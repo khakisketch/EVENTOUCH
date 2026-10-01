@@ -205,6 +205,123 @@
     return record;
   };
 
+  function escapeHtml(value) {
+    return String(value === undefined || value === null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // Management mount renderer: templates + campaign compose + campaign
+  // list with send + simulated outbox. Errors surface as role=alert.
+  // Uses the slice-ensuring messagingWorkspace() above.
+  ETKO.renderMessaging = function (container) {
+    var ws = messagingWorkspace();
+    var templates = (ws.templates || []).map(function (t) {
+      return (
+        '<li>' + escapeHtml(t.name) + ' · ' + escapeHtml(t.channel) +
+        ' <button type="button" data-template-del="' + escapeHtml(t.id) + '">삭제</button></li>'
+      );
+    }).join('');
+    var campaigns = (ws.messages || []).map(function (c) {
+      return (
+        '<li>' + escapeHtml(c.title) + ' · ' + escapeHtml(c.channel) + ' · ' + escapeHtml(c.target) +
+        ' · ' + (c.count || 0) + '명 · ' + escapeHtml(c.status) + ' · SIMULATION_ONLY' +
+        ' <button type="button" data-campaign-send="' + escapeHtml(c.id) + '">발송</button></li>'
+      );
+    }).join('');
+    var outbox = [];
+    try {
+      outbox = typeof ETKO.outbox === 'function' ? ETKO.outbox() : [];
+    } catch (err) {
+      outbox = [];
+    }
+    var outboxRows = outbox.map(function (o) {
+      return '<li>' + escapeHtml(o.title || '') + ' · ' + escapeHtml(o.channel || '') + ' · ' + (o.toCount || 0) + '명 · SIMULATION_ONLY</li>';
+    }).join('');
+    var channelOptions = CHANNELS.map(function (c) {
+      return '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>';
+    }).join('');
+    var html =
+      '<section aria-label="메시지 템플릿 관리"><h2>템플릿</h2>' +
+      '<ul>' + (templates || '<li>저장된 템플릿이 없습니다</li>') + '</ul>' +
+      '<div class="inline-form"><div class="field"><input data-template-name type="text" placeholder="템플릿 이름" aria-label="템플릿 이름" /></div>' +
+      '<div class="field"><input data-template-content type="text" placeholder="메시지 내용" aria-label="템플릿 내용" /></div>' +
+      '<button type="button" data-template-save>템플릿 저장</button></div></section>' +
+      '<section aria-label="캠페인 작성"><h2>캠페인</h2>' +
+      '<div class="inline-form"><div class="field"><input data-campaign-title type="text" placeholder="캠페인 이름" aria-label="캠페인 이름" /></div>' +
+      '<div class="field"><select data-campaign-channel aria-label="발송 채널">' + channelOptions + '</select></div>' +
+      '<div class="field"><input data-campaign-content type="text" placeholder="메시지" aria-label="캠페인 메시지" /></div>' +
+      '<button type="button" data-campaign-save>초안 저장</button></div>' +
+      '<ul>' + (campaigns || '<li>작성된 캠페인이 없습니다</li>') + '</ul></section>' +
+      '<section aria-label="발송함"><h2>발송함</h2>' +
+      '<ul>' + (outboxRows || '<li>발송 기록이 없습니다</li>') + '</ul></section>';
+    if (ETKO.lastMessagingError) {
+      html += '<p role="alert">' + escapeHtml(ETKO.lastMessagingError) + '</p>';
+    }
+    container.innerHTML = html;
+    wireMessaging(container);
+    return container.innerHTML;
+  };
+
+  function fieldValue(container, attr) {
+    var el = container.querySelector ? container.querySelector('[' + attr + ']') : null;
+    return el && el.value !== undefined ? el.value : '';
+  }
+
+  function wireMessaging(container) {
+    if (!container || !container.querySelectorAll) return;
+    function onAttr(attr, fn) {
+      Array.prototype.forEach.call(container.querySelectorAll('[' + attr + ']'), function (btn) {
+        if (btn.tagName === 'INPUT' || btn.tagName === 'SELECT') return;
+        if (typeof btn.addEventListener !== 'function') return;
+        btn.addEventListener('click', function () {
+          ETKO.lastMessagingError = null;
+          try {
+            fn(btn);
+          } catch (err) {
+            ETKO.lastMessagingError = err && err.message ? err.message : '처리하지 못했습니다';
+          }
+          if (typeof ETKO.renderMessaging === 'function') {
+            try {
+              ETKO.renderMessaging(container);
+            } catch (err) {}
+          }
+        });
+      });
+    }
+    onAttr('data-template-save', function () {
+      ETKO.saveTemplate({
+        name: fieldValue(container, 'data-template-name'),
+        content: fieldValue(container, 'data-template-content'),
+      });
+    });
+    onAttr('data-template-del', function (btn) {
+      ETKO.deleteTemplate(btn.getAttribute('data-template-del'));
+    });
+    onAttr('data-campaign-save', function () {
+      var ws = messagingWorkspace();
+      var ids = ws.participants.filter(function (p) {
+        return p && !p.cancelled;
+      }).slice(0, 1).map(function (p) {
+        return p.id;
+      });
+      ETKO.createCampaign({
+        title: fieldValue(container, 'data-campaign-title'),
+        channel: fieldValue(container, 'data-campaign-channel') || 'SMS',
+        target: '전체',
+        recipientIds: ids,
+        content: fieldValue(container, 'data-campaign-content'),
+      });
+    });
+    onAttr('data-campaign-send', function (btn) {
+      if (typeof ETKO.sendCampaign !== 'function') throw new Error('발송 기능을 확인할 수 없습니다');
+      ETKO.sendCampaign(btn.getAttribute('data-campaign-send'));
+    });
+  }
+
   if (typeof module !== 'undefined' && module && module.exports) {
     module.exports = ETKO;
   }

@@ -183,6 +183,8 @@
             ETKO.renderEngagement(mount);
           } else if (view === 'content' && typeof ETKO.renderContent === 'function') {
             ETKO.renderContent(mount);
+          } else if (view === 'messages' && typeof ETKO.renderMessaging === 'function') {
+            ETKO.renderMessaging(mount);
           } else if (view === 'stage' && typeof ETKO.renderStage === 'function') {
             ETKO.renderStage(mount, ETKO.stageState);
           } else if (view === 'overview') {

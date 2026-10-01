@@ -116,7 +116,11 @@ button[data-photo-hide],
 button[data-program-add],
 button[data-program-del],
 button[data-notice-add],
-button[data-venue-save] {
+button[data-venue-save],
+button[data-template-save],
+button[data-template-del],
+button[data-campaign-save],
+button[data-campaign-send] {
   min-height: var(--touch-min);
   min-width: var(--touch-min);
 }
