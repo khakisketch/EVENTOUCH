@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="640" viewBox="0 0 980 640" font-family="Inter, system-ui, sans-serif">
+  <rect width="980" height="640" fill="#FAF8F5"/>
+  <text x="32" y="40" font-size="22" font-weight="700" fill="#1d1b18">EVENTOUCH 코드 구조</text>
+  <text x="32" y="62" font-size="13" fill="#6b6259">브랜치 eventouch-remediation · 바닐라 JS · ETKO 네임스페이스</text>
+
+  <!-- Browser shell -->
+  <g>
+    <rect x="32" y="84" width="280" height="150" rx="12" fill="#ffffff" stroke="#E2D8C9"/>
+    <text x="48" y="110" font-size="14" font-weight="700" fill="#BC3F1B">브라우저 셸</text>
+    <text x="48" y="130" font-size="12" fill="#1d1b18">index.html (6개 섹션)</text>
+    <text x="48" y="150" font-size="11" fill="#6b6259">overview / participants / checkin</text>
+    <text x="48" y="166" font-size="11" fill="#6b6259">booth / participant / stage</text>
+    <text x="48" y="186" font-size="11" fill="#6b6259">티켓제출→scan · 부스모드→lock</text>
+    <text x="48" y="202" font-size="11" fill="#6b6259">홈CTA · Escape/Tab · 에러 한글표시</text>
+  </g>
+
+  <!-- app.js -->
+  <g>
+    <rect x="350" y="84" width="280" height="150" rx="12" fill="#ffffff" stroke="#E2D8C9"/>
+    <text x="366" y="110" font-size="14" font-weight="700" fill="#BC3F1B">길잡이 app.js</text>
+    <text x="366" y="130" font-size="12" fill="#1d1b18">navigate (역할 게이트)</text>
+    <text x="366" y="150" font-size="11" fill="#6b6259">VIEWS 6개 + 확장 라우트 허용</text>
+    <text x="366" y="166" font-size="11" fill="#6b6259">상세진입은 participant만 바이패스</text>
+    <text x="366" y="186" font-size="11" fill="#6b6259">switchEventAndRender (전환·재동기화)</text>
+    <text x="366" y="202" font-size="11" fill="#6b6259">wireNav (버튼 연결)</text>
+  </g>
+
+  <!-- store -->
+  <g>
+    <rect x="668" y="84" width="280" height="150" rx="12" fill="#F35B2C"/>
+    <text x="684" y="110" font-size="14" font-weight="700" fill="#ffffff">단일 진실 agency.js</text>
+    <text x="684" y="130" font-size="12" fill="#ffffff">store · workspaces · role</text>
+    <text x="684" y="150" font-size="11" fill="#FFE9DE">canRoute / requireWrite</text>
+    <text x="684" y="166" font-size="11" fill="#FFE9DE">행사 생성·전환 (선택 초기화)</text>
+    <text x="684" y="186" font-size="11" fill="#FFE9DE">시드 IN → everIn 보정</text>
+    <text x="684" y="202" font-size="11" fill="#FFE9DE">VIEWER/CLIENT 쓰기 거부</text>
+  </g>
+
+  <!-- features -->
+  <g>
+    <rect x="32" y="262" width="440" height="220" rx="12" fill="#ffffff" stroke="#E2D8C9"/>
+    <text x="48" y="288" font-size="14" font-weight="700" fill="#BC3F1B">업무 규칙 features/ (13개)</text>
+    <text x="48" y="310" font-size="11" fill="#1d1b18">명단 participants · 체크인 checkin · 데스크 desks</text>
+    <text x="48" y="328" font-size="11" fill="#1d1b18">부스 booth + booths (잠금 위임) · 등록 registration</text>
+    <text x="48" y="346" font-size="11" fill="#1d1b18">참여 engagement (투표/퀴즈/Q&amp;A/추첨/설문)</text>
+    <text x="48" y="364" font-size="11" fill="#1d1b18">사진 media · 메시지 messaging (SIMULATION_ONLY)</text>
+    <text x="48" y="382" font-size="11" fill="#1d1b18">콘텐츠 content · 무대 stage · 결과 results (불변)</text>
+    <text x="48" y="404" font-size="11" fill="#6b6259">쓰기마다 한글 throw · 성공만 상태반영</text>
+    <text x="48" y="424" font-size="11" fill="#6b6259">중복·마감·수량·시간·권한 검증</text>
+    <text x="48" y="448" font-size="11" fill="#6b6259">⟶ 전부 워크스페이스 participants/기록에 기록</text>
+  </g>
+
+  <!-- mount/render -->
+  <g>
+    <rect x="508" y="262" width="440" height="220" rx="12" fill="#ffffff" stroke="#E2D8C9"/>
+    <text x="524" y="288" font-size="14" font-weight="700" fill="#BC3F1B">화면 마운트 (결과물)</text>
+    <text x="524" y="310" font-size="11" fill="#1d1b18">#people-list · #checkin-mount · #booth-mount</text>
+    <text x="524" y="328" font-size="11" fill="#1d1b18">#home-mount · #stage-mount</text>
+    <text x="524" y="346" font-size="11" fill="#1d1b18">#overview-mount + #results-mount + #settings</text>
+    <text x="524" y="368" font-size="11" fill="#6b6259">한글만 출력 · live-region 중첩 금지</text>
+    <text x="524" y="388" font-size="11" fill="#6b6259">대기열 liczby · 결과패널 · 스냅샷 고정</text>
+    <rect x="524" y="404" width="200" height="30" rx="8" fill="#FAF8F5" stroke="#E2D8C9"/>
+    <text x="536" y="424" font-size="11" fill="#1d1b18">styles/tokens.css (44/52px)</text>
+    <rect x="734" y="404" width="190" height="30" rx="8" fill="#FAF8F5" stroke="#E2D8C9"/>
+    <text x="746" y="424" font-size="11" fill="#1d1b18">i18n/ko.json · 샘플</text>
+  </g>
+
+  <!-- tests -->
+  <g>
+    <rect x="32" y="508" width="440" height="100" rx="12" fill="#ffffff" stroke="#E2D8C9"/>
+    <text x="48" y="534" font-size="14" font-weight="700" fill="#BC3F1B">검증 tests/ (25개·166 통과)</text>
+    <text x="48" y="556" font-size="11" fill="#1d1b18">qa2: 진입점 그대로 로드 (속임수 없음)</text>
+    <text x="48" y="576" font-size="11" fill="#6b6259">store-truth · rule-hardening · role-write · fixpass</text>
+  </g>
+
+  <!-- design -->
+  <g>
+    <rect x="508" y="508" width="440" height="100" rx="12" fill="#ffffff" stroke-dasharray="6 4" stroke="#BC3F1B"/>
+    <text x="524" y="534" font-size="14" font-weight="700" fill="#BC3F1B">디자인 (레포 밖·이번에 불변)</text>
+    <text x="524" y="556" font-size="11" fill="#1d1b18">OD eventouch-a82e · 5계층 · 24화면+32탭</text>
+    <text x="524" y="576" font-size="11" fill="#6b6259">원 기획 PDF 122p · v7 원본 → spec/plan 문서화</text>
+  </g>
+
+  <!-- arrows -->
+  <g stroke="#BC3F1B" stroke-width="2" fill="none">
+    <line x1="312" y1="159" x2="348" y2="159"/>
+    <line x1="630" y1="159" x2="666" y2="159"/>
+    <line x1="250" y1="234" x2="250" y2="260"/>
+    <line x1="728" y1="234" x2="728" y2="260"/>
+  </g>
+</svg>
