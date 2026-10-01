@@ -119,3 +119,9 @@ test('register refuses over capacity in Korean', () => {
     /등록 정원이 마감되었습니다/
   );
 });
+
+test('register without email succeeds and stores empty string', () => {
+  freshEvent();
+  const p = ETKO.register({ name: '무메일', phone: '010-0000-0006' });
+  assert.equal(p.email, '');
+});

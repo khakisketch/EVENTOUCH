@@ -188,7 +188,7 @@
       name: name,
       phone: phone,
       company: text(opts.company),
-      email: text(opts.email) || 'guest@example.com',
+      email: text(opts.email),
       group: '일반',
       registrationType: 'PRE',
       status: 'registered',
