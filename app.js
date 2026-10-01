@@ -47,7 +47,7 @@
   ETKO.navigate = function (view) {
     var known = VIEWS.indexOf(view) !== -1;
     if (!known) {
-      // Beyond the six shell sections, allow role-permitted routes so
+      // Beyond the shell sections, allow role-permitted routes so
       // results/settings/members/events remain reachable; unknown routes
       // still keep the current view.
       if (typeof ETKO.canRoute !== 'function') return ETKO.currentView;
@@ -56,7 +56,7 @@
           ETKO.detailBypass = false;
         } else {
           if (!ETKO.canRoute(ETKO.currentRole(), view)) return ETKO.currentView;
-          var allowed = ['overview', 'participants', 'participant', 'checkin', 'booth', 'booths', 'stage', 'staff', 'qna', 'photos', 'poll', 'quiz', 'draw', 'survey', 'messages', 'program', 'notices', 'venue', 'board', 'results', 'settings', 'members', 'events', 'home', 'screen'];
+          var allowed = ['overview', 'participants', 'participant', 'checkin', 'booth', 'booths', 'engage', 'stage', 'staff', 'qna', 'photos', 'poll', 'quiz', 'draw', 'survey', 'messages', 'program', 'notices', 'venue', 'board', 'results', 'settings', 'members', 'events', 'home', 'screen'];
           if (allowed.indexOf(view) === -1) return ETKO.currentView;
         }
       } catch (err) {

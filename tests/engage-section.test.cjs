@@ -21,3 +21,22 @@ test('engage section exists in shell, registry, views and labels', () => {
   assert.equal(ETKO.sectionFor('engage'), 'engage-view');
   assert.equal(ETKO.mountFor('engage'), 'engage-mount');
 });
+
+test('engage route passes the role gate per role', () => {
+  for (const m of ['../app.js', '../features/agency.js', '../features/views.js']) { try { delete require.cache[require.resolve(m)]; } catch {} }
+  delete globalThis.ETKO;
+  require('../app.js');
+  require('../features/agency.js');
+  require('../features/views.js');
+  const ETKO = globalThis.ETKO;
+  ETKO.setRole('AGENCY');
+  ETKO.navigate('overview');
+  assert.equal(ETKO.navigate('engage'), 'engage');
+  ETKO.setRole('STAFF');
+  ETKO.navigate('overview');
+  assert.equal(ETKO.navigate('engage'), 'engage');
+  ETKO.setRole('VIEWER');
+  ETKO.navigate('overview');
+  assert.equal(ETKO.navigate('engage'), 'engage');
+  assert.equal(ETKO.canRoute('STAFF', 'participant'), false);
+});

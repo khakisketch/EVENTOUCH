@@ -298,6 +298,14 @@
     return { participantId: record.participantId, at: record.at };
   };
 
+  // Open or close the survey. Returns the active flag.
+  ETKO.setSurveyOpen = function (open) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('survey');
+    var ws = engagementWorkspace();
+    ws.survey.open = !(open === false || open === 'false');
+    return ws.survey.open;
+  };
+
   // Submit one survey response. Length must match the question count,
   // every score an integer 1~5; repeat throws `이미 평가를 제출했습니다`.
   // Closed surveys reject with `설문이 마감되었습니다`.
@@ -331,15 +339,18 @@
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   // Management mount renderer: poll + quiz sections with Korean copy and
-  // wired controls. Q&A/draw/survey/photo sections are appended by
-  // renderEngagementMore below so each slice owns its markup.
+  // wired controls. Q&A/draw/survey/photo sections follow below.
   ETKO.renderEngagement = function (container) {
     var ws = engagementWorkspace();
     var html = ETKO.renderEngagementPollQuiz(ws) + ETKO.renderEngagementMore(ws);
+    if (ETKO.lastEngageError) {
+      html += '<p role="alert">' + escapeHtml(ETKO.lastEngageError) + '</p>';
+    }
     container.innerHTML = html;
     wireEngagement(container);
     return container.innerHTML;
@@ -370,8 +381,7 @@
     );
   };
 
-  // Extended sections (Q&A/draw/survey/photo). Full markup follows; the
-  // guard above only applies when this file loads twice.
+  // Extended sections (Q&A/draw/survey/photo) with full markup.
   ETKO.renderEngagementMore = function (wsArg) {
     var ws = wsArg || engagementWorkspace();
     return (
@@ -408,6 +418,7 @@
       '<p>당첨 후보: ' + escapeHtml(candidate) + ' · 확정 ' + (draw.winners || []).length + '명' +
       (winners ? ' (' + escapeHtml(winners) + ')' : '') + '</p>' +
       '<div><button type="button" data-draw-start>추첨 시작</button>' +
+      '<button type="button" data-draw-resolve>후보 확정</button>' +
       '<button type="button" data-draw-confirm>당첨 확정</button></div></section>'
     );
   };
@@ -457,6 +468,8 @@
     });
     onAttr('data-draw-start', function () {
       ETKO.startDraw();
+    });
+    onAttr('data-draw-resolve', function () {
       ETKO.resolveDraw();
     });
     onAttr('data-draw-confirm', function () {
@@ -464,12 +477,14 @@
     });
     onAttr('data-survey-toggle', function () {
       var ws = engagementWorkspace();
-      ws.survey.open = !ws.survey.open;
+      ETKO.setSurveyOpen(!ws.survey.open);
     });
     onAttr('data-photo-approve', function (btn) {
+      if (typeof ETKO.moderatePhotos !== 'function') throw new Error('사진 기능을 확인할 수 없습니다');
       ETKO.moderatePhotos([btn.getAttribute('data-photo-approve')], 'APPROVED');
     });
     onAttr('data-photo-hide', function (btn) {
+      if (typeof ETKO.moderatePhotos !== 'function') throw new Error('사진 기능을 확인할 수 없습니다');
       ETKO.moderatePhotos([btn.getAttribute('data-photo-hide')], 'HIDDEN');
     });
   };
@@ -492,6 +507,7 @@
       Array.prototype.forEach.call(container.querySelectorAll('[' + attr + ']'), function (btn) {
         if (typeof btn.addEventListener !== 'function') return;
         btn.addEventListener('click', function () {
+          ETKO.lastEngageError = null;
           try {
             fn(btn);
           } catch (err) {

@@ -77,9 +77,9 @@
   <script src="features/stage.js"></script>
   <script src="features/results.js"></script>
   <script>
-    /* ETKO-VIEW-SYNC: gate all six views behind ETKO.navigate.
+    /* ETKO-VIEW-SYNC: gate all shell views behind ETKO.navigate.
        Follows the syncParticipantsView pattern (Task 3 interface): show the
-       section for ETKO.currentView, hide the other five, render the active
+       section for ETKO.currentView, hide the others, render the active
        mount when its renderer exists. Call-through preserves app.js semantics
        exactly (unknown views keep the current view); guarded so double-load
        never re-wraps. Section wrappers carry no aria-live of their own so the
@@ -211,7 +211,7 @@
         }
       }
 
-      // Show the current view's section, hide the other five. Returns true
+      // Show the current view's section, hide the others. Returns true
       // when the current view's section was found and shown; false otherwise
       // (absent section, unknown view, or no document, e.g. Node).
       ETKO.syncViews = function (overrideDoc) {

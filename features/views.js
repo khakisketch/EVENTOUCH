@@ -3,7 +3,7 @@
 
   var ETKO = root.ETKO || (root.ETKO = {});
 
-  // Single definition of shell screens. The six entries mirror the
+  // Single definition of shell screens. The entries mirror the
   // `index.html` sections in nav order; `labelKey` points at `i18n/ko.json`.
   // Extended routes (results/settings/...) stay reachable via navigate but
   // are not shell sections, so they are deliberately absent here.

@@ -6,6 +6,7 @@
   var ROLES = ['AGENCY', 'MANAGER', 'CLIENT', 'STAFF', 'VIEWER'];
 
   // Known workspace routes. `booth`/`booths` are aliases for the same desk.
+  // `engage` is the participation management screen.
   var KNOWN_ROUTES = [
     'overview',
     'participants',
@@ -13,6 +14,7 @@
     'checkin',
     'booth',
     'booths',
+    'engage',
     'stage',
     'staff',
     'qna',
@@ -35,12 +37,15 @@
   ];
 
   // STAFF works the field desks only. CLIENT/VIEWER share the read-only subset.
+  // `engage` is visible to staff for field participation work and to
+  // clients/viewers read-only; writes stay behind requireWrite.
   var STAFF_ROUTES = [
     'overview',
     'participants',
     'checkin',
     'booth',
     'booths',
+    'engage',
     'staff',
     'qna',
     'photos',
@@ -51,6 +56,7 @@
     'participant',
     'booth',
     'booths',
+    'engage',
     'stage',
     'photos',
     'poll',

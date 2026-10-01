@@ -32,3 +32,48 @@ test('engagement mount renders quiz management with reveal', () => {
   ETKO.renderEngagement(box2);
   assert.match(box2.innerHTML, /마감/);
 });
+
+test('draw start leaves a candidate pending until resolve', () => {
+  const ETKO = fresh();
+  ETKO.startDraw();
+  assert.equal(ETKO.workspace().draw.phase, 'READY');
+  assert.equal(ETKO.workspace().draw.result, null);
+  const box = { innerHTML: '' };
+  ETKO.renderEngagement(box);
+  assert.match(box.innerHTML, /당첨 후보: 미정/);
+  assert.match(box.innerHTML, /data-draw-resolve/);
+  ETKO.resolveDraw(0);
+  const box2 = { innerHTML: '' };
+  ETKO.renderEngagement(box2);
+  assert.doesNotMatch(box2.innerHTML, /당첨 후보: 미정/);
+});
+
+test('survey toggle is role-gated and denial surfaces as alert', () => {
+  const ETKO = fresh();
+  ETKO.setRole('VIEWER');
+  assert.throws(() => ETKO.setSurveyOpen(true), /권한/);
+  ETKO.setRole('AGENCY');
+  ETKO.lastEngageError = '설문이 마감되었습니다';
+  const box = { innerHTML: '' };
+  ETKO.renderEngagement(box);
+  assert.match(box.innerHTML, /role="alert"/);
+  assert.match(box.innerHTML, /설문이 마감되었습니다/);
+});
+
+test('poll toggle clicks flip status through wired handlers', () => {
+  const ETKO = fresh();
+  const handlers = {};
+  const box = {
+    innerHTML: '',
+    querySelectorAll(sel) {
+      if (sel === '[data-poll-open]') return [{ addEventListener(t, fn) { handlers.open = fn; } }];
+      if (sel === '[data-poll-close]') return [{ addEventListener(t, fn) { handlers.close = fn; } }];
+      return [];
+    },
+    querySelector() { return null; },
+  };
+  ETKO.renderEngagement(box);
+  assert.ok(handlers.open && handlers.close, 'poll handlers must wire');
+  handlers.open();
+  assert.equal(ETKO.workspace().poll.status, 'OPEN');
+});
