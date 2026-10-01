@@ -98,6 +98,7 @@
   // Snapshot report: metrics + approved photos deep-copied and deep-frozen
   // at creation time, so later check-ins or moderations never mutate it.
   ETKO.createReport = function (input) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('results');
     var opts = input || {};
     var ws = resultsWorkspace();
     var title = text(opts.title);
@@ -136,6 +137,7 @@
   // Patch the active event. Only known keys apply; every provided value is
   // validated with a Korean error. Unknown status/capacity never persist.
   ETKO.updateEvent = function (patch) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('settings');
     var opts = patch || {};
     var ev = activeEvent();
     if (opts.name !== undefined) {
@@ -177,6 +179,7 @@
   // Toggle participant-facing feature flags. Unknown keys throw; known keys
   // coerce to boolean. Returns a copy so callers cannot mutate the store.
   ETKO.setEventFeatures = function (features) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('settings');
     var ws = resultsWorkspace();
     var opts = features || {};
     Object.keys(opts).forEach(function (key) {

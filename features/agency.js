@@ -186,6 +186,25 @@
     return false;
   };
 
+  // Write-command gate: VIEWER/CLIENT cannot mutate event data.
+  // STAFF keeps field-desk writes via its route table; participant detail
+  // stays reachable through openParticipantDetail (route table untouched).
+  // Read-only routes (e.g. results for VIEWER) never imply write permission.
+  var STAFF_WRITE_ROUTES = ['checkin', 'booth', 'booths', 'staff', 'qna', 'photos'];
+  ETKO.requireWrite = function (route) {
+    var role = ETKO.store && ETKO.store.role ? ETKO.store.role : 'AGENCY';
+    var r = normRole(role);
+    if (r === 'AGENCY' || r === 'MANAGER') {
+      if (!ETKO.canRoute(r, route)) throw new Error('권한을 확인하세요');
+      return;
+    }
+    if (r === 'STAFF') {
+      if (STAFF_WRITE_ROUTES.indexOf(normRoute(route)) === -1) throw new Error('권한을 확인하세요');
+      return;
+    }
+    throw new Error('권한을 확인하세요');
+  };
+
   function nextEventId() {
     var max = 0;
     ETKO.store.events.forEach(function (ev) {
@@ -198,6 +217,7 @@
   // Create an empty event: 3-field validation, status PRE, no cloned records.
   // Does not switch the active event.
   ETKO.createEvent = function (input) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('events');
     var opts = input || {};
     var name = String(opts.name === undefined || opts.name === null ? '' : opts.name).trim();
     var date = String(opts.date === undefined || opts.date === null ? '' : opts.date).trim();
@@ -235,6 +255,7 @@
 
   // Event-members tab: create by default, update when `id` matches.
   ETKO.saveMember = function (input) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('members');
     var opts = input || {};
     var ws = ETKO.workspace();
     var name = String(opts.name === undefined || opts.name === null ? '' : opts.name).trim();
