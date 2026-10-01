@@ -122,6 +122,35 @@
     return pending.length;
   };
 
+  // Result panel copy: every scan key maps to a Korean title + detail.
+  // The panel renders this map, never the raw English key.
+  var CHECKIN_MESSAGES = {
+    success: { title: '처리되었습니다', detail: '스캔이 정상적으로 반영되었습니다.' },
+    duplicate: { title: '이미 처리된 코드입니다', detail: '중복 스캔은 반영되지 않았습니다.' },
+    'not-in': { title: '입장 기록이 없습니다', detail: '먼저 입장 처리를 해주세요.' },
+    'wrong-kind': {
+      title: '체크인용 코드가 아닙니다',
+      detail: '부스 QR은 부스에서 스캔해주세요.',
+    },
+    'wrong-event': {
+      title: '다른 행사의 티켓입니다',
+      detail: '이번 행사 코드인지 확인해주세요.',
+    },
+    'not-found': { title: '등록되지 않은 코드입니다', detail: '코드를 다시 확인해주세요.' },
+    queued: {
+      title: '대기열에 저장했습니다',
+      detail: '오프라인 상태입니다. 연결 후 동기화하면 반영됩니다.',
+    },
+  };
+
+  // Korean message for a scan result key. Unknown keys fall back to a
+  // generic Korean message so English never leaks into the panel.
+  // Returns a FRESH {title, detail} object per call.
+  ETKO.checkinMessage = function (key) {
+    var entry = CHECKIN_MESSAGES[key];
+    if (entry) return { title: entry.title, detail: entry.detail };
+    return { title: '알 수 없는 결과입니다', detail: '코드를 다시 스캔해주세요.' };
+  };
   // Check-in desk direction toggle. Namespace-level so re-renders never reset it.
   if (ETKO.checkinDirection !== 'OUT') ETKO.checkinDirection = 'IN';
   // Last scan result for the result panel; null until the first scan.
@@ -143,11 +172,14 @@
     var inPressed = dir === 'IN' ? ' aria-pressed="true"' : ' aria-pressed="false"';
     var outPressed = dir === 'OUT' ? ' aria-pressed="true"' : ' aria-pressed="false"';
     var result = ETKO.lastScanResult;
-    var resultHtml = result
+    var message = result ? ETKO.checkinMessage(result.key) : null;
+    var resultHtml = message
       ? '<p data-result data-kind="' +
         escapeHtml(result.kind) +
-        '">' +
-        escapeHtml(result.key) +
+        '"><strong>' +
+        escapeHtml(message.title) +
+        '</strong> ' +
+        escapeHtml(message.detail) +
         '</p>'
       : '<p data-result>스캔을 기다리고 있습니다</p>';
     var queueHtml =

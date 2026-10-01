@@ -173,6 +173,71 @@ test('sync applies queued scans exactly once', () => {
   );
 });
 
+test('offline OUT queues, dedupes while queued, and sync applies it', () => {
+  const ETKO = loadCheckin();
+  const state = freshState();
+  // p3 starts IN, so OUT is a valid transition.
+  const queued = ETKO.scan({ code: 'EVT-1003', direction: 'OUT', online: false, state });
+  assert.scanResult(queued, 'warn', 'queued');
+  assert.equal(
+    state.people.find((p) => p.id === 'p3').status,
+    'IN',
+    'offline OUT must not mark status'
+  );
+  assert.equal(state.queue.length, 1, 'offline OUT must queue exactly one entry');
+
+  const again = ETKO.scan({ code: 'EVT-1003', direction: 'OUT', online: false, state });
+  assert.scanResult(again, 'warn', 'duplicate');
+  assert.equal(state.queue.length, 1, 'queued OUT duplicate must not create a second entry');
+
+  const applied = ETKO.syncQueue(state);
+  assert.equal(applied, 1, 'sync must apply the single queued OUT');
+  assert.equal(
+    state.people.find((p) => p.id === 'p3').status,
+    'registered',
+    'sync must revert p3 to registered'
+  );
+  assert.equal(state.queue.length, 0, 'sync must drain the queue');
+  assert.equal(ETKO.syncQueue(state), 0, 'second sync must be a no-op');
+});
+
+test('result panel shows Korean for every scan key, never raw English', () => {
+  const ETKO = loadCheckin();
+  assert.equal(typeof ETKO.checkinMessage, 'function', 'ETKO.checkinMessage must exist');
+  const keys = [
+    'success',
+    'duplicate',
+    'not-in',
+    'wrong-kind',
+    'wrong-event',
+    'not-found',
+    'queued',
+  ];
+  const kinds = {
+    success: 'good',
+    duplicate: 'warn',
+    'not-in': 'warn',
+    'wrong-kind': 'bad',
+    'wrong-event': 'bad',
+    'not-found': 'bad',
+    queued: 'warn',
+  };
+  keys.forEach((key) => {
+    const msg = ETKO.checkinMessage(key);
+    assert.match(msg.title, /[가-힣]/, key + ' title must be Korean');
+    assert.match(msg.detail, /[가-힣]/, key + ' detail must be Korean');
+
+    ETKO.lastScanResult = { kind: kinds[key], key };
+    const container = { innerHTML: '' };
+    ETKO.renderCheckin(container, freshState());
+    assert.match(container.innerHTML, /[가-힣]/, 'panel for ' + key + ' must show Korean');
+    assert.ok(
+      !container.innerHTML.includes(key),
+      'panel for ' + key + ' must not leak the raw English key'
+    );
+  });
+});
+
 test('check-in desk renders Korean direction toggle, result panel and queue', () => {
   const ETKO = loadCheckin();
   assert.equal(typeof ETKO.renderCheckin, 'function', 'ETKO.renderCheckin must exist');
