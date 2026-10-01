@@ -156,3 +156,43 @@ git commit -m "test: pin field-ops journey"
 git add index.html features/checkin.js tests/field-toggle.test.cjs
 git commit -m "feat: wire check-in online toggle"
 ```
+
+### Task 5: Engagement journey test (poll → quiz → Q&A → draw → survey → photo wall)
+
+**Files:**
+- Test: `tests/journey-engage.test.cjs`
+
+**Interfaces:**
+- Consumes: `ETKO.setPollStatus/vote/pollCounts`, `setQuizStatus/answerQuiz/revealQuiz`, `ask/approveQna/selectQna`, `startDraw/resolveDraw/confirmDraw`, `submitSurvey`, `uploadPhoto/moderatePhotos/wallPhotos`.
+- Produces: pinned journey — open→vote→close→reopen rejected duplicates; quiz answer→reveal; ask→approve→select; draw winner leaves pool; survey once; photo pending→approved→wall.
+
+- [ ] **Step 1: Write the failing test**
+- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 3: Implement minimal gap fixes only**
+- [ ] **Step 4: Run test to verify it passes** (`node --test tests/journey-engage.test.cjs tests/*.test.cjs`)
+- [ ] **Step 5: Commit**
+
+```bash
+git add tests/journey-engage.test.cjs features/*.js
+git commit -m "test: pin engagement journey"
+```
+
+### Task 6: Participant completion journey test (register → IN → next action → summary)
+
+**Files:**
+- Test: `tests/journey-participant.test.cjs`
+
+**Interfaces:**
+- Consumes: `ETKO.register`, `ETKO.scan`, `ETKO.nextAction`, `ETKO.checkinMessage`, `ETKO.eventSummary`.
+- Produces: pinned journey — register → scan IN (Korean success copy) → nextAction flips to completion copy → summary inside counts → duplicate scan warns without mutation.
+
+- [ ] **Step 1: Write the failing test**
+- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 3: Implement minimal gap fixes only**
+- [ ] **Step 4: Run test to verify it passes** (`node --test tests/journey-participant.test.cjs tests/*.test.cjs`)
+- [ ] **Step 5: Commit**
+
+```bash
+git add tests/journey-participant.test.cjs features/*.js
+git commit -m "test: pin participant completion journey"
+```
