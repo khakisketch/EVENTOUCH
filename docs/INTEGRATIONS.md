@@ -14,7 +14,7 @@
 ## 인증 (auth)
 
 - `ETKO.login({email, role?})` → `{token, role, demo:true}`
-  - 토큰은 `DEMO-` opaque 문자열이며 비밀번호를扱지 않는다
+  - 토큰은 `DEMO-` opaque 문자열이며 비밀번호를 다루지 않는다
   - 미등록 이메일 → `등록된 구성원이 아닙니다`
   - 역할 불일치 → `권한을 확인하세요` (세션 승격 불가)
 - `ETKO.session()` → 복사본 또는 null / `ETKO.logout()` → null

@@ -77,13 +77,14 @@
       if (asked !== String(found.role || '').trim().toUpperCase()) throw new Error('권한을 확인하세요');
     }
     var stamp = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-    authSession = { token: 'DEMO-' + stamp, email: found.email, name: found.name, role: found.role, demo: true };
+    var activeEventId = ETKO.store ? ETKO.store.activeEventId : null;
+    authSession = { token: 'DEMO-' + stamp, email: found.email, name: found.name, role: found.role, demo: true, eventId: activeEventId };
     if (typeof ETKO.setRole === 'function') {
       try {
         ETKO.setRole(found.role);
       } catch (err) {}
     }
-    return { token: authSession.token, email: authSession.email, name: authSession.name, role: authSession.role, demo: true };
+    return { token: authSession.token, email: authSession.email, name: authSession.name, role: authSession.role, demo: true, eventId: activeEventId };
   };
 
   ETKO.logout = function () {
@@ -93,7 +94,9 @@
 
   ETKO.session = function () {
     if (!authSession) return null;
-    return { token: authSession.token, email: authSession.email, name: authSession.name, role: authSession.role, demo: authSession.demo };
+    // A session belongs to the event it logged into; switching events ends it.
+    if (ETKO.store && authSession.eventId !== ETKO.store.activeEventId) return null;
+    return { token: authSession.token, email: authSession.email, name: authSession.name, role: authSession.role, demo: authSession.demo, eventId: authSession.eventId };
   };
 
   // ---- messages: simulated outbox (no real sending) ----
@@ -146,9 +149,15 @@
   };
 
   // ---- payments: simulated intents (never charged) ----
-  // Intents record amount + status only. No card, account, or gateway call
-  // exists in this build; a replaced provider settles externally.
-  var paymentIntents = [];
+  // Intents record amount + status only, scoped to the active event's
+  // workspace so amounts never leak across events. No card, account, or
+  // gateway call exists in this build; a replaced provider settles externally.
+  function paymentWorkspace() {
+    if (typeof ETKO.workspace !== 'function') throw new Error('행사를 찾을 수 없습니다');
+    var ws = ETKO.workspace();
+    if (!Array.isArray(ws.paymentIntents)) ws.paymentIntents = [];
+    return ws;
+  }
 
   ETKO.createPaymentIntent = function (input) {
     var opts = input || {};
@@ -156,9 +165,10 @@
     if (!isFinite(amount) || Math.floor(amount) !== amount || amount <= 0) {
       throw new Error('결제 금액을 확인하세요');
     }
+    var ws = paymentWorkspace();
     var currency = String(opts.currency === undefined || opts.currency === null ? 'KRW' : opts.currency).trim() || 'KRW';
     var intent = {
-      id: 'pi-' + (paymentIntents.length + 1),
+      id: 'pi-' + (ws.paymentIntents.length + 1),
       amount: amount,
       currency: currency,
       description: String(opts.description === undefined || opts.description === null ? '' : opts.description).trim(),
@@ -167,15 +177,16 @@
       at: new Date().toISOString(),
     };
     Object.freeze(intent);
-    paymentIntents.push(intent);
+    ws.paymentIntents.push(intent);
     return { id: intent.id, amount: intent.amount, currency: intent.currency, description: intent.description, status: intent.status, charged: intent.charged };
   };
 
   ETKO.paymentStatus = function (id) {
     var key = String(id === undefined || id === null ? '' : id).trim();
-    for (var i = 0; i < paymentIntents.length; i += 1) {
-      if (paymentIntents[i] && paymentIntents[i].id === key) {
-        var p = paymentIntents[i];
+    var list = paymentWorkspace().paymentIntents;
+    for (var i = 0; i < list.length; i += 1) {
+      if (list[i] && list[i].id === key) {
+        var p = list[i];
         return { id: p.id, amount: p.amount, currency: p.currency, description: p.description, status: p.status, charged: p.charged };
       }
     }

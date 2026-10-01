@@ -30,3 +30,13 @@ test('device capabilities are simulated with Korean labels; print confirms known
   assert.equal(rec.boothId, booth.id);
   assert.throws(() => ETKO.markPrinted('b-999'), /부스를 확인/);
 });
+
+test('print confirmation is gated by role: STAFF allowed, VIEWER denied', () => {
+  const ETKO = fresh();
+  ETKO.saveBooth({ name: '인쇄부스', capacity: 10, limit: 1, status: 'OPEN' });
+  const booth = ETKO.workspace().booths[0];
+  ETKO.setRole('STAFF');
+  assert.equal(ETKO.markPrinted(booth.id).boothId, booth.id);
+  ETKO.setRole('VIEWER');
+  assert.throws(() => ETKO.markPrinted(booth.id), /권한/);
+});

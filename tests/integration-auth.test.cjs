@@ -27,3 +27,13 @@ test('unknown email and role mismatch are rejected in Korean', () => {
   ETKO.logout();
   assert.equal(ETKO.session(), null);
 });
+
+test('session ends on event switch', () => {
+  const ETKO = fresh();
+  ETKO.saveMember({ name: '김인증', email: 'auth@example.kr', role: 'STAFF' });
+  const id2 = ETKO.createEvent({ name: '제2행사', date: '2026-11-01', venue: 'B홀' });
+  ETKO.login({ email: 'auth@example.kr' });
+  assert.ok(ETKO.session());
+  ETKO.switchEvent(id2);
+  assert.equal(ETKO.session(), null);
+});

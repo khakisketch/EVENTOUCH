@@ -26,3 +26,14 @@ test('unknown campaign and bad channel are rejected in Korean', () => {
   assert.throws(() => ETKO.sendCampaign('cp-999'), /캠페인/);
   assert.throws(() => ETKO.createCampaign({ title: 'x', channel: 'PIGEON', target: '전체', recipientIds: ['p1'], content: 'hi' }), /채널/);
 });
+
+test('sending is gated by role: STAFF and VIEWER denied', () => {
+  const ETKO = fresh();
+  const c = ETKO.createCampaign({ title: '안내', channel: 'SMS', target: '전체', recipientIds: ['p1'], content: '환영합니다' });
+  ETKO.setRole('STAFF');
+  assert.throws(() => ETKO.sendCampaign(c.id), /권한/);
+  ETKO.setRole('VIEWER');
+  assert.throws(() => ETKO.sendCampaign(c.id), /권한/);
+  ETKO.setRole('AGENCY');
+  assert.equal(ETKO.sendCampaign(c.id).status, 'QUEUED_SIMULATION');
+});
