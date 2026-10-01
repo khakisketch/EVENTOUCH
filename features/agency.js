@@ -25,7 +25,6 @@
     'quiz',
     'draw',
     'survey',
-    'messages',
     'program',
     'notices',
     'venue',

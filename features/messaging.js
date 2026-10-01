@@ -248,11 +248,13 @@
       '<section aria-label="메시지 템플릿 관리"><h2>템플릿</h2>' +
       '<ul>' + (templates || '<li>저장된 템플릿이 없습니다</li>') + '</ul>' +
       '<div class="inline-form"><div class="field"><input data-template-name type="text" placeholder="템플릿 이름" aria-label="템플릿 이름" /></div>' +
+      '<div class="field"><select data-template-channel aria-label="템플릿 채널">' + channelOptions + '</select></div>' +
       '<div class="field"><input data-template-content type="text" placeholder="메시지 내용" aria-label="템플릿 내용" /></div>' +
       '<button type="button" data-template-save>템플릿 저장</button></div></section>' +
       '<section aria-label="캠페인 작성"><h2>캠페인</h2>' +
       '<div class="inline-form"><div class="field"><input data-campaign-title type="text" placeholder="캠페인 이름" aria-label="캠페인 이름" /></div>' +
       '<div class="field"><select data-campaign-channel aria-label="발송 채널">' + channelOptions + '</select></div>' +
+      '<div class="field"><select data-campaign-target aria-label="발송 대상"><option value="전체">전체 참가자</option><option value="체크인 참가자">체크인 참가자</option><option value="미입장 참가자">미입장 참가자</option><option value="선택 참가자">선택 참가자</option></select></div>' +
       '<div class="field"><input data-campaign-content type="text" placeholder="메시지" aria-label="캠페인 메시지" /></div>' +
       '<button type="button" data-campaign-save>초안 저장</button></div>' +
       '<ul>' + (campaigns || '<li>작성된 캠페인이 없습니다</li>') + '</ul></section>' +
@@ -295,6 +297,7 @@
     onAttr('data-template-save', function () {
       ETKO.saveTemplate({
         name: fieldValue(container, 'data-template-name'),
+        channel: fieldValue(container, 'data-template-channel') || 'SMS',
         content: fieldValue(container, 'data-template-content'),
       });
     });
@@ -303,15 +306,31 @@
     });
     onAttr('data-campaign-save', function () {
       var ws = messagingWorkspace();
-      var ids = ws.participants.filter(function (p) {
+      var target = fieldValue(container, 'data-campaign-target') || '전체';
+      var pool = ws.participants.filter(function (p) {
         return p && !p.cancelled;
-      }).slice(0, 1).map(function (p) {
-        return p.id;
       });
+      var entered = function (p) {
+        return String(p.status === undefined || p.status === null ? '' : p.status).trim().toLowerCase() === 'in';
+      };
+      var ids;
+      if (target === '체크인 참가자') {
+        ids = pool.filter(entered).map(function (p) { return p.id; });
+      } else if (target === '미입장 참가자') {
+        ids = pool.filter(function (p) { return !entered(p); }).map(function (p) { return p.id; });
+      } else if (target === '선택 참가자') {
+        var picked = ETKO.selectedIds && typeof ETKO.selectedIds.has === 'function'
+          ? pool.filter(function (p) { return ETKO.selectedIds.has(p.id); })
+          : [];
+        ids = picked.map(function (p) { return p.id; });
+      } else {
+        target = '전체';
+        ids = pool.map(function (p) { return p.id; });
+      }
       ETKO.createCampaign({
         title: fieldValue(container, 'data-campaign-title'),
         channel: fieldValue(container, 'data-campaign-channel') || 'SMS',
-        target: '전체',
+        target: target,
         recipientIds: ids,
         content: fieldValue(container, 'data-campaign-content'),
       });
