@@ -19,7 +19,12 @@
       <button type="button" data-view="stage">무대</button>
     </nav>
   </header>
-  <main id="app" aria-live="polite"></main>
+  <main id="app" aria-live="polite">
+    <section id="participants-view" aria-label="참가자 목록">
+      <div id="people-counts" aria-live="polite"></div>
+      <div id="people-list"></div>
+    </section>
+  </main>
   <script>
     window.ETKO = window.ETKO || {};
     fetch('data/sample.json')
@@ -29,5 +34,6 @@
       });
   </script>
   <script src="app.js"></script>
+  <script src="features/participants.js"></script>
 </body>
 </html>
