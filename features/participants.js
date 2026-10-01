@@ -99,6 +99,27 @@
       .replace(/"/g, '&quot;');
   }
 
+  // Display-only Korean labels: raw ticket/status keys never reach the
+  // visible directory. Filtering still matches the raw stored values.
+  var TICKET_LABELS = { general: '일반', vip: 'VIP', staff: '스태프' };
+
+  ETKO.ticketLabel = function (ticket) {
+    var key = norm(ticket);
+    if (TICKET_LABELS[key]) return TICKET_LABELS[key];
+    return String(ticket === undefined || ticket === null ? '' : ticket).trim();
+  };
+
+  ETKO.statusLabel = function (status) {
+    var key = norm(status);
+    if (key === 'in') return '입장 중';
+    if (key === 'out') return '퇴장';
+    if (key === 'pending') return '대기 중';
+    if (key === 'approved') return '승인됨';
+    if (key === 'hidden') return '숨김';
+    if (key === 'registered' || key === '' || key === 'none') return '미입장';
+    return String(status === undefined || status === null ? '' : status).trim();
+  };
+
   function rowHtml(p) {
     var checked = ETKO.selectedIds.has(p.id) ? ' checked' : '';
     return (
@@ -113,9 +134,9 @@
       '</td><td>' +
       escapeHtml(p.email) +
       '</td><td>' +
-      escapeHtml(p.ticket) +
+      escapeHtml(ETKO.ticketLabel(p.ticket)) +
       '</td><td>' +
-      escapeHtml(p.status) +
+      escapeHtml(ETKO.statusLabel(p.status)) +
       '</td><td>' +
       escapeHtml(p.code) +
       '</td><td><button type="button" data-detail="' +
@@ -136,9 +157,9 @@
       '</label><p>' +
       escapeHtml(p.email) +
       ' · ' +
-      escapeHtml(p.ticket) +
+      escapeHtml(ETKO.ticketLabel(p.ticket)) +
       ' · ' +
-      escapeHtml(p.status) +
+      escapeHtml(ETKO.statusLabel(p.status)) +
       ' · ' +
       escapeHtml(p.code) +
       '</p><p><button type="button" data-detail="' +

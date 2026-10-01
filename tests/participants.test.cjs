@@ -217,3 +217,39 @@ test('touch targets meet the 44px minimum', () => {
     'checkbox hit area must enforce 44px'
   );
 });
+
+test('directory renders Korean ticket/status labels, never raw keys', () => {
+  const ETKO = loadParticipants();
+  assert.equal(ETKO.ticketLabel('GENERAL'), '일반');
+  assert.equal(ETKO.ticketLabel('staff'), '스태프');
+  assert.equal(ETKO.statusLabel('IN'), '입장 중');
+  assert.equal(ETKO.statusLabel('out'), '퇴장');
+  assert.equal(ETKO.statusLabel('registered'), '미입장');
+  assert.equal(ETKO.statusLabel('PENDING'), '대기 중');
+  const container = { innerHTML: '' };
+  ETKO.renderPeople(container, samplePeople());
+  const visible = container.innerHTML.replace(/<[^>]*>/g, ' ');
+  assert.ok(!/STAFF|PENDING|GENERAL/.test(visible), 'no raw ticket/mode keys in visible text');
+  assert.ok(!/registered/.test(visible), 'no raw registered status in visible text');
+  assert.ok(!/\bIN\b|\bOUT\b/.test(visible), 'no raw IN/OUT status in visible text');
+  assert.match(visible, /스태프/, 'STAFF ticket must display Korean');
+  assert.match(visible, /입장 중/, 'IN status must display Korean');
+  assert.match(visible, /미입장/, 'registered status must display Korean');
+});
+
+test('filters still match raw English ticket/status inputs', () => {
+  const ETKO = loadParticipants();
+  const people = samplePeople();
+  assert.deepEqual(
+    ETKO.filterPeople({ ticket: 'STAFF' }, people).map((p) => p.id),
+    ['p5'],
+    'English ticket filter must keep working on raw values'
+  );
+  assert.deepEqual(
+    ETKO.filterPeople({ status: 'IN' }, people)
+      .map((p) => p.id)
+      .sort(),
+    ['p3', 'p4'],
+    'English status filter must keep working on raw values'
+  );
+});

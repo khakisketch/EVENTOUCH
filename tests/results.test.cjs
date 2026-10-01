@@ -64,6 +64,18 @@ test('setEventFeatures stores known feature flags', () => {
   assert.equal(features.quiz, false);
 });
 
+test('photo moderation after createReport does not alter r.photos', () => {
+  const ws = ETKO.workspace();
+  ws.photos.push({ id: 'ph-snap', participantId: 'p1', caption: '기념', status: 'APPROVED' });
+  const r = ETKO.createReport({ title: '결산', summary: '총평' });
+  const before = JSON.stringify(r.photos);
+  assert.ok(r.photos.length >= 1, 'snapshot must capture the approved photo');
+  ws.photos[ws.photos.length - 1].status = 'HIDDEN';
+  ws.photos.push({ id: 'ph-snap-2', participantId: 'p1', caption: '추가', status: 'APPROVED' });
+  assert.equal(JSON.stringify(r.photos), before);
+  ws.photos = ws.photos.filter((p) => p && p.id !== 'ph-snap' && p.id !== 'ph-snap-2');
+});
+
 test('results renderers stay Korean with no raw status keys', () => {
   const results = { innerHTML: '' };
   ETKO.renderResults(results);
