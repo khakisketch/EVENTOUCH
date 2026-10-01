@@ -31,6 +31,7 @@
     <section id="checkin-view" aria-label="체크인" hidden>
       <label for="ticket-code">티켓 코드</label>
       <input id="ticket-code" type="text" data-ticket autocomplete="off" />
+      <button type="button" data-ticket-submit>조회</button>
       <div id="checkin-mount"></div>
     </section>
     <section id="booth-view" aria-label="부스" hidden>
@@ -217,12 +218,78 @@
         };
       }
 
+      // Field wiring: ticket submit -> workspace ETKO.scan, booth mode ->
+      // event lock with Korean surfacing, home CTA -> next action.
+      function submitTicket(doc) {
+        var input = doc.querySelector ? doc.querySelector('#ticket-code') : null;
+        var code = input && input.value ? input.value : '';
+        if (typeof ETKO.scan !== 'function') return;
+        var result = ETKO.scan({ code: code, direction: ETKO.checkinDirection || 'IN' });
+        ETKO.lastScanResult = result;
+        try {
+          var mount = doc.querySelector ? doc.querySelector('#checkin-mount') : null;
+          if (mount && typeof ETKO.renderCheckin === 'function') ETKO.renderCheckin(mount, ETKO.checkinState);
+        } catch (err) {}
+        if (input) {
+          input.value = '';
+          try {
+            input.focus();
+          } catch (err) {}
+        }
+      }
+
+      function wireFieldActions(doc) {
+        if (!doc || typeof doc.addEventListener !== 'function') return;
+        if (doc.__etkoFieldWired) return;
+        doc.__etkoFieldWired = true;
+        doc.addEventListener('click', function (ev) {
+          var t = ev && ev.target && ev.target.closest ? ev.target.closest('[data-ticket-submit],[data-booth-mode],[data-home-cta]') : null;
+          if (!t) return;
+          if (t.hasAttribute && t.hasAttribute('data-ticket-submit')) {
+            submitTicket(doc);
+            return;
+          }
+          if (t.hasAttribute && t.hasAttribute('data-booth-mode')) {
+            var mode = t.getAttribute('data-booth-mode');
+            try {
+              if (typeof ETKO.setEventBoothMode === 'function') {
+                ETKO.setEventBoothMode(mode, { acknowledge: true });
+              } else if (typeof ETKO.setBoothMode === 'function') {
+                ETKO.setBoothMode(mode);
+              }
+            } catch (err) {
+              ETKO.lastBoothError = err && err.message ? err.message : '부스 방식을 변경할 수 없습니다';
+              try {
+                var boothMount = doc.querySelector ? doc.querySelector('#booth-mount') : null;
+                if (boothMount) boothMount.setAttribute('data-error', ETKO.lastBoothError);
+              } catch (innerErr) {}
+            }
+            try {
+              ETKO.syncViews(doc);
+            } catch (err) {}
+            return;
+          }
+          if (t.hasAttribute && t.hasAttribute('data-home-cta')) {
+            var status = ETKO.homeStatus || 'registered';
+            var entered = String(status).trim().toLowerCase() === 'in';
+            ETKO.navigate(entered ? 'stage' : 'checkin');
+          }
+        });
+        doc.addEventListener('keydown', function (ev) {
+          if (ev && ev.key === 'Enter' && ev.target && ev.target.id === 'ticket-code') {
+            ev.preventDefault();
+            submitTicket(doc);
+          }
+        });
+      }
+
       // Browser only: apply the initial gate once the DOM is ready.
       if (
         typeof document !== 'undefined' &&
         document &&
         typeof document.addEventListener === 'function'
       ) {
+        wireFieldActions(document);
         if (document.readyState === 'loading') {
           document.addEventListener('DOMContentLoaded', function () {
             ETKO.syncViews(document);
