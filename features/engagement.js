@@ -326,6 +326,104 @@
     return { participantId: record.participantId, scores: record.scores.slice() };
   };
 
+  function escapeHtml(value) {
+    return String(value === undefined || value === null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // Management mount renderer: poll + quiz sections with Korean copy and
+  // wired controls. Q&A/draw/survey/photo sections are appended by
+  // renderEngagementMore below so each slice owns its markup.
+  ETKO.renderEngagement = function (container) {
+    var ws = engagementWorkspace();
+    var html = ETKO.renderEngagementPollQuiz(ws) + ETKO.renderEngagementMore(ws);
+    container.innerHTML = html;
+    wireEngagement(container);
+    return container.innerHTML;
+  };
+
+  ETKO.renderEngagementPollQuiz = function (wsArg) {
+    var ws = wsArg || engagementWorkspace();
+    var poll = ws.poll || { title: '', options: [], votes: [], status: 'CLOSED' };
+    var quiz = ws.quiz || { title: '', answer: '', answers: [], status: 'CLOSED' };
+    var counts = ETKO.pollCounts ? ETKO.pollCounts() : { counts: [], total: 0 };
+    var options = (poll.options || []).map(function (opt, i) {
+      var label = typeof opt === 'string' ? opt : opt && opt.label ? opt.label : '';
+      var n = counts.counts && counts.counts[i] !== undefined ? counts.counts[i] : 0;
+      return '<li>' + escapeHtml(label) + ' · ' + n + '표</li>';
+    }).join('');
+    var pollStatus = poll.status === 'OPEN' ? '진행 중' : '마감';
+    var quizStatus = quiz.status === 'OPEN' ? '진행 중' : '마감';
+    return (
+      '<section aria-label="투표 관리"><h2>투표</h2>' +
+      '<p>' + escapeHtml(poll.title || '제목 없음') + ' · ' + pollStatus + ' · 총 ' + counts.total + '표</p>' +
+      '<ul>' + (options || '<li>선택지가 없습니다</li>') + '</ul>' +
+      '<div><button type="button" data-poll-open>투표 개시</button>' +
+      '<button type="button" data-poll-close>투표 마감</button></div></section>' +
+      '<section aria-label="퀴즈 관리"><h2>퀴즈</h2>' +
+      '<p>' + escapeHtml(quiz.title || '제목 없음') + ' · ' + quizStatus + ' · 답변 ' + (quiz.answers || []).length + '건</p>' +
+      '<div><button type="button" data-quiz-open>퀴즈 개시</button>' +
+      '<button type="button" data-quiz-reveal>정답 공개</button></div></section>'
+    );
+  };
+
+  // Extended sections (Q&A/draw/survey/photo). Overridden below with full
+  // markup; defaults to empty so poll/quiz render standalone.
+  if (typeof ETKO.renderEngagementMore !== 'function') {
+    ETKO.renderEngagementMore = function () {
+      return '';
+    };
+  }
+
+  function rerender(node) {
+    var mount = node;
+    while (mount && !(mount.setAttribute && mount.getAttribute && mount.getAttribute('id') === 'engage-mount')) {
+      mount = mount.parentNode;
+    }
+    if (mount && typeof ETKO.renderEngagement === 'function') {
+      try {
+        ETKO.renderEngagement(mount);
+      } catch (err) {}
+    }
+  }
+
+  function wireEngagement(container) {
+    if (!container || !container.querySelectorAll) return;
+    function onAttr(attr, fn) {
+      Array.prototype.forEach.call(container.querySelectorAll('[' + attr + ']'), function (btn) {
+        if (typeof btn.addEventListener !== 'function') return;
+        btn.addEventListener('click', function () {
+          try {
+            fn(btn);
+          } catch (err) {
+            ETKO.lastEngageError = err && err.message ? err.message : '처리하지 못했습니다';
+          }
+          rerender(container);
+        });
+      });
+    }
+    onAttr('data-poll-open', function () {
+      ETKO.setPollStatus('OPEN');
+    });
+    onAttr('data-poll-close', function () {
+      ETKO.setPollStatus('CLOSED');
+    });
+    onAttr('data-quiz-open', function () {
+      ETKO.setQuizStatus('OPEN');
+    });
+    onAttr('data-quiz-reveal', function () {
+      ETKO.revealQuiz();
+    });
+    if (typeof ETKO.wireEngagementMore === 'function') {
+      try {
+        ETKO.wireEngagementMore(container, onAttr, rerender);
+      } catch (err) {}
+    }
+  }
+
   if (typeof module !== 'undefined' && module && module.exports) {
     module.exports = ETKO;
   }

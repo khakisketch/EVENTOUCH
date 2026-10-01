@@ -167,6 +167,8 @@
             ETKO.renderBooth(mount);
           } else if (view === 'participant' && typeof ETKO.renderHome === 'function') {
             ETKO.renderHome(mount, ETKO.homeStatus);
+          } else if (view === 'engage' && typeof ETKO.renderEngagement === 'function') {
+            ETKO.renderEngagement(mount);
           } else if (view === 'stage' && typeof ETKO.renderStage === 'function') {
             ETKO.renderStage(mount, ETKO.stageState);
           } else if (view === 'overview') {

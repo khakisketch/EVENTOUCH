@@ -100,7 +100,11 @@ button[data-motion],
 button[data-safety],
 button[data-ticket-submit],
 button[data-online-toggle],
-button[data-report-create] {
+button[data-report-create],
+button[data-poll-open],
+button[data-poll-close],
+button[data-quiz-open],
+button[data-quiz-reveal] {
   min-height: var(--touch-min);
   min-width: var(--touch-min);
 }
