@@ -55,6 +55,7 @@
       });
   </script>
   <script src="app.js"></script>
+  <script src="features/views.js"></script>
   <script src="features/agency.js"></script>
   <script src="features/participants.js"></script>
   <script src="features/checkin.js"></script>
@@ -95,6 +96,19 @@
         participant: 'home-mount',
         stage: 'stage-mount',
       };
+
+      // Prefer the single view registry when loaded; fall back to the
+      // local maps above so older shells keep working.
+      try {
+        if (typeof ETKO.viewRegistry === 'function') {
+          var reg = ETKO.viewRegistry() || [];
+          for (var ri = 0; ri < reg.length; ri += 1) {
+            var rv = reg[ri];
+            if (rv && rv.id && rv.section) SECTIONS[rv.id] = rv.section;
+            if (rv && rv.id && rv.mount && MOUNTS[rv.id]) MOUNTS[rv.id] = rv.mount;
+          }
+        }
+      } catch (err) {}
 
       function escapeHtml(value) {
         return String(value === undefined || value === null ? '' : value)
