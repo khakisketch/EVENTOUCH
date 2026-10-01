@@ -196,3 +196,44 @@ git commit -m "test: pin engagement journey"
 git add tests/journey-participant.test.cjs features/*.js
 git commit -m "test: pin participant completion journey"
 ```
+
+### Task 7: Messaging + reports journey test (template → campaign → snapshot report)
+
+**Files:**
+- Test: `tests/journey-closing.test.cjs`
+
+**Interfaces:**
+- Consumes: `ETKO.saveTemplate/createCampaign`, `ETKO.createReport/reports/eventSummary`, `ETKO.moderatePhotos`.
+- Produces: pinned journey — template saved, campaign DRAFT/SCHEDULED with SIMULATION_ONLY + null cost, report snapshot frozen against later check-ins and photo changes.
+
+- [ ] **Step 1: Write the failing test**
+- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 3: Implement minimal gap fixes only**
+- [ ] **Step 4: Run test to verify it passes** (`node --test tests/journey-closing.test.cjs tests/*.test.cjs`)
+- [ ] **Step 5: Commit**
+
+```bash
+git add tests/journey-closing.test.cjs features/*.js
+git commit -m "test: pin closing journey"
+```
+
+### Task 8: Overview report-create button (complete closing in browser)
+
+**Files:**
+- Modify: `index.html`
+- Test: `tests/closing-button.test.cjs`
+
+**Interfaces:**
+- Consumes: `ETKO.createReport`, `ETKO.renderResults`, role gate.
+- Produces: overview section has `[data-report-create]`; clicking creates a titled snapshot and re-renders results; denial surfaces Korean error without crashing.
+
+- [ ] **Step 1: Write the failing test**
+- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 3: Implement button + wiring**
+- [ ] **Step 4: Run test to verify it passes** (`node --test tests/closing-button.test.cjs tests/*.test.cjs`)
+- [ ] **Step 5: Commit**
+
+```bash
+git add index.html tests/closing-button.test.cjs
+git commit -m "feat: wire overview report creation"
+```

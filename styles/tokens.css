@@ -98,7 +98,9 @@ button[data-home-cta],
 button[data-detail],
 button[data-motion],
 button[data-safety],
-button[data-ticket-submit] {
+button[data-ticket-submit],
+button[data-online-toggle],
+button[data-report-create] {
   min-height: var(--touch-min);
   min-width: var(--touch-min);
 }

@@ -22,6 +22,7 @@
   <main id="app" data-current-view="overview">
     <section id="overview-view" aria-label="행사 개요" hidden>
       <div id="overview-mount"></div>
+      <div><button type="button" data-report-create>보고서 생성</button></div>
       <div id="results-mount" aria-label="결과"></div>
       <div id="settings-mount" aria-label="설정"></div>
     </section>
@@ -258,8 +259,38 @@
         if (doc.__etkoFieldWired) return;
         doc.__etkoFieldWired = true;
         doc.addEventListener('click', function (ev) {
-          var t = ev && ev.target && ev.target.closest ? ev.target.closest('[data-ticket-submit],[data-booth-mode],[data-home-cta],[data-online-toggle]') : null;
+          var t = ev && ev.target && ev.target.closest ? ev.target.closest('[data-ticket-submit],[data-booth-mode],[data-home-cta],[data-online-toggle],[data-report-create]') : null;
           if (!t) return;
+          if (t.hasAttribute && t.hasAttribute('data-report-create')) {
+            try {
+              var evName = '행사';
+              try {
+                var st = ETKO.store;
+                var found = null;
+                (st.events || []).forEach(function (e) {
+                  if (e && e.id === st.activeEventId) found = e;
+                });
+                if (found && found.name) evName = found.name;
+              } catch (err) {}
+              if (typeof ETKO.createReport === 'function') ETKO.createReport({ title: evName + ' 결과 보고서' });
+              ETKO.syncViews(doc);
+            } catch (err) {
+              try {
+                var resultsMount = doc.querySelector ? doc.querySelector('#results-mount') : null;
+                if (resultsMount) {
+                  var alert = resultsMount.querySelector ? resultsMount.querySelector('[data-report-error]') : null;
+                  if (!alert) {
+                    alert = doc.createElement('p');
+                    alert.setAttribute('data-report-error', 'true');
+                    alert.setAttribute('role', 'alert');
+                    resultsMount.appendChild(alert);
+                  }
+                  alert.textContent = (err && err.message) || '보고서를 생성하지 못했습니다';
+                }
+              } catch (innerErr) {}
+            }
+            return;
+          }
           if (t.hasAttribute && t.hasAttribute('data-online-toggle')) {
             if (typeof ETKO.setOnline === 'function') ETKO.setOnline(!(ETKO.online !== false));
             try {
