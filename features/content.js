@@ -213,6 +213,118 @@
     return { now: now, next: next };
   };
 
+  function escapeHtml(value) {
+    return String(value === undefined || value === null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // Management mount renderer: program + notice + venue + board sections
+  // with Korean copy and wired controls. Errors surface as role=alert.
+  ETKO.renderContent = function (container) {
+    var ws = contentWorkspace();
+    var programRows = ws.program.map(function (row) {
+      return (
+        '<li>' + escapeHtml(row.time) + '~' + escapeHtml(row.end) + ' ' +
+        escapeHtml(row.title) + ' · ' + escapeHtml(row.location) +
+        ' <button type="button" data-program-del="' + escapeHtml(row.id) + '">삭제</button></li>'
+      );
+    }).join('');
+    var noticeRows = ws.notices.map(function (n) {
+      return (
+        '<li>' + (n.pinned ? '[고정] ' : '') + escapeHtml(n.title) + ' · ' + escapeHtml(n.body) + '</li>'
+      );
+    }).join('');
+    var venue = ws.venue || null;
+    var posts = ws.posts.map(function (p) {
+      return '<li>' + escapeHtml(p.author || '') + ': ' + escapeHtml(p.body || '') + '</li>';
+    }).join('');
+    var html =
+      '<section aria-label="프로그램 관리"><h2>프로그램</h2>' +
+      '<ul>' + (programRows || '<li>등록된 프로그램이 없습니다</li>') + '</ul>' +
+      '<div class="inline-form"><div class="field"><input data-program-title type="text" placeholder="세션명" aria-label="세션명" /></div>' +
+      '<div class="field"><input data-program-time type="text" placeholder="시작 09:00" aria-label="시작 시간" /></div>' +
+      '<div class="field"><input data-program-end type="text" placeholder="종료 10:00" aria-label="종료 시간" /></div>' +
+      '<div class="field"><input data-program-location type="text" placeholder="장소" aria-label="장소" /></div>' +
+      '<button type="button" data-program-add>세션 추가</button></div></section>' +
+      '<section aria-label="공지 관리"><h2>공지</h2>' +
+      '<ul>' + (noticeRows || '<li>등록된 공지가 없습니다</li>') + '</ul>' +
+      '<div class="inline-form"><div class="field"><input data-notice-title type="text" placeholder="공지 제목" aria-label="공지 제목" /></div>' +
+      '<div class="field"><input data-notice-body type="text" placeholder="내용" aria-label="공지 내용" /></div>' +
+      '<button type="button" data-notice-add>공지 게시</button></div></section>' +
+      '<section aria-label="행사장 관리"><h2>행사장 안내</h2>' +
+      '<p>' + (venue ? escapeHtml(venue.name) + ' · ' + escapeHtml(venue.address || '') : '행사장 정보가 없습니다') + '</p>' +
+      '<div class="inline-form"><div class="field"><input data-venue-name type="text" placeholder="행사장 이름" aria-label="행사장 이름" /></div>' +
+      '<div class="field"><input data-venue-address type="text" placeholder="주소" aria-label="행사장 주소" /></div>' +
+      '<button type="button" data-venue-save>행사장 저장</button></div></section>' +
+      '<section aria-label="게시판"><h2>게시판</h2>' +
+      '<ul>' + (posts || '<li>게시글이 없습니다</li>') + '</ul></section>';
+    if (ETKO.lastContentError) {
+      html += '<p role="alert">' + escapeHtml(ETKO.lastContentError) + '</p>';
+    }
+    container.innerHTML = html;
+    wireContent(container);
+    return container.innerHTML;
+  };
+
+  function rerenderContent(container) {
+    if (typeof ETKO.renderContent === 'function') {
+      try {
+        ETKO.renderContent(container);
+      } catch (err) {}
+    }
+  }
+
+  function fieldValue(container, attr) {
+    var el = container.querySelector ? container.querySelector('[' + attr + ']') : null;
+    return el && el.value !== undefined ? el.value : '';
+  }
+
+  function wireContent(container) {
+    if (!container || !container.querySelectorAll) return;
+    function onAttr(attr, fn) {
+      Array.prototype.forEach.call(container.querySelectorAll('[' + attr + ']'), function (btn) {
+        if (btn.tagName === 'INPUT') return;
+        if (typeof btn.addEventListener !== 'function') return;
+        btn.addEventListener('click', function () {
+          ETKO.lastContentError = null;
+          try {
+            fn(btn);
+          } catch (err) {
+            ETKO.lastContentError = err && err.message ? err.message : '처리하지 못했습니다';
+          }
+          rerenderContent(container);
+        });
+      });
+    }
+    onAttr('data-program-add', function () {
+      ETKO.saveProgram({
+        title: fieldValue(container, 'data-program-title'),
+        time: fieldValue(container, 'data-program-time'),
+        end: fieldValue(container, 'data-program-end'),
+        location: fieldValue(container, 'data-program-location'),
+      });
+    });
+    onAttr('data-program-del', function (btn) {
+      ETKO.deleteProgram(btn.getAttribute('data-program-del'));
+    });
+    onAttr('data-notice-add', function () {
+      ETKO.saveNotice({
+        title: fieldValue(container, 'data-notice-title'),
+        body: fieldValue(container, 'data-notice-body'),
+      });
+    });
+    onAttr('data-venue-save', function () {
+      ETKO.saveVenue({
+        name: fieldValue(container, 'data-venue-name'),
+        address: fieldValue(container, 'data-venue-address'),
+      });
+    });
+  }
+
   if (typeof module !== 'undefined' && module && module.exports) {
     module.exports = ETKO;
   }

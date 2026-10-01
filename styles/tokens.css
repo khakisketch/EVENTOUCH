@@ -112,7 +112,11 @@ button[data-draw-resolve],
 button[data-draw-confirm],
 button[data-survey-toggle],
 button[data-photo-approve],
-button[data-photo-hide] {
+button[data-photo-hide],
+button[data-program-add],
+button[data-program-del],
+button[data-notice-add],
+button[data-venue-save] {
   min-height: var(--touch-min);
   min-width: var(--touch-min);
 }
