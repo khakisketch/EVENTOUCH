@@ -17,6 +17,6 @@ test('provider registration validates area and isolates per area', () => {
   const ETKO = fresh();
   assert.throws(() => ETKO.registerProvider('nope', 'x', {}), /연동 영역/);
   ETKO.registerProvider('messages', 'demo-log', { send() { return 'logged'; } });
-  assert.equal(ETKO.providerFor('messages').send(), 'logged');
+  assert.equal(ETKO.providerFor('messages').impl.send(), 'logged');
   assert.equal(ETKO.providerFor('auth').kind, 'simulation');
 });
