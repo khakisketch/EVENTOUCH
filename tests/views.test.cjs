@@ -8,10 +8,10 @@ function fresh() {
   return globalThis.ETKO;
 }
 
-test('registry lists the six shell views in nav order', () => {
+test('registry lists the seven shell views in nav order', () => {
   const ETKO = fresh();
   const reg = ETKO.viewRegistry();
-  assert.deepEqual(reg.map((v) => v.id), ['overview', 'participants', 'checkin', 'booth', 'participant', 'stage']);
+  assert.deepEqual(reg.map((v) => v.id), ['overview', 'participants', 'checkin', 'booth', 'participant', 'engage', 'stage']);
   for (const v of reg) {
     assert.ok(v.section, `missing section for ${v.id}`);
     assert.ok(v.labelKey, `missing labelKey for ${v.id}`);

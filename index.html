@@ -16,6 +16,7 @@
       <button type="button" data-view="checkin">체크인</button>
       <button type="button" data-view="booth">부스</button>
       <button type="button" data-view="participant">홈</button>
+      <button type="button" data-view="engage">참여</button>
       <button type="button" data-view="stage">무대</button>
     </nav>
   </header>
@@ -41,6 +42,9 @@
     </section>
     <section id="participant-view" aria-label="참가자 홈" hidden>
       <div id="home-mount"></div>
+    </section>
+    <section id="engage-view" aria-label="참여 관리" hidden>
+      <div id="engage-mount" aria-live="polite"></div>
     </section>
     <section id="stage-view" aria-label="무대" hidden>
       <div id="stage-mount"></div>
@@ -89,6 +93,7 @@
         checkin: 'checkin-view',
         booth: 'booth-view',
         participant: 'participant-view',
+        engage: 'engage-view',
         stage: 'stage-view',
       };
 
@@ -98,6 +103,7 @@
         checkin: 'checkin-mount',
         booth: 'booth-mount',
         participant: 'home-mount',
+        engage: 'engage-mount',
         stage: 'stage-mount',
       };
 

@@ -13,6 +13,7 @@
     { id: 'checkin', section: 'checkin-view', mount: 'checkin-mount', labelKey: 'checkin' },
     { id: 'booth', section: 'booth-view', mount: 'booth-mount', labelKey: 'booth' },
     { id: 'participant', section: 'participant-view', mount: 'home-mount', labelKey: 'participant' },
+    { id: 'engage', section: 'engage-view', mount: 'engage-mount', labelKey: 'engage' },
     { id: 'stage', section: 'stage-view', mount: 'stage-mount', labelKey: 'stage' },
   ];
 

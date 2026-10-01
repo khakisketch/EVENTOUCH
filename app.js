@@ -5,7 +5,8 @@
 
   // Canonical views. Singular `participant` is the participant home;
   // plural `participants` is the directory. Never merge the two.
-  var VIEWS = ['overview', 'participants', 'checkin', 'booth', 'participant', 'stage'];
+  // `engage` hosts poll/quiz/qna/draw/survey/photo management.
+  var VIEWS = ['overview', 'participants', 'checkin', 'booth', 'participant', 'engage', 'stage'];
 
   ETKO.views = VIEWS.slice();
 
