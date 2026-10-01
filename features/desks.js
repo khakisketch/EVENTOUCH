@@ -231,6 +231,12 @@
     return action === 'OUT' ? '퇴장' : '입장';
   }
 
+  function modeLabel(mode) {
+    if (mode === 'tablet') return '태블릿';
+    if (mode === 'kiosk') return '키오스크';
+    return '데스크';
+  }
+
   // Desk section renderer: unit list with select + add form. History and
   // correction follow in Task 2 via renderDesksHistory().
   ETKO.renderDesks = function (container) {
@@ -238,7 +244,7 @@
     var rows = ws.units.map(function (u) {
       var active = ETKO.activeUnitId === u.id;
       return (
-        '<li>' + escapeHtml(u.name) + ' · ' + actionLabel(u.action) + ' · ' + escapeHtml(u.mode) +
+        '<li>' + escapeHtml(u.name) + ' · ' + actionLabel(u.action) + ' · ' + escapeHtml(modeLabel(u.mode)) +
         (active ? ' · 사용 중' : '') +
         ' <button type="button" data-unit-select="' + escapeHtml(u.id) + '">선택</button></li>'
       );
@@ -250,18 +256,15 @@
       '<div class="field"><select data-unit-action aria-label="입장 퇴장 구분"><option value="IN">입장</option><option value="OUT">퇴장</option></select></div>' +
       '<button type="button" data-unit-add>데스크 개설</button></div>' +
       ETKO.renderDesksHistory(ws) +
+      (ETKO.lastDeskError ? '<p role="alert">' + escapeHtml(ETKO.lastDeskError) + '</p>' : '') +
       '</section>';
-    if (ETKO.lastDeskError) {
-      html += '<p role="alert">' + escapeHtml(ETKO.lastDeskError) + '</p>';
-    }
     container.innerHTML = html;
     wireDesks(container);
     return container.innerHTML;
   };
 
   // History section with correction entries and reason inputs.
-  ETKO.renderDesksHistory = function (wsArg) {
-    var ws = wsArg;
+  ETKO.renderDesksHistory = function (wsArg) {    var ws = wsArg;
     try {
       ws = wsArg || deskWorkspace();
     } catch (err) {
@@ -315,12 +318,7 @@
     });
   };
 
-  // History section (Task 2 extends with correction wiring).
-  if (typeof ETKO.renderDesksHistory !== 'function') {
-    ETKO.renderDesksHistory = function () {
-      return '';
-    };
-  }
+  // History section is fully implemented above; no fallback needed.
 
   function fieldValue(container, attr) {
     var el = container.querySelector ? container.querySelector('[' + attr + ']') : null;
@@ -384,6 +382,16 @@
     }
     if (useUnit) {
       var person = null;
+      var unitName = '';
+      try {
+        var units = deskWorkspace().units;
+        for (var ui = 0; ui < units.length; ui += 1) {
+          if (units[ui] && units[ui].id === unitId) {
+            unitName = units[ui].name;
+            break;
+          }
+        }
+      } catch (err) {}
       try {
         var people = deskWorkspace().participants;
         var want = String(code === undefined || code === null ? '' : code).trim().toUpperCase();
@@ -405,8 +413,9 @@
         } catch (err) {
           var msg = err && err.message ? err.message : '';
           if (/이미 처리/.test(msg)) result = { kind: 'warn', key: 'duplicate' };
+          else if (/권한/.test(msg)) result = { kind: 'bad', key: 'no-permission' };
           else if (/입장 기록/.test(msg)) result = { kind: 'warn', key: 'not-in' };
-          else if (/구분/.test(msg)) result = { kind: 'warn', key: 'not-in' };
+          else if (/구분/.test(msg)) result = { kind: 'warn', key: 'wrong-desk', unitName: unitName };
           else throw err;
         }
       }

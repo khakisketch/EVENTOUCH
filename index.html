@@ -271,8 +271,13 @@
           try {
             result = ETKO.submitTicket(code, ETKO.checkinDirection || 'IN');
           } catch (err) {
-            ETKO.lastScanResult = { kind: 'bad', key: 'not-found' };
-            ETKO.lastDeskError = err && err.message ? err.message : '처리하지 못했습니다';
+            var errMsg = err && err.message ? err.message : '';
+            if (/권한/.test(errMsg)) {
+              ETKO.lastScanResult = { kind: 'bad', key: 'no-permission' };
+            } else {
+              ETKO.lastScanResult = { kind: 'bad', key: 'not-found' };
+            }
+            ETKO.lastDeskError = errMsg || '처리하지 못했습니다';
             result = ETKO.lastScanResult;
           }
         }

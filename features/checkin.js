@@ -159,6 +159,14 @@
       detail: '이번 행사 코드인지 확인해주세요.',
     },
     'not-found': { title: '등록되지 않은 코드입니다', detail: '코드를 다시 확인해주세요.' },
+    'wrong-desk': {
+      title: '이 데스크에서 처리할 수 없습니다',
+      detail: '입장·퇴장 구분이 맞는 데스크를 선택해주세요.',
+    },
+    'no-permission': {
+      title: '권한을 확인하세요',
+      detail: '이 작업을 수행할 권한이 없습니다.',
+    },
     queued: {
       title: '대기열에 저장했습니다',
       detail: '오프라인 상태입니다. 연결 후 동기화하면 반영됩니다.',
@@ -206,13 +214,14 @@
     var outPressed = dir === 'OUT' ? ' aria-pressed="true"' : ' aria-pressed="false"';
     var result = ETKO.lastScanResult;
     var message = result ? ETKO.checkinMessage(result.key) : null;
+    var context = result && result.unitName ? ' (' + result.unitName + ')' : '';
     var resultHtml = message
       ? '<p data-result data-kind="' +
         escapeHtml(result.kind) +
         '"><strong>' +
         escapeHtml(message.title) +
         '</strong> ' +
-        escapeHtml(message.detail) +
+        escapeHtml(message.detail + context) +
         '</p>'
       : '<p data-result>스캔을 기다리고 있습니다</p>';
     var queueHtml =
