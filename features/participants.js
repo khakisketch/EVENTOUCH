@@ -183,6 +183,67 @@
     return container.innerHTML;
   };
 
+  // Gate the directory section behind ETKO.navigate: show it on the
+  // `participants` view, hide it everywhere else. Returns true when active.
+  // No-ops (false) when the section is absent, e.g. Node without a document.
+  ETKO.syncParticipantsView = function (overrideDoc, people) {
+    var doc = overrideDoc;
+    if (!doc && typeof document !== 'undefined' && document) doc = document;
+    if (!doc || typeof doc.querySelector !== 'function') return false;
+    var section = doc.querySelector('#participants-view');
+    if (!section) return false;
+    var active = ETKO.currentView === 'participants';
+    if (typeof section.setAttribute === 'function' && typeof section.removeAttribute === 'function') {
+      if (active) {
+        section.removeAttribute('hidden');
+      } else {
+        section.setAttribute('hidden', '');
+      }
+    } else {
+      section.hidden = !active;
+    }
+    if (active) {
+      var mount =
+        typeof section.querySelector === 'function'
+          ? section.querySelector('#people-list')
+          : null;
+      if (mount) ETKO.renderPeople(mount, Array.isArray(people) ? people : defaultPeople());
+    }
+    return active;
+  };
+
+  // Consume ETKO.navigate (Task 3 interface): re-sync the directory section
+  // after every view switch. Call-through preserves app.js semantics exactly
+  // (unknown views keep the current view); guarded so double-load never re-wraps.
+  if (typeof ETKO.navigate === 'function' && !ETKO.participantsNavHooked) {
+    ETKO.participantsNavHooked = true;
+    var baseNavigate = ETKO.navigate;
+    ETKO.navigate = function (view) {
+      var result = baseNavigate(view);
+      try {
+        ETKO.syncParticipantsView(null);
+      } catch (err) {}
+      return result;
+    };
+  }
+
+  // Browser only: apply the initial gate once the DOM is ready.
+  if (
+    typeof document !== 'undefined' &&
+    document &&
+    typeof document.addEventListener === 'function'
+  ) {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function () {
+        ETKO.syncParticipantsView(document);
+      });
+    } else {
+      try {
+        ETKO.syncParticipantsView(document);
+      } catch (err) {}
+    }
+  }
+
   if (typeof module !== 'undefined' && module && module.exports) {
     module.exports = ETKO;
   }

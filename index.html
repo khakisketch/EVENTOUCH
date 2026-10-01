@@ -20,9 +20,8 @@
     </nav>
   </header>
   <main id="app" aria-live="polite">
-    <section id="participants-view" aria-label="참가자 목록">
-      <div id="people-counts" aria-live="polite"></div>
-      <div id="people-list"></div>
+    <section id="participants-view" aria-label="참가자 목록" hidden>
+      <div id="people-list" aria-live="polite"></div>
     </section>
   </main>
   <script>
@@ -31,6 +30,7 @@
       .then((res) => res.json())
       .then((data) => {
         window.ETKO.sample = data;
+        if (window.ETKO.syncParticipantsView) window.ETKO.syncParticipantsView();
       });
   </script>
   <script src="app.js"></script>

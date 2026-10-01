@@ -6,8 +6,10 @@ const vm = require('node:vm');
 
 const ROOT = path.join(__dirname, '..');
 const FEATURE_PATH = path.join(ROOT, 'features', 'participants.js');
+const APP_PATH = path.join(ROOT, 'app.js');
 const SAMPLE_PATH = path.join(ROOT, 'data', 'sample.json');
 const HTML_PATH = path.join(ROOT, 'index.html');
+const CSS_PATH = path.join(ROOT, 'styles', 'tokens.css');
 
 function loadParticipants() {
   const src = fs.readFileSync(FEATURE_PATH, 'utf8');
@@ -15,6 +17,17 @@ function loadParticipants() {
   sandbox.window = {};
   vm.createContext(sandbox);
   vm.runInContext(src, sandbox, { filename: 'features/participants.js' });
+  return sandbox.window.ETKO || sandbox.ETKO;
+}
+
+function loadBoth() {
+  const sandbox = { console };
+  sandbox.window = {};
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(APP_PATH, 'utf8'), sandbox, { filename: 'app.js' });
+  vm.runInContext(fs.readFileSync(FEATURE_PATH, 'utf8'), sandbox, {
+    filename: 'features/participants.js',
+  });
   return sandbox.window.ETKO || sandbox.ETKO;
 }
 
@@ -129,4 +142,78 @@ test('index.html mounts the participants directory', () => {
     'index.html must load features/participants.js'
   );
   assert.match(html, /참가자/, 'participants mount must carry Korean copy');
+});
+
+test('participants section uses a single live mount (no dead split)', () => {
+  const html = fs.readFileSync(HTML_PATH, 'utf8');
+  assert.match(html, /id="people-list"/, 'single people-list mount must exist');
+  assert.ok(!html.includes('id="people-counts"'), 'dead #people-counts mount must be gone');
+  assert.match(
+    html,
+    /<section[^>]*id="participants-view"[^>]*hidden/,
+    'directory section must start hidden (overview is the default view)'
+  );
+});
+
+test('participants view is gated behind ETKO.navigate', () => {
+  const ETKO = loadBoth();
+  assert.equal(
+    typeof ETKO.syncParticipantsView,
+    'function',
+    'ETKO.syncParticipantsView must exist'
+  );
+  assert.ok(ETKO.participantsNavHooked, 'participants feature must hook ETKO.navigate');
+
+  // Task 2 contract holds through the wrapper: unknown views keep current view.
+  ETKO.navigate('overview');
+  assert.equal(ETKO.navigate('nope'), 'overview');
+  assert.equal(ETKO.currentView, 'overview');
+  assert.equal(ETKO.navigate('participants'), 'participants');
+
+  const mount = { innerHTML: '' };
+  const section = {
+    hiddenState: 'hidden',
+    setAttribute(k) {
+      this.hiddenState = k;
+    },
+    removeAttribute(k) {
+      if (k === 'hidden') this.hiddenState = null;
+    },
+    querySelector(sel) {
+      return sel === '#people-list' ? mount : null;
+    },
+  };
+  const stubDoc = {
+    querySelector(sel) {
+      return sel === '#participants-view' ? section : null;
+    },
+  };
+  const people = samplePeople();
+
+  assert.equal(ETKO.syncParticipantsView(stubDoc, people), true);
+  assert.equal(section.hiddenState, null, 'section must show on the participants view');
+  assert.match(mount.innerHTML, /<table/, 'mount must render the table when active');
+
+  ETKO.navigate('checkin');
+  assert.equal(ETKO.syncParticipantsView(stubDoc, people), false);
+  assert.equal(section.hiddenState, 'hidden', 'section must hide off-view');
+});
+
+test('touch targets meet the 44px minimum', () => {
+  const css = fs.readFileSync(CSS_PATH, 'utf8');
+  assert.match(
+    css,
+    /button\[data-view\][\s\S]*?min-height:\s*var\(--touch-min\)/,
+    'nav buttons must enforce 44px height'
+  );
+  assert.match(
+    css,
+    /button\[data-bulk-in\][\s\S]*?min-height:\s*var\(--touch-min\)/,
+    'bulk IN button must enforce 44px height'
+  );
+  assert.match(
+    css,
+    /input\[data-select\][\s\S]*?min-height:\s*var\(--touch-min\)/,
+    'checkbox hit area must enforce 44px'
+  );
 });
