@@ -1,0 +1,47 @@
+{
+  "event": "EVENTOUCH 운영 샘플",
+  "sample": true,
+  "note": "샘플 데이터입니다. 실제 참가자 정보가 아닙니다.",
+  "participants": [
+    {
+      "id": "p1",
+      "name": "김민준",
+      "email": "minjun.kim@example.kr",
+      "ticket": "GENERAL",
+      "status": "registered",
+      "code": "EVT-1001"
+    },
+    {
+      "id": "p2",
+      "name": "이서연",
+      "email": "seoyeon.lee@example.kr",
+      "ticket": "VIP",
+      "status": "registered",
+      "code": "EVT-1002"
+    },
+    {
+      "id": "p3",
+      "name": "박지훈",
+      "email": "jihun.park@example.kr",
+      "ticket": "GENERAL",
+      "status": "IN",
+      "code": "EVT-1003"
+    },
+    {
+      "id": "p4",
+      "name": "최수아",
+      "email": "sua.choi@example.kr",
+      "ticket": "VIP",
+      "status": "IN",
+      "code": "EVT-1004"
+    },
+    {
+      "id": "p5",
+      "name": "정하늘",
+      "email": "haneul.jung@example.kr",
+      "ticket": "STAFF",
+      "status": "registered",
+      "code": "EVT-1005"
+    }
+  ]
+}

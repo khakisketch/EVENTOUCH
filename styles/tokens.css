@@ -1,0 +1,42 @@
+/* EVENTOUCH Warm Operations tokens — OD brand-spec.md (eventouch-a82e) */
+
+:root {
+  /* Warm Operations surface scale (OKLCH) */
+  --bg: oklch(97.98% 0.0045 78.3);
+  --surface: oklch(100% 0 89.9);
+  --fg: oklch(25.69% 0.0079 84.6);
+  --muted: oklch(55.72% 0.0104 78.2);
+  --border: oklch(91.78% 0.0109 76.6);
+  --accent: oklch(66.54% 0.196 36.9);
+
+  /* Supplied brand values (exact) */
+  --brand: #f35b2c;
+  --action: #bc3f1b;
+  --canvas: #faf8f5;
+
+  /* Type */
+  --font-display: georgia, "Times New Roman", serif;
+  --font-body: inter, system-ui, sans-serif;
+  --font-mono: sfmono-regular, consolas, "Liberation Mono", monospace;
+
+  /* Touch + focus */
+  --touch-min: 44px;
+  --field-h: 52px;
+  --focus-ring: 2px solid var(--action);
+}
+
+html {
+  background: var(--canvas);
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+}
+
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}

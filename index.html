@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>이벤터치 운영</title>
+  <link rel="stylesheet" href="styles/tokens.css" />
+</head>
+<body>
+  <header>
+    <h1>이벤터치 운영</h1>
+    <p role="note">샘플 데이터입니다</p>
+    <nav aria-label="주요 화면">
+      <button type="button" data-view="overview">개요</button>
+      <button type="button" data-view="participants">참가자</button>
+      <button type="button" data-view="checkin">체크인</button>
+      <button type="button" data-view="booth">부스</button>
+      <button type="button" data-view="participant">홈</button>
+      <button type="button" data-view="stage">무대</button>
+    </nav>
+  </header>
+  <main id="app" aria-live="polite"></main>
+  <script>
+    window.ETKO = window.ETKO || {};
+    fetch('data/sample.json')
+      .then((res) => res.json())
+      .then((data) => {
+        window.ETKO.sample = data;
+      });
+  </script>
+</body>
+</html>
