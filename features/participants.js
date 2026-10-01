@@ -13,6 +13,12 @@
   }
 
   function defaultPeople() {
+    if (typeof ETKO.workspace === 'function') {
+      try {
+        var ws = ETKO.workspace();
+        if (ws && Array.isArray(ws.participants)) return ws.participants;
+      } catch (err) {}
+    }
     if (ETKO.sample && Array.isArray(ETKO.sample.participants)) {
       return ETKO.sample.participants;
     }
@@ -87,6 +93,7 @@
       if (!ETKO.selectedIds.has(p.id)) return;
       if (norm(p.status) === 'in') return;
       p.status = 'IN';
+      p.everIn = true;
       marked += 1;
     });
     return marked;

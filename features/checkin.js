@@ -60,13 +60,29 @@
   // Classification order is fixed: wrong-kind (booth BADGE- at the check-in
   // desk) beats wrong-event (another event's ticket-like code), which beats
   // the directory lookup (not-found). Invalid codes are rejected, never queued.
+  // When `state` is omitted and an event workspace exists, the active
+  // workspace participants + scan queue back the scan so shell wiring and
+  // rule stores never split.
+  function workspaceBacking() {
+    if (typeof ETKO.workspace !== 'function') return null;
+    try {
+      var ws = ETKO.workspace();
+      if (!ws || !Array.isArray(ws.participants)) return null;
+      if (!Array.isArray(ws.scanQueue)) ws.scanQueue = [];
+      return { people: ws.participants, queue: ws.scanQueue, workspace: ws };
+    } catch (err) {
+      return null;
+    }
+  }
+
   ETKO.scan = function (opts) {
     var args = opts || {};
     var code = normCode(args.code);
     var direction = normCode(args.direction || 'IN');
     if (direction !== 'OUT') direction = 'IN';
     var online = args.online !== false;
-    var state = ensureState(args.state);
+    var backing = args.state ? null : workspaceBacking();
+    var state = ensureState(args.state || (backing ? { people: backing.people, queue: backing.queue } : null));
 
     if (/^BADGE-/i.test(code)) return { kind: 'bad', key: 'wrong-kind' };
     if (/^[A-Z]+-\d+$/.test(code) && code.indexOf('EVT-') !== 0) {
@@ -89,6 +105,7 @@
         return { kind: 'warn', key: 'queued' };
       }
       person.status = 'IN';
+      person.everIn = true;
       return { kind: 'good', key: 'success' };
     }
 
@@ -107,8 +124,10 @@
   // Apply every queued entry exactly once, FIFO. Entries whose transition no
   // longer applies (stale duplicates) are dropped without effect. The queue
   // is drained in place; returns the number of entries removed.
+  // Workspace-backed when `state` is omitted.
   ETKO.syncQueue = function (state) {
-    var s = ensureState(state);
+    var backing = state ? null : workspaceBacking();
+    var s = ensureState(state || (backing ? { people: backing.people, queue: backing.queue } : null));
     var pending = s.queue.slice();
     s.queue.length = 0;
     pending.forEach(function (entry) {
@@ -116,7 +135,10 @@
       var person = findPerson(s.people, entry.code);
       if (!person) return;
       var entered = normStatus(person.status) === 'in';
-      if (entry.direction === 'IN' && !entered) person.status = 'IN';
+      if (entry.direction === 'IN' && !entered) {
+        person.status = 'IN';
+        person.everIn = true;
+      }
       if (entry.direction === 'OUT' && entered) person.status = 'registered';
     });
     return pending.length;
