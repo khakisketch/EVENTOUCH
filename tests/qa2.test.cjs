@@ -41,10 +41,13 @@ function loadShell() {
   const sandbox = { console };
   sandbox.window = {};
   vm.createContext(sandbox);
-  for (const f of ['app.js', 'features/agency.js', 'features/results.js']) {
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const listed = [...html.matchAll(/<script\s+src="([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(listed.includes('features/engagement.js'), 'index shell must list engagement for honest boot');
+  for (const f of listed) {
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sandbox, { filename: f });
   }
-  vm.runInContext(inlineSync(readHtml()), sandbox, { filename: 'index-inline-sync.js' });
+  vm.runInContext(inlineSync(html), sandbox, { filename: 'index-inline-sync.js' });
   return sandbox.window.ETKO || sandbox.ETKO;
 }
 
@@ -181,4 +184,12 @@ test('field staff reach participant detail from the directory (route table untou
   assert.equal(ETKO.openParticipantDetail('p1'), 'participant');
   assert.equal(ETKO.currentView, 'participant', 'detail entry must land on the participant view');
   assert.equal(ETKO.homeParticipantId, 'p1', 'detail entry must record its target');
+});
+
+test('shell boot loads the real feature store (no hidden wiring gap)', () => {
+  const ETKO = loadShell();
+  assert.equal(typeof ETKO.workspace, 'function', 'boot must provide workspace');
+  assert.equal(typeof ETKO.vote, 'function', 'boot must provide engagement vote');
+  assert.equal(typeof ETKO.createReport, 'function', 'boot must provide reports');
+  assert.equal(typeof ETKO.scan, 'function', 'boot must provide scan');
 });
