@@ -253,8 +253,12 @@ test('ticket input meets the 52px field height', () => {
   assert.match(html, /<input[^>]*data-ticket[^>]*>/, 'index.html must carry a ticket input');
   assert.match(
     html,
-    /<input[^>]*aria-label="[^"]*[가-힣][^"]*"[^>]*>/,
-    'ticket input must carry a Korean aria-label'
+    /<label[^>]*for="ticket-code"[^>]*>[^<]*[가-힣]+[^<]*<\/label>/,
+    'ticket input must have a visible Korean <label for="ticket-code">'
+  );
+  assert.ok(
+    !/<input[^>]*data-ticket[^>]*aria-label=/.test(html),
+    'ticket input must not duplicate its accessible name with aria-label'
   );
 });
 

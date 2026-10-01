@@ -47,6 +47,7 @@
     var mode = ETKO.boothMode === 'STAFF' ? 'STAFF' : 'SELF';
     var selfPressed = mode === 'SELF' ? ' aria-pressed="true"' : ' aria-pressed="false"';
     var staffPressed = mode === 'STAFF' ? ' aria-pressed="true"' : ' aria-pressed="false"';
+    var guide = mode === 'STAFF' ? '티켓을 보여주세요' : '부스 QR을 스캔해주세요';
     var html =
       '<div><button type="button" data-booth-mode="SELF"' +
       selfPressed +
@@ -54,7 +55,9 @@
       '<button type="button" data-booth-mode="STAFF"' +
       staffPressed +
       '>직원 스캔</button></div>' +
-      '<p>부스 QR을 스캔해주세요</p>';
+      '<p>' +
+      guide +
+      '</p>';
     container.innerHTML = html;
     if (container.querySelectorAll) {
       Array.prototype.forEach.call(

@@ -81,3 +81,20 @@ test('booth desk renders Korean mode switch', () => {
   var visible = container.innerHTML.replace(/<[^>]*>/g, ' ');
   assert.ok(!/SELF|STAFF/.test(visible), 'booth desk must not leak raw mode keys');
 });
+
+test('booth desk guidance follows the mode (SELF scan vs STAFF ticket)', () => {
+  const ETKO = loadBooth();
+  var container = { innerHTML: '' };
+  ETKO.setBoothMode('SELF');
+  ETKO.renderBooth(container);
+  assert.match(container.innerHTML, /부스 QR/, 'SELF guidance must ask for a booth QR scan');
+
+  container = { innerHTML: '' };
+  ETKO.setBoothMode('STAFF');
+  ETKO.renderBooth(container);
+  assert.match(container.innerHTML, /티켓/, 'STAFF guidance must mention the ticket');
+  assert.ok(
+    !/부스 QR/.test(container.innerHTML),
+    'STAFF guidance must not show the SELF scan copy'
+  );
+});
