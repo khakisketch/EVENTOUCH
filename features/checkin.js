@@ -177,7 +177,15 @@
   if (ETKO.checkinDirection !== 'OUT') ETKO.checkinDirection = 'IN';
   // Last scan result for the result panel; null until the first scan.
   if (!('lastScanResult' in ETKO)) ETKO.lastScanResult = null;
+  // Connectivity flag. Namespace-level so re-renders never reset it.
+  // The shell toggle and offline queue share this single value.
   if (ETKO.online !== false && ETKO.online !== true) ETKO.online = true;
+
+  // Flip connectivity. Returns the active flag.
+  ETKO.setOnline = function (value) {
+    ETKO.online = value === true || value === 'true';
+    return ETKO.online;
+  };
 
   function escapeHtml(value) {
     return String(value === undefined || value === null ? '' : value)
@@ -224,6 +232,11 @@
             .join('') +
           '</ul>';
     var html =
+      '<div><p data-connectivity>' +
+      (ETKO.online === false ? '오프라인 · 대기열에 저장됩니다' : '온라인 · 즉시 반영됩니다') +
+      '</p><button type="button" data-online-toggle>' +
+      (ETKO.online === false ? '온라인으로 전환' : '오프라인으로 전환') +
+      '</button></div>' +
       '<div><button type="button" data-direction="IN"' +
       inPressed +
       '>입장</button>' +
@@ -255,6 +268,13 @@
       if (sync && typeof sync.addEventListener === 'function') {
         sync.addEventListener('click', function () {
           ETKO.syncQueue(s);
+          ETKO.renderCheckin(container, s);
+        });
+      }
+      var toggle = container.querySelector ? container.querySelector('[data-online-toggle]') : null;
+      if (toggle && typeof toggle.addEventListener === 'function') {
+        toggle.addEventListener('click', function () {
+          ETKO.setOnline(!(ETKO.online !== false));
           ETKO.renderCheckin(container, s);
         });
       }

@@ -114,3 +114,45 @@ Expected: all PASS.
 git add tests/journey-setup.test.cjs features/*.js
 git commit -m "test: pin event-setup journey"
 ```
+
+### Task 3: Field-ops journey test (desk → IN/OUT → offline → sync → correct → summary)
+
+**Files:**
+- Test: `tests/journey-field.test.cjs`
+
+**Interfaces:**
+- Consumes: `ETKO.saveUnit/recordScan/history/correctLog`, `ETKO.scan/syncQueue`, `ETKO.eventSummary/peopleCounts`.
+- Produces: pinned journey — unit setup, IN then OUT, offline queued IN synced once, duplicate rejected, wrong correction rejected in Korean, latest-only correction restores and summary agrees.
+
+- [ ] **Step 1: Write the failing test** (fresh load agency+desks+checkin+participants+results; see file for exact assertions)
+- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 3: Implement minimal gap fixes only**
+- [ ] **Step 4: Run test to verify it passes** (`node --test tests/journey-field.test.cjs tests/*.test.cjs`)
+- [ ] **Step 5: Commit**
+
+```bash
+git add tests/journey-field.test.cjs features/*.js
+git commit -m "test: pin field-ops journey"
+```
+
+### Task 4: Check-in panel online/offline toggle (complete the offline flow in UI)
+
+**Files:**
+- Modify: `index.html`
+- Modify: `features/checkin.js`
+- Test: `tests/field-toggle.test.cjs`
+
+**Interfaces:**
+- Consumes: `ETKO.online`, `ETKO.renderCheckin`, workspace `scanQueue`.
+- Produces: shell check-in section has `[data-online-toggle]` showing 온라인/오프라인; clicking flips `ETKO.online` and re-renders the panel (queue count + sync stay workspace-backed).
+
+- [ ] **Step 1: Write the failing test** (assert toggle marker + `ETKO.setOnline` flips and re-render keeps queue)
+- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 3: Implement `ETKO.setOnline` + shell toggle wiring**
+- [ ] **Step 4: Run test to verify it passes** (`node --test tests/field-toggle.test.cjs tests/*.test.cjs`)
+- [ ] **Step 5: Commit**
+
+```bash
+git add index.html features/checkin.js tests/field-toggle.test.cjs
+git commit -m "feat: wire check-in online toggle"
+```
