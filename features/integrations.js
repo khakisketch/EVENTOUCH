@@ -182,6 +182,58 @@
     throw new Error('결제 내역을 찾을 수 없습니다');
   };
 
+  // ---- devices: QR validation + simulated capabilities ----
+  // Booth payloads are public identifiers `ET:BOOTH:<eventId>:<boothId>`.
+  // Parsing is strict: hand-written or truncated codes throw Korean errors.
+  // No camera/printer/LED hardware is touched; caps report simulation.
+  var DEVICE_LABELS = { camera: '카메라', printer: '프린터', led: '전광판', qr: '부스 QR' };
+
+  ETKO.parseBoothPayload = function (text) {
+    var raw = String(text === undefined || text === null ? '' : text).trim();
+    var m = /^ET:BOOTH:([^:]+):([^:]+)$/.exec(raw);
+    if (!m) throw new Error('부스 QR을 확인하세요');
+    return { eventId: m[1], boothId: m[2] };
+  };
+
+  ETKO.deviceCaps = function () {
+    return { camera: false, printer: false, led: false, simulated: true };
+  };
+
+  ETKO.deviceLabel = function (key) {
+    var k = String(key === undefined || key === null ? '' : key).trim().toLowerCase();
+    if (DEVICE_LABELS[k]) return DEVICE_LABELS[k];
+    return String(key === undefined || key === null ? '' : key).trim();
+  };
+
+  // Confirm a booth QR print. Records who confirmed what, never prints.
+  ETKO.markPrinted = function (boothId, format) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('booth');
+    var ws = null;
+    try {
+      ws = typeof ETKO.workspace === 'function' ? ETKO.workspace() : null;
+    } catch (err) {
+      ws = null;
+    }
+    var booths = ws && Array.isArray(ws.booths) ? ws.booths : [];
+    var found = null;
+    for (var i = 0; i < booths.length; i += 1) {
+      if (booths[i] && booths[i].id === boothId) {
+        found = booths[i];
+        break;
+      }
+    }
+    if (!found) throw new Error('부스를 확인하세요');
+    var rec = {
+      boothId: found.id,
+      format: String(format === undefined || format === null ? 'A4' : format).trim() || 'A4',
+      at: new Date().toISOString(),
+      simulated: true,
+    };
+    if (!Array.isArray(ws.prints)) ws.prints = [];
+    ws.prints.push(rec);
+    return { boothId: rec.boothId, format: rec.format, simulated: true };
+  };
+
   if (typeof module !== 'undefined' && module && module.exports) {
     module.exports = ETKO;
   }
