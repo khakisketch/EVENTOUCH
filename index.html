@@ -22,6 +22,8 @@
   <main id="app" data-current-view="overview">
     <section id="overview-view" aria-label="행사 개요" hidden>
       <div id="overview-mount"></div>
+      <div id="results-mount" aria-label="결과"></div>
+      <div id="settings-mount" aria-label="설정"></div>
     </section>
     <section id="participants-view" aria-label="참가자 목록" hidden>
       <div id="people-list" aria-live="polite"></div>
@@ -56,6 +58,7 @@
   <script src="features/checkin.js"></script>
   <script src="features/booth.js"></script>
   <script src="features/stage.js"></script>
+  <script src="features/results.js"></script>
   <script>
     /* ETKO-VIEW-SYNC: gate all six views behind ETKO.navigate.
        Follows the syncParticipantsView pattern (Task 3 interface): show the
@@ -138,6 +141,23 @@
               ETKO.sample && ETKO.sample.event ? ETKO.sample.event : '이벤터치 운영';
             mount.innerHTML =
               '<p>' + escapeHtml(name) + '</p><p role="note">샘플 데이터입니다</p>';
+            // Results + settings live behind the overview gate: they render
+            // with the default view through ETKO.navigate, never as dead
+            // mounts. Each renderer is guarded so older shells keep working.
+            try {
+              var resultsMount = section.querySelector
+                ? section.querySelector('#results-mount')
+                : null;
+              if (resultsMount && typeof ETKO.renderResults === 'function') {
+                ETKO.renderResults(resultsMount);
+              }
+              var settingsMount = section.querySelector
+                ? section.querySelector('#settings-mount')
+                : null;
+              if (settingsMount && typeof ETKO.renderSettings === 'function') {
+                ETKO.renderSettings(settingsMount);
+              }
+            } catch (err) {}
           }
         } catch (err) {}
       }

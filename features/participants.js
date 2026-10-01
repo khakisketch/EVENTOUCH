@@ -58,6 +58,17 @@
     return ETKO.selectedIds;
   };
 
+  // Participant-detail entry for field staff: records the target and moves
+  // to the singular `participant` home view. View navigation is separate
+  // from the role route table (canRoute('STAFF','participant') stays false
+  // per Task 1); the shell offers this path from the STAFF-visible
+  // directory so staff can still reach participant detail.
+  ETKO.openParticipantDetail = function (id) {
+    ETKO.homeParticipantId = id;
+    if (typeof ETKO.navigate === 'function') return ETKO.navigate('participant');
+    return 'participant';
+  };
+
   ETKO.peopleCounts = function (people) {
     var list = Array.isArray(people) ? people : defaultPeople();
     var entered = 0;
@@ -107,7 +118,9 @@
       escapeHtml(p.status) +
       '</td><td>' +
       escapeHtml(p.code) +
-      '</td></tr>'
+      '</td><td><button type="button" data-detail="' +
+      escapeHtml(p.id) +
+      '">상세</button></td></tr>'
     );
   }
 
@@ -128,7 +141,9 @@
       escapeHtml(p.status) +
       ' · ' +
       escapeHtml(p.code) +
-      '</p></li>'
+      '</p><p><button type="button" data-detail="' +
+      escapeHtml(p.id) +
+      '">상세 보기</button></p></li>'
     );
   }
 
@@ -149,7 +164,7 @@
         '<div class="table-wrap"><table><thead><tr><th scope="col">선택</th>' +
         '<th scope="col">이름</th><th scope="col">이메일</th>' +
         '<th scope="col">권종</th><th scope="col">상태</th>' +
-        '<th scope="col">코드</th></tr></thead><tbody>' +
+        '<th scope="col">코드</th><th scope="col">상세</th></tr></thead><tbody>' +
         list.map(rowHtml).join('') +
         '</tbody></table></div>';
       html +=
@@ -179,6 +194,16 @@
           ETKO.renderPeople(container, list);
         });
       }
+      Array.prototype.forEach.call(
+        container.querySelectorAll('[data-detail]'),
+        function (btn) {
+          if (typeof btn.addEventListener !== 'function') return;
+          btn.addEventListener('click', function () {
+            var id = btn.getAttribute ? btn.getAttribute('data-detail') : btn.id;
+            ETKO.openParticipantDetail(id);
+          });
+        }
+      );
     }
     return container.innerHTML;
   };

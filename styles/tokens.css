@@ -95,6 +95,7 @@ button[data-booth-mode],
 button[data-take],
 button[data-sync],
 button[data-home-cta],
+button[data-detail],
 button[data-motion],
 button[data-safety] {
   min-height: var(--touch-min);
@@ -117,6 +118,18 @@ input[data-ticket] {
   }
   #people-list .table-wrap {
     margin: 0 -12px;
+  }
+}
+
+/* Tablet: two-column cards from 768px up without sideways page scroll. */
+@media (min-width: 768px) {
+  main {
+    padding: 0 24px;
+  }
+  #people-list .cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
   }
 }
 
