@@ -259,6 +259,62 @@
     return container.innerHTML;
   };
 
+  // History section with correction entries and reason inputs.
+  ETKO.renderDesksHistory = function (wsArg) {
+    var ws = wsArg;
+    try {
+      ws = wsArg || deskWorkspace();
+    } catch (err) {
+      ws = { logs: [], units: [], participants: [] };
+    }
+    var logs = Array.isArray(ws.logs) ? ws.logs : [];
+    function personName(pid) {
+      var people = ws.participants || [];
+      for (var i = 0; i < people.length; i += 1) {
+        if (people[i] && people[i].id === pid) return people[i].name;
+      }
+      return pid;
+    }
+    function unitName(uid) {
+      var units = ws.units || [];
+      for (var j = 0; j < units.length; j += 1) {
+        if (units[j] && units[j].id === uid) return units[j].name;
+      }
+      return uid;
+    }
+    function actionLabelLog(action) {
+      if (action === 'IN') return '입장';
+      if (action === 'OUT') return '퇴장';
+      return '정정';
+    }
+    var rows = logs.map(function (entry) {
+      var correctBtn = '';
+      if (entry && entry.action !== 'CORRECTION' && !entry.corrected) {
+        correctBtn =
+          ' <input data-correct-reason="' + escapeHtml(entry.id) + '" type="text" placeholder="정정 사유 5~200자" aria-label="정정 사유" />' +
+          ' <button type="button" data-correct-log="' + escapeHtml(entry.id) + '">정정</button>';
+      }
+      return (
+        '<li>' + escapeHtml(personName(entry.participantId)) + ' · ' + actionLabelLog(entry.action) +
+        ' · ' + escapeHtml(unitName(entry.unitId)) +
+        (entry.corrected ? ' · 정정됨' : '') + correctBtn + '</li>'
+      );
+    }).join('');
+    return (
+      '<div aria-label="입퇴장 기록"><h3>입퇴장 기록</h3>' +
+      '<ul>' + (rows || '<li>기록이 없습니다</li>') + '</ul></div>'
+    );
+  };
+
+  ETKO.wireDesksHistory = function (container, onAttr) {
+    onAttr('data-correct-log', function (btn) {
+      var id = btn.getAttribute('data-correct-log');
+      var reasonEl = container.querySelector ? container.querySelector('[data-correct-reason="' + id + '"]') : null;
+      var reason = reasonEl && reasonEl.value !== undefined ? reasonEl.value : '';
+      ETKO.correctLog(id, reason);
+    });
+  };
+
   // History section (Task 2 extends with correction wiring).
   if (typeof ETKO.renderDesksHistory !== 'function') {
     ETKO.renderDesksHistory = function () {
