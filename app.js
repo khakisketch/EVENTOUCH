@@ -44,15 +44,35 @@
   };
 
   ETKO.navigate = function (view) {
-    if (VIEWS.indexOf(view) === -1) return ETKO.currentView;
-    if (typeof ETKO.canRoute === 'function') {
+    var known = VIEWS.indexOf(view) !== -1;
+    if (!known) {
+      // Beyond the six shell sections, allow role-permitted routes so
+      // results/settings/members/events remain reachable; unknown routes
+      // still keep the current view.
+      if (typeof ETKO.canRoute !== 'function') return ETKO.currentView;
       try {
-        if (ETKO.detailBypass === true) {
+        if (ETKO.detailBypass === 'participant' && view === 'participant') {
+          ETKO.detailBypass = false;
+        } else {
+          if (!ETKO.canRoute(ETKO.currentRole(), view)) return ETKO.currentView;
+          var allowed = ['overview', 'participants', 'participant', 'checkin', 'booth', 'booths', 'stage', 'staff', 'qna', 'photos', 'poll', 'quiz', 'draw', 'survey', 'messages', 'program', 'notices', 'venue', 'board', 'results', 'settings', 'members', 'events', 'home', 'screen'];
+          if (allowed.indexOf(view) === -1) return ETKO.currentView;
+        }
+      } catch (err) {
+        return ETKO.currentView;
+      }
+    } else if (typeof ETKO.canRoute === 'function') {
+      try {
+        if (ETKO.detailBypass === 'participant' && view === 'participant') {
+          ETKO.detailBypass = false;
+        } else if (ETKO.detailBypass === true && view === 'participant') {
           ETKO.detailBypass = false;
         } else if (!ETKO.canRoute(ETKO.currentRole(), view)) {
           return ETKO.currentView;
         }
       } catch (err) {}
+    } else if (ETKO.detailBypass === true || ETKO.detailBypass === 'participant') {
+      ETKO.detailBypass = false;
     }
     ETKO.currentView = view;
     paint(docOf(null));

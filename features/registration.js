@@ -86,6 +86,7 @@
   // (they stay required); select fields need at least two options.
   // Bumps formVersion so existing answers stay pinned to their version.
   ETKO.setFields = function (fields) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('participants');
     var ws = formWorkspace();
     if (!Array.isArray(fields) || fields.length === 0) {
       throw new Error('등록 항목을 입력하세요');
@@ -159,6 +160,7 @@
   // Create a participant: validate, refuse name+phone duplicates and a full
   // event, then append with the next p<N> id.
   ETKO.register = function (payload) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('participants');
     var ws = formWorkspace();
     var version = ETKO.validateSignup(payload).formVersion;
     var opts = payload || {};

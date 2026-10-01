@@ -10,7 +10,21 @@
 
   // Switch mode. Unknown values keep the current mode (mirrors ETKO.navigate
   // semantics: no state change on unknown input). Returns the active mode.
+  // When an event workspace exists, delegate to the locked event mode so the
+  // legacy toggle cannot bypass acknowledge + visit locks.
   ETKO.setBoothMode = function (mode) {
+    if (typeof ETKO.setEventBoothMode === 'function' && typeof ETKO.workspace === 'function') {
+      try {
+        ETKO.setEventBoothMode(mode, { acknowledge: true });
+        try {
+          var ws = ETKO.workspace();
+          if (ws && typeof ws.boothMode === 'string') ETKO.boothMode = ws.boothMode;
+        } catch (err) {}
+        return ETKO.boothMode;
+      } catch (err) {
+        throw err;
+      }
+    }
     var next = String(mode === undefined || mode === null ? '' : mode)
       .trim()
       .toUpperCase();

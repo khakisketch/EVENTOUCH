@@ -224,7 +224,7 @@
         var input = doc.querySelector ? doc.querySelector('#ticket-code') : null;
         var code = input && input.value ? input.value : '';
         if (typeof ETKO.scan !== 'function') return;
-        var result = ETKO.scan({ code: code, direction: ETKO.checkinDirection || 'IN' });
+        var result = ETKO.scan({ code: code, direction: ETKO.checkinDirection || 'IN', online: ETKO.online !== false });
         ETKO.lastScanResult = result;
         try {
           var mount = doc.querySelector ? doc.querySelector('#checkin-mount') : null;
@@ -257,11 +257,22 @@
               } else if (typeof ETKO.setBoothMode === 'function') {
                 ETKO.setBoothMode(mode);
               }
+              ETKO.lastBoothError = null;
             } catch (err) {
               ETKO.lastBoothError = err && err.message ? err.message : '부스 방식을 변경할 수 없습니다';
               try {
                 var boothMount = doc.querySelector ? doc.querySelector('#booth-mount') : null;
-                if (boothMount) boothMount.setAttribute('data-error', ETKO.lastBoothError);
+                if (boothMount) {
+                  boothMount.setAttribute('data-error', ETKO.lastBoothError);
+                  var alert = boothMount.querySelector ? boothMount.querySelector('[data-booth-error]') : null;
+                  if (!alert) {
+                    alert = doc.createElement('p');
+                    alert.setAttribute('data-booth-error', 'true');
+                    alert.setAttribute('role', 'alert');
+                    boothMount.appendChild(alert);
+                  }
+                  alert.textContent = ETKO.lastBoothError;
+                }
               } catch (innerErr) {}
             }
             try {
@@ -270,7 +281,30 @@
             return;
           }
           if (t.hasAttribute && t.hasAttribute('data-home-cta')) {
-            var status = ETKO.homeStatus || 'registered';
+            var status = ETKO.homeStatus || null;
+            if (!status && ETKO.homeParticipantId && typeof ETKO.workspace === 'function') {
+              try {
+                var people = ETKO.workspace().participants || [];
+                for (var i = 0; i < people.length; i += 1) {
+                  if (people[i] && people[i].id === ETKO.homeParticipantId) {
+                    status = people[i].status;
+                    break;
+                  }
+                }
+              } catch (err) {}
+            }
+            if (!status && typeof ETKO.workspace === 'function') {
+              try {
+                var first = (ETKO.workspace().participants || [])[0];
+                if (first) status = first.status;
+              } catch (err) {}
+            }
+            status = status || 'registered';
+            if (typeof ETKO.renderHome === 'function') {
+              try {
+                ETKO.homeStatus = status;
+              } catch (err) {}
+            }
             var entered = String(status).trim().toLowerCase() === 'in';
             ETKO.navigate(entered ? 'stage' : 'checkin');
           }
@@ -285,7 +319,7 @@
             if (openDialog) {
               if (openDialog.removeAttribute) {
                 openDialog.removeAttribute('data-open');
-                openDialog.classList.remove('open');
+                if (openDialog.classList) openDialog.classList.remove('open');
               }
               var returnTo = openDialog.getAttribute ? openDialog.getAttribute('data-return-focus') : null;
               if (returnTo && doc.getElementById) {
@@ -294,6 +328,28 @@
                   try {
                     target.focus();
                   } catch (err) {}
+                }
+              }
+            }
+          }
+          if (ev && ev.key === 'Tab') {
+            var trap = doc.querySelector ? doc.querySelector('[role="dialog"][data-open="true"], [role="dialog"].open') : null;
+            if (trap && trap.querySelectorAll) {
+              var focusables = trap.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+              var visible = [];
+              for (var fi = 0; fi < focusables.length; fi += 1) {
+                var el = focusables[fi];
+                if (el && el.getClientRects && el.getClientRects().length) visible.push(el);
+              }
+              if (visible.length) {
+                var firstEl = visible[0];
+                var lastEl = visible[visible.length - 1];
+                if (ev.shiftKey && doc.activeElement === firstEl) {
+                  ev.preventDefault();
+                  lastEl.focus();
+                } else if (!ev.shiftKey && doc.activeElement === lastEl) {
+                  ev.preventDefault();
+                  firstEl.focus();
                 }
               }
             }

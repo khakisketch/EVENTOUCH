@@ -110,6 +110,7 @@
   // Event-wide booth mode. Requires explicit acknowledgement; locks forever
   // once any stamp visit exists.
   ETKO.setEventBoothMode = function (mode, opts) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('booth');
     var ws = boothWorkspace();
     var next = text(mode).toUpperCase();
     if (MODES.indexOf(next) === -1) throw new Error('인증 방식을 확인하세요');
@@ -125,6 +126,7 @@
 
   // Create a booth by default; update the matching booth when `id` matches.
   ETKO.saveBooth = function (input) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('booth');
     var opts = input || {};
     var ws = boothWorkspace();
     var name = text(opts.name);
@@ -157,6 +159,7 @@
   };
 
   ETKO.setBoothStatus = function (id, status) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('booth');
     var ws = boothWorkspace();
     var booth = findBooth(ws, id);
     if (!booth) throw new Error('부스를 찾을 수 없습니다');
@@ -167,6 +170,7 @@
   // Stamp one visit. Validates booth OPEN, time window, total capacity and
   // per-person limit. Returns a copy of the recorded visit.
   ETKO.stamp = function (input) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('booth');
     var opts = input || {};
     var ws = boothWorkspace();
     var booth = findBooth(ws, opts.boothId);

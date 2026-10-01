@@ -66,6 +66,7 @@
   // Create by default, update when `id` matches. End must be a later
   // same-day HH:MM than start.
   ETKO.saveProgram = function (input) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('program');
     var opts = input || {};
     var ws = contentWorkspace();
     var title = text(opts.title);
@@ -100,6 +101,7 @@
   };
 
   ETKO.deleteProgram = function (id) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('program');
     var ws = contentWorkspace();
     ws.program = ws.program.filter(function (row) {
       return !row || row.id !== id;
@@ -116,6 +118,7 @@
 
   // Create by default, update when `id` matches. New notices go first.
   ETKO.saveNotice = function (input) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('notices');
     var opts = input || {};
     var ws = contentWorkspace();
     var title = text(opts.title);
@@ -136,6 +139,7 @@
   };
 
   ETKO.saveVenue = function (input) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('venue');
     var opts = input || {};
     var ws = contentWorkspace();
     var name = text(opts.name);
@@ -150,6 +154,7 @@
 
   // Participant board post, max 300 chars. Newest first.
   ETKO.createPost = function (participantId, body) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('board');
     var ws = contentWorkspace();
     var person = findParticipant(ws, participantId);
     if (!person) throw new Error('참가자를 찾을 수 없습니다');

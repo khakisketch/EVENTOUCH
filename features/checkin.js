@@ -177,6 +177,7 @@
   if (ETKO.checkinDirection !== 'OUT') ETKO.checkinDirection = 'IN';
   // Last scan result for the result panel; null until the first scan.
   if (!('lastScanResult' in ETKO)) ETKO.lastScanResult = null;
+  if (ETKO.online !== false && ETKO.online !== true) ETKO.online = true;
 
   function escapeHtml(value) {
     return String(value === undefined || value === null ? '' : value)
@@ -188,8 +189,10 @@
 
   // Render direction toggle + result panel + queue list + sync button.
   // Korean copy only. Wires controls when the container supports queries.
+  // Workspace-backed when `state` is omitted so the shell queue stays visible.
   ETKO.renderCheckin = function (container, state) {
-    var s = ensureState(state);
+    var backing = state ? null : workspaceBacking();
+    var s = ensureState(state || (backing ? { people: backing.people, queue: backing.queue } : null));
     var dir = ETKO.checkinDirection === 'OUT' ? 'OUT' : 'IN';
     var inPressed = dir === 'IN' ? ' aria-pressed="true"' : ' aria-pressed="false"';
     var outPressed = dir === 'OUT' ? ' aria-pressed="true"' : ' aria-pressed="false"';

@@ -109,6 +109,7 @@
   // Save a reusable message template. Creates by default, updates when
   // `id` matches. Channel defaults to SMS.
   ETKO.saveTemplate = function (input) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('messages');
     var opts = input || {};
     var ws = messagingWorkspace();
     var name = required(opts.name, '템플릿명', 80);
@@ -130,6 +131,7 @@
   // Delete one template by id. Missing ids are a no-op returning false,
   // deleted ids return true.
   ETKO.deleteTemplate = function (id) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('messages');
     var ws = messagingWorkspace();
     var before = ws.templates.length;
     ws.templates = ws.templates.filter(function (t) {
@@ -163,6 +165,7 @@
   // reservation time is given), delivery is always SIMULATION_ONLY and
   // cost stays null (unpriced, not zero).
   ETKO.createCampaign = function (input) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('messages');
     var opts = input || {};
     var ws = messagingWorkspace();
     var target = text(opts.target) || '전체';

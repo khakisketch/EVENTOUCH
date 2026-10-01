@@ -82,6 +82,7 @@
   // Only JPEG/PNG/WebP data URLs up to 1MB (by length), and at most
   // 3 photos are stored with data.
   ETKO.uploadPhoto = function (participantId, input) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('photos');
     var ws = mediaWorkspace();
     var person = findParticipant(ws, participantId);
     if (!person) throw new Error('참가자를 찾을 수 없습니다');
@@ -107,6 +108,7 @@
   // Review uploaded photos. Unknown ids throw
   // `사진을 찾을 수 없습니다`.
   ETKO.moderatePhotos = function (ids, status) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('photos');
     var ws = mediaWorkspace();
     var next = text(status).toUpperCase();
     if (PHOTO_STATUSES.indexOf(next) === -1) throw new Error('상태를 확인하세요');
@@ -130,6 +132,7 @@
 
   // Photowall output settings: grid or one-at-a-time, 3..60s rotation.
   ETKO.setWall = function (input) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('screen');
     var ws = mediaWorkspace();
     var opts = input || {};
     var layout = text(opts.layout).toLowerCase();
@@ -146,6 +149,7 @@
   // Screen output selection. A media asset must exist in product.media,
   // a photos asset must exist in photos; unknown assets throw.
   ETKO.setOutput = function (input) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('screen');
     var ws = mediaWorkspace();
     var opts = input || {};
     var type = text(opts.type).toLowerCase();

@@ -97,7 +97,8 @@
     Object.keys(p || {}).forEach(function (key) {
       out[key] = p[key];
     });
-    out.everIn = false;
+    var entered = String(out.status === undefined || out.status === null ? '' : out.status).trim().toLowerCase() === 'in';
+    out.everIn = entered ? true : out.everIn === true;
     if (typeof out.group !== 'string' || !out.group) out.group = '일반';
     return out;
   }
@@ -190,7 +191,7 @@
   // STAFF keeps field-desk writes via its route table; participant detail
   // stays reachable through openParticipantDetail (route table untouched).
   // Read-only routes (e.g. results for VIEWER) never imply write permission.
-  var STAFF_WRITE_ROUTES = ['checkin', 'booth', 'booths', 'staff', 'qna', 'photos'];
+  var STAFF_WRITE_ROUTES = ['participants', 'checkin', 'booth', 'booths', 'staff', 'qna', 'photos', 'poll', 'quiz', 'draw', 'survey'];
   ETKO.requireWrite = function (route) {
     var role = ETKO.store && ETKO.store.role ? ETKO.store.role : 'AGENCY';
     var r = normRole(role);
@@ -240,6 +241,12 @@
     });
     if (!found) throw new Error('행사를 찾을 수 없습니다');
     ETKO.store.activeEventId = found.id;
+    try {
+      if (ETKO.selectedIds && typeof ETKO.selectedIds.clear === 'function') ETKO.selectedIds.clear();
+    } catch (err) {}
+    ETKO.lastScanResult = null;
+    ETKO.homeParticipantId = null;
+    ETKO.detailBypass = false;
     return found;
   };
 

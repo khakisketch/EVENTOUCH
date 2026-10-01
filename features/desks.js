@@ -77,6 +77,7 @@
 
   // Create a desk unit by default; update the matching unit when `id` matches.
   ETKO.saveUnit = function (input) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('checkin');
     var opts = input || {};
     var ws = deskWorkspace();
     var name = text(opts.name);
@@ -102,6 +103,7 @@
   // and OUT without a live IN throws a Korean not-in error (same semantics as
   // ETKO.scan, which stays untouched). Stores an immutable before/after entry.
   ETKO.recordScan = function (input) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('checkin');
     var opts = input || {};
     var ws = deskWorkspace();
     var action = text(opts.action).toUpperCase();
@@ -141,6 +143,7 @@
   // per participant can be corrected. Restores the entry's before state and
   // unshifts a CORRECTION entry; all other cases throw Korean errors.
   ETKO.correctLog = function (logId, reason) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('checkin');
     var ws = deskWorkspace();
     var why = text(reason);
     if (why.length < 5 || why.length > 200) {

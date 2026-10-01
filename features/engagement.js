@@ -59,6 +59,7 @@
 
   // Open or close the poll. Returns the active status.
   ETKO.setPollStatus = function (status) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('poll');
     var next = normStatus(status);
     if (next !== 'OPEN' && next !== 'CLOSED') throw new Error('상태를 확인하세요');
     engagementWorkspace().poll.status = next;
@@ -80,6 +81,7 @@
   // Cast one vote. Closed throws `투표가 마감되었습니다`,
   // repeat throws `이미 투표했습니다`.
   ETKO.vote = function (participantId, option) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('poll');
     var ws = engagementWorkspace();
     var person = findParticipant(ws, participantId);
     if (!person) throw new Error('참가자를 찾을 수 없습니다');
@@ -113,6 +115,7 @@
 
   // Open or close the quiz. Returns the active status.
   ETKO.setQuizStatus = function (status) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('quiz');
     var next = normStatus(status);
     if (next !== 'OPEN' && next !== 'CLOSED') throw new Error('상태를 확인하세요');
     engagementWorkspace().quiz.status = next;
@@ -122,6 +125,7 @@
   // Submit one quiz answer. Closed / repeat / empty / over-200-char inputs
   // throw Korean errors.
   ETKO.answerQuiz = function (participantId, answer) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('quiz');
     var ws = engagementWorkspace();
     var person = findParticipant(ws, participantId);
     if (!person) throw new Error('참가자를 찾을 수 없습니다');
@@ -141,6 +145,7 @@
 
   // Close the quiz and reveal the registered answer.
   ETKO.revealQuiz = function () {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('quiz');
     var ws = engagementWorkspace();
     ws.quiz.status = 'CLOSED';
     return text(ws.quiz.answer);
@@ -195,6 +200,7 @@
 
   // Submit a question. Empty / over-600-char inputs throw Korean errors.
   ETKO.ask = function (participantId, question) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('qna');
     var ws = engagementWorkspace();
     var person = findParticipant(ws, participantId);
     if (!person) throw new Error('참가자를 찾을 수 없습니다');
@@ -215,6 +221,7 @@
   // Approve (or unapprove) a question for public display.
   // Unapproving a stage-selected question clears its selection.
   ETKO.approveQna = function (id, approved) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('qna');
     var ws = engagementWorkspace();
     var item = findQna(ws, id);
     if (!item) throw new Error('질문을 찾을 수 없습니다');
@@ -226,6 +233,7 @@
   // Pick one approved question for the stage. Unapproved throws
   // `공개 승인한 질문만 선택할 수 있습니다`.
   ETKO.selectQna = function (id) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('qna');
     var ws = engagementWorkspace();
     var item = findQna(ws, id);
     if (!item) throw new Error('질문을 찾을 수 없습니다');
@@ -239,6 +247,7 @@
   // Open a draw round. Pool = IN participants not yet winners;
   // empty throws `추첨 대상이 없습니다`.
   ETKO.startDraw = function () {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('draw');
     var ws = engagementWorkspace();
     var pool = drawPool(ws);
     if (pool.length === 0) throw new Error('추첨 대상이 없습니다');
@@ -250,6 +259,7 @@
   // Resolve the round to one winner. Accepts an injectable
   // randomInt(poolSize)->index for tests; defaults to Math.random.
   ETKO.resolveDraw = function (randomInt) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('draw');
     var ws = engagementWorkspace();
     var pool = drawPool(ws);
     if (pool.length === 0) throw new Error('추첨 대상이 없습니다');
@@ -272,6 +282,7 @@
   // Confirm the resolved winner into history + winners.
   // Without a resolved result throws `확정할 당첨 결과가 없습니다`.
   ETKO.confirmDraw = function () {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('draw');
     var ws = engagementWorkspace();
     if (!ws.draw.result || !ws.draw.result.participantId) {
       throw new Error('확정할 당첨 결과가 없습니다');
@@ -291,6 +302,7 @@
   // every score an integer 1~5; repeat throws `이미 평가를 제출했습니다`.
   // Closed surveys reject with `설문이 마감되었습니다`.
   ETKO.submitSurvey = function (participantId, scores) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('survey');
     var ws = engagementWorkspace();
     if (!ws.survey.open) throw new Error('설문이 마감되었습니다');
     var person = findParticipant(ws, participantId);
