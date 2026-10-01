@@ -256,6 +256,7 @@
     ETKO.lastScanResult = null;
     ETKO.homeParticipantId = null;
     ETKO.detailBypass = false;
+    ETKO.activeUnitId = null;
     return found;
   };
 

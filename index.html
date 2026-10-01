@@ -266,8 +266,21 @@
         var input = doc.querySelector ? doc.querySelector('#ticket-code') : null;
         var code = input && input.value ? input.value : '';
         if (typeof ETKO.scan !== 'function') return;
-        var result = ETKO.scan({ code: code, direction: ETKO.checkinDirection || 'IN', online: ETKO.online !== false });
-        ETKO.lastScanResult = result;
+        var result = null;
+        if (typeof ETKO.submitTicket === 'function') {
+          try {
+            result = ETKO.submitTicket(code, ETKO.checkinDirection || 'IN');
+          } catch (err) {
+            ETKO.lastScanResult = { kind: 'bad', key: 'not-found' };
+            ETKO.lastDeskError = err && err.message ? err.message : '처리하지 못했습니다';
+            result = ETKO.lastScanResult;
+          }
+        }
+        if (!result && typeof ETKO.scan === 'function') {
+          result = ETKO.scan({ code: code, direction: ETKO.checkinDirection || 'IN', online: ETKO.online !== false });
+          ETKO.lastScanResult = result;
+        }
+        if (!result) return;
         try {
           var mount = doc.querySelector ? doc.querySelector('#checkin-mount') : null;
           if (mount && typeof ETKO.renderCheckin === 'function') ETKO.renderCheckin(mount, ETKO.checkinState);

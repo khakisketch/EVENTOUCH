@@ -251,7 +251,16 @@
       '건</p>' +
       queueHtml +
       '<button type="button" data-sync>동기화</button></div>';
+    if (typeof ETKO.renderDesks === 'function') {
+      html += '<div data-desks-embed></div>';
+    }
     container.innerHTML = html;
+    if (typeof ETKO.renderDesks === 'function' && container.querySelector) {
+      try {
+        var embed = container.querySelector('[data-desks-embed]');
+        if (embed) ETKO.renderDesks(embed);
+      } catch (err) {}
+    }
     if (container.querySelectorAll) {
       Array.prototype.forEach.call(
         container.querySelectorAll('[data-direction]'),

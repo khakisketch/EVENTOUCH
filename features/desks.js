@@ -200,6 +200,168 @@
     return copyEntry(entry);
   };
 
+  function escapeHtml(value) {
+    return String(value === undefined || value === null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // Active desk unit for ticket intake. Namespace-level; cleared on event
+  // switch by agency.js alongside other per-event UI state.
+  if (ETKO.activeUnitId === undefined) ETKO.activeUnitId = null;
+
+  ETKO.setActiveUnit = function (id) {
+    var ws = deskWorkspace();
+    var found = null;
+    for (var i = 0; i < ws.units.length; i += 1) {
+      if (ws.units[i] && ws.units[i].id === id) {
+        found = ws.units[i];
+        break;
+      }
+    }
+    if (!found) throw new Error('데스크를 찾을 수 없습니다');
+    ETKO.activeUnitId = found.id;
+    return found.id;
+  };
+
+  function actionLabel(action) {
+    return action === 'OUT' ? '퇴장' : '입장';
+  }
+
+  // Desk section renderer: unit list with select + add form. History and
+  // correction follow in Task 2 via renderDesksHistory().
+  ETKO.renderDesks = function (container) {
+    var ws = deskWorkspace();
+    var rows = ws.units.map(function (u) {
+      var active = ETKO.activeUnitId === u.id;
+      return (
+        '<li>' + escapeHtml(u.name) + ' · ' + actionLabel(u.action) + ' · ' + escapeHtml(u.mode) +
+        (active ? ' · 사용 중' : '') +
+        ' <button type="button" data-unit-select="' + escapeHtml(u.id) + '">선택</button></li>'
+      );
+    }).join('');
+    var html =
+      '<section aria-label="데스크 관리"><h2>데스크</h2>' +
+      '<ul>' + (rows || '<li>개설된 데스크가 없습니다</li>') + '</ul>' +
+      '<div class="inline-form"><div class="field"><input data-unit-name type="text" placeholder="데스크 이름" aria-label="데스크 이름" /></div>' +
+      '<div class="field"><select data-unit-action aria-label="입장 퇴장 구분"><option value="IN">입장</option><option value="OUT">퇴장</option></select></div>' +
+      '<button type="button" data-unit-add>데스크 개설</button></div>' +
+      ETKO.renderDesksHistory(ws) +
+      '</section>';
+    if (ETKO.lastDeskError) {
+      html += '<p role="alert">' + escapeHtml(ETKO.lastDeskError) + '</p>';
+    }
+    container.innerHTML = html;
+    wireDesks(container);
+    return container.innerHTML;
+  };
+
+  // History section (Task 2 extends with correction wiring).
+  if (typeof ETKO.renderDesksHistory !== 'function') {
+    ETKO.renderDesksHistory = function () {
+      return '';
+    };
+  }
+
+  function fieldValue(container, attr) {
+    var el = container.querySelector ? container.querySelector('[' + attr + ']') : null;
+    return el && el.value !== undefined ? el.value : '';
+  }
+
+  function wireDesks(container) {
+    if (!container || !container.querySelectorAll) return;
+    function onAttr(attr, fn) {
+      Array.prototype.forEach.call(container.querySelectorAll('[' + attr + ']'), function (btn) {
+        if (btn.tagName === 'INPUT' || btn.tagName === 'SELECT') return;
+        if (typeof btn.addEventListener !== 'function') return;
+        btn.addEventListener('click', function () {
+          ETKO.lastDeskError = null;
+          try {
+            fn(btn);
+          } catch (err) {
+            ETKO.lastDeskError = err && err.message ? err.message : '처리하지 못했습니다';
+          }
+          if (typeof ETKO.renderDesks === 'function') {
+            try {
+              ETKO.renderDesks(container);
+            } catch (err) {}
+          }
+        });
+      });
+    }
+    onAttr('data-unit-add', function () {
+      var unit = ETKO.saveUnit({
+        name: fieldValue(container, 'data-unit-name'),
+        action: fieldValue(container, 'data-unit-action') || 'IN',
+        mode: 'desk',
+      });
+      ETKO.setActiveUnit(unit.id);
+    });
+    onAttr('data-unit-select', function (btn) {
+      ETKO.setActiveUnit(btn.getAttribute('data-unit-select'));
+    });
+    if (typeof ETKO.wireDesksHistory === 'function') {
+      try {
+        ETKO.wireDesksHistory(container, onAttr);
+      } catch (err) {}
+    }
+  }
+
+  // Ticket intake through the active unit when one is selected and still
+  // exists; otherwise falls back to plain ETKO.scan. Returns {kind, key}
+  // and records ETKO.lastScanResult for the panel.
+  ETKO.submitTicket = function (code, direction) {
+    var dir = String(direction || 'IN').trim().toUpperCase() === 'OUT' ? 'OUT' : 'IN';
+    var result = null;
+    var unitId = ETKO.activeUnitId;
+    var useUnit = false;
+    if (unitId && ETKO.online !== false) {
+      try {
+        var ws = deskWorkspace();
+        useUnit = ws.units.some(function (u) { return u && u.id === unitId; });
+      } catch (err) {
+        useUnit = false;
+      }
+    }
+    if (useUnit) {
+      var person = null;
+      try {
+        var people = deskWorkspace().participants;
+        var want = String(code === undefined || code === null ? '' : code).trim().toUpperCase();
+        for (var i = 0; i < people.length; i += 1) {
+          if (people[i] && String(people[i].code || '').trim().toUpperCase() === want) {
+            person = people[i];
+            break;
+          }
+        }
+      } catch (err) {
+        person = null;
+      }
+      if (!person) {
+        result = { kind: 'bad', key: 'not-found' };
+      } else {
+        try {
+          ETKO.recordScan({ participantId: person.id, action: dir, unitId: unitId });
+          result = { kind: 'good', key: 'success' };
+        } catch (err) {
+          var msg = err && err.message ? err.message : '';
+          if (/이미 처리/.test(msg)) result = { kind: 'warn', key: 'duplicate' };
+          else if (/입장 기록/.test(msg)) result = { kind: 'warn', key: 'not-in' };
+          else if (/구분/.test(msg)) result = { kind: 'warn', key: 'not-in' };
+          else throw err;
+        }
+      }
+    } else {
+      if (typeof ETKO.scan !== 'function') throw new Error('체크인 기능을 확인할 수 없습니다');
+      result = ETKO.scan({ code: code, direction: dir, online: ETKO.online !== false });
+    }
+    ETKO.lastScanResult = result;
+    return result;
+  };
+
   if (typeof module !== 'undefined' && module && module.exports) {
     module.exports = ETKO;
   }
