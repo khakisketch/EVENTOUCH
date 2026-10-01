@@ -370,13 +370,109 @@
     );
   };
 
-  // Extended sections (Q&A/draw/survey/photo). Overridden below with full
-  // markup; defaults to empty so poll/quiz render standalone.
-  if (typeof ETKO.renderEngagementMore !== 'function') {
-    ETKO.renderEngagementMore = function () {
-      return '';
-    };
-  }
+  // Extended sections (Q&A/draw/survey/photo). Full markup follows; the
+  // guard above only applies when this file loads twice.
+  ETKO.renderEngagementMore = function (wsArg) {
+    var ws = wsArg || engagementWorkspace();
+    return (
+      ETKO.renderEngagementQna(ws) +
+      ETKO.renderEngagementDraw(ws) +
+      ETKO.renderEngagementSurvey(ws) +
+      ETKO.renderEngagementPhoto(ws)
+    );
+  };
+
+  ETKO.renderEngagementQna = function (wsArg) {
+    var ws = wsArg || engagementWorkspace();
+    var rows = (ws.qna || []).map(function (q) {
+      var state = q.selected ? '무대 선택' : q.approved ? '승인됨' : '대기 중';
+      return (
+        '<li>' + escapeHtml(q.question || '') + ' · ' + state +
+        ' <button type="button" data-qna-approve="' + escapeHtml(q.id) + '">승인</button>' +
+        ' <button type="button" data-qna-stage="' + escapeHtml(q.id) + '">무대로</button></li>'
+      );
+    }).join('');
+    return (
+      '<section aria-label="질문과 답변 관리"><h2>질문과 답변</h2>' +
+      '<ul>' + (rows || '<li>등록된 질문이 없습니다</li>') + '</ul></section>'
+    );
+  };
+
+  ETKO.renderEngagementDraw = function (wsArg) {
+    var ws = wsArg || engagementWorkspace();
+    var draw = ws.draw || { phase: 'IDLE', result: null, winners: [] };
+    var winners = (draw.winners || []).join(', ');
+    var candidate = draw.result && draw.result.participantId ? draw.result.participantId : '미정';
+    return (
+      '<section aria-label="럭키드로우 관리"><h2>럭키드로우</h2>' +
+      '<p>당첨 후보: ' + escapeHtml(candidate) + ' · 확정 ' + (draw.winners || []).length + '명' +
+      (winners ? ' (' + escapeHtml(winners) + ')' : '') + '</p>' +
+      '<div><button type="button" data-draw-start>추첨 시작</button>' +
+      '<button type="button" data-draw-confirm>당첨 확정</button></div></section>'
+    );
+  };
+
+  ETKO.renderEngagementSurvey = function (wsArg) {
+    var ws = wsArg || engagementWorkspace();
+    var survey = ws.survey || { title: '', questions: [], open: false };
+    var responses = ws.responses || [];
+    return (
+      '<section aria-label="만족도 관리"><h2>만족도 평가</h2>' +
+      '<p>' + escapeHtml(survey.title || '제목 없음') + ' · ' + (survey.open ? '진행 중' : '마감') +
+      ' · 문항 ' + (survey.questions || []).length + '개 · 응답 ' + responses.length + '건</p>' +
+      '<div><button type="button" data-survey-toggle>' + (survey.open ? '설문 마감' : '설문 개시') + '</button></div></section>'
+    );
+  };
+
+  ETKO.renderEngagementPhoto = function (wsArg) {
+    var ws = wsArg || engagementWorkspace();
+    var photos = ws.photos || [];
+    var pending = photos.filter(function (p) {
+      return p && p.status !== 'APPROVED';
+    });
+    var approved = photos.filter(function (p) {
+      return p && p.status === 'APPROVED';
+    }).length;
+    var rows = pending.map(function (p) {
+      return (
+        '<li>' + escapeHtml(p.caption || p.id) + ' <button type="button" data-photo-approve="' + escapeHtml(p.id) + '">공개</button>' +
+        ' <button type="button" data-photo-hide="' + escapeHtml(p.id) + '">숨김</button></li>'
+      );
+    }).join('');
+    return (
+      '<section aria-label="사진 검토"><h2>사진 검토</h2>' +
+      '<p>공개 ' + approved + '장 · 검토 대기 ' + pending.length + '장</p>' +
+      '<ul>' + (rows || '<li>검토할 사진이 없습니다</li>') + '</ul></section>'
+    );
+  };
+
+  ETKO.wireEngagementMore = function (container, onAttr) {
+    onAttr('data-qna-approve', function (btn) {
+      var id = btn.getAttribute('data-qna-approve');
+      ETKO.approveQna(id, true);
+    });
+    onAttr('data-qna-stage', function (btn) {
+      var id = btn.getAttribute('data-qna-stage');
+      ETKO.selectQna(id);
+    });
+    onAttr('data-draw-start', function () {
+      ETKO.startDraw();
+      ETKO.resolveDraw();
+    });
+    onAttr('data-draw-confirm', function () {
+      ETKO.confirmDraw();
+    });
+    onAttr('data-survey-toggle', function () {
+      var ws = engagementWorkspace();
+      ws.survey.open = !ws.survey.open;
+    });
+    onAttr('data-photo-approve', function (btn) {
+      ETKO.moderatePhotos([btn.getAttribute('data-photo-approve')], 'APPROVED');
+    });
+    onAttr('data-photo-hide', function (btn) {
+      ETKO.moderatePhotos([btn.getAttribute('data-photo-hide')], 'HIDDEN');
+    });
+  };
 
   function rerender(node) {
     var mount = node;

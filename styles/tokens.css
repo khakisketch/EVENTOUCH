@@ -104,7 +104,14 @@ button[data-report-create],
 button[data-poll-open],
 button[data-poll-close],
 button[data-quiz-open],
-button[data-quiz-reveal] {
+button[data-quiz-reveal],
+button[data-qna-approve],
+button[data-qna-stage],
+button[data-draw-start],
+button[data-draw-confirm],
+button[data-survey-toggle],
+button[data-photo-approve],
+button[data-photo-hide] {
   min-height: var(--touch-min);
   min-width: var(--touch-min);
 }
