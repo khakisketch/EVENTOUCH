@@ -8,13 +8,15 @@ const ROOT = path.join(__dirname, '..');
 const HTML_PATH = path.join(ROOT, 'index.html');
 const CSS_PATH = path.join(ROOT, 'styles', 'tokens.css');
 
-const VIEWS = ['overview', 'participants', 'checkin', 'booth', 'participant', 'engage', 'stage'];
+const VIEWS = ['overview', 'participants', 'checkin', 'booth', 'participant', 'engage', 'content', 'messages', 'stage'];
 const SECTION_IDS = {
   overview: 'overview-view',
   participants: 'participants-view',
   checkin: 'checkin-view',
   booth: 'booth-view',
   participant: 'participant-view',
+  content: 'content-view',
+  messages: 'messages-view',
   engage: 'engage-view',
   stage: 'stage-view',
 };
@@ -24,6 +26,8 @@ const MOUNT_IDS = {
   checkin: 'checkin-mount',
   booth: 'booth-mount',
   participant: 'home-mount',
+  content: 'content-mount',
+  messages: 'messages-mount',
   engage: 'engage-mount',
   stage: 'stage-mount',
 };
@@ -147,7 +151,7 @@ test('shell stays lang="ko" with viewport meta and Korean nav', () => {
   }
 });
 
-test('all seven views are mounted with Korean labels and start hidden', () => {
+test('all nine views are mounted with Korean labels and start hidden', () => {
   const html = readHtml();
   for (const view of VIEWS) {
     const id = SECTION_IDS[view];

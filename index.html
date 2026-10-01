@@ -17,6 +17,8 @@
       <button type="button" data-view="booth">부스</button>
       <button type="button" data-view="participant">홈</button>
       <button type="button" data-view="engage">참여</button>
+      <button type="button" data-view="content">콘텐츠</button>
+      <button type="button" data-view="messages">메시지</button>
       <button type="button" data-view="stage">무대</button>
     </nav>
   </header>
@@ -45,6 +47,12 @@
     </section>
     <section id="engage-view" aria-label="참여 관리" hidden>
       <div id="engage-mount" aria-live="polite"></div>
+    </section>
+    <section id="content-view" aria-label="콘텐츠 관리" hidden>
+      <div id="content-mount" aria-live="polite"></div>
+    </section>
+    <section id="messages-view" aria-label="메시지 관리" hidden>
+      <div id="messages-mount" aria-live="polite"></div>
     </section>
     <section id="stage-view" aria-label="무대" hidden>
       <div id="stage-mount"></div>
@@ -94,6 +102,8 @@
         booth: 'booth-view',
         participant: 'participant-view',
         engage: 'engage-view',
+        content: 'content-view',
+        messages: 'messages-view',
         stage: 'stage-view',
       };
 
@@ -104,6 +114,8 @@
         booth: 'booth-mount',
         participant: 'home-mount',
         engage: 'engage-mount',
+        content: 'content-mount',
+        messages: 'messages-mount',
         stage: 'stage-mount',
       };
 
