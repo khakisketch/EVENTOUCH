@@ -166,6 +166,18 @@
     var person = findParticipant(ws, target.participantId);
     if (!person) throw new Error('참가자를 찾을 수 없습니다');
     person.status = target.before;
+    // everIn tracks "has ever entered": if the corrected entry was the
+    // participant's only IN and no other uncorrected IN remains, clear it.
+    // Otherwise a wrong first IN keeps inflating cumulative counts.
+    if (target.action === 'IN') {
+      var stillIn = false;
+      ws.logs.forEach(function (entry) {
+        if (!entry || entry.participantId !== person.id) return;
+        if (entry.id === target.id || entry.action === 'CORRECTION' || entry.corrected) return;
+        if (entry.action === 'IN') stillIn = true;
+      });
+      if (!stillIn) person.everIn = false;
+    }
     target.corrected = true;
     target.correctedAt = new Date().toISOString();
     target.correctReason = why;

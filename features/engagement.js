@@ -213,11 +213,13 @@
   };
 
   // Approve (or unapprove) a question for public display.
+  // Unapproving a stage-selected question clears its selection.
   ETKO.approveQna = function (id, approved) {
     var ws = engagementWorkspace();
     var item = findQna(ws, id);
     if (!item) throw new Error('질문을 찾을 수 없습니다');
     item.approved = !!approved;
+    if (!item.approved) item.selected = false;
     return item;
   };
 
@@ -287,8 +289,10 @@
 
   // Submit one survey response. Length must match the question count,
   // every score an integer 1~5; repeat throws `이미 평가를 제출했습니다`.
+  // Closed surveys reject with `설문이 마감되었습니다`.
   ETKO.submitSurvey = function (participantId, scores) {
     var ws = engagementWorkspace();
+    if (!ws.survey.open) throw new Error('설문이 마감되었습니다');
     var person = findParticipant(ws, participantId);
     if (!person) throw new Error('참가자를 찾을 수 없습니다');
     for (var i = 0; i < ws.responses.length; i += 1) {
