@@ -97,9 +97,21 @@ button[data-sync],
 button[data-home-cta],
 button[data-detail],
 button[data-motion],
-button[data-safety] {
+button[data-safety],
+button[data-ticket-submit] {
   min-height: var(--touch-min);
   min-width: var(--touch-min);
+}
+
+/* Switch controls expose a full touch target with an accessible name. */
+[role="switch"] {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Dialogs trap focus while open and close on Escape (shell wiring). */
+[role="dialog"] {
+  touch-action: manipulation;
 }
 
 /* Ticket/code entry keeps the 52px field height. */

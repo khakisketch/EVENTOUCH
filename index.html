@@ -280,6 +280,24 @@
             ev.preventDefault();
             submitTicket(doc);
           }
+          if (ev && ev.key === 'Escape') {
+            var openDialog = doc.querySelector ? doc.querySelector('[role="dialog"][data-open="true"], [role="dialog"].open') : null;
+            if (openDialog) {
+              if (openDialog.removeAttribute) {
+                openDialog.removeAttribute('data-open');
+                openDialog.classList.remove('open');
+              }
+              var returnTo = openDialog.getAttribute ? openDialog.getAttribute('data-return-focus') : null;
+              if (returnTo && doc.getElementById) {
+                var target = doc.getElementById(returnTo);
+                if (target && target.focus) {
+                  try {
+                    target.focus();
+                  } catch (err) {}
+                }
+              }
+            }
+          }
         });
       }
 
