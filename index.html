@@ -93,6 +93,7 @@
 
       var MOUNTS = {
         overview: 'overview-mount',
+        participants: 'people-list',
         checkin: 'checkin-mount',
         booth: 'booth-mount',
         participant: 'home-mount',
@@ -292,6 +293,14 @@
             return;
           }
           if (t.hasAttribute && t.hasAttribute('data-online-toggle')) {
+            // Panel-inner toggles own their flip (renderCheckin wires its own
+            // listener); the shell handles only the static section button so
+            // a panel click never flips twice (net no-op).
+            var inPanel = false;
+            try {
+              inPanel = !!(t.closest && t.closest('#checkin-mount'));
+            } catch (err) {}
+            if (inPanel) return;
             if (typeof ETKO.setOnline === 'function') ETKO.setOnline(!(ETKO.online !== false));
             try {
               var checkinMount = doc.querySelector ? doc.querySelector('#checkin-mount') : null;
