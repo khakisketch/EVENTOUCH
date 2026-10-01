@@ -44,6 +44,58 @@
     return simulationProvider(key);
   };
 
+  // ---- auth: demo sessions (no real backend) ----
+  // Login binds to the workspace member record: unknown emails and role
+  // mismatches throw Korean errors, so sessions never escalate.
+  var authSession = null;
+
+  function normEmail(value) {
+    return String(value === undefined || value === null ? '' : value).trim().toLowerCase();
+  }
+
+  ETKO.login = function (input) {
+    var opts = input || {};
+    var email = normEmail(opts.email);
+    if (!email) throw new Error('이메일을 입력하세요');
+    var ws = null;
+    try {
+      ws = typeof ETKO.workspace === 'function' ? ETKO.workspace() : null;
+    } catch (err) {
+      ws = null;
+    }
+    var members = ws && Array.isArray(ws.members) ? ws.members : [];
+    var found = null;
+    for (var i = 0; i < members.length; i += 1) {
+      if (members[i] && normEmail(members[i].email) === email) {
+        found = members[i];
+        break;
+      }
+    }
+    if (!found) throw new Error('등록된 구성원이 아닙니다');
+    if (opts.role !== undefined && opts.role !== null && opts.role !== '') {
+      var asked = String(opts.role).trim().toUpperCase();
+      if (asked !== String(found.role || '').trim().toUpperCase()) throw new Error('권한을 확인하세요');
+    }
+    var stamp = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    authSession = { token: 'DEMO-' + stamp, email: found.email, name: found.name, role: found.role, demo: true };
+    if (typeof ETKO.setRole === 'function') {
+      try {
+        ETKO.setRole(found.role);
+      } catch (err) {}
+    }
+    return { token: authSession.token, email: authSession.email, name: authSession.name, role: authSession.role, demo: true };
+  };
+
+  ETKO.logout = function () {
+    authSession = null;
+    return null;
+  };
+
+  ETKO.session = function () {
+    if (!authSession) return null;
+    return { token: authSession.token, email: authSession.email, name: authSession.name, role: authSession.role, demo: authSession.demo };
+  };
+
   if (typeof module !== 'undefined' && module && module.exports) {
     module.exports = ETKO;
   }
