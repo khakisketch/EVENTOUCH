@@ -96,6 +96,55 @@
     return { token: authSession.token, email: authSession.email, name: authSession.name, role: authSession.role, demo: authSession.demo };
   };
 
+  // ---- messages: simulated outbox (no real sending) ----
+  // sendCampaign resolves a stored campaign into an immutable outbox entry.
+  // The default provider never transmits; a replaced area provider may
+  // deliver through its own impl, but status never claims SENT here.
+  function messageWorkspace() {
+    if (typeof ETKO.workspace !== 'function') throw new Error('행사를 찾을 수 없습니다');
+    var ws = ETKO.workspace();
+    if (!Array.isArray(ws.messages)) ws.messages = [];
+    if (!Array.isArray(ws.messageOutbox)) ws.messageOutbox = [];
+    return ws;
+  }
+
+  ETKO.sendCampaign = function (campaignId) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('messages');
+    var ws = messageWorkspace();
+    var id = String(campaignId === undefined || campaignId === null ? '' : campaignId).trim();
+    var found = null;
+    for (var i = 0; i < ws.messages.length; i += 1) {
+      if (ws.messages[i] && ws.messages[i].id === id) {
+        found = ws.messages[i];
+        break;
+      }
+    }
+    if (!found) throw new Error('캠페인을 찾을 수 없습니다');
+    var entry = {
+      id: 'out-' + (ws.messageOutbox.length + 1),
+      campaignId: found.id,
+      title: found.title || '',
+      channel: found.channel || '',
+      toCount: Array.isArray(found.recipientIds) ? found.recipientIds.length : 0,
+      body: found.content || '',
+      at: new Date().toISOString(),
+      delivery: 'SIMULATION_ONLY',
+    };
+    Object.freeze(entry);
+    ws.messageOutbox.push(entry);
+    var provider = ETKO.providerFor('messages');
+    if (provider && provider.kind !== 'simulation' && provider.impl && typeof provider.impl.send === 'function') {
+      try {
+        provider.impl.send(entry);
+      } catch (err) {}
+    }
+    return { status: 'QUEUED_SIMULATION', outboxId: entry.id };
+  };
+
+  ETKO.outbox = function () {
+    return messageWorkspace().messageOutbox.slice();
+  };
+
   if (typeof module !== 'undefined' && module && module.exports) {
     module.exports = ETKO;
   }
