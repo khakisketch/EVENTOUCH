@@ -54,9 +54,17 @@
       });
   </script>
   <script src="app.js"></script>
+  <script src="features/agency.js"></script>
   <script src="features/participants.js"></script>
   <script src="features/checkin.js"></script>
   <script src="features/booth.js"></script>
+  <script src="features/registration.js"></script>
+  <script src="features/desks.js"></script>
+  <script src="features/booths.js"></script>
+  <script src="features/engagement.js"></script>
+  <script src="features/media.js"></script>
+  <script src="features/messaging.js"></script>
+  <script src="features/content.js"></script>
   <script src="features/stage.js"></script>
   <script src="features/results.js"></script>
   <script>
@@ -157,9 +165,23 @@
               if (settingsMount && typeof ETKO.renderSettings === 'function') {
                 ETKO.renderSettings(settingsMount);
               }
-            } catch (err) {}
+            } catch (err) {
+              var msg = err && err.message ? err.message : '화면을 표시하지 못했습니다';
+              if (section.querySelector) {
+                var rm = section.querySelector('#results-mount');
+                if (rm && !rm.innerHTML) rm.innerHTML = '<p>' + escapeHtml(msg) + '</p>';
+              }
+            }
           }
-        } catch (err) {}
+        } catch (err) {
+          try {
+            var activeSection = doc && doc.querySelector ? doc.querySelector('#' + SECTIONS[view]) : null;
+            if (activeSection) {
+              var fallback = activeSection.querySelector ? activeSection.querySelector('#' + mountId) : null;
+              if (fallback && !fallback.innerHTML) fallback.innerHTML = '<p>화면을 표시하지 못했습니다</p>';
+            }
+          } catch (innerErr) {}
+        }
       }
 
       // Show the current view's section, hide the other five. Returns true

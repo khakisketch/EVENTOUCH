@@ -35,11 +35,41 @@
   }
 
   // Switch view. Unknown views keep the current view (no state change).
+  // When a role store exists, denied routes keep the current view.
+  // openParticipantDetail sets ETKO.detailBypass once so STAFF can reach
+  // the singular participant view without changing the route table.
+  ETKO.currentRole = function () {
+    if (ETKO.store && typeof ETKO.store.role === 'string') return ETKO.store.role;
+    return 'AGENCY';
+  };
+
   ETKO.navigate = function (view) {
     if (VIEWS.indexOf(view) === -1) return ETKO.currentView;
+    if (typeof ETKO.canRoute === 'function') {
+      try {
+        if (ETKO.detailBypass === true) {
+          ETKO.detailBypass = false;
+        } else if (!ETKO.canRoute(ETKO.currentRole(), view)) {
+          return ETKO.currentView;
+        }
+      } catch (err) {}
+    }
     ETKO.currentView = view;
     paint(docOf(null));
     return ETKO.currentView;
+  };
+
+  // Switch the active event and re-sync mounted sections when possible.
+  ETKO.switchEventAndRender = function (id) {
+    if (typeof ETKO.switchEvent !== 'function') throw new Error('행사를 찾을 수 없습니다');
+    var ev = ETKO.switchEvent(id);
+    try {
+      if (typeof ETKO.syncViews === 'function') ETKO.syncViews(null);
+    } catch (err) {}
+    try {
+      if (typeof ETKO.syncParticipantsView === 'function') ETKO.syncParticipantsView(null);
+    } catch (err) {}
+    return ev;
   };
 
   // Bind every [data-view] button to navigate. Returns the wired count.

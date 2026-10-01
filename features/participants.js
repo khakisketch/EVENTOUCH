@@ -65,6 +65,7 @@
   // directory so staff can still reach participant detail.
   ETKO.openParticipantDetail = function (id) {
     ETKO.homeParticipantId = id;
+    ETKO.detailBypass = true;
     if (typeof ETKO.navigate === 'function') return ETKO.navigate('participant');
     return 'participant';
   };
