@@ -19,9 +19,26 @@
       <button type="button" data-view="stage">무대</button>
     </nav>
   </header>
-  <main id="app" aria-live="polite">
+  <main id="app" data-current-view="overview">
+    <section id="overview-view" aria-label="행사 개요" hidden>
+      <div id="overview-mount"></div>
+    </section>
     <section id="participants-view" aria-label="참가자 목록" hidden>
       <div id="people-list" aria-live="polite"></div>
+    </section>
+    <section id="checkin-view" aria-label="체크인" hidden>
+      <label for="ticket-code">티켓 코드</label>
+      <input id="ticket-code" type="text" data-ticket aria-label="티켓 코드" autocomplete="off" />
+      <div id="checkin-mount"></div>
+    </section>
+    <section id="booth-view" aria-label="부스" hidden>
+      <div id="booth-mount"></div>
+    </section>
+    <section id="participant-view" aria-label="참가자 홈" hidden>
+      <div id="home-mount"></div>
+    </section>
+    <section id="stage-view" aria-label="무대" hidden>
+      <div id="stage-mount"></div>
     </section>
   </main>
   <script>
@@ -31,9 +48,150 @@
       .then((data) => {
         window.ETKO.sample = data;
         if (window.ETKO.syncParticipantsView) window.ETKO.syncParticipantsView();
+        if (window.ETKO.syncViews) window.ETKO.syncViews();
       });
   </script>
   <script src="app.js"></script>
   <script src="features/participants.js"></script>
+  <script src="features/checkin.js"></script>
+  <script src="features/booth.js"></script>
+  <script src="features/stage.js"></script>
+  <script>
+    /* ETKO-VIEW-SYNC: gate all six views behind ETKO.navigate.
+       Follows the syncParticipantsView pattern (Task 3 interface): show the
+       section for ETKO.currentView, hide the other five, render the active
+       mount when its renderer exists. Call-through preserves app.js semantics
+       exactly (unknown views keep the current view); guarded so double-load
+       never re-wraps. Section wrappers carry no aria-live of their own so the
+       per-view live regions (people-list, check-in result panel) never nest. */
+    (function () {
+      var ETKO = window.ETKO || (window.ETKO = {});
+
+      var SECTIONS = {
+        overview: 'overview-view',
+        participants: 'participants-view',
+        checkin: 'checkin-view',
+        booth: 'booth-view',
+        participant: 'participant-view',
+        stage: 'stage-view',
+      };
+
+      var MOUNTS = {
+        overview: 'overview-mount',
+        checkin: 'checkin-mount',
+        booth: 'booth-mount',
+        participant: 'home-mount',
+        stage: 'stage-mount',
+      };
+
+      function escapeHtml(value) {
+        return String(value === undefined || value === null ? '' : value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function docOf(overrideDoc) {
+        if (overrideDoc) return overrideDoc;
+        if (typeof document !== 'undefined') return document;
+        return null;
+      }
+
+      function setHidden(section, hidden) {
+        if (
+          section.setAttribute &&
+          section.removeAttribute
+        ) {
+          if (hidden) section.setAttribute('hidden', '');
+          else section.removeAttribute('hidden');
+        } else {
+          section.hidden = !!hidden;
+        }
+      }
+
+      function renderActive(doc, view) {
+        try {
+          // The directory keeps its own gate + render; delegate to it.
+          if (view === 'participants') {
+            if (typeof ETKO.syncParticipantsView === 'function') ETKO.syncParticipantsView(doc);
+            return;
+          }
+          var mountId = MOUNTS[view];
+          if (!mountId || !doc || typeof doc.querySelector !== 'function') return;
+          var section = doc.querySelector('#' + SECTIONS[view]);
+          var mount =
+            section && typeof section.querySelector === 'function'
+              ? section.querySelector('#' + mountId)
+              : null;
+          if (!mount) return;
+          if (view === 'checkin' && typeof ETKO.renderCheckin === 'function') {
+            ETKO.renderCheckin(mount, ETKO.checkinState);
+          } else if (view === 'booth' && typeof ETKO.renderBooth === 'function') {
+            ETKO.renderBooth(mount);
+          } else if (view === 'participant' && typeof ETKO.renderHome === 'function') {
+            ETKO.renderHome(mount, ETKO.homeStatus);
+          } else if (view === 'stage' && typeof ETKO.renderStage === 'function') {
+            ETKO.renderStage(mount, ETKO.stageState);
+          } else if (view === 'overview') {
+            var name =
+              ETKO.sample && ETKO.sample.event ? ETKO.sample.event : '이벤터치 운영';
+            mount.innerHTML =
+              '<p>' + escapeHtml(name) + '</p><p role="note">샘플 데이터입니다</p>';
+          }
+        } catch (err) {}
+      }
+
+      // Show the current view's section, hide the other five. Returns true
+      // when the current view's section was found and shown; false otherwise
+      // (absent section, unknown view, or no document, e.g. Node).
+      ETKO.syncViews = function (overrideDoc) {
+        var doc = docOf(overrideDoc);
+        if (!doc || typeof doc.querySelector !== 'function') return false;
+        var current = ETKO.currentView;
+        if (!SECTIONS[current]) return false;
+        var found = false;
+        Object.keys(SECTIONS).forEach(function (view) {
+          var section = doc.querySelector('#' + SECTIONS[view]);
+          if (!section) return;
+          if (view === current) found = true;
+          setHidden(section, view !== current);
+        });
+        if (!found) return false;
+        renderActive(doc, current);
+        return true;
+      };
+
+      // Consume ETKO.navigate: re-sync every section after each view switch.
+      if (typeof ETKO.navigate === 'function' && !ETKO.viewsNavHooked) {
+        ETKO.viewsNavHooked = true;
+        var baseNavigate = ETKO.navigate;
+        ETKO.navigate = function (view) {
+          var result = baseNavigate(view);
+          try {
+            ETKO.syncViews(null);
+          } catch (err) {}
+          return result;
+        };
+      }
+
+      // Browser only: apply the initial gate once the DOM is ready.
+      if (
+        typeof document !== 'undefined' &&
+        document &&
+        typeof document.addEventListener === 'function'
+      ) {
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', function () {
+            ETKO.syncViews(document);
+          });
+        } else {
+          try {
+            ETKO.syncViews(document);
+          } catch (err) {}
+        }
+      }
+    })();
+  </script>
 </body>
 </html>

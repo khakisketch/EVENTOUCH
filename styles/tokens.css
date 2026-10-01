@@ -29,11 +29,26 @@ html {
   background: var(--canvas);
 }
 
+html,
+body {
+  max-width: 100%;
+}
+
 body {
   margin: 0;
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-body);
+  overflow-x: hidden;
+  overflow-x: clip;
+}
+
+img,
+svg,
+video,
+canvas,
+table {
+  max-width: 100%;
 }
 
 :focus-visible {
@@ -59,4 +74,55 @@ button[data-bulk-in] {
   align-items: center;
   gap: 8px;
   min-height: var(--touch-min);
+}
+
+/* Task 7: responsive + accessibility QA (320/390/1440). */
+
+/* Tables scroll inside their wrapper only; the page never scrolls sideways. */
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-wrap table {
+  width: max-content;
+  min-width: 100%;
+}
+
+/* Primary controls keep the 44px minimum across every view. */
+button[data-direction],
+button[data-booth-mode],
+button[data-take],
+button[data-sync],
+button[data-home-cta],
+button[data-motion],
+button[data-safety] {
+  min-height: var(--touch-min);
+  min-width: var(--touch-min);
+}
+
+/* Ticket/code entry keeps the 52px field height. */
+input[data-ticket] {
+  min-height: var(--field-h);
+  min-width: var(--touch-min);
+  font-size: 16px;
+}
+
+@media (max-width: 390px) {
+  body {
+    font-size: 16px;
+  }
+  main {
+    padding: 0 12px;
+  }
+  #people-list .table-wrap {
+    margin: 0 -12px;
+  }
+}
+
+@media (min-width: 1440px) {
+  main {
+    max-width: 72rem;
+    margin: 0 auto;
+  }
 }
