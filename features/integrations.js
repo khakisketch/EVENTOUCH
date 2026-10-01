@@ -145,6 +145,43 @@
     return messageWorkspace().messageOutbox.slice();
   };
 
+  // ---- payments: simulated intents (never charged) ----
+  // Intents record amount + status only. No card, account, or gateway call
+  // exists in this build; a replaced provider settles externally.
+  var paymentIntents = [];
+
+  ETKO.createPaymentIntent = function (input) {
+    var opts = input || {};
+    var amount = Number(opts.amount);
+    if (!isFinite(amount) || Math.floor(amount) !== amount || amount <= 0) {
+      throw new Error('결제 금액을 확인하세요');
+    }
+    var currency = String(opts.currency === undefined || opts.currency === null ? 'KRW' : opts.currency).trim() || 'KRW';
+    var intent = {
+      id: 'pi-' + (paymentIntents.length + 1),
+      amount: amount,
+      currency: currency,
+      description: String(opts.description === undefined || opts.description === null ? '' : opts.description).trim(),
+      status: 'SIMULATION_ONLY',
+      charged: false,
+      at: new Date().toISOString(),
+    };
+    Object.freeze(intent);
+    paymentIntents.push(intent);
+    return { id: intent.id, amount: intent.amount, currency: intent.currency, description: intent.description, status: intent.status, charged: intent.charged };
+  };
+
+  ETKO.paymentStatus = function (id) {
+    var key = String(id === undefined || id === null ? '' : id).trim();
+    for (var i = 0; i < paymentIntents.length; i += 1) {
+      if (paymentIntents[i] && paymentIntents[i].id === key) {
+        var p = paymentIntents[i];
+        return { id: p.id, amount: p.amount, currency: p.currency, description: p.description, status: p.status, charged: p.charged };
+      }
+    }
+    throw new Error('결제 내역을 찾을 수 없습니다');
+  };
+
   if (typeof module !== 'undefined' && module && module.exports) {
     module.exports = ETKO;
   }
