@@ -224,6 +224,31 @@
     return 'ET:BOOTH:' + eventId + ':' + boothId;
   };
 
+  // Resolve a scanned booth QR to its booth. Strict format; the event scope
+  // must match the active event so another event's QR cannot stamp here.
+  ETKO.resolveBoothQr = function (text) {
+    var raw = String(text === undefined || text === null ? '' : text).trim();
+    var parsed = null;
+    if (typeof ETKO.parseBoothPayload === 'function') {
+      try {
+        parsed = ETKO.parseBoothPayload(raw);
+      } catch (err) {
+        throw new Error('부스 QR을 확인하세요');
+      }
+    } else {
+      var m = /^ET:BOOTH:([^:]+):([^:]+)$/.exec(raw);
+      if (!m) throw new Error('부스 QR을 확인하세요');
+      parsed = { eventId: m[1], boothId: m[2] };
+    }
+    if (!parsed || parsed.eventId !== ETKO.store.activeEventId) {
+      throw new Error('다른 행사의 부스 QR입니다');
+    }
+    var ws = boothWorkspace();
+    var booth = findBooth(ws, parsed.boothId);
+    if (!booth) throw new Error('부스를 찾을 수 없습니다');
+    return booth;
+  };
+
   function escapeHtml(value) {
     return String(value === undefined || value === null ? '' : value)
       .replace(/&/g, '&amp;')
@@ -240,9 +265,11 @@
   }
 
   // Participant stamp mount: booth list with remaining counts, my stamps,
-  // and a booth receive control. Success and limit/sold-out/closed refusals
-  // surface as Korean alerts. SELF mode uses stampSelf(); STAFF desks keep
-  // using stamp() so participants cannot bypass the staff desk.
+  // a booth QR input, and a booth receive control. A filled QR input wins
+  // over the select so camera-app paste and manual typing share one button.
+  // Success and limit/sold-out/closed/QR refusals surface as Korean alerts.
+  // SELF mode uses stampSelf(); STAFF desks keep using stamp() so
+  // participants cannot bypass the staff desk.
   ETKO.renderStamps = function (container, participantId) {
     var ws = boothWorkspace();
     var mine = ws.visits.filter(function (v) {
@@ -267,7 +294,8 @@
       '<section aria-label="스탬프 투어"><h2>스탬프 투어</h2>' +
       '<p>내 스탬프 ' + mine + '개</p>' +
       '<ul>' + (rows || '<li>운영 중인 부스가 없습니다</li>') + '</ul>' +
-      '<div class="inline-form"><div class="field"><select data-stamp-booth aria-label="부스 선택">' + options + '</select></div>' +
+      '<div class="inline-form"><div class="field"><label>부스 QR 입력<input data-stamp-qr type="text" inputmode="text" autocomplete="off" spellcheck="false" aria-label="부스 QR 입력" placeholder="ET:BOOTH:행사ID:부스ID" /></label></div>' +
+      '<div class="field"><select data-stamp-booth aria-label="부스 선택">' + options + '</select></div>' +
       '<button type="button" data-stamp-receive>스탬프 받기</button></div></section>';
     if (ETKO.lastStampError) {
       html += '<p role="alert">' + escapeHtml(ETKO.lastStampError) + '</p>';
@@ -283,8 +311,15 @@
           ETKO.lastStampError = null;
           ETKO.lastStampDone = false;
           try {
-            var sel = container.querySelector ? container.querySelector('[data-stamp-booth]') : null;
-            var boothId = sel && sel.value !== undefined ? sel.value : '';
+            var qrEl = container.querySelector ? container.querySelector('[data-stamp-qr]') : null;
+            var qrText = qrEl && qrEl.value !== undefined ? String(qrEl.value).trim() : '';
+            var boothId = '';
+            if (qrText) {
+              boothId = ETKO.resolveBoothQr(qrText).id;
+            } else {
+              var sel = container.querySelector ? container.querySelector('[data-stamp-booth]') : null;
+              boothId = sel && sel.value !== undefined ? sel.value : '';
+            }
             var modeNow = ws.boothMode !== 'STAFF' ? 'SELF' : 'STAFF';
             var stampFn = modeNow === 'SELF' && typeof ETKO.stampSelf === 'function' ? ETKO.stampSelf : ETKO.stamp;
             stampFn({ boothId: boothId, participantId: participantId });
