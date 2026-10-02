@@ -174,8 +174,21 @@
 
   // Stamp one visit. Validates booth OPEN, time window, total capacity and
   // per-person limit. Returns a copy of the recorded visit.
+  // Staff/admin path: requires the booth write grant.
   ETKO.stamp = function (input) {
     if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('booth');
+    return recordVisit(input);
+  };
+
+  // Self-service path: SELF mode only (participant scans the booth QR).
+  // STAFF mode refuses so participants cannot bypass the staff desk.
+  ETKO.stampSelf = function (input) {
+    var ws = boothWorkspace();
+    if (ws.boothMode !== 'SELF') throw new Error('직원 스캔 방식에서는 직원이 인증합니다');
+    return recordVisit(input);
+  };
+
+  function recordVisit(input) {
     var opts = input || {};
     var ws = boothWorkspace();
     var booth = findBooth(ws, opts.boothId);
@@ -228,7 +241,8 @@
 
   // Participant stamp mount: booth list with remaining counts, my stamps,
   // and a booth receive control. Success and limit/sold-out/closed refusals
-  // surface as Korean alerts.
+  // surface as Korean alerts. SELF mode uses stampSelf(); STAFF desks keep
+  // using stamp() so participants cannot bypass the staff desk.
   ETKO.renderStamps = function (container, participantId) {
     var ws = boothWorkspace();
     var mine = ws.visits.filter(function (v) {
@@ -271,7 +285,9 @@
           try {
             var sel = container.querySelector ? container.querySelector('[data-stamp-booth]') : null;
             var boothId = sel && sel.value !== undefined ? sel.value : '';
-            ETKO.stamp({ boothId: boothId, participantId: participantId });
+            var modeNow = ws.boothMode !== 'STAFF' ? 'SELF' : 'STAFF';
+            var stampFn = modeNow === 'SELF' && typeof ETKO.stampSelf === 'function' ? ETKO.stampSelf : ETKO.stamp;
+            stampFn({ boothId: boothId, participantId: participantId });
             ETKO.lastStampDone = true;
           } catch (err) {
             ETKO.lastStampError = err && err.message ? err.message : '스탬프를 받지 못했습니다';

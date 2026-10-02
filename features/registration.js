@@ -159,8 +159,20 @@
 
   // Create a participant: validate, refuse name+phone duplicates and a full
   // event, then append with the next p<N> id.
+  // Admin path: requires the participants write grant.
   ETKO.register = function (payload) {
     if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('participants');
+    return createParticipant(payload);
+  };
+
+  // Self-service path: no admin write grant required. Same validation,
+  // duplicate, and capacity rules as register(). Staff/admin entry stays
+  // on ETKO.register so audits can distinguish the two callers.
+  ETKO.registerSelf = function (payload) {
+    return createParticipant(payload);
+  };
+
+  function createParticipant(payload) {
     var ws = formWorkspace();
     var version = ETKO.validateSignup(payload).formVersion;
     var opts = payload || {};
@@ -216,7 +228,7 @@
   }
 
   // Mobile signup mount: renders the active form with required marks and
-  // select options, submits to register(), shows the ticket code on success
+  // select options, submits to registerSelf(), shows the ticket code on success
   // and a field-named Korean alert on failure.
   ETKO.renderSignup = function (container) {
     var fields = ETKO.formFields();
@@ -260,7 +272,8 @@
               var el = container.querySelector ? container.querySelector('[data-signup-' + f.id + ']') : null;
               payload[f.id] = el && el.value !== undefined ? el.value : '';
             });
-            var created = ETKO.register(payload);
+            var signupFn = typeof ETKO.registerSelf === 'function' ? ETKO.registerSelf : ETKO.register;
+            var created = signupFn(payload);
             ETKO.lastSignupTicket = created.code || created.ticket || '';
           } catch (err) {
             ETKO.lastSignupError = err && err.message ? err.message : '신청하지 못했습니다';
