@@ -197,12 +197,78 @@
       everIn: false,
       cancelled: false,
       ticket: 'DEMO-' + String(num).padStart(4, '0'),
+      code: 'EVT-' + (1000 + num),
       registeredAt: new Date().toISOString(),
       customAnswers: custom,
       formVersion: version,
     };
     ws.participants.push(participant);
     return participant;
+  };
+
+  function escapeHtml(value) {
+    return String(value === undefined || value === null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // Mobile signup mount: renders the active form with required marks and
+  // select options, submits to register(), shows the ticket code on success
+  // and a field-named Korean alert on failure.
+  ETKO.renderSignup = function (container) {
+    var fields = ETKO.formFields();
+    var rows = fields.map(function (f) {
+      var req = f.required ? ' <span>필수</span>' : '';
+      var input = '';
+      if (f.type === 'select' && Array.isArray(f.options)) {
+        input =
+          '<select data-signup-' + escapeHtml(f.id) + ' aria-label="' + escapeHtml(f.label) + '">' +
+          f.options.map(function (o) {
+            return '<option value="' + escapeHtml(o) + '">' + escapeHtml(o) + '</option>';
+          }).join('') +
+          '</select>';
+      } else {
+        input =
+          '<input data-signup-' + escapeHtml(f.id) + ' type="text" aria-label="' + escapeHtml(f.label) + '" />';
+      }
+      return '<div class="field"><label>' + escapeHtml(f.label) + req + '</label>' + input + '</div>';
+    }).join('');
+    var html =
+      '<section aria-label="참가 신청"><h2>참가 신청</h2>' +
+      rows +
+      '<button type="button" data-signup-submit>신청하기</button></section>';
+    if (ETKO.lastSignupError) {
+      html += '<p role="alert">' + escapeHtml(ETKO.lastSignupError) + '</p>';
+    }
+    if (ETKO.lastSignupTicket) {
+      html += '<p>등록 완료 · 티켓 코드: ' + escapeHtml(ETKO.lastSignupTicket) + '</p>';
+    }
+    container.innerHTML = html;
+    if (container.querySelectorAll) {
+      Array.prototype.forEach.call(container.querySelectorAll('[data-signup-submit]'), function (btn) {
+        if (typeof btn.addEventListener !== 'function') return;
+        btn.addEventListener('click', function () {
+          ETKO.lastSignupError = null;
+          ETKO.lastSignupTicket = null;
+          try {
+            var payload = {};
+            fields.forEach(function (f) {
+              var el = container.querySelector ? container.querySelector('[data-signup-' + f.id + ']') : null;
+              payload[f.id] = el && el.value !== undefined ? el.value : '';
+            });
+            var created = ETKO.register(payload);
+            ETKO.lastSignupTicket = created.code || created.ticket || '';
+          } catch (err) {
+            ETKO.lastSignupError = err && err.message ? err.message : '신청하지 못했습니다';
+          }
+          ETKO.renderSignup(container);
+        });
+      });
+    }
+    return container.innerHTML;
   };
 
   if (typeof module !== 'undefined' && module && module.exports) {
