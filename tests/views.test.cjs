@@ -8,7 +8,7 @@ function fresh() {
   return globalThis.ETKO;
 }
 
-test('registry lists the nine shell views in nav order', () => {
+test('registry lists the ten shell views in nav order', () => {
   const ETKO = fresh();
   const reg = ETKO.viewRegistry();
   assert.deepEqual(reg.map((v) => v.id), ['overview', 'participants', 'checkin', 'booth', 'participant', 'engage', 'content', 'messages', 'stage', 'screen']);

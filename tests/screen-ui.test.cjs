@@ -18,6 +18,8 @@ test('screen mount projects program output without controls or contacts', () => 
   assert.doesNotMatch(box.innerHTML, /<button/);
   assert.doesNotMatch(box.innerHTML, /<input/);
   assert.doesNotMatch(box.innerHTML, /<select/);
+  assert.doesNotMatch(box.innerHTML, /<textarea/);
+  assert.doesNotMatch(box.innerHTML, /<form/);
   assert.doesNotMatch(box.innerHTML, /<a[\s>]/);
   assert.doesNotMatch(box.innerHTML, /@/);
 });
@@ -40,4 +42,22 @@ test('screen mount reflects take changes, selected question and photo count', ()
   assert.match(after.innerHTML, /암전 중입니다/);
   assert.match(after.innerHTML, /내일 일정 질문입니다/);
   assert.match(after.innerHTML, /공개 사진 1장/);
+});
+
+test('unapproved selected question never projects', () => {
+  const ETKO = fresh();
+  ETKO.stageState = { preview: 'LOGO', program: 'LOGO', disclose: [true, true], confirm: [true, true] };
+  ETKO.workspace().qna.push({ id: 'qx', participantId: 'p1', question: '주입된 질문', approved: false, selected: true });
+  const box = { innerHTML: '' };
+  ETKO.renderScreen(box);
+  assert.match(box.innerHTML, /선택된 질문이 없습니다/);
+  assert.doesNotMatch(box.innerHTML, /주입된 질문/);
+});
+
+test('screen renders safely without stage state or workspace', () => {
+  const ETKO = fresh();
+  delete ETKO.stageState;
+  const box = { innerHTML: '' };
+  ETKO.renderScreen(box);
+  assert.match(box.innerHTML, /로고를 표시하고 있습니다/);
 });

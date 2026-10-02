@@ -19,7 +19,7 @@ test('audience screen section exists in shell, registry, views and gates', () =>
   assert.ok(ETKO.views.includes('screen'), 'VIEWS must include screen');
   assert.equal(ETKO.sectionFor('screen'), 'screen-view');
   assert.equal(ETKO.mountFor('screen'), 'screen-mount');
-  for (const role of ['AGENCY', 'STAFF', 'VIEWER']) {
+  for (const role of ['AGENCY', 'MANAGER', 'STAFF', 'CLIENT', 'VIEWER']) {
     ETKO.setRole(role);
     ETKO.navigate('overview');
     assert.equal(ETKO.navigate('screen'), 'screen', `${role} must reach screen`);
