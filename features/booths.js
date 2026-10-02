@@ -206,6 +206,78 @@
     return 'ET:BOOTH:' + eventId + ':' + boothId;
   };
 
+  function escapeHtml(value) {
+    return String(value === undefined || value === null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function boothStatusLabel(status) {
+    if (status === 'OPEN') return '운영 중';
+    if (status === 'CLOSED') return '종료';
+    return '대기 중';
+  }
+
+  // Participant stamp mount: booth list with remaining counts, my stamps,
+  // and a booth receive control. Success and limit/sold-out/closed refusals
+  // surface as Korean alerts.
+  ETKO.renderStamps = function (container, participantId) {
+    var ws = boothWorkspace();
+    var mine = ws.visits.filter(function (v) {
+      return v && v.participantId === participantId;
+    }).length;
+    var rows = ws.booths.map(function (b) {
+      var left = Math.max(0, (b.capacity || 0) - usedCount(ws, b.id));
+      var got = ws.visits.some(function (v) {
+        return v && v.boothId === b.id && v.participantId === participantId;
+      });
+      return (
+        '<li>' + escapeHtml(b.name) + ' · ' + boothStatusLabel(b.status) +
+        ' · 남은 ' + left + '개' + (got ? ' · 받음' : '') + '</li>'
+      );
+    }).join('');
+    var options = ws.booths.filter(function (b) {
+      return b && b.status === 'OPEN';
+    }).map(function (b) {
+      return '<option value="' + escapeHtml(b.id) + '">' + escapeHtml(b.name) + '</option>';
+    }).join('');
+    var html =
+      '<section aria-label="스탬프 투어"><h2>스탬프 투어</h2>' +
+      '<p>내 스탬프 ' + mine + '개</p>' +
+      '<ul>' + (rows || '<li>운영 중인 부스가 없습니다</li>') + '</ul>' +
+      '<div class="inline-form"><div class="field"><select data-stamp-booth aria-label="부스 선택">' + options + '</select></div>' +
+      '<button type="button" data-stamp-receive>스탬프 받기</button></div></section>';
+    if (ETKO.lastStampError) {
+      html += '<p role="alert">' + escapeHtml(ETKO.lastStampError) + '</p>';
+    }
+    if (ETKO.lastStampDone) {
+      html += '<p>스탬프를 받았습니다</p>';
+    }
+    container.innerHTML = html;
+    if (container.querySelectorAll) {
+      Array.prototype.forEach.call(container.querySelectorAll('[data-stamp-receive]'), function (btn) {
+        if (typeof btn.addEventListener !== 'function') return;
+        btn.addEventListener('click', function () {
+          ETKO.lastStampError = null;
+          ETKO.lastStampDone = false;
+          try {
+            var sel = container.querySelector ? container.querySelector('[data-stamp-booth]') : null;
+            var boothId = sel && sel.value !== undefined ? sel.value : '';
+            ETKO.stamp({ boothId: boothId, participantId: participantId });
+            ETKO.lastStampDone = true;
+          } catch (err) {
+            ETKO.lastStampError = err && err.message ? err.message : '스탬프를 받지 못했습니다';
+          }
+          ETKO.renderStamps(container, participantId);
+        });
+      });
+    }
+    return container.innerHTML;
+  };
+
   if (typeof module !== 'undefined' && module && module.exports) {
     module.exports = ETKO;
   }

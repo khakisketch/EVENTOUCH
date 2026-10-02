@@ -124,7 +124,8 @@ button[data-template-save],
 button[data-template-del],
 button[data-campaign-save],
 button[data-campaign-send],
-button[data-signup-submit] {
+button[data-signup-submit],
+button[data-stamp-receive] {
   min-height: var(--touch-min);
   min-width: var(--touch-min);
 }
