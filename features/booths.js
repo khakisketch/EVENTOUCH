@@ -290,13 +290,17 @@
     }).map(function (b) {
       return '<option value="' + escapeHtml(b.id) + '">' + escapeHtml(b.name) + '</option>';
     }).join('');
+    var staffMode = ws.boothMode === 'STAFF';
+    var controls = staffMode
+      ? '<p>직원에게 티켓을 보여주세요. 직원이 스캔합니다.</p>'
+      : '<div class="inline-form"><div class="field"><label>부스 QR 입력<input data-stamp-qr type="text" inputmode="text" autocomplete="off" spellcheck="false" aria-label="부스 QR 입력" placeholder="ET:BOOTH:행사ID:부스ID" /></label></div>' +
+        '<div class="field"><select data-stamp-booth aria-label="부스 선택">' + options + '</select></div>' +
+        '<button type="button" data-stamp-receive>스탬프 받기</button></div>';
     var html =
       '<section aria-label="스탬프 투어"><h2>스탬프 투어</h2>' +
       '<p>내 스탬프 ' + mine + '개</p>' +
       '<ul>' + (rows || '<li>운영 중인 부스가 없습니다</li>') + '</ul>' +
-      '<div class="inline-form"><div class="field"><label>부스 QR 입력<input data-stamp-qr type="text" inputmode="text" autocomplete="off" spellcheck="false" aria-label="부스 QR 입력" placeholder="ET:BOOTH:행사ID:부스ID" /></label></div>' +
-      '<div class="field"><select data-stamp-booth aria-label="부스 선택">' + options + '</select></div>' +
-      '<button type="button" data-stamp-receive>스탬프 받기</button></div></section>';
+      controls + '</section>';
     if (ETKO.lastStampError) {
       html += '<p role="alert">' + escapeHtml(ETKO.lastStampError) + '</p>';
     }
