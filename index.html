@@ -20,6 +20,7 @@
       <button type="button" data-view="content">콘텐츠</button>
       <button type="button" data-view="messages">메시지</button>
       <button type="button" data-view="stage">무대</button>
+      <button type="button" data-view="screen">화면 출력</button>
     </nav>
   </header>
   <main id="app" data-current-view="overview">
@@ -56,6 +57,9 @@
     </section>
     <section id="stage-view" aria-label="무대" hidden>
       <div id="stage-mount"></div>
+    </section>
+    <section id="screen-view" aria-label="관객 화면" hidden>
+      <div id="screen-mount" aria-live="polite"></div>
     </section>
   </main>
   <script>
@@ -107,6 +111,7 @@
         engage: 'engage-view',
         content: 'content-view',
         messages: 'messages-view',
+        screen: 'screen-view',
         stage: 'stage-view',
       };
 
@@ -119,6 +124,7 @@
         engage: 'engage-mount',
         content: 'content-mount',
         messages: 'messages-mount',
+        screen: 'screen-mount',
         stage: 'stage-mount',
       };
 

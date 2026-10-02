@@ -47,6 +47,7 @@
     'booth',
     'booths',
     'engage',
+    'screen',
     'staff',
     'qna',
     'photos',

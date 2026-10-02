@@ -17,6 +17,7 @@
     { id: 'content', section: 'content-view', mount: 'content-mount', labelKey: 'content' },
     { id: 'messages', section: 'messages-view', mount: 'messages-mount', labelKey: 'messages' },
     { id: 'stage', section: 'stage-view', mount: 'stage-mount', labelKey: 'stage' },
+    { id: 'screen', section: 'screen-view', mount: 'screen-mount', labelKey: 'screen' },
   ];
 
   function copy(entry) {

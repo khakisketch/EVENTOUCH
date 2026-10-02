@@ -12,7 +12,7 @@ const APP_PATH = path.join(ROOT, 'app.js');
 // Canonical view keys (Task 2 interface + engage slice). Singular `participant` is the
 // participant home; plural `participants` is the directory. They must stay
 // distinct: different ko.json keys, different nav labels, different states.
-const VIEWS = ['overview', 'participants', 'checkin', 'booth', 'participant', 'engage', 'content', 'messages', 'stage'];
+const VIEWS = ['overview', 'participants', 'checkin', 'booth', 'participant', 'engage', 'content', 'messages', 'stage', 'screen'];
 const labelKey = (view) => view;
 
 function readButtons(html) {
@@ -81,7 +81,7 @@ test('ETKO.navigate switches views and keeps current view on unknown input', () 
   const ETKO = loadApp();
   assert.ok(ETKO, 'app.js must define ETKO');
   assert.equal(typeof ETKO.navigate, 'function', 'ETKO.navigate must be a function');
-  assert.deepEqual([...ETKO.views].sort(), [...VIEWS].sort(), 'ETKO.views must list the nine views');
+  assert.deepEqual([...ETKO.views].sort(), [...VIEWS].sort(), 'ETKO.views must list the ten views');
 
   assert.equal(ETKO.navigate('overview'), 'overview');
   assert.equal(ETKO.navigate('checkin'), 'checkin');
