@@ -98,6 +98,111 @@
     return container.innerHTML;
   };
 
+  function resolveParticipant() {
+    var list = [];
+    try {
+      if (typeof ETKO.workspace === 'function') list = ETKO.workspace().participants || [];
+    } catch (err) {
+      list = [];
+    }
+    var active = list.filter(function (p) { return p && !p.cancelled; });
+    if (ETKO.homeParticipantId) {
+      for (var i = 0; i < active.length; i += 1) {
+        if (active[i].id === ETKO.homeParticipantId) return active[i];
+      }
+      ETKO.homeParticipantId = null;
+    }
+    return active.length ? active[0] : null;
+  }
+
+  function ticketLabelOf(ticket) {
+    if (typeof ETKO.ticketLabel === 'function') {
+      try {
+        return ETKO.ticketLabel(ticket);
+      } catch (err) {}
+    }
+    return String(ticket === undefined || ticket === null ? '' : ticket).trim();
+  }
+
+  function statusLabelOf(status) {
+    if (typeof ETKO.statusLabel === 'function') {
+      try {
+        return ETKO.statusLabel(status);
+      } catch (err) {}
+    }
+    return String(status || '').trim().toLowerCase() === 'in' ? '입장 중' : '미입장';
+  }
+
+  // Full participant mobile mount: next action + schedule + ticket +
+  // signup/stamp embeds (Tasks 2-3). Shows only the resolved participant's
+  // own record, never the roster. Empty roster guides to signup.
+  ETKO.renderParticipant = function (container) {
+    var me = resolveParticipant();
+    if (!me) {
+      container.innerHTML =
+        '<section aria-label="참가자 홈"><h2>참가자 홈</h2>' +
+        '<p>등록된 참가자가 없습니다. 아래에서 참가 신청을 해주세요.</p></section>' +
+        '<div data-signup-embed></div>';
+      if (typeof ETKO.renderSignup === 'function' && container.querySelector) {
+        try {
+          var embed = container.querySelector('[data-signup-embed]');
+          if (embed) ETKO.renderSignup(embed);
+        } catch (err) {}
+      }
+      return container.innerHTML;
+    }
+    var feed = { now: null, next: null };
+    try {
+      if (typeof ETKO.homeNow === 'function') feed = ETKO.homeNow() || feed;
+    } catch (err) {}
+    function programRow(row, tag) {
+      if (!row) return '<p>' + tag + ': 예정된 일정이 없습니다</p>';
+      return '<p>' + tag + ': ' + escapeHtml(row.time) + ' ' + escapeHtml(row.title) + ' · ' + escapeHtml(row.location) + '</p>';
+    }
+    var programList = [];
+    try {
+      var wss = typeof ETKO.workspace === 'function' ? ETKO.workspace() : null;
+      programList = (wss && Array.isArray(wss.program) ? wss.program : []).slice(0, 20);
+    } catch (err) {}
+    var programAll = programList.map(function (row) {
+      return '<li>' + escapeHtml(row.time) + ' ' + escapeHtml(row.title) + ' · ' + escapeHtml(row.location) + '</li>';
+    }).join('');
+    var stampCount = 0;
+    try {
+      var ws = typeof ETKO.workspace === 'function' ? ETKO.workspace() : null;
+      var visits = ws && Array.isArray(ws.visits) ? ws.visits : [];
+      stampCount = visits.filter(function (v) { return v && v.participantId === me.id; }).length;
+    } catch (err) {}
+    var html =
+      '<section aria-label="다음 행동"><div><button type="button" data-home-cta>' +
+      escapeHtml(ETKO.nextAction(me.status)) +
+      '</button></div></section>' +
+      '<section aria-label="내 일정"><h2>내 일정</h2>' +
+      programRow(feed.now, '현재') + programRow(feed.next, '다음') +
+      '<ul>' + (programAll || '<li>등록된 일정이 없습니다</li>') + '</ul></section>' +
+      '<section aria-label="내 티켓"><h2>내 티켓</h2>' +
+      '<p>' + escapeHtml(me.name) + ' · ' + escapeHtml(ticketLabelOf(me.ticket)) + ' · ' + escapeHtml(statusLabelOf(me.status)) + '</p>' +
+      '<p>티켓 코드: ' + escapeHtml(me.code) + '</p>' +
+      '<p>내 스탬프 ' + stampCount + '개</p></section>' +
+      '<div data-signup-embed></div><div data-stamps-embed></div>';
+    container.innerHTML = html;
+    if (container.querySelector) {
+      try {
+        if (typeof ETKO.renderSignup === 'function') {
+          var se = container.querySelector('[data-signup-embed]');
+          if (se) ETKO.renderSignup(se);
+        }
+      } catch (err) {}
+      try {
+        if (typeof ETKO.renderStamps === 'function') {
+          var te = container.querySelector('[data-stamps-embed]');
+          if (te) ETKO.renderStamps(te, me.id);
+        }
+      } catch (err) {}
+    }
+    return container.innerHTML;
+  };
+
   if (typeof module !== 'undefined' && module && module.exports) {
     module.exports = ETKO;
   }
