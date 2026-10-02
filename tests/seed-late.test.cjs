@@ -27,3 +27,14 @@ test('seed event refills from late sample, new events stay empty', () => {
   ETKO.ensureSeeded();
   assert.equal(ETKO.workspace().participants.length, 0);
 });
+
+test('workspace() auto-fills a flagged workspace without explicit call', () => {
+  const ETKO = fresh();
+  ETKO.switchEvent('evt-1');
+  ETKO.workspace().participants = [];
+  ETKO.workspace().seeded = false;
+  ETKO.workspace().seedFromSample = true;
+  ETKO.sample = { participants: [{ id: 's1', name: '샘플', email: 's@x.kr', ticket: 'GENERAL', status: 'registered', code: 'EVT-9' }] };
+  assert.equal(ETKO.workspace().participants.length, 1);
+  assert.equal(ETKO.workspace().participants.length, 1);
+});

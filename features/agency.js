@@ -117,6 +117,8 @@
   function emptyWorkspace() {
     return {
       participants: [],
+      seeded: false,
+      seedFromSample: false,
       members: [],
       fields: [],
       formVersion: 1,
@@ -152,8 +154,7 @@
     // Seed provenance: only this workspace may refill from a late sample
     // (browser fetch races script load). New events never seed.
     ws.seeded = ws.participants.length > 0;
-    ws.seedFromSample = !ws.seeded;
-    if (ws.seeded) ws.seedFromSample = false;
+    ws.seedFromSample = ws.participants.length === 0;
     return ws;
   }
 
