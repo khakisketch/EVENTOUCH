@@ -136,6 +136,15 @@ button[data-stamp-receive] {
   min-width: 44px;
 }
 
+/* Confirmation checkbox labels are the touch target (boxes are 13px). */
+#stage-mount label,
+#engage-mount label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
 /* Dialogs trap focus while open and close on Escape (shell wiring). */
 [role="dialog"] {
   touch-action: manipulation;
