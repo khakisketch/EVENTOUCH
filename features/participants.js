@@ -69,7 +69,9 @@
   // from the role route table (canRoute('STAFF','participant') stays false
   // per Task 1); the shell offers this path from the STAFF-visible
   // directory so staff can still reach participant detail.
+  // Staff-or-better only: read-only roles cannot bypass into tickets.
   ETKO.openParticipantDetail = function (id) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('participants');
     ETKO.homeParticipantId = id;
     ETKO.detailBypass = 'participant';
     if (typeof ETKO.navigate === 'function') return ETKO.navigate('participant');
@@ -86,7 +88,9 @@
   };
 
   // Mark every selected participant IN. Returns the marked count.
+  // Staff-or-better only: read-only roles cannot change statuses.
   ETKO.bulkCheckIn = function (people) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('participants');
     var list = Array.isArray(people) ? people : defaultPeople();
     var marked = 0;
     list.forEach(function (p) {
@@ -110,6 +114,18 @@
   // Display-only Korean labels: raw ticket/status keys never reach the
   // visible directory. Filtering still matches the raw stored values.
   var TICKET_LABELS = { general: '일반', vip: 'VIP', staff: '스태프' };
+
+  // Directory controls (detail entry, bulk intake) need the participants
+  // write grant. Without a gate loaded (older shell) they stay visible.
+  function canWriteParticipants() {
+    if (typeof ETKO.requireWrite !== 'function') return true;
+    try {
+      ETKO.requireWrite('participants');
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
 
   ETKO.ticketLabel = function (ticket) {
     var key = norm(ticket);
@@ -147,9 +163,11 @@
       escapeHtml(ETKO.statusLabel(p.status)) +
       '</td><td>' +
       escapeHtml(p.code) +
-      '</td><td><button type="button" data-detail="' +
-      escapeHtml(p.id) +
-      '">상세</button></td></tr>'
+      '</td><td>' +
+      (canWriteParticipants()
+        ? '<button type="button" data-detail="' + escapeHtml(p.id) + '">상세</button>'
+        : '') +
+      '</td></tr>'
     );
   }
 
@@ -170,9 +188,11 @@
       escapeHtml(ETKO.statusLabel(p.status)) +
       ' · ' +
       escapeHtml(p.code) +
-      '</p><p><button type="button" data-detail="' +
-      escapeHtml(p.id) +
-      '">상세 보기</button></p></li>'
+      '</p><p>' +
+      (canWriteParticipants()
+        ? '<button type="button" data-detail="' + escapeHtml(p.id) + '">상세 보기</button>'
+        : '') +
+      '</p></li>'
     );
   }
 
@@ -198,7 +218,9 @@
         '</tbody></table></div>';
       html +=
         '<ul class="cards">' + list.map(cardHtml).join('') + '</ul>';
-      html += '<button type="button" data-bulk-in>선택 입장 처리</button>';
+      if (canWriteParticipants()) {
+        html += '<button type="button" data-bulk-in>선택 입장 처리</button>';
+      }
     }
     container.innerHTML = html;
     if (container.querySelectorAll) {
