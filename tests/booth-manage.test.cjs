@@ -1,0 +1,118 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+
+function fresh() {
+  const files = ['../app.js', '../features/agency.js', '../features/persist.js', '../features/qrcode.js', '../features/booth.js', '../features/booths.js', '../features/integrations.js'];
+  for (const m of files) { try { delete require.cache[require.resolve(m)]; } catch {} }
+  delete globalThis.ETKO;
+  delete globalThis.ETQR;
+  globalThis.ETKO = {};
+  for (const m of files) require(m);
+  return globalThis.ETKO;
+}
+
+function manageBox(ETKO, fields, handlers) {
+  const box = {
+    innerHTML: '',
+    querySelectorAll(sel) {
+      const map = {
+        '[data-booth-add]': 'add',
+        '[data-booth-status]': 'status',
+        '[data-booth-print]': 'print',
+      };
+      const key = Object.keys(map).find((k) => sel === k || sel.indexOf(k) === 0);
+      if (!key) return [];
+      const btn = {
+        tagName: 'BUTTON',
+        getAttribute(attr) { return btn.attrs[attr]; },
+        attrs: { 'data-booth-status': 'b1:OPEN', 'data-booth-print': 'b1' },
+        addEventListener(t, fn) { handlers[map[key]] = fn; },
+      };
+      return [btn];
+    },
+    querySelector(sel) {
+      if (/data-booth-name/.test(sel)) return { value: fields.name };
+      if (/data-booth-capacity/.test(sel)) return { value: fields.capacity };
+      if (/data-booth-limit/.test(sel)) return { value: fields.limit };
+      if (/data-booth-status-select/.test(sel)) return { value: fields.status };
+      return null;
+    },
+  };
+  ETKO.renderBoothManage(box);
+  return box;
+}
+
+test('manage lists booth payload, QR, and remaining counts', () => {
+  const ETKO = fresh();
+  ETKO.saveBooth({ name: '관리부스', capacity: 10, limit: 2, status: 'OPEN' });
+  const box = { innerHTML: '', querySelectorAll() { return []; }, querySelector() { return null; } };
+  ETKO.renderBoothManage(box);
+  assert.match(box.innerHTML, /관리부스/);
+  assert.match(box.innerHTML, /ET:BOOTH:evt-1:b1/);
+  assert.match(box.innerHTML, /<svg[^>]*viewBox/);
+  assert.match(box.innerHTML, /남은 10개/);
+  assert.match(box.innerHTML, /data-booth-add/);
+});
+
+test('manage add creates a booth, bad input alerts in Korean', () => {
+  const ETKO = fresh();
+  const handlers = {};
+  manageBox(ETKO, { name: '새부스', capacity: '5', limit: '1', status: 'OPEN' }, handlers);
+  assert.ok(handlers.add, 'add must wire');
+  handlers.add();
+  assert.equal(ETKO.workspace().booths.length, 1);
+  assert.equal(ETKO.workspace().booths[0].name, '새부스');
+
+  const badHandlers = {};
+  manageBox(ETKO, { name: '', capacity: '5', limit: '1', status: 'OPEN' }, badHandlers);
+  badHandlers.add();
+  assert.equal(ETKO.workspace().booths.length, 1);
+  assert.match(ETKO.lastBoothError, /부스 이름/);
+});
+
+test('manage status change applies, print confirm records', () => {
+  const ETKO = fresh();
+  ETKO.saveBooth({ name: '상태부스', capacity: 10, limit: 2, status: 'OPEN' });
+  const handlers = {};
+  const box = manageBox(ETKO, { name: 'x', capacity: '1', limit: '1', status: 'OPEN' }, handlers);
+  box.querySelectorAll = (sel) => {
+    if (sel !== '[data-booth-status]') return [];
+    return [{ tagName: 'BUTTON', getAttribute: (a) => (a === 'data-booth-status' ? 'b1:CLOSED' : ''), addEventListener: (t, fn) => { handlers.status = fn; } }];
+  };
+  ETKO.renderBoothManage(box);
+  handlers.status();
+  assert.equal(ETKO.workspace().booths[0].status, 'CLOSED');
+
+  const pHandlers = {};
+  const box2 = manageBox(ETKO, { name: 'x', capacity: '1', limit: '1', status: 'OPEN' }, pHandlers);
+  box2.querySelectorAll = (sel) => {
+    if (sel !== '[data-booth-print]') return [];
+    return [{ tagName: 'BUTTON', getAttribute: (a) => (a === 'data-booth-print' ? 'b1' : ''), addEventListener: (t, fn) => { pHandlers.print = fn; } }];
+  };
+  ETKO.renderBoothManage(box2);
+  pHandlers.print();
+  assert.ok(ETKO.workspace().prints.some((p) => p.boothId === 'b1'));
+});
+
+test('read-only roles see the list without controls', () => {
+  const ETKO = fresh();
+  ETKO.saveBooth({ name: '공개부스', capacity: 10, limit: 2, status: 'OPEN' });
+  ETKO.setRole('VIEWER');
+  const box = { innerHTML: '', querySelectorAll() { return []; }, querySelector() { return null; } };
+  ETKO.renderBoothManage(box);
+  assert.match(box.innerHTML, /공개부스/);
+  assert.match(box.innerHTML, /ET:BOOTH/);
+  assert.doesNotMatch(box.innerHTML, /data-booth-add/);
+  assert.doesNotMatch(box.innerHTML, /data-booth-status/);
+});
+
+test('manage notes the mode lock once visits exist', () => {
+  const ETKO = fresh();
+  const booth = ETKO.saveBooth({ name: '잠금부스', capacity: 10, limit: 2, status: 'OPEN' });
+  const ws = ETKO.workspace();
+  ws.participants.push({ id: 'p1', name: '참가', phone: '010', cancelled: false });
+  ETKO.stamp({ boothId: booth.id, participantId: 'p1' });
+  const box = { innerHTML: '', querySelectorAll() { return []; }, querySelector() { return null; } };
+  ETKO.renderBoothManage(box);
+  assert.match(box.innerHTML, /변경할 수 없습니다/);
+});

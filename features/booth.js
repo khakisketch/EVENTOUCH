@@ -72,8 +72,17 @@
       '>직원 스캔</button></div>' +
       '<p>' +
       guide +
-      '</p>';
+      '</p>' +
+      '<div data-booth-manage-embed></div>';
     container.innerHTML = html;
+    if (container.querySelector) {
+      try {
+        if (typeof ETKO.renderBoothManage === 'function') {
+          var manage = container.querySelector('[data-booth-manage-embed]');
+          if (manage) ETKO.renderBoothManage(manage);
+        }
+      } catch (err) {}
+    }
     if (container.querySelectorAll) {
       Array.prototype.forEach.call(
         container.querySelectorAll('[data-booth-mode]'),

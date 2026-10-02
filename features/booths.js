@@ -224,6 +224,128 @@
     return 'ET:BOOTH:' + eventId + ':' + boothId;
   };
 
+  function canWriteBooth() {
+    if (typeof ETKO.requireWrite !== 'function') return true;
+    try {
+      ETKO.requireWrite('booth');
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function latestPrint(ws, boothId) {
+    var prints = ws && Array.isArray(ws.prints) ? ws.prints : [];
+    for (var i = prints.length - 1; i >= 0; i -= 1) {
+      if (prints[i] && prints[i].boothId === boothId) return prints[i];
+    }
+    return null;
+  }
+
+  // Staff booth management: mode + lock note, booth list with payload/QR/
+  // remaining counts, add form, status switches, print confirmations.
+  // Read-only roles see the list and payloads without controls. All
+  // failures surface as Korean alerts.
+  ETKO.renderBoothManage = function (container) {
+    var ws = boothWorkspace();
+    var writable = canWriteBooth();
+    var modeLabel = ws.boothMode === 'STAFF' ? '직원 스캔' : '직접 스캔';
+    var items = ws.booths.map(function (b) {
+      var left = Math.max(0, (b.capacity || 0) - usedCount(ws, b.id));
+      var payload = ETKO.boothPayload(ETKO.store.activeEventId, b.id);
+      var qr = '';
+      try {
+        if (typeof ETKO.qrSvg === 'function') qr = '<div class="qr">' + ETKO.qrSvg(payload) + '</div>';
+      } catch (err) {}
+      var printed = latestPrint(ws, b.id);
+      var controls = '';
+      if (writable) {
+        controls =
+          ' <button type="button" data-booth-status="' + escapeHtml(b.id) + ':OPEN">운영</button>' +
+          ' <button type="button" data-booth-status="' + escapeHtml(b.id) + ':WAITING">대기</button>' +
+          ' <button type="button" data-booth-status="' + escapeHtml(b.id) + ':CLOSED">종료</button>' +
+          ' <button type="button" data-booth-print="' + escapeHtml(b.id) + '">인쇄 확인</button>';
+      }
+      return (
+        '<li><strong>' + escapeHtml(b.name) + '</strong> · ' + boothStatusLabel(b.status) +
+        ' · 남은 ' + left + '개 · 1인 ' + (b.limit || 0) + '회' +
+        '<p>QR: ' + escapeHtml(payload) + '</p>' + qr +
+        (printed ? '<p>인쇄 확인됨 (' + escapeHtml(printed.format || 'A4') + ')</p>' : '') +
+        controls + '</li>'
+      );
+    }).join('');
+    var html =
+      '<section aria-label="부스 관리"><h2>부스 관리</h2>' +
+      '<p>방식: ' + modeLabel + (ws.visits.length > 0 ? ' · 인증 기록이 있어 방식을 변경할 수 없습니다' : '') + '</p>' +
+      '<ul>' + (items || '<li>등록된 부스가 없습니다</li>') + '</ul>';
+    if (writable) {
+      html +=
+        '<div class="inline-form">' +
+        '<div class="field"><label>부스 이름<input data-booth-name type="text" aria-label="부스 이름" /></label></div>' +
+        '<div class="field"><label>수량<input data-booth-capacity type="text" inputmode="numeric" aria-label="부스 수량" /></label></div>' +
+        '<div class="field"><label>1인 횟수<input data-booth-limit type="text" inputmode="numeric" aria-label="1인당 참여 횟수" /></label></div>' +
+        '<div class="field"><label>상태<select data-booth-status-select aria-label="부스 상태"><option value="OPEN">운영 중</option><option value="WAITING">대기 중</option><option value="CLOSED">종료</option></select></label></div>' +
+        '<button type="button" data-booth-add>부스 개설</button></div>';
+    }
+    html += '</section>';
+    if (ETKO.lastBoothError) {
+      html += '<p role="alert">' + escapeHtml(ETKO.lastBoothError) + '</p>';
+    }
+    container.innerHTML = html;
+    if (container.querySelectorAll) {
+      Array.prototype.forEach.call(container.querySelectorAll('[data-booth-add]'), function (btn) {
+        if (typeof btn.addEventListener !== 'function') return;
+        btn.addEventListener('click', function () {
+          ETKO.lastBoothError = null;
+          try {
+            ETKO.saveBooth({
+              name: fieldText(container, '[data-booth-name]'),
+              capacity: fieldText(container, '[data-booth-capacity]'),
+              limit: fieldText(container, '[data-booth-limit]'),
+              status: fieldText(container, '[data-booth-status-select]') || 'OPEN',
+            });
+          } catch (err) {
+            ETKO.lastBoothError = err && err.message ? err.message : '부스를 개설하지 못했습니다';
+          }
+          ETKO.renderBoothManage(container);
+        });
+      });
+      Array.prototype.forEach.call(container.querySelectorAll('[data-booth-status]'), function (btn) {
+        if (typeof btn.addEventListener !== 'function') return;
+        btn.addEventListener('click', function () {
+          ETKO.lastBoothError = null;
+          try {
+            var spec = btn.getAttribute ? String(btn.getAttribute('data-booth-status') || '') : '';
+            var parts = spec.split(':');
+            ETKO.setBoothStatus(parts[0], parts.slice(1).join(':'));
+          } catch (err) {
+            ETKO.lastBoothError = err && err.message ? err.message : '부스 상태를 변경하지 못했습니다';
+          }
+          ETKO.renderBoothManage(container);
+        });
+      });
+      Array.prototype.forEach.call(container.querySelectorAll('[data-booth-print]'), function (btn) {
+        if (typeof btn.addEventListener !== 'function') return;
+        btn.addEventListener('click', function () {
+          ETKO.lastBoothError = null;
+          try {
+            var id = btn.getAttribute ? btn.getAttribute('data-booth-print') : '';
+            ETKO.markPrinted(id);
+          } catch (err) {
+            ETKO.lastBoothError = err && err.message ? err.message : '인쇄 확인을 기록하지 못했습니다';
+          }
+          ETKO.renderBoothManage(container);
+        });
+      });
+    }
+    return container.innerHTML;
+  };
+
+  function fieldText(container, sel) {
+    var el = container.querySelector ? container.querySelector(sel) : null;
+    return el && el.value !== undefined ? el.value : '';
+  }
+
   // Resolve a scanned booth QR to its booth. Strict format; the event scope
   // must match the active event so another event's QR cannot stamp here.
   ETKO.resolveBoothQr = function (text) {
