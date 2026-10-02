@@ -1283,3 +1283,119 @@ function load(id){id=id.replace('./','');if(cache[id])return cache[id].exports;c
     module.exports = ETKO;
   }
 })((typeof window !== 'undefined' && window) || globalThis);
+
+/* QR intake seam: decode photographed/printed codes without hardware. */
+(function (root) {
+  'use strict';
+
+  var ETKO = root.ETKO || (root.ETKO = {});
+
+  function decoder() {
+    var dec = root.jsQR || (typeof globalThis !== 'undefined' && globalThis.jsQR) || null;
+    return typeof dec === 'function' ? dec : null;
+  }
+
+  // Decode raw RGBA pixels. Throws Korean errors when no decoder is
+  // loaded or no QR is found.
+  ETKO.decodeQrPixels = function (data, width, height) {
+    var dec = decoder();
+    if (!dec) throw new Error('QR 판독기를 확인할 수 없습니다');
+    var out = null;
+    try {
+      out = dec(data, width, height);
+    } catch (err) {
+      out = null;
+    }
+    if (!out || !out.data) throw new Error('QR을 읽지 못했습니다. 코드를 직접 입력하세요');
+    return String(out.data);
+  };
+
+  // Lazy-load the vendored decoder (once) for file intake. Returns true
+  // when ready to decode, false while loading or unavailable.
+  ETKO.ensureQrDecoder = function () {
+    if (decoder()) return true;
+    try {
+      var doc = root.document || (typeof document !== 'undefined' ? document : null);
+      if (!doc || typeof doc.createElement !== 'function' || typeof doc.querySelector !== 'function') return false;
+      if (doc.querySelector('script[data-qr-decoder]')) return false;
+      var script = doc.createElement('script');
+      if (script.setAttribute) script.setAttribute('data-qr-decoder', 'true');
+      script.src = 'features/jsqr-decoder.js';
+      var parent = doc.head || doc.body || doc.documentElement;
+      if (parent && typeof parent.appendChild === 'function') parent.appendChild(script);
+    } catch (err) {}
+    return !!decoder();
+  };
+
+  // Decode an image File/Blob into its QR text. Browser only; rejects
+  // with Korean errors when the environment cannot read images.
+  ETKO.decodeQrFile = function (file) {
+    return new Promise(function (resolve, reject) {
+      function fail(message) {
+        reject(new Error(message));
+      }
+      if (!file) {
+        fail('QR 사진을 선택하세요');
+        return;
+      }
+      var FR = root.FileReader || (typeof FileReader !== 'undefined' ? FileReader : null);
+      if (typeof FR !== 'function') {
+        fail('이 환경에서는 QR 사진을 읽을 수 없습니다');
+        return;
+      }
+      var reader = new FR();
+      reader.onerror = function () {
+        fail('QR 사진을 읽지 못했습니다');
+      };
+      reader.onload = function () {
+        try {
+          var Img = root.Image || (typeof Image !== 'undefined' ? Image : null);
+          var doc = root.document || (typeof document !== 'undefined' ? document : null);
+          if (typeof Img !== 'function' || !doc || typeof doc.createElement !== 'function') {
+            fail('이 환경에서는 QR 사진을 읽을 수 없습니다');
+            return;
+          }
+          var img = new Img();
+          img.onerror = function () {
+            fail('QR 사진을 읽지 못했습니다');
+          };
+          img.onload = function () {
+            try {
+              var w = img.naturalWidth || img.width;
+              var h = img.naturalHeight || img.height;
+              if (!w || !h) {
+                fail('QR 사진을 읽지 못했습니다');
+                return;
+              }
+              var canvas = doc.createElement('canvas');
+              canvas.width = w;
+              canvas.height = h;
+              var ctx = canvas.getContext('2d');
+              if (!ctx) {
+                fail('QR 사진을 읽지 못했습니다');
+                return;
+              }
+              ctx.drawImage(img, 0, 0);
+              var pixels = ctx.getImageData(0, 0, w, h);
+              resolve(ETKO.decodeQrPixels(pixels.data, w, h));
+            } catch (err) {
+              fail(err && err.message ? err.message : 'QR 사진을 읽지 못했습니다');
+            }
+          };
+          img.src = reader.result;
+        } catch (err) {
+          fail('QR 사진을 읽지 못했습니다');
+        }
+      };
+      try {
+        reader.readAsDataURL(file);
+      } catch (err) {
+        fail('QR 사진을 읽지 못했습니다');
+      }
+    });
+  };
+
+  if (typeof module !== 'undefined' && module && module.exports) {
+    module.exports = ETKO;
+  }
+})((typeof window !== 'undefined' && window) || globalThis);

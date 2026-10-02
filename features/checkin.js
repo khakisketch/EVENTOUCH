@@ -203,6 +203,18 @@
       .replace(/"/g, '&quot;');
   }
 
+  // QR photo intake: staff photographs a ticket/QR when no scanner is
+  // attached. Hidden where files cannot be read. Decoded codes flow
+  // through the same submitTicket path as typed codes.
+  function qrIntakeSupported() {
+    try {
+      return typeof FileReader !== 'undefined';
+    } catch (err) {
+      return false;
+    }
+  }
+  // Korean copy only. Wires controls when the container supports queries.
+  // Workspace-backed when `state` is omitted so the shell queue stays visible.
   // Render direction toggle + result panel + queue list + sync button.
   // Korean copy only. Wires controls when the container supports queries.
   // Workspace-backed when `state` is omitted so the shell queue stays visible.
@@ -259,7 +271,13 @@
       s.queue.length +
       '건</p>' +
       queueHtml +
-      '<button type="button" data-sync>동기화</button></div>';
+      '<button type="button" data-sync>동기화</button></div>' +
+      (qrIntakeSupported()
+        ? '<div class="inline-form"><div class="field"><label>QR 사진<input data-qr-file type="file" accept="image/*" aria-label="QR 사진" /></label></div></div>'
+        : '');
+    if (ETKO.lastQrError) {
+      html += '<p role="alert">' + escapeHtml(ETKO.lastQrError) + '</p>';
+    }
     if (typeof ETKO.renderDesks === 'function') {
       html += '<div data-desks-embed></div>';
     }
@@ -296,6 +314,70 @@
           ETKO.renderCheckin(container, s);
         });
       }
+      Array.prototype.forEach.call(
+        container.querySelectorAll('[data-qr-file]'),
+        function (input) {
+          if (typeof input.addEventListener !== 'function') return;
+          input.addEventListener('change', function () {
+            ETKO.lastQrError = null;
+            var file = input.files && input.files[0];
+            if (!file) return;
+            if (typeof ETKO.decodeQrFile !== 'function') {
+              ETKO.lastQrError = '이 환경에서는 QR 사진을 읽을 수 없습니다';
+              ETKO.renderCheckin(container, s);
+              return;
+            }
+            decodeWhenReady(file, 25);
+          });
+
+          function decoderReady() {
+            try {
+              if (typeof ETKO.ensureQrDecoder === 'function') return ETKO.ensureQrDecoder();
+            } catch (err) {}
+            return false;
+          }
+
+          function decodeWhenReady(file, triesLeft) {
+            if (decoderReady()) {
+              runDecode(file);
+              return;
+            }
+            if (triesLeft <= 0) {
+              ETKO.lastQrError = 'QR 판독기를 확인할 수 없습니다';
+              ETKO.renderCheckin(container, s);
+              return;
+            }
+            setTimeout(function () {
+              decodeWhenReady(file, triesLeft - 1);
+            }, 200);
+          }
+
+          function runDecode(file) {
+            ETKO.decodeQrFile(file).then(
+              function (code) {
+                try {
+                  if (typeof ETKO.submitTicket === 'function') {
+                    ETKO.lastScanResult = ETKO.submitTicket(code, ETKO.checkinDirection || 'IN');
+                  } else {
+                    ETKO.lastScanResult = ETKO.scan({
+                      code: code,
+                      direction: ETKO.checkinDirection || 'IN',
+                      online: ETKO.online !== false,
+                    });
+                  }
+                } catch (err) {
+                  ETKO.lastQrError = err && err.message ? err.message : '처리하지 못했습니다';
+                }
+                ETKO.renderCheckin(container, s);
+              },
+              function (err) {
+                ETKO.lastQrError = err && err.message ? err.message : 'QR 사진을 읽지 못했습니다';
+                ETKO.renderCheckin(container, s);
+              }
+            );
+          }
+        }
+      );
     }
     return container.innerHTML;
   };
