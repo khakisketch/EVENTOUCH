@@ -266,6 +266,7 @@
     ETKO.activeUnitId = null;
     ETKO.lastSignupTicket = null;
     ETKO.lastSignupError = null;
+    ETKO.lastLookupError = null;
     ETKO.lastStampError = null;
     ETKO.lastStampDone = false;
     ETKO.lastEngageError = null;

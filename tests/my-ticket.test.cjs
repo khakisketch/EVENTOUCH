@@ -106,3 +106,11 @@ test('lookup receive with a bad record surfaces a Korean alert', () => {
   assert.ok(!ETKO.homeParticipantId);
   assert.match(ETKO.lastLookupError, /등록 정보/);
 });
+
+test('event switch clears the lookup error', () => {
+  const ETKO = fresh();
+  ETKO.lastLookupError = '등록 정보를 찾을 수 없습니다';
+  const id = ETKO.createEvent({ name: '다음행사', date: '2026-12-01', venue: 'B홀' });
+  ETKO.switchEvent(id);
+  assert.equal(ETKO.lastLookupError, null);
+});
