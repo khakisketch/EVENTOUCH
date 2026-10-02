@@ -71,7 +71,12 @@
   }
 
   function nextVisitId(ws) {
-    return 'v' + (ws.visits.length + 1);
+    var max = 0;
+    ws.visits.forEach(function (v) {
+      var m = /^v(\d+)$/.exec((v && v.id) || '');
+      if (m) max = Math.max(max, parseInt(m[1], 10));
+    });
+    return 'v' + (max + 1);
   }
 
   function copyVisit(v) {

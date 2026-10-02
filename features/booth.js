@@ -52,7 +52,8 @@
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   // Render the booth desk mode switch. Korean copy only; never renders the
@@ -108,11 +109,12 @@
     var active = list.filter(function (p) { return p && !p.cancelled; });
     if (ETKO.homeParticipantId) {
       for (var i = 0; i < active.length; i += 1) {
-        if (active[i].id === ETKO.homeParticipantId) return active[i];
+        if (active[i].id === ETKO.homeParticipantId) return { person: active[i], fellBack: false };
       }
       ETKO.homeParticipantId = null;
+      return { person: active.length ? active[0] : null, fellBack: true };
     }
-    return active.length ? active[0] : null;
+    return { person: active.length ? active[0] : null, fellBack: false };
   }
 
   function ticketLabelOf(ticket) {
@@ -137,7 +139,8 @@
   // signup/stamp embeds (Tasks 2-3). Shows only the resolved participant's
   // own record, never the roster. Empty roster guides to signup.
   ETKO.renderParticipant = function (container) {
-    var me = resolveParticipant();
+    var resolved = resolveParticipant();
+    var me = resolved.person;
     if (!me) {
       container.innerHTML =
         '<section aria-label="참가자 홈"><h2>참가자 홈</h2>' +
@@ -160,13 +163,19 @@
       return '<p>' + tag + ': ' + escapeHtml(row.time) + ' ' + escapeHtml(row.title) + ' · ' + escapeHtml(row.location) + '</p>';
     }
     var programList = [];
+    var programTotal = 0;
     try {
       var wss = typeof ETKO.workspace === 'function' ? ETKO.workspace() : null;
-      programList = (wss && Array.isArray(wss.program) ? wss.program : []).slice(0, 20);
+      var all = (wss && Array.isArray(wss.program) ? wss.program : []);
+      programTotal = all.length;
+      programList = all.slice(0, 20);
     } catch (err) {}
     var programAll = programList.map(function (row) {
       return '<li>' + escapeHtml(row.time) + ' ' + escapeHtml(row.title) + ' · ' + escapeHtml(row.location) + '</li>';
     }).join('');
+    var programNote = programTotal > programList.length
+      ? '<p>전체 ' + programTotal + '개 중 ' + programList.length + '개 표시</p>'
+      : '';
     var stampCount = 0;
     try {
       var ws = typeof ETKO.workspace === 'function' ? ETKO.workspace() : null;
@@ -174,12 +183,14 @@
       stampCount = visits.filter(function (v) { return v && v.participantId === me.id; }).length;
     } catch (err) {}
     var html =
-      '<section aria-label="다음 행동"><div><button type="button" data-home-cta>' +
+      '<section aria-label="다음 행동">' +
+      (resolved.fellBack ? '<p role="status">선택한 참가자를 찾을 수 없어 첫 참가자를 보여줍니다</p>' : '') +
+      '<div><button type="button" data-home-cta>' +
       escapeHtml(ETKO.nextAction(me.status)) +
       '</button></div></section>' +
       '<section aria-label="내 일정"><h2>내 일정</h2>' +
       programRow(feed.now, '현재') + programRow(feed.next, '다음') +
-      '<ul>' + (programAll || '<li>등록된 일정이 없습니다</li>') + '</ul></section>' +
+      '<ul>' + (programAll || '<li>등록된 일정이 없습니다</li>') + '</ul>' + programNote + '</section>' +
       '<section aria-label="내 티켓"><h2>내 티켓</h2>' +
       '<p>' + escapeHtml(me.name) + ' · ' + escapeHtml(ticketLabelOf(me.ticket)) + ' · ' + escapeHtml(statusLabelOf(me.status)) + '</p>' +
       '<p>티켓 코드: ' + escapeHtml(me.code) + '</p>' +

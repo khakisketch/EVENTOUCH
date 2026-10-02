@@ -55,4 +55,5 @@ test('signup submit registers and shows ticket, invalid shows field-named alert'
   ETKO.renderSignup(bad);
   bad.fn();
   assert.match(bad.innerHTML, /role="alert"/);
+  assert.match(ETKO.lastSignupError, /이름/);
 });

@@ -196,7 +196,7 @@
       status: 'registered',
       everIn: false,
       cancelled: false,
-      ticket: 'DEMO-' + String(num).padStart(4, '0'),
+      ticket: 'GENERAL',
       code: 'EVT-' + (1000 + num),
       registeredAt: new Date().toISOString(),
       customAnswers: custom,
@@ -226,6 +226,7 @@
       if (f.type === 'select' && Array.isArray(f.options)) {
         input =
           '<select data-signup-' + escapeHtml(f.id) + ' aria-label="' + escapeHtml(f.label) + '">' +
+          '<option value="">선택하세요</option>' +
           f.options.map(function (o) {
             return '<option value="' + escapeHtml(o) + '">' + escapeHtml(o) + '</option>';
           }).join('') +

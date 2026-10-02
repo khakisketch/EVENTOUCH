@@ -18,7 +18,10 @@ test('participant mount renders next action, schedule and ticket', () => {
   assert.match(box.innerHTML, /개회식/);
   assert.match(box.innerHTML, /내 티켓/);
   assert.match(box.innerHTML, /EVT-1001/);
-  assert.doesNotMatch(box.innerHTML, /minjun\.kim@example\.kr.*seoyeon|seoyeon\.lee@example\.kr.*minjun/);
+  assert.doesNotMatch(box.innerHTML, /DEMO-/);
+  assert.doesNotMatch(box.innerHTML, /seoyeon\.lee@example\.kr/);
+  assert.doesNotMatch(box.innerHTML, /haneul\.jung@example\.kr/);
+  assert.doesNotMatch(box.innerHTML, /EVT-1002/);
 });
 
 test('empty roster shows signup guidance, stale detail falls back', () => {

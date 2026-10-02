@@ -264,6 +264,14 @@
     ETKO.homeParticipantId = null;
     ETKO.detailBypass = false;
     ETKO.activeUnitId = null;
+    ETKO.lastSignupTicket = null;
+    ETKO.lastSignupError = null;
+    ETKO.lastStampError = null;
+    ETKO.lastStampDone = false;
+    ETKO.lastEngageError = null;
+    ETKO.lastContentError = null;
+    ETKO.lastMessagingError = null;
+    ETKO.lastDeskError = null;
     return found;
   };
 
