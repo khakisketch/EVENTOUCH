@@ -102,6 +102,21 @@
     return true;
   };
 
+  // Read the last saved snapshot (cross-tab sync). Null when absent.
+  ETKO.savedSnapshot = function () {
+    var b = null;
+    try {
+      b = backend();
+    } catch (err) {
+      b = null;
+    }
+    if (!b) return null;
+    try {
+      return b.get();
+    } catch (err) {
+      return null;
+    }
+  };
   // Save now. No backend (e.g. Node tests) is a silent no-op returning false.
   ETKO.touchStore = function () {
     var b = null;
@@ -142,13 +157,27 @@
   };
 
   // Boot: resume a previous session when one was saved. Runs once at load;
-  // a missing/corrupt entry keeps the seeded store.
+  // a missing/corrupt entry keeps the seeded store. A dedicated display
+  // (?view=screen) still pulls the data but keeps its screen view.
   try {
+    var keepView = null;
+    try {
+      if (
+        typeof window !== 'undefined' &&
+        window &&
+        window.location &&
+        typeof window.location.search === 'string' &&
+        /[?&]view=screen\b/.test(window.location.search)
+      ) {
+        keepView = ETKO.currentView;
+      }
+    } catch (err) {}
     var b0 = backend();
     if (b0) {
       var prev = b0.get();
       if (prev) ETKO.restoreStore(prev);
     }
+    if (keepView) ETKO.currentView = keepView;
   } catch (err) {}
 
   // Browser lifecycle: save on hide/close so refresh and revisit resume.

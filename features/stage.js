@@ -89,6 +89,9 @@
     var s = ensureStageState(state);
     if (!ETKO.canTake({ disclose: s.disclose, confirm: s.confirm })) return false;
     s.program = s.preview;
+    try {
+      if (typeof ETKO.announceScreen === 'function') ETKO.announceScreen();
+    } catch (err) {}
     return true;
   };
 
@@ -149,7 +152,8 @@
       '<button type="button" data-safety="LOGO">로고</button></div>' +
       '<div><button type="button" data-motion aria-pressed="' +
       (ETKO.reducedMotion ? 'true' : 'false') +
-      '">모션 줄이기</button></div>';
+      '">모션 줄이기</button></div>' +
+      '<div><a href="?view=screen" target="_blank" rel="noopener">관객 화면 열기</a></div>';
     container.innerHTML = html;
     if (container.querySelectorAll) {
       Array.prototype.forEach.call(
@@ -201,6 +205,100 @@
       }
     }
     return container.innerHTML;
+  };
+
+  // Audience display sync across tabs/windows.
+  // announceScreen posts the live program; listenScreen re-renders a screen
+  // mount on every announcement (pulling the saved snapshot first so a
+  // dedicated display tab shows the control tab's data). Both degrade to
+  // silent no-ops without a bus, and never throw.
+  var SCREEN_CHANNEL = 'eventouch-screen-v1';
+
+  function screenBus() {
+    if (ETKO.screenBus) return ETKO.screenBus;
+    try {
+      if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined') {
+        ETKO.screenBus = new BroadcastChannel(SCREEN_CHANNEL);
+        return ETKO.screenBus;
+      }
+    } catch (err) {}
+    return null;
+  }
+
+  ETKO.announceScreen = function () {
+    var bus = null;
+    try {
+      bus = screenBus();
+    } catch (err) {
+      bus = null;
+    }
+    if (!bus) return false;
+    var program = 'LOGO';
+    try {
+      if (ETKO.stageState && typeof ETKO.stageState.program === 'string') {
+        program = ETKO.stageState.program;
+      }
+    } catch (err) {}
+    try {
+      bus.postMessage({ type: 'eventouch-screen', program: program, at: new Date().toISOString() });
+      return true;
+    } catch (err) {
+      return false;
+    }
+  };
+
+  ETKO.listenScreen = function (container) {
+    if (!container || container.screenListening) return !!container && !!container.screenListening;
+    function refresh() {
+      var keep = ETKO.currentView;
+      try {
+        if (typeof ETKO.savedSnapshot === 'function' && typeof ETKO.restoreStore === 'function') {
+          var raw = ETKO.savedSnapshot();
+          if (raw) ETKO.restoreStore(raw);
+        }
+      } catch (err) {}
+      ETKO.currentView = keep;
+      try {
+        ETKO.renderScreen(container);
+      } catch (err) {}
+    }
+    var wired = false;
+    var bus = null;
+    try {
+      bus = screenBus();
+    } catch (err) {
+      bus = null;
+    }
+    if (bus && typeof bus.addEventListener === 'function') {
+      try {
+        bus.addEventListener('message', function (ev) {
+          if (ev && ev.data && ev.data.type === 'eventouch-screen') refresh();
+        });
+        wired = true;
+      } catch (err) {}
+    } else if (bus && typeof bus.onmessage !== 'undefined') {
+      try {
+        bus.onmessage = function (ev) {
+          if (ev && ev.data && ev.data.type === 'eventouch-screen') refresh();
+        };
+        wired = true;
+      } catch (err) {}
+    }
+    // Storage events fire only in OTHER tabs: the exact cross-tab fallback.
+    try {
+      if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+        window.addEventListener('storage', function (ev) {
+          if (ev && ev.key === 'eventouch-store-v1') refresh();
+        });
+        wired = true;
+      }
+    } catch (err) {}
+    if (wired) {
+      try {
+        container.screenListening = true;
+      } catch (err) {}
+    }
+    return wired;
   };
 
   // Audience projection: read-only program output + selected question +

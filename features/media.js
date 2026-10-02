@@ -102,6 +102,9 @@
       status: 'PENDING',
     };
     ws.photos.push(record);
+    try {
+      if (typeof ETKO.announceScreen === 'function') ETKO.announceScreen();
+    } catch (err) {}
     return copyPhoto(record);
   };
 
@@ -117,6 +120,9 @@
       var photo = findPhoto(ws, id);
       if (!photo) throw new Error('사진을 찾을 수 없습니다');
       photo.status = next;
+      try {
+        if (typeof ETKO.announceScreen === 'function') ETKO.announceScreen();
+      } catch (err) {}
       return copyPhoto(photo);
     });
   };

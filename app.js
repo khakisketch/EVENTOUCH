@@ -139,6 +139,20 @@
     }
   }
 
+  // Dedicated audience display: ?view=screen boots straight into the
+  // read-only screen view (projector/second window), no role needed.
+  try {
+    if (
+      typeof window !== 'undefined' &&
+      window &&
+      window.location &&
+      typeof window.location.search === 'string' &&
+      /[?&]view=screen\b/.test(window.location.search)
+    ) {
+      ETKO.navigate('screen');
+    }
+  } catch (err) {}
+
   if (typeof module !== 'undefined' && module && module.exports) {
     module.exports = ETKO;
   }

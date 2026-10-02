@@ -227,6 +227,9 @@
     if (!item) throw new Error('질문을 찾을 수 없습니다');
     item.approved = !!approved;
     if (!item.approved) item.selected = false;
+    try {
+      if (typeof ETKO.announceScreen === 'function') ETKO.announceScreen();
+    } catch (err) {}
     return item;
   };
 
@@ -241,6 +244,9 @@
     ws.qna.forEach(function (q) {
       if (q) q.selected = q.id === item.id;
     });
+    try {
+      if (typeof ETKO.announceScreen === 'function') ETKO.announceScreen();
+    } catch (err) {}
     return item;
   };
 
