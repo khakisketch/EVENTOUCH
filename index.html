@@ -64,6 +64,9 @@
       .then((res) => res.json())
       .then((data) => {
         window.ETKO.sample = data;
+        try {
+          if (window.ETKO.ensureSeeded) window.ETKO.ensureSeeded();
+        } catch (err) {}
         if (window.ETKO.syncParticipantsView) window.ETKO.syncParticipantsView();
         if (window.ETKO.syncViews) window.ETKO.syncViews();
       });

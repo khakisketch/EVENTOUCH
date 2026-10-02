@@ -149,6 +149,11 @@
     ws.poll = { title: '만족도 투표', options: ['만족', '보통'], votes: [], status: 'CLOSED' };
     ws.quiz = { title: '퀴즈', answer: '', answers: [], status: 'CLOSED' };
     ws.survey = { title: '만족도 조사', questions: [], open: false };
+    // Seed provenance: only this workspace may refill from a late sample
+    // (browser fetch races script load). New events never seed.
+    ws.seeded = ws.participants.length > 0;
+    ws.seedFromSample = !ws.seeded;
+    if (ws.seeded) ws.seedFromSample = false;
     return ws;
   }
 
@@ -263,7 +268,37 @@
   ETKO.workspace = function () {
     var ws = ETKO.store.workspaces[ETKO.store.activeEventId];
     if (!ws) throw new Error('행사를 찾을 수 없습니다');
+    try {
+      ETKO.ensureSeeded();
+    } catch (err) {}
     return ws;
+  };
+
+  // Fill a seed-pending workspace once the sample arrives late (browser
+  // fetch races script load). Only workspaces flagged `seedFromSample`
+  // refill, and only while still empty and unseeded. Returns true on fill.
+  ETKO.ensureSeeded = function () {
+    var ws = ETKO.store.workspaces[ETKO.store.activeEventId];
+    if (!ws) throw new Error('행사를 찾을 수 없습니다');
+    if (ws.seeded || !ws.seedFromSample) return false;
+    if (Array.isArray(ws.participants) && ws.participants.length > 0) {
+      ws.seeded = true;
+      ws.seedFromSample = false;
+      return false;
+    }
+    var sample = ETKO.sample && Array.isArray(ETKO.sample.participants) ? ETKO.sample.participants : null;
+    if (!sample) {
+      try {
+        sample = sampleParticipants();
+      } catch (err) {
+        sample = null;
+      }
+    }
+    if (!sample || sample.length === 0) return false;
+    ws.participants = sample.map(copyParticipant);
+    ws.seeded = true;
+    ws.seedFromSample = false;
+    return true;
   };
 
   function isEmail(value) {
