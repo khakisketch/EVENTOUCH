@@ -257,7 +257,13 @@
       html += '<p role="alert">' + escapeHtml(ETKO.lastSignupError) + '</p>';
     }
     if (ETKO.lastSignupTicket) {
-      html += '<p>등록 완료 · 체크인 QR 코드: ' + escapeHtml(ETKO.lastSignupTicket) + '</p><p>입장 데스크에서 보여주세요</p>';
+      var signupQr = '';
+      try {
+        if (typeof ETKO.qrSvg === 'function') {
+          signupQr = '<div class="qr">' + ETKO.qrSvg(ETKO.lastSignupTicket) + '</div>';
+        }
+      } catch (err) {}
+      html += '<p>등록 완료 · 체크인 QR 코드: ' + escapeHtml(ETKO.lastSignupTicket) + '</p>' + signupQr + '<p>입장 데스크에서 보여주세요</p>';
     }
     container.innerHTML = html;
     if (container.querySelectorAll) {

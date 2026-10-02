@@ -253,6 +253,12 @@
       var visits = ws && Array.isArray(ws.visits) ? ws.visits : [];
       stampCount = visits.filter(function (v) { return v && v.participantId === me.id; }).length;
     } catch (err) {}
+    var ticketQr = '';
+    try {
+      if (typeof ETKO.qrSvg === 'function' && me.code) {
+        ticketQr = '<div class="qr" aria-hidden="false">' + ETKO.qrSvg(me.code) + '</div>';
+      }
+    } catch (err) {}
     var eventName = '';
     try {
       var evs = (ETKO.store && ETKO.store.events) || [];
@@ -275,6 +281,7 @@
       (eventName ? '<p>' + escapeHtml(eventName) + '</p>' : '') +
       '<p>' + escapeHtml(me.name) + ' · ' + escapeHtml(ticketLabelOf(me.ticket)) + ' · ' + escapeHtml(statusLabelOf(me.status)) + '</p>' +
       '<p>체크인 QR 코드: ' + escapeHtml(me.code) + '</p>' +
+      ticketQr +
       '<p>입장 데스크에서 보여주세요</p>' +
       '<p>내 스탬프 ' + stampCount + '개</p></section>' +
       '<div data-signup-embed></div><div data-stamps-embed></div>';

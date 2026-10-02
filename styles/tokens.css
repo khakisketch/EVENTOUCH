@@ -196,3 +196,12 @@ input[data-ticket] {
     margin: 0 auto;
   }
 }
+
+/* Scannable QR figures: fixed display size, never overflow the viewport. */
+.qr svg {
+  width: 180px;
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 8px 0;
+}
