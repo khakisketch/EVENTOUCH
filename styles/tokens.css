@@ -153,6 +153,7 @@ input[data-ticket] {
 #app select,
 #app textarea {
   min-height: var(--touch-min);
+  min-width: var(--touch-min);
   font-size: 16px;
 }
 
