@@ -203,6 +203,49 @@
     return container.innerHTML;
   };
 
+  // Audience projection: read-only program output + selected question +
+  // approved photo count. No controls, no contacts. Reads live state so
+  // every render reflects the latest take/moderation/selection.
+  ETKO.renderScreen = function (container, state) {
+    var s = ensureStageState(state || ETKO.stageState);
+    var programMsg = ETKO.safety(s.program);
+    var selected = null;
+    try {
+      var qna = typeof ETKO.workspace === 'function' ? (ETKO.workspace().qna || []) : [];
+      for (var i = 0; i < qna.length; i += 1) {
+        if (qna[i] && qna[i].selected && qna[i].approved) {
+          selected = qna[i];
+          break;
+        }
+      }
+    } catch (err) {
+      selected = null;
+    }
+    var approvedPhotos = 0;
+    try {
+      var photos = typeof ETKO.workspace === 'function' ? (ETKO.workspace().photos || []) : [];
+      approvedPhotos = photos.filter(function (p) {
+        return p && p.status === 'APPROVED';
+      }).length;
+    } catch (err) {
+      approvedPhotos = 0;
+    }
+    var html =
+      '<section aria-label="현재 송출"><h2>' +
+      escapeHtml(programMsg.title) +
+      '</h2><p>' +
+      escapeHtml(programMsg.detail) +
+      '</p></section>' +
+      '<section aria-label="선택된 질문"><h2>질문</h2><p>' +
+      (selected ? escapeHtml(selected.question) : '선택된 질문이 없습니다') +
+      '</p></section>' +
+      '<section aria-label="공개 사진"><h2>사진</h2><p>공개 사진 ' +
+      approvedPhotos +
+      '장</p></section>';
+    container.innerHTML = html;
+    return container.innerHTML;
+  };
+
   if (typeof module !== 'undefined' && module && module.exports) {
     module.exports = ETKO;
   }

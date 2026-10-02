@@ -196,6 +196,8 @@
             ETKO.renderMessaging(mount);
           } else if (view === 'stage' && typeof ETKO.renderStage === 'function') {
             ETKO.renderStage(mount, ETKO.stageState);
+          } else if (view === 'screen' && typeof ETKO.renderScreen === 'function') {
+            ETKO.renderScreen(mount);
           } else if (view === 'overview') {
             var name =
               ETKO.sample && ETKO.sample.event ? ETKO.sample.event : '이벤터치 운영';
