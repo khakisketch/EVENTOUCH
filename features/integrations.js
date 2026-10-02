@@ -245,6 +245,11 @@
     return { boothId: rec.boothId, format: rec.format, simulated: true };
   };
 
+  // Persist after successful mutations (no-op without a backend).
+  try {
+    if (typeof ETKO.persistWrap === 'function') ETKO.persistWrap(['sendCampaign', 'createPaymentIntent', 'markPrinted']);
+  } catch (err) {}
+
   if (typeof module !== 'undefined' && module && module.exports) {
     module.exports = ETKO;
   }

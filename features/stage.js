@@ -257,6 +257,11 @@
     return container.innerHTML;
   };
 
+  // Persist after successful mutations (no-op without a backend).
+  try {
+    if (typeof ETKO.persistWrap === 'function') ETKO.persistWrap(['applyTake']);
+  } catch (err) {}
+
   if (typeof module !== 'undefined' && module && module.exports) {
     module.exports = ETKO;
   }

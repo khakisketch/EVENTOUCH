@@ -325,6 +325,11 @@
     });
   }
 
+  // Persist after successful mutations (no-op without a backend).
+  try {
+    if (typeof ETKO.persistWrap === 'function') ETKO.persistWrap(['saveProgram', 'deleteProgram', 'saveNotice', 'saveVenue', 'createPost']);
+  } catch (err) {}
+
   if (typeof module !== 'undefined' && module && module.exports) {
     module.exports = ETKO;
   }

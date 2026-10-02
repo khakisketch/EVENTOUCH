@@ -427,6 +427,11 @@
     return result;
   };
 
+  // Persist after successful mutations (no-op without a backend).
+  try {
+    if (typeof ETKO.persistWrap === 'function') ETKO.persistWrap(['saveUnit', 'recordScan', 'correctLog', 'setActiveUnit']);
+  } catch (err) {}
+
   if (typeof module !== 'undefined' && module && module.exports) {
     module.exports = ETKO;
   }

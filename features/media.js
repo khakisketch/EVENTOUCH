@@ -171,6 +171,11 @@
     return { type: type, assetId: assetId || null };
   };
 
+  // Persist after successful mutations (no-op without a backend).
+  try {
+    if (typeof ETKO.persistWrap === 'function') ETKO.persistWrap(['uploadPhoto', 'moderatePhotos', 'setWall', 'setOutput']);
+  } catch (err) {}
+
   if (typeof module !== 'undefined' && module && module.exports) {
     module.exports = ETKO;
   }
