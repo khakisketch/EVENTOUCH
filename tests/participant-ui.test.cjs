@@ -12,6 +12,7 @@ function fresh() {
 test('participant mount renders next action, schedule and ticket', () => {
   const ETKO = fresh();
   ETKO.saveProgram({ title: '개회식', time: '09:00', end: '09:30', location: 'A홀' });
+  ETKO.homeParticipantId = 'p1';
   const box = { innerHTML: '' };
   ETKO.renderParticipant(box);
   assert.match(box.innerHTML, /data-home-cta/);
@@ -22,6 +23,14 @@ test('participant mount renders next action, schedule and ticket', () => {
   assert.doesNotMatch(box.innerHTML, /seoyeon\.lee@example\.kr/);
   assert.doesNotMatch(box.innerHTML, /haneul\.jung@example\.kr/);
   assert.doesNotMatch(box.innerHTML, /EVT-1002/);
+});
+
+test('unbound home shows lookup, never another ticket', () => {
+  const ETKO = fresh();
+  const box = { innerHTML: '' };
+  ETKO.renderParticipant(box);
+  assert.doesNotMatch(box.innerHTML, /EVT-1001/);
+  assert.doesNotMatch(box.innerHTML, /체크인 QR 코드/);
 });
 
 test('empty roster shows signup guidance, stale detail falls back', () => {

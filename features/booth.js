@@ -99,6 +99,25 @@
     return container.innerHTML;
   };
 
+  // My-ticket lookup: bind the home view to the caller's own record by
+  // exact name+phone. Read-only self-service; cancelled records never match.
+  ETKO.findMyTicket = function (payload) {
+    var opts = payload || {};
+    var name = String(opts.name === undefined || opts.name === null ? '' : opts.name).trim();
+    var phone = String(opts.phone === undefined || opts.phone === null ? '' : opts.phone).trim();
+    var list = [];
+    try {
+      if (typeof ETKO.workspace === 'function') list = ETKO.workspace().participants || [];
+    } catch (err) {
+      list = [];
+    }
+    for (var i = 0; i < list.length; i += 1) {
+      var p = list[i];
+      if (p && !p.cancelled && p.name === name && p.phone === phone) return p;
+    }
+    throw new Error('등록 정보를 찾을 수 없습니다. 이름과 연락처를 확인하세요');
+  };
+
   function resolveParticipant() {
     var list = [];
     try {
@@ -109,12 +128,13 @@
     var active = list.filter(function (p) { return p && !p.cancelled; });
     if (ETKO.homeParticipantId) {
       for (var i = 0; i < active.length; i += 1) {
-        if (active[i].id === ETKO.homeParticipantId) return { person: active[i], fellBack: false };
+        if (active[i].id === ETKO.homeParticipantId) return { person: active[i] };
       }
       ETKO.homeParticipantId = null;
-      return { person: active.length ? active[0] : null, fellBack: true };
     }
-    return { person: active.length ? active[0] : null, fellBack: false };
+    // No fallback: without an explicit selection the home view must not
+    // expose another participant's ticket. The lookup form binds it.
+    return { person: null };
   }
 
   function ticketLabelOf(ticket) {
@@ -135,21 +155,72 @@
     return String(status || '').trim().toLowerCase() === 'in' ? '입장 중' : '미입장';
   }
 
+  // My-ticket lookup mount: name+phone form bound to findMyTicket.
+  // On success binds homeParticipantId and re-renders the outer mount;
+  // on failure surfaces a Korean alert and binds nothing.
+  ETKO.renderLookup = function (container, outer) {
+    var html =
+      '<section aria-label="내 티켓 찾기"><h2>내 티켓 찾기</h2>' +
+      '<div class="field"><label>이름<input data-lookup-name type="text" aria-label="이름" autocomplete="name" /></label></div>' +
+      '<div class="field"><label>연락처<input data-lookup-phone type="text" aria-label="연락처" inputmode="tel" autocomplete="tel" /></label></div>' +
+      '<button type="button" data-lookup-submit>내 티켓 찾기</button>' +
+      (ETKO.lastLookupError ? '<p role="alert">' + escapeHtml(ETKO.lastLookupError) + '</p>' : '') +
+      '</section>';
+    container.innerHTML = html;
+    if (container.querySelectorAll) {
+      Array.prototype.forEach.call(container.querySelectorAll('[data-lookup-submit]'), function (btn) {
+        if (typeof btn.addEventListener !== 'function') return;
+        btn.addEventListener('click', function () {
+          ETKO.lastLookupError = null;
+          try {
+            var nameEl = container.querySelector ? container.querySelector('[data-lookup-name]') : null;
+            var phoneEl = container.querySelector ? container.querySelector('[data-lookup-phone]') : null;
+            var found = ETKO.findMyTicket({
+              name: nameEl && nameEl.value !== undefined ? nameEl.value : '',
+              phone: phoneEl && phoneEl.value !== undefined ? phoneEl.value : '',
+            });
+            ETKO.homeParticipantId = found.id;
+          } catch (err) {
+            ETKO.lastLookupError = err && err.message ? err.message : '티켓을 찾지 못했습니다';
+          }
+          if (outer && typeof ETKO.renderParticipant === 'function') {
+            try {
+              ETKO.renderParticipant(outer);
+            } catch (renderErr) {}
+          } else {
+            ETKO.renderLookup(container, outer);
+          }
+        });
+      });
+    }
+    return container.innerHTML;
+  };
+
   // Full participant mobile mount: next action + schedule + ticket +
-  // signup/stamp embeds (Tasks 2-3). Shows only the resolved participant's
-  // own record, never the roster. Empty roster guides to signup.
+  // signup/stamp embeds (Tasks 2-3). Shows only the bound participant's
+  // own record, never the roster or another ticket. Without a binding the
+  // lookup form + signup guide render instead.
   ETKO.renderParticipant = function (container) {
     var resolved = resolveParticipant();
     var me = resolved.person;
     if (!me) {
       container.innerHTML =
         '<section aria-label="참가자 홈"><h2>참가자 홈</h2>' +
-        '<p>등록된 참가자가 없습니다. 아래에서 참가 신청을 해주세요.</p></section>' +
+        '<p>내 티켓을 확인하려면 등록한 이름과 연락처를 입력하세요. 본인 티켓만 보여줍니다. 처음 방문하셨다면 아래에서 참가 신청을 해주세요.</p></section>' +
+        '<div data-lookup-embed></div>' +
         '<div data-signup-embed></div>';
-      if (typeof ETKO.renderSignup === 'function' && container.querySelector) {
+      if (container.querySelector) {
         try {
-          var embed = container.querySelector('[data-signup-embed]');
-          if (embed) ETKO.renderSignup(embed);
+          if (typeof ETKO.renderLookup === 'function') {
+            var lookup = container.querySelector('[data-lookup-embed]');
+            if (lookup) ETKO.renderLookup(lookup, container);
+          }
+        } catch (err) {}
+        try {
+          if (typeof ETKO.renderSignup === 'function') {
+            var embed = container.querySelector('[data-signup-embed]');
+            if (embed) ETKO.renderSignup(embed);
+          }
         } catch (err) {}
       }
       return container.innerHTML;
@@ -194,7 +265,6 @@
     } catch (err) {}
     var html =
       '<section aria-label="다음 행동">' +
-      (resolved.fellBack ? '<p role="status">선택한 참가자를 찾을 수 없어 첫 참가자를 보여줍니다</p>' : '') +
       '<div><button type="button" data-home-cta>' +
       escapeHtml(ETKO.nextAction(me.status)) +
       '</button></div></section>' +
