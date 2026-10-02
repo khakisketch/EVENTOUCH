@@ -206,9 +206,20 @@
   // Audience projection: read-only program output + selected question +
   // approved photo count. No controls, no contacts. Reads live state so
   // every render reflects the latest take/moderation/selection.
+  // BLACK is a true blackout: only the notice renders, never the question
+  // or photo sections.
   ETKO.renderScreen = function (container, state) {
     var s = ensureStageState(state || ETKO.stageState);
     var programMsg = ETKO.safety(s.program);
+    if (s.program === 'BLACK') {
+      container.innerHTML =
+        '<section aria-label="현재 송출"><h2>' +
+        escapeHtml(programMsg.title) +
+        '</h2><p>' +
+        escapeHtml(programMsg.detail) +
+        '</p></section>';
+      return container.innerHTML;
+    }
     var selected = null;
     try {
       var qna = typeof ETKO.workspace === 'function' ? (ETKO.workspace().qna || []) : [];

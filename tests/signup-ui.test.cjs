@@ -43,7 +43,7 @@ test('signup submit registers and shows ticket, invalid shows field-named alert'
   assert.ok(handlers.submit, 'submit must wire');
   handlers.submit();
   assert.match(box.innerHTML, /등록 완료/);
-  assert.match(box.innerHTML, /티켓 코드/);
+  assert.match(box.innerHTML, /체크인 QR 코드/);
   const bad = {
     innerHTML: '',
     querySelectorAll(sel) {

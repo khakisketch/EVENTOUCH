@@ -182,6 +182,16 @@
       var visits = ws && Array.isArray(ws.visits) ? ws.visits : [];
       stampCount = visits.filter(function (v) { return v && v.participantId === me.id; }).length;
     } catch (err) {}
+    var eventName = '';
+    try {
+      var evs = (ETKO.store && ETKO.store.events) || [];
+      for (var ei = 0; ei < evs.length; ei += 1) {
+        if (evs[ei] && evs[ei].id === ETKO.store.activeEventId) {
+          eventName = String(evs[ei].name || '');
+          break;
+        }
+      }
+    } catch (err) {}
     var html =
       '<section aria-label="다음 행동">' +
       (resolved.fellBack ? '<p role="status">선택한 참가자를 찾을 수 없어 첫 참가자를 보여줍니다</p>' : '') +
@@ -192,8 +202,10 @@
       programRow(feed.now, '현재') + programRow(feed.next, '다음') +
       '<ul>' + (programAll || '<li>등록된 일정이 없습니다</li>') + '</ul>' + programNote + '</section>' +
       '<section aria-label="내 티켓"><h2>내 티켓</h2>' +
+      (eventName ? '<p>' + escapeHtml(eventName) + '</p>' : '') +
       '<p>' + escapeHtml(me.name) + ' · ' + escapeHtml(ticketLabelOf(me.ticket)) + ' · ' + escapeHtml(statusLabelOf(me.status)) + '</p>' +
-      '<p>티켓 코드: ' + escapeHtml(me.code) + '</p>' +
+      '<p>체크인 QR 코드: ' + escapeHtml(me.code) + '</p>' +
+      '<p>입장 데스크에서 보여주세요</p>' +
       '<p>내 스탬프 ' + stampCount + '개</p></section>' +
       '<div data-signup-embed></div><div data-stamps-embed></div>';
     container.innerHTML = html;

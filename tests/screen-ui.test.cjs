@@ -40,8 +40,8 @@ test('screen mount reflects take changes, selected question and photo count', ()
   const after = { innerHTML: '' };
   ETKO.renderScreen(after);
   assert.match(after.innerHTML, /암전 중입니다/);
-  assert.match(after.innerHTML, /내일 일정 질문입니다/);
-  assert.match(after.innerHTML, /공개 사진 1장/);
+  assert.doesNotMatch(after.innerHTML, /내일 일정 질문입니다/);
+  assert.doesNotMatch(after.innerHTML, /공개 사진/);
 });
 
 test('unapproved selected question never projects', () => {
