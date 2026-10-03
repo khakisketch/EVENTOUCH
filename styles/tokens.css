@@ -125,7 +125,14 @@ button[data-template-del],
 button[data-campaign-save],
 button[data-campaign-send],
 button[data-signup-submit],
-button[data-stamp-receive] {
+button[data-stamp-receive],
+button[data-lookup-submit],
+button[data-scene],
+button[data-camera-scan],
+button[data-camera-stop],
+button[data-booth-add],
+button[data-booth-status],
+button[data-booth-print] {
   min-height: var(--touch-min);
   min-width: var(--touch-min);
 }

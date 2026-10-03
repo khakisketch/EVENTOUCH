@@ -1,0 +1,319 @@
+/* EVENTOUCH Warm Operations theme — applied over tokens.css.
+   Palette is pre-approved: brand #F35B2C, action #BC3F1B, canvas #FAF8F5.
+   This layer only styles the existing shell (header/nav/sections/mounts);
+   feature renderers keep emitting the same markup. */
+
+/* ---- page frame ---- */
+
+body {
+  background: var(--canvas);
+  color: var(--fg);
+  line-height: 1.6;
+}
+
+body > header {
+  background: #17191d;
+  color: #faf8f5;
+  padding: 20px 16px 0;
+}
+
+body > header h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 24px;
+  letter-spacing: -0.02em;
+}
+
+body > header h1::after {
+  content: "";
+  display: block;
+  width: 40px;
+  height: 4px;
+  margin-top: 8px;
+  border-radius: 2px;
+  background: var(--brand);
+}
+
+body > header p[role="note"] {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #beb7ab;
+}
+
+body > header nav {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin: 16px -16px 0;
+  padding: 0 16px 12px;
+}
+
+body > header nav button {
+  flex-shrink: 0;
+  border: 1px solid #3a3b38;
+  border-radius: 999px;
+  background: transparent;
+  color: #e8e2d8;
+  font-size: 14px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+body > header nav button[aria-current="page"] {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
+  font-weight: 700;
+}
+
+main {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 20px 16px 64px;
+}
+
+main > section {
+  margin-bottom: 24px;
+}
+
+/* ---- content blocks ---- */
+
+main section section,
+main section > div > div {
+  margin-bottom: 16px;
+}
+
+main h2 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  margin: 0 0 8px;
+  letter-spacing: -0.01em;
+}
+
+main section[aria-label] > h2:first-child,
+main section section > h2:first-child {
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--brand);
+}
+
+main ul {
+  padding-left: 20px;
+}
+
+main li {
+  margin: 6px 0;
+}
+
+/* Cards: directory rows, booth/stall lists, scene buttons. */
+main .cards {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+main .card,
+main section ul > li {
+  overflow-wrap: anywhere;
+}
+
+main .card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+/* ---- controls ---- */
+
+main button,
+main input[type="submit"] {
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--fg);
+  font-size: 14px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+main button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+main button[data-take],
+main button[data-ticket-submit],
+main button[data-signup-submit],
+main button[data-stamp-receive],
+main button[data-report-create],
+main button[data-booth-add],
+main button[data-camera-scan] {
+  border-color: var(--action);
+  background: var(--brand);
+  color: #fff;
+  font-weight: 700;
+}
+
+main button[data-lookup-submit] {
+  border-color: var(--action);
+  background: var(--brand);
+  color: #fff;
+  font-weight: 700;
+}
+
+main button[data-safety="BLACK"] {
+  background: #17191d;
+  border-color: #17191d;
+  color: #fff;
+}
+
+main a {
+  color: var(--action);
+}
+
+/* Forms: label above control, comfortable rows. */
+main .field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 10px 0;
+}
+
+main .field > label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+/* Labels wrapping their own control stack vertically. */
+main .field > label:has(input),
+main .field > label:has(select),
+main .field > label:has(textarea) {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+main input[type="text"],
+main input:not([type]),
+main select,
+main textarea {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--fg);
+  padding: 8px 12px;
+}
+
+main .inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+/* ---- feedback ---- */
+
+main p[role="alert"] {
+  border-left: 4px solid var(--brand);
+  background: #fff3ec;
+  padding: 10px 12px;
+  border-radius: 0 8px 8px 0;
+}
+
+main p[role="status"],
+main p[role="note"] {
+  color: var(--muted);
+}
+
+main [data-result][data-kind="good"] {
+  border-left: 4px solid #2e7d32;
+  background: #eef6ee;
+  padding: 10px 12px;
+  border-radius: 0 8px 8px 0;
+}
+
+main [data-result][data-kind="warn"] {
+  border-left: 4px solid #b7791f;
+  background: #fdf6e7;
+  padding: 10px 12px;
+  border-radius: 0 8px 8px 0;
+}
+
+main [data-result][data-kind="bad"] {
+  border-left: 4px solid var(--action);
+  background: #fdecea;
+  padding: 10px 12px;
+  border-radius: 0 8px 8px 0;
+}
+
+/* ---- tables ---- */
+
+main table {
+  border-collapse: collapse;
+  background: var(--surface);
+  font-size: 14px;
+}
+
+main th,
+main td {
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+main thead th {
+  background: #17191d;
+  border-color: #17191d;
+  color: #faf8f5;
+  white-space: nowrap;
+}
+
+/* ---- audience display ---- */
+
+#screen-view {
+  background: #17191d;
+  color: #fffaf2;
+  border-radius: 16px;
+  padding: 32px 24px;
+  text-align: center;
+}
+
+#screen-view h2 {
+  border: 0;
+  padding: 0;
+  font-size: clamp(24px, 5vw, 56px);
+  color: #ffb278;
+}
+
+#screen-view p {
+  color: #c9bfb0;
+}
+
+#screen-view img {
+  max-height: 50vh;
+  margin: 0 auto;
+}
+
+/* ---- small screens ---- */
+
+@media (max-width: 390px) {
+  body > header h1 {
+    font-size: 20px;
+  }
+  main {
+    padding: 16px 12px 64px;
+    font-size: 16px;
+  }
+  main .inline-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  #screen-view {
+    padding: 24px 16px;
+    border-radius: 12px;
+  }
+}

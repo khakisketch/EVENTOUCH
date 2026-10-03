@@ -170,8 +170,8 @@
   ETKO.renderLookup = function (container, outer) {
     var html =
       '<section aria-label="내 티켓 찾기"><h2>내 티켓 찾기</h2>' +
-      '<div class="field"><label>이름<input data-lookup-name type="text" aria-label="이름" autocomplete="name" /></label></div>' +
-      '<div class="field"><label>연락처<input data-lookup-phone type="text" aria-label="연락처" inputmode="tel" autocomplete="tel" /></label></div>' +
+      '<div class="field"><label>이름</label><input data-lookup-name type="text" aria-label="이름" autocomplete="name" /></div>' +
+      '<div class="field"><label>연락처</label><input data-lookup-phone type="text" aria-label="연락처" inputmode="tel" autocomplete="tel" /></div>' +
       '<button type="button" data-lookup-submit>내 티켓 찾기</button>' +
       (ETKO.lastLookupError ? '<p role="alert">' + escapeHtml(ETKO.lastLookupError) + '</p>' : '') +
       '</section>';
