@@ -207,7 +207,7 @@
       counts.in +
       '명</p>';
     if (list.length === 0) {
-      html += '<p>' + escapeHtml(ETKO.PEOPLE_EMPTY) + '</p>';
+      html += '<p role="status" data-empty>' + escapeHtml(ETKO.PEOPLE_EMPTY) + '</p>';
     } else {
       html +=
         '<div class="table-wrap"><table><thead><tr><th scope="col">선택</th>' +

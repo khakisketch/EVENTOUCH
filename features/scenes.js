@@ -153,7 +153,7 @@
       var pct = total > 0 ? Math.round((n / total) * 100) : 0;
       return (
         '<li>' + escapeHtml(opt) + ' · ' + n + '표' +
-        '<div aria-hidden="true" style="background:#eee"><div style="width:' + pct + '%;height:8px;background:#F35B2C"></div></div></li>'
+        '<div class="poll-bar" aria-hidden="true"><div style="width:' + pct + '%"></div></div></li>'
       );
     }).join('') + '</ul>';
   }

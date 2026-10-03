@@ -244,14 +244,14 @@
     var rows = ws.units.map(function (u) {
       var active = ETKO.activeUnitId === u.id;
       return (
-        '<li>' + escapeHtml(u.name) + ' · ' + actionLabel(u.action) + ' · ' + escapeHtml(modeLabel(u.mode)) +
+        '<li class="card">' + escapeHtml(u.name) + ' · ' + actionLabel(u.action) + ' · ' + escapeHtml(modeLabel(u.mode)) +
         (active ? ' · 사용 중' : '') +
         ' <button type="button" data-unit-select="' + escapeHtml(u.id) + '">선택</button></li>'
       );
     }).join('');
     var html =
       '<section aria-label="데스크 관리"><h2>데스크</h2>' +
-      '<ul>' + (rows || '<li>개설된 데스크가 없습니다</li>') + '</ul>' +
+      '<ul class="cards">' + (rows || '<li class="card" data-empty><p role="status">개설된 데스크가 없습니다</p></li>') + '</ul>' +
       '<div class="inline-form"><div class="field"><input data-unit-name type="text" placeholder="데스크 이름" aria-label="데스크 이름" /></div>' +
       '<div class="field"><select data-unit-action aria-label="입장 퇴장 구분"><option value="IN">입장</option><option value="OUT">퇴장</option></select></div>' +
       '<button type="button" data-unit-add>데스크 개설</button></div>' +
@@ -298,14 +298,14 @@
           ' <button type="button" data-correct-log="' + escapeHtml(entry.id) + '">정정</button>';
       }
       return (
-        '<li>' + escapeHtml(personName(entry.participantId)) + ' · ' + actionLabelLog(entry.action) +
+        '<li class="card">' + escapeHtml(personName(entry.participantId)) + ' · ' + actionLabelLog(entry.action) +
         ' · ' + escapeHtml(unitName(entry.unitId)) +
         (entry.corrected ? ' · 정정됨' : '') + correctBtn + '</li>'
       );
     }).join('');
     return (
       '<div aria-label="입퇴장 기록"><h3>입퇴장 기록</h3>' +
-      '<ul>' + (rows || '<li>기록이 없습니다</li>') + '</ul></div>'
+      '<ul class="cards">' + (rows || '<li class="card" data-empty><p role="status">기록이 없습니다</p></li>') + '</ul></div>'
     );
   };
 

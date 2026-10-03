@@ -36,10 +36,11 @@
       <div id="people-list" aria-live="polite"></div>
     </section>
     <section id="checkin-view" aria-label="체크인" hidden>
-      <label for="ticket-code">티켓 코드</label>
-      <input id="ticket-code" type="text" data-ticket autocomplete="off" />
-      <button type="button" data-ticket-submit>조회</button>
-      <button type="button" data-online-toggle>온라인/오프라인 전환</button>
+      <div class="inline-form">
+        <div class="field"><label for="ticket-code">티켓 코드</label><input id="ticket-code" type="text" data-ticket autocomplete="off" /></div>
+        <button type="button" data-ticket-submit>조회</button>
+        <button type="button" data-online-toggle>온라인/오프라인 전환</button>
+      </div>
       <div id="checkin-mount"></div>
     </section>
     <section id="booth-view" aria-label="부스" hidden>

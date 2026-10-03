@@ -221,13 +221,13 @@
     var ws = messagingWorkspace();
     var templates = (ws.templates || []).map(function (t) {
       return (
-        '<li>' + escapeHtml(t.name) + ' · ' + escapeHtml(t.channel) +
+        '<li class="card">' + escapeHtml(t.name) + ' · ' + escapeHtml(t.channel) +
         ' <button type="button" data-template-del="' + escapeHtml(t.id) + '">삭제</button></li>'
       );
     }).join('');
     var campaigns = (ws.messages || []).map(function (c) {
       return (
-        '<li>' + escapeHtml(c.title) + ' · ' + escapeHtml(c.channel) + ' · ' + escapeHtml(c.target) +
+        '<li class="card">' + escapeHtml(c.title) + ' · ' + escapeHtml(c.channel) + ' · ' + escapeHtml(c.target) +
         ' · ' + (c.count || 0) + '명 · ' + escapeHtml(c.status) + ' · SIMULATION_ONLY' +
         ' <button type="button" data-campaign-send="' + escapeHtml(c.id) + '">발송</button></li>'
       );
@@ -239,14 +239,14 @@
       outbox = [];
     }
     var outboxRows = outbox.map(function (o) {
-      return '<li>' + escapeHtml(o.title || '') + ' · ' + escapeHtml(o.channel || '') + ' · ' + (o.toCount || 0) + '명 · SIMULATION_ONLY</li>';
+      return '<li class="card">' + escapeHtml(o.title || '') + ' · ' + escapeHtml(o.channel || '') + ' · ' + (o.toCount || 0) + '명 · SIMULATION_ONLY</li>';
     }).join('');
     var channelOptions = CHANNELS.map(function (c) {
       return '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>';
     }).join('');
     var html =
       '<section aria-label="메시지 템플릿 관리"><h2>템플릿</h2>' +
-      '<ul>' + (templates || '<li>저장된 템플릿이 없습니다</li>') + '</ul>' +
+      '<ul class="cards">' + (templates || '<li class="card" data-empty><p role="status">저장된 템플릿이 없습니다</p></li>') + '</ul>' +
       '<div class="inline-form"><div class="field"><input data-template-name type="text" placeholder="템플릿 이름" aria-label="템플릿 이름" /></div>' +
       '<div class="field"><select data-template-channel aria-label="템플릿 채널">' + channelOptions + '</select></div>' +
       '<div class="field"><input data-template-content type="text" placeholder="메시지 내용" aria-label="템플릿 내용" /></div>' +
@@ -257,9 +257,9 @@
       '<div class="field"><select data-campaign-target aria-label="발송 대상"><option value="전체">전체 참가자</option><option value="체크인 참가자">체크인 참가자</option><option value="미입장 참가자">미입장 참가자</option><option value="선택 참가자">선택 참가자</option></select></div>' +
       '<div class="field"><input data-campaign-content type="text" placeholder="메시지" aria-label="캠페인 메시지" /></div>' +
       '<button type="button" data-campaign-save>초안 저장</button></div>' +
-      '<ul>' + (campaigns || '<li>작성된 캠페인이 없습니다</li>') + '</ul></section>' +
+      '<ul class="cards">' + (campaigns || '<li class="card" data-empty><p role="status">작성된 캠페인이 없습니다</p></li>') + '</ul></section>' +
       '<section aria-label="발송함"><h2>발송함</h2>' +
-      '<ul>' + (outboxRows || '<li>발송 기록이 없습니다</li>') + '</ul></section>';
+      '<ul class="cards">' + (outboxRows || '<li class="card" data-empty><p role="status">발송 기록이 없습니다</p></li>') + '</ul></section>';
     if (ETKO.lastMessagingError) {
       html += '<p role="alert">' + escapeHtml(ETKO.lastMessagingError) + '</p>';
     }

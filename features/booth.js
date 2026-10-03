@@ -170,9 +170,10 @@
   ETKO.renderLookup = function (container, outer) {
     var html =
       '<section aria-label="내 티켓 찾기"><h2>내 티켓 찾기</h2>' +
+      '<div class="inline-form">' +
       '<div class="field"><label>이름</label><input data-lookup-name type="text" aria-label="이름" autocomplete="name" /></div>' +
       '<div class="field"><label>연락처</label><input data-lookup-phone type="text" aria-label="연락처" inputmode="tel" autocomplete="tel" /></div>' +
-      '<button type="button" data-lookup-submit>내 티켓 찾기</button>' +
+      '<button type="button" data-lookup-submit>내 티켓 찾기</button></div>' +
       (ETKO.lastLookupError ? '<p role="alert">' + escapeHtml(ETKO.lastLookupError) + '</p>' : '') +
       '</section>';
     container.innerHTML = html;
@@ -239,7 +240,7 @@
       if (typeof ETKO.homeNow === 'function') feed = ETKO.homeNow() || feed;
     } catch (err) {}
     function programRow(row, tag) {
-      if (!row) return '<p>' + tag + ': 예정된 일정이 없습니다</p>';
+      if (!row) return '<p role="status" data-empty>' + tag + ': 예정된 일정이 없습니다</p>';
       return '<p>' + tag + ': ' + escapeHtml(row.time) + ' ' + escapeHtml(row.title) + ' · ' + escapeHtml(row.location) + '</p>';
     }
     var programList = [];
@@ -251,7 +252,7 @@
       programList = all.slice(0, 20);
     } catch (err) {}
     var programAll = programList.map(function (row) {
-      return '<li>' + escapeHtml(row.time) + ' ' + escapeHtml(row.title) + ' · ' + escapeHtml(row.location) + '</li>';
+      return '<li class="card">' + escapeHtml(row.time) + ' ' + escapeHtml(row.title) + ' · ' + escapeHtml(row.location) + '</li>';
     }).join('');
     var programNote = programTotal > programList.length
       ? '<p>전체 ' + programTotal + '개 중 ' + programList.length + '개 표시</p>'
@@ -285,7 +286,7 @@
       '</button></div></section>' +
       '<section aria-label="내 일정"><h2>내 일정</h2>' +
       programRow(feed.now, '현재') + programRow(feed.next, '다음') +
-      '<ul>' + (programAll || '<li>등록된 일정이 없습니다</li>') + '</ul>' + programNote + '</section>' +
+      '<ul class="cards">' + (programAll || '<li class="card" data-empty><p role="status">등록된 일정이 없습니다</p></li>') + '</ul>' + programNote + '</section>' +
       '<section aria-label="내 티켓"><h2>내 티켓</h2>' +
       (eventName ? '<p>' + escapeHtml(eventName) + '</p>' : '') +
       '<p>' + escapeHtml(me.name) + ' · ' + escapeHtml(ticketLabelOf(me.ticket)) + ' · ' + escapeHtml(statusLabelOf(me.status)) + '</p>' +

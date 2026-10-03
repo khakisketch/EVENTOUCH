@@ -370,14 +370,14 @@
     var options = (poll.options || []).map(function (opt, i) {
       var label = typeof opt === 'string' ? opt : opt && opt.label ? opt.label : '';
       var n = counts.counts && counts.counts[i] !== undefined ? counts.counts[i] : 0;
-      return '<li>' + escapeHtml(label) + ' · ' + n + '표</li>';
+      return '<li class="card">' + escapeHtml(label) + ' · ' + n + '표</li>';
     }).join('');
     var pollStatus = poll.status === 'OPEN' ? '진행 중' : '마감';
     var quizStatus = quiz.status === 'OPEN' ? '진행 중' : '마감';
     return (
       '<section aria-label="투표 관리"><h2>투표</h2>' +
       '<p>' + escapeHtml(poll.title || '제목 없음') + ' · ' + pollStatus + ' · 총 ' + counts.total + '표</p>' +
-      '<ul>' + (options || '<li>선택지가 없습니다</li>') + '</ul>' +
+      '<ul class="cards">' + (options || '<li class="card" data-empty><p role="status">선택지가 없습니다</p></li>') + '</ul>' +
       '<div><button type="button" data-poll-open>투표 개시</button>' +
       '<button type="button" data-poll-close>투표 마감</button></div></section>' +
       '<section aria-label="퀴즈 관리"><h2>퀴즈</h2>' +
@@ -403,14 +403,14 @@
     var rows = (ws.qna || []).map(function (q) {
       var state = q.selected ? '무대 선택' : q.approved ? '승인됨' : '대기 중';
       return (
-        '<li>' + escapeHtml(q.question || '') + ' · ' + state +
+        '<li class="card">' + escapeHtml(q.question || '') + ' · ' + state +
         ' <button type="button" data-qna-approve="' + escapeHtml(q.id) + '">승인</button>' +
         ' <button type="button" data-qna-stage="' + escapeHtml(q.id) + '">무대로</button></li>'
       );
     }).join('');
     return (
       '<section aria-label="질문과 답변 관리"><h2>질문과 답변</h2>' +
-      '<ul>' + (rows || '<li>등록된 질문이 없습니다</li>') + '</ul></section>'
+      '<ul class="cards">' + (rows || '<li class="card" data-empty><p role="status">등록된 질문이 없습니다</p></li>') + '</ul></section>'
     );
   };
 
@@ -452,14 +452,14 @@
     }).length;
     var rows = pending.map(function (p) {
       return (
-        '<li>' + escapeHtml(p.caption || p.id) + ' <button type="button" data-photo-approve="' + escapeHtml(p.id) + '">공개</button>' +
+        '<li class="card">' + escapeHtml(p.caption || p.id) + ' <button type="button" data-photo-approve="' + escapeHtml(p.id) + '">공개</button>' +
         ' <button type="button" data-photo-hide="' + escapeHtml(p.id) + '">숨김</button></li>'
       );
     }).join('');
     return (
       '<section aria-label="사진 검토"><h2>사진 검토</h2>' +
       '<p>공개 ' + approved + '장 · 검토 대기 ' + pending.length + '장</p>' +
-      '<ul>' + (rows || '<li>검토할 사진이 없습니다</li>') + '</ul></section>'
+      '<ul class="cards">' + (rows || '<li class="card" data-empty><p role="status">검토할 사진이 없습니다</p></li>') + '</ul></section>'
     );
   };
 

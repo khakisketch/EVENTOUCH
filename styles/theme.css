@@ -1,7 +1,8 @@
 /* EVENTOUCH Warm Operations theme — applied over tokens.css.
    Palette is pre-approved: brand #F35B2C, action #BC3F1B, canvas #FAF8F5.
-   This layer only styles the existing shell (header/nav/sections/mounts);
-   feature renderers keep emitting the same markup. */
+   Shared patterns below (.cards/.card, [data-empty], .poll-bar) are the
+   consistency contract: staff renderers emit this markup (see
+   docs/superpowers/specs/2026-10-03-eventouch-consistency-pass-design.md). */
 
 /* ---- page frame ---- */
 
@@ -110,6 +111,12 @@ main .cards {
   padding: 0;
   display: grid;
   gap: 12px;
+}
+
+@media (min-width: 640px) {
+  main .cards {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+  }
 }
 
 main .card,
@@ -228,6 +235,25 @@ main p[role="note"] {
   color: var(--muted);
 }
 
+/* Shared empty pattern: [data-empty] + role="status" from every renderer.
+   In-list empties ride on .card; standalone notes get a dashed well. */
+main li.card[data-empty] {
+  border-style: dashed;
+  background: transparent;
+}
+
+main li.card[data-empty] p[role="status"] {
+  margin: 0;
+  text-align: center;
+}
+
+main p[data-empty] {
+  text-align: center;
+  padding: 16px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+}
+
 main [data-result][data-kind="good"] {
   border-left: 4px solid #2e7d32;
   background: #eef6ee;
@@ -296,6 +322,19 @@ main thead th {
 #screen-view img {
   max-height: 50vh;
   margin: 0 auto;
+}
+
+/* Audience poll bars: track + brand fill. Width stays inline (live data). */
+#screen-view .poll-bar {
+  background: #3a3b38;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+#screen-view .poll-bar > div {
+  height: 8px;
+  background: var(--brand);
 }
 
 /* ---- small screens ---- */

@@ -238,12 +238,12 @@
       : '<p data-result>스캔을 기다리고 있습니다</p>';
     var queueHtml =
       s.queue.length === 0
-        ? '<p>대기 중인 항목이 없습니다</p>'
-        : '<ul>' +
+        ? '<p role="status" data-empty>대기 중인 항목이 없습니다</p>'
+        : '<ul class="cards">' +
           s.queue
             .map(function (entry) {
               return (
-                '<li>' +
+                '<li class="card">' +
                 escapeHtml(entry.code) +
                 ' · ' +
                 (entry.direction === 'OUT' ? '퇴장' : '입장') +

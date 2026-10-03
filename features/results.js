@@ -221,7 +221,7 @@
       return p && p.status === 'APPROVED';
     }).length;
     var html =
-      '<div><h2>행사 결과</h2>' +
+      '<section aria-label="행사 결과"><h2>행사 결과</h2>' +
       '<p>전체 ' +
       s.total +
       '명 · 누적 입장 ' +
@@ -237,7 +237,7 @@
       approved +
       '장 · 보고서 ' +
       resultsWorkspace().reports.length +
-      '건</p></div>';
+      '건</p></section>';
     container.innerHTML = html;
     return container.innerHTML;
   };
@@ -250,7 +250,7 @@
     var statusLabel = EVENT_STATUS_LABELS[ev.status] || '준비 중';
     var flags = FEATURE_KEYS.map(function (key) {
       return (
-        '<li>' +
+        '<li class="card">' +
         escapeHtml(FEATURE_LABELS[key]) +
         ' · ' +
         (ws.features[key] ? '사용' : '미사용') +
@@ -258,7 +258,7 @@
       );
     }).join('');
     var html =
-      '<div><h2>행사 설정</h2>' +
+      '<section aria-label="행사 설정"><h2>행사 설정</h2>' +
       '<p>' +
       escapeHtml(ev.name) +
       ' · ' +
@@ -268,9 +268,9 @@
       ' · ' +
       escapeHtml(statusLabel) +
       '</p>' +
-      '<ul>' +
+      '<ul class="cards">' +
       flags +
-      '</ul></div>';
+      '</ul></section>';
     container.innerHTML = html;
     return container.innerHTML;
   };

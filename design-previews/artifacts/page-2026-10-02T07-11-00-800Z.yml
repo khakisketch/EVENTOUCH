@@ -1,0 +1,40 @@
+- generic [active] [ref=f1e1]:
+  - banner [ref=f1e2]:
+    - heading "이벤터치 운영" [level=1] [ref=f1e3]
+    - note [ref=f1e4]: 샘플 데이터입니다
+    - navigation "주요 화면" [ref=f1e5]:
+      - button "개요" [ref=f1e6]
+      - button "참가자" [ref=f1e7]
+      - button "체크인" [ref=f1e8]
+      - button "부스" [ref=f1e9]
+      - button "홈" [ref=f1e10]
+      - button "참여" [ref=f1e11]
+      - button "콘텐츠" [ref=f1e12]
+      - button "메시지" [ref=f1e13]
+      - button "무대" [ref=f1e14]
+      - button "화면 출력" [ref=f1e15]
+  - main [ref=f1e16]:
+    - region "행사 개요" [ref=f1e17]:
+      - generic [ref=f1e18]:
+        - paragraph [ref=f1e19]: EVENTOUCH 운영 샘플
+        - note [ref=f1e20]: 샘플 데이터입니다
+      - button "보고서 생성" [ref=f1e22]
+      - generic "결과" [ref=f1e23]:
+        - generic [ref=f1e24]:
+          - heading "행사 결과" [level=2] [ref=f1e25]
+          - paragraph [ref=f1e26]: 전체 5명 · 누적 입장 2명 · 현재 입장 2명 · 미입장 3명 · 입장률 40%
+          - paragraph [ref=f1e27]: 승인된 사진 0장 · 보고서 0건
+      - generic "설정" [ref=f1e28]:
+        - generic [ref=f1e29]:
+          - heading "행사 설정" [level=2] [ref=f1e30]
+          - paragraph [ref=f1e31]: EVENTOUCH 운영 샘플 · 2026-10-01 · A홀 · 준비 중
+          - list [ref=f1e32]:
+            - listitem [ref=f1e33]: 럭키드로우 · 미사용
+            - listitem [ref=f1e34]: 투표 · 미사용
+            - listitem [ref=f1e35]: 퀴즈 · 미사용
+            - listitem [ref=f1e36]: 질문과 답변 · 미사용
+            - listitem [ref=f1e37]: 만족도 평가 · 미사용
+            - listitem [ref=f1e38]: 스탬프 투어 · 미사용
+            - listitem [ref=f1e39]: 포토 이벤트 · 미사용
+            - listitem [ref=f1e40]: 행사장 안내 · 미사용
+            - listitem [ref=f1e41]: 행사 게시판 · 미사용

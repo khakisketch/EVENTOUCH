@@ -267,7 +267,7 @@
           ' <button type="button" data-booth-print="' + escapeHtml(b.id) + '">인쇄 확인</button>';
       }
       return (
-        '<li><strong>' + escapeHtml(b.name) + '</strong> · ' + boothStatusLabel(b.status) +
+        '<li class="card"><strong>' + escapeHtml(b.name) + '</strong> · ' + boothStatusLabel(b.status) +
         ' · 남은 ' + left + '개 · 1인 ' + (b.limit || 0) + '회' +
         '<p>QR: ' + escapeHtml(payload) + '</p>' + qr +
         (printed ? '<p>인쇄 확인됨 (' + escapeHtml(printed.format || 'A4') + ')</p>' : '') +
@@ -277,7 +277,7 @@
     var html =
       '<section aria-label="부스 관리"><h2>부스 관리</h2>' +
       '<p>방식: ' + modeLabel + (ws.visits.length > 0 ? ' · 인증 기록이 있어 방식을 변경할 수 없습니다' : '') + '</p>' +
-      '<ul>' + (items || '<li>등록된 부스가 없습니다</li>') + '</ul>';
+      '<ul class="cards">' + (items || '<li class="card" data-empty><p role="status">등록된 부스가 없습니다</p></li>') + '</ul>';
     if (writable) {
       html +=
         '<div class="inline-form">' +
@@ -403,7 +403,7 @@
         return v && v.boothId === b.id && v.participantId === participantId;
       });
       return (
-        '<li>' + escapeHtml(b.name) + ' · ' + boothStatusLabel(b.status) +
+        '<li class="card">' + escapeHtml(b.name) + ' · ' + boothStatusLabel(b.status) +
         ' · 남은 ' + left + '개' + (got ? ' · 받음' : '') + '</li>'
       );
     }).join('');
@@ -421,7 +421,7 @@
     var html =
       '<section aria-label="스탬프 투어"><h2>스탬프 투어</h2>' +
       '<p>내 스탬프 ' + mine + '개</p>' +
-      '<ul>' + (rows || '<li>운영 중인 부스가 없습니다</li>') + '</ul>' +
+      '<ul class="cards">' + (rows || '<li class="card" data-empty><p role="status">운영 중인 부스가 없습니다</p></li>') + '</ul>' +
       controls + '</section>';
     if (ETKO.lastStampError) {
       html += '<p role="alert">' + escapeHtml(ETKO.lastStampError) + '</p>';
