@@ -8,8 +8,12 @@ const ROOT = path.join(__dirname, '..');
 const HTML_PATH = path.join(ROOT, 'index.html');
 const CSS_PATH = path.join(ROOT, 'styles', 'tokens.css');
 
-const VIEWS = ['overview', 'participants', 'checkin', 'booth', 'participant', 'engage', 'content', 'messages', 'stage', 'screen'];
+const VIEWS = ['agency-home', 'agency-events', 'agency-clients', 'agency-team', 'overview', 'participants', 'checkin', 'booth', 'participant', 'engage', 'content', 'messages', 'stage', 'screen'];
 const SECTION_IDS = {
+  'agency-home': 'agency-home-view',
+  'agency-events': 'agency-events-view',
+  'agency-clients': 'agency-clients-view',
+  'agency-team': 'agency-team-view',
   overview: 'overview-view',
   participants: 'participants-view',
   checkin: 'checkin-view',
@@ -22,6 +26,10 @@ const SECTION_IDS = {
   screen: 'screen-view',
 };
 const MOUNT_IDS = {
+  'agency-home': 'agency-home-mount',
+  'agency-events': 'agency-events-mount',
+  'agency-clients': 'agency-clients-mount',
+  'agency-team': 'agency-team-mount',
   overview: 'overview-mount',
   participants: 'people-list',
   checkin: 'checkin-mount',

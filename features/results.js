@@ -193,8 +193,7 @@
     return copy;
   };
 
-  var EVENT_STATUS_LABELS = { PRE: '준비 중', LIVE: '진행 중', END: '종료' };
-  var FEATURE_LABELS = {
+  var EVENT_STATUS_LABELS = { PRE: '준비 중', LIVE: '진행 중', END: '종료' };  var FEATURE_LABELS = {
     draw: '럭키드로우',
     poll: '투표',
     quiz: '퀴즈',
@@ -204,6 +203,15 @@
     photo: '포토 이벤트',
     venue: '행사장 안내',
     board: '행사 게시판',
+  };
+
+  // Feature key/label table for creators (wizard) and settings alike.
+  ETKO.featureLabels = function () {
+    var copy = {};
+    FEATURE_KEYS.forEach(function (key) {
+      copy[key] = FEATURE_LABELS[key];
+    });
+    return copy;
   };
 
   function escapeHtml(value) {

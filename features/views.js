@@ -8,6 +8,10 @@
   // Extended routes (results/settings/...) stay reachable via navigate but
   // are not shell sections, so they are deliberately absent here.
   var REGISTRY = [
+    { id: 'agency-home', section: 'agency-home-view', mount: 'agency-home-mount', labelKey: 'agency-home' },
+    { id: 'agency-events', section: 'agency-events-view', mount: 'agency-events-mount', labelKey: 'agency-events' },
+    { id: 'agency-clients', section: 'agency-clients-view', mount: 'agency-clients-mount', labelKey: 'agency-clients' },
+    { id: 'agency-team', section: 'agency-team-view', mount: 'agency-team-mount', labelKey: 'agency-team' },
     { id: 'overview', section: 'overview-view', mount: 'overview-mount', labelKey: 'overview' },
     { id: 'participants', section: 'participants-view', mount: 'people-list', labelKey: 'participants' },
     { id: 'checkin', section: 'checkin-view', mount: 'checkin-mount', labelKey: 'checkin' },

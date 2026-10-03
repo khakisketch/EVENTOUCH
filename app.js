@@ -3,10 +3,10 @@
 
   var ETKO = root.ETKO || (root.ETKO = {});
 
-  // Canonical views. Singular `participant` is the participant home;
-  // plural `participants` is the directory. Never merge the two.
+  // Canonical views. Agency console leads; singular `participant` is the
+  // participant home; plural `participants` is the directory. Never merge.
   // `engage` hosts poll/quiz/qna/draw/survey/photo management.
-  var VIEWS = ['overview', 'participants', 'checkin', 'booth', 'participant', 'engage', 'content', 'messages', 'stage', 'screen'];
+  var VIEWS = ['agency-home', 'agency-events', 'agency-clients', 'agency-team', 'overview', 'participants', 'checkin', 'booth', 'participant', 'engage', 'content', 'messages', 'stage', 'screen'];
 
   ETKO.views = VIEWS.slice();
 
@@ -56,7 +56,7 @@
           ETKO.detailBypass = false;
         } else {
           if (!ETKO.canRoute(ETKO.currentRole(), view)) return ETKO.currentView;
-          var allowed = ['overview', 'participants', 'participant', 'checkin', 'booth', 'booths', 'engage', 'content', 'messages', 'stage', 'staff', 'qna', 'photos', 'poll', 'quiz', 'draw', 'survey', 'program', 'notices', 'venue', 'board', 'results', 'settings', 'members', 'events', 'home', 'screen'];
+          var allowed = ['overview', 'participants', 'participant', 'checkin', 'booth', 'booths', 'engage', 'content', 'messages', 'stage', 'staff', 'qna', 'photos', 'poll', 'quiz', 'draw', 'survey', 'program', 'notices', 'venue', 'board', 'results', 'settings', 'members', 'events', 'clients', 'agency-home', 'agency-events', 'agency-clients', 'agency-team', 'home', 'screen'];
           if (allowed.indexOf(view) === -1) return ETKO.currentView;
         }
       } catch (err) {

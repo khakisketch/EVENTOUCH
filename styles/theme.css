@@ -217,7 +217,8 @@ main button[data-signup-submit],
 main button[data-stamp-receive],
 main button[data-report-create],
 main button[data-booth-add],
-main button[data-camera-scan] {
+main button[data-camera-scan],
+main button[data-wizard-create] {
   border-color: var(--action);
   background: var(--brand);
   color: #fff;

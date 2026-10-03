@@ -13,6 +13,10 @@
     <h1>이벤터치 운영</h1>
     <p role="note">샘플 데이터입니다</p>
     <nav aria-label="주요 화면">
+      <button type="button" data-view="agency-home">대행사 홈</button>
+      <button type="button" data-view="agency-events">행사 관리</button>
+      <button type="button" data-view="agency-clients">고객사</button>
+      <button type="button" data-view="agency-team">팀과 권한</button>
       <button type="button" data-view="overview">개요</button>
       <button type="button" data-view="participants">참가자</button>
       <button type="button" data-view="checkin">체크인</button>
@@ -26,6 +30,18 @@
     </nav>
   </header>
   <main id="app" data-current-view="overview">
+    <section id="agency-home-view" aria-label="대행사 홈" hidden>
+      <div id="agency-home-mount"></div>
+    </section>
+    <section id="agency-events-view" aria-label="행사 관리" hidden>
+      <div id="agency-events-mount"></div>
+    </section>
+    <section id="agency-clients-view" aria-label="고객사" hidden>
+      <div id="agency-clients-mount"></div>
+    </section>
+    <section id="agency-team-view" aria-label="팀과 권한" hidden>
+      <div id="agency-team-mount"></div>
+    </section>
     <section id="overview-view" aria-label="행사 개요" hidden>
       <div id="overview-mount"></div>
       <div><button type="button" data-report-create>보고서 생성</button></div>
@@ -97,6 +113,7 @@
   <script src="features/stage.js"></script>
   <script src="features/scenes.js"></script>
   <script src="features/results.js"></script>
+  <script src="features/agency-ui.js"></script>
   <script>
     /* ETKO-VIEW-SYNC: gate all shell views behind ETKO.navigate.
        Follows the syncParticipantsView pattern (Task 3 interface): show the
@@ -109,6 +126,10 @@
       var ETKO = window.ETKO || (window.ETKO = {});
 
       var SECTIONS = {
+        'agency-home': 'agency-home-view',
+        'agency-events': 'agency-events-view',
+        'agency-clients': 'agency-clients-view',
+        'agency-team': 'agency-team-view',
         overview: 'overview-view',
         participants: 'participants-view',
         checkin: 'checkin-view',
@@ -122,6 +143,10 @@
       };
 
       var MOUNTS = {
+        'agency-home': 'agency-home-mount',
+        'agency-events': 'agency-events-mount',
+        'agency-clients': 'agency-clients-mount',
+        'agency-team': 'agency-team-mount',
         overview: 'overview-mount',
         participants: 'people-list',
         checkin: 'checkin-mount',
@@ -190,6 +215,14 @@
           if (!mount) return;
           if (view === 'checkin' && typeof ETKO.renderCheckin === 'function') {
             ETKO.renderCheckin(mount, ETKO.checkinState);
+          } else if (view === 'agency-home' && typeof ETKO.renderAgencyHome === 'function') {
+            ETKO.renderAgencyHome(mount);
+          } else if (view === 'agency-events' && typeof ETKO.renderAgencyEvents === 'function') {
+            ETKO.renderAgencyEvents(mount);
+          } else if (view === 'agency-clients' && typeof ETKO.renderAgencyClients === 'function') {
+            ETKO.renderAgencyClients(mount);
+          } else if (view === 'agency-team' && typeof ETKO.renderAgencyTeam === 'function') {
+            ETKO.renderAgencyTeam(mount);
           } else if (view === 'booth' && typeof ETKO.renderBooth === 'function') {
             ETKO.renderBooth(mount);
           } else if (view === 'participant' && typeof ETKO.renderParticipant === 'function') {

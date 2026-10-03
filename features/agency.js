@@ -33,6 +33,11 @@
     'settings',
     'members',
     'events',
+    'clients',
+    'agency-home',
+    'agency-events',
+    'agency-clients',
+    'agency-team',
     'home',
     'screen',
   ];
@@ -71,6 +76,10 @@
     'results',
     'home',
     'screen',
+    'agency-home',
+    'agency-events',
+    'agency-clients',
+    'agency-team',
   ];
 
   function normRole(role) {
@@ -173,6 +182,7 @@
       workspaces: { 'evt-1': seedWorkspace() },
       activeEventId: 'evt-1',
       role: 'AGENCY',
+      clients: [],
     };
   }
 
@@ -345,6 +355,99 @@
     ws.members.push(member);
     return member;
   };
+
+  // Agency-level clients: shared across events, never cloned per event.
+  function clientList() {
+    if (!Array.isArray(ETKO.store.clients)) ETKO.store.clients = [];
+    return ETKO.store.clients;
+  }
+
+  // Client create by default, update when `id` matches.
+  ETKO.saveClient = function (input) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('clients');
+    var opts = input || {};
+    var list = clientList();
+    var name = String(opts.name === undefined || opts.name === null ? '' : opts.name).trim();
+    var contact = String(opts.contact === undefined || opts.contact === null ? '' : opts.contact).trim();
+    var email = String(opts.email === undefined || opts.email === null ? '' : opts.email).trim();
+    if (!name) throw new Error('고객사 이름을 입력하세요');
+    if (!isEmail(email)) throw new Error('이메일 형식이 올바르지 않습니다');
+    if (opts.id !== undefined && opts.id !== null && opts.id !== '') {
+      for (var i = 0; i < list.length; i += 1) {
+        if (list[i] && list[i].id === opts.id) {
+          list[i].name = name;
+          list[i].contact = contact;
+          list[i].email = email;
+          return list[i];
+        }
+      }
+      throw new Error('고객사를 찾을 수 없습니다');
+    }
+    var client = { id: 'c' + (list.length + 1), name: name, contact: contact, email: email };
+    list.push(client);
+    return client;
+  };
+
+  ETKO.removeClient = function (id) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('clients');
+    var list = clientList();
+    for (var i = 0; i < list.length; i += 1) {
+      if (list[i] && list[i].id === id) {
+        list.splice(i, 1);
+        return id;
+      }
+    }
+    throw new Error('고객사를 찾을 수 없습니다');
+  };
+
+  // Event status moves forward only: PRE -> LIVE -> END.
+  var STATUS_FLOW = { PRE: ['LIVE'], LIVE: ['END'], END: [] };
+
+  ETKO.setEventStatus = function (id, next) {
+    if (typeof ETKO.requireWrite === 'function') ETKO.requireWrite('events');
+    var status = String(next === undefined || next === null ? '' : next).trim().toUpperCase();
+    var found = null;
+    (ETKO.store.events || []).forEach(function (ev) {
+      if (ev && ev.id === id) found = ev;
+    });
+    if (!found) throw new Error('행사를 찾을 수 없습니다');
+    var allowed = STATUS_FLOW[found.status] || [];
+    if (allowed.indexOf(status) === -1) {
+      throw new Error('행사 상태는 준비→운영→결과 순서로만 변경할 수 있습니다');
+    }
+    found.status = status;
+    return found.status;
+  };
+
+  // Cross-event dashboard numbers. Read-only, never throws on thin slices.
+  ETKO.agencySummary = function () {
+    var events = ETKO.store.events || [];
+    var out = { total: events.length, live: 0, pre: 0, ended: 0, participants: 0, pending: 0 };
+    events.forEach(function (ev) {
+      if (!ev) return;
+      if (ev.status === 'LIVE') out.live += 1;
+      else if (ev.status === 'END') out.ended += 1;
+      else out.pre += 1;
+      var ws = null;
+      try {
+        ws = ETKO.store.workspaces ? ETKO.store.workspaces[ev.id] : null;
+      } catch (err) {
+        ws = null;
+      }
+      if (!ws) return;
+      if (Array.isArray(ws.participants)) out.participants += ws.participants.length;
+      (Array.isArray(ws.photos) ? ws.photos : []).forEach(function (p) {
+        if (p && p.status !== 'APPROVED') out.pending += 1;
+      });
+      (Array.isArray(ws.qna) ? ws.qna : []).forEach(function (q) {
+        if (q && !q.approved) out.pending += 1;
+      });
+    });
+    return out;
+  };
+
+  // In-memory wizard state for the event creation flow (resets on reload).
+  ETKO.agencyUi = ETKO.agencyUi || { step: 1, draft: {} };
 
   if (typeof module !== 'undefined' && module && module.exports) {
     module.exports = ETKO;
