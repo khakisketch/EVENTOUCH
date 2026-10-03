@@ -9,6 +9,7 @@ const KO_PATH = path.join(ROOT, 'i18n', 'ko.json');
 const HTML_PATH = path.join(ROOT, 'index.html');
 const APP_PATH = path.join(ROOT, 'app.js');
 const VIEWS_PATH = path.join(ROOT, 'features', 'views.js');
+const CSS_PATH = path.join(ROOT, 'styles', 'theme.css');
 
 // Canonical view keys (Task 2 interface + engage slice). Singular `participant` is the
 // participant home; plural `participants` is the directory. They must stay
@@ -22,6 +23,12 @@ function readButtons(html) {
   let m;
   while ((m = re.exec(html)) !== null) out.set(m[1], m[2].trim());
   return out;
+}
+
+function routesInLayer(html, layer) {
+  const group = new RegExp(`<div[^>]*data-nav-layer="${layer}"[^>]*>([\\s\\S]*?)<\\/div>`).exec(html);
+  if (!group) return [];
+  return [...group[1].matchAll(/data-view="([^"]+)"/g)].map((match) => match[1]);
 }
 
 function loadApp(stubDocument) {
@@ -80,6 +87,49 @@ test('shell is lang="ko" and every nav label equals its ko.json value', () => {
     buttons.get('participant'),
     'directory and home nav buttons must have distinct labels'
   );
+});
+
+test('shell groups all 14 routes under five contextual layers', () => {
+  const html = fs.readFileSync(HTML_PATH, 'utf8');
+  const expected = {
+    agency: ['agency-home', 'agency-events', 'agency-clients', 'agency-team'],
+    event: ['overview', 'participants', 'engage', 'content', 'messages', 'stage'],
+    onsite: ['checkin', 'booth'],
+    participant: ['participant'],
+    screen: ['screen'],
+  };
+  for (const [layer, routes] of Object.entries(expected)) {
+    assert.match(html, new RegExp(`data-layer="${layer}"`), `missing ${layer} selector`);
+    assert.deepEqual(routesInLayer(html, layer), routes, `wrong routes in ${layer} menu`);
+  }
+  assert.equal([...html.matchAll(/data-layer="(?:agency|event|onsite|participant|screen)"/g)].length, 5);
+  assert.match(html, /<aside[^>]*class="[^"]*app-sidebar/, 'desktop sidebar is missing');
+  assert.match(html, /<select[^>]*data-event-context/, 'active-event selector is missing');
+  assert.doesNotMatch(html, /<nav[^>]*aria-label="주요 화면"/, 'old flat top-level navigation remains');
+});
+
+test('shell keeps the existing product name as its page heading', () => {
+  const html = fs.readFileSync(HTML_PATH, 'utf8');
+  assert.match(html, /<h1(?:\s[^>]*)?>\s*이벤터치 운영\s*<\/h1>/);
+});
+
+test('shell CSS defines the compact mobile menu and accessible target sizes', () => {
+  const css = fs.readFileSync(CSS_PATH, 'utf8');
+  assert.match(css, /@media\s*\(max-width:\s*800px\)/, 'mobile shell breakpoint is missing');
+  assert.match(css, /\.layer-switch[\s\S]*?grid-template-columns:\s*repeat\(5,/, 'mobile layer selector must have five columns');
+  assert.match(css, /\.context-nav[\s\S]*?overflow-x:\s*auto/, 'second-level menu must scroll inside its own row');
+  assert.match(css, /\.layer-switch[\s\S]*?min-height:\s*var\(--touch-min\)/, 'layer targets must meet the 44px token');
+  assert.match(css, /:focus-visible/, 'keyboard focus treatment is missing');
+});
+
+test('layer and route navigation expose the shared keyboard focus ring', () => {
+  const css = fs.readFileSync(CSS_PATH, 'utf8');
+  assert.match(css, /\.layer-switch button:focus-visible,\s*\.context-nav button:focus-visible\s*\{[^}]*outline:\s*var\(--focus-ring\);[^}]*outline-offset:\s*2px/);
+});
+
+test('workspace main fills the content column instead of shrinking to its contents', () => {
+  const css = fs.readFileSync(CSS_PATH, 'utf8');
+  assert.match(css, /\.workspace\s*>\s*main\s*\{[^}]*width:\s*100%/, 'workspace main must fill the available column');
 });
 
 test('index.html loads app.js', () => {

@@ -9,26 +9,72 @@
   <link rel="stylesheet" href="styles/theme.css" />
 </head>
 <body>
-  <header>
-    <h1>이벤터치 운영</h1>
-    <p role="note">샘플 데이터입니다</p>
-    <nav aria-label="주요 화면">
-      <button type="button" data-view="agency-home">대행사 홈</button>
-      <button type="button" data-view="agency-events">행사 관리</button>
-      <button type="button" data-view="agency-clients">고객사</button>
-      <button type="button" data-view="agency-team">팀과 권한</button>
-      <button type="button" data-view="overview">개요</button>
-      <button type="button" data-view="participants">참가자</button>
-      <button type="button" data-view="checkin">체크인</button>
-      <button type="button" data-view="booth">부스</button>
-      <button type="button" data-view="participant">홈</button>
-      <button type="button" data-view="engage">참여</button>
-      <button type="button" data-view="content">콘텐츠</button>
-      <button type="button" data-view="messages">메시지</button>
-      <button type="button" data-view="stage">무대</button>
-      <button type="button" data-view="screen">화면 출력</button>
-    </nav>
-  </header>
+  <div class="app-shell">
+    <aside class="app-sidebar" aria-label="이벤터치 작업 메뉴">
+      <div class="product-identity">
+        <h1>이벤터치 운영</h1>
+      </div>
+
+      <label class="event-context">
+        <span>현재 행사</span>
+        <select data-event-context aria-label="현재 행사 선택">
+          <option value="">행사 불러오는 중</option>
+        </select>
+      </label>
+
+      <nav class="layer-switch" aria-label="업무 영역">
+        <button type="button" data-layer="agency" aria-pressed="false">대행사</button>
+        <button type="button" data-layer="event" aria-pressed="false">행사</button>
+        <button type="button" data-layer="onsite" aria-pressed="false">현장</button>
+        <button type="button" data-layer="participant" aria-pressed="false">참가자</button>
+        <button type="button" data-layer="screen" aria-pressed="false">스크린</button>
+      </nav>
+
+      <nav class="context-nav" aria-label="세부 작업 메뉴">
+        <div class="nav-group" data-nav-layer="agency" aria-label="대행사 작업" hidden>
+          <h2>대행사 업무</h2>
+          <button type="button" data-view="agency-home" data-shell-nav-item>대행사 홈</button>
+          <button type="button" data-view="agency-events" data-shell-nav-item>행사 관리</button>
+          <button type="button" data-view="agency-clients" data-shell-nav-item>고객사</button>
+          <button type="button" data-view="agency-team" data-shell-nav-item>팀과 권한</button>
+        </div>
+        <div class="nav-group" data-nav-layer="event" aria-label="행사 작업" hidden>
+          <h2>행사 워크스페이스</h2>
+          <button type="button" data-view="overview" data-shell-nav-item>개요</button>
+          <button type="button" data-view="participants" data-shell-nav-item>참가자</button>
+          <button type="button" data-view="engage" data-shell-nav-item>참여</button>
+          <button type="button" data-view="content" data-shell-nav-item>콘텐츠</button>
+          <button type="button" data-view="messages" data-shell-nav-item>메시지</button>
+          <button type="button" data-view="stage" data-shell-nav-item>무대</button>
+        </div>
+        <div class="nav-group" data-nav-layer="onsite" aria-label="현장 작업" hidden>
+          <h2>현장 운영</h2>
+          <button type="button" data-view="checkin" data-shell-nav-item>체크인</button>
+          <button type="button" data-view="booth" data-shell-nav-item>부스</button>
+        </div>
+        <div class="nav-group" data-nav-layer="participant" aria-label="참가자 작업" hidden>
+          <h2>참가자 경험</h2>
+          <button type="button" data-view="participant" data-shell-nav-item>홈</button>
+        </div>
+        <div class="nav-group" data-nav-layer="screen" aria-label="스크린 작업" hidden>
+          <h2>스크린 출력</h2>
+          <button type="button" data-view="screen" data-shell-nav-item>화면 출력</button>
+        </div>
+      </nav>
+
+      <p class="sidebar-disclosure" role="note">샘플 데이터 · 실제 발송·결제·장비 연결 없음</p>
+    </aside>
+
+    <div class="workspace">
+      <header class="workspace-topbar">
+        <div class="breadcrumb" aria-label="현재 위치">
+          <span data-shell-current-layer>행사</span>
+          <span aria-hidden="true">/</span>
+          <strong data-shell-current-view>개요</strong>
+        </div>
+        <span class="workspace-badge">샘플 환경</span>
+      </header>
+
   <main id="app" data-current-view="overview">
     <section id="agency-home-view" aria-label="대행사 홈" hidden>
       <div id="agency-home-mount"></div>
@@ -81,6 +127,8 @@
       <div id="screen-mount" aria-live="polite"></div>
     </section>
   </main>
+    </div>
+  </div>
   <script>
     window.ETKO = window.ETKO || {};
     fetch('data/sample.json')

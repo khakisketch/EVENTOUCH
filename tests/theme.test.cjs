@@ -20,9 +20,16 @@ test('theme layer uses the approved brand palette', () => {
 
 test('theme marks the active nav item and primary actions', () => {
   const css = theme();
-  assert.match(css, /nav button\[aria-current="page"\]/);
+  assert.match(css, /\.context-nav button\[aria-current="page"\]/);
   assert.match(css, /button\[data-take\]/);
   assert.match(css, /button\[data-stamp-receive\]/);
+});
+
+test('contextual navigation selected states use existing surface tokens', () => {
+  const css = theme();
+  assert.match(css, /\.layer-switch button\[aria-pressed="true"\]\s*\{[^}]*border-color:\s*var\(--border\);[^}]*background:\s*var\(--surface-soft\)/);
+  assert.match(css, /\.context-nav button\[aria-current="page"\]\s*\{[^}]*border-color:\s*var\(--border\);[^}]*background:\s*var\(--surface-soft\)/);
+  assert.doesNotMatch(css, /#f3ddd1/i);
 });
 
 test('theme keeps feedback and audience display readable', () => {
