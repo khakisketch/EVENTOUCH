@@ -78,6 +78,8 @@
     }
     s.disclose = normChecks(s.disclose);
     s.confirm = normChecks(s.confirm);
+    if (typeof s.scenePreview !== 'string' || !s.scenePreview) s.scenePreview = 'brand-idle';
+    if (typeof s.sceneProgram !== 'string' || !s.sceneProgram) s.sceneProgram = null;
     return s;
   }
 
@@ -89,6 +91,9 @@
     var s = ensureStageState(state);
     if (!ETKO.canTake({ disclose: s.disclose, confirm: s.confirm })) return false;
     s.program = s.preview;
+    if (typeof ETKO.sceneById === 'function' && ETKO.sceneById(s.scenePreview)) {
+      s.sceneProgram = s.scenePreview;
+    }
     try {
       if (typeof ETKO.announceScreen === 'function') ETKO.announceScreen();
     } catch (err) {}
@@ -121,13 +126,27 @@
   }
 
   // Render the two-stage live dialog: disclosure checks, preview/program,
-  // TAKE gated on all four checks, safety outputs, reduced-motion toggle.
-  // Korean copy only. Wires controls when the container supports queries.
+  // scene picker, TAKE gated on all four checks, safety outputs,
+  // reduced-motion toggle. Korean copy only. Wires controls when the
+  // container supports queries.
   ETKO.renderStage = function (container, state) {
     var s = ensureStageState(state);
     var allowed = ETKO.canTake({ disclose: s.disclose, confirm: s.confirm });
     var previewMsg = ETKO.safety(s.preview);
     var programMsg = ETKO.safety(s.program);
+    var scenes = [];
+    try {
+      scenes = typeof ETKO.SCENES !== 'undefined' && Array.isArray(ETKO.SCENES) ? ETKO.SCENES : [];
+    } catch (err) {
+      scenes = [];
+    }
+    var sceneGrid = scenes.map(function (sc) {
+      var active = s.scenePreview === sc.id ? ' aria-pressed="true"' : ' aria-pressed="false"';
+      return (
+        '<button type="button" data-scene="' + escapeHtml(sc.id) + '"' + active + '>' +
+        escapeHtml(sc.name) + ' · ' + escapeHtml(sc.code) + '</button>'
+      );
+    }).join('');
     var html =
       '<div><p>미리보기: ' +
       escapeHtml(previewMsg.title) +
@@ -153,7 +172,8 @@
       '<div><button type="button" data-motion aria-pressed="' +
       (ETKO.reducedMotion ? 'true' : 'false') +
       '">모션 줄이기</button></div>' +
-      '<div><a href="?view=screen" target="_blank" rel="noopener">관객 화면 열기</a></div>';
+      '<div><a href="?view=screen" target="_blank" rel="noopener">관객 화면 열기</a></div>' +
+      (sceneGrid ? '<div><p>장면 선택</p><div>' + sceneGrid + '</div></div>' : '');
     container.innerHTML = html;
     if (container.querySelectorAll) {
       Array.prototype.forEach.call(
@@ -185,6 +205,20 @@
           ETKO.renderStage(container, s);
         });
       }
+      Array.prototype.forEach.call(
+        container.querySelectorAll('[data-scene]'),
+        function (btn) {
+          if (typeof btn.addEventListener !== 'function') return;
+          btn.addEventListener('click', function () {
+            var id = btn.getAttribute ? btn.getAttribute('data-scene') : null;
+            try {
+              if (typeof ETKO.setPreviewScene === 'function') ETKO.setPreviewScene(id);
+              s.scenePreview = id;
+            } catch (err) {}
+            ETKO.renderStage(container, s);
+          });
+        }
+      );
       Array.prototype.forEach.call(
         container.querySelectorAll('[data-safety]'),
         function (btn) {
@@ -301,8 +335,9 @@
     return wired;
   };
 
-  // Audience projection: read-only program output + selected question +
-  // approved photo count. No controls, no contacts. Reads live state so
+  // Audience projection: program scene when one is taken, otherwise the
+  // legacy read-only composite (program output + selected question +
+  // approved photo count). No controls, no contacts. Reads live state so
   // every render reflects the latest take/moderation/selection.
   // BLACK is a true blackout: only the notice renders, never the question
   // or photo sections.
@@ -317,6 +352,12 @@
         escapeHtml(programMsg.detail) +
         '</p></section>';
       return container.innerHTML;
+    }
+    if (s.sceneProgram && typeof ETKO.renderSceneProgram === 'function') {
+      try {
+        var sceneHtml = ETKO.renderSceneProgram(container, s);
+        if (sceneHtml !== null) return sceneHtml;
+      } catch (err) {}
     }
     var selected = null;
     try {

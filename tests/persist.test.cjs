@@ -79,3 +79,15 @@ test('check-in scans and desk records persist', () => {
   assert.ok(ws.participants.some((p) => p.id === person.id && p.status === 'IN'));
   assert.equal(snap.ui.activeUnitId, unit.id);
 });
+
+test('a stateless tab does not clobber the saved program output', () => {
+  const ETKO = fresh();
+  const backend = memoryBackend();
+  ETKO.storeBackend = backend;
+  ETKO.stageState = { preview: 'LOGO', program: 'LOGO', scenePreview: 'poll-result', sceneProgram: 'poll-result' };
+  ETKO.touchStore();
+  ETKO.stageState = null;
+  ETKO.touchStore();
+  const snap = JSON.parse(backend.peek());
+  assert.equal(snap.ui.stageState.sceneProgram, 'poll-result');
+});

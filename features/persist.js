@@ -29,6 +29,24 @@
     return defaultBackend();
   }
 
+  // A tab with no stage state (e.g. a dedicated display before its first
+  // refresh) must not clobber the control tab's saved program output.
+  // Null therefore carries the previously saved stage state forward;
+  // only a real (non-null) state overwrites it.
+  function prevStageState() {
+    try {
+      var b = backend();
+      if (!b) return null;
+      var raw = b.get();
+      if (!raw) return null;
+      var prev = JSON.parse(raw);
+      if (prev && prev.ui && prev.ui.stageState && typeof prev.ui.stageState === 'object') {
+        return prev.ui.stageState;
+      }
+    } catch (err) {}
+    return null;
+  }
+
   function cleanStageState(value) {
     if (!value || typeof value !== 'object') return null;
     var preview = String(value.preview || 'LOGO').trim().toUpperCase();
@@ -36,11 +54,25 @@
     var ok = ['BLACK', 'HOLD', 'LOGO'];
     if (ok.indexOf(preview) === -1) preview = 'LOGO';
     if (ok.indexOf(program) === -1) program = 'LOGO';
-    return { preview: preview, program: program };
+    var out = { preview: preview, program: program };
+    if (typeof value.scenePreview === 'string' && value.scenePreview) {
+      out.scenePreview = value.scenePreview;
+    }
+    if (typeof value.sceneProgram === 'string' && value.sceneProgram) {
+      out.sceneProgram = value.sceneProgram;
+    }
+    return out;
   }
 
   ETKO.snapshotStore = function () {
     var store = ETKO.store || {};
+    var staged = null;
+    try {
+      staged = cleanStageState(ETKO.stageState);
+    } catch (err) {
+      staged = null;
+    }
+    if (!staged) staged = prevStageState();
     return JSON.stringify({
       version: 1,
       savedAt: new Date().toISOString(),
@@ -55,7 +87,7 @@
         activeUnitId: ETKO.activeUnitId || null,
         checkinDirection: ETKO.checkinDirection === 'OUT' ? 'OUT' : 'IN',
         checkinView: ETKO.currentView || 'overview',
-        stageState: cleanStageState(ETKO.stageState),
+        stageState: staged,
       },
     });
   };
