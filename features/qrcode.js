@@ -1399,3 +1399,151 @@ function load(id){id=id.replace('./','');if(cache[id])return cache[id].exports;c
     module.exports = ETKO;
   }
 })((typeof window !== 'undefined' && window) || globalThis);
+
+/* Live camera scan seam: progressive enhancement for attached cameras. */
+(function (root) {
+  'use strict';
+
+  var ETKO = root.ETKO || (root.ETKO = {});
+
+  function nav() {
+    try {
+      return root.navigator || (typeof navigator !== 'undefined' ? navigator : null);
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function NativeDetector() {
+    try {
+      return root.BarcodeDetector || (typeof BarcodeDetector !== 'undefined' ? BarcodeDetector : null);
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function docOf() {
+    try {
+      return root.document || (typeof document !== 'undefined' ? document : null);
+    } catch (err) {
+      return null;
+    }
+  }
+
+  // True when this environment can open a camera stream. Decoder
+  // availability is resolved at scan time (native first, vendored fallback).
+  ETKO.cameraSupported = function () {
+    try {
+      var n = nav();
+      return !!(n && n.mediaDevices && typeof n.mediaDevices.getUserMedia === 'function');
+    } catch (err) {
+      return false;
+    }
+  };
+
+  function canvasFallback(video) {
+    var doc = docOf();
+    var w = video ? video.videoWidth || video.width : 0;
+    var h = video ? video.videoHeight || video.height : 0;
+    if (!doc || typeof doc.createElement !== 'function' || !w || !h) {
+      throw new Error('QR을 읽지 못했습니다. 코드를 직접 입력하세요');
+    }
+    var canvas = doc.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('QR을 읽지 못했습니다. 코드를 직접 입력하세요');
+    ctx.drawImage(video, 0, 0);
+    var pixels = ctx.getImageData(0, 0, w, h);
+    return ETKO.decodeQrPixels(pixels.data, w, h);
+  }
+
+  // Read one video frame: native BarcodeDetector first, vendored decoder
+  // on the same frame when native finds nothing usable. Rejects Korean.
+  ETKO.scanCameraFrame = function (video) {
+    return Promise.resolve().then(function () {
+      var Det = NativeDetector();
+      if (typeof Det === 'function' && video) {
+        var det = null;
+        try {
+          det = new Det({ formats: ['qr_code'] });
+        } catch (err) {
+          det = null;
+        }
+        if (det && typeof det.detect === 'function') {
+          return det.detect(video).then(
+            function (found) {
+              if (found && found[0] && found[0].rawValue) return String(found[0].rawValue);
+              throw new Error('QR을 읽지 못했습니다. 코드를 직접 입력하세요');
+            },
+            function () {
+              return canvasFallback(video);
+            }
+          );
+        }
+      }
+      return canvasFallback(video);
+    });
+  };
+
+  // Open the camera and invoke onCode for each newly seen code until
+  // stopped. Resolves with a handle for ETKO.stopCameraScan.
+  ETKO.startCameraScan = function (video, onCode, opts) {
+    var options = opts || {};
+    var intervalMs = Number(options.intervalMs) || 500;
+    if (intervalMs < 50) intervalMs = 50;
+    var n = nav();
+    if (!n || !n.mediaDevices || typeof n.mediaDevices.getUserMedia !== 'function') {
+      return Promise.reject(new Error('이 기기에서는 카메라를 사용할 수 없습니다'));
+    }
+    var handle = { stopped: false, stream: null, timer: null, last: null };
+    return Promise.resolve(
+      n.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+    ).then(function (stream) {
+      handle.stream = stream || null;
+      try {
+        if (video) {
+          video.srcObject = stream;
+          if (typeof video.play === 'function') video.play();
+        }
+      } catch (err) {}
+      handle.timer = setInterval(function () {
+        if (handle.stopped) return;
+        ETKO.scanCameraFrame(video).then(
+          function (code) {
+            if (handle.stopped || !code || code === handle.last) return;
+            handle.last = code;
+            try {
+              if (typeof onCode === 'function') onCode(code);
+            } catch (err) {}
+          },
+          function () {}
+        );
+      }, intervalMs);
+      return handle;
+    });
+  };
+
+  // Stop the loop and release every camera track. Never throws.
+  ETKO.stopCameraScan = function (handle) {
+    if (!handle) return;
+    handle.stopped = true;
+    try {
+      if (handle.timer) clearInterval(handle.timer);
+    } catch (err) {}
+    handle.timer = null;
+    try {
+      var tracks =
+        handle.stream && typeof handle.stream.getTracks === 'function' ? handle.stream.getTracks() : [];
+      tracks.forEach(function (track) {
+        try {
+          if (track && typeof track.stop === 'function') track.stop();
+        } catch (err) {}
+      });
+    } catch (err) {}
+  };
+
+  if (typeof module !== 'undefined' && module && module.exports) {
+    module.exports = ETKO;
+  }
+})((typeof window !== 'undefined' && window) || globalThis);

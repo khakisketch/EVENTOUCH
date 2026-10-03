@@ -274,6 +274,11 @@
       '<button type="button" data-sync>동기화</button></div>' +
       (qrIntakeSupported()
         ? '<div class="inline-form"><div class="field"><label>QR 사진<input data-qr-file type="file" accept="image/*" aria-label="QR 사진" /></label></div></div>'
+        : '') +
+      (typeof ETKO.cameraSupported === 'function' && ETKO.cameraSupported()
+        ? '<div class="inline-form"><button type="button" data-camera-scan>카메라 스캔</button>' +
+          '<button type="button" data-camera-stop>스캔 중지</button>' +
+          '<video data-camera-video muted playsinline aria-label="카메라 미리보기"></video></div>'
         : '');
     if (ETKO.lastQrError) {
       html += '<p role="alert">' + escapeHtml(ETKO.lastQrError) + '</p>';
@@ -376,6 +381,71 @@
               }
             );
           }
+        }
+      );
+      Array.prototype.forEach.call(
+        container.querySelectorAll('[data-camera-scan]'),
+        function (btn) {
+          if (typeof btn.addEventListener !== 'function') return;
+          btn.addEventListener('click', function () {
+            ETKO.lastQrError = null;
+            if (typeof ETKO.startCameraScan !== 'function') {
+              ETKO.lastQrError = '이 기기에서는 카메라를 사용할 수 없습니다';
+              ETKO.renderCheckin(container, s);
+              return;
+            }
+            try {
+              if (typeof ETKO.ensureQrDecoder === 'function') ETKO.ensureQrDecoder();
+            } catch (err) {}
+            try {
+              if (ETKO.cameraHandle) ETKO.stopCameraScan(ETKO.cameraHandle);
+            } catch (err) {}
+            var video = container.querySelector ? container.querySelector('[data-camera-video]') : null;
+            ETKO.startCameraScan(video, function (code) {
+              try {
+                var result = null;
+                if (typeof ETKO.submitTicket === 'function') {
+                  result = ETKO.submitTicket(code, ETKO.checkinDirection || 'IN');
+                } else {
+                  result = ETKO.scan({
+                    code: code,
+                    direction: ETKO.checkinDirection || 'IN',
+                    online: ETKO.online !== false,
+                  });
+                }
+                ETKO.lastScanResult = result;
+                if (result && result.kind === 'good') {
+                  try {
+                    ETKO.stopCameraScan(ETKO.cameraHandle);
+                  } catch (err) {}
+                  ETKO.cameraHandle = null;
+                }
+              } catch (err) {
+                ETKO.lastQrError = err && err.message ? err.message : '처리하지 못했습니다';
+              }
+              ETKO.renderCheckin(container, s);
+            }).then(
+              function (handle) {
+                ETKO.cameraHandle = handle;
+              },
+              function (err) {
+                ETKO.lastQrError = err && err.message ? err.message : '카메라를 열지 못했습니다';
+                ETKO.renderCheckin(container, s);
+              }
+            );
+          });
+        }
+      );
+      Array.prototype.forEach.call(
+        container.querySelectorAll('[data-camera-stop]'),
+        function (btn) {
+          if (typeof btn.addEventListener !== 'function') return;
+          btn.addEventListener('click', function () {
+            try {
+              if (ETKO.cameraHandle) ETKO.stopCameraScan(ETKO.cameraHandle);
+            } catch (err) {}
+            ETKO.cameraHandle = null;
+          });
         }
       );
     }
