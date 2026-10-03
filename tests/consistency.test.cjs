@@ -177,8 +177,8 @@ test('nav marks exactly the current view across all ten views', () => {
     addEventListener() {},
   }));
   const stubDocument = {
-    querySelectorAll: () => buttons,
-    querySelector: () => ({ setAttribute() {} }),
+    querySelectorAll: (selector) => selector === '[data-view]' ? buttons : [],
+    querySelector: (selector) => selector === 'main' ? { setAttribute() {} } : null,
   };
   const sandbox = { console, document: stubDocument, window: {} };
   vm.createContext(sandbox);

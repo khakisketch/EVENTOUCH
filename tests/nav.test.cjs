@@ -8,6 +8,7 @@ const ROOT = path.join(__dirname, '..');
 const KO_PATH = path.join(ROOT, 'i18n', 'ko.json');
 const HTML_PATH = path.join(ROOT, 'index.html');
 const APP_PATH = path.join(ROOT, 'app.js');
+const VIEWS_PATH = path.join(ROOT, 'features', 'views.js');
 
 // Canonical view keys (Task 2 interface + engage slice). Singular `participant` is the
 // participant home; plural `participants` is the directory. They must stay
@@ -31,6 +32,15 @@ function loadApp(stubDocument) {
   vm.createContext(sandbox);
   vm.runInContext(src, sandbox, { filename: 'app.js' });
   return sandbox.window.ETKO || sandbox.ETKO;
+}
+
+function loadShellApp(stubDocument) {
+  const sandbox = { console, window: {} };
+  if (stubDocument !== undefined) sandbox.document = stubDocument;
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(APP_PATH, 'utf8'), sandbox, { filename: 'app.js' });
+  vm.runInContext(fs.readFileSync(VIEWS_PATH, 'utf8'), sandbox, { filename: 'features/views.js' });
+  return sandbox.window.ETKO;
 }
 
 test('ko.json has one non-empty label per view key', () => {
@@ -99,6 +109,64 @@ test('ETKO.navigate distinguishes participants from participant', () => {
   ETKO.navigate('participant');
   assert.equal(ETKO.currentView, 'participant');
   assert.notEqual(ETKO.currentView, 'participants');
+});
+
+test('selectLayer navigates to its default route and tracks the active layer', () => {
+  const ETKO = loadShellApp();
+  ETKO.navigate('overview');
+  assert.equal(ETKO.currentLayer, 'event');
+  assert.equal(ETKO.selectLayer('onsite'), 'checkin');
+  assert.equal(ETKO.currentView, 'checkin');
+  assert.equal(ETKO.currentLayer, 'onsite');
+  assert.equal(ETKO.selectLayer('screen'), 'screen');
+  assert.equal(ETKO.currentLayer, 'screen');
+});
+
+test('selectLayer chooses an accessible route and leaves denied layers unchanged', () => {
+  const ETKO = loadShellApp();
+  ETKO.currentRole = () => 'CLIENT';
+  ETKO.canRoute = (_role, route) => route !== 'agency-home' && route !== 'agency-events' && route !== 'agency-clients' && route !== 'agency-team' && route !== 'checkin';
+  ETKO.navigate('overview');
+
+  assert.equal(ETKO.selectLayer('onsite'), 'booth', 'use the first permitted route when the default is denied');
+  assert.equal(ETKO.currentLayer, 'onsite');
+
+  assert.equal(ETKO.selectLayer('agency'), 'booth', 'a fully denied layer must leave the current view unchanged');
+  assert.equal(ETKO.currentLayer, 'onsite');
+  assert.equal(ETKO.selectLayer('missing'), 'booth', 'an unknown layer must leave the current view unchanged');
+});
+
+test('extended and unknown route attempts do not erase the contextual layer', () => {
+  const ETKO = loadShellApp();
+  ETKO.canRoute = () => true;
+  ETKO.navigate('checkin');
+  assert.equal(ETKO.currentLayer, 'onsite');
+  assert.equal(ETKO.navigate('results'), 'results');
+  assert.equal(ETKO.currentLayer, 'onsite');
+  assert.equal(ETKO.navigate('not-a-route'), 'results');
+  assert.equal(ETKO.currentLayer, 'onsite');
+});
+
+test('syncShellContext escapes event names and selects the active event', () => {
+  const ETKO = loadShellApp();
+  const select = { innerHTML: '', value: '' };
+  const doc = {
+    querySelector(selector) {
+      return selector === '[data-event-context]' ? select : null;
+    },
+  };
+  ETKO.store = {
+    events: [
+      { id: 'evt-1', name: '<img src=x onerror="run()">' },
+      { id: 'evt-2', name: '행사 & 운영' },
+    ],
+    activeEventId: 'evt-2',
+  };
+
+  assert.equal(ETKO.syncShellContext(doc), true);
+  assert.match(select.innerHTML, /&lt;img src=x onerror=&quot;run\(\)&quot;&gt;/);
+  assert.match(select.innerHTML, /행사 &amp; 운영/);
+  assert.equal(select.value, 'evt-2');
 });
 
 test('data-view buttons wire to ETKO.navigate on click', () => {
