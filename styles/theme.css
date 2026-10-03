@@ -1,27 +1,31 @@
-/* EVENTOUCH Warm Operations theme — applied over tokens.css.
+/* EVENTOUCH product visual system — ported from OpenDesign eventouch-a82e
+   (refined pass, artifact sha256 ed870f52...de767e).
    Palette is pre-approved: brand #F35B2C, action #BC3F1B, canvas #FAF8F5.
-   Shared patterns below (.cards/.card, [data-empty], .poll-bar) are the
-   consistency contract: staff renderers emit this markup (see
-   docs/superpowers/specs/2026-10-03-eventouch-consistency-pass-design.md). */
+   This layer styles the product shell (header/nav/sections/mounts) in the
+   refined language: type scale, spacing rhythm, component finish, feedback. */
 
 /* ---- page frame ---- */
 
 body {
   background: var(--canvas);
   color: var(--fg);
-  line-height: 1.6;
+  font-size: 14px;
+  line-height: 1.55;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
 }
 
 body > header {
   background: #17191d;
   color: #faf8f5;
-  padding: 20px 16px 0;
+  padding: 22px 16px 0;
 }
 
 body > header h1 {
   margin: 0;
   font-family: var(--font-display);
   font-size: 24px;
+  font-weight: 500;
   letter-spacing: -0.02em;
 }
 
@@ -38,6 +42,7 @@ body > header h1::after {
 body > header p[role="note"] {
   margin: 8px 0 0;
   font-size: 12px;
+  line-height: 1.5;
   color: #beb7ab;
 }
 
@@ -51,13 +56,20 @@ body > header nav {
 
 body > header nav button {
   flex-shrink: 0;
+  min-height: 44px;
   border: 1px solid #3a3b38;
   border-radius: 999px;
   background: transparent;
   color: #e8e2d8;
-  font-size: 14px;
+  font-size: 13px;
   padding: 8px 14px;
   cursor: pointer;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+body > header nav button:hover {
+  border-color: #6b6c68;
+  color: #fff;
 }
 
 body > header nav button[aria-current="page"] {
@@ -70,11 +82,13 @@ body > header nav button[aria-current="page"] {
 main {
   max-width: 72rem;
   margin: 0 auto;
-  padding: 20px 16px 64px;
+  padding: 28px 16px 72px;
+  min-width: 0;
 }
 
 main > section {
   margin-bottom: 24px;
+  min-width: 0;
 }
 
 /* ---- content blocks ---- */
@@ -85,16 +99,19 @@ main section > div > div {
 }
 
 main h2 {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: 20px;
+  font-weight: 750;
   margin: 0 0 8px;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
+  line-height: 1.35;
 }
 
-main section[aria-label] > h2:first-child,
-main section section > h2:first-child {
-  padding-bottom: 8px;
-  border-bottom: 2px solid var(--brand);
+main h3 {
+  font-size: 14px;
+  font-weight: 750;
+  letter-spacing: -0.015em;
+  margin: 0 0 8px;
 }
 
 main ul {
@@ -127,26 +144,71 @@ main section ul > li {
 main .card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
   padding: 16px;
+}
+
+/* Overview stat band (renderResults .stats). */
+main .stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 10rem), 1fr));
+  gap: 12px;
+  margin: 12px 0;
+}
+
+main .stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
+}
+
+main .stat small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+main .stat b.stat-value {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(24px, 2.4vw, 30px);
+  letter-spacing: -0.03em;
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
 /* ---- controls ---- */
 
 main button,
 main input[type="submit"] {
-  border-radius: 8px;
+  min-height: 44px;
+  border-radius: 9px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--fg);
-  font-size: 14px;
-  padding: 8px 14px;
+  font-size: 13px;
+  padding: 8px 15px;
   cursor: pointer;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+
+main button:hover {
+  background: #f1ede8;
+  border-color: #cfc6bc;
+}
+
+main button:active {
+  transform: translateY(1px);
 }
 
 main button:disabled {
-  opacity: 0.5;
+  opacity: 0.52;
   cursor: not-allowed;
+  transform: none;
 }
 
 main button[data-take],
@@ -159,20 +221,42 @@ main button[data-camera-scan] {
   border-color: var(--action);
   background: var(--brand);
   color: #fff;
-  font-weight: 700;
+  font-weight: 750;
+}
+
+main button[data-take]:hover,
+main button[data-ticket-submit]:hover,
+main button[data-signup-submit]:hover,
+main button[data-stamp-receive]:hover,
+main button[data-report-create]:hover,
+main button[data-booth-add]:hover,
+main button[data-camera-scan]:hover {
+  background: #ed4f23;
+  border-color: #ed4f23;
+  color: #fff;
 }
 
 main button[data-lookup-submit] {
   border-color: var(--action);
   background: var(--brand);
   color: #fff;
-  font-weight: 700;
+  font-weight: 750;
 }
 
 main button[data-safety="BLACK"] {
   background: #17191d;
   border-color: #17191d;
   color: #fff;
+}
+
+main button:focus-visible,
+main a:focus-visible,
+main input:focus-visible,
+main select:focus-visible,
+main textarea:focus-visible {
+  outline: 3px solid var(--action);
+  outline-offset: 2px;
+  box-shadow: var(--focus);
 }
 
 main a {
@@ -183,14 +267,16 @@ main a {
 main .field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   margin: 10px 0;
+  min-width: 0;
 }
 
 main .field > label {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 650;
+  color: var(--fg);
 }
 
 /* Labels wrapping their own control stack vertically. */
@@ -199,7 +285,7 @@ main .field > label:has(select),
 main .field > label:has(textarea) {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 main input[type="text"],
@@ -207,10 +293,23 @@ main input:not([type]),
 main select,
 main textarea {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 9px;
   background: #fff;
   color: var(--fg);
+  font-size: 13px;
   padding: 8px 12px;
+}
+
+main input::placeholder,
+main textarea::placeholder {
+  color: #746d66;
+  opacity: 1;
+}
+
+main .field .hint {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--muted);
 }
 
 main .inline-form {
@@ -226,8 +325,10 @@ main .inline-form {
 main p[role="alert"] {
   border-left: 4px solid var(--brand);
   background: #fff3ec;
-  padding: 10px 12px;
-  border-radius: 0 8px 8px 0;
+  padding: 12px 14px;
+  border-radius: 0 10px 10px 0;
+  line-height: 1.5;
+  font-size: 13px;
 }
 
 main p[role="status"],
@@ -236,66 +337,105 @@ main p[role="note"] {
 }
 
 /* Shared empty pattern: [data-empty] + role="status" from every renderer.
-   In-list empties ride on .card; standalone notes get a dashed well. */
+   Soft product panel in the refined language. */
 main li.card[data-empty] {
-  border-style: dashed;
-  background: transparent;
+  background: var(--surface-soft);
+  box-shadow: none;
 }
 
 main li.card[data-empty] p[role="status"] {
   margin: 0;
   text-align: center;
+  padding: 8px 4px;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 main p[data-empty] {
   text-align: center;
-  padding: 16px 12px;
-  border: 1px dashed var(--border);
-  border-radius: 12px;
+  padding: 24px 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+main [data-result] {
+  line-height: 1.5;
+  font-size: 13px;
 }
 
 main [data-result][data-kind="good"] {
   border-left: 4px solid #2e7d32;
   background: #eef6ee;
-  padding: 10px 12px;
-  border-radius: 0 8px 8px 0;
+  padding: 12px 14px;
+  border-radius: 0 10px 10px 0;
+  line-height: 1.5;
 }
 
 main [data-result][data-kind="warn"] {
   border-left: 4px solid #b7791f;
   background: #fdf6e7;
-  padding: 10px 12px;
-  border-radius: 0 8px 8px 0;
+  padding: 12px 14px;
+  border-radius: 0 10px 10px 0;
+  line-height: 1.5;
 }
 
 main [data-result][data-kind="bad"] {
   border-left: 4px solid var(--action);
   background: #fdecea;
-  padding: 10px 12px;
-  border-radius: 0 8px 8px 0;
+  padding: 12px 14px;
+  border-radius: 0 10px 10px 0;
+  line-height: 1.5;
 }
 
 /* ---- tables ---- */
 
+main .table-wrap {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
 main table {
   border-collapse: collapse;
   background: var(--surface);
-  font-size: 14px;
+  font-size: 13px;
+  width: 100%;
 }
 
 main th,
 main td {
-  border: 1px solid var(--border);
-  padding: 10px 12px;
+  padding: 12px 14px;
   text-align: left;
   vertical-align: top;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.45;
+}
+
+main tbody tr:last-child th,
+main tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 main thead th {
-  background: #17191d;
-  border-color: #17191d;
-  color: #faf8f5;
+  background: #f7f4f0;
+  color: #625b53;
+  font-size: 11px;
+  letter-spacing: 0.04em;
   white-space: nowrap;
+}
+
+main tbody tr:hover {
+  background: #fbf8f4;
+}
+
+main td code,
+main .mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
 }
 
 /* ---- audience display ---- */
@@ -304,19 +444,25 @@ main thead th {
   background: #17191d;
   color: #fffaf2;
   border-radius: 16px;
-  padding: 32px 24px;
+  padding: clamp(24px, 4vw, 48px);
   text-align: center;
 }
 
 #screen-view h2 {
   border: 0;
   padding: 0;
-  font-size: clamp(24px, 5vw, 56px);
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 1.15;
+  letter-spacing: -0.025em;
   color: #ffb278;
 }
 
 #screen-view p {
   color: #c9bfb0;
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 #screen-view img {
@@ -337,14 +483,33 @@ main thead th {
   background: var(--brand);
 }
 
+/* ---- reduced motion ---- */
+
+@media (prefers-reduced-motion: reduce) {
+  main button,
+  body > header nav button {
+    transition: none;
+  }
+}
+
 /* ---- small screens ---- */
+
+@media (max-width: 600px) {
+  main .inline-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  main .inline-form > button {
+    width: 100%;
+  }
+}
 
 @media (max-width: 390px) {
   body > header h1 {
     font-size: 20px;
   }
   main {
-    padding: 16px 12px 64px;
+    padding: 22px 12px 64px;
     font-size: 16px;
   }
   main .inline-form {

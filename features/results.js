@@ -220,20 +220,19 @@
     var approved = resultsWorkspace().photos.filter(function (p) {
       return p && p.status === 'APPROVED';
     }).length;
+    function stat(label, value) {
+      return '<div class="stat"><small>' + escapeHtml(label) + '</small><b class="stat-value">' + escapeHtml(value) + '</b></div>';
+    }
     var html =
       '<section aria-label="행사 결과"><h2>행사 결과</h2>' +
-      '<p>전체 ' +
-      s.total +
-      '명 · 누적 입장 ' +
-      s.checked +
-      '명 · 현재 입장 ' +
-      s.inside +
-      '명 · 미입장 ' +
-      s.notArrived +
-      '명 · 입장률 ' +
-      s.rate +
-      '%</p>' +
-      '<p>승인된 사진 ' +
+      '<div class="stats">' +
+      stat('전체', s.total + '명') +
+      stat('누적 입장', s.checked + '명') +
+      stat('현재 입장', s.inside + '명') +
+      stat('미입장', s.notArrived + '명') +
+      stat('입장률', s.rate + '%') +
+      '</div>' +
+      '<p role="note">승인된 사진 ' +
       approved +
       '장 · 보고서 ' +
       resultsWorkspace().reports.length +
