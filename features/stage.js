@@ -2,6 +2,14 @@
   'use strict';
 
   var ETKO = root.ETKO || (root.ETKO = {});
+  var SCENE_GROUP_LABELS = {
+    CORE: '행사 기본',
+    POLL: '투표',
+    QUIZ: '퀴즈',
+    QNA: '질문과 답변',
+    DRAW: '럭키드로우',
+    PHOTO: '사진',
+  };
 
   // Live control disclosure + stage safety. Consumes ETKO.navigate only as a
   // view switch (never redefined here); Task 2 navigate semantics untouched.
@@ -140,11 +148,33 @@
     } catch (err) {
       scenes = [];
     }
-    var sceneGrid = scenes.map(function (sc) {
-      var active = s.scenePreview === sc.id ? ' aria-pressed="true"' : ' aria-pressed="false"';
+    var sceneGroups = [];
+    scenes.forEach(function (scene) {
+      if (!scene) return;
+      var groupId = String(scene.group || 'OTHER');
+      var group = null;
+      for (var i = 0; i < sceneGroups.length; i += 1) {
+        if (sceneGroups[i].id === groupId) group = sceneGroups[i];
+      }
+      if (!group) {
+        group = { id: groupId, scenes: [] };
+        sceneGroups.push(group);
+      }
+      group.scenes.push(scene);
+    });
+    var sceneGrid = sceneGroups.map(function (group) {
+      var groupLabel = SCENE_GROUP_LABELS[group.id] || group.id;
+      var buttons = group.scenes.map(function (scene) {
+        var active = s.scenePreview === scene.id ? ' aria-pressed="true"' : ' aria-pressed="false"';
+        return (
+          '<button type="button" data-scene="' + escapeHtml(scene.id) + '"' + active + '>' +
+          escapeHtml(scene.name) + ' · ' + escapeHtml(scene.code) + '</button>'
+        );
+      }).join('');
       return (
-        '<button type="button" data-scene="' + escapeHtml(sc.id) + '"' + active + '>' +
-        escapeHtml(sc.name) + ' · ' + escapeHtml(sc.code) + '</button>'
+        '<section class="scene-group" data-scene-group="' + escapeHtml(group.id) + '" aria-label="' + escapeHtml(groupLabel) + '">' +
+        '<div class="scene-group-heading"><h3>' + escapeHtml(groupLabel) + '</h3><span>' + group.scenes.length + '개</span></div>' +
+        '<div class="scene-grid">' + buttons + '</div></section>'
       );
     }).join('');
     var html =
@@ -173,7 +203,8 @@
       (ETKO.reducedMotion ? 'true' : 'false') +
       '">모션 줄이기</button></div>' +
       '<div><a href="?view=screen" target="_blank" rel="noopener">관객 화면 열기</a></div>' +
-      (sceneGrid ? '<div><p>장면 선택</p><div>' + sceneGrid + '</div></div>' : '');
+      (sceneGrid ? '<section class="stage-scenes" aria-label="장면 선택"><h2>장면 선택</h2>' +
+        '<p>기능별로 분류된 시연 장면 ' + scenes.length + '개</p><div class="scene-groups">' + sceneGrid + '</div></section>' : '');
     container.innerHTML = html;
     if (container.querySelectorAll) {
       Array.prototype.forEach.call(

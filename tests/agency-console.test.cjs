@@ -117,6 +117,39 @@ test('agency home renders stats, events and activity in the shared patterns', ()
   assert.match(b.innerHTML, /EVENTOUCH 운영 샘플/, 'home misses the seeded event');
 });
 
+test('selected-event overview shows live context and routes quick actions to existing day-of views', () => {
+  const ETKO = load(['../app.js', '../features/agency.js', '../features/results.js', '../features/agency-ui.js']);
+  const handlers = {};
+  const routes = [];
+  const actions = ['checkin', 'booth'].map((route) => ({
+    getAttribute(name) { return name === 'data-overview-route' ? route : null; },
+    addEventListener(type, fn) { if (type === 'click') handlers[route] = fn; },
+  }));
+  const b = {
+    innerHTML: '',
+    querySelectorAll(selector) { return selector === '[data-overview-route]' ? actions : []; },
+  };
+  ETKO.navigate = (route) => { routes.push(route); return route; };
+
+  ETKO.renderOverview(b);
+
+  const event = ETKO.store.events.find((item) => item.id === ETKO.store.activeEventId);
+  assert.match(b.innerHTML, new RegExp(event.name));
+  assert.match(b.innerHTML, new RegExp(event.date));
+  assert.match(b.innerHTML, new RegExp(event.venue));
+  assert.match(b.innerHTML, /data-overview-metric="total"/);
+  assert.match(b.innerHTML, /data-overview-route="checkin"/);
+  assert.match(b.innerHTML, /data-overview-route="booth"/);
+  handlers.checkin.call(actions[0]);
+  handlers.booth.call(actions[1]);
+  assert.deepEqual(routes, ['checkin', 'booth']);
+});
+
+test('overview shell delegates to the selected-event renderer', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  assert.match(html, /view === 'overview'[\s\S]{0,220}ETKO\.renderOverview\(mount\)/);
+});
+
 test('agency events view renders the 3-step wizard and the event list', () => {
   const ETKO = load(['../app.js', '../features/agency.js', '../features/results.js', '../features/agency-ui.js']);
   ETKO.agencyUi = { step: 1, draft: {} };
@@ -245,7 +278,7 @@ test('team form errors and drafts do not leak across selected events', () => {
   assert.match(restored.innerHTML, /이메일 형식이 올바르지 않습니다/);
 });
 
-test('shell carries the four agency views with sections, mounts and labels', () => {
+test('shell keeps four agency-owned routes while placing team in the selected-event preparation group', () => {
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   const ko = JSON.parse(fs.readFileSync(path.join(ROOT, 'i18n', 'ko.json'), 'utf8'));
   const mounts = {
@@ -260,8 +293,15 @@ test('shell carries the four agency views with sections, mounts and labels', () 
     assert.match(html, new RegExp('id="' + mounts[v] + '"'), `shell misses mount ${v}`);
     assert.ok(typeof ko[v] === 'string' && ko[v].trim() !== '', `ko.json misses label ${v}`);
   }
-  assert.equal(ko['agency-home'], '대행사 홈');
-  assert.equal(ko['agency-events'], '행사 관리');
+  assert.equal(ko['agency-home'], '현장 홈');
+  assert.equal(ko['agency-events'], '현장 관리');
   assert.equal(ko['agency-clients'], '고객사');
-  assert.equal(ko['agency-team'], '팀과 권한');
+  assert.equal(ko['agency-team'], '운영 팀');
+  const globalGroup = /<div[^>]*data-nav-layer="agency"[^>]*>([\s\S]*?)<\/div>/.exec(html)?.[1] || '';
+  const preparationGroup = /<div[^>]*data-nav-layer="event"[^>]*>([\s\S]*?)<\/div>/.exec(html)?.[1] || '';
+  assert.match(globalGroup, /data-view="agency-home"/);
+  assert.match(globalGroup, /data-view="agency-events"/);
+  assert.match(globalGroup, /data-view="agency-clients"/);
+  assert.doesNotMatch(globalGroup, /agency-team/);
+  assert.match(preparationGroup, /data-view="agency-team"/);
 });

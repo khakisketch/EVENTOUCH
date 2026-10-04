@@ -1,5 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 function fresh() {
   const files = ['../app.js', '../features/agency.js', '../features/participants.js', '../features/checkin.js', '../features/booth.js', '../features/content.js'];
@@ -88,4 +90,19 @@ test('empty roster shows signup guidance, stale detail falls back', () => {
   const box2 = { innerHTML: '' };
   ETKO.renderParticipant(box2);
   assert.match(box2.innerHTML, /참가 신청/);
+});
+
+test('participant directory keeps actions but shows table on desktop and cards on mobile', () => {
+  const ETKO = fresh();
+  const box = { innerHTML: '' };
+  ETKO.renderPeople(box);
+  assert.match(box.innerHTML, /<table/);
+  assert.match(box.innerHTML, /class="cards"/);
+  assert.match(box.innerHTML, /data-detail=/);
+  assert.match(box.innerHTML, /data-bulk-in/);
+
+  const css = fs.readFileSync(path.join(__dirname, '..', 'styles', 'theme.css'), 'utf8');
+  assert.match(css, /#participants-view\s+#people-list\s*>\s*\.cards\s*\{[^}]*display:\s*none/);
+  assert.match(css, /@media\s*\(max-width:\s*800px\)[\s\S]*?#participants-view\s+#people-list\s*>\s*\.table-wrap\s*\{[^}]*display:\s*none/);
+  assert.match(css, /@media\s*\(max-width:\s*800px\)[\s\S]*?#participants-view\s+#people-list\s*>\s*\.cards\s*\{[^}]*display:\s*grid/);
 });

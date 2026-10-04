@@ -20,6 +20,16 @@ test('engagement mount renders poll management in Korean', () => {
   assert.match(box.innerHTML, /좋다/);
 });
 
+test('poll and quiz statuses use distinct visible status cues', () => {
+  const ETKO = fresh();
+  ETKO.workspace().poll = { title: '만족도 투표', options: ['좋다'], votes: [], status: 'OPEN' };
+  ETKO.workspace().quiz = { title: '오늘의 퀴즈', answer: '정답', answers: [], status: 'CLOSED' };
+  const box = { innerHTML: '' };
+  ETKO.renderEngagement(box);
+  assert.match(box.innerHTML, /data-engagement-status="open"[^>]*>진행 중/);
+  assert.match(box.innerHTML, /data-engagement-status="closed"[^>]*>마감/);
+});
+
 test('engagement mount renders quiz management with reveal', () => {
   const ETKO = fresh();
   ETKO.workspace().quiz = { title: '오늘의 퀴즈', answer: '정답', answers: [], status: 'OPEN' };

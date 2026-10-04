@@ -293,10 +293,14 @@
               if (typeof ETKO.listenScreen === 'function') ETKO.listenScreen(mount);
             } catch (err) {}
           } else if (view === 'overview') {
-            var name =
-              ETKO.sample && ETKO.sample.event ? ETKO.sample.event : '이벤터치 운영';
-            mount.innerHTML =
-              '<p>' + escapeHtml(name) + '</p><p role="note">샘플 데이터입니다</p>';
+            if (typeof ETKO.renderOverview === 'function') {
+              ETKO.renderOverview(mount);
+            } else {
+              var name =
+                ETKO.sample && ETKO.sample.event ? ETKO.sample.event : '이벤터치 운영';
+              mount.innerHTML =
+                '<p>' + escapeHtml(name) + '</p><p role="note">샘플 데이터입니다</p>';
+            }
             // Results + settings live behind the overview gate: they render
             // with the default view through ETKO.navigate, never as dead
             // mounts. Each renderer is guarded so older shells keep working.

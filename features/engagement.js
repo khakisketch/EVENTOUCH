@@ -349,6 +349,11 @@
       .replace(/'/g, '&#39;');
   }
 
+  function engagementStatus(state, label) {
+    return '<span class="engagement-status" data-engagement-status="' +
+      escapeHtml(state) + '">' + escapeHtml(label) + '</span>';
+  }
+
   // Management mount renderer: poll + quiz sections with Korean copy and
   // wired controls. Q&A/draw/survey/photo sections follow below.
   ETKO.renderEngagement = function (container) {
@@ -372,16 +377,18 @@
       var n = counts.counts && counts.counts[i] !== undefined ? counts.counts[i] : 0;
       return '<li class="card">' + escapeHtml(label) + ' · ' + n + '표</li>';
     }).join('');
-    var pollStatus = poll.status === 'OPEN' ? '진행 중' : '마감';
-    var quizStatus = quiz.status === 'OPEN' ? '진행 중' : '마감';
+    var pollOpen = poll.status === 'OPEN';
+    var quizOpen = quiz.status === 'OPEN';
+    var pollStatus = pollOpen ? '진행 중' : '마감';
+    var quizStatus = quizOpen ? '진행 중' : '마감';
     return (
       '<section aria-label="투표 관리"><h2>투표</h2>' +
-      '<p>' + escapeHtml(poll.title || '제목 없음') + ' · ' + pollStatus + ' · 총 ' + counts.total + '표</p>' +
+      '<p>' + escapeHtml(poll.title || '제목 없음') + ' · ' + engagementStatus(pollOpen ? 'open' : 'closed', pollStatus) + ' · 총 ' + counts.total + '표</p>' +
       '<ul class="cards">' + (options || '<li class="card" data-empty><p role="status">선택지가 없습니다</p></li>') + '</ul>' +
       '<div><button type="button" data-poll-open>투표 개시</button>' +
       '<button type="button" data-poll-close>투표 마감</button></div></section>' +
       '<section aria-label="퀴즈 관리"><h2>퀴즈</h2>' +
-      '<p>' + escapeHtml(quiz.title || '제목 없음') + ' · ' + quizStatus + ' · 답변 ' + (quiz.answers || []).length + '건</p>' +
+      '<p>' + escapeHtml(quiz.title || '제목 없음') + ' · ' + engagementStatus(quizOpen ? 'open' : 'closed', quizStatus) + ' · 답변 ' + (quiz.answers || []).length + '건</p>' +
       '<div><button type="button" data-quiz-open>퀴즈 개시</button>' +
       '<button type="button" data-quiz-reveal>정답 공개</button></div></section>'
     );
@@ -401,9 +408,10 @@
   ETKO.renderEngagementQna = function (wsArg) {
     var ws = wsArg || engagementWorkspace();
     var rows = (ws.qna || []).map(function (q) {
+      var stateKey = q.selected ? 'selected' : q.approved ? 'approved' : 'pending';
       var state = q.selected ? '무대 선택' : q.approved ? '승인됨' : '대기 중';
       return (
-        '<li class="card">' + escapeHtml(q.question || '') + ' · ' + state +
+        '<li class="card">' + escapeHtml(q.question || '') + ' · ' + engagementStatus(stateKey, state) +
         ' <button type="button" data-qna-approve="' + escapeHtml(q.id) + '">승인</button>' +
         ' <button type="button" data-qna-stage="' + escapeHtml(q.id) + '">무대로</button></li>'
       );
@@ -419,9 +427,12 @@
     var draw = ws.draw || { phase: 'IDLE', result: null, winners: [] };
     var winners = (draw.winners || []).join(', ');
     var candidate = draw.result && draw.result.participantId ? draw.result.participantId : '미정';
+    var drawLabels = { IDLE: '대기', READY: '추첨 준비', RESOLVED: '결과 확인' };
+    var drawState = String(draw.phase || 'IDLE').toUpperCase();
     return (
       '<section aria-label="럭키드로우 관리"><h2>럭키드로우</h2>' +
-      '<p>당첨 후보: ' + escapeHtml(candidate) + ' · 확정 ' + (draw.winners || []).length + '명' +
+      '<p>' + engagementStatus(drawState.toLowerCase(), drawLabels[drawState] || '대기') +
+      ' · 당첨 후보: ' + escapeHtml(candidate) + ' · 확정 ' + (draw.winners || []).length + '명' +
       (winners ? ' (' + escapeHtml(winners) + ')' : '') + '</p>' +
       '<div><button type="button" data-draw-start>추첨 시작</button>' +
       '<button type="button" data-draw-resolve>후보 확정</button>' +
@@ -435,7 +446,7 @@
     var responses = ws.responses || [];
     return (
       '<section aria-label="만족도 관리"><h2>만족도 평가</h2>' +
-      '<p>' + escapeHtml(survey.title || '제목 없음') + ' · ' + (survey.open ? '진행 중' : '마감') +
+      '<p>' + escapeHtml(survey.title || '제목 없음') + ' · ' + engagementStatus(survey.open ? 'open' : 'closed', survey.open ? '진행 중' : '마감') +
       ' · 문항 ' + (survey.questions || []).length + '개 · 응답 ' + responses.length + '건</p>' +
       '<div><button type="button" data-survey-toggle>' + (survey.open ? '설문 마감' : '설문 개시') + '</button></div></section>'
     );
@@ -458,7 +469,7 @@
     }).join('');
     return (
       '<section aria-label="사진 검토"><h2>사진 검토</h2>' +
-      '<p>공개 ' + approved + '장 · 검토 대기 ' + pending.length + '장</p>' +
+      '<p>공개 ' + approved + '장 · ' + engagementStatus(pending.length ? 'pending' : 'clear', pending.length ? '검토 대기 ' + pending.length + '장' : '검토 대기 없음') + '</p>' +
       '<ul class="cards">' + (rows || '<li class="card" data-empty><p role="status">검토할 사진이 없습니다</p></li>') + '</ul></section>'
     );
   };

@@ -91,16 +91,17 @@
     var staffPressed = mode === 'STAFF' ? ' aria-pressed="true"' : ' aria-pressed="false"';
     var guide = mode === 'STAFF' ? '티켓을 보여주세요' : '부스 QR을 스캔해주세요';
     var html =
-      '<div><button type="button" data-booth-mode="SELF"' +
+      '<section class="booth-mode-panel" data-booth-mode-current="' + mode + '" aria-label="부스 운영 방식">' +
+      '<div class="booth-mode-selector" role="group" aria-label="스캔 방식 선택"><button type="button" data-booth-mode="SELF"' +
       selfPressed +
       '>직접 스캔</button>' +
       '<button type="button" data-booth-mode="STAFF"' +
       staffPressed +
       '>직원 스캔</button></div>' +
-      '<p>' +
+      '<p class="booth-mode-guidance" role="status">' +
       guide +
       '</p>' +
-      '<div data-booth-manage-embed></div>';
+      '<div data-booth-manage-embed></div></section>';
     container.innerHTML = html;
     if (container.querySelector) {
       try {

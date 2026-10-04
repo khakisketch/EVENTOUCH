@@ -249,3 +249,15 @@ test('check-in desk renders Korean direction toggle, result panel and queue', ()
   assert.match(container.innerHTML, /대기/, 'desk must carry Korean queue copy');
   assert.match(container.innerHTML, /동기화/, 'desk must carry Korean sync copy');
 });
+
+test('check-in presents explicit online/offline and scan-result context states', () => {
+  const ETKO = loadCheckin();
+  ETKO.setOnline(false);
+  ETKO.lastScanResult = { kind: 'warn', key: 'queued', unitName: '1층 안내 데스크' };
+  const container = { innerHTML: '' };
+  ETKO.renderCheckin(container, freshState());
+  assert.match(container.innerHTML, /class="checkin-connectivity" data-connectivity-state="offline"/);
+  assert.match(container.innerHTML, /오프라인 · 대기열에 저장됩니다/);
+  assert.match(container.innerHTML, /class="checkin-result" data-result-state="warn"/);
+  assert.match(container.innerHTML, /1층 안내 데스크/);
+});

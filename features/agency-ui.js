@@ -198,6 +198,59 @@
     return container.innerHTML;
   };
 
+  // Selected-event overview: derive its context and four operational metrics
+  // from the existing event/workspace data, and link only to existing routes.
+  ETKO.renderOverview = function (container) {
+    var activeId = ETKO.store && ETKO.store.activeEventId;
+    var event = eventById(activeId);
+    var workspace = typeof ETKO.workspace === 'function' ? ETKO.workspace() : {};
+    var summary = typeof ETKO.eventSummary === 'function'
+      ? ETKO.eventSummary()
+      : { total: participantsOf(activeId), inside: 0, checked: 0, notArrived: participantsOf(activeId) };
+    var status = event ? STATUS_LABELS[event.status] || '상태 미정' : '행사 정보 없음';
+    var programs = Array.isArray(workspace && workspace.program) ? workspace.program : [];
+    var programRows = programs.slice(0, 4).map(function (item) {
+      if (!item) return '';
+      return '<li class="overview-program-row"><time>' + escapeHtml(item.time || '') +
+        (item.end ? '–' + escapeHtml(item.end) : '') + '</time><strong>' + escapeHtml(item.title || '') +
+        '</strong><span>' + escapeHtml(item.location || '') + '</span></li>';
+    }).join('');
+    var stats = [
+      ['total', '등록 참가자', summary.total + '명'],
+      ['inside', '현재 입장', summary.inside + '명'],
+      ['checked', '누적 입장', summary.checked + '명'],
+      ['not-arrived', '미입장', summary.notArrived + '명'],
+    ].map(function (row) {
+      return '<div class="stat" data-overview-metric="' + row[0] + '"><small>' +
+        escapeHtml(row[1]) + '</small><b class="stat-value">' + escapeHtml(row[2]) + '</b></div>';
+    }).join('');
+    container.innerHTML =
+      '<section class="event-overview" aria-labelledby="event-overview-title">' +
+      '<div class="event-overview-heading"><div>' +
+      '<p class="event-overview-kicker">선택한 현장 · 개요</p>' +
+      '<h1 id="event-overview-title">' + escapeHtml(event && event.name || '선택한 현장') + '</h1>' +
+      '<p class="event-overview-meta">' + escapeHtml(event && event.date || '날짜 미정') + ' · ' +
+      escapeHtml(event && event.venue || '장소 미정') + ' · <span class="event-status">' + escapeHtml(status) + '</span></p>' +
+      '</div><div class="overview-quick-actions" role="group" aria-label="당일 운영 바로가기">' +
+      '<button type="button" data-overview-route="checkin">빠른 체크인</button>' +
+      '<button type="button" data-overview-route="booth">부스 현황</button>' +
+      '</div></div>' +
+      '<div class="stats overview-stats" aria-label="현재 현장 현황">' + stats + '</div>' +
+      '<section class="overview-program" aria-labelledby="overview-program-title"><div>' +
+      '<h2 id="overview-program-title">오늘의 운영 순서</h2>' +
+      '<p>등록된 프로그램 정보를 표시합니다.</p></div>' +
+      (programRows ? '<ul class="overview-program-list">' + programRows + '</ul>' :
+        '<p role="status" data-empty>등록된 프로그램이 없습니다. 콘텐츠에서 프로그램을 등록할 수 있습니다.</p>') +
+      '</section></section>';
+    onClick(container, 'data-overview-route', function () {
+      var route = this && typeof this.getAttribute === 'function'
+        ? this.getAttribute('data-overview-route')
+        : null;
+      if (route && typeof ETKO.navigate === 'function') ETKO.navigate(route);
+    });
+    return container.innerHTML;
+  };
+
   function wizardStepsBar(step) {
     return '<p>' + WIZARD_STEPS.map(function (label, i) {
       var n = i + 1;

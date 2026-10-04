@@ -17,6 +17,18 @@ function loadStage(seed) {
   return sandbox.window.ETKO || sandbox.ETKO;
 }
 
+function loadStageWithScenes() {
+  const sandbox = { console, window: {} };
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'features', 'scenes.js'), 'utf8'), sandbox, {
+    filename: 'features/scenes.js',
+  });
+  vm.runInContext(fs.readFileSync(STAGE_PATH, 'utf8'), sandbox, {
+    filename: 'features/stage.js',
+  });
+  return sandbox.window.ETKO || sandbox.ETKO;
+}
+
 function fullChecks() {
   return { disclose: [true, true], confirm: [true, true] };
 }
@@ -157,4 +169,23 @@ test('stage consumes ETKO.navigate without altering it', () => {
   const ETKO = loadStage({ ETKO: { navigate: () => 'kept', currentView: 'stage' } });
   assert.equal(typeof ETKO.navigate, 'function', 'ETKO.navigate must survive stage load');
   assert.equal(ETKO.navigate('stage'), 'kept', 'stage must not alter navigate semantics');
+});
+
+test('stage groups all 28 canonical scenes by the six existing group values', () => {
+  const ETKO = loadStageWithScenes();
+  const box = { innerHTML: '' };
+  ETKO.renderStage(box, { disclose: [false, false], confirm: [false, false] });
+  const groups = [...box.innerHTML.matchAll(/<section class="scene-group" data-scene-group="([^"]+)"[^>]*>([\s\S]*?)<\/section>/g)];
+  const expectedGroups = Array.from(new Set(Array.from(ETKO.SCENES, (scene) => scene.group)));
+  assert.deepEqual(groups.map((match) => match[1]), expectedGroups);
+  const renderedIds = groups.flatMap((match) => [...match[2].matchAll(/data-scene="([^"]+)"/g)].map((item) => item[1]));
+  assert.equal(renderedIds.length, 28);
+  assert.deepEqual(renderedIds, Array.from(ETKO.SCENES, (scene) => scene.id));
+  for (const groupId of expectedGroups) {
+    const expectedIds = Array.from(ETKO.SCENES).filter((scene) => scene.group === groupId).map((scene) => scene.id);
+    const groupMarkup = groups.find((match) => match[1] === groupId)[2];
+    assert.match(groupMarkup, /<h3/);
+    assert.deepEqual([...groupMarkup.matchAll(/data-scene="([^"]+)"/g)].map((match) => match[1]), expectedIds);
+  }
+  assert.match(box.innerHTML, /data-take[^>]*disabled/);
 });

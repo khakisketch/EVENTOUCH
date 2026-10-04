@@ -253,7 +253,7 @@
             .join('') +
           '</ul>';
     var html =
-      '<div><p data-connectivity>' +
+      '<div class="checkin-connectivity" data-connectivity-state="' + (ETKO.online === false ? 'offline' : 'online') + '"><p data-connectivity>' +
       (ETKO.online === false ? '오프라인 · 대기열에 저장됩니다' : '온라인 · 즉시 반영됩니다') +
       '</p><button type="button" data-online-toggle>' +
       (ETKO.online === false ? '온라인으로 전환' : '오프라인으로 전환') +
@@ -264,7 +264,7 @@
       '<button type="button" data-direction="OUT"' +
       outPressed +
       '>퇴장</button></div>' +
-      '<div aria-live="polite">' +
+      '<div class="checkin-result" data-result-state="' + escapeHtml(result ? result.kind : 'waiting') + '" aria-label="최근 스캔 결과" aria-live="polite">' +
       resultHtml +
       '</div>' +
       '<div><p>대기 목록 ' +

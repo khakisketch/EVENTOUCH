@@ -160,3 +160,19 @@ test('manage notes the mode lock once visits exist', () => {
   ETKO.renderBoothManage(box);
   assert.match(box.innerHTML, /변경할 수 없습니다/);
 });
+
+test('booth view makes current self-scan and staff-scan modes explicit', () => {
+  const ETKO = fresh();
+  const box = { innerHTML: '', querySelectorAll() { return []; }, querySelector() { return null; } };
+  ETKO.boothMode = 'SELF';
+  ETKO.renderBooth(box);
+  assert.match(box.innerHTML, /data-booth-mode-current="SELF"/);
+  assert.match(box.innerHTML, /직접 스캔/);
+  assert.match(box.innerHTML, /부스 QR을 스캔해주세요/);
+
+  ETKO.boothMode = 'STAFF';
+  ETKO.renderBooth(box);
+  assert.match(box.innerHTML, /data-booth-mode-current="STAFF"/);
+  assert.match(box.innerHTML, /직원 스캔/);
+  assert.match(box.innerHTML, /티켓을 보여주세요/);
+});
