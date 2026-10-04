@@ -30,3 +30,20 @@ test('cross-event isolation: second event starts empty, first untouched', () => 
   ETKO.switchEvent('evt-1');
   assert.ok(ETKO.workspace().participants.length > 0);
 });
+
+test('event creation accepts only real YYYY-MM-DD calendar dates', () => {
+  const before = ETKO.store.events.length;
+  for (const date of ['2026-02-30', '2026-13-01', '2026-2-03', '20260228', '0000-01-01']) {
+    assert.throws(
+      () => ETKO.createEvent({ name: '날짜 검증', date, venue: 'A홀' }),
+      /날짜/,
+      `${date} must be rejected`
+    );
+  }
+  assert.equal(ETKO.store.events.length, before, 'invalid dates must not create events');
+
+  const leap = ETKO.createEvent({ name: '윤년', date: '2028-02-29', venue: 'B홀' });
+  const nonLeap = ETKO.createEvent({ name: '평년', date: '2027-02-28', venue: 'C홀' });
+  assert.equal(ETKO.store.events.find((event) => event.id === leap).date, '2028-02-29');
+  assert.equal(ETKO.store.events.find((event) => event.id === nonLeap).date, '2027-02-28');
+});

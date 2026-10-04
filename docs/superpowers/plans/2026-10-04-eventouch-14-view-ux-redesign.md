@@ -77,20 +77,22 @@
 **Files:**
 - Modify: `features/agency.js`
 - Modify: `features/agency-ui.js`
+- Modify: `styles/theme.css`
 - Modify: `tests/agency.test.cjs`
 - Modify: `tests/agency-console.test.cjs`
+- Modify: `tests/theme.test.cjs`
 
 **Interfaces:**
 - Keep event/client/member data APIs and write permissions. Enforce a real `YYYY-MM-DD` calendar date at event creation; do not rewrite existing event records.
 - Preserve the three-step event wizard and its feature choices. Keep draft data in `ETKO.agencyUi`; keep errors scoped to the active agency view and identify the failing field.
 - Use `type="date"` for event date and `type="email"` for client/member email; associate errors with their controls using `aria-invalid` and `aria-describedby`, and focus the invalid control after a failed action.
 
-- [ ] **Step 1: Write failing data tests** for invalid calendar dates (`2026-02-30`, malformed strings) and valid leap/non-leap dates; write failing UI tests for field-level errors, focus, client/team email semantics, and no event-wizard error leakage into clients.
-- [ ] **Step 2: Run the focused tests and verify RED** on current nonempty-only date validation and shared `lastAgencyError` rendering.
-- [ ] **Step 3: Implement strict event-date validation and per-view/per-field agency form state**; capture wizard values before validation and retain them through back/forward navigation and rerender.
-- [ ] **Step 4: Implement semantic client/team inputs and inline error/focus restoration** without changing `saveClient`, `saveMember`, event IDs or role behavior.
-- [ ] **Step 5: Run `node --test tests/agency-console.test.cjs` plus the new focused tests and verify GREEN.**
-- [ ] **Step 6: Commit Task 3** as `feat: improve event and team form validation` after `git diff --check`.
+- [x] **Step 1: Write failing data tests** for invalid calendar dates (`2026-02-30`, malformed strings) and valid leap/non-leap dates; write failing UI tests for field-level errors, focus, client/team email semantics, and no event-wizard error leakage into clients.
+- [x] **Step 2: Run the focused tests and verify RED** on current nonempty-only date validation and shared `lastAgencyError` rendering.
+- [x] **Step 3: Implement strict event-date validation and per-view/per-field agency form state**; capture wizard values before validation and retain them through back/forward navigation and rerender.
+- [x] **Step 4: Implement semantic client/team inputs and inline error/focus restoration** without changing `saveClient`, `saveMember`, event IDs or role behavior.
+- [x] **Step 5: Run `node --test tests/agency-console.test.cjs` plus the new focused tests and verify GREEN.**
+- [x] **Step 6: Commit Task 3** as `feat: improve event and team form validation` after `git diff --check`.
 
 ### Task 4: Semantic controls and form recovery across view renderers
 

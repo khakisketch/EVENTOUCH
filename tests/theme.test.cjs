@@ -39,6 +39,15 @@ test('theme keeps feedback and audience display readable', () => {
   assert.match(css, /#screen-view/);
 });
 
+test('semantic date and email controls and inline errors use the shared form theme', () => {
+  const css = theme();
+  for (const type of ['date', 'email', 'tel', 'number', 'time']) {
+    assert.match(css, new RegExp('main input\\[type="' + type + '"\\]'));
+  }
+  assert.match(css, /aria-invalid="true"/);
+  assert.match(css, /\.field-error/);
+});
+
 test('touch minimums cover newer controls', () => {
   const css = fs.readFileSync(path.join(__dirname, '..', 'styles', 'tokens.css'), 'utf8');
   for (const sel of ['data-lookup-submit', 'data-scene', 'data-camera-scan', 'data-camera-stop', 'data-booth-add', 'data-booth-status', 'data-booth-print']) {

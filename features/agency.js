@@ -241,6 +241,18 @@
     return 'evt-' + (max + 1);
   }
 
+  function isCalendarDate(value) {
+    var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) return false;
+    var year = Number(match[1]);
+    var month = Number(match[2]);
+    var day = Number(match[3]);
+    if (year < 1 || month < 1 || month > 12 || day < 1) return false;
+    var leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+    var daysInMonth = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    return day <= daysInMonth[month - 1];
+  }
+
   // Create an empty event: 3-field validation, status PRE, no cloned records.
   // Does not switch the active event.
   ETKO.createEvent = function (input) {
@@ -253,6 +265,7 @@
     ).trim();
     if (!name) throw new Error('행사 이름을 입력하세요');
     if (!date) throw new Error('행사 날짜를 입력하세요');
+    if (!isCalendarDate(date)) throw new Error('행사 날짜 형식이 올바르지 않습니다 (YYYY-MM-DD)');
     if (!venue) throw new Error('행사 장소를 입력하세요');
     var id = nextEventId();
     ETKO.store.events.push({ id: id, name: name, date: date, venue: venue, status: 'PRE' });

@@ -18,6 +18,42 @@ function box() {
   return { innerHTML: '', querySelector() { return null; }, querySelectorAll() { return []; } };
 }
 
+function formBox(values, actionAttrs) {
+  const handlers = {};
+  const fields = {};
+  const buttons = {};
+  Object.keys(values).forEach((attr) => {
+    fields[attr] = {
+      value: values[attr],
+      checked: false,
+      focused: false,
+      focus() { this.focused = true; },
+    };
+  });
+  (actionAttrs || []).forEach((attr) => {
+    buttons[attr] = {
+      addEventListener(type, handler) { if (type === 'click') handlers[attr] = handler; },
+      getAttribute(name) { return name === attr ? '' : null; },
+    };
+  });
+  return {
+    handlers,
+    fields,
+    buttons,
+    innerHTML: '',
+    querySelector(selector) {
+      const match = /^\[([^\]]+)\]$/.exec(selector);
+      return match ? fields[match[1]] || buttons[match[1]] || null : null;
+    },
+    querySelectorAll(selector) {
+      const match = /^\[([^\]]+)\]$/.exec(selector);
+      if (!match) return [];
+      const item = fields[match[1]] || buttons[match[1]];
+      return item ? [item] : [];
+    },
+  };
+}
+
 const AGENCY_VIEWS = ['agency-home', 'agency-events', 'agency-clients', 'agency-team'];
 
 test('clients CRUD validates and writes behind permission', () => {
@@ -121,6 +157,92 @@ test('agency team view renders the member matrix on the active event', () => {
   ETKO.renderAgencyTeam(full);
   assert.match(full.innerHTML, /팀원/, 'team misses saved members');
   assert.match(full.innerHTML, /data-member-add/, 'team misses the add control');
+});
+
+test('agency forms use date and email input types', () => {
+  const ETKO = load(['../app.js', '../features/agency.js', '../features/agency-ui.js']);
+  const events = box();
+  const clients = box();
+  const team = box();
+  ETKO.renderAgencyEvents(events);
+  ETKO.renderAgencyClients(clients);
+  ETKO.renderAgencyTeam(team);
+  assert.match(events.innerHTML, /data-wdate type="date"/);
+  assert.match(clients.innerHTML, /data-client-email type="email"/);
+  assert.match(team.innerHTML, /data-member-email type="email"/);
+});
+
+test('wizard date errors stay on that field, restore focus, and preserve the other values', () => {
+  const ETKO = load(['../app.js', '../features/agency.js', '../features/agency-ui.js']);
+  const events = formBox({
+    'data-wname': '운영 포럼',
+    'data-wdate': '',
+    'data-wvenue': 'A홀',
+  }, ['data-wizard-next', 'data-wizard-back']);
+  ETKO.renderAgencyEvents(events);
+  events.handlers['data-wizard-next'].call(events.buttons['data-wizard-next']);
+  assert.match(events.innerHTML, /data-wdate[^>]*aria-invalid="true"/);
+  assert.match(events.innerHTML, /id="wdate-error"[^>]*>행사 날짜를 입력하세요/);
+  assert.match(events.innerHTML, /value="운영 포럼"/);
+  assert.match(events.innerHTML, /value="A홀"/);
+  assert.equal(events.fields['data-wdate'].focused, true);
+
+  events.fields['data-wdate'].value = '2026-10-04';
+  events.handlers['data-wizard-next'].call(events.buttons['data-wizard-next']);
+  assert.match(events.innerHTML, /2단계 참여기능/);
+  assert.doesNotMatch(events.innerHTML, /행사 날짜를 입력하세요/);
+  events.handlers['data-wizard-back'].call(events.buttons['data-wizard-back']);
+  assert.match(events.innerHTML, /value="2026-10-04"/);
+  assert.match(events.innerHTML, /value="운영 포럼"/);
+  assert.match(events.innerHTML, /value="A홀"/);
+
+  const clients = box();
+  ETKO.renderAgencyClients(clients);
+  assert.doesNotMatch(clients.innerHTML, /행사 날짜를 입력하세요/);
+});
+
+test('client email error preserves draft and focuses the invalid email field', () => {
+  const ETKO = load(['../app.js', '../features/agency.js', '../features/agency-ui.js']);
+  const clients = formBox({
+    'data-client-name': '고객사 샘플',
+    'data-client-contact': '김담당',
+    'data-client-email': 'invalid-email',
+  }, ['data-client-save']);
+  ETKO.renderAgencyClients(clients);
+  clients.handlers['data-client-save'].call(clients.buttons['data-client-save']);
+  assert.match(clients.innerHTML, /data-client-email[^>]*aria-invalid="true"/);
+  assert.match(clients.innerHTML, /id="client-email-error"[^>]*>이메일 형식이 올바르지 않습니다/);
+  assert.match(clients.innerHTML, /value="고객사 샘플"/);
+  assert.match(clients.innerHTML, /value="김담당"/);
+  assert.match(clients.innerHTML, /value="invalid-email"/);
+  assert.equal(clients.fields['data-client-email'].focused, true);
+  assert.equal(ETKO.store.clients.length, 0, 'invalid data must not be written');
+});
+
+test('team form errors and drafts do not leak across selected events', () => {
+  const ETKO = load(['../app.js', '../features/agency.js', '../features/agency-ui.js']);
+  const firstEvent = ETKO.store.activeEventId;
+  const first = formBox({
+    'data-member-name': '현장 담당자',
+    'data-member-email': 'invalid-email',
+  }, ['data-member-add']);
+  ETKO.renderAgencyTeam(first);
+  first.handlers['data-member-add'].call(first.buttons['data-member-add']);
+  assert.match(first.innerHTML, /member-email-error/);
+  assert.equal(first.fields['data-member-email'].focused, true);
+
+  const secondEvent = ETKO.createEvent({ name: '다른 현장', date: '2026-12-01', venue: 'B홀' });
+  ETKO.switchEvent(secondEvent);
+  const second = box();
+  ETKO.renderAgencyTeam(second);
+  assert.doesNotMatch(second.innerHTML, /invalid-email|현장 담당자|이메일 형식이 올바르지 않습니다/);
+
+  ETKO.switchEvent(firstEvent);
+  const restored = box();
+  ETKO.renderAgencyTeam(restored);
+  assert.match(restored.innerHTML, /value="현장 담당자"/);
+  assert.match(restored.innerHTML, /value="invalid-email"/);
+  assert.match(restored.innerHTML, /이메일 형식이 올바르지 않습니다/);
 });
 
 test('shell carries the four agency views with sections, mounts and labels', () => {

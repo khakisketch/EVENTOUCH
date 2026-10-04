@@ -454,6 +454,11 @@ main .field > label:has(textarea) {
 }
 
 main input[type="text"],
+main input[type="date"],
+main input[type="email"],
+main input[type="tel"],
+main input[type="number"],
+main input[type="time"],
 main input:not([type]),
 main select,
 main textarea {
@@ -463,6 +468,12 @@ main textarea {
   color: var(--fg);
   font-size: 13px;
   padding: 8px 12px;
+}
+
+main input[aria-invalid="true"],
+main select[aria-invalid="true"],
+main textarea[aria-invalid="true"] {
+  border-color: var(--action);
 }
 
 main input::placeholder,
@@ -494,6 +505,16 @@ main p[role="alert"] {
   border-radius: 0 10px 10px 0;
   line-height: 1.5;
   font-size: 13px;
+}
+
+main p.field-error[role="alert"] {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--action);
+  font-size: 12px;
 }
 
 main p[role="status"],
