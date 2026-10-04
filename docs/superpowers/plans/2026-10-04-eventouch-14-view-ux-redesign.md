@@ -41,11 +41,13 @@
 - Produces a rendered Local Codex preview and a complete source bundle that covers all 14 existing route IDs and required empty/error/mobile states.
 - The artifact is a design source, not production code, user acceptance, or authorization to alter APIs/data or to deploy.
 
-- [ ] Verify the existing EVENTOUCH project, entry artifacts and prior `entry_missing` run; do not overwrite or blindly retry that run.
-- [ ] Start one new refinement run with the approved spec, existing product tokens, exact route IDs, Mobbin pattern intent, responsive states and explicit out-of-scope list.
-- [ ] Open the returned preview and inspect the desktop multi-site/workspace hierarchy, mobile staged navigation, form error states, participant directory, grouped stage scenes and standalone audience screen.
-- [ ] Retrieve the complete artifact bundle once; record actual required-file hashes, omitted/truncated files, preview locator and any differences/open decisions in this ledger.
-- [ ] Record the design-source result in this plan; preserve existing OpenDesign outputs and do not commit machine-local previews or the working-state checkpoint.
+- [x] Verify the existing EVENTOUCH project, entry artifacts and prior `entry_missing` run; do not overwrite or blindly retry that run.
+- [x] Start a new refinement run with the approved spec, existing product tokens, exact route IDs, Mobbin pattern intent, responsive states and explicit out-of-scope list.
+- [x] Open the rendered artifact preview and inspect desktop hierarchy, mobile staged navigation, form error recovery, participant directory, grouped stage scenes and standalone audience screen.
+- [x] Retrieve the complete artifact bundle; record actual required-file hash, omitted/truncated files, preview locator and differences/open decisions in the task ledger.
+- [x] Record the design-source result; preserve existing OpenDesign outputs and do not commit machine-local previews or the working-state checkpoint.
+
+**Verified design source (2026-10-04):** Separate artifact `eventouch-14-view-redesign.html`, SHA256 `d429499c7cc41d525df64af28f520836cd9ead7fa4f3dc8faa998572425ed611`, complete one-file bundle (87,355 bytes; no truncation/skips), rendered at [Local OpenDesign preview](http://127.0.0.1:7456/api/projects/eventouch-a82e/raw/eventouch-14-view-redesign.html). The latest run reported `deliverableValid=false` / `entry_not_touched` because project metadata intentionally continues to point at the preserved `eventouch-operations.html`; this is retained as a validator caveat, not represented as a valid project-entry handoff. Independent browser inspection of the exact separate artifact confirmed all 14 routes, the no-filter event list, field-level create error, mobile site selector (44px at 390/320 with no horizontal overflow), `?view=screen` with no operator chrome/control in rendered or accessibility output, and the six groups/28 scene concepts. Source still contains dormant screen-exit markup, but it is zero-sized/inaccessible in the standalone audience route. Product integration uses canonical scene metadata and Korean labels rather than the mockup's alternate narrative group names.
 
 ### Task 2: Route grouping, contextual navigation and standalone audience screen
 
@@ -127,12 +129,12 @@
 - Directory table is the only visible presentation at desktop widths; cards are the only visible presentation at mobile widths.
 - Render all 28 existing scenes under their six existing `SCENES[].group` values; do not rename/remove scenes or relax stage disclosure/confirmation checks.
 
-- [ ] **Step 1: Write failing UI tests** for quick actions from the selected-site overview, one visible participant representation at each breakpoint, engagement sections/status cues, check-in online/offline and scan-result context, booth self/staff mode distinction, and six named scene groups containing all 28 IDs.
-- [ ] **Step 2: Run focused tests and verify RED** against current overview, duplicated participant markup, ungrouped scene list and operation renderers.
-- [ ] **Step 3: Implement the small overview and day-of composition changes** from the inspected design artifact while preserving current operation handlers.
-- [ ] **Step 4: Implement breakpoint-specific directory visibility and grouped scene rendering from existing metadata**; keep TAKE disabled until all four checks pass.
-- [ ] **Step 5: Run `node --test tests/agency-console.test.cjs tests/participant-ui.test.cjs tests/engage-ui.test.cjs tests/engage-ui2.test.cjs tests/checkin.test.cjs tests/booth-manage.test.cjs tests/stage.test.cjs` and verify GREEN.**
-- [ ] **Step 6: Commit Task 5** as `feat: clarify workspace and day-of operations` after `git diff --check`.
+- [x] **Step 1: Write failing UI tests** for quick actions from the selected-site overview, one visible participant representation at each breakpoint, engagement sections/status cues, check-in online/offline and scan-result context, booth self/staff mode distinction, and six named scene groups containing all 28 IDs.
+- [x] **Step 2: Run focused tests and verify RED** against current overview, duplicated participant markup, ungrouped scene list and operation renderers.
+- [x] **Step 3: Implement the small overview and day-of composition changes** from the inspected design artifact while preserving current operation handlers.
+- [x] **Step 4: Implement breakpoint-specific directory visibility and grouped scene rendering from existing metadata**; keep TAKE disabled until all four checks pass.
+- [x] **Step 5: Run `node --test tests/agency-console.test.cjs tests/participant-ui.test.cjs tests/engage-ui.test.cjs tests/engage-ui2.test.cjs tests/checkin.test.cjs tests/booth-manage.test.cjs tests/stage.test.cjs` and verify GREEN (61/61).**
+- [x] **Step 6: Commit Task 5** as `feat: clarify workspace and day-of operations` after `git diff --check` (`5b715fb`).
 
 ### Task 6: Full regression and browser verification
 
