@@ -63,14 +63,14 @@
 - In the selected-site workspace, persistently show the current event name/date/status and a return path to `전체 현장`; keep the existing event selector/switch behavior.
 - Mobile navigation must expose `전체 현장 → 선택 현장 → 준비/당일 운영` as staged context while retaining a visible active-site selector and 44px targets.
 
-- [ ] **Step 1: Write failing route/group tests.** Assert the exact 14 IDs map once to the new groups; `agency-team` is event-scoped, and check-in/booth are in `당일 운영`.
-- [ ] **Step 2: Run `node --test tests/views.test.cjs tests/nav.test.cjs` and verify RED** because the registry and HTML still use the five old group mapping.
-- [ ] **Step 3: Implement the registry, shell markup and Korean labels** without changing section/mount IDs or role tables.
-- [ ] **Step 4: Run the focused navigation tests and verify GREEN**, including denied/partial role access, event selector sync, and route ID preservation.
-- [ ] **Step 5: Write failing standalone-screen tests.** Assert `?view=screen` marks a dedicated screen mode, hides the operator sidebar/topbar, and gives the audience mount the viewport; keep the stage link target unchanged.
-- [ ] **Step 6: Run screen tests and verify RED; implement the screen-mode class and responsive full-screen styles using existing product tokens.**
-- [ ] **Step 7: Run `node --test tests/views.test.cjs tests/nav.test.cjs tests/screen-section.test.cjs tests/theme.test.cjs` and verify GREEN.**
-- [ ] **Step 8: Commit Task 2** as `feat: restructure event workspace navigation` after `git diff --check`.
+- [x] **Step 1: Write failing route/group tests.** Assert the exact 14 IDs map once to the new groups; `agency-team` is event-scoped, and check-in/booth are in `당일 운영`.
+- [x] **Step 2: Run `node --test tests/views.test.cjs tests/nav.test.cjs` and verify RED** because the registry and HTML still use the five old group mapping.
+- [x] **Step 3: Implement the registry, shell markup and Korean labels** without changing section/mount IDs or role tables.
+- [x] **Step 4: Run the focused navigation tests and verify GREEN**, including denied/partial role access, event selector sync, and route ID preservation.
+- [x] **Step 5: Write failing standalone-screen tests.** Assert `?view=screen` marks a dedicated screen mode, hides the operator sidebar/topbar, and gives the audience mount the viewport; keep the stage link target unchanged.
+- [x] **Step 6: Run screen tests and verify RED; implement the screen-mode class and responsive full-screen styles using existing product tokens.**
+- [x] **Step 7: Run `node --test tests/views.test.cjs tests/nav.test.cjs tests/screen-section.test.cjs tests/theme.test.cjs` and verify GREEN.**
+- [x] **Step 8: Commit Task 2** as `feat: restructure event workspace navigation` after `git diff --check`.
 
 ### Task 3: Event, client and team forms with field-scoped validation
 
