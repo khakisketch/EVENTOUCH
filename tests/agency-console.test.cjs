@@ -117,6 +117,38 @@ test('agency home renders stats, events and activity in the shared patterns', ()
   assert.match(b.innerHTML, /EVENTOUCH 운영 샘플/, 'home misses the seeded event');
 });
 
+test('agency home stat cards carry context sub-labels', () => {
+  const ETKO = load(['../app.js', '../features/agency.js', '../features/agency-ui.js']);
+  const b = box();
+  ETKO.renderAgencyHome(b);
+  const subs = b.innerHTML.match(/stat-sub/g) || [];
+  assert.equal(subs.length, 4, 'each of the four stat cards needs a context sub-label');
+});
+
+test('agency home event cards mark the primary action and status chip', () => {
+  const ETKO = load(['../app.js', '../features/agency.js', '../features/agency-ui.js']);
+  const b = box();
+  ETKO.renderAgencyHome(b);
+  assert.match(b.innerHTML, /data-event-open[^>]*event-open-primary|event-open-primary[^>]*data-event-open/, 'workspace entry misses primary marking');
+  assert.match(b.innerHTML, /event-status-chip/, 'event card misses the status chip');
+  assert.match(b.innerHTML, /data-event-status/, 'event card misses status control');
+});
+
+test('agency home lays events and activity out as a dashboard', () => {
+  const ETKO = load(['../app.js', '../features/agency.js', '../features/agency-ui.js']);
+  const b = box();
+  ETKO.renderAgencyHome(b);
+  assert.match(b.innerHTML, /agency-dashboard/, 'home misses the dashboard layout wrapper');
+});
+
+test('empty activity offers a next action on an existing route', () => {
+  const ETKO = load(['../app.js', '../features/agency.js', '../features/agency-ui.js']);
+  const b = box();
+  ETKO.renderAgencyHome(b);
+  assert.match(b.innerHTML, /최근 활동이 없습니다/, 'home misses the empty activity copy');
+  assert.match(b.innerHTML, /data-agency-next="agency-events"/, 'empty activity misses the next-action route');
+});
+
 test('selected-event overview shows live context and routes quick actions to existing day-of views', () => {
   const ETKO = load(['../app.js', '../features/agency.js', '../features/results.js', '../features/agency-ui.js']);
   const handlers = {};

@@ -152,13 +152,13 @@
       if (!ev) return '';
       var next = STATUS_NEXT[ev.status] || null;
       var controls = writable
-        ? ' <button type="button" data-event-open="' + escapeHtml(ev.id) + '">워크스페이스 열기</button>' +
-          (next ? ' <button type="button" data-event-status="' + escapeHtml(ev.id) + ':' + next + '">다음 단계: ' + escapeHtml(STATUS_LABELS[next] || next) + '</button>' : '')
+        ? ' <button type="button" class="event-open-primary" data-event-open="' + escapeHtml(ev.id) + '">워크스페이스 열기</button>' +
+          (next ? ' <button type="button" class="event-status-next" data-event-status="' + escapeHtml(ev.id) + ':' + next + '">다음 단계: ' + escapeHtml(STATUS_LABELS[next] || next) + '</button>' : '')
         : '';
       return (
-        '<li class="card"><strong>' + escapeHtml(ev.name) + '</strong> · ' + escapeHtml(STATUS_LABELS[ev.status] || '준비 중') +
+        '<li class="card event-card"><strong>' + escapeHtml(ev.name) + '</strong> <span class="event-status-chip">' + escapeHtml(STATUS_LABELS[ev.status] || '준비 중') + '</span>' +
         '<p>' + escapeHtml(ev.date) + ' · ' + escapeHtml(ev.venue) + ' · 참가자 ' + participantsOf(ev.id) + '명</p>' +
-        (controls ? '<p>' + controls + '</p>' : '') + '</li>'
+        (controls ? '<p class="event-card-actions">' + controls + '</p>' : '') + '</li>'
       );
     }).join('');
   }
@@ -183,8 +183,9 @@
     }).join('');
   }
 
-  function stat(label, value) {
-    return '<div class="stat"><small>' + escapeHtml(label) + '</small><b class="stat-value">' + escapeHtml(value) + '</b></div>';
+  function stat(label, value, sub) {
+    return '<div class="stat"><small>' + escapeHtml(label) + '</small><b class="stat-value">' + escapeHtml(value) + '</b>' +
+      (sub ? '<span class="stat-sub">' + escapeHtml(sub) + '</span>' : '') + '</div>';
   }
 
   // Agency dashboard: cross-event stats, event cards, recent activity.
@@ -195,15 +196,17 @@
     var html =
       '<section aria-label="대행사 현황"><h2>대행사 현황</h2>' +
       '<div class="stats">' +
-      stat('진행 중', s.live + '건') +
-      stat('준비 중', s.pre + '건') +
-      stat('전체 참가자', s.participants + '명') +
-      stat('확인할 항목', s.pending + '건') +
+      stat('진행 중', s.live + '건', '현재 운영 중인 현장') +
+      stat('준비 중', s.pre + '건', '오픈을 준비 중인 현장') +
+      stat('전체 참가자', s.participants + '명', '모든 현장 등록 합계') +
+      stat('확인할 항목', s.pending + '건', '입장 처리 대기') +
       '</div></section>' +
+      '<div class="agency-dashboard">' +
       '<section aria-label="전체 행사"><h2>전체 행사</h2>' +
       '<ul class="cards">' + (cards || emptyItem('등록된 행사가 없습니다')) + '</ul></section>' +
       '<section aria-label="최근 활동"><h2>최근 활동</h2>' +
-      '<ul class="cards">' + (activity || emptyItem('최근 활동이 없습니다')) + '</ul></section>';
+      '<ul class="cards">' + (activity || '<li class="card" data-empty><p role="status">최근 활동이 없습니다</p><p><button type="button" data-agency-next="agency-events">현장 관리에서 행사 준비하기</button></p></li>') + '</ul></section>' +
+      '</div>';
     container.innerHTML = html;
     container.__agencyView = 'home';
     wireAgency(container);
@@ -461,6 +464,12 @@
   // Shared wiring for the four agency mounts.
   function wireAgency(container) {
     if (!container || typeof container.querySelectorAll !== 'function') return;
+    onClick(container, 'data-agency-next', function () {
+      var route = this && typeof this.getAttribute === 'function'
+        ? this.getAttribute('data-agency-next')
+        : null;
+      if (route && typeof ETKO.navigate === 'function') ETKO.navigate(route);
+    });
     onClick(container, 'data-event-open', function () {
       var id = this.getAttribute ? this.getAttribute('data-event-open') : null;
       try {

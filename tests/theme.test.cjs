@@ -25,10 +25,10 @@ test('theme marks the active nav item and primary actions', () => {
   assert.match(css, /button\[data-stamp-receive\]/);
 });
 
-test('contextual navigation selected states use existing surface tokens', () => {
+test('contextual navigation separates layer state from the current page', () => {
   const css = theme();
   assert.match(css, /\.layer-switch button\[aria-pressed="true"\]\s*\{[^}]*border-color:\s*var\(--border\);[^}]*background:\s*var\(--surface-soft\)/);
-  assert.match(css, /\.context-nav button\[aria-current="page"\]\s*\{[^}]*border-color:\s*var\(--border\);[^}]*background:\s*var\(--surface-soft\)/);
+  assert.match(css, /\.context-nav button\[aria-current="page"\]\s*\{[^}]*border-color:\s*var\(--action\)/);
   assert.doesNotMatch(css, /#f3ddd1/i);
 });
 

@@ -172,7 +172,7 @@ body {
 }
 
 .context-nav button[aria-current="page"] {
-  border-color: var(--border);
+  border-color: var(--action);
   background: var(--surface-soft);
   color: var(--action);
   font-weight: 750;
@@ -370,6 +370,59 @@ main .stat b.stat-value {
   letter-spacing: -0.03em;
   margin-top: 6px;
   font-variant-numeric: tabular-nums lining-nums;
+}
+
+main .stat .stat-sub {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* Agency home dashboard: events beside activity on wide screens. */
+.agency-dashboard {
+  display: grid;
+  gap: 0 20px;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .agency-dashboard {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.event-status-chip {
+  display: inline-flex;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--action);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.event-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+main button.event-open-primary {
+  border-color: var(--action);
+  background: var(--brand);
+  color: #fff;
+  font-weight: 750;
+}
+
+main button.event-status-next {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--fg);
+  font-weight: 650;
 }
 
 /* Selected-event overview: active context, existing metrics and day-of entry. */
