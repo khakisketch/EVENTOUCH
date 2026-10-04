@@ -16,49 +16,50 @@
       </div>
 
       <label class="event-context">
-        <span>현재 행사</span>
+        <span>선택한 현장</span>
         <select data-event-context aria-label="현재 행사 선택">
           <option value="">행사 불러오는 중</option>
         </select>
+        <span class="event-context-meta" data-event-meta aria-live="polite">행사 정보 불러오는 중</span>
       </label>
 
       <nav class="layer-switch" aria-label="업무 영역">
-        <button type="button" data-layer="agency" aria-pressed="false">대행사</button>
-        <button type="button" data-layer="event" aria-pressed="false">행사</button>
-        <button type="button" data-layer="onsite" aria-pressed="false">현장</button>
+        <button type="button" data-layer="agency" aria-pressed="false">전체 현장</button>
+        <button type="button" data-layer="event" aria-pressed="false">준비</button>
+        <button type="button" data-layer="onsite" aria-pressed="false">당일 운영</button>
         <button type="button" data-layer="participant" aria-pressed="false">참가자</button>
-        <button type="button" data-layer="screen" aria-pressed="false">스크린</button>
+        <button type="button" data-layer="screen" aria-pressed="false">관객 화면</button>
       </nav>
 
       <nav class="context-nav" aria-label="세부 작업 메뉴">
-        <div class="nav-group" data-nav-layer="agency" role="group" aria-label="대행사 작업" hidden>
-          <h2>대행사 업무</h2>
-          <button type="button" data-view="agency-home" data-shell-nav-item>대행사 홈</button>
-          <button type="button" data-view="agency-events" data-shell-nav-item>행사 관리</button>
+        <div class="nav-group" data-nav-layer="agency" role="group" aria-label="전체 현장 메뉴" hidden>
+          <h2>전체 현장</h2>
+          <button type="button" data-view="agency-home" data-shell-nav-item>현장 홈</button>
+          <button type="button" data-view="agency-events" data-shell-nav-item>현장 관리</button>
           <button type="button" data-view="agency-clients" data-shell-nav-item>고객사</button>
-          <button type="button" data-view="agency-team" data-shell-nav-item>팀과 권한</button>
         </div>
-        <div class="nav-group" data-nav-layer="event" role="group" aria-label="행사 작업" hidden>
-          <h2>행사 워크스페이스</h2>
-          <button type="button" data-view="overview" data-shell-nav-item>개요</button>
+        <div class="nav-group" data-nav-layer="event" role="group" aria-label="행사 준비 메뉴" hidden>
+          <h2>준비</h2>
+          <button type="button" data-view="overview" data-shell-nav-item>행사 개요</button>
+          <button type="button" data-view="agency-team" data-shell-nav-item>운영 팀</button>
           <button type="button" data-view="participants" data-shell-nav-item>참가자</button>
-          <button type="button" data-view="engage" data-shell-nav-item>참여</button>
           <button type="button" data-view="content" data-shell-nav-item>콘텐츠</button>
-          <button type="button" data-view="messages" data-shell-nav-item>메시지</button>
-          <button type="button" data-view="stage" data-shell-nav-item>무대</button>
+          <button type="button" data-view="messages" data-shell-nav-item>안내 메시지</button>
         </div>
-        <div class="nav-group" data-nav-layer="onsite" role="group" aria-label="현장 작업" hidden>
-          <h2>현장 운영</h2>
+        <div class="nav-group" data-nav-layer="onsite" role="group" aria-label="당일 운영 메뉴" hidden>
+          <h2>당일 운영</h2>
           <button type="button" data-view="checkin" data-shell-nav-item>체크인</button>
           <button type="button" data-view="booth" data-shell-nav-item>부스</button>
+          <button type="button" data-view="engage" data-shell-nav-item>참여 프로그램</button>
+          <button type="button" data-view="stage" data-shell-nav-item>무대 제어</button>
         </div>
-        <div class="nav-group" data-nav-layer="participant" role="group" aria-label="참가자 작업" hidden>
+        <div class="nav-group" data-nav-layer="participant" role="group" aria-label="참가자 화면 메뉴" hidden>
           <h2>참가자 경험</h2>
-          <button type="button" data-view="participant" data-shell-nav-item>홈</button>
+          <button type="button" data-view="participant" data-shell-nav-item>참가자 웹</button>
         </div>
-        <div class="nav-group" data-nav-layer="screen" role="group" aria-label="스크린 작업" hidden>
-          <h2>스크린 출력</h2>
-          <button type="button" data-view="screen" data-shell-nav-item>화면 출력</button>
+        <div class="nav-group" data-nav-layer="screen" role="group" aria-label="관객 화면 메뉴" hidden>
+          <h2>관객 화면</h2>
+          <button type="button" data-view="screen" data-shell-nav-item>관객 스크린</button>
         </div>
       </nav>
 
@@ -68,10 +69,11 @@
     <div class="workspace">
       <header class="workspace-topbar">
         <nav class="breadcrumb" aria-label="현재 위치">
-          <span data-shell-current-layer>행사</span>
+          <span data-shell-current-layer>준비</span>
           <span aria-hidden="true">/</span>
-          <strong data-shell-current-view>개요</strong>
+          <strong data-shell-current-view>행사 개요</strong>
         </nav>
+        <button type="button" class="event-return" data-layer="agency" data-shell-return hidden>← 전체 현장</button>
         <span class="workspace-badge">샘플 환경</span>
       </header>
 

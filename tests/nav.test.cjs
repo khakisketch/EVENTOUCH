@@ -89,12 +89,12 @@ test('shell is lang="ko" and every nav label equals its ko.json value', () => {
   );
 });
 
-test('shell groups all 14 routes under five contextual layers', () => {
+test('shell groups all 14 routes under global, preparation, day-of, and separate user layers', () => {
   const html = fs.readFileSync(HTML_PATH, 'utf8');
   const expected = {
-    agency: ['agency-home', 'agency-events', 'agency-clients', 'agency-team'],
-    event: ['overview', 'participants', 'engage', 'content', 'messages', 'stage'],
-    onsite: ['checkin', 'booth'],
+    agency: ['agency-home', 'agency-events', 'agency-clients'],
+    event: ['overview', 'agency-team', 'participants', 'content', 'messages'],
+    onsite: ['checkin', 'booth', 'engage', 'stage'],
     participant: ['participant'],
     screen: ['screen'],
   };
@@ -102,9 +102,13 @@ test('shell groups all 14 routes under five contextual layers', () => {
     assert.match(html, new RegExp(`data-layer="${layer}"`), `missing ${layer} selector`);
     assert.deepEqual(routesInLayer(html, layer), routes, `wrong routes in ${layer} menu`);
   }
-  assert.equal([...html.matchAll(/data-layer="(?:agency|event|onsite|participant|screen)"/g)].length, 5);
+  assert.equal([...html.matchAll(/<button[^>]*data-layer="(?:agency|event|onsite|participant|screen)"/g)].length, 6);
   assert.match(html, /<aside[^>]*class="[^"]*app-sidebar/, 'desktop sidebar is missing');
   assert.match(html, /<select[^>]*data-event-context/, 'active-event selector is missing');
+  assert.match(html, /data-event-meta/, 'active event date and status must stay visible');
+  assert.match(html, /data-shell-return[^>]*data-layer="agency"|data-layer="agency"[^>]*data-shell-return/, 'selected-event workspace needs a return path to all sites');
+  assert.match(html, /data-nav-layer="event"[^>]*aria-label="행사 준비 메뉴"/);
+  assert.match(html, /data-nav-layer="onsite"[^>]*aria-label="당일 운영 메뉴"/);
   assert.doesNotMatch(html, /<nav[^>]*aria-label="주요 화면"/, 'old flat top-level navigation remains');
 });
 
@@ -209,17 +213,20 @@ test('extended and unknown route attempts do not erase the contextual layer', ()
 });
 
 test('syncShellContext escapes event names and selects the active event', () => {
-  const ETKO = loadShellApp();
   const select = { innerHTML: '', value: '' };
+  const meta = { textContent: '' };
   const doc = {
     querySelector(selector) {
-      return selector === '[data-event-context]' ? select : null;
+      if (selector === '[data-event-context]') return select;
+      if (selector === '[data-event-meta]') return meta;
+      return null;
     },
   };
+  const ETKO = loadShellApp(doc);
   ETKO.store = {
     events: [
-      { id: 'evt-1', name: '<img src=x onerror="run()">' },
-      { id: 'evt-2', name: '행사 & 운영' },
+      { id: 'evt-1', name: '<img src=x onerror="run()">', date: '2026-10-01', status: 'PRE' },
+      { id: 'evt-2', name: '행사 & 운영', date: '2026-10-18', status: 'LIVE' },
     ],
     activeEventId: 'evt-2',
   };
@@ -228,6 +235,40 @@ test('syncShellContext escapes event names and selects the active event', () => 
   assert.match(select.innerHTML, /&lt;img src=x onerror=&quot;run\(\)&quot;&gt;/);
   assert.match(select.innerHTML, /행사 &amp; 운영/);
   assert.equal(select.value, 'evt-2');
+  assert.equal(meta.textContent, '2026년 10월 18일 · 진행 중');
+
+  ETKO.switchEvent = (id) => {
+    ETKO.store.activeEventId = id;
+    return ETKO.store.events.find((event) => event.id === id);
+  };
+  ETKO.switchEventAndRender('evt-1');
+  assert.equal(select.value, 'evt-1');
+  assert.equal(meta.textContent, '2026년 10월 1일 · 준비 중');
+});
+
+test('selected-event return control navigates through the accessible global layer', () => {
+  const handlers = {};
+  const button = {
+    hidden: false,
+    attrs: { 'data-layer': 'agency', 'data-shell-return': '' },
+    getAttribute(name) { return this.attrs[name] || null; },
+    setAttribute(name, value) { this.attrs[name] = value; },
+    removeAttribute(name) { delete this.attrs[name]; },
+    addEventListener(type, handler) { if (type === 'click') handlers.click = handler; },
+  };
+  const doc = {
+    querySelectorAll(selector) {
+      if (selector === '[data-layer]') return [button];
+      return [];
+    },
+    querySelector() { return null; },
+  };
+  const ETKO = loadShellApp(doc);
+  ETKO.navigate('overview');
+  ETKO.wireNav(doc);
+  assert.equal(typeof handlers.click, 'function');
+  handlers.click();
+  assert.equal(ETKO.currentView, 'agency-home');
 });
 
 test('data-view buttons wire to ETKO.navigate on click', () => {

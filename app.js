@@ -50,6 +50,16 @@
     }
   }
 
+  function setScreenDisplayMode(doc, enabled) {
+    var body = doc && doc.body;
+    if (!body) return;
+    if (enabled && typeof body.setAttribute === 'function') {
+      body.setAttribute('data-screen-mode', 'true');
+    } else if (!enabled && typeof body.removeAttribute === 'function') {
+      body.removeAttribute('data-screen-mode');
+    }
+  }
+
   function layerForView(view) {
     return typeof ETKO.layerForView === 'function' ? ETKO.layerForView(view) : null;
   }
@@ -125,6 +135,14 @@
       });
     }
 
+    var returnControl = queryOne('[data-shell-return]');
+    if (returnControl) {
+      var agencyLayer = findLayer('agency');
+      var canReturnToAgency = agencyLayer && agencyLayer.views.some(canOpen);
+      var isEventWorkspace = ETKO.currentLayer === 'event' || ETKO.currentLayer === 'onsite';
+      setHidden(returnControl, !isEventWorkspace || !canReturnToAgency);
+    }
+
     var main = queryOne('main');
     if (main && main.setAttribute) main.setAttribute('data-current-view', ETKO.currentView);
     ETKO.syncShellContext(doc);
@@ -142,8 +160,34 @@
     }).join('');
     select.innerHTML = options;
     select.value = String(store.activeEventId || '');
+    var activeEvent = null;
+    for (var i = 0; i < store.events.length; i += 1) {
+      if (store.events[i] && String(store.events[i].id) === String(store.activeEventId || '')) {
+        activeEvent = store.events[i];
+        break;
+      }
+    }
+    var meta = doc.querySelector('[data-event-meta]');
+    if (meta) {
+      meta.textContent = activeEvent
+        ? eventDateLabel(activeEvent.date) + ' · ' + eventStatusLabel(activeEvent.status)
+        : '행사를 선택하세요';
+    }
     return true;
   };
+
+  function eventDateLabel(value) {
+    var date = String(value === undefined || value === null ? '' : value);
+    var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+    if (!match) return date || '날짜 미정';
+    return Number(match[1]) + '년 ' + Number(match[2]) + '월 ' + Number(match[3]) + '일';
+  }
+
+  function eventStatusLabel(value) {
+    var status = String(value === undefined || value === null ? '' : value).trim().toUpperCase();
+    var labels = { PRE: '준비 중', LIVE: '진행 중', END: '종료' };
+    return labels[status] || '상태 미정';
+  }
 
   ETKO.selectLayer = function (layerId) {
     var layer = findLayer(layerId);
@@ -204,6 +248,7 @@
       ETKO.detailBypass = false;
     }
     ETKO.currentView = view;
+    setScreenDisplayMode(docOf(null), view === 'screen');
     paint(docOf(null));
     return ETKO.currentView;
   };

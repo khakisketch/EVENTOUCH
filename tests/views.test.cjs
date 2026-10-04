@@ -23,21 +23,21 @@ test('navigation layers group all canonical views in product order', () => {
   assert.deepEqual(ETKO.layerRegistry(), [
     {
       id: 'agency',
-      label: '대행사',
+      label: '전체 현장',
       defaultView: 'agency-home',
-      views: ['agency-home', 'agency-events', 'agency-clients', 'agency-team'],
+      views: ['agency-home', 'agency-events', 'agency-clients'],
     },
     {
       id: 'event',
-      label: '행사',
+      label: '준비',
       defaultView: 'overview',
-      views: ['overview', 'participants', 'engage', 'content', 'messages', 'stage'],
+      views: ['overview', 'agency-team', 'participants', 'content', 'messages'],
     },
     {
       id: 'onsite',
-      label: '현장',
+      label: '당일 운영',
       defaultView: 'checkin',
-      views: ['checkin', 'booth'],
+      views: ['checkin', 'booth', 'engage', 'stage'],
     },
     {
       id: 'participant',
@@ -47,7 +47,7 @@ test('navigation layers group all canonical views in product order', () => {
     },
     {
       id: 'screen',
-      label: '스크린',
+      label: '관객 화면',
       defaultView: 'screen',
       views: ['screen'],
     },
@@ -58,16 +58,16 @@ test('navigation layers group all canonical views in product order', () => {
       ['agency-home', 'agency'],
       ['agency-events', 'agency'],
       ['agency-clients', 'agency'],
-      ['agency-team', 'agency'],
+      ['agency-team', 'event'],
       ['overview', 'event'],
       ['participants', 'event'],
       ['checkin', 'onsite'],
       ['booth', 'onsite'],
       ['participant', 'participant'],
-      ['engage', 'event'],
+      ['engage', 'onsite'],
       ['content', 'event'],
       ['messages', 'event'],
-      ['stage', 'event'],
+      ['stage', 'onsite'],
       ['screen', 'screen'],
     ]
   );

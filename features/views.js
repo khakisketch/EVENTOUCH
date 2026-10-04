@@ -11,25 +11,25 @@
     { id: 'agency-home', section: 'agency-home-view', mount: 'agency-home-mount', labelKey: 'agency-home', layer: 'agency' },
     { id: 'agency-events', section: 'agency-events-view', mount: 'agency-events-mount', labelKey: 'agency-events', layer: 'agency' },
     { id: 'agency-clients', section: 'agency-clients-view', mount: 'agency-clients-mount', labelKey: 'agency-clients', layer: 'agency' },
-    { id: 'agency-team', section: 'agency-team-view', mount: 'agency-team-mount', labelKey: 'agency-team', layer: 'agency' },
+    { id: 'agency-team', section: 'agency-team-view', mount: 'agency-team-mount', labelKey: 'agency-team', layer: 'event' },
     { id: 'overview', section: 'overview-view', mount: 'overview-mount', labelKey: 'overview', layer: 'event' },
     { id: 'participants', section: 'participants-view', mount: 'people-list', labelKey: 'participants', layer: 'event' },
     { id: 'checkin', section: 'checkin-view', mount: 'checkin-mount', labelKey: 'checkin', layer: 'onsite' },
     { id: 'booth', section: 'booth-view', mount: 'booth-mount', labelKey: 'booth', layer: 'onsite' },
     { id: 'participant', section: 'participant-view', mount: 'home-mount', labelKey: 'participant', layer: 'participant' },
-    { id: 'engage', section: 'engage-view', mount: 'engage-mount', labelKey: 'engage', layer: 'event' },
+    { id: 'engage', section: 'engage-view', mount: 'engage-mount', labelKey: 'engage', layer: 'onsite' },
     { id: 'content', section: 'content-view', mount: 'content-mount', labelKey: 'content', layer: 'event' },
     { id: 'messages', section: 'messages-view', mount: 'messages-mount', labelKey: 'messages', layer: 'event' },
-    { id: 'stage', section: 'stage-view', mount: 'stage-mount', labelKey: 'stage', layer: 'event' },
+    { id: 'stage', section: 'stage-view', mount: 'stage-mount', labelKey: 'stage', layer: 'onsite' },
     { id: 'screen', section: 'screen-view', mount: 'screen-mount', labelKey: 'screen', layer: 'screen' },
   ];
 
   var LAYERS = [
-    { id: 'agency', label: '대행사', defaultView: 'agency-home', views: ['agency-home', 'agency-events', 'agency-clients', 'agency-team'] },
-    { id: 'event', label: '행사', defaultView: 'overview', views: ['overview', 'participants', 'engage', 'content', 'messages', 'stage'] },
-    { id: 'onsite', label: '현장', defaultView: 'checkin', views: ['checkin', 'booth'] },
+    { id: 'agency', label: '전체 현장', defaultView: 'agency-home', views: ['agency-home', 'agency-events', 'agency-clients'] },
+    { id: 'event', label: '준비', defaultView: 'overview', views: ['overview', 'agency-team', 'participants', 'content', 'messages'] },
+    { id: 'onsite', label: '당일 운영', defaultView: 'checkin', views: ['checkin', 'booth', 'engage', 'stage'] },
     { id: 'participant', label: '참가자', defaultView: 'participant', views: ['participant'] },
-    { id: 'screen', label: '스크린', defaultView: 'screen', views: ['screen'] },
+    { id: 'screen', label: '관객 화면', defaultView: 'screen', views: ['screen'] },
   ];
 
   function copy(entry) {
