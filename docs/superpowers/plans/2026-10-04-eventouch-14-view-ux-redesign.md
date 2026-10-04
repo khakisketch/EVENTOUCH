@@ -112,8 +112,8 @@
 - [x] **Step 4: Write failing error-recovery tests** for a rejected program, notice, campaign, ticket lookup and booth quantity; assert the error targets the relevant field and the entered non-invalid values survive rerender.
 - [x] **Step 5: Run the focused form tests and verify RED** against the existing whole-screen alert and cleared values.
 - [x] **Step 6: Implement view-scoped form draft/error state and first-invalid focus** in the owning renderers; use semantic quantity inputs without changing scan or booth data rules. No manual ticket-code input exists in the current check-in UI, so existing file/camera and desk intake remain unchanged.
-- [x] **Step 7: Run the plan-focused form/navigation suite and verify GREEN**; additional signup, desk-history, theme and full-suite checks are recorded in the task ledger.
-- [ ] **Step 8: Commit Task 4** as `feat: improve form controls and recovery` after `git diff --check`.
+- [x] **Step 7: Run `node --test tests/content-ui.test.cjs tests/messaging-ui.test.cjs tests/participant-ui.test.cjs tests/registration.test.cjs tests/signup-ui.test.cjs tests/booths.test.cjs tests/booth-manage.test.cjs tests/desk-ui.test.cjs tests/desk-history-ui.test.cjs tests/nav.test.cjs` and verify GREEN; full-suite result is recorded in the task ledger.**
+- [x] **Step 8: Commit Task 4** as `feat: improve form controls and recovery` after `git diff --check`.
 
 ### Task 5: Workspace overview, participant directory and day-of operations
 
