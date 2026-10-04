@@ -98,7 +98,7 @@
 
 **Files:**
 - Modify: `features/content.js`, `features/messaging.js`, `features/registration.js`, `features/booth.js`, `features/booths.js`, `features/desks.js`, `features/checkin.js`, `index.html`, and `styles/theme.css` as required by the generated artifact.
-- Modify tests: `tests/content-ui.test.cjs`, `tests/messaging-ui.test.cjs`, `tests/participant-ui.test.cjs`, `tests/registration.test.cjs`, `tests/booths.test.cjs`, `tests/booth-manage.test.cjs`, `tests/desk-ui.test.cjs`, and `tests/nav.test.cjs`.
+- Modify tests: `tests/content-ui.test.cjs`, `tests/messaging-ui.test.cjs`, `tests/participant-ui.test.cjs`, `tests/registration.test.cjs`, `tests/signup-ui.test.cjs`, `tests/booths.test.cjs`, `tests/booth-manage.test.cjs`, `tests/desk-ui.test.cjs`, `tests/desk-history-ui.test.cjs`, and `tests/nav.test.cjs`.
 
 **Interfaces:**
 - Keep every existing data function, route, feature, persistence wrapper and simulation boundary; this task changes presentation and form recovery only.
@@ -106,13 +106,13 @@
 - Keep persistent visible labels on existing controls, associate field errors with their controls, focus the first invalid field after a failed action, and preserve draft values through validation rerenders.
 - Do not add camera/device functionality; keep ticket/QR entry and simulation behavior as-is.
 
-- [ ] **Step 1: Write failing renderer tests** for program `time` controls, message/notice `textarea`s, persistent labels, and dynamic signup email/phone field types.
-- [ ] **Step 2: Run `node --test tests/content-ui.test.cjs tests/messaging-ui.test.cjs tests/participant-ui.test.cjs` and verify RED** on current text-only inputs and missing visible labels.
-- [ ] **Step 3: Implement only the required semantic control markup** in content, messaging and signup/lookup renderers; preserve existing field IDs and stored payloads.
-- [ ] **Step 4: Write failing error-recovery tests** for a rejected program, notice, campaign, ticket lookup and booth quantity; assert the error targets the relevant field and the entered non-invalid values survive rerender.
-- [ ] **Step 5: Run the focused form tests and verify RED** against the existing whole-screen alert and cleared values.
-- [ ] **Step 6: Implement view-scoped form draft/error state and first-invalid focus** in the owning renderers; change check-in ticket and numeric quantity controls to semantic types without changing scan or booth data rules.
-- [ ] **Step 7: Run `node --test tests/content-ui.test.cjs tests/messaging-ui.test.cjs tests/participant-ui.test.cjs tests/registration.test.cjs tests/booths.test.cjs tests/booth-manage.test.cjs tests/desk-ui.test.cjs tests/nav.test.cjs` and verify GREEN.**
+- [x] **Step 1: Write failing renderer tests** for program `time` controls, message/notice `textarea`s, persistent labels, and dynamic signup email/phone field types.
+- [x] **Step 2: Run the renderer tests and verify RED** on current text-only inputs and missing visible labels.
+- [x] **Step 3: Implement only the required semantic control markup** in content, messaging and signup/lookup renderers; preserve existing field IDs and stored payloads.
+- [x] **Step 4: Write failing error-recovery tests** for a rejected program, notice, campaign, ticket lookup and booth quantity; assert the error targets the relevant field and the entered non-invalid values survive rerender.
+- [x] **Step 5: Run the focused form tests and verify RED** against the existing whole-screen alert and cleared values.
+- [x] **Step 6: Implement view-scoped form draft/error state and first-invalid focus** in the owning renderers; use semantic quantity inputs without changing scan or booth data rules. No manual ticket-code input exists in the current check-in UI, so existing file/camera and desk intake remain unchanged.
+- [x] **Step 7: Run the plan-focused form/navigation suite and verify GREEN**; additional signup, desk-history, theme and full-suite checks are recorded in the task ledger.
 - [ ] **Step 8: Commit Task 4** as `feat: improve form controls and recovery` after `git diff --check`.
 
 ### Task 5: Workspace overview, participant directory and day-of operations

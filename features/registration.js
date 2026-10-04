@@ -227,33 +227,79 @@
       .replace(/'/g, '&#39;');
   }
 
+  function signupUiState() {
+    if (!ETKO.signupUi || typeof ETKO.signupUi !== 'object') ETKO.signupUi = {};
+    if (!ETKO.signupUi.events || typeof ETKO.signupUi.events !== 'object') ETKO.signupUi.events = {};
+    var eventId = String(ETKO.store && ETKO.store.activeEventId || 'default');
+    if (!ETKO.signupUi.events[eventId]) ETKO.signupUi.events[eventId] = { draft: null, error: null };
+    return ETKO.signupUi.events[eventId];
+  }
+
+  function signupFieldAttrs(state, field, id) {
+    return state.error && state.error.field === field
+      ? ' aria-invalid="true" aria-describedby="' + escapeHtml(id) + '"'
+      : ' aria-invalid="false"';
+  }
+
+  function signupFieldError(state, field, id) {
+    if (!state.error || state.error.field !== field) return '';
+    return '<p class="field-error" id="' + escapeHtml(id) + '" role="alert">' + escapeHtml(state.error.message) + '</p>';
+  }
+
+  function signupErrorField(fields, message) {
+    for (var i = 0; i < fields.length; i += 1) {
+      var label = String(fields[i].label || '');
+      if (label && message.indexOf(label) !== -1) return fields[i].id;
+    }
+    return null;
+  }
+
+  function focusSignupError(container, field) {
+    if (!container || !field || typeof container.querySelector !== 'function') return;
+    var control = container.querySelector('[data-signup-' + field + ']');
+    if (control && typeof control.focus === 'function') control.focus();
+  }
+
   // Mobile signup mount: renders the active form with required marks and
   // select options, submits to registerSelf(), shows the ticket code on success
   // and a field-named Korean alert on failure.
   ETKO.renderSignup = function (container) {
     var fields = ETKO.formFields();
+    var state = signupUiState();
     var rows = fields.map(function (f) {
       var req = f.required ? ' <span>필수</span>' : '';
       var input = '';
       if (f.type === 'select' && Array.isArray(f.options)) {
+        var selected = state.draft && state.draft[f.id];
         input =
-          '<select data-signup-' + escapeHtml(f.id) + ' aria-label="' + escapeHtml(f.label) + '">' +
-          '<option value="">선택하세요</option>' +
+          '<select data-signup-' + escapeHtml(f.id) + (f.required ? ' required' : '') + ' aria-label="' + escapeHtml(f.label) + '"' + signupFieldAttrs(state, f.id, 'signup-' + f.id + '-error') + '>' +
+          '<option value=""' + (!selected ? ' selected' : '') + '>선택하세요</option>' +
           f.options.map(function (o) {
-            return '<option value="' + escapeHtml(o) + '">' + escapeHtml(o) + '</option>';
+            return '<option value="' + escapeHtml(o) + '"' + (selected === o ? ' selected' : '') + '>' + escapeHtml(o) + '</option>';
           }).join('') +
           '</select>';
+      } else if (f.type === 'checkbox') {
+        input = '<input data-signup-' + escapeHtml(f.id) + ' type="checkbox"' + (f.required ? ' required' : '') +
+          (state.draft && state.draft[f.id] ? ' checked' : '') + ' aria-label="' + escapeHtml(f.label) + '"' +
+          signupFieldAttrs(state, f.id, 'signup-' + f.id + '-error') + ' />';
       } else {
+        var inputType = f.type === 'email' ? 'email' : f.id === 'phone' ? 'tel' : 'text';
+        var autocomplete = f.id === 'phone' ? ' autocomplete="tel" inputmode="tel"' : f.id === 'email' ? ' autocomplete="email"' : f.id === 'name' ? ' autocomplete="name"' : '';
         input =
-          '<input data-signup-' + escapeHtml(f.id) + ' type="text" aria-label="' + escapeHtml(f.label) + '" />';
+          '<input data-signup-' + escapeHtml(f.id) + ' type="' + inputType + '"' + (f.required ? ' required' : '') + autocomplete +
+          ' value="' + escapeHtml(state.draft && state.draft[f.id]) + '" aria-label="' + escapeHtml(f.label) + '"' +
+          signupFieldAttrs(state, f.id, 'signup-' + f.id + '-error') + ' />';
       }
-      return '<div class="field"><label>' + escapeHtml(f.label) + req + '</label>' + input + '</div>';
+      return '<div class="field"><label>' + escapeHtml(f.label) + req + input + '</label>' +
+        signupFieldError(state, f.id, 'signup-' + f.id + '-error') + '</div>';
     }).join('');
     var html =
       '<section aria-label="참가 신청"><h2>참가 신청</h2>' +
       rows +
       '<button type="button" data-signup-submit>신청하기</button></section>';
-    if (ETKO.lastSignupError) {
+    if (state.error && !state.error.field) {
+      html += '<p role="alert">' + escapeHtml(state.error.message) + '</p>';
+    } else if (ETKO.lastSignupError && !state.error) {
       html += '<p role="alert">' + escapeHtml(ETKO.lastSignupError) + '</p>';
     }
     if (ETKO.lastSignupTicket) {
@@ -270,21 +316,29 @@
       Array.prototype.forEach.call(container.querySelectorAll('[data-signup-submit]'), function (btn) {
         if (typeof btn.addEventListener !== 'function') return;
         btn.addEventListener('click', function () {
+          var state = signupUiState();
           ETKO.lastSignupError = null;
           ETKO.lastSignupTicket = null;
+          state.error = null;
           try {
             var payload = {};
             fields.forEach(function (f) {
               var el = container.querySelector ? container.querySelector('[data-signup-' + f.id + ']') : null;
-              payload[f.id] = el && el.value !== undefined ? el.value : '';
+              payload[f.id] = f.type === 'checkbox'
+                ? !!(el && el.checked)
+                : el && el.value !== undefined ? el.value : '';
             });
+            state.draft = payload;
             var signupFn = typeof ETKO.registerSelf === 'function' ? ETKO.registerSelf : ETKO.register;
             var created = signupFn(payload);
             ETKO.lastSignupTicket = created.code || created.ticket || '';
+            state.draft = null;
           } catch (err) {
             ETKO.lastSignupError = err && err.message ? err.message : '신청하지 못했습니다';
+            state.error = { message: ETKO.lastSignupError, field: signupErrorField(fields, ETKO.lastSignupError) };
           }
           ETKO.renderSignup(container);
+          if (state.error) focusSignupError(container, state.error.field);
         });
       });
     }

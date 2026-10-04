@@ -42,6 +42,25 @@ function manageBox(ETKO, fields, handlers) {
   return box;
 }
 
+function invalidManageBox(ETKO, values) {
+  const handlers = {};
+  const fields = {};
+  Object.keys(values).forEach((attr) => {
+    fields[attr] = { value: values[attr], focused: false, focus() { this.focused = true; } };
+  });
+  const button = { addEventListener(type, fn) { if (type === 'click') handlers.add = fn; } };
+  const box = {
+    handlers, fields, innerHTML: '',
+    querySelector(selector) {
+      const match = /^\[([^\]]+)\]$/.exec(selector);
+      return match ? fields[match[1]] || null : null;
+    },
+    querySelectorAll(selector) { return selector === '[data-booth-add]' ? [button] : []; },
+  };
+  ETKO.renderBoothManage(box);
+  return box;
+}
+
 test('manage lists booth payload, QR, and remaining counts', () => {
   const ETKO = fresh();
   ETKO.saveBooth({ name: '관리부스', capacity: 10, limit: 2, status: 'OPEN' });
@@ -52,6 +71,31 @@ test('manage lists booth payload, QR, and remaining counts', () => {
   assert.match(box.innerHTML, /<svg[^>]*viewBox/);
   assert.match(box.innerHTML, /남은 10개/);
   assert.match(box.innerHTML, /data-booth-add/);
+});
+
+test('booth quantities use labeled integer number inputs', () => {
+  const ETKO = fresh();
+  const box = { innerHTML: '', querySelectorAll() { return []; }, querySelector() { return null; } };
+  ETKO.renderBoothManage(box);
+  assert.match(box.innerHTML, /<label>수량<input data-booth-capacity type="number" min="1" step="1"/);
+  assert.match(box.innerHTML, /<label>1인 횟수<input data-booth-limit type="number" min="1" step="1"/);
+});
+
+test('invalid booth capacity stays in its field and receives focused inline error', () => {
+  const ETKO = fresh();
+  const box = invalidManageBox(ETKO, {
+    'data-booth-name': '체험 부스',
+    'data-booth-capacity': '',
+    'data-booth-limit': '2',
+    'data-booth-status-select': 'OPEN',
+  });
+  box.handlers.add();
+  assert.equal(ETKO.workspace().booths.length, 0);
+  assert.match(box.innerHTML, /data-booth-capacity[^>]*aria-invalid="true"/);
+  assert.match(box.innerHTML, /id="booth-capacity-error"[^>]*>부스 수량을 확인하세요/);
+  assert.match(box.innerHTML, /value="체험 부스"/);
+  assert.match(box.innerHTML, /value="2"/);
+  assert.equal(box.fields['data-booth-capacity'].focused, true);
 });
 
 test('manage add creates a booth, bad input alerts in Korean', () => {

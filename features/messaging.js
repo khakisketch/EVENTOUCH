@@ -214,11 +214,71 @@
       .replace(/'/g, '&#39;');
   }
 
+  function messagingState() {
+    if (!ETKO.messagingUi || typeof ETKO.messagingUi !== 'object') ETKO.messagingUi = {};
+    if (!ETKO.messagingUi.events || typeof ETKO.messagingUi.events !== 'object') ETKO.messagingUi.events = {};
+    var eventId = String(ETKO.store && ETKO.store.activeEventId || 'default');
+    if (!ETKO.messagingUi.events[eventId]) {
+      ETKO.messagingUi.events[eventId] = { drafts: {}, errors: {}, pageError: null };
+    }
+    return ETKO.messagingUi.events[eventId];
+  }
+
+  function formFieldAttrs(state, form, field, id) {
+    var error = state.errors[form];
+    return error && error.field === field
+      ? ' aria-invalid="true" aria-describedby="' + escapeHtml(id) + '"'
+      : ' aria-invalid="false"';
+  }
+
+  function formFieldError(state, form, field, id) {
+    var error = state.errors[form];
+    if (!error || error.field !== field) return '';
+    return '<p class="field-error" id="' + escapeHtml(id) + '" role="alert">' + escapeHtml(error.message) + '</p>';
+  }
+
+  function formValue(state, form, field) {
+    var draft = state.drafts[form] || {};
+    return escapeHtml(draft[field] || '');
+  }
+
+  function optionSelected(state, form, field, value, fallback) {
+    var draft = state.drafts[form] || {};
+    var selected = draft[field] === undefined ? fallback : draft[field];
+    return String(selected) === String(value) ? ' selected' : '';
+  }
+
+  function messageErrorField(form, message) {
+    if (form === 'template') {
+      if (message.indexOf('템플릿명') !== -1) return 'name';
+      if (message.indexOf('메시지 내용') !== -1) return 'content';
+      if (message.indexOf('채널') !== -1) return 'channel';
+    } else if (form === 'campaign') {
+      if (message.indexOf('캠페인 이름') !== -1) return 'title';
+      if (message.indexOf('메시지') !== -1) return 'content';
+      if (message.indexOf('발송 채널') !== -1) return 'channel';
+      if (message.indexOf('발송 대상') !== -1 || message.indexOf('참가자 상태') !== -1) return 'target';
+    }
+    return null;
+  }
+
+  function focusMessageField(container, form, field) {
+    if (!container || !field || typeof container.querySelector !== 'function') return;
+    var attrs = {
+      template: { name: 'data-template-name', channel: 'data-template-channel', content: 'data-template-content' },
+      campaign: { title: 'data-campaign-title', channel: 'data-campaign-channel', target: 'data-campaign-target', content: 'data-campaign-content' },
+    };
+    var attr = attrs[form] && attrs[form][field];
+    var control = attr ? container.querySelector('[' + attr + ']') : null;
+    if (control && typeof control.focus === 'function') control.focus();
+  }
+
   // Management mount renderer: templates + campaign compose + campaign
   // list with send + simulated outbox. Errors surface as role=alert.
   // Uses the slice-ensuring messagingWorkspace() above.
   ETKO.renderMessaging = function (container) {
     var ws = messagingWorkspace();
+    var state = messagingState();
     var templates = (ws.templates || []).map(function (t) {
       return (
         '<li class="card">' + escapeHtml(t.name) + ' · ' + escapeHtml(t.channel) +
@@ -241,28 +301,39 @@
     var outboxRows = outbox.map(function (o) {
       return '<li class="card">' + escapeHtml(o.title || '') + ' · ' + escapeHtml(o.channel || '') + ' · ' + (o.toCount || 0) + '명 · SIMULATION_ONLY</li>';
     }).join('');
-    var channelOptions = CHANNELS.map(function (c) {
-      return '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>';
+    function channelOptions(form) {
+      return CHANNELS.map(function (c) {
+        return '<option value="' + escapeHtml(c) + '"' + optionSelected(state, form, 'channel', c, '알림톡') + '>' + escapeHtml(c) + '</option>';
+      }).join('');
+    }
+    var targetOptions = ['전체', '체크인 참가자', '미입장 참가자', '선택 참가자'].map(function (target) {
+      var label = target === '전체' ? '전체 참가자' : target;
+      return '<option value="' + escapeHtml(target) + '"' + optionSelected(state, 'campaign', 'target', target, '전체') + '>' + escapeHtml(label) + '</option>';
     }).join('');
     var html =
       '<section aria-label="메시지 템플릿 관리"><h2>템플릿</h2>' +
       '<ul class="cards">' + (templates || '<li class="card" data-empty><p role="status">저장된 템플릿이 없습니다</p></li>') + '</ul>' +
-      '<div class="inline-form"><div class="field"><input data-template-name type="text" placeholder="템플릿 이름" aria-label="템플릿 이름" /></div>' +
-      '<div class="field"><select data-template-channel aria-label="템플릿 채널">' + channelOptions + '</select></div>' +
-      '<div class="field"><input data-template-content type="text" placeholder="메시지 내용" aria-label="템플릿 내용" /></div>' +
+      '<div class="inline-form"><div class="field"><label>템플릿 이름<input data-template-name type="text" required value="' + formValue(state, 'template', 'name') + '" aria-label="템플릿 이름"' + formFieldAttrs(state, 'template', 'name', 'template-name-error') + ' /></label>' +
+      formFieldError(state, 'template', 'name', 'template-name-error') + '</div>' +
+      '<div class="field"><label>채널<select data-template-channel aria-label="템플릿 채널">' + channelOptions('template') + '</select></label>' +
+      formFieldError(state, 'template', 'channel', 'template-channel-error') + '</div>' +
+      '<div class="field"><label>템플릿 내용<textarea data-template-content rows="4" required aria-label="템플릿 내용"' + formFieldAttrs(state, 'template', 'content', 'template-content-error') + '>' + formValue(state, 'template', 'content') + '</textarea></label>' +
+      formFieldError(state, 'template', 'content', 'template-content-error') + '</div>' +
       '<button type="button" data-template-save>템플릿 저장</button></div></section>' +
       '<section aria-label="캠페인 작성"><h2>캠페인</h2>' +
-      '<div class="inline-form"><div class="field"><input data-campaign-title type="text" placeholder="캠페인 이름" aria-label="캠페인 이름" /></div>' +
-      '<div class="field"><select data-campaign-channel aria-label="발송 채널">' + channelOptions + '</select></div>' +
-      '<div class="field"><select data-campaign-target aria-label="발송 대상"><option value="전체">전체 참가자</option><option value="체크인 참가자">체크인 참가자</option><option value="미입장 참가자">미입장 참가자</option><option value="선택 참가자">선택 참가자</option></select></div>' +
-      '<div class="field"><input data-campaign-content type="text" placeholder="메시지" aria-label="캠페인 메시지" /></div>' +
+      '<div class="inline-form"><div class="field"><label>캠페인 이름<input data-campaign-title type="text" required value="' + formValue(state, 'campaign', 'title') + '" aria-label="캠페인 이름"' + formFieldAttrs(state, 'campaign', 'title', 'campaign-title-error') + ' /></label>' +
+      formFieldError(state, 'campaign', 'title', 'campaign-title-error') + '</div>' +
+      '<div class="field"><label>채널<select data-campaign-channel aria-label="발송 채널">' + channelOptions('campaign') + '</select></label>' +
+      formFieldError(state, 'campaign', 'channel', 'campaign-channel-error') + '</div>' +
+      '<div class="field"><label>발송 대상<select data-campaign-target aria-label="발송 대상">' + targetOptions + '</select></label>' +
+      formFieldError(state, 'campaign', 'target', 'campaign-target-error') + '</div>' +
+      '<div class="field"><label>캠페인 메시지<textarea data-campaign-content rows="5" required aria-label="캠페인 메시지"' + formFieldAttrs(state, 'campaign', 'content', 'campaign-content-error') + '>' + formValue(state, 'campaign', 'content') + '</textarea></label>' +
+      formFieldError(state, 'campaign', 'content', 'campaign-content-error') + '</div>' +
       '<button type="button" data-campaign-save>초안 저장</button></div>' +
       '<ul class="cards">' + (campaigns || '<li class="card" data-empty><p role="status">작성된 캠페인이 없습니다</p></li>') + '</ul></section>' +
       '<section aria-label="발송함"><h2>발송함</h2>' +
       '<ul class="cards">' + (outboxRows || '<li class="card" data-empty><p role="status">발송 기록이 없습니다</p></li>') + '</ul></section>';
-    if (ETKO.lastMessagingError) {
-      html += '<p role="alert">' + escapeHtml(ETKO.lastMessagingError) + '</p>';
-    }
+    if (state.pageError) html += '<p role="alert">' + escapeHtml(state.pageError) + '</p>';
     container.innerHTML = html;
     wireMessaging(container);
     return container.innerHTML;
@@ -275,38 +346,64 @@
 
   function wireMessaging(container) {
     if (!container || !container.querySelectorAll) return;
-    function onAttr(attr, fn) {
+    function onAttr(attr, fn, form) {
       Array.prototype.forEach.call(container.querySelectorAll('[' + attr + ']'), function (btn) {
         if (btn.tagName === 'INPUT' || btn.tagName === 'SELECT') return;
         if (typeof btn.addEventListener !== 'function') return;
         btn.addEventListener('click', function () {
+          var state = messagingState();
           ETKO.lastMessagingError = null;
+          state.pageError = null;
           try {
             fn(btn);
+            if (form) {
+              state.drafts[form] = null;
+              state.errors[form] = null;
+            }
           } catch (err) {
-            ETKO.lastMessagingError = err && err.message ? err.message : '처리하지 못했습니다';
+            var message = err && err.message ? err.message : '처리하지 못했습니다';
+            ETKO.lastMessagingError = message;
+            if (form) {
+              var field = messageErrorField(form, message);
+              state.errors[form] = { message: message, field: field };
+              if (!field) state.pageError = message;
+            } else {
+              state.pageError = message;
+            }
           }
           if (typeof ETKO.renderMessaging === 'function') {
             try {
               ETKO.renderMessaging(container);
             } catch (err) {}
           }
+          if (form && state.errors[form]) {
+            focusMessageField(container, form, state.errors[form].field);
+          }
         });
       });
     }
     onAttr('data-template-save', function () {
-      ETKO.saveTemplate({
+      var state = messagingState();
+      state.drafts.template = {
         name: fieldValue(container, 'data-template-name'),
         channel: fieldValue(container, 'data-template-channel') || 'SMS',
         content: fieldValue(container, 'data-template-content'),
-      });
-    });
+      };
+      ETKO.saveTemplate(state.drafts.template);
+    }, 'template');
     onAttr('data-template-del', function (btn) {
       ETKO.deleteTemplate(btn.getAttribute('data-template-del'));
     });
     onAttr('data-campaign-save', function () {
+      var state = messagingState();
       var ws = messagingWorkspace();
-      var target = fieldValue(container, 'data-campaign-target') || '전체';
+      state.drafts.campaign = {
+        title: fieldValue(container, 'data-campaign-title'),
+        channel: fieldValue(container, 'data-campaign-channel') || 'SMS',
+        target: fieldValue(container, 'data-campaign-target') || '전체',
+        content: fieldValue(container, 'data-campaign-content'),
+      };
+      var target = state.drafts.campaign.target;
       var pool = ws.participants.filter(function (p) {
         return p && !p.cancelled;
       });
@@ -328,13 +425,13 @@
         ids = pool.map(function (p) { return p.id; });
       }
       ETKO.createCampaign({
-        title: fieldValue(container, 'data-campaign-title'),
-        channel: fieldValue(container, 'data-campaign-channel') || 'SMS',
+        title: state.drafts.campaign.title,
+        channel: state.drafts.campaign.channel,
         target: target,
         recipientIds: ids,
-        content: fieldValue(container, 'data-campaign-content'),
+        content: state.drafts.campaign.content,
       });
-    });
+    }, 'campaign');
     onAttr('data-campaign-send', function (btn) {
       if (typeof ETKO.sendCampaign !== 'function') throw new Error('발송 기능을 확인할 수 없습니다');
       ETKO.sendCampaign(btn.getAttribute('data-campaign-send'));

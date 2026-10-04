@@ -9,6 +9,40 @@ function fresh() {
   return globalThis.ETKO;
 }
 
+function formBox(values, actions) {
+  const handlers = {};
+  const fields = {};
+  const buttons = {};
+  Object.keys(values).forEach((attr) => {
+    fields[attr] = {
+      value: values[attr], focused: false,
+      focus() { this.focused = true; },
+    };
+  });
+  (actions || []).forEach((action) => {
+    buttons[action.attr] = {
+      tagName: 'BUTTON',
+      getAttribute(name) { return name === action.attr ? action.value || '' : ''; },
+      addEventListener(type, handler) { if (type === 'click') handlers[action.key] = handler; },
+    };
+  });
+  return {
+    handlers, fields, innerHTML: '',
+    querySelector(selector) {
+      const match = /^\[([^\]=]+)(?:="([^"]+)")?\]$/.exec(selector);
+      if (!match) return null;
+      const key = match[2] ? match[1] + '="' + match[2] + '"' : match[1];
+      return fields[key] || null;
+    },
+    querySelectorAll(selector) {
+      const match = /^\[([^\]]+)\]$/.exec(selector);
+      if (!match) return [];
+      const attr = match[1].split('=')[0];
+      return actions.filter((action) => action.attr === attr).map((action) => buttons[action.attr]);
+    },
+  };
+}
+
 test('desk section lists units with add and select', () => {
   const ETKO = fresh();
   ETKO.saveUnit({ name: 'A게이트', action: 'IN', mode: 'desk' });
@@ -17,6 +51,56 @@ test('desk section lists units with add and select', () => {
   assert.match(box.innerHTML, /A게이트/);
   assert.match(box.innerHTML, /data-unit-add/);
   assert.match(box.innerHTML, /data-unit-select/);
+});
+
+test('desk name, direction, and correction reason have persistent visible labels', () => {
+  const ETKO = fresh();
+  const person = ETKO.workspace().participants.find((item) => item.status !== 'IN');
+  const unit = ETKO.saveUnit({ name: 'A게이트', action: 'IN', mode: 'desk' });
+  ETKO.setActiveUnit(unit.id);
+  ETKO.submitTicket(person.code, 'IN');
+  const box = { innerHTML: '' };
+  ETKO.renderDesks(box);
+  assert.match(box.innerHTML, /<label>데스크 이름<input data-unit-name/);
+  assert.match(box.innerHTML, /<label>입장·퇴장 구분<select data-unit-action/);
+  assert.match(box.innerHTML, /<label>정정 사유 \(5~200자\)<input data-correct-reason=/);
+});
+
+test('invalid desk name stays local and preserves the selected direction', () => {
+  const ETKO = fresh();
+  const box = formBox({
+    'data-unit-name': '',
+    'data-unit-action': 'OUT',
+  }, [{ attr: 'data-unit-add', key: 'add' }]);
+  ETKO.renderDesks(box);
+  box.handlers.add();
+  assert.equal(ETKO.workspace().units.length, 0);
+  assert.match(box.innerHTML, /data-unit-name[^>]*aria-invalid="true"/);
+  assert.match(box.innerHTML, /id="unit-name-error"[^>]*>데스크 이름을 입력하세요/);
+  assert.match(box.innerHTML, /<option value="OUT" selected>퇴장<\/option>/);
+  assert.equal(box.fields['data-unit-name'].focused, true);
+});
+
+test('short correction reason stays in its row and receives focus', () => {
+  const ETKO = fresh();
+  const person = ETKO.workspace().participants.find((item) => item.status !== 'IN');
+  const unit = ETKO.saveUnit({ name: 'A게이트', action: 'IN', mode: 'desk' });
+  ETKO.setActiveUnit(unit.id);
+  ETKO.submitTicket(person.code, 'IN');
+  const log = ETKO.history()[0];
+  const reasonAttr = 'data-correct-reason="' + log.id + '"';
+  const box = formBox({
+    'data-unit-name': 'A게이트',
+    'data-unit-action': 'IN',
+    [reasonAttr]: '짧음',
+  }, [{ attr: 'data-correct-log', value: log.id, key: 'correct' }]);
+  ETKO.renderDesks(box);
+  box.handlers.correct();
+  assert.equal(ETKO.history()[0].action, 'IN', 'rejected correction must not create a new record');
+  assert.match(box.innerHTML, new RegExp('data-correct-reason="' + log.id + '"[^>]*aria-invalid="true"'));
+  assert.match(box.innerHTML, /정정 사유는 5자 이상 200자 이하로 입력하세요/);
+  assert.match(box.innerHTML, /value="짧음"/);
+  assert.equal(box.fields[reasonAttr].focused, true);
 });
 
 test('active unit selection validates existence', () => {

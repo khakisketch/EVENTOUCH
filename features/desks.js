@@ -30,6 +30,36 @@
     return ws;
   }
 
+  function deskUiState() {
+    if (!ETKO.deskUi || typeof ETKO.deskUi !== 'object') ETKO.deskUi = {};
+    if (!ETKO.deskUi.events || typeof ETKO.deskUi.events !== 'object') ETKO.deskUi.events = {};
+    var eventId = String(ETKO.store && ETKO.store.activeEventId || 'default');
+    if (!ETKO.deskUi.events[eventId]) {
+      ETKO.deskUi.events[eventId] = { unitDraft: null, unitError: null, corrections: {}, pageError: null };
+    }
+    return ETKO.deskUi.events[eventId];
+  }
+
+  function deskFieldAttrs(error, field, id) {
+    return error && error.field === field
+      ? ' aria-invalid="true" aria-describedby="' + id + '"'
+      : ' aria-invalid="false"';
+  }
+
+  function deskFieldError(error, field, id) {
+    if (!error || error.field !== field) return '';
+    return '<p class="field-error" id="' + id + '" role="alert">' + escapeHtml(error.message) + '</p>';
+  }
+
+  function focusDeskError(container, form, field, logId) {
+    if (!container || !field || typeof container.querySelector !== 'function') return;
+    var selector = form === 'correction'
+      ? '[data-correct-reason="' + logId + '"]'
+      : field === 'name' ? '[data-unit-name]' : '[data-unit-action]';
+    var control = container.querySelector(selector);
+    if (control && typeof control.focus === 'function') control.focus();
+  }
+
   function copyEntry(log) {
     var out = {};
     Object.keys(log || {}).forEach(function (key) {
@@ -241,6 +271,8 @@
   // correction follow in Task 2 via renderDesksHistory().
   ETKO.renderDesks = function (container) {
     var ws = deskWorkspace();
+    var state = deskUiState();
+    var draft = state.unitDraft || {};
     var rows = ws.units.map(function (u) {
       var active = ETKO.activeUnitId === u.id;
       return (
@@ -252,11 +284,14 @@
     var html =
       '<section aria-label="데스크 관리"><h2>데스크</h2>' +
       '<ul class="cards">' + (rows || '<li class="card" data-empty><p role="status">개설된 데스크가 없습니다</p></li>') + '</ul>' +
-      '<div class="inline-form"><div class="field"><input data-unit-name type="text" placeholder="데스크 이름" aria-label="데스크 이름" /></div>' +
-      '<div class="field"><select data-unit-action aria-label="입장 퇴장 구분"><option value="IN">입장</option><option value="OUT">퇴장</option></select></div>' +
+      '<div class="inline-form"><div class="field"><label>데스크 이름<input data-unit-name type="text" required value="' + escapeHtml(draft.name || '') + '" aria-label="데스크 이름"' + deskFieldAttrs(state.unitError, 'name', 'unit-name-error') + ' /></label>' +
+      deskFieldError(state.unitError, 'name', 'unit-name-error') + '</div>' +
+      '<div class="field"><label>입장·퇴장 구분<select data-unit-action aria-label="입장 퇴장 구분">' +
+      '<option value="IN"' + ((draft.action || 'IN') === 'IN' ? ' selected' : '') + '>입장</option>' +
+      '<option value="OUT"' + (draft.action === 'OUT' ? ' selected' : '') + '>퇴장</option></select></label></div>' +
       '<button type="button" data-unit-add>데스크 개설</button></div>' +
       ETKO.renderDesksHistory(ws) +
-      (ETKO.lastDeskError ? '<p role="alert">' + escapeHtml(ETKO.lastDeskError) + '</p>' : '') +
+      (state.pageError ? '<p role="alert">' + escapeHtml(state.pageError) + '</p>' : '') +
       '</section>';
     container.innerHTML = html;
     wireDesks(container);
@@ -264,7 +299,9 @@
   };
 
   // History section with correction entries and reason inputs.
-  ETKO.renderDesksHistory = function (wsArg) {    var ws = wsArg;
+  ETKO.renderDesksHistory = function (wsArg) {
+    var state = deskUiState();
+    var ws = wsArg;
     try {
       ws = wsArg || deskWorkspace();
     } catch (err) {
@@ -293,8 +330,10 @@
     var rows = logs.map(function (entry) {
       var correctBtn = '';
       if (entry && entry.action !== 'CORRECTION' && !entry.corrected) {
+        var correction = state.corrections[entry.id] || {};
         correctBtn =
-          ' <input data-correct-reason="' + escapeHtml(entry.id) + '" type="text" placeholder="정정 사유 5~200자" aria-label="정정 사유" />' +
+          ' <div class="field"><label>정정 사유 (5~200자)<input data-correct-reason="' + escapeHtml(entry.id) + '" type="text" minlength="5" maxlength="200" value="' + escapeHtml(correction.draft || '') + '" aria-label="정정 사유"' + deskFieldAttrs(correction.error, 'reason', 'correct-reason-error-' + escapeHtml(entry.id)) + ' /></label>' +
+          deskFieldError(correction.error, 'reason', 'correct-reason-error-' + escapeHtml(entry.id)) + '</div>' +
           ' <button type="button" data-correct-log="' + escapeHtml(entry.id) + '">정정</button>';
       }
       return (
@@ -315,7 +354,7 @@
       var reasonEl = container.querySelector ? container.querySelector('[data-correct-reason="' + id + '"]') : null;
       var reason = reasonEl && reasonEl.value !== undefined ? reasonEl.value : '';
       ETKO.correctLog(id, reason);
-    });
+    }, 'correction');
   };
 
   // History section is fully implemented above; no fallback needed.
@@ -327,33 +366,71 @@
 
   function wireDesks(container) {
     if (!container || !container.querySelectorAll) return;
-    function onAttr(attr, fn) {
+    function onAttr(attr, fn, form) {
       Array.prototype.forEach.call(container.querySelectorAll('[' + attr + ']'), function (btn) {
         if (btn.tagName === 'INPUT' || btn.tagName === 'SELECT') return;
         if (typeof btn.addEventListener !== 'function') return;
         btn.addEventListener('click', function () {
+          var state = deskUiState();
+          var logId = form === 'correction' && btn.getAttribute
+            ? btn.getAttribute('data-correct-log')
+            : null;
+          state.pageError = null;
+          if (form === 'unit') {
+            state.unitDraft = {
+              name: fieldValue(container, 'data-unit-name'),
+              action: fieldValue(container, 'data-unit-action') || 'IN',
+            };
+            state.unitError = null;
+          } else if (form === 'correction') {
+            var correction = state.corrections[logId] || {};
+            correction.draft = fieldValue(container, 'data-correct-reason="' + logId + '"');
+            correction.error = null;
+            state.corrections[logId] = correction;
+          }
           ETKO.lastDeskError = null;
           try {
             fn(btn);
+            if (form === 'unit') {
+              state.unitDraft = null;
+              state.unitError = null;
+            } else if (form === 'correction') {
+              delete state.corrections[logId];
+            }
           } catch (err) {
-            ETKO.lastDeskError = err && err.message ? err.message : '처리하지 못했습니다';
+            var message = err && err.message ? err.message : '처리하지 못했습니다';
+            ETKO.lastDeskError = message;
+            if (form === 'unit' && message.indexOf('데스크 이름') !== -1) {
+              state.unitError = { field: 'name', message: message };
+            } else if (form === 'unit' && message.indexOf('구분') !== -1) {
+              state.unitError = { field: 'action', message: message };
+            } else if (form === 'correction' && message.indexOf('정정 사유') !== -1) {
+              state.corrections[logId].error = { field: 'reason', message: message };
+            } else {
+              state.pageError = message;
+            }
           }
           if (typeof ETKO.renderDesks === 'function') {
             try {
               ETKO.renderDesks(container);
             } catch (err) {}
           }
+          if (form === 'unit' && state.unitError) {
+            focusDeskError(container, 'unit', state.unitError.field);
+          } else if (form === 'correction' && state.corrections[logId] && state.corrections[logId].error) {
+            focusDeskError(container, 'correction', 'reason', logId);
+          }
         });
       });
     }
     onAttr('data-unit-add', function () {
       var unit = ETKO.saveUnit({
-        name: fieldValue(container, 'data-unit-name'),
-        action: fieldValue(container, 'data-unit-action') || 'IN',
+        name: deskUiState().unitDraft.name,
+        action: deskUiState().unitDraft.action,
         mode: 'desk',
       });
       ETKO.setActiveUnit(unit.id);
-    });
+    }, 'unit');
     onAttr('data-unit-select', function (btn) {
       ETKO.setActiveUnit(btn.getAttribute('data-unit-select'));
     });

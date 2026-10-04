@@ -234,6 +234,40 @@
     }
   }
 
+  function boothUiState() {
+    if (!ETKO.boothUi || typeof ETKO.boothUi !== 'object') ETKO.boothUi = {};
+    if (!ETKO.boothUi.events || typeof ETKO.boothUi.events !== 'object') ETKO.boothUi.events = {};
+    var eventId = String(ETKO.store && ETKO.store.activeEventId || 'default');
+    if (!ETKO.boothUi.events[eventId]) ETKO.boothUi.events[eventId] = { draft: null, error: null, pageError: null };
+    return ETKO.boothUi.events[eventId];
+  }
+
+  function boothFieldAttrs(state, field, id) {
+    return state.error && state.error.field === field
+      ? ' aria-invalid="true" aria-describedby="' + escapeHtml(id) + '"'
+      : ' aria-invalid="false"';
+  }
+
+  function boothFieldError(state, field, id) {
+    if (!state.error || state.error.field !== field) return '';
+    return '<p class="field-error" id="' + escapeHtml(id) + '" role="alert">' + escapeHtml(state.error.message) + '</p>';
+  }
+
+  function boothErrorField(message) {
+    if (message.indexOf('부스 이름') !== -1) return 'name';
+    if (message.indexOf('부스 수량') !== -1 || message.indexOf('발급된 수량') !== -1) return 'capacity';
+    if (message.indexOf('1인당') !== -1) return 'limit';
+    if (message.indexOf('부스 상태') !== -1) return 'status';
+    return null;
+  }
+
+  function focusBoothError(container, field) {
+    if (!container || !field || typeof container.querySelector !== 'function') return;
+    var attrs = { name: 'data-booth-name', capacity: 'data-booth-capacity', limit: 'data-booth-limit', status: 'data-booth-status-select' };
+    var control = container.querySelector('[' + attrs[field] + ']');
+    if (control && typeof control.focus === 'function') control.focus();
+  }
+
   function latestPrint(ws, boothId) {
     var prints = ws && Array.isArray(ws.prints) ? ws.prints : [];
     for (var i = prints.length - 1; i >= 0; i -= 1) {
@@ -248,6 +282,8 @@
   // failures surface as Korean alerts.
   ETKO.renderBoothManage = function (container) {
     var ws = boothWorkspace();
+    var state = boothUiState();
+    var draft = state.draft || {};
     var writable = canWriteBooth();
     var modeLabel = ws.boothMode === 'STAFF' ? '직원 스캔' : '직접 스캔';
     var items = ws.booths.map(function (b) {
@@ -281,45 +317,64 @@
     if (writable) {
       html +=
         '<div class="inline-form">' +
-        '<div class="field"><label>부스 이름<input data-booth-name type="text" aria-label="부스 이름" /></label></div>' +
-        '<div class="field"><label>수량<input data-booth-capacity type="text" inputmode="numeric" aria-label="부스 수량" /></label></div>' +
-        '<div class="field"><label>1인 횟수<input data-booth-limit type="text" inputmode="numeric" aria-label="1인당 참여 횟수" /></label></div>' +
-        '<div class="field"><label>상태<select data-booth-status-select aria-label="부스 상태"><option value="OPEN">운영 중</option><option value="WAITING">대기 중</option><option value="CLOSED">종료</option></select></label></div>' +
+        '<div class="field"><label>부스 이름<input data-booth-name type="text" required value="' + escapeHtml(draft.name || '') + '" aria-label="부스 이름"' + boothFieldAttrs(state, 'name', 'booth-name-error') + ' /></label>' +
+        boothFieldError(state, 'name', 'booth-name-error') + '</div>' +
+        '<div class="field"><label>수량<input data-booth-capacity type="number" min="1" step="1" required value="' + escapeHtml(draft.capacity || '') + '" aria-label="부스 수량"' + boothFieldAttrs(state, 'capacity', 'booth-capacity-error') + ' /></label>' +
+        boothFieldError(state, 'capacity', 'booth-capacity-error') + '</div>' +
+        '<div class="field"><label>1인 횟수<input data-booth-limit type="number" min="1" step="1" required value="' + escapeHtml(draft.limit || '') + '" aria-label="1인당 참여 횟수"' + boothFieldAttrs(state, 'limit', 'booth-limit-error') + ' /></label>' +
+        boothFieldError(state, 'limit', 'booth-limit-error') + '</div>' +
+        '<div class="field"><label>상태<select data-booth-status-select aria-label="부스 상태"' + boothFieldAttrs(state, 'status', 'booth-status-error') + '>' +
+        '<option value="OPEN"' + ((draft.status || 'OPEN') === 'OPEN' ? ' selected' : '') + '>운영 중</option>' +
+        '<option value="WAITING"' + (draft.status === 'WAITING' ? ' selected' : '') + '>대기 중</option>' +
+        '<option value="CLOSED"' + (draft.status === 'CLOSED' ? ' selected' : '') + '>종료</option></select></label>' +
+        boothFieldError(state, 'status', 'booth-status-error') + '</div>' +
         '<button type="button" data-booth-add>부스 개설</button></div>';
     }
     html += '</section>';
-    if (ETKO.lastBoothError) {
-      html += '<p role="alert">' + escapeHtml(ETKO.lastBoothError) + '</p>';
-    }
+    if (state.pageError) html += '<p role="alert">' + escapeHtml(state.pageError) + '</p>';
     container.innerHTML = html;
     if (container.querySelectorAll) {
       Array.prototype.forEach.call(container.querySelectorAll('[data-booth-add]'), function (btn) {
         if (typeof btn.addEventListener !== 'function') return;
         btn.addEventListener('click', function () {
+          var state = boothUiState();
           ETKO.lastBoothError = null;
+          state.error = null;
+          state.pageError = null;
+          state.draft = {
+            name: fieldText(container, '[data-booth-name]'),
+            capacity: fieldText(container, '[data-booth-capacity]'),
+            limit: fieldText(container, '[data-booth-limit]'),
+            status: fieldText(container, '[data-booth-status-select]') || 'OPEN',
+          };
           try {
-            ETKO.saveBooth({
-              name: fieldText(container, '[data-booth-name]'),
-              capacity: fieldText(container, '[data-booth-capacity]'),
-              limit: fieldText(container, '[data-booth-limit]'),
-              status: fieldText(container, '[data-booth-status-select]') || 'OPEN',
-            });
+            ETKO.saveBooth(state.draft);
+            state.draft = null;
           } catch (err) {
-            ETKO.lastBoothError = err && err.message ? err.message : '부스를 개설하지 못했습니다';
+            var message = err && err.message ? err.message : '부스를 개설하지 못했습니다';
+            ETKO.lastBoothError = message;
+            var field = boothErrorField(message);
+            state.error = { message: message, field: field };
+            if (!field) state.pageError = message;
           }
           ETKO.renderBoothManage(container);
+          if (state.error) focusBoothError(container, state.error.field);
         });
       });
       Array.prototype.forEach.call(container.querySelectorAll('[data-booth-status]'), function (btn) {
         if (typeof btn.addEventListener !== 'function') return;
         btn.addEventListener('click', function () {
+          var state = boothUiState();
           ETKO.lastBoothError = null;
+          state.error = null;
+          state.pageError = null;
           try {
             var spec = btn.getAttribute ? String(btn.getAttribute('data-booth-status') || '') : '';
             var parts = spec.split(':');
             ETKO.setBoothStatus(parts[0], parts.slice(1).join(':'));
           } catch (err) {
             ETKO.lastBoothError = err && err.message ? err.message : '부스 상태를 변경하지 못했습니다';
+            state.pageError = ETKO.lastBoothError;
           }
           ETKO.renderBoothManage(container);
         });
@@ -327,12 +382,16 @@
       Array.prototype.forEach.call(container.querySelectorAll('[data-booth-print]'), function (btn) {
         if (typeof btn.addEventListener !== 'function') return;
         btn.addEventListener('click', function () {
+          var state = boothUiState();
           ETKO.lastBoothError = null;
+          state.error = null;
+          state.pageError = null;
           try {
             var id = btn.getAttribute ? btn.getAttribute('data-booth-print') : '';
             ETKO.markPrinted(id);
           } catch (err) {
             ETKO.lastBoothError = err && err.message ? err.message : '인쇄 확인을 기록하지 못했습니다';
+            state.pageError = ETKO.lastBoothError;
           }
           ETKO.renderBoothManage(container);
         });

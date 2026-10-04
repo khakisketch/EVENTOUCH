@@ -56,6 +56,33 @@
       .replace(/'/g, '&#39;');
   }
 
+  function lookupUiState() {
+    if (!ETKO.lookupUi || typeof ETKO.lookupUi !== 'object') ETKO.lookupUi = {};
+    if (!ETKO.lookupUi.events || typeof ETKO.lookupUi.events !== 'object') ETKO.lookupUi.events = {};
+    var eventId = String(ETKO.store && ETKO.store.activeEventId || 'default');
+    if (!ETKO.lookupUi.events[eventId]) ETKO.lookupUi.events[eventId] = { draft: null, error: null };
+    return ETKO.lookupUi.events[eventId];
+  }
+
+  function lookupFieldAttrs(state, field, id) {
+    return state.error && state.error.field === field
+      ? ' aria-invalid="true" aria-describedby="' + escapeHtml(id) + '"'
+      : ' aria-invalid="false"';
+  }
+
+  function lookupFieldError(state, field, id) {
+    if (!state.error || state.error.field !== field) return '';
+    return '<p class="field-error" id="' + escapeHtml(id) + '" role="alert">' + escapeHtml(state.error.message) + '</p>';
+  }
+
+  function focusLookupError(container, outer, field) {
+    if (!field) return;
+    var root = outer && typeof outer.querySelector === 'function' ? outer : container;
+    if (!root || typeof root.querySelector !== 'function') return;
+    var control = root.querySelector('[data-lookup-' + field + ']');
+    if (control && typeof control.focus === 'function') control.focus();
+  }
+
   // Render the booth desk mode switch. Korean copy only; never renders the
   // raw SELF/STAFF keys. Wires the toggle when the container supports queries.
   ETKO.renderBooth = function (container) {
@@ -168,30 +195,46 @@
   // On success binds homeParticipantId and re-renders the outer mount;
   // on failure surfaces a Korean alert and binds nothing.
   ETKO.renderLookup = function (container, outer) {
+    var state = lookupUiState();
+    var draft = state.draft || {};
     var html =
       '<section aria-label="내 티켓 찾기"><h2>내 티켓 찾기</h2>' +
       '<div class="inline-form">' +
-      '<div class="field"><label>이름</label><input data-lookup-name type="text" aria-label="이름" autocomplete="name" /></div>' +
-      '<div class="field"><label>연락처</label><input data-lookup-phone type="text" aria-label="연락처" inputmode="tel" autocomplete="tel" /></div>' +
+      '<div class="field"><label>이름<input data-lookup-name type="text" value="' + escapeHtml(draft.name || '') + '" aria-label="이름" autocomplete="name"' + lookupFieldAttrs(state, 'name', 'lookup-name-error') + ' /></label>' +
+      lookupFieldError(state, 'name', 'lookup-name-error') + '</div>' +
+      '<div class="field"><label>연락처<input data-lookup-phone type="tel" value="' + escapeHtml(draft.phone || '') + '" aria-label="연락처" inputmode="tel" autocomplete="tel"' + lookupFieldAttrs(state, 'phone', 'lookup-phone-error') + ' /></label>' +
+      lookupFieldError(state, 'phone', 'lookup-phone-error') + '</div>' +
       '<button type="button" data-lookup-submit>내 티켓 찾기</button></div>' +
-      (ETKO.lastLookupError ? '<p role="alert">' + escapeHtml(ETKO.lastLookupError) + '</p>' : '') +
+      (state.error && !state.error.field ? '<p role="alert">' + escapeHtml(state.error.message) + '</p>' : '') +
       '</section>';
     container.innerHTML = html;
     if (container.querySelectorAll) {
       Array.prototype.forEach.call(container.querySelectorAll('[data-lookup-submit]'), function (btn) {
         if (typeof btn.addEventListener !== 'function') return;
         btn.addEventListener('click', function () {
+          var state = lookupUiState();
           ETKO.lastLookupError = null;
+          state.error = null;
+          var nameEl = container.querySelector ? container.querySelector('[data-lookup-name]') : null;
+          var phoneEl = container.querySelector ? container.querySelector('[data-lookup-phone]') : null;
+          state.draft = {
+            name: nameEl && nameEl.value !== undefined ? nameEl.value : '',
+            phone: phoneEl && phoneEl.value !== undefined ? phoneEl.value : '',
+          };
           try {
-            var nameEl = container.querySelector ? container.querySelector('[data-lookup-name]') : null;
-            var phoneEl = container.querySelector ? container.querySelector('[data-lookup-phone]') : null;
             var found = ETKO.findMyTicket({
-              name: nameEl && nameEl.value !== undefined ? nameEl.value : '',
-              phone: phoneEl && phoneEl.value !== undefined ? phoneEl.value : '',
+              name: state.draft.name,
+              phone: state.draft.phone,
             });
             ETKO.homeParticipantId = found.id;
+            state.draft = null;
           } catch (err) {
-            ETKO.lastLookupError = err && err.message ? err.message : '티켓을 찾지 못했습니다';
+            var message = err && err.message ? err.message : '티켓을 찾지 못했습니다';
+            ETKO.lastLookupError = message;
+            var field = !String(state.draft.name || '').trim()
+              ? 'name'
+              : !String(state.draft.phone || '').trim() ? 'phone' : null;
+            state.error = { message: message, field: field };
           }
           if (outer && typeof ETKO.renderParticipant === 'function') {
             try {
@@ -200,6 +243,7 @@
           } else {
             ETKO.renderLookup(container, outer);
           }
+          if (state.error) focusLookupError(container, outer, state.error.field);
         });
       });
     }
