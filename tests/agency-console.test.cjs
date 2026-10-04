@@ -145,6 +145,27 @@ test('selected-event overview shows live context and routes quick actions to exi
   assert.deepEqual(routes, ['checkin', 'booth']);
 });
 
+test('opening a workspace from the cross-site list switches event and enters its overview', () => {
+  const ETKO = load(['../app.js', '../features/agency.js', '../features/agency-ui.js']);
+  const eventId = ETKO.createEvent({ name: '워크스페이스 이동 확인', date: '2026-10-10', venue: '테스트 장소' });
+  const handlers = {};
+  const button = {
+    getAttribute(name) { return name === 'data-event-open' ? eventId : null; },
+    addEventListener(type, fn) { if (type === 'click') handlers.open = fn; },
+  };
+  const mount = {
+    innerHTML: '',
+    querySelectorAll(selector) { return selector === '[data-event-open]' ? [button] : []; },
+  };
+  ETKO.currentView = 'agency-events';
+
+  ETKO.renderAgencyEvents(mount);
+  handlers.open.call(button);
+
+  assert.equal(ETKO.store.activeEventId, eventId);
+  assert.equal(ETKO.currentView, 'overview');
+});
+
 test('overview shell delegates to the selected-event renderer', () => {
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   assert.match(html, /view === 'overview'[\s\S]{0,220}ETKO\.renderOverview\(mount\)/);

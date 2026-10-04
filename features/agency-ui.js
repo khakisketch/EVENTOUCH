@@ -448,6 +448,7 @@
         if (typeof ETKO.switchEventAndRender === 'function') ETKO.switchEventAndRender(id);
         else if (typeof ETKO.switchEvent === 'function') ETKO.switchEvent(id);
         clearError(container.__agencyView || 'home');
+        if (typeof ETKO.navigate === 'function') ETKO.navigate('overview');
       } catch (err) {
         fail(container, err);
       }
