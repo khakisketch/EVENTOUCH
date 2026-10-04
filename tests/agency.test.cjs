@@ -47,3 +47,25 @@ test('event creation accepts only real YYYY-MM-DD calendar dates', () => {
   assert.equal(ETKO.store.events.find((event) => event.id === leap).date, '2028-02-29');
   assert.equal(ETKO.store.events.find((event) => event.id === nonLeap).date, '2027-02-28');
 });
+
+test('agency validation errors expose stable field identifiers without changing messages', () => {
+  const cases = [
+    ['event name', () => ETKO.createEvent({ name: '', date: '2026-10-10', venue: 'A홀' }), 'name', /행사 이름/],
+    ['event date', () => ETKO.createEvent({ name: '날짜', date: '2026-02-30', venue: 'A홀' }), 'date', /날짜/],
+    ['event venue', () => ETKO.createEvent({ name: '장소', date: '2026-10-10', venue: '' }), 'venue', /행사 장소/],
+    ['client email', () => ETKO.saveClient({ name: '고객사', email: 'invalid' }), 'email', /이메일/],
+    ['member role', () => ETKO.saveMember({ name: '담당자', email: 'person@example.kr', role: 'INVALID' }), 'role', /역할/],
+  ];
+
+  for (const [label, operation, field, message] of cases) {
+    let error;
+    try {
+      operation();
+    } catch (caught) {
+      error = caught;
+    }
+    assert.ok(error, label + ' must reject invalid input');
+    assert.match(error.message, message, label + ' keeps the existing message');
+    assert.equal(error.field, field, label + ' error must expose a stable field');
+  }
+});

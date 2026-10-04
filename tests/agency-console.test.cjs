@@ -145,6 +145,37 @@ test('selected-event overview shows live context and routes quick actions to exi
   assert.deepEqual(routes, ['checkin', 'booth']);
 });
 
+test('overview hides quick actions the current role cannot open', () => {
+  const ETKO = load(['../app.js', '../features/agency.js', '../features/results.js', '../features/agency-ui.js']);
+  ETKO.setRole('VIEWER');
+  const b = box();
+
+  ETKO.renderOverview(b);
+
+  assert.doesNotMatch(b.innerHTML, /data-overview-route="checkin"/);
+  assert.match(b.innerHTML, /data-overview-route="booth"/);
+});
+
+test('agency renderer uses structured field metadata even when error copy has no field keyword', () => {
+  const ETKO = load(['../app.js', '../features/agency.js', '../features/agency-ui.js']);
+  const clients = formBox({
+    'data-client-name': '고객사 샘플',
+    'data-client-contact': '김담당',
+    'data-client-email': 'invalid-email',
+  }, ['data-client-save']);
+  ETKO.saveClient = function () {
+    const error = new Error('Validation rejected this value');
+    error.field = 'email';
+    throw error;
+  };
+
+  ETKO.renderAgencyClients(clients);
+  clients.handlers['data-client-save'].call(clients.buttons['data-client-save']);
+
+  assert.match(clients.innerHTML, /data-client-email[^>]*aria-invalid="true"/);
+  assert.equal(clients.fields['data-client-email'].focused, true);
+});
+
 test('opening a workspace from the cross-site list switches event and enters its overview', () => {
   const ETKO = load(['../app.js', '../features/agency.js', '../features/agency-ui.js']);
   const eventId = ETKO.createEvent({ name: '워크스페이스 이동 확인', date: '2026-10-10', venue: '테스트 장소' });
@@ -273,7 +304,7 @@ test('client email error preserves draft and focuses the invalid email field', (
   assert.equal(ETKO.store.clients.length, 0, 'invalid data must not be written');
 });
 
-test('team form errors and drafts do not leak across selected events', () => {
+test('team form errors and drafts stay event-local and restore when returning to that event', () => {
   const ETKO = load(['../app.js', '../features/agency.js', '../features/agency-ui.js']);
   const firstEvent = ETKO.store.activeEventId;
   const first = formBox({

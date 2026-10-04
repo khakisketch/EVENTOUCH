@@ -253,6 +253,12 @@
     return day <= daysInMonth[month - 1];
   }
 
+  function fieldValidationError(message, field) {
+    var error = new Error(message);
+    error.field = field;
+    return error;
+  }
+
   // Create an empty event: 3-field validation, status PRE, no cloned records.
   // Does not switch the active event.
   ETKO.createEvent = function (input) {
@@ -263,10 +269,10 @@
     var venue = String(
       opts.venue === undefined || opts.venue === null ? '' : opts.venue
     ).trim();
-    if (!name) throw new Error('행사 이름을 입력하세요');
-    if (!date) throw new Error('행사 날짜를 입력하세요');
-    if (!isCalendarDate(date)) throw new Error('행사 날짜 형식이 올바르지 않습니다 (YYYY-MM-DD)');
-    if (!venue) throw new Error('행사 장소를 입력하세요');
+    if (!name) throw fieldValidationError('행사 이름을 입력하세요', 'name');
+    if (!date) throw fieldValidationError('행사 날짜를 입력하세요', 'date');
+    if (!isCalendarDate(date)) throw fieldValidationError('행사 날짜 형식이 올바르지 않습니다 (YYYY-MM-DD)', 'date');
+    if (!venue) throw fieldValidationError('행사 장소를 입력하세요', 'venue');
     var id = nextEventId();
     ETKO.store.events.push({ id: id, name: name, date: date, venue: venue, status: 'PRE' });
     ETKO.store.workspaces[id] = emptyWorkspace();
@@ -350,9 +356,9 @@
       opts.email === undefined || opts.email === null ? '' : opts.email
     ).trim();
     var role = normRole(opts.role || 'STAFF');
-    if (!name) throw new Error('이름을 입력하세요');
-    if (!isEmail(email)) throw new Error('이메일 형식이 올바르지 않습니다');
-    if (ROLES.indexOf(role) === -1) throw new Error('역할을 확인하세요');
+    if (!name) throw fieldValidationError('이름을 입력하세요', 'name');
+    if (!isEmail(email)) throw fieldValidationError('이메일 형식이 올바르지 않습니다', 'email');
+    if (ROLES.indexOf(role) === -1) throw fieldValidationError('역할을 확인하세요', 'role');
     if (opts.id !== undefined && opts.id !== null && opts.id !== '') {
       for (var i = 0; i < ws.members.length; i += 1) {
         if (ws.members[i] && ws.members[i].id === opts.id) {
@@ -383,8 +389,8 @@
     var name = String(opts.name === undefined || opts.name === null ? '' : opts.name).trim();
     var contact = String(opts.contact === undefined || opts.contact === null ? '' : opts.contact).trim();
     var email = String(opts.email === undefined || opts.email === null ? '' : opts.email).trim();
-    if (!name) throw new Error('고객사 이름을 입력하세요');
-    if (!isEmail(email)) throw new Error('이메일 형식이 올바르지 않습니다');
+    if (!name) throw fieldValidationError('고객사 이름을 입력하세요', 'name');
+    if (!isEmail(email)) throw fieldValidationError('이메일 형식이 올바르지 않습니다', 'email');
     if (opts.id !== undefined && opts.id !== null && opts.id !== '') {
       for (var i = 0; i < list.length; i += 1) {
         if (list[i] && list[i].id === opts.id) {

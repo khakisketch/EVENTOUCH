@@ -25,6 +25,16 @@
     return true;
   }
 
+  function canOpenRoute(view) {
+    try {
+      if (typeof ETKO.canRoute !== 'function') return true;
+      var role = typeof ETKO.currentRole === 'function' ? ETKO.currentRole() : 'AGENCY';
+      return ETKO.canRoute(role, view) === true;
+    } catch (err) {
+      return false;
+    }
+  }
+
   function emptyItem(copy) {
     return '<li class="card" data-empty><p role="status">' + escapeHtml(copy) + '</p></li>';
   }
@@ -60,6 +70,8 @@
   }
 
   function stateKey(view) {
+    // Team form drafts/errors belong to the selected event and are restored
+    // only when returning to that event; they never leak to another event.
     return view === 'team'
       ? 'team:' + String(ETKO.store && ETKO.store.activeEventId || '')
       : view;
@@ -224,6 +236,16 @@
       return '<div class="stat" data-overview-metric="' + row[0] + '"><small>' +
         escapeHtml(row[1]) + '</small><b class="stat-value">' + escapeHtml(row[2]) + '</b></div>';
     }).join('');
+    var quickActions = '';
+    if (canOpenRoute('checkin')) {
+      quickActions += '<button type="button" data-overview-route="checkin">빠른 체크인</button>';
+    }
+    if (canOpenRoute('booth')) {
+      quickActions += '<button type="button" data-overview-route="booth">부스 현황</button>';
+    }
+    var quickActionGroup = quickActions
+      ? '<div class="overview-quick-actions" role="group" aria-label="당일 운영 바로가기">' + quickActions + '</div>'
+      : '';
     container.innerHTML =
       '<section class="event-overview" aria-labelledby="event-overview-title">' +
       '<div class="event-overview-heading"><div>' +
@@ -231,10 +253,7 @@
       '<h1 id="event-overview-title">' + escapeHtml(event && event.name || '선택한 현장') + '</h1>' +
       '<p class="event-overview-meta">' + escapeHtml(event && event.date || '날짜 미정') + ' · ' +
       escapeHtml(event && event.venue || '장소 미정') + ' · <span class="event-status">' + escapeHtml(status) + '</span></p>' +
-      '</div><div class="overview-quick-actions" role="group" aria-label="당일 운영 바로가기">' +
-      '<button type="button" data-overview-route="checkin">빠른 체크인</button>' +
-      '<button type="button" data-overview-route="booth">부스 현황</button>' +
-      '</div></div>' +
+      '</div>' + quickActionGroup + '</div>' +
       '<div class="stats overview-stats" aria-label="현재 현장 현황">' + stats + '</div>' +
       '<section class="overview-program" aria-labelledby="overview-program-title"><div>' +
       '<h2 id="overview-program-title">오늘의 운영 순서</h2>' +
@@ -426,7 +445,7 @@
     var view = container && container.__agencyView ? container.__agencyView : 'events';
     var message = (err && err.message) || '처리하지 못했습니다';
     var state = ui();
-    var invalidField = field || fieldForError(view, message);
+    var invalidField = field || (err && err.field) || fieldForError(view, message);
     state.errors[stateKey(view)] = { message: message, field: invalidField || null };
     if (view === 'events' && invalidField && state.step !== 1) state.step = 1;
     ETKO.lastAgencyError = message;
@@ -472,9 +491,9 @@
           var date = fieldText(container, 'data-wdate').trim();
           var venue = fieldText(container, 'data-wvenue').trim();
           state.draft = { name: name, date: date, venue: venue, features: (state.draft && state.draft.features) || {} };
-          if (!name) throw new Error('행사 이름을 입력하세요');
-          if (!date) throw new Error('행사 날짜를 입력하세요');
-          if (!venue) throw new Error('행사 장소를 입력하세요');
+          if (!name) return fail(container, new Error('행사 이름을 입력하세요'), 'name');
+          if (!date) return fail(container, new Error('행사 날짜를 입력하세요'), 'date');
+          if (!venue) return fail(container, new Error('행사 장소를 입력하세요'), 'venue');
           state.step = 2;
         } else if (state.step === 2) {
           var picked = {};
