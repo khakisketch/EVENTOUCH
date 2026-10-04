@@ -108,6 +108,17 @@ test('shell groups all 14 routes under five contextual layers', () => {
   assert.doesNotMatch(html, /<nav[^>]*aria-label="주요 화면"/, 'old flat top-level navigation remains');
 });
 
+test('context groups and breadcrumb expose their accessible names', () => {
+  const html = fs.readFileSync(HTML_PATH, 'utf8');
+  const groups = [...html.matchAll(/<div[^>]*data-nav-layer="[^"]+"[^>]*>/g)];
+  assert.equal(groups.length, 5);
+  for (const [index, [openingTag]] of groups.entries()) {
+    assert.match(openingTag, /role="group"/, `nav group ${index + 1} needs group semantics`);
+    assert.match(openingTag, /aria-label="[^"]+"/, `nav group ${index + 1} needs an accessible name`);
+  }
+  assert.match(html, /<nav[^>]*class="breadcrumb"[^>]*aria-label="현재 위치"/);
+});
+
 test('shell keeps the existing product name as its page heading', () => {
   const html = fs.readFileSync(HTML_PATH, 'utf8');
   assert.match(html, /<h1(?:\s[^>]*)?>\s*이벤터치 운영\s*<\/h1>/);

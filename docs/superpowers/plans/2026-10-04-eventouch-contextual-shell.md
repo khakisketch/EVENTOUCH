@@ -107,19 +107,29 @@ Task 1: complete (commit `f9969c8..7216b70`; tests: `node --test tests/*.test.cj
 - [x] **Step 6: Verify rendered flows at 1280, 768, 390, and 320px**
   - Verify layer selection and route navigation for all five layers, active-event switching, role-denied navigation, `?view=screen`, page overflow, minimum navigation target size, and browser console/network failures.
   - Expected: all 14 routes remain reachable to authorized roles; no page-level horizontal overflow; mobile secondary nav scrolls within its own container; existing event data/rendering remains functional.
-- [ ] **Step 7: Commit Task 2 and record evidence**
+- [x] **Step 7: Commit Task 2 and record evidence**
   - Commit message: `feat: replace flat navigation with contextual shell`
   - Update this ledger with commit and test/browser evidence before integration.
 
 Task 2 RED/GREEN evidence: Initial route-group/mobile CSS tests failed on the missing grouped shell. Follow-up checks failed on missing original `<h1>`, token-only selected colors, and explicit shell focus rings; each passed after the scoped fixes. Final `node --test tests/*.test.cjs` → 349/349 pass; `git diff --check` clean.
 
+Task 2: complete (commit `a9ed81e`; tests: `node --test tests/*.test.cjs` → 349/349 pass).
+
+## Independent branch review and disposition
+
+- Whole-branch review range: `f9969c8..a9ed81e`; reviewer ran the full suite (349/349) and `git diff --check` (clean). Review follow-up was verified on the updated tree.
+- `Initial event selector may be empty before sample data loads`: **Ruling** — `features/agency.js` synchronously seeds the default `evt-1` before DOMContentLoaded; `persist.js` restores saved state before `wireNav` binds the selector. After clearing browser storage and deliberately aborting `data/sample.json`, the first-load browser still showed the `EVENTOUCH 운영 샘플` option. Cost if wrong: a later change removing synchronous event seeding could expose a blank selector; retain a first-load regression check if boot order changes.
+- `Context route groups and breadcrumb lack exposed semantics`: fixed in this follow-up by giving all five groups `role="group"` and making the labeled current-location element a `<nav>`. `context groups and breadcrumb expose their accessible names` failed before the markup change and passed after it.
+- Post-review verification: `node --test tests/*.test.cjs` → 350/350 pass; `git diff --check` clean. On the worktree preview, the 320px accessibility tree exposes the breadcrumb as `navigation "현재 위치"` and the active route set as a named group; document width equals viewport width; event selector is populated; browser console and page errors are empty on a normal load.
+- Verified worktree preview: `http://127.0.0.1:8766/index.html`. Fresh screenshots: `/tmp/opencode/contextual-shell-postreview-desktop.png` and `/tmp/opencode/contextual-shell-postreview-320.png`. The prior `8765` endpoint did not reliably serve this worktree and is not the final preview link.
+
 ## Design-to-build handoff / verification snapshot
 
 - Target: EVENTOUCH `index.html` shell on `feat/eventouch-contextual-shell`; existing `features/views.js` registry and `app.js` router remain the interface. No view mounts/renderers were replaced.
 - Source reference: `/tmp/opencode/od/eventouch-operations-nav.html`, SHA-256 `1f7df664b3eebc3579f9a243ac8dc53c4af6d4944be4321c57df7ccc092bf4d6`; its OpenDesign run was reported `entry_missing` and had no official preview, so treat it as a manually inspected draft, not a validated design deliverable.
-- Required-file SHA-256 snapshot: `index.html` `38e772bbb8bd073259668608138d885c79d23e7691f1547a25413f50a6bf1ce0`; `styles/theme.css` `bcf0cea1c34fc34001a5e6b7d41c1b8c3254d1465a43c6445c712bc5a40f2b62`; `styles/tokens.css` `2acc7f8a6c4dfb57ccf2c58db08b8fe69df8a5173461e49780b504b5bc39d38f`; `app.js` `72cd6ca0d89ccd1eb0c2cbde0e94c7b1172a11f0c8f17fcfc4c7d3153818ef03`; `features/views.js` `fec71ebdc11fde681a8bc0ec9447d50cd9222eec5ffc3a851371abfa045f5c84`.
+- Required-file SHA-256 snapshot: `index.html` `6bbad3d29b6b8715f6b9750dab7372dec10bd067ec3394f464edb80e940ed5a1`; `styles/theme.css` `bcf0cea1c34fc34001a5e6b7d41c1b8c3254d1465a43c6445c712bc5a40f2b62`; `styles/tokens.css` `2acc7f8a6c4dfb57ccf2c58db08b8fe69df8a5173461e49780b504b5bc39d38f`; `app.js` `72cd6ca0d89ccd1eb0c2cbde0e94c7b1172a11f0c8f17fcfc4c7d3153818ef03`; `features/views.js` `fec71ebdc11fde681a8bc0ec9447d50cd9222eec5ffc3a851371abfa045f5c84`.
 - States: active layer=`aria-pressed="true"`; active route=`aria-current="page"`; current-event selector tracks `activeEventId`; inaccessible layers/routes are hidden while existing route permission checks remain authoritative.
 - Responsive: desktop sidebar/workspace at 801px+; mobile five-column layer selector + horizontally scrollable second-level menu at 800px and below. Existing `--brand`, `--action`, `--canvas`, `--surface-soft`, `--border`, `--focus-ring`, and `--touch-min` tokens retained; no new logo or selected-state palette added.
 - Browser evidence: all 14 routes clicked; event wizard created a temporary test event, selector switched to it and back to `evt-1`; STAFF hid the agency layer; `?view=screen` loaded the screen route. At 1280/768/390/320/1440, document width matched viewport; at 320 the event menu scrolled internally and nav targets measured 44px. Keyboard Tab showed the 3px shared focus ring on layer and route controls. Console/page errors empty; failed requests none. Browser was headless/emulated, not a real-device or screen-reader test.
-- Screenshots: `/tmp/opencode/contextual-shell-final-desktop.png` and `/tmp/opencode/contextual-shell-final-320-focus.png`. Local worktree preview: `http://127.0.0.1:8765/index.html`.
+- Screenshots: `/tmp/opencode/contextual-shell-postreview-desktop.png` and `/tmp/opencode/contextual-shell-postreview-320.png`. Local worktree preview: `http://127.0.0.1:8766/index.html`.
 - Product-server boundary: read-only check of `http://100.116.163.1:8000/index.html` still shows the flat 14-item shell from `master` `f9969c8`. Updating that server by merging would publish this UI immediately; no publish/merge has been performed without explicit authorization. User visual and end-to-end acceptance remains pending.
