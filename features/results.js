@@ -232,7 +232,7 @@
       return '<div class="stat"><small>' + escapeHtml(label) + '</small><b class="stat-value">' + escapeHtml(value) + '</b></div>';
     }
     var html =
-      '<section aria-label="행사 결과"><h2>행사 결과</h2>' +
+      '<section class="panel" aria-label="행사 결과"><div class="section-head"><h2>행사 결과</h2></div>' +
       '<div class="stats">' +
       stat('전체', s.total + '명') +
       stat('누적 입장', s.checked + '명') +
@@ -265,7 +265,7 @@
       );
     }).join('');
     var html =
-      '<section aria-label="행사 설정"><h2>행사 설정</h2>' +
+      '<section class="panel" aria-label="행사 설정"><div class="section-head"><h2>행사 설정</h2></div>' +
       '<p>' +
       escapeHtml(ev.name) +
       ' · ' +

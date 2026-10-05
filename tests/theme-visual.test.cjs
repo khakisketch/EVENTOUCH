@@ -87,5 +87,5 @@ test('overview results render as labeled stat blocks', () => {
   ETKO.renderResults(box);
   assert.match(box.innerHTML, /stat-value/, 'results miss stat values');
   assert.match(box.innerHTML, /입장률/, 'results miss the rate label');
-  assert.match(box.innerHTML, /<section aria-label="행사 결과">/, 'results miss labeled section');
+  assert.match(box.innerHTML, /<section class="panel" aria-label="행사 결과">/, 'results miss labeled section');
 });

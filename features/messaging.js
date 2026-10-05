@@ -311,7 +311,7 @@
       return '<option value="' + escapeHtml(target) + '"' + optionSelected(state, 'campaign', 'target', target, '전체') + '>' + escapeHtml(label) + '</option>';
     }).join('');
     var html =
-      '<section aria-label="메시지 템플릿 관리"><h2>템플릿</h2>' +
+      '<div class="section-stack"><section class="panel" aria-label="메시지 템플릿 관리"><div class="section-head"><h2>템플릿</h2></div>' +
       '<ul class="cards">' + (templates || '<li class="card" data-empty><p role="status">저장된 템플릿이 없습니다</p></li>') + '</ul>' +
       '<div class="inline-form"><div class="field"><label>템플릿 이름<input data-template-name type="text" required value="' + formValue(state, 'template', 'name') + '" aria-label="템플릿 이름"' + formFieldAttrs(state, 'template', 'name', 'template-name-error') + ' /></label>' +
       formFieldError(state, 'template', 'name', 'template-name-error') + '</div>' +
@@ -320,7 +320,7 @@
       '<div class="field"><label>템플릿 내용<textarea data-template-content rows="4" required aria-label="템플릿 내용"' + formFieldAttrs(state, 'template', 'content', 'template-content-error') + '>' + formValue(state, 'template', 'content') + '</textarea></label>' +
       formFieldError(state, 'template', 'content', 'template-content-error') + '</div>' +
       '<button type="button" data-template-save>템플릿 저장</button></div></section>' +
-      '<section aria-label="캠페인 작성"><h2>캠페인</h2>' +
+      '<section class="panel" aria-label="캠페인 작성"><div class="section-head"><h2>캠페인</h2></div>' +
       '<div class="inline-form"><div class="field"><label>캠페인 이름<input data-campaign-title type="text" required value="' + formValue(state, 'campaign', 'title') + '" aria-label="캠페인 이름"' + formFieldAttrs(state, 'campaign', 'title', 'campaign-title-error') + ' /></label>' +
       formFieldError(state, 'campaign', 'title', 'campaign-title-error') + '</div>' +
       '<div class="field"><label>채널<select data-campaign-channel aria-label="발송 채널">' + channelOptions('campaign') + '</select></label>' +
@@ -331,8 +331,8 @@
       formFieldError(state, 'campaign', 'content', 'campaign-content-error') + '</div>' +
       '<button type="button" data-campaign-save>초안 저장</button></div>' +
       '<ul class="cards">' + (campaigns || '<li class="card" data-empty><p role="status">작성된 캠페인이 없습니다</p></li>') + '</ul></section>' +
-      '<section aria-label="발송함"><h2>발송함</h2>' +
-      '<ul class="cards">' + (outboxRows || '<li class="card" data-empty><p role="status">발송 기록이 없습니다</p></li>') + '</ul></section>';
+      '<section class="panel" aria-label="발송함"><div class="section-head"><h2>발송함</h2></div>' +
+      '<ul class="cards">' + (outboxRows || '<li class="card" data-empty><p role="status">발송 기록이 없습니다</p></li>') + '</ul></section></div>';
     if (state.pageError) html += '<p role="alert">' + escapeHtml(state.pageError) + '</p>';
     container.innerHTML = html;
     wireMessaging(container);

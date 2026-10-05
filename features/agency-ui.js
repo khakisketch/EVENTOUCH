@@ -338,7 +338,7 @@
         '<button type="button" data-wizard-create>행사 만들기</button></div>';
     }
     return (
-      '<section aria-label="새 행사 만들기"><h2>새 행사 만들기</h2>' +
+      '<section class="panel" aria-label="새 행사 만들기"><div class="section-head"><h2>새 행사 만들기</h2></div>' +
       wizardStepsBar(step) + body +
       viewError('events') +
       '</section>'
@@ -350,7 +350,7 @@
     var cards = eventCards();
     var html =
       wizardHtml() +
-      '<section aria-label="전체 행사"><h2>전체 행사</h2>' +
+      '<section class="panel" aria-label="전체 행사"><div class="section-head"><h2>전체 행사</h2></div>' +
       '<ul class="cards">' + (cards || emptyItem('등록된 행사가 없습니다')) + '</ul></section>';
     container.innerHTML = html;
     container.__agencyView = 'events';
@@ -379,7 +379,7 @@
     var clientContact = draft ? draft.contact : editing ? editing.contact : '';
     var clientEmail = draft ? draft.email : editing ? editing.email : '';
     var html =
-      '<section aria-label="고객사"><h2>고객사</h2>' +
+      '<section class="panel" aria-label="고객사"><div class="section-head"><h2>고객사</h2></div>' +
       '<ul class="cards">' + (rows || emptyItem('등록된 고객사가 없습니다')) + '</ul>' +
       '<div class="inline-form">' +
       '<div class="field"><label>고객사 이름<input data-client-name type="text" value="' + escapeHtml(clientName || '') + '" aria-label="고객사 이름"' + fieldAttrs('clients', 'name', 'client-name-error') + ' /></label>' +
@@ -427,7 +427,7 @@
     }).join('');
     var draft = state.teamDrafts[stateKey('team')] || {};
     var html =
-      '<section aria-label="팀과 권한"><h2>팀과 권한</h2>' +
+      '<section class="panel" aria-label="팀과 권한"><div class="section-head"><h2>팀과 권한</h2></div>' +
       '<p role="note">' + escapeHtml(ev ? ev.name : '') + ' 구성원을 관리합니다. 역할을 바꾸면 해당 인원의 메뉴 범위가 함께 바뀝니다.</p>' +
       '<ul class="cards">' + (rows || emptyItem('등록된 구성원이 없습니다')) + '</ul>' +
       '<div class="inline-form">' +

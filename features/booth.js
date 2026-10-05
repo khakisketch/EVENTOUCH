@@ -199,7 +199,7 @@
     var state = lookupUiState();
     var draft = state.draft || {};
     var html =
-      '<section aria-label="내 티켓 찾기"><h2>내 티켓 찾기</h2>' +
+      '<section class="panel" aria-label="내 티켓 찾기"><div class="section-head"><h2>내 티켓 찾기</h2></div>' +
       '<div class="inline-form">' +
       '<div class="field"><label>이름<input data-lookup-name type="text" value="' + escapeHtml(draft.name || '') + '" aria-label="이름" autocomplete="name"' + lookupFieldAttrs(state, 'name', 'lookup-name-error') + ' /></label>' +
       lookupFieldError(state, 'name', 'lookup-name-error') + '</div>' +
@@ -260,7 +260,7 @@
     var me = resolved.person;
     if (!me) {
       container.innerHTML =
-        '<section aria-label="참가자 홈"><h2>참가자 홈</h2>' +
+        '<section class="panel" aria-label="참가자 홈"><div class="section-head"><h2>참가자 홈</h2></div>' +
         '<p>내 티켓을 확인하려면 등록한 이름과 연락처를 입력하세요. 본인 티켓만 보여줍니다. 처음 방문하셨다면 아래에서 참가 신청을 해주세요.</p></section>' +
         '<div data-lookup-embed></div>' +
         '<div data-signup-embed></div>';
@@ -325,14 +325,14 @@
       }
     } catch (err) {}
     var html =
-      '<section aria-label="다음 행동">' +
+      '<section class="panel" aria-label="다음 행동">' +
       '<div><button type="button" data-home-cta>' +
       escapeHtml(ETKO.nextAction(me.status)) +
       '</button></div></section>' +
-      '<section aria-label="내 일정"><h2>내 일정</h2>' +
+      '<section class="panel" aria-label="내 일정"><div class="section-head"><h2>내 일정</h2></div>' +
       programRow(feed.now, '현재') + programRow(feed.next, '다음') +
       '<ul class="cards">' + (programAll || '<li class="card" data-empty><p role="status">등록된 일정이 없습니다</p></li>') + '</ul>' + programNote + '</section>' +
-      '<section aria-label="내 티켓"><h2>내 티켓</h2>' +
+      '<section class="panel" aria-label="내 티켓"><div class="section-head"><h2>내 티켓</h2></div>' +
       (eventName ? '<p>' + escapeHtml(eventName) + '</p>' : '') +
       '<p>' + escapeHtml(me.name) + ' · ' + escapeHtml(ticketLabelOf(me.ticket)) + ' · ' + escapeHtml(statusLabelOf(me.status)) + '</p>' +
       '<p>체크인 QR 코드: ' + escapeHtml(me.code) + '</p>' +

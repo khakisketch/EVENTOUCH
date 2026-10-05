@@ -282,7 +282,7 @@
       );
     }).join('');
     var html =
-      '<section aria-label="데스크 관리"><h2>데스크</h2>' +
+      '<section class="panel" aria-label="데스크 관리"><div class="section-head"><h2>데스크</h2></div>' +
       '<ul class="cards">' + (rows || '<li class="card" data-empty><p role="status">개설된 데스크가 없습니다</p></li>') + '</ul>' +
       '<div class="inline-form"><div class="field"><label>데스크 이름<input data-unit-name type="text" required value="' + escapeHtml(draft.name || '') + '" aria-label="데스크 이름"' + deskFieldAttrs(state.unitError, 'name', 'unit-name-error') + ' /></label>' +
       deskFieldError(state.unitError, 'name', 'unit-name-error') + '</div>' +

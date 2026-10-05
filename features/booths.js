@@ -478,7 +478,7 @@
         '<div class="field"><select data-stamp-booth aria-label="부스 선택">' + options + '</select></div>' +
         '<button type="button" data-stamp-receive>스탬프 받기</button></div>';
     var html =
-      '<section aria-label="스탬프 투어"><h2>스탬프 투어</h2>' +
+      '<section class="panel" aria-label="스탬프 투어"><div class="section-head"><h2>스탬프 투어</h2></div>' +
       '<p>내 스탬프 ' + mine + '개</p>' +
       '<ul class="cards">' + (rows || '<li class="card" data-empty><p role="status">운영 중인 부스가 없습니다</p></li>') + '</ul>' +
       controls + '</section>';

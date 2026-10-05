@@ -300,7 +300,7 @@
       return '<li class="card">' + escapeHtml(p.author || '') + ': ' + escapeHtml(p.body || '') + '</li>';
     }).join('');
     var html =
-      '<section aria-label="프로그램 관리"><h2>프로그램</h2>' +
+      '<div class="section-stack"><section class="panel" aria-label="프로그램 관리"><div class="section-head"><h2>프로그램</h2></div>' +
       '<ul class="cards">' + (programRows || '<li class="card" data-empty><p role="status">등록된 프로그램이 없습니다</p></li>') + '</ul>' +
       '<div class="inline-form"><div class="field"><label>세션명<input data-program-title type="text" required value="' + formValue(state, 'program', 'title') + '" aria-label="세션명"' + formFieldAttrs(state, 'program', 'title', 'program-title-error') + ' /></label>' +
       formFieldError(state, 'program', 'title', 'program-title-error') + '</div>' +
@@ -311,14 +311,14 @@
       '<div class="field"><label>장소<input data-program-location type="text" required value="' + formValue(state, 'program', 'location') + '" aria-label="장소"' + formFieldAttrs(state, 'program', 'location', 'program-location-error') + ' /></label>' +
       formFieldError(state, 'program', 'location', 'program-location-error') + '</div>' +
       '<button type="button" data-program-add>세션 추가</button></div></section>' +
-      '<section aria-label="공지 관리"><h2>공지</h2>' +
+      '<section class="panel" aria-label="공지 관리"><div class="section-head"><h2>공지</h2></div>' +
       '<ul class="cards">' + (noticeRows || '<li class="card" data-empty><p role="status">등록된 공지가 없습니다</p></li>') + '</ul>' +
       '<div class="inline-form"><div class="field"><label>공지 제목<input data-notice-title type="text" required value="' + formValue(state, 'notice', 'title') + '" aria-label="공지 제목"' + formFieldAttrs(state, 'notice', 'title', 'notice-title-error') + ' /></label>' +
       formFieldError(state, 'notice', 'title', 'notice-title-error') + '</div>' +
       '<div class="field"><label>공지 내용<textarea data-notice-body rows="4" required aria-label="공지 내용"' + formFieldAttrs(state, 'notice', 'body', 'notice-body-error') + '>' + formValue(state, 'notice', 'body') + '</textarea></label>' +
       formFieldError(state, 'notice', 'body', 'notice-body-error') + '</div>' +
       '<button type="button" data-notice-add>공지 게시</button></div></section>' +
-      '<section aria-label="행사장 관리"><h2>행사장 안내</h2>' +
+      '<section class="panel" aria-label="행사장 관리"><div class="section-head"><h2>행사장 안내</h2></div>' +
       (venue
         ? '<p>' + escapeHtml(venue.name) + ' · ' + escapeHtml(venue.address || '') + '</p>'
         : '<p role="status" data-empty>행사장 정보가 없습니다</p>') +
@@ -327,8 +327,8 @@
       '<div class="field"><label>주소<input data-venue-address type="text" value="' + formValue(state, 'venue', 'address') + '" aria-label="행사장 주소"' + formFieldAttrs(state, 'venue', 'address', 'venue-address-error') + ' /></label>' +
       formFieldError(state, 'venue', 'address', 'venue-address-error') + '</div>' +
       '<button type="button" data-venue-save>행사장 저장</button></div></section>' +
-      '<section aria-label="게시판"><h2>게시판</h2>' +
-      '<ul class="cards">' + (posts || '<li class="card" data-empty><p role="status">게시글이 없습니다</p></li>') + '</ul></section>';
+      '<section class="panel" aria-label="게시판"><div class="section-head"><h2>게시판</h2></div>' +
+      '<ul class="cards">' + (posts || '<li class="card" data-empty><p role="status">게시글이 없습니다</p></li>') + '</ul></section></div>';
     if (state.pageError) html += '<p role="alert">' + escapeHtml(state.pageError) + '</p>';
     container.innerHTML = html;
     wireContent(container);

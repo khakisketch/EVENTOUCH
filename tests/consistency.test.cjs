@@ -131,10 +131,10 @@ test('results and settings panels use labeled sections', () => {
   const ETKO = load(['../app.js', '../features/agency.js', '../features/results.js']);
   const results = box();
   ETKO.renderResults(results);
-  assert.match(results.innerHTML, /<section aria-label="행사 결과">/, 'results panel misses labeled section');
+  assert.match(results.innerHTML, /<section class="panel" aria-label="행사 결과">/, 'results panel misses labeled section');
   const settings = box();
   ETKO.renderSettings(settings);
-  assert.match(settings.innerHTML, /<section aria-label="행사 설정">/, 'settings panel misses labeled section');
+  assert.match(settings.innerHTML, /<section class="panel" aria-label="행사 설정">/, 'settings panel misses labeled section');
 });
 
 test('checkin shell ticket row uses the inline-form pattern', () => {

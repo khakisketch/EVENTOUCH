@@ -294,7 +294,7 @@
         signupFieldError(state, f.id, 'signup-' + f.id + '-error') + '</div>';
     }).join('');
     var html =
-      '<section aria-label="참가 신청"><h2>참가 신청</h2>' +
+      '<section class="panel" aria-label="참가 신청"><div class="section-head"><h2>참가 신청</h2></div>' +
       rows +
       '<button type="button" data-signup-submit>신청하기</button></section>';
     if (state.error && !state.error.field) {
