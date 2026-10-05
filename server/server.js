@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { openStore } = require('./store');
 const { handleAuth, ensureSeed } = require('./auth');
+const { handleApi } = require('./api');
 
 const ROOT = path.join(__dirname, '..');
 const PORT = Number(process.env.PORT || 8776);
@@ -66,7 +67,9 @@ const server = http.createServer((req, res) => {
       });
       return;
     }
-    notFoundApi(res);
+    handleApi(req, res, store, urlPath).catch(() => {
+      sendJson(res, 500, { error: '요청을 처리하지 못했습니다' });
+    });
     return;
   }
   if (req.method !== 'GET' && req.method !== 'HEAD') {
