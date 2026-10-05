@@ -253,25 +253,26 @@
             .join('') +
           '</ul>';
     var html =
-      '<div class="checkin-connectivity" data-connectivity-state="' + (ETKO.online === false ? 'offline' : 'online') + '"><p data-connectivity>' +
+      '<div class="section-stack">' +
+      '<div class="checkin-connectivity panel" data-connectivity-state="' + (ETKO.online === false ? 'offline' : 'online') + '"><p data-connectivity>' +
       (ETKO.online === false ? '오프라인 · 대기열에 저장됩니다' : '온라인 · 즉시 반영됩니다') +
       '</p><button type="button" data-online-toggle>' +
       (ETKO.online === false ? '온라인으로 전환' : '오프라인으로 전환') +
       '</button></div>' +
-      '<div><button type="button" data-direction="IN"' +
+      '<div class="action-group"><button type="button" data-direction="IN"' +
       inPressed +
       '>입장</button>' +
       '<button type="button" data-direction="OUT"' +
       outPressed +
       '>퇴장</button></div>' +
-      '<div class="checkin-result" data-result-state="' + escapeHtml(result ? result.kind : 'waiting') + '" aria-label="최근 스캔 결과" aria-live="polite">' +
+      '<div class="checkin-result panel" data-result-state="' + escapeHtml(result ? result.kind : 'waiting') + '" aria-label="최근 스캔 결과" aria-live="polite">' +
       resultHtml +
       '</div>' +
-      '<div><p>대기 목록 ' +
+      '<section class="panel" aria-label="동기화 대기 목록"><div><p>대기 목록 ' +
       s.queue.length +
       '건</p>' +
       queueHtml +
-      '<button type="button" data-sync>동기화</button></div>' +
+      '<div class="action-group"><button type="button" data-sync>동기화</button></div></div></section>' +
       (qrIntakeSupported()
         ? '<div class="inline-form"><div class="field"><label>QR 사진<input data-qr-file type="file" accept="image/*" aria-label="QR 사진" /></label></div></div>'
         : '') +
@@ -286,6 +287,7 @@
     if (typeof ETKO.renderDesks === 'function') {
       html += '<div data-desks-embed></div>';
     }
+    html += '</div>';
     container.innerHTML = html;
     if (typeof ETKO.renderDesks === 'function' && container.querySelector) {
       try {

@@ -193,33 +193,34 @@
       );
     }).join('');
     var html =
-      '<div><p>미리보기: ' +
+      '<div class="section-stack">' +
+      '<section class="panel" aria-label="송출 상태"><div><p>미리보기: ' +
       escapeHtml(previewMsg.title) +
       '</p>' +
       '<p>송출 중: ' +
       escapeHtml(programMsg.title) +
-      '</p></div>' +
-      '<div><p>송출 전 확인</p>' +
+      '</p></div></section>' +
+      '<section class="panel" aria-label="송출 전 확인"><div class="section-head"><h2>송출 전 확인</h2></div>' +
       checkHtml('disclose', 0, s.disclose[0], DISCLOSE_COPY[0]) +
       checkHtml('disclose', 1, s.disclose[1], DISCLOSE_COPY[1]) +
-      '</div>' +
-      '<div><p>송출 확인</p>' +
+      '</section>' +
+      '<section class="panel" aria-label="송출 확인"><div class="section-head"><h2>송출 확인</h2></div>' +
       checkHtml('confirm', 0, s.confirm[0], CONFIRM_COPY[0]) +
       checkHtml('confirm', 1, s.confirm[1], CONFIRM_COPY[1]) +
-      '</div>' +
       '<div><button type="button" data-take' +
       (allowed ? '' : ' disabled') +
-      '>송출하기</button></div>' +
-      '<div><p>안전 화면</p>' +
-      '<button type="button" data-safety="BLACK">암전</button>' +
+      '>송출하기</button></div></section>' +
+      '<section class="panel" aria-label="안전 화면"><div class="section-head"><h2>안전 화면</h2></div>' +
+      '<div><button type="button" data-safety="BLACK">암전</button>' +
       '<button type="button" data-safety="HOLD">대기 화면</button>' +
       '<button type="button" data-safety="LOGO">로고</button></div>' +
       '<div><button type="button" data-motion aria-pressed="' +
       (ETKO.reducedMotion ? 'true' : 'false') +
       '">모션 줄이기</button></div>' +
-      '<div><a href="?view=screen" target="_blank" rel="noopener">관객 화면 열기</a></div>' +
-      (sceneGrid ? '<section class="stage-scenes" aria-label="장면 선택"><h2>장면 선택</h2>' +
-        '<p>기능별로 분류된 시연 장면 ' + scenes.length + '개</p><div class="scene-groups">' + sceneGrid + '</div></section>' : '');
+      '<div><a href="?view=screen" target="_blank" rel="noopener">관객 화면 열기</a></div></section>' +
+      (sceneGrid ? '<section class="stage-scenes panel" aria-label="장면 선택"><div class="section-head"><h2>장면 선택</h2>' +
+        '<p>기능별로 분류된 시연 장면 ' + scenes.length + '개</p></div><div class="scene-groups">' + sceneGrid + '</div></section>' : '') +
+      '</div>';
     container.innerHTML = html;
     try {
       syncReducedMotionDoc(container.ownerDocument || null);

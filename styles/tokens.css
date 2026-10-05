@@ -43,6 +43,13 @@
   --fs-h2: 20px;
   --fs-stat: clamp(24px, 2.4vw, 30px);
   --fs-h1: clamp(24px, 2.6vw, 32px);
+
+  /* Visual system interaction tokens. */
+  --surface-hover: #f1ede8;
+  --border-hover: #cfc6bc;
+  --brand-hover: #ed4f23;
+  --radius-sm: 9px;
+  --radius-md: 11px;
 }
 
 html {

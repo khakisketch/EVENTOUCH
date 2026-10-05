@@ -358,7 +358,7 @@
   // wired controls. Q&A/draw/survey/photo sections follow below.
   ETKO.renderEngagement = function (container) {
     var ws = engagementWorkspace();
-    var html = ETKO.renderEngagementPollQuiz(ws) + ETKO.renderEngagementMore(ws);
+    var html = '<div class="section-stack">' + ETKO.renderEngagementPollQuiz(ws) + ETKO.renderEngagementMore(ws) + '</div>';
     if (ETKO.lastEngageError) {
       html += '<p role="alert">' + escapeHtml(ETKO.lastEngageError) + '</p>';
     }
@@ -382,14 +382,14 @@
     var pollStatus = pollOpen ? '진행 중' : '마감';
     var quizStatus = quizOpen ? '진행 중' : '마감';
     return (
-      '<section aria-label="투표 관리"><h2>투표</h2>' +
+      '<section class="panel" aria-label="투표 관리"><div class="section-head"><h2>투표</h2></div>' +
       '<p>' + escapeHtml(poll.title || '제목 없음') + ' · ' + engagementStatus(pollOpen ? 'open' : 'closed', pollStatus) + ' · 총 ' + counts.total + '표</p>' +
       '<ul class="cards">' + (options || '<li class="card" data-empty><p role="status">선택지가 없습니다</p></li>') + '</ul>' +
-      '<div><button type="button" data-poll-open>투표 개시</button>' +
+      '<div class="action-group"><button type="button" data-poll-open>투표 개시</button>' +
       '<button type="button" data-poll-close>투표 마감</button></div></section>' +
-      '<section aria-label="퀴즈 관리"><h2>퀴즈</h2>' +
+      '<section class="panel" aria-label="퀴즈 관리"><div class="section-head"><h2>퀴즈</h2></div>' +
       '<p>' + escapeHtml(quiz.title || '제목 없음') + ' · ' + engagementStatus(quizOpen ? 'open' : 'closed', quizStatus) + ' · 답변 ' + (quiz.answers || []).length + '건</p>' +
-      '<div><button type="button" data-quiz-open>퀴즈 개시</button>' +
+      '<div class="action-group"><button type="button" data-quiz-open>퀴즈 개시</button>' +
       '<button type="button" data-quiz-reveal>정답 공개</button></div></section>'
     );
   };
@@ -417,7 +417,7 @@
       );
     }).join('');
     return (
-      '<section aria-label="질문과 답변 관리"><h2>질문과 답변</h2>' +
+      '<section class="panel" aria-label="질문과 답변 관리"><div class="section-head"><h2>질문과 답변</h2></div>' +
       '<ul class="cards">' + (rows || '<li class="card" data-empty><p role="status">등록된 질문이 없습니다</p></li>') + '</ul></section>'
     );
   };
@@ -430,7 +430,7 @@
     var drawLabels = { IDLE: '대기', READY: '추첨 준비', RESOLVED: '결과 확인' };
     var drawState = String(draw.phase || 'IDLE').toUpperCase();
     return (
-      '<section aria-label="럭키드로우 관리"><h2>럭키드로우</h2>' +
+      '<section class="panel" aria-label="럭키드로우 관리"><div class="section-head"><h2>럭키드로우</h2></div>' +
       '<p>' + engagementStatus(drawState.toLowerCase(), drawLabels[drawState] || '대기') +
       ' · 당첨 후보: ' + escapeHtml(candidate) + ' · 확정 ' + (draw.winners || []).length + '명' +
       (winners ? ' (' + escapeHtml(winners) + ')' : '') + '</p>' +
@@ -445,7 +445,7 @@
     var survey = ws.survey || { title: '', questions: [], open: false };
     var responses = ws.responses || [];
     return (
-      '<section aria-label="만족도 관리"><h2>만족도 평가</h2>' +
+      '<section class="panel" aria-label="만족도 관리"><div class="section-head"><h2>만족도 평가</h2></div>' +
       '<p>' + escapeHtml(survey.title || '제목 없음') + ' · ' + engagementStatus(survey.open ? 'open' : 'closed', survey.open ? '진행 중' : '마감') +
       ' · 문항 ' + (survey.questions || []).length + '개 · 응답 ' + responses.length + '건</p>' +
       '<div><button type="button" data-survey-toggle>' + (survey.open ? '설문 마감' : '설문 개시') + '</button></div></section>'
@@ -468,7 +468,7 @@
       );
     }).join('');
     return (
-      '<section aria-label="사진 검토"><h2>사진 검토</h2>' +
+      '<section class="panel" aria-label="사진 검토"><div class="section-head"><h2>사진 검토</h2></div>' +
       '<p>공개 ' + approved + '장 · ' + engagementStatus(pending.length ? 'pending' : 'clear', pending.length ? '검토 대기 ' + pending.length + '장' : '검토 대기 없음') + '</p>' +
       '<ul class="cards">' + (rows || '<li class="card" data-empty><p role="status">검토할 사진이 없습니다</p></li>') + '</ul></section>'
     );

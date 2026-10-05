@@ -344,7 +344,30 @@ main .card {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 16px;
+  padding: var(--space-4);
+}
+
+/* Shared panel: one bordered section surface for all screens.
+   Replaces one-off panel rules (program, connectivity, scene group). */
+main .panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: var(--space-4);
+}
+
+/* Shared empty state: single skeleton for all "nothing here" blocks. */
+main .empty-state,
+main [data-empty] {
+  color: var(--muted);
+  font-size: var(--fs-body-sm);
+}
+
+/* Vertical section rhythm owned by the stack, not DOM depth. */
+main .section-stack {
+  display: grid;
+  gap: var(--space-5);
 }
 
 /* Overview stat band (renderResults .stats). */
@@ -599,7 +622,7 @@ main button[data-overview-route="checkin"] {
 }
 
 .overview-program {
-  padding: 18px;
+  padding: var(--space-4);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -613,13 +636,13 @@ main button[data-overview-route="checkin"] {
 
 .overview-program > div:first-child p {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--fs-body-sm);
 }
 
 .overview-program-list {
   display: grid;
   gap: 0;
-  margin: 12px 0 0;
+  margin: var(--space-3) 0 0;
   padding: 0;
   list-style: none;
 }
@@ -627,10 +650,10 @@ main button[data-overview-route="checkin"] {
 .overview-program-row {
   display: grid;
   grid-template-columns: 90px minmax(0, 1fr) minmax(90px, auto);
-  gap: 12px;
+  gap: var(--space-3);
   align-items: center;
   margin: 0;
-  padding: 12px 0;
+  padding: var(--space-3) 0;
   border-top: 1px solid var(--border);
 }
 
@@ -641,19 +664,19 @@ main button[data-overview-route="checkin"] {
 
 .overview-program-row span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--fs-body-sm);
 }
 
 main .engagement-status {
   display: inline-flex;
   align-items: center;
   width: fit-content;
-  padding: 3px 9px;
+  padding: var(--space-1) var(--space-2);
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface-soft);
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--fs-caption);
   font-weight: 700;
   line-height: 1.35;
   white-space: nowrap;
@@ -670,11 +693,8 @@ main .engagement-status[data-engagement-status="selected"] {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: 11px;
-  background: var(--surface);
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
 }
 
 .checkin-connectivity p {
@@ -688,11 +708,8 @@ main .engagement-status[data-engagement-status="selected"] {
 }
 
 .checkin-result {
-  margin: 14px 0;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
 }
 
 .checkin-result > [data-result] {
@@ -709,8 +726,8 @@ main .engagement-status[data-engagement-status="selected"] {
 }
 
 .booth-mode-panel {
-  margin-bottom: 20px;
-  padding: 16px;
+  margin-bottom: 0;
+  padding: var(--space-4);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -720,7 +737,7 @@ main .engagement-status[data-engagement-status="selected"] {
 .booth-mode-selector {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 main .booth-mode-selector button[aria-pressed="true"] {
@@ -731,29 +748,29 @@ main .booth-mode-selector button[aria-pressed="true"] {
 }
 
 .booth-mode-guidance {
-  margin: 12px 0 0;
+  margin: var(--space-3) 0 0;
   color: var(--muted);
   font-size: 13px;
   font-weight: 650;
 }
 
 .stage-scenes {
-  margin-top: 20px;
+  margin-top: 0;
 }
 
 .stage-scenes > p {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--fs-body-sm);
 }
 
 .scene-groups {
   display: grid;
-  gap: 14px;
+  gap: var(--space-4);
 }
 
 .scene-group {
   min-width: 0;
-  padding: 14px;
+  padding: var(--space-4);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -763,8 +780,8 @@ main .booth-mode-selector button[aria-pressed="true"] {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
 }
 
 .scene-group-heading h3 {
@@ -773,13 +790,13 @@ main .booth-mode-selector button[aria-pressed="true"] {
 
 .scene-group-heading span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--fs-caption);
 }
 
 .scene-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 main .scene-grid button[data-scene] {
@@ -796,24 +813,32 @@ main .scene-grid button[data-scene][aria-pressed="true"] {
   font-weight: 700;
 }
 
+/* Shared action group: consistent spacing for command button rows. */
+main .action-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
 /* ---- controls ---- */
 
 main button,
 main input[type="submit"] {
   min-height: 44px;
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--fg);
   font-size: 13px;
-  padding: 8px 15px;
+  padding: var(--space-2) 15px;
   cursor: pointer;
   transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
 }
 
 main button:hover {
-  background: #f1ede8;
-  border-color: #cfc6bc;
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
 }
 
 main button:active {
@@ -826,6 +851,10 @@ main button:disabled {
   transform: none;
 }
 
+/* Shared button hierarchy: primary = single main action per section,
+   secondary = supporting actions (also the default button look above).
+   data-* hooks keep working; kinds are assigned by role, not by hook. */
+main button.btn-primary,
 main button[data-take],
 main button[data-ticket-submit],
 main button[data-signup-submit],
@@ -833,30 +862,28 @@ main button[data-stamp-receive],
 main button[data-report-create],
 main button[data-booth-add],
 main button[data-camera-scan],
-main button[data-wizard-create] {
+main button[data-wizard-create],
+main button[data-lookup-submit],
+main button.event-open-primary {
   border-color: var(--action);
   background: var(--brand);
   color: #fff;
   font-weight: 750;
 }
 
+main button.btn-primary:hover,
 main button[data-take]:hover,
 main button[data-ticket-submit]:hover,
 main button[data-signup-submit]:hover,
 main button[data-stamp-receive]:hover,
 main button[data-report-create]:hover,
 main button[data-booth-add]:hover,
-main button[data-camera-scan]:hover {
-  background: #ed4f23;
-  border-color: #ed4f23;
+main button[data-camera-scan]:hover,
+main button[data-lookup-submit]:hover,
+main button.event-open-primary:hover {
+  background: var(--brand-hover);
+  border-color: var(--brand-hover);
   color: #fff;
-}
-
-main button[data-lookup-submit] {
-  border-color: var(--action);
-  background: var(--brand);
-  color: #fff;
-  font-weight: 750;
 }
 
 main button[data-safety="BLACK"] {
