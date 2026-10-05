@@ -1,0 +1,72 @@
+'use strict';
+
+// EVENTOUCH product server: static frontend + /api/*. Node built-ins only.
+const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const ROOT = path.join(__dirname, '..');
+const PORT = Number(process.env.PORT || 8776);
+
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+};
+
+function sendJson(res, status, value) {
+  const body = JSON.stringify(value);
+  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });
+  res.end(body);
+}
+
+function notFoundApi(res) {
+  sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
+}
+
+function serveStatic(req, res) {
+  const urlPath = req.url.split('?')[0];
+  const rel = urlPath === '/' ? 'index.html' : decodeURIComponent(urlPath).replace(/^\/+/, '');
+  const file = path.normalize(path.join(ROOT, rel));
+  if (!file.startsWith(ROOT + path.sep) && file !== ROOT) {
+    res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end('경로를 확인하세요');
+    return;
+  }
+  fs.readFile(file, (err, data) => {
+    if (err) {
+      res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+      res.end('파일을 찾을 수 없습니다');
+      return;
+    }
+    const type = MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';
+    res.writeHead(200, { 'content-type': type });
+    res.end(data);
+  });
+}
+
+const server = http.createServer((req, res) => {
+  const urlPath = (req.url || '/').split('?')[0];
+  if (urlPath === '/api/health') {
+    sendJson(res, 200, { ok: true, version: 1 });
+    return;
+  }
+  if (urlPath === '/api/' || urlPath.startsWith('/api/')) {
+    notFoundApi(res);
+    return;
+  }
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.writeHead(405, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end('지원하지 않는 방법입니다');
+    return;
+  }
+  serveStatic(req, res);
+});
+
+server.listen(PORT, () => {
+  process.stdout.write(`eventouch server on ${PORT}\n`);
+});
