@@ -1118,6 +1118,14 @@ main .mono {
   }
 }
 
+/* Product reduced-motion toggle: mirrors the OS preference when set. */
+html[data-reduced-motion="true"] *,
+html[data-reduced-motion="true"] *::before,
+html[data-reduced-motion="true"] *::after {
+  transition: none !important;
+  animation: none !important;
+}
+
 @media (max-width: 800px) {
   .app-shell {
     display: block;

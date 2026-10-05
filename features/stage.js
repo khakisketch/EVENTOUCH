@@ -60,8 +60,23 @@
   // Switch reduced motion. Returns the active flag.
   ETKO.setReducedMotion = function (value) {
     ETKO.reducedMotion = value === true || value === 'true';
+    try {
+      var doc = root.document || (typeof document !== 'undefined' ? document : null);
+      syncReducedMotionDoc(doc);
+    } catch (err) {}
     return ETKO.reducedMotion;
   };
+
+  // Expose the toggle on the document so it actually stops motion.
+  // Guards keep mock containers and non-DOM runtimes working.
+  function syncReducedMotionDoc(doc) {
+    try {
+      var el = doc && doc.documentElement ? doc.documentElement : null;
+      if (!el) return;
+      if (el.setAttribute) el.setAttribute('data-reduced-motion', ETKO.reducedMotion ? 'true' : 'false');
+      else if (el.dataset) el.dataset.reducedMotion = ETKO.reducedMotion ? 'true' : 'false';
+    } catch (err) {}
+  }
 
   function normChecks(value) {
     var out = [false, false];
@@ -206,6 +221,9 @@
       (sceneGrid ? '<section class="stage-scenes" aria-label="장면 선택"><h2>장면 선택</h2>' +
         '<p>기능별로 분류된 시연 장면 ' + scenes.length + '개</p><div class="scene-groups">' + sceneGrid + '</div></section>' : '');
     container.innerHTML = html;
+    try {
+      syncReducedMotionDoc(container.ownerDocument || null);
+    } catch (err) {}
     if (container.querySelectorAll) {
       Array.prototype.forEach.call(
         container.querySelectorAll('[data-disclose]'),

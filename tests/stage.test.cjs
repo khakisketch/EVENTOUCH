@@ -165,6 +165,23 @@ test('reduced-motion toggle defaults off and switches on request', () => {
   assert.equal(ETKO.setReducedMotion(false), false, 'must switch reduced motion off');
 });
 
+test('reduced-motion toggle marks the document so motion actually stops', () => {
+  const ETKO = loadStageWithScenes();
+  const docEl = { dataset: {} };
+  const container = {
+    innerHTML: '',
+    ownerDocument: { documentElement: docEl },
+    querySelector() { return null; },
+    querySelectorAll() { return []; },
+  };
+  ETKO.setReducedMotion(true);
+  ETKO.renderStage(container);
+  assert.equal(docEl.dataset.reducedMotion, 'true', 'render must expose the on state on the document');
+  ETKO.setReducedMotion(false);
+  ETKO.renderStage(container);
+  assert.equal(docEl.dataset.reducedMotion, 'false', 'render must expose the off state on the document');
+});
+
 test('stage consumes ETKO.navigate without altering it', () => {
   const ETKO = loadStage({ ETKO: { navigate: () => 'kept', currentView: 'stage' } });
   assert.equal(typeof ETKO.navigate, 'function', 'ETKO.navigate must survive stage load');
