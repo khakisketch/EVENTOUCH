@@ -29,6 +29,20 @@
   --touch-min: 44px;
   --field-h: 52px;
   --focus-ring: 3px solid var(--action);
+
+  /* Visual system scale: spacing + type (approved 2026-10-06). */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --fs-caption: 11px;
+  --fs-body-sm: 12px;
+  --fs-body: 14px;
+  --fs-h2: 20px;
+  --fs-stat: clamp(24px, 2.4vw, 30px);
+  --fs-h1: clamp(24px, 2.6vw, 32px);
 }
 
 html {
