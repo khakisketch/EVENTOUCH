@@ -708,6 +708,18 @@ function handleEvents(req, res, store, parts, body) {
     save();
     return sendJson(res, 200, { delivery: 'SIMULATION_ONLY', outboxId: entry.id });
   }
+  // Files
+  if (parts[1] === 'files' && parts.length === 3 && req.method === 'GET') {
+    requireUser(store, req);
+    const file = resolveStoredFile(ev.id, parts[2]);
+    if (!file) return err(res, 404, '파일을 찾을 수 없습니다');
+    const ext = path.extname(file).toLowerCase();
+    const type =
+      Object.keys(ALLOW_TYPES).find((t) => ALLOW_TYPES[t] === ext) || 'application/octet-stream';
+    res.writeHead(200, { 'content-type': type });
+    fs.createReadStream(file).pipe(res);
+    return;
+  }
   // Results + reports
   if (parts[1] === 'reports' && parts.length === 2 && req.method === 'GET') {
     return sendJson(res, 200, { reports: ws.reports });
@@ -732,6 +744,46 @@ function handleEvents(req, res, store, parts, body) {
     return sendJson(res, 201, { report });
   }
   return sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
+}
+
+function resolveStoredFile(eventId, filename) {
+  const name = safeFileName(filename);
+  if (!name || /^\.+$/.test(name)) return null;
+  const full = path.normalize(path.join(storageRoot(), String(eventId), name));
+  const base = path.normalize(storageRoot()) + path.sep;
+  if (!full.startsWith(base)) return null;
+  if (!fs.existsSync(full)) return null;
+  return full;
+}
+
+async function handleFileUpload(req, res, store, eventId, urlPath) {
+  const data = readEvents(store);
+  const me = requireUser(store, req);
+  requireWrite(me, 'photos');
+  const ev = findEvent(data, eventId);
+  const query = urlPath.split('?')[1] || '';
+  const params = new URLSearchParams(query);
+  const name = safeFileName(params.get('name'));
+  if (!name) return err(res, 400, '파일 이름을 확인하세요', 'name');
+  const ctype = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+  if (!ALLOW_TYPES[ctype]) return err(res, 400, '지원하지 않는 파일 형식입니다', 'type');
+  const dir = path.join(storageRoot(), ev.id);
+  fs.mkdirSync(dir, { recursive: true });
+  const stored = crypto.randomUUID() + '-' + name;
+  await writeUpload(req, path.join(dir, stored), MAX_FILE_BYTES);
+  const ws = workspaceOf(data, ev.id);
+  if (!Array.isArray(ws.files)) ws.files = [];
+  const meta = {
+    key: ev.id + '/' + stored,
+    name: stored,
+    original: params.get('name'),
+    size: fs.statSync(path.join(dir, stored)).size,
+    type: ctype,
+    at: new Date().toISOString(),
+  };
+  ws.files.push(meta);
+  saveEvents(store, data);
+  return sendJson(res, 201, { file: meta });
 }
 
 function normCodeDirection(value) {
@@ -811,10 +863,69 @@ function addParticipant(store, data, ws, body, selfService) {
   return participant;
 }
 
+const ALLOW_TYPES = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/webp': '.webp',
+  'application/pdf': '.pdf',
+  'application/json': '.json',
+};
+const MAX_FILE_BYTES = 8 * 1024 * 1024;
+
+function storageRoot() {
+  return process.env.STORAGE_DIR || path.join(__dirname, '..', 'data', 'storage');
+}
+
+function safeFileName(raw) {
+  const base = path.basename(String(raw || ''));
+  const clean = base.replace(/[^a-zA-Z0-9가-힣_.-]/g, '').replace(/^\.+/, '');
+  return clean.slice(0, 120);
+}
+
+function writeUpload(req, dest, cap) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    let tooBig = false;
+    const stream = fs.createWriteStream(dest);
+    req.on('data', (chunk) => {
+      if (tooBig) return;
+      size += chunk.length;
+      if (size > cap) {
+        tooBig = true;
+        stream.destroy();
+        fs.unlink(dest, () => {});
+        req.resume();
+        return;
+      }
+      stream.write(chunk);
+    });
+    req.on('end', () => {
+      if (tooBig) {
+        reject(Object.assign(new Error('파일이 너무 큽니다'), { status: 413 }));
+        return;
+      }
+      stream.end(() => resolve(size));
+    });
+    req.on('error', () => reject(new Error('파일을 받지 못했습니다')));
+    stream.on('error', () => {
+      if (!tooBig) reject(new Error('파일을 저장하지 못했습니다'));
+    });
+  });
+}
+
 async function handleApi(req, res, store, urlPath) {
   ensureSeedData(store);
   const parts = urlPath.split('/').filter(Boolean);
   if (parts[0] !== 'api') return sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
+
+  // Raw octet uploads bypass the JSON body reader.
+  if (req.method === 'POST' && parts[1] === 'events' && parts[3] === 'files' && parts.length === 4) {
+    try {
+      return await handleFileUpload(req, res, store, parts[2], req.url || urlPath);
+    } catch (e) {
+      return err(res, e.status || 500, e.message || '요청을 처리하지 못했습니다', e.field);
+    }
+  }
 
   let body = {};
   if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
