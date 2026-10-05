@@ -92,6 +92,14 @@ test('empty roster shows signup guidance, stale detail falls back', () => {
   assert.match(box2.innerHTML, /참가 신청/);
 });
 
+test('operator roster heading names the managed list', () => {
+  const ETKO = fresh();
+  const box = { innerHTML: '' };
+  ETKO.renderPeople(box);
+  assert.match(box.innerHTML, /참가자 명단/, 'roster misses the operator-list heading');
+  assert.match(box.innerHTML, /참가 신청은 참가자 웹/, 'roster misses the self-service pointer');
+});
+
 test('participant directory keeps actions but shows table on desktop and cards on mobile', () => {
   const ETKO = fresh();
   const box = { innerHTML: '' };

@@ -253,6 +253,9 @@
     var quickActionGroup = quickActions
       ? '<div class="overview-quick-actions" role="group" aria-label="당일 운영 바로가기">' + quickActions + '</div>'
       : '';
+    var nextStep = event && event.status === 'PRE'
+      ? '<p class="overview-next" role="note">아직 준비 중입니다. 현장 관리에서 진행 중으로 전환하면 당일 운영이 시작됩니다.</p>'
+      : '';
     container.innerHTML =
       '<section class="event-overview" aria-labelledby="event-overview-title">' +
       '<div class="event-overview-heading"><div>' +
@@ -260,7 +263,7 @@
       '<h1 id="event-overview-title">' + escapeHtml(event && event.name || '선택한 현장') + '</h1>' +
       '<p class="event-overview-meta">' + escapeHtml(event && event.date || '날짜 미정') + ' · ' +
       escapeHtml(event && event.venue || '장소 미정') + ' · <span class="event-status">' + escapeHtml(status) + '</span></p>' +
-      '</div>' + quickActionGroup + '</div>' +
+      '</div>' + quickActionGroup + '</div>' + nextStep +
       '<div class="stats overview-stats" aria-label="현재 현장 현황">' + stats + '</div>' +
       '<section class="overview-program" aria-labelledby="overview-program-title"><div>' +
       '<h2 id="overview-program-title">오늘의 운영 순서</h2>' +

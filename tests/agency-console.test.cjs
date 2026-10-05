@@ -166,6 +166,17 @@ test('empty activity offers a next action on an existing route', () => {
   assert.match(b.innerHTML, /data-agency-next="agency-events"/, 'empty activity misses the next-action route');
 });
 
+test('PRE overview names the next step toward day-of operation', () => {
+  const ETKO = load(['../app.js', '../features/agency.js', '../features/results.js', '../features/agency-ui.js']);
+  const b = box();
+  ETKO.renderOverview(b);
+  assert.match(b.innerHTML, /진행 중으로 전환/, 'PRE overview misses the next-step note');
+  ETKO.setEventStatus(ETKO.store.activeEventId, 'LIVE');
+  const live = box();
+  ETKO.renderOverview(live);
+  assert.doesNotMatch(live.innerHTML, /진행 중으로 전환/, 'LIVE overview must not show the PRE next-step note');
+});
+
 test('selected-event overview shows live context and routes quick actions to existing day-of views', () => {
   const ETKO = load(['../app.js', '../features/agency.js', '../features/results.js', '../features/agency-ui.js']);
   const handlers = {};

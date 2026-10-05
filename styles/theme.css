@@ -543,6 +543,12 @@ main .event-overview h1 {
   font-size: 12px;
 }
 
+.overview-next {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .event-status {
   display: inline-flex;
   padding: 3px 9px;

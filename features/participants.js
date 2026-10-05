@@ -201,6 +201,8 @@
     var list = Array.isArray(people) ? people : defaultPeople();
     var counts = ETKO.peopleCounts(list);
     var html =
+      '<h2>참가자 명단</h2>' +
+      '<p>운영자가 관리하는 등록 명단입니다. 참가 신청은 참가자 웹에서 진행됩니다.</p>' +
       '<p>전체 ' +
       counts.total +
       '명 · 입장 ' +
