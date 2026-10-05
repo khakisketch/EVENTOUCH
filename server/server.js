@@ -4,9 +4,13 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const { openStore } = require('./store');
+const { handleAuth, ensureSeed } = require('./auth');
 
 const ROOT = path.join(__dirname, '..');
 const PORT = Number(process.env.PORT || 8776);
+const store = openStore(process.env.DATA_DIR || path.join(ROOT, 'data', 'server'));
+ensureSeed(store);
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -56,6 +60,12 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (urlPath === '/api/' || urlPath.startsWith('/api/')) {
+    if (urlPath.startsWith('/api/auth/')) {
+      handleAuth(req, res, store, urlPath).catch(() => {
+        sendJson(res, 500, { error: '요청을 처리하지 못했습니다' });
+      });
+      return;
+    }
     notFoundApi(res);
     return;
   }
