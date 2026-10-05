@@ -330,12 +330,36 @@
     document &&
     typeof document.addEventListener === 'function'
   ) {
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function () {
-        ETKO.wireNav(document);
-      });
-    } else {
+    var boot = function () {
       ETKO.wireNav(document);
+      // Prefer the shared server when one answers; otherwise keep the
+      // local demo untouched. Login gate appears on agency-home only.
+      if (typeof ETKO.bootRemote === 'function') {
+        ETKO.bootRemote().then(function (mode) {
+          if (!mode) return;
+          if (mode.mode === 'server' && mode.user) {
+            try {
+              if (typeof ETKO.setRole === 'function') ETKO.setRole(mode.user.role);
+            } catch (err) {}
+            if (typeof ETKO.pullRemoteStore === 'function') {
+              ETKO.pullRemoteStore()
+                .then(function () {
+                  if (typeof ETKO.syncViews === 'function') ETKO.syncViews(null);
+                })
+                .catch(function () {});
+            }
+          } else if (mode.mode === 'login-needed') {
+            ETKO.remoteAuth = 'login-needed';
+            if (typeof ETKO.navigate === 'function') ETKO.navigate('agency-home');
+            else if (typeof ETKO.syncViews === 'function') ETKO.syncViews(null);
+          }
+        });
+      }
+    };
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', boot);
+    } else {
+      boot();
     }
   }
 

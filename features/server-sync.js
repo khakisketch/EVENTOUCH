@@ -1,0 +1,176 @@
+(function (root) {
+  'use strict';
+
+  var ETKO = root.ETKO || (root.ETKO = {});
+
+  var SESSION_COOKIE_NAME = 'etko_session';
+
+  function fetchFn() {
+    if (typeof root.fetch === 'function') return root.fetch.bind(root);
+    if (typeof fetch === 'function') return fetch;
+    throw new Error('서버에 연결할 수 없습니다');
+  }
+
+  async function request(method, urlPath, body) {
+    const base = (ETKO.remote && ETKO.remote.base) || '';
+    const headers = {};
+    if (!ETKO.remote.jar) ETKO.remote.jar = {};
+    const jarKeys = Object.keys(ETKO.remote.jar);
+    if (jarKeys.length > 0) {
+      headers.cookie = jarKeys.map((k) => k + '=' + ETKO.remote.jar[k]).join('; ');
+    }
+    let payload;
+    if (body !== undefined) {
+      headers['content-type'] = 'application/json';
+      payload = JSON.stringify(body);
+    }
+    let res = null;
+    try {
+      res = await fetchFn()(base + urlPath, {
+        method,
+        headers,
+        credentials: 'same-origin',
+        body: payload,
+      });
+    } catch (err) {
+      throw new Error('서버에 연결할 수 없습니다');
+    }
+    try {
+      const setCookies =
+        typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : [];
+      setCookies.forEach((line) => {
+        const match = /^\s*([^=;]+)=([^;]*)/.exec(String(line));
+        if (match) ETKO.remote.jar[match[1].trim()] = decodeURIComponent(match[2].trim());
+      });
+      if (ETKO.remote.jar[SESSION_COOKIE_NAME] === '') delete ETKO.remote.jar[SESSION_COOKIE_NAME];
+    } catch (err) {}
+    let data = null;
+    try {
+      data = await res.json();
+    } catch (err) {}
+    if (!res.ok) {
+      const error = new Error((data && data.error) || '요청을 처리하지 못했습니다');
+      if (data && data.field) error.field = data.field;
+      error.status = res.status;
+      throw error;
+    }
+    return data;
+  }
+
+  ETKO.remote = {
+    base: '',
+    get(path) {
+      return request('GET', path);
+    },
+    post(path, body) {
+      return request('POST', path, body);
+    },
+    put(path, body) {
+      return request('PUT', path, body);
+    },
+    patch(path, body) {
+      return request('PATCH', path, body);
+    },
+    del(path) {
+      return request('DELETE', path);
+    },
+  };
+
+  // Detect a real product server. Static-only previews answer 404 here.
+  // Never throws: unreachable means local demo mode.
+  ETKO.bootRemote = async function () {
+    try {
+      const health = await ETKO.remote.get('/api/health');
+      if (!health || health.ok !== true) return { mode: 'demo' };
+    } catch (err) {
+      return { mode: 'demo' };
+    }
+    try {
+      const me = await ETKO.remote.get('/api/auth/me');
+      if (me && me.user) return { mode: 'server', user: me.user };
+    } catch (err) {}
+    return { mode: 'login-needed' };
+  };
+
+  // Pull shared events + workspaces into the local store shape.
+  ETKO.pullRemoteStore = async function () {
+    const data = await ETKO.remote.get('/api/events');
+    if (!ETKO.store) ETKO.store = { events: [], workspaces: {}, activeEventId: null };
+    ETKO.store.events = data.events || [];
+    const details = await Promise.all(
+      ETKO.store.events.map((ev) => ETKO.remote.get('/api/events/' + ev.id).catch(() => null))
+    );
+    return { events: ETKO.store.events.length, pulled: details.filter(Boolean).length };
+  };
+
+  // Replay offline check-in entries once each. Server-side duplicate
+  // detection makes replays idempotent: applied counts only fresh
+  // successes, repeats land in duplicates.
+  ETKO.replayOutbox = async function (eventId, entries) {
+    let applied = 0;
+    let duplicates = 0;
+    for (const entry of entries || []) {
+      if (!entry) continue;
+      const result = await ETKO.remote.post('/api/events/' + eventId + '/checkin', {
+        code: entry.code,
+        direction: entry.direction || 'IN',
+        online: true,
+      });
+      if (result && result.key === 'success') applied += 1;
+      else duplicates += 1;
+    }
+    return { applied, duplicates };
+  };
+
+  function escapeHtml(value) {
+    return String(value === undefined || value === null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // Login gate rendered inside agency-home when the server is reachable
+  // but no session exists. Calls onDone(user) after a successful login.
+  ETKO.loginCardHtml = function () {
+    return (
+      '<section class="login-gate" aria-label="로그인"><h2>로그인</h2>' +
+      '<p>운영 서버에 연결되었습니다. 계정으로 로그인하세요.</p>' +
+      '<div class="inline-form"><div class="field"><label>아이디<input data-login-id type="text" autocomplete="username" /></label></div>' +
+      '<div class="field"><label>비밀번호<input data-login-password type="password" autocomplete="current-password" /></label></div>' +
+      '<p class="field-error" data-login-error role="alert" hidden></p>' +
+      '<button type="button" data-login-submit>로그인</button></div></section>'
+    );
+  };
+
+  ETKO.renderLoginInto = function (container, onDone) {
+    if (!container) return '';
+    container.innerHTML = ETKO.loginCardHtml();
+    const idEl = container.querySelector ? container.querySelector('[data-login-id]') : null;
+    const pwEl = container.querySelector ? container.querySelector('[data-login-password]') : null;
+    const buttons = container.querySelectorAll ? container.querySelectorAll('[data-login-submit]') : [];
+    Array.prototype.forEach.call(buttons, function (btn) {
+      if (typeof btn.addEventListener !== 'function') return;
+      btn.addEventListener('click', async function () {
+        try {
+          const data = await ETKO.remote.post('/api/auth/login', {
+            id: idEl && idEl.value !== undefined ? String(idEl.value) : '',
+            password: pwEl && pwEl.value !== undefined ? String(pwEl.value) : '',
+          });
+          if (typeof onDone === 'function') onDone(data && data.user);
+        } catch (err) {
+          const alert = container.querySelector ? container.querySelector('[data-login-error]') : null;
+          if (alert) {
+            alert.textContent = err.message;
+            alert.hidden = false;
+          }
+        }
+      });
+    });
+    return container.innerHTML;
+  };
+
+  if (typeof module !== 'undefined' && module && module.exports) {
+    module.exports = ETKO;
+  }
+})((typeof window !== 'undefined' && window) || globalThis);

@@ -193,7 +193,11 @@
     var s = ETKO.agencySummary();
     var cards = eventCards();
     var activity = activityRows();
-    var html =
+    var gate =
+      ETKO.remoteAuth === 'login-needed' && typeof ETKO.loginCardHtml === 'function'
+        ? ETKO.loginCardHtml()
+        : '';
+    var html = gate +
       '<div class="agency-home-heading"><div><p class="eyebrow">대행사 · 전체 현장</p><h1>대행사 현황</h1>' +
       '<p class="agency-home-sub">관리 중인 행사와 현장 요청을 한곳에서 확인합니다.</p></div>' +
       '<div class="agency-home-actions"><button type="button" class="event-open-primary" data-agency-next="agency-events">새 행사 만들기</button></div></div>' +
@@ -476,6 +480,34 @@
   // Shared wiring for the four agency mounts.
   function wireAgency(container) {
     if (!container || typeof container.querySelectorAll !== 'function') return;
+    onClick(container, 'data-login-submit', function () {
+      var idEl = container.querySelector ? container.querySelector('[data-login-id]') : null;
+      var pwEl = container.querySelector ? container.querySelector('[data-login-password]') : null;
+      var id = idEl && idEl.value !== undefined ? String(idEl.value) : '';
+      var password = pwEl && pwEl.value !== undefined ? String(pwEl.value) : '';
+      return Promise.resolve()
+        .then(function () {
+          return ETKO.remote.post('/api/auth/login', { id: id, password: password });
+        })
+        .then(function (data) {
+          var user = (data && data.user) || {};
+          ETKO.remoteAuth = null;
+          if (typeof ETKO.setRole === 'function' && user.role) ETKO.setRole(user.role);
+          else if (ETKO.store) ETKO.store.role = user.role || ETKO.store.role;
+          var pulled =
+            typeof ETKO.pullRemoteStore === 'function' ? ETKO.pullRemoteStore() : Promise.resolve();
+          return Promise.resolve(pulled).then(function () {
+            refresh(container);
+          });
+        })
+        .catch(function (e) {
+          var alert = container.querySelector ? container.querySelector('[data-login-error]') : null;
+          if (alert) {
+            alert.textContent = (e && e.message) || '로그인하지 못했습니다';
+            alert.hidden = false;
+          }
+        });
+    });
     onClick(container, 'data-agency-next', function () {
       var route = this && typeof this.getAttribute === 'function'
         ? this.getAttribute('data-agency-next')

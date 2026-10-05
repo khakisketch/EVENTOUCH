@@ -107,6 +107,22 @@ test('agency routes gate by role', () => {
   assert.equal(ETKO.canRoute('STAFF', 'checkin'), true, 'staff keeps field routes');
 });
 
+test('login gate appears on agency-home when server login is needed', async () => {
+  const ETKO = load(['../app.js', '../features/agency.js', '../features/server-sync.js', '../features/agency-ui.js']);
+  ETKO.remoteAuth = 'login-needed';
+  ETKO.remote.post = async () => ({ user: { id: 'admin', name: '관리자', role: 'AGENCY' } });
+  ETKO.pullRemoteStore = async () => ({ events: 1, pulled: 1 });
+  const home = formBox(
+    { 'data-login-id': 'admin', 'data-login-password': 'pw' },
+    ['data-login-submit']
+  );
+  ETKO.renderAgencyHome(home);
+  assert.match(home.innerHTML, /data-login-submit/, 'home misses the login gate');
+  await home.handlers['data-login-submit'].call(home.buttons['data-login-submit']);
+  assert.equal(ETKO.remoteAuth, null, 'successful login must clear the gate');
+  assert.equal(ETKO.store.role, 'AGENCY', 'login must apply the server role');
+});
+
 test('agency home renders stats, events and activity in the shared patterns', () => {
   const ETKO = load(['../app.js', '../features/agency.js', '../features/agency-ui.js']);
   const b = box();
