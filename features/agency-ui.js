@@ -194,7 +194,10 @@
     var cards = eventCards();
     var activity = activityRows();
     var html =
-      '<section aria-label="대행사 현황"><h2>대행사 현황</h2>' +
+      '<div class="agency-home-heading"><div><p class="eyebrow">대행사 · 전체 현장</p><h1>대행사 현황</h1>' +
+      '<p class="agency-home-sub">관리 중인 행사와 현장 요청을 한곳에서 확인합니다.</p></div>' +
+      '<div class="agency-home-actions"><button type="button" class="event-open-primary" data-agency-next="agency-events">새 행사 만들기</button></div></div>' +
+      '<section aria-label="대행사 현황"><h2 class="visually-hidden">대행사 현황</h2>' +
       '<div class="stats">' +
       stat('진행 중', s.live + '건', '현재 운영 중인 현장') +
       stat('준비 중', s.pre + '건', '오픈을 준비 중인 현장') +
@@ -202,9 +205,10 @@
       stat('확인할 항목', s.pending + '건', '입장 처리 대기') +
       '</div></section>' +
       '<div class="agency-dashboard">' +
-      '<section aria-label="전체 행사"><h2>전체 행사</h2>' +
+      '<section aria-label="전체 행사"><div class="panel-head"><div><h2>전체 행사</h2><p>최근 일정과 준비 상태</p></div>' +
+      '<button type="button" class="plain-link" data-agency-next="agency-events">행사 목록 모두 보기 →</button></div>' +
       '<ul class="cards">' + (cards || emptyItem('등록된 행사가 없습니다')) + '</ul></section>' +
-      '<section aria-label="최근 활동"><h2>최근 활동</h2>' +
+      '<section aria-label="최근 활동"><div class="panel-head"><div><h2>최근 활동</h2><p>운영 변경과 주요 기록</p></div></div>' +
       '<ul class="cards">' + (activity || '<li class="card" data-empty><p role="status">최근 활동이 없습니다</p><p><button type="button" data-agency-next="agency-events">현장 관리에서 행사 준비하기</button></p></li>') + '</ul></section>' +
       '</div>';
     container.innerHTML = html;

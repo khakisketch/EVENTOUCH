@@ -117,6 +117,23 @@ test('agency home renders stats, events and activity in the shared patterns', ()
   assert.match(b.innerHTML, /EVENTOUCH 운영 샘플/, 'home misses the seeded event');
 });
 
+test('agency home heading states context and offers event creation shortcut', () => {
+  const ETKO = load(['../app.js', '../features/agency.js', '../features/agency-ui.js']);
+  const b = box();
+  ETKO.renderAgencyHome(b);
+  assert.match(b.innerHTML, /대행사 · 전체 현장/, 'home heading misses the context eyebrow');
+  assert.match(b.innerHTML, /관리 중인 행사와 현장 요청을 한곳에서 확인합니다/, 'home heading misses the sub-copy');
+  assert.match(b.innerHTML, /새 행사 만들기/, 'home heading misses the creation shortcut');
+});
+
+test('agency home events panel links to the full list', () => {
+  const ETKO = load(['../app.js', '../features/agency.js', '../features/agency-ui.js']);
+  const b = box();
+  ETKO.renderAgencyHome(b);
+  assert.match(b.innerHTML, /최근 일정과 준비 상태/, 'events panel misses the sub-copy');
+  assert.match(b.innerHTML, /행사 목록 모두 보기/, 'events panel misses the view-all link');
+});
+
 test('agency home stat cards carry context sub-labels', () => {
   const ETKO = load(['../app.js', '../features/agency.js', '../features/agency-ui.js']);
   const b = box();
