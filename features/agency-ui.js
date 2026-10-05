@@ -198,12 +198,12 @@
         ? ETKO.loginCardHtml()
         : '';
     var html = gate +
-      '<div class="agency-home"><div class="agency-home-heading"><div><p class="eyebrow">대행사 · 전체 현장</p><h1>대행사 현황</h1>' +
+      '<div class="agency-home"><div class="agency-home-heading"><div class="agency-home-intro"><p class="eyebrow">대행사 · 전체 현장</p><h1>대행사 현황</h1>' +
       '<p class="agency-home-sub">관리 중인 행사와 현장 요청을 한곳에서 확인합니다.</p></div>' +
-      '<div class="agency-home-actions"><button type="button" class="event-open-primary" data-agency-next="agency-events">새 행사 만들기</button></div></div>' +
+      '<div class="agency-home-hero-side"><div class="agency-home-kpi"><small>진행 중</small><b class="agency-home-kpi-value">' + escapeHtml(s.live + '건') + '</b><span>현재 운영 중인 현장</span></div>' +
+      '<div class="agency-home-actions"><button type="button" class="event-open-primary" data-agency-next="agency-events">새 행사 만들기</button></div></div></div>' +
       '<section class="agency-home-summary" aria-label="대행사 현황"><div class="agency-home-section-head"><div><h2>운영 요약</h2><p>전체 현장의 현재 규모와 처리 대기</p></div></div>' +
       '<div class="stats agency-home-stats">' +
-      stat('진행 중', s.live + '건', '현재 운영 중인 현장') +
       stat('준비 중', s.pre + '건', '오픈을 준비 중인 현장') +
       stat('전체 참가자', s.participants + '명', '모든 현장 등록 합계') +
       stat('확인할 항목', s.pending + '건', '입장 처리 대기', s.pending > 0) +
