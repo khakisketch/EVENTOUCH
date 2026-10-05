@@ -14,10 +14,17 @@ function openStore(dataDir) {
   return {
     read(name) {
       const file = fileFor(dataDir, name);
+      let raw = null;
       try {
-        return JSON.parse(fs.readFileSync(file, 'utf8'));
+        raw = fs.readFileSync(file, 'utf8');
       } catch (err) {
-        return {};
+        if (err && err.code === 'ENOENT') return {};
+        throw err;
+      }
+      try {
+        return JSON.parse(raw);
+      } catch (err) {
+        throw new Error('저장소 파일이 손상되었습니다: ' + name);
       }
     },
     write(name, value) {

@@ -104,3 +104,14 @@ test('expired-session-rejected', async () => {
   const me = await fetch(`${BASE}/api/auth/me`, { headers: { cookie } });
   assert.equal(me.status, 401);
 });
+
+test('no-default-admin-without-env', () => {
+  const auth = require('../server/auth.js');
+  const store = require('../server/store.js');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'etko-noadmin-'));
+  delete process.env.ADMIN_PASSWORD;
+  delete process.env.ALLOW_DEV_DEFAULT_ADMIN;
+  auth.ensureSeed(store.openStore(dir));
+  const users = store.openStore(dir).read('users');
+  assert.ok(!users.admin, 'no usable default admin without explicit opt-in');
+});

@@ -10,17 +10,23 @@ function readJsonBody(req, maxBytes) {
   const cap = maxBytes || 1024 * 1024;
   return new Promise((resolve, reject) => {
     let size = 0;
+    let tooBig = false;
     const chunks = [];
     req.on('data', (chunk) => {
+      if (tooBig) return;
       size += chunk.length;
       if (size > cap) {
-        reject(new Error('요청이 너무 큽니다'));
-        req.destroy();
+        tooBig = true;
+        req.resume();
         return;
       }
       chunks.push(chunk);
     });
     req.on('end', () => {
+      if (tooBig) {
+        reject(new Error('요청이 너무 큽니다'));
+        return;
+      }
       try {
         resolve(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'));
       } catch (err) {

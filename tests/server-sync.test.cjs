@@ -75,6 +75,17 @@ test('unreachable-keeps-demo', async () => {
   assert.equal(mode.mode, 'demo');
 });
 
+test('pull-remote-store-populates-workspaces', async () => {
+  const ETKO = loadSync();
+  ETKO.remote.base = BASE;
+  await ETKO.remote.post('/api/auth/login', { id: 'admin', password: 'pw' });
+  ETKO.store = { events: [], workspaces: {}, activeEventId: null };
+  const pulled = await ETKO.pullRemoteStore();
+  assert.ok(pulled.events >= 1);
+  assert.ok(ETKO.store.workspaces['evt-1'].participants.length >= 5);
+  assert.ok(ETKO.store.activeEventId);
+});
+
 test('login-card-renders-and-submits', async () => {
   const ETKO = loadSync();
   ETKO.remote.base = BASE;
@@ -104,4 +115,78 @@ test('login-card-renders-and-submits', async () => {
   assert.match(container.innerHTML, /data-login-id/);
   await handlers.submit.call({});
   assert.equal(done && done.id, 'admin');
+});
+
+test('replay-pending-skips-without-session', async () => {
+  const ETKO = loadSync();
+  ETKO.remote.base = 'http://127.0.0.1:18999';
+  ETKO.serverSession = false;
+  const r = await ETKO.replayPending('evt-1', [{ code: 'EVT-1001', direction: 'IN' }]);
+  assert.deepEqual(r, { applied: 0, duplicates: 0, skipped: true });
+});
+
+test('replay-pending-applies-once-on-server', async () => {
+  const ETKO = loadSync();
+  ETKO.remote.base = BASE;
+  await ETKO.remote.post('/api/auth/login', { id: 'admin', password: 'pw' });
+  ETKO.serverSession = true;
+  const created = await ETKO.remote.post('/api/events', { name: '재전송적용', date: '2026-12-11', venue: 'K홀' });
+  const id = created.event.id;
+  const person = await ETKO.remote.post(`/api/events/${id}/signup`, { name: '적용손님', phone: '010-2222-0001' });
+  const r = await ETKO.replayPending(id, [
+    { code: person.participant.code, direction: 'IN' },
+    { code: person.participant.code, direction: 'IN' },
+  ]);
+  assert.equal(r.applied, 1);
+  assert.equal(r.duplicates, 1);
+  const summary = await ETKO.remote.get(`/api/events/${id}/summary`);
+  assert.equal(summary.summary.inside, 1);
+});
+
+test('checkin-sync-replays-to-server', async () => {
+  for (const m of ['../app.js', '../features/agency.js', '../features/checkin.js', '../features/server-sync.js']) {
+    try { delete require.cache[require.resolve(m)]; } catch {}
+  }
+  delete globalThis.ETKO;
+  globalThis.ETKO = {};
+  for (const m of ['../app.js', '../features/agency.js', '../features/checkin.js', '../features/server-sync.js']) {
+    require(m);
+  }
+  const ETKO = globalThis.ETKO;
+  ETKO.remote.base = BASE;
+  await ETKO.remote.post('/api/auth/login', { id: 'admin', password: 'pw' });
+  ETKO.serverSession = true;
+  const created = await ETKO.remote.post('/api/events', { name: '동기화연동', date: '2026-12-12', venue: 'L홀' });
+  const id = created.event.id;
+  const person = await ETKO.remote.post(`/api/events/${id}/signup`, { name: '연동손님', phone: '010-3333-0001' });
+  ETKO.store.activeEventId = id;
+  const state = {
+    people: [{ id: 'lx', code: person.participant.code, status: 'registered', cancelled: false }],
+    queue: [],
+  };
+  const scanned = ETKO.scan({ code: person.participant.code, direction: 'IN', online: false, state });
+  assert.equal(scanned.key, 'queued');
+  let replayCalls = 0;
+  const realReplay = ETKO.replayPending.bind(ETKO);
+  ETKO.replayPending = async function (eventId, pending) {
+    replayCalls += 1;
+    return realReplay(eventId, pending);
+  };
+  const handlers = {};
+  const container = {
+    innerHTML: '',
+    querySelector(sel) {
+      if (sel === '[data-sync]') return { addEventListener: (t, fn) => { handlers.sync = fn; } };
+      return null;
+    },
+    querySelectorAll() { return []; },
+  };
+  ETKO.renderCheckin(container, state);
+  assert.ok(handlers.sync, 'sync control must be wired');
+  await handlers.sync.call({});
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal(state.queue.length, 0, 'local queue must drain');
+  assert.equal(replayCalls, 1, 'sync must replay once');
+  const summary = await ETKO.remote.get(`/api/events/${id}/summary`);
+  assert.equal(summary.summary.inside, 1);
 });

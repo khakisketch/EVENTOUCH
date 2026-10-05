@@ -308,8 +308,22 @@
       var sync = container.querySelector ? container.querySelector('[data-sync]') : null;
       if (sync && typeof sync.addEventListener === 'function') {
         sync.addEventListener('click', function () {
+          var pending = s && Array.isArray(s.queue) ? s.queue.slice() : [];
           ETKO.syncQueue(s);
           ETKO.renderCheckin(container, s);
+          try {
+            if (
+              typeof ETKO.replayPending === 'function' &&
+              ETKO.store &&
+              ETKO.store.activeEventId
+            ) {
+              ETKO.replayPending(ETKO.store.activeEventId, pending)
+                .then(function () {
+                  ETKO.renderCheckin(container, s);
+                })
+                .catch(function () {});
+            }
+          } catch (err) {}
         });
       }
       var toggle = container.querySelector ? container.querySelector('[data-online-toggle]') : null;

@@ -492,6 +492,7 @@
         .then(function (data) {
           var user = (data && data.user) || {};
           ETKO.remoteAuth = null;
+          ETKO.serverSession = true;
           if (typeof ETKO.setRole === 'function' && user.role) ETKO.setRole(user.role);
           else if (ETKO.store) ETKO.store.role = user.role || ETKO.store.role;
           var pulled =

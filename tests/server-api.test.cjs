@@ -267,3 +267,62 @@ test('api-write-gates-deny-viewer', async () => {
   const readable = await api('GET', '/api/events', undefined, vCookie);
   assert.equal(readable.status, 200);
 });
+
+test('api-qna-ask-requires-session', async () => {
+  const anon = await api('POST', '/api/events/evt-1/qna', { participantId: 'p1', body: '스팸?' }, undefined);
+  assert.equal(anon.status, 401);
+});
+
+test('api-write-route-tampered-cookie-denied', async () => {
+  const r = await api('POST', '/api/events', { name: '위조', date: '2026-12-08', venue: 'H홀' }, 'etko_session=forged');
+  assert.equal(r.status, 401);
+  assert.ok(!JSON.stringify(r.json).includes('admin'), 'denial must not enumerate users');
+});
+
+test('api-concurrent-checkins-keep-both', async () => {
+  const created = await api('POST', '/api/events', { name: '동시행사', date: '2026-12-09', venue: 'I홀' }, adminCookie);
+  const id = created.json.event.id;
+  const a = await api('POST', `/api/events/${id}/signup`, { name: '동시A', phone: '010-1111-0001' }, undefined);
+  const b = await api('POST', `/api/events/${id}/signup`, { name: '동시B', phone: '010-1111-0002' }, undefined);
+  const [r1, r2] = await Promise.all([
+    api('POST', `/api/events/${id}/checkin`, { code: a.json.participant.code, direction: 'IN' }, adminCookie),
+    api('POST', `/api/events/${id}/checkin`, { code: b.json.participant.code, direction: 'IN' }, adminCookie),
+  ]);
+  assert.equal(r1.json.key, 'success');
+  assert.equal(r2.json.key, 'success');
+  const summary = await api('GET', `/api/events/${id}/summary`, undefined, adminCookie);
+  assert.equal(summary.json.summary.inside, 2);
+});
+
+test('api-unknown-event-sweep', async () => {
+  const paths = [
+    ['GET', '/api/events/evt-999/participants'],
+    ['POST', '/api/events/evt-999/checkin'],
+    ['PUT', '/api/events/evt-999/poll'],
+    ['POST', '/api/events/evt-999/qna'],
+    ['GET', '/api/events/evt-999/reports'],
+  ];
+  for (const [method, url] of paths) {
+    const r = await api(method, url, method === 'GET' ? undefined : {}, adminCookie);
+    assert.equal(r.status, 404, url);
+    assert.match(r.json.error || '', /찾을 수 없습니다/, url);
+  }
+});
+
+test('api-patch-date-validates-calendar', async () => {
+  const created = await api('POST', '/api/events', { name: '날짜행사', date: '2026-12-10', venue: 'J홀' }, adminCookie);
+  const id = created.json.event.id;
+  const bad = await api('PATCH', `/api/events/${id}`, { date: '2026-02-30' }, adminCookie);
+  assert.equal(bad.status, 400);
+});
+
+test('api-proto-user-rejected', async () => {
+  const r = await api('POST', '/api/users', { id: '__proto__', name: 'x', password: 'pw', role: 'VIEWER' }, adminCookie);
+  assert.equal(r.status, 400);
+});
+
+test('api-workspace-returns-slices', async () => {
+  const r = await api('GET', '/api/events/evt-1/workspace', undefined, adminCookie);
+  assert.equal(r.status, 200);
+  assert.ok(r.json.workspace.participants.length >= 5);
+});

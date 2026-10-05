@@ -97,15 +97,40 @@
     const data = await ETKO.remote.get('/api/events');
     if (!ETKO.store) ETKO.store = { events: [], workspaces: {}, activeEventId: null };
     ETKO.store.events = data.events || [];
-    const details = await Promise.all(
-      ETKO.store.events.map((ev) => ETKO.remote.get('/api/events/' + ev.id).catch(() => null))
-    );
-    return { events: ETKO.store.events.length, pulled: details.filter(Boolean).length };
+    let pulled = 0;
+    for (const ev of ETKO.store.events) {
+      if (!ev || !ev.id) continue;
+      try {
+        const detail = await ETKO.remote.get('/api/events/' + ev.id + '/workspace');
+        if (detail && detail.workspace) {
+          ETKO.store.workspaces[ev.id] = detail.workspace;
+          pulled += 1;
+        }
+      } catch (err) {}
+    }
+    if (!ETKO.store.activeEventId || !ETKO.store.workspaces[ETKO.store.activeEventId]) {
+      ETKO.store.activeEventId =
+        (data && data.activeEventId) ||
+        (ETKO.store.events[0] && ETKO.store.events[0].id) ||
+        null;
+    }
+    return { events: ETKO.store.events.length, pulled };
   };
 
-  // Replay offline check-in entries once each. Server-side duplicate
-  // detection makes replays idempotent: applied counts only fresh
-  // successes, repeats land in duplicates.
+  // Replay locally queued offline scans after a local sync. Runs only
+  // with an authenticated server session; otherwise skipped so demo and
+  // logged-out flows never fire doomed requests. Server-side duplicate
+  // detection keeps replays idempotent.
+  ETKO.replayPending = async function (eventId, pending) {
+    if (ETKO.serverSession !== true) return { applied: 0, duplicates: 0, skipped: true };
+    const entries = Array.isArray(pending) ? pending.filter(Boolean) : [];
+    if (!eventId || entries.length === 0) return { applied: 0, duplicates: 0, skipped: true };
+    try {
+      return await ETKO.replayOutbox(eventId, entries);
+    } catch (err) {
+      return { applied: 0, duplicates: 0, skipped: true };
+    }
+  };
   ETKO.replayOutbox = async function (eventId, entries) {
     let applied = 0;
     let duplicates = 0;
@@ -121,14 +146,6 @@
     }
     return { applied, duplicates };
   };
-
-  function escapeHtml(value) {
-    return String(value === undefined || value === null ? '' : value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
 
   // Login gate rendered inside agency-home when the server is reachable
   // but no session exists. Calls onDone(user) after a successful login.
@@ -157,6 +174,7 @@
             id: idEl && idEl.value !== undefined ? String(idEl.value) : '',
             password: pwEl && pwEl.value !== undefined ? String(pwEl.value) : '',
           });
+          ETKO.serverSession = true;
           if (typeof onDone === 'function') onDone(data && data.user);
         } catch (err) {
           const alert = container.querySelector ? container.querySelector('[data-login-error]') : null;

@@ -37,3 +37,10 @@ test('store-write-leaves-no-tmp', () => {
   const leftovers = fs.readdirSync(dir).filter((f) => f.endsWith('.tmp'));
   assert.equal(leftovers.length, 0);
 });
+
+test('store-corrupt-file-throws-instead-of-resetting', () => {
+  const dir = tmpDir();
+  fs.writeFileSync(path.join(dir, 'users.json'), '{broken');
+  const db = store.openStore(dir);
+  assert.throws(() => db.read('users'), /손상|파싱|JSON|예기치/);
+});

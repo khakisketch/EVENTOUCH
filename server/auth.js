@@ -8,8 +8,10 @@ const ROLES = ['AGENCY', 'MANAGER', 'CLIENT', 'STAFF', 'VIEWER'];
 const SESSION_COOKIE = 'etko_session';
 
 function hashPassword(password) {
+  const pw = String(password);
+  if (pw.length === 0 || pw.length > 200) throw new Error('비밀번호를 확인하세요');
   const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(String(password), salt, 32).toString('hex');
+  const hash = crypto.scryptSync(pw, salt, 32).toString('hex');
   return `scrypt:${salt}:${hash}`;
 }
 
@@ -37,15 +39,34 @@ function publicUser(user) {
 function ensureSeed(store) {
   const users = store.read('users');
   if (!users.admin) {
-    const password = process.env.ADMIN_PASSWORD || 'admin-local-only';
-    users.admin = {
-      id: 'admin',
-      name: '관리자',
-      role: 'AGENCY',
-      scope: null,
-      hash: hashPassword(password),
-    };
-    store.write('users', users);
+    if (process.env.ADMIN_PASSWORD) {
+      users.admin = {
+        id: 'admin',
+        name: '관리자',
+        role: 'AGENCY',
+        scope: null,
+        hash: hashPassword(process.env.ADMIN_PASSWORD),
+      };
+      store.write('users', users);
+      return;
+    }
+    if (process.env.ALLOW_DEV_DEFAULT_ADMIN === '1') {
+      users.admin = {
+        id: 'admin',
+        name: '관리자',
+        role: 'AGENCY',
+        scope: null,
+        hash: hashPassword('admin-local-only'),
+      };
+      store.write('users', users);
+      try {
+        process.stderr.write('[eventouch] WARNING: default dev admin seeded; set ADMIN_PASSWORD.\n');
+      } catch (err) {}
+      return;
+    }
+    try {
+      process.stderr.write('[eventouch] WARNING: no ADMIN_PASSWORD set; admin login disabled.\n');
+    } catch (err) {}
   }
 }
 
@@ -57,11 +78,16 @@ function createSession(store, userId) {
   return sid;
 }
 
+function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj, key);
+}
+
 function sessionFromCookie(store, header) {
   const cookies = parseCookies(header);
   const sid = cookies[SESSION_COOKIE];
-  if (!sid) return null;
+  if (!sid || typeof sid !== 'string') return null;
   const sessions = store.read('sessions');
+  if (!hasOwn(sessions, sid)) return null;
   const entry = sessions[sid];
   if (!entry || entry.expiresAt < Date.now()) {
     if (entry) {
@@ -71,6 +97,7 @@ function sessionFromCookie(store, header) {
     return null;
   }
   const users = store.read('users');
+  if (!hasOwn(users, entry.userId)) return null;
   const user = users[entry.userId];
   if (!user) return null;
   return { sid, user };
@@ -78,7 +105,8 @@ function sessionFromCookie(store, header) {
 
 function sessionCookieHeader(sid) {
   const maxAge = Math.floor(ttlMs() / 1000);
-  return `${SESSION_COOKIE}=${sid}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${maxAge}`;
+  const secure = process.env.COOKIE_SECURE === '1' ? '; Secure' : '';
+  return `${SESSION_COOKIE}=${sid}; HttpOnly; Path=/; SameSite=Lax${secure}; Max-Age=${maxAge}`;
 }
 
 function clearCookieHeader() {

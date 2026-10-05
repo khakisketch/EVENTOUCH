@@ -33,8 +33,20 @@ function notFoundApi(res) {
   sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
 }
 
+const DENIED_PREFIXES = ['/server/', '/data/server/', '/data/storage/', '/.git/', '/node_modules/'];
+
 function serveStatic(req, res) {
   const urlPath = req.url.split('?')[0];
+  const lower = urlPath.toLowerCase();
+  if (
+    DENIED_PREFIXES.some((prefix) => lower === prefix.slice(0, -1) || lower.startsWith(prefix)) ||
+    /(^|\/)\.[^/]*$/.test(lower) ||
+    lower.endsWith('.env')
+  ) {
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end('파일을 찾을 수 없습니다');
+    return;
+  }
   const rel = urlPath === '/' ? 'index.html' : decodeURIComponent(urlPath).replace(/^\/+/, '');
   const file = path.normalize(path.join(ROOT, rel));
   if (!file.startsWith(ROOT + path.sep) && file !== ROOT) {
@@ -49,7 +61,7 @@ function serveStatic(req, res) {
       return;
     }
     const type = MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';
-    res.writeHead(200, { 'content-type': type });
+    res.writeHead(200, { 'content-type': type, 'x-content-type-options': 'nosniff' });
     res.end(data);
   });
 }

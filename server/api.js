@@ -363,7 +363,7 @@ function handleEvents(req, res, store, parts, body) {
       ev.name = text(body.name);
     }
     if (body.date !== undefined) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(text(body.date))) return err(res, 400, '행사 날짜 형식을 확인하세요', 'date');
+      if (!isCalendarDate(text(body.date))) return err(res, 400, '행사 날짜 형식을 확인하세요', 'date');
       ev.date = text(body.date);
     }
     if (body.venue !== undefined) {
@@ -392,6 +392,10 @@ function handleEvents(req, res, store, parts, body) {
   // GET /api/events/:id/summary
   if (parts.length === 2 && parts[1] === 'summary' && req.method === 'GET') {
     return sendJson(res, 200, { summary: eventSummary(ws) });
+  }
+  // GET /api/events/:id/workspace (authenticated slices for sync clients)
+  if (parts.length === 2 && parts[1] === 'workspace' && req.method === 'GET') {
+    return sendJson(res, 200, { workspace: ws });
   }
   // Participants
   if (parts[1] === 'participants' && parts.length === 2 && req.method === 'GET') {
@@ -538,6 +542,7 @@ function handleEvents(req, res, store, parts, body) {
     return sendJson(res, 200, { qna: ws.qna });
   }
   if (parts[1] === 'qna' && parts.length === 2 && req.method === 'POST') {
+    requireWrite(me, 'qna');
     const person = findPersonById(ws, body.participantId);
     if (!person) return err(res, 404, '참가자를 찾을 수 없습니다', 'participantId');
     const qbody = text(body.body);
@@ -585,7 +590,7 @@ function handleEvents(req, res, store, parts, body) {
   }
   // Survey
   if (parts[1] === 'survey' && parts.length === 2 && req.method === 'POST') {
-    requireWrite(me, 'draw');
+    requireWrite(me, 'survey');
     const person = findPersonById(ws, body.participantId);
     if (!person) return err(res, 404, '참가자를 찾을 수 없습니다', 'participantId');
     if (!ws.survey.open) return err(res, 409, '설문이 마감되었습니다');
@@ -605,6 +610,9 @@ function handleEvents(req, res, store, parts, body) {
   }
   if (parts[1] === 'photos' && parts.length === 2 && req.method === 'POST') {
     requireWrite(me, 'photos');
+    if (body.participantId !== undefined && !findPersonById(ws, body.participantId)) {
+      return err(res, 404, '참가자를 찾을 수 없습니다', 'participantId');
+    }
     const photo = {
       id: nextId(ws.photos, 'photo'),
       participantId: text(body.participantId),
@@ -627,7 +635,7 @@ function handleEvents(req, res, store, parts, body) {
   }
   // Content
   if (parts[1] === 'program' && parts.length === 2 && req.method === 'POST') {
-    requireWrite(me, 'events');
+    requireWrite(me, 'program');
     if (!text(body.title)) return err(res, 400, '세션명을 입력하세요', 'title');
     if (!text(body.time)) return err(res, 400, '시작 시간을 입력하세요', 'time');
     const row = {
@@ -642,7 +650,7 @@ function handleEvents(req, res, store, parts, body) {
     return sendJson(res, 201, { program: row });
   }
   if (parts[1] === 'program' && parts.length === 3 && req.method === 'DELETE') {
-    requireWrite(me, 'events');
+    requireWrite(me, 'program');
     const before = ws.program.length;
     ws.program = ws.program.filter((r) => r && r.id !== parts[2]);
     if (ws.program.length === before) return err(res, 404, '프로그램을 찾을 수 없습니다');
@@ -650,7 +658,7 @@ function handleEvents(req, res, store, parts, body) {
     return sendJson(res, 200, { ok: true });
   }
   if (parts[1] === 'notices' && parts.length === 2 && req.method === 'POST') {
-    requireWrite(me, 'events');
+    requireWrite(me, 'notices');
     if (!text(body.title)) return err(res, 400, '공지 제목을 입력하세요', 'title');
     if (!text(body.body)) return err(res, 400, '공지 내용을 입력하세요', 'body');
     const notice = { id: nextId(ws.notices, 'notice'), title: text(body.title), body: text(body.body) };
@@ -659,7 +667,7 @@ function handleEvents(req, res, store, parts, body) {
     return sendJson(res, 201, { notice });
   }
   if (parts[1] === 'venue' && parts.length === 2 && req.method === 'PUT') {
-    requireWrite(me, 'events');
+    requireWrite(me, 'venue');
     if (!text(body.name)) return err(res, 400, '행사장 이름을 입력하세요', 'name');
     ws.venue = { name: text(body.name), address: text(body.address) };
     save();
@@ -667,7 +675,7 @@ function handleEvents(req, res, store, parts, body) {
   }
   // Messages
   if (parts[1] === 'templates' && parts.length === 2 && req.method === 'POST') {
-    requireWrite(me, 'events');
+    requireWrite(me, 'messages');
     if (!text(body.name)) return err(res, 400, '템플릿 이름을 입력하세요', 'name');
     if (!text(body.body)) return err(res, 400, '템플릿 내용을 입력하세요', 'body');
     const tpl = { id: nextId(ws.templates, 'tpl'), name: text(body.name), body: text(body.body) };
@@ -676,7 +684,7 @@ function handleEvents(req, res, store, parts, body) {
     return sendJson(res, 201, { template: tpl });
   }
   if (parts[1] === 'campaigns' && parts.length === 2 && req.method === 'POST') {
-    requireWrite(me, 'events');
+    requireWrite(me, 'messages');
     if (!text(body.title)) return err(res, 400, '캠페인 이름을 입력하세요', 'title');
     if (!text(body.content)) return err(res, 400, '메시지 내용을 입력하세요', 'content');
     const camp = {
@@ -691,7 +699,7 @@ function handleEvents(req, res, store, parts, body) {
     return sendJson(res, 201, { campaign: camp });
   }
   if (parts[1] === 'campaigns' && parts[3] === 'send' && parts.length === 4 && req.method === 'POST') {
-    requireWrite(me, 'events');
+    requireWrite(me, 'messages');
     const camp = (ws.campaigns || []).find((c) => c && c.id === parts[2]);
     if (!camp) return err(res, 404, '캠페인을 찾을 수 없습니다');
     const entry = {
@@ -716,7 +724,7 @@ function handleEvents(req, res, store, parts, body) {
     const ext = path.extname(file).toLowerCase();
     const type =
       Object.keys(ALLOW_TYPES).find((t) => ALLOW_TYPES[t] === ext) || 'application/octet-stream';
-    res.writeHead(200, { 'content-type': type });
+    res.writeHead(200, { 'content-type': type, 'x-content-type-options': 'nosniff' });
     fs.createReadStream(file).pipe(res);
     return;
   }
@@ -725,7 +733,7 @@ function handleEvents(req, res, store, parts, body) {
     return sendJson(res, 200, { reports: ws.reports });
   }
   if (parts[1] === 'reports' && parts.length === 2 && req.method === 'POST') {
-    requireWrite(me, 'events');
+    requireWrite(me, 'results');
     if (!text(body.title)) return err(res, 400, '보고서 제목을 입력하세요', 'title');
     const metrics = eventSummary(ws);
     const report = {
@@ -763,7 +771,11 @@ async function handleFileUpload(req, res, store, eventId, urlPath) {
   const ev = findEvent(data, eventId);
   const query = urlPath.split('?')[1] || '';
   const params = new URLSearchParams(query);
-  const name = safeFileName(params.get('name'));
+  const rawName = params.get('name') || '';
+  if (rawName.includes('/') || rawName.includes('\\') || rawName.includes('..')) {
+    return err(res, 400, '파일 이름을 확인하세요', 'name');
+  }
+  const name = safeFileName(rawName);
   if (!name) return err(res, 400, '파일 이름을 확인하세요', 'name');
   const ctype = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
   if (!ALLOW_TYPES[ctype]) return err(res, 400, '지원하지 않는 파일 형식입니다', 'type');
@@ -906,8 +918,12 @@ function writeUpload(req, dest, cap) {
       }
       stream.end(() => resolve(size));
     });
-    req.on('error', () => reject(new Error('파일을 받지 못했습니다')));
+    req.on('error', () => {
+      fs.unlink(dest, () => {});
+      reject(new Error('파일을 받지 못했습니다'));
+    });
     stream.on('error', () => {
+      fs.unlink(dest, () => {});
       if (!tooBig) reject(new Error('파일을 저장하지 못했습니다'));
     });
   });
@@ -930,7 +946,6 @@ async function handleApi(req, res, store, urlPath) {
   let body = {};
   if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
     try {
-      const { readJsonBody } = require('./http');
       body = await readJsonBody(req);
     } catch (e) {
       return err(res, 400, e.message);
@@ -945,6 +960,9 @@ async function handleApi(req, res, store, urlPath) {
       }
       const id = text(body.id);
       if (!id) return err(res, 400, '사용자 아이디를 입력하세요', 'id');
+      if (id === '__proto__' || id === 'constructor' || id === 'prototype') {
+        return err(res, 400, '사용자 아이디를 확인하세요', 'id');
+      }
       if (!text(body.password)) return err(res, 400, '비밀번호를 입력하세요', 'password');
       const role = String(body.role || 'VIEWER').toUpperCase();
       if (ROLES.indexOf(role) === -1) return err(res, 400, '역할을 확인하세요', 'role');
