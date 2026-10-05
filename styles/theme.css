@@ -437,13 +437,15 @@ main .stat .stat-sub {
   font-size: var(--fs-body-sm);
 }
 
-/* Agency home heading: context eyebrow, title and creation shortcut. */
+/* Agency home: clear page identity, compact metrics and operational lists. */
 .agency-home-heading {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
+  padding-bottom: var(--space-5);
   margin-bottom: var(--space-5);
+  border-bottom: 1px solid var(--border);
 }
 
 .agency-home-heading .eyebrow {
@@ -451,25 +453,117 @@ main .stat .stat-sub {
   color: var(--muted);
   font-size: var(--fs-caption);
   font-weight: 700;
+  letter-spacing: 0.06em;
 }
 
 .agency-home-heading h1 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: var(--fs-h1);
+  font-size: clamp(30px, 3vw, 38px);
   font-weight: 500;
   letter-spacing: -0.02em;
+  line-height: 1.15;
 }
 
 .agency-home-sub {
-  margin: var(--space-2) 0 0;
+  margin: var(--space-3) 0 0;
   color: var(--muted);
-  font-size: var(--fs-body-sm);
+  font-size: var(--fs-body);
+  line-height: 1.5;
 }
 
 .agency-home-actions {
   flex: 0 0 auto;
-  padding-top: var(--space-5);
+}
+
+main .agency-home button.event-open-primary {
+  min-height: var(--touch-min);
+  padding-inline: var(--space-4);
+  border-color: var(--action);
+  background: var(--action);
+  color: #fff;
+  font-weight: 750;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+main .agency-home button.event-open-primary:hover {
+  background: var(--action);
+  color: #fff;
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
+}
+
+main .agency-home button.event-open-primary:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.agency-home-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.agency-home-section-head h2 {
+  margin: 0;
+}
+
+.agency-home-section-head p {
+  margin: var(--space-1) 0 0;
+  color: var(--muted);
+  font-size: var(--fs-body-sm);
+  line-height: 1.45;
+}
+
+.agency-home-summary {
+  margin-bottom: var(--space-6);
+}
+
+main .agency-home-stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  overflow: clip;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+main .agency-home-stats .agency-home-stat {
+  min-width: 0;
+  padding: var(--space-4) var(--space-4);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+main .agency-home-stats .agency-home-stat + .agency-home-stat {
+  border-left: 1px solid var(--border);
+}
+
+main .agency-home-stats .stat-value {
+  margin: 0 0 var(--space-1);
+  font-size: clamp(26px, 2.7vw, 34px);
+  line-height: 1.1;
+}
+
+main .agency-home-stats .agency-home-stat small {
+  color: var(--fg);
+  font-size: var(--fs-body-sm);
+  font-weight: 700;
+}
+
+main .agency-home-stats .stat-sub {
+  margin-top: var(--space-2);
+  font-size: var(--fs-caption);
+  line-height: 1.45;
+}
+
+main .agency-home-stats .agency-home-stat-attention .stat-value {
+  color: var(--action);
 }
 
 .panel-head {
@@ -506,17 +600,105 @@ main button.plain-link:hover {
   text-decoration: underline;
 }
 
+main button.plain-link:active {
+  color: var(--action);
+  text-decoration: underline;
+}
+
 /* Agency home dashboard: events beside activity on wide screens. */
 .agency-dashboard {
   display: grid;
-  gap: 0 var(--space-5);
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: var(--space-6);
+  grid-template-columns: minmax(0, 1.55fr) minmax(16rem, 0.85fr);
   align-items: start;
+}
+
+.agency-home-panel {
+  min-width: 0;
+}
+
+main .agency-dashboard .agency-home-list {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  margin: 0;
+}
+
+main .agency-dashboard .agency-home-list > .card {
+  min-width: 0;
+  padding: var(--space-3) 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+main .agency-dashboard .agency-home-list > .card:last-child {
+  border-bottom: 0;
+}
+
+main .agency-dashboard .event-card > strong {
+  font-size: var(--fs-body);
+  line-height: 1.4;
+}
+
+main .agency-dashboard .event-card > p:not(.event-card-actions) {
+  margin: var(--space-2) 0 0;
+  color: var(--muted);
+  font-size: var(--fs-body-sm);
+  line-height: 1.5;
+}
+
+main .agency-dashboard .event-card .event-card-actions {
+  margin: var(--space-3) 0 0;
+}
+
+main .agency-dashboard .agency-home-activity > .card {
+  padding: var(--space-3) 0;
+  font-size: var(--fs-body-sm);
+  line-height: 1.5;
 }
 
 @media (max-width: 900px) {
   .agency-dashboard {
     grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-5);
+  }
+}
+
+@media (max-width: 600px) {
+  .agency-home-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .agency-home-actions {
+    width: 100%;
+  }
+
+  main .agency-home-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  main .agency-home-stats .agency-home-stat {
+    padding: var(--space-3);
+  }
+
+  main .agency-home-stats .agency-home-stat + .agency-home-stat {
+    border-left: 1px solid var(--border);
+  }
+
+  main .agency-home-stats .agency-home-stat:nth-child(odd) {
+    border-left: 0;
+  }
+
+  main .agency-home-stats .agency-home-stat:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--border);
+  }
+
+  .agency-home-section-head {
+    align-items: flex-start;
   }
 }
 
