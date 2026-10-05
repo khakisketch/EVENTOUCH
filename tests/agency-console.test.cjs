@@ -177,6 +177,38 @@ test('PRE overview names the next step toward day-of operation', () => {
   assert.doesNotMatch(live.innerHTML, /진행 중으로 전환/, 'LIVE overview must not show the PRE next-step note');
 });
 
+test('overview program section links to content management', () => {
+  const ETKO = load(['../app.js', '../features/agency.js', '../features/results.js', '../features/agency-ui.js']);
+  const handlers = {};
+  const actions = ['checkin', 'booth', 'content'].map((route) => ({
+    getAttribute(name) { return name === 'data-overview-route' ? route : null; },
+    addEventListener(type, fn) { if (type === 'click') handlers[route] = fn; },
+  }));
+  const b = {
+    innerHTML: '',
+    querySelectorAll(selector) { return selector === '[data-overview-route]' ? actions : []; },
+  };
+  const routes = [];
+  ETKO.navigate = (route) => { routes.push(route); return route; };
+
+  ETKO.renderOverview(b);
+
+  assert.match(b.innerHTML, /일정 관리/, 'program section misses the content link');
+  assert.match(b.innerHTML, /data-overview-route="content"/, 'program link misses the content route');
+  handlers.content.call(actions[2]);
+  assert.deepEqual(routes, ['content']);
+});
+
+test('overview report action lives in its own trailing section', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const view = html.slice(html.indexOf('id="overview-view"'), html.indexOf('id="participants-view"'));
+  assert.match(view, /aria-label="운영 보고서"/, 'overview misses the report section');
+  const order = ['id="overview-mount"', 'id="results-mount"', 'id="settings-mount"', 'data-report-create']
+    .map((marker) => view.indexOf(marker));
+  assert.ok(order.every((pos) => pos !== -1), 'overview misses a required block');
+  assert.deepEqual([...order].sort((a, b) => a - b), order, 'overview blocks are out of order');
+});
+
 test('selected-event overview shows live context and routes quick actions to existing day-of views', () => {
   const ETKO = load(['../app.js', '../features/agency.js', '../features/results.js', '../features/agency-ui.js']);
   const handlers = {};

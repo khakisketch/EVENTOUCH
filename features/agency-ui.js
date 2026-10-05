@@ -253,6 +253,13 @@
     var quickActionGroup = quickActions
       ? '<div class="overview-quick-actions" role="group" aria-label="당일 운영 바로가기">' + quickActions + '</div>'
       : '';
+    var programHead = '<div class="panel-head"><div>' +
+      '<h2 id="overview-program-title">오늘의 운영 순서</h2>' +
+      '<p>등록된 프로그램 정보를 표시합니다.</p></div>' +
+      (canOpenRoute('content')
+        ? '<button type="button" class="plain-link" data-overview-route="content">일정 관리 →</button>'
+        : '') +
+      '</div>';
     var nextStep = event && event.status === 'PRE'
       ? '<p class="overview-next" role="note">아직 준비 중입니다. 현장 관리에서 진행 중으로 전환하면 당일 운영이 시작됩니다.</p>'
       : '';
@@ -265,9 +272,7 @@
       escapeHtml(event && event.venue || '장소 미정') + ' · <span class="event-status">' + escapeHtml(status) + '</span></p>' +
       '</div>' + quickActionGroup + '</div>' + nextStep +
       '<div class="stats overview-stats" aria-label="현재 현장 현황">' + stats + '</div>' +
-      '<section class="overview-program" aria-labelledby="overview-program-title"><div>' +
-      '<h2 id="overview-program-title">오늘의 운영 순서</h2>' +
-      '<p>등록된 프로그램 정보를 표시합니다.</p></div>' +
+      '<section class="overview-program" aria-labelledby="overview-program-title">' + programHead +
       (programRows ? '<ul class="overview-program-list">' + programRows + '</ul>' :
         '<p role="status" data-empty>등록된 프로그램이 없습니다. 콘텐츠에서 프로그램을 등록할 수 있습니다.</p>') +
       '</section></section>';
