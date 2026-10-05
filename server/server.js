@@ -34,11 +34,20 @@ function notFoundApi(res) {
 }
 
 const DENIED_PREFIXES = ['/server/', '/data/server/', '/data/storage/', '/.git/', '/node_modules/'];
+const DENIED_FILES = new Set([
+  '/dockerfile',
+  '/docker-compose.yml',
+  '/vercel.json',
+  '/.env',
+  '/.env.example',
+  '/.dockerignore',
+]);
 
 function serveStatic(req, res) {
   const urlPath = req.url.split('?')[0];
   const lower = urlPath.toLowerCase();
   if (
+    DENIED_FILES.has(lower) ||
     DENIED_PREFIXES.some((prefix) => lower === prefix.slice(0, -1) || lower.startsWith(prefix)) ||
     /(^|\/)\.[^/]*$/.test(lower) ||
     lower.endsWith('.env')

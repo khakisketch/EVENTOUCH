@@ -1,3 +1,7 @@
 .superpowers/
 node_modules/
 .worktrees/
+.playwright-cli/
+data/server/
+data/storage/
+.env

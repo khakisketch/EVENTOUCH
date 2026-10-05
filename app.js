@@ -337,22 +337,21 @@
       if (typeof ETKO.bootRemote === 'function') {
         ETKO.bootRemote().then(function (mode) {
           if (!mode) return;
-          if (mode.mode === 'server' && mode.user) {
+          var apply =
+            typeof ETKO.applyBootMode === 'function'
+              ? ETKO.applyBootMode(mode)
+              : Promise.resolve(mode.mode);
+          Promise.resolve(apply).then(function (result) {
             try {
-              if (typeof ETKO.setRole === 'function') ETKO.setRole(mode.user.role);
+              if (result === 'server') {
+                if (typeof ETKO.setRole === 'function' && mode.user) ETKO.setRole(mode.user.role);
+                if (typeof ETKO.syncViews === 'function') ETKO.syncViews(null);
+              } else if (result === 'login-needed') {
+                if (typeof ETKO.navigate === 'function') ETKO.navigate('agency-home');
+                else if (typeof ETKO.syncViews === 'function') ETKO.syncViews(null);
+              }
             } catch (err) {}
-            if (typeof ETKO.pullRemoteStore === 'function') {
-              ETKO.pullRemoteStore()
-                .then(function () {
-                  if (typeof ETKO.syncViews === 'function') ETKO.syncViews(null);
-                })
-                .catch(function () {});
-            }
-          } else if (mode.mode === 'login-needed') {
-            ETKO.remoteAuth = 'login-needed';
-            if (typeof ETKO.navigate === 'function') ETKO.navigate('agency-home');
-            else if (typeof ETKO.syncViews === 'function') ETKO.syncViews(null);
-          }
+          });
         });
       }
     };

@@ -190,3 +190,49 @@ test('checkin-sync-replays-to-server', async () => {
   const summary = await ETKO.remote.get(`/api/events/${id}/summary`);
   assert.equal(summary.summary.inside, 1);
 });
+
+test('replay-outbox-reports-partial-failures', async () => {
+  const ETKO = loadSync();
+  ETKO.remote.base = BASE;
+  await ETKO.remote.post('/api/auth/login', { id: 'admin', password: 'pw' });
+  ETKO.serverSession = true;
+  const created = await ETKO.remote.post('/api/events', { name: '부분재전송', date: '2026-12-13', venue: 'M홀' });
+  const id = created.event.id;
+  const person = await ETKO.remote.post(`/api/events/${id}/signup`, { name: '부분손님', phone: '010-4444-0001' });
+  const r = await ETKO.replayOutbox(id, [
+    { code: person.participant.code, direction: 'IN' },
+    { code: 'EVT-0000', direction: 'IN' },
+  ]);
+  assert.equal(r.applied, 1);
+  assert.equal(r.duplicates, 0);
+  assert.equal(r.failed, 1);
+  assert.ok(Array.isArray(r.errors) && r.errors.length === 1);
+});
+
+test('apply-boot-mode-derives-session-flag', async () => {
+  const ETKO = loadSync();
+  let pulls = 0;
+  ETKO.pullRemoteStore = async () => { pulls += 1; return { events: 0, pulled: 0 }; };
+  assert.equal(await ETKO.applyBootMode({ mode: 'server', user: { id: 'a' } }), 'server');
+  assert.equal(ETKO.serverSession, true);
+  assert.equal(pulls, 1);
+  assert.equal(await ETKO.applyBootMode({ mode: 'login-needed' }), 'login-needed');
+  assert.equal(ETKO.serverSession, false);
+  assert.equal(ETKO.remoteAuth, 'login-needed');
+  assert.equal(await ETKO.applyBootMode({ mode: 'demo' }), 'demo');
+  assert.equal(ETKO.serverSession, false);
+});
+
+test('pull-preserves-local-team-members', async () => {
+  const ETKO = loadSync();
+  ETKO.remote.base = BASE;
+  await ETKO.remote.post('/api/auth/login', { id: 'admin', password: 'pw' });
+  ETKO.store = {
+    events: [{ id: 'evt-1' }],
+    workspaces: { 'evt-1': { members: [{ id: 'm1', name: '로컬팀' }] } },
+    activeEventId: 'evt-1',
+  };
+  await ETKO.pullRemoteStore();
+  assert.deepEqual(ETKO.store.workspaces['evt-1'].members, [{ id: 'm1', name: '로컬팀' }]);
+  assert.ok(ETKO.store.workspaces['evt-1'].participants.length >= 5);
+});

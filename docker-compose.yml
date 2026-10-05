@@ -1,0 +1,23 @@
+services:
+  eventouch:
+    build: .
+    # HOST_PORT:container 8776. 컨테이너 내부는 항상 8776.
+    ports:
+      - "${HOST_PORT:-8776}:8776"
+    environment:
+      PORT: 8776
+      DATA_DIR: /data/db
+      STORAGE_DIR: /data/storage
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
+      COOKIE_SECURE: ${COOKIE_SECURE:-0}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD을 설정하세요}
+    volumes:
+      # 운영 DB. NAS에 둘 때: /mnt/nas/eventouch/db:/data/db
+      - etko-db:/data/db
+      # 운영 파일 저장소. NAS에 둘 때: /mnt/nas/eventouch/storage:/data/storage
+      - etko-storage:/data/storage
+    restart: unless-stopped
+
+volumes:
+  etko-db:
+  etko-storage:

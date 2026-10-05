@@ -22,6 +22,7 @@
 - 저장 형태는 기존 `ETKO.store` v1(event·workspace·참가자·프로그램·공지·부스·데스크·기록·투표·퀴즈·Q&A·드로우·사진·메시지·보고서)을 그대로 서버로 이관.
 - REST `/api/*`: auth(로그인·로그아웃·내 정보), events, participants, checkin, booths, engagement(투표·퀴즈·Q&A·드로우·만족도·사진 상태 전이), content, messages(초안·예약 저장, 발송은 SIMULATION_ONLY 유지), results/reports, files(업로드·다운로드).
 - 프론트 이관: fetch 어댑터(쿠키 세션), 서버 정식 저장. 체크인 오프라인 큐는 클라이언트에 유지.
+- 참여(투표·퀴즈·Q&A·드로우·만족도·사진) 쓰기는 로그인 세션 + 역할 게이트 뒤에 둔다(스태프 매개). 익명 공개 제출은 범위 밖.
 
 ## 4. 수용 기준
 

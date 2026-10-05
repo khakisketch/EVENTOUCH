@@ -55,7 +55,7 @@ test('unknown-api-404-korean', async () => {
 });
 
 test('static-denies-secret-paths', async () => {
-  for (const p of ['/data/server/users.json', '/data/server/sessions.json', '/server/auth.js', '/.git/config']) {
+  for (const p of ['/data/server/users.json', '/data/server/sessions.json', '/server/auth.js', '/.git/config', '/Dockerfile', '/docker-compose.yml', '/vercel.json', '/.env']) {
     const res = await fetch(`${BASE}${p}`);
     assert.equal(res.status, 404, `${p} must not be served`);
   }

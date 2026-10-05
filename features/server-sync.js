@@ -103,7 +103,21 @@
       try {
         const detail = await ETKO.remote.get('/api/events/' + ev.id + '/workspace');
         if (detail && detail.workspace) {
+          // Team members are local-only until a members API ships; never
+          // let a pull wipe them.
+          const keepMembers =
+            ETKO.store.workspaces[ev.id] && Array.isArray(ETKO.store.workspaces[ev.id].members)
+              ? ETKO.store.workspaces[ev.id].members
+              : null;
           ETKO.store.workspaces[ev.id] = detail.workspace;
+          if (
+            keepMembers &&
+            keepMembers.length > 0 &&
+            (!Array.isArray(ETKO.store.workspaces[ev.id].members) ||
+              ETKO.store.workspaces[ev.id].members.length === 0)
+          ) {
+            ETKO.store.workspaces[ev.id].members = keepMembers;
+          }
           pulled += 1;
         }
       } catch (err) {}
@@ -134,17 +148,44 @@
   ETKO.replayOutbox = async function (eventId, entries) {
     let applied = 0;
     let duplicates = 0;
+    let failed = 0;
+    const errors = [];
     for (const entry of entries || []) {
       if (!entry) continue;
-      const result = await ETKO.remote.post('/api/events/' + eventId + '/checkin', {
-        code: entry.code,
-        direction: entry.direction || 'IN',
-        online: true,
-      });
-      if (result && result.key === 'success') applied += 1;
-      else duplicates += 1;
+      try {
+        const result = await ETKO.remote.post('/api/events/' + eventId + '/checkin', {
+          code: entry.code,
+          direction: entry.direction || 'IN',
+          online: true,
+        });
+        if (result && result.key === 'success') applied += 1;
+        else if (result && result.key === 'duplicate') duplicates += 1;
+        else {
+          failed += 1;
+          errors.push({ code: entry.code, key: result && result.key });
+        }
+      } catch (err) {
+        failed += 1;
+        errors.push({ code: entry.code, message: err.message });
+      }
     }
-    return { applied, duplicates };
+    return { applied, duplicates, failed, errors };
+  };
+
+  // Derive the session flag from a boot probe (single testable place).
+  ETKO.applyBootMode = async function (mode) {
+    if (mode && mode.mode === 'server') {
+      ETKO.serverSession = true;
+      if (typeof ETKO.pullRemoteStore === 'function') {
+        try {
+          await ETKO.pullRemoteStore();
+        } catch (err) {}
+      }
+      return 'server';
+    }
+    ETKO.serverSession = false;
+    ETKO.remoteAuth = mode && mode.mode === 'login-needed' ? 'login-needed' : null;
+    return (mode && mode.mode) || 'demo';
   };
 
   // Login gate rendered inside agency-home when the server is reachable
