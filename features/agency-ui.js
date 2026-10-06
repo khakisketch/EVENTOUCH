@@ -281,15 +281,56 @@
       '<section class="overview-program" aria-labelledby="overview-program-title">' + programHead +
       (programRows ? '<ul class="overview-program-list">' + programRows + '</ul>' :
         '<p role="status" data-empty>등록된 프로그램이 없습니다. 콘텐츠에서 프로그램을 등록할 수 있습니다.</p>') +
-      '</section></section>';
+      '</section>' + checklistHtml(event, workspace) + '</section>';
     onClick(container, 'data-overview-route', function () {
       var route = this && typeof this.getAttribute === 'function'
         ? this.getAttribute('data-overview-route')
         : null;
       if (route && typeof ETKO.navigate === 'function') ETKO.navigate(route);
     });
+    onClick(container, 'data-overview-publish', function () {
+      try {
+        if (typeof ETKO.setEventStatus !== 'function') return;
+        var id = ETKO.store && ETKO.store.activeEventId;
+        ETKO.setEventStatus(id, 'LIVE');
+        if (typeof ETKO.renderOverview === 'function') ETKO.renderOverview(container);
+      } catch (err) {
+        fail(container, err);
+      }
+    });
     return container.innerHTML;
   };
+
+  var RECRUIT_LABELS = { online: '온라인 신청', manual: '명단 직접 등록', later: '나중에 정하기' };
+
+  function checklistHtml(event, workspace) {
+    var ws = workspace || {};
+    var programs = Array.isArray(ws.program) ? ws.program.length : 0;
+    var units = Array.isArray(ws.units) ? ws.units.length : 0;
+    var notices = Array.isArray(ws.notices) ? ws.notices.length : 0;
+    var method = event && RECRUIT_LABELS[event.recruitment] ? RECRUIT_LABELS[event.recruitment] : '미정';
+    function item(done, text, route, routeLabel) {
+      var mark = done ? '완료' : '대기';
+      var link = route && canOpenRoute(route)
+        ? ' <button type="button" class="plain-link" data-overview-route="' + route + '">' + escapeHtml(routeLabel || '열기 →') + '</button>'
+        : '';
+      return '<li data-checklist-done="' + (done ? 'true' : 'false') + '">[' + mark + '] ' + escapeHtml(text) + link + '</li>';
+    }
+    var items =
+      item(!!(event && event.recruitment), '모집 방식: ' + method) +
+      item(programs > 0, '프로그램 ' + programs + '개 등록', 'content', '일정 관리 →') +
+      item(units > 0, '입장·퇴장 데스크 ' + units + '개 개설', 'checkin', '데스크 관리 →') +
+      item(notices > 0, '공지 ' + notices + '건 등록', 'content', '공지 관리 →') +
+      item(false, '참가자 화면 미리보기', 'participant', '미리보기 →');
+    var publish = event && event.status === 'PRE' && canWrite()
+      ? '<div class="action-group"><button type="button" class="btn-primary" data-overview-publish>운영 시작하기 (진행 중으로 전환)</button></div>'
+      : '';
+    return (
+      '<section class="panel" aria-label="행사 준비 체크리스트"><div class="section-head"><div><h2>행사 준비 체크리스트</h2>' +
+      '<p>필요한 항목부터 차례로 완료하세요.</p></div></div>' +
+      '<ul class="checklist">' + items + '</ul>' + publish + '</section>'
+    );
+  }
 
   function wizardStepsBar(step) {
     return '<p>' + WIZARD_STEPS.map(function (label, i) {

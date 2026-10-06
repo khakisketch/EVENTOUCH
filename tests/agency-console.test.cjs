@@ -225,6 +225,39 @@ test('overview report action lives in its own trailing section', () => {
   assert.deepEqual([...order].sort((a, b) => a - b), order, 'overview blocks are out of order');
 });
 
+test('overview preparation checklist reflects state and links existing routes', () => {
+  const ETKO = load(['../app.js', '../features/agency.js', '../features/results.js', '../features/agency-ui.js']);
+  ETKO.updateEvent({ recruitment: 'online' });
+  const b = box();
+  ETKO.renderOverview(b);
+  assert.match(b.innerHTML, /행사 준비 체크리스트/, 'overview misses the checklist');
+  assert.match(b.innerHTML, /온라인 신청/, 'checklist misses the recruitment state');
+  assert.match(b.innerHTML, /data-overview-route="content"/, 'checklist misses the program link');
+  assert.match(b.innerHTML, /data-overview-route="checkin"/, 'checklist misses the desk link');
+  assert.match(b.innerHTML, /data-overview-route="participant"/, 'checklist misses the preview link');
+  assert.match(b.innerHTML, /data-overview-publish/, 'PRE overview misses the publish action');
+});
+
+test('overview publish advances PRE to LIVE and hides after', () => {
+  const ETKO = load(['../app.js', '../features/agency.js', '../features/results.js', '../features/agency-ui.js']);
+  const handlers = {};
+  const buttons = {
+    publish: { getAttribute: () => null, addEventListener(type, fn) { if (type === 'click') handlers.publish = fn; } },
+  };
+  const b = {
+    innerHTML: '',
+    querySelector() { return null; },
+    querySelectorAll(selector) { return selector === '[data-overview-publish]' ? [buttons.publish] : []; },
+  };
+  assert.equal(ETKO.store.events.find((e) => e.id === ETKO.store.activeEventId).status, 'PRE');
+  ETKO.renderOverview(b);
+  handlers.publish.call(buttons.publish);
+  assert.equal(ETKO.store.events.find((e) => e.id === ETKO.store.activeEventId).status, 'LIVE');
+  const live = box();
+  ETKO.renderOverview(live);
+  assert.doesNotMatch(live.innerHTML, /data-overview-publish/, 'LIVE overview must hide the publish action');
+});
+
 test('selected-event overview shows live context and routes quick actions to existing day-of views', () => {
   const ETKO = load(['../app.js', '../features/agency.js', '../features/results.js', '../features/agency-ui.js']);
   const handlers = {};

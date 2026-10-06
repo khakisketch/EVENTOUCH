@@ -1128,6 +1128,19 @@ main .action-group {
   margin-top: var(--space-3);
 }
 
+/* Preparation checklist: state-led items with existing-route links. */
+main .checklist {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+}
+
+main .checklist li[data-checklist-done="true"] {
+  color: var(--muted);
+}
+
 /* ---- controls ---- */
 
 main button,
