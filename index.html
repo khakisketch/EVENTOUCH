@@ -1,601 +1,148 @@
 <!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>이벤터치 운영</title>
-  <link rel="icon" href="data:," />
-  <link rel="stylesheet" href="styles/tokens.css" />
-  <link rel="stylesheet" href="styles/theme.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#E76D26">
+<meta name="eventouch-source-version" content="22">
+<title>EVENTOUCH · 행사 운영 워크스페이스</title>
+<meta name="description" content="행사 준비, 참가자 관리, 현장 스태프와 참가자 웹을 연결하는 EVENTOUCH 브라우저 프로토타입">
+<style>
+/* OD-LAYOUT-PRIMITIVES v1 — structure only: display, flex/grid, overflow, wrapping, ratio.
+   Put this @layer first; product CSS outside the layer always wins. */
+@layer od-layout {
+  :where(.od-stack,.od-row,.od-row-top,.od-cluster,.od-grid,.od-field,.od-stat,.od-cell,.od-tile) > :where(*) { min-width: 0; }
+
+  /* containers */
+  .od-stack   { display: flex; flex-direction: column; gap: var(--od-gap, 8px); }
+  .od-row     { display: flex; align-items: center; gap: var(--od-gap, 8px); }
+  .od-row-top { display: flex; align-items: flex-start; gap: var(--od-gap, 8px); }
+  .od-cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--od-gap, 8px); }
+  .od-fill    { flex: 1 1 0; min-width: 0; }
+  .od-fixed   { flex: none; }
+  .od-grid    { display: grid; gap: var(--od-gap, 12px); grid-template-columns: repeat(var(--od-cols, 3), minmax(0, 1fr)); }
+
+  /* stacked information: each piece is its own line — never sibling inline spans */
+  .od-stat, .od-field, .od-cell { display: grid; gap: var(--od-gap, 2px); }
+  :where(.od-stat,.od-field,.od-cell) > :where(*) { display: block; }
+  .od-tile { display: grid; grid-template-rows: auto 1fr; }
+  :where(.od-tile) > :where(*) { display: block; }
+
+  /* media keeps its intrinsic ratio by default; never a distorted or cropped
+     cover by accident. height:auto lets the ratio win over an <img height="…">
+     attribute. Cropping to a uniform box is an explicit opt-in: set --od-ratio
+     AND add .od-media-cover together (per the core rule, only where a crop is
+     deliberate — tile thumbs, decorative fills — never on full-frame content). */
+  .od-media { display: block; width: 100%; height: auto; aspect-ratio: var(--od-ratio, auto); }
+  .od-media-cover { object-fit: cover; }
+
+  /* data text only — authored copy is rewritten to its budget instead */
+  .od-truncate { display: block; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .od-clamp-2, .od-clamp-3 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+  .od-clamp-2 { -webkit-line-clamp: 2; }
+  .od-clamp-3 { -webkit-line-clamp: 3; }
+  .od-lines-2 { min-height: calc(2 * 1.4em); }   /* block-level reservation for a shared baseline */
+  .od-nowrap  { white-space: nowrap; }           /* 数字+单位 · 价格+起 · 日期+星期 */
+  .od-keep    { word-break: keep-all; overflow-wrap: anywhere; } /* CJK labels break at spaces / <wbr> first */
+
+  /* screen skeleton (optional): bars take their own space, the middle scrolls — no padding guessed for chrome */
+  .od-screen { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; }
+  .od-scroll { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+
+  /* horizontal rail: the next item peeks at the edge; trailing room survives overflow */
+  .od-rail { display: flex; gap: var(--od-gap, 8px); overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none;
+             padding-inline: var(--od-rail-pad, 16px); scroll-padding-inline: var(--od-rail-pad, 16px); }
+  .od-rail::-webkit-scrollbar { display: none; }
+  :where(.od-rail) > :where(*) { flex: none; scroll-snap-align: start; }
+  :where(.od-rail) > :where(:last-child) { margin-inline-end: var(--od-rail-pad, 16px); }
+
+  .od-spacer { flex: none; visibility: hidden; pointer-events: none; }
+  .od-touch  { min-width: 44px; min-height: 44px; }
+}
+/* /OD-LAYOUT-PRIMITIVES v1 */
+
+</style>
+<link rel="stylesheet" href="assets/css/tokens.css?v=15">
+<link rel="stylesheet" href="assets/css/console.css?v=15">
+<link rel="stylesheet" href="assets/css/handheld.css?v=15">
+<link rel="stylesheet" href="assets/css/event-flow.css?v=2">
+<link rel="stylesheet" href="assets/css/operator-experience.css?v=1">
+<script>
+(function(){
+  function showFailure(message){
+    var box=document.getElementById('runtime-error');
+    if(!box){window.eventouchStartError=message;return;}
+    box.hidden=false;
+    var text=document.getElementById('runtime-error-detail');
+    if(text)text.textContent=message;
+  }
+  window.addEventListener('error',function(event){
+    if(event.target&&event.target.tagName==='SCRIPT')showFailure('화면 소스 파일을 불러오지 못했습니다: '+(event.target.getAttribute('src')||'초기화 스크립트'));
+    else if(event.message)showFailure(event.message);
+  },true);
+  window.addEventListener('unhandledrejection',function(event){showFailure(event.reason&&event.reason.message?event.reason.message:'작업을 완료하지 못했습니다. 페이지를 다시 열어주세요.');});
+  document.addEventListener('DOMContentLoaded',function(){
+    if(window.eventouchStartError)showFailure(window.eventouchStartError);
+  });
+  document.addEventListener('click',function(event){
+    if(event.target.closest('[data-reload-entry]'))window.location.reload();
+  });
+})();
+</script>
+<script defer src="assets/js/core.js?v=16"></script>
+<script defer src="assets/js/store.js?v=18"></script>
+<script defer src="assets/js/qr.js?v=14"></script>
+<script defer src="assets/js/phone-shell.js?v=14"></script>
+<script defer src="assets/js/ui.js?v=14"></script>
+<script defer src="assets/js/registration.js?v=14"></script>
+<script defer src="assets/js/console.js?v=17"></script>
+<script defer src="assets/js/field.js?v=14"></script>
+<script defer src="assets/js/programs.js?v=15"></script>
+<script defer src="assets/js/communication.js?v=14"></script>
+<script defer src="assets/js/attendee.js?v=18"></script>
+<script defer src="assets/js/results.js?v=14"></script>
+<script defer src="assets/js/display.js?v=14"></script>
+<script defer src="assets/js/router.js?v=19"></script>
+<script defer src="assets/js/experience.js?v=16"></script>
+<script defer src="assets/js/workflows.js?v=15"></script>
+<script defer src="assets/js/role-model.js?v=17"></script>
+<script defer src="assets/js/event-flow.js?v=2"></script>
+<script defer src="assets/js/operator-experience.js?v=2"></script>
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="app-sidebar" aria-label="이벤터치 작업 메뉴">
-      <div class="product-identity">
-        <h1>이벤터치 운영</h1>
-      </div>
-
-      <label class="event-context">
-        <span>선택한 현장</span>
-        <select data-event-context aria-label="현재 행사 선택">
-          <option value="">행사 불러오는 중</option>
-        </select>
-        <span class="event-context-meta" data-event-meta aria-live="polite">행사 정보 불러오는 중</span>
-      </label>
-
-      <nav class="layer-switch" aria-label="업무 영역">
-        <button type="button" data-layer="agency" aria-pressed="false">전체 현장</button>
-        <button type="button" data-layer="event" aria-pressed="false">준비</button>
-        <button type="button" data-layer="onsite" aria-pressed="false">당일 운영</button>
-        <button type="button" data-layer="participant" aria-pressed="false">참가자</button>
-        <button type="button" data-layer="screen" aria-pressed="false">관객 화면</button>
-      </nav>
-
-      <nav class="context-nav" aria-label="세부 작업 메뉴">
-        <div class="nav-group" data-nav-layer="agency" role="group" aria-label="전체 현장 메뉴" hidden>
-          <h2>전체 현장</h2>
-          <button type="button" data-view="agency-home" data-shell-nav-item>현장 홈</button>
-          <button type="button" data-view="agency-events" data-shell-nav-item>현장 관리</button>
-          <button type="button" data-view="agency-clients" data-shell-nav-item>고객사</button>
-        </div>
-        <div class="nav-group" data-nav-layer="event" role="group" aria-label="행사 준비 메뉴" hidden>
-          <h2>준비</h2>
-          <button type="button" data-view="overview" data-shell-nav-item>행사 개요</button>
-          <button type="button" data-view="agency-team" data-shell-nav-item>운영 팀</button>
-          <button type="button" data-view="participants" data-shell-nav-item>참가자</button>
-          <button type="button" data-view="content" data-shell-nav-item>콘텐츠</button>
-          <button type="button" data-view="messages" data-shell-nav-item>안내 메시지</button>
-        </div>
-        <div class="nav-group" data-nav-layer="onsite" role="group" aria-label="당일 운영 메뉴" hidden>
-          <h2>당일 운영</h2>
-          <button type="button" data-view="checkin" data-shell-nav-item>체크인</button>
-          <button type="button" data-view="booth" data-shell-nav-item>부스</button>
-          <button type="button" data-view="engage" data-shell-nav-item>참여 프로그램</button>
-          <button type="button" data-view="stage" data-shell-nav-item>무대 제어</button>
-        </div>
-        <div class="nav-group" data-nav-layer="participant" role="group" aria-label="참가자 화면 메뉴" hidden>
-          <h2>참가자 경험</h2>
-          <button type="button" data-view="participant" data-shell-nav-item>참가자 웹</button>
-        </div>
-        <div class="nav-group" data-nav-layer="screen" role="group" aria-label="관객 화면 메뉴" hidden>
-          <h2>관객 화면</h2>
-          <button type="button" data-view="screen" data-shell-nav-item>관객 스크린</button>
-        </div>
-      </nav>
-
-      <p class="sidebar-disclosure" role="note">샘플 데이터 · 실제 발송·결제·장비 연결 없음</p>
-    </aside>
-
-    <div class="workspace">
-      <header class="workspace-topbar">
-        <nav class="breadcrumb" aria-label="현재 위치">
-          <span data-shell-current-layer>준비</span>
-          <span aria-hidden="true">/</span>
-          <strong data-shell-current-view>행사 개요</strong>
-        </nav>
-        <button type="button" class="event-return" data-layer="agency" data-shell-return hidden>← 전체 현장</button>
-        <span class="workspace-badge">샘플 환경</span>
-      </header>
-
-  <main id="app" data-current-view="overview">
-    <section id="agency-home-view" aria-label="대행사 홈" hidden>
-      <div id="agency-home-mount"></div>
+<a class="skip" href="#main-content">본문으로 바로가기</a>
+<section id="runtime-error" class="notice error no-print" hidden role="alert" style="margin:var(--s4)">
+  <strong>화면 또는 작업 연결에 오류가 있습니다.</strong>
+  <p>index.html과 assets 폴더를 함께 열어주세요. 계속 오류가 나면 아래 내용을 운영자에게 전달하세요.</p>
+  <details><summary>오류 내용</summary><pre id="runtime-error-detail" class="code"></pre></details>
+  <button type="button" class="btn" data-reload-entry>다시 불러오기</button>
+</section>
+<div id="app">
+  <main class="login-layout" id="main-content">
+    <section class="login-story">
+      <div class="wordmark">EVENTOUCH</div>
+      <span class="eyebrow">행사 준비부터 결과까지</span>
+      <h1>운영의 흐름을<br>한곳에서.</h1>
+      <p>행사를 준비하고, 현장에서 처리하고, 결과를 전달합니다. 운영자와 참가자는 각자의 업무 화면을 사용합니다.</p>
     </section>
-    <section id="agency-events-view" aria-label="행사 관리" hidden>
-      <div id="agency-events-mount"></div>
-    </section>
-    <section id="agency-clients-view" aria-label="고객사" hidden>
-      <div id="agency-clients-mount"></div>
-    </section>
-    <section id="agency-team-view" aria-label="팀과 권한" hidden>
-      <div id="agency-team-mount"></div>
-    </section>
-    <section id="overview-view" aria-label="행사 개요" hidden>
-      <div id="overview-mount"></div>
-      <div id="results-mount" aria-label="결과"></div>
-      <div id="settings-mount" aria-label="설정"></div>
-      <section aria-label="운영 보고서">
-        <h2>운영 보고서</h2>
-        <p>행사 결과를 확인하고 보고서를 생성합니다.</p>
-        <div><button type="button" data-report-create>보고서 생성</button></div>
-      </section>
-    </section>
-    <section id="participants-view" aria-label="참가자 목록" hidden>
-      <div id="people-list" aria-live="polite"></div>
-    </section>
-    <section id="checkin-view" aria-label="체크인" hidden>
-      <div class="inline-form">
-        <div class="field"><label for="ticket-code">티켓 코드</label><input id="ticket-code" type="text" data-ticket autocomplete="off" /></div>
-        <button type="button" data-ticket-submit>조회</button>
-        <button type="button" data-online-toggle>온라인/오프라인 전환</button>
-      </div>
-      <div id="checkin-mount"></div>
-    </section>
-    <section id="booth-view" aria-label="부스" hidden>
-      <div id="booth-mount"></div>
-    </section>
-    <section id="participant-view" aria-label="참가자 홈" hidden>
-      <div id="home-mount"></div>
-    </section>
-    <section id="engage-view" aria-label="참여 관리" hidden>
-      <div id="engage-mount" aria-live="polite"></div>
-    </section>
-    <section id="content-view" aria-label="콘텐츠 관리" hidden>
-      <div id="content-mount" aria-live="polite"></div>
-    </section>
-    <section id="messages-view" aria-label="메시지 관리" hidden>
-      <div id="messages-mount" aria-live="polite"></div>
-    </section>
-    <section id="stage-view" aria-label="무대" hidden>
-      <div id="stage-mount"></div>
-    </section>
-    <section id="screen-view" aria-label="관객 화면" hidden>
-      <div id="screen-mount" aria-live="polite"></div>
+    <section class="login-form">
+      <span class="eyebrow">워크스페이스 시작</span>
+      <h2>업무 화면을 준비하고 있습니다</h2>
+      <p>행사 준비, 참가자 접수, 현장 처리와 결과 보고를 연결합니다. 잠시 후 로그인 또는 행사 링크에 맞는 화면으로 이동합니다. 필수 파일을 불러오지 못하면 위에 복구 안내가 표시됩니다.</p>
+      <div class="skeleton od-field" role="status" aria-live="polite"><strong>워크스페이스 연결 중…</strong><span>운영사 체험 계정: admin@example.demo</span><span>체험 비밀번호: eventouch</span></div>
+      <noscript><div class="notice error"><strong>JavaScript 실행이 필요합니다.</strong><p>이 페이지는 실제 화면 이동과 업무 처리를 위해 JavaScript를 사용합니다. 파일을 일반 브라우저에서 열거나 미리보기의 스크립트 실행 지원을 확인해주세요.</p></div></noscript>
+      <p class="help">실제 인증·서버·문자·결제는 연결되지 않은 브라우저 프로토타입입니다.</p>
     </section>
   </main>
-    </div>
-  </div>
-  <script>
-    window.ETKO = window.ETKO || {};
-    fetch('data/sample.json')
-      .then((res) => res.json())
-      .then((data) => {
-        window.ETKO.sample = data;
-        try {
-          if (window.ETKO.ensureSeeded) window.ETKO.ensureSeeded();
-        } catch (err) {}
-        if (window.ETKO.syncParticipantsView) window.ETKO.syncParticipantsView();
-        if (window.ETKO.syncViews) window.ETKO.syncViews();
-      });
-  </script>
-  <script src="app.js"></script>
-  <script src="features/views.js"></script>
-  <script src="features/integrations.js"></script>
-  <script src="features/agency.js"></script>
-  <script src="features/persist.js"></script>
-  <script src="features/participants.js"></script>
-  <script src="features/checkin.js"></script>
-  <script src="features/qrcode.js"></script>
-  <script src="features/booth.js"></script>
-  <script src="features/registration.js"></script>
-  <script src="features/desks.js"></script>
-  <script src="features/booths.js"></script>
-  <script src="features/engagement.js"></script>
-  <script src="features/media.js"></script>
-  <script src="features/messaging.js"></script>
-  <script src="features/content.js"></script>
-  <script src="features/stage.js"></script>
-  <script src="features/scenes.js"></script>
-  <script src="features/results.js"></script>
-  <script src="features/agency-ui.js"></script>
-  <script src="features/server-sync.js"></script>
-  <script>
-    /* ETKO-VIEW-SYNC: gate all shell views behind ETKO.navigate.
-       Follows the syncParticipantsView pattern (Task 3 interface): show the
-       section for ETKO.currentView, hide the others, render the active
-       mount when its renderer exists. Call-through preserves app.js semantics
-       exactly (unknown views keep the current view); guarded so double-load
-       never re-wraps. Section wrappers carry no aria-live of their own so the
-       per-view live regions (people-list, check-in result panel) never nest. */
-    (function () {
-      var ETKO = window.ETKO || (window.ETKO = {});
-
-      var SECTIONS = {
-        'agency-home': 'agency-home-view',
-        'agency-events': 'agency-events-view',
-        'agency-clients': 'agency-clients-view',
-        'agency-team': 'agency-team-view',
-        overview: 'overview-view',
-        participants: 'participants-view',
-        checkin: 'checkin-view',
-        booth: 'booth-view',
-        participant: 'participant-view',
-        engage: 'engage-view',
-        content: 'content-view',
-        messages: 'messages-view',
-        screen: 'screen-view',
-        stage: 'stage-view',
-      };
-
-      var MOUNTS = {
-        'agency-home': 'agency-home-mount',
-        'agency-events': 'agency-events-mount',
-        'agency-clients': 'agency-clients-mount',
-        'agency-team': 'agency-team-mount',
-        overview: 'overview-mount',
-        participants: 'people-list',
-        checkin: 'checkin-mount',
-        booth: 'booth-mount',
-        participant: 'home-mount',
-        engage: 'engage-mount',
-        content: 'content-mount',
-        messages: 'messages-mount',
-        screen: 'screen-mount',
-        stage: 'stage-mount',
-      };
-
-      // Prefer the single view registry when loaded; fall back to the
-      // local maps above so older shells keep working.
-      try {
-        if (typeof ETKO.viewRegistry === 'function') {
-          var reg = ETKO.viewRegistry() || [];
-          for (var ri = 0; ri < reg.length; ri += 1) {
-            var rv = reg[ri];
-            if (rv && rv.id && rv.section) SECTIONS[rv.id] = rv.section;
-            if (rv && rv.id && rv.mount && MOUNTS[rv.id]) MOUNTS[rv.id] = rv.mount;
-          }
-        }
-      } catch (err) {}
-
-      function escapeHtml(value) {
-        return String(value === undefined || value === null ? '' : value)
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;');
-      }
-
-      function docOf(overrideDoc) {
-        if (overrideDoc) return overrideDoc;
-        if (typeof document !== 'undefined') return document;
-        return null;
-      }
-
-      function setHidden(section, hidden) {
-        if (
-          section.setAttribute &&
-          section.removeAttribute
-        ) {
-          if (hidden) section.setAttribute('hidden', '');
-          else section.removeAttribute('hidden');
-        } else {
-          section.hidden = !!hidden;
-        }
-      }
-
-      function renderActive(doc, view) {
-        try {
-          // The directory keeps its own gate + render; delegate to it.
-          if (view === 'participants') {
-            if (typeof ETKO.syncParticipantsView === 'function') ETKO.syncParticipantsView(doc);
-            return;
-          }
-          var mountId = MOUNTS[view];
-          if (!mountId || !doc || typeof doc.querySelector !== 'function') return;
-          var section = doc.querySelector('#' + SECTIONS[view]);
-          var mount =
-            section && typeof section.querySelector === 'function'
-              ? section.querySelector('#' + mountId)
-              : null;
-          if (!mount) return;
-          if (view === 'checkin' && typeof ETKO.renderCheckin === 'function') {
-            ETKO.renderCheckin(mount, ETKO.checkinState);
-          } else if (view === 'agency-home' && typeof ETKO.renderAgencyHome === 'function') {
-            ETKO.renderAgencyHome(mount);
-          } else if (view === 'agency-events' && typeof ETKO.renderAgencyEvents === 'function') {
-            ETKO.renderAgencyEvents(mount);
-          } else if (view === 'agency-clients' && typeof ETKO.renderAgencyClients === 'function') {
-            ETKO.renderAgencyClients(mount);
-          } else if (view === 'agency-team' && typeof ETKO.renderAgencyTeam === 'function') {
-            ETKO.renderAgencyTeam(mount);
-          } else if (view === 'booth' && typeof ETKO.renderBooth === 'function') {
-            ETKO.renderBooth(mount);
-          } else if (view === 'participant' && typeof ETKO.renderParticipant === 'function') {
-            ETKO.renderParticipant(mount);
-          } else if (view === 'participant' && typeof ETKO.renderHome === 'function') {
-            ETKO.renderHome(mount, ETKO.homeStatus);
-          } else if (view === 'engage' && typeof ETKO.renderEngagement === 'function') {
-            ETKO.renderEngagement(mount);
-          } else if (view === 'content' && typeof ETKO.renderContent === 'function') {
-            ETKO.renderContent(mount);
-          } else if (view === 'messages' && typeof ETKO.renderMessaging === 'function') {
-            ETKO.renderMessaging(mount);
-          } else if (view === 'stage' && typeof ETKO.renderStage === 'function') {
-            ETKO.renderStage(mount, ETKO.stageState);
-          } else if (view === 'screen' && typeof ETKO.renderScreen === 'function') {
-            ETKO.renderScreen(mount);
-            try {
-              if (typeof ETKO.listenScreen === 'function') ETKO.listenScreen(mount);
-            } catch (err) {}
-          } else if (view === 'overview') {
-            if (typeof ETKO.renderOverview === 'function') {
-              ETKO.renderOverview(mount);
-            } else {
-              var name =
-                ETKO.sample && ETKO.sample.event ? ETKO.sample.event : '이벤터치 운영';
-              mount.innerHTML =
-                '<p>' + escapeHtml(name) + '</p><p role="note">샘플 데이터입니다</p>';
-            }
-            // Results + settings live behind the overview gate: they render
-            // with the default view through ETKO.navigate, never as dead
-            // mounts. Each renderer is guarded so older shells keep working.
-            try {
-              var resultsMount = section.querySelector
-                ? section.querySelector('#results-mount')
-                : null;
-              if (resultsMount && typeof ETKO.renderResults === 'function') {
-                ETKO.renderResults(resultsMount);
-              }
-              var settingsMount = section.querySelector
-                ? section.querySelector('#settings-mount')
-                : null;
-              if (settingsMount && typeof ETKO.renderSettings === 'function') {
-                ETKO.renderSettings(settingsMount);
-              }
-            } catch (err) {
-              var msg = err && err.message ? err.message : '화면을 표시하지 못했습니다';
-              if (section.querySelector) {
-                var rm = section.querySelector('#results-mount');
-                if (rm && !rm.innerHTML) rm.innerHTML = '<p>' + escapeHtml(msg) + '</p>';
-              }
-            }
-          }
-        } catch (err) {
-          try {
-            var activeSection = doc && doc.querySelector ? doc.querySelector('#' + SECTIONS[view]) : null;
-            if (activeSection) {
-              var fallback = activeSection.querySelector ? activeSection.querySelector('#' + mountId) : null;
-              if (fallback && !fallback.innerHTML) fallback.innerHTML = '<p>화면을 표시하지 못했습니다</p>';
-            }
-          } catch (innerErr) {}
-        }
-      }
-
-      // Show the current view's section, hide the others. Returns true
-      // when the current view's section was found and shown; false otherwise
-      // (absent section, unknown view, or no document, e.g. Node).
-      ETKO.syncViews = function (overrideDoc) {
-        var doc = docOf(overrideDoc);
-        if (!doc || typeof doc.querySelector !== 'function') return false;
-        var current = ETKO.currentView;
-        if (!SECTIONS[current]) return false;
-        var found = false;
-        Object.keys(SECTIONS).forEach(function (view) {
-          var section = doc.querySelector('#' + SECTIONS[view]);
-          if (!section) return;
-          if (view === current) found = true;
-          setHidden(section, view !== current);
-        });
-        if (!found) return false;
-        renderActive(doc, current);
-        return true;
-      };
-
-      // Consume ETKO.navigate: re-sync every section after each view switch.
-      if (typeof ETKO.navigate === 'function' && !ETKO.viewsNavHooked) {
-        ETKO.viewsNavHooked = true;
-        var baseNavigate = ETKO.navigate;
-        ETKO.navigate = function (view) {
-          var result = baseNavigate(view);
-          try {
-            ETKO.syncViews(null);
-          } catch (err) {}
-          return result;
-        };
-      }
-
-      // Field wiring: ticket submit -> workspace ETKO.scan, booth mode ->
-      // event lock with Korean surfacing, home CTA -> next action.
-      function submitTicket(doc) {
-        var input = doc.querySelector ? doc.querySelector('#ticket-code') : null;
-        var code = input && input.value ? input.value : '';
-        if (typeof ETKO.scan !== 'function') return;
-        var result = null;
-        if (typeof ETKO.submitTicket === 'function') {
-          try {
-            result = ETKO.submitTicket(code, ETKO.checkinDirection || 'IN');
-          } catch (err) {
-            var errMsg = err && err.message ? err.message : '';
-            if (/권한/.test(errMsg)) {
-              ETKO.lastScanResult = { kind: 'bad', key: 'no-permission' };
-            } else {
-              ETKO.lastScanResult = { kind: 'bad', key: 'not-found' };
-            }
-            ETKO.lastDeskError = errMsg || '처리하지 못했습니다';
-            result = ETKO.lastScanResult;
-          }
-        }
-        if (!result && typeof ETKO.scan === 'function') {
-          result = ETKO.scan({ code: code, direction: ETKO.checkinDirection || 'IN', online: ETKO.online !== false });
-          ETKO.lastScanResult = result;
-        }
-        if (!result) return;
-        try {
-          var mount = doc.querySelector ? doc.querySelector('#checkin-mount') : null;
-          if (mount && typeof ETKO.renderCheckin === 'function') ETKO.renderCheckin(mount, ETKO.checkinState);
-        } catch (err) {}
-        if (input) {
-          input.value = '';
-          try {
-            input.focus();
-          } catch (err) {}
-        }
-      }
-
-      function wireFieldActions(doc) {
-        if (!doc || typeof doc.addEventListener !== 'function') return;
-        if (doc.__etkoFieldWired) return;
-        doc.__etkoFieldWired = true;
-        doc.addEventListener('click', function (ev) {
-          var t = ev && ev.target && ev.target.closest ? ev.target.closest('[data-ticket-submit],[data-booth-mode],[data-home-cta],[data-online-toggle],[data-report-create]') : null;
-          if (!t) return;
-          if (t.hasAttribute && t.hasAttribute('data-report-create')) {
-            try {
-              var evName = '행사';
-              try {
-                var st = ETKO.store;
-                var found = null;
-                (st.events || []).forEach(function (e) {
-                  if (e && e.id === st.activeEventId) found = e;
-                });
-                if (found && found.name) evName = found.name;
-              } catch (err) {}
-              if (typeof ETKO.createReport === 'function') ETKO.createReport({ title: evName + ' 결과 보고서' });
-              ETKO.syncViews(doc);
-            } catch (err) {
-              try {
-                var resultsMount = doc.querySelector ? doc.querySelector('#results-mount') : null;
-                if (resultsMount) {
-                  var alert = resultsMount.querySelector ? resultsMount.querySelector('[data-report-error]') : null;
-                  if (!alert) {
-                    alert = doc.createElement('p');
-                    alert.setAttribute('data-report-error', 'true');
-                    alert.setAttribute('role', 'alert');
-                    resultsMount.appendChild(alert);
-                  }
-                  alert.textContent = (err && err.message) || '보고서를 생성하지 못했습니다';
-                }
-              } catch (innerErr) {}
-            }
-            return;
-          }
-          if (t.hasAttribute && t.hasAttribute('data-online-toggle')) {
-            // Panel-inner toggles own their flip (renderCheckin wires its own
-            // listener); the shell handles only the static section button so
-            // a panel click never flips twice (net no-op).
-            var inPanel = false;
-            try {
-              inPanel = !!(t.closest && t.closest('#checkin-mount'));
-            } catch (err) {}
-            if (inPanel) return;
-            if (typeof ETKO.setOnline === 'function') ETKO.setOnline(!(ETKO.online !== false));
-            try {
-              var checkinMount = doc.querySelector ? doc.querySelector('#checkin-mount') : null;
-              if (checkinMount && typeof ETKO.renderCheckin === 'function') ETKO.renderCheckin(checkinMount);
-              else ETKO.syncViews(doc);
-            } catch (err) {}
-            return;
-          }
-          if (t.hasAttribute && t.hasAttribute('data-ticket-submit')) {
-            submitTicket(doc);
-            return;
-          }
-          if (t.hasAttribute && t.hasAttribute('data-booth-mode')) {
-            var mode = t.getAttribute('data-booth-mode');
-            try {
-              if (typeof ETKO.setEventBoothMode === 'function') {
-                ETKO.setEventBoothMode(mode, { acknowledge: true });
-              } else if (typeof ETKO.setBoothMode === 'function') {
-                ETKO.setBoothMode(mode);
-              }
-              ETKO.lastBoothError = null;
-            } catch (err) {
-              ETKO.lastBoothError = err && err.message ? err.message : '부스 방식을 변경할 수 없습니다';
-              try {
-                var boothMount = doc.querySelector ? doc.querySelector('#booth-mount') : null;
-                if (boothMount) {
-                  boothMount.setAttribute('data-error', ETKO.lastBoothError);
-                  var alert = boothMount.querySelector ? boothMount.querySelector('[data-booth-error]') : null;
-                  if (!alert) {
-                    alert = doc.createElement('p');
-                    alert.setAttribute('data-booth-error', 'true');
-                    alert.setAttribute('role', 'alert');
-                    boothMount.appendChild(alert);
-                  }
-                  alert.textContent = ETKO.lastBoothError;
-                }
-              } catch (innerErr) {}
-            }
-            try {
-              ETKO.syncViews(doc);
-            } catch (err) {}
-            return;
-          }
-          if (t.hasAttribute && t.hasAttribute('data-home-cta')) {
-            var status = ETKO.homeStatus || null;
-            if (!status && ETKO.homeParticipantId && typeof ETKO.workspace === 'function') {
-              try {
-                var people = ETKO.workspace().participants || [];
-                for (var i = 0; i < people.length; i += 1) {
-                  if (people[i] && people[i].id === ETKO.homeParticipantId) {
-                    status = people[i].status;
-                    break;
-                  }
-                }
-              } catch (err) {}
-            }
-            if (!status && typeof ETKO.workspace === 'function') {
-              try {
-                var first = (ETKO.workspace().participants || [])[0];
-                if (first) status = first.status;
-              } catch (err) {}
-            }
-            status = status || 'registered';
-            if (typeof ETKO.renderHome === 'function') {
-              try {
-                ETKO.homeStatus = status;
-              } catch (err) {}
-            }
-            var entered = String(status).trim().toLowerCase() === 'in';
-            ETKO.navigate(entered ? 'stage' : 'checkin');
-          }
-        });
-        doc.addEventListener('keydown', function (ev) {
-          if (ev && ev.key === 'Enter' && ev.target && ev.target.id === 'ticket-code') {
-            ev.preventDefault();
-            submitTicket(doc);
-          }
-          if (ev && ev.key === 'Escape') {
-            var openDialog = doc.querySelector ? doc.querySelector('[role="dialog"][data-open="true"], [role="dialog"].open') : null;
-            if (openDialog) {
-              if (openDialog.removeAttribute) {
-                openDialog.removeAttribute('data-open');
-                if (openDialog.classList) openDialog.classList.remove('open');
-              }
-              var returnTo = openDialog.getAttribute ? openDialog.getAttribute('data-return-focus') : null;
-              if (returnTo && doc.getElementById) {
-                var target = doc.getElementById(returnTo);
-                if (target && target.focus) {
-                  try {
-                    target.focus();
-                  } catch (err) {}
-                }
-              }
-            }
-          }
-          if (ev && ev.key === 'Tab') {
-            var trap = doc.querySelector ? doc.querySelector('[role="dialog"][data-open="true"], [role="dialog"].open') : null;
-            if (trap && trap.querySelectorAll) {
-              var focusables = trap.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-              var visible = [];
-              for (var fi = 0; fi < focusables.length; fi += 1) {
-                var el = focusables[fi];
-                if (el && el.getClientRects && el.getClientRects().length) visible.push(el);
-              }
-              if (visible.length) {
-                var firstEl = visible[0];
-                var lastEl = visible[visible.length - 1];
-                if (ev.shiftKey && doc.activeElement === firstEl) {
-                  ev.preventDefault();
-                  lastEl.focus();
-                } else if (!ev.shiftKey && doc.activeElement === lastEl) {
-                  ev.preventDefault();
-                  firstEl.focus();
-                }
-              }
-            }
-          }
-        });
-      }
-
-      // Browser only: apply the initial gate once the DOM is ready.
-      if (
-        typeof document !== 'undefined' &&
-        document &&
-        typeof document.addEventListener === 'function'
-      ) {
-        wireFieldActions(document);
-        if (document.readyState === 'loading') {
-          document.addEventListener('DOMContentLoaded', function () {
-            ETKO.syncViews(document);
-          });
-        } else {
-          try {
-            ETKO.syncViews(document);
-          } catch (err) {}
-        }
-      }
-    })();
-  </script>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded',function(){
+  if(!window.ET||!window.ET.render||window.ET.workflowVersion!==17){
+    var box=document.getElementById('runtime-error');
+    box.hidden=false;
+    document.getElementById('runtime-error-detail').textContent='필수 업무 소스가 모두 초기화되지 않았습니다. index.html과 assets 폴더를 함께 열어주세요. 위쪽 파일 오류를 확인한 뒤 다시 불러오세요. JavaScript 실행이 제한된 환경에서는 일반 브라우저에서 열어주세요.';
+  }
+});
+</script>
 </body>
 </html>
