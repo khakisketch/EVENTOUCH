@@ -383,15 +383,15 @@
         '<button type="button" data-wizard-next>다음</button></div>';
     } else if (step === 2) {
       body =
-        '<div class="inline-form">' +
+        '<div class="form-stack">' +
         '<div class="field"><label>모집 방식<select data-wrecruit aria-label="모집 방식">' +
         recruitOptions(draft.recruitment) +
         '</select></label>' +
         '<p>온라인 신청 · 명단 직접 등록 · 나중에 정하기 중 하나를 고르세요.</p></div>' +
         '<div class="field"><label>정원(0은 제한 없음)<input data-wcapacity type="number" min="0" value="' + escapeHtml(draft.capacity === undefined || draft.capacity === null ? '' : String(draft.capacity)) + '" aria-label="정원"' + fieldAttrs('events', 'capacity', 'wcapacity-error') + ' /></label>' +
         fieldError('events', 'capacity', 'wcapacity-error') + '</div>' +
-        '<div class="field"><label><input data-wapproval type="checkbox"' + (draft.approval ? ' checked' : '') + ' aria-label="참가 승인 필요" />참가 승인이 필요함</label></div>' +
-        '<div><button type="button" data-wizard-back>이전</button> ' +
+        '<div class="field"><label class="check-label"><input data-wapproval type="checkbox"' + (draft.approval ? ' checked' : '') + ' aria-label="참가 승인 필요" />참가 승인이 필요함</label></div>' +
+        '<div class="action-group"><button type="button" data-wizard-back>이전</button> ' +
         '<button type="button" data-wizard-next>다음</button></div></div>';
     } else if (step === 3) {
       body =
