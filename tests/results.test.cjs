@@ -57,6 +57,16 @@ test('updateEvent validates name/date/venue/status/capacity in Korean', () => {
   ETKO.updateEvent({ name: 'EVENTOUCH 운영 샘플' });
 });
 
+test('updateEvent stores recruitment method and approval in Korean', () => {
+  assert.throws(() => ETKO.updateEvent({ recruitment: 'nope' }), /모집 방식/);
+  const ev = ETKO.updateEvent({ recruitment: 'manual', approval: true });
+  assert.equal(ev.recruitment, 'manual');
+  assert.equal(ev.approval, true);
+  const ev2 = ETKO.updateEvent({ recruitment: 'online', approval: false });
+  assert.equal(ev2.recruitment, 'online');
+  assert.equal(ev2.approval, false);
+});
+
 test('setEventFeatures stores known feature flags', () => {
   assert.throws(() => ETKO.setEventFeatures({ unknown: true }), /기능/);
   const features = ETKO.setEventFeatures({ poll: true, quiz: false });

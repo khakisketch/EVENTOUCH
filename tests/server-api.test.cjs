@@ -316,6 +316,19 @@ test('api-patch-date-validates-calendar', async () => {
   assert.equal(bad.status, 400);
 });
 
+test('api-patch-stores-recruitment-method', async () => {
+  const created = await api('POST', '/api/events', { name: '모집행사', date: '2026-12-11', venue: 'K홀' }, adminCookie);
+  const id = created.json.event.id;
+  const bad = await api('PATCH', `/api/events/${id}`, { recruitment: 'nope' }, adminCookie);
+  assert.equal(bad.status, 400);
+  assert.match(bad.json.error || '', /모집 방식/);
+  const good = await api('PATCH', `/api/events/${id}`, { recruitment: 'manual', approval: true, capacity: 80 }, adminCookie);
+  assert.equal(good.status, 200);
+  const fetched = await api('GET', `/api/events/${id}`, undefined, adminCookie);
+  assert.equal(fetched.json.event.recruitment, 'manual');
+  assert.equal(fetched.json.event.approval, true);
+});
+
 test('api-proto-user-rejected', async () => {
   const r = await api('POST', '/api/users', { id: '__proto__', name: 'x', password: 'pw', role: 'VIEWER' }, adminCookie);
   assert.equal(r.status, 400);

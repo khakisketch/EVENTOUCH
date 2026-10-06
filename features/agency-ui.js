@@ -5,7 +5,7 @@
 
   var STATUS_LABELS = { PRE: '준비 중', LIVE: '진행 중', END: '종료' };
   var STATUS_NEXT = { PRE: 'LIVE', LIVE: 'END', END: null };
-  var WIZARD_STEPS = ['기본정보', '참여기능', '검토'];
+  var WIZARD_STEPS = ['기본정보', '모집방식', '참여기능', '검토'];
 
   function escapeHtml(value) {
     return String(value === undefined || value === null ? '' : value)
@@ -106,6 +106,7 @@
       if (message.indexOf('이름') !== -1) return 'name';
       if (message.indexOf('날짜') !== -1) return 'date';
       if (message.indexOf('장소') !== -1) return 'venue';
+      if (message.indexOf('정원') !== -1) return 'capacity';
     } else if (view === 'clients') {
       if (message.indexOf('이메일') !== -1) return 'email';
       if (message.indexOf('고객사 이름') !== -1) return 'name';
@@ -120,7 +121,7 @@
   function focusError(container, view, field) {
     if (!container || !field || typeof container.querySelector !== 'function') return;
     var attrs = {
-      events: { name: 'data-wname', date: 'data-wdate', venue: 'data-wvenue' },
+      events: { name: 'data-wname', date: 'data-wdate', venue: 'data-wvenue', capacity: 'data-wcapacity' },
       clients: { name: 'data-client-name', email: 'data-client-email' },
       team: { name: 'data-member-name', email: 'data-member-email', role: 'data-member-role-new' },
     };
@@ -312,9 +313,21 @@
     }).join('');
   }
 
+  function recruitOptions(current) {
+    var value = String(current || 'online').toLowerCase();
+    if (['online', 'manual', 'later'].indexOf(value) === -1) value = 'online';
+    return [
+      ['online', '온라인 신청'],
+      ['manual', '명단 직접 등록'],
+      ['later', '나중에 정하기'],
+    ].map(function (opt) {
+      return '<option value="' + opt[0] + '"' + (value === opt[0] ? ' selected' : '') + '>' + opt[1] + '</option>';
+    }).join('');
+  }
+
   function wizardHtml() {
     var state = ui();
-    var step = state.step === 2 ? 2 : state.step === 3 ? 3 : 1;
+    var step = state.step === 2 ? 2 : state.step === 3 ? 3 : state.step === 4 ? 4 : 1;
     var draft = state.draft || {};
     var body = '';
     if (step === 1) {
@@ -328,6 +341,18 @@
         fieldError('events', 'venue', 'wvenue-error') + '</div>' +
         '<button type="button" data-wizard-next>다음</button></div>';
     } else if (step === 2) {
+      body =
+        '<div class="inline-form">' +
+        '<div class="field"><label>모집 방식<select data-wrecruit aria-label="모집 방식">' +
+        recruitOptions(draft.recruitment) +
+        '</select></label>' +
+        '<p>온라인 신청 · 명단 직접 등록 · 나중에 정하기 중 하나를 고르세요.</p></div>' +
+        '<div class="field"><label>정원(0은 제한 없음)<input data-wcapacity type="number" min="0" value="' + escapeHtml(draft.capacity === undefined || draft.capacity === null ? '' : String(draft.capacity)) + '" aria-label="정원"' + fieldAttrs('events', 'capacity', 'wcapacity-error') + ' /></label>' +
+        fieldError('events', 'capacity', 'wcapacity-error') + '</div>' +
+        '<div class="field"><label><input data-wapproval type="checkbox"' + (draft.approval ? ' checked' : '') + ' aria-label="참가 승인 필요" />참가 승인이 필요함</label></div>' +
+        '<div><button type="button" data-wizard-back>이전</button> ' +
+        '<button type="button" data-wizard-next>다음</button></div></div>';
+    } else if (step === 3) {
       body =
         '<div>' + (featureChecks(draft) || '<p role="status" data-empty>설정할 참여 기능이 없습니다</p>') + '</div>' +
         '<div><button type="button" data-wizard-back>이전</button> ' +
@@ -346,7 +371,7 @@
     );
   }
 
-  // Event management: 3-step creation wizard plus the event list.
+  // Event management: 4-step creation wizard plus the event list.
   ETKO.renderAgencyEvents = function (container) {
     var cards = eventCards();
     var html =
@@ -467,7 +492,10 @@
     var state = ui();
     var invalidField = field || (err && err.field) || fieldForError(view, message);
     state.errors[stateKey(view)] = { message: message, field: invalidField || null };
-    if (view === 'events' && invalidField && state.step !== 1) state.step = 1;
+    if (view === 'events' && invalidField && state.step !== 1 &&
+        (invalidField === 'name' || invalidField === 'date' || invalidField === 'venue')) {
+      state.step = 1;
+    }
     ETKO.lastAgencyError = message;
     refresh(container);
     focusError(container, view, invalidField);
@@ -545,18 +573,39 @@
           var name = fieldText(container, 'data-wname').trim();
           var date = fieldText(container, 'data-wdate').trim();
           var venue = fieldText(container, 'data-wvenue').trim();
-          state.draft = { name: name, date: date, venue: venue, features: (state.draft && state.draft.features) || {} };
+          var prev = (state.draft && typeof state.draft === 'object') ? state.draft : {};
+          state.draft = { name: name, date: date, venue: venue, recruitment: prev.recruitment, capacity: prev.capacity, approval: prev.approval, features: prev.features || {} };
           if (!name) return fail(container, new Error('행사 이름을 입력하세요'), 'name');
           if (!date) return fail(container, new Error('행사 날짜를 입력하세요'), 'date');
           if (!venue) return fail(container, new Error('행사 장소를 입력하세요'), 'venue');
           state.step = 2;
         } else if (state.step === 2) {
+          var recruitEl = container.querySelector ? container.querySelector('[data-wrecruit]') : null;
+          var capEl = container.querySelector ? container.querySelector('[data-wcapacity]') : null;
+          var apprEl = container.querySelector ? container.querySelector('[data-wapproval]') : null;
+          var recruitment = recruitEl && recruitEl.value ? String(recruitEl.value) : 'online';
+          var capacityRaw = capEl && capEl.value !== undefined ? String(capEl.value).trim() : '';
+          var draft2 = (state.draft && typeof state.draft === 'object') ? state.draft : {};
+          draft2.recruitment = recruitment;
+          draft2.approval = !!(apprEl && apprEl.checked);
+          if (capacityRaw === '') {
+            delete draft2.capacity;
+          } else {
+            var capacity = Number(capacityRaw);
+            if (!isFinite(capacity) || capacity < 0) {
+              return fail(container, new Error('정원을 확인하세요'), 'capacity');
+            }
+            draft2.capacity = Math.floor(capacity);
+          }
+          state.draft = draft2;
+          state.step = 3;
+        } else if (state.step === 3) {
           var picked = {};
           eachAttr(container, 'data-wfeat', function (box) {
             if (box && box.checked && box.getAttribute) picked[box.getAttribute('data-wfeat')] = true;
           });
           state.draft.features = picked;
-          state.step = 3;
+          state.step = 4;
         }
         clearError('events');
         refresh(container);
@@ -566,7 +615,7 @@
     });
     onClick(container, 'data-wizard-back', function () {
       var state = ui();
-      state.step = state.step === 3 ? 2 : 1;
+      state.step = state.step === 4 ? 3 : state.step === 3 ? 2 : 1;
       clearError('events');
       refresh(container);
     });
@@ -578,6 +627,13 @@
         var id = ETKO.createEvent({ name: draft.name, date: draft.date, venue: draft.venue });
         ETKO.switchEvent(id);
         if (typeof ETKO.setEventFeatures === 'function') ETKO.setEventFeatures(draft.features || {});
+        if (typeof ETKO.updateEvent === 'function') {
+          var patch = {};
+          if (draft.recruitment) patch.recruitment = draft.recruitment;
+          if (draft.capacity !== undefined) patch.capacity = draft.capacity;
+          if (draft.approval !== undefined) patch.approval = draft.approval;
+          if (Object.keys(patch).length > 0) ETKO.updateEvent(patch);
+        }
         ETKO.switchEvent(backTo);
         ETKO.agencyUi = { step: 1, draft: {} };
         clearError('events');

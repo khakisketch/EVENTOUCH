@@ -310,18 +310,23 @@ test('overview shell delegates to the selected-event renderer', () => {
   assert.match(html, /view === 'overview'[\s\S]{0,220}ETKO\.renderOverview\(mount\)/);
 });
 
-test('agency events view renders the 3-step wizard and the event list', () => {
+test('agency events view renders the 4-step wizard and the event list', () => {
   const ETKO = load(['../app.js', '../features/agency.js', '../features/results.js', '../features/agency-ui.js']);
   ETKO.agencyUi = { step: 1, draft: {} };
   const b = box();
   ETKO.renderAgencyEvents(b);
   assert.match(b.innerHTML, /행사명/, 'wizard step 1 misses the name field');
   assert.match(b.innerHTML, /data-wizard-next/, 'wizard misses next');
-  ETKO.agencyUi = { step: 2, draft: { name: '신규', date: '2026-12-01', venue: 'B홀', features: {} } };
+  ETKO.agencyUi = { step: 2, draft: { name: '신규', date: '2026-12-01', venue: 'B홀' } };
   const step2 = box();
   ETKO.renderAgencyEvents(step2);
-  assert.match(step2.innerHTML, /투표/, 'wizard step 2 misses feature labels');
-  assert.match(step2.innerHTML, /럭키드로우/, 'wizard step 2 misses feature labels');
+  assert.match(step2.innerHTML, /모집 방식/, 'wizard step 2 misses recruitment');
+  assert.match(step2.innerHTML, /data-wcapacity/, 'wizard step 2 misses capacity');
+  ETKO.agencyUi = { step: 3, draft: { name: '신규', date: '2026-12-01', venue: 'B홀', features: {} } };
+  const step3 = box();
+  ETKO.renderAgencyEvents(step3);
+  assert.match(step3.innerHTML, /투표/, 'wizard step 3 misses feature labels');
+  assert.match(step3.innerHTML, /럭키드로우/, 'wizard step 3 misses feature labels');
   assert.match(b.innerHTML, /data-event-open/, 'event list misses workspace entry');
   assert.match(b.innerHTML, /data-event-status/, 'event list misses status control');
 });
@@ -382,8 +387,16 @@ test('wizard date errors stay on that field, restore focus, and preserve the oth
 
   events.fields['data-wdate'].value = '2026-10-04';
   events.handlers['data-wizard-next'].call(events.buttons['data-wizard-next']);
-  assert.match(events.innerHTML, /2단계 참여기능/);
+  assert.match(events.innerHTML, /2단계 모집방식/);
+  assert.match(events.innerHTML, /data-wrecruit/);
+  assert.match(events.innerHTML, /data-wcapacity/);
   assert.doesNotMatch(events.innerHTML, /행사 날짜를 입력하세요/);
+  events.handlers['data-wizard-next'].call(events.buttons['data-wizard-next']);
+  assert.match(events.innerHTML, /3단계 참여기능/);
+  events.handlers['data-wizard-next'].call(events.buttons['data-wizard-next']);
+  assert.match(events.innerHTML, /4단계 검토/);
+  events.handlers['data-wizard-back'].call(events.buttons['data-wizard-back']);
+  events.handlers['data-wizard-back'].call(events.buttons['data-wizard-back']);
   events.handlers['data-wizard-back'].call(events.buttons['data-wizard-back']);
   assert.match(events.innerHTML, /value="2026-10-04"/);
   assert.match(events.innerHTML, /value="운영 포럼"/);
@@ -392,6 +405,40 @@ test('wizard date errors stay on that field, restore focus, and preserve the oth
   const clients = box();
   ETKO.renderAgencyClients(clients);
   assert.doesNotMatch(clients.innerHTML, /행사 날짜를 입력하세요/);
+});
+
+test('wizard recruitment step validates capacity and preserves the draft', () => {
+  const ETKO = load(['../app.js', '../features/agency.js', '../features/agency-ui.js']);
+  const events = formBox({
+    'data-wname': '모집 테스트',
+    'data-wdate': '2026-11-01',
+    'data-wvenue': 'B홀',
+    'data-wcapacity': 'not-a-number',
+  }, ['data-wizard-next', 'data-wizard-back']);
+  ETKO.renderAgencyEvents(events);
+  events.handlers['data-wizard-next'].call(events.buttons['data-wizard-next']);
+  events.fields['data-wcapacity'].value = 'abc';
+  events.handlers['data-wizard-next'].call(events.buttons['data-wizard-next']);
+  assert.match(events.innerHTML, /data-wcapacity[^>]*aria-invalid="true"/);
+  assert.match(events.innerHTML, /정원을 확인하세요/);
+  events.fields['data-wcapacity'].value = '150';
+  events.handlers['data-wizard-next'].call(events.buttons['data-wizard-next']);
+  assert.match(events.innerHTML, /3단계 참여기능/);
+});
+
+test('wizard persists recruitment and capacity on the created event', () => {
+  const ETKO = load(['../app.js', '../features/agency.js', '../features/results.js', '../features/agency-ui.js']);
+  ETKO.agencyUi = {
+    step: 4,
+    draft: { name: '모집 행사', date: '2026-12-01', venue: 'C홀', recruitment: 'manual', capacity: '80', approval: true, features: {} },
+  };
+  const events = formBox({}, ['data-wizard-create', 'data-wizard-back']);
+  ETKO.renderAgencyEvents(events);
+  events.handlers['data-wizard-create'].call(events.buttons['data-wizard-create']);
+  const created = ETKO.store.events.find((e) => e.name === '모집 행사');
+  assert.ok(created, 'created event must exist');
+  assert.equal(created.recruitment, 'manual');
+  assert.equal(created.capacity, 80);
 });
 
 test('client email error preserves draft and focuses the invalid email field', () => {

@@ -375,6 +375,16 @@ function handleEvents(req, res, store, parts, body) {
       if (!Number.isFinite(cap) || cap < 0) return err(res, 400, '정원을 확인하세요', 'capacity');
       ws.capacity = cap;
     }
+    if (body.recruitment !== undefined) {
+      const method = String(body.recruitment).toLowerCase();
+      if (['online', 'manual', 'later'].indexOf(method) === -1) {
+        return err(res, 400, '모집 방식을 확인하세요', 'recruitment');
+      }
+      ev.recruitment = method;
+    }
+    if (body.approval !== undefined) {
+      ev.approval = !!body.approval;
+    }
     save();
     return sendJson(res, 200, { event: ev });
   }

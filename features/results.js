@@ -166,6 +166,16 @@
       if (!isFinite(capacity) || capacity < 0) throw new Error('정원을 확인하세요');
       ev.capacity = Math.floor(capacity);
     }
+    if (opts.recruitment !== undefined) {
+      var recruitment = text(opts.recruitment).toLowerCase();
+      if (['online', 'manual', 'later'].indexOf(recruitment) === -1) {
+        throw new Error('모집 방식을 확인하세요');
+      }
+      ev.recruitment = recruitment;
+    }
+    if (opts.approval !== undefined) {
+      ev.approval = !!opts.approval;
+    }
     return {
       id: ev.id,
       name: ev.name,
@@ -173,6 +183,8 @@
       venue: ev.venue,
       status: ev.status,
       capacity: ev.capacity,
+      recruitment: ev.recruitment,
+      approval: !!ev.approval,
     };
   };
 
