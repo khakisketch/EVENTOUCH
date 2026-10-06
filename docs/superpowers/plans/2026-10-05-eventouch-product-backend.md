@@ -1,5 +1,7 @@
 # EVENTOUCH 실제품 백엔드 Implementation Plan
 
+> Historical plan: superseded on 2026-10-07 by `docs/superpowers/plans/2026-10-07-eventouch-postgresql.md` after the user selected PostgreSQL and the repository's frontend/data model moved to EVENTOUCH v9. Kept for history; do not execute this plan.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Execution method already supplied: proceed inline without per-task approval prompts; user waived plan review.
 
 **Goal:** Ship a real multi-user EVENTOUCH product: Node API server with auth, shared persistence and file storage, frontend switched to server authority, deploy artifacts ready.
