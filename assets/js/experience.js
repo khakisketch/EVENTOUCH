@@ -2,27 +2,8 @@
 (function(E){'use strict';
 const e=E.esc,B=E.button,L=E.link,F=E.field,S=E.select;
 const stages=['DRAFT','READY','LIVE','ENDED','ARCHIVED'];
-const pageGroups={overview:'overview',participants:'participants',onsite:'onsite',booths:'booth',page:'page',programs:'programs',messages:'messages',screen:'screen',results:'results',settings:'settings'};
 const dateLabel=value=>{const d=new Date(value+'T12:00:00');return Number.isFinite(d.getTime())?d.toLocaleDateString('ko-KR',{month:'long',day:'numeric',weekday:'short'}):value;};
-const externalLink=(label,hash,icon='')=>'<a class="btn" href="'+e(E.url(hash))+'" target="_blank" rel="noopener">'+(icon?E.icon(icon):'')+e(label)+'<span class="sr-only"> · 새 탭</span></a>';
 const quick=(title,desc,page)=>'<a class="quick-link" href="'+e(E.consoleURL(page))+'"><div class="od-field od-fill"><strong>'+e(title)+'</strong><small>'+e(desc)+'</small></div>'+E.icon('arrow')+'</a>';
-E.publicEventURL=()=> '#/event/'+encodeURIComponent(E.event().slug)+'/home';
-
-E.adminShell=body=>{
- const agency=E.route.scope==='agency',ev=E.event(),role=E.session.role,client=E.state.clients.find(c=>c.id===ev?.clientId);
- const menu=agency?[['events','calendar','행사'],...(role==='AGENCY'?[['clients','building','고객사'],['team','shield','팀·권한'],['integrations','settings','서비스 연동']]:[])]:[
-  ['overview','grid','운영 현황'],['participants','people','참가자'],['onsite','scan','현장 운영'],...(ev.features.includes('stamp')?[['booths','ticket','부스 운영']]:[]),['page','file','참가자 페이지'],
-  ...(ev.features.some(f=>['poll','quiz','qa','draw','survey','photo','reward'].includes(f))?[['programs','play','참여 프로그램']]:[]),['messages','message','메시지'],...(ev.features.includes('screen')?[['screen','monitor','행사장 출력']]:[]),['results','chart','결과·보고서'],['settings','settings','설정']
- ].filter(([p])=>E.can(pageGroups[p],false));
- const active=p=>agency?E.route.page===p:E.groupForPage(E.route.page)===pageGroups[p];
- const nav=menu.map(([p,i,t])=>'<a class="nav-item '+(active(p)?'active':'')+'" '+(active(p)?'aria-current="page"':'')+' href="'+e(agency?'#/console/agency/'+p:E.consoleURL(p))+'">'+E.icon(i)+'<span>'+e(t)+'</span></a>').join('');
- return '<div class="admin-shell"><button class="menu-dismiss" data-action="close-menu" aria-label="메뉴 닫기"></button><aside class="sidebar"><a class="wordmark" href="#/console/agency/events">EVENTOUCH<span>행사 운영 워크스페이스</span></a>'+
- (!agency?'<div class="sidebar-event od-field"><small>'+e(client?.name||'선택한 행사')+'</small><strong>'+e(ev.name)+'</strong>'+L('행사 목록','#/console/agency/events','sidebar-back','back')+'</div>':'<div class="workspace-caption">운영사 워크스페이스</div>')+
- '<nav class="side-nav" aria-label="주요 메뉴">'+nav+'</nav><div class="sidebar-bottom"><div class="od-row"><div class="participant-avatar">'+e(E.session.name.slice(0,1))+'</div><div class="od-field od-fill"><strong>'+e(E.session.name)+'</strong><small>'+e(E.roleNames[role])+'</small></div></div>'+B('로그아웃','logout','','sidebar-logout')+'</div></aside><div class="admin-main"><header class="topbar">'+
- '<button type="button" class="btn square menu-button" data-action="toggle-menu" aria-label="주요 메뉴 열기" aria-expanded="false">'+E.icon('menu')+'</button><div class="breadcrumb"><span>'+(agency?'워크스페이스':'행사 운영')+'</span><span class="context-separator">/</span><strong>'+e(agency?'운영사 관리':ev.name)+'</strong></div><div class="actions">'+
- (!agency?E.badge(E.stages[ev.stage],ev.stage==='LIVE'?'good':ev.stage==='ENDED'?'':'warn')+externalLink('참가자 페이지',E.publicEventURL(),'arrow'):'')+'<span class="environment-label">브라우저 체험</span></div></header><main class="content" id="main-content" tabindex="-1">'+
- (E.storageWarning?E.notice(E.storageWarning,'warning'):'')+(E.ui.externalChange?'<div class="notice warning od-stack" role="status"><strong>'+e(E.ui.pendingRevision?'다른 탭에 새 변경이 있습니다.':'최신 자료가 반영되었습니다.')+'</strong><span>작성 중인 입력은 유지됩니다. 저장 전 현재 내용을 확인하세요.</span>'+B('최신 자료 확인','refresh-data')+'</div>': '')+body+'</main><footer class="workspace-footer">이 브라우저에 저장되는 프로토타입입니다. 실제 개인정보와 외부 전송은 사용하지 마세요.</footer></div></div>';
-};
 E.actions['close-menu']=()=>{document.body.classList.remove('menu-open');const main=document.querySelector('.admin-main');if(main)main.inert=false;const b=document.querySelector('.menu-button');b?.setAttribute('aria-expanded','false');b?.focus();};
 E.actions['toggle-menu']=()=>{const open=document.body.classList.toggle('menu-open');const main=document.querySelector('.admin-main');if(main)main.inert=open;document.querySelector('.menu-button')?.setAttribute('aria-expanded',String(open));if(open)document.querySelector('.sidebar a')?.focus();};
 document.addEventListener('keydown',ev=>{if(document.querySelector('.overlay')||!document.body.classList.contains('menu-open'))return;if(ev.key==='Escape')E.actions['close-menu']();if(ev.key==='Tab'){const nodes=Array.from(document.querySelectorAll('.sidebar a,.sidebar button,.menu-dismiss')).filter(n=>!n.disabled&&n.getClientRects().length),first=nodes[0],last=nodes[nodes.length-1];if(ev.shiftKey&&document.activeElement===first){ev.preventDefault();last?.focus();}else if(!ev.shiftKey&&document.activeElement===last){ev.preventDefault();first?.focus();}}});
