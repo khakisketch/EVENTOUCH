@@ -206,12 +206,13 @@
       '<div class="stats agency-home-stats">' +
       stat('준비 중', s.pre + '건', '오픈을 준비 중인 현장') +
       stat('전체 참가자', s.participants + '명', '모든 현장 등록 합계') +
+      stat('진행 중', s.live + '건', '현재 운영 중인 현장') +
       stat('확인할 항목', s.pending + '건', '입장 처리 대기', s.pending > 0) +
       '</div></section>' +
       '<div class="agency-dashboard">' +
       '<section class="agency-home-panel" aria-label="전체 행사"><div class="agency-home-section-head"><div><h2>전체 행사</h2><p>최근 일정과 준비 상태</p></div>' +
       '<button type="button" class="plain-link" data-agency-next="agency-events">행사 목록 모두 보기 →</button></div>' +
-      '<ul class="cards agency-home-list">' + (cards || emptyItem('등록된 행사가 없습니다')) + '</ul></section>' +
+      '<div class="agency-home-list"><ul class="cards">' + (cards || emptyItem('등록된 행사가 없습니다')) + '</ul></div></section>' +
       '<section class="agency-home-panel" aria-label="최근 활동"><div class="agency-home-section-head"><div><h2>최근 활동</h2><p>운영 변경과 주요 기록</p></div></div>' +
       '<ul class="cards agency-home-list agency-home-activity">' + (activity || '<li class="card" data-empty><p role="status">최근 활동이 없습니다</p><p><button type="button" data-agency-next="agency-events">현장 관리에서 행사 준비하기</button></p></li>') + '</ul></section>' +
       '</div></div>';
