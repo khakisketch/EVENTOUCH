@@ -45,6 +45,9 @@
 .event-create-panel>.help{margin:0 0 var(--s5)}
 .event-create-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s4)}
 .event-create-fields>.od-field{min-width:0}
+.event-create-advanced{margin-top:var(--s4)}
+.event-create-advanced>summary{display:flex;align-items:center;min-height:44px;cursor:pointer;font-weight:650}
+.event-create-advanced[open]>summary{margin-bottom:var(--s3)}
 .event-create-field-group{min-width:0}
 .event-create-field-label{font-weight:650}
 .event-create-options{display:grid;gap:var(--s2)}

@@ -5,17 +5,20 @@ E.views['agency-events']=()=>{const allowed=E.state.events.filter(x=>E.eventAllo
 E.actions['new-event']=()=>{
  const steps=[['기본 정보','행사 일정과 장소'],['모집·정원','신청 방식과 운영 정책'],['검토·생성','입력한 내용 확인']];
  let currentStep=0,createdId=null;
+ const slugInitial=['g','kk','n','d','tt','r','m','b','pp','s','ss','','j','jj','ch','k','t','p','h'],slugMedial=['a','ae','ya','yae','eo','e','yeo','ye','o','wa','wae','oe','yo','u','wo','we','wi','yu','eu','ui','i'],slugFinal=['','k','k','ks','n','nj','nh','t','l','lk','lm','lb','ls','lt','lp','lh','m','p','ps','t','t','ng','t','t','k','t','p','h'];
+ const slugFromName=value=>{const romanized=Array.from(String(value||'')).map(char=>{const code=char.charCodeAt(0)-0xac00;if(code<0||code>11171)return char;return slugInitial[Math.floor(code/588)]+slugMedial[Math.floor(code%588/28)]+slugFinal[code%28];}).join('');const base=romanized.normalize('NFKD').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,50).replace(/-+$/,'')||'event';let slug=base,index=2;while(E.state.events.some(event=>String(event.slug||'').toLowerCase()===slug.toLowerCase())){const suffix='-'+index++;slug=base.slice(0,50-suffix.length).replace(/-+$/,'')+suffix;}return slug;};
+ let slugEdited=false;
  const body='<div class="event-create-layout"><aside class="event-create-progress" aria-label="행사 만들기 단계"><ol class="event-create-step-list">'+steps.map((step,index)=>'<li class="event-create-step" data-step-indicator="'+index+'"'+(index===0?' aria-current="step"':'')+'><span class="event-create-step-number">'+String(index+1).padStart(2,'0')+'</span><span class="od-field"><strong>'+e(step[0])+'</strong><small>'+e(step[1])+'</small><small class="event-create-step-state"></small></span></li>').join('')+'</ol></aside><div class="event-create-form-content">'+
- '<section class="event-create-panel" data-wizard-step="0" aria-labelledby="event-create-step-0"><h3 id="event-create-step-0" tabindex="-1">기본 정보</h3><p class="help">행사의 이름과 일정, 장소를 입력하세요.</p><div class="event-create-fields">'+
+ '<section class="event-create-panel" data-wizard-step="0" aria-labelledby="event-create-step-0"><h3 id="event-create-step-0" tabindex="-1">기본 정보</h3><p class="help">행사명과 날짜를 입력하면 시작할 수 있습니다. 장소 안내는 준비 체크리스트에서 나중에 추가할 수 있습니다.</p><div class="event-create-fields">'+
  F('행사명 *','name','','text','required maxlength="100"')+
- S('고객사 *','clientId',[['','선택하세요'],...E.state.clients.map(a=>[a.id,a.name])],'','required')+
  F('행사 날짜 *','date','','date','required')+
- F('행사 주소 코드 *','slug','','text','required pattern="[a-z0-9-]+" maxlength="50" autocomplete="off"')+
- F('시작 시간 *','start','09:00','time','required')+
- F('종료 시간 *','end','17:00','time','required')+
- F('장소명 *','venueName','','text','required maxlength="100"')+
+ '</div><details class="event-create-advanced"><summary>고급 설정</summary><div class="event-create-fields">'+
+ F('행사 주소 코드','slug','','text','pattern="[a-z0-9-]+" maxlength="50" autocomplete="off"')+
+ F('시작 시간','start','09:00','time')+
+ F('종료 시간','end','17:00','time')+
+ F('장소명','venueName','','text','maxlength="100"')+
  F('장소 주소','venueAddress','','text','maxlength="200"')+
- '</div></section>'+
+ '</div></details></section>'+
  '<section class="event-create-panel" data-wizard-step="1" aria-labelledby="event-create-step-1" hidden><h3 id="event-create-step-1" tabindex="-1">모집과 정원</h3><p class="help">참가 신청을 여는 시점과 승인 방식을 정하세요.</p>'+
  '<div class="event-create-field-group od-field"><span class="event-create-field-label" id="event-recruitment-label">모집 방식 *</span><div class="event-create-options" role="radiogroup" aria-labelledby="event-recruitment-label"><div class="event-create-choice"><input id="event-recruitment-later" type="radio" name="recruitment" value="later" required checked><label for="event-recruitment-later"><strong>준비 후 접수 시작</strong><small>등록 양식을 확인한 뒤 참가 신청을 엽니다.</small></label></div><div class="event-create-choice"><input id="event-recruitment-open" type="radio" name="recruitment" value="open"><label for="event-recruitment-open"><strong>온라인 참가 신청</strong><small>기본 등록 양식을 게시하고 신청을 시작합니다.</small></label></div></div><span class="field-error" id="event-recruitment-later-error" aria-live="polite"></span></div>'+
  '<div class="event-create-fields event-create-policy">'+F('정원 · 0은 제한 없음','capacity',100,'number','min="0" step="1" required')+'</div>'+
@@ -25,10 +28,10 @@ E.actions['new-event']=()=>{
  '</dl><p class="event-create-note">'+e('참가자와 운영 기록이 없는 새 행사로 생성됩니다.')+'</p></section>'+
  '</div></div>';
  E.dialog('행사 만들기',body,async p=>{
-  const createPayload={name:p.name,clientId:p.clientId,date:p.date,slug:p.slug,start:p.start,end:p.end,capacity:p.capacity};
+  const createPayload={name:p.name,clientId:p.clientId||null,date:p.date,slug:p.slug,start:p.start||'09:00',end:p.end||'17:00',capacity:p.capacity};
   if(!createdId)createdId=await E.run('event.create',createPayload);
   await E.run('event.update',{...createPayload,stage:'DRAFT',approvalRequired:!!p.approvalRequired,allowReentry:true,price:0});
-  await E.run('venue.save',{name:p.venueName,address:p.venueAddress||''});
+  if(p.venueName||p.venueAddress)await E.run('venue.save',{name:p.venueName||'',address:p.venueAddress||''});
   if(p.recruitment==='open')await E.run('form.publish');
   E.close();E.navigate(E.consoleURL('settings',createdId));E.toast('행사를 만들었습니다. 등록과 기능을 설정하세요.');
  },'행사 만들기',true);
@@ -38,10 +41,11 @@ E.actions['new-event']=()=>{
  const back=footer.querySelector('[data-wizard-back]'),next=footer.querySelector('[data-wizard-next]'),submit=footer.querySelector('[type="submit"]');
  const panels=Array.from(form.querySelectorAll('[data-wizard-step]')),indicators=Array.from(form.querySelectorAll('[data-step-indicator]')),summary=form.querySelector('.error-summary');
  function read(name){const field=form.elements.namedItem(name);return field?field.value:'';}
+ function ensureSlug(){const field=form.elements.namedItem('slug');if(field&&!field.value)field.value=slugFromName(read('name'));}
  function updateReview(){
-  const client=E.state.clients.find(item=>item.id===read('clientId'));
+  ensureSlug();const client=E.state.clients.find(item=>item.id===read('clientId'));
   const venue=[read('venueName'),read('venueAddress')].filter(Boolean).join(' · ');
-  const values={name:read('name')||'—',client:client?.name||'—',date:read('date')||'—',time:(read('start')||'—')+'–'+(read('end')||'—'),slug:read('slug')||'—',venue:venue||'—',recruitment:read('recruitment')==='open'?'온라인 참가 신청':'준비 후 접수 시작',capacity:Number(read('capacity'))===0?'제한 없음':(read('capacity')||'—')+'명',approval:form.elements.namedItem('approvalRequired')?.checked?'승인 후 확정':'신청 즉시 확정'};
+  const values={name:read('name')||'—',client:client?.name||'미지정',date:read('date')||'—',time:(read('start')||'09:00')+'–'+(read('end')||'17:00'),slug:read('slug')||'—',venue:venue||'준비 체크리스트에서 입력',recruitment:read('recruitment')==='open'?'온라인 참가 신청':'준비 후 접수 시작',capacity:Number(read('capacity'))===0?'제한 없음':(read('capacity')||'—')+'명',approval:form.elements.namedItem('approvalRequired')?.checked?'승인 후 확정':'신청 즉시 확정'};
   Object.entries(values).forEach(([key,value])=>{const target=form.querySelector('[data-review="'+key+'"]');if(target)target.textContent=value;});
  }
  function showStep(index,moveFocus=true){
@@ -55,6 +59,7 @@ E.actions['new-event']=()=>{
   if(moveFocus)panels[index].querySelector('[tabindex="-1"]')?.focus();
  }
  function validateStep(index){
+  if(index===0)ensureSlug();
   const invalid=[];
   panels[index].querySelectorAll('input,select,textarea').forEach(input=>{
    let custom='';
@@ -69,7 +74,7 @@ E.actions['new-event']=()=>{
  back.addEventListener('click',()=>{if(currentStep>0)showStep(currentStep-1);});
  next.addEventListener('click',()=>{if(validateStep(currentStep)&&currentStep<2)showStep(currentStep+1);});
  form.addEventListener('submit',event=>{if(currentStep===2)return;event.preventDefault();event.stopImmediatePropagation();if(validateStep(currentStep)&&currentStep<2)showStep(currentStep+1);});
- form.addEventListener('input',event=>{form.dataset.dirty='true';if(['slug','start','end'].includes(event.target.name))event.target.setCustomValidity('');});
+ form.addEventListener('input',event=>{form.dataset.dirty='true';if(event.target.name==='name'&&!slugEdited){const slug=form.elements.namedItem('slug');if(slug)slug.value=slugFromName(event.target.value);}if(event.target.name==='slug')slugEdited=true;if(['slug','start','end'].includes(event.target.name))event.target.setCustomValidity('');});
  form.addEventListener('change',()=>{form.dataset.dirty='true';});
  showStep(0,false);
 };
@@ -84,7 +89,7 @@ E.actions['client-contact-unlink']=d=>E.dialog('담당자 연결 해제',E.notic
 E.views['agency-team']=()=>E.head('팀·권한','팀원을 초대하고 행사별 담당 업무를 배정합니다.',B('팀원 초대','invite-member','','primary'),'AGENCY WORKSPACE')+E.panel('팀원',E.table(['이름','이메일','역할','담당 행사'],E.state.accounts.filter(a=>a.active).map(a=>'<tr><td>'+e(a.name)+'</td><td>'+e(a.email)+'</td><td>'+e(E.roleNames[a.role])+'</td><td>'+e(a.role==='AGENCY'?'전체':E.state.memberships.filter(m=>m.accountId===a.id).map(m=>E.state.events.find(ev=>ev.id===m.eventId)?.name).join(', ')||'미배정')+'</td></tr>')))+E.panel('초대 내역',E.state.invitations.length?E.table(['수신자','역할','상태','작업'],E.state.invitations.map(i=>'<tr><td><div class="od-field"><strong>'+e(i.name)+'</strong><small>'+e(i.email)+'</small></div></td><td>'+e(E.roleNames[i.role])+'</td><td>'+E.badge({PENDING:'초대 대기',ACCEPTED:'수락',REVOKED:'철회'}[i.status])+'</td><td><div class="actions">'+(i.status==='PENDING'?B('수락 링크','invite-link','data-token="'+e(i.token)+'"')+B('철회','revoke-invite','data-id="'+e(i.id)+'"','','danger'):'—')+'</div></td></tr>')):E.empty('초대 내역이 없습니다','팀원 초대로 계정을 만들 수 있습니다.'));
 E.actions['invite-member']=()=>E.dialog('팀원 초대',F('이름 *','name','','text','required')+F('이메일 *','email','','email','required')+S('역할','role',Object.entries(E.roleNames).filter(([k])=>!['AGENCY','CLIENT'].includes(k)).map(([k,v])=>[k,v]),'MANAGER')+S('담당 행사','eventId',[['','아직 배정하지 않음'],...E.state.events.map(x=>[x.id,x.name])],'')+E.notice('고객사 담당자는 고객사 상세에서 고객사·행사별 권한과 함께 초대하세요. 실제 이메일을 발송하지 않습니다. 생성된 수락 링크로 이 브라우저에서 초대를 진행합니다.'),async p=>{await E.run('member.invite',p);E.close();E.toast('초대 링크를 만들었습니다. 초대 내역에서 복사하세요.');},'초대 링크 만들기');
 E.actions['invite-link']=d=>E.copyLink(E.url('#/invite/'+d.token));E.actions['revoke-invite']=d=>E.confirm('초대 철회','이 링크로 새 계정을 만들 수 없게 됩니다.',()=>E.run('member.revoke',{id:d.id}));
-E.readiness=()=>{const w=E.work(),ev=E.event();return [['기본정보',!!(ev.name&&ev.date&&ev.clientId),'settings','일정·정원·고객사 확인'],['등록 양식',w.publishedVersion>0,'form','참가자가 작성할 항목 게시'],['참가자 안내',w.notices.some(n=>n.published),'notices','입장 안내와 문의처 게시'],['프로그램',w.program.some(p=>p.published),'schedule','시간표 게시'],['등록 데스크',w.desks.length>0,'desks','입장·퇴장 작업 설정'],['스태프 배정',w.assignments.some(a=>a.type==='DESK'),'desks','현장 담당자 배정']];};
+E.readiness=()=>{const w=E.work(),ev=E.event();return [['기본정보',!!(ev.name&&ev.date),'settings','일정·정원 확인'],['행사장 안내',!!w.venue.name,'venue','장소 이름과 주소 확인'],['등록 양식',w.publishedVersion>0,'form','참가자가 작성할 항목 게시'],['참가자 안내',w.notices.some(n=>n.published),'notices','입장 안내와 문의처 게시'],['프로그램',w.program.some(p=>p.published),'schedule','시간표 게시'],['등록 데스크',w.desks.length>0,'desks','입장·퇴장 작업 설정'],['스태프 배정',w.assignments.some(a=>a.type==='DESK'),'desks','현장 담당자 배정']];};
 E.views.overview=()=>{const ev=E.event(),w=E.work(),m=E.metrics(w);return E.head('운영 현황','지금 처리할 업무부터 확인하세요.',E.can('onsite',true)?L('체크인 열기',E.consoleURL('checkin'),'primary','scan'):'')+E.stats([[m.total,'등록 참가자','명'],[m.pending,'승인 대기','명'],[m.checked,'누적 입장','명'],[m.inside,'현재 입장','명']])+E.notice('이 행사의 샘플 명단과 기록에서 계산한 수치입니다. 현재 입장은 퇴장을 반영하며 재입장은 누적 입장 수를 늘리지 않습니다.')+(E.state.migration?.available&&E.can('settings',true)?E.panel('이전 프로토타입 자료',E.notice('행사 출처가 없는 공용 참가자 '+E.state.migration.count+'명의 이전 자료가 발견되었습니다. 원본은 보존됩니다. 선택한 행사로 가져올 때 귀속 가정을 기록합니다.','warning')+B('이 행사로 가져오기','legacy-import')):'')+'<div class="split">'+E.panel(ev.stage==='DRAFT'||ev.stage==='READY'?'준비할 업무':'처리할 업무',E.readiness().map(([name,ok,page,desc])=>'<div class="task-row"><div class="od-row">'+E.icon(ok?'check':'file')+'<div class="od-field"><strong>'+e(name)+'</strong><small class="muted">'+e(desc)+'</small></div></div>'+E.link(ok?'확인':'준비',E.consoleURL(page))+'</div>').join(''))+E.panel('최근 현장 기록',w.checks.length?w.checks.slice(0,5).map(x=>'<div class="timeline-item od-field"><strong>'+e(x.name)+' · '+(x.action==='IN'?'입장':'퇴장')+(x.corrected?' · 정정됨':'')+'</strong><small class="muted">'+e(E.date(x.at))+'</small></div>').join(''):E.empty('아직 처리 기록이 없습니다','데스크에서 처리한 입퇴장이 이곳에 표시됩니다.'))+'</div>';};
 E.views.readiness=()=>E.views.overview();E.actions['legacy-import']=()=>E.confirm('이전 자료 가져오기','출처 행사가 불명확한 참가자를 현재 행사에 추가합니다. 현재 명단과 별도로 확인할 필요가 있으며 원본 저장값은 유지합니다.',()=>E.run('legacy.import'));
 E.views.settings=()=>{const ev=E.event(),w=E.work();return E.head('행사 설정','일정과 운영 정책을 관리합니다.')+E.eventTabs('settings')+E.panel('기본정보',E.can('settings',true)?'<form data-form="event-settings" novalidate><div class="error-summary" role="alert"></div><div class="form-grid">'+F('행사명 *','name',ev.name,'text','required')+S('고객사','clientId',E.state.clients.map(c=>[c.id,c.name]),ev.clientId)+F('행사 날짜 *','date',ev.date,'date','required')+F('행사 주소 코드 *','slug',ev.slug,'text','required pattern="[a-z0-9-]+"')+F('시작 *','start',ev.start,'time','required')+F('종료 *','end',ev.end,'time','required')+F('정원 · 0은 제한 없음','capacity',ev.capacity,'number','min="0" step="1"')+S('진행 단계','stage',Object.entries(E.stages),ev.stage)+'</div>'+E.check('신청 후 운영자가 승인', 'approvalRequired',w.approvalRequired)+E.check('퇴장 후 재입장 허용','allowReentry',w.allowReentry)+(ev.features.includes('payment')?F('참가비 · 원','price',w.price,'number','min="0" step="1"'):'<input type="hidden" name="price" value="'+w.price+'">')+E.notice('보관 상태에서는 다른 업무 변경이 잠깁니다. 주소 변경 시 기존 참가자 주소에 영향을 줄 수 있습니다.','warning')+E.submit('설정 저장')+'</form>':E.detail([['행사',ev.name],['일정',ev.date+' '+ev.start+'–'+ev.end],['정원',ev.capacity||'제한 없음'],['상태',E.stages[ev.stage]]]));};

@@ -134,7 +134,7 @@ E.views['agency-clients']=()=>E.head('고객사','행사 의뢰 조직과 내부
 E.actions['client-detail']=d=>{
  const c=E.state.clients.find(a=>a.id===d.id);if(!c)throw Error('고객사를 찾을 수 없습니다.');
  const events=E.state.events.filter(a=>a.clientId===c.id);
- const rows=events.length?E.table(['행사','일정','상태','이동'],events.map(a=>'<tr><td><strong>'+e(a.name)+'</strong></td><td>'+e(a.date)+'</td><td>'+e(E.stages[a.stage]||a.stage)+'</td><td>'+L('운영 현황',E.consoleURL('overview',a.id),'','arrow')+'</td></tr>')):E.empty('연결된 행사가 없습니다','새 행사를 만들 때 이 고객사를 선택하면 여기에 표시됩니다.');
+ const rows=events.length?E.table(['행사','일정','상태','이동'],events.map(a=>'<tr><td><strong>'+e(a.name)+'</strong></td><td>'+e(a.date)+'</td><td>'+e(E.stages[a.stage]||a.stage)+'</td><td>'+L('운영 현황',E.consoleURL('overview',a.id),'','arrow')+'</td></tr>')):E.empty('연결된 행사가 없습니다','행사 설정에서 이 고객사를 연결하면 여기에 표시됩니다.');
  E.dialog('고객사 상세',E.detail([['고객사명',c.name],['내부 담당자',c.contact||'미등록'],['연락처 이메일',c.email||'미등록'],['연결 행사',events.length+'개']])+'<h3 class="section-title">연결된 행사</h3>'+rows+E.notice('고객사 정보는 운영사의 내부 관리 기록입니다. 고객사 계정, 로그인, 행사 권한 또는 보고서 포털은 제공하지 않습니다.')+B('정보 수정','edit-client','data-id="'+e(c.id)+'" data-return-detail="true"'));
 };
 
