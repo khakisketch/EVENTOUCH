@@ -11,7 +11,7 @@
   ETKO.views = VIEWS.slice();
 
   if (typeof ETKO.currentView !== 'string' || VIEWS.indexOf(ETKO.currentView) === -1) {
-    ETKO.currentView = 'overview';
+    ETKO.currentView = 'agency-home';
   }
 
   function docOf(overrideDoc) {

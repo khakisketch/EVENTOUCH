@@ -223,6 +223,29 @@ test('apply-boot-mode-derives-session-flag', async () => {
   assert.equal(ETKO.serverSession, false);
 });
 
+test('server boot moves a role off the denied agency home', async () => {
+  const ETKO = loadSync();
+  for (const m of ['../app.js', '../features/agency.js']) {
+    try { delete require.cache[require.resolve(m)]; } catch {}
+  }
+  delete globalThis.ETKO2;
+  globalThis.ETKO = ETKO;
+  require('../app.js');
+  require('../features/agency.js');
+  const E2 = globalThis.ETKO;
+  E2.remote = ETKO.remote;
+  E2.pullRemoteStore = async () => ({ events: 0, pulled: 0 });
+  E2.applyBootMode = ETKO.applyBootMode;
+  E2.store.role = 'STAFF';
+  E2.currentView = 'agency-home';
+  assert.equal(await E2.applyBootMode({ mode: 'server', user: { id: 's', role: 'STAFF' } }), 'server');
+  assert.equal(E2.currentView, 'overview');
+  E2.store.role = 'AGENCY';
+  E2.currentView = 'agency-home';
+  assert.equal(await E2.applyBootMode({ mode: 'server', user: { id: 'a', role: 'AGENCY' } }), 'server');
+  assert.equal(E2.currentView, 'agency-home');
+});
+
 test('pull-preserves-local-team-members', async () => {
   const ETKO = loadSync();
   ETKO.remote.base = BASE;

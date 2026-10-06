@@ -181,6 +181,27 @@
           await ETKO.pullRemoteStore();
         } catch (err) {}
       }
+      // A role denied on the boot view must not sit on it: fall back to
+      // the first permitted view in shell order.
+      try {
+        if (
+          typeof ETKO.canRoute === 'function' &&
+          typeof ETKO.currentRole === 'function' &&
+          typeof ETKO.navigate === 'function' &&
+          ETKO.canRoute(ETKO.currentRole(), ETKO.currentView) !== true
+        ) {
+          var order =
+            typeof ETKO.views !== 'undefined' && Array.isArray(ETKO.views)
+              ? ETKO.views
+              : ['overview', 'participants', 'checkin'];
+          for (var i = 0; i < order.length; i += 1) {
+            if (ETKO.canRoute(ETKO.currentRole(), order[i]) === true) {
+              ETKO.navigate(order[i]);
+              break;
+            }
+          }
+        }
+      } catch (err) {}
       return 'server';
     }
     ETKO.serverSession = false;

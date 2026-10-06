@@ -58,9 +58,9 @@ test('?view=screen boots the standalone audience route and marks shell-free mode
   assert.equal(mainAttrs['data-current-view'], 'screen');
 });
 
-test('normal operator URL does not enable standalone audience mode', () => {
+test('normal operator URL lands on the agency home, not an event detail', () => {
   const { ETKO, bodyAttrs } = boot('');
-  assert.equal(ETKO.currentView, 'overview');
+  assert.equal(ETKO.currentView, 'agency-home');
   assert.equal(bodyAttrs['data-screen-mode'], undefined);
 });
 
