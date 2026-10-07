@@ -1040,6 +1040,18 @@ async function handleApi(req, res, store, urlPath, security = {}) {
   }
 
   try {
+    if (parts[1] === 'events' && parts.length === 2 && req.method === 'GET' && state) {
+      const account = await requireUser(auth, req);
+      if (String(account.role).toUpperCase() !== 'AGENCY') {
+        const projection = await state.loadBootstrap(account);
+        res.setHeader('cache-control', 'no-store');
+        return sendJson(res, 200, {
+          events: projection.events,
+          activeEventId: projection.activeEventId,
+        });
+      }
+    }
+
     if (parts[1] === 'events' && parts.length === 4 && parts[3] === 'signup') {
       if (req.method !== 'POST') return sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
       const slug = decodedSegment(parts[2]);

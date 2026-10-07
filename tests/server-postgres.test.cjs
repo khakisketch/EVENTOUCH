@@ -3,9 +3,17 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const { createDatabase } = require('../server/db');
 const { runMigrations } = require('../server/migrate');
+const { createDatabaseAuth } = require('../server/auth');
+const { createAccess } = require('../server/access');
+const { openStore } = require('../server/store');
+const { createHttpServer } = require('../server/server');
 const { testDatabaseUrl } = require('./helpers/postgres-test.cjs');
+const { requestJson } = require('./helpers/postgres-api-server.cjs');
 
 class FakeClient {
   constructor(pool) {
@@ -172,6 +180,107 @@ integration('postgres-health-and-migrations-are-idempotent', { timeout: 15000 },
   } finally {
     await db.close();
     await isolated.drop();
+  }
+});
+
+integration('postgres-failed-migration-rolls-back-schema-and-applied-version', { timeout: 15000 }, async () => {
+  const isolated = await createIsolatedMigrationSchema();
+  const db = createDatabase({ connectionString: isolated.connectionString });
+  const migrationsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'eventouch-migrations-test-'));
+  fs.writeFileSync(path.join(migrationsDir, '001_create-marker.sql'),
+    'CREATE TABLE migration_marker (id integer NOT NULL);');
+  fs.writeFileSync(path.join(migrationsDir, '002_fail-insert.sql'),
+    "INSERT INTO migration_marker (id) VALUES ('not-an-integer');");
+  try {
+    await assert.rejects(runMigrations(db, migrationsDir), /invalid input syntax/i);
+    const state = await db.query(`
+      SELECT to_regclass('schema_migrations') AS migrations,
+             to_regclass('migration_marker') AS marker
+    `);
+    assert.equal(state.rows[0].migrations, null);
+    assert.equal(state.rows[0].marker, null);
+  } finally {
+    await db.close();
+    await isolated.drop();
+    fs.rmSync(migrationsDir, { recursive: true, force: true });
+  }
+});
+
+integration('postgres-public-signup-survives-http-server-restart', { timeout: 15000 }, async () => {
+  const isolated = await createIsolatedMigrationSchema();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'eventouch-server-restart-test-'));
+  const eventId = `restart-event-${crypto.randomUUID()}`;
+  const slug = `restart-${crypto.randomUUID()}`;
+  const connectionString = isolated.connectionString;
+  let db = null;
+  let server = null;
+  let serverUrl = '';
+
+  const start = async () => {
+    server = createHttpServer(openStore(dataDir), createDatabaseAuth(db), createAccess(db), db);
+    await new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', resolve);
+    });
+    serverUrl = `http://127.0.0.1:${server.address().port}`;
+  };
+  const stop = async () => {
+    if (!server) return;
+    server.closeAllConnections();
+    await new Promise((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve());
+    });
+    server = null;
+  };
+
+  try {
+    db = createDatabase({ connectionString });
+    await db.migrate();
+    await db.query('INSERT INTO events (id, slug, payload) VALUES ($1, $2, $3::jsonb)', [
+      eventId,
+      slug,
+      JSON.stringify({ id: eventId, slug, name: '재시작 지속 행사', date: '2026-12-01', stage: 'READY', capacity: 10, features: [] }),
+    ]);
+    await db.query('INSERT INTO event_workspaces (event_id, payload) VALUES ($1, $2::jsonb)', [
+      eventId,
+      JSON.stringify({
+        participants: [],
+        registrationOpen: true,
+        publishedVersion: 1,
+        publishedFields: [
+          { id: 'name', label: '이름', type: 'text', required: true, options: [] },
+          { id: 'phone', label: '연락처', type: 'text', required: true, options: [] },
+        ],
+        consentText: '',
+        consentVersion: 1,
+      }),
+    ]);
+    await start();
+    const signup = await requestJson(serverUrl, `/api/events/${slug}/signup`, {
+      method: 'POST',
+      body: {
+        commandId: `restart-${crypto.randomUUID()}`,
+        formVersion: 1,
+        name: '재시작 후 참가자',
+        phone: '01098765432',
+      },
+    });
+    assert.equal(signup.status, 201, JSON.stringify(signup.json));
+    const ticket = signup.json.participant.ticket;
+    await stop();
+    await db.close();
+
+    db = createDatabase({ connectionString });
+    await db.migrate();
+    await start();
+    const persisted = await requestJson(serverUrl, `/api/public/events/${slug}/ticket`, { bearer: ticket });
+    assert.equal(persisted.status, 200, JSON.stringify(persisted.json));
+    assert.equal(persisted.json.participant.name, '재시작 후 참가자');
+  } finally {
+    await stop();
+    if (db) await db.close();
+    await isolated.drop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
   }
 });
 

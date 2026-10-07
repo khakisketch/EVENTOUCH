@@ -464,6 +464,9 @@ function createParticipantCommands(database) {
       commandId: id,
       operation: 'public.signup',
       apply: async ({ event, workspace, now }) => {
+        if (String(event.stage || '').toUpperCase() === 'ENDED') {
+          throw failure(409, '종료된 행사에서는 신청할 수 없습니다');
+        }
         if (!publicSignupEvent(event)) throw failure(404, '요청한 행사를 찾을 수 없습니다');
         if (workspace.registrationOpen !== true || !(Number(workspace.publishedVersion) > 0)) {
           throw failure(409, '현재 신청을 받지 않습니다');

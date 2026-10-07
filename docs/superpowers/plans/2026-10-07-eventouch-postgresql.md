@@ -45,7 +45,7 @@
 - `transaction(fn)` checks out one PoolClient, runs BEGIN/COMMIT/ROLLBACK on that client, and always releases it. SQL uses parameterized values. `migrate()` applies numbered migrations transactionally and records applied versions.
 - Integration tests read only `EVENTOUCH_TEST_DATABASE_URL`; the helper permits loopback TCP or the task-scoped socket under `/tmp/opencode/eventouch-pg-test-*`, never the application `DATABASE_URL` or a remote host.
 
-- [x] Write tests for DB health, migration idempotency, transaction commit/rollback, parameterized repository calls, and pool close.
+- [x] Write tests for DB health, migration idempotency/failure atomicity, transaction commit/rollback, parameterized repository calls, pool close, and PostgreSQL-backed signup persistence across HTTP server restart.
 - [x] Run the focused tests and confirm expected failure before implementation.
 - [x] Add the single runtime dependency `pg`, migration runner, initial schema, and Compose test/production service definitions without starting production services.
 - [x] Start only the approved disposable local PostgreSQL test container and run focused tests.
@@ -104,8 +104,12 @@ Task 3 verification (2026-10-07): PostgreSQL-backed bootstrap/public API tests w
 - Produces: `POST /api/events/:slug/signup`, plus authenticated participant create/update/status/import and attendee self-service commands through `POST /api/events/:eventId/commands`.
 - Validate published form version, visible consent, duplicate participant rules, capacity/waitlist, cancellation, ticket expiry/revocation, idempotency command ID, and server-generated ticket secrets inside the locked event transaction.
 - Preserve CSV import as an authenticated operator workflow; importing alone must not manufacture attendee consent.
+- Attendee self-update is limited to currently published form field IDs. ENDED/ARCHIVED events reject operator participant writes; an ENDED public event returns a closure response while ARCHIVED remains hidden as not-found.
+- Preserve v9 CSV mapping for base contact fields. Imported participants may complete any required published custom answers through ticket self-update; import stays atomic and rejects duplicate/capacity-overflow batches (it does not auto-waitlist overflow even when approval is required).
+- Cancellation changes PAID payment rows to REFUND_REQUESTED and projects that state on the participant. A still-PENDING simulated payment remains PENDING on cancellation to match v9; no payment provider side effect is performed.
+- Idempotency receipts omit raw ticket values and keep only hashes; replay restores the same token only while it remains current, otherwise returns a conflict.
 
-- [ ] Test app-free signup, required consent, duplicate signup, capacity boundary, parallel final-slot signup, ticket expiry/reissue/cancel, CSV import permission, and replayed command ID.
+- [ ] Test app-free signup, required consent/custom-field backfill, duplicate signup, capacity boundary with concurrent callers, concurrent same-command retries, ticket expiry/reissue/cancel, CSV import permission/atomicity, and replayed command ID.
 - [ ] Implement server-side participant rules and return only the resulting participant/ticket projection needed by the caller.
 - [ ] Run focused concurrency/API tests; commit as `feat: make attendee registration transactional`.
 
@@ -151,10 +155,11 @@ Task 3 verification (2026-10-07): PostgreSQL-backed bootstrap/public API tests w
 **Interfaces:**
 - Consumes: Tasks 2–6 routes.
 - Produces: `ET.remote.get/post`, bootstrap hydration, credential login/logout, server command transport preserving `E.run(name, payload)` and command IDs, public attendee fetch, offline check-in outbox replay, and visible connection/error states.
+- The existing `GET /api/events` collection returns the PostgreSQL role-scoped event list for MANAGER/STAFF; no client route may rely on JSON-file event/participant writes as authoritative data.
 - Server mode is explicit and cannot silently fall back to a writable local demo. Local demo is available only as clearly labeled preview mode and cannot be mistaken for shared operations.
 - Preserve existing route IDs, layout/brand, responsive behavior, focus handling, and CSV import. OpenDesign owns visual login/connection copy and rendered review/refinement using actual desktop/mobile and denied/loading states; Build changes only nonvisual transport/wiring. Use the current approved direction, no new visual redesign.
 
-- [ ] Write transport tests for credentials, session bootstrap, server rejection, same-command retry, queue dedupe, and no local write in server mode.
+- [ ] Write transport tests for credentials, session bootstrap, server rejection, same-command retry, queue dedupe, and no local write in server mode; exercise event creation and participant writes through PostgreSQL-authoritative routes.
 - [ ] Run red tests, implement nonvisual adapter/wiring, commission compact OpenDesign copy/state refinement plus distinct rendered review, then run all current-v9 tests.
 - [ ] Verify in a browser at 1280px and 390px: login, assigned staff scan flow, attendee signup/ticket, refresh persistence, permission denial, and no console/network errors.
 - [ ] Commit as `feat: connect EVENTOUCH to shared server state`.
@@ -169,11 +174,13 @@ Task 3 verification (2026-10-07): PostgreSQL-backed bootstrap/public API tests w
 - Consumes: Tasks 1–7.
 - Produces: file upload/download under `STORAGE_DIR` with allowlist and size/path limits; Compose PostgreSQL + API service with health dependency and named local volume; documented env/TLS/backup/NAS configuration only (no mount or deployment performed).
 
-- [ ] Test authenticated file access, event permission, size/type/path rejection, and metadata persistence.
+- [ ] Test authenticated file access, event permission, size/type/path rejection, metadata persistence, and explicit denial of staff file reads unless an approved assignment contract is added.
 - [ ] Run all tests and static checks; use an independent test-runner and reviewer at the verified final revision.
 - [ ] Record the test container cleanup, actual commands/results, open findings, and no-production-deployment status; commit as `docs: document PostgreSQL deployment configuration`.
 
 ## Execution notes
+
+- M1 exit gate is detailed in `docs/superpowers/product-state.md`: create and mutate through PostgreSQL-only product routes, verify independent role-scoped/bootstrap/public-ticket reads, restart persistence, and obtain human end-to-end acceptance. Tasks 4 review checks do not close the broader M1 milestone.
 
 - Base revision: `86b532d83ac3fa6e18b818936b2dd94f1965bb5d`.
 - Isolated workspace: `.worktrees/eventouch-postgres`, branch `feat/eventouch-postgres`.

@@ -271,6 +271,24 @@ test('public-signup-rejects-stale-published-forms-and-missing-required-consent',
   assert.equal(invalidOption.json.field, 'meal');
 });
 
+test('public-signup-reports-an-ended-visible-event-as-closed', async () => {
+  const original = await harness.database.query('SELECT payload FROM events WHERE id = $1', [ids.operators]);
+  try {
+    await harness.database.query(
+      "UPDATE events SET payload = jsonb_set(payload, '{stage}', to_jsonb('ENDED'::text), true) WHERE id = $1",
+      [ids.operators]
+    );
+    const response = await publicSignup(slugs.operators, signupBody('종료 행사 신청자', '01000000025'));
+    assert.equal(response.status, 409);
+    assert.match(response.json.error, /종료|받지 않습니다/);
+  } finally {
+    await harness.database.query('UPDATE events SET payload = $2::jsonb WHERE id = $1', [
+      ids.operators,
+      JSON.stringify(original.rows[0].payload),
+    ]);
+  }
+});
+
 test('public-signup-rejects-duplicate-normalized-phone-numbers', async () => {
   const first = await publicSignup(slugs.duplicate, signupBody('수아 참가자', '010-1234-5678'));
   const duplicate = await publicSignup(slugs.duplicate, signupBody('다른 이름', '01012345678'));
@@ -288,11 +306,11 @@ test('capacity-boundary-allows-one-seat-and-rejects-the-next-signup', async () =
 });
 
 test('parallel-signups-for-the-final-seat-commit-exactly-one-participant', async () => {
-  const responses = await Promise.all([
-    publicSignup(slugs.parallel, signupBody('병렬 참가자 하나', '01000000003')),
-    publicSignup(slugs.parallel, signupBody('병렬 참가자 둘', '01000000004')),
-  ]);
-  assert.deepEqual(responses.map((response) => response.status).sort(), [201, 409]);
+  const responses = await Promise.all(Array.from({ length: 8 }, (_, index) =>
+    publicSignup(slugs.parallel, signupBody(`병렬 참가자 ${index + 1}`, `010000000${30 + index}`))
+  ));
+  assert.equal(responses.filter((response) => response.status === 201).length, 1);
+  assert.equal(responses.filter((response) => response.status === 409).length, 7);
   const stored = await harness.database.query(
     'SELECT payload FROM event_workspaces WHERE event_id = $1',
     [ids.parallel]
@@ -333,6 +351,53 @@ test('command-id-reuse-in-a-different-event-is-rejected-without-a-second-signup'
     [ids.stale]
   );
   assert.equal(target.rows[0].payload.participants.length, 0);
+});
+
+test('concurrent-signup-retries-with-one-command-id-create-a-single-participant', async () => {
+  const id = commandId();
+  const before = await harness.database.query(
+    'SELECT payload FROM event_workspaces WHERE event_id = $1',
+    [ids.replay]
+  );
+  const originalCount = before.rows[0].payload.participants.length;
+  const responses = await Promise.all(Array.from({ length: 5 }, (_, index) =>
+    publicSignup(slugs.replay, signupBody(`동시 재시도 ${index + 1}`, `010000000${40 + index}`, { commandId: id }))
+  ));
+
+  assert.deepEqual(responses.map((response) => response.status).sort(), [200, 200, 200, 200, 201]);
+  assert.ok(responses.every((response) => response.json.participant.id === responses[0].json.participant.id));
+  const after = await harness.database.query(
+    'SELECT payload FROM event_workspaces WHERE event_id = $1',
+    [ids.replay]
+  );
+  assert.equal(after.rows[0].payload.participants.length, originalCount + 1);
+});
+
+test('concurrent-operator-retries-with-one-command-id-create-a-single-participant', async () => {
+  const id = commandId();
+  const before = await harness.database.query(
+    'SELECT payload FROM event_workspaces WHERE event_id = $1',
+    [ids.operators]
+  );
+  const originalCount = before.rows[0].payload.participants.length;
+  const responses = await Promise.all(Array.from({ length: 5 }, (_, index) =>
+    operatorCommand(ids.operators, 'participant.create', {
+      name: `운영자 동시 재시도 ${index + 1}`, phone: `010123400${30 + index}`, meal: '일반식',
+    }, cookies.manager, id)
+  ));
+
+  assert.deepEqual(responses.map((response) => response.status).sort(), [200, 200, 200, 200, 201]);
+  assert.ok(responses.every((response) => response.json.participant.id === responses[0].json.participant.id));
+  const after = await harness.database.query(
+    'SELECT payload FROM event_workspaces WHERE event_id = $1',
+    [ids.operators]
+  );
+  assert.equal(after.rows[0].payload.participants.length, originalCount + 1);
+  const receipt = await harness.database.query(
+    'SELECT result FROM command_receipts WHERE command_id = $1',
+    [id]
+  );
+  assert.ok(!JSON.stringify(receipt.rows[0].result).includes(responses[0].json.participant.ticket));
 });
 
 test('numeric-demo-signup-falls-back-only-when-no-postgresql-event-matches', async () => {
@@ -401,6 +466,17 @@ test('authenticated-commands-preserve-role-boundaries-and-csv-import-does-not-cr
   );
   const savedImport = stored.rows[0].payload.participants.find((person) => person.id === imported.json.participants[0].id);
   assert.equal(savedImport.consent, null);
+  assert.deepEqual(savedImport.answers, {});
+
+  const completedImport = await attendeeCommand(ids.operators, 'participant.self-update', {
+    name: savedImport.name,
+    phone: savedImport.phone,
+    email: savedImport.email,
+    company: savedImport.company,
+    meal: '채식',
+  }, imported.json.participants[0].ticket);
+  assert.equal(completedImport.status, 200, JSON.stringify(completedImport.json));
+  assert.equal(completedImport.json.participant.answers.meal, '채식');
 
   const staffImport = await operatorCommand(ids.operators, 'participant.import', {
     rows: [{ name: '권한 밖 CSV', phone: '01012340003' }],
@@ -659,6 +735,30 @@ test('participant-cancellation-keeps-the-payment-and-ticket-projection-in-sync',
   assert.equal(restored.status, 200);
   assert.equal(restored.json.participants[0].paymentStatus, 'REFUND_REQUESTED');
   assert.notEqual(restored.json.participants[0].ticket, created.json.participant.ticket);
+});
+
+test('participant-cancellation-preserves-v9-pending-payment-projection', async () => {
+  const created = await operatorCommand(ids.payment, 'participant.create', {
+    name: '결제 대기 취소 참가자', phone: '01012340024', meal: '일반식',
+  }, cookies.manager);
+  assert.equal(created.status, 201);
+  assert.equal(created.json.participant.paymentStatus, 'PENDING');
+
+  const canceled = await operatorCommand(ids.payment, 'participant.status', {
+    id: created.json.participant.id, status: 'CANCELLED',
+  }, cookies.manager);
+  assert.equal(canceled.status, 200);
+  assert.equal(canceled.json.participants[0].status, 'CANCELLED');
+  assert.equal(canceled.json.participants[0].paymentStatus, 'PENDING');
+
+  const stored = await harness.database.query(
+    'SELECT payload FROM event_workspaces WHERE event_id = $1',
+    [ids.payment]
+  );
+  const participant = stored.rows[0].payload.participants.find((item) => item.id === created.json.participant.id);
+  const payment = stored.rows[0].payload.payments.find((item) => item.participantId === participant.id);
+  assert.equal(participant.revoked, true);
+  assert.equal(payment.status, 'PENDING');
 });
 
 test('replaying-an-old-ticket-reissue-does-not-return-a-later-ticket', async () => {

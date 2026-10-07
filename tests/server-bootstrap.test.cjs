@@ -170,6 +170,14 @@ test('api-bootstrap-projects-organization-and-membership-events-without-cross-ev
   assert.ok(!JSON.stringify(manager.json.state).includes('행사 B'));
 });
 
+test('manager-event-collection-lists-only-membership-events', async () => {
+  const response = await requestJson(harness.baseUrl, '/api/events', { cookie: cookies.manager });
+
+  assert.equal(response.status, 200, JSON.stringify(response.json));
+  assert.deepEqual(response.json.events.map((event) => event.id), [ids.eventA]);
+  assert.equal(response.json.activeEventId, ids.eventA);
+});
+
 test('api-bootstrap-staff-sees-only-assigned-targets-and-no-ticket-or-contact-secrets', async () => {
   const staff = await requestJson(harness.baseUrl, '/api/bootstrap', { cookie: cookies.staff });
   assert.equal(staff.status, 200);
