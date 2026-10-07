@@ -117,6 +117,11 @@ function normalizeWorkspace(value) {
   return workspace;
 }
 
+function projectParticipant(workspace, event, participant) {
+  if (!participant) return null;
+  return publicWorkspace(workspace, event, participant).participants[0] || null;
+}
+
 function accountProjection(row, fullOrganization) {
   return {
     id: String(row.id),
@@ -339,4 +344,4 @@ function createState(database) {
   return { loadBootstrap };
 }
 
-module.exports = { createState, emptyWorkspace, normalizeEvent, normalizeWorkspace };
+module.exports = { createState, emptyWorkspace, normalizeEvent, normalizeWorkspace, projectParticipant };

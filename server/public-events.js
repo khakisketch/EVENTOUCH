@@ -210,7 +210,9 @@ function publicWorkspace(value, event, participant = null) {
       'everIn', 'ticket', 'ticketExpiresAt', 'revoked', 'paymentStatus', 'createdAt',
     ]),
     answers: Object.fromEntries(Object.entries(answers).filter(([key]) => allowedAnswerIds.has(key)).map(([key, answer]) => [key, publicValue(answer)])),
-    consent: pick(object(participant.consent), ['version', 'at']),
+    consent: participant.consent && typeof participant.consent === 'object'
+      ? pick(object(participant.consent), ['version', 'at'])
+      : null,
   } : null;
 
   const venue = object(source.venue);

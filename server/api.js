@@ -979,7 +979,7 @@ function bearerToken(header) {
 }
 
 async function handleApi(req, res, store, urlPath, security = {}) {
-  const { auth, access, state, publicEvents } = security;
+  const { auth, access, state, publicEvents, participantCommands } = security;
   const parts = urlPath.split('/').filter(Boolean);
   if (parts[0] !== 'api') return sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
 
@@ -1020,11 +1020,10 @@ async function handleApi(req, res, store, urlPath, security = {}) {
     }
   }
 
-  ensureSeedData(store);
-
   // Raw octet uploads bypass the JSON body reader.
   if (req.method === 'POST' && parts[1] === 'events' && parts[3] === 'files' && parts.length === 4) {
     try {
+      ensureSeedData(store);
       return await handleFileUpload(req, res, store, parts[2], req.url || urlPath, auth, access);
     } catch (e) {
       return err(res, e.status || 500, e.message || '요청을 처리하지 못했습니다', e.field);
@@ -1041,6 +1040,77 @@ async function handleApi(req, res, store, urlPath, security = {}) {
   }
 
   try {
+    if (parts[1] === 'events' && parts.length === 4 && parts[3] === 'signup') {
+      if (req.method !== 'POST') return sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
+      const slug = decodedSegment(parts[2]);
+      if (!slug) return err(res, 404, '요청한 행사를 찾을 수 없습니다');
+      res.setHeader('cache-control', 'no-store');
+      if (!participantCommands) {
+        ensureSeedData(store);
+        return await handleEvents(req, res, store, [slug, 'signup'], body, auth, access);
+      }
+      try {
+        const result = await participantCommands.signup({ slug, commandId: body.commandId, input: body });
+        return sendJson(res, result.status, result.body);
+      } catch (error) {
+        // Keep the old numeric demo IDs working until the v9 client has moved to the PostgreSQL API.
+        if (error.code === 'EVENT_NOT_FOUND' && /^evt-\d+$/.test(slug)) {
+          ensureSeedData(store);
+          if (readEvents(store).items.some((event) => event && event.id === slug)) {
+            return await handleEvents(req, res, store, [slug, 'signup'], body, auth, access);
+          }
+        }
+        return err(res, error.status || 500, error.message || '요청을 처리하지 못했습니다', error.field);
+      }
+    }
+
+    if (parts[1] === 'events' && parts.length === 4 && parts[3] === 'commands') {
+      if (req.method !== 'POST') return sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
+      res.setHeader('cache-control', 'no-store');
+      if (!participantCommands) return err(res, 503, '데이터베이스를 사용할 수 없습니다');
+      const eventId = decodedSegment(parts[2]);
+      if (!eventId) return err(res, 404, '요청한 행사를 찾을 수 없습니다');
+      const command = text(body.command || body.name);
+      const payload = body.payload && typeof body.payload === 'object' && !Array.isArray(body.payload)
+        ? body.payload
+        : {};
+      const commandId = body.commandId || payload.commandId;
+      const assignmentId = body.assignmentId || payload.assignmentId;
+      if (command === 'participant.self-update' || command === 'participant.cancel') {
+        const result = await participantCommands.execute({
+          eventId,
+          commandId,
+          command,
+          payload,
+          ticketToken: bearerToken(req.headers.authorization),
+        });
+        return sendJson(res, result.status, result.body);
+      }
+
+      const account = await requireUser(auth, req);
+      if (String(account.role).toUpperCase() === 'STAFF') {
+        if (command !== 'participant.create') throw Object.assign(new Error('권한을 확인하세요'), { status: 403 });
+        await access.authorize({
+          account,
+          eventId,
+          command: 'participants.read',
+          assignmentId,
+        });
+      } else {
+        await access.authorize({ account, eventId, command: 'participants.write' });
+      }
+      const result = await participantCommands.execute({
+        eventId,
+        commandId,
+        command,
+        payload,
+        account,
+        assignmentId,
+      });
+      return sendJson(res, result.status, result.body);
+    }
+
+    ensureSeedData(store);
     if (parts[1] === 'users' && parts.length === 2 && req.method === 'POST') {
       const me = await requireUser(auth, req);
       if (String(me.role).toUpperCase() !== 'AGENCY') {
