@@ -2,7 +2,7 @@
 const e=E.esc,B=E.button,L=E.link,F=E.field,S=E.select;
 const org={ 'events.all':'모든 행사 보기','events.create':'행사 생성·복제','clients.manage':'고객사 내부 기록','team.manage':'팀·권한 관리','integrations.manage':'서비스 연동 설정' };
 const event={participants:'참가자',page:'참가자 페이지',programs:'참여 프로그램',onsite:'현장 운영',booth:'부스 운영',messages:'메시지',results:'결과 보고',settings:'행사 설정'};
-const eventPages={overview:'overview',readiness:'overview',participants:'participants',form:'participants',import:'participants',groups:'participants',payments:'participants',onsite:'onsite',desks:'onsite',checks:'onsite',checkin:'onsite',booths:'booth',visits:'booth',page:'page','event-qr':'page',notices:'page',schedule:'page',venue:'page',board:'page',programs:'programs',poll:'programs',quiz:'programs',qa:'programs',draw:'programs',survey:'programs',photo:'programs',rewards:'programs',messages:'messages',templates:'messages',deliveries:'messages',screen:'screen',results:'results',reports:'results',settings:'settings',features:'settings',members:'settings',audit:'settings'};
+const eventPages={overview:'overview',readiness:'overview',participants:'participants',form:'participants',import:'participants',groups:'participants',onsite:'onsite',desks:'onsite',checks:'onsite',checkin:'onsite',booths:'booth',visits:'booth',page:'page','event-qr':'page',notices:'page',schedule:'page',venue:'page',board:'page',programs:'programs',poll:'programs',quiz:'programs',qa:'programs',draw:'programs',survey:'programs',photo:'programs',rewards:'programs',messages:'messages',templates:'messages',deliveries:'messages',screen:'screen',results:'results',reports:'results',settings:'settings',features:'settings',members:'settings',audit:'settings'};
 const isOperator=a=>!!a&&['OPERATOR','AGENCY','MANAGER'].includes(a.role);
 const list=x=>Array.isArray(x)?x:typeof x==='string'?[x]:[];
 const orgList=x=>Array.from(new Set(list(x).filter(k=>Object.hasOwn(org,k))));
@@ -103,7 +103,7 @@ E.actions['assign-member']=d=>{
  E.dialog('행사 범위 권한',E.detail([['행사',ev.name],['구성원',a.name]])+E.check('이 행사 접근 허용','enabled',!!m)+'<fieldset class="permission-fieldset"><legend>허용할 업무</legend>'+controls+'</fieldset>'+E.notice('선택하지 않은 업무는 조회할 수 있지만 변경할 수 없습니다.'),async p=>{await E.run('member.assign',{accountId:a.id,enabled:!!p.enabled,write:p.write||[]});E.close();E.toast('행사 권한을 저장했습니다.');},'저장');
 };
 E.views['agency-integrations']=()=>{
- const entries=[['로그인·인증','미연동','체험 계정은 이 브라우저에만 저장됩니다.'],['문자·알림톡','미연동','대상 검토와 요청 기록만 체험할 수 있습니다.'],['결제·환불','미연동','금전 이동 없이 상태 흐름만 체험합니다.'],['지도·길찾기','미연동','행사별 주소와 안내 문구를 표시합니다.'],['QR·인쇄','브라우저 기능','기기 카메라와 프린터 연결은 별도 확인이 필요합니다.']];
+ const entries=[['로그인·인증','미연동','체험 계정은 이 브라우저에만 저장됩니다.'],['문자·알림톡','미연동','대상 검토와 요청 기록만 체험할 수 있습니다.'],['결제·환불','미연동','공급자 연결 전에는 제품 화면에서 사용할 수 없습니다.'],['지도·길찾기','미연동','행사별 주소와 안내 문구를 표시합니다.'],['QR·인쇄','브라우저 기능','기기 카메라와 프린터 연결은 별도 확인이 필요합니다.']];
  return E.head('서비스 연동','실제 서비스 연결 상태와 프로토타입에서 체험할 수 있는 범위를 구분합니다.')+entries.map(x=>E.panel(x[0],'<div class="od-row"><div class="od-field od-fill"><strong>'+e(x[1])+'</strong><span>'+e(x[2])+'</span></div>'+E.badge(x[1])+'</div>')).join('')+E.notice('실제 인증 정보나 참가자 개인정보를 입력하지 마세요.');
 };
 

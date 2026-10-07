@@ -3,7 +3,7 @@
 const e=E.esc,B=E.button,L=E.link,F=E.field,S=E.select;
 const groups={
  'new-event':'agency','duplicate-event':'agency','edit-client':'agency','invite-member':'agency','revoke-invite':'agency',
- 'edit-person':'participants','person-status':'participants','reissue-ticket':'participants','bulk-approve':'participants','bulk-cancel':'participants','bulk-group':'participants','new-group':'participants','edit-field':'participants','move-field':'participants','delete-field':'participants','close-registration':'participants','import-commit':'participants','import-edit-row':'participants','refund-payment':'participants',
+ 'edit-person':'participants','person-status':'participants','reissue-ticket':'participants','bulk-approve':'participants','bulk-cancel':'participants','bulk-group':'participants','new-group':'participants','edit-field':'participants','move-field':'participants','delete-field':'participants','close-registration':'participants','import-commit':'participants','import-edit-row':'participants',
  'edit-desk':'onsite','assign-staff':'onsite','unassign-staff':'onsite','scan-person':'onsite','correct-check':'onsite',
  'edit-booth':'booth','booth-mode':'booth',
  'edit-notice':'page','delete-notice':'page','edit-program':'page','delete-program':'page','moderate-post':'page',

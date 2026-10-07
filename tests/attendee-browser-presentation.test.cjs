@@ -24,13 +24,15 @@ const workspace = {
   approvalRequired: false, price: 0, payments: [], desks: [],
 };
 
-function loadAttendee(page = 'home', person = null) {
+function loadAttendee(page = 'home', person = null, options = {}) {
   const classes = new Set();
+  const testEvent = { ...event, features: options.features || event.features };
+  const testWorkspace = { ...workspace, ...options.workspace };
   const E = {
-    route: { scope: 'attendee', eventId: event.id, slug: event.slug, page, params: new URLSearchParams() },
+    route: { scope: 'attendee', eventId: testEvent.id, slug: testEvent.slug, page, params: new URLSearchParams() },
     state: { events: [event] }, views: {}, forms: {}, actions: {}, ui: {},
     features: {}, registrationStates: { APPROVED: '참가 확정', PENDING: '확인 중' },
-    event: () => event, work: () => workspace, person: () => person,
+    event: () => testEvent, work: () => testWorkspace, person: () => person,
     can: () => false, ticketValid: () => true,
     esc: value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])),
     button: (label, action, attrs = '', cls = '') => `<button class="btn ${cls}" data-action="${action}" ${attrs}>${label}</button>`,
@@ -51,6 +53,33 @@ function loadAttendee(page = 'home', person = null) {
   const window = { ET: E, ETQR: { encode: code => `<svg data-ticket="${code}"></svg>` } };
   vm.runInNewContext(fs.readFileSync(path.join(root, 'assets/js/attendee.js'), 'utf8'), { window, document, URLSearchParams });
   return { E, classes };
+}
+
+function loadCoreAndConsole() {
+  const window = {};
+  vm.runInNewContext(fs.readFileSync(path.join(root, 'assets/js/core.js'), 'utf8'), { window, URLSearchParams });
+  const E = window.ET;
+  const testEvent = { ...event, features: ['payment'] };
+  const testWorkspace = { ...workspace, price: 2500 };
+  Object.assign(E, {
+    event: () => testEvent,
+    work: () => testWorkspace,
+    can: () => true,
+    head: () => '',
+    tabs: items => items.map(([label]) => label).join('|'),
+    panel: (title, body) => `<section>${title}${body}</section>`,
+    field: (label, name, value = '', type = 'text') => `<label>${label}<input name="${name}" type="${type}" value="${value}"></label>`,
+    select: (label, name) => `<label>${label}<select name="${name}"></select></label>`,
+    check: () => '', notice: () => '', submit: () => '<button>저장</button>',
+    state: { clients: [] }, stages: { LIVE: '진행 중' },
+  });
+  vm.runInNewContext(fs.readFileSync(path.join(root, 'assets/js/console.js'), 'utf8'), { window: { ET: E } });
+  vm.runInNewContext(fs.readFileSync(path.join(root, 'assets/js/router.js'), 'utf8'), {
+    window: { ET: E, addEventListener() {} }, document: { addEventListener() {} },
+    URLSearchParams, location: { hash: '' }, requestAnimationFrame() {},
+  });
+  E.route = { page: 'participants' };
+  return E;
 }
 
 test('attendee home identifies event date, time, venue, and a registration action', () => {
@@ -76,6 +105,37 @@ test('direct registration shows event context before the unchanged form and cons
   assert.match(html, /이름과 연락처를 참가 신청 및 입장 확인에 사용합니다\./);
   assert.match(html, /name="consent" required/);
   assert.match(html, /type="submit"/);
+});
+
+test('payment is absent from selectable features and settings preserve price in a hidden input', () => {
+  const E = loadCoreAndConsole();
+  assert.equal(Object.hasOwn(E.features, 'payment'), false);
+  assert.doesNotMatch(E.eventTabs('participants'), /결제/);
+  assert.equal(E.groupForPage('payments'), null);
+  const html = E.views.settings();
+  assert.match(html, /<input type="hidden" name="price" value="2500">/);
+  assert.doesNotMatch(html, /참가비/);
+});
+
+test('legacy paid registration and payment deep links render no payment UI', () => {
+  const { E } = loadAttendee('register', null, { features: ['payment'], workspace: { price: 2500 } });
+  const registration = E.mobileRegister();
+  assert.doesNotMatch(registration, /참가비|결제 흐름|simulate-payment|request-refund/);
+
+  E.route.page = 'payment';
+  const deepLink = E.views.attendee();
+  assert.match(deepLink, /없는 페이지입니다/);
+  assert.match(deepLink, /행사 홈/);
+  assert.doesNotMatch(deepLink, /결제|환불|payment\.simulate|simulate-payment|request-refund/);
+});
+
+test('ticket payment-status gate remains while presenting neutral next steps', () => {
+  const person = { id: 'person-paid-pending', ticket: 'bearer-code', name: '김가람', status: 'APPROVED', paymentStatus: 'PENDING' };
+  const { E } = loadAttendee('ticket', person);
+  const ticket = E.mobileTicket();
+  assert.match(ticket, /티켓을 사용할 수 없습니다/);
+  assert.match(ticket, /신청 정보 확인/);
+  assert.doesNotMatch(ticket, /data-ticket=|결제|환불|payment/);
 });
 
 test('approved ticket puts event context before a functional QR and QR enlargement link', () => {
