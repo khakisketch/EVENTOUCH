@@ -79,6 +79,10 @@ body:has(#app > .attendee-site) #app{display:block;width:100%;min-width:0;height
 }
 @media(max-width:360px){.attendee-site-header,.attendee-site-main,.attendee-site-footer{width:calc(100% - 24px);}.attendee-site-header nav,.attendee-page-nav{gap:2px 12px;}}
 
+/* Give attendee toasts their own top row so they cannot cover page content. */
+body:has(#app > .attendee-site):has(> .toast:not(:empty)) #app{padding-top:112px;}
+body:has(#app > .attendee-site) > .toast:not(:empty){top:16px;bottom:auto;width:min(480px,calc(100% - 32px));max-width:none;}
+
 /* Keep the submit target stable on access pages: the inline field error
    (assets/js/ui.js + .field-error) must toggle its text without resizing the
    field group, otherwise a corrected-value click can miss the moved button. */
