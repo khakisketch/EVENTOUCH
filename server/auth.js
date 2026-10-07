@@ -69,6 +69,60 @@ function publicAccount(account) {
   };
 }
 
+function publicInvitation(invitation) {
+  return {
+    id: invitation.id,
+    email: invitation.email,
+    name: invitation.name,
+    role: invitation.role,
+    eventId: invitation.event_id || null,
+    status: invitation.status,
+    expiresAt: new Date(invitation.expires_at).toISOString(),
+  };
+}
+
+function invitationFailure(status, message, extra) {
+  return Object.assign(new Error(message), { status }, extra || {});
+}
+
+function commandIdentifier(value) {
+  const id = String(value === undefined || value === null ? '' : value).trim();
+  if (!/^[A-Za-z0-9_-]{8,128}$/.test(id)) {
+    throw invitationFailure(400, '요청 식별자를 확인하세요', { field: 'commandId' });
+  }
+  return id;
+}
+
+function invitationRequest(input) {
+  const name = String(input && input.name !== undefined && input.name !== null ? input.name : '').trim().slice(0, 120);
+  if (!name || name.length > 60) {
+    throw invitationFailure(400, '이름을 1~60자로 입력하세요', { field: 'name' });
+  }
+  const email = normalizeEmail(input && input.email);
+  if (!email) {
+    throw invitationFailure(400, '이메일을 확인하세요', { field: 'email' });
+  }
+  const role = String((input && input.role) || '').trim().toUpperCase();
+  if (role !== 'MANAGER' && role !== 'STAFF') {
+    throw invitationFailure(400, '역할을 확인하세요', { field: 'role' });
+  }
+  const rawEventId = input && input.eventId !== undefined && input.eventId !== null ? String(input.eventId).trim() : '';
+  return { name, email, role, eventId: rawEventId || null };
+}
+
+function sameInvitationRequest(left, right) {
+  return left && right &&
+    left.name === right.name &&
+    left.email === right.email &&
+    left.role === right.role &&
+    (left.eventId || null) === (right.eventId || null);
+}
+
+function eventArchived(payload) {
+  const stage = payload && typeof payload === 'object' ? String(payload.stage || '') : '';
+  return stage.toUpperCase() === 'ARCHIVED';
+}
+
 function createDatabaseAuth(database) {
   async function authenticate(emailValue, passwordValue) {
     const email = normalizeEmail(emailValue);
@@ -223,6 +277,164 @@ function createDatabaseAuth(database) {
     }
   }
 
+  async function requireAgency(cookieHeader) {
+    const user = await sessionFromCookie(cookieHeader);
+    if (!user) throw invitationFailure(401, '로그인이 필요합니다');
+    const current = await database.query('SELECT role, active FROM accounts WHERE id = $1 LIMIT 1', [user.id]);
+    const actor = current.rows[0];
+    if (!actor || actor.active !== true) throw invitationFailure(401, '로그인이 필요합니다');
+    if (actor.role !== 'AGENCY') throw invitationFailure(403, '권한을 확인하세요');
+    return user;
+  }
+
+  // Invitation issuance. The raw bearer is returned exactly once in the 201
+  // response and never persisted: only its SHA256 token_hash is stored.
+  // commandId is stable: a replay of the same creation request returns 409
+  // INVITATION_LINK_UNAVAILABLE instead of reissuing (or leaking) the link.
+  async function createInvitation(actor, input) {
+    const commandIdValue = commandIdentifier(input && input.commandId);
+    const request = invitationRequest(input);
+    try {
+      return await database.transaction(async (client) => {
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`invitation-create:${commandIdValue}`]);
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`invitation-email:${request.email}`]);
+
+        const receiptResult = await client.query(
+          'SELECT actor_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1 FOR UPDATE',
+          [commandIdValue]
+        );
+        if (receiptResult.rowCount) {
+          const receipt = receiptResult.rows[0];
+          const stored = receipt.result && typeof receipt.result === 'object' ? receipt.result : {};
+          if (String(receipt.actor_id || '') === String(actor.id) &&
+              stored.command === 'invitation.create' &&
+              sameInvitationRequest(stored.request, request)) {
+            throw invitationFailure(
+              409,
+              '이미 초대 링크가 발급되었습니다. 링크는 생성 시 한 번만 표시되므로 분실한 경우 기존 초대를 철회하고 다시 초대하세요',
+              { code: 'INVITATION_LINK_UNAVAILABLE' }
+            );
+          }
+          throw invitationFailure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+        }
+
+        if (request.eventId) {
+          const eventResult = await client.query('SELECT id, payload FROM events WHERE id = $1 LIMIT 1', [request.eventId]);
+          if (!eventResult.rowCount) throw invitationFailure(404, '행사를 찾을 수 없습니다');
+          if (eventArchived(eventResult.rows[0].payload)) {
+            throw invitationFailure(409, '보관된 행사는 변경할 수 없습니다');
+          }
+        }
+
+        const accountResult = await client.query(
+          'SELECT 1 FROM accounts WHERE lower(email) = $1 AND active = true LIMIT 1',
+          [request.email]
+        );
+        if (accountResult.rowCount) {
+          throw invitationFailure(409, '이 이메일로 이미 계정이 등록되었습니다');
+        }
+        const pendingResult = await client.query(
+          `SELECT 1 FROM invitations
+            WHERE lower(email) = $1 AND status = 'PENDING' AND expires_at > now()
+            LIMIT 1`,
+          [request.email]
+        );
+        if (pendingResult.rowCount) {
+          throw invitationFailure(409, '이 이메일로 이미 대기 중인 초대가 있습니다');
+        }
+
+        const invitationId = `inv-${crypto.randomUUID()}`;
+        const token = crypto.randomBytes(32).toString('base64url');
+        const inserted = await client.query(
+          `INSERT INTO invitations (id, token_hash, email, name, role, event_id, payload, status, expires_at)
+           VALUES ($1, $2, $3, $4, $5, $6, '{}'::jsonb, 'PENDING', now() + interval '7 days')
+           RETURNING id, email, name, role, event_id, status, expires_at`,
+          [invitationId, tokenHash(token), request.email, request.name, request.role, request.eventId]
+        );
+        const invitation = publicInvitation(inserted.rows[0]);
+        await client.query(
+          `INSERT INTO command_receipts (command_id, event_id, actor_id, result)
+           VALUES ($1, $2, $3, $4::jsonb)`,
+          [commandIdValue, request.eventId, actor.id, JSON.stringify({
+            command: 'invitation.create',
+            request,
+            response: { invitation },
+          })]
+        );
+        return { invitation, token };
+      });
+    } catch (error) {
+      if (error && error.code === '23505' && !error.status) {
+        throw invitationFailure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+      }
+      throw error;
+    }
+  }
+
+  // Revocation is idempotent: revoked invitations stay revoked and retries of
+  // the same revocation command return the current state.
+  async function revokeInvitation(actor, invitationId, commandIdValue) {
+    const id = String(invitationId || '').trim();
+    if (!id) throw invitationFailure(404, '초대를 찾을 수 없습니다');
+    const command = commandIdentifier(commandIdValue);
+    try {
+      return await database.transaction(async (client) => {
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`invitation-revoke:${command}`]);
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`invitation-id:${id}`]);
+
+        const receiptResult = await client.query(
+          'SELECT actor_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1 FOR UPDATE',
+          [command]
+        );
+        if (receiptResult.rowCount) {
+          const receipt = receiptResult.rows[0];
+          const stored = receipt.result && typeof receipt.result === 'object' ? receipt.result : {};
+          if (String(receipt.actor_id || '') === String(actor.id) &&
+              stored.command === 'invitation.revoke' &&
+              stored.request && String(stored.request.id || '') === id) {
+            const current = await client.query(
+              `SELECT id, email, name, role, event_id, status, expires_at
+                FROM invitations WHERE id = $1 LIMIT 1`,
+              [id]
+            );
+            if (!current.rowCount) throw invitationFailure(404, '초대를 찾을 수 없습니다');
+            return { invitation: publicInvitation(current.rows[0]), replayed: true };
+          }
+          throw invitationFailure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+        }
+
+        const found = await client.query(
+          `SELECT id, email, name, role, event_id, status, expires_at
+            FROM invitations WHERE id = $1 FOR UPDATE`,
+          [id]
+        );
+        if (!found.rowCount) throw invitationFailure(404, '초대를 찾을 수 없습니다');
+        const row = found.rows[0];
+        if (row.status === 'ACCEPTED') throw invitationFailure(409, '이미 수락된 초대입니다');
+        if (row.status === 'PENDING') {
+          await client.query("UPDATE invitations SET status = 'REVOKED' WHERE id = $1", [id]);
+          row.status = 'REVOKED';
+        }
+        const invitation = publicInvitation(row);
+        await client.query(
+          `INSERT INTO command_receipts (command_id, event_id, actor_id, result)
+           VALUES ($1, $2, $3, $4::jsonb)`,
+          [command, row.event_id, actor.id, JSON.stringify({
+            command: 'invitation.revoke',
+            request: { id },
+            response: { invitation },
+          })]
+        );
+        return { invitation, replayed: false };
+      });
+    } catch (error) {
+      if (error && error.code === '23505' && !error.status) {
+        throw invitationFailure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+      }
+      throw error;
+    }
+  }
+
   async function handleDatabaseAuth(req, res, urlPath) {
     if (urlPath === '/api/auth/login' && req.method === 'POST') {
       let body;
@@ -261,6 +473,67 @@ function createDatabaseAuth(database) {
         return;
       }
       sendJson(res, 200, { user });
+      return;
+    }
+    if (urlPath === '/api/auth/invitations' && req.method === 'POST') {
+      let actor;
+      try {
+        actor = await requireAgency(req.headers.cookie);
+      } catch (error) {
+        sendJson(res, error.status || 401, { error: error.message });
+        return;
+      }
+      let body;
+      try {
+        body = await readJsonBody(req);
+      } catch (error) {
+        sendJson(res, 400, { error: error.message });
+        return;
+      }
+      try {
+        const created = await createInvitation(actor, body);
+        sendJson(res, 201, created);
+      } catch (error) {
+        sendJson(res, error.status || 500, Object.assign(
+          { error: error.message || '초대를 만들지 못했습니다' },
+          error.code ? { code: error.code } : null,
+          error.field ? { field: error.field } : null
+        ));
+      }
+      return;
+    }
+    const revokePath = /^\/api\/auth\/invitations\/([^/]+)\/revoke$/.exec(urlPath);
+    if (revokePath && req.method === 'POST') {
+      let invitationId;
+      try {
+        invitationId = decodeURIComponent(revokePath[1]);
+      } catch (error) {
+        sendJson(res, 404, { error: '초대를 찾을 수 없습니다' });
+        return;
+      }
+      let actor;
+      try {
+        actor = await requireAgency(req.headers.cookie);
+      } catch (error) {
+        sendJson(res, error.status || 401, { error: error.message });
+        return;
+      }
+      let body;
+      try {
+        body = await readJsonBody(req);
+      } catch (error) {
+        sendJson(res, 400, { error: error.message });
+        return;
+      }
+      try {
+        const result = await revokeInvitation(actor, invitationId, body && body.commandId);
+        sendJson(res, 200, { invitation: result.invitation });
+      } catch (error) {
+        sendJson(res, error.status || 500, Object.assign(
+          { error: error.message || '초대를 철회하지 못했습니다' },
+          error.field ? { field: error.field } : null
+        ));
+      }
       return;
     }
     const invitePath = /^\/api\/auth\/invitations\/([^/]+)(\/accept)?$/.exec(urlPath);
