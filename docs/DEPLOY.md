@@ -3,15 +3,16 @@
 ## 구성
 
 - 프론트: 이 저장소 정적 파일. Vercel 또는 중앙 서버가 직접 서빙.
-- API: `server/server.js` (Node 24, 의존성 없음). `PORT` 환경변수 (기본 8776).
-- DB: `DATA_DIR`의 JSON 파일 (원자적 쓰기). 추후 Postgres 교체 예정.
+- API: `server/server.js` (Node 24, `pg` 의존성). `PORT` 환경변수 (기본 8776).
+- DB: PostgreSQL (`DATABASE_URL` 필수). 앱 시작 시 번호가 붙은 migration을 적용한다.
 - 파일: `STORAGE_DIR/eventouch/{photos,reports,exports}`.
 
 ## 내부 운영 (Tailscale)
 
-1. `ADMIN_PASSWORD`를 정하고 `PORT=8776 DATA_DIR=/data/db STORAGE_DIR=/data/storage ADMIN_PASSWORD=... node server/server.js`
-2. 또는 `docker compose up -d` (compose가 볼륨·재시작 관리).
-3. 브라우저에서 서버 주소로 접속 → 로그인 게이트 → 관리자 로그인.
+1. `DATABASE_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`를 설정한다. 비밀번호는 8자 이상이어야 하며 최초 AGENCY 계정만 환경변수로 만든다.
+2. `npm ci` 후 `PORT=8776 DATABASE_URL="$DATABASE_URL" ADMIN_EMAIL="$ADMIN_EMAIL" ADMIN_PASSWORD="$ADMIN_PASSWORD" node server/server.js`
+3. 또는 `docker compose up -d` (compose가 PostgreSQL 볼륨·재시작을 관리).
+4. 브라우저에서 서버 주소로 접속 → 로그인 게이트 → 관리자 로그인.
 
 ## 고객사 NAS 연결
 
@@ -33,5 +34,5 @@
 ## 운영 주의
 
 - 비밀값은 `.env`가 아니라 실행 환경·비밀 저장소에 둔다. 저장소에 커밋 금지.
-- `ADMIN_PASSWORD` 없이 기동하면 관리자 로그인이 막힌다. `ALLOW_DEV_DEFAULT_ADMIN=1`은 개발용이다.
+- `ADMIN_EMAIL`과 `ADMIN_PASSWORD`를 함께 설정하지 않으면 최초 관리자 계정이 만들어지지 않는다. 기본/개발용 관리자 비밀번호는 없다.
 - 백업: `DATA_DIR` + `STORAGE_DIR`을 NAS 스냅샷·외부 복사 중 하나로 이중화한다.

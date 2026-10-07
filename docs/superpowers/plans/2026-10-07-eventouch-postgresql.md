@@ -54,21 +54,24 @@
 ### Task 2: Account authentication, sessions, and server permission checks
 
 **Files:**
-- Modify: `server/auth.js`, `server/server.js`, `server/api.js`
+- Modify: `server/auth.js`, `server/server.js`, `server/api.js`, `server/migrate.js`, `.env.example`, `docker-compose.yml`, `docs/DEPLOY.md`
 - Create: `server/access.js`
-- Modify/test: `tests/server-auth.test.cjs`, `tests/server-api.test.cjs`
+- Modify/test: `tests/server-auth.test.cjs`, `tests/server-api.test.cjs`, `tests/server-postgres.test.cjs`, `tests/server-files.test.cjs`, `tests/server-skeleton.test.cjs`
 
 **Interfaces:**
 - Consumes: Task 1 database and relational schema.
-- Produces: `authenticate(email, password)`, `createSession(accountId)`, `sessionFromCookie(cookieHeader)`, `revokeSession(cookieHeader)`, and `authorize({ account, eventId, command, assignmentId })`.
+- Produces: `authenticate(email, password)`, `createSession(accountId)`, `sessionFromCookie(cookieHeader)`, `revokeSession(cookieHeader)`, and `authorize({ account, eventId, command, assignmentId, targetId? })`; target-specific commands require the active assignment's `target_id` to match the request target. Invitation review is `GET /api/auth/invitations/:token`, acceptance is `POST /api/auth/invitations/:token/accept`.
 - Persist scrypt hashes and SHA-256 hashes of opaque session/invitation bearer tokens; never persist/log raw session tokens. Roles are exactly `AGENCY`, `MANAGER`, `STAFF`.
 - `AGENCY` has organization access, `MANAGER` requires an active event membership, `STAFF` requires a matching active assignment for the specific target and command. Invitation acceptance sets a password; delivery remains manual.
 - Preserve `/api/auth/login`, `/api/auth/me`, `/api/auth/logout`; add invitation lookup/acceptance that consumes a valid invitation token once and records a scrypt password hash. Reject unknown/expired/tampered sessions, reused invitations, and disabled accounts in Korean.
 
-- [ ] Test wrong credentials, malformed/tampered/expired cookies, disabled accounts, password-hash non-disclosure, and cookie flags.
-- [ ] Test role × event × assignment authorization, including immediate revocation.
-- [ ] Implement auth/access and seed the first administrator only from environment configuration.
-- [ ] Run focused server auth tests against PostgreSQL; commit as `feat: enforce PostgreSQL account and event access`.
+- [x] Test wrong credentials, malformed/tampered/expired cookies, disabled accounts, password-hash non-disclosure, and cookie flags.
+- [x] Test role × event × assignment authorization, including immediate revocation and mismatched booth targets.
+- [x] Implement auth/access and seed the first administrator only from `ADMIN_EMAIL` + `ADMIN_PASSWORD` environment configuration; no default credentials.
+- [x] Run focused server auth/API/PostgreSQL tests against PostgreSQL and keep the legacy server health/file tests aligned with the required database startup.
+- [x] Commit as `feat: enforce PostgreSQL account and event access`.
+
+Task 2 verification (2026-10-07): the mismatch-target test first returned 201 instead of 403; after adding `targetId` authorization it passed and the assigned booth remained usable. Concurrent check-in consistently lost one update while data was read before async authorization; the new test failed 1/2, then passed after reading state after auth. A controlled upload/auth race also lost a committed check-in (2 instead of 3); it passed after upload metadata is applied to a fresh store read. Independent test-runner `ses_eeb4bacc3ffeaaYbhGvv69U5YI` ran auth/API/PostgreSQL/files/skeleton suites → 61/61 pass and `git diff --check` → clean. The complete suite currently reports 414 tests, 74 pass, 340 fail; remaining failures are from the known legacy test/source mismatch (for example tests importing removed `features/*.js` paths) and planned later frontend-sync work, with no failures in the five Task 2 server suites.
 
 ### Task 3: Authorized bootstrap and app-free attendee read APIs
 

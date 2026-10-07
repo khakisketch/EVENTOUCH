@@ -5,13 +5,13 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const { openStore } = require('./store');
-const { handleAuth, ensureSeed } = require('./auth');
+const { createDatabase } = require('./db');
+const { createDatabaseAuth } = require('./auth');
+const { createAccess } = require('./access');
 const { handleApi } = require('./api');
 
 const ROOT = path.join(__dirname, '..');
 const PORT = Number(process.env.PORT || 8776);
-const store = openStore(process.env.DATA_DIR || path.join(ROOT, 'data', 'server'));
-ensureSeed(store);
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -75,32 +75,67 @@ function serveStatic(req, res) {
   });
 }
 
-const server = http.createServer((req, res) => {
-  const urlPath = (req.url || '/').split('?')[0];
-  if (urlPath === '/api/health') {
-    sendJson(res, 200, { ok: true, version: 1 });
-    return;
-  }
-  if (urlPath === '/api/' || urlPath.startsWith('/api/')) {
-    if (urlPath.startsWith('/api/auth/')) {
-      handleAuth(req, res, store, urlPath).catch(() => {
+function createHttpServer(store, auth, access) {
+  return http.createServer((req, res) => {
+    const urlPath = (req.url || '/').split('?')[0];
+    if (urlPath === '/api/health') {
+      sendJson(res, 200, { ok: true, version: 1 });
+      return;
+    }
+    if (urlPath === '/api/' || urlPath.startsWith('/api/')) {
+      if (urlPath.startsWith('/api/auth/')) {
+        auth.handleAuth(req, res, urlPath).catch(() => {
+          sendJson(res, 500, { error: '요청을 처리하지 못했습니다' });
+        });
+        return;
+      }
+      handleApi(req, res, store, urlPath, { auth, access }).catch(() => {
         sendJson(res, 500, { error: '요청을 처리하지 못했습니다' });
       });
       return;
     }
-    handleApi(req, res, store, urlPath).catch(() => {
-      sendJson(res, 500, { error: '요청을 처리하지 못했습니다' });
-    });
-    return;
-  }
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    res.writeHead(405, { 'content-type': 'text/plain; charset=utf-8' });
-    res.end('지원하지 않는 방법입니다');
-    return;
-  }
-  serveStatic(req, res);
-});
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      res.writeHead(405, { 'content-type': 'text/plain; charset=utf-8' });
+      res.end('지원하지 않는 방법입니다');
+      return;
+    }
+    serveStatic(req, res);
+  });
+}
 
-server.listen(PORT, () => {
-  process.stdout.write(`eventouch server on ${PORT}\n`);
-});
+async function startServer() {
+  const database = createDatabase();
+  try {
+    await database.migrate();
+    const auth = createDatabaseAuth(database);
+    const access = createAccess(database);
+    const seedStatus = await auth.seedAdmin();
+    if (seedStatus === 'unconfigured') {
+      process.stderr.write('[eventouch] administrator is not configured; login is disabled\n');
+    }
+    const store = openStore(process.env.DATA_DIR || path.join(ROOT, 'data', 'server'));
+    const server = createHttpServer(store, auth, access);
+    await new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(PORT, () => {
+        server.removeListener('error', reject);
+        process.stdout.write(`eventouch server on ${PORT}\n`);
+        resolve();
+      });
+    });
+    return { server, database };
+  } catch (error) {
+    await database.close().catch(() => {});
+    throw error;
+  }
+}
+
+if (require.main === module) {
+  startServer().catch((error) => {
+    const code = error && error.code ? ` (${error.code})` : '';
+    process.stderr.write(`[eventouch] startup failed${code}\n`);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { startServer, createHttpServer };

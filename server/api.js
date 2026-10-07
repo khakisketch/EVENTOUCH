@@ -7,7 +7,6 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { sendJson, readJsonBody } = require('./http');
-const { sessionFromCookie, hashPassword, ROLES } = require('./auth');
 
 const STAFF_WRITE = ['participants', 'checkin', 'booth', 'booths', 'staff', 'qna', 'photos', 'poll', 'quiz', 'draw', 'survey'];
 const STATUS_FLOW = { PRE: ['LIVE'], LIVE: ['END'], END: [] };
@@ -156,10 +155,10 @@ function nextEventId(items) {
 
 // ---- auth gates (mirror requireWrite) ----
 
-function requireUser(store, req) {
-  const sess = sessionFromCookie(store, req.headers.cookie);
-  if (!sess) throw Object.assign(new Error('로그인이 필요합니다'), { status: 401 });
-  return sess.user;
+async function requireUser(auth, req) {
+  const account = auth && await auth.sessionFromCookie(req.headers.cookie);
+  if (!account) throw Object.assign(new Error('로그인이 필요합니다'), { status: 401 });
+  return account;
 }
 
 function requireWrite(user, route) {
@@ -306,11 +305,23 @@ function nextParticipantId(ws) {
 
 // ---- router ----
 
-function handleEvents(req, res, store, parts, body) {
-  const data = readEvents(store);
+function eventCommand(parts, method, body) {
+  const route = parts[1] || '';
+  if (!parts.length) return method === 'GET' ? 'events.list' : 'events.create';
+  if (route === 'participants' && method === 'GET') return 'participants.read';
+  if (route === 'checkin' && method === 'POST') return 'checkin.scan';
+  if (route === 'sync' && method === 'POST') return 'checkin.sync';
+  if (route === 'corrections' && method === 'POST') return 'checkin.correction';
+  if (route === 'stamps' && method === 'POST') return 'booth.visit';
+  if (route === 'assignments' && method === 'GET') return 'assignment.read';
+  return `event.${method.toLowerCase()}`;
+}
+
+async function handleEvents(req, res, store, parts, body, auth, access) {
   // POST /api/events/:id/signup (self-service, same validation, no grant)
   if (parts.length === 2 && parts[1] === 'signup' && req.method === 'POST') {
     try {
+      const data = readEvents(store);
       findEvent(data, parts[0]);
       const ws = workspaceOf(data, parts[0]);
       const participant = addParticipant(store, data, ws, body, true);
@@ -320,7 +331,20 @@ function handleEvents(req, res, store, parts, body) {
       return err(res, e.status || 500, e.message || '요청을 처리하지 못했습니다', e.field);
     }
   }
-  const me = requireUser(store, req);
+  const me = await requireUser(auth, req);
+  const query = new URL(req.url || '/', 'http://localhost').searchParams;
+  const command = eventCommand(parts, req.method, body);
+  const targetId = command === 'booth.visit'
+    ? body.booth
+    : body.targetId || body.deskId || query.get('targetId') || query.get('deskId');
+  await access.authorize({
+    account: me,
+    eventId: parts[0] || null,
+    command,
+    assignmentId: body.assignmentId || query.get('assignmentId'),
+    targetId,
+  });
+  const data = readEvents(store);
 
   // GET /api/events
   if (parts.length === 0 && req.method === 'GET') {
@@ -728,7 +752,7 @@ function handleEvents(req, res, store, parts, body) {
   }
   // Files
   if (parts[1] === 'files' && parts.length === 3 && req.method === 'GET') {
-    requireUser(store, req);
+    await requireUser(auth, req);
     const file = resolveStoredFile(ev.id, parts[2]);
     if (!file) return err(res, 404, '파일을 찾을 수 없습니다');
     const ext = path.extname(file).toLowerCase();
@@ -774,11 +798,11 @@ function resolveStoredFile(eventId, filename) {
   return full;
 }
 
-async function handleFileUpload(req, res, store, eventId, urlPath) {
-  const data = readEvents(store);
-  const me = requireUser(store, req);
+async function handleFileUpload(req, res, store, eventId, urlPath, auth, access) {
+  const me = await requireUser(auth, req);
+  await access.authorize({ account: me, eventId, command: 'file.upload' });
   requireWrite(me, 'photos');
-  const ev = findEvent(data, eventId);
+  const initialEvent = findEvent(readEvents(store), eventId);
   const query = urlPath.split('?')[1] || '';
   const params = new URLSearchParams(query);
   const rawName = params.get('name') || '';
@@ -789,10 +813,12 @@ async function handleFileUpload(req, res, store, eventId, urlPath) {
   if (!name) return err(res, 400, '파일 이름을 확인하세요', 'name');
   const ctype = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
   if (!ALLOW_TYPES[ctype]) return err(res, 400, '지원하지 않는 파일 형식입니다', 'type');
-  const dir = path.join(storageRoot(), ev.id);
+  const dir = path.join(storageRoot(), initialEvent.id);
   fs.mkdirSync(dir, { recursive: true });
   const stored = crypto.randomUUID() + '-' + name;
   await writeUpload(req, path.join(dir, stored), MAX_FILE_BYTES);
+  const data = readEvents(store);
+  const ev = findEvent(data, eventId);
   const ws = workspaceOf(data, ev.id);
   if (!Array.isArray(ws.files)) ws.files = [];
   const meta = {
@@ -939,15 +965,16 @@ function writeUpload(req, dest, cap) {
   });
 }
 
-async function handleApi(req, res, store, urlPath) {
+async function handleApi(req, res, store, urlPath, security = {}) {
   ensureSeedData(store);
+  const { auth, access } = security;
   const parts = urlPath.split('/').filter(Boolean);
   if (parts[0] !== 'api') return sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
 
   // Raw octet uploads bypass the JSON body reader.
   if (req.method === 'POST' && parts[1] === 'events' && parts[3] === 'files' && parts.length === 4) {
     try {
-      return await handleFileUpload(req, res, store, parts[2], req.url || urlPath);
+      return await handleFileUpload(req, res, store, parts[2], req.url || urlPath, auth, access);
     } catch (e) {
       return err(res, e.status || 500, e.message || '요청을 처리하지 못했습니다', e.field);
     }
@@ -964,30 +991,19 @@ async function handleApi(req, res, store, urlPath) {
 
   try {
     if (parts[1] === 'users' && parts.length === 2 && req.method === 'POST') {
-      const me = requireUser(store, req);
+      const me = await requireUser(auth, req);
       if (String(me.role).toUpperCase() !== 'AGENCY') {
         throw Object.assign(new Error('권한을 확인하세요'), { status: 403 });
       }
-      const id = text(body.id);
-      if (!id) return err(res, 400, '사용자 아이디를 입력하세요', 'id');
-      if (id === '__proto__' || id === 'constructor' || id === 'prototype') {
-        return err(res, 400, '사용자 아이디를 확인하세요', 'id');
-      }
-      if (!text(body.password)) return err(res, 400, '비밀번호를 입력하세요', 'password');
-      const role = String(body.role || 'VIEWER').toUpperCase();
-      if (ROLES.indexOf(role) === -1) return err(res, 400, '역할을 확인하세요', 'role');
-      const users = store.read('users');
-      if (users[id]) return err(res, 409, '이미 등록된 사용자입니다');
-      users[id] = { id, name: text(body.name) || id, role, scope: body.scope || null, hash: hashPassword(body.password) };
-      store.write('users', users);
-      return sendJson(res, 201, { user: { id, name: users[id].name, role } });
+      return err(res, 410, '계정은 초대 수락 절차로 생성해야 합니다');
     }
     if (parts[1] === 'summary' && parts.length === 2 && req.method === 'GET') {
-      requireUser(store, req);
+      const account = await requireUser(auth, req);
+      await access.authorize({ account, command: 'organization.summary' });
       return sendJson(res, 200, { summary: agencySummary(readEvents(store)) });
     }
     if (parts[1] === 'events') {
-      return handleEvents(req, res, store, parts.slice(2), body);
+      return await handleEvents(req, res, store, parts.slice(2), body, auth, access);
     }
     return sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
   } catch (e) {

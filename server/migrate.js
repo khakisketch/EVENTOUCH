@@ -22,6 +22,7 @@ async function runMigrations(database, migrationsDir = DEFAULT_MIGRATIONS_DIR) {
   });
 
   return database.transaction(async (client) => {
+    await client.query('SELECT pg_advisory_xact_lock($1::bigint)', [MIGRATION_LOCK_ID]);
     await client.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
         version text PRIMARY KEY,
@@ -29,7 +30,6 @@ async function runMigrations(database, migrationsDir = DEFAULT_MIGRATIONS_DIR) {
         applied_at timestamptz NOT NULL DEFAULT now()
       )
     `);
-    await client.query('SELECT pg_advisory_xact_lock($1::bigint)', [MIGRATION_LOCK_ID]);
     const result = await client.query('SELECT version, checksum FROM schema_migrations');
     const applied = new Map(result.rows.map((row) => [row.version, row.checksum]));
     const newlyApplied = [];

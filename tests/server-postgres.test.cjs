@@ -4,6 +4,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const { createDatabase } = require('../server/db');
+const { runMigrations } = require('../server/migrate');
 const { testDatabaseUrl } = require('./helpers/postgres-test.cjs');
 
 class FakeClient {
@@ -105,8 +106,63 @@ test('test-database-helper-rejects-non-loopback-hosts', () => {
 const databaseUrl = testDatabaseUrl();
 const integration = databaseUrl ? test : (name, options, fn) => test(name, { skip: 'set EVENTOUCH_TEST_DATABASE_URL to an isolated loopback PostgreSQL test database' }, fn);
 
+async function createIsolatedMigrationSchema() {
+  const schema = `eventouch_migration_${crypto.randomUUID().replace(/-/g, '')}`;
+  const admin = createDatabase({ connectionString: databaseUrl });
+  try {
+    await admin.query(`CREATE SCHEMA "${schema}"`);
+  } catch (error) {
+    await admin.close();
+    throw error;
+  }
+  const isolatedUrl = new URL(databaseUrl);
+  isolatedUrl.searchParams.set('options', `-c search_path=${schema}`);
+  return {
+    connectionString: isolatedUrl.toString(),
+    async drop() {
+      await admin.query(`DROP SCHEMA "${schema}" CASCADE`);
+      await admin.close();
+    },
+  };
+}
+
+integration('postgres-concurrent-first-migrations-serialize', { timeout: 15000 }, async () => {
+  const isolated = await createIsolatedMigrationSchema();
+  const scopedFirst = createDatabase({ connectionString: isolated.connectionString });
+  const scopedSecond = createDatabase({ connectionString: isolated.connectionString });
+  let arrivals = 0;
+  let release;
+  const bothTransactionsStarted = new Promise((resolve) => { release = resolve; });
+  const gate = (database) => ({
+    transaction(fn) {
+      return database.transaction(async (client) => {
+        arrivals += 1;
+        if (arrivals === 2) release();
+        await bothTransactionsStarted;
+        return fn(client);
+      });
+    },
+  });
+  try {
+    const outcomes = await Promise.allSettled([
+      runMigrations(gate(scopedFirst)),
+      runMigrations(gate(scopedSecond)),
+    ]);
+    const failures = outcomes.filter((outcome) => outcome.status === 'rejected');
+    assert.equal(failures.length, 0, failures.map((outcome) => outcome.reason.message).join('\n'));
+    assert.deepEqual(
+      outcomes.map((outcome) => outcome.value).sort((a, b) => a.length - b.length),
+      [[], ['001_initial.sql']]
+    );
+  } finally {
+    await Promise.all([scopedFirst.close(), scopedSecond.close()]);
+    await isolated.drop();
+  }
+});
+
 integration('postgres-health-and-migrations-are-idempotent', { timeout: 15000 }, async () => {
-  const db = createDatabase({ connectionString: databaseUrl });
+  const isolated = await createIsolatedMigrationSchema();
+  const db = createDatabase({ connectionString: isolated.connectionString });
   try {
     const first = await db.migrate();
     const health = await db.query('SELECT 1 AS ok');
@@ -115,6 +171,7 @@ integration('postgres-health-and-migrations-are-idempotent', { timeout: 15000 },
     assert.deepEqual(await db.migrate(), []);
   } finally {
     await db.close();
+    await isolated.drop();
   }
 });
 

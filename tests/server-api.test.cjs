@@ -1,14 +1,23 @@
-const { test, before, after } = require('node:test');
+const { test: nodeTest, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const crypto = require('node:crypto');
+const { createDatabase } = require('../server/db');
+const { testDatabaseUrl } = require('./helpers/postgres-test.cjs');
 
 const PORT = 18778;
 const BASE = `http://127.0.0.1:${PORT}`;
+const ADMIN_EMAIL = 'eventouch-auth-admin@example.test';
+const databaseUrl = testDatabaseUrl();
+const test = databaseUrl
+  ? nodeTest
+  : (name, fn) => nodeTest(name, { skip: 'set EVENTOUCH_TEST_DATABASE_URL to an isolated PostgreSQL test database' }, fn);
 let child = null;
 let dataDir = null;
+let db = null;
 
 async function waitForHealth() {
   for (let i = 0; i < 50; i += 1) {
@@ -24,17 +33,27 @@ async function waitForHealth() {
 let adminCookie = '';
 
 before(async () => {
+  if (!databaseUrl) return;
+  db = createDatabase({ connectionString: databaseUrl });
+  await db.migrate();
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'etko-api-'));
   child = spawn(process.execPath, ['server/server.js'], {
     cwd: __dirname + '/..',
-    env: { ...process.env, PORT: String(PORT), DATA_DIR: dataDir, ADMIN_PASSWORD: 'pw' },
+    env: {
+      ...process.env,
+      PORT: String(PORT),
+      DATA_DIR: dataDir,
+      DATABASE_URL: databaseUrl,
+      ADMIN_EMAIL,
+      ADMIN_PASSWORD: 'admin-test-pw',
+    },
     stdio: 'ignore',
   });
   await waitForHealth();
   const res = await fetch(`${BASE}/api/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ id: 'admin', password: 'pw' }),
+    body: JSON.stringify({ email: ADMIN_EMAIL, password: 'admin-test-pw' }),
   });
   const raw = res.headers.get('set-cookie') || '';
   const match = /etko_session=([^;]+)/.exec(raw);
@@ -42,8 +61,9 @@ before(async () => {
   adminCookie = `etko_session=${match[1]}`;
 });
 
-after(() => {
+after(async () => {
   if (child) child.kill();
+  if (db) await db.close();
 });
 
 async function api(method, url, body, cookie) {
@@ -245,27 +265,17 @@ test('api-reports-snapshot-immutable', async () => {
   assert.ok(listed.json.reports.length >= 1);
 });
 
-test('api-write-gates-deny-viewer', async () => {
+test('legacy-user-creation-requires-invitation-and-does-not-accept-retired-roles', async () => {
   const denied = await api('POST', '/api/events', { name: '차단', date: '2026-12-06', venue: 'G홀' }, 'etko_session=nope');
   assert.equal(denied.status, 401);
-  const mk = await api(
+  const legacy = await api(
     'POST',
     '/api/users',
     { id: 'viewer1', name: '조회자', password: 'pw', role: 'VIEWER' },
     adminCookie
   );
-  assert.equal(mk.status, 201);
-  const login = await fetch(`${BASE}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ id: 'viewer1', password: 'pw' }),
-  });
-  const vCookie = `etko_session=${/etko_session=([^;]+)/.exec(login.headers.get('set-cookie') || '')[1]}`;
-  const forbidden = await api('POST', '/api/events', { name: '차단2', date: '2026-12-06', venue: 'G홀' }, vCookie);
-  assert.equal(forbidden.status, 403);
-  assert.match(forbidden.json.error || '', /권한/);
-  const readable = await api('GET', '/api/events', undefined, vCookie);
-  assert.equal(readable.status, 200);
+  assert.equal(legacy.status, 410);
+  assert.match(legacy.json.error || '', /초대/);
 });
 
 test('api-qna-ask-requires-session', async () => {
@@ -329,13 +339,264 @@ test('api-patch-stores-recruitment-method', async () => {
   assert.equal(fetched.json.event.approval, true);
 });
 
-test('api-proto-user-rejected', async () => {
-  const r = await api('POST', '/api/users', { id: '__proto__', name: 'x', password: 'pw', role: 'VIEWER' }, adminCookie);
-  assert.equal(r.status, 400);
-});
-
 test('api-workspace-returns-slices', async () => {
   const r = await api('GET', '/api/events/evt-1/workspace', undefined, adminCookie);
   assert.equal(r.status, 200);
   assert.ok(r.json.workspace.participants.length >= 5);
+});
+
+test('manager-api-read-requires-an-active-event-membership', async () => {
+  const { hashPassword } = require('../server/auth');
+  const accountId = `manager-${crypto.randomUUID()}`;
+  const email = `manager-${crypto.randomUUID()}@example.test`;
+  const otherEventId = `evt-${crypto.randomUUID()}`;
+  await db.query(
+    `INSERT INTO accounts (id, email, name, role, password_hash)
+     VALUES ($1, $2, '행사 매니저', 'MANAGER', $3)`,
+    [accountId, email, hashPassword('manager-test-password')]
+  );
+  await db.query(
+    'INSERT INTO events (id, slug, payload) VALUES ($1, $2, $3::jsonb), ($4, $5, $6::jsonb) ON CONFLICT (id) DO NOTHING',
+    ['evt-1', `api-${crypto.randomUUID()}`, '{}', otherEventId, `api-${crypto.randomUUID()}`, '{}']
+  );
+  const signedIn = await fetch(`${BASE}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email, password: 'manager-test-password' }),
+  });
+  assert.equal(signedIn.status, 200);
+  const cookie = `etko_session=${/etko_session=([^;]+)/.exec(signedIn.headers.get('set-cookie') || '')[1]}`;
+
+  const denied = await api('GET', '/api/events/evt-1', undefined, cookie);
+  assert.equal(denied.status, 403);
+  await db.query('INSERT INTO memberships (account_id, event_id) VALUES ($1, $2)', [accountId, 'evt-1']);
+  const allowed = await api('GET', '/api/events/evt-1', undefined, cookie);
+  assert.equal(allowed.status, 200);
+  const otherEvent = await api('GET', `/api/events/${otherEventId}`, undefined, cookie);
+  assert.equal(otherEvent.status, 403);
+  await db.query('DELETE FROM memberships WHERE account_id = $1 AND event_id = $2', [accountId, 'evt-1']);
+  const revoked = await api('GET', '/api/events/evt-1', undefined, cookie);
+  assert.equal(revoked.status, 403);
+});
+
+test('staff-api-read-needs-the-exact-active-assignment-and-stops-after-revocation', async () => {
+  const { hashPassword } = require('../server/auth');
+  const accountId = `staff-${crypto.randomUUID()}`;
+  const email = `staff-${crypto.randomUUID()}@example.test`;
+  const assignmentId = `assignment-${crypto.randomUUID()}`;
+  const wrongAssignmentId = `assignment-${crypto.randomUUID()}`;
+  await db.query(
+    `INSERT INTO accounts (id, email, name, role, password_hash)
+     VALUES ($1, $2, '현장 스태프', 'STAFF', $3)`,
+    [accountId, email, hashPassword('staff-test-password')]
+  );
+  await db.query(
+    `INSERT INTO staff_assignments (id, account_id, event_id, type, target_id)
+     VALUES ($1, $2, 'evt-1', 'DESK', 'desk-1'), ($3, $2, 'evt-1', 'BOOTH', 'booth-1')`,
+    [assignmentId, accountId, wrongAssignmentId]
+  );
+  const signedIn = await fetch(`${BASE}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email, password: 'staff-test-password' }),
+  });
+  assert.equal(signedIn.status, 200);
+  const cookie = `etko_session=${/etko_session=([^;]+)/.exec(signedIn.headers.get('set-cookie') || '')[1]}`;
+  const exact = await api('GET', `/api/events/evt-1/participants?assignmentId=${assignmentId}`, undefined, cookie);
+  assert.equal(exact.status, 200);
+  const wrongTarget = await api('GET', `/api/events/evt-1/participants?assignmentId=${wrongAssignmentId}`, undefined, cookie);
+  assert.equal(wrongTarget.status, 403);
+  await db.query('UPDATE staff_assignments SET active = false WHERE id = $1', [assignmentId]);
+  const revoked = await api('GET', `/api/events/evt-1/participants?assignmentId=${assignmentId}`, undefined, cookie);
+  assert.equal(revoked.status, 403);
+});
+
+test('staff-booth-assignment-cannot-authorize-a-different-booth-target', async () => {
+  const { hashPassword } = require('../server/auth');
+  const email = `booth-staff-${crypto.randomUUID()}@example.test`;
+  const accountId = `staff-${crypto.randomUUID()}`;
+  const assignmentId = `assignment-${crypto.randomUUID()}`;
+  const created = await api(
+    'POST',
+    '/api/events',
+    { name: '배정 대상 확인 행사', date: '2026-12-12', venue: 'L홀' },
+    adminCookie
+  );
+  assert.equal(created.status, 201);
+  const eventId = created.json.event.id;
+  await db.query(
+    'INSERT INTO events (id, slug, payload) VALUES ($1, $2, $3::jsonb) ON CONFLICT (id) DO NOTHING',
+    [eventId, `booth-auth-${crypto.randomUUID()}`, '{}']
+  );
+
+  const assignedBooth = await api(
+    'POST',
+    `/api/events/${eventId}/booths`,
+    { name: '배정 부스', code: 'ASSIGNED' },
+    adminCookie
+  );
+  const differentBooth = await api(
+    'POST',
+    `/api/events/${eventId}/booths`,
+    { name: '다른 부스', code: 'OTHER' },
+    adminCookie
+  );
+  assert.equal(assignedBooth.status, 201);
+  assert.equal(differentBooth.status, 201);
+  const signup = await api(
+    'POST',
+    `/api/events/${eventId}/signup`,
+    { name: '테스트 참가자', phone: '010-0000-0099' }
+  );
+  assert.equal(signup.status, 201);
+
+  await db.query(
+    `INSERT INTO accounts (id, email, name, role, password_hash)
+     VALUES ($1, $2, '부스 스태프', 'STAFF', $3)`,
+    [accountId, email, hashPassword('booth-staff-test-password')]
+  );
+  await db.query(
+    `INSERT INTO staff_assignments (id, account_id, event_id, type, target_id)
+     VALUES ($1, $2, $3, 'BOOTH', $4)`,
+    [assignmentId, accountId, eventId, assignedBooth.json.booth.id]
+  );
+  const signedIn = await fetch(`${BASE}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email, password: 'booth-staff-test-password' }),
+  });
+  assert.equal(signedIn.status, 200);
+  const cookie = `etko_session=${/etko_session=([^;]+)/.exec(signedIn.headers.get('set-cookie') || '')[1]}`;
+
+  const attempted = await api(
+    'POST',
+    `/api/events/${eventId}/stamps`,
+    {
+      booth: differentBooth.json.booth.id,
+      code: signup.json.participant.code,
+      assignmentId,
+    },
+    cookie
+  );
+  assert.equal(attempted.status, 403);
+  assert.match(attempted.json.error || '', /권한/);
+
+  const assignedTarget = await api(
+    'POST',
+    `/api/events/${eventId}/stamps`,
+    {
+      booth: assignedBooth.json.booth.id,
+      code: signup.json.participant.code,
+      assignmentId,
+    },
+    cookie
+  );
+  assert.equal(assignedTarget.status, 201);
+});
+
+nodeTest('file-upload-does-not-overwrite-a-checkin-committed-while-authentication-is-pending', async () => {
+  const { createHttpServer } = require('../server/server');
+  const { openStore } = require('../server/store');
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'eventouch-api-race-'));
+  const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'eventouch-storage-race-'));
+  const previousStorageDir = process.env.STORAGE_DIR;
+  process.env.STORAGE_DIR = storageDir;
+
+  let releaseUploadAuth;
+  let signalUploadAuth;
+  const uploadAuthStarted = new Promise((resolve) => { signalUploadAuth = resolve; });
+  const auth = {
+    async sessionFromCookie(cookie) {
+      if (cookie === 'etko_session=slow') {
+        signalUploadAuth();
+        await new Promise((resolve) => { releaseUploadAuth = resolve; });
+      }
+      return { id: 'test-agency', role: 'AGENCY' };
+    },
+  };
+  const access = { async authorize() { return true; } };
+  const server = createHttpServer(openStore(dataDir), auth, access);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  try {
+    const uploadPromise = fetch(`${base}/api/events/evt-1/files?name=sample.pdf`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/pdf', cookie: 'etko_session=slow' },
+      body: Buffer.from('sample pdf'),
+    });
+    await uploadAuthStarted;
+
+    const checkin = await fetch(`${base}/api/events/evt-1/checkin`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: 'etko_session=fast' },
+      body: JSON.stringify({ code: 'EVT-1001', direction: 'IN' }),
+    });
+    assert.equal(checkin.status, 200);
+    assert.equal((await checkin.json()).key, 'success');
+
+    releaseUploadAuth();
+    const uploaded = await uploadPromise;
+    assert.equal(uploaded.status, 201);
+
+    const summaryResponse = await fetch(`${base}/api/events/evt-1/summary`, {
+      headers: { cookie: 'etko_session=fast' },
+    });
+    const summary = await summaryResponse.json();
+    assert.equal(summary.summary.inside, 3, 'the check-in committed before upload must remain visible');
+
+    const eventStorageDir = path.join(storageDir, 'evt-1');
+    const filesBeforeSecondUpload = fs.readdirSync(eventStorageDir).length;
+    const http = require('node:http');
+    const uploadRequest = http.request(`${base}/api/events/evt-1/files?name=second.pdf`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/pdf',
+        'content-length': '10',
+        cookie: 'etko_session=fast',
+      },
+    }, (response) => {
+      response.resume();
+      response.on('end', () => resolveUpload(response.statusCode));
+    });
+    let resolveUpload;
+    const secondUploadPromise = new Promise((resolve, reject) => {
+      resolveUpload = resolve;
+      uploadRequest.on('error', reject);
+    });
+    uploadRequest.write('sample');
+    const deadline = Date.now() + 3000;
+    while (Date.now() < deadline && fs.readdirSync(eventStorageDir).length <= filesBeforeSecondUpload) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.ok(fs.readdirSync(eventStorageDir).length > filesBeforeSecondUpload, 'upload stream reached storage');
+
+    const secondCheckin = await fetch(`${base}/api/events/evt-1/checkin`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: 'etko_session=fast' },
+      body: JSON.stringify({ code: 'EVT-1002', direction: 'IN' }),
+    });
+    assert.equal(secondCheckin.status, 200);
+    assert.equal((await secondCheckin.json()).key, 'success');
+    uploadRequest.end(' pdf');
+    assert.equal(await secondUploadPromise, 201);
+
+    const workspaceResponse = await fetch(`${base}/api/events/evt-1/workspace`, {
+      headers: { cookie: 'etko_session=fast' },
+    });
+    const workspace = await workspaceResponse.json();
+    assert.equal(workspace.workspace.files.length, 2);
+    const finalSummaryResponse = await fetch(`${base}/api/events/evt-1/summary`, {
+      headers: { cookie: 'etko_session=fast' },
+    });
+    const finalSummary = await finalSummaryResponse.json();
+    assert.equal(finalSummary.summary.inside, 4, 'the check-in during upload must remain visible');
+  } finally {
+    if (releaseUploadAuth) releaseUploadAuth();
+    await new Promise((resolve) => server.close(resolve));
+    if (previousStorageDir === undefined) delete process.env.STORAGE_DIR;
+    else process.env.STORAGE_DIR = previousStorageDir;
+    fs.rmSync(dataDir, { recursive: true, force: true });
+    fs.rmSync(storageDir, { recursive: true, force: true });
+  }
 });

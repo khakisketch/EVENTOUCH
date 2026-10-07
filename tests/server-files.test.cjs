@@ -1,16 +1,24 @@
-const { test, before, after } = require('node:test');
+const { test: nodeTest, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { createDatabase } = require('../server/db');
+const { testDatabaseUrl } = require('./helpers/postgres-test.cjs');
 
 const PORT = 18779;
 const BASE = `http://127.0.0.1:${PORT}`;
+const ADMIN_EMAIL = 'eventouch-auth-admin@example.test';
+const databaseUrl = testDatabaseUrl();
+const test = databaseUrl
+  ? nodeTest
+  : (name, fn) => nodeTest(name, { skip: 'set EVENTOUCH_TEST_DATABASE_URL to an isolated PostgreSQL test database' }, fn);
 let child = null;
 let dataDir = null;
 let storageDir = null;
 let adminCookie = '';
+let db = null;
 
 async function waitForHealth() {
   for (let i = 0; i < 50; i += 1) {
@@ -24,6 +32,9 @@ async function waitForHealth() {
 }
 
 before(async () => {
+  if (!databaseUrl) return;
+  db = createDatabase({ connectionString: databaseUrl });
+  await db.migrate();
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'etko-files-data-'));
   storageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'etko-files-store-'));
   child = spawn(process.execPath, ['server/server.js'], {
@@ -33,7 +44,9 @@ before(async () => {
       PORT: String(PORT),
       DATA_DIR: dataDir,
       STORAGE_DIR: storageDir,
-      ADMIN_PASSWORD: 'pw',
+      DATABASE_URL: databaseUrl,
+      ADMIN_EMAIL,
+      ADMIN_PASSWORD: 'admin-test-pw',
     },
     stdio: 'ignore',
   });
@@ -41,15 +54,23 @@ before(async () => {
   const res = await fetch(`${BASE}/api/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ id: 'admin', password: 'pw' }),
+    body: JSON.stringify({ email: ADMIN_EMAIL, password: 'admin-test-pw' }),
   });
+  assert.equal(res.status, 200);
   const match = /etko_session=([^;]+)/.exec(res.headers.get('set-cookie') || '');
   assert.ok(match, 'admin login must work');
   adminCookie = `etko_session=${match[1]}`;
 });
 
-after(() => {
-  if (child) child.kill();
+after(async () => {
+  if (child && child.exitCode === null) {
+    const exited = new Promise((resolve) => child.once('exit', resolve));
+    child.kill();
+    await exited;
+  }
+  if (db) await db.close();
+  if (dataDir) fs.rmSync(dataDir, { recursive: true, force: true });
+  if (storageDir) fs.rmSync(storageDir, { recursive: true, force: true });
 });
 
 async function upload(eventId, name, buffer, type, cookie) {
