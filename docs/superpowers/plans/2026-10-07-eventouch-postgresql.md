@@ -86,9 +86,11 @@ Task 2 verification (2026-10-07): the mismatch-target test first returned 201 in
 - `GET /api/bootstrap` returns only organization data allowed by the current account and only authorized events/workspaces. Public event routes return published attendee-visible data; ticket routes return only the participant represented by that high-entropy ticket.
 - Do not accept a browser-supplied role, account ID, workspace, or entire state as authorization evidence.
 
-- [ ] Test agency, manager, and staff projections, no cross-event leakage, hidden drafts, ticket redaction, invalid ticket, and cross-event ticket attempts.
-- [ ] Implement the projection/public readers and verify response shapes remain consumable by v9 routes.
-- [ ] Run focused PostgreSQL API tests; commit as `feat: serve role-scoped event state`.
+- [x] Test agency, manager, and staff projections, no cross-event leakage, hidden drafts, ticket redaction, invalid ticket, and cross-event ticket attempts.
+- [x] Implement the projection/public readers and verify response shapes remain consumable by v9 routes.
+- [x] Run focused PostgreSQL API tests; commit as `feat: serve role-scoped event state`.
+
+Task 3 verification (2026-10-07): PostgreSQL-backed bootstrap/public API tests were observed red on missing routes; follow-up red tests caught staff event metadata and null-participant draft content exposure before the allowlist fixes. All seven server suites pass 67/67, including agency/manager/staff projection, role impersonation rejection, published-content redaction, and same-event ticket binding. `git diff --check` and `node --check` for the four changed server modules pass. The full suite reports 420 tests, 80 pass, 340 fail; the 340 failures are the known legacy UI/test-source mismatch (e.g. imports from removed `features/*.js`), with no failures in the seven server suites.
 
 ### Task 4: Transactional attendee registration and ticket lifecycle
 

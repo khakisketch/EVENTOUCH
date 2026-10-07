@@ -965,11 +965,62 @@ function writeUpload(req, dest, cap) {
   });
 }
 
+function decodedSegment(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch (error) {
+    return null;
+  }
+}
+
+function bearerToken(header) {
+  const match = /^Bearer\s+(.+)$/i.exec(String(header || ''));
+  return match ? match[1] : '';
+}
+
 async function handleApi(req, res, store, urlPath, security = {}) {
-  ensureSeedData(store);
-  const { auth, access } = security;
+  const { auth, access, state, publicEvents } = security;
   const parts = urlPath.split('/').filter(Boolean);
   if (parts[0] !== 'api') return sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
+
+  if (parts[1] === 'bootstrap') {
+    res.setHeader('cache-control', 'no-store');
+    if (parts.length !== 2 || req.method !== 'GET') return sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
+    if (!state) return err(res, 503, '데이터베이스를 사용할 수 없습니다');
+    try {
+      const account = await requireUser(auth, req);
+      const projection = await state.loadBootstrap(account);
+      return sendJson(res, 200, { state: projection });
+    } catch (error) {
+      return err(res, error.status || 500, error.message || '요청을 처리하지 못했습니다');
+    }
+  }
+
+  if (parts[1] === 'public') {
+    res.setHeader('cache-control', 'no-store');
+    if (req.method !== 'GET' || !publicEvents) {
+      return err(res, publicEvents ? 404 : 503, publicEvents ? '요청한 API를 찾을 수 없습니다' : '데이터베이스를 사용할 수 없습니다');
+    }
+    if (parts[2] !== 'events' || ![4, 5].includes(parts.length) || (parts.length === 5 && parts[4] !== 'ticket')) {
+      return sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
+    }
+    const slug = decodedSegment(parts[3]);
+    if (!slug) return err(res, 404, '요청한 행사를 찾을 수 없습니다');
+    try {
+      if (parts.length === 4) {
+        const result = await publicEvents.loadPublicEvent(slug);
+        if (!result) return err(res, 404, '요청한 행사를 찾을 수 없습니다');
+        return sendJson(res, 200, result);
+      }
+      const result = await publicEvents.loadTicket(slug, bearerToken(req.headers.authorization));
+      if (!result) return err(res, 404, '티켓 링크를 확인할 수 없습니다');
+      return sendJson(res, 200, result);
+    } catch (error) {
+      return err(res, error.status || 500, error.message || '요청을 처리하지 못했습니다');
+    }
+  }
+
+  ensureSeedData(store);
 
   // Raw octet uploads bypass the JSON body reader.
   if (req.method === 'POST' && parts[1] === 'events' && parts[3] === 'files' && parts.length === 4) {
