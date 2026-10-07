@@ -34,3 +34,6 @@ Status: architecture selected; implementation plan is active. No human end-to-en
 - SMS OTP or other attendee identity verification; actual messaging and payment integrations.
 - NAS/object-storage deployment, production hosting/TLS, data retention policy, and operational monitoring.
 - Scaling beyond the initial single service / event-scoped transaction model.
+- Reconcile the remaining frontend/theme tests against the current v9 source tree during Task 7; the independent full-suite run currently reports missing legacy UI paths/modules.
+- Before production use, decide the onsite consent-capture policy and verify ticket-ID/date-expiry behavior for long event IDs and non-UTC hosts.
+- Keep targeted guard regressions (cancel while inside, self-update phone collision, operator cross-event command-ID reuse) and the explicit Task 8 staff-file denial test in the relevant later verification suites.
