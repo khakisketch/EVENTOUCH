@@ -49,7 +49,7 @@
 - Read routes: `GET /api/events/:eventId/files/:fileId` requires AGENCY/MANAGER access; STAFF denied. `GET /api/public/events/:slug/files/:fileId` serves only references reachable from that event's currently published/public content, including the published map when stamp is enabled. Draft-only/unreferenced/private/cross-event files return404. Never expose `storage_key`.
 - Store bytes under Task8 `STORAGE_DIR`; metadata in `stored_files`. Migration adds nullable `width_px`/`height_px` with paired-positive validation. Generated names, capped writes, transaction/idempotency, upload rollback cleanup and restart persistence are common Task8 responsibilities.
 
-- [ ] Write real API tests `map_image_upload_is_event_scoped`, `public_read_rejects_draft_or_foreign_file`, `staff_file_read_denied`, `same_upload_id_does_not_create_duplicate`, and metadata table cases (valid PNG/JPEG/WebP, truncated header, MIME mismatch, impossible dimensions). Assert stored bytes/dimensions, no raw storage key in response,201/200 success and403/404 denial.
+- [x] Write real API tests `map_image_upload_is_event_scoped`, `public_read_rejects_draft_or_foreign_file`, `staff_file_read_denied`, `same_upload_id_does_not_create_duplicate`, and metadata table cases (valid PNG/JPEG/WebP, truncated header, MIME mismatch, impossible dimensions). Assert stored bytes/dimensions, no raw storage key in response,201/200 success and403/404 denial.
 
 For a real320×200 image fixture and the HTTP helper's response envelope, pin literal consumer expectations:
 
@@ -63,9 +63,9 @@ assert.equal(staffRead.status, 403);
 ```
 
 - [x] Run `node --test tests/server-files.test.cjs tests/server-image-metadata.test.cjs` in the isolated DB environment; observe the missing PostgreSQL-file behavior failing before implementing it. Existing JSON `evt-1` roundtrip tests migrated to real PostgreSQL events; primary focused GREEN10/10 (independent combined check pending).
-- [ ] Implement/reconcile the shared service and wire actual routes; re-check auth inside writes, fingerprint same-command uploads, remove only newly owned failed-upload bytes, preserve files on HTTP restart. Complete relevant Task8 documentation without starting Compose/deployment.
-- [ ] Re-run these tests and current server regressions: `node --test tests/server-*.test.cjs`. Expected: new/current server tests pass,0 skips; classify remaining legacy UI failures separately.
-- [ ] Independently verify and commit only Task8/file-owned changes at a coherent milestone; reuse an existing verified Task8 commit if this prerequisite has already been delivered.
+- [x] Implement/reconcile the shared service and wire actual routes; re-check auth inside writes, fingerprint same-command uploads, remove only newly owned failed-upload bytes, preserve files on HTTP restart. Complete relevant Task8 documentation without starting Compose/deployment.
+- [x] Re-run these tests and current server regressions: `node --test tests/server-*.test.cjs`. Expected: new/current server tests pass,0 skips; classify remaining legacy UI failures separately.
+- [x] Independently verify and commit only Task8/file-owned changes at a coherent milestone; reuse an existing verified Task8 commit if this prerequisite has already been delivered.
 
 ### Task 2: Transactional map drafts, publication and public projection
 
@@ -79,7 +79,7 @@ assert.equal(staffRead.status, 403);
 - Publish input `{expectedDraftVersion}` validates current file/booths again and deep-copies the draft. Unpublish input `{expectedPublishedVersion}` clears only the matching published snapshot (already unpublished is an idempotent no-op). Neither operation changes booths/visits. Existing command receipts protect retries.
 - Public projection adds `boothMap:{published:...}` only for stamp-enabled public events; no draft. Remove orphan pin IDs from projection without deleting history. Public map file allowlist must use this same publication state, not arbitrary workspace references.
 
-- [ ] Write tests `draft_is_not_public`, `publish_is_snapshot`, `replacement_clears_positions_and_preserves_publication`, `coordinate_and_booth_boundaries`, `foreign_file_rejected`, `guest_staff_and_foreign_manager_denied`, `archived_rejected`, `command_retry_and_version_conflict`, `unpublish_preserves_visits`, `orphan_pin_hidden`. Use literal expected coordinates/version/count and real PostgreSQL routes.
+- [x] Write tests `draft_is_not_public`, `publish_is_snapshot`, `replacement_clears_positions_and_preserves_publication`, `coordinate_and_booth_boundaries`, `foreign_file_rejected`, `guest_staff_and_foreign_manager_denied`, `archived_rejected`, `command_retry_and_version_conflict`, `unpublish_preserves_visits`, `orphan_pin_hidden`. Use literal expected coordinates/version/count and real PostgreSQL routes.
 
 For a published version1 and a later version2 draft, require:
 
@@ -92,9 +92,9 @@ assert.deepEqual(afterUnpublishVisits, beforeUnpublishVisits);
 ```
 
 - [x] Map command tests observed RED6 missing-command failures before code, then GREEN6/6 alongside file/metadata GREEN16/16; independent combined regression check pending.
-- [ ] Implement the module/context wiring, normalization and allowlisted projection. Save/post failures roll back both draft and audit/receipt; publish locks the event with existing domain executor.
-- [ ] Re-run focused tests plus `node --test tests/server-domain-commands.test.cjs tests/server-operations.test.cjs tests/server-public-event.test.cjs`; expect zero new failures/skips and unchanged certification semantics.
-- [ ] Independent Test Runner checks the integrated server revision, then commit only map/server tests owned by this task.
+- [x] Implement the module/context wiring, normalization and allowlisted projection. Save/post failures roll back both draft and audit/receipt; publish locks the event with existing domain executor.
+- [x] Re-run focused tests plus `node --test tests/server-domain-commands.test.cjs tests/server-operations.test.cjs tests/server-public-event.test.cjs`; expect zero new failures/skips and unchanged certification semantics.
+- [x] Independent Test Runner checks the integrated server revision, then commit only map/server tests owned by this task.
 
 ### Task 3: Client data/transport contracts without visual implementation
 
@@ -102,7 +102,7 @@ assert.deepEqual(afterUnpublishVisits, beforeUnpublishVisits);
 
 **Interfaces:** `E.boothStampSummary(booths,visits,participantId)->{total,completed,visitedBoothIds}` deduplicates current booth IDs and own confirmed visits; for no valid participant use `completed:null`, not0. `E.remote.uploadFile(file,{eventId,commandId})->FileRef` sends raw bytes with same-origin credentials and stable retry identity. `E.remote.fileURL({eventId,fileId,slug?,public:false})->sameOriginPath` uses Task1 operator/public routes; rejects missing/unsafe IDs. Map editing calls existing `E.run` with Task2 payloads.
 
-- [ ] Write summary fixture tests with two same-name booths, repeated visits, foreign participant visits, an orphan visit, unplaced and CLOSED booths. Example booth IDs a/b/c plus own visits a/a/orphan produce total3/completed1; guest produces completednull and no visited IDs.
+- [x] Write summary fixture tests with two same-name booths, repeated visits, foreign participant visits, an orphan visit, unplaced and CLOSED booths. Example booth IDs a/b/c plus own visits a/a/orphan produce total3/completed1; guest produces completednull and no visited IDs.
 
 ```js
 const booths = [{id:'a',name:'같은 이름'}, {id:'b',name:'같은 이름'}, {id:'c',status:'CLOSED'}];
@@ -116,10 +116,10 @@ assert.deepEqual(E.boothStampSummary(booths, visits, null),
   {total:3,completed:null,visitedBoothIds:[]});
 ```
 
-- [ ] Write upload/URL transport tests asserting raw bytes (not JSON/base64), credentials, normalized FileRef without paths, preserved HTTP errors, stable commandId after lost response and no local authoritative write. Register map command declarations in `E.handlers` so existing local authorization accepts group `booth`; explicit preview rejects new map writes with an explanatory error rather than calling the shared server.
+- [x] Write upload/URL transport tests asserting raw bytes (not JSON/base64), credentials, normalized FileRef without paths, preserved HTTP errors, stable commandId after lost response and no local authoritative write. Register map command declarations in `E.handlers` so existing local authorization accepts group `booth`; explicit preview rejects new map writes with an explanatory error rather than calling the shared server.
 - [x] Run `node --test tests/booth-map-data.test.cjs tests/server-sync-client.test.cjs`; observed missing-summary/transport RED5/25 before implementation, then GREEN25/25. Independent combined check pending.
-- [ ] Implement only calculation/validation/transport/command declarations; no generated markup/styles/interaction layout. Include the data module before server adapter/startup and preserve current load-order overrides.
-- [ ] Re-run focused tests and `node --check` for changed JS; independently verify and commit the nonvisual client slice. Leave actual map file/pin rendering to Task4.
+- [x] Implement only calculation/validation/transport/command declarations; no generated markup/styles/interaction layout. Include the data module before server adapter/startup and preserve current load-order overrides.
+- [x] Re-run focused tests and `node --check` for changed JS; independently verify and commit the nonvisual client slice. Leave actual map file/pin rendering to Task4.
 
 ### Task 4: Design-owned editor and attendee stamp-map rendering
 
@@ -127,13 +127,13 @@ assert.deepEqual(E.boothStampSummary(booths, visits, null),
 
 **Interfaces:** Operate on Task2 `boothMap`, Task3 helpers and current `E.run`/routes/actions. Extend the existing organizer booth management, not event-creation wizard requirements. Attendee entry remains `#/event/:slug/stamp`; render public map/list before the existing ticket-only certification controls, without weakening guest restrictions for other modules.
 
-- [ ] Confirm actual product source/write binding, readable representative floorplan asset and required states. Perform focused Mobbin research only for the unresolved map/editor pattern; keep canonical links and locally readable permitted images. No external brand assets or fabricated client floorplan.
-- [ ] Give the design run the approved spec, real sources, file/map/certification contracts, existing tokens and sanitized fixtures. Preserve brand and browser-first shell. Select live implementation skill and record it; commission local execution only.
-- [ ] Require semantic controls, click/touch and numeric-coordinate placement (dragging optional), save/publish/unpublish separation, map zoom/pan with normalized pins, selectable booth details, textual/icon completion marks, all-booth list and own completed/total summary. No public fake0 count without a ticket. Staff-certified progress updates only after explicit server reread/re-entry; no new push/polling.
-- [ ] Design owner writes presentation contract tests against actual output; capture missing behaviors RED before its changes. Source tests do not prove render quality. Reconcile actual output files/hashes, not canonical-entry status alone.
-- [ ] Host browser captures real editor/attendee at390×844 and1280×900; also320/768 overflow checks. Cover image loading/error, unpublished/no map,0 booths, unplaced/duplicate-name/CLOSED booth, no ticket, own completed/not-completed, keyboard/focus, zoom/pan and failed certification. Verify real save→publish→independent public read; do not label reconstructed presentation states as fresh backend writes.
-- [ ] Commission a separate read-only review skill such as discovered `web-design-guidelines`, using the exact source snapshot and captures. Confirm images actually read. Track criterion→defect(screen/state/impact/desired result)→revision→render evidence→fixed/open; send visual repairs back to design until closure or a concrete blocker. Use axe when available, do not install or claim actual screen-reader/real-device testing without evidence.
-- [ ] Re-run functional/source checks after refinements. Deliver product link labeled temporary/tailnet-only if applicable, target-viewports before/after captures and refreshed design preview/studio link with any missing preview disclosed. Independently verify before committing design-owned files.
+- [x] Confirm actual product source/write binding, readable representative floorplan asset and required states. Perform focused Mobbin research only for the unresolved map/editor pattern; keep canonical links and locally readable permitted images. No external brand assets or fabricated client floorplan.
+- [x] Give the design run the approved spec, real sources, file/map/certification contracts, existing tokens and sanitized fixtures. Preserve brand and browser-first shell. Select live implementation skill and record it; commission local execution only.
+- [x] Require semantic controls, click/touch and numeric-coordinate placement (dragging optional), save/publish/unpublish separation, map zoom/pan with normalized pins, selectable booth details, textual/icon completion marks, all-booth list and own completed/total summary. No public fake0 count without a ticket. Staff-certified progress updates only after explicit server reread/re-entry; no new push/polling.
+- [x] Design owner writes presentation contract tests against actual output; capture missing behaviors RED before its changes. Source tests do not prove render quality. Reconcile actual output files/hashes, not canonical-entry status alone.
+- [x] Host browser captures real editor/attendee at390×844 and1280×900; also320/768 overflow checks. Cover image loading/error, unpublished/no map,0 booths, unplaced/duplicate-name/CLOSED booth, no ticket, own completed/not-completed, keyboard/focus, zoom/pan and failed certification. Verify real save→publish→independent public read; do not label reconstructed presentation states as fresh backend writes.
+- [x] Commission a separate read-only review skill such as discovered `web-design-guidelines`, using the exact source snapshot and captures. Confirm images actually read. Track criterion→defect(screen/state/impact/desired result)→revision→render evidence→fixed/open; send visual repairs back to design until closure or a concrete blocker. Use axe when available, do not install or claim actual screen-reader/real-device testing without evidence.
+- [x] Re-run functional/source checks after refinements. Deliver product link labeled temporary/tailnet-only if applicable, target-viewports before/after captures and refreshed design preview/studio link with any missing preview disclosed. Independently verify before committing design-owned files.
 
 ### Task 5: Integrated stamp journey, persistence and evidence closeout
 
@@ -141,7 +141,7 @@ assert.deepEqual(E.boothStampSummary(booths, visits, null),
 
 **Interfaces:** Uses actual Task1 files + Task2 map commands/projection + Task3 transport + reviewed Task4 product UI. Existing signup/ticket/check-in and SELF/STAFF authorization remain the binding product contracts.
 
-- [ ] Write/API-test organizer upload→draft→publish→guest map/no personal data→signup/ticket→desk IN→SELF booth certification→ticket reread/summary. Separately test assigned STAFF certification in a STAFF-mode event, denied wrong booth/ticket/assignment, closed booth, repeated commandId and mixed old/orphan visit records. Assert no fabricated completion and exactly one confirmed visit per retried command.
+- [x] Write/API-test organizer upload→draft→publish→guest map/no personal data→signup/ticket→desk IN→SELF booth certification→ticket reread/summary. Separately test assigned STAFF certification in a STAFF-mode event, denied wrong booth/ticket/assignment, closed booth, repeated commandId and mixed old/orphan visit records. Assert no fabricated completion and exactly one confirmed visit per retried command.
 
 ```js
 assert.equal(firstCertification.status, 201);
@@ -152,9 +152,9 @@ assert.equal(restartedOwnTicketRead.json.workspace.visits.length, 1);
 assert.equal(restartedMapRead.json.workspace.boothMap.published.version, 1);
 ```
 
-- [ ] Exercise the same changed product flows in separate real browser sessions, including map pin/list consistency, publication persistence on reload, successful certification marks and failed scan remaining unmarked. Preserve current user inspection fixtures; use separate owned synthetic fixtures when needed.
-- [ ] Restart only a separate test HTTP fixture against its unchanged isolated schema/files and re-read the same public map, own visits and session-bound state. Restarting with a new schema is not persistence evidence. No production/test-container/inspection-server restart implied.
-- [ ] Independent Test Runner executes `node --test tests/server-*.test.cjs tests/booth-map-data.test.cjs tests/booth-map-presentation.test.cjs tests/attendee-browser-presentation.test.cjs` with approved DB environment, syntax and diff checks, followed by full `npm test`. Record actual revision/pending file hashes/counts/skips and all full-suite failures. Fix introduced failures; legacy-suite reconciliation remains recorded M1 work, never claim full green when failures remain.
+- [x] Exercise the same changed product flows in separate real browser sessions, including map pin/list consistency, publication persistence on reload, successful certification marks and failed scan remaining unmarked. Preserve current user inspection fixtures; use separate owned synthetic fixtures when needed.
+- [x] Restart only a separate test HTTP fixture against its unchanged isolated schema/files and re-read the same public map, own visits and session-bound state. Restarting with a new schema is not persistence evidence. No production/test-container/inspection-server restart implied.
+- [x] Independent Test Runner executes `node --test tests/server-*.test.cjs tests/booth-map-data.test.cjs tests/booth-map-presentation.test.cjs tests/attendee-browser-presentation.test.cjs` with approved DB environment, syntax and diff checks, followed by full `npm test`. Record actual revision/pending file hashes/counts/skips and all full-suite failures. Fix introduced failures; legacy-suite reconciliation remains recorded M1 work, never claim full green when failures remain.
 - [ ] One fresh read-only whole-branch reviewer checks map/file/privacy and the Review Focus against actual code/evidence. Resolve important findings with regression tests and rerun affected independent checks; keep minor nonblocking findings in backlog.
 - [ ] Commit only verified task-owned changes; reconcile ledgers/checkpoint/product-state. Report separately: implemented, design-reviewed, functionally verified, user-accepted, externally delivered. Map technical completion does not close M1 or authorize deployment. Retain any dirty/unintegrated helper worktree until its own safe integration/cleanup is proven.
 

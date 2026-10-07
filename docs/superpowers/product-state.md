@@ -14,7 +14,7 @@ Acceptance: the real product server authenticates operational users, enforces ev
 
 M1 exit gate: event creation and all operational participant writes must use PostgreSQL as the only authoritative path; no JSON-file fallback may be able to create data that bootstrap/public/ticket reads cannot see. Verify a write through the real product route, read it from an independent role-scoped session and the public ticket route, then restart the HTTP server and read it again. The manager/staff event collection must also remain role-scoped. Human end-to-end acceptance is still required after technical checks.
 
-Status: PostgreSQL Tasks 1–6 are implemented and independently verified through `6bf0e56` in the isolated worktree. Task 7 is in progress with uncommitted server adapter/event creation/API retirement changes; an initial real-browser agency login → create → reload flow passed. M1 remains open pending complete Tasks 7–8, cross-role/public-ticket/restart verification, rendered design review, and human end-to-end acceptance. No production deployment has occurred.
+Status: PostgreSQL Tasks 1–8 are implemented and committed in the isolated worktree through `76de86d`. Server/file/map authority, the server-backed client shell, invitations, the booth stamp map and the user-approved payment-simulation removal are committed; the M1 exit-gate checks ran through the real product route (write via real route → independent role/public-ticket reads → same-schema HTTP restart read-back; role-scoped event collection). Final integrated verification on `76de86d`: focused 251/251 (0 skips), full suite current failures 0 with 328 known legacy suite failures unchanged, syntax/diff clean. Rendered design reviews for map/invitations/attendee/payment-removal were performed with all reported defects closed. Awaiting human end-to-end acceptance; no production deployment has occurred.
 
 ## Approved architecture
 
@@ -33,8 +33,8 @@ Status: PostgreSQL Tasks 1–6 are implemented and independently verified throug
 
 - User approved a floorplan with existing booth positions and the attendee's server-confirmed QR certification marks/count, not location tracking.
 - Explicitly exclude GPS/current location/last-location highlights, navigation, zone drawing and separate location QR. Keep existing stamp/ticket/SELF-STAFF authorization contracts.
-- Written design and implementation plan approved: `docs/superpowers/specs/2026-10-07-eventouch-booth-stamp-map-design.md`, `docs/superpowers/plans/2026-10-07-eventouch-booth-stamp-map.md`; inline development requested. File authority, map draft/publication server commands and client data/upload contracts are implemented but uncommitted under verification. Design-owned map UI generation is active; actual rendered review and integrated browser checks remain required. No map completion or human acceptance claimed. Reuse Task8 event-file storage, not a competing file store.
-- Payment/refund exclusion was discussed separately; no removal has been implemented, and approving the map does not authorize data deletion.
+- Written design and implementation plan approved: `docs/superpowers/specs/2026-10-07-eventouch-booth-stamp-map-design.md`, `docs/superpowers/plans/2026-10-07-eventouch-booth-stamp-map.md`; inline development requested and executed. File authority, map draft/publication server commands and client data/upload contracts are committed; design-owned map UI, rendered reviews and integrated browser checks are closed for the reviewed states.
+- User decision 2026-10-08: the unconnected payment/refund simulation UI is removed (`c92915e`) while stored data and server contracts stay; server-unreachable keeps block+retry (no demo fallback); attendee surfaces were finished with capture review + integrated checks.
 
 ## Backlog / later decisions
 
