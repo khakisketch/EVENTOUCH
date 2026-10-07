@@ -61,11 +61,10 @@ test('guest stamp route shows event context, published map and all booths withou
   const html = E.views.attendee();
   assert.match(html, /부스 지도 확인 행사/);
   assert.match(html, /2026-10-21/);
-  assert.match(html, /컨벤션 홀/);
   assert.match(html, /data-od-id="booth-map-meta-event"[^>]*>부스 지도 확인 행사/);
   assert.match(html, /data-od-id="booth-map-meta-date"[^>]*>2026-10-21/);
-  assert.match(html, /data-od-id="booth-map-meta-venue"[^>]*>컨벤션 홀/);
-  assert.match(html, /등록된 티켓으로 접속하면 본인의 인증 현황을 확인/);
+  assert.match(html, /티켓 등록 후 내 인증 현황을 확인할 수 있어요/);
+  assert.doesNotMatch(html, /booth-map-meta-venue|booth-map-meta-address|행사 참여/);
   assert.doesNotMatch(html, /0\s*\/\s*4/);
   assert.match(html, /floorplan-1/);
   assert.match(html, /left:100%;top:0%/);
@@ -220,14 +219,13 @@ test('conflict guidance suppresses only the redundant toast while preserving ord
   assert.match(css, /\.booth-map-conflict > p:last-child\s*\{[^}]*word-break:\s*keep-all/s);
 });
 
-test('public event metadata and conflict guidance keep Korean words intact when wrapping', () => {
+test('compact event metadata and conflict guidance keep Korean copy readable', () => {
   const css = fs.readFileSync('assets/css/booth-map.css', 'utf8');
-  assert.match(css, /\.booth-map-heading > p\s*\{[^}]*word-break:\s*keep-all/s);
-  assert.doesNotMatch(css, /\.booth-map-heading > p\s*\{[^}]*overflow-wrap:\s*anywhere/s);
+  assert.match(css, /\.booth-map-event-meta\s*\{[^}]*text-overflow:\s*ellipsis[^}]*white-space:\s*nowrap/s);
   const { E, workspace } = harness();
   workspace.venue = { name: '', address: '' };
   const html = E.boothStampPage();
-  assert.match(html, /data-od-id="booth-map-meta-venue"[^>]*>장소 안내 예정/);
+  assert.doesNotMatch(html, /booth-map-meta-venue|booth-map-meta-address/);
 });
 
 test('unselected mobile helper copy remains concise and complete', () => {
@@ -320,6 +318,22 @@ test('stamp map page uses one main region and omits empty personal progress', ()
   E.work().participants = [];
   const attendeeHtml = E.views.attendee();
   assert.equal((attendeeHtml.match(/<main\b/g) || []).length, 1);
+});
+
+test('stamp map chrome is compact while map controls keep accessible names and targets', () => {
+  const { E } = harness();
+  E.ui.boothMap = { local: null, selectedId: null, viewport: { scale: 1, x: 0, y: 0 }, imageStatus: { 'floorplan-1': 'ready' } };
+  const html = E.boothStampPage();
+  assert.match(html, /<h1 id="booth-map-title"[^>]*>스탬프 투어<\/h1>/);
+  assert.doesNotMatch(html, /class="eyebrow"|booth-map-section-heading|게시된 배치도|booth-map-secondary/);
+  assert.match(html, /class="booth-map-jump"/);
+  const labels = ['배치도 확대', '배치도 축소', '보기 초기화', '배치도 왼쪽 이동', '배치도 위쪽 이동', '배치도 아래쪽 이동', '배치도 오른쪽 이동'];
+  for (const label of labels) assert.match(html, new RegExp('aria-label="' + label + '"'));
+  assert.equal((html.match(/data-action="booth-map-zoom"/g) || []).length, 7);
+  assert.equal((html.match(/<svg[^>]*aria-hidden="true"/g) || []).length, 7);
+  const css = fs.readFileSync('assets/css/booth-map.css', 'utf8');
+  assert.match(css, /\.booth-map-controls[^\{]*\{[^}]*grid-template-columns:\s*repeat\(3,\s*44px\)/s);
+  assert.match(css, /@media\s*\(max-width:\s*760px\)\s*\{\s*\.booth-map-jump\s*\{\s*display:\s*none/s);
 });
 
 test('map loading is announced and controls remain unavailable until image readiness', () => {
