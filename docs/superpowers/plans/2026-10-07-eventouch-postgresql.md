@@ -109,9 +109,11 @@ Task 3 verification (2026-10-07): PostgreSQL-backed bootstrap/public API tests w
 - Cancellation changes PAID payment rows to REFUND_REQUESTED and projects that state on the participant. A still-PENDING simulated payment remains PENDING on cancellation to match v9; no payment provider side effect is performed.
 - Idempotency receipts omit raw ticket values and keep only hashes; replay restores the same token only while it remains current, otherwise returns a conflict.
 
-- [ ] Test app-free signup, required consent/custom-field backfill, duplicate signup, capacity boundary with concurrent callers, concurrent same-command retries, ticket expiry/reissue/cancel, CSV import permission/atomicity, and replayed command ID.
-- [ ] Implement server-side participant rules and return only the resulting participant/ticket projection needed by the caller.
-- [ ] Run focused concurrency/API tests; commit as `feat: make attendee registration transactional`.
+- [x] Test app-free signup, required consent/custom-field backfill, duplicate signup, capacity boundary with concurrent callers, concurrent same-command retries, ticket expiry/reissue/cancel, CSV import permission/atomicity, and replayed command ID.
+- [x] Implement server-side participant rules and return only the resulting participant/ticket projection needed by the caller.
+- [x] Run focused concurrency/API tests; commit as `feat: make attendee registration transactional`.
+
+Task 4 verification (2026-10-07): registration suite → 21/21 pass; independent Test Runner `ses_eeac4e00cffepIuKmnJHMPbRqo` ran the eight focused server/PostgreSQL suites → 91/91 pass, 0 skipped. `node --check` for all changed JavaScript and `git diff --check HEAD^ HEAD` pass. The full suite reports 444 tests, 99 pass, 345 fail; the failures are non-server UI/theme tests importing absent legacy paths/files (`styles/tokens.css`, `styles/theme.css`, `app.js`, `features/views.js`, and the `store-truth` module), not Task 4 server failures. Read-only branch review `ses_eeada0981ffe5Bho8JsBgF1Guc` prompted the follow-up commit `4ab0f8c`: ended signup closure message, role-scoped manager/staff event collection, migration-failure rollback and HTTP restart persistence tests, eight-way capacity contention, and concurrent same-command retries. Review rulings preserve v9 base-only CSV import with attendee custom-field backfill and PENDING payment state on cancellation; the dual-store convergence gate is recorded for M1 exit. M1 remains open pending Tasks 5–8 and human end-to-end acceptance.
 
 ### Task 5: Staff assignment and check-in command family
 
