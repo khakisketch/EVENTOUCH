@@ -979,7 +979,7 @@ function bearerToken(header) {
 }
 
 async function handleApi(req, res, store, urlPath, security = {}) {
-  const { auth, access, state, publicEvents, participantCommands, operationsCommands } = security;
+  const { auth, access, state, publicEvents, participantCommands, operationsCommands, domainCommands } = security;
   const parts = urlPath.split('/').filter(Boolean);
   if (parts[0] !== 'api') return sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
 
@@ -1128,6 +1128,30 @@ async function handleApi(req, res, store, urlPath, security = {}) {
           payload,
           account,
           assignmentId,
+        });
+        return sendJson(res, result.status, result.body);
+      }
+
+      if (domainCommands && domainCommands.supports(command)) {
+        if (domainCommands.isGuestCommand(command)) {
+          const result = await domainCommands.execute({
+            eventId,
+            commandId,
+            command,
+            payload,
+            account: null,
+            ticketToken: guestTicketToken,
+          });
+          return sendJson(res, result.status, result.body);
+        }
+        const account = await requireUser(auth, req);
+        await access.authorize({ account, eventId, command: 'participants.write' });
+        const result = await domainCommands.execute({
+          eventId,
+          commandId,
+          command,
+          payload,
+          account,
         });
         return sendJson(res, result.status, result.body);
       }

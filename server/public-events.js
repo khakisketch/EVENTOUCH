@@ -30,6 +30,19 @@ function pick(source, keys) {
 
 function publicImage(value) {
   const source = object(value);
+  const fileId = text(source.fileId, 160);
+  const contentType = text(source.type, 80);
+  const size = Number(source.size);
+  if (/^[A-Za-z0-9_-]{1,160}$/.test(fileId) &&
+      ['image/png', 'image/jpeg', 'image/webp'].includes(contentType) &&
+      Number.isSafeInteger(size) && size >= 0 && size <= 600000) {
+    return {
+      fileId,
+      name: text(source.name, 200),
+      type: contentType,
+      size,
+    };
+  }
   const data = text(source.data, 900000);
   if (!/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(data)) return null;
   const width = Number(source.width);
@@ -38,6 +51,21 @@ function publicImage(value) {
     data,
     width: Number.isFinite(width) && width > 0 && width <= 10000 ? width : 1,
     height: Number.isFinite(height) && height > 0 && height <= 10000 ? height : 1,
+  };
+}
+
+function publicAttachment(value) {
+  const source = object(value);
+  const fileId = text(source.fileId, 160);
+  const contentType = text(source.type, 80);
+  const size = Number(source.size);
+  if (!/^[A-Za-z0-9_-]{1,160}$/.test(fileId) || contentType !== 'application/pdf' ||
+      !Number.isSafeInteger(size) || size < 0 || size > 600000) return null;
+  return {
+    fileId,
+    name: text(source.name, 200),
+    type: contentType,
+    size,
   };
 }
 
@@ -190,10 +218,14 @@ function publicWorkspace(value, event, participant = null) {
     ...pick(item, ['id', 'title', 'body', 'pinned', 'at']),
     published: true,
   }));
-  const program = array(source.program).filter((item) => item && item.published === true).map((item) => ({
-    ...pick(item, ['id', 'title', 'date', 'start', 'end', 'place', 'location', 'description', 'speaker', 'speakers']),
-    published: true,
-  }));
+  const program = array(source.program).filter((item) => item && item.published === true).map((item) => {
+    const attachment = publicAttachment(item.attachment);
+    return {
+      ...pick(item, ['id', 'title', 'date', 'start', 'end', 'place', 'location', 'description', 'speaker', 'speakers']),
+      ...(attachment ? { attachment } : {}),
+      published: true,
+    };
+  });
   const own = (items) => array(items).filter((item) => item && attendeeId && item.participantId === attendeeId);
   const photos = array(source.photos).filter((item) => item && (
     item.status === 'APPROVED' || (attendeeId && item.participantId === attendeeId)

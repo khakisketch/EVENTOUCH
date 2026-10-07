@@ -12,6 +12,7 @@ const { createState } = require('./state');
 const { createPublicEvents } = require('./public-events');
 const { createParticipantCommands } = require('./commands/participants');
 const { createOperationsCommands } = require('./commands/operations');
+const { createDomainCommands } = require('./commands/domain');
 const { handleApi } = require('./api');
 
 const ROOT = path.join(__dirname, '..');
@@ -84,6 +85,7 @@ function createHttpServer(store, auth, access, database) {
   const publicEvents = database ? createPublicEvents(database) : null;
   const participantCommands = database ? createParticipantCommands(database) : null;
   const operationsCommands = database ? createOperationsCommands(database) : null;
+  const domainCommands = database ? createDomainCommands(database) : null;
   return http.createServer((req, res) => {
     const urlPath = (req.url || '/').split('?')[0];
     if (urlPath === '/api/health') {
@@ -97,7 +99,15 @@ function createHttpServer(store, auth, access, database) {
         });
         return;
       }
-      handleApi(req, res, store, urlPath, { auth, access, state, publicEvents, participantCommands, operationsCommands }).catch(() => {
+      handleApi(req, res, store, urlPath, {
+        auth,
+        access,
+        state,
+        publicEvents,
+        participantCommands,
+        operationsCommands,
+        domainCommands,
+      }).catch(() => {
         sendJson(res, 500, { error: '요청을 처리하지 못했습니다' });
       });
       return;
