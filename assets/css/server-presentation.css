@@ -83,3 +83,6 @@ body:has(#app > .attendee-site) #app{display:block;width:100%;min-width:0;height
    (assets/js/ui.js + .field-error) must toggle its text without resizing the
    field group, otherwise a corrected-value click can miss the moved button. */
 .access-page .od-field .field-error:empty{display:block;min-height:1.4rem;}
+.access-page .invite-identity .detail-grid{margin:0 0 var(--s4);}
+.access-page .invite-accept-form{margin:0 0 var(--s4);}
+.access-page .invite-access .detail-grid{margin:0;}

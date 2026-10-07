@@ -65,11 +65,11 @@ if(typeof originalInvitePage==='function')E.invitePage=()=>{
  if(!invitation){
   const state=E.ui?.connectionState||{};
   const message=state.message&&!['connected','login-required','preview','connecting'].includes(state.status||'')?state.message:'';
-  return E.accessPage('초대를 사용할 수 없습니다',message||'링크가 만료되었거나 철회되었습니다. 운영사 구성원에게 새 초대를 요청하세요.');
+  return E.accessPage('초대를 사용할 수 없습니다',(message||'링크가 만료되었거나 철회되었습니다.')+' 운영사 구성원에게 새 초대를 요청하세요.');
  }
  const role=invitation.role==='STAFF'?'현장 스태프':'운영사 구성원';
  const access=invitation.eventId?'초대에 지정된 행사':'행사는 수락 후 배정됩니다';
- return '<main class="access-page">'+E.head('팀 초대 수락','초대 역할과 접근 범위를 확인하세요.','','EVENTOUCH')+E.panel('초대 정보',E.detail([['이름',invitation.name],['이메일',invitation.email],['제품 역할',role],['접근 범위',access],['만료',E.date(invitation.expiresAt)]])+E.notice('비밀번호를 8자 이상으로 설정하면 초대가 수락되고 이 계정으로 로그인합니다. 실제 이메일은 발송되지 않습니다.')+'<form data-form="accept-invite-server" novalidate class="od-stack"><div class="error-summary" role="alert"></div>'+E.field('비밀번호 설정 *','password','','password','required minlength="8" autocomplete="new-password"')+E.submit('초대 수락')+'</form>')+'</main>';
+ return '<main class="access-page">'+E.head('팀 초대 수락','초대 역할과 접근 범위를 확인하세요.','','EVENTOUCH')+E.panel('초대 정보','<div class="invite-identity">'+E.detail([['이름',invitation.name],['제품 역할',role]])+'</div>'+'<form data-form="accept-invite-server" novalidate class="od-stack invite-accept-form"><div class="error-summary" role="alert"></div>'+E.field('비밀번호 설정 *','password','','password','required minlength="8" autocomplete="new-password"')+E.submit('초대 수락')+'</form>'+'<div class="invite-access">'+E.detail([['이메일',invitation.email],['접근 범위',access],['만료',E.date(invitation.expiresAt)]])+'</div>'+E.notice('비밀번호를 8자 이상으로 설정하면 초대가 수락되고 이 계정으로 로그인합니다. 실제 이메일은 발송되지 않습니다.'))+'</main>';
 };
 
 E.forms=E.forms||{};

@@ -17,6 +17,9 @@
 @media(max-width:768px){.page-head{display:block;margin-bottom:var(--s5)}.page-head>.actions{margin-top:var(--s4)}.form-grid{grid-template-columns:1fr}.form-grid .wide{grid-column:auto}.panel{padding:var(--s4)}.image-list{grid-template-columns:repeat(2,minmax(0,1fr))}.detail-grid{grid-template-columns:1fr}.overlay{padding:var(--s4)}}
 @media(max-width:375px){.metrics{gap:var(--s2)}.btn{padding-inline:var(--s3)}.image-list{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
+
+/* Keep desktop workspace toasts clear of the full-width workspace footer. */
+@media(min-width:769px){body:has(.admin-shell) .toast{left:auto;right:var(--s4);transform:none;max-width:min(280px,calc(100% - 32px));}}
 @media print{body{background:var(--paper)!important}.sidebar,.topbar,.page-head>.actions,.tabs,.toolbar,.toast,.overlay,.no-print{display:none!important}.admin-shell{display:block!important}.content{padding:0!important;max-width:none!important}.panel{box-shadow:none;break-inside:avoid}.print-only{display:block}.phone-frame{box-shadow:none!important;background:none!important}.print-label{width:90mm;padding:8mm;border:1px solid var(--line)}.print-label h1{font-size:24pt}.report-page{page-break-after:always}}
 
 /* Complete product states and responsive data layouts. */

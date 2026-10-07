@@ -79,6 +79,11 @@ test('server invite page renders token-free metadata with a password acceptance 
   assert.match(html, /data-form="accept-invite-server"/);
   assert.match(html, /name="password"/);
   assert.match(html, /minlength="8"/);
+  assert.ok(html.indexOf('invite-identity') < html.indexOf('invite-accept-form'));
+  assert.ok(html.indexOf('invite-accept-form') < html.indexOf('invite-access'));
+  assert.match(html, /invite-identity[\s\S]*이름[\s\S]*초대 대상[\s\S]*제품 역할[\s\S]*운영사 구성원/);
+  assert.match(html, /invite-accept-form[\s\S]*name="password"[\s\S]*초대 수락/);
+  assert.match(html, /class="invite-access"[\s\S]*접근 범위[\s\S]*만료/);
   assert.doesNotMatch(html, /이 브라우저의 초대 체험/);
   E.state = { invitations: [] };
   assert.match(E.invitePage(), /사용할 수 없습니다/);
@@ -89,7 +94,10 @@ test('server invite page surfaces the expired or revoked message from the lookup
     route: { scope: 'invite', page: 'invite', token: INVITE_TOKEN },
   });
   E.state = { invitations: [] };
-  assert.match(E.invitePage(), /INVITE_EXPIRED_SENTINEL/);
+  const html = E.invitePage();
+  assert.match(html, /INVITE_EXPIRED_SENTINEL/);
+  assert.match(html, /새 초대/);
+  assert.match(html, /운영사 구성원/);
 });
 
 test('invite acceptance requires a password and routes by the accepted role', async () => {
