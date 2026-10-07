@@ -14,7 +14,7 @@ const { createHttpServer } = require('../../server/server');
 const databaseUrl = testDatabaseUrl();
 const testPasswordHash = hashPassword('not-a-real-test-password');
 
-async function startApiHarness() {
+async function startApiHarness({ storageDir } = {}) {
   if (!databaseUrl) throw new Error('EVENTOUCH_TEST_DATABASE_URL is required');
   const schema = `eventouch_api_test_${crypto.randomUUID().replace(/-/g, '')}`;
   const adminDatabase = createDatabase({ connectionString: databaseUrl });
@@ -31,7 +31,7 @@ async function startApiHarness() {
     await database.migrate();
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'eventouch-api-test-'));
     const auth = createDatabaseAuth(database);
-    server = createHttpServer(openStore(dataDir), auth, createAccess(database), database);
+    server = createHttpServer(openStore(dataDir), auth, createAccess(database), database, { storageDir: storageDir || path.join(dataDir, 'storage') });
 
     await new Promise((resolve, reject) => {
       server.once('error', reject);
@@ -43,6 +43,16 @@ async function startApiHarness() {
       database,
       auth,
       baseUrl: `http://127.0.0.1:${address.port}`,
+      async restartHttp() {
+        server.closeAllConnections();
+        await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+        server = createHttpServer(openStore(dataDir), auth, createAccess(database), database,
+          { storageDir: storageDir || path.join(dataDir, 'storage') });
+        await new Promise((resolve, reject) => {
+          server.once('error', reject);
+          server.listen(address.port, '127.0.0.1', resolve);
+        });
+      },
       async close() {
         server.closeAllConnections();
         try {

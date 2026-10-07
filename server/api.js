@@ -979,7 +979,7 @@ function bearerToken(header) {
 }
 
 async function handleApi(req, res, store, urlPath, security = {}) {
-  const { auth, access, state, publicEvents, participantCommands, operationsCommands, domainCommands } = security;
+  const { auth, access, state, publicEvents, participantCommands, operationsCommands, domainCommands, files } = security;
   const parts = urlPath.split('/').filter(Boolean);
   if (parts[0] !== 'api') return sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
 
@@ -998,6 +998,14 @@ async function handleApi(req, res, store, urlPath, security = {}) {
 
   if (parts[1] === 'public') {
     res.setHeader('cache-control', 'no-store');
+    if (req.method === 'GET' && parts[2] === 'events' && parts[4] === 'files' && parts.length === 6 && files) {
+      try {
+        const file = await files.readPublic({slug:decodedSegment(parts[3]),fileId:decodedSegment(parts[5])});
+        res.writeHead(200, {'content-type':file.type,'content-length':file.size,'x-content-type-options':'nosniff'});
+        fs.createReadStream(file.absolutePath).on('error', () => res.destroy()).pipe(res);
+        return;
+      } catch (error) { return err(res,error.status || 500,error.status ? error.message : '파일을 읽지 못했습니다'); }
+    }
     if (req.method !== 'GET' || !publicEvents) {
       return err(res, publicEvents ? 404 : 503, publicEvents ? '요청한 API를 찾을 수 없습니다' : '데이터베이스를 사용할 수 없습니다');
     }
@@ -1021,6 +1029,39 @@ async function handleApi(req, res, store, urlPath, security = {}) {
   }
 
   // Raw octet uploads bypass the JSON body reader.
+  if (parts[1] === 'events' && parts[3] === 'files' && files &&
+      ((req.method === 'POST' && parts.length === 4) || (req.method === 'GET' && parts.length === 5))) {
+    res.setHeader('cache-control','no-store');
+    try {
+      const account = await requireUser(auth,req);
+      const eventId = decodedSegment(parts[2]);
+      await access.authorize({account,eventId,command:req.method === 'POST' ? 'file.upload' : 'file.read'});
+      if (req.method === 'GET') {
+        const file = await files.readOperator({account,eventId,fileId:decodedSegment(parts[4])});
+        res.writeHead(200,{'content-type':file.type,'content-length':file.size,'x-content-type-options':'nosniff'});
+        fs.createReadStream(file.absolutePath).on('error', () => res.destroy()).pipe(res);
+        return;
+      }
+      const params = new URL(req.url,'http://localhost').searchParams;
+      const bytes = await new Promise((resolve,reject) => {
+        const chunks = []; let size = 0, rejected = false;
+        req.on('data',chunk => {
+          if (rejected) return;
+          size += chunk.length;
+          if (size > MAX_FILE_BYTES) {
+            rejected = true; chunks.length = 0;
+            reject(Object.assign(new Error('파일이 너무 큽니다'),{status:413}));
+          } else chunks.push(chunk);
+        });
+        req.on('end',() => { if (!rejected) resolve(Buffer.concat(chunks)); });
+        req.on('error',reject);
+        req.on('aborted',() => reject(Object.assign(new Error('업로드가 중단되었습니다'),{status:400})));
+      });
+      const result = await files.upload({account,eventId,commandId:params.get('commandId'),name:params.get('name'),
+        contentType:String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase(),bytes});
+      return sendJson(res,result.replayed ? 200 : 201,{file:result.file});
+    } catch (error) { return err(res,error.status || 500,error.status ? error.message : '파일을 저장하지 못했습니다'); }
+  }
   if (req.method === 'POST' && parts[1] === 'events' && parts[3] === 'files' && parts.length === 4) {
     try {
       ensureSeedData(store);
@@ -1042,14 +1083,19 @@ async function handleApi(req, res, store, urlPath, security = {}) {
   try {
     if (parts[1] === 'events' && parts.length === 2 && req.method === 'GET' && state) {
       const account = await requireUser(auth, req);
-      if (String(account.role).toUpperCase() !== 'AGENCY') {
-        const projection = await state.loadBootstrap(account);
-        res.setHeader('cache-control', 'no-store');
-        return sendJson(res, 200, {
-          events: projection.events,
-          activeEventId: projection.activeEventId,
-        });
-      }
+      const projection = await state.loadBootstrap(account);
+      res.setHeader('cache-control', 'no-store');
+      return sendJson(res, 200, {
+        events: projection.events,
+        activeEventId: projection.activeEventId,
+      });
+    }
+
+    if (parts[1] === 'events' && parts.length === 2 && req.method === 'POST' && state) {
+      const account = await requireUser(auth, req);
+      res.setHeader('cache-control', 'no-store');
+      const result = await state.createEvent(account, body);
+      return sendJson(res, result.replayed ? 200 : 201, { event: result.event });
     }
 
     if (parts[1] === 'events' && parts.length === 4 && parts[3] === 'signup') {
@@ -1065,13 +1111,6 @@ async function handleApi(req, res, store, urlPath, security = {}) {
         const result = await participantCommands.signup({ slug, commandId: body.commandId, input: body });
         return sendJson(res, result.status, result.body);
       } catch (error) {
-        // Keep the old numeric demo IDs working until the v9 client has moved to the PostgreSQL API.
-        if (error.code === 'EVENT_NOT_FOUND' && /^evt-\d+$/.test(slug)) {
-          ensureSeedData(store);
-          if (readEvents(store).items.some((event) => event && event.id === slug)) {
-            return await handleEvents(req, res, store, [slug, 'signup'], body, auth, access);
-          }
-        }
         return err(res, error.status || 500, error.message || '요청을 처리하지 못했습니다', error.field);
       }
     }
@@ -1193,6 +1232,10 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       return sendJson(res, 200, { summary: agencySummary(readEvents(store)) });
     }
     if (parts[1] === 'events') {
+      if (state && !(req.method === 'GET' && parts.length === 5 && parts[3] === 'files')) {
+        await requireUser(auth, req);
+        return err(res, 410, '이전 저장 API는 종료되었습니다. 서버 행사 명령 API를 사용하세요');
+      }
       return await handleEvents(req, res, store, parts.slice(2), body, auth, access);
     }
     return sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });

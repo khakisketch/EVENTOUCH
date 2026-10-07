@@ -5,11 +5,13 @@ const { normalizeEvent, normalizeWorkspace } = require('../state');
 const preparation = require('./preparation');
 const engagement = require('./engagement');
 const contentResults = require('./content-results');
+const boothMap = require('./booth-map');
 
 const COMMANDS = new Set([
   ...preparation.COMMANDS,
   ...engagement.COMMANDS,
   ...contentResults.COMMANDS,
+  ...boothMap.COMMANDS,
 ]);
 
 const GUEST_COMMANDS = new Set([
@@ -115,7 +117,7 @@ async function resolveStoredFile(client, input, { eventId, contentTypes, maxByte
   const id = clean(source.fileId || source.id, 160);
   if (!id) throw failure(400, '업로드된 파일을 선택하세요', 'fileId');
   const result = await client.query(
-    `SELECT id, original_name, content_type, size_bytes
+    `SELECT id, original_name, content_type, size_bytes, width_px, height_px
      FROM stored_files WHERE id = $1 AND event_id = $2 LIMIT 1`,
     [id, String(eventId)]
   );
@@ -130,6 +132,7 @@ async function resolveStoredFile(client, input, { eventId, contentTypes, maxByte
     name: String(row.original_name),
     type: String(row.content_type),
     size,
+    ...(row.width_px && row.height_px ? {width:row.width_px,height:row.height_px} : {}),
   };
 }
 
@@ -231,7 +234,9 @@ function createDomainCommands(database) {
       if (String(event.stage).toUpperCase() === 'ARCHIVED') {
         throw failure(409, '보관된 행사는 변경할 수 없습니다');
       }
-      const result = preparation.COMMANDS.has(command)
+      const result = boothMap.COMMANDS.has(command)
+        ? await boothMap.apply(ctx)
+        : preparation.COMMANDS.has(command)
         ? await preparation.apply(ctx)
         : engagement.COMMANDS.has(command)
           ? await engagement.apply(ctx)
@@ -245,13 +250,25 @@ function createDomainCommands(database) {
         [event.id, JSON.stringify(workspace)]
       );
       if (result.eventChanged) {
-        await client.query(
-          `UPDATE events
-           SET slug = $2, client_id = $3, payload = $4::jsonb,
-               revision = revision + 1, updated_at = now()
-           WHERE id = $1`,
-          [event.id, event.slug, event.clientId, JSON.stringify(serializableEvent(event))]
-        );
+        try {
+          await client.query(
+            `UPDATE events
+             SET slug = $2, client_id = $3, payload = $4::jsonb,
+                 revision = revision + 1, updated_at = now()
+             WHERE id = $1`,
+            [event.id, event.slug, event.clientId, JSON.stringify(serializableEvent(event))]
+          );
+        } catch (error) {
+          // Concurrent settings updates on different events pass the
+          // pre-check SELECT together (per-event row locks do not serialize
+          // a shared slug), so the UNIQUE(slug) constraint is the arbiter.
+          // Translate it to the same 409 contract as the pre-check instead
+          // of leaking a raw database error as 500.
+          if (error && error.code === '23505') {
+            throw failure(409, '이미 사용 중인 행사 주소 코드입니다', 'slug');
+          }
+          throw error;
+        }
       }
       const response = result.body || {};
       await client.query(

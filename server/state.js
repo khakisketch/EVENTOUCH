@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('node:crypto');
 const { publicWorkspace } = require('./public-events');
 
 const ROLES = new Set(['AGENCY', 'MANAGER', 'STAFF']);
@@ -25,6 +26,24 @@ function denied() {
   return Object.assign(new Error('로그인이 필요합니다'), { status: 401 });
 }
 
+function rejected(status, message, field) {
+  const error = new Error(message);
+  error.status = status;
+  if (field) error.field = field;
+  return error;
+}
+
+function validDate(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (year < 1 || month < 1 || month > 12 || day < 1) return false;
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  return day <= [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+}
+
 function emptyWorkspace() {
   return {
     participants: [],
@@ -46,6 +65,7 @@ function emptyWorkspace() {
     groups: ['일반', 'VIP', '스태프'],
     desks: [],
     booths: [],
+    boothMap: { draft: null, published: null },
     assignments: [],
     checks: [],
     visits: [],
@@ -114,6 +134,7 @@ function normalizeWorkspace(value) {
   workspace.venue = { ...defaults.venue, ...object(source.venue) };
   workspace.branding = { ...defaults.branding, ...object(source.branding) };
   workspace.display = { ...defaults.display, ...object(source.display) };
+  workspace.boothMap = { draft: null, published: null, ...object(source.boothMap) };
   return workspace;
 }
 
@@ -135,6 +156,101 @@ function accountProjection(row, fullOrganization) {
 }
 
 function createState(database) {
+  async function createEvent(account, input = {}) {
+    const idempotencyKey = String(input.commandId || '').trim();
+    if (!/^[A-Za-z0-9_-]{8,128}$/.test(idempotencyKey)) {
+      throw rejected(400, '요청 식별자를 확인하세요', 'commandId');
+    }
+
+    const name = String(input.name || '').trim();
+    const slug = String(input.slug || '').trim();
+    const eventDate = String(input.date || '').trim();
+    const start = String(input.start || '').trim();
+    const end = String(input.end || '').trim();
+    const capacity = Number(input.capacity);
+    const clientId = input.clientId == null || input.clientId === '' ? null : String(input.clientId).trim();
+    if (!name || name.length > 100) throw rejected(400, '행사명을 1~100자로 입력하세요', 'name');
+    if (!/^[a-z0-9][a-z0-9-]{0,49}$/.test(slug)) throw rejected(400, '행사 주소 코드를 확인하세요', 'slug');
+    if (!validDate(eventDate)) throw rejected(400, '행사 날짜 형식이 올바르지 않습니다', 'date');
+    if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(start) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(end) || start >= end) {
+      throw rejected(400, '종료 시간은 시작 시간보다 늦어야 합니다', 'end');
+    }
+    if (!Number.isSafeInteger(capacity) || capacity < 0) throw rejected(400, '정원은 0 이상의 정수로 입력하세요', 'capacity');
+    if (clientId && clientId.length > 160) throw rejected(400, '고객사를 확인하세요', 'clientId');
+
+    const request = { name, slug, date: eventDate, start, end, capacity, clientId };
+    try {
+      return await database.transaction(async (client) => {
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [idempotencyKey]);
+        const accountResult = await client.query(
+          'SELECT role, active FROM accounts WHERE id = $1 LIMIT 1 FOR SHARE',
+          [String(account && account.id || '')]
+        );
+        const actor = accountResult.rows[0];
+        if (!actor || actor.active !== true || !ROLES.has(actor.role)) throw denied();
+        if (actor.role !== 'AGENCY') throw rejected(403, '행사 생성 권한을 확인하세요');
+
+        const receiptResult = await client.query(
+          'SELECT event_id, actor_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1 FOR UPDATE',
+          [idempotencyKey]
+        );
+        if (receiptResult.rowCount) {
+          const receipt = receiptResult.rows[0];
+          const stored = object(receipt.result);
+          const storedRequest = object(stored.request);
+          const sameRequest = Object.keys(storedRequest).length === Object.keys(request).length &&
+            Object.entries(request).every(([key, value]) => storedRequest[key] === value);
+          if (String(receipt.actor_id || '') !== String(account.id) || stored.command !== 'event.create' ||
+              !sameRequest || !stored.response?.event ||
+              String(receipt.event_id || '') !== String(stored.response.event.id)) {
+            throw rejected(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+          }
+          return { event: copy(stored.response.event), replayed: true };
+        }
+
+        if (clientId) {
+          const clientResult = await client.query('SELECT 1 FROM clients WHERE id = $1 LIMIT 1', [clientId]);
+          if (!clientResult.rowCount) throw rejected(400, '고객사를 확인하세요', 'clientId');
+        }
+        const duplicateSlug = await client.query('SELECT 1 FROM events WHERE slug = $1 LIMIT 1', [slug]);
+        if (duplicateSlug.rowCount) throw rejected(409, '행사 주소 코드가 이미 사용 중입니다', 'slug');
+
+        const eventId = `event-${crypto.randomUUID()}`;
+        const payload = {
+          id: eventId,
+          name,
+          slug,
+          clientId,
+          date: eventDate,
+          start,
+          end,
+          capacity,
+          stage: 'DRAFT',
+          features: [],
+        };
+        const event = normalizeEvent({ id: eventId, slug, client_id: clientId, payload, revision: 0 });
+        await client.query(
+          'INSERT INTO events (id, slug, client_id, payload) VALUES ($1, $2, $3, $4::jsonb)',
+          [eventId, slug, clientId, JSON.stringify(payload)]
+        );
+        await client.query(
+          'INSERT INTO event_workspaces (event_id, payload) VALUES ($1, $2::jsonb)',
+          [eventId, JSON.stringify(emptyWorkspace())]
+        );
+        const response = { event };
+        await client.query(
+          `INSERT INTO command_receipts (command_id, event_id, actor_id, result)
+           VALUES ($1, $2, $3, $4::jsonb)`,
+          [idempotencyKey, eventId, account.id, JSON.stringify({ command: 'event.create', request, response })]
+        );
+        return { event, replayed: false };
+      });
+    } catch (error) {
+      if (error && error.code === '23505') throw rejected(409, '행사 주소 코드가 이미 사용 중입니다', 'slug');
+      throw error;
+    }
+  }
+
   async function loadBootstrap(account) {
     const accountId = account && typeof account.id === 'string' ? account.id.trim() : '';
     if (!accountId) throw denied();
@@ -341,7 +457,7 @@ function createState(database) {
     });
   }
 
-  return { loadBootstrap };
+  return { loadBootstrap, createEvent };
 }
 
 module.exports = { createState, emptyWorkspace, normalizeEvent, normalizeWorkspace, projectParticipant };

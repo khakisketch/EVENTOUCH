@@ -1,123 +1,86 @@
+'use strict';
 const { test: nodeTest, before, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { spawn } = require('node:child_process');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
-const { createDatabase } = require('../server/db');
-const { testDatabaseUrl } = require('./helpers/postgres-test.cjs');
-
-const PORT = 18779;
-const BASE = `http://127.0.0.1:${PORT}`;
-const ADMIN_EMAIL = 'eventouch-auth-admin@example.test';
-const databaseUrl = testDatabaseUrl();
-const test = databaseUrl
-  ? nodeTest
-  : (name, fn) => nodeTest(name, { skip: 'set EVENTOUCH_TEST_DATABASE_URL to an isolated PostgreSQL test database' }, fn);
-let child = null;
-let dataDir = null;
-let storageDir = null;
-let adminCookie = '';
-let db = null;
-
-async function waitForHealth() {
-  for (let i = 0; i < 50; i += 1) {
-    try {
-      const res = await fetch(`${BASE}/api/health`);
-      if (res.ok) return;
-    } catch (err) {}
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  throw new Error('server did not start');
-}
-
+const { databaseUrl, startApiHarness, insertAccount, insertEvent, insertMembership, sessionCookie, requestJson } = require('./helpers/postgres-api-server.cjs');
+const { floorplanPng } = require('./helpers/floorplan-image.cjs');
+const test = databaseUrl ? nodeTest : (name, fn) => nodeTest(name, {skip:'isolated PostgreSQL required'}, fn);
+let h, cookie, staffCookie, managerCookie, storageDir;
+const png = floorplanPng();
 before(async () => {
   if (!databaseUrl) return;
-  db = createDatabase({ connectionString: databaseUrl });
-  await db.migrate();
-  dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'etko-files-data-'));
-  storageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'etko-files-store-'));
-  child = spawn(process.execPath, ['server/server.js'], {
-    cwd: __dirname + '/..',
-    env: {
-      ...process.env,
-      PORT: String(PORT),
-      DATA_DIR: dataDir,
-      STORAGE_DIR: storageDir,
-      DATABASE_URL: databaseUrl,
-      ADMIN_EMAIL,
-      ADMIN_PASSWORD: 'admin-test-pw',
-    },
-    stdio: 'ignore',
+  storageDir = fs.mkdtempSync('/tmp/opencode/eventouch-files-');
+  h = await startApiHarness({ storageDir });
+  for (const [id, role] of [['agency','AGENCY'], ['staff','STAFF'], ['manager','MANAGER']])
+    await insertAccount(h.database, {id, role, name:id, email:`${id}@example.test`});
+  for (const id of ['event-a','event-b']) await insertEvent(h.database, {
+    id, slug:id, payload:{id, slug:id, stage:'LIVE', features:['stamp']}, workspace:{}
   });
-  await waitForHealth();
-  const res = await fetch(`${BASE}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email: ADMIN_EMAIL, password: 'admin-test-pw' }),
-  });
-  assert.equal(res.status, 200);
-  const match = /etko_session=([^;]+)/.exec(res.headers.get('set-cookie') || '');
-  assert.ok(match, 'admin login must work');
-  adminCookie = `etko_session=${match[1]}`;
+  await insertMembership(h.database, 'manager', 'event-a');
+  cookie = await sessionCookie(h, 'agency'); staffCookie = await sessionCookie(h, 'staff');
+  managerCookie = await sessionCookie(h, 'manager');
 });
-
-after(async () => {
-  if (child && child.exitCode === null) {
-    const exited = new Promise((resolve) => child.once('exit', resolve));
-    child.kill();
-    await exited;
-  }
-  if (db) await db.close();
-  if (dataDir) fs.rmSync(dataDir, { recursive: true, force: true });
-  if (storageDir) fs.rmSync(storageDir, { recursive: true, force: true });
-});
-
-async function upload(eventId, name, buffer, type, cookie) {
-  return fetch(`${BASE}/api/events/${eventId}/files?name=${encodeURIComponent(name)}`, {
-    method: 'POST',
-    headers: { 'content-type': type, ...(cookie ? { cookie } : {}) },
-    body: buffer,
+after(async () => { if (h) await h.close(); if (storageDir) fs.rmSync(storageDir,{recursive:true,force:true}); });
+async function upload({eventId='event-a', name='floorplan.png', bytes=png, type='image/png', actor=cookie, commandId=crypto.randomUUID()} = {}) {
+  const res = await fetch(`${h.baseUrl}/api/events/${eventId}/files?name=${encodeURIComponent(name)}&commandId=${encodeURIComponent(commandId)}`, {
+    method:'POST', headers:{'content-type':type, ...(actor ? {cookie:actor}: {})}, body:bytes
   });
+  return {status:res.status, json:await res.json()};
 }
-
-test('upload-roundtrip', async () => {
-  const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 1, 2, 3]);
-  const up = await upload('evt-1', 'qr.png', png, 'image/png', adminCookie);
-  assert.equal(up.status, 201);
-  const meta = await up.json();
-  assert.ok(meta.file && meta.file.key, 'upload must return a key');
-  assert.ok(!meta.file.key.includes('..'), 'key must be traversal-free');
-  const down = await fetch(`${BASE}/api/events/evt-1/files/${encodeURIComponent(meta.file.name)}`, {
-    headers: { cookie: adminCookie },
-  });
-  assert.equal(down.status, 200);
-  assert.equal(down.headers.get('content-type'), 'image/png');
-  assert.deepEqual(Buffer.from(await down.arrayBuffer()), png);
+test('map image upload is event-scoped PostgreSQL metadata with server dimensions', async () => {
+  const up = await upload(); assert.equal(up.status,201);
+  assert.deepEqual(up.json.file, {fileId:up.json.file.fileId,name:'floorplan.png',type:'image/png',size:png.length,width:320,height:200});
+  const row = await h.database.query('SELECT * FROM stored_files WHERE id=$1',[up.json.file.fileId]);
+  assert.equal(row.rows[0].event_id,'event-a'); assert.equal(row.rows[0].width_px,320);
+  const res = await fetch(`${h.baseUrl}/api/events/event-a/files/${up.json.file.fileId}`,{headers:{cookie}});
+  assert.equal(res.status,200); assert.equal(res.headers.get('content-type'),'image/png');
+  assert.deepEqual(Buffer.from(await res.arrayBuffer()),png);
+  const other = await requestJson(h.baseUrl,`/api/events/event-b/files/${up.json.file.fileId}`,{cookie});
+  assert.equal(other.status,404);
 });
-
-test('upload-rejects-oversize', async () => {
-  const big = Buffer.alloc(9 * 1024 * 1024, 1);
-  const up = await upload('evt-1', 'big.png', big, 'image/png', adminCookie);
-  assert.equal(up.status, 413);
-});
-
-test('upload-rejects-traversal', async () => {
-  const png = Buffer.from([1, 2, 3]);
-  const up = await upload('evt-1', '../../evil.png', png, 'image/png', adminCookie);
-  assert.ok([400, 201].includes(up.status));
-  if (up.status === 201) {
-    const meta = await up.json();
-    assert.ok(!meta.file.key.includes('..'), 'stored key must stay inside storage');
-    const stored = path.join(storageDir, meta.file.key);
-    assert.ok(
-      path.normalize(stored).startsWith(path.normalize(storageDir) + path.sep),
-      'file must land inside STORAGE_DIR'
-    );
+test('unreferenced and draft-only files cannot be read publicly or across events', async () => {
+  const up = await upload(); assert.equal(up.status,201);
+  await h.database.query("UPDATE event_workspaces SET payload=$1::jsonb WHERE event_id='event-a'",[JSON.stringify({boothMap:{draft:{image:up.json.file}}})]);
+  for (const slug of ['event-a','event-b']) {
+    const read = await requestJson(h.baseUrl,`/api/public/events/${slug}/files/${up.json.file.fileId}`);
+    assert.equal(read.status,404);
   }
 });
-
-test('download-needs-session', async () => {
-  const down = await fetch(`${BASE}/api/events/evt-1/files/nope.png`);
-  assert.equal(down.status, 401);
+test('public reads allow only actual published content and stop after unpublication', async () => {
+  const up = await upload(); assert.equal(up.status,201);
+  await h.database.query("UPDATE event_workspaces SET payload=$1::jsonb WHERE event_id='event-a'",[JSON.stringify({pageExperience:{published:{logo:up.json.file}}})]);
+  const read = await fetch(`${h.baseUrl}/api/public/events/event-a/files/${up.json.file.fileId}`);
+  assert.equal(read.status,200); assert.deepEqual(Buffer.from(await read.arrayBuffer()),png);
+  await h.database.query("UPDATE event_workspaces SET payload='{}'::jsonb WHERE event_id='event-a'");
+  assert.equal((await requestJson(h.baseUrl,`/api/public/events/event-a/files/${up.json.file.fileId}`)).status,404);
+});
+test('staff and unauthenticated file writes/reads are denied and managers are event-bound', async () => {
+  assert.equal((await upload({actor:staffCookie})).status,403);
+  assert.equal((await upload({actor:''})).status,401);
+  assert.equal((await upload({actor:managerCookie,eventId:'event-b'})).status,403);
+  const up = await upload({actor:managerCookie}); assert.equal(up.status,201);
+  for (const [actor,want] of [[staffCookie,403],['',401]])
+    assert.equal((await requestJson(h.baseUrl,`/api/events/event-a/files/${up.json.file.fileId}`,{cookie:actor})).status,want);
+});
+test('same upload command replays once and rejects changed content, event or actor', async () => {
+  const commandId = crypto.randomUUID();
+  const [a,b] = await Promise.all([upload({commandId}),upload({commandId})]);
+  assert.deepEqual([a.status,b.status].sort(),[200,201]); assert.deepEqual(a.json,b.json);
+  const count = await h.database.query('SELECT count(*)::int AS n FROM stored_files WHERE id=$1',[a.json.file.fileId]);
+  assert.equal(count.rows[0].n,1);
+  for (const changed of [{name:'different.png'},{eventId:'event-b'},{actor:managerCookie},{bytes:floorplanPng(10,10)}])
+    assert.equal((await upload({...changed,commandId})).status,409);
+});
+test('malformed uploads create no metadata or leftover bytes', async () => {
+  const beforeRows = (await h.database.query('SELECT count(*)::int AS n FROM stored_files')).rows[0].n;
+  const beforeFiles = fs.readdirSync(storageDir).sort();
+  for (const [input,want] of [
+    [{name:'../../evil.png'},400], [{bytes:Buffer.from('not a png')},400],
+    [{bytes:png,type:'image/jpeg'},400], [{bytes:Buffer.alloc(9*1024*1024)},413],
+    [{commandId:''},400], [{eventId:'missing-event'},404]
+  ]) assert.equal((await upload(input)).status,want);
+  assert.equal((await h.database.query('SELECT count(*)::int AS n FROM stored_files')).rows[0].n,beforeRows);
+  assert.deepEqual(fs.readdirSync(storageDir).sort(),beforeFiles);
 });

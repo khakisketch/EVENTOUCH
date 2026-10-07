@@ -160,7 +160,7 @@ integration('postgres-concurrent-first-migrations-serialize', { timeout: 15000 }
     assert.equal(failures.length, 0, failures.map((outcome) => outcome.reason.message).join('\n'));
     assert.deepEqual(
       outcomes.map((outcome) => outcome.value).sort((a, b) => a.length - b.length),
-      [[], ['001_initial.sql']]
+      [[], ['001_initial.sql', '002_stored-file-dimensions.sql']]
     );
   } finally {
     await Promise.all([scopedFirst.close(), scopedSecond.close()]);

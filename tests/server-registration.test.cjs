@@ -400,14 +400,13 @@ test('concurrent-operator-retries-with-one-command-id-create-a-single-participan
   assert.ok(!JSON.stringify(receipt.rows[0].result).includes(responses[0].json.participant.ticket));
 });
 
-test('numeric-demo-signup-falls-back-only-when-no-postgresql-event-matches', async () => {
+test('numeric-demo-signup-does-not-fall-back-when-no-postgresql-event-matches', async () => {
   const response = await publicSignup('evt-1', {
     name: '기존 데모 신청자', phone: '01012349999',
   });
 
-  assert.equal(response.status, 201, JSON.stringify(response.json));
-  assert.equal(response.json.participant.name, '기존 데모 신청자');
-  assert.match(response.json.participant.id, /^p\d+$/);
+  assert.equal(response.status, 404, JSON.stringify(response.json));
+  assert.equal(response.json.participant, undefined);
   const databaseMatch = await harness.database.query('SELECT 1 FROM events WHERE slug = $1', ['evt-1']);
   assert.equal(databaseMatch.rowCount, 0);
 });

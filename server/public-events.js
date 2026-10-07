@@ -274,6 +274,7 @@ function publicWorkspace(value, event, participant = null) {
     groups: [],
     desks,
     booths,
+    ...(allowedFeatures.has('stamp') ? {boothMap:{published:publicBoothMap(source.boothMap,booths)}} : {}),
     assignments: [],
     checks: [],
     visits: own(source.visits).map((item) => pick(item, ['id', 'boothId', 'participantId', 'at'])),
@@ -298,6 +299,22 @@ function publicWorkspace(value, event, participant = null) {
     price: Math.max(0, Number(source.price) || 0),
   };
   return workspace;
+}
+
+function publicBoothMap(value,booths) {
+  const published = object(object(value).published);
+  const image = publicImage(published.image);
+  const sourceImage = object(published.image);
+  if (!image || !image.fileId || !Number.isSafeInteger(published.version) || published.version < 1 ||
+      !Number.isInteger(sourceImage.width) || !Number.isInteger(sourceImage.height) ||
+      sourceImage.width < 1 || sourceImage.height < 1 || sourceImage.width > 10000 || sourceImage.height > 10000) return null;
+  const ids = new Set(booths.map(b => b.id)); const seen = new Set();
+  const points = array(published.points).filter(p => {
+    if (!p || !ids.has(p.boothId) || seen.has(p.boothId) || typeof p.x !== 'number' || typeof p.y !== 'number' ||
+        !Number.isFinite(p.x) || !Number.isFinite(p.y) || p.x < 0 || p.x > 1 || p.y < 0 || p.y > 1) return false;
+    seen.add(p.boothId); return true;
+  }).map(p => ({boothId:p.boothId,x:p.x,y:p.y}));
+  return {version:published.version,image:{...image,width:sourceImage.width,height:sourceImage.height},points,publishedAt:text(published.publishedAt,64)};
 }
 
 function validParticipant(participant, token, now) {
