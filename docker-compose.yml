@@ -1,11 +1,31 @@
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-eventouch}
+      POSTGRES_USER: ${POSTGRES_USER:-eventouch}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD을 설정하세요}
+    volumes:
+      - eventouch-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
   eventouch:
     build: .
+    depends_on:
+      db:
+        condition: service_healthy
     # HOST_PORT:container 8776. 컨테이너 내부는 항상 8776.
     ports:
       - "${HOST_PORT:-8776}:8776"
     environment:
       PORT: 8776
+      DATABASE_URL: postgresql://${POSTGRES_USER:-eventouch}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD을 설정하세요}@db:5432/${POSTGRES_DB:-eventouch}
+      # JSON store is retained only to avoid discarding any pre-migration local data.
       DATA_DIR: /data/db
       STORAGE_DIR: /data/storage
       SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
@@ -19,5 +39,6 @@ services:
     restart: unless-stopped
 
 volumes:
+  eventouch-pgdata:
   etko-db:
   etko-storage:

@@ -56,4 +56,4 @@
 - 구현 계획: `docs/superpowers/plans/2026-10-07-eventouch-postgresql.md`.
 - 2026-10-07 승인: `pg` 단일 새 런타임 의존성 및 테스트 전용 임시 PostgreSQL Docker 컨테이너.
 - 시작 기준: `feat/eventouch-visual-system`의 `86b532d83ac3fa6e18b818936b2dd94f1965bb5d`에서 분기한 격리 작업공간.
-- 기준 테스트: `node --test tests/*.test.cjs` 58개 중 44 통과/14 실패. 실패는 구형 정적 문구 기대 2건과 아직 없는 `features/server-sync.js`를 참조하는 12건이다. 제품 요구와 대조해 변경 영향 범위 안에서 갱신한다.
+- 변경 전 기준 테스트: `node --test tests/*.test.cjs` 394개 중 52 통과/342 실패. Task 1 테스트 추가 후 실행은 401개 중 57 통과/342 실패/2 건너뜀(테스트 DB 미설정)이다. 다수 실패는 현재 v9에 없는 구형 `app.js`, `features/`, `styles/` 경로를 참조한다. 최종 검증에서 현재 제품 계약과 대조해 분류한다.

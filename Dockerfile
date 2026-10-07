@@ -1,11 +1,11 @@
 FROM node:24-alpine
 WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 COPY server/ ./server/
-COPY features/ ./features/
-COPY styles/ ./styles/
-COPY i18n/ ./i18n/
+COPY assets/ ./assets/
 COPY data/sample.json ./data/sample.json
-COPY index.html app.js ./
+COPY index.html ./index.html
 ENV PORT=8776 DATA_DIR=/data/db STORAGE_DIR=/data/storage
 EXPOSE 8776
 USER node

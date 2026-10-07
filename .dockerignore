@@ -1,6 +1,12 @@
 .git/
+.superpowers/
+.opencode/
+.worktrees/
 data/server/
 data/storage/
 .playwright-cli/
+.od-review/
+.od-skills/
+*.zip
 .env
 node_modules/

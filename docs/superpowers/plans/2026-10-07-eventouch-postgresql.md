@@ -43,13 +43,13 @@
 **Interfaces:**
 - Produces: `createDatabase({ connectionString, PoolClass? }) -> { pool, query(text, values), transaction(fn), migrate(), close() }`.
 - `transaction(fn)` checks out one PoolClient, runs BEGIN/COMMIT/ROLLBACK on that client, and always releases it. SQL uses parameterized values. `migrate()` applies numbered migrations transactionally and records applied versions.
-- Integration tests use `DATABASE_URL` pointing only at the approved temporary local test database; no production URL or real records.
+- Integration tests read only `EVENTOUCH_TEST_DATABASE_URL`; the helper permits loopback TCP or the task-scoped socket under `/tmp/opencode/eventouch-pg-test-*`, never the application `DATABASE_URL` or a remote host.
 
-- [ ] Write tests for DB health, migration idempotency, transaction commit/rollback, parameterized repository calls, and pool close.
-- [ ] Run the focused tests and confirm expected failure before implementation.
-- [ ] Add the single runtime dependency `pg`, migration runner, initial schema, and Compose test/production service definitions without starting production services.
-- [ ] Start only the approved disposable local PostgreSQL test container and run focused tests.
-- [ ] Commit as `feat: add PostgreSQL persistence foundation`.
+- [x] Write tests for DB health, migration idempotency, transaction commit/rollback, parameterized repository calls, and pool close.
+- [x] Run the focused tests and confirm expected failure before implementation.
+- [x] Add the single runtime dependency `pg`, migration runner, initial schema, and Compose test/production service definitions without starting production services.
+- [x] Start only the approved disposable local PostgreSQL test container and run focused tests.
+- [x] Commit as `feat: add PostgreSQL persistence foundation`.
 
 ### Task 2: Account authentication, sessions, and server permission checks
 
@@ -173,5 +173,6 @@
 - Base revision: `86b532d83ac3fa6e18b818936b2dd94f1965bb5d`.
 - Isolated workspace: `.worktrees/eventouch-postgres`, branch `feat/eventouch-postgres`.
 - The 2026-10-05 JSON/ETKO plan is historical and superseded by this plan; preserve it for history.
-- Baseline observed before changes: `node --test tests/*.test.cjs` → 44 pass, 14 fail. Keep baseline failures visible and fix/rewrite only tests whose contract is now stale, with equivalent coverage against the actual v9 paths.
+- Baseline before changes: `node --test tests/*.test.cjs` → 394 tests, 52 pass, 342 fail. A run after adding Task 1 tests reported 401 tests, 57 pass, 342 fail, 2 PostgreSQL tests skipped. Treat the failures as pre-existing until reconciled against current v9 contracts; do not silently count them as regressions.
 - PostgreSQL doc references: Context7 `/websites/node-postgres` for Pool, parameterized queries, and single-client transaction lifecycle.
+- Task 1 integration tests passed 7/7 against disposable PostgreSQL 16 with container networking disabled and a task-scoped Unix socket; the container and socket were cleaned up. The host Docker bridge is unavailable, so continue using only this isolated socket setup for local DB verification—never host networking or another project's database.
