@@ -123,7 +123,7 @@ async function sessionCookie(harness, accountId) {
 }
 
 async function requestJson(baseUrl, url, { cookie, bearer, method = 'GET', body } = {}) {
-  const headers = {};
+  const headers = { connection: 'close' };
   if (cookie) headers.cookie = cookie;
   if (bearer) headers.authorization = `Bearer ${bearer}`;
   if (body !== undefined) headers['content-type'] = 'application/json';

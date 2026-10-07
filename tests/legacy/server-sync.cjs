@@ -1,3 +1,7 @@
+// Historical ETKO/features transport characterization, superseded by the v9
+// tests/server-sync-client.test.cjs and actual PostgreSQL browser-flow checks.
+// Non-runnable text reference: original imports/startup paths remain unchanged.
+// Not a current product acceptance suite; do not silently re-enable JSON startup.
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');

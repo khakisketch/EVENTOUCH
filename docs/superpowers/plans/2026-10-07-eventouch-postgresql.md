@@ -147,9 +147,9 @@ Task 5 verification (2026-10-07): `tests/server-operations.test.cjs` → 15/15 p
 - Produces: existing v9 command families for event preparation/settings, notices/programs/venue/branding, polls/quizzes/Q&A/draw/survey/photo/board, messages in simulation-only mode, reports, and file metadata transitions.
 - Enforce feature gates, forward-only stage rules, one response per eligible participant, moderation, immutable published report snapshots, and no real message/payment side effects.
 
-- [ ] Test representative validation and permission cases for every command family, including closed/archived states, duplicate responses, draft visibility, report snapshot immutability, and SIMULATION_ONLY sends.
-- [ ] Implement the server command families without trusting front-end-only checks.
-- [ ] Run the full API domain tests; commit as `feat: add server-authoritative event commands`.
+- [x] Test representative validation and permission cases for every command family, including closed/archived states, duplicate responses, draft visibility, report snapshot immutability, and SIMULATION_ONLY sends.
+- [x] Implement the server command families without trusting front-end-only checks.
+- [x] Run the full API domain tests; commit as `feat: add server-authoritative event commands`.
 
 ### Task 7: Frontend server authority adapter
 
@@ -164,6 +164,8 @@ Task 5 verification (2026-10-07): `tests/server-operations.test.cjs` → 15/15 p
 - The existing `GET /api/events` collection returns the PostgreSQL role-scoped event list for MANAGER/STAFF; no client route may rely on JSON-file event/participant writes as authoritative data.
 - Server mode is explicit and cannot silently fall back to a writable local demo. Local demo is available only as clearly labeled preview mode and cannot be mistaken for shared operations.
 - Preserve existing route IDs, layout/brand, responsive behavior, focus handling, and CSV import. OpenDesign owns visual login/connection copy and rendered review/refinement using actual desktop/mobile and denied/loading states; Build changes only nonvisual transport/wiring. Use the current approved direction, no new visual redesign.
+
+Latest approved amendment (2026-10-07): user approved the proposed attendee browser-first event information + registration responsive WEB direction after rejecting app-like browser presentation. OpenDesign may structurally redesign only the attendee shell/home/signup/ticket composition within existing brand/routes/data/consent/ticket contracts; preserve organizer/staff presentation. Current attendee source refinement and distinct rendered review are recorded in the existing SDD ledger. This supersedes layout preservation for attendees, not API/feature/deployment scope.
 
 - [ ] Write transport tests for credentials, session bootstrap, server rejection, same-command retry, queue dedupe, and no local write in server mode; exercise event creation and participant writes through PostgreSQL-authoritative routes.
 - [ ] Run red tests, implement nonvisual adapter/wiring, commission compact OpenDesign copy/state refinement plus distinct rendered review, then run all current-v9 tests.

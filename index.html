@@ -67,6 +67,8 @@
 <link rel="stylesheet" href="assets/css/handheld.css?v=15">
 <link rel="stylesheet" href="assets/css/event-flow.css?v=2">
 <link rel="stylesheet" href="assets/css/operator-experience.css?v=1">
+<link rel="stylesheet" href="assets/css/server-presentation.css?v=1">
+<link rel="stylesheet" href="assets/css/booth-map.css?v=2">
 <script>
 (function(){
   function showFailure(message){
@@ -108,6 +110,10 @@
 <script defer src="assets/js/role-model.js?v=17"></script>
 <script defer src="assets/js/event-flow.js?v=2"></script>
 <script defer src="assets/js/operator-experience.js?v=2"></script>
+<script defer src="assets/js/server-sync.js?v=1"></script>
+<script defer src="assets/js/booth-map-data.js?v=1"></script>
+<script defer src="assets/js/booth-map-ui.js?v=2"></script>
+<script defer src="assets/js/server-presentation.js?v=1"></script>
 </head>
 <body>
 <a class="skip" href="#main-content">본문으로 바로가기</a>
@@ -128,10 +134,10 @@
     <section class="login-form">
       <span class="eyebrow">워크스페이스 시작</span>
       <h2>업무 화면을 준비하고 있습니다</h2>
-      <p>행사 준비, 참가자 접수, 현장 처리와 결과 보고를 연결합니다. 잠시 후 로그인 또는 행사 링크에 맞는 화면으로 이동합니다. 필수 파일을 불러오지 못하면 위에 복구 안내가 표시됩니다.</p>
-      <div class="skeleton od-field" role="status" aria-live="polite"><strong>워크스페이스 연결 중…</strong><span>운영사 체험 계정: admin@example.demo</span><span>체험 비밀번호: eventouch</span></div>
+      <p>행사 준비, 참가자 접수, 현장 처리와 결과 보고를 연결합니다. 서버 연결을 확인한 뒤 계정 또는 행사 링크에 맞는 화면을 엽니다.</p>
+      <div class="skeleton od-field" role="status" aria-live="polite"><strong>서버에 연결하고 있습니다.</strong><span>운영사 계정과 행사 상태를 확인 중입니다.</span><button type="button" class="btn quiet" data-action="retry-server-connection">연결 다시 시도</button></div>
       <noscript><div class="notice error"><strong>JavaScript 실행이 필요합니다.</strong><p>이 페이지는 실제 화면 이동과 업무 처리를 위해 JavaScript를 사용합니다. 파일을 일반 브라우저에서 열거나 미리보기의 스크립트 실행 지원을 확인해주세요.</p></div></noscript>
-      <p class="help">실제 인증·서버·문자·결제는 연결되지 않은 브라우저 프로토타입입니다.</p>
+      <p class="help">운영사 계정으로 로그인하거나 참가자 행사 링크를 열어주세요.</p>
     </section>
   </main>
 </div>

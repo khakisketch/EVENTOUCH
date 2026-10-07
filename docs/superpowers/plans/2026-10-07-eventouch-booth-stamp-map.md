@@ -8,7 +8,7 @@
 
 **Tech Stack:** 현재 Node/CommonJS/`node:test`/PostgreSQL/`pg`/vanilla HTML·JS·CSS. 새 라이브러리, 외부 지도 공급자, 위치 API 없음.
 
-**Spec:** `docs/superpowers/specs/2026-10-07-eventouch-booth-stamp-map-design.md` (written design approved in conversation; implementation-plan review pending).
+**Spec:** `docs/superpowers/specs/2026-10-07-eventouch-booth-stamp-map-design.md` (written design and implementation plan approved; user requested development).
 
 ## Global Constraints
 
@@ -41,7 +41,7 @@
 
 ### Task 1: Complete/reuse the common PostgreSQL file prerequisite
 
-**Files:** Reuse/update Task8-owned `server/api.js`, `server/server.js`, `tests/server-files.test.cjs`, `docs/DEPLOY.md`; create `server/files.js`, `server/image-metadata.js`, `server/migrations/002_stored_file_dimensions.sql`, `tests/server-image-metadata.test.cjs` if not already produced by Task8. Do not create a second file service if equivalent work has landed.
+**Files:** Reuse/update Task8-owned `server/api.js`, `server/server.js`, `tests/server-files.test.cjs`, `docs/DEPLOY.md`; create `server/files.js`, `server/image-metadata.js`, `server/migrations/002_stored-file-dimensions.sql`, `tests/server-image-metadata.test.cjs` if not already produced by Task8. Hyphenated migration slug follows the existing runner's filename filter. Do not create a second file service if equivalent work has landed.
 
 **Interfaces:** `createFileService(database,{storageDir})` produces `upload({account,eventId,commandId,name,contentType,bytes}) -> FileRef`, `readOperator({account,eventId,fileId}) -> StoredFile`, and `readPublic({slug,fileId}) -> StoredFile`; `StoredFile` has a private server-side absolute path plus `FileRef`. `FileRef={fileId,name,type,size,width?,height?}` never contains storage paths. `inspectImage(bytes,contentType)->{width,height}` uses bounded PNG/JPEG/WebP headers and rejects unsupported/truncated headers; both dimensions must be integers in1..10000. Metadata parsing is not a claim that a browser can decode every image.
 
@@ -62,7 +62,7 @@ assert.equal(draftOnlyPublicRead.status, 404);
 assert.equal(staffRead.status, 403);
 ```
 
-- [ ] Run `node --test tests/server-files.test.cjs tests/server-image-metadata.test.cjs` in the isolated DB environment; observe the missing PostgreSQL-file behavior failing before implementing it. Existing JSON `evt-1` roundtrip tests must be migrated to real PostgreSQL events, not restored as authority.
+- [x] Run `node --test tests/server-files.test.cjs tests/server-image-metadata.test.cjs` in the isolated DB environment; observe the missing PostgreSQL-file behavior failing before implementing it. Existing JSON `evt-1` roundtrip tests migrated to real PostgreSQL events; primary focused GREEN10/10 (independent combined check pending).
 - [ ] Implement/reconcile the shared service and wire actual routes; re-check auth inside writes, fingerprint same-command uploads, remove only newly owned failed-upload bytes, preserve files on HTTP restart. Complete relevant Task8 documentation without starting Compose/deployment.
 - [ ] Re-run these tests and current server regressions: `node --test tests/server-*.test.cjs`. Expected: new/current server tests pass,0 skips; classify remaining legacy UI failures separately.
 - [ ] Independently verify and commit only Task8/file-owned changes at a coherent milestone; reuse an existing verified Task8 commit if this prerequisite has already been delivered.
@@ -91,7 +91,7 @@ assert.equal(stalePublish.status, 409);
 assert.deepEqual(afterUnpublishVisits, beforeUnpublishVisits);
 ```
 
-- [ ] Run `node --test tests/server-booth-map.test.cjs tests/server-public-event.test.cjs`; expect RED on missing map commands/projection before code.
+- [x] Map command tests observed RED6 missing-command failures before code, then GREEN6/6 alongside file/metadata GREEN16/16; independent combined regression check pending.
 - [ ] Implement the module/context wiring, normalization and allowlisted projection. Save/post failures roll back both draft and audit/receipt; publish locks the event with existing domain executor.
 - [ ] Re-run focused tests plus `node --test tests/server-domain-commands.test.cjs tests/server-operations.test.cjs tests/server-public-event.test.cjs`; expect zero new failures/skips and unchanged certification semantics.
 - [ ] Independent Test Runner checks the integrated server revision, then commit only map/server tests owned by this task.
@@ -117,7 +117,7 @@ assert.deepEqual(E.boothStampSummary(booths, visits, null),
 ```
 
 - [ ] Write upload/URL transport tests asserting raw bytes (not JSON/base64), credentials, normalized FileRef without paths, preserved HTTP errors, stable commandId after lost response and no local authoritative write. Register map command declarations in `E.handlers` so existing local authorization accepts group `booth`; explicit preview rejects new map writes with an explanatory error rather than calling the shared server.
-- [ ] Run `node --test tests/booth-map-data.test.cjs tests/server-sync-client.test.cjs`; observe missing-summary/transport RED before implementation.
+- [x] Run `node --test tests/booth-map-data.test.cjs tests/server-sync-client.test.cjs`; observed missing-summary/transport RED5/25 before implementation, then GREEN25/25. Independent combined check pending.
 - [ ] Implement only calculation/validation/transport/command declarations; no generated markup/styles/interaction layout. Include the data module before server adapter/startup and preserve current load-order overrides.
 - [ ] Re-run focused tests and `node --check` for changed JS; independently verify and commit the nonvisual client slice. Leave actual map file/pin rendering to Task4.
 
@@ -162,4 +162,4 @@ assert.equal(restartedMapRead.json.workspace.boothMap.published.version, 1);
 
 Coverage: spec§1–2→constraints/dependencies;§3/5→Tasks1–2/4;§4→Tasks2–3/5;§6→Task4;§7→Task5. Producer/consumer field names and routes are defined above; no inline storage/GPS/new provider path. Review Focus cases each have assigned tests. Reconcile Task8 producer contracts if already implemented instead of blindly recreating them.
 
-Written design approved; plan now awaits user review. Preserve inline execution once approved, without per-task routine approval prompts. New scope/external effects/security-sensitive changes retain their gates.
+Written design and implementation plan approved; executing inline under the user's development request. New scope/external effects/security-sensitive changes retain their gates.

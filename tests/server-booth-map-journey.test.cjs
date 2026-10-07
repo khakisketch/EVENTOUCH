@@ -33,7 +33,7 @@ async function signup(id,phone){
 }
 test('upload publication, anonymous signup, assigned check-in and confirmed SELF stamps survive HTTP restart',async()=>{
  const bytes=floorplanPng();
- const up=await fetch(`${h.baseUrl}/api/events/self-event/files?name=map.png&commandId=${crypto.randomUUID()}`,{method:'POST',headers:{cookie,'content-type':'image/png'},body:bytes});
+ const up=await fetch(`${h.baseUrl}/api/events/self-event/files?name=map.png&commandId=${crypto.randomUUID()}`,{method:'POST',headers:{cookie,'content-type':'image/png',connection:'close'},body:bytes});
  assert.equal(up.status,201);const file=(await up.json()).file;
  assert.equal((await command('self-event','booth.map.save',{fileId:file.fileId,points:[{boothId:'booth-a',x:0.25,y:0.75}],expectedDraftVersion:0})).status,200);
  assert.equal((await command('self-event','booth.map.publish',{expectedDraftVersion:1})).status,200);
@@ -57,7 +57,7 @@ test('upload publication, anonymous signup, assigned check-in and confirmed SELF
  const after=await requestJson(h.baseUrl,'/api/public/events/self-event/ticket',{bearer:person.ticket});
  assert.equal(after.status,200);assert.equal(after.json.workspace.visits.length,1);
  assert.equal(after.json.workspace.boothMap.published.version,1);assert.equal(after.json.participant.inside,true);
- const image=await fetch(`${h.baseUrl}/api/public/events/self-event/files/${file.fileId}`);
+ const image=await fetch(`${h.baseUrl}/api/public/events/self-event/files/${file.fileId}`,{headers:{connection:'close'}});
  assert.equal(image.status,200);assert.deepEqual(Buffer.from(await image.arrayBuffer()),bytes);
  assert.equal((await requestJson(h.baseUrl,'/api/bootstrap',{cookie})).status,200);
  assert.deepEqual((await requestJson(h.baseUrl,'/api/public/events/self-event')).json.workspace.visits,[]);
@@ -74,4 +74,13 @@ test('STAFF certification updates only the owner ticket and wrong assignments ca
  const after=await requestJson(h.baseUrl,'/api/public/events/staff-event/ticket',{bearer:person.ticket});assert.equal(after.json.workspace.visits.length,1);
  assert.equal(after.json.workspace.visits[0].participantId,person.id);
  assert.deepEqual((await requestJson(h.baseUrl,'/api/public/events/staff-event')).json.workspace.visits,[]);
+});
+test('test HTTP client closes connections so a restarted server never inherits a pooled socket',async()=>{
+ const before=await requestJson(h.baseUrl,'/api/health');
+ assert.equal(before.status,200);
+ assert.equal(before.headers.get('connection'),'close');
+ await h.restartHttp();
+ const afterRestart=await requestJson(h.baseUrl,'/api/health');
+ assert.equal(afterRestart.status,200);
+ assert.equal(afterRestart.headers.get('connection'),'close');
 });
