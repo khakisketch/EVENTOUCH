@@ -85,6 +85,38 @@ after(async () => {
   if (harness) await harness.close();
 });
 
+test('invitation writes recheck the current agency role inside the transaction', async () => {
+  const existing = await createInvitation(cookies.agency, {
+    commandId: commandId(), name: '철회 대상', email: uniqueEmail('race-existing'), role: 'STAFF',
+  });
+  assert.equal(existing.status, 201);
+  for (const operation of ['create','revoke']) {
+    const original = harness.database.transaction;
+    let entered, release;
+    const arrival = new Promise(resolve => { entered = resolve; });
+    const gate = new Promise(resolve => { release = resolve; });
+    harness.database.transaction = async fn => {
+      entered(); await gate; return original.call(harness.database, fn);
+    };
+    try {
+      const pending = operation === 'create' ? createInvitation(cookies.agency, {
+        commandId: commandId(), name: '권한 변경 후 초대', email: uniqueEmail('race-new'), role: 'STAFF',
+      }) : requestJson(harness.baseUrl, `/api/auth/invitations/${existing.json.invitation.id}/revoke`, {
+        cookie: cookies.agency, method: 'POST', body: { commandId: commandId() },
+      });
+      await arrival;
+      await harness.database.query("UPDATE accounts SET role='MANAGER' WHERE id='agency-owner'");
+      release();
+      assert.equal((await pending).status, 403);
+      assert.equal((await harness.database.query('SELECT status FROM invitations WHERE id=$1',
+        [existing.json.invitation.id])).rows[0].status, 'PENDING');
+    } finally {
+      release(); harness.database.transaction = original;
+      await harness.database.query("UPDATE accounts SET role='AGENCY' WHERE id='agency-owner'");
+    }
+  }
+});
+
 test('invitation creation and revocation require login', async () => {
   const created = await createInvitation(null, {
     commandId: commandId(), name: '홍길동', email: uniqueEmail('anon'), role: 'MANAGER',

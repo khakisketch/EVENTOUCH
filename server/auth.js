@@ -291,11 +291,19 @@ function createDatabaseAuth(database) {
   // response and never persisted: only its SHA256 token_hash is stored.
   // commandId is stable: a replay of the same creation request returns 409
   // INVITATION_LINK_UNAVAILABLE instead of reissuing (or leaking) the link.
+  async function authorizeAgencyWrite(client, actor) {
+    const result = await client.query('SELECT role, active FROM accounts WHERE id = $1 LIMIT 1 FOR SHARE', [actor.id]);
+    const current = result.rows[0];
+    if (!current || current.active !== true) throw invitationFailure(401, '로그인이 필요합니다');
+    if (current.role !== 'AGENCY') throw invitationFailure(403, '권한을 확인하세요');
+  }
+
   async function createInvitation(actor, input) {
     const commandIdValue = commandIdentifier(input && input.commandId);
     const request = invitationRequest(input);
     try {
       return await database.transaction(async (client) => {
+        await authorizeAgencyWrite(client, actor);
         await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`invitation-create:${commandIdValue}`]);
         await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`invitation-email:${request.email}`]);
 
@@ -379,6 +387,7 @@ function createDatabaseAuth(database) {
     const command = commandIdentifier(commandIdValue);
     try {
       return await database.transaction(async (client) => {
+        await authorizeAgencyWrite(client, actor);
         await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`invitation-revoke:${command}`]);
         await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`invitation-id:${id}`]);
 
