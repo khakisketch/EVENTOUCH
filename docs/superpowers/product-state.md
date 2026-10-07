@@ -14,7 +14,7 @@ Acceptance: the real product server authenticates operational users, enforces ev
 
 M1 exit gate: event creation and all operational participant writes must use PostgreSQL as the only authoritative path; no JSON-file fallback may be able to create data that bootstrap/public/ticket reads cannot see. Verify a write through the real product route, read it from an independent role-scoped session and the public ticket route, then restart the HTTP server and read it again. The manager/staff event collection must also remain role-scoped. Human end-to-end acceptance is still required after technical checks.
 
-Status: architecture selected; implementation plan is active. No human end-to-end acceptance or production deployment yet.
+Status: PostgreSQL Tasks 1–5 are implemented in the isolated worktree. M1 remains open pending Tasks 6–8, Task 7 frontend/browser integration, and human end-to-end acceptance. No production deployment has occurred.
 
 ## Approved architecture
 

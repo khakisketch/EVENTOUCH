@@ -129,9 +129,11 @@ Deferred review minors: numeric-demo fallback remains transitional until Task 7;
 - Produces: server commands for desk setup/open state, staff assignment/revocation, check-in/out, correction with reason, booth configuration/visit, and idempotent offline replay.
 - Every staff command checks active event, stage, role, exact assignment target, payment/ticket state, duplicate/re-entry rules, and actor identity on the server.
 
-- [ ] Test desk/booth assignment boundaries, inactive/revoked links, duplicate scans, re-entry, correction audit, payment gate, and concurrent scan replay.
-- [ ] Implement transaction-backed operations and retain existing history/audit shape.
-- [ ] Run focused API tests; commit as `feat: enforce assigned staff operations`.
+- [x] Test desk/booth assignment boundaries, inactive/revoked links, duplicate scans, re-entry, correction audit, payment gate, app-free SELF booth access, and concurrent scan replay.
+- [x] Implement transaction-backed operations and retain existing history/audit shape.
+- [x] Run focused API tests; commit as `feat: enforce assigned staff operations`.
+
+Task 5 verification (2026-10-07): `tests/server-operations.test.cjs` → 15/15 pass. Independent Test Runner `ses_eea8757d6ffeGgmmGD3YKslWYi` ran the focused server/API/PostgreSQL suites (including operations) → 106/106 pass, 0 skipped; syntax and `git diff --check` pass. Full `npm test` → 459 total, 119 pass, 340 fail; the failures are the known legacy UI/source-path tests importing absent CSS/JS modules (`styles/*.css`, `app.js`, `features/views.js`, `store-truth`, and related `features/` paths), with no failures in the focused server suites. The Task 5 command family includes app-free SELF booth redemption through the attendee ticket bearer; receipts persist a ticket hash, not the raw bearer.
 
 ### Task 6: Preparation, content, engagement, and result commands
 

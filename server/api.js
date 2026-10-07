@@ -979,7 +979,7 @@ function bearerToken(header) {
 }
 
 async function handleApi(req, res, store, urlPath, security = {}) {
-  const { auth, access, state, publicEvents, participantCommands } = security;
+  const { auth, access, state, publicEvents, participantCommands, operationsCommands } = security;
   const parts = urlPath.split('/').filter(Boolean);
   if (parts[0] !== 'api') return sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
 
@@ -1095,6 +1095,39 @@ async function handleApi(req, res, store, urlPath, security = {}) {
           command,
           payload,
           ticketToken: bearerToken(req.headers.authorization),
+        });
+        return sendJson(res, result.status, result.body);
+      }
+
+      const guestTicketToken = bearerToken(req.headers.authorization);
+      if (command === 'booth.visit' && guestTicketToken) {
+        if (!operationsCommands) return err(res, 503, '데이터베이스를 사용할 수 없습니다');
+        const result = await operationsCommands.execute({
+          eventId,
+          commandId,
+          command,
+          payload,
+          account: null,
+          ticketToken: guestTicketToken,
+        });
+        return sendJson(res, result.status, result.body);
+      }
+
+      if (operationsCommands && operationsCommands.supports(command)) {
+        const account = await requireUser(auth, req);
+        const targetId = command === 'check.scan'
+          ? payload.deskId || payload.targetId
+          : command === 'booth.visit'
+            ? payload.boothId || payload.targetId
+            : payload.targetId;
+        await access.authorize({ account, eventId, command, assignmentId, targetId });
+        const result = await operationsCommands.execute({
+          eventId,
+          commandId,
+          command,
+          payload,
+          account,
+          assignmentId,
         });
         return sendJson(res, result.status, result.body);
       }

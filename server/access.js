@@ -4,12 +4,14 @@ const ROLES = ['AGENCY', 'MANAGER', 'STAFF'];
 const STAFF_COMMANDS = new Map([
   ['assignment.read', null],
   ['participants.read', 'DESK'],
+  ['check.scan', 'DESK'],
+  ['check.correct', 'DESK'],
   ['checkin.scan', 'DESK'],
   ['checkin.sync', 'DESK'],
   ['checkin.correction', 'DESK'],
   ['booth.visit', 'BOOTH'],
 ]);
-const STAFF_TARGET_REQUIRED = new Set(['booth.visit']);
+const STAFF_TARGET_REQUIRED = new Set(['check.scan', 'checkin.scan', 'booth.visit']);
 
 function denied(status = 403) {
   return Object.assign(new Error(status === 401 ? '로그인이 필요합니다' : '권한을 확인하세요'), { status });
