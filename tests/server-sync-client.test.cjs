@@ -156,8 +156,7 @@ test('member commands use invitation endpoints and hydrate token-free state inst
   assert.equal(JSON.stringify(h.E.state).includes('one-time-command-token'),false);assert.equal(h.localStorageWrites,0);
 });
 
-test('legacy operator invitations post as manager with only the server contract fields', async () => {
-  let body = null;
+test('legacy operator invitations post as manager with only the server contract fields', async () => {  let body = null;
   const h = loadAdapter(async (url, options) => {
     if (url === '/api/auth/invitations') {
       body = JSON.parse(options.body);
@@ -174,6 +173,8 @@ test('legacy operator invitations post as manager with only the server contract 
   assert.equal(Object.hasOwn(body, 'write'), false);
   assert.equal(Object.hasOwn(body, 'orgPermissions'), false);
   await assert.rejects(h.E.remote.createInvitation({ name: '팀원', email: 'admin@example.test', role: 'ADMIN' }), /운영사 구성원|현장 스태프/);
+  await assert.rejects(h.E.remote.createInvitation({ name: '행사 지정 스태프', email: 'staff@example.test', role: 'STAFF', eventId: 'event-1' }), /행사/);
+  assert.equal(h.calls.filter(call => call.url === '/api/auth/invitations').length, 1);
   assert.equal(h.E.remote.invitationLink('inv-legacy'), '#/invite/legacy-one-time-token');
 });
 

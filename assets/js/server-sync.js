@@ -81,6 +81,7 @@ E.remote={
   const legacy=String(input.role||'').trim().toUpperCase();
   const role=legacy==='OPERATOR'?'MANAGER':legacy;
   if(!['MANAGER','STAFF'].includes(role))throw Error('운영사 구성원 또는 현장 스태프만 초대할 수 있습니다.');
+  if(role==='STAFF'&&input.eventId)throw Error('현장 스태프 초대에는 행사를 지정할 수 없습니다. 행사 배정은 수락 후 데스크·부스 배정으로 연결하세요.');
   const result=await postWithRetry('/auth/invitations',{
    name:input.name,email:input.email,role,eventId:input.eventId||null,commandId:input.commandId||E.id('invite'),
   });

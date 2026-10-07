@@ -107,6 +107,9 @@ function invitationRequest(input) {
     throw invitationFailure(400, '역할을 확인하세요', { field: 'role' });
   }
   const rawEventId = input && input.eventId !== undefined && input.eventId !== null ? String(input.eventId).trim() : '';
+  if (role === 'STAFF' && rawEventId) {
+    throw invitationFailure(400, '현장 스태프 초대에는 행사를 지정할 수 없습니다. 수락 후 데스크·부스 배정으로 연결합니다.', { field: 'eventId' });
+  }
   return { name, email, role, eventId: rawEventId || null };
 }
 

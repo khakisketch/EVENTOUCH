@@ -408,3 +408,20 @@ test('short accept passwords are rejected without consuming the invitation', asy
   const lookup = await requestJson(harness.baseUrl, `/api/auth/invitations/${created.json.token}`);
   assert.equal(lookup.status, 200);
 });
+
+test('staff invitations reject an event scope instead of silently dropping it', async () => {
+  const email = uniqueEmail('staff-scoped');
+  const rejected = await createInvitation(cookies.agency, {
+    commandId: commandId(), name: '행사 지정 스태프', email,
+    role: 'STAFF', eventId,
+  });
+  assert.equal(rejected.status, 400, JSON.stringify(rejected.json));
+  assert.match(rejected.json.error, /행사/);
+  const rows = await harness.database.query('SELECT 1 FROM invitations WHERE email = $1', [email]);
+  assert.equal(rows.rowCount, 0);
+  const retry = await createInvitation(cookies.agency, {
+    commandId: commandId(), name: '배정 대기 스태프', email: uniqueEmail('staff-unscoped'), role: 'STAFF',
+  });
+  assert.equal(retry.status, 201, JSON.stringify(retry.json));
+  assert.equal(retry.json.invitation.eventId, null);
+});
