@@ -54,7 +54,7 @@ E.register('desk.set-open','onsite',(s,p,c)=>{
 
 E.actions['edit-desk']=d=>{
  const desk=E.work().desks.find(x=>x.id===d.id)||{};
- E.dialog('데스크 설정',E.field('데스크 이름 *','name',desk.name||'','text','required maxlength="60"')+E.select('처리 방향','action',[['IN','입장 처리'],['OUT','퇴장 처리']],desk.action||'IN')+E.select('작업 화면','mode',[['desk','데스크 노트북'],['tablet','태블릿']],desk.mode||'desk')+E.check('방향 변경 시 지점을 닫고 기존 기록을 보존합니다.','confirmDirectionChange',false)+E.check('처리 지점 열기','open',desk.open!==false)+E.notice('입장·퇴장 방향을 바꾸면 이 지점은 닫힙니다. 행사 전체 모드는 바뀌지 않습니다.'),async p=>{
+ E.dialog('데스크 설정',E.field('데스크 이름 *','name',desk.name||'','text','required maxlength="60"')+E.select('처리 방향','action',[['IN','입장 처리'],['OUT','퇴장 처리']],desk.action||'IN')+E.check('방향 변경 시 지점을 닫고 기존 기록을 보존합니다.','confirmDirectionChange',false)+E.check('처리 지점 열기','open',desk.open!==false)+E.notice('입장·퇴장 방향을 바꾸면 이 지점은 닫힙니다. 행사 전체 모드는 바뀌지 않습니다.'),async p=>{
   const changed=!!desk.id&&desk.action!==p.action;
   if(changed&&!p.confirmDirectionChange)throw Error('입장·퇴장 방향을 바꾸려면 확인란을 선택하세요.');
   await E.run('desk.save',{...p,id:desk.id,confirmDirectionChange:!!p.confirmDirectionChange,open:changed?false:!!p.open});
@@ -72,7 +72,7 @@ E.actions['toggle-desk-open']=d=>{
 const oldDeskView=E.views.desks;
 E.views.desks=()=>{
  const w=E.work(),ev=E.event(),editable=E.can('onsite',true);
- const stations=w.desks.length?w.desks.map(d=>'<div class="event-flow-station"><div class="od-field"><strong>'+e(d.name)+'</strong><span>'+e(actionName(d.action))+' 처리</span><small class="muted">'+e(d.mode==='desk'?'노트북 데스크':'태블릿 화면')+'</small></div><div class="event-flow-station-state"><span class="badge '+(isOpen(d)?'good':'warn')+'">'+(isOpen(d)?(ev.stage==='LIVE'?'열림':'열림 · 행사 시작 대기'):'닫힘')+'</span>'+(editable?'<div class="actions">'+B(isOpen(d)?'지점 닫기':'지점 열기','toggle-desk-open','data-id="'+e(d.id)+'"')+B('설정','edit-desk','data-id="'+e(d.id)+'"')+'</div>':'')+'</div></div>').join(''):E.empty('입퇴장 지점이 없습니다','입장 지점과 퇴장 지점을 각각 만들어 주세요.');
+ const stations=w.desks.length?w.desks.map(d=>'<div class="event-flow-station"><div class="od-field"><strong>'+e(d.name)+'</strong><span>'+e(actionName(d.action))+' 처리</span></div><div class="event-flow-station-state"><span class="badge '+(isOpen(d)?'good':'warn')+'">'+(isOpen(d)?(ev.stage==='LIVE'?'열림':'열림 · 행사 시작 대기'):'닫힘')+'</span>'+(editable?'<div class="actions">'+B(isOpen(d)?'지점 닫기':'지점 열기','toggle-desk-open','data-id="'+e(d.id)+'"')+B('설정','edit-desk','data-id="'+e(d.id)+'"')+'</div>':'')+'</div></div>').join(''):E.empty('입퇴장 지점이 없습니다','입장 지점과 퇴장 지점을 각각 만들어 주세요.');
  const assignments=w.assignments.filter(a=>a.type==='DESK'&&w.desks.some(d=>d.id===a.targetId));
  const qrRows=assignments.length?'<div class="event-flow-qr-list">'+assignments.map(a=>{const desk=w.desks.find(d=>d.id===a.targetId),account=E.state.accounts.find(x=>x.id===a.accountId),url=E.url(staffHash(ev.id,a.id));return '<article class="event-flow-qr-card"><div class="od-field"><strong>'+e(desk.name)+' · '+e(actionName(desk.action))+'</strong><small>'+e(account?.name||'담당 스태프')+' · 배정 업무로만 접근</small></div>'+qr(url)+'<div class="od-field"><span class="code">'+e(url)+'</span><small class="muted">스태프 계정 로그인 후 지정된 데스크가 열립니다.</small></div><div class="actions">'+B('업무 QR 인쇄','print-staff-qr','data-id="'+e(a.id)+'"')+B('링크 복사','copy-staff-link','data-id="'+e(a.id)+'"')+'</div></article>';}).join('')+'</div>':E.empty('스태프 업무 QR을 만들 수 없습니다','먼저 데스크를 스태프에게 배정하세요.',editable?B('업무 배정','assign-staff'):'');
  return oldDeskView()+E.panel('입퇴장 지점 가동 상태','<p class="help">각 지점의 방향은 고정됩니다. 입장과 퇴장을 동시에 운영할 수 있으며, 행사 전체를 한 번에 전환하지 않습니다.</p><div class="event-flow-stations">'+stations+'</div>')+E.panel('스태프용 데스크 업무 QR',qrRows+E.notice('이 QR은 배정된 스태프의 업무 페이지를 여는 링크입니다. 참가자용 행사 안내 QR이나 개인 티켓 QR과 다릅니다. 링크를 공유해도 실제 계정 인증·여러 기기 동기화가 제공되지는 않습니다.'));
@@ -116,23 +116,6 @@ if(oldScanForm)E.scanForm=(type,target)=>{
   if(desk?.open===false)return E.notice('이 지점은 닫혀 있습니다. 매니저가 다시 열 때까지 QR 처리를 할 수 없습니다.','warning');
  }
  return oldScanForm(type,target);
-};
-const oldStaffView=E.views.staff;
-const staffTasks=()=>E.state.events.flatMap(event=>(E.activeAssignments(event.id)||[]).map(assignment=>{const workspace=E.state.workspaces[event.id],target=(assignment.type==='DESK'?workspace.desks:workspace.booths).find(x=>x.id===assignment.targetId);return target?{event,assignment,target}:null;})).filter(Boolean);
-const staffLaptopView=(assignment,desk)=>{
- const w=E.work(),ev=E.event(),q=E.ui.filters.deskSearch||'',found=q.length>=2?w.participants.filter(p=>(p.name+' '+p.company+' '+p.phone).includes(q)).slice(0,12):[],items=staffTasks();
- const switcher=items.length>1?'<section class="staff-laptop-switcher"><h2>내 배정 업무</h2><nav class="event-flow-task-links" aria-label="배정된 현장 업무">'+items.map(x=>{const current=x.event.id===ev.id&&x.assignment.id===assignment.id,label=x.assignment.type==='DESK'?'데스크 · '+actionName(x.target.action):'부스 인증';return '<a class="btn '+(current?'primary':'')+'" href="'+e(staffHash(x.event.id,x.assignment.id))+'"><span class="od-field"><strong>'+e(x.event.name)+'</strong><small>'+e(label+' · '+x.target.name)+'</small></span>'+(current?'<span class="badge">현재 업무</span>':'')+'</a>';}).join('')+'</nav></section>':'';
- const closed=desk.open===false;
- const scan=closed?'':E.scanForm('desk',desk.id);
- const search=closed?'':'<label for="staff-desk-search">이름·소속·연락처로 찾기</label><input id="staff-desk-search" value="'+e(q)+'" data-filter="deskSearch" placeholder="두 글자 이상 입력">'+(q.length<2?E.notice('QR이 없거나 손상된 경우 이름으로 검색하세요.'):found.length?found.map(p=>'<div class="task-row"><div class="od-field"><strong>'+e(p.name)+'</strong><span>'+e(p.company||'소속 미입력')+'</span><small class="muted">'+e(E.registrationStates[p.status])+' · '+e(p.inside?'입장 중':p.everIn?'퇴장':'미도착')+'</small></div>'+B(actionName(desk.action)+' 처리','scan-person','data-id="'+e(p.id)+'" data-desk="'+e(desk.id)+'"')+'</div>').join(''):E.empty('참가자를 찾지 못했습니다','검색어를 바꾸거나 참가자에게 행사 등록 QR을 안내하세요.'));
- const records=w.checks.filter(r=>r.deskId===desk.id).slice(0,10);
- return '<div class="staff-laptop-shell"><header class="staff-laptop-header"><a class="wordmark" href="#/console/agency/events">EVENTOUCH<span>현장 운영 데스크</span></a><div class="od-field"><strong>'+e(ev.name)+'</strong><small>'+e(E.session.name)+' · 현장 스태프</small></div><div class="actions">'+E.badge(isOpen(desk)?(ev.stage==='LIVE'?'업무 열림':'행사 시작 대기'):'업무 닫힘',isOpen(desk)?'good':'warn')+B('로그아웃','logout')+'</div></header><main class="staff-laptop-main" id="main-content" tabindex="-1">'+(E.storageWarning?E.notice(E.storageWarning,'warning'):'')+E.fieldOperationWarning(desk)+'<section class="staff-laptop-current"><div class="od-field"><span class="eyebrow">현재 처리 지점</span><h1>'+e(desk.name)+'</h1><span>'+e(assignment.id?'배정된 데스크 업무':'')+'</span></div><div class="staff-laptop-action"><span>지금 처리</span><strong>'+e(actionName(desk.action))+'</strong><small>이 방향은 이 데스크에 고정되어 있습니다.</small></div></section>'+switcher+'<div class="split staff-laptop-work"><section class="panel field-scan-panel"><div class="panel-head"><h2>개인 티켓 QR 확인</h2></div><p class="help">참가자가 휴대폰의 개인 티켓 QR을 보여주면 스캔하거나 코드를 입력하세요.</p><div class="field-scan-result-region">'+E.scanResult()+'</div>'+scan+'</section><section class="panel field-secondary-panel"><div class="panel-head"><h2>참가자 검색</h2><span class="field-secondary-label">보조 경로</span></div>'+search+'</section></div><section class="panel"><div class="panel-head"><h2>최근 처리</h2><span class="help">이 데스크에서 처리한 기록</span></div>'+(records.length?E.table(['시점','참가자','처리','상태','작업'],records.map(r=>'<tr><td>'+e(E.date(r.at))+'</td><td>'+e(r.name)+'</td><td>'+e(actionName(r.action))+'</td><td>'+E.badge(r.corrected?'정정됨':'유효',r.corrected?'warn':'good')+'</td><td>'+(!r.corrected&&r.actor===E.session.id?B('정정','correct-check','data-id="'+e(r.id)+'"'):'—')+'</td></tr>')):E.empty('처리 기록이 없습니다','입퇴장 처리가 이곳에 표시됩니다.'))+'</section></main></div>';
-};
-E.views.staff=()=>{
- const assignment=E.assignment(),desk=assignment?.type==='DESK'&&E.work()?.desks.find(x=>x.id===assignment.targetId);
- if(desk&&desk.mode==='desk')return staffLaptopView(assignment,desk);
- const view=oldStaffView();
- return view;
 };
 
 })(window.ET);

@@ -254,6 +254,22 @@ test('desk-setup-requires-confirmation-to-change-direction-and-can-reopen', asyn
   assert.equal(reopened.json.desk.open, true);
 });
 
+test('desk-save-defaults-missing-mode-to-desk-and-rejects-unknown-mode', async () => {
+  const event = await createFixture({ stage: 'READY' });
+  const defaulted = await operatorCommand(event.id, 'desk.save', {
+    name: '모드 없는 데스크', action: 'IN', open: true,
+  });
+  assert.equal(defaulted.status, 201, JSON.stringify(defaulted.json));
+  assert.equal(defaulted.json.desk.mode, 'desk');
+  const stored = (await readWorkspace(event.id)).desks.find((desk) => desk.id === defaulted.json.desk.id);
+  assert.equal(stored.mode, 'desk');
+
+  const invalid = await operatorCommand(event.id, 'desk.save', {
+    name: '모드 없는 데스크', action: 'IN', mode: 'kiosk', open: true,
+  });
+  assert.equal(invalid.status, 400, JSON.stringify(invalid.json));
+});
+
 test('staff-assignment-is-relational-revocation-invalidates-link-and-reassignment-rotates-it', async () => {
   const event = await createFixture();
   const assigned = await assignStaff(event);

@@ -180,7 +180,7 @@ function activeParticipant(workspace, token) {
 function updateDesk(workspace, input) {
   const name = clean(input.name, 60);
   const action = clean(input.action, 8).toUpperCase();
-  const mode = clean(input.mode, 16).toLowerCase();
+  const mode = clean(input.mode, 16).toLowerCase() || 'desk';
   if (!name) throw failure(400, '데스크 이름을 입력하세요', 'name');
   if (!['IN', 'OUT'].includes(action) || !['desk', 'tablet'].includes(mode)) {
     throw failure(400, '데스크 작업과 화면을 선택하세요');
