@@ -113,6 +113,38 @@ test('valid ticket renders only own confirmed unique visit marks; unapproved sta
   assert.match(pending, /참가가 확정되면/);
 });
 
+test('attendee certification actions appear between the map and booth list', () => {
+  const participant = { id: 'person-1', ticket: 'ticket-1', name: '홍길동', status: 'APPROVED', paymentStatus: 'FREE', inside: true };
+  const staffHtml = harness({ participant, stampMode: 'STAFF' }).E.boothStampPage();
+  assert.ok(staffHtml.indexOf('booth-map-view') < staffHtml.indexOf('booth-ticket-entry'));
+  assert.ok(staffHtml.indexOf('booth-ticket-entry') < staffHtml.indexOf('booth-map-list-panel'));
+  assert.match(staffHtml, /내 티켓 제시/);
+
+  const selfHtml = harness({ participant, stampMode: 'SELF' }).E.boothStampPage();
+  assert.ok(selfHtml.indexOf('booth-map-view') < selfHtml.indexOf('booth-self-scan'));
+  assert.ok(selfHtml.indexOf('booth-self-scan') < selfHtml.indexOf('booth-map-list-panel'));
+  assert.match(selfHtml, /코드 직접 입력/);
+});
+
+test('completed booth rows add a decorative check while retaining their accessible completion label', () => {
+  const participant = { id: 'person-1', status: 'APPROVED', paymentStatus: 'FREE', inside: true };
+  const { E, workspace } = harness({ participant });
+  workspace.visits = [{ boothId: 'booth-a', participantId: participant.id }];
+  const html = E.boothStampPage();
+  assert.match(html, /class="booth-map-list-item is-visited"/);
+  assert.match(html, /booth-map-list-state-icon[^>]*aria-hidden="true"/);
+  assert.match(html, /aria-label="체험 부스 1, 진행 중, 인증 완료"/);
+  const css = fs.readFileSync('assets/css/booth-map.css', 'utf8');
+  assert.match(css, /\.booth-map-list-item\.is-visited \.booth-map-list-state[^\{]*\{[^}]*var\(--success\)/s);
+});
+
+test('attendee status stays flat and editor coordinate actions align to the field height', () => {
+  const css = fs.readFileSync('assets/css/booth-map.css', 'utf8');
+  assert.match(css, /\.booth-map-guest,\s*\.booth-map-progress\s*\{[^}]*padding:\s*0;[^}]*border:\s*0;[^}]*background:\s*transparent/s);
+  assert.doesNotMatch(css, /\.booth-map-progress,\s*\.booth-map-guest,\s*\.booth-map-certify\s*\{/);
+  assert.match(css, /\.booth-map-coordinate button\s*\{[^}]*align-self:\s*center;[^}]*height:\s*44px/s);
+});
+
 test('published map absence and image failure leave a complete booth list fallback', () => {
   const { E } = harness({ published: null });
   const html = E.boothStampPage();
@@ -247,6 +279,15 @@ test('synthetic floorplan render fixture is clearly labeled and not a product da
   assert.equal(png.toString('hex', 0, 8), '89504e470d0a1a0a');
   assert.equal(png.readUInt32BE(16), 1200);
   assert.equal(png.readUInt32BE(20), 760);
+});
+
+test('finished fictional demo floorplan is a local PNG distinct from the synthetic test fixture', () => {
+  const demo = fs.readFileSync('design-inputs/booth-map/demo-venue-floorplan.png');
+  const fixture = fs.readFileSync('design-inputs/booth-map/synthetic-demo-floorplan.png');
+  assert.deepEqual([...demo.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+  assert.equal(demo.readUInt32BE(16), 1600);
+  assert.equal(demo.readUInt32BE(20), 1000);
+  assert.notDeepEqual(demo, fixture);
 });
 
 test('map editor stays hidden without booth-management write permission', () => {

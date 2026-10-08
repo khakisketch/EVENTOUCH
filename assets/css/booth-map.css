@@ -18,10 +18,7 @@
 .booth-map-progress strong { font-size: inherit; }
 .booth-map-page .btn.primary,
 .booth-map-editor .btn.primary { background: var(--brand); border-color: var(--brand-text); color: var(--on-brand); }
-.booth-map-progress,
-.booth-map-guest,
-.booth-map-certify { padding: var(--s3, 16px); border: 1px solid var(--line); border-radius: var(--radius, 8px); background: var(--surface, var(--paper)); }
-.booth-map-progress strong { font-size: 1.15em; }
+.booth-map-certify { grid-area: action; padding: var(--s3, 16px); border: 1px solid var(--line); border-radius: var(--radius, 8px); background: var(--surface, var(--paper)); }
 .booth-map-jump,
 .booth-map-secondary { display: flex; flex-wrap: wrap; gap: var(--s2, 12px); }
 .booth-map-jump a,
@@ -29,10 +26,12 @@
 .booth-map-secondary a { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 12px; color: var(--ink); text-decoration: underline; text-underline-offset: .18em; }
 .booth-map-jump button { font: inherit; border: 0; background: transparent; cursor: pointer; }
 .booth-map-jump button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: var(--r1, 8px); }
-.booth-map-public-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(260px, .8fr); align-items: start; gap: var(--s4, 24px); }
+.booth-map-public-layout { display: grid; grid-template-areas: "map list" "action list"; grid-template-columns: minmax(0, 1.35fr) minmax(260px, .8fr); align-items: start; gap: var(--s4, 24px); }
 .booth-map-view,
 .booth-map-list-panel,
 .booth-map-editor { min-width: 0; }
+.booth-map-view { grid-area: map; }
+.booth-map-list-panel { grid-area: list; }
 .booth-map-view,
 .booth-map-list-panel { border: 1px solid var(--line); border-radius: var(--radius, 8px); background: var(--surface, var(--paper)); padding: var(--s3, 16px); }
 .booth-map-section-heading,
@@ -86,9 +85,11 @@
 .booth-map-list-copy { display: grid; flex: 1; min-width: 0; gap: 3px; }
 .booth-map-list-copy > span,
 .booth-map-list-state { color: var(--muted); font-size: .88rem; line-height: 1.4; overflow-wrap: anywhere; }
-.booth-map-list-state { max-width: 9em; text-align: right; }
+.booth-map-list-state { display: inline-flex; align-items: center; gap: 6px; max-width: 9em; text-align: right; }
+.booth-map-list-item.is-visited .booth-map-list-state { color: var(--success); font-weight: 650; }
+.booth-map-list-state-icon { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .booth-map-selected { margin: 12px 4px 0; padding-top: 12px; border-top: 1px solid var(--line); line-height: 1.5; overflow-wrap: anywhere; }
-.booth-map-certify { margin-top: var(--s4, 24px); }
+.booth-map-certify { margin: 0; }
 .booth-map-certify .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .booth-map-certify .actions > *,
 .booth-map-certify > a { min-height: 44px; }
@@ -115,7 +116,7 @@ body:has(.booth-map-conflict) .toast { display: none; }
 .booth-map-coordinate { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 4px 12px 48px; }
 .booth-map-coordinate label { display: grid; gap: 4px; min-width: 90px; flex: 1; font-size: .82rem; }
 .booth-map-coordinate input { width: 100%; min-height: 44px; padding: 8px; }
-.booth-map-coordinate button { min-height: 44px; }
+.booth-map-coordinate button { align-self: center; height: 44px; min-height: 44px; }
 .booth-map-editor-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
 .booth-map-editor-footer p { margin: 0; }
 .booth-map-editor-footer .actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -125,6 +126,7 @@ body:has(.booth-map-conflict) .toast { display: none; }
   .booth-map-editor { padding: var(--s3, 16px); }
   .booth-map-public-layout,
   .booth-map-editor-grid { grid-template-columns: minmax(0, 1fr); gap: var(--s3, 16px); }
+  .booth-map-public-layout { grid-template-areas: "map" "action" "list"; }
   .booth-map-view { order: 0; }
   .booth-map-list-panel { order: 1; }
   .booth-map-stage { width: min(100%, var(--booth-map-mobile-width, 100%)); max-height: 360px; margin-inline: auto; }

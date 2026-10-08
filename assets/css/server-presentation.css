@@ -90,3 +90,9 @@ body:has(#app > .attendee-site) > .toast:not(:empty){top:16px;bottom:auto;width:
 .access-page .invite-identity .detail-grid{margin:0 0 var(--s4);}
 .access-page .invite-accept-form{margin:0 0 var(--s4);}
 .access-page .invite-access .detail-grid{margin:0;}
+
+/* Keep mobile admin feedback in its own row, clear of active editing controls. */
+@media(max-width:768px){
+ body:has(.admin-shell):has(> .toast:not(:empty)) #app{padding-top:112px;}
+ body:has(.admin-shell) > .toast:not(:empty){top:16px;bottom:auto;}
+}
