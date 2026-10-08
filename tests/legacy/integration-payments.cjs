@@ -1,3 +1,7 @@
+// Historical ETKO payment-intent characterization, superseded by the v9
+// PostgreSQL product and the approved payment-simulation UI removal (c92915e).
+// Non-runnable text reference: original imports/startup paths remain unchanged.
+// Not a current product acceptance suite; do not silently re-enable.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 

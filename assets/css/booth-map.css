@@ -38,7 +38,6 @@
 .booth-map-editor > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s2, 12px); margin-bottom: var(--s3, 16px); }
 .booth-map-section-heading h2,
 .booth-map-list-panel h2 { margin: 0; font-size: 1.2rem; }
-.booth-map-state { display: inline-flex; align-items: center; min-height: 32px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: .85rem; }
 .booth-map-stage { position: relative; width: 100%; overflow: hidden; aspect-ratio: var(--booth-map-ratio, 16 / 10); border: 1px solid var(--line); border-radius: var(--radius, 8px); background: var(--surface-muted, var(--paper)); isolation: isolate; }
 .booth-map-stage img { max-width: 100%; }
 .booth-map-art { position: absolute; inset: 0; transform-origin: top left; transition: transform .16s ease-out; }
@@ -59,7 +58,7 @@
 .booth-map-loading { position: absolute; z-index: 2; inset: 0; display: grid; place-items: center; margin: 0; padding: var(--s3, 16px); color: var(--ink); background: var(--surface, var(--paper)); text-align: center; line-height: 1.5; }
 .booth-map-stage[data-map-ready="false"] { cursor: wait; }
 .booth-map-pin.is-visited { background: var(--success); color: var(--paper); }
-.booth-map-pin.is-selected { outline: 3px solid var(--accent); outline-offset: 2px; }
+.booth-map-pin.is-selected { outline: 3px solid var(--focus); outline-offset: 2px; }
 .booth-map-pin:focus-visible,
 .booth-map-list-item:focus-visible,
 .booth-map-controls button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }

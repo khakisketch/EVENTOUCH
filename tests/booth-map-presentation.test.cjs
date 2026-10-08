@@ -26,7 +26,7 @@ function harness({ participant = null, published = map.published, stampMode = 'S
     link: (text, href, cls = '') => `<a class="${cls}" href="${href}">${text}</a>`,
     field: (label, name, value = '', type = 'text', attrs = '') => `<label>${label}<input name="${name}" type="${type}" value="${value}" ${attrs}></label>`,
     select: () => '<select></select>', notice: (text, kind = '') => `<p class="notice ${kind}">${text}</p>`,
-    badge: label => `<span class="badge">${label}</span>`, detail: rows => `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`,
+    badge: (label, kind = '') => `<span class="badge ${kind}">${label}</span>`, detail: rows => `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`,
     panel: (title, body) => `<section><h2>${title}</h2>${body}</section>`, empty: (title, body) => `<section><h2>${title}</h2><p>${body}</p></section>`,
     register: () => {}, run: async (name, payload) => { calls.push([name, payload]); return { boothMap: { draft: { ...payload, version: payload.expectedDraftVersion + 1, image: { fileId: payload.fileId } } } }; },
     remote: {
@@ -168,6 +168,17 @@ test('existing booth view is preserved and the additive editor exposes upload, c
   assert.doesNotMatch(html, /data-action="booth-map-zoom"/, 'map controls wait until the image is usable');
   assert.match(html, /위치.+직접 입력|좌표.+입력/);
   assert.match(E.views.booths(), /existing-booth-controls[\s\S]*booth-map-editor/);
+});
+
+test('map publication state uses the shared filled semantic badge treatment', () => {
+  const { E } = harness();
+  const html = E.boothMapEditor();
+  assert.match(html, /class="badge good">현재 게시본 유지<\/span>/);
+  const unpublished = harness({ published: null }).E.boothMapEditor();
+  assert.match(unpublished, /class="badge warn">미게시<\/span>/);
+  const css = fs.readFileSync('assets/css/booth-map.css', 'utf8');
+  assert.doesNotMatch(css, /\.booth-map-state\s*\{/);
+  assert.match(css, /\.booth-map-pin\.is-selected\s*\{[^}]*var\(--focus\)/s);
 });
 
 test('editor point changes stay local, normalize coordinates and save with expected server version', async () => {

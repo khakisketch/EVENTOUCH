@@ -172,3 +172,42 @@ test('scoped attendee presentation contains responsive browser-page layout rules
   assert.match(css, /\.attendee-ticket-page \.ticket-card/);
   assert.match(css, /@media\s*\(max-width:\s*700px\)/);
 });
+
+test('five attendee header routes form balanced narrow rows and expose the current route', () => {
+  const person = { id: 'person-1', ticket: 'bearer-code', name: '김가람', status: 'APPROVED' };
+  const { E } = loadAttendee('home', person);
+  const html = E.views.attendee();
+  const nav = html.match(/<nav aria-label="행사 메뉴">([\s\S]*?)<\/nav>/)?.[1] || '';
+  for (const route of ['home', 'schedule', 'notices', 'more', 'ticket']) {
+    assert.match(nav, new RegExp(`href="#/event/browser-event/${route}"`));
+  }
+  assert.match(nav, /class="[^\"]*active[^\"]*"[^>]*aria-current="page"[^>]*>행사 홈<\/a>/);
+
+  E.route.page = 'schedule';
+  const scheduleNav = E.views.attendee().match(/<nav aria-label="행사 메뉴">([\s\S]*?)<\/nav>/)?.[1] || '';
+  assert.match(scheduleNav, /class="[^\"]*active[^\"]*"[^>]*href="#\/event\/browser-event\/schedule" aria-current="page">일정<\/a>/);
+  E.route.page = 'register';
+  const focusedNav = E.views.attendee().match(/<nav aria-label="페이지 이동">([\s\S]*?)<\/nav>/)?.[1] || '';
+  assert.match(focusedNav, /href="#\/event\/browser-event\/home" aria-current="page">행사 홈<\/a>/);
+  assert.doesNotMatch(focusedNav, /내 티켓/);
+
+  const css = fs.readFileSync(path.join(root, 'assets/css/server-presentation.css'), 'utf8');
+  assert.match(css, /\.attendee-site-header nav:has\(> a:nth-child\(5\)\)/);
+  assert.match(css, /\.attendee-site-header nav:has\(> a:nth-child\(5\)\)[\s\S]*?grid-template-columns:\s*repeat\(6,minmax\(0,1fr\)\)/);
+  assert.match(css, /\.attendee-site-header nav:has\(> a:nth-child\(5\)\) a:nth-child\(4\)\s*\{[^}]*grid-column:\s*2\s*\/\s*span\s*2/s);
+  assert.match(css, /\.attendee-site-header nav:has\(> a:nth-child\(5\)\) a:nth-child\(5\)\s*\{[^}]*grid-column:\s*4\s*\/\s*span\s*2/s);
+});
+
+test('organizer overview uses the shared panel, list-row, badge, empty-state and action-row treatments', () => {
+  const source = fs.readFileSync(path.join(root, 'assets/js/experience.js'), 'utf8');
+  const overview = source.match(/E\.views\.overview\s*=\s*\(\)\s*=>\s*\{([\s\S]*?)\n\};/)?.[1] || '';
+  assert.ok(overview, 'the experience override remains the active overview implementation');
+  assert.match(overview, /E\.head\(/);
+  assert.match(overview, /E\.stats\(/);
+  assert.match(overview, /E\.panel\(/);
+  assert.match(overview, /class="list-item"/);
+  assert.match(overview, /class="actions"/);
+  assert.match(overview, /E\.badge\(/);
+  assert.match(overview, /E\.empty\(/);
+  assert.doesNotMatch(overview, /class="(?:task-row|quick-link|timeline-item)|class="context-summary|current-stage/);
+});

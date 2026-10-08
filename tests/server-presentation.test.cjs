@@ -56,6 +56,12 @@ test('server login omits demo credentials and role-based account chooser', () =>
   assert.doesNotMatch(html, /admin@example\.demo|value="eventouch"|체험 비밀번호|역할을 선택하고 계정으로 시작/);
 });
 
+test('attendee focus rings use the existing focus token', () => {
+  const css = fs.readFileSync(path.join(root, 'assets/css/server-presentation.css'), 'utf8');
+  assert.match(css, /\.attendee-site-header nav a:focus-visible[^{]*\{[^}]*outline:3px solid var\(--focus\)/s);
+  assert.doesNotMatch(css, /var\(--(?:accent|bg|fg|border)\)/);
+});
+
 test('server startup failure is visible and offers recovery before login submission', () => {
   const { E } = loadPresentation(false, { status: 'error', message: 'TEST_SERVER_UNAVAILABLE' });
   const html = E.loginPage();
