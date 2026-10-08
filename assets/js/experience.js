@@ -48,13 +48,6 @@ E.actions['fill-account']=async(d,b)=>{
  }finally{if(label)label.textContent='시작';}
 };
 
-E.views['agency-events']=()=>{
- const q=(E.ui.filters.events||'').toLowerCase(),status=E.ui.filters.eventStatus||'',allowed=E.state.events.filter(a=>E.eventAllowed(a.id));
- const list=allowed.filter(a=>(a.name+' '+(E.state.clients.find(c=>c.id===a.clientId)?.name||'')).toLowerCase().includes(q)&&(!status||a.stage===status));
- return E.head('행사 관리','운영할 행사를 선택하고 준비부터 마감까지 이어가세요.',E.session.role==='AGENCY'?B('새 행사 만들기','new-event','','primary'):'','운영사 워크스페이스')+
- '<div class="toolbar"><div class="od-field od-fill"><label for="event-query">행사 검색</label><input id="event-query" data-filter="events" value="'+e(E.ui.filters.events||'')+'" placeholder="행사명 또는 고객사"></div><div class="od-field"><label for="event-status">진행 단계</label><select id="event-status" data-filter="eventStatus"><option value="">전체 단계</option>'+Object.entries(E.stages).map(([k,v])=>'<option value="'+k+'" '+(status===k?'selected':'')+'>'+e(v)+'</option>').join('')+'</select></div></div><p class="muted">'+list.length+'개 행사'+(q||status?' · 검색 결과':'')+'</p>'+
- (list.length?'<div class="event-card-grid">'+list.map(ev=>{const w=E.state.workspaces[ev.id],keyvisual=w.branding?.keyvisual,thumbnail=keyvisual?'<div class="event-card-keyvisual" aria-hidden="true">'+E.image(keyvisual,'').replace('class="od-media"','class="od-media od-media-cover"')+'</div>':'';return '<article class="panel event-card">'+thumbnail+'<div class="card-top"><span class="event-date">'+e(dateLabel(ev.date))+'</span>'+E.badge(E.stages[ev.stage],ev.stage==='LIVE'?'good':ev.stage==='DRAFT'?'warn':'')+'</div><span class="eyebrow">'+e(E.state.clients.find(c=>c.id===ev.clientId)?.name||'고객사 미지정')+'</span><h2>'+e(ev.name)+'</h2><p class="muted">'+e(ev.start)+'–'+e(ev.end)+' · '+e(w.venue.name||'장소 준비 중')+'</p><div class="card-footer">'+L('행사 관리',E.consoleURL('overview',ev.id),'','arrow')+'</div></article>';}).join('')+'</div>':E.empty(allowed.length?'검색 결과가 없습니다':'배정된 행사가 없습니다',allowed.length?'행사명이나 진행 단계 조건을 바꿔보세요.':'운영사 관리자에게 행사 배정을 요청하세요.',allowed.length?B('검색 초기화','clear-event-filters'):''));
-};
 E.actions['clear-event-filters']=()=>{E.ui.filters.events='';E.ui.filters.eventStatus='';E.render();};
 
 E.phaseStrip=()=>{const stage=E.event().stage,current=stages.indexOf(stage);return '<ol class="workflow-strip" aria-label="행사 진행 단계">'+stages.map((s,i)=>'<li class="'+(i===current?'current':i<current?'done':'')+'" '+(i===current?'aria-current="step"':'')+'><strong>'+e(E.stages[s])+'</strong><small>'+e(['기본 구성','공개·배정','현장 처리','보고·공유','기록 보관'][i])+'</small></li>').join('')+'</ol>';};
@@ -108,11 +101,7 @@ E.mobileHome=()=>{
  (ev.features.includes('venue')?'<div class="mobile-section-head"><h2>오시는 길</h2></div><a class="mobile-card od-row" href="'+e(E.aurl('venue'))+'"><div class="od-field od-fill"><strong>'+e(w.venue.name||'행사장 안내')+'</strong><small class="muted od-clamp-2">'+e(w.venue.address||'상세 위치를 확인하세요.')+'</small></div>'+E.icon('arrow')+'</a>':'');
 };
 
-// A search result is a candidate. Only the explicitly confirmed command mutates attendance.
-E.actions['scan-person']=d=>{
- const p=E.work().participants.find(x=>x.id===d.id),desk=E.work().desks.find(x=>x.id===d.desk);if(!p||!desk)return;
- E.dialog('참가자 확인','<div class="scan-candidate"><h2>'+e(p.name)+'</h2>'+E.detail([['소속',p.company||'미등록'],['연락처',E.maskPhone(p.phone)],['등록 상태',E.registrationStates[p.status]],['현장 상태',p.inside?'입장 중':p.everIn?'퇴장':'미도착'],['처리 데스크',desk.name]])+'</div>'+E.notice('이름과 소속을 참가자에게 확인한 뒤 처리하세요.'),()=>E.processScan('desk',desk.id,p.ticket),desk.action==='IN'?'입장 확인':'퇴장 확인');
-};
+
 const oldScanForm=E.scanForm;
 E.scanForm=(type,target)=>'<section class="scan-station"><div class="scan-mark">'+E.icon('scan')+'</div><h2>'+e(type==='booth'?'참가자 티켓 확인':'티켓을 확인하세요')+'</h2><p class="muted">QR이 없으면 이름 검색이나 코드를 직접 입력할 수 있습니다.</p>'+B('카메라로 QR 스캔','camera-scan','data-type="'+e(type)+'" data-target="'+e(target)+'"','primary')+'</section><details class="scan-manual"><summary>티켓 코드 직접 입력</summary>'+oldScanForm(type,target)+'</details>';
 const oldStaff=E.views.staff;

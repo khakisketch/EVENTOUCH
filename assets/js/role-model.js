@@ -138,63 +138,6 @@ E.actions['client-detail']=d=>{
  E.dialog('고객사 상세',E.detail([['고객사명',c.name],['내부 담당자',c.contact||'미등록'],['연락처 이메일',c.email||'미등록'],['연결 행사',events.length+'개']])+'<h3 class="section-title">연결된 행사</h3>'+rows+E.notice('고객사 정보는 운영사의 내부 관리 기록입니다. 고객사 계정, 로그인, 행사 권한 또는 보고서 포털은 제공하지 않습니다.')+B('정보 수정','edit-client','data-id="'+e(c.id)+'" data-return-detail="true"'));
 };
 
-E.views['agency-team']=()=>{
- const active=E.state.accounts.filter(a=>a.active&&['AGENCY','MANAGER','STAFF'].includes(a.role));
- const assignmentNames=accountId=>E.state.events.flatMap(ev=>(E.state.workspaces[ev.id].assignments||[]).filter(a=>a.accountId===accountId).map(a=>{const w=E.state.workspaces[ev.id],target=(a.type==='DESK'?w.desks:w.booths).find(t=>t.id===a.targetId);return target?ev.name+' · '+target.name:'';})).filter(Boolean).join(', ');
- const memberships=a=>a.role==='AGENCY'?'전체':E.state.memberships.filter(m=>m.accountId===a.id&&E.state.events.some(ev=>ev.id===m.eventId)).map(m=>E.state.events.find(ev=>ev.id===m.eventId)?.name).filter(Boolean).join(', ')||'미배정';
- const invites=E.state.invitations.filter(i=>['MANAGER','STAFF'].includes(i.role));
- return E.head('팀·권한','운영사와 행사 매니저는 행사 접근을, 현장 스태프는 배정 업무를 기준으로 관리합니다.',B('팀원 초대','invite-member','','primary'),'AGENCY WORKSPACE')+
- E.panel('팀원',E.table(['이름','이메일','역할','행사·업무'],active.map(a=>'<tr><td>'+e(a.name)+'</td><td>'+e(a.email)+'</td><td>'+e(roleNames[a.role])+'</td><td>'+e(a.role==='STAFF'?assignmentNames(a.id):memberships(a))+'</td></tr>')))+
- E.panel('초대 내역',invites.length?E.table(['수신자','역할','행사','상태','작업'],invites.map(i=>'<tr><td><div class="od-field"><strong>'+e(i.name)+'</strong><small>'+e(i.email)+'</small></div></td><td>'+e(roleNames[i.role])+'</td><td>'+e(E.state.events.find(a=>a.id===i.eventId)?.name||'미배정')+'</td><td>'+E.badge({PENDING:'초대 대기',ACCEPTED:'수락',REVOKED:'철회'}[i.status]||i.status,i.status==='PENDING'?'warn':'')+'</td><td><div class="actions">'+(i.status==='PENDING'?B('수락 링크','invite-link','data-token="'+e(i.token)+'"')+B('철회','revoke-invite','data-id="'+e(i.id)+'"','','danger'):'—')+'</div></td></tr>')):E.empty('초대 내역이 없습니다','행사 매니저 또는 현장 스태프를 초대할 수 있습니다.'))+
- E.notice('고객사 담당자 연락처는 고객사 메뉴에서 내부 기록으로 관리합니다. 고객사 로그인 계정은 만들지 않습니다.');
-};
-E.actions['invite-member']=()=>E.dialog('팀원 초대',F('이름 *','name','','text','required')+F('이메일 *','email','','email','required')+S('역할','role',[['MANAGER',roleNames.MANAGER],['STAFF',roleNames.STAFF]],'MANAGER')+S('담당 행사','eventId',[['','아직 배정하지 않음'],...E.state.events.map(x=>[x.id,x.name])],'')+E.notice('초대는 이 브라우저에서 수락하는 체험용 링크입니다. 현장 스태프는 계정 생성 후 데스크 또는 부스 업무를 별도로 배정해야 합니다. 실제 이메일은 발송하지 않습니다.'),async p=>{await E.run('member.invite',p);E.close();E.toast('초대 링크를 만들었습니다. 초대 내역에서 복사하세요.');},'초대 링크 만들기');
-E.views.members=()=>{
- const ev=E.event(),managers=E.state.accounts.filter(a=>a.active&&a.role==='MANAGER');
- const rows=managers.map(a=>{const m=E.state.memberships.find(x=>x.accountId===a.id&&x.eventId===ev.id);return '<tr><td>'+e(a.name)+'</td><td>'+e(a.email)+'</td><td>'+E.badge(m?'접근 허용':'미배정',m?'good':'')+'</td><td>'+(E.can('settings',true)?B(m?'접근 해제':'행사 접근','assign-member','data-id="'+e(a.id)+'"',m?'quiet':''):'—')+'</td></tr>';});
- return E.head('행사 권한','행사 매니저의 접근을 관리합니다. 현장 업무는 데스크·부스 배정으로 따로 제어합니다.')+E.eventTabs('settings')+E.panel('행사 매니저',rows.length?E.table(['이름','이메일','상태','작업'],rows):E.empty('행사 매니저 계정이 없습니다','운영사 관리자에게 팀 초대를 요청하세요.'))+E.panel('현장 스태프 권한',E.notice('현장 스태프에게 행사 전체 접근을 부여하지 않습니다. 데스크·부스 업무 메뉴에서 필요한 대상만 배정하고, 해제하면 해당 링크의 접근도 종료됩니다.'));
-};
-E.actions['assign-member']=d=>{
- const ev=E.event(),managers=E.state.accounts.filter(a=>a.active&&a.role==='MANAGER');if(!managers.length)throw Error('행사 매니저 계정이 없습니다.');
- const id=managers.some(a=>a.id===d.id)?d.id:managers[0].id,m=E.state.memberships.find(a=>a.accountId===id&&a.eventId===ev.id);
- E.dialog('행사 매니저 접근',E.detail([['행사',ev.name],['계정',managers.find(a=>a.id===id).name]])+S('행사 매니저','accountId',managers.map(a=>[a.id,a.name+' · '+a.email]),id)+E.check('이 행사에 접근 허용','enabled',!!m)+E.notice('행사 매니저는 배정된 행사에서 운영 기능 전체를 사용할 수 있습니다. 현장 스태프는 이 화면이 아니라 개별 업무 배정으로 관리합니다.'),async p=>{await E.run('member.assign',p);E.close();E.toast('행사 접근을 저장했습니다.');});
- const select=document.querySelector('.overlay [name="accountId"]'),toggle=document.querySelector('.overlay [name="enabled"]');
- if(select&&toggle)select.addEventListener('change',()=>{toggle.checked=!!E.state.memberships.find(a=>a.accountId===select.value&&a.eventId===ev.id);});
-};
-
-E.invitePage=()=>{
- const i=E.state.invitations.find(a=>a.token===E.route.token);
- if(!i||i.status!=='PENDING'||new Date(i.expiresAt)<new Date())return E.accessPage('초대를 사용할 수 없습니다','링크가 만료되었거나 철회되었습니다. 운영사 관리자에게 새 초대를 요청하세요.');
- if(!['MANAGER','STAFF'].includes(i.role))return E.accessPage('지원하지 않는 초대입니다','고객사 로그인은 제공하지 않습니다. 운영사 관리자에게 올바른 팀 초대를 요청하세요.');
- const event=E.state.events.find(a=>a.id===i.eventId);
- return '<main class="access-page">'+E.head('팀 초대 수락','계정 역할과 행사 범위를 확인하세요.','','EVENTOUCH')+E.panel('초대 정보',E.detail([['이름',i.name],['이메일',i.email],['역할',roleNames[i.role]],['행사',event?.name||'초대 후 배정'],['만료',E.date(i.expiresAt)]])+E.notice(i.role==='STAFF'?'수락 후에도 현장 업무는 자동으로 열리지 않습니다. 행사 매니저가 데스크 또는 부스를 배정해야 합니다.':'행사 매니저는 지정된 행사에만 접근합니다. 실제 이메일 인증은 사용하지 않는 프로토타입입니다.')+B('초대 수락','accept-invite','data-token="'+e(i.token)+'"','primary'))+'</main>';
-};
-E.actions['accept-invite']=async d=>{
- const invite=E.state.invitations.find(a=>a.token===d.token),eventId=invite?.eventId,id=await E.run('member.accept',{token:d.token});
- E.login(id);const account=E.state.accounts.find(a=>a.id===id);
- const assignment=account?.role==='STAFF'?E.state.events.flatMap(ev=>E.activeAssignments(ev.id).map(a=>({ev,a}))).find(x=>x.a.accountId===id):null;
- E.toast('팀 초대를 수락했습니다.');
- if(assignment)E.navigate('#/staff/'+encodeURIComponent(assignment.ev.id)+'/'+encodeURIComponent(assignment.a.id));
- else if(account?.role==='MANAGER'&&eventId)E.navigate(E.consoleURL('overview',eventId));
- else E.navigate('#/console/agency/events');
-};
-E.forms.login=async p=>{
- if(p.password!=='eventouch')throw Error('체험 비밀번호 eventouch를 입력하세요.');
- const account=E.state.accounts.find(a=>a.email.toLowerCase()===p.email.trim().toLowerCase()&&a.active);
- if(!account||!['AGENCY','MANAGER','STAFF'].includes(account.role))throw Error('활성 체험 계정 이메일을 확인하세요.');
- E.login(account.id);let hash=E.ui.returnTo;E.ui.returnTo=null;
- if(account.role==='STAFF'){
-  if(!hash?.startsWith('#/event/')){
-   const assignment=E.state.events.flatMap(ev=>E.activeAssignments(ev.id).map(a=>({ev,a}))).find(x=>x.a.accountId===account.id);
-   hash=assignment?'#/staff/'+encodeURIComponent(assignment.ev.id)+'/'+encodeURIComponent(assignment.a.id):'#/console/agency/events';
-  }
- }else if(!hash||!hash.startsWith('#/')){
-  const membership=account.role==='MANAGER'&&E.state.memberships.find(m=>m.accountId===account.id&&E.state.events.some(ev=>ev.id===m.eventId&&ev.stage!=='ARCHIVED'));
-  hash=membership?E.consoleURL('overview',membership.eventId):'#/console/agency/events';
- }
- E.close();E.navigate(hash);
-};
-
 E.actions['choose-assignment']=()=>{
  const items=E.state.events.flatMap(ev=>E.activeAssignments(ev.id).map(a=>{const w=E.state.workspaces[ev.id];return {ev,a,target:(a.type==='DESK'?w.desks:w.booths).find(t=>t.id===a.targetId)};})).filter(x=>x.target);
  const current=E.assignment();
