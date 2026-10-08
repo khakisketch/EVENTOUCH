@@ -3,6 +3,7 @@
 const { test: nodeTest, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const fs = require('node:fs');
 const {
   databaseUrl, startApiHarness, insertAccount, insertEvent, insertMembership,
   insertAssignment, sessionCookie, requestJson,
@@ -140,3 +141,15 @@ for (const [method, suffix] of retired) {
     assert.equal(response.json.workspace, undefined);
   });
 }
+
+test('api database mode never writes the retired JSON store', async () => {
+  const summary = await api('/api/summary', { cookie: cookies.agency });
+  assert.equal(summary.status, 410);
+  assert.match(summary.json.error, /이전 저장 API/);
+  const users = await api('/api/users', { cookie: cookies.agency, method: 'POST', body: { name: '퇴역', role: 'CLIENT' } });
+  assert.equal(users.status, 410);
+  const legacyEvent = await api('/api/events/evt-1', { cookie: cookies.agency });
+  assert.equal(legacyEvent.status, 410);
+  const files = fs.readdirSync(harness.dataDir).filter((name) => name.endsWith('.json'));
+  assert.deepEqual(files, [], `JSON store files must not be created in database mode: ${files.join(', ')}`);
+});

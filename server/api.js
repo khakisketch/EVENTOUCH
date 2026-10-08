@@ -1207,7 +1207,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       return sendJson(res, result.status, result.body);
     }
 
-    ensureSeedData(store);
+    if (!state) ensureSeedData(store);
     if (parts[1] === 'users' && parts.length === 2 && req.method === 'POST') {
       const me = await requireUser(auth, req);
       if (String(me.role).toUpperCase() !== 'AGENCY') {
@@ -1217,6 +1217,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
     }
     if (parts[1] === 'summary' && parts.length === 2 && req.method === 'GET') {
       const account = await requireUser(auth, req);
+      if (state) return err(res, 410, '이전 저장 API는 종료되었습니다. 서버 행사 명령 API를 사용하세요');
       await access.authorize({ account, command: 'organization.summary' });
       return sendJson(res, 200, { summary: agencySummary(readEvents(store)) });
     }

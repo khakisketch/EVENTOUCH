@@ -42,6 +42,7 @@ async function startApiHarness({ storageDir } = {}) {
     return {
       database,
       auth,
+      dataDir,
       baseUrl: `http://127.0.0.1:${address.port}`,
       async restartHttp() {
         server.closeAllConnections();
