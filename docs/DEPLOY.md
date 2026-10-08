@@ -51,3 +51,8 @@
 - 레거시 JSON 라우트(`GET/POST /api/events/:id...`, `GET /api/summary`, `POST /api/users`)는 PostgreSQL 모드에서 로그인 확인 후 `410 이전 저장 API는 종료되었습니다`를 반환한다. 시드 데이터 생성도 실행하지 않는다.
 - `DATA_DIR` JSON 폴백은 데이터베이스 없이 서버를 띄운 과도기 모드에서만 동작한다. 운영에서는 `DATABASE_URL`을 항상 설정한다.
 - 회귀 방지: `tests/server-api.test.cjs`의 `api database mode never writes the retired JSON store` 테스트가 410 응답과 JSON 파일 미생성을 함께 검증한다.
+
+## 정적 자산 버전 (개발 규율)
+
+- `index.html`의 CSS/JS `?v=` 값은 수동 캐시버스터다. 해당 파일을 수정하면 같은 커밋에서 `?v=`를 1 올린다(예: `assets/js/router.js?v=19` → `?v=20`). 자동화(콘텐츠 해시)는 별도 작업이다.
+- 테스트/브라우저 검증 전에 `index.html`의 참조 목록과 실제 `assets/` 파일 목록이 일치하는지 확인한다. 새 파일은 스크립트 순서 규칙(기존 로드 순서·덮어쓰기 체인)을 따른다.
