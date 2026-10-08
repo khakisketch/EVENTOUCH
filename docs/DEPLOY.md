@@ -56,3 +56,10 @@
 
 - `index.html`의 CSS/JS `?v=` 값은 수동 캐시버스터다. 해당 파일을 수정하면 같은 커밋에서 `?v=`를 1 올린다(예: `assets/js/router.js?v=19` → `?v=20`). 자동화(콘텐츠 해시)는 별도 작업이다.
 - 테스트/브라우저 검증 전에 `index.html`의 참조 목록과 실제 `assets/` 파일 목록이 일치하는지 확인한다. 새 파일은 스크립트 순서 규칙(기존 로드 순서·덮어쓰기 체인)을 따른다.
+
+## 클라이언트 스크립트 로드 순서 (덮어쓰기 체인)
+
+- `index.html`의 `defer` 스크립트는 순서 자체가 모듈 시스템이다. 뒤에 로드되는 파일이 같은 이름의 뷰/액션/핸들러를 덮어쓴다(예: operator-experience가 role-model/console의 정의를, server-sync가 로그인 폼을 감싼다).
+- 유지되는 체인: core → store → console → router → experience → workflows → role-model → event-flow → operator-experience → server-sync → booth-map-data → booth-map-ui → server-presentation.
+- `?mode=preview`는 server-sync가 캡처해 둔 프리뷰 로그인 폼으로 위임한다. 로그인/초대/스태프 링크는 각 시점의 최종 정의를 쓰므로, 정의를 옮기거나 순서를 바꾸기 전에 `tests/load-order.test.cjs`를 확인한다.
+- `window.ET.workflowVersion` 게이트(operator-experience에서 최종 값 설정)가 로드 실패를 감지한다.
