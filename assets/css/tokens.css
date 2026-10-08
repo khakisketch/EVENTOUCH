@@ -41,5 +41,6 @@ input[aria-invalid=true],select[aria-invalid=true],textarea[aria-invalid=true]{b
 .table-scroll tr{display:grid;gap:var(--s2);padding:var(--s4) 0;border-bottom:1px solid var(--line)}.table-scroll td{display:grid;grid-template-columns:minmax(72px,1fr) minmax(0,3fr);gap:var(--s3);border:0;padding:0;align-items:start}
 .table-scroll td:before{content:attr(data-label);color:var(--muted);font-size:var(--small)}.table-scroll td>*{min-width:0}
 }
+@media(max-width:480px){.tabs{gap:var(--s1)}.tabs .btn{padding-inline:var(--s2)}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 @media print{.table-scroll table{display:table}.table-scroll thead{position:static;width:auto;height:auto;clip:auto}.table-scroll tbody{display:table-row-group}.table-scroll tr{display:table-row}.table-scroll td{display:table-cell;padding:var(--s2)}.table-scroll td:before{display:none}}
