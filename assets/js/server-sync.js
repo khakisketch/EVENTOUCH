@@ -11,7 +11,7 @@ const clone=value=>value==null?value:JSON.parse(JSON.stringify(value));
 function setConnection(status,message=''){
  E.remote.status=status;E.remote.error=message;
  E.ui.connectionState={status,message};
- if(message)E.storageWarning=message;
+ if(status==='offline'||status==='error'){if(message)E.storageWarning=message;}
  else if(status==='connected')E.storageWarning='';
 }
 function apiPath(path){

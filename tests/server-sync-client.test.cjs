@@ -527,3 +527,31 @@ test('manual retry after two lost command responses reuses the uncertain command
   const latest = JSON.parse(harness.calls.filter(call => call.url.endsWith('/commands')).at(-1).options.body);
   assert.notEqual(latest.commandId, commands[0].commandId);
 });
+
+test('business denials keep the connection state without raising the storage banner', async () => {
+  const harness = loadAdapter(async () => response(403, { error: 'permission denied' }));
+  harness.E.storageWarning = '';
+  harness.E.state = state();
+  harness.E.session = ACCOUNT;
+  harness.E.route = { scope: 'staff', eventId: 'event-1', assignmentId: 'assignment-1' };
+  harness.E.handlers['check.scan'] = { group: 'onsite', options: {} };
+  await assert.rejects(harness.E.run('check.scan', { deskId: 'desk-1', ticket: 'ticket-1' }), error => error.status === 403);
+  assert.equal(harness.E.ui.connectionState.status, 'denied');
+  assert.equal(harness.E.storageWarning, '');
+});
+
+test('connection failures raise the storage banner and a later success clears it', async () => {
+  let mode = 'offline';
+  const harness = loadAdapter(async url => {
+    if (mode === 'offline') throw new Error('network down');
+    if (url === '/api/bootstrap') return response(200, { state: state() });
+    return response(404, { error: 'unexpected route' });
+  });
+  harness.E.session = ACCOUNT;
+  await assert.rejects(harness.E.remote.bootstrap(), error => error.message === 'network down');
+  assert.equal(harness.E.ui.connectionState.status, 'offline');
+  assert.equal(harness.E.storageWarning, 'network down');
+  mode = 'online';
+  await harness.E.remote.bootstrap();
+  assert.equal(harness.E.storageWarning, '');
+});
