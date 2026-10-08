@@ -94,6 +94,15 @@ test('attendee home identifies event date, time, venue, and a registration actio
   assert.match(html, /참가 신청/);
 });
 
+test('attendee home uses shared empty states for unpublished notice and schedule content', () => {
+  const source = fs.readFileSync(path.join(root, 'assets/js/operator-experience.js'), 'utf8');
+  const home = source.match(/E\.mobileHome\s*=\s*\(\)\s*=>\s*\{([\s\S]*?)\n\};/)?.[1] || '';
+  assert.ok(home, 'the configured attendee home override remains active');
+  assert.match(home, /E\.empty\('새 안내가 없습니다'/);
+  assert.match(home, /E\.empty\('일정 준비 중입니다'/);
+  assert.doesNotMatch(home, /E\.notice\('(새 안내가 게시되면|시간표가 게시되면)/);
+});
+
 test('direct registration shows event context before the unchanged form and consent', () => {
   const { E } = loadAttendee('register');
   const html = E.mobileRegister();
