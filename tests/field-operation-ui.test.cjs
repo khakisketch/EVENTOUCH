@@ -105,3 +105,14 @@ test('field screens use one warning message for event-not-live and closed-desk s
   assert.match(warnings[0], /행사가 진행 중이 아니거나 배정 데스크가 닫혀 있습니다/);
   assert.equal(event.stage, 'PRE');
 });
+
+test('staff workspace keeps a page-level title and exposes assignment switching in the header', () => {
+  const { E, workspace } = boot();
+  workspace.assignments.push({ id: 'assignment-2', accountId: 'staff-1', type: 'BOOTH', targetId: 'booth-1' });
+  const html = E.views.staff();
+  assert.match(html, /<header class="app-header staff-header">[\s\S]*?<h1>입장 데스크<\/h1>/);
+  assert.match(html, /class="btn staff-assignment-trigger"[^>]*data-action="choose-assignment"/);
+  assert.match(html, /class="staff-primary"/);
+  assert.match(html, /class="staff-recent"[\s\S]*최근 처리/);
+  assert.ok(html.indexOf('<h1>입장 데스크</h1>') < html.indexOf('최근 처리'), 'page title should precede section titles');
+});

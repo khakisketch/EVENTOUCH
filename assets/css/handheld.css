@@ -170,7 +170,7 @@
     /* Narrow viewports: the handset chrome collapses and the screen fills the
        viewport, so the app behaves like a real phone page instead of
        scrolling sideways. */
-    @media (max-width: 480px) {
+    @media (max-width: 520px) {
       body.handheld { padding: 0; display: block; }
       .phone-frame { width: 100%; height: 100dvh; padding: 0; border-radius: 0; background: none; box-shadow: none; zoom: 1; }
       .phone-frame::before, .phone-frame::after, .hardware-button { display: none; }
@@ -192,4 +192,43 @@ body.handheld{color:var(--ink);font-family:var(--body-font)}.phone-content{backg
 .staff-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s3);margin-bottom:var(--s5)}.staff-summary .od-stat{padding:var(--s4);background:var(--surface-muted);border-radius:var(--radius)}.staff-summary strong{font:700 var(--h2)/1.3 var(--display-font)}.staff-summary small{color:var(--muted)}.scan-candidate{padding:var(--s5) var(--s4);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:var(--s4)}.scan-candidate h2{font-size:var(--h2)}.scan-candidate .actions{margin-top:var(--s5)}.scan-candidate .btn{min-height:48px}.mobile-body .status-block .btn{width:100%;min-height:48px}
 .mobile-body form>.btn[type=submit]{width:100%;margin-top:var(--s4)}.mobile-body .notice{color:var(--info)}.mobile-body .notice.warning{color:var(--warning)}.mobile-body .notice.error{color:var(--danger)}.time-cell{color:var(--brand-text)}.app-footer{background:var(--surface-muted)}.phone-screen .toast{width:calc(100% - 32px);bottom:calc(var(--phone-safe-bottom) + 72px);white-space:normal}
 @media(hover:hover){.engagement-link:hover{background:var(--soft);border-color:var(--brand-text)}.app-nav a:hover{background:var(--soft);color:var(--brand-text)}}
+
+/* Staff workspace: keep the established full-screen phone layout on narrow
+   viewports, and present the same route as a full-size workspace on desktop. */
+.staff-workspace .staff-header h1{font-size:var(--h3);line-height:1.4;letter-spacing:0}
+.staff-header-actions{flex:none}
+.staff-assignment-trigger{min-height:44px}
+.staff-primary,.staff-recent{min-width:0}
+.staff-assignment-switcher{min-width:0}
+@media(max-width:520px){
+  .staff-primary,.staff-recent{display:contents}
+}
+@media(min-width:900px){
+  body.staff-workspace-mode{display:block;min-height:100dvh;padding:0;background:var(--ground);color:var(--ink);font:var(--body)/1.6 var(--body-font)}
+  body.staff-workspace-mode .mobile-app.staff-workspace{display:flex;flex-direction:column;width:100%;height:100dvh;min-height:0}
+  .staff-workspace .staff-header{flex:none;align-items:center;gap:var(--s5);padding:var(--s4) clamp(24px,4vw,64px);}
+  .staff-workspace .staff-heading{min-width:0}
+  .staff-workspace .staff-header h1{font-size:var(--h1);line-height:1.3;letter-spacing:-.04em;overflow-wrap:anywhere}
+  .staff-workspace .staff-header-actions{align-items:center;justify-content:flex-end;flex-wrap:wrap}
+  .staff-workspace .staff-header-actions .btn{min-height:44px}
+  .staff-workspace>.mobile-body{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,.85fr);align-content:start;align-items:start;gap:var(--s5);flex:1;min-height:0;width:100%;max-width:1680px;margin:0 auto;padding:var(--s5) clamp(24px,4vw,64px);overflow-x:hidden;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent}
+  .staff-workspace>.mobile-body::-webkit-scrollbar{width:8px}
+  .staff-workspace>.mobile-body::-webkit-scrollbar-track{background:transparent}
+  .staff-workspace>.mobile-body::-webkit-scrollbar-thumb{border:2px solid var(--ground);border-radius:999px;background:var(--line-strong)}
+  .staff-workspace .staff-primary,.staff-workspace .staff-recent{min-width:0;padding:var(--s5);border:1px solid var(--line);border-radius:var(--radius);background:var(--paper)}
+  .staff-workspace .staff-assignment-switcher{grid-column:1/-1;grid-template-columns:minmax(200px,.65fr) minmax(0,1.35fr);align-items:center;gap:var(--s4);margin:0;padding:0 0 var(--s4)}
+  .staff-workspace .staff-assignment-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:var(--s2)}
+  .staff-workspace .staff-assignment-link{min-width:0}
+  .staff-workspace .staff-assignment-link .od-field{min-width:0;overflow-wrap:anywhere}
+  .staff-workspace .staff-primary .notice:first-child{margin-top:0}
+  .staff-workspace .staff-primary form{min-width:0}
+  .staff-workspace .staff-primary form .actions .btn{min-height:44px}
+  .staff-workspace .staff-primary>.actions{margin-top:var(--s4)}
+  .staff-workspace .staff-recent .section-title{margin-top:0}
+  .staff-workspace .staff-recent .list-item{display:flex;align-items:center;justify-content:space-between;gap:var(--s4)}
+  .staff-workspace .staff-recent .list-item>.od-field{min-width:0;overflow-wrap:anywhere}
+  .staff-workspace .staff-recent .list-item .actions{flex:none}
+  .staff-workspace .staff-recent .list-item{min-height:56px}
+  .staff-workspace .app-footer{flex:none;padding-inline:clamp(24px,4vw,64px)}
+}
 .staff-assignment-switcher{display:grid;gap:var(--s3);margin:0 0 var(--s5);padding:0 0 var(--s5);border-bottom:1px solid var(--line)}.staff-assignment-switcher>div p{margin:0;color:var(--muted);font-size:var(--small)}.staff-assignment-list{gap:var(--s2)}.staff-assignment-link{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);min-height:56px;padding:var(--s3);border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--paper);color:var(--ink);text-decoration:none}.staff-assignment-link .od-field{gap:var(--s1)}.staff-assignment-link small{color:var(--muted)}.staff-assignment-link .staff-current-label,.staff-assignment-link .staff-switch-label{flex:none;font-size:var(--small);font-weight:700;white-space:nowrap}.staff-assignment-link .staff-current-label{color:var(--brand-text)}.staff-assignment-link.is-current{background:var(--soft);border-color:var(--brand-text)}@media(hover:hover){a.staff-assignment-link:hover{background:var(--soft);border-color:var(--brand-text);color:var(--ink)}}
