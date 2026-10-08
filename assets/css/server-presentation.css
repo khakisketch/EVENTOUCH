@@ -94,5 +94,5 @@ body:has(#app > .attendee-site) > .toast:not(:empty){top:16px;bottom:auto;width:
 /* Keep mobile admin feedback in its own row, clear of active editing controls. */
 @media(max-width:768px){
  body:has(.admin-shell):has(> .toast:not(:empty)) #app{padding-top:112px;}
- body:has(.admin-shell) > .toast:not(:empty){top:16px;bottom:auto;}
+ body:has(.admin-shell) > .toast:not(:empty){top:16px;right:var(--s4);bottom:auto;left:auto;transform:none;max-width:min(280px,calc(100% - 32px));}
 }
