@@ -14,7 +14,7 @@ const event = {
 const workspace = {
   venue: { name: '시민회관', address: '서울 중구 세종대로 1' },
   branding: { tagline: '함께 나누는 지역의 이야기', logo: null, keyvisual: null },
-  notices: [], program: [], publishedFields: [
+  notices: [], program: [], modules: [], publishedFields: [
     { id: 'name', label: '이름', required: true, type: 'text' },
     { id: 'phone', label: '연락처', required: true, type: 'tel' },
     { id: 'company', label: '소속', required: false, type: 'text' },
@@ -32,7 +32,7 @@ function loadAttendee(page = 'home', person = null, options = {}) {
     route: { scope: 'attendee', eventId: testEvent.id, slug: testEvent.slug, page, params: new URLSearchParams() },
     state: { events: [event] }, views: {}, forms: {}, actions: {}, ui: {},
     features: {}, registrationStates: { APPROVED: '참가 확정', PENDING: '확인 중' },
-    event: () => testEvent, work: () => testWorkspace, person: () => person,
+    event: () => testEvent, work: () => testWorkspace, person: () => person, date: value => String(value ?? ''),
     can: () => false, ticketValid: () => true,
     esc: value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])),
     button: (label, action, attrs = '', cls = '') => `<button class="btn ${cls}" data-action="${action}" ${attrs}>${label}</button>`,
@@ -199,12 +199,38 @@ test('five attendee header routes form balanced narrow rows and expose the curre
   const focusedNav = E.views.attendee().match(/<nav aria-label="페이지 이동">([\s\S]*?)<\/nav>/)?.[1] || '';
   assert.match(focusedNav, /href="#\/event\/browser-event\/home" aria-current="page">행사 홈<\/a>/);
   assert.doesNotMatch(focusedNav, /내 티켓/);
+  E.route.page = 'fullticket';
+  const fullTicketNav = E.views.attendee().match(/<nav aria-label="페이지 이동">([\s\S]*?)<\/nav>/)?.[1] || '';
+  assert.match(fullTicketNav, /href="#\/event\/browser-event\/home" aria-current="page">행사 홈<\/a>/);
+  assert.doesNotMatch(fullTicketNav, /내 티켓/);
 
   const css = fs.readFileSync(path.join(root, 'assets/css/server-presentation.css'), 'utf8');
   assert.match(css, /\.attendee-site-header nav:has\(> a:nth-child\(5\)\)/);
   assert.match(css, /\.attendee-site-header nav:has\(> a:nth-child\(5\)\)[\s\S]*?grid-template-columns:\s*repeat\(6,minmax\(0,1fr\)\)/);
   assert.match(css, /\.attendee-site-header nav:has\(> a:nth-child\(5\)\) a:nth-child\(4\)\s*\{[^}]*grid-column:\s*2\s*\/\s*span\s*2/s);
   assert.match(css, /\.attendee-site-header nav:has\(> a:nth-child\(5\)\) a:nth-child\(5\)\s*\{[^}]*grid-column:\s*4\s*\/\s*span\s*2/s);
+  const activeRule = css.indexOf('.attendee-site-header nav a.active{');
+  assert.ok(activeRule >= 0 && activeRule < css.indexOf('@media(max-width:700px)'), 'the visible active treatment applies at desktop widths too');
+});
+
+test('attendee child routes mark their parent destination while unknown routes stay unselected', () => {
+  const { E } = loadAttendee('home', { id: 'person-1', ticket: 'bearer-code', name: '김가람', status: 'APPROVED' });
+  const parentRoutes = {
+    'program-detail': 'schedule', 'notice-detail': 'notices', info: 'more', venue: 'more', help: 'more',
+    stamp: 'more', poll: 'more', quiz: 'more', qa: 'more', draw: 'more', survey: 'more', photo: 'more', board: 'more', rewards: 'more',
+  };
+  for (const [page, parent] of Object.entries(parentRoutes)) {
+    E.route.page = page;
+    const nav = E.views.attendee().match(/<nav aria-label="행사 메뉴">([\s\S]*?)<\/nav>/)?.[1] || '';
+    const currentLinks = nav.match(/<a\b[^>]*aria-current="page"[^>]*>/g) || [];
+    assert.equal(currentLinks.length, 1, `${page} should expose exactly one current destination`);
+    assert.match(currentLinks[0], new RegExp(`href="#/event/browser-event/${parent}"`));
+    assert.match(currentLinks[0], /class="[^"]*active[^"]*"/);
+  }
+
+  E.route.page = 'unknown';
+  const unknownNav = E.views.attendee().match(/<nav aria-label="행사 메뉴">([\s\S]*?)<\/nav>/)?.[1] || '';
+  assert.doesNotMatch(unknownNav, /aria-current="page"|class="[^"]*\bactive\b/);
 });
 
 test('organizer overview uses the shared panel, list-row, badge, empty-state and action-row treatments', () => {

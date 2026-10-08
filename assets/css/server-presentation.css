@@ -34,6 +34,7 @@ body:has(#app > .attendee-site) #app{display:block;width:100%;min-width:0;height
 .attendee-site-header nav,.attendee-page-nav{display:flex;align-items:center;gap:20px;flex-wrap:wrap;}
 .attendee-site-header nav a,.attendee-page-nav a{min-height:44px;display:inline-flex;align-items:center;color:var(--ink);text-decoration:underline;text-underline-offset:3px;}
 .attendee-site-header nav a:focus-visible,.attendee-page-nav a:focus-visible,.attendee-site a:focus-visible{outline:3px solid var(--focus);outline-offset:3px;border-radius:3px;}
+.attendee-site-header nav a.active{color:var(--brand-text);font-weight:700;text-decoration-thickness:2px;}
 .attendee-site-main{padding-block:32px 64px;min-height:calc(100vh - 142px);}
 .attendee-site-footer{display:flex;justify-content:space-between;gap:16px;padding-block:20px;border-top:1px solid var(--line);color:var(--muted);font-size:var(--small);}
 .attendee-site-footer a{color:inherit;}
@@ -74,7 +75,6 @@ body:has(#app > .attendee-site) #app{display:block;width:100%;min-width:0;height
  .attendee-site-header nav:has(> a:nth-child(5)) a:nth-child(-n+3){grid-column:span 2;}
  .attendee-site-header nav:has(> a:nth-child(5)) a:nth-child(4){grid-column:2/span 2;}
  .attendee-site-header nav:has(> a:nth-child(5)) a:nth-child(5){grid-column:4/span 2;}
- .attendee-site-header nav a.active{color:var(--brand-text);font-weight:700;text-decoration-thickness:2px;}
  .attendee-site-main{padding-block:24px 48px;min-height:calc(100vh - 170px);}
  .attendee-home-hero{grid-template-columns:minmax(0,1fr);gap:20px;padding-block:12px 28px;}
  .attendee-home-image{grid-row:1;}
