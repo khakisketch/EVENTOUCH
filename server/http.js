@@ -47,4 +47,10 @@ function parseCookies(header) {
   return out;
 }
 
-module.exports = { sendJson, readJsonBody, parseCookies };
+// Expected domain failures carry an explicit status plus a user-facing
+// message; unexpected errors must not echo internal details to clients.
+function failureMessage(error, fallback) {
+  return error && error.status && error.message ? error.message : fallback;
+}
+
+module.exports = { sendJson, readJsonBody, parseCookies, failureMessage };

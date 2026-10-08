@@ -39,6 +39,7 @@ function loadPresentation(previewMode = false, connection = { status: 'connected
     navigate: hash => { copied.navigations.push(hash); },
     loginPage: () => '<main>PREVIEW_SENTINEL</main>',
     invitePage: () => '<main>PREVIEW_INVITE_SENTINEL</main>',
+    reportMarkup: overrides.reportMarkup || (() => '<article><footer class="rule"><p class="help">샘플 행사 데이터로 작성된 브라우저 프로토타입 보고서입니다. 생성 시점의 데이터가 고정되어 이후 운영 변경과 구분됩니다.</p></footer></article>'),
   };
   const window = { ET: E, addEventListener() {}, location: { search: '' } };
   const document = { addEventListener() {}, querySelector: () => null };
@@ -153,4 +154,16 @@ test('preview mode keeps the local invite page and link behavior', () => {
   const { E } = loadPresentation(true, { status: 'preview', message: '' });
   assert.match(E.invitePage(), /PREVIEW_INVITE_SENTINEL/);
   assert.equal(E.actions['invite-link']({ token: 'preview-token' }), 'PREVIEW_INVITE_LINK:preview-token');
+});
+
+test('server-mode reports replace the browser-prototype footer with server wording', () => {
+  const { E } = loadPresentation();
+  const html = E.reportMarkup();
+  assert.match(html, /행사 서버에 기록된 데이터로 작성된 내부 결과 보고서입니다/);
+  assert.doesNotMatch(html, /브라우저 프로토타입 보고서/);
+});
+
+test('preview mode keeps the prototype report footer', () => {
+  const { E } = loadPresentation(true, { status: 'preview', message: '' });
+  assert.match(E.reportMarkup(), /브라우저 프로토타입 보고서/);
 });

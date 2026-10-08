@@ -10,7 +10,7 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-const { sendJson } = require('./http');
+const { sendJson, failureMessage } = require('./http');
 const { isCalendarDate, toCapacityNumber, isFiniteCapacity } = require('./validation');
 
 const STAFF_WRITE = ['participants', 'checkin', 'booth', 'booths', 'staff', 'qna', 'photos', 'poll', 'quiz', 'draw', 'survey'];
@@ -317,7 +317,7 @@ async function handleEvents(req, res, store, parts, body, auth, access) {
       saveEvents(store, data);
       return sendJson(res, 201, { participant });
     } catch (e) {
-      return err(res, e.status || 500, e.message || '요청을 처리하지 못했습니다', e.field);
+      return err(res, e.status || 500, failureMessage(e, '요청을 처리하지 못했습니다'), e.field);
     }
   }
   const me = await requireUser(auth, req);

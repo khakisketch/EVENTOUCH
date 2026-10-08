@@ -5,7 +5,7 @@
 // All mutations require an authenticated session + write grant.
 
 const fs = require('node:fs');
-const { sendJson, readJsonBody } = require('./http');
+const { sendJson, readJsonBody, failureMessage } = require('./http');
 const {
   handleLegacyEvents,
   handleLegacyUpload,
@@ -67,7 +67,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       const projection = await state.loadBootstrap(account);
       return sendJson(res, 200, { state: projection });
     } catch (error) {
-      return err(res, error.status || 500, error.message || '요청을 처리하지 못했습니다');
+      return err(res, error.status || 500, failureMessage(error, '요청을 처리하지 못했습니다'));
     }
   }
 
@@ -99,7 +99,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       if (!result) return err(res, 404, '티켓 링크를 확인할 수 없습니다');
       return sendJson(res, 200, result);
     } catch (error) {
-      return err(res, error.status || 500, error.message || '요청을 처리하지 못했습니다');
+      return err(res, error.status || 500, failureMessage(error, '요청을 처리하지 못했습니다'));
     }
   }
 
@@ -142,7 +142,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       ensureLegacySeed(store);
       return await handleLegacyUpload(req, res, store, parts[2], req.url || urlPath, auth, access);
     } catch (e) {
-      return err(res, e.status || 500, e.message || '요청을 처리하지 못했습니다', e.field);
+      return err(res, e.status || 500, failureMessage(e, '요청을 처리하지 못했습니다'), e.field);
     }
   }
 
@@ -186,7 +186,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
         const result = await participantCommands.signup({ slug, commandId: body.commandId, input: body });
         return sendJson(res, result.status, result.body);
       } catch (error) {
-        return err(res, error.status || 500, error.message || '요청을 처리하지 못했습니다', error.field);
+        return err(res, error.status || 500, failureMessage(error, '요청을 처리하지 못했습니다'), error.field);
       }
     }
 
@@ -316,7 +316,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
     }
     return sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
   } catch (e) {
-    return err(res, e.status || 500, e.message || '요청을 처리하지 못했습니다', e.field);
+    return err(res, e.status || 500, failureMessage(e, '요청을 처리하지 못했습니다'), e.field);
   }
 }
 

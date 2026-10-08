@@ -73,6 +73,13 @@ if(originalAttendeeView)E.views.attendee=function(){
  return html;
 };
 
+const originalReportMarkup=E.reportMarkup;
+if(typeof originalReportMarkup==='function')E.reportMarkup=function(){
+ let html=originalReportMarkup.apply(this,arguments);
+ if(E.previewMode||E.storageMode!=='server')return html;
+ return html.replace('샘플 행사 데이터로 작성된 브라우저 프로토타입 보고서입니다','행사 서버에 기록된 데이터로 작성된 내부 결과 보고서입니다');
+};
+
 const originalInviteLinkAction=E.actions['invite-link'];
 E.actions['invite-link']=data=>{
  if(E.previewMode)return originalInviteLinkAction?originalInviteLinkAction(data):undefined;

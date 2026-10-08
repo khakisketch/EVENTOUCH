@@ -2,7 +2,7 @@
 
 // Session auth with role users. Passwords: scrypt hashes only.
 const crypto = require('node:crypto');
-const { sendJson, readJsonBody } = require('./http');
+const { sendJson, readJsonBody, failureMessage } = require('./http');
 
 const ROLES = ['AGENCY', 'MANAGER', 'STAFF'];
 const SESSION_COOKIE = 'etko_session';
@@ -526,7 +526,7 @@ function createDatabaseAuth(database) {
         sendJson(res, 201, created);
       } catch (error) {
         sendJson(res, error.status || 500, Object.assign(
-          { error: error.message || '초대를 만들지 못했습니다' },
+          { error: failureMessage(error, '초대를 만들지 못했습니다') },
           error.code ? { code: error.code } : null,
           error.field ? { field: error.field } : null
         ));
@@ -561,7 +561,7 @@ function createDatabaseAuth(database) {
         sendJson(res, 200, { invitation: result.invitation });
       } catch (error) {
         sendJson(res, error.status || 500, Object.assign(
-          { error: error.message || '초대를 철회하지 못했습니다' },
+          { error: failureMessage(error, '초대를 철회하지 못했습니다') },
           error.field ? { field: error.field } : null
         ));
       }
@@ -600,7 +600,7 @@ function createDatabaseAuth(database) {
           const account = await acceptInvitation(token, body && body.password);
           sendJson(res, 201, { account });
         } catch (error) {
-          sendJson(res, error.status || 500, { error: error.message || '초대를 수락하지 못했습니다' });
+          sendJson(res, error.status || 500, { error: failureMessage(error, '초대를 수락하지 못했습니다') });
         }
         return;
       }
