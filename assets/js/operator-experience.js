@@ -133,7 +133,7 @@ E.actions['accept-invite']=async d=>{
  const invite=E.state.invitations.find(x=>x.token===d.token),eventId=invite?.eventId,id=await E.run('member.accept',{token:d.token});
  E.login(id);const account=E.state.accounts.find(x=>x.id===id),assignment=account?.role==='STAFF'?E.state.events.flatMap(ev=>E.activeAssignments(ev.id).filter(a=>a.accountId===id).map(a=>({ev,a})))[0]:null;
  E.toast('팀 초대를 수락했습니다.');
- if(assignment)E.navigate(E.staffURL(assignment.a));else if(account?.role==='STAFF')E.navigate('#/login');else E.navigate(eventId?'#/console/events/'+encodeURIComponent(eventId)+'/overview':'#/console/agency/events');
+ if(assignment)E.navigate(E.staffURLFor(assignment.ev.id,assignment.a));else if(account?.role==='STAFF')E.navigate('#/login');else E.navigate(eventId?'#/console/events/'+encodeURIComponent(eventId)+'/overview':'#/console/agency/events');
 };
 E.forms.login=async p=>{
  if(p.password!=='eventouch')throw Error('체험 비밀번호 eventouch를 입력하세요.');
@@ -141,7 +141,7 @@ E.forms.login=async p=>{
  if(!a)throw Error('활성 운영사 구성원 또는 현장 스태프 계정 이메일을 확인하세요.');
  E.login(a.id);let hash=E.ui.returnTo;E.ui.returnTo=null;
  if(!hash||!hash.startsWith('#/')){
-  if(a.role==='STAFF'){const pair=E.state.events.flatMap(ev=>E.activeAssignments(ev.id).filter(x=>x.accountId===a.id).map(x=>({ev,x})))[0];hash=pair?E.staffURL(pair.x):'#/login';}
+  if(a.role==='STAFF'){const pair=E.state.events.flatMap(ev=>E.activeAssignments(ev.id).filter(x=>x.accountId===a.id).map(x=>({ev,x})))[0];hash=pair?E.staffURLFor(pair.ev.id,pair.x):'#/login';}
   else hash='#/console/agency/events';
  }
  E.close();E.navigate(hash);

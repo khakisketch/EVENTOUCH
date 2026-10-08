@@ -23,7 +23,7 @@ E.can=(group,write=false)=>{if(!E.session||!E.session.active)return false;if(E.s
 E.metrics=w=>{const active=w.participants.filter(p=>p.status!=='CANCELLED');return {total:active.length,pending:active.filter(p=>p.status==='PENDING').length,approved:active.filter(p=>p.status==='APPROVED').length,checked:active.filter(p=>p.everIn).length,inside:active.filter(p=>p.inside).length,responses:w.responses.length,rate:active.length?Math.round(active.filter(p=>p.everIn).length/active.length*100):0};};
 E.ticketURL=(ev,p,page='ticket')=>'#/event/'+encodeURIComponent(ev.slug)+'/'+page+'?ticket='+encodeURIComponent(p.ticket);
 E.consoleURL=(page='overview',id=E.event()?.id)=>'#/console/events/'+id+'/'+page;
-E.staffURL=a=>'#/staff/'+E.event().id+'/'+a.id;E.url=hash=>location.href.split('#')[0]+hash;
+E.staffURL=a=>'#/staff/'+E.event().id+'/'+a.id;E.staffURLFor=(eventId,a)=>'#/staff/'+eventId+'/'+a.id;E.url=hash=>location.href.split('#')[0]+hash;
 E.theme=name=>getComputedStyle(document.documentElement).getPropertyValue('--'+name).trim();
 E.ticketValid=p=>!!p&&!p.revoked&&p.status!=='CANCELLED'&&Number.isFinite(Date.parse(p.ticketExpiresAt))&&Date.parse(p.ticketExpiresAt)>Date.now();
 E.require=(v,label,max=200)=>{const s=String(v??'').trim();if(!s)throw Error(label+'을(를) 입력하세요.');if(s.length>max)throw Error(label+'은(는) '+max+'자 이내로 입력하세요.');return s;};
