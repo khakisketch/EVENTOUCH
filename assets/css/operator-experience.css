@@ -11,8 +11,7 @@
 .mobile-app{--attendee-accent:var(--brand);--attendee-accent-ink:var(--on-brand)}
 .mobile-app .mobile-brand,.mobile-app .eyebrow{color:var(--attendee-accent-ink)}
 .mobile-app .btn.primary{background:var(--attendee-accent);border-color:var(--attendee-accent);color:var(--attendee-accent-ink)}
-.mobile-app .app-nav a.active{color:var(--attendee-accent-ink);border-color:var(--attendee-accent)}
-.mobile-app .app-nav a:focus-visible,.mobile-app .mobile-card:focus-visible{outline-color:var(--focus)}
+.mobile-app .mobile-card:focus-visible{outline-color:var(--focus)}
 .mobile-app .mobile-hero{border-color:var(--attendee-accent)}
 .mobile-app .mobile-hero .eyebrow{color:var(--attendee-accent-ink)}
 @media(hover:hover){.mobile-app .btn.primary:hover{box-shadow:0 0 0 2px var(--attendee-accent)}}

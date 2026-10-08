@@ -215,9 +215,7 @@ E.views.attendee=()=>{
  if(!cfg.showPrograms&&['poll','quiz','qa','draw','survey','stamp','photo','board','rewards'].includes(E.route.page))return E.mobileState('참여 프로그램 안내가 숨겨져 있습니다','운영자가 참가자 페이지 설정에서 공개할 수 있습니다.',L('행사 홈',E.aurl('home')));
  html=html.replace('<div class="mobile-app od-screen">','<div class="mobile-app od-screen" style="--attendee-accent:'+validAccent(cfg.accent)+';--attendee-accent-ink:'+contrastInk(validAccent(cfg.accent))+'">');
  if(preview)html=html.replace('<div class="od-scroll mobile-body" id="main-content">','<div class="od-scroll mobile-body" id="main-content"><div class="preview-ribbon" role="status">운영자 미리보기 · 저장한 초안 · 테스트 신청은 이 브라우저에 저장됩니다</div>');
- const links=[['home','home','홈'],['ticket','ticket','티켓'],...(cfg.showSchedule?[['schedule','calendar','일정']]:[]),['more','more','더보기']];
- const nav='<nav class="app-nav" aria-label="참가자 메뉴">'+links.map(([page,icon,label])=>'<a href="'+e(E.aurl(page))+'" '+(E.route.page===page?'aria-current="page"':'')+' class="'+(E.route.page===page?'active':'')+'">'+E.icon(icon)+'<span>'+e(label)+'</span></a>').join('')+'</nav>';
- return html.replace(/<nav class="app-nav" aria-label="참가자 메뉴">[\s\S]*?<\/nav>/,nav);
+ return html;
 };
 E.workflowVersion=17;
 })(window.ET);
