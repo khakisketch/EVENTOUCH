@@ -1,5 +1,7 @@
 'use strict';
 
+const { isCalendarDate, toCapacityNumber, isIntegerCapacity } = require('../validation');
+
 const COMMANDS = new Set([
   'event.update',
   'event.features',
@@ -31,18 +33,6 @@ function requireText(ctx, value, label, max, field) {
   const result = ctx.clean(value, max);
   if (!result) throw ctx.fail(400, `${label}을(를) 입력하세요`, field);
   return result;
-}
-
-function date(value) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
-  if (!match) return false;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  if (year < 1 || month < 1 || month > 12 || day < 1) return false;
-  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
-  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  return day <= days[month - 1];
 }
 
 function time(value) {
@@ -95,16 +85,16 @@ async function updateEvent(ctx, input) {
   const eventDate = requireText(ctx, input.date, '날짜', 10, 'date');
   const start = requireText(ctx, input.start, '시작 시간', 5, 'start');
   const end = requireText(ctx, input.end, '종료 시간', 5, 'end');
-  const capacity = Number(input.capacity);
+  const capacity = toCapacityNumber(input.capacity);
   const price = Number(input.price === undefined ? workspace.price : input.price);
   if (!/^[a-z0-9-]+$/.test(slug)) throw ctx.fail(400, '행사 주소 코드를 확인하세요', 'slug');
   if (slug !== event.slug) {
     const duplicate = await ctx.client.query('SELECT 1 FROM events WHERE slug = $1 AND id <> $2 LIMIT 1', [slug, event.id]);
     if (duplicate.rowCount) throw ctx.fail(409, '이미 사용 중인 행사 주소 코드입니다', 'slug');
   }
-  if (!date(eventDate)) throw ctx.fail(400, '행사 날짜 형식이 올바르지 않습니다', 'date');
+  if (!isCalendarDate(eventDate)) throw ctx.fail(400, '행사 날짜 형식이 올바르지 않습니다', 'date');
   if (!time(start) || !time(end) || start >= end) throw ctx.fail(400, '종료 시간은 시작 시간보다 늦어야 합니다', 'end');
-  if (!Number.isInteger(capacity) || capacity < 0) throw ctx.fail(400, '정원은 0 이상의 정수로 입력하세요', 'capacity');
+  if (!isIntegerCapacity(capacity)) throw ctx.fail(400, '정원은 0 이상의 정수로 입력하세요', 'capacity');
   const activeCount = workspace.participants.filter((person) => person.status !== 'CANCELLED').length;
   if (capacity > 0 && capacity < activeCount) throw ctx.fail(409, '현재 참가자 수보다 정원을 줄일 수 없습니다');
   if (!Number.isFinite(price) || price < 0) throw ctx.fail(400, '참가비는 0 이상이어야 합니다', 'price');
@@ -263,7 +253,7 @@ async function saveProgram(ctx, input) {
   const eventDate = ctx.clean(input.date || ctx.event.date, 10);
   const start = requireText(ctx, input.start, '시작 시간', 5, 'start');
   const end = requireText(ctx, input.end, '종료 시간', 5, 'end');
-  if (!date(eventDate) || !time(start) || !time(end) || start >= end) {
+  if (!isCalendarDate(eventDate) || !time(start) || !time(end) || start >= end) {
     throw ctx.fail(400, '일정 날짜와 종료 시간을 확인하세요');
   }
   let attachment = old ? old.attachment || null : null;

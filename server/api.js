@@ -7,6 +7,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { sendJson, readJsonBody } = require('./http');
+const { isCalendarDate, toCapacityNumber, isFiniteCapacity } = require('./validation');
 
 const STAFF_WRITE = ['participants', 'checkin', 'booth', 'booths', 'staff', 'qna', 'photos', 'poll', 'quiz', 'draw', 'survey'];
 const STATUS_FLOW = { PRE: ['LIVE'], LIVE: ['END'], END: [] };
@@ -28,18 +29,6 @@ function err(res, status, message, field) {
   const body = { error: message };
   if (field) body.field = field;
   sendJson(res, status, body);
-}
-
-function isCalendarDate(value) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!m) return false;
-  const y = Number(m[1]);
-  const mo = Number(m[2]);
-  const d = Number(m[3]);
-  if (y < 1 || mo < 1 || mo > 12 || d < 1) return false;
-  const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
-  const dim = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  return d <= dim[mo - 1];
 }
 
 function isEmail(value) {
@@ -365,8 +354,8 @@ async function handleEvents(req, res, store, parts, body, auth, access) {
     data.items.push(ev);
     data.workspaces[id] = emptyWorkspace();
     if (body.capacity !== undefined) {
-      const cap = Number(body.capacity);
-      if (!Number.isFinite(cap) || cap < 0) return err(res, 400, '정원을 확인하세요', 'capacity');
+      const cap = toCapacityNumber(body.capacity);
+      if (!isFiniteCapacity(cap)) return err(res, 400, '정원을 확인하세요', 'capacity');
       data.workspaces[id].capacity = cap;
     }
     saveEvents(store, data);
@@ -395,8 +384,8 @@ async function handleEvents(req, res, store, parts, body, auth, access) {
       ev.venue = text(body.venue);
     }
     if (body.capacity !== undefined) {
-      const cap = Number(body.capacity);
-      if (!Number.isFinite(cap) || cap < 0) return err(res, 400, '정원을 확인하세요', 'capacity');
+      const cap = toCapacityNumber(body.capacity);
+      if (!isFiniteCapacity(cap)) return err(res, 400, '정원을 확인하세요', 'capacity');
       ws.capacity = cap;
     }
     if (body.recruitment !== undefined) {

@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const { publicWorkspace } = require('./public-events');
+const { isCalendarDate, toCapacityNumber, isSafeIntegerCapacity } = require('./validation');
 
 const ROLES = new Set(['AGENCY', 'MANAGER', 'STAFF']);
 const ARRAY_FIELDS = [
@@ -31,17 +32,6 @@ function rejected(status, message, field) {
   error.status = status;
   if (field) error.field = field;
   return error;
-}
-
-function validDate(value) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return false;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  if (year < 1 || month < 1 || month > 12 || day < 1) return false;
-  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
-  return day <= [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
 }
 
 function emptyWorkspace() {
@@ -167,15 +157,15 @@ function createState(database) {
     const eventDate = String(input.date || '').trim();
     const start = String(input.start || '').trim();
     const end = String(input.end || '').trim();
-    const capacity = Number(input.capacity);
+    const capacity = toCapacityNumber(input.capacity);
     const clientId = input.clientId == null || input.clientId === '' ? null : String(input.clientId).trim();
     if (!name || name.length > 100) throw rejected(400, '행사명을 1~100자로 입력하세요', 'name');
     if (!/^[a-z0-9][a-z0-9-]{0,49}$/.test(slug)) throw rejected(400, '행사 주소 코드를 확인하세요', 'slug');
-    if (!validDate(eventDate)) throw rejected(400, '행사 날짜 형식이 올바르지 않습니다', 'date');
+    if (!isCalendarDate(eventDate)) throw rejected(400, '행사 날짜 형식이 올바르지 않습니다', 'date');
     if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(start) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(end) || start >= end) {
       throw rejected(400, '종료 시간은 시작 시간보다 늦어야 합니다', 'end');
     }
-    if (!Number.isSafeInteger(capacity) || capacity < 0) throw rejected(400, '정원은 0 이상의 정수로 입력하세요', 'capacity');
+    if (!isSafeIntegerCapacity(capacity)) throw rejected(400, '정원은 0 이상의 정수로 입력하세요', 'capacity');
     if (clientId && clientId.length > 160) throw rejected(400, '고객사를 확인하세요', 'clientId');
 
     const request = { name, slug, date: eventDate, start, end, capacity, clientId };
