@@ -204,3 +204,10 @@ Latest approved amendment (2026-10-07): user approved the proposed attendee brow
 - The approved code-structure cleanup (review `ses_ee630851`) is complete through P3: `9bdb441`, `f5054fb`, `09a536b`, `dbbe8a4`, `a0803e2`, `c715da8`, `84cdd91`, `cd66787`, `fb324e1`, `a2e0900`; further file splits are optional.
 - Test state: maintained suite 282/282 (0 fail, 0 skip); the former legacy failures are archived under `tests/legacy` with `docs/superpowers/legacy-test-attribution.md`.
 - The OpenDesign boot unit was restart-verified (new healthy container, identical mount set, daemon responding to the project query).
+
+## Follow-up note — 2026-10-08 (consistency/systematization, HEAD `9c54bcb`)
+
+- User request: the main console vs the field experience changed menus/fonts/control sizes; the agency pages (home, team·권한) felt cluttered; the design should be systematic for both quality and development.
+- Two read-only audits (36567ccb cross-surface consistency; 253a9939 agency pages) produced concrete defect lists; the user approved seven direction decisions (field desktop full-width responsive; staff assignment switch; attendee top-row nav kept; console mobile event name; agency cards + one-event adaptation; integrations overview + dedup; mobile menu kept while scrolling).
+- Implemented: `4e72f1c` field workspace redesign (desktop ≥900px full-width, real type scale/44px targets, two-column, assignment switch, thin scrollbar; mobile phone layout unchanged 1:1), `cc3e38c` agency/console fixes (clients empty state, one-event single column, consistent "운영 워크스페이스" labels, conditional team 관리 column, integration rows with one badge, team notice placement, sticky mobile topbar with menu + event name), `9c54bcb` dead attendee bottom-nav removal.
+- Verification: rendered reviews d80da796 (field) and 209370b5 (agency) with capture-disproven false-positive claims recorded; suite 288/288; captures `field-*`, `agency2-*`, `cleanup-*` under design-inputs/uiux-audit/ (not committed).
