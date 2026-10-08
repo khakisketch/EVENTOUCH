@@ -283,3 +283,51 @@ integrationTest('malformed-admin-configuration-is-rejected', async () => {
     /ADMIN_EMAIL.*ADMIN_PASSWORD/
   );
 });
+
+integrationTest('development quick login stays disabled without the explicit flag', async () => {
+  const res = await fetch(`${BASE}/api/auth/dev/quick-login`, { method: 'POST' });
+  assert.equal(res.status, 404);
+  const health = await (await fetch(`${BASE}/api/health`)).json();
+  assert.equal(health.devQuickLogin, undefined);
+});
+
+integrationTest('development quick login issues a session for the configured account when enabled', async () => {
+  const port = PORT + 1;
+  const enabled = spawn(process.execPath, ['server/server.js'], {
+    cwd: __dirname + '/..',
+    env: {
+      ...process.env,
+      PORT: String(port),
+      DATA_DIR: dataDir,
+      DATABASE_URL: databaseUrl,
+      ADMIN_EMAIL,
+      ADMIN_PASSWORD: 'admin-test-pw',
+      COOKIE_SECURE: '1',
+      SESSION_TTL_HOURS: '1',
+      EVENTOUCH_DEV_QUICK_LOGIN: ADMIN_EMAIL,
+    },
+    stdio: 'ignore',
+  });
+  const base = `http://127.0.0.1:${port}`;
+  try {
+    let ready = false;
+    for (let i = 0; i < 50 && !ready; i += 1) {
+      try { ready = (await fetch(`${base}/api/health`)).ok; } catch (err) {}
+      if (!ready) await new Promise((r) => setTimeout(r, 100));
+    }
+    assert.ok(ready, 'enabled server did not start');
+    const health = await (await fetch(`${base}/api/health`)).json();
+    assert.equal(health.devQuickLogin, true);
+    const res = await fetch(`${base}/api/auth/dev/quick-login`, { method: 'POST' });
+    assert.equal(res.status, 200);
+    const setCookie = res.headers.get('set-cookie') || '';
+    assert.match(setCookie, /etko_session=/);
+    const data = await res.json();
+    assert.equal(data.user.email, ADMIN_EMAIL);
+    assert.equal(data.user.role, 'AGENCY');
+    const bootstrap = await fetch(`${base}/api/bootstrap`, { headers: { cookie: setCookie.split(';')[0] } });
+    assert.equal(bootstrap.status, 200);
+  } finally {
+    enabled.kill();
+  }
+});

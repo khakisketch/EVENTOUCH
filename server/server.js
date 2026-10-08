@@ -91,7 +91,11 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
   return http.createServer((req, res) => {
     const urlPath = (req.url || '/').split('?')[0];
     if (urlPath === '/api/health') {
-      sendJson(res, 200, { ok: true, version: 1 });
+      sendJson(res, 200, {
+        ok: true,
+        version: 1,
+        ...(process.env.EVENTOUCH_DEV_QUICK_LOGIN ? { devQuickLogin: true } : {}),
+      });
       return;
     }
     if (urlPath === '/api/' || urlPath.startsWith('/api/')) {

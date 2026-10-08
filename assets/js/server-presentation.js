@@ -17,9 +17,32 @@ function serverLoginPage(){
  if(E.previewMode)return originalLoginPage();
  const previous=String(originalLoginPage());
  const story=previous.match(/<section class="login-story">[\s\S]*?<\/section>/)?.[0]||'<section class="login-story"><div class="wordmark">EVENTOUCH</div><span class="eyebrow">행사 준비부터 결과까지</span><h1>운영의 흐름을<br>한곳에서.</h1><p>행사를 준비하고, 현장에서 처리하고, 결과를 전달합니다.</p></section>';
- return '<main class="login-layout">'+story+'<section class="login-form"><span class="eyebrow">운영사 로그인</span><h2>워크스페이스 시작</h2><p class="muted">운영사 계정으로 로그인해 권한이 있는 행사와 업무를 확인하세요.</p>'+connectionNotice()+'<form data-form="login" novalidate class="od-stack" style="--od-gap:16px"><div class="error-summary" role="alert"></div>'+E.field('이메일','email','','email','required autocomplete="username"')+E.field('비밀번호','password','','password','required autocomplete="current-password"')+E.submit('로그인')+'</form><p class="help">계정은 운영사 구성원이 초대합니다. 참가자는 로그인 없이 행사 링크를 사용합니다.</p></section></main>';
+ return '<main class="login-layout">'+story+'<section class="login-form"><span class="eyebrow">운영사 로그인</span><h2>워크스페이스 시작</h2><p class="muted">운영사 계정으로 로그인해 권한이 있는 행사와 업무를 확인하세요.</p>'+connectionNotice()+'<form data-form="login" novalidate class="od-stack" style="--od-gap:16px"><div class="error-summary" role="alert"></div>'+E.field('이메일','email','','email','required autocomplete="username"')+E.field('비밀번호','password','','password','required autocomplete="current-password"')+E.submit('로그인')+'</form><p class="help" id="dev-quick-login" hidden>개발 환경 전용 · <button type="button" class="btn" data-action="dev-quick-login">빠른 로그인</button></p><p class="help">계정은 운영사 구성원이 초대합니다. 참가자는 로그인 없이 행사 링크를 사용합니다.</p></section></main>';
 }
-E.loginPage=serverLoginPage;
+E.loginPage=()=>{const html=serverLoginPage();revealDevQuickLogin();return html;};
+
+function revealDevQuickLogin(){
+ if(E.previewMode||typeof fetch!=='function')return;
+ setTimeout(()=>{
+  fetch('/api/health',{credentials:'same-origin',cache:'no-store'}).then(response=>response.json()).then(data=>{
+   const slot=document.getElementById('dev-quick-login');
+   if(slot&&data&&data.devQuickLogin)slot.hidden=false;
+  }).catch(()=>{});
+ },0);
+}
+
+E.actions=E.actions||{};
+E.actions['dev-quick-login']=async()=>{
+ if(E.previewMode)return;
+ try{
+  const response=await fetch('/api/auth/dev/quick-login',{method:'POST',credentials:'same-origin',headers:{accept:'application/json'}});
+  let data=null;try{data=await response.json();}catch(error){}
+  if(!response.ok)throw Object.assign(new Error((data&&data.error)||'빠른 로그인을 사용할 수 없습니다.'),{status:response.status});
+  if(E.remote?.restoreSession)await E.remote.restoreSession();
+  E.toast?.((data&&data.user&&data.user.name?data.user.name+' 계정으로':'')+' 빠른 로그인으로 접속했습니다.');
+  E.navigate?.('#/console/agency/events');
+ }catch(error){E.toast?.(error.message||'빠른 로그인을 사용할 수 없습니다.');}
+};
 
 E.actions=E.actions||{};
 E.actions['retry-server-connection']=async()=>{

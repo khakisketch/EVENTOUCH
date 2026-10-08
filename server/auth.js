@@ -448,6 +448,25 @@ function createDatabaseAuth(database) {
   }
 
   async function handleDatabaseAuth(req, res, urlPath) {
+    const devQuickLogin = String(process.env.EVENTOUCH_DEV_QUICK_LOGIN || '').trim().toLowerCase();
+    if (devQuickLogin && urlPath === '/api/auth/dev/quick-login' && req.method === 'POST') {
+      const result = await database.query(
+        'SELECT id, email, name, role, active FROM accounts WHERE lower(email) = $1 LIMIT 1',
+        [devQuickLogin]
+      );
+      const account = result.rows[0];
+      if (!account || account.active !== true) {
+        sendJson(res, 404, { error: '개발용 계정을 찾을 수 없습니다' });
+        return;
+      }
+      const token = await createSession(account.id);
+      res.writeHead(200, {
+        'content-type': 'application/json; charset=utf-8',
+        'set-cookie': databaseCookie(token),
+      });
+      res.end(JSON.stringify({ user: publicAccount(account) }));
+      return;
+    }
     if (urlPath === '/api/auth/login' && req.method === 'POST') {
       let body;
       try {
