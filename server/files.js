@@ -57,6 +57,52 @@ function createFileService(database, { storageDir = process.env.STORAGE_DIR || p
       throw error;
     }
   }
+  // Ticket-authorized attendee upload (currently the photo feature). The
+  // ticket bearer comes from the attendee link; the file is scoped to the
+  // participant and to the photo feature limits.
+  async function uploadGuest({slug,token,commandId,name,contentType,bytes}) {
+    if (!ID.test(String(commandId || ''))) throw failure(400,'요청 ID를 확인하세요');
+    if (typeof name !== 'string' || !name.trim() || name.length > 200 || /[\/\\\x00-\x1f\x7f]/.test(name) || name.includes('..')) throw failure(400,'파일 이름을 확인하세요');
+    if (!['image/png','image/jpeg','image/webp'].includes(contentType)) throw failure(400,'사진 형식을 확인하세요');
+    if (!Buffer.isBuffer(bytes) || !bytes.length) throw failure(400,'사진 형식을 확인하세요');
+    if (bytes.length > 600000) throw failure(413,'600KB 이하 사진을 올려주세요');
+    const projection = await createPublicEvents(database).loadTicket(String(slug || ''),String(token || ''));
+    if (!projection) throw failure(401,'티켓 링크를 확인하세요');
+    const { event, participant } = projection;
+    if (!Array.isArray(event.features) || !event.features.includes('photo')) throw failure(403,'사진 기능을 사용하지 않습니다');
+    if (!participant || String(participant.status).toUpperCase() !== 'APPROVED') throw failure(403,'참가 확정 후 사진을 공유할 수 있습니다');
+    if (!['READY','LIVE','ENDED'].includes(String(event.stage || '').toUpperCase())) throw failure(409,'현재 사진을 공유할 수 없습니다');
+    const eventId = String(event.id);
+    const dimensions = inspectImage(bytes,contentType);
+    const actorId = String(participant.id);
+    const fingerprint = crypto.createHash('sha256').update(JSON.stringify([eventId,`participant:${actorId}`,name,contentType])).update(bytes).digest('hex');
+    let ownedPath;
+    try {
+      return await database.transaction(async client => {
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',[commandId]);
+        const receipt = await client.query('SELECT event_id,actor_id,result FROM command_receipts WHERE command_id=$1',[commandId]);
+        if (receipt.rowCount) {
+          const r = receipt.rows[0];
+          if (String(r.event_id) !== eventId || r.actor_id != null || r.result.command !== 'file.upload.guest' || r.result.participantId !== actorId || r.result.fingerprint !== fingerprint) throw failure(409,'요청 ID가 다른 업로드에 사용되었습니다');
+          return {file:r.result.file,replayed:true};
+        }
+        const id = `file-${crypto.randomUUID()}`;
+        await fs.mkdir(root,{recursive:true});
+        ownedPath = path.join(root,id);
+        await fs.writeFile(ownedPath,bytes,{flag:'wx',mode:0o600});
+        const row = await client.query(`INSERT INTO stored_files (id,event_id,storage_key,original_name,content_type,size_bytes,created_by,width_px,height_px)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+          [id,eventId,id,name,contentType,bytes.length,null,dimensions && dimensions.width,dimensions && dimensions.height]);
+        const file = fileRef(row.rows[0]);
+        await client.query('INSERT INTO command_receipts (command_id,event_id,actor_id,result) VALUES ($1,$2,$3,$4::jsonb)',
+          [commandId,eventId,null,JSON.stringify({command:'file.upload.guest',fingerprint,participantId:actorId,file})]);
+        return {file,replayed:false};
+      });
+    } catch (error) {
+      if (ownedPath) await fs.unlink(ownedPath).catch(() => {});
+      throw error;
+    }
+  }
   async function stored(eventId,fileId) {
     if (!ID.test(String(fileId || ''))) throw failure(404,'파일을 찾을 수 없습니다');
     const row = (await database.query('SELECT * FROM stored_files WHERE id=$1 AND event_id=$2',[fileId,eventId])).rows[0];
@@ -81,6 +127,6 @@ function createFileService(database, { storageDir = process.env.STORAGE_DIR || p
     if (!refs.some(ref => ref && ref.fileId === fileId)) throw failure(404,'파일을 찾을 수 없습니다');
     return stored(projection.event.id,fileId);
   }
-  return {upload,readOperator,readPublic};
+  return {upload,uploadGuest,readOperator,readPublic};
 }
 module.exports = {createFileService, MAX_FILE_BYTES};

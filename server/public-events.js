@@ -175,7 +175,7 @@ function publicQuestion(question) {
   };
 }
 
-function publicPhoto(photo) {
+function publicPhoto(photo, own = false) {
   const source = object(photo);
   const image = publicImage(source.image);
   if (!image) return null;
@@ -186,10 +186,11 @@ function publicPhoto(photo) {
     caption: text(source.caption, 1000),
     status: source.status === 'APPROVED' ? 'APPROVED' : text(source.status, 24),
     at: text(source.at, 64),
+    ...(own && source.participantId ? { participantId: text(source.participantId, 160) } : {}),
   };
 }
 
-function publicPost(post) {
+function publicPost(post, own = false) {
   const source = object(post);
   return {
     id: text(source.id, 120),
@@ -197,6 +198,7 @@ function publicPost(post) {
     body: text(source.body, 2000),
     status: text(source.status, 24),
     at: text(source.at, 64),
+    ...(own && source.participantId ? { participantId: text(source.participantId, 160) } : {}),
   };
 }
 
@@ -230,10 +232,10 @@ function publicWorkspace(value, event, participant = null) {
   const photos = array(source.photos).filter((item) => item && (
     item.status === 'APPROVED' || (attendeeId && item.participantId === attendeeId)
   ))
-    .map(publicPhoto).filter(Boolean);
+    .map((item) => publicPhoto(item, Boolean(attendeeId && item.participantId === attendeeId))).filter(Boolean);
   const posts = array(source.posts).filter((item) => item && (
     item.status === 'APPROVED' || (attendeeId && item.participantId === attendeeId)
-  )).map(publicPost);
+  )).map((item) => publicPost(item, Boolean(attendeeId && item.participantId === attendeeId)));
   const answers = participant && object(participant.answers);
   const allowedAnswerIds = new Set(fields.map((field) => field.id));
   const projectedParticipant = participant ? {

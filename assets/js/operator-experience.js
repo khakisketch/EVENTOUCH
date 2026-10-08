@@ -185,7 +185,7 @@ E.views.page=()=>{
  return E.head('참가자 페이지','기본 화면을 행사별로 조정하고, 초안 미리보기 후 참가자에게 게시합니다.',L('게시 화면 열기',E.aurl('home'),'','arrow'),'참가자 경험')+E.eventTabs('page')+E.panel('기본 화면 편집',form)+E.panel('초안 이미지',photos)+E.panel('미리보기 · 게시',E.notice(dirtyLabel,dirty?'warning':'')+'<div class="attendee-preview"><iframe title="참가자 모바일 화면 미리보기" src="'+e(preview)+'" loading="lazy"></iframe></div><p class="help">미리보기에서 행사 홈 → 신청 → 신청 상태·티켓 QR까지 직접 이동할 수 있습니다. 테스트 신청은 이 브라우저의 샘플 데이터에 저장되므로 가상 정보를 사용하세요. 참가자에게는 게시된 설정만 보입니다.</p>',publish);
 };
 E.forms['attendee-page']=async(p,f)=>{
- for(const key of ['logo','keyvisual']){const file=f.elements[key]?.files?.[0];if(file)p[key]=await E.readImage(file);}
+ for(const key of ['logo','keyvisual']){const file=f.elements[key]?.files?.[0];if(file)p[key]=await E.storeFile(file,{commandId:E.id('page-upload')});else delete p[key];}
  await E.run('attendee.page.save',p);E.toast('참가자 페이지 초안을 저장했습니다. 미리보기 후 게시하세요.');
 };
 E.actions['publish-attendee-page']=()=>E.confirm('참가자 페이지 게시','저장된 초안의 소개, 강조색, 이미지와 메뉴 표시를 참가자에게 공개합니다.',async()=>{await E.run('attendee.page.publish');E.toast('참가자 페이지를 게시했습니다.');});

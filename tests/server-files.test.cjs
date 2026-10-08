@@ -84,3 +84,62 @@ test('malformed uploads create no metadata or leftover bytes', async () => {
   assert.equal((await h.database.query('SELECT count(*)::int AS n FROM stored_files')).rows[0].n,beforeRows);
   assert.deepEqual(fs.readdirSync(storageDir).sort(),beforeFiles);
 });
+
+// ---- attendee (ticket) uploads ----
+const GUEST_TICKET = `ET:photo-event:T-${'g'.repeat(40)}`;
+const guestWorkspace = () => ({ participants: [{
+  id:'photo-person', name:'사진 참가자', status:'APPROVED', revoked:false, inside:true, everIn:true,
+  ticket: GUEST_TICKET, ticketExpiresAt:new Date(Date.now()+30*86400000).toISOString(), paymentStatus:'FREE', createdAt:new Date().toISOString(),
+}] });
+async function guestUpload({slug='photo-event', ticket=GUEST_TICKET, name='photo.png', bytes=png, type='image/png', commandId=crypto.randomUUID()}={}) {
+  const res = await fetch(`${h.baseUrl}/api/public/events/${slug}/files?name=${encodeURIComponent(name)}&commandId=${encodeURIComponent(commandId)}`, {
+    method:'POST', headers:{'content-type':type, ...(ticket?{authorization:`Bearer ${ticket}`}:{})}, body:bytes
+  });
+  return {status:res.status, json:await res.json()};
+}
+test('attendee photo upload is ticket- and feature-scoped', async () => {
+  await insertEvent(h.database, { id:'photo-event', slug:'photo-event',
+    payload:{ id:'photo-event', slug:'photo-event', name:'사진 행사', date:'2026-11-20', stage:'LIVE', features:['photo'] },
+    workspace: guestWorkspace() });
+  await insertEvent(h.database, { id:'plain-event', slug:'plain-event',
+    payload:{ id:'plain-event', slug:'plain-event', name:'일반 행사', date:'2026-11-20', stage:'LIVE', features:['stamp'] },
+    workspace: guestWorkspace() });
+  const commandId = crypto.randomUUID();
+  const up = await guestUpload({commandId}); assert.equal(up.status,201);
+  assert.deepEqual(up.json.file, {fileId:up.json.file.fileId,name:'photo.png',type:'image/png',size:png.length,width:320,height:200});
+  const row = await h.database.query('SELECT * FROM stored_files WHERE id=$1',[up.json.file.fileId]);
+  assert.equal(row.rows[0].event_id,'photo-event');
+  assert.equal(row.rows[0].created_by,null);
+  const receipt = await h.database.query('SELECT result FROM command_receipts WHERE command_id=$1',[commandId]);
+  assert.equal(receipt.rows[0].result.participantId,'photo-person');
+  assert.equal((await guestUpload({ticket:''})).status,401);
+  assert.equal((await guestUpload({ticket:`ET:photo-event:T-${'x'.repeat(40)}`})).status,401);
+  assert.equal((await guestUpload({slug:'plain-event'})).status,403);
+  assert.equal((await guestUpload({type:'application/pdf',bytes:Buffer.from('%PDF-1.4 tiny')})).status,400);
+  assert.equal((await guestUpload({bytes:Buffer.alloc(600001)})).status,413);
+});
+test('guest upload command replays once and rejects changed content', async () => {
+  const commandId = crypto.randomUUID();
+  const [a,b] = await Promise.all([guestUpload({commandId}),guestUpload({commandId})]);
+  assert.deepEqual([a.status,b.status].sort(),[200,201]); assert.deepEqual(a.json,b.json);
+  assert.equal((await guestUpload({commandId,bytes:floorplanPng(10,10)})).status,409);
+});
+test('attendee photo submission stores the uploaded reference and publishes on approval', async () => {
+  const uploadResult = await guestUpload(); assert.equal(uploadResult.status,201);
+  const ref = uploadResult.json.file;
+  const submitted = await requestJson(h.baseUrl,'/api/events/photo-event/commands',{
+    bearer:GUEST_TICKET, method:'POST',
+    body:{ commandId:crypto.randomUUID(), command:'photo.submit', payload:{ image:ref, caption:'검증 사진' } },
+  });
+  assert.equal(submitted.status,201);
+  assert.equal(submitted.json.photo.image.fileId,ref.fileId);
+  assert.equal(submitted.json.photo.status,'PENDING');
+  assert.equal((await requestJson(h.baseUrl,`/api/public/events/photo-event/files/${ref.fileId}`)).status,404);
+  const moderated = await requestJson(h.baseUrl,'/api/events/photo-event/commands',{
+    cookie, method:'POST',
+    body:{ commandId:crypto.randomUUID(), command:'photo.moderate', payload:{ id:submitted.json.photo.id, status:'APPROVED' } },
+  });
+  assert.equal(moderated.status,200);
+  const read = await fetch(`${h.baseUrl}/api/public/events/photo-event/files/${ref.fileId}`);
+  assert.equal(read.status,200); assert.deepEqual(Buffer.from(await read.arrayBuffer()),png);
+});

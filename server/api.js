@@ -53,6 +53,23 @@ function bearerToken(header) {
   return match ? match[1] : '';
 }
 
+function readRawBytes(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = []; let size = 0, rejected = false;
+    req.on('data', chunk => {
+      if (rejected) return;
+      size += chunk.length;
+      if (size > MAX_FILE_BYTES) {
+        rejected = true; chunks.length = 0;
+        reject(Object.assign(new Error('파일이 너무 큽니다'),{status:413}));
+      } else chunks.push(chunk);
+    });
+    req.on('end', () => { if (!rejected) resolve(Buffer.concat(chunks)); });
+    req.on('error', reject);
+    req.on('aborted', () => reject(Object.assign(new Error('업로드가 중단되었습니다'),{status:400})));
+  });
+}
+
 async function handleApi(req, res, store, urlPath, security = {}) {
   const { auth, access, state, publicEvents, participantCommands, operationsCommands, domainCommands, files } = security;
   const parts = urlPath.split('/').filter(Boolean);
@@ -80,6 +97,25 @@ async function handleApi(req, res, store, urlPath, security = {}) {
         fs.createReadStream(file.absolutePath).on('error', () => res.destroy()).pipe(res);
         return;
       } catch (error) { return err(res,error.status || 500,error.status ? error.message : '파일을 읽지 못했습니다'); }
+    }
+    if (req.method === 'POST' && parts[2] === 'events' && parts[4] === 'files' && parts.length === 5 && files) {
+      res.setHeader('cache-control', 'no-store');
+      try {
+        const slug = decodedSegment(parts[3]);
+        if (!slug) return err(res, 404, '요청한 행사를 찾을 수 없습니다');
+        const params = new URL(req.url, 'http://localhost').searchParams;
+        const result = await files.uploadGuest({
+          slug,
+          token: bearerToken(req.headers.authorization),
+          commandId: params.get('commandId'),
+          name: params.get('name'),
+          contentType: String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase(),
+          bytes: await readRawBytes(req),
+        });
+        return sendJson(res, result.replayed ? 200 : 201, { file: result.file });
+      } catch (error) {
+        return err(res, error.status || 500, failureMessage(error, '사진을 저장하지 못했습니다'));
+      }
     }
     if (req.method !== 'GET' || !publicEvents) {
       return err(res, publicEvents ? 404 : 503, publicEvents ? '요청한 API를 찾을 수 없습니다' : '데이터베이스를 사용할 수 없습니다');
@@ -118,20 +154,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
         return;
       }
       const params = new URL(req.url,'http://localhost').searchParams;
-      const bytes = await new Promise((resolve,reject) => {
-        const chunks = []; let size = 0, rejected = false;
-        req.on('data',chunk => {
-          if (rejected) return;
-          size += chunk.length;
-          if (size > MAX_FILE_BYTES) {
-            rejected = true; chunks.length = 0;
-            reject(Object.assign(new Error('파일이 너무 큽니다'),{status:413}));
-          } else chunks.push(chunk);
-        });
-        req.on('end',() => { if (!rejected) resolve(Buffer.concat(chunks)); });
-        req.on('error',reject);
-        req.on('aborted',() => reject(Object.assign(new Error('업로드가 중단되었습니다'),{status:400})));
-      });
+      const bytes = await readRawBytes(req);
       const result = await files.upload({account,eventId,commandId:params.get('commandId'),name:params.get('name'),
         contentType:String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase(),bytes});
       return sendJson(res,result.replayed ? 200 : 201,{file:result.file});

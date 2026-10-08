@@ -46,6 +46,7 @@ function loadAttendee(page = 'home', person = null, options = {}) {
     detail: items => `<dl>${items.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`,
     empty: (title, desc) => `<section><h3>${title}</h3><p>${desc}</p></section>`,
     icon: () => '', image: () => '', number: String,
+    id: prefix => `${prefix}-fixed`,
     mobileEngagement: () => '<p>module</p>',
   };
   E.button = E.button.bind(E);
@@ -298,4 +299,36 @@ test('organizer overview uses the shared panel, list-row, badge, empty-state and
   assert.match(overview, /E\.badge\(/);
   assert.match(overview, /E\.empty\(/);
   assert.doesNotMatch(overview, /class="(?:task-row|quick-link|timeline-item)|class="context-summary|current-stage/);
+});
+
+const PHOTO_TICKET = `ET:browser-event:T-${'t'.repeat(40)}`;
+test('attendee photo submission uploads through the public route in server mode', async () => {
+  const uploaded = []; const submitted = [];
+  const { E } = loadAttendee('photo', { id: 'p1', status: 'APPROVED', ticket: PHOTO_TICKET });
+  E.previewMode = false; E.storageMode = 'server';
+  E.remote = { uploadPublicFile: async (file, options) => { uploaded.push({ file, options }); return { fileId: 'file-1', name: file.name, type: file.type, size: file.size, width: 10, height: 10 }; } };
+  E.run = async (name, payload) => { submitted.push({ name, payload }); return {}; };
+  E.toast = () => {};
+  const file = { name: 'photo.png', type: 'image/png', size: 10 };
+  await E.forms['attendee-photo']({ caption: '사진 설명' }, { elements: { image: { files: [file] } } });
+  assert.equal(uploaded.length, 1);
+  assert.equal(uploaded[0].options.slug, 'browser-event');
+  assert.equal(uploaded[0].options.commandId, 'photo-upload-fixed');
+  assert.deepEqual(JSON.parse(JSON.stringify(submitted)), [{
+    name: 'photo.submit',
+    payload: { image: { fileId: 'file-1', name: 'photo.png', type: 'image/png', size: 10, width: 10, height: 10 }, caption: '사진 설명' },
+  }]);
+  assert.equal(E.dirty, true);
+});
+test('attendee photo submission keeps inline preview data in preview mode', async () => {
+  const submitted = [];
+  const { E } = loadAttendee('photo', { id: 'p1', status: 'APPROVED', ticket: PHOTO_TICKET });
+  E.previewMode = true; E.storageMode = 'local';
+  E.readImage = async () => ({ data: 'data:image/png;base64,AAAA', width: 4, height: 4 });
+  E.run = async (name, payload) => { submitted.push({ name, payload }); return {}; };
+  E.toast = () => {};
+  await E.forms['attendee-photo']({ caption: '사진' }, { elements: { image: { files: [{ name: 'p.png', type: 'image/png', size: 10 }] } } });
+  assert.equal(submitted[0].payload.image.data, 'data:image/png;base64,AAAA');
+  assert.equal(E.dirty, true);
+  await assert.rejects(E.forms['attendee-photo']({ caption: '사진' }, { elements: { image: { files: [] } } }), /사진을 선택/);
 });

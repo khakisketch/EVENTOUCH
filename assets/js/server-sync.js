@@ -122,6 +122,30 @@ E.remote={
    pending.delete(eventId);return result;
   }catch(error){if(error.status&&error.status<500)pending.delete(eventId);throw error;}
  },
+ async uploadPublicFile(file,{slug,commandId}={}){
+  if(E.previewMode||E.storageMode!=='server')throw Error('사진 업로드는 서버 연결 상태에서만 할 수 있습니다.');
+  if(!file||!file.name||!file.type||!Number.isSafeInteger(file.size)||file.size<1||file.size>600000||!/^[a-z0-9][a-z0-9-]{0,99}$/.test(String(slug||'')))throw Error('사진과 행사를 확인하세요.');
+  const ticket=E.person?.()?.ticket||E.route?.params?.get('ticket')||'';
+  if(!ticket)throw Error('티켓 링크를 확인하세요.');
+  let pending=uncertainUploads.get(file);
+  if(!pending){pending=new Map();uncertainUploads.set(file,pending);}
+  const id=String(commandId||pending.get(slug)||E.id('cmd'));pending.set(slug,id);
+  const path='/api/public/events/'+encodeURIComponent(slug)+'/files?name='+encodeURIComponent(file.name)+'&commandId='+encodeURIComponent(id);
+  const send=async()=>{
+   let response;
+   try{response=await window.fetch(path,{method:'POST',credentials:'same-origin',cache:'no-store',headers:{accept:'application/json','content-type':file.type,authorization:'Bearer '+ticket},body:file});}
+   catch(error){setConnection('offline',error.message);throw error;}
+   let data=null;try{data=await response.json();}catch{}
+   if(!response.ok){const error=Error(data?.error||'사진을 저장하지 못했습니다.');error.status=response.status;setConnection(response.status>=500?'error':'denied',error.message);throw error;}
+   const ref=data?.file;
+   if(!ref||!/^[A-Za-z0-9_-]{1,160}$/.test(ref.fileId)||!Number.isSafeInteger(ref.size)||ref.size<1)throw Error('서버 파일 정보를 확인할 수 없습니다.');
+   setConnection('connected');return {fileId:ref.fileId,name:ref.name,type:ref.type,size:ref.size,...(Number.isInteger(ref.width)&&Number.isInteger(ref.height)?{width:ref.width,height:ref.height}:{})};
+  };
+  try{
+   let result;try{result=await send();}catch(error){if(error.status||window.navigator?.onLine===false)throw error;result=await send();}
+   pending.delete(slug);return result;
+  }catch(error){if(error.status&&error.status<500)pending.delete(slug);throw error;}
+ },
  get(path,options={}){return request('GET',path,undefined,options);},
  post(path,body,options={}){return request('POST',path,body,options);},
  async bootstrap(){return refreshAuthenticated();},
@@ -248,6 +272,15 @@ async function syncCommand(name,payload,commandId){
  if(name.startsWith('participant.')||name==='ticket.reissue')return result?.participant||result;
  return result;
 }
+E.storeFile=async(file,{commandId,kind='image'}={})=>{
+ if(E.previewMode||E.storageMode!=='server'){
+  if(kind==='image')return E.readImage(file);
+  const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('파일을 읽지 못했습니다.'));reader.readAsDataURL(file);});
+  return {name:file.name,data};
+ }
+ const eventId=E.route?.eventId||E.event?.()?.id;
+ return E.remote.uploadFile(file,{eventId,commandId});
+};
 E.run=async(name,payload={})=>{
  if(E.previewMode)return localRun(name,payload);
  if(E.storageMode!=='server')throw Error('서버 연결을 확인할 수 없습니다. 미리보기로 자동 전환하지 않았습니다.');

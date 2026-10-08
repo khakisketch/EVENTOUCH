@@ -555,3 +555,51 @@ test('connection failures raise the storage banner and a later success clears it
   await harness.E.remote.bootstrap();
   assert.equal(harness.E.storageWarning, '');
 });
+
+const GUEST_TICKET = `ET:event-one:T-${'t'.repeat(40)}`;
+test('public photo upload sends the ticket bearer and retries with the same command id', async () => {
+  const file = { name: 'photo.png', type: 'image/png', size: 3, bytes: new Uint8Array([1,2,3]) };
+  let attempts = 0;
+  const h = loadAdapter(async (url, options) => {
+    assert.equal(options.credentials, 'same-origin');
+    assert.equal(options.headers.authorization, `Bearer ${GUEST_TICKET}`);
+    assert.equal(options.headers['content-type'], 'image/png');
+    if (++attempts === 1) throw Error('response lost');
+    return response(201, { file: { fileId: 'file-9', name: file.name, type: file.type, size: 3, width: 320, height: 200 } });
+  });
+  h.E.route = { scope: 'attendee', slug: 'event-one', params: new URLSearchParams() };
+  h.E.person = () => ({ id: 'p1', ticket: GUEST_TICKET });
+  const ref = await h.E.remote.uploadPublicFile(file, { slug: 'event-one', commandId: 'photo-fixed-123' });
+  assert.deepEqual(JSON.parse(JSON.stringify(ref)), { fileId: 'file-9', name: 'photo.png', type: 'image/png', size: 3, width: 320, height: 200 });
+  assert.equal(h.calls.length, 2);
+  assert.equal(h.calls[0].url, h.calls[1].url);
+  assert.ok(h.calls[0].url.startsWith('/api/public/events/event-one/files?'));
+  assert.ok(h.calls[0].url.includes('commandId=photo-fixed-123'));
+  assert.equal(h.localStorageWrites, 0);
+});
+test('public photo upload requires a ticket, server mode and photo limits', async () => {
+  const h = loadAdapter();
+  h.E.route = { scope: 'attendee', slug: 'event-one', params: new URLSearchParams() };
+  h.E.person = () => ({ id: 'p1' });
+  await assert.rejects(h.E.remote.uploadPublicFile({ name: 'a.png', type: 'image/png', size: 3 }, { slug: 'event-one' }), /티켓/);
+  h.E.person = () => ({ id: 'p1', ticket: GUEST_TICKET });
+  await assert.rejects(h.E.remote.uploadPublicFile({ name: 'a.png', type: 'image/png', size: 600001 }, { slug: 'event-one' }), /행사/);
+  h.E.previewMode = true;
+  await assert.rejects(h.E.remote.uploadPublicFile({ name: 'a.png', type: 'image/png', size: 3 }, { slug: 'event-one' }), /서버/);
+  assert.equal(h.calls.length, 0);
+});
+test('storeFile uploads to the event in server mode and falls back to inline preview data', async () => {
+  const file = { name: 'key.png', type: 'image/png', size: 3 };
+  const h = loadAdapter(async (url) => {
+    assert.ok(url.includes('/api/events/event-1/files?'));
+    return response(201, { file: { fileId: 'file-5', name: file.name, type: file.type, size: 3, width: 10, height: 10 } });
+  });
+  h.E.route = { scope: 'console', eventId: 'event-1' };
+  const stored = await h.E.storeFile(file, { commandId: 'page-fixed-123' });
+  assert.deepEqual(JSON.parse(JSON.stringify(stored)), { fileId: 'file-5', name: 'key.png', type: 'image/png', size: 3, width: 10, height: 10 });
+  h.E.previewMode = true;
+  h.E.readImage = async () => ({ data: 'data:image/png;base64,AAAA', width: 1, height: 1 });
+  const inline = await h.E.storeFile(file);
+  assert.equal(inline.data, 'data:image/png;base64,AAAA');
+  assert.equal(h.calls.length, 1);
+});

@@ -28,7 +28,17 @@ E.copyLink=async url=>{try{await navigator.clipboard.writeText(url);E.toast('링
 E.actionFeedback=(control,message)=>{if(!control?.isConnected)return;control._actionFeedback?.remove();const note=document.createElement('div');note.className='action-feedback';note.id='action-feedback-'+(++fieldId);note.setAttribute('role','alert');note.textContent=message;control.insertAdjacentElement('afterend',note);const described=(control.getAttribute('aria-describedby')||'').split(/\s+/).filter(Boolean);described.push(note.id);control.setAttribute('aria-describedby',[...new Set(described)].join(' '));control._actionFeedback=note;};
 E.printContent=html=>{document.getElementById('print-area')?.remove();const d=document.createElement('div');d.id='print-area';d.className='print-only';d.innerHTML=html;document.body.append(d);document.body.classList.add('printing');window.print();};window.addEventListener('afterprint',()=>{document.body.classList.remove('printing');document.getElementById('print-area')?.remove();});
 E.readImage=async file=>{if(!file||!['image/png','image/jpeg','image/webp'].includes(file.type))throw Error('PNG, JPEG 또는 WebP 이미지를 선택하세요.');if(file.size>600000)throw Error('600KB 이하 이미지를 선택하세요. 로컬 저장 공간이 제한되어 있습니다.');const data=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(Error('이미지를 읽지 못했습니다.'));r.readAsDataURL(file);});const img=new Image();img.src=data;await img.decode();return {data,width:img.naturalWidth,height:img.naturalHeight};};
-E.image=(a,alt)=>a?'<img class="od-media" src="'+e(a.data)+'" width="'+Number(a.width)+'" height="'+Number(a.height)+'" alt="'+e(alt)+'">':'';
+E.fileURL=(ref,{public:publicFile}={})=>{
+ if(!ref)return '';
+ if(ref.data)return String(ref.data);
+ if(!ref.fileId||!E.remote||typeof E.remote.fileURL!=='function')return '';
+ const asPublic=publicFile===undefined?(E.route?.scope==='attendee'||E.route?.scope==='display'):!!publicFile;
+ try{
+  if(asPublic)return E.remote.fileURL({slug:E.event?.()?.slug||E.route?.slug,fileId:ref.fileId,public:true});
+  return E.remote.fileURL({eventId:E.route?.eventId||E.event?.()?.id,fileId:ref.fileId});
+ }catch(error){return '';}
+};
+E.image=(a,alt)=>{const src=a?E.fileURL(a):'';if(!src)return '';return '<img class="od-media" src="'+e(src)+'"'+(Number.isInteger(a.width)&&a.width>0?' width="'+a.width+'"':'')+(Number.isInteger(a.height)&&a.height>0?' height="'+a.height+'"':'')+' alt="'+e(alt)+'">';};
 E.draftKey=()=>[E.session?.id||'public',E.route?.key||location.hash].join('|');
 E.formIdentity=f=>f.dataset.form+'|'+Array.from(f.querySelectorAll('input[type="hidden"]')).filter(i=>['moduleId','targetId','id'].includes(i.name)).map(i=>i.name+'='+i.value).join('&');
 E.captureForms=()=>{const forms=Array.from(document.querySelectorAll('#app form[data-form]'));const drafts={};forms.forEach(f=>{if(f.dataset.dirty!=='true')return;drafts[E.formIdentity(f)]={type:f.dataset.form,values:Array.from(f.elements).filter(i=>i.name&&i.type!=='file'&&!i.disabled).map(i=>({name:i.name,type:i.type,value:i.value,checked:i.checked}))};});E.ui.formDrafts=E.ui.formDrafts||{};if(Object.keys(drafts).length)E.ui.formDrafts[E.draftKey()]=drafts;};

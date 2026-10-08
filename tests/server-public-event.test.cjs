@@ -124,10 +124,12 @@ function publicWorkspace() {
     photos: [
       { id: 'photo-public', participantId: 'person-other', name: '사진 공개 이름', image: { data: 'data:image/png;base64,ZmFrZQ==' }, caption: '게시 사진', status: 'APPROVED' },
       { id: 'photo-draft', participantId: null, image: { data: 'data:image/png;base64,ZmFrZQ==' }, status: 'PENDING' },
+      { id: 'photo-own-pending', participantId: 'person-own', name: '본인 참가자', image: { data: 'data:image/png;base64,ZmFrZQ==' }, caption: '본인 검토 사진', status: 'PENDING' },
     ],
     posts: [
       { id: 'post-public', participantId: 'person-other', name: '게시자', body: '공개 글', status: 'APPROVED' },
       { id: 'post-draft', participantId: null, body: '검토 전 비공개 글', status: 'PENDING' },
+      { id: 'post-own-pending', participantId: 'person-own', name: '본인 참가자', body: '본인 검토 글', status: 'PENDING' },
     ],
     reports: [{ id: 'private-report', summary: 'secret report' }],
     payments: [{ id: 'payment-own', participantId: 'person-own', amount: 0, status: 'FREE' }, { id: 'payment-other', participantId: 'person-other', amount: 9999 }],
@@ -236,6 +238,12 @@ test('public-ticket-api-returns-only-the-matching-participant-and-their-own-data
   assert.ok(!JSON.stringify(response.json).includes('private-audit'));
   assert.deepEqual(response.json.workspace.assignments, []);
   assert.deepEqual(response.json.workspace.checks, []);
+  assert.deepEqual(response.json.workspace.photos.map((photo) => photo.id).sort(), ['photo-own-pending', 'photo-public']);
+  assert.deepEqual(response.json.workspace.posts.map((post) => post.id).sort(), ['post-own-pending', 'post-public']);
+  assert.equal(response.json.workspace.photos.find((photo) => photo.id === 'photo-own-pending').participantId, 'person-own');
+  assert.equal(response.json.workspace.posts.find((post) => post.id === 'post-own-pending').participantId, 'person-own');
+  assert.ok(!Object.hasOwn(response.json.workspace.photos.find((photo) => photo.id === 'photo-public'), 'participantId'));
+  assert.ok(!Object.hasOwn(response.json.workspace.posts.find((post) => post.id === 'post-public'), 'participantId'));
 });
 
 test('public-ticket-api-rejects-missing-invalid-revoked-expired-and-cross-event-tickets', async () => {
