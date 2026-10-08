@@ -63,3 +63,12 @@
 - 유지되는 체인: core → store → console → router → experience → workflows → role-model → event-flow → operator-experience → server-sync → booth-map-data → booth-map-ui → server-presentation.
 - `?mode=preview`는 server-sync가 캡처해 둔 프리뷰 로그인 폼으로 위임한다. 로그인/초대/스태프 링크는 각 시점의 최종 정의를 쓰므로, 정의를 옮기거나 순서를 바꾸기 전에 `tests/load-order.test.cjs`를 확인한다.
 - `window.ET.workflowVersion` 게이트(operator-experience에서 최종 값 설정)가 로드 실패를 감지한다.
+
+## 화면 라우트 지도 (사이드바 vs 딥링크)
+
+- 해시 라우터(`assets/js/router.js`)는 모든 화면을 파싱한다. 아래는 사이드바에서 직접 노출되지 않는 딥링크 전용 라우트이므로, "죽은 링크"로 오판하지 않는다.
+- `readiness`(준비 체크): 운영 현황의 진행 단계 스트립에서 진입.
+- `event-qr`(QR·출력), `notices`, `schedule`, `venue`, `board`: `page` 그룹 탭에서 진입.
+- `form`/`import`/`groups`: `participants` 탭. `templates`/`deliveries`: `messages` 탭. `features`/`members`/`audit`: `settings` 탭.
+- `rewards`: `programs` 탭(경품 기능 활성 시). `reports`: `results` 탭. `checkin`: 데스크 현황 버튼.
+- 라우트 그룹 매핑은 `router.js`의 `groups`와 `operator-experience.js`의 `eventPages` 두 곳이며, `tests/route-map-consistency.test.cjs`가 공유 키 일치를 강제한다.
