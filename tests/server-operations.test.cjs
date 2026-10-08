@@ -709,6 +709,101 @@ test('operation-command-id-cannot-be-reused-for-a-different-operation-or-event',
   assert.equal(crossEvent.status, 409);
 });
 
+test('check-scan-by-participant-id-processes-checkin-without-ticket', async () => {
+  const person = makeParticipant('placeholder', 'QR 손상 참가자');
+  const event = await createFixture({ participants: [person] });
+  const stripped = await readWorkspace(event.id);
+  stripped.participants.find((item) => item.id === person.id).ticket = '';
+  await writeWorkspace(event.id, stripped);
+  const assignment = await seedAssignment(event);
+
+  const scanned = await operatorCommand(event.id, 'check.scan', {
+    deskId: event.deskIn, participantId: person.id,
+  }, { actor: 'staff', assignmentId: assignment.id });
+  assert.equal(scanned.status, 200, JSON.stringify(scanned.json));
+  assert.deepEqual(scanned.json, { name: person.name, id: person.id, action: 'IN', reentry: false });
+
+  const state = await readWorkspace(event.id);
+  assert.equal(state.participants.find((item) => item.id === person.id).inside, true);
+  assert.equal(state.participants.find((item) => item.id === person.id).everIn, true);
+  assert.equal(state.checks[0].participantId, person.id);
+});
+
+test('check-scan-by-participant-id-rejects-ineligible-and-unknown-person', async () => {
+  const pending = makeParticipant('placeholder', '승인 대기 참가자', { status: 'PENDING' });
+  const revoked = makeParticipant('placeholder', '회수 참가자', { revoked: true });
+  const event = await createFixture({ participants: [pending, revoked] });
+  const stripped = await readWorkspace(event.id);
+  for (const item of stripped.participants) item.ticket = '';
+  await writeWorkspace(event.id, stripped);
+
+  const pendingScan = await operatorCommand(event.id, 'check.scan', {
+    deskId: event.deskIn, participantId: pending.id,
+  });
+  assert.equal(pendingScan.status, 409);
+
+  const revokedScan = await operatorCommand(event.id, 'check.scan', {
+    deskId: event.deskIn, participantId: revoked.id,
+  });
+  assert.equal(revokedScan.status, 409);
+
+  const unknown = await operatorCommand(event.id, 'check.scan', {
+    deskId: event.deskIn, participantId: `person-${crypto.randomUUID()}`,
+  });
+  assert.equal(unknown.status, 404);
+
+  const other = await createFixture();
+  const crossEvent = await operatorCommand(other.id, 'check.scan', {
+    deskId: other.deskIn, participantId: pending.id,
+  });
+  assert.equal(crossEvent.status, 404);
+});
+
+test('check-scan-requires-ticket-or-participant-id-and-keeps-ticket-path', async () => {
+  const person = makeParticipant('placeholder', '티켓 경로 참가자');
+  const event = await createFixture({ participants: [person] });
+  const saved = await readWorkspace(event.id);
+  saved.participants[0].ticket = person.ticket = `ET:${event.id}:T-${crypto.randomBytes(32).toString('base64url')}`;
+  await writeWorkspace(event.id, saved);
+
+  const missing = await operatorCommand(event.id, 'check.scan', { deskId: event.deskIn });
+  assert.equal(missing.status, 400);
+  assert.match(missing.json.error, /티켓 코드/);
+
+  const ticketScan = await scan(event, person);
+  assert.equal(ticketScan.status, 200, JSON.stringify(ticketScan.json));
+  assert.deepEqual(ticketScan.json, { name: person.name, id: person.id, action: 'IN', reentry: false });
+});
+
+test('check-scan-by-participant-id-retry-with-same-command-id-is-idempotent', async () => {
+  const person = makeParticipant('placeholder', '재전송 참가자');
+  const other = makeParticipant('placeholder', '다른 참가자');
+  const event = await createFixture({ participants: [person, other] });
+  const stripped = await readWorkspace(event.id);
+  for (const item of stripped.participants) item.ticket = '';
+  await writeWorkspace(event.id, stripped);
+
+  const id = commandId();
+  const first = await operatorCommand(event.id, 'check.scan', {
+    deskId: event.deskIn, participantId: person.id,
+  }, { id });
+  assert.equal(first.status, 200, JSON.stringify(first.json));
+  const replayed = await operatorCommand(event.id, 'check.scan', {
+    deskId: event.deskIn, participantId: person.id,
+  }, { id });
+  assert.equal(replayed.status, 200);
+  assert.deepEqual(replayed.json, first.json);
+
+  const state = await readWorkspace(event.id);
+  assert.equal(state.checks.filter((row) => row.participantId === person.id).length, 1);
+  assert.equal(state.audit.filter((row) => row.id === id).length, 1);
+
+  const reused = await operatorCommand(event.id, 'check.scan', {
+    deskId: event.deskIn, participantId: other.id,
+  }, { id });
+  assert.equal(reused.status, 409);
+});
+
 test('manager-membership-is-required-for-operation-setup-and-archived-event-writes', async () => {
   const event = await createFixture({ stage: 'ARCHIVED' });
   const archived = await operatorCommand(event.id, 'desk.save', {

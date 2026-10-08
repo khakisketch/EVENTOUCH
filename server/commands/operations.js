@@ -80,13 +80,14 @@ function ticketHash(token) {
   return token ? crypto.createHash('sha256').update(token).digest('hex') : null;
 }
 
-function commandReceiptMatches(receipt, { eventId, actorId, command, ticketToken }) {
+function commandReceiptMatches(receipt, { eventId, actorId, command, ticketToken, participantId }) {
   const result = object(receipt && receipt.result);
   const receiptActorId = receipt && receipt.actor_id != null ? String(receipt.actor_id) : null;
   const expectedActorId = actorId == null ? null : String(actorId);
   return receipt && String(receipt.event_id) === String(eventId) &&
     receiptActorId === expectedActorId && result.command === command &&
-    (result.ticketHash || null) === ticketHash(ticketToken);
+    (result.ticketHash || null) === ticketHash(ticketToken) &&
+    (result.participantId || null) === (participantId || null);
 }
 
 async function lockEvent(client, eventId) {
@@ -287,15 +288,26 @@ function scan(workspace, event, actor, input, assignment) {
     throw failure(403, '배정된 데스크에서만 처리할 수 있습니다.');
   }
   const code = ticketCode(input.ticket);
-  if (!code) throw failure(400, '티켓 코드를 입력하세요.', 'ticket');
-  const person = findTicket(workspace, code);
-  if (!person) throw failure(404, '이 행사에서 티켓을 찾을 수 없습니다. 다른 행사 또는 잘못된 코드를 확인하세요.');
+  let person = null;
+  let idPath = false;
+  if (code) {
+    person = findTicket(workspace, code);
+    if (!person) throw failure(404, '이 행사에서 티켓을 찾을 수 없습니다. 다른 행사 또는 잘못된 코드를 확인하세요.');
+  } else {
+    const participantId = clean(input.participantId, 120);
+    if (!participantId) throw failure(400, '티켓 코드를 입력하세요.', 'ticket');
+    person = list(workspace.participants).find((item) => item && String(item.id) === participantId) || null;
+    if (!person) throw failure(404, '이 행사에서 참가자를 찾을 수 없습니다. 이름으로 다시 검색하세요.');
+    idPath = true;
+  }
   if (person.revoked === true || String(person.status || '').toUpperCase() !== 'APPROVED') {
     throw failure(409, '입장 가능한 티켓이 아닙니다. 등록 상태를 확인하세요.');
   }
-  const expiry = Date.parse(person.ticketExpiresAt);
-  if (!Number.isFinite(expiry) || expiry <= Date.now()) {
-    throw failure(409, '티켓이 만료되었습니다. 운영자에게 재발급을 요청하세요.');
+  if (idPath ? clean(person.ticketExpiresAt, 64) !== '' : true) {
+    const expiry = Date.parse(person.ticketExpiresAt);
+    if (!Number.isFinite(expiry) || expiry <= Date.now()) {
+      throw failure(409, '티켓이 만료되었습니다. 운영자에게 재발급을 요청하세요.');
+    }
   }
   if (!['FREE', 'PAID'].includes(String(person.paymentStatus || '').toUpperCase())) {
     throw failure(409, '결제가 완료되지 않았습니다. 결제 상태를 확인하세요.');
@@ -511,19 +523,25 @@ function createOperationsCommands(database) {
         [id]
       );
       const receipt = receiptResult.rows[0];
+      const pendingInput = object(payload);
+      const pendingTicket = command === 'check.scan' ? ticketCode(pendingInput.ticket) : '';
+      const pendingParticipantId = command === 'check.scan' && !pendingTicket
+        ? clean(pendingInput.participantId, 120) || null
+        : null;
       if (receipt) {
         if (!commandReceiptMatches(receipt, {
           eventId: event.id,
           actorId: guest ? null : account.id,
           command,
           ticketToken: guest ? ticketToken : null,
+          participantId: pendingParticipantId,
         })) {
           throw failure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다.');
         }
         return { status: 200, body: structuredClone(object(receipt.result).response), replayed: true };
       }
 
-      const input = object(payload);
+      const input = pendingInput;
       const now = new Date().toISOString();
       ensureNotArchived(event);
       let result;
@@ -581,6 +599,7 @@ function createOperationsCommands(database) {
           command,
           response: result.body || {},
           ticketHash: ticketHash(guest ? ticketToken : null),
+          participantId: pendingParticipantId,
         })]
       );
       return { status: result.status || 200, body: result.body || {}, replayed: false };
