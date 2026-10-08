@@ -82,6 +82,31 @@ function loadCoreAndConsole() {
   return E;
 }
 
+function loadPrograms(features = [], allowed = true) {
+  const E = {
+    esc: value => String(value ?? ''),
+    button: (label, action, attrs = '', cls = '') => `<button class="btn ${cls}" data-action="${action}" ${attrs}>${label}</button>`,
+    link: (label, href, cls = '') => `<a class="btn ${cls}" href="${href}">${label}</a>`,
+    field: () => '', select: () => '', register() {},
+    features: { poll: '투표', quiz: '퀴즈', qa: 'Q&A', draw: '추첨', survey: '만족도' },
+    event: () => ({ id: 'event-1', features }),
+    work: () => ({ modules: [] }),
+    head: (title, desc, action = '') => `<header><h1>${title}</h1><p>${desc}</p>${action}</header>`, eventTabs: () => '', can: () => allowed,
+    moduleCard: () => '', empty: (title, desc, action = '') => `<div class="empty"><h3>${title}</h3><p>${desc}</p>${action}</div>`,
+    consoleURL: page => `#/console/events/event-1/${page}`,
+  };
+  const source = fs.readFileSync(path.join(root, 'assets/js/programs.js'), 'utf8');
+  const start = source.indexOf('E.programPage=');
+  const end = source.indexOf('\nE.views.programs=', start);
+  vm.runInNewContext(source.slice(start, end), {
+    E,
+    e: E.esc,
+    B: E.button,
+    L: E.link,
+  });
+  return E;
+}
+
 test('attendee home identifies event date, time, venue, and a registration action', () => {
   const { E } = loadAttendee();
   const html = E.mobileHome();
@@ -114,6 +139,34 @@ test('direct registration shows event context before the unchanged form and cons
   assert.match(html, /이름과 연락처를 참가 신청 및 입장 확인에 사용합니다\./);
   assert.match(html, /name="consent" required/);
   assert.match(html, /type="submit"/);
+});
+
+test('attendee info omits blank optional details while retaining populated identity rows', () => {
+  const person = { name: '김가람', phone: '010-1234-5678', company: '', email: '  ', status: 'APPROVED', createdAt: '' };
+  const { E } = loadAttendee('info', person);
+  const html = E.mobileInfo();
+  assert.match(html, /<dt>이름<\/dt><dd>김가람<\/dd>/);
+  assert.match(html, /<dt>연락처<\/dt><dd>010-1234-5678<\/dd>/);
+  assert.doesNotMatch(html, /<dt>(소속|이메일|등록 시각)<\/dt>/);
+  person.email = 'garam@example.test';
+  assert.match(E.mobileInfo(), /<dt>이메일<\/dt><dd>garam@example\.test<\/dd>/);
+});
+
+test('program empty state links to feature settings only when no program feature is enabled', () => {
+  const disabled = loadPrograms([], true).programPage();
+  assert.match(disabled, /사용할 기능을 켜고 프로그램을 시작하면 참가자에게 노출됩니다\./);
+  assert.match(disabled, /href="#\/console\/events\/event-1\/features">기능 설정<\/a>/);
+  assert.match(disabled, /data-action="edit-module"/);
+  const enabled = loadPrograms(['poll'], true).programPage();
+  assert.doesNotMatch(enabled, /기능 설정/);
+  const readOnly = loadPrograms([], false).programPage();
+  assert.doesNotMatch(readOnly, /data-action="edit-module"/);
+  assert.match(readOnly, /기능 설정/);
+});
+
+test('handheld modal action footer remains sticky and reachable while modal content scrolls', () => {
+  const css = fs.readFileSync(path.join(root, 'assets/css/tokens.css'), 'utf8');
+  assert.match(css, /\.phone-screen \.modal footer\s*\{[^}]*position:\s*sticky[^}]*bottom:\s*0[^}]*background:\s*var\(--paper\)/s);
 });
 
 test('payment is absent from selectable features and settings preserve price in a hidden input', () => {

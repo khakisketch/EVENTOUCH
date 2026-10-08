@@ -15,6 +15,7 @@
 @media(hover:hover){.btn:hover{background:var(--surface-muted)}.btn.primary:hover{background:var(--brand-hover)}.btn.quiet:hover{background:var(--soft)}a:hover{text-decoration-thickness:2px}}
 @media(max-width:1024px){.split{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:768px){.page-head{display:block;margin-bottom:var(--s5)}.page-head>.actions{margin-top:var(--s4)}.form-grid{grid-template-columns:1fr}.form-grid .wide{grid-column:auto}.panel{padding:var(--s4)}.image-list{grid-template-columns:repeat(2,minmax(0,1fr))}.detail-grid{grid-template-columns:1fr}.overlay{padding:var(--s4)}}
+@media(max-width:768px){.phone-screen .modal footer{position:sticky;bottom:0;z-index:1;background:var(--paper);padding:var(--s3) 0}}
 @media(max-width:375px){.metrics{gap:var(--s2)}.btn{padding-inline:var(--s3)}.image-list{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
 
