@@ -1,0 +1,85 @@
+# Legacy test attribution (labeled run)
+
+Why: the earlier “328 legacy failures” number was unverified. This labeled run replaces it with an attributable list.
+
+- Command: `EVENTOUCH_TEST_DATABASE_URL=postgres://eventouch@localhost/eventouch?host=/tmp/opencode/eventouch-pg-test-auth.l0FjK5 npm test`
+- Revision: HEAD 192e33d + rollout stage-1 attendee changes pending in the working tree
+- Result: 604 tests / 279 pass / 325 fail / 0 skipped; **all 325 failures are in 71 legacy static-shell test files**; current suites have zero failures.
+- Failure classes: 187 × missing `../app.js`, 10 × `../features/agency.js`, 4 × `../features/qrcode.js`, 3 × `../features/views.js`, 2 × `../features/integrations.js`, 1 × `../features/checkin.js`; plus ENOENT of removed `features/*`, `styles/*`, `i18n/ko.json` paths (27 AssertionError / 180 ENOENT / 207 MODULE_NOT_FOUND / 1 TypeError).
+- Cause: these files characterize the removed v9 static shell (`app.js`, `features/*`, `styles/*`). The current product shell lives in `assets/**` and is covered by the current suites (server-*, booth-map-*, server-sync-client, attendee-browser-presentation, server-presentation, server-ui-events, staff-link, route-map-consistency, server-validation, server-invitation-management).
+- Decision: **archive, do not repair** (repairing would recreate the retired shell) and do not delete (pre-PostgreSQL characterization is kept as reference). Archived on 2026-10-08 by moving each file to `tests/legacy/<name>.cjs`; `npm test` (glob `tests/*.test.cjs`) no longer runs them.
+- If a specific archived behavior ever needs re-verification, port that behavior into a current suite at that time.
+
+## Archived files (71)
+
+- `tests/a11y.test.cjs`
+- `tests/agency-console.test.cjs`
+- `tests/agency.test.cjs`
+- `tests/booth-manage.test.cjs`
+- `tests/booth-qr.test.cjs`
+- `tests/booth.test.cjs`
+- `tests/booths.test.cjs`
+- `tests/camera-scan.test.cjs`
+- `tests/checkin.test.cjs`
+- `tests/closing-button.test.cjs`
+- `tests/consistency.test.cjs`
+- `tests/content-section.test.cjs`
+- `tests/content-ui.test.cjs`
+- `tests/content.test.cjs`
+- `tests/desk-history-ui.test.cjs`
+- `tests/desk-ui.test.cjs`
+- `tests/desks.test.cjs`
+- `tests/detail-gate.test.cjs`
+- `tests/engage-section.test.cjs`
+- `tests/engage-ui.test.cjs`
+- `tests/engage-ui2.test.cjs`
+- `tests/engagement.test.cjs`
+- `tests/engagement2.test.cjs`
+- `tests/field-toggle.test.cjs`
+- `tests/fixpass.test.cjs`
+- `tests/flow-wiring.test.cjs`
+- `tests/i18n.test.cjs`
+- `tests/integration-auth.test.cjs`
+- `tests/integration-devices.test.cjs`
+- `tests/integration-messages.test.cjs`
+- `tests/integrations.test.cjs`
+- `tests/journey-closing.test.cjs`
+- `tests/journey-engage.test.cjs`
+- `tests/journey-field.test.cjs`
+- `tests/journey-participant.test.cjs`
+- `tests/journey-setup.test.cjs`
+- `tests/media.test.cjs`
+- `tests/messaging-ui.test.cjs`
+- `tests/messaging.test.cjs`
+- `tests/my-ticket.test.cjs`
+- `tests/nav.test.cjs`
+- `tests/participant-ui.test.cjs`
+- `tests/participants.test.cjs`
+- `tests/persist.test.cjs`
+- `tests/qa.test.cjs`
+- `tests/qa2.test.cjs`
+- `tests/qr-scan.test.cjs`
+- `tests/qr-ui.test.cjs`
+- `tests/qr.test.cjs`
+- `tests/registration.test.cjs`
+- `tests/results.test.cjs`
+- `tests/role-write.test.cjs`
+- `tests/rule-hardening.test.cjs`
+- `tests/scenes.test.cjs`
+- `tests/screen-blackout.test.cjs`
+- `tests/screen-section.test.cjs`
+- `tests/screen-sync.test.cjs`
+- `tests/screen-ui.test.cjs`
+- `tests/seed-late.test.cjs`
+- `tests/self-service.test.cjs`
+- `tests/shell-boot.test.cjs`
+- `tests/signup-ui.test.cjs`
+- `tests/staff-stamp.test.cjs`
+- `tests/stage-touch.test.cjs`
+- `tests/stage.test.cjs`
+- `tests/stamp-ui.test.cjs`
+- `tests/store-truth.test.cjs`
+- `tests/theme-visual.test.cjs`
+- `tests/theme.test.cjs`
+- `tests/ticket-display.test.cjs`
+- `tests/views.test.cjs`
