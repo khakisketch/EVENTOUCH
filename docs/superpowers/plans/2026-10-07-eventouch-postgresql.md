@@ -196,3 +196,11 @@ Latest approved amendment (2026-10-07): user approved the proposed attendee brow
 - Baseline before changes: `node --test tests/*.test.cjs` → 394 tests, 52 pass, 342 fail. A run after adding Task 1 tests reported 401 tests, 57 pass, 342 fail, 2 PostgreSQL tests skipped. Treat the failures as pre-existing until reconciled against current v9 contracts; do not silently count them as regressions.
 - PostgreSQL doc references: Context7 `/websites/node-postgres` for Pool, parameterized queries, and single-client transaction lifecycle.
 - Task 1 integration tests passed 7/7 against disposable PostgreSQL 16 with container networking disabled and a task-scoped Unix socket; the container and socket were cleaned up. The host Docker bridge is unavailable, so continue using only this isolated socket setup for local DB verification—never host networking or another project's database.
+
+## Status note — 2026-10-08 (current revision `ca8224d`)
+
+- The M1 technical checks are complete on the current revision; human end-to-end acceptance is still pending (see `docs/superpowers/product-state.md`).
+- The approved UI/UX rollout finished stage 2 (console + login + staff/invite coverage): commit `ca8224d` — `.action-feedback` semantic tokens, narrow-width active-tab reveal, ≤480px tab spacing so the onsite row fits at 390. Per-stage captures and distinct read-only reviews are recorded in the active ledger (`.superpowers/sdd/2026-10-07-eventouch-postgresql/progress.md`); captures live under `design-inputs/uiux-audit/` (not committed).
+- The approved code-structure cleanup (review `ses_ee630851`) is complete through P3: `9bdb441`, `f5054fb`, `09a536b`, `dbbe8a4`, `a0803e2`, `c715da8`, `84cdd91`, `cd66787`, `fb324e1`, `a2e0900`; further file splits are optional.
+- Test state: maintained suite 282/282 (0 fail, 0 skip); the former legacy failures are archived under `tests/legacy` with `docs/superpowers/legacy-test-attribution.md`.
+- The OpenDesign boot unit was restart-verified (new healthy container, identical mount set, daemon responding to the project query).
