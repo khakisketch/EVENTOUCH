@@ -23,6 +23,13 @@ Status: PostgreSQL Tasks 1–8 are implemented and committed in the isolated wor
 - Public attendees use an event link and bearer ticket link; no app, account, or unapproved OTP.
 - SMS/email/payment providers, NAS mounting, production deployment and publication remain out of scope.
 
+## Product binding
+
+- Repository/worktree: `/home/ksi/Desktop/SI-Projects/EVENTOUCH/.worktrees/eventouch-postgres`, branch `feat/eventouch-postgres`; product entry `index.html`.
+- OpenDesign local project: `EVENTOUCH PostgreSQL` (`5601983f-a74b-4199-8c6d-969623f020c6`), verified `metadata.baseDir` points to this exact worktree; entry `index.html`. Design preview: `http://127.0.0.1:7456/api/projects/5601983f-a74b-4199-8c6d-969623f020c6/raw/index.html` (artifact preview only).
+- Actual product: `http://100.116.163.1:46771/` (temporary, tailnet-only; existing preserved fixture, do not restart for this task). Fixture launcher: `node .superpowers/sdd/2026-10-07-eventouch-postgresql/serve-existing-fixture.cjs` with its already-prepared environment. Product start script: `npm start`; automated suite: `npm test`.
+- Brand source: `design-inputs/uiux-audit/shared-system.md`; no project-level `product-context.md` is present.
+
 ## Active workstream
 
 - Plan/ledger: `docs/superpowers/plans/2026-10-07-eventouch-postgresql.md`.
@@ -30,6 +37,7 @@ Status: PostgreSQL Tasks 1–8 are implemented and committed in the isolated wor
 - UI/UX rollout (user-approved, autonomous): pilot + stage 1/1b (attendee) + stage 2 (console/login/staff/invite) applied the shared definitions (`design-inputs/uiux-audit/shared-system.md`) with per-stage captures and distinct read-only reviews; stage-2 commit `ca8224d`. Evidence and captures stay under `design-inputs/uiux-audit/` (not committed).
 - Consistency/systematization follow-up (user-approved 2026-10-08): audits 36567ccb + 253a9939 → seven user-approved decisions → `4e72f1c` (field workspace: full-width responsive desktop ≥900px, mobile phone layout unchanged, assignment switch, thin scrollbar), `cc3e38c` (agency pages: empty state, one-event single column, "운영 워크스페이스" labels, conditional 관리 column, integration rows with one badge, notice placement, sticky mobile topbar with menu + event name), `9c54bcb` (dead attendee bottom-nav removal). Captures `field-*`, `agency2-*`, `cleanup-*` under `design-inputs/uiux-audit/`.
 - Code-structure cleanup (review ses_ee630851, user-approved): P1–P3 complete — staff links (`9bdb441`), route-map pin (`f5054fb`), JSON-store isolation + 410 pins (`09a536b`), validators (`dbbe8a4`), dead-view removal (`a0803e2`, `c715da8`), legacy archive (`84cdd91`), load-order pin (`cd66787`), route map doc (`fb324e1`), server legacy-cluster split (`a2e0900`).
+- Focused mobile-admin success-toast follow-up (2026-10-09): iteration-6 fixes mobile placement/lifecycle while preserving copy, status semantics, focus, four-second dismissal, routes/data/auth, desktop and attendee behavior. Actual-fixture normal/edge Playwright suites pass at 320/390; rendered review found no open toast defect. Independent `npm test`: 322 total, 150 pass, 0 fail, 172 PostgreSQL tests skipped because isolated `EVENTOUCH_TEST_DATABASE_URL` was unavailable; browser-script syntax and diff checks pass. Details and hashes: `docs/superpowers/plans/2026-10-07-eventouch-postgresql.md`; M1 human acceptance, screen-reader listening, and physical-device checks remain pending/unperformed. No deployment.
 - Original checkout remains on `feat/eventouch-visual-system` with the separate preparation/registration UX work and its untracked design artifacts; do not alter or clean them from this workstream.
 
 ## Approved next scope — booth stamp map
