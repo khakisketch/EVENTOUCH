@@ -134,3 +134,51 @@
   .event-card-keyvisual{max-width:72px;max-height:56px}
   .event-card-keyvisual .od-media{max-width:72px;max-height:56px}
 }
+
+/* Event operations overview: put live work and compact metrics ahead of secondary detail. */
+.overview-page{display:grid;gap:var(--s3)}
+.overview-page>.panel{margin:0}
+.overview-page>.page-head.overview-heading{align-items:center;gap:var(--s3);margin:0}
+.overview-heading h1{font-size:var(--h2);letter-spacing:-.02em}
+.overview-page .metrics{grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s2);margin:0}
+.overview-page .metric-box{display:grid;align-content:center;gap:var(--s1);min-width:0;min-height:76px;padding:var(--s3) var(--s4)}
+.overview-page .metric{font-size:clamp(24px,2.4vw,var(--h1));line-height:1.15}
+.overview-page .metric-box>small{margin:0;color:var(--muted)}
+.overview-page .overview-task-list .list-item{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:var(--s3);padding:var(--s3) 0}
+.overview-page .overview-task-list .list-item:first-child{padding-top:0}
+.overview-page .overview-task-list .list-item:last-child{padding-bottom:0;border-bottom:0}
+.overview-page .overview-task-list .od-field{display:grid;gap:var(--s1);min-width:0}
+.overview-page .overview-task-list .btn{min-width:64px;min-height:44px}
+.overview-page .overview-task-empty .empty{padding:var(--s3) var(--s2);text-align:left}
+.overview-page .overview-task-empty .empty p{margin:var(--s1) 0 0}
+.overview-page .overview-support{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:var(--s3)}
+.overview-page .overview-support>.panel{margin:0;min-width:0}
+.overview-page .overview-quick-moves{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap}
+.overview-page .overview-quick-moves .btn{min-height:44px}
+.overview-page .overview-activity .list-item{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:var(--s2) 0}
+.overview-page .overview-activity .list-item:first-child{padding-top:0}
+.overview-page .overview-activity .list-item:last-child{padding-bottom:0;border-bottom:0}
+.overview-page .overview-activity .od-field{display:grid;gap:var(--s1);min-width:0}
+.overview-page .overview-details{overflow:hidden;border:1px solid var(--line);border-radius:var(--radius);background:var(--paper)}
+.overview-page .overview-details summary{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);min-height:48px;padding:var(--s2) var(--s4);list-style:none}
+.overview-page .overview-details summary::-webkit-details-marker{display:none}
+.overview-page .overview-details summary::after{content:"";width:8px;height:8px;flex:none;margin-inline-start:var(--s2);border-inline-end:2px solid var(--muted);border-block-end:2px solid var(--muted);transform:rotate(45deg);transition:transform var(--enter) ease-out}
+.overview-page .overview-details[open] summary::after{transform:rotate(225deg)}
+.overview-page .overview-details summary span{color:var(--muted);font-size:var(--small);flex:none}
+.overview-page .overview-details summary strong{min-width:0;text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.overview-page .overview-details[open] summary{border-bottom:1px solid var(--line)}
+.overview-page .overview-details .detail-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s3);margin:0;padding:var(--s3) var(--s4)}
+.overview-page .overview-help{max-width:72ch;margin:0;color:var(--muted);font-size:var(--small)}
+body:has(.overview-page) .workspace-footer{padding-block:var(--s2);font-size:var(--small)}
+@media(max-width:1024px){
+  .overview-page .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .overview-page .overview-support{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:768px){
+  .overview-page{gap:var(--s2)}
+  .overview-page>.page-head.overview-heading{gap:var(--s2)}
+  .overview-heading h1{font-size:var(--h3)}
+  .overview-page .metric-box{min-height:68px;padding:var(--s2) var(--s3)}
+  .overview-page .metric{font-size:var(--h2)}
+  .overview-page .overview-details .detail-grid{grid-template-columns:minmax(0,1fr);gap:var(--s2)}
+}
