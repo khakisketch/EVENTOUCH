@@ -301,17 +301,22 @@ test('attendee child routes mark their parent destination while unknown routes s
   assert.doesNotMatch(unknownNav, /aria-current="page"|class="[^"]*\bactive\b/);
 });
 
-test('organizer overview uses the shared panel, list-row, badge, empty-state and action-row treatments', () => {
+test('organizer overview uses the approved execution-console treatments', () => {
   const source = fs.readFileSync(path.join(root, 'assets/js/experience.js'), 'utf8');
   const overview = source.match(/E\.views\.overview\s*=\s*\(\)\s*=>\s*\{([\s\S]*?)\n\};/)?.[1] || '';
   assert.ok(overview, 'the experience override remains the active overview implementation');
-  assert.match(overview, /E\.head\(/);
-  assert.match(overview, /E\.stats\(/);
-  assert.match(overview, /E\.panel\(/);
-  assert.match(overview, /class="list-item"/);
-  assert.match(overview, /class="actions"/);
+  // Approved 2026-10-10 rebuild: the overview intentionally leaves the uniform
+  // card treatments (E.head/E.stats/list-item) for an execution-first console.
   assert.match(overview, /E\.badge\(/);
-  assert.match(overview, /E\.empty\(/);
+  assert.match(overview, /E\.panel\(/);
+  assert.match(overview, /E\.icon\(/);
+  assert.match(overview, /overview-status-strip/);
+  assert.match(overview, /overview-task-row/);
+  assert.match(overview, /overview-quick-link/);
+  assert.match(overview, /overview-timeline/);
+  assert.doesNotMatch(overview, /E\.head\(/);
+  assert.doesNotMatch(overview, /E\.stats\(/);
+  assert.doesNotMatch(overview, /class="list-item"/);
   assert.doesNotMatch(overview, /class="(?:task-row|quick-link|timeline-item)|class="context-summary|current-stage/);
 });
 

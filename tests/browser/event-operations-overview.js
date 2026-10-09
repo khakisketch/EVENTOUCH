@@ -1,4 +1,4 @@
-// Event operations console verification (actual fixture; synthetic states in-memory only).
+// Operations home console verification (actual fixture; synthetic states in-memory only).
 // playwright-cli -s=eventouch-event-redesign run-code --filename=tests/browser/event-operations-overview.js
 async page => {
   const baseUrl = 'http://100.116.163.1:46771';
@@ -8,7 +8,7 @@ async page => {
   const capture = name => page.screenshot({ path: `${root}/${name}.png`, scale: 'css', type: 'png' });
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(`${baseUrl}/?__event_ops_console=verify#/console/events/map-event/overview`);
+  await page.goto(`${baseUrl}/?__event_ops_home=verify#/console/events/map-event/overview`);
   await page.waitForFunction(() => document.querySelector('.admin-shell') || document.querySelector('#dev-quick-login'));
   if (!await page.locator('.admin-shell').count()) await page.getByRole('button', { name: '빠른 로그인' }).click();
   await page.waitForFunction(() => location.hash.includes('/overview') && window.ET);
@@ -16,45 +16,47 @@ async page => {
   await page.waitForFunction(() => location.hash.includes('/overview') && window.ET);
   await page.waitForSelector('.overview-page');
 
-  const baseline390 = 1882;
+  // Event name lives in the sticky topbar, not repeated in the body.
+  check(/부스 지도 검증 행사/.test(await page.locator('.topbar').innerText()), 'Topbar must retain the event name.');
+  check(!(await page.locator('.overview-page').innerText()).includes('부스 지도 검증 행사'), 'Body must not repeat the event name.');
+
+  const baseline390 = 1241;
   for (const width of [320, 390, 768, 1024, 1280]) {
     await page.setViewportSize({ width, height: width >= 1024 ? 900 : 844 });
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.waitForTimeout(200);
     const layout = await page.evaluate(() => {
       const q = s => document.querySelector(s);
-      const b = node => { if (!node) return null; const r = node.getBoundingClientRect(); return { y: Math.round(r.y), bottom: Math.round(r.bottom), width: Math.round(r.width), height: Math.round(r.height) }; };
+      const b = node => { if (!node) return null; const r = node.getBoundingClientRect(); return { y: Math.round(r.y), bottom: Math.round(r.bottom) }; };
+      const hrefs = [...document.querySelectorAll('.overview-page a[href]')].map(a => a.getAttribute('href'));
       return {
         width: innerWidth, viewportHeight: innerHeight,
         scrollWidth: document.documentElement.scrollWidth, scrollHeight: document.documentElement.scrollHeight,
-        heading: b(q('.overview-page .overview-heading h1')),
-        metricCount: document.querySelectorAll('.overview-page .metric-box').length,
-        metricIcons: [...document.querySelectorAll('.overview-page .overview-metric-icon svg path')].map(p => p.getAttribute('d').length > 10),
-        tasks: b(q('.overview-page .overview-task-panel')),
-        taskQuantities: [...document.querySelectorAll('.overview-page .overview-task-quantity')].map(n => n.innerText.replace(/\s+/g, ' ')),
-        primary: (() => { const a = document.querySelector('.overview-page .overview-quick-link.primary'); const r = a?.getBoundingClientRect(); return a ? { href: a.getAttribute('href'), h: Math.round(r.height) } : null; })(),
-        quickLabels: [...document.querySelectorAll('.overview-page .overview-quick-link span')].map(n => n.innerText),
+        identity: b(q('.overview-page .overview-identity')),
+        statusCards: document.querySelectorAll('.overview-page .overview-status-card').length,
+        primaryCtas: document.querySelectorAll('.overview-page .overview-primary-cta').length,
+        checkinHrefs: hrefs.filter(h => h.includes('/checkin')).length,
+        taskRows: document.querySelectorAll('.overview-page .overview-task-row').length,
+        quickLinks: [...document.querySelectorAll('.overview-page .overview-quick-link span')].map(n => n.innerText),
         timelineRows: document.querySelectorAll('.overview-page .overview-timeline-item').length,
         timelineTimes: [...document.querySelectorAll('.overview-page .overview-timeline time')].map(n => n.innerText),
-        allRecords: document.querySelector('.overview-page .overview-activity-footer a')?.getAttribute('href') || '',
+        allRecords: q('.overview-page .overview-activity-footer a')?.getAttribute('href') || '',
+        attendeeLink: q('.overview-page .overview-attendee-link')?.getAttribute('href') || '',
         smallTargets: [...document.querySelectorAll('.overview-page a[href], .overview-page button, .overview-page summary')].filter(el => { const r = el.getBoundingClientRect(); return (r.width < 44 || r.height < 44) && r.width > 0 && r.height > 0; }).length,
-        topbarActionsVisible: (() => { const a = document.querySelector('.admin-main>.topbar>.actions'); const r = a?.getBoundingClientRect(); return r && r.width > 0 && r.height > 0; })(),
-        topbarH: Math.round(document.querySelector('.admin-main>.topbar')?.getBoundingClientRect().height || 0),
-        footerHidden: (() => { const f = document.querySelector('.workspace-footer'); if (!f) return true; const r = f.getBoundingClientRect(); return r.height === 0; })(),
       };
     });
     check(layout.scrollWidth <= width + 1, `${width}px must not overflow horizontally (scrollWidth=${layout.scrollWidth}).`);
-    check(layout.metricCount === 4 && layout.metricIcons.length === 4 && layout.metricIcons.every(Boolean), `${width}px must show 4 metrics with real icons.`);
+    check(layout.statusCards === 4, `${width}px must show 4 status values (got ${layout.statusCards}).`);
+    check(layout.checkinHrefs === 1, `${width}px must expose checkin exactly once (got ${layout.checkinHrefs}).`);
     check(layout.smallTargets === 0, `${width}px must keep every overview control at least 44px (small=${layout.smallTargets}).`);
-    check(layout.primary && layout.primary.href.includes('/checkin') && layout.primary.h >= 44, `${width}px must emphasize 체크인 as the single primary quick action.`);
-    check(layout.timelineRows <= 3, `${width}px recent activity must cap at 3 rows (got ${layout.timelineRows}).`);
+    check(layout.timelineRows <= 2, `${width}px recent activity must cap at 2 rows (got ${layout.timelineRows}).`);
     check(layout.timelineTimes.every(t => /^\d{1,2}\/\d{1,2} \d{2}:\d{2}$/.test(t)), `${width}px timeline must use short times (got ${layout.timelineTimes.join('|')}).`);
     check(layout.allRecords.includes('/checks'), `${width}px must link full history to the checks route.`);
-    check(layout.topbarActionsVisible === false, `${width}px overview must hide topbar actions (badge/button live in body).`);
-    check(layout.footerHidden === true, `${width}px overview must hide the product footer.`);
+    check(layout.attendeeLink.includes('/event/'), `${width}px must keep the attendee-page link in the identity area.`);
+    check(JSON.stringify(layout.quickLinks) === JSON.stringify(['참가자 관리', '부스 운영', '활동 기록']), `${width}px quick menu must be the 3-destination menu (got ${layout.quickLinks.join('/')}).`);
     if (width <= 390) {
-      check(layout.scrollHeight < baseline390, `${width}px scroll height must beat the 1882px baseline (got ${layout.scrollHeight}).`);
-      check(layout.tasks && layout.tasks.y < layout.viewportHeight, `${width}px tasks must begin inside the first screen (y=${layout.tasks?.y}).`);
+      check(layout.scrollHeight < baseline390, `${width}px scroll height must beat the 1241px baseline (got ${layout.scrollHeight}).`);
+      check(layout.identity && layout.identity.y < 300, `${width}px identity line must start near the top (y=${layout.identity?.y}).`);
     }
     if (width === 390) await capture('after-390');
     if (width === 320) await capture('after-320');
@@ -63,7 +65,7 @@ async page => {
     if (width === 1280) await capture('after-1280');
   }
 
-  // Collapsing header: scrolled state shrinks the bar but keeps menu + name reachable.
+  // Collapsing header still works and keeps menu + name reachable.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.waitForTimeout(200);
@@ -74,14 +76,13 @@ async page => {
     cls: document.body.classList.contains('overview-scrolled'),
     h: Math.round(document.querySelector('.admin-main>.topbar').getBoundingClientRect().height),
     menu: (() => { const r = document.querySelector('.topbar .menu-button')?.getBoundingClientRect(); return r && r.top >= 0 && r.bottom <= innerHeight; })(),
-    name: (() => { const r = document.querySelector('.topbar .event-context')?.getBoundingClientRect(); return r && r.top >= 0 && r.bottom <= innerHeight; })(),
   }));
-  check(collapsed.cls && collapsed.h < top0 && collapsed.h <= 56, `Header must collapse on scroll (top=${top0}, collapsed=${collapsed.h}).`);
-  check(collapsed.menu && collapsed.name, 'Collapsed header must keep menu and event name reachable.');
+  check(collapsed.cls && collapsed.h <= top0 && collapsed.h <= 56, `Header must collapse on scroll (top=${top0}, collapsed=${collapsed.h}).`);
+  check(collapsed.menu, 'Collapsed header must keep the menu reachable.');
   await capture('after-collapsed-390');
 
-  // Other event pages must keep their chrome (spot-check).
-  await page.goto(`${baseUrl}/?__event_ops_console=verify#/console/events/map-event/checkin`);
+  // Other event pages keep their chrome.
+  await page.goto(`${baseUrl}/?__event_ops_home=verify#/console/events/map-event/checkin`);
   await page.waitForFunction(() => location.hash.includes('/checkin'));
   await page.waitForTimeout(300);
   const other = await page.evaluate(() => {
@@ -90,14 +91,14 @@ async page => {
     return { actionsVisible: r && r.width > 0, footerVisible: fr && fr.height > 0, noCollapse: !document.body.classList.contains('overview-scrolled') };
   });
   check(other.actionsVisible && other.footerVisible && other.noCollapse, 'Non-overview pages must keep topbar actions and footer.');
-  await page.goto(`${baseUrl}/?__event_ops_console=verify#/console/events/map-event/overview`);
+  await page.goto(`${baseUrl}/?__event_ops_home=verify#/console/events/map-event/overview`);
   await page.waitForFunction(() => location.hash.includes('/overview') && window.ET);
   await page.waitForSelector('.overview-page');
 
-  // Keyboard order from the primary quick action.
+  // Keyboard order from the first status card.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.locator('.overview-page .overview-quick-link.primary').focus();
+  await page.locator('.overview-page .overview-status-card[href]').first().focus();
   const tabStops = [];
   for (let i = 0; i < 6; i++) { await page.keyboard.press('Tab'); tabStops.push(await page.evaluate(() => document.activeElement?.tagName)); }
   check(tabStops.filter(t => t === 'A').length >= 2, 'Keyboard must move through overview actions.');
@@ -117,6 +118,6 @@ async page => {
   check(/운영 마감|마감할 업무/.test(states.ENDED), 'Ended state must keep its wrap-up tasks.');
   await page.waitForSelector('.overview-page');
 
-  if (failures.length) throw new Error(`Overview console failures:\n- ${failures.join('\n- ')}`);
+  if (failures.length) throw new Error(`Operations home failures:\n- ${failures.join('\n- ')}`);
   return { result: 'pass', viewports: [320, 390, 768, 1024, 1280], checks: failures.length };
 }
