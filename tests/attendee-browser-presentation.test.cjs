@@ -305,19 +305,22 @@ test('organizer overview uses the approved execution-console treatments', () => 
   const source = fs.readFileSync(path.join(root, 'assets/js/experience.js'), 'utf8');
   const overview = source.match(/E\.views\.overview\s*=\s*\(\)\s*=>\s*\{([\s\S]*?)\n\};/)?.[1] || '';
   assert.ok(overview, 'the experience override remains the active overview implementation');
-  // Approved 2026-10-10 rebuild: the overview intentionally leaves the uniform
-  // card treatments (E.head/E.stats/list-item) for an execution-first console.
+  // Approved 2026-10-10 rebuild + simplify: the overview intentionally leaves the
+  // uniform card treatments (E.head/E.stats/list-item) for an execution-first console.
+  // 2026-10-10 simplify: recent timeline moved to the records screen; the menu is
+  // three management destinations; live metrics use the compact live-stat pattern.
   assert.match(overview, /E\.badge\(/);
   assert.match(overview, /E\.panel\(/);
   assert.match(overview, /E\.icon\(/);
-  assert.match(overview, /overview-status-strip/);
+  assert.match(overview, /overview-live-stat|overview-status-strip/);
   assert.match(overview, /overview-task-row/);
-  assert.match(overview, /overview-quick-link/);
-  assert.match(overview, /overview-timeline/);
+  assert.match(overview, /overview-menu-link/);
+  assert.match(overview, /overview-primary-row/);
   assert.doesNotMatch(overview, /E\.head\(/);
   assert.doesNotMatch(overview, /E\.stats\(/);
   assert.doesNotMatch(overview, /class="list-item"/);
-  assert.doesNotMatch(overview, /class="(?:task-row|quick-link|timeline-item)|class="context-summary|current-stage/);
+  assert.doesNotMatch(overview, /overview-timeline/);
+  assert.doesNotMatch(overview, /class="(?:task-row|quick-link)|class="context-summary|current-stage/);
 });
 
 const PHOTO_TICKET = `ET:browser-event:T-${'t'.repeat(40)}`;
