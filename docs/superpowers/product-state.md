@@ -1,6 +1,6 @@
 # EVENTOUCH Product State
 
-Updated: 2026-10-08
+Updated: 2026-10-09
 
 ## Product goal
 
@@ -15,6 +15,12 @@ Acceptance: the real product server authenticates operational users, enforces ev
 M1 exit gate: event creation and all operational participant writes must use PostgreSQL as the only authoritative path; no JSON-file fallback may be able to create data that bootstrap/public/ticket reads cannot see. Verify a write through the real product route, read it from an independent role-scoped session and the public ticket route, then restart the HTTP server and read it again. The manager/staff event collection must also remain role-scoped. Human end-to-end acceptance is still required after technical checks.
 
 Status: PostgreSQL Tasks 1–8 are implemented and committed in the isolated worktree (current HEAD `9c54bcb`). Server/file/map authority, the server-backed client shell, invitations, the booth stamp map and the user-approved payment-simulation removal are committed; the M1 exit-gate checks ran through the real product route (write via real route → independent role/public-ticket reads → same-schema HTTP restart read-back; role-scoped event collection). Final integrated verification on the current revision: full suite 288/288 (0 fail, 0 skip; the former legacy failures are archived under `tests/legacy` with the labeled attribution in `docs/superpowers/legacy-test-attribution.md`), focused server suites green, syntax/diff clean. The approved UI/UX rollout (shared definitions in `design-inputs/uiux-audit/shared-system.md`) completed stages 1/1b (attendee) and 2 (console + login, including the staff field surface and the invite accept page) with per-stage captures and distinct read-only reviews; the approved code-structure cleanup (P1–P3, review ses_ee630851) is complete including the server legacy-cluster split (`a2e0900`) and the script load-order pin (`cd66787`). The OpenDesign boot unit was verified with a real restart cycle (new healthy container, identical mount set, daemon responding). Follow-up workstream (user request 2026-10-08, "일관성·체계적으로 설계"): cross-surface consistency + agency-page systematization — two read-only audits (36567ccb, 253a9939) produced defect lists; the user approved seven direction decisions; implemented as the field workspace redesign (`4e72f1c`: full-width responsive desktop, heading hierarchy, assignment switch, thin scroll boundary), the agency/console fixes (`cc3e38c`: clients empty state, one-event layout, consistent agency labels, conditional team column, integration rows with one badge, sticky mobile topbar with event name), and the retired attendee bottom-nav cleanup (`9c54bcb`); suite 288/288, rendered verifications d80da796 (field) and 209370b5 (agency) with capture-disproven false-positive claims recorded. Awaiting human review of the new results and M1 end-to-end acceptance; no production deployment has occurred.
+
+## Current State (2026-10-09; supersedes the earlier status summary)
+
+- Verified checkout: `/home/ksi/Desktop/SI-Projects/EVENTOUCH/.worktrees/eventouch-postgres`, branch `feat/eventouch-postgres`, HEAD `746b929`.
+- The focused mobile-admin success-toast repair is committed; actual-fixture normal/edge browser regressions pass at 320/390, and rendered review found no open toast defect. The PostgreSQL-enabled maintained suite passed 322/322 with 0 skips; evidence and the independent Test Runner session are recorded in the active plan.
+- M1 human end-to-end acceptance remains pending. Real screen-reader listening and physical-device checks are unperformed. No production deployment, merge, or push occurred.
 
 ## Approved architecture
 
