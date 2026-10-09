@@ -129,6 +129,20 @@ test('attendee home uses shared empty states for unpublished notice and schedule
   assert.doesNotMatch(home, /E\.notice\('(새 안내가 게시되면|시간표가 게시되면)/);
 });
 
+test('server attendee home binds the existing capped desktop hero while preserving mobile content order', () => {
+  const source = fs.readFileSync(path.join(root, 'assets/js/operator-experience.js'), 'utf8');
+  const home = source.match(/E\.mobileHome\s*=\s*\(\)\s*=>\s*\{([\s\S]*?)\n\};/)?.[1] || '';
+  assert.ok(home, 'the server-mode attendee home override remains active');
+  assert.match(home, /class="attendee-home-hero"/);
+  assert.match(home, /class="attendee-home-copy"/);
+  assert.match(home, /class="attendee-home-image"/);
+  assert.ok(home.indexOf('attendee-home-copy') < home.indexOf('attendee-home-image'));
+  assert.ok(home.indexOf('attendee-home-image') < home.indexOf('hero-actions'));
+
+  const css = fs.readFileSync(path.join(root, 'assets/css/server-presentation.css'), 'utf8');
+  assert.match(css, /\.attendee-home-image img\s*\{[^}]*max-height:\s*420px/s);
+});
+
 test('direct registration shows event context before the unchanged form and consent', () => {
   const { E } = loadAttendee('register');
   const html = E.mobileRegister();

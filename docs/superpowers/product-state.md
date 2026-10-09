@@ -18,9 +18,15 @@ Status: PostgreSQL Tasks 1–8 are implemented and committed in the isolated wor
 
 ## Current State (2026-10-09; supersedes the earlier status summary)
 
-- Verified checkout: `/home/ksi/Desktop/SI-Projects/EVENTOUCH/.worktrees/eventouch-postgres`, branch `feat/eventouch-postgres`, HEAD `746b929`.
+- Bounded UI-slice base checkout: `/home/ksi/Desktop/SI-Projects/EVENTOUCH/.worktrees/eventouch-postgres`, branch `feat/eventouch-postgres`, base HEAD `8a0a9b1`.
 - The focused mobile-admin success-toast repair is committed; actual-fixture normal/edge browser regressions pass at 320/390, and rendered review found no open toast defect. The PostgreSQL-enabled maintained suite passed 322/322 with 0 skips; evidence and the independent Test Runner session are recorded in the active plan.
 - M1 human end-to-end acceptance remains pending. Real screen-reader listening and physical-device checks are unperformed. No production deployment, merge, or push occurred.
+
+## Current authorized UI slice — bounded micro-UX polish
+
+- User approved the three scoped refinements in `docs/superpowers/plans/2026-10-09-eventouch-ui-micro-polish.md`: consolidate the agency workspace context per viewport; right-align the mobile agency “새 행사 만들기” action beside its title; constrain/recompose the desktop attendee hero so the registration action is in the first viewport.
+- Preserve the existing EVENTOUCH design system, mobile attendee content order, route/permission/action behavior, and all API/data/auth contracts. This is visual-only; M1 acceptance and prior technical evidence are unchanged.
+- Status: design-owned implementation, separate rendered review, responsive/interaction browser verification, and independent code review are technically complete; human product acceptance remains pending. No deployment, merge, or push is approved.
 
 ## Approved architecture
 

@@ -76,6 +76,7 @@
 .agency-integration-row{display:flex;align-items:center;justify-content:space-between;gap:var(--s4)}
 .agency-integration-row .od-field{display:grid;gap:var(--s1);min-width:0}
 .agency-integration-row .od-field p{margin:0}
+@media(min-width:769px){.admin-shell:has(.workspace-caption) .topbar .breadcrumb{display:none}}
 @media(max-width:768px){
   .admin-main>.topbar{position:sticky;top:0;z-index:50}
   .topbar .breadcrumb{display:flex;align-items:center;gap:var(--s2);min-width:0}
@@ -84,4 +85,11 @@
   .topbar .breadcrumb .context-separator{display:none}
   .topbar .breadcrumb .event-context{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .agency-integration-row{align-items:flex-start}
+}
+@media(max-width:768px){
+  .page-head.agency-events-head{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:var(--s2) var(--s3)}
+  .page-head.agency-events-head>div:first-child{display:contents}
+  .page-head.agency-events-head h1{grid-column:1;grid-row:1;min-width:0}
+  .page-head.agency-events-head p{grid-column:1/-1;grid-row:2}
+  .page-head.agency-events-head>.actions{grid-column:2;grid-row:1;width:auto;margin:0}
 }

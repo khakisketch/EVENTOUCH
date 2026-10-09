@@ -9,7 +9,7 @@ E.button=(label,action,attrs='',cls='')=>'<button type="button" class="btn '+cls
 E.link=(label,url,cls='',icon='')=>'<a class="btn '+cls+'" href="'+e(url)+'">'+(icon?E.icon(icon):'')+e(label)+'</a>';
 E.submit=(label='저장')=>'<button class="btn primary" type="submit">'+e(label)+'</button>';
 E.badge=(text,kind='')=>'<span class="badge '+kind+'">'+e(text)+'</span>';
-E.head=(title,desc='',actions='',eyebrow='행사 운영')=>'<header class="page-head"><div><span class="eyebrow">'+e(eyebrow)+'</span><h1>'+e(title)+'</h1>'+(desc?'<p>'+e(desc)+'</p>':'')+'</div><div class="actions">'+actions+'</div></header>';
+E.head=(title,desc='',actions='',eyebrow='행사 운영',className='')=>'<header class="page-head'+(className?' '+e(className):'')+'"><div>'+(eyebrow?'<span class="eyebrow">'+e(eyebrow)+'</span>':'')+'<h1>'+e(title)+'</h1>'+(desc?'<p>'+e(desc)+'</p>':'')+'</div><div class="actions">'+actions+'</div></header>';
 E.panel=(title,body,actions='')=>'<section class="panel"><div class="panel-head"><h2>'+e(title)+'</h2><div class="actions">'+actions+'</div></div>'+body+'</section>';
 E.empty=(title,desc,action='')=>'<div class="empty"><h3>'+e(title)+'</h3><p>'+e(desc)+'</p>'+action+'</div>';
 E.notice=(text,kind='')=>'<div class="notice '+kind+'">'+e(text)+'</div>';

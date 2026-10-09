@@ -20,7 +20,7 @@ function loadAgencyViews() {
     link: (label, url, cls = '') => `<a class="btn ${cls}" href="${url}">${label}</a>`,
     field: () => '', select: () => '', check: () => '', submit: () => '',
     badge: text => `<span class="badge">${text}</span>`,
-    head: (title, desc = '', actions = '', eyebrow = '') => `<header class="page-head"><span class="eyebrow">${eyebrow}</span><h1>${title}</h1>${desc}${actions}</header>`,
+    head: (title, desc = '', actions = '', eyebrow = '', className = '') => `<header class="page-head${className ? ' ' + className : ''}"><div>${eyebrow ? `<span class="eyebrow">${eyebrow}</span>` : ''}<h1>${title}</h1>${desc}</div><div class="actions">${actions}</div></header>`,
     panel: (title, body) => `<section class="panel"><h2>${title}</h2>${body}</section>`,
     empty: (title, desc) => `<div class="empty"><h3>${title}</h3><p>${desc}</p></div>`,
     notice: text => `<div class="notice">${text}</div>`,
@@ -45,10 +45,10 @@ function loadAgencyViews() {
   return E;
 }
 
-test('empty clients use the shared empty state inside the panel and the agency context label', () => {
+test('empty clients use the shared empty state without repeating the agency workspace label', () => {
   const E = loadAgencyViews();
   const html = E.views['agency-clients']();
-  assert.match(html, /<span class="eyebrow">운영 워크스페이스<\/span>/);
+  assert.doesNotMatch(html, /운영 워크스페이스/);
   assert.match(html, /<section class="panel"><h2>고객사 목록<\/h2><div class="empty">/);
 });
 
@@ -60,7 +60,9 @@ test('one-event agency home adapts its grid without removing the event card', ()
   E.route.page = 'events';
   const html = E.views['agency-events']();
   assert.match(html, /event-card-grid event-card-grid-single/);
+  assert.match(html, /<header class="page-head agency-events-head">/);
   assert.match(html, /한 개 행사/);
+  assert.doesNotMatch(html, /운영 워크스페이스/);
 });
 
 test('team management column follows available permission-checked actions and notice stays in section', () => {
@@ -73,7 +75,7 @@ test('team management column follows available permission-checked actions and no
   html = E.views['agency-team']();
   assert.match(html, /<th>관리<\/th>/);
   assert.match(html, /data-action="edit-org-permissions"/);
-  assert.match(html, /<span class="eyebrow">운영 워크스페이스<\/span>/);
+  assert.doesNotMatch(html, /운영 워크스페이스/);
 });
 
 test('integrations render one status badge per service in shared list rows', () => {
@@ -83,7 +85,7 @@ test('integrations render one status badge per service in shared list rows', () 
   assert.equal((html.match(/class="badge"/g) || []).length, 5);
   assert.equal((html.match(/미연동/g) || []).length, 4);
   assert.equal((html.match(/class="list-item agency-integration-row"/g) || []).length, 5);
-  assert.match(html, /<span class="eyebrow">운영 워크스페이스<\/span>/);
+  assert.doesNotMatch(html, /운영 워크스페이스/);
 });
 
 test('mobile console shell keeps agency or event context beside the menu in a sticky topbar', () => {

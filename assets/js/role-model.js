@@ -130,7 +130,7 @@ E.register('staff.unassign','onsite',(s,p,c)=>{
 for(const name of ['client.contact.invite','client.contact.link','client.access.save','client.contact.unlink'])delete E.handlers[name];
 for(const name of ['client-contact-invite','client-contact-link','client-event-access','client-contact-unlink','share-report'])delete E.actions[name];
 
-E.views['agency-clients']=()=>{const rows=E.state.clients.map(c=>'<tr><td><strong>'+e(c.name)+'</strong></td><td><div class="od-field"><span>'+e(c.contact||'미등록')+'</span><small class="muted">'+e(c.email||'연락처 없음')+'</small></div></td><td>'+E.state.events.filter(a=>a.clientId===c.id).length+'개</td><td>'+B('상세','client-detail','data-id="'+e(c.id)+'"')+'</td></tr>');const content=rows.length?E.table(['고객사','내부 연락처','행사','관리'],rows):E.empty('등록된 고객사가 없습니다','고객사를 추가하면 내부 담당자 정보와 연결된 행사가 여기에 표시됩니다.');return E.head('고객사','행사 의뢰 조직과 내부 담당자 정보를 관리합니다.',B('고객사 추가','edit-client','','primary'),'운영 워크스페이스')+E.panel('고객사 목록',content);};
+E.views['agency-clients']=()=>{const rows=E.state.clients.map(c=>'<tr><td><strong>'+e(c.name)+'</strong></td><td><div class="od-field"><span>'+e(c.contact||'미등록')+'</span><small class="muted">'+e(c.email||'연락처 없음')+'</small></div></td><td>'+E.state.events.filter(a=>a.clientId===c.id).length+'개</td><td>'+B('상세','client-detail','data-id="'+e(c.id)+'"')+'</td></tr>');const content=rows.length?E.table(['고객사','내부 연락처','행사','관리'],rows):E.empty('등록된 고객사가 없습니다','고객사를 추가하면 내부 담당자 정보와 연결된 행사가 여기에 표시됩니다.');return E.head('고객사','행사 의뢰 조직과 내부 담당자 정보를 관리합니다.',B('고객사 추가','edit-client','','primary'),'')+E.panel('고객사 목록',content);};
 E.actions['client-detail']=d=>{
  const c=E.state.clients.find(a=>a.id===d.id);if(!c)throw Error('고객사를 찾을 수 없습니다.');
  const events=E.state.events.filter(a=>a.clientId===c.id);
