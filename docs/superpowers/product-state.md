@@ -26,7 +26,7 @@ Status: PostgreSQL Tasks 1–8 are implemented and committed in the isolated wor
 
 - User directly requested a mobile-first redesign of the agency event list, including information density, card/image treatment, compact search/filter, copy hierarchy, responsive behavior, and clear distinction between scheduled date and persisted operational stage. Workstream: `docs/superpowers/plans/2026-10-09-event-management-mobile-redesign.md`.
 - Preserve the current EVENTOUCH system, routes, roles/permissions, API/data/auth contracts, and explicit stage workflow. The actual `2026-11-15` + `LIVE` record is not date-derived; do not auto-correct it or change stage gates.
-- Status: event-list slice (`3ab90a1`, `5cf509f`) and operations-overview slices (`0c7abb2`, `b84568f`) committed; visual-language pass committed as `41d0807` (icon metrics, task emphasis, icon quick menu, activity timeline, `clock`+`edit` icons; captures untracked under `design-inputs/uiux-audit/event-operations/`). Human product acceptance still pending for all slices. No backend/data/auth, deployment, push, or merge work is authorized.
+- Status: event-list (`3ab90a1`, `5cf509f`), operations-overview (`0c7abb2`, `b84568f`), visual-language (`41d0807`, `afe05e4`) slices committed; console-density pass committed as `21ddc95` (collapsing overview-scoped header, merged context, single 체크인 primary, icon quick grid, 3-row activity + checks link, overview-local short times; captures untracked under `design-inputs/uiux-audit/event-operations/`). Human product acceptance still pending for all slices. No backend/data/auth, deployment, push, or merge work is authorized.
 
 ## Approved architecture
 
