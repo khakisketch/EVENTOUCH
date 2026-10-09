@@ -22,7 +22,7 @@ function loadAgencyViews() {
     badge: text => `<span class="badge">${text}</span>`,
     head: (title, desc = '', actions = '', eyebrow = '', className = '') => `<header class="page-head${className ? ' ' + className : ''}"><div>${eyebrow ? `<span class="eyebrow">${eyebrow}</span>` : ''}<h1>${title}</h1>${desc}</div><div class="actions">${actions}</div></header>`,
     panel: (title, body) => `<section class="panel"><h2>${title}</h2>${body}</section>`,
-    empty: (title, desc) => `<div class="empty"><h3>${title}</h3><p>${desc}</p></div>`,
+    empty: (title, desc, action = '') => `<div class="empty"><h3>${title}</h3><p>${desc}</p>${action}</div>`,
     notice: text => `<div class="notice">${text}</div>`,
     table: (heads, rows) => `<table><thead><tr>${heads.map(head => `<th>${head}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`,
     detail: () => '', register(name, group, fn, options = {}) { this.handlers[name] = { group, fn, options }; },
@@ -63,6 +63,54 @@ test('one-event agency home adapts its grid without removing the event card', ()
   assert.match(html, /<header class="page-head agency-events-head">/);
   assert.match(html, /한 개 행사/);
   assert.doesNotMatch(html, /운영 워크스페이스/);
+});
+
+test('event-list no-results state is distinct and offers a direct filter reset', () => {
+  const E = loadAgencyViews();
+  const event = { id: 'event-1', name: '한 개 행사', slug: 'one-event', date: '2026-10-08', start: '09:00', end: '17:00', stage: 'DRAFT', features: [] };
+  E.state.events = [event];
+  E.state.workspaces[event.id] = { branding: {} };
+  E.route.page = 'events';
+  E.ui.filters.events = '없는 행사';
+  E.ui.filters.eventStatus = 'LIVE';
+
+  const html = E.views['agency-events']();
+
+  assert.match(html, /검색 결과|조건에 맞는 행사/);
+  assert.match(html, /data-action="clear-event-filters"/);
+  assert.doesNotMatch(html, /담당 행사가 없습니다|조직 구성원에게 행사 접근 권한을 요청하세요/);
+});
+
+test('event cards label schedule separately from the persisted operational stage', () => {
+  const E = loadAgencyViews();
+  const event = { id: 'event-1', name: '행사명', slug: 'one-event', date: '2026-11-15', start: '09:00', end: '17:00', stage: 'LIVE', features: [] };
+  E.state.events = [event];
+  E.state.workspaces[event.id] = { branding: {} };
+  E.route.page = 'events';
+
+  const html = E.views['agency-events']();
+  const card = html.slice(html.indexOf('<article'), html.indexOf('</article>') + '</article>'.length);
+
+  assert.match(card, /일정/);
+  assert.match(card, /운영 상태/);
+  assert.match(card, /2026-11-15[\s\S]*09:00[\s\S]*17:00/);
+  assert.match(card, /class="event-schedule-date">2026-11-15<\/span>\s+<span class="event-schedule-time">09:00–17:00/);
+  assert.match(card, /진행 중/);
+  assert.equal(event.stage, 'LIVE');
+});
+
+test('event-list heading omits persistent helper copy and image-free cards have no image placeholder', () => {
+  const E = loadAgencyViews();
+  const event = { id: 'event-1', name: '이미지 없는 행사', slug: 'no-image', date: '2026-10-08', start: '09:00', end: '17:00', stage: 'DRAFT', features: [] };
+  E.state.events = [event];
+  E.state.workspaces[event.id] = { branding: {} };
+  E.route.page = 'events';
+
+  const html = E.views['agency-events']();
+
+  assert.doesNotMatch(html, /담당 범위의 행사에서 준비와 운영을 이어갑니다|팀과 행사 권한은/);
+  assert.doesNotMatch(html, /event-card-keyvisual/);
+  assert.match(html, /이미지 없는 행사/);
 });
 
 test('team management column follows available permission-checked actions and notice stays in section', () => {

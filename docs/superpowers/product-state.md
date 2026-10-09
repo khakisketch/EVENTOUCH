@@ -18,15 +18,15 @@ Status: PostgreSQL Tasks 1–8 are implemented and committed in the isolated wor
 
 ## Current State (2026-10-09; supersedes the earlier status summary)
 
-- Bounded UI-slice base checkout: `/home/ksi/Desktop/SI-Projects/EVENTOUCH/.worktrees/eventouch-postgres`, branch `feat/eventouch-postgres`, base HEAD `8a0a9b1`.
+- Bounded UI-slice base checkout: `/home/ksi/Desktop/SI-Projects/EVENTOUCH/.worktrees/eventouch-postgres`, branch `feat/eventouch-postgres`, task base HEAD `0b1e628`.
 - The focused mobile-admin success-toast repair is committed; actual-fixture normal/edge browser regressions pass at 320/390, and rendered review found no open toast defect. The PostgreSQL-enabled maintained suite passed 322/322 with 0 skips; evidence and the independent Test Runner session are recorded in the active plan.
 - M1 human end-to-end acceptance remains pending. Real screen-reader listening and physical-device checks are unperformed. No production deployment, merge, or push occurred.
 
-## Current authorized UI slice — bounded micro-UX polish
+## Current authorized UI slice — event management list redesign
 
-- User approved the three scoped refinements in `docs/superpowers/plans/2026-10-09-eventouch-ui-micro-polish.md`: consolidate the agency workspace context per viewport; right-align the mobile agency “새 행사 만들기” action beside its title; constrain/recompose the desktop attendee hero so the registration action is in the first viewport.
-- Preserve the existing EVENTOUCH design system, mobile attendee content order, route/permission/action behavior, and all API/data/auth contracts. This is visual-only; M1 acceptance and prior technical evidence are unchanged.
-- Status: design-owned implementation, separate rendered review, responsive/interaction browser verification, and independent code review are technically complete; human product acceptance remains pending. No deployment, merge, or push is approved.
+- User directly requested a mobile-first redesign of the agency event list, including information density, card/image treatment, compact search/filter, copy hierarchy, responsive behavior, and clear distinction between scheduled date and persisted operational stage. Workstream: `docs/superpowers/plans/2026-10-09-event-management-mobile-redesign.md`.
+- Preserve the current EVENTOUCH system, routes, roles/permissions, API/data/auth contracts, and explicit stage workflow. The actual `2026-11-15` + `LIVE` record is not date-derived; do not auto-correct it or change stage gates.
+- Status: exact-source implementation, design refinements, actual-product browser checks, independent code review, and final read-only rendered review are complete for the authorized visual slice (320/390/768/1024/1280 plus synthetic edge states). The final review retracted the earlier misread deep-scroll finding and confirmed no supported open visual defect. `npm test`: 326 total, 154 pass, 0 fail, 172 PostgreSQL-dependent skips because an isolated `EVENTOUCH_TEST_DATABASE_URL` was unavailable. Loading/error real states, axe/real screen-reader, reduced-motion, and physical-device checks remain unverified. Human product acceptance remains separate; no backend/data/auth, deployment, push, or merge work is authorized.
 
 ## Approved architecture
 

@@ -73,6 +73,7 @@
 @media(max-width:420px){.event-create-fields{grid-template-columns:minmax(0,1fr);gap:var(--s3)}.event-create-review>div{grid-template-columns:88px minmax(0,1fr);gap:var(--s2)}.event-create-footer .btn{min-width:80px;padding-inline:var(--s3)}}
 
 .event-card-grid-single{grid-template-columns:minmax(0,1fr)}
+@media(min-width:768px){.event-card-grid-single{width:100%;max-width:700px;margin-inline:auto}}
 .agency-integration-row{display:flex;align-items:center;justify-content:space-between;gap:var(--s4)}
 .agency-integration-row .od-field{display:grid;gap:var(--s1);min-width:0}
 .agency-integration-row .od-field p{margin:0}
@@ -92,4 +93,44 @@
   .page-head.agency-events-head h1{grid-column:1;grid-row:1;min-width:0}
   .page-head.agency-events-head p{grid-column:1/-1;grid-row:2}
   .page-head.agency-events-head>.actions{grid-column:2;grid-row:1;width:auto;margin:0}
+}
+
+/* Agency event list: schedule, operational state and next action scan as one compact unit. */
+.event-list-toolbar{margin-top:0}
+.event-list-count{margin-left:auto;color:var(--muted);font-size:var(--small);white-space:nowrap}
+.event-card{gap:var(--s4);min-width:0}
+.event-card-main{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:var(--s4);min-width:0;flex:1}
+.event-card-info{min-width:0}
+.event-card-info h2{margin:0 0 var(--s3);overflow-wrap:anywhere}
+.event-card-facts{display:grid;gap:var(--s2);margin:0}
+.event-card-facts>div{display:grid;grid-template-columns:88px minmax(0,1fr);align-items:start;gap:var(--s2);min-width:0}
+.event-card-facts dt{color:var(--muted);font-size:var(--small)}
+.event-card-facts dd{min-width:0;margin:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.event-schedule-time{white-space:nowrap}
+.event-card-keyvisual{display:flex;align-items:flex-start;justify-content:flex-end;max-width:120px;max-height:80px;aspect-ratio:auto;margin:0;overflow:visible;border-radius:var(--radius-small)}
+.event-card-keyvisual .od-media{display:block;width:auto;height:auto;max-width:120px;max-height:80px;object-fit:contain}
+.event-card .card-footer{margin-top:var(--s4)}
+.event-card .card-footer .btn{min-width:44px;min-height:44px}
+@media(max-width:768px){
+  .event-list-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 128px;gap:var(--s2);margin:0 0 var(--s4)}
+  .event-list-toolbar input{width:100%;max-width:none;min-width:0}
+  .event-list-toolbar select{width:128px;max-width:128px;min-width:0;padding-inline:var(--s2)}
+  .event-list-count{grid-column:1/-1;margin-left:0}
+  .event-card{gap:var(--s3);padding:var(--s4)}
+  .event-card-main{gap:var(--s3)}
+  .event-card-info h2{font-size:var(--h3);line-height:1.35;margin-bottom:var(--s2)}
+  .event-card-facts{gap:var(--s1)}
+  .event-schedule-date,.event-schedule-time{display:block}
+  .event-card-facts>div{grid-template-columns:76px minmax(0,1fr);gap:var(--s1)}
+  .event-card-facts dt,.event-card-facts dd{font-size:var(--small);line-height:1.45}
+  .event-card-keyvisual{max-width:88px;max-height:64px}
+  .event-card-keyvisual .od-media{max-width:88px;max-height:64px}
+  .event-card .card-footer{margin-top:var(--s3)}
+  .event-card .card-footer .btn{width:100%}
+}
+@media(max-width:350px){
+  .event-card-main{grid-template-columns:minmax(0,1fr);gap:var(--s2)}
+  .event-card-main:has(.event-card-keyvisual){grid-template-columns:minmax(0,1fr) 72px}
+  .event-card-keyvisual{max-width:72px;max-height:56px}
+  .event-card-keyvisual .od-media{max-width:72px;max-height:56px}
 }
