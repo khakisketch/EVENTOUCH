@@ -47,8 +47,8 @@ async page => {
       const input = document.querySelector('#event-query');
       const select = document.querySelector('#event-status');
       const image = card?.querySelector('img');
-      const scheduleDate=card?.querySelector('.event-schedule-date');
-      const scheduleTime=card?.querySelector('.event-schedule-time');
+      const row = card?.querySelector('.event-list-row');
+      const summary = card?.querySelector('.event-list-row-summary');
       const singleGrid=document.querySelector('.event-card-grid-single');
       const box = node => {
         if (!node) return null;
@@ -60,10 +60,11 @@ async page => {
         card:box(card), action:box(action), button:box(button), input:box(input), select:box(select), image:box(image),
         topbar:box(document.querySelector('.topbar')), menu:box(document.querySelector('.topbar .menu-button')),
         imageLoaded:!!image?.complete&&image.naturalWidth>0,
-        scheduleDate:box(scheduleDate),scheduleTime:box(scheduleTime),scheduleTimeLines:scheduleTime?.getClientRects().length||0,
-        scheduleGap:scheduleDate&&scheduleTime?scheduleTime.getBoundingClientRect().left-scheduleDate.getBoundingClientRect().right:null,
+        summary:box(summary),summaryLines:summary?.getClientRects().length||0,
+        summaryOverflow:summary?(summary.scrollWidth-summary.clientWidth):null,
+        rowLabel:row?.getAttribute('aria-label')||'',
         singleGrid:box(singleGrid),content:box(document.querySelector('.content')),
-        cardText:card?.innerText||'', eventTitle:card?.querySelector('h2')?.innerText||'',
+        cardText:card?.innerText||'', eventTitle:card?.querySelector('.event-list-row-title')?.innerText||'',
         toolbar:box(document.querySelector('.toolbar')),
       };
     });
@@ -72,11 +73,9 @@ async page => {
     check(layout.input && layout.input.height >= 44, `${width}px search target must remain at least 44px high.`);
     check(layout.select && layout.select.height >= 44, `${width}px status filter must remain at least 44px high.`);
     check(layout.action && layout.action.height >= 44 && layout.action.width >= 44, `${width}px event-management action must retain a 44×44px minimum target.`);
-    check(/일정/.test(layout.cardText) && /운영 상태/.test(layout.cardText), `${width}px card must label schedule separately from operational stage.`);
-    check(/등록\s+\d+명/.test(layout.cardText), `${width}px card should expose the event's registration count.`);
-    check(layout.scheduleTime && layout.scheduleTimeLines===1, `${width}px scheduled time range should stay together on one line.`);
-    if(width<=390) check(layout.scheduleDate?.y < layout.scheduleTime?.y, `${width}px date and time should occupy distinct, scannable lines.`);
-    if(width>=1024) check(layout.scheduleGap>=3, `${width}px inline date and time should have a visible separator (gap=${layout.scheduleGap}).`);
+    check(/부스 지도 검증 행사/.test(layout.eventTitle), `${width}px row must lead with the event name.`);
+    check(/등록 \d+명/.test(layout.rowLabel) && /\d+명/.test(layout.cardText), `${width}px row must expose the registration count in its accessible name and visible summary.`);
+    check(layout.summary && layout.summaryLines===1 && (layout.summaryOverflow||0)<=1, `${width}px one-line summary must not wrap or clip (lines=${layout.summaryLines}, overflow=${layout.summaryOverflow}).`);
     if(width>=768){
       check(layout.singleGrid?.width<=700, `${width}px one-event card should stay compact (width=${layout.singleGrid?.width}).`);
       check(Math.abs((layout.singleGrid?.x+layout.singleGrid?.width/2)-(layout.content?.x+layout.content?.width/2))<=2, `${width}px one-event card should be centered within the content region.`);
@@ -136,6 +135,7 @@ async page => {
   await page.locator('#event-query').fill('');
   await page.waitForSelector('.event-card');
   await page.evaluate(() => {const E=window.ET,s=window.__eventListCustomerSnapshot;E.state.events=s.events;E.state.clients=s.clients;delete window.__eventListCustomerSnapshot;E.render();});
+  await page.waitForTimeout(150); // Let the restored render settle before keyboard traversal.
 
   await page.locator('#event-query').focus();
   await page.keyboard.press('Tab');
@@ -145,6 +145,7 @@ async page => {
   await capture('after-focus-390');
 
   await page.locator('#event-status').selectOption('LIVE');
+  await page.waitForTimeout(200); // Let the stage-filter render settle before counting.
   check(await page.locator('.event-card').count() === 1, 'The stored LIVE filter should preserve the existing event result.');
   await page.locator('#event-status').selectOption('DRAFT');
   check(await page.locator('.event-card').count() === 0, 'A non-matching stage filter should produce zero results.');
@@ -205,16 +206,16 @@ async page => {
   await page.evaluate(() => window.scrollTo(0,0));
   const synthetic = await page.evaluate(() => ({
     scrollWidth:document.documentElement.scrollWidth,
-    titles:[...document.querySelectorAll('.event-card h2')].map(node=>node.innerText),
+    titles:[...document.querySelectorAll('.event-list-row-title')].map(node=>node.innerText),
     imageCounts:[...document.querySelectorAll('.event-card')].map(card=>card.querySelectorAll('img').length),
     cardCount:document.querySelectorAll('.event-card').length,
-    noImageReservedWidth:(()=>{const card=document.querySelectorAll('.event-card')[1],main=card?.querySelector('.event-card-main')?.getBoundingClientRect(),info=card?.querySelector('.event-card-info')?.getBoundingClientRect();return main&&info?main.width-info.width:null;})(),
+    noImageReserved:(()=>{const row=document.querySelectorAll('.event-card')[1]?.querySelector('.event-list-row');return {images:row?.querySelectorAll('.event-list-row-image').length||0, flagged:row?.classList.contains('has-event-image')};})(),
   }));
   check(synthetic.scrollWidth <= 321, 'Long titles and multiple events must not create horizontal overflow at 320px.');
   check(synthetic.titles.some(title=>title.includes('EVENTOUCH')), 'Long-title synthetic event should render in the list.');
   check(synthetic.cardCount===8, 'The list should remain renderable with eight events.');
   check(synthetic.imageCounts[1]===0, 'An event without an image should not receive a large empty image placeholder.');
-  check(synthetic.noImageReservedWidth!==null && synthetic.noImageReservedWidth<=24, `An image-free card should not reserve an empty thumbnail column (reserved=${synthetic.noImageReservedWidth}).`);
+  check(synthetic.noImageReserved.images===0 && !synthetic.noImageReserved.flagged, 'An image-free row must not reserve thumbnail space.');
   for(const [stage,expectedCount] of [['DRAFT',2],['READY',2],['LIVE',1],['ENDED',2],['ARCHIVED',1]]){
     await page.locator('#event-status').selectOption(stage);
     check(await page.locator('.event-card').count()===expectedCount, `${stage} filter should show its matching synthetic/fixture events.`);
@@ -244,6 +245,29 @@ async page => {
   });
   await page.waitForSelector('.event-card');
 
+  // Thirty-event synthetic list (in-memory only): rows must stay compact and scannable.
+  await page.evaluate(() => {
+    const E=window.ET, original=E.state.events.find(item=>E.eventAllowed(item.id));
+    window.__eventListManySnapshot={events:E.state.events};
+    const many=Array.from({length:29},(_,index)=>({...original,id:`many-event-${index+1}`,slug:`many-event-${index+1}`,name:`합성 행사 ${index+1}`,date:`2026-12-${String((index%28)+1).padStart(2,'0')}`,stage:['DRAFT','READY','LIVE','ENDED','ARCHIVED'][index%5]}));
+    E.state.events=[original,...many];
+    for(const event of many){E.state.workspaces[event.id]=structuredClone(E.state.workspaces[original.id]);E.state.workspaces[event.id].branding={...(E.state.workspaces[event.id].branding||{}),keyvisual:null};}
+    E.ui.filters.events='';E.ui.filters.eventStatus='';E.render();
+  });
+  await page.waitForFunction(()=>document.querySelectorAll('.event-card').length===30);
+  await page.setViewportSize({width:320,height:844});
+  await page.evaluate(()=>window.scrollTo(0,0));
+  const many=await page.evaluate(()=>({count:document.querySelectorAll('.event-card').length,scrollWidth:document.documentElement.scrollWidth,scrollHeight:document.documentElement.scrollHeight,rowH:document.querySelector('.event-list-row')?.getBoundingClientRect().height||0}));
+  check(many.count===30,'Thirty-event list must render all rows.');
+  check(many.scrollWidth<=321,'Thirty-event list must not overflow horizontally at 320px.');
+  check(many.scrollHeight>844,'Thirty-event list should scroll rather than squeeze.');
+  check(many.rowH>0&&many.rowH<200,`Rows must stay compact for fast scanning (rowH=${many.rowH}).`);
+  await page.locator('#event-status').selectOption('LIVE');
+  check((await page.locator('.event-card').count())>=1,'Stage filter must still work across thirty events.');
+  await page.locator('#event-status').selectOption('');
+  await page.evaluate(()=>{const E=window.ET,s=window.__eventListManySnapshot;E.state.events=s.events;for(const id of Object.keys(E.state.workspaces))if(id.startsWith('many-event-'))delete E.state.workspaces[id];delete window.__eventListManySnapshot;E.render();});
+  await page.waitForFunction(()=>document.querySelectorAll('.event-card').length===1);
+
   await page.setViewportSize({ width:390, height:844 });
   await page.evaluate(() => {
     const E=window.ET;window.__eventListEmptySnapshot=E.state.events;E.state.events=[];E.render();
@@ -266,5 +290,5 @@ async page => {
   check(/담당 행사가 없습니다/.test(permissionLimited.copy)&&/접근 권한/.test(permissionLimited.copy), 'A member with no assigned event access should retain the existing permission guidance.');
 
   if (failures.length) throw new Error(`Event-list redesign failures:\n- ${failures.join('\n- ')}`);
-  return { result:'pass', viewports:[320,390,768,1024,1280], syntheticVariants:['many events','long title','no image','true empty','permission-limited'], checks:failures.length };
+  return { result:'pass', viewports:[320,390,768,1024,1280], syntheticVariants:['many events','thirty events','long title','no image','true empty','permission-limited'], checks:failures.length };
 }
