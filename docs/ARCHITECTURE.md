@@ -157,30 +157,45 @@ PostgreSQL이 행사 데이터의 유일한 권위다. JSON 파일 저장소(`DA
 
 ### 로드 순서상의 함정 (실측)
 
-같은 이름이 여러 파일에 정의되고 **뒤에 로드된 쪽이 이긴다.** 소스를 고쳐도 아무 일이
-일어나지 않을 수 있다.
+같은 이름이 여러 파일에 정의된다. **그 중 일부는 덮어쓰기지만 일부는 겹쳐 쌓기다.**
+구분이 중요하다 — 덮어쓰기라고 알고 제거하면 살아있는 레이어를 지운다.
 
-- 로그인 화면: `E.loginPage`가 **3번** 정의된다 — `router.js` → `experience.js` →
-  `server-presentation.js`. 서버 모드 문구는 마지막 파일에만 있다. `router.js`를 고치면
-  소스는 맞아 보이지만 화면은 그대로다(실제로 겪었다).
-- **뷰 39개 중 10개가 중복 정의**된다:
+**겹쳐 쌓기(레이어)** — 나중 파일이 앞의 값을 붙잡아 호출한다. 모두 살아있다.
 
-      staff         experience.js → field.js → role-model.js → workflows.js   (4중)
-      attendee      attendee.js → operator-experience.js → server-presentation.js
-      display       display.js → experience.js → workflows.js
-      booths        booth-map-ui.js → field.js
-      checkin       event-flow.js → field.js
-      desks         event-flow.js → field.js
-      settings      console.js → experience.js
-      import        experience.js → registration.js
-      programs      programs.js → workflows.js
-      participants  registration.js → workflows.js
+    view:staff      field.js(기본) → experience.js → workflows.js → role-model.js   (4중)
+    view:display    display.js(기본) → experience.js → workflows.js
+    view:checkin    field.js(기본) → event-flow.js
+    view:booths     field.js(기본) → booth-map-ui.js
+    view:desks      field.js(기본) → event-flow.js
+    view:participants / import / settings / programs
+    action:clear-scan / message-detail / invite-link / report-detail
 
-- **액션 120개 중 16개가 중복 정의**된다(`scan-person`, `assign-staff`, `camera-scan`,
-  `edit-desk`, `compose-message`, `client-detail`, `invite-link`, `toggle-menu` 등).
+server-presentation.js는 통째로 레이어다. `loginPage`, `adminShell`, `views.attendee`,
+`reportMarkup`, `actions['invite-link']`를 감싼다.
 
-**규칙**: 화면이나 동작을 고칠 때는 어느 정의가 실제로 이기는지 먼저 확인한다.
-`tests/load-order.test.cjs`가 순서 자체를 고정하고 있다.
+**덮어쓰기(앞의 정의가 죽음)**
+
+    view:attendee           attendee.js → operator-experience.js
+    action:toggle-menu      ui.js → experience.js
+    action:scan-person / staff-search / camera-scan / assign-staff / edit-desk
+    action:compose-message / edit-module / client-detail / publish-report
+    action:table-page / clear-event-filters
+
+### 이 구분을 정적으로 알 수 없다 (중요)
+
+레이어인지 덮어쓰기인지 **정적 분석으로 판별하지 못한다.** 시도한 세 가지 방법이
+세 가지 다른 답을 냈다(레이어 12개 → 0개 → 26개). 캡처 표현이 파일마다 다르고
+(`const oldX=E.views.x`, `const baseX=E.views.x`) 식별자 이름도 제각각이라
+정규식으로 안정적으로 잡히지 않는다.
+
+그래서:
+
+- **어느 정의가 실제로 실행되는지는 런타임 호출 추적으로만 확정할 수 있다.**
+  아직 하지 않았다. 죽은 정의 제거는 그 추적이 선행되어야 한다.
+- `tests/frontend-contract.test.cjs`가 로드 순서·이름 목록·알려진 중복 목록을
+  고정한다. **새 중복이 생기면 테스트가 실패**하므로 사고는 막힌다.
+- 화면이나 동작을 고칠 때는 **어느 파일이 최종인지 먼저 확인**한다.
+  `staff`를 `field.js`만 고치면 아무 일도 일어나지 않는다.
 
 ### 구조 부채 (알려진 것)
 
@@ -260,8 +275,9 @@ CI(`.github/workflows/ci.yml`)가 세 게이트를 모두 돌린다. 원격 저�
 
 1. **프론트엔드 모듈 경계 부재** — `E` 전역 155개. 가장 큰 부채이며 기능 추가 전에
    정리하는 것이 순서다.
-2. **가려진 중복 정의** — 뷰 10개·액션 16개가 로드 순서로 덮인다. 제거하면 동작이
-   바뀔 수 있어(가려진 쪽이 실제로 쓰이지 않는지 확인 필요) 특성화 테스트가 선행되어야 한다.
+2. **중복 정의 26개** — 뷰 10개·액션 16개가 여러 파일에 정의된다. 레이어와 덮어쓰기가
+   섞여 있고 정적으로 구분되지 않는다(위 7절). 제거하려면 런타임 호출 추적이 먼저다.
+   그때까지 `tests/frontend-contract.test.cjs`가 새 중복만 막는다.
 3. **문서 부패 방지** — `code-structure.svg`가 한 번 커밋된 뒤 6개 화면·다른 네임스페이스
    시절로 방치되어 있었다. 구조를 바꾸는 변경은 이 문서와 SVG를 함께 갱신해야 한다.
 4. **`legacy-events.js` 970줄** — 과도기 폴백. 운영에서 쓰이지 않으면 제거 후보.
