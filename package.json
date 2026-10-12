@@ -10,7 +10,8 @@
     "db:migrate": "node server/migrate.js",
     "test": "node scripts/run-tests.cjs",
     "test:raw": "node --test tests/*.test.cjs",
-    "a11y": "node scripts/accessibility-audit.cjs"
+    "a11y": "node scripts/accessibility-audit.cjs",
+    "mobile": "node scripts/mobile-audit.cjs"
   },
   "dependencies": {
     "pg": "^8.23.1"

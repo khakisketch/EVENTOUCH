@@ -35,11 +35,17 @@
 
     npm test   # PostgreSQL 포함 전체 스위트. 스킵이 하나라도 있으면 실패한다.
     npm run a11y   # 주요 화면 12곳의 WCAG 2.1 AA 감사
+    npm run mobile # 실기기 프로필 6종 × 가로/세로 × 6화면
 
 두 명령 모두 DB가 있어야 정상 동작한다. `EVENTOUCH_TEST_DATABASE_URL`,
 `EVENTOUCH_A11Y_DATABASE_URL`이 없으면 백엔드 테스트는 스킵으로 처리되고,
 접근성 감사는 실행되지 않는다. CI는 두 값 모두 주입하므로 빌드가 통과했다면
 백엔드 테스트와 접근성 감사가 실제로 수행된 것이다.
+
+
+`npm run mobile`은 오버플로와 44px 미만 조작 요소를 잡는다. 카메라
+권한, 소프트 키보드, 실제 터치, iOS Safari 렌더링은 잡지 못한다.
+실기기 확인이 필요한 항목은 `scripts/device-checklist.md`에 있다.
 
 ## 운영 주의
 
