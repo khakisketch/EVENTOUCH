@@ -53,6 +53,9 @@ async function runMigrations(database, migrationsDir = DEFAULT_MIGRATIONS_DIR) {
 }
 
 async function main() {
+  // Required here, not at module scope: db.js requires this file back, and a
+  // top-level require would leave one of the two modules half-initialised
+  // depending on which entry point loaded first.
   const { createDatabase } = require('./db');
   const database = createDatabase();
   try {
@@ -65,6 +68,13 @@ async function main() {
   }
 }
 
+// Exported before the CLI block below. db.js requires this file lazily, and
+// under the `npm run db:migrate` entry point that require happens while this
+// module is still evaluating: main() calls database.migrate(), which requires
+// this file back. Assigning exports after the CLI block left `runMigrations`
+// undefined at exactly that moment and every CLI migration failed.
+module.exports = { runMigrations };
+
 if (require.main === module) {
   main().catch((error) => {
     const code = error && error.code ? ` (${error.code})` : '';
@@ -72,5 +82,3 @@ if (require.main === module) {
     process.exitCode = 1;
   });
 }
-
-module.exports = { runMigrations };

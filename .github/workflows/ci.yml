@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+# A new push to the same ref supersedes an in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: eventouch_test
+          POSTGRES_USER: eventouch
+          POSTGRES_PASSWORD: eventouch
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U eventouch -d eventouch_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify migrations apply to a clean database
+        # Proves the migration chain is valid on its own, independently of
+        # whether the integration suites happen to touch every table.
+        env:
+          DATABASE_URL: postgresql://eventouch:eventouch@localhost:5432/eventouch_test
+        run: npm run db:migrate
+
+      - name: Re-verify migrations are idempotent
+        env:
+          DATABASE_URL: postgresql://eventouch:eventouch@localhost:5432/eventouch_test
+        run: npm run db:migrate
+
+      - name: Run the suite against PostgreSQL
+        # scripts/run-tests.cjs fails the job when anything is skipped, so a
+        # green build here means the backend integration tests really ran.
+        env:
+          EVENTOUCH_TEST_DATABASE_URL: postgresql://eventouch:eventouch@localhost:5432/eventouch_test
+        run: npm test

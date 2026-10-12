@@ -71,7 +71,14 @@ function createDatabase({ connectionString, PoolClass = Pool } = {}) {
     },
     async migrate() {
       if (closed) throw new Error('데이터베이스 연결이 종료되었습니다');
+      // migrate.js requires this file back for its CLI entry point. Requiring
+      // it from here would observe a half-initialised module depending on
+      // which entry point ran first, so the require stays inside the call
+      // that actually needs it — by then this module is fully initialised.
       const { runMigrations } = require('./migrate');
+      if (typeof runMigrations !== 'function') {
+        throw new Error('마이그레이션을 실행할 수 없습니다');
+      }
       return runMigrations(database);
     },
     async close() {
