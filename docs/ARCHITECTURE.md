@@ -181,21 +181,37 @@ server-presentation.js는 통째로 레이어다. `loginPage`, `adminShell`, `vi
     action:compose-message / edit-module / client-detail / publish-report
     action:table-page / clear-event-filters
 
-### 이 구분을 정적으로 알 수 없다 (중요)
+### 런타임 추적 결과 (실측)
 
-레이어인지 덮어쓰기인지 **정적 분석으로 판별하지 못한다.** 시도한 세 가지 방법이
+정적으로는 판별할 수 없어서(아래) 실제로 로드하고 호출해 확인했다.
+`node scripts/definition-trace.cjs`.
+
+- **레이어 체인 56개가 확정됐다.** 정의가 전부 실행되므로 합성임이 분명하다.
+  여기에는 `view:staff`(4중), `view:attendee`(3중), `view:display`(3중),
+  `view:checkin`·`view:desks`·`view:booths`·`view:import`·`view:participants`·
+  `view:programs`·`view:settings`, 그리고 workflows.js가 권한을 씌우는
+  다수 액션이 포함된다.
+- **15개 이름은 단일 호출로 확인되지 않았다.** 이것은 **죽음이 아니라 미확인**이다.
+  추적이 한 가지 합성 상태에서만 돌기 때문에 승자가 그 상태에서 예외를 던지면
+  기반 정의에 도달하지 못한다. 실제로 `view:attendee`가 처음엔 죽음으로 나왔지만
+  가짜 DOM을 보완하니 3중 레이어로 정정됐다.
+
+**따라서 제거는 여전히 하지 않았다.** 미확인 15개를 지우려면 preview 모드와
+서버 모드 각각에서 실제 제품 경로로 도달 여부를 확인해야 한다.
+
+### 정적 분석으로는 판별할 수 없다
+
+레이어인지 덮어쓰기인지 정적 분석으로 판별하지 못한다. 시도한 세 가지 방법이
 세 가지 다른 답을 냈다(레이어 12개 → 0개 → 26개). 캡처 표현이 파일마다 다르고
-(`const oldX=E.views.x`, `const baseX=E.views.x`) 식별자 이름도 제각각이라
-정규식으로 안정적으로 잡히지 않는다.
+(`const oldStaff=E.views.staff`, `const baseAttendee=E.views.attendee`) 식별자도
+제각각이라 정규식으로 안정적으로 잡히지 않는다.
 
 그래서:
 
-- **어느 정의가 실제로 실행되는지는 런타임 호출 추적으로만 확정할 수 있다.**
-  아직 하지 않았다. 죽은 정의 제거는 그 추적이 선행되어야 한다.
 - `tests/frontend-contract.test.cjs`가 로드 순서·이름 목록·알려진 중복 목록을
   고정한다. **새 중복이 생기면 테스트가 실패**하므로 사고는 막힌다.
 - 화면이나 동작을 고칠 때는 **어느 파일이 최종인지 먼저 확인**한다.
-  `staff`를 `field.js`만 고치면 아무 일도 일어나지 않는다.
+  `staff`를 `field.js`만 고치면 나머지 세 레이어가 그대로 덮는다.
 
 ### 구조 부채 (알려진 것)
 
@@ -275,9 +291,10 @@ CI(`.github/workflows/ci.yml`)가 세 게이트를 모두 돌린다. 원격 저�
 
 1. **프론트엔드 모듈 경계 부재** — `E` 전역 155개. 가장 큰 부채이며 기능 추가 전에
    정리하는 것이 순서다.
-2. **중복 정의 26개** — 뷰 10개·액션 16개가 여러 파일에 정의된다. 레이어와 덮어쓰기가
-   섞여 있고 정적으로 구분되지 않는다(위 7절). 제거하려면 런타임 호출 추적이 먼저다.
-   그때까지 `tests/frontend-contract.test.cjs`가 새 중복만 막는다.
+2. **중복 정의 26개** — 레이어 56개 체인이 실행으로 확정됐고, 15개 이름은
+   미확인이다(죽음 아님). `scripts/definition-trace.cjs`로 추적하되, 제거 전에는
+   preview·서버 두 모드에서 실제 경로 도달을 확인해야 한다. 그때까지
+   `tests/frontend-contract.test.cjs`가 새 중복만 막는다.
 3. **문서 부패 방지** — `code-structure.svg`가 한 번 커밋된 뒤 6개 화면·다른 네임스페이스
    시절로 방치되어 있었다. 구조를 바꾸는 변경은 이 문서와 SVG를 함께 갱신해야 한다.
 4. **`legacy-events.js` 970줄** — 과도기 폴백. 운영에서 쓰이지 않으면 제거 후보.
