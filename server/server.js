@@ -124,11 +124,8 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
   // production path; the generic provider stays for tests and for any vendor
   // reachable through a translation shim. Absent credentials leave every
   // campaign in its recorded, non-sending state.
-  const solapiConfig = solapi.providerConfig();
-  const messaging = solapiConfig.configured
-    ? solapi.createSolapiProvider(solapiConfig)
-    : genericMessaging.createMessagingProvider(genericMessaging.providerConfig());
-  const messagingStatus = solapiConfig.configured ? solapi.messagingState() : genericMessaging.messagingState();
+  const messaging = genericMessaging.activeProvider();
+  const messagingStatus = genericMessaging.activeMessagingState();
   const domainCommands = database ? createDomainCommands(database, { messaging }) : null;
   const files = database ? createFileService(database, { storageDir }) : null;
   return http.createServer((req, res) => {

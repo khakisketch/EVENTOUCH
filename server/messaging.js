@@ -120,7 +120,27 @@ function createMessagingProvider(config, { fetchImpl = globalThis.fetch, timeout
   return { send, state: messagingState() };
 }
 
+// The single source of truth for "is outbound messaging live". Solapi wins
+// when configured; otherwise the generic provider applies. Callers must use
+// this rather than messagingState() directly, or a Solapi-only deployment
+// reports itself as disconnected.
+function activeMessagingState(env = process.env) {
+  const solapi = require('./messaging-solapi');
+  const config = solapi.providerConfig(env);
+  return config.configured ? solapi.messagingState(env) : messagingState(env);
+}
+
+function activeProvider(env = process.env) {
+  const solapi = require('./messaging-solapi');
+  const config = solapi.providerConfig(env);
+  return config.configured
+    ? solapi.createSolapiProvider(config)
+    : createMessagingProvider(providerConfig(env));
+}
+
 module.exports = {
+  activeMessagingState,
+  activeProvider,
   providerConfig,
   messagingState,
   createMessagingProvider,

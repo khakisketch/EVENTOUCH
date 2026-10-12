@@ -2,6 +2,7 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const crypto = require('node:crypto');
+const fs = require('node:fs');
 
 const solapi = require('../server/messaging-solapi');
 
@@ -437,4 +438,76 @@ test('a-group-read-can-be-used-to-recover-message-ids', async () => {
   const result = await provider.groupMessages('G4V-1');
   assert.equal(result.ok, true);
   assert.equal(result.messages.M1.to, '01011111111');
+});
+
+
+// --- provider selection ----------------------------------------------------
+//
+// Which provider is active must be decided in one place. server/state.js was
+// calling the generic messagingState(), which only reads EVENTOUCH_MESSAGING_*,
+// so a Solapi-only deployment told the browser it was disconnected while the
+// server was sending. That is the shape of bug these tests exist to prevent.
+
+test('active-state-reports-solapi-when-solapi-is-configured', () => {
+  const { activeMessagingState } = require('../server/messaging');
+  const state = activeMessagingState({
+    SOLAPI_API_KEY: 'k', SOLAPI_API_SECRET: 's', SOLAPI_SENDER: '0212345678',
+  });
+  assert.equal(state.connected, true, 'a Solapi-only deployment is connected');
+  assert.equal(state.provider, 'solapi');
+});
+
+test('active-state-falls-back-to-the-generic-provider', () => {
+  const { activeMessagingState } = require('../server/messaging');
+  const state = activeMessagingState({
+    EVENTOUCH_MESSAGING_ENDPOINT: 'https://example.test/send',
+    EVENTOUCH_MESSAGING_TOKEN: 't',
+  });
+  assert.equal(state.connected, true);
+  assert.equal(state.provider, undefined, 'the generic provider does not name itself');
+});
+
+test('active-state-is-disconnected-when-nothing-is-configured', () => {
+  const { activeMessagingState } = require('../server/messaging');
+  assert.equal(activeMessagingState({}).connected, false);
+});
+
+test('active-provider-is-the-solapi-adapter-when-solapi-is-configured', () => {
+  const { activeProvider } = require('../server/messaging');
+  const provider = activeProvider({
+    SOLAPI_API_KEY: 'k', SOLAPI_API_SECRET: 's', SOLAPI_SENDER: '0212345678',
+  });
+  // batch capability is what marks the Solapi adapter
+  assert.equal(typeof provider.sendBatch, 'function');
+  assert.equal(typeof provider.pollResults, 'function');
+});
+
+test('active-provider-falls-back-to-per-recipient-sending', () => {
+  const { activeProvider } = require('../server/messaging');
+  const provider = activeProvider({
+    EVENTOUCH_MESSAGING_ENDPOINT: 'https://example.test/send',
+    EVENTOUCH_MESSAGING_TOKEN: 't',
+  });
+  assert.equal(typeof provider.send, 'function');
+  assert.equal(provider.sendBatch, undefined);
+});
+
+test('the-bootstrap-projection-and-the-health-probe-agree', () => {
+  // Two separate call sites decide "is messaging live". They drifted once and
+  // the browser showed disconnected while the server was sending, so both must
+  // route through the shared decision.
+  const path = require('node:path');
+  const state = fs.readFileSync(path.join(__dirname, '..', 'server/state.js'), 'utf8');
+  const server = fs.readFileSync(path.join(__dirname, '..', 'server/server.js'), 'utf8');
+  assert.match(state, /activeMessagingState\(\)/, 'state.js must use the shared decision');
+  assert.match(server, /activeMessagingState\(\)/, 'server.js must use the shared decision');
+});
+
+test('state-js-never-calls-the-generic-state-directly', () => {
+  // Calling it directly is what caused the drift: it only knows the generic
+  // provider, so a Solapi deployment reported itself as disconnected.
+  const path = require('node:path');
+  const state = fs.readFileSync(path.join(__dirname, '..', 'server/state.js'), 'utf8');
+  const calls = state.match(/\bmessagingState\(\)/g) || [];
+  assert.equal(calls.length, 0, 'use activeMessagingState() instead');
 });

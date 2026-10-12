@@ -2,6 +2,10 @@
 const originalLoginPage=E.loginPage;
 const esc=E.esc||((value)=>String(value??''));
 
+// True only when the server reports a working outbound provider. The compose
+// flow reads it so it never promises a send it cannot make, nor denies one it can.
+Object.defineProperty(E,'messageReady',{get:()=>Boolean(E.state&&E.state.integrations&&E.state.integrations.connected),configurable:true});
+
 function connectionNotice(){
  const state=E.ui?.connectionState||{};
  const status=state.status||E.remote?.status||'';
