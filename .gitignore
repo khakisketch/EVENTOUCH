@@ -5,3 +5,10 @@ node_modules/
 data/server/
 data/storage/
 .env
+
+# Task-owned rendered review captures and design-workspace artifacts.
+# Large (25MB+) and review-scoped, never product source or product assets.
+design-inputs/
+.od-review/
+.od-skills/
+index.html.artifact.json
