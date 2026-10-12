@@ -310,10 +310,24 @@ async function loadSetupState(){
   E.ui.setupRequired=!result?.ready;
 }
 
+// Register the offline shell. Registration is best effort by design: the
+// product is fully usable online without it, so a failure here must never
+// surface as an error to the operator.
+function registerServiceWorker(){
+  if(E.previewMode)return;
+  if(typeof navigator==='undefined'||!('serviceWorker' in navigator))return;
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('/sw.js',{scope:'/'}).catch(()=>{
+     // Offline shell unavailable; the product still works while online.
+    });
+  });
+}
+
 E.startup=async()=>{
  const query=new URLSearchParams(window.location?.search||'');
  E.previewMode=query.get('mode')==='preview';
  if(E.previewMode){E.storageMode='local';const state=localLoad();E.previewMode=true;E.ui.previewMode=true;E.remote.status='preview';E.render?.();return state;}
+ registerServiceWorker();
  E.previewMode=false;E.ui.previewMode=false;E.storageMode='server';E.state=emptyState();E.session=null;setConnection('connecting','서버에 연결하고 있습니다.');
  try{await loadSetupState();}catch(error){/* a missing probe must not block startup */}
  try{

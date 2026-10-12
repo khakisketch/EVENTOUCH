@@ -4,8 +4,11 @@ const esc=E.esc||((value)=>String(value??''));
 
 function connectionNotice(){
  const state=E.ui?.connectionState||{};
- const status=state.status||E.remote?.status||'',message=String(state.message||E.remote?.error||'');
+ const status=state.status||E.remote?.status||'';
+ let message=String(state.message||E.remote?.error||'');
  if(!status||['connected','login-required','preview'].includes(status))return '';
+ const technical=/failed to fetch|networkerror|load failed/i;
+ if(technical.test(message))message='서버에 연결하지 못했습니다. 인터넷 연결과 서버 상태를 확인하세요.';
  const labels={connecting:'서버에 연결하고 있습니다.',offline:'서버 연결이 끊겼습니다.',error:'서버와 통신하는 중 문제가 발생했습니다.',denied:'서버에서 요청을 허용하지 않았습니다.',stale:'서버의 최신 자료를 확인하지 못했습니다.'};
  const label=labels[status]||'서버 연결 상태를 확인할 수 없습니다.';
  const role=status==='connecting'?'status':'alert';
@@ -19,6 +22,14 @@ function serverLoginPage(){
  const story=previous.match(/<section class="login-story">[\s\S]*?<\/section>/)?.[0]||'<section class="login-story"><div class="wordmark">EVENTOUCH</div><span class="eyebrow">행사 준비부터 결과까지</span><h1>운영의 흐름을<br>한곳에서.</h1><p>행사를 준비하고, 현장에서 처리하고, 결과를 전달합니다.</p></section>';
  return '<main class="login-layout">'+story+'<section class="login-form"><span class="eyebrow">운영사 로그인</span><h2>워크스페이스 시작</h2><p class="muted">운영사 계정으로 로그인해 권한이 있는 행사와 업무를 확인하세요.</p>'+connectionNotice()+'<form data-form="login" novalidate class="od-stack" style="--od-gap:16px"><div class="error-summary" role="alert"></div>'+E.field('이메일','email','','email','required autocomplete="username"')+E.field('비밀번호','password','','password','required autocomplete="current-password"')+E.submit('로그인')+'</form><p class="help" id="dev-quick-login" hidden>개발 환경 전용 · <button type="button" class="btn" data-action="dev-quick-login">빠른 로그인</button></p><p class="help">계정은 운영사 구성원이 초대합니다. 참가자는 로그인 없이 행사 링크를 사용합니다.</p></section></main>';
 }
+// A raw fetch failure is not actionable at a desk. When the shell is
+// running from cache, say what still works and what does not.
+function offlineGuidance(){
+  if(E.previewMode)return '';
+  if(typeof navigator!=='undefined'&&navigator.onLine)return '';
+  return E.notice('인터넷에 연결되어 있지 않습니다. 화면과 메뉴는 이 기기에서 바로 열리지만 참가자 조회·입장 처리·저장에는 서버 연결이 필요합니다. 같은 장소의 와이파이나 인터넷이 복구되면 대기 중인 항목이 자동으로 이어집니다.','warning');
+}
+
 E.loginPage=()=>{
  const html=serverLoginPage();
  revealDevQuickLogin();
@@ -29,7 +40,7 @@ E.loginPage=()=>{
   return html.replace('</form>',
    '</form>'+E.notice('아직 운영자 계정이 설정되지 않았습니다. 서버 설치 시 ADMIN_EMAIL과 ADMIN_PASSWORD를 설정해 관리자 계정을 먼저 만드세요.','warning'));
  }
- return html;
+ return html.replace('</section></main>',offlineGuidance()+'</section></main>');
 };
 
 function revealDevQuickLogin(){
@@ -71,6 +82,7 @@ if(originalAdminShell)E.adminShell=function(){
   if(warning)html=html.replace(warning,connectionNotice()||warning);
   html=html.replace('<span class="environment-label">브라우저 체험</span>','<span class="environment-label">서버 모드</span>');
   html=html.replace(/<footer class="workspace-footer">[\s\S]*?<\/footer>/,'<footer class="workspace-footer">EVENTOUCH · 행사 정보는 서버에 저장되며 행사 권한에 따라 팀원과 공유됩니다.</footer>');
+   html=html.replace('<main class="content"',offlineGuidance()+'<main class="content"');
  }
  return html;
 };

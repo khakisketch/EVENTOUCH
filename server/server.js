@@ -28,6 +28,7 @@ const MIME = {
   '.png': 'image/png',
   '.webp': 'image/webp',
   '.svg': 'image/svg+xml',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
 
 function sendJson(res, status, value) {
@@ -70,6 +71,25 @@ function serveStatic(req, res, nonce) {
   ) {
     res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
     res.end('파일을 찾을 수 없습니다');
+    return;
+  }
+  // The worker must live at the origin root to control every route, but it
+  // is authored next to the other server files.
+  if (urlPath === '/sw.js') {
+    const worker = path.join(__dirname, 'sw.js');
+    fs.readFile(worker, (err, data) => {
+      if (err) {
+        res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+        res.end('파일을 찾을 수 없습니다');
+        return;
+      }
+      res.writeHead(200, {
+        'content-type': 'text/javascript; charset=utf-8',
+        'cache-control': 'no-cache',
+        'service-worker-allowed': '/',
+      });
+      res.end(data);
+    });
     return;
   }
   const rel = urlPath === '/' ? 'index.html' : decodeURIComponent(urlPath).replace(/^\/+/, '');
