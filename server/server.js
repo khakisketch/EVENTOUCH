@@ -15,6 +15,7 @@ const { createOperationsCommands } = require('./commands/operations');
 const { createDomainCommands } = require('./commands/domain');
 const { createFileService } = require('./files');
 const { handleApi } = require('./api');
+const { applySecurityHeaders } = require('./http');
 
 const ROOT = path.join(__dirname, '..');
 const PORT = Number(process.env.PORT || 8776);
@@ -49,7 +50,16 @@ const DENIED_FILES = new Set([
   '/.dockerignore',
 ]);
 
-function serveStatic(req, res) {
+// The CSP allows inline scripts only when they carry this response's nonce.
+// index.html has exactly two inline bootstrap <script> blocks, so both are
+// stamped; external <script src> files are already 'self' and need nothing.
+function applyCspNonce(data, nonce) {
+  return data
+    .toString('utf8')
+    .replace(/<script(?![^>]*\bsrc=)([^>]*)>/g, `<script nonce="${nonce}"$1>`);
+}
+
+function serveStatic(req, res, nonce) {
   const urlPath = req.url.split('?')[0];
   const lower = urlPath.toLowerCase();
   if (
@@ -76,8 +86,10 @@ function serveStatic(req, res) {
       return;
     }
     const type = MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';
-    res.writeHead(200, { 'content-type': type, 'x-content-type-options': 'nosniff' });
-    res.end(data);
+    res.writeHead(200, { 'content-type': type });
+    // Only HTML carries the inline bootstrap scripts the CSP nonce protects;
+    // CSS/JS/images are already covered by 'self'.
+    res.end(type === 'text/html; charset=utf-8' ? applyCspNonce(data, nonce) : data);
   });
 }
 
@@ -89,6 +101,10 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
   const domainCommands = database ? createDomainCommands(database) : null;
   const files = database ? createFileService(database, { storageDir }) : null;
   return http.createServer((req, res) => {
+    // One security-header wrapper per response. Every path below — static,
+    // /api/*, /api/auth/*, 404, 405, 500 — therefore carries the same policy
+    // without each call site having to remember it.
+    const nonce = applySecurityHeaders(res);
     const urlPath = (req.url || '/').split('?')[0];
     if (urlPath === '/api/health') {
       sendJson(res, 200, {
@@ -124,7 +140,7 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
       res.end('지원하지 않는 방법입니다');
       return;
     }
-    serveStatic(req, res);
+    serveStatic(req, res, nonce);
   });
 }
 
