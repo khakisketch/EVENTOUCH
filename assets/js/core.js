@@ -1,5 +1,5 @@
 (function(){'use strict';
-const E=window.ET={views:{},actions:{},forms:{},handlers:{},ui:{filters:{},scroll:{},pageSize:12},session:null,state:null,route:null};
+const E=window.ET={views:{},actions:{},forms:{},handlers:{},ui:{filters:{},scroll:{},pageSize:12,setupRequired:false},session:null,state:null,route:null};
 E.id=prefix=>(prefix||'id')+'-'+(window.crypto&&crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+'-'+Math.random().toString(36).slice(2));
 E.copy=x=>JSON.parse(JSON.stringify(x));E.esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 E.now=()=>new Date().toISOString();E.date=x=>x?new Date(x).toLocaleString('ko-KR',{hour12:false}):'—';E.number=x=>Number(x||0).toLocaleString('ko-KR');

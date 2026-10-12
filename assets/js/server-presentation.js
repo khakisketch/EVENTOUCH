@@ -19,7 +19,18 @@ function serverLoginPage(){
  const story=previous.match(/<section class="login-story">[\s\S]*?<\/section>/)?.[0]||'<section class="login-story"><div class="wordmark">EVENTOUCH</div><span class="eyebrow">행사 준비부터 결과까지</span><h1>운영의 흐름을<br>한곳에서.</h1><p>행사를 준비하고, 현장에서 처리하고, 결과를 전달합니다.</p></section>';
  return '<main class="login-layout">'+story+'<section class="login-form"><span class="eyebrow">운영사 로그인</span><h2>워크스페이스 시작</h2><p class="muted">운영사 계정으로 로그인해 권한이 있는 행사와 업무를 확인하세요.</p>'+connectionNotice()+'<form data-form="login" novalidate class="od-stack" style="--od-gap:16px"><div class="error-summary" role="alert"></div>'+E.field('이메일','email','','email','required autocomplete="username"')+E.field('비밀번호','password','','password','required autocomplete="current-password"')+E.submit('로그인')+'</form><p class="help" id="dev-quick-login" hidden>개발 환경 전용 · <button type="button" class="btn" data-action="dev-quick-login">빠른 로그인</button></p><p class="help">계정은 운영사 구성원이 초대합니다. 참가자는 로그인 없이 행사 링크를 사용합니다.</p></section></main>';
 }
-E.loginPage=()=>{const html=serverLoginPage();revealDevQuickLogin();return html;};
+E.loginPage=()=>{
+ const html=serverLoginPage();
+ revealDevQuickLogin();
+ // A fresh install with no administrator used to show a normal login form
+ // and then reject every credential as a wrong password. Say what is
+ // actually wrong instead of leaving the operator to guess.
+ if(E.ui?.setupRequired){
+  return html.replace('</form>',
+   '</form>'+E.notice('아직 운영자 계정이 설정되지 않았습니다. 서버 설치 시 ADMIN_EMAIL과 ADMIN_PASSWORD를 설정해 관리자 계정을 먼저 만드세요.','warning'));
+ }
+ return html;
+};
 
 function revealDevQuickLogin(){
  if(E.previewMode||typeof fetch!=='function')return;

@@ -341,6 +341,18 @@ function createDatabaseAuth(database, options = {}) {
     });
   }
 
+  // Whether this install can accept a login at all. A fresh deployment with
+  // no administrator configured otherwise shows a normal login form and
+  // then answers "이메일 또는 비밀번호를 확인하세요" forever, which tells
+  // the operator nothing about the actual cause.
+  async function setupState() {
+    const result = await database.query(
+      "SELECT count(*)::int AS count FROM accounts WHERE role = 'AGENCY' AND active = true"
+    );
+    const accounts = Number(result.rows[0] && result.rows[0].count) || 0;
+    return { ready: accounts > 0, administratorConfigured: accounts > 0 };
+  }
+
   async function readInvitation(token) {
     if (!/^[A-Za-z0-9_-]{40,128}$/.test(token)) return { status: 404 };
     const result = await database.query(
@@ -640,6 +652,16 @@ function createDatabaseAuth(database, options = {}) {
       }
       const user = await authenticate(body && body.email, body && body.password);
       if (!user) {
+        const state = await setupState();
+        if (!state.ready) {
+          sendJson(res, 503, {
+            error: '운영자 계정이 아직 설정되지 않았습니다.',
+            setupRequired: true,
+          });
+          return;
+        }
+      }
+      if (!user) {
         await recordFailureSafely('account', throttle.accountKey);
         await recordFailureSafely('address', throttle.address);
         sendJson(res, 401, { error: '이메일 또는 비밀번호를 확인하세요' });
@@ -662,6 +684,10 @@ function createDatabaseAuth(database, options = {}) {
         'set-cookie': databaseCookie('', 0),
       });
       res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+    if (urlPath === '/api/auth/setup-state' && req.method === 'GET') {
+      sendJson(res, 200, await setupState());
       return;
     }
     if (urlPath === '/api/auth/me' && req.method === 'GET') {
@@ -804,6 +830,7 @@ function createDatabaseAuth(database, options = {}) {
     sessionFromCookie,
     revokeSession,
     seedAdmin,
+    setupState,
     readInvitation,
     acceptInvitation,
     throttleState,

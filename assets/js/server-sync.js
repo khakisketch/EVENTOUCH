@@ -301,11 +301,21 @@ E.run=async(name,payload={})=>{
  }finally{E.ui.commandBusy=false;}
 };
 
+// Whether this install has an administrator at all. On a fresh deployment
+// the login form must say so, otherwise an operator is told their password
+// is wrong when in fact no account has been created yet.
+async function loadSetupState(){
+  if(E.previewMode)return;
+  const result=await request('GET','/auth/setup-state');
+  E.ui.setupRequired=!result?.ready;
+}
+
 E.startup=async()=>{
  const query=new URLSearchParams(window.location?.search||'');
  E.previewMode=query.get('mode')==='preview';
  if(E.previewMode){E.storageMode='local';const state=localLoad();E.previewMode=true;E.ui.previewMode=true;E.remote.status='preview';E.render?.();return state;}
  E.previewMode=false;E.ui.previewMode=false;E.storageMode='server';E.state=emptyState();E.session=null;setConnection('connecting','서버에 연결하고 있습니다.');
+ try{await loadSetupState();}catch(error){/* a missing probe must not block startup */}
  try{
   const route=E.parseRoute?.();
   if(route?.scope==='attendee')await E.remote.loadPublic(route.slug,route.params?.get('ticket')||'');
