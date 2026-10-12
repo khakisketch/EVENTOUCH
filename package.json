@@ -9,9 +9,14 @@
     "start": "node server/server.js",
     "db:migrate": "node server/migrate.js",
     "test": "node scripts/run-tests.cjs",
-    "test:raw": "node --test tests/*.test.cjs"
+    "test:raw": "node --test tests/*.test.cjs",
+    "a11y": "node scripts/accessibility-audit.cjs"
   },
   "dependencies": {
     "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "axe-core": "^4.14.0",
+    "playwright": "^1.64.0"
   }
 }

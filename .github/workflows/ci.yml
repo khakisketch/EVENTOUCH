@@ -63,3 +63,46 @@ jobs:
         env:
           EVENTOUCH_TEST_DATABASE_URL: postgresql://eventouch:eventouch@localhost:5432/eventouch_test
         run: npm test
+
+  accessibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: eventouch_a11y
+          POSTGRES_USER: eventouch
+          POSTGRES_PASSWORD: eventouch
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U eventouch -d eventouch_a11y"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install the browser for the audit
+        run: npx playwright install --with-deps chromium
+
+      - name: Audit accessibility across the main screens
+        # Serious and critical WCAG A/AA violations fail the job. Manual
+        # review previously covered only screenshots someone happened to
+        # capture, which is not a gate.
+        env:
+          EVENTOUCH_A11Y_DATABASE_URL: postgresql://eventouch:eventouch@localhost:5432/eventouch_a11y
+        run: |
+          npm run db:migrate
+          npm run a11y
