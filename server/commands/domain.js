@@ -286,12 +286,30 @@ function createDomainCommands(database, options = {}) {
           participantId: guest ? actor.id : null,
         })]
       );
-      return { status: result.status || 200, body: response, replayed: false, dispatch: result.dispatch || null };
+      return { status: result.status || 200, body: response, replayed: false, dispatch: result.dispatch || null, resolvePending: result.resolvePending === true };
     });
 
     // The provider call happens after commit on purpose. Failing to send
     // must not roll back a command the operator already saw succeed; it
     // leaves a campaign they can retry.
+    // Delivery confirmation talks to the provider, so it runs after commit
+    // for the same reason the send does.
+    if (outcome.resolvePending && provider && eventId) {
+      try {
+        const resolved = await require('../messaging').resolveDelivery(database, provider, eventId);
+        if (outcome.body) {
+          outcome.body.sync = { resolved: resolved.resolved, pending: resolved.pending, total: resolved.total };
+          // Answer with the state polling just established rather than the
+          // pre-poll snapshot, or the operator would keep seeing SENDING.
+          const wanted = outcome.body.message && outcome.body.message.id;
+          const actual = (resolved.messages || []).find((item) => item.id === wanted);
+          if (actual) outcome.body.message = actual;
+        }
+      } catch (error) {
+        process.stderr.write('[eventouch] delivery resolve failed: ' + (error && error.message) + '\n');
+      }
+    }
+
     if (outcome.dispatch && provider) {
       try {
         const sent = await dispatchCampaign(database, provider, outcome.dispatch);

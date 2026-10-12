@@ -133,8 +133,30 @@ module.exports = {
 // not be lost because our own transaction rolled back afterwards. A failure
 // here leaves the campaign in a state the operator can retry, it does not
 // undo the command.
+// Recipient numbers live in the snapshot, not on the stored delivery. Every
+// id lookup has to go through one of these.
+function digitsOnly(value) {
+  return String(value == null ? '' : value).replace(/[^0-9]/g, '');
+}
+
+function phoneForDispatch(dispatch, participantId) {
+  const match = (dispatch.recipients || []).find((recipient) => recipient.participantId === participantId);
+  return digitsOnly(match && match.phone);
+}
+
+function phoneForRecipient(message, participantId) {
+  const match = (message.recipientSnapshot || []).find((person) => person.id === participantId);
+  return digitsOnly(match && match.phone);
+}
+
 async function dispatchCampaign(database, provider, dispatch, { now = new Date().toISOString() } = {}) {
   if (!provider || !dispatch || !dispatch.messageId) return { skipped: true };
+  // A batch-capable provider (Solapi) takes a whole campaign in one request
+  // and answers with what it accepted. Acceptance is not delivery, so the
+  // campaign stays unresolved until polling confirms the real outcome.
+  if (typeof provider.sendBatch === 'function') {
+    return dispatchCampaignBatch(database, provider, dispatch, { now });
+  }
 
   let finalMessage = null;
   const results = [];
@@ -199,4 +221,219 @@ async function dispatchCampaign(database, provider, dispatch, { now = new Date()
   return { results, delivered: results.filter((item) => item.delivered).length, message: finalMessage };
 }
 
+// Batch dispatch: one provider call for the whole campaign, then a write-back
+// that records acceptance per recipient. Delivery is deliberately left
+// unresolved — resolveDelivery() decides it from a later poll.
+async function dispatchCampaignBatch(database, provider, dispatch, { now = new Date().toISOString() } = {}) {
+  let finalMessage = null;
+  let batchResult = null;
+  try {
+    batchResult = await provider.sendBatch(dispatch.recipients.map((recipient) => ({
+      participantId: recipient.participantId,
+      channel: dispatch.channel,
+      to: recipient.phone,
+      text: dispatch.text,
+      subject: dispatch.subject,
+      variables: recipient.variables,
+      templateId: dispatch.templateId || null,
+    })));
+  } catch (error) {
+    batchResult = { accepted: false, reason: 'TRANSPORT', error: error && error.message };
+  }
+
+  const byParticipant = new Map();
+  for (const entry of (batchResult && batchResult.registered) || []) byParticipant.set(entry.participantId, entry);
+  for (const entry of (batchResult && batchResult.rejected) || []) byParticipant.set(entry.participantId, { ...entry, accepted: false });
+
+  // Read the message ids back from the group so a later poll can resolve them.
+  let idsByNumber = new Map();
+  if (batchResult && batchResult.accepted && batchResult.groupId && typeof provider.groupMessages === 'function') {
+    try {
+      const group = await provider.groupMessages(batchResult.groupId);
+      if (group && group.ok) {
+        for (const value of Object.values(group.messages || {})) {
+          idsByNumber.set(String(value.to || '').replace(/[^0-9]/g, ''), value.messageId);
+        }
+      }
+    } catch (error) {
+      // Polling can still work from the group id alone; a missing id map
+      // must not lose the fact that the messages were accepted.
+      idsByNumber = new Map();
+    }
+  }
+
+  await database.transaction(async (client) => {
+    const row = await client.query('SELECT payload FROM event_workspaces WHERE event_id = $1 FOR UPDATE', [dispatch.eventId]);
+    if (!row.rows[0]) return;
+    const raw = row.rows[0].payload;
+    const workspace = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (!workspace || !Array.isArray(workspace.messages)) return;
+    const message = workspace.messages.find((item) => item.id === dispatch.messageId);
+    if (!message) return;
+
+    const deliveries = Array.isArray(message.deliveries) ? message.deliveries : [];
+    let accepted = 0;
+    for (const delivery of deliveries) {
+      const outcome = byParticipant.get(delivery.participantId);
+      if (!outcome) {
+        delivery.status = 'FAILED';
+        delivery.error = (batchResult && batchResult.error) || '공급사 응답에서 이 수신자를 확인하지 못했습니다';
+        delivery.at = now;
+        continue;
+      }
+      if (outcome.accepted) {
+        accepted += 1;
+        delivery.status = 'SENDING';
+        delivery.sentType = outcome.type || null;
+        // Deliveries do not store the number (it lives in the recipient
+        // snapshot), so the id is matched through the dispatch recipients.
+        delivery.solapiMessageId = idsByNumber.get(phoneForDispatch(dispatch, delivery.participantId)) || null;
+        delivery.error = null;
+      } else {
+        delivery.status = 'FAILED';
+        delivery.error = outcome.error || '접수가 거부되었습니다';
+      }
+      delivery.at = now;
+    }
+
+    message.providerGroupId = (batchResult && batchResult.groupId) || null;
+    message.dispatchedAt = now;
+    message.acceptedCount = accepted;
+    message.deliveryUnconfirmed = accepted > 0;
+    // Nothing may be called sent until polling says so.
+    message.status = accepted === 0 ? 'FAILED' : 'SENDING';
+    finalMessage = message;
+
+    await client.query(
+      'UPDATE event_workspaces SET payload = $2::jsonb, revision = revision + 1, updated_at = now() WHERE event_id = $1',
+      [dispatch.eventId, JSON.stringify(workspace)]
+    );
+  });
+
+  return { accepted: Boolean(batchResult && batchResult.accepted), acceptedCount: finalMessage ? finalMessage.acceptedCount : 0, message: finalMessage, deliveryUnconfirmed: true };
+}
+
+// Resolves campaigns that were accepted but not yet confirmed delivered.
+//
+// This is the other half of dispatchCampaignBatch: acceptance is not arrival,
+// so SENDING only becomes SENT/PARTIAL/FAILED once Solapi reports the real
+// result. Called on demand (the operator opening the campaign) rather than by
+// a background worker, because there is no scheduler in this product and a
+// polling loop would need one to be reliable.
+async function resolveDelivery(database, provider, eventId, { now = new Date().toISOString() } = {}) {
+  if (!provider || typeof provider.pollResults !== 'function') return { skipped: true };
+
+  const row = await database.query('SELECT payload FROM event_workspaces WHERE event_id = $1', [eventId]);
+  if (!row.rows[0]) return { skipped: true };
+  const raw = row.rows[0].payload;
+  const workspace = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  const messages = Array.isArray(workspace && workspace.messages) ? workspace.messages : [];
+
+  const pending = messages.filter((message) => message.status === 'SENDING' && Array.isArray(message.deliveries));
+  if (!pending.length) return { resolved: 0, pending: 0 };
+
+  let resolvedCount = 0;
+  const updates = [];
+
+  for (const message of pending) {
+    let ids = message.deliveries.map((delivery) => delivery.solapiMessageId).filter(Boolean);
+
+    // The id map can be missing when the group read failed at dispatch time.
+    // Recovering it here keeps the campaign resolvable instead of stuck.
+    if (!ids.length && message.providerGroupId && typeof provider.groupMessages === 'function') {
+      try {
+        const group = await provider.groupMessages(message.providerGroupId);
+        if (group && group.ok) {
+          const byNumber = new Map();
+          for (const value of Object.values(group.messages || {})) {
+            byNumber.set(String(value.to || '').replace(/[^0-9]/g, ''), value.messageId);
+          }
+          for (const delivery of message.deliveries) {
+            const id = byNumber.get(phoneForRecipient(message, delivery.participantId));
+            if (id) delivery.solapiMessageId = id;
+          }
+          ids = message.deliveries.map((delivery) => delivery.solapiMessageId).filter(Boolean);
+        }
+      } catch (error) {
+        // Fall through: the campaign stays SENDING and will be retried.
+      }
+    }
+
+    if (!ids.length) continue;
+    const polled = await provider.pollResults(ids);
+    if (!polled || !polled.ok) continue;
+
+    let delivered = 0;
+    let failed = 0;
+    let stillPending = 0;
+    for (const delivery of message.deliveries) {
+      const result = polled.results[delivery.solapiMessageId];
+      if (!result) { stillPending += 1; continue; }
+      if (result.state === 'PENDING') { stillPending += 1; continue; }
+      if (result.state === 'DELIVERED') {
+        delivered += 1;
+        delivery.status = 'SENT';
+        delivery.sentType = result.type || delivery.sentType || null;
+        // An alimtalk that fell back to text still arrived, but the operator
+        // should be able to see that it did not arrive as alimtalk.
+        delivery.replacedFallback = Boolean(result.replacement);
+        delivery.receivedAt = result.receivedAt || null;
+        delivery.error = null;
+      } else {
+        failed += 1;
+        delivery.status = 'FAILED';
+        delivery.error = result.reason || '발송에 실패했습니다';
+        delivery.statusCode = result.statusCode || null;
+      }
+      delivery.at = now;
+    }
+
+    if (stillPending) {
+      // Some recipients are unresolved; the campaign stays in flight rather
+      // than being rounded to a result we do not have.
+      message.status = 'SENDING';
+      message.deliveredCount = delivered;
+      message.failedCount = failed;
+      message.deliveryUnconfirmed = true;
+      updates.push(message);
+      continue;
+    }
+
+    resolvedCount += 1;
+    message.status = failed === 0 ? 'SENT' : delivered === 0 ? 'FAILED' : 'PARTIAL';
+    message.deliveredCount = delivered;
+    message.failedCount = failed;
+    message.deliveryUnconfirmed = false;
+    message.resolvedAt = now;
+    updates.push(message);
+  }
+
+  if (updates.length) {
+    await database.transaction(async (client) => {
+      const locked = await client.query('SELECT payload FROM event_workspaces WHERE event_id = $1 FOR UPDATE', [eventId]);
+      if (!locked.rows[0]) return;
+      const current = typeof locked.rows[0].payload === 'string' ? JSON.parse(locked.rows[0].payload) : locked.rows[0].payload;
+      if (!current || !Array.isArray(current.messages)) return;
+      for (const updated of updates) {
+        const target = current.messages.find((item) => item.id === updated.id);
+        if (!target) continue;
+        target.status = updated.status;
+        target.deliveries = updated.deliveries;
+        target.deliveredCount = updated.deliveredCount;
+        target.failedCount = updated.failedCount;
+        target.deliveryUnconfirmed = updated.deliveryUnconfirmed;
+        target.resolvedAt = updated.resolvedAt;
+      }
+      await client.query(
+        'UPDATE event_workspaces SET payload = $2::jsonb, revision = revision + 1, updated_at = now() WHERE event_id = $1',
+        [eventId, JSON.stringify(current)]
+      );
+    });
+  }
+
+  return { resolved: resolvedCount, pending: updates.length - resolvedCount, total: pending.length, messages: updates };
+}
+
 module.exports.dispatchCampaign = dispatchCampaign;
+module.exports.dispatchCampaignBatch = dispatchCampaignBatch;
+module.exports.resolveDelivery = resolveDelivery;

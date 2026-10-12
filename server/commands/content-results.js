@@ -7,6 +7,7 @@ const COMMANDS = new Set([
   'message.create',
   'message.cancel',
   'message.retry',
+  'message.sync',
   'payment.simulate',
   'payment.refund-request',
   'payment.refund',
@@ -19,7 +20,9 @@ const COMMANDS = new Set([
   'report.successor',
 ]);
 
-const MESSAGE_CHANNELS = new Set(['SMS', 'ALIMTALK']);
+// LMS is a distinct priced channel in Korea, so it is chosen deliberately
+// rather than left to silently upgrade from SMS.
+const MESSAGE_CHANNELS = new Set(['SMS', 'LMS', 'ALIMTALK']);
 const TEMPLATE_VARIABLES = new Set(['이름', '행사명', '행사일', '티켓링크']);
 const REPORT_SECTIONS = new Set(['overview', 'attendance', 'programs', 'survey', 'photos']);
 
@@ -52,10 +55,36 @@ function saveTemplate(ctx, input) {
     name: requireText(ctx, input.name, '템플릿 이름', 80, 'name'),
     channel,
     body: requireText(ctx, input.body, '메시지 내용', 2000, 'body'),
+    // Solapi alimtalk can only send a template approved in their console, so
+    // the product template must point at that approved id.
+    solapiTemplateId: ctx.clean(input.solapiTemplateId, 120) || old?.solapiTemplateId || null,
   };
+  if (channel === 'ALIMTALK' && !template.solapiTemplateId) {
+    // Without an approved id an alimtalk send is impossible; catching it here
+    // is better than accepting a campaign that can never go out.
+    throw ctx.fail(400, '알림톡 템플릿은 Solapi 승인 템플릿 ID가 필요합니다', 'solapiTemplateId');
+  }
   if (old) Object.assign(old, template);
   else ctx.workspace.templates.push(template);
   return { body: { template } };
+}
+
+// Builds the substitution values for one recipient. Called only while a
+// dispatch is in flight so the ticket bearer never lands in stored history.
+function messageVariables(ctx, liveParticipant, snapshot) {
+  const base = {
+    이름: (liveParticipant && liveParticipant.name) || snapshot.name || '',
+    행사명: ctx.event.name || '',
+    행사일: ctx.event.date || '',
+  };
+  const origin = String(process.env.EVENTOUCH_PUBLIC_URL || '').trim().replace(/\/+$/, '');
+  const ticket = liveParticipant && liveParticipant.ticket;
+  // Without a configured public origin no link can be built, so the key is
+  // omitted and the template keeps its own text rather than a broken URL.
+  if (origin && ticket && ctx.event.slug) {
+    base.티켓링크 = origin + '/#/event/' + encodeURIComponent(ctx.event.slug) + '/ticket?ticket=' + encodeURIComponent(ticket);
+  }
+  return base;
 }
 
 function validateTemplateVariables(ctx, body) {
@@ -76,6 +105,16 @@ function createMessage(ctx, input) {
   }
   const channel = ctx.clean(input.channel, 16).toUpperCase();
   if (!MESSAGE_CHANNELS.has(channel)) throw ctx.fail(400, '발송 채널을 선택하세요', 'channel');
+  // Alimtalk cannot be sent from free text, so the campaign must name the
+  // approved template it will use. Failing here beats dispatching a campaign
+  // that was never able to go out.
+  const templateId = ctx.clean(input.templateId, 120) || null;
+  const boundTemplate = templateId
+    ? list(ctx.workspace.templates).find((item) => item.id === templateId)
+    : null;
+  if (channel === 'ALIMTALK' && !(boundTemplate && boundTemplate.solapiTemplateId)) {
+    throw ctx.fail(400, '알림톡은 Solapi 승인 템플릿을 선택해야 발송할 수 있습니다', 'templateId');
+  }
   const title = requireText(ctx, input.title, '캠페인 제목', 100, 'title');
   const body = requireText(ctx, input.body, '내용', 2000, 'body');
   validateTemplateVariables(ctx, body);
@@ -102,6 +141,8 @@ function createMessage(ctx, input) {
     scheduled,
     status,
     simulate: simulated,
+    templateId,
+    solapiTemplateId: boundTemplate ? boundTemplate.solapiTemplateId : null,
     at: ctx.now,
     cost: null,
     attempts: status === 'SCHEDULED' ? 0 : 1,
@@ -124,6 +165,16 @@ function cancelMessage(ctx, input) {
   message.status = 'CANCELLED';
   list(message.deliveries).forEach((delivery) => { delivery.status = 'CANCELLED'; });
   return { body: { message } };
+}
+
+// Delivery can only be confirmed by asking Solapi what happened to the
+// messages it accepted, so this marks the campaign for the post-commit
+// resolver rather than touching the network inside the transaction.
+function syncMessage(ctx, input) {
+  const message = list(ctx.workspace.messages).find((item) => item.id === ctx.clean(input.id, 120));
+  const scope = message || list(ctx.workspace.messages).find((item) => item.status === 'SENDING');
+  if (!scope) throw ctx.fail(409, '확인할 발송 건이 없습니다');
+  return { body: { message: scope, pending: true }, resolvePending: true };
 }
 
 function retryMessage(ctx, input) {
@@ -153,12 +204,20 @@ function retryMessage(ctx, input) {
         eventId: ctx.event.id,
         messageId: message.id,
         channel: message.channel,
+        subject: message.title,
         text: message.body,
-        recipients: list(message.recipientSnapshot).map((person) => ({
-          participantId: person.id,
-          name: person.name,
-          phone: person.phone,
-        })),
+        templateId: message.solapiTemplateId || null,
+        // Variables are computed here and never persisted: a ticket link is a
+        // bearer credential, and campaign history must not retain one.
+        recipients: list(message.recipientSnapshot).map((person) => {
+          const live = list(ctx.workspace.participants).find((item) => item.id === person.id);
+          return {
+            participantId: person.id,
+            name: person.name,
+            phone: person.phone,
+            variables: messageVariables(ctx, live, person),
+          };
+        }),
       },
     };
   }
@@ -434,6 +493,7 @@ async function apply(ctx) {
     case 'message.create': return createMessage(ctx, ctx.input);
     case 'message.cancel': return cancelMessage(ctx, ctx.input);
     case 'message.retry': return retryMessage(ctx, ctx.input);
+    case 'message.sync': return syncMessage(ctx, ctx.input);
     case 'payment.simulate': return simulatePayment(ctx, ctx.input);
     case 'payment.refund-request': return requestRefund(ctx, ctx.input);
     case 'payment.refund': return refundPayment(ctx, ctx.input);

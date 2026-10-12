@@ -16,7 +16,8 @@ const { createDomainCommands } = require('./commands/domain');
 const { createFileService } = require('./files');
 const { handleApi } = require('./api');
 const { applySecurityHeaders } = require('./http');
-const { createMessagingProvider, providerConfig, messagingState } = require('./messaging');
+const genericMessaging = require('./messaging');
+const solapi = require('./messaging-solapi');
 
 const ROOT = path.join(__dirname, '..');
 const PORT = Number(process.env.PORT || 8776);
@@ -119,9 +120,15 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
   const publicEvents = database ? createPublicEvents(database) : null;
   const participantCommands = database ? createParticipantCommands(database) : null;
   const operationsCommands = database ? createOperationsCommands(database) : null;
-  // Configured from the environment; absent credentials leave every
+  // Which provider is active is decided by what is configured. Solapi is the
+  // production path; the generic provider stays for tests and for any vendor
+  // reachable through a translation shim. Absent credentials leave every
   // campaign in its recorded, non-sending state.
-  const messaging = createMessagingProvider(providerConfig());
+  const solapiConfig = solapi.providerConfig();
+  const messaging = solapiConfig.configured
+    ? solapi.createSolapiProvider(solapiConfig)
+    : genericMessaging.createMessagingProvider(genericMessaging.providerConfig());
+  const messagingStatus = solapiConfig.configured ? solapi.messagingState() : genericMessaging.messagingState();
   const domainCommands = database ? createDomainCommands(database, { messaging }) : null;
   const files = database ? createFileService(database, { storageDir }) : null;
   return http.createServer((req, res) => {
@@ -135,7 +142,8 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
         ok: true,
         version: 1,
         ...(process.env.EVENTOUCH_DEV_QUICK_LOGIN ? { devQuickLogin: true } : {}),
-        messaging: messagingState().connected,
+        messaging: messagingStatus.connected,
+        messagingProvider: messagingStatus.provider || null,
       });
       return;
     }

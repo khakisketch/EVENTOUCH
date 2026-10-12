@@ -645,10 +645,33 @@ test('message-and-template-commands-record-simulation-or-unconnected-state-only'
   assert.equal(simulated.json.message.status, 'SIMULATED');
   assert.equal(simulated.json.message.deliveries[0].status, 'SIMULATED');
 
+  // Alimtalk cannot be sent from free text, so a campaign without an
+  // approved Solapi template is refused rather than accepted and never sent.
+  const alimtalkWithoutTemplate = await operator(event, 'message.create', {
+    ids: [first.id], title: '승인 템플릿 없음', channel: 'ALIMTALK', body: '예약 전 미연동', simulate: false,
+  });
+  assert.equal(alimtalkWithoutTemplate.status, 400);
+  assert.equal(alimtalkWithoutTemplate.json.field, 'templateId');
+
+  // Saving an alimtalk template without the approved id is refused too.
+  const templateWithoutApproval = await operator(event, 'template.save', {
+    name: '승인 없는 알림톡', channel: 'ALIMTALK', body: '{{이름}}님 안내',
+  });
+  assert.equal(templateWithoutApproval.status, 400);
+
+  const alimtalkTemplate = await operator(event, 'template.save', {
+    name: '승인된 알림톡', channel: 'ALIMTALK', body: '{{이름}}님 {{행사명}} 안내입니다.',
+    solapiTemplateId: 'KAxxxxxxxxxxxxxxxx',
+  });
+  assert.equal(alimtalkTemplate.status, 200, JSON.stringify(alimtalkTemplate.json));
+  assert.equal(alimtalkTemplate.json.template.solapiTemplateId, 'KAxxxxxxxxxxxxxxxx');
+
   const pendingConnection = await operator(event, 'message.create', {
     ids: [first.id], title: '미연동 요청', channel: 'ALIMTALK', body: '예약 전 미연동', simulate: false,
+    templateId: alimtalkTemplate.json.template.id,
   });
   assert.equal(pendingConnection.status, 201, JSON.stringify(pendingConnection.json));
+  assert.equal(pendingConnection.json.message.solapiTemplateId, 'KAxxxxxxxxxxxxxxxx');
   assert.equal(pendingConnection.json.message.status, 'NEEDS_CONNECTION');
   assert.equal(pendingConnection.json.message.deliveries[0].status, 'UNCONNECTED');
   assert.equal((await operator(event, 'message.retry', { id: pendingConnection.json.message.id })).status, 200);

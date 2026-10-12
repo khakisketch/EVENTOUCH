@@ -113,11 +113,18 @@ E.views['agency-integrations']=()=>{
   // genuinely live here — the server issues and verifies sessions — so
   // labelling it 미연동 was reporting something untrue to an operator.
   const live=E.previewMode?false:E.storageMode==='server';
+  const integrations=(()=>{
+   const info=E.state?.integrations||{};
+   if(!live)return {messagingLabel:'브라우저 체험',messagingDetail:'대상 검토와 발송 요청 기록만 체험할 수 있습니다.'};
+   if(!info.connected)return {messagingLabel:'미연동',messagingDetail:'대상을 확인하고 발송 요청을 기록하지만 실제 전송은 하지 않습니다.'};
+   if(!info.alimtalkReady)return {messagingLabel:'부분 연결',messagingDetail:'문자(SMS·LMS)는 실제 발송됩니다. 카카오 채널을 연결하면 알림톡도 발송할 수 있습니다.'};
+   return {messagingLabel:'연결됨',messagingDetail:'문자와 알림톡을 실제 발송하고 도달 결과를 수신자별로 기록합니다.'};
+  })();
   const entries=live
     ?[['로그인·인증','연결됨','계정과 세션은 행사 서버가 관리합니다. 비밀번호는 서버에서만 검증됩니다.'],
        ['파일·사진','연결됨','업로드한 파일과 사진은 행사 서버에 저장됩니다.'],
        ['QR·인쇄','브라우저 기능','카메라와 프린터는 브라우저 권한을 사용합니다. 인쇄는 각 기기에서 확인하세요.'],
-       ['문자·알림톡',E.state?.integrations?.connected?'연결됨':'미연동',E.state?.integrations?.connected?'설정된 공급사로 실제 발송하고 결과를 수신자별로 기록합니다.':'대상을 확인하고 발송 요청을 기록하지만 실제 전송은 하지 않습니다.'],
+       ['문자·알림톡',integrations.messagingLabel,integrations.messagingDetail],
        ['결제·환불','미연동','결제 모듈이 꺼져 있으며 실제 청구를 수행하지 않습니다.'],
        ['지도·길찾기','미연동','행사별 주소와 안내 문구를 표시합니다.']]
     :[['로그인·인증','브라우저 체험','체험 계정은 이 브라우저에만 저장됩니다.'],
@@ -125,7 +132,7 @@ E.views['agency-integrations']=()=>{
        ['결제·환불','미연동','공급자 연결 전에는 제품 화면에서 사용할 수 없습니다.'],
        ['지도·길찾기','미연동','행사별 주소와 안내 문구를 표시합니다.'],
        ['QR·인쇄','브라우저 기능','기기 카메라와 프린터 연결은 별도 확인이 필요합니다.']];
-  const rows=entries.map(x=>'<div class="list-item agency-integration-row"><div class="od-field od-fill"><strong>'+e(x[0])+'</strong><p class="muted">'+e(x[2])+'</p></div>'+E.badge(x[1],x[1]==='연결됨'?'good':'')+'</div>').join('');
+  const rows=entries.map(x=>'<div class="list-item agency-integration-row"><div class="od-field od-fill"><strong>'+e(x[0])+'</strong><p class="muted">'+e(x[2])+'</p></div>'+E.badge(x[1],x[1]==='연결됨'?'good':x[1]==='부분 연결'?'warn':'')+'</div>').join('');
   const subtitle=live?'행사 서버에 연결된 서비스와 아직 연결되지 않은 서비스를 구분합니다.':'브라우저 체험에서 사용할 수 있는 범위를 구분합니다.';
   const notice=live?'연결되지 않은 항목은 사용자에게 노출되지 않으며, 실제 전송이나 청구를 수행하지 않습니다.':'실제 인증 정보나 참가자 개인정보를 입력하지 마세요.';
   return E.head('서비스 연동',subtitle,'','')+E.panel('서비스별 상태','<div class="list">'+rows+'</div>')+E.notice(notice,live?'good':'warning');
