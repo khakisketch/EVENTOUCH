@@ -126,14 +126,32 @@ test('team management column follows available permission-checked actions and no
   assert.doesNotMatch(html, /운영 워크스페이스/);
 });
 
-test('integrations render one status badge per service in shared list rows', () => {
+test('integrations describe the browser preview when not connected to the server', () => {
   const E = loadAgencyViews();
   E.route.page = 'integrations';
+  // storageMode/previewMode are unset, so this is the browser-experience view.
   const html = E.views['agency-integrations']();
-  assert.equal((html.match(/class="badge"/g) || []).length, 5);
-  assert.equal((html.match(/미연동/g) || []).length, 4);
+  assert.equal((html.match(/class="badge[ "]/g) || []).length, 5);
+  assert.match(html, /브라우저 체험/);
+  assert.doesNotMatch(html, /연결됨/);
   assert.equal((html.match(/class="list-item agency-integration-row"/g) || []).length, 5);
   assert.doesNotMatch(html, /운영 워크스페이스/);
+});
+
+test('integrations report real server connections in server mode', () => {
+  const E = loadAgencyViews();
+  E.route.page = 'integrations';
+  E.previewMode = false;
+  E.storageMode = 'server';
+  const html = E.views['agency-integrations']();
+  // Login and file/photo storage are genuinely live on the server; messaging
+  // and payments genuinely are not. The screen must say which is which.
+  assert.equal((html.match(/class="badge[ "]/g) || []).length, 6);
+  assert.equal((html.match(/연결됨/g) || []).length, 2);
+  assert.match(html, /계정과 세션은 행사 서버가 관리합니다/);
+  // The stubbed badge helper ignores the kind argument, so the good-tone class
+  // is asserted against the real helper separately below.
+  assert.doesNotMatch(html, /프로토타입|브라우저 체험|체험 계정/);
 });
 
 test('mobile console shell keeps agency or event context beside the menu in a sticky topbar', () => {

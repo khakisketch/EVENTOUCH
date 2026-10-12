@@ -186,7 +186,7 @@ E.views.reports=()=>{
 };
 E.actions['report-detail']=d=>{
  const r=E.work().reports.find(a=>a.id===d.id);if(!r)throw Error('보고서를 찾을 수 없습니다.');
- E.dialog(r.title,E.reportMarkup(r)+'<div class="actions">'+B('인쇄','print-report','data-id="'+e(r.id)+'"')+B('데이터 JSON','export-report','data-id="'+e(r.id)+'"')+(E.can('results',true)&&r.status==='DRAFT'?B('내용 편집','edit-report','data-id="'+e(r.id)+'"')+B('보고서 확정','publish-report','data-id="'+e(r.id)+'"'):'')+(r.status==='PUBLISHED'?B('새 버전 만들기','report-successor','data-id="'+e(r.id)+'"'):'')+'</div>',null,'',true);
+ E.dialog(r.title,E.reportMarkup(r)+'<div class="actions">'+B('PDF로 저장','print-report','data-id="'+e(r.id)+'"')+B('데이터 JSON','export-report','data-id="'+e(r.id)+'"')+(E.can('results',true)&&r.status==='DRAFT'?B('내용 편집','edit-report','data-id="'+e(r.id)+'"')+B('보고서 확정','publish-report','data-id="'+e(r.id)+'"'):'')+(r.status==='PUBLISHED'?B('새 버전 만들기','report-successor','data-id="'+e(r.id)+'"'):'')+'</div>',null,'',true);
 };
 E.actions['publish-report']=d=>E.confirm('내부 보고서 확정','이 시점의 보고서 내용을 잠급니다. 수정이 필요하면 후속 버전을 만드세요. 고객사 공유 링크는 생성하지 않습니다.',()=>E.run('report.publish',{id:d.id}));
 E.actions['report-successor']=d=>E.dialog('새 보고서 버전',S('집계 기준','source',[['current','현재 운영 기록으로 갱신'],['previous','이전 확정본의 집계 유지']],'current')+E.notice('이전 확정본은 그대로 보존됩니다. 새 초안은 내부에서 편집·확정할 수 있습니다.'),async p=>{await E.run('report.successor',{id:d.id,source:p.source});E.close();E.navigate(E.consoleURL('reports'));E.toast('새 보고서 초안을 만들었습니다.');});
