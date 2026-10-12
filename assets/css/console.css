@@ -95,36 +95,105 @@
   .page-head.agency-events-head>.actions{grid-column:2;grid-row:1;width:auto;margin:0}
 }
 
-/* Agency events: compact, keyboard-visible selection rows share console tokens. */
+/* Agency event list: schedule, operational state and next action scan as one compact unit. */
 .event-list-toolbar{margin-top:0}
 .event-list-count{margin-left:auto;color:var(--muted);font-size:var(--small);white-space:nowrap}
-.event-card-grid{grid-template-columns:minmax(0,1fr);gap:var(--s2)}
-.event-card{min-width:0;margin:0;padding:0;border:0;background:transparent}
-.event-list-row{display:grid;grid-template-columns:minmax(0,1fr) 20px;align-items:center;gap:var(--s3);min-width:0;min-height:var(--s8);padding:var(--s2) var(--s3);border:1px solid var(--line);border-radius:var(--radius);background:var(--paper);color:var(--ink);text-decoration:none}
-.event-list-row.has-event-image{grid-template-columns:minmax(0,1fr) 56px 20px}
-.event-list-row:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
-.event-list-row-copy{display:grid;gap:var(--s1);min-width:0}
-.event-list-row-title{overflow-wrap:anywhere;font-size:var(--h3);line-height:1.3}
-.event-list-row-summary{display:flex;align-items:center;gap:var(--s2);min-width:0;overflow:hidden;color:var(--muted);font-size:var(--small);line-height:1.4;white-space:nowrap}
-.event-list-row-summary>.badge{flex:none}
-.event-list-row-summary>span:last-child{flex:none}
-.event-list-row-image{display:grid;place-items:center;width:56px;height:56px;overflow:hidden;border-radius:var(--radius-small);background:var(--surface-muted)}
-.event-list-row-image .od-media{display:block;width:100%;height:100%;object-fit:contain}
-.event-list-row>.icon{width:20px;height:20px;color:var(--muted)}
-@media(hover:hover){.event-list-row:hover{border-color:var(--line-strong);background:var(--surface-muted);color:var(--ink)}}
+.event-card-grid{gap:var(--s4)}
+.event-card{gap:var(--s4);min-width:0;padding:var(--s4)}
+.event-card-main{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:var(--s4);min-width:0;flex:1}
+.event-card-info{min-width:0}
+.event-card-info h2{margin:0 0 var(--s3);overflow-wrap:anywhere}
+.event-card-facts{display:grid;gap:var(--s2);margin:0}
+.event-card-facts>div{display:grid;grid-template-columns:88px minmax(0,1fr);align-items:start;gap:var(--s2);min-width:0}
+.event-card-facts dt{color:var(--muted);font-size:var(--small)}
+.event-card-facts dd{min-width:0;margin:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.event-schedule-time{white-space:nowrap}
+.event-card-keyvisual{display:flex;align-items:flex-start;justify-content:flex-end;max-width:120px;max-height:80px;aspect-ratio:auto;margin:0;overflow:visible;border-radius:var(--radius-small)}
+.event-card-keyvisual .od-media{display:block;width:auto;height:auto;max-width:120px;max-height:80px;object-fit:contain}
+.event-card .card-footer{margin-top:var(--s4)}
+.event-card .card-footer .btn{min-width:44px;min-height:44px}
 @media(max-width:768px){
   .event-list-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 128px;gap:var(--s2);margin:0 0 var(--s4)}
   .event-list-toolbar input{width:100%;max-width:none;min-width:0}
   .event-list-toolbar select{width:128px;max-width:128px;min-width:0;padding-inline:var(--s2)}
   .event-list-count{grid-column:1/-1;margin-left:0}
-  .event-list-row{gap:var(--s2);padding-inline:var(--s3)}
-  .event-list-row-title{font-size:var(--body)}
+  .event-card{gap:var(--s3);padding:var(--s4)}
+  .event-card-main{gap:var(--s3)}
+  .event-card-info h2{font-size:var(--h3);line-height:1.35;margin-bottom:var(--s2)}
+  .event-card-facts{gap:var(--s1)}
+  .event-schedule-date,.event-schedule-time{display:block}
+  .event-card-facts>div{grid-template-columns:76px minmax(0,1fr);gap:var(--s1)}
+  .event-card-facts dt,.event-card-facts dd{font-size:var(--small);line-height:1.45}
+  .event-card-keyvisual{max-width:88px;max-height:64px}
+  .event-card-keyvisual .od-media{max-width:88px;max-height:64px}
+  .event-card .card-footer{margin-top:var(--s3)}
+  .event-card .card-footer .btn{width:100%}
 }
 @media(max-width:350px){
-  .event-list-row{padding-inline:var(--s2)}
-  .event-list-row.has-event-image{grid-template-columns:minmax(0,1fr) var(--s7) 20px}
-  .event-list-row-image{width:var(--s7);height:var(--s7)}
+  .event-card-main{grid-template-columns:minmax(0,1fr);gap:var(--s2)}
+  .event-card-main:has(.event-card-keyvisual){grid-template-columns:minmax(0,1fr) 72px}
+  .event-card-keyvisual{max-width:72px;max-height:56px}
+  .event-card-keyvisual .od-media{max-width:72px;max-height:56px}
 }
+
+/* Check-in: scan first, with compact visible manual and name-search fallbacks. */
+.checkin-page{min-width:0}
+.checkin-page-head{align-items:center;margin-bottom:var(--s3)}
+.checkin-page-head p{margin:0}
+.checkin-page .tabs{gap:var(--s1);margin-bottom:var(--s3);padding-bottom:var(--s1)}
+.checkin-page .tabs .btn{min-height:44px;padding:var(--s1) var(--s2)}
+.checkin-page .field-operation-warning{margin:var(--s2) 0;padding:var(--s2) var(--s3)}
+.checkin-work-grid{min-width:0}
+.checkin-work-grid>.panel{margin-bottom:0}
+.checkin-work-grid .panel-head{margin-bottom:var(--s3)}
+.checkin-work-grid .panel-head h2{font-size:var(--h3)}
+.checkin-work-grid .field-scan-panel{border-color:var(--line-strong)}
+.checkin-work-grid .field-scan-panel>.od-field label{display:block;margin-bottom:var(--s1);font-size:var(--small)}
+.checkin-work-grid .field-scan-panel>.od-field select{min-height:44px}
+.checkin-work-grid .field-scan-result-region{min-height:0}
+.checkin-work-grid .field-scan-result-region:empty{display:none}
+.checkin-work-grid .scan-station{padding:var(--s3) 0 var(--s2)}
+.checkin-work-grid .scan-station .scan-mark{width:48px;height:48px;margin-bottom:var(--s2)}
+.checkin-work-grid .scan-mark .icon{width:26px;height:26px}
+.checkin-work-grid .scan-station h2{margin:0;font-size:var(--h3)}
+.checkin-work-grid .scan-station p{margin:var(--s1) 0 0;font-size:var(--small)}
+.checkin-work-grid .scan-station>.btn{min-height:56px;margin-top:var(--s2);font-size:var(--h3)}
+.checkin-work-grid .scan-manual{margin:var(--s2) 0 0;padding:var(--s2) var(--s3);background:var(--surface-muted)}
+.checkin-work-grid .scan-manual summary{font-weight:700}
+.checkin-work-grid .scan-manual form{padding-top:var(--s2)}
+.checkin-work-grid .scan-manual .actions .btn{min-height:44px}
+.checkin-page .scan-manual button[type="submit"]{background:var(--paper);border-color:var(--line-strong);color:var(--ink)}
+.checkin-page .scan-manual button[type="submit"]:hover{background:var(--surface-muted);border-color:var(--line-strong);color:var(--ink)}
+.checkin-work-grid .scan-manual button[data-action="camera-scan"]{display:none}
+.checkin-name-search{margin-top:var(--s3);padding-top:var(--s3);border-top:1px solid var(--line)}
+.checkin-fallback-heading{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);margin-bottom:var(--s2)}
+.checkin-fallback-heading h3{margin:0;font-size:var(--h3)}
+.checkin-name-search>label{display:block;margin-bottom:var(--s1);font-size:var(--small)}
+.checkin-search-hint{margin:var(--s1) 0 0;color:var(--muted);font-size:var(--small)}
+.checkin-work-grid .field-secondary-panel{padding:var(--s4)}
+.checkin-registration{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);margin-top:var(--s3);padding-top:var(--s3);border-top:1px solid var(--line)}
+.checkin-registration strong{font-size:var(--small)}
+.checkin-registration .btn{min-height:44px}
+@media(max-width:768px){
+ .checkin-page-head{margin-bottom:var(--s2)}
+ .checkin-page .tabs{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin}
+ .checkin-page .tabs .btn{flex:none}
+ .checkin-work-grid>.panel{padding:var(--s3);margin-bottom:0}
+ .checkin-work-grid .panel-head{margin-bottom:var(--s2)}
+ .checkin-work-grid .scan-station{display:grid;grid-template-columns:minmax(0,1fr);padding:0}
+ .checkin-work-grid .scan-station .scan-mark{display:none}
+ .checkin-work-grid .scan-station p{display:none}
+ .checkin-work-grid .scan-station>.btn{min-height:56px;margin-top:var(--s2)}
+ .checkin-work-grid .scan-manual{margin-top:var(--s1);padding:var(--s1) var(--s2)}
+ .checkin-work-grid .scan-manual summary{min-height:44px}
+ .checkin-work-grid .scan-manual form{padding-top:0}
+ .checkin-work-grid .field-secondary-panel{padding:var(--s2)}
+ .checkin-work-grid .checkin-name-search{margin-top:0;padding-top:0}
+ .checkin-fallback-heading{margin-bottom:0}
+ .checkin-name-search>label{margin-bottom:0}
+ .checkin-registration{margin-top:var(--s2);padding-top:var(--s2)}
+}
+@media(prefers-reduced-motion:reduce){.checkin-page *{scroll-behavior:auto;transition-duration:0.01ms!important;animation-duration:0.01ms!important}}
 
 /* Event operations overview: execution-focused, route-scoped console. */
 .overview-page{display:grid;gap:var(--s2);min-width:0}
