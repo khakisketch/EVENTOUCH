@@ -443,6 +443,7 @@ function createState(database) {
         invitations,
         globalAudit: [],
         commands: [],
+        integrations: require('./messaging').messagingState(),
       };
     });
   }

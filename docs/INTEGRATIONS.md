@@ -43,6 +43,69 @@
 - `ETKO.deviceLabel(key)` → 카메라/프린터/전광판/부스 QR
 - `ETKO.markPrinted(boothId, format?)` → 출력 확인 기록 (실제 인쇄 없음) / 미등록 부스 → `부스를 확인하세요`
 
+## 실제 메시지 발송 (SMS · 알림톡)
+
+기본값은 미연동이다. 아래 두 값이 모두 설정된 경우에만 실제로 발송한다.
+
+    EVENTOUCH_MESSAGING_ENDPOINT=https://<공급사 또는 중계 서버>/send
+    EVENTOUCH_MESSAGING_TOKEN=<발급받은 토큰>
+    EVENTOUCH_MESSAGING_SENDER=0212345678   # 발신번호 (선택)
+
+### 동작 방식
+
+EVENTOUCH는 특정 공급사 SDK에 의존하지 않는다. 아래 한 가지 형태로만 요청한다.
+
+    POST <EVENTOUCH_MESSAGING_ENDPOINT>
+    authorization: Bearer <EVENTOUCH_MESSAGING_TOKEN>
+    content-type: application/json
+
+    { "from": "0212345678", "to": "01012345678",
+      "text": "본문", "channel": "SMS" | "ALIMTALK",
+      "reference": "<캠페인ID>:<참가자ID>" }
+
+성공은 `2xx` + `{"ok": true, "id": "..."}` 로 판단한다. 그 밖의 응답,
+`ok:false`, 타임아웃(10초), 연결 실패는 모두 발송 실패로 기록한다.
+`200` 이어도 `ok:false` 면 성공으로 보지 않는다.
+
+### 검증 상태
+
+`/api/health` 응답의 `messaging` 값이 실제 연결 여부다. 콘솔의
+**서비스 연동** 화면도 같은 값을 표시한다. 값을 확인하려고 시험 발송을
+할 필요가 없다.
+
+### 캠페인 상태
+
+| 상태 | 의미 |
+|---|---|
+| `SIMULATED` | 시뮬레이션으로 기록. 발송하지 않음 |
+| `NEEDS_CONNECTION` | 대상 확정, 공급사 미연동. 발송 안 됨 |
+| `SENDING` | 발송 커밋됨, 결과 기록 중 |
+| `SENT` | 모든 수신자 발송 확인 |
+| `PARTIAL` | 일부만 성공. 실패 건은 수신자별로 사유 기록 |
+| `FAILED` | 전부 실패 |
+
+`PARTIAL`과 `FAILED`를 `SENT`로 올림하지 않는다. 수신자별 결과
+(`SENT`/`FAILED` + 공급사 메시지 ID 또는 실패 사유)를 함께 저장한다.
+
+### 공급사가 다른 형식을 요구할 때
+
+대부분의 국내 공급사는 위 형태와 다르다. 이 경우 공급사 앞에 얇은 변환
+서버를 두고 `EVENTOUCH_MESSAGING_ENDPOINT`가 그 서버를 가리키게 한다.
+EVENTOUCH 코드를 고칠 필요가 없다. 변환 서버는 토큰 검증, 공급사 형식
+변환, 결과 매핑만 담당하면 된다.
+
+### 발송 시점
+
+발송은 명령 트랜잭션이 **커밋된 뒤** 실행된다. 공급사 호출이 느려도 행사
+행 잠금을 붙잡지 않고, 공급사가 접수한 메시지를 우리 트랜잭션 롤백으로
+잃는 일도 없다. 같은 `commandId` 재요청은 재발송하지 않는다.
+
+### 개인정보
+
+수신자 전화번호는 행사 워크스페이스에 저장된 값을 사용한다. 발송 시
+공급사로 전달되므로, 계약·보유기간·국외이전 여부를 고객사와 먼저
+확정한다. 이 저장소에는 어떤 전화번호도 커밋하지 않는다.
+
 ## 하지 않는 것
 
 - 실제 발송·청구·인증·장비 제어 없음

@@ -54,7 +54,13 @@ after(async () => {
 test('health-returns-ok', async () => {
   const res = await fetch(`${BASE}/api/health`);
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { ok: true, version: 1 });
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.version, 1);
+  // The probe reports whether outbound messaging is actually connected, so an
+  // operator can tell without sending a test message. With no provider
+  // configured it must say false rather than implying a working integration.
+  assert.equal(body.messaging, false);
 });
 
 test('static-serves-index', async () => {

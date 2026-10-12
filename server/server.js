@@ -16,6 +16,7 @@ const { createDomainCommands } = require('./commands/domain');
 const { createFileService } = require('./files');
 const { handleApi } = require('./api');
 const { applySecurityHeaders } = require('./http');
+const { createMessagingProvider, providerConfig, messagingState } = require('./messaging');
 
 const ROOT = path.join(__dirname, '..');
 const PORT = Number(process.env.PORT || 8776);
@@ -118,7 +119,10 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
   const publicEvents = database ? createPublicEvents(database) : null;
   const participantCommands = database ? createParticipantCommands(database) : null;
   const operationsCommands = database ? createOperationsCommands(database) : null;
-  const domainCommands = database ? createDomainCommands(database) : null;
+  // Configured from the environment; absent credentials leave every
+  // campaign in its recorded, non-sending state.
+  const messaging = createMessagingProvider(providerConfig());
+  const domainCommands = database ? createDomainCommands(database, { messaging }) : null;
   const files = database ? createFileService(database, { storageDir }) : null;
   return http.createServer((req, res) => {
     // One security-header wrapper per response. Every path below — static,
@@ -131,6 +135,7 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
         ok: true,
         version: 1,
         ...(process.env.EVENTOUCH_DEV_QUICK_LOGIN ? { devQuickLogin: true } : {}),
+        messaging: messagingState().connected,
       });
       return;
     }

@@ -133,6 +133,36 @@ function retryMessage(ctx, input) {
   }
   if (message.scheduled && Date.parse(message.scheduled) > Date.now()) throw ctx.fail(409, '예약 시각 전입니다');
   message.attempts = (Number(message.attempts) || 0) + 1;
+
+  // A connected provider makes this a real send. The network call must not
+  // run inside the surrounding transaction: a slow provider would hold the
+  // event row lock, and a provider that accepted a message we then rolled
+  // back would be unrecorded. The transaction records the intent as SENDING;
+  // the dispatcher sends after commit and writes the outcome back.
+  if (message.simulate !== true && ctx.messaging && ctx.messaging.connected) {
+    message.status = 'SENDING';
+    list(message.deliveries).forEach((delivery) => {
+      delivery.status = 'SENDING';
+      delivery.at = ctx.now;
+    });
+    return {
+      body: { message },
+      // The dispatcher needs a reachable address per recipient; the snapshot
+      // is the only place the phone number is kept.
+      dispatch: {
+        eventId: ctx.event.id,
+        messageId: message.id,
+        channel: message.channel,
+        text: message.body,
+        recipients: list(message.recipientSnapshot).map((person) => ({
+          participantId: person.id,
+          name: person.name,
+          phone: person.phone,
+        })),
+      },
+    };
+  }
+
   message.status = message.simulate === true ? 'SIMULATED' : 'NEEDS_CONNECTION';
   list(message.deliveries).forEach((delivery) => {
     delivery.status = message.simulate === true ? 'SIMULATED' : 'UNCONNECTED';

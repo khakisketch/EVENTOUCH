@@ -6,6 +6,7 @@ const preparation = require('./preparation');
 const engagement = require('./engagement');
 const contentResults = require('./content-results');
 const boothMap = require('./booth-map');
+const { createMessagingProvider, dispatchCampaign } = require('../messaging');
 
 const COMMANDS = new Set([
   ...preparation.COMMANDS,
@@ -156,7 +157,10 @@ function serializableEvent(event) {
   return payload;
 }
 
-function createDomainCommands(database) {
+function createDomainCommands(database, options = {}) {
+  // A provider is optional: without one every campaign stays SIMULATED or
+  // NEEDS_CONNECTION exactly as before.
+  const provider = options.messaging || createMessagingProvider(require('../messaging').providerConfig(options.env));
   async function execute({
     eventId,
     commandId: rawId,
@@ -172,7 +176,7 @@ function createDomainCommands(database) {
     if (guest && !ticketToken) throw failure(401, '티켓 링크를 확인하세요');
     if (!guest && (!account || !account.id)) throw failure(401, '로그인이 필요합니다');
 
-    return database.transaction(async (client) => {
+    const outcome = await database.transaction(async (client) => {
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [id]);
       const row = await lockEvent(client, eventId);
       if (!row) throw failure(404, '요청한 행사를 찾을 수 없습니다');
@@ -227,6 +231,7 @@ function createDomainCommands(database) {
         participant: guest ? actor : null,
         clean,
         fail: failure,
+        messaging: { connected: Boolean(provider && provider.state && provider.state.connected) },
         makeId: nextId,
         resolveFile: (file, rules) => resolveStoredFile(client, file, rules),
       };
@@ -281,8 +286,25 @@ function createDomainCommands(database) {
           participantId: guest ? actor.id : null,
         })]
       );
-      return { status: result.status || 200, body: response, replayed: false };
+      return { status: result.status || 200, body: response, replayed: false, dispatch: result.dispatch || null };
     });
+
+    // The provider call happens after commit on purpose. Failing to send
+    // must not roll back a command the operator already saw succeed; it
+    // leaves a campaign they can retry.
+    if (outcome.dispatch && provider) {
+      try {
+        const sent = await dispatchCampaign(database, provider, outcome.dispatch);
+        // Answer with the outcome the operator actually cares about rather
+        // than the intermediate SENDING state.
+        if (sent && sent.message && outcome.body && outcome.body.message) {
+          outcome.body.message = sent.message;
+        }
+      } catch (error) {
+        process.stderr.write('[eventouch] campaign dispatch failed: ' + (error && error.message) + '\n');
+      }
+    }
+    return outcome;
   }
 
   return {

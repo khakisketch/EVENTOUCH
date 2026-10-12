@@ -34,6 +34,7 @@ async function request(method,path,body,options={}){
 }
 function normalizedState(value){
  if(!value||value.version!==9||!Array.isArray(value.events)||!value.workspaces||typeof value.workspaces!=='object')throw Error('서버 행사 자료 형식이 올바르지 않습니다.');
+ // Outbound messaging state is server-owned; keep whatever it reported.
  const next=clone(value);next.events=next.events.filter(Boolean);next.accounts=Array.isArray(next.accounts)?next.accounts:[];next.clients=Array.isArray(next.clients)?next.clients:[];next.memberships=Array.isArray(next.memberships)?next.memberships:[];next.invitations=Array.isArray(next.invitations)?next.invitations:[];next.commands=Array.isArray(next.commands)?next.commands:[];
  for(const event of next.events){if(!event.features||!Array.isArray(event.features))event.features=[];next.workspaces[event.id]={...(E.emptyWorkspace?E.emptyWorkspace():{}),...(next.workspaces[event.id]||{})};}
  return next;
