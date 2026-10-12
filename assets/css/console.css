@@ -223,7 +223,7 @@
 .overview-status-secondary .overview-status-card{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);min-height:48px;padding:var(--s2) var(--s3)}
 .overview-status-secondary .overview-status-value{font:700 var(--h3)/1 var(--display-font)}
 .overview-status-secondary .overview-status-value small{font-size:var(--small)}
-.overview-live-status h2,.overview-action-panel h2,.overview-menu-section h2{margin:0 0 var(--s2);font-size:var(--h3)}
+.overview-live-status h2,.overview-action-panel h2,.overview-menu-section h2,.overview-check-activity h2{margin:0 0 var(--s2);font-size:var(--h3)}
 .overview-live-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:hidden;border:1px solid var(--line);border-radius:var(--radius);background:var(--line)}
 .overview-live-stat{display:flex;align-items:center;gap:var(--s2);min-width:0;min-height:var(--s7);padding:var(--s2) var(--s3);background:var(--paper);color:var(--ink);text-decoration:none}
 .overview-live-stat+.overview-live-stat{border-inline-start:1px solid var(--line)}
@@ -233,6 +233,18 @@
 .overview-live-stat-copy strong{font:700 var(--h2)/1 var(--display-font);font-variant-numeric:tabular-nums}
 .overview-live-stat-copy em{font:600 var(--small)/1 var(--body-font);font-style:normal}
 @media(hover:hover){.overview-live-stat[href]:hover{background:var(--soft);color:var(--ink)}}
+.overview-check-activity{min-width:0;padding-block:var(--s2);border-block:1px solid var(--line)}
+.overview-check-activity-heading{display:flex;align-items:center;justify-content:space-between;gap:var(--s2)}
+.overview-check-activity-heading h2{margin:0}
+.overview-check-activity-heading a{display:inline-flex;align-items:center;min-height:44px;color:var(--brand-text);font-size:var(--small);font-weight:700;text-decoration:none}
+.overview-check-activity-heading a:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+@media(hover:hover){.overview-check-activity-heading a:hover{color:var(--brand-text);text-decoration:underline}}
+.overview-check-activity-list{display:grid;gap:0;margin:var(--s1) 0 0;padding:0;list-style:none}
+.overview-check-activity-list li{display:flex;align-items:center;gap:var(--s2);min-width:0;min-height:44px;padding-block:var(--s1);border-top:1px solid var(--line)}
+.overview-check-activity-list li>strong{min-width:0;overflow-wrap:anywhere}
+.overview-check-activity-meta{margin-inline-start:auto;color:var(--muted);font-size:var(--small);font-variant-numeric:tabular-nums;white-space:nowrap}
+.overview-check-correction{flex:none;padding:2px var(--s1);border:1px solid var(--line-strong);border-radius:var(--radius-small);color:var(--ink);font-size:var(--small);font-weight:650}
+.overview-check-activity-empty{margin:var(--s1) 0 0;padding-block:var(--s2);border-top:1px solid var(--line);color:var(--muted);font-size:var(--small)}
 .overview-action-panel{min-width:0;padding:var(--s3);border:1px solid var(--line);border-radius:var(--radius);background:var(--paper)}
 .overview-action-panel h2{margin-bottom:var(--s2)}
 .overview-task-list{display:grid;gap:0;margin-top:var(--s2);border-top:1px solid var(--line)}
@@ -279,6 +291,8 @@ body.overview-scrolled:has(.overview-page) .admin-main>.topbar .breadcrumb{font-
  .overview-identity{grid-template-columns:minmax(0,1fr);gap:var(--s1)}
  .overview-identity-main{gap:var(--s1)}
  .overview-attendee-link{justify-self:start;padding-inline:0}
+ .overview-check-activity-list li{gap:var(--s1)}
+ .overview-check-activity-meta{font-size:var(--small)}
  .overview-status-card{min-height:72px;padding:var(--s2) var(--s3)}
  .overview-action-panel{padding:var(--s3)}
  .overview-task-row{grid-template-columns:22px minmax(0,1fr) auto 16px;gap:var(--s2)}
