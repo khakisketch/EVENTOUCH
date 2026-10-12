@@ -9,6 +9,7 @@ data/storage/
 # Task-owned rendered review captures and design-workspace artifacts.
 # Large (25MB+) and review-scoped, never product source or product assets.
 design-inputs/
+design-previews/
 .od-review/
 .od-skills/
 index.html.artifact.json
