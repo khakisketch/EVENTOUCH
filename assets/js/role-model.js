@@ -130,12 +130,19 @@ E.register('staff.unassign','onsite',(s,p,c)=>{
 for(const name of ['client.contact.invite','client.contact.link','client.access.save','client.contact.unlink'])delete E.handlers[name];
 for(const name of ['client-contact-invite','client-contact-link','client-event-access','client-contact-unlink','share-report'])delete E.actions[name];
 
-E.views['agency-clients']=()=>{const rows=E.state.clients.map(c=>'<tr><td><strong>'+e(c.name)+'</strong></td><td><div class="od-field"><span>'+e(c.contact||'미등록')+'</span><small class="muted">'+e(c.email||'연락처 없음')+'</small></div></td><td>'+E.state.events.filter(a=>a.clientId===c.id).length+'개</td><td>'+B('상세','client-detail','data-id="'+e(c.id)+'"')+'</td></tr>');const content=rows.length?E.table(['고객사','내부 연락처','행사','관리'],rows):E.empty('등록된 고객사가 없습니다','고객사를 추가하면 내부 담당자 정보와 연결된 행사가 여기에 표시됩니다.');return E.head('고객사','행사 의뢰 조직과 내부 담당자 정보를 관리합니다.',B('고객사 추가','edit-client','','primary'),'')+E.panel('고객사 목록',content);};
+E.views['agency-clients']=()=>{
+ const rows=E.state.clients.map(c=>{
+  const events=E.state.events.filter(a=>a.clientId===c.id),eventNames=events.map(a=>a.name).join(' · ')||'연결 행사 없음';
+  return '<tr><td><strong>'+e(c.name)+'</strong></td><td><div class="od-field"><span>'+e(c.contact||'미등록')+'</span><small class="muted">'+e(c.email||'이메일 미등록')+'</small></div></td><td><span class="client-event-list" title="' + e(eventNames) + '">'+e(eventNames)+'</span></td><td>'+B('상세','client-detail','data-id="'+e(c.id)+'"')+'</td></tr>';
+ });
+ const content=rows.length?E.table(['고객사','내부 담당자','연결 행사','관리'],rows):E.empty('등록된 고객사가 없습니다','고객사를 추가하면 내부 담당자 정보와 연결된 행사가 여기에 표시됩니다.');
+ return E.head('고객사','행사 의뢰 조직과 내부 담당자 정보를 관리합니다.',B('고객사 추가','edit-client','','primary'),'')+E.panel('고객사 목록',content);
+};
 E.actions['client-detail']=d=>{
  const c=E.state.clients.find(a=>a.id===d.id);if(!c)throw Error('고객사를 찾을 수 없습니다.');
  const events=E.state.events.filter(a=>a.clientId===c.id);
  const rows=events.length?E.table(['행사','일정','상태','이동'],events.map(a=>'<tr><td><strong>'+e(a.name)+'</strong></td><td>'+e(a.date)+'</td><td>'+e(E.stages[a.stage]||a.stage)+'</td><td>'+L('운영 현황',E.consoleURL('overview',a.id),'','arrow')+'</td></tr>')):E.empty('연결된 행사가 없습니다','행사 설정에서 이 고객사를 연결하면 여기에 표시됩니다.');
- E.dialog('고객사 상세',E.detail([['고객사명',c.name],['내부 담당자',c.contact||'미등록'],['연락처 이메일',c.email||'미등록'],['연결 행사',events.length+'개']])+'<h3 class="section-title">연결된 행사</h3>'+rows+E.notice('고객사 정보는 운영사의 내부 관리 기록입니다. 고객사 계정, 로그인, 행사 권한 또는 보고서 포털은 제공하지 않습니다.')+B('정보 수정','edit-client','data-id="'+e(c.id)+'" data-return-detail="true"'));
+  E.dialog('고객사 상세',E.detail([['고객사명',c.name],['내부 담당자',c.contact||'미등록'],['담당자 이메일',c.email||'이메일 미등록']])+'<h3 class="section-title">연결 행사</h3>'+rows+E.notice('고객사 정보는 운영사의 내부 관리 기록입니다. 고객사 계정, 로그인, 행사 권한 또는 보고서 포털은 제공하지 않습니다.')+B('정보 수정','edit-client','data-id="'+e(c.id)+'" data-return-detail="true"'));
 };
 
 E.actions['choose-assignment']=()=>{

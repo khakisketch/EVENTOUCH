@@ -15,7 +15,7 @@
 //   /api/*                   never cached; when offline the request falls
 //                            through and the client keeps its queued state
 
-const CACHE = 'eventouch-shell-v13';
+const CACHE = 'eventouch-shell-v15';
 const SHELL = ['/', '/index.html'];
 
 async function shellAssets() {

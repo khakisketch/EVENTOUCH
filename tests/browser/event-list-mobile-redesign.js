@@ -28,11 +28,15 @@ async page => {
   await page.evaluate(() => { window.ET.ui.filters.events='';window.ET.ui.filters.eventStatus='';window.ET.render(); });
   await page.waitForSelector('.event-card');
 
-  const baseline = await page.evaluate(() => ({
-    count: window.ET.state.events.filter(event => window.ET.eventAllowed(event.id)).length,
-    eventId: window.ET.state.events.find(event => window.ET.eventAllowed(event.id))?.id,
-    event: window.ET.state.events.find(event => window.ET.eventAllowed(event.id)),
-  }));
+  const baseline = await page.evaluate(() => {
+    const event = window.ET.state.events.find(item => window.ET.eventAllowed(item.id));
+    return {
+      count: window.ET.state.events.filter(item => window.ET.eventAllowed(item.id)).length,
+      eventId: event?.id,
+      event,
+      customer: window.ET.state.clients.find(client => client.id === event?.clientId)?.name || '미연결',
+    };
+  });
   check(baseline.count === 1, 'The preserved actual fixture should expose its single assigned event.');
   const event = baseline.event || {};
 
@@ -62,6 +66,7 @@ async page => {
         imageLoaded:!!image?.complete&&image.naturalWidth>0,
         scheduleDate:box(scheduleDate),scheduleTime:box(scheduleTime),scheduleTimeLines:scheduleTime?.getClientRects().length||0,
         scheduleGap:scheduleDate&&scheduleTime?scheduleTime.getBoundingClientRect().left-scheduleDate.getBoundingClientRect().right:null,
+        customer:card?.querySelector('.event-client-name')?.innerText||'',firstFact:card?.querySelector('.event-card-facts dt')?.innerText||'',
         singleGrid:box(singleGrid),content:box(document.querySelector('.content')),
         cardText:card?.innerText||'', eventTitle:card?.querySelector('h2')?.innerText||'',
         toolbar:box(document.querySelector('.toolbar')),
@@ -73,6 +78,7 @@ async page => {
     check(layout.select && layout.select.height >= 44, `${width}px status filter must remain at least 44px high.`);
     check(layout.action && layout.action.height >= 44 && layout.action.width >= 44, `${width}px event-management action must retain a 44×44px minimum target.`);
     check(/일정/.test(layout.cardText) && /운영 상태/.test(layout.cardText), `${width}px card must label schedule separately from operational stage.`);
+    check(layout.firstFact==='고객사'&&layout.customer===baseline.customer, `${width}px card should show the linked customer before the event schedule.`);
     check(/등록\s*\d+명/.test(layout.cardText.replace(/\n/g,' ')), `${width}px card should expose the event's registration count.`);
     check(layout.scheduleTime && layout.scheduleTimeLines===1, `${width}px scheduled time range should stay together on one line.`);
     if(width<=390) check(layout.scheduleDate?.y < layout.scheduleTime?.y, `${width}px date and time should occupy distinct, scannable lines.`);
