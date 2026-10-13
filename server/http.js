@@ -20,7 +20,10 @@ function contentSecurityPolicy(nonce) {
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
     "connect-src 'self'",
-    "frame-ancestors 'none'",
+    // The operator's participant-page preview frames the product's own
+    // attendee route, so framing must be allowed for this origin — and only
+    // for it. Cross-origin clickjacking stays blocked.
+    "frame-ancestors 'self'",
     "base-uri 'self'",
     "form-action 'self'",
     "object-src 'none'",
@@ -34,7 +37,7 @@ function contentSecurityPolicy(nonce) {
 function securityHeaders(nonce, env = process.env) {
   const headers = {
     'x-content-type-options': 'nosniff',
-    'x-frame-options': 'DENY',
+    'x-frame-options': 'SAMEORIGIN',
     'referrer-policy': 'strict-origin-when-cross-origin',
     'permissions-policy': 'camera=(self), microphone=(), geolocation=()',
     'cross-origin-opener-policy': 'same-origin',

@@ -139,8 +139,10 @@ PostgreSQL이 행사 데이터의 유일한 권위다. JSON 파일 저장소(`DA
 - 잠금 응답(429)은 "잠겼다"고 알리지 않는다(공격자에게 신호가 되므로).
 - 미마이그레이션 DB에서는 제한 테이블 부재를 감지해 **제한 없이 로그인을 계속 허용**한다.
   운영자가 자기 제품에 잠기는 것이 더 나쁜 실패이기 때문이다.
-- 보안 헤더: CSP(nonce 기반) · `X-Frame-Options: DENY` · `nosniff` · `Referrer-Policy` ·
+- 보안 헤더: CSP(nonce 기반) · `X-Frame-Options: SAMEORIGIN` · `nosniff` · `Referrer-Policy` ·
   `Permissions-Policy` · HSTS(`COOKIE_SECURE=1`일 때). 모든 응답에 적용.
+  CSP의 `frame-ancestors 'self'`는 참가자 페이지의 "미리보기"가 같은 출처의 참가자 화면을
+  iframe으로 띄우기 때문이다. 외부 출처 프레임은 계속 차단한다.
   `EVENTOUCH_CSP_REPORT_ONLY=1`로 강제 없이 관찰할 수 있다.
 
 ## 7. 프론트엔드 구조
@@ -180,6 +182,15 @@ server-presentation.js는 통째로 레이어다. `loginPage`, `adminShell`, `vi
     action:scan-person / staff-search / camera-scan / assign-staff / edit-desk
     action:compose-message / edit-module / client-detail / publish-report
     action:table-page / clear-event-filters
+
+### 참가자 페이지 미리보기
+
+운영자는 `참가자 페이지` 화면에서 저장한 초안을 iframe으로 확인한다. iframe은 같은 출처의
+`#/event/<slug>/home?preview=1`을 열고, 그 문서는 **공개 투영이 아니라 운영자 워크스페이스**를
+읽는다 — 초안은 공개 API에 없고, `DRAFT` 행사는 공개 투영 자체가 없다. 그래서 미리보기에는
+운영자 세션이 필요하고, 세션·권한이 없으면 게시본이 보인다(`server-sync.js`의
+`isOperatorPreview`). 미리보기에서는 신청·제출을 저장하지 않는다(`E.run` 가드) — 초안 확인이
+실제 참가자 데이터를 만들면 안 되기 때문이다.
 
 ### 런타임 추적 결과 (실측)
 

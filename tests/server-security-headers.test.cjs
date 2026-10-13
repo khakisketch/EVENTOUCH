@@ -64,7 +64,9 @@ test('every-response-carries-the-baseline-security-headers', async () => {
   for (const target of ['/', '/index.html', '/assets/css/tokens.css', '/api/health', '/api/nope', '/missing-file']) {
     const res = await fetch(`${BASE}${target}`);
     assert.equal(res.headers.get('x-content-type-options'), 'nosniff', `${target} nosniff`);
-    assert.equal(res.headers.get('x-frame-options'), 'DENY', `${target} frame`);
+    // SAMEORIGIN, not DENY: the participant-page preview frames the product's
+    // own attendee route. Cross-origin framing stays blocked.
+    assert.equal(res.headers.get('x-frame-options'), 'SAMEORIGIN', `${target} frame`);
     assert.equal(res.headers.get('referrer-policy'), 'strict-origin-when-cross-origin', `${target} referrer`);
     assert.ok(res.headers.get('permissions-policy'), `${target} permissions-policy`);
     assert.ok(res.headers.get('content-security-policy'), `${target} csp`);
@@ -74,14 +76,15 @@ test('every-response-carries-the-baseline-security-headers', async () => {
 test('the-405-method-rejection-also-carries-security-headers', async () => {
   const res = await fetch(`${BASE}/index.html`, { method: 'DELETE' });
   assert.equal(res.status, 405);
-  assert.equal(res.headers.get('x-frame-options'), 'DENY');
+  assert.equal(res.headers.get('x-frame-options'), 'SAMEORIGIN');
   assert.ok(res.headers.get('content-security-policy'));
 });
 
 test('the-csp-locks-framing-base-uri-and-objects', async () => {
   const res = await fetch(`${BASE}/`);
   const csp = res.headers.get('content-security-policy');
-  assert.match(csp, /frame-ancestors 'none'/);
+  assert.match(csp, /frame-ancestors 'self'/);
+  assert.doesNotMatch(csp, /frame-ancestors \*|frame-ancestors 'none'/);
   assert.match(csp, /base-uri 'self'/);
   assert.match(csp, /object-src 'none'/);
   assert.match(csp, /form-action 'self'/);
@@ -140,7 +143,7 @@ test('csp-can-be-held-in-report-only-without-dropping-other-headers', async () =
   const res = await fetch(`${BASE}/`);
   assert.equal(res.headers.get('content-security-policy'), null);
   assert.ok(res.headers.get('content-security-policy-report-only'));
-  assert.equal(res.headers.get('x-frame-options'), 'DENY');
+  assert.equal(res.headers.get('x-frame-options'), 'SAMEORIGIN');
   await stopServer();
   await startServer();
 });

@@ -284,6 +284,8 @@ E.storeFile=async(file,{commandId,kind='image'}={})=>{
 };
 E.run=async(name,payload={})=>{
  if(E.previewMode)return localRun(name,payload);
+ // A preview must not create real participants or submissions.
+ if(E.route?.scope==='attendee'&&E.route.params?.get('preview')==='1'&&E.can?.('page',true))throw Error('운영자 미리보기에서는 신청·제출을 저장하지 않습니다. 실제 참가자 링크에서 확인하세요.');
  if(E.storageMode!=='server')throw Error('서버 연결을 확인할 수 없습니다. 미리보기로 자동 전환하지 않았습니다.');
  if(E.ui.commandBusy)throw Error('앞선 작업을 저장하고 있습니다. 완료 후 다시 시도하세요.');
  E.ui.commandBusy=true;
@@ -324,6 +326,16 @@ function registerServiceWorker(){
   });
 }
 
+// The participant-page preview (operator-experience.js) frames the attendee
+// route with ?preview=1. It must render the saved draft, which the public
+// projection does not carry — and a DRAFT event has no public projection at
+// all. With an operator session the console workspace already has it.
+function isOperatorPreview(route){return route?.scope==='attendee'&&route.params?.get('preview')==='1';}
+async function restoreOperatorPreview(){
+ try{await E.remote.restoreSession();}catch(error){return false;}
+ return Boolean(E.session&&E.can?.('page',true));
+}
+
 E.startup=async()=>{
  const query=new URLSearchParams(window.location?.search||'');
  E.previewMode=query.get('mode')==='preview';
@@ -333,7 +345,10 @@ E.startup=async()=>{
  try{await loadSetupState();}catch(error){/* a missing probe must not block startup */}
  try{
   const route=E.parseRoute?.();
-  if(route?.scope==='attendee')await E.remote.loadPublic(route.slug,route.params?.get('ticket')||'');
+  if(route?.scope==='attendee'){
+   if(isOperatorPreview(route)&&await restoreOperatorPreview()){/* the operator workspace is already loaded */}
+   else await E.remote.loadPublic(route.slug,route.params?.get('ticket')||'');
+  }
   else if(route?.scope==='invite')await E.remote.loadInvitation(route.token);
   else await E.remote.restoreSession();
  }catch(error){setConnection('error',error.message);E.state=E.state||emptyState();}
@@ -343,7 +358,9 @@ E.handleRouteChange=async()=>{
  if(E.previewMode){E.render?.();return;}
  try{
   const route=E.parseRoute?.();
-   if(route?.scope==='attendee')await E.remote.loadPublic(route.slug,route.params?.get('ticket')||'');
+   if(route?.scope==='attendee'){
+    if(!(isOperatorPreview(route)&&E.session&&E.can?.('page',true)))await E.remote.loadPublic(route.slug,route.params?.get('ticket')||'');
+   }
    else if(route?.scope==='invite')await E.remote.loadInvitation(route.token);
    else if(!E.session&&route?.scope!=='login')await E.remote.restoreSession();
    else if(E.session&&['agency','console','staff','display'].includes(route?.scope))await refreshAuthenticated();

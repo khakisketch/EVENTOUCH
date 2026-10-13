@@ -209,7 +209,7 @@ E.views.page=()=>{
  const photos='<div class="image-list">'+(d.logo?'<figure>'+E.image(d.logo,'행사 로고')+'<figcaption>초안 로고</figcaption></figure>':'')+(d.keyvisual?'<figure>'+E.image(d.keyvisual,'행사 대표 이미지')+'<figcaption>초안 대표 이미지</figcaption></figure>':'')+(!d.logo&&!d.keyvisual?'<p class="muted">업로드한 이미지가 없습니다. 기본 행사명과 안내로 표시됩니다.</p>':'')+'</div>';
  const dirtyLabel=dirty?'저장한 초안이 게시본과 다릅니다.':'초안과 게시본이 같습니다.';
  const publish=can?B('참가자에게 게시','publish-attendee-page','','primary'):'<span class="help">게시 권한이 없습니다.</span>';
- return E.head('참가자 페이지','기본 화면을 행사별로 조정하고, 초안 미리보기 후 참가자에게 게시합니다.',L('게시 화면 열기',E.aurl('home'),'','arrow'),'참가자 경험')+E.eventTabs('page')+E.panel('기본 화면 편집',form)+E.panel('초안 이미지',photos)+E.panel('미리보기 · 게시',E.notice(dirtyLabel,dirty?'warning':'')+'<div class="attendee-preview"><iframe title="참가자 모바일 화면 미리보기" src="'+e(preview)+'" loading="lazy"></iframe></div><p class="help">미리보기에서 행사 홈 → 신청 → 신청 상태·티켓 QR까지 직접 이동할 수 있습니다. 테스트 신청은 이 브라우저의 샘플 데이터에 저장되므로 가상 정보를 사용하세요. 참가자에게는 게시된 설정만 보입니다.</p>',publish);
+ return E.head('참가자 페이지','기본 화면을 행사별로 조정하고, 초안 미리보기 후 참가자에게 게시합니다.',L('게시 화면 열기',E.aurl('home'),'','arrow'),'참가자 경험')+E.eventTabs('page')+E.panel('기본 화면 편집',form)+E.panel('초안 이미지',photos)+E.panel('미리보기 · 게시',E.notice(dirtyLabel,dirty?'warning':'')+'<div class="attendee-preview"><iframe title="참가자 모바일 화면 미리보기" src="'+e(E.url(preview))+'" loading="lazy"></iframe></div><p class="help">미리보기에서 행사 홈 → 신청 → 신청 상태·티켓 QR까지 이동하며 저장한 초안을 확인할 수 있습니다. 미리보기에서는 신청·제출을 저장하지 않습니다. 참가자에게는 게시된 설정만 보입니다.</p>',publish);
 };
 E.forms['attendee-page']=async(p,f)=>{
  for(const key of ['logo','keyvisual']){const file=f.elements[key]?.files?.[0];if(file)p[key]=await E.storeFile(file,{commandId:E.id('page-upload')});else delete p[key];}
@@ -240,8 +240,8 @@ E.views.attendee=()=>{
  if(!cfg.showAnnouncements&&['notices','notice-detail'].includes(E.route.page))return E.mobileState('공지 안내가 숨겨져 있습니다','운영자가 참가자 페이지 설정에서 공개할 수 있습니다.',L('행사 홈',E.aurl('home')));
  if(!cfg.showSchedule&&['schedule','program-detail'].includes(E.route.page))return E.mobileState('일정 안내가 숨겨져 있습니다','운영자가 참가자 페이지 설정에서 공개할 수 있습니다.',L('행사 홈',E.aurl('home')));
  if(!cfg.showPrograms&&['poll','quiz','qa','draw','survey','stamp','photo','board','rewards'].includes(E.route.page))return E.mobileState('참여 프로그램 안내가 숨겨져 있습니다','운영자가 참가자 페이지 설정에서 공개할 수 있습니다.',L('행사 홈',E.aurl('home')));
- html=html.replace('<div class="mobile-app od-screen">','<div class="mobile-app od-screen" style="--attendee-accent:'+validAccent(cfg.accent)+';--attendee-accent-ink:'+contrastInk(validAccent(cfg.accent))+'">');
- if(preview)html=html.replace('<div class="od-scroll mobile-body" id="main-content">','<div class="od-scroll mobile-body" id="main-content"><div class="preview-ribbon" role="status">운영자 미리보기 · 저장한 초안 · 테스트 신청은 이 브라우저에 저장됩니다</div>');
+ html=html.replace('<div class="mobile-app attendee-site">','<div class="mobile-app attendee-site" style="--attendee-accent:'+validAccent(cfg.accent)+';--attendee-accent-ink:'+contrastInk(validAccent(cfg.accent))+'">');
+ if(preview)html=html.replace('<main class="attendee-site-main" id="main-content">','<main class="attendee-site-main" id="main-content"><div class="preview-ribbon" role="status">운영자 미리보기 · 저장한 초안 · 신청·제출은 저장되지 않습니다</div>');
  return html;
 };
 E.workflowVersion=17;
