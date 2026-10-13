@@ -41,6 +41,8 @@ function loadOverview({ canChecks = true, stage = 'LIVE', readiness = [] } = {})
 
 test('LIVE overview shows the first two check-ins and gates identities and history together', () => {
   const html = loadOverview();
+  assert.match(html, /<h1 class="overview-page-title">운영 현황<\/h1>/);
+  assert.match(html, /id="overview-status-title">등록·입장 현황<\/h2>/);
   assert.ok(html.indexOf('최근 참가자') < html.indexOf('이전 참가자'));
   assert.match(html, /OUT/);
   assert.match(html, /IN/);
