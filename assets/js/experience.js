@@ -56,36 +56,74 @@ const syncOverviewChrome=()=>document.body.classList.toggle('overview-scrolled',
 const scheduleOverviewChromeSync=()=>window.requestAnimationFrame?window.requestAnimationFrame(syncOverviewChrome):window.setTimeout(syncOverviewChrome,0);
 if(!E.ui.overviewChromeBound){E.ui.overviewChromeBound=true;window.addEventListener('scroll',syncOverviewChrome,{passive:true});window.addEventListener('hashchange',scheduleOverviewChromeSync);}
 E.views.overview=()=>{
- const ev=E.event(),w=E.work(),m=E.metrics(w),prep=['DRAFT','READY'].includes(ev.stage),ended=['ENDED','ARCHIVED'].includes(ev.stage),todo=E.readiness().filter(a=>!a[1]);
- const review=w.questions.filter(a=>!a.approved).length+w.photos.filter(a=>a.status==='PENDING').length+w.posts.filter(a=>a.status==='PENDING').length;
- let tasks=[];
- if(prep)tasks=todo.filter(a=>E.can(E.groupForPage(a[2]),false)).map(([t,ok,p,d])=>[(p==='form'||p==='notices'||p==='schedule'?'게시할 ':p==='desks'?(t==='스태프 배정'?'배정할 ':'설정할 '):'확인할 ')+t,d,p,null]);
- else if(!ended){if(m.pending&&E.can('participants',false))tasks.push(['승인할 신청','신청 내용을 확인하세요.','participants',m.pending]);if(review&&E.can('programs',false))tasks.push(['검토할 참가자 콘텐츠','질문·사진·게시글을 확인하세요.','programs',review]);const scheduledMessages=w.messages.filter(a=>a.status==='SCHEDULED').length;if(scheduledMessages&&E.can('messages',false))tasks.push(['확인할 예약 메시지','예약은 실제 자동 발송이 아닌 체험 기록입니다.','messages',scheduledMessages]);}
- else{if(w.registrationOpen&&E.can('participants',true))tasks.push(['닫을 참가 접수','마감 후 추가 신청을 차단하세요.','form',null]);const openModules=w.modules.filter(a=>a.status==='OPEN').length;if(openModules&&E.can('programs',false))tasks.push(['정리할 진행 프로그램','행사 후 설문을 제외한 접수를 정리하세요.','programs',openModules]);if(!w.reports.some(a=>a.status==='PUBLISHED')&&E.can('results',false))tasks.push(['공유할 결과 보고서','집계와 요약을 확정해 고객사에 전달하세요.','reports',null]);}
- const routeIcons={form:'file',notices:'message',desks:'people',results:'chart',reports:'file',audit:'file',checkin:'scan',booths:'ticket',page:'home',participants:'people',programs:'file',messages:'message',readiness:'calendar',checks:'check'};
- const canPage=p=>E.can(E.groupForPage(p),false),canCheckin=canPage('checkin'),canParticipants=canPage('participants'),canChecks=canPage('checks');
- const primary=prep?(E.can('settings',true)?['운영 준비 이어하기','readiness','calendar']:null):ended?(E.can(E.groupForPage('results'),false)?['결과 분석 보기','results','chart']:null):(canCheckin?['체크인 시작','checkin','scan']:null);
- const primaryRow=primary?'<a class="overview-primary-row" href="'+e(E.consoleURL(primary[1]))+'">'+E.icon(primary[2])+'<span>'+e(primary[0])+'</span>'+E.icon('arrow')+'</a>':'';
- const statusCard=(label,value,unit,href='')=>{const body='<span class="overview-status-label">'+e(label)+'</span><strong class="overview-status-value">'+e(value)+'<small> '+e(unit)+'</small></strong>';return href?'<a class="overview-status-card" href="'+e(href)+'">'+body+'</a>':'<div class="overview-status-card">'+body+'</div>';};
- const firstPending=tasks.find(([,d,p,count])=>count===null||count>0);
- const liveCheckinTarget=ev.stage==='LIVE'&&canCheckin?E.consoleURL('checkin'):'';
- const pendingTarget=firstPending&&canPage(firstPending[2])?E.consoleURL(firstPending[2]):'';
- const liveStatusCard=(label,value,unit,href,icon)=>{const body='<span class="overview-live-stat-icon" aria-hidden="true">'+E.icon(icon)+'</span><span class="overview-live-stat-copy"><small>'+e(label)+'</small><strong>'+e(value)+'<em> '+e(unit)+'</em></strong></span>';return href?'<a class="overview-live-stat" href="'+e(href)+'">'+body+'</a>':'<div class="overview-live-stat">'+body+'</div>';};
- const statusStrip=ev.stage==='LIVE'?'<section class="overview-live-status" aria-labelledby="overview-status-title"><h2 id="overview-status-title">등록·입장 현황</h2><div class="overview-live-metrics">'+liveStatusCard('등록',m.total,'명',canParticipants?E.consoleURL('participants'):'','people')+liveStatusCard('현재 입장',m.inside,'명',canPage('onsite')?E.consoleURL('onsite'):'','scan')+liveStatusCard('누적 입장',m.checked,'명',canChecks?E.consoleURL('checks'):'','check')+'</div></section>':'<section class="overview-status-strip" aria-label="현재 운영 지표">'+statusCard('현재 입장',m.inside,'명')+statusCard('처리 대기',tasks.reduce((sum,[,d,p,count])=>sum+(count===null?1:count),0),'건',pendingTarget)+'<div class="overview-status-secondary">'+statusCard('등록',m.total,'명',canParticipants?E.consoleURL('participants'):'')+statusCard('누적 입장',m.checked,'명',canChecks?E.consoleURL('checks'):'')+'</div></section>';
- const checkTime=at=>{const date=new Date(at);return Number.isNaN(date.getTime())?'—':date.toLocaleTimeString('ko-KR',{hour:'numeric',minute:'2-digit'});};
- const activitySection=ev.stage==='LIVE'&&canChecks?'<section class="overview-check-activity" aria-labelledby="overview-check-activity-title"><div class="overview-check-activity-heading"><h2 id="overview-check-activity-title">최근 입퇴장</h2><a href="'+e(E.consoleURL('checks'))+'">전체 기록 보기</a></div>'+(w.checks.length?'<ol class="overview-check-activity-list">'+w.checks.slice(0,2).map(record=>'<li><strong>'+e(record.name)+'</strong><span class="overview-check-activity-meta">'+e(record.action)+' · <time datetime="'+e(record.at)+'">'+e(checkTime(record.at))+'</time></span>'+(record.corrected?'<span class="overview-check-correction">정정</span>':'')+'</li>').join('')+'</ol>':'<p class="overview-check-activity-empty">아직 입퇴장 기록이 없습니다.</p>')+'</section>':'';
- const taskRows=tasks.length?'<div class="overview-task-list">'+tasks.map(([title,description,page,count])=>'<a class="overview-task-row" href="'+e(E.consoleURL(page))+'"><span class="overview-task-icon" aria-hidden="true">'+E.icon(routeIcons[page]||'file')+'</span><span class="overview-task-copy"><strong>'+e(title)+'</strong><small>'+e(description)+'</small></span>'+(count===null?'':'<span class="overview-task-count"><strong>'+e(count)+'</strong><small>건</small></span>')+E.icon('arrow')+'</a>').join('')+'</div>':'<p class="overview-task-empty">'+(prep?'기본 준비가 완료되었습니다.':'현재 대기 중인 업무가 없습니다.')+'</p>';
- const taskSection='<section class="overview-action-panel" aria-labelledby="overview-action-title"><h2 id="overview-action-title">현장 운영</h2>'+primaryRow+taskRows+'</section>';
- const menuItems=[['참가자','등록과 신청 관리','participants','people'],['부스 운영','부스와 인증 기록 관리','booths','ticket'],['운영 기록','입퇴장 처리 기록','checks','check']].filter(([,d,p])=>canPage(p)&&(p!=='booths'||ev.features.includes('stamp'))&&(p!=='checks'||ev.stage!=='LIVE'));
- const quickMenu=menuItems.length?'<section class="overview-menu-section" aria-labelledby="overview-menu-title"><h2 id="overview-menu-title">관리 메뉴</h2><nav class="overview-menu-grid" aria-label="관리 메뉴">'+menuItems.map(([label,description,page,icon])=>'<a class="overview-menu-link" href="'+e(E.consoleURL(page))+'" aria-label="'+e(label+': '+description)+'">'+E.icon(icon)+'<span>'+e(label)+'</span></a>').join('')+'</nav></section>':'';
- const attendeeLink=canPage('page')?'<a class="overview-attendee-link" target="_blank" rel="noopener" href="#/event/'+e(ev.slug)+'/home">참가자 페이지 '+E.icon('arrow')+'</a>':'';
- const identity='<section class="overview-identity" aria-label="행사 정보"><div class="overview-identity-main"><h1 class="overview-page-title">운영 현황</h1><div class="overview-event-facts"><strong>'+e(dateLabel(ev.date)+' · '+ev.start+'–'+ev.end)+'</strong><span>'+e(w.venue.name||'장소 미정')+'</span></div><div class="overview-status-chips"><span class="overview-stage-context"><span class="overview-stage-label">운영 단계</span>'+overviewStage()+'</span>'+E.badge(w.registrationOpen?'접수 중':'접수 마감',w.registrationOpen?'good':'')+'</div></div>'+attendeeLink+'</section>';
- const note='<details class="overview-help"><summary>일정·집계 기준</summary><div class="overview-help-content"><p>'+(ev.isDemo?'가상 행사 데이터입니다. ':'')+'운영 단계는 행사 일정과 별도로 저장된 상태를 따릅니다.</p><p>지표는 이 행사의 저장 기록을 기준으로 계산하며, 재입장은 누적 입장 수에 중복 합산하지 않습니다.</p><p>'+e(dateLabel(ev.date)+' · '+ev.start+'–'+ev.end+' · '+(w.venue.name||'장소 미정'))+'</p></div></details>';
- const lower='<div class="overview-lower">'+quickMenu+'</div>';
- scheduleOverviewChromeSync();
- return '<div class="overview-page">'+identity+taskSection+statusStrip+activitySection+lower+note+
- (E.state.migration?.available&&E.can('settings',true)?E.panel('이전 자료',E.notice('출처 행사가 불명확한 이전 명단은 선택한 행사로 가져오기 전에 검토가 필요합니다. 원본은 보존합니다.','warning')+B('이전 자료 가져오기','legacy-import')):'')+'</div>';
-};
+  const ev=E.event(),w=E.work(),m=E.metrics(w),prep=['DRAFT','READY'].includes(ev.stage),ended=['ENDED','ARCHIVED'].includes(ev.stage),todo=E.readiness().filter(a=>!a[1]);
+  const canPage=p=>E.can(E.groupForPage(p),false),canCheckin=canPage('checkin'),canParticipants=canPage('participants'),canChecks=canPage('checks'),canOnsite=canPage('onsite');
+  const review=(w.questions||[]).filter(a=>!a.approved).length+(w.photos||[]).filter(a=>a.status==='PENDING').length+(w.posts||[]).filter(a=>a.status==='PENDING').length;
+  let tasks=[];
+  if(prep)tasks=todo.filter(a=>E.can(E.groupForPage(a[2]),false)).map(([t,ok,p,d])=>[(p==='form'||p==='notices'||p==='schedule'?'게시할 ':p==='desks'?(t==='스태프 배정'?'배정할 ':'설정할 '):'확인할 ')+t,d,p,null]);
+  else if(!ended){if(m.pending&&canParticipants)tasks.push(['승인 대기','참가 신청 내용을 확인하세요.','participants',m.pending]);if(review&&canPage('programs'))tasks.push(['검토 대기 콘텐츠','질문·사진·게시글을 확인하세요.','programs',review]);const scheduledMessages=(w.messages||[]).filter(a=>a.status==='SCHEDULED').length;if(scheduledMessages&&canPage('messages'))tasks.push(['확인할 예약 메시지','예약은 실제 자동 발송이 아닌 체험 기록입니다.','messages',scheduledMessages]);}
+  else{if(w.registrationOpen&&E.can('participants',true))tasks.push(['닫을 참가 접수','마감 후 추가 신청을 차단하세요.','form',null]);const openModules=(w.modules||[]).filter(a=>a.status==='OPEN').length;if(openModules&&canPage('programs'))tasks.push(['정리할 진행 프로그램','행사 후 설문을 제외한 접수를 정리하세요.','programs',openModules]);if(!(w.reports||[]).some(a=>a.status==='PUBLISHED')&&canPage('results'))tasks.push(['공유할 결과 보고서','집계와 요약을 확정해 고객사에 전달하세요.','reports',null]);}
+  const routeIcons={form:'file',notices:'message',desks:'people',results:'chart',reports:'file',audit:'file',checkin:'scan',booths:'ticket',page:'home',participants:'people',programs:'file',messages:'message',readiness:'calendar',checks:'check'};
+  const primary=prep?(E.can('settings',true)?['운영 준비 이어가기','readiness','calendar']:null):ended?(canPage('results')?['결과 분석 보기','results','chart']:null):(canCheckin?['체크인 시작','checkin','scan']:null);
+  const primaryRow=primary?'<a class="overview-primary-row" href="'+e(E.consoleURL(primary[1]))+'">'+E.icon(primary[2])+'<span>'+e(primary[0])+'</span>'+E.icon('arrow')+'</a>':'';
+  const noActionAccess=prep?!E.can('settings',true)&&!tasks.length:ended?!canPage('results')&&!canParticipants&&!canPage('programs')&&!tasks.length:!canCheckin&&!canParticipants&&!canPage('programs')&&!canPage('messages')&&!tasks.length;
+  const taskEmptyText=noActionAccess?'현재 계정에서 접근할 수 있는 업무가 없습니다.':prep?'기본 준비가 완료되었습니다.':'대기 중인 업무가 없습니다.';
+  const number=value=>{const numeric=Number(value);return Number.isFinite(numeric)?e(numeric.toLocaleString('ko-KR')):e(value??'—');};
+  const capacityValue=Number(ev.capacity);
+  const capacity=Number.isFinite(capacityValue)&&capacityValue>0?capacityValue:0;
+  const registrationRate=capacity?Math.round(m.total/capacity*100):null;
+  const metricItems=prep?[
+   ['등록',m.total,'명',canParticipants?E.consoleURL('participants'):''],
+   ['승인 대기',m.pending,'건',canParticipants?E.consoleURL('participants'):''],
+   ['참가 확정',m.approved,'명',canParticipants?E.consoleURL('participants'):''],
+   ['정원 대비 등록',registrationRate===null?'—':registrationRate,registrationRate===null?'':'%',canParticipants?E.consoleURL('participants'):'',registrationRate===null?'정원 미설정':'']
+  ]:ended?[
+   ['등록',m.total,'명',canParticipants?E.consoleURL('participants'):''],
+   ['승인 대기',m.pending,'건',canParticipants?E.consoleURL('participants'):''],
+   ['누적 입장',m.checked,'명',canChecks?E.consoleURL('checks'):''],
+   ['입장률',m.rate,'%',canParticipants&&canChecks?E.consoleURL('checks'):'']
+  ]:[
+   ['등록',m.total,'명',canParticipants?E.consoleURL('participants'):''],
+   ['승인 대기',m.pending,'건',canParticipants?E.consoleURL('participants'):''],
+   ['현재 입장',m.inside,'명',canOnsite?E.consoleURL('onsite'):''],
+   ['입장률',m.rate,'%',canParticipants&&canChecks?E.consoleURL('checks'):'']
+  ];
+  const visibleMetrics=metricItems.filter(item=>prep?canParticipants:(item[0]==='등록'||item[0]==='승인 대기'?canParticipants:item[0]==='입장률'?canParticipants&&canChecks:item[0]==='현재 입장'?canOnsite:canChecks));
+  const kpiCard=([label,value,unit,href,detail])=>{const body='<span class="overview-kpi-label">'+e(label)+'</span><strong class="overview-kpi-value"><span>'+number(value)+'</span>'+(unit?'<small>'+e(unit)+'</small>':'')+'</strong>'+(detail?'<span class="overview-kpi-detail">'+e(detail)+'</span>':'');return href?'<a class="overview-kpi-card" href="'+e(href)+'">'+body+'</a>':'<div class="overview-kpi-card">'+body+'</div>';};
+  const metricTitle=prep?'접수 현황':ended?'행사 집계':'등록·입장 현황';
+  const statusStrip=visibleMetrics.length?'<section class="overview-kpi-section" aria-labelledby="overview-status-title"><h2 id="overview-status-title">'+metricTitle+'</h2><div class="overview-kpi-grid">'+visibleMetrics.map(kpiCard).join('')+'</div></section>':'';
+  const taskRows=tasks.length?'<div class="overview-task-list">'+tasks.map(([title,description,page,count])=>'<a class="overview-task-row" href="'+e(E.consoleURL(page))+'"><span class="overview-task-icon" aria-hidden="true">'+E.icon(routeIcons[page]||'file')+'</span><span class="overview-task-copy"><strong>'+e(title)+'</strong><small>'+e(description)+'</small></span>'+(count===null?'':'<span class="overview-task-count"><strong>'+number(count)+'</strong><small>건</small></span>')+E.icon('arrow')+'</a>').join('')+'</div>':'<p class="overview-task-empty">'+taskEmptyText+'</p>';
+  const taskSection='<section class="overview-action-panel" aria-labelledby="overview-action-title"><h2 id="overview-action-title">지금 할 일</h2>'+primaryRow+taskRows+'</section>';
+  const parsedCheckTime=record=>{const value=Date.parse(record.at);return Number.isFinite(value)?value:0;};
+  const eventDateKey=String(ev.date||'');
+  const sameEventDate=at=>{const date=new Date(at);if(!Number.isFinite(date.getTime()))return false;const key=[date.getFullYear(),String(date.getMonth()+1).padStart(2,'0'),String(date.getDate()).padStart(2,'0')].join('-');return !eventDateKey||key===eventDateKey;};
+  const validEntries=(w.checks||[]).filter(record=>record.action==='IN'&&!record.corrected&&sameEventDate(record.at));
+  const observedHours=validEntries.map(record=>new Date(record.at).getHours());
+  const startHour=parseInt(String(ev.start||'').slice(0,2),10);
+  const firstHour=observedHours.length?(Number.isFinite(startHour)?Math.min(startHour,...observedHours):Math.min(...observedHours)):0;
+  const lastHour=observedHours.length?Math.max(...observedHours):0;
+  const hourCounts=new Map();
+  for(const record of validEntries){const hour=new Date(record.at).getHours();hourCounts.set(hour,(hourCounts.get(hour)||0)+1);}
+  const hourlyData=observedHours.length?Array.from({length:lastHour-firstHour+1},(_,index)=>{const hour=firstHour+index;return {hour,count:hourCounts.get(hour)||0};}):[];
+  const maxHourlyCount=Math.max(1,...hourlyData.map(row=>row.count));
+  const chart=ev.stage==='LIVE'&&canChecks&&hourlyData.length?'<h2 id="overview-progress-title">시간대별 입장 추이</h2><ol class="overview-hourly-list" aria-label="시간대별 입장 기록">'+hourlyData.map(row=>'<li><span class="overview-hourly-label">'+String(row.hour).padStart(2,'0')+'시</span><div class="overview-hourly-track" aria-hidden="true"><span style="width:'+Math.round(row.count/maxHourlyCount*100)+'%"></span></div><strong>'+number(row.count)+'건</strong></li>').join('')+'</ol><p class="overview-chart-note">정정되지 않은 입장 기록 기준</p>':'';
+  const capacityItem=(label,value)=>'<div class="overview-capacity-item"><div class="overview-capacity-heading"><span>'+e(label)+'</span><strong>'+number(value)+(capacity?'<small> / '+number(capacity)+'명</small>':'')+'</strong></div>'+(capacity?'<div class="overview-capacity-meter"><progress value="'+Math.min(Number(value)||0,capacity)+'" max="'+capacity+'" aria-label="정원 대비 '+e(label)+'"></progress><span>'+Math.round((Number(value)||0)/capacity*100)+'%</span></div>':'<p class="overview-capacity-unset">정원을 설정하면 진행률을 확인할 수 있습니다.</p>')+'</div>';
+  const capacityRows=[];
+  if(prep){if(canParticipants){capacityRows.push(capacityItem('등록',m.total));capacityRows.push(capacityItem('참가 확정',m.approved));}}
+  else{if(canParticipants)capacityRows.push(capacityItem('등록',m.total));if(canChecks)capacityRows.push(capacityItem('누적 입장',m.checked));}
+  const progressTitle=prep?'접수·준비 현황':ended?'정원 대비 행사 집계':'현장 진행률';
+  const progressBody=chart|| (capacityRows.length?'<h2 id="overview-progress-title">'+progressTitle+'</h2><div class="overview-capacity-list">'+capacityRows.join('')+'</div>':'');
+  const progressSection=progressBody?'<section class="overview-progress-panel" aria-labelledby="overview-progress-title">'+progressBody+'</section>':'';
+  const history=(w.checks||[]).slice().sort((a,b)=>parsedCheckTime(b)-parsedCheckTime(a));
+  const checkTime=at=>{const date=new Date(at);return Number.isNaN(date.getTime())?'—':date.toLocaleTimeString('ko-KR',{hour:'numeric',minute:'2-digit'});};
+  const activitySection=!prep&&canChecks?'<section class="overview-check-activity" aria-labelledby="overview-check-activity-title"><div class="overview-check-activity-heading"><h2 id="overview-check-activity-title">최근 입퇴장</h2><a href="'+e(E.consoleURL('checks'))+'">전체 기록 보기</a></div>'+(history.length?'<ol class="overview-check-activity-list">'+history.slice(0,5).map(record=>'<li><span class="overview-check-action '+(record.action==='IN'?'is-in':'is-out')+'">'+(record.action==='IN'?'입장':'퇴장')+'</span><strong>'+e(record.name||'이름 미등록')+'</strong><span class="overview-check-activity-meta"><time datetime="'+e(record.at)+'">'+e(checkTime(record.at))+'</time></span>'+(record.corrected?'<span class="overview-check-correction">정정</span>':'')+'</li>').join('')+'</ol>':'<p class="overview-check-activity-empty">아직 입퇴장 기록이 없습니다.</p>')+'</section>':'';
+  const attendeeLink=canPage('page')?'<a class="overview-attendee-link" target="_blank" rel="noopener" href="#/event/'+e(ev.slug)+'/home">참가자 페이지 '+E.icon('arrow')+'</a>':'';
+  const identity='<section class="overview-identity" aria-label="행사 정보"><div class="overview-identity-main"><h1 class="overview-page-title">운영 현황</h1><div class="overview-event-facts"><strong>'+e(dateLabel(ev.date)+' · '+ev.start+'–'+ev.end)+'</strong><span>'+e(w.venue.name||'장소 미정')+'</span></div><div class="overview-status-chips"><span class="overview-stage-context"><span class="overview-stage-label">운영 단계</span>'+overviewStage()+'</span>'+E.badge(w.registrationOpen?'접수 중':'접수 마감',w.registrationOpen?'good':'')+'</div></div>'+attendeeLink+'</section>';
+  const note='<details class="overview-help"><summary>일정·집계 기준</summary><div class="overview-help-content"><p>'+(ev.isDemo?'가상 행사 데이터입니다. ':'')+'운영 단계는 행사 일정과 별도로 저장된 상태를 따릅니다.</p><p>지표는 이 행사의 저장 기록을 기준으로 계산하며, 재입장은 누적 입장 수에 중복 합산하지 않습니다.</p><p>'+e(dateLabel(ev.date)+' · '+ev.start+'–'+ev.end+' · '+(w.venue.name||'장소 미정'))+'</p></div></details>';
+  scheduleOverviewChromeSync();
+  return '<div class="overview-page">'+identity+statusStrip+'<div class="overview-dashboard-grid'+(progressSection?'':' overview-dashboard-grid--single')+'">'+taskSection+progressSection+'</div>'+activitySection+note+
+  (E.state.migration?.available&&E.can('settings',true)?E.panel('이전 자료',E.notice('출처 행사가 불명확한 이전 명단은 선택한 행사로 가져오기 전에 검토가 필요합니다. 원본은 보존합니다.','warning')+B('이전 자료 가져오기','legacy-import')):'')+'</div>';
+ };
 E.views.readiness=()=>{const all=E.readiness(),done=all.filter(a=>a[1]).length;return E.head('운영 준비 체크','신청부터 현장 처리까지 필요한 준비를 확인하세요.',E.can('settings',true)&&E.event().stage!=='LIVE'?B('행사 시작','start-event','','primary'):'')+E.phaseStrip()+E.panel('기본 준비','<div class="task-count"><strong>'+done+' / '+all.length+'</strong><span>준비 완료</span></div><progress class="progress-meter" value="'+done+'" max="'+all.length+'" aria-label="행사 준비 진행률"></progress>'+all.map(([t,ok,p,d])=>'<div class="task-row"><div class="od-row od-fill">'+E.icon(ok?'check':'file')+'<div class="od-field od-fill"><strong>'+e(t)+'</strong><small class="muted">'+e(d)+'</small></div></div>'+E.badge(ok?'준비됨':'준비 필요',ok?'good':'warn')+(E.can(E.groupForPage(p),false)?L('확인',E.consoleURL(p)):'')+'</div>').join(''));};
 E.actions['open-readiness']=()=>E.navigate(E.consoleURL('readiness'));
 

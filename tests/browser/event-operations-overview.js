@@ -22,7 +22,6 @@ async page => {
   // Stage badge must carry its operational-stage label (never date-derived).
   check(/운영 단계/.test(await page.locator('.overview-page').innerText()), 'Stage badge must carry the 운영 단계 label.');
 
-  const baseline390 = 916;
   for (const width of [320, 390, 768, 1024, 1280]) {
     await page.setViewportSize({ width, height: width >= 1024 ? 900 : 844 });
     await page.evaluate(() => window.scrollTo(0, 0));
@@ -37,29 +36,42 @@ async page => {
         scrollWidth: document.documentElement.scrollWidth, scrollHeight: document.documentElement.scrollHeight,
         identity: b(q('.overview-page .overview-identity')),
         primaryRows: document.querySelectorAll('.overview-page .overview-primary-row').length,
-        liveStats: document.querySelectorAll('.overview-page .overview-live-stat').length,
+        kpiCards: document.querySelectorAll('.overview-page .overview-kpi-card').length,
         checkinHrefs: hrefs.filter(h => h.includes('/checkin')).length,
         taskRows: document.querySelectorAll('.overview-page .overview-task-row').length,
-        menuLinks: [...document.querySelectorAll('.overview-page .overview-menu-link span')].map(n => n.innerText),
-        recentSections: [...document.querySelectorAll('.overview-page h2')].map(n => n.innerText).filter(t => /최근|기록/.test(t) && !/운영 기록/.test(t)).length,
-        recordsMenu: [...document.querySelectorAll('.overview-page .overview-menu-link')].map(a => a.getAttribute('href')).some(h => h.includes('/checks')),
+        actionTitle: q('#overview-action-title')?.innerText || '',
+        progressTitle: q('#overview-progress-title')?.innerText || '',
+        action: b(q('.overview-action-panel')),
+        kpis: b(q('.overview-kpi-section')),
+        activityRows: document.querySelectorAll('.overview-page .overview-check-activity-list li').length,
+        recentSections: [...document.querySelectorAll('.overview-page h2')].map(n => n.innerText).filter(t => /최근 입퇴장/.test(t)).length,
+        activityLink: q('.overview-check-activity-heading a')?.getAttribute('href') || '',
+        managementLinks: document.querySelectorAll('.overview-page .overview-menu-link').length,
         attendeeLink: q('.overview-page .overview-attendee-link')?.getAttribute('href') || '',
         pendingDupes: (text.match(/1건/g) || []).length,
         smallTargets: [...document.querySelectorAll('.overview-page a[href], .overview-page button, .overview-page summary')].filter(el => { const r = el.getBoundingClientRect(); return (r.width < 44 || r.height < 44) && r.width > 0 && r.height > 0; }).length,
       };
     });
     check(layout.scrollWidth <= width + 1, `${width}px must not overflow horizontally (scrollWidth=${layout.scrollWidth}).`);
-    check(layout.liveStats === 3, `${width}px live state must show 3 compact stats (got ${layout.liveStats}).`);
+    check(layout.kpiCards > 0 && layout.kpiCards <= 4, `${width}px must show no more than 4 permitted KPIs (got ${layout.kpiCards}).`);
+    check(layout.actionTitle === '지금 할 일', `${width}px must present the current task group first (got ${layout.actionTitle}).`);
     check(layout.primaryRows === 1, `${width}px must show exactly one primary action row (got ${layout.primaryRows}).`);
     check(layout.checkinHrefs === 1, `${width}px must expose checkin exactly once (got ${layout.checkinHrefs}).`);
     check(layout.smallTargets === 0, `${width}px must keep every overview control at least 44px (small=${layout.smallTargets}).`);
-    check(layout.recentSections === 0, `${width}px home must not render a recent-activity section.`);
-    check(layout.recordsMenu, `${width}px management menu must link 운영 기록 to the checks route.`);
+    check(layout.recentSections === 1 && layout.activityRows <= 5, `${width}px must show up to five recent records (sections=${layout.recentSections}, rows=${layout.activityRows}).`);
+    check(layout.activityLink.includes('/checks'), `${width}px recent activity must link to the existing checks route.`);
+    check(layout.managementLinks === 0, `${width}px must not duplicate the sidebar management menu.`);
     check(layout.attendeeLink.includes('/event/'), `${width}px must keep the attendee-page link in the identity area.`);
-    check(JSON.stringify(layout.menuLinks) === JSON.stringify(['참가자', '부스 운영', '운영 기록']), `${width}px menu must be 참가자/부스 운영/운영 기록 (got ${layout.menuLinks.join('/')}).`);
+    if (width === 1280) {
+      check(layout.kpis && layout.kpis.bottom <= layout.viewportHeight, `1280px first screen must contain the KPI group (bottom=${layout.kpis?.bottom}).`);
+      check(layout.action && layout.action.bottom <= layout.viewportHeight, `1280px first screen must contain the current tasks (bottom=${layout.action?.bottom}).`);
+    }
     if (width <= 390) {
-      check(layout.scrollHeight < baseline390, `${width}px scroll height must beat the 916px baseline (got ${layout.scrollHeight}).`);
       check(layout.identity && layout.identity.y < 300, `${width}px identity line must start near the top (y=${layout.identity?.y}).`);
+      if (width === 390) {
+        check(layout.kpis && layout.kpis.bottom <= layout.viewportHeight, `390px first screen must contain the KPI group (bottom=${layout.kpis?.bottom}).`);
+        check(layout.action && layout.action.bottom <= layout.viewportHeight, `390px first screen must contain the current tasks (bottom=${layout.action?.bottom}).`);
+      }
     }
     if (width === 390) await capture('after-390');
     if (width === 320) await capture('after-320');
@@ -123,8 +135,8 @@ async page => {
     ev.stage = keep; E.render();
     return out;
   });
-  check(/운영 준비|준비할 업무|운영 준비 이어하기/.test(states.READY), 'Prep state must keep its preparation tasks.');
-  check(/현장 운영/.test(states.ENDED) && /결과 분석 보기|닫을 참가 접수|마감/.test(states.ENDED), 'Ended state must keep its wrap-up tasks.');
+  check(/운영 준비|준비할 업무|운영 준비 이어하기|접수·준비 현황/.test(states.READY), 'Prep state must keep its preparation context.');
+  check(/지금 할 일/.test(states.ENDED) && /결과 분석 보기|닫을 참가 접수|마감/.test(states.ENDED), 'Ended state must keep its wrap-up tasks.');
   await page.waitForSelector('.overview-page');
 
   if (failures.length) throw new Error(`Operations home failures:\n- ${failures.join('\n- ')}`);

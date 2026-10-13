@@ -323,18 +323,18 @@ test('attendee child routes mark their parent destination while unknown routes s
 
 test('organizer overview uses the approved execution-console treatments', () => {
   const source = fs.readFileSync(path.join(root, 'assets/js/experience.js'), 'utf8');
-  const overview = source.match(/E\.views\.overview\s*=\s*\(\)\s*=>\s*\{([\s\S]*?)\n\};/)?.[1] || '';
+  const overview = source.match(/E\.views\.overview\s*=\s*\(\)\s*=>\s*\{([\s\S]*?)\n\s*\};/)?.[1] || '';
   assert.ok(overview, 'the experience override remains the active overview implementation');
-  // Approved 2026-10-10 rebuild + simplify: the overview intentionally leaves the
-  // uniform card treatments (E.head/E.stats/list-item) for an execution-first console.
-  // 2026-10-10 simplify: recent timeline moved to the records screen; the menu is
-  // three management destinations; live metrics use the compact live-stat pattern.
+  // The overview is grouped into status KPIs, current actions, a stage-aware progress
+  // panel and permitted recent activity; duplicate management links stay in the sidebar.
   assert.match(overview, /E\.badge\(/);
   assert.match(overview, /E\.panel\(/);
   assert.match(overview, /E\.icon\(/);
-  assert.match(overview, /overview-live-stat|overview-status-strip/);
+  assert.match(overview, /overview-kpi-section/);
+  assert.match(overview, /overview-hourly-list/);
   assert.match(overview, /overview-task-row/);
-  assert.match(overview, /overview-menu-link/);
+  assert.match(overview, /overview-check-activity/);
+  assert.doesNotMatch(overview, /overview-menu-link|관리 메뉴/);
   assert.match(overview, /overview-primary-row/);
   assert.doesNotMatch(overview, /E\.head\(/);
   assert.doesNotMatch(overview, /E\.stats\(/);
