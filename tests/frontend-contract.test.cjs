@@ -80,7 +80,7 @@ test('the-view-inventory-is-pinned', () => {
 
 test('the-action-inventory-is-pinned', () => {
   const { actions } = definitions();
-  assert.equal(actions.size, 120, 'an action was added or removed — update the expected count deliberately');
+  assert.equal(actions.size, 119, 'the obsolete sidebar accordion action is intentionally removed');
 });
 
 test('no-new-view-is-defined-twice', () => {

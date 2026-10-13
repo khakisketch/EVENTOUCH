@@ -23,17 +23,35 @@ E.can=(group,write=false)=>{
 };
 E.authorizeCommand=(name,group)=>group==='agency'?E.can('agency',true):E.can(group,true);
 E.adminShell=body=>{
- const agency=E.route.scope==='agency',ev=E.event(),client=E.state.clients.find(c=>c.id===ev?.clientId);
+ const agency=E.route.scope==='agency',ev=E.event();
  const orgMenu=[['events','calendar','행사','events.view'],['clients','building','고객사','clients.manage'],['team','shield','팀·권한','team.manage'],['integrations','settings','서비스 연동','integrations.manage']].filter(x=>E.orgCan(x[3]));
- const eventMenu=[['overview','grid','운영 현황'],['participants','people','참가자'],['onsite','scan','현장 운영'],...(ev?.features.includes('stamp')?[['booths','ticket','부스 운영']]:[]),['page','file','참가자 페이지'],...(ev?.features.some(x=>['poll','quiz','qa','draw','survey','photo','board','reward'].includes(x))?[['programs','play','참여 프로그램']]:[]),['messages','message','메시지'],...(ev?.features.includes('screen')?[['screen','monitor','행사장 출력']]:[]),['results','chart','결과·보고서'],['settings','settings','설정']].filter(x=>E.can(eventPages[x[0]]||x[0]));
- const menu=agency?orgMenu:eventMenu,active=x=>agency?E.route.page===x[0]:(eventPages[E.route.page]||E.route.page)===(eventPages[x[0]]||x[0]);
- const itemLink=x=>'<a class="nav-item '+(active(x)?'active':'')+'" '+(active(x)?'aria-current="page"':'')+' href="'+e(agency?'#/console/agency/'+x[0]:E.consoleURL(x[0]))+'">'+E.icon(x[1])+'<span>'+e(x[2])+'</span></a>';
- const eventGroups=[['preparation','준비',['participants','page','programs','messages']],['live-operation','현장 운영',['overview','onsite','booths','screen']],['wrap-up','마무리',['results','settings']]];
- const nav=agency?menu.map(itemLink).join(''):eventGroups.map(([id,label,pages])=>{const items=eventMenu.filter(x=>pages.includes(x[0]));if(!items.length)return '';const expanded=items.some(active);return '<section class="nav-group"><button type="button" class="nav-group-toggle" data-action="toggle-sidebar-group" data-group="'+id+'" aria-expanded="'+expanded+'" aria-controls="sidebar-nav-'+id+'">'+e(label)+'</button><div class="nav-group-items" id="sidebar-nav-'+id+'"'+(expanded?'':' hidden')+'>'+items.map(itemLink).join('')+'</div></section>';}).join('');
+ const orgCurrent=x=>agency&&E.route.page===x[0];
+ const eventCurrent=x=>!agency&&(eventPages[E.route.page]||E.route.page)===(eventPages[x[0]]||x[0]);
+ const itemLink=(x,{href,current=false,inPath=false,id=''}={})=>'<a class="nav-item'+(current?' active':'')+(inPath?' active-path':'')+'" '+(id?'id="'+e(id)+'" ':'')+(current?'aria-current="page" ':'')+'href="'+e(href)+'">'+E.icon(x[1])+'<span>'+e(x[2])+'</span></a>';
+ const orgItem=x=>itemLink(x,{href:'#/console/agency/'+x[0],current:orgCurrent(x),inPath:!agency&&x[0]==='events',id:x[0]==='events'?'workspace-events-link':''});
+ const eventGroups=[
+  {label:'현황과 결과',items:[['overview','grid','운영 현황'],['results','chart','결과·보고서']]},
+  {label:'참가자 관리',items:[['participants','people','참가자'],['page','file','참가자 페이지'],['messages','message','메시지']]},
+  {label:'현장·프로그램 운영',items:[['onsite','scan','현장 운영'],['booths','ticket','부스 운영','stamp'],['programs','play','참여 프로그램','programs'],['screen','monitor','행사장 출력','screen']]},
+  {label:'행사 설정',items:[['settings','settings','설정']]},
+ ];
+ const featureEnabled=feature=>feature==='stamp'?!!ev?.features.includes('stamp'):feature==='screen'?!!ev?.features.includes('screen'):feature==='programs'?!!ev?.features.some(x=>['poll','quiz','qa','draw','survey','photo','board','reward'].includes(x)):true;
+ const eventTree=()=>{
+  if(!ev)return '';
+  const groups=eventGroups.map(group=>{
+   const items=group.items.map(x=>{
+    if(!E.can(eventPages[x[0]]||x[0]))return '';
+    if(x[3]&&!featureEnabled(x[3]))return '';
+    return itemLink(x,{href:E.consoleURL(x[0]),current:eventCurrent(x)});
+   }).join('');
+   return items?'<div class="nav-group" role="group" aria-label="'+e(group.label)+'"><p class="nav-section-label">'+e(group.label)+'</p>'+items+'</div>':'';
+  }).join('');
+   return '<div class="nav-event-branch" role="group" aria-labelledby="workspace-events-link"><div class="nav-current-event"><strong>'+e(ev.name||'선택한 행사')+'</strong><a class="nav-event-switch" href="#/console/agency/events" aria-label="전환: 다른 행사 선택" title="다른 행사 선택">전환'+E.icon('arrow')+'</a></div>'+groups+'</div>';
+ };
+ const nav=orgMenu.map(x=>orgItem(x)+(x[0]==='events'&&!agency?eventTree():'')).join('');
  const top=!agency&&ev?E.badge(E.stages[ev.stage],ev.stage==='LIVE'?'good':'')+'<a class="btn" target="_blank" href="#/event/'+e(ev.slug)+'/home">참가자 페이지</a>':'';
- return '<div class="admin-shell"><button class="menu-dismiss" data-action="close-menu" aria-label="메뉴 닫기"></button><aside class="sidebar"><a class="wordmark" href="#/console/agency/events">EVENTOUCH<span>행사 운영 워크스페이스</span></a>'+(!agency?'<div class="sidebar-event od-field"><small>'+e(client?.name||'')+'</small><strong>'+e(ev?.name||'선택한 행사')+'</strong>'+L('행사 목록','#/console/agency/events','sidebar-back','back')+'</div>':'<div class="workspace-caption">운영 워크스페이스</div>')+'<nav class="side-nav" aria-label="주요 메뉴">'+nav+'</nav><div class="sidebar-bottom"><div class="od-field"><strong>'+e(E.session.name)+'</strong><small>운영사 구성원'+(E.session.orgOwner?' · 조직 소유자':'')+'</small></div>'+B('로그아웃','logout','','sidebar-logout')+'</div></aside><div class="admin-main"><header class="topbar"><button type="button" class="btn square menu-button" data-action="toggle-menu" aria-label="주요 메뉴 열기">'+E.icon('menu')+'</button><div class="breadcrumb '+(agency?'agency-context':'event-context')+'"><span class="workspace-context">운영 워크스페이스</span>'+(agency?'':'<span class="context-separator">/</span><strong class="event-context">'+e(ev?.name||'행사')+'</strong>')+'</div><div class="actions">'+top+'<span class="environment-label">브라우저 체험</span></div></header><main class="content" id="main-content" tabindex="-1">'+(E.storageWarning?E.notice(E.storageWarning,'warning'):'')+body+'</main><footer class="workspace-footer">EVENTOUCH · 브라우저 프로토타입 · 실제 개인정보와 외부 전송은 사용하지 마세요.</footer></div></div>';
+ return '<div class="admin-shell"><button class="menu-dismiss" data-action="close-menu" aria-label="메뉴 닫기"></button><aside class="sidebar" id="operator-sidebar"><a class="wordmark" href="#/console/agency/events">EVENTOUCH<span>행사 운영 워크스페이스</span></a><div class="workspace-caption">운영 워크스페이스</div><nav class="side-nav" aria-label="주요 메뉴">'+nav+'</nav><div class="sidebar-bottom"><div class="od-field"><strong>'+e(E.session.name)+'</strong><small>운영사 구성원'+(E.session.orgOwner?' · 조직 소유자':'')+'</small></div>'+B('로그아웃','logout','','sidebar-logout')+'</div></aside><div class="admin-main"><header class="topbar"><button type="button" class="btn square menu-button" data-action="toggle-menu" aria-label="주요 메뉴 열기" aria-controls="operator-sidebar" aria-expanded="false">'+E.icon('menu')+'</button><div class="breadcrumb '+(agency?'agency-context':'event-context')+'"><span class="workspace-context">운영 워크스페이스</span>'+(agency?'':'<span class="context-separator">/</span><strong class="event-context">'+e(ev?.name||'행사')+'</strong>')+'</div><div class="actions">'+top+'<span class="environment-label">브라우저 체험</span></div></header><main class="content" id="main-content" tabindex="-1">'+(E.storageWarning?E.notice(E.storageWarning,'warning'):'')+body+'</main><footer class="workspace-footer">EVENTOUCH · 브라우저 프로토타입 · 실제 개인정보와 외부 전송은 사용하지 마세요.</footer></div></div>';
 };
-E.actions['toggle-sidebar-group']=(d,button)=>{const items=document.getElementById('sidebar-nav-'+d.group);if(!items||!button)return;const expanded=button.getAttribute('aria-expanded')==='true';button.setAttribute('aria-expanded',String(!expanded));items.hidden=expanded;};
 E.actions['clear-event-filters']=()=>{E.ui.filters.events='';E.ui.filters.eventStatus='';E.ui.listPage=1;E.render();document.querySelector('#event-query')?.focus();};
 E.views['agency-events']=()=>{
  const allowed=E.state.events.filter(x=>E.eventAllowed(x.id)),q=String(E.ui.filters.events||'').toLowerCase(),status=E.ui.filters.eventStatus||'';
