@@ -115,7 +115,7 @@ if(oldScanForm)E.scanForm=(type,target)=>{
   const desk=E.work()?.desks.find(x=>x.id===target);
   if(desk?.open===false)return E.notice('이 지점은 닫혀 있습니다. 매니저가 다시 열 때까지 QR 처리를 할 수 없습니다.','warning');
  }
- return oldScanForm(type,target);
+ return oldScanForm(type,target).replace('class="btn primary" type="submit"','class="btn scan-code-submit" type="submit"');
 };
 
 })(window.ET);

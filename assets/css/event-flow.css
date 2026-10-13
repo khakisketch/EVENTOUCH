@@ -48,3 +48,17 @@
 @media(max-width:380px){.booth-card{padding:var(--s3)}.booth-card-heading{align-items:flex-start;flex-direction:column}.booth-card-meta{gap:var(--s2);padding:var(--s2)}.onsite-desk-row{align-items:stretch;flex-direction:column}.onsite-desk-row>.btn{width:100%;white-space:normal}}
 @media(max-width:768px){.event-flow-public-qr{grid-template-columns:1fr}.event-flow-public-qr .qr{width:min(260px,100%)}.event-flow-qr-types,.event-flow-qr-list{grid-template-columns:1fr}.event-flow-station{align-items:flex-start;flex-direction:column}.event-flow-station-state{justify-items:start}}
 @media print{.event-qr-sheet{break-inside:avoid}.event-qr-sheet .qr{width:68mm}.event-flow-public-qr,.event-flow-qr-types,.event-flow-qr-list,.event-flow-station{display:none!important}}
+
+/* Keep manual ticket entry clear as the secondary path, without another primary button. */
+.scan-manual .scan-code-submit{min-height:var(--s7);border:2px solid var(--brand-text);background:var(--soft);color:var(--brand-text);font-weight:700}
+.scan-manual .scan-code-submit:hover{border-color:var(--brand-hover);background:var(--paper);color:var(--brand-text)}
+.checkin-page .scan-manual button.scan-code-submit{min-height:var(--s7);border:2px solid var(--brand-text);background:var(--soft);color:var(--brand-text);font-weight:700}
+.checkin-page .scan-manual button.scan-code-submit:hover{border-color:var(--brand-hover);background:var(--paper);color:var(--brand-text)}
+.checkin-work-grid .scan-manual .actions button.scan-code-submit{min-height:var(--s7)}
+
+/* Booth facts are split into labeled values instead of repeating the same limit. */
+.booth-card-state{display:flex;align-items:center;gap:var(--s1);flex:none}
+.booth-card-state>small,.booth-card-meta small{color:var(--muted)}
+.booth-card-meta{grid-template-columns:repeat(3,minmax(0,1fr))}
+.booth-card-meta strong{overflow-wrap:anywhere}
+@media(max-width:768px){.booth-card-meta{grid-template-columns:repeat(2,minmax(0,1fr))}}

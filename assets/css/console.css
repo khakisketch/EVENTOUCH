@@ -310,3 +310,43 @@ body.overview-scrolled:has(.overview-page) .admin-main>.topbar .breadcrumb{font-
  .overview-menu-link{padding-inline:var(--s1);font-size:var(--small)}
 }
 @media(prefers-reduced-motion:reduce){body:has(.overview-page) .admin-main>.topbar,.overview-help summary::after{transition:none}}
+
+/* Projector output: center one readable content group and use the screen evenly. */
+.display-mode{min-height:100dvh}
+.display-stage{width:100%;max-width:none;min-height:100dvh;margin:0;padding:clamp(var(--s5),6vw,var(--s8));display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--s4);text-align:center}
+.display-content{display:grid;justify-items:center;align-content:center;gap:var(--s4);width:min(100%,1600px)}
+.display-content>h1{max-width:20ch;margin:0;font-size:clamp(var(--display-large),6vw,var(--display-stage));line-height:1.15;text-wrap:balance}
+.display-content>p{max-width:42ch;margin:0;font-size:clamp(var(--h2),3vw,var(--display));line-height:1.45;text-wrap:balance}
+.display-stage .eyebrow{margin:0;color:var(--brand);font-size:var(--h3);letter-spacing:.08em}
+.display-stage .bar span{background:var(--chart)}
+.display-stage .bar-row{width:min(100%,1200px);margin:0;gap:var(--s2);text-align:left}
+.display-stage .bar-row .od-row{align-items:baseline;justify-content:space-between;gap:var(--s4)}
+.display-stage .bar-row h2{max-width:none;font-size:clamp(var(--h3),3vw,var(--display));line-height:1.2}
+.display-stage .bar-row strong{flex:none;font-size:var(--h2);white-space:nowrap}
+.display-stage .bar{height:var(--s3);border-radius:var(--radius-small)}
+.display-stage .display-winners{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:var(--s4);width:min(100%,1200px)}
+.display-stage .display-winner{display:grid;justify-items:center;gap:var(--s1);padding:var(--s4);border:1px solid var(--nav-active);border-radius:var(--radius)}
+.display-stage .display-winner h2{font-size:clamp(var(--display),4vw,var(--display-large));line-height:1.2}
+.display-stage .display-winner p{max-width:none;margin:0;font-size:clamp(var(--h3),2.5vw,var(--h2))}
+.display-content--quiz>h2{max-width:20ch;font-size:clamp(var(--display-xl),5vw,var(--display-stage));line-height:1.1;text-wrap:balance}
+.display-stage .display-questions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s4);width:min(100%,1440px)}
+.display-stage .display-questions.is-single{grid-template-columns:minmax(0,1fr);width:min(100%,1200px)}
+.display-stage .display-question{display:grid;align-content:start;gap:var(--s2);padding:var(--s4);border-top:1px solid var(--nav-active);text-align:left}
+.display-stage .display-questions.is-single .display-question{text-align:center}
+.display-stage .display-question h2{max-width:32ch;font-size:clamp(var(--h2),3vw,var(--display));line-height:1.2}
+.display-stage .display-question p{max-width:none;margin:0;font-size:clamp(var(--h3),2vw,var(--h2));line-height:1.4}
+.display-stage .display-photo-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:stretch;gap:var(--s3);width:min(100%,1440px)}
+.display-stage .display-photo-grid.is-single{grid-template-columns:minmax(0,1fr);width:min(100%,960px)}
+.display-stage .display-photo-grid figure{display:grid;align-content:start;gap:var(--s2);min-width:0;margin:0}
+.display-stage .display-photo-grid img{display:block;width:100%;aspect-ratio:16/9;object-fit:contain;border:1px solid var(--nav-active);border-radius:var(--radius);background:var(--nav-hover)}
+.display-stage .display-photo-grid figcaption{color:var(--nav-text);font-size:var(--h3);line-height:1.35;text-align:center;overflow-wrap:anywhere}
+.display-stage .display-logo{width:min(100%,240px);max-width:240px;margin:0 auto var(--s2)}
+.display-stage .display-logo img{display:block;width:100%;height:auto}
+@media(max-width:768px){
+ .display-stage{padding:var(--s5);gap:var(--s3)}
+ .display-content{width:100%}
+ .display-content>h1{font-size:var(--display-large)}
+ .display-content>p{font-size:var(--h3)}
+ .display-stage .display-questions,.display-stage .display-photo-grid,.display-stage .display-winners{grid-template-columns:1fr}
+ .display-stage .display-photo-grid.is-single{width:100%}
+}

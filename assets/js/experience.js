@@ -119,7 +119,7 @@ E.mobileHome=()=>{
 
 
 const oldScanForm=E.scanForm;
-E.scanForm=(type,target)=>'<section class="scan-station"><div class="scan-mark">'+E.icon('scan')+'</div><h2>'+e(type==='booth'?'참가자 티켓 확인':'티켓을 확인하세요')+'</h2><p class="muted">QR이 없으면 이름 검색이나 코드를 직접 입력할 수 있습니다.</p>'+B('카메라로 QR 스캔','camera-scan','data-type="'+e(type)+'" data-target="'+e(target)+'"','primary')+'</section><details class="scan-manual"><summary>티켓 코드 직접 입력</summary>'+oldScanForm(type,target)+'</details>';
+E.scanForm=(type,target)=>'<section class="scan-station"><div class="scan-mark">'+E.icon('scan')+'</div><h2>'+e(type==='booth'?'참가자 티켓 확인':'티켓을 확인하세요')+'</h2><p class="muted">먼저 카메라로 스캔하고, QR이 없으면 코드를 입력하세요.</p>'+B('카메라 스캔','camera-scan','data-type="'+e(type)+'" data-target="'+e(target)+'"','primary')+'</section><details class="scan-manual"><summary>코드 입력</summary>'+oldScanForm(type,target)+'</details>';
 const oldStaff=E.views.staff;
 E.views.staff=()=>{
  const body=oldStaff(),a=E.assignment();if(!a)return body;

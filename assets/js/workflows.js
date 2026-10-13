@@ -118,7 +118,7 @@ E.views.screen=()=>{const w=E.work(),features=E.event().features,allowed=Object.
 E.outputFields=(type,selection={})=>['poll','draw','quiz'].includes(type)?S('연결 프로그램 *','moduleId',[['','선택하세요'],...E.work().modules.filter(m=>m.type===type&&m.published&&(type!=='quiz'||m.revealed)&&(type!=='draw'||(m.drawHistory||[]).some(r=>r.published))).map(m=>[m.id,m.title])],selection.moduleId||'','required'):type==='notice'?S('연결 공지 *','noticeId',[['','선택하세요'],...E.work().notices.filter(n=>n.published).map(n=>[n.id,n.title])],selection.noticeId||'','required'):E.notice(type==='qa'?'공개 승인된 질문을 표시합니다.':type==='photo'?'공개 승인된 사진을 표시합니다.':'행사 기본 안내를 표시합니다.');
 document.addEventListener('change',event=>{if(!event.target.matches('[data-display-choice]'))return;const fields=event.target.closest('form')?.querySelector('[data-display-fields]');if(fields)fields.innerHTML=E.outputFields(event.target.value);});
 const displayView=E.views.display;
-E.views.display=()=>{if(E.event()?.stage==='ARCHIVED')return '<main class="display-stage"><h1>행사가 마감되었습니다</h1><p>공개 화면 운영을 종료했습니다.</p></main>';const html=displayView();return E.event()?.stage==='ENDED'?html.replace('<p>잠시 후 시작합니다.</p>','<p>행사가 종료되었습니다.</p>'):html;};
+E.views.display=()=>{if(E.event()?.stage==='ARCHIVED')return '<main class="display-stage" data-display-type="archived"><span class="eyebrow">EVENTOUCH</span><div class="display-content"><h1>행사가 마감되었습니다</h1><p>공개 화면 운영을 종료했습니다.</p></div></main>';const html=displayView();return E.event()?.stage==='ENDED'?html.replace('<p>잠시 후 시작합니다.</p>','<p>행사가 종료되었습니다.</p>'):html;};
 
 // A published report stays fixed. A successor receives its own id and share token.
 const reportData=E.reportData;

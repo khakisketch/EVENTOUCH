@@ -86,7 +86,8 @@ test('booth list uses cards with status, remaining quantity, and per-person limi
   assert.doesNotMatch(html, /<table/);
   assert.match(html, /진행/);
   assert.match(html, /남은 수량[\s\S]{0,80}>6개</);
-  assert.match(html, /1인 2회/);
+  assert.match(html, /<small>1인 제한<\/small><strong>2회<\/strong>/);
+  assert.equal((html.match(/1인 제한/g) || []).length, 1);
 });
 
 test('field screens use one warning message for event-not-live and closed-desk states', () => {
