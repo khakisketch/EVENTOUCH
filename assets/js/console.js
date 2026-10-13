@@ -89,5 +89,35 @@ E.actions['legacy-import']=()=>E.confirm('이전 자료 가져오기','출처 �
 E.views.settings=()=>{const ev=E.event(),w=E.work();return E.head('행사 설정','일정과 운영 정책을 관리합니다.')+E.eventTabs('settings')+E.panel('기본정보',E.can('settings',true)?'<form data-form="event-settings" novalidate><div class="error-summary" role="alert"></div><div class="form-grid">'+F('행사명 *','name',ev.name,'text','required')+S('고객사','clientId',E.state.clients.map(c=>[c.id,c.name]),ev.clientId)+F('행사 날짜 *','date',ev.date,'date','required')+F('행사 주소 코드 *','slug',ev.slug,'text','required pattern="[a-z0-9\\x2d]+"')+F('시작 *','start',ev.start,'time','required')+F('종료 *','end',ev.end,'time','required')+F('정원 · 0은 제한 없음','capacity',ev.capacity,'number','min="0" step="1"')+S('진행 단계','stage',Object.entries(E.stages),ev.stage)+'</div>'+E.check('신청 후 운영자가 승인', 'approvalRequired',w.approvalRequired)+E.check('퇴장 후 재입장 허용','allowReentry',w.allowReentry)+'<input type="hidden" name="price" value="'+w.price+'">'+E.notice('보관 상태에서는 다른 업무 변경이 잠깁니다. 주소 변경 시 기존 참가자 주소에 영향을 줄 수 있습니다.','warning')+E.submit('설정 저장')+'</form>':E.detail([['행사',ev.name],['일정',ev.date+' '+ev.start+'–'+ev.end],['정원',ev.capacity||'제한 없음'],['상태',E.stages[ev.stage]]]));};
 E.forms['event-settings']=async p=>{await E.run('event.update',p);E.toast('행사 설정을 저장했습니다.');};
 E.views.features=()=>E.head('사용할 기능','행사에서 사용할 기능만 메뉴와 참가자 화면에 나타납니다.')+E.eventTabs('settings')+E.panel('기능 선택','<form data-form="event-features" novalidate><div class="form-grid">'+Object.entries(E.features).map(([k,v])=>E.check(v,'features',E.event().features.includes(k),k)).join('')+'</div>'+E.notice('기능을 끄더라도 기존 응답과 기록은 삭제하지 않습니다.')+(E.can('settings',true)?E.submit('기능 적용'):'<p>조회 권한입니다.</p>')+'</form>');E.forms['event-features']=async p=>{await E.run('event.features',p);E.toast('사용할 기능을 적용했습니다.');};
-E.views.audit=()=>E.head('활동 기록','변경과 정정의 주체 및 시점을 확인합니다.')+E.eventTabs('settings')+E.panel('최근 활동',E.work().audit.length?E.table(['시점','작업','담당자','내용'],E.work().audit.slice(0,100).map(x=>'<tr><td>'+e(E.date(x.at))+'</td><td class="audit-code">'+e(x.type)+'</td><td>'+e(E.state.accounts.find(a=>a.id===x.actor)?.name||'참가자·공개 요청')+'</td><td>'+e(x.detail||'—')+'</td></tr>')):E.empty('활동 기록이 없습니다','변경 작업이 생기면 표시됩니다.'));
+// The audit log records command identifiers. Operators read the log, so the
+// row shows a Korean label; the exact command stays in the cell's title for
+// support. Raw keys are never the visible text (design system, section 4).
+const auditCommandLabels={
+ 'event.create':'행사 생성','event.update':'행사 설정 변경','event.features':'기능 사용 설정','event.stage':'운영 단계 변경',
+ 'field.save':'등록 항목 저장','field.move':'등록 항목 순서 변경','field.delete':'등록 항목 삭제',
+ 'form.publish':'등록 양식 게시·접수 시작','form.close':'접수 마감',
+ 'group.save':'등록 그룹 저장','group.assign':'등록 그룹 배정',
+ 'notice.save':'공지 저장','notice.delete':'공지 삭제',
+ 'program.save':'프로그램 저장','program.delete':'프로그램 삭제',
+ 'venue.save':'행사장 안내 저장','branding.save':'브랜딩 저장',
+ 'attendee.page.save':'참가자 페이지 초안 저장','attendee.page.publish':'참가자 페이지 게시',
+ 'module.save':'참여 프로그램 저장','module.status':'참여 프로그램 진행 상태 변경','module.reveal':'퀴즈 정답 공개',
+ 'response.submit':'참여 응답 제출','question.submit':'질문 제출','question.manage':'질문 승인·관리','question.like':'질문 공감',
+ 'photo.submit':'사진 제출','photo.moderate':'사진 검토','post.submit':'게시글 제출','post.moderate':'게시글 검토',
+ 'draw.run':'추첨 실행','draw.publish':'추첨 결과 공개','display.set':'행사장 출력 설정',
+ 'template.save':'메시지 템플릿 저장','message.create':'캠페인 기록','message.cancel':'캠페인 취소',
+ 'message.retry':'캠페인 발송 요청','message.sync':'발송 결과 확인',
+ 'payment.simulate':'결제 시뮬레이션','payment.refund':'환불 처리',
+ 'reward.create':'경품 배정','reward.fulfill':'경품 지급 처리','reward.cancel':'경품 취소',
+ 'report.create':'보고서 작성','report.update':'보고서 수정','report.publish':'보고서 공유','report.successor':'보고서 새 버전',
+ 'desk.save':'데스크 저장','desk.set-open':'데스크 열기·닫기','staff.assign':'스태프 업무 배정','staff.unassign':'스태프 배정 해제',
+ 'check.scan':'입퇴장 처리','check.correct':'입퇴장 기록 정정',
+ 'booth.save':'부스 저장','booth.mode':'부스 인증 방식 변경','booth.visit':'부스 인증',
+ 'booth.map.save':'부스 배치도 저장','booth.map.publish':'부스 배치도 게시','booth.map.unpublish':'부스 배치도 게시 취소',
+ 'participant.create':'참가자 등록','participant.update':'참가자 정보 수정','participant.status':'참가자 상태 변경',
+ 'participant.self-update':'참가자 본인 정보 수정','participant.cancel':'참가 신청 취소','ticket.reissue':'티켓 재발급',
+ 'participant.import':'명단 가져오기',
+};
+E.auditCommandLabel=type=>auditCommandLabels[String(type||'')]||String(type||'');
+E.views.audit=()=>E.head('활동 기록','변경과 정정의 주체 및 시점을 확인합니다.')+E.eventTabs('settings')+E.panel('최근 활동',E.work().audit.length?E.table(['시점','작업','담당자','내용'],E.work().audit.slice(0,100).map(x=>'<tr><td>'+e(E.date(x.at))+'</td><td title="'+e(x.type)+'">'+e(E.auditCommandLabel(x.type))+'</td><td>'+e(E.state.accounts.find(a=>a.id===x.actor)?.name||'참가자·공개 요청')+'</td><td>'+e(x.detail||'—')+'</td></tr>')):E.empty('활동 기록이 없습니다','변경 작업이 생기면 표시됩니다.'));
 })(window.ET);

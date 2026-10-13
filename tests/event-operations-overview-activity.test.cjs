@@ -8,7 +8,7 @@ const vm = require('node:vm');
 
 const root = path.resolve(__dirname, '..');
 
-function loadOverview({ canChecks = true, stage = 'LIVE' } = {}) {
+function loadOverview({ canChecks = true, stage = 'LIVE', readiness = [] } = {}) {
   const checks = [
     { id: 'check-new', name: '최근 참가자', action: 'OUT', at: '2026-10-11T09:42:00', corrected: true },
     { id: 'check-older', name: '이전 참가자', action: 'IN', at: '2026-10-11T09:31:00', corrected: false },
@@ -25,7 +25,7 @@ function loadOverview({ canChecks = true, stage = 'LIVE' } = {}) {
     work: () => ({ checks, participants: [], questions: [], photos: [], posts: [], messages: [], reports: [], registrationOpen: true, venue: { name: '운영홀' } }),
     event: () => ({ id: 'event-1', name: '운영 행사', stage, date: '2026-10-11', start: '09:00', end: '17:00', slug: 'event', features: [] }),
     metrics: () => ({ total: 3, inside: 1, checked: 2, pending: 0 }),
-    readiness: () => [],
+    readiness: () => readiness,
     can: (page) => page === 'checks' ? canChecks : true,
     groupForPage: page => page,
     consoleURL: page => `#/console/events/event-1/${page}`,
@@ -56,4 +56,22 @@ test('LIVE overview shows the first two check-ins and gates identities and histo
   const draft = loadOverview({ stage: 'DRAFT' });
   assert.doesNotMatch(draft, /overview-check-activity/);
   assert.match(draft, /href="#\/console\/events\/event-1\/checks"[^]*운영 기록/);
+});
+
+test('overview task rows let the visible text be the accessible name', () => {
+  // A previous version composed aria-label="제목, N건. 설명". The count sat
+  // between the two visible strings, so the accessible name no longer
+  // contained the visible text and axe reported label-content-name-mismatch
+  // (serious) whenever a task row was present.
+  const html = loadOverview({
+    stage: 'DRAFT',
+    readiness: [
+      ['확인할 행사장 안내', false, 'venue', '장소 이름과 주소 확인'],
+      ['배정할 스태프 배정', false, 'desks', '현장 담당자 배정'],
+    ],
+  });
+  assert.match(html, /overview-task-row/);
+  assert.match(html, /확인할 행사장 안내/);
+  assert.match(html, /장소 이름과 주소 확인/);
+  assert.doesNotMatch(html, /overview-task-row[^>]*aria-label/);
 });

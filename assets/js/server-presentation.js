@@ -65,7 +65,7 @@ E.actions['dev-quick-login']=async()=>{
   let data=null;try{data=await response.json();}catch(error){}
   if(!response.ok)throw Object.assign(new Error((data&&data.error)||'빠른 로그인을 사용할 수 없습니다.'),{status:response.status});
   if(E.remote?.restoreSession)await E.remote.restoreSession();
-  E.toast?.((data&&data.user&&data.user.name?data.user.name+' 계정으로':'')+' 빠른 로그인으로 접속했습니다.');
+  E.toast?.(data&&data.user&&data.user.name?data.user.name+' 계정으로 빠른 로그인했습니다.':'빠른 로그인으로 접속했습니다.');
   E.navigate?.('#/console/agency/events');
  }catch(error){E.toast?.(error.message||'빠른 로그인을 사용할 수 없습니다.');}
 };

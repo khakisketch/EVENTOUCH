@@ -154,3 +154,11 @@ test('no-script-defines-a-name-both-ways-in-the-same-file', () => {
     assert.deepEqual(both, [], `${file} registers the same form name both ways: ${both.join(', ')}`);
   }
 });
+
+test('the-render-loop-does-not-resurrect-the-last-toast', () => {
+  // E.render used to call E.toast(E.ui.lastToast) on every screen change. That
+  // restarted the 4s timer, so a success message from a previous screen
+  // followed the operator around and read as the new screen's result.
+  assert.doesNotMatch(read('assets/js/router.js'), /lastToast/,
+    'navigation must not re-show the previous screen\'s toast');
+});
