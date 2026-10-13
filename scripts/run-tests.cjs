@@ -20,7 +20,12 @@ const DATABASE_ENV = 'EVENTOUCH_TEST_DATABASE_URL';
 
 function runTests({ databaseUrl }) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ['--test', '--test-reporter=tap', 'tests/*.test.cjs'], {
+    // Test files run one at a time: they share a single PostgreSQL database and
+    // serve over loopback, so parallel files interfere with each other. The
+    // login-throttle limit is keyed by address, so concurrent files tripped it
+    // for each other and reported auth failures that did not exist serially —
+    // a red suite that hid real results. Serial costs ~8s more and is honest.
+    const child = spawn(process.execPath, ['--test', '--test-reporter=tap', '--test-concurrency=1', 'tests/*.test.cjs'], {
       cwd: ROOT,
       env: { ...process.env, ...(databaseUrl ? { [DATABASE_ENV]: databaseUrl } : {}) },
       // shell:true lets the shell expand the glob so Node receives the list.
