@@ -73,7 +73,7 @@
 @media(max-width:420px){.event-create-fields{grid-template-columns:minmax(0,1fr);gap:var(--s3)}.event-create-review>div{grid-template-columns:88px minmax(0,1fr);gap:var(--s2)}.event-create-footer .btn{min-width:80px;padding-inline:var(--s3)}}
 
 .event-card-grid-single{grid-template-columns:minmax(0,1fr)}
-@media(min-width:768px){.event-card-grid-single{width:100%;max-width:700px;margin-inline:auto}}
+@media(min-width:768px){.event-card-grid-single{width:100%;max-width:700px;margin-inline:0}}
 .agency-integration-row{display:flex;align-items:center;justify-content:space-between;gap:var(--s4)}
 .agency-integration-row .od-field{display:grid;gap:var(--s1);min-width:0}
 .agency-integration-row .od-field p{margin:0}

@@ -79,7 +79,7 @@ async page => {
     if(width>=1024) check(layout.scheduleGap>=3, `${width}px inline date and time should have a visible separator (gap=${layout.scheduleGap}).`);
     if(width>=768){
       check(layout.singleGrid?.width<=700, `${width}px one-event card should stay compact (width=${layout.singleGrid?.width}).`);
-      check(Math.abs((layout.singleGrid?.x+layout.singleGrid?.width/2)-(layout.content?.x+layout.content?.width/2))<=2, `${width}px one-event card should be centered within the content region.`);
+      check(Math.abs(layout.singleGrid?.x-layout.toolbar?.x)<=2, `${width}px one-event card should align with the event-list controls.`);
     }
     if (layout.image) check(layout.image.height <= 120, `${width}px low-information event image must not dominate the card (height=${layout.image.height}).`);
     if(width===390) check(layout.imageLoaded, 'The preserved actual fixture should exercise its loaded key visual, not silently skip the image check.');
