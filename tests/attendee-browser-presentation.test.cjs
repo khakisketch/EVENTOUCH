@@ -156,6 +156,26 @@ test('direct registration shows event context before the unchanged form and cons
   assert.match(html, /type="submit"/);
 });
 
+test('successful attendee registration lands directly on the issued ticket without obscuring it with a toast', async () => {
+  const { E } = loadAttendee('register');
+  let destination = null;
+  let toast = null;
+  E.run = async (command, payload) => {
+    assert.equal(command, 'participant.create');
+    assert.deepEqual(payload, { name: '테스트 참가자' });
+    return { ticket: 'issued-ticket' };
+  };
+  E.navigate = value => { destination = value; };
+  E.toast = value => { toast = value; };
+  E.dirty = true;
+
+  await E.forms['attendee-register']({ name: '테스트 참가자' });
+
+  assert.equal(destination, '#/event/browser-event/ticket?ticket=issued-ticket');
+  assert.equal(E.dirty, false);
+  assert.equal(toast, null);
+});
+
 test('attendee info omits blank optional details while retaining populated identity rows', () => {
   const person = { name: '김가람', phone: '010-1234-5678', company: '', email: '  ', status: 'APPROVED', createdAt: '' };
   const { E } = loadAttendee('info', person);

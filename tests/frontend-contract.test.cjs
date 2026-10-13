@@ -6,7 +6,7 @@ const path = require('node:path');
 const ROOT = path.join(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
-// The frontend has no build step and no module system: 23 scripts extend one
+// The frontend has no build step and no module system: 25 scripts extend one
 // global object, and load order decides which definition wins. Nothing
 // enforces that, so an accidental redefinition silently replaces behaviour.
 // These tests are the enforcement that the toolchain cannot provide.
@@ -45,6 +45,7 @@ test('the-script-load-order-is-pinned', () => {
     'results.js', 'display.js', 'router.js', 'experience.js', 'workflows.js',
     'role-model.js', 'event-flow.js', 'operator-experience.js', 'server-sync.js',
     'booth-map-data.js', 'booth-map-ui.js', 'server-presentation.js',
+    'surface-presentation.js', 'display-refresh.js',
   ];
   assert.deepEqual(loadOrder(), expected,
     'index.html script order changed — verify nothing now shadows a definition it used to follow');
@@ -56,11 +57,15 @@ test('every-script-in-the-load-order-exists', () => {
   }
 });
 
-test('server-presentation-runs-last', () => {
+test('server-presentation-runs-before-the-final-surface-augmentations', () => {
   // It wraps loginPage, adminShell, views.attendee, reportMarkup and
-  // invite-link. Loaded earlier, those wrappers would be discarded.
+  // invite-link. Surface presentation then wraps attendee/staff/display;
+  // display-refresh starts only after those final view definitions exist.
   const order = loadOrder();
-  assert.equal(order[order.length - 1], 'server-presentation.js');
+  const serverPresentation = order.indexOf('server-presentation.js');
+  assert.equal(order[serverPresentation + 1], 'surface-presentation.js');
+  assert.equal(order[serverPresentation + 2], 'display-refresh.js');
+  assert.equal(order[order.length - 3], 'server-presentation.js');
 });
 
 test('workflows-runs-after-field-so-its-wrapper-captures-the-real-view', () => {
@@ -118,8 +123,8 @@ test('a-shadowed-definition-is-never-silently-trusted', () => {
   // which files are involved, so an editor knows to check before changing one.
   const { views } = definitions();
   const staff = views.get('staff');
-  assert.deepEqual(staff, ['field.js', 'experience.js', 'workflows.js', 'role-model.js'],
-    'staff is composed from four files — editing one alone may have no effect');
+  assert.deepEqual(staff, ['field.js', 'experience.js', 'workflows.js', 'role-model.js', 'surface-presentation.js'],
+    'staff is composed from five files — editing one alone may have no effect');
   const checkin = views.get('checkin');
   assert.deepEqual(checkin, ['field.js', 'event-flow.js']);
 });

@@ -25,10 +25,11 @@ async function request(method,path,body,options={}){
  if(body!==undefined){headers['content-type']='application/json';init.body=JSON.stringify(body);}
  let response;
  try{response=await window.fetch(apiPath(path),init);}
- catch(error){setConnection('offline',error&&error.message||'서버에 연결할 수 없습니다. 연결 상태를 확인한 뒤 다시 시도하세요.');throw error;}
+  catch(error){E.remote.statusCode=null;setConnection('offline',error&&error.message||'서버에 연결할 수 없습니다. 연결 상태를 확인한 뒤 다시 시도하세요.');throw error;}
  let data=null;
  try{data=await response.json();}catch{}
- if(!response.ok){const message=String(data?.error||data?.message||'요청을 처리하지 못했습니다.');const error=Error(message);error.status=response.status;if(data?.code)error.code=data.code;if(data?.field)error.field=data.field;setConnection(response.status>=500?'error':'denied',message);throw error;}
+  if(!response.ok){E.remote.statusCode=response.status;const message=String(data?.error||data?.message||'요청을 처리하지 못했습니다.');const error=Error(message);error.status=response.status;if(data?.code)error.code=data.code;if(data?.field)error.field=data.field;setConnection(response.status>=500?'error':'denied',message);throw error;}
+  E.remote.statusCode=response.status;
  setConnection('connected');
  return data;
 }
@@ -74,7 +75,7 @@ function publicState(response){
  return E.state;
 }
 E.remote={
- status:'connecting',error:'',
+  status:'connecting',error:'',statusCode:null,
  invitationLink(id){const saved=invitationLinks.get(String(id||''));return saved&&saved.accountId===E.session?.id?saved.link:null;},
  async createInvitation(input={}){
   if(E.previewMode||E.storageMode!=='server'||!E.session?.id)throw Error('초대는 서버에 로그인한 운영자만 만들 수 있습니다.');

@@ -106,6 +106,13 @@ body:has(#app > .attendee-site) > .toast:not(:empty){top:16px;bottom:auto;width:
 .access-page .invite-accept-form{margin:0 0 var(--s4);}
 .access-page .invite-access .detail-grid{margin:0;}
 
+/* Long projector headlines remain legible without pushing the canvas below the screen. */
+.display-content--idle.is-long>h1{max-width:min(100%,38ch);font-size:clamp(42px,3.4vw,64px);line-height:1.2;}
+.display-content--notice.is-long>h1{max-width:min(100%,30ch);font-size:clamp(40px,3.2vw,60px);line-height:1.2;}
+.display-content--notice.is-long>p.preserve-lines{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:14;max-width:min(100%,80ch);overflow:hidden;font-size:clamp(20px,1.45vw,28px);line-height:1.38;text-wrap:initial;}
+.display-stage:has(.display-content--notice.is-long){padding-block:32px;}
+.display-content .display-content-hint{max-width:72ch;margin:0;color:var(--nav-muted);font-size:20px;line-height:1.4;text-wrap:balance;}
+
 /* Keep mobile admin feedback in its own row, clear of active editing controls. */
 @media(max-width:768px){
  body:has(.admin-shell) > .toast:not(:empty){position:absolute;z-index:49;right:var(--s4);bottom:auto;left:auto;transform:none;max-width:min(280px,calc(100% - 32px));}
