@@ -23,6 +23,7 @@ export default function StaffLoginForm() {
       });
       const data = (await res.json().catch(() => null)) as {
         error?: unknown;
+        user?: { role?: unknown } | null;
       } | null;
       if (!res.ok) {
         setFailure(
@@ -32,7 +33,9 @@ export default function StaffLoginForm() {
         );
         return;
       }
-      router.push("/staff");
+      // One login screen serves every role: staff go to their desk flow,
+      // operators go to the console.
+      router.push(data?.user?.role === "STAFF" ? "/staff" : "/console");
     } catch {
       setFailure("연결하지 못했습니다. 다시 시도하세요.");
     } finally {

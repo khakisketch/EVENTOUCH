@@ -103,3 +103,17 @@ test('web-display-polls-public-content-and-never-blanks-on-a-drop', () => {
   assert.doesNotMatch(board, /localStorage/);
   assert.doesNotMatch(board, /sessionStorage/);
 });
+
+test('web-console-reads-operator-bootstrap-and-writes-nothing-yet', () => {
+  const login = read('app/staff/login/StaffLoginForm.tsx');
+  assert.match(login, /\/staff/);
+  assert.match(login, /\/console/);
+  for (const file of ['app/console/ConsoleHome.tsx', 'app/console/events/[id]/EventOverview.tsx']) {
+    const source = read(file);
+    assert.match(source, /\/api\/bootstrap/);
+    assert.doesNotMatch(source, /method:\s*"POST"/i);
+    assert.doesNotMatch(source, /\/commands/);
+    assert.doesNotMatch(source, /localStorage/);
+    assert.doesNotMatch(source, /sessionStorage/);
+  }
+});
