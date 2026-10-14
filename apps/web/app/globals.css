@@ -729,6 +729,22 @@ select[aria-invalid="true"] {
   margin-top: calc(var(--s2) * -1);
 }
 
+.staff-task-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-bottom: var(--s3);
+}
+
+.staff-task-switch button {
+  flex: 1 1 auto;
+}
+
+.staff-booth-code {
+  overflow-wrap: anywhere;
+  font-size: var(--small);
+}
+
 .activity-heading {
   margin: var(--s3) 0 0;
   padding-top: var(--s4);

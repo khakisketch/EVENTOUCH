@@ -207,3 +207,13 @@ test('web-display-honors-the-operator-selection-from-the-public-projection', () 
   assert.match(board, /counts/);
   assert.doesNotMatch(board, /participantId/);
 });
+
+test('web-staff-booth-work-uses-the-booth-visit-command-and-stamp-mode', () => {
+  const staff = read('app/staff/StaffConsole.tsx');
+  assert.match(staff, /booth\.visit/);
+  assert.match(staff, /stampMode/);
+  assert.match(staff, /boothAssignments/);
+  // The self-scan mode is a notice, never a staff-side certification.
+  assert.match(staff, /참가자가 부스 QR을 스캔하는 방식/);
+  assert.doesNotMatch(staff, /localStorage/);
+});
