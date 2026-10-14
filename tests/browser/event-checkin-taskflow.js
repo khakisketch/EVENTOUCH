@@ -2,7 +2,7 @@
 // playwright-cli -s=eventouch-joint run-code --filename=tests/browser/event-checkin-taskflow.js
 async page => {
   const baseUrl = 'http://100.116.163.1:46771';
-  const root = 'design-inputs/uiux-audit/event-checkin';
+  const root = '/tmp/opencode/eventouch-captures/event-checkin';
   const failures = [];
   const check = (condition, message) => { if (!condition) failures.push(message); };
   const capture = name => page.screenshot({ path: `${root}/${name}.png`, scale: 'css', type: 'png' });

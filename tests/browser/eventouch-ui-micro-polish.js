@@ -7,7 +7,7 @@ async page => {
   const failures = [];
   const check = (condition, message) => { if (!condition) failures.push(message); };
   const routeUrl = hash => `${baseUrl}/?__micro_polish=${capturePrefix}${hash}`;
-  const capture = async name => page.screenshot({ path: `design-inputs/uiux-audit/micro-polish-${capturePrefix}-${name}.png`, scale: 'css', type: 'png' });
+  const capture = async name => page.screenshot({ path: `/tmp/opencode/eventouch-captures/micro-polish-${capturePrefix}-${name}.png`, scale: 'css', type: 'png' });
   const clearFocus = async () => page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });
 
   const ensureAgencyLogin = async () => {

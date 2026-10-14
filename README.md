@@ -60,10 +60,9 @@ server/commands/        이벤트 커맨드 5묶음 + 도메인 라우터(domain
 server/migrations/      번호순 SQL 마이그레이션
 tests/                  node:test 스위트(+ helpers/postgres-api-server.cjs)
 scripts/                테스트 러너, 접근성·모바일 감사, 정의 추적
-docs/                   정본 문서
-docs/archive/           지난 계획·설계 기록(역사)
-design-previews/        렌더 검증 캡처(추적 안 함)
-design-inputs/          리뷰 입력·공유 시스템 정의(추적 안 함)
+docs/                   정본 문서(+ archive/ = 지난 계획 기록, 현재 지침 아님)
+tests/fixtures/         테스트가 읽는 고정 자산(부스 지도 예시 이미지 등)
+scripts/serve-demo.sh   이 환경의 데모 서버 시작(포트·DB를 환경변수로 바꾼다)
 ```
 
 ## 이 저장소에서 지켜지는 규율

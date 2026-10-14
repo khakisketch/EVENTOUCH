@@ -50,8 +50,10 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
 ## 문서
 
 - **현황은 한 곳**: `docs/STATUS.md`. 지난 서술을 다른 곳에 병렬로 남기지 않는다.
-- 지난 계획·설계는 `docs/archive/`에 둔다(고치지 않고 보존, 인덱스만 `docs/archive/INDEX.md`).
-- 렌더 증거는 `design-previews/`(추적 안 함)에 날짜 폴더로 남기고 `INDEX.md` 한 장을 둔다.
+- 지난 계획·설계는 `docs/archive/`에 있다. **고치지 않고 보존하며, 현재 지침으로 쓰지 않는다.**
+  거기 적힌 경로·도구·워크플로는 그 시점의 것이고 지금은 존재하지 않을 수 있다.
+- 렌더 검증 캡처는 저장소에 두지 않는다. 작업 폴더(`/tmp/opencode/eventouch-captures/`)에 남기고,
+  저장소에 필요한 증거는 결론만 `docs/STATUS.md`에 적는다.
 - 문서가 코드와 어긋나면 코드가 맞다. 문서를 고치거나 내린다.
 
 ## 하지 말 것

@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" role="img" aria-labelledby="title description">
+  <title id="title">Synthetic demo floorplan — not a customer venue</title>
+  <desc id="description">A fictional event hall with two labeled aisles, six booth blocks, a stage, and clear edge margins for pin-placement review.</desc>
+  <defs>
+    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M24 0H0V24" fill="none" stroke="#d9e3e8" stroke-width="1"/>
+    </pattern>
+    <style>
+      text { font-family: Arial, sans-serif; fill: #183247; }
+      .small { font-size: 18px; font-weight: 600; letter-spacing: 1px; }
+      .booth { font-size: 26px; font-weight: 700; }
+      .note { font-size: 15px; font-weight: 700; letter-spacing: 2px; }
+    </style>
+  </defs>
+  <rect width="1200" height="760" fill="#f1f6f8"/>
+  <text x="44" y="48" class="note">SYNTHETIC DEMO FLOORPLAN · NOT CUSTOMER ARTWORK</text>
+  <rect x="42" y="72" width="1116" height="640" rx="18" fill="#fff" stroke="#476273" stroke-width="4"/>
+  <rect x="62" y="92" width="1076" height="600" fill="url(#grid)"/>
+  <rect x="492" y="110" width="216" height="92" rx="8" fill="#183247"/>
+  <text x="600" y="165" text-anchor="middle" fill="#fff" class="small">STAGE</text>
+  <path d="M112 330H1088M112 522H1088" stroke="#dcecf0" stroke-width="84" stroke-linecap="round"/>
+  <path d="M112 330H1088M112 522H1088" stroke="#8aa9b4" stroke-width="2" stroke-dasharray="14 12"/>
+  <text x="600" y="337" text-anchor="middle" class="small">AISLE A</text>
+  <text x="600" y="529" text-anchor="middle" class="small">AISLE B</text>
+  <g stroke="#35576b" stroke-width="3">
+    <rect x="132" y="132" width="250" height="150" rx="8" fill="#d9edf4"/>
+    <rect x="818" y="132" width="250" height="150" rx="8" fill="#e4ead8"/>
+    <rect x="132" y="386" width="250" height="92" rx="8" fill="#f2e3c7"/>
+    <rect x="818" y="386" width="250" height="92" rx="8" fill="#e6dff2"/>
+    <rect x="132" y="578" width="250" height="92" rx="8" fill="#d9edf4"/>
+    <rect x="818" y="578" width="250" height="92" rx="8" fill="#f2e3c7"/>
+  </g>
+  <g text-anchor="middle" class="booth">
+    <text x="257" y="220">BOOTH 01</text><text x="943" y="220">BOOTH 02</text>
+    <text x="257" y="442">BOOTH 03</text><text x="943" y="442">BOOTH 04</text>
+    <text x="257" y="634">BOOTH 05</text><text x="943" y="634">BOOTH 06</text>
+  </g>
+  <g class="small">
+    <text x="90" y="712">WEST</text><text x="1110" y="712" text-anchor="end">EAST</text>
+  </g>
+</svg>

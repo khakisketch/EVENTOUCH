@@ -35,7 +35,7 @@ Branch: `master` · HEAD: `e21e7cb`
 ```bash
 npm ci
 npm start                     # DATABASE_URL 필요, 기본 포트 8776
-bash design-previews/uiux-review-2026-10-13/serve.sh   # 이 환경의 데모 서버
+bash scripts/serve-demo.sh     # 이 환경의 데모 서버(포트·DB를 환경변수로 바꾼다)
 ```
 
 검증용 DB를 붙여 돌릴 때:

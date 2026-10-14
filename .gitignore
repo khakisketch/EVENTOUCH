@@ -1,15 +1,18 @@
+# Tool state — never product source. Recreated by tooling if the workflow returns.
 .superpowers/
+.playwright-cli/
+.od-review/
+.od-skills/
+index.html.artifact.json
+
 node_modules/
 .worktrees/
-.playwright-cli/
 data/server/
 data/storage/
 .env
 
-# Task-owned rendered review captures and design-workspace artifacts.
-# Large (25MB+) and review-scoped, never product source or product assets.
+# Verification evidence stays outside the repository.
+# Captures go to /tmp/opencode/eventouch-captures/ (see AGENTS.md); these guards
+# only catch a stray write if some tool defaults back to an in-repo path.
 design-inputs/
 design-previews/
-.od-review/
-.od-skills/
-index.html.artifact.json

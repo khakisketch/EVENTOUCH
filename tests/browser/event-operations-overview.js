@@ -2,7 +2,7 @@
 // playwright-cli -s=eventouch-event-redesign run-code --filename=tests/browser/event-operations-overview.js
 async page => {
   const baseUrl = 'http://100.116.163.1:46771';
-  const root = 'design-inputs/uiux-audit/event-operations';
+  const root = '/tmp/opencode/eventouch-captures/event-operations';
   const failures = [];
   const check = (condition, message) => { if (!condition) failures.push(message); };
   const capture = name => page.screenshot({ path: `${root}/${name}.png`, scale: 'css', type: 'png' });

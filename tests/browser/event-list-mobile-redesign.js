@@ -3,7 +3,7 @@
 // playwright-cli -s=eventouch-event-redesign run-code --filename=tests/browser/event-list-mobile-redesign.js
 async page => {
   const baseUrl = 'http://100.116.163.1:46771';
-  const root = 'design-inputs/uiux-audit/event-list-redesign';
+  const root = '/tmp/opencode/eventouch-captures/event-list-redesign';
   const failures = [];
   const check = (condition, message) => { if (!condition) failures.push(message); };
   const capture = name => page.screenshot({ path: `${root}/${name}.png`, scale: 'css', type: 'png' });

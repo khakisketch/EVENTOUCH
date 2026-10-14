@@ -280,8 +280,8 @@ test('unselected mobile helper copy remains concise and complete', () => {
 });
 
 test('synthetic floorplan render fixture is clearly labeled and not a product data seed', () => {
-  const svg = fs.readFileSync('design-inputs/booth-map/synthetic-demo-floorplan.svg', 'utf8');
-  const png = fs.readFileSync('design-inputs/booth-map/synthetic-demo-floorplan.png');
+  const svg = fs.readFileSync('tests/fixtures/booth-map/synthetic-demo-floorplan.svg', 'utf8');
+  const png = fs.readFileSync('tests/fixtures/booth-map/synthetic-demo-floorplan.png');
   assert.match(svg, /SYNTHETIC DEMO FLOORPLAN/);
   assert.match(svg, /viewBox="0 0 1200 760"/);
   assert.match(svg, /booth/i);
@@ -293,8 +293,8 @@ test('synthetic floorplan render fixture is clearly labeled and not a product da
 });
 
 test('finished fictional demo floorplan is a local PNG distinct from the synthetic test fixture', () => {
-  const demo = fs.readFileSync('design-inputs/booth-map/demo-venue-floorplan.png');
-  const fixture = fs.readFileSync('design-inputs/booth-map/synthetic-demo-floorplan.png');
+  const demo = fs.readFileSync('tests/fixtures/booth-map/demo-venue-floorplan.png');
+  const fixture = fs.readFileSync('tests/fixtures/booth-map/synthetic-demo-floorplan.png');
   assert.deepEqual([...demo.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
   assert.equal(demo.readUInt32BE(16), 1600);
   assert.equal(demo.readUInt32BE(20), 1000);

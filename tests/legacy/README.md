@@ -8,8 +8,7 @@ tests. `npm test` runs `tests/*.test.cjs` (no recursion), so nothing here execut
   `../server/*`) intentionally stay unchanged; do not "fix" them, which would
   resurrect retired JSON paths.
 - Current coverage lives in `tests/*.test.cjs` (server, adapter, presentation,
-  map, invitations) plus the SDD fixture scripts under
-  `.superpowers/sdd/2026-10-07-eventouch-postgresql/`.
+  map, invitations) plus the browser contract scripts under `tests/browser/`.
 
 ## Batch archive (2026-10-08)
 
