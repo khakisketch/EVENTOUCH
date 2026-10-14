@@ -2,6 +2,14 @@
 
 const crypto = require('node:crypto');
 const { normalizeEvent, normalizeWorkspace, projectParticipant } = require('../state');
+const {
+  failure,
+  object,
+  list,
+  clean,
+  commandIdentifier,
+  ticketHash,
+} = require('./shared');
 
 const COMMANDS = new Set([
   'participant.create',
@@ -15,34 +23,6 @@ const COMMANDS = new Set([
 const GUEST_COMMANDS = new Set(['participant.self-update', 'participant.cancel']);
 const TICKET_TOKEN = /^(?:[A-Za-z0-9_-]{32,128}|ET:[A-Za-z0-9_-]{1,80}:T-[A-Za-z0-9_-]{32,128})$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-function failure(status, message, field, code) {
-  const error = new Error(message);
-  error.status = status;
-  if (field) error.field = field;
-  if (code) error.code = code;
-  return error;
-}
-
-function object(value) {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
-}
-
-function list(value) {
-  return Array.isArray(value) ? value : [];
-}
-
-function clean(value, max = 500) {
-  return String(value === undefined || value === null ? '' : value).trim().slice(0, max);
-}
-
-function commandIdentifier(value) {
-  const id = clean(value, 128);
-  if (!/^[A-Za-z0-9_-]{8,128}$/.test(id)) {
-    throw failure(400, '요청 식별자를 확인하세요', 'commandId');
-  }
-  return id;
-}
 
 function normalizedPhone(value) {
   return String(value === undefined || value === null ? '' : value).replace(/\D/g, '');
@@ -257,10 +237,6 @@ function receiptMatches(receipt, { eventId, actorId, operation, ticketToken }) {
   if (data.operation !== operation) return false;
   const tokenHash = ticketToken ? ticketHash(ticketToken) : null;
   return (data.ticketHash || null) === tokenHash;
-}
-
-function ticketHash(token) {
-  return crypto.createHash('sha256').update(token).digest('hex');
 }
 
 function responseForReceipt(responseValue) {

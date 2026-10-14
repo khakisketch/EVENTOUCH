@@ -346,6 +346,7 @@ server-presentation.js는 통째로 레이어다. `loginPage`, `adminShell`, `vi
 | `server/sw.js` | 오프라인 셸 서비스 워커 |
 | `server/legacy-events.js` | 과도기 JSON 저장소 폴백(운영에서 410 반환) |
 | `server/commands/*.js` | 도메인 커맨드 5묶음 |
+| `server/commands/shared.js` | 실행기 3종(domain·participants·operations)이 공유하는 순수 헬퍼. 실패 생성·값 정리·요청 식별자·티켓 해시·티켓 조회·베어러 파싱만 둔다. 권한·잠금·영수증 판정은 각 실행기에 남긴다 |
 
 ### 프론트엔드
 

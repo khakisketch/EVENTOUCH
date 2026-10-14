@@ -1,7 +1,15 @@
 'use strict';
 
-const crypto = require('node:crypto');
 const { normalizeEvent, normalizeWorkspace } = require('../state');
+const {
+  failure,
+  object,
+  clean,
+  commandIdentifier,
+  nextId,
+  hashTicket,
+  findTicket,
+} = require('./shared');
 const preparation = require('./preparation');
 const engagement = require('./engagement');
 const contentResults = require('./content-results');
@@ -24,40 +32,6 @@ const GUEST_COMMANDS = new Set([
   'payment.simulate',
   'payment.refund-request',
 ]);
-
-function failure(status, message, field, code) {
-  const error = new Error(message);
-  error.status = status;
-  if (field) error.field = field;
-  if (code) error.code = code;
-  return error;
-}
-
-function object(value) {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
-}
-
-function clean(value, max = 500) {
-  return String(value === undefined || value === null ? '' : value).trim().slice(0, max);
-}
-
-function commandIdentifier(value) {
-  const id = clean(value, 128);
-  if (!/^[A-Za-z0-9_-]{8,128}$/.test(id)) throw failure(400, '요청 식별자를 확인하세요', 'commandId');
-  return id;
-}
-
-function nextId(prefix) {
-  return `${prefix}-${crypto.randomUUID()}`;
-}
-
-function hashTicket(token) {
-  return token ? crypto.createHash('sha256').update(token).digest('hex') : null;
-}
-
-function findTicket(workspace, token) {
-  return workspace.participants.find((person) => person && person.ticket === token) || null;
-}
 
 function activeTicket(workspace, token, { allowPendingPayment = false } = {}) {
   const participant = findTicket(workspace, token);

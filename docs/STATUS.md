@@ -93,6 +93,10 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
 
 ## 이력
 
+- 2026-10-14: 서버 커맨드 실행기의 중복 순수 헬퍼를 `server/commands/shared.js`로 묶음.
+  동작 변경 없음(권한·잠금·영수증은 각 실행기에 유지). `npm test` 479 통과,
+  데모 서버 재시작 후 로그인→콘솔 진입 확인, 페이지 오류 0.
+  증거는 `/tmp/opencode/eventouch-captures/refactor-shared-*.png`.
 - 2026-10-14: 풀스택 목표를 모듈형 모놀리스로 확정하고 Next.js/TypeScript 프론트엔드와
   TypeScript/Fastify API를 점진 도입하는 기준을 `docs/ARCHITECTURE.md`에 기록. 서로 다른
   요청 ID로 같은 티켓을 동시에 스캔할 때도 체크인이 한 번만 성공하는 PostgreSQL 회귀 테스트 추가.

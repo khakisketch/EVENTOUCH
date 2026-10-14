@@ -1,7 +1,17 @@
 'use strict';
 
-const crypto = require('node:crypto');
 const { normalizeEvent, normalizeWorkspace } = require('../state');
+const {
+  failure,
+  object,
+  list,
+  clean,
+  commandIdentifier,
+  nextId,
+  ticketHash,
+  findTicket,
+  ticketCode,
+} = require('./shared');
 
 const COMMANDS = new Set([
   'desk.save',
@@ -20,52 +30,6 @@ const STAFF_ASSIGNMENTS = new Map([
   ['booth.visit', 'BOOTH'],
 ]);
 
-function failure(status, message, field) {
-  const error = new Error(message);
-  error.status = status;
-  if (field) error.field = field;
-  return error;
-}
-
-function object(value) {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
-}
-
-function list(value) {
-  return Array.isArray(value) ? value : [];
-}
-
-function clean(value, max = 500) {
-  return String(value === undefined || value === null ? '' : value).trim().slice(0, max);
-}
-
-function commandIdentifier(value) {
-  const id = clean(value, 128);
-  if (!/^[A-Za-z0-9_-]{8,128}$/.test(id)) {
-    throw failure(400, '요청 식별자를 확인하세요', 'commandId');
-  }
-  return id;
-}
-
-function nextId(prefix) {
-  return `${prefix}-${crypto.randomUUID()}`;
-}
-
-function ticketCode(value) {
-  const raw = clean(value, 2048);
-  if (!raw.includes('ticket=')) return raw;
-  try {
-    const query = raw.slice(raw.indexOf('?') + 1);
-    return new URLSearchParams(query).get('ticket') || raw;
-  } catch (error) {
-    return raw;
-  }
-}
-
-function findTicket(workspace, token) {
-  return list(workspace.participants).find((person) => person && person.ticket === token) || null;
-}
-
 function ensureNotArchived(event) {
   if (String(event.stage || '').toUpperCase() === 'ARCHIVED') {
     throw failure(409, '보관된 행사는 변경할 수 없습니다');
@@ -74,10 +38,6 @@ function ensureNotArchived(event) {
 
 function requireLive(event, message) {
   if (String(event.stage || '').toUpperCase() !== 'LIVE') throw failure(409, message);
-}
-
-function ticketHash(token) {
-  return token ? crypto.createHash('sha256').update(token).digest('hex') : null;
 }
 
 function commandReceiptMatches(receipt, { eventId, actorId, command, ticketToken, participantId }) {
