@@ -17,4 +17,4 @@ tests. `npm test` runs `tests/*.test.cjs` (no recursion), so nothing here execut
 `styles/*`, `i18n/ko.json`) were moved here from `tests/` so `npm test`
 (`tests/*.test.cjs`) no longer reports them. Their imports are intentionally left
 broken; do not repair or delete. The labeled attribution and the full file list
-live in `docs/superpowers/legacy-test-attribution.md`.
+live in `docs/archive/legacy-test-attribution.md`.

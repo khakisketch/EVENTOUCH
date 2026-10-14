@@ -31,6 +31,21 @@
 4. HTTPS 공개 시 중앙 서버에 `COOKIE_SECURE=1`을 설정한다. 내부 HTTP 운영에서는 0.
 5. 문자·결제 연동 전에는 안내 문구를 시뮬레이션 표시 그대로 둔다.
 
+## 배포 검증 (2026-10-14 실행됨)
+
+로컬에서 컨테이너 배포를 실제로 기동하고 검증했다. 이 문서는 이제 "배포 실행 승인이 아니다"가
+아니라, 실행된 절차의 기록을 포함한다.
+
+    docker compose -p eventouch up -d --build
+
+- 결과: `eventouch-db-1`(healthy) + `eventouch-eventouch-1`(healthy), 호스트 `8891` → 컨테이너 `8776`.
+- 확인한 것: `/api/health` 200 → 로그인 → 콘솔 진입 → **고객사 저장** → `docker compose restart eventouch`
+  → 같은 값 유지(볼륨 영속).
+- 자격증명은 실행 환경에서 주입하고 저장소에 두지 않는다. 검증용 값은 `/tmp/opencode/eventouch-deploy.env`(600).
+- 테일넷 공개: 8893 → 컨테이너 배포본, 8890 → 개발·데모 서버(데모 데이터).
+
+운영 배포 위치(NAS·공개 도메인)는 아직 정해지지 않았다. 정해지면 `COOKIE_SECURE=1`로 올린다.
+
 ## 검증
 
     npm test   # PostgreSQL 포함 전체 스위트. 스킵이 하나라도 있으면 실패한다.
