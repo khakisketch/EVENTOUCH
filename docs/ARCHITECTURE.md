@@ -124,6 +124,8 @@ PostgreSQL이 행사 데이터의 유일한 권위다. JSON 파일 저장소(`DA
 | `staff_assignments` | 스태프 배정(데스크/부스) |
 | `stored_files` | 업로드 파일 메타(치수 포함) |
 | `command_receipts` | 커맨드 멱등성 영수증 |
+| `message_outbox` | 발송 의도(커맨드와 같은 트랜잭션 기록, 결과 기록 후 삭제, 부팅 드레인) |
+| `checkin_records` | 체크인 이력의 write-through 투영(JSONB가 읽기 권위, 005가 기존 기록 백필) |
 | `login_attempts` | 로그인 실패 카운터(계정·주소 스코프) |
 | `login_lockout_overrides` | 관리자 잠금 해제 기록 |
 | `global_state` | 전역 키-값 |
@@ -131,6 +133,16 @@ PostgreSQL이 행사 데이터의 유일한 권위다. JSON 파일 저장소(`DA
 설계상 중요한 점: 행사 업무 데이터는 **하나의 `event_workspaces.payload` jsonb**에
 들어 있다. 참가자·데스크·부스·메시지·보고서가 모두 그 안에 있고, 변경은 행 단위
 잠금 + 리비전 증가로 직렬화된다.
+
+정규화는 expand 단계로 진행한다(읽기 권위는 그대로 둔다):
+
+- `message_outbox` — 발송 의도. `message.retry`가 SENDING으로 바꿀 때 같은
+  트랜잭션에서 행을 남기고, 결과 기록 후 삭제한다. 부팅 드레인이 남은 행을
+  재처리한다. `/api/health`는 대기 건수(`outboxPending`)를 함께 둔다.
+- `checkin_records` — 체크인 이력의 write-through 투영. `check.scan`·
+  `check.correct`와 같은 트랜잭션에서 기록하므로 JSONB와 어긋날 수 없다.
+  읽기는 `workspace.checks`가 계속 맡는다. 005 마이그레이션이 기존 기록을
+  백필한다.
 
 ## 5. 서버 권위와 커맨드 흐름
 
@@ -155,6 +167,9 @@ PostgreSQL이 행사 데이터의 유일한 권위다. JSON 파일 저장소(`DA
 
 - 메시지 발송 (`dispatchCampaign`) — 느린 공급사가 행 잠금을 붙잡지 않도록
 - 도달 확인 폴링 (`resolveDelivery`)
+- outbox 확정 (`message_outbox` 행 삭제) — 결과가 기록됐을 때만. 공급사 호출이
+  예외로 끝나거나 프로세스가 먼저 죽으면 행이 남아 부팅 드레인이 재발송한다.
+  이미 결과가 기록된 채 남은 행은 재발송 없이 정리한다.
 
 이유: 공급사 호출이 실패해도 운영자가 이미 성공으로 본 커맨드를 롤백하면 안 되고,
 공급사가 접수한 메시지를 롤백으로 잃으면 안 된다.
@@ -340,6 +355,7 @@ server-presentation.js는 통째로 레이어다. `loginPage`, `adminShell`, `vi
 | `server/public-events.js` | 참가자 웹용 공개 투영 |
 | `server/files.js` | 파일 저장·조회 |
 | `server/messaging.js` | 발송 오케스트레이션(배치 발송, 커밋 후 실행, 도달 확정) |
+| `server/message-outbox.js` | 발송 의도의 트랜잭션 outbox. 같은 트랜잭션에서 발송 의도를 기록하고, 결과 기록 시 행을 삭제하며, 부팅 시 남은 행을 재처리한다. 이미 끝난 건 재발송 없이 정리 |
 | `server/messaging-solapi.js` | Solapi 어댑터(HMAC 서명, 타입 판정, 페이로드) |
 | `server/http.js` | 응답 헬퍼, 보안 헤더, nonce |
 | `server/validation.js` | 날짜·정원 공용 검증 |

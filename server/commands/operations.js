@@ -40,8 +40,7 @@ function requireLive(event, message) {
   if (String(event.stage || '').toUpperCase() !== 'LIVE') throw failure(409, message);
 }
 
-function commandReceiptMatches(receipt, { eventId, actorId, command, ticketToken, participantId }) {
-  const result = object(receipt && receipt.result);
+function commandReceiptMatches(receipt, { eventId, actorId, command, ticketToken, participantId }) {  const result = object(receipt && receipt.result);
   const receiptActorId = receipt && receipt.actor_id != null ? String(receipt.actor_id) : null;
   const expectedActorId = actorId == null ? null : String(actorId);
   return receipt && String(receipt.event_id) === String(eventId) &&
@@ -50,8 +49,7 @@ function commandReceiptMatches(receipt, { eventId, actorId, command, ticketToken
     (result.participantId || null) === (participantId || null);
 }
 
-async function lockEvent(client, eventId) {
-  const result = await client.query(
+async function lockEvent(client, eventId) {  const result = await client.query(
     `SELECT e.id, e.slug, e.client_id, e.payload, e.revision,
             w.payload AS workspace_payload, w.revision AS workspace_revision
      FROM events e JOIN event_workspaces w ON w.event_id = e.id
@@ -457,6 +455,44 @@ function appendAudit(workspace, event, account, command, input, commandId, now) 
   });
 }
 
+// Write-through projection of the check history (see 005_checkin-records).
+// Runs in the SAME transaction as the workspace update, so the JSONB checks
+// array (still the read authority) and checkin_records cannot drift. Reads
+// stay on the workspace until the report path is switched over deliberately.
+async function projectCheckinRecord(client, eventId, row) {
+  await client.query(
+    `INSERT INTO checkin_records
+       (id, event_id, participant_id, name, action, desk_id, actor_id, at,
+        before_inside, before_ever_in, corrected)
+     VALUES ($1, $2, $3, $4, $5, $6, $7,
+             COALESCE(NULLIF($8, '')::timestamptz, now()), $9, $10, $11)
+     ON CONFLICT (id) DO NOTHING`,
+    [
+      String(row.id),
+      String(eventId),
+      String(row.participantId),
+      String(row.name || ''),
+      String(row.action),
+      String(row.deskId || ''),
+      row.actor ? String(row.actor) : null,
+      String(row.at || ''),
+      Boolean(row.before && row.before.inside),
+      Boolean(row.before && row.before.everIn),
+      row.corrected === true,
+    ]
+  );
+}
+
+async function markCheckinCorrected(client, eventId, check) {
+  const updated = await client.query(
+    'UPDATE checkin_records SET corrected = true WHERE id = $1',
+    [String(check.id)]
+  );
+  // A check written straight to the workspace (fixtures, pre-projection
+  // data missed by backfill) still gets its row rather than going missing.
+  if (!updated.rowCount) await projectCheckinRecord(client, eventId, check);
+}
+
 function createOperationsCommands(database) {
   async function execute({ eventId, commandId: rawId, command, payload, account, assignmentId, ticketToken: rawTicketToken }) {
     if (!COMMANDS.has(command)) throw failure(400, '지원하지 않는 현장 운영 작업입니다.', 'command');
@@ -523,11 +559,13 @@ function createOperationsCommands(database) {
           scanResult.row.id = id;
           scanResult.row.at = now;
           workspace.checks.unshift(scanResult.row);
+          await projectCheckinRecord(client, event.id, scanResult.row);
           result = { body: scanResult.body };
           break;
         }
         case 'check.correct':
           result = correctCheck(workspace, event, account, input, authorized.assignment, now, id);
+          await markCheckinCorrected(client, event.id, result.body.check);
           break;
         case 'booth.save':
           result = updateBooth(workspace, event, input);

@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const { recordDispatchRequest } = require('../message-outbox');
 
 const COMMANDS = new Set([
   'template.save',
@@ -177,7 +178,31 @@ function syncMessage(ctx, input) {
   return { body: { message: scope, pending: true }, resolvePending: true };
 }
 
-function retryMessage(ctx, input) {
+// The dispatcher needs a reachable address per recipient; the snapshot
+// is the only place the phone number is kept. Variables are computed here
+// and never persisted: a ticket link is a bearer credential, and campaign
+// history must not retain one.
+function buildMessageDispatch(event, workspace, message) {
+  return {
+    eventId: event.id,
+    messageId: message.id,
+    channel: message.channel,
+    subject: message.title,
+    text: message.body,
+    templateId: message.solapiTemplateId || null,
+    recipients: list(message.recipientSnapshot).map((person) => {
+      const live = list(workspace.participants).find((item) => item.id === person.id);
+      return {
+        participantId: person.id,
+        name: person.name,
+        phone: person.phone,
+        variables: messageVariables({ event }, live, person),
+      };
+    }),
+  };
+}
+
+async function retryMessage(ctx, input) {
   const message = list(ctx.workspace.messages).find((item) => item.id === ctx.clean(input.id, 120));
   if (!message || !['SCHEDULED', 'NEEDS_CONNECTION'].includes(message.status)) {
     throw ctx.fail(409, '실행할 수 없는 상태입니다');
@@ -188,38 +213,19 @@ function retryMessage(ctx, input) {
   // A connected provider makes this a real send. The network call must not
   // run inside the surrounding transaction: a slow provider would hold the
   // event row lock, and a provider that accepted a message we then rolled
-  // back would be unrecorded. The transaction records the intent as SENDING;
-  // the dispatcher sends after commit and writes the outcome back.
+  // back would be unrecorded. The transaction records the intent as SENDING
+  // and queues the send in the outbox; the dispatcher sends after commit
+  // and writes the outcome back. If the process dies first, the queued row
+  // is what a later drain replays.
   if (message.simulate !== true && ctx.messaging && ctx.messaging.connected) {
     message.status = 'SENDING';
     list(message.deliveries).forEach((delivery) => {
       delivery.status = 'SENDING';
       delivery.at = ctx.now;
     });
-    return {
-      body: { message },
-      // The dispatcher needs a reachable address per recipient; the snapshot
-      // is the only place the phone number is kept.
-      dispatch: {
-        eventId: ctx.event.id,
-        messageId: message.id,
-        channel: message.channel,
-        subject: message.title,
-        text: message.body,
-        templateId: message.solapiTemplateId || null,
-        // Variables are computed here and never persisted: a ticket link is a
-        // bearer credential, and campaign history must not retain one.
-        recipients: list(message.recipientSnapshot).map((person) => {
-          const live = list(ctx.workspace.participants).find((item) => item.id === person.id);
-          return {
-            participantId: person.id,
-            name: person.name,
-            phone: person.phone,
-            variables: messageVariables(ctx, live, person),
-          };
-        }),
-      },
-    };
+    const dispatch = buildMessageDispatch(ctx.event, ctx.workspace, message);
+    await recordDispatchRequest(ctx.client, ctx.event.id, message.id);
+    return { body: { message }, dispatch };
   }
 
   message.status = message.simulate === true ? 'SIMULATED' : 'NEEDS_CONNECTION';
@@ -508,4 +514,4 @@ async function apply(ctx) {
   }
 }
 
-module.exports = { COMMANDS, apply };
+module.exports = { COMMANDS, apply, buildMessageDispatch };

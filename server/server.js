@@ -18,6 +18,7 @@ const { handleApi } = require('./api');
 const { applySecurityHeaders } = require('./http');
 const genericMessaging = require('./messaging');
 const solapi = require('./messaging-solapi');
+const { drainMessageOutbox } = require('./message-outbox');
 
 const ROOT = path.join(__dirname, '..');
 const PORT = Number(process.env.PORT || 8776);
@@ -135,13 +136,26 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
     const nonce = applySecurityHeaders(res);
     const urlPath = (req.url || '/').split('?')[0];
     if (urlPath === '/api/health') {
-      sendJson(res, 200, {
+      const base = {
         ok: true,
         version: 1,
         ...(process.env.EVENTOUCH_DEV_QUICK_LOGIN ? { devQuickLogin: true } : {}),
         messaging: messagingStatus.connected,
         messagingProvider: messagingStatus.provider || null,
-      });
+      };
+      // Queue depth is a best-effort signal: a failing count must never turn
+      // a live server unhealthy, it just omits the field.
+      if (!database) {
+        sendJson(res, 200, base);
+        return;
+      }
+      database.query(
+        `SELECT COUNT(*)::int AS pending FROM message_outbox
+         WHERE status IN ('PENDING', 'SENDING') AND next_attempt_at <= now()`
+      ).then(
+        (result) => sendJson(res, 200, { ...base, outboxPending: result.rows[0].pending }),
+        () => sendJson(res, 200, base)
+      );
       return;
     }
     if (urlPath === '/api/' || urlPath.startsWith('/api/')) {
@@ -194,6 +208,21 @@ async function startServer() {
         resolve();
       });
     });
+    // Replay dispatch intents queued before a previous shutdown (crash
+    // between commit and provider call). Fire-and-forget by design: a drain
+    // failure must not take down boot, and leftovers are retried next boot.
+    drainMessageOutbox(database, genericMessaging.activeProvider()).then(
+      (result) => {
+        if (result && (result.dispatched || result.settled)) {
+          process.stdout.write(
+            `[eventouch] outbox drain: dispatched=${result.dispatched} settled=${result.settled}\n`
+          );
+        }
+      },
+      (error) => {
+        process.stderr.write('[eventouch] outbox drain failed: ' + (error && error.message) + '\n');
+      }
+    );
     return { server, database };
   } catch (error) {
     await database.close().catch(() => {});

@@ -15,6 +15,7 @@ const engagement = require('./engagement');
 const contentResults = require('./content-results');
 const boothMap = require('./booth-map');
 const { createMessagingProvider, dispatchCampaign } = require('../messaging');
+const { settleDispatch } = require('../message-outbox');
 
 const COMMANDS = new Set([
   ...preparation.COMMANDS,
@@ -292,8 +293,19 @@ function createDomainCommands(database, options = {}) {
         if (sent && sent.message && outcome.body && outcome.body.message) {
           outcome.body.message = sent.message;
         }
+        // The outcome is now recorded in the workspace, so the queued intent
+        // is settled. A settle failure must not fail the response the send
+        // already completed; the drain treats a leftover row whose campaign
+        // already has an outcome as settled without re-sending.
+        try {
+          await settleDispatch(database, outcome.dispatch.messageId);
+        } catch (settleError) {
+          process.stderr.write('[eventouch] outbox settle failed: ' + (settleError && settleError.message) + '\n');
+        }
       } catch (error) {
         process.stderr.write('[eventouch] campaign dispatch failed: ' + (error && error.message) + '\n');
+        // The outcome was NOT recorded, so the outbox row stays queued: a
+        // later drain replays the send instead of losing it silently.
       }
     }
     return outcome;
