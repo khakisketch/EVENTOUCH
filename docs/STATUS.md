@@ -26,7 +26,7 @@ Branch: `master` · HEAD: `925a767`
 
 ## 검증 수치 (현재 작업 트리 실측)
 
-- `npm test` — **488 통과, 실패 0, 스킵 0** (DB 주입 시). DB 없이 돌리면 197개가 스킵되고 실패로 처리된다.
+- `npm test` — **491 통과, 실패 0, 스킵 0** (DB 주입 시). DB 없이 돌리면 197개가 스킵되고 실패로 처리된다.
 - `npm run a11y` — 주요 12화면, serious/critical **0**
 - `npm run mobile` — 6기기 × 2방향 × 6화면 = **72검사 통과**, 가로 넘침·44px 미만 조작 요소 0
 
@@ -93,6 +93,10 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
 
 ## 이력
 
+- 2026-10-14: Next.js 이관 슬라이스 1(`apps/web`, 공개 행사 안내). 기존 공개 투영을
+  서버 렌더링으로 읽고, `/api/*`는 rewrite로 API에 전달한다. 구 앱은 그대로 동작.
+  `tsc`·`next build`·프로덕션 기동 후 실데이터 렌더·404·프록시를 확인하고 계약 테스트 3개 추가.
+  다음 슬라이스는 참가 신청 → 티켓 → 스태프 스캔 순.
 - 2026-10-14: 발송 outbox(`message_outbox`, 004)와 체크인 기록 투영(`checkin_records`, 005) 추가.
   발송 의도는 커맨드와 같은 트랜잭션에 기록되고 결과 기록 후 확정, 남은 건 부팅 드레인이
   재처리한다. 체크인 기록은 같은 트랜잭션 write-through + 기존 기록 백필, 읽기는 JSONB 유지.

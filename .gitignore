@@ -6,6 +6,7 @@
 index.html.artifact.json
 
 node_modules/
+.next/
 .worktrees/
 data/server/
 data/storage/

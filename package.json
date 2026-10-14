@@ -11,7 +11,10 @@
     "test": "node scripts/run-tests.cjs",
     "test:raw": "node --test tests/*.test.cjs",
     "a11y": "node scripts/accessibility-audit.cjs",
-    "mobile": "node scripts/mobile-audit.cjs"
+    "mobile": "node scripts/mobile-audit.cjs",
+    "web:dev": "PORT=8777 npm --prefix apps/web run dev",
+    "web:build": "npm --prefix apps/web run build",
+    "web:start": "PORT=8777 npm --prefix apps/web run start"
   },
   "dependencies": {
     "pg": "^8.23.1"
