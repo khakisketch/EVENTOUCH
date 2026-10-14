@@ -125,6 +125,10 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
   첫 변경 시 채운다. `npm test` 503 통과.
 - 2026-10-14: 공개 투영에 운영자 출력 지정 공개(타입·moduleId·noticeId만, 내부값 차단).
   새 앱 전광판 적용은 다음 슬라이스.
+- 2026-10-14: Next.js 이관 슬라이스 6c(운영 콘솔 메시지). 템플릿 저장·캠페인 생성·
+  재시도·도달 상태를 같은 오리진 `/commands`로 처리하고 이력에 티켓 bearer를 두지 않는다.
+  캠페인 생성·재시도 계약을 실제 API로 확인(미연동이라 NEEDS_CONNECTION 유지).
+  웹 감사(접근성·넘침) 통과, `npm test` 504 통과.
 - 2026-10-14: Next.js 이관 슬라이스 6a(운영 콘솔 읽기). 세션 부트스트랩으로
   행사 목록 홈과 행사별 운영 현황(지표·대기·최근 입퇴장)을 렌더. 역할별 로그인
   분기를 데모에서 확인.

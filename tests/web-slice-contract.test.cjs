@@ -127,6 +127,24 @@ test('web-participant-status-goes-through-the-operator-command-path', () => {
   assert.doesNotMatch(list, /sessionStorage/);
 });
 
+test('web-messaging-uses-operator-commands-and-keeps-ticket-bearers-out-of-history', () => {
+  const messaging = read('app/console/events/[id]/messages/MessagingWorkspace.tsx');
+  assert.match(messaging, /template\.save/);
+  assert.match(messaging, /message\.create/);
+  assert.match(messaging, /message\.retry/);
+  assert.match(messaging, /message\.sync/);
+  assert.match(messaging, /\/api\/events\/\$\{encodeURIComponent\(eventId\)\}\/commands/);
+  assert.match(messaging, /workspaces/);
+  assert.match(messaging, /deliveries/);
+  assert.match(messaging, /messageStatusLabel/);
+  assert.match(messaging, /deliveryStatusLabel/);
+  assert.match(messaging, /data\?\.field/);
+  assert.match(messaging, /window\.confirm/);
+  assert.doesNotMatch(messaging, /localStorage/);
+  assert.doesNotMatch(messaging, /sessionStorage/);
+  assert.doesNotMatch(messaging, /recipientSnapshot|ticketToken|Bearer /);
+});
+
 test('web-console-shell-keeps-decided-navigation-and-clients-read-only', () => {
   const shell = read('app/console/ConsoleShell.tsx');
   assert.match(shell, /행사/);

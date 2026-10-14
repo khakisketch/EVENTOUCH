@@ -1,0 +1,565 @@
+.page {
+  display: grid;
+  gap: var(--s5);
+}
+
+.header,
+.panelHeading,
+.historyHeading,
+.campaignTop,
+.campaignTitle,
+.campaignActions,
+.templateActions,
+.recipientTools,
+.formActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.header {
+  align-items: flex-end;
+  padding-bottom: var(--s4);
+  border-bottom: 1px solid var(--line);
+}
+
+.header h1 {
+  margin: 0 0 var(--s2);
+  font-size: clamp(var(--h2), 3vw, var(--display));
+  line-height: 1.2;
+}
+
+.intro,
+.help {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.headerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.connectionNote {
+  display: grid;
+  gap: var(--s1);
+  margin: 0;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--warning-line);
+  border-radius: var(--radius);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: var(--small);
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.85fr);
+  align-items: start;
+  gap: var(--s5);
+}
+
+.panel,
+.history {
+  min-width: 0;
+  padding: var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.panelHeading {
+  align-items: flex-end;
+  margin-bottom: var(--s4);
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--line);
+}
+
+.panelHeading h2,
+.historyHeading h2 {
+  margin: 0;
+  font-size: var(--h3);
+}
+
+.panelKicker {
+  margin: 0 0 var(--s1);
+  color: var(--brand-text);
+  font-size: var(--small);
+  font-weight: 750;
+}
+
+.selectionCount {
+  flex: none;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 700;
+}
+
+.form,
+.templateForm {
+  display: grid;
+  gap: var(--s4);
+}
+
+.form label,
+.templateForm label,
+.recipientFieldset legend {
+  margin-bottom: var(--s2);
+  font-size: var(--small);
+  font-weight: 700;
+}
+
+.form input:not([type="checkbox"]),
+.form select,
+.form textarea,
+.templateForm input,
+.templateForm select,
+.templateForm textarea {
+  margin: 0;
+}
+
+.form textarea,
+.templateForm textarea {
+  min-height: 128px;
+  resize: vertical;
+}
+
+.twoFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s3);
+  align-items: end;
+}
+
+.recipientFieldset {
+  min-width: 0;
+  margin: 0;
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.recipientFieldset legend {
+  padding-inline: var(--s1);
+}
+
+.recipientTools {
+  flex-wrap: wrap;
+  margin-bottom: var(--s2);
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.recipientTools > div {
+  display: flex;
+  gap: var(--s3);
+}
+
+.textButton {
+  min-height: 44px;
+  padding: var(--s2);
+  border: 0;
+  border-radius: var(--radius-small);
+  background: transparent;
+  color: var(--brand-text);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.recipientList,
+.templateList,
+.campaignList,
+.deliveries ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recipientList {
+  max-height: 288px;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.recipientList > li {
+  border-bottom: 1px solid var(--line);
+}
+
+.recipientList > li:last-child {
+  border-bottom: 0;
+}
+
+.recipientRow {
+  display: grid;
+  min-height: 52px;
+  grid-template-columns: 20px minmax(0, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s2);
+  margin: 0;
+  padding: var(--s2);
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.form .recipientRow {
+  display: grid;
+  margin: 0;
+}
+
+.recipientRow input[type="checkbox"],
+.simulateOption input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  accent-color: var(--brand-text);
+}
+
+.recipientName {
+  min-width: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.recipientMeta {
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.recipientDisabled .recipientRow {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.simulateOption {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0 !important;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+  cursor: pointer;
+}
+
+.form .simulateOption {
+  display: flex;
+  margin: 0 !important;
+}
+
+.simulateOption span {
+  display: grid;
+  gap: var(--s1);
+}
+
+.simulateOption strong {
+  font-size: var(--small);
+}
+
+.simulateOption small {
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 400;
+}
+
+.formActions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.fieldError {
+  margin: var(--s2) 0 0;
+  color: var(--danger);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.templateList {
+  display: grid;
+  margin-bottom: var(--s5);
+  border-top: 1px solid var(--line);
+}
+
+.templateRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding-block: var(--s3);
+  border-bottom: 1px solid var(--line);
+}
+
+.templateSummary {
+  display: grid;
+  min-width: 0;
+  gap: var(--s1);
+}
+
+.templateSummary strong {
+  overflow-wrap: anywhere;
+}
+
+.templateSummary span,
+.templateSummary small {
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.templateActions {
+  flex: none;
+  gap: var(--s1);
+}
+
+.templateActions .textButton {
+  padding-inline: var(--s1);
+}
+
+.templateForm {
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+.templateForm h3 {
+  margin: 0;
+  font-size: var(--h3);
+}
+
+.history {
+  display: grid;
+  gap: var(--s4);
+}
+
+.historyHeading {
+  align-items: flex-end;
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--line);
+}
+
+.historyHeading .help {
+  margin-top: var(--s2);
+}
+
+.campaignList {
+  display: grid;
+  gap: var(--s3);
+}
+
+.campaignCard {
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.campaignTop {
+  align-items: flex-start;
+}
+
+.campaignTitle {
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.campaignTitle h3 {
+  min-width: 0;
+  margin: 0;
+  font-size: var(--h3);
+  overflow-wrap: anywhere;
+}
+
+.campaignActions {
+  flex: none;
+  justify-content: flex-end;
+}
+
+.status {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: var(--s1) var(--s2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  font-size: var(--small);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.statusGood {
+  border-color: var(--success-line);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.statusBad {
+  border-color: var(--danger-line);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.statusWarning {
+  border-color: var(--warning-line);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.statusNeutral {
+  border-color: var(--info-line);
+  background: var(--info-soft);
+  color: var(--info);
+}
+
+.campaignMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3) var(--s5);
+  margin: 0;
+}
+
+.campaignMeta div {
+  display: grid;
+  gap: var(--s1);
+}
+
+.campaignMeta dt {
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.campaignMeta dd {
+  margin: 0;
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.campaignHint {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border-left: 3px solid var(--warning-line);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: var(--small);
+}
+
+.deliveries {
+  border-top: 1px solid var(--line);
+}
+
+.deliveries summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  color: var(--ink);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.deliveries summary span {
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 400;
+}
+
+.deliveries ul {
+  border-top: 1px solid var(--line);
+}
+
+.deliveries li {
+  display: grid;
+  min-height: 48px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, auto);
+  align-items: center;
+  gap: var(--s3);
+  padding-block: var(--s2);
+  border-bottom: 1px solid var(--line);
+}
+
+.deliveryName {
+  min-width: 0;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.deliveries time {
+  color: var(--muted);
+  font-size: var(--small);
+  text-align: right;
+}
+
+.empty {
+  margin: 0;
+  padding: var(--s4);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+@media (max-width: 1024px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .header,
+  .historyHeading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .headerActions {
+    width: 100%;
+  }
+
+  .panel,
+  .history {
+    padding: var(--s4);
+  }
+
+  .twoFields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .recipientRow {
+    grid-template-columns: 20px minmax(0, 1fr);
+  }
+
+  .recipientMeta {
+    grid-column: 2;
+    text-align: left;
+  }
+
+  .campaignTop {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .campaignActions {
+    justify-content: flex-start;
+  }
+
+  .deliveries li {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--s2);
+  }
+
+  .deliveries time {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+}
