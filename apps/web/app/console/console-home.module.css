@@ -38,7 +38,6 @@
   gap: var(--s3);
   margin-top: var(--s3);
   padding-block: var(--s2);
-  border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
 
@@ -55,10 +54,10 @@
   min-height: 44px;
   align-items: center;
   gap: var(--s2);
-  padding-inline: var(--s2);
-  border: 1px solid transparent;
-  border-radius: var(--radius-small);
-  background: transparent;
+  padding-inline: var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
   color: var(--muted);
   font: inherit;
   font-size: var(--small);
@@ -79,9 +78,13 @@
 }
 
 .filterActive {
-  border-color: var(--brand-text);
-  background: var(--soft);
-  color: var(--ink);
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.filterActive .filterCount {
+  color: var(--paper);
 }
 
 .filterCount {
@@ -451,13 +454,25 @@
 
 @media (max-width: 1024px) {
   .toolbar {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: var(--s1);
+    flex-wrap: wrap;
+    gap: var(--s2);
+  }
+
+  .filters {
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-block: var(--s1);
+  }
+
+  .viewSwitch {
+    flex: none;
   }
 
   .searchField {
-    width: min(420px, 100%);
+    flex: 1 1 100%;
+    width: 100%;
   }
 
   .eventGrid {
@@ -479,10 +494,9 @@
   }
 
   .filters {
-    flex-wrap: nowrap;
-    width: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
     overflow-x: auto;
-    padding-block: var(--s1);
     scrollbar-color: var(--line-strong) transparent;
   }
 

@@ -159,6 +159,9 @@ test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   assert.match(home, /styles\.dayCell/);
   assert.match(home, /selectedDate/);
   assert.match(home, /nextAction/);
+  // Empty stage filters stay out of the way; archived events remain
+  // reachable through the always-visible total.
+  assert.match(home, /counts\[item\.id\] > 0/);
   assert.match(home, /승인 처리하기/);
   assert.match(home, /일정 미정/);
   // A recoverable connection failure restores shell navigation with the list.

@@ -343,7 +343,7 @@ export default function ConsoleHome() {
 
         <div className={styles.toolbar}>
           <div className={styles.filters} role="group" aria-label="행사 단계">
-            {FILTERS.map((item) => (
+            {FILTERS.filter((item) => item.id === "all" || counts[item.id] > 0).map((item) => (
               <button
                 key={item.id}
                 type="button"
