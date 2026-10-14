@@ -264,3 +264,31 @@ test('public-ticket-api-rejects-missing-invalid-revoked-expired-and-cross-event-
   const crossEvent = await requestJson(harness.baseUrl, `/api/public/events/${slugs.live}/ticket`, { bearer: ticketTokens.crossEvent });
   assert.equal(crossEvent.status, 404);
 });
+
+test('public-event-api-projects-only-the-operator-display-selection', async () => {
+  const idle = await requestJson(harness.baseUrl, `/api/public/events/${slugs.live}`);
+  assert.deepEqual(idle.json.workspace.display, { type: 'idle', moduleId: null });
+
+  await harness.database.query(
+    `UPDATE event_workspaces
+     SET payload = jsonb_set(payload, '{display}', $2::jsonb)
+     WHERE event_id = $1`,
+    [eventIds.live, JSON.stringify({
+      type: 'notice', moduleId: null, noticeId: 'notice-public',
+      at: '2026-10-20T00:00:00.000Z', internalFlag: 'secret',
+    })]
+  );
+  const notice = await requestJson(harness.baseUrl, `/api/public/events/${slugs.live}`);
+  assert.deepEqual(notice.json.workspace.display, {
+    type: 'notice', moduleId: null, noticeId: 'notice-public',
+  });
+
+  await harness.database.query(
+    `UPDATE event_workspaces
+     SET payload = jsonb_set(payload, '{display}', $2::jsonb)
+     WHERE event_id = $1`,
+    [eventIds.live, JSON.stringify({ type: 'bogus', moduleId: 'x'.repeat(500), at: 'now' })]
+  );
+  const fallback = await requestJson(harness.baseUrl, `/api/public/events/${slugs.live}`);
+  assert.deepEqual(fallback.json.workspace.display, { type: 'idle', moduleId: null });
+});

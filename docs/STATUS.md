@@ -27,7 +27,7 @@ Branch: `master` · HEAD: `1a099e0`
 
 ## 검증 수치 (현재 작업 트리 실측)
 
-- `npm test` — **503 통과, 실패 0, 스킵 0** (DB 주입 시). DB 없이 돌리면 197개가 스킵되고 실패로 처리된다.
+- `npm test` — **504 통과, 실패 0, 스킵 0** (DB 주입 시). DB 없이 돌리면 197개가 스킵되고 실패로 처리된다.
 - `npm run a11y` — 구 앱 주요 12화면, serious/critical **0**
 - `npm run mobile` — 구 앱 6기기 × 2방향 × 6화면 = **72검사 통과**, 가로 넘침·44px 미만 조작 요소 0
 
@@ -122,6 +122,8 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
 - 2026-10-14: 티켓 식별 투영(`tickets`, 006). 참가자 변경과 같은 트랜잭션에
   해시·취소·만료를 기록하고 읽기는 JSONB 유지. 백필은 식별자만 옮기고 해시는
   첫 변경 시 채운다. `npm test` 503 통과.
+- 2026-10-14: 공개 투영에 운영자 출력 지정 공개(타입·moduleId·noticeId만, 내부값 차단).
+  새 앱 전광판 적용은 다음 슬라이스.
 - 2026-10-14: Next.js 이관 슬라이스 6a(운영 콘솔 읽기). 세션 부트스트랩으로
   행사 목록 홈과 행사별 운영 현황(지표·대기·최근 입퇴장)을 렌더. 역할별 로그인
   분기를 데모에서 확인.
@@ -152,3 +154,6 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
   Docker 배포 기동, 테스트 하네스 직렬화(거짓 실패 6건 제거).
 - 2026-10-13: 상용화 기반(보안·운영) + UI/UX 렌더 리뷰와 결함 조치.
 - 2026-10-07: PostgreSQL 전환(M1) 완료, JSON 폴백은 410.
+- 2026-10-14: Next.js 이관 슬라이스 6c(메시지 운영). 템플릿 저장, 수신자 선택 캠페인 작성,
+  재시도·수신 결과 조회를 기존 커맨드 경로에 연결. 데모에서 미연동·검증 오류를 확인했고,
+  Solapi 실발송은 자격증명 부재로 미검증.

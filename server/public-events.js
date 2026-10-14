@@ -202,6 +202,21 @@ function publicPost(post, own = false) {
   };
 }
 
+function publicDisplay(value) {
+  // The venue screen is public by nature, so the operator's selection is
+  // public too — but only the selection. Internal fields never cross over.
+  const source = object(value);
+  const type = ['notice', 'poll', 'draw', 'quiz', 'qa', 'photo'].includes(source.type)
+    ? source.type
+    : 'idle';
+  if (type === 'idle') return { type: 'idle', moduleId: null };
+  return {
+    type,
+    moduleId: typeof source.moduleId === 'string' ? source.moduleId.slice(0, 120) : null,
+    noticeId: typeof source.noticeId === 'string' ? source.noticeId.slice(0, 120) : null,
+  };
+}
+
 function publicWorkspace(value, event, participant = null) {
   const source = object(value);
   const attendeeId = participant && participant.id;
@@ -293,7 +308,7 @@ function publicWorkspace(value, event, participant = null) {
     payments: own(source.payments).map((item) => pick(item, ['id', 'participantId', 'amount', 'status', 'at'])),
     rewards: own(source.rewards).map((item) => pick(item, ['id', 'participantId', 'name', 'status', 'at'])),
     audit: [],
-    display: { type: 'idle', moduleId: null },
+    display: publicDisplay(source.display),
     branding: publicPage(source).branding,
     pageExperience: publicPage(source).pageExperience,
     stampMode: source.stampMode === 'SELF' ? 'SELF' : 'STAFF',
