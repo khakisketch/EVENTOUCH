@@ -6,20 +6,23 @@
 ## 손대기 전에 알아야 하는 것
 
 - **이벤트 커맨드 단일 경로**: 운영 모드의 모든 행사 쓰기는
-  `POST /api/events/:eventId/commands`로 들어와 `server/commands/domain.js`의 `execute`가
-  트랜잭션 하나에서 처리한다(멱등 키 → 행 잠금 → 영수증 확인 → 권한 → apply → 감사·저장).
-  새 커맨드는 이 순서를 그대로 따르고, 응답 유실 재시도를 위해 **영수증을 남긴다**.
+  `POST /api/events/:eventId/commands`로 들어와 트랜잭션 하나에서 처리한다
+  (멱등 키 → 행 잠금 → 영수증 확인 → 권한 → apply → 감사·저장).
+  경로는 하나지만 실행기는 3종이다(`domain`·`participants`·`operations`).
+  셋 다 같은 규율을 따르고, 새 커맨드는 이 순서를 그대로 따르고 응답 유실
+  재시도를 위해 **영수증을 남긴다**.
 - **조직 범위 작업은 전용 REST 경로**를 쓴다(이벤트 스코프가 없으므로):
   `POST /api/events`(생성) · `POST /api/clients` · `POST /api/accounts/:id/org-permissions` ·
-  `POST /api/events/:id/members` · `/api/auth/invitations`. 셋 다 같은 멱등 규율을 따른다.
+  `POST /api/events/:id/members` · `/api/auth/invitations`. 모두 같은 멱등 규율을 따른다.
 - **메시지 발송은 커밋 이후**에 실행한다. 공급사 호출이 실패해도 이미 성공으로 본 커맨드를
   롤백하면 안 되고, 공급사가 접수한 메시지를 롤백으로 잃으면 안 된다.
 - **JSON 저장소는 과도기 폴백**이다. `DATABASE_URL`이 있으면 읽지도 쓰지도 않고 레거시 라우트는 410이다.
 
-## 커밋 규율
+## 커밋 규율 (구 앱 자산 전용)
 
 - CSS/JS를 고치면 **같은 커밋에서** `index.html`의 해당 `?v=`를 1 올리고,
   `server/sw.js`의 `CACHE` 이름도 올린다. 서비스 워커가 셸을 캐시하기 때문이다.
+  `apps/web`은 자체 빌드라 이 규칙이 아니라 `tsc`·`next build` 통과가 기준이다.
 - 스크립트 로드 순서는 곧 모듈 시스템이다(뒤가 앞을 덮어쓴다). 순서를 바꾸면
   `tests/load-order.test.cjs`와 `docs/ARCHITECTURE.md` 7절을 함께 고친다.
 - `tests/frontend-contract.test.cjs`가 화면 39·액션 120을 고정한다. 화면·액션을 더하거나 지우면
@@ -35,6 +38,7 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
 ```
 
 - DB URL 없이 `npm test`를 돌리면 197개가 스킵되고 **실패로 처리된다**(침묵 커버리지 손실 방지).
+- a11y·mobile 감사는 구 앱 셸 대상이다. 새 앱 슬라이스는 각 슬라이스 검증(캡처·조작 흐름)으로 확인한다.
 - 테스트 파일은 **직렬 실행**이다(`scripts/run-tests.cjs`). 공유 DB와 IP 기반 로그인 스로틀 때문에
   병렬로 돌리면 서로 걸려 거짓 실패가 난다. 이 결정을 되돌리지 않는다.
 - 브라우저 검증은 저장소의 Playwright(`node_modules/playwright`)를 직접 쓴다.
@@ -42,7 +46,7 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
 
 ## 배포
 
-- `docker compose up -d --build`가 정본 경로다. `HOST_PORT`로 호스트 포트를 바꾼다.
+- `docker compose up -d --build`가 정본 경로다(구 앱+Node 서버만 포함). `HOST_PORT`로 호스트 포트를 바꾼다.
 - 운영에서는 `COOKIE_SECURE=1`, `ADMIN_*`은 실행 환경에서 주입하고 저장소에 두지 않는다.
 - 마이그레이션은 앱 시작 시 자동 적용된다. 되돌리는 마이그레이션은 없다.
 - 배포 검증 최소 기준: `/api/health` 200 → 로그인 → 콘솔 진입 → 쓰기 1건 → **재시작 후 그 값 유지**.
@@ -50,6 +54,10 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
 ## 문서
 
 - **현황은 한 곳**: `docs/STATUS.md`. 지난 서술을 다른 곳에 병렬로 남기지 않는다.
+- 정본 연결: 구조·권한·데이터는 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
+  디자인은 [docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md),
+  배포는 [docs/DEPLOY.md](docs/DEPLOY.md), 연동은 [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
+  정본 내용을 여러 문서에 복제하지 않는다.
 - 지난 계획·설계는 `docs/archive/`에 있다. **고치지 않고 보존하며, 현재 지침으로 쓰지 않는다.**
   거기 적힌 경로·도구·워크플로는 그 시점의 것이고 지금은 존재하지 않을 수 있다.
 - 렌더 검증 캡처는 저장소에 두지 않는다. 작업 폴더(`/tmp/opencode/eventouch-captures/`)에 남기고,

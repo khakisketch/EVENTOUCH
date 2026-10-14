@@ -2,7 +2,8 @@
 
 ## 구성
 
-- 프론트: 이 저장소 정적 파일. Vercel 또는 중앙 서버가 직접 서빙.
+- 프론트: 구 앱은 이 저장소 정적 파일. Vercel 또는 중앙 서버가 직접 서빙.
+  새 앱(`apps/web`)은 아직 컨테이너 이미지·배포 대상이 없다.
 - API: `server/server.js` (Node 24, `pg` 의존성). `PORT` 환경변수 (기본 8776).
 - DB: PostgreSQL (`DATABASE_URL` 필수). 앱 시작 시 번호가 붙은 migration을 적용한다.
 - 파일: `STORAGE_DIR` 아래 서버 생성 파일 ID로 저장; 원본 이름·행사·크기·이미지 치수는 PostgreSQL `stored_files`에 보관한다. 미설정 기본값은 `data/storage`다.
@@ -27,6 +28,7 @@
 
 1. 이 저장소를 Vercel 프로젝트로 연결 (정적).
 2. `vercel.json`의 `API_HOST_HERE`를 중앙 서버 공개 주소로 교체한다. 교체 없이 배포하지 않는다.
+   `API_HOST_HERE`는 자리 표시자이며, 교체 전 상태로는 배포가 동작하지 않는다.
 3. 같은 도메인에서 `/api/*`가 중앙 서버로 가도록 리버스 프록시를 둔다 (예: 프록시에서 `/api/` → 중앙 서버, 나머지 → Vercel 정적).
 4. HTTPS 공개 시 중앙 서버에 `COOKIE_SECURE=1`을 설정한다. 내부 HTTP 운영에서는 0.
 5. 문자·결제 연동 전에는 안내 문구를 시뮬레이션 표시 그대로 둔다.
@@ -45,6 +47,12 @@
 - 테일넷 공개: 8893 → 컨테이너 배포본, 8890 → 개발·데모 서버(데모 데이터).
 
 운영 배포 위치(NAS·공개 도메인)는 아직 정해지지 않았다. 정해지면 `COOKIE_SECURE=1`로 올린다.
+
+## 새 앱·CI 범위 (미완료)
+
+- `docker compose` 이미지·CI(`.github/workflows/ci.yml`)는 구 앱 범위만 검증한다
+  (`npm ci`·`db:migrate`·`npm test`·`mobile`·`a11y`). `apps/web` 설치·타입체크·빌드는
+  포함되어 있지 않으므로, CI 통과가 새 앱 무결함을 뜻하지 않는다.
 
 ## 검증
 

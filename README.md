@@ -9,7 +9,8 @@
 
 ## 스택
 
-- 프론트: 빌드 없는 바닐라 ES + IIFE. `index.html`이 `defer` 스크립트와 CSS를 순서대로 로드한다.
+- 프론트: 구 앱은 빌드 없는 바닐라 ES + IIFE. `index.html`이 `defer` 스크립트와 CSS를 순서대로 로드한다.
+- 새 앱: `apps/web`(Next.js + TypeScript). 별도 설치·빌드(아래 실행 참조), 같은 오리진 `/api` rewrite로 API를 쓴다.
 - 서버: Node 24, `node:http` + `pg`. `server/server.js`가 정적 파일과 `/api/*`를 함께 처리한다.
 - DB: PostgreSQL. 앱 시작 시 번호순 마이그레이션을 적용한다.
 - 테스트: `node:test` + Playwright(감사·브라우저 계약).
@@ -19,6 +20,13 @@
 ```bash
 npm ci
 npm start          # DATABASE_URL 필수, PORT 기본 8776
+```
+
+새 앱(포트 8777):
+
+```bash
+npm --prefix apps/web ci
+npm run web:build && npm run web:start
 ```
 
 최초 관리자는 환경변수로만 만든다. 셋 다 있어야 생성된다.
@@ -42,7 +50,7 @@ POSTGRES_PASSWORD=... ADMIN_EMAIL=... ADMIN_PASSWORD=... docker compose up -d --
 DB가 있어야 백엔드 테스트와 감사가 실제로 돈다. 없이 돌리면 스킵되고, 러너가 그것을 실패로 처리한다.
 
 ```bash
-EVENTOUCH_TEST_DATABASE_URL='postgres://...' npm test    # 478개, 스킵 0이어야 통과
+EVENTOUCH_TEST_DATABASE_URL='postgres://...' npm test    # 스킵 0이어야 통과(최신 수치는 docs/STATUS.md)
 EVENTOUCH_A11Y_DATABASE_URL='postgres://...' npm run a11y # 주요 12화면 WCAG 위반 0
 EVENTOUCH_MOBILE_DATABASE_URL='postgres://...' npm run mobile # 72검사(넘침·44px)
 ```
@@ -58,6 +66,7 @@ assets/js/              core → store → … → surface-presentation 순서�
 server/                 API·인증·권한·커맨드·발송·파일
 server/commands/        이벤트 커맨드 5묶음 + 도메인 라우터(domain.js)
 server/migrations/      번호순 SQL 마이그레이션
+apps/web/               새 프론트엔드(Next.js+TS, 별도 설치·빌드, /api rewrite)
 tests/                  node:test 스위트(+ helpers/postgres-api-server.cjs)
 scripts/                테스트 러너, 접근성·모바일 감사, 정의 추적
 docs/                   정본 문서(+ archive/ = 지난 계획 기록, 현재 지침 아님)

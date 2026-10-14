@@ -4,13 +4,14 @@
 갱신 규칙: 작업이 끝날 때마다 갱신하고, 지난 서술은 지우거나 `## 이력`으로 내린다.
 
 Updated: 2026-10-14
-Branch: `master` · HEAD: `925a767`
+Branch: `master` · HEAD: `1a099e0`
 
 ## 제품
 
 행사대행 운영사를 위한 웹 제품 하나. 운영사 구성원·고객사 담당자·현장 스태프가 쓰는 콘솔과
 앱 없는 참가자 웹(신청 → 티켓 QR → 현장 체크인)을 같은 서버가 함께 서빙한다.
-빌드 단계 없음(바닐라 ES + IIFE), 데이터는 PostgreSQL.
+구 앱(바닐라 ES + IIFE)은 빌드 단계가 없고, 데이터는 PostgreSQL.
+새 앱(`apps/web`, Next.js + TypeScript)은 별도 설치·빌드가 필요하다(아래 실행 참조).
 
 ## 지금 되는 것
 
@@ -20,15 +21,15 @@ Branch: `master` · HEAD: `925a767`
 | 참가자 웹 | 행사 홈 · 참가 신청 · 신청 상태 · 티켓 QR · 현장 안내 |
 | 스태프 | 데스크(체크인·수동 검색·카메라 스캔) · 부스 인증 · 오프라인 케네(스캔 큐) |
 | 전광판 | 공지·프로그램·사진·설문 등 5초 갱신 출력 화면 |
-| 서버 권위 | 이벤트 커맨드 60종 + 조직 범위 REST 3종(고객사·조직 권한·행사 권한), 멱등 재시도 |
+| 서버 권위 | 이벤트 커맨드 60여 종 + 조직 범위 REST(행사 생성·고객사·조직/행사 권한·초대), 멱등 재시도 |
 | 메시지 | Solapi 어댑터 구현됨, 자격증명 없어 **모의 발송**만. 발송 의도는 트랜잭션 outbox에 기록되고 부팅 시 재처리된다 |
-| 배포 | Docker 컨테이너 2개(앱+DB) 기동·검증됨 |
+| 배포 | Docker 컨테이너 2개(앱+DB, 구 앱+Node 서버만 포함) 기동·검증됨. 새 앱(`apps/web`)은 아직 컨테이너 이미지·배포 대상 없음 |
 
 ## 검증 수치 (현재 작업 트리 실측)
 
 - `npm test` — **499 통과, 실패 0, 스킵 0** (DB 주입 시). DB 없이 돌리면 197개가 스킵되고 실패로 처리된다.
-- `npm run a11y` — 주요 12화면, serious/critical **0**
-- `npm run mobile` — 6기기 × 2방향 × 6화면 = **72검사 통과**, 가로 넘침·44px 미만 조작 요소 0
+- `npm run a11y` — 구 앱 주요 12화면, serious/critical **0**
+- `npm run mobile` — 구 앱 6기기 × 2방향 × 6화면 = **72검사 통과**, 가로 넘침·44px 미만 조작 요소 0
 
 ## 실행
 
@@ -36,6 +37,15 @@ Branch: `master` · HEAD: `925a767`
 npm ci
 npm start                     # DATABASE_URL 필요, 기본 포트 8776
 bash scripts/serve-demo.sh     # 이 환경의 데모 서버(포트·DB를 환경변수로 바꾼다)
+```
+
+새 앱은 의존성·빌드가 분리되어 있다(루트 `npm ci`에 포함되지 않음):
+
+```bash
+npm --prefix apps/web ci
+npm run web:build              # 프로덕션 빌드
+npm run web:start              # 포트 8777, API는 EVENTOUCH_API_URL(기본 127.0.0.1:8776)
+npm run web:dev                # 개발 서버(포트 8777)
 ```
 
 검증용 DB를 붙여 돌릴 때:
@@ -66,6 +76,7 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
 - 내비게이션 정본: 메인 메뉴는 `행사`·`고객사` 두 개, 현재 행사는 `행사` 아래 중첩,
   `팀·권한`·`서비스 연동`은 하단 운영자 메뉴. 새 "조직 설정" 영역은 만들지 않는다.
 - 고객사는 운영사의 내부 기록이다. 고객사 포털·로그인은 제공하지 않는다.
+  고객사 담당자(CLIENT 역할) 미지원은 출시 블로커가 아니라 의도적 제외다.
 
 ## 블로커
 
@@ -74,7 +85,7 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
 | 실발송 | Solapi API Key/Secret·발신번호·카카오 `pfId`·승인 템플릿 없음 |
 | 푸시·PR | git 원격 없음(2026-10-14 사용자가 "지금은 푸시하지 않음" 선택) |
 | 운영 배포 | NAS냐 공개 도메인이냐 미정, 필요한 자격증명 미확보 |
-| 고객사 담당자 | 서버 `accounts.role` CHECK에 `CLIENT` 역할이 없어 초대·연결·행사 권한이 프리뷰 모드에서만 동작 |
+| CI 범위 | CI는 구 앱(`npm ci`·`npm test`·a11y·mobile)만 검증. `apps/web` 설치·타입체크·빌드는 미포함 |
 | 서버 시각 | NTP 동기화 미확인(Solapi ±15분 제약) |
 
 ## 다음
@@ -82,7 +93,7 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
 1. Solapi 준비 → 실발송 검증(SMS·LMS·알림톡·대체발송 각 1건). `docs/INTEGRATIONS.md`
 2. 운영 배포 위치 결정 → 그 값으로 자격증명 발급, `COOKIE_SECURE=1`
 3. 푸시할 원격이 정해지면 push + CI(워크플로는 이미 있다: `.github/workflows/ci.yml`)
-4. 고객사 담당자(CLIENT 역할) 지원 여부 결정 — 스키마 변경 + 인증 흐름 설계 필요
+4. 운영 콘솔 쓰기 계속(현장·메시지·설정) + Fastify/TypeScript API·티켓 정규화·리포트 전환(승인된 잔여 작업)
 
 ## 남은 미검증 (완료라고 말하지 않는다)
 
