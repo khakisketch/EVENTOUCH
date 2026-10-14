@@ -30,6 +30,32 @@ function entryLabel(state: {
   return "참가 확정";
 }
 
+const STORAGE_PREFIX = "eventouch.ticket.";
+
+function readStoredTicket(slug: string): string {
+  try {
+    return window.sessionStorage.getItem(STORAGE_PREFIX + slug) || "";
+  } catch {
+    return "";
+  }
+}
+
+function storeTicket(slug: string, ticket: string): void {
+  try {
+    window.sessionStorage.setItem(STORAGE_PREFIX + slug, ticket);
+  } catch {
+    // Storage unavailable (private mode): the URL pass-through still works.
+  }
+}
+
+function clearStoredTicket(slug: string): void {
+  try {
+    window.sessionStorage.removeItem(STORAGE_PREFIX + slug);
+  } catch {
+    // Nothing to clear.
+  }
+}
+
 export default function TicketView({ slug }: { slug: string }) {
   const [state, setState] = useState<TicketState>({ kind: "loading" });
 
@@ -37,11 +63,15 @@ export default function TicketView({ slug }: { slug: string }) {
     let cancelled = false;
     async function load() {
       const query = new URLSearchParams(window.location.search);
-      const ticket = query.get("ticket") || "";
-      // Consume the bearer once: it must not linger in history or a shared link.
+      const fromLink = query.get("ticket") || "";
+      // Consume the bearer once: it must not linger in history or a shared
+      // link. The tab keeps it (sessionStorage, gone when the tab closes)
+      // so a venue refresh or a dropped connection does not lose the ticket.
+      if (fromLink) storeTicket(slug, fromLink);
       query.delete("ticket");
       const cleaned = `${window.location.pathname}${query.toString() ? `?${query.toString()}` : ""}${window.location.hash}`;
       window.history.replaceState(null, "", cleaned);
+      const ticket = fromLink || readStoredTicket(slug);
       if (!ticket) {
         if (!cancelled) setState({ kind: "missing" });
         return;
@@ -57,6 +87,8 @@ export default function TicketView({ slug }: { slug: string }) {
           participant?: Record<string, unknown> | null;
         } | null;
         if (!res.ok || !data?.participant) {
+          // The server says this link is not usable; stop replaying it.
+          if (res.status === 404) clearStoredTicket(slug);
           if (!cancelled) {
             setState({
               kind: "failed",

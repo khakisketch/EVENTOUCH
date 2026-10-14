@@ -53,12 +53,14 @@ test('web-registration-posts-to-the-public-signup-contract', () => {
   assert.match(page, /publishedVersion/);
 });
 
-test('web-ticket-keeps-the-bearer-out-of-storage-and-history', () => {
+test('web-ticket-keeps-the-bearer-out-of-history-and-persistent-storage', () => {
   const view = read('app/event/[slug]/ticket/TicketView.tsx');
   assert.match(view, /authorization:\s*`Bearer /);
   assert.match(view, /history\.replaceState/);
+  // The bearer survives a venue refresh in the tab session only; it must
+  // never land in persistent storage or outlive the tab.
+  assert.match(view, /sessionStorage/);
   assert.doesNotMatch(view, /localStorage/);
-  assert.doesNotMatch(view, /sessionStorage/);
   // The QR encodes the same raw token the staff scanners accept.
   assert.match(view, /<QRCode value=\{[^}]*ticket[^}]*\}/);
 });
