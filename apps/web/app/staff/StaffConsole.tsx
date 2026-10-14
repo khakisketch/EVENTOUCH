@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import CameraScan from "./CameraScan";
 
 type Assignment = { id: string; type: string; targetId: string };
 type Desk = { id: string; name: string; action: string };
@@ -39,6 +40,7 @@ export default function StaffConsole() {
   const [scopeIndex, setScopeIndex] = useState(0);
   const [deskId, setDeskId] = useState("");
   const [ticket, setTicket] = useState("");
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [result, setResult] = useState<ScanResult>({ kind: "idle" });
   const [submitting, setSubmitting] = useState(false);
 
@@ -129,9 +131,8 @@ export default function StaffConsole() {
   if (!scope) return <p>배정된 데스크가 없습니다.</p>;
   const assignment = scope.assignments.find((item) => item.targetId === deskId) ?? null;
 
-  async function onScan(event: React.FormEvent) {
-    event.preventDefault();
-    if (submitting || !assignment || !deskId || !ticket.trim()) return;
+  async function submitTicket(code: string) {
+    if (submitting || !assignment || !deskId || !code.trim()) return;
     setSubmitting(true);
     setResult({ kind: "idle" });
     try {
@@ -142,7 +143,7 @@ export default function StaffConsole() {
           commandId: randomCommandId(),
           command: "check.scan",
           assignmentId: assignment.id,
-          payload: { deskId, ticket: ticket.trim() },
+          payload: { deskId, ticket: code.trim() },
         }),
       });
       const data = (await res.json().catch(() => null)) as {
@@ -172,6 +173,11 @@ export default function StaffConsole() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function onScan(event: React.FormEvent) {
+    event.preventDefault();
+    await submitTicket(ticket);
   }
 
   return (
@@ -232,6 +238,28 @@ export default function StaffConsole() {
           {submitting ? "처리 중입니다" : "체크인"}
         </button>
       </form>
+      <div>
+        <button
+          type="button"
+          disabled={!assignment}
+          onClick={() => {
+            setResult({ kind: "idle" });
+            setCameraOpen(true);
+          }}
+        >
+          카메라로 스캔
+        </button>
+      </div>
+      {cameraOpen && assignment ? (
+        <CameraScan
+          onDetected={(code) => {
+            setCameraOpen(false);
+            setTicket(code);
+            submitTicket(code);
+          }}
+          onClose={() => setCameraOpen(false)}
+        />
+      ) : null}
       {result.kind === "ok" ? (
         <p role="status">
           {result.name} · {result.action === "IN" ? "입장" : "퇴장"}

@@ -77,3 +77,18 @@ test('web-staff-uses-session-bootstrap-and-server-checked-commands', () => {
   assert.doesNotMatch(console_, /localStorage/);
   assert.doesNotMatch(console_, /sessionStorage/);
 });
+
+test('web-camera-scan-degrades-to-manual-entry-without-a-camera', () => {
+  const scanner = read('app/staff/CameraScan.tsx');
+  // Guarded access: never crash where getUserMedia is missing or denied.
+  assert.match(scanner, /navigator\.mediaDevices/);
+  assert.match(scanner, /getUserMedia/);
+  assert.match(scanner, /직접 입력/);
+  // Decoded strings go through the same server-checked submit, never a
+  // local decision.
+  assert.match(scanner, /onDetected/);
+  assert.doesNotMatch(scanner, /fetch\(/);
+  const console_ = read('app/staff/StaffConsole.tsx');
+  assert.match(console_, /CameraScan/);
+  assert.match(console_, /submitTicket\(code\)/);
+});
