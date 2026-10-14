@@ -7,6 +7,7 @@ index.html.artifact.json
 
 node_modules/
 .next/
+*.tsbuildinfo
 .worktrees/
 data/server/
 data/storage/
