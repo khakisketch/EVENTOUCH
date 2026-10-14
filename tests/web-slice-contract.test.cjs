@@ -52,3 +52,13 @@ test('web-registration-posts-to-the-public-signup-contract', () => {
   assert.match(page, /registrationOpen/);
   assert.match(page, /publishedVersion/);
 });
+
+test('web-ticket-keeps-the-bearer-out-of-storage-and-history', () => {
+  const view = read('app/event/[slug]/ticket/TicketView.tsx');
+  assert.match(view, /authorization:\s*`Bearer /);
+  assert.match(view, /history\.replaceState/);
+  assert.doesNotMatch(view, /localStorage/);
+  assert.doesNotMatch(view, /sessionStorage/);
+  // The QR encodes the same raw token the staff scanners accept.
+  assert.match(view, /<QRCode value=\{[^}]*ticket[^}]*\}/);
+});
