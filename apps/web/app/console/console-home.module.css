@@ -1,0 +1,91 @@
+.createTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.listHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2) var(--s4);
+  margin-bottom: var(--s2);
+}
+
+.listHead .eventListCount {
+  margin: 0;
+}
+
+.dialogBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: var(--s4);
+  background: var(--scrim);
+}
+
+.dialog {
+  width: min(480px, 100%);
+  max-height: min(640px, calc(100svh - var(--s6)));
+  overflow-y: auto;
+  padding: var(--s5);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.dialog h2 {
+  margin: 0 0 var(--s4);
+  font-size: var(--h2);
+}
+
+.dialog form {
+  display: grid;
+  gap: var(--s3);
+}
+
+.dialog label {
+  display: block;
+  margin-bottom: var(--s1);
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.dialog input,
+.dialog select {
+  width: 100%;
+  min-height: 44px;
+}
+
+.slugHint {
+  margin: var(--s1) 0 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.dialogActions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s2);
+  margin: var(--s2) 0 0;
+  padding-block: var(--s3);
+  background: var(--paper);
+  border-top: 1px solid var(--line);
+}
+
+.gridTwo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s3);
+}
+
+@media (max-width: 480px) {
+  .gridTwo {
+    grid-template-columns: 1fr;
+  }
+}

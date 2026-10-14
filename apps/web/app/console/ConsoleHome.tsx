@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { eventStageClassName, eventStageLabel } from "../event-stage";
+import CreateEventDialog from "./CreateEventDialog";
+import styles from "./console-home.module.css";
 
 type ConsoleEvent = {
   id: string;
@@ -30,6 +32,7 @@ export default function ConsoleHome() {
   const [state, setState] = useState<HomeState>({ kind: "loading" });
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -124,8 +127,32 @@ export default function ConsoleHome() {
 
   if (state.kind === "loading") return <p className="loading-state" role="status">행사 목록을 불러오고 있습니다.</p>;
   if (state.kind === "failed") return <p className="state-error" role="alert">{state.message}</p>;
+  const clientOptions = [...state.clients.entries()].map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name, "ko-KR"));
   return (
     <section className="event-list-section" aria-label="행사 목록">
+      <div className={styles.listHead}>
+        <p className="event-list-count" role="status" aria-live="polite" aria-atomic="true">
+          {filteredEvents.length}개 행사
+        </p>
+        <button
+          type="button"
+          className={`button button-primary ${styles.createTrigger}`}
+          onClick={() => setCreateOpen(true)}
+        >
+          새 행사 만들기
+        </button>
+      </div>
+      {createOpen ? (
+        <CreateEventDialog
+          clients={clientOptions}
+          onClose={() => setCreateOpen(false)}
+          onCreated={(eventId) => {
+            setCreateOpen(false);
+            router.push(`/console/events/${encodeURIComponent(eventId)}`);
+          }}
+        />
+      ) : null}
       <div className="event-filters" role="search" aria-label="행사 검색 및 필터">
         <div className="event-filter">
           <label htmlFor="event-query">행사 검색</label>
@@ -147,10 +174,6 @@ export default function ConsoleHome() {
           </select>
         </div>
       </div>
-
-      <p className="event-list-count" role="status" aria-live="polite" aria-atomic="true">
-        {filteredEvents.length}개 행사
-      </p>
 
       {!state.events.length ? (
         <p className="empty-state">진행 중인 행사가 없습니다.</p>
