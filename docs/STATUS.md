@@ -4,7 +4,7 @@
 갱신 규칙: 작업이 끝날 때마다 갱신하고, 지난 서술은 지우거나 `## 이력`으로 내린다.
 
 Updated: 2026-10-14
-Branch: `master` · HEAD: `e21e7cb`
+Branch: `master` · HEAD: `925a767`
 
 ## 제품
 
@@ -24,9 +24,9 @@ Branch: `master` · HEAD: `e21e7cb`
 | 메시지 | Solapi 어댑터 구현됨, 자격증명 없어 **모의 발송**만 |
 | 배포 | Docker 컨테이너 2개(앱+DB) 기동·검증됨 |
 
-## 검증 수치 (이 리비전 실측)
+## 검증 수치 (현재 작업 트리 실측)
 
-- `npm test` — **478 통과, 실패 0, 스킵 0** (DB 주입 시). DB 없이 돌리면 197개가 스킵되고 실패로 처리된다.
+- `npm test` — **479 통과, 실패 0, 스킵 0** (DB 주입 시). DB 없이 돌리면 197개가 스킵되고 실패로 처리된다.
 - `npm run a11y` — 주요 12화면, serious/critical **0**
 - `npm run mobile` — 6기기 × 2방향 × 6화면 = **72검사 통과**, 가로 넘침·44px 미만 조작 요소 0
 
@@ -93,6 +93,13 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
 
 ## 이력
 
+- 2026-10-14: 풀스택 목표를 모듈형 모놀리스로 확정하고 Next.js/TypeScript 프론트엔드와
+  TypeScript/Fastify API를 점진 도입하는 기준을 `docs/ARCHITECTURE.md`에 기록. 서로 다른
+  요청 ID로 같은 티켓을 동시에 스캔할 때도 체크인이 한 번만 성공하는 PostgreSQL 회귀 테스트 추가.
+  `npm test` 479 통과.
+- 2026-10-14: OD·Superpowers·Playwright 임시 상태와 시안 작업 폴더 제거. 테스트 픽스처는
+  `tests/fixtures/booth-map/`, 데모 런처는 `scripts/serve-demo.sh`로 이동. 전체 테스트 478개,
+  접근성 12화면, 모바일 72검사 통과. 관련 커밋 `6f711d2`, `925a767`.
 - 2026-10-14: 콘솔 IA 재설계(사이드바·행사 목록 홈·고객사·운영 현황 대시보드), 표면 3종
   (참가자·스태프·전광판) 조치, 서버 명령 3종(고객사·조직 권한·행사 권한) 구현,
   Docker 배포 기동, 테스트 하네스 직렬화(거짓 실패 6건 제거).

@@ -424,6 +424,25 @@ test('concurrent-offline-replay-with-same-command-id-creates-one-checkin', async
   assert.equal(state.audit.filter((row) => row.id === id).length, 1);
 });
 
+test('concurrent-scans-with-distinct-command-ids-allow-only-one-entry', async () => {
+  const event = await createFixture();
+  const person = makeParticipant(event.id, '동시 스캔 참가자');
+  const workspace = await readWorkspace(event.id);
+  workspace.participants.push(person);
+  await writeWorkspace(event.id, workspace);
+  const assignment = await seedAssignment(event);
+
+  const results = await Promise.all([
+    scan(event, person, { actor: 'staff', assignmentId: assignment.id, id: commandId() }),
+    scan(event, person, { actor: 'staff', assignmentId: assignment.id, id: commandId() }),
+  ]);
+
+  assert.deepEqual(results.map((result) => result.status).sort(), [200, 409]);
+  const state = await readWorkspace(event.id);
+  assert.equal(state.checks.filter((row) => row.participantId === person.id && row.corrected !== true).length, 1);
+  assert.equal(state.participants.find((row) => row.id === person.id).inside, true);
+});
+
 test('checkin-respects-reentry-and-supports-exit-before-a-later-entry', async () => {
   const person = makeParticipant('placeholder', '재입장 참가자', { everIn: true });
   const event = await createFixture({ allowReentry: false, participants: [person] });
