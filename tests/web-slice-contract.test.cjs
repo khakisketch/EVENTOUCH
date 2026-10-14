@@ -126,3 +126,14 @@ test('web-participant-status-goes-through-the-operator-command-path', () => {
   assert.doesNotMatch(list, /localStorage/);
   assert.doesNotMatch(list, /sessionStorage/);
 });
+
+test('web-console-shell-keeps-decided-navigation-and-clients-read-only', () => {
+  const shell = read('app/console/ConsoleShell.tsx');
+  assert.match(shell, /행사/);
+  assert.match(shell, /고객사/);
+  assert.match(shell, /nav/i);
+  const clients = read('app/console/clients/ClientsList.tsx');
+  assert.match(clients, /\/api\/bootstrap/);
+  assert.doesNotMatch(clients, /method:\s*"POST"/i);
+  assert.doesNotMatch(clients, /\/commands/);
+});

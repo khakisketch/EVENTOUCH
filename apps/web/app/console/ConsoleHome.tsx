@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { eventStageClassName, eventStageLabel } from "../event-stage";
@@ -20,9 +20,13 @@ type HomeState =
   | { kind: "failed"; message: string }
   | { kind: "ready"; events: ConsoleEvent[]; clients: Map<string, string> };
 
+const STAGES = ["DRAFT", "READY", "LIVE", "ENDED", "ARCHIVED"];
+
 export default function ConsoleHome() {
   const router = useRouter();
   const [state, setState] = useState<HomeState>({ kind: "loading" });
+  const [query, setQuery] = useState("");
+  const [stage, setStage] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -82,26 +86,84 @@ export default function ConsoleHome() {
     };
   }, [router]);
 
+  const filteredEvents = useMemo(() => {
+    if (state.kind !== "ready") return [];
+    const search = query.trim().toLocaleLowerCase("ko-KR");
+    return state.events.filter((event) => {
+      const clientName = event.clientId ? state.clients.get(event.clientId) ?? "" : "";
+      const matchesQuery = !search || `${event.name} ${clientName}`.toLocaleLowerCase("ko-KR").includes(search);
+      return matchesQuery && (!stage || event.stage === stage);
+    });
+  }, [query, stage, state]);
+
   if (state.kind === "loading") return <p className="loading-state" role="status">행사 목록을 불러오고 있습니다.</p>;
   if (state.kind === "failed") return <p className="state-error" role="alert">{state.message}</p>;
-  if (!state.events.length) return <p className="empty-state">진행 중인 행사가 없습니다.</p>;
   return (
-    <ul className="event-list">
-      {state.events.map((event) => (
-        <li className="console-event-card" key={event.id}>
-          <Link className="console-event-title" href={`/console/events/${encodeURIComponent(event.id)}`}>
-            {event.name}
-          </Link>
-          <div className="console-event-meta">
-            {event.clientId && state.clients.get(event.clientId) ? (
-              <span>{state.clients.get(event.clientId)}</span>
-            ) : null}
-            {event.date ? <span>{event.date}</span> : null}
-            {event.stage ? <span className={eventStageClassName(event.stage)}>{eventStageLabel(event.stage)}</span> : null}
-          </div>
-          <span className="event-card-arrow" aria-hidden="true">↗</span>
-        </li>
-      ))}
-    </ul>
+    <section className="event-list-section" aria-label="행사 목록">
+      <div className="event-filters" role="search" aria-label="행사 검색 및 필터">
+        <div className="event-filter">
+          <label htmlFor="event-query">행사 검색</label>
+          <input
+            id="event-query"
+            type="search"
+            placeholder="행사명·고객사 검색"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </div>
+        <div className="event-filter">
+          <label htmlFor="event-stage">진행 상태</label>
+          <select id="event-stage" value={stage} onChange={(event) => setStage(event.target.value)}>
+            <option value="">모든 상태</option>
+            {STAGES.map((value) => (
+              <option value={value} key={value}>{eventStageLabel(value)}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <p className="event-list-count" role="status" aria-live="polite" aria-atomic="true">
+        {filteredEvents.length}개 행사
+      </p>
+
+      {!state.events.length ? (
+        <p className="empty-state">진행 중인 행사가 없습니다.</p>
+      ) : !filteredEvents.length ? (
+        <p className="empty-state">검색 결과가 없습니다.</p>
+      ) : (
+        <ul className="event-list" aria-label="행사 목록">
+          {filteredEvents.map((event) => (
+            <li key={event.id}>
+              <article className="console-event-row">
+                <Link className="console-event-title" href={`/console/events/${encodeURIComponent(event.id)}`}>
+                  <span>{event.name}</span>
+                  <span className="event-card-arrow" aria-hidden="true">↗</span>
+                </Link>
+                <dl className="console-event-meta">
+                  {event.clientId && state.clients.get(event.clientId) ? (
+                    <div>
+                      <dt>고객사</dt>
+                      <dd>{state.clients.get(event.clientId)}</dd>
+                    </div>
+                  ) : null}
+                  {event.date ? (
+                    <div>
+                      <dt>일정</dt>
+                      <dd>{event.date}</dd>
+                    </div>
+                  ) : null}
+                  {event.stage ? (
+                    <div>
+                      <dt>진행 상태</dt>
+                      <dd><span className={eventStageClassName(event.stage)}>{eventStageLabel(event.stage)}</span></dd>
+                    </div>
+                  ) : null}
+                </dl>
+              </article>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
