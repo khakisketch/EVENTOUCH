@@ -251,6 +251,22 @@ async function syncCommand(name,payload,commandId){
   if(result?.event?.id&&E.state?.workspaces?.[result.event.id])E.state.activeEventId=result.event.id;
   return result?.event?.id;
  }
+ if(name==='client.save'){
+  const result=await postWithRetry('/clients',{...payload,commandId});
+  try{await refreshAuthenticated();}catch(error){setConnection('stale',error.message);}
+  return result?.client;
+ }
+ if(name==='org.permissions.save'){
+  const result=await postWithRetry('/accounts/'+encodeURIComponent(payload.accountId||'')+'/org-permissions',{...payload,commandId});
+  try{await refreshAuthenticated();}catch(error){setConnection('stale',error.message);}
+  return result?.account;
+ }
+ if(name==='member.assign'){
+  if(!event?.id)throw Error('행사를 찾을 수 없습니다.');
+  const result=await postWithRetry('/events/'+encodeURIComponent(event.id)+'/members',{...payload,commandId});
+  try{await refreshAuthenticated();}catch(error){setConnection('stale',error.message);}
+  return result?.membership;
+ }
  if(name==='participant.create'&&scope==='attendee'){
   const slug=E.route?.slug;if(!slug)throw Error('행사 주소를 확인할 수 없습니다.');
   const result=await postWithRetry('/events/'+encodeURIComponent(slug)+'/signup',{...payload,formVersion:Number(E.work()?.publishedVersion)||0,commandId});

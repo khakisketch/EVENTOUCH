@@ -5,6 +5,10 @@ const { publicWorkspace } = require('./public-events');
 const { isCalendarDate, toCapacityNumber, isSafeIntegerCapacity } = require('./validation');
 
 const ROLES = new Set(['AGENCY', 'MANAGER', 'STAFF']);
+// Mirrors the console's permission vocabulary so a stored grant can never be
+// one the UI cannot name.
+const ORG_PERMISSIONS = new Set(['events.all', 'events.view', 'events.create', 'clients.manage', 'team.manage', 'integrations.manage']);
+const EVENT_PERMISSIONS = new Set(['all', 'participants', 'page', 'programs', 'onsite', 'booth', 'messages', 'results', 'settings']);
 const ARRAY_FIELDS = [
   'participants', 'fields', 'publishedFields', 'notices', 'program', 'groups', 'desks', 'booths',
   'assignments', 'checks', 'visits', 'modules', 'responses', 'questions', 'photos', 'posts',
@@ -241,6 +245,177 @@ function createState(database) {
     }
   }
 
+  async function saveClient(account, input = {}) {
+    const idempotencyKey = String(input.commandId || '').trim();
+    if (!/^[A-Za-z0-9_-]{8,128}$/.test(idempotencyKey)) {
+      throw rejected(400, '요청 식별자를 확인하세요', 'commandId');
+    }
+
+    const requestedId = String(input.id || '').trim();
+    const name = String(input.name || '').trim();
+    const contact = String(input.contact || '').trim();
+    const email = String(input.email || '').trim();
+    if (!name || name.length > 80) throw rejected(400, '고객사명을 1~80자로 입력하세요', 'name');
+    if (contact.length > 60) throw rejected(400, '담당자 이름을 60자 이내로 입력하세요', 'contact');
+    if (email && (!/^\S+@\S+\.\S+$/.test(email) || email.length > 120)) {
+      throw rejected(400, '담당자 이메일 형식을 확인하세요', 'email');
+    }
+    if (requestedId.length > 160) throw rejected(400, '고객사를 확인하세요', 'id');
+
+    return database.transaction(async (client) => {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [idempotencyKey]);
+      const accountResult = await client.query(
+        'SELECT role, active FROM accounts WHERE id = $1 LIMIT 1 FOR SHARE',
+        [String(account && account.id || '')]
+      );
+      const actor = accountResult.rows[0];
+      if (!actor || actor.active !== true || !ROLES.has(actor.role)) throw denied();
+      // Client records are organisation-level: a manager scoped to one event
+      // must not be able to add or rewrite the customer list.
+      if (actor.role !== 'AGENCY') throw rejected(403, '고객사 관리 권한을 확인하세요');
+
+      const receiptResult = await client.query(
+        'SELECT actor_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1 FOR UPDATE',
+        [idempotencyKey]
+      );
+      if (receiptResult.rowCount) {
+        const receipt = receiptResult.rows[0];
+        const stored = object(receipt.result);
+        if (String(receipt.actor_id || '') !== String(account.id) || stored.command !== 'client.save' || !stored.response?.client) {
+          throw rejected(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+        }
+        return { client: copy(stored.response.client), replayed: true };
+      }
+
+      const existing = requestedId
+        ? (await client.query('SELECT payload FROM clients WHERE id = $1 LIMIT 1 FOR UPDATE', [requestedId])).rows[0]
+        : null;
+      if (requestedId && !existing) throw rejected(404, '고객사를 찾을 수 없습니다');
+
+      const clientId = requestedId || `client-${crypto.randomUUID()}`;
+      // Keep fields this command does not own (a linked contact, for example)
+      // so editing a name never silently unlinks anything.
+      const payload = { ...object(existing && existing.payload), name, contact, email };
+      if (existing) {
+        await client.query(
+          'UPDATE clients SET payload = $2::jsonb, updated_at = now() WHERE id = $1',
+          [clientId, JSON.stringify(payload)]
+        );
+      } else {
+        await client.query(
+          'INSERT INTO clients (id, payload) VALUES ($1, $2::jsonb)',
+          [clientId, JSON.stringify(payload)]
+        );
+      }
+      const saved = { ...payload, id: clientId };
+      await client.query(
+        `INSERT INTO command_receipts (command_id, event_id, actor_id, result)
+         VALUES ($1, NULL, $2, $3::jsonb)`,
+        [idempotencyKey, account.id, JSON.stringify({ command: 'client.save', response: { client: saved } })]
+      );
+      return { client: saved, replayed: false };
+    });
+  }
+
+  async function saveOrgPermissions(account, accountId, input = {}) {
+    const idempotencyKey = String(input.commandId || '').trim();
+    if (!/^[A-Za-z0-9_-]{8,128}$/.test(idempotencyKey)) throw rejected(400, '요청 식별자를 확인하세요', 'commandId');
+    const targetId = String(accountId || '').trim();
+    if (!targetId || targetId.length > 160) throw rejected(400, '구성원을 확인하세요', 'accountId');
+    const requested = Array.isArray(input.orgPermissions) ? input.orgPermissions.map((value) => String(value)) : [];
+    const unknown = requested.filter((value) => !ORG_PERMISSIONS.has(value));
+    if (unknown.length) throw rejected(400, '허용할 수 없는 조직 권한이 포함되어 있습니다', 'orgPermissions');
+    const permissions = [...new Set(requested)];
+
+    return database.transaction(async (client) => {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [idempotencyKey]);
+      const actorResult = await client.query('SELECT role, active FROM accounts WHERE id = $1 LIMIT 1 FOR SHARE', [String(account && account.id || '')]);
+      const actor = actorResult.rows[0];
+      if (!actor || actor.active !== true || !ROLES.has(actor.role)) throw denied();
+      if (actor.role !== 'AGENCY') throw rejected(403, '조직 권한을 변경할 권한이 없습니다');
+
+      const receipt = await client.query('SELECT actor_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1 FOR UPDATE', [idempotencyKey]);
+      if (receipt.rowCount) {
+        const stored = object(receipt.rows[0].result);
+        if (String(receipt.rows[0].actor_id || '') !== String(account.id) || stored.command !== 'org.permissions.save') {
+          throw rejected(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+        }
+        return { account: copy(stored.response.account), replayed: true };
+      }
+
+      const targetResult = await client.query('SELECT id, name, email, role, active, org_permissions FROM accounts WHERE id = $1 LIMIT 1 FOR UPDATE', [targetId]);
+      const target = targetResult.rows[0];
+      if (!target || target.active !== true) throw rejected(404, '구성원을 찾을 수 없습니다');
+      // The organisation owner's own scope is not editable through this command.
+      if (target.role === 'AGENCY') throw rejected(403, '조직 소유자의 권한은 변경할 수 없습니다');
+
+      await client.query('UPDATE accounts SET org_permissions = $2::jsonb WHERE id = $1', [targetId, JSON.stringify(permissions)]);
+      const projection = accountProjection({ ...target, org_permissions: permissions }, true);
+      await client.query(
+        `INSERT INTO command_receipts (command_id, event_id, actor_id, result)
+         VALUES ($1, NULL, $2, $3::jsonb)`,
+        [idempotencyKey, account.id, JSON.stringify({ command: 'org.permissions.save', response: { account: projection } })]
+      );
+      return { account: projection, replayed: false };
+    });
+  }
+
+  async function assignMember(account, eventId, input = {}) {
+    const idempotencyKey = String(input.commandId || '').trim();
+    if (!/^[A-Za-z0-9_-]{8,128}$/.test(idempotencyKey)) throw rejected(400, '요청 식별자를 확인하세요', 'commandId');
+    const targetId = String(input.accountId || '').trim();
+    if (!targetId || targetId.length > 160) throw rejected(400, '구성원을 확인하세요', 'accountId');
+    const requested = Array.isArray(input.write) ? input.write.map((value) => String(value)) : [];
+    const unknown = requested.filter((value) => !EVENT_PERMISSIONS.has(value));
+    if (unknown.length) throw rejected(400, '허용할 수 없는 행사 권한이 포함되어 있습니다', 'write');
+    const write = [...new Set(requested)];
+    const enabled = input.enabled !== false;
+
+    return database.transaction(async (client) => {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [idempotencyKey]);
+      const actorResult = await client.query('SELECT role, active FROM accounts WHERE id = $1 LIMIT 1 FOR SHARE', [String(account && account.id || '')]);
+      const actor = actorResult.rows[0];
+      if (!actor || actor.active !== true || !ROLES.has(actor.role)) throw denied();
+      if (actor.role !== 'AGENCY') throw rejected(403, '행사 권한을 변경할 권한이 없습니다');
+
+      const eventResult = await client.query('SELECT id FROM events WHERE id = $1 LIMIT 1 FOR SHARE', [String(eventId || '')]);
+      if (!eventResult.rowCount) throw rejected(404, '행사를 찾을 수 없습니다');
+
+      const receipt = await client.query('SELECT actor_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1 FOR UPDATE', [idempotencyKey]);
+      if (receipt.rowCount) {
+        const stored = object(receipt.rows[0].result);
+        if (String(receipt.rows[0].actor_id || '') !== String(account.id) || stored.command !== 'member.assign') {
+          throw rejected(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+        }
+        return { membership: copy(stored.response.membership), replayed: true };
+      }
+
+      const targetResult = await client.query('SELECT id, role, active FROM accounts WHERE id = $1 LIMIT 1 FOR UPDATE', [targetId]);
+      const target = targetResult.rows[0];
+      if (!target || target.active !== true || !ROLES.has(target.role)) throw rejected(404, '구성원을 찾을 수 없습니다');
+      if (target.role === 'AGENCY') throw rejected(403, '조직 소유자는 모든 행사에 접근합니다');
+
+      let membership = null;
+      if (enabled) {
+        await client.query(
+          `INSERT INTO memberships (account_id, event_id, write_permissions)
+           VALUES ($1, $2, $3::jsonb)
+           ON CONFLICT (account_id, event_id) DO UPDATE SET write_permissions = EXCLUDED.write_permissions`,
+          [target.id, String(eventId), JSON.stringify(write)]
+        );
+        membership = { accountId: String(target.id), eventId: String(eventId), write };
+      } else {
+        await client.query('DELETE FROM memberships WHERE account_id = $1 AND event_id = $2', [target.id, String(eventId)]);
+      }
+      await client.query(
+        `INSERT INTO command_receipts (command_id, event_id, actor_id, result)
+         VALUES ($1, $2, $3, $4::jsonb)`,
+        [idempotencyKey, String(eventId), account.id, JSON.stringify({ command: 'member.assign', response: { membership } })]
+      );
+      return { membership, replayed: false };
+    });
+  }
+
   async function loadBootstrap(account) {
     const accountId = account && typeof account.id === 'string' ? account.id.trim() : '';
     if (!accountId) throw denied();
@@ -448,7 +623,7 @@ function createState(database) {
     });
   }
 
-  return { loadBootstrap, createEvent };
+  return { loadBootstrap, createEvent, saveClient, saveOrgPermissions, assignMember };
 }
 
 module.exports = { createState, emptyWorkspace, normalizeEvent, normalizeWorkspace, projectParticipant };

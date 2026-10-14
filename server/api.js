@@ -196,6 +196,28 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       return sendJson(res, result.replayed ? 200 : 201, { event: result.event });
     }
 
+    if (parts[1] === 'clients' && parts.length === 2 && req.method === 'POST' && state) {
+      const account = await requireUser(auth, req);
+      res.setHeader('cache-control', 'no-store');
+      try {
+        const result = await state.saveClient(account, body);
+        return sendJson(res, result.replayed ? 200 : 201, { client: result.client });
+      } catch (error) {
+        return err(res, error.status || 500, failureMessage(error, '고객사 정보를 저장하지 못했습니다'), error.field);
+      }
+    }
+
+    if (parts[1] === 'accounts' && parts[3] === 'org-permissions' && parts.length === 4 && req.method === 'POST' && state) {
+      const account = await requireUser(auth, req);
+      res.setHeader('cache-control', 'no-store');
+      try {
+        const result = await state.saveOrgPermissions(account, decodedSegment(parts[2]), body);
+        return sendJson(res, result.replayed ? 200 : 201, { account: result.account });
+      } catch (error) {
+        return err(res, error.status || 500, failureMessage(error, '조직 권한을 저장하지 못했습니다'), error.field);
+      }
+    }
+
     if (parts[1] === 'events' && parts.length === 4 && parts[3] === 'signup') {
       if (req.method !== 'POST') return sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
       const slug = decodedSegment(parts[2]);
@@ -210,6 +232,19 @@ async function handleApi(req, res, store, urlPath, security = {}) {
         return sendJson(res, result.status, result.body);
       } catch (error) {
         return err(res, error.status || 500, failureMessage(error, '요청을 처리하지 못했습니다'), error.field);
+      }
+    }
+
+    if (parts[1] === 'events' && parts.length === 4 && parts[3] === 'members' && req.method === 'POST' && state) {
+      const account = await requireUser(auth, req);
+      res.setHeader('cache-control', 'no-store');
+      const eventId = decodedSegment(parts[2]);
+      if (!eventId) return err(res, 404, '요청한 행사를 찾을 수 없습니다');
+      try {
+        const result = await state.assignMember(account, eventId, body);
+        return sendJson(res, result.replayed ? 200 : 201, { membership: result.membership });
+      } catch (error) {
+        return err(res, error.status || 500, failureMessage(error, '행사 권한을 저장하지 못했습니다'), error.field);
       }
     }
 

@@ -140,9 +140,12 @@ async function requestJson(baseUrl, url, { cookie, bearer, method = 'GET', body 
   return { status: response.status, headers: response.headers, json };
 }
 
-async function deleteFixtureRows(database, { eventIds = [], accountIds = [] }) {
+async function deleteFixtureRows(database, { eventIds = [], accountIds = [], clientIds = [] }) {
   if (eventIds.length) {
     await database.query('DELETE FROM events WHERE id = ANY($1::text[])', [eventIds]);
+  }
+  if (clientIds.length) {
+    await database.query('DELETE FROM clients WHERE id = ANY($1::text[])', [clientIds]);
   }
   if (accountIds.length) {
     await database.query('DELETE FROM accounts WHERE id = ANY($1::text[])', [accountIds]);
