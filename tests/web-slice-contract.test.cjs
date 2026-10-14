@@ -288,7 +288,20 @@ test('web-event-stage-moves-forward-through-the-command-path-only', () => {
   const overview = read('app/console/events/[id]/EventOverview.tsx');
   assert.match(overview, /event\.stage/);
   assert.match(overview, /\/commands/);
-  assert.match(overview, /window\.confirm/);
+  assert.doesNotMatch(overview, /window\.confirm/);
+  assert.match(overview, /setStageConfirm\(true\)/);
+  assert.match(overview, /정말 전환합니다/);
+  assert.match(overview, /취소/);
+  assert.match(overview, /commandId:\s*stageCommandIdRef\.current/);
+  assert.match(overview, /payload:\s*\{\s*stage:\s*nextStage\s*\}/);
+  assert.equal((overview.match(/className=\{styles\.metricCard\}/g) ?? []).length, 4);
+  assert.match(overview, /<time[^>]+dateTime/);
+  assert.match(overview, /formatCheckTime\(check\.at\)/);
+  assert.match(overview, /overview\.registrationOpen \? "접수 중" : "접수 마감"/);
+  assert.doesNotMatch(overview, /className="notice"/);
+  assert.match(overview, /overview\.canManageEvent && !archived/);
+  assert.match(overview, /currentStage === "ARCHIVED"/);
+  assert.doesNotMatch(read('app/console/events/[id]/page.tsx'), /eyebrow/);
   // The UI may hint at prerequisites but never decides them.
   assert.doesNotMatch(overview, /stage:\s*"(LIVE|ARCHIVED)"\s*\}/);
   // A failed load recovers in place; unknown stages read as undecided.

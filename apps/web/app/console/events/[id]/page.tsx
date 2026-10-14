@@ -1,8 +1,7 @@
 import EventOverview from "./EventOverview";
 
-// Slice 6a: the per-event operations overview, read-only. Order follows the
-// decided console IA: header (schedule, venue, stage, intake) → key metrics
-// → what needs doing now → recent in/out. Writes follow in later slices.
+// Per-event operating snapshot. Event stage writes stay in EventOverview and
+// use the single idempotent event command path.
 export default async function ConsoleEventPage({
   params,
 }: {
@@ -10,10 +9,7 @@ export default async function ConsoleEventPage({
 }) {
   const { id } = await params;
   return (
-    <section className="console-page overview-page">
-      <header className="console-page-header">
-        <p className="eyebrow">운영 현황</p>
-      </header>
+    <section className="console-page" aria-label="행사 운영 현황">
       <EventOverview eventId={id} />
     </section>
   );

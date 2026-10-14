@@ -1,0 +1,349 @@
+.overview {
+  display: grid;
+  gap: var(--s4);
+  width: 100%;
+  min-width: 0;
+}
+
+.pageHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s4);
+  min-width: 0;
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--line);
+}
+
+.pageHeader h1 {
+  margin: 0;
+}
+
+.eventTitleBlock {
+  min-width: 0;
+}
+
+.scheduleLine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s2);
+  margin: var(--s2) 0 0;
+  color: var(--muted);
+  font-size: var(--small);
+  font-variant-numeric: tabular-nums;
+}
+
+.statusBadges {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  padding-bottom: 2px;
+}
+
+.stagePill {
+  border-radius: var(--s6);
+}
+
+.intakeBadge {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding-inline: var(--s2);
+  border: 1px solid var(--line);
+  border-radius: var(--s6);
+  font-size: var(--small);
+  font-weight: 700;
+}
+
+.intakeOpen {
+  border-color: var(--success-line);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.intakeClosed {
+  background: var(--surface-muted);
+  color: var(--muted);
+}
+
+.pendingBadge {
+  padding: 2px var(--s2);
+  border-radius: var(--radius-small);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--small);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.metricsSection {
+  display: grid;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: var(--h3);
+}
+
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s3);
+  margin: 0;
+  padding: 0;
+}
+
+.metricCard {
+  display: grid;
+  min-width: 0;
+  min-height: var(--s8);
+  align-content: space-between;
+  gap: var(--s2);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.metricCard dt {
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.metricCard dd {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s1);
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--h3);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.metricCard dd span {
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.restrictedNote {
+  margin: 0;
+  padding-block: var(--s2);
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.workGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.9fr);
+  align-items: stretch;
+  gap: var(--s3);
+  min-width: 0;
+}
+
+.taskCard,
+.stageCard,
+.recentCard {
+  min-width: 0;
+  padding: var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.taskCard,
+.stageCard {
+  display: grid;
+  align-content: start;
+  gap: var(--s3);
+}
+
+.taskSummary {
+  margin: var(--s2) 0 0;
+  color: var(--muted);
+}
+
+.tabular {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.taskPrimary {
+  width: 100%;
+}
+
+.quickLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+.stagePrompt {
+  margin: var(--s2) 0 0;
+  color: var(--muted);
+}
+
+.stageControls,
+.confirmation {
+  display: grid;
+  justify-items: start;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.confirmation {
+  width: 100%;
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+.confirmation > p {
+  margin: 0;
+  font-weight: 700;
+}
+
+.confirmationActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.precondition {
+  margin: 0;
+  padding: var(--s3);
+  border: 1px solid var(--warning-line);
+  border-radius: var(--radius-small);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: var(--small);
+}
+
+.readOnlyNote {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.stageFeedback {
+  display: grid;
+  justify-items: start;
+  gap: var(--s2);
+}
+
+.stageFeedback > p {
+  margin: 0;
+}
+
+.recentCard {
+  display: grid;
+  gap: var(--s2);
+}
+
+.recentHeading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.recentCount {
+  flex: none;
+  color: var(--muted);
+  font-size: var(--small);
+  font-variant-numeric: tabular-nums;
+}
+
+.activityList {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activityList li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding-block: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+.checkDetails {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s1) var(--s2);
+}
+
+.checkDetails strong {
+  overflow-wrap: anywhere;
+}
+
+.checkIn,
+.checkOut {
+  font-size: var(--small);
+  font-weight: 700;
+}
+
+.checkIn {
+  color: var(--success);
+}
+
+.checkOut {
+  color: var(--muted);
+}
+
+.timestamp {
+  flex: none;
+  color: var(--muted);
+  font-size: var(--small);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 1024px) {
+  .metricGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  .overview {
+    gap: var(--s3);
+  }
+
+  .pageHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .taskCard,
+  .stageCard,
+  .recentCard {
+    padding: var(--s4);
+  }
+
+  .workGrid {
+    gap: var(--s2);
+  }
+
+  .activityList li {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--s1);
+  }
+}

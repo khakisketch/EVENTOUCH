@@ -4,7 +4,7 @@
 갱신 규칙: 작업이 끝날 때마다 갱신하고, 지난 서술은 지우거나 `## 이력`으로 내린다.
 
 Updated: 2026-10-14
-Branch: `master` · HEAD: `dc282a2` (기록 기준)
+Branch: `master` · HEAD: `19a3498` (기록 기준)
 
 ## 제품
 
@@ -105,6 +105,12 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
 
 ## 이력
 
+- 2026-10-15: 행사 운영 현황을 홈과 같은 카드 언어로 재설계. 지표 4카드·승인대기 우선
+  할 일(primary 1개)·인라인 2단계 단계 전환(기존 window.confirm 제거, 멱등 재시도 유지)·
+  시각 포함 최근 입퇴장. STAFF는 범위 안내+배정 데스크 기록만, 관리 링크·단계 버튼
+  미렌더. bare `notice` 무스타일 2건을 상태 클래스로 교체, overview 전역 스타일을
+  모듈로 이전(미사용 확인 후 제거), eyebrow 제거. AGENCY·MANAGER·STAFF 3역할과
+  1440·390px 실동작 확인, 데모 데이터 변경 없음. 웹 감사·detect clean, 518 통과.
 - 2026-10-15: 콘솔 홈을 카드 그리드(B 기본)+달력 날짜 필터(C)로 재설계. full-width 행을
   없애고 카드마다 등록·승인대기·현재입장 수치와 다음 행동(승인 처리·현장 준비 등) 버튼을
   달았다. 달력은 같은 카드를 날짜로 거르는 필터이며 일정 미정은 별도 스트립에 둔다.

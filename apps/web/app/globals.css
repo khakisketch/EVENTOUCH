@@ -780,8 +780,7 @@ select[aria-invalid="true"] {
   border-top: 1px solid var(--line);
 }
 
-.activity-list,
-.recent-checks {
+.activity-list {
   display: grid;
   gap: var(--s2);
   margin: 0;
@@ -789,8 +788,7 @@ select[aria-invalid="true"] {
   list-style: none;
 }
 
-.activity-list li,
-.recent-checks li {
+.activity-list li {
   padding: var(--s3);
   border: 1px solid var(--line);
   border-radius: var(--radius-small);
@@ -1640,98 +1638,13 @@ select[aria-invalid="true"] {
   color: var(--muted);
 }
 
-.overview-content,
 .participants-content {
   max-width: var(--web-reading-max);
-}
-
-.overview-header {
-  padding: var(--s5);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
-}
-
-.overview-header h1 {
-  margin-bottom: var(--s2);
 }
 
 .overview-meta {
   margin: 0;
   color: var(--muted);
-}
-
-.section-heading {
-  margin: var(--s6) 0 var(--s3);
-}
-
-.overview-metrics {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--s3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.overview-metrics li {
-  display: flex;
-  min-height: var(--s8);
-  flex-direction: column;
-  justify-content: space-between;
-  gap: var(--s2);
-  padding: var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
-}
-
-.overview-metrics li > span {
-  color: var(--muted);
-  font-size: var(--small);
-}
-
-.overview-metrics strong {
-  font-family: var(--display-font);
-  font-size: var(--display);
-  line-height: 1;
-}
-
-.overview-metrics strong small {
-  margin-left: var(--s1);
-  font: 700 var(--small)/1 var(--body-font);
-}
-
-.overview-task,
-.overview-recent {
-  margin-top: var(--s6);
-  padding: var(--s5);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
-}
-
-.overview-task .section-heading,
-.overview-recent .section-heading {
-  margin-top: 0;
-}
-
-.overview-task > p:not(.overview-action) {
-  margin-bottom: var(--s4);
-}
-
-.overview-action {
-  margin: 0;
-}
-
-.overview-action-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
-}
-
-.recent-checks li {
-  background: var(--paper);
 }
 
 .participant-list {
@@ -1859,10 +1772,6 @@ select[aria-invalid="true"] {
 @media (max-width: 1024px) {
   .console-shell {
     grid-template-columns: 232px minmax(0, 1fr);
-  }
-
-  .overview-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -2015,12 +1924,6 @@ select[aria-invalid="true"] {
     flex-direction: column;
     align-items: flex-start;
     gap: var(--s1);
-  }
-
-  .overview-header,
-  .overview-task,
-  .overview-recent {
-    padding: var(--s4);
   }
 
   .display-page {
@@ -2177,7 +2080,6 @@ select[aria-invalid="true"] {
   }
 
   .ticket-card,
-  .overview-header,
   .participant-row {
     break-inside: avoid;
   }
