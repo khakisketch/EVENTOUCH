@@ -1024,6 +1024,61 @@ select[aria-invalid="true"] {
   outline-offset: 2px;
 }
 
+.nav-event-branch {
+  display: grid;
+  min-width: 0;
+  gap: var(--s1);
+  margin: var(--s1) 0 var(--s2) var(--s4);
+  padding-left: var(--s2);
+  border-left: 1px solid var(--nav-active);
+}
+
+.nav-current-event {
+  display: grid;
+  min-width: 0;
+  gap: var(--s1);
+  padding: var(--s2) var(--s3) 0;
+}
+
+.nav-current-event strong {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--nav-text);
+  font-size: var(--small);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.nav-event-switch {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  color: var(--nav-muted);
+  font-size: var(--small);
+  font-weight: 650;
+  line-height: 1.35;
+  text-decoration: none;
+}
+
+.nav-event-switch:hover {
+  color: var(--nav-text);
+  text-decoration: underline;
+}
+
+.nav-event-switch:focus-visible {
+  outline-color: var(--nav-text);
+  outline-offset: 2px;
+}
+
+.console-subnav-item {
+  min-height: 44px;
+  padding-inline: var(--s3);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
 .sidebar-bottom {
   flex: none;
   padding-top: var(--s3);
@@ -1068,6 +1123,115 @@ select[aria-invalid="true"] {
   color: var(--nav-muted);
   font-size: var(--small);
   line-height: 1.3;
+}
+
+.operator-menu-trigger {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--nav-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.operator-menu-trigger:hover {
+  border-radius: var(--radius-small);
+  background: var(--nav-hover);
+}
+
+.operator-menu-trigger:focus-visible {
+  border-radius: var(--radius-small);
+  outline-color: var(--nav-text);
+  outline-offset: 2px;
+}
+
+.operator-menu-caret {
+  width: var(--s2);
+  height: var(--s2);
+  flex: none;
+  margin-left: auto;
+  border-right: 2px solid var(--nav-muted);
+  border-bottom: 2px solid var(--nav-muted);
+  transform: rotate(225deg);
+  transition: transform var(--enter) ease-out;
+}
+
+.operator-menu-trigger[aria-expanded="true"] .operator-menu-caret {
+  transform: rotate(45deg);
+}
+
+.operator-menu {
+  z-index: 30;
+  display: grid;
+  gap: var(--s1);
+  overflow-y: auto;
+  padding: var(--s2);
+  border: 1px solid var(--nav-active);
+  border-radius: var(--radius);
+  background: var(--nav);
+  box-shadow: 0 8px 24px var(--scrim);
+  overscroll-behavior: contain;
+}
+
+.operator-menu[hidden] {
+  display: none;
+}
+
+.operator-menu-item {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3);
+  border: 0;
+  border-radius: var(--radius-small);
+  background: transparent;
+  color: var(--nav-text);
+  font: inherit;
+  font-size: var(--small);
+  font-weight: 650;
+  line-height: 1.35;
+  text-align: left;
+  text-decoration: none;
+}
+
+.operator-menu-item:not(:disabled):hover {
+  background: var(--nav-hover);
+}
+
+.operator-menu-item:focus-visible {
+  outline-color: var(--nav-text);
+  outline-offset: 1px;
+}
+
+.operator-menu-item:disabled,
+.operator-menu-item[aria-disabled="true"] {
+  color: var(--nav-muted);
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.operator-menu-status {
+  flex: none;
+  color: var(--nav-muted);
+  font-size: var(--small);
+  font-weight: 500;
+}
+
+.operator-menu-divider {
+  height: 1px;
+  margin-block: var(--s1);
+  background: var(--nav-active);
+}
+
+.operator-menu-error {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  color: var(--danger-soft);
+  font-size: var(--small);
+  line-height: 1.4;
 }
 
 .console-content-shell {
@@ -1506,15 +1670,21 @@ select[aria-invalid="true"] {
 
   .side-nav {
     flex: none;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    flex-direction: column;
     gap: var(--s2);
     overflow: visible;
     padding-block: var(--s2);
   }
 
   .console-nav-item {
+    width: 100%;
     gap: var(--s2);
     padding-inline: var(--s2);
+  }
+
+  .nav-event-branch {
+    margin-left: var(--s4);
   }
 
   .sidebar-bottom {

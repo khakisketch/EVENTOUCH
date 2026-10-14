@@ -1,7 +1,33 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+
+type JsonRecord = Record<string, unknown>;
+type ShellData = {
+  userName: string;
+  role: string;
+  roleLabel: string;
+  canSeeEvents: boolean;
+  canSeeClients: boolean;
+  canManageTeam: boolean;
+  canManageIntegrations: boolean;
+  currentEventName: string | null;
+  canAccessCurrentEvent: boolean;
+};
+
+function record(value: unknown): JsonRecord | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as JsonRecord
+    : null;
+}
+
+function text(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
 
 function EventsIcon() {
   return (
@@ -22,9 +48,278 @@ function ClientsIcon() {
 
 export default function ConsoleShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "/console";
+  const router = useRouter();
+  const eventMatch = pathname.match(/^\/console\/events\/([^/]+)/);
+  let eventId: string | null = null;
+  try {
+    eventId = eventMatch ? decodeURIComponent(eventMatch[1]) : null;
+  } catch {
+    eventId = null;
+  }
   const isHome = pathname === "/console";
   const isClients = pathname === "/console/clients";
-  const isEventPath = pathname.startsWith("/console/events/");
+  const isEventPath = Boolean(eventId);
+  const eventBasePath = eventId ? `/console/events/${encodeURIComponent(eventId)}` : "";
+  const isOverview = Boolean(eventBasePath && pathname === eventBasePath);
+  const isParticipants = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/participants`));
+  const isMessages = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/messages`));
+
+  const [shellData, setShellData] = useState<ShellData | null>(null);
+  const [operatorMenuOpen, setOperatorMenuOpen] = useState(false);
+  const [operatorMenuPosition, setOperatorMenuPosition] = useState<CSSProperties | null>(null);
+  const [portalReady, setPortalReady] = useState(false);
+  const [logoutPending, setLogoutPending] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+  const operatorTriggerRef = useRef<HTMLButtonElement>(null);
+  const operatorMenuRef = useRef<HTMLDivElement>(null);
+  const menuFocusPendingRef = useRef(false);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadShellData() {
+      try {
+        const [meResponse, bootstrapResponse] = await Promise.all([
+          fetch("/api/auth/me", { cache: "no-store" }),
+          fetch("/api/bootstrap", { cache: "no-store" }),
+        ]);
+        if (cancelled) return;
+        if (meResponse.status === 401 || bootstrapResponse.status === 401) {
+          router.replace("/staff/login");
+          return;
+        }
+        const [mePayload, bootstrapPayload] = await Promise.all([
+          meResponse.json().catch(() => null) as Promise<unknown>,
+          bootstrapResponse.json().catch(() => null) as Promise<unknown>,
+        ]);
+        const user = record(record(mePayload)?.user);
+        if (!meResponse.ok || !user) return;
+
+        const userId = text(user.id);
+        const role = text(user.role);
+        const state = record(record(bootstrapPayload)?.state);
+        const accounts = Array.isArray(state?.accounts)
+          ? state.accounts.map(record).filter((item): item is JsonRecord => item !== null)
+          : [];
+        const account = accounts.find((item) => item.id === userId);
+        const orgPermissions = Array.isArray(account?.orgPermissions)
+          ? account.orgPermissions.filter((value): value is string => typeof value === "string")
+          : [];
+        const isOrganizationOwner = role === "AGENCY" || account?.orgOwner === true;
+        const hasOrgPermission = (permission: string) =>
+          isOrganizationOwner || orgPermissions.includes(permission);
+        const memberships = Array.isArray(state?.memberships)
+          ? state.memberships.map(record).filter((item): item is JsonRecord => item !== null)
+          : [];
+        const events = Array.isArray(state?.events)
+          ? state.events.map(record).filter((item): item is JsonRecord => item !== null)
+          : [];
+        const currentEvent = eventId
+          ? events.find((item) => item.id === eventId)
+          : undefined;
+        const hasCurrentMembership = memberships.some(
+          (item) => item.accountId === userId && item.eventId === eventId
+        );
+        const canAccessCurrentEvent = Boolean(currentEvent) &&
+          (isOrganizationOwner || (role === "MANAGER" && hasCurrentMembership));
+        const roleLabel = role === "STAFF"
+          ? "현장 스태프"
+          : role === "MANAGER"
+            ? "운영사 구성원"
+            : role === "AGENCY"
+              ? "조직 소유자"
+              : "운영자";
+
+        if (!cancelled) {
+          setShellData({
+            userName: text(user.name).trim() || "운영자",
+            role,
+            roleLabel,
+            canSeeEvents:
+              isOrganizationOwner || role === "MANAGER" ||
+              orgPermissions.includes("events.view") || orgPermissions.includes("events.all"),
+            canSeeClients: hasOrgPermission("clients.manage"),
+            canManageTeam: hasOrgPermission("team.manage"),
+            canManageIntegrations: hasOrgPermission("integrations.manage"),
+            currentEventName: currentEvent ? text(currentEvent.name).trim() || "선택한 행사" : null,
+            canAccessCurrentEvent,
+          });
+        }
+      } catch {
+        // The routed screen owns its data error; keep the shell usable with safe defaults.
+      }
+    }
+    loadShellData();
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId, router]);
+
+  const userName = shellData?.userName ?? "운영자";
+  const roleLabel = shellData?.roleLabel ?? "운영 워크스페이스";
+  const canSeeEvents = shellData?.canSeeEvents ?? false;
+  const canSeeClients = shellData?.canSeeClients ?? false;
+  const canManageTeam = shellData?.canManageTeam ?? false;
+  const canManageIntegrations = shellData?.canManageIntegrations ?? false;
+  const showCurrentEvent = Boolean(
+    isEventPath && shellData?.canAccessCurrentEvent && shellData.currentEventName
+  );
+
+  function closeOperatorMenu(restoreFocus = false) {
+    menuFocusPendingRef.current = false;
+    setOperatorMenuOpen(false);
+    setOperatorMenuPosition(null);
+    if (restoreFocus) {
+      window.requestAnimationFrame(() => operatorTriggerRef.current?.focus());
+    }
+  }
+
+  function updateOperatorMenuPosition() {
+    const trigger = operatorTriggerRef.current;
+    const menu = operatorMenuRef.current;
+    if (!trigger || !menu) return;
+    const rect = trigger.getBoundingClientRect();
+    const gutter = 8;
+    const maxHeight = Math.max(120, window.innerHeight - gutter * 4);
+    const menuHeight = Math.min(menu.scrollHeight, maxHeight);
+    const width = Math.min(rect.width, window.innerWidth - gutter * 2);
+    const left = Math.min(Math.max(gutter, rect.left), window.innerWidth - width - gutter);
+    const spaceAbove = rect.top - gutter;
+    const spaceBelow = window.innerHeight - rect.bottom - gutter;
+    const openBelow = spaceBelow >= menuHeight + gutter || spaceBelow >= spaceAbove;
+    const top = openBelow
+      ? rect.bottom + gutter
+      : rect.top - menuHeight - gutter;
+    setOperatorMenuPosition({
+      position: "fixed",
+      top: Math.max(gutter, top),
+      left,
+      width,
+      maxHeight,
+    });
+  }
+
+  useEffect(() => {
+    if (!operatorMenuOpen) return;
+    updateOperatorMenuPosition();
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        !operatorMenuRef.current?.contains(target) &&
+        !operatorTriggerRef.current?.contains(target)
+      ) {
+        closeOperatorMenu(true);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeOperatorMenu(true);
+        return;
+      }
+      if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+      if (!operatorMenuRef.current?.contains(document.activeElement)) return;
+      const items = Array.from(
+        operatorMenuRef.current?.querySelectorAll<HTMLElement>(
+          '[role="menuitem"]:not([aria-disabled="true"]):not(:disabled)'
+        ) ?? []
+      );
+      if (!items.length) return;
+      event.preventDefault();
+      const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+      const nextIndex = event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? items.length - 1
+          : (currentIndex + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+      items[nextIndex]?.focus();
+    };
+    window.addEventListener("resize", updateOperatorMenuPosition);
+    window.addEventListener("scroll", updateOperatorMenuPosition, true);
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("resize", updateOperatorMenuPosition);
+      window.removeEventListener("scroll", updateOperatorMenuPosition, true);
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [operatorMenuOpen]);
+
+  useEffect(() => {
+    if (!operatorMenuOpen || !operatorMenuPosition || !menuFocusPendingRef.current) return;
+    menuFocusPendingRef.current = false;
+    const frame = window.requestAnimationFrame(() => {
+      operatorMenuRef.current
+        ?.querySelector<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"]):not(:disabled)')
+        ?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [operatorMenuOpen, operatorMenuPosition]);
+
+  async function logout() {
+    if (logoutPending) return;
+    setLogoutError(null);
+    setLogoutPending(true);
+    try {
+      const response = await fetch("/api/auth/logout", { method: "POST" });
+      if (!response.ok) {
+        setLogoutError("로그아웃하지 못했습니다. 다시 시도하세요.");
+        return;
+      }
+      router.replace("/staff/login");
+      router.refresh();
+    } catch {
+      setLogoutError("연결을 확인한 뒤 다시 로그아웃하세요.");
+    } finally {
+      setLogoutPending(false);
+    }
+  }
+
+  const menuItems = portalReady
+    ? createPortal(
+        <div
+          ref={operatorMenuRef}
+          id="operator-menu"
+          className="operator-menu"
+          role="menu"
+          aria-label="운영자 메뉴"
+          hidden={!operatorMenuOpen}
+          style={operatorMenuPosition ?? { visibility: "hidden" }}
+        >
+          {canManageTeam ? (
+            <button type="button" className="operator-menu-item" role="menuitem" aria-disabled="true" disabled>
+              <span>팀·권한</span><span className="operator-menu-status">준비 중</span>
+            </button>
+          ) : null}
+          {canManageIntegrations ? (
+            <button type="button" className="operator-menu-item" role="menuitem" aria-disabled="true" disabled>
+              <span>서비스 연동</span><span className="operator-menu-status">준비 중</span>
+            </button>
+          ) : null}
+          {(canManageTeam || canManageIntegrations) ? (
+            <div className="operator-menu-divider" aria-hidden="true" />
+          ) : null}
+          <button
+            type="button"
+            className="operator-menu-item operator-menu-logout"
+            role="menuitem"
+            onClick={logout}
+            disabled={logoutPending}
+          >
+            <span>{logoutPending ? "로그아웃 중…" : "로그아웃"}</span>
+          </button>
+          {logoutError ? <p className="operator-menu-error" role="alert">{logoutError}</p> : null}
+        </div>,
+        document.body
+      )
+    : null;
+
+  const avatar = Array.from(userName.trim())[0] || "운";
 
   return (
     <div className="console-shell">
@@ -35,34 +330,87 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
         </Link>
 
         <nav className="side-nav" aria-label="주요 메뉴">
-          <Link
-            className={`console-nav-item${isHome ? " active" : isEventPath ? " active-path" : ""}`}
-            href="/console"
-            aria-current={isHome ? "page" : undefined}
-          >
-            <EventsIcon />
-            <span>행사</span>
-          </Link>
-          <Link
-            className={`console-nav-item${isClients ? " active" : ""}`}
-            href="/console/clients"
-            aria-current={isClients ? "page" : undefined}
-          >
-            <ClientsIcon />
-            <span>고객사</span>
-          </Link>
+          {canSeeEvents ? (
+            <Link
+              id="workspace-events-link"
+              className={`console-nav-item${isHome ? " active" : isEventPath ? " active-path" : ""}`}
+              href="/console"
+              aria-current={isHome ? "page" : undefined}
+            >
+              <EventsIcon />
+              <span>행사</span>
+            </Link>
+          ) : null}
+          {showCurrentEvent && eventId ? (
+            <div className="nav-event-branch" role="group" aria-labelledby="workspace-events-link">
+              <div className="nav-current-event">
+                <strong title={shellData?.currentEventName ?? undefined}>{shellData?.currentEventName}</strong>
+                <Link className="nav-event-switch" href="/console">목록에서 전환</Link>
+              </div>
+              <Link
+                className={`console-nav-item console-subnav-item${isOverview ? " active" : ""}`}
+                href={eventBasePath}
+                aria-current={isOverview ? "page" : undefined}
+              >
+                운영 현황
+              </Link>
+              <Link
+                className={`console-nav-item console-subnav-item${isParticipants ? " active" : ""}`}
+                href={`${eventBasePath}/participants`}
+                aria-current={isParticipants ? "page" : undefined}
+              >
+                참가자
+              </Link>
+              <Link
+                className={`console-nav-item console-subnav-item${isMessages ? " active" : ""}`}
+                href={`${eventBasePath}/messages`}
+                aria-current={isMessages ? "page" : undefined}
+              >
+                메시지
+              </Link>
+            </div>
+          ) : null}
+          {canSeeClients ? (
+            <Link
+              className={`console-nav-item${isClients ? " active" : ""}`}
+              href="/console/clients"
+              aria-current={isClients ? "page" : undefined}
+            >
+              <ClientsIcon />
+              <span>고객사</span>
+            </Link>
+          ) : null}
         </nav>
 
         <div className="sidebar-bottom">
-          <div className="operator-block">
-            <span className="operator-avatar" aria-hidden="true">운</span>
+          <button
+            ref={operatorTriggerRef}
+            type="button"
+            className="operator-block operator-menu-trigger"
+            aria-haspopup="menu"
+            aria-expanded={operatorMenuOpen}
+            aria-controls="operator-menu"
+            onClick={() => {
+              setLogoutError(null);
+              if (operatorMenuOpen) {
+                closeOperatorMenu();
+              } else {
+                menuFocusPendingRef.current = true;
+                setOperatorMenuOpen(true);
+              }
+            }}
+          >
+            <span className="operator-avatar" aria-hidden="true">{avatar}</span>
             <span className="operator-identity">
-              <strong>운영자</strong>
-              <small>운영 워크스페이스</small>
+              <strong>{userName}</strong>
+              <small>{roleLabel}</small>
             </span>
-          </div>
+            <span className="operator-menu-caret" aria-hidden="true" />
+          </button>
         </div>
       </aside>
+
+      {menuItems}
 
       <div className="console-content-shell">
         <header className="console-topbar">
