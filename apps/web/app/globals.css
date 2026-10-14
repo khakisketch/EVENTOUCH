@@ -1182,16 +1182,24 @@ select[aria-invalid="true"] {
 .console-event-row,
 .client-row {
   min-width: 0;
-  padding-block: var(--s4);
+  padding-block: var(--s3);
   border-bottom: 1px solid var(--line);
 }
 
-.console-event-title {
+/* Dense comparator row: identity + stage on one line, facts underneath.
+   The whole title is the only entry point — no repeated manage button. */
+.console-event-head {
   display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2) var(--s4);
+}
+
+.console-event-title {
+  display: inline-flex;
   min-height: 44px;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--s4);
   color: var(--ink);
   font-family: var(--display-font);
   font-size: var(--h3);
@@ -1202,7 +1210,8 @@ select[aria-invalid="true"] {
 
 .console-event-title:hover {
   color: var(--brand-text);
-  text-decoration: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .console-event-title .event-card-arrow {
@@ -1221,21 +1230,29 @@ select[aria-invalid="true"] {
 .client-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s3) var(--s6);
-  margin: var(--s2) 0 0;
+  gap: var(--s1) var(--s5);
+  margin: var(--s1) 0 0;
+  padding: 0;
 }
 
 .console-event-meta > div,
 .client-meta > div {
-  display: grid;
+  display: flex;
   min-width: 0;
-  gap: var(--s1);
+  align-items: baseline;
+  gap: var(--s2);
 }
 
 .console-event-meta dt,
 .client-meta dt {
   color: var(--muted);
   font-size: var(--small);
+  white-space: nowrap;
+}
+
+.console-event-meta dt::after,
+.client-meta dt::after {
+  content: "";
 }
 
 .console-event-meta dd,
@@ -1572,6 +1589,13 @@ select[aria-invalid="true"] {
 
   .event-list {
     grid-template-columns: 1fr;
+  }
+
+  .console-event-meta,
+  .client-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--s1);
   }
 
   .overview-header,

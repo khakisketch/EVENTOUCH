@@ -12,6 +12,9 @@ type ConsoleEvent = {
   clientId: string | null;
   date: string;
   stage: string;
+  venue: string;
+  registered: number;
+  capacity: number;
 };
 type Client = { id: string; name: string };
 
@@ -42,17 +45,33 @@ export default function ConsoleHome() {
           state?: {
             events?: unknown;
             clients?: unknown;
+            workspaces?: Record<string, {
+              participants?: unknown;
+              venue?: { name?: unknown } | null;
+            }>;
           } | null;
         } | null;
         if (!res.ok || !data?.state) {
           setState({ kind: "failed", message: "행사 목록을 불러오지 못했습니다." });
           return;
         }
+        const workspaces = data.state.workspaces ?? {};
+        const countRegistered = (eventId: string): number => {
+          const people = workspaces[eventId]?.participants;
+          if (!Array.isArray(people)) return 0;
+          return people.filter((person) => {
+            if (typeof person !== "object" || person === null) return false;
+            const status = (person as Record<string, unknown>).status;
+            return status !== "CANCELLED";
+          }).length;
+        };
         const events = Array.isArray(data.state.events)
           ? data.state.events.flatMap((item) => {
               if (typeof item !== "object" || item === null) return [];
               const event = item as Record<string, unknown>;
               if (typeof event.id !== "string" || !event.id) return [];
+              const venueSource = workspaces[event.id]?.venue;
+              const capacity = Number(event.capacity);
               return [{
                 id: event.id,
                 name: typeof event.name === "string" ? event.name : event.id,
@@ -60,6 +79,13 @@ export default function ConsoleHome() {
                 clientId: typeof event.clientId === "string" ? event.clientId : null,
                 date: typeof event.date === "string" ? event.date : "",
                 stage: typeof event.stage === "string" ? event.stage : "",
+                venue:
+                  typeof venueSource === "object" && venueSource !== null &&
+                  typeof (venueSource as Record<string, unknown>).name === "string"
+                    ? String((venueSource as Record<string, unknown>).name)
+                    : "",
+                registered: countRegistered(event.id),
+                capacity: Number.isFinite(capacity) && capacity > 0 ? capacity : 0,
               }];
             })
           : [];
@@ -135,10 +161,14 @@ export default function ConsoleHome() {
           {filteredEvents.map((event) => (
             <li key={event.id}>
               <article className="console-event-row">
-                <Link className="console-event-title" href={`/console/events/${encodeURIComponent(event.id)}`}>
-                  <span>{event.name}</span>
-                  <span className="event-card-arrow" aria-hidden="true">↗</span>
-                </Link>
+                <div className="console-event-head">
+                  <Link className="console-event-title" href={`/console/events/${encodeURIComponent(event.id)}`}>
+                    {event.name}
+                  </Link>
+                  {event.stage ? (
+                    <span className={eventStageClassName(event.stage)}>{eventStageLabel(event.stage)}</span>
+                  ) : null}
+                </div>
                 <dl className="console-event-meta">
                   {event.clientId && state.clients.get(event.clientId) ? (
                     <div>
@@ -152,12 +182,20 @@ export default function ConsoleHome() {
                       <dd>{event.date}</dd>
                     </div>
                   ) : null}
-                  {event.stage ? (
+                  {event.venue ? (
                     <div>
-                      <dt>진행 상태</dt>
-                      <dd><span className={eventStageClassName(event.stage)}>{eventStageLabel(event.stage)}</span></dd>
+                      <dt>장소</dt>
+                      <dd>{event.venue}</dd>
                     </div>
                   ) : null}
+                  <div>
+                    <dt>등록</dt>
+                    <dd>
+                      {event.capacity
+                        ? `${event.registered} / ${event.capacity}명`
+                        : `${event.registered}명`}
+                    </dd>
+                  </div>
                 </dl>
               </article>
             </li>
