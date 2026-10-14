@@ -126,6 +126,7 @@ PostgreSQL이 행사 데이터의 유일한 권위다. JSON 파일 저장소(`DA
 | `command_receipts` | 커맨드 멱등성 영수증 |
 | `message_outbox` | 발송 의도(커맨드와 같은 트랜잭션 기록, 결과 기록 후 삭제, 부팅 드레인) |
 | `checkin_records` | 체크인 이력의 write-through 투영(JSONB가 읽기 권위, 005가 기존 기록 백필) |
+| `tickets` | 티켓 식별의 write-through 투영(JSONB가 읽기 권위, 006 백필은 식별자만·해시는 첫 변경 시 채움) |
 | `login_attempts` | 로그인 실패 카운터(계정·주소 스코프) |
 | `login_lockout_overrides` | 관리자 잠금 해제 기록 |
 | `global_state` | 전역 키-값 |
@@ -143,6 +144,10 @@ PostgreSQL이 행사 데이터의 유일한 권위다. JSON 파일 저장소(`DA
   `check.correct`와 같은 트랜잭션에서 기록하므로 JSONB와 어긋날 수 없다.
   읽기는 `workspace.checks`가 계속 맡는다. 005 마이그레이션이 기존 기록을
   백필한다.
+- `tickets` — 참가자 티켓 식별의 write-through 투영. 참가자 변경과 같은
+  트랜잭션에서 해시·취소·만료를 기록한다. 006 백필은 식별자만 옮기고 해시는
+  비워 둔다(SQL 마이그레이션은 공유 DB의 암호 확장을 가정하지 않는다).
+  첫 변경 때 해시가 채워지고, 읽기 전환 전에는 스크립트 충원이 먼저다.
 
 ## 5. 서버 권위와 커맨드 흐름
 

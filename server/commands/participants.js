@@ -255,8 +255,7 @@ function responseForReceipt(responseValue) {
   return { response, participantIds, issuedTicketHashes };
 }
 
-function responseFromReceipt(receipt, workspace) {
-  const data = object(receipt.result);
+function responseFromReceipt(receipt, workspace) {  const data = object(receipt.result);
   const response = structuredClone(object(data.response));
   const issuedTicketHashes = object(data.issuedTicketHashes);
   const tickets = new Map(list(data.participantIds).map((id) => {
@@ -275,6 +274,30 @@ function responseFromReceipt(receipt, workspace) {
   restoreTicket(response.participant);
   for (const participant of list(response.participants)) restoreTicket(participant);
   return response;
+}
+
+async function syncTicketRows(client, event, workspace, participantIds) {
+  for (const rawId of participantIds) {
+    const person = existingParticipant(workspace, String(rawId));
+    if (!person || typeof person.ticket !== 'string' || !person.ticket) continue;
+    await client.query(
+      `INSERT INTO tickets (participant_id, event_id, ticket_hash, revoked, expires_at, updated_at)
+       VALUES ($1, $2, $3, $4, NULLIF($5, '')::timestamptz, now())
+       ON CONFLICT (participant_id) DO UPDATE
+       SET event_id = EXCLUDED.event_id,
+           ticket_hash = EXCLUDED.ticket_hash,
+           revoked = EXCLUDED.revoked,
+           expires_at = EXCLUDED.expires_at,
+           updated_at = now()`,
+      [
+        String(person.id),
+        String(event.id),
+        ticketHash(person.ticket),
+        person.revoked === true,
+        String(person.ticketExpiresAt || ''),
+      ]
+    );
+  }
 }
 
 function reissueTicket(event, person, now) {
@@ -408,6 +431,10 @@ function createParticipantCommands(database) {
         [event.id, JSON.stringify(workspace)]
       );
       const savedResponse = responseForReceipt(response.body);
+      // Write-through projection of ticket identity (see 006_tickets): same
+      // transaction as the workspace write, so the two cannot drift. The
+      // JSONB participant list stays the read authority.
+      await syncTicketRows(client, event, workspace, savedResponse.participantIds);
       const receiptData = {
         operation,
         response: savedResponse.response,
