@@ -180,8 +180,8 @@ test('migration-006-backfills-tickets-written-before-the-table-existed', async (
       const applied = await runMigrations(db);
       assert.ok(applied.includes('006_tickets.sql'), `applied: ${applied.join(',')}`);
 
-      // Pre-006 rows carry identity; their hashes complete on first mutation
-      // (SQL migrations assume no crypto extension in shared databases).
+      // Pre-006 rows carry identity; their hashes complete either on first
+      // mutation or via the scripted fill that must precede any read-switch.
       const rows = await db.query(
         'SELECT participant_id, event_id, ticket_hash, revoked FROM tickets ORDER BY participant_id'
       );
@@ -191,6 +191,17 @@ test('migration-006-backfills-tickets-written-before-the-table-existed', async (
         ticket_hash: null,
         revoked: false,
       }]);
+
+      const { fillTicketHashes } = require('../scripts/backfill-ticket-hashes.cjs');
+      const dry = await fillTicketHashes(db, { dryRun: true });
+      assert.deepEqual(dry, { pending: 1, filled: 1, missing: [] });
+      assert.equal((await db.query('SELECT ticket_hash FROM tickets')).rows[0].ticket_hash, null);
+
+      const filled = await fillTicketHashes(db);
+      assert.deepEqual(filled, { pending: 1, filled: 1, missing: [] });
+      assert.equal((await db.query('SELECT ticket_hash FROM tickets')).rows[0].ticket_hash, sha256(oldTicket));
+      // A second run is a no-op.
+      assert.deepEqual(await fillTicketHashes(db), { pending: 0, filled: 0, missing: [] });
     } finally {
       await db.close();
     }
