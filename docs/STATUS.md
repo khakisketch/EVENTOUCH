@@ -86,7 +86,7 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
 | 실발송 | Solapi API Key/Secret·발신번호·카카오 `pfId`·승인 템플릿 없음 |
 | 푸시·PR | git 원격 없음(2026-10-14 사용자가 "지금은 푸시하지 않음" 선택) |
 | 운영 배포 | NAS냐 공개 도메인이냐 미정, 필요한 자격증명 미확보 |
-| CI 범위 | CI는 구 앱(`npm ci`·`npm test`·a11y·mobile)만 검증. `apps/web` 설치·타입체크·빌드는 미포함 |
+| CI 웹 공백 | CI는 구 앱(`npm ci`·`npm test`·a11y·mobile)만 검증하던 것을 `web` 잡으로 새 앱 타입체크·빌드까지 확장. 실발송·실기기 검증은 여전히 CI 밖 |
 | 서버 시각 | NTP 동기화 미확인(Solapi ±15분 제약) |
 
 ## 다음

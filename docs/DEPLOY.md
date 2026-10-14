@@ -50,9 +50,7 @@
 
 ## 새 앱·CI 범위 (미완료)
 
-- `docker compose` 이미지·CI(`.github/workflows/ci.yml`)는 구 앱 범위만 검증한다
-  (`npm ci`·`db:migrate`·`npm test`·`mobile`·`a11y`). `apps/web` 설치·타입체크·빌드는
-  포함되어 있지 않으므로, CI 통과가 새 앱 무결함을 뜻하지 않는다.
+- `docker compose` 이미지·CI(`.github/workflows/ci.yml`)는 구 앱 범위(`npm ci`·`db:migrate`·`npm test`·`mobile`·`a11y`)에 더해 `web` 잡이 `apps/web` 타입체크·빌드를 검증한다.
 
 ## 검증
 

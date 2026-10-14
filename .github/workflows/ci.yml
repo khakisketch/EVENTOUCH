@@ -149,3 +149,25 @@ jobs:
         run: |
           npm run db:migrate
           npm run a11y
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      # The new app has its own lockfile and build; this job is the only
+      # place CI proves it typechecks and builds at all.
+      - name: Install web dependencies
+        run: npm --prefix apps/web ci
+
+      - name: Typecheck the new app
+        run: npx --prefix apps/web tsc --noEmit -p apps/web/tsconfig.json
+
+      - name: Build the new app
+        run: npm --prefix apps/web run build
