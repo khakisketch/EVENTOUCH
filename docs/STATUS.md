@@ -30,6 +30,7 @@ Branch: `master` · HEAD: `1a099e0`
 - `npm test` — **504 통과, 실패 0, 스킵 0** (DB 주입 시). DB 없이 돌리면 197개가 스킵되고 실패로 처리된다.
 - `npm run a11y` — 구 앱 주요 12화면, serious/critical **0**
 - `npm run mobile` — 구 앱 6기기 × 2방향 × 6화면 = **72검사 통과**, 가로 넘침·44px 미만 조작 요소 0
+- `npm run web:audit` — 새 앱 공개 4화면 × 3뷰포트 + 스태프·운영 콘솔, serious/critical **0**, 가로 넘침 0 (실행 중 데모 대상)
 
 ## 실행
 

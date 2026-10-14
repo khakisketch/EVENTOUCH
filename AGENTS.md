@@ -38,7 +38,8 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
 ```
 
 - DB URL 없이 `npm test`를 돌리면 197개가 스킵되고 **실패로 처리된다**(침묵 커버리지 손실 방지).
-- a11y·mobile 감사는 구 앱 셸 대상이다. 새 앱 슬라이스는 각 슬라이스 검증(캡처·조작 흐름)으로 확인한다.
+- a11y·mobile 감사는 구 앱 셸 대상이다. 새 앱 슬라이스는 각 슬라이스 검증(캡처·조작 흐름)과
+  `npm run web:audit`(실행 중 데모 대상 접근성·넘침 감사)으로 확인한다.
 - 테스트 파일은 **직렬 실행**이다(`scripts/run-tests.cjs`). 공유 DB와 IP 기반 로그인 스로틀 때문에
   병렬로 돌리면 서로 걸려 거짓 실패가 난다. 이 결정을 되돌리지 않는다.
 - 브라우저 검증은 저장소의 Playwright(`node_modules/playwright`)를 직접 쓴다.
