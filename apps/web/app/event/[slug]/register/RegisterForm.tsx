@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PublishedField } from "./page";
 
@@ -20,6 +20,11 @@ function randomCommandId(): string {
 
 export default function RegisterForm({ slug, fields, consentText, formVersion }: Props) {
   const router = useRouter();
+  // One command id per filled form, not per click: if the response is lost
+  // on its way back, the retry replays the SAME request and the server
+  // returns the original participant and ticket instead of creating a
+  // second registration. Cleared only after a response is received.
+  const commandIdRef = useRef<string | null>(null);
   const [values, setValues] = useState<Record<string, string | boolean>>({});
   const [consent, setConsent] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
@@ -35,8 +40,10 @@ export default function RegisterForm({ slug, fields, consentText, formVersion }:
     setSubmitting(true);
     setFailure(null);
     try {
+      const commandId = commandIdRef.current ?? randomCommandId();
+      commandIdRef.current = commandId;
       const body: Record<string, unknown> = {
-        commandId: randomCommandId(),
+        commandId,
         formVersion,
         consent: consentText ? consent : undefined,
       };
@@ -53,6 +60,9 @@ export default function RegisterForm({ slug, fields, consentText, formVersion }:
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
+      // A received response settles the attempt: the next submit is a new
+      // request. Only a transport failure (catch below) keeps the id.
+      commandIdRef.current = null;
       const data = (await res.json().catch(() => null)) as {
         error?: unknown;
         field?: unknown;

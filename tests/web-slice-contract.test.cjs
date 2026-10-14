@@ -155,3 +155,14 @@ test('web-console-shell-keeps-decided-navigation-and-clients-read-only', () => {
   assert.doesNotMatch(clients, /method:\s*"POST"/i);
   assert.doesNotMatch(clients, /\/commands/);
 });
+
+test('web-retry-keeps-one-command-id-per-attempt-on-signup-and-scan', () => {
+  // A lost response must replay the same request id, or the retry becomes a
+  // second registration / a confusing duplicate scan.
+  const register = read('app/event/[slug]/register/RegisterForm.tsx');
+  assert.match(register, /commandIdRef\.current/);
+  assert.match(register, /useRef<string \| null>/);
+  const staff = read('app/staff/StaffConsole.tsx');
+  assert.match(staff, /pendingScanIdRef\.current/);
+  assert.match(staff, /useRef<string \| null>/);
+});

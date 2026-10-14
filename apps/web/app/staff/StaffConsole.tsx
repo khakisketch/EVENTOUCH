@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import CameraScan from "./CameraScan";
 
@@ -34,6 +34,7 @@ function randomCommandId(): string {
 
 export default function StaffConsole() {
   const router = useRouter();
+  const pendingScanIdRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [scopes, setScopes] = useState<Scope[]>([]);
@@ -135,17 +136,23 @@ export default function StaffConsole() {
     if (submitting || !assignment || !deskId || !code.trim()) return;
     setSubmitting(true);
     setResult({ kind: "idle" });
+    // One command id per scan attempt: a lost response must replay the SAME
+    // request, or the retry would look like a second scan of the same
+    // ticket. Cleared as soon as any response is received.
+    const commandId = pendingScanIdRef.current ?? randomCommandId();
+    pendingScanIdRef.current = commandId;
     try {
       const res = await fetch(`/api/events/${encodeURIComponent(scope.eventId)}/commands`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          commandId: randomCommandId(),
+          commandId,
           command: "check.scan",
           assignmentId: assignment.id,
           payload: { deskId, ticket: code.trim() },
         }),
       });
+      pendingScanIdRef.current = null;
       const data = (await res.json().catch(() => null)) as {
         error?: unknown;
         name?: unknown;
