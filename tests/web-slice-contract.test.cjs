@@ -126,6 +126,20 @@ test('web-console-home-reads-bootstrap-before-any-write-paths', () => {
   assert.doesNotMatch(overview, /sessionStorage/);
 });
 
+test('web-console-home-surfaces-priority-work-and-stage-grouped-event-links', () => {
+  const home = read('app/console/ConsoleHome.tsx');
+  assert.match(home, /pendingApproval/);
+  assert.match(home, /먼저 확인/);
+  assert.match(home, /참가자 확인/);
+  assert.match(home, /aria-pressed=\{filter === item\.id\}/);
+  for (const label of ['전체', '준비 중', '진행 중', '종료·보관']) {
+    assert.match(home, new RegExp(label));
+  }
+  assert.match(home, /className=\{styles\.eventRow\}/);
+  assert.match(home, /href=\{`\/console\/events/);
+  assert.match(home, /role="meter"/);
+});
+
 test('web-participant-status-goes-through-the-operator-command-path', () => {
   const list = read('app/console/events/[id]/participants/ParticipantList.tsx');
   assert.match(list, /participant\.status/);

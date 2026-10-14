@@ -1,14 +1,10 @@
 import ConsoleHome from "./ConsoleHome";
 
-// Slice 6a of the frontend migration: the operator console, read-only first.
-// The workspace home is the event list (no separate KPI dashboard); each
-// event's overview owns its dashboard. Writes follow in later slices.
+// Workspace home: cross-event priorities and directory. Each event's
+// overview owns the event-specific operating dashboard.
 export default function ConsolePage() {
   return (
-    <section className="console-page console-home-page">
-      <header className="console-page-header">
-        <h1>행사</h1>
-      </header>
+    <section className="console-page console-home-page" aria-label="행사 워크스페이스">
       <ConsoleHome />
     </section>
   );

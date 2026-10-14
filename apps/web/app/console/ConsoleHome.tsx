@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { eventStageClassName, eventStageLabel } from "../event-stage";
@@ -16,23 +16,39 @@ type ConsoleEvent = {
   stage: string;
   venue: string;
   registered: number;
+  pendingApproval: number;
   capacity: number;
 };
 type Client = { id: string; name: string };
+type EventFilter = "all" | "preparing" | "live" | "closed";
 
 type HomeState =
   | { kind: "loading" }
   | { kind: "failed"; message: string }
   | { kind: "ready"; events: ConsoleEvent[]; clients: Map<string, string> };
 
-const STAGES = ["DRAFT", "READY", "LIVE", "ENDED", "ARCHIVED"];
+const STAGE_ORDER: Record<string, number> = {
+  LIVE: 0,
+  READY: 1,
+  DRAFT: 2,
+  ENDED: 3,
+  ARCHIVED: 4,
+};
+
+const FILTERS: Array<{ id: EventFilter; label: string }> = [
+  { id: "all", label: "전체" },
+  { id: "preparing", label: "준비 중" },
+  { id: "live", label: "진행 중" },
+  { id: "closed", label: "종료·보관" },
+];
 
 export default function ConsoleHome() {
   const router = useRouter();
   const [state, setState] = useState<HomeState>({ kind: "loading" });
   const [query, setQuery] = useState("");
-  const [stage, setStage] = useState("");
+  const [filter, setFilter] = useState<EventFilter>("all");
   const [createOpen, setCreateOpen] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -68,6 +84,14 @@ export default function ConsoleHome() {
             return status !== "CANCELLED";
           }).length;
         };
+        const countPending = (eventId: string): number => {
+          const people = workspaces[eventId]?.participants;
+          if (!Array.isArray(people)) return 0;
+          return people.filter((person) => {
+            if (typeof person !== "object" || person === null) return false;
+            return (person as Record<string, unknown>).status === "PENDING";
+          }).length;
+        };
         const events = Array.isArray(data.state.events)
           ? data.state.events.flatMap((item) => {
               if (typeof item !== "object" || item === null) return [];
@@ -88,6 +112,7 @@ export default function ConsoleHome() {
                     ? String((venueSource as Record<string, unknown>).name)
                     : "",
                 registered: countRegistered(event.id),
+                pendingApproval: countPending(event.id),
                 capacity: Number.isFinite(capacity) && capacity > 0 ? capacity : 0,
               }];
             })
@@ -113,28 +138,57 @@ export default function ConsoleHome() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [reloadTick, router]);
 
   const filteredEvents = useMemo(() => {
     if (state.kind !== "ready") return [];
     const search = query.trim().toLocaleLowerCase("ko-KR");
     return state.events.filter((event) => {
       const clientName = event.clientId ? state.clients.get(event.clientId) ?? "" : "";
-      const matchesQuery = !search || `${event.name} ${clientName}`.toLocaleLowerCase("ko-KR").includes(search);
-      return matchesQuery && (!stage || event.stage === stage);
+      const matchesQuery = !search || `${event.name} ${clientName} ${event.venue}`.toLocaleLowerCase("ko-KR").includes(search);
+      const matchesFilter =
+        filter === "all" ||
+        (filter === "preparing" && ["DRAFT", "READY"].includes(event.stage)) ||
+        (filter === "live" && event.stage === "LIVE") ||
+        (filter === "closed" && ["ENDED", "ARCHIVED"].includes(event.stage));
+      return matchesQuery && matchesFilter;
+    }).sort((a, b) => {
+      const rank = (STAGE_ORDER[a.stage] ?? 5) - (STAGE_ORDER[b.stage] ?? 5);
+      return rank || a.date.localeCompare(b.date) || a.name.localeCompare(b.name, "ko-KR");
     });
-  }, [query, stage, state]);
+  }, [filter, query, state]);
 
   if (state.kind === "loading") return <p className="loading-state" role="status">행사 목록을 불러오고 있습니다.</p>;
-  if (state.kind === "failed") return <p className="state-error" role="alert">{state.message}</p>;
+  if (state.kind === "failed") {
+    return (
+      <section className={styles.statePanel}>
+        <p role="alert">{state.message}</p>
+        <button type="button" className="button button-secondary" onClick={() => setReloadTick((tick) => tick + 1)}>
+          다시 불러오기
+        </button>
+      </section>
+    );
+  }
   const clientOptions = [...state.clients.entries()].map(([id, name]) => ({ id, name }))
     .sort((a, b) => a.name.localeCompare(b.name, "ko-KR"));
+  const counts: Record<EventFilter, number> = {
+    all: state.events.length,
+    preparing: state.events.filter((event) => ["DRAFT", "READY"].includes(event.stage)).length,
+    live: state.events.filter((event) => event.stage === "LIVE").length,
+    closed: state.events.filter((event) => ["ENDED", "ARCHIVED"].includes(event.stage)).length,
+  };
+  const priorityEvents = [...state.events]
+    .filter((event) => event.pendingApproval > 0 || event.stage === "LIVE")
+    .sort((a, b) => (b.pendingApproval - a.pendingApproval) || a.date.localeCompare(b.date))
+    .slice(0, 3);
+
   return (
-    <section className="event-list-section" aria-label="행사 목록">
-      <div className={styles.listHead}>
-        <p className="event-list-count" role="status" aria-live="polite" aria-atomic="true">
-          {filteredEvents.length}개 행사
-        </p>
+    <div className={styles.home}>
+      <header className={styles.pageHeader}>
+        <div>
+          <h1>행사</h1>
+          <p>운영할 행사를 찾고, 확인이 필요한 업무부터 이어가세요.</p>
+        </div>
         <button
           type="button"
           className={`button button-primary ${styles.createTrigger}`}
@@ -142,7 +196,8 @@ export default function ConsoleHome() {
         >
           새 행사 만들기
         </button>
-      </div>
+      </header>
+
       {createOpen ? (
         <CreateEventDialog
           clients={clientOptions}
@@ -153,78 +208,150 @@ export default function ConsoleHome() {
           }}
         />
       ) : null}
-      <div className="event-filters" role="search" aria-label="행사 검색 및 필터">
-        <div className="event-filter">
-          <label htmlFor="event-query">행사 검색</label>
-          <input
-            id="event-query"
-            type="search"
-            placeholder="행사명·고객사 검색"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </div>
-        <div className="event-filter">
-          <label htmlFor="event-stage">진행 상태</label>
-          <select id="event-stage" value={stage} onChange={(event) => setStage(event.target.value)}>
-            <option value="">모든 상태</option>
-            {STAGES.map((value) => (
-              <option value={value} key={value}>{eventStageLabel(value)}</option>
-            ))}
-          </select>
-        </div>
-      </div>
 
-      {!state.events.length ? (
-        <p className="empty-state">진행 중인 행사가 없습니다.</p>
-      ) : !filteredEvents.length ? (
-        <p className="empty-state">검색 결과가 없습니다.</p>
-      ) : (
-        <ul className="event-list" aria-label="행사 목록">
-          {filteredEvents.map((event) => (
-            <li key={event.id}>
-              <article className="console-event-row">
-                <div className="console-event-head">
-                  <Link className="console-event-title" href={`/console/events/${encodeURIComponent(event.id)}`}>
-                    {event.name}
-                  </Link>
-                  {event.stage ? (
+      {priorityEvents.length ? (
+        <section className={styles.prioritySection} aria-labelledby="priority-title">
+          <div className={styles.sectionHeading}>
+            <div>
+              <h2 id="priority-title">먼저 확인</h2>
+              <p>승인 대기와 현재 운영 중인 행사를 모았습니다.</p>
+            </div>
+            <span className={styles.sectionCount}>{priorityEvents.length}개</span>
+          </div>
+          <ul className={styles.priorityList}>
+            {priorityEvents.map((event) => {
+              const hasApprovals = event.pendingApproval > 0;
+              const href = hasApprovals
+                ? `/console/events/${encodeURIComponent(event.id)}/participants`
+                : `/console/events/${encodeURIComponent(event.id)}`;
+              return (
+                <li key={event.id}>
+                  <div className={styles.priorityCopy}>
                     <span className={eventStageClassName(event.stage)}>{eventStageLabel(event.stage)}</span>
-                  ) : null}
-                </div>
-                <dl className="console-event-meta">
-                  {event.clientId && state.clients.get(event.clientId) ? (
-                    <div>
-                      <dt>고객사</dt>
-                      <dd>{state.clients.get(event.clientId)}</dd>
-                    </div>
-                  ) : null}
-                  {event.date ? (
-                    <div>
-                      <dt>일정</dt>
-                      <dd>{event.date}</dd>
-                    </div>
-                  ) : null}
-                  {event.venue ? (
-                    <div>
-                      <dt>장소</dt>
-                      <dd>{event.venue}</dd>
-                    </div>
-                  ) : null}
-                  <div>
-                    <dt>등록</dt>
-                    <dd>
-                      {event.capacity
-                        ? `${event.registered} / ${event.capacity}명`
-                        : `${event.registered}명`}
-                    </dd>
+                    <strong>{event.name}</strong>
+                    <span className={styles.priorityReason}>
+                      {hasApprovals ? `승인 대기 ${event.pendingApproval}명` : `등록 ${event.registered}${event.capacity ? ` / ${event.capacity}명` : "명"}`}
+                    </span>
                   </div>
-                </dl>
-              </article>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+                  <Link className={styles.priorityLink} href={href}>
+                    {hasApprovals ? "참가자 확인" : "운영 현황"}
+                    <span aria-hidden="true">→</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
+
+      <section className={styles.directory} aria-labelledby="events-title">
+        <div className={styles.sectionHeading}>
+          <div>
+            <h2 id="events-title">모든 행사</h2>
+            <p>단계와 등록 규모를 비교해 다음 행사로 이동합니다.</p>
+          </div>
+          <span className={styles.resultCount} role="status" aria-live="polite" aria-atomic="true">
+            {filteredEvents.length} / {state.events.length}
+          </span>
+        </div>
+
+        <div className={styles.toolbar}>
+          <div className={styles.filters} role="group" aria-label="행사 단계">
+            {FILTERS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`${styles.filterButton}${filter === item.id ? ` ${styles.filterActive}` : ""}`}
+                aria-pressed={filter === item.id}
+                onClick={() => setFilter(item.id)}
+              >
+                <span>{item.label}</span>
+                <span className={styles.filterCount}>{counts[item.id]}</span>
+              </button>
+            ))}
+          </div>
+          <label className={styles.searchField}>
+            <span className="sr-only">행사명·고객사·장소 검색</span>
+            <input
+              type="search"
+              placeholder="행사명·고객사·장소 검색"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+        </div>
+
+        {!state.events.length ? (
+          <div className={styles.emptyState}>
+            <h3>아직 등록된 행사가 없습니다</h3>
+            <p>새 행사를 만들면 일정과 참가 접수 준비를 시작할 수 있습니다.</p>
+          </div>
+        ) : !filteredEvents.length ? (
+          <div className={styles.emptyState}>
+            <h3>조건에 맞는 행사가 없습니다</h3>
+            <p>검색어를 바꾸거나 다른 진행 단계에서 찾아보세요.</p>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => { setQuery(""); setFilter("all"); }}
+            >
+              필터 초기화
+            </button>
+          </div>
+        ) : (
+          <ul className={styles.eventList}>
+            {filteredEvents.map((event) => {
+              const clientName = event.clientId ? state.clients.get(event.clientId) : "";
+              const percent = event.capacity
+                ? Math.min(100, Math.round((event.registered / event.capacity) * 100))
+                : null;
+              return (
+                <li key={event.id}>
+                  <Link
+                    className={styles.eventRow}
+                    href={`/console/events/${encodeURIComponent(event.id)}`}
+                  >
+                    <span className={styles.eventIdentity}>
+                      <span className={styles.eventTitleLine}>
+                        <strong>{event.name}</strong>
+                        {event.stage ? (
+                          <span className={eventStageClassName(event.stage)}>{eventStageLabel(event.stage)}</span>
+                        ) : null}
+                      </span>
+                      <span className={styles.eventClient}>{clientName || "고객사 미지정"}</span>
+                    </span>
+                    <span className={styles.eventWhen}>
+                      <span>{event.date || "일정 미정"}</span>
+                      <span>{event.venue || "장소 미정"}</span>
+                    </span>
+                    <span className={styles.registration}>
+                      <span className={styles.registrationText}>
+                        <span>등록</span>
+                        <strong>{event.capacity ? `${event.registered} / ${event.capacity}` : `${event.registered}`}</strong>
+                        <span>명</span>
+                      </span>
+                      {percent !== null ? (
+                        <span
+                          className={styles.progressTrack}
+                          role="meter"
+                          aria-label={`${event.name} 정원 사용률`}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={percent}
+                          aria-valuetext={`${percent}%`}
+                        >
+                          <span className={styles.progressValue} style={{ width: `${percent}%` }} />
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className={styles.rowArrow} aria-hidden="true">→</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+    </div>
   );
 }
