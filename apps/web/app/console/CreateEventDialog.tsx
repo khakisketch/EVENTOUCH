@@ -46,6 +46,8 @@ export default function CreateEventDialog({
   const nameRef = useRef<HTMLInputElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const submittingRef = useRef(submitting);
+  submittingRef.current = submitting;
 
   useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null;
@@ -55,7 +57,9 @@ export default function CreateEventDialog({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onCloseRef.current();
+        // Closing mid-submit would look canceled while the write still
+        // lands; the Cancel button already stays disabled until it settles.
+        if (!submittingRef.current) onCloseRef.current();
         return;
       }
       if (event.key !== "Tab" || !dialogRef.current) return;
@@ -133,7 +137,7 @@ export default function CreateEventDialog({
 
   return (
     <div className={styles.dialogBackdrop} onClick={(event) => {
-      if (event.target === event.currentTarget) onClose();
+      if (event.target === event.currentTarget && !submitting) onClose();
     }}>
       <div ref={dialogRef} className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="create-event-title">
         <h2 id="create-event-title">새 행사 만들기</h2>

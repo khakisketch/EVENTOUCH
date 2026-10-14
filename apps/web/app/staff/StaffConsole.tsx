@@ -50,6 +50,8 @@ export default function StaffConsole() {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [result, setResult] = useState<ScanResult>({ kind: "idle" });
   const [submitting, setSubmitting] = useState(false);
+  const scopesRef = useRef<Scope[]>([]);
+  scopesRef.current = scopes;
 
   async function load(silent = false) {
     // A post-scan refresh must not unmount the result the operator just
@@ -111,7 +113,14 @@ export default function StaffConsole() {
           checks: Array.isArray(workspace.checks) ? workspace.checks : [],
         });
       }
-      setScopes(next);
+      if (silent && !next.length && scopesRef.current.length) {
+        // A silent refresh must never strand an operator mid-shift on an
+        // empty screen: keep the current scopes and say the list may be
+        // stale instead. The notice below offers a full reload.
+        setLoadError("최신 업무를 불러오지 못했습니다. 표시된 내용이 오래되었을 수 있습니다.");
+      } else {
+        setScopes(next);
+      }
       if (!silent) {
         setScopeIndex(0);
         setDeskId("");
@@ -396,8 +405,8 @@ export default function StaffConsole() {
       <h2 className="activity-heading">최근 처리</h2>
       {loadError && scopes.length ? (
         <p className="notice" role="status">
-          목록을 새로고침하지 못했습니다. 표시된 기록이 오래되었을 수 있습니다.{" "}
-          <button type="button" className="button button-secondary" onClick={() => load(true)}>
+          {loadError}{" "}
+          <button type="button" className="button button-secondary" onClick={() => load()}>
             다시 불러오기
           </button>
         </p>

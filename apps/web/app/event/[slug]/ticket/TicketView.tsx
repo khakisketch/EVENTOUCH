@@ -163,7 +163,7 @@ export default function TicketView({ slug }: { slug: string }) {
     return (
       <section className="ticket-card ticket-message">
         <h1>티켓을 사용할 수 없습니다</h1>
-        <p>{state.message}</p>
+        <p role="alert">{state.message}</p>
         <p>
           <button
             type="button"
@@ -195,7 +195,7 @@ export default function TicketView({ slug }: { slug: string }) {
       <div className="ticket-attendee">
         <h2>{state.name}</h2>
         {state.company ? <p>{state.company}</p> : null}
-        <p className="ticket-entry-state"><span className="status-dot" aria-hidden="true" />{entryLabel(state)}</p>
+        <p className="ticket-entry-state" data-tone={usable ? "good" : state.status === "CANCELLED" ? "bad" : "wait"}><span className="status-dot" aria-hidden="true" />{entryLabel(state)}</p>
       </div>
       {usable ? (
         <>

@@ -241,11 +241,6 @@
   overflow-wrap: anywhere;
 }
 
-.recipientDisabled .recipientRow {
-  color: var(--muted);
-  cursor: not-allowed;
-}
-
 .simulateOption {
   display: flex;
   min-height: 64px;

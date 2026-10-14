@@ -96,7 +96,8 @@ function channelLabel(channel: string): string {
   switch (channel) {
     case "LMS": return "LMS · 장문";
     case "ALIMTALK": return "알림톡";
-    default: return "SMS · 단문";
+    case "SMS": return "SMS · 단문";
+    default: return "채널 확인 필요";
   }
 }
 
@@ -105,7 +106,8 @@ function participantStatusLabel(status: string): string {
     case "APPROVED": return "참가 확정";
     case "WAITLIST": return "대기 명단";
     case "CANCELLED": return "신청 취소";
-    default: return "승인 대기";
+    case "PENDING": return "승인 대기";
+    default: return "상태 확인 필요";
   }
 }
 
@@ -384,7 +386,12 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   }
 
   function setAllRecipients(checked: boolean, people: Participant[]) {
-    setSelectedIds(checked ? people.map((person) => person.id) : []);
+    const ids = people.map((person) => person.id);
+    setSelectedIds((current) => checked
+      // Union: selecting a filtered view must not drop recipients chosen
+      // in another view. Deselecting removes only the visible ones.
+      ? [...new Set([...current, ...ids])]
+      : current.filter((selected) => !ids.includes(selected)));
     setCampaignFieldError(null);
   }
 
@@ -510,7 +517,10 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       <section className="state-panel">
         <p role="alert">{state.message}</p>
         <p>
-          <button type="button" className="button button-secondary" onClick={() => void refresh()}>
+          <button type="button" className="button button-secondary" onClick={() => {
+            window.dispatchEvent(new CustomEvent("eventouch:shell-reload"));
+            void refresh();
+          }}>
             다시 불러오기
           </button>
         </p>
@@ -641,8 +651,8 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   <div className={styles.recipientTools}>
                     <span>{recipientSearch ? `검색 ${visibleRecipients.length}명` : `발송 가능 ${activeParticipants.length}명`}</span>
                     <div>
-                      <button type="button" className={styles.textButton} onClick={() => setAllRecipients(true, visibleRecipients)}>표시된 대상 전체 선택</button>
-                      <button type="button" className={styles.textButton} onClick={() => setAllRecipients(false, visibleRecipients)}>선택 해제</button>
+                      <button type="button" className={styles.textButton} onClick={() => setAllRecipients(true, visibleRecipients)}>표시된 대상 추가 선택</button>
+                      <button type="button" className={styles.textButton} onClick={() => setAllRecipients(false, visibleRecipients)}>표시된 대상 선택 해제</button>
                     </div>
                   </div>
                   <div className={styles.recipientSearch}>

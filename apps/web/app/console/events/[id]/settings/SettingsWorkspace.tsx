@@ -234,7 +234,10 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     return (
       <section className="state-panel">
         <p role="alert">{state.message}</p>
-        <button type="button" className="button button-secondary" onClick={() => setReloadTick((tick) => tick + 1)}>
+        <button type="button" className="button button-secondary" onClick={() => {
+          setReloadTick((tick) => tick + 1);
+          window.dispatchEvent(new CustomEvent("eventouch:shell-reload"));
+        }}>
           다시 불러오기
         </button>
       </section>

@@ -188,13 +188,13 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
 
   function reload() {
     setReloadTick((tick) => tick + 1);
+    window.dispatchEvent(new CustomEvent("eventouch:shell-reload"));
   }
 
   async function runCommand(
     command: string,
     payload: Record<string, unknown>,
-    successMessage: string,
-    { keepOpen = false }: { keepOpen?: boolean } = {}
+    successMessage: string
   ) {
     if (busy) return false;
     setBusy(true);
@@ -218,8 +218,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         return false;
       }
       setNotice(successMessage);
-      if (!keepOpen) reload();
-      else reload();
+      reload();
       return true;
     } catch {
       setFailure({ message: "연결하지 못했습니다. 다시 시도하세요." });
@@ -256,7 +255,9 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         <h1>{eventName}</h1>
       </header>
 
-      {failure ? <p role="alert" className={styles.alert}>{failure.message}</p> : null}
+      {failure && !(deskOpen || boothOpen || assignOpen) ? (
+        <p role="alert" className={styles.alert}>{failure.message}</p>
+      ) : null}
       {notice ? <p role="status" className={styles.notice}>{notice}</p> : null}
 
       <section className={styles.section} aria-labelledby="ops-desks">
@@ -706,6 +707,8 @@ function AssignDialog({
             id="assign-account"
             value={accountId}
             onChange={(event) => setAccountId(event.target.value)}
+            aria-invalid={failure?.field === "accountId" || undefined}
+            aria-describedby={failure ? "assign-dialog-error" : undefined}
             required
           >
             <option value="">선택하세요</option>
@@ -737,6 +740,8 @@ function AssignDialog({
             id="assign-target"
             value={currentTarget}
             onChange={(event) => setTargetId(event.target.value)}
+            aria-invalid={failure?.field === "targetId" || undefined}
+            aria-describedby={failure ? "assign-dialog-error" : undefined}
             required
           >
             <option value="">선택하세요</option>
@@ -744,7 +749,7 @@ function AssignDialog({
               <option key={target.id} value={target.id}>
                 {target.name}
                 {"mode" in target && target.mode === "tablet" ? " (태블릿)" : ""}
-                {"action" in target ? ` · ${DESK_ACTION_LABEL[target.action] ?? target.action}` : ""}
+                {"action" in target ? ` · ${DESK_ACTION_LABEL[target.action] ?? "작업 미정"}` : ""}
               </option>
             ))}
           </select>

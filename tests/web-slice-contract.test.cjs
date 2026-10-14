@@ -67,6 +67,9 @@ test('web-ticket-keeps-the-bearer-out-of-history-and-persistent-storage', () => 
   // retries with the stored bearer instead of dead-ending.
   assert.match(view, /결제 확인 필요/);
   assert.match(view, /setReloadTick/);
+  // Entry tone follows usability, and the failure is announced.
+  assert.match(view, /data-tone/);
+  assert.match(view, /<p role="alert">/);
 });
 
 test('web-staff-uses-session-bootstrap-and-server-checked-commands', () => {
@@ -161,6 +164,8 @@ test('web-console-home-is-a-compact-schedule-first-event-directory', () => {
   assert.match(dialog, /nameRef\.current\?\.focus/);
   assert.match(dialog, /Escape/);
   assert.match(dialog, /previouslyFocused/);
+  // Escape/backdrop never fake-cancel an in-flight write.
+  assert.match(dialog, /submittingRef/);
   const css = read('app/console/console-home.module.css');
   assert.match(css, /\.dialogBackdrop/);
   assert.match(css, /\.dialogActions/);
@@ -203,6 +208,14 @@ test('web-messaging-uses-operator-commands-and-keeps-ticket-bearers-out-of-histo
   assert.match(messaging, /이름·소속 검색/);
   assert.match(messaging, /visibleRecipients/);
   assert.match(messaging, /다시 불러오기/);
+  // Bulk selection is scoped to the visible view: adding never drops other
+  // views, clearing never touches them.
+  assert.match(messaging, /표시된 대상 추가 선택/);
+  assert.match(messaging, /\[\.\.\.new Set\(\[\.\.\.current, \.\.\.ids\]\)\]/);
+  assert.match(messaging, /eventouch:shell-reload/);
+  // Unknown values never read as a concrete channel or status.
+  assert.match(messaging, /채널 확인 필요/);
+  assert.match(messaging, /상태 확인 필요/);
 });
 
 test('web-console-shell-keeps-decided-navigation-and-clients-read-only', () => {
@@ -238,6 +251,16 @@ test('web-event-stage-moves-forward-through-the-command-path-only', () => {
   // A failed load recovers in place; unknown stages read as undecided.
   assert.match(overview, /다시 불러오기/);
   assert.match(overview, /단계 미정/);
+  // Every screen retry also wakes the shell navigation.
+  for (const file of [
+    'app/console/events/[id]/EventOverview.tsx',
+    'app/console/events/[id]/participants/ParticipantList.tsx',
+    'app/console/clients/ClientsList.tsx',
+    'app/console/events/[id]/operations/OperationsWorkspace.tsx',
+    'app/console/events/[id]/settings/SettingsWorkspace.tsx',
+  ]) {
+    assert.match(read(file), /eventouch:shell-reload/);
+  }
 });
 
 test('web-operations-uses-desk-booth-and-assignment-commands-only', () => {
@@ -255,9 +278,11 @@ test('web-operations-uses-desk-booth-and-assignment-commands-only', () => {
   assert.match(ops, /previouslyFocused/);
   assert.match(ops, /Escape/);
   assert.match(ops, /DialogError/);
+  assert.match(ops, /assign-dialog-error/);
   assert.doesNotMatch(ops, /\?\? desk\.action/);
   assert.doesNotMatch(ops, /\?\? booth\.status/);
   assert.doesNotMatch(ops, /\?\? assignment\.accountId/);
+  assert.doesNotMatch(ops, /\?\? target\.action/);
 });
 
 test('web-display-honors-the-operator-selection-from-the-public-projection', () => {
@@ -274,6 +299,7 @@ test('web-display-honors-the-operator-selection-from-the-public-projection', () 
   // so projection never pushes the footer off-screen.
   assert.match(board, /stale/);
   assert.match(board, /연결 확인 중/);
+  assert.match(board, /display-idle/);
 });
 
 test('web-staff-booth-work-uses-the-booth-visit-command-and-stamp-mode', () => {
@@ -286,6 +312,8 @@ test('web-staff-booth-work-uses-the-booth-visit-command-and-stamp-mode', () => {
   // …so the camera action stays out of SELF mode, and a stale refresh says so.
   assert.match(staff, /stampMode === "SELF" \? null/);
   assert.match(staff, /오래되었을 수 있습니다/);
+  // A silent refresh never strands an operator on an empty screen.
+  assert.match(staff, /scopesRef/);
   assert.doesNotMatch(staff, /localStorage/);
 });
 

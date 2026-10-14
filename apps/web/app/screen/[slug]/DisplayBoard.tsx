@@ -436,6 +436,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
         <p>EVENTOUCH</p>
         <h1>{data.name}</h1>
         <p>{data.date}</p>
+        {stale ? <p className="display-stale" role="status">연결 확인 중 · 마지막 화면입니다</p> : null}
         <p>화면 준비 중</p>
       </section>
     );
