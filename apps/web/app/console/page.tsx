@@ -1,6 +1,6 @@
 import ConsoleHome from "./ConsoleHome";
 
-// Workspace home: cross-event priorities and directory. Each event's
+// Workspace home: a compact, schedule-first event directory. Each event's
 // overview owns the event-specific operating dashboard.
 export default function ConsolePage() {
   return (

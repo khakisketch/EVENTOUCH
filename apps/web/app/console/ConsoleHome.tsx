@@ -13,10 +13,11 @@ type ConsoleEvent = {
   slug: string;
   clientId: string | null;
   date: string;
+  start: string;
+  end: string;
   stage: string;
   venue: string;
   registered: number;
-  pendingApproval: number;
   capacity: number;
 };
 type Client = { id: string; name: string };
@@ -26,14 +27,6 @@ type HomeState =
   | { kind: "loading" }
   | { kind: "failed"; message: string }
   | { kind: "ready"; events: ConsoleEvent[]; clients: Map<string, string> };
-
-const STAGE_ORDER: Record<string, number> = {
-  LIVE: 0,
-  READY: 1,
-  DRAFT: 2,
-  ENDED: 3,
-  ARCHIVED: 4,
-};
 
 const FILTERS: Array<{ id: EventFilter; label: string }> = [
   { id: "all", label: "전체" },
@@ -64,6 +57,8 @@ export default function ConsoleHome() {
           state?: {
             events?: unknown;
             clients?: unknown;
+            // Keep each event's calendar time adjacent to its date in the
+            // schedule-first home; all other fields remain server-owned.
             workspaces?: Record<string, {
               participants?: unknown;
               venue?: { name?: unknown } | null;
@@ -84,14 +79,6 @@ export default function ConsoleHome() {
             return status !== "CANCELLED";
           }).length;
         };
-        const countPending = (eventId: string): number => {
-          const people = workspaces[eventId]?.participants;
-          if (!Array.isArray(people)) return 0;
-          return people.filter((person) => {
-            if (typeof person !== "object" || person === null) return false;
-            return (person as Record<string, unknown>).status === "PENDING";
-          }).length;
-        };
         const events = Array.isArray(data.state.events)
           ? data.state.events.flatMap((item) => {
               if (typeof item !== "object" || item === null) return [];
@@ -105,6 +92,8 @@ export default function ConsoleHome() {
                 slug: typeof event.slug === "string" ? event.slug : "",
                 clientId: typeof event.clientId === "string" ? event.clientId : null,
                 date: typeof event.date === "string" ? event.date : "",
+                start: typeof event.start === "string" ? event.start : "",
+                end: typeof event.end === "string" ? event.end : "",
                 stage: typeof event.stage === "string" ? event.stage : "",
                 venue:
                   typeof venueSource === "object" && venueSource !== null &&
@@ -112,7 +101,6 @@ export default function ConsoleHome() {
                     ? String((venueSource as Record<string, unknown>).name)
                     : "",
                 registered: countRegistered(event.id),
-                pendingApproval: countPending(event.id),
                 capacity: Number.isFinite(capacity) && capacity > 0 ? capacity : 0,
               }];
             })
@@ -153,8 +141,20 @@ export default function ConsoleHome() {
         (filter === "closed" && ["ENDED", "ARCHIVED"].includes(event.stage));
       return matchesQuery && matchesFilter;
     }).sort((a, b) => {
-      const rank = (STAGE_ORDER[a.stage] ?? 5) - (STAGE_ORDER[b.stage] ?? 5);
-      return rank || a.date.localeCompare(b.date) || a.name.localeCompare(b.name, "ko-KR");
+      // The calendar is the primary index: today's sessions first, then the
+      // nearest future date, recent past events, and finally undated events.
+      const today = new Date();
+      const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+      const bucket = (event: ConsoleEvent) => {
+        if (!event.date) return 3;
+        if (event.date === todayKey) return 0;
+        return event.date > todayKey ? 1 : 2;
+      };
+      const aBucket = bucket(a);
+      const bBucket = bucket(b);
+      if (aBucket !== bBucket) return aBucket - bBucket;
+      const dateOrder = aBucket === 2 ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date);
+      return dateOrder || a.start.localeCompare(b.start) || a.name.localeCompare(b.name, "ko-KR");
     });
   }, [filter, query, state]);
 
@@ -177,17 +177,12 @@ export default function ConsoleHome() {
     live: state.events.filter((event) => event.stage === "LIVE").length,
     closed: state.events.filter((event) => ["ENDED", "ARCHIVED"].includes(event.stage)).length,
   };
-  const priorityEvents = [...state.events]
-    .filter((event) => event.pendingApproval > 0 || event.stage === "LIVE")
-    .sort((a, b) => (b.pendingApproval - a.pendingApproval) || a.date.localeCompare(b.date))
-    .slice(0, 3);
-
   return (
     <div className={styles.home}>
       <header className={styles.pageHeader}>
         <div>
           <h1>행사</h1>
-          <p>운영할 행사를 찾고, 확인이 필요한 업무부터 이어가세요.</p>
+          <p>날짜와 운영 상태를 보고 행사로 바로 이동하세요.</p>
         </div>
         <button
           type="button"
@@ -209,46 +204,11 @@ export default function ConsoleHome() {
         />
       ) : null}
 
-      {priorityEvents.length ? (
-        <section className={styles.prioritySection} aria-labelledby="priority-title">
-          <div className={styles.sectionHeading}>
-            <div>
-              <h2 id="priority-title">먼저 확인</h2>
-              <p>승인 대기와 현재 운영 중인 행사를 모았습니다.</p>
-            </div>
-            <span className={styles.sectionCount}>{priorityEvents.length}개</span>
-          </div>
-          <ul className={styles.priorityList}>
-            {priorityEvents.map((event) => {
-              const hasApprovals = event.pendingApproval > 0;
-              const href = hasApprovals
-                ? `/console/events/${encodeURIComponent(event.id)}/participants`
-                : `/console/events/${encodeURIComponent(event.id)}`;
-              return (
-                <li key={event.id}>
-                  <div className={styles.priorityCopy}>
-                    <span className={eventStageClassName(event.stage)}>{eventStageLabel(event.stage)}</span>
-                    <strong>{event.name}</strong>
-                    <span className={styles.priorityReason}>
-                      {hasApprovals ? `승인 대기 ${event.pendingApproval}명` : `등록 ${event.registered}${event.capacity ? ` / ${event.capacity}명` : "명"}`}
-                    </span>
-                  </div>
-                  <Link className={styles.priorityLink} href={href}>
-                    {hasApprovals ? "참가자 확인" : "운영 현황"}
-                    <span aria-hidden="true">→</span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ) : null}
-
       <section className={styles.directory} aria-labelledby="events-title">
         <div className={styles.sectionHeading}>
           <div>
-            <h2 id="events-title">모든 행사</h2>
-            <p>단계와 등록 규모를 비교해 다음 행사로 이동합니다.</p>
+            <h2 id="events-title">행사 일정</h2>
+            <p>오늘과 가까운 일정부터 날짜순으로 표시합니다.</p>
           </div>
           <span className={styles.resultCount} role="status" aria-live="polite" aria-atomic="true">
             {filteredEvents.length} / {state.events.length}
@@ -299,50 +259,47 @@ export default function ConsoleHome() {
             </button>
           </div>
         ) : (
+          <>
+          <div className={styles.listHeader} aria-hidden="true">
+            <span>일정</span>
+            <span>행사 · 고객사 · 장소</span>
+            <span>상태</span>
+            <span>참가자</span>
+            <span />
+          </div>
           <ul className={styles.eventList}>
             {filteredEvents.map((event) => {
               const clientName = event.clientId ? state.clients.get(event.clientId) : "";
-              const percent = event.capacity
-                ? Math.min(100, Math.round((event.registered / event.capacity) * 100))
-                : null;
               return (
                 <li key={event.id}>
                   <Link
                     className={styles.eventRow}
                     href={`/console/events/${encodeURIComponent(event.id)}`}
                   >
+                    <span className={styles.eventDate}>
+                      <strong>{event.date || "일정 미정"}</strong>
+                      {event.start || event.end ? (
+                        <span>{event.start}{event.end ? `–${event.end}` : ""}</span>
+                      ) : null}
+                    </span>
                     <span className={styles.eventIdentity}>
                       <span className={styles.eventTitleLine}>
                         <strong>{event.name}</strong>
-                        {event.stage ? (
-                          <span className={eventStageClassName(event.stage)}>{eventStageLabel(event.stage)}</span>
-                        ) : null}
                       </span>
-                      <span className={styles.eventClient}>{clientName || "고객사 미지정"}</span>
+                      <span className={styles.eventClient}>
+                        {[clientName, event.venue].filter(Boolean).join(" · ") || "고객사·장소 미지정"}
+                      </span>
                     </span>
-                    <span className={styles.eventWhen}>
-                      <span>{event.date || "일정 미정"}</span>
-                      <span>{event.venue || "장소 미정"}</span>
+                    <span className={styles.eventStatus}>
+                      {event.stage ? (
+                        <span className={eventStageClassName(event.stage)}>{eventStageLabel(event.stage)}</span>
+                      ) : <span className="stage-badge">단계 미정</span>}
                     </span>
                     <span className={styles.registration}>
                       <span className={styles.registrationText}>
-                        <span>등록</span>
-                        <strong>{event.capacity ? `${event.registered} / ${event.capacity}` : `${event.registered}`}</strong>
-                        <span>명</span>
+                        <strong>{event.registered}</strong>
+                        <span>명 등록{event.capacity ? ` · 정원 ${event.capacity}명` : ""}</span>
                       </span>
-                      {percent !== null ? (
-                        <span
-                          className={styles.progressTrack}
-                          role="meter"
-                          aria-label={`${event.name} 정원 사용률`}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          aria-valuenow={percent}
-                          aria-valuetext={`${percent}%`}
-                        >
-                          <span className={styles.progressValue} style={{ width: `${percent}%` }} />
-                        </span>
-                      ) : null}
                     </span>
                     <span className={styles.rowArrow} aria-hidden="true">→</span>
                   </Link>
@@ -350,6 +307,7 @@ export default function ConsoleHome() {
               );
             })}
           </ul>
+          </>
         )}
       </section>
     </div>
