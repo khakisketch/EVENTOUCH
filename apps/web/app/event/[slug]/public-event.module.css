@@ -1,0 +1,79 @@
+.introLine {
+  margin: var(--s2) 0 0;
+  max-width: var(--web-reading-max, 68ch);
+  color: var(--muted);
+}
+
+.cta {
+  margin-top: var(--s4);
+}
+
+.section {
+  max-width: var(--web-content-max, 1120px);
+  margin: var(--s6) auto 0;
+  padding: 0 clamp(var(--s4), 4vw, var(--s6));
+}
+
+.section h2 {
+  margin: 0 0 var(--s3);
+  font-size: var(--h2);
+}
+
+.noticeList,
+.programList {
+  display: grid;
+  gap: var(--s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.noticeList li,
+.programList li {
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.noticeList h3,
+.programList h3 {
+  margin: 0 0 var(--s2);
+  font-size: var(--h3);
+}
+
+.noticeList p,
+.programList p {
+  margin: 0;
+}
+
+.noticeList p + p,
+.programList p + p {
+  margin-top: var(--s2);
+}
+
+.pin {
+  margin-right: var(--s2);
+}
+
+.programMeta {
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.programSpeaker {
+  color: var(--brand-text);
+  font-size: var(--small);
+}
+
+@media (max-width: 768px) {
+  .section {
+    margin-top: var(--s5);
+    padding: 0 var(--s4);
+  }
+
+  .noticeList li,
+  .programList li {
+    padding: var(--s3);
+  }
+}
