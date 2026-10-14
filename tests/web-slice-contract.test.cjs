@@ -183,3 +183,15 @@ test('web-event-stage-moves-forward-through-the-command-path-only', () => {
   // The UI may hint at prerequisites but never decides them.
   assert.doesNotMatch(overview, /stage:\s*"(LIVE|ARCHIVED)"\s*\}/);
 });
+
+test('web-operations-uses-desk-booth-and-assignment-commands-only', () => {
+  const ops = read('app/console/events/[id]/operations/OperationsWorkspace.tsx');
+  for (const command of ['desk.save', 'desk.set-open', 'booth.save', 'staff.assign', 'staff.unassign']) {
+    assert.match(ops, new RegExp(command.replace('.', '\\.')));
+  }
+  assert.match(ops, /\/commands/);
+  assert.doesNotMatch(ops, /localStorage/);
+  assert.doesNotMatch(ops, /sessionStorage/);
+  // The screen may surface prerequisites but never computes authorization.
+  assert.doesNotMatch(ops, /access\.|authorize\(/);
+});
