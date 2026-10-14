@@ -4,7 +4,7 @@
 갱신 규칙: 작업이 끝날 때마다 갱신하고, 지난 서술은 지우거나 `## 이력`으로 내린다.
 
 Updated: 2026-10-14
-Branch: `master` · HEAD: `7a86cec` (기록 기준)
+Branch: `master` · HEAD: `dc282a2` (기록 기준)
 
 ## 제품
 
@@ -105,6 +105,12 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
 
 ## 이력
 
+- 2026-10-15: 콘솔 홈을 카드 그리드(B 기본)+달력 날짜 필터(C)로 재설계. full-width 행을
+  없애고 카드마다 등록·승인대기·현재입장 수치와 다음 행동(승인 처리·현장 준비 등) 버튼을
+  달았다. 달력은 같은 카드를 날짜로 거르는 필터이며 일정 미정은 별도 스트립에 둔다.
+  현행 토큰·다크 레일 유지(canon). `PRODUCT.md` 신설, 표면 브리프
+  `.impeccable/surfaces/` 기록. 데스크톱·모바일 실동작 확인, 웹 감사·detect clean,
+  `npm test` 518 통과.
 - 2026-10-14: 초대 전용 계정의 비밀번호 찾기·초대 수락 추가. 서버에 조직 소유자 전용
   재설정(`POST /api/auth/accounts/:id/password`, 멱등·세션 무효화·본인 세션 유지)을
   넣고, 새 앱에 초대 수락(`/invite/[token]`)·팀 관리(`/console/team`, 재설정

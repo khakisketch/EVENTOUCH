@@ -136,7 +136,7 @@ test('web-console-home-reads-bootstrap-before-any-write-paths', () => {
   assert.doesNotMatch(overview, /sessionStorage/);
 });
 
-test('web-console-home-is-a-compact-schedule-first-event-directory', () => {
+test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   const home = read('app/console/ConsoleHome.tsx');
   assert.doesNotMatch(home, /먼저 확인/);
   assert.match(home, /오늘과 가까운 일정부터/);
@@ -148,6 +148,16 @@ test('web-console-home-is-a-compact-schedule-first-event-directory', () => {
   assert.match(home, /start: typeof event\.start/);
   assert.match(home, /event\.date > todayKey/);
   assert.match(home, /eventRecency/);
+  // No full-width rows: events render as cards in a capped grid, and the
+  // calendar only filters those same cards by date.
+  assert.doesNotMatch(home, /eventRow/);
+  assert.match(home, /className=\{styles\.eventGrid\}/);
+  assert.match(home, /className=\{styles\.eventCard/);
+  assert.match(home, /styles\.dayCell/);
+  assert.match(home, /selectedDate/);
+  assert.match(home, /nextAction/);
+  assert.match(home, /승인 처리하기/);
+  assert.match(home, /일정 미정/);
   // A recoverable connection failure restores shell navigation with the list.
   assert.match(home, /eventouch:shell-reload/);
   const shell = read('app/console/ConsoleShell.tsx');
@@ -157,10 +167,12 @@ test('web-console-home-is-a-compact-schedule-first-event-directory', () => {
   for (const label of ['전체', '준비 중', '진행 중', '종료·보관']) {
     assert.match(home, new RegExp(label));
   }
-  assert.match(home, /className=\{styles\.eventRow\}/);
-  assert.match(home, /href=\{`\/console\/events/);
   assert.match(home, /className=\{styles\.eventDate\}/);
   assert.match(home, /className=\{styles\.eventStatus\}/);
+  assert.match(home, /pending: counts\.pending/);
+  assert.match(home, /inside: counts\.inside/);
+  assert.doesNotMatch(home, /localStorage/);
+  assert.doesNotMatch(home, /sessionStorage/);
   // The create dialog is a real modal again: styled, focus-trapped,
   // Escape-dismissed, with focus returned to the trigger.
   const dialog = read('app/console/CreateEventDialog.tsx');
@@ -173,6 +185,9 @@ test('web-console-home-is-a-compact-schedule-first-event-directory', () => {
   assert.match(css, /\.dialogBackdrop/);
   assert.match(css, /\.dialogActions/);
   assert.match(css, /\.eventRecency/);
+  assert.match(css, /\.eventGrid/);
+  assert.match(css, /\.dayCell/);
+  assert.doesNotMatch(css, /\.eventRow/);
   assert.doesNotMatch(css, /min-height: 40px/);
 });
 

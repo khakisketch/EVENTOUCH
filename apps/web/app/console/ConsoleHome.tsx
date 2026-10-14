@@ -18,10 +18,12 @@ type ConsoleEvent = {
   stage: string;
   venue: string;
   registered: number;
+  pending: number;
+  inside: number;
   capacity: number;
 };
-type Client = { id: string; name: string };
 type EventFilter = "all" | "preparing" | "live" | "closed";
+type HomeView = "cards" | "calendar";
 
 type HomeState =
   | { kind: "loading" }
@@ -61,11 +63,38 @@ function todayKeyOf(now: Date): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
+function monthKeyOf(year: number, month: number): string {
+  return `${year}-${String(month + 1).padStart(2, "0")}`;
+}
+
+// The card's single next action: the most urgent unfinished work for that
+// event, so the grid answers "what do I touch next" without a separate list.
+function nextAction(event: ConsoleEvent): { label: string; href: string } {
+  const base = `/console/events/${encodeURIComponent(event.id)}`;
+  if (event.pending > 0) return { label: "승인 처리하기", href: `${base}/participants` };
+  if (event.stage === "DRAFT") return { label: "이어서 만들기", href: `${base}/settings` };
+  if (event.stage === "READY") return { label: "현장 준비하기", href: `${base}/operations` };
+  if (event.stage === "LIVE") return { label: "현장 보기", href: `${base}/operations` };
+  return { label: "행사 열기", href: base };
+}
+
+function describeDate(date: string): string {
+  if (!date) return "일정 미정";
+  const [year, month, day] = date.split("-");
+  return `${Number(month)}월 ${Number(day)}일${year ? "" : ""}`;
+}
+
 export default function ConsoleHome() {
   const router = useRouter();
   const [state, setState] = useState<HomeState>({ kind: "loading" });
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<EventFilter>("all");
+  const [view, setView] = useState<HomeView>("cards");
+  const [monthCursor, setMonthCursor] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() };
+  });
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
 
@@ -83,8 +112,8 @@ export default function ConsoleHome() {
           state?: {
             events?: unknown;
             clients?: unknown;
-            // Keep each event's calendar time adjacent to its date in the
-            // schedule-first home; all other fields remain server-owned.
+            // Counts stay adjacent to the identity fields; everything else
+            // remains server-owned and is read on the event screens.
             workspaces?: Record<string, {
               participants?: unknown;
               venue?: { name?: unknown } | null;
@@ -96,14 +125,21 @@ export default function ConsoleHome() {
           return;
         }
         const workspaces = data.state.workspaces ?? {};
-        const countRegistered = (eventId: string): number => {
+        const countParticipants = (eventId: string): { registered: number; pending: number; inside: number } => {
           const people = workspaces[eventId]?.participants;
-          if (!Array.isArray(people)) return 0;
-          return people.filter((person) => {
-            if (typeof person !== "object" || person === null) return false;
-            const status = (person as Record<string, unknown>).status;
-            return status !== "CANCELLED";
-          }).length;
+          if (!Array.isArray(people)) return { registered: 0, pending: 0, inside: 0 };
+          let registered = 0;
+          let pending = 0;
+          let inside = 0;
+          for (const item of people) {
+            if (typeof item !== "object" || item === null) continue;
+            const person = item as Record<string, unknown>;
+            if (person.status === "CANCELLED") continue;
+            registered += 1;
+            if (person.status === "PENDING") pending += 1;
+            if (person.inside === true) inside += 1;
+          }
+          return { registered, pending, inside };
         };
         const events = Array.isArray(data.state.events)
           ? data.state.events.flatMap((item) => {
@@ -112,6 +148,7 @@ export default function ConsoleHome() {
               if (typeof event.id !== "string" || !event.id) return [];
               const venueSource = workspaces[event.id]?.venue;
               const capacity = Number(event.capacity);
+              const counts = countParticipants(event.id);
               return [{
                 id: event.id,
                 name: typeof event.name === "string" ? event.name : event.id,
@@ -126,7 +163,9 @@ export default function ConsoleHome() {
                   typeof (venueSource as Record<string, unknown>).name === "string"
                     ? String((venueSource as Record<string, unknown>).name)
                     : "",
-                registered: countRegistered(event.id),
+                registered: counts.registered,
+                pending: counts.pending,
+                inside: counts.inside,
                 capacity: Number.isFinite(capacity) && capacity > 0 ? capacity : 0,
               }];
             })
@@ -156,7 +195,7 @@ export default function ConsoleHome() {
 
   const todayKey = todayKeyOf(new Date());
 
-  const filteredEvents = useMemo(() => {
+  const stageQueryFiltered = useMemo(() => {
     if (state.kind !== "ready") return [];
     const search = query.trim().toLocaleLowerCase("ko-KR");
     return state.events.filter((event) => {
@@ -168,21 +207,60 @@ export default function ConsoleHome() {
         (filter === "live" && event.stage === "LIVE") ||
         (filter === "closed" && ["ENDED", "ARCHIVED"].includes(event.stage));
       return matchesQuery && matchesFilter;
-    }).sort((a, b) => {
-      // The calendar is the primary index: today's sessions first, then the
-      // nearest future date, recent past events, and finally undated events.
-      const bucket = (event: ConsoleEvent) => {
-        if (!event.date) return 3;
-        if (event.date === todayKey) return 0;
-        return event.date > todayKey ? 1 : 2;
-      };
+    });
+  }, [filter, query, state]);
+
+  const visibleEvents = useMemo(() => {
+    const dated = selectedDate && view === "calendar"
+      ? stageQueryFiltered.filter((event) => event.date === selectedDate)
+      : stageQueryFiltered;
+    // The calendar is the primary index: today's sessions first, then the
+    // nearest future date, recent past events, and finally undated events.
+    const bucket = (event: ConsoleEvent) => {
+      if (!event.date) return 3;
+      if (event.date === todayKey) return 0;
+      return event.date > todayKey ? 1 : 2;
+    };
+    return [...dated].sort((a, b) => {
       const aBucket = bucket(a);
       const bBucket = bucket(b);
       if (aBucket !== bBucket) return aBucket - bBucket;
       const dateOrder = aBucket === 2 ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date);
       return dateOrder || a.start.localeCompare(b.start) || a.name.localeCompare(b.name, "ko-KR");
     });
-  }, [filter, query, state, todayKey]);
+  }, [stageQueryFiltered, selectedDate, view, todayKey]);
+
+  const unscheduled = useMemo(
+    () => visibleEvents.filter((event) => !event.date),
+    [visibleEvents]
+  );
+  const datedVisible = useMemo(
+    () => visibleEvents.filter((event) => event.date),
+    [visibleEvents]
+  );
+
+  const monthCells = useMemo(() => {
+    const firstWeekday = new Date(monthCursor.year, monthCursor.month, 1).getDay();
+    const days = new Date(monthCursor.year, monthCursor.month + 1, 0).getDate();
+    const cells: Array<{ key: string; day: number | null }> = [];
+    for (let i = 0; i < firstWeekday; i += 1) cells.push({ key: `blank-${i}`, day: null });
+    for (let day = 1; day <= days; day += 1) {
+      cells.push({
+        key: `${monthKeyOf(monthCursor.year, monthCursor.month)}-${String(day).padStart(2, "0")}`,
+        day,
+      });
+    }
+    return cells;
+  }, [monthCursor]);
+
+  const eventDates = useMemo(() => {
+    const dates = new Map<string, number>();
+    for (const event of stageQueryFiltered) {
+      if (!event.date) continue;
+      dates.set(event.date, (dates.get(event.date) ?? 0) + 1);
+    }
+    return dates;
+  }, [stageQueryFiltered]);
 
   if (state.kind === "loading") {
     return (
@@ -226,6 +304,12 @@ export default function ConsoleHome() {
     live: state.events.filter((event) => event.stage === "LIVE").length,
     closed: state.events.filter((event) => ["ENDED", "ARCHIVED"].includes(event.stage)).length,
   };
+  const clearAll = () => {
+    setQuery("");
+    setFilter("all");
+    setSelectedDate(null);
+  };
+  const hasNarrowing = query.trim() !== "" || filter !== "all" || selectedDate !== null;
   return (
     <div className={styles.home}>
       <header className={styles.pageHeader}>
@@ -255,9 +339,9 @@ export default function ConsoleHome() {
 
       <section className={styles.directory} aria-label="행사 목록">
         <p className="sr-only" role="status">
-          {filter === "all" && !query.trim()
+          {filter === "all" && !query.trim() && !selectedDate
             ? `전체 ${state.events.length}개 행사`
-            : `검색 결과 ${filteredEvents.length}개 / 전체 ${state.events.length}개`}
+            : `검색 결과 ${visibleEvents.length}개 / 전체 ${state.events.length}개`}
         </p>
 
         <div className={styles.toolbar}>
@@ -275,6 +359,24 @@ export default function ConsoleHome() {
               </button>
             ))}
           </div>
+          <div className={styles.viewSwitch} role="group" aria-label="목록 보기 방식">
+            <button
+              type="button"
+              className={`${styles.viewButton}${view === "cards" ? ` ${styles.viewActive}` : ""}`}
+              aria-pressed={view === "cards"}
+              onClick={() => setView("cards")}
+            >
+              카드
+            </button>
+            <button
+              type="button"
+              className={`${styles.viewButton}${view === "calendar" ? ` ${styles.viewActive}` : ""}`}
+              aria-pressed={view === "calendar"}
+              onClick={() => setView("calendar")}
+            >
+              달력
+            </button>
+          </div>
           <label className={styles.searchField}>
             <span className="sr-only">행사명·고객사·장소 검색</span>
             <input
@@ -286,77 +388,182 @@ export default function ConsoleHome() {
           </label>
         </div>
 
+        {view === "calendar" ? (
+          <div className={styles.calendarPanel}>
+            <div className={styles.monthBar}>
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={() => setMonthCursor((cursor) => cursor.month === 0
+                  ? { year: cursor.year - 1, month: 11 }
+                  : { year: cursor.year, month: cursor.month - 1 })}
+                aria-label="이전 달"
+              >
+                ‹
+              </button>
+              <strong>{monthCursor.year}년 {monthCursor.month + 1}월</strong>
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={() => setMonthCursor((cursor) => cursor.month === 11
+                  ? { year: cursor.year + 1, month: 0 }
+                  : { year: cursor.year, month: cursor.month + 1 })}
+                aria-label="다음 달"
+              >
+                ›
+              </button>
+              {selectedDate ? (
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  onClick={() => setSelectedDate(null)}
+                >
+                  {describeDate(selectedDate)} 해제
+                </button>
+              ) : null}
+            </div>
+            <div className={styles.monthGrid} role="group" aria-label="날짜 선택">
+              {["일", "월", "화", "수", "목", "금", "토"].map((weekday) => (
+                <span key={weekday} className={styles.weekday} aria-hidden="true">{weekday}</span>
+              ))}
+              {monthCells.map((cell) => {
+                if (cell.day === null) return <span key={cell.key} aria-hidden="true" />;
+                const count = eventDates.get(cell.key) ?? 0;
+                const selected = selectedDate === cell.key;
+                return (
+                  <button
+                    key={cell.key}
+                    type="button"
+                    className={`${styles.dayCell}${selected ? ` ${styles.daySelected}` : ""}${cell.key === todayKey ? ` ${styles.dayToday}` : ""}`}
+                    aria-pressed={selected}
+                    aria-label={`${describeDate(cell.key)}${count ? `, 행사 ${count}건` : ", 행사 없음"}`}
+                    onClick={() => setSelectedDate(selected ? null : cell.key)}
+                  >
+                    <span className={styles.dayNumber}>{cell.day}</span>
+                    {count ? <span className={styles.dayCount}>{count}건</span> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
         {!state.events.length ? (
           <div className={styles.emptyState}>
             <h3>아직 등록된 행사가 없습니다</h3>
             <p>새 행사를 만들면 일정과 참가 접수 준비를 시작할 수 있습니다.</p>
           </div>
-        ) : !filteredEvents.length ? (
+        ) : !visibleEvents.length ? (
           <div className={styles.emptyState}>
             <h3>조건에 맞는 행사가 없습니다</h3>
-            <p>검색어를 바꾸거나 다른 진행 단계에서 찾아보세요.</p>
+            <p>검색어를 바꾸거나 다른 진행 단계·날짜에서 찾아보세요.</p>
             <button
               type="button"
               className="button button-secondary"
-              onClick={() => { setQuery(""); setFilter("all"); }}
+              onClick={clearAll}
             >
               필터 초기화
             </button>
           </div>
         ) : (
           <>
-          <div className={styles.listHeader} aria-hidden="true">
-            <span>일정</span>
-            <span>행사 · 고객사 · 장소</span>
-            <span>상태</span>
-            <span>참가자</span>
-            <span />
-          </div>
-          <ul className={styles.eventList}>
-            {filteredEvents.map((event) => {
-              const clientName = event.clientId ? state.clients.get(event.clientId) : "";
-              const recency = eventRecency(event.date, todayKey);
-              const stageKnown = KNOWN_STAGES.includes(event.stage);
-              return (
-                <li key={event.id}>
-                  <Link
-                    className={styles.eventRow}
-                    href={`/console/events/${encodeURIComponent(event.id)}`}
-                  >
-                    <span className={styles.eventDate}>
-                      <strong>{event.date || "일정 미정"}</strong>
-                      {event.start || event.end ? (
-                        <span>{event.start}{event.end ? `–${event.end}` : ""}</span>
-                      ) : null}
-                      {recency ? (
-                        <span className={styles.eventRecency}>{recency}</span>
-                      ) : null}
-                    </span>
-                    <span className={styles.eventIdentity}>
-                      <span className={styles.eventTitleLine}>
-                        <strong>{event.name}</strong>
-                      </span>
-                      <span className={styles.eventClient}>
+            {view === "calendar" && selectedDate ? (
+              <h2 className={styles.sectionTitle}>{describeDate(selectedDate)} 행사 {datedVisible.length}건</h2>
+            ) : null}
+            <ul className={styles.eventGrid}>
+              {(view === "calendar" && selectedDate ? datedVisible : visibleEvents.filter((event) => view === "cards" || event.date)).map((event) => {
+                const clientName = event.clientId ? state.clients.get(event.clientId) : "";
+                const recency = eventRecency(event.date, todayKey);
+                const stageKnown = KNOWN_STAGES.includes(event.stage);
+                const action = nextAction(event);
+                return (
+                  <li key={event.id}>
+                    <article className={styles.eventCard}>
+                      <p className={styles.eventDate}>
+                        <strong>{event.date || "일정 미정"}</strong>
+                        {event.start || event.end ? (
+                          <span>{event.start}{event.end ? `–${event.end}` : ""}</span>
+                        ) : null}
+                        {recency ? (
+                          <span className={styles.eventRecency}>{recency}</span>
+                        ) : null}
+                      </p>
+                      <h3 className={styles.eventName}>
+                        <Link href={`/console/events/${encodeURIComponent(event.id)}`}>
+                          {event.name}
+                        </Link>
+                      </h3>
+                      <p className={styles.eventClient}>
                         {[clientName, event.venue].filter(Boolean).join(" · ") || "고객사·장소 미지정"}
-                      </span>
-                    </span>
-                    <span className={styles.eventStatus}>
-                      {stageKnown ? (
-                        <span className={eventStageClassName(event.stage)}>{eventStageLabel(event.stage)}</span>
-                      ) : <span className="stage-badge">단계 미정</span>}
-                    </span>
-                    <span className={styles.registration}>
-                      <span className={styles.registrationText}>
-                        <strong>{event.registered}</strong>
-                        <span>명 등록{event.capacity ? ` · 정원 ${event.capacity}명` : ""}</span>
-                      </span>
-                    </span>
-                    <span className={styles.rowArrow} aria-hidden="true">→</span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+                      </p>
+                      <p className={styles.eventStatus}>
+                        {stageKnown ? (
+                          <span className={eventStageClassName(event.stage)}>{eventStageLabel(event.stage)}</span>
+                        ) : <span className="stage-badge">단계 미정</span>}
+                        {event.pending > 0 ? (
+                          <span className={styles.pendingBadge}>승인대기 {event.pending}</span>
+                        ) : null}
+                      </p>
+                      <dl className={styles.eventMetrics}>
+                        <div>
+                          <dt>등록</dt>
+                          <dd>{event.registered}{event.capacity ? <span>/{event.capacity}</span> : null}</dd>
+                        </div>
+                        <div>
+                          <dt>승인대기</dt>
+                          <dd>{event.pending}</dd>
+                        </div>
+                        <div>
+                          <dt>현재입장</dt>
+                          <dd>{event.inside}</dd>
+                        </div>
+                      </dl>
+                      <p className={styles.eventAction}>
+                        <Link
+                          className="button button-secondary"
+                          href={action.href}
+                        >
+                          {action.label}
+                        </Link>
+                      </p>
+                    </article>
+                  </li>
+                );
+              })}
+            </ul>
+            {view === "calendar" && !selectedDate && unscheduled.length ? (
+              <>
+                <h2 className={styles.sectionTitle}>일정 미정 {unscheduled.length}건</h2>
+                <ul className={styles.eventGrid}>
+                  {unscheduled.map((event) => {
+                    const action = nextAction(event);
+                    return (
+                      <li key={event.id}>
+                        <article className={`${styles.eventCard} ${styles.eventCardCompact}`}>
+                          <h3 className={styles.eventName}>
+                            <Link href={`/console/events/${encodeURIComponent(event.id)}`}>
+                              {event.name}
+                            </Link>
+                          </h3>
+                          <p className={styles.eventAction}>
+                            <Link className="button button-secondary" href={action.href}>
+                              {action.label}
+                            </Link>
+                          </p>
+                        </article>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            ) : null}
+            {hasNarrowing && visibleEvents.length > 0 ? (
+              <p className={styles.resetRow}>
+                <button type="button" className="button button-secondary" onClick={clearAll}>
+                  필터 초기화
+                </button>
+              </p>
+            ) : null}
           </>
         )}
       </section>

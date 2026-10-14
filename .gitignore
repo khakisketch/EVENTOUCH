@@ -18,3 +18,9 @@ data/storage/
 # only catch a stray write if some tool defaults back to an in-repo path.
 design-inputs/
 design-previews/
+
+# Impeccable decision sketches — local review artifacts served by a static
+# server during direction rounds. Surface briefs under .impeccable/surfaces/
+# are committed; the mock sketches are not.
+.impeccable/mocks/
+.impeccable/questions/
