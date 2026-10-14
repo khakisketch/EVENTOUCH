@@ -10,3 +10,7 @@ data/storage/
 *.zip
 .env
 node_modules/
+# The web image builds inside its own directory; host build output must not
+# shadow it, and the API image does not need it at all.
+apps/web/node_modules/
+apps/web/.next/

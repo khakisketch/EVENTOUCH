@@ -3,7 +3,9 @@
 ## 구성
 
 - 프론트: 구 앱은 이 저장소 정적 파일. Vercel 또는 중앙 서버가 직접 서빙.
-  새 앱(`apps/web`)은 아직 컨테이너 이미지·배포 대상이 없다.
+  새 앱(`apps/web`)은 자체 이미지(`apps/web/Dockerfile`)로 빌드되며 compose의 `web`
+  서비스로 뜬다(기본 호스트 8777). `/api/*`는 `EVENTOUCH_API_URL`(compose 내부
+  `http://eventouch:8776`)로 프록시된다.
 - API: `server/server.js` (Node 24, `pg` 의존성). `PORT` 환경변수 (기본 8776).
 - DB: PostgreSQL (`DATABASE_URL` 필수). 앱 시작 시 번호가 붙은 migration을 적용한다.
 - 파일: `STORAGE_DIR` 아래 서버 생성 파일 ID로 저장; 원본 이름·행사·크기·이미지 치수는 PostgreSQL `stored_files`에 보관한다. 미설정 기본값은 `data/storage`다.
@@ -48,9 +50,13 @@
 
 운영 배포 위치(NAS·공개 도메인)는 아직 정해지지 않았다. 정해지면 `COOKIE_SECURE=1`로 올린다.
 
-## 새 앱·CI 범위 (미완료)
+## 새 앱·CI 범위
 
-- `docker compose` 이미지·CI(`.github/workflows/ci.yml`)는 구 앱 범위(`npm ci`·`db:migrate`·`npm test`·`mobile`·`a11y`)에 더해 `web` 잡이 `apps/web` 타입체크·빌드를 검증한다.
+- `docker compose`는 API 서비스(`eventouch`)에 더해 새 앱 `web` 서비스를 빌드·기동한다.
+  이미지·프록시는 검증됨(공개 행사 SSR·`/api/health` 프록시). 운영 노출(도메인·TLS·
+  리버스 프록시)은 아직 정해지지 않았다.
+- CI(`.github/workflows/ci.yml`)의 `web` 잡이 `apps/web` 타입체크·빌드를 검증한다.
+  라이브 흐름·감사는 여전히 CI 밖이다.
 
 ## 검증
 

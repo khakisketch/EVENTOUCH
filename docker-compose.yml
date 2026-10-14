@@ -40,6 +40,21 @@ services:
       - etko-storage:/data/storage
     restart: unless-stopped
 
+  # 새 프론트엔드. API와 같은 출처가 되도록 프록시 뒤에 두거나, 이 포트를
+  # 직접 노출한다. 브라우저는 이 서비스에만 닿고 /api/*는 내부 API로 전달된다.
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    depends_on:
+      - eventouch
+    ports:
+      - "${WEB_HOST_PORT:-8777}:8777"
+    environment:
+      PORT: 8777
+      EVENTOUCH_API_URL: http://eventouch:8776
+    restart: unless-stopped
+
 volumes:
   eventouch-pgdata:
   etko-db:
