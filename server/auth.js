@@ -537,6 +537,77 @@ function createDatabaseAuth(database, options = {}) {
 
   // Revocation is idempotent: revoked invitations stay revoked and retries of
   // the same revocation command return the current state.
+  async function resetAccountPassword(actor, accountId, password, commandIdValue, keepTokenHash) {
+    const id = String(accountId || '').trim();
+    if (!id || id.length > 120) throw invitationFailure(404, '계정을 찾을 수 없습니다');
+    if (typeof password !== 'string' || password.length < 8 || password.length > 200) {
+      throw invitationFailure(400, '비밀번호를 8~200자로 입력하세요', { field: 'password' });
+    }
+    const command = commandIdentifier(commandIdValue);
+    try {
+      return await database.transaction(async (client) => {
+        await authorizeAgencyWrite(client, actor);
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`account-password:${command}`]);
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`account-id:${id}`]);
+
+        const receiptResult = await client.query(
+          'SELECT actor_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1 FOR UPDATE',
+          [command]
+        );
+        if (receiptResult.rowCount) {
+          const receipt = receiptResult.rows[0];
+          const stored = receipt.result && typeof receipt.result === 'object' ? receipt.result : {};
+          if (String(receipt.actor_id || '') === String(actor.id) &&
+              stored.command === 'account.password-reset' &&
+              stored.request && String(stored.request.id || '') === id) {
+            const current = await client.query(
+              'SELECT id, email, name, role, password_hash FROM accounts WHERE id = $1 LIMIT 1',
+              [id]
+            );
+            if (!current.rowCount) throw invitationFailure(404, '계정을 찾을 수 없습니다');
+            // Same command id, different password is a different operation:
+            // only a byte-identical replay counts as idempotent.
+            if (!verifyPassword(password, current.rows[0].password_hash)) {
+              throw invitationFailure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+            }
+            const { password_hash: _dropped, ...account } = current.rows[0];
+            return { account: publicAccount(account), replayed: true, sessionsRevoked: 0 };
+          }
+          throw invitationFailure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+        }
+
+        const found = await client.query(
+          'SELECT id, email, name, role, active FROM accounts WHERE id = $1 FOR UPDATE',
+          [id]
+        );
+        if (!found.rowCount) throw invitationFailure(404, '계정을 찾을 수 없습니다');
+        if (found.rows[0].active !== true) throw invitationFailure(409, '사용 중지된 계정입니다');
+        await client.query('UPDATE accounts SET password_hash = $1 WHERE id = $2', [hashPassword(password), id]);
+        // A reset logs the account out everywhere except the session that
+        // performed it, so a compromised password stops working at once.
+        const revoked = await client.query(
+          'DELETE FROM sessions WHERE account_id = $1 AND token_hash != $2',
+          [id, keepTokenHash || '']
+        );
+        const account = publicAccount(found.rows[0]);
+        await client.query(
+          `INSERT INTO command_receipts (command_id, event_id, actor_id, result)
+           VALUES ($1, $2, $3, $4::jsonb)`,
+          [command, null, actor.id, JSON.stringify({
+            command: 'account.password-reset',
+            request: { id },
+            response: { account },
+          })]
+        );
+        return { account, replayed: false, sessionsRevoked: revoked.rowCount };
+      });
+    } catch (error) {
+      if (error && error.code === '23505' && !error.status) {
+        throw invitationFailure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+      }
+      throw error;
+    }
+  }
   async function revokeInvitation(actor, invitationId, commandIdValue) {
     const id = String(invitationId || '').trim();
     if (!id) throw invitationFailure(404, '초대를 찾을 수 없습니다');
@@ -697,6 +768,44 @@ function createDatabaseAuth(database, options = {}) {
         return;
       }
       sendJson(res, 200, { user });
+      return;
+    }
+    const passwordResetPath = /^\/api\/auth\/accounts\/([^/]+)\/password$/.exec(urlPath);
+    if (passwordResetPath && req.method === 'POST') {
+      let accountId;
+      try {
+        accountId = decodeURIComponent(passwordResetPath[1]);
+      } catch (error) {
+        sendJson(res, 404, { error: '계정을 찾을 수 없습니다' });
+        return;
+      }
+      let actor;
+      try {
+        actor = await requireAgency(req.headers.cookie);
+      } catch (error) {
+        sendJson(res, error.status || 401, { error: error.message });
+        return;
+      }
+      let body;
+      try {
+        body = await readJsonBody(req);
+      } catch (error) {
+        sendJson(res, 400, { error: error.message });
+        return;
+      }
+      try {
+        const token = cookieToken(req.headers.cookie);
+        const result = await resetAccountPassword(
+          actor, accountId, body && body.password, body && body.commandId,
+          token && token.length <= 256 ? tokenHash(token) : ''
+        );
+        sendJson(res, 200, { account: result.account, sessionsRevoked: result.sessionsRevoked });
+      } catch (error) {
+        sendJson(res, error.status || 500, Object.assign(
+          { error: failureMessage(error, '비밀번호를 재설정하지 못했습니다') },
+          error.field ? { field: error.field } : null
+        ));
+      }
       return;
     }
     if (urlPath === '/api/auth/invitations' && req.method === 'POST') {

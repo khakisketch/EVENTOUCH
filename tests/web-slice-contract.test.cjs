@@ -117,6 +117,9 @@ test('web-console-home-reads-bootstrap-before-any-write-paths', () => {
   const login = read('app/staff/login/StaffLoginForm.tsx');
   assert.match(login, /\/staff/);
   assert.match(login, /\/console/);
+  // No public signup by design: accounts are invitation-only, and a
+  // forgotten password goes through the organization owner.
+  assert.match(login, /조직 관리자에게 재설정을 요청/);
   const home = read('app/console/ConsoleHome.tsx');
   assert.match(home, /\/api\/bootstrap/);
   assert.doesNotMatch(home, /localStorage/);
@@ -171,6 +174,31 @@ test('web-console-home-is-a-compact-schedule-first-event-directory', () => {
   assert.match(css, /\.dialogActions/);
   assert.match(css, /\.eventRecency/);
   assert.doesNotMatch(css, /min-height: 40px/);
+});
+
+test('web-invite-accept-and-team-reset-cover-invitation-only-accounts', () => {
+  // Invitation links are single-use bearers: the page reads public metadata
+  // and never persists the token.
+  const invite = read('app/invite/[token]/InviteAccept.tsx');
+  assert.match(invite, /\/api\/auth\/invitations\/\$\{encodeURIComponent\(token\)\}\/accept/);
+  assert.match(invite, /new-password/);
+  assert.doesNotMatch(invite, /localStorage/);
+  assert.doesNotMatch(invite, /sessionStorage/);
+  const invitePage = read('app/invite/[token]/page.tsx');
+  assert.match(invitePage, /\/api\/auth\/invitations\//);
+  assert.doesNotMatch(invitePage, /localStorage/);
+  // Password resets are owner-only, idempotent by command id, and revoke
+  // other sessions; the UI gates on the same permission the server enforces.
+  const team = read('app/console/team/TeamWorkspace.tsx');
+  assert.match(team, /\/api\/auth\/accounts\/\$\{encodeURIComponent\(account\.id\)\}\/password/);
+  assert.match(team, /commandId/);
+  assert.match(team, /team\.manage/);
+  assert.match(team, /previouslyFocused/);
+  assert.match(team, /Escape/);
+  assert.doesNotMatch(team, /localStorage/);
+  assert.doesNotMatch(team, /sessionStorage/);
+  const shell = read('app/console/ConsoleShell.tsx');
+  assert.match(shell, /\/console\/team/);
 });
 
 test('web-participant-status-goes-through-the-operator-command-path', () => {

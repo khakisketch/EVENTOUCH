@@ -69,6 +69,7 @@ export default function StaffLoginForm() {
       <button type="submit" disabled={submitting}>
         {submitting ? "로그인 중입니다" : "로그인"}
       </button>
+      <p className="auth-help">비밀번호를 잊으셨나요? 조직 관리자에게 재설정을 요청하세요.</p>
     </form>
   );
 }

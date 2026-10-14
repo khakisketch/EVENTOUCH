@@ -58,6 +58,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   }
   const isHome = pathname === "/console";
   const isClients = pathname === "/console/clients";
+  const isTeam = pathname === "/console/team";
   const isEventPath = Boolean(eventId);
   const eventBasePath = eventId ? `/console/events/${encodeURIComponent(eventId)}` : "";
   const isOverview = Boolean(eventBasePath && pathname === eventBasePath);
@@ -182,6 +183,8 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     ? "행사"
     : isClients
       ? "고객사"
+      : isTeam
+        ? "팀·권한"
       : showCurrentEvent
         ? shellData?.currentEventName ?? "행사 운영"
         : isEventPath
@@ -312,9 +315,13 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           style={operatorMenuOpen ? operatorMenuPosition ?? { visibility: "hidden" } : undefined}
         >
           {canManageTeam ? (
-            <button type="button" className="operator-menu-item" role="menuitem" disabled>
-              <span>팀·권한</span><span className="operator-menu-status">준비 중</span>
-            </button>
+            <Link
+              className="operator-menu-item"
+              role="menuitem"
+              href="/console/team"
+            >
+              <span>팀·권한</span>
+            </Link>
           ) : null}
           {canManageIntegrations ? (
             <button type="button" className="operator-menu-item" role="menuitem" disabled>
