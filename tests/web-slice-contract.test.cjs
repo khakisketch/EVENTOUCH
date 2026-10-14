@@ -92,3 +92,14 @@ test('web-camera-scan-degrades-to-manual-entry-without-a-camera', () => {
   assert.match(console_, /CameraScan/);
   assert.match(console_, /submitTicket\(code\)/);
 });
+
+test('web-display-polls-public-content-and-never-blanks-on-a-drop', () => {
+  const board = read('app/screen/[slug]/DisplayBoard.tsx');
+  assert.match(board, /\/api\/public\/events\//);
+  assert.match(board, /setInterval/);
+  assert.match(board, /5000/);
+  // A failed poll keeps the last good frame; only the first load may fail.
+  assert.match(board, /prev\.kind === "ready"/);
+  assert.doesNotMatch(board, /localStorage/);
+  assert.doesNotMatch(board, /sessionStorage/);
+});
