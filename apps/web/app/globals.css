@@ -876,6 +876,114 @@ select[aria-invalid="true"] {
   font-size: var(--h3);
 }
 
+/* Operator-selected output: poll bars, winners, Q&A, photo wall. Sizes are
+   viewport-relative because the board is read from across a room. */
+.display-poll {
+  display: grid;
+  gap: var(--s4);
+}
+
+.display-poll > p {
+  color: var(--muted);
+}
+
+.poll-row {
+  display: grid;
+  gap: var(--s2);
+}
+
+.poll-label {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s4);
+  font-size: clamp(var(--h3), 2.2vw, var(--display));
+}
+
+.poll-bar {
+  height: var(--s6);
+  border-radius: var(--radius-small);
+  background: var(--ground);
+  overflow: hidden;
+}
+
+.poll-bar span {
+  display: block;
+  height: 100%;
+  background: var(--brand);
+  transition: width var(--enter) ease-out;
+}
+
+.display-answer {
+  font-weight: 750;
+}
+
+.display-winners {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--s4);
+}
+
+.display-winner {
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.display-winner h3 {
+  margin: 0;
+  font-size: clamp(var(--h2), 2.6vw, var(--display));
+}
+
+.display-winner p {
+  color: var(--muted);
+}
+
+.display-questions {
+  display: grid;
+  gap: var(--s4);
+}
+
+.display-question {
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.display-question h3 {
+  margin: 0 0 var(--s2);
+  font-size: clamp(var(--h3), 2.2vw, var(--display));
+}
+
+.display-question p {
+  color: var(--brand-text);
+}
+
+.display-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--s4);
+}
+
+.display-photo-grid figure {
+  margin: 0;
+  display: grid;
+  gap: var(--s2);
+}
+
+.display-photo-grid img {
+  width: 100%;
+  max-height: 46svh;
+  object-fit: cover;
+  border-radius: var(--radius);
+}
+
+.display-photo-grid figcaption {
+  color: var(--muted);
+  font-size: var(--h3);
+}
+
 .display-footer {
   display: flex;
   justify-content: space-between;

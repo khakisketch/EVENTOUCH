@@ -195,3 +195,15 @@ test('web-operations-uses-desk-booth-and-assignment-commands-only', () => {
   // The screen may surface prerequisites but never computes authorization.
   assert.doesNotMatch(ops, /access\.|authorize\(/);
 });
+
+test('web-display-honors-the-operator-selection-from-the-public-projection', () => {
+  const board = read('app/screen/[slug]/DisplayBoard.tsx');
+  assert.match(board, /display\.type/);
+  for (const type of ['notice', 'poll', 'quiz', 'draw', 'qa', 'photo']) {
+    assert.match(board, new RegExp(`"${type}"`));
+  }
+  // Counts arrive aggregate-only from the server; the board never renders
+  // voter identity.
+  assert.match(board, /counts/);
+  assert.doesNotMatch(board, /participantId/);
+});

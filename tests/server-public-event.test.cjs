@@ -292,3 +292,15 @@ test('public-event-api-projects-only-the-operator-display-selection', async () =
   const fallback = await requestJson(harness.baseUrl, `/api/public/events/${slugs.live}`);
   assert.deepEqual(fallback.json.workspace.display, { type: 'idle', moduleId: null });
 });
+
+test('public-poll-projection-carries-aggregate-counts-only', async () => {
+  const event = await requestJson(harness.baseUrl, `/api/public/events/${slugs.live}`);
+  const poll = event.json.workspace.modules.find((module) => module.id === 'poll-public');
+  assert.ok(poll, 'the published poll is projected');
+  // poll-public has response-other (B) and, for the ticket view, response-own (A);
+  // the anonymous view counts both but never exposes who voted.
+  assert.deepEqual(poll.options, ['A', 'B']);
+  assert.deepEqual(poll.counts, [1, 1]);
+  assert.ok(!JSON.stringify(event.json).includes('response-own'));
+  assert.ok(!JSON.stringify(event.json).includes('response-other'));
+});

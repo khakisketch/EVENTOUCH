@@ -132,7 +132,7 @@ function publicPage(source) {
   };
 }
 
-function publicModule(module) {
+function publicModule(module, responses) {
   const source = object(module);
   const projected = {
     id: text(source.id, 120),
@@ -143,6 +143,14 @@ function publicModule(module) {
   };
   if (Array.isArray(source.options)) projected.options = source.options.filter((option) => typeof option === 'string').map((option) => option.slice(0, 200));
   if (Array.isArray(source.questions)) projected.questions = source.questions.filter((question) => typeof question === 'string').map((question) => question.slice(0, 300));
+  if (source.type === 'poll') {
+    // Aggregate only: the poll board needs counts, never who voted. Responses
+    // themselves stay out of the public projection.
+    const answers = array(responses).filter((response) => response && response.moduleId === source.id);
+    projected.counts = array(projected.options).map((option) =>
+      answers.filter((response) => response.answer === option).length
+    );
+  }
   if (source.type === 'quiz') {
     projected.revealed = source.revealed === true;
     if (projected.revealed) projected.answer = text(source.answer, 1000);
@@ -224,7 +232,7 @@ function publicWorkspace(value, event, participant = null) {
   const allowedFeatures = new Set(array(event.features));
   const modules = array(source.modules)
     .filter((module) => module && module.published === true && module.status !== 'DRAFT' && allowedFeatures.has(module.type))
-    .map(publicModule);
+    .map((module) => publicModule(module, source.responses));
   const qaModuleIds = new Set(modules.filter((module) => module.type === 'qa').map((module) => module.id));
   const questions = array(source.questions)
     .filter((question) => question && qaModuleIds.has(question.moduleId) && (
