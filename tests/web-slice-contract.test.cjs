@@ -41,3 +41,14 @@ test('web-slice-does-not-take-over-writes', () => {
   assert.doesNotMatch(sources, /method:\s*"POST"/i);
   assert.doesNotMatch(sources, /\/commands/);
 });
+
+test('web-registration-posts-to-the-public-signup-contract', () => {
+  const form = read('app/event/[slug]/register/RegisterForm.tsx');
+  assert.match(form, /\/api\/events\/.*\/signup/);
+  assert.match(form, /formVersion/);
+  assert.match(form, /commandId/);
+  assert.match(form, /consent/);
+  const page = read('app/event/[slug]/register/page.tsx');
+  assert.match(page, /registrationOpen/);
+  assert.match(page, /publishedVersion/);
+});

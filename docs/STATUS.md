@@ -93,10 +93,9 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
 
 ## 이력
 
-- 2026-10-14: Next.js 이관 슬라이스 1(`apps/web`, 공개 행사 안내). 기존 공개 투영을
-  서버 렌더링으로 읽고, `/api/*`는 rewrite로 API에 전달한다. 구 앱은 그대로 동작.
-  `tsc`·`next build`·프로덕션 기동 후 실데이터 렌더·404·프록시를 확인하고 계약 테스트 3개 추가.
-  다음 슬라이스는 참가 신청 → 티켓 → 스태프 스캔 순.
+- 2026-10-14: Next.js 이관 슬라이스 2(참가 신청). 공개 양식·동의를 서버에서 읽고
+  같은 오리진 공개 signup으로 신청한 뒤 발급 티켓으로 티켓 화면에 간다.
+  실제 신청→DB 저장→티켓 화면 전환을 데모에서 확인.
 - 2026-10-14: 발송 outbox(`message_outbox`, 004)와 체크인 기록 투영(`checkin_records`, 005) 추가.
   발송 의도는 커맨드와 같은 트랜잭션에 기록되고 결과 기록 후 확정, 남은 건 부팅 드레인이
   재처리한다. 체크인 기록은 같은 트랜잭션 write-through + 기존 기록 백필, 읽기는 JSONB 유지.
