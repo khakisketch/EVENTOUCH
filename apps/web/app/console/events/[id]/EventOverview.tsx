@@ -316,6 +316,11 @@ export default function EventOverview({ eventId }: { eventId: string }) {
           현장 운영 준비
         </Link>
       </p>
+      <p className="overview-action">
+        <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/settings`}>
+          행사 설정
+        </Link>
+      </p>
       </section>
       <section className="overview-recent">
       <h2 className="section-heading">최근 입퇴장</h2>

@@ -63,6 +63,8 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const isOverview = Boolean(eventBasePath && pathname === eventBasePath);
   const isParticipants = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/participants`));
   const isMessages = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/messages`));
+  const isOperations = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/operations`));
+  const isSettings = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/settings`));
 
   const [shellData, setShellData] = useState<ShellData | null>(null);
   const [operatorMenuOpen, setOperatorMenuOpen] = useState(false);
@@ -367,6 +369,20 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
                 aria-current={isMessages ? "page" : undefined}
               >
                 메시지
+              </Link>
+              <Link
+                className={`console-nav-item console-subnav-item${isOperations ? " active" : ""}`}
+                href={`${eventBasePath}/operations`}
+                aria-current={isOperations ? "page" : undefined}
+              >
+                현장 운영
+              </Link>
+              <Link
+                className={`console-nav-item console-subnav-item${isSettings ? " active" : ""}`}
+                href={`${eventBasePath}/settings`}
+                aria-current={isSettings ? "page" : undefined}
+              >
+                행사 설정
               </Link>
             </div>
           ) : null}

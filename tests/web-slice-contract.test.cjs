@@ -217,3 +217,17 @@ test('web-staff-booth-work-uses-the-booth-visit-command-and-stamp-mode', () => {
   assert.match(staff, /참가자가 부스 QR을 스캔하는 방식/);
   assert.doesNotMatch(staff, /localStorage/);
 });
+
+test('web-settings-uses-the-preparation-command-set', () => {
+  const settings = read('app/console/events/[id]/settings/SettingsWorkspace.tsx');
+  for (const command of ['event.update', 'event.features', 'form.publish', 'form.close', 'attendee.page.save', 'attendee.page.publish']) {
+    assert.match(settings, new RegExp(command.replace('.', '\\.')));
+  }
+  assert.match(settings, /\/commands/);
+  assert.doesNotMatch(settings, /localStorage/);
+  // The shell links every live event destination.
+  const shell = read('app/console/ConsoleShell.tsx');
+  for (const href of ['/participants', '/messages', '/operations', '/settings']) {
+    assert.match(shell, new RegExp(href.replace('/', '\\/')));
+  }
+});
