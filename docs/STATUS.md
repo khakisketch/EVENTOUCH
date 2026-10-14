@@ -26,7 +26,7 @@ Branch: `master` · HEAD: `925a767`
 
 ## 검증 수치 (현재 작업 트리 실측)
 
-- `npm test` — **493 통과, 실패 0, 스킵 0** (DB 주입 시). DB 없이 돌리면 197개가 스킵되고 실패로 처리된다.
+- `npm test` — **494 통과, 실패 0, 스킵 0** (DB 주입 시). DB 없이 돌리면 197개가 스킵되고 실패로 처리된다.
 - `npm run a11y` — 주요 12화면, serious/critical **0**
 - `npm run mobile` — 6기기 × 2방향 × 6화면 = **72검사 통과**, 가로 넘침·44px 미만 조작 요소 0
 
@@ -99,6 +99,9 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
 - 2026-10-14: Next.js 이관 슬라이스 3(내 티켓). bearer를 주소에서 1회 소비해
   메모리로 옮기고 정리, 서버 조회로만 상태 판단, 스캐너 호환 토큰 원문 QR 렌더.
   신청→발급→QR 표시 흐름을 데모에서 확인.
+- 2026-10-14: Next.js 이관 슬라이스 4a(스태프 수동 체크인). 같은 오리진 세션 로그인,
+  배정 데스크 선택, `check.scan` 처리와 중복 거부 표시를 데모에서 확인.
+  성공 결과는 목록 새로고침 뒤에도 유지된다.
 - 2026-10-14: 발송 outbox(`message_outbox`, 004)와 체크인 기록 투영(`checkin_records`, 005) 추가.
   발송 의도는 커맨드와 같은 트랜잭션에 기록되고 결과 기록 후 확정, 남은 건 부팅 드레인이
   재처리한다. 체크인 기록은 같은 트랜잭션 write-through + 기존 기록 백필, 읽기는 JSONB 유지.

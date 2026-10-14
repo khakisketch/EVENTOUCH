@@ -62,3 +62,18 @@ test('web-ticket-keeps-the-bearer-out-of-storage-and-history', () => {
   // The QR encodes the same raw token the staff scanners accept.
   assert.match(view, /<QRCode value=\{[^}]*ticket[^}]*\}/);
 });
+
+test('web-staff-uses-session-bootstrap-and-server-checked-commands', () => {
+  const login = read('app/staff/login/StaffLoginForm.tsx');
+  assert.match(login, /\/api\/auth\/login/);
+  assert.doesNotMatch(login, /localStorage/);
+  assert.doesNotMatch(login, /sessionStorage/);
+  const console_ = read('app/staff/StaffConsole.tsx');
+  assert.match(console_, /\/api\/bootstrap/);
+  assert.match(console_, /\/commands/);
+  assert.match(console_, /check\.scan/);
+  assert.match(console_, /assignmentId/);
+  // No ticket bearer may be persisted on the device.
+  assert.doesNotMatch(console_, /localStorage/);
+  assert.doesNotMatch(console_, /sessionStorage/);
+});
