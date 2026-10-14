@@ -1,7 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import styles from "./console-home.module.css";
 
 type Client = { id: string; name: string };
@@ -32,7 +31,6 @@ export default function CreateEventDialog({
   onClose: () => void;
   onCreated: (eventId: string) => void;
 }) {
-  const router = useRouter();
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [clientId, setClientId] = useState("");
@@ -42,7 +40,48 @@ export default function CreateEventDialog({
   const [capacity, setCapacity] = useState("");
   const [failure, setFailure] = useState<{ message: string; field?: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [slugTouched, setSlugTouched] = useState(false);
   const commandIdRef = useRef<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    nameRef.current?.focus();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab" || !dialogRef.current) return;
+      const items = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not(:disabled), input, select, textarea, a[href]'
+        )
+      ).filter((item) => item.tabIndex >= 0);
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      previouslyFocused?.focus?.();
+    };
+  }, []);
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -93,21 +132,22 @@ export default function CreateEventDialog({
   const invalid = (field: string) => failure?.field === field;
 
   return (
-    <div className={styles.dialogBackdrop} role="presentation" onClick={(event) => {
+    <div className={styles.dialogBackdrop} onClick={(event) => {
       if (event.target === event.currentTarget) onClose();
     }}>
-      <div className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="create-event-title">
+      <div ref={dialogRef} className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="create-event-title">
         <h2 id="create-event-title">새 행사 만들기</h2>
         <form onSubmit={onSubmit}>
           <div>
             <label htmlFor="create-name">행사명</label>
             <input
               id="create-name"
+              ref={nameRef}
               type="text"
               value={name}
               onChange={(event) => setName(event.target.value)}
               onBlur={() => {
-                if (!slug) setSlug(suggestedSlug(name));
+                if (!slug && !slugTouched && name.trim()) setSlug(suggestedSlug(name));
               }}
               aria-invalid={invalid("name") || undefined}
               required
@@ -122,7 +162,11 @@ export default function CreateEventDialog({
               value={slug}
               placeholder="예: partner-conf-2026"
               pattern="[a-z0-9][a-z0-9-]{0,49}"
-              onChange={(event) => setSlug(event.target.value)}
+              title="영소문자·숫자·하이픈 50자 이내"
+              onChange={(event) => {
+                setSlug(event.target.value);
+                setSlugTouched(true);
+              }}
               aria-invalid={invalid("slug") || undefined}
             />
             <p className={styles.slugHint}>참가자 주소에 쓰입니다. 영소문자·숫자·하이픈.</p>

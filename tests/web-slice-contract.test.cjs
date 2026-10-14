@@ -129,10 +129,20 @@ test('web-console-home-reads-bootstrap-before-any-write-paths', () => {
 test('web-console-home-is-a-compact-schedule-first-event-directory', () => {
   const home = read('app/console/ConsoleHome.tsx');
   assert.doesNotMatch(home, /먼저 확인/);
-  assert.match(home, /행사 일정/);
+  assert.match(home, /오늘과 가까운 일정부터/);
+  // One visible heading only; the result count is a screen-reader live
+  // region instead of a second visible total next to the filter counts.
+  assert.doesNotMatch(home, /aria-live/);
+  assert.match(home, /className="sr-only" role="status"/);
   assert.match(home, /date: typeof event\.date/);
   assert.match(home, /start: typeof event\.start/);
   assert.match(home, /event\.date > todayKey/);
+  assert.match(home, /eventRecency/);
+  // A recoverable connection failure restores shell navigation with the list.
+  assert.match(home, /eventouch:shell-reload/);
+  const shell = read('app/console/ConsoleShell.tsx');
+  assert.match(shell, /eventouch:shell-reload/);
+  assert.doesNotMatch(shell, /aria-disabled/);
   assert.match(home, /aria-pressed=\{filter === item\.id\}/);
   for (const label of ['전체', '준비 중', '진행 중', '종료·보관']) {
     assert.match(home, new RegExp(label));
@@ -141,6 +151,17 @@ test('web-console-home-is-a-compact-schedule-first-event-directory', () => {
   assert.match(home, /href=\{`\/console\/events/);
   assert.match(home, /className=\{styles\.eventDate\}/);
   assert.match(home, /className=\{styles\.eventStatus\}/);
+  // The create dialog is a real modal again: styled, focus-trapped,
+  // Escape-dismissed, with focus returned to the trigger.
+  const dialog = read('app/console/CreateEventDialog.tsx');
+  assert.match(dialog, /nameRef\.current\?\.focus/);
+  assert.match(dialog, /Escape/);
+  assert.match(dialog, /previouslyFocused/);
+  const css = read('app/console/console-home.module.css');
+  assert.match(css, /\.dialogBackdrop/);
+  assert.match(css, /\.dialogActions/);
+  assert.match(css, /\.eventRecency/);
+  assert.doesNotMatch(css, /min-height: 40px/);
 });
 
 test('web-participant-status-goes-through-the-operator-command-path', () => {

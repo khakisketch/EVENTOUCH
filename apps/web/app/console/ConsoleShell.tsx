@@ -67,6 +67,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const isSettings = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/settings`));
 
   const [shellData, setShellData] = useState<ShellData | null>(null);
+  const [shellTick, setShellTick] = useState(0);
   const [operatorMenuOpen, setOperatorMenuOpen] = useState(false);
   const [operatorMenuPosition, setOperatorMenuPosition] = useState<CSSProperties | null>(null);
   const [portalReady, setPortalReady] = useState(false);
@@ -158,7 +159,15 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     return () => {
       cancelled = true;
     };
-  }, [eventId, router]);
+  }, [eventId, router, shellTick]);
+
+  useEffect(() => {
+    // Screens that own a retry (e.g. the event home) notify the shell so a
+    // recovered connection restores navigation together with page content.
+    const reload = () => setShellTick((tick) => tick + 1);
+    window.addEventListener("eventouch:shell-reload", reload);
+    return () => window.removeEventListener("eventouch:shell-reload", reload);
+  }, []);
 
   const userName = shellData?.userName ?? "운영자";
   const roleLabel = shellData?.roleLabel ?? "운영 워크스페이스";
@@ -169,6 +178,15 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const showCurrentEvent = Boolean(
     isEventPath && shellData?.canAccessCurrentEvent && shellData.currentEventName
   );
+  const topbarLabel = isHome
+    ? "행사"
+    : isClients
+      ? "고객사"
+      : showCurrentEvent
+        ? shellData?.currentEventName ?? "행사 운영"
+        : isEventPath
+          ? "행사 운영"
+          : "운영 워크스페이스";
 
   function closeOperatorMenu(restoreFocus = false) {
     menuFocusPendingRef.current = false;
@@ -227,7 +245,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
       if (!operatorMenuRef.current?.contains(document.activeElement)) return;
       const items = Array.from(
         operatorMenuRef.current?.querySelectorAll<HTMLElement>(
-          '[role="menuitem"]:not([aria-disabled="true"]):not(:disabled)'
+          '[role="menuitem"]:not(:disabled)'
         ) ?? []
       );
       if (!items.length) return;
@@ -257,7 +275,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     menuFocusPendingRef.current = false;
     const frame = window.requestAnimationFrame(() => {
       operatorMenuRef.current
-        ?.querySelector<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"]):not(:disabled)')
+        ?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)')
         ?.focus();
     });
     return () => window.cancelAnimationFrame(frame);
@@ -291,15 +309,15 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           role="menu"
           aria-label="운영자 메뉴"
           hidden={!operatorMenuOpen}
-          style={operatorMenuPosition ?? { visibility: "hidden" }}
+          style={operatorMenuOpen ? operatorMenuPosition ?? { visibility: "hidden" } : undefined}
         >
           {canManageTeam ? (
-            <button type="button" className="operator-menu-item" role="menuitem" aria-disabled="true" disabled>
+            <button type="button" className="operator-menu-item" role="menuitem" disabled>
               <span>팀·권한</span><span className="operator-menu-status">준비 중</span>
             </button>
           ) : null}
           {canManageIntegrations ? (
-            <button type="button" className="operator-menu-item" role="menuitem" aria-disabled="true" disabled>
+            <button type="button" className="operator-menu-item" role="menuitem" disabled>
               <span>서비스 연동</span><span className="operator-menu-status">준비 중</span>
             </button>
           ) : null}
@@ -325,7 +343,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
 
   return (
     <div className="console-shell">
-      <aside className="console-sidebar" aria-label="운영 워크스페이스">
+      <aside className="console-sidebar" aria-label="운영 콘솔">
         <Link className="console-brand" href="/console">
           <span className="console-wordmark">EVENTOUCH</span>
           <span className="console-tagline">행사 운영</span>
@@ -430,7 +448,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
 
       <div className="console-content-shell">
         <header className="console-topbar">
-          <p className="console-breadcrumb">운영 워크스페이스</p>
+          <p className="console-breadcrumb">{topbarLabel}</p>
         </header>
         <main id="main-content" className="console-main" tabIndex={-1}>
           {children}

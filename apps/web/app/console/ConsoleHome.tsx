@@ -35,6 +35,32 @@ const FILTERS: Array<{ id: EventFilter; label: string }> = [
   { id: "closed", label: "종료·보관" },
 ];
 
+const KNOWN_STAGES = ["DRAFT", "READY", "LIVE", "ENDED", "ARCHIVED"];
+
+// Calendar recency is display-only: it never changes the operational stage.
+// A past date with an active stage reads as "지난 일정" next to the badge,
+// so the two dimensions stay visibly distinct.
+function eventRecency(date: string, todayKey: string): string | null {
+  if (!date) return null;
+  if (date === todayKey) return "오늘";
+  if (date > todayKey) {
+    const days = Math.round(
+      (new Date(`${date}T00:00:00`).getTime() - new Date(`${todayKey}T00:00:00`).getTime()) / 86400000
+    );
+    if (days === 1) return "내일";
+    return `D-${days}`;
+  }
+  const days = Math.round(
+    (new Date(`${todayKey}T00:00:00`).getTime() - new Date(`${date}T00:00:00`).getTime()) / 86400000
+  );
+  if (days === 1) return "어제";
+  return "지난 일정";
+}
+
+function todayKeyOf(now: Date): string {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
 export default function ConsoleHome() {
   const router = useRouter();
   const [state, setState] = useState<HomeState>({ kind: "loading" });
@@ -128,6 +154,8 @@ export default function ConsoleHome() {
     };
   }, [reloadTick, router]);
 
+  const todayKey = todayKeyOf(new Date());
+
   const filteredEvents = useMemo(() => {
     if (state.kind !== "ready") return [];
     const search = query.trim().toLocaleLowerCase("ko-KR");
@@ -143,8 +171,6 @@ export default function ConsoleHome() {
     }).sort((a, b) => {
       // The calendar is the primary index: today's sessions first, then the
       // nearest future date, recent past events, and finally undated events.
-      const today = new Date();
-      const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
       const bucket = (event: ConsoleEvent) => {
         if (!event.date) return 3;
         if (event.date === todayKey) return 0;
@@ -156,17 +182,40 @@ export default function ConsoleHome() {
       const dateOrder = aBucket === 2 ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date);
       return dateOrder || a.start.localeCompare(b.start) || a.name.localeCompare(b.name, "ko-KR");
     });
-  }, [filter, query, state]);
+  }, [filter, query, state, todayKey]);
 
-  if (state.kind === "loading") return <p className="loading-state" role="status">행사 목록을 불러오고 있습니다.</p>;
+  if (state.kind === "loading") {
+    return (
+      <div className={styles.home}>
+        <header className={styles.pageHeader}>
+          <h1>행사</h1>
+        </header>
+        <p className="loading-state" role="status">행사 목록을 불러오고 있습니다.</p>
+      </div>
+    );
+  }
   if (state.kind === "failed") {
     return (
-      <section className={styles.statePanel}>
-        <p role="alert">{state.message}</p>
-        <button type="button" className="button button-secondary" onClick={() => setReloadTick((tick) => tick + 1)}>
-          다시 불러오기
-        </button>
-      </section>
+      <div className={styles.home}>
+        <header className={styles.pageHeader}>
+          <h1>행사</h1>
+        </header>
+        <section className={styles.statePanel}>
+          <p role="alert">{state.message}</p>
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={() => {
+              setReloadTick((tick) => tick + 1);
+              // The shell owns its own bootstrap fetch; without this the
+              // navigation stays empty while only the list recovers.
+              window.dispatchEvent(new CustomEvent("eventouch:shell-reload"));
+            }}
+          >
+            다시 불러오기
+          </button>
+        </section>
+      </div>
     );
   }
   const clientOptions = [...state.clients.entries()].map(([id, name]) => ({ id, name }))
@@ -182,7 +231,7 @@ export default function ConsoleHome() {
       <header className={styles.pageHeader}>
         <div>
           <h1>행사</h1>
-          <p>날짜와 운영 상태를 보고 행사로 바로 이동하세요.</p>
+          <p>오늘과 가까운 일정부터 날짜순으로 표시합니다.</p>
         </div>
         <button
           type="button"
@@ -204,16 +253,12 @@ export default function ConsoleHome() {
         />
       ) : null}
 
-      <section className={styles.directory} aria-labelledby="events-title">
-        <div className={styles.sectionHeading}>
-          <div>
-            <h2 id="events-title">행사 일정</h2>
-            <p>오늘과 가까운 일정부터 날짜순으로 표시합니다.</p>
-          </div>
-          <span className={styles.resultCount} role="status" aria-live="polite" aria-atomic="true">
-            {filteredEvents.length} / {state.events.length}
-          </span>
-        </div>
+      <section className={styles.directory} aria-label="행사 목록">
+        <p className="sr-only" role="status">
+          {filter === "all" && !query.trim()
+            ? `전체 ${state.events.length}개 행사`
+            : `검색 결과 ${filteredEvents.length}개 / 전체 ${state.events.length}개`}
+        </p>
 
         <div className={styles.toolbar}>
           <div className={styles.filters} role="group" aria-label="행사 단계">
@@ -270,6 +315,8 @@ export default function ConsoleHome() {
           <ul className={styles.eventList}>
             {filteredEvents.map((event) => {
               const clientName = event.clientId ? state.clients.get(event.clientId) : "";
+              const recency = eventRecency(event.date, todayKey);
+              const stageKnown = KNOWN_STAGES.includes(event.stage);
               return (
                 <li key={event.id}>
                   <Link
@@ -281,6 +328,9 @@ export default function ConsoleHome() {
                       {event.start || event.end ? (
                         <span>{event.start}{event.end ? `–${event.end}` : ""}</span>
                       ) : null}
+                      {recency ? (
+                        <span className={styles.eventRecency}>{recency}</span>
+                      ) : null}
                     </span>
                     <span className={styles.eventIdentity}>
                       <span className={styles.eventTitleLine}>
@@ -291,7 +341,7 @@ export default function ConsoleHome() {
                       </span>
                     </span>
                     <span className={styles.eventStatus}>
-                      {event.stage ? (
+                      {stageKnown ? (
                         <span className={eventStageClassName(event.stage)}>{eventStageLabel(event.stage)}</span>
                       ) : <span className="stage-badge">단계 미정</span>}
                     </span>
