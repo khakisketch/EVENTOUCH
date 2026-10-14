@@ -11,7 +11,7 @@ export default function Home() {
         <span className="header-mark" aria-hidden="true">E</span>
       </header>
       <section className="home-hero">
-        <p className="eyebrow">행사 운영 워크스페이스</p>
+        <p className="eyebrow">공개 행사</p>
         <h1>EVENTOUCH</h1>
         <p className="home-description">행사 공개 페이지를 새 앱에서 확인합니다.</p>
         <Link className="event-link-card" href="/event/partner-demo">

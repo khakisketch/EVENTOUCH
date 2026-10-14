@@ -10,7 +10,6 @@ export default function StaffLoginPage() {
           <span className="wordmark">EVENTOUCH<span>스태프 업무</span></span>
         </header>
         <section className="auth-card">
-        <p className="eyebrow">스태프 업무</p>
         <h1>로그인</h1>
         <StaffLoginForm />
         </section>
