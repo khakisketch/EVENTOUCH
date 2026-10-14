@@ -184,6 +184,11 @@ export default function EventOverview({ eventId }: { eventId: string }) {
       ) : (
         <p>대기 중인 승인이 없습니다.</p>
       )}
+      <p>
+        <Link href={`/console/events/${encodeURIComponent(eventId)}/participants`}>
+          참가자 관리로
+        </Link>
+      </p>
       <h2>최근 입퇴장</h2>
       {overview.recent.length ? (
         <ul>

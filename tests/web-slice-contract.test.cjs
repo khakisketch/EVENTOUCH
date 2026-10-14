@@ -117,3 +117,12 @@ test('web-console-reads-operator-bootstrap-and-writes-nothing-yet', () => {
     assert.doesNotMatch(source, /sessionStorage/);
   }
 });
+
+test('web-participant-status-goes-through-the-operator-command-path', () => {
+  const list = read('app/console/events/[id]/participants/ParticipantList.tsx');
+  assert.match(list, /participant\.status/);
+  assert.match(list, /\/commands/);
+  assert.match(list, /assignmentId|membership|canManage/);
+  assert.doesNotMatch(list, /localStorage/);
+  assert.doesNotMatch(list, /sessionStorage/);
+});
