@@ -58,7 +58,6 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   }
   const isHome = pathname === "/console";
   const isClients = pathname === "/console/clients";
-  const isTeam = pathname === "/console/team";
   const isEventPath = Boolean(eventId);
   const eventBasePath = eventId ? `/console/events/${encodeURIComponent(eventId)}` : "";
   const isOverview = Boolean(eventBasePath && pathname === eventBasePath);
@@ -171,7 +170,6 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   }, []);
 
   const userName = shellData?.userName ?? "운영자";
-  const roleLabel = shellData?.roleLabel ?? "운영 워크스페이스";
   const canSeeEvents = shellData?.canSeeEvents ?? false;
   const canSeeClients = shellData?.canSeeClients ?? false;
   const canManageTeam = shellData?.canManageTeam ?? false;
@@ -179,17 +177,6 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const showCurrentEvent = Boolean(
     isEventPath && shellData?.canAccessCurrentEvent && shellData.currentEventName
   );
-  const topbarLabel = isHome
-    ? "행사"
-    : isClients
-      ? "고객사"
-      : isTeam
-        ? "팀·권한"
-      : showCurrentEvent
-        ? shellData?.currentEventName ?? "행사 운영"
-        : isEventPath
-          ? "행사 운영"
-          : "운영 워크스페이스";
 
   function closeOperatorMenu(restoreFocus = false) {
     menuFocusPendingRef.current = false;
@@ -353,7 +340,6 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
       <aside className="console-sidebar" aria-label="운영 콘솔">
         <Link className="console-brand" href="/console">
           <span className="console-wordmark">EVENTOUCH</span>
-          <span className="console-tagline">행사 운영</span>
         </Link>
 
         <nav className="side-nav" aria-label="주요 메뉴">
@@ -444,7 +430,6 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
             <span className="operator-avatar" aria-hidden="true">{avatar}</span>
             <span className="operator-identity">
               <strong>{userName}</strong>
-              <small>{roleLabel}</small>
             </span>
             <span className="operator-menu-caret" aria-hidden="true" />
           </button>
@@ -454,15 +439,9 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
       {menuItems}
 
       <div className="console-content-shell">
-        <header className="console-topbar">
-          <p className="console-breadcrumb">{topbarLabel}</p>
-        </header>
         <main id="main-content" className="console-main" tabIndex={-1}>
           {children}
         </main>
-        <footer className="console-footer">
-          EVENTOUCH <span>운영 워크스페이스</span>
-        </footer>
       </div>
     </div>
   );

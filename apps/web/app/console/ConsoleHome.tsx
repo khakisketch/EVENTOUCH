@@ -313,10 +313,7 @@ export default function ConsoleHome() {
   return (
     <div className={styles.home}>
       <header className={styles.pageHeader}>
-        <div>
-          <h1>행사</h1>
-          <p>오늘과 가까운 일정부터 날짜순으로 표시합니다.</p>
-        </div>
+        <h1>행사</h1>
         <button
           type="button"
           className={`button button-primary ${styles.createTrigger}`}

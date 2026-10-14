@@ -139,7 +139,10 @@ test('web-console-home-reads-bootstrap-before-any-write-paths', () => {
 test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   const home = read('app/console/ConsoleHome.tsx');
   assert.doesNotMatch(home, /먼저 확인/);
-  assert.match(home, /오늘과 가까운 일정부터/);
+  // The header is one heading plus the create trigger; the schedule order
+  // needs no visible explainer above the filters.
+  assert.doesNotMatch(home, /오늘과 가까운 일정부터/);
+  assert.match(home, /<h1>행사<\/h1>/);
   // One visible heading only; the result count is a screen-reader live
   // region instead of a second visible total next to the filter counts.
   assert.doesNotMatch(home, /aria-live/);
@@ -163,6 +166,13 @@ test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   const shell = read('app/console/ConsoleShell.tsx');
   assert.match(shell, /eventouch:shell-reload/);
   assert.doesNotMatch(shell, /aria-disabled/);
+  // One wordmark, one heading, one name: no breadcrumb bar, tagline,
+  // footer line, or two-line operator identity competing above the work.
+  assert.doesNotMatch(shell, /topbarLabel/);
+  assert.doesNotMatch(shell, /console-topbar/);
+  assert.doesNotMatch(shell, /console-footer/);
+  assert.doesNotMatch(shell, /console-tagline/);
+  assert.doesNotMatch(shell, /<small>\{roleLabel\}<\/small>/);
   assert.match(home, /aria-pressed=\{filter === item\.id\}/);
   for (const label of ['전체', '준비 중', '진행 중', '종료·보관']) {
     assert.match(home, new RegExp(label));
