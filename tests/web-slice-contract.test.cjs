@@ -106,18 +106,24 @@ test('web-display-polls-public-content-and-never-blanks-on-a-drop', () => {
   assert.doesNotMatch(board, /sessionStorage/);
 });
 
-test('web-console-reads-operator-bootstrap-and-writes-nothing-yet', () => {
+test('web-console-home-reads-bootstrap-before-any-write-paths', () => {
   const login = read('app/staff/login/StaffLoginForm.tsx');
   assert.match(login, /\/staff/);
   assert.match(login, /\/console/);
-  for (const file of ['app/console/ConsoleHome.tsx', 'app/console/events/[id]/EventOverview.tsx']) {
-    const source = read(file);
-    assert.match(source, /\/api\/bootstrap/);
-    assert.doesNotMatch(source, /method:\s*"POST"/i);
-    assert.doesNotMatch(source, /\/commands/);
-    assert.doesNotMatch(source, /localStorage/);
-    assert.doesNotMatch(source, /sessionStorage/);
-  }
+  const home = read('app/console/ConsoleHome.tsx');
+  assert.match(home, /\/api\/bootstrap/);
+  assert.doesNotMatch(home, /localStorage/);
+  assert.doesNotMatch(home, /sessionStorage/);
+  // Event creation is the only write on the home and goes through the
+  // idempotent organisation endpoint via the dialog.
+  const dialog = read('app/console/CreateEventDialog.tsx');
+  assert.match(dialog, /\/api\/events/);
+  assert.match(dialog, /commandId/);
+  assert.doesNotMatch(dialog, /localStorage/);
+  assert.doesNotMatch(dialog, /sessionStorage/);
+  const overview = read('app/console/events/[id]/EventOverview.tsx');
+  assert.doesNotMatch(overview, /localStorage/);
+  assert.doesNotMatch(overview, /sessionStorage/);
 });
 
 test('web-participant-status-goes-through-the-operator-command-path', () => {
@@ -167,4 +173,13 @@ test('web-retry-keeps-one-command-id-per-attempt-on-signup-and-scan', () => {
   const staff = read('app/staff/StaffConsole.tsx');
   assert.match(staff, /pendingScanIdRef\.current/);
   assert.match(staff, /useRef<string \| null>/);
+});
+
+test('web-event-stage-moves-forward-through-the-command-path-only', () => {
+  const overview = read('app/console/events/[id]/EventOverview.tsx');
+  assert.match(overview, /event\.stage/);
+  assert.match(overview, /\/commands/);
+  assert.match(overview, /window\.confirm/);
+  // The UI may hint at prerequisites but never decides them.
+  assert.doesNotMatch(overview, /stage:\s*"(LIVE|ARCHIVED)"\s*\}/);
 });
