@@ -21,6 +21,12 @@ const FEATURES: Array<{ id: string; label: string }> = [
   { id: "reward", label: "경품" },
 ];
 
+const FEATURE_GROUPS: Array<{ label: string; ids: string[] }> = [
+  { label: "참여 프로그램", ids: ["poll", "quiz", "qa", "draw", "survey", "stamp"] },
+  { label: "안내·기록", ids: ["photo", "board", "venue", "screen"] },
+  { label: "유료·경품", ids: ["payment", "reward"] },
+];
+
 type Basics = {
   name: string;
   slug: string;
@@ -59,6 +65,16 @@ function randomCommandId(): string {
 
 function text(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function formatPublishedAt(value: string): string {
+  if (!value) return "";
+  const time = Date.parse(value);
+  if (!Number.isFinite(time)) return value.slice(0, 10);
+  return new Intl.DateTimeFormat("ko-KR", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(time));
 }
 
 export default function SettingsWorkspace({ eventId }: { eventId: string }) {
@@ -229,6 +245,12 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   }
 
   const invalid = (field: string) => failure?.field === field;
+  const describedBy = (field: string) =>
+    failure?.field === field ? "settings-error" : undefined;
+  const draftDirty =
+    state.kind === "ready" && draft
+      ? JSON.stringify(draft) !== JSON.stringify(state.draft)
+      : false;
 
   return (
     <div className={styles.wrapper}>
@@ -236,7 +258,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         <p className="eyebrow">행사 설정</p>
         <h1>{basics.name}</h1>
       </header>
-      {failure ? <p role="alert" className={styles.alert}>{failure.message}</p> : null}
+      {failure ? <p role="alert" id="settings-error" className={styles.alert}>{failure.message}</p> : null}
       {notice ? <p role="status" className={styles.notice}>{notice}</p> : null}
 
       <section className={styles.section} aria-labelledby="settings-basics">
@@ -267,6 +289,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
                 value={basics.name}
                 onChange={(event) => setBasics({ ...basics, name: event.target.value })}
                 aria-invalid={invalid("name") || undefined}
+                aria-describedby={describedBy("name") || undefined}
                 required
               />
             </div>
@@ -279,6 +302,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
                 value={basics.slug}
                 onChange={(event) => setBasics({ ...basics, slug: event.target.value })}
                 aria-invalid={invalid("slug") || undefined}
+                aria-describedby={describedBy("slug") || undefined}
                 required
               />
             </div>
@@ -292,6 +316,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
                 value={basics.date}
                 onChange={(event) => setBasics({ ...basics, date: event.target.value })}
                 aria-invalid={invalid("date") || undefined}
+                aria-describedby={describedBy("date") || undefined}
                 required
               />
             </div>
@@ -304,6 +329,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
                   value={basics.start}
                   onChange={(event) => setBasics({ ...basics, start: event.target.value })}
                   aria-invalid={invalid("start") || invalid("end") || undefined}
+                  aria-describedby={failure?.field === "start" || failure?.field === "end" ? "settings-error" : undefined}
                 />
               </div>
               <div>
@@ -314,6 +340,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
                   value={basics.end}
                   onChange={(event) => setBasics({ ...basics, end: event.target.value })}
                   aria-invalid={invalid("start") || invalid("end") || undefined}
+                  aria-describedby={failure?.field === "start" || failure?.field === "end" ? "settings-error" : undefined}
                 />
               </div>
             </div>
@@ -329,6 +356,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
                 value={basics.capacity}
                 onChange={(event) => setBasics({ ...basics, capacity: event.target.value })}
                 aria-invalid={invalid("capacity") || undefined}
+                aria-describedby={describedBy("capacity") || undefined}
               />
             </div>
             <div>
@@ -341,6 +369,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
                 value={basics.price}
                 onChange={(event) => setBasics({ ...basics, price: event.target.value })}
                 aria-invalid={invalid("price") || undefined}
+                aria-describedby={describedBy("price") || undefined}
               />
             </div>
           </div>
@@ -371,24 +400,35 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       <section className={styles.section} aria-labelledby="settings-features">
         <h2 id="settings-features">기능</h2>
         <p className={styles.help}>끈 기능은 콘솔 메뉴와 참가자 화면에서 함께 사라집니다. 기존 응답과 기록은 삭제되지 않습니다.</p>
-        <fieldset className={styles.featureGrid}>
-          <legend className="sr-only">사용할 기능</legend>
-          {FEATURES.map((feature) => (
-            <label key={feature.id} className={styles.check}>
-              <input
-                type="checkbox"
-                checked={features.includes(feature.id)}
-                onChange={(event) => {
-                  setFeatures((prev) => {
-                    const list = prev ?? [];
-                    return event.target.checked
-                      ? [...list, feature.id]
-                      : list.filter((id) => id !== feature.id);
-                  });
-                }}
-              />
-              {feature.label}
-            </label>
+        <fieldset className={styles.featureGroups}>
+          <legend>사용할 기능</legend>
+          {FEATURE_GROUPS.map((group) => (
+            <div key={group.label} className={styles.featureGroup}>
+              <p className={styles.featureGroupLabel}>{group.label}</p>
+              <div className={styles.featureGrid}>
+                {group.ids.map((id) => {
+                  const feature = FEATURES.find((item) => item.id === id);
+                  if (!feature) return null;
+                  return (
+                    <label key={feature.id} className={styles.check}>
+                      <input
+                        type="checkbox"
+                        checked={features.includes(feature.id)}
+                        onChange={(event) => {
+                          setFeatures((prev) => {
+                            const list = prev ?? [];
+                            return event.target.checked
+                              ? [...list, feature.id]
+                              : list.filter((item) => item !== feature.id);
+                          });
+                        }}
+                      />
+                      {feature.label}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
           ))}
         </fieldset>
         <div className={styles.actions}>
@@ -417,6 +457,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               value={consentText}
               onChange={(event) => setConsentText(event.target.value)}
               aria-invalid={invalid("consentText") || undefined}
+              aria-describedby={describedBy("consentText") || undefined}
             />
           </div>
           <div className={styles.actions}>
@@ -448,7 +489,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         <h2 id="settings-page">참가자 페이지</h2>
         <p className={styles.help}>
           저장은 초안만 바꾸고, 게시해야 참가자에게 보입니다.
-          {state.pagePublishedAt ? ` 최근 게시: ${state.pagePublishedAt.slice(0, 10)}` : ""}
+          {state.pagePublishedAt ? ` 최근 게시: ${formatPublishedAt(state.pagePublishedAt)}` : ""}
         </p>
         <div className={styles.form}>
           <div>
@@ -460,6 +501,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               value={draft.intro}
               onChange={(event) => setDraft({ ...draft, intro: event.target.value })}
               aria-invalid={invalid("intro") || undefined}
+              aria-describedby={describedBy("intro") || undefined}
               required
             />
           </div>
@@ -471,6 +513,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               value={draft.accent}
               onChange={(event) => setDraft({ ...draft, accent: event.target.value.toUpperCase() })}
               aria-invalid={invalid("accent") || undefined}
+              aria-describedby={describedBy("accent") || undefined}
             />
           </div>
           <label className={styles.check}>
@@ -505,6 +548,9 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             />
             프로그램 보기
           </label>
+          {draftDirty ? (
+            <p className={styles.help} role="status">저장되지 않은 변경이 있습니다. 게시하기 전에 초안을 저장하세요.</p>
+          ) : null}
           <div className={styles.actions}>
             <button
               type="button"
@@ -517,7 +563,8 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             <button
               type="button"
               className="button button-primary"
-              disabled={busy}
+              disabled={busy || draftDirty}
+              title={draftDirty ? "초안을 먼저 저장하세요" : undefined}
               onClick={() => void runCommand("attendee.page.publish", {}, "참가자 페이지를 게시했습니다.")}
             >
               {busy ? "처리 중입니다" : "페이지 게시"}

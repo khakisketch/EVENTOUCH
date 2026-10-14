@@ -24,10 +24,22 @@ type TicketState =
 function entryLabel(state: {
   inside: boolean;
   everIn: boolean;
+  status: string;
+  paymentStatus: string;
 }): string {
-  if (state.inside) return "입장 중";
-  if (state.everIn) return "퇴장 · 재입장 정책 확인";
-  return "참가 확정";
+  const usable =
+    state.status === "APPROVED" &&
+    (state.paymentStatus === "FREE" || state.paymentStatus === "PAID");
+  if (usable) {
+    if (state.inside) return "입장 중";
+    if (state.everIn) return "퇴장 · 재입장 정책 확인";
+    return "참가 확정";
+  }
+  if (state.status === "PENDING") return "승인 대기";
+  if (state.status === "WAITLIST") return "대기 명단";
+  if (state.status === "CANCELLED") return "신청 취소";
+  if (state.status === "APPROVED") return "결제 확인 필요";
+  return "상태 확인 필요";
 }
 
 const STORAGE_PREFIX = "eventouch.ticket.";
@@ -58,6 +70,7 @@ function clearStoredTicket(slug: string): void {
 
 export default function TicketView({ slug }: { slug: string }) {
   const [state, setState] = useState<TicketState>({ kind: "loading" });
+  const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -130,7 +143,7 @@ export default function TicketView({ slug }: { slug: string }) {
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [slug, reloadTick]);
 
   if (state.kind === "loading") {
     return <p className="ticket-state" role="status">티켓을 확인하고 있습니다.</p>;
@@ -141,7 +154,7 @@ export default function TicketView({ slug }: { slug: string }) {
         <h1>티켓 링크가 필요합니다</h1>
         <p>신청 완료 화면의 링크로 다시 여세요.</p>
         <p>
-          <Link href={`/event/${encodeURIComponent(slug)}/register`}>참가 신청하기</Link>
+          <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/register`}>참가 신청하기</Link>
         </p>
       </section>
     );
@@ -152,7 +165,19 @@ export default function TicketView({ slug }: { slug: string }) {
         <h1>티켓을 사용할 수 없습니다</h1>
         <p>{state.message}</p>
         <p>
-          <Link href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</Link>
+          <button
+            type="button"
+            className="button button-primary"
+            onClick={() => {
+              setState({ kind: "loading" });
+              setReloadTick((tick) => tick + 1);
+            }}
+          >
+            다시 시도
+          </button>
+        </p>
+        <p>
+          <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</Link>
         </p>
       </section>
     );

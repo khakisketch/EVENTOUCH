@@ -141,7 +141,7 @@ export default function StaffConsole() {
     return (
       <section className="staff-workspace state-panel">
         <p role="alert">{loadError}</p>
-        <button type="button" onClick={() => load()}>다시 불러오기</button>
+        <button type="button" className="button button-secondary" onClick={() => load()}>다시 불러오기</button>
       </section>
     );
   }
@@ -359,17 +359,19 @@ export default function StaffConsole() {
         </form>
       ) : null}
       <div className="camera-action">
-        <button
-          type="button"
-          disabled={!ready}
-          className="button button-secondary"
-          onClick={() => {
-            setResult({ kind: "idle" });
-            setCameraOpen(true);
-          }}
-        >
-          카메라로 스캔
-        </button>
+        {activeTask === "booth" && scope.stampMode === "SELF" ? null : (
+          <button
+            type="button"
+            disabled={!ready}
+            className="button button-secondary"
+            onClick={() => {
+              setResult({ kind: "idle" });
+              setCameraOpen(true);
+            }}
+          >
+            카메라로 스캔
+          </button>
+        )}
       </div>
       {cameraOpen && ready ? (
         <CameraScan
@@ -392,6 +394,14 @@ export default function StaffConsole() {
       ) : null}
       {result.kind === "failed" ? <p className="scan-result scan-failure" role="alert">{result.message}</p> : null}
       <h2 className="activity-heading">최근 처리</h2>
+      {loadError && scopes.length ? (
+        <p className="notice" role="status">
+          목록을 새로고침하지 못했습니다. 표시된 기록이 오래되었을 수 있습니다.{" "}
+          <button type="button" className="button button-secondary" onClick={() => load(true)}>
+            다시 불러오기
+          </button>
+        </p>
+      ) : null}
       {scope.checks.length ? (
         <ul className="activity-list">
           {scope.checks.slice(0, 10).map((check) => (

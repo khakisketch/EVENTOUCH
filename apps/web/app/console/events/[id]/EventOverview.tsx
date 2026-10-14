@@ -238,12 +238,20 @@ export default function EventOverview({ eventId }: { eventId: string }) {
       <section className="state-panel">
         <p role="alert">{state.message}</p>
         <p>
+          <button type="button" className="button button-secondary" onClick={() => setReloadTick((tick) => tick + 1)}>
+            다시 불러오기
+          </button>
+        </p>
+        <p>
           <Link href="/console">행사 목록으로</Link>
         </p>
       </section>
     );
   }
   const overview = state.overview;
+  const stageText = STAGE_ORDER.includes(overview.stage.toUpperCase())
+    ? eventStageLabel(overview.stage)
+    : "단계 미정";
   return (
     <section className="overview-content">
       <header className="overview-header">
@@ -251,7 +259,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
       <p className="overview-meta">
         {[overview.date, overview.start && overview.end
           ? `${overview.start} ~ ${overview.end}`
-          : overview.start, overview.venue, eventStageLabel(overview.stage)]
+          : overview.start, overview.venue, stageText]
           .filter(Boolean)
           .join(" · ")}
       </p>
@@ -266,8 +274,12 @@ export default function EventOverview({ eventId }: { eventId: string }) {
       <section className="overview-stage">
         <h2 className="section-heading">진행 단계</h2>
         <p>
-          현재 <strong>{eventStageLabel(overview.stage)}</strong>
-          {nextStage ? ` · 다음 ${eventStageLabel(nextStage)}` : " · 마지막 단계입니다"}
+          현재 <strong>{stageText}</strong>
+          {nextStage
+            ? ` · 다음 ${eventStageLabel(nextStage)}`
+            : stageText === "단계 미정"
+              ? ""
+              : " · 마지막 단계입니다"}
         </p>
         {nextStage === "LIVE" && (overview.deskCount === 0 || overview.assignedDeskStaff === 0) ? (
           <p className="notice" role="status">
@@ -301,26 +313,20 @@ export default function EventOverview({ eventId }: { eventId: string }) {
       ) : (
         <p>대기 중인 승인이 없습니다.</p>
       )}
-      <p className="overview-action">
+      <div className="overview-action-group">
         <Link className="button button-primary" href={`/console/events/${encodeURIComponent(eventId)}/participants`}>
           참가자 관리로
         </Link>
-      </p>
-      <p className="overview-action">
         <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/messages`}>
           메시지 관리로
         </Link>
-      </p>
-      <p className="overview-action">
         <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/operations`}>
           현장 운영 준비
         </Link>
-      </p>
-      <p className="overview-action">
         <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/settings`}>
           행사 설정
         </Link>
-      </p>
+      </div>
       </section>
       <section className="overview-recent">
       <h2 className="section-heading">최근 입퇴장</h2>

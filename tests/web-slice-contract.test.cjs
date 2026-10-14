@@ -63,6 +63,10 @@ test('web-ticket-keeps-the-bearer-out-of-history-and-persistent-storage', () => 
   assert.doesNotMatch(view, /localStorage/);
   // The QR encodes the same raw token the staff scanners accept.
   assert.match(view, /<QRCode value=\{[^}]*ticket[^}]*\}/);
+  // An unusable ticket never reads as confirmed; a transient lookup failure
+  // retries with the stored bearer instead of dead-ending.
+  assert.match(view, /결제 확인 필요/);
+  assert.match(view, /setReloadTick/);
 });
 
 test('web-staff-uses-session-bootstrap-and-server-checked-commands', () => {
@@ -171,6 +175,11 @@ test('web-participant-status-goes-through-the-operator-command-path', () => {
   assert.match(list, /assignmentId|membership|canManage/);
   assert.doesNotMatch(list, /localStorage/);
   assert.doesNotMatch(list, /sessionStorage/);
+  // Long lists stay findable; unknown server statuses never read as pending.
+  assert.match(list, /이름 검색/);
+  assert.match(list, /전체 상태/);
+  assert.match(list, /상태 확인 필요/);
+  assert.match(list, /다시 불러오기/);
 });
 
 test('web-messaging-uses-operator-commands-and-keeps-ticket-bearers-out-of-history', () => {
@@ -189,6 +198,11 @@ test('web-messaging-uses-operator-commands-and-keeps-ticket-bearers-out-of-histo
   assert.doesNotMatch(messaging, /localStorage/);
   assert.doesNotMatch(messaging, /sessionStorage/);
   assert.doesNotMatch(messaging, /recipientSnapshot|ticketToken|Bearer /);
+  // Recipient subsets stay selectable without scanning the full list; a
+  // failed load recovers in place.
+  assert.match(messaging, /이름·소속 검색/);
+  assert.match(messaging, /visibleRecipients/);
+  assert.match(messaging, /다시 불러오기/);
 });
 
 test('web-console-shell-keeps-decided-navigation-and-clients-read-only', () => {
@@ -200,6 +214,7 @@ test('web-console-shell-keeps-decided-navigation-and-clients-read-only', () => {
   assert.match(clients, /\/api\/bootstrap/);
   assert.doesNotMatch(clients, /method:\s*"POST"/i);
   assert.doesNotMatch(clients, /\/commands/);
+  assert.match(clients, /다시 불러오기/);
 });
 
 test('web-retry-keeps-one-command-id-per-attempt-on-signup-and-scan', () => {
@@ -220,6 +235,9 @@ test('web-event-stage-moves-forward-through-the-command-path-only', () => {
   assert.match(overview, /window\.confirm/);
   // The UI may hint at prerequisites but never decides them.
   assert.doesNotMatch(overview, /stage:\s*"(LIVE|ARCHIVED)"\s*\}/);
+  // A failed load recovers in place; unknown stages read as undecided.
+  assert.match(overview, /다시 불러오기/);
+  assert.match(overview, /단계 미정/);
 });
 
 test('web-operations-uses-desk-booth-and-assignment-commands-only', () => {
@@ -232,6 +250,14 @@ test('web-operations-uses-desk-booth-and-assignment-commands-only', () => {
   assert.doesNotMatch(ops, /sessionStorage/);
   // The screen may surface prerequisites but never computes authorization.
   assert.doesNotMatch(ops, /access\.|authorize\(/);
+  // Every dialog follows the modal contract; field rejections surface inside
+  // the open dialog, and unknown values never render as raw codes.
+  assert.match(ops, /previouslyFocused/);
+  assert.match(ops, /Escape/);
+  assert.match(ops, /DialogError/);
+  assert.doesNotMatch(ops, /\?\? desk\.action/);
+  assert.doesNotMatch(ops, /\?\? booth\.status/);
+  assert.doesNotMatch(ops, /\?\? assignment\.accountId/);
 });
 
 test('web-display-honors-the-operator-selection-from-the-public-projection', () => {
@@ -244,6 +270,10 @@ test('web-display-honors-the-operator-selection-from-the-public-projection', () 
   // voter identity.
   assert.match(board, /counts/);
   assert.doesNotMatch(board, /participantId/);
+  // A dropped poll keeps the last frame but says so; long content is capped
+  // so projection never pushes the footer off-screen.
+  assert.match(board, /stale/);
+  assert.match(board, /연결 확인 중/);
 });
 
 test('web-staff-booth-work-uses-the-booth-visit-command-and-stamp-mode', () => {
@@ -253,6 +283,9 @@ test('web-staff-booth-work-uses-the-booth-visit-command-and-stamp-mode', () => {
   assert.match(staff, /boothAssignments/);
   // The self-scan mode is a notice, never a staff-side certification.
   assert.match(staff, /참가자가 부스 QR을 스캔하는 방식/);
+  // …so the camera action stays out of SELF mode, and a stale refresh says so.
+  assert.match(staff, /stampMode === "SELF" \? null/);
+  assert.match(staff, /오래되었을 수 있습니다/);
   assert.doesNotMatch(staff, /localStorage/);
 });
 
@@ -263,6 +296,12 @@ test('web-settings-uses-the-preparation-command-set', () => {
   }
   assert.match(settings, /\/commands/);
   assert.doesNotMatch(settings, /localStorage/);
+  // Publishing never ships a stale draft silently; field errors name their
+  // control; the twelve feature toggles read as three grouped decisions.
+  assert.match(settings, /draftDirty/);
+  assert.match(settings, /describedBy/);
+  assert.match(settings, /FEATURE_GROUPS/);
+  assert.match(settings, /참여 프로그램/);
   // The shell links every live event destination.
   const shell = read('app/console/ConsoleShell.tsx');
   for (const href of ['/participants', '/messages', '/operations', '/settings']) {

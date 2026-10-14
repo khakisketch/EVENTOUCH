@@ -158,6 +158,14 @@
   gap: var(--s3);
 }
 
+.recipientSearch {
+  margin-bottom: var(--s2);
+}
+
+.recipientSearch label {
+  margin-bottom: 0;
+}
+
 .textButton {
   min-height: 44px;
   padding: var(--s2);

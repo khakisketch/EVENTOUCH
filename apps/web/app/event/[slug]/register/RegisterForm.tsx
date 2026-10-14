@@ -109,6 +109,7 @@ export default function RegisterForm({ slug, fields, consentText, formVersion }:
                 value={typeof values[field.id] === "string" ? (values[field.id] as string) : ""}
                 onChange={(event) => setValue(field.id, event.target.value)}
                 aria-invalid={invalid || undefined}
+                required={field.required}
               >
                 <option value="">선택하세요</option>
                 {field.options.map((option) => (
@@ -131,6 +132,7 @@ export default function RegisterForm({ slug, fields, consentText, formVersion }:
                   checked={values[field.id] === true}
                   onChange={(event) => setValue(field.id, event.target.checked)}
                   aria-invalid={invalid || undefined}
+                  required={field.required}
                 />
                 {field.label}
                 {field.required ? " (필수)" : ""}
@@ -149,9 +151,11 @@ export default function RegisterForm({ slug, fields, consentText, formVersion }:
               id={`field-${field.id}`}
               type={field.type === "email" ? "email" : "text"}
               autoComplete={field.id === "phone" ? "tel" : undefined}
+              inputMode={field.id === "phone" ? "tel" : undefined}
               value={typeof values[field.id] === "string" ? (values[field.id] as string) : ""}
               onChange={(event) => setValue(field.id, event.target.value)}
               aria-invalid={invalid || undefined}
+              required={field.required}
             />
             {invalid ? <p role="alert">{failure?.message}</p> : null}
           </div>
@@ -165,6 +169,7 @@ export default function RegisterForm({ slug, fields, consentText, formVersion }:
               type="checkbox"
               checked={consent}
               onChange={(event) => setConsent(event.target.checked)}
+              required
             />
             필수 정보 수집 안내에 동의합니다
           </label>

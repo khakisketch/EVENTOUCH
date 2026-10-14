@@ -832,6 +832,10 @@ select[aria-invalid="true"] {
 }
 
 .display-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s2) var(--s4);
   padding-bottom: var(--s4);
   border-bottom: 1px solid var(--line);
 }
@@ -846,8 +850,20 @@ select[aria-invalid="true"] {
 
 .display-date {
   margin: 0;
+  margin-left: auto;
   color: var(--muted);
   font-size: var(--h3);
+}
+
+.display-stale {
+  margin: 0;
+  padding: var(--s1) var(--s3);
+  border: 1px solid var(--warning-line);
+  border-radius: var(--radius-small);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: var(--small);
+  font-weight: 700;
 }
 
 .display-content {
@@ -991,7 +1007,7 @@ select[aria-invalid="true"] {
 
 .display-photo-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
   gap: var(--s4);
 }
 
@@ -1020,7 +1036,7 @@ select[aria-invalid="true"] {
   padding-top: var(--s3);
   border-top: 1px solid var(--line);
   color: var(--muted);
-  font-size: var(--small);
+  font-size: var(--h3);
 }
 
 .display-state {
@@ -1677,6 +1693,12 @@ select[aria-invalid="true"] {
   margin: 0;
 }
 
+.overview-action-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
 .recent-checks li {
   background: var(--paper);
 }
@@ -1687,6 +1709,20 @@ select[aria-invalid="true"] {
   margin: var(--s4) 0;
   padding: 0;
   list-style: none;
+}
+
+.participant-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(140px, 200px);
+  gap: var(--s2);
+  margin-top: var(--s4);
+}
+
+.participant-count {
+  margin: var(--s2) 0 0;
+  color: var(--muted);
+  font-size: var(--small);
+  font-variant-numeric: tabular-nums;
 }
 
 .participant-row {
@@ -1835,15 +1871,24 @@ select[aria-invalid="true"] {
 
   .nav-event-branch {
     grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: var(--s1);
     margin: 0;
+    padding: var(--s1) 0;
+    border-left: 0;
+    overflow-x: auto;
+    scrollbar-color: var(--nav-active) transparent;
   }
 
   .nav-current-event {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--s2);
-    padding: var(--s1) 0;
+    display: none;
+  }
+
+  .nav-event-branch .console-nav-item {
+    width: auto;
+    flex: none;
+    white-space: nowrap;
   }
 
   .nav-current-event strong {
@@ -2010,6 +2055,10 @@ select[aria-invalid="true"] {
 
   .staff-live {
     padding-inline: var(--s2);
+  }
+
+  .participant-toolbar {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .participant-row {

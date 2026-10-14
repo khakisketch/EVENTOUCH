@@ -25,6 +25,12 @@ export default function CameraScan({ onDetected, onClose }: Props) {
     let stream: MediaStream | null = null;
     let frame = 0;
     let stopped = false;
+    const stopStream = () => {
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+        stream = null;
+      }
+    };
     async function start() {
       const media = typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
       if (!media || typeof media.getUserMedia !== "function") {
@@ -52,11 +58,13 @@ export default function CameraScan({ onDetected, onClose }: Props) {
       try {
         await videoNode.play();
       } catch {
+        stopStream();
         setFailure("카메라를 시작하지 못했습니다. 티켓 코드를 직접 입력하세요.");
         return;
       }
       const rendering = canvasNode.getContext("2d", { willReadFrequently: true });
       if (!rendering) {
+        stopStream();
         setFailure("카메라를 시작하지 못했습니다. 티켓 코드를 직접 입력하세요.");
         return;
       }
@@ -81,7 +89,7 @@ export default function CameraScan({ onDetected, onClose }: Props) {
     return () => {
       stopped = true;
       cancelAnimationFrame(frame);
-      if (stream) stream.getTracks().forEach((track) => track.stop());
+      stopStream();
     };
   }, []);
 
@@ -94,7 +102,7 @@ export default function CameraScan({ onDetected, onClose }: Props) {
         <video ref={videoRef} playsInline muted aria-label="카메라 미리보기" />
       )}
       <canvas ref={canvasRef} hidden aria-hidden="true" />
-      <button type="button" onClick={onClose}>
+      <button type="button" className="button button-secondary" onClick={onClose}>
         닫기
       </button>
     </section>

@@ -32,9 +32,15 @@ function statusLabel(status: string): string {
       return "대기 명단";
     case "CANCELLED":
       return "신청 취소";
-    default:
+    case "PENDING":
       return "승인 대기";
+    default:
+      return "상태 확인 필요";
   }
+}
+
+function isKnownStatus(status: string): status is (typeof STATUSES)[number] {
+  return (STATUSES as readonly string[]).includes(status);
 }
 
 function randomCommandId(): string {
@@ -48,6 +54,8 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
   async function load(silent = false) {
     if (!silent) setState({ kind: "loading" });
@@ -175,11 +183,21 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       <section className="state-panel">
         <p role="alert">{state.message}</p>
         <p>
+          <button type="button" className="button button-secondary" onClick={() => void load()}>
+            다시 불러오기
+          </button>
+        </p>
+        <p>
           <Link href="/console">행사 목록으로</Link>
         </p>
       </section>
     );
   }
+  const search = query.trim().toLocaleLowerCase("ko-KR");
+  const visiblePeople = state.people.filter((person) => {
+    const matchesQuery = !search || person.name.toLocaleLowerCase("ko-KR").includes(search);
+    return matchesQuery && (!statusFilter || person.status === statusFilter);
+  });
   return (
     <section className="participants-content">
       <header className="participants-heading">
@@ -187,22 +205,51 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       </header>
       {notice ? <p className="state-success" role="status">{notice}</p> : null}
       {failure ? <p className="state-error" role="alert">{failure}</p> : null}
-      {state.people.length ? (
+      {!state.canManage ? (
+        <p className="notice" role="status">상태 변경 권한이 없습니다. 변경이 필요하면 담당 행사 운영자에게 요청하세요.</p>
+      ) : null}
+      <div className="participant-toolbar">
+        <label>
+          <span className="sr-only">참가자 이름 검색</span>
+          <input
+            type="search"
+            placeholder="이름 검색"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+        <label>
+          <span className="sr-only">상태별 보기</span>
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="">전체 상태</option>
+            {STATUSES.map((status) => (
+              <option key={status} value={status}>{statusLabel(status)}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <p className="participant-count" role="status">
+        {statusFilter || search
+          ? `${visiblePeople.length}명 / 전체 ${state.people.length}명`
+          : `전체 ${state.people.length}명`}
+      </p>
+      {visiblePeople.length ? (
         <ul className="participant-list">
-          {state.people.map((person) => (
+          {visiblePeople.map((person) => (
             <li className="participant-row" key={person.id}>
               <span className="participant-summary">
-                {person.name} · {statusLabel(person.status)}
+                {state.canManage ? person.name : `${person.name} · ${statusLabel(person.status)}`}
               </span>
               {state.canManage ? (
                 <select
                   aria-label={`${person.name} 상태 변경`}
-                  value={STATUSES.includes(person.status as (typeof STATUSES)[number])
-                    ? person.status
-                    : "PENDING"}
+                  value={isKnownStatus(person.status) ? person.status : ""}
                   disabled={savingId === person.id}
                   onChange={(event) => changeStatus(person, event.target.value)}
                 >
+                  {!isKnownStatus(person.status) ? (
+                    <option value="" disabled>상태 확인 필요</option>
+                  ) : null}
                   {STATUSES.map((status) => (
                     <option key={status} value={status}>
                       {statusLabel(status)}
@@ -213,6 +260,8 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
             </li>
           ))}
         </ul>
+      ) : state.people.length ? (
+        <p className="empty-state">조건에 맞는 참가자가 없습니다.</p>
       ) : (
         <p className="empty-state">등록된 참가자가 없습니다.</p>
       )}

@@ -46,7 +46,7 @@ type BoardState =
   | { kind: "loading" }
   | { kind: "missing" }
   | { kind: "failed"; message: string }
-  | { kind: "ready"; data: BoardData; frame: number };
+  | { kind: "ready"; data: BoardData; frame: number; stale: boolean };
 
 const POLL_MS = 5000;
 
@@ -211,7 +211,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
         if (!res.ok) {
           setState((prev) =>
             prev.kind === "ready"
-              ? prev
+              ? { ...prev, stale: true }
               : { kind: "failed", message: "화면 정보를 불러오지 못했습니다." }
           );
           return;
@@ -225,6 +225,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
           kind: "ready",
           data: board,
           frame: prev.kind === "ready" ? prev.frame + 1 : 0,
+          stale: false,
         }));
       } catch {
         if (!stopped) {
@@ -232,7 +233,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
           // never go blank on a transient network drop.
           setState((prev) =>
             prev.kind === "ready"
-              ? prev
+              ? { ...prev, stale: true }
               : { kind: "failed", message: "연결하지 못했습니다. 다시 시도하세요." }
           );
         }
@@ -253,14 +254,14 @@ export default function DisplayBoard({ slug }: { slug: string }) {
         <h1>행사를 찾을 수 없습니다</h1>
         <p>출력 주소를 확인하세요.</p>
         <p>
-          <Link href="/">처음으로</Link>
+          <Link className="button button-secondary" href="/">처음으로</Link>
         </p>
       </section>
     );
   }
   if (state.kind === "failed") return <p className="display-status" role="alert">{state.message}</p>;
 
-  const { data, frame } = state;
+  const { data, frame, stale } = state;
   const module = data.display.moduleId
     ? data.modules.find((item) => item.id === data.display.moduleId)
     : undefined;
@@ -280,13 +281,14 @@ export default function DisplayBoard({ slug }: { slug: string }) {
     }
   } else if (data.display.type === "poll" && module && module.type === "poll") {
     const total = module.counts.reduce((sum, count) => sum + count, 0);
+    const shownOptions = module.options.slice(0, 8);
     selected = {
       key: `poll-${module.id}`,
       title: module.title,
       body: (
         <div className="display-poll">
           <p>응답 {total}표</p>
-          {module.options.map((option, index) => {
+          {shownOptions.map((option, index) => {
             const count = module.counts[index] ?? 0;
             const ratio = total ? Math.round((count / total) * 100) : 0;
             return (
@@ -299,6 +301,9 @@ export default function DisplayBoard({ slug }: { slug: string }) {
               </div>
             );
           })}
+          {module.options.length > shownOptions.length ? (
+            <p>외 {module.options.length - shownOptions.length}개 항목</p>
+          ) : null}
         </div>
       ),
     };
@@ -309,17 +314,21 @@ export default function DisplayBoard({ slug }: { slug: string }) {
       body: <p className="display-answer">정답 · {module.answer}</p>,
     };
   } else if (data.display.type === "draw" && module && module.type === "draw") {
+    const shownWinners = module.winners.slice(0, 8);
     selected = {
       key: `draw-${module.id}`,
       title: "당첨을 축하합니다",
       body: (
         <div className="display-winners">
-          {module.winners.map((winner, index) => (
+          {shownWinners.map((winner, index) => (
             <div className="display-winner" key={`${winner.name}-${index}`}>
               <h3>{winner.name}</h3>
               <p>{winner.company}</p>
             </div>
           ))}
+          {module.winners.length > shownWinners.length ? (
+            <p>외 {module.winners.length - shownWinners.length}명</p>
+          ) : null}
         </div>
       ),
     };
@@ -361,6 +370,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
       <section className="display-board" aria-live="off">
         <header className="display-header">
           <span className="display-brand">EVENTOUCH</span>
+          {stale ? <p className="display-stale" role="status">연결 확인 중 · 마지막 화면입니다</p> : null}
           <p className="display-date">{data.date}</p>
         </header>
         <div className="display-content">
@@ -384,12 +394,13 @@ export default function DisplayBoard({ slug }: { slug: string }) {
     });
   }
   if (data.program.length) {
+    const shownSessions = data.program.slice(0, 10);
     frames.push({
       key: "program",
       title: "프로그램",
       body: (
         <ul>
-          {data.program.map((session) => (
+          {shownSessions.map((session) => (
             <li className="program-item" key={session.id}>
               <span className="program-title">{session.title}</span>
               {[session.date, session.start && session.end
@@ -403,6 +414,11 @@ export default function DisplayBoard({ slug }: { slug: string }) {
                 ) : null}
             </li>
           ))}
+          {data.program.length > shownSessions.length ? (
+            <li className="program-item">
+              <span className="program-title">외 {data.program.length - shownSessions.length}개 프로그램</span>
+            </li>
+          ) : null}
         </ul>
       ),
     });
@@ -429,6 +445,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
     <section className="display-board" aria-live="off">
       <header className="display-header">
         <span className="display-brand">EVENTOUCH</span>
+        {stale ? <p className="display-stale" role="status">연결 확인 중 · 마지막 화면입니다</p> : null}
         <p className="display-date">{data.date}</p>
       </header>
       <div className="display-content">

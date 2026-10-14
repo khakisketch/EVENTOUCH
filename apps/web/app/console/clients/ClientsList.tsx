@@ -18,6 +18,7 @@ type ClientsState =
 export default function ClientsList() {
   const router = useRouter();
   const [state, setState] = useState<ClientsState>({ kind: "loading" });
+  const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,16 +61,29 @@ export default function ClientsList() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [router, reloadTick]);
 
   if (state.kind === "loading") {
     return <p className="loading-state" role="status">고객사 목록을 불러오고 있습니다.</p>;
   }
   if (state.kind === "failed") {
-    return <p className="state-error" role="alert">{state.message}</p>;
+    return (
+      <section className="state-panel">
+        <p className="state-error" role="alert">{state.message}</p>
+        <p>
+          <button type="button" className="button button-secondary" onClick={() => setReloadTick((tick) => tick + 1)}>
+            다시 불러오기
+          </button>
+        </p>
+      </section>
+    );
   }
   if (!state.clients.length) {
-    return <p className="empty-state">고객사가 없습니다.</p>;
+    return (
+      <section className="state-panel">
+        <p>등록된 고객사가 없습니다. 새 행사의 고객사는 행사 만들기에서 함께 지정할 수 있습니다.</p>
+      </section>
+    );
   }
 
   return (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./operations.module.css";
 
@@ -277,7 +277,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                 <div className={styles.rowMain}>
                   <strong>{desk.name}</strong>
                   <span className={styles.rowMeta}>
-                    {DESK_ACTION_LABEL[desk.action] ?? desk.action}
+                    {DESK_ACTION_LABEL[desk.action] ?? "작업 미정"}
                     {" · "}
                     {desk.mode === "tablet" ? "태블릿" : "데스크"}
                     {" · "}
@@ -330,7 +330,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                   <span className={styles.rowMeta}>
                     {booth.zone || "구역 미지정"}
                     {" · "}
-                    {BOOTH_STATUS_LABEL[booth.status] ?? booth.status}
+                    {BOOTH_STATUS_LABEL[booth.status] ?? "상태 미정"}
                     {" · "}
                     잔여 {booth.capacity ? Math.max(0, booth.capacity - booth.used) : "제한 없음"}
                     {" · "}
@@ -364,13 +364,13 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             {assignments.map((assignment) => (
               <li key={assignment.id} className={styles.row}>
                 <div className={styles.rowMain}>
-                  <strong>{accountName.get(assignment.accountId) ?? assignment.accountId}</strong>
+                  <strong>{accountName.get(assignment.accountId) ?? "알 수 없는 계정"}</strong>
                   <span className={styles.rowMeta}>
                     {assignment.type === "DESK" ? "데스크" : "부스"}
                     {" · "}
                     {(assignment.type === "DESK"
                       ? deskName.get(assignment.targetId)
-                      : boothName.get(assignment.targetId)) ?? assignment.targetId}
+                      : boothName.get(assignment.targetId)) ?? "알 수 없는 담당"}
                   </span>
                 </div>
                 <button
@@ -451,20 +451,66 @@ function Dialog({
   onClose: () => void;
   busy: boolean;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    dialogRef.current
+      ?.querySelector<HTMLElement>("button:not(:disabled), input, select, textarea, a[href]")
+      ?.focus();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (!busyRef.current) onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab" || !dialogRef.current) return;
+      const items = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(
+          "button:not(:disabled), input, select, textarea, a[href]"
+        )
+      ).filter((item) => item.tabIndex >= 0);
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      previouslyFocused?.focus?.();
+    };
+  }, []);
   return (
     <div
       className={styles.backdrop}
-      role="presentation"
       onClick={(event) => {
         if (event.target === event.currentTarget && !busy) onClose();
       }}
     >
-      <div className={styles.dialog} role="dialog" aria-modal="true" aria-label={title}>
+      <div ref={dialogRef} className={styles.dialog} role="dialog" aria-modal="true" aria-label={title}>
         <h2>{title}</h2>
         {children}
       </div>
     </div>
   );
+}
+
+function DialogError({ failure, id }: { failure: Failure | null; id: string }) {
+  if (!failure) return null;
+  return <p role="alert" id={id}>{failure.message}</p>;
 }
 
 function DeskDialog({
@@ -497,6 +543,8 @@ function DeskDialog({
             type="text"
             value={name}
             onChange={(event) => setName(event.target.value)}
+            aria-invalid={failure?.field === "name" || undefined}
+            aria-describedby={failure ? "desk-dialog-error" : undefined}
             required
           />
         </div>
@@ -514,7 +562,7 @@ function DeskDialog({
             <option value="tablet">태블릿</option>
           </select>
         </div>
-        {failure && !failure.field ? <p role="alert">{failure.message}</p> : null}
+        <DialogError failure={failure} id="desk-dialog-error" />
         <div className={styles.actions}>
           <button type="button" className="button button-secondary" onClick={onClose} disabled={busy}>
             취소
@@ -561,7 +609,15 @@ function BoothDialog({
       >
         <div>
           <label htmlFor="booth-name">부스 이름</label>
-          <input id="booth-name" type="text" value={name} onChange={(event) => setName(event.target.value)} required />
+          <input
+            id="booth-name"
+            type="text"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            aria-invalid={failure?.field === "name" || undefined}
+            aria-describedby={failure ? "booth-dialog-error" : undefined}
+            required
+          />
         </div>
         <div>
           <label htmlFor="booth-zone">구역</label>
@@ -599,7 +655,7 @@ function BoothDialog({
             />
           </div>
         </div>
-        {failure && !failure.field ? <p role="alert">{failure.message}</p> : null}
+        <DialogError failure={failure} id="booth-dialog-error" />
         <div className={styles.actions}>
           <button type="button" className="button button-secondary" onClick={onClose} disabled={busy}>
             취소
@@ -658,7 +714,7 @@ function AssignDialog({
             ))}
           </select>
           {!staffAccounts.length ? (
-            <p className="notice" role="status">활성 현장 스태프 계정이 없습니다. 팀·권한에서 먼저 만들어야 합니다.</p>
+            <p className="notice" role="status">배정할 수 있는 활성 현장 스태프 계정이 없습니다. 조직 소유자가 계정을 만든 뒤에 다시 시도하세요.</p>
           ) : null}
         </div>
         <div>
@@ -693,7 +749,7 @@ function AssignDialog({
             ))}
           </select>
         </div>
-        {failure && !failure.field ? <p role="alert">{failure.message}</p> : null}
+        <DialogError failure={failure} id="assign-dialog-error" />
         <div className={styles.actions}>
           <button type="button" className="button button-secondary" onClick={onClose} disabled={busy}>
             취소

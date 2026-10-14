@@ -241,6 +241,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   const [templateNotice, setTemplateNotice] = useState<string | null>(null);
   const [campaignNotice, setCampaignNotice] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [recipientQuery, setRecipientQuery] = useState("");
 
   async function refresh(silent = false) {
     if (!silent) setState({ kind: "loading" });
@@ -508,12 +509,22 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     return (
       <section className="state-panel">
         <p role="alert">{state.message}</p>
+        <p>
+          <button type="button" className="button button-secondary" onClick={() => void refresh()}>
+            다시 불러오기
+          </button>
+        </p>
         <Link className="button button-secondary" href="/console">행사 목록으로</Link>
       </section>
     );
   }
 
   const activeParticipants = state.participants.filter((person) => person.status !== "CANCELLED");
+  const recipientSearch = recipientQuery.trim().toLocaleLowerCase("ko-KR");
+  const visibleRecipients = activeParticipants.filter((person) =>
+    !recipientSearch ||
+    `${person.name} ${person.company}`.toLocaleLowerCase("ko-KR").includes(recipientSearch)
+  );
   const selectedCount = selectedIds.length;
 
   return (
@@ -628,34 +639,43 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                 <fieldset className={styles.recipientFieldset} aria-describedby={campaignFieldError?.field === "ids" ? "campaign-recipients-error" : undefined}>
                   <legend>발송 대상</legend>
                   <div className={styles.recipientTools}>
-                    <span>{activeParticipants.length}명 중 {selectedCount}명 선택</span>
+                    <span>{recipientSearch ? `검색 ${visibleRecipients.length}명` : `발송 가능 ${activeParticipants.length}명`}</span>
                     <div>
-                      <button type="button" className={styles.textButton} onClick={() => setAllRecipients(true, activeParticipants)}>전체 선택</button>
-                      <button type="button" className={styles.textButton} onClick={() => setAllRecipients(false, activeParticipants)}>선택 해제</button>
+                      <button type="button" className={styles.textButton} onClick={() => setAllRecipients(true, visibleRecipients)}>표시된 대상 전체 선택</button>
+                      <button type="button" className={styles.textButton} onClick={() => setAllRecipients(false, visibleRecipients)}>선택 해제</button>
                     </div>
                   </div>
-                  {activeParticipants.length ? (
+                  <div className={styles.recipientSearch}>
+                    <label>
+                      <span className="sr-only">수신자 이름·소속 검색</span>
+                      <input
+                        type="search"
+                        placeholder="이름·소속 검색"
+                        value={recipientQuery}
+                        onChange={(event) => setRecipientQuery(event.target.value)}
+                      />
+                    </label>
+                  </div>
+                  {visibleRecipients.length ? (
                     <ul className={styles.recipientList} aria-label="참가자 선택">
-                      {state.participants.map((person) => {
-                        const cancelled = person.status === "CANCELLED";
-                        return (
-                          <li key={person.id} className={cancelled ? styles.recipientDisabled : undefined}>
-                            <label className={styles.recipientRow}>
-                              <input
-                                type="checkbox"
-                                checked={selectedIds.includes(person.id)}
-                                disabled={cancelled}
-                                onChange={() => toggleRecipient(person.id)}
-                              />
-                              <span className={styles.recipientName}>{person.name}</span>
-                              <span className={styles.recipientMeta}>
-                                {person.company ? `${person.company} · ` : ""}{participantStatusLabel(person.status)}
-                              </span>
-                            </label>
-                          </li>
-                        );
-                      })}
+                      {visibleRecipients.map((person) => (
+                        <li key={person.id}>
+                          <label className={styles.recipientRow}>
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.includes(person.id)}
+                              onChange={() => toggleRecipient(person.id)}
+                            />
+                            <span className={styles.recipientName}>{person.name}</span>
+                            <span className={styles.recipientMeta}>
+                              {person.company ? `${person.company} · ` : ""}{participantStatusLabel(person.status)}
+                            </span>
+                          </label>
+                        </li>
+                      ))}
                     </ul>
+                  ) : activeParticipants.length ? (
+                    <p className={styles.empty}>조건에 맞는 수신자가 없습니다.</p>
                   ) : (
                     <p className={styles.empty}>등록된 참가자가 없습니다.</p>
                   )}
