@@ -5,9 +5,10 @@ import StaffConsole from "./StaffConsole";
 // this screen only transports the ticket the operator typed or scanned.
 export default function StaffPage() {
   return (
-    <main>
-      <p>스태프 업무</p>
-      <h1>체크인</h1>
+    <main id="main-content" className="site-page staff-page">
+      <header className="staff-header">
+        <div><p className="eyebrow">스태프 업무</p><h1>체크인</h1></div>
+      </header>
       <StaffConsole />
     </main>
   );

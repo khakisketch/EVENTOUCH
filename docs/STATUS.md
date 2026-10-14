@@ -113,6 +113,8 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
   분기를 데모에서 확인.
 - 2026-10-14: Next.js 이관 슬라이스 6b(참가자 상태 변경). opencode 브라우저에서
   로그인→콘솔→참가자→승인 대기자를 확정으로 바꿔 DB 저장까지 확인.
+- 2026-10-14: 새 앱 전 슬라이스에 제품 시각 언어 적용(토큰·간격·피드백·반응형).
+  동작·API·복사 의미 변경 없음. 스크린리더·실기기 광학·TV 실물은 미검증.
 - 2026-10-14: 발송 outbox(`message_outbox`, 004)와 체크인 기록 투영(`checkin_records`, 005) 추가.
   발송 의도는 커맨드와 같은 트랜잭션에 기록되고 결과 기록 후 확정, 남은 건 부팅 드레인이
   재처리한다. 체크인 기록은 같은 트랜잭션 write-through + 기존 기록 백필, 읽기는 JSONB 유지.

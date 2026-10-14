@@ -169,10 +169,10 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     }
   }
 
-  if (state.kind === "loading") return <p>참가자 목록을 불러오고 있습니다.</p>;
+  if (state.kind === "loading") return <p className="loading-state" role="status">참가자 목록을 불러오고 있습니다.</p>;
   if (state.kind === "failed") {
     return (
-      <section>
+      <section className="state-panel">
         <p role="alert">{state.message}</p>
         <p>
           <Link href="/console">행사 목록으로</Link>
@@ -181,15 +181,17 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     );
   }
   return (
-    <section>
+    <section className="participants-content">
+      <header className="participants-heading">
       <h1>{state.eventName}</h1>
-      {notice ? <p role="status">{notice}</p> : null}
-      {failure ? <p role="alert">{failure}</p> : null}
+      </header>
+      {notice ? <p className="state-success" role="status">{notice}</p> : null}
+      {failure ? <p className="state-error" role="alert">{failure}</p> : null}
       {state.people.length ? (
-        <ul>
+        <ul className="participant-list">
           {state.people.map((person) => (
-            <li key={person.id}>
-              <span>
+            <li className="participant-row" key={person.id}>
+              <span className="participant-summary">
                 {person.name} · {statusLabel(person.status)}
               </span>
               {state.canManage ? (
@@ -212,10 +214,10 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           ))}
         </ul>
       ) : (
-        <p>등록된 참가자가 없습니다.</p>
+        <p className="empty-state">등록된 참가자가 없습니다.</p>
       )}
       <p>
-        <Link href={`/console/events/${encodeURIComponent(eventId)}`}>운영 현황으로</Link>
+        <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}`}>운영 현황으로</Link>
       </p>
     </section>
   );

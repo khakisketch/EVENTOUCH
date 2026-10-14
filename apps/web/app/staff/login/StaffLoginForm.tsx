@@ -44,8 +44,8 @@ export default function StaffLoginForm() {
   }
 
   return (
-    <form onSubmit={onSubmit}>
-      <div>
+    <form className="auth-form" onSubmit={onSubmit}>
+      <div className="form-field">
         <label htmlFor="staff-email">이메일</label>
         <input
           id="staff-email"
@@ -55,7 +55,7 @@ export default function StaffLoginForm() {
           onChange={(event) => setEmail(event.target.value)}
         />
       </div>
-      <div>
+      <div className="form-field">
         <label htmlFor="staff-password">비밀번호</label>
         <input
           id="staff-password"

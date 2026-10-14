@@ -84,12 +84,12 @@ export default function RegisterForm({ slug, fields, consentText, formVersion }:
   }
 
   return (
-    <form onSubmit={onSubmit}>
+    <form className="registration-form" onSubmit={onSubmit}>
       {fields.map((field) => {
         const invalid = failure?.field === field.id;
         if (field.type === "select") {
           return (
-            <div key={field.id}>
+            <div className="form-field" key={field.id}>
               <label htmlFor={`field-${field.id}`}>
                 {field.label}
                 {field.required ? " (필수)" : ""}
@@ -113,7 +113,7 @@ export default function RegisterForm({ slug, fields, consentText, formVersion }:
         }
         if (field.type === "checkbox") {
           return (
-            <div key={field.id}>
+            <div className="form-field checkbox-field" key={field.id}>
               <label htmlFor={`field-${field.id}`}>
                 <input
                   id={`field-${field.id}`}
@@ -130,7 +130,7 @@ export default function RegisterForm({ slug, fields, consentText, formVersion }:
           );
         }
         return (
-          <div key={field.id}>
+          <div className="form-field" key={field.id}>
             <label htmlFor={`field-${field.id}`}>
               {field.label}
               {field.required ? " (필수)" : ""}
@@ -148,7 +148,7 @@ export default function RegisterForm({ slug, fields, consentText, formVersion }:
         );
       })}
       {consentText ? (
-        <div>
+        <div className="consent-field">
           <label htmlFor="consent">
             <input
               id="consent"

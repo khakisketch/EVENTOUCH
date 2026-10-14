@@ -101,11 +101,11 @@ export default function TicketView({ slug }: { slug: string }) {
   }, [slug]);
 
   if (state.kind === "loading") {
-    return <p>티켓을 확인하고 있습니다.</p>;
+    return <p className="ticket-state" role="status">티켓을 확인하고 있습니다.</p>;
   }
   if (state.kind === "missing") {
     return (
-      <section>
+      <section className="ticket-card ticket-message">
         <h1>티켓 링크가 필요합니다</h1>
         <p>신청 완료 화면의 링크로 다시 여세요.</p>
         <p>
@@ -116,7 +116,7 @@ export default function TicketView({ slug }: { slug: string }) {
   }
   if (state.kind === "failed") {
     return (
-      <section>
+      <section className="ticket-card ticket-message">
         <h1>티켓을 사용할 수 없습니다</h1>
         <p>{state.message}</p>
         <p>
@@ -129,21 +129,26 @@ export default function TicketView({ slug }: { slug: string }) {
     state.status === "APPROVED" &&
     (state.paymentStatus === "FREE" || state.paymentStatus === "PAID");
   return (
-    <section>
-      <h1>{state.eventName}</h1>
-      <p>{state.eventDate}</p>
-      <h2>{state.name}</h2>
-      {state.company ? <p>{state.company}</p> : null}
-      <p>{entryLabel(state)}</p>
+    <section className="ticket-card ticket-ready">
+      <header className="ticket-heading">
+        <span className="ticket-label">입장 티켓</span>
+        <h1>{state.eventName}</h1>
+        <p>{state.eventDate}</p>
+      </header>
+      <div className="ticket-attendee">
+        <h2>{state.name}</h2>
+        {state.company ? <p>{state.company}</p> : null}
+        <p className="ticket-entry-state"><span className="status-dot" aria-hidden="true" />{entryLabel(state)}</p>
+      </div>
       {usable ? (
         <>
-          <div role="img" aria-label={`${state.name}님의 행사 입장 및 퇴장용 QR`}>
+          <div className="ticket-qr" role="img" aria-label={`${state.name}님의 행사 입장 및 퇴장용 QR`}>
             <QRCode value={state.ticket} size={220} />
           </div>
-          <p>입장과 퇴장에는 같은 QR을 사용합니다.</p>
+          <p className="ticket-instruction">입장과 퇴장에는 같은 QR을 사용합니다.</p>
         </>
       ) : (
-        <p>티켓을 사용할 수 없습니다. 신청 정보를 확인하세요.</p>
+        <p className="ticket-unusable">티켓을 사용할 수 없습니다. 신청 정보를 확인하세요.</p>
       )}
     </section>
   );

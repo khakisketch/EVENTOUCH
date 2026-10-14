@@ -1,0 +1,88 @@
+/*
+ * EVENTOUCH design tokens for the Next.js frontend.
+ * Values are copied from assets/css/tokens.css (:root) so this app follows
+ * the same brand, feedback, type, shape and spacing system as the product.
+ * The five layout bounds below are app-only additions; the legacy token set
+ * has no equivalent container-width tokens.
+ */
+:root {
+  --brand: #E76D26;
+  --brand-hover: #D85F1D;
+  --brand-text: #A34410;
+  --on-brand: #17252B;
+  --on-brand-hover: #111111;
+  --soft: #FFF1E8;
+
+  --ink: #17252B;
+  --muted: #52636B;
+  --line: #DCE4E6;
+  --line-strong: #A9B8BD;
+  --paper: #FFFFFF;
+  --ground: #F4F5F7;
+  --surface-muted: #F8F9FB;
+
+  --nav: #202329;
+  --nav-hover: #30343C;
+  --nav-active: #414650;
+  --nav-text: #F4F5F7;
+  --nav-muted: #BEC6CF;
+
+  --danger: #AD3D3D;
+  --danger-soft: #FFF0F0;
+  --danger-line: #D1A1A1;
+  --success: #226A4F;
+  --success-soft: #E6F3ED;
+  --success-line: #BDD8D2;
+  --warning: #81520E;
+  --warning-soft: #FFF4E1;
+  --warning-line: #D9BB84;
+  --info: #315B82;
+  --info-soft: #EAF0F7;
+  --info-line: #BDCEDF;
+
+  --focus: #A34410;
+  --report-color: var(--brand);
+  --scrim: #17252B80;
+  --shadow-color: #17252B26;
+  --chart: var(--brand);
+  --chart-track: #414650;
+
+  --body-font: 'Segoe UI', 'Malgun Gothic', system-ui, sans-serif;
+  --display-font: Bahnschrift, 'Malgun Gothic', sans-serif;
+  --mono-font: ui-monospace, Consolas, monospace;
+
+  --radius: 8px;
+  --radius-small: 4px;
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+  --s8: 64px;
+
+  --enter: 200ms;
+  --exit: 120ms;
+  --body: 16px;
+  --small: 14px;
+  --h3: 20px;
+  --h2: 24px;
+  --h1: 32px;
+  --display: 40px;
+  --display-large: 48px;
+  --display-xl: 56px;
+  --display-stage: 88px;
+  --od-gap: 8px;
+
+  --phone-screen-bg: var(--paper);
+  --phone-stage-bg: var(--ground);
+  --attendee-accent: var(--brand);
+  --attendee-accent-ink: var(--on-brand);
+
+  --web-content-max: 1200px;
+  --web-reading-max: 760px;
+  --web-form-max: 640px;
+  --web-ticket-max: 480px;
+  --web-display-max: 1800px;
+}

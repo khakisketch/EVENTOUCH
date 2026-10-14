@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { eventStageClassName, eventStageLabel } from "../../event-stage";
 
 type PublicEvent = {
   id: string;
@@ -36,11 +37,15 @@ export default async function EventPage({
   const event = await loadEvent(slug);
   if (!event) notFound();
   return (
-    <main>
-      <p>행사 안내</p>
-      <h1>{event.name}</h1>
-      <dl>
-        <div>
+    <main id="main-content" className="site-page public-event-page">
+      <header className="public-page-header">
+        <span className="compact-wordmark">EVENTOUCH</span>
+        <span className="eyebrow">행사 안내</span>
+      </header>
+      <section className="event-intro">
+        <h1>{event.name}</h1>
+        <dl className="event-facts">
+        <div className="event-fact">
           <dt>일정</dt>
           <dd>
             {event.date}
@@ -48,11 +53,13 @@ export default async function EventPage({
             {event.end ? ` ~ ${event.end}` : ""}
           </dd>
         </div>
-        <div>
+        <div className="event-fact">
           <dt>진행 상태</dt>
-          <dd>{event.stage}</dd>
+          <dd><span className={eventStageClassName(event.stage)}>{eventStageLabel(event.stage)}</span></dd>
         </div>
-      </dl>
+        </dl>
+      </section>
+      <footer className="public-page-footer">EVENTOUCH <span>행사 안내</span></footer>
     </main>
   );
 }

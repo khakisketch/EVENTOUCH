@@ -16,7 +16,7 @@ export default async function ScreenPage({
 }) {
   const { slug } = await params;
   return (
-    <main>
+      <main id="main-content" className="display-page">
       <DisplayBoard slug={slug} />
     </main>
   );

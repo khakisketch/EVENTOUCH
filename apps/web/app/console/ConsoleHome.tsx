@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { eventStageClassName, eventStageLabel } from "../event-stage";
 
 type ConsoleEvent = {
   id: string;
@@ -81,21 +82,24 @@ export default function ConsoleHome() {
     };
   }, [router]);
 
-  if (state.kind === "loading") return <p>행사 목록을 불러오고 있습니다.</p>;
-  if (state.kind === "failed") return <p role="alert">{state.message}</p>;
-  if (!state.events.length) return <p>진행 중인 행사가 없습니다.</p>;
+  if (state.kind === "loading") return <p className="loading-state" role="status">행사 목록을 불러오고 있습니다.</p>;
+  if (state.kind === "failed") return <p className="state-error" role="alert">{state.message}</p>;
+  if (!state.events.length) return <p className="empty-state">진행 중인 행사가 없습니다.</p>;
   return (
-    <ul>
+    <ul className="event-list">
       {state.events.map((event) => (
-        <li key={event.id}>
-          <Link href={`/console/events/${encodeURIComponent(event.id)}`}>
+        <li className="console-event-card" key={event.id}>
+          <Link className="console-event-title" href={`/console/events/${encodeURIComponent(event.id)}`}>
             {event.name}
           </Link>
-          {event.clientId && state.clients.get(event.clientId) ? (
-            <span> · {state.clients.get(event.clientId)}</span>
-          ) : null}
-          {event.date ? <span> · {event.date}</span> : null}
-          {event.stage ? <span> · {event.stage}</span> : null}
+          <div className="console-event-meta">
+            {event.clientId && state.clients.get(event.clientId) ? (
+              <span>{state.clients.get(event.clientId)}</span>
+            ) : null}
+            {event.date ? <span>{event.date}</span> : null}
+            {event.stage ? <span className={eventStageClassName(event.stage)}>{eventStageLabel(event.stage)}</span> : null}
+          </div>
+          <span className="event-card-arrow" aria-hidden="true">↗</span>
         </li>
       ))}
     </ul>

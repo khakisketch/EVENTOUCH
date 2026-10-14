@@ -118,17 +118,17 @@ export default function StaffConsole() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (loading) return <p>업무 정보를 불러오고 있습니다.</p>;
+  if (loading) return <p className="loading-state" role="status">업무 정보를 불러오고 있습니다.</p>;
   if (loadError && !scopes.length) {
     return (
-      <section>
+      <section className="staff-workspace state-panel">
         <p role="alert">{loadError}</p>
         <button type="button" onClick={() => load()}>다시 불러오기</button>
       </section>
     );
   }
   const scope = scopes[scopeIndex];
-  if (!scope) return <p>배정된 데스크가 없습니다.</p>;
+  if (!scope) return <p className="loading-state">배정된 데스크가 없습니다.</p>;
   const assignment = scope.assignments.find((item) => item.targetId === deskId) ?? null;
 
   async function submitTicket(code: string) {
@@ -181,9 +181,9 @@ export default function StaffConsole() {
   }
 
   return (
-    <section>
+    <section className="staff-workspace">
       {scopes.length > 1 ? (
-        <div>
+        <div className="staff-select-field">
           <label htmlFor="staff-event">행사</label>
           <select
             id="staff-event"
@@ -202,9 +202,9 @@ export default function StaffConsole() {
           </select>
         </div>
       ) : (
-        <p>{scope.eventName}</p>
+        <p className="staff-event-context">{scope.eventName}</p>
       )}
-      <div>
+      <div className="staff-select-field">
         <label htmlFor="staff-desk">데스크</label>
         <select
           id="staff-desk"
@@ -222,8 +222,8 @@ export default function StaffConsole() {
           ))}
         </select>
       </div>
-      <form onSubmit={onScan}>
-        <div>
+      <form className="scan-form" onSubmit={onScan}>
+        <div className="form-field">
           <label htmlFor="staff-ticket">티켓 코드</label>
           <input
             id="staff-ticket"
@@ -234,14 +234,15 @@ export default function StaffConsole() {
             onChange={(event) => setTicket(event.target.value)}
           />
         </div>
-        <button type="submit" disabled={submitting || !assignment || !ticket.trim()}>
+        <button className="button button-primary" type="submit" disabled={submitting || !assignment || !ticket.trim()}>
           {submitting ? "처리 중입니다" : "체크인"}
         </button>
       </form>
-      <div>
+      <div className="camera-action">
         <button
           type="button"
           disabled={!assignment}
+          className="button button-secondary"
           onClick={() => {
             setResult({ kind: "idle" });
             setCameraOpen(true);
@@ -261,15 +262,15 @@ export default function StaffConsole() {
         />
       ) : null}
       {result.kind === "ok" ? (
-        <p role="status">
+        <p className="scan-result scan-success" role="status">
           {result.name} · {result.action === "IN" ? "입장" : "퇴장"}
           {result.reentry ? " (재입장)" : ""}
         </p>
       ) : null}
-      {result.kind === "failed" ? <p role="alert">{result.message}</p> : null}
-      <h2>최근 처리</h2>
+      {result.kind === "failed" ? <p className="scan-result scan-failure" role="alert">{result.message}</p> : null}
+      <h2 className="activity-heading">최근 처리</h2>
       {scope.checks.length ? (
-        <ul>
+        <ul className="activity-list">
           {scope.checks.slice(0, 10).map((check) => (
             <li key={check.id}>
               {check.name} · {check.action === "IN" ? "입장" : "퇴장"}

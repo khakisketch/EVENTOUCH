@@ -94,7 +94,7 @@ export default async function RegisterPage({
   }
   if (!data) {
     return (
-      <main>
+      <main id="main-content" className="site-page registration-page registration-state">
         <h1>신청할 수 없는 행사입니다</h1>
         <p>행사 주소를 확인하세요.</p>
       </main>
@@ -102,7 +102,7 @@ export default async function RegisterPage({
   }
   if (!data.registrationOpen) {
     return (
-      <main>
+      <main id="main-content" className="site-page registration-page registration-state">
         <p>행사 안내</p>
         <h1>{data.name}</h1>
         <p>현재 신청을 받지 않습니다.</p>
@@ -110,15 +110,19 @@ export default async function RegisterPage({
     );
   }
   return (
-    <main>
-      <p>참가 신청</p>
-      <h1>{data.name}</h1>
+    <main id="main-content" className="site-page registration-page">
+      <header className="public-page-header">
+        <span className="compact-wordmark">EVENTOUCH</span>
+        <p className="eyebrow">참가 신청</p>
+      </header>
+      <h1 className="registration-title">{data.name}</h1>
       <RegisterForm
         slug={slug}
         fields={[...BUILT_IN_FIELDS, ...data.fields]}
         consentText={data.consentText}
         formVersion={data.publishedVersion}
       />
+      <footer className="public-page-footer">EVENTOUCH <span>참가 신청</span></footer>
     </main>
   );
 }

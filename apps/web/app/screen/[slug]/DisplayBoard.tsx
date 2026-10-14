@@ -139,10 +139,10 @@ export default function DisplayBoard({ slug }: { slug: string }) {
     };
   }, [slug]);
 
-  if (state.kind === "loading") return <p>화면을 준비하고 있습니다.</p>;
+  if (state.kind === "loading") return <p className="display-status" role="status">화면을 준비하고 있습니다.</p>;
   if (state.kind === "missing") {
     return (
-      <section>
+      <section className="display-state">
         <h1>행사를 찾을 수 없습니다</h1>
         <p>출력 주소를 확인하세요.</p>
         <p>
@@ -151,7 +151,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
       </section>
     );
   }
-  if (state.kind === "failed") return <p role="alert">{state.message}</p>;
+  if (state.kind === "failed") return <p className="display-status" role="alert">{state.message}</p>;
 
   const { data, frame } = state;
   const frames: Array<{ key: string; title: string; body: React.ReactNode }> = [];
@@ -169,12 +169,17 @@ export default function DisplayBoard({ slug }: { slug: string }) {
       body: (
         <ul>
           {data.program.map((session) => (
-            <li key={session.id}>
-              {session.title}
+            <li className="program-item" key={session.id}>
+              <span className="program-title">{session.title}</span>
               {[session.date, session.start && session.end
                 ? `${session.start} ~ ${session.end}`
-                : session.start].filter(Boolean).join(" · ")}
-              {session.place ? ` · ${session.place}` : ""}
+                : session.start, session.place].filter(Boolean).length ? (
+                  <span className="program-meta">
+                    {[session.date, session.start && session.end
+                      ? `${session.start} ~ ${session.end}`
+                      : session.start, session.place].filter(Boolean).join(" · ")}
+                  </span>
+                ) : null}
             </li>
           ))}
         </ul>
@@ -190,7 +195,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
   }
   if (!frames.length) {
     return (
-      <section>
+      <section className="display-board display-idle">
         <p>EVENTOUCH</p>
         <h1>{data.name}</h1>
         <p>{data.date}</p>
@@ -200,12 +205,19 @@ export default function DisplayBoard({ slug }: { slug: string }) {
   }
   const current = frames[frame % frames.length];
   return (
-    <section aria-live="off">
-      <p>EVENTOUCH</p>
-      <h1>{data.name}</h1>
-      <p>{data.date}</p>
-      <h2>{current.title}</h2>
-      {current.body}
+    <section className="display-board" aria-live="off">
+      <header className="display-header">
+        <span className="display-brand">EVENTOUCH</span>
+        <p className="display-date">{data.date}</p>
+      </header>
+      <div className="display-content">
+        <h1>{data.name}</h1>
+        <article className="display-frame" key={current.key}>
+          <h2>{current.title}</h2>
+          {current.body}
+        </article>
+      </div>
+      <footer className="display-footer"><span>행사 운영 워크스페이스</span><span>{data.venueName}</span></footer>
     </section>
   );
 }

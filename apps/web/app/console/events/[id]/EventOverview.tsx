@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { eventStageLabel } from "../../../event-stage";
 
 type Participant = {
   status: string;
@@ -149,10 +150,10 @@ export default function EventOverview({ eventId }: { eventId: string }) {
     };
   }, [eventId, router]);
 
-  if (state.kind === "loading") return <p>운영 현황을 불러오고 있습니다.</p>;
+  if (state.kind === "loading") return <p className="loading-state" role="status">운영 현황을 불러오고 있습니다.</p>;
   if (state.kind === "failed") {
     return (
-      <section>
+      <section className="state-panel">
         <p role="alert">{state.message}</p>
         <p>
           <Link href="/console">행사 목록으로</Link>
@@ -162,36 +163,41 @@ export default function EventOverview({ eventId }: { eventId: string }) {
   }
   const overview = state.overview;
   return (
-    <section>
+    <section className="overview-content">
+      <header className="overview-header">
       <h1>{overview.name}</h1>
-      <p>
+      <p className="overview-meta">
         {[overview.date, overview.start && overview.end
           ? `${overview.start} ~ ${overview.end}`
-          : overview.start, overview.venue, overview.stage]
+          : overview.start, overview.venue, eventStageLabel(overview.stage)]
           .filter(Boolean)
           .join(" · ")}
       </p>
-      <h2>핵심 지표</h2>
-      <ul>
-        <li>등록 {overview.registered}</li>
-        <li>승인 대기 {overview.pendingApproval}</li>
-        <li>현재 입장 {overview.insideNow}</li>
-        <li>입장률 {overview.entryRate}%</li>
+      </header>
+      <h2 className="section-heading">핵심 지표</h2>
+      <ul className="overview-metrics">
+        <li><span>등록</span><strong>{overview.registered}</strong></li>
+        <li><span>승인 대기</span><strong>{overview.pendingApproval}</strong></li>
+        <li><span>현재 입장</span><strong>{overview.insideNow}</strong></li>
+        <li><span>입장률</span><strong>{overview.entryRate}<small>%</small></strong></li>
       </ul>
-      <h2>지금 할 일</h2>
+      <section className="overview-task">
+      <h2 className="section-heading">지금 할 일</h2>
       {overview.pendingApproval > 0 ? (
         <p>승인 대기 {overview.pendingApproval}건을 확인하세요.</p>
       ) : (
         <p>대기 중인 승인이 없습니다.</p>
       )}
-      <p>
-        <Link href={`/console/events/${encodeURIComponent(eventId)}/participants`}>
+      <p className="overview-action">
+        <Link className="button button-primary" href={`/console/events/${encodeURIComponent(eventId)}/participants`}>
           참가자 관리로
         </Link>
       </p>
-      <h2>최근 입퇴장</h2>
+      </section>
+      <section className="overview-recent">
+      <h2 className="section-heading">최근 입퇴장</h2>
       {overview.recent.length ? (
-        <ul>
+        <ul className="recent-checks">
           {overview.recent.map((check) => (
             <li key={check.id}>
               {check.name} · {check.action === "IN" ? "입장" : "퇴장"}
@@ -199,8 +205,9 @@ export default function EventOverview({ eventId }: { eventId: string }) {
           ))}
         </ul>
       ) : (
-        <p>아직 입퇴장 기록이 없습니다.</p>
+        <p className="empty-state">아직 입퇴장 기록이 없습니다.</p>
       )}
+      </section>
     </section>
   );
 }

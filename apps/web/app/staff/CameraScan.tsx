@@ -86,7 +86,7 @@ export default function CameraScan({ onDetected, onClose }: Props) {
   }, []);
 
   return (
-    <section aria-label="카메라 스캔">
+    <section className="camera-panel" aria-label="카메라 스캔">
       <h2>QR 스캔</h2>
       {failure ? (
         <p role="alert">{failure}</p>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- EVENTOUCH brand mark; fills match --brand and --on-brand in tokens.css. -->
+  <rect x="2" y="2" width="60" height="60" rx="8" fill="#E76D26" />
+  <path d="M20 16h28v8H29v8h17v8H29v8h19v8H20z" fill="#17252B" />
+</svg>

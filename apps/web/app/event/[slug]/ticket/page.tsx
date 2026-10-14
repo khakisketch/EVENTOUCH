@@ -11,9 +11,13 @@ export default async function TicketPage({
 }) {
   const { slug } = await params;
   return (
-    <main>
-      <p>내 티켓</p>
-      <TicketView slug={slug} />
-    </main>
+      <main id="main-content" className="site-page ticket-page">
+        <header className="public-page-header">
+          <span className="compact-wordmark">EVENTOUCH</span>
+          <p className="eyebrow">내 티켓</p>
+        </header>
+        <TicketView slug={slug} />
+        <footer className="public-page-footer">EVENTOUCH <span>내 티켓</span></footer>
+      </main>
   );
 }
