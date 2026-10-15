@@ -13,38 +13,34 @@
   align-items: start;
   gap: var(--s4) var(--s5);
   min-width: 0;
-  padding-bottom: var(--s4);
+  padding-bottom: var(--s3);
   border-bottom: 1px solid var(--line);
+}
+
+.pageHeader h1 {
+  margin: 0;
+  font-size: var(--h1);
+  line-height: 1.15;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .titleBlock {
   min-width: 0;
 }
 
-.titleBlock h1 {
-  margin: 0;
-}
-
-.clientName {
-  margin: var(--s1) 0 0;
-  color: var(--muted);
-  font-weight: 650;
-}
-
 .scheduleLine {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s1) var(--s3);
-  margin-top: var(--s2);
+  margin-top: var(--s1);
   color: var(--muted);
   font-size: var(--small);
+  line-height: 1.4;
   font-variant-numeric: tabular-nums;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
-.scheduleLine span + span::before {
-  content: "·";
-  margin-right: var(--s3);
-  color: var(--line-strong);
+.scheduleNoWrap {
+  white-space: nowrap;
 }
 
 .statusBadges {
@@ -52,7 +48,16 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s2);
-  margin-top: var(--s3);
+  margin-top: var(--s2);
+}
+
+.statusBadges > span {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  padding: 0 var(--s3);
+  border-radius: var(--s6);
+  white-space: nowrap;
 }
 
 .stagePill {
@@ -61,12 +66,7 @@
 
 .intakeBadge,
 .dDay {
-  display: inline-flex;
-  min-height: 32px;
-  align-items: center;
-  padding: 3px var(--s3);
   border: 1px solid var(--line);
-  border-radius: var(--s6);
   font-size: var(--small);
   font-weight: 700;
 }
@@ -89,23 +89,13 @@
   font-variant-numeric: tabular-nums;
 }
 
-.pendingBadge {
-  padding: 3px var(--s3);
-  border: 1px solid var(--danger-line);
-  border-radius: var(--s6);
-  background: var(--danger-soft);
-  color: var(--danger);
-  font-size: var(--small);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
 .headerActions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--s2);
   min-width: 0;
+  align-self: start;
 }
 
 .linkNotice {
@@ -139,7 +129,6 @@
   font-size: var(--small);
 }
 
-.problemSection,
 .operationsCard,
 .scheduleCard,
 .stageControl,
@@ -151,7 +140,6 @@
   background: var(--paper);
 }
 
-.problemSection,
 .operationsCard,
 .scheduleCard,
 .recentCard {
@@ -159,19 +147,26 @@
   gap: var(--s3);
 }
 
-.problemCount {
-  flex: none;
-  padding: 2px var(--s2);
-  border-radius: var(--s6);
-  background: var(--warning-soft);
-  color: var(--warning);
-  font-size: var(--small);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+.problemSection {
+  display: grid;
+  gap: var(--s2);
+  min-width: 0;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.problemHeading {
+  margin: 0;
+  font-size: var(--body);
+  font-weight: 750;
+  line-height: 1.4;
 }
 
 .problemList {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 0;
   padding: 0;
   border-top: 1px solid var(--line);
@@ -183,13 +178,17 @@
   border-bottom: 1px solid var(--line);
 }
 
+.problemList li:nth-child(even) {
+  border-left: 1px solid var(--line);
+}
+
 .problemLink {
   display: flex;
-  min-height: 64px;
+  min-height: 56px;
   align-items: center;
   justify-content: space-between;
-  gap: var(--s3);
-  padding: var(--s3) var(--s2);
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
   color: var(--ink);
   text-decoration: none;
 }
@@ -199,9 +198,11 @@
 }
 
 .problemCopy {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
   min-width: 0;
-  gap: var(--s1);
+  gap: 0 var(--s2);
 }
 
 .problemCopy strong {
@@ -213,12 +214,14 @@
   font-size: var(--small);
 }
 
-.problemAction {
+.problemArrow {
   flex: none;
-  color: var(--brand-text);
-  font-size: var(--small);
-  font-weight: 700;
-  text-align: right;
+  width: 7px;
+  height: 7px;
+  margin-right: var(--s1);
+  border-top: 1px solid var(--muted);
+  border-right: 1px solid var(--muted);
+  transform: rotate(45deg);
 }
 
 .metricsSection {
@@ -557,7 +560,6 @@
     flex: 1 1 140px;
   }
 
-  .problemSection,
   .operationsCard,
   .scheduleCard,
   .stageControl,
@@ -565,19 +567,20 @@
     padding: var(--s4);
   }
 
+  .problemSection {
+    padding: var(--s3);
+  }
+
   .sectionHeading {
     align-items: flex-start;
   }
 
-  .problemLink {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: var(--s1);
-    padding-block: var(--s3);
+  .problemList {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .problemAction {
-    text-align: left;
+  .problemList li:nth-child(even) {
+    border-left: 0;
   }
 
   .metricGrid {

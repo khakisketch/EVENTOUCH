@@ -711,6 +711,9 @@ export default function EventOverview({ eventId }: { eventId: string }) {
   const participantPageHref = overview.slug
     ? `/event/${encodeURIComponent(overview.slug)}`
     : "";
+  const eventTime = overview.start && overview.end
+    ? `${overview.start}–${overview.end}`
+    : overview.start || overview.end;
 
   return (
     <div className={styles.overview}>
@@ -718,17 +721,12 @@ export default function EventOverview({ eventId }: { eventId: string }) {
       <header className={styles.pageHeader}>
         <div className={styles.titleBlock}>
           <h1>{overview.name || "이름 없는 행사"}</h1>
-          {overview.clientName ? <p className={styles.clientName}>{overview.clientName}</p> : null}
           <div className={styles.scheduleLine}>
-            <span>{formatEventDate(overview.date)}</span>
-            {overview.start || overview.end ? (
-              <span>
-                {overview.start && overview.end
-                  ? `${overview.start}–${overview.end}`
-                  : overview.start || overview.end}
-              </span>
-            ) : null}
-            <span>{overview.venue || "장소 미정"}</span>
+            {overview.clientName ? <>{overview.clientName} · </> : null}
+            {formatEventDate(overview.date)}
+            {eventTime ? <> · <span className={styles.scheduleNoWrap}>{eventTime}</span></> : null}
+            {" · "}
+            {overview.venue || "장소 미정"}
           </div>
           <div className={styles.statusBadges}>
             <span className={`${eventStageClassName(currentStage)} ${styles.stagePill}`}>{stageText}</span>
@@ -740,14 +738,11 @@ export default function EventOverview({ eventId }: { eventId: string }) {
                 {dDay}
               </span>
             ) : null}
-            {overview.pendingApproval > 0 && overview.canManageEvent && currentStage !== "ENDED" && !archived ? (
-              <span className={styles.pendingBadge}>승인 대기 {overview.pendingApproval}</span>
-            ) : null}
           </div>
         </div>
         {overview.canManageEvent && participantPageHref ? (
           <div className={styles.headerActions}>
-            <Link className="button button-primary" href={participantPageHref} target="_blank" rel="noreferrer">
+            <Link className="button button-secondary" href={participantPageHref} target="_blank" rel="noreferrer">
               참가자 페이지 열기
             </Link>
             <button
@@ -764,31 +759,6 @@ export default function EventOverview({ eventId }: { eventId: string }) {
 
       {overview.canManageEvent ? (
         <>
-          {problems.length > 0 ? (
-            <section className={styles.problemSection} aria-labelledby="event-problems-heading">
-              <div className={styles.sectionHeading}>
-                <div>
-                  <h2 id="event-problems-heading" className={styles.sectionTitle}>조치할 문제</h2>
-                  <p className={styles.sectionDescription}>현재 행사 데이터에서 확인된 항목입니다.</p>
-                </div>
-                <span className={styles.problemCount}>{problems.length}건</span>
-              </div>
-              <ul className={styles.problemList}>
-                {problems.map((problem, index) => (
-                  <li key={`${problem.href}-${problem.title}-${index}`}>
-                    <Link className={styles.problemLink} href={problem.href}>
-                      <span className={styles.problemCopy}>
-                        <strong>{problem.title}</strong>
-                        <span>{problem.detail}</span>
-                      </span>
-                      <span className={styles.problemAction}>화면에서 확인</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
           <section className={styles.metricsSection} aria-labelledby="event-metrics-heading">
             <div className={styles.sectionHeading}>
               <div>
@@ -808,6 +778,27 @@ export default function EventOverview({ eventId }: { eventId: string }) {
               </div>
             ) : null}
           </section>
+
+          {problems.length > 0 ? (
+            <section className={styles.problemSection} aria-labelledby="event-problems-heading">
+              <h2 id="event-problems-heading" className={styles.problemHeading}>
+                확인 필요 {problems.length}건
+              </h2>
+              <ul className={styles.problemList}>
+                {problems.map((problem, index) => (
+                  <li key={`${problem.href}-${problem.title}-${index}`}>
+                    <Link className={styles.problemLink} href={problem.href}>
+                      <span className={styles.problemCopy}>
+                        <strong>{problem.title}</strong>
+                        <span>{problem.detail}</span>
+                      </span>
+                      <span className={styles.problemArrow} aria-hidden="true" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
         </>
       ) : (
         <p className={styles.restrictedNote}>행사 전체 지표와 운영 준비 정보는 행사 운영자에게 표시됩니다.</p>
