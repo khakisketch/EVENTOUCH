@@ -1543,22 +1543,6 @@ select[aria-invalid="true"] {
   text-align: center;
 }
 
-.nav-all-link {
-  display: flex;
-  min-height: 44px;
-  align-items: center;
-  padding-inline: var(--s3);
-  color: var(--nav-muted);
-  font-size: var(--small);
-  font-weight: 650;
-  text-decoration: none;
-}
-
-.nav-all-link:hover {
-  color: var(--nav-text);
-  text-decoration: underline;
-}
-
 .nav-event-switch {
   display: flex;
   min-height: 44px;

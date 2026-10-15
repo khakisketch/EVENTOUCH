@@ -543,9 +543,6 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
             ))}
           </div>
         ) : null}
-        <Link className="nav-all-link" href="/console">
-          전체 행사 보기
-        </Link>
       </>
     ) : null;
   }

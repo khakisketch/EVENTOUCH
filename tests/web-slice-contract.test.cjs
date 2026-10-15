@@ -475,7 +475,9 @@ test('web-console-shell-keeps-decided-navigation-and-clients-read-only', () => {
   assert.match(shell, /손봐야 할 행사/);
   assert.match(shell, /nav-event-pick/);
   assert.match(shell, /nav-badge/);
-  assert.match(shell, /전체 행사 보기/);
+  // The 행사 root link already lands on the list home, so no separate
+  // view-all link competes with it.
+  assert.doesNotMatch(shell, /전체 행사 보기/);
   assert.match(shell, /currentEventMeta/);
   assert.match(shell, /renderEventSubnav/);
   assert.match(globalStyles, /\.nav-event-card/);
