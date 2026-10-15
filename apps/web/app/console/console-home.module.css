@@ -158,7 +158,7 @@
 .eventGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--s3);
+  gap: var(--s4);
   margin: var(--s3) 0 0;
   padding: 0;
   list-style: none;
@@ -200,7 +200,7 @@
 
 .eventCardTop {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) 32px;
+  grid-template-columns: minmax(var(--s8), auto) minmax(0, 1fr) 32px;
   align-items: center;
   gap: var(--s2);
   min-width: 0;
@@ -214,13 +214,19 @@
   justify-self: end;
   min-width: 0;
   color: var(--ink);
-  font-size: var(--small);
+  font-family: var(--display-font);
+  font-size: var(--body);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .eventRecency {
-  display: inline-block;
+  display: inline-flex;
+  min-width: var(--s8);
+  min-height: var(--s5);
+  align-items: center;
+  justify-content: center;
   padding: 2px var(--s2);
   border-radius: var(--radius-small);
   background: var(--soft);
@@ -228,6 +234,7 @@
   font-size: var(--small);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  text-align: center;
   white-space: nowrap;
 }
 
@@ -270,7 +277,27 @@
   flex-wrap: wrap;
   align-items: center;
   min-width: 0;
+  min-height: var(--s6);
   margin: 0;
+}
+
+.eventStatus :global(.stage-badge) {
+  display: inline-flex;
+  min-height: var(--s6);
+  align-items: center;
+  gap: var(--s2);
+  padding-inline: var(--s2) var(--s3);
+  border-radius: var(--radius-small);
+}
+
+.eventStatus :global(.stage-badge)::before {
+  display: inline-block;
+  width: var(--s2);
+  height: var(--s2);
+  flex: none;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
 }
 
 .eventMetrics {

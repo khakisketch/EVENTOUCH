@@ -727,14 +727,41 @@ select[aria-invalid="true"] {
 }
 
 .ticket-heading {
+  position: relative;
   padding: var(--s5);
   border-bottom: 1px dashed var(--line-strong);
   background: var(--surface-muted);
 }
 
+.ticket-heading::before,
+.ticket-heading::after {
+  position: absolute;
+  bottom: calc(-1 * var(--s2));
+  width: var(--s4);
+  height: var(--s4);
+  border-radius: 50%;
+  background: var(--ground);
+  content: "";
+}
+
+.ticket-heading::before {
+  left: calc(-1 * var(--s2));
+}
+
+.ticket-heading::after {
+  right: calc(-1 * var(--s2));
+}
+
 .ticket-label {
-  display: block;
-  margin-bottom: var(--s2);
+  display: flex;
+  width: fit-content;
+  min-height: var(--s5);
+  align-items: center;
+  margin-bottom: var(--s3);
+  padding-inline: var(--s2);
+  border: 1px solid var(--brand);
+  border-radius: var(--radius-small);
+  background: var(--soft);
   color: var(--brand-text);
   font-size: var(--small);
   font-weight: 750;
@@ -762,14 +789,22 @@ select[aria-invalid="true"] {
 
 .ticket-entry-state {
   display: flex;
+  width: fit-content;
+  min-height: var(--s6);
   align-items: center;
   gap: var(--s2);
   margin-top: var(--s3) !important;
+  padding: var(--s1) var(--s3);
+  border: 1px solid var(--success-line);
+  border-radius: var(--radius-small);
+  background: var(--success-soft);
   color: var(--success) !important;
   font-weight: 700;
 }
 
 .ticket-entry-state[data-tone="wait"] {
+  border-color: var(--warning-line);
+  background: var(--warning-soft);
   color: var(--warning) !important;
 }
 
@@ -778,6 +813,8 @@ select[aria-invalid="true"] {
 }
 
 .ticket-entry-state[data-tone="bad"] {
+  border-color: var(--danger-line);
+  background: var(--danger-soft);
   color: var(--danger) !important;
 }
 
@@ -799,8 +836,8 @@ select[aria-invalid="true"] {
   width: fit-content;
   max-width: calc(100% - var(--s5) * 2);
   place-items: center;
-  margin: var(--s5) auto var(--s3);
-  padding: var(--s3);
+  margin: var(--s5) auto var(--s4);
+  padding: var(--s4);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--paper);
