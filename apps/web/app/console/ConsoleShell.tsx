@@ -77,6 +77,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const mobileOperatorTriggerRef = useRef<HTMLButtonElement>(null);
   const lastOperatorTriggerRef = useRef<HTMLButtonElement>(null);
   const operatorMenuRef = useRef<HTMLDivElement>(null);
+  const mobileEventBranchRef = useRef<HTMLDivElement>(null);
   const menuFocusPendingRef = useRef(false);
 
   useEffect(() => {
@@ -179,6 +180,40 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const showCurrentEvent = Boolean(
     isEventPath && shellData?.canAccessCurrentEvent && shellData.currentEventName
   );
+
+  useEffect(() => {
+    if (!showCurrentEvent) return;
+    const branch = mobileEventBranchRef.current;
+    if (!branch) return;
+
+    const revealCurrentDestination = () => {
+      if (!window.matchMedia("(max-width: 768px)").matches) return;
+      const activeLink = branch.querySelector<HTMLElement>(".console-subnav-item.active");
+      if (!activeLink) return;
+
+      const branchBounds = branch.getBoundingClientRect();
+      const activeBounds = activeLink.getBoundingClientRect();
+      const inset = 8;
+      let nextScrollLeft = branch.scrollLeft;
+      if (activeBounds.left < branchBounds.left + inset) {
+        nextScrollLeft -= branchBounds.left + inset - activeBounds.left;
+      } else if (activeBounds.right > branchBounds.right - inset) {
+        nextScrollLeft += activeBounds.right - (branchBounds.right - inset);
+      }
+
+      branch.scrollLeft = Math.max(
+        0,
+        Math.min(branch.scrollWidth - branch.clientWidth, nextScrollLeft)
+      );
+    };
+
+    const frame = window.requestAnimationFrame(revealCurrentDestination);
+    window.addEventListener("resize", revealCurrentDestination);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", revealCurrentDestination);
+    };
+  }, [pathname, showCurrentEvent]);
 
   function getVisibleOperatorTrigger() {
     const mobileTrigger = mobileOperatorTriggerRef.current;
@@ -349,9 +384,14 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     ) : null;
   }
 
-  function renderEventBranch(eventsLinkId: string) {
+  function renderEventBranch(eventsLinkId: string, mobile = false) {
     return showCurrentEvent && eventId ? (
-      <div className="nav-event-branch" role="group" aria-labelledby={eventsLinkId}>
+      <div
+        ref={mobile ? mobileEventBranchRef : undefined}
+        className="nav-event-branch"
+        role="group"
+        aria-labelledby={eventsLinkId}
+      >
         <div className="nav-current-event">
           <strong title={shellData?.currentEventName ?? undefined}>{shellData?.currentEventName}</strong>
           <Link className="nav-event-switch" href="/console">목록에서 전환</Link>
@@ -489,7 +529,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
         </nav>
 
         <nav className="side-nav mobile-event-nav" aria-label="현재 행사 메뉴">
-          {renderEventBranch("workspace-events-link-mobile")}
+          {renderEventBranch("workspace-events-link-mobile", true)}
         </nav>
 
         <div className="sidebar-bottom">

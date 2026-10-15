@@ -282,10 +282,16 @@ test('web-console-shell-keeps-decided-navigation-and-clients-read-only', () => {
   assert.match(shell, /nav/i);
   assert.match(shell, /mobile-primary-nav/);
   assert.match(shell, /mobile-event-nav/);
+  assert.match(shell, /mobileEventBranchRef/);
+  assert.match(shell, /revealCurrentDestination/);
   assert.match(shell, /aria-current=\{isHome \? "page" : isEventPath \? "location"/);
   assert.match(shell, /mobileOperatorTriggerRef\.current\?\.contains\(target\)/);
   assert.match(globalStyles, /\.mobile-primary-nav\s*\{[^}]*position:\s*fixed;[^}]*inset:\s*auto 0 0;/s);
   assert.match(globalStyles, /safe-area-inset-bottom/);
+  assert.match(globalStyles, /container-type:\s*inline-size/);
+  assert.match(globalStyles, /@container\s*\(max-width:\s*340px\)/);
+  assert.match(globalStyles, /\.nav-event-branch \.console-subnav-item\.active::before/);
+  assert.match(globalStyles, /scroll-snap-type:\s*x proximity/);
   const clients = read('app/console/clients/ClientsList.tsx');
   assert.match(clients, /\/api\/bootstrap/);
   assert.doesNotMatch(clients, /method:\s*"POST"/i);

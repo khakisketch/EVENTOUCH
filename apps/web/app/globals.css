@@ -1841,6 +1841,7 @@ select[aria-invalid="true"] {
     display: flex;
     gap: 0;
     padding: 0;
+    container-type: inline-size;
   }
 
   .mobile-event-nav:empty {
@@ -1862,7 +1863,7 @@ select[aria-invalid="true"] {
     padding-right: max(var(--s4), env(safe-area-inset-right, 0px));
     border-top: 1px solid var(--nav-active);
     background: var(--nav);
-    box-shadow: 0 -8px 24px var(--scrim);
+    box-shadow: 0 -4px 16px var(--shadow-color);
   }
 
   .mobile-primary-nav .console-nav-root-item {
@@ -1920,17 +1921,21 @@ select[aria-invalid="true"] {
 
   .nav-event-branch {
     order: 3;
-    flex: 1 0 100%;
+    flex: 1 0 calc(100% + var(--s4));
     display: flex;
-    width: 100%;
+    width: calc(100% + var(--s4));
     min-width: 0;
     align-items: center;
     gap: var(--s1);
-    margin: 0;
-    padding: var(--s1) 0 0;
+    margin-block: 0;
+    margin-inline-start: calc(-1 * var(--s2));
+    padding: var(--s1) var(--s2) 0;
     border-left: 0;
     overflow-x: auto;
+    scroll-padding-inline: var(--s2);
+    scroll-snap-type: x proximity;
     scrollbar-color: var(--nav-active) transparent;
+    scrollbar-width: thin;
   }
 
   .nav-current-event {
@@ -1941,6 +1946,17 @@ select[aria-invalid="true"] {
     width: auto;
     flex: none;
     white-space: nowrap;
+    scroll-snap-align: start;
+  }
+
+  .nav-event-branch .console-subnav-item.active::before {
+    top: auto;
+    right: auto;
+    bottom: 0;
+    left: 50%;
+    width: 24px;
+    height: 2px;
+    transform: translateX(-50%);
   }
 
   .nav-current-event strong {
@@ -1968,6 +1984,10 @@ select[aria-invalid="true"] {
   }
 
   .operator-mobile-trigger:hover {
+    background: var(--nav-hover);
+  }
+
+  .operator-mobile-trigger[aria-expanded="true"] {
     background: var(--nav-hover);
   }
 
@@ -2128,6 +2148,19 @@ select[aria-invalid="true"] {
   .display-frame p,
   .display-frame li {
     font-size: var(--h3);
+  }
+
+  @container (max-width: 340px) {
+    .mobile-event-nav .nav-event-branch {
+      flex-basis: calc(100% + var(--s6));
+      width: calc(100% + var(--s6));
+      margin-inline-start: calc(-1 * var(--s4));
+      justify-content: space-between;
+    }
+
+    .mobile-event-nav .console-subnav-item {
+      padding-inline: var(--s1);
+    }
   }
 }
 
