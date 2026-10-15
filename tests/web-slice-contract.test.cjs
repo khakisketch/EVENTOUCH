@@ -42,6 +42,18 @@ test('web-slice-does-not-take-over-writes', () => {
   assert.doesNotMatch(sources, /\/commands/);
 });
 
+test('web-service-entry-sends-everyone-through-the-shared-login', () => {
+  // Attendees arrive by event link, never here; operators get one door.
+  const home = read('app/page.tsx');
+  assert.match(home, /\/login/);
+  assert.match(home, /\/staff/);
+  assert.match(home, /\/console/);
+  assert.match(home, /초대 메시지/);
+  assert.doesNotMatch(home, /\/commands/);
+  assert.doesNotMatch(home, /localStorage/);
+  assert.doesNotMatch(home, /sessionStorage/);
+});
+
 test('web-registration-posts-to-the-public-signup-contract', () => {
   const form = read('app/event/[slug]/register/RegisterForm.tsx');
   assert.match(form, /\/api\/events\/.*\/signup/);
@@ -269,6 +281,14 @@ test('web-invite-accept-and-team-reset-cover-invitation-only-accounts', () => {
   assert.match(team, /team\.manage/);
   assert.match(team, /previouslyFocused/);
   assert.match(team, /Escape/);
+  // Invitation issuing moved in from the legacy app: agency-only create with
+  // a once-shown link, pending list, and idempotent revoke.
+  assert.match(team, /\/api\/auth\/invitations/);
+  assert.match(team, /\/invite\/\$\{encodeURIComponent\(data\.token\)\}/);
+  assert.match(team, /초대 링크는 발급 시 한 번만 표시됩니다/);
+  assert.match(team, /대기 중인 초대/);
+  assert.match(team, /초대 철회/);
+  assert.match(team, /\/revoke/);
   assert.doesNotMatch(team, /localStorage/);
   assert.doesNotMatch(team, /sessionStorage/);
   const shell = read('app/console/ConsoleShell.tsx');
