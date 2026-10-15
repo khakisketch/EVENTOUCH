@@ -68,21 +68,95 @@ function monthKeyOf(year: number, month: number): string {
   return `${year}-${String(month + 1).padStart(2, "0")}`;
 }
 
-// The card's single next action: the most urgent unfinished work for that
-// event, so the grid answers "what do I touch next" without a separate list.
-function nextAction(event: ConsoleEvent): { label: string; href: string } {
-  const base = `/console/events/${encodeURIComponent(event.id)}`;
-  if (event.pending > 0) return { label: "승인 처리하기", href: `${base}/participants` };
-  if (event.stage === "DRAFT") return { label: "이어서 만들기", href: `${base}/settings` };
-  if (event.stage === "READY") return { label: "현장 준비하기", href: `${base}/operations` };
-  if (event.stage === "LIVE") return { label: "현장 보기", href: `${base}/operations` };
-  return { label: "행사 열기", href: base };
-}
-
 function describeDate(date: string): string {
   if (!date) return "일정 미정";
+  const [, month, day] = date.split("-");
+  return `${Number(month)}월 ${Number(day)}일`;
+}
+
+function formatEventDate(date: string): string {
+  if (!date) return "일정 미정";
   const [year, month, day] = date.split("-");
-  return `${Number(month)}월 ${Number(day)}일${year ? "" : ""}`;
+  return year && month && day ? `${year}.${month}.${day}` : date;
+}
+
+function EventCard({
+  event,
+  clientName,
+  todayKey,
+}: {
+  event: ConsoleEvent;
+  clientName: string;
+  todayKey: string;
+}) {
+  const recency = eventRecency(event.date, todayKey);
+  const stageKnown = KNOWN_STAGES.includes(event.stage);
+  const stageLabel = stageKnown ? eventStageLabel(event.stage) : "단계 미정";
+  const time = event.start && event.end
+    ? `${event.start}–${event.end}`
+    : event.start || event.end;
+  const clientAndVenue = [clientName, event.venue].filter(Boolean).join(" · ");
+
+  return (
+    <Link
+      className={styles.eventCardLink}
+      href={`/console/events/${encodeURIComponent(event.id)}`}
+    >
+      <article className={styles.eventCard}>
+        <div className={styles.eventCardTop}>
+          <span className={styles.eventRecency}>{recency ?? ""}</span>
+          <strong className={styles.eventDate}>{formatEventDate(event.date)}</strong>
+          <svg className={styles.cardArrow} viewBox="0 0 20 20" aria-hidden="true">
+            <path
+              d="M4 10h11m-5-5 5 5-5 5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </div>
+        {time ? <p className={styles.eventTime}>{time}</p> : null}
+        <div className={styles.eventIdentity}>
+          <h3 className={styles.eventName}>{event.name}</h3>
+          <p className={styles.eventClient}>
+            {clientAndVenue || "고객사·장소 미지정"}
+          </p>
+        </div>
+        <p className={styles.eventStatus}>
+          {stageKnown ? (
+            <span className={eventStageClassName(event.stage)}>{stageLabel}</span>
+          ) : <span className="stage-badge">{stageLabel}</span>}
+        </p>
+        <dl className={styles.eventMetrics}>
+          <div>
+            <dt>등록 인원</dt>
+            <dd>
+              <span className={styles.metricNumber}>{event.registered}</span>
+              <span className={styles.metricUnit}>
+                {event.capacity ? `/ ${event.capacity}명` : "명"}
+              </span>
+            </dd>
+          </div>
+          <div>
+            <dt>승인 대기</dt>
+            <dd className={event.pending > 0 ? styles.metricAttention : undefined}>
+              <span className={styles.metricNumber}>{event.pending}</span>
+              <span className={styles.metricUnit}>명</span>
+            </dd>
+          </div>
+          <div>
+            <dt>현재 입장</dt>
+            <dd>
+              <span className={styles.metricNumber}>{event.inside}</span>
+              <span className={styles.metricUnit}>명</span>
+            </dd>
+          </div>
+        </dl>
+      </article>
+    </Link>
+  );
 }
 
 export default function ConsoleHome() {
@@ -312,7 +386,8 @@ export default function ConsoleHome() {
     setFilter("all");
     setSelectedDate(null);
   };
-  const hasNarrowing = query.trim() !== "" || filter !== "all" || selectedDate !== null;
+  const dateFilterActive = view === "calendar" && selectedDate !== null;
+  const hasNarrowing = query.trim() !== "" || filter !== "all" || dateFilterActive;
   return (
     <div className={styles.home}>
       <header className={styles.pageHeader}>
@@ -339,26 +414,25 @@ export default function ConsoleHome() {
 
       <section className={styles.directory} aria-label="행사 목록">
         <p className="sr-only" role="status">
-          {filter === "all" && !query.trim() && !selectedDate
+          {filter === "all" && !query.trim() && !dateFilterActive
             ? `전체 ${state.events.length}개 행사`
             : `검색 결과 ${visibleEvents.length}개 / 전체 ${state.events.length}개`}
         </p>
 
         <div className={styles.toolbar}>
-          <div className={styles.filters} role="group" aria-label="행사 단계">
-            {FILTERS.filter((item) => item.id === "all" || counts[item.id] > 0).map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`${styles.filterButton}${filter === item.id ? ` ${styles.filterActive}` : ""}`}
-                aria-pressed={filter === item.id}
-                onClick={() => setFilter(item.id)}
-              >
-                <span>{item.label}</span>
-                <span className={styles.filterCount}>{counts[item.id]}</span>
-              </button>
-            ))}
-          </div>
+          <label className={styles.stageFilter}>
+            <span>진행 단계</span>
+            <select
+              value={filter}
+              onChange={(event) => setFilter(event.target.value as EventFilter)}
+            >
+              {FILTERS.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label} ({counts[item.id]})
+                </option>
+              ))}
+            </select>
+          </label>
           <div className={styles.viewSwitch} role="group" aria-label="목록 보기 방식">
             <button
               type="button"
@@ -448,6 +522,15 @@ export default function ConsoleHome() {
           </div>
         ) : null}
 
+        <div className={styles.resultsMeta}>
+          <p>{visibleEvents.length}개 행사</p>
+          {hasNarrowing && visibleEvents.length > 0 ? (
+            <button type="button" className="button button-secondary" onClick={clearAll}>
+              필터 초기화
+            </button>
+          ) : null}
+        </div>
+
         {!state.events.length ? (
           <div className={styles.emptyState}>
             <h3>아직 등록된 행사가 없습니다</h3>
@@ -468,101 +551,36 @@ export default function ConsoleHome() {
         ) : (
           <>
             {view === "calendar" && selectedDate ? (
-              <h2 className={styles.sectionTitle}>{describeDate(selectedDate)} 행사 {datedVisible.length}건</h2>
+              <h2 className={styles.sectionTitle}>{describeDate(selectedDate)} 행사</h2>
             ) : null}
             <ul className={styles.eventGrid}>
-              {(view === "calendar" && selectedDate ? datedVisible : visibleEvents.filter((event) => view === "cards" || event.date)).map((event) => {
-                const clientName = event.clientId ? state.clients.get(event.clientId) : "";
-                const recency = eventRecency(event.date, todayKey);
-                const stageKnown = KNOWN_STAGES.includes(event.stage);
-                const action = nextAction(event);
-                return (
-                  <li key={event.id}>
-                    <article className={styles.eventCard}>
-                      <p className={styles.eventDate}>
-                        <strong>{event.date || "일정 미정"}</strong>
-                        {event.start || event.end ? (
-                          <span>{event.start}{event.end ? `–${event.end}` : ""}</span>
-                        ) : null}
-                        {recency ? (
-                          <span className={styles.eventRecency}>{recency}</span>
-                        ) : null}
-                      </p>
-                      <h3 className={styles.eventName}>
-                        <Link href={`/console/events/${encodeURIComponent(event.id)}`}>
-                          {event.name}
-                        </Link>
-                      </h3>
-                      <p className={styles.eventClient}>
-                        {[clientName, event.venue].filter(Boolean).join(" · ") || "고객사·장소 미지정"}
-                      </p>
-                      <p className={styles.eventStatus}>
-                        {stageKnown ? (
-                          <span className={eventStageClassName(event.stage)}>{eventStageLabel(event.stage)}</span>
-                        ) : <span className="stage-badge">단계 미정</span>}
-                        {event.pending > 0 ? (
-                          <span className={styles.pendingBadge}>승인대기 {event.pending}</span>
-                        ) : null}
-                      </p>
-                      <dl className={styles.eventMetrics}>
-                        <div>
-                          <dt>등록</dt>
-                          <dd>{event.registered}{event.capacity ? <span>/{event.capacity}</span> : null}</dd>
-                        </div>
-                        <div>
-                          <dt>승인대기</dt>
-                          <dd>{event.pending}</dd>
-                        </div>
-                        <div>
-                          <dt>현재입장</dt>
-                          <dd>{event.inside}</dd>
-                        </div>
-                      </dl>
-                      <p className={styles.eventAction}>
-                        <Link
-                          className="button button-secondary"
-                          href={action.href}
-                        >
-                          {action.label}
-                        </Link>
-                      </p>
-                    </article>
-                  </li>
-                );
-              })}
+              {(view === "calendar" && selectedDate ? datedVisible : visibleEvents.filter((event) => view === "cards" || event.date)).map((event) => (
+                <li key={event.id}>
+                  <EventCard
+                    event={event}
+                    clientName={event.clientId ? state.clients.get(event.clientId) ?? "" : ""}
+                    todayKey={todayKey}
+                  />
+                </li>
+              ))}
             </ul>
             {view === "calendar" && !selectedDate && unscheduled.length ? (
               <>
                 <h2 className={styles.sectionTitle}>일정 미정 {unscheduled.length}건</h2>
                 <ul className={styles.eventGrid}>
                   {unscheduled.map((event) => {
-                    const action = nextAction(event);
                     return (
                       <li key={event.id}>
-                        <article className={`${styles.eventCard} ${styles.eventCardCompact}`}>
-                          <h3 className={styles.eventName}>
-                            <Link href={`/console/events/${encodeURIComponent(event.id)}`}>
-                              {event.name}
-                            </Link>
-                          </h3>
-                          <p className={styles.eventAction}>
-                            <Link className="button button-secondary" href={action.href}>
-                              {action.label}
-                            </Link>
-                          </p>
-                        </article>
+                        <EventCard
+                          event={event}
+                          clientName={event.clientId ? state.clients.get(event.clientId) ?? "" : ""}
+                          todayKey={todayKey}
+                        />
                       </li>
                     );
                   })}
                 </ul>
               </>
-            ) : null}
-            {hasNarrowing && visibleEvents.length > 0 ? (
-              <p className={styles.resetRow}>
-                <button type="button" className="button button-secondary" onClick={clearAll}>
-                  필터 초기화
-                </button>
-              </p>
             ) : null}
           </>
         )}

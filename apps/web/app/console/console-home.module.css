@@ -32,70 +32,37 @@
 }
 
 .toolbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(190px, 260px) auto minmax(240px, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: var(--s3);
   margin-top: var(--s3);
   padding-block: var(--s2);
   border-bottom: 1px solid var(--line);
 }
 
-.filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s1);
-  min-width: 0;
-}
-
-.filterButton {
-  display: inline-flex;
-  min-height: 44px;
+.stageFilter {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: var(--s2);
-  padding-inline: var(--s3);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  background: var(--paper);
+  min-width: 0;
   color: var(--muted);
-  font: inherit;
   font-size: var(--small);
   font-weight: 650;
-  white-space: nowrap;
-  cursor: pointer;
+  margin: 0;
 }
 
-.filterButton:hover {
-  background: var(--surface-muted);
-  color: var(--ink);
-}
-
-.filterButton:focus-visible,
-.eventCard a:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 2px;
-}
-
-.filterActive {
-  border-color: var(--ink);
-  background: var(--ink);
-  color: var(--paper);
-}
-
-.filterActive .filterCount {
-  color: var(--paper);
-}
-
-.filterCount {
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
+.stageFilter select {
+  min-width: 0;
+  margin: 0;
 }
 
 .searchField {
   display: block;
-  width: min(300px, 32%);
-  flex: none;
+  min-width: 0;
+  width: 100%;
+  margin: 0;
 }
 
 .searchField input {
@@ -146,6 +113,22 @@
   outline-offset: 2px;
 }
 
+.resultsMeta {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  margin-top: var(--s3);
+}
+
+.resultsMeta p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
 .sectionTitle {
   margin: var(--s4) 0 var(--s2);
   font-size: var(--h3);
@@ -153,7 +136,7 @@
 
 .eventGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: var(--s3);
   margin: var(--s3) 0 0;
   padding: 0;
@@ -164,55 +147,88 @@
   min-width: 0;
 }
 
-.eventCard {
-  display: grid;
-  gap: var(--s2);
+.eventCardLink {
+  display: block;
   height: 100%;
+  border-radius: var(--radius);
+  color: inherit;
+  text-decoration: none;
+}
+
+.eventCardLink:hover .eventCard {
+  border-color: var(--line-strong);
+  background: var(--surface-muted);
+}
+
+.eventCardLink:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.eventCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  height: 100%;
+  min-height: 250px;
   padding: var(--s4);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--paper);
 }
 
-.eventDate {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--s1) var(--s2);
+.eventCardTop {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: var(--s2);
   min-width: 0;
 }
 
-.eventDate strong {
-  color: var(--ink);
-  font-size: var(--body);
-  font-variant-numeric: tabular-nums;
+.eventCardTop > .eventRecency:empty {
+  visibility: hidden;
 }
 
-.eventDate > span {
+.eventDate {
+  justify-self: end;
+  min-width: 0;
+  color: var(--ink);
+  font-size: var(--small);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.eventRecency {
+  display: inline-block;
+  padding: 2px var(--s2);
+  border-radius: var(--radius-small);
+  background: var(--soft);
+  color: var(--brand-text);
+  font-size: var(--small);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cardArrow {
+  width: 20px;
+  height: 20px;
+  justify-self: end;
+  color: var(--muted);
+}
+
+.eventTime {
+  margin: calc(-1 * var(--s2)) 0 0;
   color: var(--muted);
   font-size: var(--small);
   font-variant-numeric: tabular-nums;
 }
 
-.eventRecency {
-  color: var(--brand-text);
-  font-weight: 650;
-}
-
 .eventName {
   margin: 0;
   font-size: var(--h3);
-}
-
-.eventName a {
-  color: inherit;
-  text-decoration: none;
-}
-
-.eventName a:hover {
-  color: var(--brand-text);
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .eventClient {
@@ -221,65 +237,71 @@
   font-size: var(--small);
 }
 
+.eventIdentity {
+  display: grid;
+  gap: var(--s1);
+  min-width: 0;
+}
+
 .eventStatus {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--s1);
   min-width: 0;
   margin: 0;
 }
 
-.pendingBadge {
-  border-radius: var(--radius-small);
-  background: var(--danger-soft);
-  color: var(--danger);
-  font-size: var(--small);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  padding: 2px var(--s2);
-}
-
 .eventMetrics {
-  display: flex;
-  gap: var(--s4);
-  margin: 0;
-  padding-top: var(--s2);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: auto 0 0;
+  padding-top: var(--s3);
   border-top: 1px solid var(--line);
 }
 
 .eventMetrics > div {
   display: grid;
-  gap: 2px;
+  align-content: start;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.eventMetrics > div + div {
+  padding-inline-start: var(--s2);
+  border-left: 1px solid var(--line);
 }
 
 .eventMetrics dt {
   color: var(--muted);
   font-size: var(--small);
+  line-height: 1.3;
 }
 
 .eventMetrics dd {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
   margin: 0;
   color: var(--ink);
   font-size: var(--h3);
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.metricNumber {
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
-.eventMetrics dd span {
+.metricUnit {
   color: var(--muted);
   font-size: var(--small);
 }
 
-.eventAction {
-  margin: 0;
-}
-
-.eventAction .button {
-  width: 100%;
-}
-
-.eventCardCompact {
-  gap: var(--s3);
+.metricAttention .metricNumber {
+  color: var(--danger);
 }
 
 .calendarPanel {
@@ -292,12 +314,14 @@
 
 .monthBar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s2);
   margin-bottom: var(--s3);
 }
 
 .monthBar strong {
+  flex: 1 1 8ch;
   min-width: 8ch;
   text-align: center;
   font-size: var(--h3);
@@ -357,10 +381,6 @@
 .daySelected {
   border-color: var(--brand-text);
   background: var(--soft);
-}
-
-.resetRow {
-  margin: var(--s4) 0 0;
 }
 
 .emptyState,
@@ -454,29 +474,12 @@
 
 @media (max-width: 1024px) {
   .toolbar {
-    flex-wrap: wrap;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: var(--s2);
   }
 
-  .filters {
-    flex: 1 1 auto;
-    min-width: 0;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-block: var(--s1);
-  }
-
-  .viewSwitch {
-    flex: none;
-  }
-
   .searchField {
-    flex: 1 1 100%;
-    width: 100%;
-  }
-
-  .eventGrid {
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-column: 1 / -1;
   }
 }
 
@@ -490,23 +493,12 @@
   }
 
   .toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
     margin-top: var(--s2);
   }
 
-  .filters {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow-x: auto;
-    scrollbar-color: var(--line-strong) transparent;
-  }
-
-  .filters::-webkit-scrollbar {
-    height: 6px;
-  }
-
-  .filters::-webkit-scrollbar-thumb {
-    border-radius: var(--radius-small);
-    background: var(--line-strong);
+  .stageFilter {
+    grid-template-columns: 3.5rem minmax(0, 1fr);
   }
 
   .eventGrid {

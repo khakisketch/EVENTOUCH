@@ -201,8 +201,8 @@ test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   // needs no visible explainer above the filters.
   assert.doesNotMatch(home, /오늘과 가까운 일정부터/);
   assert.match(home, /<h1>행사<\/h1>/);
-  // One visible heading only; the result count is a screen-reader live
-  // region instead of a second visible total next to the filter counts.
+  // Keep one page heading, a visible result count near the list, and a
+  // screen-reader status announcement without adding a second live region.
   assert.doesNotMatch(home, /aria-live/);
   assert.match(home, /className="sr-only" role="status"/);
   assert.match(home, /date: typeof event\.date/);
@@ -213,14 +213,16 @@ test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   // calendar only filters those same cards by date.
   assert.doesNotMatch(home, /eventRow/);
   assert.match(home, /className=\{styles\.eventGrid\}/);
-  assert.match(home, /className=\{styles\.eventCard/);
+  assert.match(home, /className=\{styles\.eventCard\}>/);
   assert.match(home, /styles\.dayCell/);
   assert.match(home, /selectedDate/);
-  assert.match(home, /nextAction/);
-  // Empty stage filters stay out of the way; archived events remain
-  // reachable through the always-visible total.
-  assert.match(home, /counts\[item\.id\] > 0/);
-  assert.match(home, /승인 처리하기/);
+  // One native stage selector keeps the four stable filters discoverable
+  // without turning every status into a separate card-like control.
+  assert.match(home, /className=\{styles\.stageFilter\}>\s*<span>진행 단계<\/span>\s*<select/);
+  assert.match(home, /value=\{filter\}/);
+  assert.match(home, /FILTERS\.map\(\(item\) =>/);
+  assert.match(home, /counts\[item\.id\]/);
+  assert.doesNotMatch(home, /nextAction|승인 처리하기|현장 보기|이어서 만들기/);
   assert.match(home, /일정 미정/);
   // A recoverable connection failure restores shell navigation with the list.
   assert.match(home, /eventouch:shell-reload/);
@@ -234,14 +236,24 @@ test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   assert.doesNotMatch(shell, /console-footer/);
   assert.doesNotMatch(shell, /console-tagline/);
   assert.doesNotMatch(shell, /<small>\{roleLabel\}<\/small>/);
-  assert.match(home, /aria-pressed=\{filter === item\.id\}/);
+  assert.match(home, /aria-pressed=\{view === "cards"\}/);
   for (const label of ['전체', '준비 중', '진행 중', '종료·보관']) {
     assert.match(home, new RegExp(label));
   }
   assert.match(home, /className=\{styles\.eventDate\}/);
   assert.match(home, /className=\{styles\.eventStatus\}/);
+  assert.match(home, /className=\{styles\.eventMetrics\}/);
+  assert.match(home, /등록 인원/);
+  assert.match(home, /승인 대기/);
+  assert.match(home, /현재 입장/);
   assert.match(home, /pending: counts\.pending/);
   assert.match(home, /inside: counts\.inside/);
+  const eventCard = home.slice(home.indexOf('function EventCard('), home.indexOf('export default function ConsoleHome()'));
+  assert.match(eventCard, /<Link[\s\S]*className=\{styles\.eventCardLink\}/);
+  assert.match(eventCard, /href=\{`\/console\/events\/\$\{encodeURIComponent\(event\.id\)\}`\}/);
+  assert.doesNotMatch(eventCard, /aria-label=/);
+  assert.equal((eventCard.match(/<Link\b/g) ?? []).length, 1);
+  assert.doesNotMatch(eventCard, /<button|<select|<input|<a\b/);
   assert.doesNotMatch(home, /localStorage/);
   assert.doesNotMatch(home, /sessionStorage/);
   // The create dialog is a real modal again: styled, focus-trapped,
@@ -256,6 +268,9 @@ test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   assert.match(css, /\.dialogBackdrop/);
   assert.match(css, /\.dialogActions/);
   assert.match(css, /\.eventRecency/);
+  assert.match(css, /\.eventCardTop/);
+  assert.match(css, /\.eventCardLink:focus-visible/);
+  assert.match(css, /\.metricUnit/);
   assert.match(css, /\.eventGrid/);
   assert.match(css, /\.dayCell/);
   assert.doesNotMatch(css, /\.eventRow/);
