@@ -1,15 +1,15 @@
-import StaffConsole from "./StaffConsole";
+import StaffHub from "./StaffHub";
 
-// Staff surface: assignment-scoped desk check-in and booth certification
-// (slice 4a/4b plus the booth path). Every scan is validated server-side;
-// this screen only transports the ticket the operator typed or scanned.
+// Staff surface entry: the assignment hub lists only this account's active
+// event work. Event-specific desk/booth work lives at
+// /staff/events/[eventId]; every scan there is still validated server-side.
 export default function StaffPage() {
   return (
     <main id="main-content" className="site-page staff-page">
       <header className="staff-header">
-        <div><p className="eyebrow">스태프 업무</p><h1>현장 업무</h1></div>
+        <div><p className="eyebrow">스태프 업무</p><h1>내 업무</h1></div>
       </header>
-      <StaffConsole />
+      <StaffHub />
     </main>
   );
 }

@@ -57,7 +57,7 @@ export default function InviteAccept({ token, invitation }: { token: string; inv
         <h1>초대를 수락했습니다</h1>
         <p>{invitation.name}님, 이 계정으로 로그인하세요.</p>
         <p>
-          <Link className="button button-primary" href="/staff/login">로그인으로</Link>
+          <Link className="button button-primary" href="/login">로그인으로</Link>
         </p>
       </section>
     );

@@ -742,6 +742,45 @@ select[aria-invalid="true"] {
   font-weight: 700;
 }
 
+.staff-event-context .staff-back-link {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  margin-right: var(--s3);
+  font-weight: 600;
+}
+
+.staff-assignment-list {
+  display: grid;
+  gap: var(--s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.staff-assignment-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.staff-assignment-summary {
+  display: grid;
+  flex: 1 1 200px;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.staff-assignment-summary span {
+  color: var(--muted);
+  font-size: var(--small);
+}
+
 .scan-form {
   display: grid;
   gap: var(--s3);

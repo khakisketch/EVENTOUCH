@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { loginHrefForLocation } from "../../../../auth-redirect";
 
 type Person = {
   id: string;
@@ -65,7 +66,9 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         fetch("/api/bootstrap", { cache: "no-store" }),
       ]);
       if (meRes.status === 401 || bootRes.status === 401) {
-        router.push("/staff/login");
+        router.push(
+          loginHrefForLocation(window.location.pathname, window.location.search)
+        );
         return;
       }
       const me = (await meRes.json().catch(() => null)) as {

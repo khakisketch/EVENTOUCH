@@ -64,11 +64,11 @@ async function overflow(page) {
 }
 
 async function login(page, email, password) {
-  await page.goto(`${WEB_BASE}/staff/login`, { waitUntil: 'networkidle' });
-  await page.fill('#staff-email', email);
-  await page.fill('#staff-password', password);
+  await page.goto(`${WEB_BASE}/login`, { waitUntil: 'networkidle' });
+  await page.fill('#login-email', email);
+  await page.fill('#login-password', password);
   await Promise.all([
-    page.waitForURL(/\/staff$|\/console$/, { timeout: 15000 }),
+    page.waitForURL(/\/staff(\/|$|\?)|\/console/, { timeout: 15000 }),
     page.click('button[type=submit]'),
   ]);
 }

@@ -5,6 +5,7 @@ import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { loginHrefForLocation } from "../auth-redirect";
 
 type JsonRecord = Record<string, unknown>;
 type ShellData = {
@@ -94,7 +95,12 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
         ]);
         if (cancelled) return;
         if (meResponse.status === 401 || bootstrapResponse.status === 401) {
-          router.replace("/staff/login");
+          router.replace(
+            loginHrefForLocation(
+              typeof window !== "undefined" ? window.location.pathname : pathname,
+              typeof window !== "undefined" ? window.location.search : ""
+            )
+          );
           return;
         }
         const [mePayload, bootstrapPayload] = await Promise.all([
@@ -336,7 +342,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
         setLogoutError("로그아웃하지 못했습니다. 다시 시도하세요.");
         return;
       }
-      router.replace("/staff/login");
+      router.replace("/login");
       router.refresh();
     } catch {
       setLogoutError("연결을 확인한 뒤 다시 로그아웃하세요.");

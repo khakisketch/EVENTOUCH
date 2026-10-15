@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { loginHrefForLocation } from "../../auth-redirect";
 import styles from "./team.module.css";
 
 type Account = {
@@ -57,7 +58,10 @@ export default function TeamWorkspace() {
         ]);
         if (cancelled) return;
         if (meResponse.status === 401 || bootstrapResponse.status === 401) {
-          window.location.href = "/staff/login";
+          window.location.href = loginHrefForLocation(
+            window.location.pathname,
+            window.location.search
+          );
           return;
         }
         const mePayload = (await meResponse.json().catch(() => null)) as {

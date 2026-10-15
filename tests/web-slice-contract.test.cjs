@@ -73,18 +73,32 @@ test('web-ticket-keeps-the-bearer-out-of-history-and-persistent-storage', () => 
 });
 
 test('web-staff-uses-session-bootstrap-and-server-checked-commands', () => {
-  const login = read('app/staff/login/StaffLoginForm.tsx');
+  const login = read('app/login/LoginForm.tsx');
   assert.match(login, /\/api\/auth\/login/);
   assert.doesNotMatch(login, /localStorage/);
   assert.doesNotMatch(login, /sessionStorage/);
-  const console_ = read('app/staff/StaffConsole.tsx');
-  assert.match(console_, /\/api\/bootstrap/);
-  assert.match(console_, /\/commands/);
-  assert.match(console_, /check\.scan/);
-  assert.match(console_, /assignmentId/);
+  // The shared login honors a validated return destination and keeps
+  // STAFF on the assignment hub instead of the operator console.
+  assert.match(login, /safeNextPath/);
+  assert.match(login, /\/staff/);
+  assert.match(login, /\/console/);
+  const guard = read('app/auth-redirect.ts');
+  assert.match(guard, /safeNextPath/);
+  assert.match(guard, /\/login\?next=/);
+  const hub = read('app/staff/StaffHub.tsx');
+  assert.match(hub, /\/api\/bootstrap/);
+  assert.match(hub, /\/staff\/events\//);
+  assert.doesNotMatch(hub, /\/commands/);
+  assert.doesNotMatch(hub, /localStorage/);
+  assert.doesNotMatch(hub, /sessionStorage/);
+  const work = read('app/staff/StaffEventWork.tsx');
+  assert.match(work, /\/api\/bootstrap/);
+  assert.match(work, /\/commands/);
+  assert.match(work, /check\.scan/);
+  assert.match(work, /assignmentId/);
   // No ticket bearer may be persisted on the device.
-  assert.doesNotMatch(console_, /localStorage/);
-  assert.doesNotMatch(console_, /sessionStorage/);
+  assert.doesNotMatch(work, /localStorage/);
+  assert.doesNotMatch(work, /sessionStorage/);
 });
 
 test('web-camera-scan-degrades-to-manual-entry-without-a-camera', () => {
@@ -97,7 +111,7 @@ test('web-camera-scan-degrades-to-manual-entry-without-a-camera', () => {
   // local decision.
   assert.match(scanner, /onDetected/);
   assert.doesNotMatch(scanner, /fetch\(/);
-  const console_ = read('app/staff/StaffConsole.tsx');
+  const console_ = read('app/staff/StaffEventWork.tsx');
   assert.match(console_, /CameraScan/);
   assert.match(console_, /submitTicket\(code\)/);
 });
@@ -114,7 +128,7 @@ test('web-display-polls-public-content-and-never-blanks-on-a-drop', () => {
 });
 
 test('web-console-home-reads-bootstrap-before-any-write-paths', () => {
-  const login = read('app/staff/login/StaffLoginForm.tsx');
+  const login = read('app/login/LoginForm.tsx');
   assert.match(login, /\/staff/);
   assert.match(login, /\/console/);
   // No public signup by design: accounts are invitation-only, and a
@@ -305,7 +319,7 @@ test('web-retry-keeps-one-command-id-per-attempt-on-signup-and-scan', () => {
   const register = read('app/event/[slug]/register/RegisterForm.tsx');
   assert.match(register, /commandIdRef\.current/);
   assert.match(register, /useRef<string \| null>/);
-  const staff = read('app/staff/StaffConsole.tsx');
+  const staff = read('app/staff/StaffEventWork.tsx');
   assert.match(staff, /pendingScanIdRef\.current/);
   assert.match(staff, /useRef<string \| null>/);
 });
@@ -385,7 +399,7 @@ test('web-display-honors-the-operator-selection-from-the-public-projection', () 
 });
 
 test('web-staff-booth-work-uses-the-booth-visit-command-and-stamp-mode', () => {
-  const staff = read('app/staff/StaffConsole.tsx');
+  const staff = read('app/staff/StaffEventWork.tsx');
   assert.match(staff, /booth\.visit/);
   assert.match(staff, /stampMode/);
   assert.match(staff, /boothAssignments/);
@@ -395,8 +409,48 @@ test('web-staff-booth-work-uses-the-booth-visit-command-and-stamp-mode', () => {
   assert.match(staff, /stampMode === "SELF" \? null/);
   assert.match(staff, /오래되었을 수 있습니다/);
   // A silent refresh never strands an operator on an empty screen.
-  assert.match(staff, /scopesRef/);
+  assert.match(staff, /scopeRef/);
   assert.doesNotMatch(staff, /localStorage/);
+});
+
+test('web-shared-login-keeps-safe-return-destinations-only', () => {
+  const guard = read('app/auth-redirect.ts');
+  assert.match(guard, /safeNextPath/);
+  assert.match(guard, /startsWith\("\/console/);
+  assert.doesNotMatch(guard, /http/);
+  const legacyLogin = read('app/staff/login/page.tsx');
+  assert.match(legacyLogin, /\/login\?next=/);
+  assert.match(legacyLogin, /safeNextPath/);
+  const shell = read('app/console/ConsoleShell.tsx');
+  assert.match(shell, /loginHrefForLocation/);
+  assert.match(shell, /\/login/);
+  assert.doesNotMatch(shell, /router\.replace\("\/staff\/login"\)/);
+  const invite = read('app/invite/[token]/InviteAccept.tsx');
+  assert.match(invite, /href="\/login"/);
+  // Protected screens preserve the requested destination on 401 instead of
+  // dropping it at a bare login path.
+  for (const file of [
+    'app/console/ConsoleHome.tsx',
+    'app/console/clients/ClientsList.tsx',
+    'app/console/events/[id]/EventOverview.tsx',
+    'app/staff/StaffHub.tsx',
+    'app/staff/StaffEventWork.tsx',
+  ]) {
+    assert.match(read(file), /loginHrefForLocation/);
+  }
+});
+
+test('web-staff-hub-links-event-work-without-downloading-all-desks-upfront', () => {
+  const hubPage = read('app/staff/page.tsx');
+  assert.match(hubPage, /StaffHub/);
+  assert.doesNotMatch(hubPage, /StaffConsole/);
+  const eventPage = read('app/staff/events/[eventId]/page.tsx');
+  assert.match(eventPage, /StaffEventWork/);
+  assert.match(eventPage, /params/);
+  const scope = read('app/staff/staff-scope.ts');
+  assert.match(scope, /buildStaffScopes/);
+  assert.match(scope, /DESK/);
+  assert.match(scope, /BOOTH/);
 });
 
 test('web-settings-uses-the-preparation-command-set', () => {

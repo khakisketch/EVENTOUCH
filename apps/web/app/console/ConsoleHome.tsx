@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { loginHrefForLocation } from "../auth-redirect";
 import { eventStageClassName, eventStageLabel } from "../event-stage";
 import CreateEventDialog from "./CreateEventDialog";
 import styles from "./console-home.module.css";
@@ -105,7 +106,9 @@ export default function ConsoleHome() {
         const res = await fetch("/api/bootstrap", { cache: "no-store" });
         if (cancelled) return;
         if (res.status === 401) {
-          router.push("/staff/login");
+          router.push(
+            loginHrefForLocation(window.location.pathname, window.location.search)
+          );
           return;
         }
         const data = (await res.json().catch(() => null)) as {

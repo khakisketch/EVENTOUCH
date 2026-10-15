@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { loginHrefForLocation } from "../../../../auth-redirect";
 import styles from "./operations.module.css";
 
 type Desk = { id: string; name: string; action: string; mode: string; open: boolean };
@@ -67,7 +68,9 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         const res = await fetch("/api/bootstrap", { cache: "no-store" });
         if (cancelled) return;
         if (res.status === 401) {
-          router.push("/staff/login");
+          router.push(
+            loginHrefForLocation(window.location.pathname, window.location.search)
+          );
           return;
         }
         const data = (await res.json().catch(() => null)) as {

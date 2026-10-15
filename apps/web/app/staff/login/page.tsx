@@ -1,18 +1,15 @@
-import StaffLoginForm from "./StaffLoginForm";
+import { redirect } from "next/navigation";
+import { safeNextPath } from "../../auth-redirect";
 
-// Slice 4 of the frontend migration: staff check-in. Login first; the
-// session cookie is same-origin (HttpOnly, Path=/), so later API calls
-// through the /api rewrite carry it without any token handling here.
-export default function StaffLoginPage() {
-  return (
-      <main id="main-content" className="site-page auth-page staff-login-page">
-        <header className="auth-brand">
-          <span className="wordmark">EVENTOUCH<span>스태프 업무</span></span>
-        </header>
-        <section className="auth-card">
-        <h1>로그인</h1>
-        <StaffLoginForm />
-        </section>
-      </main>
-  );
+// Compatibility entry: the shared login now lives at /login. Preserve an
+// optional ?next= so old bookmarks and 401 redirects keep working.
+export default async function StaffLoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string | string[] }>;
+}) {
+  const resolved = await searchParams;
+  const raw = Array.isArray(resolved.next) ? resolved.next[0] : resolved.next;
+  const safe = safeNextPath(raw);
+  redirect(safe ? `/login?next=${encodeURIComponent(safe)}` : "/login");
 }

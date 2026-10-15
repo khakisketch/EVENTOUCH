@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { loginHrefForLocation } from "../../../../auth-redirect";
 import styles from "./MessagingWorkspace.module.css";
 
 type Template = {
@@ -253,7 +254,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
         fetch("/api/bootstrap", { cache: "no-store" }),
       ]);
       if (meResponse.status === 401 || bootstrapResponse.status === 401) {
-        router.push("/staff/login");
+        router.push(
+          loginHrefForLocation(window.location.pathname, window.location.search)
+        );
         return;
       }
       const meData = await meResponse.json().catch(() => null) as unknown;
