@@ -27,7 +27,9 @@ function startMock() {
   const requests = [];
   let sendResponse = null;
   let listResponse = null;
+  let uploadResponse = null;
   let sendStatus = 200;
+  let uploadStatus = 200;
   let hang = false;
 
   const server = http.createServer((req, res) => {
@@ -40,6 +42,17 @@ function startMock() {
       requests.push({ path: url.pathname, query: Object.fromEntries(url.searchParams), body: parsed, authorization: req.headers.authorization });
 
       if (hang) return;
+
+      if (url.pathname === '/storage/v1/files') {
+        if (uploadStatus !== 200) {
+          res.writeHead(uploadStatus, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ errorCode: 'UploadFailed', message: '업로드에 실패했습니다.' }));
+          return;
+        }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(uploadResponse || { fileId: 'IMG-TEST-1' }));
+        return;
+      }
 
       if (url.pathname === '/messages/v4/send-many/detail') {
         if (sendStatus !== 200) {
@@ -66,9 +79,11 @@ function startMock() {
     requests,
     setSend: (value) => { sendResponse = value; },
     setList: (value) => { listResponse = value; },
+    setUpload: (value) => { uploadResponse = value; },
     setSendStatus: (value) => { sendStatus = value; },
+    setUploadStatus: (value) => { uploadStatus = value; },
     setHang: (value) => { hang = value; },
-    reset: () => { requests.length = 0; sendResponse = null; listResponse = null; sendStatus = 200; hang = false; },
+    reset: () => { requests.length = 0; sendResponse = null; listResponse = null; uploadResponse = null; sendStatus = 200; uploadStatus = 200; hang = false; },
     listen: () => new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server.address().port))),
     close: () => new Promise((resolve) => server.close(resolve)),
   };
@@ -244,7 +259,7 @@ test('a-recipient-without-a-number-is-refused', () => {
 
 test('an-unsupported-channel-is-refused', () => {
   const provider = solapi.createSolapiProvider(config({ host }));
-  assert.equal(provider.buildMessage({ channel: 'MMS', to: '01011112222', text: 'hi' }).error, 'UNSUPPORTED_CHANNEL');
+  assert.equal(provider.buildMessage({ channel: 'VOICE', to: '01011112222', text: 'hi' }).error, 'UNSUPPORTED_CHANNEL');
 });
 
 // --- batch sending ---------------------------------------------------------
@@ -510,4 +525,71 @@ test('state-js-never-calls-the-generic-state-directly', () => {
   const state = fs.readFileSync(path.join(__dirname, '..', 'server/state.js'), 'utf8');
   const calls = state.match(/\bmessagingState\(\)/g) || [];
   assert.equal(calls.length, 0, 'use activeMessagingState() instead');
+});
+
+// --- MMS -------------------------------------------------------------------
+
+function jpegBytes(size) {
+  const buffer = Buffer.alloc(size, 0x00);
+  buffer[0] = 0xff; buffer[1] = 0xd8; buffer[2] = 0xff;
+  return buffer;
+}
+
+test('mms-text-follows-the-2000-byte-photo-limit', () => {
+  assert.equal(solapi.typedFor('MMS', '사진 안내').type, 'MMS');
+  assert.equal(solapi.typedFor('MMS', '가'.repeat(1001)).reason, 'TOO_LONG');
+});
+
+test('an-mms-without-its-image-is-rejected-before-any-charge', () => {
+  const provider = solapi.createSolapiProvider(config({ host }));
+  const built = provider.buildMessage({ channel: 'MMS', to: '01011112222', text: '사진 안내' });
+  assert.equal(built.error, 'MMS_IMAGE_REQUIRED');
+});
+
+test('an-mms-carries-its-uploaded-image-and-subject', async () => {
+  mock.reset();
+  mock.setSend({ failedMessageList: [], groupInfo: { groupId: 'G-MMS' } });
+  const provider = solapi.createSolapiProvider(config({ host }));
+  const result = await provider.sendBatch([{
+    participantId: 'p1', channel: 'MMS', to: '01011112222',
+    text: '사진 안내', subject: '행사 사진', imageId: 'IMG-1',
+  }]);
+  assert.equal(result.accepted, true);
+  const sent = mock.requests.find((request) => request.path === '/messages/v4/send-many/detail');
+  assert.equal(sent.body.messages[0].type, 'MMS');
+  assert.equal(sent.body.messages[0].imageId, 'IMG-1');
+  assert.equal(sent.body.messages[0].subject, '행사 사진');
+});
+
+test('the-campaign-photo-is-uploaded-once-as-base64', async () => {
+  mock.reset();
+  const provider = solapi.createSolapiProvider(config({ host }));
+  const uploaded = await provider.uploadImage({ bytes: jpegBytes(1024), name: 'photo.jpg' });
+  assert.equal(uploaded.ok, true);
+  assert.equal(uploaded.imageId, 'IMG-TEST-1');
+  const request = mock.requests.find((entry) => entry.path === '/storage/v1/files');
+  assert.equal(request.body.type, 'MMS');
+  assert.equal(Buffer.from(request.body.file, 'base64').length, 1024);
+});
+
+test('a-non-jpeg-or-oversize-photo-never-reaches-the-provider', async () => {
+  const provider = solapi.createSolapiProvider(config({ host }));
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  assert.equal((await provider.uploadImage({ bytes: png, name: 'photo.png' })).reason, 'IMAGE_TYPE');
+  assert.equal((await provider.uploadImage({ bytes: jpegBytes(200 * 1024 + 1), name: 'big.jpg' })).reason, 'IMAGE_TOO_LARGE');
+});
+
+test('a-failed-upload-is-reported-honestly', async () => {
+  mock.reset();
+  mock.setUploadStatus(500);
+  const provider = solapi.createSolapiProvider(config({ host }));
+  const uploaded = await provider.uploadImage({ bytes: jpegBytes(512), name: 'photo.jpg' });
+  assert.equal(uploaded.ok, false);
+});
+
+test('an-unconfigured-provider-uploads-nothing', async () => {
+  const provider = solapi.createSolapiProvider(config({ configured: false }));
+  const uploaded = await provider.uploadImage({ bytes: jpegBytes(512), name: 'photo.jpg' });
+  assert.equal(uploaded.ok, false);
+  assert.equal(uploaded.reason, 'NOT_CONFIGURED');
 });

@@ -1,5 +1,8 @@
 'use strict';
 
+const fs = require('node:fs/promises');
+const path = require('node:path');
+
 // Outbound messaging provider.
 //
 // Every message campaign in this product was previously recorded as SIMULATED
@@ -247,18 +250,42 @@ async function dispatchCampaign(database, provider, dispatch, { now = new Date()
 async function dispatchCampaignBatch(database, provider, dispatch, { now = new Date().toISOString() } = {}) {
   let finalMessage = null;
   let batchResult = null;
-  try {
-    batchResult = await provider.sendBatch(dispatch.recipients.map((recipient) => ({
-      participantId: recipient.participantId,
-      channel: dispatch.channel,
-      to: recipient.phone,
-      text: dispatch.text,
-      subject: dispatch.subject,
-      variables: recipient.variables,
-      templateId: dispatch.templateId || null,
-    })));
-  } catch (error) {
-    batchResult = { accepted: false, reason: 'TRANSPORT', error: error && error.message };
+  let imageId = null;
+  if (String(dispatch && dispatch.channel).toUpperCase() === 'MMS') {
+    const image = await loadMmsImage(database, dispatch);
+    if (!image.ok) {
+      batchResult = failAllRecipients(dispatch, image.reason, image.error);
+    } else if (!provider || typeof provider.uploadImage !== 'function') {
+      batchResult = failAllRecipients(dispatch, 'MMS_UNSUPPORTED', 'MMS를 지원하지 않는 공급사입니다');
+    } else {
+      let uploaded;
+      try {
+        uploaded = await provider.uploadImage({ bytes: image.bytes, name: image.name });
+      } catch (error) {
+        uploaded = { ok: false, reason: 'UPLOAD_FAILED', error: (error && error.message) || '이미지 접수에 실패했습니다' };
+      }
+      if (!uploaded.ok) {
+        batchResult = failAllRecipients(dispatch, uploaded.reason || 'UPLOAD_FAILED', uploaded.error || '이미지 접수에 실패했습니다');
+      } else {
+        imageId = uploaded.imageId;
+      }
+    }
+  }
+  if (!batchResult) {
+    try {
+      batchResult = await provider.sendBatch(dispatch.recipients.map((recipient) => ({
+        participantId: recipient.participantId,
+        channel: dispatch.channel,
+        to: recipient.phone,
+        text: dispatch.text,
+        subject: dispatch.subject,
+        variables: recipient.variables,
+        templateId: dispatch.templateId || null,
+        ...(imageId ? { imageId } : {}),
+      })));
+    } catch (error) {
+      batchResult = { accepted: false, reason: 'TRANSPORT', error: error && error.message };
+    }
   }
 
   const byParticipant = new Map();
@@ -331,6 +358,60 @@ async function dispatchCampaignBatch(database, provider, dispatch, { now = new D
   });
 
   return { accepted: Boolean(batchResult && batchResult.accepted), acceptedCount: finalMessage ? finalMessage.acceptedCount : 0, message: finalMessage, deliveryUnconfirmed: true };
+}
+
+// Loads the MMS campaign photo from our own file storage for the single
+// provider upload. The bytes never enter the workspace payload or the
+// recipient snapshots — only the stored file id does.
+async function loadMmsImage(database, dispatch) {
+  const fileId = String((dispatch && dispatch.imageFileId) || '');
+  if (!fileId) {
+    return { ok: false, reason: 'MMS_IMAGE_REQUIRED', error: 'MMS 캠페인의 이미지를 확인하세요' };
+  }
+  let rows = [];
+  try {
+    const result = await database.query(
+      'SELECT id, event_id, storage_key, original_name, content_type, size_bytes FROM stored_files WHERE id = $1 AND event_id = $2',
+      [fileId, dispatch.eventId]
+    );
+    rows = (result && result.rows) || [];
+  } catch (error) {
+    return { ok: false, reason: 'IMAGE_UNREADABLE', error: 'MMS 이미지를 읽지 못했습니다' };
+  }
+  const row = rows[0];
+  if (!row) {
+    return { ok: false, reason: 'MMS_IMAGE_REQUIRED', error: 'MMS 캠페인의 이미지 파일을 찾을 수 없습니다' };
+  }
+  if (row.content_type !== 'image/jpeg') {
+    return { ok: false, reason: 'IMAGE_TYPE', error: 'MMS 이미지는 JPG 형식을 사용하세요' };
+  }
+  if (Number(row.size_bytes) > 200 * 1024) {
+    return { ok: false, reason: 'IMAGE_TOO_LARGE', error: 'MMS 이미지는 JPG 200KB 이하만 가능합니다' };
+  }
+  const root = path.resolve(process.env.STORAGE_DIR || path.join(__dirname, '../data/storage'));
+  const absolute = path.resolve(root, String(row.storage_key || ''));
+  if (absolute !== root && !absolute.startsWith(root + path.sep)) {
+    return { ok: false, reason: 'IMAGE_UNREADABLE', error: 'MMS 이미지 파일을 읽지 못했습니다' };
+  }
+  try {
+    const bytes = await fs.readFile(absolute);
+    return { ok: true, bytes, name: String(row.original_name || 'mms.jpg') };
+  } catch (error) {
+    return { ok: false, reason: 'IMAGE_UNREADABLE', error: 'MMS 이미지 파일을 읽지 못했습니다' };
+  }
+}
+
+function failAllRecipients(dispatch, reason, error) {
+  return {
+    accepted: false,
+    reason,
+    error,
+    rejected: (dispatch.recipients || []).map((recipient) => ({
+      participantId: recipient.participantId,
+      reason,
+      error,
+    })),
+  };
 }
 
 // Resolves campaigns that were accepted but not yet confirmed delivered.

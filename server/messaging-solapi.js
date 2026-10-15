@@ -32,7 +32,13 @@ const LMS_MAX_BYTES = 2000;
 const SUBJECT_MAX_BYTES = 40;
 
 // Reasons a message can be rejected before it is ever registered.
-const MESSAGE_TYPES = new Set(['SMS', 'LMS', 'ALIMTALK']);
+const MESSAGE_TYPES = new Set(['SMS', 'LMS', 'MMS', 'ALIMTALK']);
+
+// MMS carries a photo: Solapi documents JPG up to 200KB with text up to
+// 2000 bytes. PNG/WebP uploads are rejected here rather than charged and
+// failed provider-side, where the error would be harder to act on.
+const MMS_IMAGE_MAX_BYTES = 200 * 1024;
+const MMS_IMAGE_TYPES = new Set(['image/jpeg']);
 
 function providerConfig(env = process.env) {
   const apiKey = String(env.SOLAPI_API_KEY || '').trim();
@@ -98,6 +104,12 @@ function typedFor(channel, text) {
   const requested = String(channel || '').toUpperCase();
   if (!MESSAGE_TYPES.has(requested)) return { type: null, reason: 'UNSUPPORTED_CHANNEL' };
   if (requested === 'ALIMTALK') return { type: 'ATA', reason: null, bytes: messageBytes(text) };
+  if (requested === 'MMS') {
+    const bytes = messageBytes(text);
+    return bytes > LMS_MAX_BYTES
+      ? { type: null, reason: 'TOO_LONG', bytes }
+      : { type: 'MMS', reason: null, bytes };
+  }
   if (requested === 'LMS') {
     const bytes = messageBytes(text);
     return bytes > LMS_MAX_BYTES
@@ -191,7 +203,7 @@ function createSolapiProvider(config, { fetchImpl = globalThis.fetch, timeoutMs 
   // Builds the body Solapi expects for one recipient: digits-only number,
   // explicit type, and kakaoOptions for alimtalk. Returns a rejection instead
   // of sending something that would be charged and then fail.
-  function buildMessage({ channel, to, text, subject, variables, sender, pfId, templateId }) {
+  function buildMessage({ channel, to, text, subject, variables, sender, pfId, templateId, imageId }) {
     const number = normalizePhone(to);
     if (!number) return { error: 'NO_RECIPIENT' };
 
@@ -200,6 +212,18 @@ function createSolapiProvider(config, { fetchImpl = globalThis.fetch, timeoutMs 
     if (planned.reason) return { error: planned.reason };
 
     const message = { to: number, from: normalizePhone(sender || config.sender), type: planned.type };
+
+    if (planned.type === 'MMS') {
+      // The photo is uploaded once per campaign (uploadImage) and referenced
+      // here; sending an MMS without an image would be charged as a photo
+      // message with nothing to show.
+      if (!imageId) return { error: 'MMS_IMAGE_REQUIRED' };
+      message.imageId = imageId;
+      message.text = renderText(text, variables);
+      const trimmed = String(subject || '').trim();
+      if (trimmed) message.subject = trimmed.slice(0, 40);
+      return { message, plannedType: planned.type, bytes: planned.bytes };
+    }
 
     if (planned.type === 'ATA') {
       if (!(pfId || config.kakaoPfId) || !templateId) {
@@ -322,7 +346,41 @@ function createSolapiProvider(config, { fetchImpl = globalThis.fetch, timeoutMs 
     return { ok: true, results };
   }
 
-  return { sendBatch, pollResults, groupMessages, state: messagingState(), buildMessage, call };
+  // Uploads one campaign photo to Solapi storage and returns its image id
+  // for MMS sends (POST /storage/v1/files, base64 per the vendor SDKs).
+  // One upload serves the whole campaign; the id is referenced, never the
+  // bytes, so recipient payloads stay small. JPEG magic bytes are checked
+  // because the documented MMS contract is JPG — a PNG would be accepted
+  // here and then fail provider-side with a worse error.
+  async function uploadImage({ bytes, name }) {
+    if (!enabled) return { ok: false, reason: 'NOT_CONFIGURED', error: '메시지 공급사가 연결되지 않았습니다' };
+    const buffer = Buffer.isBuffer(bytes) ? bytes : null;
+    if (!buffer || !buffer.length) return { ok: false, reason: 'NO_IMAGE', error: 'MMS 이미지를 확인하세요' };
+    if (buffer.length > MMS_IMAGE_MAX_BYTES) {
+      return { ok: false, reason: 'IMAGE_TOO_LARGE', error: 'MMS 이미지는 JPG 200KB 이하만 가능합니다', bytes: buffer.length };
+    }
+    if (!(buffer.length > 2 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff)) {
+      return { ok: false, reason: 'IMAGE_TYPE', error: 'MMS 이미지는 JPG 형식을 사용하세요' };
+    }
+    const result = await call('/storage/v1/files', {
+      method: 'POST',
+      body: {
+        type: 'MMS',
+        file: buffer.toString('base64'),
+        ...(String(name || '').trim() ? { name: String(name).trim().slice(0, 200) } : {}),
+      },
+    });
+    if (!result.ok) return { ok: false, ...result };
+    const payload = result.payload || {};
+    const nested = payload.file && typeof payload.file === 'object' ? payload.file : {};
+    const imageId = payload.fileId || payload.imageId || payload.id || nested.fileId || nested.imageId || null;
+    if (!imageId) {
+      return { ok: false, reason: 'UPLOAD_UNEXPECTED', error: '공급사가 이미지 접수 결과를 확인하지 못했습니다', payload };
+    }
+    return { ok: true, imageId };
+  }
+
+  return { sendBatch, pollResults, groupMessages, uploadImage, state: messagingState(), buildMessage, call };
 }
 
 // Solapi reports an accepted message as PENDING/SENDING and only settles to
@@ -363,4 +421,5 @@ module.exports = {
   SMS_MAX_BYTES,
   LMS_MAX_BYTES,
   SUBJECT_MAX_BYTES,
+  MMS_IMAGE_MAX_BYTES,
 };

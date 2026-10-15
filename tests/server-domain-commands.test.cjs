@@ -845,3 +845,48 @@ test('domain-writes-require-event-membership-and-never-grant-staff-general-setti
   assert.equal(staff.status, 403);
   assert.equal((await readWorkspace(event.id)).notices.length, 0);
 });
+
+test('mms-campaigns-pin-their-photo-before-they-can-go-out', async () => {
+  const person = participant('pending', 'MMS 참가자');
+  const event = await createFixture({ stage: 'READY', participants: [person] });
+
+  const withoutImage = await operator(event, 'message.create', {
+    title: '사진 안내', channel: 'MMS', body: '사진을 확인하세요',
+    ids: [person.id],
+  });
+  assert.equal(withoutImage.status, 400);
+  assert.equal(withoutImage.json.field, 'imageFileId');
+
+  const missingFile = await operator(event, 'message.create', {
+    title: '사진 안내', channel: 'MMS', body: '사진을 확인하세요',
+    ids: [person.id], imageFileId: `file-missing-${suffix}`,
+  });
+  assert.equal(missingFile.status, 404);
+
+  const fileId = `file-mms-${suffix}`;
+  await harness.database.query(
+    `INSERT INTO stored_files (id, event_id, storage_key, original_name, content_type, size_bytes, created_by)
+     VALUES ($1, $2, $3, 'photo.jpg', 'image/jpeg', 1024, $4)`,
+    [fileId, event.id, fileId, accounts.manager]
+  );
+  const created = await operator(event, 'message.create', {
+    title: '사진 안내', channel: 'MMS', body: '사진을 확인하세요',
+    ids: [person.id], imageFileId: fileId,
+  });
+  assert.equal(created.status, 201, JSON.stringify(created.json));
+  const stored = (await readWorkspace(event.id)).messages[0];
+  assert.equal(stored.image.fileId, fileId);
+  assert.equal(stored.image.contentType, 'image/jpeg');
+
+  const pngId = `file-mms-png-${suffix}`;
+  await harness.database.query(
+    `INSERT INTO stored_files (id, event_id, storage_key, original_name, content_type, size_bytes, created_by)
+     VALUES ($1, $2, $3, 'photo.png', 'image/png', 1024, $4)`,
+    [pngId, event.id, pngId, accounts.manager]
+  );
+  const pngCampaign = await operator(event, 'message.create', {
+    title: '사진 안내', channel: 'MMS', body: '사진을 확인하세요',
+    ids: [person.id], imageFileId: pngId,
+  });
+  assert.equal(pngCampaign.status, 400);
+});

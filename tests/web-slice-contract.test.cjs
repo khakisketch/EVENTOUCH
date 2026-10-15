@@ -381,6 +381,14 @@ test('web-messaging-uses-operator-commands-and-keeps-ticket-bearers-out-of-histo
   // Unknown values never read as a concrete channel or status.
   assert.match(messaging, /채널 확인 필요/);
   assert.match(messaging, /상태 확인 필요/);
+  // MMS carries a photo: channel option, JPEG upload under 200KB, file id on
+  // the create payload, and the honest surcharge note. Bytes never travel
+  // through the command path.
+  assert.match(messaging, /MMS · 사진/);
+  assert.match(messaging, /campaign-image/);
+  assert.match(messaging, /imageFileId/);
+  assert.match(messaging, /200KB/);
+  assert.match(messaging, /별도 요금/);
 });
 
 test('web-console-shell-keeps-decided-navigation-and-clients-read-only', () => {

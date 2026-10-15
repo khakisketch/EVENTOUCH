@@ -24,6 +24,7 @@ type Campaign = {
   scheduled: string;
   at: string;
   attempts: number;
+  imageName: string;
   deliveries: Delivery[];
 };
 type ReadyState = {
@@ -49,6 +50,8 @@ type CampaignDraft = {
   body: string;
   scheduled: string;
   simulate: boolean;
+  imageFileId: string;
+  imageName: string;
 };
 type CommandResult = Record<string, unknown>;
 type ServerError = { message: string; field: string | null };
@@ -66,6 +69,8 @@ const EMPTY_CAMPAIGN: CampaignDraft = {
   body: "",
   scheduled: "",
   simulate: false,
+  imageFileId: "",
+  imageName: "",
 };
 const FIELD_LABELS: Record<string, string> = {
   name: "템플릿 이름",
@@ -74,6 +79,7 @@ const FIELD_LABELS: Record<string, string> = {
   solapiTemplateId: "Solapi 승인 템플릿 ID",
   title: "캠페인 제목",
   templateId: "승인된 알림톡 템플릿",
+  imageFileId: "첨부 이미지",
   ids: "발송 대상",
   scheduled: "예약 시각",
 };
@@ -96,6 +102,7 @@ function commandId(): string {
 function channelLabel(channel: string): string {
   switch (channel) {
     case "LMS": return "LMS · 장문";
+    case "MMS": return "MMS · 사진";
     case "ALIMTALK": return "알림톡";
     case "SMS": return "SMS · 단문";
     default: return "채널 확인 필요";
@@ -212,6 +219,7 @@ function parseCampaign(value: unknown): Campaign | null {
     scheduled: text(item.scheduled),
     at: text(item.at),
     attempts: typeof item.attempts === "number" ? item.attempts : 0,
+    imageName: text(asRecord(item.image)?.name),
     deliveries: Array.isArray(item.deliveries)
       ? item.deliveries.flatMap((delivery) => {
           const parsed = parseDelivery(delivery);
@@ -245,6 +253,50 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   const [campaignNotice, setCampaignNotice] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [recipientQuery, setRecipientQuery] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  // MMS photo upload: raw bytes to the event file API (the same endpoint the
+  // file contract covers). The returned file id is what the campaign sends;
+  // bytes never travel through the command path.
+  async function uploadMmsImage(file: File) {
+    if (file.size > 200 * 1024) {
+      setCampaignFieldError({ field: "imageFileId", message: "MMS 이미지는 JPG 200KB 이하만 가능합니다." });
+      return;
+    }
+    if (file.type !== "image/jpeg") {
+      setCampaignFieldError({ field: "imageFileId", message: "MMS 이미지는 JPG 형식을 사용하세요." });
+      return;
+    }
+    setUploadingImage(true);
+    setCampaignFieldError(null);
+    try {
+      const res = await fetch(
+        `/api/events/${encodeURIComponent(eventId)}/files?name=${encodeURIComponent(file.name)}&commandId=${encodeURIComponent(commandId())}`,
+        { method: "POST", headers: { "content-type": file.type }, body: file }
+      );
+      const data = (await res.json().catch(() => null)) as {
+        file?: { fileId?: unknown; name?: unknown };
+        error?: unknown;
+      } | null;
+      const fileId = typeof data?.file?.fileId === "string" ? data.file.fileId : "";
+      if (!res.ok || !fileId) {
+        setCampaignFieldError({
+          field: "imageFileId",
+          message: typeof data?.error === "string" ? data.error : "이미지를 올리지 못했습니다.",
+        });
+        return;
+      }
+      setCampaignDraft((current) => ({
+        ...current,
+        imageFileId: fileId,
+        imageName: typeof data?.file?.name === "string" ? data.file.name : file.name,
+      }));
+    } catch {
+      setCampaignFieldError({ field: "imageFileId", message: "연결하지 못했습니다. 다시 시도하세요." });
+    } finally {
+      setUploadingImage(false);
+    }
+  }
 
   async function refresh(silent = false) {
     if (!silent) setState({ kind: "loading" });
@@ -418,6 +470,14 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       });
       return;
     }
+    const isMms = campaignDraft.channel === "MMS";
+    if (isMms && !campaignDraft.imageFileId) {
+      setCampaignFieldError({
+        field: "imageFileId",
+        message: "MMS는 JPG 이미지(200KB 이하)를 첨부해야 합니다.",
+      });
+      return;
+    }
     const scheduled = campaignDraft.scheduled
       ? new Date(campaignDraft.scheduled).toISOString()
       : "";
@@ -433,7 +493,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
         ? "모의 발송은 실제로 전달되지 않습니다."
         : scheduledCampaign
           ? "예약 시각에 발송을 시도합니다."
-          : "공급사가 연결되어 있으면 즉시 실제 발송을 시도합니다. 발송은 되돌릴 수 없습니다.")
+          : isMms
+            ? "MMS 사진 문자로 발송을 시도합니다. 별도 요금이 발생하며 발송은 되돌릴 수 없습니다."
+            : "공급사가 연결되어 있으면 즉시 실제 발송을 시도합니다. 발송은 되돌릴 수 없습니다.")
     );
     if (!accepted) return;
 
@@ -448,6 +510,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       };
       if (selectedTemplateId) payload.templateId = selectedTemplateId;
       if (scheduled) payload.scheduled = scheduled;
+      if (isMms) payload.imageFileId = campaignDraft.imageFileId;
       const result = await postCommand("message.create", payload);
       const created = asRecord(result.message);
       setCampaignNotice(
@@ -627,6 +690,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                     >
                       <option value="SMS">SMS · 단문</option>
                       <option value="LMS">LMS · 장문</option>
+                      <option value="MMS">MMS · 사진</option>
                       <option value="ALIMTALK">알림톡</option>
                     </select>
                     {campaignFieldError?.field === "channel" ? <p className={styles.fieldError} id="campaign-channel-error" role="alert">{campaignFieldError.message}</p> : null}
@@ -648,6 +712,33 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   <p className={styles.help} id="campaign-variables">사용 가능 변수: &#123;&#123;이름&#125;&#125;, &#123;&#123;행사명&#125;&#125;, &#123;&#123;행사일&#125;&#125;, &#123;&#123;티켓링크&#125;&#125;</p>
                   {campaignFieldError?.field === "body" ? <p className={styles.fieldError} id="campaign-body-error" role="alert">{campaignFieldError.message}</p> : null}
                 </div>
+
+                {campaignDraft.channel === "MMS" ? (
+                  <div>
+                    <label htmlFor="campaign-image">MMS 사진 · JPG 200KB 이하</label>
+                    <input
+                      id="campaign-image"
+                      type="file"
+                      accept="image/jpeg"
+                      disabled={uploadingImage}
+                      aria-invalid={campaignFieldError?.field === "imageFileId"}
+                      aria-describedby={campaignFieldError?.field === "imageFileId" ? "campaign-image-error" : "campaign-image-help"}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) void uploadMmsImage(file);
+                        event.target.value = "";
+                      }}
+                    />
+                    <p className={styles.help} id="campaign-image-help">
+                      {uploadingImage
+                        ? "이미지를 올리는 중입니다."
+                        : campaignDraft.imageFileId
+                          ? `첨부됨: ${campaignDraft.imageName || "사진 1장"} · MMS는 별도 요금이 발생합니다.`
+                          : "사진을 첨부해야 캠페인을 등록할 수 있습니다."}
+                    </p>
+                    {campaignFieldError?.field === "imageFileId" ? <p className={styles.fieldError} id="campaign-image-error" role="alert">{campaignFieldError.message}</p> : null}
+                  </div>
+                ) : null}
 
                 <fieldset className={styles.recipientFieldset} aria-describedby={campaignFieldError?.field === "ids" ? "campaign-recipients-error" : undefined}>
                   <legend>발송 대상</legend>
@@ -877,6 +968,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                         </div>
                         <dl className={styles.campaignMeta}>
                           <div><dt>채널</dt><dd>{channelLabel(campaign.channel)}</dd></div>
+                          {campaign.imageName ? <div><dt>첨부 이미지</dt><dd>{campaign.imageName}</dd></div> : null}
                           <div><dt>대상</dt><dd>{campaign.recipientIds.length}명</dd></div>
                           <div><dt>요청 시각</dt><dd>{formatDate(campaign.at)}</dd></div>
                           {campaign.scheduled ? <div><dt>예약 시각</dt><dd>{formatDate(campaign.scheduled)}</dd></div> : null}

@@ -396,3 +396,157 @@ test('a-phone-formatted-differently-than-the-provider-still-matches', async () =
   });
   assert.equal(result.message.deliveries[0].solapiMessageId, 'M1');
 });
+
+// --- MMS dispatch ----------------------------------------------------------
+
+const mmsWorkspaceWith = (deliveries) => ({
+  messages: [{
+    id: 'msg-mms',
+    title: '사진 안내',
+    body: '본문',
+    channel: 'MMS',
+    status: 'SENDING',
+    image: { fileId: 'file-img-1', name: 'photo.jpg', contentType: 'image/jpeg', sizeBytes: 1024 },
+    deliveries,
+    recipientSnapshot: deliveries.map((delivery, index) => ({
+      id: delivery.participantId, name: delivery.name || `참가자${index}`, phone: delivery.phone,
+    })),
+  }],
+});
+
+function mmsDatabase(workspace, fileRow) {
+  const writes = [];
+  const answer = async (sql) => {
+    if (/SELECT payload FROM event_workspaces/.test(sql)) return { rows: [{ payload: workspace }] };
+    if (/FROM stored_files/.test(sql)) return { rows: fileRow ? [fileRow] : [] };
+    if (/UPDATE event_workspaces/.test(sql)) {
+      writes.push({ sql });
+      return { rowCount: 1 };
+    }
+    return { rows: [] };
+  };
+  return {
+    workspace,
+    writes,
+    query: answer,
+    async transaction(fn) {
+      return fn({ query: answer });
+    },
+  };
+}
+
+const mmsDispatch = {
+  eventId: 'e-mms',
+  messageId: 'msg-mms',
+  channel: 'MMS',
+  text: '본문',
+  subject: '사진 안내',
+  imageFileId: 'file-img-1',
+  recipients: [
+    { participantId: 'p1', name: '가', phone: '01011111111', variables: { 이름: '가' } },
+  ],
+};
+
+function mmsImageFile(dir) {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const bytes = Buffer.alloc(1024, 0x00);
+  bytes[0] = 0xff; bytes[1] = 0xd8; bytes[2] = 0xff;
+  fs.writeFileSync(path.join(dir, 'file-img-1'), bytes);
+  return {
+    id: 'file-img-1',
+    event_id: 'e-mms',
+    storage_key: 'file-img-1',
+    original_name: 'photo.jpg',
+    content_type: 'image/jpeg',
+    size_bytes: 1024,
+  };
+}
+
+test('an-mms-without-its-image-fails-every-delivery-honestly', async () => {
+  const workspace = mmsWorkspaceWith([
+    { participantId: 'p1', name: '가', phone: '01011111111', status: 'SENDING' },
+  ]);
+  const db = mmsDatabase(workspace, null);
+  const provider = {
+    async uploadImage() { throw new Error('must not upload without a file'); },
+    async sendBatch() { throw new Error('must not send without a file'); },
+  };
+
+  const result = await dispatchCampaign(db, provider, { ...mmsDispatch, imageFileId: null });
+
+  assert.equal(result.accepted, false);
+  assert.equal(result.message.status, 'FAILED');
+  assert.equal(result.message.deliveries[0].status, 'FAILED');
+  assert.match(result.message.deliveries[0].error, /이미지/);
+});
+
+test('an-mms-provider-without-upload-support-fails-honestly', async () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'eventouch-mms-'));
+  const previous = process.env.STORAGE_DIR;
+  process.env.STORAGE_DIR = dir;
+  try {
+    const workspace = mmsWorkspaceWith([
+      { participantId: 'p1', name: '가', phone: '01011111111', status: 'SENDING' },
+    ]);
+    const db = mmsDatabase(workspace, mmsImageFile(dir));
+    const provider = { async sendBatch() { throw new Error('must not send without an upload'); } };
+
+    const result = await dispatchCampaign(db, provider, mmsDispatch);
+
+    assert.equal(result.accepted, false);
+    assert.equal(result.message.status, 'FAILED');
+    assert.match(result.message.deliveries[0].error, /MMS를 지원하지 않는 공급사/);
+  } finally {
+    if (previous === undefined) delete process.env.STORAGE_DIR;
+    else process.env.STORAGE_DIR = previous;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('an-mms-uploads-once-and-sends-with-the-image-id', async () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'eventouch-mms-'));
+  const previous = process.env.STORAGE_DIR;
+  process.env.STORAGE_DIR = dir;
+  try {
+    const workspace = mmsWorkspaceWith([
+      { participantId: 'p1', name: '가', phone: '01011111111', status: 'SENDING' },
+    ]);
+    const db = mmsDatabase(workspace, mmsImageFile(dir));
+    const seen = [];
+    const provider = {
+      async uploadImage({ bytes, name }) {
+        seen.push({ bytes: bytes.length, name });
+        return { ok: true, imageId: 'IMG-9' };
+      },
+      async sendBatch(batch) {
+        return {
+          accepted: true,
+          registered: batch.map((item) => ({ participantId: item.participantId, accepted: true, type: 'MMS' })),
+          rejected: [],
+          groupId: 'G-MMS',
+          deliveryUnconfirmed: true,
+        };
+      },
+      async groupMessages() { return { ok: true, messages: {} }; },
+    };
+
+    const result = await dispatchCampaign(db, provider, mmsDispatch);
+
+    assert.equal(seen.length, 1, 'one upload serves the whole campaign');
+    assert.equal(seen[0].bytes, 1024);
+    assert.equal(result.accepted, true);
+    assert.equal(result.message.status, 'SENDING');
+    assert.equal(result.message.deliveries[0].status, 'SENDING');
+  } finally {
+    if (previous === undefined) delete process.env.STORAGE_DIR;
+    else process.env.STORAGE_DIR = previous;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

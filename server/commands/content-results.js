@@ -22,8 +22,10 @@ const COMMANDS = new Set([
 ]);
 
 // LMS is a distinct priced channel in Korea, so it is chosen deliberately
-// rather than left to silently upgrade from SMS.
-const MESSAGE_CHANNELS = new Set(['SMS', 'LMS', 'ALIMTALK']);
+// rather than left to silently upgrade from SMS. MMS carries a photo and
+// needs its stored image up front, for the same reason alimtalk needs its
+// approved template id: a campaign that can never go out must not be created.
+const MESSAGE_CHANNELS = new Set(['SMS', 'LMS', 'MMS', 'ALIMTALK']);
 const TEMPLATE_VARIABLES = new Set(['이름', '행사명', '행사일', '티켓링크']);
 const REPORT_SECTIONS = new Set(['overview', 'attendance', 'programs', 'survey', 'photos']);
 
@@ -95,7 +97,36 @@ function validateTemplateVariables(ctx, body) {
   }
 }
 
-function createMessage(ctx, input) {
+async function requireMmsImage(ctx, fileId) {
+  const id = ctx.clean(fileId, 160);
+  if (!id) throw ctx.fail(400, 'MMS는 JPG 이미지(200KB 이하)를 첨부해야 합니다', 'imageFileId');
+  let rows = [];
+  try {
+    const result = await ctx.client.query(
+      'SELECT id, original_name, content_type, size_bytes FROM stored_files WHERE id = $1 AND event_id = $2',
+      [id, ctx.event.id]
+    );
+    rows = (result && result.rows) || [];
+  } catch (error) {
+    throw ctx.fail(500, '첨부 이미지를 확인하지 못했습니다', 'imageFileId');
+  }
+  const row = rows[0];
+  if (!row) throw ctx.fail(404, '첨부 이미지 파일을 찾을 수 없습니다', 'imageFileId');
+  if (row.content_type !== 'image/jpeg') {
+    throw ctx.fail(400, 'MMS 이미지는 JPG 형식을 사용하세요', 'imageFileId');
+  }
+  if (Number(row.size_bytes) > 200 * 1024) {
+    throw ctx.fail(400, 'MMS 이미지는 JPG 200KB 이하만 가능합니다', 'imageFileId');
+  }
+  return {
+    fileId: String(row.id),
+    name: String(row.original_name || ''),
+    contentType: String(row.content_type || ''),
+    sizeBytes: Number(row.size_bytes) || 0,
+  };
+}
+
+async function createMessage(ctx, input) {
   const ids = Array.isArray(input.ids) ? input.ids.map((id) => ctx.clean(id, 120)) : [];
   if (!ids.length || ids.length > 5000 || ids.some((id) => !id) || new Set(ids).size !== ids.length) {
     throw ctx.fail(400, '발송 대상을 선택하세요', 'ids');
@@ -119,6 +150,14 @@ function createMessage(ctx, input) {
   const title = requireText(ctx, input.title, '캠페인 제목', 100, 'title');
   const body = requireText(ctx, input.body, '내용', 2000, 'body');
   validateTemplateVariables(ctx, body);
+
+  // MMS photo: pinned to a stored event file now so dispatch can upload that
+  // exact file to the provider once per campaign. Only the file id is kept
+  // on the message; bytes stay in file storage.
+  let image = null;
+  if (channel === 'MMS') {
+    image = await requireMmsImage(ctx, input.imageFileId);
+  }
 
   const scheduled = input.scheduled ? ctx.clean(input.scheduled, 64) : '';
   const scheduledAt = scheduled ? Date.parse(scheduled) : NaN;
@@ -144,6 +183,7 @@ function createMessage(ctx, input) {
     simulate: simulated,
     templateId,
     solapiTemplateId: boundTemplate ? boundTemplate.solapiTemplateId : null,
+    ...(image ? { image } : {}),
     at: ctx.now,
     cost: null,
     attempts: status === 'SCHEDULED' ? 0 : 1,
@@ -190,6 +230,7 @@ function buildMessageDispatch(event, workspace, message) {
     subject: message.title,
     text: message.body,
     templateId: message.solapiTemplateId || null,
+    imageFileId: (message.image && message.image.fileId) || null,
     recipients: list(message.recipientSnapshot).map((person) => {
       const live = list(workspace.participants).find((item) => item.id === person.id);
       return {
