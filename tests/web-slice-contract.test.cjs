@@ -56,6 +56,21 @@ test('web-service-entry-sends-everyone-through-the-shared-login', () => {
   assert.match(home, /mailto:/);
   assert.match(home, /도입 문의/);
   assert.doesNotMatch(home, /<form/);
+  // Persuade hierarchy: the hero asks for inquiry, login stays a utility.
+  assert.match(home, /도입 상담 메일 보내기/);
+  assert.match(home, /home-login-link/);
+  assert.match(home, /INQUIRY_BODY/);
+  assert.match(home, /이메일 주소 복사/);
+  // Honest messaging claim plus real product evidence, not mockups.
+  assert.match(home, /모의 발송으로 동작하며/);
+  assert.match(home, /실제 화면/);
+  assert.match(home, /\/evidence\/ev-console\.png/);
+  assert.match(home, /\/evidence\/ev-ticket\.png/);
+  assert.match(home, /\/evidence\/ev-staff\.png/);
+  // The quiet header login still meets the touch target.
+  const landingCss = read('app/globals.css');
+  assert.match(landingCss, /\.home-login-link\s*\{[^}]*min-height:\s*44px/s);
+  assert.match(landingCss, /\.evidence-card/);
 });
 
 test('web-registration-posts-to-the-public-signup-contract', () => {
@@ -152,6 +167,8 @@ test('web-staff-uses-session-bootstrap-and-server-checked-commands', () => {
   assert.doesNotMatch(hub, /\/commands/);
   assert.doesNotMatch(hub, /localStorage/);
   assert.doesNotMatch(hub, /sessionStorage/);
+  // The failed-state retry actually refetches instead of idling on loading.
+  assert.match(hub, /setReloadTick\(\(tick\) => tick \+ 1\)/);
   const work = read('app/staff/StaffEventWork.tsx');
   assert.match(work, /\/api\/bootstrap/);
   assert.match(work, /\/commands/);
@@ -160,6 +177,17 @@ test('web-staff-uses-session-bootstrap-and-server-checked-commands', () => {
   // No ticket bearer may be persisted on the device.
   assert.doesNotMatch(work, /localStorage/);
   assert.doesNotMatch(work, /sessionStorage/);
+  // A valid mis-scan is corrected where it happened: the latest record of
+  // this session carries a reason-backed correction; the server still owns
+  // desk scope and authorship.
+  assert.match(work, /check\.correct/);
+  assert.match(work, /정정 사유/);
+  assert.match(work, /최신 기록 정정/);
+  assert.match(work, /correctableCheck/);
+  // SELF booth codes are scannable QR with a copy path, not bare text.
+  assert.match(work, /react-qr-code/);
+  assert.match(work, /ET:BOOTH:/);
+  assert.match(work, /코드 복사/);
 });
 
 test('web-camera-scan-degrades-to-manual-entry-without-a-camera', () => {

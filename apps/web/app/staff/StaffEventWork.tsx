@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import CameraScan from "./CameraScan";
+import QRCode from "react-qr-code";
 import { loginHrefForLocation } from "../auth-redirect";
 import { buildStaffScopes, resolveStaffScopeId, type StaffScope } from "./staff-scope";
 
@@ -42,6 +43,9 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   const [kiosk, setKiosk] = useState(false);
   const [nametag, setNametag] = useState<Nametag | null>(null);
   const [result, setResult] = useState<ScanResult>({ kind: "idle" });
+  const [correctReason, setCorrectReason] = useState("");
+  const [correctNotice, setCorrectNotice] = useState<string | null>(null);
+  const [correcting, setCorrecting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [directory, setDirectory] = useState<Record<string, string>>({});
   const scopeRef = useRef<StaffScope | null>(null);
@@ -237,6 +241,47 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     await submitTicket(ticket);
   }
 
+  // A valid QR for the wrong person is accepted instantly, so the latest
+  // record of this session carries its own correction. The server still
+  // enforces desk scope and authorship; other records stay read-only here.
+  const correctableCheck = result.kind === "ok" && result.action !== "STAMP"
+    ? activeScope.checks.find(
+        (check) => check.participantId === result.participantId && check.corrected !== true && check.deskId === deskId
+      ) ?? null
+    : null;
+
+  async function correctLatest(event: React.FormEvent) {
+    event.preventDefault();
+    if (correcting || !correctableCheck || !assignment || !correctReason.trim()) return;
+    setCorrecting(true);
+    setCorrectNotice(null);
+    try {
+      const res = await fetch(`/api/events/${encodeURIComponent(activeScope.eventId)}/commands`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          commandId: randomCommandId(),
+          command: "check.correct",
+          assignmentId: assignment.id,
+          payload: { id: correctableCheck.id, reason: correctReason.trim() },
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as { error?: unknown } | null;
+      if (!res.ok) {
+        setCorrectNotice(typeof data?.error === "string" ? data.error : "정정하지 못했습니다.");
+        return;
+      }
+      setCorrectNotice("기록을 정정했습니다. 현재 입장 상태에 반영되었습니다.");
+      setCorrectReason("");
+      setResult({ kind: "idle" });
+      await load(true);
+    } catch {
+      setCorrectNotice("연결하지 못했습니다. 다시 시도하세요.");
+    } finally {
+      setCorrecting(false);
+    }
+  }
+
   return (
     <section className={`staff-workspace${kiosk ? " kiosk-mode" : ""}`} aria-label={`${activeScope.eventName} 현장 업무`}>
       <p className="staff-event-context">
@@ -343,9 +388,29 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         </p>
       ) : null}
       {activeTask === "booth" && activeScope.stampMode === "SELF" && boothId ? (
-        <p className="staff-booth-code">
-          부스 QR: <code>{`ET:BOOTH:${activeScope.eventId}:${boothId}`}</code>
-        </p>
+        <div className="staff-booth-code">
+          <p>이 QR을 참가자에게 보여주세요. 참가자가 직접 스캔합니다.</p>
+          <div role="img" aria-label={`${activeScope.booths.find((booth) => booth.id === boothId)?.name ?? "부스"} 인증 QR`}>
+            <QRCode value={`ET:BOOTH:${activeScope.eventId}:${boothId}`} size={200} />
+          </div>
+          <p>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(`ET:BOOTH:${activeScope.eventId}:${boothId}`);
+                  setCorrectNotice("부스 코드를 복사했습니다.");
+                } catch {
+                  setCorrectNotice("복사에 실패했습니다. 아래 코드를 직접 전달하세요.");
+                }
+              }}
+            >
+              코드 복사
+            </button>
+          </p>
+          <p><code>{`ET:BOOTH:${activeScope.eventId}:${boothId}`}</code></p>
+        </div>
       ) : null}
       {activeTask === "booth" && activeScope.stampMode !== "SELF" ? (
         <form className="scan-form" onSubmit={onScan}>
@@ -439,6 +504,26 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         </p>
       ) : null}
       {result.kind === "failed" ? <p className="scan-result scan-failure" role="alert">{result.message}</p> : null}
+      {correctableCheck ? (
+        <form className="correction-form" onSubmit={correctLatest}>
+          <p className="staff-direction-hint">다른 분의 QR을 처리했다면 여기서 바로 정정하세요. 본인 배정 데스크의 최신 기록만 정정됩니다.</p>
+          <div className="form-field">
+            <label htmlFor="correct-reason">정정 사유</label>
+            <input
+              id="correct-reason"
+              type="text"
+              maxLength={300}
+              placeholder="예: 다른 분 티켓을 잘못 스캔함"
+              value={correctReason}
+              onChange={(event) => setCorrectReason(event.target.value)}
+            />
+          </div>
+          <button className="button button-secondary" type="submit" disabled={correcting || !correctReason.trim()}>
+            {correcting ? "정정 중입니다" : "최신 기록 정정"}
+          </button>
+        </form>
+      ) : null}
+      {correctNotice ? <p className="scan-result" role="status">{correctNotice}</p> : null}
       <h2 className="activity-heading">최근 처리</h2>
       {loadError && scope ? (
         <p className="notice" role="status">

@@ -77,7 +77,7 @@ export default function StaffHub() {
     return (
       <section className="staff-workspace state-panel">
         <p role="alert">{state.message}</p>
-        <button type="button" className="button button-secondary" onClick={() => setState({ kind: "loading" })}>
+        <button type="button" className="button button-secondary" onClick={() => setReloadTick((tick) => tick + 1)}>
           다시 불러오기
         </button>
       </section>

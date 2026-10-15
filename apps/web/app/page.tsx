@@ -8,11 +8,20 @@ import { useRouter } from "next/navigation";
 // else gets the SaaS landing. Attendees never come through here; their
 // invitation message links straight at their event. Inquiries are email-only:
 // the proposal mock form was UI-only and never had server storage.
+//
+// POV note (field artifacts): this page persuades with authentic product
+// screens, not illustrations. Real captures from the demo carry the product
+// truth; decorative mockups would say less with more pixels.
 const CONTACT_EMAIL = "contact@eventouch.co.kr";
+const INQUIRY_SUBJECT = "EVENTOUCH 도입 문의";
+const INQUIRY_BODY = "행사 종류:\n일정:\n예상 규모(인원):\n문의 내용:\n";
+const INQUIRY_HREF =
+  `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(INQUIRY_SUBJECT)}&body=${encodeURIComponent(INQUIRY_BODY)}`;
 
 export default function Home() {
   const router = useRouter();
   const [checking, setChecking] = useState(true);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,18 +60,21 @@ export default function Home() {
     <main id="main-content" className="site-page home-page">
       <header className="home-header">
         <span className="wordmark">EVENTOUCH<span>행사 운영 워크스페이스</span></span>
-        <Link className="button" href="/login">로그인</Link>
+        <Link className="home-login-link" href="/login">로그인</Link>
       </header>
       <section className="home-hero">
         <p className="eyebrow">행사대행 운영 SaaS</p>
         <h1>행사를 끝까지 운영하는 하나의 워크스페이스</h1>
         <p className="home-description">모집·승인·안내부터 현장 체크인, 결과 보고서까지 한 곳에서 이어갑니다.</p>
-        <Link className="event-link-card" href="/login">
-          <span className="event-card-kicker">운영자·스태프</span>
-          <span className="event-card-title">로그인하기</span>
+        <a className="event-link-card" href={INQUIRY_HREF}>
+          <span className="event-card-kicker">도입 문의 · 이메일</span>
+          <span className="event-card-title">도입 상담 메일 보내기</span>
           <span className="event-card-arrow" aria-hidden="true">↗</span>
-        </Link>
-        <p className="home-description">행사 참가자는 초대 메시지의 행사 링크로 바로 접속하세요.</p>
+        </a>
+        <p className="home-description">
+          운영자·스태프는 <Link href="/login">로그인</Link>하세요.
+          행사 참가자는 초대 메시지의 행사 링크로 바로 접속하세요.
+        </p>
       </section>
       <section className="landing-section" aria-label="핵심 흐름">
         <h2>핵심 흐름</h2>
@@ -79,6 +91,31 @@ export default function Home() {
           <li className="landing-card">
             <h3>결과·보고서</h3>
             <p>등록·입장·참여를 집계하고 보고서를 작성·공유합니다.</p>
+          </li>
+        </ul>
+        <p className="landing-note">문자·알림톡 안내: 현재 모의 발송으로 동작하며, 실발송 자격증명을 확보하는 대로 전환합니다. 도입 시점에 발송 가능 상태를 확인해 드립니다.</p>
+      </section>
+      <section className="landing-section" aria-label="실제 화면">
+        <h2>실제 화면</h2>
+        <p className="landing-lead">목업이 아니라 동작하는 제품의 화면입니다. 데모 데이터로 촬영했습니다.</p>
+        <ul className="evidence-grid">
+          <li className="evidence-card">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/evidence/ev-console.png" alt="행사 목록과 승인 대기 수치가 보이는 운영 콘솔" loading="lazy" />
+            <h3>운영 콘솔</h3>
+            <p>행사별 등록·승인 대기·현재 입장을 보고 승인부터 처리합니다.</p>
+          </li>
+          <li className="evidence-card">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/evidence/ev-ticket.png" alt="참가자 이름과 입장 QR이 표시된 모바일 티켓" loading="lazy" />
+            <h3>참가자 티켓</h3>
+            <p>앱 설치 없이 신청하고, QR 하나로 입장·퇴장합니다.</p>
+          </li>
+          <li className="evidence-card">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/evidence/ev-staff.png" alt="큰 글자의 키오스크 체크인 화면을 든 현장 스태프용 화면" loading="lazy" />
+            <h3>현장 체크인</h3>
+            <p>공용 태블릿의 큰 화면으로 티켓을 확인하고 입장 처리합니다.</p>
           </li>
         </ul>
       </section>
@@ -107,12 +144,29 @@ export default function Home() {
       <section className="landing-section" aria-label="도입 문의">
         <h2>도입 문의</h2>
         <p className="landing-lead">도입 문의는 이메일로 받습니다. 문의 폼은 두지 않습니다.</p>
-        <a className="event-link-card" href={`mailto:${CONTACT_EMAIL}`}>
+        <a className="event-link-card" href={INQUIRY_HREF}>
           <span className="event-card-kicker">이메일 문의</span>
           <span className="event-card-title">{CONTACT_EMAIL}</span>
           <span className="event-card-arrow" aria-hidden="true">↗</span>
         </a>
-        <p className="landing-note">행사 종류·일정·예상 규모를 함께 적어 주시면 안내가 빠릅니다.</p>
+        <p className="landing-note">메일에는 행사 종류·일정·예상 규모가 미리 적혀 있습니다. 주소가 복사되지 않으면 {CONTACT_EMAIL}로 직접 보내주세요.</p>
+        <p>
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(CONTACT_EMAIL);
+                setCopied(true);
+              } catch {
+                setCopied(false);
+              }
+            }}
+          >
+            이메일 주소 복사
+          </button>
+          {copied ? <span className="landing-note" role="status"> 복사했습니다.</span> : null}
+        </p>
       </section>
       <section className="landing-section" aria-label="약관 및 개인정보">
         <h2>약관·개인정보</h2>
