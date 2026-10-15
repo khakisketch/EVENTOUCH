@@ -65,6 +65,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const isParticipants = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/participants`));
   const isMessages = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/messages`));
   const isOperations = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/operations`));
+  const isPrograms = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/programs`));
   const isSettings = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/settings`));
   const isReports = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/reports`));
 
@@ -430,6 +431,13 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           aria-current={isOperations ? "page" : undefined}
         >
           현장 운영
+        </Link>
+        <Link
+          className={`console-nav-item console-subnav-item${isPrograms ? " active" : ""}`}
+          href={`${eventBasePath}/programs`}
+          aria-current={isPrograms ? "page" : undefined}
+        >
+          참여 프로그램
         </Link>
         <Link
           className={`console-nav-item console-subnav-item${isSettings ? " active" : ""}`}
