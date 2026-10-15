@@ -720,20 +720,24 @@ test('reports-use-server-derived-snapshots-and-published-versions-cannot-be-muta
   const emptyReport = await operator(event, 'report.create', { title: '항목 없는 보고서', sections: [] });
   assert.equal(emptyReport.status, 400);
   const created = await operator(event, 'report.create', {
-    title: '행사 결과', sections: ['overview', 'attendance', 'survey'],
+    title: '행사 결과', subtitle: '표지 부제목', coverNote: '표지 문구',
+    sections: ['overview', 'attendance', 'survey'],
     summary: '운영 요약', color: '#123456',
     snapshot: { event: { name: '브라우저가 보낸 위조 값' } }, shareToken: 'attacker-controlled-token',
   });
   assert.equal(created.status, 201, JSON.stringify(created.json));
   const reportId = created.json.report.id;
   let report = (await readWorkspace(event.id)).reports[0];
+  assert.equal(report.subtitle, '표지 부제목');
+  assert.equal(report.coverNote, '표지 문구');
   assert.equal(report.snapshot.event.name, '도메인 명령 검증 행사');
   assert.equal(report.snapshot.metrics.total, 1);
   assert.equal(report.snapshot.survey[0].average, '5.0');
   assert.equal(Object.hasOwn(report, 'shareToken'), false);
 
   await operator(event, 'report.update', {
-    id: reportId, title: '확정본', summary: '고정 요약', sections: ['overview'], color: '#654321',
+    id: reportId, title: '확정본', subtitle: '확정 부제목', coverNote: '확정 문구',
+    summary: '고정 요약', sections: ['overview'], color: '#654321',
   });
   const published = await operator(event, 'report.publish', { id: reportId });
   assert.equal(published.status, 200, JSON.stringify(published.json));
@@ -757,6 +761,8 @@ test('reports-use-server-derived-snapshots-and-published-versions-cannot-be-muta
   assert.equal(next.status, 'DRAFT');
   assert.equal(next.version, 3);
   assert.equal(next.parentId, reportId);
+  assert.equal(next.subtitle, '확정 부제목');
+  assert.equal(next.coverNote, '확정 문구');
   assert.equal(next.snapshot.metrics.inside, 0);
   assert.equal(reports.find((item) => item.id === reportId).snapshot.metrics.inside, 1);
 });

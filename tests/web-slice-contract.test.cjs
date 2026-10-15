@@ -571,6 +571,12 @@ test('web-reports-combine-live-analysis-with-snapshot-reports', () => {
   assert.match(reports, /공유하면 이 버전은 잠깁니다/);
   assert.match(reports, /현재 집계로 새 버전/);
   assert.match(reports, /데이터 JSON 저장/);
+  // Cover: subtitle and note survive create/edit/versioning.
+  assert.match(reports, /subtitle/);
+  assert.match(reports, /coverNote/);
+  assert.match(reports, /표지 부제목/);
+  assert.match(reports, /표지 문구/);
+  assert.match(reports, /reportCover/);
   // No customer portal: publish records shared state, never a share link.
   assert.doesNotMatch(reports, /shareToken/);
   assert.doesNotMatch(reports, /공유 링크/);

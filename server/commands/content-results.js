@@ -424,6 +424,8 @@ async function createReport(ctx, input) {
   const report = {
     id: ctx.commandId,
     title: requireText(ctx, input.title, '보고서 제목', 100, 'title'),
+    subtitle: ctx.clean(input.subtitle, 100),
+    coverNote: ctx.clean(input.coverNote, 500),
     summary: ctx.clean(input.summary, 2000),
     sections: reportSections(ctx, input.sections),
     snapshot: await reportSnapshot(ctx),
@@ -447,6 +449,8 @@ function updateReport(ctx, input) {
   const report = findReport(ctx, input.id);
   if (report.status === 'PUBLISHED') throw ctx.fail(409, '공유한 버전은 수정할 수 없습니다. 새 보고서 버전을 만드세요');
   report.title = requireText(ctx, input.title, '제목', 100, 'title');
+  if (input.subtitle !== undefined) report.subtitle = ctx.clean(input.subtitle, 100);
+  if (input.coverNote !== undefined) report.coverNote = ctx.clean(input.coverNote, 500);
   report.summary = ctx.clean(input.summary, 2000);
   report.sections = reportSections(ctx, input.sections === undefined ? report.sections : input.sections);
   if (input.color !== undefined) {
@@ -481,6 +485,8 @@ async function createSuccessor(ctx, input) {
     parentId: source.id,
     version,
     title: String(source.title || ''),
+    subtitle: String(source.subtitle || ''),
+    coverNote: String(source.coverNote || ''),
     summary: String(source.summary || ''),
     sections: structuredClone(list(source.sections)),
     snapshot,

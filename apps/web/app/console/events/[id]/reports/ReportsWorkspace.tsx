@@ -20,6 +20,8 @@ type ReportSnapshot = {
 type Report = {
   id: string;
   title: string;
+  subtitle: string;
+  coverNote: string;
   summary: string;
   sections: string[];
   color: string;
@@ -229,6 +231,8 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                 ? [{
                     id: item.id,
                     title: text(item.title),
+                    subtitle: text(item.subtitle),
+                    coverNote: text(item.coverNote),
                     summary: text(item.summary),
                     sections: Array.isArray(item.sections)
                       ? item.sections.filter((section): section is string => typeof section === "string")
@@ -461,13 +465,18 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
         <section className={styles.section} aria-labelledby="report-detail">
           <h2 id="report-detail">보고서 내용</h2>
           <article className={styles.reportDoc}>
-            <p className="eyebrow">EVENTOUCH · 결과 보고서</p>
-            <h3>{detail.title}</h3>
-            {detail.snapshot?.event ? (
-              <p className={styles.help}>
-                {[text(detail.snapshot.event.name), text(detail.snapshot.event.date), text(detail.snapshot.event.client), text(detail.snapshot.event.venue)].filter(Boolean).join(" · ")}
-              </p>
-            ) : null}
+            <header className={styles.reportCover} style={{ borderColor: detail.color }}>
+              <p className="eyebrow">EVENTOUCH · 결과 보고서</p>
+              <h3>{detail.title}</h3>
+              {detail.subtitle ? <p className={styles.reportSubtitle}>{detail.subtitle}</p> : null}
+              {detail.snapshot?.event ? (
+                <p className={styles.help}>
+                  {[text(detail.snapshot.event.name), text(detail.snapshot.event.date), text(detail.snapshot.event.client), text(detail.snapshot.event.venue)].filter(Boolean).join(" · ")}
+                </p>
+              ) : null}
+              <p className={styles.help}>버전 {detail.version} · {detail.status === "PUBLISHED" ? `공유됨${detail.publishedAt ? ` · ${detail.publishedAt.slice(0, 10)}` : ""}` : "초안"}</p>
+              {detail.coverNote ? <p>{detail.coverNote}</p> : null}
+            </header>
             {detail.sections.includes("overview") ? (
               <section><h3>운영 요약</h3><p>{detail.summary || "운영 요약을 작성해주세요."}</p></section>
             ) : null}
@@ -637,6 +646,8 @@ function CreateDialog({
   onSubmit: (payload: Record<string, unknown>) => Promise<void>;
 }) {
   const [title, setTitle] = useState(initial?.title ?? "");
+  const [subtitle, setSubtitle] = useState(initial?.subtitle ?? "");
+  const [coverNote, setCoverNote] = useState(initial?.coverNote ?? "");
   const [summary, setSummary] = useState(initial?.summary ?? "");
   const [color, setColor] = useState(
     initial && /^#[0-9a-f]{6}$/i.test(initial.color) ? initial.color : "#E76D26"
@@ -694,7 +705,7 @@ function CreateDialog({
               return;
             }
             setFormError(null);
-            void onSubmit({ title, summary, color, sections });
+            void onSubmit({ title, subtitle, coverNote, summary, color, sections });
           }}
         >
           <div>
@@ -707,6 +718,25 @@ function CreateDialog({
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               required
+            />
+          </div>
+          <div>
+            <label htmlFor="report-subtitle">표지 부제목</label>
+            <input
+              id="report-subtitle"
+              type="text"
+              maxLength={100}
+              value={subtitle}
+              onChange={(event) => setSubtitle(event.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="report-cover-note">표지 문구</label>
+            <textarea
+              id="report-cover-note"
+              maxLength={500}
+              value={coverNote}
+              onChange={(event) => setCoverNote(event.target.value)}
             />
           </div>
           <div>
