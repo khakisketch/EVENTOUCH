@@ -276,9 +276,16 @@ test('web-messaging-uses-operator-commands-and-keeps-ticket-bearers-out-of-histo
 
 test('web-console-shell-keeps-decided-navigation-and-clients-read-only', () => {
   const shell = read('app/console/ConsoleShell.tsx');
+  const globalStyles = read('app/globals.css');
   assert.match(shell, /행사/);
   assert.match(shell, /고객사/);
   assert.match(shell, /nav/i);
+  assert.match(shell, /mobile-primary-nav/);
+  assert.match(shell, /mobile-event-nav/);
+  assert.match(shell, /aria-current=\{isHome \? "page" : isEventPath \? "location"/);
+  assert.match(shell, /mobileOperatorTriggerRef\.current\?\.contains\(target\)/);
+  assert.match(globalStyles, /\.mobile-primary-nav\s*\{[^}]*position:\s*fixed;[^}]*inset:\s*auto 0 0;/s);
+  assert.match(globalStyles, /safe-area-inset-bottom/);
   const clients = read('app/console/clients/ClientsList.tsx');
   assert.match(clients, /\/api\/bootstrap/);
   assert.doesNotMatch(clients, /method:\s*"POST"/i);

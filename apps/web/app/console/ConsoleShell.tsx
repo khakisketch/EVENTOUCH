@@ -74,6 +74,8 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const [logoutPending, setLogoutPending] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const operatorTriggerRef = useRef<HTMLButtonElement>(null);
+  const mobileOperatorTriggerRef = useRef<HTMLButtonElement>(null);
+  const lastOperatorTriggerRef = useRef<HTMLButtonElement>(null);
   const operatorMenuRef = useRef<HTMLDivElement>(null);
   const menuFocusPendingRef = useRef(false);
 
@@ -178,25 +180,40 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     isEventPath && shellData?.canAccessCurrentEvent && shellData.currentEventName
   );
 
+  function getVisibleOperatorTrigger() {
+    const mobileTrigger = mobileOperatorTriggerRef.current;
+    if (mobileTrigger?.getClientRects().length) return mobileTrigger;
+    return operatorTriggerRef.current;
+  }
+
   function closeOperatorMenu(restoreFocus = false) {
     menuFocusPendingRef.current = false;
     setOperatorMenuOpen(false);
     setOperatorMenuPosition(null);
     if (restoreFocus) {
-      window.requestAnimationFrame(() => operatorTriggerRef.current?.focus());
+      window.requestAnimationFrame(() => {
+        const lastTrigger = lastOperatorTriggerRef.current;
+        const visibleLastTrigger = lastTrigger?.getClientRects().length ? lastTrigger : null;
+        (visibleLastTrigger ?? getVisibleOperatorTrigger())?.focus();
+      });
     }
   }
 
   function updateOperatorMenuPosition() {
-    const trigger = operatorTriggerRef.current;
+    const trigger = getVisibleOperatorTrigger();
     const menu = operatorMenuRef.current;
     if (!trigger || !menu) return;
     const rect = trigger.getBoundingClientRect();
     const gutter = 8;
     const maxHeight = Math.max(120, window.innerHeight - gutter * 4);
     const menuHeight = Math.min(menu.scrollHeight, maxHeight);
-    const width = Math.min(rect.width, window.innerWidth - gutter * 2);
-    const left = Math.min(Math.max(gutter, rect.left), window.innerWidth - width - gutter);
+    const isMobileShell = window.matchMedia("(max-width: 768px)").matches;
+    const width = isMobileShell
+      ? Math.min(320, window.innerWidth - gutter * 2)
+      : Math.min(rect.width, window.innerWidth - gutter * 2);
+    const left = isMobileShell
+      ? window.innerWidth - width - gutter
+      : Math.min(Math.max(gutter, rect.left), window.innerWidth - width - gutter);
     const spaceAbove = rect.top - gutter;
     const spaceBelow = window.innerHeight - rect.bottom - gutter;
     const openBelow = spaceBelow >= menuHeight + gutter || spaceBelow >= spaceAbove;
@@ -217,10 +234,13 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     updateOperatorMenuPosition();
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target;
+      const isOperatorTrigger =
+        target instanceof Node &&
+        (operatorTriggerRef.current?.contains(target) || mobileOperatorTriggerRef.current?.contains(target));
       if (
         target instanceof Node &&
         !operatorMenuRef.current?.contains(target) &&
-        !operatorTriggerRef.current?.contains(target)
+        !isOperatorTrigger
       ) {
         closeOperatorMenu(true);
       }
@@ -290,6 +310,100 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     }
   }
 
+  function handleOperatorMenuTrigger(event: React.MouseEvent<HTMLButtonElement>) {
+    lastOperatorTriggerRef.current = event.currentTarget;
+    setLogoutError(null);
+    if (operatorMenuOpen) {
+      closeOperatorMenu();
+    } else {
+      menuFocusPendingRef.current = true;
+      setOperatorMenuOpen(true);
+    }
+  }
+
+  function renderEventsLink(id: string) {
+    return canSeeEvents ? (
+      <Link
+        id={id}
+        className={`console-nav-item console-nav-root-item${isHome ? " active" : isEventPath ? " active-path" : ""}`}
+        href="/console"
+        aria-current={isHome ? "page" : isEventPath ? "location" : undefined}
+      >
+        <EventsIcon />
+        <span>행사</span>
+      </Link>
+    ) : null;
+  }
+
+  function renderClientsLink(id: string) {
+    return canSeeClients ? (
+      <Link
+        id={id}
+        className={`console-nav-item console-nav-root-item${isClients ? " active" : ""}`}
+        href="/console/clients"
+        aria-current={isClients ? "page" : undefined}
+      >
+        <ClientsIcon />
+        <span>고객사</span>
+      </Link>
+    ) : null;
+  }
+
+  function renderEventBranch(eventsLinkId: string) {
+    return showCurrentEvent && eventId ? (
+      <div className="nav-event-branch" role="group" aria-labelledby={eventsLinkId}>
+        <div className="nav-current-event">
+          <strong title={shellData?.currentEventName ?? undefined}>{shellData?.currentEventName}</strong>
+          <Link className="nav-event-switch" href="/console">목록에서 전환</Link>
+        </div>
+        <Link
+          className={`console-nav-item console-subnav-item${isOverview ? " active" : ""}`}
+          href={eventBasePath}
+          aria-current={isOverview ? "page" : undefined}
+        >
+          운영 현황
+        </Link>
+        <Link
+          className={`console-nav-item console-subnav-item${isParticipants ? " active" : ""}`}
+          href={`${eventBasePath}/participants`}
+          aria-current={isParticipants ? "page" : undefined}
+        >
+          참가자
+        </Link>
+        <Link
+          className={`console-nav-item console-subnav-item${isMessages ? " active" : ""}`}
+          href={`${eventBasePath}/messages`}
+          aria-current={isMessages ? "page" : undefined}
+        >
+          메시지
+        </Link>
+        <Link
+          className={`console-nav-item console-subnav-item${isOperations ? " active" : ""}`}
+          href={`${eventBasePath}/operations`}
+          aria-current={isOperations ? "page" : undefined}
+        >
+          현장 운영
+        </Link>
+        <Link
+          className={`console-nav-item console-subnav-item${isSettings ? " active" : ""}`}
+          href={`${eventBasePath}/settings`}
+          aria-current={isSettings ? "page" : undefined}
+        >
+          행사 설정
+        </Link>
+      </div>
+    ) : null;
+  }
+
+  const organizationPermissionSummary = shellData
+    ? [
+        canSeeEvents ? "행사" : null,
+        canSeeClients ? "고객사" : null,
+        canManageTeam ? "팀·권한" : null,
+        canManageIntegrations ? "서비스 연동" : null,
+      ].filter((label): label is string => label !== null).join(" · ") || "조직 메뉴 권한 없음"
+    : "확인 중";
+
   const menuItems = portalReady
     ? createPortal(
         <div
@@ -301,6 +415,19 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           hidden={!operatorMenuOpen}
           style={operatorMenuOpen ? operatorMenuPosition ?? { visibility: "hidden" } : undefined}
         >
+          <div className="operator-menu-profile" role="group" aria-label="계정 정보">
+            <div className="operator-menu-profile-heading">
+              <span className="operator-avatar operator-menu-profile-avatar" aria-hidden="true">{Array.from(userName.trim())[0] || "운"}</span>
+              <div className="operator-menu-profile-identity">
+                <strong>{userName}</strong>
+                <span>{shellData?.roleLabel ?? "운영자"}</span>
+              </div>
+            </div>
+            <p className="operator-menu-permissions">
+              <strong>조직 메뉴 권한</strong>
+              <span>{organizationPermissionSummary}</span>
+            </p>
+          </div>
           {canManageTeam ? (
             <Link
               className="operator-menu-item"
@@ -342,71 +469,27 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           <span className="console-wordmark">EVENTOUCH</span>
         </Link>
 
-        <nav className="side-nav" aria-label="주요 메뉴">
-          {canSeeEvents ? (
-            <Link
-              id="workspace-events-link"
-              className={`console-nav-item${isHome ? " active" : isEventPath ? " active-path" : ""}`}
-              href="/console"
-              aria-current={isHome ? "page" : undefined}
-            >
-              <EventsIcon />
-              <span>행사</span>
-            </Link>
-          ) : null}
-          {showCurrentEvent && eventId ? (
-            <div className="nav-event-branch" role="group" aria-labelledby="workspace-events-link">
-              <div className="nav-current-event">
-                <strong title={shellData?.currentEventName ?? undefined}>{shellData?.currentEventName}</strong>
-                <Link className="nav-event-switch" href="/console">목록에서 전환</Link>
-              </div>
-              <Link
-                className={`console-nav-item console-subnav-item${isOverview ? " active" : ""}`}
-                href={eventBasePath}
-                aria-current={isOverview ? "page" : undefined}
-              >
-                운영 현황
-              </Link>
-              <Link
-                className={`console-nav-item console-subnav-item${isParticipants ? " active" : ""}`}
-                href={`${eventBasePath}/participants`}
-                aria-current={isParticipants ? "page" : undefined}
-              >
-                참가자
-              </Link>
-              <Link
-                className={`console-nav-item console-subnav-item${isMessages ? " active" : ""}`}
-                href={`${eventBasePath}/messages`}
-                aria-current={isMessages ? "page" : undefined}
-              >
-                메시지
-              </Link>
-              <Link
-                className={`console-nav-item console-subnav-item${isOperations ? " active" : ""}`}
-                href={`${eventBasePath}/operations`}
-                aria-current={isOperations ? "page" : undefined}
-              >
-                현장 운영
-              </Link>
-              <Link
-                className={`console-nav-item console-subnav-item${isSettings ? " active" : ""}`}
-                href={`${eventBasePath}/settings`}
-                aria-current={isSettings ? "page" : undefined}
-              >
-                행사 설정
-              </Link>
-            </div>
-          ) : null}
-          {canSeeClients ? (
-            <Link
-              className={`console-nav-item${isClients ? " active" : ""}`}
-              href="/console/clients"
-              aria-current={isClients ? "page" : undefined}
-            >
-              <ClientsIcon />
-              <span>고객사</span>
-            </Link>
-          ) : null}
+        <button
+          ref={mobileOperatorTriggerRef}
+          type="button"
+          className="operator-block operator-menu-trigger operator-mobile-trigger"
+          aria-label={`계정 메뉴, ${userName}, ${shellData?.roleLabel ?? "역할 확인 중"}`}
+          aria-haspopup="menu"
+          aria-expanded={operatorMenuOpen}
+          aria-controls="operator-menu"
+          onClick={handleOperatorMenuTrigger}
+        >
+          <span className="operator-avatar" aria-hidden="true">{avatar}</span>
+        </button>
+
+        <nav className="side-nav desktop-side-nav" aria-label="주요 메뉴">
+          {renderEventsLink("workspace-events-link")}
+          {renderEventBranch("workspace-events-link")}
+          {renderClientsLink("workspace-clients-link")}
+        </nav>
+
+        <nav className="side-nav mobile-event-nav" aria-label="현재 행사 메뉴">
+          {renderEventBranch("workspace-events-link-mobile")}
         </nav>
 
         <div className="sidebar-bottom">
@@ -417,15 +500,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
             aria-haspopup="menu"
             aria-expanded={operatorMenuOpen}
             aria-controls="operator-menu"
-            onClick={() => {
-              setLogoutError(null);
-              if (operatorMenuOpen) {
-                closeOperatorMenu();
-              } else {
-                menuFocusPendingRef.current = true;
-                setOperatorMenuOpen(true);
-              }
-            }}
+            onClick={handleOperatorMenuTrigger}
           >
             <span className="operator-avatar" aria-hidden="true">{avatar}</span>
             <span className="operator-identity">
@@ -443,6 +518,14 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           {children}
         </main>
       </div>
+
+      <nav
+        className={`side-nav mobile-primary-nav${Number(canSeeEvents) + Number(canSeeClients) === 1 ? " side-nav-single-root" : ""}`}
+        aria-label="주요 메뉴"
+      >
+        {renderEventsLink("workspace-events-link-mobile")}
+        {renderClientsLink("workspace-clients-link-mobile")}
+      </nav>
     </div>
   );
 }
