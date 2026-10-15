@@ -118,7 +118,11 @@ function EventCard({
             />
           </svg>
         </div>
-        {time ? <p className={styles.eventTime}>{time}</p> : null}
+        {time ? (
+          <p className={styles.eventTime}>
+            {event.date ? time : `시간 ${time}`}
+          </p>
+        ) : null}
         <div className={styles.eventIdentity}>
           <h3 className={styles.eventName}>{event.name}</h3>
           <p className={styles.eventClient}>

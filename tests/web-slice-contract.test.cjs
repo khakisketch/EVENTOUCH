@@ -257,6 +257,9 @@ test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   // Past dates use the same D arithmetic as future ones (D-70 / D+3), so a
   // past date beside an active stage never reads as a contradiction.
   assert.match(home, /return `D\+\$\{days\}`/);
+  // A card with no date but a time says so instead of showing a bare clock
+  // under 일정 미정.
+  assert.match(home, /시간 \$\{time\}/);
   // No full-width rows: events render as cards in a capped grid, and the
   // calendar only filters those same cards by date.
   assert.doesNotMatch(home, /eventRow/);
