@@ -228,7 +228,8 @@
   margin: 0;
   font-size: var(--h3);
   line-height: 1.35;
-  overflow-wrap: anywhere;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .eventClient {

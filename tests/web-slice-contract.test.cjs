@@ -273,6 +273,9 @@ test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   assert.match(css, /\.metricUnit/);
   assert.match(css, /\.eventGrid/);
   assert.match(css, /\.dayCell/);
+  // Korean titles wrap at word boundaries, never mid-syllable; unbreakable
+  // strings still break so narrow cards never overflow.
+  assert.match(css, /\.eventName\s*\{[^}]*word-break:\s*keep-all/s);
   assert.doesNotMatch(css, /\.eventRow/);
   assert.doesNotMatch(css, /min-height: 40px/);
 });
