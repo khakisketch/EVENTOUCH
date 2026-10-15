@@ -206,6 +206,23 @@ test('evidence photos stay separate, section-scoped and retry-safe', () => {
   assert.match(programs, />\s*원본 저장\s*</u);
 });
 
+test('slug pattern attributes stay valid under the HTML v-flag rules', () => {
+  const files = [
+    'app/console/CreateEventDialog.tsx',
+    'app/console/events/[id]/settings/SettingsWorkspace.tsx',
+  ];
+  for (const file of files) {
+    const source = read(file);
+    for (const match of source.matchAll(/pattern="([^"]+)"/gu)) {
+      // Modern browsers compile pattern attributes with the v flag; an
+      // unescaped dash inside a class throws there and the constraint
+      // silently stops applying.
+      new RegExp(`^(?:${match[1]})$`, 'v');
+    }
+    assert.match(source, /pattern="\[a-z0-9\]\[a-z0-9\\-\]\{0,49\}"/u, `${file} keeps a v-flag-safe slug pattern`);
+  }
+});
+
 test('thin participant route wrappers and overview do not add legacy eyebrows', () => {
   const paths = [
     'app/console/events/[id]/page.tsx',

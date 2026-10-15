@@ -431,7 +431,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               <input
                 id="set-slug"
                 type="text"
-                pattern="[a-z0-9][a-z0-9-]{0,49}"
+                pattern="[a-z0-9][a-z0-9\-]{0,49}"
                 value={basics.slug}
                 onChange={(event) => setBasics({ ...basics, slug: event.target.value })}
                 aria-invalid={invalid("slug") || undefined}

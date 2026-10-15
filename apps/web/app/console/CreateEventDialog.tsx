@@ -165,7 +165,7 @@ export default function CreateEventDialog({
               type="text"
               value={slug}
               placeholder="예: partner-conf-2026"
-              pattern="[a-z0-9][a-z0-9-]{0,49}"
+              pattern="[a-z0-9][a-z0-9\-]{0,49}"
               title="영소문자·숫자·하이픈 50자 이내"
               onChange={(event) => {
                 setSlug(event.target.value);
