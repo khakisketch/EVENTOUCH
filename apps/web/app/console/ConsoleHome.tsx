@@ -41,8 +41,9 @@ const FILTERS: Array<{ id: EventFilter; label: string }> = [
 const KNOWN_STAGES = ["DRAFT", "READY", "LIVE", "ENDED", "ARCHIVED"];
 
 // Calendar recency is display-only: it never changes the operational stage.
-// A past date with an active stage reads as "지난 일정" next to the badge,
-// so the two dimensions stay visibly distinct.
+// Recency is display-only: it never changes the operational stage. Future
+// and past dates share one arithmetic (D-70 / D+3) so a past date next to an
+// active stage never reads as a contradiction.
 function eventRecency(date: string, todayKey: string): string | null {
   if (!date) return null;
   if (date === todayKey) return "오늘";
@@ -57,7 +58,7 @@ function eventRecency(date: string, todayKey: string): string | null {
     (new Date(`${todayKey}T00:00:00`).getTime() - new Date(`${date}T00:00:00`).getTime()) / 86400000
   );
   if (days === 1) return "어제";
-  return "지난 일정";
+  return `D+${days}`;
 }
 
 function todayKeyOf(now: Date): string {
