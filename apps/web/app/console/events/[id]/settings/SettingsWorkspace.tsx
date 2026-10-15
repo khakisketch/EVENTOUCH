@@ -38,6 +38,7 @@ type Basics = {
   price: string;
   approvalRequired: boolean;
   allowReentry: boolean;
+  verificationRequired: boolean;
 };
 type PageDraft = {
   intro: string;
@@ -111,6 +112,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               price?: unknown;
               approvalRequired?: unknown;
               allowReentry?: unknown;
+              verificationRequired?: unknown;
               registrationOpen?: unknown;
               publishedVersion?: unknown;
               consentText?: unknown;
@@ -152,6 +154,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           price: String(Number(workspace.price) || 0),
           approvalRequired: workspace.approvalRequired === true,
           allowReentry: workspace.allowReentry !== false,
+          verificationRequired: workspace.verificationRequired === true,
         };
         const newDraft: PageDraft = {
           intro: text(draftSource.intro) || text(event.name),
@@ -283,6 +286,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               price: Number(basics.price) || 0,
               approvalRequired: basics.approvalRequired,
               allowReentry: basics.allowReentry,
+              verificationRequired: basics.verificationRequired,
             }, "기본 정보를 저장했습니다.");
           }}
         >
@@ -395,6 +399,15 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             />
             재입장 허용
           </label>
+          <label className={styles.check}>
+            <input
+              type="checkbox"
+              checked={basics.verificationRequired}
+              onChange={(event) => setBasics({ ...basics, verificationRequired: event.target.checked })}
+            />
+            참가 신청 전 연락처 인증 필요
+          </label>
+          <p className={styles.help}>인증번호는 신청자의 휴대전화로 발송됩니다. 발송 준비가 안 된 상태에서는 신청이 막히므로, 먼저 인증번호 1건을 테스트하세요.</p>
           <div className={styles.actions}>
             <button type="submit" className="button button-primary" disabled={busy}>
               {busy ? "저장 중입니다" : "기본 정보 저장"}

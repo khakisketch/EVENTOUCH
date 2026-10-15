@@ -485,6 +485,40 @@ test('web-staff-hub-links-event-work-without-downloading-all-desks-upfront', () 
   assert.match(scope, /BOOTH/);
 });
 
+test('web-reports-combine-live-analysis-with-snapshot-reports', () => {
+  const reports = read('app/console/events/[id]/reports/ReportsWorkspace.tsx');
+  // Analysis mirrors the server snapshot formulas; reports go through the
+  // existing idempotent domain command path.
+  for (const command of ['report.create', 'report.update', 'report.publish', 'report.successor']) {
+    assert.match(reports, new RegExp(command.replace('.', '\\.')));
+  }
+  assert.match(reports, /\/commands/);
+  assert.match(reports, /누적 입장/);
+  assert.match(reports, /누적 입장률/);
+  assert.match(reports, /재입장을 중복 집계하지 않습니다/);
+  for (const label of ['운영 요약', '참가·입장', '프로그램·부스', '만족도', '승인 사진']) {
+    assert.match(reports, new RegExp(label));
+  }
+  // Published versions lock; the next version branches explicitly.
+  assert.match(reports, /공유하면 이 버전은 잠깁니다/);
+  assert.match(reports, /현재 집계로 새 버전/);
+  assert.match(reports, /데이터 JSON 저장/);
+  // No customer portal: publish records shared state, never a share link.
+  assert.doesNotMatch(reports, /shareToken/);
+  assert.doesNotMatch(reports, /공유 링크/);
+  // The create/edit dialog is modal: initial focus, Escape, focus return.
+  assert.match(reports, /titleRef\.current\?\.focus/);
+  assert.match(reports, /Escape/);
+  assert.match(reports, /previouslyFocused/);
+  assert.match(reports, /보고서 항목을 하나 이상 선택하세요/);
+  assert.doesNotMatch(reports, /localStorage/);
+  assert.doesNotMatch(reports, /sessionStorage/);
+  const page = read('app/console/events/[id]/reports/page.tsx');
+  assert.match(page, /ReportsWorkspace/);
+  // Every screen retry also wakes the shell navigation.
+  assert.match(reports, /eventouch:shell-reload/);
+});
+
 test('web-settings-uses-the-preparation-command-set', () => {
   const settings = read('app/console/events/[id]/settings/SettingsWorkspace.tsx');
   for (const command of ['event.update', 'event.features', 'form.publish', 'form.close', 'attendee.page.save', 'attendee.page.publish']) {
@@ -498,9 +532,12 @@ test('web-settings-uses-the-preparation-command-set', () => {
   assert.match(settings, /describedBy/);
   assert.match(settings, /FEATURE_GROUPS/);
   assert.match(settings, /참여 프로그램/);
+  // Phone-verification opt-in rides the basics form into event.update.
+  assert.match(settings, /verificationRequired/);
+  assert.match(settings, /참가 신청 전 연락처 인증 필요/);
   // The shell links every live event destination.
   const shell = read('app/console/ConsoleShell.tsx');
-  for (const href of ['/participants', '/messages', '/operations', '/settings']) {
+  for (const href of ['/participants', '/messages', '/operations', '/settings', '/reports']) {
     assert.match(shell, new RegExp(href.replace('/', '\\/')));
   }
 });

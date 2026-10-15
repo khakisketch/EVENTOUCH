@@ -233,7 +233,7 @@ PostgreSQL이 행사 데이터의 유일한 권위다. JSON 파일 저장소(`DA
 `index.html`이 `defer` 스크립트 25개와 CSS 7개를 **순서대로** 로드하므로 로드 순서가
 계약이다(`tests/load-order.test.cjs`가 고정).
 
-### Next.js 이관 (슬라이스 1·2·3·4a·4b·5·6a·6b·6c·6d·6e·6f·7a 완료)
+### Next.js 이관 (슬라이스 1·2·3·4a·4b·5·6a·6b·6c·6d·6e·6f·7a·7b 완료)
 
 `apps/web`(Next.js + TypeScript App Router)이 같은 제품의 새 프론트엔드다.
 이관 원칙: 기존 바닐라 앱을 끄지 않고 기능 단위로 증명·교체한다.
@@ -283,6 +283,11 @@ PostgreSQL이 행사 데이터의 유일한 권위다. JSON 파일 저장소(`DA
   답한다. 검증 필수는 행사별 `verificationRequired` opt-in이며, 신청·복구 성공 시
   세션을 합치고 취소·연락처 변경 시 끊는다. QR 단독 세션 발급 경로는 없다.
   새 앱 신청 인증 단계·`/ticket/recover`·세션 티켓 복원이 같은 계약을 쓴다.
+- 슬라이스 7b: 결과·보고서 이관 + 인증 토글. 행사 목적지 `결과 보고서`
+  (`/console/events/:id/reports`)에서 서버 스냅샷과 같은 공식의 실시간 분석과
+  보고서 초안 작성·수정·공유·새 버전을 기존 멱등 커맨드 경로로 처리한다.
+  고객사 포털은 제공하지 않으므로 공유는 상태 기록만 남기고 공유 링크를 만들지
+  않는다. `event.update`가 `verificationRequired`를 받아 행사 설정 토글로 잇는다.
 - 브라우저는 새 앱의 오리진에만 닿는다. `/api/*`는 새 앱의 rewrite가 API로
   전달한다(`EVENTOUCH_API_URL`, 기본 `http://127.0.0.1:8776`). 프론트가 API
   호스트를 직접 두지 않으므로 쿠키·CSP·CORS 정책이 유지된다.

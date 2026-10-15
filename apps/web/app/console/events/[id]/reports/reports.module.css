@@ -1,0 +1,222 @@
+.wrapper {
+  display: grid;
+  gap: var(--s6);
+  max-width: var(--web-reading-max, 68ch);
+}
+
+.section {
+  display: grid;
+  gap: var(--s3);
+}
+
+.section h2 {
+  margin: 0;
+  font-size: var(--h2);
+}
+
+.help {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--s3);
+}
+
+.metricCard {
+  display: grid;
+  gap: var(--s1);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.metricCard strong {
+  font-size: var(--h2);
+  font-family: var(--display-font);
+}
+
+.metricCard span {
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.dataTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--small);
+}
+
+.dataTable th,
+.dataTable td {
+  padding: var(--s2) var(--s3);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.dataTable th {
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.reportList {
+  display: grid;
+  gap: var(--s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reportRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.reportSummary {
+  display: grid;
+  flex: 1 1 220px;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.reportSummary small {
+  color: var(--muted);
+}
+
+.badge {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 0 var(--s2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-small);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.badgePublished {
+  border-color: var(--success-line);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.badgeDraft {
+  border-color: var(--warning-line);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.alert {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--danger-line);
+  border-radius: var(--radius-small);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.notice {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--success-line);
+  border-radius: var(--radius-small);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.form {
+  display: grid;
+  gap: var(--s3);
+}
+
+.form label {
+  font-size: var(--small);
+}
+
+.form > div > label {
+  display: block;
+  margin-bottom: var(--s1);
+  font-weight: 650;
+}
+
+.form input,
+.form textarea {
+  width: 100%;
+  min-height: 44px;
+}
+
+.form textarea {
+  min-height: 88px;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 44px;
+}
+
+.check input {
+  width: auto;
+  min-height: auto;
+}
+
+.dialogBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s4);
+  background: var(--scrim);
+}
+
+.dialog {
+  display: grid;
+  gap: var(--s4);
+  width: min(560px, 100%);
+  max-height: min(84vh, 720px);
+  overflow: auto;
+  padding: var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.dialogActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--s2);
+}
+
+.reportDoc {
+  display: grid;
+  gap: var(--s4);
+  padding: var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.reportDoc h3 {
+  margin: 0;
+}

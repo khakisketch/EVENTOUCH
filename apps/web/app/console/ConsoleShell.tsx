@@ -66,6 +66,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const isMessages = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/messages`));
   const isOperations = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/operations`));
   const isSettings = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/settings`));
+  const isReports = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/reports`));
 
   const [shellData, setShellData] = useState<ShellData | null>(null);
   const [shellTick, setShellTick] = useState(0);
@@ -436,6 +437,13 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           aria-current={isSettings ? "page" : undefined}
         >
           행사 설정
+        </Link>
+        <Link
+          className={`console-nav-item console-subnav-item${isReports ? " active" : ""}`}
+          href={`${eventBasePath}/reports`}
+          aria-current={isReports ? "page" : undefined}
+        >
+          결과 보고서
         </Link>
       </div>
     ) : null;

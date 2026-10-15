@@ -112,6 +112,9 @@ async function updateEvent(ctx, input) {
   workspace.allowReentry = input.allowReentry === undefined
     ? workspace.allowReentry !== false
     : input.allowReentry === true;
+  workspace.verificationRequired = input.verificationRequired === undefined
+    ? workspace.verificationRequired === true
+    : input.verificationRequired === true;
   workspace.price = price;
   return { eventChanged: true, body: { event: { ...event } } };
 }

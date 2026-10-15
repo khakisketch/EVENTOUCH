@@ -274,6 +274,23 @@ test('event-settings-update-posts-event-and-workspace-atomically-and-validates-c
   assert.equal(row.payload.name, '새 행사명');
   assert.equal(row.payload.date, '2026-12-02');
   assert.equal((await readWorkspace(event.id)).price, 2500);
+  // Phone-verification opt-in rides the same boolean pattern: explicit set
+  // persists, omission preserves the stored value (normalized to false on
+  // the first save, like the other workspace flags).
+  assert.equal((await readWorkspace(event.id)).verificationRequired, false);
+  const verified = await operator(event, 'event.update', {
+    name: '새 행사명', slug: `${event.slug}-next`, date: '2026-12-02',
+    start: '10:00', end: '18:00', capacity: 5, stage: 'READY', price: 2500,
+    verificationRequired: true,
+  });
+  assert.equal(verified.status, 200, JSON.stringify(verified.json));
+  assert.equal((await readWorkspace(event.id)).verificationRequired, true);
+  const preserved = await operator(event, 'event.update', {
+    name: '새 행사명', slug: `${event.slug}-next`, date: '2026-12-02',
+    start: '10:00', end: '18:00', capacity: 5, stage: 'READY', price: 2500,
+  });
+  assert.equal(preserved.status, 200, JSON.stringify(preserved.json));
+  assert.equal((await readWorkspace(event.id)).verificationRequired, true);
 
   const tooSmall = await operator(event, 'event.update', {
     name: '새 행사명', slug: `${event.slug}-next`, date: '2026-12-02',
