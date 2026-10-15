@@ -80,6 +80,18 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
+  // The overview approval CTA lands here pre-filtered; a direct visit shows
+  // everything. Read once on mount — the select owns the state afterwards.
+  useEffect(() => {
+    try {
+      const initial = new URLSearchParams(window.location.search).get("status") ?? "";
+      if ((STATUSES as readonly string[]).includes(initial)) setStatusFilter(initial);
+    } catch {
+      // Keep the unfiltered list.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId]);
+
   async function load(silent = false) {
     if (!silent) setState({ kind: "loading" });
     try {

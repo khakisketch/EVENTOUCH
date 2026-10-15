@@ -76,7 +76,7 @@ function formatCheckTime(value: string): string {
 function taskActionFor(overview: Overview, eventId: string): TaskAction | null {
   const base = `/console/events/${encodeURIComponent(eventId)}`;
   if (overview.pendingApproval > 0) {
-    return { href: `${base}/participants`, label: "승인 처리하기" };
+    return { href: `${base}/participants?status=PENDING`, label: "승인 처리하기" };
   }
   switch (overview.stage.toUpperCase()) {
     case "DRAFT":
@@ -366,7 +366,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             {overview.registrationOpen ? "접수 중" : "접수 마감"}
           </span>
           {overview.pendingApproval > 0 && overview.canManageEvent ? (
-            <span className={styles.pendingBadge}>승인대기 {overview.pendingApproval}</span>
+            <span className={styles.pendingBadge}>승인 대기 {overview.pendingApproval}</span>
           ) : null}
         </div>
       </header>
@@ -380,11 +380,11 @@ export default function EventOverview({ eventId }: { eventId: string }) {
               <dd>{overview.registered}</dd>
             </div>
             <div className={styles.metricCard}>
-              <dt>승인대기</dt>
+              <dt>승인 대기</dt>
               <dd>{overview.pendingApproval}</dd>
             </div>
             <div className={styles.metricCard}>
-              <dt>현재입장</dt>
+              <dt>현재 입장</dt>
               <dd>{overview.insideNow}</dd>
             </div>
             <div className={styles.metricCard}>

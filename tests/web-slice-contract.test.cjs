@@ -391,6 +391,8 @@ test('web-participant-status-goes-through-the-operator-command-path', () => {
   assert.match(list, /다시 불러오기/);
   // Approval is explicit on pending rows, with identity on the row; only
   // cancellation asks twice. The full digits stay in exports, not on screen.
+  // The overview approval CTA lands pre-filtered via ?status=.
+  assert.match(list, /URLSearchParams\(window\.location\.search\)/);
   assert.match(list, /participant-identity/);
   assert.match(list, /maskPhone/);
   assert.match(list, /"승인"/);
@@ -532,6 +534,9 @@ test('web-event-stage-moves-forward-through-the-command-path-only', () => {
   const overview = read('app/console/events/[id]/EventOverview.tsx');
   assert.match(overview, /event\.stage/);
   assert.match(overview, /\/commands/);
+  assert.match(overview, /승인 대기/);
+  assert.doesNotMatch(overview, /승인대기/);
+  assert.match(overview, /participants\?status=PENDING/);
   assert.doesNotMatch(overview, /window\.confirm/);
   assert.match(overview, /setStageConfirm\(true\)/);
   assert.match(overview, /정말 전환합니다/);
