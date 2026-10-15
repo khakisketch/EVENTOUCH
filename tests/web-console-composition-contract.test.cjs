@@ -191,6 +191,13 @@ test('evidence photos stay separate, section-scoped and retry-safe', () => {
   assert.match(photos, /status:\s*bytesUploaded\s*\?\s*"failed-record"\s*:\s*"failed-upload"/u);
   assert.match(photos, /evidence\.photo\.move/u);
   assert.match(photos, /evidence\.photo\.remove/u);
+  assert.match(photos, /id="evidence-photo-section"/u, 'mobile section picker stays a native labeled select');
+  assert.match(photos, /URL\.createObjectURL\(file\)/u, 'selected images have a local preview before upload');
+  assert.match(photos, /사진을 끌어 놓거나 파일을 선택하세요/u, 'upload area explains both drop and browse actions');
+  assert.match(photos, /onDrop=\{/u, 'files can be dropped onto the upload area');
+  assert.match(photos, /onClick=\{uploadSelectedJobs\}/u, 'uploads start only after explicit confirmation');
+  assert.match(photos, /<details className=\{styles\.jobDisclosure\}/u, 'successful upload history is disclosed on demand');
+  assert.match(photos, /<details className=\{styles\.photoManage\}/u, 'per-photo maintenance actions are disclosed on demand');
   assert.match(photos, /보관함 참조만 제거합니다\. 원본 파일은 삭제되지 않고 기존 행사 파일 읽기 권한은 그대로 적용됩니다/u);
   assert.match(photos, /evidence-photos\.zip\?\$\{params\.toString\(\)\}/u);
   assert.match(programs, /status\s*===\s*"APPROVED"/u);
