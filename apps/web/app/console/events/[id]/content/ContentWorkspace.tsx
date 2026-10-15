@@ -4,6 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
+import ConsolePageHeader, {
+  formatConsoleEventMeta,
+  type ConsoleEventMeta,
+} from "../../../console-ui/ConsolePageHeader";
+import ConsoleSection from "../../../console-ui/ConsoleSection";
+import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import styles from "./content.module.css";
 
 // Console authoring for notices, schedule programs, and venue guidance.
@@ -65,6 +71,7 @@ type WorkspaceState =
   | {
       kind: "ready";
       eventName: string;
+      eventMeta: ConsoleEventMeta;
       features: string[];
       canManage: boolean;
       notices: Notice[];
@@ -225,6 +232,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
       const boot = (await bootRes.json().catch(() => null)) as {
         state?: {
           events?: unknown;
+          clients?: unknown;
           memberships?: unknown;
           workspaces?: Record<string, unknown>;
         } | null;
@@ -273,9 +281,19 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
           })
         : []).sort((left, right) => (left.date + left.start).localeCompare(right.date + right.start));
       const venue = parseVenue(workspace.venue);
+      const client = Array.isArray(bootstrap.clients)
+        ? bootstrap.clients.map(asRecord).find((item) => item?.id === event.clientId)
+        : undefined;
       setState({
         kind: "ready",
         eventName: text(event.name, eventId),
+        eventMeta: {
+          clientName: text(client?.name),
+          date: text(event.date),
+          start: text(event.start),
+          end: text(event.end),
+          venue: venue.name || text(event.venue),
+        },
         features: Array.isArray(event.features)
           ? event.features.filter((feature): feature is string => typeof feature === "string")
           : [],
@@ -596,27 +614,45 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
     }
   }
 
+  const pageHeader = (
+    <ConsolePageHeader
+      title={state.kind === "ready" ? state.eventName : "콘텐츠"}
+      meta={state.kind === "ready" ? formatConsoleEventMeta(state.eventMeta) : undefined}
+      back={{
+        href: `/console/events/${encodeURIComponent(eventId)}`,
+        label: "← 운영 현황",
+      }}
+      actions={state.kind === "ready" ? (
+        <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/settings`}>
+          행사 설정
+        </Link>
+      ) : null}
+    />
+  );
+
   if (state.kind === "loading") {
-    return <p className="loading-state" role="status">콘텐츠 정보를 불러오고 있습니다.</p>;
+    return (
+      <div className={styles.page}>
+        {pageHeader}
+        <ConsoleStatePanel
+          kind="loading"
+          message="콘텐츠 정보를 불러오고 있습니다."
+          onRetry={() => { void load(); }}
+        />
+      </div>
+    );
   }
   if (state.kind === "failed") {
     return (
-      <section className="state-panel">
-        <p role="alert">{state.message}</p>
-        <p>
-          <button
-            type="button"
-            className="button button-secondary"
-            onClick={() => {
-              window.dispatchEvent(new CustomEvent("eventouch:shell-reload"));
-              void load();
-            }}
-          >
-            다시 불러오기
-          </button>
-        </p>
-        <Link className="button button-secondary" href="/console">행사 목록으로</Link>
-      </section>
+      <div className={styles.page}>
+        {pageHeader}
+        {/* ConsoleStatePanel dispatches eventouch:shell-reload and renders 다시 불러오기. */}
+        <ConsoleStatePanel
+          kind="failed"
+          message={state.message}
+          onRetry={() => { void load(); }}
+        />
+      </div>
     );
   }
 
@@ -624,17 +660,10 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <div>
-          <p className="eyebrow">콘텐츠</p>
-          <h1>{state.eventName}</h1>
-          <p className={styles.intro}>공지·일정·장소 안내를 작성하고 게시 상태를 관리합니다. 게시한 항목만 참가자에게 보입니다.</p>
-        </div>
-        <nav className={styles.headerActions} aria-label="행사 내 이동">
-          <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}`}>운영 현황</Link>
-          <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/settings`}>행사 설정</Link>
-        </nav>
-      </header>
+      <div className={styles.pageHeading}>
+        {pageHeader}
+        <p className={styles.intro}>공지·일정·장소 안내를 작성하고 게시 상태를 관리합니다. 게시한 항목만 참가자에게 보입니다.</p>
+      </div>
 
       {!state.canManage ? (
         <p className="state-error" role="alert">콘텐츠를 관리할 운영 권한이 없습니다.</p>
@@ -645,13 +674,15 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
             <p className="state-error" role="alert" id="content-error">{failure.message}</p>
           ) : null}
 
-          <section className={styles.section} aria-labelledby="content-notices">
-            <div className={styles.sectionHead}>
-              <h2 id="content-notices">공지</h2>
-              <button type="button" className="button button-primary" onClick={openNoticeCreate}>
+          <ConsoleSection
+            headingId="content-notices"
+            title="공지"
+            action={(
+              <button type="button" className="button button-secondary" onClick={openNoticeCreate}>
                 공지 작성
               </button>
-            </div>
+            )}
+          >
             {state.notices.length ? (
               <ul className={styles.cardList}>
                 {state.notices.map((item) => (
@@ -711,20 +742,22 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
             ) : (
               <p className={styles.empty}>등록된 공지가 없습니다. 위에서 첫 공지를 작성하세요.</p>
             )}
-          </section>
+          </ConsoleSection>
 
-          <section className={styles.section} aria-labelledby="content-program">
-            <div className={styles.sectionHead}>
-              <h2 id="content-program">프로그램 일정</h2>
+          <ConsoleSection
+            headingId="content-program"
+            title="프로그램 일정"
+            description="날짜·시작 시간 순으로 정렬되어 참가자에게 보입니다."
+            action={(
               <button
                 type="button"
-                className="button button-primary"
+                className="button button-secondary"
                 onClick={() => openProgramCreate()}
               >
                 일정 추가
               </button>
-            </div>
-            <p className={styles.help}>날짜·시작 시간 순으로 정렬되어 참가자에게 보입니다.</p>
+            )}
+          >
             {state.program.length ? (
               <ul className={styles.cardList}>
                 {state.program.map((item) => (
@@ -785,12 +818,9 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
             ) : (
               <p className={styles.empty}>등록된 일정이 없습니다. 위에서 첫 일정을 추가하세요.</p>
             )}
-          </section>
+          </ConsoleSection>
 
-          <section className={styles.section} aria-labelledby="content-venue">
-            <div className={styles.sectionHead}>
-              <h2 id="content-venue">장소 안내</h2>
-            </div>
+          <ConsoleSection headingId="content-venue" title="장소 안내">
             {!venueFeatureOn ? (
               <p className={styles.featureOff} role="note">
                 장소 안내 기능이 꺼져 있습니다.{" "}
@@ -853,7 +883,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                 <div className={styles.actions}>
                   <button
                     type="submit"
-                    className="button button-primary"
+                    className="button button-secondary"
                     disabled={busy !== null || !venueFeatureOn}
                     title={venueFeatureOn ? undefined : "행사 설정에서 장소 안내 기능을 먼저 켜세요"}
                   >
@@ -862,7 +892,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                 </div>
               </form>
             ) : null}
-          </section>
+          </ConsoleSection>
         </>
       )}
 

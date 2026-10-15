@@ -4,6 +4,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
+import ConsolePageHeader, {
+  formatConsoleEventMeta,
+  type ConsoleEventMeta,
+} from "../../../console-ui/ConsolePageHeader";
+import ConsoleSection from "../../../console-ui/ConsoleSection";
+import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import styles from "./MessagingWorkspace.module.css";
 
 type Template = {
@@ -31,6 +37,7 @@ type ReadyState = {
   kind: "ready";
   eventName: string;
   eventDate: string;
+  eventMeta: ConsoleEventMeta;
   canManage: boolean;
   participants: Participant[];
   templates: Template[];
@@ -340,10 +347,20 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
         setState({ kind: "failed", message: "행사를 찾을 수 없습니다." });
         return;
       }
+      const clients = Array.isArray(bootstrap.clients) ? bootstrap.clients : [];
+      const client = clients.map(asRecord).find((item) => item?.id === event.clientId);
+      const venue = asRecord(workspace.venue);
       setState({
         kind: "ready",
         eventName: text(event.name, eventId),
         eventDate: text(event.date),
+        eventMeta: {
+          clientName: text(client?.name),
+          date: text(event.date),
+          start: text(event.start),
+          end: text(event.end),
+          venue: text(venue?.name) || text(event.venue),
+        },
         canManage,
         participants: Array.isArray(workspace.participants)
           ? workspace.participants.flatMap((value) => {
@@ -575,23 +592,48 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     }
   }
 
+  const pageHeader = (
+    <ConsolePageHeader
+      title={state.kind === "ready" ? state.eventName : "메시지"}
+      meta={state.kind === "ready" ? formatConsoleEventMeta(state.eventMeta) : undefined}
+      back={{
+        href: `/console/events/${encodeURIComponent(eventId)}`,
+        label: "← 운영 현황",
+      }}
+      actions={state.kind === "ready" ? (
+        <Link
+          className="button button-secondary"
+          href={`/console/events/${encodeURIComponent(eventId)}/participants`}
+        >
+          참가자
+        </Link>
+      ) : null}
+    />
+  );
+
   if (state.kind === "loading") {
-    return <p className="loading-state" role="status">메시지 정보를 불러오고 있습니다.</p>;
+    return (
+      <div className={styles.page}>
+        {pageHeader}
+        <ConsoleStatePanel
+          kind="loading"
+          message="메시지 정보를 불러오고 있습니다."
+          onRetry={() => { void refresh(); }}
+        />
+      </div>
+    );
   }
   if (state.kind === "failed") {
     return (
-      <section className="state-panel">
-        <p role="alert">{state.message}</p>
-        <p>
-          <button type="button" className="button button-secondary" onClick={() => {
-            window.dispatchEvent(new CustomEvent("eventouch:shell-reload"));
-            void refresh();
-          }}>
-            다시 불러오기
-          </button>
-        </p>
-        <Link className="button button-secondary" href="/console">행사 목록으로</Link>
-      </section>
+      <div className={styles.page}>
+        {pageHeader}
+        {/* ConsoleStatePanel dispatches eventouch:shell-reload and renders 다시 불러오기. */}
+        <ConsoleStatePanel
+          kind="failed"
+          message={state.message}
+          onRetry={() => { void refresh(); }}
+        />
+      </div>
     );
   }
 
@@ -605,17 +647,10 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <div>
-          <p className="eyebrow">메시지</p>
-          <h1>{state.eventName}</h1>
-          <p className={styles.intro}>수신 대상을 확인하고 캠페인과 전달 상태를 관리합니다.</p>
-        </div>
-        <nav className={styles.headerActions} aria-label="행사 내 이동">
-          <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}`}>운영 현황</Link>
-          <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants`}>참가자</Link>
-        </nav>
-      </header>
+      <div className={styles.pageHeading}>
+        {pageHeader}
+        <p className={styles.intro}>수신 대상을 확인하고 캠페인과 전달 상태를 관리합니다.</p>
+      </div>
 
       {!state.canManage ? (
         <p className="state-error" role="alert">메시지 캠페인을 관리할 운영 권한이 없습니다.</p>
@@ -629,14 +664,14 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
           {campaignError ? <p className="state-error" role="alert">{campaignError}</p> : null}
 
           <div className={styles.workspace}>
-            <section className={styles.panel} aria-labelledby="campaign-heading">
-              <div className={styles.panelHeading}>
-                <div>
-                  <p className={styles.panelKicker}>새 캠페인</p>
-                  <h2 id="campaign-heading">메시지 작성</h2>
-                </div>
-                <span className={styles.selectionCount}>{selectedCount}명 선택</span>
-              </div>
+            <ConsoleSection
+              className={styles.panel}
+              headingId="campaign-heading"
+              title="메시지 작성"
+              description="새 캠페인"
+              action={<span className={styles.selectionCount}>{selectedCount}명 선택</span>}
+              divider
+            >
               <form className={styles.form} onSubmit={createCampaign}>
                 <div>
                   <label htmlFor="campaign-title">캠페인 제목</label>
@@ -817,15 +852,15 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   <span className={styles.help}>발송 요청 전 수신 인원과 내용을 확인합니다.</span>
                 </div>
               </form>
-            </section>
+            </ConsoleSection>
 
-            <section className={styles.panel} aria-labelledby="templates-heading">
-              <div className={styles.panelHeading}>
-                <div>
-                  <p className={styles.panelKicker}>저장한 문구</p>
-                  <h2 id="templates-heading">메시지 템플릿</h2>
-                </div>
-              </div>
+            <ConsoleSection
+              className={styles.panel}
+              headingId="templates-heading"
+              title="메시지 템플릿"
+              description="저장한 문구"
+              divider
+            >
               {templateNotice ? <p className="state-success" role="status">{templateNotice}</p> : null}
               {templateError ? <p className="state-error" role="alert">{templateError}</p> : null}
               {state.templates.length ? (
@@ -927,18 +962,22 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   ) : null}
                 </div>
               </form>
-            </section>
+            </ConsoleSection>
           </div>
 
-          <section className={styles.history} aria-labelledby="history-heading">
-            <div className={styles.historyHeading}>
-              <div>
-                <p className={styles.panelKicker}>전송 이력</p>
-                <h2 id="history-heading">캠페인과 수신 결과</h2>
-                <p className={styles.help}>캠페인 기록에는 참가자 티켓 링크가 표시되지 않습니다.</p>
-              </div>
-              <button className="button button-secondary" type="button" disabled={busyAction !== null} onClick={() => void refresh(true)}>상태 새로고침</button>
-            </div>
+          <ConsoleSection
+            className={styles.history}
+            headingId="history-heading"
+            title="캠페인과 수신 결과"
+            description="전송 이력"
+            action={(
+              <button className="button button-secondary" type="button" disabled={busyAction !== null} onClick={() => void refresh(true)}>
+                상태 새로고침
+              </button>
+            )}
+            divider
+          >
+            <p className={styles.help}>캠페인 기록에는 참가자 티켓 링크가 표시되지 않습니다.</p>
             {state.campaigns.length ? (
               <ul className={styles.campaignList}>
                 {state.campaigns.map((campaign) => {
@@ -1004,7 +1043,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
             ) : (
               <p className={styles.empty}>캠페인이 없습니다. 위에서 수신 대상을 선택해 첫 메시지를 준비하세요.</p>
             )}
-          </section>
+          </ConsoleSection>
         </>
       )}
     </div>

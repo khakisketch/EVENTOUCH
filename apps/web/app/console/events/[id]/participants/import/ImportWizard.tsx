@@ -4,6 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { loginHrefForLocation } from "../../../../../auth-redirect";
+import ConsolePageHeader, {
+  formatConsoleEventMeta,
+  type ConsoleEventMeta,
+} from "../../../../console-ui/ConsolePageHeader";
+import ConsoleSection from "../../../../console-ui/ConsoleSection";
+import ConsoleStatePanel from "../../../../console-ui/ConsoleStatePanel";
+import consoleUiStyles from "../../../../console-ui/console-ui.module.css";
 
 type ImportMap = { name: string; phone: string; email: string; company: string };
 type ValidRow = { name: string; phone: string; email: string; company: string };
@@ -12,7 +19,7 @@ type RowError = { row: number; reason: string };
 type GateState =
   | { kind: "loading" }
   | { kind: "failed"; message: string }
-  | { kind: "ready"; eventName: string; canManage: boolean };
+  | { kind: "ready"; eventName: string; eventMeta: ConsoleEventMeta; canManage: boolean };
 
 const MAX_BYTES = 1048576;
 const MAX_ROWS = 1000;
@@ -153,6 +160,7 @@ function downloadCsv(filename: string, rows: string[][]) {
 export default function ImportWizard({ eventId }: { eventId: string }) {
   const router = useRouter();
   const [gate, setGate] = useState<GateState>({ kind: "loading" });
+  const [retryTick, setRetryTick] = useState(0);
   const [headers, setHeaders] = useState<string[] | null>(null);
   const [dataRows, setDataRows] = useState<string[][]>([]);
   const [fileKind, setFileKind] = useState<"csv" | "txt" | null>(null);
@@ -182,7 +190,12 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
           user?: { id?: unknown; role?: unknown } | null;
         } | null;
         const boot = (await bootRes.json().catch(() => null)) as {
-          state?: { events?: unknown; memberships?: unknown } | null;
+          state?: {
+            events?: unknown;
+            clients?: unknown;
+            workspaces?: Record<string, Record<string, unknown>>;
+            memberships?: unknown;
+          } | null;
         } | null;
         const bootstrap = boot?.state;
         if (!meRes.ok || !bootRes.ok || !me?.user || !bootstrap) {
@@ -212,11 +225,32 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
                 (item as Record<string, unknown>).id === eventId
             )
           : undefined;
+        const workspace = bootstrap.workspaces?.[eventId] ?? {};
+        const client = Array.isArray(bootstrap.clients)
+          ? bootstrap.clients.find(
+              (item): item is Record<string, unknown> =>
+                typeof item === "object" && item !== null && item.id === event?.clientId
+            )
+          : undefined;
+        const venue = typeof workspace.venue === "object" && workspace.venue !== null
+          ? workspace.venue as Record<string, unknown>
+          : null;
         if (!cancelled) {
           setGate({
             kind: "ready",
             eventName:
               event && typeof event.name === "string" ? event.name : eventId,
+            eventMeta: {
+              clientName: typeof client?.name === "string" ? client.name : "",
+              date: typeof event?.date === "string" ? event.date : "",
+              start: typeof event?.start === "string" ? event.start : "",
+              end: typeof event?.end === "string" ? event.end : "",
+              venue: typeof venue?.name === "string"
+                ? venue.name
+                : typeof event?.venue === "string"
+                  ? event.venue
+                  : "",
+            },
             canManage,
           });
         }
@@ -228,7 +262,7 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [eventId, router]);
+  }, [eventId, retryTick, router]);
 
   async function readFile(file: File) {
     setFileError(null);
@@ -325,34 +359,75 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
     }
   }
 
+  const pageHeader = (
+    <ConsolePageHeader
+      title={gate.kind === "ready" ? gate.eventName : "명단 가져오기"}
+      meta={gate.kind === "ready" ? formatConsoleEventMeta(gate.eventMeta) : undefined}
+      back={{
+        href: `/console/events/${encodeURIComponent(eventId)}`,
+        label: "← 운영 현황",
+      }}
+    />
+  );
+
   if (gate.kind === "loading") {
-    return <p className="loading-state" role="status">가져오기 화면을 불러오고 있습니다.</p>;
+    return (
+      <div className={consoleUiStyles.pageFlow}>
+        {pageHeader}
+        <ConsoleStatePanel
+          kind="loading"
+          message="가져오기 화면을 불러오고 있습니다."
+          onRetry={() => setRetryTick((tick) => tick + 1)}
+        />
+      </div>
+    );
   }
   if (gate.kind === "failed") {
     return (
-      <section className="state-panel">
-        <p role="alert">{gate.message}</p>
-        <p><Link href={`/console/events/${encodeURIComponent(eventId)}/participants`}>참가자 목록으로</Link></p>
-      </section>
+      <div className={consoleUiStyles.pageFlow}>
+        {pageHeader}
+        <ConsoleStatePanel
+          kind="failed"
+          message={gate.message}
+          onRetry={() => {
+            setGate({ kind: "loading" });
+            setRetryTick((tick) => tick + 1);
+          }}
+          actions={(
+            <Link
+              className="button button-secondary"
+              href={`/console/events/${encodeURIComponent(eventId)}/participants`}
+            >
+              참가자 목록으로
+            </Link>
+          )}
+        />
+      </div>
     );
   }
 
   return (
-    <section className="participants-content">
-      <header className="participants-heading">
-        <h1>명단 가져오기</h1>
-        <p className="landing-note">{gate.eventName} · CSV·TXT 파일의 열을 연결하고 오류를 확인한 뒤 반영합니다.</p>
-      </header>
-      {!gate.canManage ? (
-        <p className="notice" role="status">가져오기 권한이 없습니다. 변경이 필요하면 담당 행사 운영자에게 요청하세요.</p>
-      ) : null}
-      {committed !== null ? (
-        <p className="state-success" role="status">{committed}명을 반영했습니다.</p>
-      ) : null}
-      {gate.canManage ? (
-        <>
-          <section className="state-panel" aria-label="1단계 파일 선택">
-            <h2>1. 파일 선택</h2>
+    <div className={consoleUiStyles.pageFlow}>
+      {pageHeader}
+      <section className="participants-content">
+        {committed !== null ? (
+          <p className="state-success" role="status">{committed}명을 반영했습니다.</p>
+        ) : null}
+        <ConsoleSection
+          headingId="participant-import-heading"
+          title="명단 가져오기"
+          description="CSV·TXT 파일의 열을 연결하고 오류를 확인한 뒤 반영합니다."
+        >
+          {!gate.canManage ? (
+            <p className="notice" role="status">가져오기 권한이 없습니다. 변경이 필요하면 담당 행사 운영자에게 요청하세요.</p>
+          ) : null}
+          {gate.canManage ? (
+            <>
+          <ConsoleSection
+            headingId="participant-import-file-heading"
+            title="1. 파일 선택"
+            className="state-panel"
+          >
             <div className="participant-toolbar">
               <label>
                 <span className="sr-only">CSV·TXT 파일 선택</span>
@@ -381,10 +456,13 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
             </div>
             <p className="landing-note">UTF-8 CSV·TXT · 최대 1MB, 1,000행. XLSX는 CSV로 저장한 뒤 사용하세요. TXT는 한 줄에 한 명: 이름, 연락처, 이메일(선택), 소속(선택).</p>
             {fileError ? <p className="state-error" role="alert">{fileError}</p> : null}
-          </section>
+          </ConsoleSection>
           {headers ? (
-            <section className="state-panel" aria-label="2단계 열 매핑">
-              <h2>2. 열 연결 {fileKind === "txt" ? "(TXT 고정 순서)" : ""}</h2>
+            <ConsoleSection
+              headingId="participant-import-map-heading"
+              title={`2. 열 연결 ${fileKind === "txt" ? "(TXT 고정 순서)" : ""}`}
+              className="state-panel"
+            >
               <div className="participant-toolbar">
                 {FIELDS.map((field) => (
                   <label key={field.id}>
@@ -413,11 +491,14 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
                   검토 결과 만들기
                 </button>
               </p>
-            </section>
+            </ConsoleSection>
           ) : null}
           {preview ? (
-            <section className="state-panel" aria-label="3단계 검토 후 반영">
-              <h2>3. 검토 후 반영</h2>
+            <ConsoleSection
+              headingId="participant-import-review-heading"
+              title="3. 검토 후 반영"
+              className="state-panel"
+            >
               <p className="landing-note" role="status">
                 유효 {preview.valid.length}행 · 오류 {preview.errors.length}행. 오류 행은 제외되며 원본 파일에서 수정 후 다시 가져올 수 있습니다.
               </p>
@@ -455,13 +536,15 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
                   검토 취소
                 </button>
               </div>
-            </section>
+            </ConsoleSection>
           ) : null}
-        </>
-      ) : null}
-      <p>
-        <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants`}>참가자 목록으로</Link>
-      </p>
-    </section>
+            </>
+          ) : null}
+          <p>
+            <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants`}>참가자 목록으로</Link>
+          </p>
+        </ConsoleSection>
+      </section>
+    </div>
   );
 }

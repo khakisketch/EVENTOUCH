@@ -7,61 +7,19 @@
   overflow-wrap: anywhere;
 }
 
-.pageHeader {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: var(--s4) var(--s5);
-  min-width: 0;
-  padding-bottom: var(--s3);
-  border-bottom: 1px solid var(--line);
+.stagePill {
+  border-radius: var(--s6);
 }
 
-.pageHeader h1 {
-  margin: 0;
-  font-size: var(--h1);
-  line-height: 1.15;
-  word-break: keep-all;
-  overflow-wrap: break-word;
-}
-
-.titleBlock {
-  min-width: 0;
-}
-
-.scheduleLine {
-  margin-top: var(--s1);
-  color: var(--muted);
-  font-size: var(--small);
-  line-height: 1.4;
-  font-variant-numeric: tabular-nums;
-  word-break: keep-all;
-  overflow-wrap: anywhere;
-}
-
-.scheduleNoWrap {
-  white-space: nowrap;
-}
-
-.statusBadges {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2);
-  margin-top: var(--s2);
-}
-
-.statusBadges > span {
+.stagePill,
+.intakeBadge,
+.dDay {
   display: inline-flex;
   min-height: 32px;
   align-items: center;
   padding: 0 var(--s3);
   border-radius: var(--s6);
   white-space: nowrap;
-}
-
-.stagePill {
-  border-radius: var(--s6);
 }
 
 .intakeBadge,
@@ -89,42 +47,8 @@
   font-variant-numeric: tabular-nums;
 }
 
-.headerActions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--s2);
-  min-width: 0;
-  align-self: start;
-}
-
 .linkNotice {
-  grid-column: 1 / -1;
-  margin: calc(-1 * var(--s2)) 0 0;
-  color: var(--muted);
-  font-size: var(--small);
-}
-
-.sectionHeading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--s3);
-  min-width: 0;
-}
-
-.sectionHeading > div {
-  min-width: 0;
-}
-
-.sectionTitle {
   margin: 0;
-  font-size: var(--h3);
-  line-height: 1.35;
-}
-
-.sectionDescription {
-  margin: var(--s1) 0 0;
   color: var(--muted);
   font-size: var(--small);
 }
@@ -140,28 +64,12 @@
   background: var(--paper);
 }
 
-.operationsCard,
-.scheduleCard,
-.recentCard {
-  display: grid;
-  gap: var(--s3);
-}
-
 .problemSection {
-  display: grid;
-  gap: var(--s2);
   min-width: 0;
   padding: var(--s3) var(--s4);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--paper);
-}
-
-.problemHeading {
-  margin: 0;
-  font-size: var(--body);
-  font-weight: 750;
-  line-height: 1.4;
 }
 
 .problemList {
@@ -225,8 +133,6 @@
 }
 
 .metricsSection {
-  display: grid;
-  gap: var(--s3);
   min-width: 0;
 }
 
@@ -370,22 +276,8 @@
 }
 
 .stageControl {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--s3) var(--s4);
   padding-block: var(--s4);
   background: var(--surface-muted);
-}
-
-.stageCopy {
-  min-width: 0;
-}
-
-.stagePrompt {
-  margin: var(--s1) 0 0;
-  color: var(--muted);
-  font-size: var(--small);
 }
 
 .stageControls {
@@ -437,25 +329,6 @@
 
 .recentCard {
   gap: var(--s3);
-}
-
-.recentHeading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--s3);
-  min-width: 0;
-}
-
-.recentHeading > div {
-  min-width: 0;
-}
-
-.updateNote {
-  margin: var(--s1) 0 0;
-  color: var(--muted);
-  font-size: var(--small);
-  font-variant-numeric: tabular-nums;
 }
 
 .recentActions {
@@ -547,19 +420,6 @@
     gap: var(--s3);
   }
 
-  .pageHeader {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--s3);
-  }
-
-  .headerActions {
-    justify-content: flex-start;
-  }
-
-  .headerActions > * {
-    flex: 1 1 140px;
-  }
-
   .operationsCard,
   .scheduleCard,
   .stageControl,
@@ -569,10 +429,6 @@
 
   .problemSection {
     padding: var(--s3);
-  }
-
-  .sectionHeading {
-    align-items: flex-start;
   }
 
   .problemList {
@@ -620,14 +476,6 @@
 }
 
 @media (max-width: 420px) {
-  .sectionHeading {
-    flex-wrap: wrap;
-  }
-
-  .sectionHeading > :global(.button) {
-    width: 100%;
-  }
-
   .programList li {
     grid-template-columns: minmax(0, 1fr) auto;
   }

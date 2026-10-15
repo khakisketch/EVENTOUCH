@@ -1,0 +1,188 @@
+.pageHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--s4) var(--s5);
+  min-width: 0;
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--line);
+}
+
+.pageFlow {
+  display: grid;
+  gap: var(--s5);
+  min-width: 0;
+}
+
+.pageIdentity {
+  min-width: 0;
+}
+
+.pageIdentity h1 {
+  margin: 0;
+  font-size: var(--h1);
+  line-height: 1.15;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.backLink {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  margin-bottom: var(--s1);
+  color: var(--brand-text);
+  font-size: var(--small);
+  font-weight: 700;
+  text-decoration: none;
+  text-underline-offset: 3px;
+}
+
+.backLink:hover {
+  text-decoration: underline;
+}
+
+.pageMeta {
+  margin: var(--s1) 0 0;
+  color: var(--muted);
+  font-size: var(--small);
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.pageBadges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  margin-top: var(--s2);
+}
+
+.pageActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--s2);
+  min-width: 0;
+  align-self: start;
+}
+
+.section {
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s3);
+  min-width: 0;
+}
+
+.sectionCopy {
+  min-width: 0;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: var(--h3);
+  line-height: 1.35;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.sectionDescription {
+  margin: var(--s1) 0 0;
+  color: var(--muted);
+  font-size: var(--small);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.sectionAction {
+  display: flex;
+  flex: none;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s2);
+}
+
+.sectionCompact {
+  gap: var(--s2);
+}
+
+.sectionCompact .sectionTitle {
+  font-size: var(--body);
+  line-height: 1.4;
+}
+
+.sectionDivider > .sectionHead {
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--line);
+}
+
+.statePanel {
+  display: grid;
+  justify-items: start;
+  gap: var(--s3);
+  min-width: 0;
+  padding: var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.stateMessage {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.stateLoading .stateMessage {
+  color: var(--muted);
+}
+
+.stateFailed .stateMessage {
+  color: var(--danger);
+}
+
+.stateActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+@media (max-width: 680px) {
+  .pageHeader {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s3);
+  }
+
+  .pageActions {
+    justify-content: flex-start;
+  }
+
+  .pageActions > * {
+    flex: 1 1 140px;
+  }
+}
+
+@media (max-width: 420px) {
+  .sectionHead {
+    flex-wrap: wrap;
+  }
+
+  .sectionAction {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+  }
+
+  .sectionAction :global(.button) {
+    max-width: 100%;
+  }
+}

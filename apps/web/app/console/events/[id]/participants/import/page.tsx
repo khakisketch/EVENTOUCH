@@ -11,9 +11,6 @@ export default async function ConsoleParticipantImportPage({
   const { id } = await params;
   return (
     <section className="console-page participants-page">
-      <header className="console-page-header">
-        <p className="eyebrow">참가자 관리</p>
-      </header>
       <ImportWizard eventId={id} />
     </section>
   );

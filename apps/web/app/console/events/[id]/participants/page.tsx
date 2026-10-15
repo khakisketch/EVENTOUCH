@@ -12,9 +12,6 @@ export default async function ConsoleParticipantsPage({
   const { id } = await params;
   return (
     <section className="console-page participants-page">
-      <header className="console-page-header">
-        <p className="eyebrow">참가자 관리</p>
-      </header>
       <ParticipantList eventId={id} />
     </section>
   );

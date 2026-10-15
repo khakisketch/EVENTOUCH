@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { loginHrefForLocation } from "../../../auth-redirect";
 import { eventStageClassName, eventStageLabel } from "../../../event-stage";
+import ConsolePageHeader, { formatConsoleEventMeta } from "../../console-ui/ConsolePageHeader";
+import ConsoleSection from "../../console-ui/ConsoleSection";
+import ConsoleStatePanel from "../../console-ui/ConsoleStatePanel";
 import styles from "./event-overview.module.css";
 
 type CheckRow = {
@@ -578,10 +581,14 @@ export default function EventOverview({ eventId }: { eventId: string }) {
   }, [eventId, router, reloadTick]);
 
   function reloadOverview() {
+    requestOverviewReload();
+    window.dispatchEvent(new CustomEvent("eventouch:shell-reload"));
+  }
+
+  function requestOverviewReload() {
     setStageError(null);
     setRefreshError(null);
     setReloadTick((tick) => tick + 1);
-    window.dispatchEvent(new CustomEvent("eventouch:shell-reload"));
   }
 
   async function copyParticipantLink(slug: string) {
@@ -661,25 +668,24 @@ export default function EventOverview({ eventId }: { eventId: string }) {
   if (state.kind === "loading") {
     return (
       <div className={styles.overview}>
-        <header className={styles.pageHeader}>
-          <h1>행사 운영 현황</h1>
-        </header>
-        <p className="loading-state" role="status">운영 현황을 불러오고 있습니다.</p>
+        <ConsolePageHeader title="운영 현황" />
+        <ConsoleStatePanel
+          kind="loading"
+          message="운영 현황을 불러오고 있습니다."
+          onRetry={requestOverviewReload}
+        />
       </div>
     );
   }
   if (state.kind === "failed") {
     return (
       <div className={styles.overview}>
-        <header className={styles.pageHeader}>
-          <h1>행사 운영 현황</h1>
-        </header>
-        <section className="state-panel" aria-label="운영 현황을 불러오지 못함">
-          <p role="alert">{state.message}</p>
-          <button type="button" className="button button-secondary" onClick={reloadOverview}>
-            다시 불러오기
-          </button>
-        </section>
+        <ConsolePageHeader title="운영 현황" />
+        <ConsoleStatePanel
+          kind="failed"
+          message={state.message}
+          onRetry={requestOverviewReload}
+        />
       </div>
     );
   }
@@ -711,61 +717,62 @@ export default function EventOverview({ eventId }: { eventId: string }) {
   const participantPageHref = overview.slug
     ? `/event/${encodeURIComponent(overview.slug)}`
     : "";
-  const eventTime = overview.start && overview.end
-    ? `${overview.start}–${overview.end}`
-    : overview.start || overview.end;
+  const eventMeta = formatConsoleEventMeta({
+    clientName: overview.clientName,
+    date: overview.date,
+    start: overview.start,
+    end: overview.end,
+    venue: overview.venue,
+  });
+
+  const pageHeader = (
+    <ConsolePageHeader
+      title={overview.name || "이름 없는 행사"}
+      meta={eventMeta}
+      badges={(
+        <>
+          <span className={`${eventStageClassName(currentStage)} ${styles.stagePill}`}>{stageText}</span>
+          <span className={`${styles.intakeBadge} ${overview.registrationOpen ? styles.intakeOpen : styles.intakeClosed}`}>
+            {overview.registrationOpen ? "접수 중" : "접수 마감"}
+          </span>
+          {dDay ? (
+            <span className={styles.dDay} title="일정 표시이며 단계는 자동 변경되지 않습니다.">
+              {dDay}
+            </span>
+          ) : null}
+        </>
+      )}
+      actions={overview.canManageEvent && participantPageHref ? (
+        <>
+          <Link className="button button-secondary" href={participantPageHref} target="_blank" rel="noreferrer">
+            참가자 페이지 열기
+          </Link>
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={() => void copyParticipantLink(overview.slug)}
+          >
+            링크 복사
+          </button>
+        </>
+      ) : null}
+    />
+  );
 
   return (
     <div className={styles.overview}>
       <p className="sr-only" role="status">{stageNotice ?? ""}</p>
-      <header className={styles.pageHeader}>
-        <div className={styles.titleBlock}>
-          <h1>{overview.name || "이름 없는 행사"}</h1>
-          <div className={styles.scheduleLine}>
-            {overview.clientName ? <>{overview.clientName} · </> : null}
-            {formatEventDate(overview.date)}
-            {eventTime ? <> · <span className={styles.scheduleNoWrap}>{eventTime}</span></> : null}
-            {" · "}
-            {overview.venue || "장소 미정"}
-          </div>
-          <div className={styles.statusBadges}>
-            <span className={`${eventStageClassName(currentStage)} ${styles.stagePill}`}>{stageText}</span>
-            <span className={`${styles.intakeBadge} ${overview.registrationOpen ? styles.intakeOpen : styles.intakeClosed}`}>
-              {overview.registrationOpen ? "접수 중" : "접수 마감"}
-            </span>
-            {dDay ? (
-              <span className={styles.dDay} title="일정 표시이며 단계는 자동 변경되지 않습니다.">
-                {dDay}
-              </span>
-            ) : null}
-          </div>
-        </div>
-        {overview.canManageEvent && participantPageHref ? (
-          <div className={styles.headerActions}>
-            <Link className="button button-secondary" href={participantPageHref} target="_blank" rel="noreferrer">
-              참가자 페이지 열기
-            </Link>
-            <button
-              type="button"
-              className="button button-secondary"
-              onClick={() => void copyParticipantLink(overview.slug)}
-            >
-              링크 복사
-            </button>
-          </div>
-        ) : null}
-        {linkNotice ? <p className={styles.linkNotice} role="status">{linkNotice}</p> : null}
-      </header>
+      {pageHeader}
+      {linkNotice ? <p className={styles.linkNotice} role="status">{linkNotice}</p> : null}
 
       {overview.canManageEvent ? (
         <>
-          <section className={styles.metricsSection} aria-labelledby="event-metrics-heading">
-            <div className={styles.sectionHeading}>
-              <div>
-                <h2 id="event-metrics-heading" className={styles.sectionTitle}>주요 지표</h2>
-                <p className={styles.sectionDescription}>{stageKnown ? `${stageText} 단계 기준` : "확인 가능한 단계 지표가 없습니다."}</p>
-              </div>
-            </div>
+          <ConsoleSection
+            headingId="event-metrics-heading"
+            title="주요 지표"
+            description={stageKnown ? `${stageText} 단계 기준` : "확인 가능한 단계 지표가 없습니다."}
+            className={styles.metricsSection}
+          >
             {metrics.length ? (
               <div className={styles.metricGrid}>
                 {metrics.map((metric) => (
@@ -777,13 +784,15 @@ export default function EventOverview({ eventId }: { eventId: string }) {
                 ))}
               </div>
             ) : null}
-          </section>
+          </ConsoleSection>
 
           {problems.length > 0 ? (
-            <section className={styles.problemSection} aria-labelledby="event-problems-heading">
-              <h2 id="event-problems-heading" className={styles.problemHeading}>
-                확인 필요 {problems.length}건
-              </h2>
+            <ConsoleSection
+              headingId="event-problems-heading"
+              title={`확인 필요 ${problems.length}건`}
+              density="compact"
+              className={styles.problemSection}
+            >
               <ul className={styles.problemList}>
                 {problems.map((problem, index) => (
                   <li key={`${problem.href}-${problem.title}-${index}`}>
@@ -797,7 +806,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
                   </li>
                 ))}
               </ul>
-            </section>
+            </ConsoleSection>
           ) : null}
         </>
       ) : (
@@ -805,14 +814,13 @@ export default function EventOverview({ eventId }: { eventId: string }) {
       )}
 
       {overview.canManageEvent ? (
-        <section className={styles.operationsCard} aria-labelledby="event-operations-heading">
-          <div className={styles.sectionHeading}>
-            <div>
-              <h2 id="event-operations-heading" className={styles.sectionTitle}>운영 준비·가동</h2>
-              <p className={styles.sectionDescription}>설정과 배정 상태를 보여줍니다. 현장 출근이나 기기 정상 여부를 확인하는 값은 아닙니다.</p>
-            </div>
-            <Link className="button button-secondary" href={`${base}/operations`}>현장 운영</Link>
-          </div>
+        <ConsoleSection
+          headingId="event-operations-heading"
+          title="운영 준비·가동"
+          description="설정과 배정 상태를 보여줍니다. 현장 출근이나 기기 정상 여부를 확인하는 값은 아닙니다."
+          action={<Link className="button button-secondary" href={`${base}/operations`}>현장 운영</Link>}
+          className={styles.operationsCard}
+        >
           <dl className={styles.operationsGrid}>
             <div className={styles.operationItem}>
               <dt>열린 데스크</dt>
@@ -848,18 +856,17 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             </div>
           </dl>
           <p className={styles.operationNote}>데스크 열림은 설정 상태이고, 배정 인원은 출근 확인이 아닙니다. 부스·전광판 기기 상태도 별도 확인이 필요합니다.</p>
-        </section>
+        </ConsoleSection>
       ) : null}
 
       {overview.canManageEvent && schedule.length > 0 ? (
-        <section className={styles.scheduleCard} aria-labelledby="event-schedule-heading">
-          <div className={styles.sectionHeading}>
-            <div>
-              <h2 id="event-schedule-heading" className={styles.sectionTitle}>현재·다음 일정</h2>
-              <p className={styles.sectionDescription}>게시 여부와 관계없이 등록된 일정입니다. 실제 진행 상태가 아닌 예정 기준입니다.</p>
-            </div>
-            <Link className="button button-secondary" href={`${base}/content`}>프로그램 일정</Link>
-          </div>
+        <ConsoleSection
+          headingId="event-schedule-heading"
+          title="현재·다음 일정"
+          description="게시 여부와 관계없이 등록된 일정입니다. 실제 진행 상태가 아닌 예정 기준입니다."
+          action={<Link className="button button-secondary" href={`${base}/content`}>프로그램 일정</Link>}
+          className={styles.scheduleCard}
+        >
           <ol className={styles.programList}>
             {schedule.map((program) => (
               <li key={program.id}>
@@ -875,15 +882,15 @@ export default function EventOverview({ eventId }: { eventId: string }) {
               </li>
             ))}
           </ol>
-        </section>
+        </ConsoleSection>
       ) : null}
 
-      <section className={styles.stageControl} aria-labelledby="event-stage-heading">
-        <div className={styles.stageCopy}>
-          <h2 id="event-stage-heading" className={styles.sectionTitle}>진행 단계</h2>
-          <p className={styles.stagePrompt}>{stagePrompt}</p>
-        </div>
-        {nextStage && overview.canManageEvent ? (
+      <ConsoleSection
+        headingId="event-stage-heading"
+        title="진행 단계"
+        description={stagePrompt}
+        className={styles.stageControl}
+        action={nextStage && overview.canManageEvent ? (
           <div className={styles.stageControls}>
             {!stageConfirm ? (
               <button
@@ -935,6 +942,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         ) : !archived && !stageKnown ? (
           <p className={styles.readOnlyNote}>단계 정보가 확인되지 않아 전환할 수 없습니다.</p>
         ) : null}
+      >
 
         {nextStage === "LIVE" && (overview.deskCount === 0 || overview.deskAssignmentCount === 0) ? (
           <p className={styles.precondition}>
@@ -957,18 +965,17 @@ export default function EventOverview({ eventId }: { eventId: string }) {
           </div>
         ) : null}
         {stageNotice ? <p className="state-success">{stageNotice}</p> : null}
-      </section>
+      </ConsoleSection>
 
-      <section className={styles.recentCard} aria-labelledby="event-recent-heading">
-        <div className={styles.recentHeading}>
-          <div>
-            <h2 id="event-recent-heading" className={styles.sectionTitle}>
-              {overview.canManageEvent ? "최근 입퇴장" : "배정 데스크 최근 입퇴장"}
-            </h2>
-            <p className={styles.updateNote}>
-              자동 갱신되지 않습니다 · <time dateTime={overview.updatedAt}>마지막 갱신 {UPDATED_TIME_FORMAT.format(new Date(overview.updatedAt))}</time>
-            </p>
-          </div>
+      <ConsoleSection
+        headingId="event-recent-heading"
+        title={overview.canManageEvent ? "최근 입퇴장" : "배정 데스크 최근 입퇴장"}
+        description={(
+          <>
+            자동 갱신되지 않습니다 · <time dateTime={overview.updatedAt}>마지막 갱신 {UPDATED_TIME_FORMAT.format(new Date(overview.updatedAt))}</time>
+          </>
+        )}
+        action={(
           <div className={styles.recentActions}>
             <span className={styles.recentCount}>{overview.recent.length}건</span>
             <button
@@ -981,7 +988,9 @@ export default function EventOverview({ eventId }: { eventId: string }) {
               다시 불러오기
             </button>
           </div>
-        </div>
+        )}
+        className={styles.recentCard}
+      >
         {refreshing ? <p className={styles.refreshStatus} role="status">최신 운영 현황을 불러오고 있습니다.</p> : null}
         {refreshError ? <p className="state-error" role="alert">{refreshError} 이전에 불러온 내용은 유지됩니다.</p> : null}
         {overview.recent.length ? (
@@ -1008,7 +1017,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
               : "배정된 데스크에 아직 입퇴장 기록이 없습니다."}
           </p>
         )}
-      </section>
+      </ConsoleSection>
     </div>
   );
 }

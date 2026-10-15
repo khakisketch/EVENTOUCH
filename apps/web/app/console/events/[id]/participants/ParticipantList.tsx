@@ -4,6 +4,13 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { loginHrefForLocation } from "../../../../auth-redirect";
+import ConsolePageHeader, {
+  formatConsoleEventMeta,
+  type ConsoleEventMeta,
+} from "../../../console-ui/ConsolePageHeader";
+import ConsoleSection from "../../../console-ui/ConsoleSection";
+import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
+import consoleUiStyles from "../../../console-ui/console-ui.module.css";
 
 type Person = {
   id: string;
@@ -25,6 +32,7 @@ type ListState =
   | {
       kind: "ready";
       eventName: string;
+      eventMeta: ConsoleEventMeta;
       people: Person[];
       groups: string[];
       canManage: boolean;
@@ -71,6 +79,10 @@ function identityLine(person: { company: string; group: string; phone: string })
 function randomCommandId(): string {
   if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
   return `web-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value : "";
 }
 
 export default function ParticipantList({ eventId }: { eventId: string }) {
@@ -123,7 +135,8 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       const boot = (await bootRes.json().catch(() => null)) as {
         state?: {
           events?: unknown;
-          workspaces?: Record<string, { participants?: unknown }>;
+          clients?: unknown;
+          workspaces?: Record<string, Record<string, unknown>>;
           memberships?: unknown;
         } | null;
       } | null;
@@ -158,8 +171,17 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
               (item as Record<string, unknown>).id === eventId
           )
         : undefined;
-      const participants = bootstrap.workspaces?.[eventId]?.participants;
       const workspace = (bootstrap.workspaces?.[eventId] ?? {}) as Record<string, unknown>;
+      const participants = workspace.participants;
+      const client = Array.isArray(bootstrap.clients)
+        ? bootstrap.clients.find(
+            (item): item is Record<string, unknown> =>
+              typeof item === "object" && item !== null && item.id === event?.clientId
+          )
+        : undefined;
+      const venue = typeof workspace.venue === "object" && workspace.venue !== null
+        ? workspace.venue as Record<string, unknown>
+        : null;
       const groups = Array.isArray(workspace.groups)
         ? workspace.groups.filter((value): value is string => typeof value === "string")
         : [];
@@ -190,6 +212,13 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         kind: "ready",
         eventName:
           event && typeof event.name === "string" ? event.name : eventId,
+        eventMeta: {
+          clientName: stringValue(client?.name),
+          date: stringValue(event?.date),
+          start: stringValue(event?.start),
+          end: stringValue(event?.end),
+          venue: stringValue(venue?.name) || stringValue(event?.venue),
+        },
         people,
         groups,
         canManage,
@@ -208,8 +237,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   async function changeStatus(person: Person, status: string) {
     if (savingId || status === person.status) return;
     // Cancellation voids the ticket: confirm it like the stage transitions
-    // do. Approval stays one tap — it is the primary action, and the row now
-    // shows who is being approved.
+    // do. Approval stays one tap, and the row shows who is being approved.
     if (status === "CANCELLED" && !window.confirm(
       `${person.name}님의 신청을 취소할까요? 발급된 티켓은 무효화되며, 되돌리려면 다시 승인해야 합니다.`
     )) return;
@@ -247,23 +275,40 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     }
   }
 
-  if (state.kind === "loading") return <p className="loading-state" role="status">참가자 목록을 불러오고 있습니다.</p>;
+  const pageHeader = (
+    <ConsolePageHeader
+      title={state.kind === "ready" ? state.eventName : "참가자 관리"}
+      meta={state.kind === "ready" ? formatConsoleEventMeta(state.eventMeta) : undefined}
+      back={{
+        href: `/console/events/${encodeURIComponent(eventId)}`,
+        label: "← 운영 현황",
+      }}
+    />
+  );
+
+  if (state.kind === "loading") {
+    return (
+      <div className={consoleUiStyles.pageFlow}>
+        {pageHeader}
+        <ConsoleStatePanel
+          kind="loading"
+          message="참가자 목록을 불러오고 있습니다."
+          onRetry={() => { void load(); }}
+        />
+      </div>
+    );
+  }
   if (state.kind === "failed") {
     return (
-      <section className="state-panel">
-        <p role="alert">{state.message}</p>
-        <p>
-          <button type="button" className="button button-secondary" onClick={() => {
-            window.dispatchEvent(new CustomEvent("eventouch:shell-reload"));
-            void load();
-          }}>
-            다시 불러오기
-          </button>
-        </p>
-        <p>
-          <Link href="/console">행사 목록으로</Link>
-        </p>
-      </section>
+      <div className={consoleUiStyles.pageFlow}>
+        {pageHeader}
+        {/* ConsoleStatePanel dispatches eventouch:shell-reload and renders 다시 불러오기. */}
+        <ConsoleStatePanel
+          kind="failed"
+          message={state.message}
+          onRetry={() => { void load(); }}
+        />
+      </div>
     );
   }
   const search = query.trim().toLocaleLowerCase("ko-KR");
@@ -391,10 +436,10 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     URL.revokeObjectURL(url);
   }
   return (
-    <section className="participants-content">
-      <header className="participants-heading">
-      <h1>{state.eventName}</h1>
-      </header>
+    <div className={consoleUiStyles.pageFlow}>
+      {pageHeader}
+      <section className="participants-content">
+      <ConsoleSection headingId="participants-list-heading" title="참가자 목록">
       {notice ? <p className="state-success" role="status">{notice}</p> : null}
       {failure ? <p className="state-error" role="alert">{failure}</p> : null}
       {!state.canManage ? (
@@ -494,7 +539,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                 person.status === "PENDING" ? (
                   <button
                     type="button"
-                    className="button button-primary"
+                    className="button button-secondary"
                     disabled={savingId === person.id}
                     onClick={() => changeStatus(person, "APPROVED")}
                   >
@@ -626,9 +671,8 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           </div>
         </div>
       ) : null}
-      <p>
-        <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}`}>운영 현황으로</Link>
-      </p>
-    </section>
+      </ConsoleSection>
+      </section>
+    </div>
   );
 }

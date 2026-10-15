@@ -4,42 +4,15 @@
   max-width: var(--web-content-max, 1120px);
 }
 
-.header h1 {
-  margin: var(--s1) 0 0;
-  word-break: keep-all;
-  overflow-wrap: break-word;
+.pageHeading {
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
 }
 
 .intro {
-  margin: var(--s1) 0 0;
-  color: var(--muted);
-}
-
-.headerActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
-  margin-top: var(--s3);
-}
-
-.section {
-  display: grid;
-  gap: var(--s3);
-}
-
-.sectionHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s2);
-}
-
-.sectionHead h2 {
   margin: 0;
-  font-size: var(--h2);
-  word-break: keep-all;
-  overflow-wrap: break-word;
+  color: var(--muted);
 }
 
 .cardList {
@@ -122,7 +95,6 @@
 }
 
 .cardActions .button,
-.sectionHead .button,
 .actions .button {
   min-height: 44px;
 }
