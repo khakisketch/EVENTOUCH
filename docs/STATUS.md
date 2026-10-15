@@ -28,7 +28,7 @@ Branch: `master` · 작업 기준: `a0bbc03`
 
 ## 검증 수치 (현재 작업 트리 실측)
 
-- `npm test` — **608 통과, 실패 0, 스킵 0** (DB 주입 시). DB 없이 돌리면 스킵되고 실패로 처리된다.
+- `npm test` — **617 통과, 실패 0, 스킵 0** (DB 주입 시). DB 없이 돌리면 스킵되고 실패로 처리된다.
 - `npm run a11y` — 구 앱 주요 12화면, serious/critical **0**
 - `npm run mobile` — 구 앱 6기기 × 2방향 × 6화면 = **72검사 통과**, 가로 넘침·44px 미만 조작 요소 0
 - `npm run web:audit` — 새 앱 공개 4화면 × 3뷰포트 + 스태프·운영 콘솔, serious/critical **0**, 가로 넘침 0 (실행 중 데모 대상)
@@ -98,7 +98,7 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
 1. Solapi 준비 → 실발송 검증(SMS·LMS·MMS·알림톡·대체발송 각 1건, 업로드 이미지 ID 실측). `docs/INTEGRATIONS.md`
 2. 운영 배포 위치 결정 → 그 값으로 자격증명 발급, `COOKIE_SECURE=1`
 3. 푸시할 원격이 정해지면 push + CI(워크플로는 이미 있다: `.github/workflows/ci.yml`)
-4. Fastify 다음 순서: 공개 읽기 → 조직 REST → 커맨드 경로. 티켓 읽기 전환은 정합 테스트가 전제를 보증한다
+4. Fastify 다음 순서: 조직 REST → 커맨드 경로는 마지막. 공개 읽기(공개 행사·티켓·공개 파일)는 이관 완료이며, 정합 테스트와 경계 계약이 전제를 보증한다
 5. 조직 격리 2단계 이후(매핑·스코프·롤아웃)는 별도 승인 후. 인증번호 SMS 도달 검증은 자격증명 확보 후
 
 ## 남은 미검증 (완료라고 말하지 않는다)
@@ -110,6 +110,7 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
 
 ## 이력
 
+- 2026-10-16: Fastify 이관 2단계로 공개 읽기를 옮겼다. `server/fastify/public-reads.ts`가 `GET /api/public/events/:slug`(공개 행사 투영), `.../ticket`(bearer 우선·같은 브라우저 세션 대체), `.../files/:fileId`(원본 스트림)를 서빙하고, `server/server.js`는 GET `/api/public*`만 이 경계로 위임한다(인증번호·게스트 업로드 쓰기는 구 라우터 유지). 상태·본문·헤더·오류 문구를 구 경로와 동일하게 유지하고, 잘못된 퍼센트 인코딩은 Fastify 기본 400 대신 구 라우터의 분기별 404를 `frameworkErrors`로 재현한다. 같은 프리뷰 DB를 읽는 구·신 서버(8776/8790)에 7개 경로를 요청해 본문·상태가 모두 동일함을 실측했고, 새 코드로 띄운 API+Next(8791, 프록시)에서 `/event/partner-demo` SSR 렌더·프록시 경유 공개 읽기 200·`%ZZ` 404(레거시 문구)·`/screen/...`·`/register` 200, 예기치 않은 콘솔·페이지 오류 0을 확인했다. 경계 계약 9종 신설(총 617 통과), `npm run server:typecheck`·전체 `npm test` 통과. 실기기·스크린리더는 미검증. `docs/ARCHITECTURE.md` 진행 표기도 갱신했다.
 - 2026-10-16: 증빙 사진 화면에 대한 피드백을 반영해 촬영 구간의 동일한 카드 그리드를 데스크톱 밑줄형 분류 목록으로 바꾸고, 모바일 기본 select는 유지했다. 파일 버튼을 명확한 찾아보기 동작으로 교체하고 드롭도 지원하며, 전송 전에 이미지 미리보기·파일명·용량과 선택 취소를 제공한다. 증빙 내용을 보존하도록 사진은 크롭하지 않는다. 실제 Next 프로덕션 빌드에서 1280/390/320px 화면을 합성 이미지로 렌더 확인하고 파일 선택 버튼→브라우저 파일 선택기, 드롭→선택 취소, 모바일 구간 변경, 업로드→처리 내역을 조작했다(파일·API 응답은 격리된 Playwright 모의). 세 폭에서 가로 넘침·axe WCAG 위반·페이지 오류 0. `npm test` 608 통과, 앱 타입 검사·프로덕션 빌드·콘솔 구성 계약 9개 통과. 캡처는 `/tmp/opencode/eventouch-captures/evidence-photo-review-{1280,390,320}.png`; 물리 OS 파일 선택, 실제 기기·터치·스크린리더 미검증. 빌드에는 다중 lockfile workspace 추론 경고가 남아 있다.
 - 2026-10-16: 증빙 사진 화면의 반복 설명과 세로 길이를 줄였다. 모바일은 수량이 보이는 구간 선택·짧은 ZIP 액션·가로형 사진 행으로 정보가 한 세로 축에 과하게 쌓이지 않게 했다. 업로드 내역과 사진별 관리 작업은 필요 시 펼치고, 업로드를 사진 목록과 한 작업 영역에 묶었다. 1280/390/320px의 합성 사진 상태를 실제 Next 프로덕션 빌드에서 렌더 확인했고, 구간 전환·업로드·내역/관리 펼치기를 조작했다. 세 뷰포트에서 가로 넘침·axe WCAG 위반·페이지 오류 0. 앱 타입검사·프로덕션 빌드·콘솔 구성 계약 9개 통과. 빌드에는 다중 lockfile workspace 추론 경고가 남아 있다. 캡처는 `/tmp/opencode/eventouch-captures/evidence-photos-refined-{1280,390,320}.png`; 실제 기기·스크린리더는 미검증.
 - 2026-10-16: 참가자 포토월과 분리된 행사 증빙 사진 보관함을 구현했다. 8개 고정 섹션, 운영자 업로드·재시도·이동·보관함 제외(원본·기존 파일 권한은 유지), 섹션별 ZIP과 참가자 승인 사진 ZIP을 추가했다. 서버는 AGENCY/행사 멤버 MANAGER 권한, 행사·분류 범위, 생성 파일명, 비공개 투영을 유지하고 참조된 원본이 사라진 ZIP은 부분 압축을 내보내지 않고 오류로 종료한다. 실제 Next 프로덕션 빌드와 격리 PostgreSQL 데모 데이터에서 Playwright로 업로드→기록 연결 실패→기록만 재시도(바이트 업로드 1회·커맨드 2회), 분류 이동, 섹션 ZIP(해당 섹션 엔트리만), 승인 사진 ZIP(승인 1장만), 메타데이터 제외를 확인했다. 로딩→완료, 빈 구간, API 오류→재시도, STAFF 직접 진입 시 사진/업로드/ZIP 미노출도 확인했다. 1280/390/320px 캡처를 읽어 확인했고 문서 너비 넘침·페이지 오류·해당 화면 axe 위반 0. `npm test` 608 통과(신규 DB 통합 11 포함), 서버·앱 타입 검사, `npm run web:build`, test API를 대상으로 한 `npm run web:audit` 통과. 캡처는 `/tmp/opencode/eventouch-captures/evidence-photos-final-{1280,390,320}.png`. 실제 키보드·터치·실기기·스크린리더는 미검증이며 데모 데이터는 격리 DB에만 있다.

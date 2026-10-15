@@ -15,7 +15,7 @@ const { createOperationsCommands } = require('./commands/operations');
 const { createDomainCommands } = require('./commands/domain');
 const { createFileService } = require('./files');
 const { handleApi } = require('./api');
-const { applySecurityHeaders } = require('./http');
+const { applySecurityHeaders, failureMessage } = require('./http');
 const genericMessaging = require('./messaging');
 const solapi = require('./messaging-solapi');
 const { drainMessageOutbox } = require('./message-outbox');
@@ -162,6 +162,17 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
     includeDevLogin: Boolean(process.env.EVENTOUCH_DEV_QUICK_LOGIN),
   });
   const healthReady = healthApp.ready();
+  // Second Fastify increment: public reads (server/fastify/public-reads.ts).
+  // Only GET requests under /api/public delegate; verification codes and
+  // guest photo uploads keep using the legacy router until their slice moves.
+  const { buildPublicReadsApp } = require('./fastify/public-reads.ts');
+  const publicReadsApp = buildPublicReadsApp({
+    events: publicEvents,
+    resolveSession: attendeeAccess ? (cookie) => attendeeAccess.resolveSession(cookie) : null,
+    readPublicFile: files ? (input) => files.readPublic(input) : null,
+    failureMessage,
+  });
+  const publicReadsReady = publicReadsApp.ready();
   return http.createServer((req, res) => {
     // One security-header wrapper per response. Every path below — static,
     // /api/*, /api/auth/*, 404, 405, 500 — therefore carries the same policy
@@ -175,6 +186,13 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
           res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' });
           res.end(JSON.stringify({ ok: false, error: '상태를 확인할 수 없습니다' }));
         }
+      );
+      return;
+    }
+    if ((urlPath === '/api/public' || urlPath.startsWith('/api/public/')) && req.method === 'GET') {
+      publicReadsReady.then(
+        () => publicReadsApp.routing(req, res),
+        () => sendJson(res, 500, { error: '요청을 처리하지 못했습니다' })
       );
       return;
     }
