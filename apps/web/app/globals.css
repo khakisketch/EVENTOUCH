@@ -1461,21 +1461,6 @@ select[aria-invalid="true"] {
 .nav-stage-dot.nav-stage-planned { background: #E8A33D; }
 .nav-stage-dot.nav-stage-ended { background: var(--nav-muted); }
 
-.nav-stage-chip {
-  flex: none;
-  padding: 0 6px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 20px;
-  white-space: nowrap;
-}
-
-.nav-stage-chip.nav-stage-live { background: #4CAF7D; color: #10251b; }
-.nav-stage-chip.nav-stage-planned { background: #E8A33D; color: #2b1c05; }
-.nav-stage-chip.nav-stage-ended,
-.nav-stage-chip.nav-stage-unknown { background: var(--nav-active); color: var(--nav-muted); }
-
 .nav-event-meta {
   color: var(--nav-muted);
   font-size: 12px;

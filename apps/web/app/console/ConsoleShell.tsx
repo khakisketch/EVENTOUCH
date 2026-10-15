@@ -508,9 +508,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
               <span className="nav-event-head">
                 <span className={`nav-stage-dot nav-stage-${stageTone(shellData.currentEventMeta.stage)}`} aria-hidden="true" />
                 <strong title={shellData?.currentEventName ?? undefined}>{shellData?.currentEventName}</strong>
-                <span className={`nav-stage-chip nav-stage-${stageTone(shellData.currentEventMeta.stage)}`}>
-                  {stageLabel(shellData.currentEventMeta.stage)}
-                </span>
+                <span className="sr-only">{stageLabel(shellData.currentEventMeta.stage)}</span>
               </span>
               <span className="nav-event-meta">
                 {[formatShortDate(shellData.currentEventMeta.date), shellData.currentEventMeta.venue].filter(Boolean).join(" · ")}

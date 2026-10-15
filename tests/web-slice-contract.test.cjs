@@ -469,7 +469,9 @@ test('web-console-shell-keeps-decided-navigation-and-clients-read-only', () => {
   // stage, facts below), and the triage list carries the same signals as the
   // home cards so busy events sort themselves. Mobile keeps its compact row.
   assert.match(shell, /nav-event-card/);
-  assert.match(shell, /nav-stage-chip/);
+  assert.match(shell, /nav-stage-dot/);
+  // The dot carries the stage visually; its label stays for screen readers.
+  assert.match(shell, /<span className="sr-only">\{stageLabel/);
   assert.match(shell, /손봐야 할 행사/);
   assert.match(shell, /nav-event-pick/);
   assert.match(shell, /nav-badge/);
