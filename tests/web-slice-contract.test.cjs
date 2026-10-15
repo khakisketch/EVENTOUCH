@@ -52,6 +52,10 @@ test('web-service-entry-sends-everyone-through-the-shared-login', () => {
   assert.doesNotMatch(home, /\/commands/);
   assert.doesNotMatch(home, /localStorage/);
   assert.doesNotMatch(home, /sessionStorage/);
+  // SaaS landing (B): email-only inquiry, no form storage, policy notice.
+  assert.match(home, /mailto:/);
+  assert.match(home, /도입 문의/);
+  assert.doesNotMatch(home, /<form/);
 });
 
 test('web-registration-posts-to-the-public-signup-contract', () => {

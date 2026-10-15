@@ -330,6 +330,7 @@ select[aria-invalid="true"] {
 .home-hero h1 {
   margin-bottom: var(--s3);
   font-size: clamp(var(--display-large), 8vw, var(--display-xl));
+  word-break: keep-all;
 }
 
 .home-description {
@@ -395,6 +396,90 @@ select[aria-invalid="true"] {
 .public-page-footer span,
 .console-footer span {
   color: var(--muted);
+}
+
+/* SaaS landing sections: same tokens, quiet rhythm under the hero. */
+.landing-section {
+  width: 100%;
+  max-width: var(--web-reading-max);
+  margin: 0 auto;
+  padding-block: var(--s6);
+  border-top: 1px solid var(--line);
+}
+
+.landing-section h2 {
+  margin: 0 0 var(--s2);
+  font-size: var(--h2);
+  letter-spacing: -0.02em;
+  word-break: keep-all;
+}
+
+.landing-lead {
+  margin: 0 0 var(--s4);
+  color: var(--muted);
+  font-size: var(--body);
+  word-break: keep-all;
+}
+
+.landing-grid,
+.audience-grid {
+  display: grid;
+  gap: var(--s4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.landing-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.audience-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.landing-card {
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.landing-card h3 {
+  margin: 0 0 var(--s1);
+  font-size: var(--h3);
+  word-break: keep-all;
+}
+
+.landing-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--body);
+  word-break: keep-all;
+}
+
+.landing-note {
+  margin: var(--s3) 0 0;
+  color: var(--muted);
+  font-size: var(--small);
+  word-break: keep-all;
+}
+
+.policy-list {
+  display: grid;
+  gap: var(--s1);
+  margin: var(--s3) 0 0;
+  padding-left: var(--s4);
+  color: var(--muted);
+  font-size: var(--body);
+  word-break: keep-all;
+}
+
+@media (max-width: 720px) {
+  .landing-grid,
+  .audience-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* Public event details. */
