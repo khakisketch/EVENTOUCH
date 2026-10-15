@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const { normalizeEvent, normalizeWorkspace, projectParticipant } = require('../state');
+const { createAttendeeAccess } = require('../attendees');
 const {
   failure,
   object,
@@ -386,6 +387,9 @@ function validCommand(command) {
 }
 
 function createParticipantCommands(database) {
+  // Verification grants and session revocation live here; the SMS transport
+  // itself is owned by the API layer (server/attendees is transport-free).
+  const attendeeAccess = createAttendeeAccess(database);
   async function mutate({ ref, value, commandId, operation, command, account, assignmentId, ticketToken, apply }) {
     const id = commandIdentifier(commandId);
     return database.transaction(async (client) => {
@@ -448,11 +452,18 @@ function createParticipantCommands(database) {
          VALUES ($1, $2, $3, $4::jsonb)`,
         [id, event.id, actorId, JSON.stringify(receiptData)]
       );
-      return { status: response.status || 200, body: response.body, replayed: false };
+      return {
+        status: response.status || 200,
+        body: response.body,
+        replayed: false,
+        revokedParticipantIds: Array.isArray(response.revokedParticipantIds)
+          ? response.revokedParticipantIds
+          : [],
+      };
     });
   }
 
-  async function signup({ slug, commandId: id, input }) {
+  async function signup({ slug, commandId: id, input, cookieHeader }) {
     const eventSlug = clean(slug, 100);
     try {
       commandIdentifier(id);
@@ -461,7 +472,51 @@ function createParticipantCommands(database) {
       if (!exists.rowCount) throw failure(404, '요청한 행사를 찾을 수 없습니다', undefined, 'EVENT_NOT_FOUND');
       throw error;
     }
-    return mutate({
+    // Phone-verified enrollment (slice 7a): events that opt in with
+    // workspace.verificationRequired must present a single-use grant bound
+    // to the same phone number. Older workspaces stay open, so existing
+    // registrations and tests keep working.
+    const formInput = object(input);
+    const signupPhone = normalizedPhone(formInput.phone);
+    let grantConsumed = false;
+    const eventRow = await database.query(
+      `SELECT e.id, e.payload, w.payload AS workspace_payload
+        FROM events e LEFT JOIN event_workspaces w ON w.event_id = e.id
+        WHERE e.slug = $1 LIMIT 1`,
+      [eventSlug]
+    );
+    const verificationRequired = Boolean(
+      eventRow.rows[0] &&
+      eventRow.rows[0].workspace_payload &&
+      eventRow.rows[0].workspace_payload.verificationRequired === true
+    );
+    if (verificationRequired) {
+      if (!eventRow.rows[0]) throw failure(404, '요청한 행사를 찾을 수 없습니다', undefined, 'EVENT_NOT_FOUND');
+      try {
+        await attendeeAccess.consumeGrant({
+          token: formInput.verificationGrant,
+          eventId: eventRow.rows[0].id,
+          phone: signupPhone,
+        });
+        grantConsumed = true;
+      } catch (error) {
+        if (error && error.status === 409 && !grantConsumed) {
+          // A lost response retried with the same command id already spent
+          // its grant on the first attempt: let the receipt replay answer
+          // instead of demanding a fresh verification.
+          const receipt = await database.query(
+            'SELECT event_id FROM command_receipts WHERE command_id = $1 LIMIT 1',
+            [String(id)]
+          );
+          if (!receipt.rows[0] || String(receipt.rows[0].event_id) !== String(eventRow.rows[0].id)) {
+            throw error;
+          }
+        } else {
+          throw error;
+        }
+      }
+    }
+    const result = await mutate({
       ref: 'slug',
       value: eventSlug,
       commandId: id,
@@ -490,6 +545,27 @@ function createParticipantCommands(database) {
         };
       },
     });
+    // Same-device session: the enrolling browser proved possession of this
+    // enrollment, so it resumes the ticket without re-verifying. Merging is
+    // idempotent, which also heals the lost-response replay above.
+    let session = null;
+    try {
+      const participantId = result.body && result.body.participant && result.body.participant.id;
+      if (participantId && eventRow.rows[0]) {
+        const merged = await attendeeAccess.mergeGrant({
+          cookieHeader,
+          event: { id: eventRow.rows[0].id, payload: eventRow.rows[0].payload || {} },
+          participantId: String(participantId),
+          phone: signupPhone,
+        });
+        session = { token: merged.token, expiresAt: merged.expiresAt };
+      }
+    } catch (error) {
+      // The registration itself succeeded; a session failure must never
+      // turn it into an error. The ticket bearer in the response still works.
+      process.stderr.write(`[eventouch] signup session merge failed: ${(error && error.message) || error}\n`);
+    }
+    return { ...result, session };
   }
 
   async function execute({ eventId, commandId: id, command, payload, account, assignmentId: assignedId, ticketToken }) {
@@ -501,7 +577,7 @@ function createParticipantCommands(database) {
       throw failure(401, '로그인이 필요합니다');
     }
 
-    return mutate({
+    const result = await mutate({
       ref: 'id',
       value: clean(eventId, 100),
       commandId: id,
@@ -513,6 +589,7 @@ function createParticipantCommands(database) {
       apply: async ({ client, event, workspace, now }) => {
         const input = object(payload);
         const nowMs = Date.parse(now);
+        const revokedParticipantIds = [];
         if (guest) {
           const participant = activeTicketParticipant(workspace, ticketToken, nowMs);
           if (!participant) throw failure(404, '티켓 링크를 확인할 수 없습니다');
@@ -520,21 +597,29 @@ function createParticipantCommands(database) {
             if (workspace.registrationOpen !== true || ['ENDED', 'ARCHIVED'].includes(String(event.stage).toUpperCase())) {
               throw failure(409, '수정 기간이 종료되었습니다. 운영자에게 문의하세요');
             }
+            const beforePhone = normalizedPhone(participant.phone);
             updateParticipant(
               workspace,
               participant,
               publishedFormInput(input, workspace.publishedFields),
               workspace.publishedFields
             );
+            // A changed number breaks the recovery binding: the browser must
+            // re-verify the new number before it reads as this participant.
+            if (normalizedPhone(participant.phone) !== beforePhone) {
+              revokedParticipantIds.push(participant.id);
+            }
           } else {
             if (['ENDED', 'ARCHIVED'].includes(String(event.stage).toUpperCase())) {
               throw failure(409, '취소 기간이 종료되었습니다');
             }
             cancelParticipant(workspace, participant);
+            revokedParticipantIds.push(participant.id);
           }
           return {
             body: { participant: projectParticipant(workspace, event, participant) },
             participantId: participant.id,
+            revokedParticipantIds,
           };
         }
 
@@ -550,8 +635,12 @@ function createParticipantCommands(database) {
 
         if (command === 'participant.update') {
           const person = findPerson(workspace, clean(input.id, 120));
+          const beforePhone = normalizedPhone(person.phone);
           updateParticipant(workspace, person, input, workspace.fields);
-          return { body: { participant: projectParticipant(workspace, event, person) } };
+          if (normalizedPhone(person.phone) !== beforePhone) {
+            revokedParticipantIds.push(person.id);
+          }
+          return { body: { participant: projectParticipant(workspace, event, person) }, revokedParticipantIds };
         }
 
         if (command === 'participant.status') {
@@ -562,7 +651,10 @@ function createParticipantCommands(database) {
           }
           const people = ids.map((personId) => findPerson(workspace, clean(personId, 120)));
           for (const person of people) setParticipantStatus(event, workspace, person, status, now);
-          return { body: { participants: people.map((person) => projectParticipant(workspace, event, person)) } };
+          for (const person of people) {
+            if (person.status === 'CANCELLED') revokedParticipantIds.push(person.id);
+          }
+          return { body: { participants: people.map((person) => projectParticipant(workspace, event, person)) }, revokedParticipantIds };
         }
 
         if (command === 'ticket.reissue') {
@@ -598,6 +690,22 @@ function createParticipantCommands(database) {
         throw failure(400, '지원하지 않는 참가자 작업입니다');
       },
     });
+    // Session revocation runs after commit and never fails the command: the
+    // workspace write already won, and a stale browser grant must simply
+    // stop resolving afterwards.
+    const revoked = Array.isArray(result.revokedParticipantIds)
+      ? [...new Set(result.revokedParticipantIds.map((item) => String(item)).filter(Boolean))]
+      : [];
+    if (revoked.length) {
+      try {
+        for (const participantId of revoked) {
+          await attendeeAccess.revokeParticipant(eventId, participantId);
+        }
+      } catch (error) {
+        process.stderr.write(`[eventouch] session revoke failed: ${(error && error.message) || error}\n`);
+      }
+    }
+    return result;
   }
 
   return { signup, execute };

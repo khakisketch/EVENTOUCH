@@ -6,6 +6,11 @@
 #   PORT=8899 bash scripts/serve-demo.sh       # 다른 포트
 #   DATABASE_URL='postgres://…' bash scripts/serve-demo.sh   # 다른 DB
 #
+# Attendee verification codes use the mock SMS transport here
+# (EVENTOUCH_SMS_MOCK=1): codes are written to the server log only, never to
+# HTTP responses. Real sends need Solapi credentials (docs/INTEGRATIONS.md)
+# and EVENTOUCH_SMS_MOCK unset.
+#
 # 시안·캡처 폴더에 의존하지 않는다. 이 스크립트 하나로 데모 서버를 다시 띄운다.
 set -euo pipefail
 
@@ -31,6 +36,7 @@ ADMIN_NAME="${ADMIN_NAME:-운영사 관리자}" \
 ADMIN_PASSWORD="$ADMIN_PASSWORD" \
 DATA_DIR="$RUN_DIR/data" \
 STORAGE_DIR="$RUN_DIR/storage" \
+EVENTOUCH_SMS_MOCK="${EVENTOUCH_SMS_MOCK:-1}" \
 EVENTOUCH_DEV_QUICK_LOGIN="$ADMIN_EMAIL" \
 node server/server.js > "$RUN_DIR/server.log" 2>&1 &
 

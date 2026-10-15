@@ -137,6 +137,29 @@ salt를 새로 만들고, 서버 시각이 Solapi 기준 ±15분을 넘으면 �
 접수를 곧 발송으로 올림하지 않는다. 수신자별로 `SENDING → SENT/FAILED`가
 따로 기록되고, 실패 사유와 Solapi 상태코드가 함께 남는다.
 
+### 참가자 인증번호 발송 (선구현)
+
+참가자 연락처 확인·복구용 6자리 인증번호는 같은 Solapi SMS 경로로 나간다
+(`server/verification-transport.js`). 문구 형식:
+
+    [EVENTOUCH] 인증번호 123456 (행사명)
+
+짧은 SMS 한도(90바이트) 안에 들어가므로 항상 SMS로 발송되고 LMS로 승격되지
+않는다. 캠페인 outbox와는 별도 경로다: 인증번호는 발송 후에도 DB에 남지
+않으며(해시만 저장), 재시도는 새 인증번호 발급(재전송 간격 60초·일 10회 제한)으로 처리한다.
+
+모드 선택(명시적, 조용한 기본값 없음):
+
+| 조건 | 동작 |
+|---|---|
+| Solapi 3종(`SOLAPI_API_KEY`·`SOLAPI_API_SECRET`·`SOLAPI_SENDER`) 설정 | 실제 SMS 발송 |
+| `EVENTOUCH_SMS_MOCK=1` | 모의 기록(프로세스 메모리 + 데모 서버 로그). HTTP 응답에 코드가 절대 포함되지 않음 |
+| 둘 다 없음 | `NOT_CONFIGURED` → 인증 요청에 503. 발송된 것처럼 속이지 않음 |
+
+실발송 검증 체크리스트(자격증명 확보 후): SMS 1건 도달 확인 →
+서버 로그·DB·응답에 코드 잔류 없음 확인 → 재전송 간격·일 한도·시도 횟수
+초과 동작 확인 → `/api/health`의 `verification`이 `solapi`로 표시됨 확인.
+
 ### 도달 확인 (폴링)
 
     GET https://api.solapi.com/messages/v4/list?messageIds=["M1","M2"]&limit=500

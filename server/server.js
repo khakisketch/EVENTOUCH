@@ -19,6 +19,8 @@ const { applySecurityHeaders } = require('./http');
 const genericMessaging = require('./messaging');
 const solapi = require('./messaging-solapi');
 const { drainMessageOutbox } = require('./message-outbox');
+const { createAttendeeAccess } = require('./attendees');
+const { createVerificationTransport } = require('./verification-transport');
 
 const ROOT = path.join(__dirname, '..');
 const PORT = Number(process.env.PORT || 8776);
@@ -129,6 +131,11 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
   const messagingStatus = genericMessaging.activeMessagingState();
   const domainCommands = database ? createDomainCommands(database, { messaging }) : null;
   const files = database ? createFileService(database, { storageDir }) : null;
+  // Attendee verification transport: Solapi when credentials exist, explicit
+  // mock (EVENTOUCH_SMS_MOCK=1) for development/tests/demo, honest 503
+  // otherwise. Verification codes are never returned to HTTP clients.
+  const verificationTransport = createVerificationTransport();
+  const attendeeAccess = database ? createAttendeeAccess(database, { transport: verificationTransport }) : null;
   return http.createServer((req, res) => {
     // One security-header wrapper per response. Every path below — static,
     // /api/*, /api/auth/*, 404, 405, 500 — therefore carries the same policy
@@ -142,6 +149,7 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
         ...(process.env.EVENTOUCH_DEV_QUICK_LOGIN ? { devQuickLogin: true } : {}),
         messaging: messagingStatus.connected,
         messagingProvider: messagingStatus.provider || null,
+        verification: verificationTransport.state().mode,
       };
       // Queue depth is a best-effort signal: a failing count must never turn
       // a live server unhealthy, it just omits the field.
@@ -174,6 +182,7 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
         operationsCommands,
         domainCommands,
         files,
+        attendeeAccess,
       }).catch(() => {
         sendJson(res, 500, { error: '요청을 처리하지 못했습니다' });
       });

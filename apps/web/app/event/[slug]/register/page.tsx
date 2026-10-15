@@ -14,6 +14,7 @@ export type RegisterData = {
   consentVersion: number;
   registrationOpen: boolean;
   publishedVersion: number;
+  verificationRequired: boolean;
   fields: PublishedField[];
 };
 
@@ -68,6 +69,7 @@ async function loadRegisterData(slug: string): Promise<RegisterData | null> {
       typeof workspace.publishedVersion === "number"
         ? workspace.publishedVersion
         : 0,
+    verificationRequired: workspace.verificationRequired === true,
     fields: rawFields
       .map(asField)
       .filter((field): field is PublishedField => field !== null),
@@ -121,6 +123,7 @@ export default async function RegisterPage({
         fields={[...BUILT_IN_FIELDS, ...data.fields]}
         consentText={data.consentText}
         formVersion={data.publishedVersion}
+        verificationRequired={data.verificationRequired}
       />
       <footer className="public-page-footer">EVENTOUCH <span>참가 신청</span></footer>
     </main>

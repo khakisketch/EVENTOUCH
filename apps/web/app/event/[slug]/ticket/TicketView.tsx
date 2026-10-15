@@ -85,14 +85,12 @@ export default function TicketView({ slug }: { slug: string }) {
       const cleaned = `${window.location.pathname}${query.toString() ? `?${query.toString()}` : ""}${window.location.hash}`;
       window.history.replaceState(null, "", cleaned);
       const ticket = fromLink || readStoredTicket(slug);
-      if (!ticket) {
-        if (!cancelled) setState({ kind: "missing" });
-        return;
-      }
       try {
         const res = await fetch(
           `/api/public/events/${encodeURIComponent(slug)}/ticket`,
-          { headers: { authorization: `Bearer ${ticket}` }, cache: "no-store" }
+          ticket
+            ? { headers: { authorization: `Bearer ${ticket}` }, cache: "no-store" }
+            : { cache: "no-store" }
         );
         const data = (await res.json().catch(() => null)) as {
           error?: unknown;
@@ -101,25 +99,34 @@ export default function TicketView({ slug }: { slug: string }) {
         } | null;
         if (!res.ok || !data?.participant) {
           // The server says this link is not usable; stop replaying it.
-          if (res.status === 404) clearStoredTicket(slug);
+          // Without any credential (fresh tab, cleared storage) this is the
+          // normal "come back" state, not an error.
+          if (res.status === 404 && ticket) clearStoredTicket(slug);
           if (!cancelled) {
-            setState({
-              kind: "failed",
-              message:
-                typeof data?.error === "string"
-                  ? data.error
-                  : "티켓을 확인할 수 없습니다. 운영자에게 새 링크를 요청하세요.",
-            });
+            if (!ticket) setState({ kind: "missing" });
+            else {
+              setState({
+                kind: "failed",
+                message:
+                  typeof data?.error === "string"
+                    ? data.error
+                    : "티켓을 확인할 수 없습니다. 운영자에게 새 링크를 요청하세요.",
+              });
+            }
           }
           return;
         }
         const participant = data.participant;
         const text = (value: unknown): string =>
           typeof value === "string" ? value : "";
+        // Session restores carry the token inside the payload; keep it in
+        // tab memory only, exactly like the link-consumed bearer.
+        const resolvedTicket = ticket || text(participant.ticket);
+        if (resolvedTicket && !fromLink) storeTicket(slug, resolvedTicket);
         if (!cancelled) {
           setState({
             kind: "ready",
-            ticket,
+            ticket: resolvedTicket,
             name: text(participant.name),
             company: text(participant.company),
             status: text(participant.status) || "APPROVED",
@@ -152,7 +159,10 @@ export default function TicketView({ slug }: { slug: string }) {
     return (
       <section className="ticket-card ticket-message">
         <h1>티켓 링크가 필요합니다</h1>
-        <p>신청 완료 화면의 링크로 다시 여세요.</p>
+        <p>신청 완료 화면의 링크로 다시 여세요. 이 기기에서 신청했다면 자동으로 찾을 수 있습니다.</p>
+        <p>
+          <Link className="button button-primary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 참가 정보 다시 연결</Link>
+        </p>
         <p>
           <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/register`}>참가 신청하기</Link>
         </p>

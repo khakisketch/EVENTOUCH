@@ -53,6 +53,38 @@ test('web-registration-posts-to-the-public-signup-contract', () => {
   assert.match(page, /publishedVersion/);
 });
 
+test('web-attendee-verification-precedes-signup-and-recovery-without-accounts', () => {
+  // Verified-only events prove phone possession before signup; the grant is
+  // bound to the exact digits and dies when the number is edited.
+  const form = read('app/event/[slug]/register/RegisterForm.tsx');
+  assert.match(form, /verificationRequired/);
+  assert.match(form, /verification\/request/);
+  assert.match(form, /verification\/confirm/);
+  assert.match(form, /verificationGrant/);
+  assert.match(form, /연락처 인증을 먼저 완료하세요/);
+  assert.match(form, /setGrantPhone/);
+  assert.doesNotMatch(form, /localStorage/);
+  assert.doesNotMatch(form, /sessionStorage/);
+  const page = read('app/event/[slug]/register/page.tsx');
+  assert.match(page, /verificationRequired/);
+  // Recovery reconnects by verified number; the session cookie set by the
+  // server does the rest. No account, no stored secret on the device.
+  const recover = read('app/event/[slug]/ticket/recover/RecoverForm.tsx');
+  assert.match(recover, /verification\/request/);
+  assert.match(recover, /verification\/confirm/);
+  assert.match(recover, /RECOVER/);
+  assert.match(recover, /\/ticket/);
+  assert.doesNotMatch(recover, /localStorage/);
+  assert.doesNotMatch(recover, /sessionStorage/);
+  const recoverPage = read('app/event/[slug]/ticket/recover/page.tsx');
+  assert.match(recoverPage, /RecoverForm/);
+  // The ticket screen falls back to the session when the tab holds no
+  // bearer, and points home instead of dead-ending.
+  const view = read('app/event/[slug]/ticket/TicketView.tsx');
+  assert.match(view, /ticket\/recover/);
+  assert.match(view, /내 참가 정보 다시 연결/);
+});
+
 test('web-ticket-keeps-the-bearer-out-of-history-and-persistent-storage', () => {
   const view = read('app/event/[slug]/ticket/TicketView.tsx');
   assert.match(view, /authorization:\s*`Bearer /);

@@ -322,6 +322,7 @@ function publicWorkspace(value, event, participant = null) {
     stampMode: source.stampMode === 'SELF' ? 'SELF' : 'STAFF',
     allowReentry: source.allowReentry !== false,
     price: Math.max(0, Number(source.price) || 0),
+    verificationRequired: source.verificationRequired === true,
   };
   return workspace;
 }
@@ -384,7 +385,60 @@ function createPublicEvents(database) {
     return { event, workspace, participant: workspace.participants[0] };
   }
 
-  return { loadPublicEvent, loadTicket };
+  // Session-granted read: the caller already proved browser-session
+  // ownership of this participant. Active participants get the same payload
+  // as the bearer path (including the QR token, kept in tab memory by the
+  // client); cancelled/revoked/expired ones get a status-only record so the
+  // screen can explain instead of dead-ending, without usable admission.
+  async function loadParticipantTicket(eventSlugValue, participantIdValue) {
+    const slug = String(eventSlugValue || '');
+    const participantId = String(participantIdValue || '');
+    if (!/^[a-z0-9][a-z0-9-]{0,99}$/.test(slug) || !participantId) return null;
+    const row = await findBySlug(slug);
+    if (!row) return null;
+    const event = publicEvent(row);
+    if (!event) return null;
+    const source = object(row.workspace_payload);
+    const participant = array(source.participants).find((item) => item && item.id === participantId);
+    if (!participant) return null;
+    const usable = participant.status !== 'CANCELLED' && participant.cancelled !== true &&
+      participant.revoked !== true &&
+      (() => {
+        const expiresAt = Date.parse(participant.ticketExpiresAt);
+        return Number.isFinite(expiresAt) && expiresAt > Date.now();
+      })();
+    const workspace = publicWorkspace(source, event, usable ? participant : null);
+    if (usable) return { event, workspace, participant: workspace.participants[0] };
+    return {
+      event,
+      workspace,
+      participant: {
+        id: participant.id,
+        name: typeof participant.name === 'string' ? participant.name : '',
+        status: participant.status === 'CANCELLED' ? 'CANCELLED' : '상태 확인 필요',
+        paymentStatus: typeof participant.paymentStatus === 'string' ? participant.paymentStatus : '',
+        inside: false,
+        everIn: participant.everIn === true,
+        revoked: participant.revoked === true,
+      },
+    };
+  }
+
+  // Browser-session entry to the ticket above: matches one of the session's
+  // per-event grants against this event. No grant, no read; a photographed
+  // QR alone mints nothing because no endpoint exchanges a ticket token for
+  // a session.
+  async function loadSessionTicket(eventSlugValue, grants) {
+    const slug = String(eventSlugValue || '');
+    if (!/^[a-z0-9][a-z0-9-]{0,99}$/.test(slug) || !Array.isArray(grants)) return null;
+    const row = await findBySlug(slug);
+    if (!row) return null;
+    const grant = grants.find((item) => item && String(item.eventId) === String(row.id)) || null;
+    if (!grant || !grant.participantId) return null;
+    return loadParticipantTicket(slug, grant.participantId);
+  }
+
+  return { loadPublicEvent, loadTicket, loadParticipantTicket, loadSessionTicket };
 }
 
 module.exports = { createPublicEvents, publicEvent, publicWorkspace, validParticipant };

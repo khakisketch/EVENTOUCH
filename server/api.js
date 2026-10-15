@@ -6,6 +6,7 @@
 
 const fs = require('node:fs');
 const { sendJson, readJsonBody, failureMessage } = require('./http');
+const { attendeeCookie } = require('./attendees');
 const {
   handleLegacyEvents,
   handleLegacyUpload,
@@ -71,9 +72,52 @@ function readRawBytes(req) {
 }
 
 async function handleApi(req, res, store, urlPath, security = {}) {
-  const { auth, access, state, publicEvents, participantCommands, operationsCommands, domainCommands, files } = security;
+  const { auth, access, state, publicEvents, participantCommands, operationsCommands, domainCommands, files, attendeeAccess } = security;
   const parts = urlPath.split('/').filter(Boolean);
   if (parts[0] !== 'api') return sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
+
+  // Attendee phone verification (slice 7a). Same-origin public endpoints;
+  // the session cookie set here authorizes reads only, and codes never
+  // leave the server except through the SMS transport.
+  if (parts[1] === 'public' && parts[2] === 'events' && parts[4] === 'verification' &&
+      parts.length === 6 && req.method === 'POST' && publicEvents && attendeeAccess) {
+    const slug = decodedSegment(parts[3]);
+    const action = decodedSegment(parts[5]);
+    if (!slug || (action !== 'request' && action !== 'confirm')) {
+      return sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
+    }
+    res.setHeader('cache-control', 'no-store');
+    let challengeBody = {};
+    try {
+      challengeBody = await readJsonBody(req);
+    } catch (error) {
+      return err(res, 400, error.message);
+    }
+    try {
+      if (action === 'request') {
+        const issued = await attendeeAccess.requestChallenge({
+          eventRef: slug,
+          phone: challengeBody.phone,
+          purpose: challengeBody.purpose,
+        });
+        return sendJson(res, 200, { ok: true, challengeId: issued.challengeId, expiresAt: issued.expiresAt });
+      }
+      const confirmed = await attendeeAccess.confirmChallenge({
+        eventRef: slug,
+        phone: challengeBody.phone,
+        code: challengeBody.code,
+      });
+      if (confirmed.kind === 'grant') {
+        return sendJson(res, 200, { ok: true, grant: confirmed.grant, grantExpiresAt: confirmed.grantExpiresAt });
+      }
+      const maxAge = Math.max(60, Math.floor((Date.parse(confirmed.session.expiresAt) - Date.now()) / 1000));
+      res.setHeader('set-cookie', attendeeCookie(confirmed.session.token, maxAge));
+      return sendJson(res, 200, { ok: true, expiresAt: confirmed.session.expiresAt });
+    } catch (error) {
+      if (error && error.code === 'NEEDS_CONNECTION') return err(res, 503, error.message);
+      return err(res, error.status || 500, failureMessage(error, '요청을 처리하지 못했습니다'), error.field);
+    }
+  }
 
   if (parts[1] === 'bootstrap') {
     res.setHeader('cache-control', 'no-store');
@@ -132,6 +176,19 @@ async function handleApi(req, res, store, urlPath, security = {}) {
         return sendJson(res, 200, result);
       }
       const result = await publicEvents.loadTicket(slug, bearerToken(req.headers.authorization));
+      if (!result && attendeeAccess) {
+        // Same-browser return: a verified session restores the ticket
+        // without the bearer. A photographed QR alone mints nothing.
+        try {
+          const session = await attendeeAccess.resolveSession(req.headers.cookie);
+          if (session) {
+            const granted = await publicEvents.loadSessionTicket(slug, session.grants);
+            if (granted) return sendJson(res, 200, granted);
+          }
+        } catch (error) {
+          // Fall through to the generic ticket failure below.
+        }
+      }
       if (!result) return err(res, 404, '티켓 링크를 확인할 수 없습니다');
       return sendJson(res, 200, result);
     } catch (error) {
@@ -228,7 +285,16 @@ async function handleApi(req, res, store, urlPath, security = {}) {
         return await handleLegacyEvents(req, res, store, [slug, 'signup'], body, auth, access);
       }
       try {
-        const result = await participantCommands.signup({ slug, commandId: body.commandId, input: body });
+        const result = await participantCommands.signup({
+          slug,
+          commandId: body.commandId,
+          input: body,
+          cookieHeader: req.headers.cookie,
+        });
+        if (result.session) {
+          const maxAge = Math.max(60, Math.floor((Date.parse(result.session.expiresAt) - Date.now()) / 1000));
+          res.setHeader('set-cookie', attendeeCookie(result.session.token, maxAge));
+        }
         return sendJson(res, result.status, result.body);
       } catch (error) {
         return err(res, error.status || 500, failureMessage(error, '요청을 처리하지 못했습니다'), error.field);
