@@ -374,12 +374,27 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           >
             <option value="">선택하세요</option>
             {activeScope.booths.map((booth) => (
-              <option key={booth.id} value={booth.id}>
+              <option
+                key={booth.id}
+                value={booth.id}
+                disabled={booth.status !== "" && booth.status !== "OPEN"}
+              >
                 {booth.name}
-                {booth.status && booth.status !== "OPEN" ? " (진행 전)" : ""}
+                {booth.status === "WAITING" ? " (운영 전)" : booth.status === "CLOSED" ? " (종료)" : ""}
               </option>
             ))}
           </select>
+          {(() => {
+            const selected = activeScope.booths.find((booth) => booth.id === boothId);
+            if (!selected) return null;
+            if (selected.status === "WAITING") {
+              return <p className="staff-direction-hint" role="status">아직 운영을 시작하지 않은 부스입니다. 운영자가 부스를 열면 선택할 수 있습니다.</p>;
+            }
+            if (selected.status === "CLOSED") {
+              return <p className="staff-direction-hint" role="status">종료된 부스입니다. 운영자가 다시 열면 선택할 수 있습니다.</p>;
+            }
+            return null;
+          })()}
         </div>
       )}
       {activeTask === "booth" && activeScope.stampMode === "SELF" ? (

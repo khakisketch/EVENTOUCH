@@ -617,6 +617,11 @@ test('web-staff-booth-work-uses-the-booth-visit-command-and-stamp-mode', () => {
   // …so the camera action stays out of SELF mode, and a stale refresh says so.
   assert.match(staff, /stampMode === "SELF" \? null/);
   assert.match(staff, /오래되었을 수 있습니다/);
+  // Booth availability is stated truthfully: WAITING and CLOSED are distinct
+  // and non-open booths cannot be selected.
+  assert.match(staff, /운영 전/);
+  assert.match(staff, /종료된 부스입니다/);
+  assert.match(staff, /booth\.status !== "" && booth\.status !== "OPEN"/);
   // A silent refresh never strands an operator on an empty screen.
   assert.match(staff, /scopeRef/);
   assert.doesNotMatch(staff, /localStorage/);
