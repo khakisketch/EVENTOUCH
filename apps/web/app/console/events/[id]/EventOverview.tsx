@@ -313,7 +313,7 @@ function problemsForStage(overview: Overview, stage: string, base: string): Prob
     });
   }
 
-  if (soldOutBooths.length > 0) {
+  if (isLiveOrReady && soldOutBooths.length > 0) {
     const names = soldOutBooths.map((booth) => booth.name).filter(Boolean).slice(0, 3);
     const suffix = soldOutBooths.length > names.length ? ` 외 ${soldOutBooths.length - names.length}곳` : "";
     problems.push({
