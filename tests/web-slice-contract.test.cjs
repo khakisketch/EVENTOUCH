@@ -521,6 +521,25 @@ test('web-staff-booth-work-uses-the-booth-visit-command-and-stamp-mode', () => {
   assert.doesNotMatch(staff, /localStorage/);
 });
 
+test('web-staff-desk-shows-direction-and-prints-nametags-in-kiosk-mode', () => {
+  const staff = read('app/staff/StaffEventWork.tsx');
+  // The scan action comes from the desk; the operator must see it.
+  assert.match(staff, /퇴장/);
+  assert.match(staff, /이 데스크는/);
+  // Kiosk is a display mode on the same assignment and login, never an
+  // unattended self check-in.
+  assert.match(staff, /키오스크 모드/);
+  assert.match(staff, /kiosk-mode/);
+  assert.match(staff, /무인 셀프 체크인은 지원하지 않습니다/);
+  // Nametags print from the scan result with the company on file.
+  assert.match(staff, /네임택 인쇄/);
+  assert.match(staff, /nametag-sheet/);
+  assert.match(staff, /nametag-printing/);
+  const css = read('app/globals.css');
+  assert.match(css, /\.nametag-sheet/);
+  assert.match(css, /\.kiosk-mode/);
+});
+
 test('web-shared-login-keeps-safe-return-destinations-only', () => {
   const guard = read('app/auth-redirect.ts');
   assert.match(guard, /safeNextPath/);

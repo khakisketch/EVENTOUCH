@@ -9,8 +9,17 @@ import { buildStaffScopes, resolveStaffScopeId, type StaffScope } from "./staff-
 
 type ScanResult =
   | { kind: "idle" }
-  | { kind: "ok"; name: string; action: string; reentry: boolean; booth?: string }
+  | { kind: "ok"; participantId: string; name: string; action: string; reentry: boolean; booth?: string }
   | { kind: "failed"; message: string };
+
+type Nametag = {
+  name: string;
+  company: string;
+  eventName: string;
+  deskName: string;
+  action: string;
+  at: string;
+};
 
 function randomCommandId(): string {
   if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
@@ -30,8 +39,11 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   const [boothId, setBoothId] = useState("");
   const [ticket, setTicket] = useState("");
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [kiosk, setKiosk] = useState(false);
+  const [nametag, setNametag] = useState<Nametag | null>(null);
   const [result, setResult] = useState<ScanResult>({ kind: "idle" });
   const [submitting, setSubmitting] = useState(false);
+  const [directory, setDirectory] = useState<Record<string, string>>({});
   const scopeRef = useRef<StaffScope | null>(null);
   scopeRef.current = scope;
 
@@ -60,6 +72,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             assignments?: unknown;
             checks?: unknown;
             stampMode?: unknown;
+            participants?: unknown;
           }>;
         } | null;
       } | null;
@@ -86,6 +99,21 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       }
       setScope(next);
       setMissingAssignment(false);
+      // Name directory for nametags: the staff projection already carries
+      // names and companies for desk work, so no extra read is needed.
+      const directoryMap: Record<string, string> = {};
+      const roster = state.workspaces?.[targetEventId]?.participants;
+      if (Array.isArray(roster)) {
+        for (const entry of roster) {
+          if (typeof entry === "object" && entry !== null) {
+            const person = entry as Record<string, unknown>;
+            if (typeof person.id === "string" && person.id) {
+              directoryMap[person.id] = typeof person.company === "string" ? person.company : "";
+            }
+          }
+        }
+      }
+      setDirectory(directoryMap);
       if (!silent) {
         setDeskId("");
         setBoothId("");
@@ -107,6 +135,12 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetEventId]);
+
+  useEffect(() => {
+    if (!kiosk || loading) return;
+    const input = document.getElementById("staff-ticket");
+    if (input instanceof HTMLInputElement) input.focus();
+  }, [kiosk, loading, task, deskId, boothId]);
 
   if (loading) return <p className="loading-state" role="status">업무 정보를 불러오고 있습니다.</p>;
   if (missingAssignment || (!scope && loadError)) {
@@ -165,6 +199,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       pendingScanIdRef.current = null;
       const data = (await res.json().catch(() => null)) as {
         error?: unknown;
+        id?: unknown;
         name?: unknown;
         action?: unknown;
         reentry?: unknown;
@@ -180,6 +215,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       }
       setResult({
         kind: "ok",
+        participantId: typeof data?.id === "string" ? data.id : "",
         name: typeof data?.name === "string" ? data.name : "",
         action: isDesk
           ? typeof data?.action === "string" ? data.action : ""
@@ -202,13 +238,29 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   }
 
   return (
-    <section className="staff-workspace" aria-label={`${activeScope.eventName} 현장 업무`}>
+    <section className={`staff-workspace${kiosk ? " kiosk-mode" : ""}`} aria-label={`${activeScope.eventName} 현장 업무`}>
       <p className="staff-event-context">
         <Link className="staff-back-link" href="/staff">
           ← 내 업무
         </Link>
         <span>{activeScope.eventName}</span>
+        <button
+          type="button"
+          className="button button-secondary kiosk-toggle"
+          aria-pressed={kiosk}
+          onClick={() => {
+            setKiosk((current) => !current);
+            setResult({ kind: "idle" });
+          }}
+        >
+          {kiosk ? "일반 화면" : "키오스크 모드"}
+        </button>
       </p>
+      {kiosk ? (
+        <p className="notice" role="status">
+          공용 태블릿용 큰 화면입니다. 같은 배정·같은 로그인으로 처리하며, 무인 셀프 체크인은 지원하지 않습니다.
+        </p>
+      ) : null}
       {hasDeskWork && hasBoothWork ? (
         <div className="staff-task-switch" role="group" aria-label="업무 종류">
           <button
@@ -249,10 +301,20 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             <option value="">선택하세요</option>
             {activeScope.desks.map((desk) => (
               <option key={desk.id} value={desk.id}>
-                {desk.name}
+                {desk.name} · {desk.action === "OUT" ? "퇴장" : "입장"}
               </option>
             ))}
           </select>
+          {deskId ? (
+            <p className="staff-direction-hint" role="status">
+              {(() => {
+                const selected = activeScope.desks.find((desk) => desk.id === deskId);
+                return selected
+                  ? `이 데스크는 ${selected.action === "OUT" ? "퇴장" : "입장"} 처리합니다.`
+                  : "";
+              })()}
+            </p>
+          ) : null}
         </div>
       ) : (
         <div className="staff-select-field">
@@ -355,6 +417,27 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           {result.reentry ? " (재입장)" : ""}
         </p>
       ) : null}
+      {result.kind === "ok" && result.action === "IN" ? (
+        <p>
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={() => {
+              setNametag({
+                name: result.name,
+                company: (result.participantId && directory[result.participantId]) || "",
+                eventName: activeScope.eventName,
+                deskName: activeScope.desks.find((desk) => desk.id === deskId)?.name ?? "",
+                action: result.action,
+                at: new Date().toISOString(),
+              });
+              document.body.classList.add("nametag-printing");
+            }}
+          >
+            네임택 인쇄
+          </button>
+        </p>
+      ) : null}
       {result.kind === "failed" ? <p className="scan-result scan-failure" role="alert">{result.message}</p> : null}
       <h2 className="activity-heading">최근 처리</h2>
       {loadError && scope ? (
@@ -377,6 +460,31 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       ) : (
         <p>아직 처리 기록이 없습니다.</p>
       )}
+      {nametag ? (
+        <section className="nametag-sheet" aria-label="네임택 인쇄">
+          <p className="nametag-event">{nametag.eventName}</p>
+          <p className="nametag-name">{nametag.name}</p>
+          {nametag.company ? <p className="nametag-company">{nametag.company}</p> : null}
+          <p className="nametag-meta">
+            {[nametag.deskName, nametag.action === "IN" ? "입장" : "퇴장"].filter(Boolean).join(" · ")}
+          </p>
+          <p className="nametag-actions">
+            <button type="button" className="button button-primary" onClick={() => window.print()}>
+              인쇄하기
+            </button>{" "}
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => {
+                setNametag(null);
+                document.body.classList.remove("nametag-printing");
+              }}
+            >
+              닫기
+            </button>
+          </p>
+        </section>
+      ) : null}
     </section>
   );
 }

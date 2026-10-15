@@ -2414,4 +2414,78 @@ select[aria-invalid="true"] {
   .participant-row {
     break-inside: avoid;
   }
+
+  /* Nametag: only the tag sheet prints. Buttons are already hidden above. */
+  .nametag-printing .staff-workspace > :not(.nametag-sheet) {
+    display: none !important;
+  }
+
+  .nametag-sheet {
+    max-width: 90mm;
+    margin: 0 auto;
+    padding: 12mm 8mm;
+    border: 2px solid var(--ink);
+    text-align: center;
+  }
+}
+
+/* Staff kiosk display mode for shared tablets: same assignment, same login,
+   larger type and fewer distractions. Not an unattended self check-in. */
+.staff-workspace.kiosk-mode .scan-form input,
+.staff-workspace.kiosk-mode .scan-form button,
+.staff-workspace.kiosk-mode .staff-select-field select {
+  min-height: 56px;
+  font-size: var(--h2);
+}
+
+.staff-workspace.kiosk-mode .scan-result {
+  font-size: var(--h2);
+  font-weight: 800;
+}
+
+.staff-workspace.kiosk-mode .activity-list,
+.staff-workspace.kiosk-mode .activity-heading,
+.staff-workspace.kiosk-mode .camera-action {
+  display: none;
+}
+
+.staff-direction-hint {
+  margin: var(--s1) 0 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.nametag-sheet {
+  display: grid;
+  gap: var(--s2);
+  margin-top: var(--s4);
+  padding: var(--s5);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--paper);
+  text-align: center;
+}
+
+.nametag-event {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.nametag-name {
+  margin: 0;
+  font-size: var(--display);
+  font-weight: 800;
+  word-break: keep-all;
+}
+
+.nametag-company {
+  margin: 0;
+  font-size: var(--h3);
+  font-weight: 700;
+}
+
+.nametag-meta {
+  margin: 0;
+  color: var(--muted);
 }
