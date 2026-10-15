@@ -36,6 +36,14 @@ type State =
       stampMode: string;
       visitsCount: number;
       boothMap: BoothMapState;
+      screenEnabled: boolean;
+      display: { type: string; moduleId: string; noticeId: string };
+      displayOptions: {
+        notices: Array<{ id: string; title: string; published: boolean }>;
+        modules: Array<{ id: string; title: string; type: string; published: boolean; revealed: boolean; hasPublishedDraw: boolean }>;
+        approvedPhotos: number;
+        approvedQuestions: number;
+      };
       desks: Desk[];
       booths: Booth[];
       assignments: Assignment[];
@@ -75,6 +83,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const [mapPlacing, setMapPlacing] = useState<string>("");
   const [mapDraftPoints, setMapDraftPoints] = useState<BoothMapPoint[] | null>(null);
   const [mapImageOverride, setMapImageOverride] = useState<BoothMapDraft["image"] | null>(null);
+  const [displayChoice, setDisplayChoice] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -100,6 +109,11 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
               visits?: unknown;
               stampMode?: unknown;
               boothMap?: unknown;
+              display?: unknown;
+              notices?: unknown;
+              modules?: unknown;
+              photos?: unknown;
+              questions?: unknown;
             }>;
           } | null;
         } | null;
@@ -231,6 +245,46 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           stampMode: workspace.stampMode === "SELF" ? "SELF" : "STAFF",
           visitsCount: Array.isArray(workspace.visits) ? workspace.visits.length : 0,
           boothMap: parseBoothMap(workspace.boothMap),
+          screenEnabled: features.includes("screen"),
+          display: {
+            type: typeof (workspace.display as Record<string, unknown> | undefined)?.type === "string"
+              ? String((workspace.display as Record<string, unknown>).type)
+              : "idle",
+            moduleId: text((workspace.display as Record<string, unknown> | undefined)?.moduleId),
+            noticeId: text((workspace.display as Record<string, unknown> | undefined)?.noticeId),
+          },
+          displayOptions: {
+            notices: Array.isArray(workspace.notices)
+              ? workspace.notices.flatMap((item) => {
+                  if (typeof item !== "object" || item === null) return [];
+                  const notice = item as Record<string, unknown>;
+                  if (typeof notice.id !== "string") return [];
+                  return [{ id: notice.id, title: text(notice.title), published: notice.published === true }];
+                })
+              : [],
+            modules: Array.isArray(workspace.modules)
+              ? workspace.modules.flatMap((item) => {
+                  if (typeof item !== "object" || item === null) return [];
+                  const module = item as Record<string, unknown>;
+                  if (typeof module.id !== "string" || typeof module.type !== "string") return [];
+                  return [{
+                    id: module.id,
+                    title: text(module.title),
+                    type: module.type,
+                    published: module.published === true,
+                    revealed: module.revealed === true,
+                    hasPublishedDraw: Array.isArray(module.drawHistory)
+                      && module.drawHistory.some((row) => (row as Record<string, unknown>)?.published === true),
+                  }];
+                })
+              : [],
+            approvedPhotos: Array.isArray(workspace.photos)
+              ? workspace.photos.filter((photo) => (photo as Record<string, unknown>)?.status === "APPROVED").length
+              : 0,
+            approvedQuestions: Array.isArray(workspace.questions)
+              ? workspace.questions.filter((question) => (question as Record<string, unknown>)?.approved === true).length
+              : 0,
+          },
           desks,
           booths,
           assignments,
@@ -366,8 +420,46 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const stampMode = state.stampMode;
   const visitsCount = state.visitsCount;
   const boothMap = state.boothMap;
+  const display = state.display;
+  const displayOptions = state.displayOptions;
+  const screenEnabled = state.screenEnabled;
+
+  // Output choices mirror the server contract exactly; impossible choices are
+  // not offered (unpublished notices, unrevealed quizzes, unmocked draws).
+  const displayChoices = (() => {
+    const options: Array<{ value: string; label: string }> = [
+      { value: "idle|", label: "유휴 화면 (안내 없음)" },
+    ];
+    for (const notice of displayOptions.notices) {
+      if (notice.published) options.push({ value: `notice|${notice.id}`, label: `공지 · ${notice.title}` });
+    }
+    for (const module of displayOptions.modules) {
+      if (!module.published) continue;
+      if (module.type === "poll") options.push({ value: `poll|${module.id}`, label: `투표 · ${module.title}` });
+      if (module.type === "quiz" && module.revealed) options.push({ value: `quiz|${module.id}`, label: `퀴즈 정답 · ${module.title}` });
+      if (module.type === "draw" && module.hasPublishedDraw) options.push({ value: `draw|${module.id}`, label: `추첨 결과 · ${module.title}` });
+      if (module.type === "qa" && displayOptions.approvedQuestions > 0) options.push({ value: `qa|${module.id}`, label: `Q&A · ${module.title}` });
+    }
+    if (displayOptions.approvedPhotos > 0) options.push({ value: "photo|", label: `사진 · 승인 ${displayOptions.approvedPhotos}장` });
+    return options;
+  })();
+  const currentDisplayValue = `${display.type}|${display.type === "notice" ? display.noticeId : display.moduleId}`;
   const mapPoints = mapDraftPoints ?? boothMap.draft?.points ?? [];
   const pointFor = (boothId: string) => mapPoints.find((point) => point.boothId === boothId) ?? null;
+
+  async function applyDisplayChoice() {
+    const [type, target] = displayChoice.split("|");
+    if (!type) return;
+    const payload: Record<string, unknown> = { type };
+    if (type === "notice") payload.noticeId = target;
+    else if (type !== "idle" && type !== "photo") payload.moduleId = target;
+    const ok = await runCommand(
+      "display.set",
+      payload,
+      type === "idle" ? "전광판을 유휴 화면으로 바꿨습니다." : "전광판 출력을 바꿨습니다."
+    );
+    if (ok) setDisplayChoice("");
+  }
 
   // Booth-map draft edits stay local until 저장; mapDraftPoints holds the
   // working set, and each placement is normalized to 0..1 so the published
@@ -670,6 +762,44 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
               {boothMap.published.publishedAt ? ` · ${boothMap.published.publishedAt.slice(0, 10)}` : ""}
             </p>
           ) : null}
+        </section>
+      ) : null}
+
+      {screenEnabled ? (
+        <section className={styles.section} aria-labelledby="ops-display">
+          <div className={styles.sectionHead}>
+            <h2 id="ops-display">전광판 출력</h2>
+          </div>
+          <p className={styles.rowMeta}>
+            행사장 화면에 지금 내보낼 내용입니다. 현재:{" "}
+            {currentDisplayValue.startsWith("idle")
+              ? "유휴 화면"
+              : displayChoices.find((choice) => choice.value === currentDisplayValue)?.label ?? "출력 확인 필요"}
+          </p>
+          <div className={styles.rowActions}>
+            <label className="sr-only" htmlFor="ops-display-pick">전광판 출력 선택</label>
+            <select
+              id="ops-display-pick"
+              value={displayChoice}
+              onChange={(event) => setDisplayChoice(event.target.value)}
+            >
+              <option value="">출력 고르기</option>
+              {displayChoices.map((choice) => (
+                <option key={choice.value} value={choice.value}>{choice.label}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="button button-primary"
+              disabled={busy || !displayChoice || displayChoice === currentDisplayValue}
+              onClick={() => void applyDisplayChoice()}
+            >
+              {displayChoice && displayChoice !== currentDisplayValue ? (displayChoice.startsWith("idle") ? "유휴로 내리기" : "출력 적용") : "출력 적용"}
+            </button>
+          </div>
+          <p className={styles.rowMeta}>
+            게시한 공지·공개된 프로그램만 고를 수 있습니다. 참가자 화면과 같은 내용이 행사장 화면에 나옵니다.
+          </p>
         </section>
       ) : null}
 

@@ -427,6 +427,12 @@ test('web-booth-mode-and-map-editor-are-operations-owned', () => {
   assert.match(ops, /booth\.map\.unpublish/);
   assert.match(ops, /expectedDraftVersion/);
   assert.match(ops, /expectedPublishedVersion/);
+  // Display output honours the same contract the public board reads, and
+  // impossible choices are never offered.
+  assert.match(ops, /display\.set/);
+  assert.match(ops, /전광판 출력/);
+  assert.match(ops, /module\.revealed/);
+  assert.match(ops, /hasPublishedDraw/);
   // The public page renders only the published map with its markers.
   const publicPage = read('app/event/[slug]/page.tsx');
   assert.match(publicPage, /source\.published/);
