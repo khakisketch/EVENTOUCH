@@ -109,6 +109,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const isOperations = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/operations`));
   const isPrograms = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/programs`));
   const isContent = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/content`));
+  const isRewards = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/rewards`));
   const isSettings = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/settings`));
   const isReports = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/reports`));
 
@@ -592,6 +593,13 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           aria-current={isContent ? "page" : undefined}
         >
           콘텐츠
+        </Link>
+        <Link
+          className={`console-nav-item console-subnav-item${isRewards ? " active" : ""}`}
+          href={`${eventBasePath}/rewards`}
+          aria-current={isRewards ? "page" : undefined}
+        >
+          경품
         </Link>
         <Link
           className={`console-nav-item console-subnav-item${isSettings ? " active" : ""}`}

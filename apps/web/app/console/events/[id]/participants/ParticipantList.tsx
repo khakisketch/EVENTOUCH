@@ -26,7 +26,9 @@ type ListState =
       kind: "ready";
       eventName: string;
       people: Person[];
+      groups: string[];
       canManage: boolean;
+      rewardFeature: boolean;
     };
 
 const STATUSES = ["PENDING", "APPROVED", "WAITLIST", "CANCELLED"] as const;
@@ -79,6 +81,16 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [groupFilter, setGroupFilter] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [groupDialogOpen, setGroupDialogOpen] = useState(false);
+  const [groupDraft, setGroupDraft] = useState("");
+  const [groupBusy, setGroupBusy] = useState(false);
+  const [groupError, setGroupError] = useState<string | null>(null);
+  const [rewardTarget, setRewardTarget] = useState<Person | null>(null);
+  const [rewardDraft, setRewardDraft] = useState({ name: "", method: "ONSITE" });
+  const [rewardBusy, setRewardBusy] = useState(false);
+  const [rewardError, setRewardError] = useState<{ message: string; field: string | null } | null>(null);
 
   // The overview approval CTA lands here pre-filtered; a direct visit shows
   // everything. Read once on mount — the select owns the state afterwards.
@@ -147,6 +159,13 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           )
         : undefined;
       const participants = bootstrap.workspaces?.[eventId]?.participants;
+      const workspace = (bootstrap.workspaces?.[eventId] ?? {}) as Record<string, unknown>;
+      const groups = Array.isArray(workspace.groups)
+        ? workspace.groups.filter((value): value is string => typeof value === "string")
+        : [];
+      const features = Array.isArray(event && (event as Record<string, unknown>).features)
+        ? ((event as Record<string, unknown>).features as unknown[])
+        : [];
       const people: Person[] = Array.isArray(participants)
         ? participants.flatMap((item) => {
             if (typeof item !== "object" || item === null) return [];
@@ -172,7 +191,9 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         eventName:
           event && typeof event.name === "string" ? event.name : eventId,
         people,
+        groups,
         canManage,
+        rewardFeature: features.includes("reward"),
       });
     } catch {
       setState({ kind: "failed", message: "연결하지 못했습니다. 다시 시도하세요." });
@@ -249,8 +270,96 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   const visiblePeople = state.people.filter((person) => {
     const haystack = `${person.name} ${person.company} ${person.phone}`.toLocaleLowerCase("ko-KR");
     const matchesQuery = !search || haystack.includes(search);
-    return matchesQuery && (!statusFilter || person.status === statusFilter);
+    const matchesGroup = !groupFilter || person.group === groupFilter;
+    return matchesQuery && matchesGroup && (!statusFilter || person.status === statusFilter);
   });
+
+  // Selection is scoped to what is visible: group assignment only ever
+  // touches rows the operator can see and count.
+  const visibleIds = new Set(visiblePeople.map((person) => person.id));
+  const effectiveSelection = selectedIds.filter((id) => visibleIds.has(id));
+
+  function togglePerson(id: string) {
+    setSelectedIds((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id]
+    );
+  }
+
+  async function assignGroup(event: React.FormEvent) {
+    event.preventDefault();
+    if (groupBusy || !groupDraft || !effectiveSelection.length) return;
+    setGroupBusy(true);
+    setGroupError(null);
+    try {
+      const res = await fetch(
+        `/api/events/${encodeURIComponent(eventId)}/commands`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            commandId: randomCommandId(),
+            command: "group.assign",
+            payload: { group: groupDraft, ids: effectiveSelection },
+          }),
+        }
+      );
+      const data = (await res.json().catch(() => null)) as { error?: unknown } | null;
+      if (!res.ok) {
+        setGroupError(typeof data?.error === "string" ? data.error : "그룹을 지정하지 못했습니다.");
+        return;
+      }
+      setNotice(`${effectiveSelection.length}명을 ${groupDraft}(으)로 지정했습니다.`);
+      setSelectedIds([]);
+      setGroupDialogOpen(false);
+      await load(true);
+    } catch {
+      setGroupError("연결하지 못했습니다. 다시 시도하세요.");
+    } finally {
+      setGroupBusy(false);
+    }
+  }
+
+  async function createReward(event: React.FormEvent) {
+    event.preventDefault();
+    if (rewardBusy || !rewardTarget || !rewardDraft.name.trim()) return;
+    setRewardBusy(true);
+    setRewardError(null);
+    try {
+      const res = await fetch(
+        `/api/events/${encodeURIComponent(eventId)}/commands`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            commandId: randomCommandId(),
+            command: "reward.create",
+            payload: {
+              participantId: rewardTarget.id,
+              name: rewardDraft.name.trim(),
+              method: rewardDraft.method,
+            },
+          }),
+        }
+      );
+      const data = (await res.json().catch(() => null)) as {
+        error?: unknown;
+        field?: unknown;
+      } | null;
+      if (!res.ok) {
+        setRewardError({
+          field: typeof data?.field === "string" ? data.field : null,
+          message: typeof data?.error === "string" ? data.error : "경품을 등록하지 못했습니다.",
+        });
+        return;
+      }
+      setNotice(`${rewardTarget.name}님의 경품을 등록했습니다. 경품 화면에서 지급 처리하세요.`);
+      setRewardTarget(null);
+    } catch {
+      setRewardError({ field: null, message: "연결하지 못했습니다. 다시 시도하세요." });
+    } finally {
+      setRewardBusy(false);
+    }
+  }
 
   function exportCsv() {
     const rows = visiblePeople.map((person) => [
@@ -310,6 +419,17 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
             ))}
           </select>
         </label>
+        {state.groups.length ? (
+          <label>
+            <span className="sr-only">그룹별 보기</span>
+            <select value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}>
+              <option value="">전체 그룹</option>
+              {state.groups.map((group) => (
+                <option key={group} value={group}>{group}</option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <button type="button" className="button button-secondary" onClick={exportCsv}>
           목록 CSV
         </button>
@@ -319,8 +439,36 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           </Link>
         ) : null}
       </div>
+      {state.canManage ? (
+        <div className="participant-selection" role="group" aria-label="선택 도구">
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => {
+              const ids = visiblePeople.map((person) => person.id);
+              setSelectedIds((current) => [...new Set([...current, ...ids])]);
+            }}
+          >
+            표시 {visiblePeople.length}명 선택
+          </button>
+          <button type="button" className="text-button" onClick={() => setSelectedIds([])}>선택 해제</button>
+          <span>{effectiveSelection.length}명 선택됨</span>
+          <button
+            type="button"
+            className="button button-secondary"
+            disabled={!effectiveSelection.length}
+            onClick={() => {
+              setGroupError(null);
+              setGroupDraft(state.groups[0] ?? "");
+              setGroupDialogOpen(true);
+            }}
+          >
+            그룹 지정
+          </button>
+        </div>
+      ) : null}
       <p className="participant-count" role="status">
-        {statusFilter || search
+        {statusFilter || groupFilter || search
           ? `${visiblePeople.length}명 / 전체 ${state.people.length}명`
           : `전체 ${state.people.length}명`}
       </p>
@@ -328,6 +476,15 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         <ul className="participant-list">
           {visiblePeople.map((person) => (
             <li className="participant-row" key={person.id}>
+              {state.canManage ? (
+                <input
+                  type="checkbox"
+                  className="participant-select"
+                  aria-label={`${person.name} 선택`}
+                  checked={effectiveSelection.includes(person.id)}
+                  onChange={() => togglePerson(person.id)}
+                />
+              ) : null}
               <span className="participant-summary">
                 {person.name}
                 <small className="participant-identity">{identityLine(person) || statusLabel(person.status)}</small>
@@ -342,6 +499,18 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                     onClick={() => changeStatus(person, "APPROVED")}
                   >
                     {savingId === person.id ? "승인 중…" : "승인"}
+                  </button>
+                ) : person.status === "APPROVED" && state.rewardFeature ? (
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    onClick={() => {
+                      setRewardError(null);
+                      setRewardDraft({ name: "", method: "ONSITE" });
+                      setRewardTarget(person);
+                    }}
+                  >
+                    경품 등록
                   </button>
                 ) : (
                   <select
@@ -369,6 +538,94 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       ) : (
         <p className="empty-state">등록된 참가자가 없습니다.</p>
       )}
+      {groupDialogOpen ? (
+        <div className="dialog-backdrop" onClick={() => { if (!groupBusy) setGroupDialogOpen(false); }}>
+          <div
+            className="dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="그룹 지정"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2>그룹 지정</h2>
+            <p>표시된 명단에서 선택한 {effectiveSelection.length}명의 그룹을 바꿉니다.</p>
+            <form onSubmit={(event) => void assignGroup(event)}>
+              <div>
+                <label htmlFor="group-pick">그룹</label>
+                <select
+                  id="group-pick"
+                  required
+                  value={groupDraft}
+                  onChange={(event) => setGroupDraft(event.target.value)}
+                >
+                  <option value="">선택하세요</option>
+                  {state.groups.map((group) => (
+                    <option key={group} value={group}>{group}</option>
+                  ))}
+                </select>
+              </div>
+              {groupError ? <p className="state-error" role="alert">{groupError}</p> : null}
+              <div className="dialog-actions">
+                <button type="submit" className="button button-primary" disabled={groupBusy || !groupDraft}>
+                  {groupBusy ? "지정 중…" : "지정"}
+                </button>
+                <button type="button" className="button button-secondary" disabled={groupBusy} onClick={() => setGroupDialogOpen(false)}>
+                  취소
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+      {rewardTarget ? (
+        <div className="dialog-backdrop" onClick={() => { if (!rewardBusy) setRewardTarget(null); }}>
+          <div
+            className="dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="경품 등록"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2>경품 등록 · {rewardTarget.name}</h2>
+            <form onSubmit={(event) => void createReward(event)}>
+              <div>
+                <label htmlFor="reward-name">경품명 (필수)</label>
+                <input
+                  id="reward-name"
+                  type="text"
+                  maxLength={80}
+                  required
+                  value={rewardDraft.name}
+                  aria-invalid={rewardError?.field === "name"}
+                  onChange={(event) => setRewardDraft({ ...rewardDraft, name: event.target.value })}
+                />
+                {rewardError?.field === "name" ? <p className="state-error" role="alert">{rewardError.message}</p> : null}
+              </div>
+              <div>
+                <label htmlFor="reward-method">지급 방식</label>
+                <select
+                  id="reward-method"
+                  value={rewardDraft.method}
+                  onChange={(event) => setRewardDraft({ ...rewardDraft, method: event.target.value })}
+                >
+                  <option value="ONSITE">현장 수령</option>
+                  <option value="GIFT">기프티콘 (모의 코드)</option>
+                </select>
+                <p className="landing-note">기프티콘은 v1 제외 항목이라 모의 코드만 발급됩니다.</p>
+              </div>
+              {rewardError && !rewardError.field ? <p className="state-error" role="alert">{rewardError.message}</p> : null}
+              <div className="dialog-actions">
+                <button type="submit" className="button button-primary" disabled={rewardBusy || !rewardDraft.name.trim()}>
+                  {rewardBusy ? "등록 중…" : "등록"}
+                </button>
+                <button type="button" className="button button-secondary" disabled={rewardBusy} onClick={() => setRewardTarget(null)}>
+                  취소
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
       <p>
         <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}`}>운영 현황으로</Link>
       </p>

@@ -402,6 +402,32 @@ test('web-participant-status-goes-through-the-operator-command-path', () => {
   // Export stays client-side; import lives behind the management gate.
   assert.match(list, /EVENTOUCH_participants\.csv/);
   assert.match(list, /participants\/import/);
+  // Group assignment and reward registration live on the rows, scoped to
+  // the visible selection; both ride the command path.
+  assert.match(list, /group\.assign/);
+  assert.match(list, /reward\.create/);
+  assert.match(list, /effectiveSelection/);
+  assert.match(list, /그룹 지정/);
+  assert.match(list, /경품 등록/);
+  assert.doesNotMatch(list, /localStorage/);
+  assert.doesNotMatch(list, /sessionStorage/);
+});
+
+test('web-rewards-fulfil-on-the-command-path-with-honest-gift-status', () => {
+  const rewards = read('app/console/events/[id]/rewards/RewardsWorkspace.tsx');
+  assert.match(rewards, /reward\.fulfill/);
+  assert.match(rewards, /reward\.cancel/);
+  assert.match(rewards, /\/commands/);
+  // GIFT fulfilment is a mock in v1: the status says NEEDS_CONNECTION, and
+  // the UI prints the placeholder code instead of a real coupon.
+  assert.match(rewards, /NEEDS_CONNECTION/);
+  assert.match(rewards, /기프티콘 미연동/);
+  assert.match(rewards, /기프티콘 지급\(모의\)/);
+  assert.match(rewards, /v1/);
+  assert.match(rewards, /window\.confirm/);
+  assert.match(rewards, /eventouch:shell-reload/);
+  assert.doesNotMatch(rewards, /localStorage/);
+  assert.doesNotMatch(rewards, /sessionStorage/);
 });
 
 test('web-participant-import-maps-and-reviews-before-the-command-path', () => {
@@ -480,6 +506,9 @@ test('web-console-shell-keeps-decided-navigation-and-clients-read-only', () => {
   // The 행사 root link already lands on the list home, so no separate
   // view-all link competes with it.
   assert.doesNotMatch(shell, /전체 행사 보기/);
+  // Content authoring and the reward desk are destinations inside the event.
+  assert.match(shell, /\/content/);
+  assert.match(shell, /\/rewards/);
   assert.match(shell, /currentEventMeta/);
   assert.match(shell, /renderEventSubnav/);
   assert.match(globalStyles, /\.nav-event-card/);
