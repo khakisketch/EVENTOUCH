@@ -523,8 +523,283 @@ test('the server delegates the organization REST only in database mode', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'server', 'server.js'), 'utf8');
   assert.match(
     source,
-    /state && decodablePath\(urlPath\) && organizationRestPath\(urlPath, req\.method\)/u,
-    'the boundary takes database-mode, decodable organization requests only'
+    /state && decodablePath\(urlPath\)/u,
+    'the boundaries take database-mode, decodable requests only'
   );
   assert.match(source, /organizationRestApp\.routing\(req, res\)/u, 'the boundary actually serves the delegated writes');
+});
+
+// ---- participant command path (server/fastify/command-path.ts) ----
+
+const { buildCommandPathApp, commandPathPath } = require('../server/fastify/command-path.ts');
+
+function commandDeps(overrides = {}) {
+  const calls = [];
+  const deps = {
+    participantCommands: {
+      signup: async (input) => {
+        calls.push(['signup', input]);
+        return {
+          status: 201,
+          body: { participant: { id: 'p1' } },
+          session: { token: 'tok-1', expiresAt: new Date(Date.now() + 3600_000).toISOString() },
+        };
+      },
+      execute: async (input) => {
+        calls.push(['participant.execute', input]);
+        return { status: 201, body: { ok: 'participant' } };
+      },
+    },
+    operationsCommands: {
+      supports: (command) => command === 'check.scan' || command === 'desk.open' || command === 'booth.visit',
+      execute: async (input) => {
+        calls.push(['operations.execute', input]);
+        return { status: 200, body: { ok: 'operations' } };
+      },
+    },
+    domainCommands: {
+      supports: (command) => command === 'engage.vote' || command === 'content.publish',
+      isGuestCommand: (command) => command === 'engage.vote',
+      execute: async (input) => {
+        calls.push(['domain.execute', input]);
+        return { status: 200, body: { ok: 'domain' } };
+      },
+    },
+    access: {
+      authorize: async (input) => {
+        calls.push(['authorize', input]);
+      },
+    },
+    sessionFromCookie: async (cookie) => {
+      calls.push(['session', cookie]);
+      if (cookie === 'staff=ok') return { id: 'staff-1', role: 'STAFF' };
+      if (cookie === 'session=ok') return { id: 'agency-1', role: 'AGENCY' };
+      return null;
+    },
+    attendeeCookie: (token, maxAgeSeconds) => `eventouch_attendee=${token}; Max-Age=${maxAgeSeconds}`,
+    failureMessage: (error, fallback) => (error && error.status && error.message ? error.message : fallback),
+    ...overrides,
+  };
+  return { deps, calls };
+}
+
+test('the command boundary owns exactly the participant writes', () => {
+  const owns = [
+    ['/api/events/e1/commands', 'POST'],
+    ['/api/events/e1/commands/', 'POST'],
+    ['/api/events/e1/signup', 'POST'],
+  ];
+  for (const [url, method] of owns) {
+    assert.equal(commandPathPath(url, method), true, `${method} ${url} belongs to the boundary`);
+  }
+  const notOurs = [
+    ['/api/events/e1/commands', 'GET'],
+    ['/api/events/e1/signup', 'GET'],
+    ['/api/events/e1/commands', 'PUT'],
+    ['/api/events/e1/commands/x', 'POST'],
+    ['/api/events/e1/participants', 'POST'],
+    ['/api/events', 'POST'],
+    ['/api/events/e1/files', 'POST'],
+  ];
+  for (const [url, method] of notOurs) {
+    assert.equal(commandPathPath(url, method), false, `${method} ${url} stays elsewhere`);
+  }
+});
+
+test('signup answers through the boundary with the attendee cookie', async () => {
+  const { deps, calls } = commandDeps();
+  const app = buildCommandPathApp(deps);
+  const body = { commandId: 'signup-command-1', name: '참가자', phone: '01000000000' };
+  const response = await injected(app, '/api/events/e1/signup', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    payload: body,
+  });
+  assert.equal(response.status, 201);
+  assert.deepEqual(response.json, { participant: { id: 'p1' } });
+  assert.equal(response.headers['cache-control'], 'no-store');
+  assert.match(String(response.headers['set-cookie']), /^eventouch_attendee=tok-1; Max-Age=\d+$/u);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], 'signup');
+  assert.equal(calls[0][1].slug, 'e1');
+  assert.equal(calls[0][1].commandId, 'signup-command-1');
+  assert.deepEqual(calls[0][1].input, body);
+});
+
+test('signup failures keep the legacy mapping and body order', async () => {
+  const { deps } = commandDeps();
+  deps.participantCommands.signup = async () => {
+    throw Object.assign(new Error('정원이 마감되었습니다'), { status: 409, field: 'capacity' });
+  };
+  const app = buildCommandPathApp(deps);
+  const failed = await injected(app, '/api/events/e1/signup', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    payload: { commandId: 'signup-command-2' },
+  });
+  assert.equal(failed.status, 409);
+  assert.deepEqual(failed.json, { error: '정원이 마감되었습니다', field: 'capacity' });
+
+  const malformed = await injected(app, '/api/events/e1/signup', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    payload: '{oops',
+  });
+  assert.equal(malformed.status, 400);
+  assert.deepEqual(malformed.json, { error: '요청 형식을 확인하세요' });
+  assert.equal(malformed.headers['cache-control'], undefined);
+});
+
+test('participant self-service commands need only the ticket bearer', async () => {
+  const { deps, calls } = commandDeps();
+  const app = buildCommandPathApp(deps);
+  const response = await injected(app, '/api/events/e1/commands', {
+    method: 'POST',
+    headers: { authorization: 'Bearer ticket-token-1' },
+    payload: { command: 'participant.cancel', commandId: 'command-cancel-1' },
+  });
+  assert.equal(response.status, 201);
+  assert.deepEqual(response.json, { ok: 'participant' });
+  assert.deepEqual(calls, [[
+    'participant.execute',
+    { eventId: 'e1', commandId: 'command-cancel-1', command: 'participant.cancel', payload: {}, ticketToken: 'ticket-token-1' },
+  ]]);
+  assert.equal(response.headers['cache-control'], 'no-store');
+});
+
+test('guest booth visits bypass the session and sessionless ones do not', async () => {
+  const { deps, calls } = commandDeps();
+  const app = buildCommandPathApp(deps);
+
+  const guest = await injected(app, '/api/events/e1/commands', {
+    method: 'POST',
+    headers: { authorization: 'Bearer ticket-token-2' },
+    payload: { command: 'booth.visit', commandId: 'command-booth-1', payload: { boothId: 'booth-1' } },
+  });
+  assert.equal(guest.status, 200);
+  assert.deepEqual(calls.at(-1), [
+    'operations.execute',
+    { eventId: 'e1', commandId: 'command-booth-1', command: 'booth.visit', payload: { boothId: 'booth-1' }, account: null, ticketToken: 'ticket-token-2' },
+  ]);
+  assert.equal(calls.some((call) => call[0] === 'session'), false);
+
+  const anonymous = await injected(app, '/api/events/e1/commands', {
+    method: 'POST',
+    payload: { command: 'booth.visit', commandId: 'command-booth-2', payload: { boothId: 'booth-1' } },
+  });
+  assert.equal(anonymous.status, 401);
+  assert.deepEqual(anonymous.json, { error: '로그인이 필요합니다' });
+
+  const member = await injected(app, '/api/events/e1/commands', {
+    method: 'POST',
+    headers: { cookie: 'session=ok' },
+    payload: { command: 'booth.visit', commandId: 'command-booth-3', payload: { boothId: 'booth-2' }, assignmentId: 'assignment-1' },
+  });
+  assert.equal(member.status, 200);
+  const authorize = calls.filter((call) => call[0] === 'authorize').at(-1);
+  assert.deepEqual(authorize, ['authorize', {
+    account: { id: 'agency-1', role: 'AGENCY' },
+    eventId: 'e1',
+    command: 'booth.visit',
+    assignmentId: 'assignment-1',
+    targetId: 'booth-2',
+  }]);
+});
+
+test('operations commands authorize with the scan target and payload fallbacks', async () => {
+  const { deps, calls } = commandDeps();
+  const app = buildCommandPathApp(deps);
+  const response = await injected(app, '/api/events/e1/commands', {
+    method: 'POST',
+    headers: { cookie: 'session=ok' },
+    payload: { name: 'check.scan', payload: { deskId: 'desk-9', commandId: 'command-scan-1' } },
+  });
+  assert.equal(response.status, 200);
+  const authorize = calls.find((call) => call[0] === 'authorize');
+  assert.deepEqual(authorize, ['authorize', {
+    account: { id: 'agency-1', role: 'AGENCY' },
+    eventId: 'e1',
+    command: 'check.scan',
+    assignmentId: undefined,
+    targetId: 'desk-9',
+  }]);
+  const execute = calls.find((call) => call[0] === 'operations.execute');
+  assert.equal(execute[1].commandId, 'command-scan-1', 'the payload commandId is the fallback');
+});
+
+test('domain commands split guest and session tiers', async () => {
+  const { deps, calls } = commandDeps();
+  const app = buildCommandPathApp(deps);
+
+  const guest = await injected(app, '/api/events/e1/commands', {
+    method: 'POST',
+    headers: { authorization: 'Bearer ticket-token-3' },
+    payload: { command: 'engage.vote', payload: { optionId: 'opt-1' } },
+  });
+  assert.equal(guest.status, 200);
+  assert.deepEqual(calls.at(-1), [
+    'domain.execute',
+    { eventId: 'e1', commandId: undefined, command: 'engage.vote', payload: { optionId: 'opt-1' }, account: null, ticketToken: 'ticket-token-3' },
+  ]);
+
+  const anonymous = await injected(app, '/api/events/e1/commands', {
+    method: 'POST',
+    payload: { command: 'content.publish', commandId: 'command-content-1' },
+  });
+  assert.equal(anonymous.status, 401);
+
+  const member = await injected(app, '/api/events/e1/commands', {
+    method: 'POST',
+    headers: { cookie: 'session=ok' },
+    payload: { command: 'content.publish', commandId: 'command-content-1' },
+  });
+  assert.equal(member.status, 200);
+  const authorize = calls.filter((call) => call[0] === 'authorize').at(-1);
+  assert.deepEqual(authorize, ['authorize', { account: { id: 'agency-1', role: 'AGENCY' }, eventId: 'e1', command: 'participants.write' }]);
+});
+
+test('the participant tier keeps the STAFF exception', async () => {
+  const { deps, calls } = commandDeps();
+  const app = buildCommandPathApp(deps);
+
+  const denied = await injected(app, '/api/events/e1/commands', {
+    method: 'POST',
+    headers: { cookie: 'staff=ok' },
+    payload: { command: 'participant.status', commandId: 'command-status-1' },
+  });
+  assert.equal(denied.status, 403);
+  assert.deepEqual(denied.json, { error: '권한을 확인하세요' });
+  assert.equal(calls.filter((call) => call[0] === 'participant.execute').length, 0);
+
+  const created = await injected(app, '/api/events/e1/commands', {
+    method: 'POST',
+    headers: { cookie: 'staff=ok' },
+    payload: { command: 'participant.create', commandId: 'command-create-1', assignmentId: 'assignment-2' },
+  });
+  assert.equal(created.status, 201);
+  const authorize = calls.filter((call) => call[0] === 'authorize').at(-1);
+  assert.deepEqual(authorize, ['authorize', {
+    account: { id: 'staff-1', role: 'STAFF' },
+    eventId: 'e1',
+    command: 'participants.read',
+    assignmentId: 'assignment-2',
+  }]);
+});
+
+test('a null command body fails like the legacy router', async () => {
+  const { deps } = commandDeps();
+  const app = buildCommandPathApp(deps);
+  const response = await injected(app, '/api/events/e1/commands', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    payload: 'null',
+  });
+  assert.equal(response.status, 500);
+  assert.deepEqual(response.json, { error: '요청을 처리하지 못했습니다' });
+});
+
+test('the server delegates the command path in database mode', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'server', 'server.js'), 'utf8');
+  assert.match(source, /commandPathPath\(urlPath, req\.method\)/u, 'the command predicate gates the boundary');
+  assert.match(source, /commandPathApp\.routing\(req, res\)/u, 'the boundary actually serves the delegated commands');
 });

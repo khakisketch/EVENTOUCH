@@ -20,6 +20,7 @@
 
 import fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { createReadStream } from "node:fs";
+import { bearerToken, decodedSegment, errorStatus } from "./legacy-http.ts";
 
 export type PublicEventReader = {
   loadPublicEvent: (slug: string) => Promise<unknown | null>;
@@ -52,26 +53,8 @@ const FILE_READ_FAILURE = "파일을 읽지 못했습니다";
 const NO_DATABASE = "데이터베이스를 사용할 수 없습니다";
 const GENERIC_FAILURE = "요청을 처리하지 못했습니다";
 
-// Same rule as the legacy router: a malformed percent-escape decodes to
-// null instead of throwing, and each branch has its own answer for that.
-function decodedSegment(value: string): string | null {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return null;
-  }
-}
-
-function bearerToken(header: string | undefined): string {
-  const match = /^Bearer\s+(.+)$/i.exec(String(header || ""));
-  return match ? match[1] : "";
-}
-
-function errorStatus(error: unknown): Parameters<FastifyReply["code"]>[0] {
-  const value = error && typeof error === "object" ? (error as { status?: unknown }).status : undefined;
-  return (typeof value === "number" && Number.isInteger(value) && value >= 400 && value <= 599 ? value : 500) as Parameters<FastifyReply["code"]>[0];
-}
-
+// The legacy file-read branch echoed an explicit failure's own message and
+// hid unexpected internals behind the Korean fallback.
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
 }

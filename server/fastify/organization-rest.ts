@@ -25,6 +25,7 @@
 // (Node 24 type stripping) and is verified by `npm run server:typecheck`.
 
 import fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
+import { bodyOf, decodedSegment, fail, failureFields, readBody } from "./legacy-http.ts";
 
 export type OrganizationRestDeps = {
   /** Session lookup for the cookie the browser already holds. */
@@ -46,12 +47,9 @@ export type OrganizationRestDeps = {
   failureMessage: (error: unknown, fallback: string) => string;
 };
 
-const MAX_BODY_BYTES = 1024 * 1024;
 const NOT_FOUND_API = "요청한 API를 찾을 수 없습니다";
 const LOGIN_REQUIRED = "로그인이 필요합니다";
 const GENERIC_FAILURE = "요청을 처리하지 못했습니다";
-
-type BodyResult = { ok: true; body: unknown } | { ok: false; error: string };
 
 /** Which requests this boundary owns; server.js delegates exactly these. */
 export function organizationRestPath(urlPath: string, method: string): boolean {
@@ -64,78 +62,15 @@ export function organizationRestPath(urlPath: string, method: string): boolean {
   return false;
 }
 
-function decodedSegment(value: string): string | null {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return null;
-  }
-}
-
-// server/http.js readJsonBody, kept byte-for-byte: a single 1MB cap with the
-// rest of the request drained, an empty body as {}, and its own three error
-// messages. Streaming here keeps the memory profile of the legacy path.
-function readBody(stream: NodeJS.ReadableStream): Promise<BodyResult> {
-  return new Promise((resolve) => {
-    let size = 0;
-    let tooBig = false;
-    const chunks: Buffer[] = [];
-    stream.on("data", (chunk: Buffer) => {
-      if (tooBig) return;
-      size += chunk.length;
-      if (size > MAX_BODY_BYTES) {
-        tooBig = true;
-        chunks.length = 0;
-        (stream as NodeJS.ReadableStream & { resume: () => void }).resume();
-        return;
-      }
-      chunks.push(chunk);
-    });
-    stream.on("end", () => {
-      if (tooBig) {
-        resolve({ ok: false, error: "요청이 너무 큽니다" });
-        return;
-      }
-      try {
-        resolve({ ok: true, body: JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}") });
-      } catch {
-        resolve({ ok: false, error: "요청 형식을 확인하세요" });
-      }
-    });
-    stream.on("error", () => resolve({ ok: false, error: "요청을 읽지 못했습니다" }));
-  });
-}
-
-function bodyOf(request: FastifyRequest): BodyResult {
-  const value = request.body as BodyResult | undefined;
-  return value && typeof value === "object" && "ok" in value ? value : { ok: true, body: {} };
-}
-
-function errorStatus(error: unknown): Parameters<FastifyReply["code"]>[0] {
-  const value = error && typeof error === "object" ? (error as { status?: unknown }).status : undefined;
-  return (typeof value === "number" && Number.isInteger(value) && value >= 400 && value <= 599 ? value : 500) as Parameters<FastifyReply["code"]>[0];
-}
-
-function failureFields(error: unknown, fallback: string, deps: OrganizationRestDeps) {
-  const field = error && typeof error === "object" ? (error as { field?: unknown }).field : undefined;
-  return {
-    status: errorStatus(error),
-    message: deps.failureMessage(error, fallback),
-    field: typeof field === "string" && field ? field : null,
-  };
-}
-
-// server/api.js err(): the field rides along only when it is set.
-function fail(reply: FastifyReply, status: Parameters<FastifyReply["code"]>[0], message: string, field?: string | null) {
-  const body: Record<string, unknown> = { error: message };
-  if (field) body.field = field;
-  return reply.code(status).send(body);
-}
-
 async function currentAccount(deps: OrganizationRestDeps, request: FastifyRequest): Promise<unknown> {
   const account = await deps.sessionFromCookie(request.headers.cookie);
   if (!account) throw Object.assign(new Error(LOGIN_REQUIRED), { status: 401 });
   return account;
+}
+
+function failWith(deps: OrganizationRestDeps, reply: FastifyReply, error: unknown, fallback: string) {
+  const mapped = failureFields(error, fallback, deps.failureMessage);
+  return fail(reply, mapped.status, mapped.message, mapped.field);
 }
 
 async function organizationRest(
@@ -178,8 +113,7 @@ async function organizationRest(
         const result = await deps.saveClient(account, body);
         return reply.code(result.replayed ? 200 : 201).send({ client: result.client });
       } catch (error) {
-        const mapped = failureFields(error, "고객사 정보를 저장하지 못했습니다", deps);
-        return fail(reply, mapped.status, mapped.message, mapped.field);
+        return failWith(deps, reply, error, "고객사 정보를 저장하지 못했습니다");
       }
     }
 
@@ -190,8 +124,7 @@ async function organizationRest(
         const result = await deps.saveOrgPermissions(account, decodedSegment(parts[2]), body);
         return reply.code(result.replayed ? 200 : 201).send({ account: result.account });
       } catch (error) {
-        const mapped = failureFields(error, "조직 권한을 저장하지 못했습니다", deps);
-        return fail(reply, mapped.status, mapped.message, mapped.field);
+        return failWith(deps, reply, error, "조직 권한을 저장하지 못했습니다");
       }
     }
 
@@ -204,15 +137,13 @@ async function organizationRest(
         const result = await deps.assignMember(account, eventId, body);
         return reply.code(result.replayed ? 200 : 201).send({ membership: result.membership });
       } catch (error) {
-        const mapped = failureFields(error, "행사 권한을 저장하지 못했습니다", deps);
-        return fail(reply, mapped.status, mapped.message, mapped.field);
+        return failWith(deps, reply, error, "행사 권한을 저장하지 못했습니다");
       }
     }
 
     return fail(reply, 404, NOT_FOUND_API);
   } catch (error) {
-    const mapped = failureFields(error, GENERIC_FAILURE, deps);
-    return fail(reply, mapped.status, mapped.message, mapped.field);
+    return failWith(deps, reply, error, GENERIC_FAILURE);
   }
 }
 

@@ -28,7 +28,7 @@ Branch: `master` · 작업 기준: `a0bbc03`
 
 ## 검증 수치 (현재 작업 트리 실측)
 
-- `npm test` — **626 통과, 실패 0, 스킵 0** (DB 주입 시). DB 없이 돌리면 스킵되고 실패로 처리된다.
+- `npm test` — **636 통과, 실패 0, 스킵 0** (DB 주입 시). DB 없이 돌리면 스킵되고 실패로 처리된다.
 - `npm run a11y` — 구 앱 주요 12화면, serious/critical **0**
 - `npm run mobile` — 구 앱 6기기 × 2방향 × 6화면 = **72검사 통과**, 가로 넘침·44px 미만 조작 요소 0
 - `npm run web:audit` — 새 앱 공개 4화면 × 3뷰포트 + 스태프·운영 콘솔, serious/critical **0**, 가로 넘침 0 (실행 중 데모 대상)
@@ -98,7 +98,7 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
 1. Solapi 준비 → 실발송 검증(SMS·LMS·MMS·알림톡·대체발송 각 1건, 업로드 이미지 ID 실측). `docs/INTEGRATIONS.md`
 2. 운영 배포 위치 결정 → 그 값으로 자격증명 발급, `COOKIE_SECURE=1`
 3. 푸시할 원격이 정해지면 push + CI(워크플로는 이미 있다: `.github/workflows/ci.yml`)
-4. Fastify 다음 순서: 커맨드 경로는 마지막. 공개 읽기(공개 행사·티켓·공개 파일)와 조직 REST(행사 목록/생성·고객사·조직 권한·행사 멤버)는 이관 완료이며, 정합 테스트와 경계 계약이 전제를 보증한다
+4. Fastify 이관: 공개 읽기·조직 REST·참가자 커맨드 경로까지 이관 완료. 남은 구 경로는 `/api/auth/*`, 파일 업로드·사진 ZIP, `/api/bootstrap`, 410 폴백이며 정합 테스트와 경계 계약이 전제를 보증한다
 5. 조직 격리 2단계 이후(매핑·스코프·롤아웃)는 별도 승인 후. 인증번호 SMS 도달 검증은 자격증명 확보 후
 
 ## 남은 미검증 (완료라고 말하지 않는다)
@@ -110,6 +110,7 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
 
 ## 이력
 
+- 2026-10-16: Fastify 이관 4단계로 참가자 커맨드 경로를 옮겼다. `server/fastify/command-path.ts`가 `POST /api/events/:slug/signup`(가입·세션 쿠키)과 `POST /api/events/:id/commands`(이벤트 커맨드 디스패처)를 서빙하고, 디스패처는 구 라우터의 순서를 그대로 보존한다 — 본문 선행 → 티켓 셀프서비스 → 게스트 부스 방문 → 세션+authorize 뒤 operations 실행기 → 도메인 실행기(게스트/`participants.write`) → STAFF 예외가 있는 참가자 실행기, commandId·assignmentId는 payload 폴백까지 동일. 공통 규칙(세그먼트 디코드·bearer·본문 리더·상태/문구/field 매핑)은 `server/fastify/legacy-http.ts`로 모아 공개 읽기·조직 REST와 공유하고 `allowImportingTsExtensions`를 서버 tsconfig에 추가했다. 같은 프리뷰 DB의 구·신 서버(8776/8790)로 6개 시나리오(익명 check.scan 401, 티켓 없는 셀프서비스 401, 잘못된 본문 400, 데스크 누락 400, 인증 선행 409+field, 이벤트 id 오류 404)가 모두 동일했고, 경계 경유 `participant.create` 201 → 양쪽 재시도 200이 바이트 동일했다(참가자·티켓·영수증 행은 삭제로 정리 후 0 확인). 경계 계약 10종 신설 — 총 636 테스트·서버 타입 검사 통과. 실기기·스크린리더는 미검증이며, 데모 행사의 참가자 셀프 가입은 연락처 인증 선행(모의) 때문에 실데이터 성공 경로는 격리 테스트 DB의 E2E로 확인했다.
 - 2026-10-16: Fastify 이관 3단계로 조직 REST를 옮겼다. `server/fastify/organization-rest.ts`가 `GET/POST /api/events`(행사 목록·생성), `POST /api/clients`, `POST /api/accounts/:id/org-permissions`, `POST /api/events/:id/members`를 서빙하고, `server/server.js`는 DB 모드에서 디코드 가능한 해당 요청만 위임한다(무DB JSON 폴백·잘못된 퍼센트 인코딩은 구 라우터 유지, 그 경로의 레거시 분기 응답을 보존). 본문 파싱(1MB 상한·드레인·3종 오류 문구)·인증 순서(본문→세션)·상태·헤더·`field`까지 구 경로와 동일하게 유지했다. 같은 프리뷰 DB를 쓰는 구·신 서버(8776/8790)에 7개 시나리오(익명 목록 401, 목록 200, 잘못된 본문 400, 필드 매핑 400, 익명 고객사 401, 인코딩 불가 경로, 생성→양쪽 재시도)를 요청해 상태·본문이 모두 동일했고, 경계 경유 생성/재시도 응답은 두 서버가 바이트 동일했다(생성↔재시도 키 순서 차이는 PostgreSQL JSONB 재정렬로 두 서버 공통). 새 코드 스택(8791 프록시)의 콘솔 UI에서 로그인→행사 생성 201→중복 409(`field: slug`)→고객사 201→목록 표시까지 조작했고 예기치 않은 콘솔·페이지 오류 0, 검증용 행사·고객사·영수증은 삭제로 정리했다. 검증 중 콘솔 slug `pattern` 속성이 HTML `v` 플래그에서 무효여서 제약이 적용되지 않던 문제를 찾아 이스케이프로 고치고 계약 1종을 추가했다. 경계 계약 8종 신설 — 총 626 테스트·서버 타입 검사·앱 프로덕션 빌드 통과. 실기기·스크린리더는 미검증. `docs/ARCHITECTURE.md` 진행 표기를 갱신했다.
 - 2026-10-16: Fastify 이관 2단계로 공개 읽기를 옮겼다. `server/fastify/public-reads.ts`가 `GET /api/public/events/:slug`(공개 행사 투영), `.../ticket`(bearer 우선·같은 브라우저 세션 대체), `.../files/:fileId`(원본 스트림)를 서빙하고, `server/server.js`는 GET `/api/public*`만 이 경계로 위임한다(인증번호·게스트 업로드 쓰기는 구 라우터 유지). 상태·본문·헤더·오류 문구를 구 경로와 동일하게 유지하고, 잘못된 퍼센트 인코딩은 Fastify 기본 400 대신 구 라우터의 분기별 404를 `frameworkErrors`로 재현한다. 같은 프리뷰 DB를 읽는 구·신 서버(8776/8790)에 7개 경로를 요청해 본문·상태가 모두 동일함을 실측했고, 새 코드로 띄운 API+Next(8791, 프록시)에서 `/event/partner-demo` SSR 렌더·프록시 경유 공개 읽기 200·`%ZZ` 404(레거시 문구)·`/screen/...`·`/register` 200, 예기치 않은 콘솔·페이지 오류 0을 확인했다. 경계 계약 9종 신설(총 617 통과), `npm run server:typecheck`·전체 `npm test` 통과. 실기기·스크린리더는 미검증. `docs/ARCHITECTURE.md` 진행 표기도 갱신했다.
 - 2026-10-16: 증빙 사진 화면에 대한 피드백을 반영해 촬영 구간의 동일한 카드 그리드를 데스크톱 밑줄형 분류 목록으로 바꾸고, 모바일 기본 select는 유지했다. 파일 버튼을 명확한 찾아보기 동작으로 교체하고 드롭도 지원하며, 전송 전에 이미지 미리보기·파일명·용량과 선택 취소를 제공한다. 증빙 내용을 보존하도록 사진은 크롭하지 않는다. 실제 Next 프로덕션 빌드에서 1280/390/320px 화면을 합성 이미지로 렌더 확인하고 파일 선택 버튼→브라우저 파일 선택기, 드롭→선택 취소, 모바일 구간 변경, 업로드→처리 내역을 조작했다(파일·API 응답은 격리된 Playwright 모의). 세 폭에서 가로 넘침·axe WCAG 위반·페이지 오류 0. `npm test` 608 통과, 앱 타입 검사·프로덕션 빌드·콘솔 구성 계약 9개 통과. 캡처는 `/tmp/opencode/eventouch-captures/evidence-photo-review-{1280,390,320}.png`; 물리 OS 파일 선택, 실제 기기·터치·스크린리더 미검증. 빌드에는 다중 lockfile workspace 추론 경고가 남아 있다.

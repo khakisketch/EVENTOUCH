@@ -19,7 +19,7 @@ const { applySecurityHeaders, failureMessage } = require('./http');
 const genericMessaging = require('./messaging');
 const solapi = require('./messaging-solapi');
 const { drainMessageOutbox } = require('./message-outbox');
-const { createAttendeeAccess } = require('./attendees');
+const { createAttendeeAccess, attendeeCookie } = require('./attendees');
 const { createVerificationTransport } = require('./verification-transport');
 
 const ROOT = path.join(__dirname, '..');
@@ -199,6 +199,20 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
     failureMessage,
   });
   const organizationRestReady = organizationRestApp.ready();
+  // Fourth Fastify increment: the participant command path (signup and the
+  // event command dispatcher). Database mode only, like the organization
+  // boundary; the JSON fallback keeps its legacy router.
+  const { buildCommandPathApp, commandPathPath } = require('./fastify/command-path.ts');
+  const commandPathApp = buildCommandPathApp({
+    participantCommands,
+    operationsCommands,
+    domainCommands,
+    access,
+    sessionFromCookie: (cookie) => auth.sessionFromCookie(cookie),
+    attendeeCookie,
+    failureMessage,
+  });
+  const commandPathReady = commandPathApp.ready();
   return http.createServer((req, res) => {
     // One security-header wrapper per response. Every path below — static,
     // /api/*, /api/auth/*, 404, 405, 500 — therefore carries the same policy
@@ -223,15 +237,24 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
       return;
     }
     if (urlPath === '/api/' || urlPath.startsWith('/api/')) {
-      // Undecodable paths never reach the organization boundary: their legacy
+      // Undecodable paths never reach the Fastify boundaries: their legacy
       // answers depend on bodies and sessions, so the hand-rolled router keeps
       // answering them exactly as before.
-      if (state && decodablePath(urlPath) && organizationRestPath(urlPath, req.method)) {
-        organizationRestReady.then(
-          () => organizationRestApp.routing(req, res),
-          () => sendJson(res, 500, { error: '요청을 처리하지 못했습니다' })
-        );
-        return;
+      if (state && decodablePath(urlPath)) {
+        if (organizationRestPath(urlPath, req.method)) {
+          organizationRestReady.then(
+            () => organizationRestApp.routing(req, res),
+            () => sendJson(res, 500, { error: '요청을 처리하지 못했습니다' })
+          );
+          return;
+        }
+        if (commandPathPath(urlPath, req.method)) {
+          commandPathReady.then(
+            () => commandPathApp.routing(req, res),
+            () => sendJson(res, 500, { error: '요청을 처리하지 못했습니다' })
+          );
+          return;
+        }
       }
       if (urlPath.startsWith('/api/auth/')) {
         auth.handleAuth(req, res, urlPath).catch(() => {

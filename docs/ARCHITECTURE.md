@@ -39,8 +39,9 @@ Updated: 2026-10-14 · 기준 브랜치: `master` (구현 기준은 현재 저�
   (진행: `server/commands/shared.ts` 전환 + `npm run server:typecheck`, `server/fastify/health.ts`가
   `GET /api/health`를, `server/fastify/public-reads.ts`가 `GET /api/public/*` 읽기(공개 행사·티켓·
   공개 파일)를, `server/fastify/organization-rest.ts`가 조직 REST(행사 목록/생성·고객사·조직 권한·
-  행사 멤버)를 실제 서빙. 빌드 단계 없음 — Node 24 타입 스트리핑, erasable 문법만.
-  다음 순서: 커맨드 경로는 마지막.)
+  행사 멤버)를, `server/fastify/command-path.ts`가 참가자 커맨드 경로(가입·이벤트 커맨드)를 서빙.
+  빌드 단계 없음 — Node 24 타입 스트리핑, erasable 문법만.
+  남은 구 경로: `/api/auth/*`, 파일 업로드·사진 ZIP, `/api/bootstrap`, 410 폴백.)
 - **데이터:** PostgreSQL을 권위 저장소로 유지한다. 일정·폼 등 유연한 설정은 JSONB를 쓸 수 있지만,
   티켓·체크인·권한·멱등성처럼 제약과 동시성 보장이 중요한 핵심 데이터는 명시적 스키마로
   점진 이전한다. 기존 데이터는 마이그레이션과 회귀 테스트 없이 일괄 변환하지 않는다.
