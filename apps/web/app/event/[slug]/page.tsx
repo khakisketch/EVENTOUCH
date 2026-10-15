@@ -33,6 +33,8 @@ type PublicWorkspace = {
   venue?: { name?: unknown; address?: unknown; directions?: unknown; contact?: unknown } | null;
   registrationOpen?: unknown;
   pageExperience?: { published?: { intro?: unknown } } | null;
+  boothMap?: { published?: unknown } | null;
+  booths?: unknown;
 };
 
 function apiBase(): string {
@@ -113,6 +115,37 @@ export default async function EventPage({
   const venueDirections = text(venue.directions);
   const venueContact = text(venue.contact);
   const hasVenue = Boolean(venueName || venueAddress || venueDirections || venueContact);
+  // Published booth map only: draft placements never surface here.
+  const boothMap = (() => {
+    const source = workspace.boothMap as { published?: unknown } | undefined;
+    const published = source && typeof source === "object" ? source.published : null;
+    if (!published || typeof published !== "object") return null;
+    const map = published as Record<string, unknown>;
+    const image = map.image && typeof map.image === "object" ? (map.image as Record<string, unknown>) : null;
+    if (!image || typeof image.fileId !== "string") return null;
+    const width = Number(image.width);
+    const height = Number(image.height);
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1) return null;
+    const points = Array.isArray(map.points)
+      ? map.points.flatMap((item) => {
+          if (typeof item !== "object" || item === null) return [];
+          const point = item as Record<string, unknown>;
+          const x = Number(point.x);
+          const y = Number(point.y);
+          if (typeof point.boothId !== "string" || !Number.isFinite(x) || !Number.isFinite(y)) return [];
+          return [{ boothId: point.boothId, x, y }];
+        })
+      : [];
+    const booths = Array.isArray(workspace.booths)
+      ? workspace.booths.flatMap((item) => {
+          if (typeof item !== "object" || item === null) return [];
+          const booth = item as Record<string, unknown>;
+          if (typeof booth.id !== "string") return [];
+          return [{ id: booth.id, name: text(booth.name) }];
+        })
+      : [];
+    return { fileId: image.fileId, points, booths };
+  })();
 
   return (
     <main id="main-content" className="site-page public-event-page">
@@ -199,6 +232,34 @@ export default async function EventPage({
               </li>
             ))}
           </ul>
+        </section>
+      ) : null}
+
+      {boothMap ? (
+        <section className={styles.section} aria-labelledby="public-booth-map">
+          <h2 id="public-booth-map">부스 지도</h2>
+          <div className={styles.mapWrap}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              className={styles.mapImage}
+              src={`/api/public/events/${encodeURIComponent(slug)}/files/${encodeURIComponent(boothMap.fileId)}`}
+              alt="행사장 부스 배치도"
+              loading="lazy"
+            />
+            {boothMap.points.map((point) => {
+              const booth = boothMap.booths.find((item) => item.id === point.boothId);
+              if (!booth) return null;
+              return (
+                <span
+                  key={point.boothId}
+                  className={styles.mapPoint}
+                  style={{ left: `${point.x * 100}%`, top: `${point.y * 100}%` }}
+                >
+                  {booth.name}
+                </span>
+              );
+            })}
+          </div>
         </section>
       ) : null}
 

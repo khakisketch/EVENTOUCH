@@ -18,13 +18,24 @@ type Booth = {
 type Assignment = { id: string; accountId: string; type: string; targetId: string };
 type Account = { id: string; name: string; role: string; active: boolean };
 
+type BoothMapPoint = { boothId: string; x: number; y: number };
+type BoothMapDraft = { version: number; image: { fileId: string; name: string; width: number; height: number }; points: BoothMapPoint[] };
+type BoothMapState = {
+  draft: BoothMapDraft | null;
+  published: (BoothMapDraft & { publishedAt: string }) | null;
+};
+
 type State =
   | { kind: "loading" }
   | { kind: "failed"; message: string }
   | {
       kind: "ready";
       eventName: string;
+      eventId: string;
       stampEnabled: boolean;
+      stampMode: string;
+      visitsCount: number;
+      boothMap: BoothMapState;
       desks: Desk[];
       booths: Booth[];
       assignments: Assignment[];
@@ -60,6 +71,10 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const [deskOpen, setDeskOpen] = useState(false);
   const [boothOpen, setBoothOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [mapUploading, setMapUploading] = useState(false);
+  const [mapPlacing, setMapPlacing] = useState<string>("");
+  const [mapDraftPoints, setMapDraftPoints] = useState<BoothMapPoint[] | null>(null);
+  const [mapImageOverride, setMapImageOverride] = useState<BoothMapDraft["image"] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,6 +96,10 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
               desks?: unknown;
               booths?: unknown;
               assignments?: unknown;
+              checks?: unknown;
+              visits?: unknown;
+              stampMode?: unknown;
+              boothMap?: unknown;
             }>;
           } | null;
         } | null;
@@ -148,6 +167,49 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         const features = Array.isArray(event.features)
           ? event.features.filter((feature): feature is string => typeof feature === "string")
           : [];
+        const parseBoothMap = (value: unknown): BoothMapState => {
+          const source = value && typeof value === "object" && !Array.isArray(value)
+            ? (value as Record<string, unknown>)
+            : {};
+          const parseOne = (raw: unknown): BoothMapDraft | null => {
+            const map = raw && typeof raw === "object" && !Array.isArray(raw)
+              ? (raw as Record<string, unknown>)
+              : null;
+            if (!map) return null;
+            const image = map.image && typeof map.image === "object"
+              ? (map.image as Record<string, unknown>)
+              : null;
+            if (!image || typeof image.fileId !== "string" || !image.fileId) return null;
+            const points: BoothMapPoint[] = Array.isArray(map.points)
+              ? map.points.flatMap((item) => {
+                  if (typeof item !== "object" || item === null) return [];
+                  const point = item as Record<string, unknown>;
+                  if (typeof point.boothId !== "string") return [];
+                  const x = Number(point.x);
+                  const y = Number(point.y);
+                  if (!Number.isFinite(x) || !Number.isFinite(y)) return [];
+                  return [{ boothId: point.boothId, x, y }];
+                })
+              : [];
+            return {
+              version: Number(map.version) || 0,
+              image: {
+                fileId: image.fileId,
+                name: text(image.name),
+                width: Number(image.width) || 0,
+                height: Number(image.height) || 0,
+              },
+              points,
+            };
+          };
+          const published = parseOne(source.published);
+          return {
+            draft: parseOne(source.draft),
+            published: published
+              ? { ...published, publishedAt: text((source.published as Record<string, unknown>)?.publishedAt) }
+              : null,
+          };
+        };
         const accounts: Account[] = Array.isArray(bootstrap.accounts)
           ? bootstrap.accounts.flatMap((item) => {
               if (typeof item !== "object" || item === null) return [];
@@ -164,7 +226,11 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         setState({
           kind: "ready",
           eventName: text(event.name),
+          eventId,
           stampEnabled: features.includes("stamp"),
+          stampMode: workspace.stampMode === "SELF" ? "SELF" : "STAFF",
+          visitsCount: Array.isArray(workspace.visits) ? workspace.visits.length : 0,
+          boothMap: parseBoothMap(workspace.boothMap),
           desks,
           booths,
           assignments,
@@ -231,6 +297,53 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
     }
   }
 
+  async function saveBoothMapDraft() {
+    const image = mapImageOverride ?? boothMap.draft?.image ?? null;
+    if (!image) {
+      setFailure({ message: "배치도 이미지를 먼저 올리세요." });
+      return;
+    }
+    const ok = await runCommand(
+      "booth.map.save",
+      {
+        expectedDraftVersion: boothMap.draft?.version ?? 0,
+        fileId: image.fileId,
+        points: mapPoints,
+      },
+      "부스 지도 초안을 저장했습니다."
+    );
+    if (ok) {
+      setMapDraftPoints(null);
+      setMapImageOverride(null);
+      setMapPlacing("");
+    }
+  }
+
+  async function publishBoothMap() {
+    const ok = await runCommand(
+      "booth.map.publish",
+      { expectedDraftVersion: boothMap.draft?.version ?? 0 },
+      "부스 지도를 게시했습니다. 참가자 화면에 보입니다."
+    );
+    if (ok) setMapDraftPoints(null);
+  }
+
+  async function unpublishBoothMap() {
+    if (!window.confirm("게시된 부스 지도를 내릴까요? 참가자 화면에서 사라집니다.")) return;
+    await runCommand(
+      "booth.map.unpublish",
+      { expectedPublishedVersion: boothMap.published?.version ?? 0 },
+      "부스 지도를 내렸습니다."
+    );
+  }
+
+  async function setStampMode(mode: "SELF" | "STAFF") {
+    if (mode === stampMode) return;
+    const label = mode === "SELF" ? "참가자가 부스 QR을 직접 스캔" : "스태프가 참가자 티켓을 확인";
+    if (!window.confirm(`인증 방식을 '${label}'(으)로 바꿀까요?\n인증 기록이 있으면 바꿀 수 없습니다.`)) return;
+    await runCommand("booth.mode", { mode, acknowledge: true }, "부스 인증 방식을 바꿨습니다.");
+  }
+
   if (state.kind === "loading") {
     return <p className="loading-state" role="status">현장 운영 정보를 불러오고 있습니다.</p>;
   }
@@ -244,12 +357,71 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       </section>
     );
   }
-
   const { desks, booths, assignments, accounts, stampEnabled, eventName } = state;
   const accountName = new Map(accounts.map((account) => [account.id, account.name]));
   const deskName = new Map(desks.map((desk) => [desk.id, desk.name]));
   const boothName = new Map(booths.map((booth) => [booth.id, booth.name]));
   const deskStaffCount = assignments.filter((assignment) => assignment.type === "DESK").length;
+
+  const stampMode = state.stampMode;
+  const visitsCount = state.visitsCount;
+  const boothMap = state.boothMap;
+  const mapPoints = mapDraftPoints ?? boothMap.draft?.points ?? [];
+  const pointFor = (boothId: string) => mapPoints.find((point) => point.boothId === boothId) ?? null;
+
+  // Booth-map draft edits stay local until 저장; mapDraftPoints holds the
+  // working set, and each placement is normalized to 0..1 so the published
+  // map scales to any board size.
+  async function uploadMapImage(file: File) {
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      setFailure({ message: "배치도는 PNG·JPG·WebP 이미지를 사용하세요." });
+      return;
+    }
+    if (file.size > 600000) {
+      setFailure({ message: "600KB 이하 배치도 이미지를 올려주세요." });
+      return;
+    }
+    setMapUploading(true);
+    setFailure(null);
+    try {
+      const res = await fetch(
+        `/api/events/${encodeURIComponent(eventId)}/files?name=${encodeURIComponent(file.name)}&commandId=${encodeURIComponent(randomCommandId())}`,
+        { method: "POST", headers: { "content-type": file.type }, body: file }
+      );
+      const data = (await res.json().catch(() => null)) as {
+        file?: { fileId?: unknown; name?: unknown; width?: unknown; height?: unknown };
+        error?: unknown;
+      } | null;
+      const fileId = typeof data?.file?.fileId === "string" ? data.file.fileId : "";
+      if (!res.ok || !fileId) {
+        setFailure({ message: typeof data?.error === "string" ? data.error : "배치도를 올리지 못했습니다." });
+        return;
+      }
+      if (boothMap.draft && boothMap.draft.image.fileId !== fileId && mapPoints.length) {
+        // The server refuses an image swap with leftover points; clear them
+        // here so the operator learns before the save round-trip.
+        setMapDraftPoints([]);
+        setFailure({ message: "배치도를 교체했습니다. 부스 위치를 다시 지정한 뒤 저장하세요." });
+        setMapImageOverride({
+          fileId,
+          name: typeof data?.file?.name === "string" ? data.file.name : file.name,
+          width: Number(data?.file?.width) || 0,
+          height: Number(data?.file?.height) || 0,
+        });
+        return;
+      }
+      setMapImageOverride({
+        fileId,
+        name: typeof data?.file?.name === "string" ? data.file.name : file.name,
+        width: Number(data?.file?.width) || 0,
+        height: Number(data?.file?.height) || 0,
+      });
+    } catch {
+      setFailure({ message: "연결하지 못했습니다. 다시 시도하세요." });
+    } finally {
+      setMapUploading(false);
+    }
+  }
 
   return (
     <div className={styles.wrapper}>
@@ -348,6 +520,158 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           <p className="empty-state">등록된 부스가 없습니다.</p>
         )}
       </section>
+
+      {stampEnabled ? (
+        <section className={styles.section} aria-labelledby="ops-booth-mode">
+          <div className={styles.sectionHead}>
+            <h2 id="ops-booth-mode">부스 인증 방식</h2>
+          </div>
+          <p className={styles.rowMeta}>
+            {stampMode === "SELF"
+              ? "참가자가 부스 QR을 직접 스캔합니다. 부스마다 QR을 붙여 주세요."
+              : "스태프가 참가자 티켓을 확인해 처리합니다. 부스 배정이 필요합니다."}
+            {visitsCount ? ` · 이미 인증 ${visitsCount}건이라 방식을 바꿀 수 없습니다.` : ""}
+          </p>
+          <div className={styles.rowActions}>
+            <button
+              type="button"
+              className={`button ${stampMode === "STAFF" ? "button-primary" : "button-secondary"}`}
+              disabled={busy || visitsCount > 0 || stampMode === "STAFF"}
+              aria-pressed={stampMode === "STAFF"}
+              onClick={() => void setStampMode("STAFF")}
+            >
+              스태프 확인
+            </button>
+            <button
+              type="button"
+              className={`button ${stampMode === "SELF" ? "button-primary" : "button-secondary"}`}
+              disabled={busy || visitsCount > 0 || stampMode === "SELF"}
+              aria-pressed={stampMode === "SELF"}
+              onClick={() => void setStampMode("SELF")}
+            >
+              참가자 셀프 스캔
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {stampEnabled ? (
+        <section className={styles.section} aria-labelledby="ops-booth-map">
+          <div className={styles.sectionHead}>
+            <h2 id="ops-booth-map">부스 지도</h2>
+          </div>
+          <p className={styles.rowMeta}>
+            배치도를 올리고, 부스를 골라 이미지를 눌러 위치를 찍습니다. 게시해야 참가자 화면에 보입니다.
+          </p>
+          <div className={styles.rowActions}>
+            <label className="button button-secondary">
+              {mapUploading ? "올리는 중…" : boothMap.draft ? "배치도 교체" : "배치도 올리기"}
+              <input
+                type="file"
+                className="sr-only"
+                accept="image/png,image/jpeg,image/webp"
+                disabled={mapUploading || busy}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void uploadMapImage(file);
+                  event.target.value = "";
+                }}
+              />
+            </label>
+            {mapImageOverride || boothMap.draft ? (
+              <>
+                <button type="button" className="button button-primary" disabled={busy || mapUploading} onClick={() => void saveBoothMapDraft()}>
+                  초안 저장
+                </button>
+                <button type="button" className="button button-secondary" disabled={busy || !boothMap.draft} onClick={() => void publishBoothMap()}>
+                  게시
+                </button>
+              </>
+            ) : null}
+            {boothMap.published ? (
+              <button type="button" className="button button-secondary" disabled={busy} onClick={() => void unpublishBoothMap()}>
+                게시 내리기
+              </button>
+            ) : null}
+          </div>
+          {(() => {
+            const image = mapImageOverride ?? boothMap.draft?.image ?? null;
+            if (!image) {
+              return <p className="empty-state">아직 배치도가 없습니다. 배치도 올리기로 시작하세요.</p>;
+            }
+            return (
+              <div className={styles.mapWrap}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  className={styles.mapImage}
+                  src={`/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(image.fileId)}`}
+                  alt="부스 배치도"
+                  onClick={(event) => {
+                    if (!mapPlacing) return;
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    const x = (event.clientX - rect.left) / rect.width;
+                    const y = (event.clientY - rect.top) / rect.height;
+                    const next = mapPoints.filter((point) => point.boothId !== mapPlacing);
+                    next.push({
+                      boothId: mapPlacing,
+                      x: Math.min(1, Math.max(0, x)),
+                      y: Math.min(1, Math.max(0, y)),
+                    });
+                    setMapDraftPoints(next);
+                    setMapPlacing("");
+                  }}
+                />
+                {mapPoints.map((point) => {
+                  const booth = booths.find((item) => item.id === point.boothId);
+                  return (
+                    <span
+                      key={point.boothId}
+                      className={styles.mapPoint}
+                      style={{ left: `${point.x * 100}%`, top: `${point.y * 100}%` }}
+                    >
+                      {booth?.name ?? "부스"}
+                    </span>
+                  );
+                })}
+              </div>
+            );
+          })()}
+          {booths.length ? (
+            <ul className={styles.list}>
+              {booths.map((booth) => {
+                const point = pointFor(booth.id);
+                return (
+                  <li key={booth.id} className={styles.row}>
+                    <div className={styles.rowMain}>
+                      <strong>{booth.name}</strong>
+                      <span className={styles.rowMeta}>{point ? "위치 지정됨" : "위치 미지정"}</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="button button-secondary"
+                      disabled={busy}
+                      onClick={() => setMapPlacing(mapPlacing === booth.id ? "" : booth.id)}
+                    >
+                      {mapPlacing === booth.id ? "지정 취소" : point ? "다시 지정" : "위치 지정"}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+          {mapPlacing ? (
+            <p className="notice" role="status">
+              {boothName.get(mapPlacing) ?? "부스"} 위치를 이미지에서 눌러 지정하세요.
+            </p>
+          ) : null}
+          {boothMap.published ? (
+            <p className={styles.rowMeta}>
+              게시본 v{boothMap.published.version} · {boothMap.published.points.length}개 위치
+              {boothMap.published.publishedAt ? ` · ${boothMap.published.publishedAt.slice(0, 10)}` : ""}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className={styles.section} aria-labelledby="ops-staff">
         <div className={styles.sectionHead}>

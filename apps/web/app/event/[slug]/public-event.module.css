@@ -77,3 +77,33 @@
     padding: var(--s3);
   }
 }
+
+/* Published booth map: the image scales, markers ride percentage positions
+   normalized by the editor, so any board size stays aligned. */
+.mapWrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.mapImage {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.mapPoint {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: 2px var(--s2);
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font-size: var(--small);
+  font-weight: 800;
+  white-space: nowrap;
+  pointer-events: none;
+}

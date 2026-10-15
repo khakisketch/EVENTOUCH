@@ -413,6 +413,28 @@ test('web-participant-status-goes-through-the-operator-command-path', () => {
   assert.doesNotMatch(list, /sessionStorage/);
 });
 
+test('web-booth-mode-and-map-editor-are-operations-owned', () => {
+  const ops = read('app/console/events/[id]/operations/OperationsWorkspace.tsx');
+  // Mode switching is explicit, acknowledges the direction, and blocks once
+  // visits exist (server also refuses; the UI explains why).
+  assert.match(ops, /booth\.mode/);
+  assert.match(ops, /acknowledge:\s*true/);
+  assert.match(ops, /방식을 바꿀 수 없습니다/);
+  // Map editing normalizes placement to 0..1 and publishes through the
+  // versioned commands.
+  assert.match(ops, /booth\.map\.save/);
+  assert.match(ops, /booth\.map\.publish/);
+  assert.match(ops, /booth\.map\.unpublish/);
+  assert.match(ops, /expectedDraftVersion/);
+  assert.match(ops, /expectedPublishedVersion/);
+  // The public page renders only the published map with its markers.
+  const publicPage = read('app/event/[slug]/page.tsx');
+  assert.match(publicPage, /source\.published/);
+  assert.match(publicPage, /public-booth-map/);
+  assert.match(publicPage, /mapPoint/);
+  assert.doesNotMatch(publicPage, /boothMap\.draft/);
+});
+
 test('web-rewards-fulfil-on-the-command-path-with-honest-gift-status', () => {
   const rewards = read('app/console/events/[id]/rewards/RewardsWorkspace.tsx');
   assert.match(rewards, /reward\.fulfill/);
