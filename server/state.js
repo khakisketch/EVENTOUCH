@@ -261,6 +261,9 @@ function createState(database) {
       throw rejected(400, '담당자 이메일 형식을 확인하세요', 'email');
     }
     if (requestedId.length > 160) throw rejected(400, '고객사를 확인하세요', 'id');
+    const logoFileId = String(input.logoFileId || '').trim();
+    const docFileId = String(input.docFileId || '').trim();
+    if (logoFileId.length > 160 || docFileId.length > 160) throw rejected(400, '첨부 파일을 확인하세요', 'logoFileId');
 
     return database.transaction(async (client) => {
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [idempotencyKey]);
@@ -293,9 +296,24 @@ function createState(database) {
       if (requestedId && !existing) throw rejected(404, '고객사를 찾을 수 없습니다');
 
       const clientId = requestedId || `client-${crypto.randomUUID()}`;
+      // Attached files stay owned by their stored rows: the record keeps the
+      // reference, and each id must resolve to a file of this client, so a
+      // logo can never point at another record's document.
+      for (const [field, fileId] of [['logoFileId', logoFileId], ['docFileId', docFileId]]) {
+        if (!fileId) continue;
+        const fileRow = await client.query(
+          'SELECT original_name, content_type, size_bytes FROM stored_files WHERE id = $1 AND client_id = $2 LIMIT 1',
+          [fileId, clientId]
+        );
+        if (!fileRow.rowCount) throw rejected(404, '첨부 파일 정보를 찾을 수 없습니다', field);
+      }
       // Keep fields this command does not own (a linked contact, for example)
       // so editing a name never silently unlinks anything.
-      const payload = { ...object(existing && existing.payload), name, contact, email };
+      const payload = {
+        ...object(existing && existing.payload), name, contact, email,
+        ...(logoFileId || (existing && Object.hasOwn(object(existing.payload), 'logoFileId')) ? { logoFileId } : {}),
+        ...(docFileId || (existing && Object.hasOwn(object(existing.payload), 'docFileId')) ? { docFileId } : {}),
+      };
       if (existing) {
         await client.query(
           'UPDATE clients SET payload = $2::jsonb, updated_at = now() WHERE id = $1',

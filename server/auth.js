@@ -770,6 +770,51 @@ function createDatabaseAuth(database, options = {}) {
       sendJson(res, 200, { user });
       return;
     }
+    // Read-only login protection overview for the organization owner: which
+    // accounts are currently counting failures and which overrides are fresh.
+    // Failure rows are counters, not an access log — successful logins are
+    // never recorded, so there is nothing here to mistake for one.
+    if (urlPath === '/api/auth/security' && req.method === 'GET') {
+      let actor;
+      try {
+        actor = await requireAgency(req.headers.cookie);
+      } catch (error) {
+        sendJson(res, error.status || 401, { error: error.message });
+        return;
+      }
+      try {
+        const attempts = await database.query(
+          `SELECT scope, key, failures, first_failure_at, last_failure_at
+           FROM login_attempts ORDER BY last_failure_at DESC LIMIT 50`
+        );
+        const overrides = await database.query(
+          `SELECT key, cleared_at, cleared_by FROM login_lockout_overrides
+           WHERE cleared_at > now() - interval '24 hours' ORDER BY cleared_at DESC LIMIT 50`
+        );
+        sendJson(res, 200, {
+          attempts: attempts.rows.map((row) => ({
+            scope: String(row.scope),
+            key: String(row.key),
+            failures: Number(row.failures) || 0,
+            firstFailureAt: row.first_failure_at,
+            lastFailureAt: row.last_failure_at,
+          })),
+          overrides: overrides.rows.map((row) => ({
+            key: String(row.key),
+            clearedAt: row.cleared_at,
+            clearedBy: row.cleared_by ? String(row.cleared_by) : null,
+          })),
+          actor: actor.id,
+        });
+      } catch (error) {
+        if (/login_attempts|login_lockout_overrides/.test(String(error && error.message))) {
+          sendJson(res, 200, { attempts: [], overrides: [], unmigrated: true, actor: actor.id });
+          return;
+        }
+        sendJson(res, error.status || 500, { error: failureMessage(error, '보호 상태를 불러오지 못했습니다') });
+      }
+      return;
+    }
     const passwordResetPath = /^\/api\/auth\/accounts\/([^/]+)\/password$/.exec(urlPath);
     if (passwordResetPath && req.method === 'POST') {
       let accountId;

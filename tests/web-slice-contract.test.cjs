@@ -313,6 +313,19 @@ test('web-invite-accept-and-team-reset-cover-invitation-only-accounts', () => {
   assert.match(team, /\/revoke/);
   assert.doesNotMatch(team, /localStorage/);
   assert.doesNotMatch(team, /sessionStorage/);
+  // Operations visibility is read-only: integration status from the health
+  // probe, recent activity from scoped workspaces, login protection from the
+  // agency-only security endpoint. Credentials are never entered on screen.
+  const ops = read('app/console/team/OperationsPanels.tsx');
+  assert.match(ops, /\/api\/health/);
+  assert.match(ops, /\/api\/auth\/security/);
+  assert.match(ops, /연동 상태/);
+  assert.match(ops, /최근 활동/);
+  assert.match(ops, /로그인 보호 상태/);
+  assert.match(ops, /성공한 로그인은 기록하지 않으므로/);
+  assert.match(ops, /화면에 입력하지 않습니다/);
+  assert.doesNotMatch(ops, /localStorage/);
+  assert.doesNotMatch(ops, /sessionStorage/);
   const shell = read('app/console/ConsoleShell.tsx');
   assert.match(shell, /\/console\/team/);
 });
@@ -416,9 +429,20 @@ test('web-console-shell-keeps-decided-navigation-and-clients-read-only', () => {
   assert.match(globalStyles, /\.operator-block\.operator-mobile-trigger\s*\{[^}]*grid-area:\s*profile/s);
   const clients = read('app/console/clients/ClientsList.tsx');
   assert.match(clients, /\/api\/bootstrap/);
-  assert.doesNotMatch(clients, /method:\s*"POST"/i);
+  // Client records live on the organization REST path (agency-only on the
+  // server), never the event command path; files travel the file routes.
+  assert.match(clients, /\/api\/clients/);
+  assert.match(clients, /method:\s*"POST"/i);
   assert.doesNotMatch(clients, /\/commands/);
+  assert.match(clients, /\/files\?name=/);
+  assert.match(clients, /logoFileId/);
+  assert.match(clients, /docFileId/);
+  assert.match(clients, /사업자등록증/);
+  assert.match(clients, /600KB/);
+  assert.match(clients, /canManage/);
   assert.match(clients, /다시 불러오기/);
+  assert.doesNotMatch(clients, /localStorage/);
+  assert.doesNotMatch(clients, /sessionStorage/);
 });
 
 test('web-retry-keeps-one-command-id-per-attempt-on-signup-and-scan', () => {

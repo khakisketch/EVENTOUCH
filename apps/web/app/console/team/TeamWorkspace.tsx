@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { loginHrefForLocation } from "../../auth-redirect";
+import OperationsPanels from "./OperationsPanels";
 import styles from "./team.module.css";
 
 type Account = {
@@ -237,6 +238,7 @@ export default function TeamWorkspace() {
       <p>
         <Link className="button button-secondary" href="/console">행사 목록으로</Link>
       </p>
+      <OperationsPanels />
       {resetTarget ? (
         <ResetDialog
           account={resetTarget}

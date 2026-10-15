@@ -217,6 +217,27 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       return sendJson(res,result.replayed ? 200 : 201,{file:result.file});
     } catch (error) { return err(res,error.status || 500,error.status ? error.message : '파일을 저장하지 못했습니다'); }
   }
+  // Organization-level client files (logos, registration documents). No
+  // event scope, so only AGENCY passes; the file service enforces it.
+  if (parts[1] === 'clients' && parts[3] === 'files' && files &&
+      ((req.method === 'POST' && parts.length === 4) || (req.method === 'GET' && parts.length === 5))) {
+    res.setHeader('cache-control','no-store');
+    try {
+      const account = await requireUser(auth,req);
+      const clientId = decodedSegment(parts[2]);
+      if (req.method === 'GET') {
+        const file = await files.readClientFile({account,clientId,fileId:decodedSegment(parts[4])});
+        res.writeHead(200,{'content-type':file.type,'content-length':file.size,'x-content-type-options':'nosniff'});
+        fs.createReadStream(file.absolutePath).on('error', () => res.destroy()).pipe(res);
+        return;
+      }
+      const params = new URL(req.url,'http://localhost').searchParams;
+      const bytes = await readRawBytes(req);
+      const result = await files.uploadClientFile({account,clientId,commandId:params.get('commandId'),name:params.get('name'),
+        contentType:String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase(),bytes});
+      return sendJson(res,result.replayed ? 200 : 201,{file:result.file});
+    } catch (error) { return err(res,error.status || 500,error.status ? error.message : '파일을 저장하지 못했습니다'); }
+  }
   if (req.method === 'POST' && parts[1] === 'events' && parts[3] === 'files' && parts.length === 4) {
     try {
       ensureLegacySeed(store);

@@ -1755,6 +1755,74 @@ select[aria-invalid="true"] {
 .client-row h2 {
   margin: 0;
   font-size: var(--h3);
+  word-break: keep-all;
+}
+
+.client-logo {
+  max-width: 160px;
+  max-height: 64px;
+  margin-top: var(--s2);
+  object-fit: contain;
+}
+
+.client-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-top: var(--s3);
+}
+
+/* Generic modal dialog for simple management screens. Focus and Escape
+   behavior stays with the component; this is only the visual shell. */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: var(--s4);
+  background: var(--scrim);
+}
+
+.dialog {
+  display: grid;
+  gap: var(--s3);
+  width: min(100%, var(--web-form-max));
+  max-height: calc(100svh - var(--s5) * 2);
+  overflow-y: auto;
+  padding: var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.dialog h2 {
+  margin: 0;
+  font-size: var(--h2);
+  word-break: keep-all;
+}
+
+.dialog label {
+  display: block;
+  margin-bottom: var(--s1);
+  font-weight: 700;
+}
+
+.dialog input[type="text"],
+.dialog input[type="email"] {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-small);
+  font: inherit;
+}
+
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--s2);
 }
 
 .client-meta a {
