@@ -1311,7 +1311,7 @@ select[aria-invalid="true"] {
   border-top: 1px solid var(--nav-active);
 }
 
-.operator-mobile-trigger {
+.operator-block.operator-mobile-trigger {
   display: none;
 }
 
@@ -2011,7 +2011,7 @@ select[aria-invalid="true"] {
     display: none;
   }
 
-  .operator-mobile-trigger {
+  .operator-block.operator-mobile-trigger {
     grid-area: profile;
     display: flex;
     width: 44px;

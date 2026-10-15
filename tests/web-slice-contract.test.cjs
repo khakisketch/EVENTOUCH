@@ -358,6 +358,11 @@ test('web-console-shell-keeps-decided-navigation-and-clients-read-only', () => {
   assert.match(globalStyles, /@container\s*\(max-width:\s*340px\)/);
   assert.match(globalStyles, /\.nav-event-branch \.console-subnav-item\.active::before/);
   assert.match(globalStyles, /scroll-snap-type:\s*x proximity/);
+  // Exactly one account trigger per viewport: the two-class hide rule must
+  // beat .operator-block's later display:flex on desktop, and the mobile
+  // rule must win it back inside the media query.
+  assert.match(globalStyles, /\.operator-block\.operator-mobile-trigger\s*\{[^}]*display:\s*none/s);
+  assert.match(globalStyles, /\.operator-block\.operator-mobile-trigger\s*\{[^}]*grid-area:\s*profile/s);
   const clients = read('app/console/clients/ClientsList.tsx');
   assert.match(clients, /\/api\/bootstrap/);
   assert.doesNotMatch(clients, /method:\s*"POST"/i);
