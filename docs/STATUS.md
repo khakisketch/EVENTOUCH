@@ -93,13 +93,13 @@ EVENTOUCH_MOBILE_DATABASE_URL='postgres://eventouch@localhost/eventouch_uiux_mob
 | CI 웹 공백 | CI는 구 앱(`npm ci`·`npm test`·a11y·mobile)만 검증하던 것을 `web` 잡으로 새 앱 타입체크·빌드까지 확장. 실발송·실기기 검증은 여전히 CI 밖 |
 | 서버 시각 | NTP 동기화 미확인(Solapi ±15분 제약) |
 
-## 다음
+## 다음 (코드 작업 완료 — 남은 것은 외부 트랙)
 
-1. Solapi 준비 → 실발송 검증(SMS·LMS·알림톡·대체발송 각 1건). `docs/INTEGRATIONS.md`
+1. Solapi 준비 → 실발송 검증(SMS·LMS·MMS·알림톡·대체발송 각 1건, 업로드 이미지 ID 실측). `docs/INTEGRATIONS.md`
 2. 운영 배포 위치 결정 → 그 값으로 자격증명 발급, `COOKIE_SECURE=1`
 3. 푸시할 원격이 정해지면 push + CI(워크플로는 이미 있다: `.github/workflows/ci.yml`)
-4. 운영 콘솔 쓰기 계속(현장·메시지·설정) + Fastify/TypeScript API·티켓 정규화(승인된 잔여 작업)
-5. 참가자 재접속 서버 기반 마련됨(슬라이스 7a·7b: 인증·세션·복구, 행사별 opt-in+토글) → 팀 초대 발급 새 앱 이관됨(7c) → 조직 격리 설계 확정됨(`docs/MULTI-TENANCY.md`, 구현은 별도 승인 후). 실발송 자격증명 확보 후 인증번호 SMS 도달 검증
+4. Fastify 다음 순서: 공개 읽기 → 조직 REST → 커맨드 경로. 티켓 읽기 전환은 정합 테스트가 전제를 보증한다
+5. 조직 격리 2단계 이후(매핑·스코프·롤아웃)는 별도 승인 후. 인증번호 SMS 도달 검증은 자격증명 확보 후
 
 ## 남은 미검증 (완료라고 말하지 않는다)
 
