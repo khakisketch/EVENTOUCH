@@ -9,7 +9,7 @@ const {
   nextId,
   hashTicket,
   findTicket,
-} = require('./shared');
+} = require('./shared.ts');
 const preparation = require('./preparation');
 const engagement = require('./engagement');
 const contentResults = require('./content-results');

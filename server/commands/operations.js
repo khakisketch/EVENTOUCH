@@ -11,7 +11,7 @@ const {
   ticketHash,
   findTicket,
   ticketCode,
-} = require('./shared');
+} = require('./shared.ts');
 
 const COMMANDS = new Set([
   'desk.save',

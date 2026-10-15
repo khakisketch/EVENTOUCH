@@ -136,6 +136,32 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
   // otherwise. Verification codes are never returned to HTTP clients.
   const verificationTransport = createVerificationTransport();
   const attendeeAccess = database ? createAttendeeAccess(database, { transport: verificationTransport }) : null;
+  // First Fastify increment: /api/health is served through the route
+  // boundary (server/fastify/health.ts). Same shape, same headers — the
+  // security wrapper above already ran, Fastify only fills the body.
+  const { buildHealthApp } = require('./fastify/health.ts');
+  const healthApp = buildHealthApp({
+    getMessaging: () => ({
+      connected: messagingStatus.connected,
+      provider: messagingStatus.provider || null,
+    }),
+    getVerificationMode: () => verificationTransport.state().mode,
+    countOutbox: database
+      ? async () => {
+          try {
+            const result = await database.query(
+              `SELECT COUNT(*)::int AS pending FROM message_outbox
+               WHERE status IN ('PENDING', 'SENDING') AND next_attempt_at <= now()`
+            );
+            return result.rows[0].pending;
+          } catch {
+            return null;
+          }
+        }
+      : null,
+    includeDevLogin: Boolean(process.env.EVENTOUCH_DEV_QUICK_LOGIN),
+  });
+  const healthReady = healthApp.ready();
   return http.createServer((req, res) => {
     // One security-header wrapper per response. Every path below — static,
     // /api/*, /api/auth/*, 404, 405, 500 — therefore carries the same policy
@@ -143,26 +169,12 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
     const nonce = applySecurityHeaders(res);
     const urlPath = (req.url || '/').split('?')[0];
     if (urlPath === '/api/health') {
-      const base = {
-        ok: true,
-        version: 1,
-        ...(process.env.EVENTOUCH_DEV_QUICK_LOGIN ? { devQuickLogin: true } : {}),
-        messaging: messagingStatus.connected,
-        messagingProvider: messagingStatus.provider || null,
-        verification: verificationTransport.state().mode,
-      };
-      // Queue depth is a best-effort signal: a failing count must never turn
-      // a live server unhealthy, it just omits the field.
-      if (!database) {
-        sendJson(res, 200, base);
-        return;
-      }
-      database.query(
-        `SELECT COUNT(*)::int AS pending FROM message_outbox
-         WHERE status IN ('PENDING', 'SENDING') AND next_attempt_at <= now()`
-      ).then(
-        (result) => sendJson(res, 200, { ...base, outboxPending: result.rows[0].pending }),
-        () => sendJson(res, 200, base)
+      healthReady.then(
+        () => healthApp.routing(req, res),
+        () => {
+          res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ ok: false, error: '상태를 확인할 수 없습니다' }));
+        }
       );
       return;
     }

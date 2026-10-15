@@ -8,6 +8,7 @@
   "scripts": {
     "start": "node server/server.js",
     "db:migrate": "node server/migrate.js",
+    "server:typecheck": "tsc -p server/tsconfig.json",
     "test": "node scripts/run-tests.cjs",
     "test:raw": "node --test tests/*.test.cjs",
     "a11y": "node scripts/accessibility-audit.cjs",
@@ -18,10 +19,13 @@
     "web:start": "PORT=8777 npm --prefix apps/web run start"
   },
   "dependencies": {
+    "fastify": "^5.12.7",
     "pg": "^8.23.1"
   },
   "devDependencies": {
+    "@types/node": "^26.6.5",
     "axe-core": "^4.14.0",
-    "playwright": "^1.64.0"
+    "playwright": "^1.64.0",
+    "typescript": "^7.0.2"
   }
 }

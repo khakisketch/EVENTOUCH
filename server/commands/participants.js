@@ -10,7 +10,7 @@ const {
   clean,
   commandIdentifier,
   ticketHash,
-} = require('./shared');
+} = require('./shared.ts');
 
 const COMMANDS = new Set([
   'participant.create',

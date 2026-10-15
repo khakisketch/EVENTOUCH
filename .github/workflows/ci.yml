@@ -64,6 +64,11 @@ jobs:
           EVENTOUCH_TEST_DATABASE_URL: postgresql://eventouch:eventouch@localhost:5432/eventouch_test
         run: npm test
 
+      - name: Typecheck the TypeScript server modules
+        # Converted modules run without a build step (Node 24 type stripping);
+        # this is the check that keeps runtime and types the same file.
+        run: npm run server:typecheck
+
   mobile:
     runs-on: ubuntu-latest
     timeout-minutes: 15
