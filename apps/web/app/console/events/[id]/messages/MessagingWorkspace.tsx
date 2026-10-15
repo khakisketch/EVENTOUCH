@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
 import ConsolePageHeader, {
   formatConsoleEventMeta,
@@ -90,6 +90,7 @@ const FIELD_LABELS: Record<string, string> = {
   ids: "발송 대상",
   scheduled: "예약 시각",
 };
+const ATTENTION_STATUSES = ["FAILED", "PARTIAL", "NEEDS_CONNECTION"];
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -247,7 +248,10 @@ class CommandFailure extends Error {
 
 export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const attentionParam = searchParams.get("attention");
   const [state, setState] = useState<WorkspaceState>({ kind: "loading" });
+  const [attentionOnly, setAttentionOnly] = useState(false);
   const [templateDraft, setTemplateDraft] = useState<TemplateDraft>(EMPTY_TEMPLATE);
   const [campaignDraft, setCampaignDraft] = useState<CampaignDraft>(EMPTY_CAMPAIGN);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
@@ -391,6 +395,24 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     // Bootstrap is scoped by this event; the session cookie is same-origin.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
+
+  useEffect(() => {
+    setAttentionOnly(attentionParam === "1");
+  }, [attentionParam]);
+
+  useEffect(() => {
+    if (!attentionOnly || state.kind !== "ready") return;
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        document.getElementById("history-heading")?.scrollIntoView({ block: "start" });
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+    };
+  }, [attentionOnly, state.kind]);
 
   async function postCommand(command: string, payload: Record<string, unknown>): Promise<CommandResult> {
     const response = await fetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
@@ -644,6 +666,8 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     `${person.name} ${person.company}`.toLocaleLowerCase("ko-KR").includes(recipientSearch)
   );
   const selectedCount = selectedIds.length;
+  const attentionCampaigns = state.campaigns.filter((campaign) => ATTENTION_STATUSES.includes(campaign.status));
+  const visibleCampaigns = attentionOnly ? attentionCampaigns : state.campaigns;
 
   return (
     <div className={styles.page}>
@@ -978,9 +1002,20 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
             divider
           >
             <p className={styles.help}>캠페인 기록에는 참가자 티켓 링크가 표시되지 않습니다.</p>
-            {state.campaigns.length ? (
+            {attentionOnly ? (
+              <div className={styles.attentionFilter}>
+                <p role="status">발송 확인이 필요한 캠페인만 보고 있습니다 · {visibleCampaigns.length}건</p>
+                <Link
+                  className="button button-secondary"
+                  href={`/console/events/${encodeURIComponent(eventId)}/messages`}
+                >
+                  전체 캠페인 보기
+                </Link>
+              </div>
+            ) : null}
+            {visibleCampaigns.length ? (
               <ul className={styles.campaignList}>
-                {state.campaigns.map((campaign) => {
+                {visibleCampaigns.map((campaign) => {
                   const due = !campaign.scheduled || Date.parse(campaign.scheduled) <= Date.now();
                   const canRetry = campaign.status === "NEEDS_CONNECTION" || (campaign.status === "SCHEDULED" && due);
                   const canSync = campaign.status === "SENDING" || campaign.status === "PARTIAL";
@@ -1041,7 +1076,11 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                 })}
               </ul>
             ) : (
-              <p className={styles.empty}>캠페인이 없습니다. 위에서 수신 대상을 선택해 첫 메시지를 준비하세요.</p>
+              <p className={styles.empty}>
+                {attentionOnly
+                  ? "확인이 필요한 캠페인이 없습니다. 전체 캠페인에서 최근 상태를 확인할 수 있습니다."
+                  : "캠페인이 없습니다. 위에서 수신 대상을 선택해 첫 메시지를 준비하세요."}
+              </p>
             )}
           </ConsoleSection>
         </>

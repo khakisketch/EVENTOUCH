@@ -53,9 +53,7 @@
   font-size: var(--small);
 }
 
-.operationsCard,
 .scheduleCard,
-.stageControl,
 .recentCard {
   min-width: 0;
   padding: var(--s5);
@@ -64,101 +62,41 @@
   background: var(--paper);
 }
 
-.problemSection {
-  min-width: 0;
-  padding: var(--s3) var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
-}
-
-.problemList {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin: 0;
-  padding: 0;
-  border-top: 1px solid var(--line);
-  list-style: none;
-}
-
-.problemList li {
-  min-width: 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.problemList li:nth-child(even) {
-  border-left: 1px solid var(--line);
-}
-
-.problemLink {
-  display: flex;
-  min-height: 56px;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s2);
-  padding: var(--s2) var(--s3);
-  color: var(--ink);
-  text-decoration: none;
-}
-
-.problemLink:hover {
-  background: var(--surface-muted);
-}
-
-.problemCopy {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  min-width: 0;
-  gap: 0 var(--s2);
-}
-
-.problemCopy strong {
-  font-weight: 750;
-}
-
-.problemCopy > span {
-  color: var(--muted);
-  font-size: var(--small);
-}
-
-.problemArrow {
-  flex: none;
-  width: 7px;
-  height: 7px;
-  margin-right: var(--s1);
-  border-top: 1px solid var(--muted);
-  border-right: 1px solid var(--muted);
-  transform: rotate(45deg);
-}
-
 .metricsSection {
   min-width: 0;
 }
 
-.metricGrid {
+.metricRow {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--s3);
+  margin: 0;
+  padding: 0;
+  border-block: 1px solid var(--line);
+  list-style: none;
   min-width: 0;
 }
 
-.metricCard {
+.metricRow li {
+  min-width: 0;
+  border-right: 1px solid var(--line);
+}
+
+.metricRow li:last-child {
+  border-right: 0;
+}
+
+.metricItem {
   display: grid;
   min-width: 0;
-  min-height: 124px;
-  align-content: space-between;
-  gap: var(--s2);
-  padding: var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
+  min-height: 104px;
+  align-content: center;
+  gap: var(--s1);
+  padding: var(--s3) var(--s4);
   color: var(--ink);
   text-decoration: none;
 }
 
-.metricCard:hover {
-  border-color: var(--line-strong);
+.metricItem:hover {
   background: var(--surface-muted);
 }
 
@@ -170,7 +108,7 @@
 .metricValue {
   min-width: 0;
   color: var(--ink);
-  font-size: clamp(1.25rem, 2vw, var(--h2));
+  font-size: var(--h2);
   font-weight: 750;
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
@@ -182,42 +120,158 @@
   font-size: var(--small);
 }
 
-.restrictedNote,
-.readOnlyNote {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--small);
-}
-
-.operationsGrid {
+.entryProgress {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin: 0;
-  padding: 0;
-  border-top: 1px solid var(--line);
-}
-
-.operationItem {
-  display: grid;
-  align-content: start;
-  gap: var(--s1);
+  gap: var(--s3);
   min-width: 0;
-  padding: var(--s3) var(--s2);
-  border-bottom: 1px solid var(--line);
 }
 
-.operationItem dt {
+.entrySummary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--s4);
+  min-width: 0;
+}
+
+.entryMain {
+  display: grid;
+  min-width: 0;
+  gap: var(--s1);
+}
+
+.entryValues {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--s3);
+}
+
+.entryCount {
+  color: var(--ink);
+  font-size: var(--display);
+  font-weight: 800;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.entryCount span {
   color: var(--muted);
+  font-size: var(--h3);
+  font-weight: 650;
+}
+
+.entryRate {
+  color: var(--brand-text);
+  font-size: var(--h2);
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.entrySeparator {
+  color: var(--muted);
+  font-size: var(--h3);
+}
+
+.notEntered {
+  display: grid;
+  min-width: 150px;
+  min-height: 56px;
+  align-content: center;
+  justify-items: end;
+  gap: var(--s1);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--warning-line);
+  border-radius: var(--radius-small);
+  background: var(--warning-soft);
+  color: var(--warning);
+  text-decoration: none;
+}
+
+.notEntered:hover {
+  border-color: var(--warning);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.notEntered span,
+.readOnlyNote {
   font-size: var(--small);
 }
 
-.operationItem dd {
-  margin: 0;
-  font-weight: 700;
+.notEntered strong {
+  font-size: var(--h3);
   font-variant-numeric: tabular-nums;
 }
 
-.operationNote {
+.entryTrack {
+  height: 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--s6);
+  background: var(--surface-muted);
+}
+
+.entryFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--brand);
+  transition: width 180ms ease-out;
+}
+
+.entryFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s1) var(--s3);
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.summaryFacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) 0;
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+.summaryFact {
+  display: grid;
+  min-width: 128px;
+  gap: var(--s1);
+  padding-inline: var(--s3);
+  border-left: 1px solid var(--line);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.summaryFact:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.summaryFact span {
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.summaryFact strong {
+  font-weight: 700;
+}
+
+.summaryFact:hover strong {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.restrictedNote,
+.readOnlyNote {
   margin: 0;
   color: var(--muted);
   font-size: var(--small);
@@ -275,58 +329,6 @@
   font-weight: 700;
 }
 
-.stageControl {
-  padding-block: var(--s4);
-  background: var(--surface-muted);
-}
-
-.stageControls {
-  display: grid;
-  justify-items: start;
-  gap: var(--s2);
-  min-width: 0;
-}
-
-.confirmation {
-  display: grid;
-  justify-items: start;
-  gap: var(--s2);
-  min-width: 0;
-}
-
-.confirmation > p {
-  margin: 0;
-  font-weight: 700;
-}
-
-.confirmationActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
-}
-
-.precondition {
-  grid-column: 1 / -1;
-  margin: 0;
-  padding: var(--s3);
-  border: 1px solid var(--warning-line);
-  border-radius: var(--radius-small);
-  background: var(--warning-soft);
-  color: var(--warning);
-  font-size: var(--small);
-}
-
-.stageFeedback {
-  grid-column: 1 / -1;
-  display: grid;
-  justify-items: start;
-  gap: var(--s2);
-}
-
-.stageFeedback > p {
-  margin: 0;
-}
-
 .recentCard {
   gap: var(--s3);
 }
@@ -346,6 +348,41 @@
   font-variant-numeric: tabular-nums;
 }
 
+.refreshButton:global(.button-secondary) {
+  display: grid;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  place-items: center;
+}
+
+.refreshButton svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.refreshButton[aria-busy="true"] svg {
+  animation: refreshSpin 700ms linear infinite;
+}
+
+@keyframes refreshSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .entryFill,
+  .refreshButton[aria-busy="true"] svg {
+    transition: none;
+    animation: none;
+  }
+}
+
 .refreshStatus {
   margin: 0;
   color: var(--muted);
@@ -361,10 +398,10 @@
 }
 
 .activityList li {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   min-width: 0;
   align-items: center;
-  justify-content: space-between;
   gap: var(--s3);
   padding-block: var(--s3);
   border-bottom: 1px solid var(--line);
@@ -382,18 +419,41 @@
   overflow-wrap: anywhere;
 }
 
-.checkIn,
-.checkOut {
+.checkAction {
+  display: inline-flex;
+  min-height: 24px;
+  flex: none;
+  align-items: center;
+  gap: var(--s1);
+  padding-inline: var(--s1);
+  border-radius: var(--s6);
   font-size: var(--small);
   font-weight: 700;
+  white-space: nowrap;
+}
+
+.checkAction::before {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
 }
 
 .checkIn {
   color: var(--success);
+  background: var(--success-soft);
 }
 
 .checkOut {
+  color: var(--info);
+  background: var(--info-soft);
+}
+
+.checkOther {
   color: var(--muted);
+  background: var(--surface-muted);
 }
 
 .deskName {
@@ -402,17 +462,11 @@
 }
 
 .timestamp {
-  flex: none;
+  justify-self: end;
   color: var(--muted);
   font-size: var(--small);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-}
-
-@media (max-width: 1024px) {
-  .metricGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 680px) {
@@ -420,36 +474,49 @@
     gap: var(--s3);
   }
 
-  .operationsCard,
   .scheduleCard,
-  .stageControl,
   .recentCard {
     padding: var(--s4);
   }
 
-  .problemSection {
+  .metricRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metricRow li {
+    border-bottom: 1px solid var(--line);
+  }
+
+  .metricRow li:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .metricRow li:nth-child(2) ~ li,
+  .metricRow li:first-child:last-child {
+    border-bottom: 0;
+  }
+
+  .metricItem {
+    min-height: 92px;
     padding: var(--s3);
   }
 
-  .problemList {
+  .entrySummary {
     grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: var(--s3);
   }
 
-  .problemList li:nth-child(even) {
-    border-left: 0;
+  .notEntered {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: space-between;
   }
 
-  .metricGrid {
-    gap: var(--s2);
-  }
-
-  .metricCard {
-    min-height: 116px;
-    padding: var(--s3);
-  }
-
-  .operationsGrid {
-    grid-template-columns: minmax(0, 1fr);
+  .entryFoot {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .programList li {
@@ -460,14 +527,6 @@
   .scheduledBadge {
     grid-column: 2;
     justify-self: start;
-  }
-
-  .stageControl {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .recentHeading {
-    flex-direction: column;
   }
 
   .recentActions {
@@ -494,9 +553,12 @@
     grid-column: 1 / -1;
   }
 
-  .activityList li {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: var(--s1);
+  .metricItem {
+    padding-inline: var(--s2);
+  }
+
+  .summaryFact {
+    min-width: 50%;
+    padding-inline: var(--s2);
   }
 }

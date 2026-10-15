@@ -1568,6 +1568,7 @@ select[aria-invalid="true"] {
 
 .nav-badge {
   flex: none;
+  margin-left: auto;
   min-width: 26px;
   height: 22px;
   padding-inline: 6px;

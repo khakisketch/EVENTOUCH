@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { loginHrefForLocation } from "../../../auth-redirect";
@@ -27,14 +27,6 @@ type ScheduledProgram = {
   place: string;
 };
 
-type BoothRow = {
-  id: string;
-  name: string;
-  status: string;
-  capacity: number;
-  used: number;
-};
-
 type Overview = {
   name: string;
   slug: string;
@@ -49,28 +41,15 @@ type Overview = {
   approved: number;
   pendingApproval: number;
   waitlist: number;
-  insideNow: number;
   everIn: number;
   confirmedNotEntered: number;
   entryRate: number;
   recent: CheckRow[];
-  deskCount: number;
-  openDeskCount: number;
-  deskAssignmentCount: number;
-  assignedDeskPeople: number;
-  booths: BoothRow[];
-  stampEnabled: boolean;
-  stampMode: string;
-  screenEnabled: boolean;
-  displayLabel: string;
   registrationOpen: boolean;
-  openModules: number;
   surveyResponseCount: number | null;
   reportCount: number;
   publishedReportCount: number;
   draftReportCount: number;
-  messageAttentionCount: number;
-  messageAttentionSummary: string;
   programs: ScheduledProgram[];
   updatedAt: string;
   canManageEvent: boolean;
@@ -84,12 +63,6 @@ type OverviewState =
 type Metric = {
   label: string;
   value: string | number;
-  detail: string;
-  href: string;
-};
-
-type Problem = {
-  title: string;
   detail: string;
   href: string;
 };
@@ -130,11 +103,6 @@ function text(value: unknown): string {
 function number(value: unknown): number {
   const result = Number(value);
   return Number.isFinite(result) ? result : 0;
-}
-
-function randomCommandId(): string {
-  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  return `web-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
 }
 
 function formatEventDate(value: string): string {
@@ -239,7 +207,6 @@ function getReportStatus(overview: Overview): string {
 
 function metricsForStage(overview: Overview, stage: string, base: string): Metric[] {
   const participantsHref = `${base}/participants`;
-  const reportsHref = `${base}/reports`;
 
   switch (stage) {
     case "DRAFT":
@@ -255,119 +222,16 @@ function metricsForStage(overview: Overview, stage: string, base: string): Metri
               detail: "대기 명단 · 행사 정원",
               href: `${participantsHref}?status=WAITLIST`,
             }]
-          : []),
-      ];
-    case "LIVE":
-      return [
-        { label: "누적 입장", value: overview.everIn, detail: "취소 제외 참가 기록", href: reportsHref },
-        { label: "현재 입장", value: overview.insideNow, detail: "현재 입장 상태", href: reportsHref },
-        { label: "확정자 중 미입장", value: overview.confirmedNotEntered, detail: "참가 확정 · 입장 기록 없음", href: `${participantsHref}?status=APPROVED` },
-        { label: "취소 제외 등록 대비 입장률", value: `${overview.entryRate}%`, detail: "결과 보고서와 같은 정의", href: reportsHref },
-      ];
-    case "ENDED":
-      return [
-        { label: "최종 누적 입장", value: overview.everIn, detail: "everIn 기록 · 취소 제외", href: reportsHref },
-        { label: "취소 제외 등록 대비 입장률", value: `${overview.entryRate}%`, detail: "결과 보고서와 같은 정의", href: reportsHref },
-        ...(overview.surveyResponseCount === null
-          ? []
-          : [{ label: "설문 응답", value: overview.surveyResponseCount, detail: "만족도 프로그램 응답", href: reportsHref }]),
-        { label: "보고서 상태", value: getReportStatus(overview), detail: overview.reportCount ? `${overview.reportCount}건` : "보고서 없음", href: reportsHref },
-      ];
-    case "ARCHIVED":
-      return [
-        { label: "취소 제외 등록", value: overview.registered, detail: "읽기 전용 요약", href: participantsHref },
-        { label: "최종 누적 입장", value: overview.everIn, detail: "everIn 기록", href: reportsHref },
-        { label: "취소 제외 등록 대비 입장률", value: `${overview.entryRate}%`, detail: "결과 보고서와 같은 정의", href: reportsHref },
-        { label: "보고서 상태", value: getReportStatus(overview), detail: overview.reportCount ? `${overview.reportCount}건` : "보고서 없음", href: reportsHref },
+          : [{
+              label: "정원",
+              value: "제한 없음",
+              detail: "신청 수 제한 없음",
+              href: `${base}/settings`,
+            }]),
       ];
     default:
       return [];
   }
-}
-
-function problemsForStage(overview: Overview, stage: string, base: string): Problem[] {
-  const problems: Problem[] = [];
-  const pendingCanBeApproved = stage !== "ENDED" && stage !== "ARCHIVED";
-  const isLiveOrReady = stage === "READY" || stage === "LIVE";
-  const soldOutBooths = overview.booths.filter(
-    (booth) => booth.capacity > 0 && booth.used >= booth.capacity
-  );
-  const reportIsIncomplete =
-    (stage === "ENDED" || stage === "ARCHIVED") &&
-    (overview.reportCount === 0 || overview.draftReportCount === overview.reportCount);
-
-  if (isLiveOrReady && (overview.deskCount === 0 || overview.deskAssignmentCount === 0)) {
-    const gaps = [
-      overview.deskCount === 0 ? "등록 데스크 없음" : "",
-      overview.deskAssignmentCount === 0 ? "데스크 배정 없음" : "",
-    ].filter(Boolean);
-    problems.push({
-      title: "현장 데스크 준비 필요",
-      detail: gaps.join(" · "),
-      href: `${base}/operations`,
-    });
-  }
-
-  if (overview.messageAttentionCount > 0) {
-    problems.push({
-      title: "발송 확인 필요",
-      detail: `${overview.messageAttentionCount}개 캠페인 · ${overview.messageAttentionSummary}`,
-      href: `${base}/messages`,
-    });
-  }
-
-  if (isLiveOrReady && soldOutBooths.length > 0) {
-    const names = soldOutBooths.map((booth) => booth.name).filter(Boolean).slice(0, 3);
-    const suffix = soldOutBooths.length > names.length ? ` 외 ${soldOutBooths.length - names.length}곳` : "";
-    problems.push({
-      title: "부스 수량 소진",
-      detail: `${soldOutBooths.length}개 부스 · ${names.join(" · ")}${suffix}`,
-      href: `${base}/operations`,
-    });
-  }
-
-  if (pendingCanBeApproved && overview.pendingApproval > 0) {
-    problems.push({
-      title: `승인 대기 ${overview.pendingApproval}명`,
-      detail: "참가 신청을 검토하고 승인 여부를 정하세요.",
-      href: `${base}/participants?status=PENDING`,
-    });
-  }
-
-  if (reportIsIncomplete) {
-    problems.push({
-      title: "결과 보고서 작성 필요",
-      detail: overview.reportCount === 0 ? "아직 작성된 보고서가 없습니다." : "보고서가 모두 초안 상태입니다.",
-      href: `${base}/reports`,
-    });
-  }
-
-  return problems.slice(0, 5);
-}
-
-function displayName(
-  display: Record<string, unknown> | null,
-  modules: Record<string, unknown>[],
-  notices: Record<string, unknown>[]
-): string {
-  const type = text(display?.type);
-  if (type === "idle") return "유휴 화면";
-  if (type === "photo") return "사진 출력";
-  if (type === "notice") {
-    const notice = notices.find((item) => item.id === display?.noticeId);
-    return notice ? `공지 · ${text(notice.title) || "제목 없음"}` : "공지 출력 · 내용 확인 필요";
-  }
-  const module = modules.find((item) => item.id === display?.moduleId);
-  const title = text(module?.title);
-  const typeLabel: Record<string, string> = {
-    poll: "투표",
-    quiz: "퀴즈 정답",
-    draw: "추첨 결과",
-    qa: "Q&A",
-  };
-  return typeLabel[type] && module
-    ? `${typeLabel[type]}${title ? ` · ${title}` : ""}`
-    : "출력 설정 확인 필요";
 }
 
 export default function EventOverview({ eventId }: { eventId: string }) {
@@ -377,11 +241,6 @@ export default function EventOverview({ eventId }: { eventId: string }) {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [linkNotice, setLinkNotice] = useState<string | null>(null);
-  const [stageBusy, setStageBusy] = useState(false);
-  const [stageConfirm, setStageConfirm] = useState(false);
-  const [stageError, setStageError] = useState<string | null>(null);
-  const [stageNotice, setStageNotice] = useState<string | null>(null);
-  const stageCommandIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -435,26 +294,6 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         const approved = participantRows.filter((person) => person.status === "APPROVED");
         const everIn = participantRows.filter((person) => person.everIn === true).length;
         const registered = participantRows.length;
-        const desks = records(workspace.desks);
-        const deskMap = new Map<string, string>();
-        desks.forEach((desk) => {
-          if (typeof desk.id === "string") deskMap.set(desk.id, text(desk.name));
-        });
-        const assignments = records(workspace.assignments);
-        const deskAssignments = assignments.filter((assignment) => assignment.type === "DESK");
-        const assignedDeskPeople = new Set(
-          deskAssignments.map((assignment) => text(assignment.accountId)).filter(Boolean)
-        ).size;
-        const boothRows: BoothRow[] = records(workspace.booths).flatMap((booth) => {
-          if (typeof booth.id !== "string" || !booth.id) return [];
-          return [{
-            id: booth.id,
-            name: text(booth.name),
-            status: text(booth.status),
-            capacity: number(booth.capacity),
-            used: number(booth.used),
-          }];
-        });
         const modules = records(workspace.modules);
         const responseRows = records(workspace.responses);
         const surveyModuleIds = new Set(
@@ -466,24 +305,10 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         const reportRows = records(workspace.reports);
         const publishedReportCount = reportRows.filter((report) => report.status === "PUBLISHED").length;
         const draftReportCount = reportRows.filter((report) => report.status === "DRAFT").length;
-        const attentionStatusCounts = new Map<string, number>();
-        records(workspace.messages).forEach((campaign) => {
-          const status = text(campaign.status);
-          if (["FAILED", "PARTIAL", "NEEDS_CONNECTION"].includes(status)) {
-            attentionStatusCounts.set(status, (attentionStatusCounts.get(status) ?? 0) + 1);
-          }
+        const deskMap = new Map<string, string>();
+        records(workspace.desks).forEach((desk) => {
+          if (typeof desk.id === "string") deskMap.set(desk.id, text(desk.name));
         });
-        const attentionLabels = [
-          ["FAILED", "실패"],
-          ["PARTIAL", "일부 실패"],
-          ["NEEDS_CONNECTION", "연결 필요"],
-        ] as const;
-        const messageAttentionSummary = attentionLabels
-          .flatMap(([status, label]) => {
-            const count = attentionStatusCounts.get(status) ?? 0;
-            return count ? [`${label} ${count}건`] : [];
-          })
-          .join(" · ");
         const programRows: ScheduledProgram[] = records(workspace.program).flatMap((program, index) => {
           const title = text(program.title);
           if (!title) return [];
@@ -496,8 +321,6 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             place: text(program.place),
           }];
         });
-        const notices = records(workspace.notices);
-        const display = asRecord(workspace.display);
         const checks: CheckRow[] = records(workspace.checks)
           .filter((check) => typeof check.id === "string" && check.id && check.corrected !== true)
           .map((check) => ({
@@ -513,9 +336,6 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             return (Number.isNaN(rightTime) ? 0 : rightTime) - (Number.isNaN(leftTime) ? 0 : leftTime);
           })
           .slice(0, 8);
-        const features = Array.isArray(event.features)
-          ? event.features.filter((feature): feature is string => typeof feature === "string")
-          : [];
         const workspaceVenue = asRecord(workspace.venue);
         const now = new Date();
 
@@ -535,28 +355,15 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             approved: approved.length,
             pendingApproval: participantRows.filter((person) => person.status === "PENDING").length,
             waitlist: participantRows.filter((person) => person.status === "WAITLIST").length,
-            insideNow: participantRows.filter((person) => person.inside === true).length,
             everIn,
             confirmedNotEntered: approved.filter((person) => person.everIn !== true).length,
             entryRate: registered ? Math.round((everIn / registered) * 100) : 0,
             recent: checks,
-            deskCount: desks.length,
-            openDeskCount: desks.filter((desk) => desk.open === true).length,
-            deskAssignmentCount: deskAssignments.length,
-            assignedDeskPeople,
-            booths: boothRows,
-            stampEnabled: features.includes("stamp"),
-            stampMode: text(workspace.stampMode),
-            screenEnabled: features.includes("screen"),
-            displayLabel: displayName(display, modules, notices),
             registrationOpen: workspace.registrationOpen === true,
-            openModules: modules.filter((module) => module.status === "OPEN").length,
             surveyResponseCount,
             reportCount: reportRows.length,
             publishedReportCount,
             draftReportCount,
-            messageAttentionCount: [...attentionStatusCounts.values()].reduce((sum, count) => sum + count, 0),
-            messageAttentionSummary,
             programs: programRows,
             updatedAt: now.toISOString(),
             canManageEvent,
@@ -586,7 +393,6 @@ export default function EventOverview({ eventId }: { eventId: string }) {
   }
 
   function requestOverviewReload() {
-    setStageError(null);
     setRefreshError(null);
     setReloadTick((tick) => tick + 1);
   }
@@ -615,55 +421,6 @@ export default function EventOverview({ eventId }: { eventId: string }) {
   }
 
   const currentStage = state.kind === "ready" ? state.overview.stage.toUpperCase() : "";
-  const stageIndex = STAGE_ORDER.indexOf(currentStage);
-  const nextStage = stageIndex >= 0 && stageIndex < STAGE_ORDER.length - 1
-    ? STAGE_ORDER[stageIndex + 1]
-    : null;
-
-  async function submitStageTransition() {
-    if (
-      state.kind !== "ready" ||
-      !state.overview.canManageEvent ||
-      !nextStage ||
-      stageBusy ||
-      !stageConfirm
-    ) return;
-    const label = eventStageLabel(nextStage);
-    if (!stageCommandIdRef.current) stageCommandIdRef.current = randomCommandId();
-    setStageBusy(true);
-    setStageError(null);
-    setStageNotice(null);
-    try {
-      const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          commandId: stageCommandIdRef.current,
-          command: "event.stage",
-          payload: { stage: nextStage },
-        }),
-      });
-      const data = (await res.json().catch(() => null)) as { error?: unknown } | null;
-      if (!res.ok) {
-        setStageError(
-          typeof data?.error === "string" ? data.error : "단계를 전환하지 못했습니다."
-        );
-        setStageConfirm(false);
-        stageCommandIdRef.current = null;
-        return;
-      }
-      stageCommandIdRef.current = null;
-      setStageNotice(`행사를 ${label}(으)로 전환했습니다.`);
-      setStageConfirm(false);
-      setReloadTick((tick) => tick + 1);
-    } catch {
-      // Keep the same id when the response is lost so a retry can replay its
-      // receipt instead of creating a second stage command.
-      setStageError("연결하지 못했습니다. 같은 요청을 다시 시도하세요.");
-    } finally {
-      setStageBusy(false);
-    }
-  }
 
   if (state.kind === "loading") {
     return (
@@ -693,27 +450,13 @@ export default function EventOverview({ eventId }: { eventId: string }) {
   const overview = state.overview;
   const stageKnown = STAGE_ORDER.includes(currentStage);
   const stageText = stageKnown ? eventStageLabel(currentStage) : "단계 미정";
-  const archived = currentStage === "ARCHIVED";
   const base = `/console/events/${encodeURIComponent(eventId)}`;
   const metrics = metricsForStage(overview, currentStage, base);
-  const problems = overview.canManageEvent ? problemsForStage(overview, currentStage, base) : [];
+  const entryProgress = Math.max(0, Math.min(100, overview.entryRate));
   const schedule = overview.canManageEvent
     ? upcomingPrograms(overview.programs, new Date())
     : [];
   const dDay = dDayLabel(overview.date, new Date());
-  const stagePrompt = nextStage
-    ? `현재 ${stageText} · 다음 ${eventStageLabel(nextStage)}`
-    : archived
-      ? "보관된 행사는 읽기 전용입니다."
-      : stageKnown
-        ? "마지막 진행 단계입니다."
-        : "단계 정보가 확인되지 않아 전환할 수 없습니다.";
-  const boothCounts = {
-    before: overview.booths.filter((booth) => booth.status === "WAITING").length,
-    live: overview.booths.filter((booth) => booth.status === "OPEN").length,
-    ended: overview.booths.filter((booth) => booth.status === "CLOSED").length,
-    unknown: overview.booths.filter((booth) => !["WAITING", "OPEN", "CLOSED"].includes(booth.status)).length,
-  };
   const participantPageHref = overview.slug
     ? `/event/${encodeURIComponent(overview.slug)}`
     : "";
@@ -761,103 +504,95 @@ export default function EventOverview({ eventId }: { eventId: string }) {
 
   return (
     <div className={styles.overview}>
-      <p className="sr-only" role="status">{stageNotice ?? ""}</p>
       {pageHeader}
       {linkNotice ? <p className={styles.linkNotice} role="status">{linkNotice}</p> : null}
 
       {overview.canManageEvent ? (
-        <>
-          <ConsoleSection
-            headingId="event-metrics-heading"
-            title="주요 지표"
-            description={stageKnown ? `${stageText} 단계 기준` : "확인 가능한 단계 지표가 없습니다."}
-            className={styles.metricsSection}
-          >
-            {metrics.length ? (
-              <div className={styles.metricGrid}>
-                {metrics.map((metric) => (
-                  <Link className={styles.metricCard} href={metric.href} key={metric.label}>
+        <ConsoleSection
+          headingId="event-metrics-heading"
+          title={currentStage === "LIVE" ? "입장 진행" : currentStage === "ENDED" || currentStage === "ARCHIVED" ? "최종 요약" : "주요 지표"}
+          description={stageKnown ? `${stageText} 단계 기준` : "확인 가능한 단계 지표가 없습니다."}
+          className={styles.metricsSection}
+        >
+          {["LIVE", "ENDED", "ARCHIVED"].includes(currentStage) ? (
+            <div className={styles.entryProgress}>
+              <div className={styles.entrySummary}>
+                <div className={styles.entryMain}>
+                  <span className={styles.metricLabel}>{currentStage === "LIVE" ? "누적 입장" : "최종 누적 입장"}</span>
+                  <div className={styles.entryValues}>
+                    <strong className={styles.entryCount}>
+                      {overview.everIn}<span>/{overview.registered}명</span>
+                    </strong>
+                    <span className={styles.entrySeparator} aria-hidden="true">·</span>
+                    <strong className={styles.entryRate}>{overview.entryRate}%</strong>
+                  </div>
+                </div>
+                {currentStage === "ARCHIVED" ? (
+                  <span className={styles.readOnlyNote}>보관된 행사는 읽기 전용입니다.</span>
+                ) : (
+                  <Link
+                    className={styles.notEntered}
+                    href={`${base}/participants?status=APPROVED`}
+                  >
+                    <span>확정자 중 미입장</span>
+                    <strong>{overview.confirmedNotEntered}명</strong>
+                  </Link>
+                )}
+              </div>
+              <div
+                className={styles.entryTrack}
+                role="progressbar"
+                aria-label={`입장 진행 ${overview.everIn}/${overview.registered}명, 취소 제외 등록 대비 ${overview.entryRate}%`}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={entryProgress}
+              >
+                <span className={styles.entryFill} style={{ width: `${entryProgress}%` }} />
+              </div>
+              <div className={styles.entryFoot}>
+                <span>취소 제외 등록 대비 입장률 · 결과 보고서와 같은 정의</span>
+                <Link href={`${base}/reports`}>결과 보고서 보기</Link>
+              </div>
+              {currentStage !== "LIVE" ? (
+                <div className={styles.summaryFacts}>
+                  {currentStage === "ARCHIVED" ? (
+                    <Link className={styles.summaryFact} href={`${base}/participants`}>
+                      <span>취소 제외 등록</span>
+                      <strong>{overview.registered}명</strong>
+                    </Link>
+                  ) : null}
+                  {overview.surveyResponseCount !== null ? (
+                    <Link className={styles.summaryFact} href={`${base}/reports`}>
+                      <span>설문 응답</span>
+                      <strong>{overview.surveyResponseCount}건</strong>
+                    </Link>
+                  ) : null}
+                  <Link className={styles.summaryFact} href={`${base}/reports`}>
+                    <span>보고서 상태</span>
+                    <strong>{getReportStatus(overview)}</strong>
+                  </Link>
+                </div>
+              ) : null}
+            </div>
+          ) : metrics.length ? (
+            <ul className={styles.metricRow}>
+              {metrics.map((metric) => (
+                <li key={metric.label}>
+                  <Link className={styles.metricItem} href={metric.href}>
                     <span className={styles.metricLabel}>{metric.label}</span>
                     <strong className={styles.metricValue}>{metric.value}</strong>
                     <span className={styles.metricDetail}>{metric.detail}</span>
                   </Link>
-                ))}
-              </div>
-            ) : null}
-          </ConsoleSection>
-
-          {problems.length > 0 ? (
-            <ConsoleSection
-              headingId="event-problems-heading"
-              title={`확인 필요 ${problems.length}건`}
-              density="compact"
-              className={styles.problemSection}
-            >
-              <ul className={styles.problemList}>
-                {problems.map((problem, index) => (
-                  <li key={`${problem.href}-${problem.title}-${index}`}>
-                    <Link className={styles.problemLink} href={problem.href}>
-                      <span className={styles.problemCopy}>
-                        <strong>{problem.title}</strong>
-                        <span>{problem.detail}</span>
-                      </span>
-                      <span className={styles.problemArrow} aria-hidden="true" />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </ConsoleSection>
-          ) : null}
-        </>
-      ) : (
-        <p className={styles.restrictedNote}>행사 전체 지표와 운영 준비 정보는 행사 운영자에게 표시됩니다.</p>
-      )}
-
-      {overview.canManageEvent ? (
-        <ConsoleSection
-          headingId="event-operations-heading"
-          title="운영 준비·가동"
-          description="설정과 배정 상태를 보여줍니다. 현장 출근이나 기기 정상 여부를 확인하는 값은 아닙니다."
-          action={<Link className="button button-secondary" href={`${base}/operations`}>현장 운영</Link>}
-          className={styles.operationsCard}
-        >
-          <dl className={styles.operationsGrid}>
-            <div className={styles.operationItem}>
-              <dt>열린 데스크</dt>
-              <dd>{overview.openDeskCount} / {overview.deskCount}개</dd>
-            </div>
-            <div className={styles.operationItem}>
-              <dt>데스크 배정 계정</dt>
-              <dd>{overview.assignedDeskPeople}명</dd>
-            </div>
-            <div className={styles.operationItem}>
-              <dt>부스 상태</dt>
-              <dd>
-                {overview.booths.length
-                  ? `운영 전 ${boothCounts.before} · 운영 중 ${boothCounts.live} · 종료 ${boothCounts.ended}${boothCounts.unknown ? ` · 상태 미정 ${boothCounts.unknown}` : ""}`
-                  : "등록 부스 없음"}
-              </dd>
-            </div>
-            <div className={styles.operationItem}>
-              <dt>부스 인증 방식</dt>
-              <dd>
-                {!overview.stampEnabled
-                  ? "사용 안 함"
-                  : overview.stampMode === "SELF"
-                    ? "참가자 직접 인증"
-                    : overview.stampMode === "STAFF"
-                      ? "스태프 확인"
-                      : "인증 방식 확인 필요"}
-              </dd>
-            </div>
-            <div className={styles.operationItem}>
-              <dt>전광판 출력</dt>
-              <dd>{overview.screenEnabled ? overview.displayLabel : "사용 안 함"}</dd>
-            </div>
-          </dl>
-          <p className={styles.operationNote}>데스크 열림은 설정 상태이고, 배정 인원은 출근 확인이 아닙니다. 부스·전광판 기기 상태도 별도 확인이 필요합니다.</p>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className={styles.restrictedNote}>확인 가능한 단계 지표가 없습니다.</p>
+          )}
         </ConsoleSection>
-      ) : null}
+      ) : (
+        <p className={styles.restrictedNote}>행사 지표는 행사 운영자에게 표시됩니다.</p>
+      )}
 
       {overview.canManageEvent && schedule.length > 0 ? (
         <ConsoleSection
@@ -886,88 +621,6 @@ export default function EventOverview({ eventId }: { eventId: string }) {
       ) : null}
 
       <ConsoleSection
-        headingId="event-stage-heading"
-        title="진행 단계"
-        description={stagePrompt}
-        className={styles.stageControl}
-        action={nextStage && overview.canManageEvent ? (
-          <div className={styles.stageControls}>
-            {!stageConfirm ? (
-              <button
-                type="button"
-                className="button button-secondary"
-                onClick={() => {
-                  setStageError(null);
-                  setStageNotice(null);
-                  setStageConfirm(true);
-                }}
-                disabled={stageBusy}
-              >
-                {eventStageLabel(nextStage)}(으)로 전환
-              </button>
-            ) : (
-              <div className={styles.confirmation} role="group" aria-label="단계 전환 확인">
-                <p>정말 {eventStageLabel(nextStage)} 단계로 전환합니다?</p>
-                <div className={styles.confirmationActions}>
-                  <button
-                    type="button"
-                    className="button button-secondary"
-                    onClick={() => void submitStageTransition()}
-                    disabled={stageBusy}
-                    aria-label={`정말 ${eventStageLabel(nextStage)} 단계로 전환합니다`}
-                  >
-                    {stageBusy
-                      ? "전환 중입니다"
-                      : stageCommandIdRef.current && stageError
-                        ? "같은 요청 다시 시도"
-                        : "정말 전환합니다"}
-                  </button>
-                  <button
-                    type="button"
-                    className="button button-secondary"
-                    onClick={() => {
-                      setStageConfirm(false);
-                      setStageError(null);
-                    }}
-                    disabled={stageBusy}
-                  >
-                    취소
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : !overview.canManageEvent ? (
-          <p className={styles.readOnlyNote}>행사 단계 변경 권한이 없습니다.</p>
-        ) : !archived && !stageKnown ? (
-          <p className={styles.readOnlyNote}>단계 정보가 확인되지 않아 전환할 수 없습니다.</p>
-        ) : null}
-      >
-
-        {nextStage === "LIVE" && (overview.deskCount === 0 || overview.deskAssignmentCount === 0) ? (
-          <p className={styles.precondition}>
-            진행 중 전환에는 등록 데스크와 데스크 배정이 필요합니다. 배정은 출근 확인이 아닙니다.
-          </p>
-        ) : null}
-        {nextStage === "ARCHIVED" && (overview.registrationOpen || overview.openModules > 0) ? (
-          <p className={styles.precondition}>
-            보관하려면 접수를 닫고 진행 중인 참여 프로그램을 모두 닫아야 합니다.
-          </p>
-        ) : null}
-        {stageError ? (
-          <div className={styles.stageFeedback}>
-            <p className="state-error" role="alert">{stageError}</p>
-            {!stageConfirm ? (
-              <button type="button" className="button button-secondary" onClick={reloadOverview}>
-                현황 다시 불러오기
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-        {stageNotice ? <p className="state-success">{stageNotice}</p> : null}
-      </ConsoleSection>
-
-      <ConsoleSection
         headingId="event-recent-heading"
         title={overview.canManageEvent ? "최근 입퇴장" : "배정 데스크 최근 입퇴장"}
         description={(
@@ -980,12 +633,17 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             <span className={styles.recentCount}>{overview.recent.length}건</span>
             <button
               type="button"
-              className="button button-secondary"
+              className={`button button-secondary ${styles.refreshButton}`}
               onClick={reloadOverview}
               disabled={refreshing}
               aria-busy={refreshing}
+              aria-label="새로고침"
+              title="새로고침"
             >
-              다시 불러오기
+              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+                <path d="M20 7v5h-5" />
+                <path d="M19.1 12a7.1 7.1 0 1 1-2.08-5.02L20 9" />
+              </svg>
             </button>
           </div>
         )}
@@ -999,7 +657,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
               <li key={check.id}>
                 <div className={styles.checkDetails}>
                   <strong>{check.name || "이름 없음"}</strong>
-                  <span className={check.action === "IN" ? styles.checkIn : styles.checkOut}>
+                  <span className={`${styles.checkAction} ${check.action === "IN" ? styles.checkIn : check.action === "OUT" ? styles.checkOut : styles.checkOther}`}>
                     {check.action === "IN" ? "입장" : check.action === "OUT" ? "퇴장" : "기록"}
                   </span>
                   {check.deskName ? <span className={styles.deskName}>{check.deskName}</span> : null}

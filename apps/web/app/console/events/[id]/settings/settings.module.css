@@ -127,6 +127,63 @@
   font-size: var(--small);
 }
 
+.stagePanel {
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.stageIdentity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.stageLabel {
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.stagePrecondition {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--warning-line);
+  border-radius: var(--radius-small);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: var(--small);
+}
+
+.stageActions {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.stageConfirmation {
+  display: grid;
+  min-width: 0;
+  gap: var(--s2);
+}
+
+.stageConfirmation > p {
+  margin: 0;
+  font-weight: 700;
+}
+
+.stageConfirmation .actions {
+  justify-content: flex-start;
+}
+
 @media (max-width: 640px) {
   .gridTwo,
   .twoCols {

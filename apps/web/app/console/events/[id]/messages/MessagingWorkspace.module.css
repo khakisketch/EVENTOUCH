@@ -411,6 +411,26 @@
   font-size: var(--small);
 }
 
+.attentionFilter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin-block: var(--s3);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--warning-line);
+  border-radius: var(--radius);
+  background: var(--warning-soft);
+}
+
+.attentionFilter p {
+  margin: 0;
+  color: var(--warning);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
 .deliveries {
   border-top: 1px solid var(--line);
 }
@@ -477,6 +497,10 @@
   .panel,
   .history {
     padding: var(--s4);
+  }
+
+  .history :global(#history-heading) {
+    scroll-margin-top: 120px;
   }
 
   .twoFields {

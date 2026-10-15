@@ -23,6 +23,7 @@ type ShellData = {
     date: string;
     venue: string;
     pending: number;
+    messageAttention: number;
   } | null;
   triage: Array<{
     id: string;
@@ -54,6 +55,10 @@ function stageTone(stage: string): string {
     case "ARCHIVED": return "ended";
     default: return "unknown";
   }
+}
+
+function isApprovalQueueRelevant(stage: string): boolean {
+  return !["ENDED", "ARCHIVED"].includes(stage.toUpperCase());
 }
 
 function formatShortDate(date: string): string {
@@ -198,6 +203,17 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           }
           return pending;
         };
+        const messageAttentionOf = (eventId: string): number => {
+          const workspace = record(workspaces[eventId]);
+          const campaigns = workspace?.messages;
+          if (!Array.isArray(campaigns)) return 0;
+          return campaigns.reduce((count, item) => {
+            const status = text(record(item)?.status);
+            return ["FAILED", "PARTIAL", "NEEDS_CONNECTION"].includes(status)
+              ? count + 1
+              : count;
+          }, 0);
+        };
         const venueOf = (eventId: string): string => {
           const workspace = record(workspaces[eventId]);
           const venue = workspace ? record(workspace.venue) : null;
@@ -211,13 +227,21 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           venue: venueOf(text(item.id)),
           pending: pendingOf(text(item.id)),
         });
-        const currentEventMeta = currentEvent ? summarize(currentEvent) : null;
+        const currentEventMeta = currentEvent
+          ? {
+              ...summarize(currentEvent),
+              messageAttention: messageAttentionOf(text(currentEvent.id)),
+            }
+          : null;
         // Triage, not a directory: events that need hands (pending approvals)
         // or are live now, current one excluded, most pending first.
         const triage = events
           .filter((item) => text(item.id) && text(item.id) !== eventId)
           .map(summarize)
-          .filter((item) => item.pending > 0 || item.stage === "LIVE")
+          .filter((item) =>
+            item.stage === "LIVE" ||
+            (item.pending > 0 && isApprovalQueueRelevant(item.stage))
+          )
           .sort((a, b) =>
             b.pending - a.pending ||
             (a.date || "9999").localeCompare(b.date || "9999") ||
@@ -274,6 +298,10 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const canManageIntegrations = shellData?.canManageIntegrations ?? false;
   const showCurrentEvent = Boolean(
     isEventPath && shellData?.canAccessCurrentEvent && shellData.currentEventName
+  );
+  // This is a display gate only; server reads and command authorization remain authoritative.
+  const showOperatorNavBadges = Boolean(
+    shellData && ["AGENCY", "MANAGER"].includes(shellData.role)
   );
 
   useEffect(() => {
@@ -514,7 +542,6 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
               </span>
               <span className="nav-event-meta">
                 {[formatShortDate(shellData.currentEventMeta.date), shellData.currentEventMeta.venue].filter(Boolean).join(" · ")}
-                {shellData.currentEventMeta.pending > 0 ? ` · 승인 ${shellData.currentEventMeta.pending} 남음` : ""}
               </span>
             </div>
           ) : (
@@ -538,8 +565,8 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
                   <strong>{item.name}</strong>
                   <small>{[formatShortDate(item.date), item.venue].filter(Boolean).join(" · ") || stageLabel(item.stage)}</small>
                 </span>
-                {item.pending > 0 ? (
-                  <span className="nav-badge" aria-label={`승인 대기 ${item.pending}건`}>{item.pending}</span>
+                {showOperatorNavBadges && item.pending > 0 ? (
+                  <span className="nav-badge" role="img" aria-label={`승인 대기 ${item.pending}건`}>{item.pending}</span>
                 ) : null}
               </Link>
             ))}
@@ -550,6 +577,21 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   }
 
   function renderEventSubnav() {
+    const eventMeta = shellData?.currentEventMeta;
+    const showPendingApprovalBadge = Boolean(
+      showOperatorNavBadges && eventMeta && eventMeta.pending > 0 &&
+      isApprovalQueueRelevant(eventMeta.stage)
+    );
+    const showMessageAttentionBadge = Boolean(
+      showOperatorNavBadges && eventMeta && eventMeta.messageAttention > 0
+    );
+    const participantsHref = showPendingApprovalBadge
+      ? `${eventBasePath}/participants?status=PENDING`
+      : `${eventBasePath}/participants`;
+    const messagesHref = showMessageAttentionBadge
+      ? `${eventBasePath}/messages?attention=1#history-heading`
+      : `${eventBasePath}/messages`;
+
     return (
       <>
         <Link
@@ -561,17 +603,27 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
         </Link>
         <Link
           className={`console-nav-item console-subnav-item${isParticipants ? " active" : ""}`}
-          href={`${eventBasePath}/participants`}
+          href={participantsHref}
           aria-current={isParticipants ? "page" : undefined}
         >
           참가자
+          {showPendingApprovalBadge ? (
+            <span className="nav-badge" role="img" aria-label={`승인 대기 ${eventMeta?.pending ?? 0}건`}>
+              {eventMeta?.pending}
+            </span>
+          ) : null}
         </Link>
         <Link
           className={`console-nav-item console-subnav-item${isMessages ? " active" : ""}`}
-          href={`${eventBasePath}/messages`}
+          href={messagesHref}
           aria-current={isMessages ? "page" : undefined}
         >
           메시지
+          {showMessageAttentionBadge ? (
+            <span className="nav-badge" role="img" aria-label={`발송 확인 ${eventMeta?.messageAttention ?? 0}건`}>
+              {eventMeta?.messageAttention}
+            </span>
+          ) : null}
         </Link>
         <Link
           className={`console-nav-item console-subnav-item${isOperations ? " active" : ""}`}

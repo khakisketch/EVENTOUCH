@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
+import { eventStageClassName, eventStageLabel } from "../../../../event-stage";
 import styles from "./settings.module.css";
 
 // Mirrors server/commands/preparation.js FEATURES. A toggle that the server
@@ -28,6 +29,8 @@ const FEATURE_GROUPS: Array<{ label: string; ids: string[] }> = [
   { label: "유료·경품", ids: ["payment", "reward"] },
 ];
 
+const STAGE_ORDER = ["DRAFT", "READY", "LIVE", "ENDED", "ARCHIVED"];
+
 type Basics = {
   name: string;
   slug: string;
@@ -50,6 +53,11 @@ type PageDraft = {
 };
 type Ready = {
   kind: "ready";
+  stage: string;
+  canManageEvent: boolean;
+  deskCount: number;
+  deskAssignmentCount: number;
+  openModules: number;
   basics: Basics;
   features: string[];
   registrationOpen: boolean;
@@ -69,6 +77,12 @@ function text(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+function record(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
 function formatPublishedAt(value: string): string {
   if (!value) return "";
   const time = Date.parse(value);
@@ -86,6 +100,11 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<{ message: string; field?: string } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [stageBusy, setStageBusy] = useState(false);
+  const [stageConfirm, setStageConfirm] = useState(false);
+  const [stageError, setStageError] = useState<string | null>(null);
+  const [stageNotice, setStageNotice] = useState<string | null>(null);
+  const stageCommandIdRef = useRef<string | null>(null);
 
   const [basics, setBasics] = useState<Basics | null>(null);
   const [features, setFeatures] = useState<string[] | null>(null);
@@ -107,6 +126,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         const data = (await res.json().catch(() => null)) as {
           state?: {
             events?: unknown;
+            accounts?: unknown;
             workspaces?: Record<string, {
               features?: unknown;
               price?: unknown;
@@ -117,6 +137,9 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               publishedVersion?: unknown;
               consentText?: unknown;
               pageExperience?: unknown;
+              desks?: unknown;
+              assignments?: unknown;
+              modules?: unknown;
             }>;
           } | null;
         } | null;
@@ -138,6 +161,18 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           setState({ kind: "failed", message: "행사를 찾을 수 없습니다." });
           return;
         }
+        const accounts = Array.isArray(bootstrap.accounts)
+          ? bootstrap.accounts.map(record).filter((item): item is Record<string, unknown> => item !== null)
+          : [];
+        // Match the overview's UI gate. The server still authorizes every stage command.
+        const canManageEvent = accounts.some((account) =>
+          ["AGENCY", "MANAGER"].includes(text(account.role))
+        );
+        const desks = Array.isArray(workspace.desks) ? workspace.desks : [];
+        const assignments = Array.isArray(workspace.assignments) ? workspace.assignments : [];
+        const modules = Array.isArray(workspace.modules) ? workspace.modules : [];
+        const deskAssignmentCount = assignments.filter((item) => record(item)?.type === "DESK").length;
+        const openModules = modules.filter((item) => record(item)?.status === "OPEN").length;
         const pageExperience = typeof workspace.pageExperience === "object" && workspace.pageExperience !== null
           ? (workspace.pageExperience as Record<string, unknown>)
           : {};
@@ -166,6 +201,11 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         };
         setState({
           kind: "ready",
+          stage: text(event.stage).toUpperCase(),
+          canManageEvent,
+          deskCount: desks.length,
+          deskAssignmentCount,
+          openModules,
           basics: newBasics,
           features: Array.isArray(event.features)
             ? event.features.filter((feature): feature is string => typeof feature === "string")
@@ -260,6 +300,62 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     state.kind === "ready" && draft
       ? JSON.stringify(draft) !== JSON.stringify(state.draft)
       : false;
+
+  const currentStage = state.stage.toUpperCase();
+  const stageKnown = STAGE_ORDER.includes(currentStage);
+  const stageIndex = STAGE_ORDER.indexOf(currentStage);
+  const nextStage = stageIndex >= 0 && stageIndex < STAGE_ORDER.length - 1
+    ? STAGE_ORDER[stageIndex + 1]
+    : null;
+  const stageText = stageKnown ? eventStageLabel(currentStage) : "단계 미정";
+  const stagePrompt = nextStage
+    ? `현재 ${stageText} · 다음 ${eventStageLabel(nextStage)}`
+    : currentStage === "ARCHIVED"
+      ? "보관된 행사는 읽기 전용입니다."
+      : stageKnown
+        ? "마지막 진행 단계입니다."
+        : "단계 정보가 확인되지 않아 전환할 수 없습니다.";
+  const stagePrecondition = nextStage === "LIVE" && (state.deskCount === 0 || state.deskAssignmentCount === 0)
+    ? "진행 중 전환에는 등록 데스크와 데스크 배정이 필요합니다. 배정은 출근 확인이 아닙니다."
+    : nextStage === "ARCHIVED" && (state.registrationOpen || state.openModules > 0)
+      ? "보관하려면 접수를 닫고 진행 중인 참여 프로그램을 모두 닫아야 합니다."
+      : null;
+
+  async function submitStageTransition() {
+    if (state.kind !== "ready" || !state.canManageEvent || !nextStage || stageBusy || !stageConfirm) return;
+    const label = eventStageLabel(nextStage);
+    if (!stageCommandIdRef.current) stageCommandIdRef.current = randomCommandId();
+    setStageBusy(true);
+    setStageError(null);
+    setStageNotice(null);
+    try {
+      const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          commandId: stageCommandIdRef.current,
+          command: "event.stage",
+          payload: { stage: nextStage },
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as { error?: unknown } | null;
+      if (!res.ok) {
+        setStageError(typeof data?.error === "string" ? data.error : "단계를 전환하지 못했습니다.");
+        setStageConfirm(false);
+        stageCommandIdRef.current = null;
+        return;
+      }
+      stageCommandIdRef.current = null;
+      setStageNotice(`행사를 ${label}(으)로 전환했습니다.`);
+      setStageConfirm(false);
+      setReloadTick((tick) => tick + 1);
+    } catch {
+      // Preserve the id so a retry can replay the server receipt after a lost response.
+      setStageError("연결하지 못했습니다. 같은 요청을 다시 시도하세요.");
+    } finally {
+      setStageBusy(false);
+    }
+  }
 
   return (
     <div className={styles.wrapper}>
@@ -414,6 +510,68 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             </button>
           </div>
         </form>
+      </section>
+
+      <section className={styles.section} aria-labelledby="settings-stage">
+        <h2 id="settings-stage">진행 단계</h2>
+        <div className={styles.stagePanel}>
+          <div className={styles.stageIdentity}>
+            <span className={styles.stageLabel}>현재 단계</span>
+            <span className={eventStageClassName(currentStage)}>{stageText}</span>
+          </div>
+          <p className={styles.help}>{stagePrompt}</p>
+          {stagePrecondition ? <p className={styles.stagePrecondition}>{stagePrecondition}</p> : null}
+          {stageError ? <p className={styles.alert} role="alert">{stageError}</p> : null}
+          {stageNotice ? <p className={styles.notice} role="status">{stageNotice}</p> : null}
+          <div className={styles.stageActions}>
+            {!state.canManageEvent ? (
+              <p className={styles.help}>행사 단계 변경 권한이 없습니다.</p>
+            ) : nextStage && !stageConfirm ? (
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={() => {
+                  setStageError(null);
+                  setStageNotice(null);
+                  setStageConfirm(true);
+                }}
+                disabled={stageBusy || busy}
+              >
+                {eventStageLabel(nextStage)}(으)로 전환
+              </button>
+            ) : nextStage ? (
+              <div className={styles.stageConfirmation} role="group" aria-label="단계 전환 확인">
+                <p>정말 {eventStageLabel(nextStage)} 단계로 전환합니다?</p>
+                <div className={styles.actions}>
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    onClick={() => void submitStageTransition()}
+                    disabled={stageBusy || busy}
+                    aria-label={`정말 ${eventStageLabel(nextStage)} 단계로 전환합니다`}
+                  >
+                    {stageBusy
+                      ? "전환 중입니다"
+                      : stageCommandIdRef.current && stageError
+                        ? "같은 요청 다시 시도"
+                        : "정말 전환합니다"}
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    onClick={() => {
+                      setStageConfirm(false);
+                      setStageError(null);
+                    }}
+                    disabled={stageBusy || busy}
+                  >
+                    취소
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
       </section>
 
       <section className={styles.section} aria-labelledby="settings-features">
