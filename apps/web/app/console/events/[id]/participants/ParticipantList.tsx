@@ -10,6 +10,12 @@ type Person = {
   name: string;
   status: string;
   paymentStatus: string;
+  phone: string;
+  company: string;
+  email: string;
+  group: string;
+  inside: boolean;
+  everIn: boolean;
 };
 type Membership = { accountId: string; eventId: string };
 
@@ -124,6 +130,12 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
               status: typeof person.status === "string" ? person.status : "PENDING",
               paymentStatus:
                 typeof person.paymentStatus === "string" ? person.paymentStatus : "",
+              phone: typeof person.phone === "string" ? person.phone : "",
+              company: typeof person.company === "string" ? person.company : "",
+              email: typeof person.email === "string" ? person.email : "",
+              group: typeof person.group === "string" ? person.group : "",
+              inside: person.inside === true,
+              everIn: person.everIn === true,
             }];
           })
         : [];
@@ -201,9 +213,40 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   }
   const search = query.trim().toLocaleLowerCase("ko-KR");
   const visiblePeople = state.people.filter((person) => {
-    const matchesQuery = !search || person.name.toLocaleLowerCase("ko-KR").includes(search);
+    const haystack = `${person.name} ${person.company} ${person.phone}`.toLocaleLowerCase("ko-KR");
+    const matchesQuery = !search || haystack.includes(search);
     return matchesQuery && (!statusFilter || person.status === statusFilter);
   });
+
+  function exportCsv() {
+    const rows = visiblePeople.map((person) => [
+      person.name,
+      person.company,
+      person.phone,
+      person.email,
+      person.group,
+      statusLabel(person.status),
+      person.inside ? "입장 중" : person.everIn ? "퇴장" : "미도착",
+    ]);
+    const escaped = [["이름", "소속", "연락처", "이메일", "그룹", "등록 상태", "현장 상태"], ...rows]
+      .map((row) =>
+        row
+          .map((cell) =>
+            /[",\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell
+          )
+          .join(",")
+      )
+      .join("\r\n");
+    const blob = new Blob(["﻿" + escaped], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "EVENTOUCH_participants.csv";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
   return (
     <section className="participants-content">
       <header className="participants-heading">
@@ -219,7 +262,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           <span className="sr-only">참가자 이름 검색</span>
           <input
             type="search"
-            placeholder="이름 검색"
+            placeholder="이름·소속·연락처 검색"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -233,6 +276,14 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
             ))}
           </select>
         </label>
+        <button type="button" className="button button-secondary" onClick={exportCsv}>
+          목록 CSV
+        </button>
+        {state.canManage ? (
+          <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants/import`}>
+            명단 가져오기
+          </Link>
+        ) : null}
       </div>
       <p className="participant-count" role="status">
         {statusFilter || search

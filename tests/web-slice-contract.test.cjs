@@ -325,10 +325,31 @@ test('web-participant-status-goes-through-the-operator-command-path', () => {
   assert.doesNotMatch(list, /localStorage/);
   assert.doesNotMatch(list, /sessionStorage/);
   // Long lists stay findable; unknown server statuses never read as pending.
-  assert.match(list, /이름 검색/);
+  assert.match(list, /이름·소속·연락처 검색/);
   assert.match(list, /전체 상태/);
   assert.match(list, /상태 확인 필요/);
   assert.match(list, /다시 불러오기/);
+  // Export stays client-side; import lives behind the management gate.
+  assert.match(list, /EVENTOUCH_participants\.csv/);
+  assert.match(list, /participants\/import/);
+});
+
+test('web-participant-import-maps-and-reviews-before-the-command-path', () => {
+  const wizard = read('app/console/events/[id]/participants/import/ImportWizard.tsx');
+  assert.match(wizard, /participant\.import/);
+  assert.match(wizard, /\/commands/);
+  assert.match(wizard, /commandId/);
+  assert.match(wizard, /submittingRef/);
+  assert.match(wizard, /1048576/);
+  assert.match(wizard, /1,000/);
+  assert.match(wizard, /양식 CSV/);
+  assert.match(wizard, /EVENTOUCH_import_template\.csv/);
+  assert.match(wizard, /동의 기록은 가져오기만으로 생성하지 않습니다/);
+  assert.match(wizard, /canManage/);
+  assert.doesNotMatch(wizard, /localStorage/);
+  assert.doesNotMatch(wizard, /sessionStorage/);
+  assert.doesNotMatch(wizard, /sheetjs/i);
+  assert.doesNotMatch(wizard, /require\(.xlsx|from .xlsx/);
 });
 
 test('web-messaging-uses-operator-commands-and-keeps-ticket-bearers-out-of-history', () => {
