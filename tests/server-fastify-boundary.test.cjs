@@ -300,3 +300,231 @@ test('the server delegates exactly the public GETs to this boundary', () => {
   );
   assert.match(source, /publicReadsApp\.routing\(req, res\)/u, 'the boundary actually serves the delegated reads');
 });
+
+// ---- organization-scope REST (server/fastify/organization-rest.ts) ----
+
+const { buildOrganizationRestApp, organizationRestPath } = require('../server/fastify/organization-rest.ts');
+
+function organizationDeps(overrides = {}) {
+  return {
+    sessionFromCookie: async (cookie) => (cookie === 'session=ok' ? { id: 'agency-1', role: 'AGENCY' } : null),
+    loadBootstrap: async () => ({ events: [{ id: 'e1' }], activeEventId: 'e1', memberships: [] }),
+    createEvent: async (account, body) => ({
+      event: { id: 'e2', slug: body && body.slug },
+      replayed: false,
+    }),
+    saveClient: async () => ({ client: { id: 'c1' }, replayed: false }),
+    saveOrgPermissions: async (account, accountId) => ({ account: { id: accountId }, replayed: false }),
+    assignMember: async (account, eventId) => ({ membership: { eventId }, replayed: false }),
+    failureMessage: (error, fallback) => (error && error.status && error.message ? error.message : fallback),
+    ...overrides,
+  };
+}
+
+async function injected(app, url, options = {}) {
+  const response = await app.inject({
+    method: options.method || 'GET',
+    url,
+    ...(options.payload === undefined ? {} : { payload: options.payload }),
+    ...(options.headers === undefined ? {} : { headers: options.headers }),
+  });
+  let json = null;
+  try {
+    json = response.json();
+  } catch {
+    json = null;
+  }
+  return { status: response.statusCode, json, headers: response.headers };
+}
+
+test('the organization boundary owns exactly the organization REST shapes', () => {
+  const owns = [
+    ['/api/events', 'GET'],
+    ['/api/events', 'POST'],
+    ['/api/events/', 'POST'],
+    ['/api/events//', 'GET'],
+    ['/api/clients', 'POST'],
+    ['/api/clients/', 'POST'],
+    ['/api/accounts/a1/org-permissions', 'POST'],
+    ['/api/events/e1/members', 'POST'],
+  ];
+  for (const [url, method] of owns) {
+    assert.equal(organizationRestPath(url, method), true, `${method} ${url} belongs to the boundary`);
+  }
+  const notOurs = [
+    ['/api/events', 'DELETE'],
+    ['/api/clients', 'GET'],
+    ['/api/clients', 'DELETE'],
+    ['/api/events/e1/members', 'GET'],
+    ['/api/events/e1/commands', 'POST'],
+    ['/api/events/e1/files', 'POST'],
+    ['/api/accounts/a1', 'POST'],
+    ['/api/accounts/a1/org-permissions', 'GET'],
+    ['/api/bootstrap', 'GET'],
+    ['/api/public/events/e1', 'GET'],
+  ];
+  for (const [url, method] of notOurs) {
+    assert.equal(organizationRestPath(url, method), false, `${method} ${url} stays elsewhere`);
+  }
+});
+
+test('the event list reads through the boundary with the legacy session rules', async () => {
+  const app = buildOrganizationRestApp(organizationDeps());
+
+  const anonymous = await injected(app, '/api/events');
+  assert.equal(anonymous.status, 401);
+  assert.deepEqual(anonymous.json, { error: '로그인이 필요합니다' });
+  assert.equal(anonymous.headers['cache-control'], undefined);
+
+  const listed = await injected(app, '/api/events', { headers: { cookie: 'session=ok' } });
+  assert.equal(listed.status, 200);
+  assert.deepEqual(listed.json, { events: [{ id: 'e1' }], activeEventId: 'e1' });
+  assert.equal(listed.headers['cache-control'], 'no-store');
+});
+
+test('write bodies are read before authentication, exactly like the legacy router', async () => {
+  const app = buildOrganizationRestApp(organizationDeps());
+
+  const malformed = await injected(app, '/api/events', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    payload: '{oops',
+  });
+  assert.equal(malformed.status, 400);
+  assert.deepEqual(malformed.json, { error: '요청 형식을 확인하세요' });
+  assert.equal(malformed.headers['cache-control'], undefined);
+
+  const oversized = await injected(app, '/api/events', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    payload: `"${'x'.repeat(1024 * 1024 + 1)}"`,
+  });
+  assert.equal(oversized.status, 400);
+  assert.deepEqual(oversized.json, { error: '요청이 너무 큽니다' });
+
+  // The legacy reader ignored the media type; so does this boundary.
+  const noMediaType = await injected(app, '/api/clients', {
+    method: 'POST',
+    headers: { cookie: 'session=ok' },
+    payload: JSON.stringify({ commandId: 'client-command-1' }),
+  });
+  assert.equal(noMediaType.status, 201);
+  assert.deepEqual(noMediaType.json, { client: { id: 'c1' } });
+});
+
+test('event creation answers 201 and replays 200 through the boundary', async () => {
+  let calls = 0;
+  const deps = organizationDeps({
+    createEvent: async () => {
+      calls += 1;
+      return calls === 1
+        ? { event: { id: 'e9' }, replayed: false }
+        : { event: { id: 'e9' }, replayed: true };
+    },
+  });
+  const app = buildOrganizationRestApp(deps);
+
+  const created = await injected(app, '/api/events', {
+    method: 'POST',
+    headers: { cookie: 'session=ok' },
+    payload: { commandId: 'event-command-1', name: '행사' },
+  });
+  assert.equal(created.status, 201);
+  assert.deepEqual(created.json, { event: { id: 'e9' } });
+  assert.equal(created.headers['cache-control'], 'no-store');
+
+  const replayed = await injected(app, '/api/events', {
+    method: 'POST',
+    headers: { cookie: 'session=ok' },
+    payload: { commandId: 'event-command-1', name: '행사' },
+  });
+  assert.equal(replayed.status, 200);
+  assert.deepEqual(replayed.json, { event: { id: 'e9' } });
+});
+
+test('domain failures keep the legacy status, message and field', async () => {
+  const app = buildOrganizationRestApp(organizationDeps({
+    saveClient: async () => {
+      throw Object.assign(new Error('고객사 이름을 입력하세요'), { status: 400, field: 'name' });
+    },
+    saveOrgPermissions: async () => {
+      throw Object.assign(new Error('조직 권한을 변경할 권한이 없습니다'), { status: 403 });
+    },
+    assignMember: async () => {
+      throw new Error('connection reset by peer');
+    },
+  }));
+
+  const client = await injected(app, '/api/clients', {
+    method: 'POST',
+    headers: { cookie: 'session=ok' },
+    payload: {},
+  });
+  assert.equal(client.status, 400);
+  assert.deepEqual(client.json, { error: '고객사 이름을 입력하세요', field: 'name' });
+  assert.equal(client.headers['cache-control'], 'no-store');
+
+  const permissions = await injected(app, '/api/accounts/a1/org-permissions', {
+    method: 'POST',
+    headers: { cookie: 'session=ok' },
+    payload: {},
+  });
+  assert.equal(permissions.status, 403);
+  assert.deepEqual(permissions.json, { error: '조직 권한을 변경할 권한이 없습니다' });
+
+  const membership = await injected(app, '/api/events/e1/members', {
+    method: 'POST',
+    headers: { cookie: 'session=ok' },
+    payload: {},
+  });
+  assert.equal(membership.status, 500);
+  assert.deepEqual(membership.json, { error: '행사 권한을 저장하지 못했습니다' });
+});
+
+test('path ids decode like the legacy segments', async () => {
+  const seen = [];
+  const app = buildOrganizationRestApp(organizationDeps({
+    saveOrgPermissions: async (account, accountId) => {
+      seen.push(['permissions', accountId]);
+      return { account: { id: accountId }, replayed: false };
+    },
+    assignMember: async (account, eventId) => {
+      seen.push(['member', eventId]);
+      return { membership: { eventId }, replayed: false };
+    },
+  }));
+
+  const permissions = await injected(app, '/api/accounts/a%2Fb/org-permissions', {
+    method: 'POST',
+    headers: { cookie: 'session=ok' },
+    payload: {},
+  });
+  assert.equal(permissions.status, 201);
+  assert.deepEqual(permissions.json, { account: { id: 'a/b' } });
+
+  const membership = await injected(app, '/api/events/e%201/members', {
+    method: 'POST',
+    headers: { cookie: 'session=ok' },
+    payload: {},
+  });
+  assert.equal(membership.status, 201);
+  assert.deepEqual(membership.json, { membership: { eventId: 'e 1' } });
+  assert.deepEqual(seen, [['permissions', 'a/b'], ['member', 'e 1']]);
+});
+
+test('unknown shapes inside the boundary answer the legacy API 404', async () => {
+  const app = buildOrganizationRestApp(organizationDeps());
+  const missing = await injected(app, '/api/nothing', { method: 'POST', payload: {} });
+  assert.equal(missing.status, 404);
+  assert.deepEqual(missing.json, { error: '요청한 API를 찾을 수 없습니다' });
+});
+
+test('the server delegates the organization REST only in database mode', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'server', 'server.js'), 'utf8');
+  assert.match(
+    source,
+    /state && decodablePath\(urlPath\) && organizationRestPath\(urlPath, req\.method\)/u,
+    'the boundary takes database-mode, decodable organization requests only'
+  );
+  assert.match(source, /organizationRestApp\.routing\(req, res\)/u, 'the boundary actually serves the delegated writes');
+});

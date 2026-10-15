@@ -46,6 +46,18 @@ function notFoundApi(res) {
   sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
 }
 
+// The Fastify boundaries require a decodable URL; the legacy router parsed
+// segments itself and kept answering malformed requests by branch. Those
+// stay on the legacy router.
+function decodablePath(urlPath) {
+  try {
+    decodeURIComponent(urlPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const DENIED_PREFIXES = ['/server/', '/data/server/', '/data/storage/', '/.git/', '/node_modules/'];
 const DENIED_FILES = new Set([
   '/dockerfile',
@@ -173,6 +185,20 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
     failureMessage,
   });
   const publicReadsReady = publicReadsApp.ready();
+  // Third Fastify increment: organization-scope REST (events, clients,
+  // permissions, members). Database mode only — without a database those
+  // paths belong to the JSON fallback router, which keeps them.
+  const { buildOrganizationRestApp, organizationRestPath } = require('./fastify/organization-rest.ts');
+  const organizationRestApp = buildOrganizationRestApp({
+    sessionFromCookie: (cookie) => auth.sessionFromCookie(cookie),
+    loadBootstrap: (account) => state.loadBootstrap(account),
+    createEvent: (account, body) => state.createEvent(account, body),
+    saveClient: (account, body) => state.saveClient(account, body),
+    saveOrgPermissions: (account, accountId, body) => state.saveOrgPermissions(account, accountId, body),
+    assignMember: (account, eventId, body) => state.assignMember(account, eventId, body),
+    failureMessage,
+  });
+  const organizationRestReady = organizationRestApp.ready();
   return http.createServer((req, res) => {
     // One security-header wrapper per response. Every path below — static,
     // /api/*, /api/auth/*, 404, 405, 500 — therefore carries the same policy
@@ -197,6 +223,16 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
       return;
     }
     if (urlPath === '/api/' || urlPath.startsWith('/api/')) {
+      // Undecodable paths never reach the organization boundary: their legacy
+      // answers depend on bodies and sessions, so the hand-rolled router keeps
+      // answering them exactly as before.
+      if (state && decodablePath(urlPath) && organizationRestPath(urlPath, req.method)) {
+        organizationRestReady.then(
+          () => organizationRestApp.routing(req, res),
+          () => sendJson(res, 500, { error: '요청을 처리하지 못했습니다' })
+        );
+        return;
+      }
       if (urlPath.startsWith('/api/auth/')) {
         auth.handleAuth(req, res, urlPath).catch(() => {
           sendJson(res, 500, { error: '요청을 처리하지 못했습니다' });
