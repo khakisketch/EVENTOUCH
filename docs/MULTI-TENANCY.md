@@ -1,6 +1,6 @@
 # 조직 격리(멀티테넌시) 설계
 
-Status: 설계안. 마이그레이션·롤아웃을 포함하지 않는다. 실행은 별도 승인 후.
+Status: 설계안 + 1단계(additive 스키마 `008_organizations.sql`) 적용됨. 기존 동작 불변. 매핑·스코프·롤아웃은 별도 승인 후.
 Related: `docs/ARCHITECTURE.md` 1절 목표, `docs/STATUS.md` 블로커.
 
 ## 현재 상태 (단일 조직 전제)
