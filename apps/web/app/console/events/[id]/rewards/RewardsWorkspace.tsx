@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
+import ConsolePageHeader, { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
+import ConsoleSection from "../../../console-ui/ConsoleSection";
+import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import styles from "./rewards.module.css";
 
 // Reward handout desk: registration happens on the participant row
@@ -26,7 +29,7 @@ type Reward = {
 type State =
   | { kind: "loading" }
   | { kind: "failed"; message: string }
-  | { kind: "ready"; eventName: string; featureOn: boolean; canManage: boolean; rewards: Reward[] };
+  | { kind: "ready"; eventName: string; eventMeta?: string; featureOn: boolean; canManage: boolean; rewards: Reward[] };
 
 function text(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
@@ -92,7 +95,7 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
           return;
         }
         const data = (await res.json().catch(() => null)) as {
-          state?: { events?: unknown; workspaces?: unknown } | null;
+          state?: { events?: unknown; clients?: unknown; workspaces?: unknown } | null;
         } | null;
         const bootstrap = data?.state;
         if (!res.ok || !bootstrap) {
@@ -107,6 +110,9 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
           setState({ kind: "failed", message: "행사를 찾을 수 없습니다." });
           return;
         }
+        const clients = Array.isArray(bootstrap.clients) ? bootstrap.clients.map(record) : [];
+        const clientName = clients.find((client) => client?.id === event.clientId)?.name;
+        const venue = record(workspace.venue);
         const names = new Map<string, string>();
         if (Array.isArray(workspace.participants)) {
           for (const item of workspace.participants) {
@@ -133,6 +139,13 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
         setState({
           kind: "ready",
           eventName: text(event.name, eventId),
+          eventMeta: formatConsoleEventMeta({
+            clientName: text(clientName),
+            date: text(event.date),
+            start: text(event.start),
+            end: text(event.end),
+            venue: text(venue?.name),
+          }),
           featureOn: Array.isArray(event.features) && event.features.includes("reward"),
           canManage: (event as Record<string, unknown>).canManage !== false,
           rewards,
@@ -175,34 +188,38 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
     }
   }
 
-  if (state.kind === "loading") return <p className="loading-state" role="status">경품 정보를 불러오고 있습니다.</p>;
+  const pageHeader = (
+    <ConsolePageHeader
+      title={state.kind === "ready" ? state.eventName : "행사"}
+      back={{ href: `/console/events/${encodeURIComponent(eventId)}`, label: "← 운영 현황" }}
+      meta={state.kind === "ready" ? state.eventMeta : undefined}
+      actions={<Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants`}>참가자로</Link>}
+    />
+  );
+  if (state.kind === "loading") {
+    return (
+      <div className={styles.wrapper}>
+        {pageHeader}
+        <ConsoleStatePanel kind="loading" message="경품 정보를 불러오고 있습니다." onRetry={() => {}} />
+      </div>
+    );
+  }
   if (state.kind === "failed") {
     return (
-      <section className="state-panel">
-        <p role="alert">{state.message}</p>
-        <button
-          type="button"
-          className="button button-secondary"
-          onClick={() => {
-            setReloadTick((tick) => tick + 1);
-            window.dispatchEvent(new CustomEvent("eventouch:shell-reload"));
-          }}
-        >
-          다시 불러오기
-        </button>
-      </section>
+      <div className={styles.wrapper}>
+        {pageHeader}
+        {/* ConsoleStatePanel dispatches eventouch:shell-reload before its "다시 불러오기" callback. */}
+        <ConsoleStatePanel kind="failed" message={state.message} onRetry={() => setReloadTick((tick) => tick + 1)} />
+      </div>
     );
   }
 
   return (
     <div className={styles.wrapper}>
-      <header>
-        <p className="eyebrow">경품</p>
-        <h1>{state.eventName}</h1>
-        <p className={styles.help}>
-          경품 등록은 참가자 화면에서, 지급 처리는 여기서 합니다. 참가 확정자에게만 등록할 수 있습니다.
-        </p>
-      </header>
+      {pageHeader}
+      <p className={styles.help}>
+        경품 등록은 참가자 화면에서, 지급 처리는 여기서 합니다. 참가 확정자에게만 등록할 수 있습니다.
+      </p>
       {!state.featureOn ? (
         <p className="notice" role="status">
           경품 기능이 꺼져 있습니다.{" "}
@@ -211,53 +228,52 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
       ) : null}
       {failure ? <p className="state-error" role="alert">{failure}</p> : null}
       {notice ? <p className="state-success" role="status">{notice}</p> : null}
-      {state.rewards.length ? (
-        <ul className={styles.list} aria-label="경품 목록">
-          {state.rewards.map((reward) => (
-            <li className={styles.row} key={reward.id}>
-              <div className={styles.summary}>
-                <strong>{reward.name}</strong>
-                <span className={styles.meta}>
-                  {reward.participantName} · {methodLabel(reward.method)} · {statusLabel(reward.status)}
-                </span>
-                <span className={styles.meta}>
-                  등록 {formatTime(reward.at)}
-                  {reward.code ? ` · 코드 ${reward.code}` : ""}
-                </span>
-              </div>
-              {state.featureOn && (reward.status === "READY" || reward.status === "FAILED") ? (
-                <button
-                  type="button"
-                  className="button button-primary"
-                  disabled={busy !== null}
-                  onClick={() => void runCommand(reward.id, "reward.fulfill")}
-                >
-                  {busy === reward.id ? "처리 중…" : reward.method === "GIFT" ? "기프티콘 지급(모의)" : "수령 처리"}
-                </button>
-              ) : null}
-              {state.featureOn && reward.status !== "RECEIVED" && reward.status !== "CANCELLED" ? (
-                <button
-                  type="button"
-                  className="button button-secondary"
-                  disabled={busy !== null}
-                  onClick={() => {
-                    if (window.confirm(`${reward.participantName}님의 경품을 취소할까요?`)) {
-                      void runCommand(reward.id, "reward.cancel");
-                    }
-                  }}
-                >
-                  취소
-                </button>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="empty-state">등록된 경품이 없습니다. 참가자 화면에서 참가 확정자에게 경품을 등록하세요.</p>
-      )}
-      <p>
-        <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants`}>참가자로</Link>
-      </p>
+      <ConsoleSection headingId="rewards-list" title="경품 목록">
+        {state.rewards.length ? (
+          <ul className={styles.list} aria-label="경품 목록">
+            {state.rewards.map((reward) => (
+              <li className={styles.row} key={reward.id}>
+                <div className={styles.summary}>
+                  <strong>{reward.name}</strong>
+                  <span className={styles.meta}>
+                    {reward.participantName} · {methodLabel(reward.method)} · {statusLabel(reward.status)}
+                  </span>
+                  <span className={styles.meta}>
+                    등록 {formatTime(reward.at)}
+                    {reward.code ? ` · 코드 ${reward.code}` : ""}
+                  </span>
+                </div>
+                {state.featureOn && (reward.status === "READY" || reward.status === "FAILED") ? (
+                  <button
+                    type="button"
+                    className="button button-primary"
+                    disabled={busy !== null}
+                    onClick={() => void runCommand(reward.id, "reward.fulfill")}
+                  >
+                    {busy === reward.id ? "처리 중…" : reward.method === "GIFT" ? "기프티콘 지급(모의)" : "수령 처리"}
+                  </button>
+                ) : null}
+                {state.featureOn && reward.status !== "RECEIVED" && reward.status !== "CANCELLED" ? (
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    disabled={busy !== null}
+                    onClick={() => {
+                      if (window.confirm(`${reward.participantName}님의 경품을 취소할까요?`)) {
+                        void runCommand(reward.id, "reward.cancel");
+                      }
+                    }}
+                  >
+                    취소
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="empty-state">등록된 경품이 없습니다. 참가자 화면에서 참가 확정자에게 경품을 등록하세요.</p>
+        )}
+      </ConsoleSection>
     </div>
   );
 }

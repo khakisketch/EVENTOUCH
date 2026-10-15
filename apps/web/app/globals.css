@@ -1971,7 +1971,8 @@ select[aria-invalid="true"] {
   overflow-wrap: anywhere;
 }
 
-.client-row h2 {
+.client-row h2,
+.client-row h3 {
   margin: 0;
   font-size: var(--h3);
   word-break: keep-all;

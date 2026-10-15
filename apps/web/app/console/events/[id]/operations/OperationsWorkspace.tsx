@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
+import ConsolePageHeader, { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
+import ConsoleSection from "../../../console-ui/ConsoleSection";
+import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import styles from "./operations.module.css";
 
 type Desk = { id: string; name: string; action: string; mode: string; open: boolean };
@@ -31,6 +34,7 @@ type State =
   | {
       kind: "ready";
       eventName: string;
+      eventMeta?: string;
       eventId: string;
       stampEnabled: boolean;
       stampMode: string;
@@ -100,8 +104,10 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         const data = (await res.json().catch(() => null)) as {
           state?: {
             events?: unknown;
+            clients?: unknown;
             accounts?: unknown;
             workspaces?: Record<string, {
+              venue?: unknown;
               desks?: unknown;
               booths?: unknown;
               assignments?: unknown;
@@ -236,10 +242,25 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                 active: account.active !== false,
               }];
             })
-          : [];
+            : [];
+        const clientName = Array.isArray(bootstrap.clients)
+          ? bootstrap.clients
+              .map((item) => item && typeof item === "object" ? item as Record<string, unknown> : null)
+              .find((client) => client?.id === event.clientId)?.name
+          : "";
+        const venue = workspace.venue && typeof workspace.venue === "object"
+          ? workspace.venue as Record<string, unknown>
+          : {};
         setState({
           kind: "ready",
           eventName: text(event.name),
+          eventMeta: formatConsoleEventMeta({
+            clientName: text(clientName),
+            date: text(event.date),
+            start: text(event.start),
+            end: text(event.end),
+            venue: text(venue.name),
+          }),
           eventId,
           stampEnabled: features.includes("stamp"),
           stampMode: workspace.stampMode === "SELF" ? "SELF" : "STAFF",
@@ -398,17 +419,27 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
     await runCommand("booth.mode", { mode, acknowledge: true }, "부스 인증 방식을 바꿨습니다.");
   }
 
+  const pageHeader = (
+    <ConsolePageHeader
+      title={state.kind === "ready" ? state.eventName || "이름 없는 행사" : "행사"}
+      back={{ href: `/console/events/${encodeURIComponent(eventId)}`, label: "← 운영 현황" }}
+      meta={state.kind === "ready" ? state.eventMeta : undefined}
+    />
+  );
   if (state.kind === "loading") {
-    return <p className="loading-state" role="status">현장 운영 정보를 불러오고 있습니다.</p>;
+    return (
+      <div className={styles.wrapper}>
+        {pageHeader}
+        <ConsoleStatePanel kind="loading" message="현장 운영 정보를 불러오고 있습니다." onRetry={() => {}} />
+      </div>
+    );
   }
   if (state.kind === "failed") {
     return (
-      <section className="state-panel">
-        <p role="alert">{state.message}</p>
-        <button type="button" className="button button-secondary" onClick={reload}>
-          다시 불러오기
-        </button>
-      </section>
+      <div className={styles.wrapper}>
+        {pageHeader}
+        <ConsoleStatePanel kind="failed" message={state.message} onRetry={() => setReloadTick((tick) => tick + 1)} />
+      </div>
     );
   }
   const { desks, booths, assignments, accounts, stampEnabled, eventName } = state;
@@ -517,19 +548,17 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
 
   return (
     <div className={styles.wrapper}>
-      <header className={styles.header}>
-        <p className="eyebrow">현장 운영</p>
-        <h1>{eventName}</h1>
-      </header>
+      {pageHeader}
 
       {failure && !(deskOpen || boothOpen || assignOpen) ? (
         <p role="alert" className={styles.alert}>{failure.message}</p>
       ) : null}
       {notice ? <p role="status" className={styles.notice}>{notice}</p> : null}
 
-      <section className={styles.section} aria-labelledby="ops-desks">
-        <div className={styles.sectionHead}>
-          <h2 id="ops-desks">데스크</h2>
+      <ConsoleSection
+        headingId="ops-desks"
+        title="데스크"
+        action={(
           <button
             type="button"
             className="button button-secondary"
@@ -537,7 +566,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           >
             데스크 추가
           </button>
-        </div>
+        )}
+      >
         {desks.length ? (
           <ul className={styles.list}>
             {desks.map((desk) => (
@@ -570,21 +600,21 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         ) : (
           <p className="empty-state">등록된 데스크가 없습니다. 진행 중 전환에는 데스크와 스태프 배정이 필요합니다.</p>
         )}
-      </section>
+      </ConsoleSection>
 
-      <section className={styles.section} aria-labelledby="ops-booths">
-        <div className={styles.sectionHead}>
-          <h2 id="ops-booths">부스</h2>
-          {stampEnabled ? (
-            <button
-              type="button"
-              className="button button-secondary"
-              onClick={() => { setBoothOpen(true); setFailure(null); }}
-            >
-              부스 추가
-            </button>
-          ) : null}
-        </div>
+      <ConsoleSection
+        headingId="ops-booths"
+        title="부스"
+        action={stampEnabled ? (
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={() => { setBoothOpen(true); setFailure(null); }}
+          >
+            부스 추가
+          </button>
+        ) : undefined}
+      >
         {!stampEnabled ? (
           <p className="notice" role="status">
             이 행사에서 부스 인증 기능을 먼저 켜야 부스를 사용할 수 있습니다.
@@ -611,13 +641,10 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         ) : (
           <p className="empty-state">등록된 부스가 없습니다.</p>
         )}
-      </section>
+      </ConsoleSection>
 
       {stampEnabled ? (
-        <section className={styles.section} aria-labelledby="ops-booth-mode">
-          <div className={styles.sectionHead}>
-            <h2 id="ops-booth-mode">부스 인증 방식</h2>
-          </div>
+        <ConsoleSection headingId="ops-booth-mode" title="부스 인증 방식">
           <p className={styles.rowMeta}>
             {stampMode === "SELF"
               ? "참가자가 부스 QR을 직접 스캔합니다. 부스마다 QR을 붙여 주세요."
@@ -644,14 +671,11 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
               참가자 셀프 스캔
             </button>
           </div>
-        </section>
+        </ConsoleSection>
       ) : null}
 
       {stampEnabled ? (
-        <section className={styles.section} aria-labelledby="ops-booth-map">
-          <div className={styles.sectionHead}>
-            <h2 id="ops-booth-map">부스 지도</h2>
-          </div>
+        <ConsoleSection headingId="ops-booth-map" title="부스 지도">
           <p className={styles.rowMeta}>
             배치도를 올리고, 부스를 골라 이미지를 눌러 위치를 찍습니다. 게시해야 참가자 화면에 보입니다.
           </p>
@@ -762,14 +786,11 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
               {boothMap.published.publishedAt ? ` · ${boothMap.published.publishedAt.slice(0, 10)}` : ""}
             </p>
           ) : null}
-        </section>
+        </ConsoleSection>
       ) : null}
 
       {screenEnabled ? (
-        <section className={styles.section} aria-labelledby="ops-display">
-          <div className={styles.sectionHead}>
-            <h2 id="ops-display">전광판 출력</h2>
-          </div>
+        <ConsoleSection headingId="ops-display" title="전광판 출력">
           <p className={styles.rowMeta}>
             행사장 화면에 지금 내보낼 내용입니다. 현재:{" "}
             {currentDisplayValue.startsWith("idle")
@@ -800,12 +821,11 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           <p className={styles.rowMeta}>
             게시한 공지·공개된 프로그램만 고를 수 있습니다. 참가자 화면과 같은 내용이 행사장 화면에 나옵니다.
           </p>
-        </section>
+        </ConsoleSection>
       ) : null}
 
-      <section className={styles.section} aria-labelledby="ops-staff">
-        <div className={styles.sectionHead}>
-          <h2 id="ops-staff">스태프 배정</h2>
+      <ConsoleSection headingId="ops-staff" title="스태프 배정">
+        <div className={styles.primarySectionAction}>
           <button
             type="button"
             className="button button-primary"
@@ -856,7 +876,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             진행 중 전환 조건: 등록 데스크 {desks.length}개 · 데스크 배정 {deskStaffCount}건
           </p>
         ) : null}
-      </section>
+      </ConsoleSection>
 
       {deskOpen ? (
         <DeskDialog

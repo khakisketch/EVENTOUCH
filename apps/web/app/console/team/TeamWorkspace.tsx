@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { loginHrefForLocation } from "../../auth-redirect";
+import ConsolePageHeader from "../console-ui/ConsolePageHeader";
+import ConsoleSection from "../console-ui/ConsoleSection";
+import ConsoleStatePanel from "../console-ui/ConsoleStatePanel";
 import OperationsPanels from "./OperationsPanels";
 import styles from "./team.module.css";
 
@@ -140,7 +143,7 @@ export default function TeamWorkspace() {
               return [{ id: event.id, name: text(event.name) || event.id }];
             })
           : [];
-        if (!meResponse.ok || !userId) {
+        if (!meResponse.ok || !userId || !bootstrapResponse.ok || !bootstrapPayload?.state) {
           setState({ kind: "failed", message: "팀 정보를 불러오지 못했습니다." });
           return;
         }
@@ -157,25 +160,33 @@ export default function TeamWorkspace() {
     };
   }, [reloadTick]);
 
-  if (state.kind === "loading") return <p className="loading-state" role="status">팀 정보를 불러오고 있습니다.</p>;
+  const pageHeader = (
+    <ConsolePageHeader
+      title="팀 관리"
+      actions={<Link className="button button-secondary" href="/console">행사 목록으로</Link>}
+    />
+  );
+  if (state.kind === "loading") {
+    return (
+      <div className={`${styles.workspace} participants-content`}>
+        {pageHeader}
+        <ConsoleStatePanel kind="loading" message="팀 정보를 불러오고 있습니다." onRetry={() => {}} />
+      </div>
+    );
+  }
   if (state.kind === "failed") {
     return (
-      <section className="state-panel">
-        <p role="alert">{state.message}</p>
-        <button type="button" className="button button-secondary" onClick={() => setReloadTick((tick) => tick + 1)}>
-          다시 불러오기
-        </button>
-      </section>
+      <div className={`${styles.workspace} participants-content`}>
+        {pageHeader}
+        <ConsoleStatePanel kind="failed" message={state.message} onRetry={() => setReloadTick((tick) => tick + 1)} />
+      </div>
     );
   }
 
   return (
-    <div className="participants-content">
-      <header>
-        <p className="eyebrow">팀·권한</p>
-        <h1>팀 관리</h1>
-        <p className="overview-meta">비밀번호를 잊은 구성원은 조직 소유자가 재설정합니다. 재설정하면 다른 기기에서 모두 로그아웃됩니다.</p>
-      </header>
+    <div className={`${styles.workspace} participants-content`}>
+      {pageHeader}
+      <p className="overview-meta">비밀번호를 잊은 구성원은 조직 소유자가 재설정합니다. 재설정하면 다른 기기에서 모두 로그아웃됩니다.</p>
       {notice ? <p className="state-success" role="status">{notice}</p> : null}
       {!state.canManage ? (
         <p className="notice" role="status">팀 관리 권한이 없습니다. 비밀번호 재설정은 조직 소유자에게 요청하세요.</p>
@@ -192,8 +203,7 @@ export default function TeamWorkspace() {
         </p>
       ) : null}
       {state.canInvite && state.invitations.length ? (
-        <section aria-labelledby="pending-invites">
-          <h2 id="pending-invites">대기 중인 초대</h2>
+        <ConsoleSection headingId="pending-invites" title="대기 중인 초대" className={styles.teamSection}>
           <ul className="participant-list" aria-label="대기 중인 초대 목록">
             {state.invitations.map((invitation) => (
               <li className="participant-row" key={invitation.id}>
@@ -212,32 +222,39 @@ export default function TeamWorkspace() {
               </li>
             ))}
           </ul>
-        </section>
+        </ConsoleSection>
+      ) : state.canInvite ? (
+        <ConsoleSection headingId="pending-invites" title="대기 중인 초대" className={styles.teamSection}>
+          <p>대기 중인 초대가 없습니다.</p>
+        </ConsoleSection>
       ) : null}
-      <ul className="participant-list" aria-label="구성원 목록">
-        {state.accounts.map((account) => (
-          <li className="participant-row" key={account.id}>
-            <span className="participant-summary">
-              {account.name} · {roleLabel(account.role)}
-              {account.active ? "" : " · 사용 중지"}
-              <br />
-              <small className={styles.accountEmail}>{account.email}</small>
-            </span>
-            {state.canManage ? (
-              <button
-                type="button"
-                className="button button-secondary"
-                onClick={() => { setNotice(null); setResetTarget(account); }}
-              >
-                비밀번호 재설정
-              </button>
-            ) : null}
-          </li>
-        ))}
-      </ul>
-      <p>
-        <Link className="button button-secondary" href="/console">행사 목록으로</Link>
-      </p>
+      <ConsoleSection headingId="team-members" title="구성원" className={styles.teamSection}>
+        {state.accounts.length ? (
+          <ul className="participant-list" aria-label="구성원 목록">
+            {state.accounts.map((account) => (
+              <li className="participant-row" key={account.id}>
+                <span className="participant-summary">
+                  {account.name} · {roleLabel(account.role)}
+                  {account.active ? "" : " · 사용 중지"}
+                  <br />
+                  <small className={styles.accountEmail}>{account.email}</small>
+                </span>
+                {state.canManage ? (
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    onClick={() => { setNotice(null); setResetTarget(account); }}
+                  >
+                    비밀번호 재설정
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>등록된 구성원이 없습니다.</p>
+        )}
+      </ConsoleSection>
       <OperationsPanels />
       {resetTarget ? (
         <ResetDialog

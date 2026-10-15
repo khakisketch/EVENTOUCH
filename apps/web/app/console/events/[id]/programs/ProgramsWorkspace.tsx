@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
+import ConsolePageHeader, { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
+import ConsoleSection from "../../../console-ui/ConsoleSection";
+import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import styles from "./programs.module.css";
 
 // Operator screen for the engagement bundle. Reads the operator bootstrap
@@ -52,6 +55,7 @@ type WorkspaceState =
   | {
       kind: "ready";
       eventName: string;
+      eventMeta?: string;
       features: string[];
       canManage: boolean;
       modules: Module[];
@@ -212,6 +216,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       const boot = (await bootRes.json().catch(() => null)) as {
         state?: {
           events?: unknown;
+          clients?: unknown;
           memberships?: unknown;
           workspaces?: Record<string, unknown>;
         } | null;
@@ -245,6 +250,12 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
         setState({ kind: "failed", message: "행사를 찾을 수 없습니다." });
         return;
       }
+      const clientName = Array.isArray(bootstrap.clients)
+        ? bootstrap.clients
+            .map(asRecord)
+            .find((client) => client?.id === event.clientId)?.name
+        : "";
+      const venue = asRecord(workspace.venue);
       const modules = Array.isArray(workspace.modules)
         ? workspace.modules.flatMap((value) => {
             const parsed = parseModule(value);
@@ -304,6 +315,13 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       setState({
         kind: "ready",
         eventName: text(event.name, eventId),
+        eventMeta: formatConsoleEventMeta({
+          clientName: text(clientName),
+          date: text(event.date),
+          start: text(event.start),
+          end: text(event.end),
+          venue: text(venue?.name),
+        }),
         features: Array.isArray(event.features)
           ? event.features.filter((feature): feature is string => typeof feature === "string")
           : [],
@@ -532,43 +550,41 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     }
   }
 
+  const pageHeader = (
+    <ConsolePageHeader
+      title={state.kind === "ready" ? state.eventName : "행사"}
+      back={{ href: `/console/events/${encodeURIComponent(eventId)}`, label: "← 운영 현황" }}
+      meta={state.kind === "ready" ? state.eventMeta : undefined}
+      actions={<Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/settings`}>행사 설정</Link>}
+    />
+  );
   if (state.kind === "loading") {
-    return <p className="loading-state" role="status">참여 프로그램 정보를 불러오고 있습니다.</p>;
+    return (
+      <div className={styles.page}>
+        {pageHeader}
+        <ConsoleStatePanel kind="loading" message="참여 프로그램 정보를 불러오고 있습니다." onRetry={() => {}} />
+      </div>
+    );
   }
   if (state.kind === "failed") {
     return (
-      <section className="state-panel">
-        <p role="alert">{state.message}</p>
-        <p>
-          <button
-            type="button"
-            className="button button-secondary"
-            onClick={() => {
-              window.dispatchEvent(new CustomEvent("eventouch:shell-reload"));
-              void load();
-            }}
-          >
-            다시 불러오기
-          </button>
-        </p>
-        <Link className="button button-secondary" href="/console">행사 목록으로</Link>
-      </section>
+      <div className={styles.page}>
+        {pageHeader}
+        {/* ConsoleStatePanel renders "다시 불러오기" and dispatches eventouch:shell-reload before retrying. */}
+        <ConsoleStatePanel
+          kind="failed"
+          message={state.message}
+          onRetry={() => { void load(); }}
+          actions={<Link className="button button-secondary" href="/console">행사 목록으로</Link>}
+        />
+      </div>
     );
   }
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <div>
-          <p className="eyebrow">참여 프로그램</p>
-          <h1>{state.eventName}</h1>
-          <p className={styles.intro}>투표·퀴즈·Q&A·추첨·만족도·사진·게시판을 만들고 진행 상태를 관리합니다.</p>
-        </div>
-        <nav className={styles.headerActions} aria-label="행사 내 이동">
-          <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}`}>운영 현황</Link>
-          <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/settings`}>행사 설정</Link>
-        </nav>
-      </header>
+      {pageHeader}
+      <p className={styles.intro}>투표·퀴즈·Q&A·추첨·만족도·사진·게시판을 만들고 진행 상태를 관리합니다.</p>
 
       {!state.canManage ? (
         <p className="state-error" role="alert">참여 프로그램을 관리할 운영 권한이 없습니다.</p>
@@ -576,52 +592,54 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
         <>
           {notice ? <p className="state-success" role="status">{notice}</p> : null}
           {failure ? <p className="state-error" role="alert">{failure}</p> : null}
-          <div className={styles.toolbar}>
-            <button type="button" className="button button-primary" onClick={openCreate}>
-              프로그램 만들기
-            </button>
-            <button
-              type="button"
-              className="button button-secondary"
-              disabled={busy !== null}
-              onClick={() => void load(true)}
-            >
-              새로고침
-            </button>
-          </div>
-          {state.modules.length ? (
-            <ul className={styles.moduleList}>
-              {state.modules.map((module) => (
-                <ModuleCard
-                  key={module.id}
-                  module={module}
-                  featureOn={state.features.includes(module.type)}
-                  eventId={eventId}
-                  busy={busy}
-                  responses={state.responses.filter((response) => response.moduleId === module.id).length}
-                  questions={state.questions.filter((question) => question.moduleId === module.id)}
-                  photos={state.photos}
-                  posts={state.posts}
-                  drawCounts={drawCounts}
-                  setDrawCounts={setDrawCounts}
-                  drawFailure={drawFailure?.id === module.id ? drawFailure : null}
-                  answerDrafts={answerDrafts}
-                  setAnswerDrafts={setAnswerDrafts}
-                  answerFailure={answerFailure}
-                  onEdit={() => openEdit(module)}
-                  onStatus={(status) => void changeStatus(module, status)}
-                  onReveal={() => void revealQuiz(module)}
-                  onRunDraw={() => void runDraw(module)}
-                  onPublishDraw={() => void publishDraw(module)}
-                  onManageQuestion={(question, approved) => void manageQuestion(question, approved)}
-                  onModeratePhoto={(photo, status) => void moderatePhoto(photo, status)}
-                  onModeratePost={(post, status) => void moderatePost(post, status)}
-                />
-              ))}
-            </ul>
-          ) : (
-            <p className={styles.empty}>등록된 프로그램이 없습니다. 위에서 첫 프로그램을 만드세요.</p>
-          )}
+          <ConsoleSection headingId="program-module-list" title="참여 프로그램">
+            <div className={styles.toolbar}>
+              <button type="button" className="button button-primary" onClick={openCreate}>
+                프로그램 만들기
+              </button>
+              <button
+                type="button"
+                className="button button-secondary"
+                disabled={busy !== null}
+                onClick={() => void load(true)}
+              >
+                새로고침
+              </button>
+            </div>
+            {state.modules.length ? (
+              <ul className={styles.moduleList}>
+                {state.modules.map((module) => (
+                  <ModuleCard
+                    key={module.id}
+                    module={module}
+                    featureOn={state.features.includes(module.type)}
+                    eventId={eventId}
+                    busy={busy}
+                    responses={state.responses.filter((response) => response.moduleId === module.id).length}
+                    questions={state.questions.filter((question) => question.moduleId === module.id)}
+                    photos={state.photos}
+                    posts={state.posts}
+                    drawCounts={drawCounts}
+                    setDrawCounts={setDrawCounts}
+                    drawFailure={drawFailure?.id === module.id ? drawFailure : null}
+                    answerDrafts={answerDrafts}
+                    setAnswerDrafts={setAnswerDrafts}
+                    answerFailure={answerFailure}
+                    onEdit={() => openEdit(module)}
+                    onStatus={(status) => void changeStatus(module, status)}
+                    onReveal={() => void revealQuiz(module)}
+                    onRunDraw={() => void runDraw(module)}
+                    onPublishDraw={() => void publishDraw(module)}
+                    onManageQuestion={(question, approved) => void manageQuestion(question, approved)}
+                    onModeratePhoto={(photo, status) => void moderatePhoto(photo, status)}
+                    onModeratePost={(post, status) => void moderatePost(post, status)}
+                  />
+                ))}
+              </ul>
+            ) : (
+              <p className={styles.empty}>등록된 프로그램이 없습니다. 위에서 첫 프로그램을 만드세요.</p>
+            )}
+          </ConsoleSection>
         </>
       )}
 
@@ -721,7 +739,7 @@ function ModuleCard(props: {
     <li className={styles.moduleCard}>
       <div className={styles.moduleTop}>
         <div className={styles.moduleTitle}>
-          <h2>{module.title}</h2>
+          <h3>{module.title}</h3>
           <p className={styles.moduleMeta}>
             <span className={styles.typeBadge}>{typeLabel(module.type)}</span>
             <span className={`${styles.status} ${module.status === "OPEN" ? styles.statusOpen : module.status === "CLOSED" ? styles.statusClosed : styles.statusDraft}`}>

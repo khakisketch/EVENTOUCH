@@ -4,16 +4,6 @@
   max-width: var(--web-reading-max, 68ch);
 }
 
-.section {
-  display: grid;
-  gap: var(--s3);
-}
-
-.section h2 {
-  margin: 0;
-  font-size: var(--h2);
-}
-
 .help {
   margin: 0;
   color: var(--muted);
@@ -46,9 +36,26 @@
 }
 
 .dataTable {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   font-size: var(--small);
+}
+
+.tableScroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.tableScroll:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.wrapper > section > h3 {
+  margin: 0;
+  font-size: var(--body);
 }
 
 .dataTable th,
@@ -62,6 +69,11 @@
 .dataTable th {
   color: var(--muted);
   font-weight: 650;
+  white-space: nowrap;
+}
+
+.dataTable td {
+  overflow-wrap: anywhere;
 }
 
 .reportList {

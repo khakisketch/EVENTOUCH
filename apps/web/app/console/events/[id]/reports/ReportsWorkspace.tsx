@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
+import ConsolePageHeader, { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
+import ConsoleSection from "../../../console-ui/ConsoleSection";
+import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import styles from "./reports.module.css";
 
 type ReportSnapshot = {
@@ -36,11 +39,7 @@ type Report = {
 type Ready = {
   kind: "ready";
   eventName: string;
-  clientName: string;
-  eventDate: string;
-  eventStart: string;
-  eventEnd: string;
-  venueName: string;
+  eventMeta?: string;
   metrics: { total: number; pending: number; approved: number; checked: number; inside: number; rate: number };
   groups: Array<{ name: string; count: number }>;
   booths: Array<{ name: string; used: number; capacity: number }>;
@@ -188,11 +187,13 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
           setState({
             kind: "ready",
             eventName: text(event.name) || "이름 없는 행사",
-            clientName: text(clientName),
-            eventDate: text(event.date),
-            eventStart: text(event.start),
-            eventEnd: text(event.end),
-            venueName: text(venue.name),
+            eventMeta: formatConsoleEventMeta({
+              clientName: text(clientName),
+              date: text(event.date),
+              start: text(event.start),
+              end: text(event.end),
+              venue: text(venue.name),
+            }),
             metrics: {
               total: people.length,
               pending: people.filter((person) => person.status === "PENDING").length,
@@ -320,20 +321,28 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
     URL.revokeObjectURL(url);
   }
 
+  const pageHeader = (
+    <ConsolePageHeader
+      title={state.kind === "ready" ? state.eventName : "행사"}
+      back={{ href: `/console/events/${encodeURIComponent(eventId)}`, label: "← 운영 현황" }}
+      meta={state.kind === "ready" ? state.eventMeta : undefined}
+    />
+  );
   if (state.kind === "loading") {
-    return <p className="loading-state" role="status">결과 데이터를 불러오고 있습니다.</p>;
+    return (
+      <div className={styles.wrapper}>
+        {pageHeader}
+        <ConsoleStatePanel kind="loading" message="결과 데이터를 불러오고 있습니다." onRetry={() => {}} />
+      </div>
+    );
   }
   if (state.kind === "failed") {
     return (
-      <section className="state-panel">
-        <p role="alert">{state.message}</p>
-        <button type="button" className="button button-secondary" onClick={() => {
-          setReloadTick((tick) => tick + 1);
-          window.dispatchEvent(new CustomEvent("eventouch:shell-reload"));
-        }}>
-          다시 불러오기
-        </button>
-      </section>
+      <div className={styles.wrapper}>
+        {pageHeader}
+        {/* Shared panel dispatches eventouch:shell-reload before calling this page's retry. */}
+        <ConsoleStatePanel kind="failed" message={state.message} onRetry={() => setReloadTick((tick) => tick + 1)} />
+      </div>
     );
   }
 
@@ -342,19 +351,15 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
 
   return (
     <div className={styles.wrapper}>
-      <header>
-        <p className="eyebrow">결과 보고서</p>
-        <h1>{state.eventName}</h1>
-        <p className={styles.help}>
-          {[state.eventDate, state.clientName, state.venueName].filter(Boolean).join(" · ") || "행사 정보 확인 중"}
-        </p>
-      </header>
+      {pageHeader}
       {failure ? <p role="alert" className={styles.alert}>{failure.message}</p> : null}
       {notice ? <p role="status" className={styles.notice}>{notice}</p> : null}
 
-      <section className={styles.section} aria-labelledby="reports-analysis">
-        <h2 id="reports-analysis">결과 분석</h2>
-        <p className={styles.help}>누적 입장은 한 번 이상 입장한 참가자 기준이며 재입장을 중복 집계하지 않습니다. 취소된 신청은 제외합니다.</p>
+      <ConsoleSection
+        headingId="reports-analysis"
+        title="결과 분석"
+        description="누적 입장은 한 번 이상 입장한 참가자 기준이며 재입장을 중복 집계하지 않습니다. 취소된 신청은 제외합니다."
+      >
         <div className={styles.metricGrid}>
           <div className={styles.metricCard}><strong>{state.metrics.total}</strong><span>취소 제외 등록 (명)</span></div>
           <div className={styles.metricCard}><strong>{state.metrics.checked}</strong><span>누적 입장 (명)</span></div>
@@ -363,44 +368,50 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
         </div>
         <h3>등록 그룹</h3>
         {state.groups.length ? (
-          <table className={styles.dataTable}>
-            <thead><tr><th scope="col">그룹</th><th scope="col">인원</th></tr></thead>
-            <tbody>
-              {state.groups.map((group) => (
-                <tr key={group.name}><td>{group.name}</td><td>{group.count}명</td></tr>
-              ))}
-            </tbody>
-          </table>
+          <div className={styles.tableScroll} role="region" tabIndex={0} aria-label="등록 그룹별 인원 표">
+            <table className={styles.dataTable}>
+              <thead><tr><th scope="col">그룹</th><th scope="col">인원</th></tr></thead>
+              <tbody>
+                {state.groups.map((group) => (
+                  <tr key={group.name}><td>{group.name}</td><td>{group.count}명</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <p className={styles.help}>등록 그룹이 없습니다.</p>
         )}
         <h3>부스 이용</h3>
         {state.booths.length ? (
-          <table className={styles.dataTable}>
-            <thead><tr><th scope="col">부스</th><th scope="col">인증</th></tr></thead>
-            <tbody>
-              {state.booths.map((booth) => (
-                <tr key={booth.name}><td>{booth.name}</td><td>{booth.used}건</td></tr>
-              ))}
-            </tbody>
-          </table>
+          <div className={styles.tableScroll} role="region" tabIndex={0} aria-label="부스별 인증 수 표">
+            <table className={styles.dataTable}>
+              <thead><tr><th scope="col">부스</th><th scope="col">인증</th></tr></thead>
+              <tbody>
+                {state.booths.map((booth) => (
+                  <tr key={booth.name}><td>{booth.name}</td><td>{booth.used}건</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <p className={styles.help}>부스 데이터가 없습니다.</p>
         )}
         <h3>프로그램 응답</h3>
         {state.programs.length ? (
-          <table className={styles.dataTable}>
-            <thead><tr><th scope="col">프로그램</th><th scope="col">종류</th><th scope="col">응답</th></tr></thead>
-            <tbody>
-              {state.programs.map((program) => (
-                <tr key={`${program.type}-${program.name}`}>
-                  <td>{program.name}</td>
-                  <td>{MODULE_TYPE_LABELS[program.type] ?? "항목 확인 필요"}</td>
-                  <td>{program.responses}건</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className={styles.tableScroll} role="region" tabIndex={0} aria-label="프로그램별 응답 표">
+            <table className={styles.dataTable}>
+              <thead><tr><th scope="col">프로그램</th><th scope="col">종류</th><th scope="col">응답</th></tr></thead>
+              <tbody>
+                {state.programs.map((program) => (
+                  <tr key={`${program.type}-${program.name}`}>
+                    <td>{program.name}</td>
+                    <td>{MODULE_TYPE_LABELS[program.type] ?? "항목 확인 필요"}</td>
+                    <td>{program.responses}건</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <p className={styles.help}>참여 기록이 없습니다.</p>
         )}
@@ -409,29 +420,33 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
           state.surveys.map((survey) => (
             <div key={survey.name}>
               <p><strong>{survey.name}</strong> · 응답 {survey.count}명 · 평균 {survey.average === null ? "응답 없음" : `${survey.average} / 5`}</p>
-              <table className={styles.dataTable}>
-                <thead><tr><th scope="col">항목</th><th scope="col">평균</th><th scope="col">응답</th></tr></thead>
-                <tbody>
-                  {survey.questions.map((question) => (
-                    <tr key={question.name}>
-                      <td>{question.name}</td>
-                      <td>{question.average === null ? "—" : `${question.average} / 5`}</td>
-                      <td>{question.count}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className={styles.tableScroll} role="region" tabIndex={0} aria-label={`${survey.name} 만족도 항목별 결과 표`}>
+                <table className={styles.dataTable}>
+                  <thead><tr><th scope="col">항목</th><th scope="col">평균</th><th scope="col">응답</th></tr></thead>
+                  <tbody>
+                    {survey.questions.map((question) => (
+                      <tr key={question.name}>
+                        <td>{question.name}</td>
+                        <td>{question.average === null ? "—" : `${question.average} / 5`}</td>
+                        <td>{question.count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ))
         ) : (
           <p className={styles.help}>만족도 데이터가 없습니다.</p>
         )}
         <p className={styles.help}>승인 사진 {state.photoCount}건{state.photoCaptions.length ? ` · ${state.photoCaptions.slice(0, 3).join(" · ")}` : ""}</p>
-      </section>
+      </ConsoleSection>
 
-      <section className={styles.section} aria-labelledby="reports-list">
-        <h2 id="reports-list">보고서</h2>
-        <p className={styles.help}>보고서를 만들면 현재 집계와 승인 사진을 복사합니다. 이후 운영 변경은 보고서에 자동 반영하지 않으며, 공유한 버전은 잠그고 새 버전으로 이어갑니다. 고객사 포털은 제공하지 않으므로 공유 상태만 기록합니다.</p>
+      <ConsoleSection
+        headingId="reports-list"
+        title="보고서"
+        description="보고서를 만들면 현재 집계와 승인 사진을 복사합니다. 이후 운영 변경은 보고서에 자동 반영하지 않으며, 공유한 버전은 잠그고 새 버전으로 이어갑니다. 고객사 포털은 제공하지 않으므로 공유 상태만 기록합니다."
+      >
         <div className={styles.actions}>
           <button type="button" className="button button-primary" onClick={() => setCreateOpen(true)}>
             보고서 만들기
@@ -459,11 +474,10 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
         ) : (
           <p className={styles.help}>아직 보고서가 없습니다.</p>
         )}
-      </section>
+      </ConsoleSection>
 
       {detail ? (
-        <section className={styles.section} aria-labelledby="report-detail">
-          <h2 id="report-detail">보고서 내용</h2>
+        <ConsoleSection headingId="report-detail" title="보고서 내용">
           <article className={styles.reportDoc}>
             <header className={styles.reportCover} style={{ borderColor: detail.color }}>
               <p className="eyebrow">EVENTOUCH · 결과 보고서</p>
@@ -610,7 +624,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
               닫기
             </button>
           </div>
-        </section>
+        </ConsoleSection>
       ) : null}
 
       {createOpen ? (

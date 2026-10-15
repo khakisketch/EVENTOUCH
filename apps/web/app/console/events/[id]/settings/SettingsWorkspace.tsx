@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
 import { eventStageClassName, eventStageLabel } from "../../../../event-stage";
+import ConsolePageHeader, { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
+import ConsoleSection from "../../../console-ui/ConsoleSection";
+import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import styles from "./settings.module.css";
 
 // Mirrors server/commands/preparation.js FEATURES. A toggle that the server
@@ -54,6 +57,7 @@ type PageDraft = {
 type Ready = {
   kind: "ready";
   stage: string;
+  eventMeta?: string;
   canManageEvent: boolean;
   deskCount: number;
   deskAssignmentCount: number;
@@ -126,8 +130,10 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         const data = (await res.json().catch(() => null)) as {
           state?: {
             events?: unknown;
+            clients?: unknown;
             accounts?: unknown;
             workspaces?: Record<string, {
+              venue?: unknown;
               features?: unknown;
               price?: unknown;
               approvalRequired?: unknown;
@@ -161,6 +167,11 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           setState({ kind: "failed", message: "행사를 찾을 수 없습니다." });
           return;
         }
+        const clients = Array.isArray(bootstrap.clients)
+          ? bootstrap.clients.map(record).filter((item): item is Record<string, unknown> => item !== null)
+          : [];
+        const clientName = clients.find((client) => client.id === event.clientId)?.name;
+        const venue = record(workspace.venue);
         const accounts = Array.isArray(bootstrap.accounts)
           ? bootstrap.accounts.map(record).filter((item): item is Record<string, unknown> => item !== null)
           : [];
@@ -202,6 +213,13 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         setState({
           kind: "ready",
           stage: text(event.stage).toUpperCase(),
+          eventMeta: formatConsoleEventMeta({
+            clientName: text(clientName),
+            date: text(event.date),
+            start: text(event.start),
+            end: text(event.end),
+            venue: text(venue?.name),
+          }),
           canManageEvent,
           deskCount: desks.length,
           deskAssignmentCount,
@@ -273,24 +291,37 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     }
   }
 
+  const pageHeader = (
+    <ConsolePageHeader
+      title={state.kind === "ready" ? basics?.name || state.basics.name : "행사"}
+      back={{ href: `/console/events/${encodeURIComponent(eventId)}`, label: "← 운영 현황" }}
+      meta={state.kind === "ready" ? state.eventMeta : undefined}
+    />
+  );
   if (state.kind === "loading") {
-    return <p className="loading-state" role="status">행사 설정을 불러오고 있습니다.</p>;
+    return (
+      <div className={styles.wrapper}>
+        {pageHeader}
+        <ConsoleStatePanel kind="loading" message="행사 설정을 불러오고 있습니다." onRetry={() => {}} />
+      </div>
+    );
   }
   if (state.kind === "failed") {
     return (
-      <section className="state-panel">
-        <p role="alert">{state.message}</p>
-        <button type="button" className="button button-secondary" onClick={() => {
-          setReloadTick((tick) => tick + 1);
-          window.dispatchEvent(new CustomEvent("eventouch:shell-reload"));
-        }}>
-          다시 불러오기
-        </button>
-      </section>
+      <div className={styles.wrapper}>
+        {pageHeader}
+        {/* ConsoleStatePanel owns the "다시 불러오기" control and eventouch:shell-reload dispatch. */}
+        <ConsoleStatePanel kind="failed" message={state.message} onRetry={() => setReloadTick((tick) => tick + 1)} />
+      </div>
     );
   }
   if (!basics || !features || !draft) {
-    return <p className="loading-state" role="status">행사 설정을 준비하고 있습니다.</p>;
+    return (
+      <div className={styles.wrapper}>
+        {pageHeader}
+        <ConsoleStatePanel kind="loading" message="행사 설정을 준비하고 있습니다." onRetry={() => {}} />
+      </div>
+    );
   }
 
   const invalid = (field: string) => failure?.field === field;
@@ -359,15 +390,11 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
 
   return (
     <div className={styles.wrapper}>
-      <header>
-        <p className="eyebrow">행사 설정</p>
-        <h1>{basics.name}</h1>
-      </header>
+      {pageHeader}
       {failure ? <p role="alert" id="settings-error" className={styles.alert}>{failure.message}</p> : null}
       {notice ? <p role="status" className={styles.notice}>{notice}</p> : null}
 
-      <section className={styles.section} aria-labelledby="settings-basics">
-        <h2 id="settings-basics">기본 정보</h2>
+      <ConsoleSection headingId="settings-basics" title="기본 정보">
         <form
           className={styles.form}
           onSubmit={(event) => {
@@ -510,10 +537,10 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             </button>
           </div>
         </form>
-      </section>
+      </ConsoleSection>
 
-      <section className={styles.section} aria-labelledby="settings-stage">
-        <h2 id="settings-stage">진행 단계</h2>
+      {/* Replaces <section className={styles.section} aria-labelledby="settings-stage"> with shared heading/label wiring. */}
+      <ConsoleSection headingId="settings-stage" title="진행 단계">
         <div className={styles.stagePanel}>
           <div className={styles.stageIdentity}>
             <span className={styles.stageLabel}>현재 단계</span>
@@ -572,10 +599,10 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             ) : null}
           </div>
         </div>
-      </section>
+      </ConsoleSection>
 
-      <section className={styles.section} aria-labelledby="settings-features">
-        <h2 id="settings-features">기능</h2>
+      {/* Replaces <section className={styles.section} aria-labelledby="settings-features"> with shared heading/label wiring. */}
+      <ConsoleSection headingId="settings-features" title="기능">
         <p className={styles.help}>끈 기능은 콘솔 메뉴와 참가자 화면에서 함께 사라집니다. 기존 응답과 기록은 삭제되지 않습니다.</p>
         <fieldset className={styles.featureGroups}>
           <legend>사용할 기능</legend>
@@ -618,10 +645,9 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             {busy ? "저장 중입니다" : "기능 저장"}
           </button>
         </div>
-      </section>
+      </ConsoleSection>
 
-      <section className={styles.section} aria-labelledby="settings-intake">
-        <h2 id="settings-intake">참가 접수</h2>
+      <ConsoleSection headingId="settings-intake" title="참가 접수">
         <p>
           현재 {state.registrationOpen ? "접수 중" : "접수 닫힘"} · 게시된 양식 버전 {state.publishedVersion}
         </p>
@@ -660,10 +686,9 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             </button>
           </div>
         </div>
-      </section>
+      </ConsoleSection>
 
-      <section className={styles.section} aria-labelledby="settings-page">
-        <h2 id="settings-page">참가자 페이지</h2>
+      <ConsoleSection headingId="settings-page" title="참가자 페이지">
         <p className={styles.help}>
           저장은 초안만 바꾸고, 게시해야 참가자에게 보입니다.
           {state.pagePublishedAt ? ` 최근 게시: ${formatPublishedAt(state.pagePublishedAt)}` : ""}
@@ -748,7 +773,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             </button>
           </div>
         </div>
-      </section>
+      </ConsoleSection>
     </div>
   );
 }

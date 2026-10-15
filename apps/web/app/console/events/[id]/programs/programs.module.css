@@ -59,7 +59,7 @@
   min-width: 0;
 }
 
-.moduleTitle h2 {
+.moduleTitle h3 {
   margin: 0;
   font-size: var(--h3);
   word-break: keep-all;

@@ -4,31 +4,39 @@
   width: 100%;
 }
 
-.pageHeader {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+.homeHeaderRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
   gap: var(--s4);
   padding-bottom: var(--s3);
   border-bottom: 1px solid var(--line);
 }
 
-.pageHeader h1 {
-  margin: 0;
-}
-
-.pageHeader p {
-  margin: var(--s1) 0 0;
-  color: var(--muted);
-  font-size: var(--small);
+.homeHeader.homeHeader {
+  grid-template-columns: minmax(0, 1fr);
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
 .createTrigger {
   flex: none;
+  align-self: end;
 }
 
 .directory {
   min-width: 0;
+}
+
+.directorySection.directorySection {
+  gap: var(--s3);
+}
+
+.directorySection .toolbar,
+.directorySection .calendarPanel,
+.directorySection .resultsMeta,
+.directorySection .eventGrid {
+  margin-top: 0;
 }
 
 .toolbar {
@@ -432,8 +440,7 @@
   background: var(--soft);
 }
 
-.emptyState,
-.statePanel {
+.emptyState {
   display: grid;
   justify-items: start;
   gap: var(--s2);
@@ -443,8 +450,7 @@
 }
 
 .emptyState h3,
-.emptyState p,
-.statePanel p {
+.emptyState p {
   margin: 0;
 }
 
@@ -452,8 +458,7 @@
   font-size: var(--h3);
 }
 
-.emptyState p,
-.statePanel p {
+.emptyState p {
   color: var(--muted);
 }
 
@@ -542,8 +547,8 @@
     gap: var(--s3);
   }
 
-  .pageHeader p {
-    max-width: 34ch;
+  .homeHeaderRow {
+    gap: var(--s2);
   }
 
   .toolbar {

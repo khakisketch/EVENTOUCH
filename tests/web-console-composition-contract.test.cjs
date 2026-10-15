@@ -1,8 +1,7 @@
 'use strict';
 
-// The new console layout primitives are the shared contract for the first
-// migrated event pages. Keep copy/permissions/actions in their workspaces;
-// centralize only header, section and loading/failure composition.
+// The shared console layout primitives own page hierarchy and initial-state
+// composition. Keep screen copy, permissions and task actions in workspaces.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -23,6 +22,22 @@ const targets = [
   'app/console/events/[id]/content/ContentWorkspace.tsx',
   'app/console/events/[id]/messages/MessagingWorkspace.tsx',
 ];
+
+const eventPhaseTwoTargets = [
+  'app/console/events/[id]/operations/OperationsWorkspace.tsx',
+  'app/console/events/[id]/programs/ProgramsWorkspace.tsx',
+  'app/console/events/[id]/rewards/RewardsWorkspace.tsx',
+  'app/console/events/[id]/reports/ReportsWorkspace.tsx',
+  'app/console/events/[id]/settings/SettingsWorkspace.tsx',
+];
+
+const rootTargets = [
+  'app/console/ConsoleHome.tsx',
+  'app/console/clients/ClientsList.tsx',
+  'app/console/team/TeamWorkspace.tsx',
+];
+
+const allPageTargets = [...targets, ...eventPhaseTwoTargets, ...rootTargets];
 
 test('console layout primitives expose stable, hook-free composition', () => {
   const header = read('app/console/console-ui/ConsolePageHeader.tsx');
@@ -59,8 +74,8 @@ test('state panel unifies loading, alert and shell-aware retry', () => {
   assert.match(state, /actions\?: ReactNode/);
 });
 
-test('first event pages all compose from the common header, sections and state panel', () => {
-  for (const target of targets) {
+test('event, organization and root pages use shared header, sections and state panels', () => {
+  for (const target of allPageTargets) {
     const source = read(target);
     for (const component of ['ConsolePageHeader', 'ConsoleSection', 'ConsoleStatePanel']) {
       assert.match(source, new RegExp(`import ${component}\\b`), `${target} imports ${component}`);
@@ -68,7 +83,12 @@ test('first event pages all compose from the common header, sections and state p
     }
     assert.match(source, /kind="loading"/u, `${target} uses the shared loading state`);
     assert.match(source, /kind="failed"/u, `${target} uses the shared failed state`);
-    assert.doesNotMatch(source, /className="eyebrow"|className=\{[^}]*eyebrow/);
+    if (target.endsWith('/reports/ReportsWorkspace.tsx')) {
+      assert.equal((source.match(/className="eyebrow"/gu) ?? []).length, 1);
+      assert.match(source, /<p className="eyebrow">EVENTOUCH · 결과 보고서<\/p>/u, 'printed report cover eyebrow remains product content');
+    } else {
+      assert.doesNotMatch(source, /className="eyebrow"|className=\{[^}]*eyebrow/);
+    }
   }
 });
 
@@ -93,6 +113,65 @@ test('event child pages use one header back link and keep action slots secondary
   assert.doesNotMatch(content, />\s*운영 현황\s*<\/Link>/u);
   assert.doesNotMatch(participants, />\s*운영 현황으로\s*<\/Link>/u);
   assert.doesNotMatch(messages, />\s*운영 현황\s*<\/Link>/u);
+});
+
+test('phase-two event children keep the shared back link and bootstrap-only meta', () => {
+  for (const target of eventPhaseTwoTargets) {
+    const source = read(target);
+    assert.match(source, /label:\s*"← 운영 현황"/u, `${target} has the common event back link`);
+    assert.match(source, /formatConsoleEventMeta/u, `${target} formats only available event meta`);
+  }
+  const overview = read(targets[0]);
+  assert.doesNotMatch(overview, /label:\s*"← 운영 현황"/u);
+
+  const settings = read(eventPhaseTwoTargets[4]);
+  for (const id of ['settings-basics', 'settings-stage', 'settings-features', 'settings-intake', 'settings-page']) {
+    assert.match(settings, new RegExp(`headingId="${id}"`), `settings retains ${id}`);
+  }
+
+  const operations = read(eventPhaseTwoTargets[0]);
+  assert.match(operations, /<ConsoleSection headingId="ops-staff" title="스태프 배정">\s*<div className=\{styles\.primarySectionAction\}>\s*<button[\s\S]*?className="button button-primary"/u);
+  assert.match(operations, /className="button button-primary"[^>]*>[\s\S]*?초안 저장/u, 'map draft save remains a primary body action');
+});
+
+test('root pages keep title-only identity and preserve primary task actions', () => {
+  const home = read(rootTargets[0]);
+  assert.match(home, /<ConsolePageHeader title="행사" className=\{styles\.homeHeader\} \/>/u);
+  assert.match(home, /className=\{`button button-primary \$\{styles\.createTrigger\}`\}/u);
+  assert.doesNotMatch(home, /<ConsolePageHeader[^>]*actions=/u, 'create-event primary is not put in the supplementary header slot');
+  assert.match(home, /headingId="console-event-directory" title="행사 목록"/u);
+
+  const clients = read(rootTargets[1]);
+  const clientsRoute = read('app/console/clients/page.tsx');
+  assert.match(clients, /<ConsolePageHeader title="고객사" \/>/u);
+  assert.match(clients, /headingId="client-list-heading" title="고객사 목록"/u);
+  assert.match(clients, /state\.canManage \? \([\s\S]*?className="button button-primary"[\s\S]*?고객사 등록/u);
+  assert.match(clients, /<h3>\{client\.name\}<\/h3>/u);
+  assert.doesNotMatch(clientsRoute, /<h1>|console-page-header/u, 'the route does not duplicate the workspace title');
+
+  const team = read(rootTargets[2]);
+  assert.match(team, /title="팀 관리"/u);
+  assert.match(team, /headingId="pending-invites" title="대기 중인 초대"/u);
+  assert.match(team, /headingId="team-members" title="구성원"/u);
+  assert.match(team, /등록된 구성원이 없습니다/u);
+  assert.match(team, /!bootstrapResponse\.ok \|\| !bootstrapPayload\?\.state/u, 'bootstrap failure cannot masquerade as an empty team');
+  assert.match(team, /actions=\{<Link className="button button-secondary" href="\/console">행사 목록으로<\/Link>\}/u);
+  assert.doesNotMatch(team, /label:\s*"← 운영 현황"|meta=\{/u);
+
+  const panels = read('app/console/team/OperationsPanels.tsx');
+  for (const id of ['operations-integrations', 'operations-activity', 'operations-security']) {
+    assert.match(panels, new RegExp(`headingId="${id}"`));
+  }
+});
+
+test('report tables remain complete and keyboard-scrollable on narrow screens', () => {
+  const reports = read(eventPhaseTwoTargets[3]);
+  assert.equal((reports.match(/className=\{styles\.tableScroll\}/gu) ?? []).length, 4);
+  assert.equal((reports.match(/className=\{styles\.dataTable\}/gu) ?? []).length, 4);
+  assert.match(reports, /role="region" tabIndex=\{0\} aria-label="등록 그룹별 인원 표"/u);
+  assert.match(reports, /role="region" tabIndex=\{0\} aria-label="부스별 인증 수 표"/u);
+  assert.match(reports, /role="region" tabIndex=\{0\} aria-label="프로그램별 응답 표"/u);
+  assert.match(read('app/console/events/[id]/reports/reports.module.css'), /\.tableScroll\s*\{[^}]*overflow-x:\s*auto/s);
 });
 
 test('thin participant route wrappers and overview do not add legacy eyebrows', () => {

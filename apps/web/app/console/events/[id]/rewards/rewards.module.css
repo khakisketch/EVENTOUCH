@@ -1,6 +1,7 @@
 .wrapper {
   display: grid;
   gap: var(--s4);
+  max-width: var(--web-content-max, 1120px);
 }
 
 .help {
@@ -27,6 +28,10 @@
   background: var(--paper);
 }
 
+.row > .button {
+  min-height: 44px;
+}
+
 .summary {
   display: grid;
   min-width: 0;
@@ -41,4 +46,14 @@
 .meta {
   color: var(--muted);
   font-size: var(--small);
+}
+
+@media (max-width: 480px) {
+  .row {
+    align-items: flex-start;
+  }
+
+  .summary {
+    flex-basis: 100%;
+  }
 }

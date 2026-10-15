@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { loginHrefForLocation } from "../auth-redirect";
 import { eventStageClassName, eventStageLabel } from "../event-stage";
+import ConsolePageHeader from "./console-ui/ConsolePageHeader";
+import ConsoleSection from "./console-ui/ConsoleSection";
+import ConsoleStatePanel from "./console-ui/ConsoleStatePanel";
 import CreateEventDialog from "./CreateEventDialog";
 import styles from "./console-home.module.css";
 
@@ -354,34 +357,27 @@ export default function ConsoleHome() {
   if (state.kind === "loading") {
     return (
       <div className={styles.home}>
-        <header className={styles.pageHeader}>
-          <h1>행사</h1>
-        </header>
-        <p className="loading-state" role="status">행사 목록을 불러오고 있습니다.</p>
+        {/* ConsolePageHeader renders the root <h1>행사</h1> for loading and failed states too. */}
+        <div className={styles.homeHeaderRow}>
+          <ConsolePageHeader title="행사" className={styles.homeHeader} />
+        </div>
+        <ConsoleStatePanel kind="loading" message="행사 목록을 불러오고 있습니다." onRetry={() => {}} />
       </div>
     );
   }
   if (state.kind === "failed") {
     return (
       <div className={styles.home}>
-        <header className={styles.pageHeader}>
-          <h1>행사</h1>
-        </header>
-        <section className={styles.statePanel}>
-          <p role="alert">{state.message}</p>
-          <button
-            type="button"
-            className="button button-secondary"
-            onClick={() => {
-              setReloadTick((tick) => tick + 1);
-              // The shell owns its own bootstrap fetch; without this the
-              // navigation stays empty while only the list recovers.
-              window.dispatchEvent(new CustomEvent("eventouch:shell-reload"));
-            }}
-          >
-            다시 불러오기
-          </button>
-        </section>
+        {/* ConsolePageHeader renders the root <h1>행사</h1> while the directory recovers. */}
+        <div className={styles.homeHeaderRow}>
+          <ConsolePageHeader title="행사" className={styles.homeHeader} />
+        </div>
+        {/* ConsoleStatePanel dispatches eventouch:shell-reload before this directory retry. */}
+        <ConsoleStatePanel
+          kind="failed"
+          message={state.message}
+          onRetry={() => setReloadTick((tick) => tick + 1)}
+        />
       </div>
     );
   }
@@ -402,8 +398,8 @@ export default function ConsoleHome() {
   const hasNarrowing = query.trim() !== "" || filter !== "all" || dateFilterActive;
   return (
     <div className={styles.home}>
-      <header className={styles.pageHeader}>
-        <h1>행사</h1>
+      <div className={styles.homeHeaderRow}>
+        <ConsolePageHeader title="행사" className={styles.homeHeader} />
         <button
           type="button"
           className={`button button-primary ${styles.createTrigger}`}
@@ -411,7 +407,7 @@ export default function ConsoleHome() {
         >
           새 행사 만들기
         </button>
-      </header>
+      </div>
 
       {createOpen ? (
         <CreateEventDialog
@@ -424,7 +420,8 @@ export default function ConsoleHome() {
         />
       ) : null}
 
-      <section className={styles.directory} aria-label="행사 목록">
+      <ConsoleSection headingId="console-event-directory" title="행사 목록" className={styles.directorySection}>
+        <div className={styles.directory}>
         <p className="sr-only" role="status">
           {filter === "all" && !needsWork && !query.trim() && !dateFilterActive
             ? `전체 ${state.events.length}개 행사`
@@ -571,7 +568,7 @@ export default function ConsoleHome() {
         ) : (
           <>
             {view === "calendar" && selectedDate ? (
-              <h2 className={styles.sectionTitle}>{describeDate(selectedDate)} 행사</h2>
+              <h3 className={styles.sectionTitle}>{describeDate(selectedDate)} 행사</h3>
             ) : null}
             <ul className={styles.eventGrid}>
               {(view === "calendar" && selectedDate ? datedVisible : visibleEvents.filter((event) => view === "cards" || event.date)).map((event) => (
@@ -586,7 +583,7 @@ export default function ConsoleHome() {
             </ul>
             {view === "calendar" && !selectedDate && unscheduled.length ? (
               <>
-                <h2 className={styles.sectionTitle}>일정 미정 {unscheduled.length}건</h2>
+                <h3 className={styles.sectionTitle}>일정 미정 {unscheduled.length}건</h3>
                 <ul className={styles.eventGrid}>
                   {unscheduled.map((event) => {
                     return (
@@ -604,7 +601,8 @@ export default function ConsoleHome() {
             ) : null}
           </>
         )}
-      </section>
+        </div>
+      </ConsoleSection>
     </div>
   );
 }

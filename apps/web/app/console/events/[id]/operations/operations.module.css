@@ -13,6 +13,11 @@
   gap: var(--s3);
 }
 
+.primarySectionAction {
+  display: flex;
+  justify-content: flex-start;
+}
+
 .sectionHead {
   display: flex;
   flex-wrap: wrap;

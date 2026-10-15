@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../auth-redirect";
+import ConsolePageHeader from "../console-ui/ConsolePageHeader";
+import ConsoleSection from "../console-ui/ConsoleSection";
+import ConsoleStatePanel from "../console-ui/ConsoleStatePanel";
 
 type Client = {
   id: string;
@@ -217,27 +220,28 @@ export default function ClientsList() {
     }
   }
 
+  const pageHeader = <ConsolePageHeader title="고객사" />;
   if (state.kind === "loading") {
-    return <p className="loading-state" role="status">고객사 목록을 불러오고 있습니다.</p>;
+    return (
+      <>
+        {pageHeader}
+        <ConsoleStatePanel kind="loading" message="고객사 목록을 불러오고 있습니다." onRetry={() => {}} />
+      </>
+    );
   }
   if (state.kind === "failed") {
     return (
-      <section className="state-panel">
-        <p className="state-error" role="alert">{state.message}</p>
-        <p>
-          <button type="button" className="button button-secondary" onClick={() => {
-            setReloadTick((tick) => tick + 1);
-            window.dispatchEvent(new CustomEvent("eventouch:shell-reload"));
-          }}>
-            다시 불러오기
-          </button>
-        </p>
-      </section>
+      <>
+        {pageHeader}
+        {/* ConsoleStatePanel supplies "다시 불러오기" and wakes the shell with eventouch:shell-reload. */}
+        <ConsoleStatePanel kind="failed" message={state.message} onRetry={() => setReloadTick((tick) => tick + 1)} />
+      </>
     );
   }
 
   return (
-    <div>
+    <>
+      {pageHeader}
       {notice ? <p className="state-success" role="status">{notice}</p> : null}
       {formError && !draft ? <p className="state-error" role="alert">{formError.message}</p> : null}
       {state.canManage ? (
@@ -247,16 +251,15 @@ export default function ClientsList() {
           </button>
         </p>
       ) : null}
-      {!state.clients.length ? (
-        <section className="state-panel">
+      <ConsoleSection headingId="client-list-heading" title="고객사 목록">
+        {!state.clients.length ? (
           <p>등록된 고객사가 없습니다. 새 행사의 고객사는 행사 만들기에서 함께 지정할 수 있습니다.</p>
-        </section>
-      ) : (
-        <ul className="client-list" aria-label="고객사 목록">
-          {state.clients.map((client) => (
-            <li key={client.id}>
-              <article className="client-row">
-                <h2>{client.name}</h2>
+        ) : (
+          <ul className="client-list" aria-label="고객사 목록">
+            {state.clients.map((client) => (
+              <li key={client.id}>
+                <article className="client-row">
+                  <h3>{client.name}</h3>
                 {client.logoFileId ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -343,11 +346,12 @@ export default function ClientsList() {
                     ) : null}
                   </div>
                 ) : null}
-              </article>
-            </li>
-          ))}
-        </ul>
-      )}
+                </article>
+              </li>
+            ))}
+          </ul>
+        )}
+      </ConsoleSection>
       {draft && state.canManage ? (
         <div className="dialog-backdrop" onClick={() => setDraft(null)}>
           <div
@@ -409,6 +413,6 @@ export default function ClientsList() {
           </div>
         </div>
       ) : null}
-    </div>
+    </>
   );
 }

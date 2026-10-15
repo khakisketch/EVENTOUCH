@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ConsoleSection from "../console-ui/ConsoleSection";
+import styles from "./team.module.css";
 
 // Operations visibility for the team screen: integration status, recent
 // activity, and login protection. All three are read-only; the server owns
@@ -174,8 +176,7 @@ export default function OperationsPanels() {
 
   return (
     <>
-      <section aria-labelledby="operations-integrations">
-        <h2 id="operations-integrations">연동 상태</h2>
+      <ConsoleSection headingId="operations-integrations" title="연동 상태" className={styles.teamSection}>
         {!health ? (
           <p className="notice" role="status">연동 상태를 불러오고 있습니다.</p>
         ) : (
@@ -197,9 +198,8 @@ export default function OperationsPanels() {
           </dl>
         )}
         <p className="landing-note">자격증명·발신번호·승인 템플릿은 서버 환경에서 관리하며 화면에 입력하지 않습니다.</p>
-      </section>
-      <section aria-labelledby="operations-activity">
-        <h2 id="operations-activity">최근 활동</h2>
+      </ConsoleSection>
+      <ConsoleSection headingId="operations-activity" title="최근 활동" className={styles.teamSection}>
         {!audit ? (
           <p className="notice" role="status">활동 기록을 불러오고 있습니다.</p>
         ) : !audit.length ? (
@@ -218,10 +218,9 @@ export default function OperationsPanels() {
             ))}
           </ul>
         )}
-      </section>
+      </ConsoleSection>
       {attempts && attempts.length ? (
-        <section aria-labelledby="operations-security">
-          <h2 id="operations-security">로그인 보호 상태</h2>
+        <ConsoleSection headingId="operations-security" title="로그인 보호 상태" className={styles.teamSection}>
           <p className="landing-note">실패 횟수만 집계합니다. 성공한 로그인은 기록하지 않으므로 접속 로그로 오해하지 마세요.</p>
           <ul className="participant-list" aria-label="로그인 실패 집계">
             {attempts.map((attempt) => (
@@ -234,7 +233,7 @@ export default function OperationsPanels() {
               </li>
             ))}
           </ul>
-        </section>
+        </ConsoleSection>
       ) : null}
     </>
   );
