@@ -1,0 +1,1142 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { loginHrefForLocation } from "../../../../auth-redirect";
+import styles from "./content.module.css";
+
+// Console authoring for notices, schedule programs, and venue guidance.
+// Reads the operator bootstrap; every write goes through the idempotent
+// event command path (server/commands/preparation.js stays authoritative on
+// field names, limits, and the venue feature gate). Published items alone
+// reach the public event page, so each section manages its own publish flag.
+
+// Mirrors server/commands/preparation.js saveNotice.
+const NOTICE_TITLE_MAX = 100;
+const NOTICE_BODY_MAX = 3000;
+
+// Mirrors server/commands/preparation.js saveProgram.
+const PROGRAM_TITLE_MAX = 100;
+const PROGRAM_PLACE_MAX = 160;
+const PROGRAM_DESCRIPTION_MAX = 4000;
+
+// Mirrors server/commands/preparation.js saveProgram attachment rules.
+const PROGRAM_ATTACHMENT_TYPES = ["application/pdf"];
+const PROGRAM_ATTACHMENT_MAX_BYTES = 600000;
+
+// Mirrors server/commands/preparation.js saveVenue clean() limits.
+const VENUE_LIMITS = { name: 100, address: 200, directions: 400, contact: 120, description: 400 };
+
+type Attachment = { fileId: string; name: string };
+
+type Notice = {
+  id: string;
+  title: string;
+  body: string;
+  published: boolean;
+  pinned: boolean;
+  at: string;
+};
+
+type ProgramItem = {
+  id: string;
+  title: string;
+  date: string;
+  start: string;
+  end: string;
+  place: string;
+  description: string;
+  published: boolean;
+  attachment: Attachment | null;
+};
+
+type Venue = {
+  name: string;
+  address: string;
+  directions: string;
+  contact: string;
+  description: string;
+};
+
+type WorkspaceState =
+  | { kind: "loading" }
+  | { kind: "failed"; message: string }
+  | {
+      kind: "ready";
+      eventName: string;
+      features: string[];
+      canManage: boolean;
+      notices: Notice[];
+      program: ProgramItem[];
+      venue: Venue;
+    };
+
+type Failure = { message: string; field: string | null };
+
+type NoticeDraft = {
+  id: string;
+  title: string;
+  body: string;
+  published: boolean;
+  pinned: boolean;
+};
+
+type ProgramDraft = {
+  id: string;
+  title: string;
+  date: string;
+  start: string;
+  end: string;
+  place: string;
+  description: string;
+  published: boolean;
+  attachment: Attachment | null;
+  attachmentDirty: boolean;
+};
+
+const EMPTY_NOTICE_DRAFT: NoticeDraft = {
+  id: "",
+  title: "",
+  body: "",
+  published: false,
+  pinned: false,
+};
+
+const EMPTY_PROGRAM_DRAFT: ProgramDraft = {
+  id: "",
+  title: "",
+  date: "",
+  start: "",
+  end: "",
+  place: "",
+  description: "",
+  published: false,
+  attachment: null,
+  attachmentDirty: false,
+};
+
+function randomCommandId(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return `web-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
+}
+
+function text(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function parseNotice(value: unknown): Notice | null {
+  const item = asRecord(value);
+  if (!item || typeof item.id !== "string" || !item.id) return null;
+  if (typeof item.title !== "string") return null;
+  return {
+    id: item.id,
+    title: item.title,
+    body: text(item.body),
+    published: item.published === true,
+    pinned: item.pinned === true,
+    at: text(item.at),
+  };
+}
+
+function parseAttachment(value: unknown): Attachment | null {
+  const item = asRecord(value);
+  if (!item || typeof item.fileId !== "string" || !item.fileId) return null;
+  return { fileId: item.fileId, name: text(item.name) };
+}
+
+function parseProgram(value: unknown): ProgramItem | null {
+  const item = asRecord(value);
+  if (!item || typeof item.id !== "string" || !item.id) return null;
+  if (typeof item.title !== "string") return null;
+  return {
+    id: item.id,
+    title: item.title,
+    date: text(item.date),
+    start: text(item.start),
+    end: text(item.end),
+    place: text(item.place),
+    description: text(item.description),
+    published: item.published === true,
+    attachment: parseAttachment(item.attachment),
+  };
+}
+
+function parseVenue(value: unknown): Venue {
+  const item = asRecord(value) ?? {};
+  return {
+    name: text(item.name),
+    address: text(item.address),
+    directions: text(item.directions),
+    contact: text(item.contact),
+    description: text(item.description),
+  };
+}
+
+class CommandFailure extends Error {
+  field: string | null;
+
+  constructor(failure: Failure) {
+    super(failure.message);
+    this.field = failure.field;
+  }
+}
+
+export default function ContentWorkspace({ eventId }: { eventId: string }) {
+  const router = useRouter();
+  const [state, setState] = useState<WorkspaceState>({ kind: "loading" });
+  const [notice, setNotice] = useState<string | null>(null);
+  const [failure, setFailure] = useState<Failure | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const [noticeDialogOpen, setNoticeDialogOpen] = useState(false);
+  const [noticeDraft, setNoticeDraft] = useState<NoticeDraft>(EMPTY_NOTICE_DRAFT);
+  const [noticeDialogFailure, setNoticeDialogFailure] = useState<Failure | null>(null);
+  const [noticeDialogBusy, setNoticeDialogBusy] = useState(false);
+
+  const [programDialogOpen, setProgramDialogOpen] = useState(false);
+  const [programDraft, setProgramDraft] = useState<ProgramDraft>(EMPTY_PROGRAM_DRAFT);
+  const [programDialogFailure, setProgramDialogFailure] = useState<Failure | null>(null);
+  const [programDialogBusy, setProgramDialogBusy] = useState(false);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+
+  const [venueDraft, setVenueDraft] = useState<Venue | null>(null);
+
+  async function load(silent = false) {
+    if (!silent) setState({ kind: "loading" });
+    try {
+      const [meRes, bootRes] = await Promise.all([
+        fetch("/api/auth/me", { cache: "no-store" }),
+        fetch("/api/bootstrap", { cache: "no-store" }),
+      ]);
+      if (meRes.status === 401 || bootRes.status === 401) {
+        router.push(loginHrefForLocation(window.location.pathname, window.location.search));
+        return;
+      }
+      const me = (await meRes.json().catch(() => null)) as {
+        user?: { id?: unknown; role?: unknown } | null;
+      } | null;
+      const boot = (await bootRes.json().catch(() => null)) as {
+        state?: {
+          events?: unknown;
+          memberships?: unknown;
+          workspaces?: Record<string, unknown>;
+        } | null;
+      } | null;
+      const bootstrap = boot?.state;
+      if (!meRes.ok || !bootRes.ok || !me?.user || !bootstrap) {
+        setState({ kind: "failed", message: "콘텐츠 정보를 불러오지 못했습니다." });
+        return;
+      }
+      const role = typeof me.user.role === "string" ? me.user.role : "";
+      const myId = typeof me.user.id === "string" ? me.user.id : "";
+      const memberships: Array<{ accountId: string; eventId: string }> = Array.isArray(bootstrap.memberships)
+        ? bootstrap.memberships.flatMap((item) => {
+            const membership = asRecord(item);
+            if (!membership || typeof membership.accountId !== "string" || typeof membership.eventId !== "string") return [];
+            return [{ accountId: membership.accountId, eventId: membership.eventId }];
+          })
+        : [];
+      const canManage =
+        role === "AGENCY" ||
+        (role === "MANAGER" &&
+          memberships.some((membership) => membership.accountId === myId && membership.eventId === eventId));
+      const event = Array.isArray(bootstrap.events)
+        ? bootstrap.events.flatMap((item) => {
+            const record = asRecord(item);
+            return record && record.id === eventId ? [record] : [];
+          })[0]
+        : undefined;
+      const workspace = asRecord(bootstrap.workspaces?.[eventId]);
+      if (!event || !workspace) {
+        setState({ kind: "failed", message: "행사를 찾을 수 없습니다." });
+        return;
+      }
+      const notices = Array.isArray(workspace.notices)
+        ? workspace.notices.flatMap((value) => {
+            const parsed = parseNotice(value);
+            return parsed ? [parsed] : [];
+          })
+        : [];
+      // The server keeps program sorted by date+start; mirror it so the
+      // console reads in the same order attendees see.
+      const program = (Array.isArray(workspace.program)
+        ? workspace.program.flatMap((value) => {
+            const parsed = parseProgram(value);
+            return parsed ? [parsed] : [];
+          })
+        : []).sort((left, right) => (left.date + left.start).localeCompare(right.date + right.start));
+      const venue = parseVenue(workspace.venue);
+      setState({
+        kind: "ready",
+        eventName: text(event.name, eventId),
+        features: Array.isArray(event.features)
+          ? event.features.filter((feature): feature is string => typeof feature === "string")
+          : [],
+        canManage,
+        notices,
+        program,
+        venue,
+      });
+      setVenueDraft(venue);
+    } catch {
+      setState({ kind: "failed", message: "연결하지 못했습니다. 다시 시도하세요." });
+    }
+  }
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId]);
+
+  async function postCommand(command: string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await fetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ commandId: randomCommandId(), command, payload }),
+    });
+    const data = (await response.json().catch(() => null)) as {
+      error?: unknown;
+      field?: unknown;
+    } & Record<string, unknown> | null;
+    if (!response.ok) {
+      throw new CommandFailure({
+        message: typeof data?.error === "string" ? data.error : "요청을 처리하지 못했습니다.",
+        field: typeof data?.field === "string" ? data.field : null,
+      });
+    }
+    return data ?? {};
+  }
+
+  function openNoticeCreate() {
+    setNoticeDraft(EMPTY_NOTICE_DRAFT);
+    setNoticeDialogFailure(null);
+    setNoticeDialogOpen(true);
+  }
+
+  function openNoticeEdit(item: Notice) {
+    setNoticeDraft({
+      id: item.id,
+      title: item.title,
+      body: item.body,
+      published: item.published,
+      pinned: item.pinned,
+    });
+    setNoticeDialogFailure(null);
+    setNoticeDialogOpen(true);
+  }
+
+  async function saveNotice(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setNoticeDialogFailure(null);
+    setNoticeDialogBusy(true);
+    try {
+      const payload: Record<string, unknown> = {
+        title: noticeDraft.title,
+        body: noticeDraft.body,
+        published: noticeDraft.published,
+        pinned: noticeDraft.pinned,
+      };
+      if (noticeDraft.id) payload.id = noticeDraft.id;
+      await postCommand("notice.save", payload);
+      setNoticeDialogOpen(false);
+      setNotice(noticeDraft.id ? "공지를 저장했습니다." : "공지를 만들었습니다.");
+      setFailure(null);
+      await load(true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "저장하지 못했습니다.";
+      const field = error instanceof CommandFailure ? error.field : null;
+      setNoticeDialogFailure({ message, field });
+    } finally {
+      setNoticeDialogBusy(false);
+    }
+  }
+
+  async function toggleNoticePublish(item: Notice) {
+    const action = item.published ? "비게시" : "게시";
+    setBusy(`notice-publish:${item.id}`);
+    setNotice(null);
+    setFailure(null);
+    try {
+      await postCommand("notice.save", {
+        id: item.id,
+        title: item.title,
+        body: item.body,
+        published: !item.published,
+        pinned: item.pinned,
+      });
+      setNotice(`공지를 ${action}했습니다.${item.published ? "" : " 참가자 화면에 보입니다."}`);
+      await load(true);
+    } catch (error) {
+      setFailure({
+        message: error instanceof Error ? error.message : "게시 상태를 바꾸지 못했습니다.",
+        field: error instanceof CommandFailure ? error.field : null,
+      });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function toggleNoticePin(item: Notice) {
+    const action = item.pinned ? "고정 해제" : "고정";
+    setBusy(`notice-pin:${item.id}`);
+    setNotice(null);
+    setFailure(null);
+    try {
+      await postCommand("notice.save", {
+        id: item.id,
+        title: item.title,
+        body: item.body,
+        published: item.published,
+        pinned: !item.pinned,
+      });
+      setNotice(`공지를 ${action}했습니다.`);
+      await load(true);
+    } catch (error) {
+      setFailure({
+        message: error instanceof Error ? error.message : "고정 상태를 바꾸지 못했습니다.",
+        field: error instanceof CommandFailure ? error.field : null,
+      });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function deleteNotice(item: Notice) {
+    if (!window.confirm(`“${item.title}” 공지를 삭제할까요?`)) return;
+    setBusy(`notice-delete:${item.id}`);
+    setNotice(null);
+    setFailure(null);
+    try {
+      await postCommand("notice.delete", { id: item.id });
+      setNotice("공지를 삭제했습니다.");
+      await load(true);
+    } catch (error) {
+      setFailure({
+        message: error instanceof Error ? error.message : "삭제하지 못했습니다.",
+        field: error instanceof CommandFailure ? error.field : null,
+      });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function openProgramCreate() {
+    setProgramDraft({ ...EMPTY_PROGRAM_DRAFT });
+    setProgramDialogFailure(null);
+    setProgramDialogOpen(true);
+  }
+
+  function openProgramEdit(item: ProgramItem) {
+    setProgramDraft({
+      id: item.id,
+      title: item.title,
+      date: item.date,
+      start: item.start,
+      end: item.end,
+      place: item.place,
+      description: item.description,
+      published: item.published,
+      attachment: item.attachment,
+      attachmentDirty: false,
+    });
+    setProgramDialogFailure(null);
+    setProgramDialogOpen(true);
+  }
+
+  async function uploadProgramAttachment(file: File) {
+    if (!PROGRAM_ATTACHMENT_TYPES.includes(file.type)) {
+      setProgramDialogFailure({ message: "일정 자료는 PDF로 올려주세요.", field: "attachment" });
+      return;
+    }
+    if (file.size > PROGRAM_ATTACHMENT_MAX_BYTES) {
+      setProgramDialogFailure({ message: "600KB 이하 파일을 올려주세요.", field: "attachment" });
+      return;
+    }
+    setUploadingAttachment(true);
+    setProgramDialogFailure(null);
+    try {
+      const res = await fetch(
+        `/api/events/${encodeURIComponent(eventId)}/files?name=${encodeURIComponent(file.name)}&commandId=${encodeURIComponent(randomCommandId())}`,
+        { method: "POST", headers: { "content-type": file.type }, body: file }
+      );
+      const data = (await res.json().catch(() => null)) as {
+        file?: { fileId?: unknown; name?: unknown };
+        error?: unknown;
+      } | null;
+      const fileId = typeof data?.file?.fileId === "string" ? data.file.fileId : "";
+      if (!res.ok || !fileId) {
+        setProgramDialogFailure({
+          message: typeof data?.error === "string" ? data.error : "파일을 올리지 못했습니다.",
+          field: "attachment",
+        });
+        return;
+      }
+      setProgramDraft((current) => ({
+        ...current,
+        attachment: {
+          fileId,
+          name: typeof data?.file?.name === "string" ? data.file.name : file.name,
+        },
+        attachmentDirty: true,
+      }));
+    } catch {
+      setProgramDialogFailure({ message: "연결하지 못했습니다. 다시 시도하세요.", field: "attachment" });
+    } finally {
+      setUploadingAttachment(false);
+    }
+  }
+
+  async function saveProgram(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setProgramDialogFailure(null);
+    setProgramDialogBusy(true);
+    try {
+      const payload: Record<string, unknown> = {
+        title: programDraft.title,
+        date: programDraft.date,
+        start: programDraft.start,
+        end: programDraft.end,
+        place: programDraft.place,
+        description: programDraft.description,
+        published: programDraft.published,
+      };
+      if (programDraft.id) payload.id = programDraft.id;
+      // The server keeps the stored attachment unless the key is present:
+      // absent means untouched, null means cleared, { fileId } means replaced.
+      if (programDraft.attachmentDirty) {
+        payload.attachment = programDraft.attachment
+          ? { fileId: programDraft.attachment.fileId }
+          : null;
+      }
+      await postCommand("program.save", payload);
+      setProgramDialogOpen(false);
+      setNotice(programDraft.id ? "일정을 저장했습니다." : "일정을 만들었습니다.");
+      setFailure(null);
+      await load(true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "저장하지 못했습니다.";
+      const field = error instanceof CommandFailure ? error.field : null;
+      setProgramDialogFailure({ message, field });
+    } finally {
+      setProgramDialogBusy(false);
+    }
+  }
+
+  async function toggleProgramPublish(item: ProgramItem) {
+    const action = item.published ? "비게시" : "게시";
+    setBusy(`program-publish:${item.id}`);
+    setNotice(null);
+    setFailure(null);
+    try {
+      await postCommand("program.save", {
+        id: item.id,
+        title: item.title,
+        date: item.date,
+        start: item.start,
+        end: item.end,
+        place: item.place,
+        description: item.description,
+        published: !item.published,
+      });
+      setNotice(`일정을 ${action}했습니다.${item.published ? "" : " 참가자 화면에 보입니다."}`);
+      await load(true);
+    } catch (error) {
+      setFailure({
+        message: error instanceof Error ? error.message : "게시 상태를 바꾸지 못했습니다.",
+        field: error instanceof CommandFailure ? error.field : null,
+      });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function deleteProgram(item: ProgramItem) {
+    if (!window.confirm(`“${item.title}” 일정을 삭제할까요?`)) return;
+    setBusy(`program-delete:${item.id}`);
+    setNotice(null);
+    setFailure(null);
+    try {
+      await postCommand("program.delete", { id: item.id });
+      setNotice("일정을 삭제했습니다.");
+      await load(true);
+    } catch (error) {
+      setFailure({
+        message: error instanceof Error ? error.message : "삭제하지 못했습니다.",
+        field: error instanceof CommandFailure ? error.field : null,
+      });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function saveVenue(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!venueDraft) return;
+    setBusy("venue:save");
+    setNotice(null);
+    setFailure(null);
+    try {
+      await postCommand("venue.save", { ...venueDraft });
+      setNotice("장소 안내를 저장했습니다.");
+      await load(true);
+    } catch (error) {
+      setFailure({
+        message: error instanceof Error ? error.message : "저장하지 못했습니다.",
+        field: error instanceof CommandFailure ? error.field : null,
+      });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (state.kind === "loading") {
+    return <p className="loading-state" role="status">콘텐츠 정보를 불러오고 있습니다.</p>;
+  }
+  if (state.kind === "failed") {
+    return (
+      <section className="state-panel">
+        <p role="alert">{state.message}</p>
+        <p>
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("eventouch:shell-reload"));
+              void load();
+            }}
+          >
+            다시 불러오기
+          </button>
+        </p>
+        <Link className="button button-secondary" href="/console">행사 목록으로</Link>
+      </section>
+    );
+  }
+
+  const venueFeatureOn = state.features.includes("venue");
+
+  return (
+    <div className={styles.page}>
+      <header className={styles.header}>
+        <div>
+          <p className="eyebrow">콘텐츠</p>
+          <h1>{state.eventName}</h1>
+          <p className={styles.intro}>공지·일정·장소 안내를 작성하고 게시 상태를 관리합니다. 게시한 항목만 참가자에게 보입니다.</p>
+        </div>
+        <nav className={styles.headerActions} aria-label="행사 내 이동">
+          <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}`}>운영 현황</Link>
+          <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/settings`}>행사 설정</Link>
+        </nav>
+      </header>
+
+      {!state.canManage ? (
+        <p className="state-error" role="alert">콘텐츠를 관리할 운영 권한이 없습니다.</p>
+      ) : (
+        <>
+          {notice ? <p className="state-success" role="status">{notice}</p> : null}
+          {failure && !noticeDialogOpen && !programDialogOpen ? (
+            <p className="state-error" role="alert" id="content-error">{failure.message}</p>
+          ) : null}
+
+          <section className={styles.section} aria-labelledby="content-notices">
+            <div className={styles.sectionHead}>
+              <h2 id="content-notices">공지</h2>
+              <button type="button" className="button button-primary" onClick={openNoticeCreate}>
+                공지 작성
+              </button>
+            </div>
+            {state.notices.length ? (
+              <ul className={styles.cardList}>
+                {state.notices.map((item) => (
+                  <li key={item.id} className={styles.card}>
+                    <div className={styles.cardTop}>
+                      <div className={styles.cardTitle}>
+                        <h3>
+                          {item.pinned ? <span className={styles.pin} aria-label="고정 공지">📌</span> : null}
+                          {item.title}
+                        </h3>
+                        <p className={styles.cardMeta}>
+                          <span className={`${styles.badge} ${item.published ? styles.badgeOn : styles.badgeOff}`}>
+                            {item.published ? "게시 중" : "비공개"}
+                          </span>
+                          {item.pinned ? <span className={styles.badge}>고정됨</span> : null}
+                        </p>
+                      </div>
+                      <div className={styles.cardActions}>
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          disabled={busy !== null}
+                          onClick={() => openNoticeEdit(item)}
+                        >
+                          편집
+                        </button>
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          disabled={busy !== null}
+                          onClick={() => void toggleNoticePublish(item)}
+                        >
+                          {busy === `notice-publish:${item.id}` ? "처리 중…" : item.published ? "비게시" : "게시"}
+                        </button>
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          disabled={busy !== null}
+                          onClick={() => void toggleNoticePin(item)}
+                        >
+                          {item.pinned ? "고정 해제" : "고정"}
+                        </button>
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          disabled={busy !== null}
+                          onClick={() => void deleteNotice(item)}
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    </div>
+                    {item.body ? <p className={`${styles.body} preserve-lines`}>{item.body}</p> : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className={styles.empty}>등록된 공지가 없습니다. 위에서 첫 공지를 작성하세요.</p>
+            )}
+          </section>
+
+          <section className={styles.section} aria-labelledby="content-program">
+            <div className={styles.sectionHead}>
+              <h2 id="content-program">프로그램 일정</h2>
+              <button
+                type="button"
+                className="button button-primary"
+                onClick={() => openProgramCreate()}
+              >
+                일정 추가
+              </button>
+            </div>
+            <p className={styles.help}>날짜·시작 시간 순으로 정렬되어 참가자에게 보입니다.</p>
+            {state.program.length ? (
+              <ul className={styles.cardList}>
+                {state.program.map((item) => (
+                  <li key={item.id} className={styles.card}>
+                    <div className={styles.cardTop}>
+                      <div className={styles.cardTitle}>
+                        <h3>{item.title}</h3>
+                        <p className={styles.cardMeta}>
+                          <span className={`${styles.badge} ${item.published ? styles.badgeOn : styles.badgeOff}`}>
+                            {item.published ? "게시 중" : "비공개"}
+                          </span>
+                          <span>
+                            {[item.date, item.start && item.end ? `${item.start} ~ ${item.end}` : item.start, item.place]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </span>
+                        </p>
+                      </div>
+                      <div className={styles.cardActions}>
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          disabled={busy !== null}
+                          onClick={() => openProgramEdit(item)}
+                        >
+                          편집
+                        </button>
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          disabled={busy !== null}
+                          onClick={() => void toggleProgramPublish(item)}
+                        >
+                          {busy === `program-publish:${item.id}` ? "처리 중…" : item.published ? "비게시" : "게시"}
+                        </button>
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          disabled={busy !== null}
+                          onClick={() => void deleteProgram(item)}
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    </div>
+                    {item.description ? <p className={styles.body}>{item.description}</p> : null}
+                    {item.attachment ? (
+                      <p className={styles.attachment}>
+                        첨부:{" "}
+                        <Link href={`/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(item.attachment.fileId)}`}>
+                          {item.attachment.name || "일정 자료(PDF)"}
+                        </Link>
+                      </p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className={styles.empty}>등록된 일정이 없습니다. 위에서 첫 일정을 추가하세요.</p>
+            )}
+          </section>
+
+          <section className={styles.section} aria-labelledby="content-venue">
+            <div className={styles.sectionHead}>
+              <h2 id="content-venue">장소 안내</h2>
+            </div>
+            {!venueFeatureOn ? (
+              <p className={styles.featureOff} role="note">
+                장소 안내 기능이 꺼져 있습니다.{" "}
+                <Link href={`/console/events/${encodeURIComponent(eventId)}/settings`}>행사 설정</Link>에서
+                기능을 먼저 켜세요. 켜기 전에는 저장이 반영되지 않습니다.
+              </p>
+            ) : null}
+            {venueDraft ? (
+              <form className={styles.form} onSubmit={(event) => void saveVenue(event)}>
+                <div>
+                  <label htmlFor="content-venue-name">장소 이름</label>
+                  <input
+                    id="content-venue-name"
+                    type="text"
+                    maxLength={VENUE_LIMITS.name}
+                    value={venueDraft.name}
+                    onChange={(event) => setVenueDraft({ ...venueDraft, name: event.target.value })}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="content-venue-address">주소</label>
+                  <input
+                    id="content-venue-address"
+                    type="text"
+                    maxLength={VENUE_LIMITS.address}
+                    value={venueDraft.address}
+                    onChange={(event) => setVenueDraft({ ...venueDraft, address: event.target.value })}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="content-venue-directions">길찾기</label>
+                  <textarea
+                    id="content-venue-directions"
+                    rows={3}
+                    maxLength={VENUE_LIMITS.directions}
+                    value={venueDraft.directions}
+                    onChange={(event) => setVenueDraft({ ...venueDraft, directions: event.target.value })}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="content-venue-contact">문의</label>
+                  <input
+                    id="content-venue-contact"
+                    type="text"
+                    maxLength={VENUE_LIMITS.contact}
+                    value={venueDraft.contact}
+                    onChange={(event) => setVenueDraft({ ...venueDraft, contact: event.target.value })}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="content-venue-description">안내 문구</label>
+                  <textarea
+                    id="content-venue-description"
+                    rows={3}
+                    maxLength={VENUE_LIMITS.description}
+                    value={venueDraft.description}
+                    onChange={(event) => setVenueDraft({ ...venueDraft, description: event.target.value })}
+                  />
+                </div>
+                <div className={styles.actions}>
+                  <button
+                    type="submit"
+                    className="button button-primary"
+                    disabled={busy !== null || !venueFeatureOn}
+                    title={venueFeatureOn ? undefined : "행사 설정에서 장소 안내 기능을 먼저 켜세요"}
+                  >
+                    {busy === "venue:save" ? "저장 중…" : "장소 안내 저장"}
+                  </button>
+                </div>
+              </form>
+            ) : null}
+          </section>
+        </>
+      )}
+
+      {noticeDialogOpen && state.kind === "ready" ? (
+        <Modal titleId="content-notice-dialog-title" title={noticeDraft.id ? "공지 편집" : "공지 작성"} busy={noticeDialogBusy} onClose={() => {
+          if (!noticeDialogBusy) setNoticeDialogOpen(false);
+        }}>
+          <form className={styles.form} onSubmit={(event) => void saveNotice(event)}>
+            <div>
+              <label htmlFor="content-notice-title">제목</label>
+              <input
+                id="content-notice-title"
+                type="text"
+                maxLength={NOTICE_TITLE_MAX}
+                required
+                value={noticeDraft.title}
+                aria-invalid={noticeDialogFailure?.field === "title"}
+                aria-describedby={noticeDialogFailure?.field === "title" ? "content-notice-title-error" : undefined}
+                onChange={(event) => setNoticeDraft({ ...noticeDraft, title: event.target.value })}
+              />
+              {noticeDialogFailure?.field === "title" ? (
+                <p className={styles.fieldError} id="content-notice-title-error" role="alert">{noticeDialogFailure.message}</p>
+              ) : null}
+            </div>
+            <div>
+              <label htmlFor="content-notice-body">내용</label>
+              <textarea
+                id="content-notice-body"
+                rows={5}
+                maxLength={NOTICE_BODY_MAX}
+                required
+                value={noticeDraft.body}
+                aria-invalid={noticeDialogFailure?.field === "body"}
+                aria-describedby={noticeDialogFailure?.field === "body" ? "content-notice-body-error" : undefined}
+                onChange={(event) => setNoticeDraft({ ...noticeDraft, body: event.target.value })}
+              />
+              {noticeDialogFailure?.field === "body" ? (
+                <p className={styles.fieldError} id="content-notice-body-error" role="alert">{noticeDialogFailure.message}</p>
+              ) : null}
+            </div>
+            <label className={styles.check}>
+              <input
+                type="checkbox"
+                checked={noticeDraft.published}
+                onChange={(event) => setNoticeDraft({ ...noticeDraft, published: event.target.checked })}
+              />
+              게시함 (참가자 화면에 보임)
+            </label>
+            <label className={styles.check}>
+              <input
+                type="checkbox"
+                checked={noticeDraft.pinned}
+                onChange={(event) => setNoticeDraft({ ...noticeDraft, pinned: event.target.checked })}
+              />
+              상단 고정
+            </label>
+            {noticeDialogFailure && !noticeDialogFailure.field ? (
+              <p className={styles.fieldError} role="alert">{noticeDialogFailure.message}</p>
+            ) : null}
+            <div className={styles.actions}>
+              <button
+                type="button"
+                className="button button-secondary"
+                disabled={noticeDialogBusy}
+                onClick={() => setNoticeDialogOpen(false)}
+              >
+                취소
+              </button>
+              <button type="submit" className="button button-primary" disabled={noticeDialogBusy}>
+                {noticeDialogBusy ? "저장 중…" : noticeDraft.id ? "저장" : "만들기"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+
+      {programDialogOpen && state.kind === "ready" ? (
+        <Modal titleId="content-program-dialog-title" title={programDraft.id ? "일정 편집" : "일정 추가"} busy={programDialogBusy} onClose={() => {
+          if (!programDialogBusy) setProgramDialogOpen(false);
+        }}>
+          <form className={styles.form} onSubmit={(event) => void saveProgram(event)}>
+            <div>
+              <label htmlFor="content-program-title">제목</label>
+              <input
+                id="content-program-title"
+                type="text"
+                maxLength={PROGRAM_TITLE_MAX}
+                required
+                value={programDraft.title}
+                aria-invalid={programDialogFailure?.field === "title"}
+                aria-describedby={programDialogFailure?.field === "title" ? "content-program-title-error" : undefined}
+                onChange={(event) => setProgramDraft({ ...programDraft, title: event.target.value })}
+              />
+              {programDialogFailure?.field === "title" ? (
+                <p className={styles.fieldError} id="content-program-title-error" role="alert">{programDialogFailure.message}</p>
+              ) : null}
+            </div>
+            <div>
+              <label htmlFor="content-program-date">날짜 (비우면 행사일)</label>
+              <input
+                id="content-program-date"
+                type="date"
+                value={programDraft.date}
+                onChange={(event) => setProgramDraft({ ...programDraft, date: event.target.value })}
+              />
+            </div>
+            <div className={styles.gridTwo}>
+              <div>
+                <label htmlFor="content-program-start">시작</label>
+                <input
+                  id="content-program-start"
+                  type="time"
+                  required
+                  value={programDraft.start}
+                  onChange={(event) => setProgramDraft({ ...programDraft, start: event.target.value })}
+                />
+              </div>
+              <div>
+                <label htmlFor="content-program-end">종료</label>
+                <input
+                  id="content-program-end"
+                  type="time"
+                  required
+                  value={programDraft.end}
+                  onChange={(event) => setProgramDraft({ ...programDraft, end: event.target.value })}
+                />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="content-program-place">장소</label>
+              <input
+                id="content-program-place"
+                type="text"
+                maxLength={PROGRAM_PLACE_MAX}
+                value={programDraft.place}
+                onChange={(event) => setProgramDraft({ ...programDraft, place: event.target.value })}
+              />
+            </div>
+            <div>
+              <label htmlFor="content-program-description">상세 설명</label>
+              <textarea
+                id="content-program-description"
+                rows={4}
+                maxLength={PROGRAM_DESCRIPTION_MAX}
+                value={programDraft.description}
+                onChange={(event) => setProgramDraft({ ...programDraft, description: event.target.value })}
+              />
+            </div>
+            <div>
+              <label htmlFor="content-program-attachment">일정 자료 (PDF, 600KB 이하)</label>
+              {programDraft.attachment ? (
+                <p className={styles.attachmentRow}>
+                  <span>{programDraft.attachment.name || "일정 자료(PDF)"}</span>
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    disabled={programDialogBusy || uploadingAttachment}
+                    onClick={() => setProgramDraft({ ...programDraft, attachment: null, attachmentDirty: true })}
+                  >
+                    첨부 제거
+                  </button>
+                </p>
+              ) : (
+                <input
+                  id="content-program-attachment"
+                  type="file"
+                  accept="application/pdf"
+                  disabled={programDialogBusy || uploadingAttachment}
+                  aria-invalid={programDialogFailure?.field === "attachment"}
+                  aria-describedby={programDialogFailure?.field === "attachment" ? "content-program-attachment-error" : undefined}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void uploadProgramAttachment(file);
+                    event.target.value = "";
+                  }}
+                />
+              )}
+              {uploadingAttachment ? <p className={styles.help} role="status">파일을 올리고 있습니다.</p> : null}
+              {programDialogFailure?.field === "attachment" ? (
+                <p className={styles.fieldError} id="content-program-attachment-error" role="alert">{programDialogFailure.message}</p>
+              ) : null}
+            </div>
+            <label className={styles.check}>
+              <input
+                type="checkbox"
+                checked={programDraft.published}
+                onChange={(event) => setProgramDraft({ ...programDraft, published: event.target.checked })}
+              />
+              게시함 (참가자 화면에 보임)
+            </label>
+            {programDialogFailure && !programDialogFailure.field ? (
+              <p className={styles.fieldError} role="alert">{programDialogFailure.message}</p>
+            ) : null}
+            <div className={styles.actions}>
+              <button
+                type="button"
+                className="button button-secondary"
+                disabled={programDialogBusy || uploadingAttachment}
+                onClick={() => setProgramDialogOpen(false)}
+              >
+                취소
+              </button>
+              <button type="submit" className="button button-primary" disabled={programDialogBusy || uploadingAttachment}>
+                {programDialogBusy ? "저장 중…" : programDraft.id ? "저장" : "만들기"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+    </div>
+  );
+}
+
+function Modal(props: {
+  titleId: string;
+  title: string;
+  busy: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const { titleId, title, busy, onClose, children } = props;
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    dialogRef.current
+      ?.querySelector<HTMLElement>("button:not(:disabled), input, select, textarea, a[href]")
+      ?.focus();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (!busyRef.current) onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab" || !dialogRef.current) return;
+      const items = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(
+          "button:not(:disabled), input, select, textarea, a[href]"
+        )
+      ).filter((item) => item.tabIndex >= 0);
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      previouslyFocused?.focus?.();
+    };
+  }, []);
+  return (
+    <div
+      className={styles.backdrop}
+      onClick={(event) => {
+        if (event.target === event.currentTarget && !busy) onClose();
+      }}
+    >
+      <div ref={dialogRef} className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby={titleId}>
+        <h2 id={titleId}>{title}</h2>
+        {children}
+      </div>
+    </div>
+  );
+}
