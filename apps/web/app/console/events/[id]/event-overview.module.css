@@ -3,54 +3,68 @@
   gap: var(--s4);
   width: 100%;
   min-width: 0;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 .pageHeader {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--s4);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--s4) var(--s5);
   min-width: 0;
-  padding-bottom: var(--s3);
+  padding-bottom: var(--s4);
   border-bottom: 1px solid var(--line);
 }
 
-.pageHeader h1 {
+.titleBlock {
+  min-width: 0;
+}
+
+.titleBlock h1 {
   margin: 0;
 }
 
-.eventTitleBlock {
-  min-width: 0;
+.clientName {
+  margin: var(--s1) 0 0;
+  color: var(--muted);
+  font-weight: 650;
 }
 
 .scheduleLine {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s1) var(--s2);
-  margin: var(--s2) 0 0;
+  gap: var(--s1) var(--s3);
+  margin-top: var(--s2);
   color: var(--muted);
   font-size: var(--small);
   font-variant-numeric: tabular-nums;
 }
 
+.scheduleLine span + span::before {
+  content: "·";
+  margin-right: var(--s3);
+  color: var(--line-strong);
+}
+
 .statusBadges {
   display: flex;
-  flex: none;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s2);
-  padding-bottom: 2px;
+  margin-top: var(--s3);
 }
 
 .stagePill {
   border-radius: var(--s6);
 }
 
-.intakeBadge {
+.intakeBadge,
+.dDay {
   display: inline-flex;
-  min-height: 28px;
+  min-height: 32px;
   align-items: center;
-  padding-inline: var(--s2);
+  padding: 3px var(--s3);
   border: 1px solid var(--line);
   border-radius: var(--s6);
   font-size: var(--small);
@@ -68,9 +82,17 @@
   color: var(--muted);
 }
 
+.dDay {
+  border-color: var(--info-line);
+  background: var(--info-soft);
+  color: var(--info);
+  font-variant-numeric: tabular-nums;
+}
+
 .pendingBadge {
-  padding: 2px var(--s2);
-  border-radius: var(--radius-small);
+  padding: 3px var(--s3);
+  border: 1px solid var(--danger-line);
+  border-radius: var(--s6);
   background: var(--danger-soft);
   color: var(--danger);
   font-size: var(--small);
@@ -78,76 +100,49 @@
   font-variant-numeric: tabular-nums;
 }
 
-.metricsSection {
-  display: grid;
+.headerActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--s2);
+  min-width: 0;
+}
+
+.linkNotice {
+  grid-column: 1 / -1;
+  margin: calc(-1 * var(--s2)) 0 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s3);
+  min-width: 0;
+}
+
+.sectionHeading > div {
   min-width: 0;
 }
 
 .sectionTitle {
   margin: 0;
   font-size: var(--h3);
+  line-height: 1.35;
 }
 
-.metricGrid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--s3);
-  margin: 0;
-  padding: 0;
-}
-
-.metricCard {
-  display: grid;
-  min-width: 0;
-  min-height: var(--s8);
-  align-content: space-between;
-  gap: var(--s2);
-  padding: var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
-}
-
-.metricCard dt {
+.sectionDescription {
+  margin: var(--s1) 0 0;
   color: var(--muted);
   font-size: var(--small);
 }
 
-.metricCard dd {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s1);
-  margin: 0;
-  color: var(--ink);
-  font-size: var(--h3);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.metricCard dd span {
-  color: var(--muted);
-  font-size: var(--small);
-}
-
-.restrictedNote {
-  margin: 0;
-  padding-block: var(--s2);
-  border-bottom: 1px solid var(--line);
-  color: var(--muted);
-  font-size: var(--small);
-}
-
-.workGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.9fr);
-  align-items: stretch;
-  gap: var(--s3);
-  min-width: 0;
-}
-
-.taskCard,
-.stageCard,
+.problemSection,
+.operationsCard,
+.scheduleCard,
+.stageControl,
 .recentCard {
   min-width: 0;
   padding: var(--s5);
@@ -156,42 +151,241 @@
   background: var(--paper);
 }
 
-.taskCard,
-.stageCard {
+.problemSection,
+.operationsCard,
+.scheduleCard,
+.recentCard {
   display: grid;
-  align-content: start;
   gap: var(--s3);
 }
 
-.taskSummary {
-  margin: var(--s2) 0 0;
-  color: var(--muted);
-}
-
-.tabular {
-  color: var(--ink);
+.problemCount {
+  flex: none;
+  padding: 2px var(--s2);
+  border-radius: var(--s6);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: var(--small);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
-.taskPrimary {
-  width: 100%;
+.problemList {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
 }
 
-.quickLinks {
+.problemList li {
+  min-width: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.problemLink {
   display: flex;
-  flex-wrap: wrap;
+  min-height: 64px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s3) var(--s2);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.problemLink:hover {
+  background: var(--surface-muted);
+}
+
+.problemCopy {
+  display: grid;
+  min-width: 0;
+  gap: var(--s1);
+}
+
+.problemCopy strong {
+  font-weight: 750;
+}
+
+.problemCopy > span {
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.problemAction {
+  flex: none;
+  color: var(--brand-text);
+  font-size: var(--small);
+  font-weight: 700;
+  text-align: right;
+}
+
+.metricsSection {
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
+}
+
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s3);
+  min-width: 0;
+}
+
+.metricCard {
+  display: grid;
+  min-width: 0;
+  min-height: 124px;
+  align-content: space-between;
   gap: var(--s2);
-  padding-top: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.metricCard:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-muted);
+}
+
+.metricLabel {
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.metricValue {
+  min-width: 0;
+  color: var(--ink);
+  font-size: clamp(1.25rem, 2vw, var(--h2));
+  font-weight: 750;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.metricDetail {
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.restrictedNote,
+.readOnlyNote {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.operationsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
   border-top: 1px solid var(--line);
 }
 
-.stagePrompt {
-  margin: var(--s2) 0 0;
-  color: var(--muted);
+.operationItem {
+  display: grid;
+  align-content: start;
+  gap: var(--s1);
+  min-width: 0;
+  padding: var(--s3) var(--s2);
+  border-bottom: 1px solid var(--line);
 }
 
-.stageControls,
-.confirmation {
+.operationItem dt {
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.operationItem dd {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.operationNote {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.programList {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+
+.programList li {
+  display: grid;
+  grid-template-columns: minmax(112px, 0.55fr) minmax(0, 1.6fr) auto;
+  align-items: center;
+  gap: var(--s3);
+  min-width: 0;
+  padding: var(--s3) var(--s2);
+  border-bottom: 1px solid var(--line);
+}
+
+.programTime {
+  display: grid;
+  gap: var(--s1);
+  color: var(--muted);
+  font-size: var(--small);
+  font-variant-numeric: tabular-nums;
+}
+
+.programInfo {
+  display: grid;
+  min-width: 0;
+  gap: var(--s1);
+}
+
+.programInfo strong {
+  font-weight: 700;
+}
+
+.programInfo > span {
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.scheduledBadge {
+  justify-self: end;
+  padding: 2px var(--s2);
+  border: 1px solid var(--info-line);
+  border-radius: var(--s6);
+  background: var(--info-soft);
+  color: var(--info);
+  font-size: var(--small);
+  font-weight: 700;
+}
+
+.stageControl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s3) var(--s4);
+  padding-block: var(--s4);
+  background: var(--surface-muted);
+}
+
+.stageCopy {
+  min-width: 0;
+}
+
+.stagePrompt {
+  margin: var(--s1) 0 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.stageControls {
   display: grid;
   justify-items: start;
   gap: var(--s2);
@@ -199,9 +393,10 @@
 }
 
 .confirmation {
-  width: 100%;
-  padding-top: var(--s3);
-  border-top: 1px solid var(--line);
+  display: grid;
+  justify-items: start;
+  gap: var(--s2);
+  min-width: 0;
 }
 
 .confirmation > p {
@@ -216,6 +411,7 @@
 }
 
 .precondition {
+  grid-column: 1 / -1;
   margin: 0;
   padding: var(--s3);
   border: 1px solid var(--warning-line);
@@ -225,13 +421,8 @@
   font-size: var(--small);
 }
 
-.readOnlyNote {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--small);
-}
-
 .stageFeedback {
+  grid-column: 1 / -1;
   display: grid;
   justify-items: start;
   gap: var(--s2);
@@ -242,28 +433,54 @@
 }
 
 .recentCard {
-  display: grid;
-  gap: var(--s2);
+  gap: var(--s3);
 }
 
 .recentHeading {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--s3);
+  min-width: 0;
 }
 
-.recentCount {
-  flex: none;
+.recentHeading > div {
+  min-width: 0;
+}
+
+.updateNote {
+  margin: var(--s1) 0 0;
   color: var(--muted);
   font-size: var(--small);
   font-variant-numeric: tabular-nums;
+}
+
+.recentActions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s2);
+}
+
+.recentCount {
+  color: var(--muted);
+  font-size: var(--small);
+  font-variant-numeric: tabular-nums;
+}
+
+.refreshStatus {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
 }
 
 .activityList {
   display: grid;
   margin: 0;
   padding: 0;
+  border-top: 1px solid var(--line);
   list-style: none;
 }
 
@@ -274,7 +491,7 @@
   justify-content: space-between;
   gap: var(--s3);
   padding-block: var(--s3);
-  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
 .checkDetails {
@@ -303,6 +520,11 @@
   color: var(--muted);
 }
 
+.deskName {
+  color: var(--muted);
+  font-size: var(--small);
+}
+
 .timestamp {
   flex: none;
   color: var(--muted);
@@ -315,10 +537,6 @@
   .metricGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
-  .workGrid {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 @media (max-width: 680px) {
@@ -327,18 +545,102 @@
   }
 
   .pageHeader {
-    align-items: flex-start;
-    flex-direction: column;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s3);
   }
 
-  .taskCard,
-  .stageCard,
+  .headerActions {
+    justify-content: flex-start;
+  }
+
+  .headerActions > * {
+    flex: 1 1 140px;
+  }
+
+  .problemSection,
+  .operationsCard,
+  .scheduleCard,
+  .stageControl,
   .recentCard {
     padding: var(--s4);
   }
 
-  .workGrid {
+  .sectionHeading {
+    align-items: flex-start;
+  }
+
+  .problemLink {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--s1);
+    padding-block: var(--s3);
+  }
+
+  .problemAction {
+    text-align: left;
+  }
+
+  .metricGrid {
     gap: var(--s2);
+  }
+
+  .metricCard {
+    min-height: 116px;
+    padding: var(--s3);
+  }
+
+  .operationsGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .programList li {
+    grid-template-columns: minmax(86px, 0.65fr) minmax(0, 1.4fr);
+    gap: var(--s2);
+  }
+
+  .scheduledBadge {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .stageControl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .recentHeading {
+    flex-direction: column;
+  }
+
+  .recentActions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 420px) {
+  .sectionHeading {
+    flex-wrap: wrap;
+  }
+
+  .sectionHeading > :global(.button) {
+    width: 100%;
+  }
+
+  .programList li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .programTime {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .programInfo {
+    grid-column: 1 / -1;
+  }
+
+  .scheduledBadge {
+    grid-column: 1 / -1;
   }
 
   .activityList li {

@@ -606,12 +606,15 @@ test('web-event-stage-moves-forward-through-the-command-path-only', () => {
   assert.match(overview, /취소/);
   assert.match(overview, /commandId:\s*stageCommandIdRef\.current/);
   assert.match(overview, /payload:\s*\{\s*stage:\s*nextStage\s*\}/);
-  assert.equal((overview.match(/className=\{styles\.metricCard\}/g) ?? []).length, 4);
+  // Metrics follow the event stage instead of a fixed four-card grid; the
+  // dedicated event-home contract pins each stage's metric set.
+  assert.match(overview, /metricsForStage\(overview, currentStage, base\)/);
   assert.match(overview, /<time[^>]+dateTime/);
   assert.match(overview, /formatCheckTime\(check\.at\)/);
   assert.match(overview, /overview\.registrationOpen \? "접수 중" : "접수 마감"/);
   assert.doesNotMatch(overview, /className="notice"/);
-  assert.match(overview, /overview\.canManageEvent && !archived/);
+  // The advisory blocks are management-gated the same way the stage button is.
+  assert.match(overview, /overview\.canManageEvent \? problemsForStage\(overview, currentStage, base\) : \[\]/);
   assert.match(overview, /currentStage === "ARCHIVED"/);
   assert.doesNotMatch(read('app/console/events/[id]/page.tsx'), /eyebrow/);
   // The UI may hint at prerequisites but never decides them.
