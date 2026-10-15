@@ -2369,6 +2369,12 @@ select[aria-invalid="true"] {
     scroll-snap-align: start;
   }
 
+  /* Keep the active event destination wholly visible when the subnav is
+     wider than a narrow phone viewport. */
+  .nav-event-branch .console-subnav-item.active {
+    scroll-snap-align: end;
+  }
+
   .nav-event-branch .console-subnav-item.active::before {
     top: auto;
     right: auto;

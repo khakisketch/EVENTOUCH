@@ -195,6 +195,7 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
         domainCommands,
         files,
         attendeeAccess,
+        database,
       }).catch(() => {
         sendJson(res, 500, { error: '요청을 처리하지 못했습니다' });
       });

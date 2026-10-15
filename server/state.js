@@ -12,7 +12,7 @@ const EVENT_PERMISSIONS = new Set(['all', 'participants', 'page', 'programs', 'o
 const ARRAY_FIELDS = [
   'participants', 'fields', 'publishedFields', 'notices', 'program', 'groups', 'desks', 'booths',
   'assignments', 'checks', 'visits', 'modules', 'responses', 'questions', 'photos', 'posts',
-  'messages', 'reports', 'payments', 'rewards', 'audit',
+  'messages', 'reports', 'payments', 'rewards', 'audit', 'evidencePhotos',
 ];
 
 function object(value) {
@@ -73,6 +73,7 @@ function emptyWorkspace() {
     payments: [],
     rewards: [],
     audit: [],
+    evidencePhotos: [],
     display: { type: 'idle', moduleId: null },
     branding: { tagline: '행사 안내를 확인하세요.', logo: null, keyvisual: null },
     stampMode: 'STAFF',

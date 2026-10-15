@@ -138,6 +138,9 @@ PostgreSQL이 행사 데이터의 유일한 권위다. JSON 파일 저장소(`DA
 설계상 중요한 점: 행사 업무 데이터는 **하나의 `event_workspaces.payload` jsonb**에
 들어 있다. 참가자·데스크·부스·메시지·보고서가 모두 그 안에 있고, 변경은 행 단위
 잠금 + 리비전 증가로 직렬화된다.
+운영자 증빙 사진은 `workspace.evidencePhotos`에 별도 보관하고, 참가자 포토월의
+`workspace.photos`와 목적·상태·공개 범위를 섞지 않는다. 증빙의 바이너리는 기존
+`stored_files`에 두며 공개 투영과 스태프 부트스트랩에서 제외한다.
 
 정규화는 expand 단계로 진행한다(읽기 권위는 그대로 둔다):
 
@@ -215,6 +218,21 @@ PostgreSQL이 행사 데이터의 유일한 권위다. JSON 파일 저장소(`DA
 | `content-results` | 15 | 템플릿·메시지·결제·경품·보고서 |
 | `operations` | 9 | 데스크·스태프 배정·입퇴장·부스 |
 | `booth-map` | 3 | 부스 지도 저장·게시·게시취소 |
+| `event-evidence` | 3 | 운영자 증빙 사진 추가·분류 이동·보관함에서 제거 |
+
+증빙 사진 커맨드는 `evidence.photo.add/move/remove`이며 AGENCY 또는 행사 멤버
+MANAGER만 호출할 수 있다. 파일 참조는 같은 행사에 운영자가 올린 PNG/JPEG/WebP에
+한정한다. 제거는 워크스페이스 참조만 없애며 저장 파일 바이트를 지우거나 기존 행사 `file.read`
+권한을 회수하지 않는다. 매니저가 참조를 제거해도 이미 알려진 file ID는 기존 파일 권한에 따라 읽힌다.
+읽기 ZIP은 별도 GET이며 쓰기 커맨드 경로를 대체하지 않는다:
+
+- `GET /api/events/:eventId/evidence-photos.zip?section=<fixed-key>` — 지정 섹션의 증빙만.
+- `GET /api/events/:eventId/attendee-photos.zip` — 참가자 포토월의 승인 사진만.
+
+두 경로 모두 `file.read` 행사 권한(AGENCY/멤버 MANAGER)을 매 요청 확인하고,
+파일명을 서버에서 생성하며 응답은 `no-store`다. 참가자 이름·ID, 검토 대기·숨김 사진,
+증빙 사진은 참가자 ZIP에 포함하지 않는다. 원본 참조 중 하나라도 없으면 부분 ZIP을 완성본처럼 반환하지 않고,
+헤더 전 오류 응답으로 종료한다.
 
 ## 6. 인증과 방어
 

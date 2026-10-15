@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "fastify": "^5.12.7",
+    "fflate": "0.8.3",
     "pg": "^8.23.1"
   },
   "devDependencies": {

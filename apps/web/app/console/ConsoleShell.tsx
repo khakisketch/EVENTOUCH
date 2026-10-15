@@ -16,6 +16,7 @@ type ShellData = {
   canSeeClients: boolean;
   canManageTeam: boolean;
   canManageIntegrations: boolean;
+  canManageEvidencePhotos: boolean;
   currentEventName: string | null;
   canAccessCurrentEvent: boolean;
   currentEventMeta: {
@@ -115,6 +116,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const isPrograms = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/programs`));
   const isContent = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/content`));
   const isRewards = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/rewards`));
+  const isEvidencePhotos = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/photos`));
   const isSettings = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/settings`));
   const isReports = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/reports`));
 
@@ -267,6 +269,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
             canSeeClients: hasOrgPermission("clients.manage"),
             canManageTeam: hasOrgPermission("team.manage"),
             canManageIntegrations: hasOrgPermission("integrations.manage"),
+            canManageEvidencePhotos: role === "AGENCY" || (role === "MANAGER" && hasCurrentMembership),
             currentEventName: currentEvent ? text(currentEvent.name).trim() || "선택한 행사" : null,
             canAccessCurrentEvent,
             currentEventMeta,
@@ -639,6 +642,15 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
         >
           참여 프로그램
         </Link>
+        {shellData?.canManageEvidencePhotos ? (
+          <Link
+            className={`console-nav-item console-subnav-item${isEvidencePhotos ? " active" : ""}`}
+            href={`${eventBasePath}/photos`}
+            aria-current={isEvidencePhotos ? "page" : undefined}
+          >
+            현장 사진
+          </Link>
+        ) : null}
         <Link
           className={`console-nav-item console-subnav-item${isContent ? " active" : ""}`}
           href={`${eventBasePath}/content`}

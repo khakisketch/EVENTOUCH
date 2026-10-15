@@ -29,6 +29,7 @@ const eventPhaseTwoTargets = [
   'app/console/events/[id]/rewards/RewardsWorkspace.tsx',
   'app/console/events/[id]/reports/ReportsWorkspace.tsx',
   'app/console/events/[id]/settings/SettingsWorkspace.tsx',
+  'app/console/events/[id]/photos/EvidencePhotosWorkspace.tsx',
 ];
 
 const rootTargets = [
@@ -174,11 +175,36 @@ test('report tables remain complete and keyboard-scrollable on narrow screens', 
   assert.match(read('app/console/events/[id]/reports/reports.module.css'), /\.tableScroll\s*\{[^}]*overflow-x:\s*auto/s);
 });
 
+test('evidence photos stay separate, section-scoped and retry-safe', () => {
+  const photos = read('app/console/events/[id]/photos/EvidencePhotosWorkspace.tsx');
+  const shell = read('app/console/ConsoleShell.tsx');
+  const programs = read('app/console/events/[id]/programs/ProgramsWorkspace.tsx');
+
+  for (const key of ['SPACE', 'STAGE', 'PARTICIPANT_BOOTH', 'ONSITE_DIRECTION', 'PRE_SETUP', 'ARRIVAL_REGISTRATION', 'PROGRAM', 'AWARDS']) {
+    assert.match(photos, new RegExp(`key: "${key}"`), `${key} section is available`);
+  }
+  assert.match(shell, /canManageEvidencePhotos:\s*role\s*===\s*"AGENCY"\s*\|\|\s*\(role\s*===\s*"MANAGER"\s*&&\s*hasCurrentMembership\)/u);
+  assert.match(shell, /\{shellData\?\.canManageEvidencePhotos\s*\?\s*\(/u, 'photo navigation is hidden outside agency/event-member manager roles');
+  assert.match(photos, /command:\s*"evidence\.photo\.add"/u);
+  assert.match(photos, /uploadCommandId:\s*randomCommandId\(\)/u);
+  assert.match(photos, /recordCommandId:\s*randomCommandId\(\)/u);
+  assert.match(photos, /status:\s*bytesUploaded\s*\?\s*"failed-record"\s*:\s*"failed-upload"/u);
+  assert.match(photos, /evidence\.photo\.move/u);
+  assert.match(photos, /evidence\.photo\.remove/u);
+  assert.match(photos, /보관함 참조만 제거합니다\. 원본 파일은 삭제되지 않고 기존 행사 파일 읽기 권한은 그대로 적용됩니다/u);
+  assert.match(photos, /evidence-photos\.zip\?\$\{params\.toString\(\)\}/u);
+  assert.match(programs, /status\s*===\s*"APPROVED"/u);
+  assert.match(programs, /attendee-photos\.zip/u);
+  assert.match(programs, /href=\{`\/api\/events\/\$\{encodeURIComponent\(props\.eventId\)\}\/attendee-photos\.zip`\}/u);
+  assert.match(programs, />\s*원본 저장\s*</u);
+});
+
 test('thin participant route wrappers and overview do not add legacy eyebrows', () => {
   const paths = [
     'app/console/events/[id]/page.tsx',
     'app/console/events/[id]/participants/page.tsx',
     'app/console/events/[id]/participants/import/page.tsx',
+    'app/console/events/[id]/photos/page.tsx',
   ];
   for (const target of paths) {
     assert.doesNotMatch(read(target), /eyebrow/u, `${target} has no eyebrow`);
@@ -186,4 +212,5 @@ test('thin participant route wrappers and overview do not add legacy eyebrows', 
   assert.match(read(paths[0]), /<EventOverview eventId=\{id\} \/>/u);
   assert.match(read(paths[1]), /<ParticipantList eventId=\{id\} \/>/u);
   assert.match(read(paths[2]), /<ImportWizard eventId=\{id\} \/>/u);
+  assert.match(read(paths[3]), /<EvidencePhotosWorkspace key=\{id\} eventId=\{id\} \/>/u);
 });

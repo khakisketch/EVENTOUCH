@@ -46,7 +46,7 @@ type Question = {
   approved: boolean;
   likes: number;
 };
-type Photo = { id: string; caption: string; status: string; at: string; name: string; fileId: string };
+type Photo = { id: string; caption: string; status: string; at: string; name: string; fileId: string; fileName: string };
 type Post = { id: string; body: string; status: string; at: string; name: string };
 
 type WorkspaceState =
@@ -296,6 +296,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
               at: text(item.at),
               name: text(item.name, "이름 미등록"),
               fileId: image ? text(image.fileId) : "",
+              fileName: image ? text(image.name, "photo") : "photo",
             }];
           })
         : [];
@@ -955,43 +956,68 @@ function PhotoList(props: {
   eventId: string;
   onModerate: (photo: Photo, status: "APPROVED" | "HIDDEN") => void;
 }) {
+  const approvedPhotos = props.photos.filter((photo) => photo.status === "APPROVED" && photo.fileId);
   if (!props.photos.length) return <p className={styles.help}>공유된 사진이 없습니다.</p>;
   return (
-    <ul className={styles.itemList}>
-      {props.photos.map((photo) => (
-        <li key={photo.id} className={styles.itemRow}>
-          {photo.fileId ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={`/api/events/${encodeURIComponent(props.eventId)}/files/${encodeURIComponent(photo.fileId)}`}
-              alt={photo.caption || "참가자가 공유한 사진"}
-              className={styles.photoThumb}
-              loading="lazy"
-            />
-          ) : null}
-          <p className={styles.itemText}><strong>{photo.name}</strong> · {photo.caption || "설명 없음"}</p>
-          <p className={styles.itemMeta}>{photoStatusLabel(photo.status)}</p>
-          <div className={styles.itemActions}>
-            <button
-              type="button"
-              className="button button-secondary"
-              disabled={props.busy !== null || photo.status === "APPROVED"}
-              onClick={() => props.onModerate(photo, "APPROVED")}
-            >
-              승인
-            </button>
-            <button
-              type="button"
-              className="button button-secondary"
-              disabled={props.busy !== null || photo.status === "HIDDEN"}
-              onClick={() => props.onModerate(photo, "HIDDEN")}
-            >
-              반려
-            </button>
-          </div>
-        </li>
-      ))}
-    </ul>
+    <>
+      <div className={styles.photoArchiveTools}>
+        <p className={styles.help}>승인된 참가자 사진만 ZIP에 담습니다. 검토 대기·반려 사진은 제외되며, 1,000장·512MB를 넘으면 개별 원본을 저장하세요.</p>
+        {approvedPhotos.length ? (
+          <a
+            className="button button-secondary"
+            href={`/api/events/${encodeURIComponent(props.eventId)}/attendee-photos.zip`}
+          >
+            승인 사진 ZIP 다운로드 ({approvedPhotos.length}장)
+          </a>
+        ) : (
+          <span className={styles.itemMeta}>다운로드할 승인 사진이 없습니다.</span>
+        )}
+      </div>
+      <ul className={styles.itemList}>
+        {props.photos.map((photo) => (
+          <li key={photo.id} className={styles.itemRow}>
+            {photo.fileId ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={`/api/events/${encodeURIComponent(props.eventId)}/files/${encodeURIComponent(photo.fileId)}`}
+                alt={photo.caption || "참가자가 공유한 사진"}
+                className={styles.photoThumb}
+                loading="lazy"
+              />
+            ) : null}
+            <p className={styles.itemText}><strong>{photo.name}</strong> · {photo.caption || "설명 없음"}</p>
+            <p className={styles.itemMeta}>{photoStatusLabel(photo.status)}</p>
+            <div className={styles.itemActions}>
+              {photo.status === "APPROVED" && photo.fileId ? (
+                <a
+                  className="button button-secondary"
+                  href={`/api/events/${encodeURIComponent(props.eventId)}/files/${encodeURIComponent(photo.fileId)}`}
+                  download={photo.fileName || "photo"}
+                >
+                  원본 저장
+                </a>
+              ) : null}
+              <button
+                type="button"
+                className="button button-secondary"
+                disabled={props.busy !== null || photo.status === "APPROVED"}
+                onClick={() => props.onModerate(photo, "APPROVED")}
+              >
+                승인
+              </button>
+              <button
+                type="button"
+                className="button button-secondary"
+                disabled={props.busy !== null || photo.status === "HIDDEN"}
+                onClick={() => props.onModerate(photo, "HIDDEN")}
+              >
+                반려
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 

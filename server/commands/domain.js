@@ -14,6 +14,7 @@ const preparation = require('./preparation');
 const engagement = require('./engagement');
 const contentResults = require('./content-results');
 const boothMap = require('./booth-map');
+const eventEvidence = require('./event-evidence');
 const { createMessagingProvider, dispatchCampaign } = require('../messaging');
 const { settleDispatch } = require('../message-outbox');
 
@@ -22,6 +23,7 @@ const COMMANDS = new Set([
   ...engagement.COMMANDS,
   ...contentResults.COMMANDS,
   ...boothMap.COMMANDS,
+  ...eventEvidence.COMMANDS,
 ]);
 
 const GUEST_COMMANDS = new Set([
@@ -220,7 +222,9 @@ function createDomainCommands(database, options = {}) {
         ? await preparation.apply(ctx)
         : engagement.COMMANDS.has(command)
           ? await engagement.apply(ctx)
-          : await contentResults.apply(ctx);
+          : eventEvidence.COMMANDS.has(command)
+            ? await eventEvidence.apply(ctx)
+            : await contentResults.apply(ctx);
 
       appendAudit(workspace, event, guest ? actor.id : actor.id, command, input, id, now, guest);
       await client.query(

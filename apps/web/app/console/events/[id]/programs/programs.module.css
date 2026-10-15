@@ -223,6 +223,19 @@
   gap: var(--s2);
 }
 
+.photoArchiveTools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin-bottom: var(--s3);
+}
+
+.photoArchiveTools .help {
+  flex: 1 1 280px;
+}
+
 .photoThumb {
   width: 100%;
   max-width: 320px;
@@ -305,5 +318,14 @@
   .moduleTop {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .photoArchiveTools {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .photoArchiveTools :global(.button) {
+    width: 100%;
   }
 }
