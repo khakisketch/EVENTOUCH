@@ -18,7 +18,49 @@ type ShellData = {
   canManageIntegrations: boolean;
   currentEventName: string | null;
   canAccessCurrentEvent: boolean;
+  currentEventMeta: {
+    stage: string;
+    date: string;
+    venue: string;
+    pending: number;
+  } | null;
+  triage: Array<{
+    id: string;
+    name: string;
+    stage: string;
+    date: string;
+    venue: string;
+    pending: number;
+  }>;
 };
+
+function stageLabel(stage: string): string {
+  switch (stage) {
+    case "DRAFT": return "기획";
+    case "READY": return "운영 준비";
+    case "LIVE": return "진행 중";
+    case "ENDED": return "종료";
+    case "ARCHIVED": return "보관";
+    default: return "단계 미정";
+  }
+}
+
+function stageTone(stage: string): string {
+  switch (stage) {
+    case "LIVE": return "live";
+    case "DRAFT":
+    case "READY": return "planned";
+    case "ENDED":
+    case "ARCHIVED": return "ended";
+    default: return "unknown";
+  }
+}
+
+function formatShortDate(date: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) return "일정 미정";
+  return `${match[1]}.${match[2]}.${match[3]}`;
+}
 
 function record(value: unknown): JsonRecord | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -139,6 +181,47 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
         );
         const canAccessCurrentEvent = Boolean(currentEvent) &&
           (isOrganizationOwner || (role === "MANAGER" && hasCurrentMembership));
+        // Sidebar switching needs the same signals as the home cards: stage,
+        // date, venue, and pending approvals. The server already scopes both
+        // lists to what this account may see.
+        const workspaces = record(state?.workspaces) ?? {};
+        const pendingOf = (eventId: string): number => {
+          const workspace = record(workspaces[eventId]);
+          const people = workspace ? workspace.participants : undefined;
+          if (!Array.isArray(people)) return 0;
+          let pending = 0;
+          for (const item of people) {
+            const person = record(item);
+            if (person && person.status === "PENDING") pending += 1;
+          }
+          return pending;
+        };
+        const venueOf = (eventId: string): string => {
+          const workspace = record(workspaces[eventId]);
+          const venue = workspace ? record(workspace.venue) : null;
+          return venue ? text(venue.name) : "";
+        };
+        const summarize = (item: JsonRecord) => ({
+          id: text(item.id),
+          name: text(item.name).trim() || text(item.id),
+          stage: text(item.stage),
+          date: text(item.date),
+          venue: venueOf(text(item.id)),
+          pending: pendingOf(text(item.id)),
+        });
+        const currentEventMeta = currentEvent ? summarize(currentEvent) : null;
+        // Triage, not a directory: events that need hands (pending approvals)
+        // or are live now, current one excluded, most pending first.
+        const triage = events
+          .filter((item) => text(item.id) && text(item.id) !== eventId)
+          .map(summarize)
+          .filter((item) => item.pending > 0 || item.stage === "LIVE")
+          .sort((a, b) =>
+            b.pending - a.pending ||
+            (a.date || "9999").localeCompare(b.date || "9999") ||
+            a.name.localeCompare(b.name, "ko-KR")
+          )
+          .slice(0, 5);
         const roleLabel = role === "STAFF"
           ? "현장 스태프"
           : role === "MANAGER"
@@ -160,6 +243,8 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
             canManageIntegrations: hasOrgPermission("integrations.manage"),
             currentEventName: currentEvent ? text(currentEvent.name).trim() || "선택한 행사" : null,
             canAccessCurrentEvent,
+            currentEventMeta,
+            triage,
           });
         }
       } catch {
@@ -393,17 +478,83 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   }
 
   function renderEventBranch(eventsLinkId: string, mobile = false) {
-    return showCurrentEvent && eventId ? (
-      <div
-        ref={mobile ? mobileEventBranchRef : undefined}
-        className="nav-event-branch"
-        role="group"
-        aria-labelledby={eventsLinkId}
-      >
-        <div className="nav-current-event">
-          <strong title={shellData?.currentEventName ?? undefined}>{shellData?.currentEventName}</strong>
-          <Link className="nav-event-switch" href="/console">목록에서 전환</Link>
+    // Mobile keeps the compact in-row switcher; the triage list lives on
+    // desktop where the sidebar has room. Switching happens on /console home.
+    if (mobile) {
+      return showCurrentEvent && eventId ? (
+        <div
+          ref={mobileEventBranchRef}
+          className="nav-event-branch"
+          role="group"
+          aria-labelledby={eventsLinkId}
+        >
+          <div className="nav-current-event">
+            <strong title={shellData?.currentEventName ?? undefined}>{shellData?.currentEventName}</strong>
+            <Link className="nav-event-switch" href="/console">목록에서 전환</Link>
+          </div>
+          {renderEventSubnav()}
         </div>
+      ) : null;
+    }
+    return showCurrentEvent && eventId ? (
+      <>
+        <div
+          className="nav-event-branch"
+          role="group"
+          aria-labelledby={eventsLinkId}
+        >
+          {shellData?.currentEventMeta ? (
+            <div className="nav-event-card">
+              <span className="nav-event-head">
+                <span className={`nav-stage-dot nav-stage-${stageTone(shellData.currentEventMeta.stage)}`} aria-hidden="true" />
+                <strong title={shellData?.currentEventName ?? undefined}>{shellData?.currentEventName}</strong>
+                <span className={`nav-stage-chip nav-stage-${stageTone(shellData.currentEventMeta.stage)}`}>
+                  {stageLabel(shellData.currentEventMeta.stage)}
+                </span>
+              </span>
+              <span className="nav-event-meta">
+                {[formatShortDate(shellData.currentEventMeta.date), shellData.currentEventMeta.venue].filter(Boolean).join(" · ")}
+                {shellData.currentEventMeta.pending > 0 ? ` · 승인 ${shellData.currentEventMeta.pending} 남음` : ""}
+              </span>
+            </div>
+          ) : (
+            <div className="nav-current-event">
+              <strong title={shellData?.currentEventName ?? undefined}>{shellData?.currentEventName}</strong>
+            </div>
+          )}
+          {renderEventSubnav()}
+        </div>
+        {shellData && shellData.triage.length ? (
+          <div className="nav-triage" role="group" aria-label="손봐야 할 행사">
+            <p className="nav-section-label">손봐야 할 행사</p>
+            {shellData.triage.map((item) => (
+              <Link
+                key={item.id}
+                className="nav-event-pick"
+                href={`/console/events/${encodeURIComponent(item.id)}`}
+              >
+                <span className={`nav-stage-dot nav-stage-${stageTone(item.stage)}`} aria-hidden="true" />
+                <span className="nav-event-text">
+                  <strong>{item.name}</strong>
+                  <small>{[formatShortDate(item.date), item.venue].filter(Boolean).join(" · ") || stageLabel(item.stage)}</small>
+                </span>
+                {item.pending > 0 ? (
+                  <span className="nav-badge" aria-label={`승인 대기 ${item.pending}건`}>{item.pending}</span>
+                ) : null}
+              </Link>
+            ))}
+          </div>
+        ) : null}
+        <Link className="nav-all-link" href="/console">
+          전체 행사 보기
+        </Link>
+      </>
+    ) : null;
+  }
+
+  function renderEventSubnav() {
+    return (
+      <>
         <Link
           className={`console-nav-item console-subnav-item${isOverview ? " active" : ""}`}
           href={eventBasePath}
@@ -453,8 +604,8 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
         >
           결과 보고서
         </Link>
-      </div>
-    ) : null;
+      </>
+    );
   }
 
   const organizationPermissionSummary = shellData

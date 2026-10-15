@@ -465,6 +465,19 @@ test('web-console-shell-keeps-decided-navigation-and-clients-read-only', () => {
   assert.match(shell, /행사/);
   assert.match(shell, /고객사/);
   assert.match(shell, /nav/i);
+  // In-place switching: the current event reads as an event card (name with
+  // stage, facts below), and the triage list carries the same signals as the
+  // home cards so busy events sort themselves. Mobile keeps its compact row.
+  assert.match(shell, /nav-event-card/);
+  assert.match(shell, /nav-stage-chip/);
+  assert.match(shell, /손봐야 할 행사/);
+  assert.match(shell, /nav-event-pick/);
+  assert.match(shell, /nav-badge/);
+  assert.match(shell, /전체 행사 보기/);
+  assert.match(shell, /currentEventMeta/);
+  assert.match(shell, /renderEventSubnav/);
+  assert.match(globalStyles, /\.nav-event-card/);
+  assert.match(globalStyles, /\.nav-event-pick/);
   assert.match(shell, /mobile-primary-nav/);
   assert.match(shell, /mobile-event-nav/);
   assert.match(shell, /mobileEventBranchRef/);

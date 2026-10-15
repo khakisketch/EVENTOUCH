@@ -1419,6 +1419,161 @@ select[aria-invalid="true"] {
   -webkit-line-clamp: 2;
 }
 
+/* Current event as a card: the box says "this is the event", not a menu.
+   First line carries the name with its stage; the second line carries the
+   facts. Same sidebar voice, no new hue. */
+.nav-event-card {
+  display: grid;
+  gap: var(--s1);
+  margin: var(--s1) 0;
+  padding: var(--s3);
+  border: 1px solid var(--nav-active);
+  border-radius: var(--radius);
+  background: var(--nav-hover);
+}
+
+.nav-event-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.nav-event-head strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--nav-text);
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-stage-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--nav-muted);
+}
+
+.nav-stage-dot.nav-stage-live { background: #4CAF7D; }
+.nav-stage-dot.nav-stage-planned { background: #E8A33D; }
+.nav-stage-dot.nav-stage-ended { background: var(--nav-muted); }
+
+.nav-stage-chip {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.nav-stage-chip.nav-stage-live { background: #4CAF7D; color: #10251b; }
+.nav-stage-chip.nav-stage-planned { background: #E8A33D; color: #2b1c05; }
+.nav-stage-chip.nav-stage-ended,
+.nav-stage-chip.nav-stage-unknown { background: var(--nav-active); color: var(--nav-muted); }
+
+.nav-event-meta {
+  color: var(--nav-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* Triage list: quick-switch rows with the same signals as the home cards.
+   Pending badges first; zero-pending rows stay quiet. */
+.nav-triage {
+  display: grid;
+  min-width: 0;
+  gap: var(--s1);
+  margin-bottom: var(--s1);
+}
+
+.nav-section-label {
+  margin: var(--s2) 0 0;
+  padding-inline: var(--s3);
+  color: var(--nav-muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.nav-event-pick {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--radius-small);
+  color: var(--nav-muted);
+  font-size: var(--small);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.nav-event-pick:hover {
+  background: var(--nav-hover);
+  color: var(--nav-text);
+  text-decoration: none;
+}
+
+.nav-event-pick:focus-visible {
+  outline-color: var(--nav-text);
+  outline-offset: 2px;
+}
+
+.nav-event-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.nav-event-text strong {
+  display: block;
+  overflow: hidden;
+  color: var(--nav-text);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-event-text small {
+  display: block;
+  color: var(--nav-muted);
+  font-size: 12px;
+}
+
+.nav-badge {
+  flex: none;
+  min-width: 26px;
+  height: 22px;
+  padding-inline: 6px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 22px;
+  text-align: center;
+}
+
+.nav-all-link {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  padding-inline: var(--s3);
+  color: var(--nav-muted);
+  font-size: var(--small);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.nav-all-link:hover {
+  color: var(--nav-text);
+  text-decoration: underline;
+}
+
 .nav-event-switch {
   display: flex;
   min-height: 44px;
