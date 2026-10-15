@@ -50,6 +50,22 @@ function isKnownStatus(status: string): status is (typeof STATUSES)[number] {
   return (STATUSES as readonly string[]).includes(status);
 }
 
+// Approval-time identity check: names collide, so the row carries the
+// company and a masked contact next to the name. Full digits stay in the
+// CSV export and the server, never on this screen.
+function maskPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 8) return "연락처 확인 필요";
+  return `${digits.slice(0, 3)}-****-${digits.slice(-4)}`;
+}
+
+function identityLine(person: { company: string; group: string; phone: string }): string {
+  const parts = [person.company, person.group === "일반" ? "" : person.group, maskPhone(person.phone)]
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return parts.join(" · ");
+}
+
 function randomCommandId(): string {
   if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
   return `web-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
@@ -158,6 +174,12 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
 
   async function changeStatus(person: Person, status: string) {
     if (savingId || status === person.status) return;
+    // Cancellation voids the ticket: confirm it like the stage transitions
+    // do. Approval stays one tap — it is the primary action, and the row now
+    // shows who is being approved.
+    if (status === "CANCELLED" && !window.confirm(
+      `${person.name}님의 신청을 취소할까요? 발급된 티켓은 무효화되며, 되돌리려면 다시 승인해야 합니다.`
+    )) return;
     setSavingId(person.id);
     setNotice(null);
     setFailure(null);
@@ -295,24 +317,37 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           {visiblePeople.map((person) => (
             <li className="participant-row" key={person.id}>
               <span className="participant-summary">
-                {state.canManage ? person.name : `${person.name} · ${statusLabel(person.status)}`}
+                {person.name}
+                <small className="participant-identity">{identityLine(person) || statusLabel(person.status)}</small>
+                {!state.canManage ? ` · ${statusLabel(person.status)}` : ""}
               </span>
               {state.canManage ? (
-                <select
-                  aria-label={`${person.name} 상태 변경`}
-                  value={isKnownStatus(person.status) ? person.status : ""}
-                  disabled={savingId === person.id}
-                  onChange={(event) => changeStatus(person, event.target.value)}
-                >
-                  {!isKnownStatus(person.status) ? (
-                    <option value="" disabled>상태 확인 필요</option>
-                  ) : null}
-                  {STATUSES.map((status) => (
-                    <option key={status} value={status}>
-                      {statusLabel(status)}
-                    </option>
-                  ))}
-                </select>
+                person.status === "PENDING" ? (
+                  <button
+                    type="button"
+                    className="button button-primary"
+                    disabled={savingId === person.id}
+                    onClick={() => changeStatus(person, "APPROVED")}
+                  >
+                    {savingId === person.id ? "승인 중…" : "승인"}
+                  </button>
+                ) : (
+                  <select
+                    aria-label={`${person.name} 상태 변경`}
+                    value={isKnownStatus(person.status) ? person.status : ""}
+                    disabled={savingId === person.id}
+                    onChange={(event) => changeStatus(person, event.target.value)}
+                  >
+                    {!isKnownStatus(person.status) ? (
+                      <option value="" disabled>상태 확인 필요</option>
+                    ) : null}
+                    {STATUSES.map((status) => (
+                      <option key={status} value={status}>
+                        {statusLabel(status)}
+                      </option>
+                    ))}
+                  </select>
+                )
               ) : null}
             </li>
           ))}

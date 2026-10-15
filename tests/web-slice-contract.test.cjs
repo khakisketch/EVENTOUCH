@@ -226,6 +226,12 @@ test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   assert.match(home, /value=\{filter\}/);
   assert.match(home, /FILTERS\.map\(\(item\) =>/);
   assert.match(home, /counts\[item\.id\]/);
+  // Triage: the pending queue outranks the calendar when asked.
+  assert.match(home, /승인 대기 있는 행사만/);
+  assert.match(home, /needsWork/);
+  assert.match(home, /event\.pending > 0/);
+  assert.match(home, /b\.pending - a\.pending/);
+  assert.match(home, /workFilter/);
   assert.doesNotMatch(home, /nextAction|승인 처리하기|현장 보기|이어서 만들기/);
   assert.match(home, /일정 미정/);
   // A recoverable connection failure restores shell navigation with the list.
@@ -342,6 +348,14 @@ test('web-participant-status-goes-through-the-operator-command-path', () => {
   assert.match(list, /전체 상태/);
   assert.match(list, /상태 확인 필요/);
   assert.match(list, /다시 불러오기/);
+  // Approval is explicit on pending rows, with identity on the row; only
+  // cancellation asks twice. The full digits stay in exports, not on screen.
+  assert.match(list, /participant-identity/);
+  assert.match(list, /maskPhone/);
+  assert.match(list, /"승인"/);
+  assert.match(list, /승인 중/);
+  assert.match(list, /발급된 티켓은 무효화/);
+  assert.match(list, /\*\*\*\*/);
   // Export stays client-side; import lives behind the management gate.
   assert.match(list, /EVENTOUCH_participants\.csv/);
   assert.match(list, /participants\/import/);

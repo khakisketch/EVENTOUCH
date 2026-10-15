@@ -164,6 +164,7 @@ export default function ConsoleHome() {
   const [state, setState] = useState<HomeState>({ kind: "loading" });
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<EventFilter>("all");
+  const [needsWork, setNeedsWork] = useState(false);
   const [view, setView] = useState<HomeView>("cards");
   const [monthCursor, setMonthCursor] = useState(() => {
     const now = new Date();
@@ -283,9 +284,12 @@ export default function ConsoleHome() {
         (filter === "preparing" && ["DRAFT", "READY"].includes(event.stage)) ||
         (filter === "live" && event.stage === "LIVE") ||
         (filter === "closed" && ["ENDED", "ARCHIVED"].includes(event.stage));
-      return matchesQuery && matchesFilter;
+      // Triage first: the pending queue is the operator's Monday-morning
+      // question, and calendar order buries it.
+      const matchesWork = !needsWork || event.pending > 0;
+      return matchesQuery && matchesFilter && matchesWork;
     });
-  }, [filter, query, state]);
+  }, [filter, needsWork, query, state]);
 
   const visibleEvents = useMemo(() => {
     const dated = selectedDate && view === "calendar"
@@ -299,13 +303,16 @@ export default function ConsoleHome() {
       return event.date > todayKey ? 1 : 2;
     };
     return [...dated].sort((a, b) => {
+      // With the triage filter on, urgency outranks the calendar: most
+      // pending approvals first.
+      if (needsWork && a.pending !== b.pending) return b.pending - a.pending;
       const aBucket = bucket(a);
       const bBucket = bucket(b);
       if (aBucket !== bBucket) return aBucket - bBucket;
       const dateOrder = aBucket === 2 ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date);
       return dateOrder || a.start.localeCompare(b.start) || a.name.localeCompare(b.name, "ko-KR");
     });
-  }, [stageQueryFiltered, selectedDate, view, todayKey]);
+  }, [stageQueryFiltered, selectedDate, view, todayKey, needsWork]);
 
   const unscheduled = useMemo(
     () => visibleEvents.filter((event) => !event.date),
@@ -414,9 +421,9 @@ export default function ConsoleHome() {
 
       <section className={styles.directory} aria-label="행사 목록">
         <p className="sr-only" role="status">
-          {filter === "all" && !query.trim() && !dateFilterActive
+          {filter === "all" && !needsWork && !query.trim() && !dateFilterActive
             ? `전체 ${state.events.length}개 행사`
-            : `검색 결과 ${visibleEvents.length}개 / 전체 ${state.events.length}개`}
+            : `검색 결과 ${visibleEvents.length}개 / 전체 ${state.events.length}개${needsWork ? " · 승인 대기 있는 행사만" : ""}`}
         </p>
 
         <div className={styles.toolbar}>
@@ -432,6 +439,14 @@ export default function ConsoleHome() {
                 </option>
               ))}
             </select>
+          </label>
+          <label className={styles.workFilter}>
+            <input
+              type="checkbox"
+              checked={needsWork}
+              onChange={(event) => setNeedsWork(event.target.checked)}
+            />
+            <span>승인 대기 있는 행사만{state.kind === "ready" ? ` (${state.events.filter((event) => event.pending > 0).length})` : ""}</span>
           </label>
           <div className={styles.viewSwitch} role="group" aria-label="목록 보기 방식">
             <button

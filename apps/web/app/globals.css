@@ -1892,6 +1892,14 @@ select[aria-invalid="true"] {
   overflow-wrap: anywhere;
 }
 
+.participant-identity {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 400;
+}
+
 .participant-row select {
   width: auto;
   min-width: 160px;

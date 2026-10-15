@@ -33,7 +33,7 @@
 
 .toolbar {
   display: grid;
-  grid-template-columns: minmax(190px, 260px) auto minmax(240px, 1fr);
+  grid-template-columns: minmax(190px, 260px) auto auto minmax(240px, 1fr);
   align-items: center;
   gap: var(--s3);
   margin-top: var(--s3);
@@ -56,6 +56,27 @@
 .stageFilter select {
   min-width: 0;
   margin: 0;
+}
+
+/* Triage toggle: same row voice as the stage filter, checkbox first so the
+   label reads as an action, not a status. */
+.workFilter {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.workFilter input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--brand);
 }
 
 .searchField {
@@ -481,6 +502,11 @@
 
   .searchField {
     grid-column: 1 / -1;
+  }
+
+  .workFilter {
+    grid-column: 1 / -1;
+    min-height: 44px;
   }
 }
 
