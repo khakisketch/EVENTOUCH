@@ -698,6 +698,10 @@ test('web-staff-desk-shows-direction-and-prints-nametags-in-kiosk-mode', () => {
   assert.match(staff, /네임택 인쇄/);
   assert.match(staff, /nametag-sheet/);
   assert.match(staff, /nametag-printing/);
+  // Focus follows the sheet in and back to the ticket field on close; the
+  // recent list carries time so the last scan is verifiable in a queue.
+  assert.match(staff, /nametagSheetRef\.current\?\.focus\(\)/);
+  assert.match(staff, /formatCheckTime\(check\.at\)/);
   const css = read('app/globals.css');
   assert.match(css, /\.nametag-sheet/);
   assert.match(css, /\.kiosk-mode/);

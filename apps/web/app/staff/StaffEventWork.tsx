@@ -27,6 +27,14 @@ function randomCommandId(): string {
   return `web-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
 }
 
+// Recent checks read in queue order; a bare name is not enough to verify the
+// last scan while a line is moving.
+function formatCheckTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "시각 확인 중";
+  return new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
 export default function StaffEventWork({ eventId }: { eventId: string }) {
   const router = useRouter();
   const targetEventId = resolveStaffScopeId(eventId);
@@ -49,6 +57,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [directory, setDirectory] = useState<Record<string, string>>({});
   const scopeRef = useRef<StaffScope | null>(null);
+  const nametagSheetRef = useRef<HTMLElement | null>(null);
   scopeRef.current = scope;
 
   async function load(silent = false) {
@@ -512,6 +521,9 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                 at: new Date().toISOString(),
               });
               document.body.classList.add("nametag-printing");
+              // Move focus to the sheet so keyboard and screen-reader users
+              // land on the print action instead of scrolling to find it.
+              window.requestAnimationFrame(() => nametagSheetRef.current?.focus());
             }}
           >
             네임택 인쇄
@@ -553,6 +565,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           {activeScope.checks.slice(0, 10).map((check) => (
             <li key={check.id}>
               {check.name} · {check.action === "IN" ? "입장" : "퇴장"}
+              {check.at ? ` · ${formatCheckTime(check.at)}` : ""}
               {check.corrected ? " (정정됨)" : ""}
             </li>
           ))}
@@ -561,7 +574,12 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         <p>아직 처리 기록이 없습니다.</p>
       )}
       {nametag ? (
-        <section className="nametag-sheet" aria-label="네임택 인쇄">
+        <section
+          className="nametag-sheet"
+          aria-label="네임택 인쇄"
+          ref={nametagSheetRef}
+          tabIndex={-1}
+        >
           <p className="nametag-event">{nametag.eventName}</p>
           <p className="nametag-name">{nametag.name}</p>
           {nametag.company ? <p className="nametag-company">{nametag.company}</p> : null}
@@ -578,6 +596,10 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
               onClick={() => {
                 setNametag(null);
                 document.body.classList.remove("nametag-printing");
+                window.requestAnimationFrame(() => {
+                  const field = document.getElementById("staff-ticket");
+                  if (field instanceof HTMLInputElement) field.focus();
+                });
               }}
             >
               닫기
