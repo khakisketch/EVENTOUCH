@@ -264,13 +264,14 @@ export default function RegisterForm({ slug, fields, consentText, formVersion, v
             <p className="state-success" role="status">연락처 인증됨. 번호를 바꾸면 다시 인증하세요.</p>
           ) : (
             <>
-              <p>신청 연락처가 본인 것인지 문자 인증번호로 확인합니다.</p>
+              <p>신청 연락처가 본인 것인지 문자 인증번호로 확인합니다. 인증을 마쳐야 신청할 수 있습니다.</p>
               {!codeSent ? (
                 <button type="button" className="button button-secondary" onClick={requestCode} disabled={verifying}>
                   {verifying ? "보내는 중입니다" : "인증번호 받기"}
                 </button>
               ) : (
                 <>
+                  <p className="state-success" role="status">입력한 연락처로 인증번호를 보냈습니다. 10분 안에 입력하세요. 오지 않으면 다시 받기를 누르세요.</p>
                   <div className="form-field">
                     <label htmlFor="verify-code">인증번호 6자리</label>
                     <input
@@ -285,6 +286,9 @@ export default function RegisterForm({ slug, fields, consentText, formVersion, v
                   </div>
                   <button type="button" className="button button-secondary" onClick={confirmCode} disabled={verifying}>
                     {verifying ? "확인 중입니다" : "인증 확인"}
+                  </button>{" "}
+                  <button type="button" className="button button-secondary" onClick={requestCode} disabled={verifying}>
+                    {verifying ? "보내는 중입니다" : "인증번호 다시 받기"}
                   </button>
                 </>
               )}
@@ -294,6 +298,9 @@ export default function RegisterForm({ slug, fields, consentText, formVersion, v
         </section>
       ) : null}
       {failure && !failure.field ? <p role="alert">{failure.message}</p> : null}
+      {verificationRequired && !grant ? (
+        <p className="notice" role="status">연락처 인증을 완료해야 신청할 수 있습니다. 위에서 인증번호를 받아 확인하세요.</p>
+      ) : null}
       <button type="submit" disabled={submitting}>
         {submitting ? "신청 중입니다" : "신청하기"}
       </button>

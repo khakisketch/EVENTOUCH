@@ -44,6 +44,23 @@ function entryLabel(state: {
 
 const STORAGE_PREFIX = "eventouch.ticket.";
 
+function unusableCopy(state: { status: string }): { text: string; showRegister: boolean } {
+  // A submitted application must read as a receipt, never as a broken
+  // ticket. Each state names what happens next.
+  switch (state.status) {
+    case "PENDING":
+      return { text: "신청이 접수되었습니다. 운영자가 승인하면 이 화면에 입장 QR이 표시됩니다.", showRegister: false };
+    case "WAITLIST":
+      return { text: "대기 명단에 등록되어 있습니다. 자리가 나면 이 화면에 입장 QR이 표시됩니다.", showRegister: false };
+    case "CANCELLED":
+      return { text: "신청이 취소된 상태입니다. 다시 참가하려면 새로 신청하세요.", showRegister: true };
+    case "APPROVED":
+      return { text: "참가 확정까지 결제 확인이 남았습니다. 안내받은 방법으로 결제를 마친 뒤 다시 여세요.", showRegister: false };
+    default:
+      return { text: "신청 정보를 확인하세요. 상태가 바뀌지 않으면 운영자에게 문의하세요.", showRegister: false };
+  }
+}
+
 function readStoredTicket(slug: string): string {
   try {
     return window.sessionStorage.getItem(STORAGE_PREFIX + slug) || "";
@@ -159,7 +176,7 @@ export default function TicketView({ slug }: { slug: string }) {
     return (
       <section className="ticket-card ticket-message">
         <h1>티켓 링크가 필요합니다</h1>
-        <p>신청 완료 화면의 링크로 다시 여세요. 이 기기에서 신청했다면 자동으로 찾을 수 있습니다.</p>
+        <p>티켓은 신청 완료 화면이 열린 탭에서만 자동으로 찾을 수 있습니다. 탭을 닫았다면 아래에서 참가 정보를 다시 연결하세요.</p>
         <p>
           <Link className="button button-primary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 참가 정보 다시 연결</Link>
         </p>
@@ -213,9 +230,19 @@ export default function TicketView({ slug }: { slug: string }) {
             <QRCode value={state.ticket} size={220} />
           </div>
           <p className="ticket-instruction">입장과 퇴장에는 같은 QR을 사용합니다.</p>
+          <p>
+            <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/engage`}>참여 프로그램 보기</Link>
+          </p>
         </>
       ) : (
-        <p className="ticket-unusable">티켓을 사용할 수 없습니다. 신청 정보를 확인하세요.</p>
+        <>
+          <p className="ticket-unusable">{unusableCopy(state).text}</p>
+          {unusableCopy(state).showRegister ? (
+            <p>
+              <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/register`}>다시 신청하기</Link>
+            </p>
+          ) : null}
+        </>
       )}
     </section>
   );

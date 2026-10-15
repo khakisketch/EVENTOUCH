@@ -79,6 +79,12 @@ test('web-attendee-verification-precedes-signup-and-recovery-without-accounts', 
   assert.match(form, /verificationGrant/);
   assert.match(form, /연락처 인증을 먼저 완료하세요/);
   assert.match(form, /setGrantPhone/);
+  // Readiness is stated before submission, not discovered through it; the
+  // sent code is confirmed with its window and a resend path.
+  assert.match(form, /인증을 마쳐야 신청할 수 있습니다/);
+  assert.match(form, /연락처 인증을 완료해야 신청할 수 있습니다/);
+  assert.match(form, /인증번호 다시 받기/);
+  assert.match(form, /10분 안에 입력하세요/);
   assert.doesNotMatch(form, /localStorage/);
   assert.doesNotMatch(form, /sessionStorage/);
   const page = read('app/event/[slug]/register/page.tsx');
@@ -115,6 +121,13 @@ test('web-ticket-keeps-the-bearer-out-of-history-and-persistent-storage', () => 
   // retries with the stored bearer instead of dead-ending.
   assert.match(view, /결제 확인 필요/);
   assert.match(view, /setReloadTick/);
+  // A submitted application reads as a receipt with next steps, never as a
+  // broken ticket; the usable ticket links onward to participation.
+  assert.match(view, /신청이 접수되었습니다/);
+  assert.match(view, /대기 명단에 등록되어 있습니다/);
+  assert.match(view, /참여 프로그램 보기/);
+  assert.match(view, /\/engage/);
+  assert.match(view, /탭에서만 자동으로 찾을 수 있습니다/);
   // Entry tone follows usability, and the failure is announced.
   assert.match(view, /data-tone/);
   assert.match(view, /<p role="alert">/);
