@@ -105,7 +105,7 @@ test("participant home offers self-service booth stamping in the ticket tab", ()
   assert.match(landing, /\{ key: "stamp", label: "부스 인증", category: "Engagement" \}/u);
   assert.match(landing, /\{ key: "vote", label: "순위 투표", category: "Engagement" \}/u);
   const staff = read("staff/StaffEventWork.tsx");
-  assert.match(staff, /참가자 홈 &gt; 부스 인증에 코드를 붙여넣게 안내하세요/u);
+  assert.match(staff, /참가자 홈 &gt; 부스 인증에서 카메라로 바로 인증하게 안내/u);
 });
 
 test("the rank vote is named 순위 투표, apart from the poll module", () => {

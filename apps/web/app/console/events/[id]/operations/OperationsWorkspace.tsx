@@ -1339,7 +1339,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           booths={stampEnabled ? booths : []}
           initialType={assignPreset?.type ?? (desks.length ? "DESK" : "BOOTH")}
           initialTargetId={assignPreset?.targetId ?? ""}
-          onClose={() => { setAssignDirty(false); setAssignOpen(false); setAssignPreset(null); }}
+          onClose={() => { setAssignDirty(false); setAssignOpen(false); }}
           onDirtyChange={setAssignDirty}
           onSubmit={async (payload) => {
             const ok = await runCommand("staff.assign", payload, "스태프를 배정했습니다.");
@@ -1609,6 +1609,10 @@ function AssignDialog({
   };
   const targets = type === "DESK" ? desks : booths;
   const currentTarget = targets.some((target) => target.id === targetId) ? targetId : "";
+  // A preset target can go stale while the dialog is open (deleted desk or
+  // booth, or booths hidden after the feature switch): the save button would
+  // only sit disabled with no reason, so the mismatch reads out loud.
+  const targetStale = targetId !== "" && currentTarget === "";
   return (
     <ConsoleDialog title="스태프 배정" onClose={onClose} busy={busy} canClose={canClose}>
       <form
@@ -1635,8 +1639,10 @@ function AssignDialog({
           </select>
           {!staffAccounts.length ? (
             <p className="notice" role="status">
-              배정할 수 있는 활성 현장 스태프 계정이 없습니다. 팀·권한 화면에서 현장 스태프를 초대하면
+              배정할 수 있는 활성 현장 스태프 계정이 없습니다.{" "}
+              <Link href="/console/team">팀·권한에서 현장 스태프 초대</Link>하면
               수락한 계정을 여기서 데스크·부스로 지정할 수 있습니다.
+              초대 수락 후 다시 여세요. 닫기 전 고른 데스크·부스 대상은 유지됩니다.
             </p>
           ) : null}
         </div>
@@ -1673,6 +1679,12 @@ function AssignDialog({
               </option>
             ))}
           </select>
+          {targetStale ? (
+            <p className="notice" role="alert">
+              선택한 담당 대상을 찾을 수 없습니다. 삭제되었거나 부스 인증 방식이 바뀌어 목록에서 빠졌습니다.
+              담당 대상을 다시 선택하세요.
+            </p>
+          ) : null}
         </div>
         <DialogError failure={failure} id="assign-dialog-error" />
         <ConsoleFormActions>

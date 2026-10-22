@@ -137,7 +137,8 @@ test("staff invites never fabricate an event assignment", () => {
   assert.ok(staffLine, "STAFF branch must return the hub path");
   assert.doesNotMatch(staffLine, /eventId/);
   assert.doesNotMatch(staffLine, /\$\{/);
-  assert.match(accept, /수락 후 데스크·부스 배정으로 연결합니다/);
+  assert.match(accept, /수락 후 로그인하면 운영자가 배정한 업무 목록으로 이동합니다/);
+  assert.match(accept, /아직 배정되지 않았다면 대기 상태/);
 });
 
 test("invite copy and roles stay as written", () => {

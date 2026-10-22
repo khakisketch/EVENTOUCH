@@ -1597,7 +1597,14 @@ async function main() {
         await page.goto(`${baseUrl}/event/${encodeURIComponent(fixture.slug)}/home`, { waitUntil: 'networkidle', timeout: 30000 });
         await page.getByRole('button', { name: '부스 인증', exact: true }).click();
         await page.getByText('티켓이 확인되지 않습니다.').first().waitFor({ timeout: 10000 });
-        await page.getByRole('link', { name: '내 티켓 찾기' }).first().waitFor({ timeout: 5000 });
+        // The fixture forces SMS mock, so no recovery code can arrive and the
+        // recover screen itself refuses: the dead-end link must stay hidden
+        // while device + operator guidance reads on screen.
+        await page.getByText('신청한 기기에서만 열 수 있습니다').first().waitFor({ timeout: 10000 });
+        if (await page.getByRole('link', { name: '내 티켓 찾기' }).count()) {
+          throw new Error('recovery link shown where no code can arrive');
+        }
+        await page.getByRole('link', { name: '참가 신청하기' }).first().waitFor({ timeout: 5000 });
         await saveShot(page, 'attendee/booth-stamp-no-ticket.png');
       } finally {
         await page.close();

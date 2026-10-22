@@ -111,6 +111,7 @@ export default async function RegisterPage({
     );
   }
   if (!data.registrationOpen) {
+    const recoveryUnavailable = verificationMode === "mock" || verificationMode === "none";
     return (
       <main id="main-content" tabIndex={-1} className="site-page registration-page registration-state">
         <header className="public-page-header">
@@ -119,11 +120,15 @@ export default async function RegisterPage({
         </header>
         <h1>{data.name}</h1>
         <p>현재 신청을 받지 않습니다.</p>
-        <p>
-          <Link className="button button-primary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>
-            이미 신청했다면 내 티켓 찾기
-          </Link>
-        </p>
+        {recoveryUnavailable ? (
+          <p role="note">이 행사에서는 문자로 티켓을 다시 연결할 수 없어, 티켓은 신청한 기기에서만 열 수 있습니다. 티켓을 잃었다면 행사 안내의 문의처로 운영자에게 연락하세요.</p>
+        ) : (
+          <p>
+            <Link className="button button-primary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>
+              이미 신청했다면 내 티켓 찾기
+            </Link>
+          </p>
+        )}
         <p>
           <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>
             행사 안내로
@@ -157,7 +162,7 @@ export default async function RegisterPage({
         consentText={data.consentText}
         formVersion={data.publishedVersion}
         verificationRequired={data.verificationRequired}
-        recoveryBlocked={verificationMode === "none"}
+        recoveryBlocked={verificationMode === "none" || verificationMode === "mock"}
       />
       <footer className="public-page-footer">EVENTOUCH <span>참가 신청</span></footer>
     </main>

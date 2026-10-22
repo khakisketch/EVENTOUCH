@@ -8,6 +8,7 @@ import styles from "./home.module.css";
 import AttendeeHomeLanding, { HOME_MENUS, type HomeMenuKey } from "./AttendeeHomeLanding";
 import CameraScan from "../../../CameraScan";
 import { DEFAULT_HOME_STYLE, normalizeHomeStyle, type HomeStyle } from "../../../../lib/attendee-home";
+import { isRecoveryBlocked, useVerificationMode } from "../../../../lib/use-verification-mode";
 
 // Attendee home shell: five tabs (QR / notices / lucky number / roulette /
 // vote) on one route. The ticket bearer lives in tab memory only
@@ -154,6 +155,7 @@ export default function HomeShell({ slug }: { slug: string }) {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [activeTab, setActiveTab] = useState<Tab | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
+  const recoveryBlocked = isRecoveryBlocked(useVerificationMode());
   const ticketRef = useRef<string>("");
   const commandIdsRef = useRef<Record<string, string>>({});
   const detailBackRef = useRef<HTMLButtonElement>(null);
@@ -524,10 +526,20 @@ export default function HomeShell({ slug }: { slug: string }) {
         <section className={styles.statePanel}>
           <h1 className={styles.stateTitle}>행사를 불러올 수 없습니다</h1>
           <p className={styles.stateMessage}>{state.message}</p>
+          {recoveryBlocked ? (
+            <p className={styles.stateMessage} role="note">
+              이 행사에서는 문자로 티켓을 다시 연결할 수 없어 신청한 기기에서만 열 수 있습니다.
+              티켓을 잃었다면 행사 안내의 문의처로 운영자에게 연락하세요.
+            </p>
+          ) : null}
           <p className={styles.stateAction}>
-            <Link className={styles.stateButton} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>
-              내 티켓 찾기
-            </Link>{" "}
+            {recoveryBlocked ? null : (
+              <>
+                <Link className={styles.stateButton} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>
+                  내 티켓 찾기
+                </Link>{" "}
+              </>
+            )}
             <Link className={styles.stateButton} href={`/event/${encodeURIComponent(slug)}`}>
               행사 안내로
             </Link>
@@ -695,13 +707,27 @@ function NoticeTab({ slug, notices }: { slug: string; notices: Notice[] }) {
 }
 
 function NeedTicket({ slug }: { slug: string }) {
+  // Recovery availability resolves from the existing public health response;
+  // until it does the link stays so a working path is never hidden by a
+  // failed health read.
+  const recoveryBlocked = isRecoveryBlocked(useVerificationMode());
   return (
     <section className={styles.needTicket}>
       <p className={styles.needTicketText}>티켓이 확인되지 않습니다. 신청 후 이용하세요.</p>
+      {recoveryBlocked ? (
+        <p className={styles.needTicketText} role="note">
+          이 행사에서는 문자로 티켓을 다시 연결할 수 없어 신청한 기기에서만 열 수 있습니다.
+          티켓을 잃었다면 행사 안내의 문의처로 운영자에게 연락하세요.
+        </p>
+      ) : null}
       <p className={styles.needTicketAction}>
-        <Link className={styles.needTicketButton} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>
-          내 티켓 찾기
-        </Link>{" "}
+        {recoveryBlocked ? null : (
+          <>
+            <Link className={styles.needTicketButton} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>
+              내 티켓 찾기
+            </Link>{" "}
+          </>
+        )}
         <Link className={styles.needTicketButton} href={`/event/${encodeURIComponent(slug)}/register`}>
           참가 신청하기
         </Link>

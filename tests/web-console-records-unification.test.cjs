@@ -340,7 +340,13 @@ test('import flags over-limit fields instead of cutting them', () => {
 
 test('team activity maps raw command keys to concise Korean labels', () => {
   const panels = read('app/console/team/OperationsPanels.tsx');
+  const labels = read('app/console/team/activity-labels.ts');
   assert.match(panels, /function activityActionLabel/u, 'mapping owns one function');
+  // A single resolution path: the panel holds no command switch of its own,
+  // so a new server command can only change the shared map.
+  assert.doesNotMatch(panels, /switch \(type\)/u, 'no second command switch in the panel');
+  assert.doesNotMatch(panels, /case "report\.publish":/u, 'pinned cases live in the map, not the panel');
+  assert.match(panels, /getActivityLabel\(type\)/u, 'labels resolve through the shared map');
   for (const [key, label] of [
     ['report.publish', '결과 보고서 공유 완료'],
     ['report.create', '보고서 만들기'],
@@ -358,7 +364,7 @@ test('team activity maps raw command keys to concise Korean labels', () => {
     ['event.features', '기능 설정'],
     ['form.publish', '참가 신청 게시'],
   ]) {
-    assert.match(panels, new RegExp(`case "${key.replace('.', '\\.')}":[\\s\\S]*?return "${label}"`, 'u'), `${key} maps to ${label}`);
+    assert.match(labels, new RegExp(`"${key.replace('.', '\\.')}": "${label}"`, 'u'), `${key} maps to ${label} in the single map`);
   }
   assert.match(panels, /startsWith\("participant\."\)/u, 'participant.* maps together');
   assert.match(panels, /참가자 변경/u);

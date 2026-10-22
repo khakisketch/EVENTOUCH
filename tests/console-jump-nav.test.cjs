@@ -43,6 +43,9 @@ test('a section jump moves focus into the section, not only the viewport', () =>
   assert.match(nav, /onClick=\{\(\) =>/u);
   assert.match(nav, /document\.getElementById\(item\.id\)/u);
   assert.match(nav, /setAttribute\("tabindex", "-1"\)/u);
+  assert.match(nav, /target\.focus\(\{ preventScroll: true \}\)/u, 'focus moves directly, matching the messaging skip grammar');
+  assert.match(nav, /target\.scrollIntoView\(\{ block: "start" \}\)/u, 'the viewport follows explicitly, not by browser accident');
+  assert.match(nav, /instanceof HTMLElement/u, 'focus is guarded to focusable nodes');
   // The fragment must still change: a section stays copyable and reopenable.
   assert.doesNotMatch(nav, /event\.preventDefault\(\)/u);
 });

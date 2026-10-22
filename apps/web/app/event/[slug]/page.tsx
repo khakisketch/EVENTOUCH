@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eventStageClassName, eventStageLabel } from "../../event-stage";
+import { loadVerificationMode } from "../../../lib/verification-mode";
 import styles from "./public-event.module.css";
 
 type PublicEvent = {
@@ -69,9 +70,16 @@ export default async function EventPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const loaded = await loadEvent(slug);
+  const [loaded, verificationMode] = await Promise.all([
+    loadEvent(slug),
+    loadVerificationMode(),
+  ]);
   if (!loaded) notFound();
   const { event, workspace } = loaded;
+  // The recover screen itself refuses mock/none transports, so this page
+  // must not advertise a recovery that ends there: device + operator
+  // guidance replaces the link instead.
+  const recoveryBlocked = verificationMode === "mock" || verificationMode === "none";
 
   const intro =
     text(workspace.pageExperience?.published?.intro) || "참가에 필요한 안내를 확인하세요.";
@@ -187,12 +195,16 @@ export default async function EventPage({
           ) : (
             <p className={styles.registrationClosed} role="status">현재 신청을 받지 않습니다.</p>
           )}
-          <Link
-            className={`button button-secondary ${styles.recoveryLink}`}
-            href={`/event/${encodeURIComponent(slug)}/ticket/recover`}
-          >
-            이미 신청했다면 · 내 티켓 찾기
-          </Link>
+          {recoveryBlocked ? (
+            <p className={styles.registrationClosed} role="note">이미 신청했다면 신청한 기기에서 티켓을 여세요. 문자로 다시 연결할 수 없는 행사입니다. 티켓을 잃었다면 아래 문의처로 운영자에게 연락하세요.</p>
+          ) : (
+            <Link
+              className={`button button-secondary ${styles.recoveryLink}`}
+              href={`/event/${encodeURIComponent(slug)}/ticket/recover`}
+            >
+              이미 신청했다면 · 내 티켓 찾기
+            </Link>
+          )}
           <Link
             className={`button button-secondary ${styles.homeLink}`}
             href={`/event/${encodeURIComponent(slug)}/home`}

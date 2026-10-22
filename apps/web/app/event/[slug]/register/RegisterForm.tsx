@@ -235,6 +235,7 @@ export default function RegisterForm({ slug, fields, consentText, formVersion, v
       {recoveryBlocked ? (
         <p className="registration-lead" role="note">
           이 행사에서는 문자로 티켓을 다시 연결할 수 없어, 티켓은 신청한 기기에서만 열 수 있습니다.
+          티켓을 잃었다면 행사 안내의 문의처로 운영자에게 연락하세요.
         </p>
       ) : null}
       {fields.map((field) => {
@@ -327,10 +328,17 @@ export default function RegisterForm({ slug, fields, consentText, formVersion, v
       ) : null}
       {failure && !failure.field ? <p role="alert">{failure.message}</p> : null}
       {alreadyRegistered ? (
-        <p className="registration-duplicate" role="status">
-          이미 신청하신 연락처로 등록되어 있습니다.{" "}
-          <Link href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</Link>
-        </p>
+        recoveryBlocked ? (
+          <p className="registration-duplicate" role="status">
+            이미 신청하신 연락처로 등록되어 있습니다. 이 행사에서는 문자로 티켓을 다시 연결할 수 없어
+            신청한 기기에서만 열 수 있습니다. 티켓을 잃었다면 행사 안내의 문의처로 운영자에게 연락하세요.
+          </p>
+        ) : (
+          <p className="registration-duplicate" role="status">
+            이미 신청하신 연락처로 등록되어 있습니다.{" "}
+            <Link href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</Link>
+          </p>
+        )
       ) : null}
       {verificationRequired && !grant ? (
         <p className="notice" role="status">연락처 인증을 완료하면 아래에서 신청 정보를 입력할 수 있습니다.</p>

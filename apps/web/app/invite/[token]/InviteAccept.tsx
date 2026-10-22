@@ -34,7 +34,7 @@ function loginNextForRole(role: string, eventId: string | null): string {
 }
 
 function nextStepHint(role: string, eventId: string | null): string {
-  if (role === "STAFF") return "수락 후 로그인하면 배정된 현장 업무를 확인합니다. 수락 후 데스크·부스 배정으로 연결합니다.";
+  if (role === "STAFF") return "수락 후 로그인하면 운영자가 배정한 업무 목록으로 이동합니다. 아직 배정되지 않았다면 대기 상태로 표시됩니다.";
   if (role === "MANAGER" && eventId) return "수락 후 로그인하면 담당 행사로 이동합니다.";
   if (role === "MANAGER") return "수락 후 로그인하면 운영 콘솔로 이동합니다.";
   return "수락 후 로그인하세요.";

@@ -68,15 +68,15 @@ test("staff success folds the input and hands off to the next participant", () =
   );
   assert.match(staff, /ref=\{nextParticipantRef\}/u);
   // Preparing the next participant clears the just-processed input (no stale
-  // value left to resend) and restores the folded dock for the next person.
+  // value left to resend) and restores the folded input for the next person.
   const prepare = staff.slice(
     staff.indexOf("function prepareNextParticipant()")
   );
   assert.match(prepare, /setTicket\(""\)/u);
   assert.match(prepare, /setResult\(\{ kind: "idle" \}\)/u);
-  // A success folds the scan dock away; failures keep the form so the same
+  // A success folds the scan input away; failures keep the form so the same
   // ticket can be retried in place.
-  assert.match(staff, /scanDockHasContent && result\.kind !== "ok"/u);
+  assert.match(staff, /scanInputHasWork && result\.kind !== "ok"/u);
   // Success moves focus to the next step instead of stranding it on the
   // folded input.
   assert.match(staff, /nextParticipantRef = useRef<HTMLButtonElement \| null>/u);

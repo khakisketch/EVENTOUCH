@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import styles from "./engage.module.css";
+import { isRecoveryBlocked, useVerificationMode } from "../../../../lib/use-verification-mode";
 
 // Attendee engagement screen. Reads the public projection (published
 // programs only; the server filters drafts, disabled features, and other
@@ -169,6 +170,7 @@ export default function EngageClient({ slug }: { slug: string }) {
   const [captions, setCaptions] = useState<Record<string, string>>({});
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
+  const recoveryBlocked = isRecoveryBlocked(useVerificationMode());
 
   function commandIdFor(key: string): string {
     if (!commandIdsRef.current[key]) commandIdsRef.current[key] = randomCommandId();
@@ -462,9 +464,15 @@ export default function EngageClient({ slug }: { slug: string }) {
         </header>
         <section className={styles.noticeCard}>
           <h2>티켓이 확인되지 않습니다</h2>
-          <p>참여 프로그램은 티켓 링크로 연 참가자만 이용할 수 있습니다. 신청할 때 쓴 연락처로 티켓을 다시 연결하거나, 신청 완료 화면의 링크로 다시 여세요.</p>
+          {recoveryBlocked ? (
+            <p>참여 프로그램은 티켓 링크로 연 참가자만 이용할 수 있습니다. 이 행사에서는 문자로 티켓을 다시 연결할 수 없어 신청한 기기에서만 열 수 있습니다. 티켓을 잃었다면 행사 안내의 문의처로 운영자에게 연락하세요.</p>
+          ) : (
+            <p>참여 프로그램은 티켓 링크로 연 참가자만 이용할 수 있습니다. 신청할 때 쓴 연락처로 티켓을 다시 연결하거나, 신청 완료 화면의 링크로 다시 여세요.</p>
+          )}
           <p className={styles.actions}>
-            <Link className="button button-primary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</Link>
+            {recoveryBlocked ? null : (
+              <Link className="button button-primary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</Link>
+            )}
             <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</Link>
           </p>
         </section>
@@ -494,7 +502,7 @@ export default function EngageClient({ slug }: { slug: string }) {
             >
               다시 시도
             </button>
-            {state.hasTicket ? null : (
+            {state.hasTicket ? null : recoveryBlocked ? null : (
               <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</Link>
             )}
             <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</Link>

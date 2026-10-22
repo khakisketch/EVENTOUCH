@@ -62,9 +62,9 @@ test('the-empty-scan-dock-never-floats-over-the-booth-qr', () => {
   // The dock is shown only when it holds something (the SELF booth task has no
   // scan form), and it folds away once a scan succeeded so the next action is
   // the result, not the old input.
-  assert.match(staffWork, /const scanDockHasContent = activeTask === "desk" \|\| activeScope\.stampMode !== "SELF";/);
-  assert.match(staffWork, /\{scanDockHasContent && result\.kind !== "ok" \? \(/);
-  assert.match(staffWork, /<div className=\{prizeStyles\.scanDock\}>/);
+  assert.match(staffWork, /const scanInputHasWork = activeTask === "desk" \|\| activeScope\.stampMode !== "SELF";/);
+  assert.match(staffWork, /\{scanInputHasWork && result\.kind !== "ok" \? \(/);
+  assert.match(staffWork, /<div className=\{prizeStyles\.scanInput\}>/);
 });
 
 test('the-booth-qr-scrolls-into-view-when-a-booth-is-picked', () => {

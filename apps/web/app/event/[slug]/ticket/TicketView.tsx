@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import QRCode from "react-qr-code";
 import styles from "./ticket.module.css";
+import { isRecoveryBlocked, useVerificationMode } from "../../../../lib/use-verification-mode";
 
 type TicketState =
   | { kind: "loading" }
@@ -89,6 +90,7 @@ function clearStoredTicket(slug: string): void {
 export default function TicketView({ slug }: { slug: string }) {
   const [state, setState] = useState<TicketState>({ kind: "loading" });
   const [reloadTick, setReloadTick] = useState(0);
+  const recoveryBlocked = isRecoveryBlocked(useVerificationMode());
 
   useEffect(() => {
     let cancelled = false;
@@ -180,10 +182,11 @@ export default function TicketView({ slug }: { slug: string }) {
         {/* Same state, same words as the home entries: the attendee has no
             ticket here, and the way forward is the same everywhere. */}
         <h1>티켓이 확인되지 않습니다</h1>
-        <p>이 브라우저에 티켓이 보관되어 있지 않습니다. 신청할 때 쓴 연락처를 인증하면 다시 열 수 있습니다.</p>
-        <p>
-          <Link className={styles.buttonPrimary} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</Link>
-        </p>
+        {recoveryBlocked ? (
+          <p>이 브라우저에 티켓이 보관되어 있지 않습니다. 이 행사에서는 문자로 티켓을 다시 연결할 수 없어 신청한 기기에서만 열 수 있습니다. 티켓을 잃었다면 행사 안내의 문의처로 운영자에게 연락하세요.</p>
+        ) : (
+          <p>이 브라우저에 티켓이 보관되어 있지 않습니다. 신청할 때 쓴 연락처를 인증하면 다시 열 수 있습니다.</p>
+        )}
         <p>
           <Link className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/register`}>참가 신청하기</Link>
         </p>
@@ -191,11 +194,18 @@ export default function TicketView({ slug }: { slug: string }) {
     );
   }
   if (state.kind === "failed") {
+    // A 404 ticket with no SMS route behind it cannot be reconnected: the
+    // recover screen would only repeat that verdict, so it steps aside for
+    // device + operator guidance.
+    const showRecover = state.canRecover && !recoveryBlocked;
     return (
       <section className={`${styles.ticketCard} ${styles.ticketMessage}`}>
         <h1>티켓을 사용할 수 없습니다</h1>
         <p role="alert">{state.message}</p>
-        {state.canRecover ? (
+        {state.canRecover && recoveryBlocked ? (
+          <p>이 행사에서는 문자로 티켓을 다시 연결할 수 없어 신청한 기기에서만 열 수 있습니다. 티켓을 잃었다면 행사 안내의 문의처로 운영자에게 연락하세요.</p>
+        ) : null}
+        {showRecover ? (
           <p>
             <Link className={styles.buttonPrimary} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>연락처 인증으로 티켓 다시 찾기</Link>
           </p>
@@ -251,11 +261,18 @@ export default function TicketView({ slug }: { slug: string }) {
                 shows at the desk, not this link. */}
             <Link className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/engage`}>참여 프로그램 보기</Link>
           </div>
-          <p className={styles.ticketRecovery}>
-            이 티켓은 현재 탭에만 보관됩니다. 다른 기기에서 열 때는{" "}
-            <Link href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>연락처 인증으로 다시 연결</Link>
-            하세요.
-          </p>
+          {recoveryBlocked ? (
+            <p className={styles.ticketRecovery}>
+              이 티켓은 현재 탭에만 보관됩니다. 이 행사에서는 문자로 티켓을 다시 연결할 수 없어
+              다른 기기에서 열 수 없습니다. 티켓을 잃었다면 행사 안내의 문의처로 운영자에게 연락하세요.
+            </p>
+          ) : (
+            <p className={styles.ticketRecovery}>
+              이 티켓은 현재 탭에만 보관됩니다. 다른 기기에서 열 때는{" "}
+              <Link href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>연락처 인증으로 다시 연결</Link>
+              하세요.
+            </p>
+          )}
         </>
       ) : (
         <>

@@ -49,11 +49,11 @@ test('recent-checks-read-as-one-line-and-offer-next-scan-flow', () => {
 });
 
 test('field-flow-keeps-touch-size-sticky-scan-and-kiosk-distinction', () => {
-  assert.match(work, /prizeStyles\.scanDock/);
+  assert.match(work, /prizeStyles\.scanInput/);
   assert.match(work, /kiosk-mode/);
   assert.match(work, /키오스크 모드/);
   assert.match(styles, /\.nextActions button\s*\{[^}]*min-height:\s*44px/s);
   assert.match(styles, /\.recentRow button\s*\{[^}]*min-height:\s*44px/s);
-  assert.match(styles, /\.scanDock\s*\{[^}]*position:\s*sticky[^}]*bottom:\s*0/s);
+  assert.match(styles, /\.scanInput\s*{[^}]*position:\s*sticky[^}]*bottom:\s*0/s);
   assert.match(styles, /\.nextActions button,[\s\S]*?width:\s*100%/);
 });

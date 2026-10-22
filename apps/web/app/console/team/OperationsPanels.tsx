@@ -58,47 +58,13 @@ function verificationLabel(mode: string): string {
   }
 }
 
-// Raw command keys are operator-hostile on their own: the pinned cases below
-// keep their concise Korean action labels, and every other known audit type
-// resolves through the shared activity-labels map (the full server command
-// universe, read-only). Unknown keys keep the raw key at the data level so
-// no activity ever goes blank; rows render "기록된 작업" with the
-// raw key inside an on-demand details block instead.
+// Raw command keys are operator-hostile on their own: every known audit
+// type resolves through the single shared activity-labels map (the full
+// server command universe, read-only), so a new server command can only
+// change one place. Unknown keys keep the raw key at the data level so no
+// activity ever goes blank; rows render "기록된 작업" with the raw key
+// inside an on-demand details block instead.
 function activityActionLabel(type: string): string {
-  switch (type) {
-    case "report.publish":
-      return "결과 보고서 공유 완료";
-    case "report.create":
-      return "보고서 만들기";
-    case "reward.create":
-      return "경품 등록";
-    case "message.create":
-      return "메시지 발송 요청";
-    case "template.save":
-      return "템플릿 저장";
-    case "module.save":
-      return "참여 프로그램 저장";
-    case "module.status":
-      return "참여 프로그램 상태 변경";
-    case "question.submit":
-      return "Q&A 질문";
-    case "question.manage":
-      return "Q&A 답변";
-    case "notice.save":
-      return "공지 저장";
-    case "check.scan":
-      return "입퇴장 스캔";
-    case "desk.save":
-      return "데스크 저장";
-    case "booth.save":
-      return "부스 저장";
-    case "event.features":
-      return "기능 설정";
-    case "form.publish":
-      return "참가 신청 게시";
-    default:
-      break;
-  }
   const mapped = getActivityLabel(type);
   if (mapped !== null) return mapped;
   if (type.startsWith("participant.")) return "참가자 변경";

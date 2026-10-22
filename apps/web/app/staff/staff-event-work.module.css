@@ -204,7 +204,7 @@
   justify-self: start;
 }
 
-.scanDock {
+.scanInput {
   display: grid;
   gap: var(--s3);
 }
@@ -279,7 +279,7 @@
     justify-self: stretch;
   }
 
-  .scanDock {
+  .scanInput {
     position: sticky;
     bottom: 0;
     z-index: 1;

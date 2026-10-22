@@ -87,6 +87,7 @@ export default function StaffHub() {
     return (
       <section className="staff-workspace state-panel">
         <p role="status">배정된 업무가 없습니다. 운영자에게 문의하세요.</p>
+        <p>업무 배정은 운영 콘솔 &gt; 현장 운영 &gt; 스태프 배정에서 지정됩니다. 아직 배정 전이라면 대기 상태이며, 배정이 올라오면 다시 불러오기 후 목록에 표시됩니다. 이 화면을 안내한 담당자(초대 메일·행사 안내의 문의처)에게 배정 여부를 확인해 주세요.</p>
         <button type="button" className="button button-secondary" onClick={() => setReloadTick((tick) => tick + 1)}>
           다시 불러오기
         </button>

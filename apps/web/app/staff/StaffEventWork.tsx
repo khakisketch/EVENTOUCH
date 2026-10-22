@@ -88,6 +88,11 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   const [rewardDataLoaded, setRewardDataLoaded] = useState(false);
   const [rewardLookupTicket, setRewardLookupTicket] = useState("");
   const [rewardLookupLoading, setRewardLookupLoading] = useState(false);
+  // The last successfully scanned desk ticket, kept so the prize lookup can
+  // replay it with one touch: an exit scan that missed its reward response
+  // must not force the operator to retype the same ticket. Client memory
+  // only; no new server field is involved.
+  const [lastScannedTicket, setLastScannedTicket] = useState("");
   const [rewardCollectingId, setRewardCollectingId] = useState<string | null>(null);
   const [rewardError, setRewardError] = useState<string | null>(null);
   const [rewardNotice, setRewardNotice] = useState<string | null>(null);
@@ -108,8 +113,8 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   }
 
   // A success clears the just-processed input so the old value can never be
-  // resent, and folds the scan dock away: the result block next to it owns
-  // the "다음 참가자" step. That step restores the dock for the next person.
+  // resent, and folds the scan input away: the result block next to it owns
+  // the "다음 참가자" step. That step restores the input for the next person.
   function prepareNextParticipant() {
     setTicket("");
     setTicketCopyNotice(null);
@@ -236,6 +241,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     setTargetRewards([]);
     setRewardDataLoaded(false);
     setRewardLookupTicket("");
+    setLastScannedTicket("");
     setRewardError(null);
     setRewardNotice(null);
     load();
@@ -248,6 +254,20 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     if (input instanceof HTMLInputElement) input.focus();
   }, [kiosk, loading, task, deskId, boothId]);
 
+  // Printing is a browser dialog, not a route: closing it via 인쇄하기's
+  // print (or cancelling it) fires afterprint without touching the sheet's
+  // 닫기 path, so the print-only body flag is lifted here too. The sheet
+  // stays open so the operator can reprint or close deliberately.
+  useEffect(() => {
+    if (!nametag) return;
+    const liftPrintFlag = () => {
+      document.body.classList.remove("nametag-printing");
+    };
+    window.addEventListener("afterprint", liftPrintFlag);
+    return () => {
+      window.removeEventListener("afterprint", liftPrintFlag);
+    };
+  }, [nametag]);
   // The booth QR is shown to the participant, so it has to be fully on
   // screen: scroll it into view whenever a booth is picked.
   useEffect(() => {
@@ -303,9 +323,10 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   const selectedDesk = activeScope.desks.find((desk) => desk.id === deskId) ?? null;
   const isExitDesk = activeTask === "desk" && selectedDesk?.action === "OUT";
   // In the SELF booth task the staff shows a QR instead of scanning one, so
-  // the scan dock would be empty. An empty sticky dock still floats over the
-  // page and covers the QR the participant has to scan, so it is not shown.
-  const scanDockHasContent = activeTask === "desk" || activeScope.stampMode !== "SELF";
+  // the scan input would be empty. An empty sticky input still floats over
+  // the page and covers the QR the participant has to scan, so it is not
+  // shown.
+  const scanInputHasWork = activeTask === "desk" || activeScope.stampMode !== "SELF";
   // The recent list follows the task on screen: desk passes under the desk
   // task, booth stamps under the booth task. Mixing them made the operator
   // hunt for the record that belongs to the task in hand.
@@ -377,6 +398,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         : "STAMP";
       const participantId = typeof data?.id === "string" ? data.id : "";
       const participantName = typeof data?.name === "string" ? data.name : "";
+      if (isDesk) setLastScannedTicket(code.trim());
       setResult({
         kind: "ok",
         participantId,
@@ -428,13 +450,15 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     return { data, attempt };
   }
 
-  async function lookupRewardsByTicket(event: React.FormEvent) {
+  async function lookupRewardsByTicket(event: React.FormEvent, ticketOverride?: string) {
     event.preventDefault();
-    if (!rewardEnabled || !isExitDesk || !assignment || !rewardLookupTicket.trim() || rewardLookupLoading) return;
+    const lookupTicket = (ticketOverride ?? rewardLookupTicket).trim();
+    if (!rewardEnabled || !isExitDesk || !assignment || !lookupTicket || rewardLookupLoading) return;
+    setRewardLookupTicket(lookupTicket);
     setRewardLookupLoading(true);
     clearRewardPanel();
     try {
-      const { data, attempt } = await postRewardCommand("reward.lookup", { ticket: rewardLookupTicket.trim() });
+      const { data, attempt } = await postRewardCommand("reward.lookup", { ticket: lookupTicket });
       const person = typeof data.participant === "object" && data.participant !== null
         ? data.participant as Record<string, unknown>
         : null;
@@ -673,13 +697,13 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       )}
       {activeTask === "booth" && activeScope.stampMode === "SELF" ? (
         <p className="notice" role="status">
-          참가자가 직접 인증하는 방식입니다. QR을 보여주고 참가자 홈 &gt; 부스 인증에 코드를 붙여넣게 안내하세요.
+          참가자가 직접 인증하는 방식입니다. QR을 보여주고 참가자 홈 &gt; 부스 인증에서 카메라로 바로 인증하게 안내하세요.
           이 화면에서 티켓을 대신 처리하지 않습니다.
         </p>
       ) : null}
       {activeTask === "booth" && activeScope.stampMode === "SELF" && boothId ? (
         <div className="staff-booth-code">
-          <p>이 QR을 참가자에게 보여주세요. 참가자가 카메라로 찍어 코드를 복사한 뒤 참가자 홈 &gt; 부스 인증에 붙여넣습니다.</p>
+          <p>이 QR을 참가자에게 보여주세요. 참가자는 참가자 홈 &gt; 부스 인증에서 카메라로 찍어 바로 인증하고, 카메라를 쓸 수 없으면 아래 코드를 직접 입력합니다.</p>
           <div
             className={prizeStyles.boothQr}
             role="img"
@@ -714,8 +738,8 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       {activeTask !== "booth" || activeScope.stampMode !== "SELF" ? (
         <p id="staff-scan-hint" className="staff-direction-hint" role="status">{scanHint}</p>
       ) : null}
-      {scanDockHasContent && result.kind !== "ok" ? (
-      <div className={prizeStyles.scanDock}>
+      {scanInputHasWork && result.kind !== "ok" ? (
+      <div className={prizeStyles.scanInput}>
       {activeTask === "booth" && activeScope.stampMode !== "SELF" ? (
         <form className="scan-form" onSubmit={onScan}>
           <div className="form-field">
@@ -888,6 +912,16 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             <button type="submit" className="button button-secondary" disabled={rewardLookupLoading || !ready || !rewardLookupTicket.trim()}>
               {rewardLookupLoading ? "조회 중입니다" : "경품 조회"}
             </button>
+            {lastScannedTicket ? (
+              <button
+                type="button"
+                className="button button-secondary"
+                disabled={rewardLookupLoading || !ready}
+                onClick={(event) => lookupRewardsByTicket(event, lastScannedTicket)}
+              >
+                마지막 스캔 티켓으로 조회
+              </button>
+            ) : null}
           </form>
           {rewardTarget ? (
             <div className={prizeStyles.prizeTarget}>

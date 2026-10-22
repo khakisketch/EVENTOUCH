@@ -317,6 +317,34 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
     return state.reports.find((report) => report.id === detailId) ?? null;
   }, [state, detailId]);
 
+  // The open report stays addressable: the hash carries the detail id, so a
+  // checklist deep-link round-trip (or a copied URL) restores the same open
+  // report instead of dropping the operator back at the list. Section
+  // anchors (#reports-*) are never touched; only #report-* is managed here.
+  useEffect(() => {
+    try {
+      const match = /^#report-([^#]+)$/.exec(window.location.hash);
+      if (match && match[1]) setDetailId(decodeURIComponent(match[1]));
+    } catch {
+      // The address bar stays as-is; the operator keeps the list.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId]);
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      if (detailId) {
+        url.hash = `report-${encodeURIComponent(detailId)}`;
+        window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+      } else if (/^#report-/.test(url.hash)) {
+        url.hash = "";
+        window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+      }
+    } catch {
+      // The address bar stays as-is; the open report still renders.
+    }
+  }, [detailId]);
+
   async function runCommand(
     command: string,
     payload: Record<string, unknown>,
@@ -391,13 +419,32 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
     cleanupReportPrint();
     const clone = source.cloneNode(true) as HTMLElement;
     clone.id = "eventouch-report-print";
+    // The clone must not duplicate in-page ids: assistive tech and fragment
+    // navigation would otherwise see two owners for one id.
+    clone.querySelectorAll("[id]").forEach((node) => node.removeAttribute("id"));
     document.body.appendChild(clone);
     document.body.classList.add("report-printing");
-    const handleAfterPrint = () => {
+    let cleaned = false;
+    const finish = () => {
+      if (cleaned) return;
+      cleaned = true;
       window.removeEventListener("afterprint", handleAfterPrint);
+      window.removeEventListener("pagehide", handlePageHide);
+      media.removeEventListener("change", handleMedia);
       cleanupReportPrint();
     };
+    const handleAfterPrint = () => finish();
+    const handlePageHide = () => finish();
+    // afterprint is the primary signal; the print-media change and pagehide
+    // cover browsers that never fire afterprint (cancel paths included), and
+    // the unmount effect below covers a mid-dialog navigation.
+    const media = window.matchMedia("print");
+    const handleMedia = () => {
+      if (!media.matches) finish();
+    };
     window.addEventListener("afterprint", handleAfterPrint);
+    window.addEventListener("pagehide", handlePageHide);
+    media.addEventListener("change", handleMedia);
     window.print();
   }
 
@@ -727,25 +774,52 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
             </p>
             <p className={styles.archiveLead}>조회 기준 시각 {loadedAt ? capturedLabel(loadedAt) : "확인 중"} · 새로고침 시 갱신됩니다.</p>
             <ul className={styles.archiveList}>
-              <li>현재 단계: {state.stage ? eventStageLabel(state.stage) : "단계 미정"}</li>
               <li>
-                {state.registrationOpen
-                  ? "참가 접수 열림 — 보관 전에 접수 닫기가 필요합니다."
-                  : "참가 접수 닫힘"}
+                현재 단계: {state.stage ? eventStageLabel(state.stage) : "단계 미정"}{" "}
+                <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/settings#settings-stage`}>
+                  진행 단계에서 확인·전환
+                </Link>
               </li>
               <li>
-                {state.openModules.length
-                  ? `진행 중인 참여 프로그램 ${state.openModules.length}개 — 보관 전에 모두 닫기가 필요합니다: ${state.openModules.map((module) => module.name).join(" · ")}`
-                  : "진행 중인 참여 프로그램 없음"}
+                {state.registrationOpen ? (
+                  <>
+                    참가 접수 열림 — 보관 전에 접수 닫기가 필요합니다.{" "}
+                    <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/settings#settings-intake`}>
+                      참가 접수에서 닫기
+                    </Link>
+                  </>
+                ) : (
+                  "참가 접수 닫힘"
+                )}
+              </li>
+              <li>
+                {state.metrics.pending > 0 ? (
+                  <>
+                    승인 대기 {state.metrics.pending}명 — 보관 집계에 포함되지 않습니다.{" "}
+                    <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants?status=PENDING`}>
+                      참가자에서 승인 처리하기
+                    </Link>
+                  </>
+                ) : (
+                  "승인 대기 없음"
+                )}
+              </li>
+              <li>
+                {state.openModules.length ? (
+                  <>
+                    {`진행 중인 참여 프로그램 ${state.openModules.length}개 — 보관 전에 모두 닫기가 필요합니다: ${state.openModules.map((module) => module.name).join(" · ")}`}{" "}
+                    <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/programs`}>
+                      참여 프로그램에서 닫기
+                    </Link>{" "}
+                    <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/draws`}>
+                      추첨·투표에서 닫기
+                    </Link>
+                  </>
+                ) : (
+                  "진행 중인 참여 프로그램 없음"
+                )}
               </li>
             </ul>
-            {state.archived ? null : (
-              <p className={styles.archiveLead}>
-                <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/settings#settings-stage`}>
-                  행사 설정 · 진행 단계에서 확인·전환
-                </Link>
-              </p>
-            )}
           </div>
           <ConsoleFormActions>
             <button type="button" className="button button-secondary" onClick={() => exportJson(detail)}>

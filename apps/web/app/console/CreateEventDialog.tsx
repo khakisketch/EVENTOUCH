@@ -373,7 +373,7 @@ export default function CreateEventDialog({
             </dl>
           </div>
         ) : clientMode === "create" ? (
-          "새 고객사를 등록하면 이 행사의 고객사로 바로 선택됩니다. 입력 중인 행사 정보는 그대로 유지됩니다."
+          "새 고객사를 등록하면 이 행사의 고객사로 바로 선택됩니다. 입력 중인 행사 정보는 그대로 유지됩니다. 등록한 고객사는 행사 작성을 취소해도 고객사 목록에 남습니다."
         ) : undefined}
     >
       {clientMode === "create" && !duplicateOf ? (
@@ -470,7 +470,10 @@ export default function CreateEventDialog({
             {invalid("slug") ? <p role="alert">{failure?.message}</p> : null}
           </div>
           {duplicateOf ? (
-            <p className={styles.slugHint}>고객사: {duplicateOf.clientName || "선택하지 않음"}</p>
+            <>
+              <p className={styles.slugHint}>고객사: {duplicateOf.clientName || "선택하지 않음"}</p>
+              <p className={styles.slugHint} role="note">복제 중에는 고객사를 새로 등록할 수 없습니다. 다른 고객사로 복제하려면 복제를 마친 뒤 행사 설정에서 바꾸거나, 고객사 화면에서 먼저 등록한 뒤 이 화면을 다시 여세요.</p>
+            </>
           ) : clientMode === "create" ? null : (
             <div>
               <label htmlFor="create-client">고객사</label>

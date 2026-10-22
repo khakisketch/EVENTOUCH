@@ -149,8 +149,11 @@ test("operations: row assignment reuses the generic dialog preselected, never au
   assert.match(source, /targetId !== \(initialTargetId \?\? ""\)/u, "the dirty baseline is the preset, not a blank");
   assert.match(source, /disabled=\{busy \|\| !accountId \|\| !currentTarget\}/u, "staff selection still gates submit");
   assert.doesNotMatch(source, /onSubmit\(\{ accountId, type, targetId: currentTarget \}\)[\s\S]{0,80}auto|autoSubmit/u);
-  // Prefill resets: close clears the preset and the dialog unmounts per open.
-  assert.match(source, /setAssignPreset\(null\); \}\}/u);
+  // Prefill survives: dismissal keeps the preset target so an invite
+  // round-trip (team screen and back) reopens on the same desk/booth; only
+  // a committed assignment clears it, and the dialog still unmounts per open.
+  assert.match(source, /onClose=\{\(\) => \{ setAssignDirty\(false\); setAssignOpen\(false\); \}\}/u);
+  assert.match(source, /if \(ok\) \{ setAssignDirty\(false\); setAssignOpen\(false\); setAssignPreset\(null\); \}/u);
   assert.match(source, /\{assignOpen \? \(\s*<AssignDialog/u, "the dialog mounts fresh on each open");
   assert.match(source, /targets\.some\(\(target\) => target\.id === targetId\) \? targetId : ""/u, "a stale target coerces to unchosen");
 });

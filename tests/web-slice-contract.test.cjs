@@ -142,11 +142,14 @@ test('web-attendee-verification-precedes-signup-and-recovery-without-accounts', 
   const recoverPage = read('app/event/[slug]/ticket/recover/page.tsx');
   assert.match(recoverPage, /RecoverForm/);
   // The ticket screen falls back to the session when the tab holds no
-  // bearer, and points home instead of dead-ending.
+  // bearer, and points home instead of dead-ending. Recovery entries stay
+  // but step aside with device + operator guidance where no SMS code can
+  // arrive (mock/none transports).
   const view = read('app/event/[slug]/ticket/TicketView.tsx');
   assert.match(view, /ticket\/recover/);
-  assert.match(view, /내 티켓 찾기/);
+  assert.match(view, /연락처 인증으로 티켓 다시 찾기/);
   assert.match(view, /신청 연락처 인증으로 다시 연결/);
+  assert.match(view, /신청한 기기에서만 열 수 있습니다/);
   // The recovery note stays a quiet footnote; the wording changed with it.
   assert.match(view, /이 티켓은 현재 탭에만 보관됩니다/);
   const event = read('app/event/[slug]/page.tsx');
