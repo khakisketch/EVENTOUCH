@@ -1,6 +1,6 @@
 # EVENTOUCH 구조
 
-Updated: 2026-10-14 · 기준 브랜치: `master` (구현 기준은 현재 저장소 코드와 테스트)
+Updated: 2026-10-17 · 기준 브랜치: `master` (구현 기준은 현재 저장소 코드와 테스트)
 
 이 문서는 현재 구현과 목표 아키텍처를 구분해 기록한다. 제안서(`EVENTOUCH_서비스 기획 및
 제안.html`)나 `행사운영플랫폼_개발기획안.pdf`는 초기 기획이므로 구현 판단의 근거로 쓰지 않는다.
@@ -11,18 +11,22 @@ Updated: 2026-10-14 · 기준 브랜치: `master` (구현 기준은 현재 저�
 
 ## 1. 한눈에
 
-행사대행사가 여러 고객사의 행사를 운영하는 B2B 워크스페이스. 하나의 서버가 세 종류의
-화면을 제공한다.
+행사대행사가 여러 고객사의 행사를 운영하는 B2B 워크스페이스. 하나의 API와
+유일한 제품 UI인 Next.js 새 앱(`apps/web`)이 네 종류의 화면을 제공한다.
 
 | 표면 | 사용자 | 경로 | 인증 |
 |---|---|---|---|
-| 운영 콘솔 | 대행사·행사 담당·현장 스태프 | `#/console/*`, `#/staff/*` | 세션 쿠키 |
-| 참가자 웹 | 행사 참가자 | `#/event/<slug>/*` | 티켓 bearer (URL) |
-| 행사장 출력 | 무대·전광판 | `#/screen/<eventId>` | 없음(공개) |
-| 초대 수락 | 초대받은 구성원 | `#/invite/<token>` | 초대 토큰 |
+| 운영 콘솔 | 대행사·행사 담당 | `/console/*` | 세션 쿠키 |
+| 현장 스태프 | 배정된 스태프 | `/staff`, `/staff/events/:eventId` | 세션 쿠키 |
+| 참가자 웹 | 행사 참가자 | `/event/<slug>`, `/event/<slug>/register`, `/event/<slug>/ticket`, `/event/<slug>/home`, `/event/<slug>/engage` | 티켓 bearer·참가자 세션 |
+| 행사장 출력 | 무대·전광판 | `/screen/<slug>` | 없음(공개) |
+| 초대 수락 | 초대받은 구성원 | `/invite/<token>` | 초대 토큰 |
+| 공용 입구 | 모두 | `/`, `/login` | 로그인 상태면 역할별 복귀 |
 
-현행 계약 테스트는 화면 39 · UI 액션 120을 고정한다. 서버 커맨드와 테이블 정의의 현재
-범위는 각각 `server/commands/`와 `server/migrations/`를 기준으로 한다.
+구 바닐라 앱(`index.html` 해시 라우터·`assets/`·`window.ET`)과 그 계약 검사
+(화면·액션 수·로드 순서 고정)는 2026-10-17 은퇴로 제거됐다. 의도된 구 UI 계약
+은퇴이며 서버 커맨드·권한·멱등 커버리지의 손실이 아니다. 서버 커맨드와 테이블
+정의의 현재 범위는 각각 `server/commands/`와 `server/migrations/`를 기준으로 한다.
 
 ## 목표 아키텍처 (점진 적용)
 
@@ -30,14 +34,22 @@ Updated: 2026-10-14 · 기준 브랜치: `master` (구현 기준은 현재 저�
 
 - **제품 구조:** 하나의 모듈형 모놀리스. 참가자·운영자·스태프·전광판은 같은 제품/API를 쓴다.
   트래픽이나 독립 배포 필요가 확인되기 전에는 마이크로서비스로 분리하지 않는다.
-- **프론트엔드 목표:** TypeScript 기반 Next.js App Router. 공개 행사 페이지는 검색·공유 요구에
-  맞춰 서버 렌더링을 검토하고, 운영 콘솔과 QR 카메라 스캔은 브라우저 상태가 필요한 클라이언트
-  화면으로 둔다. 현행 바닐라 화면은 기능 단위로 교체하고, 한 번에 전부 옮기지 않는다.
+- **프론트엔드:** TypeScript Next.js App Router(`apps/web`)가 유일한 제품 UI다.
+  공개 행사 페이지는 서버 컴포넌트 렌더링, 운영 콘솔·QR 카메라 스캔 등 브라우저
+  상태가 필요한 화면은 클라이언트 컴포넌트로 둔다. 스타일은 제품 토큰
+  (`apps/web/app/tokens.css`) + CSS 모듈 + 공용 콘솔 부품
+  (`apps/web/app/console/console-ui/`)으로 구현한다. 브라우저는 새 앱의 오리진에만
+  닿고, `/api/*`는 새 앱의 rewrite가 API로 전달한다(`EVENTOUCH_API_URL`, 기본
+  `http://127.0.0.1:8776`, compose 내부 `http://eventouch:8776`). 프론트가 API
+  호스트를 직접 두지 않으므로 쿠키·CSP·CORS 정책이 유지된다. 서비스 워커·오프라인
+  셸·스캔 큐는 없다. 계약 테스트 `tests/web-slice-contract.test.cjs`가 rewrite와
+  읽기 전용을 고정한다.
 - **백엔드 목표:** Node.js + TypeScript의 도메인 모듈형 API. Fastify는 라우트·검증 경계로
   점진 도입하되, 기존 커맨드 도메인을 보존하고 프론트엔드와 업무 규칙을 중복하지 않는다.
   모든 쓰기는 서버 권위이며 PostgreSQL 트랜잭션에서 검증한다.
   (진행: `server/commands/shared.ts` 전환 + `npm run server:typecheck`, `server/fastify/health.ts`가
-  `GET /api/health`를, `server/fastify/public-reads.ts`가 `GET /api/public/*` 읽기(공개 행사·티켓·
+  `GET /api/health`를, `server/server.js`가 DB `SELECT 1`을 포함하는 `GET /api/readyz`를,
+  `server/fastify/public-reads.ts`가 `GET /api/public/*` 읽기(공개 행사·티켓·
   공개 파일)를, `server/fastify/organization-rest.ts`가 조직 REST(행사 목록/생성·고객사·조직 권한·
   행사 멤버)를, `server/fastify/command-path.ts`가 참가자 커맨드 경로(가입·이벤트 커맨드)를 서빙.
   빌드 단계 없음 — Node 24 타입 스트리핑, erasable 문법만.
@@ -56,19 +68,20 @@ Updated: 2026-10-14 · 기준 브랜치: `master` (구현 기준은 현재 저�
   만료·취소 여부는 서버가 매 스캔마다 판정한다.
 - 같은 참가자의 동시 스캔도 PostgreSQL 잠금/제약으로 한 번만 상태를 바꾸며, 재전송은
   `commandId` 멱등성으로 처리한다. 실패·중복 결과는 스태프 화면에 구분해 보여준다.
-- 오프라인에서는 셸과 스캔 큐만 허용한다. 서버 확인 전 기록은 확정 체크인으로 표시하지 않고,
-  재연결 시 권한·티켓·중복을 다시 검사한다. 오프라인 로그인 세션을 새로 허용하지 않는다.
+- 오프라인 지원 없음. 새 앱은 오프라인 셸·스캔 큐를 제공하지 않으므로 연결 단절은
+  오류 안내와 재시도로만 다룬다. 서버 확인 전 기록은 확정 체크인으로 표시하지 않고,
+  오프라인 로그인 세션을 새로 허용하지 않는다.
 - QR이 bearer 자격증명인 만큼 원문 로그·오류 추적·분석 이벤트에 토큰을 남기지 않는다.
   QR 토큰의 저장·재발급·취소 방식은 핵심 엔티티를 정규화할 때 해시 저장과 유출 대응까지 함께
   설계한다. 현행 workspace 저장 방식을 바꾸기 전에는 호환성 마이그레이션을 먼저 만든다.
 
 ### 이전 순서와 완료 기준
 
-1. 현재 구현·문서·API 계약을 기준선으로 고정하고 QR/체크인 실패·중복·오프라인 재전송 테스트를 보강한다.
+1. 현재 구현·문서·API 계약을 기준선으로 고정하고 QR/체크인 실패·중복 테스트를 보강한다.
 2. DB 마이그레이션으로 티켓/체크인 핵심 엔티티를 분리하되 기존 API 응답과 화면 계약을 유지한다.
 3. TypeScript API 모듈을 먼저 분리하고, Fastify 경계에서 기존 권한·트랜잭션 테스트를 그대로 통과시킨다.
-4. Next.js 화면을 기능 단위로 도입한다. 각 단위의 E2E/접근성/모바일 검증이 끝나기 전 기존 화면을 제거하지 않는다.
-5. 실기기 QR 스캔, 오프라인 재전송, DB 백업 복구, 운영 로그·알림까지 검증한 뒤 운영 전환한다.
+4. Next.js 화면을 기능 단위로 도입하고, 각 단위의 브라우저·접근성·모바일 검증이 끝난 뒤 구 화면을 제거한다(2026-10-17 제거 완료).
+5. 실기기 QR 스캔, 운영 데이터 규모의 DB 백업·복구 리허설, 운영 로그·알림까지 검증한 뒤 운영 전환한다.
 
 각 단계는 기존 API·권한·멱등성·저장 보존 테스트를 통과해야 완료다. 프레임워크 교체만으로
 완료 처리하지 않는다.
@@ -88,13 +101,16 @@ Updated: 2026-10-14 · 기준 브랜치: `master` (구현 기준은 현재 저�
     assignment.read · participants.read
     check.scan · check.correct · checkin.scan · checkin.sync · checkin.correction
     booth.visit
+    reward.lookup · reward.collect (배정된 DESK에서 대상자 경품 조회·수령)
 
 `STAFF_TARGET_REQUIRED`(`check.scan`, `checkin.scan`, `booth.visit`)는 대상 ID까지
 일치해야 한다. 즉 다른 데스크의 스캔은 서버가 거부한다.
+`reward.lookup`·`reward.collect`도 DESK 배정을 서버에서 확인한다. STAFF bootstrap에는
+전역 경품 목록을 싣지 않고, 스캔 영수증·대상자별 조회 응답에 필요한 경품만 싣는다.
 
 행사 단위 쓰기 권한은 `memberships.write_permissions` 배열이며 `'all'` 또는 기능 키다.
-화면 접근은 라우트 → 메뉴 그룹(`router.js`의 `groups`, 37개 매핑) → 그룹 권한 순으로
-판정한다.
+화면 접근은 라우트 → 셸 메뉴(행사·고객사 + 행사 하위 목적지, 2메뉴 정본) → 그룹 권한 순으로
+판정한다. 메뉴 표시는 게이트일 뿐이며 권한 판정은 항상 서버가 한다.
 
 ## 3. 행사 생명주기와 기능
 
@@ -113,6 +129,54 @@ Updated: 2026-10-14 · 기준 브랜치: `master` (구현 기준은 현재 저�
 
 참가자 상태: `PENDING`(승인 대기) · `APPROVED`(참가 확정) · `WAITLIST`(대기 명단) ·
 `CANCELLED`(신청 취소).
+
+### 3.1 참가자 추첨·투표와 무대
+
+`server/commands/attendee-experience.js`는 기존 도메인 실행기 안에서 같은 행사 잠금·
+권한·영수증·감사 규율을 사용한다. 설정/결과는 워크스페이스 JSONB에 저장한다.
+
+- `vote.config.save`로 정확한 선택 수·개시/마감·집계 게시를 정한다. `vote.ranked`는
+  호환 이름일 뿐 참가자 순위 입력이 아니다. `vote.tally`는 득표수 경쟁 순위와 동점을
+  명시하고 3위 경계 동점을 임의 탈락시키지 않는다. 미게시 집계는 공개 응답에서 숨긴다.
+- `roulette.config.save`는 무대 추첨과 독립된 시간·재고·상품 정책이다. 유한 재고는
+  잔여 수량을 기본 가중치로 쓰며 무제한은 명시적 `quantity:null`과 양의 `weight`가
+  필요하다. 첫 결과 이후 상품 ID/순서/이름은 고정한다. `roulette.spin`은 개인별 한 번,
+  결과와 수령 가능한 경품을 함께 저장한다. 공개 `rouletteView`는 운영 여부·시간·
+  경품 라벨만 제공하고 수량/가중치는 공개하지 않는다.
+- `lucky.config.save`·`lucky.preassign`으로 초대 전 번호를 원자적으로 배정한다.
+  신규 행사는 1~900 기본 풀, 투표·룰렛 마감 상태로 시작한다. 기존 미설정 행사는
+  명시적으로 구분해 정규화하며 이미 배정한 번호를 바꾸지 않는다.
+- `draw.program.save/run`은 PERSON/COMPANY 대상·그룹/업체 필터·상품 등급·
+  EVENT/PROGRAM/NONE 중복 범위를 지원한다. `count:1`은 사회자 한 번 터치다.
+  `showOnScreen:true`는 당첨·경품 생성·전광판 선택을 한 트랜잭션에 담고,
+  출력 기능이나 게시 모듈 조건이 맞지 않으면 전부 거부한다. 게시를 내리면 연결된
+  모듈 내역도 숨기며 상태 변경으로 명시적 비공개 선택을 덮어쓰지 않는다.
+- 개인 당첨은 발생 건별 경품을 만든다. 업체 당첨은 PENDING 경품으로 남기고
+  `reward.assign`으로 승인된 동일 업체 수령자를 운영자가 명시한 뒤 수령할 수 있다.
+  `check.scan` 응답의 해당 참가자 경품과 `reward.lookup/collect`는 같은 단일 커맨드
+  경로·영수증을 사용한다. 퇴장 스캔이 경품 수령을 자동 확정하지 않는다.
+
+메시지 변수·개인 링크의 발송 조건은 [INTEGRATIONS.md](INTEGRATIONS.md)를 따른다.
+
+### 3.2 행사별 참가자 홈 디자인
+
+`attendee.page.save/publish`의 기존 `pageExperience.{draft,published}`에 `homeStyle`을
+추가한다. 기본값·허용 필드·입력 검증의 서버 정본은 `server/attendee-home-style.js`다.
+배경 HEX, 제한된 대표/보조 문구, 배치·크기·정렬·글자 톤·이미지 덮개·초점 선택지만
+저장하며 임의 CSS/HTML/외부 글꼴·이미지 URL은 설정으로 받지 않는다. 미설정·이전 행사는
+현재 기본 홈을 유지한다. `homeStyle` 생략은 기존 초안을 보존하고 부분 객체는 해당 필드만
+병합하며 `null`은 스타일 기본값으로 되돌린다(배너 파일을 지우는 동작과 별개).
+
+초안 저장은 `draftVersion`을 올리고, 게시는 그 버전을 `publishedVersion`으로 복사한다.
+새 편집기는 `expectedDraftVersion`을 보내 다른 운영자의 최신 초안을 덮어쓰거나 잘못
+게시하지 않으며, 기존 클라이언트의 버전 필드 생략은 호환된다. 응답 유실 재시도는 같은
+커맨드 영수증으로 결과를 확인하고 버전을 다시 올리지 않는다.
+
+공개·티켓 API는 게시본 `homeStyle`만 허용 목록으로 투영한다. 초안·내부 버전은 공개하지
+않는다. 배너는 기존 행사 범위 파일 업로드/읽기와 PNG/JPEG/WEBP 600KB 제한을 재사용한다.
+미게시 파일은 인증된 운영자 경로에서만 미리 보고, 게시 후에만 공개 파일 경로로 제공한다.
+콘솔 편집기는 새 앱 `/console/events/:id/page`가 유일한 입구다(`ThemeWorkspace`, 휴대폰
+미리보기·초안 저장·명시적 게시·충돌 시 `expectedDraftVersion` 409 안내).
 
 ## 4. 데이터 모델
 
@@ -209,7 +273,7 @@ PostgreSQL이 행사 데이터의 유일한 권위다. JSON 파일 저장소(`DA
   `ORG_PERMISSIONS`·`EVENT_PERMISSIONS`). 모르는 키는 저장하지 않고 400으로 거부한다.
 - 고객사 수정은 이 커맨드가 소유하지 않는 필드(연결된 담당자 계정 등)를 보존한다.
   이름을 고쳐도 연결이 끊기지 않는다.
-- 클라이언트는 `assets/js/server-sync.js`의 `syncCommand`에서 이 이름들을 해당 경로로 보낸다.
+- 클라이언트는 새 앱의 워크스페이스 컴포넌트에서 이 이름들을 해당 경로로 보낸다.
   매핑이 없으면 이벤트 커맨드 경로로 흘러가 "지원하지 않는 …작업"으로 실패한다.
 
 ### 커맨드 모듈 (2026-10-12 측정 스냅샷; 현재 범위는 코드 기준)
@@ -246,22 +310,44 @@ MANAGER만 호출할 수 있다. 파일 참조는 같은 행사에 운영자가 
 - 잠금 응답(429)은 "잠겼다"고 알리지 않는다(공격자에게 신호가 되므로).
 - 미마이그레이션 DB에서는 제한 테이블 부재를 감지해 **제한 없이 로그인을 계속 허용**한다.
   운영자가 자기 제품에 잠기는 것이 더 나쁜 실패이기 때문이다.
-- 보안 헤더: CSP(nonce 기반) · `X-Frame-Options: SAMEORIGIN` · `nosniff` · `Referrer-Policy` ·
-  `Permissions-Policy` · HSTS(`COOKIE_SECURE=1`일 때). 모든 응답에 적용.
-  CSP의 `frame-ancestors 'self'`는 참가자 페이지의 "미리보기"가 같은 출처의 참가자 화면을
-  iframe으로 띄우기 때문이다. 외부 출처 프레임은 계속 차단한다.
+- 보안 헤더: API는 nonce 기반 CSP · `X-Frame-Options: SAMEORIGIN` · `nosniff` ·
+  `Referrer-Policy` · `Permissions-Policy` · HSTS(`COOKIE_SECURE=1`일 때) · COOP를
+  모든 응답에 적용한다. CSP의 `frame-ancestors 'self'`는 같은 출처의 참가자 화면을
+  프레임으로 띄우는 운영자 미리보기 때문이다. 외부 출처 프레임은 계속 차단한다.
   `EVENTOUCH_CSP_REPORT_ONLY=1`로 강제 없이 관찰할 수 있다.
+- Next 문서 응답은 `apps/web/proxy.ts`가 요청별 nonce를 요청·응답 CSP에 함께 싣고
+  Next가 같은 nonce를 하이드레이션 스크립트에 부여한다. 루트 레이아웃은 이를 위해
+  동적으로 렌더링한다(정적 HTML/CDN 캐싱을 전제로 두지 않는다). 운영 `script-src`는
+  nonce와 `strict-dynamic`을 쓰며 `unsafe-inline`·`unsafe-eval`은 허용하지 않는다.
+  React의 검증된 테마 style 속성은 `style-src 'unsafe-inline'`으로 허용하되 스크립트
+  정책을 완화하지 않는다. 카메라(self)·같은 출처 미리보기·nosniff·리퍼러·COOP도 유지한다.
+  HSTS와 insecure-request 업그레이드는 `COOKIE_SECURE=1`에서만 켜 로컬 HTTP를
+  임의로 HTTPS로 바꾸지 않는다. `/api/*`는 API 자신의 보안 정책을 덮어쓰지 않는다.
 
-## 7. 프론트엔드 구조
+## 7. 프론트엔드 (유일한 제품 UI)
 
-빌드 단계가 없다. 바닐라 ES(브라우저) + IIFE가 `window.ET`(코드에서는 `E`)를 확장한다.
-`index.html`이 `defer` 스크립트 25개와 CSS 7개를 **순서대로** 로드하므로 로드 순서가
-계약이다(`tests/load-order.test.cjs`가 고정).
+`apps/web`(Next.js + TypeScript App Router)이 제품의 유일한 프론트엔드다. 구 바닐라 앱은
+2026-10-17 은퇴로 제거됐으므로 아래만 현재 계약이다. 제품 토큰 정본은
+`apps/web/app/tokens.css`, 화면 스타일은 CSS 모듈 + 공용 콘솔 부품
+(`apps/web/app/console/console-ui/`의 `ConsolePageHeader`·`ConsoleSection`·
+`ConsoleStatePanel`)으로 구현한다. 시각 세부 규칙은 [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md)를 따른다.
 
-### Next.js 이관 (슬라이스 1·2·3·4a·4b·5·6a·6b·6c·6d·6e·6f·7a·7b·7c 완료)
+브라우저는 새 앱의 오리진에만 닿는다. `/api/*`는 새 앱의 rewrite가 API로
+전달한다(`EVENTOUCH_API_URL`, 기본 `http://127.0.0.1:8776`). 프론트가 API
+호스트를 직접 두지 않으므로 쿠키·CSP·CORS 정책이 유지된다. 서비스 워커·오프라인
+셸·스캔 큐는 없으며, 연결 단절은 오류 안내와 재시도로만 다룬다.
 
-`apps/web`(Next.js + TypeScript App Router)이 같은 제품의 새 프론트엔드다.
-이관 원칙: 기존 바닐라 앱을 끄지 않고 기능 단위로 증명·교체한다.
+입구·세션 계약: 공용 로그인은 `/login`이며 `?next=`는 로컬 allowlist로 검증하고
+도착 화면이 서버 기준 역할·배정을 재확인한다. `/staff/login`은 호환 리다이렉트로
+유지한다. `/staff`는 배정 허브(단건 자동 진입, 복수 선택)이며 실제 스캔은
+`/staff/events/:eventId`에서 배정 범위로만 처리한다. 티켓 bearer는 주소에 실린
+1회를 즉시 소비해 메모리로 옮기고 주소를 정리하며, 티켓 상태는 서버 조회로만
+판단한다. QR에는 스태프 스캐너가 받는 토큰 원문을 인코딩한다.
+
+### Next.js 화면 (이관 완료, 구 앱 제거됨)
+
+기능 단위 이관 슬라이스의 증명 기록이다. 각 단위는 실제 API·DB 연결 흐름과
+접근성·모바일 검증을 통과했고, 구 앱은 2026-10-17 은퇴로 제거됐다.
 
 - 슬라이스 1: 공개 행사 안내(`app/event/[slug]`, 서버 컴포넌트).
   기존 공개 투영(`GET /api/public/events/:slug`)을 읽어 이름·일정·진행 상태를
@@ -280,11 +366,7 @@ MANAGER만 호출할 수 있다. 파일 참조는 같은 행사에 운영자가 
   넘긴다. 카메라·권한이 없으면 수동 입력으로 안내하고 데스크를 막지 않는다.
   실제 광학 디코딩은 실기기 검증에서 확인한다.
 - 슬라이스 5: 전광판(`app/screen/[slug]`). 인증 없이 공개 투영을 5초 주기로 읽고
-  공지·프로그램·장소를 순환한다. 끊김에는 마지막 화면을 유지한다. 운영자의
-  display.set 지정은 공개 투영에 설정이 없어 아직 따르지 않는다 — 설정 공개
-  계약이 먼저 필요하고, 그전까지 구 화면이 운영자 지정 출력을 맡는다.
-  (서버 계약 추가됨: 공개 투영이 타입·moduleId·noticeId만 싣는다.
-  새 앱 전광판이 이를 따르는 것은 다음 슬라이스.)
+  공지·프로그램·장소를 순환한다. 끊김에는 마지막 화면을 유지한다.
 - 슬라이스 6a: 운영 콘솔 읽기(행사 목록 홈·행사별 운영 현황). 같은 오리진 세션으로
   부트스트랩을 읽고, 목록·지표·대기·최근 입퇴장을 렌더링한다.
   로그인은 `/login`에서 공통으로 받고 역할별 기본 목적지로 보낸다.
@@ -321,20 +403,13 @@ MANAGER만 호출할 수 있다. 파일 참조는 같은 행사에 운영자가 
   전달한다(`EVENTOUCH_API_URL`, 기본 `http://127.0.0.1:8776`). 프론트가 API
   호스트를 직접 두지 않으므로 쿠키·CSP·CORS 정책이 유지된다.
 - 계약 테스트 `tests/web-slice-contract.test.cjs`가 rewrite와 읽기 전용을 고정한다.
-- 다음 슬라이스는 결과·보고서와 참가자 페이지 나머지(참가자 홈 정보 확장), 그다음
-  Fastify/TypeScript API 이관. 참가 신청·티켓·스태프 스캔·전광판·현장 운영·설정은 완료.
-- 구 앱의 계약 테스트(화면 39·액션 120·로드 순서)는 이관이 끝날 때까지 유지한다.
+- 구 앱의 계약 테스트(화면 수·액션 수·로드 순서 고정)와 `scripts/definition-trace.cjs`는
+  은퇴와 함께 제거됐다. `tests/audit-retirement-contract.test.cjs`가 그 제거를 고정한다.
 
-### 화면 39 · 액션 120
+### 콘솔 셸의 정보구조
 
-화면은 `E.views.<이름>` 함수가 HTML 문자열을 반환하는 방식이다. 라우터는 경로를 파싱해
-해당 뷰를 호출하고 `#app`에 넣는다. 폼은 `E.forms.<이름>`, 클릭은 `E.actions.<이름>`,
-서버 커맨드 핸들러는 `E.register`로 등록한다.
-
-### 콘솔 셸의 정보구조 (2026-10-14 확정)
-
-셸은 `E.adminShell`(`assets/js/operator-experience.js`) 하나가 만들고, 스코프에 따라 내용만 바뀐다.
-**바깥 랜드마크는 스코프가 바뀌어도 자리를 지킨다.**
+셸은 새 앱의 `ConsoleShell`(`apps/web/app/console/ConsoleShell.tsx`) 하나가 만들고,
+스코프에 따라 내용만 바뀐다. **바깥 랜드마크는 스코프가 바뀌어도 자리를 지킨다.**
 
 ```
 EVENTOUCH / 행사 운영              워드마크 + 제품 한 줄
@@ -351,92 +426,21 @@ EVENTOUCH / 행사 운영              워드마크 + 제품 한 줄
 - 스크롤은 메뉴 영역(`.side-nav`)에서만 일어나고 운영자 블록은 하단에 남는다.
 - 상단 브레드크럼의 `운영 워크스페이스`는 위치 신호로 유지한다.
 
-행사 목록(`#/console/agency/events`)이 워크스페이스 홈이다. 별도 KPI 대시보드를 두지 않고,
+행사 목록(`/console`)이 워크스페이스 홈이다. 별도 KPI 대시보드를 두지 않고,
 행사별 대시보드는 그 행사의 `운영 현황`이 맡는다.
 
 ### 운영 현황 화면의 순서
 
-`E.views.overview`는 운영자가 묻는 순서대로 배치한다: 헤더(일정·장소·단계·접수) →
+`EventOverview`는 운영자가 묻는 순서대로 배치한다: 헤더(일정·장소·단계·접수) →
 핵심 지표(등록·승인 대기·현재 입장·입장률) → 지금 할 일(주 행동 + 대기 건수) →
 진행/추이(진행 중이면 시간대별 입장, 아니면 정원 대비 진행률) → 최근 입퇴장 → 접힌 집계 기준.
 그룹 사이 간격은 24px, 그룹 안은 4~12px로 리듬을 만든다(균일 간격은 그룹을 읽히지 않는다).
 
-### 로드 순서상의 함정 (실측)
+### 참가자 홈 미리보기
 
-같은 이름이 여러 파일에 정의된다. **그 중 일부는 덮어쓰기지만 일부는 겹쳐 쌓기다.**
-구분이 중요하다 — 덮어쓰기라고 알고 제거하면 살아있는 레이어를 지운다.
-
-**겹쳐 쌓기(레이어)** — 나중 파일이 앞의 값을 붙잡아 호출한다. 모두 살아있다.
-
-    view:staff      field.js(기본) → experience.js → workflows.js → role-model.js   (4중)
-    view:display    display.js(기본) → experience.js → workflows.js
-    view:checkin    field.js(기본) → event-flow.js
-    view:booths     field.js(기본) → booth-map-ui.js
-    view:desks      field.js(기본) → event-flow.js
-    view:participants / import / settings / programs
-    action:clear-scan / message-detail / invite-link / report-detail
-
-server-presentation.js는 통째로 레이어다. `loginPage`, `adminShell`, `views.attendee`,
-`reportMarkup`, `actions['invite-link']`를 감싼다.
-
-**덮어쓰기(앞의 정의가 죽음)**
-
-    view:attendee           attendee.js → operator-experience.js
-    action:toggle-menu      ui.js → experience.js
-    action:scan-person / staff-search / camera-scan / assign-staff / edit-desk
-    action:compose-message / edit-module / client-detail / publish-report
-    action:table-page / clear-event-filters
-
-### 참가자 페이지 미리보기
-
-운영자는 `참가자 페이지` 화면에서 저장한 초안을 iframe으로 확인한다. iframe은 같은 출처의
-`#/event/<slug>/home?preview=1`을 열고, 그 문서는 **공개 투영이 아니라 운영자 워크스페이스**를
-읽는다 — 초안은 공개 API에 없고, `DRAFT` 행사는 공개 투영 자체가 없다. 그래서 미리보기에는
-운영자 세션이 필요하고, 세션·권한이 없으면 게시본이 보인다(`server-sync.js`의
-`isOperatorPreview`). 미리보기에서는 신청·제출을 저장하지 않는다(`E.run` 가드) — 초안 확인이
-실제 참가자 데이터를 만들면 안 되기 때문이다.
-
-### 런타임 추적 결과 (실측)
-
-정적으로는 판별할 수 없어서(아래) 실제로 로드하고 호출해 확인했다.
-`node scripts/definition-trace.cjs`.
-
-- **레이어 체인 56개가 확정됐다.** 정의가 전부 실행되므로 합성임이 분명하다.
-  여기에는 `view:staff`(4중), `view:attendee`(3중), `view:display`(3중),
-  `view:checkin`·`view:desks`·`view:booths`·`view:import`·`view:participants`·
-  `view:programs`·`view:settings`, 그리고 workflows.js가 권한을 씌우는
-  다수 액션이 포함된다.
-- **15개 이름은 단일 호출로 확인되지 않았다.** 이것은 **죽음이 아니라 미확인**이다.
-  추적이 한 가지 합성 상태에서만 돌기 때문에 승자가 그 상태에서 예외를 던지면
-  기반 정의에 도달하지 못한다. 실제로 `view:attendee`가 처음엔 죽음으로 나왔지만
-  가짜 DOM을 보완하니 3중 레이어로 정정됐다.
-
-**따라서 제거는 여전히 하지 않았다.** 미확인 15개를 지우려면 preview 모드와
-서버 모드 각각에서 실제 제품 경로로 도달 여부를 확인해야 한다.
-
-### 정적 분석으로는 판별할 수 없다
-
-레이어인지 덮어쓰기인지 정적 분석으로 판별하지 못한다. 시도한 세 가지 방법이
-세 가지 다른 답을 냈다(레이어 12개 → 0개 → 26개). 캡처 표현이 파일마다 다르고
-(`const oldStaff=E.views.staff`, `const baseAttendee=E.views.attendee`) 식별자도
-제각각이라 정규식으로 안정적으로 잡히지 않는다.
-
-그래서:
-
-- `tests/frontend-contract.test.cjs`가 로드 순서·이름 목록·알려진 중복 목록을
-  고정한다. **새 중복이 생기면 테스트가 실패**하므로 사고는 막힌다.
-- 화면이나 동작을 고칠 때는 **어느 파일이 최종인지 먼저 확인**한다.
-  `staff`를 `field.js`만 고치면 나머지 세 레이어가 그대로 덮는다.
-
-### 구조 부채 (알려진 것)
-
-- **`E`에 붙은 최상위 속성이 155개다.** 모듈 경계가 없고 모든 파일이 전역을 통해
-  서로를 호출한다. 규모(화면 39·액션 120)에 비해 경계가 없다.
-- **죽은 정의가 있다.** 위 로드 순서 때문에 덮어써지는 이전 정의들. 제거 대상이지만
-  제거하면 동작이 바뀔 수 있어 테스트가 필요하다.
-- 뷰가 문자열 연결이라 마크업 오류를 컴파일 타임에 잡을 수 없다. 대신 axe(12화면)와
-  모바일(6기기×2방향×6화면) 자동 감사가 회귀를 잡는다.
-- `assets/js/qr.js`가 1,259줄로 프론트엔드의 36%다(QR 인코더, 외부 알고리즘).
+콘솔 편집기(`/console/events/:id/page`)의 휴대폰 미리보기는 참가자 홈과 같은 표시
+컴포넌트로 초안을 렌더하고 참가자 행동을 실행하지 않는다. 초안은 공개 응답·이미지
+경로로 노출하지 않으며, 저장되지 않은 변경·저장된 초안·게시된 화면을 혼동시키지 않는다.
 
 ## 8. 파일별 책임
 
@@ -444,7 +448,7 @@ server-presentation.js는 통째로 레이어다. `loginPage`, `adminShell`, `vi
 
 | 파일 | 책임 |
 |---|---|
-| `server/server.js` | 정적 서빙 + `/api/*` 라우팅 진입점. 보안 헤더 래핑 |
+| `server/server.js` | API 전용 진입점. `/api/*` 라우팅 + 은퇴 워커 `/sw.js`. 저장소 정적 파일 서빙 없음 |
 | `server/api.js` | API 경로 해석, 인증 게이트, 커맨드·조직 범위 REST 위임 |
 | `server/auth.js` | 세션·비밀번호·초대·로그인 제한 |
 | `server/access.js` | 역할·배정 기반 권한 판정 |
@@ -458,61 +462,53 @@ server-presentation.js는 통째로 레이어다. `loginPage`, `adminShell`, `vi
 | `server/messaging-solapi.js` | Solapi 어댑터(HMAC 서명, 타입 판정, 페이로드) |
 | `server/http.js` | 응답 헬퍼, 보안 헤더, nonce |
 | `server/validation.js` | 날짜·정원 공용 검증 |
-| `server/sw.js` | 오프라인 셸 서비스 워커 |
+| `server/sw.js` | 은퇴 워커. 구 셸 캐시(`eventouch-shell-*`)만 지우고 등록 해제. fetch·캐시 핸들러 없음 |
 | `server/legacy-events.js` | 과도기 JSON 저장소 폴백(운영에서 410 반환) |
 | `server/commands/*.js` | 도메인 커맨드 5묶음 |
 | `server/commands/shared.js` | 실행기 3종(domain·participants·operations)이 공유하는 순수 헬퍼. 실패 생성·값 정리·요청 식별자·티켓 해시·티켓 조회·베어러 파싱만 둔다. 권한·잠금·영수증 판정은 각 실행기에 남긴다 |
 
-### 프론트엔드
+### 새 앱(`apps/web`)
 
-| 파일 | 책임 |
+| 경로 | 책임 |
 |---|---|
-| `core.js` | `E` 초기화, 상태 상수(단계·기능·역할·상태), 기본 워크스페이스 |
-| `store.js` | 로컬 저장, 커맨드 레지스트리 |
-| `router.js` | 경로 파싱, 메뉴 그룹 매핑, 렌더 루프 |
-| `ui.js` | 공용 위젯(필드·배지·패널·표·모달·토스트·인쇄) |
-| `experience.js` | 운영 현황·준비·가져오기 |
-| `operator-experience.js` | 대행사 4화면, 관리 셸 |
-| `role-model.js` | 역할 모델, 보고서 목록 |
-| `server-sync.js` | 서버 모드 동기화, 오프라인 큐, 세션 |
-| `server-presentation.js` | 서버 모드 문구·상태 표현(로그인 포함) |
-| `registration.js` | 참가자·양식·그룹·가져오기 |
-| `field.js` | 현장 운영(데스크·체크인·부스) |
-| `programs.js` | 공지·일정·장소·게시판·Q&A·사진 |
-| `communication.js` | 메시지·템플릿·발송내역·경품 |
-| `results.js` | 결과·보고서 |
-| `attendee.js` | 참가자 웹 전체 |
-| `console.js` | 설정·기능·활동 기록 |
-| `event-flow.js` | 데스크·행사 QR·체크인 |
-| `workflows.js` | 화면 간 흐름, 상태 전이 후처리 |
-| `booth-map-ui.js` | 부스 지도 편집·표시 |
-| `booth-map-data.js` | 부스 지도 기본 데이터 |
-| `display.js` | 행사장 출력 |
-| `phone-shell.js` | 핸드헬드 셸 |
-| `qr.js` | QR 인코더·디코더(외부 알고리즘) |
+| `app/layout.tsx` | 루트 레이아웃·건너뛰기 링크·전역 CSS |
+| `app/page.tsx` | 서비스 입구(공용 로그인 중심 랜딩) |
+| `app/login/page.tsx` | 공용 로그인(운영자·스태프, `?next=` allowlist) |
+| `app/console/**` | 운영 콘솔 셸·홈·행사별 목적지(현황·참가자·가져오기·콘텐츠·메시지·현장 운영·프로그램·경품·보고서·설정·사진·추첨·홈 꾸미기 편집기) |
+| `app/console/console-ui/` | 공용 부품(`ConsolePageHeader`·`ConsoleSection`·`ConsoleStatePanel`) |
+| `app/event/[slug]/` | 참가자 화면(안내·신청·티켓·복구·홈·참여) |
+| `app/staff/` | 스태프 배정 허브·행사별 현장 업무·호환 로그인 리다이렉트 |
+| `app/screen/[slug]/` | 전광판 공개 출력 |
+| `app/invite/[token]/` | 초대 수락 |
+| `app/tokens.css` | 제품 디자인 토큰 정본 |
+| `app/globals.css` | 전역 스타일·반응형·인쇄 |
+| `proxy.ts` | 문서 응답 보안 헤더 경계(`/api/*` 제외) |
+| `next.config.ts` | `/api/*` → API rewrite(`EVENTOUCH_API_URL`) |
+| `Dockerfile` | 새 앱 전용 이미지(rewrite 목적지 빌드 시 baked) |
 
 ## 9. 검증 수단
 
-| 무엇을 | 어떻게 | 현재 |
+| 무엇을 | 어떻게 | 기준 |
 |---|---|---|
-| 서버·표현 계층 | `npm test` (PostgreSQL 주입) | 최신 실측값은 `docs/STATUS.md` 참조 |
-| 접근성 | `npm run a11y` (axe, 12화면) | serious+ 0 |
-| 반응형·터치 | `npm run mobile` (6기기×2방향×6화면) | 72검사 통과 |
+| 서버·API·권한·멱등 | `npm test` (PostgreSQL 주입, 직렬, 스킵 실패) | 최신 실측값은 `docs/STATUS.md` 참조 |
+| 새 앱 접근성 | `npm run a11y` (실행 중 Next + 격리 API·DB 픽스처, axe) | serious+ 0 |
+| 새 앱 반응형·터치 | `npm run mobile` (6기기×2방향×6실경로=72검사) | 넘침·44px 미만 0 |
+| 새 앱 접근성·넘침·홈 기하 | `npm run web:audit` (실행 중 빌드, `WEB_BASE`) | serious+·넘침 0 |
+| 가져오기·한울·테마 흐름 | `npm run web:import:audit`·`web:hanwool:audit`·`web:theme:audit` (실제 API·격리 DB) | 각 감사 통과 |
 | 발송 | `docs/INTEGRATIONS.md` 체크리스트 | mock 검증 완료, 실발송 미검증 |
 | 실기기 | `scripts/device-checklist.md` | 미수행(출시 게이트 아님) |
+| 은퇴 고정 | `tests/audit-retirement-contract.test.cjs` | 구 UI 검사 제거 상태 유지 |
 
-CI(`.github/workflows/ci.yml`)가 세 게이트를 모두 돌린다. 원격 저장소가 없어 아직
-실제로 실행된 적은 없다.
+CI(`.github/workflows/ci.yml`)는 루트 의존성 설치 + DB 마이그레이션 + `npm test` +
+서버 타입 검사 잡, 모바일·접근성 감사 잡, 새 앱 설치·타입 검사·빌드 잡을 모두 돌린다.
+원격 저장소가 없어 아직 실제로 실행된 적은 없다. 구 앱 대상 검사는 은퇴했고, 그 검사가
+사라진 것은 의도된 계약 은퇴이지 API 커버리지 손실이 아니다. 검사를 약화해서 수치를
+맞추지 않는다.
 
 ## 10. 구조 부채 요약 (우선순위)
 
-1. **프론트엔드 모듈 경계 부재** — `E` 전역 155개. 가장 큰 부채이며 기능 추가 전에
-   정리하는 것이 순서다.
-2. **중복 정의 26개** — 레이어 56개 체인이 실행으로 확정됐고, 15개 이름은
-   미확인이다(죽음 아님). `scripts/definition-trace.cjs`로 추적하되, 제거 전에는
-   preview·서버 두 모드에서 실제 경로 도달을 확인해야 한다. 그때까지
-   `tests/frontend-contract.test.cjs`가 새 중복만 막는다.
-3. **문서 부패 방지** — `code-structure.svg`가 한 번 커밋된 뒤 6개 화면·다른 네임스페이스
-   시절로 방치되어 있었다. 구조를 바꾸는 변경은 이 문서와 SVG를 함께 갱신해야 한다.
-4. **`legacy-events.js` 970줄** — 과도기 폴백. 운영에서 쓰이지 않으면 제거 후보.
-5. **실발송 미검증** — 코드는 준비됨, 자격증명 대기.
+1. **`legacy-events.js` 과도기 폴백** — 운영에서 쓰이지 않으면 제거 후보. 410 시맨틱 회귀
+   검사가 전제를 보증한다.
+2. **실발송 미검증** — 코드는 준비됨, 자격증명 대기.
+3. **문서 부패 방지** — `code-structure.svg`는 참고 그림이다. 구조를 바꾸는 변경은
+   이 문서와 SVG를 함께 갱신해야 한다.

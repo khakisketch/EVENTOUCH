@@ -19,9 +19,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    # HOST_PORT:container 8776. 컨테이너 내부는 항상 8776.
-    ports:
-      - "${HOST_PORT:-8776}:8776"
+    # API-only service: no public port. Browsers reach the product through the
+    # web service below; HOST_PORT now publishes the Next app instead.
+    expose:
+      - "8776"
     environment:
       PORT: 8776
       DATABASE_URL: postgresql://${POSTGRES_USER:-eventouch}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD을 설정하세요}@db:5432/${POSTGRES_DB:-eventouch}
@@ -30,6 +31,8 @@ services:
       STORAGE_DIR: /data/storage
       SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
       COOKIE_SECURE: ${COOKIE_SECURE:-0}
+      EVENTOUCH_PUBLIC_URL: ${EVENTOUCH_PUBLIC_URL:-}
+      EVENTOUCH_SMS_MOCK: ${EVENTOUCH_SMS_MOCK:-0}
       ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL을 설정하세요}
       ADMIN_NAME: ${ADMIN_NAME:-관리자}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD을 설정하세요}
@@ -40,19 +43,26 @@ services:
       - etko-storage:/data/storage
     restart: unless-stopped
 
-  # 새 프론트엔드. API와 같은 출처가 되도록 프록시 뒤에 두거나, 이 포트를
-  # 직접 노출한다. 브라우저는 이 서비스에만 닿고 /api/*는 내부 API로 전달된다.
+  # Sole product UI. Browsers only ever reach this service; /api/* is
+  # proxied to the internal API, so cookies, CSP and CORS policy stay put.
+  # The /api/* rewrite destination is baked at build time, so the build ARG
+  # and the runtime env must agree (both point at the internal API service).
   web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        EVENTOUCH_API_URL: http://eventouch:8776
     depends_on:
-      - eventouch
+      eventouch:
+        condition: service_healthy
+    # HOST_PORT:container 8777. 컨테이너 내부는 항상 8777.
     ports:
-      - "${WEB_HOST_PORT:-8777}:8777"
+      - "${HOST_PORT:-8777}:8777"
     environment:
       PORT: 8777
       EVENTOUCH_API_URL: http://eventouch:8776
+      COOKIE_SECURE: ${COOKIE_SECURE:-0}
     restart: unless-stopped
 
 volumes:

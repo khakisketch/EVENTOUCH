@@ -11,6 +11,16 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# The vanilla app is retired: apps/web (Next) is the sole UI and the Node
+# server is API-only. Every browser audit drives the running Next build
+# through the same-origin test gateway backed by a real API and an isolated
+# PostgreSQL schema — never a mocked API, never the demo database.
+#
+# Each job owns a separate PostgreSQL service database, so jobs may run in
+# parallel. Within a job everything runs serially: the backend suite shares
+# one database and the login throttle is address-keyed, so parallel files
+# report auth failures that do not exist serially.
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -42,8 +52,8 @@ jobs:
           node-version: '24'
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install root and web dependencies
+        run: npm run setup
 
       - name: Verify migrations apply to a clean database
         # Proves the migration chain is valid on its own, independently of
@@ -69,9 +79,15 @@ jobs:
         # this is the check that keeps runtime and types the same file.
         run: npm run server:typecheck
 
+      - name: Typecheck the new app
+        run: npx --prefix apps/web tsc --noEmit -p apps/web/tsconfig.json
+
+      - name: Build the new app
+        run: npm --prefix apps/web run build
+
   mobile:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     services:
       postgres:
@@ -96,25 +112,31 @@ jobs:
           node-version: '24'
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install root and web dependencies
+        run: npm run setup
 
       - name: Install the browser for the audit
         run: npx playwright install --with-deps chromium
 
       - name: Audit real device profiles in both orientations
-        # Catches overflow and sub-44px controls on profiles a mouse-driven
-        # 390px check misses. It does not replace holding the device; see
-        # scripts/device-checklist.md for what still needs a human.
+        # 6 devices x 2 orientations x 6 real Next routes = 72 layout audits
+        # plus 44px target coverage. It does not replace holding the device;
+        # see scripts/device-checklist.md for what still needs a human.
         env:
           EVENTOUCH_MOBILE_DATABASE_URL: postgresql://eventouch:eventouch@localhost:5432/eventouch_mobile
+          DATABASE_URL: postgresql://eventouch:eventouch@localhost:5432/eventouch_mobile
+          WEB_BASE: http://127.0.0.1:8777
         run: |
           npm run db:migrate
+          npm --prefix apps/web run build
+          (PORT=8777 npm --prefix apps/web run start & echo $! > /tmp/next-mobile.pid)
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8777/ >/dev/null && break; sleep 2; done
           npm run mobile
+          kill "$(cat /tmp/next-mobile.pid)"
 
   accessibility:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     services:
       postgres:
@@ -139,24 +161,45 @@ jobs:
           node-version: '24'
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install root and web dependencies
+        run: npm run setup
 
       - name: Install the browser for the audit
         run: npx playwright install --with-deps chromium
 
-      - name: Audit accessibility across the main screens
-        # Serious and critical WCAG A/AA violations fail the job. Manual
-        # review previously covered only screenshots someone happened to
-        # capture, which is not a gate.
+      - name: Audit accessibility across the new app
+        # Serious and critical WCAG A/AA violations fail the job: public,
+        # operator, staff, unknown-slug, unauthenticated private and error
+        # states against the running Next build with a real API.
         env:
           EVENTOUCH_A11Y_DATABASE_URL: postgresql://eventouch:eventouch@localhost:5432/eventouch_a11y
+          DATABASE_URL: postgresql://eventouch:eventouch@localhost:5432/eventouch_a11y
+          WEB_BASE: http://127.0.0.1:8777
         run: |
           npm run db:migrate
+          npm --prefix apps/web run build
+          (PORT=8777 npm --prefix apps/web run start & echo $! > /tmp/next-a11y.pid)
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8777/ >/dev/null && break; sleep 2; done
           npm run a11y
+          kill "$(cat /tmp/next-a11y.pid)"
   web:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: eventouch_web
+          POSTGRES_USER: eventouch
+          POSTGRES_PASSWORD: eventouch
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U eventouch -d eventouch_web"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
 
     steps:
       - uses: actions/checkout@v4
@@ -166,13 +209,40 @@ jobs:
           node-version: '24'
           cache: npm
 
-      # The new app has its own lockfile and build; this job is the only
-      # place CI proves it typechecks and builds at all.
-      - name: Install web dependencies
-        run: npm --prefix apps/web ci
+      - name: Install root and web dependencies
+        run: npm run setup
 
+      - name: Install the browser for the audits
+        run: npx playwright install --with-deps chromium
+
+      # The new app has its own lockfile and build; this job is the place CI
+      # proves it typechecks and builds before any browser touches it.
       - name: Typecheck the new app
         run: npx --prefix apps/web tsc --noEmit -p apps/web/tsconfig.json
 
       - name: Build the new app
         run: npm --prefix apps/web run build
+
+      - name: Run the browser audits serially against one Next build
+        # web:audit is portable (shared fixture + portable browser). The
+        # import/hanwool/theme/retirement audits run with the same isolated
+        # database; all support CHROMIUM_EXECUTABLE or the bundled browser,
+        # so the installed Chromium is used
+        # on any machine with no hardcoded paths.
+        env:
+          EVENTOUCH_TEST_DATABASE_URL: postgresql://eventouch:eventouch@localhost:5432/eventouch_web
+          EVENTOUCH_A11Y_DATABASE_URL: postgresql://eventouch:eventouch@localhost:5432/eventouch_web
+          EVENTOUCH_MOBILE_DATABASE_URL: postgresql://eventouch:eventouch@localhost:5432/eventouch_web
+          DATABASE_URL: postgresql://eventouch:eventouch@localhost:5432/eventouch_web
+          WEB_BASE: http://127.0.0.1:8777
+        run: |
+          npm run db:migrate
+          (PORT=8777 npm --prefix apps/web run start & echo $! > /tmp/next-web.pid)
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8777/ >/dev/null && break; sleep 2; done
+          npm run web:audit
+          npm run web:console:audit
+          npm run web:import:audit
+          npm run web:hanwool:audit
+          npm run web:theme:audit
+          npm run web:retirement:audit
+          kill "$(cat /tmp/next-web.pid)"

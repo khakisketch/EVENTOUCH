@@ -12,6 +12,7 @@ node_modules/
 data/server/
 data/storage/
 .env
+backups/
 
 # Verification evidence stays outside the repository.
 # Captures go to /tmp/opencode/eventouch-captures/ (see AGENTS.md); these guards
@@ -24,3 +25,7 @@ design-previews/
 # are committed; the mock sketches are not.
 .impeccable/mocks/
 .impeccable/questions/
+
+# The operator's own files at the repository root (archives, plans) are not
+# project assets: keep them out of every commit without touching them.
+/*.zip

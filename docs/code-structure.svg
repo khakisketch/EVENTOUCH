@@ -1,57 +1,57 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="980" height="620" viewBox="0 0 980 620" font-family="Inter, system-ui, sans-serif">
   <rect width="980" height="620" fill="#FAF8F5"/>
   <text x="32" y="42" font-size="22" font-weight="700" fill="#1d1b18">EVENTOUCH 구조</text>
-  <text x="32" y="64" font-size="12" fill="#666">기준 36243c9 · 과거 스냅샷(현재 수치 아님) · 상세는 docs/ARCHITECTURE.md</text>
+  <text x="32" y="64" font-size="12" fill="#666">유일한 제품 UI는 Next 새 앱 · 상세는 docs/ARCHITECTURE.md</text>
 
   <!-- surfaces -->
-  <text x="32" y="100" font-size="11" font-weight="700" fill="#A34410">표면 (4)</text>
+  <text x="32" y="100" font-size="11" font-weight="700" fill="#A34410">표면 (Next App Router)</text>
   <g font-size="12" fill="#1d1b18">
     <rect x="32" y="110" width="212" height="46" rx="8" fill="#FFF" stroke="#DCE4E6"/>
     <text x="48" y="131" font-weight="600">운영 콘솔</text>
-    <text x="48" y="147" font-size="11" fill="#666">#/console/* · #/staff/*</text>
+    <text x="48" y="147" font-size="11" fill="#666">/console/* · 세션 쿠키</text>
 
     <rect x="256" y="110" width="212" height="46" rx="8" fill="#FFF" stroke="#DCE4E6"/>
     <text x="272" y="131" font-weight="600">참가자 웹</text>
-    <text x="272" y="147" font-size="11" fill="#666">#/event/&lt;slug&gt;/* · 티켓 bearer</text>
+    <text x="272" y="147" font-size="11" fill="#666">/event/&lt;slug&gt;/* · 티켓 bearer</text>
 
     <rect x="480" y="110" width="212" height="46" rx="8" fill="#FFF" stroke="#DCE4E6"/>
-    <text x="496" y="131" font-weight="600">행사장 출력</text>
-    <text x="496" y="147" font-size="11" fill="#666">#/screen/&lt;id&gt; · 공개</text>
+    <text x="496" y="131" font-weight="600">스태프 · 행사장 출력</text>
+    <text x="496" y="147" font-size="11" fill="#666">/staff/* · /screen/&lt;slug&gt;</text>
 
     <rect x="704" y="110" width="244" height="46" rx="8" fill="#FFF" stroke="#DCE4E6"/>
-    <text x="720" y="131" font-weight="600">초대 수락</text>
-    <text x="720" y="147" font-size="11" fill="#666">#/invite/&lt;token&gt;</text>
+    <text x="720" y="131" font-weight="600">공용 입구 · 초대 수락</text>
+    <text x="720" y="147" font-size="11" fill="#666">/ · /login · /invite/&lt;token&gt;</text>
   </g>
 
   <!-- client -->
   <text x="32" y="196" font-size="11" font-weight="700" fill="#A34410">클라이언트</text>
   <rect x="32" y="206" width="916" height="94" rx="10" fill="#FFF" stroke="#DCE4E6"/>
-  <text x="48" y="230" font-size="13" font-weight="700">index.html</text>
-  <text x="140" y="230" font-size="12" fill="#666">defer 스크립트 23개 + CSS 7개를 순서대로 로드 — 로드 순서가 계약 (tests/load-order.test.cjs)</text>
+  <text x="48" y="230" font-size="13" font-weight="700">apps/web</text>
+  <text x="140" y="230" font-size="12" fill="#666">Next.js App Router + CSS 모듈 — /api/* rewrite로 같은 오리진 API를 쓴다</text>
   <g font-size="12" fill="#1d1b18">
     <rect x="48" y="242" width="286" height="44" rx="6" fill="#FFF1E8" stroke="#E9C3A8"/>
-    <text x="60" y="261" font-weight="600">window.ET (E)</text>
-    <text x="60" y="277" font-size="11" fill="#8a5a3a">전역 최상위 속성 155개</text>
+    <text x="60" y="261" font-weight="600">서버 컴포넌트 + 클라이언트 화면</text>
+    <text x="60" y="277" font-size="11" fill="#8a5a3a">공개 렌더 · 콘솔 · 스캔 · 전광판</text>
 
     <rect x="346" y="242" width="286" height="44" rx="6" fill="#F8F9FB" stroke="#DCE4E6"/>
-    <text x="358" y="261" font-weight="600">views 39 · actions 120</text>
-    <text x="358" y="277" font-size="11" fill="#666">뷰 10개·액션 16개가 중복 정의(뒤가 이김)</text>
+    <text x="358" y="261" font-weight="600">console-ui · tokens.css</text>
+    <text x="358" y="277" font-size="11" fill="#666">공용 머리·섹션·상태 패널</text>
 
     <rect x="644" y="242" width="288" height="44" rx="6" fill="#F8F9FB" stroke="#DCE4E6"/>
-    <text x="656" y="261" font-weight="600">forms · register · ui · store</text>
-    <text x="656" y="277" font-size="11" fill="#666">폼·커맨드 핸들러·공용 위젯</text>
+    <text x="656" y="261" font-weight="600">proxy.ts 문서 헤더 경계</text>
+    <text x="656" y="277" font-size="11" fill="#666">/api/* 제외 · API 정책 유지</text>
   </g>
 
   <!-- api -->
-  <text x="32" y="332" font-size="11" font-weight="700" fill="#A34410">서버</text>
+  <text x="32" y="332" font-size="11" font-weight="700" fill="#A34410">서버 (API 전용)</text>
   <rect x="32" y="342" width="916" height="72" rx="10" fill="#FFF" stroke="#DCE4E6"/>
   <g font-size="12" fill="#1d1b18">
     <rect x="48" y="358" width="212" height="40" rx="6" fill="#F8F9FB" stroke="#DCE4E6"/>
     <text x="60" y="375" font-weight="600">server.js</text>
-    <text x="60" y="390" font-size="11" fill="#666">정적 + 보안 헤더</text>
+    <text x="60" y="390" font-size="11" fill="#666">/api/* + 은퇴 워커 /sw.js</text>
 
     <rect x="272" y="358" width="212" height="40" rx="6" fill="#F8F9FB" stroke="#DCE4E6"/>
-    <text x="284" y="375" font-weight="600">api.js</text>
+    <text x="284" y="375" font-weight="600">api.js · fastify/</text>
     <text x="284" y="390" font-size="11" fill="#666">경로 해석 · 인증 게이트</text>
 
     <rect x="496" y="358" width="212" height="40" rx="6" fill="#F8F9FB" stroke="#DCE4E6"/>
@@ -65,38 +65,38 @@
 
   <!-- commands -->
   <rect x="32" y="428" width="916" height="94" rx="10" fill="#FFF" stroke="#DCE4E6"/>
-  <text x="48" y="452" font-size="12" font-weight="700">commands/domain.js · execute → 트랜잭션 1개</text>
+  <text x="48" y="452" font-size="12" font-weight="700">commands 실행기 3종 · 트랜잭션 1개</text>
   <text x="360" y="452" font-size="11" fill="#666">멱등 lock → 행 잠금 → 영수증 확인 → 권한 → apply → 감사 → 저장</text>
   <g font-size="11.5" fill="#1d1b18">
     <rect x="48" y="464" width="172" height="42" rx="6" fill="#FFF1E8" stroke="#E9C3A8"/>
-    <text x="58" y="481" font-weight="600">preparation 18</text>
-    <text x="58" y="496" font-size="10.5" fill="#8a5a3a">설정·양식·공지·프로그램</text>
+    <text x="58" y="481" font-weight="600">domain</text>
+    <text x="58" y="496" font-size="10.5" fill="#8a5a3a">행사 설정·콘텐츠·결과</text>
 
     <rect x="230" y="464" width="172" height="42" rx="6" fill="#FFF1E8" stroke="#E9C3A8"/>
-    <text x="240" y="481" font-weight="600">engagement 14</text>
-    <text x="240" y="496" font-size="10.5" fill="#8a5a3a">응답·질문·사진·추첨</text>
+    <text x="240" y="481" font-weight="600">participants</text>
+    <text x="240" y="496" font-size="10.5" fill="#8a5a3a">모집·티켓·투표·추첨</text>
 
     <rect x="412" y="464" width="172" height="42" rx="6" fill="#FFF1E8" stroke="#E9C3A8"/>
-    <text x="422" y="481" font-weight="600">content-results 15</text>
-    <text x="422" y="496" font-size="10.5" fill="#8a5a3a">메시지·경품·보고서</text>
+    <text x="422" y="481" font-weight="600">operations</text>
+    <text x="422" y="496" font-size="10.5" fill="#8a5a3a">데스크·배정·입퇴장·부스</text>
 
-    <rect x="594" y="464" width="172" height="42" rx="6" fill="#FFF1E8" stroke="#E9C3A8"/>
-    <text x="604" y="481" font-weight="600">operations 9</text>
-    <text x="604" y="496" font-size="10.5" fill="#8a5a3a">데스크·배정·입퇴장</text>
+    <rect x="594" y="464" width="172" height="42" rx="6" fill="#F8F9FB" stroke="#DCE4E6"/>
+    <text x="604" y="481" font-weight="600">조직 REST</text>
+    <text x="604" y="496" font-size="10.5" fill="#8a5a3a">행사·고객사·권한·초대</text>
 
-    <rect x="776" y="464" width="156" height="42" rx="6" fill="#FFF1E8" stroke="#E9C3A8"/>
-    <text x="786" y="481" font-weight="600">booth-map 3</text>
-    <text x="786" y="496" font-size="10.5" fill="#8a5a3a">부스 지도</text>
+    <rect x="776" y="464" width="156" height="42" rx="6" fill="#F8F9FB" stroke="#DCE4E6"/>
+    <text x="786" y="481" font-weight="600">파일·증빙 ZIP</text>
+    <text x="786" y="496" font-size="10.5" fill="#8a5a3a">행사 범위 읽기</text>
   </g>
 
   <!-- storage + post-commit -->
   <g font-size="12" fill="#1d1b18">
     <rect x="32" y="542" width="448" height="56" rx="10" fill="#E6F3ED" stroke="#BDD8D2"/>
-    <text x="48" y="565" font-weight="700">PostgreSQL · 테이블 12</text>
-    <text x="48" y="583" font-size="11" fill="#3d6b58">events · event_workspaces(payload jsonb) · memberships · staff_assignments · sessions · command_receipts …</text>
+    <text x="48" y="565" font-weight="700">PostgreSQL (유일한 권위)</text>
+    <text x="48" y="583" font-size="11" fill="#3d6b58">events · event_workspaces(payload jsonb) · memberships · receipts …</text>
 
     <rect x="500" y="542" width="448" height="56" rx="10" fill="#EAF0F7" stroke="#BDCEDF"/>
     <text x="516" y="565" font-weight="700">커밋 이후 (트랜잭션 밖)</text>
-    <text x="516" y="583" font-size="11" fill="#4a6b8a">messaging.js → messaging-solapi.js (Solapi 배치 발송 · 폴링으로 도달 확정)</text>
+    <text x="516" y="583" font-size="11" fill="#4a6b8a">outbox → Solapi 배치 발송 · 폴링으로 도달 확정</text>
   </g>
 </svg>
