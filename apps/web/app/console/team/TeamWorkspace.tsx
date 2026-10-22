@@ -13,6 +13,7 @@ import ConsoleSection from "../console-ui/ConsoleSection";
 import ConsoleStatePanel from "../console-ui/ConsoleStatePanel";
 import { UNCONFIRMED_WRITE_CLOSE_MESSAGE, useConsoleDraftGuard } from "../console-draft-guard";
 import consoleUiStyles from "../console-ui/console-ui.module.css";
+import teamStyles from "./team.module.css";
 import OperationsPanels from "./OperationsPanels";
 
 type Account = {
@@ -334,9 +335,12 @@ export default function TeamWorkspace() {
               return (
               <li className={consoleUiStyles.recordRow} key={invitation.id}>
                 <div className={consoleUiStyles.recordMain}>
-                  <span>{invitation.name} · {roleLabel(invitation.role)}</span>
-                  <p className={consoleUiStyles.recordMeta}>
-                    {invitation.email} · {eventName ? `담당 행사: ${eventName}` : "담당 행사 미지정"}{expiry ? ` · 만료: ${expiry}` : ""}
+                  <strong className={teamStyles.memberName}>{invitation.name}</strong>
+                  <p className={teamStyles.memberRole}>{roleLabel(invitation.role)}</p>
+                  <p className={teamStyles.memberContact}>{invitation.email}</p>
+                  <p className={teamStyles.inviteDetail}>
+                    <span>{eventName ? `담당 행사: ${eventName}` : "담당 행사 미지정"}</span>
+                    {expiry ? <span>만료: {expiry}</span> : null}
                   </p>
                 </div>
                 <div className={consoleUiStyles.recordActions}>
@@ -366,11 +370,12 @@ export default function TeamWorkspace() {
             {state.accounts.map((account) => (
               <li className={consoleUiStyles.recordRow} key={account.id}>
                 <div className={consoleUiStyles.recordMain}>
-                  <span>
-                    {account.name} · {roleLabel(account.role)}
+                  <strong className={teamStyles.memberName}>{account.name}</strong>
+                  <p className={teamStyles.memberRole}>
+                    {roleLabel(account.role)}
                     {account.active ? "" : " · 사용 중지"}
-                  </span>
-                  <p className={consoleUiStyles.recordMeta}>{account.email}</p>
+                  </p>
+                  <p className={teamStyles.memberContact}>{account.email}</p>
                 </div>
                 {state.canManage ? (
                   <div className={consoleUiStyles.recordActions}>

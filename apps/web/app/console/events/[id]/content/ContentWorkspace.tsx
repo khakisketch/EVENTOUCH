@@ -883,12 +883,12 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                         : { text: "전광판 출력으로 선택됨", live: true };
                   const canOutput = canOutputNotice && item.published;
                   return (
-                  <li key={item.id} className={uiStyles.recordRow}>
+                  <li key={item.id} className={`${uiStyles.recordRow} ${styles.recordRow}`}>
                     <div className={uiStyles.recordMain}>
                       <h3 className={styles.recordTitle}>
                         {item.title}
                       </h3>
-                      <p className={uiStyles.recordMeta}>
+                      <p className={`${uiStyles.recordMeta} ${styles.badgeRow}`}>
                         <span className={`${styles.badge} ${item.published ? styles.badgeOn : styles.badgeOff}`}>
                           {item.published ? "게시 중" : "비공개"}
                         </span>
@@ -931,7 +931,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                       </button>
                       <button
                         type="button"
-                        className="button button-secondary"
+                        className={`button button-secondary ${styles.dangerGhost}`}
                         disabled={busy !== null || archived}
                         title={archived ? archivedReason : undefined}
                         onClick={() => requestNoticeDelete(item)}
@@ -963,6 +963,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                       <ConsoleConfirm
                         summary={`“${item.title}” 공지를 삭제할까요?`}
                         confirmLabel="삭제한다"
+                        confirmClassName={`button button-secondary ${styles.dangerGhost}`}
                         busy={busy !== null}
                         onConfirm={() => void deleteNotice(item)}
                         onCancel={() => setNoticeDeletePendingId(null)}
@@ -996,10 +997,10 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
             {state.program.length ? (
               <ul className={uiStyles.collection}>
                 {state.program.map((item) => (
-                  <li key={item.id} className={uiStyles.recordRow}>
+                  <li key={item.id} className={`${uiStyles.recordRow} ${styles.recordRow}`}>
                     <div className={uiStyles.recordMain}>
                       <h3 className={styles.recordTitle}>{item.title}</h3>
-                      <p className={uiStyles.recordMeta}>
+                      <p className={`${uiStyles.recordMeta} ${styles.badgeRow}`}>
                         <span className={`${styles.badge} ${item.published ? styles.badgeOn : styles.badgeOff}`}>
                           {item.published ? "게시 중" : "비공개"}
                         </span>
@@ -1040,7 +1041,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                       </button>
                       <button
                         type="button"
-                        className="button button-secondary"
+                        className={`button button-secondary ${styles.dangerGhost}`}
                         disabled={busy !== null || archived}
                         title={archived ? archivedReason : undefined}
                         onClick={() => requestProgramDelete(item)}
@@ -1052,6 +1053,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                       <ConsoleConfirm
                         summary={`“${item.title}” 일정을 삭제할까요?`}
                         confirmLabel="삭제한다"
+                        confirmClassName={`button button-secondary ${styles.dangerGhost}`}
                         busy={busy !== null}
                         onConfirm={() => void deleteProgram(item)}
                         onCancel={() => setProgramDeletePendingId(null)}

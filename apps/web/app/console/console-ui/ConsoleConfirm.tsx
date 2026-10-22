@@ -16,6 +16,10 @@ type ConsoleConfirmProps = {
   confirmLabel: string;
   cancelLabel?: string;
   busy?: boolean;
+  // Visual tone of the confirming button only. The default keeps the filled
+  // primary; a workspace may pass its own tokenized outline (e.g. a danger
+  // outline for deletes) without changing copy, order, handlers or focus.
+  confirmClassName?: string;
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -25,6 +29,7 @@ export default function ConsoleConfirm({
   confirmLabel,
   cancelLabel = "취소",
   busy = false,
+  confirmClassName = "button button-primary",
   onConfirm,
   onCancel,
 }: ConsoleConfirmProps) {
@@ -43,7 +48,7 @@ export default function ConsoleConfirm({
         <button
           ref={confirmRef}
           type="button"
-          className="button button-primary"
+          className={confirmClassName}
           onClick={onConfirm}
           disabled={busy}
         >

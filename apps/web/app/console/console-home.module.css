@@ -216,8 +216,12 @@
 .eventCardAction {
   display: inline-flex;
   min-height: 44px;
+  /* The duplicate affordance is a compact text action: it still owns a full
+     44px target in both axes without growing the card row. */
+  min-inline-size: var(--s7);
   margin-left: auto;
   align-items: center;
+  justify-content: center;
   padding-inline: var(--s1);
   border: 0;
   border-radius: var(--radius-small);
@@ -308,14 +312,24 @@
   align-items: center;
   justify-content: center;
   padding: 2px var(--s2);
+  border: 1px solid var(--line);
   border-radius: var(--radius-small);
-  background: var(--brand);
-  color: var(--on-brand);
+  background: var(--surface-muted);
+  color: var(--muted);
   font-size: var(--small);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   text-align: center;
   white-space: nowrap;
+}
+
+/* Purposeful attention only for sessions at hand: today and tomorrow keep
+   the filled brand countdown. Far-future, past and undated-adjacent counts
+   stay quiet so the event name and stage lead the card. */
+.eventRecencySoon {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: var(--on-brand);
 }
 
 .cardArrow {
@@ -392,6 +406,9 @@
   align-items: center;
   min-width: 0;
   min-height: 44px;
+  /* Same compact text-action floor as the duplicate button: the queue link
+     never shrinks below a full target either. */
+  min-inline-size: var(--s7);
   color: var(--brand-text);
   font-size: var(--small);
   font-weight: 700;

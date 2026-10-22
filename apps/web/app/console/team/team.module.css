@@ -1,0 +1,42 @@
+/* Team identity rows: the person reads first, the role second. Name and
+   role share no separator line, and invitation contact/context lines stack
+   with token gaps instead of one long muted run. All fields stay visible at
+   every width — nothing truncates. Tokens only. */
+
+.memberName {
+  display: block;
+  color: var(--ink);
+  font-size: var(--body);
+  font-weight: 800;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.memberRole {
+  margin: var(--s1) 0 0;
+  color: var(--muted);
+  font-size: var(--small);
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.memberContact {
+  margin: var(--s1) 0 0;
+  color: var(--muted);
+  font-size: var(--small);
+  overflow-wrap: anywhere;
+}
+
+.inviteDetail {
+  display: grid;
+  gap: var(--s1);
+  margin: var(--s1) 0 0;
+  color: var(--muted);
+  font-size: var(--small);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.inviteDetail span {
+  overflow-wrap: anywhere;
+}

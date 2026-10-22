@@ -501,14 +501,15 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
             </div>
           ) : null}
         </div>
+        <div className={styles.subgroup}>
         <h3>등록 그룹</h3>
         {state.groups.length ? (
           <div className={styles.tableScroll} role="region" tabIndex={0} aria-label="등록 그룹별 인원 표">
             <table className={styles.dataTable}>
-              <thead><tr><th scope="col">그룹</th><th scope="col">인원</th></tr></thead>
+              <thead><tr><th scope="col">그룹</th><th scope="col" className={styles.num}>인원</th></tr></thead>
               <tbody>
                 {state.groups.map((group) => (
-                  <tr key={group.name}><td>{group.name}</td><td>{group.count}명</td></tr>
+                  <tr key={group.name}><td>{group.name}</td><td className={styles.num}>{group.count}명</td></tr>
                 ))}
               </tbody>
             </table>
@@ -516,14 +517,16 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
         ) : (
           <p className={styles.help}>등록 그룹이 없습니다.</p>
         )}
+        </div>
+        <div className={styles.subgroup}>
         <h3>부스 이용</h3>
         {state.booths.length ? (
           <div className={styles.tableScroll} role="region" tabIndex={0} aria-label="부스별 인증 수 표">
             <table className={styles.dataTable}>
-              <thead><tr><th scope="col">부스</th><th scope="col">인증</th></tr></thead>
+              <thead><tr><th scope="col">부스</th><th scope="col" className={styles.num}>인증</th></tr></thead>
               <tbody>
                 {state.booths.map((booth) => (
-                  <tr key={booth.name}><td>{booth.name}</td><td>{booth.used}건</td></tr>
+                  <tr key={booth.name}><td>{booth.name}</td><td className={styles.num}>{booth.used}건</td></tr>
                 ))}
               </tbody>
             </table>
@@ -531,17 +534,19 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
         ) : (
           <p className={styles.help}>부스 데이터가 없습니다.</p>
         )}
+        </div>
+        <div className={styles.subgroup}>
         <h3>프로그램 응답</h3>
         {state.programs.length ? (
           <div className={styles.tableScroll} role="region" tabIndex={0} aria-label="프로그램별 응답 표">
             <table className={styles.dataTable}>
-              <thead><tr><th scope="col">프로그램</th><th scope="col">종류</th><th scope="col">응답</th></tr></thead>
+              <thead><tr><th scope="col">프로그램</th><th scope="col">종류</th><th scope="col" className={styles.num}>응답</th></tr></thead>
               <tbody>
                 {state.programs.map((program) => (
                   <tr key={`${program.type}-${program.name}`}>
                     <td>{program.name}</td>
                     <td>{MODULE_TYPE_LABELS[program.type] ?? "항목 확인 필요"}</td>
-                    <td>{program.responses}건</td>
+                    <td className={styles.num}>{program.responses}건</td>
                   </tr>
                 ))}
               </tbody>
@@ -550,20 +555,22 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
         ) : (
           <p className={styles.help}>참여 기록이 없습니다.</p>
         )}
+        </div>
+        <div className={styles.subgroup}>
         <h3>만족도</h3>
         {state.surveys.length ? (
           state.surveys.map((survey) => (
-            <div key={survey.name}>
+            <div key={survey.name} className={styles.surveyGroup}>
               <p><strong>{survey.name}</strong> · 응답 {survey.count}명 · 평균 {survey.average === null ? "응답 없음" : `${survey.average} / 5`}</p>
               <div className={styles.tableScroll} role="region" tabIndex={0} aria-label={`${survey.name} 만족도 항목별 결과 표`}>
                 <table className={styles.dataTable}>
-                  <thead><tr><th scope="col">항목</th><th scope="col">평균</th><th scope="col">응답</th></tr></thead>
+                  <thead><tr><th scope="col">항목</th><th scope="col" className={styles.num}>평균</th><th scope="col" className={styles.num}>응답</th></tr></thead>
                   <tbody>
                     {survey.questions.map((question) => (
                       <tr key={question.name}>
                         <td>{question.name}</td>
-                        <td>{question.average === null ? "—" : `${question.average} / 5`}</td>
-                        <td>{question.count}</td>
+                        <td className={styles.num}>{question.average === null ? "—" : `${question.average} / 5`}</td>
+                        <td className={styles.num}>{question.count}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -574,6 +581,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
         ) : (
           <p className={styles.help}>만족도 데이터가 없습니다.</p>
         )}
+        </div>
         <p className={styles.help}>승인 사진 {state.photoCount}건{state.photoCaptions.length ? ` · ${state.photoCaptions.slice(0, 3).join(" · ")}` : ""}</p>
       </ConsoleSection>
 

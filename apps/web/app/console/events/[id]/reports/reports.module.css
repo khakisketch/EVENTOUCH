@@ -53,9 +53,34 @@
   outline-offset: 2px;
 }
 
-.analysisSubheads h3 {
+.analysisSubheads .subgroup {
+  display: grid;
+  gap: var(--s2);
+  margin-top: var(--s5);
+}
+
+.analysisSubheads .subgroup > h3 {
   margin: 0;
   font-size: var(--body);
+}
+
+.analysisSubheads .surveyGroup {
+  display: grid;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.analysisSubheads .surveyGroup > p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Numeric columns read down the right edge with tabular figures. Text
+   columns (names, kinds) intentionally keep the base left alignment. */
+.dataTable .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .dataTable th,

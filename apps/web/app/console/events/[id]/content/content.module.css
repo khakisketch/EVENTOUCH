@@ -1,17 +1,52 @@
+/* Row layout (this workspace only): main content and actions share the
+   first row; an in-place ConsoleConfirm ([role="group"]) always spans the
+   full row below instead of squeezing in as a third flex column. Mobile
+   stacks to one column like the shared row behavior. */
+li.recordRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+li.recordRow > * {
+  min-width: 0;
+}
+
+li.recordRow > [role="group"] {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 768px) {
+  li.recordRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .recordTitle {
-  margin: 0;
+  margin: 0 0 var(--s1);
   font-size: var(--h3);
   word-break: keep-all;
   overflow-wrap: break-word;
 }
 
+.badgeRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  margin-bottom: var(--s2);
+}
+
 .badge {
-  padding: 2px var(--s2);
+  display: inline-flex;
+  align-items: center;
+  padding: var(--s1) var(--s2);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-small);
   background: var(--surface-muted);
   color: var(--ink);
   font-weight: 650;
+  line-height: 1.3;
 }
 
 .badgeOn {
@@ -26,12 +61,12 @@
 }
 
 .body {
-  margin: 0;
+  margin: var(--s2) 0 0;
   overflow-wrap: break-word;
 }
 
 .attachment {
-  margin: 0;
+  margin: var(--s1) 0 0;
   font-size: var(--small);
   overflow-wrap: break-word;
 }
@@ -53,6 +88,22 @@
 
 .attachmentRow .button {
   min-height: 44px;
+}
+
+/* Destructive row/confirm actions stay outlined (never filled primary):
+   danger text and line on the shared paper button. Focus, 44px height and
+   disabled dimming ride the global .button rules. Scoped to this workspace
+   only — other cancel/stop buttons keep their existing tone. */
+button.dangerGhost {
+  border-color: var(--danger-line);
+  background: var(--paper);
+  color: var(--danger);
+}
+
+button.dangerGhost:hover {
+  border-color: var(--danger-line);
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .empty {

@@ -145,6 +145,10 @@ function EventCard({
   onDuplicate: (event: ConsoleEvent) => void;
 }) {
   const recency = eventRecency(event.date, todayKey);
+  // Only the countdown at hand earns the filled voice: today and tomorrow.
+  // Far-future (D-86) and past (D+N) counts stay quiet so the
+  // name and stage lead. Same strings, same position — tone only.
+  const recencySoon = recency === "오늘" || recency === "내일";
   const stageKnown = KNOWN_STAGES.includes(event.stage);
   const stageLabel = stageKnown ? eventStageLabel(event.stage) : "단계 미정";
   const time = event.start && event.end
@@ -161,7 +165,7 @@ function EventCard({
         href={`/console/events/${encodeURIComponent(event.id)}`}
       >
         <div className={styles.eventCardTop}>
-          <span className={styles.eventRecency}>{recency ?? ""}</span>
+          <span className={recencySoon ? `${styles.eventRecency} ${styles.eventRecencySoon}` : styles.eventRecency}>{recency ?? ""}</span>
           <strong className={styles.eventDate}>{formatEventDate(event.date)}</strong>
           <svg className={styles.cardArrow} viewBox="0 0 20 20" aria-hidden="true">
             <path
