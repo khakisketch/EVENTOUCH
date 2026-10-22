@@ -205,7 +205,10 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       }
       setDirectory(directoryMap);
       if (!silent) {
-        setDeskId("");
+        // A single assigned desk is not a choice. Keep its name and IN/OUT
+        // explanation visible in the existing selector; never pick between
+        // multiple desks or submit a scan on the staff member's behalf.
+        setDeskId(next.desks.length === 1 ? next.desks[0].id : "");
         setBoothId("");
         setTask(next.desks.length ? "desk" : "booth");
         setResult({ kind: "idle" });

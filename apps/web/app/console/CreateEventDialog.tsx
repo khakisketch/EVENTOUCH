@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import styles from "./console-home.module.css";
 import ConsoleDialog from "./console-ui/ConsoleDialog";
 import ConsoleFormActions from "./console-ui/ConsoleFormActions";
@@ -50,11 +50,13 @@ export default function CreateEventDialog({
   duplicateOf = null,
   onClose,
   onCreated,
+  onClientRegistered,
 }: {
   clients: Client[];
   duplicateOf?: DuplicateSource | null;
   onClose: () => void;
   onCreated: (eventId: string) => void;
+  onClientRegistered?: (client: Client) => void;
 }) {
   const [name, setName] = useState(() =>
     duplicateOf ? `${duplicateOf.name.slice(0, 95)} 복사본`.trim() : ""
@@ -74,6 +76,33 @@ export default function CreateEventDialog({
   const [failure, setFailure] = useState<{ message: string; field?: string; retryable?: boolean } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [slugTouched, setSlugTouched] = useState(() => Boolean(duplicateOf));
+  // In-dialog customer registration: a "select" view with the existing
+  // dropdown, and a "create" view that posts to the same organization REST
+  // path the customer directory uses. One dialog, one focus trap — never a
+  // nested modal. The event draft (name/slug/date/times/capacity and the
+  // pending event command id below) is untouched by this flow; a successful
+  // registration only appends the new customer to the options and selects
+  // it before returning to the event form.
+  const [clientMode, setClientMode] = useState<"select" | "create">("select");
+  const [extraClients, setExtraClients] = useState<Client[]>([]);
+  const [newClientName, setNewClientName] = useState("");
+  const [newClientContact, setNewClientContact] = useState("");
+  const [newClientEmail, setNewClientEmail] = useState("");
+  const [clientFailure, setClientFailure] = useState<{ message: string; field?: string; retryable?: boolean } | null>(null);
+  const [clientSaving, setClientSaving] = useState(false);
+  const [clientNotice, setClientNotice] = useState<string | null>(null);
+  // Separate receipt from the event one: one command id per distinct
+  // customer record, mirroring the customer directory save. An ambiguous
+  // outcome keeps the id so the retry replays the same record instead of
+  // adding a second one; editing the customer form after a failure mints a
+  // new id via the fingerprint.
+  const pendingClientRef = useRef<{ fingerprint: string; commandId: string } | null>(null);
+  // Synchronous same-turn gate for the customer write, independent of the
+  // event submit gate above.
+  const clientWriteRef = useRef(false);
+  const newClientNameRef = useRef<HTMLInputElement>(null);
+  const clientSelectRef = useRef<HTMLSelectElement>(null);
+  const returnFocusToSelectRef = useRef(false);
   // One command id per distinct payload: ambiguous outcomes (5xx, 408,
   // network loss, unparseable success body) keep the id so the retry replays
   // the same request and the server receipt replays the original event
@@ -91,14 +120,38 @@ export default function CreateEventDialog({
   const nameRef = useRef<HTMLInputElement>(null);
   const initialFields = useRef(JSON.stringify([name, slug, clientId, date, start, end, capacity]));
   const dirty = JSON.stringify([name, slug, clientId, date, start, end, capacity]) !== initialFields.current;
-  useConsoleDraftGuard(dirty || submitting || Boolean(commandIdRef.current),
+  const clientDraftDirty =
+    newClientName.trim() !== "" || newClientContact.trim() !== "" || newClientEmail.trim() !== "";
+  const allClients = [...clients, ...extraClients.filter((extra) => !clients.some((client) => client.id === extra.id))]
+    .sort((left, right) => left.name.localeCompare(right.name, "ko-KR"));
+  useConsoleDraftGuard(dirty || submitting || Boolean(commandIdRef.current) || clientDraftDirty || clientSaving || Boolean(pendingClientRef.current),
     submitting ? "행사 생성 요청을 처리하고 있습니다. 이동해도 서버의 처리가 취소되지는 않습니다."
       : failure?.retryable ? "행사 생성 결과를 아직 확인하지 못했습니다. 이미 생성되었을 수 있으므로 같은 요청으로 결과를 확인하세요."
-        : undefined);
+        : clientSaving || pendingClientRef.current ? "고객사 등록 결과를 아직 확인하지 못했습니다. 이미 등록되었을 수 있으므로 같은 요청으로 결과를 확인하세요."
+          : clientDraftDirty ? "작성 중인 고객사 내용이 있습니다."
+            : undefined);
+
+  // The subview swap unmounts one form and mounts the other inside the same
+  // dialog: move focus with it so keyboard operators never land behind the
+  // visible view.
+  useEffect(() => {
+    if (clientMode === "create") {
+      newClientNameRef.current?.focus();
+    } else if (returnFocusToSelectRef.current) {
+      returnFocusToSelectRef.current = false;
+      clientSelectRef.current?.focus();
+    }
+  }, [clientMode]);
 
   function canClose() {
     if (submitGateRef.current) return false;
+    // The in-dialog customer write has its own same-turn gate: an in-flight
+    // registration blocks dismissal exactly like an in-flight event write,
+    // and the pending receipt below warns instead of fake-cancelling.
+    if (clientWriteRef.current) return false;
     if (commandIdRef.current) return window.confirm("행사 생성 결과를 아직 확인하지 못했습니다. 이미 생성되었을 수 있습니다. 결과를 확인하지 않고 닫을까요?");
+    if (pendingClientRef.current) return window.confirm("고객사 등록 결과를 아직 확인하지 못했습니다. 이미 등록되었을 수 있습니다. 결과를 확인하지 않고 닫을까요?");
+    if (clientMode === "create" && clientDraftDirty) return window.confirm("작성 중인 고객사 내용이 사라집니다. 닫을까요?");
     return !dirty || window.confirm("입력한 행사 정보를 저장하지 않고 닫을까요?");
   }
 
@@ -192,6 +245,107 @@ export default function CreateEventDialog({
   }
 
   const invalid = (field: string) => failure?.field === field;
+  const invalidClient = (field: string) => clientFailure?.field === field;
+
+  // Posts the customer-directory record from inside the event dialog. The
+  // event payload, its frozen auto-slug and its pending command id are
+  // never touched here; only the customer options and the selection change.
+  async function saveNewClient(formEvent: React.FormEvent) {
+    formEvent.preventDefault();
+    if (clientWriteRef.current || clientSaving) return;
+    clientWriteRef.current = true;
+    setClientSaving(true);
+    setClientFailure(null);
+    const payload = {
+      name: newClientName.trim(),
+      contact: newClientContact.trim(),
+      email: newClientEmail.trim(),
+    };
+    const fingerprint = JSON.stringify(payload);
+    const attempt = pendingClientRef.current?.fingerprint === fingerprint
+      ? pendingClientRef.current
+      : { fingerprint, commandId: randomCommandId() };
+    pendingClientRef.current = attempt;
+    try {
+      const res = await fetch("/api/clients", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ commandId: attempt.commandId, ...payload }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        error?: unknown;
+        field?: unknown;
+        client?: { id?: unknown; name?: unknown } | null;
+      } | null;
+      if (!res.ok) {
+        // 403 included: customer records are organization-level, so a
+        // manager scoped to one event must not rewrite the list. The server
+        // message names the gate; the event draft stays as typed.
+        const serverMessage =
+          typeof data?.error === "string" ? data.error : "고객사를 등록하지 못했습니다.";
+        if (isDefinitiveClientError(res.status)) {
+          pendingClientRef.current = null;
+          setClientFailure({
+            message: serverMessage,
+            field: typeof data?.field === "string" ? data.field : undefined,
+          });
+        } else {
+          setClientFailure({
+            message: `${serverMessage} 같은 요청으로 다시 시도하세요.`,
+            field: typeof data?.field === "string" ? data.field : undefined,
+            retryable: true,
+          });
+        }
+        return;
+      }
+      const record = typeof data?.client === "object" && data?.client !== null ? data.client : null;
+      if (!record || typeof record.id !== "string" || !record.id || record.name !== payload.name) {
+        // 2xx without the echoed record: the write may have landed, so keep
+        // the id and retry the same request instead of minting a new one.
+        setClientFailure({
+          message: "응답을 확인하지 못했습니다. 같은 요청으로 다시 시도하세요.",
+          retryable: true,
+        });
+        return;
+      }
+      pendingClientRef.current = null;
+      // Narrowing on `record.id` does not survive the updater closure below,
+      // so capture the validated id in a local const first.
+      const clientRecordId: string = record.id;
+      // Customer registration is already committed even if this event draft
+      // is later discarded. Keep the directory's options authoritative too.
+      onClientRegistered?.({ id: clientRecordId, name: payload.name });
+      setExtraClients((prev) =>
+        prev.some((client) => client.id === clientRecordId)
+          ? prev
+          : [...prev, { id: clientRecordId, name: payload.name }]
+      );
+      setClientId(clientRecordId);
+      setClientNotice(`${payload.name} 고객사를 등록하고 선택했습니다.`);
+      setNewClientName("");
+      setNewClientContact("");
+      setNewClientEmail("");
+      setClientFailure(null);
+      returnFocusToSelectRef.current = true;
+      setClientMode("select");
+    } catch {
+      setClientFailure({ message: "연결하지 못했습니다. 같은 요청으로 다시 시도하세요.", retryable: true });
+    } finally {
+      clientWriteRef.current = false;
+      setClientSaving(false);
+    }
+  }
+
+  function cancelClientCreate() {
+    if (clientWriteRef.current || clientSaving) return;
+    if (pendingClientRef.current) {
+      if (!window.confirm("고객사 등록 결과를 아직 확인하지 못했습니다. 이미 등록되었을 수 있습니다. 결과를 확인하지 않고 닫을까요?")) return;
+    } else if (clientDraftDirty) {
+      if (!window.confirm("작성 중인 고객사 내용이 사라집니다. 닫을까요?")) return;
+    }
+    returnFocusToSelectRef.current = true;
+    setClientMode("select");
+  }
 
   return (
     <ConsoleDialog
@@ -218,8 +372,61 @@ export default function CreateEventDialog({
               </div>
             </dl>
           </div>
+        ) : clientMode === "create" ? (
+          "새 고객사를 등록하면 이 행사의 고객사로 바로 선택됩니다. 입력 중인 행사 정보는 그대로 유지됩니다."
         ) : undefined}
     >
+      {clientMode === "create" && !duplicateOf ? (
+        <form onSubmit={saveNewClient} className={ui.formStack}>
+          <div>
+            <label htmlFor="create-new-client-name">고객사명 (필수)</label>
+            <input
+              id="create-new-client-name"
+              ref={newClientNameRef}
+              type="text"
+              maxLength={80}
+              value={newClientName}
+              onChange={(event) => setNewClientName(event.target.value)}
+              aria-invalid={invalidClient("name") || undefined}
+              required
+            />
+            {invalidClient("name") ? <p role="alert">{clientFailure?.message}</p> : null}
+          </div>
+          <div>
+            <label htmlFor="create-new-client-contact">담당자</label>
+            <input
+              id="create-new-client-contact"
+              type="text"
+              maxLength={60}
+              value={newClientContact}
+              onChange={(event) => setNewClientContact(event.target.value)}
+              aria-invalid={invalidClient("contact") || undefined}
+            />
+            {invalidClient("contact") ? <p role="alert">{clientFailure?.message}</p> : null}
+          </div>
+          <div>
+            <label htmlFor="create-new-client-email">담당자 이메일</label>
+            <input
+              id="create-new-client-email"
+              type="email"
+              maxLength={120}
+              value={newClientEmail}
+              onChange={(event) => setNewClientEmail(event.target.value)}
+              aria-invalid={invalidClient("email") || undefined}
+            />
+            {invalidClient("email") ? <p role="alert">{clientFailure?.message}</p> : null}
+          </div>
+          {clientFailure && !clientFailure.field ? <p role="alert">{clientFailure.message}</p> : null}
+          <ConsoleFormActions>
+            <button type="button" className="button button-secondary" onClick={cancelClientCreate} disabled={clientSaving}>
+              행사 입력으로 돌아가기
+            </button>
+            <button type="submit" className="button button-primary" disabled={clientSaving}>
+              {clientSaving ? "등록 중입니다" : clientFailure?.retryable ? "같은 요청 다시 시도" : "고객사 등록"}
+            </button>
+          </ConsoleFormActions>
+        </form>
+      ) : (
         <form onSubmit={onSubmit} className={ui.formStack}>
           <div>
             <label htmlFor="create-name">행사명</label>
@@ -264,20 +471,34 @@ export default function CreateEventDialog({
           </div>
           {duplicateOf ? (
             <p className={styles.slugHint}>고객사: {duplicateOf.clientName || "선택하지 않음"}</p>
-          ) : (
+          ) : clientMode === "create" ? null : (
             <div>
               <label htmlFor="create-client">고객사</label>
               <select
                 id="create-client"
+                ref={clientSelectRef}
                 value={clientId}
                 onChange={(event) => setClientId(event.target.value)}
                 aria-invalid={invalid("clientId") || undefined}
+                aria-describedby={clientNotice ? "create-client-notice" : undefined}
               >
                 <option value="">선택하지 않음</option>
-                {clients.map((client) => (
+                {allClients.map((client) => (
                   <option key={client.id} value={client.id}>{client.name}</option>
                 ))}
               </select>
+              {clientNotice ? (
+                <p className={styles.slugHint} role="status" id="create-client-notice">{clientNotice}</p>
+              ) : null}
+              <p className={styles.slugHint}>
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  onClick={() => { setClientFailure(null); setClientMode("create"); }}
+                >
+                  새 고객사 등록
+                </button>
+              </p>
               {invalid("clientId") ? <p role="alert">{failure?.message}</p> : null}
             </div>
           )}
@@ -341,6 +562,7 @@ export default function CreateEventDialog({
             </button>
           </ConsoleFormActions>
         </form>
+      )}
     </ConsoleDialog>
   );
 }

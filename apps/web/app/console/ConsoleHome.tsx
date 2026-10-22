@@ -633,6 +633,9 @@ export default function ConsoleHome() {
         <CreateEventDialog
           clients={clientOptions}
           onClose={() => setCreateOpen(false)}
+          onClientRegistered={(client) => setState((current) => current.kind === "ready"
+            ? { ...current, clients: new Map(current.clients).set(client.id, client.name) }
+            : current)}
           onCreated={(eventId) => {
             setCreateOpen(false);
             router.push(`/console/events/${encodeURIComponent(eventId)}`);

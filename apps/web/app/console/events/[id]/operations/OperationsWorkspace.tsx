@@ -850,13 +850,16 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
               return (
               <li key={desk.id} className={uiStyles.recordRow}>
                 <div className={uiStyles.recordMain}>
-                  <strong>{desk.name}</strong>
+                  <div className={styles.resourceHead}>
+                    <strong>{desk.name}</strong>
+                    <span className={styles.resourceStatus} data-tone={desk.open ? "good" : "muted"}>
+                      {desk.open ? "가동 중" : "중지됨"}
+                    </span>
+                  </div>
                   <p className={uiStyles.recordMeta}>
                     {DESK_ACTION_LABEL[desk.action] ?? "작업 미정"}
                     {" · "}
                     {desk.mode === "tablet" ? "태블릿" : "데스크"}
-                    {" · "}
-                    {desk.open ? "가동 중" : "중지됨"}
                   </p>
                   <p className={uiStyles.recordMeta}>
                     {deskStaffNames.length ? `배정: ${deskStaffNames.join(", ")}` : "배정된 스태프 없음"}
@@ -943,11 +946,17 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
               return (
               <li key={booth.id} className={uiStyles.recordRow}>
                 <div className={uiStyles.recordMain}>
-                  <strong>{booth.name}</strong>
+                  <div className={styles.resourceHead}>
+                    <strong>{booth.name}</strong>
+                    <span
+                      className={styles.resourceStatus}
+                      data-tone={booth.status === "OPEN" ? "good" : booth.status === "WAITING" ? "wait" : "muted"}
+                    >
+                      {BOOTH_STATUS_LABEL[booth.status] ?? "상태 미정"}
+                    </span>
+                  </div>
                   <p className={uiStyles.recordMeta}>
                     {booth.zone || "구역 미지정"}
-                    {" · "}
-                    {BOOTH_STATUS_LABEL[booth.status] ?? "상태 미정"}
                     {" · "}
                     {booth.capacity
                       ? `인증 ${booth.used}회 · 잔여 ${Math.max(0, booth.capacity - booth.used)} / ${booth.capacity}`

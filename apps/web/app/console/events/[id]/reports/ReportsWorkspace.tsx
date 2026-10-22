@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { loginHrefForLocation } from "../../../../auth-redirect";
+import { eventStageLabel } from "../../../../event-stage";
 import ConsolePage from "../../../console-ui/ConsolePage";
 import ConsoleToolbar from "../../../console-ui/ConsoleToolbar";
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
@@ -50,6 +51,9 @@ type Ready = {
   eventName: string;
   eventMeta?: string;
   archived: boolean;
+  stage: string;
+  registrationOpen: boolean;
+  openModules: Array<{ name: string }>;
   metrics: { total: number; pending: number; approved: number; checked: number; inside: number; rate: number };
   groups: Array<{ name: string; count: number }>;
   booths: Array<{ name: string; used: number; capacity: number }>;
@@ -230,6 +234,14 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
               venue: text(venue.name),
             }),
             archived: text(event.stage).toUpperCase() === "ARCHIVED",
+            stage: text(event.stage).toUpperCase(),
+            // Live archive prerequisites, kept apart from the frozen
+            // snapshots below: intake state and still-open programs are
+            // what the settings stage gate checks before 보관.
+            registrationOpen: workspace.registrationOpen === true,
+            openModules: modules
+              .filter((module) => text(module.status) === "OPEN")
+              .map((module) => ({ name: text(module.title) || "이름 없는 프로그램" })),
             metrics: {
               total: people.length,
               pending: people.filter((person) => person.status === "PENDING").length,
@@ -700,6 +712,41 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
               </section>
             ) : null}
           </article>
+          {/* Live archive prerequisites, adjacent to the next action and
+              outside the frozen print article: the snapshot above stays at
+              its capture basis while this checklist reads the current
+              runtime state. No transition command lives here; the link
+              lands on the existing settings stage anchor, whose own
+              expansion and confirmation stay untouched. */}
+          <div className={styles.archiveCheck} role="note" aria-label="보관 전제 · 조회 시점">
+            <p className={styles.archiveLead}>
+              <strong>보관 전제 · 조회 시점</strong>
+              {state.archived
+                ? " — 보관된 행사입니다. 위 보고서는 생성 시점 그대로 유지됩니다."
+                : " — 위 보고서는 생성 시점 그대로 유지되며, 아래는 마지막으로 불러온 행사 상태입니다."}
+            </p>
+            <p className={styles.archiveLead}>조회 기준 시각 {loadedAt ? capturedLabel(loadedAt) : "확인 중"} · 새로고침 시 갱신됩니다.</p>
+            <ul className={styles.archiveList}>
+              <li>현재 단계: {state.stage ? eventStageLabel(state.stage) : "단계 미정"}</li>
+              <li>
+                {state.registrationOpen
+                  ? "참가 접수 열림 — 보관 전에 접수 닫기가 필요합니다."
+                  : "참가 접수 닫힘"}
+              </li>
+              <li>
+                {state.openModules.length
+                  ? `진행 중인 참여 프로그램 ${state.openModules.length}개 — 보관 전에 모두 닫기가 필요합니다: ${state.openModules.map((module) => module.name).join(" · ")}`
+                  : "진행 중인 참여 프로그램 없음"}
+              </li>
+            </ul>
+            {state.archived ? null : (
+              <p className={styles.archiveLead}>
+                <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/settings#settings-stage`}>
+                  행사 설정 · 진행 단계에서 확인·전환
+                </Link>
+              </p>
+            )}
+          </div>
           <ConsoleFormActions>
             <button type="button" className="button button-secondary" onClick={() => exportJson(detail)}>
               원본 파일 저장 (JSON)

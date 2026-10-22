@@ -20,11 +20,15 @@
   overflow-wrap: break-word;
 }
 
+/* Contact lines break at the safe opportunities the markup provides
+   (<wbr> after @/./-/_) and keep Korean phrases intact. Only a token with
+   no acceptable break point wraps mid-token (break-word fallback). */
 .memberContact {
   margin: var(--s1) 0 0;
   color: var(--muted);
   font-size: var(--small);
-  overflow-wrap: anywhere;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .inviteDetail {
@@ -34,9 +38,104 @@
   color: var(--muted);
   font-size: var(--small);
   word-break: keep-all;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .inviteDetail span {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* Atomic domain group: an ordinary @domain stays one readable piece inside
+   the full contact width; only a domain wider than the row wraps inside —
+   and still never overflows. Tokens only. */
+.contactDomain {
+  display: inline-block;
+  width: max-content;
+  max-width: 100%;
+  vertical-align: bottom;
+  overflow-wrap: anywhere;
+}
+
+/* Team-scoped row width: the shared record row owns the card look, these
+   classes only guarantee the text column keeps full width next to its
+   action button instead of squeezing. */
+.teamRow {
+  width: 100%;
+}
+
+.memberMain {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.memberActions {
+  flex: none;
+  max-width: 100%;
+}
+
+/* Accepted-staff assignment picker: lives in the member's own text column,
+   next to the row actions. Choosing an event only reveals the operations
+   link for that real event — nothing is stored, sent, or pre-associated.
+   Tokens only; the select and the link keep full touch targets. */
+.assignPanel {
+  display: grid;
+  gap: var(--s2);
+  margin-top: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.assignLead {
+  margin: 0;
+  font-size: var(--small);
+  overflow-wrap: anywhere;
+}
+
+.assignField {
+  display: grid;
+  gap: var(--s1);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.assignField select {
+  min-height: 44px;
+}
+
+.assignLink {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  color: var(--brand-text);
+  font-weight: 700;
+}
+
+.assignLink:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Unknown-activity technical key: folded until asked for, with a full
+   touch target and a mono readout for the raw key. */
+.activityTech {
+  margin: var(--s1) 0 0;
+}
+
+.activityTech summary {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  color: var(--brand-text);
+  font-size: var(--small);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.activityTech code {
+  font-family: var(--mono-font);
+  font-size: var(--small);
   overflow-wrap: anywhere;
 }

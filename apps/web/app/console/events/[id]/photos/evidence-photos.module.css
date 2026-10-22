@@ -584,8 +584,11 @@
     outline-offset: 3px;
   }
 
+  /* Narrow upload: explanation keeps full width instead of a squeezed
+     column beside the button, so guidance reads in full phrases. Copy
+     first, then a full-width action — same order as desktop. */
   .uploadArea {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--s2);
     padding: var(--s2) var(--s3);
   }
@@ -602,10 +605,15 @@
     display: inline;
   }
 
+  .uploadCopy {
+    grid-column: 1;
+  }
+
   .uploadArea > :global(.button) {
-    grid-column: 2;
-    grid-row: 1;
-    justify-self: end;
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: stretch;
+    width: 100%;
   }
 
   .previewGrid {

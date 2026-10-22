@@ -226,6 +226,31 @@
   overflow-wrap: anywhere;
 }
 
+/* Frozen-report archive bridge: live runtime checklist adjacent to the next
+   action, outside the frozen print article. Quiet panel surface with token
+   rhythm only; the snapshot above keeps its own capture basis. */
+.archiveCheck {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.archiveLead {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.archiveList {
+  display: grid;
+  gap: var(--s1);
+  margin: 0;
+  padding-left: var(--s4);
+  overflow-wrap: anywhere;
+}
+
 /* Phone density: tighter KPI rhythm without touching type sizes — the first
    KPI row must read inside a 412px viewport below the folded header. */
 @media (max-width: 768px) {

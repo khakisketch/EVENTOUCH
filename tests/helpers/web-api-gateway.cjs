@@ -23,6 +23,11 @@ async function startWebApiGateway({ apiBase, webBase, loseFirstResponseFor = nul
       for await (const chunk of request) chunks.push(chunk);
       const body = Buffer.concat(chunks);
       let command = null;
+      // Organization REST writes carry no `command` field; name the one
+      // fault-injection target by path so a committed loss can be aimed at
+      // it. REST faults stay out of the `commands` write log that other
+      // audits count — only the loss machinery below reads them.
+      let restFault = null;
       if (request.url.startsWith('/api/') && request.method === 'POST') {
         const requestURL = new URL(request.url, 'http://gateway.invalid');
         if (/^\/api\/events\/[^/]+\/files$/.test(requestURL.pathname)) {
@@ -34,6 +39,8 @@ async function startWebApiGateway({ apiBase, webBase, loseFirstResponseFor = nul
             if (typeof parsed.command === 'string') {
               command = { command: parsed.command, commandId: parsed.commandId, status: null, responseLost: false };
               commands.push(command);
+            } else if (requestURL.pathname === '/api/clients') {
+              restFault = { command: 'client.save', commandId: typeof parsed.commandId === 'string' ? parsed.commandId : null, status: null, responseLost: false };
             }
           } catch { /* Non-command requests are forwarded unchanged. */ }
         }
@@ -51,16 +58,18 @@ async function startWebApiGateway({ apiBase, webBase, loseFirstResponseFor = nul
         headers: { ...request.headers, connection: 'close' },
       }, (reply) => {
         if (command) command.status = reply.statusCode;
-        if (command && faults.has(command.command) && !lostCommands.has(command.command) && reply.statusCode >= 200 && reply.statusCode < 300) {
+        if (restFault) restFault.status = reply.statusCode;
+        const faultTarget = command || restFault;
+        if (faultTarget && faults.has(faultTarget.command) && !lostCommands.has(faultTarget.command) && reply.statusCode >= 200 && reply.statusCode < 300) {
           // The API already committed. Consume its real reply, then lose only
           // the transport response so the UI must retry the stored receipt.
-          lostCommands.add(command.command);
-          command.responseLost = true;
+          lostCommands.add(faultTarget.command);
+          faultTarget.responseLost = true;
           reply.resume();
           reply.on('end', () => {
-            completedLosses.add(command.command);
+            completedLosses.add(faultTarget.command);
             response.destroy();
-            lossEvents.emit('loss', command.command);
+            lossEvents.emit('loss', faultTarget.command);
           });
           return;
         }

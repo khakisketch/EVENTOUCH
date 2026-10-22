@@ -931,7 +931,17 @@ test('web-shared-login-keeps-safe-return-destinations-only', () => {
   assert.match(shell, /\/login/);
   assert.doesNotMatch(shell, /router\.replace\("\/staff\/login"\)/);
   const invite = read('app/invite/[token]/InviteAccept.tsx');
-  assert.match(invite, /href="\/login"/);
+  // The accept screen keeps the single shared login entry but carries the
+  // role-aware return through the shared guard: staff to the assignment
+  // hub, an event-scoped manager to that event, anyone else to the console.
+  // A bare href="/login" would drop that return, so every destination is
+  // pinned here instead of the bare path.
+  assert.match(invite, /from "\.\.\/\.\.\/auth-redirect"/);
+  assert.match(invite, /loginHref\(loginNextForRole\(invitation\.role, invitation\.eventId\)\)/);
+  assert.match(invite, /if \(role === "STAFF"\) return "\/staff"/);
+  assert.match(invite, /`\/console\/events\/\$\{eventId\}`/);
+  assert.match(invite, /return "\/console"/);
+  assert.doesNotMatch(invite, /href="\/login"/);
   // Protected screens preserve the requested destination on 401 instead of
   // dropping it at a bare login path.
   for (const file of [

@@ -4,7 +4,7 @@
 갱신 규칙: 작업이 끝날 때마다 갱신하고, 지난 서술은 지우거나 `## 이력`으로 내린다.
 
 Updated: 2026-10-22
-Branch: `master` · 작업 기준: `d2d9a72` + 디자인·화면 구성 리뷰 작업 트리
+Branch: `master` · 작업 기준: `15c9005` + 최종 task-first 종합 개선 작업 트리(미커밋·미배포)
 
 ## 제품
 
@@ -30,10 +30,12 @@ Branch: `master` · 작업 기준: `d2d9a72` + 디자인·화면 구성 리뷰 �
 
 ## 검증 수치 (현재 작업 트리 실측)
 
-- `npm test` — **814 통과, 실패 0, 스킵 0**(2026-10-22, 격리 테스트 DB `eventouch_task_flow_tests_20261022_69e31cdf`, 직렬 실행). 기존 API·권한·멱등·저장·발송/게시·사용 사례·QR·모바일 내비게이션·업무 흐름 계약은 유지하고, 이번 디자인 리뷰 소스 계약 13건을 추가했다. DB 없이 스킵되면 계속 실패한다. 증거: `/tmp/opencode/eventouch-captures/design-review/{tests,contracts}.log`. 관련 콘솔 소스 계약 전수 124건도 별도 통과했다(`console-contracts.log`).
-- `npm run build` — 디자인·화면 구성 리뷰 작업 트리의 제품 빌드 `-mPoOW92p8LBAmBelETag`(server 타입 검사 + Next 빌드/타입 검사) 통과. `npx tsc -p apps/web/tsconfig.json --noEmit`도 통과했다. 빌드 API 목적지와 실행 설정 불일치 거부 검사는 유지한다. 이번 UI의 실행 검증은 격리 API/DB이며 기존 배포본을 재배포하거나 재시작하지 않았다. 증거: `/tmp/opencode/eventouch-captures/design-review/{build,typecheck}.log`. 동일 구성 Before 빌드는 `Xam-SY51LIos8Jc_meX8w`이며 각 캡처 폴더 `verification.json`에 역할·빌드·시각을 기록했다.
-- `npm run a11y` — **새 앱 11화면**, 같은 격리 API에 연결된 서버 렌더와 정확한 역할에서 axe 위반 **0**. `npm run mobile` — **새 앱 6기기×2방향×6경로=72검사 통과**, 가로 넘침·44px 미만 조작 목표 0. 디자인 리뷰 최종 빌드 증거는 `/tmp/opencode/eventouch-captures/design-review/{a11y,mobile}.log`다. 익명 경로·실제 준비 표식 검사를 유지하며 이전의 잘못된 역할/SSR 대상 감사 수치를 재사용하지 않는다.
-- `npm run web:audit` — 디자인 리뷰 최종 빌드·격리 API/DB에서 serious/critical **0**, 가로 넘침 0. 짧은 홈 화면 9종(320×568~1280×800)의 배너·현재 고객사 확정 **6개 메뉴** 한 화면 배치, 44px 목표·내부 글자/아이콘 영역, ①②/③④/⑤⑥ 순서, Enter·뒤로가기·분리 상세를 유지한다. 증거는 `/tmp/opencode/eventouch-captures/design-review/web-audit.log`다.
+최종 통합 증거 목록: `/tmp/opencode/eventouch-captures/task-first-final/final-verification.json`.
+
+- `npm test` — **851 통과, 실패 0, 스킵 0**(2026-10-22, 작업 전용 DB `eventouch_task_first_regression_20261022_1638`, 직렬 실행). 기존 API·권한·멱등·저장·발송/게시·사용 사례·QR·내비게이션·업무 흐름 계약을 유지하고 최종 task-first 소스 계약 **37건**을 추가했다. DB 없이 스킵되면 계속 실패한다. 증거 루트 `R=/tmp/opencode/eventouch-captures/task-first-final/`: `tests.log`, `contracts.log`.
+- `npm run build` — 최종 통합 빌드 **`SHCLRJJqHwQG_UgIjundi`**(server 타입 검사 + Next 빌드/타입 검사) 통과. `npx tsc -p apps/web/tsconfig.json --noEmit`도 통과했다. 빌드 API 목적지/실행 설정 거부 검사는 유지한다. `R/{build,typecheck}.log`. 기존 배포를 재시작하거나 바꾸지 않았다. Before의 기존 아티팩트는 `REsmIRaXJwwJnVyYw0-VJ`; 빠진 초대·보고서 상세·최근 처리 증거는 **같은 기준 소스 `15c9005`의 별도 임시 스냅샷 빌드 `Rm1viCXSRbA_bLDTAul1O`**로 보완했다. 두 Before 빌드를 하나로 부르지 않는다.
+- `npm run a11y` — **새 앱 11화면**, 같은 격리 API의 SSR·정확한 역할에서 axe 위반 **0**. `npm run mobile` — **6기기×2방향×6경로=72검사**, 가로 넘침·44px 미만 조작 목표 **0**. 최종 빌드 증거 `R/{a11y,mobile}.log`. 익명 경로·실제 준비 표식을 유지한다. 실기기·Safari·스크린리더 실청취는 여전히 미검증이다.
+- `npm run web:audit` — 최종 빌드·격리 API/DB에서 serious/critical **0**, 가로 넘침 **0**. 짧은 홈 화면 9종의 배너·고객사 확정 **6개 메뉴** 한 화면 배치, 44px 목표·①②/③④/⑤⑥·Enter·뒤로가기·분리 상세를 유지한다. `R/web-audit.log`.
 - `npm run web:console:audit` — 최신 빌드에서 **16메뉴 × 1280/390px = 32렌더**, 모바일 구성·업무 흐름을 포함한 **73판정 통과**, axe 위반·넘침·페이지 오류 **0**. 이번 회차에 데스크 편집·부스 지도 초안/게시·추첨 대상 문구·프로그램→추첨 링크·참가비 안내, 승인 대기 카드 처리 링크의 실제 이동, 참가자 부스 인증의 카메라 스캔·코드 재입력 한도·티켓 없는 탭 안내, 운영자 정보 배치(보고서 승인 대기·그룹 지정 범위·추첨 실행 전제·MMS 템플릿·전광판 미적용·종료 확인)와 경품↔추첨 프로그램 연결을 실제 커맨드로 추가 검증했다.
   기존 미입장 드릴다운·주소 복원·선택 보존, 미저장 경고·대화상자, 커밋 후 502 같은 영수증 재시도,
   편집기 409 복구·저장/게시, 역할·종료/보관, 동결 보고서 전용 인쇄/PDF 검사를 모두 유지했다.
@@ -47,10 +49,13 @@ Branch: `master` · 작업 기준: `d2d9a72` + 디자인·화면 구성 리뷰 �
   `theme-two-tab-merge-phone.png`, `long-*.png`, `sweep/*.png`, `writes-*-dialog-error.png`,
   `report-print-emulated.{png,pdf}`와 `/tmp/opencode/eventouch-captures/mobile-navigation/{console-audit,trace-final}.log`.
   업무 흐름 빌드에서도 같은 73판정을 통과했다. 당시 감사 로그·빌드별 결과는 `/tmp/opencode/eventouch-captures/task-flow/after/{console.log,console-verification.json}`이다. 데스크 이름이 포함된 새 배정 버튼의 접근성 이름과 기존 `편집` 버튼을 혼동하지 않도록 감사의 편집 선택자 두 곳만 정확 일치로 강화했다. 판정·상한은 줄이거나 늘리지 않았다.
-  디자인 리뷰 최종 빌드에서도 **73판정**, 실패·moderate **0**, 32개 전 메뉴 렌더를 새로 확인했다. 최신 정본 증거는
-  `/tmp/opencode/eventouch-captures/design-review/console.log`, `after/console-verification.json`, `after/sweep/*.png`다.
+  최종 task-first 빌드에서도 **73판정**, 실패·moderate **0**, 32개 전 메뉴 렌더를 새로 확인했다. 최신 정본 증거는
+  `R/console.log`, `R/after/console-verification.json`이며 원본 전 메뉴 캡처는 `/tmp/opencode/eventouch-captures/console-unification/sweep/`다.
   최초 실행은 셸의 120초 제한으로 중단돼 browser-closed 실패가 기록됐다(`console-interrupted.log`); 통과 증거로 쓰지 않고 최종 빌드에서 시간 제한 없이 직렬 재실행했다.
   이전 별도 경계 조작(`ux-flows*.json`)의 근거는 당시 빌드에 한정하며, 원격 CI·실프린터 증거가 아니다.
+- `npm run audit:usability` — 최종 빌드 **23/23**. 운영자 12회·참가자 10회·스크롤 6회·키보드 40회 상한은 그대로다. `R/usability.log`, `R/after/usability-result.json`.
+- 기존 연속 과제 `node scripts/web-task-flow-audit.cjs` — **4과제 + 복구 안전 검사** 통과; `node scripts/web-task-flow-journey-audit.cjs` — **10/10**, 단일 데스크 수동 체크인 **3→2회**의 새 기대값만 반영했다. 기존 12회 상한·부스 선택·서버 반영은 유지한다. `R/task-flow*.log`, `R/after/{task-results,task-flow-journey-results}.json`.
+- 추가 최종 검사 — `web-task-first-final-audit.cjs` **40 렌더/수행 판정**, `web-task-first-final-journeys.cjs` **6/6 여정**, `web-task-first-final-states.cjs` **24 상태 판정**과 별도 라벨 8·상태 배지 10·줄바꿈 6 확인을 통과했다. 정상/빈/문제·키보드 다음 참가자·실제 커밋 후 응답 유실/동일 영수증 재시도·행사 취소 후 등록 고객사 재사용을 검증했다. 이 추가 여정의 스크롤 수는 **미계측(null)**이며 0회로 주장하지 않는다. 모든 정상 API 응답은 실제 격리 API/DB다. 통신 중단·과거 로그·PNG는 명시된 모의 입력이다. `R/{render,journeys,states}.log`, `R/{journey-final-results.json,after/verification.json,after/states-verification.json}`.
 - 홈 한 화면 외부 검증 — Tailscale HTTPS `8894`의 실제 앱에서 320×568·412×700·390×844·1280×800 순으로 같은 페이지를 리사이즈해 가로/세로 넘침 0을 확인했다. 200% 글자 크기 모의에서 제목·메뉴 잘림 0, 필요한 세로 스크롤 허용(320×568에서 문서 높이 705px), 키보드·뒤로가기·pageerror 0. 실제 기기 주소창·safe-area·Safari는 미검증이다.
 - `npm run web:import:audit` — 실제 API·격리 PostgreSQL 브라우저 감사 통과. XLSX/XLS 12명, 표시 연락처의 선행 0·8열 이후 열 연결·1,001행 거부, 커밋 후 응답 유실의 동일 영수증 재시도와 HTTP 서버 재생성 후 값 유지를 확인했다. API 성공 응답 모의 없음.
 - `npm run web:hanwool:audit` — 은퇴 후 최신 앱/엄격 CSP에서 실제 API·격리 DB로 재통과. 8명/20팀, 브라우저 투표 1건·추가 API 입력 5건의 정확한 5팀 선택, 표시 QR 소프트웨어 해독→입장(추가 입장 7건은 API), 독립 룰렛 2명(일반/감소 모션), 개인 1명/업체 4회, 명시적 업체 수령자, STAFF 경품 3건 수령·응답 유실 재시도·HTTP 재시작 유지를 확인했다. 실제 경품 칸 정지·재접속 복원, 첫 무대 반영 1,007ms, STAFF bootstrap 전역 경품 0, pageerror·axe serious/critical·넘침 0. 실발송은 하지 않았다.
@@ -62,6 +67,69 @@ Branch: `master` · 작업 기준: `d2d9a72` + 디자인·화면 구성 리뷰 �
 - 운영 준비 보강 — `/api/readyz`가 DB `SELECT 1`까지 확인해 격리 compose의 API에서 200을 반환했고, API 이미지 HEALTHCHECK를 readyz로 바꿨다. 백업은 덤프 전후 행 수를 비교해 `countsStable`을 기록하고, 복원은 체크섬·파일 아카이브 판독·대상 볼륨/디렉터리 점유를 DB 변경 전에 검사한다. 점유된 디렉터리를 지정한 복원은 실패했고 대상 DB가 생성되지 않았으며, 실제 복원 후 `ops-verify` 행 이름을 확인했다. 529 테스트·빌드를 통과했다.
 
 ## 이번 UI/UX 검수와 반영
+
+### 최종 task-first 종합 개선 — 남은 다섯 과제와 현장 수행
+
+이 절이 이번 단위의 최종 판단이다. 아래 앞선 회차의 ‘미반영·후속 후보’는 **그 회차 당시 이력**으로 남기며,
+이번에 해결한 항목을 현재 미완료로 해석하지 않는다. 서버·커맨드·권한·DB 스키마·토큰 값은 바꾸지 않았다.
+기존 문구·정보·위험 확인·미저장/응답 미확인 경고·고객사 확정 참가자 홈 6타일을 유지했다. 커밋·푸시·배포하지 않았다.
+
+**장면 → 구성 → 대안 → 대가 → 실제 확인** 순서로 기존 제품을 보고 판단했다. 원본 렌더는 `R/before/`,
+최종 통합 빌드의 실제 렌더는 `R/after/`이며 390×844·1280×900 양쪽 이미지를 직접 열어 확인했다.
+실사용자 이해도나 작업 시간 향상 수치를 만들지 않았다. 다음의 조작 수는 클릭·입력·선택·키 입력·확인 수락을 센 Chromium 수행이다.
+
+| 과제 | 장면·먼저 보이는 구성 | 비교한 대안·채택/대가 | 실제 확인·수치·렌더 |
+|---|---|---|---|
+| 긴 이메일 | 운영자가 구성원을 식별하고 권한/배정 작업을 찾는다. 이름→역할→연락처 순서를 유지하고 이메일 원문을 모두 남긴다. | 단순 `anywhere`나 모든 구분점의 `<wbr>`는 `example.`/`test`를 여전히 나눈다. 말줄임/툴팁 대신 로컬 부분은 `-/_`에서, `@도메인`은 한 단위로 감싼다. 아주 긴 도메인만 행 폭 안에서 다시 줄바꿈한다. 줄 수 축소가 아니라 읽기 단위 보존을 택했다. | 모바일 기본 주소는 **3줄→3줄**이나 도메인 내부 분리는 제거했다. 두 일반 주소×두 폭 **4회** 도메인 한 줄, 과도하게 긴 주소×두 폭 넘침 0을 확인했다. `before/team-390.png`, `after/team-390.png`, `after/states-team-labels-{390,1280}.png`, `after/states-verification.json`. |
+| 활동 명령 키 | 운영자가 누가 무엇을 바꿨는지 읽는다. 행사·한국어 작업·대상/내용·행위자·시각은 계속 보인다. | 기술 로그처럼 키를 첫 줄에 두는 대신 기존 화면의 작업 이름을 쓴다. 미지의 작업은 ‘기록된 작업’, 원시 키는 네이티브 `기술 정보` 펼침으로 보존한다. 진단에 한 번 더 펼침이 필요하다. | **83개** 기존 명령 키 매핑. 기본 Before 목록에서 보였던 `draw.program.save`·`booth.mode` 원시 표기 **2→0**. `participant.import`는 기존 일반 ‘참가자 변경’ 대신 구체적인 명단 가져오기로 읽힌다. 해당 과거 로그와 미지의 키는 자기 픽스처의 합성 입력이며 숨김→펼침을 검증했다. `before/team-{390,1280}.png`, `after/states-team-labels-{390,1280}.png`. |
+| 전역 토큰 | 어두운 내비에서 행사·대기 수를 읽고 작은 안내를 확인한다. 프레임/내비 위치는 유지한다. | 임의의 새 밝은 색을 만들지 않고 기존 내비·피드백·글자 토큰을 재사용했다. 글자가 커지고 일부 간격이 늘어나는 대가를 전 화면 회귀로 점검했다. | `globals.css` 리터럴 색 **3→0**, 12/13/15px 글자 선언 **8→0**, 2/6/10px 간격 선언 **4→0**. 주황 내비 배지의 글자 대비 **3.18:1→4.95:1**(`on-brand`); 새 hex/토큰 값 변경 없음. `before|after/{team,operations,import}-{390,1280}.png`. 기계적 검사 경고는 변경하지 않은 기존 3px 한쪽 강조선 1건이며 새 결함 0이라고 포장하지 않는다(`R/detector.json`). |
+| 사진·가져오기·자원 상태 | 운영자가 구간의 사진을 올리고, 이미 가진 명단을 고르며, 데스크/부스 가동 상태를 먼저 판단한다. | 모바일 업로드 설명 옆의 좁은 버튼 열 대신 설명→전체 폭 파일 버튼을 쌓았다. 명단 파일은 공통 도구막대 왼쪽, 보조 양식은 오른쪽. 자원 이름 옆에 기존 상태 문구를 배지로 옮겼다. 정보/제약/확인 동작은 줄이지 않으며 사진 영역은 조금 높아진다. | 사진 안내 폭 **197.19→332px**, 같은 안내 **3→2줄**. 1280px 파일 입력 x **770.19→321px**. 가동/중지/대기/진행/종료 **5상태×2폭** 확인. 빈 사진→합성 PNG 실제 업로드/저장→잘못된 파일, 깨진 CSV→유효 1행 미리보기(자동 커밋 0)를 수행했다. `before|after/{photos,import,operations}-{390,1280}.png`, `after/states-{photos-*,import-*,ops-badges-*}.png`. |
+| 과제 연결 3건 | 초대받은 사람은 역할에 맞는 일로, 운영자는 행사 초안을 유지해 고객사를 등록하고, 결과를 동결한 뒤 종료·보관 전제를 확인한다. | 기존 로그인 복귀·고객사 REST·bootstrap/설정 단계 가드를 쓴다. [Shopify의 초안 주문 안에서 고객사 생성/선택](https://help.shopify.com/en/manual/fulfillment/managing-orders/create-orders/create-draft#add-or-remove-a-customer)처럼 원래 과제를 떠나지 않는 패턴만 채택했다. 팀 행사 선택과 기존 비가역 확인을 생략하지 않는다. | 역할별 로그인 복귀 안내 **0→1**, 활성 STAFF 행의 배정 입구 **0→1**. 고객사 등록 하위 보기 **0→1**, 기존 행사 값 6개 유지+고객사 선택 반영. 동결 보고서의 단계 연결 **0→1**, 조회 시각·단계/접수/열린 프로그램을 별도 표시한다. 상세 수행/증거는 아래. |
+
+**연결 과제의 계약·실제 수행**
+
+- **초대→배정**: 공개 초대 응답에 이미 있는 `eventId`만 넘겨 MANAGER는 담당 행사, STAFF는 `/staff`로 로그인 복귀한다.
+  초대 시 STAFF의 행사 지정은 기존 서버가 **400**으로 거부함을 먼저 확인했다. 팀에서 활성 STAFF의 `행사 배정`을 열면
+  실제 행사 선택→기존 현장 운영의 `#ops-staff`로 이동한다. 행사가 여러 개면 미리 선택하지 않고, 하나일 때만 기본값이다.
+  수락/로그인 **각 7회**, 팀→명시적 데스크 배정 **7회**, bootstrap의 실제 배정으로 확인했다. 자동 배정/권한 부여 없음.
+  `before/{invite-normal,invite-accepted,invite-staff-accepted,team-staff-row}-{390,1280}.png`,
+  `after/{invite-normal,invite-accepted,invite-staff-accepted,final-team-assign-panel}-{390,1280}.png`.
+- **행사→고객사→초안 복귀**: 중첩 모달 대신 같은 대화상자의 하위 보기를 쓰며 초점은 고객사명→기존 고객사 선택으로 돌아온다.
+  고객사 쓰기는 독립 멱등 키이고 행사 키/주소 코드/기존 값은 바꾸지 않는다. 실제 고객사 커밋 후 응답만 끊고 같은 영수증으로
+  재시도해 **10회**, 고객사 중복 **0**·새 고객사 자동 선택·행사 생성/서버 재조회까지 확인했다. 고객사 등록 뒤 행사 초안을
+  명시적으로 버려도 고객사는 저장된 상태이므로, 부모 목록도 갱신해 재진입/재사용 **10회**(확인 수락 포함)를 추가 검증했다.
+  `before/event-draft-{390,1280}.png`, `after/{event-draft,final-event-client-subview,final-client-after-event-discard}-{390,1280}.png`.
+- **동결 보고서→종료/보관 전제**: 새 상태 정보는 인쇄되는 동결 `article` **밖**에 있다. ‘실시간’ 자동 갱신을 약속하지 않고
+  **조회 기준 시각·새로고침 시 갱신**을 밝힌다. 접수 열림과 열린 프로그램 이름/수를 읽고 44px 보조 버튼으로 기존 진행 단계에
+  도착하는 **5회**를 수행했으며, 링크 이동 시 명령 POST **0**이다. 종료/보관 명령·선행 조건·확인은 원래 설정 화면이 소유한다.
+  `before/report-detail-{390,1280}.png`, `after/final-report-archive-checklist-{390,1280}.png`.
+
+**참가자·스태프 task-first 재점검**
+
+- 참가자: 신청 정보/동의→티켓, 티켓 없음→연락처 복구가 먼저 보이고 참여 상세는 해당 메뉴로 이동한다. 고객사 홈 6타일·기존 QR
+  여백·복구 안내는 유지했다. 추가 단계로 쪼개는 대안은 필수 입력/증빙을 숨기거나 왕복을 늘려 채택하지 않았다. 실제 신청에서
+  통신 중단 시 이름/연락처를 보존→재시도→QR/주소의 bearer 제거를 확인했다. 빈 티켓/참여/복구·홈·신청은 두 폭으로 보았다.
+  `before|after/attendee-{home,register,ticket-empty,engage,recover}-{390,1280}.png`, `after/attendee-{register-problem,ticket-normal}-390.png`.
+- 스태프: 현장의 우선 과제는 배정 데스크와 입장/퇴장 방향을 확인하고 한 명을 처리하는 것이다. **유일한 배정 데스크만** 미리
+  선택해 수동 처리 **3→2회**; 여러 데스크는 빈 선택을 유지한다. 자동 스캔·권한 우회는 없다. 성공 후 다음 참가자가 먼저,
+  오처리 정정과 최근 기록/재스캔은 발견 가능하게 유지했다. 모바일 최근 기록의 데스크톱 `flex-basis`가 높이가 되는 결함을
+  고쳐 텍스트 영역 **200→51.19px**, 같은 정상 상태의 페이지 **1361→1212px**다. 기록/버튼은 삭제하지 않았다.
+  실제 입장·잘못된 티켓 거부·미배정·bootstrap 통신 문제/재조회·여러 데스크·Enter 다음 참가자를 수행했다.
+  `before|after/staff-{work,scan-normal}-{390,1280}.png`, `after/staff-{scan-problem,multiple-desks,empty,load-problem}-390.png`.
+
+**보정과 한계·남은 후보**
+
+- 첫 줄바꿈 가설(모든 구분점에 `<wbr>`)은 원본 이미지에서 도메인 분리가 재발해 버렸다. 도메인 원자 그룹으로 바꾸고,
+  실제 `Text.data`와 Range 좌표를 읽는 검사를 강화했다. 첫 스크립트의 페이지 펼침 누락·익명 로그인 `GET /api/auth/me`의 정상
+  401 분류·문자 계측 오류는 제품 성공으로 덮지 않고 수정했다. 실패/중간 증거는 `R/{states-initial,states-probe-initial}.log`,
+  `R/intermediate-*`에 남긴다. 최종 성공 증거는 위의 최종 빌드만 가리킨다.
+- 선택한 다섯 과제 중 새 서버 계약이 없어 못 한 UI 개선은 없다. STAFF 초대에 행사 지정/자동 배정, 보고서에서 자동 종료·보관,
+  예약 자동 실행 등은 기존 계약/안전 경계를 바꾸므로 하지 않았다. 선택한 사람을 배정 폼에 다시 고르는 기존 명시 단계는 남는다.
+- 후속 **P3(추가 관찰 후보, 현재 차단 아님)**: 팀의 선택한 계정을 배정 폼에 안전하게 인계해 재선택 1회를 줄일지,
+  팀 행사 선택 목록에 종료/보관 단계를 함께 보여 줄지. 이번에는 실제 배정과 읽기 전용 가드를 유지했다.
+- Native Browser는 이 세션에서 `browser.disconnected`였고 저장소 Playwright/로컬 Chromium을 사용했다. 실기기·Safari·소프트 키보드·
+  실제 카메라/터치·스크린리더 실청취·실프린터·실발송·배포 재시작/영속성은 이번 단위에서 검증하지 않았다. 최종 제품 수용/배포는
+  메인 세션이 담당한다. 임시 baseline은 보존된 기준 소스의 복사본이며 제품/아카이브/공유 DB를 되돌린 것이 아니다.
 
 ### 디자인·화면 구성 리뷰 — 시각 위계 네 항목
 

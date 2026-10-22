@@ -24,6 +24,8 @@ export default async function InvitePage({
       name?: unknown;
       email?: unknown;
       role?: unknown;
+      eventId?: unknown;
+      status?: unknown;
       expiresAt?: unknown;
     } | null;
   } | null;
@@ -43,6 +45,8 @@ export default async function InvitePage({
           name: invitation.name,
           email: invitation.email,
           role: typeof invitation.role === "string" ? invitation.role : "",
+          eventId: typeof invitation.eventId === "string" ? invitation.eventId : null,
+          status: typeof invitation.status === "string" ? invitation.status : "",
           expiresAt: typeof invitation.expiresAt === "string" ? invitation.expiresAt : "",
         }}
       />

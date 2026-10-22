@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { loginHrefForLocation } from "../../auth-redirect";
 import ConsoleConfirm from "../console-ui/ConsoleConfirm";
 import ConsolePage from "../console-ui/ConsolePage";
@@ -77,6 +78,31 @@ function confirmLines(message: string): ReactNode {
   return parts.flatMap((line, index) => (index === 0 ? [line] : [<br key={index} />, line]));
 }
 
+// Long audit-style addresses (audit-owner-…@example.test) must not snap
+// mid-token: the local part breaks only after -/_ runs, and the @domain
+// reads as one atomic group (inline-block, full contact width available).
+// Only a domain wider than the row itself wraps inside (anywhere fallback
+// that still never overflows). Non-addresses render untouched.
+function SafeContact({ value }: { value: string }) {
+  if (!value) return null;
+  const at = value.lastIndexOf("@");
+  if (at <= 0 || at === value.length - 1) return <>{value}</>;
+  const parts = value.slice(0, at).split(/([-_]+)/);
+  return (
+    <>
+      {parts.map((part, index) =>
+        index % 2 === 1 ? (
+          <span key={index}>{part}<wbr /></span>
+        ) : (
+          <span key={index}>{part}</span>
+        )
+      )}
+      <wbr />
+      <span className={teamStyles.contactDomain}>@{value.slice(at + 1)}</span>
+    </>
+  );
+}
+
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -109,6 +135,10 @@ export default function TeamWorkspace() {
   // dismissal gates (ResetDialog/InviteDialog canClose) keep their own
   // contract and are untouched.
   const [inviteLossPending, setInviteLossPending] = useState<"replace" | "close" | null>(null);
+  // Which accepted member's assignment picker is expanded (account id, one at
+  // a time). Navigation-only: choosing an event never writes, so the member
+  // list stays non-dirty and no draft guard is registered for it.
+  const [assignOpenId, setAssignOpenId] = useState<string | null>(null);
 
   // Only the issued once-shown bearer link guards navigation at the parent
   // level: losing it loses the link. Open reset/invite forms register their
@@ -333,17 +363,17 @@ export default function TeamWorkspace() {
                 : "";
               const expiry = invitation.expiresAt ? formatInviteExpiry(invitation.expiresAt) : "";
               return (
-              <li className={consoleUiStyles.recordRow} key={invitation.id}>
-                <div className={consoleUiStyles.recordMain}>
+              <li className={`${consoleUiStyles.recordRow} ${teamStyles.teamRow}`} key={invitation.id}>
+                <div className={`${consoleUiStyles.recordMain} ${teamStyles.memberMain}`}>
                   <strong className={teamStyles.memberName}>{invitation.name}</strong>
                   <p className={teamStyles.memberRole}>{roleLabel(invitation.role)}</p>
-                  <p className={teamStyles.memberContact}>{invitation.email}</p>
+                  <p className={teamStyles.memberContact}><SafeContact value={invitation.email} /></p>
                   <p className={teamStyles.inviteDetail}>
                     <span>{eventName ? `담당 행사: ${eventName}` : "담당 행사 미지정"}</span>
                     {expiry ? <span>만료: {expiry}</span> : null}
                   </p>
                 </div>
-                <div className={consoleUiStyles.recordActions}>
+                <div className={`${consoleUiStyles.recordActions} ${teamStyles.memberActions}`}>
                   <RevokeInviteButton
                     invitationId={invitation.id}
                     onDone={() => {
@@ -368,17 +398,28 @@ export default function TeamWorkspace() {
         {state.accounts.length ? (
           <ul className={consoleUiStyles.collection} aria-label="구성원 목록">
             {state.accounts.map((account) => (
-              <li className={consoleUiStyles.recordRow} key={account.id}>
-                <div className={consoleUiStyles.recordMain}>
+              <li className={`${consoleUiStyles.recordRow} ${teamStyles.teamRow}`} key={account.id}>
+                <div className={`${consoleUiStyles.recordMain} ${teamStyles.memberMain}`}>
                   <strong className={teamStyles.memberName}>{account.name}</strong>
                   <p className={teamStyles.memberRole}>
                     {roleLabel(account.role)}
                     {account.active ? "" : " · 사용 중지"}
                   </p>
-                  <p className={teamStyles.memberContact}>{account.email}</p>
+                  <p className={teamStyles.memberContact}><SafeContact value={account.email} /></p>
+                  {state.canManage && account.role === "STAFF" && account.active && assignOpenId === account.id ? (
+                    <StaffAssignmentPanel
+                      events={state.events}
+                      accountId={account.id}
+                      accountName={account.name}
+                      onClose={() => {
+                        setAssignOpenId(null);
+                        document.getElementById(`staff-assign-toggle-${account.id}`)?.focus();
+                      }}
+                    />
+                  ) : null}
                 </div>
                 {state.canManage ? (
-                  <div className={consoleUiStyles.recordActions}>
+                  <div className={`${consoleUiStyles.recordActions} ${teamStyles.memberActions}`}>
                     <button
                       type="button"
                       className="button button-secondary"
@@ -386,6 +427,21 @@ export default function TeamWorkspace() {
                     >
                       비밀번호 재설정
                     </button>
+                    {account.role === "STAFF" && account.active ? (
+                      <button
+                        type="button"
+                        id={`staff-assign-toggle-${account.id}`}
+                        className="button button-secondary"
+                        aria-expanded={assignOpenId === account.id}
+                        aria-controls={`staff-assign-panel-${account.id}`}
+                        onClick={() => {
+                          setNotice(null);
+                          setAssignOpenId((current) => (current === account.id ? null : account.id));
+                        }}
+                      >
+                        행사 배정
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
               </li>
@@ -424,6 +480,76 @@ export default function TeamWorkspace() {
         />
       ) : null}
     </ConsolePage>
+  );
+}
+
+function StaffAssignmentPanel({
+  events,
+  accountId,
+  accountName,
+  onClose,
+}: {
+  events: TeamEvent[];
+  accountId: string;
+  accountName: string;
+  onClose: () => void;
+}) {
+  // Preselect only when there is exactly one event to choose from; with
+  // several events the operator must choose, and with none there is nothing
+  // to link. No association is stored or sent anywhere here — the actual
+  // assignment stays an explicit operations command on the target event.
+  const [eventId, setEventId] = useState(
+    events.length === 1 && events[0] ? events[0].id : ""
+  );
+  const selectRef = useRef<HTMLSelectElement>(null);
+  useEffect(() => {
+    selectRef.current?.focus();
+  }, []);
+  const chosen = events.find((item) => item.id === eventId) ?? null;
+  return (
+    <div className={teamStyles.assignPanel} id={`staff-assign-panel-${accountId}`}>
+      <p className={teamStyles.assignLead}>
+        {accountName}님의 데스크·부스 배정은 행사별 현장 운영에서 지정합니다.
+        {events.length === 1
+          ? " 배정할 행사가 하나뿐이라 미리 선택했습니다."
+          : " 배정할 행사를 선택하세요."}
+      </p>
+      {events.length ? (
+        <label className={teamStyles.assignField}>
+          <span>배정할 행사</span>
+          <select
+            ref={selectRef}
+            value={eventId}
+            onChange={(event) => setEventId(event.target.value)}
+            aria-label={`${accountName} 배정 행사 선택`}
+          >
+            <option value="">선택하세요</option>
+            {events.map((item) => (
+              <option key={item.id} value={item.id}>{item.name}</option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <p className={teamStyles.assignLead} role="status">배정할 수 있는 행사가 없습니다.</p>
+      )}
+      {chosen ? (
+        <p className={teamStyles.assignLead}>
+          <Link
+            className={teamStyles.assignLink}
+            href={`/console/events/${encodeURIComponent(chosen.id)}/operations#ops-staff`}
+          >
+            {chosen.name} 현장 운영 · 스태프 배정으로 이동
+          </Link>
+        </p>
+      ) : events.length ? (
+        <p className={teamStyles.assignLead} role="status">배정할 행사를 선택하면 이동 링크가 나타납니다.</p>
+      ) : null}
+      <p className={teamStyles.assignLead}>
+        <button type="button" className="button button-secondary" onClick={onClose}>
+          닫기
+        </button>
+      </p>
+    </div>
   );
 }
 

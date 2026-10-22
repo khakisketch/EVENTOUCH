@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import ConsoleSection from "../console-ui/ConsoleSection";
 import consoleUiStyles from "../console-ui/console-ui.module.css";
+import teamStyles from "./team.module.css";
+import { getActivityLabel, isKnownActivityType } from "./activity-labels";
 
 // Operations visibility for the team screen: integration status, recent
 // activity, and login protection. All three are read-only; the server owns
@@ -56,9 +58,12 @@ function verificationLabel(mode: string): string {
   }
 }
 
-// Raw command keys are operator-hostile on their own: map the known audit
-// types to concise Korean action labels. Unknown keys keep the raw key so
-// no activity ever renders blank.
+// Raw command keys are operator-hostile on their own: the pinned cases below
+// keep their concise Korean action labels, and every other known audit type
+// resolves through the shared activity-labels map (the full server command
+// universe, read-only). Unknown keys keep the raw key at the data level so
+// no activity ever goes blank; rows render "기록된 작업" with the
+// raw key inside an on-demand details block instead.
 function activityActionLabel(type: string): string {
   switch (type) {
     case "report.publish":
@@ -94,6 +99,8 @@ function activityActionLabel(type: string): string {
     default:
       break;
   }
+  const mapped = getActivityLabel(type);
+  if (mapped !== null) return mapped;
   if (type.startsWith("participant.")) return "참가자 변경";
   return type;
 }
@@ -278,17 +285,40 @@ export default function OperationsPanels() {
         ) : (
           <>
           <ul ref={activityListRef} className={consoleUiStyles.collection} aria-label="최근 활동 목록">
-            {audit.slice(0, visibleActivityCount).map((entry, index) => (
+            {audit.slice(0, visibleActivityCount).map((entry, index) => {
+              // Known audit types read as their Korean action; unmapped
+              // participant.* keys keep the grouped fallback; anything else
+              // reads as "기록된 작업". The raw technical key is one
+              // disclosure away whenever the key is unmapped — including
+              // unmapped participant.* keys — so evidence is never lost to
+              // a grouped reading.
+              const known = isKnownActivityType(entry.type);
+              const unmapped = getActivityLabel(entry.type) === null;
+              return (
               <li className={consoleUiStyles.recordRow} key={entry.id || `${entry.eventId}-${index}`} tabIndex={-1} data-activity-row={index}>
                 <div className={consoleUiStyles.recordMain}>
-                  <span>
-                    {entry.eventName} · {activityActionLabel(entry.type)}
-                    {entry.detail ? ` · ${entry.detail}` : ""}
-                  </span>
+                  {known ? (
+                    <span>
+                      {entry.eventName} · {activityActionLabel(entry.type)}
+                      {entry.detail ? ` · ${entry.detail}` : ""}
+                    </span>
+                  ) : (
+                    <span>
+                      {entry.eventName} · 기록된 작업
+                      {entry.detail ? ` · ${entry.detail}` : ""}
+                    </span>
+                  )}
                   <p className={consoleUiStyles.recordMeta}>{entry.actor} · {formatTime(entry.at)}</p>
+                  {unmapped ? (
+                    <details className={teamStyles.activityTech}>
+                      <summary>기술 정보</summary>
+                      <p className={consoleUiStyles.recordMeta}>내부 작업 키 <code>{entry.type}</code></p>
+                    </details>
+                  ) : null}
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
           {audit.length > visibleActivityCount ? (
             <p>

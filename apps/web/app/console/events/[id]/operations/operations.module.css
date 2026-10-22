@@ -44,14 +44,58 @@
 .mapPoint {
   position: absolute;
   transform: translate(-50%, -50%);
-  padding: 2px var(--s2);
+  padding: var(--s1) var(--s2);
   border-radius: 999px;
   background: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
   font-size: var(--small);
   font-weight: 800;
   white-space: nowrap;
   pointer-events: none;
+}
+
+/* Resource identity + state: the name reads first, the running state as an
+   explicit text badge beside it — never buried in the meta sentence alone.
+   Copy stays identical (가동 중/중지됨/대기/진행/종료); only the emphasis is
+   new. Tones reuse the product feedback tokens. */
+.resourceHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.resourceHead strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.resourceStatus {
+  display: inline-flex;
+  flex: none;
+  min-height: 28px;
+  align-items: center;
+  padding: 0 var(--s2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.resourceStatus[data-tone="good"] {
+  border-color: var(--success-line);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.resourceStatus[data-tone="wait"] {
+  border-color: var(--warning-line);
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 
 /* Jump nav wrapper: desktop renders exactly the shared section nav as

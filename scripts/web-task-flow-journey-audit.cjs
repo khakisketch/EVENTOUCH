@@ -423,8 +423,13 @@ async function main() {
       task.screens = [`/staff/events/${fixture.eventId} (staff, 데스크 체크인)`];
       task.fields = ['#staff-desk', '#staff-ticket', 'submit 입장 처리'];
       await go(`/staff/events/${fixture.eventId}`, '#staff-desk');
-      assert.equal(await page.locator('#staff-desk').inputValue(), '', 'desk must not be preselected (StaffEventWork defaults deskId "")');
-      await act(() => page.locator('#staff-desk').selectOption(fixture.deskId));
+      if (before) {
+        assert.equal(await page.locator('#staff-desk').inputValue(), '', 'baseline requires choosing a desk');
+        await act(() => page.locator('#staff-desk').selectOption(fixture.deskId));
+      } else {
+        assert.equal(await page.locator('#staff-desk').inputValue(), fixture.deskId,
+          'the only assigned desk is visible and selected; no scan has been submitted');
+      }
       await act(() => page.locator('#staff-ticket').fill(ticketPerson.ticket));
       const submitted = commandsResponse();
       await act(() => page.locator('form.scan-form').getByRole('button', { name: '입장 처리', exact: true }).click());

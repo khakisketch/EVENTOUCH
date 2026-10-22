@@ -585,34 +585,34 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
             기본이며, 여기서는 이미 확보한 명단을 한 번에 등록할 때 사용합니다.
           </p>
           <ConsoleToolbar
+            filters={
+              <label>
+                <span className="sr-only">CSV·TXT·XLSX 파일 선택</span>
+                <input
+                  type="file"
+                  disabled={committing}
+                  accept=".csv,text/csv,.txt,text/plain,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void readFile(file);
+                    event.target.value = "";
+                  }}
+                />
+              </label>
+            }
             actions={
-              <>
-                <label>
-                  <span className="sr-only">CSV·TXT·XLSX 파일 선택</span>
-                  <input
-                    type="file"
-                    disabled={committing}
-                    accept=".csv,text/csv,.txt,text/plain,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) void readFile(file);
-                      event.target.value = "";
-                    }}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="button button-secondary"
-                  onClick={() =>
-                    downloadCsv("EVENTOUCH_import_template.csv", [
-                      ["이름", "연락처", "이메일", "소속"],
-                      ["예시 참가자", "01000009999", "sample@example.demo", "예시 조직"],
-                    ])
-                  }
-                >
-                  양식 CSV
-                </button>
-              </>
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={() =>
+                  downloadCsv("EVENTOUCH_import_template.csv", [
+                    ["이름", "연락처", "이메일", "소속"],
+                    ["예시 참가자", "01000009999", "sample@example.demo", "예시 조직"],
+                  ])
+                }
+              >
+                양식 CSV
+              </button>
             }
           />
           <p className="landing-note">CSV·TXT·XLSX · 최대 1MB, 1,000행. 엑셀은 첫 시트의 첫 행을 헤더로 읽으며 256열까지 연결할 수 있습니다. TXT는 한 줄에 한 명: 이름, 연락처, 이메일(선택), 소속(선택).</p>

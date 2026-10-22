@@ -293,6 +293,11 @@
     flex-direction: column;
   }
 
+  .recentRow span {
+    /* The desktop width basis would become a 200px height in a column. */
+    flex: none;
+  }
+
   .rewardItem {
     align-items: stretch;
     flex-direction: column;
