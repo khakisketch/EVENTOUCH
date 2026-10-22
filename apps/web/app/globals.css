@@ -286,6 +286,171 @@ select[aria-invalid="true"] {
   background: var(--paper);
 }
 
+/* ------------------------------------------------------------------
+   Console-wide UI improvements: metric cards, status badges, alert
+   strips, empty states, and action chips reuse tokens.css variables.
+   Imported implicitly via globals.css; page modules add layout overrides.
+   ------------------------------------------------------------------ */
+
+.metric-card {
+  display: grid;
+  gap: var(--s1);
+  padding: var(--s4) var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: 0 1px 3px var(--shadow-color);
+}
+
+.metric-card.metric-primary {
+  border-color: var(--brand);
+  box-shadow: 0 4px 12px var(--shadow-color);
+}
+
+.metric-value {
+  font-family: var(--display-font);
+  font-size: clamp(var(--h2), 4vw, var(--display-large));
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.04em;
+  margin: 0;
+}
+
+.metric-label {
+  margin: 0;
+  font-size: var(--small);
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.metric-detail {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.metric-trend {
+  margin: var(--s1) 0 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.metric-trend.up { color: var(--success); }
+.metric-trend.down { color: var(--danger); }
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: var(--small);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status-chip.good { background: var(--success-soft); color: var(--success); }
+.status-chip.wait { background: var(--warning-soft); color: var(--warning); }
+.status-chip.bad  { background: var(--danger-soft); color: var(--danger); }
+.status-chip.info { background: var(--info-soft); color: var(--info); }
+
+.alert-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--warning-line);
+  border-radius: var(--radius);
+  background: var(--warning-soft);
+  margin-bottom: var(--s5);
+}
+
+.alert-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--warning);
+  flex-shrink: 0;
+}
+
+.alert-text {
+  flex: 1;
+  font-size: var(--small);
+  color: var(--ink);
+}
+
+.alert-text b { color: var(--warning); }
+
+.empty-console {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s8) var(--s4);
+  text-align: center;
+  color: var(--muted);
+}
+
+.empty-console h3 {
+  margin: 0 0 var(--s2);
+  font-size: var(--h3);
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.action-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 650;
+  text-decoration: none;
+  min-height: 44px;
+}
+
+.action-chip.primary {
+  background: var(--brand);
+  color: var(--on-brand);
+  border-color: var(--brand);
+}
+
+.action-chip.secondary:hover { background: var(--surface-muted); }
+
+.card-grid {
+  display: grid;
+  gap: var(--s4);
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s4) var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: 0 1px 3px var(--shadow-color);
+}
+
+.card:hover { border-color: var(--line-strong); }
+
+.table-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--line);
+  align-items: center;
+}
+
+.table-row:last-child { border-bottom: none; }
+
 /* Landing: quiet product identity, then one clear public-event entry. */
 .home-page {
   display: flex;
@@ -294,7 +459,6 @@ select[aria-invalid="true"] {
 
 .home-header,
 .public-page-header,
-.console-page-header,
 .display-header {
   display: flex;
   align-items: center;
@@ -701,6 +865,56 @@ select[aria-invalid="true"] {
   font-weight: 750;
 }
 
+.verification-panel {
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.verification-panel h2,
+.verification-panel p {
+  margin: 0;
+}
+
+.verification-help {
+  color: var(--muted);
+  font-size: var(--small);
+  line-height: 1.5;
+}
+
+.verification-help a {
+  font-weight: 700;
+}
+
+.verification-unavailable {
+  display: grid;
+  max-width: var(--web-form-max);
+  gap: var(--s3);
+  margin-block: var(--s4);
+  padding: var(--s5);
+  border: 1px solid var(--warning-line);
+  border-radius: var(--radius);
+  background: var(--warning-soft);
+}
+
+.verification-unavailable .eyebrow,
+.verification-unavailable h2,
+.verification-unavailable p {
+  margin: 0;
+}
+
+.verification-unavailable .eyebrow {
+  color: var(--warning);
+}
+
+.verification-unavailable .button {
+  width: fit-content;
+  max-width: 100%;
+}
+
 .registration-page .public-page-footer,
 .ticket-page .public-page-footer {
   margin-top: var(--s7);
@@ -1019,6 +1233,33 @@ select[aria-invalid="true"] {
   font-weight: 700;
 }
 
+.exit-prize-panel {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s4);
+  border: 1px solid var(--success-line);
+  border-radius: var(--radius);
+  background: var(--success-soft);
+}
+.exit-prize-title {
+  margin: 0;
+  font-size: var(--small);
+  font-weight: 800;
+  color: var(--success);
+}
+.exit-prize-list {
+  margin: 0;
+  padding-left: var(--s4);
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 700;
+}
+.exit-prize-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+
 .camera-panel {
   display: grid;
   gap: var(--s3);
@@ -1227,6 +1468,23 @@ select[aria-invalid="true"] {
   color: var(--muted);
 }
 
+.display-spinning,
+.display-congrats {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: clamp(var(--h3), 2.4vw, var(--display));
+  font-weight: 800;
+}
+.display-spinning {
+  color: var(--brand-text);
+}
+.display-congrats {
+  color: var(--success);
+}
+.display-spinning-slot {
+  border-style: dashed;
+}
+
 .display-questions {
   display: grid;
   gap: var(--s4);
@@ -1364,8 +1622,11 @@ select[aria-invalid="true"] {
   scrollbar-width: thin;
 }
 
-.mobile-event-nav,
-.mobile-primary-nav {
+.mobile-event-nav {
+  display: none;
+}
+
+.console-global-nav {
   display: none;
 }
 
@@ -1813,26 +2074,27 @@ select[aria-invalid="true"] {
 
 .console-page {
   width: 100%;
-  max-width: var(--web-content-max);
-  margin-inline: auto;
+  min-width: 0;
 }
 
-.console-page-header {
+/* Menu-page width, heading and body rhythm belong to ConsolePage. This
+   wrapper only prevents a long editor/table from widening the shell. */
+.console-route-content { width: 100%; min-width: 0; }
+
+.console-shell-error {
   display: flex;
-  align-items: flex-end;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
-  gap: var(--s4);
-  margin-bottom: var(--s5);
-  padding-bottom: var(--s4);
-  border-bottom: 1px solid var(--line);
-}
-
-.console-page-header h1 {
-  margin: 0;
-}
-
-.console-page-header .eyebrow {
-  margin: 0;
+  gap: var(--s3);
+  width: 100%;
+  max-width: var(--web-content-max);
+  margin: 0 auto var(--s4);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--warning-line);
+  border-radius: var(--radius);
+  background: var(--warning-soft);
+  color: var(--ink);
 }
 
 .event-list-section {
@@ -2063,10 +2325,6 @@ select[aria-invalid="true"] {
   color: var(--muted);
 }
 
-.participants-content {
-  max-width: var(--web-reading-max);
-}
-
 .overview-meta {
   margin: 0;
   color: var(--muted);
@@ -2179,6 +2437,46 @@ select[aria-invalid="true"] {
   font-size: var(--small);
 }
 
+/* Disclosure trigger: underlined text, but a full 44px target and a visible
+   focus ring. Details stay collapsed until the operator asks for them. */
+.auth-form .auth-help-link {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--brand-text);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.auth-form .auth-reset-help {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-small);
+  background: var(--surface-muted);
+  color: var(--ink);
+  font-size: var(--small);
+}
+
+.auth-form .auth-reset-help p {
+  margin: 0;
+}
+
+.auth-form .auth-reset-help p + p {
+  margin-top: 4px;
+}
+
+.auth-form .auth-reset-help a {
+  color: var(--brand-text);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
 @media (hover: hover) {
   a:hover {
     color: var(--brand-text);
@@ -2190,6 +2488,7 @@ select[aria-invalid="true"] {
   .auth-form button[type="submit"]:hover {
     border-color: var(--brand-hover);
     background: var(--brand-hover);
+    color: var(--on-brand-hover);
   }
 
   .button-secondary:hover {
@@ -2209,6 +2508,15 @@ select[aria-invalid="true"] {
 }
 
 @media (max-width: 768px) {
+  /* Native section anchors and keyboard focus must stop below the sticky
+     two-row console rail. The fixed bottom destinations are gone, so the
+     bottom only keeps ordinary spacing above the content edge. Main's
+     existing end padding still makes the final action fully scrollable. */
+  html:has(.console-shell) {
+    scroll-padding-top: calc(var(--s7) * 2 + var(--s5) + env(safe-area-inset-top, 0px));
+    scroll-padding-bottom: calc(var(--s4) + env(safe-area-inset-bottom, 0px));
+  }
+
   .console-shell {
     display: block;
   }
@@ -2221,9 +2529,9 @@ select[aria-invalid="true"] {
     height: auto;
     min-height: 0;
     grid-template-areas:
-      "brand profile"
-      "context context";
-    grid-template-columns: minmax(0, 1fr) 44px;
+      "menu brand profile"
+      "context context context";
+    grid-template-columns: auto minmax(0, 1fr) 44px;
     align-items: center;
     gap: var(--s1) var(--s3);
     overflow: visible;
@@ -2236,6 +2544,14 @@ select[aria-invalid="true"] {
     min-height: 44px;
     flex-direction: row;
     align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .console-brand .console-wordmark {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .console-tagline {
@@ -2268,70 +2584,89 @@ select[aria-invalid="true"] {
     display: none;
   }
 
-  .mobile-primary-nav {
-    position: fixed;
-    z-index: 20;
-    inset: auto 0 0;
-    display: flex;
-    min-height: 0;
-    align-items: stretch;
-    justify-content: center;
-    gap: var(--s2);
-    overflow: visible;
-    padding-block: var(--s1) calc(var(--s1) + env(safe-area-inset-bottom, 0px));
-    padding-left: max(var(--s4), env(safe-area-inset-left, 0px));
-    padding-right: max(var(--s4), env(safe-area-inset-right, 0px));
-    border-top: 1px solid var(--nav-active);
-    background: var(--nav);
-    box-shadow: 0 -4px 16px var(--shadow-color);
+  /* Top global menu: a small disclosure anchored below its trigger, in the
+     same dark sidebar voice as the account menu. Never a full-screen
+     drawer; the two rows keep the 44px floor. */
+  .console-global-nav {
+    display: block;
+    position: relative;
+    grid-area: menu;
+    min-width: 0;
   }
 
-  .mobile-primary-nav .console-nav-root-item {
-    flex: 1 1 0;
-    width: auto;
-    max-width: 168px;
-    min-height: 56px;
-    flex-direction: column;
-    justify-content: center;
-    gap: 2px;
-    padding: var(--s1) var(--s2);
+  .console-global-trigger {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+    gap: var(--s1);
+    padding: var(--s2) var(--s3);
+    border: 1px solid var(--nav-active);
     border-radius: var(--radius-small);
+    background: transparent;
+    color: var(--nav-text);
     font-size: var(--small);
-    line-height: 1.2;
+    font-weight: 700;
+    line-height: 1.3;
+    white-space: nowrap;
   }
 
-  .mobile-primary-nav .console-nav-root-item::before {
-    top: 0;
-    right: auto;
-    bottom: auto;
-    left: 50%;
-    width: 28px;
-    height: 2px;
-    transform: translateX(-50%);
+  .console-global-trigger:hover {
+    background: var(--nav-hover);
   }
 
-  .mobile-primary-nav .console-nav-root-item svg {
-    width: 18px;
-    height: 18px;
+  .console-global-trigger:focus-visible {
+    outline-color: var(--nav-text);
+    outline-offset: 2px;
   }
 
-  .mobile-primary-nav.side-nav-single-root .console-nav-root-item {
-    flex: 0 1 168px;
+  .console-global-trigger[aria-expanded="true"] {
+    background: var(--nav-hover);
+  }
+
+  .console-global-trigger-chevron {
+    width: 12px;
+    height: 12px;
+    flex: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform var(--enter) ease-out;
+  }
+
+  .console-global-trigger[aria-expanded="true"] .console-global-trigger-chevron {
+    transform: rotate(180deg);
+  }
+
+  .console-global-menu {
+    position: absolute;
+    z-index: 30;
+    top: calc(100% + var(--s2));
+    left: 0;
+    display: grid;
+    gap: var(--s1);
+    width: 220px;
+    max-width: calc(100vw - var(--s5));
+    padding: var(--s2);
+    border: 1px solid var(--nav-active);
+    border-radius: var(--radius);
+    background: var(--nav);
+    box-shadow: 0 8px 24px var(--scrim);
+  }
+
+  .console-global-menu[hidden] {
+    display: none;
+  }
+
+  .console-global-menu .console-nav-item {
+    width: 100%;
+    min-height: 44px;
   }
 
   .side-nav:empty {
     display: none;
-  }
-
-  .console-nav-root-item {
-    flex: 1 1 calc((100% - var(--s2)) / 2);
-    justify-content: center;
-    min-width: 0;
-    width: auto;
-  }
-
-  .side-nav-single-root .console-nav-root-item {
-    flex-basis: 100%;
   }
 
   .console-nav-item {
@@ -2489,11 +2824,7 @@ select[aria-invalid="true"] {
   }
 
   .console-main {
-    padding: var(--s5) var(--s4) calc(var(--s6) + 72px + env(safe-area-inset-bottom, 0px));
-  }
-
-  .console-page-header {
-    margin-bottom: var(--s4);
+    padding: var(--s5) var(--s4) calc(var(--s6) + env(safe-area-inset-bottom, 0px));
   }
 
   .event-filters {
@@ -2673,9 +3004,24 @@ select[aria-invalid="true"] {
   }
 }
 
+/* A selected report is cloned here for printing; never expose a second copy
+   on screen or mix changing live analytics with a saved report snapshot. */
+#eventouch-report-print { display: none; }
+
 @media print {
   body {
     background: var(--paper);
+  }
+
+  body.report-printing > :not(#eventouch-report-print) {
+    display: none !important;
+  }
+
+  body.report-printing > #eventouch-report-print {
+    display: block !important;
+    width: 100%;
+    max-width: none;
+    margin: 0;
   }
 
   .console-sidebar,
@@ -2698,7 +3044,6 @@ select[aria-invalid="true"] {
   .home-footer,
   .public-page-header,
   .public-page-footer,
-  .console-page-header,
   .console-footer,
   .button {
     display: none !important;
@@ -2790,4 +3135,36 @@ select[aria-invalid="true"] {
 .nametag-meta {
   margin: 0;
   color: var(--muted);
+}
+
+/* Attendee registration: the form states what happens after submitting, and a
+   duplicate application offers the way back to the ticket. */
+.registration-lead {
+  margin: 0 0 var(--s3);
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.registration-duplicate {
+  margin: var(--s2) 0 0;
+  font-size: var(--small);
+}
+
+.registration-duplicate a {
+  color: var(--brand-text);
+  font-weight: 700;
+}
+
+/* Ticket recovery: one step at a time, with the honest limits in a quiet note. */
+.recover-lead {
+  margin: 0 0 var(--s3);
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 700;
+}
+
+.recover-note {
+  margin: 0 0 var(--s3);
+  color: var(--muted);
+  font-size: 13px;
 }

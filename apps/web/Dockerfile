@@ -6,9 +6,14 @@
 #   docker compose build web
 FROM node:24-alpine AS build
 WORKDIR /app
+# The /api/* rewrite destination is baked into the build output, so the build
+# needs the same API base the container will proxy to at runtime — not the
+# loopback default developers build with on their laptops.
+ARG EVENTOUCH_API_URL=http://127.0.0.1:8776
 COPY apps/web/package.json apps/web/package-lock.json ./
 RUN npm ci
 COPY apps/web/ ./
+ENV EVENTOUCH_API_URL=$EVENTOUCH_API_URL
 # No API needed at build time: all page data is fetched at request time.
 RUN npm run build
 

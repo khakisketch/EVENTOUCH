@@ -36,7 +36,7 @@ export default async function InvitePage({
     notFound();
   }
   return (
-    <main id="main-content" className="site-page auth-page">
+    <main id="main-content" tabIndex={-1} className="site-page auth-page">
       <InviteAccept
         token={token}
         invitation={{
