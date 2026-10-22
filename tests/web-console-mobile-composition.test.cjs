@@ -185,7 +185,7 @@ test('shared section nav wraps to fully reachable rows on mobile', () => {
   // API and semantics are untouched: native anchors, list markup, label.
   const nav = read('app/console/console-ui/ConsoleSectionNav.tsx');
   assert.match(nav, /<nav className=\{styles\.sectionNav\} aria-label=\{label \?\? "섹션 바로가기"\}>/u);
-  assert.match(nav, /<a className=\{styles\.sectionNavLink\} href=\{`#\$\{item\.id\}`\}[^>]*>/u);
+  assert.match(nav, /<a\s+className=\{styles\.sectionNavLink\}\s+href=\{`#\$\{item\.id\}`\}/su);
 });
 
 test('shared form actions and feedback survive long Korean labels', () => {

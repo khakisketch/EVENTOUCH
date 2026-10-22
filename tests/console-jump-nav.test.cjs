@@ -36,6 +36,17 @@ test('the long console screens name the section in view next to the jump nav', (
   }
 });
 
+test('a section jump moves focus into the section, not only the viewport', () => {
+  // A keyboard operator who jumps to a section must continue tabbing inside
+  // that section, so the jump hands focus over as well as scrolling.
+  const nav = read('apps/web/app/console/console-ui/ConsoleSectionNav.tsx');
+  assert.match(nav, /onClick=\{\(\) =>/u);
+  assert.match(nav, /document\.getElementById\(item\.id\)/u);
+  assert.match(nav, /setAttribute\("tabindex", "-1"\)/u);
+  // The fragment must still change: a section stays copyable and reopenable.
+  assert.doesNotMatch(nav, /event\.preventDefault\(\)/u);
+});
+
 test('the draw and vote screen keeps its four jobs addressable', () => {
   for (const id of ['draws-programs', 'draws-vote', 'draws-roulette', 'draws-lucky']) {
     assert.match(draws, new RegExp(`\\{ id: "${id}", label:`), `${id} stays in the nav`);
