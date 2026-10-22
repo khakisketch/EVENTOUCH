@@ -853,6 +853,17 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     setCampaignFieldError(null);
   }
 
+  // Keyboard path: after picking recipients the composer still holds N
+  // checkbox stops, a 6-segment datetime-local and the option row before
+  // the submit. This jump moves focus straight onto the real submit
+  // button, so the next Tab leaves it (no re-finding) and Enter/Space
+  // activates it immediately. Scroll follows for sighted operators.
+  function jumpToCampaignSubmit() {
+    const target = document.getElementById("campaign-submit") as HTMLElement | null;
+    target?.scrollIntoView({ block: "center" });
+    target?.focus({ preventScroll: true });
+  }
+
   function requestCampaignCreate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (inFlightRef.current || uploadingImage) return;
@@ -1253,6 +1264,22 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                 {/* Long-form guard: the recipient picker sits far below, so the
                     compose head restates who this goes to and jumps straight
                     there. Counts stay detailed in the 발송 대상 summary. */}
+                {/* In-form skip: recipients chosen means "confirmed" — one
+                    stop jumps straight onto the real submit button. It sits
+                    with the recipient summary so the shortcut is found
+                    before the long recipient list. */}
+                <div className={styles.sendSkip}>
+                  <button
+                    type="button"
+                    id="campaign-send-skip"
+                    data-skip-to="campaign-submit"
+                    className={styles.textButton}
+                    onClick={jumpToCampaignSubmit}
+                  >
+                    발송 요청으로 이동
+                  </button>
+                  <span className={styles.help}>수신자 선택을 마쳤으면 바로 발송 버튼으로 포커스를 옮깁니다.</span>
+                </div>
                 <div className={styles.recipientTopBar}>
                   <span>
                     {selectedCount > 0
@@ -1468,6 +1495,8 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   </details>
                   {campaignFieldError?.field === "ids" ? <p className={styles.fieldError} id="campaign-recipients-error" role="alert">{campaignFieldError.message}</p> : null}
                 </fieldset>
+
+
 
                 <div className={uiStyles.formGrid}>
                   <div>

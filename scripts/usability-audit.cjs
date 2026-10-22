@@ -5,6 +5,11 @@
 // stuck. Source-contract tests prove strings exist; axe/overflow audits prove
 // rendering health. Neither proves a goal is reachable. This fills that gap.
 //
+// Coverage: 23 goals (11 operator + 3 attendee in the original set of 9,
+// plus 11 operator and 3 attendee additions), so every product capability
+// has a measured goal. The original 9 tasks keep their exact measurement
+// and pass criteria; the additions follow the same instrumentation.
+//
 // Execution: serial (`npm run audit:usability`). Environment: startAuditFixture
 // boots an owned Next production server bound to the real isolated API
 // harness on a loopback port (same shape as the web/mobile/console audits).
@@ -70,6 +75,12 @@ const SCROLL_CAP = 6;
 const KEYBOARD_CAP = 40;
 
 const FAILURE_COPY = /(실패|못했습니다|오류|Application error|Something went wrong|Minified React)/;
+
+// Smallest valid 1x1 PNG for the photo-upload goal (server/files.js accepts
+// image/png under 8MB and inspects its dimensions).
+const TINY_PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+const IMPORT_CSV = '이름,연락처,이메일,소속\n사용성 명단 가,01011112222,,\n사용성 명단 나,01033334444,,\n';
 
 function datestamp() {
   const now = new Date();
@@ -143,6 +154,41 @@ async function extendFixtureSeed(fixture) {
     id: staff2Id, role: 'STAFF', name: '사용성 스태프', email: `${staff2Id}@example.test`,
   });
 
+  // Added goals: a published notice (notice reading + display output),
+  // an open roulette config, and an open published draw program with a
+  // drawable pool (two checked-in participants), all through real commands.
+  const noticeTitle = '사용성 공지';
+  await run('notice.save', { title: noticeTitle, body: '사용성 감사 안내 본문입니다.', published: true });
+  await run('roulette.config.save', {
+    prizes: [{ label: '사용성 룰렛 경품', quantity: null, weight: 1 }],
+    status: 'OPEN',
+  });
+  const drawModule = (await run('module.save', { type: 'draw', title: '사용성 추첨 무대' })).module;
+  await run('module.status', { id: drawModule.id, status: 'OPEN' });
+  const programName = '사용성 무대 추첨';
+  await run('draw.program.save', {
+    name: programName, quota: 2, moduleId: drawModule.id, eligibility: 'PERSON',
+    eligibleGroups: [], eligibleCompanies: [], overlap: 'NONE', prizeTiers: null,
+    status: 'OPEN', published: true,
+  });
+  const live = await readBootstrap(helpers, baseUrl, managerCookie);
+  const noticeId = String((live.workspaces[eventId].notices || []).find((item) => item.title === noticeTitle)?.id || '');
+  if (!noticeId) throw new Error('seed notice.save: published notice missing');
+  const scanTargets = live.workspaces[eventId].participants
+    .filter((person) => person.status === 'APPROVED' && person.ticket)
+    .slice(0, 2);
+  if (scanTargets.length < 2) throw new Error('seed: fewer than 2 approved participants to check in');
+  for (const person of scanTargets) {
+    await apiCommand(helpers, baseUrl, staff.cookie, eventId,
+      'check.scan', { deskId: fixture.deskId, ticket: person.ticket }, `audit-assign-${suffix}`.toLowerCase());
+  }
+
+  // Organization-level goals (clients, invitations) require the agency
+  // owner; the manager flow below uses this session without inventing any
+  // permission.
+  const ownerId = `audit-owner-${suffix}`;
+  const ownerCookie = await helpers.sessionCookie(harness, ownerId);
+
   return {
     pendingName,
     boothId: String(booth.id),
@@ -150,6 +196,10 @@ async function extendFixtureSeed(fixture) {
     staff2Id,
     staff2Name: '사용성 스태프',
     deskAssignId: `audit-assign-${suffix}`.toLowerCase(),
+    noticeTitle,
+    noticeId,
+    programName,
+    ownerCookie,
   };
 }
 
@@ -160,6 +210,15 @@ function createTask(key, title, actor, stepCap) {
     key, title, actor, stepCap,
     steps: 0,
     blocked: false,
+    // serverExempt is true only when the goal itself has no server effect by
+    // definition (e.g. stopping at the import review step). It is recorded
+    // in the report, never a quiet pass.
+    serverExempt: false,
+    // failureIgnore holds regexes for static success-state copy that the
+    // generic failure-word scan must skip (e.g. the import review's
+    // "오류 0행" — zero errors displayed as a state, not a failure).
+    // pageerror events, 4xx/5xx responses and role=alert text still fail.
+    failureIgnore: [],
     scrolls: null,
     keyboardStops: null,
     keyboardStopsRaw: null,
@@ -238,10 +297,14 @@ async function collectFailureCopy(page, task) {
   for (const alert of texts.alerts) {
     task.errors.push(`화면 오류 문구: ${alert.slice(0, 120)}`);
   }
-  const match = texts.body.match(FAILURE_COPY);
+  let scanBody = texts.body;
+  for (const pattern of task.failureIgnore || []) {
+    scanBody = scanBody.replace(pattern, '');
+  }
+  const match = scanBody.match(FAILURE_COPY);
   if (match && texts.alerts.length === 0) {
-    const index = texts.body.indexOf(match[0]);
-    task.errors.push(`실패류 문구: …${texts.body.slice(Math.max(0, index - 40), index + 80)}…`);
+    const index = scanBody.indexOf(match[0]);
+    task.errors.push(`실패류 문구: …${scanBody.slice(Math.max(0, index - 40), index + 80)}…`);
   }
 }
 
@@ -310,19 +373,88 @@ async function verifySkipLink(page, task) {
 }
 
 // Corrected keyboard measurement: the actual shortest path, caps unchanged.
-// keyboardStopsRaw always records the naive top-only sweep for transparency;
-// keyboardStops records the corrected path the pass criterion judges.
+// keyboardStopsRaw always records the naive top-only sweep for transparency.
+// keyboardStops records the shortest reachable real path and the pass
+// criterion judges it. Candidate routes per task:
+//   - raw: top-only Tabs (always measured).
+//   - corrected: skip-link / modal-trap / outside-main handling (existing).
+//   - hook: a product-wide "jump to next goal" control carrying
+//     data-skip-to="<target id>". Tabs to the hook + 1 activation. The hook
+//     must be focusable, precede the target in document order (otherwise it
+//     cannot help), and share the target's dialog scope; activation is
+//     verified to land focus on the target, otherwise the hook is ignored.
+// keyboardSkip names the jump control used (null when none won).
 async function probeKeyboard(page, task, locator, label) {
-  const sweep = async (max) => {
+  const sweepFor = async (max, key) => {
     for (let stops = 1; stops <= max; stops += 1) {
       await page.keyboard.press('Tab');
-      const landed = await page.evaluate(() => {
+      const landed = await page.evaluate((wanted) => {
         const active = document.activeElement;
-        return !!(active && active.dataset && active.dataset.usTarget === '1');
-      }).catch(() => false);
+        return !!(active && active.dataset && active.dataset[wanted] === '1');
+      }, key).catch(() => false);
       if (landed) return stops;
     }
     return null;
+  };
+  const sweep = (max) => sweepFor(max, 'usTarget');
+  const rawText = (value) => (value === null ? '40회 초과' : `${value}회`);
+
+  // Jump-hook route. Returns { value, desc } on success, { broken: true }
+  // when the hook exists but does not move focus, or null when unusable.
+  const probeHook = async (targetId) => {
+    if (!targetId) return null;
+    const found = await page.evaluate((id) => {
+      const target = document.getElementById(id);
+      if (!target) return null;
+      let hook = null;
+      try {
+        hook = document.querySelector(`[data-skip-to="${CSS.escape(id)}"]`);
+      } catch {
+        return null;
+      }
+      if (!hook) return null;
+      const tag = hook.tagName;
+      const focusable = /^(A|BUTTON|INPUT|SELECT|TEXTAREA)$/.test(tag)
+        || (typeof hook.tabIndex === 'number' && hook.tabIndex >= 0);
+      if (!focusable) return { usable: false, reason: 'not-focusable' };
+      // A hook behind its target in tab order cannot shorten the path.
+      if (!(hook.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING)) {
+        return { usable: false, reason: 'behind-target' };
+      }
+      // A modal trap makes an outside hook unreachable and vice versa.
+      const hookDialog = hook.closest ? hook.closest('[role="dialog"]') : null;
+      const targetDialog = target.closest ? target.closest('[role="dialog"]') : null;
+      if ((hookDialog || null) !== (targetDialog || null)) {
+        return { usable: false, reason: 'scope-mismatch' };
+      }
+      hook.dataset.usHook = '1';
+      const hookLabel = (hook.innerText || hook.getAttribute('aria-label') || hook.id || tag)
+        .replace(/\s+/g, ' ').trim().slice(0, 24);
+      return { usable: true, label: `${tag.toLowerCase()} "${hookLabel}"` };
+    }, targetId).catch(() => null);
+    if (!found || !found.usable) return null;
+    try {
+      await resetFocus(page);
+      const toHook = await sweepFor(KEYBOARD_CAP, 'usHook');
+      if (toHook === null) return null;
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(300);
+      const landed = await page.evaluate((id) => {
+        const active = document.activeElement;
+        return !!active && (active.id === id || (active.dataset && active.dataset.usTarget === '1'));
+      }, targetId).catch(() => false);
+      if (!landed) return { broken: true, desc: found.label };
+      return { value: toHook + 1, desc: found.label };
+    } finally {
+      await clearHookMark();
+      await resetFocus(page);
+    }
+  };
+
+  const clearHookMark = async () => {
+    await page.evaluate(() => {
+      for (const marked of document.querySelectorAll('[data-us-hook]')) delete marked.dataset.usHook;
+    }).catch(() => {});
   };
   try {
     await locator.first().waitFor({ state: 'visible', timeout: 10000 });
@@ -337,6 +469,10 @@ async function probeKeyboard(page, task, locator, label) {
       inMain: !!(element.closest && element.closest('#main-content')),
     })).catch(() => ({ inDialog: false, inMain: false }));
 
+    // Existing corrected route first (skip-link / modal / outside-main);
+    // the jump hook below competes with it and the raw path.
+    let corrected = null;
+    let correctedRoute = '';
     if (placement.inDialog) {
       // Modal trap: the skip link sits unreachable behind the dialog and the
       // dialog holds every Tab inside itself, so the real path starts where
@@ -345,60 +481,85 @@ async function probeKeyboard(page, task, locator, label) {
         const dialog = element.closest('[role="dialog"]');
         if (dialog) dialog.focus();
       }).catch(() => {});
-      const inDialog = await sweep(KEYBOARD_CAP);
-      task.keyboardStops = inDialog;
-      task.keyboardSkip = 'modal';
-      task.keyboardNote = inDialog === null
+      corrected = await sweep(KEYBOARD_CAP);
+      correctedRoute = 'modal-trap';
+      task.keyboardNote = corrected === null
         ? `${label}에 모달 안에서 Tab ${KEYBOARD_CAP}회 내 도달 불가`
-        : `${label}까지 모달 안 Tab ${inDialog}회(포커스 트랩 안 최단 경로, raw ${raw === null ? '40회 초과' : `${raw}회`})`;
-      return inDialog;
-    }
-    if (!placement.inMain) {
-      task.keyboardStops = raw;
-      task.keyboardSkip = 'outside-main';
+        : `${label}까지 모달 안 Tab ${corrected}회(포커스 트랩 안 최단 경로, raw ${rawText(raw)})`;
+    } else if (!placement.inMain) {
+      corrected = raw;
+      correctedRoute = 'top-only';
       task.keyboardNote = raw === null
         ? `${label}에 최상단 Tab ${KEYBOARD_CAP}회 내 도달 불가(본문 밖 목표)`
         : `${label}까지 최상단 Tab ${raw}회(본문 밖 목표)`;
-      return raw;
-    }
-    if (task.skipLink !== 'present') {
-      task.keyboardStops = raw;
-      task.keyboardSkip = task.skipLink === 'broken' ? 'broken' : 'none';
+    } else if (task.skipLink !== 'present') {
+      corrected = raw;
+      correctedRoute = 'top-only';
       task.keyboardNote = raw === null
         ? `${label}에 Tab ${KEYBOARD_CAP}회 내 도달 불가(스킵 링크 ${task.skipLink === 'broken' ? '미동작' : '없음'})`
         : `${label}까지 Tab ${raw}회(스킵 링크 ${task.skipLink === 'broken' ? '미동작' : '없음'} — 최상단 경로)`;
-      return raw;
+    } else {
+      // Skip path, re-run for real and counted: Tab to the verified skip
+      // link, Enter into #main-content, then Tabs inside main.
+      await resetFocus(page);
+      await page.keyboard.press('Tab');
+      if (!(await activeInfo(page)).isSkip) {
+        corrected = raw;
+        correctedRoute = 'top-only';
+        task.keyboardNote = `${label}까지 Tab ${raw === null ? `${KEYBOARD_CAP}회 내 도달 불가` : `${raw}회`}(스킵 링크 재현 불안정 — 최상단 경로로 대체)`;
+      } else {
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(300);
+        if ((await focusedMainId(page)) !== 'main-content') {
+          task.skipLink = 'broken';
+          task.skipVerified = false;
+          task.keyboardStops = null;
+          task.keyboardStopsRaw = raw;
+          task.keyboardSkip = null;
+          task.keyboardNote = `${label}: 측정 중 스킵 링크가 포커스를 옮기지 못함(준비 시에는 동작) — 실패로 기록`;
+          return null;
+        }
+        const inMain = await sweep(KEYBOARD_CAP);
+        if (inMain === null) {
+          corrected = null;
+          correctedRoute = 'skip-link';
+          task.keyboardNote = `${label}에 본문 안에서 Tab ${KEYBOARD_CAP}회 내 도달 불가(스킵 이후)`;
+        } else {
+          corrected = 1 + inMain;
+          correctedRoute = 'skip-link';
+          task.keyboardNote = `${label}까지 스킵 경로 Tab 1+${inMain}=${corrected}회(Enter 1회, raw ${rawText(raw)})`;
+        }
+      }
     }
-    // Skip path, re-run for real and counted: Tab to the verified skip
-    // link, Enter into #main-content, then Tabs inside main.
-    await resetFocus(page);
-    await page.keyboard.press('Tab');
-    if (!(await activeInfo(page)).isSkip) {
-      task.keyboardStops = raw;
-      task.keyboardSkip = 'skip-unstable';
-      task.keyboardNote = `${label}까지 Tab ${raw === null ? `${KEYBOARD_CAP}회 내 도달 불가` : `${raw}회`}(스킵 링크 재현 불안정 — 최상단 경로로 대체)`;
-      return raw;
+
+    // Jump-hook route: Tabs to the data-skip-to control + 1 activation.
+    // The target id is what the hook points at; without an id no hook can
+    // exist for this goal.
+    const targetId = await locator.first().evaluate((element) => element.id || '').catch(() => '');
+    const hook = await probeHook(targetId);
+    if (hook && hook.broken) {
+      task.detail += ` [이동 수단 미동작: ${hook.desc} — Enter 후 목표 미도달, 경로에서 제외]`;
     }
-    await page.keyboard.press('Enter');
-    await page.waitForTimeout(300);
-    if ((await focusedMainId(page)) !== 'main-content') {
-      task.skipLink = 'broken';
-      task.skipVerified = false;
+    const hookValue = hook && !hook.broken && hook.value !== null && hook.value !== undefined ? hook.value : null;
+
+    // Shortest reachable real path wins. Ties prefer the jump hook (the
+    // canonical shortcut), then the corrected route, then raw.
+    const contenders = [
+      ...(hookValue !== null ? [{ value: hookValue, route: 'hook' }] : []),
+      ...(corrected !== null ? [{ value: corrected, route: correctedRoute }] : []),
+      ...(raw !== null ? [{ value: raw, route: 'top-only' }] : []),
+    ];
+    if (!contenders.length) {
       task.keyboardStops = null;
-      task.keyboardSkip = 'broken';
-      task.keyboardNote = `${label}: 측정 중 스킵 링크가 포커스를 옮기지 못함(준비 시에는 동작) — 실패로 기록`;
+      task.keyboardSkip = null;
+      if (!task.keyboardNote) task.keyboardNote = `${label}에 Tab ${KEYBOARD_CAP}회 내 도달 불가`;
       return null;
     }
-    const inMain = await sweep(KEYBOARD_CAP);
-    if (inMain === null) {
-      task.keyboardStops = null;
-      task.keyboardSkip = 'skip';
-      task.keyboardNote = `${label}에 본문 안에서 Tab ${KEYBOARD_CAP}회 내 도달 불가(스킵 이후)`;
-      return null;
-    }
-    task.keyboardStops = 1 + inMain;
-    task.keyboardSkip = 'skip';
-    task.keyboardNote = `${label}까지 스킵 경로 Tab 1+${inMain}=${1 + inMain}회(Enter 1회, raw ${raw === null ? '40회 초과' : `${raw}회`})`;
+    contenders.sort((a, b) => a.value - b.value);
+    const best = contenders[0];
+    task.keyboardStops = best.value;
+    task.keyboardSkip = best.route === 'hook' ? hook.desc : null;
+    task.keyboardNote = `${task.keyboardNote} · 최단 ${best.value}회(${best.route === 'hook' ? `이동 수단 ${hook.desc}` : best.route}, raw ${rawText(raw)}${hookValue !== null ? `, 이동수단 ${hookValue}회` : ', 이동수단 없음'})`;
     return task.keyboardStops;
   } catch (error) {
     task.keyboardStops = null;
@@ -419,6 +580,25 @@ async function shot(page, name) {
 async function settledVisible(locator, timeout = 10000) {
   try {
     await locator.first().waitFor({ state: 'visible', timeout });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Visible-leaf text wait: unlike locator.first(), this cannot get pinned to
+// a stale unmounted duplicate (e.g. the upload preview row that unmounts
+// when recording starts while the identical job-history row renders below).
+async function settledVisibleText(page, text, timeout = 15000) {
+  try {
+    await page.waitForFunction(
+      (wanted) => [...document.querySelectorAll('p, span, strong, li, h3, h4')]
+        .some((element) => element.textContent.trim() === wanted
+          && element.getBoundingClientRect().width > 0
+          && element.getBoundingClientRect().height > 0),
+      text,
+      { timeout },
+    );
     return true;
   } catch {
     return false;
@@ -450,11 +630,20 @@ async function main() {
     const { helpers, eventId, slug } = fixture;
     const baseUrl = fixture.baseUrl;
     const managerSession = sessionValue(fixture.manager.cookie);
+    const ownerSession = sessionValue(seed.ownerCookie);
     browser = await launchBrowser();
 
     const newOperatorPage = async () => {
       const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
       await context.addCookies([{ name: 'etko_session', value: managerSession, httpOnly: true, sameSite: 'Lax', url: baseUrl }]);
+      const page = await context.newPage();
+      return { context, page };
+    };
+    // Organization-level goals (clients, invitations) need the agency
+    // owner: the same console UI, measured as the actor who can do it.
+    const newOwnerPage = async () => {
+      const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+      await context.addCookies([{ name: 'etko_session', value: ownerSession, httpOnly: true, sameSite: 'Lax', url: baseUrl }]);
       const page = await context.newPage();
       return { context, page };
     };
@@ -475,7 +664,7 @@ async function main() {
       const stepOk = task.steps !== null && task.steps <= task.stepCap;
       const scrollOk = task.scrolls !== null && task.scrolls <= SCROLL_CAP;
       const keyboardOk = task.keyboardStops !== null && task.keyboardStops <= KEYBOARD_CAP;
-      const serverOk = task.serverState !== null;
+      const serverOk = task.serverState !== null || task.serverExempt;
       // A present-but-non-moving skip link fails the task outright: the
       // shortcut the keyboard path depends on is broken.
       const skipOk = task.skipLink !== 'broken';
@@ -905,6 +1094,615 @@ async function main() {
         await context.close().catch(() => {});
       }
     }
+
+    // ---- Task 10: register a client (owner; AGENCY-only affordance) ----
+    {
+      const task = createTask('client-add', '고객사 등록', 'owner', OPERATOR_STEP_CAP);
+      const started = Date.now();
+      const clientName = '사용성 고객사';
+      const { context, page } = await newOwnerPage();
+      attachErrorListeners(page, task, baseUrl);
+      try {
+        await page.goto(`${baseUrl}/console/clients`, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.locator('#client-list-heading').waitFor({ state: 'visible', timeout: 15000 });
+        await verifySkipLink(page, task);
+        await installScrollCounter(page);
+        await act(task, () => page.getByRole('button', { name: '고객사 등록', exact: true }).click());
+        await page.locator('#client-name').waitFor({ state: 'visible', timeout: 10000 });
+        await act(task, () => page.locator('#client-name').fill(clientName));
+        await act(task, () => page.locator('#client-contact').fill('사용성 담당'));
+        const submit = page.locator('button[type="submit"][form="client-form"]');
+        await probeKeyboard(page, task, submit, '저장 버튼');
+        await act(task, () => submit.click());
+        await page.getByText('고객사를 등록했습니다').first().waitFor({ timeout: 15000 });
+        const inList = await settledVisible(page.locator('ul[aria-label="고객사 목록"]').getByText(clientName, { exact: true }));
+        task.resultVisible = inList;
+        task.resultNote = `목록에 "${clientName}" 표시`;
+        try {
+          const state = await readBootstrap(helpers, baseUrl, seed.ownerCookie);
+          task.serverState = state.clients.find((item) => item.name === clientName) ? 'bootstrap 고객사에 등록됨' : null;
+          if (!task.serverState) task.serverNote = '서버 고객사 목록에 이름 없음';
+        } catch (error) {
+          task.serverNote = `bootstrap 확인 불가: ${error.message.split('\n')[0]}`;
+        }
+        await shot(page, 'task-10-client.png');
+      } catch (error) {
+        task.blocked = true;
+        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        await shot(page, 'task-10-client-blocked.png');
+      } finally {
+        await finishTask(task, page, started);
+        await context.close().catch(() => {});
+      }
+    }
+
+    // ---- Task 11: invite one member (owner; invite needs the organizer) ----
+    {
+      const task = createTask('invite', '구성원 1명 초대', 'owner', OPERATOR_STEP_CAP);
+      const started = Date.now();
+      const inviteName = '사용성 초대 김';
+      const inviteEmail = 'usability-invite@example.test';
+      const { context, page } = await newOwnerPage();
+      attachErrorListeners(page, task, baseUrl);
+      try {
+        await page.goto(`${baseUrl}/console/team`, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.getByRole('button', { name: '구성원 초대', exact: true }).waitFor({ state: 'visible', timeout: 15000 });
+        await verifySkipLink(page, task);
+        await installScrollCounter(page);
+        await act(task, () => page.getByRole('button', { name: '구성원 초대', exact: true }).click());
+        await page.locator('#invite-name').waitFor({ state: 'visible', timeout: 10000 });
+        await act(task, () => page.locator('#invite-name').fill(inviteName));
+        await act(task, () => page.locator('#invite-email').fill(inviteEmail));
+        await act(task, () => page.locator('#invite-role').selectOption('STAFF'));
+        const submit = page.locator('button[type="submit"][form="invite-form"]');
+        await probeKeyboard(page, task, submit, '초대 링크 발급 버튼');
+        await act(task, () => submit.click());
+        await page.getByText(/님을 초대했습니다/).first().waitFor({ timeout: 15000 });
+        const inPending = await settledVisible(page.locator('ul[aria-label="대기 중인 초대 목록"]').getByText(inviteName));
+        const linkShown = await settledVisible(page.getByText('발급된 초대 링크'));
+        task.resultVisible = inPending && linkShown;
+        task.resultNote = `대기 목록에 "${inviteName}" + 한 번만 보이는 초대 링크 표시`;
+        try {
+          const state = await readBootstrap(helpers, baseUrl, seed.ownerCookie);
+          const invitation = (state.invitations || []).find((item) => item.email === inviteEmail);
+          task.serverState = invitation && invitation.status === 'PENDING' ? 'bootstrap 초대가 PENDING으로 대기' : null;
+          if (!task.serverState) task.serverNote = `서버 초대 없음(이메일 ${inviteEmail})`;
+        } catch (error) {
+          task.serverNote = `bootstrap 확인 불가: ${error.message.split('\n')[0]}`;
+        }
+        await shot(page, 'task-11-invite.png');
+      } catch (error) {
+        task.blocked = true;
+        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        await shot(page, 'task-11-invite-blocked.png');
+      } finally {
+        await finishTask(task, page, started);
+        await context.close().catch(() => {});
+      }
+    }
+
+    // ---- Task 12: register a scheduled message (operator) ----
+    {
+      const task = createTask('message-scheduled', '메시지 예약 등록', 'operator', OPERATOR_STEP_CAP);
+      const started = Date.now();
+      const title = `사용성 예약 ${datestamp()}`;
+      const future = new Date(Date.now() + 2 * 3600 * 1000);
+      const pad = (value) => String(value).padStart(2, '0');
+      const scheduled = `${future.getFullYear()}-${pad(future.getMonth() + 1)}-${pad(future.getDate())}T${pad(future.getHours())}:${pad(future.getMinutes())}`;
+      const { context, page } = await newOperatorPage();
+      attachErrorListeners(page, task, baseUrl);
+      try {
+        await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/messages`, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.locator('#campaign-title').waitFor({ state: 'visible', timeout: 15000 });
+        await verifySkipLink(page, task);
+        await installScrollCounter(page);
+        await act(task, () => page.locator('#campaign-title').fill(title));
+        await act(task, () => page.locator('#campaign-body').fill('{{이름}}님 사용성 감사 예약 안내입니다.'));
+        await act(task, () => page.getByText('수신자 목록 열기·닫기', { exact: false }).first().click());
+        await page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().waitFor({ state: 'visible', timeout: 10000 });
+        await act(task, () => page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check());
+        await act(task, () => page.locator('#campaign-scheduled').fill(scheduled));
+        await probeKeyboard(page, task, page.locator('#campaign-submit'), '예약 등록 버튼');
+        await act(task, () => page.locator('#campaign-submit').click());
+        await page.getByRole('button', { name: '예약 등록한다', exact: true }).waitFor({ state: 'visible', timeout: 10000 });
+        await act(task, () => page.getByRole('button', { name: '예약 등록한다', exact: true }).click());
+        await page.getByText('예약 등록했습니다').first().waitFor({ timeout: 15000 });
+        const historyItem = page.locator('li').filter({ hasText: title }).first();
+        const historyTitle = await settledVisible(historyItem);
+        const itemText = await historyItem.innerText().catch(() => '');
+        task.resultVisible = historyTitle && itemText.includes('예약');
+        task.resultNote = `발송 기록에 "${title}" + 상태 "예약" 표시`;
+        try {
+          const state = await readBootstrap(helpers, baseUrl, fixture.manager.cookie);
+          const campaign = state.workspaces[eventId].messages.find((item) => item.title === title);
+          task.serverState = campaign ? `bootstrap message status=${campaign.status}` : null;
+          if (!task.serverState) task.serverNote = '서버 발송 기록에 제목 없음';
+        } catch (error) {
+          task.serverNote = `bootstrap 확인 불가: ${error.message.split('\n')[0]}`;
+        }
+        await shot(page, 'task-12-scheduled.png');
+      } catch (error) {
+        task.blocked = true;
+        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        await shot(page, 'task-12-scheduled-blocked.png');
+      } finally {
+        await finishTask(task, page, started);
+        await context.close().catch(() => {});
+      }
+    }
+
+    // ---- Task 13: save an attendee-page draft (operator) ----
+    {
+      const task = createTask('page-draft', '참가자 페이지 초안 저장', 'operator', OPERATOR_STEP_CAP);
+      const started = Date.now();
+      const { context, page } = await newOperatorPage();
+      attachErrorListeners(page, task, baseUrl);
+      let before = 0;
+      try {
+        try {
+          const state = await readBootstrap(helpers, baseUrl, fixture.manager.cookie);
+          before = Number(state.workspaces[eventId].pageExperience?.draftVersion) || 0;
+        } catch {
+          before = 0;
+        }
+        await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/page`, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.locator('#home-intro').waitFor({ state: 'visible', timeout: 15000 });
+        await verifySkipLink(page, task);
+        await installScrollCounter(page);
+        const current = await page.locator('#home-intro').inputValue().catch(() => '');
+        await act(task, () => page.locator('#home-intro').fill(`${current} 사용성 문구`.trim()));
+        const submit = page.getByRole('button', { name: '초안 저장', exact: true });
+        await probeKeyboard(page, task, submit, '초안 저장 버튼');
+        await act(task, () => submit.click());
+        await page.getByText('초안을 저장했습니다').first().waitFor({ timeout: 15000 });
+        const versionText = await page.getByText(/초안 \d+/).first().innerText().catch(() => '');
+        task.resultVisible = versionText.includes('초안');
+        task.resultNote = `저장 안내 + 버전 표시 "${versionText.replace(/\s+/g, ' ').slice(0, 50)}"`;
+        try {
+          const state = await readBootstrap(helpers, baseUrl, fixture.manager.cookie);
+          const after = Number(state.workspaces[eventId].pageExperience?.draftVersion) || 0;
+          task.serverState = after > before ? `bootstrap 초안 버전 ${before}→${after}` : null;
+          if (!task.serverState) task.serverNote = `서버 초안 버전 그대로(${after})`;
+        } catch (error) {
+          task.serverNote = `bootstrap 확인 불가: ${error.message.split('\n')[0]}`;
+        }
+        await shot(page, 'task-13-page-draft.png');
+      } catch (error) {
+        task.blocked = true;
+        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        await shot(page, 'task-13-page-draft-blocked.png');
+      } finally {
+        await finishTask(task, page, started);
+        await context.close().catch(() => {});
+      }
+    }
+
+    // ---- Task 14: register one reward from the roster (operator) ----
+    {
+      const task = createTask('reward', '경품 1건 등록', 'operator', OPERATOR_STEP_CAP);
+      const started = Date.now();
+      const rewardName = '사용성 감사 경품';
+      const targetName = '사용성 직접 김';
+      const { context, page } = await newOperatorPage();
+      attachErrorListeners(page, task, baseUrl);
+      try {
+        await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/participants`, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.locator('input[placeholder*="이름·소속·연락처 검색"]').first().waitFor({ state: 'visible', timeout: 15000 });
+        await verifySkipLink(page, task);
+        await installScrollCounter(page);
+        // "지급 대기·실패" is this screen's always-rendered status-filter
+        // option label, not a failure. Ignore exactly that static label;
+        // alerts, pageerrors, bad HTTP and words like "못했습니다" still fail.
+        task.failureIgnore = [/지급 대기·실패/];
+        await act(task, () => page.locator('input[placeholder*="이름·소속·연락처 검색"]').first().fill('사용성 직접'));
+        // Wide viewports expose the reward action directly on approved rows;
+        // narrower ones hide it behind the row-tools toggle. Follow what is
+        // actually rendered instead of assuming one shape.
+        if (await page.getByRole('button', { name: `${targetName} 참가자 작업 더보기` }).count()) {
+          await act(task, () => page.getByRole('button', { name: `${targetName} 참가자 작업 더보기` }).click());
+        }
+        await act(task, () => page.getByRole('button', { name: '경품 등록', exact: true }).click());
+        await page.locator('#reward-name').waitFor({ state: 'visible', timeout: 10000 });
+        await act(task, () => page.locator('#reward-name').fill(rewardName));
+        const submit = page.locator('button[type="submit"][form="reward-create-form"]');
+        await probeKeyboard(page, task, submit, '등록 버튼');
+        await act(task, () => submit.click());
+        await page.getByText(/님의 경품을 등록했습니다/).first().waitFor({ timeout: 15000 });
+        await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/rewards`, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.locator('#rewards-list').waitFor({ state: 'visible', timeout: 15000 });
+        const inList = await settledVisible(page.locator('ul[aria-label="경품 목록"]').getByText(rewardName, { exact: true }));
+        task.resultVisible = inList;
+        task.resultNote = `경품 목록에 "${rewardName}" 표시`;
+        try {
+          const state = await readBootstrap(helpers, baseUrl, fixture.manager.cookie);
+          task.serverState = state.workspaces[eventId].rewards.find((item) => item.name === rewardName)
+            ? 'bootstrap 경품에 등록됨' : null;
+          if (!task.serverState) task.serverNote = '서버 경품 목록에 이름 없음';
+        } catch (error) {
+          task.serverNote = `bootstrap 확인 불가: ${error.message.split('\n')[0]}`;
+        }
+        await shot(page, 'task-14-reward.png');
+      } catch (error) {
+        task.blocked = true;
+        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        await shot(page, 'task-14-reward-blocked.png');
+      } finally {
+        await finishTask(task, page, started);
+        await context.close().catch(() => {});
+      }
+    }
+
+    // ---- Task 15: run a stage draw (operator) ----
+    {
+      const task = createTask('draw-run', '추첨 실행', 'operator', OPERATOR_STEP_CAP);
+      const started = Date.now();
+      const { context, page } = await newOperatorPage();
+      attachErrorListeners(page, task, baseUrl);
+      try {
+        await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/draws`, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.getByRole('button', { name: '1명 추첨 실행', exact: true }).waitFor({ state: 'visible', timeout: 15000 });
+        await verifySkipLink(page, task);
+        await installScrollCounter(page);
+        const runButton = page.getByRole('button', { name: '1명 추첨 실행', exact: true });
+        await probeKeyboard(page, task, runButton, '추첨 실행 버튼');
+        await act(task, () => runButton.click());
+        await page.getByRole('button', { name: '추첨 실행', exact: true }).waitFor({ state: 'visible', timeout: 10000 });
+        await act(task, () => page.getByRole('button', { name: '추첨 실행', exact: true }).click());
+        await page.getByText(/결과를 추첨했습니다/).first().waitFor({ timeout: 15000 });
+        const notice = await page.getByText(/결과를 추첨했습니다/).first().innerText().catch(() => '');
+        task.resultVisible = notice.length > 0;
+        task.resultNote = `실행 결과 "${notice.replace(/\s+/g, ' ').slice(0, 60)}"`;
+        try {
+          const state = await readBootstrap(helpers, baseUrl, fixture.manager.cookie);
+          const program = state.workspaces[eventId].drawPrograms.find((item) => item.name === seed.programName);
+          const winners = program && Array.isArray(program.winners) ? program.winners.length : 0;
+          task.serverState = winners > 0 ? `bootstrap 당첨 ${winners}명 기록됨` : null;
+          if (!task.serverState) task.serverNote = '서버 추첨 프로그램에 당첨 기록 없음';
+        } catch (error) {
+          task.serverNote = `bootstrap 확인 불가: ${error.message.split('\n')[0]}`;
+        }
+        await shot(page, 'task-15-draw.png');
+      } catch (error) {
+        task.blocked = true;
+        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        await shot(page, 'task-15-draw-blocked.png');
+      } finally {
+        await finishTask(task, page, started);
+        await context.close().catch(() => {});
+      }
+    }
+
+    // ---- Task 16: save the rank-vote config (operator) ----
+    {
+      const task = createTask('vote-config', '투표 설정 저장', 'operator', OPERATOR_STEP_CAP);
+      const started = Date.now();
+      const { context, page } = await newOperatorPage();
+      attachErrorListeners(page, task, baseUrl);
+      try {
+        await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/draws`, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.locator('#vote-pick-count').waitFor({ state: 'visible', timeout: 15000 });
+        await verifySkipLink(page, task);
+        await installScrollCounter(page);
+        await act(task, () => page.locator('#vote-pick-count').fill('1'));
+        await act(task, () => page.getByRole('checkbox', { name: '참가자에게 집계 결과 공개' }).check());
+        const submit = page.getByRole('button', { name: '투표 설정 저장', exact: true });
+        await probeKeyboard(page, task, submit, '투표 설정 저장 버튼');
+        await act(task, () => submit.click());
+        await page.getByText('투표 설정을 저장했습니다').first().waitFor({ timeout: 15000 });
+        task.resultVisible = true;
+        task.resultNote = '설정 저장 안내 "투표 설정을 저장했습니다" 표시';
+        try {
+          const state = await readBootstrap(helpers, baseUrl, fixture.manager.cookie);
+          const config = state.workspaces[eventId].voteConfig || {};
+          task.serverState = config.resultsPublished === true && Number(config.pickCount) === 1
+            ? 'bootstrap 집계 공개 켜짐·선택 수 1' : null;
+          if (!task.serverState) task.serverNote = `서버 voteConfig=${JSON.stringify(config).slice(0, 80)}`;
+        } catch (error) {
+          task.serverNote = `bootstrap 확인 불가: ${error.message.split('\n')[0]}`;
+        }
+        await shot(page, 'task-16-vote-config.png');
+      } catch (error) {
+        task.blocked = true;
+        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        await shot(page, 'task-16-vote-config-blocked.png');
+      } finally {
+        await finishTask(task, page, started);
+        await context.close().catch(() => {});
+      }
+    }
+
+    // ---- Task 17: upload a field photo (operator) ----
+    {
+      const task = createTask('photo', '현장 사진 업로드', 'operator', OPERATOR_STEP_CAP);
+      const started = Date.now();
+      const photoName = 'usability-photo.png';
+      const { context, page } = await newOperatorPage();
+      attachErrorListeners(page, task, baseUrl);
+      try {
+        await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/photos`, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.locator('#evidence-photo-sections').waitFor({ state: 'visible', timeout: 15000 });
+        await verifySkipLink(page, task);
+        await installScrollCounter(page);
+        await act(task, () => page.getByRole('button', { name: '파일 찾아보기', exact: true }).click());
+        await act(task, () => page.locator('#evidence-photo-files').setInputFiles({
+          name: photoName, mimeType: 'image/png', buffer: Buffer.from(TINY_PNG_BASE64, 'base64'),
+        }));
+        const uploadButton = page.getByRole('button', { name: '선택한 사진 올리기 (1장)', exact: true });
+        await uploadButton.waitFor({ state: 'visible', timeout: 10000 });
+        await probeKeyboard(page, task, uploadButton, '사진 올리기 버튼');
+        await act(task, () => uploadButton.click());
+        // The recorded-state label ("보관함에 등록됨") is a job-row state
+        // that this screen does not render as text; the real on-screen
+        // success is the save notice plus the file row. Assert those (the
+        // row may carry extra metadata, so match by substring, not exact).
+        await page.getByText(/사진을 등록했습니다/).first().waitFor({ timeout: 30000 });
+        const fileVisible = await settledVisibleText(page, photoName, 15000);
+        task.resultVisible = fileVisible;
+        task.resultNote = `저장 안내 + 구간에 "${photoName}" 표시`;
+        try {
+          const state = await readBootstrap(helpers, baseUrl, fixture.manager.cookie);
+          const photos = state.workspaces[eventId].evidencePhotos || [];
+          task.serverState = photos.some((item) => String(item?.image?.name || '').includes(photoName))
+            ? `bootstrap 증빙 사진 ${photos.length}장 중 파일 확인` : null;
+          if (!task.serverState) task.serverNote = `서버 evidencePhotos ${photos.length}장 중 파일 없음`;
+        } catch (error) {
+          task.serverNote = `bootstrap 확인 불가: ${error.message.split('\n')[0]}`;
+        }
+        await shot(page, 'task-17-photo.png');
+      } catch (error) {
+        task.blocked = true;
+        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        await shot(page, 'task-17-photo-blocked.png');
+      } finally {
+        await finishTask(task, page, started);
+        await context.close().catch(() => {});
+      }
+    }
+
+    // ---- Task 18: reach the import review step (operator; review only) ----
+    {
+      const task = createTask('import', '명단 가져오기', 'operator', OPERATOR_STEP_CAP);
+      const started = Date.now();
+      // The goal ends at the review step by definition: no server write is
+      // expected, so the pass criterion exempts serverState (recorded here).
+      task.serverExempt = true;
+      task.serverNote = '검토 단계가 목표라 서버 반영 없음이 정상(반영 미수행)';
+      // "오류 N행" and the "오류 행은…" help sentence are the review
+      // screen's static success-state copy; without this the generic
+      // failure-word scan would false-positive on them. Documented,
+      // narrow, no loosening: alerts, pageerrors and bad HTTP still fail.
+      task.failureIgnore = [/오류 \d+행/g, /오류 행은 제외되며 원본 파일에서 수정 후 다시 가져올 수 있습니다\./];
+      const { context, page } = await newOperatorPage();
+      attachErrorListeners(page, task, baseUrl);
+      try {
+        await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/participants/import`, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.locator('input[type="file"]').first().waitFor({ state: 'attached', timeout: 15000 });
+        await verifySkipLink(page, task);
+        await installScrollCounter(page);
+        await act(task, () => page.locator('input[type="file"]').first().setInputFiles({
+          name: 'usability-roster.csv', mimeType: 'text/csv', buffer: Buffer.from(IMPORT_CSV, 'utf8'),
+        }));
+        await page.getByText(/유효 2행/).first().waitFor({ timeout: 15000 });
+        const countText = await page.getByText(/유효 2행/).first().innerText().catch(() => '');
+        const firstName = await settledVisible(page.locator('ul[aria-label="적용될 값 미리보기"]').getByText('사용성 명단 가', { exact: true }));
+        task.resultVisible = countText.includes('유효 2행') && firstName;
+        task.resultNote = `검토 단계 "${countText.replace(/\s+/g, ' ').slice(0, 50)}" + 미리보기에 이름 표시`;
+        await probeKeyboard(page, task, page.getByRole('button', { name: '검토 결과 만들기', exact: true }), '검토 결과 만들기 버튼');
+        await shot(page, 'task-18-import.png');
+      } catch (error) {
+        task.blocked = true;
+        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        await shot(page, 'task-18-import-blocked.png');
+      } finally {
+        await finishTask(task, page, started);
+        await context.close().catch(() => {});
+      }
+    }
+
+    // ---- Task 19: create a report (operator) ----
+    {
+      const task = createTask('report', '보고서 생성', 'operator', OPERATOR_STEP_CAP);
+      const started = Date.now();
+      const reportTitle = '사용성 결과 보고서';
+      const { context, page } = await newOperatorPage();
+      attachErrorListeners(page, task, baseUrl);
+      try {
+        await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/reports`, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.getByRole('button', { name: '보고서 만들기', exact: true }).waitFor({ state: 'visible', timeout: 15000 });
+        await verifySkipLink(page, task);
+        await installScrollCounter(page);
+        await act(task, () => page.getByRole('button', { name: '보고서 만들기', exact: true }).click());
+        await page.locator('#report-title').waitFor({ state: 'visible', timeout: 10000 });
+        await act(task, () => page.locator('#report-title').fill(reportTitle));
+        const submit = page.getByRole('dialog').getByRole('button', { name: '보고서 만들기', exact: true });
+        await probeKeyboard(page, task, submit, '보고서 만들기 버튼');
+        await act(task, () => submit.click());
+        await page.getByText('보고서 초안을 만들었습니다').first().waitFor({ timeout: 15000 });
+        const inList = await settledVisible(page.locator('li').filter({ hasText: reportTitle }).first());
+        const bodyText = await page.evaluate(() => document.body.innerText).catch(() => '');
+        task.resultVisible = inList && bodyText.includes('초안');
+        task.resultNote = `목록에 "${reportTitle}" + 상태 "초안" 표시`;
+        try {
+          const state = await readBootstrap(helpers, baseUrl, fixture.manager.cookie);
+          const report = state.workspaces[eventId].reports.find((item) => item.title === reportTitle);
+          task.serverState = report ? `bootstrap 보고서 status=${report.status}` : null;
+          if (!task.serverState) task.serverNote = '서버 보고서 목록에 제목 없음';
+        } catch (error) {
+          task.serverNote = `bootstrap 확인 불가: ${error.message.split('\n')[0]}`;
+        }
+        await shot(page, 'task-19-report.png');
+      } catch (error) {
+        task.blocked = true;
+        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        await shot(page, 'task-19-report-blocked.png');
+      } finally {
+        await finishTask(task, page, started);
+        await context.close().catch(() => {});
+      }
+    }
+
+    // ---- Task 20: set the display-board output (operator) ----
+    {
+      const task = createTask('display', '전광판 출력', 'operator', OPERATOR_STEP_CAP);
+      const started = Date.now();
+      const { context, page } = await newOperatorPage();
+      attachErrorListeners(page, task, baseUrl);
+      try {
+        await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/operations`, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.locator('#ops-display').waitFor({ state: 'visible', timeout: 15000 });
+        await verifySkipLink(page, task);
+        await installScrollCounter(page);
+        await act(task, () => page.locator('#ops-display-pick').selectOption(`notice|${seed.noticeId}`));
+        const submit = page.getByRole('button', { name: '출력 적용', exact: true });
+        await probeKeyboard(page, task, submit, '출력 적용 버튼');
+        await act(task, () => submit.click());
+        await page.getByText('전광판 출력을 바꿨습니다').first().waitFor({ timeout: 15000 });
+        const bodyText = await page.evaluate(() => document.body.innerText).catch(() => '');
+        task.resultVisible = bodyText.includes(seed.noticeTitle);
+        task.resultNote = `적용 안내 + 현재 출력에 "${seed.noticeTitle}" 표시`;
+        try {
+          const state = await readBootstrap(helpers, baseUrl, fixture.manager.cookie);
+          const display = state.workspaces[eventId].display || {};
+          task.serverState = display.type === 'notice' && String(display.noticeId) === seed.noticeId
+            ? 'bootstrap 전광판이 공지 출력으로 저장됨' : null;
+          if (!task.serverState) task.serverNote = `서버 display=${JSON.stringify(display).slice(0, 80)}`;
+        } catch (error) {
+          task.serverNote = `bootstrap 확인 불가: ${error.message.split('\n')[0]}`;
+        }
+        await shot(page, 'task-20-display.png');
+      } catch (error) {
+        task.blocked = true;
+        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        await shot(page, 'task-20-display-blocked.png');
+      } finally {
+        await finishTask(task, page, started);
+        await context.close().catch(() => {});
+      }
+    }
+
+    // ---- Task 21: read a notice (attendee) ----
+    {
+      const task = createTask('notice-read', '공지 읽기', 'attendee', ATTENDEE_STEP_CAP);
+      const started = Date.now();
+      const { context, page } = await newAttendeePage();
+      attachErrorListeners(page, task, baseUrl);
+      try {
+        if (!attendeeTicket) throw new Error('과제 6의 티켓이 없어 공지를 열 수 없음');
+        await page.goto(`${baseUrl}/event/${encodeURIComponent(slug)}/home?ticket=${encodeURIComponent(attendeeTicket)}`, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.locator('nav[aria-label="참가 메뉴"]').waitFor({ state: 'visible', timeout: 15000 });
+        await verifySkipLink(page, task);
+        await installScrollCounter(page);
+        const noticeMenu = page.getByRole('button', { name: /공지사항/ }).first();
+        // Probe before the tab switch: opening the tab unmounts the home
+        // menu, so the menu entry itself is the measurable primary action.
+        await probeKeyboard(page, task, noticeMenu, '공지사항 메뉴');
+        await act(task, () => noticeMenu.click());
+        const titleVisible = await settledVisible(page.getByText(seed.noticeTitle, { exact: true }));
+        const bodyVisible = await settledVisible(page.getByText('사용성 감사 안내 본문입니다.', { exact: true }));
+        task.resultVisible = titleVisible && bodyVisible;
+        task.resultNote = `공지 목록에 제목 + 본문 표시`;
+        try {
+          const state = await readBootstrap(helpers, baseUrl, fixture.manager.cookie);
+          const notice = (state.workspaces[eventId].notices || []).find((item) => item.title === seed.noticeTitle);
+          task.serverState = notice && notice.published === true ? 'bootstrap 공지 게시됨(목록·본문 노출 조건)' : null;
+          if (!task.serverState) task.serverNote = '서버에 게시된 공지 없음';
+        } catch (error) {
+          task.serverNote = `bootstrap 확인 불가: ${error.message.split('\n')[0]}`;
+        }
+        await shot(page, 'task-21-notice.png');
+      } catch (error) {
+        task.blocked = true;
+        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        await shot(page, 'task-21-notice-blocked.png');
+      } finally {
+        await finishTask(task, page, started);
+        await context.close().catch(() => {});
+      }
+    }
+
+    // ---- Task 22: take a lucky number (attendee) ----
+    {
+      const task = createTask('lucky', '럭키드로우 번호 받기', 'attendee', ATTENDEE_STEP_CAP);
+      const started = Date.now();
+      const { context, page } = await newAttendeePage();
+      attachErrorListeners(page, task, baseUrl);
+      try {
+        if (!attendeeTicket) throw new Error('과제 6의 티켓이 없어 번호를 받을 수 없음');
+        await page.goto(`${baseUrl}/event/${encodeURIComponent(slug)}/home?ticket=${encodeURIComponent(attendeeTicket)}`, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.locator('nav[aria-label="참가 메뉴"]').waitFor({ state: 'visible', timeout: 15000 });
+        await verifySkipLink(page, task);
+        await installScrollCounter(page);
+        await act(task, () => page.getByRole('button', { name: /럭키드로우 번호/ }).first().click());
+        const issue = page.getByRole('button', { name: '럭키번호 발급', exact: true });
+        await issue.waitFor({ state: 'visible', timeout: 15000 });
+        await probeKeyboard(page, task, issue, '럭키번호 발급 버튼');
+        await act(task, () => issue.click());
+        // Wait for the issued number itself (digits + 번): the menu label
+        // already contains "번호", so a bare /번/ would match before issuing.
+        await page.getByText(/[0-9]+번/).first().waitFor({ timeout: 15000 });
+        const numberText = await page.getByText(/[0-9]+번/).first().innerText().catch(() => '');
+        task.resultVisible = /[0-9]+번/.test(numberText);
+        task.resultNote = `발급된 번호 "${numberText.replace(/\s+/g, ' ').slice(0, 20)}" 표시`;
+        try {
+          const state = await readBootstrap(helpers, baseUrl, fixture.manager.cookie);
+          const person = state.workspaces[eventId].participants.find((item) => item.phone === '01055554444');
+          const hit = (state.workspaces[eventId].luckyNumbers || []).find((item) => person && item.participantId === person.id);
+          task.serverState = hit ? `bootstrap 럭키번호 ${hit.number}번 기록됨` : null;
+          if (!task.serverState) task.serverNote = '서버 luckyNumbers에 기록 없음';
+        } catch (error) {
+          task.serverNote = `bootstrap 확인 불가: ${error.message.split('\n')[0]}`;
+        }
+        await shot(page, 'task-22-lucky.png');
+      } catch (error) {
+        task.blocked = true;
+        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        await shot(page, 'task-22-lucky-blocked.png');
+      } finally {
+        await finishTask(task, page, started);
+        await context.close().catch(() => {});
+      }
+    }
+
+    // ---- Task 23: spin the roulette (attendee) ----
+    {
+      const task = createTask('roulette', '룰렛 돌리기', 'attendee', ATTENDEE_STEP_CAP);
+      const started = Date.now();
+      const { context, page } = await newAttendeePage();
+      attachErrorListeners(page, task, baseUrl);
+      try {
+        if (!attendeeTicket) throw new Error('과제 6의 티켓이 없어 룰렛을 돌릴 수 없음');
+        await page.goto(`${baseUrl}/event/${encodeURIComponent(slug)}/home?ticket=${encodeURIComponent(attendeeTicket)}`, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.locator('nav[aria-label="참가 메뉴"]').waitFor({ state: 'visible', timeout: 15000 });
+        await verifySkipLink(page, task);
+        await installScrollCounter(page);
+        await act(task, () => page.getByRole('button', { name: /룰렛 이벤트/ }).first().click());
+        const start = page.getByRole('button', { name: 'START · 서버 추첨 시작', exact: true });
+        await start.waitFor({ state: 'visible', timeout: 15000 });
+        await probeKeyboard(page, task, start, 'START 버튼');
+        await act(task, () => start.click());
+        await page.getByText('내 당첨 경품').first().waitFor({ timeout: 25000 });
+        const prizeVisible = await settledVisible(page.getByText('사용성 룰렛 경품', { exact: true }));
+        task.resultVisible = prizeVisible;
+        task.resultNote = '당첨 결과 "내 당첨 경품" + 경품명 표시';
+        try {
+          const state = await readBootstrap(helpers, baseUrl, fixture.manager.cookie);
+          const person = state.workspaces[eventId].participants.find((item) => item.phone === '01055554444');
+          const hit = (state.workspaces[eventId].rouletteResults || []).find((item) => person && item.participantId === person.id);
+          task.serverState = hit ? `bootstrap 룰렛 결과 "${hit.label}" 기록됨` : null;
+          if (!task.serverState) task.serverNote = '서버 rouletteResults에 기록 없음';
+        } catch (error) {
+          task.serverNote = `bootstrap 확인 불가: ${error.message.split('\n')[0]}`;
+        }
+        await shot(page, 'task-23-roulette.png');
+      } catch (error) {
+        task.blocked = true;
+        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        await shot(page, 'task-23-roulette-blocked.png');
+      } finally {
+        await finishTask(task, page, started);
+        await context.close().catch(() => {});
+      }
+    }
   } finally {
     if (browser) await browser.close().catch(() => {});
     if (fixture) await fixture.close().catch(() => {});
@@ -933,9 +1731,10 @@ async function main() {
       scrolls: task.scrolls,
       keyboardStops: task.keyboardStops,
       keyboardStopsRaw: task.keyboardStopsRaw,
-      keyboardSkip: task.keyboardSkip,
+      keyboardSkip: task.keyboardSkip || null,
       skipLink: task.skipLink,
       skipVerified: task.skipVerified,
+      serverExempt: task.serverExempt,
       keyboardNote: task.keyboardNote,
       resultVisible: task.resultVisible,
       resultNote: task.resultNote,
@@ -953,14 +1752,20 @@ async function main() {
   const line = (text) => process.stdout.write(`${text}\n`);
   line('');
   line('== 사용성 감사 결과 (실제 목표 달성까지의 조작 측정) ==');
-  line('과제 | steps(상한) | scrolls | keyboardStops(정정) | keyboardStopsRaw(최상단) | 결과');
+  line('과제 | 조작(상한) | 스크롤 | kb(최단) | raw(최상단) | 이동수단 경유 | 서버반영 | 결과');
   const kbText = (task, value) => {
     if (value !== null) return `${value}회`;
     return task.blocked ? '미측정' : '40회 초과';
   };
+  const serverText = (task) => {
+    if (task.serverState) return String(task.serverState).slice(0, 22);
+    if (task.serverExempt) return '면제(검토 단계)';
+    return '—';
+  };
   for (const task of measured) {
     const stepText = task.steps === null ? '미완' : `${task.steps}회`;
-    line(`- ${task.title} | ${stepText}(${task.stepCap}) | ${task.scrolls}회 | ${kbText(task, task.keyboardStops)} | ${kbText(task, task.keyboardStopsRaw)} | ${task.passed ? '통과' : '실패'}`);
+    const viaText = task.keyboardSkip ? String(task.keyboardSkip) : '—';
+    line(`- ${task.title} | ${stepText}(${task.stepCap}) | ${task.scrolls}회 | ${kbText(task, task.keyboardStops)} | ${kbText(task, task.keyboardStopsRaw)} | ${viaText} | ${serverText(task)} | ${task.passed ? '통과' : '실패'}`);
   }
   // Transparency over the corrected metric: name every task whose naive
   // top-only path exceeds the cap, even when the corrected path passes.
@@ -990,7 +1795,8 @@ async function main() {
       line(`[${task.title}] ${task.detail.trim() || '(상세 없음)'}`);
       for (const error of task.errors) line(`  - 오류: ${error}`);
       if (!task.resultVisible) line(`  - 화면: ${task.resultNote || '결과 문구 미확인'}`);
-      if (!task.serverState) line(`  - 서버: ${task.serverNote || '미확인'}`);
+      if (!task.serverState && !task.serverExempt) line(`  - 서버: ${task.serverNote || '미확인'}`);
+      if (!task.serverState && task.serverExempt) line(`  - 서버: 면제(목표가 검토 단계까지라 반영 없음이 정상: ${task.serverNote})`);
     }
   } else {
     line('');

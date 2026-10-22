@@ -24,7 +24,7 @@ export default function ConsoleSectionNav({ items, label }: ConsoleSectionNavPro
       <ul className={styles.sectionNavList}>
         {items.map((item) => (
           <li key={item.id}>
-            <a className={styles.sectionNavLink} href={`#${item.id}`}>
+            <a className={styles.sectionNavLink} href={`#${item.id}`} data-skip-to={item.id}>
               {item.label}
             </a>
           </li>

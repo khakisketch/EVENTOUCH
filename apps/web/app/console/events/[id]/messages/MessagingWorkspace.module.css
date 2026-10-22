@@ -543,3 +543,27 @@
 :global(#campaign-recipients) {
   scroll-margin-top: 120px;
 }
+
+:global(#campaign-submit) {
+  scroll-margin-top: 120px;
+  scroll-margin-bottom: 48px;
+}
+
+/* In-form skip after the recipient block: a plain visible link-style
+   button (44px touch target via .textButton) plus a short hint. The
+   button itself only moves focus onto the real submit — no new action,
+   no wording or API change. Tokens only. */
+.sendSkip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  padding: var(--s2) var(--s3);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.sendSkip .textButton {
+  padding: var(--s1) var(--s2);
+}

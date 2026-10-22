@@ -245,4 +245,8 @@ jobs:
           npm run web:hanwool:audit
           npm run web:theme:audit
           npm run web:retirement:audit
+          # Usability as a gate, not a review: every goal must still be
+          # reachable in a handful of actions, with the keyboard path and the
+          # server state behind it measured.
+          npm run audit:usability
           kill "$(cat /tmp/next-web.pid)"

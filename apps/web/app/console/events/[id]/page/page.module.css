@@ -92,6 +92,43 @@
   min-width: 0;
 }
 
+/* In-form skip link to the save/publish actions. Unlike the global
+   off-canvas skip link it stays visible inside the form — the keyboard
+   audit showed operators never discover a hidden one here — while reusing
+   the same info-tone language so it reads as navigation, not content. */
+.editorSkip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--info-line);
+  border-radius: var(--radius);
+  background: var(--info-soft);
+  color: var(--info);
+  font-weight: 700;
+  text-underline-offset: 4px;
+}
+
+.editorSkip:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Landing target of the in-form skip link. Tabbable only by script
+   (tabIndex -1) so the tab order is unchanged, but focusable so the jump
+   hands focus over: the next Tab stop after this region is the save
+   button itself. */
+.saveAnchor {
+  scroll-margin-top: var(--s4);
+  border-radius: var(--radius);
+}
+
+.saveAnchor:focus {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
 .controlGroup {
   display: grid;
   gap: var(--s3);

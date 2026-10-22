@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CSSProperties, ChangeEvent } from "react";
+import type { CSSProperties, ChangeEvent, MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
 import {
@@ -304,6 +304,20 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
   const pendingSaveRef = useRef<PendingIntent | null>(null);
   const pendingPublishRef = useRef<PendingIntent | null>(null);
   const uploadUrlRef = useRef<string | null>(null);
+  // The edit form stacks every field above the save/publish actions, so a
+  // keyboard-only save means tabbing through all of them. This ref is the
+  // landing target of the "skip the fields" link at the top of the form:
+  // focusing the save region (not just scrolling to it) puts the next Tab
+  // stop on the save button itself.
+  const saveActionsRef = useRef<HTMLDivElement>(null);
+
+  const jumpToSaveActions = useCallback((event: ReactMouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    const target = document.getElementById("theme-save-draft") ?? saveActionsRef.current;
+    if (!(target instanceof HTMLElement)) return;
+    target.focus({ preventScroll: true });
+    target.scrollIntoView({ block: "start" });
+  }, []);
 
   // Unsaved work the cross-route guard must hold: local edits, an upload
   // context that is not settled, a pending save/publish intent, or an
@@ -1102,6 +1116,9 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
 
       <div className={styles.editorLayout}>
         <div className={styles.controls} id="theme-edit">
+          <a className={styles.editorSkip} href="#theme-save-draft" data-skip-to="theme-save-draft" onClick={jumpToSaveActions}>
+            편집 항목을 건너뛰고 저장·게시로 이동
+          </a>
           <fieldset className={styles.controlGroup} disabled={Boolean(commandBusy || conflict || state.archived)}>
             <legend>배경</legend>
             <p className={styles.help}>행사 홈과 상세 안내의 배경에 적용됩니다. 타일과 티켓은 읽기 쉽도록 밝은 카드로 유지됩니다.</p>
@@ -1339,7 +1356,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
             ) : null}
           </section>
 
-          <div id="theme-save">
+          <div id="theme-save" ref={saveActionsRef} tabIndex={-1} className={styles.saveAnchor}>
             {dirty && !uploadBlocked ? <p className={styles.inlineHelp}>게시 버튼은 저장된 초안에만 작동합니다. 먼저 초안을 저장하세요.</p> : null}
             {uploadBlocked ? (
               <p className={styles.inlineHelp} role="status">
@@ -1347,7 +1364,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
               </p>
             ) : null}
             <ConsoleFormActions>
-              <button className="button button-primary" type="button" onClick={() => void saveDraft()} disabled={!canSave}>
+              <button id="theme-save-draft" className="button button-primary" type="button" onClick={() => void saveDraft()} disabled={!canSave}>
                 {commandBusy === "save" ? "초안 저장 중…" : "초안 저장"}
               </button>
               <button className="button button-secondary" type="button" onClick={() => void requestPublishDraft()} disabled={!canPublish}>
