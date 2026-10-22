@@ -1,0 +1,380 @@
+.status {
+  padding: 2px var(--s2);
+  border-radius: var(--radius-small);
+  font-weight: 650;
+}
+
+.statusOpen {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.statusClosed {
+  background: var(--surface-muted);
+  color: var(--muted);
+}
+
+.statusDraft {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.featureOff {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--warning-line);
+  border-radius: var(--radius-small);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: var(--small);
+}
+
+.lockNote {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--info-line);
+  border-radius: var(--radius-small);
+  background: var(--info-soft);
+  color: var(--info);
+  font-size: var(--small);
+}
+
+.stagePrerequisite {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--info-line);
+  border-radius: var(--radius-small);
+  background: var(--info-soft);
+  color: var(--info);
+  font-size: var(--small);
+  line-height: 1.5;
+}
+
+.stagePrerequisite a {
+  color: var(--info);
+  font-weight: 750;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
+}
+
+.hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+.empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+.inlineForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s2) var(--s3);
+}
+.inlineLabel {
+  font-size: var(--small);
+  font-weight: 650;
+}
+.configForm {
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+.configGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s3);
+}
+.checkLine {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  min-height: 44px;
+  font-size: var(--small);
+  font-weight: 650;
+}
+.checkLine input { width: 20px; height: 20px; flex: none; margin: 0; }
+.tallyActions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); }
+.successHint { margin: 0; color: var(--success); font-size: var(--small); font-weight: 700; }
+.formHeading { margin: 0; font-size: var(--h3); }
+.filterGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s3);
+}
+.filterField { display: grid; align-content: start; gap: var(--s2); min-width: 0; }
+.filterField > label,
+.recipientAssign > label { font-size: var(--small); font-weight: 700; }
+.filterControls { display: flex; align-items: stretch; gap: var(--s2); min-width: 0; }
+.filterControls input { min-width: 0; flex: 1; }
+.filterControls button { flex: none; }
+.filterChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.filterChips li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  max-width: 100%;
+  padding: var(--s1) var(--s2);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--paper);
+  font-size: var(--small);
+  overflow-wrap: anywhere;
+}
+.filterChips button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface-muted);
+  color: var(--ink);
+  font-size: 18px;
+  cursor: pointer;
+}
+.tierEditor { display: grid; gap: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--line); }
+.tierHeading { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--s2); }
+.tierHeading h4 { margin: 0 0 var(--s1); font-size: var(--small); }
+.tierRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(110px, 0.45fr) auto;
+  align-items: end;
+  gap: var(--s3);
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--paper);
+}
+.teamList {
+  display: grid;
+  gap: var(--s2);
+  margin: var(--s3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.teamItem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s1) var(--s3);
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--paper);
+}
+.programForm {
+  display: grid;
+  gap: var(--s2);
+  margin-bottom: var(--s3);
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--surface-muted);
+}
+.programField {
+  display: grid;
+  gap: var(--s1);
+}
+.programField label {
+  font-size: var(--small);
+  font-weight: 650;
+}
+.programList {
+  display: grid;
+  gap: var(--s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.programItem {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+.programTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s1) var(--s3);
+}
+.programWinners {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+.programMeta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); color: var(--muted); font-size: var(--small); }
+.programMetaText { margin: 0; color: var(--muted); font-size: var(--small); overflow-wrap: anywhere; }
+.winnerList { display: grid; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
+.winnerItem { display: grid; gap: var(--s2); padding: var(--s3); border: 1px solid var(--line); border-radius: var(--radius-small); background: var(--surface-muted); }
+.winnerSummary { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--s1) var(--s3); }
+.winnerSummary span { color: var(--muted); font-size: var(--small); }
+.recipientAssign { display: grid; gap: var(--s2); }
+.recipientControls { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.recipientControls select { min-width: min(320px, 100%); flex: 1 1 220px; }
+.recipientControls button { flex: 0 0 auto; }
+.runCountField { display: grid; gap: var(--s1); min-width: 150px; }
+.runCountField label { font-size: var(--small); font-weight: 700; }
+.runCountField input { width: 100%; min-height: 44px; }
+.roulettePrizeRow { display: grid; gap: var(--s3); padding: var(--s4); border: 1px solid var(--line); border-radius: var(--radius-small); background: var(--paper); }
+.prizeRowHeading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--s1) var(--s3); }
+.prizeRowHeading span { color: var(--muted); font-size: var(--small); }
+.preassignBox { display: grid; gap: var(--s2); padding: var(--s4); border: 1px solid var(--info-line); border-radius: var(--radius); background: var(--info-soft); }
+.preassignBox .checkLine { margin: 0; }
+.programActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+/* The run buttons sit in their own group with the blocker line attached,
+   so an operator reads what is missing right where the action is. */
+.runActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  flex-basis: 100%;
+}
+/* Disabled run buttons stay readable (ink on muted, full opacity) while
+   staying clearly disabled (gray instead of the brand orange, no pointer). */
+.programActions .button-primary:disabled {
+  border-color: var(--line-strong);
+  background: var(--surface-muted);
+  color: var(--ink);
+  opacity: 1;
+  cursor: not-allowed;
+}
+.runBlocker {
+  margin: 0;
+  flex-basis: 100%;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-small);
+  background: var(--surface-muted);
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 650;
+  line-height: 1.5;
+}
+.stageButton {
+  min-height: 72px;
+  padding-inline: var(--s6);
+  font-size: var(--h3);
+}
+
+.empty {
+  margin: 0;
+  padding: var(--s5);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--muted);
+  text-align: center;
+}
+
+.fieldError {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--small);
+}
+
+@media (max-width: 768px) {
+  .configGrid,
+  .filterGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .tierRow {
+    grid-template-columns: minmax(0, 1fr) minmax(88px, 0.45fr);
+  }
+
+  .tierRow > button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .programActions > .button,
+  .runActions > .button,
+  .configForm > .button,
+  .preassignBox > .button {
+    width: 100%;
+  }
+
+  .recipientControls select,
+  .recipientControls button {
+    width: 100%;
+  }
+
+  .moduleTop {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .photoArchiveTools {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .photoArchiveTools :global(.button) {
+    width: 100%;
+  }
+}
+
+/* Setup forms fold away: the stage-draw list is what the operator runs
+   during the event, while program, roulette and lucky-number settings are
+   prepared before it. */
+.setupDetails {
+  margin-top: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--paper);
+}
+
+.setupSummary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: var(--s2) var(--s3);
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.setupDetails[open] .setupSummary {
+  border-bottom: 1px solid var(--line);
+}
+
+.setupDetails > form {
+  margin: var(--s3);
+}
+
+/* The jump nav names the section in view, so a long page with four different
+   jobs still says where the operator is. */
+.navSticky {
+  min-width: 0;
+}
+
+.navNow {
+  margin: var(--s1) 0 0;
+  color: var(--muted);
+  font-size: var(--small);
+}

@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { loginHrefForLocation } from "../../../auth-redirect";
 import { eventStageClassName, eventStageLabel } from "../../../event-stage";
-import ConsolePageHeader, { formatConsoleEventMeta } from "../../console-ui/ConsolePageHeader";
+import { formatConsoleEventMeta } from "../../console-ui/ConsolePageHeader";
+import ConsolePage from "../../console-ui/ConsolePage";
+import ConsoleFeedback from "../../console-ui/ConsoleFeedback";
 import ConsoleSection from "../../console-ui/ConsoleSection";
 import ConsoleStatePanel from "../../console-ui/ConsoleStatePanel";
 import styles from "./event-overview.module.css";
@@ -27,6 +29,15 @@ type ScheduledProgram = {
   place: string;
 };
 
+// Calendar-day buckets for the operator's situational awareness. Applications
+// count participants (cancelled excluded) and entries count unique
+// participants with an uncorrected IN record in the period.
+type PeriodCounts = {
+  today: { applications: number; entries: number };
+  yesterday: { applications: number; entries: number };
+  last7: { applications: number; entries: number };
+};
+
 type Overview = {
   name: string;
   slug: string;
@@ -44,6 +55,7 @@ type Overview = {
   everIn: number;
   confirmedNotEntered: number;
   entryRate: number;
+  periods: PeriodCounts;
   recent: CheckRow[];
   registrationOpen: boolean;
   surveyResponseCount: number | null;
@@ -321,7 +333,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             place: text(program.place),
           }];
         });
-        const checks: CheckRow[] = records(workspace.checks)
+        const checkRecords = records(workspace.checks)
           .filter((check) => typeof check.id === "string" && check.id && check.corrected !== true)
           .map((check) => ({
             id: String(check.id),
@@ -329,15 +341,49 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             action: text(check.action),
             at: text(check.at),
             deskName: deskMap.get(text(check.deskId)) ?? "",
+            participantId: text(check.participantId),
           }))
           .sort((left, right) => {
             const leftTime = Date.parse(left.at);
             const rightTime = Date.parse(right.at);
             return (Number.isNaN(rightTime) ? 0 : rightTime) - (Number.isNaN(leftTime) ? 0 : leftTime);
-          })
-          .slice(0, 8);
+          });
+        const checks: CheckRow[] = checkRecords.slice(0, 8);
         const workspaceVenue = asRecord(workspace.venue);
         const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const tomorrowStart = new Date(todayStart);
+        tomorrowStart.setDate(todayStart.getDate() + 1);
+        const yesterdayStart = new Date(todayStart);
+        yesterdayStart.setDate(todayStart.getDate() - 1);
+        const weekStart = new Date(todayStart);
+        weekStart.setDate(todayStart.getDate() - 6);
+        const within = (value: string, start: Date, end: Date) => {
+          const time = Date.parse(value);
+          return Number.isFinite(time) && time >= start.getTime() && time < end.getTime();
+        };
+        const entriesIn = (start: Date, end: Date) => new Set(
+          checkRecords
+            .filter((check) => check.action === "IN" && within(check.at, start, end))
+            .map((check) => check.participantId || check.id)
+        ).size;
+        const applicationsIn = (start: Date, end: Date) => participantRows
+          .filter((person) => within(text(person.createdAt), start, end))
+          .length;
+        const periods: PeriodCounts = {
+          today: {
+            applications: applicationsIn(todayStart, tomorrowStart),
+            entries: entriesIn(todayStart, tomorrowStart),
+          },
+          yesterday: {
+            applications: applicationsIn(yesterdayStart, todayStart),
+            entries: entriesIn(yesterdayStart, todayStart),
+          },
+          last7: {
+            applications: applicationsIn(weekStart, tomorrowStart),
+            entries: entriesIn(weekStart, tomorrowStart),
+          },
+        };
 
         setState({
           kind: "ready",
@@ -358,6 +404,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             everIn,
             confirmedNotEntered: approved.filter((person) => person.everIn !== true).length,
             entryRate: registered ? Math.round((everIn / registered) * 100) : 0,
+            periods,
             recent: checks,
             registrationOpen: workspace.registrationOpen === true,
             surveyResponseCount,
@@ -424,35 +471,39 @@ export default function EventOverview({ eventId }: { eventId: string }) {
 
   if (state.kind === "loading") {
     return (
-      <div className={styles.overview}>
-        <ConsolePageHeader title="운영 현황" />
+      <ConsolePage pageId="overview" eventId={eventId}>
         <ConsoleStatePanel
           kind="loading"
           message="운영 현황을 불러오고 있습니다."
           onRetry={requestOverviewReload}
         />
-      </div>
+      </ConsolePage>
     );
   }
   if (state.kind === "failed") {
     return (
-      <div className={styles.overview}>
-        <ConsolePageHeader title="운영 현황" />
+      <ConsolePage pageId="overview" eventId={eventId}>
         <ConsoleStatePanel
           kind="failed"
           message={state.message}
           onRetry={requestOverviewReload}
         />
-      </div>
+      </ConsolePage>
     );
   }
 
   const overview = state.overview;
   const stageKnown = STAGE_ORDER.includes(currentStage);
   const stageText = stageKnown ? eventStageLabel(currentStage) : "단계 미정";
+  const showApprovalAlert = overview.pendingApproval > 0 && !["ENDED", "ARCHIVED"].includes(currentStage);
   const base = `/console/events/${encodeURIComponent(eventId)}`;
   const metrics = metricsForStage(overview, currentStage, base);
   const entryProgress = Math.max(0, Math.min(100, overview.entryRate));
+  const periodRows: Array<[string, PeriodCounts["today"]]> = [
+    ["오늘", overview.periods.today],
+    ["어제", overview.periods.yesterday],
+    ["최근 7일", overview.periods.last7],
+  ];
   const schedule = overview.canManageEvent
     ? upcomingPrograms(overview.programs, new Date())
     : [];
@@ -468,11 +519,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
     venue: overview.venue,
   });
 
-  const pageHeader = (
-    <ConsolePageHeader
-      title={overview.name || "이름 없는 행사"}
-      meta={eventMeta}
-      badges={(
+  const stageBadges = (
         <>
           <span className={`${eventStageClassName(currentStage)} ${styles.stagePill}`}>{stageText}</span>
           <span className={`${styles.intakeBadge} ${overview.registrationOpen ? styles.intakeOpen : styles.intakeClosed}`}>
@@ -484,8 +531,8 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             </span>
           ) : null}
         </>
-      )}
-      actions={overview.canManageEvent && participantPageHref ? (
+  );
+  const headerActions = overview.canManageEvent && participantPageHref ? (
         <>
           <Link className="button button-secondary" href={participantPageHref} target="_blank" rel="noreferrer">
             참가자 페이지 열기
@@ -498,24 +545,31 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             링크 복사
           </button>
         </>
-      ) : null}
-    />
-  );
+      ) : null;
 
   return (
-    <div className={styles.overview}>
-      {pageHeader}
-      {linkNotice ? <p className={styles.linkNotice} role="status">{linkNotice}</p> : null}
-
+    <ConsolePage pageId="overview" eventId={eventId} eventName={overview.name || "이름 없는 행사"}
+      meta={eventMeta} badges={stageBadges} headerActions={headerActions}
+      feedback={linkNotice ? <ConsoleFeedback kind="info">{linkNotice}</ConsoleFeedback> : undefined}>
       {overview.canManageEvent ? (
-        <ConsoleSection
-          headingId="event-metrics-heading"
-          title={currentStage === "LIVE" ? "입장 진행" : currentStage === "ENDED" || currentStage === "ARCHIVED" ? "최종 요약" : "주요 지표"}
-          description={stageKnown ? `${stageText} 단계 기준` : "확인 가능한 단계 지표가 없습니다."}
-          className={styles.metricsSection}
-        >
-          {["LIVE", "ENDED", "ARCHIVED"].includes(currentStage) ? (
-            <div className={styles.entryProgress}>
+        <>
+          {showApprovalAlert && (
+            <ConsoleFeedback kind="warning">
+              <div className={styles.approvalNotice}>
+                <strong>승인 대기 {overview.pendingApproval}명</strong>
+                <Link className="button button-secondary" href={`${base}/participants?status=PENDING`}>
+                  승인 대기 처리
+                </Link>
+              </div>
+            </ConsoleFeedback>
+          )}
+          <ConsoleSection
+            headingId="event-metrics-heading"
+            title={currentStage === "LIVE" ? "입장 진행" : currentStage === "ENDED" || currentStage === "ARCHIVED" ? "최종 요약" : "주요 지표"}
+            description={stageKnown ? `${stageText} 단계 기준` : "확인 가능한 단계 지표가 없습니다."}
+          >
+            {["LIVE", "ENDED", "ARCHIVED"].includes(currentStage) ? (
+              <div className={styles.entryProgress}>
               <div className={styles.entrySummary}>
                 <div className={styles.entryMain}>
                   <span className={styles.metricLabel}>{currentStage === "LIVE" ? "누적 입장" : "최종 누적 입장"}</span>
@@ -532,7 +586,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
                 ) : (
                   <Link
                     className={styles.notEntered}
-                    href={`${base}/participants?status=APPROVED`}
+                    href={`${base}/participants?status=APPROVED&attendance=NOT_ENTERED`}
                   >
                     <span>확정자 중 미입장</span>
                     <strong>{overview.confirmedNotEntered}명</strong>
@@ -575,21 +629,44 @@ export default function EventOverview({ eventId }: { eventId: string }) {
               ) : null}
             </div>
           ) : metrics.length ? (
-            <ul className={styles.metricRow}>
+            <div className={styles.metricGrid}>
               {metrics.map((metric) => (
-                <li key={metric.label}>
-                  <Link className={styles.metricItem} href={metric.href}>
-                    <span className={styles.metricLabel}>{metric.label}</span>
-                    <strong className={styles.metricValue}>{metric.value}</strong>
-                    <span className={styles.metricDetail}>{metric.detail}</span>
-                  </Link>
-                </li>
+                <Link className={styles.metricCard} href={metric.href} key={metric.label}>
+                  <span className={styles.metricLabel}>{metric.label}</span>
+                  <strong className={styles.metricValue}>{metric.value}</strong>
+                  <span className={styles.metricDetail}>{metric.detail}</span>
+                </Link>
               ))}
-            </ul>
+            </div>
           ) : (
             <p className={styles.restrictedNote}>확인 가능한 단계 지표가 없습니다.</p>
           )}
+            <div className={styles.periodBlock}>
+              <div className={styles.periodHeader}>
+                <h3>기간별 신청·입장</h3>
+                <span>취소·정정 제외 · 입장은 참가자 기준</span>
+              </div>
+              <table className={styles.periodTable} aria-label="기간별 신청·입장">
+                <thead>
+                  <tr>
+                    <th scope="col">기간</th>
+                    <th scope="col">신청</th>
+                    <th scope="col">입장</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {periodRows.map(([label, period]) => (
+                    <tr key={label}>
+                      <th scope="row">{label}</th>
+                      <td>{period.applications}명</td>
+                      <td>{period.entries}명</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
         </ConsoleSection>
+      </>
       ) : (
         <p className={styles.restrictedNote}>행사 지표는 행사 운영자에게 표시됩니다.</p>
       )}
@@ -600,7 +677,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
           title="현재·다음 일정"
           description="게시 여부와 관계없이 등록된 일정입니다. 실제 진행 상태가 아닌 예정 기준입니다."
           action={<Link className="button button-secondary" href={`${base}/content`}>프로그램 일정</Link>}
-          className={styles.scheduleCard}
+          surface="panel"
         >
           <ol className={styles.programList}>
             {schedule.map((program) => (
@@ -647,7 +724,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             </button>
           </div>
         )}
-        className={styles.recentCard}
+        surface="panel"
       >
         {refreshing ? <p className={styles.refreshStatus} role="status">최신 운영 현황을 불러오고 있습니다.</p> : null}
         {refreshError ? <p className="state-error" role="alert">{refreshError} 이전에 불러온 내용은 유지됩니다.</p> : null}
@@ -676,6 +753,6 @@ export default function EventOverview({ eventId }: { eventId: string }) {
           </p>
         )}
       </ConsoleSection>
-    </div>
+    </ConsolePage>
   );
 }

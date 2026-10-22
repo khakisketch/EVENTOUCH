@@ -1,27 +1,6 @@
-.home {
-  display: grid;
-  gap: var(--s4);
-  width: 100%;
-}
-
-.homeHeaderRow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: var(--s4);
-  padding-bottom: var(--s3);
-  border-bottom: 1px solid var(--line);
-}
-
-.homeHeader.homeHeader {
-  grid-template-columns: minmax(0, 1fr);
-  padding-bottom: 0;
-  border-bottom: 0;
-}
-
 .createTrigger {
   flex: none;
-  align-self: end;
+  align-self: center;
 }
 
 .directory {
@@ -29,29 +8,55 @@
 }
 
 .directorySection.directorySection {
-  gap: var(--s3);
+  gap: var(--s2);
 }
 
-.directorySection .toolbar,
+/* The directory count is a short heading summary, not a full-width prose
+   description. Pair it tightly with the title; center the view switch
+   against that two-line group instead of reserving a 46px title row. */
+.directorySection > :has(:global(#console-event-directory)) {
+  grid-template-areas:
+    "title action"
+    "desc action";
+}
+
 .directorySection .calendarPanel,
 .directorySection .resultsMeta,
 .directorySection .eventGrid {
   margin-top: 0;
 }
 
-.toolbar {
+/* Search owns its row. Supporting filters are a quiet, compact row rather
+   than full-width form boxes competing with the event cards. */
+.homeFilters {
   display: grid;
-  grid-template-columns: minmax(190px, 260px) auto auto minmax(240px, 1fr);
-  align-items: center;
-  gap: var(--s3);
-  margin-top: var(--s3);
-  padding-block: var(--s2);
-  border-bottom: 1px solid var(--line);
+  grid-template-areas:
+    "search search"
+    "stage work";
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--s2) var(--s3);
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.homeSearch {
+  grid-area: search;
+}
+
+.homeStage {
+  grid-area: stage;
+}
+
+.homeWork {
+  grid-area: work;
 }
 
 .stageFilter {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto auto;
+  justify-self: start;
+  width: fit-content;
+  max-width: 100%;
   align-items: center;
   gap: var(--s2);
   min-width: 0;
@@ -62,12 +67,33 @@
 }
 
 .stageFilter select {
+  width: auto;
+  field-sizing: content;
+  max-width: 100%;
   min-width: 0;
+  min-height: 44px;
   margin: 0;
+  padding-inline: var(--s1) var(--s2);
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+  box-shadow: none;
+  color: var(--ink);
+  font-weight: 700;
 }
 
-/* Triage toggle: same row voice as the stage filter, checkbox first so the
-   label reads as an action, not a status. */
+.stageFilter select:hover {
+  color: var(--brand-text);
+}
+
+/* Keep the native option picker legible independently of the flat trigger. */
+.stageFilter option {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+/* Triage toggle: same row voice as the stage filter. The label wraps
+   instead of clipping, so the full count stays readable at 360px. */
 .workFilter {
   display: inline-flex;
   min-height: 44px;
@@ -77,7 +103,8 @@
   color: var(--muted);
   font-size: var(--small);
   font-weight: 650;
-  white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 .workFilter input {
@@ -144,11 +171,10 @@
 
 .resultsMeta {
   display: flex;
-  min-height: 44px;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: var(--s2);
-  margin-top: var(--s3);
+  min-width: 0;
 }
 
 .resultsMeta p {
@@ -176,17 +202,58 @@
   min-width: 0;
 }
 
+.eventCardActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s1) var(--s3);
+  margin-top: auto;
+  padding-top: var(--s1);
+  border-top: 1px solid var(--line);
+}
+
+.eventCardAction {
+  display: inline-flex;
+  min-height: 44px;
+  margin-left: auto;
+  align-items: center;
+  padding-inline: var(--s1);
+  border: 0;
+  border-radius: var(--radius-small);
+  background: transparent;
+  color: var(--brand-text);
+  font-size: var(--small);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.eventCardAction:hover {
+  color: var(--brand-hover);
+}
+
+.eventCardAction:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
 .eventCardLink {
-  display: block;
-  height: 100%;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--s2);
   border-radius: var(--radius);
   color: inherit;
   text-decoration: none;
 }
 
-.eventCardLink:hover .eventCard {
-  border-color: var(--line-strong);
-  background: var(--surface-muted);
+.eventCard:hover {
+  border-color: var(--brand);
+  background: var(--soft);
+  box-shadow: 0 4px 12px var(--shadow-color);
+  transform: translateY(-2px);
+  transition: all var(--enter) ease-out;
 }
 
 .eventCardLink:focus-visible {
@@ -197,13 +264,18 @@
 .eventCard {
   display: flex;
   flex-direction: column;
-  gap: var(--s3);
+  gap: var(--s2);
   height: 100%;
-  min-height: 250px;
   padding: var(--s4);
-  border: 1px solid var(--line);
+  border: 2px solid var(--line);
   border-radius: var(--radius);
   background: var(--paper);
+  transition: all var(--enter) ease-out;
+}
+
+.eventCard.metric-primary {
+  border-color: var(--brand);
+  background: var(--soft);
 }
 
 .eventCardTop {
@@ -224,7 +296,7 @@
   color: var(--ink);
   font-family: var(--display-font);
   font-size: var(--body);
-  font-weight: 700;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -237,10 +309,10 @@
   justify-content: center;
   padding: 2px var(--s2);
   border-radius: var(--radius-small);
-  background: var(--soft);
-  color: var(--brand-text);
+  background: var(--brand);
+  color: var(--on-brand);
   font-size: var(--small);
-  font-weight: 700;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
   text-align: center;
   white-space: nowrap;
@@ -250,7 +322,7 @@
   width: 20px;
   height: 20px;
   justify-self: end;
-  color: var(--muted);
+  color: var(--brand-text);
 }
 
 .eventTime {
@@ -266,12 +338,16 @@
   line-height: 1.35;
   word-break: keep-all;
   overflow-wrap: break-word;
+  font-family: var(--display-font);
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 .eventClient {
   margin: 0;
   color: var(--muted);
   font-size: var(--small);
+  font-weight: 600;
 }
 
 .eventIdentity {
@@ -284,81 +360,53 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  gap: var(--s2);
   min-width: 0;
-  min-height: var(--s6);
-  margin: 0;
+  min-height: auto;
+  margin: var(--s2) 0 0;
 }
 
 .eventStatus :global(.stage-badge) {
   display: inline-flex;
-  min-height: var(--s6);
   align-items: center;
   gap: var(--s2);
-  padding-inline: var(--s2) var(--s3);
-  border-radius: var(--radius-small);
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: var(--small);
+  font-weight: 800;
 }
 
 .eventStatus :global(.stage-badge)::before {
   display: inline-block;
-  width: var(--s2);
-  height: var(--s2);
+  width: 8px;
+  height: 8px;
   flex: none;
   border-radius: 50%;
   background: currentColor;
   content: "";
 }
 
-.eventMetrics {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0;
-  margin: auto 0 0;
-  padding-top: var(--s3);
-  border-top: 1px solid var(--line);
-}
-
-.eventMetrics > div {
-  display: grid;
-  align-content: start;
-  gap: var(--s1);
+/* A follow-up only when a queue exists, not a permanent third KPI. */
+.approvalLink {
+  display: inline-flex;
+  align-items: center;
   min-width: 0;
-}
-
-.eventMetrics > div + div {
-  padding-inline-start: var(--s2);
-  border-left: 1px solid var(--line);
-}
-
-.eventMetrics dt {
-  color: var(--muted);
+  min-height: 44px;
+  color: var(--brand-text);
   font-size: var(--small);
-  line-height: 1.3;
-}
-
-.eventMetrics dd {
-  display: flex;
-  align-items: baseline;
-  gap: 2px;
-  margin: 0;
-  color: var(--ink);
-  font-size: var(--h3);
-  line-height: 1.2;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.metricNumber {
   font-weight: 700;
-  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
-.metricUnit {
-  color: var(--muted);
-  font-size: var(--small);
+.approvalLink:hover {
+  color: var(--brand-hover);
 }
 
-.metricAttention .metricNumber {
-  color: var(--danger);
+.approvalLink:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
 }
 
 .calendarPanel {
@@ -462,104 +510,68 @@
   color: var(--muted);
 }
 
-.dialogBackdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: grid;
-  place-items: center;
-  padding: var(--s4);
-  background: var(--scrim);
-}
-
-.dialog {
-  width: min(480px, 100%);
-  max-height: min(640px, calc(100svh - var(--s6)));
-  overflow-y: auto;
-  padding: var(--s5);
-  border-radius: var(--radius);
-  background: var(--paper);
-  box-shadow: 0 8px 24px var(--shadow-color);
-}
-
-.dialog h2 {
-  margin: 0 0 var(--s4);
-  font-size: var(--h2);
-}
-
-.dialog form {
-  display: grid;
-  gap: var(--s3);
-}
-
-.dialog label {
-  display: block;
-  margin-bottom: var(--s1);
-  font-size: var(--small);
-  font-weight: 650;
-}
-
-.dialog input,
-.dialog select {
-  width: 100%;
-}
-
 .slugHint {
   margin: var(--s1) 0 0;
   color: var(--muted);
   font-size: var(--small);
 }
 
-.gridTwo {
+.duplicateContext {
   display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: var(--s3);
+  margin: 0 0 var(--s4);
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
 }
 
-.dialogActions {
-  position: sticky;
-  bottom: 0;
+.duplicateSource {
   display: flex;
-  justify-content: flex-end;
-  gap: var(--s2);
-  padding-top: var(--s2);
-  background: var(--paper);
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s1) var(--s2);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
 }
 
-@media (max-width: 1024px) {
-  .toolbar {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: var(--s2);
-  }
+.duplicateSource strong {
+  color: var(--ink);
+  font-weight: 750;
+}
 
-  .searchField {
-    grid-column: 1 / -1;
-  }
+.duplicateSource span {
+  color: var(--muted);
+  white-space: nowrap;
+}
 
-  .workFilter {
-    grid-column: 1 / -1;
-    min-height: 44px;
-  }
+.copyScope {
+  display: grid;
+  gap: var(--s1);
+  margin: 0;
+}
+
+.copyScope > div {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr);
+  gap: var(--s2);
+}
+
+.copyScope dt {
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.copyScope dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--small);
+  word-break: keep-all;
 }
 
 @media (max-width: 680px) {
-  .home {
-    gap: var(--s3);
-  }
-
-  .homeHeaderRow {
-    gap: var(--s2);
-  }
-
-  .toolbar {
-    grid-template-columns: minmax(0, 1fr) auto;
-    margin-top: var(--s2);
-  }
-
-  .stageFilter {
-    grid-template-columns: 3.5rem minmax(0, 1fr);
-  }
-
   .eventGrid {
     grid-template-columns: 1fr;
   }
@@ -573,14 +585,34 @@
   }
 }
 
+/* Keep the same 12px relationship at every phone width. Fractional tracks
+   would leave a growing empty band after the content-sized dropdown. */
 @media (max-width: 480px) {
-  .pageHeader {
-    align-items: flex-start;
+  .homeFilters {
+    grid-template-areas:
+      "search search"
+      "stage work";
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+
+  .homeStage > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .stageFilter {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .createTrigger {
-    padding-inline: var(--s2);
-    font-size: var(--small);
+    width: 100%;
   }
 
   .monthGrid {

@@ -1,8 +1,9 @@
 import SettingsWorkspace from "./SettingsWorkspace";
 
-// Slice 6e: event settings — basics, feature toggles, intake, attendee page.
-// Everything posts through the single command path; server validation and
-// the forward-only stage rules stay authoritative.
+// Slice 6e: event settings — basics, intake, feature toggles, stage.
+// Attendee page editing lives only in ../page (ThemeWorkspace); settings
+// keeps a status link there. Everything posts through the single command
+// path; server validation and the forward-only stage rules stay authoritative.
 export default async function ConsoleSettingsPage({
   params,
 }: {

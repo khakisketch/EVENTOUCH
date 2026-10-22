@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ConsoleSection from "../console-ui/ConsoleSection";
-import styles from "./team.module.css";
+import consoleUiStyles from "../console-ui/console-ui.module.css";
 
 // Operations visibility for the team screen: integration status, recent
 // activity, and login protection. All three are read-only; the server owns
@@ -56,10 +56,62 @@ function verificationLabel(mode: string): string {
   }
 }
 
+// Raw command keys are operator-hostile on their own: map the known audit
+// types to concise Korean action labels. Unknown keys keep the raw key so
+// no activity ever renders blank.
+function activityActionLabel(type: string): string {
+  switch (type) {
+    case "report.publish":
+      return "결과 보고서 공유 완료";
+    case "report.create":
+      return "보고서 만들기";
+    case "reward.create":
+      return "경품 등록";
+    case "message.create":
+      return "메시지 발송 요청";
+    case "template.save":
+      return "템플릿 저장";
+    case "module.save":
+      return "참여 프로그램 저장";
+    case "module.status":
+      return "참여 프로그램 상태 변경";
+    case "question.submit":
+      return "Q&A 질문";
+    case "question.manage":
+      return "Q&A 답변";
+    case "notice.save":
+      return "공지 저장";
+    case "check.scan":
+      return "입퇴장 스캔";
+    case "desk.save":
+      return "데스크 저장";
+    case "booth.save":
+      return "부스 저장";
+    case "event.features":
+      return "기능 설정";
+    case "form.publish":
+      return "참가 신청 게시";
+    default:
+      break;
+  }
+  if (type.startsWith("participant.")) return "참가자 변경";
+  return type;
+}
+
+const ACTIVITY_INITIAL_ROWS = 8;
+const ACTIVITY_MORE_STEP = 8;
+const ACTIVITY_MAX_ROWS = 20;
+
 export default function OperationsPanels() {
   const [health, setHealth] = useState<Health | null>(null);
   const [attempts, setAttempts] = useState<Attempt[] | null>(null);
   const [audit, setAudit] = useState<AuditEntry[] | null>(null);
+  const [visibleActivityCount, setVisibleActivityCount] = useState(ACTIVITY_INITIAL_ROWS);
+  const activityListRef = useRef<HTMLUListElement | null>(null);
+  // First newly revealed row to focus after 더 보기: rows render before the
+  // button, so without this the focused button disappears (final page) or
+  // focus stays behind the new rows.
+  const pendingActivityFocusRef = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,27 +137,31 @@ export default function OperationsPanels() {
       }
       try {
         const securityRes = await fetch("/api/auth/security", { cache: "no-store" });
+        // Denial (normal MANAGER) ends only this branch: the security panel
+        // stays hidden while health/activity keep loading independently.
         if (securityRes.status === 403 || securityRes.status === 401) {
           if (!cancelled) setAttempts([]);
-          return;
-        }
-        const securityData = (await securityRes.json().catch(() => null)) as {
-          attempts?: unknown;
-        } | null;
-        if (!cancelled && securityData && Array.isArray(securityData.attempts)) {
-          setAttempts(
-            securityData.attempts.flatMap((item) => {
-              if (typeof item !== "object" || item === null) return [];
-              const attempt = item as Record<string, unknown>;
-              return [{
-                scope: text(attempt.scope),
-                key: text(attempt.key),
-                failures: typeof attempt.failures === "number" ? attempt.failures : 0,
-                firstFailureAt: text(attempt.firstFailureAt),
-                lastFailureAt: text(attempt.lastFailureAt),
-              }];
-            }).slice(0, 10)
-          );
+        } else {
+          const securityData = (await securityRes.json().catch(() => null)) as {
+            attempts?: unknown;
+          } | null;
+          if (!cancelled && securityData && Array.isArray(securityData.attempts)) {
+            setAttempts(
+              securityData.attempts.flatMap((item) => {
+                if (typeof item !== "object" || item === null) return [];
+                const attempt = item as Record<string, unknown>;
+                return [{
+                  scope: text(attempt.scope),
+                  key: text(attempt.key),
+                  failures: typeof attempt.failures === "number" ? attempt.failures : 0,
+                  firstFailureAt: text(attempt.firstFailureAt),
+                  lastFailureAt: text(attempt.lastFailureAt),
+                }];
+              }).slice(0, 10)
+            );
+          } else if (!cancelled) {
+            setAttempts([]);
+          }
         }
       } catch {
         if (!cancelled) setAttempts([]);
@@ -162,7 +218,11 @@ export default function OperationsPanels() {
             }
           }
           entries.sort((a, b) => (a.at < b.at ? 1 : -1));
-          setAudit(entries.slice(0, 20));
+          if (!cancelled) setAudit(entries.slice(0, ACTIVITY_MAX_ROWS));
+        } else if (!cancelled) {
+          // Explicit empty, never perpetual loading: the panel renders its
+          // unavailable/empty copy instead of waiting forever.
+          setAudit([]);
         }
       } catch {
         if (!cancelled) setAudit([]);
@@ -174,9 +234,20 @@ export default function OperationsPanels() {
     };
   }, []);
 
+  // Keyboard reveal: rows insert before the focused 더 보기, so after each
+  // reveal move focus to the first newly revealed row. Runs on the final
+  // reveal too, where the button unmounts and focus would otherwise drop.
+  useEffect(() => {
+    const target = pendingActivityFocusRef.current;
+    if (target === null) return;
+    pendingActivityFocusRef.current = null;
+    const row = activityListRef.current?.children[target] as HTMLElement | undefined;
+    row?.focus?.();
+  }, [visibleActivityCount]);
+
   return (
     <>
-      <ConsoleSection headingId="operations-integrations" title="연동 상태" className={styles.teamSection}>
+      <ConsoleSection headingId="operations-integrations" title="연동 상태" surface="plain" width="full">
         {!health ? (
           <p className="notice" role="status">연동 상태를 불러오고 있습니다.</p>
         ) : (
@@ -199,37 +270,54 @@ export default function OperationsPanels() {
         )}
         <p className="landing-note">자격증명·발신번호·승인 템플릿은 서버 환경에서 관리하며 화면에 입력하지 않습니다.</p>
       </ConsoleSection>
-      <ConsoleSection headingId="operations-activity" title="최근 활동" className={styles.teamSection}>
+      <ConsoleSection headingId="operations-activity" title="최근 활동" surface="plain" width="full">
         {!audit ? (
           <p className="notice" role="status">활동 기록을 불러오고 있습니다.</p>
         ) : !audit.length ? (
           <p className="notice" role="status">표시할 활동 기록이 없습니다.</p>
         ) : (
-          <ul className="participant-list" aria-label="최근 활동 목록">
-            {audit.map((entry, index) => (
-              <li className="participant-row" key={entry.id || `${entry.eventId}-${index}`}>
-                <span className="participant-summary">
-                  {entry.eventName} · {entry.type}
-                  {entry.detail ? ` · ${entry.detail}` : ""}
-                  <br />
-                  <small>{entry.actor} · {formatTime(entry.at)}</small>
-                </span>
+          <>
+          <ul ref={activityListRef} className={consoleUiStyles.collection} aria-label="최근 활동 목록">
+            {audit.slice(0, visibleActivityCount).map((entry, index) => (
+              <li className={consoleUiStyles.recordRow} key={entry.id || `${entry.eventId}-${index}`} tabIndex={-1} data-activity-row={index}>
+                <div className={consoleUiStyles.recordMain}>
+                  <span>
+                    {entry.eventName} · {activityActionLabel(entry.type)}
+                    {entry.detail ? ` · ${entry.detail}` : ""}
+                  </span>
+                  <p className={consoleUiStyles.recordMeta}>{entry.actor} · {formatTime(entry.at)}</p>
+                </div>
               </li>
             ))}
           </ul>
+          {audit.length > visibleActivityCount ? (
+            <p>
+              <button
+                type="button"
+                id="team-activity-more"
+                className="button button-secondary"
+                onClick={() => {
+                  pendingActivityFocusRef.current = visibleActivityCount;
+                  setVisibleActivityCount((count) => Math.min(count + ACTIVITY_MORE_STEP, ACTIVITY_MAX_ROWS, audit.length));
+                }}
+              >
+                더 보기 ({audit.length - visibleActivityCount})
+              </button>
+            </p>
+          ) : null}
+          </>
         )}
       </ConsoleSection>
       {attempts && attempts.length ? (
-        <ConsoleSection headingId="operations-security" title="로그인 보호 상태" className={styles.teamSection}>
+        <ConsoleSection headingId="operations-security" title="로그인 보호 상태" surface="plain" width="full">
           <p className="landing-note">실패 횟수만 집계합니다. 성공한 로그인은 기록하지 않으므로 접속 로그로 오해하지 마세요.</p>
-          <ul className="participant-list" aria-label="로그인 실패 집계">
+          <ul className={consoleUiStyles.collection} aria-label="로그인 실패 집계">
             {attempts.map((attempt) => (
-              <li className="participant-row" key={`${attempt.scope}:${attempt.key}`}>
-                <span className="participant-summary">
-                  {attempt.scope === "account" ? "계정" : "접속 주소"} · {attempt.key} · {attempt.failures}회 실패
-                  <br />
-                  <small>최근 {formatTime(attempt.lastFailureAt)}</small>
-                </span>
+              <li className={consoleUiStyles.recordRow} key={`${attempt.scope}:${attempt.key}`}>
+                <div className={consoleUiStyles.recordMain}>
+                  <span>{attempt.scope === "account" ? "계정" : "접속 주소"} · {attempt.key} · {attempt.failures}회 실패</span>
+                  <p className={consoleUiStyles.recordMeta}>최근 {formatTime(attempt.lastFailureAt)}</p>
+                </div>
               </li>
             ))}
           </ul>

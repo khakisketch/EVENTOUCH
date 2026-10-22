@@ -1,66 +1,7 @@
-.page {
-  display: grid;
-  gap: var(--s5);
-  max-width: var(--web-content-max, 1120px);
-}
-
-.pageHeading {
-  display: grid;
-  gap: var(--s3);
-  min-width: 0;
-}
-
-.intro {
-  margin: 0;
-  color: var(--muted);
-}
-
-.cardList {
-  display: grid;
-  gap: var(--s3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.card {
-  display: grid;
-  gap: var(--s2);
-  padding: var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
-}
-
-.cardTop {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--s2) var(--s4);
-}
-
-.cardTitle {
-  display: grid;
-  gap: var(--s1);
-  min-width: 0;
-}
-
-.cardTitle h3 {
+.recordTitle {
   margin: 0;
   font-size: var(--h3);
   word-break: keep-all;
-  overflow-wrap: break-word;
-}
-
-.cardMeta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s1) var(--s2);
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--small);
   overflow-wrap: break-word;
 }
 
@@ -82,21 +23,6 @@
 .badgeOff {
   background: var(--surface-muted);
   color: var(--muted);
-}
-
-.pin {
-  margin-right: var(--s1);
-}
-
-.cardActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
-}
-
-.cardActions .button,
-.actions .button {
-  min-height: 44px;
 }
 
 .body {
@@ -160,38 +86,6 @@
   font-size: var(--small);
 }
 
-.form {
-  display: grid;
-  gap: var(--s3);
-}
-
-.form label {
-  display: block;
-  margin-bottom: var(--s1);
-  font-size: var(--small);
-  font-weight: 650;
-}
-
-.form input,
-.form textarea {
-  width: 100%;
-  min-height: 44px;
-}
-
-.form textarea {
-  min-height: 88px;
-}
-
-.form input[type="file"] {
-  padding: var(--s2) 0;
-}
-
-.gridTwo {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--s3);
-}
-
 .check {
   display: flex;
   align-items: center;
@@ -203,51 +97,4 @@
 .check input {
   width: auto;
   min-height: auto;
-}
-
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--s2);
-}
-
-.backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: grid;
-  place-items: center;
-  padding: var(--s4);
-  background: var(--scrim);
-}
-
-.dialog {
-  width: min(520px, 100%);
-  max-height: min(680px, calc(100svh - var(--s6)));
-  overflow-y: auto;
-  padding: var(--s5);
-  border-radius: var(--radius);
-  background: var(--paper);
-}
-
-.dialog h2 {
-  margin: 0 0 var(--s4);
-  font-size: var(--h2);
-  word-break: keep-all;
-}
-
-.dialog .form label {
-  display: block;
-}
-
-@media (max-width: 768px) {
-  .cardTop {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .gridTwo {
-    grid-template-columns: 1fr;
-  }
 }

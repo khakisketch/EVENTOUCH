@@ -1,12 +1,3 @@
-.overview {
-  display: grid;
-  gap: var(--s4);
-  width: 100%;
-  min-width: 0;
-  word-break: keep-all;
-  overflow-wrap: anywhere;
-}
-
 .stagePill {
   border-radius: var(--s6);
 }
@@ -47,24 +38,120 @@
   font-variant-numeric: tabular-nums;
 }
 
-.linkNotice {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--small);
+.approvalNotice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
 }
 
-.scheduleCard,
-.recentCard {
+.metricSection {
+  display: grid;
+  gap: var(--s4);
   min-width: 0;
-  padding: var(--s5);
+}
+
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s4);
+  min-width: 0;
+}
+
+.metricCard {
+  display: grid;
+  gap: var(--s1);
+  padding: var(--s4) var(--s5);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--paper);
+  box-shadow: 0 1px 3px var(--shadow-color);
+  color: var(--ink);
+  text-decoration: none;
+  transition: border-color var(--enter) ease-out, box-shadow var(--enter) ease-out;
 }
 
-.metricsSection {
-  min-width: 0;
+.metricCard:hover {
+  border-color: var(--brand);
+  box-shadow: 0 4px 12px var(--shadow-color);
 }
+
+.metricCard.primary {
+  border-color: var(--brand);
+  background: var(--soft);
+  box-shadow: 0 4px 12px var(--shadow-color);
+}
+
+.metricValue {
+  font-family: var(--display-font);
+  font-size: clamp(var(--h2), 4vw, var(--display-large));
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.04em;
+  margin: 0;
+}
+
+.metricLabel {
+  margin: 0;
+  font-size: var(--small);
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.metricDetail {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.metricTrend {
+  margin: var(--s1) 0 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.metricTrend.up { color: var(--success); }
+.metricTrend.down { color: var(--danger); }
+
+.statusChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: var(--small);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.statusChip.good { background: var(--success-soft); color: var(--success); }
+.statusChip.wait { background: var(--warning-soft); color: var(--warning); }
+.statusChip.bad  { background: var(--danger-soft); color: var(--danger); }
+.statusChip.info { background: var(--info-soft); color: var(--info); }
+
+.actionChip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 650;
+  text-decoration: none;
+  min-height: 44px;
+}
+
+.actionChip.primary {
+  background: var(--brand);
+  color: var(--on-brand);
+  border-color: var(--brand);
+}
+
+.actionChip.secondary:hover { background: var(--surface-muted); }
 
 .metricRow {
   display: grid;
@@ -329,10 +416,6 @@
   font-weight: 700;
 }
 
-.recentCard {
-  gap: var(--s3);
-}
-
 .recentActions {
   display: flex;
   flex: none;
@@ -470,15 +553,6 @@
 }
 
 @media (max-width: 680px) {
-  .overview {
-    gap: var(--s3);
-  }
-
-  .scheduleCard,
-  .recentCard {
-    padding: var(--s4);
-  }
-
   .metricRow {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -561,4 +635,67 @@
     min-width: 50%;
     padding-inline: var(--s2);
   }
+}
+
+.periodBlock {
+  margin-top: var(--s5);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line);
+  overflow-x: auto;
+}
+
+.periodTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--small);
+}
+
+.periodHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s1) var(--s3);
+  margin-bottom: var(--s3);
+}
+
+.periodHeader h3 {
+  margin: 0;
+  font-family: var(--display-font);
+  font-size: var(--body);
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+.periodHeader span {
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.periodTable th,
+.periodTable td {
+  padding: var(--s2) var(--s3);
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.periodTable thead th {
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.periodTable tbody th {
+  color: var(--ink);
+  font-weight: 650;
+  text-align: left;
+}
+
+.periodTable tbody tr:last-child th,
+.periodTable tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.periodTable thead th:first-child {
+  text-align: left;
 }

@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import SkipLink from "../SkipLink";
 import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../auth-redirect";
+import { CONSOLE_PAGES, EVENT_PAGE_IDS, consolePageHref, resolveConsolePage } from "./console-navigation";
+import { useConsoleLeaveConfirmation } from "./console-draft-guard";
 
 type JsonRecord = Record<string, unknown>;
 type ShellData = {
@@ -17,6 +20,8 @@ type ShellData = {
   canManageTeam: boolean;
   canManageIntegrations: boolean;
   canManageEvidencePhotos: boolean;
+  scopedEventId: string | null;
+  currentEventFeatures: string[];
   currentEventName: string | null;
   canAccessCurrentEvent: boolean;
   currentEventMeta: {
@@ -98,32 +103,23 @@ function ClientsIcon() {
 export default function ConsoleShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "/console";
   const router = useRouter();
-  const eventMatch = pathname.match(/^\/console\/events\/([^/]+)/);
-  let eventId: string | null = null;
-  try {
-    eventId = eventMatch ? decodeURIComponent(eventMatch[1]) : null;
-  } catch {
-    eventId = null;
-  }
-  const isHome = pathname === "/console";
-  const isClients = pathname === "/console/clients";
+  const confirmLeave = useConsoleLeaveConfirmation();
+  const currentPage = resolveConsolePage(pathname);
+  const eventId = currentPage?.eventId ?? null;
+  const activePageId = currentPage?.pageId === "participantImport" ? "participants" : currentPage?.pageId;
+  const isHome = currentPage?.pageId === "events";
+  const isClients = currentPage?.pageId === "clients";
   const isEventPath = Boolean(eventId);
-  const eventBasePath = eventId ? `/console/events/${encodeURIComponent(eventId)}` : "";
-  const isOverview = Boolean(eventBasePath && pathname === eventBasePath);
-  const isParticipants = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/participants`));
-  const isMessages = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/messages`));
-  const isOperations = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/operations`));
-  const isPrograms = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/programs`));
-  const isContent = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/content`));
-  const isRewards = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/rewards`));
-  const isEvidencePhotos = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/photos`));
-  const isSettings = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/settings`));
-  const isReports = Boolean(eventBasePath && pathname.startsWith(`${eventBasePath}/reports`));
+  const eventBasePath = eventId ? consolePageHref("overview", eventId) ?? "" : "";
 
   const [shellData, setShellData] = useState<ShellData | null>(null);
   const [shellTick, setShellTick] = useState(0);
+  // Visible when the shell's own navigation/permission data could not load:
+  // pages keep their own errors, but the rail must not silently pretend.
+  const [shellError, setShellError] = useState(false);
   const [operatorMenuOpen, setOperatorMenuOpen] = useState(false);
   const [operatorMenuPosition, setOperatorMenuPosition] = useState<CSSProperties | null>(null);
+  const [globalMenuOpen, setGlobalMenuOpen] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
   const [logoutPending, setLogoutPending] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
@@ -131,8 +127,11 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const mobileOperatorTriggerRef = useRef<HTMLButtonElement>(null);
   const lastOperatorTriggerRef = useRef<HTMLButtonElement>(null);
   const operatorMenuRef = useRef<HTMLDivElement>(null);
+  const globalTriggerRef = useRef<HTMLButtonElement>(null);
+  const globalMenuRef = useRef<HTMLElement>(null);
   const mobileEventBranchRef = useRef<HTMLDivElement>(null);
   const menuFocusPendingRef = useRef(false);
+  const globalFocusPendingRef = useRef(false);
 
   useEffect(() => {
     setPortalReady(true);
@@ -161,11 +160,19 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           bootstrapResponse.json().catch(() => null) as Promise<unknown>,
         ]);
         const user = record(record(mePayload)?.user);
-        if (!meResponse.ok || !user) return;
+        if (!meResponse.ok || !user) {
+          if (!cancelled) setShellError(true);
+          return;
+        }
 
         const userId = text(user.id);
         const role = text(user.role);
         const state = record(record(bootstrapPayload)?.state);
+        if (!bootstrapResponse.ok || !state) {
+          // Navigation/permission context is unusable; the shell says so.
+          if (!cancelled) setShellError(true);
+          return;
+        }
         const accounts = Array.isArray(state?.accounts)
           ? state.accounts.map(record).filter((item): item is JsonRecord => item !== null)
           : [];
@@ -259,6 +266,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
               : "운영자";
 
         if (!cancelled) {
+          setShellError(false);
           setShellData({
             userName: text(user.name).trim() || "운영자",
             role,
@@ -270,6 +278,10 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
             canManageTeam: hasOrgPermission("team.manage"),
             canManageIntegrations: hasOrgPermission("integrations.manage"),
             canManageEvidencePhotos: role === "AGENCY" || (role === "MANAGER" && hasCurrentMembership),
+            scopedEventId: eventId,
+            currentEventFeatures: Array.isArray(currentEvent?.features)
+              ? currentEvent.features.filter((value): value is string => typeof value === "string")
+              : [],
             currentEventName: currentEvent ? text(currentEvent.name).trim() || "선택한 행사" : null,
             canAccessCurrentEvent,
             currentEventMeta,
@@ -277,7 +289,9 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           });
         }
       } catch {
-        // The routed screen owns its data error; keep the shell usable with safe defaults.
+        // The routed screen owns its data error; the shell advertises its
+        // own degraded state and offers a retry instead of hiding silently.
+        if (!cancelled) setShellError(true);
       }
     }
     loadShellData();
@@ -299,13 +313,23 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const canSeeClients = shellData?.canSeeClients ?? false;
   const canManageTeam = shellData?.canManageTeam ?? false;
   const canManageIntegrations = shellData?.canManageIntegrations ?? false;
+  // The top "메뉴" trigger only exists when at least one permitted
+  // destination exists. Loading or denied states render no trigger and no
+  // fallback access: the gates inside the link renderers stay authoritative.
+  const showGlobalTrigger = canSeeEvents || canSeeClients;
   const showCurrentEvent = Boolean(
-    isEventPath && shellData?.canAccessCurrentEvent && shellData.currentEventName
+    isEventPath && shellData?.scopedEventId === eventId && shellData?.canAccessCurrentEvent && shellData.currentEventName
   );
   // This is a display gate only; server reads and command authorization remain authoritative.
   const showOperatorNavBadges = Boolean(
     shellData && ["AGENCY", "MANAGER"].includes(shellData.role)
   );
+
+  useEffect(() => {
+    if (!currentPage) return;
+    const name = showCurrentEvent ? shellData?.currentEventName : null;
+    document.title = [CONSOLE_PAGES[currentPage.pageId].title, name, "EVENTOUCH"].filter(Boolean).join(" · ");
+  }, [currentPage?.pageId, showCurrentEvent, shellData?.currentEventName]);
 
   useEffect(() => {
     if (!showCurrentEvent) return;
@@ -360,6 +384,20 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     }
   }
 
+  // Top global menu (mobile "메뉴"): a non-modal disclosure, not a dialog.
+  // No focus trap; Tab keeps its normal order. Escape restores focus to the
+  // trigger, an outside pointer closes without stealing the target's focus.
+  function closeGlobalMenu(restoreFocus = false) {
+    globalFocusPendingRef.current = false;
+    setGlobalMenuOpen(false);
+    if (restoreFocus) {
+      window.requestAnimationFrame(() => {
+        const trigger = globalTriggerRef.current;
+        if (trigger?.getClientRects().length) trigger.focus();
+      });
+    }
+  }
+
   function updateOperatorMenuPosition() {
     const trigger = getVisibleOperatorTrigger();
     const menu = operatorMenuRef.current;
@@ -398,12 +436,17 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
       const isOperatorTrigger =
         target instanceof Node &&
         (operatorTriggerRef.current?.contains(target) || mobileOperatorTriggerRef.current?.contains(target));
+      // Moving to the top "메뉴" trigger hands focus to the global menu:
+      // close here without pulling focus back to the account trigger, so
+      // the global menu's first link ends focused instead of racing it.
+      const isGlobalTrigger =
+        target instanceof Node && globalTriggerRef.current?.contains(target);
       if (
         target instanceof Node &&
         !operatorMenuRef.current?.contains(target) &&
         !isOperatorTrigger
       ) {
-        closeOperatorMenu(true);
+        closeOperatorMenu(isGlobalTrigger ? false : true);
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
@@ -452,8 +495,101 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     return () => window.cancelAnimationFrame(frame);
   }, [operatorMenuOpen, operatorMenuPosition]);
 
+  useEffect(() => {
+    // The menu closes on arrival, never on click: when the draft guard
+    // cancels a leave, the pathname is unchanged so the menu, its focus and
+    // the link state stay exactly as they were.
+    globalFocusPendingRef.current = false;
+    setGlobalMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!globalMenuOpen) return;
+    const onResize = () => {
+      // The trigger only exists at phone widths; leaving that range closes
+      // the popup without reaching for a trigger that is no longer visible.
+      if (window.matchMedia("(min-width: 769px)").matches) {
+        globalFocusPendingRef.current = false;
+        setGlobalMenuOpen(false);
+      }
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [globalMenuOpen]);
+
+  useEffect(() => {
+    if (!globalMenuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        !globalMenuRef.current?.contains(target) &&
+        !globalTriggerRef.current?.contains(target)
+      ) {
+        globalFocusPendingRef.current = false;
+        setGlobalMenuOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeGlobalMenu(true);
+        return;
+      }
+      if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+      if (!globalMenuRef.current?.contains(document.activeElement)) return;
+      const items = Array.from(
+        globalMenuRef.current?.querySelectorAll<HTMLElement>(
+          "a.console-nav-item"
+        ) ?? []
+      );
+      if (!items.length) return;
+      event.preventDefault();
+      const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+      const nextIndex = event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? items.length - 1
+          : (currentIndex + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+      items[nextIndex]?.focus();
+    };
+    const onFocusIn = (event: FocusEvent) => {
+      // Non-modal: Tab keeps its normal order and leaves the popup, which
+      // must not linger over the form underneath. Only Escape restores
+      // focus to the trigger; leaving never does.
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        !globalMenuRef.current?.contains(target) &&
+        !globalTriggerRef.current?.contains(target)
+      ) {
+        globalFocusPendingRef.current = false;
+        setGlobalMenuOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("focusin", onFocusIn);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("focusin", onFocusIn);
+    };
+  }, [globalMenuOpen]);
+
+  useEffect(() => {
+    if (!globalMenuOpen || !globalFocusPendingRef.current) return;
+    globalFocusPendingRef.current = false;
+    const frame = window.requestAnimationFrame(() => {
+      globalMenuRef.current
+        ?.querySelector<HTMLElement>("a.console-nav-item")
+        ?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [globalMenuOpen]);
+
   async function logout() {
-    if (logoutPending) return;
+    if (logoutPending || !confirmLeave()) return;
     setLogoutError(null);
     setLogoutPending(true);
     try {
@@ -474,6 +610,9 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   function handleOperatorMenuTrigger(event: React.MouseEvent<HTMLButtonElement>) {
     lastOperatorTriggerRef.current = event.currentTarget;
     setLogoutError(null);
+    // The two popups are mutually exclusive.
+    globalFocusPendingRef.current = false;
+    setGlobalMenuOpen(false);
     if (operatorMenuOpen) {
       closeOperatorMenu();
     } else {
@@ -482,30 +621,76 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     }
   }
 
-  function renderEventsLink(id: string) {
+  function handleGlobalMenuTrigger() {
+    if (globalMenuOpen) {
+      closeGlobalMenu();
+    } else {
+      // The two popups are mutually exclusive.
+      menuFocusPendingRef.current = false;
+      setOperatorMenuOpen(false);
+      setOperatorMenuPosition(null);
+      globalFocusPendingRef.current = true;
+      setGlobalMenuOpen(true);
+    }
+  }
+
+  function handleGlobalMenuNavigate(event: React.MouseEvent<HTMLElement>) {
+    // Capture precedes Next Link's bubble onClick, which marks navigation
+    // defaultPrevented before a parent bubble handler can see it. Handle
+    // ONLY the already-here destination; different paths stay untouched for
+    // the shared draft guard and pathname effect regardless of React's
+    // delegated/native capture ordering. A cancelled leave keeps the menu,
+    // focus and input intact.
+    //
+    // Bounded to the already-here destination only, for a normal unmodified
+    // primary click.
+    if (
+      event.defaultPrevented || event.button !== 0 ||
+      event.metaKey || event.ctrlKey || event.shiftKey || event.altKey
+    ) return;
+    const target = event.target instanceof Element ? event.target : null;
+    const maybeLink = target?.closest("a[href]");
+    if (!(maybeLink instanceof HTMLAnchorElement)) return;
+    const link = maybeLink;
+    if (!link || link.hasAttribute("download") || (link.target && link.target !== "_self")) return;
+    let url: URL;
+    try {
+      url = new URL(link.getAttribute("href") ?? link.href, window.location.href);
+    } catch {
+      return;
+    }
+    if (url.origin !== window.location.origin) return;
+    if (url.pathname !== window.location.pathname) return;
+    // Same destination: no navigation will arrive to close the menu, so
+    // close here and stay put without a same-page scroll reset.
+    event.preventDefault();
+    closeGlobalMenu(true);
+  }
+
+  function renderEventsLink(id: string, label?: string) {
     return canSeeEvents ? (
       <Link
         id={id}
         className={`console-nav-item console-nav-root-item${isHome ? " active" : isEventPath ? " active-path" : ""}`}
-        href="/console"
+        href={consolePageHref("events")!}
         aria-current={isHome ? "page" : isEventPath ? "location" : undefined}
       >
         <EventsIcon />
-        <span>행사</span>
+        <span>{label ?? CONSOLE_PAGES.events.label}</span>
       </Link>
     ) : null;
   }
 
-  function renderClientsLink(id: string) {
+  function renderClientsLink(id: string, label?: string) {
     return canSeeClients ? (
       <Link
         id={id}
         className={`console-nav-item console-nav-root-item${isClients ? " active" : ""}`}
-        href="/console/clients"
+        href={consolePageHref("clients")!}
         aria-current={isClients ? "page" : undefined}
       >
         <ClientsIcon />
-        <span>고객사</span>
+        <span>{label ?? CONSOLE_PAGES.clients.label}</span>
       </Link>
     ) : null;
   }
@@ -514,12 +699,15 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     // Mobile keeps the compact in-row switcher; the triage list lives on
     // desktop where the sidebar has room. Switching happens on /console home.
     if (mobile) {
+      // The old bottom bar (and its link id) is gone, so this group carries
+      // its own always-present label instead of a dangling labelledby ref.
+      // The parent nav's "현재 행사 메뉴" label stays as the outer landmark.
       return showCurrentEvent && eventId ? (
         <div
           ref={mobileEventBranchRef}
           className="nav-event-branch"
           role="group"
-          aria-labelledby={eventsLinkId}
+          aria-label="현재 행사 업무"
         >
           <div className="nav-current-event">
             <strong title={shellData?.currentEventName ?? undefined}>{shellData?.currentEventName}</strong>
@@ -595,92 +783,31 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
       ? `${eventBasePath}/messages?attention=1#history-heading`
       : `${eventBasePath}/messages`;
 
-    return (
-      <>
-        <Link
-          className={`console-nav-item console-subnav-item${isOverview ? " active" : ""}`}
-          href={eventBasePath}
-          aria-current={isOverview ? "page" : undefined}
-        >
-          운영 현황
-        </Link>
-        <Link
-          className={`console-nav-item console-subnav-item${isParticipants ? " active" : ""}`}
-          href={participantsHref}
-          aria-current={isParticipants ? "page" : undefined}
-        >
-          참가자
-          {showPendingApprovalBadge ? (
-            <span className="nav-badge" role="img" aria-label={`승인 대기 ${eventMeta?.pending ?? 0}건`}>
-              {eventMeta?.pending}
-            </span>
+    const features = shellData?.currentEventFeatures ?? [];
+    return EVENT_PAGE_IDS.map((pageId) => {
+      if (pageId === "photos" && !shellData?.canManageEvidencePhotos) return null;
+      if (pageId === "rewards" && !features.includes("reward")) return null;
+      if (pageId === "draws" && !features.some((feature) => feature === "draw" || feature === "poll")) return null;
+      if (pageId === "programs" && !features.some((feature) =>
+        ["poll", "quiz", "qa", "draw", "survey", "stamp", "photo", "board"].includes(feature))) return null;
+      const href = pageId === "participants" ? participantsHref
+        : pageId === "messages" ? messagesHref
+        : consolePageHref(pageId, eventId ?? undefined);
+      if (!href) return null;
+      const active = activePageId === pageId;
+      return (
+        <Link key={pageId} className={`console-nav-item console-subnav-item${active ? " active" : ""}`}
+          href={href} aria-current={active ? "page" : undefined}>
+          {CONSOLE_PAGES[pageId].label}
+          {pageId === "participants" && showPendingApprovalBadge ? (
+            <span className="nav-badge" role="img" aria-label={`승인 대기 ${eventMeta?.pending ?? 0}건`}>{eventMeta?.pending}</span>
+          ) : null}
+          {pageId === "messages" && showMessageAttentionBadge ? (
+            <span className="nav-badge" role="img" aria-label={`발송 확인 ${eventMeta?.messageAttention ?? 0}건`}>{eventMeta?.messageAttention}</span>
           ) : null}
         </Link>
-        <Link
-          className={`console-nav-item console-subnav-item${isMessages ? " active" : ""}`}
-          href={messagesHref}
-          aria-current={isMessages ? "page" : undefined}
-        >
-          메시지
-          {showMessageAttentionBadge ? (
-            <span className="nav-badge" role="img" aria-label={`발송 확인 ${eventMeta?.messageAttention ?? 0}건`}>
-              {eventMeta?.messageAttention}
-            </span>
-          ) : null}
-        </Link>
-        <Link
-          className={`console-nav-item console-subnav-item${isOperations ? " active" : ""}`}
-          href={`${eventBasePath}/operations`}
-          aria-current={isOperations ? "page" : undefined}
-        >
-          현장 운영
-        </Link>
-        <Link
-          className={`console-nav-item console-subnav-item${isPrograms ? " active" : ""}`}
-          href={`${eventBasePath}/programs`}
-          aria-current={isPrograms ? "page" : undefined}
-        >
-          참여 프로그램
-        </Link>
-        {shellData?.canManageEvidencePhotos ? (
-          <Link
-            className={`console-nav-item console-subnav-item${isEvidencePhotos ? " active" : ""}`}
-            href={`${eventBasePath}/photos`}
-            aria-current={isEvidencePhotos ? "page" : undefined}
-          >
-            현장 사진
-          </Link>
-        ) : null}
-        <Link
-          className={`console-nav-item console-subnav-item${isContent ? " active" : ""}`}
-          href={`${eventBasePath}/content`}
-          aria-current={isContent ? "page" : undefined}
-        >
-          콘텐츠
-        </Link>
-        <Link
-          className={`console-nav-item console-subnav-item${isRewards ? " active" : ""}`}
-          href={`${eventBasePath}/rewards`}
-          aria-current={isRewards ? "page" : undefined}
-        >
-          경품
-        </Link>
-        <Link
-          className={`console-nav-item console-subnav-item${isSettings ? " active" : ""}`}
-          href={`${eventBasePath}/settings`}
-          aria-current={isSettings ? "page" : undefined}
-        >
-          행사 설정
-        </Link>
-        <Link
-          className={`console-nav-item console-subnav-item${isReports ? " active" : ""}`}
-          href={`${eventBasePath}/reports`}
-          aria-current={isReports ? "page" : undefined}
-        >
-          결과 보고서
-        </Link>
-      </>
-    );
+      );
+    });
   }
 
   const organizationPermissionSummary = shellData
@@ -720,9 +847,9 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
             <Link
               className="operator-menu-item"
               role="menuitem"
-              href="/console/team"
+              href={consolePageHref("team")!}
             >
-              <span>팀·권한</span>
+              <span>{CONSOLE_PAGES.team.label}</span>
             </Link>
           ) : null}
           {canManageIntegrations ? (
@@ -752,7 +879,36 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
 
   return (
     <div className="console-shell">
+      <SkipLink />
       <aside className="console-sidebar" aria-label="운영 콘솔">
+        {showGlobalTrigger ? (
+          <div className="console-global-nav">
+            <button
+              ref={globalTriggerRef}
+              type="button"
+              className="console-global-trigger"
+              aria-expanded={globalMenuOpen}
+              aria-controls="console-global-menu"
+              onClick={handleGlobalMenuTrigger}
+            >
+              <span>메뉴</span>
+              <svg className="console-global-trigger-chevron" aria-hidden="true" focusable="false" viewBox="0 0 12 12">
+                <path d="M3 4.5 6 7.5 9 4.5" />
+              </svg>
+            </button>
+            <nav
+              ref={globalMenuRef}
+              id="console-global-menu"
+              className="console-global-menu"
+              aria-label="주요 메뉴"
+              hidden={!globalMenuOpen}
+              onClickCapture={handleGlobalMenuNavigate}
+            >
+              {renderEventsLink("workspace-events-link-global", "행사 목록")}
+              {renderClientsLink("workspace-clients-link-global")}
+            </nav>
+          </div>
+        ) : null}
         <Link className="console-brand" href="/console">
           <span className="console-wordmark">EVENTOUCH</span>
         </Link>
@@ -777,7 +933,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
         </nav>
 
         <nav className="side-nav mobile-event-nav" aria-label="현재 행사 메뉴">
-          {renderEventBranch("workspace-events-link-mobile", true)}
+          {renderEventBranch("workspace-events-link", true)}
         </nav>
 
         <div className="sidebar-bottom">
@@ -803,17 +959,17 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
 
       <div className="console-content-shell">
         <main id="main-content" className="console-main" tabIndex={-1}>
-          {children}
+          {shellError ? (
+            <div className="console-shell-error" role="alert">
+              <span>내비게이션 정보를 불러오지 못했습니다. 화면 일부가 제한되어 보일 수 있습니다.</span>
+              <button type="button" className="button button-secondary" onClick={() => setShellTick((tick) => tick + 1)}>
+                다시 시도
+              </button>
+            </div>
+          ) : null}
+          <div key={eventId ?? "organization"} className="console-route-content">{children}</div>
         </main>
       </div>
-
-      <nav
-        className={`side-nav mobile-primary-nav${Number(canSeeEvents) + Number(canSeeClients) === 1 ? " side-nav-single-root" : ""}`}
-        aria-label="주요 메뉴"
-      >
-        {renderEventsLink("workspace-events-link-mobile")}
-        {renderClientsLink("workspace-clients-link-mobile")}
-      </nav>
     </div>
   );
 }

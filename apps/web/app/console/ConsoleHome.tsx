@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { loginHrefForLocation } from "../auth-redirect";
 import { eventStageClassName, eventStageLabel } from "../event-stage";
-import ConsolePageHeader from "./console-ui/ConsolePageHeader";
+import ConsolePage from "./console-ui/ConsolePage";
+import ConsoleToolbar from "./console-ui/ConsoleToolbar";
 import ConsoleSection from "./console-ui/ConsoleSection";
 import ConsoleStatePanel from "./console-ui/ConsoleStatePanel";
 import CreateEventDialog from "./CreateEventDialog";
@@ -21,9 +22,7 @@ type ConsoleEvent = {
   end: string;
   stage: string;
   venue: string;
-  registered: number;
   pending: number;
-  inside: number;
   capacity: number;
 };
 type EventFilter = "all" | "preparing" | "live" | "closed";
@@ -72,6 +71,56 @@ function monthKeyOf(year: number, month: number): string {
   return `${year}-${String(month + 1).padStart(2, "0")}`;
 }
 
+function readHomeFilters(search: string): {
+  query: string;
+  filter: EventFilter;
+  needsWork: boolean;
+  view: HomeView;
+  selectedDate: string | null;
+  month: { year: number; month: number } | null;
+} {
+  // Home directory state restores from the URL so a return from a work
+  // queue (participants?status=PENDING) lands back in context. Values are
+  // allowlisted; anything else falls back to the unfiltered cards view.
+  // Unrelated params are never touched by the reader.
+  try {
+    const params = new URLSearchParams(search);
+    const rawFilter = params.get("stage") ?? "";
+    const filter: EventFilter =
+      rawFilter === "preparing" || rawFilter === "live" || rawFilter === "closed"
+        ? rawFilter
+        : "all";
+    const rawView = params.get("view") ?? "";
+    const view: HomeView = rawView === "calendar" ? "calendar" : "cards";
+    const rawDate = params.get("date") ?? "";
+    const selectedDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null;
+    const rawMonth = params.get("month") ?? "";
+    let month: { year: number; month: number } | null = null;
+    const monthMatch = /^(\d{4})-(\d{2})$/.exec(rawMonth);
+    if (monthMatch) {
+      const year = Number(monthMatch[1]);
+      const monthIndex = Number(monthMatch[2]) - 1;
+      if (monthIndex >= 0 && monthIndex <= 11) month = { year, month: monthIndex };
+    }
+    if (!month && selectedDate) {
+      const [year, monthNumber] = selectedDate.split("-").map(Number);
+      if (Number.isFinite(year) && Number.isFinite(monthNumber)) {
+        month = { year, month: monthNumber - 1 };
+      }
+    }
+    return {
+      query: params.get("q") ?? params.get("query") ?? "",
+      filter,
+      needsWork: params.get("needsWork") === "1",
+      view,
+      selectedDate,
+      month,
+    };
+  } catch {
+    return { query: "", filter: "all", needsWork: false, view: "cards", selectedDate: null, month: null };
+  }
+}
+
 function describeDate(date: string): string {
   if (!date) return "일정 미정";
   const [, month, day] = date.split("-");
@@ -88,10 +137,12 @@ function EventCard({
   event,
   clientName,
   todayKey,
+  onDuplicate,
 }: {
   event: ConsoleEvent;
   clientName: string;
   todayKey: string;
+  onDuplicate: (event: ConsoleEvent) => void;
 }) {
   const recency = eventRecency(event.date, todayKey);
   const stageKnown = KNOWN_STAGES.includes(event.stage);
@@ -102,11 +153,13 @@ function EventCard({
   const clientAndVenue = [clientName, event.venue].filter(Boolean).join(" · ");
 
   return (
-    <Link
-      className={styles.eventCardLink}
-      href={`/console/events/${encodeURIComponent(event.id)}`}
-    >
-      <article className={styles.eventCard}>
+    <article className={styles.eventCard}>
+      {/* Identity opens the event home. Optional approval follow-up and
+          duplication stay outside this link so there are no nested controls. */}
+      <Link
+        className={styles.eventCardLink}
+        href={`/console/events/${encodeURIComponent(event.id)}`}
+      >
         <div className={styles.eventCardTop}>
           <span className={styles.eventRecency}>{recency ?? ""}</span>
           <strong className={styles.eventDate}>{formatEventDate(event.date)}</strong>
@@ -137,33 +190,26 @@ function EventCard({
             <span className={eventStageClassName(event.stage)}>{stageLabel}</span>
           ) : <span className="stage-badge">{stageLabel}</span>}
         </p>
-        <dl className={styles.eventMetrics}>
-          <div>
-            <dt>등록 인원</dt>
-            <dd>
-              <span className={styles.metricNumber}>{event.registered}</span>
-              <span className={styles.metricUnit}>
-                {event.capacity ? `/ ${event.capacity}명` : "명"}
-              </span>
-            </dd>
-          </div>
-          <div>
-            <dt>승인 대기</dt>
-            <dd className={event.pending > 0 ? styles.metricAttention : undefined}>
-              <span className={styles.metricNumber}>{event.pending}</span>
-              <span className={styles.metricUnit}>명</span>
-            </dd>
-          </div>
-          <div>
-            <dt>현재 입장</dt>
-            <dd>
-              <span className={styles.metricNumber}>{event.inside}</span>
-              <span className={styles.metricUnit}>명</span>
-            </dd>
-          </div>
-        </dl>
-      </article>
-    </Link>
+      </Link>
+      <div className={styles.eventCardActions}>
+        {event.pending > 0 ? (
+          <Link
+            className={styles.approvalLink}
+            href={`/console/events/${encodeURIComponent(event.id)}/participants?status=PENDING`}
+            aria-label={`${event.name} 승인 대기 ${event.pending}명 처리`}
+          >
+            승인 대기 {event.pending}명 처리
+          </Link>
+        ) : null}
+        <button
+          type="button"
+          className={styles.eventCardAction}
+          onClick={() => onDuplicate(event)}
+        >
+          복제
+        </button>
+      </div>
+    </article>
   );
 }
 
@@ -180,7 +226,119 @@ export default function ConsoleHome() {
   });
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [duplicateSource, setDuplicateSource] = useState<ConsoleEvent | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
+  // URL-synced directory filters (participants-style replaceState, never
+  // router navigation): typing must not refetch or reroute. The init effect
+  // owns the first read; the sync effect skips it via skipFirstSyncRef.
+  const homeFiltersReadyRef = useRef(false);
+  const skipFirstHomeSyncRef = useRef(true);
+
+  // An open create/duplicate dialog holds unsent input; the directory list
+  // itself is never dirty.
+
+  useEffect(() => {
+    try {
+      const initial = readHomeFilters(window.location.search);
+      setQuery(initial.query);
+      setFilter(initial.filter);
+      setNeedsWork(initial.needsWork);
+      setView(initial.view);
+      setSelectedDate(initial.selectedDate);
+      if (initial.month) setMonthCursor(initial.month);
+      // Scrub invalid allowlisted values so the URL never contradicts the
+      // unfiltered view; unrelated params are preserved.
+      const params = new URLSearchParams(window.location.search);
+      const rawStage = params.get("stage") ?? "";
+      if (rawStage && !["preparing", "live", "closed", "all"].includes(rawStage)) {
+        params.delete("stage");
+      }
+      const rawView = params.get("view") ?? "";
+      if (rawView && rawView !== "cards" && rawView !== "calendar") {
+        params.delete("view");
+      }
+      const rawDate = params.get("date") ?? "";
+      if (rawDate && !/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+        params.delete("date");
+      }
+      const rawMonth = params.get("month") ?? "";
+      if (rawMonth && !/^\d{4}-(0[1-9]|1[0-2])$/.test(rawMonth)) {
+        params.delete("month");
+      }
+      const rawWork = params.get("needsWork") ?? "";
+      if (rawWork && rawWork !== "1") {
+        params.delete("needsWork");
+      }
+      const scrubbed = params.toString();
+      const current = new URLSearchParams(window.location.search).toString();
+      if (scrubbed !== current) {
+        window.history.replaceState(
+          null,
+          "",
+          `${window.location.pathname}${scrubbed ? `?${scrubbed}` : ""}${window.location.hash}`
+        );
+      }
+    } catch {
+      // Filtering still works; only the shareable URL keeps the stale value.
+    }
+    const onPopState = () => {
+      try {
+        const next = readHomeFilters(window.location.search);
+        setQuery(next.query);
+        setFilter(next.filter);
+        setNeedsWork(next.needsWork);
+        setView(next.view);
+        setSelectedDate(next.selectedDate);
+        if (next.month) setMonthCursor(next.month);
+      } catch {
+        // Keep the current view.
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+    homeFiltersReadyRef.current = true;
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!homeFiltersReadyRef.current) return;
+    // Skip the mount pass: the init effect above owns the first read, so the
+    // sync must not strip a shared URL before that state lands.
+    if (skipFirstHomeSyncRef.current) {
+      skipFirstHomeSyncRef.current = false;
+      return;
+    }
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (query.trim()) params.set("q", query.trim());
+      else {
+        params.delete("q");
+        params.delete("query");
+      }
+      if (filter !== "all") params.set("stage", filter);
+      else params.delete("stage");
+      if (needsWork) params.set("needsWork", "1");
+      else params.delete("needsWork");
+      if (view !== "cards") params.set("view", view);
+      else params.delete("view");
+      if (view === "calendar" && selectedDate) params.set("date", selectedDate);
+      else params.delete("date");
+      if (view === "calendar") params.set("month", monthKeyOf(monthCursor.year, monthCursor.month));
+      else params.delete("month");
+      const next = params.toString();
+      const current = new URLSearchParams(window.location.search).toString();
+      if (next !== current) {
+        window.history.replaceState(
+          null,
+          "",
+          `${window.location.pathname}${next ? `?${next}` : ""}${window.location.hash}`
+        );
+      }
+    } catch {
+      // Filtering still works; only shareable URLs lose the sync.
+    }
+  }, [query, filter, needsWork, view, selectedDate, monthCursor]);
 
   useEffect(() => {
     let cancelled = false;
@@ -211,21 +369,16 @@ export default function ConsoleHome() {
           return;
         }
         const workspaces = data.state.workspaces ?? {};
-        const countParticipants = (eventId: string): { registered: number; pending: number; inside: number } => {
+        const countPending = (eventId: string): number => {
           const people = workspaces[eventId]?.participants;
-          if (!Array.isArray(people)) return { registered: 0, pending: 0, inside: 0 };
-          let registered = 0;
+          if (!Array.isArray(people)) return 0;
           let pending = 0;
-          let inside = 0;
           for (const item of people) {
             if (typeof item !== "object" || item === null) continue;
             const person = item as Record<string, unknown>;
-            if (person.status === "CANCELLED") continue;
-            registered += 1;
             if (person.status === "PENDING") pending += 1;
-            if (person.inside === true) inside += 1;
           }
-          return { registered, pending, inside };
+          return pending;
         };
         const events = Array.isArray(data.state.events)
           ? data.state.events.flatMap((item) => {
@@ -234,7 +387,6 @@ export default function ConsoleHome() {
               if (typeof event.id !== "string" || !event.id) return [];
               const venueSource = workspaces[event.id]?.venue;
               const capacity = Number(event.capacity);
-              const counts = countParticipants(event.id);
               return [{
                 id: event.id,
                 name: typeof event.name === "string" ? event.name : event.id,
@@ -249,9 +401,7 @@ export default function ConsoleHome() {
                   typeof (venueSource as Record<string, unknown>).name === "string"
                     ? String((venueSource as Record<string, unknown>).name)
                     : "",
-                registered: counts.registered,
-                pending: counts.pending,
-                inside: counts.inside,
+                 pending: countPending(event.id),
                 capacity: Number.isFinite(capacity) && capacity > 0 ? capacity : 0,
               }];
             })
@@ -356,29 +506,22 @@ export default function ConsoleHome() {
 
   if (state.kind === "loading") {
     return (
-      <div className={styles.home}>
-        {/* ConsolePageHeader renders the root <h1>행사</h1> for loading and failed states too. */}
-        <div className={styles.homeHeaderRow}>
-          <ConsolePageHeader title="행사" className={styles.homeHeader} />
-        </div>
+      <ConsolePage pageId="events">
+        {/* Page title comes from the ConsolePage registry; this file owns no heading. */}
         <ConsoleStatePanel kind="loading" message="행사 목록을 불러오고 있습니다." onRetry={() => {}} />
-      </div>
+      </ConsolePage>
     );
   }
   if (state.kind === "failed") {
     return (
-      <div className={styles.home}>
-        {/* ConsolePageHeader renders the root <h1>행사</h1> while the directory recovers. */}
-        <div className={styles.homeHeaderRow}>
-          <ConsolePageHeader title="행사" className={styles.homeHeader} />
-        </div>
-        {/* ConsoleStatePanel dispatches eventouch:shell-reload before this directory retry. */}
+      <ConsolePage pageId="events">
+        {/* ConsoleStatePanel dispatches eventouch:shell-reload before the directory retry. */}
         <ConsoleStatePanel
           kind="failed"
           message={state.message}
           onRetry={() => setReloadTick((tick) => tick + 1)}
         />
-      </div>
+      </ConsolePage>
     );
   }
   const clientOptions = [...state.clients.entries()].map(([id, name]) => ({ id, name }))
@@ -390,24 +533,97 @@ export default function ConsoleHome() {
     closed: state.events.filter((event) => ["ENDED", "ARCHIVED"].includes(event.stage)).length,
   };
   const clearAll = () => {
+    // needsWork is a narrowing filter too: leaving it set makes the
+    // pending-approval queue look uncleared after "필터 초기화".
     setQuery("");
     setFilter("all");
+    setNeedsWork(false);
     setSelectedDate(null);
   };
   const dateFilterActive = view === "calendar" && selectedDate !== null;
-  const hasNarrowing = query.trim() !== "" || filter !== "all" || dateFilterActive;
+  const hasNarrowing = query.trim() !== "" || filter !== "all" || needsWork || dateFilterActive;
+  const pendingQueueCount = state.events.filter((event) => event.pending > 0).length;
+  // The directory count lives in the section header description so the list
+  // needs no extra 44px count row on first paint. The narrowing-only row
+  // below keeps just the reset action; the sr-only status keeps the full
+  // context for assistive technology.
+  const directoryDescription =
+    filter === "all" && !needsWork && !query.trim() && !dateFilterActive
+      ? `전체 ${state.events.length}개 행사`
+      : `검색 결과 ${visibleEvents.length}개 / 전체 ${state.events.length}개${needsWork ? " · 승인 대기 있는 행사만" : ""}`;
+  const viewSwitch = (
+    <div className={styles.viewSwitch} role="group" aria-label="목록 보기 방식">
+      <button
+        type="button"
+        className={`${styles.viewButton}${view === "cards" ? ` ${styles.viewActive}` : ""}`}
+        aria-pressed={view === "cards"}
+        onClick={() => setView("cards")}
+      >
+        카드
+      </button>
+      <button
+        type="button"
+        className={`${styles.viewButton}${view === "calendar" ? ` ${styles.viewActive}` : ""}`}
+        aria-pressed={view === "calendar"}
+        onClick={() => setView("calendar")}
+      >
+        달력
+      </button>
+    </div>
+  );
   return (
-    <div className={styles.home}>
-      <div className={styles.homeHeaderRow}>
-        <ConsolePageHeader title="행사" className={styles.homeHeader} />
-        <button
-          type="button"
-          className={`button button-primary ${styles.createTrigger}`}
-          onClick={() => setCreateOpen(true)}
-        >
-          새 행사 만들기
-        </button>
-      </div>
+    <ConsolePage
+      pageId="events"
+      toolbar={
+        <ConsoleToolbar
+          filters={
+            <div className={styles.homeFilters} data-toolbar-span="full">
+              <label className={`${styles.searchField} ${styles.homeSearch}`}>
+                <span className="sr-only">행사명·고객사·장소 검색</span>
+                <input
+                  type="search"
+                  placeholder="행사 검색"
+                  aria-label="행사명·고객사·장소 검색"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+              </label>
+              <label className={`${styles.stageFilter} ${styles.homeStage}`}>
+                <span>진행 단계</span>
+                <select
+                  value={filter}
+                  onChange={(event) => setFilter(event.target.value as EventFilter)}
+                >
+                  {FILTERS.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label} ({counts[item.id]})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={`${styles.workFilter} ${styles.homeWork}`}>
+                <input
+                  type="checkbox"
+                  checked={needsWork}
+                  onChange={(event) => setNeedsWork(event.target.checked)}
+                  aria-label={`승인 대기 있는 행사만 보기 (${pendingQueueCount}건)`}
+                />
+                <span aria-hidden="true">승인 대기만 ({pendingQueueCount})</span>
+              </label>
+            </div>
+          }
+          actions={
+            <button
+              type="button"
+              className={`button button-primary ${styles.createTrigger}`}
+              onClick={() => setCreateOpen(true)}
+            >
+              새 행사 만들기
+            </button>
+          }
+        />
+      }
+    >
 
       {createOpen ? (
         <CreateEventDialog
@@ -420,64 +636,36 @@ export default function ConsoleHome() {
         />
       ) : null}
 
-      <ConsoleSection headingId="console-event-directory" title="행사 목록" className={styles.directorySection}>
+      {duplicateSource ? (
+        <CreateEventDialog
+          clients={clientOptions}
+          duplicateOf={{
+            id: duplicateSource.id,
+            name: duplicateSource.name,
+            slug: duplicateSource.slug,
+            clientName: duplicateSource.clientId
+              ? state.clients.get(duplicateSource.clientId) ?? ""
+              : "",
+            date: duplicateSource.date,
+            start: duplicateSource.start,
+            end: duplicateSource.end,
+            capacity: duplicateSource.capacity,
+          }}
+          onClose={() => setDuplicateSource(null)}
+          onCreated={(eventId) => {
+            setDuplicateSource(null);
+            router.push(`/console/events/${encodeURIComponent(eventId)}`);
+          }}
+        />
+      ) : null}
+
+      <ConsoleSection headingId="console-event-directory" title="행사 목록" description={directoryDescription} action={viewSwitch} surface="plain" width="full" className={styles.directorySection}>
         <div className={styles.directory}>
         <p className="sr-only" role="status">
           {filter === "all" && !needsWork && !query.trim() && !dateFilterActive
             ? `전체 ${state.events.length}개 행사`
             : `검색 결과 ${visibleEvents.length}개 / 전체 ${state.events.length}개${needsWork ? " · 승인 대기 있는 행사만" : ""}`}
         </p>
-
-        <div className={styles.toolbar}>
-          <label className={styles.stageFilter}>
-            <span>진행 단계</span>
-            <select
-              value={filter}
-              onChange={(event) => setFilter(event.target.value as EventFilter)}
-            >
-              {FILTERS.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.label} ({counts[item.id]})
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={styles.workFilter}>
-            <input
-              type="checkbox"
-              checked={needsWork}
-              onChange={(event) => setNeedsWork(event.target.checked)}
-            />
-            <span>승인 대기 있는 행사만{state.kind === "ready" ? ` (${state.events.filter((event) => event.pending > 0).length})` : ""}</span>
-          </label>
-          <div className={styles.viewSwitch} role="group" aria-label="목록 보기 방식">
-            <button
-              type="button"
-              className={`${styles.viewButton}${view === "cards" ? ` ${styles.viewActive}` : ""}`}
-              aria-pressed={view === "cards"}
-              onClick={() => setView("cards")}
-            >
-              카드
-            </button>
-            <button
-              type="button"
-              className={`${styles.viewButton}${view === "calendar" ? ` ${styles.viewActive}` : ""}`}
-              aria-pressed={view === "calendar"}
-              onClick={() => setView("calendar")}
-            >
-              달력
-            </button>
-          </div>
-          <label className={styles.searchField}>
-            <span className="sr-only">행사명·고객사·장소 검색</span>
-            <input
-              type="search"
-              placeholder="행사명·고객사·장소 검색"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </label>
-        </div>
 
         {view === "calendar" ? (
           <div className={styles.calendarPanel}>
@@ -539,14 +727,13 @@ export default function ConsoleHome() {
           </div>
         ) : null}
 
-        <div className={styles.resultsMeta}>
-          <p>{visibleEvents.length}개 행사</p>
-          {hasNarrowing && visibleEvents.length > 0 ? (
+        {hasNarrowing && visibleEvents.length > 0 ? (
+          <div className={styles.resultsMeta}>
             <button type="button" className="button button-secondary" onClick={clearAll}>
               필터 초기화
             </button>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
 
         {!state.events.length ? (
           <div className={styles.emptyState}>
@@ -577,6 +764,7 @@ export default function ConsoleHome() {
                     event={event}
                     clientName={event.clientId ? state.clients.get(event.clientId) ?? "" : ""}
                     todayKey={todayKey}
+                    onDuplicate={setDuplicateSource}
                   />
                 </li>
               ))}
@@ -592,6 +780,7 @@ export default function ConsoleHome() {
                           event={event}
                           clientName={event.clientId ? state.clients.get(event.clientId) ?? "" : ""}
                           todayKey={todayKey}
+                          onDuplicate={setDuplicateSource}
                         />
                       </li>
                     );
@@ -603,6 +792,6 @@ export default function ConsoleHome() {
         )}
         </div>
       </ConsoleSection>
-    </div>
+    </ConsolePage>
   );
 }

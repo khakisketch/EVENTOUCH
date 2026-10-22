@@ -1,13 +1,13 @@
-.wrapper {
-  display: grid;
-  gap: var(--s6);
-  max-width: var(--web-reading-max, 68ch);
-}
-
 .help {
   margin: 0;
   color: var(--muted);
   font-size: var(--small);
+}
+
+/* The frozen basis stamp rides inside the analysis description (next to the
+   새로고침 section action) instead of stacking its own row above the KPIs. */
+.stamp {
+  white-space: nowrap;
 }
 
 .metricGrid {
@@ -53,7 +53,7 @@
   outline-offset: 2px;
 }
 
-.wrapper > section > h3 {
+.analysisSubheads h3 {
   margin: 0;
   font-size: var(--body);
 }
@@ -74,36 +74,6 @@
 
 .dataTable td {
   overflow-wrap: anywhere;
-}
-
-.reportList {
-  display: grid;
-  gap: var(--s3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.reportRow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2) var(--s3);
-  padding: var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
-}
-
-.reportSummary {
-  display: grid;
-  flex: 1 1 220px;
-  gap: var(--s1);
-  min-width: 0;
-}
-
-.reportSummary small {
-  color: var(--muted);
 }
 
 .badge {
@@ -129,12 +99,6 @@
   color: var(--warning);
 }
 
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
-}
-
 .alert {
   margin: 0;
   padding: var(--s2) var(--s3);
@@ -142,15 +106,6 @@
   border-radius: var(--radius-small);
   background: var(--danger-soft);
   color: var(--danger);
-}
-
-.notice {
-  margin: 0;
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--success-line);
-  border-radius: var(--radius-small);
-  background: var(--success-soft);
-  color: var(--success);
 }
 
 .form {
@@ -190,36 +145,6 @@
   min-height: auto;
 }
 
-.dialogBackdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--s4);
-  background: var(--scrim);
-}
-
-.dialog {
-  display: grid;
-  gap: var(--s4);
-  width: min(560px, 100%);
-  max-height: min(84vh, 720px);
-  overflow: auto;
-  padding: var(--s5);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
-}
-
-.dialogActions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--s2);
-}
-
 .reportDoc {
   display: grid;
   gap: var(--s4);
@@ -245,4 +170,45 @@
   font-size: var(--h3);
   font-weight: 700;
   word-break: keep-all;
+}
+
+.snapshotPhotos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--s3);
+  margin: var(--s2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.snapshotPhotos li {
+  display: grid;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.snapshotPhotos img {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  border-radius: var(--radius-small);
+}
+
+.snapshotPhotos p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  overflow-wrap: anywhere;
+}
+
+/* Phone density: tighter KPI rhythm without touching type sizes — the first
+   KPI row must read inside a 412px viewport below the folded header. */
+@media (max-width: 768px) {
+  .metricGrid {
+    gap: var(--s2);
+  }
+
+  .metricCard {
+    padding: var(--s3);
+  }
 }

@@ -1,0 +1,60 @@
+/* Import wizard: the three steps are visible from the first screen, so the
+   operator knows what is still ahead before choosing a file. */
+.importSteps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin: 0 0 var(--s3);
+  padding: 0;
+  list-style: none;
+}
+
+.importStep {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 44px;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--paper);
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.importStepNumber {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.importStepLabel {
+  font-weight: 700;
+}
+
+.importStepCurrent {
+  border-color: var(--brand);
+  color: var(--ink);
+}
+
+.importStepCurrent .importStepNumber {
+  background: var(--brand);
+  color: var(--on-brand);
+}
+
+.importStepDone {
+  color: var(--ink);
+}
+
+.importStepDone .importStepNumber {
+  background: var(--soft);
+  color: var(--brand-text);
+}

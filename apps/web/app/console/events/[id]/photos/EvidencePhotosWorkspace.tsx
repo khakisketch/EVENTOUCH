@@ -4,9 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
-import ConsolePageHeader, { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
+import ConsolePage from "../../../console-ui/ConsolePage";
+import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
+import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
+import { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
 import ConsoleSection from "../../../console-ui/ConsoleSection";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
+import { useConsoleDraftGuard } from "../../../console-draft-guard";
 import styles from "./evidence-photos.module.css";
 
 const EVIDENCE_SECTIONS = [
@@ -67,12 +71,17 @@ type WorkspaceState =
       kind: "ready";
       eventName: string;
       eventMeta?: string;
+      archived: boolean;
       canManage: boolean;
       photos: EvidencePhoto[];
     };
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const ACCEPTED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+// Long-list paging for the current-section archive: reveal the first page
+// only, then grow incrementally. ZIP/selection/upload semantics use the full
+// section list; only the rendered grid is windowed. Plain slicing only.
+const PHOTO_PAGE_SIZE = 12;
 let fallbackCommandSequence = 0;
 
 function randomCommandId(): string {
@@ -173,17 +182,61 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
   const [state, setState] = useState<WorkspaceState>({ kind: "loading" });
   const [reloadTick, setReloadTick] = useState(0);
   const [selectedSection, setSelectedSection] = useState<EvidenceSection>("SPACE");
+  const [photoLimit, setPhotoLimit] = useState(PHOTO_PAGE_SIZE);
+  // 더 보기 inserts rows before the focused button: park the first newly
+  // revealed index at click time, then focus its row after render. The row
+  // itself is focusable (tabIndex -1), so no extra announcement is added.
+  const photoRevealRef = useRef<number | null>(null);
   const [jobs, setJobs] = useState<UploadJob[]>([]);
   const [queueBusy, setQueueBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [busyPhotoId, setBusyPhotoId] = useState<string | null>(null);
+  const [movePending, setMovePending] = useState<{ photo: EvidencePhoto; nextSection: EvidenceSection } | null>(null);
+  const [removePending, setRemovePending] = useState<EvidencePhoto | null>(null);
   const [moveTargets, setMoveTargets] = useState<Record<string, EvidenceSection>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const jobsRef = useRef<UploadJob[]>([]);
   const queueRunningRef = useRef(false);
   const loadSequenceRef = useRef(0);
   const actionCommandIdsRef = useRef(new Map<string, string>());
+
+  // 보관된 행사는 서버가 모든 쓰기를 거부하므로(409) 쓰기 affordance를
+  // 잠그고 보기·내보내기만 둡니다. 역할·멤버십 게이트는 그대로 둡니다.
+  const writeLocked = state.kind === "ready" && state.archived;
+
+  // Cross-route guard predicate: any upload job that is not settled in the
+  // archive (staged drafts, queued/in-flight work, failed retries). Settled
+  // history and the section picker stay unguarded.
+  useConsoleDraftGuard(
+    jobs.some((job) => job.status !== "recorded"),
+    "처리되지 않은 사진 업로드가 있습니다."
+  );
+
+  function selectSection(section: EvidenceSection) {
+    setSelectedSection(section);
+    setPhotoLimit(PHOTO_PAGE_SIZE);
+    photoRevealRef.current = null;
+  }
+
+  function revealMorePhotos() {
+    photoRevealRef.current = photoLimit;
+    setPhotoLimit((limit) => limit + PHOTO_PAGE_SIZE);
+  }
+
+  // Focus the first newly revealed row after a 더 보기 expansion, whether the
+  // button stays (intermediate reveal) or unmounts (final reveal).
+  useEffect(() => {
+    if (photoRevealRef.current === null || state.kind !== "ready") return;
+    const index = photoRevealRef.current;
+    photoRevealRef.current = null;
+    const sectionPhotos = state.photos.filter((photo) => photo.section === selectedSection);
+    const target = sectionPhotos[index] ?? null;
+    if (!target) return;
+    const row = document.getElementById(`evidence-photo-${target.id}`);
+    row?.scrollIntoView({ block: "nearest" });
+    row?.focus({ preventScroll: true });
+  }, [photoLimit, state, selectedSection]);
 
   function commitJobs(next: UploadJob[]) {
     jobsRef.current = next;
@@ -293,6 +346,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
           end: text(event.end),
           venue: text(venue?.name),
         }),
+        archived: text(event.stage).toUpperCase() === "ARCHIVED",
         canManage,
         photos,
       });
@@ -374,7 +428,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
   }
 
   async function processJobs(jobIds: string[]) {
-    if (queueRunningRef.current) return;
+    if (queueRunningRef.current || writeLocked) return;
     queueRunningRef.current = true;
     setQueueBusy(true);
     setFailure(null);
@@ -389,7 +443,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
   }
 
   function selectFiles(files: FileList | null) {
-    if (!files?.length || queueRunningRef.current) return;
+    if (!files?.length || queueRunningRef.current || writeLocked) return;
     setNotice(null);
     setFailure(null);
     const selected = Array.from(files);
@@ -433,7 +487,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
   }
 
   function uploadSelectedJobs() {
-    if (queueRunningRef.current) return;
+    if (queueRunningRef.current || writeLocked) return;
     const selectedIds = new Set(jobsRef.current.filter((job) => job.status === "selected").map((job) => job.id));
     if (!selectedIds.size) return;
     commitJobs(jobsRef.current.map((job) => selectedIds.has(job.id)
@@ -462,16 +516,29 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
     if (!response.ok) throw new Error(commandErrorMessage(data, fallback));
   }
 
-  async function movePhoto(photo: EvidencePhoto, nextSection: EvidenceSection) {
-    if (nextSection === photo.section || busyPhotoId) return;
-    const destination = sectionLabel(nextSection);
-    if (!window.confirm(`이 사진의 보관함 분류를 ${sectionLabel(photo.section)}에서 ${destination}${directionParticle(destination)} 변경할까요?`)) return;
-    const commandKey = `move:${photo.id}:${nextSection}`;
-    setBusyPhotoId(photo.id);
+  function requestMovePhoto(photo: EvidencePhoto, nextSection: EvidenceSection) {
+    if (nextSection === photo.section || busyPhotoId || writeLocked) return;
+    setMovePending({ photo, nextSection });
+  }
+
+  async function confirmMovePhoto() {
+    const pending = movePending;
+    if (!pending || state.kind !== "ready") {
+      setMovePending(null);
+      return;
+    }
+    const current = state.photos.find((item) => item.id === pending.photo.id);
+    if (!current || pending.nextSection === current.section || busyPhotoId || writeLocked) {
+      setMovePending(null);
+      return;
+    }
+    const destination = sectionLabel(pending.nextSection);
+    const commandKey = `move:${current.id}:${pending.nextSection}`;
+    setBusyPhotoId(current.id);
     setFailure(null);
     setNotice(null);
     try {
-      await postEvidenceCommand("evidence.photo.move", { id: photo.id, section: nextSection }, commandIdFor(commandKey), "사진 구간을 변경하지 못했습니다.");
+      await postEvidenceCommand("evidence.photo.move", { id: current.id, section: pending.nextSection }, commandIdFor(commandKey), "사진 구간을 변경하지 못했습니다.");
       actionCommandIdsRef.current.delete(commandKey);
       setNotice(`사진을 ${destination}${directionParticle(destination)} 옮겼습니다.`);
       await load(true);
@@ -479,21 +546,32 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
       setFailure(error instanceof Error ? error.message : "사진 구간을 변경하지 못했습니다.");
     } finally {
       setBusyPhotoId(null);
+      setMovePending(null);
     }
   }
 
-  async function removePhoto(photo: EvidencePhoto) {
-    if (busyPhotoId) return;
-    const confirmed = window.confirm(
-      "이 사진을 보관함에서 제외할까요? 보관함 참조만 제거합니다. 원본 파일은 삭제되지 않고 기존 행사 파일 읽기 권한은 그대로 적용됩니다."
-    );
-    if (!confirmed) return;
-    const commandKey = `remove:${photo.id}`;
-    setBusyPhotoId(photo.id);
+  function requestRemovePhoto(photo: EvidencePhoto) {
+    if (busyPhotoId || writeLocked) return;
+    setRemovePending(photo);
+  }
+
+  async function confirmRemovePhoto() {
+    const pending = removePending;
+    if (!pending || state.kind !== "ready") {
+      setRemovePending(null);
+      return;
+    }
+    const current = state.photos.find((item) => item.id === pending.id);
+    if (!current || busyPhotoId || writeLocked) {
+      setRemovePending(null);
+      return;
+    }
+    const commandKey = `remove:${current.id}`;
+    setBusyPhotoId(current.id);
     setFailure(null);
     setNotice(null);
     try {
-      await postEvidenceCommand("evidence.photo.remove", { id: photo.id }, commandIdFor(commandKey), "보관함에서 제외하지 못했습니다.");
+      await postEvidenceCommand("evidence.photo.remove", { id: current.id }, commandIdFor(commandKey), "보관함에서 제외하지 못했습니다.");
       actionCommandIdsRef.current.delete(commandKey);
       setNotice("사진을 보관함에서 제외했습니다. 원본 파일과 기존 행사 파일 권한은 유지됩니다.");
       await load(true);
@@ -501,51 +579,41 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
       setFailure(error instanceof Error ? error.message : "보관함에서 제외하지 못했습니다.");
     } finally {
       setBusyPhotoId(null);
+      setRemovePending(null);
     }
   }
 
-  const pageHeader = (
-    <ConsolePageHeader
-      title={state.kind === "ready" ? state.eventName : "행사"}
-      back={{ href: `/console/events/${encodeURIComponent(eventId)}`, label: "← 운영 현황" }}
-      meta={state.kind === "ready" ? state.eventMeta : undefined}
-    />
-  );
-
   if (state.kind === "loading") {
     return (
-      <div className={styles.page}>
-        {pageHeader}
+      <ConsolePage pageId="photos" eventId={eventId}>
         <ConsoleStatePanel kind="loading" message="현장 사진 정보를 불러오고 있습니다." onRetry={() => {}} />
-      </div>
+      </ConsolePage>
     );
   }
 
   if (state.kind === "failed") {
     return (
-      <div className={styles.page}>
-        {pageHeader}
+      <ConsolePage pageId="photos" eventId={eventId}>
         <ConsoleStatePanel
           kind="failed"
           message={state.message}
           onRetry={() => setReloadTick((tick) => tick + 1)}
           actions={<Link className="button button-secondary" href="/console">행사 목록으로</Link>}
         />
-      </div>
+      </ConsolePage>
     );
   }
 
   if (!state.canManage) {
     return (
-      <div className={styles.page}>
-        {pageHeader}
+      <ConsolePage pageId="photos" eventId={eventId}>
         <ConsoleStatePanel
           kind="failed"
           message="현장 사진은 조직 소유자 또는 이 행사의 운영사 구성원만 관리할 수 있습니다."
           onRetry={() => setReloadTick((tick) => tick + 1)}
           actions={<Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}`}>운영 현황으로</Link>}
         />
-      </div>
+      </ConsolePage>
     );
   }
 
@@ -565,14 +633,24 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
   const hasUnresolvedJobs = historyJobs.some((job) => job.status !== "recorded");
 
   return (
-      <div className={styles.page}>
-        {pageHeader}
+    <ConsolePage
+      pageId="photos"
+      eventId={eventId}
+      eventName={state.eventName}
+      meta={state.eventMeta}
+      feedback={
+        <>
+          {notice ? <ConsoleFeedback kind="success">{notice}</ConsoleFeedback> : null}
+          {failure ? <ConsoleFeedback kind="error">{failure}</ConsoleFeedback> : null}
+          {state.archived ? (
+            <ConsoleFeedback kind="warning">보관된 행사는 읽기 전용입니다. 사진을 보고 내려받을 수 있지만 올리거나 옮길 수 없습니다.</ConsoleFeedback>
+          ) : null}
+        </>
+      }
+    >
       <p className={styles.intro}>
         참가자 사진과 별도로 보관합니다.
       </p>
-
-      {notice ? <p className={styles.notice} role="status">{notice}</p> : null}
-      {failure ? <p className={styles.failure} role="alert">{failure}</p> : null}
 
       <ConsoleSection
         headingId="evidence-photo-sections"
@@ -587,7 +665,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
                 type="button"
                 className={styles.categoryButton}
                 aria-pressed={selected}
-                onClick={() => setSelectedSection(section.key)}
+                onClick={() => selectSection(section.key)}
               >
                 <span className={styles.categoryLabel}>{section.label}</span>
                 <span className={styles.categoryMeta}>{section.count}장</span>
@@ -601,7 +679,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
             id="evidence-photo-section"
             value={selectedSection}
             onChange={(event) => {
-              if (isEvidenceSection(event.target.value)) setSelectedSection(event.target.value);
+              if (isEvidenceSection(event.target.value)) selectSection(event.target.value);
             }}
           >
             {sectionCounts.map((section) => (
@@ -655,7 +733,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
           <button
             type="button"
             className="button button-secondary"
-            disabled={queueBusy}
+            disabled={queueBusy || writeLocked}
             aria-describedby="evidence-photo-file-guidance"
             onClick={() => fileInputRef.current?.click()}
           >
@@ -668,7 +746,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
             type="file"
             accept="image/png,image/jpeg,image/webp"
             multiple
-            disabled={queueBusy}
+            disabled={queueBusy || writeLocked}
             tabIndex={-1}
             aria-hidden="true"
             onChange={(event) => {
@@ -795,14 +873,15 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
         ) : null}
 
         {selectedPhotos.length ? (
+          <>
           <ul className={styles.photoGrid}>
-            {selectedPhotos.map((photo) => {
+            {selectedPhotos.slice(0, photoLimit).map((photo) => {
               const photoBusy = busyPhotoId === photo.id;
               const selectedTarget = moveTargets[photo.id] ?? photo.section;
               const uploadedAt = formatUploadedAt(photo.uploadedAt);
               const originalHref = `/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(photo.image.fileId)}`;
               return (
-                <li key={photo.id} className={styles.photoItem}>
+                <li key={photo.id} id={`evidence-photo-${photo.id}`} tabIndex={-1} className={styles.photoItem}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     className={styles.thumbnail}
@@ -825,7 +904,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
                       className={styles.photoControls}
                       onSubmit={(event) => {
                         event.preventDefault();
-                        void movePhoto(photo, selectedTarget);
+                        requestMovePhoto(photo, selectedTarget);
                       }}
                     >
                       <label htmlFor={`move-photo-${photo.id}`}>보관 구간 변경</label>
@@ -833,7 +912,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
                         <select
                           id={`move-photo-${photo.id}`}
                           value={selectedTarget}
-                          disabled={busyPhotoId !== null}
+                          disabled={busyPhotoId !== null || writeLocked}
                           onChange={(event) => {
                             const value = event.target.value;
                             if (isEvidenceSection(value)) {
@@ -848,7 +927,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
                         <button
                           type="submit"
                           className="button button-secondary"
-                          disabled={photoBusy || busyPhotoId !== null || selectedTarget === photo.section}
+                          disabled={photoBusy || busyPhotoId !== null || writeLocked || selectedTarget === photo.section}
                         >
                           {photoBusy ? "처리 중…" : "구간 변경"}
                         </button>
@@ -857,21 +936,51 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
                     <button
                       type="button"
                       className={styles.removeButton}
-                      disabled={photoBusy || busyPhotoId !== null}
-                      onClick={() => void removePhoto(photo)}
+                      disabled={photoBusy || busyPhotoId !== null || writeLocked}
+                      onClick={() => requestRemovePhoto(photo)}
                     >
                       보관함에서 제외
                     </button>
+                    {movePending && movePending.photo.id === photo.id ? (
+                      <ConsoleConfirm
+                        summary={`이 사진의 보관함 분류를 ${sectionLabel(movePending.photo.section)}에서 ${sectionLabel(movePending.nextSection)}${directionParticle(sectionLabel(movePending.nextSection))} 변경할까요?`}
+                        confirmLabel="구간 변경하기"
+                        busy={photoBusy}
+                        onConfirm={() => void confirmMovePhoto()}
+                        onCancel={() => setMovePending(null)}
+                      />
+                    ) : null}
+                    {removePending && removePending.id === photo.id ? (
+                      <ConsoleConfirm
+                        summary="이 사진을 보관함에서 제외할까요? 보관함 참조만 제거합니다. 원본 파일은 삭제되지 않고 기존 행사 파일 읽기 권한은 그대로 적용됩니다."
+                        confirmLabel="보관함에서 제외하기"
+                        busy={photoBusy}
+                        onConfirm={() => void confirmRemovePhoto()}
+                        onCancel={() => setRemovePending(null)}
+                      />
+                    ) : null}
                   </details>
                 </li>
               );
             })}
           </ul>
+          {selectedPhotos.length > photoLimit ? (
+            <p className={styles.moreRow}>
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={revealMorePhotos}
+              >
+                더 보기 ({selectedPhotos.length - photoLimit})
+              </button>
+            </p>
+          ) : null}
+          </>
         ) : (
           <p className={styles.empty}>이 구간에는 아직 등록된 사진이 없습니다.</p>
         )}
       </ConsoleSection>
 
-    </div>
+    </ConsolePage>
   );
 }

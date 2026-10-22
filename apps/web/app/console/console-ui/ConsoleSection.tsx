@@ -11,6 +11,16 @@ type ConsoleSectionProps = {
   className?: string;
   density?: "default" | "compact";
   divider?: boolean;
+  /**
+   * Visual surface. `plain` keeps the section chrome-free on the page ground;
+   * `panel` lifts one self-contained unit onto paper. Never nest panels.
+   */
+  surface?: "plain" | "panel";
+  /**
+   * Body width. `full` spans the page; `form` caps the body at the shared
+   * reading width while the section header keeps page alignment.
+   */
+  width?: "full" | "form";
 };
 
 export default function ConsoleSection({
@@ -22,11 +32,15 @@ export default function ConsoleSection({
   className,
   density = "default",
   divider = false,
+  surface = "plain",
+  width = "full",
 }: ConsoleSectionProps) {
   const classNames = [
     styles.section,
     density === "compact" ? styles.sectionCompact : "",
     divider ? styles.sectionDivider : "",
+    surface === "panel" ? styles.sectionPanel : "",
+    width === "form" ? styles.sectionForm : "",
     className,
   ].filter(Boolean).join(" ");
 
@@ -39,7 +53,7 @@ export default function ConsoleSection({
         </div>
         {action ? <div className={styles.sectionAction}>{action}</div> : null}
       </div>
-      {children}
+      <div className={styles.sectionBody}>{children}</div>
     </section>
   );
 }

@@ -1,75 +1,26 @@
-.wrapper {
-  display: grid;
-  gap: var(--s6);
-  max-width: var(--web-content-max, 1120px);
-}
-
-.header h1 {
-  margin: var(--s1) 0 0;
-}
-
-.section {
-  display: grid;
-  gap: var(--s3);
-}
-
 .primarySectionAction {
   display: flex;
   justify-content: flex-start;
 }
 
-.sectionHead {
+.hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  overflow-wrap: anywhere;
+}
+
+.buttonRow {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--s2) var(--s4);
-}
-
-.sectionHead h2 {
-  margin: 0;
-  font-size: var(--h2);
-}
-
-.list {
-  display: grid;
   gap: var(--s2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s2) var(--s4);
-  padding: var(--s3) var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
-}
-
-.rowMain {
-  display: grid;
-  gap: var(--s1);
   min-width: 0;
 }
 
-.rowMain strong {
-  font-size: var(--body);
-}
-
-.rowMeta {
-  color: var(--muted);
-  font-size: var(--small);
-}
-
-.rowActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
+.buttonRow select {
+  flex: 1 1 220px;
+  min-width: 0;
 }
 
 /* Booth map editor: image with normalized marker overlays. */
@@ -103,86 +54,63 @@
   pointer-events: none;
 }
 
-.alert {
-  margin: 0;
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--danger-line);
-  border-radius: var(--radius-small);
-  background: var(--danger-soft);
-  color: var(--danger);
+/* Jump nav wrapper: desktop renders exactly the shared section nav as
+   before; only phones pin it. The readout names the section in view. */
+.navSticky {
+  min-width: 0;
 }
 
-.notice {
-  margin: 0;
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--warning-line);
-  border-radius: var(--radius-small);
-  background: var(--warning-soft);
-  color: var(--warning);
-}
-
-.backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: grid;
-  place-items: center;
-  padding: var(--s4);
-  background: var(--scrim);
-}
-
-.dialog {
-  width: min(460px, 100%);
-  max-height: min(640px, calc(100svh - var(--s6)));
-  overflow-y: auto;
-  padding: var(--s5);
-  border-radius: var(--radius);
-  background: var(--paper);
-}
-
-.dialog h2 {
-  margin: 0 0 var(--s4);
-  font-size: var(--h2);
-}
-
-.form {
-  display: grid;
-  gap: var(--s3);
-}
-
-.form label {
-  display: block;
-  margin-bottom: var(--s1);
+.navNow {
+  margin: var(--s1) 0 0;
+  color: var(--muted);
   font-size: var(--small);
-  font-weight: 650;
 }
 
-.form input,
-.form select {
-  width: 100%;
-  min-height: 44px;
+.anchorSection {
+  scroll-margin-top: 0;
 }
 
-.gridTwo {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--s3);
-}
-
-.actions {
-  position: sticky;
-  bottom: 0;
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--s2);
-  margin: var(--s2) 0 0;
-  padding-block: var(--s3);
+/* Before-the-day presets fold away on phones (draws setup-details same
+   grammar): the summary always names the current value so a folded row
+   still answers "what is it now". Same-day controls stay unfolded. */
+.presetFold {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
   background: var(--paper);
-  border-top: 1px solid var(--line);
 }
 
-@media (max-width: 480px) {
-  .gridTwo {
-    grid-template-columns: 1fr;
+.presetSummary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: var(--s2) var(--s3);
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.presetFold[open] .presetSummary {
+  border-bottom: 1px solid var(--line);
+}
+
+.presetBody {
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
+  margin: var(--s3);
+}
+
+@media (max-width: 768px) {
+  .navSticky {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    padding: var(--s2) 0;
+    background: var(--ground);
+  }
+
+  .anchorSection {
+    scroll-margin-top: 12rem;
   }
 }

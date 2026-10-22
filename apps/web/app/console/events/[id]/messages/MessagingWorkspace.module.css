@@ -1,59 +1,18 @@
-.page {
-  display: grid;
-  gap: var(--s5);
-}
-
 .campaignTop,
 .campaignTitle,
 .campaignActions,
 .templateActions,
-.recipientTools,
-.formActions {
+.recipientTools {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--s3);
 }
 
-.pageHeading {
-  display: grid;
-  gap: var(--s3);
-  min-width: 0;
-}
-
-.intro,
 .help {
   margin: 0;
   color: var(--muted);
   font-size: var(--small);
-}
-
-.connectionNote {
-  display: grid;
-  gap: var(--s1);
-  margin: 0;
-  padding: var(--s3) var(--s4);
-  border: 1px solid var(--warning-line);
-  border-radius: var(--radius);
-  background: var(--warning-soft);
-  color: var(--warning);
-  font-size: var(--small);
-}
-
-.workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.85fr);
-  align-items: start;
-  gap: var(--s5);
-}
-
-.panel,
-.history {
-  min-width: 0;
-  padding: var(--s5);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
 }
 
 .selectionCount {
@@ -63,40 +22,10 @@
   font-weight: 700;
 }
 
-.form,
-.templateForm {
-  display: grid;
-  gap: var(--s4);
-}
-
-.form label,
-.templateForm label,
 .recipientFieldset legend {
   margin-bottom: var(--s2);
   font-size: var(--small);
   font-weight: 700;
-}
-
-.form input:not([type="checkbox"]),
-.form select,
-.form textarea,
-.templateForm input,
-.templateForm select,
-.templateForm textarea {
-  margin: 0;
-}
-
-.form textarea,
-.templateForm textarea {
-  min-height: 128px;
-  resize: vertical;
-}
-
-.twoFields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s3);
-  align-items: end;
 }
 
 .recipientFieldset {
@@ -116,6 +45,68 @@
   margin-bottom: var(--s2);
   color: var(--muted);
   font-size: var(--small);
+}
+
+.recipientFilters {
+  display: grid;
+  grid-template-columns: minmax(140px, 200px) minmax(0, 1fr);
+  gap: var(--s3);
+  align-items: end;
+  margin-bottom: var(--s2);
+}
+
+.recipientFilters label {
+  margin-bottom: var(--s2);
+  font-size: var(--small);
+  font-weight: 700;
+}
+
+.selectionSummary {
+  margin: 0 0 var(--s2);
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.selectedOnlyOption {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0 0 var(--s2) !important;
+  font-size: var(--small);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.selectedOnlyOption input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  accent-color: var(--brand-text);
+}
+
+.riskWarning {
+  margin: var(--s2) 0 0;
+  padding: var(--s2) var(--s3);
+  border-left: 3px solid var(--warning-line);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.templateDetails {
+  border-top: 1px solid var(--line);
+}
+
+.templateDetails > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  color: var(--brand-text);
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .recipientTools > div {
@@ -179,11 +170,6 @@
   cursor: pointer;
 }
 
-.form .recipientRow {
-  display: grid;
-  margin: 0;
-}
-
 .recipientRow input[type="checkbox"],
 .simulateOption input[type="checkbox"] {
   width: 20px;
@@ -219,11 +205,6 @@
   cursor: pointer;
 }
 
-.form .simulateOption {
-  display: flex;
-  margin: 0 !important;
-}
-
 .simulateOption span {
   display: grid;
   gap: var(--s1);
@@ -237,11 +218,6 @@
   color: var(--muted);
   font-size: var(--small);
   font-weight: 400;
-}
-
-.formActions {
-  flex-wrap: wrap;
-  justify-content: flex-start;
 }
 
 .fieldError {
@@ -292,19 +268,14 @@
   padding-inline: var(--s1);
 }
 
-.templateForm {
+.templateDetails form {
   padding-top: var(--s4);
   border-top: 1px solid var(--line);
 }
 
-.templateForm h3 {
+.templateDetails h3 {
   margin: 0;
   font-size: var(--h3);
-}
-
-.history {
-  display: grid;
-  gap: var(--s4);
 }
 
 .campaignList {
@@ -487,23 +458,12 @@
   font-size: var(--small);
 }
 
-@media (max-width: 1024px) {
-  .workspace {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 @media (max-width: 768px) {
-  .panel,
-  .history {
-    padding: var(--s4);
-  }
-
-  .history :global(#history-heading) {
+  :global(#history-heading) {
     scroll-margin-top: 120px;
   }
 
-  .twoFields {
+  .recipientFilters {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -534,4 +494,52 @@
     grid-column: 1 / -1;
     text-align: left;
   }
+}
+
+/* The recipient list is the long part of the composer. It folds so the send
+   controls stay near the top; the selection summary stays visible. */
+.recipientDetails {
+  margin-top: var(--s2);
+}
+
+.recipientSummaryButton {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 44px;
+  padding: var(--s2) 0;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.recipientSummaryCount {
+  margin-left: auto;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* Compose-head recipient state: the picker sits far below on mobile, so the
+   head restates the count and jumps straight to it. Tokens only. */
+.recipientTopBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.recipientTopBar .textButton {
+  margin-left: auto;
+  padding: var(--s1) var(--s2);
+}
+
+:global(#campaign-recipients) {
+  scroll-margin-top: 120px;
 }

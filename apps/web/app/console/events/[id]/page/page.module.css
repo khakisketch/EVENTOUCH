@@ -1,0 +1,393 @@
+.versionSummary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.statePill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 3px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.statePill[data-state="dirty"] {
+  border-color: var(--warning-line);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.statePill[data-state="published"] {
+  border-color: var(--success-line);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.smallActions,
+.imageActions,
+.conflictActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.inlineHelp {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: var(--small);
+  line-height: 1.45;
+}
+
+.inlineHelp {
+  border-color: var(--info-line);
+  background: var(--info-soft);
+  color: var(--info);
+}
+
+.conflictPanel {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: var(--s4);
+  border: 1px solid var(--warning-line);
+  border-radius: var(--radius);
+  background: var(--warning-soft);
+  color: var(--ink);
+}
+
+.conflictPanel h2,
+.recoveryGroup h2 {
+  margin: 0 0 var(--s1);
+  font-size: 18px;
+}
+
+.conflictPanel p { margin: 0; font-size: var(--small); line-height: 1.45; }
+.conflictDetails { margin-top: var(--s2) !important; font-weight: 700; }
+.conflictActions { flex: none; justify-content: flex-end; }
+
+.editorLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(340px, 0.95fr);
+  align-items: start;
+  gap: var(--s5);
+  min-width: 0;
+}
+
+.controls {
+  display: grid;
+  gap: var(--s4);
+  min-width: 0;
+}
+
+.controlGroup {
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.controlGroup legend {
+  padding: 0 8px;
+  color: var(--ink);
+  font-size: 19px;
+  font-weight: 750;
+}
+
+.help {
+  max-width: 68ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  line-height: 1.45;
+}
+
+.colorRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.colorLabel { font-weight: 650; }
+.colorRow input[type="color"] {
+  width: 54px;
+  height: 44px;
+  padding: 3px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-small);
+  background: var(--paper);
+  cursor: pointer;
+}
+
+.colorRow output {
+  min-width: 82px;
+  color: var(--muted);
+  font-family: var(--mono-font);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.imageStatus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--surface-muted);
+}
+
+.imageStatusName { min-width: 0; overflow-wrap: anywhere; font-weight: 650; }
+.imageStatusMeta { margin-left: auto; color: var(--muted); font-size: 13px; }
+
+.fileButton {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.fileButton input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.fileButton:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
+.fileButton:has(input:disabled) { opacity: 0.55; cursor: not-allowed; }
+.fileButton:has(input:disabled):hover { cursor: not-allowed; }
+
+.field {
+  display: grid;
+  gap: var(--s1);
+  min-width: 0;
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.field > span { color: var(--muted); font-weight: 450; }
+.field input,
+.field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-small);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}
+
+.field input:focus-visible,
+.field select:focus-visible,
+.colorRow input:focus-visible,
+.viewportChoice:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s3);
+}
+
+.toggleGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s1) var(--s3);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 44px;
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.check input {
+  width: auto;
+  min-height: auto;
+  accent-color: var(--brand-text);
+}
+
+.uploadError {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--danger-line);
+  border-radius: var(--radius-small);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.uploadError p { margin: 0; font-size: var(--small); }
+
+.recoveryGroup {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3) 0 0;
+  border-top: 1px solid var(--line);
+}
+
+.previewPanel {
+  position: sticky;
+  top: var(--s4);
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.previewHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s2) var(--s3);
+}
+
+.previewHeader > div:first-child {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.previewHeader h2 { margin: 0 0 var(--s1); font-size: 19px; word-break: keep-all; overflow-wrap: anywhere; }
+.previewHeader p { margin: 0; color: var(--muted); font-size: 13px; }
+
+.liveMark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  color: var(--success);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.liveMark span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.viewportChoices { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.sourceSwitch { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.viewportChoice {
+  min-height: 44px;
+  padding: 6px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-small);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.viewportChoice[aria-pressed="true"] {
+  border-color: var(--brand);
+  background: var(--soft);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.phoneStage {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.phoneViewport {
+  width: min(100%, var(--preview-width));
+  height: var(--preview-height);
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid #243943;
+  border-radius: 16px;
+  background: #B9DEF0;
+  box-shadow: 0 5px 18px rgb(23 37 43 / 16%);
+  scrollbar-color: #687b83 #e7eef0;
+  scrollbar-width: thin;
+}
+
+.previewHome {
+  width: 100%;
+  min-height: var(--home-viewport-height);
+}
+
+.previewNote,
+.publishedNote {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.publishedNote { color: var(--info); }
+
+@media (max-width: 1080px) {
+  .editorLayout { grid-template-columns: minmax(0, 1fr); }
+  .previewPanel { position: static; }
+}
+
+@media (max-width: 680px) {
+  .conflictPanel { flex-direction: column; }
+  .conflictActions { justify-content: flex-start; }
+  .fieldGrid { grid-template-columns: minmax(0, 1fr); }
+  .toggleGrid { grid-template-columns: minmax(0, 1fr); }
+  .controlGroup { padding: var(--s3); }
+  .previewPanel { padding: var(--s3); }
+}
+
+/* The jump nav names the section in view, so a long editor page with the
+   preview at the bottom still says where the operator is. */
+.navSticky {
+  min-width: 0;
+}
+
+.navNow {
+  margin: var(--s1) 0 0;
+  color: var(--muted);
+  font-size: var(--small);
+}

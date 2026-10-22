@@ -4,12 +4,20 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
-import ConsolePageHeader, {
+import { useConsoleDraftGuard } from "../../../console-draft-guard";
+import ConsoleDialog from "../../../console-ui/ConsoleDialog";
+import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
+import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
+import ConsoleFormActions from "../../../console-ui/ConsoleFormActions";
+import ConsolePage from "../../../console-ui/ConsolePage";
+import ConsoleSectionNav from "../../../console-ui/ConsoleSectionNav";
+import {
   formatConsoleEventMeta,
   type ConsoleEventMeta,
 } from "../../../console-ui/ConsolePageHeader";
 import ConsoleSection from "../../../console-ui/ConsoleSection";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
+import uiStyles from "../../../console-ui/console-ui.module.css";
 import styles from "./content.module.css";
 
 // Console authoring for notices, schedule programs, and venue guidance.
@@ -71,6 +79,7 @@ type WorkspaceState =
   | {
       kind: "ready";
       eventName: string;
+      stage: string;
       eventMeta: ConsoleEventMeta;
       features: string[];
       canManage: boolean;
@@ -215,6 +224,28 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
 
   const [venueDraft, setVenueDraft] = useState<Venue | null>(null);
 
+  // In-place confirmations for the irreversible deletes (one open at a time,
+  // holding only the target id). Dialog dismissal gates stay on
+  // window.confirm via canCloseNoticeDialog/canCloseProgramDialog.
+  const [noticeDeletePendingId, setNoticeDeletePendingId] = useState<string | null>(null);
+  const [programDeletePendingId, setProgramDeletePendingId] = useState<string | null>(null);
+
+  // One idempotency id per command+payload fingerprint. Payload literals are
+  // rebuilt identically on retry, so the same logical write reuses its id;
+  // any edit fingerprints differently and takes a fresh id. Entries clear
+  // only on success; ambiguous or rejected responses keep them harmlessly
+  // (a corrected payload is a new fingerprint). Toggles and deletes
+  // overwrite by id, so a same-payload replay converges instead of doubling.
+  const commandIdCache = useRef(new Map<string, string>());
+  // Synchronous in-flight gate: state flags flip only after rerender, so
+  // same-turn double submits would overlap without this ref.
+  const commandBusyRef = useRef(false);
+  // Dirty-dismiss baselines: dialog snapshots for canClose, server baseline
+  // for the venue draft so silent reloads never wipe unsaved edits.
+  const noticeInitialRef = useRef<NoticeDraft>(EMPTY_NOTICE_DRAFT);
+  const programInitialRef = useRef<ProgramDraft>(EMPTY_PROGRAM_DRAFT);
+  const venueBaselineRef = useRef<Venue | null>(null);
+
   async function load(silent = false) {
     if (!silent) setState({ kind: "loading" });
     try {
@@ -287,6 +318,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
       setState({
         kind: "ready",
         eventName: text(event.name, eventId),
+        stage: text(event.stage).toUpperCase(),
         eventMeta: {
           clientName: text(client?.name),
           date: text(event.date),
@@ -302,7 +334,14 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
         program,
         venue,
       });
-      setVenueDraft(venue);
+      setVenueDraft((current) => {
+        // Preserve an independently dirty venue draft across silent reloads
+        // (e.g. a notice publish refreshing state must not wipe typed input).
+        const baseline = venueBaselineRef.current;
+        if (current && baseline && JSON.stringify(current) !== JSON.stringify(baseline)) return current;
+        return venue;
+      });
+      venueBaselineRef.current = venue;
     } catch {
       setState({ kind: "failed", message: "연결하지 못했습니다. 다시 시도하세요." });
     }
@@ -313,41 +352,89 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
+  // Draft-guard dirty state, evaluated before every early return below. True
+  // diffs against the dialog open-snapshots and the venue server baseline
+  // (not merely open dialogs), plus in-flight uploads. Clean post-save
+  // screens navigate without a confirm.
+  const noticeDialogDirty =
+    noticeDialogOpen &&
+    JSON.stringify(noticeDraft) !== JSON.stringify(noticeInitialRef.current);
+  const programDialogDirty =
+    programDialogOpen &&
+    JSON.stringify(programDraft) !== JSON.stringify(programInitialRef.current);
+  const venueDirty =
+    state.kind === "ready" &&
+    venueDraft !== null &&
+    venueBaselineRef.current !== null &&
+    JSON.stringify(venueDraft) !== JSON.stringify(venueBaselineRef.current);
+  useConsoleDraftGuard(
+    noticeDialogDirty || programDialogDirty || venueDirty || uploadingAttachment,
+    "작성 중인 콘텐츠나 저장하지 않은 장소 안내가 있습니다. 페이지를 떠나면 사라집니다."
+  );
+
   async function postCommand(command: string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await fetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ commandId: randomCommandId(), command, payload }),
-    });
-    const data = (await response.json().catch(() => null)) as {
-      error?: unknown;
-      field?: unknown;
-    } & Record<string, unknown> | null;
-    if (!response.ok) {
-      throw new CommandFailure({
-        message: typeof data?.error === "string" ? data.error : "요청을 처리하지 못했습니다.",
-        field: typeof data?.field === "string" ? data.field : null,
-      });
+    if (archived) {
+      throw new CommandFailure({ message: "보관된 행사는 읽기 전용입니다.", field: null });
     }
-    return data ?? {};
+    if (commandBusyRef.current) {
+      throw new CommandFailure({ message: "처리 중입니다. 잠시 뒤 다시 시도하세요.", field: null });
+    }
+    commandBusyRef.current = true;
+    const fingerprint = `${command}:${JSON.stringify(payload)}`;
+    let commandId = commandIdCache.current.get(fingerprint);
+    if (!commandId) {
+      commandId = randomCommandId();
+      commandIdCache.current.set(fingerprint, commandId);
+    }
+    try {
+      const response = await fetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ commandId, command, payload }),
+      });
+      const data = (await response.json().catch(() => null)) as {
+        error?: unknown;
+        field?: unknown;
+      } & Record<string, unknown> | null;
+      if (!response.ok) {
+        throw new CommandFailure({
+          message: typeof data?.error === "string" ? data.error : "요청을 처리하지 못했습니다.",
+          field: typeof data?.field === "string" ? data.field : null,
+        });
+      }
+      commandIdCache.current.delete(fingerprint);
+      return data ?? {};
+    } finally {
+      commandBusyRef.current = false;
+    }
   }
 
   function openNoticeCreate() {
+    noticeInitialRef.current = { ...EMPTY_NOTICE_DRAFT };
     setNoticeDraft(EMPTY_NOTICE_DRAFT);
     setNoticeDialogFailure(null);
     setNoticeDialogOpen(true);
   }
 
   function openNoticeEdit(item: Notice) {
-    setNoticeDraft({
+    const snapshot = {
       id: item.id,
       title: item.title,
       body: item.body,
       published: item.published,
       pinned: item.pinned,
-    });
+    };
+    noticeInitialRef.current = snapshot;
+    setNoticeDraft(snapshot);
     setNoticeDialogFailure(null);
     setNoticeDialogOpen(true);
+  }
+
+  // Dismissal gate for the shared dialog (Escape/backdrop/Cancel): a dirty
+  // draft asks once instead of silently discarding typed input.
+  function canCloseNoticeDialog(): boolean {
+    if (JSON.stringify(noticeDraft) === JSON.stringify(noticeInitialRef.current)) return true;
+    return window.confirm("작성 중인 내용이 사라집니다. 닫을까요?");
   }
 
   async function saveNotice(event: React.FormEvent<HTMLFormElement>) {
@@ -426,8 +513,12 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
     }
   }
 
+  function requestNoticeDelete(item: Notice) {
+    if (busy !== null || archived) return;
+    setNoticeDeletePendingId(item.id);
+  }
+
   async function deleteNotice(item: Notice) {
-    if (!window.confirm(`“${item.title}” 공지를 삭제할까요?`)) return;
     setBusy(`notice-delete:${item.id}`);
     setNotice(null);
     setFailure(null);
@@ -442,17 +533,19 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
       });
     } finally {
       setBusy(null);
+      setNoticeDeletePendingId(null);
     }
   }
 
   function openProgramCreate() {
+    programInitialRef.current = { ...EMPTY_PROGRAM_DRAFT };
     setProgramDraft({ ...EMPTY_PROGRAM_DRAFT });
     setProgramDialogFailure(null);
     setProgramDialogOpen(true);
   }
 
   function openProgramEdit(item: ProgramItem) {
-    setProgramDraft({
+    const snapshot = {
       id: item.id,
       title: item.title,
       date: item.date,
@@ -463,9 +556,16 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
       published: item.published,
       attachment: item.attachment,
       attachmentDirty: false,
-    });
+    };
+    programInitialRef.current = snapshot;
+    setProgramDraft(snapshot);
     setProgramDialogFailure(null);
     setProgramDialogOpen(true);
+  }
+
+  function canCloseProgramDialog(): boolean {
+    if (JSON.stringify(programDraft) === JSON.stringify(programInitialRef.current)) return true;
+    return window.confirm("작성 중인 내용이 사라집니다. 닫을까요?");
   }
 
   async function uploadProgramAttachment(file: File) {
@@ -575,8 +675,12 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
     }
   }
 
+  function requestProgramDelete(item: ProgramItem) {
+    if (busy !== null || archived) return;
+    setProgramDeletePendingId(item.id);
+  }
+
   async function deleteProgram(item: ProgramItem) {
-    if (!window.confirm(`“${item.title}” 일정을 삭제할까요?`)) return;
     setBusy(`program-delete:${item.id}`);
     setNotice(null);
     setFailure(null);
@@ -591,6 +695,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
       });
     } finally {
       setBusy(null);
+      setProgramDeletePendingId(null);
     }
   }
 
@@ -614,128 +719,152 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
     }
   }
 
-  const pageHeader = (
-    <ConsolePageHeader
-      title={state.kind === "ready" ? state.eventName : "콘텐츠"}
-      meta={state.kind === "ready" ? formatConsoleEventMeta(state.eventMeta) : undefined}
-      back={{
-        href: `/console/events/${encodeURIComponent(eventId)}`,
-        label: "← 운영 현황",
-      }}
-      actions={state.kind === "ready" ? (
-        <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/settings`}>
-          행사 설정
-        </Link>
-      ) : null}
-    />
-  );
-
   if (state.kind === "loading") {
     return (
-      <div className={styles.page}>
-        {pageHeader}
+      <ConsolePage pageId="content" eventId={eventId}>
         <ConsoleStatePanel
           kind="loading"
           message="콘텐츠 정보를 불러오고 있습니다."
           onRetry={() => { void load(); }}
         />
-      </div>
+      </ConsolePage>
     );
   }
   if (state.kind === "failed") {
     return (
-      <div className={styles.page}>
-        {pageHeader}
+      <ConsolePage pageId="content" eventId={eventId}>
         {/* ConsoleStatePanel dispatches eventouch:shell-reload and renders 다시 불러오기. */}
         <ConsoleStatePanel
           kind="failed"
           message={state.message}
           onRetry={() => { void load(); }}
         />
-      </div>
+      </ConsolePage>
     );
   }
 
   const venueFeatureOn = state.features.includes("venue");
+  const archived = state.stage === "ARCHIVED";
+  const archivedReason = "보관된 행사는 읽기 전용입니다";
 
   return (
-    <div className={styles.page}>
-      <div className={styles.pageHeading}>
-        {pageHeader}
-        <p className={styles.intro}>공지·일정·장소 안내를 작성하고 게시 상태를 관리합니다. 게시한 항목만 참가자에게 보입니다.</p>
-      </div>
-
+    <ConsolePage
+      pageId="content"
+      eventId={eventId}
+      eventName={state.eventName}
+      meta={formatConsoleEventMeta(state.eventMeta)}
+      headerActions={(
+        <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/settings`}>
+          행사 설정
+        </Link>
+      )}
+      sectionNav={(
+        <ConsoleSectionNav
+          label="콘텐츠 구역"
+          items={[
+            { id: "content-notices", label: "공지" },
+            { id: "content-program", label: "프로그램 일정" },
+            { id: "content-venue", label: "장소 안내" },
+          ]}
+        />
+      )}
+      feedback={(
+        <>
+          {archived ? (
+            <ConsoleFeedback kind="warning">
+              보관된 행사는 읽기 전용입니다. 콘텐츠는 볼 수 있지만 작성·게시·저장할 수 없습니다.
+            </ConsoleFeedback>
+          ) : null}
+          {notice ? <ConsoleFeedback kind="success">{notice}</ConsoleFeedback> : null}
+          {failure && !noticeDialogOpen && !programDialogOpen ? (
+            <ConsoleFeedback kind="error" id="content-error">{failure.message}</ConsoleFeedback>
+          ) : null}
+        </>
+      )}
+    >
       {!state.canManage ? (
-        <p className="state-error" role="alert">콘텐츠를 관리할 운영 권한이 없습니다.</p>
+        <ConsoleFeedback kind="error">콘텐츠를 관리할 운영 권한이 없습니다.</ConsoleFeedback>
       ) : (
         <>
-          {notice ? <p className="state-success" role="status">{notice}</p> : null}
-          {failure && !noticeDialogOpen && !programDialogOpen ? (
-            <p className="state-error" role="alert" id="content-error">{failure.message}</p>
-          ) : null}
-
           <ConsoleSection
             headingId="content-notices"
             title="공지"
+            description="게시한 항목만 참가자에게 보입니다."
             action={(
-              <button type="button" className="button button-secondary" onClick={openNoticeCreate}>
+              <button
+                type="button"
+                className="button button-secondary"
+                disabled={archived}
+                title={archived ? archivedReason : undefined}
+                onClick={openNoticeCreate}
+              >
                 공지 작성
               </button>
             )}
           >
             {state.notices.length ? (
-              <ul className={styles.cardList}>
+              <ul className={uiStyles.collection}>
                 {state.notices.map((item) => (
-                  <li key={item.id} className={styles.card}>
-                    <div className={styles.cardTop}>
-                      <div className={styles.cardTitle}>
-                        <h3>
-                          {item.pinned ? <span className={styles.pin} aria-label="고정 공지">📌</span> : null}
-                          {item.title}
-                        </h3>
-                        <p className={styles.cardMeta}>
-                          <span className={`${styles.badge} ${item.published ? styles.badgeOn : styles.badgeOff}`}>
-                            {item.published ? "게시 중" : "비공개"}
-                          </span>
-                          {item.pinned ? <span className={styles.badge}>고정됨</span> : null}
-                        </p>
-                      </div>
-                      <div className={styles.cardActions}>
-                        <button
-                          type="button"
-                          className="button button-secondary"
-                          disabled={busy !== null}
-                          onClick={() => openNoticeEdit(item)}
-                        >
-                          편집
-                        </button>
-                        <button
-                          type="button"
-                          className="button button-secondary"
-                          disabled={busy !== null}
-                          onClick={() => void toggleNoticePublish(item)}
-                        >
-                          {busy === `notice-publish:${item.id}` ? "처리 중…" : item.published ? "비게시" : "게시"}
-                        </button>
-                        <button
-                          type="button"
-                          className="button button-secondary"
-                          disabled={busy !== null}
-                          onClick={() => void toggleNoticePin(item)}
-                        >
-                          {item.pinned ? "고정 해제" : "고정"}
-                        </button>
-                        <button
-                          type="button"
-                          className="button button-secondary"
-                          disabled={busy !== null}
-                          onClick={() => void deleteNotice(item)}
-                        >
-                          삭제
-                        </button>
-                      </div>
+                  <li key={item.id} className={uiStyles.recordRow}>
+                    <div className={uiStyles.recordMain}>
+                      <h3 className={styles.recordTitle}>
+                        {item.title}
+                      </h3>
+                      <p className={uiStyles.recordMeta}>
+                        <span className={`${styles.badge} ${item.published ? styles.badgeOn : styles.badgeOff}`}>
+                          {item.published ? "게시 중" : "비공개"}
+                        </span>
+                        {item.pinned ? <span className={styles.badge}>고정됨</span> : null}
+                      </p>
+                      {item.body ? <p className={`${styles.body} preserve-lines`}>{item.body}</p> : null}
                     </div>
-                    {item.body ? <p className={`${styles.body} preserve-lines`}>{item.body}</p> : null}
+                    <div className={uiStyles.recordActions}>
+                      <button
+                        type="button"
+                        className="button button-secondary"
+                        disabled={busy !== null || archived}
+                        title={archived ? archivedReason : undefined}
+                        onClick={() => openNoticeEdit(item)}
+                      >
+                        편집
+                      </button>
+                      <button
+                        type="button"
+                        className="button button-secondary"
+                        disabled={busy !== null || archived}
+                        title={archived ? archivedReason : undefined}
+                        onClick={() => void toggleNoticePublish(item)}
+                      >
+                        {busy === `notice-publish:${item.id}` ? "처리 중…" : item.published ? "비게시" : "게시"}
+                      </button>
+                      <button
+                        type="button"
+                        className="button button-secondary"
+                        disabled={busy !== null || archived}
+                        title={archived ? archivedReason : undefined}
+                        onClick={() => void toggleNoticePin(item)}
+                      >
+                        {item.pinned ? "고정 해제" : "고정"}
+                      </button>
+                      <button
+                        type="button"
+                        className="button button-secondary"
+                        disabled={busy !== null || archived}
+                        title={archived ? archivedReason : undefined}
+                        onClick={() => requestNoticeDelete(item)}
+                      >
+                        삭제
+                      </button>
+                    </div>
+                    {noticeDeletePendingId === item.id ? (
+                      <ConsoleConfirm
+                        summary={`“${item.title}” 공지를 삭제할까요?`}
+                        confirmLabel="삭제한다"
+                        busy={busy !== null}
+                        onConfirm={() => void deleteNotice(item)}
+                        onCancel={() => setNoticeDeletePendingId(null)}
+                      />
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -752,6 +881,8 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
               <button
                 type="button"
                 className="button button-secondary"
+                disabled={archived}
+                title={archived ? archivedReason : undefined}
                 onClick={() => openProgramCreate()}
               >
                 일정 추가
@@ -759,58 +890,68 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
             )}
           >
             {state.program.length ? (
-              <ul className={styles.cardList}>
+              <ul className={uiStyles.collection}>
                 {state.program.map((item) => (
-                  <li key={item.id} className={styles.card}>
-                    <div className={styles.cardTop}>
-                      <div className={styles.cardTitle}>
-                        <h3>{item.title}</h3>
-                        <p className={styles.cardMeta}>
-                          <span className={`${styles.badge} ${item.published ? styles.badgeOn : styles.badgeOff}`}>
-                            {item.published ? "게시 중" : "비공개"}
-                          </span>
-                          <span>
-                            {[item.date, item.start && item.end ? `${item.start} ~ ${item.end}` : item.start, item.place]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </span>
-                        </p>
-                      </div>
-                      <div className={styles.cardActions}>
-                        <button
-                          type="button"
-                          className="button button-secondary"
-                          disabled={busy !== null}
-                          onClick={() => openProgramEdit(item)}
-                        >
-                          편집
-                        </button>
-                        <button
-                          type="button"
-                          className="button button-secondary"
-                          disabled={busy !== null}
-                          onClick={() => void toggleProgramPublish(item)}
-                        >
-                          {busy === `program-publish:${item.id}` ? "처리 중…" : item.published ? "비게시" : "게시"}
-                        </button>
-                        <button
-                          type="button"
-                          className="button button-secondary"
-                          disabled={busy !== null}
-                          onClick={() => void deleteProgram(item)}
-                        >
-                          삭제
-                        </button>
-                      </div>
-                    </div>
-                    {item.description ? <p className={styles.body}>{item.description}</p> : null}
-                    {item.attachment ? (
-                      <p className={styles.attachment}>
-                        첨부:{" "}
-                        <Link href={`/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(item.attachment.fileId)}`}>
-                          {item.attachment.name || "일정 자료(PDF)"}
-                        </Link>
+                  <li key={item.id} className={uiStyles.recordRow}>
+                    <div className={uiStyles.recordMain}>
+                      <h3 className={styles.recordTitle}>{item.title}</h3>
+                      <p className={uiStyles.recordMeta}>
+                        <span className={`${styles.badge} ${item.published ? styles.badgeOn : styles.badgeOff}`}>
+                          {item.published ? "게시 중" : "비공개"}
+                        </span>
+                        <span>
+                          {[item.date, item.start && item.end ? `${item.start} ~ ${item.end}` : item.start, item.place]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
                       </p>
+                      {item.description ? <p className={styles.body}>{item.description}</p> : null}
+                      {item.attachment ? (
+                        <p className={styles.attachment}>
+                          첨부:{" "}
+                          <Link href={`/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(item.attachment.fileId)}`}>
+                            {item.attachment.name || "일정 자료(PDF)"}
+                          </Link>
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className={uiStyles.recordActions}>
+                      <button
+                        type="button"
+                        className="button button-secondary"
+                        disabled={busy !== null || archived}
+                        title={archived ? archivedReason : undefined}
+                        onClick={() => openProgramEdit(item)}
+                      >
+                        편집
+                      </button>
+                      <button
+                        type="button"
+                        className="button button-secondary"
+                        disabled={busy !== null || archived}
+                        title={archived ? archivedReason : undefined}
+                        onClick={() => void toggleProgramPublish(item)}
+                      >
+                        {busy === `program-publish:${item.id}` ? "처리 중…" : item.published ? "비게시" : "게시"}
+                      </button>
+                      <button
+                        type="button"
+                        className="button button-secondary"
+                        disabled={busy !== null || archived}
+                        title={archived ? archivedReason : undefined}
+                        onClick={() => requestProgramDelete(item)}
+                      >
+                        삭제
+                      </button>
+                    </div>
+                    {programDeletePendingId === item.id ? (
+                      <ConsoleConfirm
+                        summary={`“${item.title}” 일정을 삭제할까요?`}
+                        confirmLabel="삭제한다"
+                        busy={busy !== null}
+                        onConfirm={() => void deleteProgram(item)}
+                        onCancel={() => setProgramDeletePendingId(null)}
+                      />
                     ) : null}
                   </li>
                 ))}
@@ -820,7 +961,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
             )}
           </ConsoleSection>
 
-          <ConsoleSection headingId="content-venue" title="장소 안내">
+          <ConsoleSection headingId="content-venue" title="장소 안내" width="form">
             {!venueFeatureOn ? (
               <p className={styles.featureOff} role="note">
                 장소 안내 기능이 꺼져 있습니다.{" "}
@@ -829,7 +970,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
               </p>
             ) : null}
             {venueDraft ? (
-              <form className={styles.form} onSubmit={(event) => void saveVenue(event)}>
+              <form className={uiStyles.formStack} onSubmit={(event) => void saveVenue(event)}>
                 <div>
                   <label htmlFor="content-venue-name">장소 이름</label>
                   <input
@@ -880,16 +1021,16 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                     onChange={(event) => setVenueDraft({ ...venueDraft, description: event.target.value })}
                   />
                 </div>
-                <div className={styles.actions}>
+                <ConsoleFormActions>
                   <button
                     type="submit"
                     className="button button-secondary"
-                    disabled={busy !== null || !venueFeatureOn}
-                    title={venueFeatureOn ? undefined : "행사 설정에서 장소 안내 기능을 먼저 켜세요"}
+                    disabled={busy !== null || !venueFeatureOn || archived}
+                    title={archived ? archivedReason : venueFeatureOn ? undefined : "행사 설정에서 장소 안내 기능을 먼저 켜세요"}
                   >
                     {busy === "venue:save" ? "저장 중…" : "장소 안내 저장"}
                   </button>
-                </div>
+                </ConsoleFormActions>
               </form>
             ) : null}
           </ConsoleSection>
@@ -897,10 +1038,14 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
       )}
 
       {noticeDialogOpen && state.kind === "ready" ? (
-        <Modal titleId="content-notice-dialog-title" title={noticeDraft.id ? "공지 편집" : "공지 작성"} busy={noticeDialogBusy} onClose={() => {
-          if (!noticeDialogBusy) setNoticeDialogOpen(false);
-        }}>
-          <form className={styles.form} onSubmit={(event) => void saveNotice(event)}>
+        <ConsoleDialog
+          titleId="content-notice-dialog-title"
+          title={noticeDraft.id ? "공지 편집" : "공지 작성"}
+          busy={noticeDialogBusy}
+          canClose={canCloseNoticeDialog}
+          onClose={() => setNoticeDialogOpen(false)}
+        >
+          <form className={uiStyles.formStack} onSubmit={(event) => void saveNotice(event)}>
             <div>
               <label htmlFor="content-notice-title">제목</label>
               <input
@@ -952,28 +1097,32 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
             {noticeDialogFailure && !noticeDialogFailure.field ? (
               <p className={styles.fieldError} role="alert">{noticeDialogFailure.message}</p>
             ) : null}
-            <div className={styles.actions}>
+            <ConsoleFormActions>
               <button
                 type="button"
                 className="button button-secondary"
                 disabled={noticeDialogBusy}
-                onClick={() => setNoticeDialogOpen(false)}
+                onClick={() => { if (canCloseNoticeDialog()) setNoticeDialogOpen(false); }}
               >
                 취소
               </button>
-              <button type="submit" className="button button-primary" disabled={noticeDialogBusy}>
+              <button type="submit" className="button button-primary" disabled={noticeDialogBusy || archived} title={archived ? archivedReason : undefined}>
                 {noticeDialogBusy ? "저장 중…" : noticeDraft.id ? "저장" : "만들기"}
               </button>
-            </div>
+            </ConsoleFormActions>
           </form>
-        </Modal>
+        </ConsoleDialog>
       ) : null}
 
       {programDialogOpen && state.kind === "ready" ? (
-        <Modal titleId="content-program-dialog-title" title={programDraft.id ? "일정 편집" : "일정 추가"} busy={programDialogBusy} onClose={() => {
-          if (!programDialogBusy) setProgramDialogOpen(false);
-        }}>
-          <form className={styles.form} onSubmit={(event) => void saveProgram(event)}>
+        <ConsoleDialog
+          titleId="content-program-dialog-title"
+          title={programDraft.id ? "일정 편집" : "일정 추가"}
+          busy={programDialogBusy}
+          canClose={canCloseProgramDialog}
+          onClose={() => setProgramDialogOpen(false)}
+        >
+          <form className={uiStyles.formStack} onSubmit={(event) => void saveProgram(event)}>
             <div>
               <label htmlFor="content-program-title">제목</label>
               <input
@@ -999,7 +1148,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                 onChange={(event) => setProgramDraft({ ...programDraft, date: event.target.value })}
               />
             </div>
-            <div className={styles.gridTwo}>
+            <div className={uiStyles.formGrid}>
               <div>
                 <label htmlFor="content-program-start">시작</label>
                 <input
@@ -1060,12 +1209,13 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                   id="content-program-attachment"
                   type="file"
                   accept="application/pdf"
-                  disabled={programDialogBusy || uploadingAttachment}
+                  disabled={programDialogBusy || uploadingAttachment || archived}
+                  title={archived ? archivedReason : undefined}
                   aria-invalid={programDialogFailure?.field === "attachment"}
                   aria-describedby={programDialogFailure?.field === "attachment" ? "content-program-attachment-error" : undefined}
                   onChange={(event) => {
                     const file = event.target.files?.[0];
-                    if (file) void uploadProgramAttachment(file);
+                    if (file && !archived) void uploadProgramAttachment(file);
                     event.target.value = "";
                   }}
                 />
@@ -1086,87 +1236,22 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
             {programDialogFailure && !programDialogFailure.field ? (
               <p className={styles.fieldError} role="alert">{programDialogFailure.message}</p>
             ) : null}
-            <div className={styles.actions}>
+            <ConsoleFormActions>
               <button
                 type="button"
                 className="button button-secondary"
                 disabled={programDialogBusy || uploadingAttachment}
-                onClick={() => setProgramDialogOpen(false)}
+                onClick={() => { if (canCloseProgramDialog()) setProgramDialogOpen(false); }}
               >
                 취소
               </button>
-              <button type="submit" className="button button-primary" disabled={programDialogBusy || uploadingAttachment}>
+              <button type="submit" className="button button-primary" disabled={programDialogBusy || uploadingAttachment || archived} title={archived ? archivedReason : undefined}>
                 {programDialogBusy ? "저장 중…" : programDraft.id ? "저장" : "만들기"}
               </button>
-            </div>
+            </ConsoleFormActions>
           </form>
-        </Modal>
+        </ConsoleDialog>
       ) : null}
-    </div>
-  );
-}
-
-function Modal(props: {
-  titleId: string;
-  title: string;
-  busy: boolean;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  const { titleId, title, busy, onClose, children } = props;
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-  const busyRef = useRef(busy);
-  busyRef.current = busy;
-  useEffect(() => {
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-    dialogRef.current
-      ?.querySelector<HTMLElement>("button:not(:disabled), input, select, textarea, a[href]")
-      ?.focus();
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        if (!busyRef.current) onCloseRef.current();
-        return;
-      }
-      if (event.key !== "Tab" || !dialogRef.current) return;
-      const items = Array.from(
-        dialogRef.current.querySelectorAll<HTMLElement>(
-          "button:not(:disabled), input, select, textarea, a[href]"
-        )
-      ).filter((item) => item.tabIndex >= 0);
-      if (!items.length) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = previousOverflow;
-      previouslyFocused?.focus?.();
-    };
-  }, []);
-  return (
-    <div
-      className={styles.backdrop}
-      onClick={(event) => {
-        if (event.target === event.currentTarget && !busy) onClose();
-      }}
-    >
-      <div ref={dialogRef} className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby={titleId}>
-        <h2 id={titleId}>{title}</h2>
-        {children}
-      </div>
-    </div>
+    </ConsolePage>
   );
 }

@@ -18,6 +18,8 @@ export type ConsolePageBack = {
 type ConsolePageHeaderProps = {
   title: string;
   back?: ConsolePageBack;
+  /** Small context row above the title (e.g. the ConsolePage event link). */
+  context?: ReactNode;
   meta?: ReactNode;
   badges?: ReactNode;
   /** Header actions are supplementary and must use the secondary button style. */
@@ -46,6 +48,7 @@ export function formatConsoleEventMeta(meta: ConsoleEventMeta): string | undefin
 export default function ConsolePageHeader({
   title,
   back,
+  context,
   meta,
   badges,
   actions,
@@ -56,6 +59,7 @@ export default function ConsolePageHeader({
   return (
     <header className={classNames}>
       <div className={styles.pageIdentity}>
+        {context ? <div className={styles.pageContext}>{context}</div> : null}
         {back ? (
           <Link className={styles.backLink} href={back.href}>
             {back.label}
