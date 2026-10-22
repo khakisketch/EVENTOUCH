@@ -540,6 +540,10 @@
   padding: var(--s1) var(--s2);
 }
 
+:global(#campaign-reload-summary) {
+  scroll-margin-top: calc(var(--s8) + var(--s7) + var(--s5));
+}
+
 :global(#campaign-recipients) {
   scroll-margin-top: 120px;
 }

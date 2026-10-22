@@ -127,6 +127,12 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const [boothOpen, setBoothOpen] = useState(false);
   const [editingBooth, setEditingBooth] = useState<Booth | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
+  // Row-level assignment preset (UI only): a desk/booth row opens the same
+  // AssignDialog with its type+target already chosen, so the operator only
+  // picks staff and submits. Null means the generic #ops-staff dialog with
+  // its existing defaults. The dialog unmounts on close, so each open starts
+  // from its own preset and never inherits a stale target.
+  const [assignPreset, setAssignPreset] = useState<{ type: string; targetId: string } | null>(null);
   const [mapUploading, setMapUploading] = useState(false);
   const [mapPlacing, setMapPlacing] = useState<string>("");
   const [mapDraftPoints, setMapDraftPoints] = useState<BoothMapPoint[] | null>(null);
@@ -837,7 +843,11 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       >
         {desks.length ? (
           <ul className={uiStyles.collection}>
-            {desks.map((desk) => (
+            {desks.map((desk) => {
+              const deskStaffNames = assignments
+                .filter((assignment) => assignment.type === "DESK" && assignment.targetId === desk.id)
+                .map((assignment) => accountName.get(assignment.accountId) ?? "알 수 없는 계정");
+              return (
               <li key={desk.id} className={uiStyles.recordRow}>
                 <div className={uiStyles.recordMain}>
                   <strong>{desk.name}</strong>
@@ -847,6 +857,9 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                     {desk.mode === "tablet" ? "태블릿" : "데스크"}
                     {" · "}
                     {desk.open ? "가동 중" : "중지됨"}
+                  </p>
+                  <p className={uiStyles.recordMeta}>
+                    {deskStaffNames.length ? `배정: ${deskStaffNames.join(", ")}` : "배정된 스태프 없음"}
                   </p>
                 </div>
                 <div className={uiStyles.recordActions}>
@@ -872,9 +885,20 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                   >
                     {desk.open ? "가동 중지" : "가동 시작"}
                   </button>
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    disabled={busy || writeBlocked}
+                    title={writeBlocked ? writeBlockedReason : undefined}
+                    aria-label={`${desk.name}에 스태프 배정`}
+                    onClick={() => { setAssignPreset({ type: "DESK", targetId: desk.id }); setAssignOpen(true); setFailure(null); }}
+                  >
+                    스태프 배정
+                  </button>
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
         ) : (
           <p className="empty-state">등록된 데스크가 없습니다. 진행 중 전환에는 데스크와 스태프 배정이 필요합니다.</p>
@@ -912,7 +936,11 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           </p>
         ) : booths.length ? (
           <ul className={uiStyles.collection}>
-            {booths.map((booth) => (
+            {booths.map((booth) => {
+              const boothStaffNames = assignments
+                .filter((assignment) => assignment.type === "BOOTH" && assignment.targetId === booth.id)
+                .map((assignment) => accountName.get(assignment.accountId) ?? "알 수 없는 계정");
+              return (
               <li key={booth.id} className={uiStyles.recordRow}>
                 <div className={uiStyles.recordMain}>
                   <strong>{booth.name}</strong>
@@ -927,6 +955,9 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                     {" · "}
                     참가자 {booth.limit}회
                   </p>
+                  <p className={uiStyles.recordMeta}>
+                    {boothStaffNames.length ? `배정: ${boothStaffNames.join(", ")}` : "배정된 스태프 없음"}
+                  </p>
                 </div>
                 <div className={uiStyles.recordActions}>
                   <button
@@ -938,9 +969,20 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                   >
                     편집
                   </button>
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    disabled={busy || writeBlocked}
+                    title={writeBlocked ? writeBlockedReason : undefined}
+                    aria-label={`${booth.name}에 스태프 배정`}
+                    onClick={() => { setAssignPreset({ type: "BOOTH", targetId: booth.id }); setAssignOpen(true); setFailure(null); }}
+                  >
+                    스태프 배정
+                  </button>
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
         ) : (
           <p className="empty-state">등록된 부스가 없습니다.</p>
@@ -1200,7 +1242,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           <button
             type="button"
             className="button button-primary"
-            onClick={() => { setAssignOpen(true); setFailure(null); }}
+            onClick={() => { setAssignPreset(null); setAssignOpen(true); setFailure(null); }}
             disabled={assignableTargets === 0 || writeBlocked}
             title={writeBlocked ? writeBlockedReason : assignableTargets === 0 ? "데스크나 부스를 먼저 만드세요" : undefined}
           >
@@ -1286,12 +1328,13 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           staffAccounts={staffAccounts}
           desks={desks}
           booths={stampEnabled ? booths : []}
-          initialType={desks.length ? "DESK" : "BOOTH"}
-          onClose={() => { setAssignDirty(false); setAssignOpen(false); }}
+          initialType={assignPreset?.type ?? (desks.length ? "DESK" : "BOOTH")}
+          initialTargetId={assignPreset?.targetId ?? ""}
+          onClose={() => { setAssignDirty(false); setAssignOpen(false); setAssignPreset(null); }}
           onDirtyChange={setAssignDirty}
           onSubmit={async (payload) => {
             const ok = await runCommand("staff.assign", payload, "스태프를 배정했습니다.");
-            if (ok) { setAssignDirty(false); setAssignOpen(false); }
+            if (ok) { setAssignDirty(false); setAssignOpen(false); setAssignPreset(null); }
           }}
         />
       ) : null}
@@ -1525,6 +1568,7 @@ function AssignDialog({
   desks,
   booths,
   initialType,
+  initialTargetId,
   onClose,
   onSubmit,
   onDirtyChange,
@@ -1535,14 +1579,18 @@ function AssignDialog({
   desks: Desk[];
   booths: Booth[];
   initialType: string;
+  initialTargetId?: string;
   onClose: () => void;
   onSubmit: (payload: Record<string, unknown>) => void;
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [accountId, setAccountId] = useState("");
   const [type, setType] = useState(initialType);
-  const [targetId, setTargetId] = useState("");
-  const dirty = accountId !== "" || type !== initialType || targetId !== "";
+  // Row-level opens preselect their target; the dialog never submits on its
+  // own, so the operator still picks staff and confirms. The pristine preset
+  // (no staff chosen yet) is not dirty, keeping the canClose gate truthful.
+  const [targetId, setTargetId] = useState(initialTargetId ?? "");
+  const dirty = accountId !== "" || type !== initialType || targetId !== (initialTargetId ?? "");
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);

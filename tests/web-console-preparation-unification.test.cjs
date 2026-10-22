@@ -168,7 +168,9 @@ test('ux-case fixes: booth edit, booth-only assignment, masked phones, true sele
   assert.match(ops, /\.\.\.\(initial \? \{ id: initial\.id \} : null\)/u);
   // Assignment works with booths only and defaults to booth without desks.
   assert.match(ops, /assignableTargets/u);
-  assert.match(ops, /initialType=\{desks\.length \? "DESK" : "BOOTH"\}/u);
+  // Contextual row opens may override the type; the generic entry must keep
+  // the original booth-only fallback when no desk exists.
+  assert.match(ops, /initialType=\{assignPreset\?\.type \?\? \(desks\.length \? "DESK" : "BOOTH"\)\}/u);
   assert.match(ops, /배정하려면 먼저 데스크나 부스를 만드세요/u);
   // Recipient rows show the same masked phone participants show.
   assert.match(messages, /function maskPhone\(phone: string\)/u);

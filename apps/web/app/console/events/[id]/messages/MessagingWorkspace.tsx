@@ -32,12 +32,15 @@ type Campaign = {
   id: string;
   title: string;
   channel: string;
+  body: string;
+  templateId: string;
   recipientIds: string[];
   status: string;
   scheduled: string;
   simulate: boolean;
   at: string;
   attempts: number;
+  imageFileId: string;
   imageName: string;
   deliveries: Delivery[];
 };
@@ -325,7 +328,9 @@ function parseCampaign(value: unknown): Campaign | null {
     title: text(item.title, "제목 없는 발송"),
     channel: text(item.channel, "SMS"),
     recipientIds: Array.isArray(item.recipientIds)
-      ? item.recipientIds.filter((id): id is string => typeof id === "string")
+      // Server dedupes ids by contract; dedupe here too so a stray
+      // duplicate never inflates the reload exclusion count below.
+      ? [...new Set(item.recipientIds.filter((id): id is string => typeof id === "string"))]
       : [],
     status: text(item.status),
     scheduled: text(item.scheduled),
@@ -336,7 +341,14 @@ function parseCampaign(value: unknown): Campaign | null {
     simulate: item.simulate === true,
     at: text(item.at),
     attempts: typeof item.attempts === "number" ? item.attempts : 0,
-    imageName: text(asRecord(item.image)?.name),
+    // Server persists the full compose snapshot on every message
+    // (content-results.js bootstrap): body, templateId and the MMS image
+    // reference live here so a FAILED campaign can be reloaded without
+    // retyping. The image may arrive nested (image.fileId/name) or flat.
+    body: text(item.body),
+    templateId: text(item.templateId),
+    imageFileId: text(asRecord(item.image)?.fileId) || text(item.imageFileId),
+    imageName: text(asRecord(item.image)?.name) || text(item.imageName),
     deliveries: Array.isArray(item.deliveries)
       ? item.deliveries.flatMap((delivery) => {
           const parsed = parseDelivery(delivery);
@@ -382,6 +394,14 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     id: string;
     kind: "retry" | "execute" | "cancel";
   } | null>(null);
+  // FAILED reload overwrite guard: set when the composer already holds a
+  // draft/selection and the operator asks to load a failed campaign. The
+  // in-place ConsoleConfirm below replaces the draft only on confirm.
+  const [reloadPending, setReloadPending] = useState<{ id: string } | null>(null);
+  // Reloaded-source summary: info (not success/sent) rendered immediately
+  // before the composer title, so the source/counts stay visible where the
+  // operator reviews them. Never duplicated into the global campaignNotice.
+  const [reloadSummary, setReloadSummary] = useState<string | null>(null);
   const [recipientQuery, setRecipientQuery] = useState("");
   const [recipientStatus, setRecipientStatus] = useState("APPROVED");
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
@@ -408,7 +428,12 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   // new fingerprint and therefore a fresh id. Entries clear only on proven
   // success or a settled non-retryable 4xx; network errors, >=500, 408 and
   // malformed success payloads keep the entry for a same-request retry.
-  const campaignCreateRef = useRef<{ fingerprint: string; commandId: string } | null>(null);
+  // The create slot additionally tracks attempted: false at confirm staging
+  // (no bytes sent yet), true once executeCampaignCreate actually posts.
+  // Guards that must distinguish "staged but unsent" from "transmitted but
+  // unconfirmed" (failedReloadBlocked) key on attempted, never on mere
+  // slot presence.
+  const campaignCreateRef = useRef<{ fingerprint: string; commandId: string; attempted: boolean } | null>(null);
   const templateSaveRef = useRef<{ fingerprint: string; commandId: string } | null>(null);
   const retryRefs = useRef(new Map<string, { fingerprint: string; commandId: string }>());
   const syncRefs = useRef(new Map<string, { fingerprint: string; commandId: string }>());
@@ -433,11 +458,14 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   }
 
   function takeCommandId(
-    slot: { current: { fingerprint: string; commandId: string } | null },
+    slot: { current: { fingerprint: string; commandId: string; attempted?: boolean } | null },
     fingerprint: string
   ): string {
     if (slot.current && slot.current.fingerprint === fingerprint) return slot.current.commandId;
-    const next = { fingerprint, commandId: commandId() };
+    // A freshly staged id has not been transmitted: attempts stay false
+    // until the executor actually posts (see executeCampaignCreate), so an
+    // unsent or cancelled confirmation never reads as ambiguous.
+    const next = { fingerprint, commandId: commandId(), attempted: false };
     slot.current = next;
     return next.commandId;
   }
@@ -596,6 +624,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   useEffect(() => {
     handoffAppliedRef.current = null;
     setHandoffNotice(null);
+    setReloadSummary(null);
     setHistoryLimit(10);
     pendingHistoryFocusRef.current = null;
   }, [eventId]);
@@ -948,6 +977,14 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
 
   async function executeCampaignCreate(pending: SendPending) {
     if (!beginAction("campaign")) return;
+    // The receipt only turns ambiguous once bytes actually leave: mark the
+    // staged slot attempted here, keyed on our own commandId identity, so a
+    // later FAILED reload blocks only on a real transmission. A same-fingerprint
+    // restage reuses the id and keeps the marker; a different payload stages
+    // a fresh unattempted id.
+    if (campaignCreateRef.current?.commandId === pending.id) {
+      campaignCreateRef.current.attempted = true;
+    }
     try {
       const result = await postCommand("message.create", pending.payload, pending.id);
       const created = asRecord(result.message);
@@ -974,6 +1011,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       setCampaignDraft(EMPTY_CAMPAIGN);
       setSelectedTemplateId("");
       setSelectedIds([]);
+      // Proven send consumes the reloaded source: its summary must not
+      // linger above the next blank composer.
+      setReloadSummary(null);
       await refresh(true);
       window.setTimeout(() => {
         document.getElementById(`campaign-${pending.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1133,6 +1173,165 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     } finally {
       endAction();
     }
+  }
+
+  // FAILED-only reload: message.retry intentionally rejects FAILED, so the
+  // safe repeat is a new composer draft preloaded from the persisted
+  // campaign. PARTIAL/SENDING rows are excluded (duplicate-delivery safety
+  // unclear). Never auto-sends: the existing submit ConsoleConfirm still
+  // gates the new send, and the old campaign id is never reused as a new
+  // create command id (fresh fingerprint → fresh id on submit).
+  function failedReloadBlocked(): boolean {
+    return (
+      // Create slot blocks only once actually transmitted: an unsent staged
+      // id (or a cancelled confirmation) is not an unconfirmed receipt.
+      // After a real post the marker stays until proven success or a
+      // settled 4xx clears the slot, so later attempts stay blocked even
+      // when no send confirm remains open.
+      campaignCreateRef.current?.attempted === true ||
+      retryRefs.current.size > 0 ||
+      syncRefs.current.size > 0 ||
+      cancelRefs.current.size > 0 ||
+      ambiguousRetryIds.length > 0 ||
+      ambiguousSyncIds.length > 0 ||
+      ambiguousCancelIds.length > 0
+    );
+  }
+
+  // Blocked-reload recovery: the history button that reported the block is
+  // far from the composer, so the error text alone strands the operator
+  // with no visible reason or next action. Surface the existing
+  // campaignError copy, drop any overwrite confirm, then land on the real
+  // submit instantly (no auto-submit): the inline error renders immediately
+  // above ConsoleFormActions, so reason and next action stay visible
+  // together. Instant only for this discrete error context transfer; the
+  // global jump/motion behavior is untouched.
+  function reportBlockedReload() {
+    setReloadPending(null);
+    setCampaignError("응답을 확인하지 못한 발송 요청이 있습니다. 결과를 먼저 확인한 뒤 내용을 불러오세요.");
+    window.setTimeout(() => {
+      document.getElementById("campaign-submit")?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "center" });
+      document.getElementById("campaign-submit")?.focus({ preventScroll: true });
+    }, 0);
+  }
+
+  function applyFailedReload(campaign: Campaign) {
+    if (state.kind !== "ready") return;
+    // Re-validate at confirm time: the overwrite confirm is nonmodal, so
+    // the operator may have submitted, started an upload, lost permission,
+    // or left an ambiguous receipt open while it stayed on screen. The
+    // request-time guard alone cannot cover that race.
+    if (!state.canManage || archived) return;
+    if (inFlightRef.current || uploadingImage) return;
+    if (failedReloadBlocked()) {
+      reportBlockedReload();
+      return;
+    }
+    // Reload from the current history row, not a stale snapshot: a
+    // background refresh may have changed or removed it while the confirm
+    // stayed open.
+    const source = state.campaigns.find((item) => item.id === campaign.id);
+    if (!source || source.status !== "FAILED") {
+      setReloadPending(null);
+      setCampaignError("발송 기록이 바뀌었습니다. 상태를 새로고침한 뒤 다시 시도하세요.");
+      return;
+    }
+    // Live roster wins: keep only current non-CANCELLED participants.
+    // Missing/deleted count as excluded, never as silent carries. Ids are
+    // already deduped by the parser; the seen guard below only skips.
+    const byId = new Map(state.participants.map((person) => [person.id, person]));
+    const seen = new Set<string>();
+    const eligible: string[] = [];
+    let excluded = 0;
+    for (const id of source.recipientIds) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const person = byId.get(id);
+      if (!person || person.status === "CANCELLED") excluded += 1;
+      else eligible.push(id);
+    }
+    const allowedChannels = ["SMS", "LMS", "MMS", "ALIMTALK"];
+    const channel = allowedChannels.includes(source.channel) ? source.channel : "SMS";
+    const boundTemplate = source.templateId
+      ? state.templates.find((template) => template.id === source.templateId)
+      : undefined;
+    // Never assume a stale ALIMTALK binding: without a current template
+    // carrying a Solapi approval id the composer stays unbound so the
+    // existing submit validation asks for a reselection.
+    const templateUsable = Boolean(
+      boundTemplate && (channel !== "ALIMTALK" || boundTemplate.solapiTemplateId)
+    );
+    const isMms = channel === "MMS";
+    setCampaignDraft({
+      title: source.title === "제목 없는 발송" ? "" : source.title,
+      channel,
+      body: source.body,
+      // A stale reservation must never replay: the operator re-picks it.
+      scheduled: "",
+      simulate: source.simulate === true,
+      imageFileId: isMms ? source.imageFileId : "",
+      imageName: isMms ? source.imageName : "",
+    });
+    setSelectedTemplateId(templateUsable && boundTemplate ? boundTemplate.id : "");
+    setSelectedIds(eligible);
+    // Reveal the reloaded set for review: clear the search/status filters
+    // and turn on the existing selected-only mode. The saved template
+    // draft (templateDraft) is intentionally untouched.
+    setRecipientQuery("");
+    setRecipientStatus("ALL");
+    setShowSelectedOnly(true);
+    setRecipientListOpen(true);
+    setSendPending(null);
+    setHistoryPending(null);
+    setReloadPending(null);
+    setCampaignFieldError(null);
+    setCampaignError(null);
+    const sourceLabel = `〈${source.title}〉`;
+    const reselectLine = channel === "ALIMTALK" && !templateUsable
+      ? " 승인된 알림톡 템플릿을 다시 선택하세요."
+      : "";
+    // The summary lives only in the composer, next to the title — never as
+    // a global success notice above the header.
+    setCampaignNotice(null);
+    if (eligible.length === 0) {
+      setReloadSummary(
+        `${sourceLabel} 내용을 불러왔습니다 · 선택 가능한 대상이 없습니다 · 제외 ${excluded}명(취소·삭제). 수신자를 새로 선택하세요. 바로 발송되지 않습니다. 새 발송 전 내용·대상을 확인하세요. 예약 시각은 다시 지정하세요.${reselectLine}`
+      );
+    } else {
+      setReloadSummary(
+        `${sourceLabel} 내용을 불러왔습니다 · 선택 ${eligible.length}명 · 제외 ${excluded}명(취소·삭제). 바로 발송되지 않습니다. 새 발송 전 내용·대상을 확인하세요. 예약 시각은 다시 지정하세요.${reselectLine}`
+      );
+    }
+    window.setTimeout(() => {
+      // Discrete task context transfer: land on the in-form summary
+      // instantly (no smooth-scroll race), then focus the title without
+      // moving the viewport again.
+      document.getElementById("campaign-reload-summary")?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "start" });
+      document.getElementById("campaign-title")?.focus({ preventScroll: true });
+    }, 0);
+  }
+
+  function requestFailedReload(campaign: Campaign) {
+    if (inFlightRef.current || uploadingImage) return;
+    if (state.kind !== "ready" || !state.canManage || archived) return;
+    // An unconfirmed create/retry/sync/cancel receipt owns its command id
+    // for a same-request retry. Replacing the draft first would strand
+    // that recovery, so block until it resolves.
+    if (failedReloadBlocked()) {
+      reportBlockedReload();
+      return;
+    }
+    setCampaignError(null);
+    setCampaignFieldError(null);
+    setHistoryPending(null);
+    // Never silently overwrite operator input: reuse the existing
+    // ConsoleConfirm grammar when the composer holds anything (draft,
+    // selection, template choice) or an unconfirmed send summary.
+    if (composeDirty || sendPending !== null) {
+      setReloadPending({ id: campaign.id });
+      return;
+    }
+    applyFailedReload(campaign);
   }
 
   if (state.kind === "loading") {
@@ -1298,6 +1497,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   </button>
                 </div>
                 <div>
+                  {reloadSummary ? (
+                    <ConsoleFeedback kind="info" id="campaign-reload-summary">{reloadSummary}</ConsoleFeedback>
+                  ) : null}
                   <label htmlFor="campaign-title">발송 제목</label>
                   <input
                     id="campaign-title"
@@ -1305,7 +1507,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                     required
                     value={campaignDraft.title}
                     aria-invalid={campaignFieldError?.field === "title"}
-                    aria-describedby={campaignFieldError?.field === "title" ? "campaign-title-error" : undefined}
+                    aria-describedby={campaignFieldError?.field === "title" ? (reloadSummary ? "campaign-reload-summary campaign-title-error" : "campaign-title-error") : (reloadSummary ? "campaign-reload-summary" : undefined)}
                     onChange={(event) => setCampaignDraft({ ...campaignDraft, title: event.target.value })}
                   />
                   {campaignFieldError?.field === "title" ? <p className={styles.fieldError} id="campaign-title-error" role="alert">{campaignFieldError.message}</p> : null}
@@ -1723,12 +1925,12 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                           </div>
                           <div className={styles.campaignActions}>
                             {canExecute ? (
-                              <button type="button" className="button button-secondary" disabled={busyAction !== null || archived} title={archived ? archivedReason : undefined} onClick={() => setHistoryPending({ id: campaign.id, kind: "execute" })}>
+                              <button type="button" className="button button-secondary" disabled={busyAction !== null || archived} title={archived ? archivedReason : undefined} onClick={() => { setReloadPending(null); setHistoryPending({ id: campaign.id, kind: "execute" }); }}>
                                 {busyAction === `retry:${campaign.id}` ? "실행 중…" : retryAmbiguous ? "같은 요청 다시 시도" : "발송 실행"}
                               </button>
                             ) : null}
                             {canRetry ? (
-                              <button type="button" className="button button-secondary" disabled={busyAction !== null || archived} title={archived ? archivedReason : undefined} onClick={() => setHistoryPending({ id: campaign.id, kind: "retry" })}>
+                              <button type="button" className="button button-secondary" disabled={busyAction !== null || archived} title={archived ? archivedReason : undefined} onClick={() => { setReloadPending(null); setHistoryPending({ id: campaign.id, kind: "retry" }); }}>
                                 {busyAction === `retry:${campaign.id}` ? "재시도 중…" : retryAmbiguous ? "같은 요청 다시 시도" : "재시도"}
                               </button>
                             ) : null}
@@ -1738,7 +1940,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                               </button>
                             ) : null}
                             {canCancel ? (
-                              <button type="button" className="button button-secondary" disabled={busyAction !== null || archived} title={archived ? archivedReason : undefined} onClick={() => setHistoryPending({ id: campaign.id, kind: "cancel" })}>
+                              <button type="button" className="button button-secondary" disabled={busyAction !== null || archived} title={archived ? archivedReason : undefined} onClick={() => { setReloadPending(null); setHistoryPending({ id: campaign.id, kind: "cancel" }); }}>
                                 {busyAction === `cancel:${campaign.id}` ? "취소 중…" : cancelAmbiguous ? "같은 요청 다시 시도" : campaign.status === "SCHEDULED" ? "예약 취소" : "발송 취소"}
                               </button>
                             ) : null}
@@ -1780,7 +1982,34 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                           <p className={styles.campaignHint}>공급사 연결 전입니다. 재시도해도 연결되지 않으면 실제로 전송되지 않습니다.</p>
                         ) : null}
                         {campaign.status === "FAILED" ? (
-                          <p className={styles.campaignHint}>발송이 실패했습니다. 같은 내용으로 다시 보내려면 위에서 새 캠페인을 만드세요.</p>
+                          <>
+                            <p className={styles.campaignHint}>발송이 실패했습니다. 같은 내용으로 다시 보내려면 위에서 새 캠페인을 만드세요. 아래 버튼으로 실패한 내용·대상을 불러오면 다시 입력하지 않아도 됩니다.</p>
+                            <div>
+                              <button
+                                type="button"
+                                className="button button-secondary"
+                                disabled={busyAction !== null || uploadingImage || archived || !state.canManage}
+                                title={archived ? archivedReason : undefined}
+                                onClick={() => requestFailedReload(campaign)}
+                              >
+                                내용·대상 불러오기
+                              </button>
+                            </div>
+                            {reloadPending?.id === campaign.id ? (
+                              <ConsoleConfirm
+                                summary={confirmLines(`〈${campaign.title}〉 내용을 작성 중인 화면에 불러올까요?\n\n작성 중인 발송 내용·선택이 교체됩니다. 예약 시각은 다시 지정해야 하며, 바로 발송되지 않습니다.`)}
+                                confirmLabel="불러온다"
+                                // Nonmodal confirm: stay disabled while any
+                                // action or upload runs so the overwrite
+                                // cannot race a competing submit. The
+                                // confirm handler re-validates before
+                                // replacing the draft.
+                                busy={busyAction !== null || uploadingImage}
+                                onConfirm={() => applyFailedReload(campaign)}
+                                onCancel={() => setReloadPending(null)}
+                              />
+                            ) : null}
+                          </>
                         ) : null}
                         {campaign.status === "SCHEDULED" && !due ? (
                           <p className={styles.campaignHint}>

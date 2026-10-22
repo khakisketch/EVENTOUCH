@@ -86,6 +86,8 @@ type WorkspaceState =
       notices: Notice[];
       program: ProgramItem[];
       venue: Venue;
+      screenEnabled: boolean;
+      display: { type: string; noticeId: string };
     };
 
 type Failure = { message: string; field: string | null };
@@ -229,6 +231,11 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
   // window.confirm via canCloseNoticeDialog/canCloseProgramDialog.
   const [noticeDeletePendingId, setNoticeDeletePendingId] = useState<string | null>(null);
   const [programDeletePendingId, setProgramDeletePendingId] = useState<string | null>(null);
+  // Direct output of a published notice to the venue screen (UI only): holds
+  // only the target id while the shared ConsoleConfirm asks once. The actual
+  // write reuses postCommand("display.set") with the same idempotency and
+  // busy discipline as every other command here.
+  const [noticeDisplayPendingId, setNoticeDisplayPendingId] = useState<string | null>(null);
 
   // One idempotency id per command+payload fingerprint. Payload literals are
   // rebuilt identically on retry, so the same logical write reuses its id;
@@ -312,6 +319,14 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
           })
         : []).sort((left, right) => (left.date + left.start).localeCompare(right.date + right.start));
       const venue = parseVenue(workspace.venue);
+      const features = Array.isArray(event.features)
+        ? event.features.filter((feature): feature is string => typeof feature === "string")
+        : [];
+      const displayRecord = asRecord(workspace.display);
+      const display = {
+        type: typeof displayRecord?.type === "string" ? String(displayRecord.type) : "idle",
+        noticeId: typeof displayRecord?.noticeId === "string" ? String(displayRecord.noticeId) : "",
+      };
       const client = Array.isArray(bootstrap.clients)
         ? bootstrap.clients.map(asRecord).find((item) => item?.id === event.clientId)
         : undefined;
@@ -326,14 +341,19 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
           end: text(event.end),
           venue: venue.name || text(event.venue),
         },
-        features: Array.isArray(event.features)
-          ? event.features.filter((feature): feature is string => typeof feature === "string")
-          : [],
+        features,
         canManage,
         notices,
         program,
         venue,
+        screenEnabled: features.includes("screen"),
+        display,
       });
+      // An accepted canonical refresh invalidates a pending output intent: a
+      // notice edited or unpublished-then-republished underneath would
+      // otherwise leave a confirm against changed state. Failed loads keep
+      // the pending confirm so the operator can still retry it.
+      setNoticeDisplayPendingId(null);
       setVenueDraft((current) => {
         // Preserve an independently dirty venue draft across silent reloads
         // (e.g. a notice publish refreshing state must not wipe typed input).
@@ -515,6 +535,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
 
   function requestNoticeDelete(item: Notice) {
     if (busy !== null || archived) return;
+    setNoticeDisplayPendingId(null);
     setNoticeDeletePendingId(item.id);
   }
 
@@ -534,6 +555,41 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
     } finally {
       setBusy(null);
       setNoticeDeletePendingId(null);
+    }
+  }
+
+  // Direct output from the authoring row: no auto-publish and no auto-output.
+  // The operator picks a published notice here, confirms the external-screen
+  // effect in place, and the same display.set path the operations screen uses
+  // applies it. Silent reload keeps an independently dirty venue draft.
+  // Output and delete confirms stay mutually exclusive: opening one clears
+  // the other, and the render guards below never show both on a row. Either
+  // write still runs under the shared busy + idempotency gates, so a second
+  // apply elsewhere cannot overlap it.
+  function requestNoticeDisplay(item: Notice) {
+    if (busy !== null || archived) return;
+    setNoticeDeletePendingId(null);
+    setNoticeDisplayPendingId(item.id);
+  }
+
+  async function applyNoticeDisplay(item: Notice) {
+    setBusy(`notice-display:${item.id}`);
+    setNotice(null);
+    setFailure(null);
+    try {
+      await postCommand("display.set", { type: "notice", noticeId: item.id });
+      setNotice("전광판 출력을 바꿨습니다.");
+      await load(true);
+      // Own success clears explicitly (load already invalidates on accept);
+      // a rejected write keeps the confirm open for retry.
+      setNoticeDisplayPendingId(null);
+    } catch (error) {
+      setFailure({
+        message: error instanceof Error ? error.message : "전광판 출력을 바꾸지 못했습니다.",
+        field: error instanceof CommandFailure ? error.field : null,
+      });
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -746,6 +802,11 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
   const venueFeatureOn = state.features.includes("venue");
   const archived = state.stage === "ARCHIVED";
   const archivedReason = "보관된 행사는 읽기 전용입니다";
+  // Direct output is a same-screen shortcut for the operations display: only
+  // when the screen feature is on, the operator can write, and the row is
+  // published. Unpublished rows, a switched-off screen, and readonly states
+  // hide the action instead of disabling it.
+  const canOutputNotice = state.screenEnabled && state.canManage && !archived;
 
   return (
     <ConsolePage
@@ -804,7 +865,24 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
           >
             {state.notices.length ? (
               <ul className={uiStyles.collection}>
-                {state.notices.map((item) => (
+                {state.notices.map((item) => {
+                  const onDisplay = state.display.type === "notice" && state.display.noticeId === item.id;
+                  // The display reference survives unpublishing (saveNotice
+                  // never clears it) and the board only shows published
+                  // notices, so a bare "출력 중" would falsely claim output.
+                  // Name the actual state: selected + published + screen on
+                  // means chosen for output; a stale selection says why it
+                  // no longer reaches the screen. No live polling — the
+                  // bootstrap value is the truth for this screen.
+                  const displayBadge = !onDisplay
+                    ? null
+                    : !state.screenEnabled
+                      ? { text: "전광판 선택됨 · 기능 꺼짐", live: false }
+                      : !item.published
+                        ? { text: "전광판 선택됨 · 비공개로 출력되지 않음", live: false }
+                        : { text: "전광판 출력으로 선택됨", live: true };
+                  const canOutput = canOutputNotice && item.published;
+                  return (
                   <li key={item.id} className={uiStyles.recordRow}>
                     <div className={uiStyles.recordMain}>
                       <h3 className={styles.recordTitle}>
@@ -815,6 +893,11 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                           {item.published ? "게시 중" : "비공개"}
                         </span>
                         {item.pinned ? <span className={styles.badge}>고정됨</span> : null}
+                        {displayBadge ? (
+                          <span className={`${styles.badge} ${displayBadge.live ? styles.badgeOn : ""}`}>
+                            {displayBadge.text}
+                          </span>
+                        ) : null}
                       </p>
                       {item.body ? <p className={`${styles.body} preserve-lines`}>{item.body}</p> : null}
                     </div>
@@ -855,8 +938,28 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                       >
                         삭제
                       </button>
+                      {canOutput ? (
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          disabled={busy !== null || archived}
+                          title={archived ? archivedReason : undefined}
+                          onClick={() => requestNoticeDisplay(item)}
+                        >
+                          {busy === `notice-display:${item.id}` ? "처리 중…" : "전광판 출력"}
+                        </button>
+                      ) : null}
                     </div>
-                    {noticeDeletePendingId === item.id ? (
+                    {noticeDisplayPendingId === item.id && canOutput && noticeDeletePendingId !== item.id ? (
+                      <ConsoleConfirm
+                        summary={`“${item.title}” 공지를 행사장 전광판에 출력할까요? 참가자 화면과 같은 내용이 외부 화면에 나옵니다.`}
+                        confirmLabel="전광판 출력"
+                        busy={busy !== null}
+                        onConfirm={() => void applyNoticeDisplay(item)}
+                        onCancel={() => setNoticeDisplayPendingId(null)}
+                      />
+                    ) : null}
+                    {noticeDeletePendingId === item.id && noticeDisplayPendingId !== item.id ? (
                       <ConsoleConfirm
                         summary={`“${item.title}” 공지를 삭제할까요?`}
                         confirmLabel="삭제한다"
@@ -866,7 +969,8 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                       />
                     ) : null}
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             ) : (
               <p className={styles.empty}>등록된 공지가 없습니다. 위에서 첫 공지를 작성하세요.</p>

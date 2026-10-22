@@ -1380,7 +1380,7 @@ async function main() {
         await addDialog.getByRole('button', { name: '데스크 저장' }).click();
         const row = page.getByRole('listitem').filter({ hasText: deskName }).first();
         await row.waitFor({ timeout: 10000 });
-        await row.getByRole('button', { name: '편집' }).click();
+        await row.getByRole('button', { name: '편집', exact: true }).click();
         const editDialog = page.getByRole('dialog');
         if (!await editDialog.getByText('데스크 편집', { exact: true }).count()) throw new Error('edit dialog did not open in edit mode');
         if (await editDialog.locator('#desk-name').inputValue() !== deskName) throw new Error('edit dialog lost the desk name');
@@ -1392,7 +1392,7 @@ async function main() {
         await edited.waitFor({ timeout: 10000 });
         const editedText = await edited.innerText();
         if (!editedText.includes('태블릿') || !editedText.includes('가동 중')) throw new Error(`edit lost mode or open state: ${editedText}`);
-        await edited.getByRole('button', { name: '편집' }).click();
+        await edited.getByRole('button', { name: '편집', exact: true }).click();
         const directionDialog = page.getByRole('dialog');
         await directionDialog.locator('#desk-action').selectOption('OUT');
         if (!await directionDialog.locator('#desk-direction-confirm').isVisible()) throw new Error('direction change did not ask for confirmation');
