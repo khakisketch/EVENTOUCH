@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="EVENTOUCH">
-  <rect width="512" height="512" fill="#E76D26"/>
-  <rect x="148" y="176" width="216" height="160" rx="22" fill="none" stroke="#FFFFFF" stroke-width="24"/>
-  <path d="M148 248h216" stroke="#FFFFFF" stroke-width="24"/>
-  <path d="M198 156v40M314 156v40" stroke="#FFFFFF" stroke-width="24" stroke-linecap="round"/>
-  <circle cx="256" cy="308" r="28" fill="#FFFFFF"/>
-</svg>
