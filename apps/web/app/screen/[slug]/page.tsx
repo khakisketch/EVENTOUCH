@@ -1,14 +1,8 @@
 import DisplayBoard from "./DisplayBoard";
 
-// Slice 5 of the frontend migration: the venue board. Public, no session,
-// polls the public projection on the legacy 5-second cadence and cycles
-// published notices, program and venue info.
-//
-// Deliberate scope: this board does not yet honor the operator's display.set
-// selection, because the public projection does not carry display config
-// (it is hardcoded to idle server-side). Honoring the selection needs a
-// public display-config contract first; until then the legacy screen keeps
-// serving operator-driven output and this board is additive.
+// Public venue board. The client polls the safe public projection, honors the
+// operator's published display selection, and keeps its last good frame during
+// transient network failures.
 export default async function ScreenPage({
   params,
 }: {
@@ -16,7 +10,7 @@ export default async function ScreenPage({
 }) {
   const { slug } = await params;
   return (
-      <main id="main-content" className="display-page">
+      <main id="main-content" tabIndex={-1} className="display-page">
       <DisplayBoard slug={slug} />
     </main>
   );

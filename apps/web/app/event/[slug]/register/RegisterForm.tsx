@@ -1,12 +1,16 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { PublishedField } from "./page";
 
 type Props = {
   slug: string;
   fields: PublishedField[];
+  // Without SMS the ticket can only be reopened on the device that applied:
+  // the form must not promise a recovery that does not exist.
+  recoveryBlocked?: boolean;
   consentText: string;
   formVersion: number;
   verificationRequired: boolean;
@@ -19,7 +23,7 @@ function randomCommandId(): string {
   return `web-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
 }
 
-export default function RegisterForm({ slug, fields, consentText, formVersion, verificationRequired }: Props) {
+export default function RegisterForm({ slug, fields, consentText, formVersion, verificationRequired, recoveryBlocked }: Props) {
   const router = useRouter();
   // One command id per filled form, not per click: if the response is lost
   // on its way back, the retry replays the SAME request and the server
@@ -29,6 +33,9 @@ export default function RegisterForm({ slug, fields, consentText, formVersion, v
   const [values, setValues] = useState<Record<string, string | boolean>>({});
   const [consent, setConsent] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
+  // Registering twice is a common, recoverable situation: the attendee needs
+  // the way back to their ticket, not only the rejection.
+  const [alreadyRegistered, setAlreadyRegistered] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   // Phone-ownership proof for verified-only events. The grant is bound to
   // the exact digits shown; editing the number afterwards voids it.
@@ -118,6 +125,7 @@ export default function RegisterForm({ slug, fields, consentText, formVersion, v
     }
     setSubmitting(true);
     setFailure(null);
+    setAlreadyRegistered(false);
     try {
       const commandId = commandIdRef.current ?? randomCommandId();
       commandIdRef.current = commandId;
@@ -149,11 +157,11 @@ export default function RegisterForm({ slug, fields, consentText, formVersion, v
         participant?: { ticket?: unknown } | null;
       } | null;
       if (!res.ok) {
+        const message =
+          typeof data?.error === "string" ? data.error : "신청을 저장하지 못했습니다";
+        setAlreadyRegistered(/이미 등록|중복/.test(message));
         setFailure({
-          message:
-            typeof data?.error === "string"
-              ? data.error
-              : "신청을 저장하지 못했습니다",
+          message,
           field: typeof data?.field === "string" ? data.field : undefined,
         });
         return;
@@ -175,6 +183,60 @@ export default function RegisterForm({ slug, fields, consentText, formVersion, v
 
   return (
     <form className="registration-form" onSubmit={onSubmit}>
+      {verificationRequired ? (
+        <section className="verification-panel" aria-label="연락처 인증">
+          <h2>연락처 인증</h2>
+          {grant ? (
+            <p className="state-success" role="status">연락처 인증됨. 번호를 바꾸면 다시 인증하세요.</p>
+          ) : (
+            <>
+              <p>신청 연락처가 본인 것인지 문자 인증번호로 확인합니다. 인증을 마쳐야 신청할 수 있습니다.</p>
+              {!codeSent ? (
+                <button type="button" className="button button-secondary" onClick={requestCode} disabled={verifying}>
+                  {verifying ? "보내는 중입니다" : "인증번호 받기"}
+                </button>
+              ) : (
+                <>
+                  <p className="state-success" role="status">인증번호 요청을 접수했습니다. 코드가 도착하면 10분 안에 입력하세요. 이 화면에서는 문자 도착 여부를 확인할 수 없습니다. 문자가 오지 않으면 잠시 후 다시 받을 수 있습니다.</p>
+                  <div className="form-field">
+                    <label htmlFor="verify-code">인증번호 6자리</label>
+                    <input
+                      id="verify-code"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      placeholder="6자리 숫자"
+                      value={code}
+                      onChange={(event) => setCode(event.target.value)}
+                    />
+                  </div>
+                  <button type="button" className="button button-secondary" onClick={confirmCode} disabled={verifying}>
+                    {verifying ? "확인 중입니다" : "인증 확인"}
+                  </button>{" "}
+                  <button type="button" className="button button-secondary" onClick={requestCode} disabled={verifying}>
+                    {verifying ? "보내는 중입니다" : "인증번호 다시 받기"}
+                  </button>
+                </>
+              )}
+              {verifyFailure ? <p role="alert">{verifyFailure}</p> : null}
+              <p className="verification-help">
+                문자가 오지 않거나 인증이 계속되지 않으면{" "}
+                <Link href={`/event/${encodeURIComponent(slug)}`}>행사 안내에서 운영 정보를 확인하세요.</Link>
+              </p>
+            </>
+          )}
+        </section>
+      ) : null}
+      <p className="registration-lead">
+        {verificationRequired
+          ? "연락처 인증 후 신청 정보를 입력하면 참가 티켓이 바로 발급됩니다."
+          : "신청 정보를 입력하면 참가 티켓이 바로 발급됩니다."}
+      </p>
+      {recoveryBlocked ? (
+        <p className="registration-lead" role="note">
+          이 행사에서는 문자로 티켓을 다시 연결할 수 없어, 티켓은 신청한 기기에서만 열 수 있습니다.
+        </p>
+      ) : null}
       {fields.map((field) => {
         const invalid = failure?.field === field.id;
         if (field.type === "select") {
@@ -230,7 +292,13 @@ export default function RegisterForm({ slug, fields, consentText, formVersion, v
             <input
               id={`field-${field.id}`}
               type={field.type === "email" ? "email" : "text"}
-              autoComplete={field.id === "phone" ? "tel" : undefined}
+              autoComplete={
+                field.id === "phone" ? "tel"
+                : field.id === "name" ? "name"
+                : field.id === "email" ? "email"
+                : field.id === "company" ? "organization"
+                : undefined
+              }
               inputMode={field.id === "phone" ? "tel" : undefined}
               value={typeof values[field.id] === "string" ? (values[field.id] as string) : ""}
               onChange={(event) => setValue(field.id, event.target.value)}
@@ -257,49 +325,15 @@ export default function RegisterForm({ slug, fields, consentText, formVersion, v
           {failure?.field === "consent" ? <p role="alert">{failure.message}</p> : null}
         </div>
       ) : null}
-      {verificationRequired ? (
-        <section className="verification-panel" aria-label="연락처 인증">
-          <h2>연락처 인증</h2>
-          {grant ? (
-            <p className="state-success" role="status">연락처 인증됨. 번호를 바꾸면 다시 인증하세요.</p>
-          ) : (
-            <>
-              <p>신청 연락처가 본인 것인지 문자 인증번호로 확인합니다. 인증을 마쳐야 신청할 수 있습니다.</p>
-              {!codeSent ? (
-                <button type="button" className="button button-secondary" onClick={requestCode} disabled={verifying}>
-                  {verifying ? "보내는 중입니다" : "인증번호 받기"}
-                </button>
-              ) : (
-                <>
-                  <p className="state-success" role="status">입력한 연락처로 인증번호를 보냈습니다. 10분 안에 입력하세요. 오지 않으면 다시 받기를 누르세요.</p>
-                  <div className="form-field">
-                    <label htmlFor="verify-code">인증번호 6자리</label>
-                    <input
-                      id="verify-code"
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      placeholder="6자리 숫자"
-                      value={code}
-                      onChange={(event) => setCode(event.target.value)}
-                    />
-                  </div>
-                  <button type="button" className="button button-secondary" onClick={confirmCode} disabled={verifying}>
-                    {verifying ? "확인 중입니다" : "인증 확인"}
-                  </button>{" "}
-                  <button type="button" className="button button-secondary" onClick={requestCode} disabled={verifying}>
-                    {verifying ? "보내는 중입니다" : "인증번호 다시 받기"}
-                  </button>
-                </>
-              )}
-              {verifyFailure ? <p role="alert">{verifyFailure}</p> : null}
-            </>
-          )}
-        </section>
-      ) : null}
       {failure && !failure.field ? <p role="alert">{failure.message}</p> : null}
+      {alreadyRegistered ? (
+        <p className="registration-duplicate" role="status">
+          이미 신청하신 연락처로 등록되어 있습니다.{" "}
+          <Link href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</Link>
+        </p>
+      ) : null}
       {verificationRequired && !grant ? (
-        <p className="notice" role="status">연락처 인증을 완료해야 신청할 수 있습니다. 위에서 인증번호를 받아 확인하세요.</p>
+        <p className="notice" role="status">연락처 인증을 완료하면 아래에서 신청 정보를 입력할 수 있습니다.</p>
       ) : null}
       <button type="submit" disabled={submitting}>
         {submitting ? "신청 중입니다" : "신청하기"}

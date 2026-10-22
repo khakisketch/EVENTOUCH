@@ -148,7 +148,7 @@ export default async function EventPage({
   })();
 
   return (
-    <main id="main-content" className="site-page public-event-page">
+    <main id="main-content" tabIndex={-1} className="site-page public-event-page">
       <header className="public-page-header">
         <span className="compact-wordmark">EVENTOUCH</span>
         <span className="eyebrow">행사 안내</span>
@@ -176,18 +176,30 @@ export default async function EventPage({
             <dd><span className={eventStageClassName(event.stage)}>{eventStageLabel(event.stage)}</span></dd>
           </div>
         </dl>
-        {registrationOpen ? (
-          <p className={styles.cta}>
+        <div className={styles.cta}>
+          {registrationOpen ? (
             <Link
               className="button button-primary"
               href={`/event/${encodeURIComponent(slug)}/register`}
             >
               참가 신청하기
             </Link>
-          </p>
-        ) : (
-          <p className="notice" role="status">현재 신청을 받지 않습니다.</p>
-        )}
+          ) : (
+            <p className={styles.registrationClosed} role="status">현재 신청을 받지 않습니다.</p>
+          )}
+          <Link
+            className={`button button-secondary ${styles.recoveryLink}`}
+            href={`/event/${encodeURIComponent(slug)}/ticket/recover`}
+          >
+            이미 신청했다면 · 내 티켓 찾기
+          </Link>
+          <Link
+            className={`button button-secondary ${styles.homeLink}`}
+            href={`/event/${encodeURIComponent(slug)}/home`}
+          >
+            참가자 홈
+          </Link>
+        </div>
       </section>
 
       {notices.length ? (

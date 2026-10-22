@@ -14,8 +14,7 @@ export default function RecoverForm({ slug }: { slug: string }) {
   const [failure, setFailure] = useState<Failure | null>(null);
   const [working, setWorking] = useState(false);
 
-  async function requestCode(event: React.FormEvent) {
-    event.preventDefault();
+  async function sendCode() {
     if (working) return;
     setWorking(true);
     setFailure(null);
@@ -34,11 +33,17 @@ export default function RecoverForm({ slug }: { slug: string }) {
         return;
       }
       setSent(true);
+      setCode("");
     } catch {
       setFailure({ message: "연결하지 못했습니다. 다시 시도하세요." });
     } finally {
       setWorking(false);
     }
+  }
+
+  async function requestCode(event: React.FormEvent) {
+    event.preventDefault();
+    await sendCode();
   }
 
   async function confirmCode(event: React.FormEvent) {
@@ -73,6 +78,11 @@ export default function RecoverForm({ slug }: { slug: string }) {
 
   return (
     <div className="recover-flow">
+      <p className="recover-lead" role="status">
+        {sent
+          ? "2. 문자로 받은 인증번호를 입력해 주세요."
+          : "1. 신청할 때 입력한 연락처로 인증번호를 받으세요."}
+      </p>
       {!sent ? (
         <form className="registration-form" onSubmit={requestCode}>
           <div className="form-field">
@@ -97,7 +107,11 @@ export default function RecoverForm({ slug }: { slug: string }) {
       ) : (
         <form className="registration-form" onSubmit={confirmCode}>
           <p className="notice" role="status">
-            {phone} 번호로 인증번호를 보냈습니다. 새 번호로 다시 받으려면 처음부터 입력하세요.
+            {phone} 번호로 인증번호 요청을 접수했습니다. 10분 안에 입력해 주세요.
+          </p>
+          <p className="recover-note">
+            이 화면에서는 문자 도착 여부를 확인할 수 없습니다. 코드가 오지 않으면 다시 받거나 행사 안내에서
+            운영 정보를 확인하세요.
           </p>
           <div className="form-field">
             <label htmlFor="recover-code">인증번호 6자리</label>
@@ -121,18 +135,26 @@ export default function RecoverForm({ slug }: { slug: string }) {
             type="button"
             className="button button-secondary"
             disabled={working}
+            onClick={sendCode}
+          >
+            {working ? "보내는 중입니다" : "인증번호 다시 받기"}
+          </button>
+          <button
+            type="button"
+            className="button button-secondary"
+            disabled={working}
             onClick={() => {
               setSent(false);
               setCode("");
               setFailure(null);
             }}
           >
-            연락처 다시 입력
+            연락처 바꾸기
           </button>
         </form>
       )}
       <p>
-        <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</Link>
+        <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내·문의처 보기</Link>
       </p>
     </div>
   );

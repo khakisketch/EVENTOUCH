@@ -11,7 +11,7 @@ export default async function TicketPage({
 }) {
   const { slug } = await params;
   return (
-      <main id="main-content" className="site-page ticket-page">
+      <main id="main-content" tabIndex={-1} className="site-page ticket-page">
         <header className="public-page-header">
           <span className="compact-wordmark">EVENTOUCH</span>
           <p className="eyebrow">내 티켓</p>

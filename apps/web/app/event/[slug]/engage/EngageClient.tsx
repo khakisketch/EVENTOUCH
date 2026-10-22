@@ -454,17 +454,17 @@ export default function EngageClient({ slug }: { slug: string }) {
 
   if (state.kind === "missing") {
     return (
-      <main id="main-content" className={styles.page}>
+      <main id="main-content" tabIndex={-1} className={styles.page}>
         <header className={styles.pageHeader}>
           <span className={styles.wordmark}>EVENTOUCH</span>
           <span className="eyebrow">참여 프로그램</span>
           {state.eventName ? <h1>{state.eventName}</h1> : null}
         </header>
         <section className={styles.noticeCard}>
-          <h2>티켓 링크가 필요합니다</h2>
-          <p>참여 프로그램은 티켓 링크로 연 참가자만 이용할 수 있습니다. 신청 완료 화면의 링크로 다시 여세요.</p>
+          <h2>티켓이 확인되지 않습니다</h2>
+          <p>참여 프로그램은 티켓 링크로 연 참가자만 이용할 수 있습니다. 신청할 때 쓴 연락처로 티켓을 다시 연결하거나, 신청 완료 화면의 링크로 다시 여세요.</p>
           <p className={styles.actions}>
-            <Link className="button button-primary" href={`/event/${encodeURIComponent(slug)}/ticket`}>내 티켓으로 이동</Link>
+            <Link className="button button-primary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</Link>
             <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</Link>
           </p>
         </section>
@@ -474,7 +474,7 @@ export default function EngageClient({ slug }: { slug: string }) {
 
   if (state.kind === "failed") {
     return (
-      <main id="main-content" className={styles.page}>
+      <main id="main-content" tabIndex={-1} className={styles.page}>
         <header className={styles.pageHeader}>
           <span className={styles.wordmark}>EVENTOUCH</span>
           <span className="eyebrow">참여 프로그램</span>
@@ -495,7 +495,7 @@ export default function EngageClient({ slug }: { slug: string }) {
               다시 시도
             </button>
             {state.hasTicket ? null : (
-              <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket`}>내 티켓으로 이동</Link>
+              <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</Link>
             )}
             <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</Link>
           </p>
@@ -505,7 +505,7 @@ export default function EngageClient({ slug }: { slug: string }) {
   }
 
   return (
-    <main id="main-content" className={styles.page}>
+    <main id="main-content" tabIndex={-1} className={styles.page}>
       <header className={styles.pageHeader}>
         <span className={styles.wordmark}>EVENTOUCH</span>
         <span className="eyebrow">참여 프로그램</span>

@@ -6,7 +6,6 @@ import { useParams } from "next/navigation";
 // Route boundary for /event/[slug]/*: a failed public fetch otherwise drops
 // the attendee on the framework default with no recovery path.
 export default function EventError({
-  error,
   reset,
 }: {
   error: Error & { digest?: string };
@@ -15,10 +14,10 @@ export default function EventError({
   const params = useParams();
   const slug = typeof params?.slug === "string" ? params.slug : "";
   return (
-    <section className="ticket-card ticket-message" role="alert">
+    <main id="main-content" tabIndex={-1} className="ticket-card ticket-message">
       <h1>행사 정보를 불러오지 못했습니다</h1>
-      <p>
-        {error?.message || "연결하지 못했습니다. 다시 시도하세요."}
+      <p role="alert">
+        연결 상태를 확인한 뒤 다시 시도하세요. 계속되면 행사 운영자에게 문의해주세요.
       </p>
       <p>
         <button type="button" className="button button-primary" onClick={() => reset()}>
@@ -30,6 +29,6 @@ export default function EventError({
           <Link href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</Link>
         </p>
       ) : null}
-    </section>
+    </main>
   );
 }

@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import QRCode from "react-qr-code";
+import styles from "./ticket.module.css";
 
 type TicketState =
   | { kind: "loading" }
   | { kind: "missing" }
-  | { kind: "failed"; message: string }
+  | { kind: "failed"; message: string; canRecover?: boolean }
   | {
       kind: "ready";
       ticket: string;
@@ -127,7 +128,8 @@ export default function TicketView({ slug }: { slug: string }) {
                 message:
                   typeof data?.error === "string"
                     ? data.error
-                    : "티켓을 확인할 수 없습니다. 운영자에게 새 링크를 요청하세요.",
+                    : "티켓을 확인할 수 없습니다. 신청 연락처 인증으로 다시 연결하세요.",
+                canRecover: res.status === 404,
               });
             }
           }
@@ -174,37 +176,46 @@ export default function TicketView({ slug }: { slug: string }) {
   }
   if (state.kind === "missing") {
     return (
-      <section className="ticket-card ticket-message">
-        <h1>티켓 링크가 필요합니다</h1>
-        <p>티켓은 신청 완료 화면이 열린 탭에서만 자동으로 찾을 수 있습니다. 탭을 닫았다면 아래에서 참가 정보를 다시 연결하세요.</p>
+      <section className={`${styles.ticketCard} ${styles.ticketMessage}`}>
+        {/* Same state, same words as the home entries: the attendee has no
+            ticket here, and the way forward is the same everywhere. */}
+        <h1>티켓이 확인되지 않습니다</h1>
+        <p>이 브라우저에 티켓이 보관되어 있지 않습니다. 신청할 때 쓴 연락처를 인증하면 다시 열 수 있습니다.</p>
         <p>
-          <Link className="button button-primary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 참가 정보 다시 연결</Link>
+          <Link className={styles.buttonPrimary} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</Link>
         </p>
         <p>
-          <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/register`}>참가 신청하기</Link>
+          <Link className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/register`}>참가 신청하기</Link>
         </p>
       </section>
     );
   }
   if (state.kind === "failed") {
     return (
-      <section className="ticket-card ticket-message">
+      <section className={`${styles.ticketCard} ${styles.ticketMessage}`}>
         <h1>티켓을 사용할 수 없습니다</h1>
         <p role="alert">{state.message}</p>
+        {state.canRecover ? (
+          <p>
+            <Link className={styles.buttonPrimary} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>연락처 인증으로 티켓 다시 찾기</Link>
+          </p>
+        ) : null}
+        {!state.canRecover ? (
+          <p>
+            <button
+              type="button"
+              className={styles.buttonPrimary}
+              onClick={() => {
+                setState({ kind: "loading" });
+                setReloadTick((tick) => tick + 1);
+              }}
+            >
+              다시 시도
+            </button>
+          </p>
+        ) : null}
         <p>
-          <button
-            type="button"
-            className="button button-primary"
-            onClick={() => {
-              setState({ kind: "loading" });
-              setReloadTick((tick) => tick + 1);
-            }}
-          >
-            다시 시도
-          </button>
-        </p>
-        <p>
-          <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</Link>
+          <Link className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</Link>
         </p>
       </section>
     );
@@ -213,33 +224,45 @@ export default function TicketView({ slug }: { slug: string }) {
     state.status === "APPROVED" &&
     (state.paymentStatus === "FREE" || state.paymentStatus === "PAID");
   return (
-    <section className="ticket-card ticket-ready">
-      <header className="ticket-heading">
-        <span className="ticket-label">입장 티켓</span>
+    <section className={styles.ticketCard}>
+      <header className={styles.ticketHeading}>
+        <span className={styles.ticketLabel}>입장 티켓</span>
         <h1>{state.eventName}</h1>
         <p>{state.eventDate}</p>
       </header>
-      <div className="ticket-attendee">
+      <div className={styles.ticketAttendee}>
         <h2>{state.name}</h2>
         {state.company ? <p>{state.company}</p> : null}
-        <p className="ticket-entry-state" data-tone={usable ? "good" : state.status === "CANCELLED" ? "bad" : "wait"}><span className="status-dot" aria-hidden="true" />{entryLabel(state)}</p>
+        <p className={styles.ticketEntryState} data-tone={usable ? "good" : state.status === "CANCELLED" ? "bad" : "wait"}>
+          <span className={styles.statusDot} aria-hidden="true" />
+          {entryLabel(state)}
+        </p>
       </div>
       {usable ? (
         <>
-          <div className="ticket-qr" role="img" aria-label={`${state.name}님의 행사 입장 및 퇴장용 QR`}>
-            <QRCode value={state.ticket} size={220} />
+          <div className={styles.ticketQrWrapper}>
+            <div className={styles.ticketQr} role="img" aria-label={`${state.name}님의 행사 입장 및 퇴장용 QR`}>
+              <QRCode value={state.ticket} size={220} />
+            </div>
+            <p className={styles.ticketInstruction}>입장할 때 이 QR을 보여 주세요. 퇴장할 때도 같은 QR을 사용합니다.</p>
           </div>
-          <p className="ticket-instruction">입장과 퇴장에는 같은 QR을 사용합니다.</p>
-          <p>
-            <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/engage`}>참여 프로그램 보기</Link>
+          <div className={styles.ticketActions}>
+            {/* Secondary on purpose: the QR above is what the attendee
+                shows at the desk, not this link. */}
+            <Link className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/engage`}>참여 프로그램 보기</Link>
+          </div>
+          <p className={styles.ticketRecovery}>
+            이 티켓은 현재 탭에만 보관됩니다. 다른 기기에서 열 때는{" "}
+            <Link href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>연락처 인증으로 다시 연결</Link>
+            하세요.
           </p>
         </>
       ) : (
         <>
-          <p className="ticket-unusable">{unusableCopy(state).text}</p>
+          <p className={styles.ticketUnusable}>{unusableCopy(state).text}</p>
           {unusableCopy(state).showRegister ? (
             <p>
-              <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/register`}>다시 신청하기</Link>
+              <Link className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/register`}>다시 신청하기</Link>
             </p>
           ) : null}
         </>

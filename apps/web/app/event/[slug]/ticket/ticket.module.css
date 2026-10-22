@@ -1,0 +1,217 @@
+/* EVENTOUCH Next.js — Participant Ticket UI improvements.
+   Reuses tokens from app/tokens.css. Imported by TicketView.tsx. */
+.ticketCard {
+  border: 2px solid var(--brand);
+  border-radius: var(--radius);
+  background: var(--paper);
+  padding: var(--s5);
+  box-shadow: 0 4px 12px var(--shadow-color);
+  max-width: var(--web-ticket-max);
+  margin: 0 auto;
+}
+
+.ticketCard.ticketMessage {
+  border-color: var(--line-strong);
+  text-align: center;
+  padding: var(--s6) var(--s5);
+}
+
+.ticketMessage h1 {
+  margin: 0 0 var(--s3);
+  font-size: var(--h2);
+  line-height: 1.35;
+}
+
+.ticketHeading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s2);
+  margin-bottom: var(--s4);
+}
+
+.ticketLabel {
+  display: inline-block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--brand-text);
+  font-weight: 800;
+}
+
+.ticketHeading h1 {
+  font-family: var(--display-font);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.3;
+  margin: var(--s2) 0 var(--s1);
+  letter-spacing: -0.02em;
+}
+
+.ticketHeading p {
+  font-size: var(--small);
+  color: var(--muted);
+  margin: 0;
+  max-width: none;
+}
+
+.ticketAttendee {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s2);
+  margin-bottom: var(--s4);
+}
+
+.ticketAttendee h2 {
+  font-size: 24px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.ticketAttendee p {
+  font-size: var(--small);
+  color: var(--muted);
+  margin: 0;
+}
+
+.ticketEntryState {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: var(--small);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ticketEntryState[data-tone="good"] {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.ticketEntryState[data-tone="wait"] {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.ticketEntryState[data-tone="bad"] {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.ticketQrWrapper {
+  text-align: center;
+  margin-bottom: var(--s4);
+}
+
+/* Staff scan this code at the desk: the QR standard asks for four clear
+   modules around the symbol, and a phone camera needs that margin to lock
+   on. */
+.ticketQr {
+  display: inline-block;
+  padding: var(--s5);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  user-select: none;
+  line-height: 0;
+}
+
+.ticketQr svg {
+  width: 220px !important;
+  height: 220px !important;
+}
+
+.ticketInstruction {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: var(--s2);
+  margin-bottom: var(--s4);
+  max-width: none;
+}
+
+.ticketActions {
+  display: flex;
+  gap: var(--s2);
+  justify-content: center;
+  margin-bottom: var(--s4);
+}
+
+.ticketRecovery {
+  max-width: none;
+  margin: 0;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--info-line);
+  border-radius: var(--radius);
+  background: var(--info-soft);
+  color: var(--muted);
+  font-size: var(--small);
+  line-height: 1.55;
+  text-align: center;
+}
+
+.ticketRecovery a {
+  font-weight: 700;
+}
+
+.buttonPrimary,
+.buttonSecondary {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  text-decoration: none;
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.buttonPrimary {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: var(--on-brand);
+}
+
+.buttonSecondary {
+  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.buttonPrimary:hover {
+  background: var(--brand-hover);
+  border-color: var(--brand-hover);
+}
+
+.buttonSecondary:hover {
+  background: var(--surface-muted);
+}
+
+.ticketUnusable {
+  font-size: var(--small);
+  color: var(--muted);
+  margin-bottom: var(--s4);
+  max-width: none;
+}
+
+@media (max-width: 480px) {
+  .ticketCard {
+    padding: var(--s4);
+  }
+
+  .ticketQr svg {
+    width: 180px !important;
+    height: 180px !important;
+  }
+}

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import drawStyles from "./draw-stage.module.css";
 
 type Notice = { id: string; title: string; body: string };
 type ProgramItem = {
@@ -13,6 +14,14 @@ type ProgramItem = {
   place: string;
   description: string;
 };
+type DrawWinner = {
+  name: string;
+  company: string;
+  kind?: "PERSON" | "COMPANY";
+  luckyNumber?: number | null;
+  tier?: string;
+};
+type DrawOutcome = { id: string; at: string; programName: string; winners: DrawWinner[] };
 type BoardModule = {
   id: string;
   type: string;
@@ -21,7 +30,7 @@ type BoardModule = {
   counts: number[];
   revealed: boolean;
   answer: string;
-  winners: Array<{ name: string; company: string }>;
+  drawHistory: DrawOutcome[];
 };
 type BoardQuestion = { id: string; text: string; answer: string; name: string };
 type BoardPhoto = { id: string; caption: string; fileId: string; data: string };
@@ -49,9 +58,18 @@ type BoardState =
   | { kind: "ready"; data: BoardData; frame: number; stale: boolean };
 
 const POLL_MS = 5000;
+const ACTIVE_DRAW_POLL_MS = 1000;
 
 function text(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function prefersReducedMotion(): boolean {
+  try {
+    return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch {
+    return false;
+  }
 }
 
 function toBoard(
@@ -101,20 +119,30 @@ function toBoard(
         const module = item as Record<string, unknown>;
         if (typeof module.id !== "string" || typeof module.type !== "string") return [];
         const type = module.type;
-        const drawHistory = Array.isArray(module.drawHistory) ? module.drawHistory : [];
-        const winners = type === "draw"
-          ? drawHistory
-              .filter((entry) => typeof entry === "object" && entry !== null)
-              .flatMap((entry) => {
-                const wins = (entry as Record<string, unknown>).winners;
-                return Array.isArray(wins)
-                  ? wins.flatMap((winner) => {
-                      if (typeof winner !== "object" || winner === null) return [];
-                      const person = winner as Record<string, unknown>;
-                      return [{ name: text(person.name), company: text(person.company) }];
-                    })
-                  : [];
-              })
+        const drawHistory: DrawOutcome[] = type === "draw" && Array.isArray(module.drawHistory)
+          ? module.drawHistory.flatMap((entry) => {
+              if (typeof entry !== "object" || entry === null) return [];
+              const record = entry as Record<string, unknown>;
+              if (typeof record.id !== "string" || !Array.isArray(record.winners)) return [];
+              const winners = record.winners.flatMap((winner) => {
+                if (typeof winner !== "object" || winner === null) return [];
+                const person = winner as Record<string, unknown>;
+                if (typeof person.name !== "string" && typeof person.company !== "string") return [];
+                const kind: DrawWinner["kind"] =
+                  person.kind === "PERSON" || person.kind === "COMPANY" ? person.kind : undefined;
+                const luckyNumber = Number.isSafeInteger(person.luckyNumber) && Number(person.luckyNumber) >= 0
+                  ? Number(person.luckyNumber)
+                  : person.luckyNumber === null ? null : undefined;
+                return [{
+                  name: text(person.name),
+                  company: text(person.company),
+                  ...(kind ? { kind } : {}),
+                  ...(luckyNumber !== undefined ? { luckyNumber } : {}),
+                  ...(typeof person.tier === "string" && person.tier ? { tier: person.tier } : {}),
+                }];
+              });
+              return [{ id: record.id, at: text(record.at), programName: text(record.programName), winners }];
+            })
           : [];
         return [{
           id: module.id,
@@ -128,7 +156,7 @@ function toBoard(
             : [],
           revealed: module.revealed === true,
           answer: text(module.answer),
-          winners,
+          drawHistory,
         }];
       })
     : [];
@@ -191,13 +219,219 @@ function toBoard(
   };
 }
 
+function DrawReveal({
+  outcome,
+  moduleTitle,
+  animate,
+  onRevealComplete,
+}: {
+  outcome: DrawOutcome | null;
+  moduleTitle: string;
+  animate: boolean;
+  onRevealComplete: (id: string) => void;
+}) {
+  const [completedOutcomeId, setCompletedOutcomeId] = useState<string | null>(null);
+  const [reduceMotion] = useState(prefersReducedMotion);
+  const revealing = Boolean(outcome && animate && !reduceMotion && completedOutcomeId !== outcome.id);
+  useEffect(() => {
+    if (!outcome || !animate || completedOutcomeId === outcome.id) {
+      return;
+    }
+    if (reduceMotion) {
+      onRevealComplete(outcome.id);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setCompletedOutcomeId(outcome.id);
+      onRevealComplete(outcome.id);
+    }, 2600);
+    return () => window.clearTimeout(timer);
+  }, [outcome?.id, animate, completedOutcomeId, reduceMotion, onRevealComplete]);
+
+  const title = outcome?.programName || moduleTitle || "추첨";
+  const singleWinner = outcome?.winners.length === 1 ? outcome.winners[0] : null;
+  const luckyNumber = singleWinner?.kind === "PERSON" && Number.isSafeInteger(singleWinner.luckyNumber)
+    ? singleWinner.luckyNumber as number
+    : null;
+  const luckyDigits = luckyNumber === null ? [] : String(luckyNumber).split("");
+
+  if (!outcome) {
+    return (
+      <div className={drawStyles.awaitingResult} role="status">
+        <NeutralRouletteWheel className={drawStyles.waitingWheel} />
+        <strong>추첨 결과를 기다리고 있습니다</strong>
+      </div>
+    );
+  }
+
+  if (revealing) {
+    if (singleWinner?.kind === "PERSON" && luckyNumber !== null) {
+      return (
+        <div className={drawStyles.revealMoment} role="status" aria-live="polite">
+          <p className={drawStyles.revealLabel}>럭키번호</p>
+          <div
+            className={`${drawStyles.slotWindow} ${drawStyles.slotWindowRevealing}`}
+            style={{ maxWidth: `${luckyDigits.length * 390}px`, gridTemplateColumns: `repeat(${luckyDigits.length}, minmax(0, 1fr))` }}
+            aria-hidden="true"
+          >
+            {luckyDigits.map((_, index) => <span className={drawStyles.slotBlank} key={`${outcome.id}-blank-${index}`}>—</span>)}
+            <span className={drawStyles.slotSweep} />
+          </div>
+          <span className={drawStyles.visuallyHidden}>{title} 럭키번호를 공개합니다.</span>
+        </div>
+      );
+    }
+
+    return (
+      <div className={drawStyles.revealMoment} role="status" aria-live="polite">
+        <NeutralRouletteWheel spinning />
+        <span className={drawStyles.visuallyHidden}>{title} 당첨 결과를 공개합니다.</span>
+      </div>
+    );
+  }
+
+  if (singleWinner?.kind === "PERSON" && luckyNumber !== null) {
+    return (
+      <div className={drawStyles.resultStage} key={outcome.id}>
+        <section className={drawStyles.personNumberOutcome} aria-label="당첨 참가자">
+          <p className={drawStyles.numberLabel}>럭키번호</p>
+          <div
+            className={drawStyles.slotWindow}
+            style={{ maxWidth: `${luckyDigits.length * 390}px`, gridTemplateColumns: `repeat(${luckyDigits.length}, minmax(0, 1fr))` }}
+            role="img"
+            aria-label={`럭키번호 ${luckyNumber}`}
+          >
+            {luckyDigits.map((digit, index) => (
+              <span className={drawStyles.slotDigit} key={`${outcome.id}-${index}`}>{digit}</span>
+            ))}
+            <span className={drawStyles.slotSweep} aria-hidden="true" />
+          </div>
+          <div className={drawStyles.personIdentity}>
+            <span className={drawStyles.winnerKind}>당첨 참가자</span>
+            <strong className={drawStyles.personName}>{singleWinner.name || "이름 정보 없음"}</strong>
+            {singleWinner.company ? <span className={drawStyles.winnerCompany}>{singleWinner.company}</span> : null}
+            {singleWinner.tier ? <span className={drawStyles.winnerTier}>{singleWinner.tier}</span> : null}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  if (singleWinner?.kind === "PERSON") {
+    return (
+      <div className={drawStyles.resultStage} key={outcome.id}>
+        <section className={drawStyles.personNameOutcome} aria-label="당첨 참가자">
+          <span className={drawStyles.winnerKind}>당첨 참가자</span>
+          <strong className={drawStyles.fallbackPersonName}>{singleWinner.name || "이름 정보 없음"}</strong>
+          {singleWinner.company ? <span className={drawStyles.winnerCompany}>{singleWinner.company}</span> : null}
+          {singleWinner.luckyNumber === null ? <span className={drawStyles.numberUnavailable}>럭키번호 미발급</span> : null}
+          {singleWinner.tier ? <span className={drawStyles.winnerTier}>{singleWinner.tier}</span> : null}
+        </section>
+      </div>
+    );
+  }
+
+  if (singleWinner?.kind === "COMPANY") {
+    return (
+      <div className={drawStyles.resultStage} key={outcome.id}>
+        <section className={drawStyles.companyOutcome} aria-label="당첨 업체">
+          <NeutralRouletteWheel className={drawStyles.companyWheel} />
+          <div className={drawStyles.companyIdentity}>
+            <span className={drawStyles.winnerKind}>당첨 업체</span>
+            <strong className={drawStyles.companyName}>{singleWinner.company || singleWinner.name || "업체 정보 없음"}</strong>
+            {singleWinner.tier ? <span className={drawStyles.companyTier}>{singleWinner.tier}</span> : null}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  return (
+    <div className={drawStyles.resultStage} key={outcome.id}>
+      {outcome.winners.length ? (
+        <ol className={drawStyles.winnerGrid}>
+          {outcome.winners.map((winner, index) => {
+            const isCompany = winner.kind === "COMPANY";
+            const number = winner.kind === "PERSON" && Number.isSafeInteger(winner.luckyNumber)
+              ? winner.luckyNumber as number
+              : null;
+            const winnerDisplayName = isCompany
+              ? winner.company || winner.name || "업체 정보 없음"
+              : winner.kind === "PERSON"
+                ? winner.name || "이름 정보 없음"
+                : winner.name || winner.company || "당첨 정보 없음";
+            return (
+              <li
+                className={`${drawStyles.winnerCard} ${isCompany ? drawStyles.winnerCardCompany : number !== null ? drawStyles.winnerCardNumber : ""}`}
+                key={`${outcome.id}-${index}`}
+              >
+                <span className={drawStyles.winnerKind}>
+                  {isCompany ? "당첨 업체" : winner.kind === "PERSON" ? "당첨 참가자" : "당첨 결과"}
+                </span>
+                {number !== null ? <strong className={drawStyles.gridLuckyNumber}>{number}</strong> : null}
+                <strong className={drawStyles.winnerName}>{winnerDisplayName}</strong>
+                {winner.kind === "PERSON" && winner.company ? <span className={drawStyles.winnerCompany}>{winner.company}</span> : null}
+                {winner.kind === "PERSON" && winner.luckyNumber === null ? <span className={drawStyles.numberUnavailable}>럭키번호 미발급</span> : null}
+                {winner.tier ? <span className={drawStyles.winnerTier}>{winner.tier}</span> : null}
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
+        <p className={drawStyles.emptyOutcome}>이번 추첨 결과가 없습니다.</p>
+      )}
+    </div>
+  );
+}
+
+function NeutralRouletteWheel({ className, spinning = false }: { className?: string; spinning?: boolean }) {
+  return (
+    <div className={`${drawStyles.rouletteWheel} ${spinning ? drawStyles.rouletteWheelSpinning : ""} ${className ?? ""}`} aria-hidden="true">
+      <span className={drawStyles.wheelPointer} />
+      <span className={drawStyles.wheelHub} />
+    </div>
+  );
+}
+
 export default function DisplayBoard({ slug }: { slug: string }) {
   const [state, setState] = useState<BoardState>({ kind: "loading" });
+  const [revealId, setRevealId] = useState<string | null>(null);
+  const seenDrawIdsRef = useRef<Map<string, string> | null>(null);
+  const visibleDrawReady = state.kind === "ready" && (
+    state.data.display.type === "draw" || state.data.modules.some((module) => module.type === "draw")
+  );
+  const pollDelay = visibleDrawReady
+    ? ACTIVE_DRAW_POLL_MS
+    : POLL_MS;
+  const onRevealComplete = useCallback((id: string) => {
+    setRevealId((current) => current === id ? null : current);
+  }, []);
+
+  useEffect(() => {
+    seenDrawIdsRef.current = null;
+    setRevealId(null);
+  }, [slug]);
 
   useEffect(() => {
     let stopped = false;
-    let timer: ReturnType<typeof setInterval> | null = null;
+    let timer: number | null = null;
+    let backoff = false;
+    function scheduleNext() {
+      if (stopped) return;
+      const visible = document.visibilityState === "visible";
+      const delay = visible && !backoff ? pollDelay : POLL_MS;
+      timer = window.setTimeout(() => {
+        timer = null;
+        void refresh();
+      }, delay);
+    }
     async function refresh() {
+      if (stopped) return;
+      if (document.visibilityState !== "visible") {
+        scheduleNext();
+        return;
+      }
+      let failed = false;
       try {
         const res = await fetch(
           `/api/public/events/${encodeURIComponent(slug)}`,
@@ -205,10 +439,12 @@ export default function DisplayBoard({ slug }: { slug: string }) {
         );
         if (stopped) return;
         if (res.status === 404) {
+          failed = true;
           setState({ kind: "missing" });
           return;
         }
         if (!res.ok) {
+          failed = true;
           setState((prev) =>
             prev.kind === "ready"
               ? { ...prev, stale: true }
@@ -218,8 +454,29 @@ export default function DisplayBoard({ slug }: { slug: string }) {
         }
         const board = toBoard(slug, (await res.json()) as object);
         if (!board) {
+          failed = true;
           setState({ kind: "missing" });
           return;
+        }
+        const seen = seenDrawIdsRef.current;
+        const currentIds = new Map<string, string>();
+        const newlyArrived: string[] = [];
+        for (const drawModule of board.modules) {
+          if (drawModule.type !== "draw") continue;
+          const latest = drawModule.drawHistory[0];
+          if (!latest?.id) continue;
+          currentIds.set(drawModule.id, latest.id);
+          if (seen && seen.has(drawModule.id) && seen.get(drawModule.id) !== latest.id) {
+            newlyArrived.push(latest.id);
+          } else if (seen && !seen.has(drawModule.id)) {
+            newlyArrived.push(latest.id);
+          }
+        }
+        if (seen === null) {
+          seenDrawIdsRef.current = currentIds;
+        } else {
+          for (const [moduleId, id] of currentIds) seen.set(moduleId, id);
+          if (newlyArrived.length) setRevealId(newlyArrived[newlyArrived.length - 1]);
         }
         setState((prev) => ({
           kind: "ready",
@@ -228,6 +485,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
           stale: false,
         }));
       } catch {
+        failed = true;
         if (!stopped) {
           // A failed poll keeps the last good frame: a venue screen must
           // never go blank on a transient network drop.
@@ -237,15 +495,27 @@ export default function DisplayBoard({ slug }: { slug: string }) {
               : { kind: "failed", message: "연결하지 못했습니다. 다시 시도하세요." }
           );
         }
+      } finally {
+        if (!stopped) {
+          backoff = failed;
+          scheduleNext();
+        }
       }
     }
-    refresh();
-    timer = setInterval(refresh, POLL_MS);
+    function onVisibilityChange() {
+      if (document.visibilityState !== "visible" || timer === null) return;
+      window.clearTimeout(timer);
+      timer = null;
+      void refresh();
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    void refresh();
     return () => {
       stopped = true;
-      if (timer) clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      if (timer !== null) window.clearTimeout(timer);
     };
-  }, [slug]);
+  }, [slug, pollDelay]);
 
   if (state.kind === "loading") return <p className="display-status" role="status">화면을 준비하고 있습니다.</p>;
   if (state.kind === "missing") {
@@ -314,22 +584,17 @@ export default function DisplayBoard({ slug }: { slug: string }) {
       body: <p className="display-answer">정답 · {module.answer}</p>,
     };
   } else if (data.display.type === "draw" && module && module.type === "draw") {
-    const shownWinners = module.winners.slice(0, 8);
+    const outcome = module.drawHistory[0] ?? null;
     selected = {
       key: `draw-${module.id}`,
-      title: "당첨을 축하합니다",
+      title: outcome?.programName || module.title || "추첨",
       body: (
-        <div className="display-winners">
-          {shownWinners.map((winner, index) => (
-            <div className="display-winner" key={`${winner.name}-${index}`}>
-              <h3>{winner.name}</h3>
-              <p>{winner.company}</p>
-            </div>
-          ))}
-          {module.winners.length > shownWinners.length ? (
-            <p>외 {module.winners.length - shownWinners.length}명</p>
-          ) : null}
-        </div>
+        <DrawReveal
+          outcome={outcome}
+          moduleTitle={module.title}
+          animate={Boolean(outcome && revealId === outcome.id)}
+          onRevealComplete={onRevealComplete}
+        />
       ),
     };
   } else if (data.display.type === "qa" && data.questions.length) {
@@ -366,21 +631,24 @@ export default function DisplayBoard({ slug }: { slug: string }) {
   }
 
   if (selected) {
+    const drawSelected = data.display.type === "draw";
     return (
-      <section className="display-board" aria-live="off">
+      <section className={`display-board ${drawSelected ? drawStyles.cinematicBoard : ""}`} aria-live="off">
         <header className="display-header">
-          <span className="display-brand">EVENTOUCH</span>
+          {!drawSelected ? <span className="display-brand">EVENTOUCH</span> : null}
           {stale ? <p className="display-stale" role="status">연결 확인 중 · 마지막 화면입니다</p> : null}
           <p className="display-date">{data.date}</p>
         </header>
-        <div className="display-content">
+        <div className={`display-content ${drawSelected ? drawStyles.cinematicContent : ""}`}>
           <h1>{data.name}</h1>
-          <article className="display-frame" key={selected.key}>
-            <h2>{selected.title}</h2>
+          <article className={`display-frame ${drawSelected ? drawStyles.cinematicFrame : ""}`} key={selected.key}>
+            <h2 className={drawSelected ? drawStyles.cinematicHeading : undefined}>{selected.title}</h2>
             {selected.body}
           </article>
         </div>
-        <footer className="display-footer"><span>행사 운영 워크스페이스</span><span>{data.venueName}</span></footer>
+        {drawSelected
+          ? data.venueName ? <footer className="display-footer"><span>{data.venueName}</span></footer> : null
+          : <footer className="display-footer"><span>행사 운영 워크스페이스</span><span>{data.venueName}</span></footer>}
       </section>
     );
   }

@@ -1,0 +1,648 @@
+.cinematicBoard {
+  --stage-ink: #fff8e9;
+  --stage-muted: #d2c7df;
+  --stage-gold: #e8bd61;
+  --stage-gold-bright: #ffe8a4;
+  --stage-gold-line: rgb(232 189 97 / 43%);
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  isolation: isolate;
+  display: flex;
+  max-width: none;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  padding: clamp(18px, 2.2vw, 42px) clamp(24px, 5vw, 96px) clamp(16px, 2vw, 36px);
+  border: 0;
+  border-radius: 0;
+  background:
+    radial-gradient(ellipse 68% 82% at 50% 56%, rgb(96 55 122 / 42%), transparent 72%),
+    radial-gradient(ellipse 48% 46% at 8% 0%, rgb(145 104 46 / 17%), transparent 72%),
+    radial-gradient(ellipse 46% 54% at 100% 100%, rgb(112 63 78 / 17%), transparent 75%),
+    linear-gradient(112deg, #0a0914 0%, #191329 48%, #0b0815 100%);
+  color: var(--stage-ink);
+  box-shadow: inset 0 0 70px rgb(3 1 12 / 55%);
+}
+
+.cinematicBoard::before,
+.cinematicBoard::after {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  content: "";
+}
+
+.cinematicBoard::before {
+  inset: 0;
+  opacity: 0.28;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgb(255 255 255 / 3%) 0 1px,
+    transparent 1px 5px
+  );
+}
+
+.cinematicBoard::after {
+  inset: clamp(8px, 1vw, 18px);
+  border: 1px solid rgb(232 189 97 / 31%);
+  box-shadow: inset 0 0 0 1px rgb(255 232 164 / 5%);
+}
+
+.cinematicBoard > * {
+  position: relative;
+  z-index: 1;
+}
+
+.cinematicBoard :global(.display-header) {
+  display: flex;
+  min-height: clamp(30px, 4vh, 48px);
+  flex: 0 0 auto;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px 20px;
+  padding: 0 clamp(2px, 0.7vw, 12px) clamp(10px, 1.4vh, 18px);
+  border-color: var(--stage-gold-line);
+}
+
+.cinematicBoard :global(.display-date) {
+  margin: 0;
+  color: var(--stage-muted);
+  font-size: clamp(16px, 1.45vw, 27px);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+}
+
+.cinematicBoard :global(.display-stale) {
+  margin-right: auto;
+  border-color: rgb(232 189 97 / 55%);
+  background: rgb(72 50 27 / 76%);
+  color: var(--stage-gold-bright);
+}
+
+.cinematicContent {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: clamp(14px, 2vh, 28px) 0 clamp(10px, 1.5vh, 22px);
+}
+
+.cinematicBoard :global(.display-content > h1) {
+  max-width: 28ch;
+  flex: 0 0 auto;
+  margin: 0 auto clamp(8px, 1.4vh, 18px);
+  color: var(--stage-ink);
+  font-size: clamp(30px, 3.35vw, 68px);
+  font-weight: 850;
+  line-height: 1.06;
+  letter-spacing: -0.025em;
+  text-align: center;
+  text-wrap: balance;
+  text-shadow: 0 5px 28px rgb(5 2 17 / 58%);
+  overflow-wrap: anywhere;
+}
+
+.cinematicFrame {
+  display: flex;
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  padding: 0;
+  border: 0;
+}
+
+.cinematicHeading {
+  max-width: 100% !important;
+  flex: 0 0 auto;
+  margin: 0 0 clamp(8px, 1.2vh, 16px) !important;
+  color: var(--stage-gold-bright);
+  font-size: clamp(22px, 2.15vw, 40px) !important;
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: 0.025em;
+  text-align: center;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.resultStage {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.awaitingResult,
+.revealMoment {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(18px, 3vh, 36px);
+  padding: clamp(12px, 2vw, 34px);
+  text-align: center;
+}
+
+.awaitingResult strong {
+  color: var(--stage-gold-bright);
+  font-size: clamp(26px, 3.6vw, 60px);
+  font-weight: 800;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+
+.waitingWheel {
+  width: clamp(170px, 28vh, 310px);
+}
+
+.rouletteWheel {
+  position: relative;
+  display: block;
+  width: clamp(220px, 34vh, 430px);
+  flex: 0 0 auto;
+  aspect-ratio: 1;
+  border: clamp(6px, 0.65vw, 12px) solid #b58b43;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center, #21182d 0 16%, transparent 16.5%),
+    radial-gradient(circle at center, transparent 0 23%, rgb(255 227 158 / 82%) 23.4% 24.2%, transparent 24.7%),
+    radial-gradient(circle at center, transparent 0 76%, rgb(255 227 158 / 60%) 76.4% 77.3%, transparent 77.8%),
+    repeating-conic-gradient(
+      from -7.5deg,
+      #49335f 0deg 13deg,
+      #dfb95f 13deg 14deg,
+      #271b38 14deg 28deg,
+      #8c6834 28deg 29deg,
+      #49335f 29deg 30deg
+    );
+  box-shadow:
+    0 22px 44px rgb(4 2 15 / 46%),
+    0 0 0 2px rgb(255 232 164 / 12%),
+    inset 0 0 0 3px rgb(255 247 222 / 13%),
+    inset 0 0 34px rgb(7 4 19 / 48%);
+}
+
+.rouletteWheel::before {
+  position: absolute;
+  inset: 6%;
+  border: 2px solid rgb(255 232 164 / 70%);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px rgb(30 18 43 / 72%);
+  content: "";
+}
+
+.wheelPointer {
+  position: absolute;
+  z-index: 2;
+  top: -6%;
+  left: 50%;
+  width: clamp(20px, 2vw, 34px);
+  height: clamp(28px, 2.7vw, 44px);
+  transform: translateX(-50%);
+  border: 1px solid rgb(255 245 211 / 88%);
+  background: linear-gradient(90deg, #8a642b, #ffe59a 44%, #bd8c3b);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  filter: drop-shadow(0 5px 7px rgb(3 1 12 / 55%));
+}
+
+.wheelHub {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 24%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border: 3px solid #edcf82;
+  border-radius: 50%;
+  background: radial-gradient(circle at 36% 30%, #806181, #2a1e38 65%, #171120);
+  box-shadow: 0 5px 18px rgb(3 1 12 / 52%), inset 0 0 0 3px rgb(14 9 25 / 78%);
+}
+
+.rouletteWheelSpinning {
+  animation: wheel-spin 2.6s cubic-bezier(0.12, 0.72, 0.14, 1) both;
+}
+
+.revealLabel,
+.numberLabel {
+  margin: 0;
+  color: var(--stage-gold-bright);
+  font-size: clamp(20px, 2.4vw, 38px);
+  font-weight: 800;
+  letter-spacing: 0.07em;
+}
+
+.slotWindow {
+  position: relative;
+  display: grid;
+  width: min(82vw, 1500px);
+  height: min(42vh, 440px);
+  min-height: 112px;
+  overflow: hidden;
+  border: clamp(4px, 0.5vw, 8px) solid #b48a42;
+  border-radius: clamp(7px, 0.7vw, 13px);
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 9%), transparent 17% 82%, rgb(0 0 0 / 25%)),
+    linear-gradient(105deg, #17111f 0%, #221a2d 48%, #130f1c 100%);
+  box-shadow:
+    0 24px 48px rgb(4 2 15 / 48%),
+    0 0 0 2px rgb(255 232 164 / 10%),
+    inset 0 0 0 2px rgb(255 247 222 / 9%),
+    inset 0 0 48px rgb(0 0 0 / 56%);
+}
+
+.slotWindow::before,
+.slotWindow::after {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(255 232 164 / 72%), transparent);
+  content: "";
+  pointer-events: none;
+}
+
+.slotWindow::before { top: 17%; }
+.slotWindow::after { bottom: 17%; }
+
+.slotDigit,
+.slotBlank {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  place-items: center;
+  overflow: hidden;
+  border-right: 1px solid rgb(232 189 97 / 25%);
+  background: linear-gradient(90deg, rgb(255 255 255 / 2%), transparent 18% 82%, rgb(0 0 0 / 17%));
+  color: var(--stage-gold-bright);
+  font-family: var(--display-font);
+  font-size: clamp(76px, min(30vh, 15vw), 320px);
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  line-height: 0.92;
+  text-shadow: 0 6px 24px rgb(232 189 97 / 28%), 0 2px 3px rgb(255 250 229 / 45%);
+}
+
+.slotDigit:nth-last-child(2),
+.slotBlank:nth-last-child(2) { border-right: 0; }
+
+.slotDigit {
+  animation: digit-land 560ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.slotBlank {
+  color: rgb(255 232 164 / 43%);
+  text-shadow: 0 4px 18px rgb(232 189 97 / 14%);
+}
+
+.slotSweep {
+  display: none;
+  position: absolute;
+  z-index: 3;
+  right: 0;
+  left: 0;
+  height: 54%;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgb(255 232 164 / 7%) 36%,
+    rgb(255 241 201 / 54%) 50%,
+    rgb(255 232 164 / 8%) 64%,
+    transparent
+  );
+  filter: blur(1px);
+  pointer-events: none;
+}
+
+.slotWindowRevealing .slotSweep {
+  display: block;
+  animation: slot-sweep 2.25s ease-in-out both;
+}
+
+.personNumberOutcome,
+.personNameOutcome {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(12px, 2vh, 24px);
+  padding: clamp(8px, 1vh, 18px) 0;
+  text-align: center;
+}
+
+.personIdentity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 1.1vh, 14px);
+}
+
+.winnerKind {
+  color: var(--stage-muted);
+  font-size: clamp(16px, 1.25vw, 22px);
+  font-weight: 750;
+  letter-spacing: 0.08em;
+}
+
+.personName {
+  max-width: 26ch;
+  color: var(--stage-ink);
+  font-size: clamp(30px, 3.4vw, 64px);
+  font-weight: 850;
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.winnerCompany {
+  color: var(--stage-muted);
+  font-size: clamp(18px, 1.8vw, 30px);
+  overflow-wrap: anywhere;
+}
+
+.winnerTier,
+.companyTier {
+  color: var(--stage-gold-bright);
+  font-size: clamp(20px, 2.1vw, 34px);
+  font-weight: 800;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+.personNameOutcome { gap: clamp(10px, 2vh, 22px); }
+
+.fallbackPersonName {
+  max-width: 22ch;
+  color: var(--stage-gold-bright);
+  font-size: clamp(52px, 11vw, 180px);
+  font-weight: 900;
+  line-height: 1.04;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.numberUnavailable {
+  color: var(--stage-muted);
+  font-size: clamp(16px, 1.25vw, 22px);
+}
+
+.companyOutcome {
+  display: grid;
+  width: min(100%, 1540px);
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(220px, 0.82fr) minmax(0, 1.18fr);
+  align-items: center;
+  justify-items: center;
+  gap: clamp(28px, 6vw, 112px);
+  margin: 0 auto;
+  padding: clamp(8px, 1vh, 18px) 0;
+}
+
+.companyWheel { width: clamp(230px, 35vh, 440px); }
+
+.companyIdentity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: clamp(12px, 1.8vh, 24px);
+}
+
+.companyName {
+  max-width: 12ch;
+  color: var(--stage-gold-bright);
+  font-size: clamp(54px, 7.2vw, 138px);
+  font-weight: 900;
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+  text-shadow: 0 7px 28px rgb(4 2 15 / 46%);
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.companyTier {
+  font-size: clamp(24px, 3vw, 52px);
+}
+
+.winnerGrid {
+  display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  align-content: center;
+  gap: clamp(8px, 1vw, 16px);
+  overflow: auto;
+  margin: 0;
+  padding: clamp(4px, 0.7vw, 12px);
+  list-style: none;
+  scrollbar-color: rgb(232 189 97 / 65%) rgb(30 21 43 / 80%);
+  scrollbar-width: thin;
+}
+
+.winnerCard {
+  display: grid;
+  min-width: 0;
+  min-height: clamp(108px, 13vh, 150px);
+  align-content: center;
+  justify-items: center;
+  gap: clamp(5px, 0.7vh, 10px);
+  padding: clamp(10px, 1.1vw, 18px);
+  overflow: hidden;
+  border: 1px solid rgb(232 189 97 / 35%);
+  border-radius: 5px;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgb(232 189 97 / 12%), transparent 62%),
+    linear-gradient(145deg, rgb(54 37 72 / 84%), rgb(19 14 32 / 88%));
+  box-shadow: 0 9px 22px rgb(3 1 12 / 28%);
+  text-align: center;
+}
+
+.gridLuckyNumber {
+  color: var(--stage-gold-bright);
+  font-size: clamp(38px, 5vh, 72px);
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  line-height: 0.96;
+  text-shadow: 0 4px 18px rgb(232 189 97 / 24%);
+}
+
+.winnerName {
+  max-width: 100%;
+  color: var(--stage-ink);
+  font-size: clamp(21px, 1.65vw, 32px);
+  font-weight: 850;
+  line-height: 1.1;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.winnerCardCompany .winnerName {
+  color: var(--stage-gold-bright);
+  font-size: clamp(26px, 2.2vw, 42px);
+}
+
+.winnerCardNumber .winnerName {
+  font-size: clamp(18px, 1.3vw, 26px);
+}
+
+.winnerCard .winnerKind {
+  font-size: clamp(13px, 1vw, 17px);
+}
+
+.winnerCard .winnerTier {
+  font-size: clamp(16px, 1.25vw, 22px);
+}
+
+.emptyOutcome {
+  display: grid;
+  flex: 1 1 auto;
+  place-items: center;
+  margin: 0;
+  color: var(--stage-muted);
+  font-size: clamp(24px, 3vw, 48px);
+  text-align: center;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.cinematicBoard :global(.display-footer) {
+  display: flex;
+  min-height: 28px;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  padding-top: clamp(8px, 1.2vh, 14px);
+  border-color: var(--stage-gold-line);
+  color: var(--stage-muted);
+  font-size: clamp(15px, 1.2vw, 22px);
+}
+
+@keyframes wheel-spin {
+  from { transform: rotate(0); }
+  to { transform: rotate(3turn); }
+}
+
+@keyframes slot-sweep {
+  0% { opacity: 0; transform: translateY(-90%); }
+  22% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(90%); }
+}
+
+@keyframes digit-land {
+  from { opacity: 0; transform: translateY(-0.12em) scaleY(1.06); }
+  to { opacity: 1; transform: translateY(0) scaleY(1); }
+}
+
+@media (max-width: 900px) {
+  .cinematicBoard {
+    padding: 18px 24px 16px;
+  }
+
+  .cinematicBoard :global(.display-content > h1) {
+    font-size: clamp(28px, 5vw, 48px);
+  }
+
+  .cinematicContent { padding-block: 12px; }
+  .companyOutcome { grid-template-columns: minmax(180px, 0.75fr) minmax(0, 1.25fr); gap: 28px; }
+  .companyWheel { width: clamp(190px, 30vh, 300px); }
+  .companyName { font-size: clamp(42px, 6vw, 82px); }
+  .winnerGrid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); }
+}
+
+@media (max-width: 560px) {
+  .cinematicBoard {
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  }
+
+  .cinematicBoard::after { inset: 6px; }
+
+  .cinematicBoard :global(.display-header) {
+    min-height: 26px;
+    align-items: center;
+    flex-direction: row;
+    gap: 8px;
+    padding-bottom: 8px;
+  }
+
+  .cinematicBoard :global(.display-date) { font-size: 14px; }
+  .cinematicBoard :global(.display-stale) { max-width: 70%; font-size: 12px; }
+
+  .cinematicContent { padding-block: 10px; }
+
+  .cinematicBoard :global(.display-content > h1) {
+    margin-bottom: 8px;
+    font-size: clamp(24px, 7vw, 36px);
+  }
+
+  .cinematicHeading {
+    margin-bottom: 6px !important;
+    font-size: clamp(18px, 5.2vw, 24px) !important;
+  }
+
+  .awaitingResult,
+  .revealMoment { gap: 18px; padding: 8px 0; }
+  .awaitingResult strong { font-size: clamp(22px, 6vw, 30px); }
+  .waitingWheel { width: min(26vh, 190px); }
+  .rouletteWheel { width: min(30vh, 220px); }
+  .companyOutcome { grid-template-columns: 1fr; gap: 16px; justify-items: center; }
+  .companyWheel { width: min(25vh, 190px); }
+  .companyIdentity { align-items: center; gap: 10px; text-align: center; }
+  .companyName { font-size: clamp(38px, 10vw, 60px); }
+  .companyTier { font-size: clamp(22px, 6vw, 32px); }
+  .numberLabel,
+  .revealLabel { font-size: 18px; }
+  .slotWindow { width: min(88vw, 1120px); height: clamp(120px, 26vh, 220px); min-height: 0; }
+  .slotDigit,
+  .slotBlank { font-size: clamp(54px, 21vw, 128px); }
+  .personNumberOutcome,
+  .personNameOutcome { gap: 12px; }
+  .personIdentity { gap: 8px 12px; }
+  .personName { font-size: clamp(26px, 7vw, 38px); }
+  .winnerCompany { font-size: 16px; }
+  .winnerTier { font-size: 18px; }
+  .fallbackPersonName { font-size: clamp(40px, 12vw, 68px); }
+  .winnerGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; padding: 2px; }
+  .winnerCard { min-height: 96px; gap: 4px; padding: 8px 5px; }
+  .winnerCard .winnerKind { font-size: 11px; }
+  .gridLuckyNumber { font-size: clamp(30px, 9vw, 44px); }
+  .winnerName,
+  .winnerCardCompany .winnerName { font-size: clamp(16px, 4.4vw, 21px); }
+  .winnerCardNumber .winnerName { font-size: clamp(14px, 3.8vw, 18px); }
+  .winnerCard .winnerTier { font-size: 14px; }
+  .emptyOutcome { font-size: 22px; }
+
+  .cinematicBoard :global(.display-footer) {
+    min-height: 20px;
+    padding-top: 7px;
+    font-size: 13px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rouletteWheelSpinning,
+  .slotDigit,
+  .slotWindowRevealing .slotSweep { animation: none; }
+}

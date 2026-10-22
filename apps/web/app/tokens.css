@@ -1,9 +1,8 @@
 /*
  * EVENTOUCH design tokens for the Next.js frontend.
- * Values are copied from assets/css/tokens.css (:root) so this app follows
- * the same brand, feedback, type, shape and spacing system as the product.
- * The five layout bounds below are app-only additions; the legacy token set
- * has no equivalent container-width tokens.
+ * This file is the product's canonical brand, feedback, typography, shape,
+ * spacing and layout-bound token source. It has no retired-frontend runtime
+ * dependency.
  */
 :root {
   --brand: #E76D26;
@@ -79,6 +78,17 @@
   --phone-stage-bg: var(--ground);
   --attendee-accent: var(--brand);
   --attendee-accent-ink: var(--on-brand);
+
+  /* Client reference theme (Hanwool Got Talent): navy section pills,
+     yellow E-Ticket cards, sky info cards, blue roulette wheel. Attendee
+     home only; the console keeps the product tokens above. */
+  --ref-navy: #2E3D5B;
+  --ref-navy-ink: #FFFFFF;
+  --ref-yellow: #FFE600;
+  --ref-yellow-ink: #17252B;
+  --ref-sky: #DCE9F8;
+  --ref-wheel-deep: #16478F;
+  --ref-wheel-blue: #1F66C1;
 
   --web-content-max: 1200px;
   --web-reading-max: 760px;

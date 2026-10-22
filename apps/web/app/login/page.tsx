@@ -6,7 +6,7 @@ import LoginForm from "./LoginForm";
 // screen against the server-owned role and assignment.
 export default function LoginPage() {
   return (
-    <main id="main-content" className="site-page auth-page login-page">
+    <main id="main-content" tabIndex={-1} className="site-page auth-page login-page">
       <header className="auth-brand">
         <span className="wordmark">EVENTOUCH<span>운영 로그인</span></span>
       </header>
