@@ -192,14 +192,36 @@ test("team offers an event picker only on active staff rows", () => {
   assert.match(team, /function StaffAssignmentPanel\(/);
 });
 
-test("team assignment preselects only a lone event and never writes", () => {
+test("team assignment hands the person off per event and never writes", () => {
   const team = read("console/team/TeamWorkspace.tsx");
   assert.match(team, /events\.length === 1 && events\[0\] \? events\[0\]\.id : ""/);
   assert.match(team, /배정할 행사를 선택하세요/);
   assert.match(team, /배정할 행사를 선택하면 이동 링크가 나타납니다/);
-  assert.match(team, /\/operations#ops-staff/);
+  // Per-event person handoff: the link carries the staff account id as a
+  // query before the staff anchor, and options name the server stage.
+  assert.match(team, /buildStaffAssignHandoffHref\(chosen\.id, accountId\)/);
+  assert.match(team, /sortTeamEventsForAssign\(events\)/);
+  assert.match(team, /teamEventOptionLabel\(item\)/);
+  // The query key and anchor live in the shared helper the link calls.
+  const handoffHelper = read("console/console-handoff.ts");
+  assert.match(handoffHelper, /assignAccount/);
+  assert.match(handoffHelper, /#ops-staff/);
   assert.doesNotMatch(team, /staff\.assign/);
   assert.doesNotMatch(team, /\/commands/);
+});
+
+test("team assignment link appears only for the chosen event (generic otherwise)", () => {
+  const team = read("console/team/TeamWorkspace.tsx");
+  const panel = team.slice(team.indexOf("function StaffAssignmentPanel("));
+  // The handoff link renders only after an event is chosen; otherwise the
+  // panel keeps its generic guidance and close path instead of forcing a
+  // destination.
+  const chosenAt = panel.indexOf("{chosen ? (");
+  assert.ok(chosenAt >= 0, "link renders only after a choice");
+  const fallbackAt = panel.indexOf("배정할 행사를 선택하면 이동 링크가 나타납니다");
+  assert.ok(fallbackAt > chosenAt, "unchosen state keeps the generic guidance");
+  assert.match(panel, /선택하세요<\/option>/);
+  assert.match(panel, />\s*닫기\s*</);
 });
 
 test("team assignment styles use tokens with full touch targets", () => {
@@ -239,7 +261,8 @@ test("journey script walks team assignment into the offered operations dialog", 
   assert.match(script, /team-staff-assignment/);
   assert.match(script, /행사 배정/);
   assert.match(script, /#assign-account/);
-  assert.match(script, /operations#ops-staff/);
+  assert.match(script, /assignAccount/);
+  assert.match(script, /#ops-staff/);
   assert.match(script, /배정 저장/);
 });
 

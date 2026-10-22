@@ -71,7 +71,14 @@ test("presets fold on phones with the current value in the folded summary", () =
   assert.match(source, /onToggle=\{\(event\) => setPresetOpen\(\(prev\)/u, "the operator can unfold either side by hand");
   const desksBody = source.slice(source.indexOf('headingId="ops-desks"'), source.indexOf('headingId="ops-booths"'));
   assert.doesNotMatch(desksBody, /<details/u, "desk start/stop never folds");
-  const displayBody = source.slice(source.indexOf('headingId="ops-display"'), source.indexOf('headingId="ops-staff"'));
+  const displayAt = source.indexOf('headingId="ops-display"');
+  // Section-exact bounds: the display ConsoleSection opens on the same line
+  // as its heading id and closes at the next section end, so the booth
+  // sections below never leak into this slice.
+  const displayOpen = source.lastIndexOf('<ConsoleSection', displayAt);
+  const displayClose = source.indexOf('</ConsoleSection>', displayAt);
+  assert.ok(displayOpen >= 0 && displayClose > displayOpen, 'display section bounds resolve');
+  const displayBody = source.slice(displayOpen, displayClose);
   assert.doesNotMatch(displayBody, /<details/u, "display apply never folds");
   const style = css();
   assert.match(style, /\.presetSummary \{[\s\S]*?min-height: 44px;/u, "folded summaries keep the 44px touch floor");

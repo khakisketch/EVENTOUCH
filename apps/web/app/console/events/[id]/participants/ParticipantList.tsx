@@ -17,6 +17,7 @@ import ConsoleSection from "../../../console-ui/ConsoleSection";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
 import { UNCONFIRMED_WRITE_CLOSE_MESSAGE, useConsoleDraftGuard } from "../../../console-draft-guard";
+import { buildApprovedMessageHandoffHref } from "../../../console-handoff";
 import styles from "./participants.module.css";
 
 // Shared dirty-dismiss copy for the roster dialogs: the guard asks on
@@ -218,6 +219,11 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   // roster can settle a pile of waiting applications in one action.
   const [bulkBusy, setBulkBusy] = useState(false);
   const pendingBulkRef = useRef<{ fingerprint: string; commandId: string } | null>(null);
+  // Bulk-approval follow-up (UI only): the ids just approved, so the
+  // operator can message exactly them. Set only on proven success;
+  // cleared on every new attempt, every other success notice, and every
+  // event switch, so a failed or stale attempt never offers the link.
+  const [approvedHandoffIds, setApprovedHandoffIds] = useState<string[] | null>(null);
   // Adding one participant by hand is a first-class way to work, not a
   // side door: no file, no import wizard.
   const [addOpen, setAddOpen] = useState(false);
@@ -294,6 +300,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     setStatusRetry(null);
     setNotice(null);
     setFailure(null);
+    setApprovedHandoffIds(null);
     // Scrub invalid allowlisted values so the URL never contradicts the
     // unfiltered view; unrelated params are preserved.
     try {
@@ -513,6 +520,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
 
   async function approveSelected() {
     if (bulkBusy || writeBusyRef.current) return;
+    setApprovedHandoffIds(null);
     const ids = effectiveSelection.filter((id) => {
       const person = state.kind === "ready" ? state.people.find((item) => item.id === id) : undefined;
       return person && person.status === "PENDING";
@@ -548,6 +556,9 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         return;
       }
       pendingBulkRef.current = null;
+      // Proven success only: failures and lost responses return above, so
+      // the follow-up link below always names exactly this approval.
+      setApprovedHandoffIds(ids);
       const applied = Array.isArray(data?.participants) ? data.participants.length : ids.length;
       // Name who was approved: a count alone cannot be checked against the
       // list the operator is looking at.
@@ -635,6 +646,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       const added = typeof data?.participant?.name === "string" ? data.participant.name : name;
       setAddDraft({ name: "", phone: "", company: "", email: "", registrationType: "ONSITE" });
       setAddOpen(false);
+      setApprovedHandoffIds(null);
       setNotice(`${added}님을 등록했습니다.`);
       await load(true);
     } catch {
@@ -717,6 +729,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       }
       pendingStatusRef.current = null;
       setStatusRetry(null);
+      setApprovedHandoffIds(null);
       setNotice(`${person.name} 상태를 ${statusLabel(status)}(으)로 바꿨습니다.`);
       await load(true);
     } catch {
@@ -897,6 +910,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         return;
       }
       pendingGroupRef.current = null;
+      setApprovedHandoffIds(null);
       setNotice(`${effectiveSelection.length}명을 ${groupDraft}(으)로 지정했습니다.`);
       setSelectedIds([]);
       setGroupDialogOpen(false);
@@ -970,6 +984,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         return;
       }
       pendingRewardRef.current = null;
+      setApprovedHandoffIds(null);
       setNotice(`${rewardTarget.name}님의 경품을 등록했습니다. 경품 화면에서 지급 처리하세요.`);
       setRewardTarget(null);
       setRewardDraft({ name: "", method: "ONSITE" });
@@ -1208,7 +1223,23 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       }
       feedback={
         <>
-          {notice ? <ConsoleFeedback kind="success">{notice}</ConsoleFeedback> : null}
+          {notice ? (
+            <ConsoleFeedback kind="success">
+              {notice}
+              {approvedHandoffIds && approvedHandoffIds.length ? (
+                <>
+                  {" "}
+                  <Link
+                    id="roster-approved-message"
+                    className="button button-secondary"
+                    href={buildApprovedMessageHandoffHref(eventId, approvedHandoffIds)}
+                  >
+                    승인자에게 안내 보내기
+                  </Link>
+                </>
+              ) : null}
+            </ConsoleFeedback>
+          ) : null}
           {failure ? (
             <ConsoleFeedback kind="error">
               {failure}{" "}

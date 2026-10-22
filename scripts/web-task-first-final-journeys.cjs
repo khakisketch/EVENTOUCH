@@ -43,6 +43,8 @@
 //     node scripts/web-task-first-final-journeys.cjs
 //
 // Captures and results land in /tmp/opencode/eventouch-captures/task-first-final/.
+// Set CAPTURE_DIR to redirect an isolated rerun elsewhere (existing
+// evidence stays untouched); the default keeps the committed location.
 
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
@@ -51,7 +53,7 @@ const path = require('node:path');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 
-const out = '/tmp/opencode/eventouch-captures/task-first-final';
+const out = (process.env.CAPTURE_DIR || '').trim() || '/tmp/opencode/eventouch-captures/task-first-final';
 fs.mkdirSync(out, { recursive: true });
 
 const STEP_CAP = 12;
@@ -330,7 +332,9 @@ async function main() {
       task.fields = ['#invite-password', '#invite-confirm', 'submit 초대 수락', 'link 로그인으로', '#login-email', '#login-password', 'submit 로그인'];
       await useCookie(null);
       await go(`/invite/${staffToken}`, 'text=팀 초대 수락');
-      await page.getByText('수락 후 데스크·부스 배정으로 연결합니다.', { exact: false }).first().waitFor({ timeout: 10000 });
+      // Current STAFF hint (no placement promise): the hub lists
+      // operator-assigned work, waiting when nothing is assigned yet.
+      await page.getByText('운영자가 배정한 업무 목록으로 이동합니다.', { exact: false }).first().waitFor({ timeout: 10000 });
       await act(() => page.locator('#invite-password').fill(INVITE_PASSWORD));
       await act(() => page.locator('#invite-confirm').fill(INVITE_PASSWORD));
       await act(() => page.getByRole('button', { name: '초대 수락', exact: true }).click());
@@ -373,7 +377,7 @@ async function main() {
     await measure('report-archive-bridge', '동결 보고서 → 보관 전제 확인 → 설정 단계 앵커', async (act, task) => {
       task.actor = 'owner';
       task.screens = [`/console/events/${createdEventId}/reports (#reports-list)`, 'report detail (frozen article + live checklist)', `/console/events/${createdEventId}/settings#settings-stage`];
-      task.fields = ['button 보고서 만들기', '#report-title', 'button 내용 보기', 'link 행사 설정 · 진행 단계에서 확인·전환'];
+      task.fields = ['button 보고서 만들기', '#report-title', 'button 내용 보기', 'link 진행 단계에서 확인·전환'];
       await useCookie(ownerCookie);
       await go(`/console/events/${createdEventId}/reports`, '#reports-list');
       await act(() => page.getByRole('button', { name: '보고서 만들기', exact: true }).first().click());
@@ -388,7 +392,9 @@ async function main() {
       await page.getByText('참가 접수 열림', { exact: false }).first().waitFor({ timeout: 10000 });
       await page.getByText(MODULE_TITLE, { exact: false }).first().waitFor({ timeout: 10000 });
       await shotBoth('final-report-archive-checklist');
-      const settingsHref = await page.getByRole('link', { name: '행사 설정 · 진행 단계에서 확인·전환', exact: true }).getAttribute('href');
+      // Each checklist item owns its link (the old context-losing single
+      // link is gone): the stage row offers 진행 단계에서 확인·전환.
+      const settingsHref = await page.getByRole('link', { name: '진행 단계에서 확인·전환', exact: true }).getAttribute('href');
       assert.ok(settingsHref && settingsHref.endsWith(`/console/events/${createdEventId}/settings#settings-stage`),
         `archive link must land on the settings stage anchor, got ${settingsHref}`);
       let commandFired = false;
@@ -396,7 +402,7 @@ async function main() {
         if (request.method() === 'POST' && request.url().includes('/commands')) commandFired = true;
       };
       page.on('request', watch);
-      await act(() => page.getByRole('link', { name: '행사 설정 · 진행 단계에서 확인·전환', exact: true }).click());
+      await act(() => page.getByRole('link', { name: '진행 단계에서 확인·전환', exact: true }).click());
       await page.waitForURL(/\/settings#settings-stage/, { timeout: 15000 });
       page.off('request', watch);
       await page.locator('#settings-stage').first().waitFor({ state: 'visible', timeout: 15000 });
@@ -425,8 +431,8 @@ async function main() {
     assert.ok(journeyStaffId, 'staff account id missing');
     await measure('team-staff-assignment', '팀 수락 구성원 → 행사 선택 → 현장 배정 (owner)', async (act, task) => {
       task.actor = 'owner';
-      task.screens = ['/console/team (#team-members)', `/console/events/${createdEventId}/operations (#ops-staff)`, '스태프 배정 dialog (#assign-account)'];
-      task.fields = ['button 행사 배정', 'select 최종 스태프 배정 행사 선택', 'link 스태프 배정으로 이동', 'button 스태프 배정', '#assign-account', '#assign-target', 'submit 배정 저장'];
+      task.screens = ['/console/team (#team-members)', `/console/events/${createdEventId}/operations?assignAccount=<staff> (#ops-staff)`, '스태프 배정 dialog (#assign-account, 자동 선택)'];
+      task.fields = ['button 행사 배정', 'select 최종 스태프 배정 행사 선택', 'link 스태프 배정으로 이동', '#assign-account', '#assign-target', 'submit 배정 저장'];
       await useCookie(ownerCookie);
       await go('/console/team', '#team-members');
       const row = page.locator('ul[aria-label="구성원 목록"] li').filter({ hasText: '최종 스태프' }).first();
@@ -438,20 +444,22 @@ async function main() {
       // The fixture holds several events, so no preselect may be assumed.
       assert.equal(await picker.inputValue(), '', 'event picker must not preselect with several events');
       await act(() => picker.selectOption(createdEventId));
+      // The link hands the person off as a query before the staff anchor.
+      const expectedHandoff = `/console/events/${createdEventId}/operations?assignAccount=${journeyStaffId}#ops-staff`;
       const opsHref = await row.getByRole('link', { name: '스태프 배정으로 이동', exact: false }).getAttribute('href');
-      assert.ok(opsHref && opsHref.endsWith(`/console/events/${createdEventId}/operations#ops-staff`),
-        `assignment link must land on the event operations anchor, got ${opsHref}`);
+      assert.equal(opsHref, expectedHandoff, `assignment link must hand off staff ${journeyStaffId}, got ${opsHref}`);
       await act(() => row.getByRole('link', { name: '스태프 배정으로 이동', exact: false }).click());
-      await page.waitForURL(/\/operations#ops-staff/, { timeout: 15000 });
-      await page.locator('#ops-staff').first().waitFor({ state: 'visible', timeout: 15000 });
-      await act(() => page.getByRole('button', { name: '스태프 배정', exact: true }).click());
+      // The handoff query is ephemeral (consumed on load), so arrival is
+      // pinned on pathname + anchor only, never on the transient query.
+      await page.waitForURL((url) => {
+        const parsed = new URL(url);
+        return parsed.pathname.endsWith(`/console/events/${createdEventId}/operations`) && parsed.hash === '#ops-staff';
+      }, { timeout: 15000 });
+      // The handoff auto-opens the existing dialog with the person already
+      // chosen: no generic open click, no person reselect.
       await page.locator('#assign-account').waitFor({ state: 'visible', timeout: 10000 });
-      {
-        const options = await page.locator('#assign-account option').evaluateAll((nodes) => nodes.map((node) => ({ value: node.value, text: node.textContent })));
-        assert.ok(options.some((option) => option.value === journeyStaffId),
-          `accepted staff ${journeyStaffId} missing from #assign-account options: ${JSON.stringify(options)}`);
-      }
-      await act(() => page.locator('#assign-account').selectOption(journeyStaffId));
+      assert.equal(await page.locator('#assign-account').inputValue(), journeyStaffId, 'handoff must preselect the staff account');
+      assert.equal(new URL(page.url()).searchParams.get('assignAccount'), null, 'ephemeral handoff query must be consumed');
       // A lone desk may arrive preselected (existing behavior); only choose
       // when the dialog leaves the target empty.
       if (!await page.locator('#assign-target').inputValue()) {
@@ -465,7 +473,7 @@ async function main() {
       assert.ok(assignment, 'DESK assignment for the accepted staff missing from workspace.assignments');
       assert.equal(String(assignment.targetId), String(journeyDesk.id));
       task.state = `workspace.assignments: accountId=${assignment.accountId} type=${assignment.type} targetId=${assignment.targetId}`;
-      task.serverNote = 'desk seeded via real desk.save; assignment via the operations dialog staff.assign, chosen explicitly';
+      task.serverNote = 'desk seeded via real desk.save; assignment via the handoff-opened operations dialog staff.assign, target chosen explicitly';
       await shot('final-team-staff-assignment');
     });
 

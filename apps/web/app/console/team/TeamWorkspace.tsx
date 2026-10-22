@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { buildStaffAssignHandoffHref, sortTeamEventsForAssign, teamEventOptionLabel } from "../console-handoff";
 import { loginHrefForLocation } from "../../auth-redirect";
 import ConsoleConfirm from "../console-ui/ConsoleConfirm";
 import ConsolePage from "../console-ui/ConsolePage";
@@ -36,7 +37,7 @@ type Invitation = {
   expiresAt: string;
 };
 
-type TeamEvent = { id: string; name: string };
+type TeamEvent = { id: string; name: string; stage: string };
 
 type TeamState =
   | { kind: "loading" }
@@ -249,7 +250,7 @@ export default function TeamWorkspace() {
           ? rawEvents.flatMap((item) => {
               const event = record(item);
               if (!event || typeof event.id !== "string" || !event.id) return [];
-              return [{ id: event.id, name: text(event.name) || event.id }];
+              return [{ id: event.id, name: text(event.name) || event.id, stage: text(event.stage).toUpperCase() }];
             })
           : [];
         if (!meResponse.ok || !userId || !bootstrapResponse.ok || !bootstrapPayload?.state) {
@@ -501,6 +502,10 @@ function StaffAssignmentPanel({
   const [eventId, setEventId] = useState(
     events.length === 1 && events[0] ? events[0].id : ""
   );
+  // Options name the server stage and sort active stages before closed
+  // ones; unknown stages sort last. Choosing still only reveals the
+  // operations link — nothing is stored, sent, or pre-associated.
+  const orderedEvents = useMemo(() => sortTeamEventsForAssign(events), [events]);
   const selectRef = useRef<HTMLSelectElement>(null);
   useEffect(() => {
     selectRef.current?.focus();
@@ -524,8 +529,8 @@ function StaffAssignmentPanel({
             aria-label={`${accountName} 배정 행사 선택`}
           >
             <option value="">선택하세요</option>
-            {events.map((item) => (
-              <option key={item.id} value={item.id}>{item.name}</option>
+            {orderedEvents.map((item) => (
+              <option key={item.id} value={item.id}>{teamEventOptionLabel(item)}</option>
             ))}
           </select>
         </label>
@@ -536,7 +541,7 @@ function StaffAssignmentPanel({
         <p className={teamStyles.assignLead}>
           <Link
             className={teamStyles.assignLink}
-            href={`/console/events/${encodeURIComponent(chosen.id)}/operations#ops-staff`}
+            href={buildStaffAssignHandoffHref(chosen.id, accountId)}
           >
             {chosen.name} 현장 운영 · 스태프 배정으로 이동
           </Link>

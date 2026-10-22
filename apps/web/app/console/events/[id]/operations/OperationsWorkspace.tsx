@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
+import { readAssignAccountParam } from "../../../console-handoff";
 import { useConsoleDraftGuard } from "../../../console-draft-guard";
 import ConsoleDialog from "../../../console-ui/ConsoleDialog";
 import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
@@ -129,10 +130,17 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const [assignOpen, setAssignOpen] = useState(false);
   // Row-level assignment preset (UI only): a desk/booth row opens the same
   // AssignDialog with its type+target already chosen, so the operator only
-  // picks staff and submits. Null means the generic #ops-staff dialog with
+  // picks staff and submits. The team screen instead hands off a person
+  // (accountId) with no target, so the operator only picks where and
+  // submits. Null means the generic #ops-staff dialog with
   // its existing defaults. The dialog unmounts on close, so each open starts
   // from its own preset and never inherits a stale target.
-  const [assignPreset, setAssignPreset] = useState<{ type: string; targetId: string } | null>(null);
+  const [assignPreset, setAssignPreset] = useState<{ type?: string; targetId?: string; accountId?: string } | null>(null);
+  // Team handoff notice (UI only): names why a requested ?assignAccount=
+  // did not open the dialog. Reads, never writes.
+  const [assignHandoffNotice, setAssignHandoffNotice] = useState<string | null>(null);
+  // The handoff applies once per event, after the workspace loads.
+  const assignHandoffAppliedRef = useRef<string | null>(null);
   const [mapUploading, setMapUploading] = useState(false);
   const [mapPlacing, setMapPlacing] = useState<string>("");
   const [mapDraftPoints, setMapDraftPoints] = useState<BoothMapPoint[] | null>(null);
@@ -441,6 +449,75 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
     query.addEventListener("change", sync);
     return () => query.removeEventListener("change", sync);
   }, []);
+
+  // Event switch resets the handoff slice (never a key remount): a stale
+  // handoff notice or an already-consumed marker from the previous event
+  // must not leak into this one.
+  useEffect(() => {
+    assignHandoffAppliedRef.current = null;
+    setAssignHandoffNotice(null);
+  }, [eventId]);
+
+  // Team -> operations handoff: read ?assignAccount= once after the
+  // workspace loads, validate it against the loaded directory, and open
+  // the existing assignment dialog with that person preselected. The
+  // dialog never submits on its own, so the operator still picks the
+  // desk/booth target and confirms. The param is removed with
+  // history.replaceState (no navigation); other params and the hash
+  // survive. Unknown, inactive, non-staff, target-less or read-only cases
+  // open nothing, write nothing, and state the reason instead.
+  useEffect(() => {
+    if (state.kind !== "ready") return;
+    if (assignHandoffAppliedRef.current === eventId) return;
+    assignHandoffAppliedRef.current = eventId;
+    let requested = "";
+    try {
+      requested = readAssignAccountParam(window.location.search);
+    } catch {
+      return;
+    }
+    if (!requested) return;
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("assignAccount");
+      const next = `${url.pathname}${url.search ? `?${url.searchParams.toString()}` : ""}${url.hash}`;
+      window.history.replaceState(null, "", next);
+    } catch {
+      // The handoff still applies; only the shareable URL keeps the param.
+    }
+    const handoffArchived = state.stage === "ARCHIVED";
+    const handoffBlocked = handoffArchived || !state.canManage;
+    if (handoffBlocked) {
+      setAssignHandoffNotice(
+        handoffArchived
+          ? "보관된 행사는 읽기 전용이라 배정을 열 수 없습니다. 팀·권한으로 돌아가 다른 행사를 선택하세요."
+          : "현장 운영을 변경할 운영 권한이 없어 배정을 열 수 없습니다. 담당 행사 운영자에게 요청하세요."
+      );
+      return;
+    }
+    const person = state.accounts.find((account) => account.id === requested);
+    if (!person || person.role !== "STAFF" || !person.active) {
+      setAssignHandoffNotice(
+        "요청한 스태프를 찾을 수 없습니다. 팀·권한에서 구성원을 확인한 뒤 다시 선택하세요. 바로 배정하지 않았습니다."
+      );
+      return;
+    }
+    const handoffTargets = state.desks.length + (state.stampEnabled ? state.booths.length : 0);
+    if (handoffTargets === 0) {
+      setAssignHandoffNotice(
+        "배정할 데스크나 부스가 없어 배정을 열 수 없습니다. 데스크나 부스를 먼저 만드세요."
+      );
+      return;
+    }
+    setAssignHandoffNotice(null);
+    setFailure(null);
+    setAssignPreset({ accountId: person.id });
+    // The originating link lives on the team screen. Give the dialog a
+    // stable local return target, just as a row-opened dialog has its button.
+    document.getElementById("ops-staff-assign")?.focus({ preventScroll: true });
+    setAssignOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, eventId]);
 
   // Names the section in view for the sticky jump-nav readout. Observes
   // only the anchors this screen renders; anchor clicks keep working
@@ -789,15 +866,15 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             label="현장 운영 구역"
             items={[
               { id: "ops-desks", label: "데스크" },
+              ...(state.screenEnabled ? [{ id: "ops-display", label: "전광판 출력" }] : []),
               { id: "ops-booths", label: "부스" },
+              { id: "ops-staff", label: "스태프 배정" },
               ...(state.stampEnabled
                 ? [
                     { id: "ops-booth-mode", label: "부스 인증 방식" },
                     { id: "ops-booth-map", label: "부스 지도" },
                   ]
                 : []),
-              ...(state.screenEnabled ? [{ id: "ops-display", label: "전광판 출력" }] : []),
-              { id: "ops-staff", label: "스태프 배정" },
             ]}
           />
           <p className={styles.navNow}>
@@ -820,6 +897,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             <ConsoleFeedback kind="error">{failure.message}</ConsoleFeedback>
           ) : null}
           {notice ? <ConsoleFeedback kind="success">{notice}</ConsoleFeedback> : null}
+          {assignHandoffNotice ? <ConsoleFeedback kind="warning">{assignHandoffNotice}</ConsoleFeedback> : null}
         </>
       )}
     >
@@ -907,6 +985,53 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           <p className="empty-state">등록된 데스크가 없습니다. 진행 중 전환에는 데스크와 스태프 배정이 필요합니다.</p>
         )}
       </ConsoleSection>
+
+      {screenEnabled ? (
+        <ConsoleSection headingId="ops-display" title="전광판 출력" description="지금 할 일" className={styles.anchorSection}>
+          <p className={styles.hint}>
+            행사장 화면에 지금 내보낼 내용입니다. 현재:{" "}
+            {currentDisplayValue.startsWith("idle")
+              ? "유휴 화면"
+              : displayChoices.find((choice) => choice.value === currentDisplayValue)?.label ?? "출력 확인 필요"}
+          </p>
+          <div className={styles.buttonRow}>
+            <label className="sr-only" htmlFor="ops-display-pick">전광판 출력 선택</label>
+            <select
+              id="ops-display-pick"
+              value={displayChoice}
+              onChange={(event) => setDisplayChoice(event.target.value)}
+            >
+              <option value="">출력 고르기</option>
+              {displayChoices.map((choice) => (
+                <option key={choice.value} value={choice.value}>{choice.label}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="button button-primary"
+              disabled={busy || !displayChoice || displayChoice === currentDisplayValue || writeBlocked}
+              title={
+                writeBlocked
+                  ? writeBlockedReason
+                  : !displayChoice
+                    ? "출력을 먼저 고르세요"
+                    : displayChoice === currentDisplayValue
+                      ? "이미 적용된 출력입니다"
+                      : undefined
+              }
+              onClick={() => void applyDisplayChoice()}
+            >
+              {displayChoice && displayChoice !== currentDisplayValue ? (displayChoice.startsWith("idle") ? "유휴로 내리기" : "출력 적용") : "출력 적용"}
+            </button>
+          </div>
+          <p className={styles.hint}>
+            게시한 공지·공개된 프로그램만 고를 수 있습니다. 참가자 화면과 같은 내용이 행사장 화면에 나옵니다.
+          </p>
+          {displayChoice && displayChoice !== currentDisplayValue ? (
+            <p className="notice" role="status">선택한 출력은 아직 적용되지 않았습니다. ‘출력 적용’을 눌러야 행사장 화면에 나옵니다.</p>
+          ) : null}
+        </ConsoleSection>
+      ) : null}
 
       <ConsoleSection
         headingId="ops-booths"
@@ -1199,56 +1324,10 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         </ConsoleSection>
       ) : null}
 
-      {screenEnabled ? (
-        <ConsoleSection headingId="ops-display" title="전광판 출력" description="지금 할 일" className={styles.anchorSection}>
-          <p className={styles.hint}>
-            행사장 화면에 지금 내보낼 내용입니다. 현재:{" "}
-            {currentDisplayValue.startsWith("idle")
-              ? "유휴 화면"
-              : displayChoices.find((choice) => choice.value === currentDisplayValue)?.label ?? "출력 확인 필요"}
-          </p>
-          <div className={styles.buttonRow}>
-            <label className="sr-only" htmlFor="ops-display-pick">전광판 출력 선택</label>
-            <select
-              id="ops-display-pick"
-              value={displayChoice}
-              onChange={(event) => setDisplayChoice(event.target.value)}
-            >
-              <option value="">출력 고르기</option>
-              {displayChoices.map((choice) => (
-                <option key={choice.value} value={choice.value}>{choice.label}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="button button-primary"
-              disabled={busy || !displayChoice || displayChoice === currentDisplayValue || writeBlocked}
-              title={
-                writeBlocked
-                  ? writeBlockedReason
-                  : !displayChoice
-                    ? "출력을 먼저 고르세요"
-                    : displayChoice === currentDisplayValue
-                      ? "이미 적용된 출력입니다"
-                      : undefined
-              }
-              onClick={() => void applyDisplayChoice()}
-            >
-              {displayChoice && displayChoice !== currentDisplayValue ? (displayChoice.startsWith("idle") ? "유휴로 내리기" : "출력 적용") : "출력 적용"}
-            </button>
-          </div>
-          <p className={styles.hint}>
-            게시한 공지·공개된 프로그램만 고를 수 있습니다. 참가자 화면과 같은 내용이 행사장 화면에 나옵니다.
-          </p>
-          {displayChoice && displayChoice !== currentDisplayValue ? (
-            <p className="notice" role="status">선택한 출력은 아직 적용되지 않았습니다. ‘출력 적용’을 눌러야 행사장 화면에 나옵니다.</p>
-          ) : null}
-        </ConsoleSection>
-      ) : null}
-
       <ConsoleSection headingId="ops-staff" title="스태프 배정" description={staffSummary} className={styles.anchorSection}>
         <div className={styles.primarySectionAction}>
           <button
+            id="ops-staff-assign"
             type="button"
             className="button button-primary"
             onClick={() => { setAssignPreset(null); setAssignOpen(true); setFailure(null); }}
@@ -1339,6 +1418,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           booths={stampEnabled ? booths : []}
           initialType={assignPreset?.type ?? (desks.length ? "DESK" : "BOOTH")}
           initialTargetId={assignPreset?.targetId ?? ""}
+          initialAccountId={assignPreset?.accountId}
           onClose={() => { setAssignDirty(false); setAssignOpen(false); }}
           onDirtyChange={setAssignDirty}
           onSubmit={async (payload) => {
@@ -1578,6 +1658,7 @@ function AssignDialog({
   booths,
   initialType,
   initialTargetId,
+  initialAccountId,
   onClose,
   onSubmit,
   onDirtyChange,
@@ -1589,17 +1670,19 @@ function AssignDialog({
   booths: Booth[];
   initialType: string;
   initialTargetId?: string;
+  initialAccountId?: string;
   onClose: () => void;
   onSubmit: (payload: Record<string, unknown>) => void;
   onDirtyChange?: (dirty: boolean) => void;
 }) {
-  const [accountId, setAccountId] = useState("");
+  const [accountId, setAccountId] = useState(initialAccountId ?? "");
   const [type, setType] = useState(initialType);
-  // Row-level opens preselect their target; the dialog never submits on its
+  // Row-level opens preselect their target, team handoffs preselect their
+  // person; the dialog never submits on its
   // own, so the operator still picks staff and confirms. The pristine preset
   // (no staff chosen yet) is not dirty, keeping the canClose gate truthful.
   const [targetId, setTargetId] = useState(initialTargetId ?? "");
-  const dirty = accountId !== "" || type !== initialType || targetId !== (initialTargetId ?? "");
+  const dirty = accountId !== (initialAccountId ?? "") || type !== initialType || targetId !== (initialTargetId ?? "");
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);

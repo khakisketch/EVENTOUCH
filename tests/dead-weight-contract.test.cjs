@@ -89,5 +89,5 @@ test('home-drops-unused-hint-title-console-drops-unused-primary', () => {
   assert.match(consoleHome, /\.eventCardTop\s*\{/u, '.eventCardTop stays exported');
   const globals = read('apps/web/app/globals.css');
   assert.doesNotMatch(globals, /\.metric-card\.metric-primary/u, 'globals .metric-card.metric-primary stays removed');
-  assert.match(globals, /\.metric-card\s*\{/u, 'globals keeps the .metric-card base');
+  assert.doesNotMatch(globals, /\.metric-card\s*\{/u, 'globals .metric-card base stays removed');
 });

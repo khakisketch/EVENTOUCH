@@ -287,51 +287,10 @@ select[aria-invalid="true"] {
 }
 
 /* ------------------------------------------------------------------
-   Console-wide UI improvements: metric cards, status badges, alert
+   Console-wide UI improvements: status badges, alert
    strips, empty states, and action chips reuse tokens.css variables.
    Imported implicitly via globals.css; page modules add layout overrides.
    ------------------------------------------------------------------ */
-
-.metric-card {
-  display: grid;
-  gap: var(--s1);
-  padding: var(--s4) var(--s5);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
-  box-shadow: 0 1px 3px var(--shadow-color);
-}
-
-.metric-value {
-  font-family: var(--display-font);
-  font-size: clamp(var(--h2), 4vw, var(--display-large));
-  font-weight: 800;
-  line-height: 1.2;
-  letter-spacing: -0.04em;
-  margin: 0;
-}
-
-.metric-label {
-  margin: 0;
-  font-size: var(--small);
-  font-weight: 700;
-  color: var(--muted);
-}
-
-.metric-detail {
-  margin: 0;
-  font-size: var(--small);
-  color: var(--muted);
-}
-
-.metric-trend {
-  margin: var(--s1) 0 0;
-  font-size: var(--small);
-  font-weight: 700;
-}
-
-.metric-trend.up { color: var(--success); }
-.metric-trend.down { color: var(--danger); }
 
 .status-chip {
   display: inline-flex;

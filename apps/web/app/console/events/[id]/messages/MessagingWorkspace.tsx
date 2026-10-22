@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
+import { readRecipientStatusHandoff } from "../../../console-handoff";
 import { useConsoleDraftGuard } from "../../../console-draft-guard";
 import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
@@ -664,23 +665,24 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       handoffAppliedRef.current = eventId;
       return;
     }
-    const stripToParam = () => {
+    const stripHandoffParams = () => {
       try {
         const url = new URL(window.location.href);
         url.searchParams.delete("to");
+        url.searchParams.delete("status");
         const next = `${url.pathname}${url.search ? `?${url.searchParams.toString()}` : ""}${url.hash}`;
         window.history.replaceState(null, "", next);
       } catch {
-        // Handoff still applies; only the shareable URL keeps the param.
+        // Handoff still applies; only the shareable URL keeps the params.
       }
     };
     handoffAppliedRef.current = eventId;
     if (!raw.length) {
-      stripToParam();
+      stripHandoffParams();
       return;
     }
     if (!state.canManage) {
-      stripToParam();
+      stripHandoffParams();
       return;
     }
     const unique = [...new Set(raw)];
@@ -694,12 +696,17 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     }
     setSelectedIds(valid);
     if (valid.length > 0) setShowSelectedOnly(true);
+    // The approval follow-up names its filter explicitly (?status=); any
+    // other ?to= link leaves the filter alone. Unknown values fall back to
+    // the composer default. Selection mechanics are untouched: no auto-send.
+    const handoffStatus = readRecipientStatusHandoff(window.location.search);
+    if (handoffStatus !== null) setRecipientStatus(handoffStatus);
     setHandoffNotice(
       excluded > 0
         ? `명단에서 ${valid.length}명을 인계받았습니다 · 제외 ${excluded}명(취소·삭제)`
         : `명단에서 ${valid.length}명을 인계받았습니다`
     );
-    stripToParam();
+    stripHandoffParams();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, eventId]);
 
