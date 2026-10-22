@@ -10,6 +10,8 @@ const STAFF_COMMANDS = new Map([
   ['checkin.sync', 'DESK'],
   ['checkin.correction', 'DESK'],
   ['booth.visit', 'BOOTH'],
+  ['reward.lookup', 'DESK'],
+  ['reward.collect', 'DESK'],
 ]);
 const STAFF_TARGET_REQUIRED = new Set(['check.scan', 'checkin.scan', 'booth.visit']);
 

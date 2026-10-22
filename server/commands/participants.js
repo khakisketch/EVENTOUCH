@@ -626,8 +626,14 @@ function createParticipantCommands(database) {
         ensureWritableEvent(event);
 
         if (command === 'participant.create') {
+          // How the roster was collected stays on the record: PRE for a list
+          // the agency had in advance, ONSITE for a walk-in at the door.
+          const requestedType = String(input.registrationType || '').trim().toUpperCase();
+          if (requestedType && !['PRE', 'ONSITE'].includes(requestedType)) {
+            throw failure(400, '등록 방식을 확인하세요', 'registrationType');
+          }
           const participant = createParticipant(event, workspace, input, {
-            registrationType: 'ONSITE',
+            registrationType: requestedType === 'PRE' ? 'PRE' : 'ONSITE',
             now,
           });
           return { status: 201, body: { participant: projectParticipant(workspace, event, participant) } };

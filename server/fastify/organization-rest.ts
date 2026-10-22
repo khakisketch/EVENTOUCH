@@ -32,6 +32,11 @@ export type OrganizationRestDeps = {
   sessionFromCookie: (cookieHeader: string | undefined) => Promise<unknown | null>;
   loadBootstrap: (account: unknown) => Promise<{ events?: unknown; activeEventId?: unknown }>;
   createEvent: (account: unknown, body: unknown) => Promise<{ event: unknown; replayed?: unknown }>;
+  duplicateEvent: (
+    account: unknown,
+    sourceEventId: string,
+    body: unknown
+  ) => Promise<{ event: unknown; replayed?: unknown }>;
   saveClient: (account: unknown, body: unknown) => Promise<{ client: unknown; replayed?: unknown }>;
   saveOrgPermissions: (
     account: unknown,
@@ -56,6 +61,7 @@ export function organizationRestPath(urlPath: string, method: string): boolean {
   const parts = urlPath.split("/").filter(Boolean);
   if (parts[0] !== "api") return false;
   if (parts[1] === "events" && parts.length === 2) return method === "GET" || method === "POST";
+  if (parts[1] === "events" && parts.length === 4 && parts[3] === "duplicate") return method === "POST";
   if (parts[1] === "events" && parts.length === 4 && parts[3] === "members") return method === "POST";
   if (parts[1] === "clients" && parts.length === 2) return method === "POST";
   if (parts[1] === "accounts" && parts.length === 4 && parts[3] === "org-permissions") return method === "POST";
@@ -103,6 +109,15 @@ async function organizationRest(
       const account = await currentAccount(deps, request);
       reply.header("cache-control", "no-store");
       const result = await deps.createEvent(account, body);
+      return reply.code(result.replayed ? 200 : 201).send({ event: result.event });
+    }
+
+    if (parts[1] === "events" && parts.length === 4 && parts[3] === "duplicate" && method === "POST") {
+      const account = await currentAccount(deps, request);
+      reply.header("cache-control", "no-store");
+      const eventId = decodedSegment(parts[2]);
+      if (!eventId) return fail(reply, 404, "요청한 행사를 찾을 수 없습니다");
+      const result = await deps.duplicateEvent(account, eventId, body);
       return reply.code(result.replayed ? 200 : 201).send({ event: result.event });
     }
 

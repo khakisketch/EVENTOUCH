@@ -1,6 +1,9 @@
 'use strict';
 
-// EVENTOUCH product server: static frontend + /api/*. Node built-ins only.
+// EVENTOUCH product server: API-only + service-worker retirement.
+// The product UI is the Next app (apps/web); this server answers /api/* and
+// serves no repository files. /sw.js stays at this origin so browsers holding
+// the retired offline worker receive the cleanup worker (server/sw.js).
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -25,16 +28,10 @@ const { createVerificationTransport } = require('./verification-transport');
 const ROOT = path.join(__dirname, '..');
 const PORT = Number(process.env.PORT || 8776);
 
-const MIME = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'application/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.png': 'image/png',
-  '.webp': 'image/webp',
-  '.svg': 'image/svg+xml',
-  '.webmanifest': 'application/manifest+json; charset=utf-8',
-};
+// Retirement worker served at this origin's /sw.js (see server/sw.js). Read
+// once at startup: this is the single bounded file read the server performs.
+// Nothing else on disk is ever answered.
+const RETIREMENT_WORKER = fs.readFileSync(path.join(__dirname, 'sw.js'));
 
 function sendJson(res, status, value) {
   const body = JSON.stringify(value);
@@ -56,78 +53,6 @@ function decodablePath(urlPath) {
   } catch {
     return false;
   }
-}
-
-const DENIED_PREFIXES = ['/server/', '/data/server/', '/data/storage/', '/.git/', '/node_modules/'];
-const DENIED_FILES = new Set([
-  '/dockerfile',
-  '/docker-compose.yml',
-  '/vercel.json',
-  '/.env',
-  '/.env.example',
-  '/.dockerignore',
-]);
-
-// The CSP allows inline scripts only when they carry this response's nonce.
-// index.html has exactly two inline bootstrap <script> blocks, so both are
-// stamped; external <script src> files are already 'self' and need nothing.
-function applyCspNonce(data, nonce) {
-  return data
-    .toString('utf8')
-    .replace(/<script(?![^>]*\bsrc=)([^>]*)>/g, `<script nonce="${nonce}"$1>`);
-}
-
-function serveStatic(req, res, nonce) {
-  const urlPath = req.url.split('?')[0];
-  const lower = urlPath.toLowerCase();
-  if (
-    DENIED_FILES.has(lower) ||
-    DENIED_PREFIXES.some((prefix) => lower === prefix.slice(0, -1) || lower.startsWith(prefix)) ||
-    /(^|\/)\.[^/]*$/.test(lower) ||
-    lower.endsWith('.env')
-  ) {
-    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-    res.end('파일을 찾을 수 없습니다');
-    return;
-  }
-  // The worker must live at the origin root to control every route, but it
-  // is authored next to the other server files.
-  if (urlPath === '/sw.js') {
-    const worker = path.join(__dirname, 'sw.js');
-    fs.readFile(worker, (err, data) => {
-      if (err) {
-        res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-        res.end('파일을 찾을 수 없습니다');
-        return;
-      }
-      res.writeHead(200, {
-        'content-type': 'text/javascript; charset=utf-8',
-        'cache-control': 'no-cache',
-        'service-worker-allowed': '/',
-      });
-      res.end(data);
-    });
-    return;
-  }
-  const rel = urlPath === '/' ? 'index.html' : decodeURIComponent(urlPath).replace(/^\/+/, '');
-  const file = path.normalize(path.join(ROOT, rel));
-  if (!file.startsWith(ROOT + path.sep) && file !== ROOT) {
-    res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
-    res.end('경로를 확인하세요');
-    return;
-  }
-  fs.readFile(file, (err, data) => {
-    if (err) {
-      res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-      res.end('파일을 찾을 수 없습니다');
-      return;
-    }
-    const type = MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';
-    res.writeHead(200, { 'content-type': type });
-    // Only HTML carries the inline bootstrap scripts the CSP nonce protects;
-    // CSS/JS/images are already covered by 'self'.
-    res.end(type === 'text/html; charset=utf-8' ? applyCspNonce(data, nonce) : data);
-  });
 }
 
 function createHttpServer(store, auth, access, database, { storageDir } = {}) {
@@ -193,6 +118,7 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
     sessionFromCookie: (cookie) => auth.sessionFromCookie(cookie),
     loadBootstrap: (account) => state.loadBootstrap(account),
     createEvent: (account, body) => state.createEvent(account, body),
+    duplicateEvent: (account, eventId, body) => state.duplicateEvent(account, eventId, body),
     saveClient: (account, body) => state.saveClient(account, body),
     saveOrgPermissions: (account, accountId, body) => state.saveOrgPermissions(account, accountId, body),
     assignMember: (account, eventId, body) => state.assignMember(account, eventId, body),
@@ -214,10 +140,10 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
   });
   const commandPathReady = commandPathApp.ready();
   return http.createServer((req, res) => {
-    // One security-header wrapper per response. Every path below — static,
-    // /api/*, /api/auth/*, 404, 405, 500 — therefore carries the same policy
+    // One security-header wrapper per response. Every path below — /api/*,
+    // /api/auth/*, /sw.js, 404, 405, 500 — therefore carries the same policy
     // without each call site having to remember it.
-    const nonce = applySecurityHeaders(res);
+    applySecurityHeaders(res);
     const urlPath = (req.url || '/').split('?')[0];
     if (urlPath === '/api/health') {
       healthReady.then(
@@ -225,6 +151,29 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
         () => {
           res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' });
           res.end(JSON.stringify({ ok: false, error: '상태를 확인할 수 없습니다' }));
+        }
+      );
+      return;
+    }
+    // Readiness is separate from liveness: /api/health answers while the
+    // process is up, but a backup/restore or a database outage must show up
+    // here so an operator (or the container healthcheck) can tell the
+    // difference. The JSON fallback mode has no database and is not a
+    // production-ready deployment.
+    if (urlPath === '/api/readyz') {
+      if (!database) {
+        res.writeHead(503, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+        res.end(JSON.stringify({ ok: false, db: false }));
+        return;
+      }
+      database.query('SELECT 1').then(
+        () => {
+          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+          res.end(JSON.stringify({ ok: true, db: true }));
+        },
+        () => {
+          res.writeHead(503, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+          res.end(JSON.stringify({ ok: false, db: false }));
         }
       );
       return;
@@ -278,12 +227,33 @@ function createHttpServer(store, auth, access, database, { storageDir } = {}) {
       });
       return;
     }
+    // No repository files are served. The only non-API route is the worker
+    // retirement URL: same path the old offline shell registered, now
+    // answering the cleanup worker that deletes its caches and unregisters.
+    if (urlPath === '/sw.js') {
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        res.writeHead(405, { 'content-type': 'text/plain; charset=utf-8' });
+        res.end('지원하지 않는 방법입니다');
+        return;
+      }
+      res.writeHead(200, {
+        'content-type': 'text/javascript; charset=utf-8',
+        'cache-control': 'no-cache',
+        'service-worker-allowed': '/',
+      });
+      res.end(RETIREMENT_WORKER);
+      return;
+    }
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.writeHead(405, { 'content-type': 'text/plain; charset=utf-8' });
       res.end('지원하지 않는 방법입니다');
       return;
     }
-    serveStatic(req, res, nonce);
+    // Bounded non-API answer: fixed plain-text body, no path echo, no
+    // repository read. data/sample.json stays a backend fallback on disk and
+    // is no longer addressable over HTTP.
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end('파일을 찾을 수 없습니다');
   });
 }
 

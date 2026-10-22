@@ -1,6 +1,12 @@
 'use strict';
 
 const { isCalendarDate, toCapacityNumber, isIntegerCapacity } = require('../validation');
+const {
+  defaultHomeStyle,
+  normalizeHomeStyle,
+  validateHomeStyleUpdate,
+  assertPublishableHomeStyle,
+} = require('../attendee-home-style');
 
 const COMMANDS = new Set([
   'event.update',
@@ -334,9 +340,27 @@ function pageDefaults(workspace) {
 function pageState(workspace) {
   const defaults = pageDefaults(workspace);
   const source = ctxObject(workspace.pageExperience);
-  const draft = { ...defaults, ...ctxObject(source.draft) };
-  const published = { ...defaults, ...ctxObject(source.published) };
-  return { ...source, draft, published, publishedAt: source.publishedAt || null };
+  const draftSource = ctxObject(source.draft);
+  const publishedSource = ctxObject(source.published);
+  const draft = { ...defaults, ...draftSource };
+  const published = { ...defaults, ...publishedSource };
+  // homeStyle merges field-by-field over the single backend default so
+  // legacy or partially stored styles keep working; malformed stored JSON
+  // degrades to the default safe allowlist instead of failing the read.
+  draft.homeStyle = normalizeHomeStyle(draftSource.homeStyle);
+  published.homeStyle = normalizeHomeStyle(publishedSource.homeStyle);
+  const draftVersion = Number.isSafeInteger(source.draftVersion) && source.draftVersion >= 0
+    ? source.draftVersion
+    : 0;
+  return { ...source, draft, published, publishedAt: source.publishedAt || null, draftVersion };
+}
+
+function checkDraftVersion(ctx, input, current) {
+  const expected = input.expectedDraftVersion;
+  if (expected === undefined || expected === null) return;
+  if (expected !== current) {
+    throw ctx.fail(409, '최신 초안을 새로고침한 뒤 다시 시도하세요', 'expectedDraftVersion');
+  }
 }
 
 function ctxObject(value) {
@@ -345,6 +369,7 @@ function ctxObject(value) {
 
 async function saveAttendeePage(ctx, input) {
   const current = pageState(ctx.workspace);
+  checkDraftVersion(ctx, input, current.draftVersion);
   const draft = {
     ...current.draft,
     accent: /^#[0-9a-f]{6}$/i.test(String(input.accent || '')) ? String(input.accent).toUpperCase() : current.draft.accent,
@@ -364,23 +389,49 @@ async function saveAttendeePage(ctx, input) {
       });
     }
   }
-  ctx.workspace.pageExperience = { ...current, draft };
-  return { body: { draft } };
+  // homeStyle is the only partially updatable section: omitting it preserves
+  // the stored style, an explicit null resets the whole style to defaults
+  // (documented return contract), and a supplied object merges its known
+  // fields over the stored style without resetting unrelated fields.
+  // Unknown keys are ignored by allowlist.
+  if (Object.hasOwn(input, 'homeStyle')) {
+    draft.homeStyle = input.homeStyle === null
+      ? defaultHomeStyle()
+      : validateHomeStyleUpdate(input.homeStyle, current.draft.homeStyle, ctx.fail);
+  } else {
+    draft.homeStyle = current.draft.homeStyle;
+  }
+  const draftVersion = current.draftVersion + 1;
+  ctx.workspace.pageExperience = { ...current, draft, draftVersion };
+  return { body: { draft, draftVersion } };
 }
 
-function publishAttendeePage(ctx) {
+function publishAttendeePage(ctx, input = {}) {
   const state = pageState(ctx.workspace);
+  checkDraftVersion(ctx, input, state.draftVersion);
   const draft = { ...state.draft };
   draft.intro = requireText(ctx, draft.intro, '행사 소개', 160, 'intro');
   if (!/^#[0-9a-f]{6}$/i.test(String(draft.accent || ''))) throw ctx.fail(400, '강조색을 확인하세요', 'accent');
-  ctx.workspace.pageExperience = { ...state, draft, published: structuredClone(draft), publishedAt: ctx.now };
+  // A malformed stored draft style is rejected here rather than silently
+  // published; legacy drafts without a style publish with defaults.
+  draft.homeStyle = assertPublishableHomeStyle(
+    ctxObject(ctxObject(ctx.workspace.pageExperience).draft).homeStyle,
+    ctx.fail
+  );
+  ctx.workspace.pageExperience = {
+    ...state,
+    draft,
+    published: structuredClone(draft),
+    publishedAt: ctx.now,
+    publishedVersion: state.draftVersion,
+  };
   ctx.workspace.branding = {
     ...ctx.workspace.branding,
     tagline: draft.intro,
     logo: draft.logo || null,
     keyvisual: draft.keyvisual || null,
   };
-  return { body: { published: draft } };
+  return { body: { published: draft, publishedVersion: state.draftVersion, draftVersion: state.draftVersion } };
 }
 
 async function apply(ctx) {
@@ -407,7 +458,7 @@ async function apply(ctx) {
     case 'venue.save': return saveVenue(ctx, input);
     case 'branding.save': return saveBranding(ctx, input);
     case 'attendee.page.save': return saveAttendeePage(ctx, input);
-    case 'attendee.page.publish': return publishAttendeePage(ctx);
+    case 'attendee.page.publish': return publishAttendeePage(ctx, input);
     default: throw ctx.fail(400, '지원하지 않는 준비 작업입니다', 'command');
   }
 }

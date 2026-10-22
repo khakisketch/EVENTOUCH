@@ -761,6 +761,21 @@ function createDatabaseAuth(database, options = {}) {
       sendJson(res, 200, await setupState());
       return;
     }
+    // A locked-out manager or staffer is told to ask the organization
+    // administrator, so the login screen needs a way to reach them. The
+    // address is the deployment-configured ADMIN_EMAIL, never an arbitrary
+    // account row: it is the administrator the operator chose to publish,
+    // and it is only returned once an administrator account actually exists.
+    if (urlPath === '/api/auth/help' && req.method === 'GET') {
+      const state = await setupState();
+      const email = String(env.ADMIN_EMAIL || '').trim();
+      const name = String(env.ADMIN_NAME || '').trim() || '조직 관리자';
+      const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      sendJson(res, 200, {
+        administrator: state.ready && valid ? { name, email } : null,
+      });
+      return;
+    }
     if (urlPath === '/api/auth/me' && req.method === 'GET') {
       const user = await sessionFromCookie(req.headers.cookie);
       if (!user) {

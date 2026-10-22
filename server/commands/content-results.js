@@ -13,6 +13,7 @@ const COMMANDS = new Set([
   'payment.refund-request',
   'payment.refund',
   'reward.create',
+  'reward.assign',
   'reward.fulfill',
   'reward.cancel',
   'report.create',
@@ -26,7 +27,7 @@ const COMMANDS = new Set([
 // needs its stored image up front, for the same reason alimtalk needs its
 // approved template id: a campaign that can never go out must not be created.
 const MESSAGE_CHANNELS = new Set(['SMS', 'LMS', 'MMS', 'ALIMTALK']);
-const TEMPLATE_VARIABLES = new Set(['이름', '행사명', '행사일', '티켓링크']);
+const TEMPLATE_VARIABLES = new Set(['이름', '행사명', '행사일', '티켓링크', '럭키번호']);
 const REPORT_SECTIONS = new Set(['overview', 'attendance', 'programs', 'survey', 'photos']);
 
 function list(value) {
@@ -72,21 +73,50 @@ function saveTemplate(ctx, input) {
   return { body: { template } };
 }
 
+// The public origin recipients open on their own devices. It comes only
+// from server environment (never the request Host), must be an http(s) URL
+// without credentials/query/hash, and is never invented: without it no
+// ticket link can be built, so campaigns requesting one are refused.
+function publicOrigin() {
+  const raw = String(process.env.EVENTOUCH_PUBLIC_URL || '').trim();
+  if (!raw) return null;
+  let url;
+  try {
+    url = new URL(raw);
+  } catch (error) {
+    return null;
+  }
+  if ((url.protocol !== 'http:' && url.protocol !== 'https:') || !url.hostname) return null;
+  if (url.username || url.password || url.search || url.hash) return null;
+  const path = url.pathname === '/' ? '' : url.pathname.replace(/\/+$/, '');
+  return `${url.protocol}//${url.host}${path}`;
+}
+
 // Builds the substitution values for one recipient. Called only while a
 // dispatch is in flight so the ticket bearer never lands in stored history.
-function messageVariables(ctx, liveParticipant, snapshot) {
+function messageVariables(ctx, liveParticipant, snapshot, workspace) {
   const base = {
     이름: (liveParticipant && liveParticipant.name) || snapshot.name || '',
     행사명: ctx.event.name || '',
     행사일: ctx.event.date || '',
   };
-  const origin = String(process.env.EVENTOUCH_PUBLIC_URL || '').trim().replace(/\/+$/, '');
+  const origin = publicOrigin();
   const ticket = liveParticipant && liveParticipant.ticket;
   // Without a configured public origin no link can be built, so the key is
   // omitted and the template keeps its own text rather than a broken URL.
+  // (Campaigns requesting {{티켓링크}} are refused before enqueue without a
+  // valid origin, so this omission is only a backstop, never a send path.)
+  // The link lands on the new app's attendee home, where the bearer is
+  // consumed once into tab memory; the legacy hash route is not used.
   if (origin && ticket && ctx.event.slug) {
-    base.티켓링크 = origin + '/#/event/' + encodeURIComponent(ctx.event.slug) + '/ticket?ticket=' + encodeURIComponent(ticket);
+    base.티켓링크 = origin + '/event/' + encodeURIComponent(ctx.event.slug) + '/home?ticket=' + encodeURIComponent(ticket);
   }
+  // Lucky numbers are preassigned by the operator before invitation messaging
+  // (lucky.preassign): message.retry refuses a {{럭키번호}} campaign while
+  // any recipient still lacks one, so this is a real number at send time.
+  const numbers = workspace && Array.isArray(workspace.luckyNumbers) ? workspace.luckyNumbers : [];
+  const own = liveParticipant && numbers.find((item) => item && item.participantId === liveParticipant.id);
+  base.럭키번호 = own && Number.isInteger(own.number) ? String(own.number) : '';
   return base;
 }
 
@@ -223,6 +253,16 @@ function syncMessage(ctx, input) {
 // and never persisted: a ticket link is a bearer credential, and campaign
 // history must not retain one.
 function buildMessageDispatch(event, workspace, message) {
+  // A requested ticket link with no valid public origin must never reach the
+  // provider as a literal placeholder — not even when the environment
+  // changed after enqueue. Throwing here keeps the outbox row queued (the
+  // drain treats it as a retryable failure) instead of sending a broken text.
+  if (String(message.body).includes('{{티켓링크}}') && !publicOrigin()) {
+    throw Object.assign(
+      new Error('참가자 초대 링크를 만들 공개 주소가 설정되지 않았습니다. EVENTOUCH_PUBLIC_URL을 http(s) 주소로 설정하세요'),
+      { status: 409 }
+    );
+  }
   return {
     eventId: event.id,
     messageId: message.id,
@@ -237,7 +277,7 @@ function buildMessageDispatch(event, workspace, message) {
         participantId: person.id,
         name: person.name,
         phone: person.phone,
-        variables: messageVariables({ event }, live, person),
+        variables: messageVariables({ event }, live, person, workspace),
       };
     }),
   };
@@ -249,6 +289,31 @@ async function retryMessage(ctx, input) {
     throw ctx.fail(409, '실행할 수 없는 상태입니다');
   }
   if (message.scheduled && Date.parse(message.scheduled) > Date.now()) throw ctx.fail(409, '예약 시각 전입니다');
+
+  // A {{티켓링크}} campaign without a valid public origin can never produce
+  // its entry URL, so it is refused before enqueue (no attempts increment,
+  // no outbox row) instead of sending the literal placeholder.
+  if (String(message.body).includes('{{티켓링크}}') && !publicOrigin()) {
+    throw ctx.fail(409, '참가자 초대 링크를 만들 공개 주소가 설정되지 않았습니다. EVENTOUCH_PUBLIC_URL을 http(s) 주소로 설정하세요');
+  }
+
+  // A {{럭키번호}} campaign must never go out with a silently empty number:
+  // refuse before enqueue while any recipient still lacks one, so the
+  // operator pre-assigns first instead of sending broken invitations.
+  if (String(message.body).includes('{{럭키번호}}')) {
+    const numbers = Array.isArray(ctx.workspace.luckyNumbers) ? ctx.workspace.luckyNumbers : [];
+    const missing = list(message.recipientIds).filter((id) =>
+      !numbers.some((item) => item && item.participantId === id && Number.isInteger(item.number))
+    );
+    if (missing.length) {
+      throw ctx.fail(
+        409,
+        `럭키번호가 배정되지 않은 대상이 ${missing.length}명 있습니다. 먼저 럭키번호를 배정하세요`,
+        'ids'
+      );
+    }
+  }
+
   message.attempts = (Number(message.attempts) || 0) + 1;
 
   // A connected provider makes this a real send. The network call must not
@@ -352,6 +417,43 @@ function createReward(ctx, input) {
   };
   ctx.workspace.rewards.push(reward);
   return { status: 201, body: { reward: { ...reward } } };
+}
+
+// Company-draw entitlements stay pending until the operator names an
+// explicit recipient: imported data never identifies the company head, so the
+// server must not pick one. The recipient must belong to the winning company
+// and be approved; assignment flips PENDING to READY, which is what makes
+// the existing fulfill/collect paths accept it.
+function assignReward(ctx, input) {
+  requireFeature(ctx, 'reward');
+  const reward = list(ctx.workspace.rewards).find((item) => item.id === ctx.clean(input.id, 120));
+  if (!reward) throw ctx.fail(404, '경품을 찾을 수 없습니다');
+  if (reward.status !== 'PENDING' || reward.participantId) {
+    throw ctx.fail(409, '수령자를 지정할 경품이 아닙니다');
+  }
+  const person = list(ctx.workspace.participants).find((item) =>
+    item.id === ctx.clean(input.participantId, 120)
+  );
+  if (!person || String(person.status || '').toUpperCase() !== 'APPROVED') {
+    throw ctx.fail(404, '참가 확정자를 선택하세요');
+  }
+  if (reward.company && String(person.company || '') !== String(reward.company)) {
+    throw ctx.fail(400, '당첨 업체 소속 참가자를 선택하세요', 'participantId');
+  }
+  reward.participantId = person.id;
+  reward.status = 'READY';
+  reward.assignedAt = ctx.now;
+  reward.assignedBy = ctx.actor.id;
+  const source = reward.source && typeof reward.source === 'object' ? reward.source : {};
+  if (source.kind === 'draw' && source.programId) {
+    const program = list(ctx.workspace.drawPrograms).find((item) => item && item.id === source.programId);
+    const winner = program && list(program.winners)[Number(source.winnerIndex)];
+    if (winner && !winner.recipientId) {
+      winner.recipientId = person.id;
+      winner.recipientName = String(person.name || '');
+    }
+  }
+  return { body: { reward: { ...reward } } };
 }
 
 function fulfillReward(ctx, input) {
@@ -551,6 +653,7 @@ async function apply(ctx) {
     case 'payment.refund-request': return requestRefund(ctx, ctx.input);
     case 'payment.refund': return refundPayment(ctx, ctx.input);
     case 'reward.create': return createReward(ctx, ctx.input);
+    case 'reward.assign': return assignReward(ctx, ctx.input);
     case 'reward.fulfill': return fulfillReward(ctx, ctx.input);
     case 'reward.cancel': return cancelReward(ctx, ctx.input);
     case 'report.create': return createReport(ctx, ctx.input);

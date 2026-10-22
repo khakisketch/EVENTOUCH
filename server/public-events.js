@@ -1,5 +1,7 @@
 'use strict';
 
+const { normalizeHomeStyle } = require('./attendee-home-style');
+
 const PUBLIC_STAGES = new Set(['READY', 'LIVE', 'ENDED']);
 const TICKET_TOKEN = /^(?:[A-Za-z0-9_-]{32,128}|ET:[A-Za-z0-9_-]{1,80}:T-[A-Za-z0-9_-]{32,128})$/;
 
@@ -125,11 +127,27 @@ function publicPage(source) {
     showPrograms: page.showPrograms !== false,
     logo: publicImage(Object.hasOwn(page, 'logo') ? page.logo : branding.logo),
     keyvisual: publicImage(Object.hasOwn(page, 'keyvisual') ? page.keyvisual : branding.keyvisual),
+    // Published-only design: the draft, version counters, and any internal
+    // control state never project. Malformed stored JSON degrades to the
+    // default safe allowlist instead of failing the read.
+    homeStyle: normalizeHomeStyle(page.homeStyle),
   };
   return {
     pageExperience: { published },
     branding: { tagline: published.intro, logo: published.logo, keyvisual: published.keyvisual },
   };
+}
+
+function publicWinner(winner) {
+  const source = object(winner);
+  const projected = {
+    name: text(source.name, 120),
+    company: text(source.company, 160),
+  };
+  if (source.kind === 'PERSON' || source.kind === 'COMPANY') projected.kind = source.kind;
+  if (typeof source.tier === 'string' && source.tier) projected.tier = source.tier.slice(0, 80);
+  if (Number.isInteger(source.luckyNumber)) projected.luckyNumber = source.luckyNumber;
+  return projected;
 }
 
 function publicModule(module, responses) {
@@ -160,10 +178,12 @@ function publicModule(module, responses) {
       id: text(result.id, 120),
       at: text(result.at, 64),
       published: true,
-      winners: array(result.winners).map((winner) => ({
-        name: text(winner && winner.name, 120),
-        company: text(winner && winner.company, 160),
-      })),
+      // Stage reference keeps name/company for compatibility plus the safe
+      // display metadata (kind/tier/drawn lucky number). Internal winner
+      // links, tickets, and contact details never project.
+      winners: array(result.winners)
+        .filter((winner) => winner && (typeof winner.name === 'string' || typeof winner.company === 'string'))
+        .map((winner) => publicWinner(winner)),
     }));
   }
   return projected;
@@ -252,6 +272,111 @@ function publicWorkspace(value, event, participant = null) {
     };
   });
   const own = (items) => array(items).filter((item) => item && attendeeId && item.participantId === attendeeId);
+  const teams = array(source.teams)
+    .filter((item) => item && typeof item.id === 'string' && typeof item.name === 'string')
+    .map((item) => pick(item, ['id', 'name', 'order']));
+  // Safe vote settings for the attendee client: exact pick count, open/close
+  // state, and whether counts are published. Projected only when the poll
+  // feature is on and an operator config exists; null means legacy mode
+  // (up to 5 picks, counts visible). No voter identity ever crosses over.
+  const voteConfigSource = allowedFeatures.has('poll') &&
+    source.voteConfig && typeof source.voteConfig === 'object' && !Array.isArray(source.voteConfig)
+    ? source.voteConfig
+    : null;
+  const voteConfig = voteConfigSource
+    ? {
+      pickCount: Number.isInteger(voteConfigSource.pickCount) ? voteConfigSource.pickCount : 5,
+      status: voteConfigSource.status === 'OPEN' ? 'OPEN' : 'CLOSED',
+      resultsPublished: voteConfigSource.resultsPublished === true,
+    }
+    : null;
+  // Interim counts stay hidden while the operator has a vote config but has
+  // not published results. Workspaces without a config keep the legacy
+  // behavior (counts visible) so existing events do not change shape.
+  const voteCounts = {};
+  const countsPublished = !voteConfigSource || object(voteConfigSource).resultsPublished === true;
+  if (countsPublished) {
+    for (const vote of array(source.votes)) {
+      if (!vote || !Array.isArray(vote.picks)) continue;
+      for (const pick of vote.picks) {
+        if (!pick || typeof pick.teamId !== 'string') continue;
+        const rank = Number(pick.rank);
+        if (!voteCounts[pick.teamId]) voteCounts[pick.teamId] = { count: 0, ranks: { 1: 0, 2: 0, 3: 0 } };
+        voteCounts[pick.teamId].count += 1;
+        if ([1, 2, 3].includes(rank)) voteCounts[pick.teamId].ranks[rank] += 1;
+      }
+    }
+  }
+  const ownVote = attendeeId
+    ? array(source.votes).find((item) => item && item.participantId === attendeeId) || null
+    : null;
+  const ownLucky = attendeeId
+    ? array(source.luckyNumbers).find((item) => item && item.participantId === attendeeId) || null
+    : null;
+  const ownRoulette = attendeeId
+    ? array(source.rouletteResults).find((item) => item && item.participantId === attendeeId) || null
+    : null;
+  // Safe mobile roulette view for the attendee client: the wheel needs prize
+  // identity and whether spinning is possible right now. `open` is computed
+  // server-side from status, schedule, and remaining inventory.Quantities,
+  // weights, and anyone's results never cross over; the caller's own
+  // persisted result stays under `roulette` above. Null when the draw
+  // feature is off or no operator config exists (legacy rows).
+  const rouletteConfigSource = allowedFeatures.has('draw') &&
+    source.rouletteConfig && typeof source.rouletteConfig === 'object' && !Array.isArray(source.rouletteConfig)
+    ? source.rouletteConfig
+    : null;
+  const rouletteView = (() => {
+    if (!rouletteConfigSource) return null;
+    const prizes = array(rouletteConfigSource.prizes)
+      .filter((prize) => prize && typeof prize.id === 'string' && typeof prize.label === 'string')
+      .map((prize, index) => ({
+        id: text(prize.id, 120),
+        tier: index + 1,
+        label: text(prize.label, 80),
+      }));
+    const used = new Map();
+    for (const item of array(source.rouletteResults)) {
+      if (!item || typeof item.prizeId !== 'string') continue;
+      used.set(item.prizeId, (used.get(item.prizeId) || 0) + 1);
+    }
+    const nowMs = Date.now();
+    const inSchedule = (!rouletteConfigSource.startsAt || nowMs >= Date.parse(rouletteConfigSource.startsAt)) &&
+      (!rouletteConfigSource.endsAt || nowMs <= Date.parse(rouletteConfigSource.endsAt));
+    // Same selectability rule as the spin path (see rouletteEffectiveWeight
+    // in server/commands/attendee-experience.js): finite prizes need
+    // remaining stock (explicit weight replaces the remaining-count weight,
+    // 0 pauses), unlimited prizes need their explicit positive weight.
+    // Anything else reads as not open rather than as a false sold-out.
+    const open = array(rouletteConfigSource.prizes).some((prize) => {
+      if (!prize || typeof prize.id !== 'string') return false;
+      const usedCount = used.get(prize.id) || 0;
+      if (prize.quantity === null || prize.quantity === undefined) {
+        return Number.isInteger(prize.weight) && prize.weight > 0;
+      }
+      const remaining = Number(prize.quantity) - usedCount;
+      if (!Number.isFinite(remaining) || remaining <= 0) return false;
+      if (prize.weight === null || prize.weight === undefined) return true;
+      return Number.isInteger(prize.weight) && prize.weight > 0;
+    });
+    return {
+      status: rouletteConfigSource.status === 'OPEN' ? 'OPEN'
+        : rouletteConfigSource.status === 'DRAFT' ? 'DRAFT' : 'CLOSED',
+      startsAt: typeof rouletteConfigSource.startsAt === 'string' ? rouletteConfigSource.startsAt.slice(0, 64) : null,
+      endsAt: typeof rouletteConfigSource.endsAt === 'string' ? rouletteConfigSource.endsAt.slice(0, 64) : null,
+      open: rouletteConfigSource.status === 'OPEN' && inSchedule && open,
+      prizes,
+    };
+  })();
+  const drawPrograms = array(source.drawPrograms)
+    .filter((item) => allowedFeatures.has('draw') && item && typeof item.id === 'string' && item.published === true)
+    .map((item) => ({
+      ...pick(item, ['id', 'name', 'quota', 'moduleId', 'status', 'published', 'drawnAt']),
+      winnerCount: array(item.winners).length,
+      winners: array(item.winners)
+        .filter((winner) => winner && (typeof winner.name === 'string' || typeof winner.company === 'string'))
+        .map((winner) => publicWinner(winner)),
+    }));
   const photos = array(source.photos).filter((item) => item && (
     item.status === 'APPROVED' || (attendeeId && item.participantId === attendeeId)
   ))
@@ -315,6 +440,15 @@ function publicWorkspace(value, event, participant = null) {
     reports: [],
     payments: own(source.payments).map((item) => pick(item, ['id', 'participantId', 'amount', 'status', 'at'])),
     rewards: own(source.rewards).map((item) => pick(item, ['id', 'participantId', 'name', 'status', 'at'])),
+    teams,
+    voteCounts,
+    voteConfig,
+    voteSubmitted: Boolean(ownVote),
+    ownVote: ownVote ? pick(ownVote, ['id', 'picks', 'at']) : null,
+    lucky: ownLucky ? pick(ownLucky, ['number', 'at']) : null,
+    roulette: ownRoulette ? pick(ownRoulette, ['tier', 'label', 'at', 'rewardId']) : null,
+    rouletteView,
+    drawPrograms,
     audit: [],
     display: publicDisplay(source.display),
     branding: publicPage(source).branding,

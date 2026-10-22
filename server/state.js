@@ -13,8 +13,8 @@ const ARRAY_FIELDS = [
   'participants', 'fields', 'publishedFields', 'notices', 'program', 'groups', 'desks', 'booths',
   'assignments', 'checks', 'visits', 'modules', 'responses', 'questions', 'photos', 'posts',
   'messages', 'reports', 'payments', 'rewards', 'audit', 'evidencePhotos',
+  'luckyNumbers', 'rouletteResults', 'teams', 'votes', 'drawPrograms',
 ];
-
 function object(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
@@ -74,6 +74,18 @@ function emptyWorkspace() {
     rewards: [],
     audit: [],
     evidencePhotos: [],
+    luckyNumbers: [],
+    rouletteResults: [],
+    teams: [],
+    votes: [],
+    // New events start closed/bounded: voting needs an explicit OPEN, the
+    // roulette needs configured prizes, lucky numbers stay in a bounded pool.
+    // Genuinely legacy rows (stored before these keys existed) keep behaving
+    // as before — see normalizeWorkspace, which maps absent keys to null.
+    voteConfig: { pickCount: 5, status: 'CLOSED', resultsPublished: false },
+    rouletteConfig: { prizes: [], status: 'CLOSED', startsAt: null, endsAt: null },
+    luckyConfig: { min: 1, max: 900 },
+    drawPrograms: [],
     display: { type: 'idle', moduleId: null },
     branding: { tagline: '행사 안내를 확인하세요.', logo: null, keyvisual: null },
     stampMode: 'STAFF',
@@ -126,6 +138,12 @@ function normalizeWorkspace(value) {
   for (const key of ARRAY_FIELDS) {
     workspace[key] = Array.isArray(source[key]) ? copy(source[key]) : copy(defaults[key]);
   }
+  // Absent capability config means "never configured" (a row stored before
+  // the keys existed): keep it null so legacy behavior is preserved in
+  // memory and on save. Only an explicitly stored object engages the gates.
+  for (const key of ['voteConfig', 'rouletteConfig', 'luckyConfig']) {
+    if (!Object.hasOwn(source, key)) workspace[key] = null;
+  }
   workspace.venue = { ...defaults.venue, ...object(source.venue) };
   workspace.branding = { ...defaults.branding, ...object(source.branding) };
   workspace.display = { ...defaults.display, ...object(source.display) };
@@ -151,6 +169,80 @@ function accountProjection(row, fullOrganization) {
 }
 
 function createState(database) {
+  // Duplicating an event copies configuration and program definitions — never
+  // runtime records. Participants, tickets, check-ins, visits, messages,
+  // responses, rewards, audit entries and lucky numbers stay with the source
+  // event. Stored files are addressed per event, so copied content never keeps
+  // a file reference (branding logo/keyvisual, program attachments, booth-map
+  // images); those are cleared instead of producing a 404 in the new event.
+  // Copied content also starts closed: DRAFT stage, registrationOpen false,
+  // booths closed, modules DRAFT/unpublished.
+  const DUPLICATE_WORKSPACE_KEYS = [
+    'fields', 'publishedFields', 'consentText', 'consentVersion', 'groups',
+    'venue', 'stampMode', 'allowReentry', 'price',
+  ];
+
+  function duplicatedNotice(item) {
+    const notice = copy(object(item));
+    delete notice.attachment;
+    delete notice.fileId;
+    notice.published = false;
+    return notice;
+  }
+
+  function duplicatedProgram(item) {
+    const program = copy(object(item));
+    program.attachment = null;
+    delete program.fileId;
+    program.published = false;
+    return program;
+  }
+
+  function duplicatedModule(item) {
+    const module = copy(object(item));
+    module.status = 'DRAFT';
+    module.published = false;
+    module.revealed = false;
+    delete module.attachment;
+    delete module.fileId;
+    delete module.image;
+    return module;
+  }
+
+  function duplicatedDesk(item) {
+    const desk = copy(object(item));
+    desk.open = false;
+    return desk;
+  }
+
+  function duplicatedBooth(item) {
+    const booth = copy(object(item));
+    booth.used = 0;
+    booth.status = 'CLOSED';
+    return booth;
+  }
+
+  function duplicatedWorkspace(source) {
+    const target = emptyWorkspace();
+    for (const key of DUPLICATE_WORKSPACE_KEYS) {
+      if (source[key] !== undefined) target[key] = copy(source[key]);
+    }
+    target.formVersion = Number(source.formVersion) || 1;
+    target.publishedVersion = Number(source.publishedVersion) || 0;
+    target.registrationOpen = false;
+    if (source.verificationRequired === true) target.verificationRequired = true;
+    const branding = object(source.branding);
+    if (typeof branding.tagline === 'string' && branding.tagline) {
+      target.branding = { ...target.branding, tagline: branding.tagline };
+    }
+    target.notices = array(source.notices).map(duplicatedNotice);
+    target.program = array(source.program).map(duplicatedProgram);
+    target.modules = array(source.modules).map(duplicatedModule);
+    target.desks = array(source.desks).map(duplicatedDesk);
+    target.booths = array(source.booths).map(duplicatedBooth);
+    return target;
+  }
+
   async function createEvent(account, input = {}) {
     const idempotencyKey = String(input.commandId || '').trim();
     if (!/^[A-Za-z0-9_-]{8,128}$/.test(idempotencyKey)) {
@@ -237,6 +329,118 @@ function createState(database) {
           `INSERT INTO command_receipts (command_id, event_id, actor_id, result)
            VALUES ($1, $2, $3, $4::jsonb)`,
           [idempotencyKey, eventId, account.id, JSON.stringify({ command: 'event.create', request, response })]
+        );
+        return { event, replayed: false };
+      });
+    } catch (error) {
+      if (error && error.code === '23505') throw rejected(409, '행사 주소 코드가 이미 사용 중입니다', 'slug');
+      throw error;
+    }
+  }
+
+  // Organization-scope write like event.create: AGENCY only, one idempotency
+  // receipt per commandId, and a request fingerprint that lets a lost-response
+  // retry replay the same duplicate instead of creating a second copy.
+  async function duplicateEvent(account, sourceEventId, input = {}) {
+    const idempotencyKey = String(input.commandId || '').trim();
+    if (!/^[A-Za-z0-9_-]{8,128}$/.test(idempotencyKey)) {
+      throw rejected(400, '요청 식별자를 확인하세요', 'commandId');
+    }
+    const sourceId = String(sourceEventId || '').trim();
+    if (!sourceId || sourceId.length > 160) throw rejected(404, '행사를 찾을 수 없습니다');
+    const request = {
+      sourceId,
+      name: input.name === undefined ? '' : String(input.name || '').trim(),
+      slug: input.slug === undefined ? '' : String(input.slug || '').trim(),
+      date: input.date === undefined ? '' : String(input.date || '').trim(),
+      start: input.start === undefined ? '' : String(input.start || '').trim(),
+      end: input.end === undefined ? '' : String(input.end || '').trim(),
+      capacity: input.capacity === undefined ? null : toCapacityNumber(input.capacity),
+    };
+    try {
+      return await database.transaction(async (client) => {
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [idempotencyKey]);
+        const accountResult = await client.query(
+          'SELECT role, active FROM accounts WHERE id = $1 LIMIT 1 FOR SHARE',
+          [String(account && account.id || '')]
+        );
+        const actor = accountResult.rows[0];
+        if (!actor || actor.active !== true || !ROLES.has(actor.role)) throw denied();
+        if (actor.role !== 'AGENCY') throw rejected(403, '행사 복제 권한을 확인하세요');
+
+        const receiptResult = await client.query(
+          'SELECT event_id, actor_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1 FOR UPDATE',
+          [idempotencyKey]
+        );
+        if (receiptResult.rowCount) {
+          const receipt = receiptResult.rows[0];
+          const stored = object(receipt.result);
+          const storedRequest = object(stored.request);
+          const sameRequest = Object.keys(storedRequest).length === Object.keys(request).length &&
+            Object.entries(request).every(([key, value]) => storedRequest[key] === value);
+          if (String(receipt.actor_id || '') !== String(account.id) || stored.command !== 'event.duplicate' ||
+              !sameRequest || !stored.response?.event ||
+              String(receipt.event_id || '') !== String(stored.response.event.id)) {
+            throw rejected(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+          }
+          return { event: copy(stored.response.event), replayed: true };
+        }
+
+        const sourceResult = await client.query(
+          `SELECT e.id, e.slug, e.client_id, e.payload, w.payload AS workspace_payload
+           FROM events e JOIN event_workspaces w ON w.event_id = e.id
+           WHERE e.id = $1 FOR SHARE OF e, w`,
+          [sourceId]
+        );
+        if (!sourceResult.rowCount) throw rejected(404, '행사를 찾을 수 없습니다');
+        const source = normalizeEvent(sourceResult.rows[0]);
+        const sourceWorkspace = normalizeWorkspace(sourceResult.rows[0].workspace_payload);
+
+        const name = request.name || `${source.name} (복사)`.slice(0, 100);
+        const slugBase = String(source.slug).slice(0, 45).replace(/-+$/, '');
+        const slug = request.slug || `${slugBase}-copy`;
+        const eventDate = request.date || source.date;
+        const start = request.start || source.start;
+        const end = request.end || source.end;
+        const capacity = request.capacity === null ? toCapacityNumber(source.capacity) : request.capacity;
+        if (!name || name.length > 100) throw rejected(400, '행사명을 1~100자로 입력하세요', 'name');
+        if (!/^[a-z0-9][a-z0-9-]{0,49}$/.test(slug)) throw rejected(400, '행사 주소 코드를 확인하세요', 'slug');
+        if (!isCalendarDate(eventDate)) throw rejected(400, '행사 날짜 형식이 올바르지 않습니다', 'date');
+        if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(start) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(end) || start >= end) {
+          throw rejected(400, '종료 시간은 시작 시간보다 늦어야 합니다', 'end');
+        }
+        if (!isSafeIntegerCapacity(capacity)) throw rejected(400, '정원은 0 이상의 정수로 입력하세요', 'capacity');
+
+        const duplicateSlug = await client.query('SELECT 1 FROM events WHERE slug = $1 LIMIT 1', [slug]);
+        if (duplicateSlug.rowCount) throw rejected(409, '행사 주소 코드가 이미 사용 중입니다', 'slug');
+
+        const eventId = `event-${crypto.randomUUID()}`;
+        const payload = {
+          id: eventId,
+          name,
+          slug,
+          clientId: source.clientId,
+          date: eventDate,
+          start,
+          end,
+          capacity,
+          stage: 'DRAFT',
+          features: copy(source.features),
+        };
+        const event = normalizeEvent({ id: eventId, slug, client_id: source.clientId, payload, revision: 0 });
+        await client.query(
+          'INSERT INTO events (id, slug, client_id, payload) VALUES ($1, $2, $3, $4::jsonb)',
+          [eventId, slug, source.clientId, JSON.stringify(payload)]
+        );
+        await client.query(
+          'INSERT INTO event_workspaces (event_id, payload) VALUES ($1, $2::jsonb)',
+          [eventId, JSON.stringify(duplicatedWorkspace(sourceWorkspace))]
+        );
+        const response = { event };
+        await client.query(
+          `INSERT INTO command_receipts (command_id, event_id, actor_id, result)
+           VALUES ($1, $2, $3, $4::jsonb)`,
+          [idempotencyKey, eventId, account.id, JSON.stringify({ command: 'event.duplicate', request, response })]
         );
         return { event, replayed: false };
       });
@@ -538,11 +742,18 @@ function createState(database) {
                         FROM accounts ORDER BY created_at, id`;
         accountValues = [];
       } else if (actor.role === 'MANAGER') {
+        // The assignment dialog is how a staff account gets attached to an
+        // event, so a manager also sees staff accounts that are not attached
+        // to any event yet. Without this the flow deadlocks: an account only
+        // became visible after it had an assignment, and the assignment is
+        // what the manager was trying to make.
         accountQuery = `SELECT DISTINCT a.id, a.email, a.name, a.role, a.active, a.org_permissions
                         FROM accounts a
                         WHERE a.id = $1
                            OR a.id IN (SELECT account_id FROM memberships WHERE event_id = ANY($2::text[]))
                            OR a.id IN (SELECT account_id FROM staff_assignments WHERE event_id = ANY($2::text[]))
+                           OR (a.role = 'STAFF'
+                               AND NOT EXISTS (SELECT 1 FROM staff_assignments sa WHERE sa.account_id = a.id))
                         ORDER BY a.id`;
         accountValues = [actor.id, eventIds];
       } else {
@@ -642,7 +853,7 @@ function createState(database) {
     });
   }
 
-  return { loadBootstrap, createEvent, saveClient, saveOrgPermissions, assignMember };
+  return { loadBootstrap, createEvent, duplicateEvent, saveClient, saveOrgPermissions, assignMember };
 }
 
 module.exports = { createState, emptyWorkspace, normalizeEvent, normalizeWorkspace, projectParticipant };

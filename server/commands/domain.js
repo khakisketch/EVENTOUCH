@@ -15,6 +15,7 @@ const engagement = require('./engagement');
 const contentResults = require('./content-results');
 const boothMap = require('./booth-map');
 const eventEvidence = require('./event-evidence');
+const attendeeExperience = require('./attendee-experience');
 const { createMessagingProvider, dispatchCampaign } = require('../messaging');
 const { settleDispatch } = require('../message-outbox');
 
@@ -24,6 +25,7 @@ const COMMANDS = new Set([
   ...contentResults.COMMANDS,
   ...boothMap.COMMANDS,
   ...eventEvidence.COMMANDS,
+  ...attendeeExperience.COMMANDS,
 ]);
 
 const GUEST_COMMANDS = new Set([
@@ -34,6 +36,7 @@ const GUEST_COMMANDS = new Set([
   'post.submit',
   'payment.simulate',
   'payment.refund-request',
+  ...attendeeExperience.GUEST_COMMANDS,
 ]);
 
 function activeTicket(workspace, token, { allowPendingPayment = false } = {}) {
@@ -224,7 +227,9 @@ function createDomainCommands(database, options = {}) {
           ? await engagement.apply(ctx)
           : eventEvidence.COMMANDS.has(command)
             ? await eventEvidence.apply(ctx)
-            : await contentResults.apply(ctx);
+            : attendeeExperience.COMMANDS.has(command)
+              ? await attendeeExperience.apply(ctx)
+              : await contentResults.apply(ctx);
 
       appendAudit(workspace, event, guest ? actor.id : actor.id, command, input, id, now, guest);
       await client.query(

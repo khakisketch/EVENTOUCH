@@ -23,11 +23,15 @@ const COMMANDS = new Set([
   'booth.save',
   'booth.mode',
   'booth.visit',
+  'reward.lookup',
+  'reward.collect',
 ]);
 const STAFF_ASSIGNMENTS = new Map([
   ['check.scan', 'DESK'],
   ['check.correct', 'DESK'],
   ['booth.visit', 'BOOTH'],
+  ['reward.lookup', 'DESK'],
+  ['reward.collect', 'DESK'],
 ]);
 
 function ensureNotArchived(event) {
@@ -299,8 +303,80 @@ function scan(workspace, event, actor, input, assignment) {
       id: String(person.id),
       action,
       reentry: action === 'IN' && before.everIn,
+      // The scanned person's own reward entitlements only: an OUT desk is
+      // the prize handoff point, and STAFF bootstrap deliberately carries no
+      // global reward list. Nothing about other participants is included.
+      rewards: rewardsFor(workspace, String(person.id)),
     },
   };
+}
+
+function rewardsFor(workspace, participantId) {
+  return list(workspace.rewards)
+    .filter((reward) => reward && String(reward.participantId) === String(participantId))
+    .map((reward) => ({
+      id: String(reward.id || ''),
+      name: String(reward.name || ''),
+      status: String(reward.status || ''),
+      method: String(reward.method || ''),
+    }));
+}
+
+function findScannedPerson(workspace, input) {
+  const code = ticketCode(input.ticket);
+  if (code) {
+    const person = findTicket(workspace, code);
+    if (!person) throw failure(404, '이 행사에서 티켓을 찾을 수 없습니다. 다른 행사 또는 잘못된 코드를 확인하세요.');
+    return person;
+  }
+  const participantId = clean(input.participantId, 120);
+  if (!participantId) throw failure(400, '티켓 코드를 입력하세요.', 'ticket');
+  const person = list(workspace.participants).find((item) => item && String(item.id) === participantId) || null;
+  if (!person) throw failure(404, '이 행사에서 참가자를 찾을 수 없습니다. 이름으로 다시 검색하세요.');
+  return person;
+}
+
+// Tightly-scoped prize lookup for an assigned DESK: exactly one participant
+// (by ticket code or id) and only their reward entitlements. No contact
+// details, no ticket bearer, nobody else's rewards.
+function lookupRewards(workspace, event, input) {
+  if (!list(event.features).includes('reward')) throw failure(409, '이 행사에서 경품 기능을 먼저 켜세요.');
+  const person = findScannedPerson(workspace, input);
+  return {
+    body: {
+      participant: {
+        id: String(person.id),
+        name: String(person.name || ''),
+        company: String(person.company || ''),
+        group: String(person.group || ''),
+        status: String(person.status || ''),
+        inside: person.inside === true,
+        everIn: person.everIn === true,
+      },
+      rewards: rewardsFor(workspace, String(person.id)),
+    },
+  };
+}
+
+// Permitted STAFF fulfillment through the same reward record the operator
+// path uses: READY becomes RECEIVED once, and a second collection of the
+// same reward is refused. Idempotent by commandId like every other command.
+function collectReward(workspace, event, actor, input, now) {
+  if (!list(event.features).includes('reward')) throw failure(409, '이 행사에서 경품 기능을 먼저 켜세요.');
+  const reward = list(workspace.rewards).find((item) => item && String(item.id) === clean(input.id, 120));
+  if (!reward) throw failure(404, '경품을 찾을 수 없습니다');
+  if (reward.status === 'RECEIVED') throw failure(409, '이미 수령한 경품입니다');
+  if (reward.status === 'PENDING' || !reward.participantId) {
+    throw failure(409, '수령자를 먼저 지정하세요');
+  }
+  if (reward.status !== 'READY') throw failure(409, '지급 대기 경품을 선택하세요');
+  const person = list(workspace.participants).find((item) => item && String(item.id) === String(reward.participantId));
+  if (!person || String(person.status || '').toUpperCase() === 'CANCELLED') {
+    throw failure(409, '참가 확정자를 선택하세요');
+  }
+  reward.status = 'RECEIVED';
+  reward.claim = { actor: String(actor.id), at: new Date().toISOString(), simulated: true };
+  return { body: { reward: structuredClone(reward) } };
 }
 
 function correctCheck(workspace, event, actor, input, assignment, now, commandId) {
@@ -427,7 +503,17 @@ function visitBooth(workspace, event, actor, input, assignment, now, commandId, 
   const priorVisits = list(workspace.visits).filter((visit) =>
     visit && String(visit.boothId) === boothId && String(visit.participantId) === String(person.id)
   ).length;
-  if (priorVisits >= limit) throw failure(409, '이 부스의 인증 횟수를 모두 사용했습니다.');
+  if (priorVisits >= limit) {
+    // A participant standing at a closed booth needs the next step, not just
+    // the reason. The event's other booths are known here, so say whether
+    // there is somewhere else to go.
+    const otherOpen = list(workspace.booths).filter((item) =>
+      item && String(item.id) !== boothId && String(item.status || '').toUpperCase() === 'OPEN'
+    );
+    throw failure(409, otherOpen.length
+      ? `이 부스의 인증 횟수를 모두 사용했습니다. 다른 열린 부스 ${otherOpen.length}곳에서 인증할 수 있습니다.`
+      : '이 부스의 인증 횟수를 모두 사용했습니다. 다른 부스를 이용하거나 현장 운영자에게 문의하세요.');
+  }
 
   booth.used = Math.max(0, Number(booth.used) || 0) + 1;
   const row = {
@@ -578,6 +664,12 @@ function createOperationsCommands(database) {
           result = visitBooth(
             workspace, event, operationActor, input, authorized.assignment, now, id, guest ? ticketToken : ''
           );
+          break;
+        case 'reward.lookup':
+          result = lookupRewards(workspace, event, input);
+          break;
+        case 'reward.collect':
+          result = collectReward(workspace, event, operationActor, input, now);
           break;
         default:
           throw failure(400, '지원하지 않는 현장 운영 작업입니다.', 'command');
