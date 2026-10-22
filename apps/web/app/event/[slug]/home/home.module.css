@@ -332,8 +332,6 @@
 
 /* Lucky number + roulette tabs: client reference yellow E-Ticket cards. */
 .luckyPanel { display: flex; flex-direction: column; gap: var(--s4); }
-.luckyTitle { margin: 0; }
-.luckyHint { color: var(--muted); }
 
 .eticket {
   display: grid;
@@ -733,7 +731,6 @@
 
 .votePanel { display: flex; flex-direction: column; gap: var(--s4); }
 .voteTitle { margin: 0; }
-.voteHint { color: var(--muted); }
 
 /* Vote tab: client reference candidate rows with avatar + check. */
 .teamGrid {

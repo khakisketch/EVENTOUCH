@@ -277,11 +277,6 @@
   transition: all var(--enter) ease-out;
 }
 
-.eventCard.metric-primary {
-  border-color: var(--brand);
-  background: var(--soft);
-}
-
 .eventCardTop {
   display: grid;
   grid-template-columns: minmax(var(--s8), auto) minmax(0, 1fr) 32px;

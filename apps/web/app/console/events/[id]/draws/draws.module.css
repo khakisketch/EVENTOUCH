@@ -322,20 +322,6 @@
   .recipientControls button {
     width: 100%;
   }
-
-  .moduleTop {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .photoArchiveTools {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .photoArchiveTools :global(.button) {
-    width: 100%;
-  }
 }
 
 /* Setup forms fold away: the stage-draw list is what the operator runs

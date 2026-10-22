@@ -302,11 +302,6 @@ select[aria-invalid="true"] {
   box-shadow: 0 1px 3px var(--shadow-color);
 }
 
-.metric-card.metric-primary {
-  border-color: var(--brand);
-  box-shadow: 0 4px 12px var(--shadow-color);
-}
-
 .metric-value {
   font-family: var(--display-font);
   font-size: clamp(var(--h2), 4vw, var(--display-large));

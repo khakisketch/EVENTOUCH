@@ -89,8 +89,7 @@
 
 .moduleActions .button,
 .itemActions .button,
-.drawControls .button,
-.actions .button {
+.drawControls .button {
   min-height: 44px;
 }
 
