@@ -84,10 +84,19 @@ test('web-console-programs-covers-status-reveal-draw-and-moderation', () => {
 
 test('web-console-programs-dialog-is-modal-and-wires-field-errors', () => {
   const workspace = read('app/console/events/[id]/programs/ProgramsWorkspace.tsx');
-  assert.match(workspace, /role="dialog"/);
-  assert.match(workspace, /aria-modal/);
-  assert.match(workspace, /previouslyFocused/);
-  assert.match(workspace, /Escape/);
+  // The dialog mounts the shared shell: workspace owns usage, title id,
+  // caller focus and dismissal gates; the shell owns modal mechanics.
+  assert.match(workspace, /<ConsoleDialog/);
+  assert.match(workspace, /titleId="program-dialog-title"/);
+  assert.match(workspace, /initialFocusRef=\{titleInputRef\}/);
+  assert.match(workspace, /canClose=\{confirmDialogClose\}/);
+  assert.match(workspace, /if \(!busy && canClose\(\)\) onClose\(\)/);
+  const dialog = read('app/console/console-ui/ConsoleDialog.tsx');
+  assert.match(dialog, /role="dialog"/);
+  assert.match(dialog, /aria-modal="true"/);
+  assert.match(dialog, /previouslyFocused/);
+  assert.match(dialog, /event\.key === "Escape"/);
+  assert.match(dialog, /event\.key !== "Tab"/);
   assert.match(workspace, /투표 선택지/);
   assert.match(workspace, /퀴즈 정답/);
   assert.match(workspace, /만족도 질문/);
@@ -97,12 +106,20 @@ test('web-console-programs-dialog-is-modal-and-wires-field-errors', () => {
 
 test('web-console-shell-links-programs-between-operations-and-settings', () => {
   const shell = read('app/console/ConsoleShell.tsx');
-  assert.match(shell, /참여 프로그램/);
-  assert.match(shell, /\$\{eventBasePath\}\/programs/);
-  assert.match(shell, /isPrograms/);
-  const operationsAt = shell.indexOf('현장 운영');
-  const programsAt = shell.indexOf('참여 프로그램');
-  const settingsAt = shell.indexOf('행사 설정');
+  // The rail renders the registry order with registry labels and hrefs, not
+  // literal duplicate routes; badges and feature gates stay in the shell.
+  assert.match(shell, /EVENT_PAGE_IDS\.map\(\(pageId\)/);
+  assert.match(shell, /CONSOLE_PAGES\[pageId\]\.label/);
+  assert.match(shell, /consolePageHref\(pageId, eventId/);
+  assert.match(shell, /nav-badge/);
+  assert.match(shell, /features\.includes\("reward"\)/);
+  const navigation = read('app/console/console-navigation.ts');
+  assert.match(navigation, /programs: \{ label: "참여 프로그램"/);
+  assert.match(navigation, /return `\$\{base\}\/programs`/);
+  const eventIds = navigation.slice(navigation.indexOf('EVENT_PAGE_IDS'), navigation.indexOf('];', navigation.indexOf('EVENT_PAGE_IDS')));
+  const operationsAt = eventIds.indexOf('"operations"');
+  const programsAt = eventIds.indexOf('"programs"');
+  const settingsAt = eventIds.indexOf('"settings"');
   assert.ok(operationsAt >= 0 && programsAt >= 0 && settingsAt >= 0);
   assert.ok(operationsAt < programsAt && programsAt < settingsAt);
 });
@@ -148,8 +165,8 @@ test('web-engage-submits-through-the-guest-command-path-only', () => {
 
 test('web-engage-keeps-the-bearer-off-the-screen-and-explains-without-a-ticket', () => {
   const client = read('app/event/[slug]/engage/EngageClient.tsx');
-  assert.match(client, /티켓 링크가 필요합니다/);
-  assert.match(client, /내 티켓으로 이동/);
+  assert.match(client, /티켓이 확인되지 않습니다/);
+  assert.match(client, /내 티켓 찾기/);
   assert.match(client, /이미 제출했습니다/);
   assert.match(client, /참가 확정 후/);
   assert.doesNotMatch(client, /localStorage/);

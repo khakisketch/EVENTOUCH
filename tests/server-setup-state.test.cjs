@@ -94,6 +94,10 @@ test('a-fresh-install-reports-that-it-has-no-administrator', async () => {
   const res = await fetch(`${BASE}/api/auth/setup-state`);
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { ready: false, administratorConfigured: false });
+  // No administrator exists yet, so there is no reset contact to publish.
+  const help = await fetch(`${BASE}/api/auth/help`);
+  assert.equal(help.status, 200);
+  assert.deepEqual(await help.json(), { administrator: null });
 });
 
 test('the-setup-probe-requires-no-session', async () => {
@@ -149,10 +153,25 @@ test('a-wrong-password-on-a-configured-install-is-still-an-ordinary-rejection', 
   assert.match(body.error, /비밀번호를 확인하세요/);
 });
 
-test('the-login-page-markup-contains-the-setup-notice-when-required', () => {
-  // The notice lives in server-presentation.js because that is the wrapper
-  // that actually renders the server-mode login screen.
-  const source = fs.readFileSync(path.join(__dirname, '..', 'assets/js/server-presentation.js'), 'utf8');
-  assert.match(source, /setupRequired/);
-  assert.match(source, /ADMIN_EMAIL/);
+test('the-next-login-form-surfaces-the-setup-failure-instead-of-a-credential-error', () => {
+  // The retired vanilla server-presentation.js rendered an explicit setup
+  // notice; the sole UI is apps/web now. The shared login posts to the same
+  // API and announces whatever the server reports via role=alert, so the
+  // unconfigured-install message ("운영자 계정이 아직 설정되지 않았습니다")
+  // reaches the operator instead of reading as a wrong password.
+  const source = fs.readFileSync(path.join(__dirname, '..', 'apps', 'web', 'app', 'login', 'LoginForm.tsx'), 'utf8');
+  assert.match(source, /\/api\/auth\/login/);
+  assert.match(source, /role="alert"/);
+  assert.match(source, /data\?\.error/);
+  assert.match(source, /\/api\/auth\/setup-state/);
+  assert.match(source, /administratorConfigured === false/);
+  assert.match(source, /설정 상태 다시 확인/);
+  // The reset instruction is a disclosure: the contact appears only after
+  // the operator asks for it, and the panel explains when none is configured.
+  assert.match(source, /\/api\/auth\/help/);
+  assert.match(source, /aria-expanded=\{resetOpen\}/);
+  assert.match(source, /aria-controls="login-reset-help"/);
+  assert.match(source, /재설정 요청/);
+  assert.match(source, /mailto:\$\{administrator\.email\}/);
+  assert.match(source, /등록된 관리자 연락처가 없습니다/);
 });

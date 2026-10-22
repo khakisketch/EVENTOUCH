@@ -60,8 +60,12 @@ after(async () => {
   if (dataDir) fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
-test('every-response-carries-the-baseline-security-headers', async () => {
-  for (const target of ['/', '/index.html', '/assets/css/tokens.css', '/api/health', '/api/nope', '/missing-file']) {
+// The Node server is API-only; document and asset security for the product
+// UI is audited against the running Next build (scripts/web-audit.cjs).
+// These tests pin the API server's own headers without requiring the
+// retired static shell.
+test('every-api-response-carries-the-baseline-security-headers', async () => {
+  for (const target of ['/api/health', '/api/nope', '/missing-file']) {
     const res = await fetch(`${BASE}${target}`);
     assert.equal(res.headers.get('x-content-type-options'), 'nosniff', `${target} nosniff`);
     // SAMEORIGIN, not DENY: the participant-page preview frames the product's
@@ -74,14 +78,14 @@ test('every-response-carries-the-baseline-security-headers', async () => {
 });
 
 test('the-405-method-rejection-also-carries-security-headers', async () => {
-  const res = await fetch(`${BASE}/index.html`, { method: 'DELETE' });
+  const res = await fetch(`${BASE}/missing-file`, { method: 'DELETE' });
   assert.equal(res.status, 405);
   assert.equal(res.headers.get('x-frame-options'), 'SAMEORIGIN');
   assert.ok(res.headers.get('content-security-policy'));
 });
 
-test('the-csp-locks-framing-base-uri-and-objects', async () => {
-  const res = await fetch(`${BASE}/`);
+test('the-api-csp-locks-framing-base-uri-and-objects', async () => {
+  const res = await fetch(`${BASE}/api/health`);
   const csp = res.headers.get('content-security-policy');
   assert.match(csp, /frame-ancestors 'self'/);
   assert.doesNotMatch(csp, /frame-ancestors \*|frame-ancestors 'none'/);
@@ -93,54 +97,27 @@ test('the-csp-locks-framing-base-uri-and-objects', async () => {
   assert.doesNotMatch(csp, /script-src[^;]*unsafe-inline/);
 });
 
-test('html-inline-scripts-carry-the-nonce-this-response-announced', async () => {
-  const res = await fetch(`${BASE}/`);
-  const csp = res.headers.get('content-security-policy');
-  const nonce = /script-src 'self' 'nonce-([^']+)'/.exec(csp)[1];
-  const html = await res.text();
-  const inlineScripts = [...html.matchAll(/<script(?![^>]*\bsrc=)([^>]*)>/g)];
-  assert.ok(inlineScripts.length >= 2, 'the product entry keeps its inline bootstrap scripts');
-  for (const [, attrs] of inlineScripts) {
-    // The nonce is base64 and may contain regex-significant characters.
-    assert.ok(
-      attrs.includes(`nonce="${nonce}"`),
-      `every inline script carries this response nonce, got: ${attrs}`,
-    );
-  }
-  // External scripts stay on 'self' and must not be stamped.
-  const external = [...html.matchAll(/<script[^>]*src=[^>]*>/g)];
-  assert.ok(external.length > 0);
-  for (const [tag] of external) assert.doesNotMatch(tag, /nonce=/);
-});
-
-test('each-response-issues-a-distinct-nonce', async () => {
-  const first = await fetch(`${BASE}/`);
-  const second = await fetch(`${BASE}/`);
+test('each-api-response-issues-a-distinct-nonce', async () => {
+  const first = await fetch(`${BASE}/api/health`);
+  const second = await fetch(`${BASE}/api/health`);
   const nonceOf = (res) => /nonce-([^']+)'/.exec(res.headers.get('content-security-policy'))[1];
   assert.notEqual(nonceOf(first), nonceOf(second));
 });
 
-test('non-html-assets-are-not-modified-by-the-nonce-pass', async () => {
-  const res = await fetch(`${BASE}/assets/css/tokens.css`);
-  const body = await res.text();
-  assert.doesNotMatch(body, /nonce=/);
-  assert.match(body, /--brand/);
-});
-
 test('hsts-is-absent-on-http-and-present-under-cookie-secure', async () => {
-  const insecure = await fetch(`${BASE}/`);
+  const insecure = await fetch(`${BASE}/api/health`);
   assert.equal(insecure.headers.get('strict-transport-security'), null);
 
   await stopServer();
   await startServer({ COOKIE_SECURE: '1' });
-  const secure = await fetch(`${BASE}/`);
+  const secure = await fetch(`${BASE}/api/health`);
   assert.match(secure.headers.get('strict-transport-security'), /max-age=31536000/);
 });
 
 test('csp-can-be-held-in-report-only-without-dropping-other-headers', async () => {
   await stopServer();
   await startServer({ EVENTOUCH_CSP_REPORT_ONLY: '1' });
-  const res = await fetch(`${BASE}/`);
+  const res = await fetch(`${BASE}/api/health`);
   assert.equal(res.headers.get('content-security-policy'), null);
   assert.ok(res.headers.get('content-security-policy-report-only'));
   assert.equal(res.headers.get('x-frame-options'), 'SAMEORIGIN');

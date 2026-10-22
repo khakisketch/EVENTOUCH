@@ -18,6 +18,15 @@ function read(rel) {
   return fs.readFileSync(path.join(WEB, rel), 'utf8');
 }
 
+function readSurfaceModules(rel) {
+  const directory = path.join(WEB, rel);
+  return fs.readdirSync(directory, { recursive: true })
+    .filter((file) => /\.(ts|tsx)$/.test(file))
+    .sort()
+    .map((file) => fs.readFileSync(path.join(directory, file), 'utf8'))
+    .join('\n');
+}
+
 test('web-proxy-keeps-the-same-origin-api-contract', () => {
   const config = read('next.config.ts');
   assert.match(config, /source:\s*"\/api\/:path\*"/);
@@ -48,7 +57,8 @@ test('web-service-entry-sends-everyone-through-the-shared-login', () => {
   assert.match(home, /\/login/);
   assert.match(home, /\/staff/);
   assert.match(home, /\/console/);
-  assert.match(home, /초대 메시지/);
+  assert.match(home, /행사 링크/);
+  assert.match(home, /앱 설치 없이/);
   assert.doesNotMatch(home, /\/commands/);
   assert.doesNotMatch(home, /localStorage/);
   assert.doesNotMatch(home, /sessionStorage/);
@@ -57,20 +67,25 @@ test('web-service-entry-sends-everyone-through-the-shared-login', () => {
   assert.match(home, /도입 문의/);
   assert.doesNotMatch(home, /<form/);
   // Persuade hierarchy: the hero asks for inquiry, login stays a utility.
-  assert.match(home, /도입 상담 메일 보내기/);
-  assert.match(home, /home-login-link/);
+  assert.match(home, /이메일로 도입 문의/);
+  assert.match(home, /styles\.loginLink/);
   assert.match(home, /INQUIRY_BODY/);
   assert.match(home, /이메일 주소 복사/);
-  // Honest messaging claim plus real product evidence, not mockups.
-  assert.match(home, /모의 발송으로 동작하며/);
-  assert.match(home, /실제 화면/);
-  assert.match(home, /\/evidence\/ev-console\.png/);
-  assert.match(home, /\/evidence\/ev-ticket\.png/);
-  assert.match(home, /\/evidence\/ev-staff\.png/);
-  // The quiet header login still meets the touch target.
-  const landingCss = read('app/globals.css');
-  assert.match(landingCss, /\.home-login-link\s*\{[^}]*min-height:\s*44px/s);
-  assert.match(landingCss, /\.evidence-card/);
+  // Honest messaging claim plus real product evidence, not mockups. The
+  // evidence set carries the operating flow: console, attendee, staff, report.
+  assert.match(home, /모의 발송으로 동작합니다/);
+  assert.match(home, /실제 제품 화면/);
+  for (const asset of ['ev-console', 'ev-attendee-event', 'ev-staff', 'ev-report']) {
+    assert.match(home, new RegExp(`/evidence/${asset}\\.png`));
+  }
+  // Auth lookup must not block public content; it has a deadline and fallback.
+  assert.match(home, /AbortController/);
+  assert.match(home, /4000/);
+  // Header login and FAQ interactions remain accessible at touch size.
+  const landingCss = read('app/landing.module.css');
+  assert.match(landingCss, /\.loginLink\s*\{[^}]*min-height:\s*44px/s);
+  assert.match(landingCss, /\.faqItem summary:focus-visible/);
+  assert.match(landingCss, /prefers-reduced-motion/);
 });
 
 test('web-registration-posts-to-the-public-signup-contract', () => {
@@ -97,13 +112,21 @@ test('web-attendee-verification-precedes-signup-and-recovery-without-accounts', 
   // Readiness is stated before submission, not discovered through it; the
   // sent code is confirmed with its window and a resend path.
   assert.match(form, /인증을 마쳐야 신청할 수 있습니다/);
-  assert.match(form, /연락처 인증을 완료해야 신청할 수 있습니다/);
+  // The verification panel now leads the form, so the notice points forward
+  // to the fields instead of back at the panel above it.
+  assert.match(form, /연락처 인증을 완료하면 아래에서 신청 정보를 입력할 수 있습니다/);
   assert.match(form, /인증번호 다시 받기/);
   assert.match(form, /10분 안에 입력하세요/);
   assert.doesNotMatch(form, /localStorage/);
   assert.doesNotMatch(form, /sessionStorage/);
   const page = read('app/event/[slug]/register/page.tsx');
   assert.match(page, /verificationRequired/);
+  assert.match(page, /이미 신청했다면 내 티켓 찾기/);
+  assert.match(page, /현재 신청을 받지 않습니다/);
+  assert.match(page, /loadVerificationMode/);
+  assert.match(page, /VerificationUnavailable/);
+  const unavailable = read('app/event/[slug]/VerificationUnavailable.tsx');
+  assert.match(unavailable, /실제 문자로 전송되지 않습니다/);
   // Recovery reconnects by verified number; the session cookie set by the
   // server does the rest. No account, no stored secret on the device.
   const recover = read('app/event/[slug]/ticket/recover/RecoverForm.tsx');
@@ -111,6 +134,9 @@ test('web-attendee-verification-precedes-signup-and-recovery-without-accounts', 
   assert.match(recover, /verification\/confirm/);
   assert.match(recover, /RECOVER/);
   assert.match(recover, /\/ticket/);
+  assert.match(recover, /인증번호 다시 받기/);
+  assert.match(recover, /setSent\(false\)/);
+  assert.doesNotMatch(recover, /setPhone\(""\)/);
   assert.doesNotMatch(recover, /localStorage/);
   assert.doesNotMatch(recover, /sessionStorage/);
   const recoverPage = read('app/event/[slug]/ticket/recover/page.tsx');
@@ -119,7 +145,111 @@ test('web-attendee-verification-precedes-signup-and-recovery-without-accounts', 
   // bearer, and points home instead of dead-ending.
   const view = read('app/event/[slug]/ticket/TicketView.tsx');
   assert.match(view, /ticket\/recover/);
-  assert.match(view, /내 참가 정보 다시 연결/);
+  assert.match(view, /내 티켓 찾기/);
+  assert.match(view, /신청 연락처 인증으로 다시 연결/);
+  // The recovery note stays a quiet footnote; the wording changed with it.
+  assert.match(view, /이 티켓은 현재 탭에만 보관됩니다/);
+  const event = read('app/event/[slug]/page.tsx');
+  assert.match(event, /이미 신청했다면 · 내 티켓 찾기/);
+  assert.match(event, /참가자 홈/);
+  const home = read('app/event/[slug]/home/page.tsx');
+  assert.match(home, /HomeShell/);
+  // Detail components may be extracted without changing this surface's
+  // API/bearer contracts. Rendering and navigation have separate live audits.
+  const shell = readSurfaceModules('app/event/[slug]/home');
+  assert.match(shell, /lucky\.assign/);
+  assert.match(shell, /roulette\.spin/);
+  assert.match(shell, /vote\.ranked/);
+  // Same tab-scoped bearer contract as the ticket screen: sessionStorage is
+  // allowed, localStorage is not, and the bearer travels in the header.
+  assert.match(shell, /authorization:\s*`Bearer /);
+  assert.match(shell, /sessionStorage/);
+  assert.doesNotMatch(shell, /localStorage/);
+  assert.match(shell, /history\.replaceState/);
+  assert.match(shell, /\/ticket\/recover/);
+  assert.match(shell, /\/commands/);
+  // The phone screenshot, not the slide's explanatory bars, is the visual
+  // reference. Keep every destination; rendered layout and home/detail
+  // separation are verified in the browser rather than pinning slide labels.
+  assert.match(shell, /참가자 개인 QR|모바일 티켓/);
+  assert.match(shell, /럭키드로우 번호/);
+  assert.match(shell, /룰렛 이벤트/);
+  assert.match(shell, /순위 투표/);
+  assert.match(shell, /부스 인증/);
+  // Detail behavior consumes real independent operator settings, not a
+  // hardcoded wheel or stage-program gate. Visual fidelity is rendered QA,
+  // not a pin on an English title or implementation-specific CSS class.
+  assert.match(shell, /rouletteView/);
+  assert.match(shell, /voteConfig/);
+  assert.match(shell, /pickCount/);
+  assert.match(shell, /prizes/);
+});
+
+test('web-attendee-home-command-contracts', () => {
+  const repoRead = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
+  const commands = repoRead('server/commands/attendee-experience.js');
+  assert.match(commands, /lucky\.assign/);
+  assert.match(commands, /roulette\.spin/);
+  assert.match(commands, /vote\.ranked/);
+  assert.match(commands, /team\.save/);
+  assert.match(commands, /draw\.program\.save/);
+  assert.match(commands, /draw\.program\.run/);
+  assert.match(commands, /luckyNumbers/);
+  assert.match(commands, /rouletteResults/);
+  assert.match(commands, /drawPrograms/);
+  // Program runs mirror into the linked draw module's published history so
+  // the venue display shows the same result without a second publish step.
+  assert.match(commands, /drawHistory/);
+  assert.match(commands, /published: true/);
+  // Mobile roulette is configured independently of stage draw programs.
+  assert.match(commands, /roulette\.config\.save/);
+  assert.match(commands, /vote\.config\.save/);
+  assert.match(commands, /특정 시간에 운영됩니다/);
+  const results = repoRead('server/commands/content-results.js');
+  assert.match(results, /럭키번호/);
+  assert.match(results, /\/home\?ticket=/);
+  const domain = repoRead('server/commands/domain.js');
+  assert.match(domain, /attendee-experience/);
+  assert.match(domain, /attendeeExperience\.COMMANDS/);
+  assert.match(domain, /attendeeExperience\.GUEST_COMMANDS/);
+  const projection = repoRead('server/public-events.js');
+  assert.match(projection, /teams/);
+  assert.match(projection, /voteCounts/);
+  assert.match(projection, /drawPrograms/);
+  assert.match(projection, /roulette/);
+  assert.match(projection, /rouletteView/);
+  assert.match(projection, /voteConfig/);
+  assert.match(projection, /lucky/);
+  const draws = readSurfaceModules('app/console/events/[id]/draws');
+  assert.match(draws, /team\.save/);
+  assert.match(draws, /draw\.program\.save/);
+  assert.match(draws, /draw\.program\.run/);
+  // MC touch now selects the screen in the draw's own transaction/receipt,
+  // rather than committing a prize before a separate display request.
+  assert.match(draws, /showOnScreen:\s*true/);
+  assert.match(draws, /vote\.config\.save/);
+  assert.match(draws, /roulette\.config\.save/);
+  assert.match(draws, /lucky\.preassign/);
+  assert.match(draws, /reward\.assign/);
+  assert.match(draws, /\/commands/);
+  const board = readSurfaceModules('app/screen/[slug]');
+  assert.match(board, /drawHistory/);
+  assert.match(board, /luckyNumber/);
+  assert.match(board, /COMPANY/);
+  const messaging = read('app/console/events/[id]/messages/MessagingWorkspace.tsx');
+  assert.match(messaging, /럭키번호/);
+  // The rail renders registry destinations, not literal duplicate routes.
+  const shellNav = read('app/console/ConsoleShell.tsx');
+  assert.match(shellNav, /EVENT_PAGE_IDS\.map\(\(pageId\)/);
+  assert.match(shellNav, /CONSOLE_PAGES\[pageId\]\.label/);
+  assert.match(shellNav, /consolePageHref\(pageId, eventId/);
+  const navigation = read('app/console/console-navigation.ts');
+  assert.match(navigation, /draws: \{ label: "추첨·투표"/);
+  assert.match(navigation, /return `\$\{base\}\/draws`/);
+  const staff = readSurfaceModules('app/staff');
+  assert.match(staff, /reward\.lookup/);
+  assert.match(staff, /reward\.collect/);
+  assert.doesNotMatch(staff, /workspaceRewards\.filter/);
 });
 
 test('web-ticket-keeps-the-bearer-out-of-history-and-persistent-storage', () => {
@@ -142,7 +272,7 @@ test('web-ticket-keeps-the-bearer-out-of-history-and-persistent-storage', () => 
   assert.match(view, /대기 명단에 등록되어 있습니다/);
   assert.match(view, /참여 프로그램 보기/);
   assert.match(view, /\/engage/);
-  assert.match(view, /탭에서만 자동으로 찾을 수 있습니다/);
+  assert.match(view, /이 브라우저에 티켓이 보관되어 있지 않습니다/);
   // Entry tone follows usability, and the failure is announced.
   assert.match(view, /data-tone/);
   assert.match(view, /<p role="alert">/);
@@ -191,7 +321,8 @@ test('web-staff-uses-session-bootstrap-and-server-checked-commands', () => {
 });
 
 test('web-camera-scan-degrades-to-manual-entry-without-a-camera', () => {
-  const scanner = read('app/staff/CameraScan.tsx');
+  // Shared by staff check-in and participant booth stamping.
+  const scanner = read('app/CameraScan.tsx');
   // Guarded access: never crash where getUserMedia is missing or denied.
   assert.match(scanner, /navigator\.mediaDevices/);
   assert.match(scanner, /getUserMedia/);
@@ -208,8 +339,9 @@ test('web-camera-scan-degrades-to-manual-entry-without-a-camera', () => {
 test('web-display-polls-public-content-and-never-blanks-on-a-drop', () => {
   const board = read('app/screen/[slug]/DisplayBoard.tsx');
   assert.match(board, /\/api\/public\/events\//);
-  assert.match(board, /setInterval/);
-  assert.match(board, /5000/);
+  assert.match(board, /set(?:Interval|Timeout)/);
+  // MC-touch freshness is checked by the live workflow, not the retired
+  // literal five-second cadence. Either timer implementation may be used.
   // A failed poll keeps the last good frame; only the first load may fail.
   assert.match(board, /prev\.kind === "ready"/);
   assert.doesNotMatch(board, /localStorage/);
@@ -242,10 +374,12 @@ test('web-console-home-reads-bootstrap-before-any-write-paths', () => {
 test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   const home = read('app/console/ConsoleHome.tsx');
   assert.doesNotMatch(home, /먼저 확인/);
-  // The header is one heading plus the create trigger; the schedule order
-  // needs no visible explainer above the filters.
+  // The header is one registry heading plus the create trigger; the
+  // schedule order needs no visible explainer above the filters. The H1
+  // comes from the ConsolePage registry (this file owns no heading).
   assert.doesNotMatch(home, /오늘과 가까운 일정부터/);
-  assert.match(home, /<h1>행사<\/h1>/);
+  assert.match(home, /<ConsolePage pageId="events">/);
+  assert.doesNotMatch(home, /<ConsolePageHeader\b|<h1\b/);
   // Keep one page heading, a visible result count near the list, and a
   // screen-reader status announcement without adding a second live region.
   assert.doesNotMatch(home, /aria-live/);
@@ -269,7 +403,7 @@ test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   assert.match(home, /selectedDate/);
   // One native stage selector keeps the four stable filters discoverable
   // without turning every status into a separate card-like control.
-  assert.match(home, /className=\{styles\.stageFilter\}>\s*<span>진행 단계<\/span>\s*<select/);
+  assert.match(home, /<label className=\{[^\n]*styles\.stageFilter[^\n]*\}>\s*<span>진행 단계<\/span>\s*<select/);
   assert.match(home, /value=\{filter\}/);
   assert.match(home, /FILTERS\.map\(\(item\) =>/);
   assert.match(home, /counts\[item\.id\]/);
@@ -299,35 +433,55 @@ test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   }
   assert.match(home, /className=\{styles\.eventDate\}/);
   assert.match(home, /className=\{styles\.eventStatus\}/);
-  assert.match(home, /className=\{styles\.eventMetrics\}/);
-  assert.match(home, /등록 인원/);
-  assert.match(home, /승인 대기/);
-  assert.match(home, /현재 입장/);
-  assert.match(home, /pending: counts\.pending/);
-  assert.match(home, /inside: counts\.inside/);
+  // The approved directory summary leaves statistics in the event home.
+  // Only a nonempty approval queue earns a small follow-up link.
+  assert.doesNotMatch(home, /eventMetrics|등록 인원|현재 입장/);
+  assert.match(home, /pending: countPending\(event\.id\)/);
+  assert.match(home, /event\.pending > 0 \? \(\s*<Link\s*className=\{styles\.approvalLink\}/);
+  const overview = read('app/console/events/[id]/EventOverview.tsx');
+  assert.match(overview, /headingId="event-metrics-heading"/);
+  assert.match(overview, /overview\.registered/);
+  assert.match(overview, /overview\.everIn/);
   const eventCard = home.slice(home.indexOf('function EventCard('), home.indexOf('export default function ConsoleHome()'));
   assert.match(eventCard, /<Link[\s\S]*className=\{styles\.eventCardLink\}/);
   assert.match(eventCard, /href=\{`\/console\/events\/\$\{encodeURIComponent\(event\.id\)\}`\}/);
-  assert.doesNotMatch(eventCard, /aria-label=/);
-  assert.equal((eventCard.match(/<Link\b/g) ?? []).length, 1);
-  assert.doesNotMatch(eventCard, /<button|<select|<input|<a\b/);
+  assert.match(eventCard, /participants\?status=PENDING/);
+  // The pending queue is its own link outside the overview link; no nested
+  // anchors and no inline editing controls on the card.
+  assert.doesNotMatch(eventCard, /<a\b/);
+  assert.match(eventCard, /<\/Link>[\s\S]*styles\.eventCardActions[\s\S]*?복제/);
   assert.doesNotMatch(home, /localStorage/);
   assert.doesNotMatch(home, /sessionStorage/);
-  // The create dialog is a real modal again: styled, focus-trapped,
-  // Escape-dismissed, with focus returned to the trigger.
+  // The create dialog mounts the shared shell: creation focus rides nameRef
+  // through initialFocusRef, Escape/backdrop/focus-return live centrally
+  // with the busy gate, and in-flight writes still block fake cancels.
   const dialog = read('app/console/CreateEventDialog.tsx');
-  assert.match(dialog, /nameRef\.current\?\.focus/);
-  assert.match(dialog, /Escape/);
-  assert.match(dialog, /previouslyFocused/);
+  assert.match(dialog, /<ConsoleDialog/);
+  assert.match(dialog, /titleId="create-event-title"/);
+  assert.match(dialog, /initialFocusRef=\{nameRef\}/);
+  assert.match(dialog, /canClose=\{canClose\}/);
+  assert.match(dialog, /busy=\{submitting\}/);
+  assert.match(dialog, /disabled=\{submitting\}/);
+  const shellDialog = read('app/console/console-ui/ConsoleDialog.tsx');
+  assert.match(shellDialog, /role="dialog"/);
+  assert.match(shellDialog, /aria-modal="true"/);
+  assert.match(shellDialog, /event\.key === "Escape"/);
+  assert.match(shellDialog, /event\.key !== "Tab"/);
+  assert.match(shellDialog, /previouslyFocused/);
+  assert.match(shellDialog, /initialFocusRef/);
+  assert.doesNotMatch(dialog, /addEventListener\("keydown"/);
+  assert.doesNotMatch(dialog, /document\.body\.style\.overflow/);
   // Escape/backdrop never fake-cancel an in-flight write.
-  assert.match(dialog, /submittingRef/);
+  assert.match(dialog, /if \(submitGateRef\.current\) return false/);
+  const dialogCss = read('app/globals.css');
+  assert.match(dialogCss, /\.dialog-backdrop/);
+  assert.match(dialogCss, /\.dialog-actions/);
   const css = read('app/console/console-home.module.css');
-  assert.match(css, /\.dialogBackdrop/);
-  assert.match(css, /\.dialogActions/);
   assert.match(css, /\.eventRecency/);
   assert.match(css, /\.eventCardTop/);
   assert.match(css, /\.eventCardLink:focus-visible/);
-  assert.match(css, /\.metricUnit/);
+  assert.match(css, /\.approvalLink:focus-visible/);
+  assert.match(css, /\.approvalLink\s*\{[^}]*min-height:\s*44px/s);
   assert.match(css, /\.eventGrid/);
   assert.match(css, /\.dayCell/);
   // Korean titles wrap at word boundaries, never mid-syllable; unbreakable
@@ -350,12 +504,17 @@ test('web-invite-accept-and-team-reset-cover-invitation-only-accounts', () => {
   assert.doesNotMatch(invitePage, /localStorage/);
   // Password resets are owner-only, idempotent by command id, and revoke
   // other sessions; the UI gates on the same permission the server enforces.
+  // Reset and invite dialogs mount the shared shell with caller-owned
+  // dismissal gates; focus mechanics live centrally.
   const team = read('app/console/team/TeamWorkspace.tsx');
   assert.match(team, /\/api\/auth\/accounts\/\$\{encodeURIComponent\(account\.id\)\}\/password/);
   assert.match(team, /commandId/);
   assert.match(team, /team\.manage/);
-  assert.match(team, /previouslyFocused/);
-  assert.match(team, /Escape/);
+  assert.match(team, /<ConsoleDialog/);
+  assert.match(team, /titleId="reset-title"/);
+  assert.match(team, /titleId="invite-title"/);
+  assert.match(team, /canClose=\{canCloseResetDialog\}/);
+  assert.match(team, /canClose=\{canCloseInviteDialog\}/);
   // Invitation issuing moved in from the legacy app: agency-only create with
   // a once-shown link, pending list, and idempotent revoke.
   assert.match(team, /\/api\/auth\/invitations/);
@@ -380,7 +539,11 @@ test('web-invite-accept-and-team-reset-cover-invitation-only-accounts', () => {
   assert.doesNotMatch(ops, /localStorage/);
   assert.doesNotMatch(ops, /sessionStorage/);
   const shell = read('app/console/ConsoleShell.tsx');
-  assert.match(shell, /\/console\/team/);
+  // Team lives behind the registry href, not a literal duplicate route.
+  assert.match(shell, /consolePageHref\("team"\)/);
+  const navigation = read('app/console/console-navigation.ts');
+  assert.match(navigation, /team: \{ label: "팀·권한"/);
+  assert.match(navigation, /case "team":/);
 });
 
 test('web-participant-status-goes-through-the-operator-command-path', () => {
@@ -399,7 +562,8 @@ test('web-participant-status-goes-through-the-operator-command-path', () => {
   // cancellation asks twice. The full digits stay in exports, not on screen.
   // The overview approval CTA lands pre-filtered via ?status=.
   assert.match(list, /URLSearchParams\(window\.location\.search\)/);
-  assert.match(list, /participant-identity/);
+  assert.match(list, /styles\.participantIdentity/);
+  assert.match(read('app/console/events/[id]/participants/participants.module.css'), /\.participantIdentity\s*\{/);
   assert.match(list, /maskPhone/);
   assert.match(list, /"승인"/);
   assert.match(list, /승인 중/);
@@ -458,7 +622,9 @@ test('web-rewards-fulfil-on-the-command-path-with-honest-gift-status', () => {
   assert.match(rewards, /기프티콘 미연동/);
   assert.match(rewards, /기프티콘 지급\(모의\)/);
   assert.match(rewards, /v1/);
-  assert.match(rewards, /window\.confirm/);
+  // The irreversible payout confirms in place, in the console's one grammar.
+  assert.match(rewards, /ConsoleConfirm/);
+  assert.doesNotMatch(rewards, /window\.confirm/);
   assert.match(rewards, /eventouch:shell-reload/);
   assert.doesNotMatch(rewards, /localStorage/);
   assert.doesNotMatch(rewards, /sessionStorage/);
@@ -478,8 +644,11 @@ test('web-participant-import-maps-and-reviews-before-the-command-path', () => {
   assert.match(wizard, /canManage/);
   assert.doesNotMatch(wizard, /localStorage/);
   assert.doesNotMatch(wizard, /sessionStorage/);
-  assert.doesNotMatch(wizard, /sheetjs/i);
-  assert.doesNotMatch(wizard, /require\(.xlsx|from .xlsx/);
+  // Excel workbooks are read in the browser (first sheet, header row) and
+  // flow into the same column mapping and validation as CSV.
+  assert.match(wizard, /from "xlsx"/);
+  assert.match(wizard, /parseWorkbook/);
+  assert.match(wizard, /\.xlsx\?/);
 });
 
 test('web-messaging-uses-operator-commands-and-keeps-ticket-bearers-out-of-history', () => {
@@ -488,24 +657,29 @@ test('web-messaging-uses-operator-commands-and-keeps-ticket-bearers-out-of-histo
   assert.match(messaging, /message\.create/);
   assert.match(messaging, /message\.retry/);
   assert.match(messaging, /message\.sync/);
+  assert.match(messaging, /message\.cancel/);
   assert.match(messaging, /\/api\/events\/\$\{encodeURIComponent\(eventId\)\}\/commands/);
   assert.match(messaging, /workspaces/);
   assert.match(messaging, /deliveries/);
   assert.match(messaging, /messageStatusLabel/);
   assert.match(messaging, /deliveryStatusLabel/);
   assert.match(messaging, /data\?\.field/);
-  assert.match(messaging, /window\.confirm/);
+  // Sending a campaign confirms in place (one grammar for irreversible
+  // commands); the dialog close gates keep the shared canClose contract.
+  assert.match(messaging, /ConsoleConfirm/);
+  assert.doesNotMatch(messaging, /window\.confirm/);
   assert.doesNotMatch(messaging, /localStorage/);
   assert.doesNotMatch(messaging, /sessionStorage/);
   assert.doesNotMatch(messaging, /recipientSnapshot|ticketToken|Bearer /);
   // Recipient subsets stay selectable without scanning the full list; a
   // failed load recovers in place.
-  assert.match(messaging, /이름·소속 검색/);
+  assert.match(messaging, /이름·소속·연락처 검색/);
   assert.match(messaging, /visibleRecipients/);
   assert.match(messaging, /다시 불러오기/);
-  // Bulk selection is scoped to the visible view: adding never drops other
-  // views, clearing never touches them.
-  assert.match(messaging, /표시된 대상 추가 선택/);
+  // Visible add/remove preserves other views; explicit full clear is separate.
+  assert.match(messaging, />표시 추가<\/button>/);
+  assert.match(messaging, />표시 해제<\/button>/);
+  assert.match(messaging, /id="recipient-clear-all"/);
   assert.match(messaging, /\[\.\.\.new Set\(\[\.\.\.current, \.\.\.ids\]\)\]/);
   assert.match(messaging, /eventouch:shell-reload/);
   // Unknown values never read as a concrete channel or status.
@@ -540,20 +714,29 @@ test('web-console-shell-keeps-decided-navigation-and-clients-read-only', () => {
   // The 행사 root link already lands on the list home, so no separate
   // view-all link competes with it.
   assert.doesNotMatch(shell, /전체 행사 보기/);
-  // Content authoring and the reward desk are destinations inside the event.
-  assert.match(shell, /\/content/);
-  assert.match(shell, /\/rewards/);
+  // Content authoring and the reward desk are registry destinations inside
+  // the event branch; the shell keeps badges, permissions and feature gates.
+  const navigation = read('app/console/console-navigation.ts');
+  assert.match(navigation, /content: \{ label: "콘텐츠"/);
+  assert.match(navigation, /rewards: \{ label: "경품"/);
+  assert.match(navigation, /return `\$\{base\}\/content`/);
+  assert.match(navigation, /return `\$\{base\}\/rewards`/);
+  assert.match(shell, /EVENT_PAGE_IDS\.map\(\(pageId\)/);
+  assert.match(shell, /consolePageHref\(pageId, eventId/);
+  assert.match(shell, /features\.includes\("reward"\)/);
   assert.match(shell, /currentEventMeta/);
   assert.match(shell, /renderEventSubnav/);
   assert.match(globalStyles, /\.nav-event-card/);
   assert.match(globalStyles, /\.nav-event-pick/);
-  assert.match(shell, /mobile-primary-nav/);
+  assert.doesNotMatch(shell, /mobile-primary-nav/, 'global destinations no longer occupy a persistent bottom bar');
+  assert.match(shell, /aria-expanded=\{[^}]*\}/, 'top menu exposes its disclosure state');
+  assert.match(shell, /행사 목록/, 'there is an explicit list escape beyond the logo');
   assert.match(shell, /mobile-event-nav/);
   assert.match(shell, /mobileEventBranchRef/);
   assert.match(shell, /revealCurrentDestination/);
   assert.match(shell, /aria-current=\{isHome \? "page" : isEventPath \? "location"/);
   assert.match(shell, /mobileOperatorTriggerRef\.current\?\.contains\(target\)/);
-  assert.match(globalStyles, /\.mobile-primary-nav\s*\{[^}]*position:\s*fixed;[^}]*inset:\s*auto 0 0;/s);
+  assert.doesNotMatch(globalStyles, /\.mobile-primary-nav\s*\{[^}]*position:\s*fixed;/s, 'no replacement bottom dock');
   assert.match(globalStyles, /safe-area-inset-bottom/);
   assert.match(globalStyles, /container-type:\s*inline-size/);
   assert.match(globalStyles, /@container\s*\(max-width:\s*340px\)/);
@@ -590,7 +773,11 @@ test('web-retry-keeps-one-command-id-per-attempt-on-signup-and-scan', () => {
   assert.match(register, /useRef<string \| null>/);
   const staff = read('app/staff/StaffEventWork.tsx');
   assert.match(staff, /pendingScanIdRef\.current/);
-  assert.match(staff, /useRef<string \| null>/);
+  // A pending scan belongs to one ticket + assignment, never the next person
+  // in line. Keep it for network/5xx uncertainty, not just thrown fetches.
+  assert.match(staff, /pendingScanIdRef = useRef\(new Map<string, string>\(\)\)/);
+  assert.match(staff, /JSON\.stringify\(\[activeScope\.eventId, activeAssignment\.id, activeTask, payload\]\)/);
+  assert.match(staff, /res\.status >= 500 \|\| res\.status === 408/);
 });
 
 test('web-event-stage-moves-forward-through-the-command-path-only', () => {
@@ -646,12 +833,23 @@ test('web-operations-uses-desk-booth-and-assignment-commands-only', () => {
   assert.doesNotMatch(ops, /sessionStorage/);
   // The screen may surface prerequisites but never computes authorization.
   assert.doesNotMatch(ops, /access\.|authorize\(/);
-  // Every dialog follows the modal contract; field rejections surface inside
-  // the open dialog, and unknown values never render as raw codes.
-  assert.match(ops, /previouslyFocused/);
-  assert.match(ops, /Escape/);
-  assert.match(ops, /DialogError/);
-  assert.match(ops, /assign-dialog-error/);
+  // Every dialog mounts the shared shell with caller-owned dismissal
+  // gates; field rejections surface inside the open dialog through the
+  // shared DialogError row, and unknown values never render as raw codes.
+  // Cancel affordances stay disabled while their dialog is busy.
+  assert.match(ops, /<ConsoleDialog/);
+  assert.match(ops, /canClose=\{canClose\}/);
+  assert.match(ops, /busy=\{busy\}/);
+  assert.match(ops, /disabled=\{busy\}/);
+  assert.match(ops, /function DialogError/);
+  assert.match(ops, /<DialogError failure=\{failure\} id="desk-dialog-error" \/>/);
+  assert.match(ops, /<DialogError failure=\{failure\} id="assign-dialog-error" \/>/);
+  const shellDialog = read('app/console/console-ui/ConsoleDialog.tsx');
+  assert.match(shellDialog, /role="dialog"/);
+  assert.match(shellDialog, /aria-modal="true"/);
+  assert.match(shellDialog, /event\.key === "Escape"/);
+  assert.match(shellDialog, /event\.key !== "Tab"/);
+  assert.match(shellDialog, /previouslyFocused/);
   assert.doesNotMatch(ops, /\?\? desk\.action/);
   assert.doesNotMatch(ops, /\?\? booth\.status/);
   assert.doesNotMatch(ops, /\?\? assignment\.accountId/);
@@ -680,8 +878,10 @@ test('web-staff-booth-work-uses-the-booth-visit-command-and-stamp-mode', () => {
   assert.match(staff, /booth\.visit/);
   assert.match(staff, /stampMode/);
   assert.match(staff, /boothAssignments/);
-  // The self-scan mode is a notice, never a staff-side certification.
-  assert.match(staff, /참가자가 부스 QR을 스캔하는 방식/);
+  // The self-scan mode is a notice, never a staff-side certification, and it
+  // names the participant path (home > 부스 인증) the QR code feeds.
+  assert.match(staff, /참가자가 직접 인증하는 방식/);
+  assert.match(staff, /참가자 홈 &gt; 부스 인증/);
   // …so the camera action stays out of SELF mode, and a stale refresh says so.
   assert.match(staff, /stampMode === "SELF" \? null/);
   assert.match(staff, /오래되었을 수 있습니다/);
@@ -773,9 +973,11 @@ test('web-reports-combine-live-analysis-with-snapshot-reports', () => {
     assert.match(reports, new RegExp(label));
   }
   // Published versions lock; the next version branches explicitly.
-  assert.match(reports, /공유하면 이 버전은 잠깁니다/);
-  assert.match(reports, /현재 집계로 새 버전/);
-  assert.match(reports, /데이터 JSON 저장/);
+  assert.match(reports, /완료로 표시하면 이 버전은 편집할 수 없습니다/);
+  assert.match(reports, /고객사에 자동 전송되지는 않습니다/);
+  assert.match(reports, /현재 집계를 새로 반영/);
+  assert.match(reports, /이 보고서의 집계 유지/);
+  assert.match(reports, /원본 파일 저장 \(JSON\)/);
   // Cover: subtitle and note survive create/edit/versioning.
   assert.match(reports, /subtitle/);
   assert.match(reports, /coverNote/);
@@ -785,10 +987,15 @@ test('web-reports-combine-live-analysis-with-snapshot-reports', () => {
   // No customer portal: publish records shared state, never a share link.
   assert.doesNotMatch(reports, /shareToken/);
   assert.doesNotMatch(reports, /공유 링크/);
-  // The create/edit dialog is modal: initial focus, Escape, focus return.
-  assert.match(reports, /titleRef\.current\?\.focus/);
-  assert.match(reports, /Escape/);
-  assert.match(reports, /previouslyFocused/);
+  // The create/edit dialog mounts the shared shell with caller-owned focus
+  // and dismissal gates; snapshot/share/command/lock semantics below stay
+  // pinned regardless of the chrome move.
+  assert.match(reports, /<ConsoleDialog/);
+  assert.match(reports, /initialFocusRef=\{titleRef\}/);
+  assert.match(reports, /canClose=\{confirmDialogClose\}/);
+  const shellDialog = read('app/console/console-ui/ConsoleDialog.tsx');
+  assert.match(shellDialog, /event\.key === "Escape"/);
+  assert.match(shellDialog, /previouslyFocused/);
   assert.match(reports, /보고서 항목을 하나 이상 선택하세요/);
   assert.doesNotMatch(reports, /localStorage/);
   assert.doesNotMatch(reports, /sessionStorage/);
@@ -800,23 +1007,61 @@ test('web-reports-combine-live-analysis-with-snapshot-reports', () => {
 
 test('web-settings-uses-the-preparation-command-set', () => {
   const settings = read('app/console/events/[id]/settings/SettingsWorkspace.tsx');
-  for (const command of ['event.update', 'event.features', 'form.publish', 'form.close', 'attendee.page.save', 'attendee.page.publish']) {
+  for (const command of ['event.update', 'event.features', 'form.publish', 'form.close']) {
     assert.match(settings, new RegExp(command.replace('.', '\\.')));
   }
   assert.match(settings, /\/commands/);
   assert.doesNotMatch(settings, /localStorage/);
-  // Publishing never ships a stale draft silently; field errors name their
-  // control; the twelve feature toggles read as three grouped decisions.
-  assert.match(settings, /draftDirty/);
+  // The guarded preview editor is the only attendee-page writer; settings
+  // links to it rather than silently overwriting a concurrently edited draft.
+  assert.doesNotMatch(settings, /runCommand\("attendee\.page\.(?:save|publish)"/);
+  assert.match(settings, /\/page/);
+  const editor = read('app/console/events/[id]/page/ThemeWorkspace.tsx');
+  assert.match(editor, /expectedDraftVersion/);
+  assert.match(editor, /attendee\.page\.save/);
+  assert.match(editor, /attendee\.page\.publish/);
+  // Field errors name their control; toggles remain three grouped decisions.
   assert.match(settings, /describedBy/);
   assert.match(settings, /FEATURE_GROUPS/);
   assert.match(settings, /참여 프로그램/);
   // Phone-verification opt-in rides the basics form into event.update.
   assert.match(settings, /verificationRequired/);
   assert.match(settings, /참가 신청 전 연락처 인증 필요/);
-  // The shell links every live event destination.
+  // The shell renders every live event destination from the registry, not
+  // literal duplicate routes.
   const shell = read('app/console/ConsoleShell.tsx');
-  for (const href of ['/participants', '/messages', '/operations', '/settings', '/reports']) {
-    assert.match(shell, new RegExp(href.replace('/', '\\/')));
+  assert.match(shell, /EVENT_PAGE_IDS\.map\(\(pageId\)/);
+  assert.match(shell, /CONSOLE_PAGES\[pageId\]\.label/);
+  assert.match(shell, /consolePageHref\(pageId, eventId/);
+  const navigation = read('app/console/console-navigation.ts');
+  for (const route of ['participants', 'messages', 'operations', 'settings', 'reports']) {
+    assert.match(navigation, new RegExp(`return \\\`\\\${base}\\\/${route}\\\``));
   }
+});
+
+test('web-event-duplicate-copies-configuration-without-records', () => {
+  const home = read('app/console/ConsoleHome.tsx');
+  const dialog = read('app/console/CreateEventDialog.tsx');
+  assert.match(home, /duplicateSource/);
+  assert.match(home, /onDuplicate=\{setDuplicateSource\}/);
+  assert.match(dialog, /duplicateOf/);
+  assert.match(dialog, /\/api\/events\/\$\{encodeURIComponent\(duplicateOf\.id\)\}\/duplicate/);
+  assert.match(dialog, /참가자·티켓·입장·발송·당첨 기록/);
+  assert.doesNotMatch(dialog, /localStorage|sessionStorage/);
+  const homeCss = read('app/console/console-home.module.css');
+  assert.match(homeCss, /\.eventCardAction\s*\{[^}]*min-height:\s*44px/s);
+});
+
+
+test('web-overview-shows-calendar-period-registration-and-entry-counts', () => {
+  const overview = read('app/console/events/[id]/EventOverview.tsx');
+  assert.match(overview, /type PeriodCounts/);
+  assert.match(overview, /applicationsIn/);
+  assert.match(overview, /entriesIn/);
+  assert.match(overview, /취소·정정 제외/);
+  for (const label of ['오늘', '어제', '최근 7일']) {
+    assert.match(overview, new RegExp(label));
+  }
+  const css = read('app/console/events/[id]/event-overview.module.css');
+  assert.match(css, /\.periodTable\s*\{/);
 });

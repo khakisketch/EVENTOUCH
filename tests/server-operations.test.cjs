@@ -372,7 +372,7 @@ test('checkin-validates-ticket-payment-and-status-and-records-v9-history', async
   const checkId = commandId();
   const entered = await scan(event, free, { id: checkId });
   assert.equal(entered.status, 200, JSON.stringify(entered.json));
-  assert.deepEqual(entered.json, { name: free.name, id: free.id, action: 'IN', reentry: false });
+  assert.deepEqual(entered.json, { name: free.name, id: free.id, action: 'IN', reentry: false, rewards: [] });
 
   const duplicate = await scan(event, free);
   assert.equal(duplicate.status, 409);
@@ -756,7 +756,7 @@ test('check-scan-by-participant-id-processes-checkin-without-ticket', async () =
     deskId: event.deskIn, participantId: person.id,
   }, { actor: 'staff', assignmentId: assignment.id });
   assert.equal(scanned.status, 200, JSON.stringify(scanned.json));
-  assert.deepEqual(scanned.json, { name: person.name, id: person.id, action: 'IN', reentry: false });
+  assert.deepEqual(scanned.json, { name: person.name, id: person.id, action: 'IN', reentry: false, rewards: [] });
 
   const state = await readWorkspace(event.id);
   assert.equal(state.participants.find((item) => item.id === person.id).inside, true);
@@ -807,7 +807,7 @@ test('check-scan-requires-ticket-or-participant-id-and-keeps-ticket-path', async
 
   const ticketScan = await scan(event, person);
   assert.equal(ticketScan.status, 200, JSON.stringify(ticketScan.json));
-  assert.deepEqual(ticketScan.json, { name: person.name, id: person.id, action: 'IN', reentry: false });
+  assert.deepEqual(ticketScan.json, { name: person.name, id: person.id, action: 'IN', reentry: false, rewards: [] });
 });
 
 test('check-scan-by-participant-id-retry-with-same-command-id-is-idempotent', async () => {

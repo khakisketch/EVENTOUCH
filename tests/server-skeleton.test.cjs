@@ -63,11 +63,10 @@ test('health-returns-ok', async () => {
   assert.equal(body.messaging, false);
 });
 
-test('static-serves-index', async () => {
-  const res = await fetch(`${BASE}/index.html`);
+test('readiness-checks-the-database-not-just-the-process', async () => {
+  const res = await fetch(`${BASE}/api/readyz`);
   assert.equal(res.status, 200);
-  const text = await res.text();
-  assert.match(text, /EVENTOUCH.*행사 운영 워크스페이스/);
+  assert.deepEqual(await res.json(), { ok: true, db: true });
 });
 
 test('unknown-api-404-korean', async () => {
@@ -77,13 +76,27 @@ test('unknown-api-404-korean', async () => {
   assert.match(body.error || '', /[가-힣]/);
 });
 
-test('static-denies-secret-paths', async () => {
-  for (const p of ['/data/server/users.json', '/data/server/sessions.json', '/server/auth.js', '/.git/config', '/Dockerfile', '/docker-compose.yml', '/vercel.json', '/.env']) {
+// The Node server is API-only: the Next app (apps/web) is the sole UI.
+// These paths must never serve repository or secret content, whether the
+// retired static shell is still on disk or already deleted.
+test('api-server-never-serves-repo-or-secret-files', async () => {
+  for (const p of ['/server/auth.js', '/.git/config', '/Dockerfile', '/docker-compose.yml', '/vercel.json', '/.env', '/data/server/sessions.json']) {
     const res = await fetch(`${BASE}${p}`);
-    assert.equal(res.status, 404, `${p} must not be served`);
+    assert.notEqual(res.status, 200, `${p} must not be served`);
   }
-  const app = await fetch(`${BASE}/assets/js/core.js`);
-  assert.equal(app.status, 200);
-  const sample = await fetch(`${BASE}/data/sample.json`);
-  assert.equal(sample.status, 200);
+  // API errors stay JSON with Korean messages, never an HTML shell.
+  const res = await fetch(`${BASE}/api/nope`);
+  assert.match(res.headers.get('content-type') || '', /application\/json/);
+});
+
+// The single bounded non-API exception: the old origin's /sw.js answers the
+// retirement worker (same worker ships at apps/web/public/sw.js for the Next
+// origin). It deletes only eventouch-shell-* caches and never caches again.
+test('the-only-non-api-route-is-the-worker-retirement', async () => {
+  const res = await fetch(`${BASE}/sw.js`);
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-type') || '', /javascript/);
+  const body = await res.text();
+  assert.match(body, /eventouch-shell-/);
+  assert.doesNotMatch(body, /addEventListener\('fetch'/);
 });

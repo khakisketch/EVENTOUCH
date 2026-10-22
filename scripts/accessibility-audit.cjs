@@ -1,97 +1,30 @@
 'use strict';
 
-// Accessibility audit of the real product against a live server.
+// Accessibility audit of the new Next.js app (apps/web) against a live
+// build with a real API and an isolated PostgreSQL schema.
 //
-// Earlier accessibility work was manual: a rendered review looked at a few
-// screenshots. That catches layout problems but not the ones that matter most
-// — missing labels, bad contrast, broken heading order — and only on screens
-// someone happened to capture. This runs axe over the screens an operator
-// actually uses, in both the console and the attendee surface.
+// Earlier accessibility work walked the retired vanilla hash shell
+// (#/login, #/console/agency/…). That product is retired; this audits the
+// sole UI instead: public, operator, staff, unknown-slug, unauthenticated
+// private, and error states, all served from the running Next build through
+// the same-origin test gateway (real reverse proxy, never a mocked API).
 //
-// Serious and critical violations fail the run. Moderate ones are reported so
-// they can be triaged deliberately rather than discovered by a customer.
+// Serious and critical axe violations fail the run. Moderate ones are
+// reported for triage. The default root API and any user demo database are
+// never touched.
 
-const { spawn } = require('node:child_process');
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
-// Prefer a Playwright already installed on the machine and matching its
-// cached browsers. The repo does not pin one, so a version mismatch here
-// would otherwise force a browser download just to run an audit.
-function loadPlaywright() {
-  for (const candidate of ['/home/ksi/node_modules/playwright', 'playwright']) {
-    try {
-      const mod = require(candidate);
-      if (mod && mod.chromium) return mod;
-    } catch (err) { /* try the next location */ }
-  }
-  throw new Error('playwright is required to run the accessibility audit');
-}
-const { chromium } = loadPlaywright();
 const axeSource = require('axe-core').source;
-
-const PORT = Number(process.env.A11Y_PORT || 18797);
-const BASE = `http://127.0.0.1:${PORT}`;
-
-const SCREENS = [
-  { name: 'login', hash: '#/login', auth: false },
-  { name: 'agency-events', hash: '#/console/agency/events', auth: true },
-  { name: 'agency-clients', hash: '#/console/agency/clients', auth: true },
-  { name: 'agency-team', hash: '#/console/agency/team', auth: true },
-  { name: 'agency-integrations', hash: '#/console/agency/integrations', auth: true },
-];
-
-// Representative event screens, resolved from the fixture at runtime.
-const EVENT_SCREENS = [
-  { name: 'event-overview', hash: '#/console/events/{id}/overview' },
-  { name: 'event-participants', hash: '#/console/events/{id}/participants' },
-  { name: 'event-checkin', hash: '#/console/events/{id}/checkin' },
-  { name: 'event-messages', hash: '#/console/events/{id}/messages' },
-  { name: 'event-results', hash: '#/console/events/{id}/results' },
-  { name: 'event-reports', hash: '#/console/events/{id}/reports' },
-  { name: 'event-settings', hash: '#/console/events/{id}/settings' },
-];
+const { launchBrowser } = require('./audit-browser.cjs');
+const { startAuditFixture, auditRoutes, cookieForContext, assertAuditRoute } = require('./audit-fixture.cjs');
 
 const BLOCKING = new Set(['serious', 'critical']);
 
-function startServer(databaseUrl) {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'etko-a11y-'));
-  const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'etko-a11y-storage-'));
-  const child = spawn(process.execPath, ['server/server.js'], {
-    cwd: path.join(__dirname, '..'),
-    env: {
-      ...process.env,
-      PORT: String(PORT),
-      DATA_DIR: dataDir,
-      STORAGE_DIR: storageDir,
-      DATABASE_URL: databaseUrl,
-      ADMIN_EMAIL: 'a11y@example.test',
-      ADMIN_PASSWORD: 'a11y-admin-password',
-      // The audit injects axe as an inline script; report-only lets it run
-      // without weakening the shipped policy.
-      EVENTOUCH_CSP_REPORT_ONLY: '1',
-    },
-    stdio: 'ignore',
-  });
-  return { child, cleanup: () => {
-    fs.rmSync(dataDir, { recursive: true, force: true });
-    fs.rmSync(storageDir, { recursive: true, force: true });
-  } };
-}
-
-async function waitForServer() {
-  for (let i = 0; i < 80; i += 1) {
-    try {
-      const res = await fetch(`${BASE}/api/health`);
-      if (res.ok) return;
-    } catch (err) {}
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  throw new Error('server did not start');
-}
-
 async function audit(page) {
-  await page.addScriptTag({ content: axeSource });
+  // Browser-protocol instrumentation: evaluate runs through CDP, outside the
+  // page's own script pipeline, so the production nonce CSP stays enabled
+  // and normal hydration exercises the real policy. Tag-based injection
+  // would be blocked by that policy (or need it weakened just for the audit).
+  await page.evaluate(axeSource);
   return page.evaluate(async () => {
     const results = await window.axe.run(document, {
       resultTypes: ['violations'],
@@ -111,55 +44,98 @@ async function audit(page) {
 }
 
 async function main() {
-  const databaseUrl = String(process.env.EVENTOUCH_A11Y_DATABASE_URL || '').trim();
-  if (!databaseUrl) {
-    process.stderr.write('[a11y] set EVENTOUCH_A11Y_DATABASE_URL to run the accessibility audit\n');
+  let fixture;
+  let browser;
+  const failures = [];
+  const advisories = [];
+  try {
+    fixture = await startAuditFixture();
+  } catch (error) {
+    process.stderr.write(`[a11y] ${error && error.message}\n`);
     process.exitCode = 2;
     return;
   }
 
-  const { child, cleanup } = startServer(databaseUrl);
-  const browser = await chromium.launch();
-  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  const page = await context.newPage();
-  const failures = [];
-  const advisories = [];
-
   try {
-    await waitForServer();
+    browser = await launchBrowser();
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    // Authenticated screens start from real sessions via cookies.
+    await context.addCookies([
+      { ...cookieForContext(fixture, 'manager'), url: fixture.baseUrl },
+      // One session cookie wins; staff coverage uses its own context below.
+    ]);
+    const page = await context.newPage();
 
-    // Sign in through the API so every screen starts from a real session.
-    const login = await page.request.post(`${BASE}/api/auth/login`, {
-      data: { email: 'a11y@example.test', password: 'a11y-admin-password' },
-    });
-    if (!login.ok()) throw new Error(`could not sign in for the audit: ${login.status()}`);
-
-    // Discover an event the signed-in account can actually reach.
-    await page.goto(`${BASE}/#/console/agency/events`, { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(1500);
-    const discovered = await page.evaluate(() => {
-      const id = window.ET?.state?.events?.[0]?.id;
-      return id || null;
-    });
-
-    const targets = [...SCREENS];
-    if (discovered) {
-      for (const screen of EVENT_SCREENS) {
-        targets.push({ ...screen, hash: screen.hash.replace('{id}', discovered) });
-      }
-    }
+    const targets = auditRoutes(fixture).map((route) => ({ ...route, auth: route.auth || null }));
+    targets.push(
+      { name: 'unknown-slug', path: '/event/unknown-slug-000000/home', auth: null },
+      { name: 'unknown-screen', path: '/screen/unknown-slug-000000', auth: null },
+      { name: 'login', path: '/login', auth: null },
+    );
 
     for (const screen of targets) {
-      await page.goto(`${BASE}/${screen.hash}`, { waitUntil: 'domcontentloaded' });
-      await page.waitForTimeout(900);
+      // Each route audits as its real actor: staff and manager routes use
+      // their sessions, public routes stay anonymous. A session on a public
+      // route redirects by product design (e.g. / -> /console) and must not
+      // leak from the previous iteration.
+      if (screen.auth === 'staff') {
+        await context.clearCookies();
+        await context.addCookies([{ ...cookieForContext(fixture, 'staff'), url: fixture.baseUrl }]);
+      } else if (screen.auth === 'manager') {
+        await context.clearCookies();
+        await context.addCookies([{ ...cookieForContext(fixture, 'manager'), url: fixture.baseUrl }]);
+      } else {
+        await context.clearCookies();
+      }
+      // domcontentloaded, not networkidle: the display board polls its
+      // public projection on an interval, so networkidle never settles on
+      // screen routes (and an unknown slug must still render its error
+      // state for the audit instead of timing out the whole run).
+      await page.goto(`${fixture.baseUrl}${screen.path}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.waitForTimeout(1500);
+      // An error boundary, not-found page, or login redirect must fail the
+      // run here, never count as an audited screen.
+      await assertAuditRoute(page, screen);
       const violations = await audit(page);
       for (const violation of violations) {
         const entry = { screen: screen.name, ...violation };
         if (BLOCKING.has(violation.impact)) failures.push(entry);
         else advisories.push(entry);
       }
-      const count = violations.length;
-      process.stderr.write(`[a11y] ${screen.name}: ${count} violation(s)\n`);
+      process.stderr.write(`[a11y] ${screen.name}: ${violations.length} violation(s)\n`);
+    }
+
+    // Unauthenticated private route must not leak operator content.
+    {
+      const anon = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+      const anonPage = await anon.newPage();
+      await anonPage.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/participants`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await anonPage.waitForTimeout(1500);
+      const violations = await audit(anonPage);
+      for (const violation of violations) {
+        const entry = { screen: 'private-anon', ...violation };
+        if (BLOCKING.has(violation.impact)) failures.push(entry);
+        else advisories.push(entry);
+      }
+      process.stderr.write(`[a11y] private-anon: ${violations.length} violation(s)\n`);
+      await anon.close();
+    }
+
+    // Staff console with its own session.
+    {
+      const staffCtx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+      await staffCtx.addCookies([{ ...cookieForContext(fixture, 'staff'), url: fixture.baseUrl }]);
+      const staffPage = await staffCtx.newPage();
+      await staffPage.goto(`${fixture.baseUrl}/staff/events/${fixture.eventId}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await staffPage.waitForTimeout(1500);
+      const violations = await audit(staffPage);
+      for (const violation of violations) {
+        const entry = { screen: 'staff-authed', ...violation };
+        if (BLOCKING.has(violation.impact)) failures.push(entry);
+        else advisories.push(entry);
+      }
+      process.stderr.write(`[a11y] staff-authed: ${violations.length} violation(s)\n`);
+      await staffCtx.close();
     }
 
     if (advisories.length) {
@@ -170,13 +146,8 @@ async function main() {
       }
     }
   } finally {
-    await browser.close();
-    if (child.exitCode === null) {
-      const exited = new Promise((resolve) => child.once('exit', resolve));
-      child.kill();
-      await exited;
-    }
-    cleanup();
+    if (browser) await browser.close().catch(() => {});
+    if (fixture) await fixture.close().catch(() => {});
   }
 
   if (failures.length) {

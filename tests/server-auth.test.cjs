@@ -73,8 +73,19 @@ function sessionCookie(res) {
   return match ? `etko_session=${match[1]}` : '';
 }
 
-integrationTest('email-login-uses-case-insensitive-account-and-hashed-database-session', async (t) => {
+integrationTest('login-help-exposes-the-configured-administrator-without-a-session', async (t) => {
   if (!db) return t.skip('set EVENTOUCH_TEST_DATABASE_URL to an isolated PostgreSQL test database');
+  // A locked-out manager needs a real address to ask for a reset. The address
+  // comes from deployment configuration, not from an account table, and no
+  // session or account list is required to read it.
+  const res = await fetch(`${BASE}/api/auth/help`);
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), {
+    administrator: { name: '조직 관리자', email: ADMIN_EMAIL },
+  });
+});
+
+integrationTest('email-login-uses-case-insensitive-account-and-hashed-database-session', async (t) => {  if (!db) return t.skip('set EVENTOUCH_TEST_DATABASE_URL to an isolated PostgreSQL test database');
   const res = await fetch(`${BASE}/api/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

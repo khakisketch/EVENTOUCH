@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Starts EVENTOUCH in server mode against its own preview database.
-# Safe to re-run: idempotent except for the port being taken.
+# Starts the EVENTOUCH product (API + Next sole UI, supervised) against its
+# own preview database. Safe to re-run: idempotent, never reseeds or resets
+# existing data — migrate/seed on boot only ensure the admin exists.
 #
-#   bash scripts/serve-demo.sh                 # 8776, 기본 데모 DB
-#   PORT=8899 bash scripts/serve-demo.sh       # 다른 포트
+#   bash scripts/serve-demo.sh                 # API 8776 + web 8777, 데모 DB
+#   PORT=8899 bash scripts/serve-demo.sh       # 다른 API 포트
+#   WEB_PORT=8898 bash scripts/serve-demo.sh   # 다른 웹 포트
 #   DATABASE_URL='postgres://…' bash scripts/serve-demo.sh   # 다른 DB
 #
 # Attendee verification codes use the mock SMS transport here
@@ -11,25 +13,42 @@
 # HTTP responses. Real sends need Solapi credentials (docs/INTEGRATIONS.md)
 # and EVENTOUCH_SMS_MOCK unset.
 #
-# 시안·캡처 폴더에 의존하지 않는다. 이 스크립트 하나로 데모 서버를 다시 띄운다.
+# An occupied API or web port is an explicit error (nonzero exit), not a
+# silent "already running": reusing an unknown listener would hide which
+# build is actually answering.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PORT="${PORT:-8776}"
+API_PORT="${API_PORT:-${PORT:-8776}}"
+WEB_PORT="${WEB_PORT:-8777}"
 DATABASE_URL="${DATABASE_URL:-postgres://eventouch@localhost/eventouch_preview?host=/tmp/opencode/eventouch-pg-test-auth.l0FjK5}"
 ADMIN_EMAIL="${ADMIN_EMAIL:-admin@eventouch.demo}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-Eventouch2026!}"
 RUN_DIR="${RUN_DIR:-/tmp/opencode/eventouch-preview}"
 
 cd "$ROOT"
-if ss -ltn | grep -q ":$PORT "; then
-  echo "port $PORT is already in use — EVENTOUCH may already be running."
-  echo "check: curl -s http://localhost:$PORT/api/health"
-  exit 0
+
+for spec in "$API_PORT:API" "$WEB_PORT:web"; do
+  port="${spec%%:*}"
+  name="${spec##*:}"
+  if ss -ltn 2>/dev/null | grep -q ":$port "; then
+    echo "error: $name port $port is already in use — refusing to reuse an unknown listener." >&2
+    echo "check: curl -s http://localhost:$port/api/health" >&2
+    echo "stop the owner or set ${name}_PORT explicitly." >&2
+    exit 1
+  fi
+done
+
+if [[ ! -x apps/web/node_modules/next/dist/bin/next ]]; then
+  echo "error: apps/web is not installed. Run: npm run setup" >&2
+  exit 1
 fi
 
 mkdir -p "$RUN_DIR"
-PORT="$PORT" \
+
+echo "starting product: API $API_PORT + web $WEB_PORT (database preserved, no reseed)."
+API_PORT="$API_PORT" \
+WEB_PORT="$WEB_PORT" \
 DATABASE_URL="$DATABASE_URL" \
 ADMIN_EMAIL="$ADMIN_EMAIL" \
 ADMIN_NAME="${ADMIN_NAME:-운영사 관리자}" \
@@ -38,11 +57,4 @@ DATA_DIR="$RUN_DIR/data" \
 STORAGE_DIR="$RUN_DIR/storage" \
 EVENTOUCH_SMS_MOCK="${EVENTOUCH_SMS_MOCK:-1}" \
 EVENTOUCH_DEV_QUICK_LOGIN="$ADMIN_EMAIL" \
-node server/server.js > "$RUN_DIR/server.log" 2>&1 &
-
-sleep 2
-echo "started. log: $RUN_DIR/server.log"
-curl -s "http://localhost:$PORT/api/health" || true
-echo
-echo "open http://localhost:$PORT/  (또는 http://100.116.163.1:$PORT/)"
-echo "계정: $ADMIN_EMAIL / $ADMIN_PASSWORD  (또는 로그인 화면의 '빠른 로그인')"
+exec node scripts/dev-supervisor.cjs

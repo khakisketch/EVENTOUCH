@@ -93,26 +93,50 @@ test('web-console-content-gates-on-the-same-management-membership', () => {
 
 test('web-console-content-dialogs-are-modal-and-wire-field-errors', () => {
   const workspace = read('app/console/events/[id]/content/ContentWorkspace.tsx');
-  assert.match(workspace, /role="dialog"/);
-  assert.match(workspace, /aria-modal/);
-  assert.match(workspace, /previouslyFocused/);
-  assert.match(workspace, /Escape/);
-  assert.match(workspace, /content-notice-dialog-title/);
-  assert.match(workspace, /content-program-dialog-title/);
+  // Dialogs mount the shared shell: workspace owns usage, title ids and
+  // dismissal gates; the shell owns role/focus/Escape mechanics centrally.
+  assert.match(workspace, /<ConsoleDialog/);
+  assert.match(workspace, /titleId="content-notice-dialog-title"/);
+  assert.match(workspace, /titleId="content-program-dialog-title"/);
+  assert.match(workspace, /canClose=\{canCloseNoticeDialog\}/);
+  assert.match(workspace, /canClose=\{canCloseProgramDialog\}/);
+  assert.match(workspace, /if \(canCloseNoticeDialog\(\)\) setNoticeDialogOpen\(false\)/);
+  assert.match(workspace, /if \(canCloseProgramDialog\(\)\) setProgramDialogOpen\(false\)/);
+  const dialog = read('app/console/console-ui/ConsoleDialog.tsx');
+  assert.match(dialog, /role="dialog"/);
+  assert.match(dialog, /aria-modal="true"/);
+  assert.match(dialog, /previouslyFocused/);
+  assert.match(dialog, /event\.key === "Escape"/);
+  assert.match(dialog, /event\.key !== "Tab"/);
+  assert.match(dialog, /initialFocusRef/);
   assert.match(workspace, /공지 작성/);
   assert.match(workspace, /일정 추가/);
   assert.match(workspace, /상단 고정/);
   assert.match(workspace, /게시함/);
+  assert.match(workspace, /content-notice-title-error/);
+  assert.match(workspace, /content-program-title-error/);
+  assert.match(workspace, /role="alert"/);
+  assert.match(workspace, /aria-describedby/);
 });
 
 test('web-console-shell-links-content-between-programs-and-settings', () => {
   const shell = read('app/console/ConsoleShell.tsx');
-  assert.match(shell, /콘텐츠/);
-  assert.match(shell, /\$\{eventBasePath\}\/content/);
-  assert.match(shell, /isContent/);
-  const programsAt = shell.indexOf('참여 프로그램');
-  const contentAt = shell.indexOf('콘텐츠');
-  const settingsAt = shell.indexOf('행사 설정');
+  // The rail renders the registry order with registry labels and hrefs, not
+  // literal duplicate routes: badges, permissions and feature gates stay in
+  // the shell while the registry owns destinations.
+  assert.match(shell, /EVENT_PAGE_IDS\.map\(\(pageId\)/);
+  assert.match(shell, /CONSOLE_PAGES\[pageId\]\.label/);
+  assert.match(shell, /consolePageHref\(pageId, eventId/);
+  assert.match(shell, /nav-badge/);
+  assert.match(shell, /showOperatorNavBadges/);
+  assert.match(shell, /canManageEvidencePhotos/);
+  const navigation = read('app/console/console-navigation.ts');
+  assert.match(navigation, /content: \{ label: "콘텐츠"/);
+  assert.match(navigation, /return `\$\{base\}\/content`/);
+  const eventIds = navigation.slice(navigation.indexOf('EVENT_PAGE_IDS'), navigation.indexOf('];', navigation.indexOf('EVENT_PAGE_IDS')));
+  const programsAt = eventIds.indexOf('"programs"');
+  const contentAt = eventIds.indexOf('"content"');
+  const settingsAt = eventIds.indexOf('"settings"');
   assert.ok(programsAt >= 0 && contentAt >= 0 && settingsAt >= 0);
   assert.ok(programsAt < contentAt && contentAt < settingsAt);
 });

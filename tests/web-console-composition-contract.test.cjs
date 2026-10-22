@@ -39,6 +39,24 @@ const rootTargets = [
 ];
 
 const allPageTargets = [...targets, ...eventPhaseTwoTargets, ...rootTargets];
+const menuPages = [
+  ['app/console/ConsoleHome.tsx', 'events'],
+  ['app/console/clients/ClientsList.tsx', 'clients'],
+  ['app/console/team/TeamWorkspace.tsx', 'team'],
+  ['app/console/events/[id]/EventOverview.tsx', 'overview'],
+  ['app/console/events/[id]/participants/ParticipantList.tsx', 'participants'],
+  ['app/console/events/[id]/participants/import/ImportWizard.tsx', 'participantImport'],
+  ['app/console/events/[id]/messages/MessagingWorkspace.tsx', 'messages'],
+  ['app/console/events/[id]/operations/OperationsWorkspace.tsx', 'operations'],
+  ['app/console/events/[id]/programs/ProgramsWorkspace.tsx', 'programs'],
+  ['app/console/events/[id]/draws/DrawsWorkspace.tsx', 'draws'],
+  ['app/console/events/[id]/photos/EvidencePhotosWorkspace.tsx', 'photos'],
+  ['app/console/events/[id]/content/ContentWorkspace.tsx', 'content'],
+  ['app/console/events/[id]/page/ThemeWorkspace.tsx', 'attendeePage'],
+  ['app/console/events/[id]/rewards/RewardsWorkspace.tsx', 'rewards'],
+  ['app/console/events/[id]/settings/SettingsWorkspace.tsx', 'settings'],
+  ['app/console/events/[id]/reports/ReportsWorkspace.tsx', 'reports'],
+];
 
 test('console layout primitives expose stable, hook-free composition', () => {
   const header = read('app/console/console-ui/ConsolePageHeader.tsx');
@@ -75,13 +93,15 @@ test('state panel unifies loading, alert and shell-aware retry', () => {
   assert.match(state, /actions\?: ReactNode/);
 });
 
-test('event, organization and root pages use shared header, sections and state panels', () => {
-  for (const target of allPageTargets) {
+test('all sixteen menus use the registry-owned page frame, not individual title chrome', () => {
+  for (const [target, pageId] of menuPages) {
     const source = read(target);
-    for (const component of ['ConsolePageHeader', 'ConsoleSection', 'ConsoleStatePanel']) {
+    for (const component of ['ConsolePage', 'ConsoleStatePanel']) {
       assert.match(source, new RegExp(`import ${component}\\b`), `${target} imports ${component}`);
       assert.match(source, new RegExp(`<${component}\\b`), `${target} renders ${component}`);
     }
+    assert.match(source, new RegExp(`<ConsolePage\\b[^>]*pageId="${pageId}"`, 'su'), `${target} identifies its real menu`);
+    assert.doesNotMatch(source, /<ConsolePageHeader\b|<h1\b/u, `${target} does not redraw the shared title`);
     assert.match(source, /kind="loading"/u, `${target} uses the shared loading state`);
     assert.match(source, /kind="failed"/u, `${target} uses the shared failed state`);
     if (target.endsWith('/reports/ReportsWorkspace.tsx')) {
@@ -93,15 +113,15 @@ test('event, organization and root pages use shared header, sections and state p
   }
 });
 
-test('event child pages use one header back link and keep action slots secondary', () => {
-  const childPages = targets.slice(1);
-  for (const target of childPages) {
-    assert.match(read(target), /label:\s*"← 운영 현황"/u, `${target} has the common back link`);
-  }
-  assert.doesNotMatch(read(targets[0]), /label:\s*"← 운영 현황"/u);
+test('event context is centralized while domain actions retain their meaning and hierarchy', () => {
+  const frame = read('app/console/console-ui/ConsolePage.tsx');
+  assert.match(frame, /consolePageHref\("overview", eventId\)/u);
+  assert.match(frame, /`행사 \/ \$\{trimmedName\}`/u);
+  assert.match(frame, /title=\{page\.title\}/u);
+  assert.doesNotMatch(frame, /back=\{/u);
 
   const content = read(targets[3]);
-  assert.match(content, /action=\{\([\s\S]*?<button type="button" className="button button-secondary" onClick=\{openNoticeCreate\}>\s*공지 작성/u);
+  assert.match(content, /action=\{\(\s*<button\b[^>]*className="button button-secondary"[^>]*onClick=\{openNoticeCreate\}[^>]*>\s*공지 작성/su);
   assert.match(content, /title="프로그램 일정"[\s\S]*?action=\{\([\s\S]*?className="button button-secondary"[\s\S]*?일정 추가/u);
 
   const participants = read(targets[1]);
@@ -116,10 +136,11 @@ test('event child pages use one header back link and keep action slots secondary
   assert.doesNotMatch(messages, />\s*운영 현황\s*<\/Link>/u);
 });
 
-test('phase-two event children keep the shared back link and bootstrap-only meta', () => {
+test('event workspaces keep factual meta and action-specific sections inside the common frame', () => {
   for (const target of eventPhaseTwoTargets) {
     const source = read(target);
-    assert.match(source, /label:\s*"← 운영 현황"/u, `${target} has the common event back link`);
+    assert.match(source, /<ConsolePage\b/u, `${target} uses the common frame`);
+    assert.doesNotMatch(source, /label:\s*"← 운영 현황"/u, `${target} does not duplicate the event context`);
     assert.match(source, /formatConsoleEventMeta/u, `${target} formats only available event meta`);
   }
   const overview = read(targets[0]);
@@ -131,32 +152,35 @@ test('phase-two event children keep the shared back link and bootstrap-only meta
   }
 
   const operations = read(eventPhaseTwoTargets[0]);
-  assert.match(operations, /<ConsoleSection headingId="ops-staff" title="스태프 배정">\s*<div className=\{styles\.primarySectionAction\}>\s*<button[\s\S]*?className="button button-primary"/u);
+  // The section may carry a description (its own status line); the contract
+  // is that the primary action stays inside the section.
+  assert.match(operations, /<ConsoleSection headingId="ops-staff" title="스태프 배정"[^>]*>\s*<div className=\{styles\.primarySectionAction\}>\s*<button[\s\S]*?className="button button-primary"/u);
   assert.match(operations, /className="button button-primary"[^>]*>[\s\S]*?초안 저장/u, 'map draft save remains a primary body action');
 });
 
 test('root pages keep title-only identity and preserve primary task actions', () => {
   const home = read(rootTargets[0]);
-  assert.match(home, /<ConsolePageHeader title="행사" className=\{styles\.homeHeader\} \/>/u);
-  assert.match(home, /className=\{`button button-primary \$\{styles\.createTrigger\}`\}/u);
-  assert.doesNotMatch(home, /<ConsolePageHeader[^>]*actions=/u, 'create-event primary is not put in the supplementary header slot');
-  assert.match(home, /headingId="console-event-directory" title="행사 목록"/u);
+  assert.match(home, /<ConsolePage\b[^>]*pageId="events"/su);
+  assert.match(home, /<ConsoleToolbar\b/u);
+  assert.match(home, /button-primary/u);
+  assert.match(home, /새 행사 만들기/u);
+  assert.doesNotMatch(home, /<ConsolePageHeader/u);
+  assert.match(home, /console-event-directory/u);
 
   const clients = read(rootTargets[1]);
   const clientsRoute = read('app/console/clients/page.tsx');
-  assert.match(clients, /<ConsolePageHeader title="고객사" \/>/u);
-  assert.match(clients, /headingId="client-list-heading" title="고객사 목록"/u);
+  assert.match(clients, /<ConsolePage\b[^>]*pageId="clients"/su);
+  assert.match(clients, /<ConsoleToolbar\b/u);
   assert.match(clients, /state\.canManage \? \([\s\S]*?className="button button-primary"[\s\S]*?고객사 등록/u);
   assert.match(clients, /<h3>\{client\.name\}<\/h3>/u);
   assert.doesNotMatch(clientsRoute, /<h1>|console-page-header/u, 'the route does not duplicate the workspace title');
 
   const team = read(rootTargets[2]);
-  assert.match(team, /title="팀 관리"/u);
+  assert.match(team, /<ConsolePage\b[^>]*pageId="team"/su);
   assert.match(team, /headingId="pending-invites" title="대기 중인 초대"/u);
   assert.match(team, /headingId="team-members" title="구성원"/u);
   assert.match(team, /등록된 구성원이 없습니다/u);
   assert.match(team, /!bootstrapResponse\.ok \|\| !bootstrapPayload\?\.state/u, 'bootstrap failure cannot masquerade as an empty team');
-  assert.match(team, /actions=\{<Link className="button button-secondary" href="\/console">행사 목록으로<\/Link>\}/u);
   assert.doesNotMatch(team, /label:\s*"← 운영 현황"|meta=\{/u);
 
   const panels = read('app/console/team/OperationsPanels.tsx');
@@ -184,7 +208,13 @@ test('evidence photos stay separate, section-scoped and retry-safe', () => {
     assert.match(photos, new RegExp(`key: "${key}"`), `${key} section is available`);
   }
   assert.match(shell, /canManageEvidencePhotos:\s*role\s*===\s*"AGENCY"\s*\|\|\s*\(role\s*===\s*"MANAGER"\s*&&\s*hasCurrentMembership\)/u);
-  assert.match(shell, /\{shellData\?\.canManageEvidencePhotos\s*\?\s*\(/u, 'photo navigation is hidden outside agency/event-member manager roles');
+  assert.match(shell, /pageId === "photos" && !shellData\?\.canManageEvidencePhotos\) return null/u, 'photo navigation stays hidden outside agency/event-member manager roles');
+  // The shell advertises its own degraded state instead of silently hiding
+  // navigation: a visible alert with retry, never a fake empty shell.
+  assert.match(shell, /const \[shellError, setShellError\] = useState\(false\)/u);
+  assert.match(shell, /setShellError\(true\)/u);
+  assert.match(shell, /className="console-shell-error" role="alert"/u);
+  assert.match(shell, /setShellTick\(\(tick\) => tick \+ 1\)/u, 'shell retry reloads its data');
   assert.match(photos, /command:\s*"evidence\.photo\.add"/u);
   assert.match(photos, /uploadCommandId:\s*randomCommandId\(\)/u);
   assert.match(photos, /recordCommandId:\s*randomCommandId\(\)/u);

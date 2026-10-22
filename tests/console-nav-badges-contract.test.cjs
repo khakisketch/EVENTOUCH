@@ -55,16 +55,18 @@ test('message badge opens the attention campaign history with a clear path back 
   assert.match(messages, /const attentionCampaigns = state\.campaigns\.filter/);
   assert.match(messages, /visibleCampaigns = attentionOnly \? attentionCampaigns : state\.campaigns/);
   assert.match(messages, /history-heading[\s\S]*scrollIntoView/);
-  assert.match(messages, /발송 확인이 필요한 캠페인만 보고 있습니다/);
-  assert.match(messages, /전체 캠페인 보기/);
+  assert.match(messages, /발송 확인이 필요한 발송만 보고 있습니다/);
+  assert.match(messages, /전체 발송 기록 보기/);
 });
 
 test('settings owns forward-only stage confirmation and reuses the command id after an uncertain response', () => {
   const settings = read('apps/web/app/console/events/[id]/settings/SettingsWorkspace.tsx');
+  // Bounded section extraction matches the opening tag without pinning its
+  // exact tail: shared props like width="form" may extend it.
   const stage = between(
     settings,
-    '<section className={styles.section} aria-labelledby="settings-stage">',
-    '<section className={styles.section} aria-labelledby="settings-features">'
+    '<ConsoleSection headingId="settings-stage"',
+    '<ConsoleSection headingId="settings-page"'
   );
 
   assert.match(settings, /stage: text\(event\.stage\)\.toUpperCase\(\)/);
