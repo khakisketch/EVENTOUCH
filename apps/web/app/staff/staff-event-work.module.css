@@ -1,0 +1,300 @@
+.prizeWorkspace {
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.prizeHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.prizeHeader h3 {
+  margin: 0 0 var(--s1);
+  font-size: var(--h3);
+}
+
+.prizeHeader p,
+.prizeNote {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  line-height: 1.5;
+}
+
+.prizeHeader button,
+.lookupForm button,
+.rewardItem button {
+  min-height: 44px;
+}
+
+.lookupForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+.prizeTarget {
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--paper);
+}
+
+.targetIdentity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s1) var(--s3);
+}
+
+.targetIdentity strong {
+  font-size: var(--h3);
+  overflow-wrap: anywhere;
+}
+
+.targetIdentity span {
+  color: var(--muted);
+  font-size: var(--small);
+  overflow-wrap: anywhere;
+}
+
+.rewardList {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rewardItem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--surface-muted);
+}
+
+.rewardInfo {
+  display: grid;
+  gap: var(--s1);
+  min-width: min(100%, 180px);
+}
+
+.rewardInfo strong {
+  overflow-wrap: anywhere;
+}
+
+.rewardStatus {
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 700;
+}
+
+.rewardReady { color: var(--warning); }
+.rewardReceived { color: var(--success); }
+
+.prizeEmpty {
+  margin: 0;
+  padding: var(--s3);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-small);
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.prizeNotice,
+.prizeError {
+  margin: 0;
+  padding: var(--s3);
+  border: 1px solid var(--success-line);
+  border-radius: var(--radius-small);
+  background: var(--success-soft);
+  color: var(--success);
+  font-size: var(--small);
+  font-weight: 700;
+}
+
+.prizeError {
+  border-color: var(--danger-line);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.codeFallback summary {
+  display: list-item;
+  min-height: 44px;
+  padding: var(--s3) 0;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.resultBlock {
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.resultBlock .scan-result {
+  border-radius: var(--radius-small);
+}
+
+.nextStep {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  line-height: 1.5;
+}
+
+.nextActions {
+  display: grid;
+  gap: var(--s2);
+}
+
+.nextActions button {
+  min-height: 44px;
+}
+
+/* Booth ticket helpers: a long ET:BOOTH code truncates inside the
+   single-line input, so the full value stays readable in a wrapping
+   read-only line and travels through a copy button (client-side only). */
+.ticketFullCode {
+  display: grid;
+  gap: var(--s1);
+  margin: 0;
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--paper);
+  font-size: var(--small);
+}
+
+.ticketFullCodeLabel {
+  color: var(--muted);
+}
+
+.ticketFullCode code {
+  overflow-wrap: anywhere;
+}
+
+.ticketCopy {
+  min-height: 44px;
+}
+
+.auxAction {
+  justify-self: start;
+}
+
+.scanDock {
+  display: grid;
+  gap: var(--s3);
+}
+
+/* Booth QR: the QR standard asks for four clear modules around the code.
+   A participant scans this with a phone camera, and without the quiet zone
+   the camera has no clean edge to lock onto, so the code is framed in white
+   with a margin on every side. */
+.boothQr {
+  display: inline-block;
+  padding: var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  line-height: 0;
+}
+
+.boothQr svg {
+  display: block;
+}
+
+.recentRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2) var(--s3);
+}
+
+.recentRow span {
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.recentRow button {
+  min-height: 44px;
+  flex: 0 0 auto;
+}
+
+.nextActions button:focus-visible,
+.recentRow button:focus-visible,
+.ticketCopy:focus-visible,
+.resultBlock:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.codeFallback summary:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.codeFallback code {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .lookupForm {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lookupForm button,
+  .rewardItem button,
+  .prizeHeader button,
+  .nextActions button,
+  .recentRow button {
+    width: 100%;
+  }
+
+  .auxAction {
+    justify-self: stretch;
+  }
+
+  .scanDock {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    padding: var(--s3) 0;
+    border-top: 1px solid var(--line);
+    background: var(--paper);
+  }
+
+  .recentRow {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .rewardItem {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

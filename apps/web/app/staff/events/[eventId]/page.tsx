@@ -9,7 +9,7 @@ export default async function StaffEventPage({
 }) {
   const { eventId } = await params;
   return (
-    <main id="main-content" className="site-page staff-page">
+    <main id="main-content" tabIndex={-1} className="site-page staff-page">
       <header className="staff-header">
         <div><p className="eyebrow">스태프 업무</p><h1>현장 업무</h1></div>
       </header>
