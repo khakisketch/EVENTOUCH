@@ -4,7 +4,7 @@
 갱신 규칙: 작업이 끝날 때마다 갱신하고, 지난 서술은 지우거나 `## 이력`으로 내린다.
 
 Updated: 2026-10-23
-Branch: `master` · 작업 기준: `f861a07` · 배포: `http://127.0.0.1:8891`(같은 커밋, Next 16.4.2)
+Branch: `master` · 제품 코드: `2ce9a52` · 배포: `http://127.0.0.1:8891`(같은 제품 코드, Next 16.4.2)
 
 ## 제품
 
@@ -30,9 +30,11 @@ Branch: `master` · 작업 기준: `f861a07` · 배포: `http://127.0.0.1:8891`(
 
 ## 검증 수치 (현재 작업 트리 실측)
 
-최종 통합 증거: `/tmp/opencode/eventouch-captures/round-next/final-verification.json`. 이번 회차 검증 로그는 `/tmp/opencode/eventouch-captures/console-ux-evaluation/{build42,tests39,console-audit34}.log`와 `/tmp/opencode/eventouch-captures/{usability-run18,handoff17}.log`다.
+최신 카드 증거: `/tmp/opencode/eventouch-captures/event-card-a2/after/verification.json`, 주 소유자 재실행 로그 `event-card-a2/integration/cards.log`, 실제 배포본 확인 `event-card-a2/deployed/verification.json`(같은 캡처 루트 아래). 앞선 통합 증거는 `/tmp/opencode/eventouch-captures/round-next/final-verification.json`와 `round-close/linear/verification.json`이다.
 
-- **2026-10-23 최신 실측** — `npm test` **913 통과, 실패·스킵 0**, `npm run build` 통과(Next **16.4.2**), 콘솔 **73판정**, 사용성 **23/23**(상한 12·10·40 불변), 마감 여정 **8단계 + 복구 검사 9건**, 인계 **17판정**, 미디어 **36판정**, 연결 여정 **6/6**(스크롤 미계측 `null`), `npm run web:audit` serious/critical·넘침 **0**, `npm run a11y` **11화면 위반 0**, `npm run mobile` **72검사** 넘침·44px 미만 **0**. 아래 항목은 그 이전 라운드의 증거다.
+- **A2 카드 반영 실측** — `npm test` **922 통과, 실패·스킵 0**, 타입·빌드 통과(로컬 `L1bVRXtziPGIePcDPFTkL`), 콘솔 **16메뉴** 감사·사용성 **23/23**·웹 감사·접근성·모바일 **72검사** 통과. 카드 전용 `npm run web:cards:audit`는 **85판정**, 주 소유자가 같은 최종 빌드로 독립 재실행해 종료 코드 **0**을 확인했다. 작업자의 전체 게이트 결과는 세션 셸 출력에 남았으며 별도 전체 로그 파일은 없다. 배포 빌드 `VPCClCdFo2lDzkFW5HGaO`에서 1139/390px 렌더·카드 진입·복제 원본 선택/자동 채움·Escape/초점 복귀·가로 넘침 0·페이지 오류 0을 확인했고 bootstrap 데이터는 전후 동일했다. 배포본 검수에서는 실제 생성·복제 쓰기를 하지 않았으며 실제 저장·응답 유실 재시도는 격리 API/DB에서 검증했다.
+
+- **앞선 마감 라운드 실측** — `npm test` **913 통과, 실패·스킵 0**, `npm run build` 통과(Next **16.4.2**), 콘솔 **73판정**, 사용성 **23/23**(상한 12·10·40 불변), 마감 여정 **8단계 + 복구 검사 9건**, 인계 **17판정**, 미디어 **36판정**, 연결 여정 **6/6**(스크롤 미계측 `null`), `npm run web:audit` serious/critical·넘침 **0**, `npm run a11y` **11화면 위반 0**, `npm run mobile` **72검사** 넘침·44px 미만 **0**. 아래 항목은 그 이전 라운드의 증거다.
 
 - `npm test` — **851 통과, 실패 0, 스킵 0**(2026-10-22, 작업 전용 DB `eventouch_task_first_regression_20261022_1638`, 직렬 실행). 기존 API·권한·멱등·저장·발송/게시·사용 사례·QR·내비게이션·업무 흐름 계약을 유지하고 최종 task-first 소스 계약 **37건**을 추가했다. DB 없이 스킵되면 계속 실패한다. 증거 루트 `R=/tmp/opencode/eventouch-captures/task-first-final/`: `tests.log`, `contracts.log`.
 - `npm run build` — 최종 통합 빌드 **`SHCLRJJqHwQG_UgIjundi`**(server 타입 검사 + Next 빌드/타입 검사) 통과. `npx tsc -p apps/web/tsconfig.json --noEmit`도 통과했다. 빌드 API 목적지/실행 설정 거부 검사는 유지한다. `R/{build,typecheck}.log`. 기존 배포를 재시작하거나 바꾸지 않았다. Before의 기존 아티팩트는 `REsmIRaXJwwJnVyYw0-VJ`; 빠진 초대·보고서 상세·최근 처리 증거는 **같은 기준 소스 `15c9005`의 별도 임시 스냅샷 빌드 `Rm1viCXSRbA_bLDTAul1O`**로 보완했다. 두 Before 빌드를 하나로 부르지 않는다.
@@ -69,6 +71,15 @@ Branch: `master` · 작업 기준: `f861a07` · 배포: `http://127.0.0.1:8891`(
 - 운영 준비 보강 — `/api/readyz`가 DB `SELECT 1`까지 확인해 격리 compose의 API에서 200을 반환했고, API 이미지 HEALTHCHECK를 readyz로 바꿨다. 백업은 덤프 전후 행 수를 비교해 `countsStable`을 기록하고, 복원은 체크섬·파일 아카이브 판독·대상 볼륨/디렉터리 점유를 DB 변경 전에 검사한다. 점유된 디렉터리를 지정한 복원은 실패했고 대상 DB가 생성되지 않았으며, 실제 복원 후 `ops-verify` 행 이름을 확인했다. 529 테스트·빌드를 통과했다.
 
 ## 이번 UI/UX 검수와 반영
+
+### 사용자 선택 A2 카드와 게시 배경색 연결
+
+- 사용자는 B의 큰 날짜 블록을 거절했고, A 파생안 중 **A2 소프트 서피스**를 선택했다. 썸네일을 따로 등록할 부담이 없다는 이유를 보존해 이미지 등록·커버는 추가하지 않았다. 행사명·묶은 일시는 연한 상단 면, 고객사/장소·단계·D-day·장식 화살표는 흰 본문으로 옮겼다. 카드와 달력이 같은 부품을 사용한다.
+- 이미 불러오는 bootstrap의 **게시된 참가자 홈 배경색만** 흰색에 15% 섞어 상단에 반영한다. 초안·미게시·무효 색은 A2 기본 `--soft`다. 게시색 위에는 중립 잉크를 사용하고 상태 배지는 기존 의미색을 유지한다. 새 색 설정·카드별 조회·서버 필드는 없다. 게시 뒤 행사 목록에 재진입하면 반영된다.
+- 카드별 복제와 상시 하단 영역은 제거했다. **새 행사 만들기 안**의 만들기 방식·원본 선택으로 기존 복제 기능을 보존하고, 기본 새 행사 입력은 바로 보인다. 승인 대기 링크는 실제 대기가 있을 때만 별도 유지한다.
+- 코드 검토에서 새 방식/원본 전환이 전송 중 또는 응답 미확인 영수증을 지울 수 있음을 발견해 동기 가드와 전환 잠금·같은 요청 재시도 안내를 추가했다. 지연 요청과 서버 커밋 후 응답 유실을 실제 격리 API/DB에서 재현하고, 동일 키 재시도·생성 1건을 확인했다.
+- **판단 방법: task-first-ux-review 적용.** 행사 식별·진입은 계속 카드 전체 1개 링크로 유지하고, 드문 생성 방식인 복제만 만들기 화면에서 공개했다. 복제는 원본 선택 단계가 늘지만 모든 카드의 반복 제어를 줄이며, 주 작업인 새 행사 입력은 중간 선택 화면 없이 유지한다. 색 연동은 게시본만 보여주므로 초안 편집 피드백은 콘솔 목록에 즉시 나타나지 않는다.
+- 웹 컨테이너만 재빌드·교체했다(API/DB·기존 행사 데이터 불변). 실제 배포본 데스크톱·390px 렌더와 진입·대화상자 동작을 직접 확인했다. 실기기·Safari·스크린리더 실청취·실발송은 이번에도 미검증이다.
 
 ### 행사 마감 — 다섯 화면 왕복을 한 경로로 (2026-10-23)
 
