@@ -1656,7 +1656,7 @@ async function main() {
         await page.getByRole('button', { name: '보고서 만들기', exact: true }).click();
         const warning = page.getByText(/승인 대기 2명이 남아 있습니다/);
         await warning.first().waitFor({ timeout: 10000 });
-        const pendingLink = page.getByRole('link', { name: '참가자에서 승인 처리하기' });
+        const pendingLink = page.getByRole('dialog').getByRole('link', { name: '참가자에서 승인 처리하기' });
         if (!await pendingLink.count() || !(await pendingLink.getAttribute('href')).includes('status=PENDING')) {
           throw new Error('report dialog does not link to the pending queue');
         }
@@ -1726,7 +1726,8 @@ async function main() {
           await stageFold.locator('summary').first().click();
         }
         await page.getByRole('button', { name: /종료\(으\)로 전환/ }).click();
-        await page.getByText(/결과 보고서는 생성 시점 값으로 고정되므로/).first().waitFor({ timeout: 10000 });
+        await page.getByText(/결과 보고서는 생성 시점 값으로 고정됩니다/).first().waitFor({ timeout: 10000 });
+        await page.getByText(/승인 대기 등 필요한 참가자 처리는 종료 전에 마치세요/).first().waitFor({ timeout: 10000 });
         await saveShot(page, 'operator/ended-report-reminder.png');
       } finally {
         await page.close();

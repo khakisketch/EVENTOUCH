@@ -40,7 +40,7 @@ test("reward list can isolate connection-only gifts", () => {
 
 test("program draw box points at the quota draw screen and quiz grading names its rule", () => {
   const programs = read("console/events/[id]/programs/ProgramsWorkspace.tsx");
-  assert.match(programs, /쿼터·등급·업체 대상 추첨과 경품 연동은\{" "\}\s*<Link href=\{`\/console\/events\/\$\{encodeURIComponent\(props\.eventId\)\}\/draws`\}>추첨<\/Link> 화면에서 관리합니다/u);
+  assert.match(programs, /쿼터·등급·업체 대상 추첨과 경품 연동은\{" "\}\s*<Link href=\{props\.closeHref\(`\/console\/events\/\$\{encodeURIComponent\(props\.eventId\)\}\/draws`\)\}>추첨<\/Link> 화면에서 관리합니다/u);
   assert.match(programs, /채점은 앞뒤 공백을 제외한 완전 일치 기준입니다/u);
 });
 

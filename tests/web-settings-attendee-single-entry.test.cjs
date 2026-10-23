@@ -82,7 +82,8 @@ test('settings-attendee-single-entry: stage preconditions block instead of faili
   assert.match(settings, /\/operations/);
   assert.match(settings, /\/programs/);
   assert.match(settings, /href="#settings-intake"/);
-  assert.match(settings, /같은 요청 다시 시도/);
+  assert.match(settings, /retry=\{Boolean\(stageCommandIdRef\.current && stageError\)\}/);
+  assert.match(read('app/console/console-ui/StageTransitionConfirmation.tsx'), /같은 요청 다시 시도/);
   assert.match(settings, /Preserve the id so a retry can replay the server receipt after a lost response/);
 });
 

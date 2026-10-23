@@ -69,8 +69,10 @@ test('event-home-keeps-permission-and-stage-transition-contracts', () => {
   assert.match(settings, /commandId: stageCommandIdRef\.current/);
   assert.match(settings, /payload: \{\s*stage: nextStage\s*\}/);
   assert.match(settings, /setStageConfirm\(true\)/);
-  assert.match(settings, /정말 전환합니다/);
-  assert.match(settings, /취소/);
+  const confirmation = fs.readFileSync(path.join(ROOT, 'apps/web/app/console/console-ui/StageTransitionConfirmation.tsx'), 'utf8');
+  assert.match(settings, /<StageTransitionConfirmation/);
+  assert.match(confirmation, /정말 전환합니다/);
+  assert.match(confirmation, /취소/);
   assert.match(settings, /"단계 미정"/);
   assert.match(settings, /보관된 행사는 읽기 전용입니다\./);
   assert.doesNotMatch(overview, /stage:\s*"(?:LIVE|ARCHIVED)"\s*\}/);

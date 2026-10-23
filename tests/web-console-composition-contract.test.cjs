@@ -118,7 +118,7 @@ test('event context is centralized while domain actions retain their meaning and
   assert.match(frame, /consolePageHref\("overview", eventId\)/u);
   assert.match(frame, /`행사 \/ \$\{trimmedName\}`/u);
   assert.match(frame, /title=\{page\.title\}/u);
-  assert.doesNotMatch(frame, /back=\{/u);
+  assert.doesNotMatch(frame, /\bback=\{/u);
 
   const content = read(targets[3]);
   assert.match(content, /action=\{\(\s*<button\b[^>]*className="button button-secondary"[^>]*onClick=\{openNoticeCreate\}[^>]*>\s*공지 작성/su);

@@ -107,7 +107,7 @@ test('console frame shares one title, context link and body rhythm', () => {
   }
   assert.doesNotMatch(page, /width\?:/u, 'pages choose no arbitrary width');
   assert.doesNotMatch(page, HOOK_CALL, 'frame stays hook-free');
-  assert.doesNotMatch(page, /back=\{/u, 'no repeated back row; the rail owns navigation');
+  assert.doesNotMatch(page, /\bback=\{/u, 'no repeated back row; the rail owns navigation (Suspense fallback is not a back prop)');
 
   assert.match(page, /CONSOLE_PAGES\[pageId\]/u, 'menu title comes from the registry');
   assert.match(page, /title=\{page\.title\}/u);

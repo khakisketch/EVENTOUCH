@@ -504,14 +504,14 @@ async function main() {
     // ---- Task 6: end the LIVE fixture event ----
     await measure('stage-end', '종료(으)로 전환 (LIVE -> ENDED)', async (act, task) => {
       task.screens = [`/console/events/${fixture.eventId}/settings (#settings-stage)`];
-      task.fields = ['summary[data-settings-collapse-summary=stage]', 'button 종료(으)로 전환', 'group 단계 전환 확인 / button aria 정말 종료 단계로 전환합니다'];
+      task.fields = ['summary[data-settings-collapse-summary=stage]', 'button 종료(으)로 전환', 'group 단계 전환 확인 / button aria 정말 전환합니다 · 종료 단계로'];
       await go(`/console/events/${fixture.eventId}/settings`, '#settings-basics');
       await page.locator('summary[data-settings-collapse-summary="stage"]').waitFor({ state: 'visible', timeout: 15000 });
       await act(() => page.locator('summary[data-settings-collapse-summary="stage"]').click());
       await page.getByRole('button', { name: '종료(으)로 전환', exact: true }).waitFor({ timeout: 10000 });
       await act(() => page.getByRole('button', { name: '종료(으)로 전환', exact: true }).click());
       await page.getByRole('group', { name: '단계 전환 확인' }).waitFor({ timeout: 10000 });
-      const endConfirm = page.getByRole('button', { name: '정말 종료 단계로 전환합니다', exact: true });
+      const endConfirm = page.getByRole('button', { name: /^(?:정말 전환합니다 · 종료 단계로|정말 종료 단계로 전환합니다)$/ });
       await act(async () => ((await endConfirm.count() ? endConfirm : page.getByRole('group', { name: '단계 전환 확인' }).getByRole('button', { name: '정말 전환합니다', exact: true })).click()));
       await page.getByText(/종료\(으\)로 전환했습니다/, { exact: false }).first().waitFor({ timeout: 15000 });
       const state = await readBootstrap(helpers, harness.baseUrl, ownerCookie);
@@ -525,7 +525,7 @@ async function main() {
     // ---- Task 7: archive next, registration already closed ----
     await measure('stage-archive', '보관(으)로 전환 (ENDED -> ARCHIVED)', async (act, task) => {
       task.screens = [`/console/events/${fixture.eventId}/settings (#settings-stage)`];
-      task.fields = ['summary[data-settings-collapse-summary=stage] (only when collapsed)', 'button 보관(으)로 전환', 'group 단계 전환 확인 / button aria 정말 보관 단계로 전환합니다'];
+      task.fields = ['summary[data-settings-collapse-summary=stage] (only when collapsed)', 'button 보관(으)로 전환', 'group 단계 전환 확인 / button aria 정말 전환합니다 · 보관 단계로'];
       await go(`/console/events/${fixture.eventId}/settings`, '#settings-basics');
       await page.locator('summary[data-settings-collapse-summary="stage"]').waitFor({ state: 'visible', timeout: 15000 });
       const open = await page.locator('details[data-settings-collapse="stage"]').evaluate((el) => el.open).catch(() => false);
@@ -538,7 +538,7 @@ async function main() {
       await page.getByRole('button', { name: '보관(으)로 전환', exact: true }).waitFor({ timeout: 10000 });
       await act(() => page.getByRole('button', { name: '보관(으)로 전환', exact: true }).click());
       await page.getByRole('group', { name: '단계 전환 확인' }).waitFor({ timeout: 10000 });
-      const archiveConfirm = page.getByRole('button', { name: '정말 보관 단계로 전환합니다', exact: true });
+      const archiveConfirm = page.getByRole('button', { name: /^(?:정말 전환합니다 · 보관 단계로|정말 보관 단계로 전환합니다)$/ });
       await act(async () => ((await archiveConfirm.count() ? archiveConfirm : page.getByRole('group', { name: '단계 전환 확인' }).getByRole('button', { name: '정말 전환합니다', exact: true })).click()));
       await page.getByText(/보관\(으\)로 전환했습니다/, { exact: false }).first().waitFor({ timeout: 15000 });
       const state = await readBootstrap(helpers, harness.baseUrl, ownerCookie);

@@ -16,11 +16,12 @@ const read = (rel) => fs.readFileSync(path.join(WEB, rel), 'utf8');
 const REPORTS = 'app/console/events/[id]/reports/ReportsWorkspace.tsx';
 
 test('each archive prerequisite links to its own fix', () => {
-  const workspace = read(REPORTS);
+  const workspace = read('app/console/events/[id]/reports/EventCloseFlow.tsx');
   assert.match(workspace, /settings#settings-stage/u, 'stage item jumps to the stage gate');
   assert.match(workspace, /settings#settings-intake/u, 'open intake jumps to the intake switch');
   assert.match(workspace, /participants\?status=PENDING/u, 'pending approvals jump to the filtered roster');
-  assert.match(workspace, /승인 대기 \{state\.metrics\.pending\}명/u, 'pending count reads live state');
+  assert.match(workspace, /승인 대기 \{inputs\.pending\}명/u, 'pending count reads the same parent bootstrap state');
+  assert.match(read(REPORTS), /pending: state\.metrics\.pending/u, 'hub receives the current pending count, not a second copy');
   assert.match(workspace, /\/programs`/u, 'open programs jump to the program screen');
   assert.match(workspace, /\/draws`/u, 'draw-side opens jump to the draws screen');
 });

@@ -71,10 +71,13 @@ test('settings owns forward-only stage confirmation and reuses the command id af
 
   assert.match(settings, /stage: text\(event\.stage\)\.toUpperCase\(\)/);
   assert.match(stage, /진행 단계/);
-  assert.match(stage, /정말 \{eventStageLabel\(nextStage\)\} 단계로 전환합니다\?/);
-  assert.match(stage, /정말 \{eventStageLabel\(nextStage\)\} 단계로 전환합니다/);
-  assert.match(stage, /같은 요청 다시 시도/);
-  assert.match(stage, />\s*취소\s*</);
+  const confirmation = read('apps/web/app/console/console-ui/StageTransitionConfirmation.tsx');
+  assert.match(stage, /<StageTransitionConfirmation[^>]+label=\{eventStageLabel\(nextStage\)\}/);
+  assert.match(stage, /retry=\{Boolean\(stageCommandIdRef\.current && stageError\)\}/);
+  assert.match(confirmation, /정말 \{label\} 단계로 전환합니다\?/);
+  assert.match(confirmation, /aria-label=\{`\$\{actionText\} · \$\{label\} 단계로`\}/, 'accessible name includes the complete visible action plus its stage target');
+  assert.match(confirmation, /같은 요청 다시 시도/);
+  assert.match(confirmation, />\s*취소\s*</);
   assert.match(settings, /stageCommandIdRef = useRef<string \| null>\(null\)/);
   assert.match(settings, /if \(!stageCommandIdRef\.current\) stageCommandIdRef\.current = randomCommandId\(\)/);
   assert.match(settings, /commandId: stageCommandIdRef\.current/);

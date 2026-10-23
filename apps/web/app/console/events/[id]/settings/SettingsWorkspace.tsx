@@ -14,7 +14,10 @@ import uiStyles from "../../../console-ui/console-ui.module.css";
 import { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
 import ConsoleSection from "../../../console-ui/ConsoleSection";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
+import StageTransitionConfirmation from "../../../console-ui/StageTransitionConfirmation";
 import styles from "./settings.module.css";
+import { readCloseReturn, readCloseSnapshot, type CloseSnapshot } from "../../../console-event-close";
+import { useEventCloseHandoff } from "../../../use-event-close-handoff";
 
 // Mirrors server/commands/preparation.js FEATURES. A toggle that the server
 // does not accept would fail on save, so the list is deliberate.
@@ -62,6 +65,7 @@ type Basics = {
 };
 type Ready = {
   kind: "ready";
+  closeSnapshot: CloseSnapshot;
   stage: string;
   eventMeta?: string;
   clientName: string;
@@ -172,6 +176,8 @@ function buildEventMeta(clientName: string, basics: Basics, venueName: string): 
 
 export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   const router = useRouter();
+  const closeHref = useEventCloseHandoff(eventId);
+  const closeLandingRef = useRef<string | null>(null);
   const [state, setState] = useState<State>({ kind: "loading" });
   const [reloadTick, setReloadTick] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -333,6 +339,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           : 0;
         setState({
           kind: "ready",
+          closeSnapshot: readCloseSnapshot(event, workspace),
           stage: text(event.stage).toUpperCase(),
           eventMeta: buildEventMeta(clientName, newBasics, venueName),
           clientName,
@@ -421,6 +428,32 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
 
   // Names the section in view for the jump-nav readout. Anchor clicks keep
   // working natively whether or not the observer is available.
+  useEffect(() => {
+    if (state.kind !== "ready") {
+      if (state.kind === "failed") closeLandingRef.current = null;
+      return;
+    }
+    const returnHref = readCloseReturn(new URLSearchParams(window.location.search).get("closeReturn"), eventId);
+    const anchor = window.location.hash;
+    if (!returnHref || !["#settings-stage", "#settings-intake", "#settings-features"].includes(anchor)) return;
+    // Native same-page intake→stage focus is owned by the linear control.
+    // A later bootstrap after ENDED must not steal focus back from Next.
+    const key = `${eventId}:${returnHref}`;
+    if (closeLandingRef.current === key) return;
+    closeLandingRef.current = key;
+    const frame = requestAnimationFrame(() => {
+      if (anchor === "#settings-stage") {
+        const details = document.querySelector<HTMLDetailsElement>('details[data-settings-collapse="stage"]');
+        if (details) details.open = true;
+      }
+      const heading = document.getElementById(anchor.slice(1));
+      heading?.setAttribute("tabindex", "-1");
+      heading?.scrollIntoView({ block: "start" });
+      heading?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [state, eventId]);
+
   useEffect(() => {
     if (state.kind !== "ready") return;
     if (typeof IntersectionObserver === "undefined") return;
@@ -689,6 +722,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   return (
     <ConsolePage
       pageId="settings"
+      closeSnapshot={state.closeSnapshot}
       eventId={eventId}
       eventName={basics?.name || state.basics.name}
       meta={state.eventMeta}
@@ -1020,7 +1054,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
                 <>
                   <a href="#settings-intake">접수 닫기</a>
                   {" · "}
-                  <Link href={`/console/events/${encodeURIComponent(eventId)}/programs`}>프로그램 닫기</Link>
+                  <Link href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>프로그램 닫기</Link>
                 </>
               )}
             </p>
@@ -1045,42 +1079,19 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
                 {eventStageLabel(nextStage)}(으)로 전환
               </button>
             ) : nextStage ? (
-              <div className={styles.stageConfirmation} role="group" aria-label="단계 전환 확인">
-                <p>정말 {eventStageLabel(nextStage)} 단계로 전환합니다?</p>
+              <StageTransitionConfirmation className={styles.stageConfirmation} label={eventStageLabel(nextStage)}
+                busy={stageBusy} disabled={busy || stageBlocked} cancelDisabled={busy}
+                retry={Boolean(stageCommandIdRef.current && stageError)}
+                describedBy={stageBlocked ? "settings-stage-precondition" : undefined}
+                onConfirm={() => void submitStageTransition()}
+                onCancel={() => { setStageConfirm(false); setStageError(null); }}>
                 {nextStage === "ENDED" ? (
                   <p className={styles.help}>
-                    종료하면 참가자 변경이 막힙니다. 결과 보고서는 생성 시점 값으로 고정되므로,
-                    필요한 집계는 종료 전에 동결해 두세요.
+                    종료하면 참가자 변경이 막힙니다. 승인 대기 등 필요한 참가자 처리는 종료 전에 마치세요.
+                    결과 보고서는 생성 시점 값으로 고정됩니다. 종료 뒤 마감 집계를 생성·검토하고 동결할 수 있으며, 편집이나 공유 완료 기록만으로 집계가 갱신되지는 않습니다.
                   </p>
                 ) : null}
-                <ConsoleFormActions>
-                  <button
-                    type="button"
-                    className="button button-secondary"
-                    onClick={() => void submitStageTransition()}
-                    disabled={stageBusy || busy || stageBlocked}
-                    aria-describedby={stageBlocked ? "settings-stage-precondition" : undefined}
-                    aria-label={`정말 ${eventStageLabel(nextStage)} 단계로 전환합니다`}
-                  >
-                    {stageBusy
-                      ? "전환 중입니다"
-                      : stageCommandIdRef.current && stageError
-                        ? "같은 요청 다시 시도"
-                        : "정말 전환합니다"}
-                  </button>
-                  <button
-                    type="button"
-                    className="button button-secondary"
-                    onClick={() => {
-                      setStageConfirm(false);
-                      setStageError(null);
-                    }}
-                    disabled={stageBusy || busy}
-                  >
-                    취소
-                  </button>
-                </ConsoleFormActions>
-              </div>
+              </StageTransitionConfirmation>
             ) : null}
           </div>
           </div>

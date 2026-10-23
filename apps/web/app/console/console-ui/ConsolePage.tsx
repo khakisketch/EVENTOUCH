@@ -1,8 +1,10 @@
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import Link from "next/link";
 import { CONSOLE_PAGES, consolePageHref, type ConsolePageId } from "../console-navigation";
 import ConsolePageHeader from "./ConsolePageHeader";
 import styles from "./console-ui.module.css";
+import EventCloseReturn from "./EventCloseReturn";
+import type { CloseSnapshot } from "../console-event-close";
 
 type ConsolePageProps = {
   pageId: ConsolePageId;
@@ -18,6 +20,10 @@ type ConsolePageProps = {
   sectionNav?: ReactNode;
   children: ReactNode;
   className?: string;
+  closeSnapshot?: CloseSnapshot;
+  closeNoticeStatus?: string;
+  closeArchiveControl?: ReactNode;
+  closeArchiveOpen?: boolean;
 };
 
 /**
@@ -43,6 +49,10 @@ export default function ConsolePage({
   sectionNav,
   children,
   className,
+  closeSnapshot,
+  closeNoticeStatus,
+  closeArchiveControl,
+  closeArchiveOpen,
 }: ConsolePageProps) {
   const page = CONSOLE_PAGES[pageId];
   const overviewHref =
@@ -67,6 +77,9 @@ export default function ConsolePage({
         badges={badges}
         actions={headerActions}
       />
+      {eventId && ["settings", "participants", "programs", "draws", "messages"].includes(pageId) ? (
+        <Suspense fallback={null}><EventCloseReturn eventId={eventId} pageId={pageId} snapshot={closeSnapshot} noticeStatus={closeNoticeStatus} archiveControl={closeArchiveControl} archiveOpen={closeArchiveOpen} /></Suspense>
+      ) : null}
       {toolbar ?? null}
       {feedback ?? null}
       {sectionNav ?? null}

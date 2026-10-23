@@ -262,3 +262,26 @@
     padding: var(--s3);
   }
 }
+.closeFlow {
+  padding: var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.closeFacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3) var(--s6);
+  margin: 0;
+}
+
+.closeFacts > div { display: grid; gap: var(--s1); }
+.closeFacts dt { color: var(--muted); font-size: var(--small); }
+.closeFacts dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.closeNext { display: grid; gap: var(--s2); margin-top: var(--s3); }
+.closeNext > p { margin: 0; }
+.closeDetails { margin-top: var(--s3); border-top: 1px solid var(--line); }
+.closeDetails > summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; text-decoration: underline; text-underline-offset: var(--s1); }
+.closeDetails > summary::before { content: "+"; margin-right: var(--s2); }
+.closeDetails[open] > summary::before { content: "−"; }

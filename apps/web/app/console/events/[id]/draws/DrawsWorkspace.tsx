@@ -14,6 +14,8 @@ import ConsoleSection from "../../../console-ui/ConsoleSection";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import { useConsoleDraftGuard } from "../../../console-draft-guard";
 import styles from "./draws.module.css";
+import { useEventCloseHandoff } from "../../../use-event-close-handoff";
+import { readCloseSnapshot, type CloseSnapshot } from "../../../console-event-close";
 
 // Operator screen for the event-plan draw bundle: voting teams + ranked vote
 // tally, named draw programs (quota/status/module) with batched runs, and the
@@ -76,6 +78,7 @@ type WorkspaceState =
   | { kind: "failed"; message: string }
   | {
       kind: "ready";
+      closeSnapshot: CloseSnapshot;
       eventName: string;
       eventMeta?: string;
       archived: boolean;
@@ -137,6 +140,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 export default function DrawsWorkspace({ eventId }: { eventId: string }) {
+  const closeHref = useEventCloseHandoff(eventId);
   const router = useRouter();
   const [state, setState] = useState<WorkspaceState>({ kind: "loading" });
   const [activeSection, setActiveSection] = useState("draws-programs");
@@ -452,6 +456,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
       }
       setState({
         kind: "ready",
+        closeSnapshot: readCloseSnapshot(event, workspace),
         eventName: text(event.name, eventId),
         eventMeta: formatConsoleEventMeta({
           clientName: text(clientName),
@@ -1007,6 +1012,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
   return (
     <ConsolePage
       pageId="draws"
+      closeSnapshot={state.closeSnapshot}
       eventId={eventId}
       eventName={state.eventName}
       meta={state.eventMeta}
@@ -1072,14 +1078,14 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
             <p className={styles.hint}>실행 인원은 매번 1~20명으로 지정합니다(기본 1명). 프로그램 대상·쿼터·등급은 첫 당첨 뒤 잠기고, 공개 여부는 별도로 관리합니다.</p>
             {!screenEnabled && state.canManage ? (
               <p className={styles.stagePrerequisite} id="stage-screen-prerequisite">
-                무대 터치 실행은 당첨 결과·경품 생성과 전광판 선택을 한 번에 저장합니다. 사용 전 <Link href={`/console/events/${encodeURIComponent(eventId)}/settings`}>행사 설정에서 행사장 출력을 켜세요.</Link>
+                무대 터치 실행은 당첨 결과·경품 생성과 전광판 선택을 한 번에 저장합니다. 사용 전 <Link href={closeHref(`/console/events/${encodeURIComponent(eventId)}/settings#settings-features`)}>행사 설정에서 행사장 출력을 켜세요.</Link>
               </p>
             ) : null}
             {!state.drawModules.some((module) => module.published) && !state.drawPrograms.length && state.canManage ? (
               <p className={styles.stagePrerequisite}>
                 {state.drawModules.length
-                  ? <>무대 터치 실행에는 공개된 추첨 무대가 필요합니다. 기존 비공개 결과는 자동 공개하지 않습니다. <Link href={`/console/events/${encodeURIComponent(eventId)}/programs`}>참여 프로그램에서 무대 운영을 시작해 공개하세요.</Link></>
-                  : <>추첨 프로그램을 만들려면 먼저 <Link href={`/console/events/${encodeURIComponent(eventId)}/programs`}>참여 프로그램에서 추첨 무대를 만들고 공개하세요.</Link> 공개 상태로 전환한 무대만 여기에 연결할 수 있습니다.</>}
+                  ? <>무대 터치 실행에는 공개된 추첨 무대가 필요합니다. 기존 비공개 결과는 자동 공개하지 않습니다. <Link href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 프로그램에서 무대 운영을 시작해 공개하세요.</Link></>
+                  : <>추첨 프로그램을 만들려면 먼저 <Link href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 프로그램에서 추첨 무대를 만들고 공개하세요.</Link> 공개 상태로 전환한 무대만 여기에 연결할 수 있습니다.</>}
               </p>
             ) : null}
             {state.drawPrograms.length ? (
@@ -1204,8 +1210,8 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                               {moduleNeedsPublishing ? (
                                 <p className={styles.stagePrerequisite} id={`stage-module-prerequisite-${program.id}`}>
                                   {!linkedModule
-                                    ? <>연결된 추첨용 무대 프로그램이 없습니다. <Link href={`/console/events/${encodeURIComponent(eventId)}/programs`}>참여 프로그램에서 추첨 무대를 만들고 연결하세요.</Link></>
-                                    : <>연결된 무대 프로그램이 비공개입니다. 기존 결과는 자동 공개되지 않습니다. <Link href={`/console/events/${encodeURIComponent(eventId)}/programs`}>참여 프로그램에서 해당 무대의 운영을 시작해 공개하세요.</Link></>}
+                                    ? <>연결된 추첨용 무대 프로그램이 없습니다. <Link href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 프로그램에서 추첨 무대를 만들고 연결하세요.</Link></>
+                                    : <>연결된 무대 프로그램이 비공개입니다. 기존 결과는 자동 공개되지 않습니다. <Link href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 프로그램에서 해당 무대의 운영을 시작해 공개하세요.</Link></>}
                                 </p>
                               ) : null}
                             </>

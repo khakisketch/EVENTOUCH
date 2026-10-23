@@ -18,6 +18,8 @@ import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
 import { UNCONFIRMED_WRITE_CLOSE_MESSAGE, useConsoleDraftGuard } from "../../../console-draft-guard";
 import { buildApprovedMessageHandoffHref } from "../../../console-handoff";
+import { useEventCloseHandoff } from "../../../use-event-close-handoff";
+import { readCloseSnapshot, type CloseSnapshot } from "../../../console-event-close";
 import styles from "./participants.module.css";
 
 // Shared dirty-dismiss copy for the roster dialogs: the guard asks on
@@ -43,6 +45,7 @@ type ListState =
   | { kind: "failed"; message: string }
   | {
       kind: "ready";
+      closeSnapshot: CloseSnapshot;
       eventName: string;
       eventMeta: ConsoleEventMeta;
       eventStage: string;
@@ -176,6 +179,7 @@ function participantRecordMatches(value: unknown, id: string, status?: string): 
 }
 
 export default function ParticipantList({ eventId }: { eventId: string }) {
+  const closeHref = useEventCloseHandoff(eventId);
   const router = useRouter();
   const [state, setState] = useState<ListState>({ kind: "loading" });
   const [notice, setNotice] = useState<string | null>(null);
@@ -484,6 +488,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         : [];
       setState({
         kind: "ready",
+        closeSnapshot: readCloseSnapshot(event, workspace),
         eventName:
           event && typeof event.name === "string" ? event.name : eventId,
         eventMeta: {
@@ -1055,6 +1060,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   return (
     <ConsolePage
       pageId="participants"
+      closeSnapshot={state.closeSnapshot}
       eventId={eventId}
       eventName={state.eventName}
       meta={formatConsoleEventMeta(state.eventMeta)}
@@ -1208,7 +1214,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                   <Link
                     id="roster-send-message"
                     className={`button button-secondary ${styles.selectionButton}`}
-                    href={handoffHref}
+                    href={closeHref(handoffHref)}
                   >
                     메시지 보내기
                   </Link>
@@ -1232,7 +1238,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                   <Link
                     id="roster-approved-message"
                     className="button button-secondary"
-                    href={buildApprovedMessageHandoffHref(eventId, approvedHandoffIds)}
+                    href={closeHref(buildApprovedMessageHandoffHref(eventId, approvedHandoffIds))}
                   >
                     승인자에게 안내 보내기
                   </Link>

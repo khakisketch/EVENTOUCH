@@ -15,8 +15,9 @@ const read = (relative) => fs.readFileSync(path.join(appRoot, relative), "utf8")
 const rootRead = (relative) => fs.readFileSync(path.join(__dirname, "..", relative), "utf8");
 
 test("report-to-settings standalone action keeps the shared 44px button target", () => {
-  const reports = read("console/events/[id]/reports/ReportsWorkspace.tsx");
-  assert.match(reports, /<Link className="button button-secondary" href=\{`\/console\/events\/\$\{encodeURIComponent\(eventId\)\}\/settings#settings-stage`\}/);
+  const flow = read("console/events/[id]/reports/EventCloseFlow.tsx");
+  assert.match(flow, /<Link className="button button-secondary" href=\{href\(`\$\{base\}\/settings#settings-stage`\)\}/);
+  assert.match(flow, /closeHandoffHref\(target, eventId, report\?\.id\)/, 'the same target now carries the explicit close return');
 });
 
 test("committed inline customer remains offered when the event draft is explicitly discarded", () => {
@@ -156,21 +157,23 @@ test("reports carry the live archive prerequisites from bootstrap", () => {
   const workspace = read("console/events/[id]/reports/ReportsWorkspace.tsx");
   assert.match(workspace, /stage: string;/);
   assert.match(workspace, /registrationOpen: boolean;/);
-  assert.match(workspace, /openModules: Array<\{ name: string \}>;/);
+  assert.match(workspace, /openModules: Array<\{ name: string; type: string \}>;/);
   assert.match(workspace, /registrationOpen: workspace\.registrationOpen === true/);
   assert.match(workspace, /text\(module\.status\) === "OPEN"/);
 });
 
 test("frozen detail links to the existing settings stage anchor with exact remainders", () => {
   const workspace = read("console/events/[id]/reports/ReportsWorkspace.tsx");
-  assert.match(workspace, /\/settings#settings-stage/);
+  const flow = read("console/events/[id]/reports/EventCloseFlow.tsx");
+  assert.match(flow, /\/settings#settings-stage/);
   assert.match(workspace, /보관 전제 · 조회 시점/);
-  assert.match(workspace, /새로고침 시 갱신됩니다/);
+  assert.match(flow, /새로고침 시 갱신됩니다/);
   assert.match(workspace, /loadedAt \? capturedLabel\(loadedAt\)/);
-  assert.match(workspace, /참가 접수 열림 — 보관 전에 접수 닫기가 필요합니다/);
-  assert.match(workspace, /진행 중인 참여 프로그램/);
+  assert.match(flow, /참가 접수 열림 — 보관 전에 접수 닫기가 필요합니다/);
+  assert.match(flow, /진행 중인 참여 프로그램/);
   assert.match(workspace, /생성 시점 그대로 유지/);
   assert.doesNotMatch(workspace, /"event\.stage"/);
+  assert.match(workspace, /eventCloseHref\(eventId, detail\.id\)/, 'detail returns to the single checklist with the chosen report');
 });
 
 test("archive checklist stays outside the frozen print article", () => {

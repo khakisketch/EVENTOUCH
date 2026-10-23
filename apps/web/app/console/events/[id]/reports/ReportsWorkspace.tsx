@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { loginHrefForLocation } from "../../../../auth-redirect";
-import { eventStageLabel } from "../../../../event-stage";
+import { closeHandoffHref, eventCloseHref } from "../../../console-event-close";
 import ConsolePage from "../../../console-ui/ConsolePage";
 import ConsoleToolbar from "../../../console-ui/ConsoleToolbar";
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
@@ -17,6 +17,7 @@ import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import { useConsoleDraftGuard } from "../../../console-draft-guard";
 import ui from "../../../console-ui/console-ui.module.css";
 import styles from "./reports.module.css";
+import EventCloseFlow from "./EventCloseFlow";
 
 type ReportSnapshot = {
   event?: { name?: unknown; date?: unknown; start?: unknown; end?: unknown; venue?: unknown; client?: unknown };
@@ -53,7 +54,8 @@ type Ready = {
   archived: boolean;
   stage: string;
   registrationOpen: boolean;
-  openModules: Array<{ name: string }>;
+  openModules: Array<{ name: string; type: string }>;
+  features: string[];
   metrics: { total: number; pending: number; approved: number; checked: number; inside: number; rate: number };
   groups: Array<{ name: string; count: number }>;
   booths: Array<{ name: string; used: number; capacity: number }>;
@@ -130,6 +132,10 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
   const [successorId, setSuccessorId] = useState<string | null>(null);
   const [successorSource, setSuccessorSource] = useState("current");
   const [loadedAt, setLoadedAt] = useState<string | null>(null);
+  const [closeReportId, setCloseReportId] = useState<string | null>(null);
+  const closeCreateRef = useRef(false);
+  const detailFocusRef = useRef(false);
+  const closePublishedFocusRef = useRef(false);
   const pendingCommandsRef = useRef(new Map<string, string>());
   const sendingRef = useRef(false);
   // Tracks a dialog save whose outcome is still unknown (ambiguous failure
@@ -239,9 +245,10 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
             // snapshots below: intake state and still-open programs are
             // what the settings stage gate checks before 보관.
             registrationOpen: workspace.registrationOpen === true,
+            features: Array.isArray(event.features) ? event.features.filter((feature): feature is string => typeof feature === "string") : [],
             openModules: modules
               .filter((module) => text(module.status) === "OPEN")
-              .map((module) => ({ name: text(module.title) || "이름 없는 프로그램" })),
+              .map((module) => ({ name: text(module.title) || "이름 없는 프로그램", type: text(module.type) })),
             metrics: {
               total: people.length,
               pending: people.filter((person) => person.status === "PENDING").length,
@@ -317,6 +324,43 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
     return state.reports.find((report) => report.id === detailId) ?? null;
   }, [state, detailId]);
 
+  useEffect(() => {
+    const readSelection = () => setCloseReportId(new URLSearchParams(window.location.search).get("closeReport"));
+    readSelection();
+    window.addEventListener("popstate", readSelection);
+    return () => window.removeEventListener("popstate", readSelection);
+  }, [eventId]);
+
+  useEffect(() => {
+    if (state.kind !== "ready") return;
+    const focusTarget = () => {
+      if (closePublishedFocusRef.current && detail?.status === "PUBLISHED") {
+        const next = document.querySelector<HTMLAnchorElement>("[data-close-report-next]");
+        next?.focus({ preventScroll: true });
+        next?.scrollIntoView({ block: "center" });
+        closePublishedFocusRef.current = false;
+        return;
+      }
+      // A returned fragment may be repeated by client navigation. Keep the
+      // public hub anchor canonical, including subsequent hash-only jumps.
+      if (/^#event-close(?:#event-close)+$/.test(window.location.hash)) {
+        const url = new URL(window.location.href);
+        url.hash = "event-close";
+        window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+      }
+      const target = detailFocusRef.current && detail ? "report-detail" : window.location.hash === "#event-close" ? "event-close" : null;
+      if (!target) return;
+      const heading = document.getElementById(target);
+      heading?.setAttribute("tabindex", "-1");
+      heading?.scrollIntoView({ block: "start" });
+      heading?.focus({ preventScroll: true });
+      detailFocusRef.current = false;
+    };
+    const frame = requestAnimationFrame(focusTarget);
+    window.addEventListener("hashchange", focusTarget);
+    return () => { cancelAnimationFrame(frame); window.removeEventListener("hashchange", focusTarget); };
+  }, [state, detail]);
+
   // The open report stays addressable: the hash carries the detail id, so a
   // checklist deep-link round-trip (or a copied URL) restores the same open
   // report instead of dropping the operator back at the list. Section
@@ -387,6 +431,16 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
         return false;
       }
       pendingCommandsRef.current.delete(attempt);
+      if (command === "report.publish" && payload.id === closeReportId) closePublishedFocusRef.current = true;
+      if (command === "report.create" && closeCreateRef.current) {
+        setCloseReportId(data.report.id);
+        const url = new URL(window.location.href);
+        url.searchParams.set("closeReport", data.report.id);
+        window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+        setDetailId(data.report.id);
+        detailFocusRef.current = true;
+        closeCreateRef.current = false;
+      }
       setNotice(successMessage);
       setReloadTick((tick) => tick + 1);
       return true;
@@ -492,31 +546,19 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
       eventId={eventId}
       eventName={state.eventName}
       meta={state.eventMeta}
-      toolbar={
-        <ConsoleToolbar
-          actions={
-            <button
-              type="button"
-              className="button button-primary"
-              disabled={writeLocked}
-              onClick={() => { setDetailId(null); setFailure(null); dialogUnresolvedRef.current = false; setCreateOpen(true); }}
-            >
-              보고서 만들기
-            </button>
-          }
-        />
-      }
       sectionNav={
         <ConsoleSectionNav
           items={
             detail
               ? [
-                  { id: "reports-analysis", label: "결과 분석" },
+                   { id: "event-close", label: "행사 마감" },
+                   { id: "reports-analysis", label: "결과 분석" },
                   { id: "reports-list", label: "보고서" },
                   { id: "report-detail", label: "보고서 내용" },
                 ]
               : [
-                  { id: "reports-analysis", label: "결과 분석" },
+                   { id: "event-close", label: "행사 마감" },
+                   { id: "reports-analysis", label: "결과 분석" },
                   { id: "reports-list", label: "보고서" },
                 ]
           }
@@ -532,6 +574,20 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
         </>
       }
     >
+      <EventCloseFlow eventId={eventId}
+        inputs={{ stage: state.stage, pending: state.metrics.pending, registrationOpen: state.registrationOpen, openModules: state.openModules, features: state.features }}
+        loadedAt={loadedAt ? capturedLabel(loadedAt) : ""}
+        report={(() => { const report = state.reports.find((item) => item.id === closeReportId); return report ? { ...report, capturedAt: capturedLabel(report.snapshot?.capturedAt) } : null; })()}
+        hasReports={state.reports.length > 0}
+        onCreate={() => { closeCreateRef.current = true; setDetailId(null); setFailure(null); dialogUnresolvedRef.current = false; setCreateOpen(true); }}
+        onReview={() => { if (closeReportId) { detailFocusRef.current = true; setDetailId(closeReportId); setReloadTick((tick) => tick + 1); } }}
+        onRefresh={() => setReloadTick((tick) => tick + 1)} />
+      <ConsoleToolbar actions={
+        <button type="button" className="button button-secondary" disabled={writeLocked}
+          onClick={() => { closeCreateRef.current = false; setDetailId(null); setFailure(null); dialogUnresolvedRef.current = false; setCreateOpen(true); }}>
+          보고서 만들기
+        </button>
+      } />
       <ConsoleSection
         headingId="reports-analysis"
         title="결과 분석"
@@ -664,7 +720,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                   <span className={`${styles.badge} ${report.status === "PUBLISHED" ? styles.badgePublished : styles.badgeDraft}`}>
                     {report.status === "PUBLISHED" ? "공유 완료 기록" : "초안"}
                   </span>
-                  <button type="button" className="button button-secondary" onClick={() => { setDetailId(report.id); setPublishId(null); setSuccessorId(null); }}>
+                  <button type="button" className="button button-secondary" onClick={() => { detailFocusRef.current = true; setDetailId(report.id); setPublishId(null); setSuccessorId(null); }}>
                     내용 보기
                   </button>
                 </div>
@@ -759,67 +815,23 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
               </section>
             ) : null}
           </article>
-          {/* Live archive prerequisites, adjacent to the next action and
-              outside the frozen print article: the snapshot above stays at
-              its capture basis while this checklist reads the current
-              runtime state. No transition command lives here; the link
-              lands on the existing settings stage anchor, whose own
-              expansion and confirmation stay untouched. */}
+          {/* Only one checklist: the hub above owns current prerequisites.
+              Keep this handoff outside the frozen article and print clone. */}
           <div className={styles.archiveCheck} role="note" aria-label="보관 전제 · 조회 시점">
+            {closeReportId === detail.id ? <p className={styles.archiveLead} data-close-report-progress><strong>마감 5/7 · 보고서 검토·동결{detail.status === "PUBLISHED" ? " · 완료" : ""}</strong></p> : null}
             <p className={styles.archiveLead}>
-              <strong>보관 전제 · 조회 시점</strong>
-              {state.archived
-                ? " — 보관된 행사입니다. 위 보고서는 생성 시점 그대로 유지됩니다."
-                : " — 위 보고서는 생성 시점 그대로 유지되며, 아래는 마지막으로 불러온 행사 상태입니다."}
+              위 보고서는 생성 시점 그대로 유지됩니다. 단계·접수·승인 대기·진행 프로그램의 전체 전제는 ‘행사 마감’ 지도에서 선택해서 확인할 수 있습니다. 작업을 마치면 다음 단계로 바로 이어가세요.
             </p>
-            <p className={styles.archiveLead}>조회 기준 시각 {loadedAt ? capturedLabel(loadedAt) : "확인 중"} · 새로고침 시 갱신됩니다.</p>
-            <ul className={styles.archiveList}>
-              <li>
-                현재 단계: {state.stage ? eventStageLabel(state.stage) : "단계 미정"}{" "}
-                <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/settings#settings-stage`}>
-                  진행 단계에서 확인·전환
-                </Link>
-              </li>
-              <li>
-                {state.registrationOpen ? (
-                  <>
-                    참가 접수 열림 — 보관 전에 접수 닫기가 필요합니다.{" "}
-                    <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/settings#settings-intake`}>
-                      참가 접수에서 닫기
-                    </Link>
-                  </>
-                ) : (
-                  "참가 접수 닫힘"
-                )}
-              </li>
-              <li>
-                {state.metrics.pending > 0 ? (
-                  <>
-                    승인 대기 {state.metrics.pending}명 — 보관 집계에 포함되지 않습니다.{" "}
-                    <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants?status=PENDING`}>
-                      참가자에서 승인 처리하기
-                    </Link>
-                  </>
-                ) : (
-                  "승인 대기 없음"
-                )}
-              </li>
-              <li>
-                {state.openModules.length ? (
-                  <>
-                    {`진행 중인 참여 프로그램 ${state.openModules.length}개 — 보관 전에 모두 닫기가 필요합니다: ${state.openModules.map((module) => module.name).join(" · ")}`}{" "}
-                    <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/programs`}>
-                      참여 프로그램에서 닫기
-                    </Link>{" "}
-                    <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/draws`}>
-                      추첨·투표에서 닫기
-                    </Link>
-                  </>
-                ) : (
-                  "진행 중인 참여 프로그램 없음"
-                )}
-              </li>
-            </ul>
+            {closeReportId === detail.id ? <>
+              {detail.status !== "PUBLISHED" ? <p className={styles.help}>이 버전의 공유 완료·잠금은 아직 기록하지 않았습니다. 내용 검토·동결 전에도 이동은 가능하며 자동으로 완료 처리하지 않습니다.</p> : null}
+              <Link className="button button-secondary" data-close-report-next
+                href={closeHandoffHref(`/console/events/${encodeURIComponent(eventId)}/messages`, eventId, detail.id)}
+                onNavigate={() => window.dispatchEvent(new Event("eventouch:shell-reload"))}>다음: 결과 안내</Link>
+            </> : null}
+            <Link className="button button-secondary" href={eventCloseHref(eventId, detail.id)}
+              onClick={() => setCloseReportId(detail.id)} data-report-close-return>
+              {closeReportId === detail.id ? "마감으로 돌아가기" : "이 보고서로 마감 이어가기"}
+            </Link>
           </div>
           <ConsoleFormActions>
             <button type="button" className="button button-secondary" onClick={() => exportJson(detail)}>
@@ -921,6 +933,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
           busy={busy}
           failure={failure}
           pendingApproval={state.metrics.pending}
+          participantChangesLocked={["ENDED", "ARCHIVED"].includes(state.stage)}
           eventId={eventId}
           submitGateRef={sendingRef}
           unresolvedRef={dialogUnresolvedRef}
@@ -950,6 +963,7 @@ function CreateDialog({
   busy,
   failure,
   pendingApproval,
+  participantChangesLocked,
   eventId,
   submitGateRef,
   unresolvedRef,
@@ -960,6 +974,7 @@ function CreateDialog({
   busy: boolean;
   failure: { message: string; field?: string } | null;
   pendingApproval: number;
+  participantChangesLocked: boolean;
   eventId: string;
   submitGateRef: { current: boolean };
   unresolvedRef: { current: boolean };
@@ -1042,9 +1057,13 @@ function CreateDialog({
           {!initial && pendingApproval > 0 ? (
             <div className={styles.help} role="status">
               승인 대기 {pendingApproval}명이 남아 있습니다. 보고서는 지금 집계로 고정되므로 이후 승인은 반영되지 않습니다.{" "}
-              <Link href={`/console/events/${encodeURIComponent(eventId)}/participants?status=PENDING`}>
-                참가자에서 승인 처리하기
-              </Link>
+              {participantChangesLocked ? (
+                <span>종료 이후에는 참가자 승인 상태를 변경할 수 없습니다. 현재 상태 그대로 취소 제외 등록 집계에 포함됩니다.</span>
+              ) : (
+                <Link href={closeHandoffHref(`/console/events/${encodeURIComponent(eventId)}/participants?status=PENDING`, eventId)}>
+                  참가자에서 승인 처리하기
+                </Link>
+              )}
             </div>
           ) : null}
           <div>

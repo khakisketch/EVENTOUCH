@@ -1,4 +1,5 @@
 "use client";
+import { readCloseSnapshot, type CloseSnapshot } from "../../../console-event-close";
 
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -6,7 +7,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
 import { readRecipientStatusHandoff } from "../../../console-handoff";
-import { useConsoleDraftGuard } from "../../../console-draft-guard";
+import { useConsoleDraftGuard, useConsoleLeaveConfirmation, UNCONFIRMED_WRITE_CLOSE_MESSAGE } from "../../../console-draft-guard";
+import StageTransitionConfirmation from "../../../console-ui/StageTransitionConfirmation";
 import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
 import ConsoleFormActions from "../../../console-ui/ConsoleFormActions";
@@ -47,6 +49,7 @@ type Campaign = {
 };
 type ReadyState = {
   kind: "ready";
+  closeSnapshot: CloseSnapshot;
   eventName: string;
   eventDate: string;
   stage: string;
@@ -384,6 +387,14 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   const [campaignFieldError, setCampaignFieldError] = useState<{ field: string; message: string } | null>(null);
   const [templateNotice, setTemplateNotice] = useState<string | null>(null);
   const [campaignNotice, setCampaignNotice] = useState<string | null>(null);
+  const [closeNoticeStatus, setCloseNoticeStatus] = useState<string | undefined>(undefined);
+  const [archiveConfirm, setArchiveConfirm] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [archiveNotice, setArchiveNotice] = useState<string | null>(null);
+  const [archiveUnresolved, setArchiveUnresolved] = useState(false);
+  const archiveCommandRef = useRef<string | null>(null);
+  const confirmLeaveForArchive = useConsoleLeaveConfirmation();
+  useConsoleDraftGuard(archiveUnresolved, UNCONFIRMED_WRITE_CLOSE_MESSAGE);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   // Compose submit confirm (payload snapshot + summary) and one history-row
   // confirm at a time. Triggers stay; confirms render in place below them.
@@ -571,8 +582,20 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       const clients = Array.isArray(bootstrap.clients) ? bootstrap.clients : [];
       const client = clients.map(asRecord).find((item) => item?.id === event.clientId);
       const venue = asRecord(workspace.venue);
+      // A deliberate refresh may prove the intended terminal state even
+      // when the original receipt response was lost. Resolve only from the
+      // authoritative same-event bootstrap, not from closing the panel.
+      if (text(event.stage).toUpperCase() === "ARCHIVED" && archiveCommandRef.current) {
+        archiveCommandRef.current = null;
+        setArchiveUnresolved(false);
+        setArchiveConfirm(false);
+        setArchiveError(null);
+        setArchiveNotice("서버 재조회에서 보관된 행사임을 확인했습니다.");
+        window.dispatchEvent(new Event("eventouch:shell-reload"));
+      }
       setState({
         kind: "ready",
+        closeSnapshot: readCloseSnapshot(event, workspace),
         eventName: text(event.name, eventId),
         eventDate: text(event.date),
         stage: text(event.stage).toUpperCase(),
@@ -610,6 +633,12 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
 
   useEffect(() => {
     void refresh();
+    setCloseNoticeStatus(undefined);
+    setArchiveConfirm(false);
+    setArchiveError(null);
+    setArchiveNotice(null);
+    setArchiveUnresolved(false);
+    archiveCommandRef.current = null;
     // Bootstrap is scoped by this event; the session cookie is same-origin.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
@@ -799,6 +828,41 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       throw scoped;
     }
     return asRecord(data) ?? {};
+  }
+
+  async function archiveFromCloseFlow() {
+    if (state.kind !== "ready" || !state.canManage || state.stage !== "ENDED" || state.closeSnapshot.registrationOpen || state.closeSnapshot.openModules.length || !archiveConfirm || !beginAction("archive")) return;
+    const id = archiveCommandRef.current ?? commandId();
+    archiveCommandRef.current = id;
+    setArchiveUnresolved(true);
+    setArchiveError(null);
+    try {
+      const result = await postCommand("event.stage", { stage: "ARCHIVED" }, id);
+      const event = asRecord(result.event);
+      if (!event || event.id !== eventId || text(event.stage).toUpperCase() !== "ARCHIVED") {
+        setArchiveError("보관 응답을 확인하지 못했습니다. 이미 보관됐을 수 있습니다. 같은 요청으로 다시 확인하세요.");
+        return;
+      }
+      archiveCommandRef.current = null;
+      setArchiveUnresolved(false);
+      setArchiveNotice("행사를 보관(으)로 전환했습니다.");
+      await refresh(true);
+      setArchiveConfirm(false);
+      window.dispatchEvent(new Event("eventouch:shell-reload"));
+    } catch (error) {
+      const status = (error as { status?: number }).status;
+      if (typeof status === "number" && !isAmbiguousStatus(status)) {
+        archiveCommandRef.current = null;
+        setArchiveUnresolved(false);
+        setArchiveConfirm(false);
+        setArchiveError(error instanceof Error ? error.message : "보관하지 못했습니다.");
+        await refresh(true);
+      } else {
+        setArchiveError("보관 응답을 확인하지 못했습니다. 이미 보관됐을 수 있습니다. 같은 요청으로 다시 확인하세요.");
+      }
+    } finally {
+      endAction();
+    }
   }
 
   function handleCommandError(error: unknown, kind: "template" | "campaign") {
@@ -1006,6 +1070,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       // Copy follows the returned record's status, not the draft flags:
       // scheduled+simulate comes back SCHEDULED, never SIMULATED.
       const createdStatus = text(created.status);
+      setCloseNoticeStatus(createdStatus);
       setCampaignNotice(
         createdStatus === "SCHEDULED"
           ? pending.payload.simulate === true
@@ -1023,7 +1088,13 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       setReloadSummary(null);
       await refresh(true);
       window.setTimeout(() => {
-        document.getElementById(`campaign-${pending.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+        const next = document.querySelector<HTMLAnchorElement>("[data-close-linear-next]");
+        if (next) {
+          next.focus({ preventScroll: true });
+          next.scrollIntoView({ block: "center" });
+        } else {
+          document.getElementById(`campaign-${pending.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
       }, 0);
     } catch (error) {
       const status = (error as { status?: unknown }).status;
@@ -1425,6 +1496,28 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   return (
     <ConsolePage
       pageId="messages"
+      closeSnapshot={state.closeSnapshot}
+      closeNoticeStatus={closeNoticeStatus}
+      closeArchiveOpen={archiveConfirm}
+      closeArchiveControl={state.canManage && state.stage === "ENDED" && !state.closeSnapshot.registrationOpen && state.closeSnapshot.openModules.length === 0 ? (
+        <div className={styles.closeArchive}>
+          {archiveConfirm ? <StageTransitionConfirmation label="보관" busy={busyAction === "archive"} disabled={busyAction !== null} cancelDisabled={busyAction !== null} retry={archiveUnresolved}
+            onConfirm={() => void archiveFromCloseFlow()}
+            onCancel={() => {
+              if (inFlightRef.current || archiveUnresolved && !confirmLeaveForArchive()) return;
+              setArchiveConfirm(false);
+              requestAnimationFrame(() => document.querySelector<HTMLButtonElement>("[data-close-inline-archive]")?.focus());
+            }}>
+            <p>보관 후에는 메시지를 포함한 모든 쓰기가 잠깁니다. 작성 중이거나 예약·연결 대기인 안내도 더 실행할 수 없으므로 대상·내용·발송 결과를 먼저 확인하세요.</p>
+          </StageTransitionConfirmation> : <button type="button" className="button button-secondary" data-close-inline-archive data-close-linear-next
+            disabled={busyAction !== null}
+            onClick={() => {
+              if (inFlightRef.current || !confirmLeaveForArchive()) return;
+              setArchiveError(null);
+              setArchiveConfirm(true);
+            }}>다음: 보관</button>}
+        </div>
+      ) : undefined}
       eventId={eventId}
       eventName={state.eventName}
       meta={formatConsoleEventMeta(state.eventMeta)}
@@ -1438,6 +1531,8 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       )}
       feedback={(
         <>
+          {archiveError ? <ConsoleFeedback kind="error">{archiveError}</ConsoleFeedback> : null}
+          {archiveNotice ? <ConsoleFeedback kind="success">{archiveNotice}</ConsoleFeedback> : null}
           {archived ? (
             <ConsoleFeedback kind="warning">
               보관된 행사는 읽기 전용입니다. 발송 기록은 볼 수 있지만 새로 발송·예약·취소할 수 없습니다.

@@ -817,3 +817,27 @@
     display: none;
   }
 }
+.closeReturn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s3);
+}
+
+.closeReturn p {
+  margin: var(--s1) 0 0;
+}
+.sectionTitle[tabindex="-1"] {
+  scroll-margin-block-start: var(--s5);
+}
+
+.sectionTitle[tabindex="-1"]:focus {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+.closeOptional {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: var(--small);
+}

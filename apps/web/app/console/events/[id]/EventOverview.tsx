@@ -10,6 +10,7 @@ import ConsolePage from "../../console-ui/ConsolePage";
 import ConsoleFeedback from "../../console-ui/ConsoleFeedback";
 import ConsoleSection from "../../console-ui/ConsoleSection";
 import ConsoleStatePanel from "../../console-ui/ConsoleStatePanel";
+import { eventCloseHref } from "../../console-event-close";
 import styles from "./event-overview.module.css";
 
 type CheckRow = {
@@ -534,6 +535,11 @@ export default function EventOverview({ eventId }: { eventId: string }) {
   );
   const headerActions = overview.canManageEvent && participantPageHref ? (
         <>
+          {["LIVE", "ENDED", "ARCHIVED"].includes(currentStage) ? (
+            <Link className="button button-secondary" href={eventCloseHref(eventId)}>
+              {currentStage === "ARCHIVED" ? "행사 마감 확인" : "행사 마감"}
+            </Link>
+          ) : null}
           <Link className="button button-secondary" href={participantPageHref} target="_blank" rel="noreferrer">
             참가자 페이지 열기
           </Link>

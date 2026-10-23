@@ -571,3 +571,8 @@
 .sendSkip .textButton {
   padding: var(--s1) var(--s2);
 }
+.closeArchive {
+  flex-basis: 100%;
+  display: grid;
+  gap: var(--s2);
+}

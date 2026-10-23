@@ -795,8 +795,10 @@ test('web-event-stage-moves-forward-through-the-command-path-only', () => {
   assert.match(shell, /participants\?status=PENDING/);
   assert.doesNotMatch(settings, /window\.confirm/);
   assert.match(settings, /setStageConfirm\(true\)/);
-  assert.match(settings, /정말 전환합니다/);
-  assert.match(settings, /취소/);
+  const confirmation = read('app/console/console-ui/StageTransitionConfirmation.tsx');
+  assert.match(settings, /<StageTransitionConfirmation/);
+  assert.match(confirmation, /정말 전환합니다/);
+  assert.match(confirmation, /취소/);
   assert.match(settings, /commandId:\s*stageCommandIdRef\.current/);
   assert.match(settings, /payload:\s*\{\s*stage:\s*nextStage\s*\}/);
   // Metrics follow the event stage instead of a fixed four-card grid; the

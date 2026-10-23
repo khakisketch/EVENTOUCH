@@ -14,6 +14,8 @@ import { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import { useConsoleDraftGuard } from "../../../console-draft-guard";
 import styles from "./programs.module.css";
+import { useEventCloseHandoff } from "../../../use-event-close-handoff";
+import { readCloseSnapshot, type CloseSnapshot } from "../../../console-event-close";
 
 // Operator screen for the engagement bundle. Reads the operator bootstrap
 // (modules, responses, questions, photos, posts); every write goes through
@@ -60,6 +62,7 @@ type WorkspaceState =
   | { kind: "failed"; message: string }
   | {
       kind: "ready";
+      closeSnapshot: CloseSnapshot;
       eventName: string;
       eventMeta?: string;
       archived: boolean;
@@ -234,6 +237,7 @@ class CommandFailure extends Error {
 }
 
 export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
+  const closeHref = useEventCloseHandoff(eventId);
   const router = useRouter();
   const pendingCommandsRef = useRef(new Map<string, string>());
   const sendingRef = useRef(false);
@@ -446,6 +450,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
         : [];
       setState({
         kind: "ready",
+        closeSnapshot: readCloseSnapshot(event, workspace),
         eventName: text(event.name, eventId),
         eventMeta: formatConsoleEventMeta({
           clientName: text(clientName),
@@ -838,7 +843,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     );
   }
 
-  const settingsHref = `/console/events/${encodeURIComponent(eventId)}/settings`;
+  const settingsHref = closeHref(`/console/events/${encodeURIComponent(eventId)}/settings#settings-features`);
 
   // Read-only client filter over the already-loaded modules: no new fetch,
   // no command, no permission change. Read-only filters stay unguarded.
@@ -860,6 +865,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
   return (
     <ConsolePage
       pageId="programs"
+      closeSnapshot={state.closeSnapshot}
       eventId={eventId}
       eventName={state.eventName}
       meta={state.eventMeta}
@@ -956,6 +962,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
                 setAnswerDrafts={setAnswerDrafts}
                 answerFailure={answerFailure}
                 onEdit={() => openEdit(module)}
+                closeHref={closeHref}
                 statusPending={statusPending?.id === module.id ? statusPending : null}
                 onRequestStatus={(status) => requestStatusChange(module, status)}
                 onConfirmStatus={() => {
@@ -1089,6 +1096,7 @@ function editLockReason(module: Module, responseCount: number, questions: Questi
 }
 
 function ModuleCard(props: {
+  closeHref: (target: string) => string;
   module: Module;
   featureOn: boolean;
   eventId: string;
@@ -1157,7 +1165,7 @@ function ModuleCard(props: {
           {!props.featureOn ? (
             <p className={styles.featureOff} role="note">
               이 유형이 꺼져 있습니다.{" "}
-              <Link href={`/console/events/${encodeURIComponent(props.eventId)}/settings`}>행사 설정</Link>에서
+              <Link href={props.closeHref(`/console/events/${encodeURIComponent(props.eventId)}/settings#settings-features`)}>행사 설정</Link>에서
               기능을 먼저 켜세요.
             </p>
           ) : null}
@@ -1292,7 +1300,7 @@ function ModuleCard(props: {
           )}
           <p className={styles.help}>
             쿼터·등급·업체 대상 추첨과 경품 연동은{" "}
-            <Link href={`/console/events/${encodeURIComponent(props.eventId)}/draws`}>추첨</Link> 화면에서 관리합니다.
+            <Link href={props.closeHref(`/console/events/${encodeURIComponent(props.eventId)}/draws`)}>추첨</Link> 화면에서 관리합니다.
           </p>
         </div>
       ) : null}
