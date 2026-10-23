@@ -119,12 +119,25 @@ function maskPhone(phone: string): string {
   return `${digits.slice(0, 3)}-****-${digits.slice(-4)}`;
 }
 
-function identityLine(person: { company: string; group: string; phone: string }): string {
-  const parts = [person.company, person.group === "일반" ? "" : person.group, maskPhone(person.phone)]
+function identityOrg(person: { company: string; group: string }): string {
+  const parts = [person.company, person.group === "일반" ? "" : person.group]
     .map((part) => part.trim())
     .filter(Boolean);
   return parts.join(" · ");
 }
+
+// Screen-only presence wording for the row details: the CSV export keeps its
+// own "미도착" copy and the server contract is untouched.
+function presenceLabel(person: { inside: boolean; everIn: boolean }): string {
+  if (person.inside === true) return "입장 중";
+  if (person.everIn === true) return "퇴장";
+  return "미입장";
+}
+
+// One compact page of rows: search, filters, counts, selection, group
+// assignment and the message handoff keep their filter-wide meanings — only
+// the rendered slice and the prev/next position change here.
+const PAGE_SIZE = 25;
 
 // Spreadsheet formula injection guard: a cell starting with = + - @ (or
 // tab/CR) would execute on open in Excel/Sheets. The leading single quote is
@@ -216,9 +229,12 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   // Cancelling a registration voids the ticket, so it is confirmed in place
   // like every other irreversible command in the console.
   const [cancelConfirm, setCancelConfirm] = useState<{ id: string; name: string } | null>(null);
-  // On a phone the per-row tools are the tallest part of the list, so they
-  // open on demand; the one-tap approval stays reachable.
+  // Row details open on demand on every viewport; the one-tap approval
+  // stays directly visible on PENDING rows.
   const [toolsOpenId, setToolsOpenId] = useState<string | null>(null);
+  // Pagination position only: filters, counts, selection, group assignment
+  // and the message handoff keep their filter-wide meanings.
+  const [page, setPage] = useState(1);
   // Bulk approval: the server already applies one status to many ids, so the
   // roster can settle a pile of waiting applications in one action.
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -305,6 +321,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     setNotice(null);
     setFailure(null);
     setApprovedHandoffIds(null);
+    setPage(1);
     // Scrub invalid allowlisted values so the URL never contradicts the
     // unfiltered view; unrelated params are preserved.
     try {
@@ -388,6 +405,12 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       // Filtering still works; only shareable URLs lose the sync.
     }
   }, [statusFilter, groupFilter, attendanceFilter, query]);
+
+  // Any filter or search change restarts at the first page; the checkbox
+  // selection (including hidden and other-page rows) is untouched.
+  useEffect(() => {
+    setPage(1);
+  }, [query, statusFilter, groupFilter, attendanceFilter]);
 
   async function load(silent = false) {
     if (!silent) setState({ kind: "loading" });
@@ -814,6 +837,18 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   const hiddenSelectedCount = selectedIds.filter(
     (id) => knownIds.has(id) && !visibleIds.has(id)
   ).length;
+  // Page slice of the same filtered result: counts above keep meaning the
+  // filter total versus the whole roster; the range below names this page.
+  const totalPages = Math.max(1, Math.ceil(visiblePeople.length / PAGE_SIZE));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const pagePeople = visiblePeople.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const pageIds = new Set(pagePeople.map((person) => person.id));
+  const pageSelectedCount = selectedIds.filter((id) => pageIds.has(id)).length;
+  // Selected under the same filter but on another page: kept, counted here,
+  // and still inside the group-assignment scope (effectiveSelection).
+  const otherPageSelectedCount = effectiveSelection.length - pageSelectedCount;
+  const pageStart = visiblePeople.length ? (safePage - 1) * PAGE_SIZE + 1 : 0;
+  const pageEnd = Math.min(safePage * PAGE_SIZE, visiblePeople.length);
   // Disclosure badge: how many of the three advanced selects narrow the list,
   // and under which readable labels. The search box stays visible, so the
   // query is summarized only by the reset label, not the count.
@@ -1057,6 +1092,45 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     const ids = visiblePeople.map((person) => person.id);
     setSelectedIds((current) => [...new Set([...current, ...ids])]);
   }
+
+  function showRosterPage(nextPage: number) {
+    setPage(nextPage);
+    // Paging is a new slice, not a continuation at the old scroll position.
+    // Land before its first row for pointer and keyboard users alike; the
+    // page status announces the range and the next Tab enters the new rows.
+    window.requestAnimationFrame(() => {
+      const heading = document.getElementById("participants-list-heading");
+      if (!heading) return;
+      heading.setAttribute("tabindex", "-1");
+      heading.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "start" });
+      heading.focus({ preventScroll: true });
+    });
+  }
+
+  function focusRosterPagination(event: React.MouseEvent<HTMLAnchorElement>) {
+    event.preventDefault();
+    const next = document.getElementById("roster-next-page") as HTMLButtonElement | null;
+    const previous = document.getElementById("roster-previous-page") as HTMLButtonElement | null;
+    const target = next && !next.disabled ? next : previous && !previous.disabled ? previous : document.getElementById("roster-search");
+    target?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "center" });
+    target?.focus({ preventScroll: true });
+  }
+  function selectPage() {
+    const ids = pagePeople.map((person) => person.id);
+    setSelectedIds((current) => [...new Set([...current, ...ids])]);
+  }
+  // Bottom-of-list return: the sticky page bar sits below the toolbar, so
+  // this moves scroll and keyboard focus back to the actual search input.
+  function focusRosterSearch() {
+    const field = document.getElementById("roster-search");
+    if (!(field instanceof HTMLElement)) return;
+    try {
+      field.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "center" });
+      field.focus({ preventScroll: true });
+    } catch {
+      field.focus();
+    }
+  }
   return (
     <ConsolePage
       pageId="participants"
@@ -1071,6 +1145,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
               <label data-toolbar-span="full">
                 <span className="sr-only" id="roster-search-label">이름·소속·연락처 검색</span>
                 <input
+                  id="roster-search"
                   aria-labelledby="roster-search-label"
                   type="search"
                   placeholder="이름·소속·연락처 검색"
@@ -1160,8 +1235,10 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
             anySelected && canAssignGroup ? (
               <>
                 <span role="status" id="roster-selection-count">
-                  현재 화면 {effectiveSelection.length}명 선택 · 전체 선택 {handoffIds.length}명 · 최대 200명
+                  현재 표시 {pageSelectedCount}명 선택 · 전체 선택 {handoffIds.length}명 · 최대 200명
                   {hiddenSelectedCount ? ` · 숨김 ${hiddenSelectedCount}명(그룹 지정 제외)` : ""}
+                  {otherPageSelectedCount > 0 ? ` · 다른 페이지 ${otherPageSelectedCount}명 포함` : ""}
+                  {` · 선택 승인·그룹 지정: 필터 범위 ${effectiveSelection.length}명`}
                 </span>
                 {canMutateStatus ? (
                   <button
@@ -1303,15 +1380,27 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       </p>
       {visiblePeople.length ? (
         <>
+          <a className="skip-link" href="#roster-next-page" data-skip-to="roster-next-page" onClick={focusRosterPagination}>명단 페이지 이동으로 건너뛰기</a>
           <div className={headClass} aria-hidden="true">
             {canAssignGroup ? <span>선택</span> : null}
             <span>참가자</span>
+            <span className={styles.rosterHeadContact}>연락처</span>
             <span className={styles.rosterHeadStatus}>상태</span>
             {showRowActions ? <span className={styles.rosterHeadAction}>작업</span> : null}
           </div>
           <ul className={styles.participantList}>
-            {visiblePeople.map((person) => {
+            {pagePeople.map((person) => {
               const tone = person.status === "APPROVED" ? "good" : person.status === "WAITLIST" ? "wait" : person.status === "CANCELLED" ? "bad" : "info";
+              const detailsOpen = toolsOpenId === person.id;
+              const detailsId = `participant-details-${person.id}`;
+              const detailFacts = [
+                `연락처 ${maskPhone(person.phone)}`,
+                person.email.trim() ? `이메일 ${person.email.trim()}` : "",
+                `출입 ${presenceLabel(person)}`,
+              ]
+                .map((part) => part.trim())
+                .filter(Boolean)
+                .join(" · ");
               return (
                 <li
                   className={rowClass}
@@ -1330,15 +1419,18 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                   ) : null}
                   <span className={styles.participantSummary}>
                     <strong className={styles.participantName}>{person.name}</strong>
-                    <small className={styles.participantIdentity}>{identityLine(person)}</small>
+                    <small className={styles.participantIdentity}>{identityOrg(person)}</small>
+                    <small className={styles.mobileContact}>{maskPhone(person.phone)}</small>
                   </span>
+                  <span className={styles.rosterContact}>{maskPhone(person.phone)}</span>
                   <span className={`status-chip ${tone} ${styles.participantStatus}`}>{statusLabel(person.status)}</span>
                   {showRowActions ? (
                     <div className={styles.participantActions}>
-                      {/* Quick actions stay one tap, but never exclusive: the
-                          row tools below always expose the full
-                          participant.status change (including cancel with its
-                          confirm) under the same ENDED/ARCHIVED gates. */}
+                      {/* One always-visible primary per row: PENDING approves
+                          directly, everything else opens the details below,
+                          which keep the full participant.status change
+                          (including cancel with its confirm) under the same
+                          ENDED/ARCHIVED gates. */}
                       {person.status === "PENDING" && canMutateStatus ? (
                         <button
                           type="button"
@@ -1349,22 +1441,22 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                           {savingId === person.id ? "승인 중…" : "승인"}
                         </button>
                       ) : null}
-                      {canMutateStatus || canRewardHere ? (
-                        <button
-                          type="button"
-                          className={`button button-secondary ${styles.rowToolsToggle}`}
-                          aria-expanded={toolsOpenId === person.id}
-                          aria-controls={`participant-tools-${person.id}`}
-                          aria-label={`${person.name} 참가자 작업 더보기`}
-                          onClick={() => setToolsOpenId((current) => (current === person.id ? null : person.id))}
-                        >
-                          더보기
-                        </button>
-                      ) : null}
-                      <span
-                        id={`participant-tools-${person.id}`}
-                        className={`${styles.participantRowTools} ${toolsOpenId === person.id ? styles.participantRowToolsOpen : ""}`}
+                      <button
+                        type="button"
+                        className={`button button-secondary ${styles.rowToolsToggle}`}
+                        aria-expanded={detailsOpen}
+                        aria-controls={detailsOpen ? detailsId : undefined}
+                        aria-label={`${person.name} 참가자 작업 더보기`}
+                        onClick={() => setToolsOpenId((current) => (current === person.id ? null : person.id))}
                       >
+                        더보기
+                      </button>
+                    </div>
+                  ) : null}
+                  {showRowActions && detailsOpen ? (
+                    <div id={detailsId} className={styles.participantDetails}>
+                      <p className={styles.detailFacts}>{detailFacts}</p>
+                      <div className={styles.detailActions}>
                         {person.status === "APPROVED" && state.rewardFeature && canRewardHere ? (
                           <button
                             type="button"
@@ -1399,7 +1491,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                             ))}
                           </select>
                         ) : null}
-                      </span>
+                      </div>
                     </div>
                   ) : null}
                   {cancelConfirm?.id === person.id ? (
@@ -1421,6 +1513,46 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
               );
             })}
           </ul>
+          <nav aria-label="참가자 목록 페이지" className={styles.paginationBar}>
+              <button
+                type="button"
+                id="roster-previous-page"
+                className={`button button-secondary ${styles.selectionButton}`}
+                disabled={safePage <= 1}
+                onClick={() => showRosterPage(safePage - 1)}
+              >
+                이전
+              </button>
+              <button
+                type="button"
+                id="roster-next-page"
+                className={`button button-secondary ${styles.selectionButton}`}
+                disabled={safePage >= totalPages}
+                onClick={() => showRosterPage(safePage + 1)}
+              >
+                다음
+              </button>
+              <span role="status" className={styles.paginationPosition}>
+                {safePage} / {totalPages} 페이지 · {pageStart}–{pageEnd} / {visiblePeople.length}명
+                {pageSelectedCount > 0 ? ` · 이 페이지 ${pageSelectedCount}명 선택` : ""}
+              </span>
+              <span className={styles.paginationActions}>
+                <button
+                  type="button"
+                  className={`button button-secondary ${styles.selectionButton}`}
+                  onClick={selectPage}
+                >
+                  이 페이지 {pagePeople.length}명 선택
+                </button>
+                <button
+                  type="button"
+                  className={`button button-secondary ${styles.selectionButton}`}
+                  onClick={focusRosterSearch}
+                >
+                  검색으로 이동
+                </button>
+              </span>
+            </nav>
         </>
       ) : state.people.length ? (
         <div className={styles.emptyState}>
@@ -1534,7 +1666,9 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       {groupDialogOpen ? (
         <ConsoleDialog
           title="그룹 지정"
-          description={`표시된 명단에서 선택한 ${effectiveSelection.length}명의 그룹을 바꿉니다.${
+          description={`필터 범위에서 선택한 ${effectiveSelection.length}명의 그룹을 바꿉니다.${
+            otherPageSelectedCount > 0 ? ` 다른 페이지에서 선택한 ${otherPageSelectedCount}명을 포함합니다.` : ""
+          }${
             hiddenSelectedCount ? ` 화면 밖에서 선택한 ${hiddenSelectedCount}명은 이번 지정에 포함되지 않습니다.` : ""
           }`}
           onClose={closeGroupDialog}

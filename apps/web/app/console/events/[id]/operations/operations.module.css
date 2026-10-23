@@ -114,7 +114,7 @@
   scroll-margin-top: 0;
 }
 
-/* Before-the-day presets fold away on phones (draws setup-details same
+/* Before-the-day presets start folded (draws setup-details same
    grammar): the summary always names the current value so a folded row
    still answers "what is it now". Same-day controls stay unfolded. */
 .presetFold {

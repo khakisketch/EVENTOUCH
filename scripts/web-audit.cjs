@@ -186,7 +186,9 @@ async function main() {
     process.exitCode = 2;
     return;
   }
-  const captureDir = '/tmp/opencode/eventouch-captures/web-audit';
+  const captureDir = process.env.EVENTOUCH_CAPTURE_ROOT
+    ? path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'web')
+    : '/tmp/opencode/eventouch-captures/web-audit';
   fs.mkdirSync(captureDir, { recursive: true });
   const baseUrl = fixture.baseUrl;
   const slug = fixture.slug;

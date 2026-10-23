@@ -208,8 +208,8 @@ test('records use shared body patterns and keep domain specifics', () => {
   assert.match(roster, /showRowActions/u);
   assert.match(roster, /headClass/u);
   assert.match(roster, /rowClass/u);
-  assert.match(rosterCss, /\.rosterHeadNoActions\s*\{[^}]*grid-template-columns:\s*44px minmax\(0, 1fr\) 112px;/su);
-  assert.match(rosterCss, /\.participantRowNoActions\s*\{[^}]*grid-template-columns:\s*44px minmax\(0, 1fr\) 112px;/su);
+  assert.match(rosterCss, /\.rosterHeadNoActions\s*\{[^}]*grid-template-columns:\s*44px minmax\(0, 1fr\) 136px 112px;/su);
+  assert.match(rosterCss, /\.participantRowNoActions\s*\{[^}]*grid-template-columns:\s*44px minmax\(0, 1fr\) 136px 112px;/su);
   // Form layouts use the shared stack/field patterns inside dialogs.
   for (const rel of [PAGES.clients, PAGES.team]) {
     assert.match(read(rel), /formStack/u, `${rel} stacks dialog forms on the shared pattern`);
@@ -286,20 +286,20 @@ test('draft dirt is a true field diff, never a pristine open form', () => {
   assert.match(team, /useConsoleDraftGuard\(\s*issuedInvite !== null/u, 'parent guards only the once-shown bearer link');
 });
 
-test('roster quick actions never hide the status menu', () => {
+test('roster quick approval keeps the gated status menu in row details', () => {
   const list = read(PAGES.participants);
-  // 승인/경품 등록 stay one tap, but the status-change menu (existing
-  // participant.status, cancel confirm, ENDED/ARCHIVED gates) always stands
-  // beside them in the same row actions — no exclusive rows.
+  // Approval stays direct. The full status-change menu and reward entry are
+  // retained in row details with the existing command/cancel/stage gates.
   assert.match(list, /"승인"/u);
   assert.match(list, /경품 등록/u);
   assert.match(list, /canMutateStatus \? \(\s*<select/u, 'status menu renders under the same gate');
   assert.match(list, /aria-label=\{`?\$\{person\.name\} 상태 변경`?\}/u, 'menu names its row for keyboard users');
-  // Controls keep touch and alignment contracts with two stacked actions.
+  // Revealed controls keep the same touch floor.
   assert.match(
     read('app/console/events/[id]/participants/participants.module.css'),
-    /\.participantActions select\s*\{[^}]*min-height:\s*44px[^}]*width:\s*100%/su
+    /\.detailActions select\s*\{[^}]*min-height:\s*44px/su
   );
+  assert.match(list, /showRowActions && detailsOpen/u);
 });
 
 test('roster hands its selection to messages through ?to=', () => {

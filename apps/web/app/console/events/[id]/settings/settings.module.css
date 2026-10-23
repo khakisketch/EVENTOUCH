@@ -1,6 +1,6 @@
 .twoCols {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--s3);
 }
 
@@ -175,6 +175,12 @@
 .stageConfirmation > p {
   margin: 0;
   font-weight: 700;
+}
+
+/* A sidebar-width workspace cannot fit a date beside two native time
+   inputs. Keep the date on its own row before their paired time row. */
+@media (max-width: 1024px) {
+  div.scheduleFields { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 640px) {

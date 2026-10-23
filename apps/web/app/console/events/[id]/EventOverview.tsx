@@ -59,6 +59,8 @@ type Overview = {
   periods: PeriodCounts;
   recent: CheckRow[];
   registrationOpen: boolean;
+  pagePublished: boolean;
+  pageDraftDiffers: boolean;
   surveyResponseCount: number | null;
   reportCount: number;
   publishedReportCount: number;
@@ -239,7 +241,7 @@ function metricsForStage(overview: Overview, stage: string, base: string): Metri
               label: "정원",
               value: "제한 없음",
               detail: "신청 수 제한 없음",
-              href: `${base}/settings`,
+              href: `${base}/settings#settings-intake`,
             }]),
       ];
     default:
@@ -351,6 +353,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
           });
         const checks: CheckRow[] = checkRecords.slice(0, 8);
         const workspaceVenue = asRecord(workspace.venue);
+        const pageExperience = asRecord(workspace.pageExperience);
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const tomorrowStart = new Date(todayStart);
@@ -408,6 +411,8 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             periods,
             recent: checks,
             registrationOpen: workspace.registrationOpen === true,
+            pagePublished: Boolean(text(pageExperience?.publishedAt)),
+            pageDraftDiffers: number(pageExperience?.draftVersion) !== number(pageExperience?.publishedVersion),
             surveyResponseCount,
             reportCount: reportRows.length,
             publishedReportCount,
@@ -497,6 +502,8 @@ export default function EventOverview({ eventId }: { eventId: string }) {
   const stageKnown = STAGE_ORDER.includes(currentStage);
   const stageText = stageKnown ? eventStageLabel(currentStage) : "단계 미정";
   const showApprovalAlert = overview.pendingApproval > 0 && !["ENDED", "ARCHIVED"].includes(currentStage);
+  const preparing = ["DRAFT", "READY"].includes(currentStage);
+  const finished = ["ENDED", "ARCHIVED"].includes(currentStage);
   const base = `/console/events/${encodeURIComponent(eventId)}`;
   const metrics = metricsForStage(overview, currentStage, base);
   const entryProgress = Math.max(0, Math.min(100, overview.entryRate));
@@ -559,6 +566,26 @@ export default function EventOverview({ eventId }: { eventId: string }) {
       feedback={linkNotice ? <ConsoleFeedback kind="info">{linkNotice}</ConsoleFeedback> : undefined}>
       {overview.canManageEvent ? (
         <>
+          {preparing ? (
+            <ConsoleSection headingId="event-readiness-heading" title="행사 준비 확인"
+              description="접수와 참가자 게시 화면을 확인한 뒤 현장 운영을 준비하세요.">
+              <ul className={styles.readinessList}>
+                <li><div><strong>참가 접수</strong><span>{overview.registrationOpen ? "접수 중" : "접수 마감"}</span></div><Link className="button button-secondary" href={`${base}/settings#settings-intake`}>접수 설정</Link></li>
+                <li><div><strong>참가자 페이지</strong><span>{overview.pagePublished ? overview.pageDraftDiffers ? "게시본과 다른 저장된 초안이 있습니다." : "저장된 초안이 게시되어 있습니다." : "아직 게시하지 않았습니다."}</span></div><Link className="button button-secondary" href={`${base}/page`}>게시 화면 확인</Link></li>
+                <li><div><strong>현장 준비</strong><span>데스크·전광판·스태프 배정을 확인하세요.</span></div><Link className="button button-secondary" href={`${base}/operations`}>현장 운영 확인</Link></li>
+              </ul>
+              <Link className={styles.stageLink} href={`${base}/settings#settings-stage`}>진행 단계 설정</Link>
+            </ConsoleSection>
+          ) : null}
+          {finished ? (
+            <ConsoleSection headingId="event-close-status-heading" title={currentStage === "ARCHIVED" ? "보관된 행사 마감 확인" : "행사 마감"}
+              description="마감 경로에서 전제조건과 다음 작업을 확인합니다. 자동으로 단계를 바꾸지 않습니다.">
+              <div className={styles.closeStatus}>
+                <p>{overview.registrationOpen ? "접수 중" : "접수 마감"} · 보고서 {getReportStatus(overview)} · {stageText}</p>
+                <Link className="button button-secondary" href={eventCloseHref(eventId)}>{currentStage === "ARCHIVED" ? "행사 마감 확인" : "행사 마감 시작"}</Link>
+              </div>
+            </ConsoleSection>
+          ) : null}
           {showApprovalAlert && (
             <ConsoleFeedback kind="warning">
               <div className={styles.approvalNotice}>
@@ -647,11 +674,11 @@ export default function EventOverview({ eventId }: { eventId: string }) {
           ) : (
             <p className={styles.restrictedNote}>확인 가능한 단계 지표가 없습니다.</p>
           )}
-            <div className={styles.periodBlock}>
-              <div className={styles.periodHeader}>
-                <h3>기간별 신청·입장</h3>
+            <details className={styles.periodBlock}>
+              <summary className={styles.periodHeader}>
+                <strong>기간별 신청·입장</strong>
                 <span>취소·정정 제외 · 입장은 참가자 기준</span>
-              </div>
+              </summary>
               <table className={styles.periodTable} aria-label="기간별 신청·입장">
                 <thead>
                   <tr>
@@ -670,38 +697,12 @@ export default function EventOverview({ eventId }: { eventId: string }) {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </details>
         </ConsoleSection>
       </>
       ) : (
         <p className={styles.restrictedNote}>행사 지표는 행사 운영자에게 표시됩니다.</p>
       )}
-
-      {overview.canManageEvent && schedule.length > 0 ? (
-        <ConsoleSection
-          headingId="event-schedule-heading"
-          title="현재·다음 일정"
-          description="게시 여부와 관계없이 등록된 일정입니다. 실제 진행 상태가 아닌 예정 기준입니다."
-          action={<Link className="button button-secondary" href={`${base}/content`}>프로그램 일정</Link>}
-          surface="panel"
-        >
-          <ol className={styles.programList}>
-            {schedule.map((program) => (
-              <li key={program.id}>
-                <div className={styles.programTime}>
-                  <span>{formatEventDate(program.date)}</span>
-                  <span>{formatProgramTime(program)}</span>
-                </div>
-                <div className={styles.programInfo}>
-                  <strong>{program.title}</strong>
-                  {program.place ? <span>{program.place}</span> : null}
-                </div>
-                <span className={styles.scheduledBadge}>예정</span>
-              </li>
-            ))}
-          </ol>
-        </ConsoleSection>
-      ) : null}
 
       <ConsoleSection
         headingId="event-recent-heading"
@@ -759,6 +760,31 @@ export default function EventOverview({ eventId }: { eventId: string }) {
           </p>
         )}
       </ConsoleSection>
+      {overview.canManageEvent && schedule.length > 0 ? (
+        <ConsoleSection
+          headingId="event-schedule-heading"
+          title="현재·다음 일정"
+          description="게시 여부와 관계없이 등록된 일정입니다. 실제 진행 상태가 아닌 예정 기준입니다."
+          action={<Link className="button button-secondary" href={`${base}/content`}>프로그램 일정</Link>}
+          surface="panel"
+        >
+          <ol className={styles.programList}>
+            {schedule.map((program) => (
+              <li key={program.id}>
+                <div className={styles.programTime}>
+                  <span>{formatEventDate(program.date)}</span>
+                  <span>{formatProgramTime(program)}</span>
+                </div>
+                <div className={styles.programInfo}>
+                  <strong>{program.title}</strong>
+                  {program.place ? <span>{program.place}</span> : null}
+                </div>
+                <span className={styles.scheduledBadge}>예정</span>
+              </li>
+            ))}
+          </ol>
+        </ConsoleSection>
+      ) : null}
     </ConsolePage>
   );
 }

@@ -45,15 +45,16 @@ test('zero-recipient block is stated next to the submit button, UI-only', () => 
   assert.match(SOURCE, /선택 \{selectedCount\}명/u);
   assert.match(SOURCE, /발송은 되돌릴 수 없습니다/u);
   // Zero state names the block reason right there.
-  assert.match(SOURCE, /수신자 0명 선택 · 수신자를 먼저 고르세요/u);
+  assert.match(SOURCE, /수신자 0명 선택 · 작성 후 수신자를 선택할 수 있습니다/u);
   assert.match(SOURCE, /selectedCount === 0 \? " 수신자를 먼저 고르세요\." : ""/u);
   // The block itself is unchanged: the submit handler returns before any
-  // command with the server's own wording; the button is not disabled so the
-  // reason stays readable and keyboard-reachable.
+  // command with the server's own wording. The approved workbench also
+  // disables review while zero recipients; its visible reason remains above.
   assert.match(SOURCE, /if \(!selectedIds\.length\)/u);
   assert.match(SOURCE, /발송 대상을 선택하세요\./u);
   assert.match(SOURCE, /id="campaign-submit"/u);
-  assert.doesNotMatch(SOURCE, /selectedCount.{0,80}disabled|disabled.{0,80}selectedCount/u);
+  assert.match(SOURCE, /disabled=\{selectedCount === 0 \|\|/u);
+  assert.match(SOURCE, /aria-describedby="campaign-submit-warning"/u);
 });
 
 test('send request command and mock-send wording are preserved', () => {

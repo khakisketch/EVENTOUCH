@@ -88,7 +88,9 @@ function datestamp() {
   return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
 }
 
-const CAPTURE_DIR = `/tmp/opencode/eventouch-captures/usability-${datestamp()}`;
+const CAPTURE_DIR = process.env.EVENTOUCH_CAPTURE_ROOT
+  ? path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'usability')
+  : `/tmp/opencode/eventouch-captures/usability-${datestamp()}`;
 
 function sessionValue(cookie) {
   return decodeURIComponent(String(cookie).slice('etko_session='.length));
@@ -779,7 +781,9 @@ async function main() {
         await installScrollCounter(page);
         await act(task, () => page.locator('#campaign-title').fill(title));
         await act(task, () => page.locator('#campaign-body').fill('{{이름}}님 사용성 감사 안내입니다.'));
-        await act(task, () => page.getByText('수신자 목록 열기·닫기', { exact: false }).first().click());
+        if (!await page.locator('#campaign-recipients details').evaluate(element => element.open)) {
+          await act(task, () => page.getByText('수신자 목록 열기·닫기', { exact: false }).first().click());
+        }
         await page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().waitFor({ state: 'visible', timeout: 10000 });
         await act(task, () => page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check());
         await probeKeyboard(page, task, page.locator('#campaign-submit'), '발송 요청 버튼');
@@ -1198,7 +1202,9 @@ async function main() {
         await installScrollCounter(page);
         await act(task, () => page.locator('#campaign-title').fill(title));
         await act(task, () => page.locator('#campaign-body').fill('{{이름}}님 사용성 감사 예약 안내입니다.'));
-        await act(task, () => page.getByText('수신자 목록 열기·닫기', { exact: false }).first().click());
+        if (!await page.locator('#campaign-recipients details').evaluate(element => element.open)) {
+          await act(task, () => page.getByText('수신자 목록 열기·닫기', { exact: false }).first().click());
+        }
         await page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().waitFor({ state: 'visible', timeout: 10000 });
         await act(task, () => page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check());
         await act(task, () => page.locator('#campaign-scheduled').fill(scheduled));

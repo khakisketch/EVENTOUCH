@@ -184,7 +184,7 @@ test('jump nav lists same-day work first and presets last', () => {
 
 test('display section sits second in the DOM with its copy and handlers intact', () => {
   const source = read(OPS);
-  const order = ['ops-desks', 'ops-display', 'ops-booths', 'ops-booth-mode', 'ops-booth-map', 'ops-staff'];
+  const order = ['ops-desks', 'ops-display', 'ops-booths', 'ops-staff', 'ops-booth-mode', 'ops-booth-map'];
   let last = -1;
   for (const id of order) {
     const at = source.indexOf(`headingId="${id}"`);
@@ -193,7 +193,7 @@ test('display section sits second in the DOM with its copy and handlers intact',
   }
   assert.equal(source.match(/headingId="ops-display"/g)?.length ?? 0, 1, 'one display section, moved not copied');
   // Verbatim block: title, copy, controls, handler wiring.
-  assert.match(source, /title="전광판 출력" description="지금 할 일"/u);
+  assert.match(source, /title="전광판 출력" description=\{displaySummary\}/u);
   assert.match(source, /htmlFor="ops-display-pick">전광판 출력 선택/u);
   assert.match(source, /<option value="">출력 고르기<\/option>/u);
   assert.match(source, /게시한 공지·공개된 프로그램만 고를 수 있습니다/u);

@@ -59,7 +59,8 @@ test('activating the link hands focus to the save actions with the viewport', ()
   assert.match(theme, /\.scrollIntoView\(\{ block: "start" \}\)/u, 'the viewport follows the focus');
   // The landing target is the real save region: focusable by script only
   // (tab order unchanged) and wrapping the actual save button.
-  assert.match(theme, /<div id="theme-save" ref=\{saveActionsRef\} tabIndex=\{-1\} className=\{styles\.saveAnchor\}>/u);
+  assert.match(theme, /<div id="theme-save" ref=\{saveActionsRef\} tabIndex=\{-1\} className=\{`\$\{styles\.saveAnchor\} \$\{styles\.saveBar\}`\}>/u);
+  assert.match(themeCss, /\.saveBar\s*\{[^}]*position:\s*sticky/su);
   const saveRegionAt = theme.indexOf('<div id="theme-save"');
   const saveButtonAt = theme.indexOf('초안 저장', saveRegionAt);
   const publishButtonAt = theme.indexOf(': "게시"', saveRegionAt);

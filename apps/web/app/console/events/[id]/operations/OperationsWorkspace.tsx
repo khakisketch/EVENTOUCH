@@ -152,11 +152,13 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const [boothDirty, setBoothDirty] = useState(false);
   const [assignDirty, setAssignDirty] = useState(false);
   // Field-day reading aids (UI only). activeSection names the section in
-  // view for the sticky jump-nav readout; presetOpen folds the
-  // before-the-day presets (auth mode, booth map) on phones while the
-  // same-day controls (desks, display) stay unfolded.
+  // view for the sticky jump-nav readout; the before-the-day presets (auth
+  // mode, booth map) start folded on every viewport so the same-day work
+  // (desks, output, assignments) reads first. The operator opens a preset
+  // by hand or by jumping straight to its anchor; a viewport change never
+  // overwrites that choice, and unsaved work keeps its preset open.
   const [activeSection, setActiveSection] = useState("ops-desks");
-  const [presetOpen, setPresetOpen] = useState({ mode: true, map: true });
+  const [presetOpen, setPresetOpen] = useState({ mode: false, map: false });
 
   // One idempotency id per command+payload fingerprint (same discipline as
   // the settings command cache): the same logical write reuses its id, any
@@ -437,17 +439,24 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
     };
   }, [eventId, router, reloadTick]);
 
-  // Presets fold on phones (≤768px) and stay open on desktop. The operator
-  // can still unfold either side by hand; a viewport change only restores
-  // the side-appropriate default, never a command or a draft.
+  // A jump straight to a preset anchor unfolds that preset: native anchors
+  // land on the always-visible section heading, but the folded body would
+  // stay hidden without this. The ids below are the rendered headingId
+  // values (there is no ops-stamp-mode section). Dirty or in-flight presets
+  // stay open regardless (see the needs-attention flags at render time),
+  // so unsaved work never hides behind a folded summary.
   useEffect(() => {
-    const query = window.matchMedia("(max-width: 768px)");
-    const sync = () => {
-      setPresetOpen(query.matches ? { mode: false, map: false } : { mode: true, map: true });
+    const applyHash = () => {
+      const hash = window.location.hash;
+      if (hash === "#ops-booth-mode") {
+        setPresetOpen((prev) => (prev.mode ? prev : { ...prev, mode: true }));
+      } else if (hash === "#ops-booth-map") {
+        setPresetOpen((prev) => (prev.map ? prev : { ...prev, map: true }));
+      }
     };
-    sync();
-    query.addEventListener("change", sync);
-    return () => query.removeEventListener("change", sync);
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
   }, []);
 
   // Event switch resets the handoff slice (never a key remount): a stale
@@ -747,8 +756,11 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const deskOpenCount = desks.filter((desk) => desk.open).length;
   const boothOpenCount = booths.filter((booth) => booth.status === "OPEN").length;
   const modeValueLabel = stampMode === "SELF" ? "참가자 셀프 스캔" : "스태프 확인";
+  const boothMapHasUnpublishedDraft = Boolean(boothMap.draft) && !mapMatchesPublished(boothMap);
   const mapStatusText = boothMap.published
-    ? `게시 중 · v${boothMap.published.version} ${boothMap.published.points.length}개 위치`
+    ? (boothMapHasUnpublishedDraft
+        ? "게시 중 · 새 초안 미게시"
+        : `게시 중 · v${boothMap.published.version} ${boothMap.published.points.length}개 위치`)
     : boothMap.draft
       ? "초안만 있음 · 미게시"
       : "미게시";
@@ -761,6 +773,12 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const modeSummary = `사전 설정 · ${modeValueLabel}`;
   const mapSummary = `사전 설정 · ${mapStatusText}`;
   const staffSummary = `지금 할 일 · 배정 ${assignments.length}명`;
+  // A preset holding unsaved work or a pending confirmation stays open even
+  // when folded: the folded summary already names the state, but the
+  // recovery action lives in the body.
+  const modeNeedsAttention = stampModePending !== null;
+  const mapNeedsAttention =
+    mapDraftPoints !== null || mapImageOverride !== null || mapUploading || mapUnpublishPending;
 
   // Output choices mirror the server contract exactly; impossible choices are
   // not offered (unpublished notices, unrevealed quizzes, unmocked draws).
@@ -782,6 +800,13 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
     return options;
   })();
   const currentDisplayValue = `${display.type}|${display.type === "notice" ? display.noticeId : display.moduleId}`;
+  // The applied output names itself in the always-visible summary slot; the
+  // hint below keeps the same value with its selection guidance. No new copy:
+  // both read the same server-derived choice list.
+  const currentDisplayLabel = currentDisplayValue.startsWith("idle")
+    ? "유휴 화면"
+    : displayChoices.find((choice) => choice.value === currentDisplayValue)?.label ?? "출력 확인 필요";
+  const displaySummary = `지금 할 일 · 현재 ${currentDisplayLabel}`;
   const mapPoints = mapDraftPoints ?? boothMap.draft?.points ?? [];
   const pointFor = (boothId: string) => mapPoints.find((point) => point.boothId === boothId) ?? null;
 
@@ -987,12 +1012,10 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       </ConsoleSection>
 
       {screenEnabled ? (
-        <ConsoleSection headingId="ops-display" title="전광판 출력" description="지금 할 일" className={styles.anchorSection}>
+        <ConsoleSection headingId="ops-display" title="전광판 출력" description={displaySummary} className={styles.anchorSection}>
           <p className={styles.hint}>
             행사장 화면에 지금 내보낼 내용입니다. 현재:{" "}
-            {currentDisplayValue.startsWith("idle")
-              ? "유휴 화면"
-              : displayChoices.find((choice) => choice.value === currentDisplayValue)?.label ?? "출력 확인 필요"}
+            {currentDisplayLabel}
           </p>
           <div className={styles.buttonRow}>
             <label className="sr-only" htmlFor="ops-display-pick">전광판 출력 선택</label>
@@ -1123,11 +1146,70 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         )}
       </ConsoleSection>
 
+      <ConsoleSection headingId="ops-staff" title="스태프 배정" description={staffSummary} className={styles.anchorSection}>
+        <div className={styles.primarySectionAction}>
+          <button
+            id="ops-staff-assign"
+            type="button"
+            className="button button-primary"
+            onClick={() => { setAssignPreset(null); setAssignOpen(true); setFailure(null); }}
+            disabled={assignableTargets === 0 || writeBlocked}
+            title={writeBlocked ? writeBlockedReason : assignableTargets === 0 ? "데스크나 부스를 먼저 만드세요" : undefined}
+          >
+            스태프 배정
+          </button>
+        </div>
+        {assignments.length ? (
+          <ul className={uiStyles.collection}>
+            {assignments.map((assignment) => (
+              <li key={assignment.id} className={uiStyles.recordRow}>
+                <div className={uiStyles.recordMain}>
+                  <strong>{accountName.get(assignment.accountId) ?? "알 수 없는 계정"}</strong>
+                  <p className={uiStyles.recordMeta}>
+                    {assignment.type === "DESK" ? "데스크" : "부스"}
+                    {" · "}
+                    {(assignment.type === "DESK"
+                      ? deskName.get(assignment.targetId)
+                      : boothName.get(assignment.targetId)) ?? "알 수 없는 담당"}
+                  </p>
+                </div>
+                <div className={uiStyles.recordActions}>
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    disabled={busy || writeBlocked}
+                    title={writeBlocked ? writeBlockedReason : undefined}
+                    onClick={() => void runCommand(
+                      "staff.unassign",
+                      { id: assignment.id },
+                      "배정을 해제했습니다."
+                    )}
+                  >
+                    해제
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : assignableTargets === 0 ? (
+          <p className="notice" role="status">배정하려면 먼저 데스크나 부스를 만드세요.</p>
+        ) : (
+          <p className="empty-state">
+            배정된 스태프가 없습니다. 진행 중으로 전환하려면 입장 데스크에 스태프를 배정하세요.
+          </p>
+        )}
+        {!deskStaffCount ? (
+          <p className="notice" role="status">
+            진행 중 전환 조건: 등록 데스크 {desks.length}개 · 데스크 배정 {deskStaffCount}건
+          </p>
+        ) : null}
+      </ConsoleSection>
+
       {stampEnabled ? (
         <ConsoleSection headingId="ops-booth-mode" title="부스 인증 방식" description={modeSummary} className={styles.anchorSection}>
-          {/* Before-the-day preset: folds on phones with the current value
+          {/* Before-the-day preset: starts folded with the current value
               in the folded summary; the draws setup-details same grammar. */}
-          <details className={styles.presetFold} open={presetOpen.mode} onToggle={(event) => setPresetOpen((prev) => ({ ...prev, mode: (event.target as HTMLDetailsElement).open }))}>
+          <details className={styles.presetFold} open={presetOpen.mode || modeNeedsAttention} onToggle={(event) => setPresetOpen((prev) => ({ ...prev, mode: (event.target as HTMLDetailsElement).open }))}>
             <summary className={styles.presetSummary}>인증 방식 · {modeValueLabel}</summary>
             <div className={styles.presetBody}>
           <p className={styles.hint}>
@@ -1180,9 +1262,9 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
 
       {stampEnabled ? (
         <ConsoleSection headingId="ops-booth-map" title="부스 지도" description={mapSummary} className={styles.anchorSection}>
-          {/* Before-the-day preset: folds on phones with the publish state
+          {/* Before-the-day preset: starts folded with the publish state
               in the folded summary so an unposted draft is never missed. */}
-          <details className={styles.presetFold} open={presetOpen.map} onToggle={(event) => setPresetOpen((prev) => ({ ...prev, map: (event.target as HTMLDetailsElement).open }))}>
+          <details className={styles.presetFold} open={presetOpen.map || mapNeedsAttention} onToggle={(event) => setPresetOpen((prev) => ({ ...prev, map: (event.target as HTMLDetailsElement).open }))}>
             <summary className={styles.presetSummary}>부스 지도 · {mapStatusText}</summary>
             <div className={styles.presetBody}>
           <p className={styles.hint}>
@@ -1323,65 +1405,6 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           </details>
         </ConsoleSection>
       ) : null}
-
-      <ConsoleSection headingId="ops-staff" title="스태프 배정" description={staffSummary} className={styles.anchorSection}>
-        <div className={styles.primarySectionAction}>
-          <button
-            id="ops-staff-assign"
-            type="button"
-            className="button button-primary"
-            onClick={() => { setAssignPreset(null); setAssignOpen(true); setFailure(null); }}
-            disabled={assignableTargets === 0 || writeBlocked}
-            title={writeBlocked ? writeBlockedReason : assignableTargets === 0 ? "데스크나 부스를 먼저 만드세요" : undefined}
-          >
-            스태프 배정
-          </button>
-        </div>
-        {assignments.length ? (
-          <ul className={uiStyles.collection}>
-            {assignments.map((assignment) => (
-              <li key={assignment.id} className={uiStyles.recordRow}>
-                <div className={uiStyles.recordMain}>
-                  <strong>{accountName.get(assignment.accountId) ?? "알 수 없는 계정"}</strong>
-                  <p className={uiStyles.recordMeta}>
-                    {assignment.type === "DESK" ? "데스크" : "부스"}
-                    {" · "}
-                    {(assignment.type === "DESK"
-                      ? deskName.get(assignment.targetId)
-                      : boothName.get(assignment.targetId)) ?? "알 수 없는 담당"}
-                  </p>
-                </div>
-                <div className={uiStyles.recordActions}>
-                  <button
-                    type="button"
-                    className="button button-secondary"
-                    disabled={busy || writeBlocked}
-                    title={writeBlocked ? writeBlockedReason : undefined}
-                    onClick={() => void runCommand(
-                      "staff.unassign",
-                      { id: assignment.id },
-                      "배정을 해제했습니다."
-                    )}
-                  >
-                    해제
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : assignableTargets === 0 ? (
-          <p className="notice" role="status">배정하려면 먼저 데스크나 부스를 만드세요.</p>
-        ) : (
-          <p className="empty-state">
-            배정된 스태프가 없습니다. 진행 중으로 전환하려면 입장 데스크에 스태프를 배정하세요.
-          </p>
-        )}
-        {!deskStaffCount ? (
-          <p className="notice" role="status">
-            진행 중 전환 조건: 등록 데스크 {desks.length}개 · 데스크 배정 {deskStaffCount}건
-          </p>
-        ) : null}
-      </ConsoleSection>
 
       {deskOpen ? (
         <DeskDialog

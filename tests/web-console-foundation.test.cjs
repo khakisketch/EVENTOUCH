@@ -62,8 +62,8 @@ test('navigation exposes rail order, root ids and existing routes', () => {
   const eventIds = nav.match(/export const EVENT_PAGE_IDS: readonly ConsolePageId\[\] = \[([\s\S]*?)\];/u);
   assert.ok(eventIds, 'EVENT_PAGE_IDS is exported');
   assert.deepEqual(quotedList(eventIds[1]), [
-    'overview', 'participants', 'messages', 'operations', 'programs', 'draws',
-    'photos', 'content', 'attendeePage', 'rewards', 'settings', 'reports',
+    'overview', 'participants', 'messages', 'content', 'attendeePage',
+    'operations', 'programs', 'draws', 'rewards', 'photos', 'reports', 'settings',
   ]);
 
   const mainIds = nav.match(/export const MAIN_PAGE_IDS: readonly ConsolePageId\[\] = \[([\s\S]*?)\];/u);

@@ -46,7 +46,8 @@ test("same-day and before-the-day sections split through one summary slot", () =
   assert.match(source, /description=\{modeSummary\}/u);
   assert.match(source, /description=\{mapSummary\}/u);
   assert.match(source, /description=\{staffSummary\}/u);
-  assert.match(source, /description="지금 할 일"/u, "display joins the same-day side");
+  assert.match(source, /description=\{displaySummary\}/u, "display names the current same-day output");
+  assert.match(source, /`지금 할 일 · 현재 \$\{currentDisplayLabel\}`/u);
   assert.match(source, /`지금 할 일 · 가동 \$\{deskOpenCount\} \/ 전체 \$\{desks\.length\}`/u);
   assert.match(source, /`지금 할 일 · 운영 \$\{boothOpenCount\} \/ 전체 \$\{booths\.length\}`/u);
   assert.match(source, /`지금 할 일 · 배정 \$\{assignments\.length\}명`/u);
@@ -58,16 +59,17 @@ test("same-day and before-the-day sections split through one summary slot", () =
   assert.doesNotMatch(source, /console\/events\/\$\{[^}]*\}\/(?!page)[a-z-]+`(?!\/)/u, "no new menu or route");
 });
 
-test("presets fold on phones with the current value in the folded summary", () => {
+test("presets start folded with current values and anchor recovery", () => {
   const source = ops();
   assert.equal(source.match(/<details/g)?.length ?? 0, 2, "only the two presets fold");
   assert.match(source, /<summary className=\{styles\.presetSummary\}>인증 방식 · \{modeValueLabel\}<\/summary>/u);
   assert.match(source, /<summary className=\{styles\.presetSummary\}>부스 지도 · \{mapStatusText\}<\/summary>/u);
   assert.match(source, /미게시/u, "an unposted map reads as 미게시 while folded");
   assert.match(source, /참가자 셀프 스캔/u, "the folded mode summary names the live value");
-  assert.match(source, /window\.matchMedia\("\(max-width: 768px\)"\)/u, "phones start folded, desktop starts open");
-  assert.match(source, /open=\{presetOpen\.mode\}/u);
-  assert.match(source, /open=\{presetOpen\.map\}/u);
+  assert.match(source, /useState\(\{ mode: false, map: false \}\)/u, "presets start folded on every viewport");
+  assert.match(source, /open=\{presetOpen\.mode \|\| modeNeedsAttention\}/u);
+  assert.match(source, /open=\{presetOpen\.map \|\| mapNeedsAttention\}/u);
+  assert.match(source, /hashchange/u, "preset deep links reveal their target");
   assert.match(source, /onToggle=\{\(event\) => setPresetOpen\(\(prev\)/u, "the operator can unfold either side by hand");
   const desksBody = source.slice(source.indexOf('headingId="ops-desks"'), source.indexOf('headingId="ops-booths"'));
   assert.doesNotMatch(desksBody, /<details/u, "desk start/stop never folds");

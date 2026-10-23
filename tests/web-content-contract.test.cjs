@@ -119,7 +119,7 @@ test('web-console-content-dialogs-are-modal-and-wire-field-errors', () => {
   assert.match(workspace, /aria-describedby/);
 });
 
-test('web-console-shell-links-content-between-programs-and-settings', () => {
+test('web-console-shell-groups-content-before-field-programs-and-settings', () => {
   const shell = read('app/console/ConsoleShell.tsx');
   // The rail renders the registry order with registry labels and hrefs, not
   // literal duplicate routes: badges, permissions and feature gates stay in
@@ -138,5 +138,5 @@ test('web-console-shell-links-content-between-programs-and-settings', () => {
   const contentAt = eventIds.indexOf('"content"');
   const settingsAt = eventIds.indexOf('"settings"');
   assert.ok(programsAt >= 0 && contentAt >= 0 && settingsAt >= 0);
-  assert.ok(programsAt < contentAt && contentAt < settingsAt);
+  assert.ok(contentAt < programsAt && programsAt < settingsAt);
 });

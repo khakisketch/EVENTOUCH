@@ -364,6 +364,10 @@ async function messagesPhase({ fixture, ownerCookie, baseUrl, eventId, ownerSess
     }));
     await page.locator('#campaign-title').first().waitFor({ state: 'visible', timeout: UI_TIMEOUT });
     await page.waitForTimeout(800);
+    const historyDisclosure = page.locator('summary', { hasText: '발송 기록 열기' });
+    await historyDisclosure.focus();
+    await page.keyboard.press('Enter');
+    await page.locator('summary', { hasText: '발송 기록 닫기' }).waitFor();
 
     const rowSelector = 'li[data-history-row]';
     let ids = await page.evaluate((selector) => [...document.querySelectorAll(selector)].map((node) => node.id), rowSelector);

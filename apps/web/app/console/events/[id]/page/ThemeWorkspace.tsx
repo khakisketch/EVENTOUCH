@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CSSProperties, ChangeEvent, MouseEvent as ReactMouseEvent } from "react";
+import type { CSSProperties, ChangeEvent, FocusEvent as ReactFocusEvent, MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
 import {
@@ -57,6 +57,18 @@ const THEME_SECTION_LABELS: Record<string, string> = {
   "theme-save": "저장·게시",
   "home-preview-heading": "미리보기",
 };
+
+// Maps any focused or jumped-to node to the jump-nav section that owns it.
+// The save region lives inside the edit column, so it wins first; the
+// preview panel is a labelled section of its own.
+function sectionForNode(node: Element | null): string | null {
+  if (!node || typeof node.closest !== "function") return null;
+  if (node.closest("#theme-save")) return "theme-save";
+  const section = node.closest("section");
+  if (section?.getAttribute("aria-labelledby") === "home-preview-heading") return "home-preview-heading";
+  if (node.closest("#theme-edit")) return "theme-edit";
+  return null;
+}
 
 type EditorState =
   | { kind: "loading" }
@@ -319,6 +331,23 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
     target.scrollIntoView({ block: "start" });
   }, []);
 
+  // The readout follows where the operator actually is: explicit jumps and
+  // real focus move it; scrolling only moves it through the genuine
+  // document flow (see the observer below).
+  const syncSectionFromFocus = useCallback((event: ReactFocusEvent<HTMLElement>) => {
+    const target = event.target as Element | null;
+    // Preview auxiliaries (source/viewport switches) never rename the
+    // location: only the explicit preview jump, which focuses the heading
+    // itself, may name the preview. Real scroll arrival stays the
+    // observer's job on stacked widths.
+    if (target && typeof target.closest === "function") {
+      const inPreview = target.closest('section[aria-labelledby="home-preview-heading"]');
+      if (inPreview && target.id !== "home-preview-heading") return;
+    }
+    const section = sectionForNode(target);
+    if (section && section in THEME_SECTION_LABELS) setActiveSection(section);
+  }, []);
+
   // Unsaved work the cross-route guard must hold: local edits, an upload
   // context that is not settled, a pending save/publish intent, or an
   // unresolved version conflict. Read-only preview choices stay unguarded.
@@ -358,15 +387,54 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
     return () => { cancelled = true; };
   }, [eventId, reloadTick, router]);
 
-  // Names the section in view for the jump-nav readout. Anchor clicks keep
-  // working natively whether or not the observer is available.
+  // Desktop lays the editor and the preview side by side, so the sticky
+  // preview and the sticky save bar would always own the in-view readout.
+  // There the readout keeps the basic edit context and moves only on
+  // explicit jumps and real focus. On stacked (mobile) widths a single
+  // document flow decides, and the preview takes over only when genuinely
+  // reached. The sticky save bar never joins the observation on either
+  // width: it reports through focus and explicit jumps only, so its stuck
+  // position cannot rename the location on first paint. Matches the 1080px
+  // layout breakpoint in page.module.css.
+  const [stackedNav, setStackedNav] = useState(false);
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia("(max-width: 1080px)");
+    const sync = () => setStackedNav(query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
+
+  // Anchor clicks keep working natively whether or not the observer is
+  // available; the focus handoff in ConsoleSectionNav and the skip link
+  // both land focus, which the capture handler above turns into the
+  // readout. This covers fragment changes that move no focus.
+  useEffect(() => {
+    const sync = () => {
+      const target = document.getElementById(window.location.hash.slice(1));
+      const section = sectionForNode(target);
+      if (section && section in THEME_SECTION_LABELS) setActiveSection(section);
+    };
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, []);
+
+  // Names the section in view for the jump-nav readout. Canonical
+  // document order wins ties, so a sticky panel behind the arrival point
+  // never renames where the operator has arrived.
   useEffect(() => {
     if (typeof IntersectionObserver === "undefined") return;
-    const ids = Object.keys(THEME_SECTION_LABELS);
+    const ids = stackedNav
+      ? ["theme-edit", "home-preview-heading"]
+      : ["theme-edit"];
     const observer = new IntersectionObserver(
       (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) setActiveSection(entry.target.id);
+        const visible = new Set(
+          entries.filter((entry) => entry.isIntersecting).map((entry) => entry.target.id)
+        );
+        for (const id of ids) {
+          if (visible.has(id)) setActiveSection(id);
         }
       },
       { rootMargin: "-30% 0px -60% 0px" }
@@ -376,7 +444,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
       if (node) observer.observe(node);
     }
     return () => observer.disconnect();
-  }, [state]);
+  }, [state, stackedNav]);
 
   useEffect(() => () => {
     if (uploadUrlRef.current) URL.revokeObjectURL(uploadUrlRef.current);
@@ -1114,7 +1182,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
         </section>
       ) : null}
 
-      <div className={styles.editorLayout}>
+      <div className={styles.editorLayout} onFocusCapture={syncSectionFromFocus}>
         <div className={styles.controls} id="theme-edit">
           <a className={styles.editorSkip} href="#theme-save-draft" data-skip-to="theme-save-draft" onClick={jumpToSaveActions}>
             편집 항목을 건너뛰고 저장·게시로 이동
@@ -1183,14 +1251,19 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
                 onCancel={() => setClearImagePending(false)}
               />
             ) : null}
-            <label className={styles.field} htmlFor="home-image-focus">
-              이미지 초점
-              <select id="home-image-focus" value={state.form.homeStyle.imageFocus} onChange={(event) => changeHomeStyle("imageFocus", event.target.value as HomeStyle["imageFocus"])}>
-                <option value="center">가운데</option>
-                <option value="top">위쪽</option>
-                <option value="bottom">아래쪽</option>
-              </select>
-            </label>
+            <details className={styles.advanced}>
+              <summary className={styles.advancedSummary}>이미지 상세 설정</summary>
+              <div className={styles.advancedBody}>
+                <label className={styles.field} htmlFor="home-image-focus">
+                  이미지 초점
+                  <select id="home-image-focus" value={state.form.homeStyle.imageFocus} onChange={(event) => changeHomeStyle("imageFocus", event.target.value as HomeStyle["imageFocus"])}>
+                    <option value="center">가운데</option>
+                    <option value="top">위쪽</option>
+                    <option value="bottom">아래쪽</option>
+                  </select>
+                </label>
+              </div>
+            </details>
           </fieldset>
 
           <fieldset className={styles.controlGroup} disabled={Boolean(commandBusy || conflict || state.archived)}>
@@ -1278,46 +1351,51 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
                 onChange={(event) => changeHomeStyle("heroSubtitle", event.target.value)}
               />
             </label>
-            <div className={styles.fieldGrid}>
-              <label className={styles.field} htmlFor="home-layout">
-                배너 배치
-                <select id="home-layout" value={state.form.homeStyle.heroLayout} onChange={(event) => changeHomeStyle("heroLayout", event.target.value as HomeStyle["heroLayout"])}>
-                  <option value="centered">가운데 제목</option>
-                  <option value="bottom-overlay">아래쪽 제목</option>
-                  <option value="image-only">이미지만</option>
-                </select>
-              </label>
-              <label className={styles.field} htmlFor="home-title-scale">
-                제목 크기
-                <select id="home-title-scale" value={state.form.homeStyle.titleScale} onChange={(event) => changeHomeStyle("titleScale", event.target.value as HomeStyle["titleScale"])}>
-                  <option value="standard">기본</option>
-                  <option value="large">크게</option>
-                </select>
-              </label>
-              <label className={styles.field} htmlFor="home-text-align">
-                문구 정렬
-                <select id="home-text-align" value={state.form.homeStyle.textAlign} onChange={(event) => changeHomeStyle("textAlign", event.target.value as HomeStyle["textAlign"])}>
-                  <option value="center">가운데</option>
-                  <option value="left">왼쪽</option>
-                  <option value="right">오른쪽</option>
-                </select>
-              </label>
-              <label className={styles.field} htmlFor="home-text-tone">
-                문구 색상
-                <select id="home-text-tone" value={state.form.homeStyle.textTone} onChange={(event) => changeHomeStyle("textTone", event.target.value as HomeStyle["textTone"])}>
-                  <option value="light">흰색</option>
-                  <option value="dark">짙은 색</option>
-                </select>
-              </label>
-              <label className={styles.field} htmlFor="home-overlay">
-                읽기 배경
-                <select id="home-overlay" value={state.form.homeStyle.overlay} onChange={(event) => changeHomeStyle("overlay", event.target.value as HomeStyle["overlay"])}>
-                  <option value="none">없음</option>
-                  <option value="soft">부드럽게</option>
-                  <option value="strong">강하게</option>
-                </select>
-              </label>
-            </div>
+            <details className={styles.advanced}>
+              <summary className={styles.advancedSummary}>배치·색상 상세 설정</summary>
+              <div className={styles.advancedBody}>
+                <div className={styles.fieldGrid}>
+                  <label className={styles.field} htmlFor="home-layout">
+                    배너 배치
+                    <select id="home-layout" value={state.form.homeStyle.heroLayout} onChange={(event) => changeHomeStyle("heroLayout", event.target.value as HomeStyle["heroLayout"])}>
+                      <option value="centered">가운데 제목</option>
+                      <option value="bottom-overlay">아래쪽 제목</option>
+                      <option value="image-only">이미지만</option>
+                    </select>
+                  </label>
+                  <label className={styles.field} htmlFor="home-title-scale">
+                    제목 크기
+                    <select id="home-title-scale" value={state.form.homeStyle.titleScale} onChange={(event) => changeHomeStyle("titleScale", event.target.value as HomeStyle["titleScale"])}>
+                      <option value="standard">기본</option>
+                      <option value="large">크게</option>
+                    </select>
+                  </label>
+                  <label className={styles.field} htmlFor="home-text-align">
+                    문구 정렬
+                    <select id="home-text-align" value={state.form.homeStyle.textAlign} onChange={(event) => changeHomeStyle("textAlign", event.target.value as HomeStyle["textAlign"])}>
+                      <option value="center">가운데</option>
+                      <option value="left">왼쪽</option>
+                      <option value="right">오른쪽</option>
+                    </select>
+                  </label>
+                  <label className={styles.field} htmlFor="home-text-tone">
+                    문구 색상
+                    <select id="home-text-tone" value={state.form.homeStyle.textTone} onChange={(event) => changeHomeStyle("textTone", event.target.value as HomeStyle["textTone"])}>
+                      <option value="light">흰색</option>
+                      <option value="dark">짙은 색</option>
+                    </select>
+                  </label>
+                  <label className={styles.field} htmlFor="home-overlay">
+                    읽기 배경
+                    <select id="home-overlay" value={state.form.homeStyle.overlay} onChange={(event) => changeHomeStyle("overlay", event.target.value as HomeStyle["overlay"])}>
+                      <option value="none">없음</option>
+                      <option value="soft">부드럽게</option>
+                      <option value="strong">강하게</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+            </details>
           </fieldset>
 
           <section className={styles.recoveryGroup} aria-labelledby="page-recovery-heading">
@@ -1356,13 +1434,30 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
             ) : null}
           </section>
 
-          <div id="theme-save" ref={saveActionsRef} tabIndex={-1} className={styles.saveAnchor}>
+          <div id="theme-save" ref={saveActionsRef} tabIndex={-1} className={`${styles.saveAnchor} ${styles.saveBar}`}>
+            <div className={styles.versionSummary}>
+              <span className={styles.statePill} data-state={dirty ? "dirty" : alreadyPublished ? "published" : "draft"}>
+                {dirty ? "저장되지 않은 변경" : alreadyPublished ? "현재 초안 게시됨" : "저장된 초안"}
+              </span>
+              <span>
+                {state.publishedAt
+                  ? `게시 버전 ${state.publishedVersion} · 초안 ${state.draftVersion}`
+                  : `아직 게시하지 않음 · 초안 ${state.draftVersion}`}
+              </span>
+            </div>
+            {state.publishedAt && publishedChanges.length ? (
+              <details className={styles.diffFold}>
+                <summary className={styles.advancedSummary}>게시본과 다른 저장된 변경 {publishedChanges.length}개</summary>
+                <p className={styles.publishedNote}>게시본과 다른 저장된 변경: {publishedChanges.join(" · ")}</p>
+              </details>
+            ) : null}
             {dirty && !uploadBlocked ? <p className={styles.inlineHelp}>게시 버튼은 저장된 초안에만 작동합니다. 먼저 초안을 저장하세요.</p> : null}
             {uploadBlocked ? (
               <p className={styles.inlineHelp} role="status">
                 {upload?.status === "uploading" ? "이미지를 올리는 중입니다. 완료될 때까지 초안 저장이 잠깁니다." : "이미지 업로드 결과를 확인해야 초안을 저장할 수 있습니다. 같은 요청으로 다시 시도하세요."}
               </p>
             ) : null}
+            <div className={styles.saveButtons}>
             <ConsoleFormActions>
               <button id="theme-save-draft" className="button button-primary" type="button" onClick={() => void saveDraft()} disabled={!canSave}>
                 {commandBusy === "save" ? "초안 저장 중…" : "초안 저장"}
@@ -1371,6 +1466,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
                 {commandBusy === "publish" ? "게시 중…" : "게시"}
               </button>
             </ConsoleFormActions>
+            </div>
             {publishPending ? (
               <ConsoleConfirm
                 summary={(

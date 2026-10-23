@@ -104,6 +104,8 @@ async function main() {
     await editor.locator('input[type=color]').first().fill('#e8efe9');
     await editor.getByLabel(/배너 제목|상단 제목/).fill('우리의 새로운 행사');
     await editor.getByLabel(/보조 문구|보조 설명/).fill('함께 만드는 특별한 하루');
+    await editor.locator('summary', { hasText: '배치·색상 상세 설정' }).click();
+    await editor.locator('summary', { hasText: '이미지 상세 설정' }).click();
     await editor.locator('select').filter({ has: editor.locator('option[value="bottom-overlay"]') }).selectOption('bottom-overlay');
     await editor.locator('select').filter({ has: editor.locator('option[value="strong"]') }).selectOption('strong');
     await editor.locator('select').filter({ has: editor.locator('option[value="left"]') }).selectOption('left');
@@ -180,6 +182,7 @@ async function main() {
     assert.equal(await second.getByRole('main').evaluate((element) => getComputedStyle(element).backgroundColor), 'rgb(185, 222, 240)');
 
     phase = 'image-only layout and image removal';
+    await editor.locator('summary', { hasText: '배치·색상 상세 설정' }).click();
     await editor.locator('#home-layout').selectOption('image-only');
     await commandClick(editor, save, 'attendee.page.save');
     await commandClick(editor, publish, 'attendee.page.publish');

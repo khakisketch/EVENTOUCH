@@ -3,7 +3,7 @@
 // Keyboard path from confirmed recipients to the send request button: after
 // picking recipients the composer still holds N checkbox stops, a
 // 6-segment datetime-local and the option row before the submit. An
-// in-form move ("발송 요청으로 이동") must jump focus straight onto the
+// in-form move ("발송 검토로 이동") must jump focus straight onto the
 // real submit button so the next Tab leaves it and Enter/Space activates
 // it — no re-finding the button by Tab. Source-only assertions; rendering
 // and browser exercise belong to main.
@@ -26,7 +26,7 @@ const CSS = fs.readFileSync(
 test('in-form move to the send request exists inside the compose form', () => {
   // Named access point with a self-explanatory screen-reader name.
   assert.match(SOURCE, /id="campaign-send-skip"/u);
-  assert.match(SOURCE, /발송 요청으로 이동/u);
+  assert.match(SOURCE, /발송 검토로 이동/u);
   // It must be a plain button (no submit, no navigation): it only moves
   // focus, it never sends anything itself.
   const skipAt = SOURCE.indexOf('id="campaign-send-skip"');
@@ -62,7 +62,8 @@ test('submit button id and labelling are preserved', () => {
   const submitAt = SOURCE.indexOf('id="campaign-submit"');
   const submitWindow = SOURCE.slice(Math.max(0, submitAt - 200), submitAt + 600);
   assert.match(submitWindow, /type="submit"/u);
-  assert.match(submitWindow, /\{submitButtonLabel\}/u);
+  assert.match(submitWindow, /발송 검토/u);
+  assert.match(SOURCE, /className=\{styles\.reviewBar\}/u);
   // Scroll target stays reachable for sighted operators.
   assert.match(CSS, /#campaign-submit/u);
   assert.match(CSS, /scroll-margin-top/u);
@@ -82,9 +83,9 @@ test('existing send, mock and cancel wording plus API surface are intact', () =>
 });
 
 test('touch target and token-only styling hold', () => {
-  // The skip reuses .textButton (min-height 44px) and token-only styling.
-  assert.match(CSS, /\.sendSkip/u);
-  assert.match(CSS, /\.sendSkip \.textButton/u);
+  // The top shortcut and bottom review bar reuse 44px/token-only controls.
+  assert.match(CSS, /\.reviewBar/u);
+  assert.match(CSS, /\.recipientTopBar/u);
   assert.match(CSS, /\.textButton \{[^}]*min-height: 44px/u);
   assert.doesNotMatch(CSS, /#[0-9a-fA-F]{3,8}\b/u);
 });

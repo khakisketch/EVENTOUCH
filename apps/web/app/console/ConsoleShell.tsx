@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import SkipLink from "../SkipLink";
 import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../auth-redirect";
-import { CONSOLE_PAGES, EVENT_PAGE_IDS, consolePageHref, resolveConsolePage } from "./console-navigation";
+import { CONSOLE_PAGES, EVENT_PAGE_IDS, EVENT_PAGE_GROUPS, consolePageHref, resolveConsolePage } from "./console-navigation";
 import { useConsoleLeaveConfirmation } from "./console-draft-guard";
 
 type JsonRecord = Record<string, unknown>;
@@ -130,6 +130,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const globalTriggerRef = useRef<HTMLButtonElement>(null);
   const globalMenuRef = useRef<HTMLElement>(null);
   const mobileEventBranchRef = useRef<HTMLDivElement>(null);
+  const mobileScrollPositionsRef = useRef(new Map<string, number>());
   const menuFocusPendingRef = useRef(false);
   const globalFocusPendingRef = useRef(false);
 
@@ -335,6 +336,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     if (!showCurrentEvent) return;
     const branch = mobileEventBranchRef.current;
     if (!branch) return;
+    if (eventId) branch.scrollLeft = mobileScrollPositionsRef.current.get(eventId) ?? 0;
 
     const revealCurrentDestination = () => {
       if (!window.matchMedia("(max-width: 768px)").matches) return;
@@ -363,7 +365,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
       window.cancelAnimationFrame(frame);
       window.removeEventListener("resize", revealCurrentDestination);
     };
-  }, [pathname, showCurrentEvent]);
+   }, [pathname, showCurrentEvent, eventId]);
 
   function getVisibleOperatorTrigger() {
     const mobileTrigger = mobileOperatorTriggerRef.current;
@@ -703,11 +705,16 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
       // its own always-present label instead of a dangling labelledby ref.
       // The parent nav's "현재 행사 메뉴" label stays as the outer landmark.
       return showCurrentEvent && eventId ? (
+        <>
+        <div className="mobile-event-location">
+          <span>현재 위치 · <strong>{activePageId ? CONSOLE_PAGES[activePageId].label : "행사"}</strong></span>
+        </div>
         <div
           ref={mobileEventBranchRef}
           className="nav-event-branch"
           role="group"
           aria-label="현재 행사 업무"
+          onScroll={(event) => mobileScrollPositionsRef.current.set(eventId, event.currentTarget.scrollLeft)}
         >
           <div className="nav-current-event">
             <strong title={shellData?.currentEventName ?? undefined}>{shellData?.currentEventName}</strong>
@@ -715,6 +722,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           </div>
           {renderEventSubnav()}
         </div>
+        </>
       ) : null;
     }
     return showCurrentEvent && eventId ? (
@@ -784,6 +792,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
       : `${eventBasePath}/messages`;
 
     const features = shellData?.currentEventFeatures ?? [];
+    let previousGroup: string | undefined;
     return EVENT_PAGE_IDS.map((pageId) => {
       if (pageId === "photos" && !shellData?.canManageEvidencePhotos) return null;
       if (pageId === "rewards" && !features.includes("reward")) return null;
@@ -795,7 +804,12 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
         : consolePageHref(pageId, eventId ?? undefined);
       if (!href) return null;
       const active = activePageId === pageId;
+      const group = EVENT_PAGE_GROUPS[pageId];
+      const showGroup = Boolean(group && group !== previousGroup);
+      previousGroup = group;
       return (
+        <Fragment key={pageId}>
+        {showGroup ? <span className="nav-work-group-label">{group}</span> : null}
         <Link key={pageId} className={`console-nav-item console-subnav-item${active ? " active" : ""}`}
           href={href} aria-current={active ? "page" : undefined}>
           {CONSOLE_PAGES[pageId].label}
@@ -806,6 +820,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
             <span className="nav-badge" role="img" aria-label={`발송 확인 ${eventMeta?.messageAttention ?? 0}건`}>{eventMeta?.messageAttention}</span>
           ) : null}
         </Link>
+        </Fragment>
       );
     });
   }

@@ -129,6 +129,100 @@
   outline-offset: 2px;
 }
 
+/* The save/publish region rides at the bottom of the viewport while the
+   form scrolls above it, so change state and both actions stay visible.
+   It settles into the normal flow once its own place is reached. */
+.saveBar {
+  position: sticky;
+  bottom: calc(var(--s3) + env(safe-area-inset-bottom, 0px));
+  z-index: 5;
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: 0 -4px 18px var(--shadow-color);
+}
+
+/* The sticky bar reads as one compact row: the pill keeps its size while
+   the version text wraps inside its own lane. */
+.saveBar .versionSummary {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.saveBar .statePill {
+  flex: none;
+}
+
+.saveBar .versionSummary > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Detail diff folds into one summary row; the full existing sentence stays
+   inside, unfolded on demand. */
+.diffFold {
+  min-width: 0;
+}
+
+/* Local button lane: the shared phone stacking rule is scoped out for the
+   sticky bar only, so both actions stay on one 44px row. The shared
+   ConsoleFormActions implementation is untouched. */
+.saveButtons {
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .saveButtons :global(button.button) {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+
+/* The sticky bar overlays the column end: focused controls keep clearance
+   above the bar when the browser scrolls them into view. */
+.controls :is(a[href], button, input, select, summary, [tabindex]) {
+  scroll-margin-bottom: 220px;
+}
+
+/* Advanced banner controls fold into a native disclosure: the basic edit
+   (background, banner image, copy) stays on top. The summary is a real
+   keyboard control with a 44px target. */
+.advanced {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--surface-muted);
+}
+
+.advancedSummary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--radius-small);
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.advancedSummary::marker {
+  color: var(--muted);
+}
+
+.advancedSummary:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.advancedBody {
+  display: grid;
+  gap: var(--s3);
+  padding: 0 var(--s3) var(--s3);
+}
+
 .controlGroup {
   display: grid;
   gap: var(--s3);
@@ -415,6 +509,7 @@
   .toggleGrid { grid-template-columns: minmax(0, 1fr); }
   .controlGroup { padding: var(--s3); }
   .previewPanel { padding: var(--s3); }
+  .saveBar { padding: var(--s3); gap: var(--s2); }
 }
 
 /* The jump nav names the section in view, so a long editor page with the

@@ -66,7 +66,7 @@ export const CONSOLE_PAGES: Record<ConsolePageId, ConsolePageMeta> = {
 };
 
 /**
- * Existing rail order for the event branch. `participantImport` is reached
+ * Work-group rail order for the event branch. `participantImport` is reached
  * from the participants workspace, not the rail, so it is intentionally
  * absent here.
  */
@@ -74,16 +74,31 @@ export const EVENT_PAGE_IDS: readonly ConsolePageId[] = [
   "overview",
   "participants",
   "messages",
+  "content",
+  "attendeePage",
   "operations",
   "programs",
   "draws",
-  "photos",
-  "content",
-  "attendeePage",
   "rewards",
-  "settings",
+  "photos",
   "reports",
+  "settings",
 ];
+
+/** Non-interactive work labels. They never change routes or gates.
+ * Overview, reports and bottom settings remain independent destinations.
+ */
+export const EVENT_PAGE_GROUPS: Partial<Record<ConsolePageId, string>> = {
+  participants: "모집·안내",
+  messages: "모집·안내",
+  content: "모집·안내",
+  attendeePage: "모집·안내",
+  operations: "현장 진행",
+  programs: "현장 진행",
+  draws: "현장 진행",
+  rewards: "현장 진행",
+  photos: "현장 진행",
+};
 
 /** Organization root destinations. Team lives in the operator menu. */
 export const MAIN_PAGE_IDS: readonly ConsolePageId[] = ["events", "clients"];

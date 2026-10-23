@@ -37,10 +37,10 @@ const css = fs.readFileSync(cssPath, "utf8");
 
 test("a one-line scope note states each section saves only itself", () => {
   assert.match(source, /data-settings-scope-note/u);
-  assert.match(source, /각 구역의 저장 버튼이 그 구역만 저장합니다/u);
+  assert.match(source, /각 구역의 저장·게시·전환은 그 구역에만 적용됩니다/u);
   const noteLine = source
     .split("\n")
-    .find((line) => line.includes("각 구역의 저장 버튼이 그 구역만 저장합니다"));
+    .find((line) => line.includes("각 구역의 저장·게시·전환은 그 구역에만 적용됩니다"));
   assert.ok(noteLine, "scope note line must exist");
   assert.match(noteLine, /기본 정보·참가 접수·기능·진행 단계/u);
 });

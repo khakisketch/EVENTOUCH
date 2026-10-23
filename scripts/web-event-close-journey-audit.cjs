@@ -57,7 +57,9 @@ const { startAuditFixture, FIXTURE_PASSWORD } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 
 const before = process.argv.includes('--before');
-const out = `/tmp/opencode/eventouch-captures/round-close/linear${before ? '/reference-direct' : ''}`;
+const out = process.env.EVENTOUCH_CAPTURE_ROOT
+  ? path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'close', before ? 'reference-direct' : 'after')
+  : `/tmp/opencode/eventouch-captures/round-close/linear${before ? '/reference-direct' : ''}`;
 fs.mkdirSync(out, { recursive: true });
 
 const STEP_CAP = 12;
@@ -632,7 +634,7 @@ async function main() {
       // ---- Phase 7: result notice as a SIMULATED campaign (never a send) ----
       await measure('result-notify', '결과 안내 모의 발송 (메시지 작성 → 모의 기록 → 확정)', async (act, task, { touchOk }) => {
         task.screens = [eventPath('/messages')];
-        task.fields = ['#campaign-title', '#campaign-body', '모의 발송으로 기록 checkbox', '수신자 목록 열기·닫기', '표시 추가', '모의 발송 기록', '모의 발송을 기록한다'];
+        task.fields = ['#campaign-title', '#campaign-body', '모의 발송으로 기록 checkbox', '수신자 목록 열기·닫기', '표시 추가', '발송 검토', '모의 발송을 기록한다'];
         if (before) await menuTo('/messages', '#campaign-title', act);
         else {
           await act('click', () => page.locator('[data-close-report-next]').click());
@@ -645,11 +647,13 @@ async function main() {
         await act('check', () => simulate.check());
         assert.ok(await simulate.isChecked(), 'simulate must stay checked: real send is forbidden');
         const list = page.locator('summary').filter({ hasText: '수신자 목록 열기·닫기' });
-        await act('click', () => list.click());
+        if (!await list.locator('..').evaluate(element => element.open)) {
+          await act('click', () => list.click());
+        }
         const addVisible = page.getByRole('button', { name: '표시 추가', exact: true });
         await act('click', () => addVisible.click());
-        const submit = page.getByRole('button', { name: '모의 발송 기록', exact: true });
-        await touchOk(submit, '모의 발송 기록');
+        const submit = page.locator('#campaign-submit');
+        await touchOk(submit, '발송 검토');
         await act('click', () => submit.click());
         const confirm = page.getByRole('button', { name: '모의 발송을 기록한다', exact: true });
         await act('click', () => confirm.click());
@@ -787,6 +791,11 @@ async function main() {
       await page.getByRole('button', { name: '내용 보기', exact: true }).click();
       await page.waitForFunction(() => { const rect = document.getElementById('report-detail')?.getBoundingClientRect(); return rect && rect.top >= 0 && rect.top < innerHeight; });
       await page.locator('[data-report-close-return]').click();
+      // The click updates the selected report locally before Next commits
+      // its query navigation. Reload only after the actual report-bearing
+      // URL arrives; otherwise this races and cancels that pending route.
+      await page.waitForURL(url => url.pathname === `/console/events/${staleId}/reports`
+        && url.searchParams.get('closeReport') === old.report.id && url.hash === '#event-close', { timeout: 10000 });
       await page.locator(HUB.nextAction).waitFor();
       assert.match(await page.locator(HUB.nextAction).innerText(), /결과 안내/);
       await page.reload({ waitUntil: 'networkidle' });

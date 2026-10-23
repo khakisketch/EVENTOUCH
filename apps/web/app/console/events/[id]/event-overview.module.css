@@ -531,15 +531,13 @@
 }
 
 .periodHeader {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
+  min-height: 44px;
+  align-content: center;
   gap: var(--s1) var(--s3);
-  margin-bottom: var(--s3);
+  cursor: pointer;
 }
 
-.periodHeader h3 {
+.periodHeader strong {
   margin: 0;
   font-family: var(--display-font);
   font-size: var(--body);
@@ -548,6 +546,7 @@
 }
 
 .periodHeader span {
+  margin-left: var(--s3);
   color: var(--muted);
   font-size: var(--small);
 }
@@ -578,4 +577,55 @@
 
 .periodTable thead th:first-child {
   text-align: left;
+}
+
+.readinessList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.readinessList li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding-block: var(--s3);
+  border-bottom: 1px solid var(--line);
+}
+
+.readinessList li > div {
+  display: grid;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.readinessList li span {
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.readinessList li > a { flex: none; }
+
+.stageLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.closeStatus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.closeStatus p { margin: 0; }
+
+@media (max-width: 768px) {
+  .readinessList li { align-items: flex-start; flex-direction: column; }
+  .readinessList li > a { width: 100%; }
+  .periodHeader span { display: block; margin-left: 0; }
 }

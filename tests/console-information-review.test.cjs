@@ -13,7 +13,8 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
 
 test("roster selection count names the visible subset and the full selection", () => {
   const list = read("console/events/[id]/participants/ParticipantList.tsx");
-  assert.match(list, /현재 화면 \{effectiveSelection\.length\}명 선택 · 전체 선택 \{handoffIds\.length\}명 · 최대 200명/u);
+  assert.match(list, /현재 표시 \{pageSelectedCount\}명 선택 · 전체 선택 \{handoffIds\.length\}명 · 최대 200명/u);
+  assert.match(list, /선택 승인·그룹 지정: 필터 범위 \$\{effectiveSelection\.length\}명/u);
   assert.doesNotMatch(list, /\}명 선택됨 · 전체 \{handoffIds\.length\}명/u, "the ambiguous 전체 label is gone");
   assert.match(list, /hiddenSelectedCount \? ` · 숨김 \$\{hiddenSelectedCount\}명\(그룹 지정 제외\)`/u, "hidden selection stays visible and its scope is named");
 });

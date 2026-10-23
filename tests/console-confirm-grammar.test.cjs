@@ -90,9 +90,11 @@ test("the roster keeps one-tap approval and folds the rest of the row tools", ()
   assert.match(list, /더보기/u);
   // The accessible name has to contain the visible label (WCAG label in name).
   assert.match(list, /aria-label=\{`\$\{person\.name\} 참가자 작업 더보기`\}/u);
-  assert.match(list, /aria-expanded=\{toolsOpenId === person\.id\}/u);
-  assert.match(css, /\.rowToolsToggle \{\s*display: none;/u);
-  assert.match(css, /\.participantRowToolsOpen \{/u);
+  assert.match(list, /const detailsOpen = toolsOpenId === person\.id/u);
+  assert.match(list, /aria-expanded=\{detailsOpen\}/u);
+  assert.match(list, /showRowActions && detailsOpen/u);
+  assert.match(css, /\.participantActions \.rowToolsToggle \{\s*display: inline-flex;/u);
+  assert.match(css, /\.participantDetails \{/u);
   assert.match(css, /\.rowConfirm \{\s*grid-column: 1 \/ -1;/u);
 });
 

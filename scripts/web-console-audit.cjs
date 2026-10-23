@@ -38,7 +38,9 @@ const { startAuditFixture } = require('./audit-fixture.cjs');
 const { auditLongListBoundaries } = require('./web-console-boundaries.cjs');
 
 const BLOCKING = new Set(['serious', 'critical']);
-const CAPTURE_DIR = '/tmp/opencode/eventouch-captures/console-unification';
+const CAPTURE_DIR = process.env.EVENTOUCH_CAPTURE_ROOT
+  ? path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'console')
+  : '/tmp/opencode/eventouch-captures/console-unification';
 const VIEWPORTS = [
   { width: 1280, height: 900 },
   { width: 390, height: 844 },
@@ -911,6 +913,7 @@ async function main() {
         // Filters replace the current entry rather than adding route visits:
         // Back still returns to the actual overview entry we came from.
         await page.goBack({ waitUntil: 'networkidle', timeout: 30000 });
+        await page.waitForURL(`${baseUrl}/console/events/${encodeURIComponent(eventId)}`, { timeout: 10000 });
         if (new URL(page.url()).pathname !== `/console/events/${encodeURIComponent(eventId)}`) {
           throw new Error(`back landed on ${page.url()}`);
         }
@@ -1445,6 +1448,7 @@ async function main() {
         await page.goto(`${baseUrl}/console/events/${eventId}/operations`, { waitUntil: 'networkidle', timeout: 30000 });
         await assertConsoleScreen(page, SCREENS.find((screen) => screen.key === 'operations'), eventId, eventName);
         if (!await page.locator('#ops-booth-map').count()) throw new Error('booth map section missing');
+        await page.locator('section[aria-labelledby="ops-booth-map"] summary').click();
         // `headingId` labels the section; the file input lives inside it.
         await page.locator('section[aria-labelledby="ops-booth-map"] input[type="file"]').setInputFiles(fixture);
         const saveDraft = page.getByRole('button', { name: '초안 저장' });

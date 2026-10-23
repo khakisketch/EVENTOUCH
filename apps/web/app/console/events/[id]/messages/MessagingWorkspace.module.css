@@ -49,7 +49,7 @@
 
 .recipientFilters {
   display: grid;
-  grid-template-columns: minmax(140px, 200px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s3);
   align-items: end;
   margin-bottom: var(--s2);
@@ -109,13 +109,28 @@
   cursor: pointer;
 }
 
+/* History folds under the composer in a native details region. The
+   summary carries the count so the folded state still reports it. */
+.historyDetails {
+  border-top: 1px solid var(--line);
+}
+
+.historyDetails > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  color: var(--brand-text);
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .recipientTools > div {
   display: flex;
   gap: var(--s3);
 }
 
 .recipientSearch {
-  margin-bottom: var(--s2);
+  margin-bottom: 0;
 }
 
 .recipientSearch label {
@@ -161,7 +176,7 @@
 .recipientRow {
   display: grid;
   min-height: 52px;
-  grid-template-columns: 20px minmax(0, auto) minmax(0, 1fr);
+  grid-template-columns: 20px minmax(0, 1fr);
   align-items: center;
   gap: var(--s2);
   margin: 0;
@@ -185,10 +200,11 @@
 }
 
 .recipientMeta {
+  grid-column: 2;
   min-width: 0;
   color: var(--muted);
   font-size: var(--small);
-  text-align: right;
+  text-align: left;
   overflow-wrap: anywhere;
 }
 
@@ -553,23 +569,47 @@
   scroll-margin-bottom: 48px;
 }
 
-/* In-form skip after the recipient block: a plain visible link-style
-   button (44px touch target via .textButton) plus a short hint. The
-   button itself only moves focus onto the real submit — no new action,
-   no wording or API change. Tokens only. */
-.sendSkip {
+/* Compose grid: draft (left) + recipients (right) on desktop, one column
+   at or below the product 1024 breakpoint. The left column reuses the
+   shared form rhythm; the fieldset keeps its own recipient styles. */
+.composeGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  gap: var(--s5);
+  align-items: start;
+  min-width: 0;
+}
+
+.composeGrid > fieldset {
+  min-width: 0;
+}
+
+/* Review bar: the send checklist and the single submit sit together
+   directly above the confirm. The submit keeps its id, disabled rules
+   and confirm flow; only its default label moves here. Tokens only. */
+.reviewBar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s2) var(--s3);
-  padding: var(--s2) var(--s3);
-  border: 1px dashed var(--line-strong);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface-muted);
 }
 
-.sendSkip .textButton {
-  padding: var(--s1) var(--s2);
+.reviewSummary {
+  flex: 1 1 240px;
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+@media (max-width: 1024px) {
+  .composeGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .closeArchive {
   flex-basis: 100%;

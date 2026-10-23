@@ -167,7 +167,7 @@ test("operations: gates, commands, and touch reuse stay pinned", () => {
   assert.match(source, /staff\.unassign/u, "the release path is untouched");
   assert.match(source, /배정된 스태프가 없습니다\. 진행 중으로 전환하려면 입장 데스크에 스태프를 배정하세요\./u);
   assert.match(source, /className="button button-secondary"/u, "row actions reuse the shared button sizing");
-  assert.doesNotMatch(source, /location\.hash|useSearchParams|router\.push\([^)]*#/u, "no fragment/query handoff for the direct operation");
+  assert.doesNotMatch(source, /useSearchParams|router\.push\([^)]*#/u, "direct operation never navigates or changes query state; existing hashes only reveal presets");
   const style = opsCss();
   // #fff in .mapPoint predates this change; nothing new may appear.
   assert.doesNotMatch(style.replace(/#fff/g, ""), /#[0-9a-fA-F]{3,8}/u, "no new color literals");

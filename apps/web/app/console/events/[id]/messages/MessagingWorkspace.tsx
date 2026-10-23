@@ -399,13 +399,27 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   // Compose submit confirm (payload snapshot + summary) and one history-row
   // confirm at a time. Triggers stay; confirms render in place below them.
   const [sendPending, setSendPending] = useState<SendPending | null>(null);
-  // The recipient list opens while someone is picking people and folds away
-  // afterwards, so the send controls stay near the top of the composer.
+  // The recipient list: desktop unfolds it next to the draft by default
+  // (see below); mobile starts folded and unfolds on demand.
   const [recipientListOpen, setRecipientListOpen] = useState(false);
+  const desktopListOpenAppliedRef = useRef(false);
+  // Desktop starts with the recipient list unfolded next to the draft so
+  // counts, off-screen picks and caution targets stay visible. Mobile
+  // starts folded and can unfold on demand; the handoff/reload paths
+  // below still force it open when they select a set for review.
+  useEffect(() => {
+    if (desktopListOpenAppliedRef.current) return;
+    desktopListOpenAppliedRef.current = true;
+    if (window.matchMedia("(min-width: 1025px)").matches) setRecipientListOpen(true);
+  }, []);
   const [historyPending, setHistoryPending] = useState<{
     id: string;
     kind: "retry" | "execute" | "cancel";
   } | null>(null);
+  // History folds under the composer in a native details region. It opens
+  // on the attention deep link and after a successful send that needs to
+  // show its row; the operator can fold it otherwise.
+  const [historyOpen, setHistoryOpen] = useState(false);
   // FAILED reload overwrite guard: set when the composer already holds a
   // draft/selection and the operator asks to load a failed campaign. The
   // in-place ConsoleConfirm below replaces the draft only on confirm.
@@ -741,6 +755,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
 
   useEffect(() => {
     if (!attentionOnly || state.kind !== "ready") return;
+    setHistoryOpen(true);
     let secondFrame = 0;
     const firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {
@@ -1087,6 +1102,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       // linger above the next blank composer.
       setReloadSummary(null);
       await refresh(true);
+      // The new row lives in the folded history: unfold so the scroll
+      // below lands on a visible row.
+      setHistoryOpen(true);
       window.setTimeout(() => {
         const next = document.querySelector<HTMLAnchorElement>("[data-close-linear-next]");
         if (next) {
@@ -1281,7 +1299,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   // with no visible reason or next action. Surface the existing
   // campaignError copy, drop any overwrite confirm, then land on the real
   // submit instantly (no auto-submit): the inline error renders immediately
-  // above ConsoleFormActions, so reason and next action stay visible
+  // after the review bar, so reason and next action stay visible
   // together. Instant only for this discrete error context transfer; the
   // global jump/motion behavior is untouched.
   function reportBlockedReload() {
@@ -1485,13 +1503,6 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     : simulateDraft
       ? "모의 발송(전달 없음)"
       : "실제 발송 시도";
-  const submitButtonLabel = busyAction === "campaign"
-    ? "요청 중…"
-    : scheduledDraft
-      ? "예약 등록(수동 실행)"
-      : simulateDraft
-        ? "모의 발송 기록"
-        : "발송 요청";
 
   return (
     <ConsolePage
@@ -1557,35 +1568,15 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
             headingId="campaign-heading"
               title="메시지 작성"
               action={<span className={styles.selectionCount}>{selectedCount}명 선택</span>}
-              width="form"
               surface="panel"
               divider
             >
               <form className={uiStyles.formStack} onSubmit={requestCampaignCreate}>
-                {/* Long-form guard: the recipient picker sits far below, so the
-                    compose head restates who this goes to and jumps straight
-                    there. Counts stay detailed in the 발송 대상 summary. */}
-                {/* In-form skip: recipients chosen means "confirmed" — one
-                    stop jumps straight onto the real submit button. It sits
-                    with the recipient summary so the shortcut is found
-                    before the long recipient list. */}
-                <div className={styles.sendSkip}>
-                  <button
-                    type="button"
-                    id="campaign-send-skip"
-                    data-skip-to="campaign-submit"
-                    className={styles.textButton}
-                    onClick={jumpToCampaignSubmit}
-                  >
-                    발송 요청으로 이동
-                  </button>
-                  <span className={styles.help}>수신자 선택을 마쳤으면 바로 발송 버튼으로 포커스를 옮깁니다.</span>
-                </div>
                 <div className={styles.recipientTopBar}>
                   <span>
                     {selectedCount > 0
                       ? `수신자 ${selectedCount}명 선택 · 확정 ${selectedApproved}명`
-                      : "수신자 0명 선택 · 수신자를 먼저 고르세요"}
+                      : "수신자 0명 선택 · 작성 후 수신자를 선택할 수 있습니다"}
                   </span>
                   <button
                     type="button"
@@ -1597,12 +1588,23 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   >
                     수신자 선택으로 이동
                   </button>
+                  <button
+                    type="button"
+                    id="campaign-send-skip"
+                    data-skip-to="campaign-submit"
+                    className={styles.textButton}
+                    onClick={jumpToCampaignSubmit}
+                  >
+                    발송 검토로 이동
+                  </button>
                 </div>
-                <div>
-                  {reloadSummary ? (
-                    <ConsoleFeedback kind="info" id="campaign-reload-summary">{reloadSummary}</ConsoleFeedback>
-                  ) : null}
-                  <label htmlFor="campaign-title">발송 제목</label>
+                <div className={styles.composeGrid}>
+                  <div className={uiStyles.formStack}>
+                    <div>
+                      {reloadSummary ? (
+                        <ConsoleFeedback kind="info" id="campaign-reload-summary">{reloadSummary}</ConsoleFeedback>
+                      ) : null}
+                      <label htmlFor="campaign-title">발송 제목</label>
                   <input
                     id="campaign-title"
                     maxLength={100}
@@ -1707,6 +1709,33 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   </div>
                 ) : null}
 
+                <div className={uiStyles.formGrid}>
+                  <div>
+                    <label htmlFor="campaign-scheduled">예약 등록(수동 실행) · 선택</label>
+                    <input
+                      id="campaign-scheduled"
+                      type="datetime-local"
+                      value={campaignDraft.scheduled}
+                      aria-invalid={campaignFieldError?.field === "scheduled"}
+                      aria-describedby={campaignFieldError?.field === "scheduled" ? "campaign-scheduled-error campaign-scheduled-help" : "campaign-scheduled-help"}
+                      onChange={(event) => setCampaignDraft({ ...campaignDraft, scheduled: event.target.value })}
+                    />
+                    <p className={styles.help} id="campaign-scheduled-help">
+                      예약 시각 이후 이 화면에서 발송 실행을 눌러야 합니다. 자동 발송은 지원하지 않습니다.
+                    </p>
+                    {campaignFieldError?.field === "scheduled" ? <p className={styles.fieldError} id="campaign-scheduled-error" role="alert">{campaignFieldError.message}</p> : null}
+                  </div>
+                  <label className={styles.simulateOption}>
+                    <input
+                      type="checkbox"
+                      checked={campaignDraft.simulate}
+                      onChange={(event) => setCampaignDraft({ ...campaignDraft, simulate: event.target.checked })}
+                    />
+                    <span><strong>모의 발송으로 기록</strong><small>실제 수신자에게 전달되지 않습니다.</small></span>
+                  </label>
+                </div>
+                  </div>
+
                 <fieldset id="campaign-recipients" className={styles.recipientFieldset} aria-describedby={campaignFieldError?.field === "ids" ? "campaign-recipients-error" : "recipient-summary"}>
                   <legend>발송 대상</legend>
                   <div className={styles.recipientFilters}>
@@ -1799,55 +1828,28 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   </details>
                   {campaignFieldError?.field === "ids" ? <p className={styles.fieldError} id="campaign-recipients-error" role="alert">{campaignFieldError.message}</p> : null}
                 </fieldset>
-
-
-
-                <div className={uiStyles.formGrid}>
-                  <div>
-                    <label htmlFor="campaign-scheduled">예약 등록(수동 실행) · 선택</label>
-                    <input
-                      id="campaign-scheduled"
-                      type="datetime-local"
-                      value={campaignDraft.scheduled}
-                      aria-invalid={campaignFieldError?.field === "scheduled"}
-                      aria-describedby={campaignFieldError?.field === "scheduled" ? "campaign-scheduled-error campaign-scheduled-help" : "campaign-scheduled-help"}
-                      onChange={(event) => setCampaignDraft({ ...campaignDraft, scheduled: event.target.value })}
-                    />
-                    <p className={styles.help} id="campaign-scheduled-help">
-                      예약 시각 이후 이 화면에서 발송 실행을 눌러야 합니다. 자동 발송은 지원하지 않습니다.
-                    </p>
-                    {campaignFieldError?.field === "scheduled" ? <p className={styles.fieldError} id="campaign-scheduled-error" role="alert">{campaignFieldError.message}</p> : null}
-                  </div>
-                  <label className={styles.simulateOption}>
-                    <input
-                      type="checkbox"
-                      checked={campaignDraft.simulate}
-                      onChange={(event) => setCampaignDraft({ ...campaignDraft, simulate: event.target.checked })}
-                    />
-                    <span><strong>모의 발송으로 기록</strong><small>실제 수신자에게 전달되지 않습니다.</small></span>
-                  </label>
                 </div>
 
-                {campaignError ? <p className={styles.fieldError} role="alert">{campaignError}</p> : null}
-                <ConsoleFormActions
-                  note={(
-                    <span id="campaign-submit-warning">
-                      선택 {selectedCount}명 · {channelLabel(campaignDraft.channel)} · {submitModeLabel}{simulateDraft ? "" : " · 발송은 되돌릴 수 없습니다."}
-                      {campaignDraft.channel === "MMS" && !simulateDraft ? " 별도 요금이 발생합니다." : ""}
-                      {selectedCount === 0 ? " 수신자를 먼저 고르세요." : ""}
-                    </span>
-                  )}
-                >
+                <div className={styles.reviewBar}>
+                  <p className={styles.reviewSummary} id="campaign-submit-warning">
+                    선택 {selectedCount}명 · {channelLabel(campaignDraft.channel)} · {submitModeLabel}{simulateDraft ? "" : " · 발송은 되돌릴 수 없습니다."}
+                    {campaignDraft.channel === "MMS" && !simulateDraft ? " 별도 요금이 발생합니다." : ""}
+                    {selectedCount === 0 ? " 수신자를 먼저 고르세요." : ""}
+                  </p>
                   <button
                     id="campaign-submit"
                     className="button button-primary"
                     type="submit"
-                    disabled={busyAction !== null || uploadingImage || archived}
-                    title={archived ? archivedReason : undefined}
+                    disabled={selectedCount === 0 || busyAction !== null || uploadingImage || archived}
+                    aria-describedby="campaign-submit-warning"
+                    title={archived ? archivedReason : selectedCount === 0 ? "수신자를 먼저 고르세요." : undefined}
                   >
-                    {submitButtonLabel}
+                    {busyAction === "campaign" ? "요청 중…" : "발송 검토"}
                   </button>
-                </ConsoleFormActions>
+                  <span className={styles.help}>선택·채널·모의를 확인하고 누르면 발송 확인이 열립니다.</span>
+                </div>
+
+                {campaignError ? <p className={styles.fieldError} role="alert">{campaignError}</p> : null}
                 {sendPending ? (
                   <ConsoleConfirm
                     summary={confirmLines(sendPending.summary)}
@@ -1991,6 +1993,10 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
             divider
           >
             <p className={styles.help}>발송 기록에는 참가자 티켓 링크가 표시되지 않습니다.</p>
+            <details className={styles.historyDetails} open={historyOpen} onToggle={(event) => setHistoryOpen((event.target as HTMLDetailsElement).open)}>
+              <summary>
+                {historyOpen ? "발송 기록 닫기" : `발송 기록 열기${visibleCampaigns.length > 0 ? ` (${visibleCampaigns.length}건)` : ""}`}
+              </summary>
             {attentionOnly ? (
               <div className={styles.attentionFilter}>
                 <p role="status">발송 확인이 필요한 발송만 보고 있습니다 · {visibleCampaigns.length}건</p>
@@ -2160,6 +2166,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   : "발송 기록이 없습니다. 위에서 수신 대상을 선택해 첫 발송을 준비하세요."}
               </p>
             )}
+            </details>
           </ConsoleSection>
         </>
       )}

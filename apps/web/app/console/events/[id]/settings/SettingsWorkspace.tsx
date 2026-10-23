@@ -454,6 +454,31 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     return () => cancelAnimationFrame(frame);
   }, [state, eventId]);
 
+  // A jump straight to a collapsed zone unfolds it: native anchors land on
+  // the always-visible section heading, but the folded body would stay
+  // hidden without this. The closeStep return flow above keeps owning its
+  // focus handoff; this only ensures the targeted collapse is open, on every
+  // viewport. Zone order, anchors, and independent per-zone saves stay put.
+  useEffect(() => {
+    if (state.kind !== "ready") return;
+    const applyHash = () => {
+      const hash = window.location.hash;
+      const target = hash === "#settings-stage"
+        ? "stage"
+        : hash === "#settings-page"
+          ? "page"
+          : null;
+      if (!target) return;
+      const details = document.querySelector<HTMLDetailsElement>(
+        `details[data-settings-collapse="${target}"]`
+      );
+      if (details && !details.open) details.open = true;
+    };
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+  }, [state]);
+
   useEffect(() => {
     if (state.kind !== "ready") return;
     if (typeof IntersectionObserver === "undefined") return;
@@ -649,8 +674,15 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   const archivedReason = "보관된 행사는 읽기 전용입니다";
   // 접힌 요약에 현재 상태를 보여 주기 위한 한 줄 요약. 펼치면 기존 동작 그대로.
   const stageSummary = `진행 단계 · 현재 ${stageText}`;
+  // A published page with newer draft edits names both, so the folded row
+  // still answers "what do attendees see, and what is waiting". No new copy:
+  // both versions already render in the unfolded body below.
+  const pageHasUnpublishedDraft = state.pagePublishedVersion > 0
+    && state.pageDraftVersion > state.pagePublishedVersion;
   const pageSummary = state.pagePublishedVersion > 0
-    ? `참가자 페이지 · 게시 버전 ${state.pagePublishedVersion}`
+    ? (pageHasUnpublishedDraft
+        ? `참가자 페이지 · 게시 버전 ${state.pagePublishedVersion} · 새 초안 ${state.pageDraftVersion} 미게시`
+        : `참가자 페이지 · 게시 버전 ${state.pagePublishedVersion}`)
     : `참가자 페이지 · 초안 ${state.pageDraftVersion} · 미게시`;
 
   function sectionStatusLine(status: SectionStatus | null, section: SettingsSectionId) {
@@ -756,7 +788,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       )}
     >
       <p className={styles.scopeNote} data-settings-scope-note>
-        화면은 기본 정보·참가 접수·기능·진행 단계로 나뉘며, 각 구역의 저장 버튼이 그 구역만 저장합니다.
+        화면은 기본 정보·참가 접수·기능·진행 단계·참가자 페이지로 나뉘며, 각 구역의 저장·게시·전환은 그 구역에만 적용됩니다.
       </p>
       <ConsoleSection headingId="settings-basics" title="기본 정보" width="form">
         <form
@@ -827,7 +859,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           {state.basics.clientId ? (
             <p className={styles.help}>연결된 고객사는 다른 고객사로만 바꿀 수 있고, 비우기로 끊을 수는 없습니다.</p>
           ) : null}
-          <div className={uiStyles.formGrid}>
+          <div className={`${uiStyles.formGrid} ${styles.scheduleFields}`}>
             <div>
               <label htmlFor="set-date">행사 날짜</label>
               <input

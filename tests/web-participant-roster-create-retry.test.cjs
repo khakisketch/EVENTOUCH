@@ -27,22 +27,20 @@ test('web-participant-roster-is-compact-with-coherent-columns', () => {
   assert.match(list, /styles\.participantStatus/);
   assert.match(css, /\.rosterHead\s*\{/);
   assert.match(css, /\.participantStatus\s*\{/);
-  // Header and rows share identical fixed tracks (status 112px, action
-  // 160px): independent `auto` tracks let narrow/wide controls shift the
-  // columns apart (header 상태/작업 vs pills/actions). Action controls fill
-  // their track so every row's action starts at the same x.
-  assert.match(css, /\.rosterHead\s*\{[^}]*grid-template-columns:\s*44px minmax\(0, 1fr\) 112px 160px/s);
-  assert.match(css, /\.participantRow\s*\{[^}]*grid-template-columns:\s*44px minmax\(0, 1fr\) 112px 160px/s);
+  // Header and rows share contact/status/action tracks (136/112/160px):
+  // independent auto tracks would shift columns with action-label width.
+  assert.match(css, /\.rosterHead\s*\{[^}]*grid-template-columns:\s*44px minmax\(0, 1fr\) 136px 112px 160px/s);
+  assert.match(css, /\.participantRow\s*\{[^}]*grid-template-columns:\s*44px minmax\(0, 1fr\) 136px 112px 160px/s);
   assert.match(list, /rosterHeadStatus/);
   assert.match(list, /rosterHeadAction/);
   assert.match(css, /\.rosterHeadStatus\s*\{/);
   assert.match(css, /\.rosterHeadAction\s*\{/);
   assert.match(css, /\.participantActions \.button\s*\{[^}]*width:\s*100%/s);
-  assert.match(css, /\.participantActions select\s*\{[^}]*width:\s*100%/s);
+  assert.match(css, /\.detailActions select\s*\{[^}]*flex:\s*1 1 220px/s);
   // Rows stay compact but never below the 44px touch target.
-  assert.match(css, /min-height:\s*60px/);
+  assert.match(css, /\.participantRow\s*\{[^}]*min-height:\s*44px/s);
   assert.match(css, /\.participantActions \.button\s*\{[^}]*min-height:\s*44px/s);
-  assert.match(css, /\.participantActions select\s*\{[^}]*min-height:\s*44px/s);
+  assert.match(css, /\.detailActions select\s*\{[^}]*min-height:\s*44px/s);
   assert.doesNotMatch(css, /min-height:\s*40px/);
   // Identity stays on the row: name + company/masked contact, full digits
   // only in the CSV export.

@@ -64,7 +64,8 @@ test('preparation sections keep stable heading ids and form reading width', () =
   const composeHeader = PAGES.messages.slice(composeStart, PAGES.messages.indexOf('<form', composeStart));
   assert.ok(composeStart > 0);
   assert.match(composeHeader, /surface="panel"/u, 'compose stays a panel');
-  assert.match(composeHeader, /width="form"/u, 'compose keeps the shared form width');
+  assert.doesNotMatch(composeHeader, /width="form"/u, 'two-column workbench uses the shared full workspace width');
+  assert.match(PAGES.messages, /className=\{styles\.composeGrid\}/u, 'composition and recipients share one workbench');
   for (const id of ['settings-basics', 'settings-intake', 'settings-features', 'settings-stage', 'settings-page']) {
     assert.match(PAGES.settings, new RegExp(`headingId="${id}"`), `settings keeps ${id}`);
   }
@@ -83,7 +84,8 @@ test('preparation feedback and editing-unit actions use the shared components', 
     assert.match(source, /<ConsoleFormActions/u, `${pageId} closes editing units with shared actions`);
   }
   assert.match(PAGES.messages, /<ConsoleFormActions/u);
-  assert.match(PAGES.messages, /note=\{/u, 'compose keeps its target/mode safeguard beside the submit');
+  assert.match(PAGES.messages, /className=\{styles\.reviewBar\}/u, 'compose keeps its target/mode safeguard beside the submit');
+  assert.match(PAGES.messages, /id="campaign-submit-warning"/u);
 });
 
 test('preparation dialogs use the shared shell with dismissal gates', () => {
@@ -116,7 +118,7 @@ test('archived events read as read-only with the reason on every write control',
     assert.match(source, /보관된 행사는 읽기 전용입니다/u, `${pageId} names the reason`);
   }
   assert.match(PAGES.settings, /disabled=\{busy \|\| archived\}/u);
-  assert.match(PAGES.messages, /disabled=\{busyAction !== null \|\| uploadingImage \|\| archived\}/u);
+  assert.match(PAGES.messages, /disabled=\{selectedCount === 0 \|\| busyAction !== null \|\| uploadingImage \|\| archived\}/u);
   assert.match(PAGES.content, /disabled=\{busy !== null \|\| archived\}/u);
   assert.match(PAGES.operations, /const writeBlocked = archived \|\| !state\.canManage/u);
   assert.match(PAGES.operations, /disabled=\{busy \|\| writeBlocked\}/u);
