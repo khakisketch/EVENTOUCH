@@ -86,7 +86,12 @@ test('home-drops-unused-hint-title-console-drops-unused-primary', () => {
   assert.match(home, /\.voteTitle\s*\{/u, '.voteTitle stays exported');
   const consoleHome = read('apps/web/app/console/console-home.module.css');
   assert.doesNotMatch(consoleHome, /\.metric-primary/u, 'console-home .metric-primary stays removed');
-  assert.match(consoleHome, /\.eventCardTop\s*\{/u, '.eventCardTop stays exported');
+  // A2 supersedes the old date-slab top row: eventCardTop stays removed and
+  // the zone/body/foot structure stays exported.
+  assert.doesNotMatch(consoleHome, /\.eventCardTop\s*\{/u, '.eventCardTop stays removed with the A2 card');
+  assert.match(consoleHome, /\.eventCardZone\s*\{/u, '.eventCardZone stays exported');
+  assert.match(consoleHome, /\.eventCardBody\s*\{/u, '.eventCardBody stays exported');
+  assert.match(consoleHome, /\.eventCardFoot\s*\{/u, '.eventCardFoot stays exported');
   const globals = read('apps/web/app/globals.css');
   assert.doesNotMatch(globals, /\.metric-card\.metric-primary/u, 'globals .metric-card.metric-primary stays removed');
   assert.doesNotMatch(globals, /\.metric-card\s*\{/u, 'globals .metric-card base stays removed');

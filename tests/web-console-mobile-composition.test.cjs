@@ -89,14 +89,33 @@ test('event directory cards show identity, not permanent participant KPIs', () =
   const home = read('app/console/ConsoleHome.tsx');
   const card = home.slice(home.indexOf('function EventCard('), home.indexOf('export default function ConsoleHome'));
   assert.doesNotMatch(card, /등록 인원|현재 입장|<dl|eventMetrics|metricNumber/u);
-  assert.match(card, /event\.pending > 0 \? \(\s*<Link\s*className=\{styles\.approvalLink\}/su);
+  assert.match(card, /\{event\.pending > 0 \? \(\s*<div className=\{styles\.eventCardActions\}>/su);
+  assert.match(card, /<Link\s*className=\{styles\.approvalLink\}/su);
   assert.match(card, /승인 대기 \{event\.pending\}명 처리/u);
   assert.match(card, /participants\?status=PENDING/u);
   assert.ok(card.indexOf('</Link>') < card.indexOf('className={styles.approvalLink}'), 'queue is not nested in overview link');
-  assert.match(card, /onClick=\{\(\) => onDuplicate\(event\)\}/u, 'duplication remains a separate control');
+  // A2: no per-card duplicate and no always-empty footer. Duplication lives
+  // in the create dialog's source select; the actions row only renders for
+  // a real pending queue.
+  assert.doesNotMatch(card, /onDuplicate|복제/u, 'no per-card duplicate control');
+  assert.doesNotMatch(card, /styles\.eventCardAction[^s]/u, 'duplicate styling does not linger');
+  assert.match(card, /\{event\.pending > 0 \? \(\s*<div className=\{styles\.eventCardActions\}>/su);
+  // A2 structure: title + grouped date·time in the tinted zone, client/venue
+  // + stage + recency + decorative arrow in the paper body. Whole card is one
+  // entry link whose name comes from its contents; the pending link stays
+  // outside it.
+  // (The entry affordance is pinned in console-event-card-a2.test.cjs.)
+  assert.match(card, /styles\.eventCardZone/u);
+  assert.match(card, /styles\.eventDateTime/u);
+  assert.match(card, /styles\.eventCardBody/u);
+  assert.match(card, /styles\.eventCardFoot/u);
+  assert.match(card, /일정 미정/u, 'unknown dates stay explicit, never blank or inferred');
+  assert.match(card, /cardHeaderTheme\(event\.themeColor\)/u, 'published-only header theme');
   const css = read('app/console/console-home.module.css');
-  assert.doesNotMatch(css, /\.eventMetrics|\.metricAttention|\.metricNumber/u, 'removed metric styling does not linger');
+  assert.doesNotMatch(css, /\.eventMetrics|\.metricAttention|\.metricNumber|\.eventCardAction[^s]/u, 'removed metric/duplicate styling does not linger');
   assert.match(css, /\.approvalLink\s*\{[^}]*min-height:\s*44px/su);
+  assert.match(css, /\.eventCardZone\s*\{[^}]*background:\s*var\(--card-zone,\s*var\(--soft\)\)/su);
+  assert.match(css, /\.eventDateTime\s*\{[^}]*color:\s*var\(--card-zone-ink,\s*var\(--brand-text\)\)/su);
 });
 
 test('home filter lattice shares one stage-plus-approval row at phone widths', () => {
@@ -109,9 +128,12 @@ test('home filter lattice shares one stage-plus-approval row at phone widths', (
   assert.doesNotMatch(css, /\.homeStage\s*>\s*span\s*\{[^}]*display:\s*none/su);
   assert.doesNotMatch(css, /\.workFilter\s*\{[^}]*white-space:\s*nowrap/su);
   assert.doesNotMatch(css, /^\.toolbar\s*\{/mu, 'dead local toolbar grid is gone');
-  // Cards keep their identity but drop the oversized floor and padding.
+  // A2 cards size from their zone/body padding, not an oversized floor: the
+  // tinted zone and the paper body own the rhythm, with a 220px minimum.
   assert.doesNotMatch(css, /\.eventCard\s*\{[^}]*min-height:\s*280px/su);
-  assert.match(css, /\.eventCard\s*\{[^}]*padding:\s*var\(--s4\)/su);
+  assert.match(css, /\.eventCard\s*\{[^}]*min-height:\s*220px/su);
+  assert.match(css, /\.eventCardZone\s*\{[^}]*padding:\s*var\(--s4\) var\(--s4\) var\(--s3\)/su);
+  assert.match(css, /\.eventCardBody\s*\{[^}]*padding:\s*var\(--s3\) var\(--s4\) var\(--s2\)/su);
 });
 
 test('home stage filtering is a compact flat control, not a card-like form box', () => {

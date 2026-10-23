@@ -22,6 +22,7 @@
     "mobile": "node scripts/mobile-audit.cjs",
     "web:audit": "node scripts/web-audit.cjs",
     "web:console:audit": "node scripts/web-console-audit.cjs",
+    "web:cards:audit": "node scripts/web-event-card-a2-audit.cjs",
     "web:close:audit": "node scripts/web-event-close-journey-audit.cjs",
     "web:import:audit": "node scripts/web-import-audit.cjs",
     "web:hanwool:audit": "node scripts/web-hanwool-audit.cjs",

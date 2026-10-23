@@ -208,45 +208,15 @@
   align-items: center;
   justify-content: flex-end;
   gap: var(--s1) var(--s3);
-  margin-top: auto;
-  padding-top: var(--s1);
+  margin: 0;
+  padding: var(--s2) var(--s4);
   border-top: 1px solid var(--line);
-}
-
-.eventCardAction {
-  display: inline-flex;
-  min-height: 44px;
-  /* The duplicate affordance is a compact text action: it still owns a full
-     44px target in both axes without growing the card row. */
-  min-inline-size: var(--s7);
-  margin-left: auto;
-  align-items: center;
-  justify-content: center;
-  padding-inline: var(--s1);
-  border: 0;
-  border-radius: var(--radius-small);
-  background: transparent;
-  color: var(--brand-text);
-  font-size: var(--small);
-  font-weight: 700;
-  text-decoration: underline;
-  text-underline-offset: 4px;
-}
-
-.eventCardAction:hover {
-  color: var(--brand-hover);
-}
-
-.eventCardAction:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 2px;
 }
 
 .eventCardLink {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: var(--s2);
   border-radius: var(--radius);
   color: inherit;
   text-decoration: none;
@@ -254,7 +224,6 @@
 
 .eventCard:hover {
   border-color: var(--brand);
-  background: var(--soft);
   box-shadow: 0 4px 12px var(--shadow-color);
   transform: translateY(-2px);
   transition: all var(--enter) ease-out;
@@ -268,36 +237,74 @@
 .eventCard {
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
   height: 100%;
-  padding: var(--s4);
+  min-height: 220px;
   border: 2px solid var(--line);
   border-radius: var(--radius);
   background: var(--paper);
+  overflow: hidden;
   transition: all var(--enter) ease-out;
 }
 
-.eventCardTop {
+/* A2 soft-tinted header: title + grouped date·time. The surface defaults to
+   the brand-soft token; a published participant-home background arrives via
+   `--card-zone`/`--card-zone-ink` (pale 15% tint, 4.5:1-safe ink) and only
+   ever comes from `pageExperience.published` — drafts never tint cards. */
+.eventCardZone {
   display: grid;
-  grid-template-columns: minmax(var(--s8), auto) minmax(0, 1fr) 32px;
-  align-items: center;
-  gap: var(--s2);
-  min-width: 0;
+  gap: var(--s1);
+  padding: var(--s4) var(--s4) var(--s3);
+  background: var(--card-zone, var(--soft));
 }
 
-.eventCardTop > .eventRecency:empty {
+.eventDateTime {
+  margin: 0;
+  color: var(--card-zone-ink, var(--brand-text));
+  font-size: var(--small);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.eventCardBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--s1);
+  padding: var(--s3) var(--s4) var(--s2);
+  background: var(--paper);
+}
+
+.eventCardFoot {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-top: var(--s2);
+}
+
+.eventCardFoot > .eventRecency:empty {
   visibility: hidden;
 }
 
-.eventDate {
-  justify-self: end;
-  min-width: 0;
-  color: var(--ink);
-  font-family: var(--display-font);
-  font-size: var(--body);
+/* Stage keeps its semantic token colors; only the pill shape and the
+   leading dot live here. Never tinted by the event theme. */
+.eventCardFoot :global(.stage-badge) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: var(--small);
   font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+}
+
+.eventCardFoot :global(.stage-badge)::before {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
 }
 
 .eventRecency {
@@ -328,21 +335,16 @@
 }
 
 .cardArrow {
-  width: 20px;
-  height: 20px;
-  justify-self: end;
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  flex: none;
   color: var(--brand-text);
-}
-
-.eventTime {
-  margin: calc(-1 * var(--s2)) 0 0;
-  color: var(--muted);
-  font-size: var(--small);
-  font-variant-numeric: tabular-nums;
 }
 
 .eventName {
   margin: 0;
+  color: var(--ink);
   font-size: var(--h3);
   line-height: 1.35;
   word-break: keep-all;
@@ -359,50 +361,12 @@
   font-weight: 600;
 }
 
-.eventIdentity {
-  display: grid;
-  gap: var(--s1);
-  min-width: 0;
-}
-
-.eventStatus {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2);
-  min-width: 0;
-  min-height: auto;
-  margin: var(--s2) 0 0;
-}
-
-.eventStatus :global(.stage-badge) {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s2);
-  padding: 4px 12px;
-  border-radius: 999px;
-  font-size: var(--small);
-  font-weight: 800;
-}
-
-.eventStatus :global(.stage-badge)::before {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  flex: none;
-  border-radius: 50%;
-  background: currentColor;
-  content: "";
-}
-
 /* A follow-up only when a queue exists, not a permanent third KPI. */
 .approvalLink {
   display: inline-flex;
   align-items: center;
   min-width: 0;
   min-height: 44px;
-  /* Same compact text-action floor as the duplicate button: the queue link
-     never shrinks below a full target either. */
   min-inline-size: var(--s7);
   color: var(--brand-text);
   font-size: var(--small);
@@ -526,6 +490,44 @@
   margin: var(--s1) 0 0;
   color: var(--muted);
   font-size: var(--small);
+}
+
+/* In-dialog create-mode choice: compact inline radios. The global input
+   box (44px + border) would turn each radio into a giant circle, so the
+   group restores the same 20px checkbox voice the directory filters use. */
+.modeGroup {
+  display: grid;
+  gap: var(--s1);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.modeGroup legend {
+  margin-bottom: var(--s1);
+  padding: 0;
+  font-weight: 650;
+}
+
+.modeGroup label {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0;
+  cursor: pointer;
+}
+
+.modeGroup input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  flex: none;
+  accent-color: var(--brand-text);
 }
 
 .duplicateContext {

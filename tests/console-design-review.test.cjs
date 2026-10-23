@@ -156,7 +156,7 @@ test("countdown defaults quiet and fills only for today and tomorrow", () => {
   assert.match(css, /\.eventRecency\s*\{[^}]*background:\s*var\(--surface-muted\)/s);
   assert.match(css, /\.eventRecency\s*\{[^}]*color:\s*var\(--muted\)/s);
   assert.match(css, /\.eventRecencySoon\s*\{[^}]*background:\s*var\(--brand\)/s);
-  assert.match(css, /\.eventCardAction\s*\{[^}]*min-inline-size:\s*var\(--s7\)/s);
+  assert.doesNotMatch(css, /\.eventCardAction[^s]/s, "per-card duplicate styling is gone with the A2 card");
   assert.match(css, /\.approvalLink\s*\{[^}]*min-inline-size:\s*var\(--s7\)/s);
   const home = read("console/ConsoleHome.tsx");
   assert.match(home, /recency === "오늘" \|\| recency === "내일"/);
@@ -166,10 +166,15 @@ test("countdown defaults quiet and fills only for today and tomorrow", () => {
   }
 });
 
-test("directory cards keep their order, content and countdown logic", () => {  const home = read("console/ConsoleHome.tsx");
+test("directory cards keep their A2 order, content and countdown logic", () => {  const home = read("console/ConsoleHome.tsx");
   const card = home.slice(home.indexOf("function EventCard("), home.indexOf("export default function ConsoleHome()"));
-  const order = ["eventRecency", "eventDate", "eventName", "eventStatus"].map((name) => card.indexOf(name));
-  assert.deepEqual([...order].sort((a, b) => a - b), order, "recency, date, name and status keep their positions");
+  // A2: title + grouped date·time in the tinted zone, then client/venue,
+  // stage and recency in the paper body. The old date-slab order
+  // (recency/date/name/status) is superseded by the approved A2 card.
+  // styles.* markers first occur in the JSX (logic helpers live above).
+  const order = ["styles.eventName", "styles.eventDateTime", "styles.eventClient", "eventStageClassName", "styles.eventRecency"].map((name) => card.indexOf(name));
+  assert.ok(order.every((position) => position >= 0), "A2 card keeps every identity token");
+  assert.deepEqual([...order].sort((a, b) => a - b), order, "title, date·time, client, stage and recency keep their A2 positions");
   assert.match(home, /event\.date > todayKey/);
   assert.match(home, /date === todayKey/);
   assert.match(home, /className=\{styles\.eventCard\}>/);

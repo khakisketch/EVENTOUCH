@@ -6,12 +6,26 @@ import ConsoleDialog from "./console-ui/ConsoleDialog";
 import ConsoleFormActions from "./console-ui/ConsoleFormActions";
 import ui from "./console-ui/console-ui.module.css";
 import { useConsoleDraftGuard } from "./console-draft-guard";
+import { eventStageLabel } from "../event-stage";
 
 type Client = { id: string; name: string };
 
-// Duplicate mode reuses the create dialog: the operator confirms the new
-// name/slug/date before the copy lands, and the dialog posts to the source
-// event's duplicate endpoint instead of event creation.
+// A duplicate candidate is any permission-available event the directory
+// already loaded: no extra fetch, no new endpoint. The dialog posts to the
+// source event's existing duplicate endpoint with the same data semantics
+// as the former per-card duplicate (name/slug/date/times/capacity prefill,
+// no clientId — the copy keeps the source's customer).
+export type DuplicateCandidate = {
+  id: string;
+  name: string;
+  slug: string;
+  clientName: string;
+  date: string;
+  start: string;
+  end: string;
+  capacity: number;
+  stage: string;
+};
 type DuplicateSource = {
   id: string;
   name: string;
@@ -48,12 +62,14 @@ function displayDate(value: string): string {
 export default function CreateEventDialog({
   clients,
   duplicateOf = null,
+  duplicateSources = [],
   onClose,
   onCreated,
   onClientRegistered,
 }: {
   clients: Client[];
   duplicateOf?: DuplicateSource | null;
+  duplicateSources?: DuplicateCandidate[];
   onClose: () => void;
   onCreated: (eventId: string) => void;
   onClientRegistered?: (client: Client) => void;
@@ -76,6 +92,44 @@ export default function CreateEventDialog({
   const [failure, setFailure] = useState<{ message: string; field?: string; retryable?: boolean } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [slugTouched, setSlugTouched] = useState(() => Boolean(duplicateOf));
+  // Duplication lives inside this dialog now (per-card duplicate removed):
+  // "새 행사" is the fastest default path with fields immediate; "기존 행사
+  // 복제" reveals a stage-labeled source select over the same fields. The
+  // legacy `duplicateOf` prop still forces copy mode for compatibility.
+  const canOfferCopy = duplicateOf === null && duplicateSources.length > 0;
+  const [mode, setMode] = useState<"new" | "copy">("new");
+  const [sourceId, setSourceId] = useState("");
+  const sourceSelectRef = useRef<HTMLSelectElement>(null);
+  // Mode/source transitions replace the event payload, so they must never
+  // run while the event write is in flight or its outcome is unresolved:
+  // replacing the fields would orphan the pending idempotency receipt and
+  // desync the draft from the same-request retry the failure note points
+  // at. These synchronous ref gates are authoritative; the disabled
+  // attributes below are only their visual voice. Field edits keep the old
+  // semantics (a changed payload mints a new command id via the
+  // fingerprint); only control transitions are locked.
+  const [modeNotice, setModeNotice] = useState<string | null>(null);
+
+  function transitionBlocked(): "inflight" | "receipt-event" | "receipt-client" | null {
+    if (submitGateRef.current || submitting || clientWriteRef.current || clientSaving) return "inflight";
+    if (commandIdRef.current) return "receipt-event";
+    if (pendingClientRef.current) return "receipt-client";
+    return null;
+  }
+
+  function guardTransition(): boolean {
+    const blocked = transitionBlocked();
+    if (!blocked) {
+      setModeNotice(null);
+      return true;
+    }
+    if (blocked === "receipt-event") {
+      setModeNotice("행사 생성 결과를 아직 확인하지 못했습니다. 같은 요청으로 다시 시도해 결과를 확인한 뒤에 바꾸세요.");
+    } else if (blocked === "receipt-client") {
+      setModeNotice("고객사 등록 결과를 아직 확인하지 못했습니다. 같은 요청으로 다시 시도해 결과를 확인한 뒤에 바꾸세요.");
+    }
+    return false;
+  }
   // In-dialog customer registration: a "select" view with the existing
   // dropdown, and a "create" view that posts to the same organization REST
   // path the customer directory uses. One dialog, one focus trap — never a
@@ -120,6 +174,107 @@ export default function CreateEventDialog({
   const nameRef = useRef<HTMLInputElement>(null);
   const initialFields = useRef(JSON.stringify([name, slug, clientId, date, start, end, capacity]));
   const dirty = JSON.stringify([name, slug, clientId, date, start, end, capacity]) !== initialFields.current;
+  // The last applied prefill (or the blank draft) is the baseline a mode or
+  // source switch compares against: switching never silently wipes a typed
+  // draft — a differing draft asks first via the existing confirm gate.
+  const prefillBaselineRef = useRef(initialFields.current);
+  const draftDiffersFromPrefill =
+    JSON.stringify([name, slug, clientId, date, start, end, capacity]) !== prefillBaselineRef.current;
+
+  function snapshotFields(next: { name: string; slug: string; clientId: string; date: string; start: string; end: string; capacity: string }): string {
+    return JSON.stringify([next.name, next.slug, next.clientId, next.date, next.start, next.end, next.capacity]);
+  }
+
+  function applySourcePrefill(source: DuplicateCandidate) {
+    const next = {
+      name: `${source.name.slice(0, 95)} 복사본`.trim(),
+      slug: `${source.slug.slice(0, 45).replace(/-+$/, "")}-copy`,
+      clientId,
+      date: source.date,
+      start: source.start || "09:00",
+      end: source.end || "18:00",
+      capacity: source.capacity ? String(source.capacity) : "",
+    };
+    setName(next.name);
+    setSlug(next.slug);
+    setSlugTouched(true);
+    setDate(next.date);
+    setStart(next.start);
+    setEnd(next.end);
+    setCapacity(next.capacity);
+    generatedSlugRef.current = "";
+    commandIdRef.current = null;
+    setFailure(null);
+    prefillBaselineRef.current = snapshotFields(next);
+    initialFields.current = snapshotFields(next);
+  }
+
+  function clearToBlankDraft() {
+    const next = { name: "", slug: "", clientId, date: "", start: "09:00", end: "18:00", capacity: "" };
+    setName(next.name);
+    setSlug(next.slug);
+    setSlugTouched(false);
+    setDate(next.date);
+    setStart(next.start);
+    setEnd(next.end);
+    setCapacity(next.capacity);
+    generatedSlugRef.current = "";
+    commandIdRef.current = null;
+    setFailure(null);
+    prefillBaselineRef.current = snapshotFields(next);
+    initialFields.current = snapshotFields(next);
+  }
+
+  function requestMode(nextMode: "new" | "copy") {
+    if (nextMode === mode) return;
+    if (!guardTransition()) return;
+    if (draftDiffersFromPrefill) {
+      if (!window.confirm("입력한 행사 정보가 있습니다. 만들기 방식을 바꾸면 입력 내용이 바뀝니다. 바꾸시겠습니까?")) return;
+    }
+    if (nextMode === "new") {
+      setSourceId("");
+      clearToBlankDraft();
+    } else {
+      // Keep the typed draft visible until a source is actually chosen;
+      // choosing the source is what replaces the fields (with its own ask).
+      prefillBaselineRef.current = JSON.stringify([name, slug, clientId, date, start, end, capacity]);
+      initialFields.current = prefillBaselineRef.current;
+    }
+    setMode(nextMode);
+  }
+
+  function requestSource(nextId: string) {
+    if (nextId === sourceId) return;
+    if (!guardTransition()) return;
+    const source = duplicateSources.find((candidate) => candidate.id === nextId) ?? null;
+    if (!source) {
+      setSourceId("");
+      return;
+    }
+    if (draftDiffersFromPrefill) {
+      if (!window.confirm(`원본 "${source.name}"의 정보로 입력 내용이 바뀝니다. 바꾸시겠습니까?`)) return;
+    }
+    setSourceId(nextId);
+    applySourcePrefill(source);
+  }
+
+  const selectedSource = mode === "copy"
+    ? duplicateSources.find((candidate) => candidate.id === sourceId) ?? null
+    : null;
+  // The chosen source reuses the exact duplicate mechanism: same prefill
+  // shape, same duplicate endpoint, same copy contract.
+  const effectiveDuplicate: DuplicateSource | null = duplicateOf ?? (selectedSource
+    ? {
+        id: selectedSource.id,
+        name: selectedSource.name,
+        slug: selectedSource.slug,
+        clientName: selectedSource.clientName,
+        date: selectedSource.date,
+        start: selectedSource.start,
+        end: selectedSource.end,
+        capacity: selectedSource.capacity,
+      }
+    : null);
   const clientDraftDirty =
     newClientName.trim() !== "" || newClientContact.trim() !== "" || newClientEmail.trim() !== "";
   const allClients = [...clients, ...extraClients.filter((extra) => !clients.some((client) => client.id === extra.id))]
@@ -166,6 +321,16 @@ export default function CreateEventDialog({
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (submitGateRef.current || submitting) return;
+    // A new submit attempt supersedes any transition-block note: the failure
+    // message below (or the created event) is the current guidance.
+    setModeNotice(null);
+    // Copy mode without a chosen source is a definitive local error: no
+    // request leaves, no receipt is minted.
+    if (mode === "copy" && duplicateOf === null && !selectedSource) {
+      setFailure({ message: "복제할 원본 행사를 선택하세요.", field: "source" });
+      sourceSelectRef.current?.focus();
+      return;
+    }
     submitGateRef.current = true;
     setSubmitting(true);
     setFailure(null);
@@ -175,21 +340,21 @@ export default function CreateEventDialog({
       const payload = {
         name,
         slug: effectiveSlug,
-        ...(duplicateOf ? {} : { clientId: clientId || null }),
+        ...(effectiveDuplicate ? {} : { clientId: clientId || null }),
         date,
         start,
         end,
         capacity: capacity ? Number(capacity) : 0,
       };
-      const fingerprint = JSON.stringify([duplicateOf?.id ?? null, payload]);
+      const fingerprint = JSON.stringify([effectiveDuplicate?.id ?? null, payload]);
       const attempt = commandIdRef.current?.fingerprint === fingerprint
         ? commandIdRef.current
         : { fingerprint, commandId: randomCommandId() };
       commandIdRef.current = attempt;
       const commandId = attempt.commandId;
       const res = await fetch(
-        duplicateOf
-          ? `/api/events/${encodeURIComponent(duplicateOf.id)}/duplicate`
+        effectiveDuplicate
+          ? `/api/events/${encodeURIComponent(effectiveDuplicate.id)}/duplicate`
           : "/api/events",
         {
           method: "POST",
@@ -206,7 +371,7 @@ export default function CreateEventDialog({
         const serverMessage =
           typeof data?.error === "string"
             ? data.error
-            : duplicateOf
+            : effectiveDuplicate
               ? "행사를 복제하지 못했습니다."
               : "행사를 만들지 못했습니다.";
         if (isDefinitiveClientError(res.status)) {
@@ -253,6 +418,7 @@ export default function CreateEventDialog({
   async function saveNewClient(formEvent: React.FormEvent) {
     formEvent.preventDefault();
     if (clientWriteRef.current || clientSaving) return;
+    setModeNotice(null);
     clientWriteRef.current = true;
     setClientSaving(true);
     setClientFailure(null);
@@ -347,19 +513,28 @@ export default function CreateEventDialog({
     setClientMode("select");
   }
 
+  // Mode switches land on the newly revealed control so keyboard
+  // operators never lose their place; closing the dialog returns focus to
+  // the create entry via the shared ConsoleDialog restore.
+  useEffect(() => {
+    if (mode === "copy" && duplicateOf === null) {
+      sourceSelectRef.current?.focus();
+    }
+  }, [mode, duplicateOf]);
+
   return (
     <ConsoleDialog
-      title={duplicateOf ? "행사 복제" : "새 행사 만들기"}
+      title={effectiveDuplicate ? "행사 복제" : "새 행사 만들기"}
       titleId="create-event-title"
       onClose={onClose}
       canClose={canClose}
       busy={submitting}
       initialFocusRef={nameRef}
-      description={duplicateOf ? (
+      description={effectiveDuplicate ? (
           <div className={styles.duplicateContext} id="duplicate-scope">
             <p className={styles.duplicateSource}>
-              원본 <strong>{duplicateOf.name}</strong>
-              <span>· {displayDate(duplicateOf.date)}</span>
+              원본 <strong>{effectiveDuplicate.name}</strong>
+              <span>· {displayDate(effectiveDuplicate.date)}</span>
             </p>
             <dl className={styles.copyScope}>
               <div>
@@ -376,7 +551,7 @@ export default function CreateEventDialog({
           "새 고객사를 등록하면 이 행사의 고객사로 바로 선택됩니다. 입력 중인 행사 정보는 그대로 유지됩니다. 등록한 고객사는 행사 작성을 취소해도 고객사 목록에 남습니다."
         ) : undefined}
     >
-      {clientMode === "create" && !duplicateOf ? (
+      {clientMode === "create" && !effectiveDuplicate ? (
         <form onSubmit={saveNewClient} className={ui.formStack}>
           <div>
             <label htmlFor="create-new-client-name">고객사명 (필수)</label>
@@ -428,6 +603,53 @@ export default function CreateEventDialog({
         </form>
       ) : (
         <form onSubmit={onSubmit} className={ui.formStack}>
+          {canOfferCopy ? (
+            <fieldset className={styles.modeGroup} disabled={submitting || clientSaving}>
+              <legend>만들기 방식</legend>
+              <label>
+                <input
+                  type="radio"
+                  name="create-mode"
+                  checked={mode === "new"}
+                  onChange={() => requestMode("new")}
+                />
+                새로 만들기
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="create-mode"
+                  checked={mode === "copy"}
+                  onChange={() => requestMode("copy")}
+                />
+                기존 행사 복제
+              </label>
+            </fieldset>
+          ) : null}
+          {mode === "copy" && duplicateOf === null ? (
+            <div>
+              <label htmlFor="create-source">원본 행사</label>
+              <select
+                id="create-source"
+                ref={sourceSelectRef}
+                value={sourceId}
+                onChange={(event) => requestSource(event.target.value)}
+                disabled={submitting || clientSaving}
+                aria-invalid={invalid("source") || undefined}
+                aria-describedby="create-source-help"
+              >
+                <option value="">원본 행사를 선택하세요</option>
+                {duplicateSources.map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {candidate.name} · {eventStageLabel(candidate.stage) || "단계 미정"} · {displayDate(candidate.date)}
+                  </option>
+                ))}
+              </select>
+              <p className={styles.slugHint} id="create-source-help">권한 있는 행사만 나옵니다. 원본을 고르면 이름·주소·날짜·시간·정원이 들어갑니다.</p>
+              {invalid("source") ? <p role="alert">{failure?.message}</p> : null}
+            </div>
+          ) : null}
+          {modeNotice ? <p role="alert">{modeNotice}</p> : null}
           <div>
             <label htmlFor="create-name">행사명</label>
             <input
@@ -469,9 +691,9 @@ export default function CreateEventDialog({
             <p className={styles.slugHint}>참가자 주소에 쓰입니다. 영소문자·숫자·하이픈.</p>
             {invalid("slug") ? <p role="alert">{failure?.message}</p> : null}
           </div>
-          {duplicateOf ? (
+          {effectiveDuplicate ? (
             <>
-              <p className={styles.slugHint}>고객사: {duplicateOf.clientName || "선택하지 않음"}</p>
+              <p className={styles.slugHint}>고객사: {effectiveDuplicate.clientName || "선택하지 않음"}</p>
               <p className={styles.slugHint} role="note">복제 중에는 고객사를 새로 등록할 수 없습니다. 다른 고객사로 복제하려면 복제를 마친 뒤 행사 설정에서 바꾸거나, 고객사 화면에서 먼저 등록한 뒤 이 화면을 다시 여세요.</p>
             </>
           ) : clientMode === "create" ? null : (
@@ -560,8 +782,8 @@ export default function CreateEventDialog({
             </button>
             <button type="submit" className="button button-primary" disabled={submitting}>
               {submitting
-                ? duplicateOf ? "복제하는 중입니다" : "만드는 중입니다"
-                : duplicateOf ? "행사 복제" : "행사 만들기"}
+                ? effectiveDuplicate ? "복제하는 중입니다" : "만드는 중입니다"
+                : effectiveDuplicate ? "행사 복제" : "행사 만들기"}
             </button>
           </ConsoleFormActions>
         </form>

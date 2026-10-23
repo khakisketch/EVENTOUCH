@@ -21,7 +21,7 @@ function consoleFiles(dir = consoleRoot, found = []) {
   return found;
 }
 
-const GATE = /canClose|dirty|UNCONFIRMED_WRITE_CLOSE_MESSAGE|작성 중|확인하지 못했|이동할까요|열어두|유실/;
+const GATE = /canClose|dirty|UNCONFIRMED_WRITE_CLOSE_MESSAGE|작성 중|확인하지 못했|이동할까요|열어두|유실|입력한 행사 정보|입력 내용이 바뀝/;
 
 test("the shared confirmation announces itself and takes focus", () => {
   const component = read("console/console-ui/ConsoleConfirm.tsx");

@@ -434,13 +434,15 @@ test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   for (const label of ['전체', '준비 중', '진행 중', '종료·보관']) {
     assert.match(home, new RegExp(label));
   }
-  assert.match(home, /className=\{styles\.eventDate\}/);
-  assert.match(home, /className=\{styles\.eventStatus\}/);
+  assert.match(home, /className=\{styles\.eventCardZone\}/);
+  assert.match(home, /className=\{styles\.eventDateTime\}/);
+  assert.match(home, /className=\{styles\.eventCardBody\}/);
+  assert.match(home, /className=\{styles\.eventCardFoot\}/);
   // The approved directory summary leaves statistics in the event home.
   // Only a nonempty approval queue earns a small follow-up link.
   assert.doesNotMatch(home, /eventMetrics|등록 인원|현재 입장/);
   assert.match(home, /pending: countPending\(event\.id\)/);
-  assert.match(home, /event\.pending > 0 \? \(\s*<Link\s*className=\{styles\.approvalLink\}/);
+  assert.match(home, /event\.pending > 0 \? \(\s*<div className=\{styles\.eventCardActions\}>/);
   const overview = read('app/console/events/[id]/EventOverview.tsx');
   assert.match(overview, /headingId="event-metrics-heading"/);
   assert.match(overview, /overview\.registered/);
@@ -450,9 +452,10 @@ test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   assert.match(eventCard, /href=\{`\/console\/events\/\$\{encodeURIComponent\(event\.id\)\}`\}/);
   assert.match(eventCard, /participants\?status=PENDING/);
   // The pending queue is its own link outside the overview link; no nested
-  // anchors and no inline editing controls on the card.
+  // anchors, no per-card duplicate, and no always-empty footer on the card.
   assert.doesNotMatch(eventCard, /<a\b/);
-  assert.match(eventCard, /<\/Link>[\s\S]*styles\.eventCardActions[\s\S]*?복제/);
+  assert.match(eventCard, /<\/Link>[\s\S]*styles\.eventCardActions[\s\S]*?승인 대기/);
+  assert.doesNotMatch(eventCard, /복제/);
   assert.doesNotMatch(home, /localStorage/);
   assert.doesNotMatch(home, /sessionStorage/);
   // The create dialog mounts the shared shell: creation focus rides nameRef
@@ -481,7 +484,11 @@ test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   assert.match(dialogCss, /\.dialog-actions/);
   const css = read('app/console/console-home.module.css');
   assert.match(css, /\.eventRecency/);
-  assert.match(css, /\.eventCardTop/);
+  assert.match(css, /\.eventCardZone/);
+  assert.match(css, /\.eventDateTime/);
+  assert.match(css, /\.eventCardBody/);
+  assert.match(css, /\.eventCardFoot/);
+  assert.doesNotMatch(css, /\.eventCardTop/);
   assert.match(css, /\.eventCardLink:focus-visible/);
   assert.match(css, /\.approvalLink:focus-visible/);
   assert.match(css, /\.approvalLink\s*\{[^}]*min-height:\s*44px/s);
@@ -1057,14 +1064,17 @@ test('web-settings-uses-the-preparation-command-set', () => {
 test('web-event-duplicate-copies-configuration-without-records', () => {
   const home = read('app/console/ConsoleHome.tsx');
   const dialog = read('app/console/CreateEventDialog.tsx');
-  assert.match(home, /duplicateSource/);
-  assert.match(home, /onDuplicate=\{setDuplicateSource\}/);
-  assert.match(dialog, /duplicateOf/);
-  assert.match(dialog, /\/api\/events\/\$\{encodeURIComponent\(duplicateOf\.id\)\}\/duplicate/);
+  // A2: no per-card duplicate. Duplication lives in the create dialog's
+  // stage-labeled source select over permission-available events, reusing the
+  // same duplicate endpoint and copy contract.
+  assert.doesNotMatch(home, /onDuplicate|setDuplicateSource/);
+  assert.match(home, /duplicateSources=\{state\.events\.map/);
+  assert.match(dialog, /duplicateSources\?: DuplicateCandidate\[\]/);
+  assert.match(dialog, /\/api\/events\/\$\{encodeURIComponent\(effectiveDuplicate\.id\)\}\/duplicate/);
   assert.match(dialog, /참가자·티켓·입장·발송·당첨 기록/);
   assert.doesNotMatch(dialog, /localStorage|sessionStorage/);
   const homeCss = read('app/console/console-home.module.css');
-  assert.match(homeCss, /\.eventCardAction\s*\{[^}]*min-height:\s*44px/s);
+  assert.doesNotMatch(homeCss, /\.eventCardAction[^s]/s);
 });
 
 

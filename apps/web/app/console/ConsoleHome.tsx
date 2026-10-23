@@ -10,6 +10,8 @@ import ConsoleToolbar from "./console-ui/ConsoleToolbar";
 import ConsoleSection from "./console-ui/ConsoleSection";
 import ConsoleStatePanel from "./console-ui/ConsoleStatePanel";
 import CreateEventDialog from "./CreateEventDialog";
+import type { CSSProperties } from "react";
+import { cardHeaderTheme, readPublishedCardColor } from "./event-card-theme";
 import styles from "./console-home.module.css";
 
 type ConsoleEvent = {
@@ -24,6 +26,10 @@ type ConsoleEvent = {
   venue: string;
   pending: number;
   capacity: number;
+  // Published participant-home background (`#RRGGBB`) or null when the event
+  // has no trustworthy published style. Drafts never reach cards; the header
+  // falls back to the existing `--soft` surface.
+  themeColor: string | null;
 };
 type EventFilter = "all" | "preparing" | "live" | "closed";
 type HomeView = "cards" | "calendar";
@@ -137,12 +143,10 @@ function EventCard({
   event,
   clientName,
   todayKey,
-  onDuplicate,
 }: {
   event: ConsoleEvent;
   clientName: string;
   todayKey: string;
-  onDuplicate: (event: ConsoleEvent) => void;
 }) {
   const recency = eventRecency(event.date, todayKey);
   // Only the countdown at hand earns the filled voice: today and tomorrow.
@@ -154,49 +158,65 @@ function EventCard({
   const time = event.start && event.end
     ? `${event.start}–${event.end}`
     : event.start || event.end;
+  // One grouped date·time line in the tinted header: full date with time,
+  // time-only when the date is unknown, and an explicit unknown label —
+  // never an empty or inferred date.
+  const dateTime = event.date
+    ? time ? `${formatEventDate(event.date)} · ${time}` : formatEventDate(event.date)
+    : time ? `시간 ${time}` : "일정 미정";
   const clientAndVenue = [clientName, event.venue].filter(Boolean).join(" · ");
+  // Published theme tints the header only; status badges keep semantic
+  // tokens. Null falls back to the existing `--soft` + brand-text CSS.
+  const theme = cardHeaderTheme(event.themeColor);
+  const zoneStyle = theme
+    ? ({ "--card-zone": theme.background, "--card-zone-ink": theme.color } as CSSProperties)
+    : undefined;
 
   return (
     <article className={styles.eventCard}>
-      {/* Identity opens the event home. Optional approval follow-up and
-          duplication stay outside this link so there are no nested controls. */}
+      {/* The whole card body is one entry into the event home. The optional
+          approval follow-up stays outside this link so there are no nested
+          controls; duplication lives in the create dialog, not on cards.
+          The accessible name comes from the card contents (plus a visually
+          hidden "열기" affordance) so visible text always stays inside the
+          name instead of an aria-label that would orphan it. */}
       <Link
         className={styles.eventCardLink}
         href={`/console/events/${encodeURIComponent(event.id)}`}
       >
-        <div className={styles.eventCardTop}>
-          <span className={recencySoon ? `${styles.eventRecency} ${styles.eventRecencySoon}` : styles.eventRecency}>{recency ?? ""}</span>
-          <strong className={styles.eventDate}>{formatEventDate(event.date)}</strong>
-          <svg className={styles.cardArrow} viewBox="0 0 20 20" aria-hidden="true">
-            <path
-              d="M4 10h11m-5-5 5 5-5 5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </div>
-        {time ? (
-          <p className={styles.eventTime}>
-            {event.date ? time : `시간 ${time}`}
-          </p>
-        ) : null}
-        <div className={styles.eventIdentity}>
+        <div className={styles.eventCardZone} style={zoneStyle}>
           <h3 className={styles.eventName}>{event.name}</h3>
+          <p className={styles.eventDateTime}>{dateTime}</p>
+        </div>
+        <div className={styles.eventCardBody}>
           <p className={styles.eventClient}>
             {clientAndVenue || "고객사·장소 미지정"}
           </p>
+          <div className={styles.eventCardFoot}>
+            {stageKnown ? (
+              <span className={eventStageClassName(event.stage)}>{stageLabel}</span>
+            ) : <span className="stage-badge">{stageLabel}</span>}
+            {recency ? (
+              <span className={recencySoon ? `${styles.eventRecency} ${styles.eventRecencySoon}` : styles.eventRecency}>{recency}</span>
+            ) : null}
+            <svg className={styles.cardArrow} viewBox="0 0 20 20" aria-hidden="true">
+              <path
+                d="M4 10h11m-5-5 5 5-5 5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <span className="sr-only"> 열기</span>
+          </div>
         </div>
-        <p className={styles.eventStatus}>
-          {stageKnown ? (
-            <span className={eventStageClassName(event.stage)}>{stageLabel}</span>
-          ) : <span className="stage-badge">{stageLabel}</span>}
-        </p>
       </Link>
-      <div className={styles.eventCardActions}>
-        {event.pending > 0 ? (
+      {/* Follow-up only when a queue exists: no permanent footer, no `0명`
+          indicator, no per-card duplicate. */}
+      {event.pending > 0 ? (
+        <div className={styles.eventCardActions}>
           <Link
             className={styles.approvalLink}
             href={`/console/events/${encodeURIComponent(event.id)}/participants?status=PENDING`}
@@ -204,15 +224,8 @@ function EventCard({
           >
             승인 대기 {event.pending}명 처리
           </Link>
-        ) : null}
-        <button
-          type="button"
-          className={styles.eventCardAction}
-          onClick={() => onDuplicate(event)}
-        >
-          복제
-        </button>
-      </div>
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -230,7 +243,6 @@ export default function ConsoleHome() {
   });
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [duplicateSource, setDuplicateSource] = useState<ConsoleEvent | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
   // URL-synced directory filters (participants-style replaceState, never
   // router navigation): typing must not refetch or reroute. The init effect
@@ -373,8 +385,7 @@ export default function ConsoleHome() {
           return;
         }
         const workspaces = data.state.workspaces ?? {};
-        const countPending = (eventId: string): number => {
-          const people = workspaces[eventId]?.participants;
+        const countPending = (eventId: string): number => {          const people = workspaces[eventId]?.participants;
           if (!Array.isArray(people)) return 0;
           let pending = 0;
           for (const item of people) {
@@ -391,6 +402,10 @@ export default function ConsoleHome() {
               if (typeof event.id !== "string" || !event.id) return [];
               const venueSource = workspaces[event.id]?.venue;
               const capacity = Number(event.capacity);
+              // Published-only card theme from the same bootstrap read: no
+              // per-card fetch, no draft leak. STAFF projections carry no
+              // pageExperience, so those cards fall back to `--soft`.
+              const themeColor = readPublishedCardColor(workspaces[event.id]);
               return [{
                 id: event.id,
                 name: typeof event.name === "string" ? event.name : event.id,
@@ -407,6 +422,7 @@ export default function ConsoleHome() {
                     : "",
                  pending: countPending(event.id),
                 capacity: Number.isFinite(capacity) && capacity > 0 ? capacity : 0,
+                themeColor,
               }];
             })
           : [];
@@ -632,35 +648,23 @@ export default function ConsoleHome() {
       {createOpen ? (
         <CreateEventDialog
           clients={clientOptions}
+          duplicateSources={state.events.map((event) => ({
+            id: event.id,
+            name: event.name,
+            slug: event.slug,
+            clientName: event.clientId ? state.clients.get(event.clientId) ?? "" : "",
+            date: event.date,
+            start: event.start,
+            end: event.end,
+            capacity: event.capacity,
+            stage: event.stage,
+          }))}
           onClose={() => setCreateOpen(false)}
           onClientRegistered={(client) => setState((current) => current.kind === "ready"
             ? { ...current, clients: new Map(current.clients).set(client.id, client.name) }
             : current)}
           onCreated={(eventId) => {
             setCreateOpen(false);
-            router.push(`/console/events/${encodeURIComponent(eventId)}`);
-          }}
-        />
-      ) : null}
-
-      {duplicateSource ? (
-        <CreateEventDialog
-          clients={clientOptions}
-          duplicateOf={{
-            id: duplicateSource.id,
-            name: duplicateSource.name,
-            slug: duplicateSource.slug,
-            clientName: duplicateSource.clientId
-              ? state.clients.get(duplicateSource.clientId) ?? ""
-              : "",
-            date: duplicateSource.date,
-            start: duplicateSource.start,
-            end: duplicateSource.end,
-            capacity: duplicateSource.capacity,
-          }}
-          onClose={() => setDuplicateSource(null)}
-          onCreated={(eventId) => {
-            setDuplicateSource(null);
             router.push(`/console/events/${encodeURIComponent(eventId)}`);
           }}
         />
@@ -771,7 +775,6 @@ export default function ConsoleHome() {
                     event={event}
                     clientName={event.clientId ? state.clients.get(event.clientId) ?? "" : ""}
                     todayKey={todayKey}
-                    onDuplicate={setDuplicateSource}
                   />
                 </li>
               ))}
@@ -787,7 +790,6 @@ export default function ConsoleHome() {
                           event={event}
                           clientName={event.clientId ? state.clients.get(event.clientId) ?? "" : ""}
                           todayKey={todayKey}
-                          onDuplicate={setDuplicateSource}
                         />
                       </li>
                     );

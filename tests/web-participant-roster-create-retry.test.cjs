@@ -153,7 +153,7 @@ test('web-create-dialog-retries-with-the-same-command-id', () => {
   assert.match(dialog, /busy=\{submitting\}/);
   assert.match(dialog, /disabled=\{submitting\}/);
   assert.match(dialog, /duplicateOf/);
-  assert.match(dialog, /\/api\/events\/\$\{encodeURIComponent\(duplicateOf\.id\)\}\/duplicate/);
+  assert.match(dialog, /\/api\/events\/\$\{encodeURIComponent\(effectiveDuplicate\.id\)\}\/duplicate/);
   assert.match(dialog, /참가자·티켓·입장·발송·당첨 기록/);
   assert.doesNotMatch(dialog, /localStorage|sessionStorage/);
 });

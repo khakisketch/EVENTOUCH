@@ -587,7 +587,17 @@ async function main() {
                 if (!bounds || bounds.height < 44) throw new Error('approval follow-up lost its touch height');
               } else if (/승인 대기/.test(await card.textContent())) throw new Error('empty approval queue should not occupy a card');
               if (await card.locator('a a, a button').count()) throw new Error('nested card controls');
-              if (!await card.getByRole('button', { name: '복제', exact: true }).isVisible()) throw new Error('duplicate action lost');
+              // A2: no per-card duplicate and no always-empty footer. The
+              // actions row exists only for a real pending queue; duplication
+              // lives in the create dialog's source select.
+              if (await card.getByRole('button', { name: '복제', exact: true }).count()) throw new Error('per-card duplicate still rendered');
+              if (pending === 0 && await card.locator('[class*="eventCardActions"]').count()) throw new Error('empty card footer should not render');
+              const entry = card.locator('a:has([class*="eventCardZone"])');
+              if ((await entry.count()) !== 1) throw new Error('card entry link missing or duplicated');
+              if (!((await entry.first().innerText()) || '').includes(name)) throw new Error('card entry lost the event identity');
+              const zone = card.locator('[class*="eventCardZone"]');
+              if (!await zone.isVisible()) throw new Error('A2 tinted zone missing');
+              if (!await zone.locator('h3').isVisible()) throw new Error('card title left the tinted zone');
             }
           }
           const geometry = await headerGeometry(page);
@@ -679,10 +689,20 @@ async function main() {
           await assertConsoleScreen(page, SCREENS.find((item) => item.key === 'participants'), eventId, eventName);
           if (await page.getByLabel('상태별 보기', { exact: true }).inputValue() !== 'PENDING') throw new Error('card queue did not apply its pending filter');
           await page.goBack({ waitUntil: 'networkidle' });
-          await card.getByRole('button', { name: '복제', exact: true }).click();
-          const dialog = page.getByRole('dialog');
-          await dialog.waitFor({ state: 'visible' });
-          await dialog.getByRole('button', { name: '취소', exact: true }).click();
+          // A2: duplication lives in the create dialog, not on cards. Open
+          // it, switch to copy mode, take the stage-labeled source, then
+          // cancel: the prefilled copy is discarded and focus returns to
+          // the create entry.
+          await page.getByRole('button', { name: '새 행사 만들기', exact: true }).click();
+          const createDialog = page.getByRole('dialog');
+          await createDialog.waitFor({ state: 'visible' });
+          await createDialog.getByText('기존 행사 복제', { exact: false }).click();
+          await createDialog.locator('#create-source').selectOption({ value: eventId });
+          if ((await createDialog.locator('#create-name').inputValue()) !== `${eventName} 복사본`) throw new Error('dialog source select did not prefill the copy');
+          if (!/행사 복제/.test(await createDialog.innerText())) throw new Error('dialog did not enter duplicate mode');
+          await createDialog.getByRole('button', { name: '취소', exact: true }).click();
+          await createDialog.waitFor({ state: 'detached' });
+          if ((await page.evaluate(() => document.activeElement && document.activeElement.textContent)) !== '새 행사 만들기') throw new Error('dialog cancel did not return focus to the create entry');
           await card.locator('a').first().click();
           await page.waitForURL((url) => url.pathname === `/console/events/${eventId}`);
           await assertConsoleScreen(page, SCREENS.find((item) => item.key === 'overview'), eventId, eventName);

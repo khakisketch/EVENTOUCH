@@ -103,7 +103,7 @@ test("inline customer form reuses directory copy and stays out of duplicate mode
   const dialog = read("console/CreateEventDialog.tsx");
   assert.match(dialog, /고객사명 \(필수\)/);
   assert.match(dialog, /담당자 이메일/);
-  assert.match(dialog, /clientMode === "create" && !duplicateOf/);
+  assert.match(dialog, /clientMode === "create" && !effectiveDuplicate/);
   // The AGENCY gate stays server-side ("고객사 관리 권한을 확인하세요" in
   // server/state.js saveClient); the dialog surfaces that message verbatim
   // as a definitive 4xx and keeps the event draft.
