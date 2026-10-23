@@ -81,6 +81,15 @@ test('linear close skips fulfilled steps and never forces an optional map return
   const ended = progress('settings', { stage: 'ENDED', openModules: [], registrationOpen: false }, 'intake', '#settings-stage');
   assert.equal(ended.position, 4);
   assert.match(ended.next.href, /\/reports\?closeFlow=1/);
+  // Position 4 is the stage step itself. Until the server says ENDED, the
+  // same-screen stage control stays the next step; the report link would let
+  // an operator skip the transition the strip is asking for.
+  const notEnded = progress('settings', { stage: 'LIVE', openModules: [], registrationOpen: false }, 'end', '#settings-stage');
+  assert.equal(notEnded.position, 4);
+  assert.equal(notEnded.complete, false);
+  assert.equal(notEnded.next.localStage, true);
+  assert.equal(notEnded.next.href, '#settings-stage');
+  assert.doesNotMatch(notEnded.next.href, /\/reports/);
   const archive = progress('settings', { stage: 'ARCHIVED', openModules: [], registrationOpen: false }, 'archive', '#settings-stage');
   assert.equal(archive.position, 7);
   assert.equal(archive.next, null);

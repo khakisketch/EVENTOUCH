@@ -73,7 +73,10 @@ export function linearCloseProgress(eventId: string, page: CloseLinearPage, snap
       ? link('/settings?closeStep=programs#settings-features', '프로그램 기능 설정 확인')
       : link('/programs', '진행 중 프로그램 닫기');
     if (step < 3 && snapshot.registrationOpen) return link('/settings?closeStep=intake#settings-intake', '참가 접수 닫기');
-    if (step < 4 && !ended) return page === "settings"
+    // The current step is step 4 (stage) whenever settings shows position 4.
+    // Offering the report here would let the operator skip the transition the
+    // strip is asking for, so the same-screen stage control stays until ENDED.
+    if (step <= 4 && !ended) return page === "settings"
       ? { label: '진행 단계 ENDED', href: '#settings-stage', localStage: true }
       : link('/settings?closeStep=end#settings-stage', '진행 단계 ENDED');
     if (step < 5 && !published) return link('/reports?closeFlow=1#event-close', '보고서 만들기/동결');
