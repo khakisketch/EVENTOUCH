@@ -25,6 +25,7 @@
     "web:cards:audit": "node scripts/web-event-card-a2-audit.cjs",
     "web:close:audit": "node scripts/web-event-close-journey-audit.cjs",
     "web:workbench:audit": "node scripts/web-workbench-audit.cjs",
+    "web:preparation:audit": "node scripts/web-preparation-journey-audit.cjs",
     "web:import:audit": "node scripts/web-import-audit.cjs",
     "web:hanwool:audit": "node scripts/web-hanwool-audit.cjs",
     "web:theme:audit": "node scripts/web-theme-audit.cjs",

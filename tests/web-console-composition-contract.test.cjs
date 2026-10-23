@@ -147,9 +147,13 @@ test('event workspaces keep factual meta and action-specific sections inside the
   assert.doesNotMatch(overview, /label:\s*"← 운영 현황"/u);
 
   const settings = read(eventPhaseTwoTargets[4]);
-  for (const id of ['settings-basics', 'settings-stage', 'settings-features', 'settings-intake', 'settings-page']) {
-    assert.match(settings, new RegExp(`headingId="${id}"`), `settings retains ${id}`);
+  for (const id of ['settings-basics', 'settings-stage', 'settings-features', 'settings-intake']) {
+    assert.ok(settings.includes(id), `settings retains deep-link anchor ${id}`);
   }
+  assert.match(settings, /role="tablist"/u);
+  assert.doesNotMatch(settings, /label: "참가자 페이지"/u);
+  assert.ok(settings.includes('id="settings-page"'), 'optional disclosure keeps its deep-link id');
+  assert.doesNotMatch(settings, /headingId="settings-page"/u);
 
   const operations = read(eventPhaseTwoTargets[0]);
   // The section may carry a description (its own status line); the contract

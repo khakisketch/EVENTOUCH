@@ -1083,10 +1083,30 @@ test('web-overview-shows-calendar-period-registration-and-entry-counts', () => {
   assert.match(overview, /type PeriodCounts/);
   assert.match(overview, /applicationsIn/);
   assert.match(overview, /entriesIn/);
-  assert.match(overview, /취소·정정 제외/);
+  // Explicit definitions contract: cancelled applications never enter the
+  // registration base, corrected records never enter entries, and entries
+  // count unique participants per period (not raw scans).
+  assert.match(overview, /person\.status !== "CANCELLED"/u);
+  assert.match(overview, /check\.corrected !== true/u);
+  assert.match(overview, /new Set\(/u);
+  assert.match(overview, /participantId \|\| check\.id/u);
+  assert.match(overview, /<summary>집계 기준<\/summary>/u);
+  assert.match(overview, /신청은 취소된 신청을 제외합니다\. 입장은 정정된 기록을 제외하며 같은 기간의 재입장은 중복 집계하지 않습니다\./u);
+  assert.match(overview, /aria-label="기간별 신청·입장"/u);
   for (const label of ['오늘', '어제', '최근 7일']) {
     assert.match(overview, new RegExp(label));
   }
+  // Module-level helper keeps the real aggregation and the full definitions
+  // in one place; preparation pairs readiness with the period section, and
+  // the empty preparing recent stays a compact row, not a full section.
+  assert.match(overview, /function PeriodDetails\(\{ rows \}/u);
+  assert.match(overview, /<PeriodDetails rows=\{periodRows\} \/>/u);
+  assert.match(overview, /peerGrid/u);
+  assert.match(overview, /headingId="event-period-heading"/u);
+  assert.match(overview, /recentCompact/u);
+  assert.match(overview, /recentCompactEmpty/u);
   const css = read('app/console/events/[id]/event-overview.module.css');
   assert.match(css, /\.periodTable\s*\{/);
+  assert.match(css, /\.peerGrid\s*\{/u);
+  assert.match(css, /\.recentCompact\s*\{/u);
 });

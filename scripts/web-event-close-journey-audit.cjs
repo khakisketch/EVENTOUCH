@@ -397,9 +397,23 @@ async function main() {
     const moduleCard = () => page.locator('li').filter({
       has: page.getByRole('heading', { name: MODULE_TITLE }),
     });
-    const stageSummary = () => page.locator('summary[data-settings-collapse-summary="stage"]');
-    const stageOpen = () => page.locator('details[data-settings-collapse="stage"]')
-      .evaluate((el) => el.open).catch(() => false);
+    const stagePanelReady = () => page.getByRole('button', { name: /\(으\)로 전환/, exact: false }).first()
+      .waitFor({ state: 'visible', timeout: 15000 });
+    const selectSettingsTab = async (act, name) => {
+      const tab = page.getByRole('tab', { name, exact: true });
+      // A deep-link hash may already select the tab: never count a
+      // redundant click, only a real switch. Either way the tab must end
+      // selected with its own panel visible.
+      if ((await tab.getAttribute('aria-selected')) !== 'true') {
+        await act('click', () => tab.click());
+      }
+      if ((await tab.getAttribute('aria-selected')) !== 'true') {
+        throw new Error(`settings: tab ${name} did not select`);
+      }
+      const panelId = await tab.getAttribute('aria-controls');
+      if (!panelId) throw new Error(`settings: tab ${name} names no panel`);
+      await page.locator(`#${panelId}:visible`).waitFor({ state: 'visible', timeout: 15000 });
+    };
     const confirmTransition = async (act, task, touch, stageLabel) => {
       const first = page.getByRole('button', { name: `${stageLabel}(으)로 전환`, exact: true });
       await touch(first, `${stageLabel} 전환 열기`);
@@ -514,10 +528,10 @@ async function main() {
       // ---- Phase 3: close registration (form.close) ----
       await measure('intake-close', '참가 접수 닫기 (행사 설정 → 접수 닫기)', async (act, task, { touchOk }) => {
         task.screens = [eventPath('/settings')];
-        task.fields = ['접수 닫기 button'];
+        task.fields = ['tab 참가 접수', '접수 닫기 button'];
         if (before) await menuTo('/settings', '#set-name', act);
-        else { await followLinear(act, '#set-name', /참가 접수 닫기/); }
-        await page.locator('#settings-intake').waitFor({ state: 'visible', timeout: 15000 });
+        else { await followLinear(act, '#set-consent', /참가 접수 닫기/); }
+        await selectSettingsTab(act, '참가 접수');
         const close = page.getByRole('button', { name: '접수 닫기', exact: true });
         await touchOk(close, '접수 닫기');
         await act('click', () => close.click());
@@ -536,21 +550,14 @@ async function main() {
       let endedStage = null;
       await measure('stage-end', '종료 단계로 전환 (진행 단계 → 종료(으)로 전환 → 확정)', async (act, task, { touchOk }) => {
         task.screens = [eventPath('/settings')];
-        task.fields = ['summary[data-settings-collapse-summary=stage]', '종료(으)로 전환', '단계 전환 확인 / 정말 전환합니다'];
-        if (before) await act('click', () => page.locator('a[href="#settings-stage"]:visible').first().click());
+        task.fields = ['tab 진행 단계', '종료(으)로 전환', '단계 전환 확인 / 정말 전환합니다'];
+        if (before) await selectSettingsTab(act, '진행 단계');
         else {
           const pathBefore = new URL(page.url()).pathname;
-          await followLinear(act, 'summary[data-settings-collapse-summary="stage"]', /ENDED/);
+          await followLinear(act, 'button:has-text("종료(으)로 전환")', /ENDED/);
           assert.equal(new URL(page.url()).pathname, pathBefore, 'intake and ENDED stay in one settings visit');
         }
-        if (!before) await page.waitForFunction(() => document.querySelector('details[data-settings-collapse="stage"]')?.open === true);
-        if (!(await stageOpen())) {
-          await touchOk(stageSummary(), '진행 단계 펼치기');
-          await act('click', () => stageSummary().click());
-          task.serverNote = 'details were collapsed after reload; expansion counted as 1 step. ';
-        } else {
-          task.serverNote = 'details stayed expanded after reload; no expansion step needed. ';
-        }
+        await stagePanelReady();
         await confirmTransition(act, task, touchOk, '종료');
         const state = await readBootstrap(helpers, harness.baseUrl, ownerCookie);
         endedStage = String((state.events || []).find((item) => item.id === eventId).stage).toUpperCase();
@@ -671,14 +678,10 @@ async function main() {
       // ---- Phase 8: archive only after the result notice (writes lock) ----
       await measure('archive', '보관 단계로 전환 (진행 단계 → 보관(으)로 전환 → 확정)', async (act, task, { touchOk }) => {
         task.screens = [eventPath(before ? '/settings' : '/messages')];
-        task.fields = before ? ['summary[data-settings-collapse-summary=stage] (collapsed only)', '보관(으)로 전환', '단계 전환 확인 / 정말 전환합니다'] : ['다음: 보관', 'shared 단계 전환 확인 / 정말 전환합니다'];
+        task.fields = before ? ['tab 진행 단계', '보관(으)로 전환', '단계 전환 확인 / 정말 전환합니다'] : ['다음: 보관', 'shared 단계 전환 확인 / 정말 전환합니다'];
         if (before) {
-          await menuTo('/settings', 'summary[data-settings-collapse-summary="stage"]', act);
-          await act('click', () => page.locator('a[href="#settings-stage"]:visible').first().click());
-          if (!(await stageOpen())) {
-            await touchOk(stageSummary(), '진행 단계 펼치기');
-            await act('click', () => stageSummary().click());
-          }
+          await menuTo('/settings', '#set-name', act);
+          await selectSettingsTab(act, '진행 단계');
           await confirmTransition(act, task, touchOk, '보관');
         } else {
           await page.getByText('모의 안내 기록 확인 · 실제로 전달되지 않았습니다.', { exact: true }).waitFor();
@@ -901,8 +904,8 @@ async function main() {
       await page.locator('[data-close-linear-next]').click();
       assert.equal(discarded, true, 'linear next uses the existing unsaved-change guard');
       assert.equal(new URL(page.url()).pathname, `/console/events/${disabledId}/settings`);
-      await page.getByRole('button', { name: '기능 저장', exact: true }).click();
-      await page.getByText('기능 설정을 저장했습니다.', { exact: false }).first().waitFor();
+      await page.getByRole('button', { name: '운영 기능 저장', exact: true }).click();
+      await page.getByText('운영 기능 설정을 저장했습니다.', { exact: false }).first().waitFor();
       await page.locator('[data-close-linear-next]').click();
       await page.getByRole('button', { name: '종료', exact: true }).waitFor();
       stateChecks.push('OPEN+feature OFF routes to settings; keyboard entry; unsaved linear-next cancellation; real event.features then direct programs handoff');
@@ -925,6 +928,30 @@ async function main() {
       await go(`/console/events/${disabledId}/messages?closeReturn=${encodeURIComponent('https://evil.test')}`, '#campaign-title');
       assert.equal(await page.locator(HUB.backLink).count(), 0);
       stateChecks.push('external closeReturn ignored in actual render');
+      // Keyboard-only linear handoff, after the full stale chain so shared
+      // state stays intact: start on the intake hash (stage panel hidden),
+      // focus the real linear next and press Enter. The hidden stage panel
+      // must open with its tab selected and focus on its heading.
+      // Unmeasured recovery, so the paired click totals do not move; the
+      // keyboard op stands on its own. The closeReturn stays the canonical
+      // /reports#event-close form; nothing relaxes readCloseReturn.
+      const focusVariantId = await seedVariant('선형 다음 키보드 인계');
+      await apiCommand(helpers, harness.baseUrl, ownerCookie, focusVariantId, 'form.close', {});
+      await go(`/console/events/${focusVariantId}/settings?closeStep=intake&closeReturn=${encodeURIComponent(`/console/events/${focusVariantId}/reports#event-close`)}#settings-intake`, '[data-close-linear-next]');
+      // Readiness before activation: the linear next can render before the
+      // initial hash tab sync, so wait for the intake panel's own marker
+      // and the intake tab selected — not just the link visible.
+      await page.locator('#set-consent').waitFor({ state: 'visible', timeout: 15000 });
+      assert.equal(await page.getByRole('tab', { name: '참가 접수', exact: true }).getAttribute('aria-selected'), 'true', 'intake hash selects the intake tab on arrival');
+      const linearNext = page.locator('[data-close-linear-next]');
+      await linearNext.focus();
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => document.querySelector('[role="tab"][aria-selected="true"]')?.textContent?.includes('진행 단계'), null, { timeout: 15000 });
+      await page.waitForFunction(() => document.activeElement?.id === 'settings-stage', null, { timeout: 15000 });
+      await page.locator('#settings-stage').waitFor({ state: 'visible', timeout: 15000 });
+      assert.equal(await page.getByRole('tab', { name: '진행 단계', exact: true }).getAttribute('aria-selected'), 'true', 'Enter on the linear next selects the stage tab');
+      stateChecks.push('keyboard Enter on the linear next selects the stage tab and lands focus on the stage heading');
+      await shotBoth('states-keyboard-linear-stage-focus');
     }
     assert.equal(errors.length, 0, `browser errors including recovery states: ${errors.join(' | ')}`);
     const report = {

@@ -46,38 +46,36 @@
   gap: var(--s3);
 }
 
+/* 연속 수치 띠: 카드 간격·바깥 여백 없이 한 면에 3열을 잇는다. 긴 값도 한 줄에 둔다. */
 .metricGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--s4);
   min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
 }
 
 .metricCard {
   display: grid;
   gap: var(--s1);
-  padding: var(--s4) var(--s5);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
-  box-shadow: 0 1px 3px var(--shadow-color);
+  min-width: 0;
+  padding: var(--s3) var(--s4);
   color: var(--ink);
   text-decoration: none;
-  transition: border-color var(--enter) ease-out, box-shadow var(--enter) ease-out;
+}
+
+.metricCard + .metricCard {
+  border-left: 1px solid var(--line);
 }
 
 .metricCard:hover {
-  border-color: var(--brand);
-  box-shadow: 0 4px 12px var(--shadow-color);
+  background: var(--surface-muted);
 }
 
-.metricValue {
-  font-family: var(--display-font);
-  font-size: clamp(var(--h2), 4vw, var(--display-large));
-  font-weight: 800;
-  line-height: 1.2;
-  letter-spacing: -0.04em;
-  margin: 0;
+.metricCard:hover .metricValue {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .metricLabel {
@@ -87,30 +85,31 @@
   color: var(--muted);
 }
 
-.metricDetail {
-  margin: 0;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.metricLabel {
-  color: var(--muted);
-  font-size: var(--small);
-}
-
 .metricValue {
+  margin: 0;
   min-width: 0;
   color: var(--ink);
   font-size: var(--h2);
   font-weight: 750;
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 
 .metricDetail {
+  margin: 0;
   color: var(--muted);
   font-size: var(--small);
+}
+
+@media (max-width: 420px) {
+  .metricCard {
+    padding: var(--s2);
+  }
+
+  .metricValue {
+    font-size: var(--h3);
+  }
 }
 
 .entryProgress {
@@ -518,6 +517,8 @@
 }
 
 .periodBlock {
+  display: grid;
+  gap: var(--s2);
   margin-top: var(--s5);
   padding-top: var(--s4);
   border-top: 1px solid var(--line);
@@ -530,23 +531,22 @@
   font-size: var(--small);
 }
 
-.periodHeader {
-  min-height: 44px;
-  align-content: center;
-  gap: var(--s1) var(--s3);
-  cursor: pointer;
-}
-
-.periodHeader strong {
+.periodDefinitions {
   margin: 0;
-  font-family: var(--display-font);
-  font-size: var(--body);
-  font-weight: 750;
-  letter-spacing: -0.01em;
 }
 
-.periodHeader span {
-  margin-left: var(--s3);
+.periodDefinitions > summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.periodDefinitions > p {
+  margin: 0 0 var(--s2);
   color: var(--muted);
   font-size: var(--small);
 }
@@ -586,10 +586,126 @@
   border-top: 1px solid var(--line);
 }
 
+.stageBand {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s1) var(--s3);
+  margin: 0 0 var(--s2);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+  font-size: var(--small);
+}
+
+.stageBand > span {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.stageBand > span strong {
+  font-weight: 800;
+}
+
+.stageNext {
+  color: var(--brand-text);
+  font-weight: 700;
+}
+
+.stageBand > a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.stateStrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s4);
+  margin: 0 0 var(--s2);
+  font-size: var(--small);
+  color: var(--muted);
+}
+
+.stateStrip b {
+  color: var(--ink);
+}
+
+.nextCondition {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s3);
+  margin: 0 0 var(--s2);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+  font-size: var(--small);
+}
+
+.nextCondition > strong {
+  color: var(--ink);
+}
+
+.nextCondition > span {
+  color: var(--muted);
+}
+
+.nextConditionBlocked {
+  border-color: var(--warning-line);
+  background: var(--warning-soft);
+}
+
+.nextConditionBlocked > strong {
+  color: var(--warning);
+}
+
+.nextConditionBlocked > span {
+  color: var(--warning);
+}
+
+.readinessIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+  color: var(--ink);
+}
+
+.readinessIcon svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.metricConfig {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s4);
+  margin: var(--s3) 0 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.metricConfig strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
 .readinessList li {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--s3);
   padding-block: var(--s3);
   border-bottom: 1px solid var(--line);
@@ -597,6 +713,7 @@
 
 .readinessList li > div {
   display: grid;
+  flex: 1 1 auto;
   gap: var(--s1);
   min-width: 0;
 }
@@ -608,12 +725,6 @@
 
 .readinessList li > a { flex: none; }
 
-.stageLink {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-}
-
 .closeStatus {
   display: flex;
   flex-wrap: wrap;
@@ -624,8 +735,76 @@
 
 .closeStatus p { margin: 0; }
 
+.topReadiness {
+  display: grid;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.peerGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 19rem);
+  gap: var(--s4);
+  align-items: start;
+  min-width: 0;
+}
+
+.peerPeriod {
+  display: grid;
+  gap: var(--s2);
+  align-content: start;
+  min-width: 0;
+}
+
+.peerPeriod .periodTable th,
+.peerPeriod .periodTable td {
+  padding: var(--s1) var(--s2);
+}
+
+@media (max-width: 1024px) {
+  .peerGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 768px) {
-  .readinessList li { align-items: flex-start; flex-direction: column; }
-  .readinessList li > a { width: 100%; }
-  .periodHeader span { display: block; margin-left: 0; }
+  .readinessList li {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .readinessList li > a {
+    grid-column: 1 / -1;
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* 빈 최근 입퇴장(준비 단계): 패널·내부 카드 없는 종속 행. 기록이 있으면 기존 패널 그대로. */
+.recentCompact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.recentCompactTitle {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--body);
+  font-weight: 750;
+}
+
+.recentCompactMeta {
+  min-width: 0;
+}
+
+.recentCompactEmpty {
+  flex-basis: 100%;
+  margin: 0;
 }

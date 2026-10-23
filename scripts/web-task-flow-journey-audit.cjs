@@ -326,10 +326,11 @@ async function main() {
     // ---- Task 4: registration consent publish ----
     let publishedBefore = null;
     await measure('intake-publish', '동의 안내 입력·양식 게시·접수 열기', async (act, task) => {
-      task.screens = [`/console/events/${createdEventId}/settings (#settings-intake)`];
-      task.fields = ['#set-name (readiness marker, not edited)', '#set-consent', 'button 양식 게시·접수 열기'];
+      task.screens = [`/console/events/${createdEventId}/settings (tab 참가 접수)`];
+      task.fields = ['tab 참가 접수', '#set-consent', 'button 양식 게시·접수 열기'];
       await go(`/console/events/${createdEventId}/settings`, '#set-name');
-      await page.locator('#settings-intake').waitFor({ state: 'visible', timeout: 15000 });
+      await act(() => page.getByRole('tab', { name: '참가 접수', exact: true }).click());
+      await page.locator('[role="tabpanel"]:visible').first().waitFor({ state: 'visible', timeout: 15000 });
       publishedBefore = (await readBootstrap(helpers, harness.baseUrl, ownerCookie))
         .workspaces[createdEventId].publishedVersion;
       await act(() => page.locator('#set-consent').fill(CONSENT_TEXT));
@@ -349,9 +350,11 @@ async function main() {
 
     // ---- Task 5: close registration ----
     await measure('intake-close', '접수 닫기', async (act, task) => {
-      task.screens = [`/console/events/${createdEventId}/settings (#settings-intake)`];
-      task.fields = ['button 접수 닫기'];
-      await go(`/console/events/${createdEventId}/settings`, '#settings-intake');
+      task.screens = [`/console/events/${createdEventId}/settings (tab 참가 접수)`];
+      task.fields = ['tab 참가 접수', 'button 접수 닫기'];
+      await go(`/console/events/${createdEventId}/settings`, '#set-name');
+      await act(() => page.getByRole('tab', { name: '참가 접수', exact: true }).click());
+      await page.locator('[role="tabpanel"]:visible').first().waitFor({ state: 'visible', timeout: 15000 });
       await act(() => page.getByRole('button', { name: '접수 닫기', exact: true }).click());
       await page.getByText('접수 닫힘', { exact: false }).first().waitFor({ timeout: 15000 });
       const workspace = (await readBootstrap(helpers, harness.baseUrl, ownerCookie)).workspaces[createdEventId];
@@ -503,11 +506,11 @@ async function main() {
 
     // ---- Task 6: end the LIVE fixture event ----
     await measure('stage-end', '종료(으)로 전환 (LIVE -> ENDED)', async (act, task) => {
-      task.screens = [`/console/events/${fixture.eventId}/settings (#settings-stage)`];
-      task.fields = ['summary[data-settings-collapse-summary=stage]', 'button 종료(으)로 전환', 'group 단계 전환 확인 / button aria 정말 전환합니다 · 종료 단계로'];
-      await go(`/console/events/${fixture.eventId}/settings`, '#settings-basics');
-      await page.locator('summary[data-settings-collapse-summary="stage"]').waitFor({ state: 'visible', timeout: 15000 });
-      await act(() => page.locator('summary[data-settings-collapse-summary="stage"]').click());
+      task.screens = [`/console/events/${fixture.eventId}/settings (tab 진행 단계)`];
+      task.fields = ['tab 진행 단계', 'button 종료(으)로 전환', 'group 단계 전환 확인 / button aria 정말 전환합니다 · 종료 단계로'];
+      await go(`/console/events/${fixture.eventId}/settings`, '#set-name');
+      await act(() => page.getByRole('tab', { name: '진행 단계', exact: true }).click());
+      await page.locator('[role="tabpanel"]:visible').first().waitFor({ state: 'visible', timeout: 15000 });
       await page.getByRole('button', { name: '종료(으)로 전환', exact: true }).waitFor({ timeout: 10000 });
       await act(() => page.getByRole('button', { name: '종료(으)로 전환', exact: true }).click());
       await page.getByRole('group', { name: '단계 전환 확인' }).waitFor({ timeout: 10000 });
@@ -524,17 +527,12 @@ async function main() {
 
     // ---- Task 7: archive next, registration already closed ----
     await measure('stage-archive', '보관(으)로 전환 (ENDED -> ARCHIVED)', async (act, task) => {
-      task.screens = [`/console/events/${fixture.eventId}/settings (#settings-stage)`];
-      task.fields = ['summary[data-settings-collapse-summary=stage] (only when collapsed)', 'button 보관(으)로 전환', 'group 단계 전환 확인 / button aria 정말 전환합니다 · 보관 단계로'];
-      await go(`/console/events/${fixture.eventId}/settings`, '#settings-basics');
-      await page.locator('summary[data-settings-collapse-summary="stage"]').waitFor({ state: 'visible', timeout: 15000 });
-      const open = await page.locator('details[data-settings-collapse="stage"]').evaluate((el) => el.open).catch(() => false);
-      if (!open) {
-        await act(() => page.locator('summary[data-settings-collapse-summary="stage"]').click());
-        task.serverNote = 'details were collapsed after reload; expansion counted as 1 step. ';
-      } else {
-        task.serverNote = 'details stayed expanded after reload; no expansion step needed. ';
-      }
+      task.screens = [`/console/events/${fixture.eventId}/settings (tab 진행 단계)`];
+      task.fields = ['tab 진행 단계', 'button 보관(으)로 전환', 'group 단계 전환 확인 / button aria 정말 보관합니다 · 보관 단계로'];
+      await go(`/console/events/${fixture.eventId}/settings`, '#set-name');
+      await act(() => page.getByRole('tab', { name: '진행 단계', exact: true }).click());
+      await page.locator('[role="tabpanel"]:visible').first().waitFor({ state: 'visible', timeout: 15000 });
+      task.serverNote = 'tab selection counted as 1 step; no collapsed summary remains. ';
       await page.getByRole('button', { name: '보관(으)로 전환', exact: true }).waitFor({ timeout: 10000 });
       await act(() => page.getByRole('button', { name: '보관(으)로 전환', exact: true }).click());
       await page.getByRole('group', { name: '단계 전환 확인' }).waitFor({ timeout: 10000 });

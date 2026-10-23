@@ -374,10 +374,10 @@ async function main() {
       id: journeyModule.id, status: 'OPEN',
     });
     const reportTitle = `최종 여정 보고서 ${suffix.slice(0, 6)}`;
-    await measure('report-archive-bridge', '동결 보고서 → 보관 전제 확인 → 설정 단계 앵커', async (act, task) => {
+    await measure('report-archive-bridge', '동결 보고서 → 보관 전제 확인 → 설정 단계 탭', async (act, task) => {
       task.actor = 'owner';
-      task.screens = [`/console/events/${createdEventId}/reports (#reports-list)`, 'report detail (frozen article + live checklist)', `/console/events/${createdEventId}/settings#settings-stage`];
-      task.fields = ['button 보고서 만들기', '#report-title', 'button 내용 보기', 'link 진행 단계에서 확인·전환'];
+      task.screens = [`/console/events/${createdEventId}/reports (#reports-list)`, 'report detail (frozen article + live checklist)', `/console/events/${createdEventId}/settings (tab 진행 단계)`];
+      task.fields = ['button 보고서 만들기', '#report-title', 'button 내용 보기', 'link 진행 단계에서 확인·전환', 'tab 진행 단계'];
       await useCookie(ownerCookie);
       await go(`/console/events/${createdEventId}/reports`, '#reports-list');
       await act(() => page.getByRole('button', { name: '보고서 만들기', exact: true }).first().click());
@@ -403,10 +403,18 @@ async function main() {
       };
       page.on('request', watch);
       await act(() => page.getByRole('link', { name: '진행 단계에서 확인·전환', exact: true }).click());
-      await page.waitForURL(/\/settings#settings-stage/, { timeout: 15000 });
+      await page.waitForURL(/\/settings/, { timeout: 15000 });
       page.off('request', watch);
-      await page.locator('#settings-stage').first().waitFor({ state: 'visible', timeout: 15000 });
-      await page.getByRole('heading', { name: '진행 단계', exact: true }).waitFor({ timeout: 10000 });
+      // The #settings-stage deep link already selects the tab on arrival:
+      // count a click only for a real switch, then verify its own panel.
+      const stageTabFinal = page.getByRole('tab', { name: '진행 단계', exact: true });
+      if ((await stageTabFinal.getAttribute('aria-selected')) !== 'true') {
+        await act(() => stageTabFinal.click());
+      }
+      const stagePanelFinal = await stageTabFinal.getAttribute('aria-controls');
+      if (!stagePanelFinal) throw new Error('settings: 진행 단계 tab names no panel');
+      await page.locator(`#${stagePanelFinal}:visible`).waitFor({ state: 'visible', timeout: 15000 });
+      await page.getByText(/진행 단계/, { exact: false }).first().waitFor({ timeout: 10000 });
       assert.equal(commandFired, false, 'following the archive link must not fire a transition command');
       const state = await readBootstrap(helpers, harness.baseUrl, ownerCookie);
       const report = (state.workspaces[createdEventId].reports || []).find((item) => item && item.title === reportTitle);

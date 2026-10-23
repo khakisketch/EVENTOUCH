@@ -61,13 +61,11 @@ test('message badge opens the attention campaign history with a clear path back 
 
 test('settings owns forward-only stage confirmation and reuses the command id after an uncertain response', () => {
   const settings = read('apps/web/app/console/events/[id]/settings/SettingsWorkspace.tsx');
-  // Bounded section extraction matches the opening tag without pinning its
-  // exact tail: shared props like width="form" may extend it.
-  const stage = between(
-    settings,
-    '<ConsoleSection headingId="settings-stage"',
-    '<ConsoleSection headingId="settings-page"'
-  );
+  // Stage lives in the fourth tab panel: bound the stage zone by its panel
+  // without pinning the exact tabpanel markup the UI worker chooses.
+  const panelAt = settings.indexOf('panel-settings-stage');
+  assert.notEqual(panelAt, -1, 'stage tabpanel must exist');
+  const stage = settings.slice(panelAt, panelAt + 12000);
 
   assert.match(settings, /stage: text\(event\.stage\)\.toUpperCase\(\)/);
   assert.match(stage, /진행 단계/);
@@ -99,10 +97,13 @@ test('overview uses a labeled entry progress visualization and removes action/pr
   assert.match(overview, /확정자 중 미입장/);
   assert.match(overview, /surveyResponseCount !== null/);
   assert.match(overview, /getReportStatus\(overview\)/);
-  assert.match(overview, /label: "정원",\s*value: "제한 없음"/);
   assert.match(overview, /const registered = participantRows\.length/);
   assert.match(overview, /overview\.canManageEvent \? \(/);
   assert.match(overview, /행사 지표는 행사 운영자에게 표시됩니다/);
+  // Exactly three pre-event metric cards; capacity/waitlist stay as metadata.
+  assert.equal((overview.match(/label: "신청"|label: "참가 확정"|label: "승인 대기"/g) || []).length, 3);
+  assert.doesNotMatch(overview, /label: "대기 명단 \/ 정원"/u);
+  assert.match(overview, /정원/u);
   assert.doesNotMatch(overview, /event-problems-heading|problemsForStage|problemList/);
   assert.doesNotMatch(overview, /event-operations-heading|운영 준비·가동|operationsGrid/);
   assert.doesNotMatch(overview, /event-stage-heading|submitStageTransition|stageCommandIdRef/);

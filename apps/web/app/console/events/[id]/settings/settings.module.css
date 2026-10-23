@@ -67,16 +67,75 @@
   font-size: var(--small);
 }
 
-/* Jump-nav readout: the shared section nav stays as before; the line below
-   names the section in view (field operations uses the same grammar). */
-.navSticky {
-  min-width: 0;
+/* 설정 탭: 네 개의 실제 탭. 가로 스크롤로 좁은 폭을 처리한다. */
+.tabs {
+  display: flex;
+  gap: var(--s1);
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
 }
 
-.navNow {
-  margin: var(--s1) 0 0;
+.tab {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--s1);
+  min-height: 44px;
+  margin-bottom: -1px;
+  padding: var(--s2) var(--s4);
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--body);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.tab:hover {
+  color: var(--ink);
+}
+
+.tab[aria-selected="true"] {
+  border-color: var(--line);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.tabDirtyDot {
+  color: var(--brand-text);
+  font-size: var(--small);
+}
+
+.tabPanel {
+  min-width: 0;
+  padding-top: var(--s4);
+}
+
+.settingsFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2) var(--s4);
+  margin-top: var(--s5);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+.footerResult {
+  margin: 0;
   color: var(--muted);
   font-size: var(--small);
+}
+
+.footerResultSuccess {
+  color: var(--success);
+}
+
+.footerResultError {
+  color: var(--danger);
 }
 
 .sectionStatus {
@@ -92,28 +151,6 @@
   color: var(--danger);
 }
 
-.collapse {
-  display: grid;
-  gap: var(--s3);
-  min-width: 0;
-}
-
-.collapseSummary {
-  display: flex;
-  min-height: 44px;
-  align-items: center;
-  min-width: 0;
-  cursor: pointer;
-  color: var(--muted);
-  font-size: var(--small);
-  font-weight: 650;
-}
-
-.collapseSummary:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 2px;
-}
-
 .pageFold {
   display: grid;
   gap: var(--s3);
@@ -124,6 +161,34 @@
   margin: 0;
 }
 
+/* 꾸미기 종속 안내: 탭 과업·푸터 뒤의 작은 펼침 영역. 두 번째 primary 없음. */
+.pageDisclosure {
+  margin-top: var(--s4);
+  padding: var(--s1) var(--s3);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+}
+
+.pageDisclosure > summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  min-width: 0;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.pageDisclosure > summary:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.pageDisclosure > div {
+  padding-bottom: var(--s2);
+}
+
 .stagePanel {
   display: grid;
   gap: var(--s3);
@@ -132,6 +197,52 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--paper);
+}
+
+.stageTimeline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stageStep {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: var(--s1) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--s6);
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.stageStepCurrent {
+  border-color: var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.stageStepNext {
+  border-color: var(--brand);
+  background: var(--paper);
+  color: var(--brand-text);
+  font-weight: 700;
+}
+
+.stageStepMark {
+  font-size: var(--small);
+  font-weight: 700;
+}
+
+.unsavedTag {
+  color: var(--brand-text);
+  font-size: var(--small);
+  font-weight: 700;
 }
 
 .stageIdentity {

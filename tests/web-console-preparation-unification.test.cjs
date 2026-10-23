@@ -40,12 +40,19 @@ test('preparation pages no longer invent their own header chrome', () => {
   }
 });
 
-test('preparation pages expose section navigation where the task flows span sections', () => {
-  assert.match(PAGES.settings, /<ConsoleSectionNav/u);
-  assert.match(PAGES.settings, /label="행사 설정 구역"/u);
-  for (const id of ['settings-basics', 'settings-intake', 'settings-features', 'settings-stage', 'settings-page']) {
-    assert.match(PAGES.settings, new RegExp(`\\{ id: "${id}"`), `settings nav reaches ${id}`);
+test('preparation pages expose tab navigation where the task flows span zones', () => {
+  assert.match(PAGES.settings, /role="tablist"/u);
+  assert.match(PAGES.settings, /role="tab"/u);
+  assert.match(PAGES.settings, /role="tabpanel"/u);
+  assert.doesNotMatch(PAGES.settings, /<ConsoleSectionNav/u);
+  for (const label of ['기본 정보', '참가 접수', '운영 기능', '진행 단계']) {
+    assert.ok(PAGES.settings.includes(label), `settings tab reaches ${label}`);
   }
+  for (const id of ['settings-basics', 'settings-intake', 'settings-features', 'settings-stage']) {
+    assert.ok(PAGES.settings.includes(id), `settings keeps deep-link anchor ${id}`);
+  }
+  // The attendee-page supporting block is content, never a fifth tab label.
+  assert.doesNotMatch(PAGES.settings, /label: "참가자 페이지"/u);
   assert.match(PAGES.content, /<ConsoleSectionNav/u);
   for (const id of ['content-notices', 'content-program', 'content-venue']) {
     assert.match(PAGES.content, new RegExp(`\\{ id: "${id}"`), `content nav reaches ${id}`);
@@ -56,7 +63,7 @@ test('preparation pages expose section navigation where the task flows span sect
   }
 });
 
-test('preparation sections keep stable heading ids and form reading width', () => {
+test('preparation tabs keep stable anchors and form reading width', () => {
   for (const id of ['campaign-heading', 'templates-heading', 'history-heading']) {
     assert.match(PAGES.messages, new RegExp(`headingId="${id}"`), `messages keeps ${id}`);
   }
@@ -66,9 +73,14 @@ test('preparation sections keep stable heading ids and form reading width', () =
   assert.match(composeHeader, /surface="panel"/u, 'compose stays a panel');
   assert.doesNotMatch(composeHeader, /width="form"/u, 'two-column workbench uses the shared full workspace width');
   assert.match(PAGES.messages, /className=\{styles\.composeGrid\}/u, 'composition and recipients share one workbench');
-  for (const id of ['settings-basics', 'settings-intake', 'settings-features', 'settings-stage', 'settings-page']) {
-    assert.match(PAGES.settings, new RegExp(`headingId="${id}"`), `settings keeps ${id}`);
+  for (const id of ['settings-basics', 'settings-intake', 'settings-features', 'settings-stage']) {
+    assert.ok(PAGES.settings.includes(id), `settings keeps deep-link anchor ${id}`);
   }
+  // The attendee-page supporting block is not a fifth tab label.
+  assert.doesNotMatch(PAGES.settings, /label: "참가자 페이지"/u);
+  // The optional disclosure keeps its own anchor id without a section heading.
+  assert.ok(PAGES.settings.includes('id="settings-page"'), 'optional disclosure keeps its deep-link id');
+  assert.doesNotMatch(PAGES.settings, /headingId="settings-page"/u);
   for (const id of ['content-notices', 'content-program', 'content-venue']) {
     assert.match(PAGES.content, new RegExp(`headingId="${id}"`), `content keeps ${id}`);
   }

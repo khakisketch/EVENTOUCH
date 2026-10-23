@@ -30,7 +30,7 @@ test('settings-attendee-single-entry: page editing lives only in the theme edito
   assert.doesNotMatch(settings, /PageDraft/);
   assert.match(theme, /attendee\.page\.save/);
   assert.match(theme, /attendee\.page\.publish/);
-  assert.match(settings, /headingId="settings-page"/);
+  assert.doesNotMatch(settings, /label: "참가자 페이지"/u);
   assert.match(settings, /참가자 페이지 편집으로 이동/);
   assert.match(settings, /\/console\/events\/\$\{encodeURIComponent\(eventId\)\}\/page/);
   assert.match(settings, /pagePublishedAt/);
@@ -54,23 +54,23 @@ test('settings-attendee-single-entry: theme edits intro, accent and visibility w
   assert.match(theme, /아래 소개 입력란을 확인하세요/);
 });
 
-test('settings-attendee-single-entry: sections stay ordered with anchor navigation', () => {
+test('settings-attendee-single-entry: tabs stay in preparation order with deep-link anchors', () => {
   const settings = read(SETTINGS);
-  const order = ['settings-basics', 'settings-intake', 'settings-features', 'settings-stage', 'settings-page']
-    .map((id) => settings.indexOf(`headingId="${id}"`));
+  // Four real tabs own the zones; deep-link anchors survive for each tab.
+  assert.doesNotMatch(settings, /<ConsoleSectionNav/);
+  assert.match(settings, /role="tablist"/u);
+  assert.match(settings, /role="tab"/u);
+  assert.match(settings, /role="tabpanel"/u);
+  const order = ['기본 정보', '참가 접수', '운영 기능', '진행 단계']
+    .map((label) => settings.indexOf(label));
   assert.ok(order.every((position) => position >= 0));
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
-  // SectionNav takes a label prop (not a raw aria-label); its items carry
-  // the section ids and the shared component builds the anchor hrefs.
-  assert.match(settings, /<ConsoleSectionNav/);
-  assert.match(settings, /label="행사 설정 구역"/);
-  for (const id of ['settings-basics', 'settings-intake', 'settings-features', 'settings-stage', 'settings-page']) {
-    assert.match(settings, new RegExp(`\\{ id: "${id}", label: `), `nav item carries ${id}`);
+  for (const id of ['settings-basics', 'settings-intake', 'settings-features', 'settings-stage']) {
+    assert.ok(settings.includes(id), `deep-link anchor survives: ${id}`);
   }
-  const nav = read('app/console/console-ui/ConsoleSectionNav.tsx');
-  assert.match(nav, /label\?: string/);
-  assert.match(nav, /aria-label=\{label \?\? "섹션 바로가기"\}/);
-  assert.match(nav, /href=\{`#\$\{item\.id\}`\}/);
+  // The attendee-page supporting block is content, never a fifth tab label.
+  assert.match(settings, /참가자 페이지 편집으로 이동/);
+  assert.doesNotMatch(settings, /label: "참가자 페이지"/u);
 });
 
 test('settings-attendee-single-entry: stage preconditions block instead of failing remotely', () => {

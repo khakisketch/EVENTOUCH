@@ -817,7 +817,7 @@ async function main() {
           await shot('participants-filtered');
         });
         await check(`phone/section-destinations@${width}`, async () => {
-          for (const key of ['draws', 'operations', 'settings', 'content']) {
+          for (const key of ['draws', 'operations', 'content']) {
             await go(key);
             const links = page.locator('main nav a[href^="#"]');
             if (!await links.count()) throw new Error(`${key}: no section links`);
@@ -833,6 +833,29 @@ async function main() {
           const rail = await page.locator('.console-sidebar').boundingBox();
           if (!target || !rail || target.y < rail.y + rail.height - 1) throw new Error('anchor heading covered by sticky rail');
           await shot('anchor');
+          // Settings owns four real tabs (not anchor nav): each tab is a
+          // 44px target, scrolls into view on narrow screens per the
+          // design-system horizontal scroll, selects its own panel, and
+          // keeps deep links.
+          await go('settings');
+          const tabs = page.getByRole('tab');
+          if (await tabs.count() !== 4) throw new Error(`settings: expected 4 tabs, got ${await tabs.count()}`);
+          for (const name of ['기본 정보', '참가 접수', '운영 기능', '진행 단계']) {
+            const tab = page.getByRole('tab', { name, exact: true }).first();
+            if (!await tab.count()) throw new Error(`settings: missing tab ${name}`);
+            await tab.scrollIntoViewIfNeeded();
+            const box = await tab.boundingBox();
+            if (!box || box.x < 0 || box.x + box.width > width + 1 || box.height < 44) throw new Error(`settings: clipped or undersized tab ${name}`);
+            const panelId = await tab.getAttribute('aria-controls');
+            if (!panelId) throw new Error(`settings: tab ${name} names no panel`);
+            // The default tab is already selected on arrival: verify it
+            // without a redundant click, click only a real switch.
+            if ((await tab.getAttribute('aria-selected')) !== 'true') {
+              await tab.click();
+            }
+            await page.locator(`#${panelId}:visible`).waitFor({ state: 'visible', timeout: 15000 });
+          }
+          await shot('settings');
         });
         await check(`phone/preview-status@${width}`, async () => {
           await go('attendeePage');
@@ -1745,10 +1768,8 @@ async function main() {
         // Settings: ending a stage reminds the operator to freeze the report.
         await page.goto(`${baseUrl}/console/events/${eventId}/settings`, { waitUntil: 'networkidle', timeout: 30000 });
         await assertConsoleScreen(page, SCREENS.find((screen) => screen.key === 'settings'), eventId, eventName);
-        const stageFold = page.locator('details').filter({ hasText: '진행 단계' }).first();
-        if (await stageFold.count() && !(await stageFold.getAttribute('open'))) {
-          await stageFold.locator('summary').first().click();
-        }
+        await page.getByRole('tab', { name: '진행 단계', exact: true }).click();
+        await page.getByRole('tabpanel').filter({ hasText: '진행 단계' }).first().waitFor({ state: 'visible', timeout: 15000 });
         await page.getByRole('button', { name: /종료\(으\)로 전환/ }).click();
         await page.getByText(/결과 보고서는 생성 시점 값으로 고정됩니다/).first().waitFor({ timeout: 10000 });
         await page.getByText(/승인 대기 등 필요한 참가자 처리는 종료 전에 마치세요/).first().waitFor({ timeout: 10000 });

@@ -26,10 +26,15 @@ function between(source, start, end) {
 test('event-home-pre-event-metrics-are-compact-and-data-backed', () => {
   const metrics = between(overview, 'function metricsForStage', 'export default function EventOverview');
   assert.match(metrics, /case "DRAFT":\s*case "READY":/);
-  for (const label of ['신청', '참가 확정', '승인 대기', '대기 명단 \/ 정원']) {
+  for (const label of ['신청', '참가 확정', '승인 대기']) {
     assert.ok(metrics.includes(label), `DRAFT/READY metric missing: ${label}`);
   }
-  assert.match(metrics, /overview\.capacity > 0/);
+  // Exactly three metric cards: capacity and waitlist survive as metadata,
+  // never as a fourth card.
+  assert.doesNotMatch(metrics, /대기 명단 \/ 정원/u);
+  assert.equal((metrics.match(/label: "/g) || []).length, 3, 'exactly 3 pre-event metrics');
+  assert.match(overview, /capacity|정원/u);
+  assert.match(overview, /waitlist|대기/u);
   assert.match(metrics, /return \[\];/);
 });
 
@@ -37,6 +42,25 @@ test('event-home-removes-redundant-advisory-and-readiness-blocks', () => {
   assert.doesNotMatch(overview, /problemsForStage|problemList|event-problems-heading/);
   assert.doesNotMatch(overview, /event-operations-heading|운영 준비·가동|operationsGrid/);
   assert.doesNotMatch(overview, /event-stage-heading|submitStageTransition|stageCommandIdRef/);
+});
+
+test('event-home-metrics-lead-readiness-with-independent-optional-design-copy', () => {
+  // Composition: the metrics section renders ahead of the preparation
+  // checklist, and the unpublished design reads as the basic design in use
+  // (custom design is optional), never as unpublished.
+  const metricsAt = overview.indexOf('headingId="event-metrics-heading"');
+  const readinessAt = overview.indexOf('headingId="event-readiness-heading"');
+  assert.ok(metricsAt >= 0 && readinessAt >= 0);
+  assert.ok(metricsAt < readinessAt, 'metrics lead, preparation follows');
+  // Preparation opens with the stage band above the counts, pairs readiness
+  // with the period section, and keeps the empty recent compact.
+  const bandAt = overview.indexOf('stageBand');
+  assert.ok(bandAt >= 0 && bandAt < metricsAt, 'stage band tops the preparation flow');
+  assert.match(overview, /peerGrid/u);
+  assert.match(overview, /recentCompact/u);
+  assert.match(overview, /기본 디자인 사용 중/u);
+  assert.match(overview, /꾸미기는 선택 사항/u);
+  assert.doesNotMatch(overview, /아직 게시하지 않았습니다/u);
 });
 
 test('event-home-entry-rate-matches-the-report-definition', () => {

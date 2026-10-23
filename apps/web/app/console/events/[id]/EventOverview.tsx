@@ -59,6 +59,9 @@ type Overview = {
   periods: PeriodCounts;
   recent: CheckRow[];
   registrationOpen: boolean;
+  deskCount: number;
+  deskAssignmentCount: number;
+  formVersion: number;
   pagePublished: boolean;
   pageDraftDiffers: boolean;
   surveyResponseCount: number | null;
@@ -226,27 +229,46 @@ function metricsForStage(overview: Overview, stage: string, base: string): Metri
   switch (stage) {
     case "DRAFT":
     case "READY":
+      // Exactly three counts in a row. 정원/대기는 별도 설정 메타 행으로 둔다.
       return [
         { label: "신청", value: overview.registered, detail: "취소 제외 등록", href: participantsHref },
         { label: "참가 확정", value: overview.approved, detail: "승인된 참가자", href: `${participantsHref}?status=APPROVED` },
         { label: "승인 대기", value: overview.pendingApproval, detail: "검토가 필요한 신청", href: `${participantsHref}?status=PENDING` },
-        ...(overview.capacity > 0
-          ? [{
-              label: "대기 명단 / 정원",
-              value: `${overview.waitlist} / ${overview.capacity}`,
-              detail: "대기 명단 · 행사 정원",
-              href: `${participantsHref}?status=WAITLIST`,
-            }]
-          : [{
-              label: "정원",
-              value: "제한 없음",
-              detail: "신청 수 제한 없음",
-              href: `${base}/settings#settings-intake`,
-            }]),
       ];
     default:
       return [];
   }
+}
+
+// 기간별 통계의 실제 집계와 정의를 한 곳에 둔다. DRAFT/READY에서는 준비
+// 섹션과 나란한 독립 섹션에, LIVE/ENDED/ARCHIVED에서는 지표 섹션 안에 둔다.
+function PeriodDetails({ rows }: { rows: Array<[string, PeriodCounts["today"]]> }) {
+  return (
+    <>
+      <table className={styles.periodTable} aria-label="기간별 신청·입장">
+        <thead>
+          <tr>
+            <th scope="col">기간</th>
+            <th scope="col">신청</th>
+            <th scope="col">입장</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(([label, period]) => (
+            <tr key={label}>
+              <th scope="row">{label}</th>
+              <td>{period.applications}명</td>
+              <td>{period.entries}명</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <details className={styles.periodDefinitions}>
+        <summary>집계 기준</summary>
+        <p>신청은 취소된 신청을 제외합니다. 입장은 정정된 기록을 제외하며 같은 기간의 재입장은 중복 집계하지 않습니다.</p>
+      </details>
+    </>
+  );
 }
 
 export default function EventOverview({ eventId }: { eventId: string }) {
@@ -324,6 +346,10 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         records(workspace.desks).forEach((desk) => {
           if (typeof desk.id === "string") deskMap.set(desk.id, text(desk.name));
         });
+        const deskCount = records(workspace.desks).length;
+        const deskAssignmentCount = records(workspace.assignments).filter(
+          (assignment) => text(assignment.type) === "DESK"
+        ).length;
         const programRows: ScheduledProgram[] = records(workspace.program).flatMap((program, index) => {
           const title = text(program.title);
           if (!title) return [];
@@ -411,6 +437,9 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             periods,
             recent: checks,
             registrationOpen: workspace.registrationOpen === true,
+            deskCount,
+            deskAssignmentCount,
+            formVersion: number(workspace.publishedVersion),
             pagePublished: Boolean(text(pageExperience?.publishedAt)),
             pageDraftDiffers: number(pageExperience?.draftVersion) !== number(pageExperience?.publishedVersion),
             surveyResponseCount,
@@ -527,6 +556,25 @@ export default function EventOverview({ eventId }: { eventId: string }) {
     venue: overview.venue,
   });
 
+  // 준비 단계의 다음 행동 판단 재료. 공개·접수·디자인은 서로 독립적이다:
+  // DRAFT는 비공개, READY부터 기본 디자인으로 공개되며, 접수는 양식 게시로
+  // 열리고, 꾸미기 미게시는 미완료가 아니라 선택 사항이다.
+  const stageIndex = STAGE_ORDER.indexOf(currentStage);
+  const nextStage = stageIndex >= 0 && stageIndex < STAGE_ORDER.length - 1
+    ? STAGE_ORDER[stageIndex + 1]
+    : null;
+  const nextStageText = nextStage ? eventStageLabel(nextStage) : "없음";
+  const liveBlocked = overview.deskCount === 0 || overview.deskAssignmentCount === 0;
+  const publicShort = currentStage === "DRAFT"
+    ? "비공개"
+    : overview.pagePublished ? "공개 중 · 게시됨" : "공개 중 · 기본";
+  const intakeShort = overview.registrationOpen
+    ? `접수 중 · 양식 버전 ${overview.formVersion}`
+    : "접수 마감";
+  const designShort = overview.pagePublished
+    ? overview.pageDraftDiffers ? "게시됨 · 새 초안" : "게시됨"
+    : "기본";
+
   const stageBadges = (
         <>
           <span className={`${eventStageClassName(currentStage)} ${styles.stagePill}`}>{stageText}</span>
@@ -547,9 +595,12 @@ export default function EventOverview({ eventId }: { eventId: string }) {
               {currentStage === "ARCHIVED" ? "행사 마감 확인" : "행사 마감"}
             </Link>
           ) : null}
-          <Link className="button button-secondary" href={participantPageHref} target="_blank" rel="noreferrer">
-            참가자 페이지 열기
-          </Link>
+          {/* DRAFT는 비공개(공개 화면 404)이므로 여는 링크를 두지 않는다. READY부터 기본 디자인으로 열린다. */}
+          {stageKnown && currentStage !== "DRAFT" ? (
+            <Link className="button button-secondary" href={participantPageHref} target="_blank" rel="noreferrer">
+              참가자 페이지 열기
+            </Link>
+          ) : null}
           <button
             type="button"
             className="button button-secondary"
@@ -567,15 +618,23 @@ export default function EventOverview({ eventId }: { eventId: string }) {
       {overview.canManageEvent ? (
         <>
           {preparing ? (
-            <ConsoleSection headingId="event-readiness-heading" title="행사 준비 확인"
-              description="접수와 참가자 게시 화면을 확인한 뒤 현장 운영을 준비하세요.">
-              <ul className={styles.readinessList}>
-                <li><div><strong>참가 접수</strong><span>{overview.registrationOpen ? "접수 중" : "접수 마감"}</span></div><Link className="button button-secondary" href={`${base}/settings#settings-intake`}>접수 설정</Link></li>
-                <li><div><strong>참가자 페이지</strong><span>{overview.pagePublished ? overview.pageDraftDiffers ? "게시본과 다른 저장된 초안이 있습니다." : "저장된 초안이 게시되어 있습니다." : "아직 게시하지 않았습니다."}</span></div><Link className="button button-secondary" href={`${base}/page`}>게시 화면 확인</Link></li>
-                <li><div><strong>현장 준비</strong><span>데스크·전광판·스태프 배정을 확인하세요.</span></div><Link className="button button-secondary" href={`${base}/operations`}>현장 운영 확인</Link></li>
-              </ul>
-              <Link className={styles.stageLink} href={`${base}/settings#settings-stage`}>진행 단계 설정</Link>
-            </ConsoleSection>
+            <div className={styles.topReadiness}>
+              <p className={styles.stageBand}>
+                <span>현재 <strong>{stageText}</strong><span aria-hidden="true"> → </span><span className={styles.stageNext}>다음 {nextStageText}</span></span>
+                <Link href={`${base}/settings#settings-stage`}>진행 단계 설정</Link>
+              </p>
+              <p className={styles.stateStrip}>
+                <span>공개 <b>{publicShort}</b></span>
+                <span>접수 <b>{intakeShort}</b></span>
+                <span>디자인 <b>{designShort}</b></span>
+              </p>
+              {currentStage === "READY" ? (
+                <p className={`${styles.nextCondition} ${liveBlocked ? styles.nextConditionBlocked : ""}`}>
+                  <strong>다음 진행 중 조건</strong>
+                  <span>등록 데스크 {overview.deskCount}개 · 데스크 배정 {overview.deskAssignmentCount}건 · {liveBlocked ? "부족 — 현장 운영에서 등록·배정하세요" : "충족"}</span>
+                </p>
+              ) : null}
+            </div>
           ) : null}
           {finished ? (
             <ConsoleSection headingId="event-close-status-heading" title={currentStage === "ARCHIVED" ? "보관된 행사 마감 확인" : "행사 마감"}
@@ -662,6 +721,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
               ) : null}
             </div>
           ) : metrics.length ? (
+            <>
             <div className={styles.metricGrid}>
               {metrics.map((metric) => (
                 <Link className={styles.metricCard} href={metric.href} key={metric.label}>
@@ -671,39 +731,98 @@ export default function EventOverview({ eventId }: { eventId: string }) {
                 </Link>
               ))}
             </div>
+            <p className={styles.metricConfig}>
+              {overview.capacity > 0 ? (
+                <span>
+                  정원 <strong>{overview.capacity}명</strong> · 대기 <strong>{overview.waitlist}명</strong>
+                  {" "}<Link href={`${base}/participants?status=WAITLIST`}>대기 명단</Link>
+                </span>
+              ) : (
+                <span>정원 제한 없음 · 대기 <strong>{overview.waitlist}명</strong></span>
+              )}
+              <span>신청은 취소 제외 · 확정은 승인된 참가자</span>
+            </p>
+            </>
           ) : (
             <p className={styles.restrictedNote}>확인 가능한 단계 지표가 없습니다.</p>
           )}
-            <details className={styles.periodBlock}>
-              <summary className={styles.periodHeader}>
-                <strong>기간별 신청·입장</strong>
-                <span>취소·정정 제외 · 입장은 참가자 기준</span>
-              </summary>
-              <table className={styles.periodTable} aria-label="기간별 신청·입장">
-                <thead>
-                  <tr>
-                    <th scope="col">기간</th>
-                    <th scope="col">신청</th>
-                    <th scope="col">입장</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {periodRows.map(([label, period]) => (
-                    <tr key={label}>
-                      <th scope="row">{label}</th>
-                      <td>{period.applications}명</td>
-                      <td>{period.entries}명</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </details>
+            {!preparing ? (
+              <div className={styles.periodBlock}>
+                <PeriodDetails rows={periodRows} />
+              </div>
+            ) : null}
         </ConsoleSection>
+          {preparing ? (
+            <div className={styles.peerGrid}>
+            <ConsoleSection headingId="event-readiness-heading" title="행사 준비 확인">
+              <ul className={styles.readinessList}>
+                <li>
+                  <span className={styles.readinessIcon} aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="17" rx="2" /><path d="M9 4a3 3 0 0 1 6 0M9 11h6M9 15h4" /></svg>
+                  </span>
+                  <div><strong>참가 접수</strong><span>{intakeShort}{overview.registrationOpen ? "" : " · 양식을 게시하면 접수 시작"}</span></div>
+                  <Link className="button button-secondary" href={`${base}/settings#settings-intake`}>접수 설정</Link>
+                </li>
+                <li>
+                  <span className={styles.readinessIcon} aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2" /><circle cx="9" cy="10" r="1.6" /><path d="M4 16l4.5-4.5 3 3L16 10l4 4" /></svg>
+                  </span>
+                  <div><strong>참가자 디자인 · 선택 사항</strong><span>{overview.pagePublished ? (overview.pageDraftDiffers ? "게시됨 · 새 초안 있음" : "게시됨") : "기본 디자인 사용 중 · 꾸미기는 선택 사항입니다"}</span></div>
+                  <Link className="button button-secondary" href={`${base}/page`}>디자인 편집</Link>
+                </li>
+                <li>
+                  <span className={styles.readinessIcon} aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3" /><circle cx="17" cy="9" r="2.2" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0M15.5 14.5a4.5 4.5 0 0 1 6 4.5" /></svg>
+                  </span>
+                  <div><strong>현장 준비</strong><span>데스크 {overview.deskCount} · 배정 {overview.deskAssignmentCount} · 현장 운영에서 세부 확인</span></div>
+                  <Link className="button button-secondary" href={`${base}/operations`}>현장 운영 확인</Link>
+                </li>
+              </ul>
+            </ConsoleSection>
+            <ConsoleSection headingId="event-period-heading" title="기간별 신청·입장">
+              <div className={styles.peerPeriod}>
+                <PeriodDetails rows={periodRows} />
+              </div>
+            </ConsoleSection>
+            </div>
+          ) : null}
       </>
       ) : (
         <p className={styles.restrictedNote}>행사 지표는 행사 운영자에게 표시됩니다.</p>
       )}
 
+      {preparing && overview.recent.length === 0 ? (
+        <div className={styles.recentCompact}>
+          <h2 id="event-recent-heading" className={styles.recentCompactTitle}>
+            {overview.canManageEvent ? "최근 입퇴장" : "배정 데스크 최근 입퇴장"}
+          </h2>
+          <span className={styles.recentCount}>0건</span>
+          <span className={styles.recentCompactMeta}>
+            자동 갱신되지 않습니다 · <time dateTime={overview.updatedAt}>마지막 갱신 {UPDATED_TIME_FORMAT.format(new Date(overview.updatedAt))}</time>
+          </span>
+          <button
+            type="button"
+            className={`button button-secondary ${styles.refreshButton}`}
+            onClick={reloadOverview}
+            disabled={refreshing}
+            aria-busy={refreshing}
+            aria-label="새로고침"
+            title="새로고침"
+          >
+            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+              <path d="M20 7v5h-5" />
+              <path d="M19.1 12a7.1 7.1 0 1 1-2.08-5.02L20 9" />
+            </svg>
+          </button>
+          {refreshing ? <p className={styles.refreshStatus} role="status">최신 운영 현황을 불러오고 있습니다.</p> : null}
+          {refreshError ? <p className="state-error" role="alert">{refreshError} 이전에 불러온 내용은 유지됩니다.</p> : null}
+          <p className={styles.recentCompactEmpty}>
+            {overview.canManageEvent
+              ? "아직 입퇴장 기록이 없습니다."
+              : "배정된 데스크에 아직 입퇴장 기록이 없습니다."}
+          </p>
+        </div>
+      ) : (
       <ConsoleSection
         headingId="event-recent-heading"
         title={overview.canManageEvent ? "최근 입퇴장" : "배정 데스크 최근 입퇴장"}
@@ -760,6 +879,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
           </p>
         )}
       </ConsoleSection>
+      )}
       {overview.canManageEvent && schedule.length > 0 ? (
         <ConsoleSection
           headingId="event-schedule-heading"

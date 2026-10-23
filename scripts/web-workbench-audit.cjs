@@ -7,11 +7,14 @@ for (const key of ['SOLAPI_API_KEY', 'SOLAPI_API_SECRET', 'SOLAPI_SENDER', 'SOLA
 process.env.EVENTOUCH_SMS_MOCK = '1';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const path = require('node:path');
 const crypto = require('node:crypto');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const PHASE = process.env.WORKBENCH_PHASE === 'before' ? 'before' : 'after';
-const OUT = `/tmp/opencode/eventouch-captures/workbench/${PHASE}`;
+const OUT = process.env.EVENTOUCH_CAPTURE_ROOT
+  ? path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'workbench', PHASE)
+  : `/tmp/opencode/eventouch-captures/workbench/${PHASE}`;
 
 async function main() {
   fs.mkdirSync(OUT, { recursive: true });
@@ -243,10 +246,14 @@ async function main() {
       await page.goto(`${f.baseUrl}/console/events/${id}`);
       await page.locator('#event-metrics-heading').waitFor();
       const firstHeading = await page.locator('main h2').first().textContent();
-      check(`${stage} prioritizes its real task`, firstHeading === (['DRAFT', 'READY'].includes(stage) ? '행사 준비 확인' : stage === 'ARCHIVED' ? '보관된 행사 마감 확인' : '행사 마감'), firstHeading);
+      check(`${stage} prioritizes its real task`, firstHeading === (['DRAFT', 'READY'].includes(stage) ? '주요 지표' : stage === 'ARCHIVED' ? '보관된 행사 마감 확인' : '행사 마감'), firstHeading);
+      if (['DRAFT', 'READY'].includes(stage)) {
+        const secondHeading = await page.locator('main h2').nth(1).textContent();
+        check(`${stage} follows metrics with preparation`, secondHeading === '행사 준비 확인', secondHeading);
+      }
       if (stage === 'DRAFT') {
         check('preparation links preserve exact settings anchors', await page.getByRole('link', { name: '접수 설정', exact: true }).getAttribute('href') === `/console/events/${id}/settings#settings-intake`);
-        check('unpublished page is not called published', (await page.locator('section[aria-labelledby="event-readiness-heading"]').textContent()).includes('아직 게시하지 않았습니다.'));
+        check('unpublished page reads as the basic design in use', (await page.locator('section[aria-labelledby="event-readiness-heading"]').textContent()).includes('기본 디자인 사용 중'));
       }
       await page.screenshot({ path: `${OUT}/state-overview-${stage.toLowerCase()}-1280.png`, fullPage: true });
       if (['ENDED', 'ARCHIVED'].includes(stage)) {
