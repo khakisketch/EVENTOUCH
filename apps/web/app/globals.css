@@ -1580,8 +1580,6 @@ select[aria-invalid="true"] {
   display: none;
 }
 
-.mobile-event-location { display: none; }
-
 .nav-work-group-label {
   margin-top: var(--s3);
   padding: var(--s2) var(--s3) var(--s1);
@@ -2481,10 +2479,7 @@ select[aria-invalid="true"] {
     scroll-padding-bottom: calc(var(--s4) + env(safe-area-inset-bottom, 0px));
   }
 
-  /* Event work has an extra current-location row above its horizontal list. */
-  html:has(.mobile-event-location) {
-    scroll-padding-top: calc(var(--s7) * 3 + var(--s5) + env(safe-area-inset-top, 0px));
-  }
+  /* Event work scrolls its horizontal list; the base offset above applies. */
 
   .console-shell {
     display: block;
@@ -2550,18 +2545,6 @@ select[aria-invalid="true"] {
     flex-direction: column;
   }
 
-  .mobile-event-location {
-    display: flex;
-    min-width: 0;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--s2);
-    color: var(--nav-muted);
-    font-size: var(--small);
-    line-height: 1.4;
-  }
-
-  .mobile-event-location strong { color: var(--nav-text); }
   .nav-work-group-label { display: none; }
 
   .mobile-event-nav:empty {

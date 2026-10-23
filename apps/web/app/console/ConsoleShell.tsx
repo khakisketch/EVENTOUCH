@@ -705,10 +705,6 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
       // its own always-present label instead of a dangling labelledby ref.
       // The parent nav's "현재 행사 메뉴" label stays as the outer landmark.
       return showCurrentEvent && eventId ? (
-        <>
-        <div className="mobile-event-location">
-          <span>현재 위치 · <strong>{activePageId ? CONSOLE_PAGES[activePageId].label : "행사"}</strong></span>
-        </div>
         <div
           ref={mobileEventBranchRef}
           className="nav-event-branch"
@@ -722,7 +718,6 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           </div>
           {renderEventSubnav()}
         </div>
-        </>
       ) : null;
     }
     return showCurrentEvent && eventId ? (
