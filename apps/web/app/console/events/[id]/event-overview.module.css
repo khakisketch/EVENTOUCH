@@ -620,19 +620,6 @@
   min-height: 44px;
 }
 
-.stateStrip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s1) var(--s4);
-  margin: 0 0 var(--s2);
-  font-size: var(--small);
-  color: var(--muted);
-}
-
-.stateStrip b {
-  color: var(--ink);
-}
-
 .nextCondition {
   display: flex;
   flex-wrap: wrap;

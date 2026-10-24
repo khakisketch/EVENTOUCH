@@ -565,15 +565,9 @@ export default function EventOverview({ eventId }: { eventId: string }) {
     : null;
   const nextStageText = nextStage ? eventStageLabel(nextStage) : "없음";
   const liveBlocked = overview.deskCount === 0 || overview.deskAssignmentCount === 0;
-  const publicShort = currentStage === "DRAFT"
-    ? "비공개"
-    : overview.pagePublished ? "공개 중 · 게시됨" : "공개 중 · 기본";
   const intakeShort = overview.registrationOpen
     ? `접수 중 · 양식 버전 ${overview.formVersion}`
     : "접수 마감";
-  const designShort = overview.pagePublished
-    ? overview.pageDraftDiffers ? "게시됨 · 새 초안" : "게시됨"
-    : "기본";
 
   const stageBadges = (
         <>
@@ -622,11 +616,6 @@ export default function EventOverview({ eventId }: { eventId: string }) {
               <p className={styles.stageBand}>
                 <span>현재 <strong>{stageText}</strong><span aria-hidden="true"> → </span><span className={styles.stageNext}>다음 {nextStageText}</span></span>
                 <Link href={`${base}/settings#settings-stage`}>진행 단계 설정</Link>
-              </p>
-              <p className={styles.stateStrip}>
-                <span>공개 <b>{publicShort}</b></span>
-                <span>접수 <b>{intakeShort}</b></span>
-                <span>디자인 <b>{designShort}</b></span>
               </p>
               {currentStage === "READY" ? (
                 <p className={`${styles.nextCondition} ${liveBlocked ? styles.nextConditionBlocked : ""}`}>
