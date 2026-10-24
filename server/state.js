@@ -8,7 +8,7 @@ const ROLES = new Set(['AGENCY', 'MANAGER', 'STAFF']);
 // Mirrors the console's permission vocabulary so a stored grant can never be
 // one the UI cannot name.
 const ORG_PERMISSIONS = new Set(['events.all', 'events.view', 'events.create', 'clients.manage', 'team.manage', 'integrations.manage']);
-const EVENT_PERMISSIONS = new Set(['all', 'participants', 'page', 'programs', 'onsite', 'booth', 'messages', 'results', 'settings']);
+const { EVENT_PERMISSIONS } = require('./event-permissions');
 const ARRAY_FIELDS = [
   'participants', 'fields', 'publishedFields', 'notices', 'program', 'groups', 'desks', 'booths',
   'assignments', 'checks', 'visits', 'modules', 'responses', 'questions', 'photos', 'posts',
@@ -588,7 +588,12 @@ function createState(database) {
     if (!/^[A-Za-z0-9_-]{8,128}$/.test(idempotencyKey)) throw rejected(400, '요청 식별자를 확인하세요', 'commandId');
     const targetId = String(input.accountId || '').trim();
     if (!targetId || targetId.length > 160) throw rejected(400, '구성원을 확인하세요', 'accountId');
-    const requested = Array.isArray(input.write) ? input.write.map((value) => String(value)) : [];
+    // An omitted `write` keeps the pre-allow-list behaviour (full access);
+    // only an explicit array — including an explicit [] for read-only —
+    // narrows the grant.
+    const requested = input.write === undefined
+      ? ['all']
+      : Array.isArray(input.write) ? input.write.map((value) => String(value)) : [];
     const unknown = requested.filter((value) => !EVENT_PERMISSIONS.has(value));
     if (unknown.length) throw rejected(400, '허용할 수 없는 행사 권한이 포함되어 있습니다', 'write');
     const write = [...new Set(requested)];

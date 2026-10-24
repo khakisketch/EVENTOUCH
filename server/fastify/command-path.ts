@@ -10,8 +10,9 @@
 // ports its order exactly rather than restructuring it: body first, then the
 // guest tiers (participant self-service, booth visit by ticket), then the
 // operations executor behind a session and an authorize call, then the domain
-// executor (guest commands without a session, the rest behind
-// `participants.write`), and finally the participant executor with the STAFF
+// executor (guest commands without a session, the rest behind a session and
+// a per-command authorize call), and finally the participant executor with
+// the STAFF
 // exception. Results keep the executor's own status and body; failures keep
 // the legacy status/message/field mapping. commandId and assignmentId fall
 // back to the payload exactly like the hand-rolled router.
@@ -201,7 +202,7 @@ async function commands(deps: CommandPathDeps, parts: string[], request: Fastify
       return reply.code(resultStatus(result)).send(result.body);
     }
     const account = await currentAccount(deps, request);
-    await deps.access.authorize({ account, eventId, command: "participants.write" });
+    await deps.access.authorize({ account, eventId, command });
     const result = await deps.domainCommands.execute({ eventId, commandId, command, payload, account });
     return reply.code(resultStatus(result)).send(result.body);
   }

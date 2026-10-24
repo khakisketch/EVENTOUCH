@@ -1,5 +1,7 @@
 'use strict';
 
+const { managerWriteAllowed, membershipOnlyCommand } = require('./event-permissions');
+
 const ROLES = ['AGENCY', 'MANAGER', 'STAFF'];
 const STAFF_COMMANDS = new Map([
   ['assignment.read', null],
@@ -33,12 +35,17 @@ function createAccess(database) {
     if (current.role === 'MANAGER') {
       if (!eventId) throw denied();
       const membership = await database.query(
-        `SELECT 1 FROM memberships m
+        `SELECT m.write_permissions FROM memberships m
          JOIN events e ON e.id = m.event_id
          WHERE m.account_id = $1 AND m.event_id = $2 LIMIT 1`,
         [account.id, String(eventId)]
       );
-      if (membership.rowCount) return true;
+      if (!membership.rowCount) throw denied();
+      // Reads and file staging stay membership-gated (see
+      // server/event-permissions.js); every other command needs its write
+      // scope in the grant, and an unmapped command is denied.
+      if (membershipOnlyCommand(command)) return true;
+      if (managerWriteAllowed(membership.rows[0].write_permissions, command)) return true;
       throw denied();
     }
 

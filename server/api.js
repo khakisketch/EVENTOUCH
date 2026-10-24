@@ -564,7 +564,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
           return sendJson(res, result.status, result.body);
         }
         const account = await requireUser(auth, req);
-        await access.authorize({ account, eventId, command: 'participants.write' });
+        await access.authorize({ account, eventId, command });
         const result = await domainCommands.execute({
           eventId,
           commandId,

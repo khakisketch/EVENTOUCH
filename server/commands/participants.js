@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const { normalizeEvent, normalizeWorkspace, projectParticipant } = require('../state');
+const { managerWriteAllowed } = require('../event-permissions');
 const { createAttendeeAccess } = require('../attendees');
 const {
   failure,
@@ -211,10 +212,15 @@ async function authorizeOperator(client, event, workspace, account, command, ass
   if (current.role === 'AGENCY') return current.role;
   if (current.role === 'MANAGER') {
     const membership = await client.query(
-      'SELECT 1 FROM memberships WHERE account_id = $1 AND event_id = $2 LIMIT 1',
+      'SELECT write_permissions FROM memberships WHERE account_id = $1 AND event_id = $2 LIMIT 1',
       [String(account.id), event.id]
     );
     if (!membership.rowCount) throw failure(403, '권한을 확인하세요');
+    // Operator commands need their write scope (server/event-permissions.js).
+    // Guest commands pass command=null and skip this entirely.
+    if (!managerWriteAllowed(membership.rows[0].write_permissions, command)) {
+      throw failure(403, '권한을 확인하세요');
+    }
     return current.role;
   }
 

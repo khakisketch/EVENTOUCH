@@ -755,7 +755,7 @@ test('domain commands split guest and session tiers', async () => {
   });
   assert.equal(member.status, 200);
   const authorize = calls.filter((call) => call[0] === 'authorize').at(-1);
-  assert.deepEqual(authorize, ['authorize', { account: { id: 'agency-1', role: 'AGENCY' }, eventId: 'e1', command: 'participants.write' }]);
+  assert.deepEqual(authorize, ['authorize', { account: { id: 'agency-1', role: 'AGENCY' }, eventId: 'e1', command: 'content.publish' }]);
 });
 
 test('the participant tier keeps the STAFF exception', async () => {

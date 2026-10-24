@@ -412,8 +412,13 @@ function createDatabaseAuth(database, options = {}) {
           [accountId, normalizeEmail(invitation.email), invitation.name, invitation.role, passwordHash]
         );
         if (invitation.role === 'MANAGER' && invitation.event_id) {
+          // An invitation names no write scope, so the grant defaults to full
+          // access (pre-allow-list behaviour). A narrower grant is an explicit
+          // POST /api/events/:id/members afterwards; explicit [] there stays
+          // read-only.
           await client.query(
-            'INSERT INTO memberships (account_id, event_id) VALUES ($1, $2)',
+            `INSERT INTO memberships (account_id, event_id, write_permissions)
+             VALUES ($1, $2, '["all"]')`,
             [accountId, invitation.event_id]
           );
         }

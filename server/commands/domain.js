@@ -1,6 +1,7 @@
 'use strict';
 
 const { normalizeEvent, normalizeWorkspace } = require('../state');
+const { managerWriteAllowed } = require('../event-permissions');
 const {
   failure,
   object,
@@ -69,7 +70,7 @@ async function lockEvent(client, eventId) {
   return result.rows[0] || null;
 }
 
-async function authorizeOperator(client, event, account) {
+async function authorizeOperator(client, event, account, command) {
   if (!account || !account.id) throw failure(401, '로그인이 필요합니다');
   const result = await client.query(
     'SELECT role, active FROM accounts WHERE id = $1 LIMIT 1 FOR SHARE',
@@ -81,10 +82,16 @@ async function authorizeOperator(client, event, account) {
   }
   if (current.role === 'MANAGER') {
     const membership = await client.query(
-      'SELECT 1 FROM memberships WHERE account_id = $1 AND event_id = $2 LIMIT 1 FOR SHARE',
+      'SELECT write_permissions FROM memberships WHERE account_id = $1 AND event_id = $2 LIMIT 1 FOR SHARE',
       [String(account.id), event.id]
     );
     if (!membership.rowCount) throw failure(403, '권한을 확인하세요');
+    // Same allow-list as the route pre-check (server/event-permissions.js):
+    // the executor is authoritative, so an unmapped command is denied here
+    // even if a caller bypassed the route gate.
+    if (!managerWriteAllowed(membership.rows[0].write_permissions, command)) {
+      throw failure(403, '권한을 확인하세요');
+    }
   }
   return { id: String(account.id), role: current.role };
 }
@@ -163,7 +170,7 @@ function createDomainCommands(database, options = {}) {
       const event = normalizeEvent(row);
       const workspace = normalizeWorkspace(row.workspace_payload);
 
-      let actor = guest ? null : await authorizeOperator(client, event, account);
+      let actor = guest ? null : await authorizeOperator(client, event, account, command);
 
       const receiptResult = await client.query(
         'SELECT event_id, actor_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1',

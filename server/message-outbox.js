@@ -50,6 +50,17 @@ function backoffInterval(attempts) {
 // Replays queued dispatch intents. Safe to run at boot and after restarts:
 // rows whose campaign already reached an outcome are settled without
 // re-sending, and only campaigns still SENDING are dispatched again.
+//
+// Restart-deduplication: a crash between supplier acceptance and the local
+// settle leaves a SENDING campaign WITH a providerGroupId plus a queued row.
+// Blindly re-sending that row would deliver the campaign twice, so the drain
+// first asks the supplier whether it already holds the group
+// (groupMessages). A confirmed group settles the row without another send;
+// the campaign itself stays SENDING for the on-demand resolver
+// (resolveDelivery). Only when the supplier has no record of the group — or
+// the campaign never reached a supplier (no group id, or a provider without
+// a status-query API) — does the drain send. A failed/unknown status query
+// never settles: the row keeps its backoff and a later drain retries.
 async function drainMessageOutbox(database, provider, { now = new Date().toISOString(), limit = DRAIN_LIMIT } = {}) {
   if (!providerConnected(provider)) return { skipped: true, reason: 'NOT_CONNECTED' };
   // Lazy require: see the module header for why this cannot live at the top.
@@ -73,6 +84,7 @@ async function drainMessageOutbox(database, provider, { now = new Date().toISOSt
 
   let dispatched = 0;
   let settled = 0;
+  let reconciled = 0;
   for (const row of claimed) {
     try {
       const outcome = await database.transaction(async (client) => {
@@ -93,12 +105,27 @@ async function drainMessageOutbox(database, provider, { now = new Date().toISOSt
         // Outcome already recorded (sent, failed, cancelled, or the campaign
         // is gone): there is nothing to re-send, only the row to drop.
         if (!message || message.status !== 'SENDING') return { action: 'settle' };
+        // The campaign is still in flight AND the supplier already holds this
+        // exact acceptance (crash between acceptance and settle): re-sending
+        // would duplicate it, so reconcile instead of dispatching. The
+        // campaign stays SENDING for the on-demand delivery resolver.
+        if (message.providerGroupId && provider && typeof provider.groupMessages === 'function') {
+          let confirmed = false;
+          try {
+            const group = await provider.groupMessages(message.providerGroupId);
+            confirmed = Boolean(group && group.ok);
+          } catch (error) {
+            confirmed = false;
+          }
+          if (confirmed) return { action: 'reconciled' };
+        }
         return { action: 'dispatch', event, workspace, message };
       });
 
-      if (outcome.action === 'settle') {
+      if (outcome.action === 'settle' || outcome.action === 'reconciled') {
         await settleDispatch(database, row.message_id);
         settled += 1;
+        if (outcome.action === 'reconciled') reconciled += 1;
         continue;
       }
       const dispatch = buildMessageDispatch(outcome.event, outcome.workspace, outcome.message);
@@ -113,7 +140,7 @@ async function drainMessageOutbox(database, provider, { now = new Date().toISOSt
     }
   }
 
-  return { dispatched, settled, claimed: claimed.length, at: now };
+  return { dispatched, settled, reconciled, claimed: claimed.length, at: now };
 }
 
 module.exports = {
