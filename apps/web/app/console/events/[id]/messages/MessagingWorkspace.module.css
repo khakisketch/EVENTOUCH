@@ -15,13 +15,6 @@
   font-size: var(--small);
 }
 
-.selectionCount {
-  flex: none;
-  color: var(--muted);
-  font-size: var(--small);
-  font-weight: 700;
-}
-
 .recipientFieldset legend {
   margin-bottom: var(--s2);
   font-size: var(--small);
@@ -536,8 +529,11 @@
   font-weight: 700;
 }
 
-/* Compose-head recipient state: the picker sits far below on mobile, so the
-   head restates the count and jumps straight to it. Tokens only. */
+/* Compose-head order guide: recipients lead the DOM on every viewport
+   while desktop keeps the draft-left visual split, so the head states that
+   either order works and jumps straight to the picker or the review.
+   A focus-only skip ahead of it bypasses the long list into the draft.
+   Tokens only. */
 .recipientTopBar {
   display: flex;
   flex-wrap: wrap;
@@ -571,17 +567,27 @@
 
 /* Compose grid: draft (left) + recipients (right) on desktop, one column
    at or below the product 1024 breakpoint. The left column reuses the
-   shared form rhythm; the fieldset keeps its own recipient styles. */
+   shared form rhythm; the fieldset keeps its own recipient styles. DOM
+   order is recipients first so the mobile reading/keyboard order meets
+   the selection before the long draft; desktop restores the visual
+   draft-left/recipients-right split with grid areas only. */
 .composeGrid {
   display: grid;
+  grid-template-areas: "draft recipients";
   grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
   gap: var(--s5);
   align-items: start;
   min-width: 0;
 }
 
+.composeDraft {
+  grid-area: draft;
+  min-width: 0;
+}
+
 .composeGrid > fieldset {
   min-width: 0;
+  grid-area: recipients;
 }
 
 /* Review bar: the send checklist and the single submit sit together
@@ -608,6 +614,9 @@
 
 @media (max-width: 1024px) {
   .composeGrid {
+    grid-template-areas:
+      "recipients"
+      "draft";
     grid-template-columns: minmax(0, 1fr);
   }
 }

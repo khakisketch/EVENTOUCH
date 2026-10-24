@@ -807,12 +807,14 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       ? "초안만 있음 · 미게시"
       : "미게시";
   const deskSummary = desks.length
-    ? `지금 할 일 · 가동 ${deskOpenCount} / 전체 ${desks.length}`
-    : "지금 할 일";
+    ? `가동 ${deskOpenCount} / 전체 ${desks.length}`
+    : "등록된 데스크 없음";
   const boothSummary = stampEnabled && booths.length
-    ? `지금 할 일 · 운영 ${boothOpenCount} / 전체 ${booths.length}`
-    : "지금 할 일";
-  const staffSummary = `지금 할 일 · 배정 ${assignments.length}명`;
+    ? `운영 ${boothOpenCount} / 전체 ${booths.length}`
+    : stampEnabled
+      ? "등록된 부스 없음"
+      : "부스 인증 기능 꺼짐";
+  const staffSummary = `배정 ${assignments.length}건`;
   // A preset holding unsaved work or a pending confirmation stays open even
   // when folded: the folded summary already names the state, but the
   // recovery action lives in the body.
@@ -846,7 +848,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const currentDisplayLabel = currentDisplayValue.startsWith("idle")
     ? "유휴 화면"
     : displayChoices.find((choice) => choice.value === currentDisplayValue)?.label ?? "출력 확인 필요";
-  const displaySummary = `지금 할 일 · 현재 ${currentDisplayLabel}`;
+  const displaySummary = `현재 ${currentDisplayLabel}`;
   const mapPoints = mapDraftPoints ?? boothMap.draft?.points ?? [];
   const pointFor = (boothId: string) => mapPoints.find((point) => point.boothId === boothId) ?? null;
 
@@ -927,6 +929,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       meta={state.eventMeta}
       sectionNav={(
         <div className={styles.navSticky}>
+          <p className={styles.navHelp}>이 페이지에서 이동</p>
           <ConsoleSectionNav
             label="현장 운영 구역"
             activeId={activeSection}
@@ -1022,6 +1025,17 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                     className="button button-secondary"
                     disabled={busy || writeBlocked}
                     title={writeBlocked ? writeBlockedReason : undefined}
+                    aria-label={`${desk.name}에 스태프 배정`}
+                    onClick={() => { setAssignPreset({ type: "DESK", targetId: desk.id }); setAssignOpen(true); setFailure(null); }}
+                  >
+                    스태프 배정
+                  </button>
+                  <span className={styles.actionSeparator} aria-hidden="true" />
+                  <button
+                    type="button"
+                    className={`button ${desk.open ? styles.stateStop : styles.stateStart}`}
+                    disabled={busy || writeBlocked}
+                    title={writeBlocked ? writeBlockedReason : undefined}
                     onClick={() => void runCommand(
                       "desk.set-open",
                       { id: desk.id, open: !desk.open },
@@ -1029,16 +1043,6 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                     )}
                   >
                     {desk.open ? "가동 중지" : "가동 시작"}
-                  </button>
-                  <button
-                    type="button"
-                    className="button button-secondary"
-                    disabled={busy || writeBlocked}
-                    title={writeBlocked ? writeBlockedReason : undefined}
-                    aria-label={`${desk.name}에 스태프 배정`}
-                    onClick={() => { setAssignPreset({ type: "DESK", targetId: desk.id }); setAssignOpen(true); setFailure(null); }}
-                  >
-                    스태프 배정
                   </button>
                 </div>
               </li>
@@ -1211,7 +1215,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                 <div className={uiStyles.recordActions}>
                   <button
                     type="button"
-                    className="button button-secondary"
+                    className={`button ${styles.dangerGhost}`}
                     disabled={busy || writeBlocked}
                     title={writeBlocked ? writeBlockedReason : undefined}
                     onClick={() => void runCommand(

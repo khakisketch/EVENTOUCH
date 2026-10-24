@@ -229,8 +229,8 @@ async function main() {
     check('all 12 destinations remain in approved work order', nav.length === 12 && nav.findIndex(t => t.includes('콘텐츠')) < nav.findIndex(t => t.includes('현장 운영')) && nav.at(-1).includes('행사 설정'), nav);
     check('group labels are not interactive', await page.locator('.desktop-side-nav .nav-work-group-label').evaluateAll(nodes => nodes.length === 2 && nodes.every(e => e.tagName === 'SPAN' && !e.hasAttribute('tabindex'))));
     await page.goto(base + '/participants?status=PENDING');
-    await page.getByRole('button', { name: '표시 49명 선택', exact: true }).waitFor();
-    await page.getByRole('button', { name: '표시 49명 선택', exact: true }).click();
+    await page.getByRole('button', { name: '검색·필터 결과 49명 전체 선택', exact: true }).waitFor();
+    await page.getByRole('button', { name: '검색·필터 결과 49명 전체 선택', exact: true }).click();
     check('bulk selection includes other pages without changing displayed count', await page.locator('#roster-selection-count').textContent().then(t => t.includes('현재 표시 25명 선택') && t.includes('전체 선택 49명') && t.includes('필터 범위 49명')));
     await page.getByRole('button', { name: '선택 승인', exact: true }).click();
     await page.locator('#roster-approved-message').waitFor();

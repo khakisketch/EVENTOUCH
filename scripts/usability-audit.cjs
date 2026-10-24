@@ -782,7 +782,7 @@ async function main() {
         await act(task, () => page.locator('#campaign-title').fill(title));
         await act(task, () => page.locator('#campaign-body').fill('{{이름}}님 사용성 감사 안내입니다.'));
         if (!await page.locator('#campaign-recipients details').evaluate(element => element.open)) {
-          await act(task, () => page.getByText('수신자 목록 열기·닫기', { exact: false }).first().click());
+          await act(task, () => page.getByText(/수신자 목록 (열기|닫기)/, { exact: false }).first().click());
         }
         await page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().waitFor({ state: 'visible', timeout: 10000 });
         await act(task, () => page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check());
@@ -1203,7 +1203,7 @@ async function main() {
         await act(task, () => page.locator('#campaign-title').fill(title));
         await act(task, () => page.locator('#campaign-body').fill('{{이름}}님 사용성 감사 예약 안내입니다.'));
         if (!await page.locator('#campaign-recipients details').evaluate(element => element.open)) {
-          await act(task, () => page.getByText('수신자 목록 열기·닫기', { exact: false }).first().click());
+          await act(task, () => page.getByText(/수신자 목록 (열기|닫기)/, { exact: false }).first().click());
         }
         await page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().waitFor({ state: 'visible', timeout: 10000 });
         await act(task, () => page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check());

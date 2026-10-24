@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
@@ -210,6 +210,35 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     () => tabFromHash(typeof window === "undefined" ? "" : window.location.hash) ?? "basics"
   );
   const tabButtonRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const tabsRef = useRef<HTMLDivElement | null>(null);
+
+  // 활성 탭 가시성: 탭 목록의 가로 스크롤만 조절한다. 세로 스크롤이나
+  // 포커스 이동은 하지 않으므로 클릭·키보드·해시·뒤로 이동 흐름을 뺏지
+  // 않는다. offsetLeft는 offsetParent 기준이라 바깥 여백만큼 어긋날 수
+  // 있으므로, 리스트·활성 탭의 bounding rect 차이로 scrollLeft 델타만 보정한다.
+  const keepActiveTabVisible = useCallback(() => {
+    const list = tabsRef.current;
+    if (!list) return;
+    const active = list.querySelector('[aria-selected="true"]') as HTMLElement | null;
+    if (!active) return;
+    const listRect = list.getBoundingClientRect();
+    const activeRect = active.getBoundingClientRect();
+    const deltaLeft = activeRect.left - listRect.left;
+    const deltaRight = activeRect.right - listRect.right;
+    if (deltaLeft < 0) {
+      list.scrollLeft += deltaLeft;
+    } else if (deltaRight > 0) {
+      list.scrollLeft += deltaRight;
+    }
+  }, []);
+
+  // 탭 목록 부착 시(ready 전환 마운트 포함) 한 번 보장하고, 이후 활성 탭
+  // 전환·폭 변화 때마다 다시 적용한다. 마운트 때 activeTab이 바뀌지
+  // 않아도 콜백 ref가 실행되므로 초기 딥링크(#settings-stage)가 잘리지 않는다.
+  const attachTabsRef = useCallback((node: HTMLDivElement | null) => {
+    tabsRef.current = node;
+    if (node) keepActiveTabVisible();
+  }, [keepActiveTabVisible]);
   const [stageBusy, setStageBusy] = useState(false);
   const [stageConfirm, setStageConfirm] = useState(false);
   const [stageError, setStageError] = useState<string | null>(null);
@@ -485,6 +514,14 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       window.removeEventListener("hashchange", syncTab);
     };
   }, [state, eventId]);
+
+  // 탭 전환·폭 변화 때 가로 위치만 다시 맞춘다. 마운트 직후 한 번은
+  // 위 콜백 ref가 보장한다.
+  useEffect(() => {
+    keepActiveTabVisible();
+    window.addEventListener("resize", keepActiveTabVisible);
+    return () => window.removeEventListener("resize", keepActiveTabVisible);
+  }, [activeTab, keepActiveTabVisible]);
 
   // 선형 마감 "다음" 인계의 제목 포커스. 패널이 렌더된 뒤에 실행하므로
   // 숨은 제목에 대한 no-op이 되지 않는다. 캡처 리스너가 "다음" 활성화
@@ -822,7 +859,9 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       eventName={basics?.name || state.basics.name}
       meta={state.eventMeta}
       sectionNav={(
-        <div role="tablist" aria-label="행사 설정 구역" className={styles.tabs} onKeyDown={onTabKeyDown}>
+        <div className={styles.tabsWrap}>
+          <p className={styles.tabsHelp}>설정 4개 구역 · 좌우로 밀어 진행 단계까지 확인하세요</p>
+          <div ref={attachTabsRef} role="tablist" aria-label="행사 설정 구역" className={styles.tabs} onKeyDown={onTabKeyDown}>
           {SETTINGS_TABS.map((tab, index) => {
             const selected = activeTab === tab.id;
             const dirty = tabDirty[tab.id];
@@ -852,6 +891,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               </button>
             );
           })}
+          </div>
         </div>
       )}
       feedback={(

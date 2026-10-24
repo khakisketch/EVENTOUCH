@@ -753,17 +753,14 @@ export default function EventOverview({ eventId }: { eventId: string }) {
                 </li>
                 <li>
                   <span className={styles.readinessIcon} aria-hidden="true">
-                    <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2" /><circle cx="9" cy="10" r="1.6" /><path d="M4 16l4.5-4.5 3 3L16 10l4 4" /></svg>
-                  </span>
-                  <div><strong>참가자 디자인 · 선택 사항</strong><span>{overview.pagePublished ? (overview.pageDraftDiffers ? "게시됨 · 새 초안 있음" : "게시됨") : "기본 디자인 사용 중 · 꾸미기는 선택 사항입니다"}</span></div>
-                  <Link className="button button-secondary" href={`${base}/page`}>디자인 편집</Link>
-                </li>
-                <li>
-                  <span className={styles.readinessIcon} aria-hidden="true">
                     <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3" /><circle cx="17" cy="9" r="2.2" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0M15.5 14.5a4.5 4.5 0 0 1 6 4.5" /></svg>
                   </span>
                   <div><strong>현장 준비</strong><span>데스크 {overview.deskCount} · 배정 {overview.deskAssignmentCount} · 현장 운영에서 세부 확인</span></div>
                   <Link className="button button-secondary" href={`${base}/operations`}>현장 운영 확인</Link>
+                </li>
+                <li className={styles.designRow}>
+                  <div><span className={styles.designTitle}>참가자 디자인 · 선택 사항</span><span>{overview.pagePublished ? (overview.pageDraftDiffers ? "게시됨 · 새 초안 있음" : "게시됨") : "기본 디자인 사용 중 · 꾸미기는 선택 사항입니다"}</span></div>
+                  <Link className={styles.designLink} href={`${base}/page`}>디자인 편집</Link>
                 </li>
               </ul>
             </ConsoleSection>

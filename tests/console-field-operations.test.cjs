@@ -1,8 +1,9 @@
-// Field-day operations console: the same-day controls (desks, display,
-// staff) stay unfolded and named as 지금 할 일, the before-the-day presets
-// (auth mode, booth map) fold on phones with their current value in the
-// folded summary, and the jump nav sticks on phones with a readable
-// position. UI-only: commands, copy volume and confirm grammar stay pinned.
+// Field-day operations console: the same-day sections state their status in
+// the description slot (가동 n / 전체, 현재 출력, 배정 n건), the before-the-day
+// presets stay folded on phones with their current value in the folded summary,
+// and the jump nav sticks on phones with a readable position. The staff
+// summary counts assignments (건), not people. UI-only: commands, copy
+// volume and confirm grammar stay pinned.
 // Source-only assertions; rendering rides the isolated console audit.
 "use strict";
 
@@ -63,10 +64,10 @@ test("same-day and before-the-day sections split through one summary slot", () =
   assert.match(source, /<summary[^>]*>부스 지도 · \{mapStatusText\}<\/summary>/u);
   assert.match(source, /description=\{staffSummary\}/u);
   assert.match(source, /description=\{displaySummary\}/u, "display names the current same-day output");
-  assert.match(source, /`지금 할 일 · 현재 \$\{currentDisplayLabel\}`/u);
-  assert.match(source, /`지금 할 일 · 가동 \$\{deskOpenCount\} \/ 전체 \$\{desks\.length\}`/u);
-  assert.match(source, /`지금 할 일 · 운영 \$\{boothOpenCount\} \/ 전체 \$\{booths\.length\}`/u);
-  assert.match(source, /`지금 할 일 · 배정 \$\{assignments\.length\}명`/u);
+  assert.match(source, /`현재 \$\{currentDisplayLabel\}`/u);
+  assert.match(source, /`가동 \$\{deskOpenCount\} \/ 전체 \$\{desks\.length\}`/u);
+  assert.match(source, /`운영 \$\{boothOpenCount\} \/ 전체 \$\{booths\.length\}`/u);
+  assert.match(source, /`배정 \$\{assignments\.length\}건`/u);
   assert.doesNotMatch(source, /modeSummary|mapSummary/u, "the folded summaries alone carry preset state");
   for (const id of ["ops-desks", "ops-booths", "ops-booth-mode", "ops-booth-map", "ops-display", "ops-staff"]) {
     assert.match(source, new RegExp(`headingId="${id}"`), `the ${id} section keeps its anchor`);

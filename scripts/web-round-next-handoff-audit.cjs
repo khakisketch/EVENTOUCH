@@ -204,9 +204,17 @@ async function main() {
       await page.locator('#recipient-status-filter').waitFor();
       await page.getByText('명단에서 2명을 인계받았습니다', { exact: false }).waitFor();
       assert.equal(await page.locator('#recipient-status-filter').inputValue(), 'APPROVED');
-      await page.getByText('수신자 목록 열기·닫기', { exact: false }).first().click();
+      // State-aware toggle: the handoff/desktop may already leave the list
+      // open, so only open it when closed — an unconditional click would
+      // close it and hide the list being asserted below.
+      if (!await page.locator('#campaign-recipients details').evaluate(element => element.open)) {
+        await page.getByText(/수신자 목록 (열기|닫기)/, { exact: false }).first().click();
+      }
+      await page.getByRole('list', { name: '참가자 선택', exact: true }).waitFor({ state: 'visible' });
       const selected = await page.getByRole('list', { name: '참가자 선택', exact: true }).locator('input[type="checkbox"]:checked').count();
       assert.equal(selected, 2);
+      assert.ok(await page.getByRole('checkbox', { name: /승인 인계 가/ }).isChecked(), 'first approved recipient stays selected');
+      assert.ok(await page.getByRole('checkbox', { name: /승인 인계 나/ }).isChecked(), 'second approved recipient stays selected');
       assert.equal(fixture.gateway.commands.filter(c => c.command === 'message.create').length, before);
       await shot('message-approved-recipients-1280.png');
       pass('approve-to-composer-filter-and-exact-recipients', { approved: ids.length, selected, automaticMessageWrites: 0 });

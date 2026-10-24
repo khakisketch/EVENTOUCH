@@ -1372,9 +1372,13 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
               type="button"
               className={`button button-secondary ${styles.selectionButton}`}
               onClick={selectVisible}
+              aria-describedby="roster-select-all-help"
             >
-              표시 {visiblePeople.length}명 선택
+              검색·필터 결과 {visiblePeople.length}명 전체 선택
             </button>
+            <span id="roster-select-all-help" className="sr-only">
+              검색·필터에 맞는 전체를 선택합니다. 다른 페이지의 결과도 포함됩니다.
+            </span>
           </>
         ) : null}
       </p>

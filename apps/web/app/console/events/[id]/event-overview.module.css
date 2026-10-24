@@ -705,6 +705,29 @@
   min-width: 0;
 }
 
+/* 꾸미기 종속행: 위 두 준비행과 같은 아이콘+외곽선 동등행이 아닌 낮은
+   강도 종속행. 펼침 없이 기본 상태가 보인다. */
+.designRow {
+  align-items: center;
+}
+
+.designTitle {
+  color: var(--ink);
+  font-size: var(--body);
+  font-weight: 650;
+}
+
+.designLink {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: 44px;
+  color: var(--brand-text);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .readinessList li span {
   color: var(--muted);
   font-size: var(--small);
@@ -759,6 +782,17 @@
     display: grid;
     grid-template-columns: 44px minmax(0, 1fr);
     align-items: center;
+  }
+
+  /* 아이콘 없는 종속행은 빈 첫 칸 없이 한 열로 읽힌다. */
+  .readinessList li.designRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .readinessList li.designRow > a {
+    grid-column: auto;
+    width: auto;
+    justify-content: flex-start;
   }
 
   .readinessList li > a {

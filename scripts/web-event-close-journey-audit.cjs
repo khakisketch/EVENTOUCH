@@ -460,7 +460,7 @@ async function main() {
       // ---- Phase 1: approve the waiting application from the overview ----
       await measure('approve-pending', '승인 대기 처리 (운영 현황 링크 → 명단 → 선택 승인)', async (act, task, { touchOk }) => {
         task.screens = [eventPath(''), `${eventPath('/participants')}?status=PENDING`];
-        task.fields = ['승인 대기 처리 link', '표시 N명 선택', '선택 승인'];
+        task.fields = ['승인 대기 처리 link', '검색·필터 결과 N명 전체 선택', '선택 승인'];
         if (before) {
           const link = page.getByRole('link', { name: '승인 대기 처리' });
           await touchOk(link, '승인 대기 처리');
@@ -474,7 +474,7 @@ async function main() {
           await followNext(act, 'input[placeholder*="이름·소속·연락처 검색"]', /승인 대기/);
         }
         await page.locator('input[placeholder*="이름·소속·연락처 검색"]').first().waitFor({ state: 'visible', timeout: 15000 });
-        const selectVisible = page.getByRole('button', { name: /표시 \d+명 선택/ });
+        const selectVisible = page.getByRole('button', { name: /검색·필터 결과 \d+명 전체 선택/ });
         await touchOk(selectVisible, '표시 선택');
         await act('click', () => selectVisible.click());
         const approve = page.getByRole('button', { name: '선택 승인', exact: true });
@@ -641,7 +641,7 @@ async function main() {
       // ---- Phase 7: result notice as a SIMULATED campaign (never a send) ----
       await measure('result-notify', '결과 안내 모의 발송 (메시지 작성 → 모의 기록 → 확정)', async (act, task, { touchOk }) => {
         task.screens = [eventPath('/messages')];
-        task.fields = ['#campaign-title', '#campaign-body', '모의 발송으로 기록 checkbox', '수신자 목록 열기·닫기', '표시 추가', '발송 검토', '모의 발송을 기록한다'];
+        task.fields = ['#campaign-title', '#campaign-body', '모의 발송으로 기록 checkbox', '수신자 목록 열기/닫기', '표시 추가', '발송 검토', '모의 발송을 기록한다'];
         if (before) await menuTo('/messages', '#campaign-title', act);
         else {
           await act('click', () => page.locator('[data-close-report-next]').click());
@@ -653,7 +653,7 @@ async function main() {
         const simulate = page.getByRole('checkbox', { name: /모의 발송으로 기록/ });
         await act('check', () => simulate.check());
         assert.ok(await simulate.isChecked(), 'simulate must stay checked: real send is forbidden');
-        const list = page.locator('summary').filter({ hasText: '수신자 목록 열기·닫기' });
+        const list = page.locator('summary').filter({ hasText: '수신자 목록' });
         if (!await list.locator('..').evaluate(element => element.open)) {
           await act('click', () => list.click());
         }

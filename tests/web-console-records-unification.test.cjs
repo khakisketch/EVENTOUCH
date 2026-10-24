@@ -72,7 +72,7 @@ test('toolbars separate filters, actions and conditional selection', () => {
   // Bulk selection owns a second row only while something is selected; the
   // compact select-all stays discoverable next to the count when none is.
   assert.match(participants, /selection=\{\s*anySelected/u);
-  assert.match(participants, /표시 \{visiblePeople\.length\}명 선택/u);
+  assert.match(participants, /검색·필터 결과 \{visiblePeople\.length\}명 전체 선택/u);
   const home = read(PAGES.home);
   assert.match(home, /filters=\{/u);
   assert.match(home, /actions=\{/u);

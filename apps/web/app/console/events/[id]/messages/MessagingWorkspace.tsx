@@ -1567,21 +1567,32 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
           <ConsoleSection
             headingId="campaign-heading"
               title="메시지 작성"
-              action={<span className={styles.selectionCount}>{selectedCount}명 선택</span>}
               surface="panel"
               divider
             >
               <form className={uiStyles.formStack} onSubmit={requestCampaignCreate}>
+                <a
+                  className="skip-link"
+                  href="#campaign-title"
+                  data-skip-to="campaign-title"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    const target = document.getElementById("campaign-title");
+                    target?.scrollIntoView({ block: "start" });
+                    target?.focus({ preventScroll: true });
+                  }}
+                >
+                  메시지 작성으로 건너뛰기
+                </a>
                 <div className={styles.recipientTopBar}>
                   <span>
-                    {selectedCount > 0
-                      ? `수신자 ${selectedCount}명 선택 · 확정 ${selectedApproved}명`
-                      : "수신자 0명 선택 · 작성 후 수신자를 선택할 수 있습니다"}
+                    내용 작성과 수신자 선택은 어느 순서로 해도 됩니다
                   </span>
                   <button
                     type="button"
                     className={styles.textButton}
                     onClick={() => {
+                      setRecipientListOpen(true);
                       document.getElementById("campaign-recipients")?.scrollIntoView({ block: "start" });
                       document.getElementById("recipient-status-filter")?.focus({ preventScroll: true });
                     }}
@@ -1599,7 +1610,102 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   </button>
                 </div>
                 <div className={styles.composeGrid}>
-                  <div className={uiStyles.formStack}>
+                  <fieldset id="campaign-recipients" className={styles.recipientFieldset} aria-describedby={campaignFieldError?.field === "ids" ? "campaign-recipients-error" : "recipient-summary"}>
+                    <legend>발송 대상</legend>
+                    <div className={styles.recipientFilters}>
+                      <div>
+                        <label htmlFor="recipient-status-filter">상태</label>
+                        <select
+                          id="recipient-status-filter"
+                          value={recipientStatus}
+                          onChange={(event) => setRecipientStatus(event.target.value)}
+                        >
+                          {RECIPIENT_STATUS_OPTIONS.map((option) => (
+                            <option value={option.value} key={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className={styles.recipientSearch}>
+                        <label htmlFor="recipient-search">
+                          <span className="sr-only">수신자 이름·소속·연락처 검색</span>
+                        </label>
+                        <input
+                          id="recipient-search"
+                          type="search"
+                          placeholder="이름·소속·연락처 검색"
+                          value={recipientQuery}
+                          onChange={(event) => setRecipientQuery(event.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <p className={styles.selectionSummary} id="recipient-summary" role="status">
+                      선택 {selectedCount}명
+                      {selectedApproved > 0 ? <> · 확정 {selectedApproved}명</> : null}
+                      {selectedPending > 0 ? <> · 승인 대기 {selectedPending}명</> : null}
+                      {selectedWaitlist > 0 ? <> · 대기 명단 {selectedWaitlist}명</> : null}
+                      {selectedMissing > 0 ? ` · 목록 제외 ${selectedMissing}명` : ""}
+                      {outsideVisibleCount > 0 ? ` · 화면 밖 선택 ${outsideVisibleCount}명 유지 중` : ""}
+                    </p>
+                    {pendingRiskCount > 0 ? (
+                      <p className={styles.riskWarning} id="recipient-risk-warning" role="alert">
+                        선택 대상 중 승인 대기·대기 명단이 {pendingRiskCount}명 있습니다. 발송 전에 대상을 다시 확인하세요.
+                      </p>
+                    ) : null}
+                    <details className={styles.recipientDetails} open={recipientListOpen} onToggle={(event) => setRecipientListOpen((event.target as HTMLDetailsElement).open)}>
+                      <summary className={styles.recipientSummaryButton}>
+                        {recipientListOpen ? "수신자 목록 닫기" : "수신자 목록 열기"}
+                        <span className={styles.recipientSummaryCount}>
+                          {recipientSearch || showSelectedOnly || recipientStatus !== "ALL"
+                            ? `표시 ${visibleRecipients.length}명`
+                            : `발송 가능 ${activeParticipants.length}명`}
+                        </span>
+                      </summary>
+                      <div className={styles.recipientTools}>
+                        <div>
+                          <button type="button" className={styles.textButton} onClick={() => setAllRecipients(true, visibleRecipients)}>표시 추가</button>
+                          <button type="button" className={styles.textButton} onClick={() => setAllRecipients(false, visibleRecipients)}>표시 해제</button>
+                          <button type="button" className={styles.textButton} id="recipient-clear-all" onClick={clearAllRecipients}>전체 선택 해제</button>
+                        </div>
+                      </div>
+                    <label className={styles.selectedOnlyOption}>
+                      <input
+                        id="recipient-selected-only"
+                        type="checkbox"
+                        checked={showSelectedOnly}
+                        onChange={(event) => setShowSelectedOnly(event.target.checked)}
+                      />
+                      선택 대상만 보기
+                    </label>
+                    {visibleRecipients.length ? (
+                      <ul className={styles.recipientList} aria-label="참가자 선택">
+                        {visibleRecipients.map((person) => (
+                          <li key={person.id}>
+                            <label className={styles.recipientRow}>
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.includes(person.id)}
+                                onChange={() => toggleRecipient(person.id)}
+                              />
+                              <span className={styles.recipientName}>{person.name}</span>
+                              <span className={styles.recipientMeta}>
+                                {person.company ? `${person.company} · ` : ""}{maskPhone(person.phone)} · {participantStatusLabel(person.status)}
+                              </span>
+                            </label>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : showSelectedOnly ? (
+                      <p className={styles.empty}>선택한 대상이 없습니다.</p>
+                    ) : activeParticipants.length ? (
+                      <p className={styles.empty}>조건에 맞는 수신자가 없습니다.</p>
+                    ) : (
+                      <p className={styles.empty}>등록된 참가자가 없습니다.</p>
+                    )}
+                    </details>
+                    {campaignFieldError?.field === "ids" ? <p className={styles.fieldError} id="campaign-recipients-error" role="alert">{campaignFieldError.message}</p> : null}
+                  </fieldset>
+
+                  <div className={`${uiStyles.formStack} ${styles.composeDraft}`}>
                     <div>
                       {reloadSummary ? (
                         <ConsoleFeedback kind="info" id="campaign-reload-summary">{reloadSummary}</ConsoleFeedback>
@@ -1735,99 +1841,6 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   </label>
                 </div>
                   </div>
-
-                <fieldset id="campaign-recipients" className={styles.recipientFieldset} aria-describedby={campaignFieldError?.field === "ids" ? "campaign-recipients-error" : "recipient-summary"}>
-                  <legend>발송 대상</legend>
-                  <div className={styles.recipientFilters}>
-                    <div>
-                      <label htmlFor="recipient-status-filter">상태</label>
-                      <select
-                        id="recipient-status-filter"
-                        value={recipientStatus}
-                        onChange={(event) => setRecipientStatus(event.target.value)}
-                      >
-                        {RECIPIENT_STATUS_OPTIONS.map((option) => (
-                          <option value={option.value} key={option.value}>{option.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className={styles.recipientSearch}>
-                      <label htmlFor="recipient-search">
-                        <span className="sr-only">수신자 이름·소속·연락처 검색</span>
-                      </label>
-                      <input
-                        id="recipient-search"
-                        type="search"
-                        placeholder="이름·소속·연락처 검색"
-                        value={recipientQuery}
-                        onChange={(event) => setRecipientQuery(event.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <p className={styles.selectionSummary} id="recipient-summary" role="status">
-                    선택 {selectedCount}명 · 확정 {selectedApproved}명 · 승인 대기 {selectedPending}명 · 대기 명단 {selectedWaitlist}명
-                    {selectedMissing > 0 ? ` · 목록 제외 ${selectedMissing}명` : ""}
-                    {outsideVisibleCount > 0 ? ` · 화면 밖 선택 ${outsideVisibleCount}명 유지 중` : ""}
-                  </p>
-                  {pendingRiskCount > 0 ? (
-                    <p className={styles.riskWarning} id="recipient-risk-warning" role="alert">
-                      선택 대상 중 승인 대기·대기 명단이 {pendingRiskCount}명 있습니다. 발송 전에 대상을 다시 확인하세요.
-                    </p>
-                  ) : null}
-                  <details className={styles.recipientDetails} open={recipientListOpen} onToggle={(event) => setRecipientListOpen((event.target as HTMLDetailsElement).open)}>
-                    <summary className={styles.recipientSummaryButton}>
-                      수신자 목록 열기·닫기
-                      <span className={styles.recipientSummaryCount}>
-                        {recipientSearch || showSelectedOnly || recipientStatus !== "ALL"
-                          ? `표시 ${visibleRecipients.length}명`
-                          : `발송 가능 ${activeParticipants.length}명`}
-                      </span>
-                    </summary>
-                    <div className={styles.recipientTools}>
-                      <span>{recipientSearch || showSelectedOnly || recipientStatus !== "ALL" ? `표시 ${visibleRecipients.length}명` : `발송 가능 ${activeParticipants.length}명`}</span>
-                      <div>
-                        <button type="button" className={styles.textButton} onClick={() => setAllRecipients(true, visibleRecipients)}>표시 추가</button>
-                        <button type="button" className={styles.textButton} onClick={() => setAllRecipients(false, visibleRecipients)}>표시 해제</button>
-                        <button type="button" className={styles.textButton} id="recipient-clear-all" onClick={clearAllRecipients}>전체 선택 해제</button>
-                      </div>
-                    </div>
-                  <label className={styles.selectedOnlyOption}>
-                    <input
-                      id="recipient-selected-only"
-                      type="checkbox"
-                      checked={showSelectedOnly}
-                      onChange={(event) => setShowSelectedOnly(event.target.checked)}
-                    />
-                    선택 대상만 보기({selectedCount}명)
-                  </label>
-                  {visibleRecipients.length ? (
-                    <ul className={styles.recipientList} aria-label="참가자 선택">
-                      {visibleRecipients.map((person) => (
-                        <li key={person.id}>
-                          <label className={styles.recipientRow}>
-                            <input
-                              type="checkbox"
-                              checked={selectedIds.includes(person.id)}
-                              onChange={() => toggleRecipient(person.id)}
-                            />
-                            <span className={styles.recipientName}>{person.name}</span>
-                            <span className={styles.recipientMeta}>
-                              {person.company ? `${person.company} · ` : ""}{maskPhone(person.phone)} · {participantStatusLabel(person.status)}
-                            </span>
-                          </label>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : showSelectedOnly ? (
-                    <p className={styles.empty}>선택한 대상이 없습니다.</p>
-                  ) : activeParticipants.length ? (
-                    <p className={styles.empty}>조건에 맞는 수신자가 없습니다.</p>
-                  ) : (
-                    <p className={styles.empty}>등록된 참가자가 없습니다.</p>
-                  )}
-                  </details>
-                  {campaignFieldError?.field === "ids" ? <p className={styles.fieldError} id="campaign-recipients-error" role="alert">{campaignFieldError.message}</p> : null}
-                </fieldset>
                 </div>
 
                 <div className={styles.reviewBar}>

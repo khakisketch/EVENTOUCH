@@ -23,6 +23,37 @@
   min-width: 0;
 }
 
+/* Tool/state action split on desk rows: 편집·스태프 배정은 일반 도구,
+   가동 시작/중지는 별도 상태 그룹으로 구분선 뒤에 둔다. 중지는 재개
+   가능하므로 경고 토큰(일괄 빨강 금지), 가동 시작은 중립/성공 약한
+   강조. '해제'는 외곽선과 구별되는 danger 텍스트·고스트. 버튼 라벨,
+   확인 문법, runCommand 경로는 그대로. */
+.actionSeparator {
+  flex: none;
+  align-self: stretch;
+  width: 1px;
+  margin-inline: var(--s1);
+  background: var(--line);
+}
+
+.stateStop {
+  border-color: var(--warning-line);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.stateStart {
+  border-color: var(--success-line);
+  background: var(--paper);
+  color: var(--success);
+}
+
+.dangerGhost {
+  border-color: var(--danger-line);
+  background: transparent;
+  color: var(--danger);
+}
+
 /* Booth map editor: image with normalized marker overlays. */
 .mapWrap {
   position: relative;
@@ -104,6 +135,15 @@
   min-width: 0;
 }
 
+/* Visible in-page move guide above the shared jump nav. The label stays
+   on the wrapper (not the shared nav) so audits keep their aria-label. */
+.navHelp {
+  margin: 0 0 var(--s1);
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
 .anchorSection {
   scroll-margin-top: 0;
 }
@@ -146,6 +186,12 @@
     z-index: 5;
     padding: var(--s2) 0;
     background: var(--ground);
+  }
+
+  .actionSeparator {
+    width: 100%;
+    height: 1px;
+    margin: 0;
   }
 
   .anchorSection {
