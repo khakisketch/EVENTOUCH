@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
@@ -65,13 +65,26 @@ type RewardRecord = {
   winnerIndex: number | null;
 };
 
-// Names the section in view for the jump-nav readout.
+// Names the section in view for the jump-nav active link. The observer
+// below iterates these keys, so the map stays the single list of tracked
+// sections.
 const DRAW_SECTION_LABELS: Record<string, string> = {
   "draws-programs": "무대 추첨",
   "draws-vote": "순위 투표",
   "draws-roulette": "모바일 룰렛",
   "draws-lucky": "럭키번호",
 };
+
+// The single list of tracked sections: the observer iterates it and deep
+// links resolve against it.
+const DRAW_SECTION_IDS = Object.keys(DRAW_SECTION_LABELS);
+
+// Keys that scroll the document when the focus is not inside an editable
+// field. Releasing the explicit-jump pin on exactly these (plus wheel and
+// touch) hands control back to the scroll spy on genuine user scrolling,
+// while programmatic jumps — which fire none of them — keep the chosen
+// section without any timeout.
+const SCROLL_RELEASE_KEYS = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "]);
 
 type WorkspaceState =
   | { kind: "loading" }
@@ -144,6 +157,34 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
   const router = useRouter();
   const [state, setState] = useState<WorkspaceState>({ kind: "loading" });
   const [activeSection, setActiveSection] = useState("draws-programs");
+  // Explicit-jump priority: a jump or deep link names its section at once
+  // and pins it past the scroll spy, which watches tiny headings in a
+  // narrow band and can never see a bottom-of-page section arrive. Only a
+  // genuine wheel, touch, or scroll-key releases the pin.
+  const navPinRef = useRef<string | null>(null);
+  const followJumpedSection = useCallback((id: string) => {
+    navPinRef.current = id;
+    setActiveSection(id);
+  }, []);
+  useEffect(() => {
+    const releaseJumpPin = () => { navPinRef.current = null; };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!SCROLL_RELEASE_KEYS.has(event.key)) return;
+      // Keystrokes inside an editable control drive that control, not the
+      // document: arrows moving through a field must not release the pin.
+      const target = event.target as Element | null;
+      if (target && typeof target.closest === "function" && target.closest("input, select, textarea, [contenteditable]")) return;
+      releaseJumpPin();
+    };
+    window.addEventListener("wheel", releaseJumpPin, { passive: true });
+    window.addEventListener("touchmove", releaseJumpPin, { passive: true });
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("wheel", releaseJumpPin);
+      window.removeEventListener("touchmove", releaseJumpPin);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -498,13 +539,17 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
-  // Names the section in view for the jump-nav readout. Anchor clicks keep
+  // Names the section in view for the jump-nav active link. Anchor clicks keep
   // working natively whether or not the observer is available.
   useEffect(() => {
     if (typeof IntersectionObserver === "undefined") return;
-    const ids = Object.keys(DRAW_SECTION_LABELS);
+    const ids = DRAW_SECTION_IDS;
     const observer = new IntersectionObserver(
       (entries) => {
+        // An explicit jump or deep link holds the current marker: the
+        // observed headings are small and the band is narrow, so a stale
+        // heading must not rename the section the operator just chose.
+        if (navPinRef.current) return;
         for (const entry of entries) {
           if (entry.isIntersecting) setActiveSection(entry.target.id);
         }
@@ -517,6 +562,19 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
     }
     return () => observer.disconnect();
   }, [state]);
+
+  // A deep link names its section even where the scroll spy cannot see it
+  // arrive; the pin holds until the operator really scrolls.
+  useEffect(() => {
+    const applyHash = () => {
+      const hash = window.location.hash;
+      const id = hash.startsWith("#") ? hash.slice(1) : "";
+      if (id && (DRAW_SECTION_IDS as readonly string[]).includes(id)) followJumpedSection(id);
+    };
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+  }, [followJumpedSection]);
 
   async function postCommand(command: string, payload: Record<string, unknown>, intent = ""): Promise<Record<string, unknown>> {
     const attempt = JSON.stringify([eventId, command, payload, intent]);
@@ -1020,6 +1078,8 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
         <div className={styles.navSticky}>
           <ConsoleSectionNav
             label="추첨·투표 구역"
+            activeId={activeSection}
+            onNavigate={followJumpedSection}
             items={[
               { id: "draws-programs", label: "무대 추첨" },
               { id: "draws-vote", label: "순위 투표" },
@@ -1027,7 +1087,6 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
               { id: "draws-lucky", label: "럭키번호" },
             ]}
           />
-          <p className={styles.navNow}>현재 위치: {DRAW_SECTION_LABELS[activeSection] || "무대 추첨"}</p>
         </div>
       }
       feedback={

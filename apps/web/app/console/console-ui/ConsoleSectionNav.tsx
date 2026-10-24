@@ -9,6 +9,21 @@ export type ConsoleSectionNavItem = {
 type ConsoleSectionNavProps = {
   items: readonly ConsoleSectionNavItem[];
   label?: string;
+  /**
+   * Id of the section currently in view. The matching link alone carries
+   * `aria-current="location"` with a token-only active style (background
+   * plus a non-color signal), so the current position reads once, in the
+   * links themselves. Omitted by pages without section tracking, which
+   * keep rendering a regular nav with no current marker.
+   */
+  activeId?: string;
+  /**
+   * Fired when the operator explicitly jumps through a link (mouse, touch,
+   * or keyboard activation), once the target section resolves. Lets the
+   * page name the jumped-to section at once instead of waiting for the
+   * scroll spy, which cannot see headings parked outside its band.
+   */
+  onNavigate?: (id: string) => void;
 };
 
 /**
@@ -21,18 +36,21 @@ type ConsoleSectionNavProps = {
  * next Tab continues inside it instead of back at the top of the page. The
  * fragment still changes, so a section can be copied and reopened.
  */
-export default function ConsoleSectionNav({ items, label }: ConsoleSectionNavProps) {
+export default function ConsoleSectionNav({ items, label, activeId, onNavigate }: ConsoleSectionNavProps) {
   if (!items.length) return null;
 
   return (
     <nav className={styles.sectionNav} aria-label={label ?? "섹션 바로가기"}>
       <ul className={styles.sectionNavList}>
-        {items.map((item) => (
+        {items.map((item) => {
+          const isActive = activeId !== undefined && item.id === activeId;
+          return (
           <li key={item.id}>
             <a
               className={styles.sectionNavLink}
               href={`#${item.id}`}
               data-skip-to={item.id}
+              aria-current={isActive ? "location" : undefined}
               onClick={() => {
                 // The anchor still navigates (the fragment stays copyable),
                 // but the target is made focusable first and focus is handed
@@ -43,6 +61,10 @@ export default function ConsoleSectionNav({ items, label }: ConsoleSectionNavPro
                 // scroll a programmatic focus on its own.
                 const target = document.getElementById(item.id);
                 if (!target) return;
+                // The operator chose this section explicitly: report it at
+                // once so the page can name it instead of waiting for the
+                // scroll spy, which may never see this heading cross its band.
+                onNavigate?.(item.id);
                 if (!target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
                 if (target instanceof HTMLElement) target.focus({ preventScroll: true });
                 target.scrollIntoView({ block: "start" });
@@ -51,7 +73,8 @@ export default function ConsoleSectionNav({ items, label }: ConsoleSectionNavPro
               {item.label}
             </a>
           </li>
-        ))}
+          );
+        })}
       </ul>
     </nav>
   );

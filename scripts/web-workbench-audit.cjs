@@ -148,7 +148,7 @@ async function main() {
 
     const theme = await newTask('배경 수정 → 초안 저장 → 명시적 게시', '/page');
     await page.locator('#home-background').waitFor();
-    if (PHASE === 'after') check('desktop preview does not rename edit location', (await page.locator('[class*="navNow"]').textContent()).includes('편집'));
+    if (PHASE === 'after') check('desktop preview does not rename edit location', await page.locator('nav[aria-label="참가자 페이지 구역"] a[href="#theme-edit"]').getAttribute('aria-current') === 'location');
     await act(theme, () => page.locator('#home-background').fill('#FFF1E8'));
     await act(theme, () => page.locator('#theme-save-draft').click());
     await page.getByText('초안을 저장했습니다', { exact: false }).first().waitFor();
@@ -161,7 +161,7 @@ async function main() {
     pageExperience = (await bootstrap()).workspaces[f.eventId].pageExperience;
     check('published background matches saved draft', pageExperience.published.homeStyle.backgroundColor === '#FFF1E8');
     await act(theme, () => page.getByRole('button', { name: '게시본', exact: true }).click());
-    if (PHASE === 'after') check('preview source switch preserves editing position', !(await page.locator('[class*="navNow"]').textContent()).includes('미리보기'));
+    if (PHASE === 'after') check('preview source switch preserves editing position', await page.locator('nav[aria-label="참가자 페이지 구역"] a[href="#home-preview-heading"]').getAttribute('aria-current') === null && await page.locator('nav[aria-label="참가자 페이지 구역"] a[aria-current="location"]').count() === 1);
     await finish(theme, 'theme-published');
 
     if (PHASE === 'before') return;

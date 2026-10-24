@@ -24,7 +24,6 @@ export default async function TicketRecoverPage({
       ) : (
         <RecoverForm slug={slug} />
       )}
-      <footer className="public-page-footer">EVENTOUCH <span>내 티켓 찾기</span></footer>
     </main>
   );
 }

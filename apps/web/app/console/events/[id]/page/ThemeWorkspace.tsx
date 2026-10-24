@@ -51,7 +51,7 @@ type Snapshot = {
   publishedDesign: DesignForm;
 };
 type Ready = Snapshot & { kind: "ready"; savedForm: DesignForm; savedPageFields: PageFields };
-// Names the section in view for the jump-nav readout.
+// Names the section in view for the jump-nav active link.
 const THEME_SECTION_LABELS: Record<string, string> = {
   "theme-edit": "편집",
   "theme-save": "저장·게시",
@@ -331,7 +331,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
     target.scrollIntoView({ block: "start" });
   }, []);
 
-  // The readout follows where the operator actually is: explicit jumps and
+  // The active link follows where the operator actually is: explicit jumps and
   // real focus move it; scrolling only moves it through the genuine
   // document flow (see the observer below).
   const syncSectionFromFocus = useCallback((event: ReactFocusEvent<HTMLElement>) => {
@@ -388,8 +388,8 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
   }, [eventId, reloadTick, router]);
 
   // Desktop lays the editor and the preview side by side, so the sticky
-  // preview and the sticky save bar would always own the in-view readout.
-  // There the readout keeps the basic edit context and moves only on
+  // preview and the sticky save bar would always own the in-view link.
+  // There the active link keeps the basic edit context and moves only on
   // explicit jumps and real focus. On stacked (mobile) widths a single
   // document flow decides, and the preview takes over only when genuinely
   // reached. The sticky save bar never joins the observation on either
@@ -409,7 +409,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
   // Anchor clicks keep working natively whether or not the observer is
   // available; the focus handoff in ConsoleSectionNav and the skip link
   // both land focus, which the capture handler above turns into the
-  // readout. This covers fragment changes that move no focus.
+  // active link. This covers fragment changes that move no focus.
   useEffect(() => {
     const sync = () => {
       const target = document.getElementById(window.location.hash.slice(1));
@@ -420,7 +420,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
     return () => window.removeEventListener("hashchange", sync);
   }, []);
 
-  // Names the section in view for the jump-nav readout. Canonical
+  // Names the section in view for the jump-nav active link. Canonical
   // document order wins ties, so a sticky panel behind the arrival point
   // never renames where the operator has arrived.
   useEffect(() => {
@@ -1095,29 +1095,19 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
         </>
       }
       badges={
-        <div className={styles.versionSummary} aria-live="polite">
-          <span className={styles.statePill} data-state={dirty ? "dirty" : alreadyPublished ? "published" : "draft"}>
-            {dirty ? "저장되지 않은 변경" : alreadyPublished ? "현재 초안 게시됨" : "저장된 초안"}
-          </span>
-          <span>
-            {state.publishedAt
-              ? `게시 버전 ${state.publishedVersion} · 초안 ${state.draftVersion}`
-              : `아직 게시하지 않음 · 초안 ${state.draftVersion}`}
-          </span>
-          {state.publishedAt ? <span>최근 게시 {formatPublishedAt(state.publishedAt)}</span> : null}
-        </div>
+        state.publishedAt ? <span>최근 게시 {formatPublishedAt(state.publishedAt)}</span> : null
       }
       sectionNav={
         <div className={styles.navSticky}>
           <ConsoleSectionNav
             label="참가자 페이지 구역"
+            activeId={activeSection}
             items={[
               { id: "theme-edit", label: "편집" },
               { id: "theme-save", label: "저장·게시" },
               { id: "home-preview-heading", label: "미리보기" },
             ]}
           />
-          <p className={styles.navNow}>현재 위치: {THEME_SECTION_LABELS[activeSection] || "편집"}</p>
         </div>
       }
     >
@@ -1435,7 +1425,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
           </section>
 
           <div id="theme-save" ref={saveActionsRef} tabIndex={-1} className={`${styles.saveAnchor} ${styles.saveBar}`}>
-            <div className={styles.versionSummary}>
+            <div className={styles.versionSummary} aria-live="polite">
               <span className={styles.statePill} data-state={dirty ? "dirty" : alreadyPublished ? "published" : "draft"}>
                 {dirty ? "저장되지 않은 변경" : alreadyPublished ? "현재 초안 게시됨" : "저장된 초안"}
               </span>

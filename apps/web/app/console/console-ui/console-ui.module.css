@@ -580,6 +580,25 @@
   background: var(--surface-muted);
 }
 
+/* Current section, read once in the links themselves: token-only soft
+   background plus non-color signals (brand border, underline, heavier
+   weight) so the position never depends on color alone. Keyed off the
+   link's own aria-current, so the shared anchor markup, 44px floor,
+   padding and keyboard focus ring stay exactly as before. */
+.sectionNavLink[aria-current="location"] {
+  border-color: var(--brand-text);
+  background: var(--soft);
+  color: var(--brand-text);
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.sectionNavLink[aria-current="location"]:hover {
+  border-color: var(--brand-text);
+  background: var(--soft);
+}
+
 @media (max-width: 768px) {
   /* Second nav wraps instead of clipping: every destination stays
      reachable without discovering a horizontal scroll. Grid auto-fit

@@ -106,3 +106,15 @@ test("draw and program command/API surface is unchanged", () => {
   assert.match(programs, /퀴즈 정답을 공개할까요/u);
   assert.match(programs, /추첨을 \$\{props\.drawPending\.count\}명으로 실행할까요/u);
 });
+
+test("an explicit jump pins the current link past the scroll spy until a real scroll", () => {
+  // Same bottom-of-page cause as the operations hall: the spy watches tiny
+  // h2s in a narrow band a trailing section never reaches, so the jump
+  // names its section at once and holds it until genuine scrolling resumes.
+  assert.match(draws, /onNavigate=\{followJumpedSection\}/u, "jumps report to the pin");
+  assert.match(draws, /navPinRef\.current = id;/u, "the jumped-to section is named at once");
+  assert.match(draws, /if \(navPinRef\.current\) return;/u, "a stale heading cannot steal the marker");
+  assert.match(draws, /const DRAW_SECTION_IDS = Object\.keys\(DRAW_SECTION_LABELS\)/u, "spy and deep links share one list");
+  assert.match(draws, /followJumpedSection\(id\)/u, "a deep link pins its section too");
+  assert.match(draws, /window\.addEventListener\("hashchange", applyHash\)/u, "later fragments keep working");
+});

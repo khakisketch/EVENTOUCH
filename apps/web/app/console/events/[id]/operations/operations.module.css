@@ -99,15 +99,9 @@
 }
 
 /* Jump nav wrapper: desktop renders exactly the shared section nav as
-   before; only phones pin it. The readout names the section in view. */
+   before; only phones pin it. The nav itself marks the section in view. */
 .navSticky {
   min-width: 0;
-}
-
-.navNow {
-  margin: var(--s1) 0 0;
-  color: var(--muted);
-  font-size: var(--small);
 }
 
 .anchorSection {

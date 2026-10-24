@@ -164,7 +164,6 @@ export default async function RegisterPage({
         verificationRequired={data.verificationRequired}
         recoveryBlocked={verificationMode === "none" || verificationMode === "mock"}
       />
-      <footer className="public-page-footer">EVENTOUCH <span>참가 신청</span></footer>
     </main>
   );
 }

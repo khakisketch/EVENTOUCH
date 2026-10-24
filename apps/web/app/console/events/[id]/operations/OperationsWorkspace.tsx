@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
@@ -103,17 +103,12 @@ const BOOTH_STATUS_LABEL: Record<string, string> = {
   CLOSED: "종료",
 };
 
-// Sticky jump-nav readout labels. The nav itself stays the shared
-// ConsoleSectionNav (native anchors only); this map only names the section
-// the observer currently sees so the operator can read where they are.
-const SECTION_LABELS: Record<string, string> = {
-  "ops-desks": "데스크",
-  "ops-booths": "부스",
-  "ops-booth-mode": "부스 인증 방식",
-  "ops-booth-map": "부스 지도",
-  "ops-display": "전광판 출력",
-  "ops-staff": "스태프 배정",
-};
+// Keys that scroll the document when the focus is not inside an editable
+// field. Releasing the explicit-jump pin on exactly these (plus wheel and
+// touch) hands control back to the scroll spy on genuine user scrolling,
+// while programmatic jumps — which fire none of them — keep the chosen
+// section without any timeout.
+const SCROLL_RELEASE_KEYS = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "]);
 
 export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const router = useRouter();
@@ -152,12 +147,40 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const [boothDirty, setBoothDirty] = useState(false);
   const [assignDirty, setAssignDirty] = useState(false);
   // Field-day reading aids (UI only). activeSection names the section in
-  // view for the sticky jump-nav readout; the before-the-day presets (auth
+  // view for the sticky jump-nav active link; the before-the-day presets (auth
   // mode, booth map) start folded on every viewport so the same-day work
   // (desks, output, assignments) reads first. The operator opens a preset
   // by hand or by jumping straight to its anchor; a viewport change never
   // overwrites that choice, and unsaved work keeps its preset open.
   const [activeSection, setActiveSection] = useState("ops-desks");
+  // Explicit-jump priority: a jump or deep link names its section at once
+  // and pins it past the scroll spy, which watches tiny headings in a
+  // narrow band and can never see a bottom-of-page section arrive. Only a
+  // genuine wheel, touch, or scroll-key releases the pin.
+  const navPinRef = useRef<string | null>(null);
+  const followJumpedSection = useCallback((id: string) => {
+    navPinRef.current = id;
+    setActiveSection(id);
+  }, []);
+  useEffect(() => {
+    const releaseJumpPin = () => { navPinRef.current = null; };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!SCROLL_RELEASE_KEYS.has(event.key)) return;
+      // Keystrokes inside an editable control drive that control, not the
+      // document: arrows moving through a field must not release the pin.
+      const target = event.target as Element | null;
+      if (target && typeof target.closest === "function" && target.closest("input, select, textarea, [contenteditable]")) return;
+      releaseJumpPin();
+    };
+    window.addEventListener("wheel", releaseJumpPin, { passive: true });
+    window.addEventListener("touchmove", releaseJumpPin, { passive: true });
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("wheel", releaseJumpPin);
+      window.removeEventListener("touchmove", releaseJumpPin);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
   const [presetOpen, setPresetOpen] = useState({ mode: false, map: false });
 
   // One idempotency id per command+payload fingerprint (same discipline as
@@ -439,6 +462,22 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
     };
   }, [eventId, router, reloadTick]);
 
+  // Sections actually rendered once the snapshot — and its feature gates —
+  // arrive. Both the scroll spy and deep links resolve against this list,
+  // so a gated-off or unknown anchor pins nothing and the marker stays on
+  // the default section instead of pointing at no rendered link.
+  // Memoized on the snapshot so the observer and hash listeners below do
+  // not resubscribe on every render.
+  const trackedIds: string[] = useMemo(() => (state.kind === "ready"
+    ? [
+        "ops-desks",
+        "ops-booths",
+        ...(state.stampEnabled ? ["ops-booth-mode", "ops-booth-map"] : []),
+        ...(state.screenEnabled ? ["ops-display"] : []),
+        "ops-staff",
+      ]
+    : []), [state]);
+
   // A jump straight to a preset anchor unfolds that preset: native anchors
   // land on the always-visible section heading, but the folded body would
   // stay hidden without this. The ids below are the rendered headingId
@@ -453,11 +492,15 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       } else if (hash === "#ops-booth-map") {
         setPresetOpen((prev) => (prev.map ? prev : { ...prev, map: true }));
       }
+      // A deep link names its section even where the scroll spy cannot see
+      // it arrive; the pin holds until the operator really scrolls.
+      const id = hash.startsWith("#") ? hash.slice(1) : "";
+      if (id && trackedIds.includes(id)) followJumpedSection(id);
     };
     applyHash();
     window.addEventListener("hashchange", applyHash);
     return () => window.removeEventListener("hashchange", applyHash);
-  }, []);
+  }, [followJumpedSection, trackedIds]);
 
   // Event switch resets the handoff slice (never a key remount): a stale
   // handoff notice or an already-consumed marker from the previous event
@@ -528,21 +571,19 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, eventId]);
 
-  // Names the section in view for the sticky jump-nav readout. Observes
+  // Names the section in view for the sticky jump-nav active link. Observes
   // only the anchors this screen renders; anchor clicks keep working
   // natively with or without the observer.
   useEffect(() => {
     if (state.kind !== "ready") return;
     if (typeof IntersectionObserver === "undefined") return;
-    const ids = [
-      "ops-desks",
-      "ops-booths",
-      ...(state.stampEnabled ? ["ops-booth-mode", "ops-booth-map"] : []),
-      ...(state.screenEnabled ? ["ops-display"] : []),
-      "ops-staff",
-    ];
+    const ids = trackedIds;
     const observer = new IntersectionObserver(
       (entries) => {
+        // An explicit jump or deep link holds the current marker: the
+        // observed headings are small and the band is narrow, so a stale
+        // heading must not rename the section the operator just chose.
+        if (navPinRef.current) return;
         for (const entry of entries) {
           if (entry.isIntersecting) setActiveSection(entry.target.id);
         }
@@ -554,7 +595,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       if (node) observer.observe(node);
     }
     return () => observer.disconnect();
-  }, [state]);
+  }, [state, trackedIds]);
 
   // Draft-guard dirty state, evaluated before every early return below. Only
   // true diffs and truthful pending intent: dialog input diffs, unsaved map
@@ -749,8 +790,9 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const displayOptions = state.displayOptions;
   const screenEnabled = state.screenEnabled;
 
-  // Each section states its own status in one summary line (same-day vs
-  // before-the-day is the same description slot, one method everywhere).
+  // Same-day sections state their status in the description slot; the
+  // before-the-day presets state theirs in the folded summary instead, the
+  // always-visible keyboard-operable reading point for those rows.
   // Counts reuse the loaded rows; an empty roster stays quiet and lets the
   // section's existing guidance speak instead.
   const deskOpenCount = desks.filter((desk) => desk.open).length;
@@ -770,8 +812,6 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const boothSummary = stampEnabled && booths.length
     ? `지금 할 일 · 운영 ${boothOpenCount} / 전체 ${booths.length}`
     : "지금 할 일";
-  const modeSummary = `사전 설정 · ${modeValueLabel}`;
-  const mapSummary = `사전 설정 · ${mapStatusText}`;
   const staffSummary = `지금 할 일 · 배정 ${assignments.length}명`;
   // A preset holding unsaved work or a pending confirmation stays open even
   // when folded: the folded summary already names the state, but the
@@ -800,9 +840,9 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
     return options;
   })();
   const currentDisplayValue = `${display.type}|${display.type === "notice" ? display.noticeId : display.moduleId}`;
-  // The applied output names itself in the always-visible summary slot; the
-  // hint below keeps the same value with its selection guidance. No new copy:
-  // both read the same server-derived choice list.
+  // The applied output names itself in the section description; the hint
+  // below the controls keeps the selection guidance. No new copy: both
+  // read the same server-derived choice list.
   const currentDisplayLabel = currentDisplayValue.startsWith("idle")
     ? "유휴 화면"
     : displayChoices.find((choice) => choice.value === currentDisplayValue)?.label ?? "출력 확인 필요";
@@ -889,6 +929,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         <div className={styles.navSticky}>
           <ConsoleSectionNav
             label="현장 운영 구역"
+            activeId={activeSection}
+            onNavigate={followJumpedSection}
             items={[
               { id: "ops-desks", label: "데스크" },
               ...(state.screenEnabled ? [{ id: "ops-display", label: "전광판 출력" }] : []),
@@ -902,9 +944,6 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                 : []),
             ]}
           />
-          <p className={styles.navNow}>
-            현재 위치: {SECTION_LABELS[activeSection] || "데스크"}
-          </p>
         </div>
       )}
       feedback={(
@@ -1013,10 +1052,6 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
 
       {screenEnabled ? (
         <ConsoleSection headingId="ops-display" title="전광판 출력" description={displaySummary} className={styles.anchorSection}>
-          <p className={styles.hint}>
-            행사장 화면에 지금 내보낼 내용입니다. 현재:{" "}
-            {currentDisplayLabel}
-          </p>
           <div className={styles.buttonRow}>
             <label className="sr-only" htmlFor="ops-display-pick">전광판 출력 선택</label>
             <select
@@ -1206,7 +1241,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       </ConsoleSection>
 
       {stampEnabled ? (
-        <ConsoleSection headingId="ops-booth-mode" title="부스 인증 방식" description={modeSummary} className={styles.anchorSection}>
+        <ConsoleSection headingId="ops-booth-mode" title="부스 인증 방식" className={styles.anchorSection}>
           {/* Before-the-day preset: starts folded with the current value
               in the folded summary; the draws setup-details same grammar. */}
           <details className={styles.presetFold} open={presetOpen.mode || modeNeedsAttention} onToggle={(event) => setPresetOpen((prev) => ({ ...prev, mode: (event.target as HTMLDetailsElement).open }))}>
@@ -1261,7 +1296,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       ) : null}
 
       {stampEnabled ? (
-        <ConsoleSection headingId="ops-booth-map" title="부스 지도" description={mapSummary} className={styles.anchorSection}>
+        <ConsoleSection headingId="ops-booth-map" title="부스 지도" className={styles.anchorSection}>
           {/* Before-the-day preset: starts folded with the publish state
               in the folded summary so an unposted draft is never missed. */}
           <details className={styles.presetFold} open={presetOpen.map || mapNeedsAttention} onToggle={(event) => setPresetOpen((prev) => ({ ...prev, map: (event.target as HTMLDetailsElement).open }))}>

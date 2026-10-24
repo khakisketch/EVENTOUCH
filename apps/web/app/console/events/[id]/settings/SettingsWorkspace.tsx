@@ -867,7 +867,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       )}
     >
       <p className={styles.scopeNote} data-settings-scope-note>
-        화면은 기본 정보·참가 접수·운영 기능·진행 단계 탭과 아래 참가자 페이지 안내로 나뉘며, 각 구역의 저장·게시·전환은 그 구역에만 적용됩니다.
+        각 구역의 저장·게시·전환은 그 구역에만 적용됩니다.
       </p>
       <div
         role="tabpanel"

@@ -590,9 +590,9 @@ export default function EventOverview({ eventId }: { eventId: string }) {
   );
   const headerActions = overview.canManageEvent && participantPageHref ? (
         <>
-          {["LIVE", "ENDED", "ARCHIVED"].includes(currentStage) ? (
+          {currentStage === "LIVE" ? (
             <Link className="button button-secondary" href={eventCloseHref(eventId)}>
-              {currentStage === "ARCHIVED" ? "행사 마감 확인" : "행사 마감"}
+              행사 마감
             </Link>
           ) : null}
           {/* DRAFT는 비공개(공개 화면 404)이므로 여는 링크를 두지 않는다. READY부터 기본 디자인으로 열린다. */}
@@ -740,7 +740,6 @@ export default function EventOverview({ eventId }: { eventId: string }) {
               ) : (
                 <span>정원 제한 없음 · 대기 <strong>{overview.waitlist}명</strong></span>
               )}
-              <span>신청은 취소 제외 · 확정은 승인된 참가자</span>
             </p>
             </>
           ) : (

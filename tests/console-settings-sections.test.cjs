@@ -42,7 +42,10 @@ test("a one-line scope note states each tab saves only itself", () => {
     .split("\n")
     .find((line) => line.includes("각 구역의 저장·게시·전환은 그 구역에만 적용됩니다"));
   assert.ok(noteLine, "scope note line must exist");
-  assert.match(noteLine, /기본 정보·참가 접수·운영 기능·진행 단계/u);
+  assert.doesNotMatch(noteLine, /기본 정보·참가 접수·운영 기능·진행 단계/u, "the note does not repeat the visible tab labels");
+  for (const label of ["기본 정보", "참가 접수", "운영 기능", "진행 단계"]) {
+    assert.ok(source.includes(`label: "${label}"`), `${label} remains discoverable in the tablist`);
+  }
 });
 
 test("each saving tab keeps its own success/failure line with a clock time", () => {

@@ -512,14 +512,8 @@
   .saveBar { padding: var(--s3); gap: var(--s2); }
 }
 
-/* The jump nav names the section in view, so a long editor page with the
-   preview at the bottom still says where the operator is. */
+/* The jump nav marks the section in view on its own link, so a long editor
+   page with the preview at the bottom still says where the operator is. */
 .navSticky {
   min-width: 0;
-}
-
-.navNow {
-  margin: var(--s1) 0 0;
-  color: var(--muted);
-  font-size: var(--small);
 }

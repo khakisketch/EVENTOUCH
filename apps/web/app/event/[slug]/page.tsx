@@ -319,7 +319,6 @@ export default async function EventPage({
         </section>
       ) : null}
 
-      <footer className="public-page-footer">EVENTOUCH <span>행사 안내</span></footer>
     </main>
   );
 }

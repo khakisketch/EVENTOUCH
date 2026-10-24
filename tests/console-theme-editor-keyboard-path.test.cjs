@@ -74,15 +74,16 @@ test('activating the link hands focus to the save actions with the viewport', ()
   assert.doesNotMatch(between, /<button/u, 'no earlier button steals the first Tab stop');
 });
 
-test('the top jump nav and position readout stay untouched', () => {
+test('the top jump nav marks the position on its own links, with no second readout', () => {
   assert.match(theme, /<ConsoleSectionNav/u, 'the shared jump nav stays');
   for (const item of ['{ id: "theme-edit", label: "편집" }', '{ id: "theme-save", label: "저장·게시" }', '{ id: "home-preview-heading", label: "미리보기" }']) {
     assert.ok(theme.includes(item), `${item} stays in the nav`);
   }
-  assert.match(theme, /현재 위치:/u, 'the position readout stays');
+  assert.match(theme, /activeId=\{activeSection\}/u, 'the tracked section drives the active link');
+  assert.doesNotMatch(theme, /현재 위치:/u, 'no separate position readout duplicates the links');
   assert.match(theme, /IntersectionObserver/u, 'the section follower stays');
   assert.match(themeCss, /\.navSticky \{/u);
-  assert.match(themeCss, /\.navNow \{/u);
+  assert.doesNotMatch(themeCss, /\.navNow \{/u, 'the readout style is gone');
 });
 
 test('the in-form jump is visible, touch-sized, and token-styled', () => {

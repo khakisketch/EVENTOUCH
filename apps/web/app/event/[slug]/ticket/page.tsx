@@ -17,7 +17,6 @@ export default async function TicketPage({
           <p className="eyebrow">내 티켓</p>
         </header>
         <TicketView slug={slug} />
-        <footer className="public-page-footer">EVENTOUCH <span>내 티켓</span></footer>
       </main>
   );
 }

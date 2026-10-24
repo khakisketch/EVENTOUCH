@@ -498,7 +498,6 @@ select[aria-invalid="true"] {
 }
 
 .home-footer,
-.public-page-footer,
 .console-footer {
   display: flex;
   justify-content: space-between;
@@ -511,7 +510,6 @@ select[aria-invalid="true"] {
 }
 
 .home-footer span,
-.public-page-footer span,
 .console-footer span {
   color: var(--muted);
 }
@@ -867,11 +865,6 @@ select[aria-invalid="true"] {
 .verification-unavailable .button {
   width: fit-content;
   max-width: 100%;
-}
-
-.registration-page .public-page-footer,
-.ticket-page .public-page-footer {
-  margin-top: var(--s7);
 }
 
 /* Ticket: a high-contrast, glanceable mobile pass with an ample QR quiet zone. */
@@ -2915,7 +2908,6 @@ select[aria-invalid="true"] {
   }
 
   .home-footer,
-  .public-page-footer,
   .console-footer {
     flex-wrap: wrap;
   }
@@ -3010,7 +3002,6 @@ select[aria-invalid="true"] {
   .home-header,
   .home-footer,
   .public-page-header,
-  .public-page-footer,
   .console-footer,
   .button {
     display: none !important;

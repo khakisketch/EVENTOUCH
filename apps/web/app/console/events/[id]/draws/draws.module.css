@@ -353,14 +353,8 @@
   margin: var(--s3);
 }
 
-/* The jump nav names the section in view, so a long page with four different
-   jobs still says where the operator is. */
+/* The jump nav marks the section in view on its own link, so a long page
+   with four different jobs still says where the operator is. */
 .navSticky {
   min-width: 0;
-}
-
-.navNow {
-  margin: var(--s1) 0 0;
-  color: var(--muted);
-  font-size: var(--small);
 }
