@@ -1,4 +1,5 @@
 "use client";
+import { consoleFetch as fetch } from "../../../lib/console-api";
 
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -14,6 +15,7 @@ import ConsoleSection from "../console-ui/ConsoleSection";
 import ConsoleStatePanel from "../console-ui/ConsoleStatePanel";
 import { UNCONFIRMED_WRITE_CLOSE_MESSAGE, useConsoleDraftGuard } from "../console-draft-guard";
 import consoleUiStyles from "../console-ui/console-ui.module.css";
+import styles from "./clients.module.css";
 
 type Client = {
   id: string;
@@ -145,7 +147,7 @@ export default function ClientsList() {
     try {
       const [meRes, bootRes] = await Promise.all([
         fetch("/api/auth/me", { cache: "no-store" }),
-        fetch("/api/bootstrap", { cache: "no-store" }),
+        fetch("/api/console/directory", { cache: "no-store" }),
       ]);
       if (meRes.status === 401 || bootRes.status === 401) {
         router.push(
@@ -157,14 +159,14 @@ export default function ClientsList() {
         user?: { role?: unknown } | null;
       } | null;
       const boot = (await bootRes.json().catch(() => null)) as {
-        state?: { clients?: unknown } | null;
+        directory?: { clients?: unknown } | null;
       } | null;
-      if (!meRes.ok || !bootRes.ok || !me?.user || !boot?.state) {
+      if (!meRes.ok || !bootRes.ok || !me?.user || !boot?.directory) {
         setState({ kind: "failed", message: "고객사 목록을 불러오지 못했습니다." });
         return;
       }
-      const clients: Client[] = Array.isArray(boot.state.clients)
-        ? boot.state.clients.flatMap((item) => {
+      const clients: Client[] = Array.isArray(boot.directory.clients)
+        ? boot.directory.clients.flatMap((item) => {
             if (typeof item !== "object" || item === null) return [];
             const client = item as Record<string, unknown>;
             if (typeof client.id !== "string" || typeof client.name !== "string") return [];
@@ -449,8 +451,8 @@ export default function ClientsList() {
         ) : (
           <ul className={consoleUiStyles.collection} aria-label="고객사 목록">
             {visibleClients.map((client) => (
-              <li className={consoleUiStyles.recordRow} key={client.id}>
-                <div className={consoleUiStyles.recordMain}>
+              <li className={`${consoleUiStyles.recordRow} ${styles.clientRow}`} key={client.id}>
+                <div className={`${consoleUiStyles.recordMain} ${styles.clientMain}`}>
                   <h3>{client.name}</h3>
                   {client.logoFileId ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -491,7 +493,8 @@ export default function ClientsList() {
                   ) : null}
                 </div>
                 {state.canManage ? (
-                  <div className={consoleUiStyles.recordActions}>
+                  <div className={`${consoleUiStyles.recordActions} ${styles.clientActions}`}>
+                    <div className={styles.clientInfoGroup} role="group" aria-label={`${client.name} 정보 관리`}>
                     <button
                       type="button"
                       className="button button-secondary"
@@ -501,6 +504,8 @@ export default function ClientsList() {
                     >
                       정보 수정
                     </button>
+                    </div>
+                    <div className={styles.clientFileGroup} role="group" aria-label={`${client.name} 로고 관리`}>
                     <label className="button button-secondary">
                       {uploading === `${client.id}:logo` ? "올리는 중…" : client.logoFileId ? "로고 교체" : "로고 등록"}
                       <input
@@ -520,6 +525,8 @@ export default function ClientsList() {
                         로고 제거
                       </button>
                     ) : null}
+                    </div>
+                    <div className={styles.clientFileGroup} role="group" aria-label={`${client.name} 사업자등록증 관리`}>
                     <label className="button button-secondary">
                       {uploading === `${client.id}:doc` ? "올리는 중…" : client.docFileId ? "서류 교체" : "사업자등록증 등록"}
                       <input
@@ -539,6 +546,7 @@ export default function ClientsList() {
                         서류 제거
                       </button>
                     ) : null}
+                    </div>
                     {removePending?.id === client.id ? (
                       <ConsoleConfirm
                         summary={confirmLines(removeSummary(client, removePending.kind))}

@@ -7,15 +7,18 @@ for (const key of ['SOLAPI_API_KEY', 'SOLAPI_API_SECRET', 'SOLAPI_SENDER', 'SOLA
 process.env.EVENTOUCH_SMS_MOCK = '1';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { prepareCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = require('./capture-dir.cjs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const before = process.argv.includes('--before');
-const out = `/tmp/opencode/eventouch-captures/task-flow/${before ? 'before' : 'after'}`;
-fs.mkdirSync(out, { recursive: true });
+const out = (process.env.CAPTURE_DIR || '').trim()
+  || path.join(defaultCaptureDir(`task-flow-${runStamp()}`), before ? 'before' : 'after');
+prepareCaptureDir(out);
 
 async function main() {
+  process.env.TMPDIR = ensureRunTmpDir(out);
   const f = await startAuditFixture();
   let browser;
   const results = [];
@@ -36,7 +39,7 @@ async function main() {
     const booth = (await run('booth.save', { name: '체험 부스', zone: '동문', status: 'OPEN', capacity: 100, limit: 1 })).booth;
     const notice = (await run('notice.save', { title: '동문 입장 안내', body: '참가자는 동문에서 티켓을 보여 주세요.', published: true })).notice;
     const staffId = `flow-staff-${f.suffix}`;
-    await f.helpers.insertAccount(f.harness.database, { id: staffId, role: 'STAFF', name: '동문 담당 김', email: `${staffId}@example.test` });
+    await f.helpers.insertAccount(f.harness.database, { orgId: f.helpers.LEGACY_ORG, id: staffId, role: 'STAFF', name: '동문 담당 김', email: `${staffId}@example.test` });
     const people = (await boot()).workspaces[f.eventId].participants.slice(0, 3);
     const old = (await run('message.create', { ids: people.map(p => p.id), title: '입장 안내 재작성', body: '{{이름}}님 동문으로 입장해 주세요.', channel: 'SMS', simulate: true })).message;
     // Provider failure is a fixture, not an asserted delivery result.
@@ -77,7 +80,7 @@ async function main() {
     // Fresh before/after full renders at both required widths, before writes.
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
-      for (const [suffix, marker, name] of [['/content', '#content-notices', 'content'], ['/operations', '#ops-desks', 'operations'], ['/messages', '#campaign-title', 'messages']]) {
+      for (const [suffix, marker, name] of [['/content', '#content-notices', 'content'], ['/operations', '#ops-desks', 'operations'], ['/messages', '#history-heading', 'messages']]) {
         await go(suffix, marker);
         await shot(`${name}-${width}`, true);
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${name} overflow`);
@@ -132,9 +135,10 @@ async function main() {
         await shot(`${kind.toLowerCase()}-assigned-390`);
       });
     }
-    await go('/messages', '#campaign-title');
+    await go('/messages', '#history-heading');
     await measure('failed-message-recompose', async (act, task) => {
       if (before) {
+        if (await page.locator('#message-compose-open').isVisible()) await act(() => page.locator('#message-compose-open').click());
         // Original content is not displayed in history: reconstruction requires
         // an external original. Count actual manual work with that original.
         task.limitation = '본문은 기존 이력에서 볼 수 없어 외부 원문을 알고 있다는 조건의 수동 재작성';
@@ -170,7 +174,7 @@ async function main() {
       await page.locator('#campaign-title').fill('덮어쓰지 말아야 할 초안');
       const writes = f.gateway.commands.length;
       await oldRow.getByRole('button', { name: '내용·대상 불러오기', exact: true }).click();
-      const confirm = oldRow.getByRole('group', { name: '실행 확인' });
+      const confirm = page.locator(`#campaign-detail-${old.id}`).getByRole('group', { name: '실행 확인' });
       await confirm.getByRole('button', { name: '취소', exact: true }).click();
       assert.equal(await page.locator('#campaign-title').inputValue(), '덮어쓰지 말아야 할 초안');
       await oldRow.getByRole('button', { name: '내용·대상 불러오기', exact: true }).click();
@@ -239,7 +243,7 @@ async function main() {
       results.push({ key: 'recovery-safety', overwriteCancelPreserved: true, keyboardEnterConfirmed: true, noAutoWrite: true, unsentConfirmationReplaceable: true, attemptedResponseLossBlocked: true, receiptReused: true, unpublishedStatusAccurate: true });
     }
     assert.deepEqual(errors, []);
-    fs.writeFileSync(path.join(out, 'task-results.json'), JSON.stringify({ before, build: fs.readFileSync('apps/web/.next/BUILD_ID', 'utf8').trim(), fixture: 'isolated random schema; FAILED historical state synthetic, commands real; no delivery', renderChecks, results, errors }, null, 2));
+    fs.writeFileSync(path.join(out, 'task-results.json'), JSON.stringify({ before, build: fs.readFileSync('apps/web/.next/BUILD_ID', 'utf8').trim(), fixture: 'isolated random schema; FAILED historical state synthetic, commands real; no delivery', renderChecks, results, errors }, null, 2), { mode: 0o600 });
     console.log(JSON.stringify(results, null, 2));
     await context.close();
   } finally { if (browser) await browser.close(); await f.close(); }

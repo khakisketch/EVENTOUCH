@@ -12,6 +12,7 @@ const {
   insertAssignment,
   sessionCookie,
   requestJson,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 
 const test = databaseUrl
@@ -111,7 +112,7 @@ async function createFixture({
   const id = `domain-${fixtureNumber}-${suffix}`;
   const slug = `domain-${fixtureNumber}-${suffix}`;
   const savedWorkspace = workspaceDefaults({ ...workspace, participants });
-  await insertEvent(harness.database, {
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,
     id,
     slug,
     payload: {
@@ -206,7 +207,7 @@ before(async () => {
     ['outside', 'MANAGER', '다른 행사 매니저'],
     ['staff', 'STAFF', '현장 스태프'],
   ]) {
-    await insertAccount(harness.database, {
+    await insertAccount(harness.database, {orgId: LEGACY_ORG,
       id: accounts[key],
       role,
       name,

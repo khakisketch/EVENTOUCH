@@ -44,19 +44,21 @@ test('event-home-removes-redundant-advisory-and-readiness-blocks', () => {
   assert.doesNotMatch(overview, /event-stage-heading|submitStageTransition|stageCommandIdRef/);
 });
 
-test('event-home-metrics-lead-readiness-with-independent-optional-design-copy', () => {
-  // Composition: the metrics section renders ahead of the preparation
-  // checklist, and the unpublished design reads as the basic design in use
-  // (custom design is optional), never as unpublished.
+test('event-home-leads-with-action-and-keeps-stage-metrics-and-optional-design-copy', () => {
+  // Reading order leads with the work queue, while desktop shows metrics in
+  // a separate adjacent column. The basic design remains explicitly optional.
   const metricsAt = overview.indexOf('headingId="event-metrics-heading"');
+  const scheduleAt = overview.indexOf('headingId="event-runbook-heading"');
   const readinessAt = overview.indexOf('headingId="event-readiness-heading"');
-  assert.ok(metricsAt >= 0 && readinessAt >= 0);
-  assert.ok(metricsAt < readinessAt, 'metrics lead, preparation follows');
-  // Preparation opens with the stage band above the counts, pairs readiness
-  // with the period section, and keeps the empty recent compact.
+  assert.ok(metricsAt >= 0 && scheduleAt >= 0 && readinessAt >= 0);
+  const queueAt = overview.indexOf('{nowSection}', overview.indexOf('return (\n    <ConsolePage'));
+  assert.ok(queueAt >= 0 && queueAt < scheduleAt && scheduleAt < readinessAt && readinessAt < metricsAt, 'actions and schedule precede metrics in reading order');
+  // Preparation opens with the stage band above the counts; period analysis
+  // is a disclosure inside the metrics section, and the empty recent stays
+  // compact. The duplicate period section was removed in the Cobalt remake.
   const bandAt = overview.indexOf('stageBand');
   assert.ok(bandAt >= 0 && bandAt < metricsAt, 'stage band tops the preparation flow');
-  assert.match(overview, /peerGrid/u);
+  assert.match(overview, /analysisDetails/u);
   assert.match(overview, /recentCompact/u);
   assert.match(overview, /기본 디자인 사용 중/u);
   assert.match(overview, /꾸미기는 선택 사항/u);
@@ -74,8 +76,11 @@ test('event-home-entry-rate-matches-the-report-definition', () => {
 test('event-home-refresh-stamps-a-successful-read-and-wakes-the-shell', () => {
   assert.match(overview, /updatedAt: now\.toISOString\(\)/);
   assert.match(overview, /<time dateTime=\{overview\.updatedAt\}>마지막 갱신/);
-  assert.match(overview, /자동 갱신되지 않습니다/);
-  assert.match(overview, /fetch\("\/api\/bootstrap", \{ cache: "no-store" \}\)/);
+  // No silent auto-refresh promise: returning from another screen refreshes
+  // on focus instead, through the shared freshness subscription.
+  assert.match(overview, /다른 화면에서 돌아오면 갱신/);
+  assert.match(overview, /subscribeConsoleFreshness/);
+  assert.match(overview, /consoleFetch\(`\/api\/events\/\$\{encodeURIComponent\(eventId\)\}\/bootstrap`, \{ cache: "no-store" \}\)/);
   assert.match(overview, /setReloadTick\(\(tick\) => tick \+ 1\)/);
   assert.match(overview, /eventouch:shell-reload/);
   assert.match(overview, /formatCheckTime\(check\.at\)/);

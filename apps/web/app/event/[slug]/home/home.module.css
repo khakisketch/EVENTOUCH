@@ -234,6 +234,26 @@
   overflow-wrap: anywhere;
 }
 
+/* Tile-level ticket notice: absolute like the category badge, so the tile
+   box and the pinned first-screen fit never move. The detail screen
+   announces the need in full sentences, so the badge stays aria-hidden. */
+.menuNeedTicket {
+  position: absolute;
+  top: 9px;
+  left: 9px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgb(19 67 91 / 8%);
+  color: #315B82;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
 .detailHeader {
   display: flex;
   align-items: center;
@@ -385,6 +405,35 @@
   line-height: 1.6;
 }
 
+/* Participant-local guidance/result copy wraps by eojeol (the DESIGN
+   keep-all default, same as .menuLabel): with the default break, long Korean
+   lines split mid-syllable at 320/390 (확/률, 있습/니다). break-word is only
+   an emergency valve for unspaced overflow. Prize/result/team/winner names
+   keep their own data rules and banner/published styles are untouched. */
+.eticketSub,
+.eticketNote,
+.rouletteOddsNote,
+.rouletteSpinStatus,
+.rouletteUnmatched,
+.rouletteWaiting,
+.rouletteResultLabel,
+.voteSubmittedNote,
+.voteStateNote,
+.voteCount,
+.voteError,
+.stampHint,
+.stampDone,
+.stampError,
+.emptyText,
+.needTicketText,
+.stateMessage,
+.luckyError,
+.personalRewardsNote,
+.tabPanel > p {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
 .assignButton {
   width: 100%;
   min-height: var(--s8);
@@ -530,7 +579,7 @@
   stroke-linejoin: round;
   paint-order: stroke;
   font-family: var(--body-font);
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 850;
   pointer-events: none;
   user-select: none;
@@ -730,7 +779,10 @@
 .stampDone { margin: 0; color: var(--brand-text); font-weight: 700; }
 
 .votePanel { display: flex; flex-direction: column; gap: var(--s4); }
-.voteTitle { margin: 0; }
+.voteTitle {
+  margin: 0;
+  color: var(--home-background-ink, var(--ink));
+}
 
 /* Vote tab: client reference candidate rows with avatar + check. */
 .teamGrid {
@@ -821,7 +873,7 @@
 
 .voteCount {
   margin: 0;
-  color: var(--muted);
+  color: var(--home-background-copy, #3f5965);
   font-size: var(--small);
   font-weight: 700;
 }
@@ -840,7 +892,7 @@
   cursor: pointer;
 }
 .submitButton:disabled { opacity: 0.6; cursor: not-allowed; }
-.submitButton:hover:not(:disabled) { background: var(--brand-hover); }
+.submitButton:hover:not(:disabled) { background: var(--brand-hover); color: var(--on-brand-hover); }
 
 .voteSubmitted {
   display: flex;
@@ -855,9 +907,12 @@
   margin: 0;
   font-size: var(--h2);
   font-weight: 800;
-  color: var(--ink);
+  color: var(--home-background-ink, var(--ink));
 }
-.voteSubmittedNote { margin: 0; color: var(--muted); font-size: var(--small); }
+/* Direct-on-background vote text follows the published background through
+   the adaptive ink/copy variables (never an unconditional gray): muted
+   #626B78 reads 3.79:1 on the default #B9DEF0 and worse on dark styles. */
+.voteSubmittedNote { margin: 0; color: var(--home-background-copy, #3f5965); font-size: var(--small); }
 .voteWaiting {
   display: grid;
   justify-items: center;
@@ -865,8 +920,13 @@
   padding: var(--s7) var(--s5);
   text-align: center;
 }
-.voteStateTitle { margin: 0; font-size: var(--h2); font-weight: 800; }
-.voteStateNote { margin: 0; color: var(--muted); font-size: var(--small); }
+.voteStateTitle {
+  margin: 0;
+  font-size: var(--h2);
+  font-weight: 800;
+  color: var(--home-background-ink, var(--ink));
+}
+.voteStateNote { margin: 0; color: var(--home-background-copy, #3f5965); font-size: var(--small); }
 .publishedVoteResults {
   display: grid;
   gap: var(--s3);
@@ -877,7 +937,7 @@
   background: var(--surface-muted);
   text-align: left;
 }
-.publishedVoteResults h3 { margin: 0; font-size: var(--small); }
+.publishedVoteResults h3 { margin: 0; font-size: var(--small); font-weight: 800; color: var(--ink); }
 .publishedVoteResults ul {
   display: grid;
   gap: var(--s2);
@@ -888,12 +948,31 @@
 .publishedVoteResults li {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: var(--s3);
   padding-block: var(--s2);
   border-bottom: 1px solid var(--line);
 }
 .publishedVoteResults li:last-child { border-bottom: 0; }
 .publishedVoteResults strong { font-variant-numeric: tabular-nums; }
+.publishedVoteOwnRow { background: var(--paper); border-radius: var(--radius-small); padding-inline: var(--s2); }
+.publishedVoteOwnName { font-weight: 800; color: var(--ink); }
+.publishedVoteOwn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  margin-left: var(--s2);
+  padding: 2px 8px;
+  border: 1px solid var(--success-line);
+  border-radius: 999px;
+  background: var(--success-soft);
+  color: var(--success);
+  font-size: var(--label);
+  font-weight: 800;
+  line-height: 1.4;
+  white-space: nowrap;
+  vertical-align: middle;
+}
 
 /* Need-ticket state. */
 .needTicket {
@@ -922,7 +1001,7 @@
   font-weight: 700;
   text-decoration: none;
 }
-.needTicketButton:hover { background: var(--brand-hover); }
+.needTicketButton:hover { background: var(--brand-hover); color: var(--on-brand-hover); }
 
 /* Empty / error states. */
 .emptyState {
@@ -968,7 +1047,7 @@
   font-weight: 700;
   text-decoration: none;
 }
-.stateButton:hover { background: var(--brand-hover); }
+.stateButton:hover { background: var(--brand-hover); color: var(--on-brand-hover); }
 
 .loading {
   padding: var(--s7);

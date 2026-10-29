@@ -13,6 +13,8 @@ import ConsoleSection from "../../../console-ui/ConsoleSection";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
 import consoleUiStyles from "../../../console-ui/console-ui.module.css";
+import { consoleFetch } from "../../../../../lib/console-api";
+import { canWriteEvent } from "../../../../../lib/event-capabilities";
 
 // Reward handout desk: registration happens on the participant row
 // (경품 등록), and this screen is where staff/operators mark handout or
@@ -38,7 +40,7 @@ type Reward = {
 type State =
   | { kind: "loading" }
   | { kind: "failed"; message: string }
-  | { kind: "ready"; eventName: string; eventMeta?: string; eventStage: string; featureOn: boolean; canManage: boolean; rewards: Reward[] };
+  | { kind: "ready"; eventName: string; eventMeta?: string; eventStage: string; featureOn: boolean; role: string; userId: string; memberships: Array<{ accountId: string; eventId: string; write?: unknown }>; rewards: Reward[] };
 
 function text(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
@@ -156,8 +158,8 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
     async function load() {
       try {
         const [meRes, bootRes] = await Promise.all([
-          fetch("/api/auth/me", { cache: "no-store" }),
-          fetch("/api/bootstrap", { cache: "no-store" }),
+          consoleFetch("/api/auth/me", { cache: "no-store" }),
+          consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store" }),
         ]);
         if (cancelled) return;
         if (meRes.status === 401 || bootRes.status === 401) {
@@ -179,26 +181,19 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
         }
         const role = typeof me.user.role === "string" ? me.user.role : "";
         const myId = typeof me.user.id === "string" ? me.user.id : "";
-        const memberships: Array<{ accountId: string; eventId: string }> = Array.isArray(bootstrap.memberships)
+        // Raw membership grants ride along untouched (omitted write is full
+        // access, [] is read-only); the results probe below re-checks the
+        // reward lifecycle through the capability helper.
+        const memberships: Array<{ accountId: string; eventId: string; write?: unknown }> = Array.isArray(bootstrap.memberships)
           ? bootstrap.memberships.flatMap((item) => {
               if (typeof item !== "object" || item === null) return [];
               const membership = item as Record<string, unknown>;
               if (typeof membership.accountId !== "string") return [];
               if (typeof membership.eventId !== "string") return [];
-              return [{ accountId: membership.accountId, eventId: membership.eventId }];
+              return [{ accountId: membership.accountId, eventId: membership.eventId, write: membership.write }];
             })
           : [];
-        // Display gate mirroring the current server enforcement (role +
-        // event membership — the same rule participant screens use). The
-        // server re-checks every write; this only decides what to show.
-        // No granular write-permission policy is invented here.
-        const canManage =
-          role === "AGENCY" ||
-          (role === "MANAGER" &&
-            memberships.some(
-              (membership) =>
-                membership.accountId === myId && membership.eventId === eventId
-            ));
+
         const event = (Array.isArray(bootstrap.events) ? bootstrap.events : [])
           .map(record)
           .find((item) => item?.id === eventId);
@@ -268,7 +263,9 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
           // that below while the list itself stays readable on every stage.
           eventStage: text(event.stage),
           featureOn: Array.isArray(event.features) && event.features.includes("reward"),
-          canManage,
+          role,
+          userId: myId,
+          memberships,
           rewards,
         });
       } catch {
@@ -296,7 +293,7 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
       : { fingerprint, commandId: randomCommandId() };
     pendingRewardActionRef.current = attempt;
     try {
-      const res = await fetch(
+      const res = await consoleFetch(
         `/api/events/${encodeURIComponent(eventId)}/commands`,
         {
           method: "POST",
@@ -351,7 +348,11 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
   }
 
   const archived = state.eventStage.toUpperCase() === "ARCHIVED";
-  const canAct = state.canManage && !archived;
+  // Reward lifecycle (register/assign/fulfill/cancel) is results scope on
+  // the server. Neither gate invents access; the server re-checks every
+  // command, and the list itself stays readable on every stage.
+  const canWriteRewards = canWriteEvent({ role: state.role, userId: state.userId, memberships: state.memberships, eventId }, "reward.create");
+  const canAct = canWriteRewards && !archived;
   const rewardSearch = rewardQuery.trim().toLocaleLowerCase("ko-KR");
   const visibleRewards = state.rewards.filter((reward) => {
     if (rewardStatusFilter === "action") {
@@ -415,10 +416,10 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
         <>
           {failure ? <ConsoleFeedback kind="error">{failure}</ConsoleFeedback> : null}
           {notice ? <ConsoleFeedback kind="success">{notice}</ConsoleFeedback> : null}
-          {!state.canManage ? (
+          {!canAct && !archived ? (
             <ConsoleFeedback kind="warning">지급 처리 권한이 없습니다. 처리가 필요하면 담당 행사 운영자에게 요청하세요.</ConsoleFeedback>
           ) : null}
-          {state.canManage && archived ? (
+          {canWriteRewards && archived ? (
             <ConsoleFeedback kind="warning">보관된 행사는 변경할 수 없습니다. 경품 목록 확인은 계속할 수 있습니다.</ConsoleFeedback>
           ) : null}
           {!state.featureOn ? (
@@ -501,7 +502,7 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
                   {state.featureOn && canAct && (reward.status === "READY" || reward.status === "FAILED") ? (
                     <button
                       type="button"
-                      className="button button-primary"
+                      className="button button-secondary"
                       disabled={busy !== null}
                       onClick={() => {
                         // The server refuses a cancel once the prize is
@@ -516,7 +517,7 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
                   {state.featureOn && canAct && reward.status !== "RECEIVED" && reward.status !== "CANCELLED" ? (
                     <button
                       type="button"
-                      className="button button-secondary"
+                      className="button button-danger"
                       disabled={busy !== null}
                       onClick={() => {
                         setRewardPending({ id: reward.id, command: "reward.cancel" });

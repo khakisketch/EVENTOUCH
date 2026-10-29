@@ -51,6 +51,7 @@ process.env.EVENTOUCH_SMS_MOCK = '1';
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const { prepareCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = require('./capture-dir.cjs');
 const path = require('node:path');
 const axeSource = require('axe-core').source;
 const { startAuditFixture, FIXTURE_PASSWORD } = require('./audit-fixture.cjs');
@@ -59,8 +60,8 @@ const { launchBrowser } = require('./audit-browser.cjs');
 const before = process.argv.includes('--before');
 const out = process.env.EVENTOUCH_CAPTURE_ROOT
   ? path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'close', before ? 'reference-direct' : 'after')
-  : `/tmp/opencode/eventouch-captures/round-close/linear${before ? '/reference-direct' : ''}`;
-fs.mkdirSync(out, { recursive: true });
+  : defaultCaptureDir(`round-close/linear-${runStamp()}`) + (before ? '/reference-direct' : '');
+prepareCaptureDir(out);
 
 const STEP_CAP = 12;
 const MODULE_TITLE = '마감 만족도 투표';
@@ -106,6 +107,7 @@ async function apiCommand(helpers, baseUrl, cookie, eventId, command, payload) {
 }
 
 async function main() {
+  process.env.TMPDIR = ensureRunTmpDir(out);
   let fixture = null;
   let browser = null;
   const errors = [];
@@ -240,6 +242,7 @@ async function main() {
       if (scrollCounter) scrollCounter.paused = true;
       try {
         await page.goto(baseUrl + target, { waitUntil: 'networkidle', timeout: 30000 });
+        if (marker === '#campaign-title') await page.locator('#message-compose-open').click();
         await page.locator(marker).first().waitFor({ state: 'visible', timeout: 15000 });
       } finally {
         if (scrollCounter) {
@@ -434,6 +437,7 @@ async function main() {
       const href = eventPath(rest);
       const link = page.locator(`a[href="${href}"]:visible`).first();
       await act('click', () => link.click());
+      if (marker === '#campaign-title' && await page.locator('#message-compose-open').isVisible()) await act('click', () => page.locator('#message-compose-open').click());
       await page.locator(marker).first().waitFor({ state: 'visible', timeout: 15000 });
     };
 
@@ -460,7 +464,7 @@ async function main() {
       // ---- Phase 1: approve the waiting application from the overview ----
       await measure('approve-pending', '승인 대기 처리 (운영 현황 링크 → 명단 → 선택 승인)', async (act, task, { touchOk }) => {
         task.screens = [eventPath(''), `${eventPath('/participants')}?status=PENDING`];
-        task.fields = ['승인 대기 처리 link', '검색·필터 결과 N명 전체 선택', '선택 승인'];
+        task.fields = ['승인 대기 처리 link', '필터 결과 전체 선택', '승인 대기 인원 승인'];
         if (before) {
           const link = page.getByRole('link', { name: '승인 대기 처리' });
           await touchOk(link, '승인 대기 처리');
@@ -474,10 +478,17 @@ async function main() {
           await followNext(act, 'input[placeholder*="이름·소속·연락처 검색"]', /승인 대기/);
         }
         await page.locator('input[placeholder*="이름·소속·연락처 검색"]').first().waitFor({ state: 'visible', timeout: 15000 });
-        const selectVisible = page.getByRole('button', { name: /검색·필터 결과 \d+명 전체 선택/ });
-        await touchOk(selectVisible, '표시 선택');
+        // Mobile opens the scope menu first; the filter-wide option remains
+        // distinct from page-only selection and includes every matching page.
+        const mobileScopes = page.getByText('여러 명 선택', { exact: true });
+        if (!before && await mobileScopes.isVisible()) {
+          await touchOk(mobileScopes, '여러 명 선택');
+          await act('click', () => mobileScopes.click());
+        }
+        const selectVisible = page.getByRole('button', { name: before ? /^전체 \d+명 선택$/ : /^필터 결과 전체 \d+명 선택$/ });
+        await touchOk(selectVisible, '전체 선택 (필터 범위)');
         await act('click', () => selectVisible.click());
-        const approve = page.getByRole('button', { name: '선택 승인', exact: true });
+        const approve = before ? page.getByRole('button', { name: '선택 승인', exact: true }) : page.locator('#roster-approve-selected');
         await touchOk(approve, '선택 승인');
         await act('click', () => approve.click());
         await page.getByText(/명을 승인했습니다/, { exact: false }).first().waitFor({ timeout: 15000 });
@@ -641,10 +652,11 @@ async function main() {
       // ---- Phase 7: result notice as a SIMULATED campaign (never a send) ----
       await measure('result-notify', '결과 안내 모의 발송 (메시지 작성 → 모의 기록 → 확정)', async (act, task, { touchOk }) => {
         task.screens = [eventPath('/messages')];
-        task.fields = ['#campaign-title', '#campaign-body', '모의 발송으로 기록 checkbox', '수신자 목록 열기/닫기', '표시 추가', '발송 검토', '모의 발송을 기록한다'];
+        task.fields = ['#campaign-title', '#campaign-body', '모의 발송으로 기록 checkbox', '수신자 목록 열기/닫기', '표시 N명 모두 선택 checkbox', '발송 검토', '모의 발송을 기록한다'];
         if (before) await menuTo('/messages', '#campaign-title', act);
         else {
           await act('click', () => page.locator('[data-close-report-next]').click());
+          await act('click', () => page.locator('#message-compose-open').click());
           await page.locator('#campaign-title').waitFor({ state: 'visible', timeout: 15000 });
           assert.ok(new URL(page.url()).searchParams.get('closeReturn').includes('closeReport='), 'chosen report survives the messages handoff');
         }
@@ -657,8 +669,8 @@ async function main() {
         if (!await list.locator('..').evaluate(element => element.open)) {
           await act('click', () => list.click());
         }
-        const addVisible = page.getByRole('button', { name: '표시 추가', exact: true });
-        await act('click', () => addVisible.click());
+        const addVisible = page.getByRole('checkbox', { name: /표시 \d+명 모두 선택/ });
+        await act('check', () => addVisible.check());
         const submit = page.locator('#campaign-submit');
         await touchOk(submit, '발송 검토');
         await act('click', () => submit.click());
@@ -763,6 +775,7 @@ async function main() {
       const seedVariant = async (name) => {
         const id = `close-state-${crypto.randomUUID()}`;
         await helpers.insertEvent(harness.database, {
+          orgId: helpers.LEGACY_ORG,
           id, slug: id,
           payload: { id, slug: id, name, stage: 'LIVE', date: '2027-01-16', features: ['poll'] },
           workspace: helpers.emptyWorkspace(),
@@ -813,6 +826,10 @@ async function main() {
       stateChecks.push('out-of-order entry shows unfinished approval facts and leaves the next control available');
       await page.locator('[data-close-linear-next]').click();
       await page.locator('[data-close-inline-archive]').waitFor();
+      // The composer now starts collapsed behind #message-compose-open (same
+      // as the measured result-notify handoff): open it before drafting.
+      if (await page.locator('#message-compose-open').isVisible()) await page.locator('#message-compose-open').click();
+      await page.locator('#campaign-title').waitFor({ state: 'visible', timeout: 15000 });
       await page.locator('#campaign-title').fill('미저장 안내 초안');
       let archiveDraftCancelled = false;
       page.once('dialog', async dialog => { archiveDraftCancelled = true; await dialog.dismiss(); });
@@ -916,11 +933,18 @@ async function main() {
       assert.match(await page.locator('[data-close-linear-next]').getAttribute('href'), /closeStep=end/, 'already-closed intake is skipped');
       stateChecks.push('already-closed intake skips straight from program completion to the existing ENDED control');
       await page.route('**/api/bootstrap', route => route.abort('connectionreset'));
+      // The reports return path now reloads the lightweight addresses; the
+      // same transport loss covers every read address so a stale checklist
+      // can never hide behind an unfaulted fetch. Recovery stays real.
+      await page.route('**/api/console/directory', route => route.abort('connectionreset'));
+      await page.route('**/api/events/*/bootstrap', route => route.abort('connectionreset'));
       await page.locator(HUB.backLink).click();
       await page.getByText('연결하지 못했습니다. 다시 시도하세요.', { exact: true }).waitFor();
       assert.equal(await page.locator(HUB.nextAction).count(), 0, 'failed return never displays a stale next action');
       await shotBoth('states-return-network-error');
       await page.unroute('**/api/bootstrap');
+      await page.unroute('**/api/console/directory');
+      await page.unroute('**/api/events/*/bootstrap');
       await page.getByRole('button', { name: '다시 불러오기', exact: true }).click();
       await page.locator(HUB.nextAction).waitFor();
       assert.match(await page.locator(HUB.nextAction).innerText(), /종료/);
@@ -979,7 +1003,7 @@ async function main() {
       recoveryEvidence,
       results, errors,
     };
-    fs.writeFileSync(path.join(out, 'journey-results.json'), JSON.stringify(report, null, 2));
+    fs.writeFileSync(path.join(out, 'journey-results.json'), JSON.stringify(report, null, 2), { mode: 0o600 });
     console.log(JSON.stringify(results.map((task) => ({
       key: task.key, steps: task.steps, clicks: task.clicks, fills: task.fills,
       selects: task.selects, checks: task.checks, scrolls: task.scrolls, writes: task.writes,
@@ -988,7 +1012,7 @@ async function main() {
     })), null, 2));
     await context.close();
   } catch (error) {
-    fs.writeFileSync(path.join(out, `journey-failure-${Date.now()}.json`), JSON.stringify({ before, build: buildId(), results, errors, failure: String(error) }, null, 2));
+    fs.writeFileSync(path.join(out, `journey-failure-${Date.now()}.json`), JSON.stringify({ before, build: buildId(), results, errors, failure: String(error) }, null, 2), { mode: 0o600 });
     throw error;
   } finally {
     if (browser) await browser.close().catch(() => {});

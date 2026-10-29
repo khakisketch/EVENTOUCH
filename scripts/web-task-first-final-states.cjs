@@ -26,11 +26,12 @@ process.env.EVENTOUCH_SMS_MOCK = '1';
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const { prepareCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = require('./capture-dir.cjs');
 const path = require('node:path');
 const { startAuditFixture, resolveAuditDatabaseUrl } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 
-const out = '/tmp/opencode/eventouch-captures/task-first-final/after';
+const out = (process.env.CAPTURE_DIR || '').trim() || defaultCaptureDir(`task-first-final/after-${runStamp()}`);
 const UI_TIMEOUT = 15000;
 
 // Real 1x1 transparent PNG (70 bytes, valid IHDR), same standing as the
@@ -46,7 +47,8 @@ async function main() {
   if (!resolveAuditDatabaseUrl()) {
     throw new Error('set a task-local EVENTOUCH_A11Y_DATABASE_URL (or MOBILE/TEST) to an isolated PostgreSQL database; never a shared one');
   }
-  fs.mkdirSync(out, { recursive: true });
+  prepareCaptureDir(out);
+  process.env.TMPDIR = ensureRunTmpDir(out);
   const f = await startAuditFixture();
   let browser;
   const errors = [];
@@ -97,7 +99,7 @@ async function main() {
       { id: `states-wrap-domain-${f.suffix}`, name: '긴 도메인 검증 담당', email: `states-wrap-probe-${f.suffix}@extraordinarily-long-subdomain-name-that-forces-overflow-check.example.test` },
     ];
     for (const account of wrapProbeAccounts) {
-      await f.helpers.insertAccount(f.harness.database, { id: account.id, role: 'MANAGER', name: account.name, email: account.email });
+      await f.helpers.insertAccount(f.harness.database, { orgId: f.helpers.LEGACY_ORG, id: account.id, role: 'MANAGER', name: account.name, email: account.email });
     }
 
     browser = await launchBrowser();
@@ -326,6 +328,17 @@ async function main() {
     await page.route('**/api/bootstrap', (route) => {
       if (!abortedOnce) { abortedOnce = true; route.abort(); } else route.continue();
     });
+    // The team shell and event screens now read the lightweight addresses;
+    // the same single transport fault covers every read address so the
+    // retry-then-recover path is exercised whichever address the UI uses.
+    // Nothing is mocked to succeed: the buttons below still demand the real
+    // recovery fetch.
+    await page.route('**/api/console/directory', (route) => {
+      if (!abortedOnce) { abortedOnce = true; route.abort(); } else route.continue();
+    });
+    await page.route('**/api/events/*/bootstrap', (route) => {
+      if (!abortedOnce) { abortedOnce = true; route.abort(); } else route.continue();
+    });
     await page.goto(`${f.baseUrl}/console/team`, { waitUntil: 'networkidle' });
     await act(() => page.getByRole('button', { name: '다시 불러오기', exact: true }).waitFor({ timeout: UI_TIMEOUT }));
     counts.states += 1;
@@ -351,7 +364,7 @@ async function main() {
       contactWraps,
       importFileInput1280,
       errors,
-    }, null, 2));
+    }, null, 2), { mode: 0o600 });
     console.log(`[task-first-final-states] labels=${counts.labels} badges=${counts.badges} targets=${counts.targets} wraps=${counts.wraps} states=${counts.states} interactions=${interactions}`);
   } finally {
     if (browser) await browser.close();

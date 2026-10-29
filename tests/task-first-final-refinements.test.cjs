@@ -132,7 +132,10 @@ test("team contacts break at safe points, never mid-token or hidden", () => {
   const workspace = read("console/team/TeamWorkspace.tsx");
   assert.match(workspace, /<wbr \/>/u, "emails carry semantic break opportunities");
   assert.match(workspace, /SafeContact/u, "both invite and member emails use the safe renderer");
-  assert.equal(workspace.match(/<SafeContact value=\{/g)?.length ?? 0, 2, "invite + member contacts");
+  assert.equal(workspace.match(/<SafeContact value=\{/g)?.length ?? 0, 3, "invite + member + event-permission editor contacts");
+  assert.match(workspace, /<SafeContact value=\{invitation\.email\} \/>/u);
+  assert.equal(workspace.match(/<SafeContact value=\{account\.email\} \/>/g)?.length ?? 0, 2, "both member and permission-editor contacts use semantic wrapping");
+  assert.doesNotMatch(workspace, />\s*\{(?:account|invitation)\.email\}\s*</u, "no direct contact rendering bypasses safe wrapping");
   assert.doesNotMatch(workspace, /text-overflow:\s*ellipsis|overflow:\s*hidden/u, "no truncation hides contact info");
   const css = read("console/team/team.module.css");
   assert.match(css, /\.memberContact\s*\{[^}]*overflow-wrap:\s*break-word/su, "contacts fall back only when no safe point exists");
@@ -225,7 +228,12 @@ test("photos upload stacks full-width on phones; import file aligns left", () =>
   assert.match(mobile, /\.uploadArea\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/su, "explanation keeps full width");
   assert.match(mobile, /\.uploadArea > :global\(\.button\)\s*\{[^}]*width:\s*100%/su, "upload action goes full-width");
   const wizard = read("console/events/[id]/participants/import/ImportWizard.tsx");
-  assert.match(wizard, /filters=\{\s*<label>/su, "file picker rides the left filter slot on desktop");
+  const fileSlot = wizard.slice(wizard.indexOf('filters={'), wizard.indexOf('actions={', wizard.indexOf('filters={')));
+  assert.match(fileSlot, /<label className=/u, "file picker rides the left filter slot on desktop");
+  assert.match(fileSlot, /styles\.filePicker/u, "the picker owns its focusable presentation");
+  assert.match(fileSlot, /type="file"/u, "the picker remains a native file input");
+  const importCss = read("console/events/[id]/participants/import/import.module.css");
+  assert.match(importCss, /\.filePicker:focus-within\s+\.fileButton\s*\{[^}]*outline:\s*3px/su, "keyboard focus is visible without :has");
   assert.match(wizard, /actions=\{\s*<button/u, "template stays a right-side action");
   assert.match(wizard, /양식 CSV/u, "template download survives the move");
 });

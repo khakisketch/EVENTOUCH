@@ -67,7 +67,16 @@ test('unexpected invitation failures return a generic message without raw detail
   const database = {
     query: async (sql) => {
       if (/FROM sessions/.test(sql)) {
-        return { rows: [{ id: 'acct-1', email: 'agency@example.test', name: '운영자', role: 'AGENCY' }] };
+        return { rows: [{
+          id: 'acct-1', email: 'agency@example.test', name: '운영자',
+          global_role: 'AGENCY', active: true, session_org: 'org-legacy', session_version: 0,
+        }] };
+      }
+      if (/organization_memberships/.test(sql)) {
+        return { rows: [{
+          org_id: 'org-legacy', role: 'AGENCY', active: true,
+          permissions: [], org_name: '기존 조직', context_version: 0,
+        }] };
       }
       return { rows: [{ role: 'AGENCY', active: true }] };
     },

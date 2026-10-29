@@ -22,6 +22,7 @@ const {
   insertAssignment,
   sessionCookie,
   requestJson,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 const { floorplanPng } = require('./helpers/floorplan-image.cjs');
 
@@ -115,10 +116,10 @@ before(async () => {
     ['staff', 'STAFF'],
   ]) {
     const id = `evidence-${key}`;
-    await insertAccount(harness.database, { id, role, name: key, email: `${id}@example.test` });
+    await insertAccount(harness.database, {orgId: LEGACY_ORG,  id, role, name: key, email: `${id}@example.test` });
     cookie[key] = await sessionCookie(harness, id);
   }
-  await insertEvent(harness.database, {
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,
     id: 'evidence-manager',
     slug: 'evidence-manager',
     payload: {
@@ -131,7 +132,7 @@ before(async () => {
   // Public slug differs from the id on purpose: the public leak tests must
   // prove the slug path exposes nothing even when the event is LIVE.
   await harness.database.query('UPDATE events SET slug = $2 WHERE id = $1', ['evidence-manager', 'evidence-a']);
-  await insertEvent(harness.database, {
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,
     id: 'evidence-other',
     slug: 'evidence-other',
     payload: {
@@ -452,7 +453,9 @@ test('archives deny staff, outsiders, cross-event readers and missing events', a
     ['/api/events/evidence-manager/evidence-photos.zip?section=SPACE', cookie.outsider, 403],
     ['/api/events/evidence-other/attendee-photos.zip', cookie.manager, 403],
     ['/api/events/evidence-other/evidence-photos.zip?section=SPACE', cookie.manager, 403],
-    ['/api/events/missing-event/attendee-photos.zip', cookie.manager, 403],
+    // Unknown ids answer exactly like invisible ones: membership probing
+    // through error shapes is closed, so the manager sees 404 here.
+    ['/api/events/missing-event/attendee-photos.zip', cookie.manager, 404],
   ]) {
     assert.equal((await fetchZip(url, actor)).status, want, `${url} as ${actor === cookie.manager ? 'manager' : 'other'}`);
   }

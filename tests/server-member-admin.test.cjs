@@ -16,6 +16,7 @@ const {
   sessionCookie,
   requestJson,
   deleteFixtureRows,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 
 const test = databaseUrl
@@ -34,19 +35,19 @@ let cookie;
 before(async () => {
   if (!databaseUrl) return;
   harness = await startApiHarness();
-  await insertAccount(harness.database, {
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,
     id: ids.agency,
     role: 'AGENCY',
     name: '조직 소유자',
     email: `${ids.agency}@example.test`,
   });
-  await insertAccount(harness.database, {
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,
     id: ids.manager,
     role: 'MANAGER',
     name: '행사 매니저',
     email: `${ids.manager}@example.test`,
   });
-  await insertEvent(harness.database, { id: ids.event, slug: ids.event, payload: { id: ids.event, name: '권한 검증 행사', slug: ids.event, date: '2026-12-01', start: '10:00', end: '17:00', capacity: 50, stage: 'DRAFT', features: [] }, workspace: {} });
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,  id: ids.event, slug: ids.event, payload: { id: ids.event, name: '권한 검증 행사', slug: ids.event, date: '2026-12-01', start: '10:00', end: '17:00', capacity: 50, stage: 'DRAFT', features: [] }, workspace: {} });
   cookie = await sessionCookie(harness, ids.agency);
 });
 
@@ -68,8 +69,12 @@ test('organisation permissions are stored, replayable and bounded to the known v
   assert.equal(saved.status, 201);
   assert.deepEqual(saved.json.account.orgPermissions, ['clients.manage', 'team.manage']);
 
-  const stored = await harness.database.query('SELECT org_permissions FROM accounts WHERE id = $1', [ids.manager]);
-  assert.deepEqual(stored.rows[0].org_permissions, ['clients.manage', 'team.manage']);
+  // Permission truth lives in the org membership, never in accounts.
+  const stored = await harness.database.query(
+    'SELECT permissions FROM organization_memberships WHERE org_id = $1 AND account_id = $2',
+    ['org-legacy', ids.manager]
+  );
+  assert.deepEqual(stored.rows[0].permissions, ['clients.manage', 'team.manage']);
 
   const replay = await requestJson(harness.baseUrl, `/api/accounts/${ids.manager}/org-permissions`, {
     method: 'POST',

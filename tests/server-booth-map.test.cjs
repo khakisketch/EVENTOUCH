@@ -3,7 +3,7 @@ const {test:nodeTest,before,after} = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
-const {databaseUrl,startApiHarness,insertAccount,insertEvent,sessionCookie,requestJson} = require('./helpers/postgres-api-server.cjs');
+const {databaseUrl,startApiHarness,insertAccount,insertEvent,sessionCookie,requestJson, LEGACY_ORG } = require('./helpers/postgres-api-server.cjs');
 const {floorplanPng} = require('./helpers/floorplan-image.cjs');
 const test = databaseUrl ? nodeTest : (name,fn) => nodeTest(name,{skip:'isolated PostgreSQL required'},fn);
 let h,cookie,staff,manager,dir,file,secondFile,foreignFile;
@@ -12,9 +12,9 @@ before(async () => {
   if (!databaseUrl) return;
   dir = fs.mkdtempSync('/tmp/opencode/eventouch-map-'); h = await startApiHarness({storageDir:dir});
   for (const [id,role] of [['agency','AGENCY'],['staff','STAFF'],['manager','MANAGER']])
-    await insertAccount(h.database,{id,role,name:id,email:`${id}@example.test`});
+    await insertAccount(h.database,{orgId: LEGACY_ORG, id,role,name:id,email:`${id}@example.test`});
   cookie = await sessionCookie(h,'agency'); staff = await sessionCookie(h,'staff'); manager = await sessionCookie(h,'manager');
-  for (const id of ['map-event','foreign-event']) await insertEvent(h.database,{id,slug:id,
+  for (const id of ['map-event','foreign-event']) await insertEvent(h.database,{orgId: LEGACY_ORG, id,slug:id,
     payload:{id,slug:id,stage:'LIVE',features:['stamp']},
     workspace:{booths:[{id:'a',name:'Same'},{id:'b',name:'Same'}],visits:[{id:'visit-old',boothId:'a',participantId:'me',at:'2026-10-07'}]}});
   async function upload(eventId,name) {

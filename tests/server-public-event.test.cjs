@@ -9,6 +9,7 @@ const {
   insertEvent,
   requestJson,
   deleteFixtureRows,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 
 const test = databaseUrl
@@ -157,19 +158,19 @@ function publicEvent(id, slug, name, stage) {
 before(async () => {
   if (!databaseUrl) return;
   harness = await startApiHarness();
-  await insertEvent(harness.database, {
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,
     id: eventIds.live,
     slug: slugs.live,
     payload: publicEvent(eventIds.live, slugs.live, '공개 행사', 'LIVE'),
     workspace: publicWorkspace(),
   });
-  await insertEvent(harness.database, {
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,
     id: eventIds.draft,
     slug: slugs.draft,
     payload: publicEvent(eventIds.draft, slugs.draft, '초안 행사', 'DRAFT'),
     workspace: publicWorkspace(),
   });
-  await insertEvent(harness.database, {
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,
     id: eventIds.other,
     slug: slugs.other,
     payload: publicEvent(eventIds.other, slugs.other, '다른 행사', 'LIVE'),

@@ -17,6 +17,7 @@ const {
   insertMembership,
   sessionCookie,
   requestJson,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 const { floorplanPng } = require('./helpers/floorplan-image.cjs');
 const { DEFAULT_HOME_STYLE } = require('../server/attendee-home-style');
@@ -90,7 +91,7 @@ const customStyle = {
 };
 
 async function createEvent(ref, { stage = 'READY', participants = [] } = {}) {
-  await insertEvent(harness.database, {
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,
     id: ref.id,
     slug: ref.slug,
     payload: {
@@ -166,7 +167,7 @@ before(async () => {
     ['other', 'MANAGER'],
     ['staff', 'STAFF'],
   ]) {
-    await insertAccount(harness.database, {
+    await insertAccount(harness.database, {orgId: LEGACY_ORG,
       id: `theme-${key}-${suffix}`,
       role,
       name: `테마 ${key}`,

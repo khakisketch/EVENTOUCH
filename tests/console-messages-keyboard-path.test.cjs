@@ -37,7 +37,7 @@ test('in-form move to the send request exists inside the compose form', () => {
   assert.doesNotMatch(skipWindow, /type="submit"/u);
   // Placement: with the recipient summary at the top of the form, so the
   // shortcut is reachable before the long recipient list is walked.
-  assert.ok(skipAt < SOURCE.indexOf('id="campaign-recipients"'), 'skip must sit above the recipient list');
+  assert.ok(skipAt > SOURCE.indexOf('id="campaign-recipients"') && skipAt < SOURCE.indexOf('id="recipient-list-summary"'), 'skip sits in the recipient section above the long list');
   assert.ok(skipAt < SOURCE.indexOf('id="campaign-submit"'), 'skip must sit before the submit button');
   assert.ok(skipAt < SOURCE.indexOf('id="campaign-scheduled"'), 'skip must sit before the schedule input');
   assert.ok(skipAt < SOURCE.indexOf('id="campaign-submit"'), 'skip must sit before the submit button');
@@ -88,6 +88,13 @@ test('touch target and token-only styling hold', () => {
   assert.match(CSS, /\.recipientTopBar/u);
   assert.match(CSS, /\.textButton \{[^}]*min-height: 44px/u);
   assert.doesNotMatch(CSS, /#[0-9a-fA-F]{3,8}\b/u);
+  // Phone keeps the send checklist in normal flow: a sticky bar covered the
+  // recipient fields at first paint (measured at 390×844).
+  assert.match(
+    CSS,
+    /@media \(max-width: 768px\) \{[\s\S]*?\.reviewBar \{[^}]*position: static;/u,
+    'the review bar must not float over the recipient fields on a phone'
+  );
 });
 
 test("the skip control carries the product-wide hook the audit measures", () => {

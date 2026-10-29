@@ -69,8 +69,10 @@ test("program list filters client-side with a count and a zero-result reset", ()
   // Client-side only: filters the already-loaded modules, no new request.
   assert.match(programs, /visibleModules = state\.modules\.filter/u);
   assert.match(programs, /toLocaleLowerCase\("ko-KR"\)\.includes\(programQueryText\)/u);
-  const fetches = [...programs.matchAll(/fetch\(\s*[`"']([^`"']+)/gu)].map((match) => match[1]);
-  assert.deepEqual(fetches, ["/api/auth/me", "/api/bootstrap", "/api/events/${encodeURIComponent(eventId)}/commands"]);
+  // All reads go through the shared transport; the event read is the scoped
+  // event bootstrap, never the full directory.
+  const fetches = [...programs.matchAll(/(?:consoleFetch|fetch)\(\s*[`"']([^`"']+)/gu)].map((match) => match[1]);
+  assert.deepEqual(fetches, ["/api/auth/me", "/api/events/${encodeURIComponent(eventId)}/bootstrap", "/api/events/${encodeURIComponent(eventId)}/commands"]);
   // Zero results guide back with a reset, without touching the real empty state.
   assert.match(programs, /조건에 맞는 프로그램이 없습니다/u);
   assert.match(programs, /검색어·상태 조건을 바꾸거나 지우고 다시 찾아보세요/u);

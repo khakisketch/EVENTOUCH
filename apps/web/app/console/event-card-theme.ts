@@ -16,8 +16,8 @@
 // import from client components (it only widens the client bundle by a few
 // pure functions).
 
-export const THEME_INK = "#17252B";
-export const THEME_BRAND_TEXT = "#A34410";
+export const THEME_INK = "#111318";
+export const THEME_BRAND_TEXT = "#1438A8";
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 /** Share of the published color in the pale header tint (rest is white). */
 export const THEME_TINT_RATIO = 0.15;
@@ -92,7 +92,7 @@ export type CardHeaderTheme = { background: string; color: string };
  * theme": the caller falls back to the existing `--soft` surface with
  * `--brand-text` date text. A published color always yields a pale tint with
  * fixed neutral ink for the date line: operator colors must never combine
- * with unrelated brand-orange text on every hue, even when the orange would
+ * with unrelated brand text on every hue, even when the orange would
  * pass contrast. The ink still clears 4.5:1 on the pale tint.
  * Only validated hex in, only computed hex out — no arbitrary CSS strings.
  */

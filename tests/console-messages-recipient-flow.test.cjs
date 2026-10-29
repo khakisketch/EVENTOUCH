@@ -20,9 +20,10 @@ const CSS = fs.readFileSync(
   'utf8'
 );
 
-test('recipient state heads the compose form with a jump path to the picker', () => {
+test('recipient state heads the compose form with a return path from review', () => {
   assert.match(SOURCE, /recipientTopBar/u);
-  assert.match(SOURCE, /수신자 선택으로 이동/u);
+  assert.match(SOURCE, /수신자 다시 확인/u);
+  assert.match(SOURCE, /onClick=\{jumpToRecipientFilter\}/u);
   assert.match(SOURCE, /id="campaign-recipients"/u);
   assert.match(SOURCE, /getElementById\("campaign-recipients"\)\?\.scrollIntoView/u);
   assert.match(SOURCE, /getElementById\("recipient-status-filter"\)\?\.focus/u);
@@ -31,9 +32,9 @@ test('recipient state heads the compose form with a jump path to the picker', ()
   assert.ok(head !== -1, 'expected the recipient head bar');
   assert.ok(head < SOURCE.indexOf('id="campaign-title"'), 'head bar must precede the title field');
   assert.ok(head < SOURCE.indexOf('id="campaign-body"'), 'head bar must precede the body field');
-  assert.ok(head < SOURCE.indexOf('id="campaign-recipients"'), 'head bar must precede the recipient picker');
+  assert.ok(head > SOURCE.indexOf('id="campaign-recipients"') && head < SOURCE.indexOf('id="recipient-list-summary"'), 'jumps sit within the recipient section before its long list');
   // The picker section keeps its title and detailed summary.
-  assert.match(SOURCE, /<legend>발송 대상<\/legend>/u);
+  assert.match(SOURCE, /<legend>수신자 선택<\/legend>/u);
   assert.match(SOURCE, /id="recipient-summary"/u);
   assert.match(SOURCE, /확정 \{selectedApproved\}명/u);
   assert.match(CSS, /\.recipientTopBar/u);
@@ -45,7 +46,6 @@ test('zero-recipient block is stated next to the submit button, UI-only', () => 
   assert.match(SOURCE, /선택 \{selectedCount\}명/u);
   assert.match(SOURCE, /발송은 되돌릴 수 없습니다/u);
   // Zero state names the block reason right there.
-  assert.match(SOURCE, /내용 작성과 수신자 선택은 어느 순서로 해도 됩니다/u);
   assert.match(SOURCE, /selectedCount === 0 \? " 수신자를 먼저 고르세요\." : ""/u);
   // The block itself is unchanged: the submit handler returns before any
   // command with the server's own wording. The approved workbench also
@@ -54,7 +54,7 @@ test('zero-recipient block is stated next to the submit button, UI-only', () => 
   assert.match(SOURCE, /발송 대상을 선택하세요\./u);
   assert.match(SOURCE, /id="campaign-submit"/u);
   assert.match(SOURCE, /disabled=\{selectedCount === 0 \|\|/u);
-  assert.match(SOURCE, /aria-describedby="campaign-submit-warning"/u);
+  assert.match(SOURCE, /aria-describedby=\{campaignError \? "campaign-submit-warning campaign-request-error" : "campaign-submit-warning"\}/u);
 });
 
 test('send request command and mock-send wording are preserved', () => {
@@ -69,8 +69,11 @@ test('send request command and mock-send wording are preserved', () => {
 
 test('API surface is unchanged and styling uses tokens only', () => {
   assert.match(SOURCE, /\/api\/events\/\$\{encodeURIComponent\(eventId\)\}\/commands/u);
-  assert.match(SOURCE, /fetch\("\/api\/auth\/me"/u);
-  assert.match(SOURCE, /fetch\("\/api\/bootstrap"/u);
+  // Reads go through the shared transport; the event read is the scoped
+  // event bootstrap, never the full directory.
+  assert.match(SOURCE, /consoleFetch\("\/api\/auth\/me"/u);
+  assert.match(SOURCE, /consoleFetch\(`\/api\/events\/\$\{encodeURIComponent\(eventId\)\}\/bootstrap`/u);
+  assert.doesNotMatch(SOURCE, /consoleFetch\("\/api\/bootstrap"/u, "no full bootstrap read remains");
   assert.match(SOURCE, /message\.retry/u);
   assert.match(SOURCE, /message\.sync/u);
   assert.match(SOURCE, /message\.cancel/u);
@@ -78,4 +81,17 @@ test('API surface is unchanged and styling uses tokens only', () => {
   assert.match(CSS, /scroll-margin-top/u);
   assert.match(CSS, /var\(--surface-muted\)/u);
   assert.doesNotMatch(CSS, /#[0-9a-fA-F]{3,8}\b/u);
+});
+
+test('recipient meta wraps Korean status at phrase boundaries, never mid-syllable', () => {
+  // The composer meta reads `소속 · 마스킹 번호 · 상태`: anywhere tore the
+  // status itself (참가 확/정). keep-all holds whole syllables while
+  // break-word still contains long emails and masked numbers.
+  const metaAt = CSS.indexOf('.recipientMeta {');
+  assert.ok(metaAt !== -1, 'expected the recipient meta style');
+  const metaWindow = CSS.slice(metaAt, CSS.indexOf('}', metaAt) + 1);
+  assert.match(metaWindow, /word-break:\s*keep-all/u, 'Korean status keeps whole syllables');
+  assert.match(metaWindow, /overflow-wrap:\s*break-word/u, 'long tokens still contain without overflowing');
+  assert.doesNotMatch(metaWindow, /overflow-wrap:\s*anywhere/u, 'anywhere must not return to the meta');
+  assert.match(SOURCE, /data-recipient-meta/u, 'the audit measures the drawn meta lines');
 });

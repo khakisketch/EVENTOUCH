@@ -7,14 +7,15 @@ process.env.EVENTOUCH_SMS_MOCK = '1';
 // No provider call is made. The message composer is inspected, never sent.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { prepareCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = require('./capture-dir.cjs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 
-const root = process.env.CAPTURE_DIR || '/tmp/opencode/eventouch-captures/round-next/after';
+const root = process.env.CAPTURE_DIR || defaultCaptureDir(`round-next/after-${runStamp()}`);
 const baseline = process.env.ROUND_NEXT_BASELINE === '1';
-fs.mkdirSync(root, { recursive: true });
+prepareCaptureDir(root);
 
 async function resetFocus(page) {
   await page.evaluate(() => {
@@ -50,6 +51,7 @@ async function sectionKeyboardPath(page) {
 }
 
 async function main() {
+  process.env.TMPDIR = ensureRunTmpDir(root);
   const fixture = await startAuditFixture({ loseFirstResponseFor: baseline ? null : 'participant.status' });
   let browser;
   const results = [], errors = [];
@@ -67,18 +69,19 @@ async function main() {
   try {
     const otherStaff = `round-staff-${suffix}`;
     const inactiveStaff = `round-inactive-${suffix}`;
-    await helpers.insertAccount(harness.database, { id: otherStaff, role: 'STAFF', name: '배정 인계 대상', email: `${otherStaff}@example.test` });
-    await helpers.insertAccount(harness.database, { id: inactiveStaff, role: 'STAFF', name: '중지된 대상', email: `${inactiveStaff}@example.test` });
-    await harness.database.query('UPDATE accounts SET active=false WHERE id=$1', [inactiveStaff]);
+    await helpers.insertAccount(harness.database, { orgId: helpers.LEGACY_ORG, id: otherStaff, role: 'STAFF', name: '배정 인계 대상', email: `${otherStaff}@example.test` });
+    await helpers.insertAccount(harness.database, { orgId: helpers.LEGACY_ORG, id: inactiveStaff, role: 'STAFF', name: '중지된 대상', email: `${inactiveStaff}@example.test` });
+    await harness.database.query('UPDATE organization_memberships SET active=false WHERE org_id=$1 AND account_id=$2', [helpers.LEGACY_ORG, inactiveStaff]);
     await cmd('event.features', { features: ['draw', 'poll', 'reward', 'screen', 'venue', 'stamp'] });
     await cmd('booth.save', { name: '인계 부스', zone: '가구역', status: 'OPEN', capacity: 0, limit: 1 });
     const notice = await cmd('notice.save', { title: '키보드 출력 안내', body: '출력 확인', published: true });
     const boot = await read();
+    assert.equal(boot.accounts.find(account => account.id === inactiveStaff)?.active, false, 'inactive organization membership must be projected as inactive');
     const noticeId = notice.notice?.id || boot.workspaces[eventId].notices.find(n => n.title === '키보드 출력 안내').id;
     const stages = ['ENDED', 'ARCHIVED', 'DRAFT'];
     for (const stage of stages) {
       const id = `round-${stage.toLowerCase()}-${suffix}`;
-      await helpers.insertEvent(harness.database, { id, slug: id, payload: { id, slug: id, name: `${stage} 단계 행사`, stage, date: '2027-02-01', features: [] }, workspace: helpers.emptyWorkspace() });
+      await helpers.insertEvent(harness.database, { orgId: helpers.LEGACY_ORG, id, slug: id, payload: { id, slug: id, name: `${stage} 단계 행사`, stage, date: '2027-02-01', features: [] }, workspace: helpers.emptyWorkspace() });
     }
     browser = await launchBrowser();
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
@@ -176,13 +179,13 @@ async function main() {
       await goto(`${eventRoute}/participants?status=PENDING`);
       await page.getByRole('checkbox', { name: /승인 인계 가/ }).check();
       await page.getByRole('checkbox', { name: /승인 인계 나/ }).check();
-      await page.getByRole('button', { name: '선택 승인', exact: true }).click();
-      const handoff = page.getByRole('link', { name: '승인자에게 안내 보내기', exact: true });
+      await page.locator('#roster-approve-selected').click();
+      const handoff = page.getByRole('link', { name: '승인자 메시지 작성', exact: true });
       await fixture.gateway.waitForResponseLoss('participant.status');
       await page.getByRole('alert').filter({ hasText: /연결하지 못했습니다/ }).waitFor();
       assert.equal(await handoff.count(), 0, 'lost response must not offer success follow-up');
       assert.ok((await read()).workspaces[eventId].participants.filter(p => ids.includes(p.id)).every(p => p.status === 'APPROVED'), 'server committed before response loss');
-      await page.getByRole('button', { name: '선택 승인', exact: true }).click();
+      await page.getByRole('button', { name: '같은 요청으로 다시 시도', exact: true }).click();
       await handoff.waitFor();
       const approvals = fixture.gateway.commands.filter(c => c.command === 'participant.status');
       assert.equal(approvals.length, 2);
@@ -221,11 +224,11 @@ async function main() {
     }
     assert.equal(errors.length, 0, errors.join('\n'));
     pass('page-errors', { count: errors.length });
-    fs.writeFileSync(path.join(root, 'handoff-verification.json'), JSON.stringify({ build: fs.readFileSync('apps/web/.next/BUILD_ID', 'utf8').trim(), baseline, results, errors }, null, 2));
+    fs.writeFileSync(path.join(root, 'handoff-verification.json'), JSON.stringify({ build: fs.readFileSync('apps/web/.next/BUILD_ID', 'utf8').trim(), baseline, results, errors }, null, 2), { mode: 0o600 });
     console.log(JSON.stringify({ passed: results.length, errors: errors.length, keyboard }, null, 2));
     await context.close();
   } catch (error) {
-    fs.writeFileSync(path.join(root, 'handoff-failure.json'), JSON.stringify({ build: fs.readFileSync('apps/web/.next/BUILD_ID', 'utf8').trim(), baseline, results, errors, failure: error.stack || String(error) }, null, 2));
+    fs.writeFileSync(path.join(root, 'handoff-failure.json'), JSON.stringify({ build: fs.readFileSync('apps/web/.next/BUILD_ID', 'utf8').trim(), baseline, results, errors, failure: error.stack || String(error) }, null, 2), { mode: 0o600 });
     throw error;
   } finally {
     if (browser) await browser.close();

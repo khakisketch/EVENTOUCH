@@ -15,6 +15,8 @@ import ConsoleSection from "../../../console-ui/ConsoleSection";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import StageTransitionConfirmation from "../../../console-ui/StageTransitionConfirmation";
 import styles from "./settings.module.css";
+import { consoleFetch } from "../../../../../lib/console-api";
+import { canWriteEvent } from "../../../../../lib/event-capabilities";
 import { readCloseReturn, readCloseSnapshot, type CloseSnapshot } from "../../../console-event-close";
 import { useEventCloseHandoff } from "../../../use-event-close-handoff";
 
@@ -58,6 +60,9 @@ type Basics = {
   end: string;
   capacity: string;
   price: string;
+  // Display-only progress shape: '' means unspecified (absent key), never an
+  // invented default. Submitted verbatim; the server keeps '' semantics.
+  format: string;
   approvalRequired: boolean;
   allowReentry: boolean;
   verificationRequired: boolean;
@@ -70,7 +75,9 @@ type Ready = {
   clientName: string;
   venueName: string;
   clients: Array<{ id: string; name: string }>;
-  canManageEvent: boolean;
+  role: string;
+  userId: string;
+  memberships: Array<{ accountId: string; eventId: string; write?: unknown }>;
   deskCount: number;
   deskAssignmentCount: number;
   openModules: number;
@@ -279,9 +286,10 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         // account directory: gating on "any manager exists" projected the
         // wrong permission onto signed-in staff. This mirrors the current
         // server role+membership semantics; the server stays authoritative.
-        const [meRes, bootRes] = await Promise.all([
-          fetch("/api/auth/me", { cache: "no-store" }),
-          fetch("/api/bootstrap", { cache: "no-store" }),
+        const [meRes, bootRes, dirRes] = await Promise.all([
+          consoleFetch("/api/auth/me", { cache: "no-store" }),
+          consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store" }),
+          consoleFetch("/api/console/directory", { cache: "no-store" }),
         ]);
         if (cancelled) return;
         if (meRes.status === 401 || bootRes.status === 401) {
@@ -315,6 +323,18 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           } | null;
         } | null;
         const bootstrap = bootData?.state;
+        // The 고객사 selector needs the org-level list, which the scoped
+        // event bootstrap does not carry: the directory provides it with the
+        // same per-role visibility the full bootstrap had (AGENCY all,
+        // MANAGER own events' clients). Scoped data stays the fallback.
+        const dirData = (await dirRes.json().catch(() => null)) as {
+          directory?: { clients?: unknown } | null;
+        } | null;
+        const dirClients = Array.isArray(dirData?.directory?.clients)
+          ? (dirData as { directory: { clients: unknown[] } }).directory.clients
+              .map(record)
+              .filter((item): item is Record<string, unknown> => item !== null)
+          : [];
         if (!meRes.ok || !bootRes.ok || !user || !bootstrap) {
           setState({ kind: "failed", message: "행사 설정을 불러오지 못했습니다." });
           return;
@@ -332,9 +352,9 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           setState({ kind: "failed", message: "행사를 찾을 수 없습니다." });
           return;
         }
-        const clients = Array.isArray(bootstrap.clients)
+        const clients = (dirClients.length ? dirClients : Array.isArray(bootstrap.clients)
           ? bootstrap.clients.map(record).filter((item): item is Record<string, unknown> => item !== null)
-          : [];
+          : []);
         const clientName = text(clients.find((client) => client.id === event.clientId)?.name);
         const venue = record(workspace.venue);
         const venueName = text(venue?.name);
@@ -344,14 +364,12 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           ? bootstrap.memberships.flatMap((value) => {
               const item = record(value);
               if (!item || typeof item.accountId !== "string" || typeof item.eventId !== "string") return [];
-              return [{ accountId: item.accountId, eventId: item.eventId }];
+              return [{ accountId: item.accountId, eventId: item.eventId, write: item.write }];
             })
           : [];
-        // Display gate only: AGENCY everywhere, MANAGER on their own events.
+        // Display gates only, per server/event-permissions.js: 행사 정보·기능·
+        // 단계는 settings (event.*), 접수 게시·마감은 participants (form.*).
         // The server still authorizes every settings command.
-        const canManageEvent = role === "AGENCY" || (role === "MANAGER" && memberships.some(
-          (membership) => membership.accountId === myId && membership.eventId === eventId
-        ));
         const desks = Array.isArray(workspace.desks) ? workspace.desks : [];
         const assignments = Array.isArray(workspace.assignments) ? workspace.assignments : [];
         const modules = Array.isArray(workspace.modules) ? workspace.modules : [];
@@ -369,6 +387,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           end: text(event.end) || "18:00",
           capacity: String(Number(event.capacity) || 0),
           price: String(Number(workspace.price) || 0),
+          format: ["offline", "online", "hybrid"].includes(text(event.format)) ? text(event.format) : "",
           approvalRequired: workspace.approvalRequired === true,
           allowReentry: workspace.allowReentry !== false,
           verificationRequired: workspace.verificationRequired === true,
@@ -393,7 +412,9 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           clients: clients
             .map((client) => ({ id: text(client.id), name: text(client.name) }))
             .filter((client) => client.id !== ""),
-          canManageEvent,
+          role,
+          userId: myId,
+          memberships,
           deskCount: desks.length,
           deskAssignmentCount,
           openModules,
@@ -610,6 +631,11 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     // Archived events reject every command server-side; the disabled buttons
     // already prevent this path, and the server stays authoritative either way.
     if (archived) return false;
+    // The disabled buttons already prevent this path; the per-command probe
+    // mirrors the server scope map so a granted screen cannot send a command
+    // its membership does not cover.
+    if (state.kind !== "ready") return false;
+    if (!canWriteEvent({ role: state.role, userId: state.userId, memberships: state.memberships, eventId }, command)) return false;
     operationsBusyRef.current = true;
     setBusy(true);
     setFailure(null);
@@ -623,7 +649,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       commandIdCache.current.set(fingerprint, commandId);
     }
     try {
-      const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
+      const res = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ commandId, command, payload }),
@@ -736,6 +762,20 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   // 잠그고 이유를 밝힌다. 조회는 그대로 둔다.
   const archived = currentStage === "ARCHIVED";
   const archivedReason = "보관된 행사는 읽기 전용입니다";
+  // Section write gates mirror the server scope map: 행사 정보·기능·단계는
+  // settings (event.* probe), 접수 게시·마감은 participants (form.* probe).
+  // Neither gate invents access; the server re-checks every command.
+  const capabilities = { role: state.role, userId: state.userId, memberships: state.memberships, eventId };
+  const canWriteSettings = canWriteEvent(capabilities, "event.update");
+  const canWriteIntake = canWriteEvent(capabilities, "form.publish");
+  // form.publish is rejected server-side once the event ends (preparation.js
+  // publishForm): the button stays visible for layout stability but cannot
+  // be pressed, with the reason inline. form.close stays available so the
+  // archive precondition can still be met from ENDED.
+  const endedPublishBlocked = currentStage === "ENDED";
+  const endedPublishReason = "종료된 행사에서는 양식을 게시할 수 없습니다. 접수를 닫은 뒤 보관하세요.";
+  const settingsNoWriteReason = "행사 정보 변경 권한이 없습니다. 필요하면 담당 행사 운영자에게 요청하세요.";
+  const intakeNoWriteReason = "접수 게시·마감은 참가자 쓰기 권한이 필요합니다. 행사 정보 권한과는 별개이며, 필요하면 담당 행사 운영자에게 요청하세요.";
 
   function sectionStatusLine(status: SectionStatus | null, section: SettingsSectionId) {
     if (!status) return null;
@@ -751,7 +791,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   }
 
   async function submitStageTransition() {
-    if (state.kind !== "ready" || !state.canManageEvent || !nextStage || stageBusy || operationsBusyRef.current || !stageConfirm || stageBlocked) return;
+    if (state.kind !== "ready" || !canWriteSettings || !nextStage || stageBusy || operationsBusyRef.current || !stageConfirm || stageBlocked) return;
     const label = eventStageLabel(nextStage);
     if (!stageCommandIdRef.current) stageCommandIdRef.current = randomCommandId();
     operationsBusyRef.current = true;
@@ -759,7 +799,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     setStageError(null);
     setStageNotice(null);
     try {
-      const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
+      const res = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -860,7 +900,6 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       meta={state.eventMeta}
       sectionNav={(
         <div className={styles.tabsWrap}>
-          <p className={styles.tabsHelp}>설정 4개 구역 · 좌우로 밀어 진행 단계까지 확인하세요</p>
           <div ref={attachTabsRef} role="tablist" aria-label="행사 설정 구역" className={styles.tabs} onKeyDown={onTabKeyDown}>
           {SETTINGS_TABS.map((tab, index) => {
             const selected = activeTab === tab.id;
@@ -917,8 +956,11 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         className={styles.tabPanel}
       >
       <ConsoleSection headingId="settings-basics" title="기본 정보" width="form">
+        {!canWriteSettings ? (
+          <p className={styles.help} role="note">{settingsNoWriteReason}</p>
+        ) : null}
         <form
-          className={uiStyles.formStack}
+          className={`${uiStyles.formStack} ${styles.basicsForm}`}
           onSubmit={(event) => {
             event.preventDefault();
             void runCommand("event.update", {
@@ -930,13 +972,21 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               end: basics.end,
               capacity: Number(basics.capacity) || 0,
               price: Number(basics.price) || 0,
+              // Display-only progress shape: the form always shows a choice
+              // ('' = unspecified), so it travels verbatim; '' clears the key.
+              format: basics.format,
               approvalRequired: basics.approvalRequired,
               allowReentry: basics.allowReentry,
               verificationRequired: basics.verificationRequired,
             }, "기본 정보를 저장했습니다.", "basics");
           }}
         >
-          <div className={uiStyles.formGrid}>
+          <fieldset disabled={!canWriteSettings} className={styles.bareFieldset}>
+          {/* 기본 정보 안의 과제 묶음: 식별 → 일시·규모 → 접수 정책.
+              그룹 래퍼와 소제목만 추가하며 입력 id·순서·검증은 그대로. */}
+          <div className={styles.fieldGroup}>
+            <h3 className={styles.groupTitle}>행사 식별</h3>
+          <div className={`${uiStyles.formGrid} ${styles.identityFields}`}>
             <div>
               <label htmlFor="set-name">행사명</label>
               <input
@@ -985,6 +1035,9 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           {state.basics.clientId ? (
             <p className={styles.help}>연결된 고객사는 다른 고객사로만 바꿀 수 있고, 비우기로 끊을 수는 없습니다.</p>
           ) : null}
+          </div>
+          <div className={styles.fieldGroup}>
+            <h3 className={styles.groupTitle}>일시·규모</h3>
           <div className={`${uiStyles.formGrid} ${styles.scheduleFields}`}>
             <div>
               <label htmlFor="set-date">행사 날짜</label>
@@ -1057,6 +1110,27 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               행사 안내에서 별도 절차로 안내하세요.
             </p>
           ) : null}
+          <div>
+            <label htmlFor="set-format">진행 형태 (선택)</label>
+            <select
+              id="set-format"
+              value={basics.format}
+              onChange={(event) => setBasics({ ...basics, format: event.target.value })}
+              aria-invalid={invalid("format") || undefined}
+              aria-describedby={describedBy("format") || undefined}
+            >
+              <option value="">미지정</option>
+              <option value="offline">현장</option>
+              <option value="online">온라인</option>
+              <option value="hybrid">혼합</option>
+            </select>
+            <p className={styles.help}>표시용 구분입니다. 기능·장소·URL이 자동으로 바뀌지 않습니다.</p>
+            {invalid("format") ? <p role="alert" id="settings-error">{failure?.message}</p> : null}
+          </div>
+          </div>
+          <div className={styles.fieldGroup}>
+            <h3 className={styles.groupTitle}>접수 정책</h3>
+          <div className={styles.policyList}>
           <label className={styles.check}>
             <input
               type="checkbox"
@@ -1081,13 +1155,15 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             />
             참가 신청 전 연락처 인증 필요
           </label>
+          </div>
           <p className={styles.help}>인증번호는 신청자의 휴대전화로 발송됩니다. 발송 준비가 안 된 상태에서는 신청이 막히므로, 먼저 인증번호 1건을 테스트하세요.</p>
+          </div>
           <ConsoleFormActions>
             <button
               type="submit"
               className="button button-primary"
-              disabled={busy || archived}
-              title={archived ? archivedReason : undefined}
+              disabled={busy || archived || !canWriteSettings}
+              title={archived ? archivedReason : !canWriteSettings ? settingsNoWriteReason : undefined}
             >
               {busy ? "저장 중입니다" : "기본 정보 저장"}
             </button>
@@ -1098,6 +1174,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             ) : null}
           </ConsoleFormActions>
           {sectionStatusLine(basicsStatus, "basics")}
+          </fieldset>
         </form>
       </ConsoleSection>
       </div>
@@ -1110,9 +1187,36 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         className={styles.tabPanel}
       >
       <ConsoleSection headingId="settings-intake" title="참가 접수" width="form">
-        <p>
-          현재 {state.registrationOpen ? "접수 중" : "접수 닫힘"} · 게시된 양식 버전 {state.publishedVersion}
+        {!canWriteIntake ? (
+          <p className={styles.help} role="note">{intakeNoWriteReason}</p>
+        ) : null}
+        <p className={styles.intakeSummary}>
+          {currentStage === "READY" || currentStage === "LIVE" ? (
+            <>현재 {state.registrationOpen ? "접수 중" : "접수 닫힘"} · 게시된 양식 버전 {state.publishedVersion}</>
+          ) : (
+            // DRAFT/ENDED cannot publicly accept no matter the flag, so the
+            // stored line names itself as a setting; the acceptance line
+            // below carries the honest public state.
+            <>현재 {state.registrationOpen ? "접수 중" : "접수 닫힘"} (설정) · 게시된 양식 버전 {state.publishedVersion}</>
+          )}
         </p>
+        {currentStage === "DRAFT" && !state.registrationOpen ? (
+          <p className={styles.help} role="note">
+            공개 접수: 닫힘 — 기획 단계에서는 공개 페이지가 열리지 않습니다. 접수를 열려면 양식을 게시하고,{" "}
+            <a href="#settings-stage">진행 단계에서 운영 준비(으)로 전환</a>하세요.
+          </p>
+        ) : null}
+        {currentStage === "DRAFT" && state.registrationOpen ? (
+          <p className={styles.help} role="note">
+            공개 접수: 닫힘 — 기획 단계에서는 공개 페이지가 열리지 않아 참가 신청을 받을 수 없습니다.{" "}
+            <a href="#settings-stage">진행 단계에서 운영 준비(으)로 전환</a>하면 게시된 양식대로 접수가 열립니다.
+          </p>
+        ) : null}
+        {currentStage === "ENDED" && state.registrationOpen ? (
+          <p className={styles.help} role="note">
+            공개 접수: 닫힘 — 종료된 행사에서는 신청을 받을 수 없습니다. 공개 신청 화면은 닫혀 있습니다. 보관하려면 접수를 닫으세요.
+          </p>
+        ) : null}
         <div className={uiStyles.formStack}>
           <div>
             <label htmlFor="set-consent">정보 수집 동의 안내</label>
@@ -1123,18 +1227,24 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               onChange={(event) => setConsentText(event.target.value)}
               aria-invalid={invalid("consentText") || undefined}
               aria-describedby={describedBy("consentText") || undefined}
+              disabled={!canWriteIntake}
             />
           </div>
           <ConsoleFormActions>
             <button
               type="button"
               className="button button-primary"
-              disabled={busy || archived}
-              title={archived ? archivedReason : undefined}
+              disabled={busy || archived || !canWriteIntake || endedPublishBlocked}
+              title={archived ? archivedReason : !canWriteIntake ? intakeNoWriteReason : endedPublishBlocked ? endedPublishReason : undefined}
               onClick={() => void runCommand(
                 "form.publish",
                 consentText ? { consentText } : {},
-                "양식을 게시하고 접수를 열었습니다.",
+                // DRAFT has no public route: the success note must not claim
+                // real intake opened. READY/LIVE keep the established wording
+                // other flows assert on.
+                currentStage === "DRAFT"
+                  ? "양식을 게시했습니다. 진행 단계에서 운영 준비(으)로 전환하면 접수가 열립니다."
+                  : "양식을 게시하고 접수를 열었습니다.",
                 "intake"
               )}
             >
@@ -1144,15 +1254,22 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               <button
                 type="button"
                 className="button button-secondary"
-                disabled={busy || archived}
-                title={archived ? archivedReason : undefined}
+                disabled={busy || archived || !canWriteIntake}
+                title={archived ? archivedReason : !canWriteIntake ? intakeNoWriteReason : undefined}
                 onClick={() => void runCommand("form.close", {}, "접수를 닫았습니다.", "intake")}
               >
                 접수 닫기
               </button>
             ) : (
-              <p role="status" className={styles.help}>접수가 닫혀 있습니다. 다시 열려면 양식을 게시하세요.</p>
+              <p role="status" className={styles.help}>
+                {endedPublishBlocked
+                  ? "접수가 닫혀 있습니다."
+                  : "접수가 닫혀 있습니다. 다시 열려면 양식을 게시하세요."}
+              </p>
             )}
+            {endedPublishBlocked ? (
+              <p className={styles.help} role="note">{endedPublishReason}</p>
+            ) : null}
             {intakeDirty ? (
               <span role="status" className={styles.unsavedTag}>
                 <span aria-hidden="true">● </span>저장 안 됨
@@ -1172,8 +1289,11 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         className={styles.tabPanel}
       >
       <ConsoleSection headingId="settings-features" title="운영 기능" width="form">
+        {!canWriteSettings ? (
+          <p className={styles.help} role="note">{settingsNoWriteReason}</p>
+        ) : null}
         <p className={styles.help}>끈 기능은 콘솔 메뉴와 참가자 화면에서 함께 사라집니다. 기존 응답과 기록은 삭제되지 않습니다.</p>
-        <fieldset className={styles.featureGroups}>
+        <fieldset className={styles.featureGroups} disabled={!canWriteSettings}>
           <legend>사용할 기능</legend>
           {FEATURE_GROUPS.map((group) => (
             <div key={group.label} className={styles.featureGroup}>
@@ -1208,8 +1328,8 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           <button
             type="button"
             className="button button-primary"
-            disabled={busy || archived}
-            title={archived ? archivedReason : undefined}
+            disabled={busy || archived || !canWriteSettings}
+            title={archived ? archivedReason : !canWriteSettings ? settingsNoWriteReason : undefined}
             onClick={() => void runCommand("event.features", { features }, "운영 기능 설정을 저장했습니다.", "features")}
           >
             {busy ? "저장 중입니다" : "운영 기능 저장"}
@@ -1274,7 +1394,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           {stageError ? <ConsoleFeedback kind="error">{stageError}</ConsoleFeedback> : null}
           {stageNotice ? <ConsoleFeedback kind="success">{stageNotice}</ConsoleFeedback> : null}
           <div className={styles.stageActions}>
-            {!state.canManageEvent ? (
+            {!canWriteSettings ? (
               <p className={styles.help}>행사 단계 변경 권한이 없습니다.</p>
             ) : nextStage && !stageConfirm ? (
               <button

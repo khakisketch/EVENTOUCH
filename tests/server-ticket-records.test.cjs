@@ -19,6 +19,7 @@ const {
   insertMembership,
   sessionCookie,
   requestJson,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 const { createDatabase } = require('../server/db');
 const { runMigrations } = require('../server/migrate');
@@ -45,7 +46,7 @@ async function createFixture() {
   fixtureNumber += 1;
   const id = `tickets-${fixtureNumber}-${suffix}`;
   const slug = `tickets-${fixtureNumber}-${suffix}`;
-  await insertEvent(harness.database, {
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,
     id,
     slug,
     payload: {
@@ -91,7 +92,7 @@ before(async () => {
     ['agency', 'AGENCY', '운영사 관리자'],
     ['manager', 'MANAGER', '행사 매니저'],
   ]) {
-    await insertAccount(harness.database, {
+    await insertAccount(harness.database, {orgId: LEGACY_ORG,
       id: accountIds[key], role, name, email: `${accountIds[key]}@example.test`,
     });
     cookies[key] = await sessionCookie(harness, accountIds[key]);
@@ -164,21 +165,27 @@ test('migration-006-backfills-tickets-written-before-the-table-existed', async (
       await runMigrations(db, tmpd);
       const eventId = `tickets-legacy-${suffix}`;
       const oldTicket = `ET:${eventId}:T-${crypto.randomBytes(32).toString('base64url')}`;
-      await insertEvent(db, {
-        id: eventId,
-        slug: `tickets-legacy-${suffix}`,
-        payload: { id: eventId },
-        workspace: {
+      // Pre-011 row shape: no org_id column exists yet. 011 must map it.
+      await db.query(
+        'INSERT INTO events (id, slug, payload) VALUES ($1, $2, $3::jsonb)',
+        [eventId, `tickets-legacy-${suffix}`, JSON.stringify({ id: eventId })]
+      );
+      await db.query(
+        'INSERT INTO event_workspaces (event_id, payload) VALUES ($1, $2::jsonb)',
+        [eventId, JSON.stringify({
           participants: [
             {
               id: 'legacy-person', name: '이전 참가자', ticket: oldTicket,
               revoked: false, ticketExpiresAt: '2026-12-31T00:00:00.000Z', status: 'APPROVED',
             },
           ],
-        },
-      });
+        })]
+      );
       const applied = await runMigrations(db);
       assert.ok(applied.includes('006_tickets.sql'), `applied: ${applied.join(',')}`);
+      assert.ok(applied.includes('011_organizations-scope.sql'), `applied: ${applied.join(',')}`);
+      const mapped = await db.query('SELECT org_id FROM events WHERE id = $1', [eventId]);
+      assert.equal(mapped.rows[0].org_id, 'org-legacy');
 
       // Pre-006 rows carry identity; their hashes complete either on first
       // mutation or via the scripted fill that must precede any read-switch.

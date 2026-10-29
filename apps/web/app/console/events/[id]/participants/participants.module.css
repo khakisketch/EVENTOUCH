@@ -1,419 +1,217 @@
-/* EVENTOUCH Next.js — Participant List improvements.
-   Reuses tokens from app/tokens.css. Imported by ParticipantList.tsx. */
-.selectionButton {
-  min-height: 44px;
-  min-width: 44px;
-}
+/* Participant data workbench. Query, selection and records share one full-width
+   surface. Details do not reserve an empty column; they open on request. */
+.workbenchPage { gap: var(--s3); }
+.workbenchPage > header { padding-bottom: var(--s3); }
+.workbenchPage > header h1 { font-size: var(--h1); }
+.workbenchControls { min-width: 0; padding: 0 0 var(--s3); color: var(--ink); }
+.workbenchControls :global(.button-secondary) { background: var(--paper); }
+.workbenchControls :global(input),
+.workbenchControls :global(select) { background: var(--paper); color: var(--ink); border-color: var(--line-strong); }
+.workbenchControls :global(input::placeholder) { color: var(--muted); opacity: 1; }
+.workbenchControls :global(:focus-visible) { outline-color: var(--focus); }
+.workbenchControls :global([role="status"]) { color: var(--ink); }
+.workbenchControls :global([role="status"]) ~ :global(.button) { color: var(--ink); background: var(--paper); border-color: var(--line-strong); }
+.workbenchControls :global([role="status"]) ~ :global(.button:hover) { background: var(--surface-muted); }
+.searchField { min-width: 0; }
+.mobilePresetPicker { display: none; }
+.workbenchControls .searchField[data-toolbar-span="full"] { flex: 0 1 360px; }
+.workbenchControls .filterToggle { flex: 0 1 auto; }
+/* View tabs live with the records they filter, not in the query toolbar:
+   one tab bar directly above the table joins counts, position and selection. */
+.rosterTabs { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s2) var(--s4); min-width: 0; border-bottom: 1px solid var(--line); }
+.quickPresets { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s5); min-width: 0; }
+.quickPresets :global(.pill) { min-height: 48px; padding-inline: var(--s2); border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: var(--body-work); font-weight: 550; font-variant-numeric: tabular-nums; }
+.quickPresets :global(.pill:hover) { background: var(--surface-muted); color: var(--ink); }
+.quickPresets :global(.pill[aria-pressed="true"]) { border-bottom-color: var(--brand); border-bottom-width: 3px; background: var(--soft); color: var(--brand-text); font-weight: 750; }
+.filterToggle { display: inline-flex; align-items: center; gap: var(--s2); min-height: 44px; border-radius: var(--radius); background: var(--paper); color: var(--ink); border-color: var(--line-strong); }
+.filterToggleSummary { min-width: 0; color: var(--muted); font-weight: 450; }
+.advancedFilters { display: contents; }
+.advancedFilters[data-open="false"] { display: none; }
+.advancedFilters[data-open="true"] { display: flex; flex: 1 1 100%; flex-wrap: wrap; gap: var(--s2); min-width: 0; }
+.advancedFilters label { flex: 1 1 140px; min-width: 0; }
+.advancedFilters select { width: 100%; min-height: 44px; border-radius: var(--radius); }
+.filterReset { min-height: 44px; }
+.utilityPair { display: flex; min-width: 0; }
+.selectionButton { min-height: 44px; min-width: 44px; }
+.selectionHeadline { display: block; font-weight: 700; }
+.selectionScope { display: block; margin-top: var(--s1); font-size: var(--small); color: var(--muted); word-break: keep-all; overflow-wrap: break-word; }
 
-/* Desktop reads as one flat table: no gaps, no card radius, rows divided
-   by hairlines with a top rule. Phones keep the card list with gaps and
-   rounded corners (restored in the 680px block below). */
-.participantList {
-  display: grid;
-  gap: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border-top: 1px solid var(--line);
-}
+.rosterSection { gap: 0; }
+/* The section name remains a heading/skip destination, not a second title
+   between the query and data. All record actions are in the workbench. */
+.rosterSection > div:first-child { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
+.rosterMeta { display: flex; align-items: center; gap: var(--s2) var(--s3); min-width: 0; min-height: 52px; flex: 1 1 100%; margin: 0; padding: var(--s2) var(--s3); background: var(--surface-muted); }
+.rosterMeta p { margin: 0; color: var(--ink); font-size: var(--small); font-weight: 650; font-variant-numeric: tabular-nums; }
+.rosterMeta :global(.button) { min-height: 44px; font-size: var(--small); }
+/* Scope caption: the meta-row select covers the whole filter result
+   (other pages included); the pagination-bar select covers only the
+   current page. Both labels stay short for the 390px row; the full
+   scope rides the visible caption plus the describedby help/position. */
+.scopeLabel { color: var(--ink); font-size: var(--label); font-weight: 700; letter-spacing: 0.04em; white-space: nowrap; }
+/* Caption and its select stay one wrapping unit: the pair drops to the next
+   line together instead of stranding the label on the previous row. The
+   group adds no overlay and changes no touch target. */
+.scopeGroup { display: inline-flex; align-items: center; gap: var(--s2); min-width: 0; }
+.scopeGroup :global(.button) { min-height: 44px; font-size: var(--small); }
+.rosterWorkbench, .rosterMain { min-width: 0; }
+/* Internal scroll container: a cropped next row at the bottom edge is the
+   expected overflow affordance (header stays sticky, pagination stays
+   below outside the scroll region), not an overlay. */
+.tableScroll { max-height: min(65svh, 720px); overflow: auto; scrollbar-width: thin; scrollbar-color: var(--line-strong) var(--paper); border-block: 1px solid var(--line); background: var(--paper); }
+.rosterTable { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--small); }
+.rosterTable th, .rosterTable td { padding: var(--s3) var(--s3); text-align: left; vertical-align: middle; border-bottom: 1px solid var(--line); }
+.rosterHead th { position: sticky; top: 0; z-index: 1; height: 48px; background: var(--surface-muted); color: var(--muted); font-weight: 700; font-size: var(--label); letter-spacing: 0.04em; white-space: nowrap; }
+.rosterTable tbody tr:last-child td { border-bottom: 0; }
+.rosterTable tbody tr:hover { background: var(--surface-muted); }
+.rosterTable tbody tr[data-selected="true"] { background: var(--soft); }
+.rosterTable .selectColumn { width: 52px; padding-inline: var(--s1); }
+.rosterTable .actionColumn { width: 160px; text-align: right; }
+.tableIdentity { display: grid; gap: var(--s1); min-width: 140px; }
+.tableIdentity strong { font-weight: 750; font-size: var(--body-work); overflow-wrap: anywhere; }
+.tableIdentity small { color: var(--muted); font-size: var(--label); overflow-wrap: anywhere; }
+.rosterContact { font-size: var(--small); color: var(--ink); font-weight: 650; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.participantStatus { display: inline-flex; width: max-content; white-space: nowrap; }
+.presence, .presenceInside { white-space: nowrap; font-size: var(--small); }
+.presence::before, .presenceInside::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: var(--s2); border-radius: 999px; vertical-align: baseline; }
+.presence { color: var(--muted); }
+.presence::before { border: 1.5px solid var(--line-strong); background: transparent; }
+.presenceInside { color: var(--success); font-weight: 700; }
+.presenceInside::before { border: 1.5px solid var(--success); background: var(--success); }
+.sortButton { display: flex; align-items: center; gap: var(--s2); min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
+.participantActions { display: flex; align-items: center; justify-content: flex-end; gap: var(--s1); }
+.participantActions :global(.button) { min-height: 44px; padding: var(--s2) var(--s3); font-size: var(--small); white-space: nowrap; }
+.participantActions .rowToolsToggle { display: inline-flex; min-height: 44px; width: auto; }
+.participantSelectTarget { display: grid; place-items: center; width: 44px; min-height: 44px; margin: 0; padding: 0; cursor: pointer; }
+.participantSelect { width: 20px; height: 20px; accent-color: var(--brand-text); }
+.participantList { display: none; }
+.participantRow { min-height: 44px; }
+.paginationBar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2) var(--s3); padding-block: var(--s3); background: var(--paper); border-bottom: 1px solid var(--line); }
+.paginationBar :global(.button) { min-height: 44px; min-width: 44px; font-size: var(--small); }
+.paginationPosition { color: var(--muted); font-size: var(--small); font-variant-numeric: tabular-nums; }
+.paginationActions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); margin-left: auto; }
+.emptyState { display: grid; justify-items: center; gap: var(--s2); padding: var(--s7) var(--s4); background: var(--paper); border: 1px solid var(--line); color: var(--muted); text-align: center; }
+.emptyState h3 { margin: 0; font-size: var(--h3); color: var(--ink); }
+.emptyState p { max-width: 65ch; margin: 0; }
 
-/* Desktop column labels share the exact track widths with the rows below
-    (keep the `grid-template-columns` strings identical so header and rows
-    can never drift apart): the flexible identity column takes what is left
-    while contact (136px), status (112px) and action (160px, widest control)
-    stay fixed, so a narrow 승인 button or a wide 승인+더보기 pair never
-    shifts the status column. Fixed tracks — not subgrid — so every
-    grid-capable browser aligns. Fixed minimum at desktop:
-    44 + 136 + 112 + 160 + gaps/padding ≈ 532px, safe below the 680px
-    stacked switchover. */
-.rosterHead {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 136px 112px 160px;
-  gap: var(--s3);
-  align-items: center;
-  padding: var(--s1) var(--s4);
-  font-size: var(--small);
-  font-weight: 700;
-  color: var(--muted);
-}
-
-.rosterHeadContact {
-  justify-self: start;
-}
-
-.rosterHeadStatus {
-  justify-self: start;
-}
-
-.rosterHeadAction {
-  justify-self: end;
-}
-
-.participantRow {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 136px 112px 160px;
-  gap: var(--s3);
-  align-items: center;
-  min-height: 44px;
-  padding: var(--s1) var(--s4);
-  border: none;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  background: var(--paper);
-  transition: all var(--enter) ease-out;
-}
-
-.viewerRow {
-  grid-template-columns: minmax(0, 1fr) 136px 112px;
-}
-
-.viewerHead {
-  grid-template-columns: minmax(0, 1fr) 136px 112px;
-}
-
-/* Selection-only rows (e.g. ENDED stage without the reward feature): the
-   checkbox, contact and status columns keep their shared widths, and no
-   empty action column is left behind. Keep identical with
-   .rosterHeadNoActions. */
-.rosterHeadNoActions {
-  grid-template-columns: 44px minmax(0, 1fr) 136px 112px;
-}
-
-.participantRowNoActions {
-  grid-template-columns: 44px minmax(0, 1fr) 136px 112px;
-}
-
-.participantRow:hover {
-  background: var(--surface-muted);
-  box-shadow: none;
-}
-
-.participantSummary {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
-  min-width: 0;
-}
-
-.participantName {
-  margin: 0;
-  font-size: var(--body);
-  font-weight: 700;
-  color: var(--ink);
-  overflow-wrap: anywhere;
-}
-
-.participantIdentity {
-  font-size: var(--small);
-  color: var(--muted);
-  overflow-wrap: anywhere;
-}
-
-/* The contact column carries the masked number the identity line used to
-   hold, so colliding names stay distinguishable at a glance. Full digits
-   stay in the CSV export and the server, never on this screen. */
-.rosterContact {
-  font-size: var(--small);
-  color: var(--muted);
-  overflow-wrap: anywhere;
-}
-
-.mobileContact { display: none; }
-
-/* The status pill sizes to its label instead of stretching across the row. */
-.participantStatus {
-  align-self: center;
-  justify-self: start;
-  flex: none;
-}
-
-.participantActions {
-  display: flex;
-  gap: var(--s2);
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-}
-
-.participantActions .button {
-  min-height: 44px;
-  width: 100%;
-  padding: var(--s2) var(--s3);
-  font-size: var(--small);
-  white-space: nowrap;
-}
-
-/* One always-visible primary per row plus its disclosure share the fixed
-   action track: 승인 beside 더보기 on PENDING rows, 더보기 alone otherwise.
-   Both size to their labels instead of stretching across the track. */
-.participantActions .rowToolsToggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: auto;
-  min-height: 44px;
-  padding: var(--s2) var(--s3);
-  font-size: var(--small);
-}
-
-.participantActions .button:not(.rowToolsToggle) {
-  width: auto;
-  flex: 1 1 auto;
-}
-
-/* Expanded row details: contact, email and presence facts plus the full
-   status change and reward actions, moved here from the always-visible row
-   so the roster stays scannable. Information is rearranged, never removed. */
-.participantDetails {
-  grid-column: 1 / -1;
-  display: grid;
-  gap: var(--s2);
-  border-top: 1px solid var(--line);
-  padding-top: var(--s2);
-}
-
-.detailFacts {
-  margin: 0;
-  font-size: var(--small);
-  color: var(--muted);
-  overflow-wrap: anywhere;
-}
-
-.detailActions {
-  display: flex;
-  gap: var(--s2);
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.detailActions .button {
-  min-height: 44px;
-  padding: var(--s2) var(--s3);
-  font-size: var(--small);
-  white-space: nowrap;
-}
-
-.detailActions select {
-  flex: 1 1 220px;
-  min-height: 44px;
-}
-
-/* Sticky page bar: prev/next, the page range and per-page selection stay
-   reachable at the end of long filtered lists, with a return link to the
-   list top. The paper surface keeps rows from showing through underneath. */
-.paginationBar {
-  position: sticky;
-  bottom: 0;
-  z-index: 1;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2) var(--s3);
-  margin-top: var(--s2);
-  padding: var(--s2) var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
-}
-
-.paginationBar .button {
-  min-height: 44px;
-  min-width: 44px;
-}
-
-.paginationPosition {
-  margin: 0;
-  font-size: var(--small);
-  color: var(--muted);
-}
-
-.paginationActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
-  align-items: center;
-  margin-inline-start: auto;
-}
-
-.rowConfirm {
-  grid-column: 1 / -1;
-}
-
-.participantSelect {
-  width: 20px;
-  height: 20px;
-  accent-color: var(--brand);
-  flex: none;
-}
-
-.participantSelectTarget {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  min-height: 44px;
-  margin: 0;
-  padding: 0;
-  cursor: pointer;
-}
-
-.emptyState {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: var(--s7) var(--s4);
-  text-align: center;
-  color: var(--muted);
-}
-
-.emptyState h3 {
-  margin: 0 0 var(--s2);
-  font-size: var(--h3);
-  font-weight: 800;
-  color: var(--ink);
-}
-
-/* The rail still occupies space on small desktops/tablets. Keep the contact
-   evidence with the name instead of forcing a fifth fixed-width column. */
-@media (max-width: 1024px) {
-  .rosterHead,
-  .participantRow { grid-template-columns: 44px minmax(0, 1fr) 112px 160px; }
-  .viewerHead,
-  .viewerRow { grid-template-columns: minmax(0, 1fr) 112px; }
-  .rosterHeadNoActions,
-  .participantRowNoActions { grid-template-columns: 44px minmax(0, 1fr) 112px; }
-  .rosterHeadContact,
-  .rosterContact { display: none; }
-  .mobileContact { display: block; color: var(--muted); font-size: var(--small); }
-}
-
-@media (max-width: 680px) {
-  /* Name/org and status share the first line so the roster reads at a
-     glance; contact moves into the details, and the row actions sit under
-     the name, reachable with the thumb. Cards return on phones only. */
-  .participantList {
-    gap: var(--s2);
-    border-top: none;
-  }
-
-  .participantRow {
-    grid-template-columns: 44px minmax(0, 1fr) auto;
-    align-items: start;
-    min-height: 60px;
-    padding: var(--s2) var(--s4);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-  }
-
-  .participantRow:hover {
-    border-color: var(--brand);
-    box-shadow: 0 2px 8px var(--shadow-color);
-    background: var(--paper);
-  }
-
-  .rosterHead {
-    display: none;
-  }
-
-  .viewerRow {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .rosterContact {
-    display: none;
-  }
-
-  /* Identity evidence remains visible before one-tap approval, including in
-     read-only rows where there is no write-tools disclosure to open. */
-  .mobileContact { display: block; color: var(--muted); font-size: var(--small); }
-
-  .participantStatus {
-    grid-column: 3;
-    grid-row: 1;
-    align-self: start;
-    justify-self: end;
-  }
-
-  .participantActions {
-    grid-column: 2 / span 2;
-    grid-row: 2;
-    justify-content: flex-end;
-  }
-
-  .participantDetails {
-    grid-column: 1 / -1;
-  }
-
-  .detailActions select {
-    flex-basis: 100%;
-  }
-
-  .viewerRow .participantStatus {
-    grid-column: 2;
-  }
-}
-
-/* Mobile task-density disclosure: search owns its row at every width via
-   data-toolbar-span="full" (shared toolbar). The toggle is desktop-hidden;
-   the advanced panel uses display:contents on desktop so the three selects
-   join the shared toolbar row exactly as before, with no media-query JS and
-   no hydration split. Values survive open/close; only the explicit reset
-   clears them. */
-.filterToggle {
-  display: none;
-}
-
-.advancedFilters {
-  display: contents;
-}
-
-/* CSV/export + import ride one intentionally paired inline group (shared
-   data-toolbar-inline): side-by-side secondary actions on every width, never
-   a tall full-width primary ahead of the list. */
-.utilityPair {
-  min-width: 0;
-}
+/* One participant, requested explicitly. The existing console dialog owns
+   focus/dismissal, while all permissions, confirmations and receipts stay
+   with the roster's command handlers. */
+.rosterInspector { display: grid; gap: var(--s4); min-width: 0; }
+.inspectorHead { padding-bottom: var(--s2); border-bottom: 1px solid var(--line); }
+.inspectorIdentity h3 { margin: 0; font-size: var(--body); }
+.participantDetails { display: grid; gap: var(--s3); min-width: 0; }
+.detailFacts { margin: 0; color: var(--muted); font-size: var(--small); overflow-wrap: anywhere; }
+.detailActions { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; }
+.detailActions :global(.button) { min-height: 44px; font-size: var(--small); }
+.detailActions select { flex: 1 1 220px; min-height: 44px; }
+.rowConfirm { grid-column: 1 / -1; }
 
 @media (max-width: 768px) {
-  .filterToggle {
-    display: inline-flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--s1) var(--s2);
-    min-height: 44px;
-    min-width: 0;
-  }
+  .workbenchPage > header h1 { font-size: var(--h1); }
+  .workbenchControls { padding: 0; }
+  .workbenchControls .searchField[data-toolbar-span="full"] { flex: 1 1 150px; }
+  .quickPresets { display: none; }
+  .rosterTabs { align-items: center; gap: var(--s2); }
+  .rosterTabs .mobilePresetPicker { display: block; flex: 1 1 100%; }
+  .rosterMeta { flex: 1 1 100%; margin-left: 0; min-height: 44px; padding-inline: 0; }
+  .filterToggle { flex-wrap: wrap; justify-content: space-between; }
+  .filterToggleSummary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .advancedFilters[data-open="true"] { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .advancedFilters[data-open="false"] { display: none; }
+  .filterReset { width: 100%; }
+  span[data-toolbar-inline].utilityPair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; max-width: 100%; }
+  .utilityPair > :global(.button) { flex: none; padding-inline: var(--s2); font-size: var(--small); }
+  /* Pair the four utilities 2×2 so the first row of people stays in view:
+     the shared 2-col rule misses CSS-module hashing, so the workbench owns
+     its own pairing. Every target keeps its 44px floor. */
+  .workbenchControls span[data-toolbar-inline].utilityPair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); width: 100%; }
+  .workbenchControls .utilityPair > :global(.button) { width: 100%; min-width: 0; }
+  /* Three utilities left: the primary owns the second row full-width so the
+     first row of people stays in view on phones. */
+  .workbenchControls .utilityPair > :global(.button-primary) { grid-column: 1 / -1; }
+  /* Narrow meta reads in two deterministic rows — count + refresh share
+     the first, the scope pair owns the second — so the count never
+     collapses into a syllable-wide column beside nowrap controls. */
+  .rosterMeta { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; padding: var(--s2) 0 0; background: transparent; gap: var(--s1) var(--s2); }
+  .rosterMeta p { min-width: 0; font-size: var(--label); }
+  .rosterMeta :global(.button) { flex: none; }
+  .scopeGroup { grid-column: 1 / -1; justify-self: start; }
+  .tableScroll { display: none; }
+  .participantList { display: block; margin: 0; padding: 0; list-style: none; background: var(--paper); border-block: 1px solid var(--line); }
+  .participantRow { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: var(--s1) var(--s2); align-items: start; padding: var(--s3) 0; border-bottom: 1px solid var(--line); }
+  .participantRow:last-child { border-bottom: 0; }
+  .participantRow[data-selected="true"] { background: var(--soft); }
+  .participantSummary { display: grid; grid-column: 2; grid-row: 1 / span 2; gap: var(--s1); min-width: 0; }
+  .participantRow > .participantSelectTarget { grid-row: 1 / span 2; }
+  .participantName { font-size: var(--body-work); font-weight: 750; overflow-wrap: anywhere; }
+  .participantIdentity, .mobileContact, .mobilePresence { color: var(--muted); font-size: var(--label); overflow-wrap: anywhere; }
+  .mobileContact { font-variant-numeric: tabular-nums; }
+  .participantRow > .rosterContact { display: none; }
+  .participantStatus { grid-column: 3; grid-row: 1; align-self: start; font-size: var(--label); }
+  .participantActions { grid-column: 3; grid-row: 2; justify-content: flex-end; }
+  .viewerRow { grid-template-columns: minmax(0, 1fr) auto; }
+  .viewerRow .participantStatus { grid-column: 2; }
+  .viewerRow .participantSummary { grid-column: 1; }
+  .viewerRow .participantActions { grid-column: 2; }
+  .participantRowNoActions { grid-template-columns: 44px minmax(0, 1fr) auto; }
+  .paginationBar { padding: var(--s3); }
+  .paginationActions { margin-left: 0; width: 100%; }
+  .paginationPosition { font-size: var(--label); }
+}
 
-  .filterToggleSummary {
-    min-width: 0;
-    overflow: hidden;
-    color: var(--muted);
-    font-weight: 450;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
+/* A working queue: choose a view, choose its scope, then act on the selection
+   beside the records. Utilities remain separate from those contextual actions. */
+.quickPresets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; width: 100%; border-block: 1px solid var(--line); }
+.quickPresets :global(.pill) { min-width: 0; min-height: 60px; padding: var(--s2) var(--s3); text-align: left; border-right: 1px solid var(--line); }
+.quickPresets :global(.pill:last-child) { border-right: 0; }
+.rosterMeta { flex-wrap: wrap; background: var(--paper); padding-inline: 0; }
+.scopeGroup { margin-left: auto; }
+.selectionWorkbench:not(:empty) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); padding: var(--s3); background: var(--soft); border-block: 1px solid var(--brand); }
+.selectionWorkbench > [role="status"] { flex: 1 1 100%; }
+.selectionWorkbench :global(.button) { min-height: 44px; }
+.selectionWorkbench:empty { display: none; }
+@media (max-width: 768px) {
+  .quickPresets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .quickPresets :global(.pill) { min-height: 48px; border-bottom: 1px solid var(--line); }
+  .rosterTabs .mobilePresetPicker { display: none; }
+  .rosterMeta { display: flex; gap: var(--s1) var(--s2); }
+  .rosterMeta p { flex: 1 1 auto; }
+  .scopeGroup { margin-left: 0; }
+  .selectionWorkbench:not(:empty) { padding: var(--s3) var(--s2); }
+}
+.utilityPair { align-items: flex-start; gap: var(--s2); }
+.rosterUtilities { position: relative; }
+.rosterUtilities summary { display: flex; align-items: center; min-height: 44px; padding: 0 var(--s4); border: 1px solid var(--line-strong); border-radius: var(--radius); cursor: pointer; list-style: none; font-weight: 650; }
+.rosterUtilities summary::-webkit-details-marker { display: none; }
+.rosterUtilities summary::after { content: '⌄'; margin-left: var(--s2); }
+.utilityMenu { position: absolute; z-index: 3; right: 0; top: calc(100% + 4px); display: grid; gap: var(--s1); min-width: 190px; padding: var(--s2); background: var(--paper); border: 1px solid var(--line-strong); border-radius: var(--radius); }
+.utilityMenu :global(.button) { justify-content: flex-start; min-height: 44px; }
+@media (max-width: 768px) {
+  .workbenchControls span[data-toolbar-inline].utilityPair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workbenchControls .utilityPair > :global(.button-primary) { grid-column: auto; }
+  .rosterUtilities summary { justify-content: center; }
+  .utilityMenu { right: auto; left: 0; }
+}
 
-  .advancedFilters[data-open="false"] {
-    display: none;
-  }
-
-  .advancedFilters[data-open="true"] {
-    display: grid;
-    flex: 1 1 100%;
-    gap: var(--s2);
-    min-width: 0;
-  }
-
-  .advancedFilters[data-open="true"] label {
-    min-width: 0;
-  }
-
-  .advancedFilters[data-open="true"] select {
-    width: 100%;
-  }
-
-  .filterReset {
-    min-height: 44px;
-    width: 100%;
-  }
+/* On a phone, keep the records close: choose a view with the native picker,
+   and disclose the two deliberately different multi-select scopes on demand. */
+.mobileScope { display: none; }
+.selectionActions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); }
+@media (max-width: 768px) {
+  .quickPresets { display: none; }
+  .rosterTabs .mobilePresetPicker { display: block; flex: 1 1 100%; }
+  .rosterMeta { display: grid; grid-template-columns: auto 1fr; gap: 0 var(--s2); }
+  .rosterMeta p { grid-column: 1 / -1; }
+  .rosterMeta > .scopeGroup, .rosterMeta > .desktopPageSelect { display: none; }
+  .mobileScope { display: block; justify-self: start; position: relative; }
+  .mobileScope summary { display: flex; align-items: center; min-height: 44px; padding: 0 var(--s3); color: var(--brand-text); font-size: var(--small); font-weight: 700; cursor: pointer; list-style: none; }
+  .mobileScope summary::-webkit-details-marker { display: none; }
+  .mobileScope summary::after { content: '⌄'; margin-left: var(--s2); }
+  .mobileScopeOptions { position: absolute; z-index: 3; top: 100%; left: 0; display: grid; gap: var(--s2); width: min(270px, calc(100vw - 32px)); padding: var(--s3); background: var(--paper); border: 1px solid var(--line-strong); border-radius: var(--radius); }
+  .mobileScopeOptions :global(.button) { min-height: 44px; text-align: left; }
+  .mobileScopeOptions p { margin: 0; color: var(--muted); font-size: var(--small); }
+  .selectionWorkbench:not(:empty) { gap: var(--s1); }
+  .selectionActions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; gap: var(--s2); }
+  .selectionActions :global(.button) { min-width: 0; padding-inline: var(--s2); word-break: keep-all; overflow-wrap: break-word; }
+  .selectionActions > [role="status"] { grid-column: 1 / -1; }
 }

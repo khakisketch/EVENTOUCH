@@ -10,7 +10,11 @@ function fakeDatabase(workspace) {
   return {
     workspace,
     writes,
-    query: async () => ({ rows: [{ payload: workspace }] }),
+    // The unlocked snapshot read returns a copy, like a real row parse: the
+    // resolver's working copy is independent of later concurrent writes.
+    // Locked in-transaction reads below keep the live reference so applied
+    // outcomes land on the stored state, as in production.
+    query: async () => ({ rows: [{ payload: JSON.parse(JSON.stringify(workspace)) }] }),
     async transaction(fn) {
       return fn({
         async query(sql, params) {
@@ -549,4 +553,202 @@ test('an-mms-uploads-once-and-sends-with-the-image-id', async () => {
     else process.env.STORAGE_DIR = previous;
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// --- partial id recovery ---------------------------------------------------
+//
+// The group read at dispatch time can fail after some deliveries already
+// carry ids. Recovery must fill only the gaps: known ids stay pollable even
+// when the recovery read itself fails, and a delivery the group does not
+// name stays in flight instead of being guessed.
+
+test('missing-ids-are-recovered-while-known-ones-are-kept', async () => {
+  const workspace = pendingWorkspace([
+    { participantId: 'p1', status: 'SENDING', solapiMessageId: 'M1' },
+    { participantId: 'p2', status: 'SENDING' },
+  ]);
+  workspace.messages[0].recipientSnapshot = [
+    { id: 'p1', name: '가', phone: '010-1111-1111' },
+    { id: 'p2', name: '나', phone: '010-2222-2222' },
+  ];
+  const db = fakeDatabase(workspace);
+  let polled = null;
+  const provider = {
+    async groupMessages() {
+      return { ok: true, messages: {
+        M1: { messageId: 'M1', to: '01011111111' },
+        M2: { messageId: 'M2', to: '01022222222' },
+      } };
+    },
+    async pollResults(ids) {
+      polled = [...ids].sort();
+      return { ok: true, results: {
+        M1: { state: 'DELIVERED' },
+        M2: { state: 'DELIVERED' },
+      } };
+    },
+  };
+
+  await resolveDelivery(db, provider, 'e-1');
+  assert.deepEqual(polled, ['M1', 'M2'], 'the recovered gap joins the known id');
+  assert.equal(workspace.messages[0].status, 'SENT');
+});
+
+test('a-failed-recovery-read-does-not-abandon-known-ids', async () => {
+  const workspace = pendingWorkspace([
+    { participantId: 'p1', status: 'SENDING', solapiMessageId: 'M1' },
+    { participantId: 'p2', status: 'SENDING' },
+  ]);
+  workspace.messages[0].recipientSnapshot = [
+    { id: 'p1', name: '가', phone: '010-1111-1111' },
+    { id: 'p2', name: '나', phone: '010-2222-2222' },
+  ];
+  const db = fakeDatabase(workspace);
+  let polled = null;
+  const provider = {
+    async groupMessages() { return { ok: false, reason: 'TRANSPORT' }; },
+    async pollResults(ids) {
+      polled = [...ids];
+      return { ok: true, results: { M1: { state: 'DELIVERED' } } };
+    },
+  };
+
+  const result = await resolveDelivery(db, provider, 'e-1');
+  assert.deepEqual(polled, ['M1'], 'known ids are still polled');
+  assert.equal(result.resolved, 0, 'one recipient is still unknown');
+  assert.equal(result.pending, 1);
+  assert.equal(workspace.messages[0].status, 'SENDING', 'not rounded to a result we do not have');
+  const missing = workspace.messages[0].deliveries.find((delivery) => delivery.participantId === 'p2');
+  assert.equal(missing.status, 'SENDING');
+  assert.equal(missing.solapiMessageId, undefined, 'no id is invented');
+});
+
+test('a-delivery-the-group-does-not-name-stays-in-flight', async () => {
+  const workspace = pendingWorkspace([
+    { participantId: 'p1', status: 'SENDING' },
+  ]);
+  workspace.messages[0].recipientSnapshot = [{ id: 'p1', name: '가', phone: '010-9999-9999' }];
+  const db = fakeDatabase(workspace);
+  const provider = {
+    async groupMessages() {
+      return { ok: true, messages: { M9: { messageId: 'M9', to: '01000000000' } } };
+    },
+    async pollResults() { return { ok: true, results: {} }; },
+  };
+
+  const result = await resolveDelivery(db, provider, 'e-1');
+  assert.equal(result.resolved, 0);
+  assert.equal(workspace.messages[0].status, 'SENDING');
+});
+
+test('recovery-never-overwrites-an-id-already-known', async () => {
+  const workspace = pendingWorkspace([
+    { participantId: 'p1', status: 'SENDING', solapiMessageId: 'M-ORIGINAL' },
+  ]);
+  workspace.messages[0].recipientSnapshot = [{ id: 'p1', name: '가', phone: '010-1111-1111' }];
+  const db = fakeDatabase(workspace);
+  const provider = {
+    async groupMessages() {
+      return { ok: true, messages: { MOTHER: { messageId: 'MOTHER', to: '01011111111' } } };
+    },
+    async pollResults(ids) {
+      assert.deepEqual(ids, ['M-ORIGINAL'], 'the known id is authoritative');
+      return { ok: true, results: { 'M-ORIGINAL': { state: 'DELIVERED' } } };
+    },
+  };
+
+  await resolveDelivery(db, provider, 'e-1');
+  assert.equal(workspace.messages[0].status, 'SENT');
+});
+
+test('a-truncated-recovery-map-fills-gaps-without-claiming-completeness', async () => {
+  // named. The named gap is recovered and polled; the unnamed delivery stays
+  // in flight instead of being rounded into a result.
+  const workspace = pendingWorkspace([
+    { participantId: 'p1', status: 'SENDING' },
+    { participantId: 'p2', status: 'SENDING' },
+  ]);
+  workspace.messages[0].recipientSnapshot = [
+    { id: 'p1', name: '가', phone: '010-1111-1111' },
+    { id: 'p2', name: '나', phone: '010-2222-2222' },
+  ];
+  const db = fakeDatabase(workspace);
+  let polled = null;
+  const provider = {
+    async groupMessages() {
+      return { ok: true, messages: { M1: { messageId: 'M1', to: '01011111111' } }, truncated: true, pages: 20 };
+    },
+    async pollResults(ids) {
+      polled = [...ids].sort();
+      return { ok: true, results: { M1: { state: 'DELIVERED' } } };
+    },
+  };
+
+  const result = await resolveDelivery(db, provider, 'e-1');
+  assert.deepEqual(polled, ['M1']);
+  assert.equal(result.resolved, 0);
+  assert.equal(result.pending, 1);
+  assert.equal(workspace.messages[0].status, 'SENDING', 'partial recovery never completes the campaign');
+  const missing = workspace.messages[0].deliveries.find((delivery) => delivery.participantId === 'p2');
+  assert.equal(missing.status, 'SENDING');
+  assert.equal(missing.solapiMessageId, undefined, 'no id is invented for the unread page');
+});
+
+// --- stale-write guard -------------------------------------------------------
+//
+// resolveDelivery reads without a lock and polls unlocked. A retry, cancel,
+// or concurrent worker may re-drive the campaign between that read and the
+// write. The write re-checks the campaign identity under the lock and skips
+// instead of overwriting the newer drive with a stale outcome.
+
+test('a-campaign-redriven-mid-resolve-is-not-overwritten', async () => {
+  const workspace = pendingWorkspace([
+    { participantId: 'p1', status: 'SENDING', solapiMessageId: 'M-OLD' },
+  ]);
+  workspace.messages[0].providerGroupId = 'G-OLD';
+  workspace.messages[0].dispatchedAt = '2026-10-24T00:00:00.000Z';
+  workspace.messages[0].attempts = 1;
+  const db = fakeDatabase(workspace);
+  const provider = {
+    async pollResults() {
+      // A concurrent retry re-drives the campaign while this resolve polls:
+      // new attempt, new supplier group, deliveries back in flight.
+      const message = db.workspace.messages[0];
+      message.providerGroupId = 'G-NEW';
+      message.dispatchedAt = '2026-10-24T00:01:00.000Z';
+      message.attempts = 2;
+      message.deliveries = [{ participantId: 'p1', status: 'SENDING', at: '2026-10-24T00:01:00.000Z' }];
+      return { ok: true, results: { 'M-OLD': { state: 'DELIVERED' } } };
+    },
+  };
+
+  const result = await resolveDelivery(db, provider, 'e-1');
+  assert.equal(result.resolved, 0, 'the stale outcome resolves nothing');
+  assert.equal(result.pending, 1, 'the re-driven campaign is still in flight');
+  const kept = db.workspace.messages[0];
+  assert.equal(kept.status, 'SENDING');
+  assert.equal(kept.providerGroupId, 'G-NEW', 'the newer drive wins');
+  assert.equal(kept.attempts, 2);
+  assert.equal(kept.deliveries.length, 1);
+  assert.equal(kept.deliveries[0].status, 'SENDING');
+  assert.equal(kept.deliveries[0].solapiMessageId, undefined, 'no stale id is written back');
+});
+
+test('an-unchanged-campaign-still-applies-its-outcome', async () => {
+  // Control for the guard above: without concurrent interference the polled
+  // outcome lands exactly as before.
+  const workspace = pendingWorkspace([
+    { participantId: 'p1', status: 'SENDING', solapiMessageId: 'M1' },
+  ]);
+  workspace.messages[0].providerGroupId = 'G-1';
+  workspace.messages[0].dispatchedAt = '2026-10-24T00:00:00.000Z';
+  workspace.messages[0].attempts = 1;
+  const db = fakeDatabase(workspace);
+  const provider = {
+    async pollResults() { return { ok: true, results: { M1: { state: 'DELIVERED' } } }; },
+  };
+
+  const result = await resolveDelivery(db, provider, 'e-1');
+  assert.equal(result.resolved, 1);
+  assert.equal(db.workspace.messages[0].status, 'SENT');
 });

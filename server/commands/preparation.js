@@ -7,6 +7,7 @@ const {
   validateHomeStyleUpdate,
   assertPublishableHomeStyle,
 } = require('../attendee-home-style');
+const { parseEventFormatInput } = require('../state');
 
 const COMMANDS = new Set([
   'event.update',
@@ -52,15 +53,22 @@ function options(value) {
   return rows.map((item) => String(item || '').trim()).filter(Boolean);
 }
 
-async function activeDeskAssignment(client, eventId) {
+async function activeDeskAssignment(client, eventId, orgId) {
+  // Authority is the org membership, never the global accounts.role: a
+  // shared account that is AGENCY in one org and STAFF here staffs this
+  // org's desks like anyone else. Global active still applies to everyone.
   const result = await client.query(
     `SELECT 1
      FROM staff_assignments sa
      JOIN accounts a ON a.id = sa.account_id
+     JOIN organization_memberships m
+       ON m.account_id = sa.account_id AND m.active = true AND m.role = 'STAFF'
+     JOIN events e ON e.id = sa.event_id
      WHERE sa.event_id = $1 AND sa.type = 'DESK' AND sa.active = true
-       AND a.role = 'STAFF' AND a.active = true
+       AND a.active = true AND m.org_id = e.org_id
+       AND ($2::text IS NULL OR e.org_id = $2)
      LIMIT 1`,
-    [eventId]
+    [eventId, orgId || null]
   );
   return result.rowCount > 0;
 }
@@ -73,7 +81,7 @@ async function transitionStage(ctx, nextStage) {
   if (nextIndex < 0) throw ctx.fail(400, '진행 단계를 확인하세요', 'stage');
   if (nextIndex < currentIndex) throw ctx.fail(409, '행사 진행 단계는 이전 상태로 되돌릴 수 없습니다');
   if (stage === 'LIVE' && current !== 'LIVE') {
-    if (!ctx.workspace.desks.length || !(await activeDeskAssignment(ctx.client, ctx.event.id))) {
+    if (!ctx.workspace.desks.length || !(await activeDeskAssignment(ctx.client, ctx.event.id, ctx.event.orgId || null))) {
       throw ctx.fail(409, '등록 데스크와 활성 스태프를 먼저 배정하세요');
     }
   }
@@ -105,10 +113,28 @@ async function updateEvent(ctx, input) {
   if (capacity > 0 && capacity < activeCount) throw ctx.fail(409, '현재 참가자 수보다 정원을 줄일 수 없습니다');
   if (!Number.isFinite(price) || price < 0) throw ctx.fail(400, '참가비는 0 이상이어야 합니다', 'price');
 
+  // Format is display metadata only: omitted leaves the stored payload
+  // untouched (legacy absent stays absent, stored values stay), '' deletes
+  // the key (explicit clear to unspecified), and only the three lowercase
+  // kinds store. Nothing else changes.
+  const formatInput = parseEventFormatInput(input.format);
+  if (formatInput !== undefined) {
+    if (formatInput === null) {
+      delete event.format;
+    } else {
+      event.format = formatInput;
+    }
+  }
+
   const clientId = input.clientId || event.clientId || null;
   if (clientId) {
-    const client = await ctx.client.query('SELECT 1 FROM clients WHERE id = $1 LIMIT 1', [String(clientId)]);
+    const client = await ctx.client.query('SELECT org_id FROM clients WHERE id = $1 LIMIT 1', [String(clientId)]);
     if (!client.rowCount) throw ctx.fail(400, '유효한 고객사를 선택하세요', 'clientId');
+    const eventOrg = event.orgId || null;
+    const clientOrg = client.rows[0].org_id || null;
+    if (eventOrg && clientOrg && String(eventOrg) !== String(clientOrg)) {
+      throw Object.assign(ctx.fail(409, '다른 조직의 고객사는 연결할 수 없습니다', 'clientId'), { code: 'ORGANIZATION_CONTEXT_CHANGED' });
+    }
   }
   await transitionStage(ctx, input.stage === undefined ? event.stage : input.stage);
   Object.assign(event, { name, slug, date: eventDate, start, end, capacity, clientId });

@@ -7,7 +7,7 @@ export default function StaffPage() {
   return (
     <main id="main-content" tabIndex={-1} className="site-page staff-page">
       <header className="staff-header">
-        <div><p className="eyebrow">스태프 업무</p><h1>내 업무</h1></div>
+        <div><h1>내 업무</h1></div>
       </header>
       <StaffHub />
     </main>

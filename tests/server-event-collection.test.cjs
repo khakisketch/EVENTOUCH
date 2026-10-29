@@ -11,6 +11,7 @@ const {
   sessionCookie,
   requestJson,
   deleteFixtureRows,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 
 const test = databaseUrl
@@ -32,7 +33,7 @@ let cookie;
 before(async () => {
   if (!databaseUrl) return;
   harness = await startApiHarness();
-  await insertAccount(harness.database, {
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,
     id: ids.agency,
     role: 'AGENCY',
     name: '행사 생성 관리자',
@@ -102,7 +103,7 @@ test('agency event creation persists the event and workspace in PostgreSQL', asy
 test('agency event collection reads PostgreSQL instead of the JSON demo store', async (t) => {
   if (!databaseUrl) return t.skip('set EVENTOUCH_TEST_DATABASE_URL to an isolated PostgreSQL test database');
 
-  await insertEvent(harness.database, {
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,
     id: ids.listedEvent,
     slug: slugs.listedEvent,
     payload: {

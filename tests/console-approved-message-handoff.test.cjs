@@ -75,19 +75,21 @@ test('bulk approval keeps its success copy and links only proven approvals', () 
   assert.match(list, /승인 대기 필터를 전체로 되돌려 승인한 사람을 보여 줍니다\./u);
   // The follow-up link names its destination and filter.
   assert.match(list, /id="roster-approved-message"/u, 'stable selector for the follow-up');
-  assert.match(list, /승인자에게 안내 보내기/u);
+  assert.match(list, /승인자 메시지 작성/u);
   assert.match(list, /buildApprovedMessageHandoffHref\(eventId, approvedHandoffIds\)/u, 'only the approved ids travel');
   // Lifecycle: cleared on every new attempt, set only on proven success,
   // cleared by every other success notice and on event switch.
   assert.match(list, /const \[approvedHandoffIds, setApprovedHandoffIds\] = useState<string\[\] \| null>\(null\)/u);
-  const approveAt = list.indexOf('async function approveSelected()');
+  const approveAt = list.indexOf('async function approveSelected(retry = false)');
+  assert.ok(approveAt >= 0, 'bulk approval and explicit retry exist');
   const approveBody = list.slice(approveAt, list.indexOf('async function createParticipant()', approveAt));
   assert.match(approveBody, /setApprovedHandoffIds\(null\)/u, 'a new attempt drops the old link first');
   assert.match(approveBody, /setApprovedHandoffIds\(ids\)/u, 'proven success arms exactly this approval');
   assert.equal(approveBody.match(/setApprovedHandoffIds\(ids\)/g)?.length ?? 0, 1, 'one arming point');
   const failureAt = approveBody.indexOf('if (!res.ok)');
-  const failureBody = approveBody.slice(failureAt, approveBody.indexOf('pendingBulkRef.current = null;', failureAt));
+  const failureBody = approveBody.slice(failureAt, approveBody.indexOf('// Proven success only:', failureAt));
   assert.doesNotMatch(failureBody, /setApprovedHandoffIds\(ids\)/u, 'failure never arms the link');
+  assert.match(failureBody, /participantRecordMatches\(entry, id, "APPROVED"\)/u, 'every original target must be confirmed before follow-up');
   assert.match(list, /setApprovedHandoffIds\(null\);\s*\n\s*setNotice\(`\$\{added\}님을 등록했습니다\./u, 'other notices clear it');
 });
 
@@ -97,6 +99,9 @@ test('bulk approval still validates and recovers exactly as before', () => {
   assert.match(list, /payload: \{ ids, status: "APPROVED" \}/u, 'bulk payload is unchanged');
   assert.match(list, /선택한 참가자 중 승인 대기 중인 사람이 없습니다\./u, 'empty attempt still explains itself');
   assert.match(list, /같은 내용으로 다시 시도하세요\./u, 'lost responses still retry the same request');
+  assert.match(list, /pendingBulkRef = useRef<BulkApprovalAttempt \| null>/u, 'unconfirmed bulk request retains a frozen attempt');
+  assert.match(list, /if \(pendingBulkRef\.current\) return;/u, 'a changed selection cannot replace an unresolved attempt');
+  assert.match(list, /onClick=\{\(\) => void approveSelected\(true\)\}/u, 'unresolved attempt has its own retry');
 });
 
 // --- messaging wiring --------------------------------------------------------------

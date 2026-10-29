@@ -42,19 +42,20 @@
 //   EVENTOUCH_A11Y_DATABASE_URL='postgres://user:pass@127.0.0.1:5432/db' \
 //     node scripts/web-task-first-final-journeys.cjs
 //
-// Captures and results land in /tmp/opencode/eventouch-captures/task-first-final/.
+// Captures and results land in /tmp/eventouch-private-<uid>/eventouch-captures/task-first-final-<run>/.
 // Set CAPTURE_DIR to redirect an isolated rerun elsewhere (existing
 // evidence stays untouched); the default keeps the committed location.
 
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const { prepareCaptureDir, ensureCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = require('./capture-dir.cjs');
 const path = require('node:path');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 
-const out = (process.env.CAPTURE_DIR || '').trim() || '/tmp/opencode/eventouch-captures/task-first-final';
-fs.mkdirSync(out, { recursive: true });
+const out = (process.env.CAPTURE_DIR || '').trim() || defaultCaptureDir(`task-first-final-${runStamp()}`);
+prepareCaptureDir(out);
 
 const STEP_CAP = 12;
 const EVENT_DATE = '2027-05-20';
@@ -90,6 +91,7 @@ async function apiCommand(helpers, baseUrl, cookie, eventId, command, payload) {
 }
 
 async function main() {
+  process.env.TMPDIR = ensureRunTmpDir(out);
   let fixture = null;
   let browser = null;
   const errors = [];
@@ -142,7 +144,7 @@ async function main() {
       // Full-page captures should anchor sticky chrome at the real page top,
       // not bake the last focused element's scroll offset into the image.
       await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
-      fs.mkdirSync(path.join(out, 'after'), { recursive: true });
+      ensureCaptureDir(path.join(out, 'after'));
       await page.screenshot({ path: path.join(out, 'after', `${name}.png`), fullPage: true });
     };
     const shotBoth = async (name) => {
@@ -517,7 +519,7 @@ async function main() {
       createdEventId, inlineClientId,
       results, errors,
     };
-    fs.writeFileSync(path.join(out, 'journey-final-results.json'), JSON.stringify(report, null, 2));
+    fs.writeFileSync(path.join(out, 'journey-final-results.json'), JSON.stringify(report, null, 2), { mode: 0o600 });
     console.log(JSON.stringify(results.map((task) => ({
       key: task.key, steps: task.steps, writes: task.writes,
       screens: task.screens, fields: task.fields, state: task.state,

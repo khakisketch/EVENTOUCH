@@ -64,13 +64,17 @@ test('the-empty-scan-dock-never-floats-over-the-booth-qr', () => {
   // the result, not the old input.
   assert.match(staffWork, /const scanInputHasWork = activeTask === "desk" \|\| activeScope\.stampMode !== "SELF";/);
   assert.match(staffWork, /\{scanInputHasWork && result\.kind !== "ok" \? \(/);
-  assert.match(staffWork, /<div className=\{prizeStyles\.scanInput\}>/);
+  // Assert that the actual dock remains inside the condition, not merely
+  // that the class appears elsewhere in the component.
+  const dock = staffWork.slice(staffWork.indexOf('{scanInputHasWork && result.kind !== "ok" ? ('), staffWork.indexOf('{cameraOpen && ready'));
+  assert.match(dock, /<div className=\{prizeStyles\.scanInput\} ref=\{scanInputRef\}>/);
 });
 
 test('the-booth-qr-scrolls-into-view-when-a-booth-is-picked', () => {
   // A participant scans the staff's screen: the code must be fully on
   // screen, not half under a bar or off the bottom.
   assert.match(staffWork, /const boothQrRef = useRef<HTMLDivElement \| null>\(null\);/);
-  assert.match(staffWork, /node\.scrollIntoView\(\{ block: "center", behavior: "smooth" \}\);/);
+  assert.match(staffWork, /window\.matchMedia\("\(prefers-reduced-motion: reduce\)"\)\.matches/);
+  assert.match(staffWork, /node\.scrollIntoView\(\{ block: "center", behavior: calm \? "auto" : "smooth" \}\);/);
   assert.match(staffWork, /ref=\{boothQrRef\}/);
 });

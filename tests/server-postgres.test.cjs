@@ -160,7 +160,7 @@ integration('postgres-concurrent-first-migrations-serialize', { timeout: 15000 }
     assert.equal(failures.length, 0, failures.map((outcome) => outcome.reason.message).join('\n'));
     assert.deepEqual(
       outcomes.map((outcome) => outcome.value).sort((a, b) => a.length - b.length),
-      [[], ['001_initial.sql', '002_stored-file-dimensions.sql', '003_login-throttle.sql', '004_message-outbox.sql', '005_checkin-records.sql', '006_tickets.sql', '007_attendee-access.sql', '008_organizations.sql', '009_client-files.sql']]
+      [[], ['001_initial.sql', '002_stored-file-dimensions.sql', '003_login-throttle.sql', '004_message-outbox.sql', '005_checkin-records.sql', '006_tickets.sql', '007_attendee-access.sql', '008_organizations.sql', '009_client-files.sql', '010_signup-request-attempts.sql', '011_organizations-scope.sql', '012_session-select-revision.sql', '013_event-client-same-org.sql', '014_membership-revision.sql', '015_invitation-owner-role.sql', '016_account-recovery.sql', '017_recovery-verify-scopes.sql']]
     );
   } finally {
     await Promise.all([scopedFirst.close(), scopedSecond.close()]);

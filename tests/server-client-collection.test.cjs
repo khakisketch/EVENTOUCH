@@ -15,6 +15,7 @@ const {
   sessionCookie,
   requestJson,
   deleteFixtureRows,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 
 const test = databaseUrl
@@ -34,13 +35,13 @@ let managerCookie;
 before(async () => {
   if (!databaseUrl) return;
   harness = await startApiHarness();
-  await insertAccount(harness.database, {
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,
     id: ids.agency,
     role: 'AGENCY',
     name: '고객사 관리자',
     email: `${ids.agency}@example.test`,
   });
-  await insertAccount(harness.database, {
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,
     id: ids.manager,
     role: 'MANAGER',
     name: '행사 매니저',

@@ -50,7 +50,7 @@ test("invalid or malicious colors never become theme output", () => {
 // --- 2. Pale tint + 4.5:1-safe date ink -------------------------------------
 
 test("published colors resolve to a pale tint with readable date text", () => {
-  const vectors = ["#B9DEF0", "#17252B", "#FFFFFF", "#E76D26", "#000000", "#1A7A4C", "#FFD23F"];
+  const vectors = ["#B9DEF0", "#111318", "#FFFFFF", "#E76D26", "#000000", "#1A7A4C", "#FFD23F"];
   for (const bg of vectors) {
     const resolved = theme.cardHeaderTheme(bg);
     assert.ok(resolved, bg);
@@ -58,7 +58,7 @@ test("published colors resolve to a pale tint with readable date text", () => {
     // Themed headers always use neutral ink: operator colors never combine
     // with unrelated brand-orange text. Only the default soft fallback keeps
     // the brand-text date line.
-    assert.equal(resolved.color, "#17252B", `${bg} uses neutral ink`);
+    assert.equal(resolved.color, "#111318", `${bg} uses neutral ink`);
     const ratio = theme.contrastRatio(resolved.color, resolved.background);
     assert.ok(ratio >= 4.5, `${bg} tint ${resolved.background} reaches ${ratio.toFixed(2)}:1`);
   }
@@ -71,13 +71,13 @@ test("tint mixes 15% of the published color over white", () => {
 });
 
 test("themed headers use neutral ink; only the default soft keeps brand text", () => {
-  assert.equal(theme.cardHeaderTheme("#B9DEF0").color, "#17252B");
-  assert.equal(theme.cardHeaderTheme("#E76D26").color, "#17252B");
-  assert.equal(theme.cardHeaderTheme("#000000").color, "#17252B");
+  assert.equal(theme.cardHeaderTheme("#B9DEF0").color, "#111318");
+  assert.equal(theme.cardHeaderTheme("#E76D26").color, "#111318");
+  assert.equal(theme.cardHeaderTheme("#000000").color, "#111318");
 });
 
 test("default soft surface keeps brand-text date text readable", () => {
-  const ratio = theme.contrastRatio("#A34410", "#FFF1E8");
+  const ratio = theme.contrastRatio("#1438A8", "#E8EDFF");
   assert.ok(ratio >= 4.5, `fallback pairing reaches ${ratio.toFixed(2)}:1`);
 });
 
@@ -99,9 +99,15 @@ test("EventCard is one entry link with a published-only tinted zone", () => {
   assert.match(card, /시간 \$\{time\}/u, "time-only events keep their explicit label");
 });
 
-test("directory maps the published theme from the same bootstrap read", () => {
+test("directory maps the published theme from the same directory read", () => {
   const home = read("app/console/ConsoleHome.tsx");
-  assert.match(home, /readPublishedCardColor\(workspaces\[event\.id\]\)/u);
+  // The lightweight directory (not the full bootstrap) carries the
+  // server-published card color per event; the client never derives it from
+  // workspaces, so drafts cannot leak onto cards by construction.
+  assert.match(home, /consoleFetch\("\/api\/console\/directory"/u);
+  assert.match(home, /typeof event\.themeColor === "string" && \/\^#\[0-9a-f\]\{6\}\$\/i\.test\(event\.themeColor\)/u);
+  assert.doesNotMatch(home, /readPublishedCardColor\(workspaces\[event\.id\]\)/u, "no workspace-derived card color remains");
+  assert.doesNotMatch(home, /workspaces\[event\.id\]/u, "cards read directory summaries, not workspaces");
   assert.match(home, /themeColor,/u);
   assert.match(home, /duplicateSources=\{state\.events\.map/u, "create dialog receives permission-available sources");
   assert.doesNotMatch(home, /setDuplicateSource|duplicateSource \?/u, "no per-card duplicate dialog remains");

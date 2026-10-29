@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-const { databaseUrl, startApiHarness, insertAccount, insertEvent, insertMembership, sessionCookie, requestJson } = require('./helpers/postgres-api-server.cjs');
+const { databaseUrl, startApiHarness, insertAccount, insertEvent, insertMembership, sessionCookie, requestJson, LEGACY_ORG } = require('./helpers/postgres-api-server.cjs');
 const { floorplanPng } = require('./helpers/floorplan-image.cjs');
 const test = databaseUrl ? nodeTest : (name, fn) => nodeTest(name, {skip:'isolated PostgreSQL required'}, fn);
 let h, cookie, staffCookie, managerCookie, storageDir;
@@ -14,8 +14,8 @@ before(async () => {
   storageDir = fs.mkdtempSync('/tmp/opencode/eventouch-files-');
   h = await startApiHarness({ storageDir });
   for (const [id, role] of [['agency','AGENCY'], ['staff','STAFF'], ['manager','MANAGER']])
-    await insertAccount(h.database, {id, role, name:id, email:`${id}@example.test`});
-  for (const id of ['event-a','event-b']) await insertEvent(h.database, {
+    await insertAccount(h.database, {orgId: LEGACY_ORG, id, role, name:id, email:`${id}@example.test`});
+  for (const id of ['event-a','event-b']) await insertEvent(h.database, {orgId: LEGACY_ORG,
     id, slug:id, payload:{id, slug:id, stage:'LIVE', features:['stamp']}, workspace:{}
   });
   await insertMembership(h.database, 'manager', 'event-a');
@@ -98,10 +98,10 @@ async function guestUpload({slug='photo-event', ticket=GUEST_TICKET, name='photo
   return {status:res.status, json:await res.json()};
 }
 test('attendee photo upload is ticket- and feature-scoped', async () => {
-  await insertEvent(h.database, { id:'photo-event', slug:'photo-event',
+  await insertEvent(h.database, {orgId: LEGACY_ORG,  id:'photo-event', slug:'photo-event',
     payload:{ id:'photo-event', slug:'photo-event', name:'사진 행사', date:'2026-11-20', stage:'LIVE', features:['photo'] },
     workspace: guestWorkspace() });
-  await insertEvent(h.database, { id:'plain-event', slug:'plain-event',
+  await insertEvent(h.database, {orgId: LEGACY_ORG,  id:'plain-event', slug:'plain-event',
     payload:{ id:'plain-event', slug:'plain-event', name:'일반 행사', date:'2026-11-20', stage:'LIVE', features:['stamp'] },
     workspace: guestWorkspace() });
   const commandId = crypto.randomUUID();

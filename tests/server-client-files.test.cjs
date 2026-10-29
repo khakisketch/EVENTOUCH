@@ -19,6 +19,7 @@ const {
   sessionCookie,
   requestJson,
   deleteFixtureRows,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 
 const test = databaseUrl
@@ -60,9 +61,9 @@ before(async () => {
   if (!databaseUrl) return;
   storageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'eventouch-clientfiles-'));
   harness = await startApiHarness({ storageDir });
-  await insertAccount(harness.database, { id: ids.agency, role: 'AGENCY', name: '고객사 관리자', email: `${ids.agency}@example.test` });
-  await insertAccount(harness.database, { id: ids.manager, role: 'MANAGER', name: '행사 매니저', email: `${ids.manager}@example.test` });
-  await insertAccount(harness.database, { id: ids.staff, role: 'STAFF', name: '현장 스태프', email: `${ids.staff}@example.test` });
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,  id: ids.agency, role: 'AGENCY', name: '고객사 관리자', email: `${ids.agency}@example.test` });
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,  id: ids.manager, role: 'MANAGER', name: '행사 매니저', email: `${ids.manager}@example.test` });
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,  id: ids.staff, role: 'STAFF', name: '현장 스태프', email: `${ids.staff}@example.test` });
   agencyCookie = await sessionCookie(harness, ids.agency);
   managerCookie = await sessionCookie(harness, ids.manager);
   staffCookie = await sessionCookie(harness, ids.staff);

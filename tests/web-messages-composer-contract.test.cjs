@@ -47,8 +47,11 @@ test('recipient picker filters by status, searches contact fields, and reports s
   assert.match(SOURCE, /id="recipient-summary"/u);
   assert.match(SOURCE, /화면 밖 선택/u);
   assert.match(SOURCE, /id="recipient-clear-all"[\s\S]*?전체 선택 해제/u);
-  assert.match(SOURCE, /표시 추가/u);
-  assert.match(SOURCE, /표시 해제/u);
+  // Visible-set bulk selection is one tri-state native checkbox (check adds
+  // the visible recipients, uncheck removes only them); the union helper
+  // and the explicit full clear below are unchanged.
+  assert.match(SOURCE, /표시 \{visibleRecipients\.length\}명 모두 선택/u);
+  assert.match(SOURCE, /setAllRecipients\(event\.target\.checked, visibleRecipients\)/u);
   assert.match(SOURCE, /id="recipient-selected-only"/u);
   assert.match(SOURCE, /선택 대상만 보기/u);
   assert.match(SOURCE, /id="recipient-risk-warning"/u);
@@ -75,7 +78,7 @@ test('scheduling promises manual execution only, with an honest due action', () 
   assert.match(SOURCE, /모의 예약/u);
   assert.match(SOURCE, /실행해도 수신자에게 전달되지 않습니다/u);
   assert.match(SOURCE, /createdStatus/u);
-  assert.match(SOURCE, /연결되지 않았으면/u);
+  assert.match(SOURCE, /연결 필요 상태로 기록됩니다\(모의 기록이 아닙니다\)/u);
   assert.match(SOURCE, /Solapi 승인/u);
 });
 

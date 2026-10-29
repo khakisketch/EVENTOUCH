@@ -21,10 +21,13 @@ function noNewHex(source, file) {
 
 test("notice rows separate title, badge row and body with tokens", () => {
   const css = read("console/events/[id]/content/content.module.css");
-  assert.match(css, /\.recordTitle\s*\{[^}]*margin:\s*0 0 var\(--s1\)/s);
-  assert.match(css, /\.badgeRow\s*\{[^}]*gap:\s*var\(--s2\)/s);
-  assert.match(css, /\.badgeRow\s*\{[^}]*margin-bottom:\s*var\(--s2\)/s);
-  assert.match(css, /\.body\s*\{[^}]*margin:\s*var\(--s2\) 0 0/s);
+  // After the rendered hierarchy review, spacing belongs to each following
+  // element rather than accumulating under both the title and badges.
+  assert.match(css, /\.recordTitle\s*\{[^}]*margin:\s*0\s*;/s);
+  assert.match(css, /\.badgeRow\s*\{[^}]*gap:\s*var\(--s1\) var\(--s2\)/s);
+  assert.match(css, /\.badgeRow\s*\{[^}]*margin:\s*var\(--s1\) 0 0/s);
+  assert.match(css, /\.body\s*\{[^}]*margin:\s*var\(--s1\) 0 0/s);
+  assert.match(css, /li\.recordRow\s*\{[^}]*align-items:\s*start/s);
   noNewHex(css, "content.module.css");
 });
 

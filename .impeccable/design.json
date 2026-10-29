@@ -1,0 +1,507 @@
+{
+  "components": [
+    {
+      "css": ".ds-btn-primary { background: var(--brand); color: var(--on-brand); border: 1px solid var(--brand); border-radius: var(--radius); padding: var(--s2) var(--s4); min-height: 44px; font-weight: 600; letter-spacing: -0.008em; transition: background 160ms ease-out, border-color 160ms ease-out; } .ds-btn-primary:hover { background: var(--brand-hover); border-color: var(--brand-hover); color: var(--on-brand-hover); } .ds-btn-primary:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; } .ds-btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }",
+      "description": "Committing action for its task or region. Filled orange, near-black text, white on hover.",
+      "html": "<button class=\"ds-btn-primary\">저장하기</button>",
+      "kind": "button",
+      "name": "Primary Button",
+      "refersTo": "button-primary"
+    },
+    {
+      "css": ".ds-btn-secondary { background: var(--paper); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--radius); padding: var(--s2) var(--s4); min-height: 44px; font-weight: 600; } .ds-btn-secondary:hover { background: var(--surface-muted); border-color: var(--line-strong); } .ds-btn-secondary:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; } .ds-btn-secondary:disabled { opacity: 0.6; cursor: not-allowed; }",
+      "description": "Non-committal companion within the same task. Quiet white paired with the primary.",
+      "html": "<button class=\"ds-btn-secondary\">취소</button>",
+      "kind": "button",
+      "name": "Secondary Button",
+      "refersTo": "button-secondary"
+    },
+    {
+      "css": ".ds-pill { display: inline-flex; align-items: center; min-height: 44px; padding: var(--s2) var(--s4); border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--ink); font-size: var(--small); font-weight: 650; } .ds-pill:hover { border-color: var(--line-strong); } .ds-pill:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; } .ds-pill[aria-pressed=\"true\"] { background: var(--soft); border-color: var(--brand-text); color: var(--brand-text); }",
+      "description": "Lookup voice for filters and switches. Never styled as a committing button.",
+      "html": "<button class=\"ds-pill\" aria-pressed=\"true\">전체</button>",
+      "kind": "chip",
+      "name": "Filter Pill",
+      "refersTo": "pill-active"
+    },
+    {
+      "css": ".ds-input { width: 100%; min-height: 44px; padding: var(--s2) var(--s3); border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--paper); color: var(--ink); } .ds-input::placeholder { color: var(--muted); } .ds-input:focus { outline: 3px solid var(--focus); outline-offset: 2px; } .ds-input:disabled { opacity: 0.55; } .ds-input[aria-invalid=\"true\"] { border-color: var(--danger); }",
+      "description": "Standard field. Strong-line stroke at rest, 3px ring on focus.",
+      "html": "<input class=\"ds-input\" placeholder=\"참가자 이름 검색\" aria-label=\"참가자 이름 검색\" />",
+      "kind": "input",
+      "name": "Text Field",
+      "refersTo": "input"
+    },
+    {
+      "css": ".ds-nav { display: flex; align-items: center; gap: var(--s3); min-height: 44px; padding: var(--s2) var(--s3); border-radius: var(--radius-small); color: var(--nav-muted); font-size: var(--small); font-weight: 550; text-decoration: none; } .ds-nav:hover { background: var(--nav-hover); color: var(--nav-text); } .ds-nav:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; } .ds-nav[aria-current=\"page\"] { background: var(--nav-active); color: var(--brand-text); font-weight: 650; }",
+      "description": "Sidebar row. Light neutral rail, orange-ink active, no indicator bar.",
+      "html": "<a class=\"ds-nav\" aria-current=\"page\" href=\"#\">참가자</a>",
+      "kind": "nav",
+      "name": "Console Nav Item",
+      "refersTo": "nav-item-active"
+    },
+    {
+      "css": ".ds-chip { display: inline-flex; align-items: center; gap: var(--s2); padding: var(--s1) var(--s3); border-radius: 999px; font-size: var(--small); font-weight: 700; background: var(--success-soft); color: var(--success); } .ds-chip[data-tone=\"wait\"] { background: var(--warning-soft); color: var(--warning); } .ds-chip[data-tone=\"bad\"] { background: var(--danger-soft); color: var(--danger); } .ds-chip[data-tone=\"info\"] { background: var(--info-soft); color: var(--info); }",
+      "description": "Feedback tone chip. Success base shown; wait/bad/info swap the soft/line/ink triple, never used as an action.",
+      "html": "<span class=\"ds-chip\" data-tone=\"wait\">승인 대기</span>",
+      "kind": "chip",
+      "name": "Status Chip (Success Base)",
+      "refersTo": "status-chip"
+    },
+    {
+      "css": ".ds-record { display: flex; align-items: center; justify-content: space-between; gap: var(--s2) var(--s4); padding: var(--s3) 0; border-bottom: 1px solid var(--line); background: transparent; } .ds-record strong { overflow-wrap: anywhere; } .ds-record small { color: var(--muted); font-size: var(--small); } .ds-record a:hover { color: var(--brand-text); }",
+      "description": "Divided data row. Transparent ground, hairline bottom, no card box or radius.",
+      "html": "<div class=\"ds-record\"><div><strong>김행사</strong><br /><small>신청 12 · 승인 9</small></div><a href=\"#\">열기</a></div>",
+      "kind": "custom",
+      "name": "Record Row",
+      "refersTo": "ledger-row"
+    },
+    {
+      "css": ".ds-feedback { padding: var(--s3) var(--s4); border: 1px solid var(--line); border-radius: var(--radius); font-size: var(--small); line-height: 1.5; background: var(--paper); } .ds-feedback[data-tone=\"error\"] { background: var(--danger-soft); border-color: var(--danger-line); color: var(--danger); } .ds-feedback[data-tone=\"success\"] { background: var(--success-soft); border-color: var(--success-line); color: var(--success); } .ds-feedback[data-tone=\"info\"] { background: var(--info-soft); border-color: var(--info-line); color: var(--info); }",
+      "description": "Recoverable failure with retry. Errors assert; success and info persist politely.",
+      "html": "<p class=\"ds-feedback\" data-tone=\"error\">연결이 끊겼습니다. 다시 시도해 주세요.</p>",
+      "kind": "custom",
+      "name": "Feedback Strip (Error)",
+      "refersTo": "feedback-error"
+    }
+  ],
+  "extensions": {
+    "breakpoints": [
+      {
+        "name": "bp-360",
+        "value": "360px",
+        "purpose": "Landing compact hero (28px) and small-attendee rules (landing.module.css:846; home.module.css:647)."
+      },
+      {
+        "name": "bp-420",
+        "value": "420px",
+        "purpose": "Console section actions unpair (console-ui.module.css:262; event-overview.module.css:182)."
+      },
+      {
+        "name": "bp-480",
+        "value": "480px",
+        "purpose": "Site/ticket/staff rows stack; display type steps down (globals.css:3143; engage.module.css:302; ticket.module.css:223)."
+      },
+      {
+        "name": "bp-560",
+        "value": "560px",
+        "purpose": "Staff work and draw-stage compaction (staff-event-work.module.css:289; draw-stage.module.css:575)."
+      },
+      {
+        "name": "bp-680",
+        "value": "680px",
+        "purpose": "Console home directory and event-overview compaction (console-home.module.css:591; event-overview.module.css:551)."
+      },
+      {
+        "name": "bp-720",
+        "value": "720px",
+        "purpose": "Global landing grids and evidence collapse to one column (globals.css:805)."
+      },
+      {
+        "name": "bp-768",
+        "value": "768px",
+        "purpose": "Console-mobile: sidebar becomes top rail, toolbar stacks, section nav wraps (globals.css:2719; console-ui.module.css)."
+      },
+      {
+        "name": "bp-900",
+        "value": "900px",
+        "purpose": "Login column padding step; draw-stage step (globals.css:3689; draw-stage.module.css:559)."
+      },
+      {
+        "name": "bp-1024",
+        "value": "1024px",
+        "purpose": "Shell rail 232px to 216px; toolbar full-row; team/overview/messaging adapt (globals.css:2713/3534; console-ui.module.css:401; MessagingWorkspace.module.css:626)."
+      },
+      {
+        "name": "bp-1080",
+        "value": "1080px",
+        "purpose": "Page editor layout and preview switch (page.module.css:494; ThemeWorkspace.tsx:420)."
+      },
+      {
+        "name": "bp-1200",
+        "value": "1200px",
+        "purpose": "Directory filter reflow; also the content-max width token (console-home.module.css:776; tokens.css:101)."
+      }
+    ],
+    "colorMeta": {
+      "brand": {
+        "canonical": "#F05A24",
+        "displayName": "절제된 오렌지 행동",
+        "role": "primary",
+        "tonalRamp": [
+          "#2A0E04",
+          "#5A1E08",
+          "#8A2D0C",
+          "#B83C10",
+          "#F05A24",
+          "#F47A4E",
+          "#F8A37F",
+          "#FDE8DD"
+        ],
+        "synthetic": true
+      },
+      "brand-hover": {
+        "canonical": "#B83C10",
+        "displayName": "오렌지 호버",
+        "role": "primary",
+        "tonalRamp": [
+          "#2A0E04",
+          "#5A1E08",
+          "#8A2D0C",
+          "#B83C10",
+          "#C9501F",
+          "#D6703F",
+          "#E08F63",
+          "#F5D9CB"
+        ],
+        "synthetic": true
+      },
+      "brand-text": {
+        "canonical": "#AA3A10",
+        "displayName": "오렌지 잉크",
+        "role": "primary",
+        "tonalRamp": [
+          "#2A0E04",
+          "#5A1E08",
+          "#8A2D0C",
+          "#AA3A10",
+          "#C05A24",
+          "#D67E4E",
+          "#E5A37E",
+          "#F6E0D2"
+        ],
+        "synthetic": true
+      },
+      "danger": {
+        "canonical": "#B21E35",
+        "displayName": "위험",
+        "role": "feedback",
+        "tonalRamp": [
+          "#2B060D",
+          "#5C0E1C",
+          "#8A152A",
+          "#B21E35",
+          "#C64A5E",
+          "#D67E8D",
+          "#E5B3BD",
+          "#F7E4E7"
+        ],
+        "synthetic": true
+      },
+      "focus": {
+        "canonical": "#AA3A10",
+        "displayName": "포커스 링",
+        "role": "feedback",
+        "tonalRamp": [
+          "#2A0E04",
+          "#5A1E08",
+          "#8A2D0C",
+          "#AA3A10",
+          "#C05A24",
+          "#D67E4E",
+          "#E5A37E",
+          "#F6E0D2"
+        ],
+        "synthetic": true
+      },
+      "ground": {
+        "canonical": "#FFFFFF",
+        "displayName": "작업 바탕",
+        "role": "neutral",
+        "tonalRamp": [
+          "#252A34",
+          "#4A515C",
+          "#6E747F",
+          "#8A939F",
+          "#B9BEC6",
+          "#E6E8EC",
+          "#F7F8FA",
+          "#FFFFFF"
+        ],
+        "synthetic": true
+      },
+      "info": {
+        "canonical": "#315B82",
+        "displayName": "정보",
+        "role": "feedback",
+        "tonalRamp": [
+          "#0A1B2C",
+          "#15334F",
+          "#23486D",
+          "#315B82",
+          "#55799A",
+          "#7E9AB5",
+          "#BDCEDF",
+          "#EAF0F7"
+        ],
+        "synthetic": true
+      },
+      "ink": {
+        "canonical": "#252A34",
+        "displayName": "잉크",
+        "role": "neutral",
+        "tonalRamp": [
+          "#101114",
+          "#1B1D21",
+          "#252A34",
+          "#3E4450",
+          "#626B78",
+          "#8A939F",
+          "#C6CBD2",
+          "#F7F8FA"
+        ],
+        "synthetic": true
+      },
+      "line": {
+        "canonical": "#E6E8EC",
+        "displayName": "헤어라인",
+        "role": "neutral",
+        "tonalRamp": [
+          "#8A939F",
+          "#A6ACB6",
+          "#C6CBD2",
+          "#DDE0E5",
+          "#E6E8EC",
+          "#EDEFF1",
+          "#F7F8FA",
+          "#FFFFFF"
+        ],
+        "synthetic": true
+      },
+      "muted": {
+        "canonical": "#626B78",
+        "displayName": "뮤티드",
+        "role": "neutral",
+        "tonalRamp": [
+          "#252A34",
+          "#3E4450",
+          "#4E5560",
+          "#626B78",
+          "#7E8692",
+          "#A6ACB6",
+          "#DDE0E5",
+          "#F7F8FA"
+        ],
+        "synthetic": true
+      },
+      "nav": {
+        "canonical": "#FAFBFC",
+        "displayName": "옅은 내비",
+        "role": "neutral",
+        "tonalRamp": [
+          "#E6E8EC",
+          "#EDEFF1",
+          "#F0F2F5",
+          "#EFF1F4",
+          "#F5F6F8",
+          "#FAFBFC",
+          "#FCFDFE",
+          "#FFFFFF"
+        ],
+        "synthetic": true
+      },
+      "nav-active": {
+        "canonical": "#FFF0E6",
+        "displayName": "내비 활성",
+        "role": "neutral",
+        "tonalRamp": [
+          "#E8C9A8",
+          "#F0D3B3",
+          "#F5DCC2",
+          "#F9E5D1",
+          "#FFF0E6",
+          "#FFF4EC",
+          "#FFF8F2",
+          "#FFFFFF"
+        ],
+        "synthetic": true
+      },
+      "paper": {
+        "canonical": "#FFFFFF",
+        "displayName": "종이",
+        "role": "neutral",
+        "tonalRamp": [
+          "#252A34",
+          "#4A515C",
+          "#6E747F",
+          "#8A939F",
+          "#B9BEC6",
+          "#E6E8EC",
+          "#F7F8FA",
+          "#FFFFFF"
+        ],
+        "synthetic": true
+      },
+      "success": {
+        "canonical": "#2F6B4F",
+        "displayName": "성공",
+        "role": "feedback",
+        "tonalRamp": [
+          "#08231A",
+          "#123F2E",
+          "#205A43",
+          "#2F6B4F",
+          "#52896F",
+          "#7DA892",
+          "#A8C3B3",
+          "#E4EFE7"
+        ],
+        "synthetic": true
+      },
+      "warning": {
+        "canonical": "#81520E",
+        "displayName": "경고",
+        "role": "feedback",
+        "tonalRamp": [
+          "#2A1C06",
+          "#543507",
+          "#6E450B",
+          "#81520E",
+          "#9A7033",
+          "#B48F5C",
+          "#D9BB84",
+          "#FFF4E1"
+        ],
+        "synthetic": true
+      }
+    },
+    "motion": [
+      {
+        "name": "enter",
+        "value": "200ms ease-out",
+        "purpose": "Hover, disclosure, menu and poll-bar transitions."
+      },
+      {
+        "name": "exit",
+        "value": "120ms ease-out",
+        "purpose": "Dismiss and collapse transitions."
+      },
+      {
+        "name": "button-base",
+        "value": "background 160ms ease-out, border-color 160ms ease-out, transform 160ms ease-out",
+        "purpose": "Base .button transition (globals.css:241); active press translateY(1px)."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "prefers-reduced-motion: reduce",
+        "purpose": "All animation and transition off; smooth scroll to auto (globals.css:3215)."
+      }
+    ],
+    "shadows": [
+      {
+        "name": "operator-menu",
+        "value": "0 14px 34px #252A3412",
+        "purpose": "Desktop operator/org menu final override (globals.css:3493)."
+      },
+      {
+        "name": "console-global-menu-mobile",
+        "value": "0 8px 24px #10111480",
+        "purpose": "Mobile global menu keeps scrim shadow; later override changes only border/background (globals.css:2848, 3556-3560)."
+      },
+      {
+        "name": "landing-evidence",
+        "value": "0 10px 30px var(--shadow-color)",
+        "purpose": "Landing console capture figure (landing.module.css:192)."
+      },
+      {
+        "name": "landing-phone",
+        "value": "0 20px 40px var(--shadow-color)",
+        "purpose": "Landing phone frame (landing.module.css:409)."
+      },
+      {
+        "name": "landing-report",
+        "value": "0 12px 32px var(--shadow-color)",
+        "purpose": "Landing report evidence (landing.module.css:478)."
+      },
+      {
+        "name": "page-thumbnail",
+        "value": "0 5px 18px rgb(23 37 43 / 16%)",
+        "purpose": "Attendee page preview thumb only (page.module.css:474)."
+      },
+      {
+        "name": "focus-outline",
+        "value": "outline: 3px solid #AA3A10, offset 2-3px",
+        "purpose": "Not a box-shadow. The shared focus indicator on all interactive elements."
+      }
+    ],
+    "typographyMeta": {
+      "body": {
+        "displayName": "Body / 작업 데이터",
+        "purpose": "15px console work data, 16px reading prose, 1.6 line height."
+      },
+      "display": {
+        "displayName": "Display",
+        "purpose": "Landing hero and venue board only."
+      },
+      "headline": {
+        "displayName": "Headline / 페이지 H1",
+        "purpose": "Console page titles at 28px."
+      },
+      "label": {
+        "displayName": "Label / 메타",
+        "purpose": "Filters, meta, chips at 12-14px."
+      },
+      "title": {
+        "displayName": "Title / 섹션",
+        "purpose": "Section and card titles at 18px."
+      }
+    },
+    "displayNotes": "tonalRamp arrays are synthesized display-only metadata for the live panel, never runtime or normative tokens. Normative color values live in DESIGN.md frontmatter, which mirrors apps/web/app/tokens.css."
+  },
+  "generatedAt": "2026-10-27T00:00:00Z",
+  "narrative": {
+    "donts": [
+      "Don't 검정 크롬·명조·2px 반경 카드·그라디언트·글래스를 부활시키지 않는다.",
+      "Don't `--stage-*`·`--ref-*`를 콘솔 근거로 쓰지 않는다(전광판·참가자·고객 레퍼런스 전용).",
+      "Don't 섹션·카드를 중첩하거나 resting 그림자를 얹지 않는다.",
+      "Don't 필(pill)과 버튼을 같은 행에서 같은 말로 쓰지 않는다(조회 vs 확정 구분).",
+      "Don't 오프라인 캐싱·체크인 큐·실발송·실기기 검증을 약속하지 않는다(미지원·미검증)."
+    ],
+    "dos": [
+      "Do 흰 바탕·얇은 선·열린 구획으로 목록/작성/검토 위계를 만든다.",
+      "Do 작업·영역당 주 행동에만 채움 오렌지를 쓰고 나머지는 Secondary·Quiet로 낮춘다.",
+      "Do 모든 폭에서 44px 터치 바닥과 포커스 링을 지킨다.",
+      "Do 고객 배너·게시된 참가자 스타일(#B9DEF0 기본)은 이벤트 독립 콘텐츠로 보존한다.",
+      "Do 움직임은 120–200ms ease-out 상태 전환으로만 쓴다(`prefers-reduced-motion` 전체 차단 포함).",
+      "Do 출처: `apps/web/app/tokens.css`, `apps/web/app/globals.css`, `apps/web/app/console/console-ui/console-ui.module.css`, `server/attendee-home-style.js`, 참고 패턴 Attio/Linear/Mailchimp(브랜드 자산 복제 금지)."
+    ],
+    "keyCharacteristics": [
+      "흰 업무면·가벼운 내비·열린 구획, 중첩 카드 더미 금지",
+      "Pretendard, 28px 제목과 14–16px 작업 데이터",
+      "오렌지는 작업·영역당 주 행동과 선택 표시에만, 면 전체는 중립 유지",
+      "모든 조작 44px 터치 바닥, 오류·복구는 가리지 않음",
+      "고객 확정 배너·게시된 참가자 스타일은 독립 콘텐츠로 보존"
+    ],
+    "northStar": "화이트 업무용 SaaS",
+    "overview": "흰 본문과 옅은 중성 내비게이션으로 행사 준비부터 현장·결과까지 하나의 조용한 업무면에 잇는다. 검은 크롬·명조·중첩 카드 장식은 쓰지 않고, 얇은 구분선과 열린 구획으로 목록·작성·검토 위계를 드러낸다. 오렌지는 주 행동과 선택에만 절제해 쓴다.\n\n이전 CUE SHEET(검정·chalk·명조)와 고대비 C안은 폐기됐다. Attio·Linear·Mailchimp 실제 업무 화면을 참고한 흰 시안이 사용자 확정 방향이며, `apps/web` 제품 전체에 적용된 상태가 정본이다.",
+    "rules": [
+      {
+        "name": "The Primary-Per-Task Rule",
+        "body": "주 행동 위계는 작업·영역 단위다. 같은 화면의 독립 작업(편집 단위·다이얼로그·모바일 행)은 각자 주 행동을 갖는다. 예외: 내비 카운트 뱃지는 채움 브랜드(`.nav-badge`), 사이드바 선택은 오렌지 잉크+연한 바탕이다.",
+        "section": "Colors"
+      },
+      {
+        "name": "The Whitewash Ban",
+        "body": "고객 확정 배너와 게시된 참가자 홈스타일을 공통 화이트로 덮지 않는다. 참가자 홈 기본 배경(#B9DEF0)과 대표·보조 문구·배치·덮개 선택은 `server/attendee-home-style.js`가 정본이며 이벤트별 독립 콘텐츠다.",
+        "section": "Colors"
+      },
+      {
+        "name": "The Retained Tokens Rule",
+        "body": "`--stage-*`, `--ref-*` 토큰은 전광판 투영·참가자 홈·고객 레퍼런스 전용이다. 콘솔 설계 근거로 쓰지 않는다.",
+        "section": "Colors"
+      },
+      {
+        "name": "The No Nesting Rule",
+        "body": "섹션 안에 장식 카드를 중첩하지 않는다. 들어올림이 필요하면 패널 상단선(`sectionPanel`) 하나만 쓴다.",
+        "section": "Layout"
+      },
+      {
+        "name": "The Flat-Work-Surface Rule",
+        "body": "작업면 카드·타일·행은 resting 그림자 없이 선으로 구분한다. 팝오버·랜딩 증거물은 위 확정 값을 그대로 쓴다.",
+        "section": "Elevation & Depth"
+      }
+    ]
+  },
+  "schemaVersion": 2,
+  "title": "Design System: EVENTOUCH"
+}

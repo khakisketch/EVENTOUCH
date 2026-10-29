@@ -48,6 +48,7 @@
   color: var(--info);
   font-size: var(--small);
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .stagePrerequisite a {
@@ -80,10 +81,11 @@
 .configForm {
   display: grid;
   gap: var(--s3);
-  padding: var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface-muted);
+  padding: var(--s4) 0;
+  border: 0;
+  border-block: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
 .configGrid {
   display: grid;
@@ -126,7 +128,7 @@
   align-items: center;
   gap: var(--s2);
   max-width: 100%;
-  padding: var(--s1) var(--s2);
+  padding: 0 var(--s2);
   border: 1px solid var(--line-strong);
   border-radius: 999px;
   background: var(--paper);
@@ -135,17 +137,28 @@
 }
 .filterChips button {
   display: grid;
-  width: 28px;
-  height: 28px;
-  flex: none;
+  position: relative;
+  isolation: isolate;
   place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: var(--surface-muted);
+  background: transparent;
   color: var(--ink);
   font-size: 18px;
+  line-height: 1;
   cursor: pointer;
+}
+.filterChips button::before {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  z-index: -1;
+  border-radius: 50%;
+  background: var(--surface-muted);
 }
 .tierEditor { display: grid; gap: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--line); }
 .tierHeading { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--s2); }
@@ -155,17 +168,19 @@
   grid-template-columns: minmax(0, 1fr) minmax(110px, 0.45fr) auto;
   align-items: end;
   gap: var(--s3);
-  padding: var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-small);
-  background: var(--paper);
+  padding: var(--s3) 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
 .teamList {
   display: grid;
-  gap: var(--s2);
+  gap: 0;
   margin: var(--s3) 0 0;
   padding: 0;
   list-style: none;
+  border-top: 1px solid var(--line);
 }
 .teamItem {
   display: flex;
@@ -173,19 +188,21 @@
   align-items: baseline;
   justify-content: space-between;
   gap: var(--s1) var(--s3);
-  padding: var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-small);
-  background: var(--paper);
+  padding: var(--s3) 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
 .programForm {
   display: grid;
-  gap: var(--s2);
+  gap: var(--s3);
   margin-bottom: var(--s3);
-  padding: var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-small);
-  background: var(--surface-muted);
+  padding: var(--s4) 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
 .programField {
   display: grid;
@@ -197,18 +214,20 @@
 }
 .programList {
   display: grid;
-  gap: var(--s3);
+  gap: 0;
   margin: 0;
   padding: 0;
   list-style: none;
+  border-top: 1px solid var(--line);
 }
 .programItem {
   display: grid;
   gap: var(--s2);
-  padding: var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
+  padding: var(--s4) 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
 .programTop {
   display: flex;
@@ -217,15 +236,30 @@
   justify-content: space-between;
   gap: var(--s1) var(--s3);
 }
+
+.programTop strong {
+  font-size: var(--h3);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+/* Quota summary stays subordinate to the program name: muted meta, never a
+   second title competing on the same row. */
+.programTop > span {
+  color: var(--muted);
+  font-size: var(--small);
+  word-break: keep-all;
+}
 .programWinners {
   margin: 0;
   color: var(--muted);
   font-size: var(--small);
 }
-.programMeta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); color: var(--muted); font-size: var(--small); }
+.programMeta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s3); color: var(--muted); font-size: var(--small); }
 .programMetaText { margin: 0; color: var(--muted); font-size: var(--small); overflow-wrap: anywhere; }
-.winnerList { display: grid; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
-.winnerItem { display: grid; gap: var(--s2); padding: var(--s3); border: 1px solid var(--line); border-radius: var(--radius-small); background: var(--surface-muted); }
+.winnerList { display: grid; gap: 0; margin: var(--s1) 0 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.winnerItem { display: grid; gap: var(--s2); padding: var(--s3) 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
 .winnerSummary { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--s1) var(--s3); }
 .winnerSummary span { color: var(--muted); font-size: var(--small); }
 .recipientAssign { display: grid; gap: var(--s2); }
@@ -235,24 +269,31 @@
 .runCountField { display: grid; gap: var(--s1); min-width: 150px; }
 .runCountField label { font-size: var(--small); font-weight: 700; }
 .runCountField input { width: 100%; min-height: 44px; }
-.roulettePrizeRow { display: grid; gap: var(--s3); padding: var(--s4); border: 1px solid var(--line); border-radius: var(--radius-small); background: var(--paper); }
+.roulettePrizeRow { display: grid; gap: var(--s3); padding: var(--s4) 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
 .prizeRowHeading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--s1) var(--s3); }
 .prizeRowHeading span { color: var(--muted); font-size: var(--small); }
 .preassignBox { display: grid; gap: var(--s2); padding: var(--s4); border: 1px solid var(--info-line); border-radius: var(--radius); background: var(--info-soft); }
 .preassignBox .checkLine { margin: 0; }
+/* The batch action keeps its own frame (irreversible), but the button sizes
+   to its label on desktop instead of stretching into a full-width banner. */
+.preassignBox > .button { justify-self: start; max-width: 480px; }
 .programActions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s2);
 }
 /* The run buttons sit in their own group with the blocker line attached,
-   so an operator reads what is missing right where the action is. */
+   so an operator reads what is missing right where the action is. A hairline
+   above the group keeps execution apart from the settings buttons above. */
 .runActions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s2) var(--s3);
   flex-basis: 100%;
+  margin-top: var(--s1);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
 }
 /* Disabled run buttons stay readable (ink on muted, full opacity) while
    staying clearly disabled (gray instead of the brand orange, no pointer). */
@@ -274,11 +315,14 @@
   font-size: var(--small);
   font-weight: 650;
   line-height: 1.5;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
 }
 .stageButton {
-  min-height: 72px;
-  padding-inline: var(--s6);
-  font-size: var(--h3);
+  min-height: 44px;
+  padding-inline: var(--s3);
+  font-size: inherit;
+  font-weight: 700;
 }
 
 .empty {
@@ -329,9 +373,10 @@
    prepared before it. */
 .setupDetails {
   margin-top: var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-small);
-  background: var(--paper);
+  border: 0;
+  border-block: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
 
 .setupSummary {
@@ -356,5 +401,42 @@
 /* The jump nav marks the section in view on its own link, so a long page
    with four different jobs still says where the operator is. */
 .navSticky {
+  display: grid;
+  gap: var(--s1);
   min-width: 0;
+}
+
+/* Visible in-page index context: a quiet scope label above the shared
+   jump nav so the anchor row reads as a contents index, not app tabs.
+   aria-hidden: the nav's own aria-label carries screen-reader naming
+   once. Static wrapper — never covers the section it jumps to. */
+.navIndexLabel {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+/* Korean prose wraps at 어절 boundaries (keep-all, DESIGN.md typography),
+   never mid-syllable at 320–390px. Unbroken tokens (long names, URLs,
+   numbers) still fall back to anywhere/break-word instead of overflowing. */
+.hint,
+.empty,
+.featureOff,
+.lockNote,
+.stagePrerequisite,
+.successHint,
+.fieldError,
+.formHeading,
+.programWinners,
+.programMeta,
+.programMetaText,
+.winnerSummary span,
+.prizeRowHeading span,
+.checkLine,
+.setupSummary,
+.runBlocker,
+.runCountField label,
+.inlineLabel {
+  word-break: keep-all;
 }

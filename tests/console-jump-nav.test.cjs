@@ -52,11 +52,12 @@ test('the active nav link carries one accessible current marker with a non-color
   const start = navCss.indexOf('.sectionNavLink[aria-current="location"]');
   assert.ok(start >= 0, 'the active link style exists');
   const block = navCss.slice(start, navCss.indexOf('}', navCss.indexOf('{', start)) + 1);
-  assert.match(block, /background: var\(--soft\)/u, 'token-only background');
+  assert.match(block, /border-bottom-color: var\(--brand\)/u, 'the current section owns the approved orange underline');
   assert.ok(
-    /text-decoration: underline/u.test(block) || /font-weight: 800/u.test(block) || /border-color: var\(--/u.test(block),
-    'a non-color signal joins the background'
+    /font-weight: 800/u.test(block) || /border-bottom-color: var\(--/u.test(block),
+    'a non-color signal joins the surface'
   );
+  assert.doesNotMatch(block, /text-decoration: underline/u, 'standalone actions do not use underline as the affordance');
   assert.doesNotMatch(block, /#[0-9a-fA-F]{3,8}/u, 'no color literals in the active style');
   const linkStart = navCss.indexOf('.sectionNavLink {');
   assert.ok(linkStart >= 0, 'the base link style exists');

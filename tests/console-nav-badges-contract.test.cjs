@@ -21,11 +21,25 @@ function between(source, start, end) {
 
 test('event navigation badges count only operator follow-up and link pending approvals directly', () => {
   const shell = read('apps/web/app/console/ConsoleShell.tsx');
-  const subnav = between(shell, 'function renderEventSubnav()', 'const organizationPermissionSummary');
+  // Hub rail: hrefs resolve in pageHref and badges render in
+  // renderPageBadges, while the badge booleans stay hoisted display gates.
+  const subnav = between(shell, 'function pageHref(', 'function renderEventHubs(');
+  // The attention badge also covers manually-due sends; the deep link still
+  // lands on the attention history, never a bare list.
+  assert.match(subnav, /showMessageAttentionBadge \|\| showManualDueBadge/u);
 
-  assert.match(shell, /person\.status === "PENDING"/);
+  // Badge counts come from the directory event summaries (server-counted
+  // pending approvals and attention campaigns), never from a client-side
+  // participant scan: the shell holds no roster.
+  assert.match(shell, /const pendingOf = \(eventId: string\): number =>/);
+  assert.match(shell, /typeof event\?\.pending === "number" \? event\.pending : 0/);
+  assert.doesNotMatch(shell, /person\.status === "PENDING"/, "no client-side roster scan for badges");
   assert.match(shell, /const messageAttentionOf = \(eventId: string\): number =>/);
-  assert.match(shell, /\["FAILED", "PARTIAL", "NEEDS_CONNECTION"\]/);
+  // The attention statuses are defined where campaigns are read (the
+  // messages screen); the shell only consumes the server-counted directory
+  // summary, so no client re-derives the set in two places.
+  assert.match(shell, /typeof event\?\.messageAttention === "number" \? event\.messageAttention : 0/);
+  assert.doesNotMatch(shell, /\["FAILED", "PARTIAL", "NEEDS_CONNECTION"\]/, "shell holds no status list");
   assert.match(shell, /function isApprovalQueueRelevant\(stage: string\)/);
   const triage = between(shell, 'const triage = events', 'const roleLabel');
   assert.match(triage, /item\.stage === "LIVE"/);
@@ -34,11 +48,10 @@ test('event navigation badges count only operator follow-up and link pending app
   assert.match(triage, /\.slice\(0, 5\)/);
   assert.match(shell, /\["AGENCY", "MANAGER"\]\.includes\(shellData\.role\)/);
   assert.match(shell, /This is a display gate only; server reads and command authorization remain authoritative/);
-  assert.match(subnav, /isApprovalQueueRelevant\(eventMeta\.stage\)/);
-  assert.match(subnav, /eventMeta\.messageAttention > 0/);
-  assert.match(subnav, /const messagesHref = showMessageAttentionBadge\s*\?/);
+  assert.match(shell, /isApprovalQueueRelevant\(eventMeta\.stage\)/);
+  assert.match(shell, /eventMeta && eventMeta\.messageAttention > 0/);
   assert.match(subnav, /messages\?attention=1/);
-  assert.match(subnav, /const participantsHref = showPendingApprovalBadge\s*\?/);
+  assert.match(subnav, /showPendingApprovalBadge/);
   assert.match(subnav, /participants\?status=PENDING/);
   assert.match(subnav, /nav-badge" role="img" aria-label=\{`승인 대기/);
   assert.match(subnav, /nav-badge" role="img" aria-label=\{`발송 확인/);
@@ -53,7 +66,8 @@ test('message badge opens the attention campaign history with a clear path back 
   assert.match(messages, /const ATTENTION_STATUSES = \["FAILED", "PARTIAL", "NEEDS_CONNECTION"\]/);
   assert.match(messages, /setAttentionOnly\(attentionParam === "1"\)/);
   assert.match(messages, /const attentionCampaigns = state\.campaigns\.filter/);
-  assert.match(messages, /visibleCampaigns = attentionOnly \? attentionCampaigns : state\.campaigns/);
+  assert.match(messages, /historyScope = attentionOnly \? attentionCampaigns : state\.campaigns/);
+  assert.match(messages, /visibleCampaigns = historyScope\.filter/);
   assert.match(messages, /history-heading[\s\S]*scrollIntoView/);
   assert.match(messages, /발송 확인이 필요한 발송만 보고 있습니다/);
   assert.match(messages, /전체 발송 기록 보기/);

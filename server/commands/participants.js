@@ -189,7 +189,7 @@ function publicSignupEvent(event) {
 async function lockEvent(client, ref, value) {
   const column = ref === 'slug' ? 'e.slug' : 'e.id';
   const result = await client.query(
-    `SELECT e.id, e.slug, e.client_id, e.payload, e.revision,
+    `SELECT e.id, e.slug, e.client_id, e.org_id, e.payload, e.revision,
             w.payload AS workspace_payload, w.revision AS workspace_revision
      FROM events e JOIN event_workspaces w ON w.event_id = e.id
      WHERE ${column} = $1
@@ -199,16 +199,15 @@ async function lockEvent(client, ref, value) {
   return result.rows[0] || null;
 }
 
-async function authorizeOperator(client, event, workspace, account, command, assignmentId) {
-  if (!account || !account.id) throw failure(401, '로그인이 필요합니다');
-  const accountResult = await client.query(
-    'SELECT role, active FROM accounts WHERE id = $1 LIMIT 1',
-    [String(account.id)]
-  );
-  const current = accountResult.rows[0];
-  if (!current || current.active !== true || !['AGENCY', 'MANAGER', 'STAFF'].includes(current.role)) {
+// Grant verdicts run AFTER the receipt lookup (AGENTS order). Scope
+// (identity/org/event) is verified pre-receipt via resolveEventAuthority at
+// the call site.
+async function authorizeGrants(client, event, workspace, account, command, assignmentId, org) {
+  const current = { role: org.role, active: true };
+  if (!['AGENCY', 'MANAGER', 'STAFF'].includes(current.role)) {
     throw failure(401, '로그인이 필요합니다');
   }
+  if (account && typeof account === 'object') account.orgId = org.orgId;
   if (current.role === 'AGENCY') return current.role;
   if (current.role === 'MANAGER') {
     const membership = await client.query(
@@ -406,15 +405,30 @@ function createParticipantCommands(database) {
       const event = normalizeEvent(row);
       const workspace = normalizeWorkspace(row.workspace_payload);
 
-      if (command) await authorizeOperator(client, event, workspace, account, command, assignmentId);
+      let partScope = null;
+      if (command) {
+        const { resolveEventAuthority } = require('../tenancy');
+        try {
+          partScope = await resolveEventAuthority(client, account, event.id);
+        } catch (error) {
+          throw failure(error.status || 403, error.message || '권한을 확인하세요', undefined, error.code);
+        }
+        if (account && typeof account === 'object') account.orgId = partScope.orgId;
+      }
 
       const receiptResult = await client.query(
-        'SELECT event_id, actor_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1',
+        'SELECT event_id, actor_id, org_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1',
         [id]
       );
       const receipt = receiptResult.rows[0];
       const actorId = account && account.id ? String(account.id) : null;
       if (receipt) {
+        const { checkReceiptScope } = require('../tenancy');
+        try {
+          checkReceiptScope(receipt, (account && account.orgId) || event.orgId || undefined);
+        } catch (scopeError) {
+          throw failure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다', undefined, scopeError.code);
+        }
         if (!receiptMatches(receipt, { eventId: event.id, actorId, operation, ticketToken })) {
           throw failure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
         }
@@ -431,6 +445,9 @@ function createParticipantCommands(database) {
         }
         return { status: 200, body: responseFromReceipt(receipt, workspace), replayed: true };
       }
+
+      // Grant verdicts only when no receipt matched (see authorizeGrants).
+      if (command) await authorizeGrants(client, event, workspace, account, command, assignmentId, partScope);
 
       const now = new Date().toISOString();
       const response = await apply({ client, event, workspace, now });
@@ -454,9 +471,9 @@ function createParticipantCommands(database) {
         participantId: response.participantId || null,
       };
       await client.query(
-        `INSERT INTO command_receipts (command_id, event_id, actor_id, result)
-         VALUES ($1, $2, $3, $4::jsonb)`,
-        [id, event.id, actorId, JSON.stringify(receiptData)]
+        `INSERT INTO command_receipts (command_id, event_id, actor_id, org_id, result)
+         VALUES ($1, $2, $3, $4, $5::jsonb)`,
+        [id, event.id, actorId, (account && account.orgId) || event.orgId || null, JSON.stringify(receiptData)]
       );
       return {
         status: response.status || 200,

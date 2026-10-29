@@ -56,7 +56,11 @@ test("content: a published notice shows live screen status and a direct output a
 test("content: no autopublish, hidden when it must be, old buttons intact", () => {
   const source = content();
   assert.match(source, /const canOutput = canOutputNotice && item\.published;/u);
-  assert.match(source, /canOutputNotice = state\.screenEnabled && state\.canManage && !archived/u);
+  // Output is the programs-scoped display.set shortcut; notices/venue stay
+  // page-scoped. Neither gate widens the other.
+  assert.match(source, /canOutputNotice = state\.screenEnabled && canWritePrograms && !archived/u);
+  assert.match(source, /const canWritePage = canWriteEvent\(capabilities, "notice\.save"\)/u);
+  assert.match(source, /const canWritePrograms = canWriteEvent\(capabilities, "program\.save"\)/u);
   assert.match(source, /\{canOutput \? \(/u, "the action hides instead of disabling");
   assert.match(source, /\{noticeDisplayPendingId === item\.id && canOutput && noticeDeletePendingId !== item\.id \? \(/u);
   assert.match(source, /\{noticeDeletePendingId === item\.id && noticeDisplayPendingId !== item\.id \? \(/u, "output and delete confirms never share a row");
@@ -160,8 +164,29 @@ test("operations: row assignment reuses the generic dialog preselected, never au
 
 test("operations: gates, commands, and touch reuse stay pinned", () => {
   const source = ops();
-  assert.match(source, /disabled=\{busy \|\| writeBlocked\}/u);
-  assert.match(source, /title=\{writeBlocked \? writeBlockedReason : undefined\}/u);
+  // Per-scope gates replace the single writeBlocked: desks/staff are onsite,
+  // booths/map/mode are booth, the display picker is programs. Every
+  // mutation button names its own locked reason; reads never gate.
+  for (const [blocked, reason] of [
+    ["onsiteBlocked", "onsiteNoWriteReason"],
+    ["boothBlocked", "boothNoWriteReason"],
+  ]) {
+    assert.ok(source.includes(blocked), `${blocked} gates its section`);
+    assert.match(source, new RegExp(`title=\\{${blocked} \\? ${reason} :`, "u"), `${blocked} names its reason`);
+  }
+  assert.ok(source.includes("displayBlocked"), "display gates its section");
+  assert.match(source, /title=\{\s*displayBlocked\s*\?\s*displayNoWriteReason/u, "display names its reason first");
+  assert.match(source, /출력을 먼저 고르세요/u, "display keeps its existing guidance");
+  assert.match(source, /이미 적용된 출력입니다/u, "display keeps its applied-state guidance");
+  // Every mutation button consults its own section gate; reads never gate.
+  assert.ok((source.match(/disabled=\{[^}]*onsiteBlocked[^}]*\}/gu) ?? []).length >= 5, "onsite buttons gate");
+  assert.ok((source.match(/disabled=\{[^}]*displayBlocked[^}]*\}/gu) ?? []).length >= 1, "display buttons gate");
+  assert.ok((source.match(/disabled=\{[^}]*boothBlocked[^}]*\}/gu) ?? []).length >= 8, "booth buttons gate");
+  assert.doesNotMatch(source, /writeBlocked/u, "no single-gate remnant may hide a scope");
+  assert.match(source, /현장 운영을 변경할 운영 권한이 없습니다/u, "the onsite staff copy is untouched");
+  assert.match(source, /const canWriteOnsite = canWriteEvent\(capabilities, "desk\.save"\)/u);
+  assert.match(source, /const canWriteBooth = canWriteEvent\(capabilities, "booth\.save"\)/u);
+  assert.match(source, /const canWriteDisplay = canWriteEvent\(capabilities, "display\.set"\)/u);
   assert.match(source, /runCommand\("staff\.assign"/u);
   assert.equal(source.match(/staff\.assign/g)?.length ?? 0, 1, "the existing assign call stays the only one");
   assert.match(source, /staff\.unassign/u, "the release path is untouched");

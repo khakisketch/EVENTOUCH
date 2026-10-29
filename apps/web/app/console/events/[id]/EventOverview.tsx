@@ -10,8 +10,11 @@ import ConsolePage from "../../console-ui/ConsolePage";
 import ConsoleFeedback from "../../console-ui/ConsoleFeedback";
 import ConsoleSection from "../../console-ui/ConsoleSection";
 import ConsoleStatePanel from "../../console-ui/ConsoleStatePanel";
+import { CopyIcon, CheckIcon } from "../../console-ui/ConsoleIcons";
 import { eventCloseHref } from "../../console-event-close";
 import styles from "./event-overview.module.css";
+import { consoleFetch, subscribeConsoleFreshness } from "../../../../lib/console-api";
+import { isOverdueManualMessage } from "../../../../lib/message-attention";
 
 type CheckRow = {
   id: string;
@@ -57,6 +60,12 @@ type Overview = {
   confirmedNotEntered: number;
   entryRate: number;
   periods: PeriodCounts;
+  // Arbitrary-range analysis reuses the exact same definitions: cancelled
+  // excluded applications (by createdAt) and uncorrected IN entries deduped
+  // per participant (no cancelled filter on checks). Raw values only; the
+  // range UI buckets them locally without refetching.
+  trendApplications: string[];
+  trendEntries: Array<{ at: string; key: string }>;
   recent: CheckRow[];
   registrationOpen: boolean;
   deskCount: number;
@@ -71,6 +80,7 @@ type Overview = {
   programs: ScheduledProgram[];
   updatedAt: string;
   canManageEvent: boolean;
+  overdueMessages: number;
 };
 
 type OverviewState =
@@ -213,6 +223,41 @@ function formatProgramTime(program: ScheduledProgram): string {
   return program.start || program.end || "시간 미정";
 }
 
+type RunbookStatus = "done" | "current" | "upcoming";
+type RunbookCue = ScheduledProgram & { status: RunbookStatus };
+
+/**
+ * The overview's runbook is the event day's full program order, not only the
+ * current/next pair. A future event shows every cue as upcoming; today's
+ * event marks completed and current cues against the browser clock. No
+ * server-derived live flag is invented here: status is display-only.
+ */
+function runbookCues(programs: ScheduledProgram[], eventDate: string, now: Date): RunbookCue[] {
+  const today = localDateKey(now);
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(eventDate) ? eventDate : today;
+  const minuteNow = now.getHours() * 60 + now.getMinutes();
+  const isToday = date === today;
+  const isPast = date < today;
+  return programs
+    .filter((program) => program.date === date)
+    .slice()
+    .sort((left, right) =>
+      (timeInMinutes(left.start) ?? -1) - (timeInMinutes(right.start) ?? -1) ||
+      left.title.localeCompare(right.title, "ko")
+    )
+    .map((program) => {
+      let status: RunbookStatus = "upcoming";
+      if (isPast) status = "done";
+      if (isToday) {
+        const start = timeInMinutes(program.start);
+        const end = timeInMinutes(program.end);
+        if (start !== null && end !== null && end < minuteNow) status = "done";
+        else if (start !== null && start <= minuteNow && (end === null || end >= minuteNow)) status = "current";
+      }
+      return { ...program, status };
+    });
+}
+
 function getReportStatus(overview: Overview): string {
   if (overview.reportCount === 0) return "미작성";
   if (overview.publishedReportCount > 0 && overview.draftReportCount > 0) {
@@ -242,7 +287,11 @@ function metricsForStage(overview: Overview, stage: string, base: string): Metri
 
 // 기간별 통계의 실제 집계와 정의를 한 곳에 둔다. DRAFT/READY에서는 준비
 // 섹션과 나란한 독립 섹션에, LIVE/ENDED/ARCHIVED에서는 지표 섹션 안에 둔다.
-function PeriodDetails({ rows }: { rows: Array<[string, PeriodCounts["today"]]> }) {
+function PeriodDetails({ rows, applications, entries }: {
+  rows: Array<[string, PeriodCounts["today"]]>;
+  applications: string[];
+  entries: Array<{ at: string; key: string }>;
+}) {
   return (
     <>
       <table className={styles.periodTable} aria-label="기간별 신청·입장">
@@ -267,7 +316,228 @@ function PeriodDetails({ rows }: { rows: Array<[string, PeriodCounts["today"]]> 
         <summary>집계 기준</summary>
         <p>신청은 취소된 신청을 제외합니다. 입장은 정정된 기록을 제외하며 같은 기간의 재입장은 중복 집계하지 않습니다.</p>
       </details>
+      <CustomRangeAnalysis applications={applications} entries={entries} />
     </>
+  );
+}
+
+// 임의 기간 분석: 위 고정 집계와 같은 정의를 브라우저 로컬 날짜의
+// from/to에 그대로 적용한다. 일별 막대는 네이티브 SVG 하나이며, 같은 값을
+// 담은 접근용 표와 요약 문장을 함께 둔다. 외부 차트 의존성 없음.
+const RANGE_DAYS_CAP = 62;
+
+function parseLocalDay(value: string): { key: string; start: Date } | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!match) return null;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  if (
+    date.getFullYear() !== Number(match[1]) ||
+    date.getMonth() !== Number(match[2]) - 1 ||
+    date.getDate() !== Number(match[3])
+  ) return null;
+  return { key: localDateKey(date), start: date };
+}
+
+function toLocalKey(value: string): string | null {
+  const time = Date.parse(value);
+  if (!Number.isFinite(time)) return null;
+  return localDateKey(new Date(time));
+}
+
+function CustomRangeAnalysis({ applications, entries }: { applications: string[]; entries: Array<{ at: string; key: string }> }) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const weekAgo = new Date(today);
+  weekAgo.setDate(today.getDate() - 6);
+  const [fromInput, setFromInput] = useState(localDateKey(weekAgo));
+  const [toInput, setToInput] = useState(localDateKey(today));
+
+  const parsedFrom = parseLocalDay(fromInput);
+  const parsedTo = parseLocalDay(toInput);
+  let rangeError: string | null = null;
+  let days: string[] = [];
+  let effectiveTo = parsedTo;
+  let clamped = false;
+  if (!parsedFrom || !parsedTo) {
+    rangeError = "날짜를 YYYY-MM-DD 형식으로 입력하세요.";
+  } else if (parsedFrom.start.getTime() > parsedTo.start.getTime()) {
+    rangeError = "시작 날짜가 끝 날짜보다 늦습니다. 순서를 바꾸세요.";
+  } else {
+    const span = Math.round((parsedTo.start.getTime() - parsedFrom.start.getTime()) / 86_400_000) + 1;
+    if (span > RANGE_DAYS_CAP) {
+      clamped = true;
+      const capped = new Date(parsedFrom.start);
+      capped.setDate(parsedFrom.start.getDate() + RANGE_DAYS_CAP - 1);
+      effectiveTo = { key: localDateKey(capped), start: capped };
+    }
+    const cursor = new Date(parsedFrom.start);
+    const endKey = (effectiveTo ?? parsedTo).key;
+    for (;;) {
+      const key = localDateKey(cursor);
+      days.push(key);
+      if (key === endKey || days.length > RANGE_DAYS_CAP) break;
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+
+  const appByDay = new Map<string, number>();
+  for (const createdAt of applications) {
+    const key = toLocalKey(createdAt);
+    if (key !== null) appByDay.set(key, (appByDay.get(key) ?? 0) + 1);
+  }
+  const entriesByDay = new Map<string, Set<string>>();
+  for (const entry of entries) {
+    const key = toLocalKey(entry.at);
+    if (key === null) continue;
+    const set = entriesByDay.get(key) ?? new Set<string>();
+    set.add(entry.key);
+    entriesByDay.set(key, set);
+  }
+  const points = days.map((key) => ({
+    key,
+    label: key.slice(5).replace("-", "/"),
+    applications: appByDay.get(key) ?? 0,
+    entries: entriesByDay.get(key)?.size ?? 0,
+  }));
+  // Zero-only days dominate short ranges (e.g. 6 zero rows + 1 spike).
+  // Fold them behind one toggle: the chart keeps the full range so the
+  // spike stays in context, while the table shows only days with activity.
+  const [showZeroDays, setShowZeroDays] = useState(false);
+  const zeroPoints = points.filter((point) => point.applications === 0 && point.entries === 0);
+  const activePoints = points.filter((point) => point.applications > 0 || point.entries > 0);
+  const tablePoints = showZeroDays || zeroPoints.length === 0 ? points : activePoints;
+  const periodApplications = points.reduce((sum, point) => sum + point.applications, 0);
+  const dailyEntriesSum = points.reduce((sum, point) => sum + point.entries, 0);
+  const periodUnique = new Set<string>();
+  for (const key of days) {
+    for (const id of entriesByDay.get(key) ?? []) periodUnique.add(id);
+  }
+
+  const maxValue = Math.max(1, ...points.map((point) => Math.max(point.applications, point.entries)));
+  const chartWidth = 640;
+  const chartHeight = 200;
+  const axisPad = 8;
+  const plotTop = 12;
+  const plotBottom = chartHeight - 28;
+  const pairGap = Math.max(2, Math.min(10, Math.floor((chartWidth - axisPad * 2) / Math.max(1, points.length) / 4)));
+  const slot = points.length ? (chartWidth - axisPad * 2) / points.length : 0;
+  const barWidth = Math.max(2, Math.min(26, (slot - pairGap) / 2));
+  const bar = (value: number) => Math.round((value / maxValue) * (plotBottom - plotTop));
+  const tickPoints = points.length > 2 ? [0, Math.floor((points.length - 1) / 2), points.length - 1] : points.map((_, index) => index);
+
+  return (
+    <div className={styles.rangeBlock}>
+      <h3 className={styles.rangeTitle}>임의 기간 분석</h3>
+      <p className={styles.rangeNote}>위 고정 집계와 같은 기준을 입력한 기간에 적용합니다. 날짜는 이 브라우저의 달력 날짜입니다.</p>
+      <div className={styles.rangeFields}>
+        <div>
+          <label htmlFor="range-from">시작일</label>
+          <input
+            id="range-from"
+            type="date"
+            value={fromInput}
+            max={toInput}
+            onChange={(event) => setFromInput(event.target.value)}
+          />
+        </div>
+        <div>
+          <label htmlFor="range-to">종료일</label>
+          <input
+            id="range-to"
+            type="date"
+            value={toInput}
+            min={fromInput}
+            onChange={(event) => setToInput(event.target.value)}
+          />
+        </div>
+      </div>
+      {rangeError ? <p className={styles.rangeError} role="alert">{rangeError}</p> : null}
+      {clamped && !rangeError ? <p className={styles.rangeNote} role="status">최대 {RANGE_DAYS_CAP}일까지만 봅니다. 종료일을 {effectiveTo?.key}로 맞췄습니다.</p> : null}
+      {!rangeError && points.length > 0 ? (
+        <>
+          <p className={styles.rangeSummary} role="status">
+            기간 신청 {periodApplications}명 · 일별 입장 합 {dailyEntriesSum}명 · 기간 고유 입장 {periodUnique.size}명(중복 제거)
+          </p>
+          <svg className={styles.rangeChart} viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label={`선택 기간 일별 신청·입장 막대그래프. 기간 신청 ${periodApplications}명, 일별 입장 합 ${dailyEntriesSum}명, 기간 고유 입장 ${periodUnique.size}명.`}>
+            {[0, 0.5, 1].map((fraction) => {
+              const y = plotBottom - (plotBottom - plotTop) * fraction;
+              const value = Math.round(maxValue * fraction);
+              return (
+                <g key={fraction}>
+                  <line x1={axisPad} x2={chartWidth - axisPad} y1={y} y2={y} className={styles.rangeGrid} />
+                  <text x={axisPad} y={Math.max(10, y - 3)} className={styles.rangeAxis}>{value}</text>
+                </g>
+              );
+            })}
+            {points.map((point, index) => {
+              const x = axisPad + index * slot + (slot - barWidth * 2 - pairGap) / 2;
+              const appHeight = bar(point.applications);
+              const entryHeight = bar(point.entries);
+              return (
+                <g key={point.key}>
+                  <rect x={x} y={plotBottom - appHeight} width={barWidth} height={appHeight} className={styles.rangeBarApplications}>
+                    <title>{`${point.key} 신청 ${point.applications}명`}</title>
+                  </rect>
+                  <rect x={x + barWidth + pairGap} y={plotBottom - entryHeight} width={barWidth} height={entryHeight} className={styles.rangeBarEntries}>
+                    <title>{`${point.key} 입장 ${point.entries}명(일별 고유)`}</title>
+                  </rect>
+                </g>
+              );
+            })}
+            {tickPoints.map((index) => {
+              const point = points[index];
+              if (!point) return null;
+              return (
+                <text
+                  key={`tick-${point.key}`}
+                  x={axisPad + index * slot + slot / 2}
+                  y={chartHeight - 8}
+                  textAnchor="middle"
+                  className={styles.rangeAxis}
+                >
+                  {point.label}
+                </text>
+              );
+            })}
+          </svg>
+          <ul className={styles.rangeLegend} aria-label="막대그래프 범례">
+            <li><span className={`${styles.rangeSwatch} ${styles.rangeBarApplications}`} aria-hidden="true" />신청</li>
+            <li><span className={`${styles.rangeSwatch} ${styles.rangeBarEntries}`} aria-hidden="true" />입장(일별 고유)</li>
+          </ul>
+          <table className={styles.periodTable} aria-label="선택 기간 일별 신청·입장">
+            <thead>
+              <tr>
+                <th scope="col">날짜</th>
+                <th scope="col">신청</th>
+                <th scope="col">입장(일별 고유)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tablePoints.map((point) => (
+                <tr key={point.key}>
+                  <th scope="row">{point.key}</th>
+                  <td>{point.applications}명</td>
+                  <td>{point.entries}명</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {zeroPoints.length > 0 ? (
+            <p>
+              <button
+                type="button"
+                className="button button-quiet"
+                aria-expanded={showZeroDays}
+                onClick={() => setShowZeroDays((current) => !current)}
+              >
+                {showZeroDays ? `0명 ${zeroPoints.length}일 접기` : `0명 ${zeroPoints.length}일 보기`}
+              </button>
+            </p>
+          ) : null}
+          <p className={styles.rangeNote}>일별 입장은 그 날의 고유 입장자 수이며, 기간 고유 입장은 선택한 전체 기간의 중복 제거 수라서 일별 합의 합과 다를 수 있습니다. 취소 제외·정정 제외 기준은 위 고정 집계와 같습니다.</p>
+        </>
+      ) : null}
+    </div>
   );
 }
 
@@ -278,13 +548,19 @@ export default function EventOverview({ eventId }: { eventId: string }) {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [linkNotice, setLinkNotice] = useState<string | null>(null);
+  // Copy affordance mirrors the notice: a check replaces the copy icon once
+  // the link lands on the clipboard, so the boxed button itself confirms the
+  // outcome next to the action (the header feedback still announces it).
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  useEffect(() => subscribeConsoleFreshness(() => setReloadTick((tick) => tick + 1)), []);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       setRefreshing(true);
       try {
-        const res = await fetch("/api/bootstrap", { cache: "no-store" });
+        const res = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store" });
         if (cancelled) return;
         if (res.status === 401) {
           router.push(
@@ -435,6 +711,10 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             confirmedNotEntered: approved.filter((person) => person.everIn !== true).length,
             entryRate: registered ? Math.round((everIn / registered) * 100) : 0,
             periods,
+            trendApplications: participantRows.map((person) => text(person.createdAt)).filter((value) => value !== ""),
+            trendEntries: checkRecords
+              .filter((check) => check.action === "IN")
+              .map((check) => ({ at: check.at, key: check.participantId || check.id })),
             recent: checks,
             registrationOpen: workspace.registrationOpen === true,
             deskCount,
@@ -449,10 +729,12 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             programs: programRows,
             updatedAt: now.toISOString(),
             canManageEvent,
+            overdueMessages: records(workspace.messages).filter((message) => isOverdueManualMessage(message)).length,
           },
         });
         setRefreshError(null);
         setLinkNotice(null);
+        setLinkCopied(false);
       } catch {
         if (!cancelled) {
           const message = "연결하지 못했습니다. 다시 시도하세요.";
@@ -497,8 +779,10 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         if (!copied) throw new Error("copy unavailable");
       }
       setLinkNotice("참가자 페이지 링크를 복사했습니다.");
+      setLinkCopied(true);
     } catch {
       setLinkNotice("링크를 복사하지 못했습니다. 참가자 페이지를 열어 주소를 확인하세요.");
+      setLinkCopied(false);
     }
   }
 
@@ -544,7 +828,15 @@ export default function EventOverview({ eventId }: { eventId: string }) {
   const schedule = overview.canManageEvent
     ? upcomingPrograms(overview.programs, new Date())
     : [];
-  const dDay = dDayLabel(overview.date, new Date());
+  const now = new Date();
+  const runbookDate = /^\d{4}-\d{2}-\d{2}$/.test(overview.date)
+    ? overview.date
+    : localDateKey(now);
+  const runbookIsToday = runbookDate === localDateKey(now);
+  const runbook = overview.canManageEvent
+    ? runbookCues(overview.programs, runbookDate, now)
+    : [];
+  const dDay = dDayLabel(overview.date, now);
   const participantPageHref = overview.slug
     ? `/event/${encodeURIComponent(overview.slug)}`
     : "";
@@ -591,28 +883,151 @@ export default function EventOverview({ eventId }: { eventId: string }) {
           ) : null}
           {/* DRAFT는 비공개(공개 화면 404)이므로 여는 링크를 두지 않는다. READY부터 기본 디자인으로 열린다. */}
           {stageKnown && currentStage !== "DRAFT" ? (
-            <Link className="button button-secondary" href={participantPageHref} target="_blank" rel="noreferrer">
-              참가자 페이지 열기
-            </Link>
+            <span className="console-header-group">
+              <Link className="button button-secondary" href={participantPageHref} target="_blank" rel="noreferrer">
+                참가자 페이지 열기
+              </Link>
+              <button
+                type="button"
+                className="button button-secondary console-icon-button"
+                aria-label="참가자 페이지 링크 복사"
+                onClick={() => void copyParticipantLink(overview.slug)}
+              >
+                {linkCopied ? <CheckIcon /> : <CopyIcon />}
+              </button>
+            </span>
           ) : null}
-          <button
-            type="button"
-            className="button button-secondary"
-            onClick={() => void copyParticipantLink(overview.slug)}
-          >
-            링크 복사
-          </button>
         </>
       ) : null;
+
+  // "지금 할 일" ledger: open items as quiet tiles with secondary actions.
+  // The overview keeps zero primary actions by contract: navigation and
+  // work queues stay secondary links so the single-primary rule applies to
+  // committing workspaces, not this status surface.
+  type NowItem = { key: string; title: string; count: string | null; hint: string; action: string; href: string };
+  const nowItems: NowItem[] = [];
+  if (overview.canManageEvent && currentStage !== "ARCHIVED") {
+    if (showApprovalAlert) {
+      nowItems.push({
+        key: "approval",
+        title: "승인 대기",
+        count: `${overview.pendingApproval}명`,
+        hint: "검토가 필요한 신청입니다.",
+        action: "승인 대기 처리",
+        href: `${base}/participants?status=PENDING`,
+      });
+    }
+    if (overview.overdueMessages > 0) {
+      nowItems.push({
+        key: "manual",
+        title: "수동 예약",
+        count: `${overview.overdueMessages}건`,
+        hint: "예약 시각이 지났습니다. 자동 발송되지 않으므로 내용을 확인한 뒤 직접 실행하세요.",
+        action: "예약 확인",
+        href: `${base}/messages?attention=1`,
+      });
+    }
+    if (currentStage === "READY" && liveBlocked) {
+      nowItems.push({
+        key: "readiness",
+        title: "현장 준비",
+        count: null,
+        hint: `등록 데스크 ${overview.deskCount}개 · 데스크 배정 ${overview.deskAssignmentCount}건 — 부족합니다.`,
+        action: "현장 운영 확인",
+        href: `${base}/operations`,
+      });
+    }
+    if (currentStage === "DRAFT") {
+      nowItems.push({
+        key: "intake",
+        title: "참가 접수",
+        count: null,
+        hint: intakeShort,
+        action: "접수 설정",
+        href: `${base}/settings#settings-intake`,
+      });
+    }
+    if (currentStage === "READY" && !liveBlocked && !showApprovalAlert && overview.overdueMessages === 0) {
+      nowItems.push({
+        key: "golive",
+        title: "진행 중 전환",
+        count: null,
+        hint: `등록 데스크 ${overview.deskCount}개 · 데스크 배정 ${overview.deskAssignmentCount}건 — 조건 충족.`,
+        action: "진행 단계 설정",
+        href: `${base}/settings#settings-stage`,
+      });
+    }
+    if (currentStage === "LIVE" && !showApprovalAlert && overview.overdueMessages === 0) {
+      nowItems.push({
+        key: "operations",
+        title: "현장 운영",
+        count: null,
+        hint: `등록 데스크 ${overview.deskCount}개 · 데스크 배정 ${overview.deskAssignmentCount}건.`,
+        action: "현장 운영 열기",
+        href: `${base}/operations`,
+      });
+    }
+    if (currentStage === "ENDED") {
+      nowItems.push({
+        key: "reports",
+        title: "결과 보고서",
+        count: null,
+        hint: `보고서 ${getReportStatus(overview)}.`,
+        action: "결과 보고서 보기",
+        href: `${base}/reports`,
+      });
+    }
+  }
+
+  // Lead with actionable work; the adjacent metrics explain its context.
+  const nowSection = nowItems.length ? (
+    <ConsoleSection
+      headingId="event-now-heading"
+      title="지금 할 일"
+      className={styles.regionQueue}
+    >
+      <ul className={styles.nowList}>
+        {nowItems.map((item) => (
+          <li className={styles.nowTile} key={item.key}>
+            <div className={styles.nowTileCopy}>
+              <div className={styles.nowTileHead}>
+                <p className={styles.nowTileTitle}>{item.title}</p>
+                {item.count ? <span className={styles.nowTileCount}>{item.count}</span> : null}
+              </div>
+              <p className={styles.nowTileHint}>{item.hint}</p>
+            </div>
+            {/* Every tile carries the same boxed affordance: the first
+                tile is not more committal than the rest, so rank must
+                not masquerade as hierarchy. Navigation stays a link. */}
+            <div className={styles.nowTileAction}>
+              <Link className="button button-secondary" href={item.href}>
+                {item.action}
+              </Link>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </ConsoleSection>
+  ) : (
+    <ConsoleSection
+      headingId="event-now-heading"
+      title="지금 할 일"
+      className={styles.regionQueue}
+    >
+      <p className={styles.nowEmpty} role="status">현재 표시할 운영 항목이 없습니다.</p>
+    </ConsoleSection>
+  );
 
   return (
     <ConsolePage pageId="overview" eventId={eventId} eventName={overview.name || "이름 없는 행사"}
       meta={eventMeta} badges={stageBadges} headerActions={headerActions}
       feedback={linkNotice ? <ConsoleFeedback kind="info">{linkNotice}</ConsoleFeedback> : undefined}>
+      <div className={overview.canManageEvent ? styles.overviewCanvas : styles.overviewSingle}>
+      {refreshError ? <p className={`${styles.refreshAlert} state-error`} role="alert">{refreshError} 이전에 불러온 내용은 유지됩니다.</p> : null}
       {overview.canManageEvent ? (
         <>
           {preparing ? (
-            <div className={styles.topReadiness}>
+            <div className={`${styles.topReadiness} ${styles.regionStatus}`}>
               <p className={styles.stageBand}>
                 <span>현재 <strong>{stageText}</strong><span aria-hidden="true"> → </span><span className={styles.stageNext}>다음 {nextStageText}</span></span>
                 <Link href={`${base}/settings#settings-stage`}>진행 단계 설정</Link>
@@ -626,28 +1041,75 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             </div>
           ) : null}
           {finished ? (
-            <ConsoleSection headingId="event-close-status-heading" title={currentStage === "ARCHIVED" ? "보관된 행사 마감 확인" : "행사 마감"}
-              description="마감 경로에서 전제조건과 다음 작업을 확인합니다. 자동으로 단계를 바꾸지 않습니다.">
+            <ConsoleSection headingId="event-close-status-heading" title={currentStage === "ARCHIVED" ? "보관된 행사 마감 확인" : "행사 마감"} description="자동으로 단계를 바꾸지 않습니다." className={styles.regionStatus}>
               <div className={styles.closeStatus}>
                 <p>{overview.registrationOpen ? "접수 중" : "접수 마감"} · 보고서 {getReportStatus(overview)} · {stageText}</p>
                 <Link className="button button-secondary" href={eventCloseHref(eventId)}>{currentStage === "ARCHIVED" ? "행사 마감 확인" : "행사 마감 시작"}</Link>
               </div>
             </ConsoleSection>
           ) : null}
-          {showApprovalAlert && (
-            <ConsoleFeedback kind="warning">
-              <div className={styles.approvalNotice}>
-                <strong>승인 대기 {overview.pendingApproval}명</strong>
-                <Link className="button button-secondary" href={`${base}/participants?status=PENDING`}>
-                  승인 대기 처리
-                </Link>
-              </div>
-            </ConsoleFeedback>
-          )}
+          <div className={styles.primaryColumn}>
+            {nowSection}
+          <ConsoleSection
+            headingId="event-runbook-heading"
+            title={runbookIsToday ? "오늘의 일정" : "행사 일정"}
+            description={<span className={styles.runbookMeta}>{runbookIsToday ? `${UPDATED_TIME_FORMAT.format(now)} 기준` : formatEventDate(runbookDate)}</span>}
+            action={<Link className="button button-secondary" href={`${base}/content`}>프로그램 일정</Link>}
+            className={[styles.regionRunbook, runbook.length ? undefined : styles.runbookIdle].filter(Boolean).join(" ")}
+          >
+            {runbook.length ? (
+              <ol className={styles.runbookList}>
+                {runbook.map((cue) => (
+                  <li
+                    key={cue.id}
+                    className={`${styles.runbookCue} ${styles[cue.status]}`}
+                    aria-current={cue.status === "current" ? "step" : undefined}
+                  >
+                    <time dateTime={cue.start ? `${cue.date}T${cue.start}` : undefined}>{cue.start || "--:--"}</time>
+                    <span className={styles.runbookDot} aria-hidden="true" />
+                    <div className={styles.runbookCopy}>
+                      <strong>{cue.title}</strong>
+                      <span>{cue.place || "장소 미정"} · {formatProgramTime(cue)}</span>
+                    </div>
+                    <span className={styles.runbookStatus}>
+                      {cue.status === "current" ? "현재" : cue.status === "done" ? "완료" : "예정"}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className={styles.runbookEmpty}>
+                행사일에 등록된 프로그램이 없습니다.
+              </p>
+            )}
+          </ConsoleSection>
+          {preparing ? (
+            <ConsoleSection headingId="event-readiness-heading" title="행사 준비 확인" className={styles.regionReadiness}>
+              <ul className={styles.readinessIndex}>
+                <li>
+                  <span className={styles.readinessLabel}>참가 접수</span>
+                  <span className={styles.readinessStatus}>{intakeShort}</span>
+                  <Link className={styles.readinessLink} href={`${base}/settings#settings-intake`}>접수 설정</Link>
+                </li>
+                <li>
+                  <span className={styles.readinessLabel}>현장 준비</span>
+                  <span className={styles.readinessStatus}>데스크 {overview.deskCount} · 배정 {overview.deskAssignmentCount}{liveBlocked ? " — 부족" : ""}</span>
+                  <Link className={styles.readinessLink} href={`${base}/operations`}>현장 운영 확인</Link>
+                </li>
+                <li>
+                  <span className={styles.readinessLabel}>참가자 디자인 · 선택 사항</span>
+                  <span className={styles.readinessStatus}>{overview.pagePublished ? (overview.pageDraftDiffers ? "게시됨 · 새 초안 있음" : "게시됨") : "기본 디자인 사용 중 · 꾸미기는 선택 사항입니다"}</span>
+                  <Link className={styles.readinessLink} href={`${base}/page`}>디자인 편집</Link>
+                </li>
+              </ul>
+            </ConsoleSection>
+          ) : null}
+          </div>
+          <div className={styles.contextColumn}>
           <ConsoleSection
             headingId="event-metrics-heading"
             title={currentStage === "LIVE" ? "입장 진행" : currentStage === "ENDED" || currentStage === "ARCHIVED" ? "최종 요약" : "주요 지표"}
-            description={stageKnown ? `${stageText} 단계 기준` : "확인 가능한 단계 지표가 없습니다."}
+            className={styles.regionMetrics}
           >
             {["LIVE", "ENDED", "ARCHIVED"].includes(currentStage) ? (
               <div className={styles.entryProgress}>
@@ -664,15 +1126,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
                 </div>
                 {currentStage === "ARCHIVED" ? (
                   <span className={styles.readOnlyNote}>보관된 행사는 읽기 전용입니다.</span>
-                ) : (
-                  <Link
-                    className={styles.notEntered}
-                    href={`${base}/participants?status=APPROVED&attendance=NOT_ENTERED`}
-                  >
-                    <span>확정자 중 미입장</span>
-                    <strong>{overview.confirmedNotEntered}명</strong>
-                  </Link>
-                )}
+                ) : null}
               </div>
               <div
                 className={styles.entryTrack}
@@ -686,6 +1140,15 @@ export default function EventOverview({ eventId }: { eventId: string }) {
               </div>
               <div className={styles.entryFoot}>
                 <span>취소 제외 등록 대비 입장률 · 결과 보고서와 같은 정의</span>
+                {currentStage === "ARCHIVED" ? null : (
+                  <Link
+                    className={styles.notEntered}
+                    href={`${base}/participants?status=APPROVED&attendance=NOT_ENTERED`}
+                  >
+                    <span>확정자 중 미입장</span>
+                    <strong>{overview.confirmedNotEntered}명</strong>
+                  </Link>
+                )}
                 <Link href={`${base}/reports`}>결과 보고서 보기</Link>
               </div>
               {currentStage !== "LIVE" ? (
@@ -734,56 +1197,57 @@ export default function EventOverview({ eventId }: { eventId: string }) {
           ) : (
             <p className={styles.restrictedNote}>확인 가능한 단계 지표가 없습니다.</p>
           )}
-            {!preparing ? (
+            <details className={styles.analysisDetails}>
+              <summary>기간 분석</summary>
               <div className={styles.periodBlock}>
-                <PeriodDetails rows={periodRows} />
+                <PeriodDetails rows={periodRows} applications={overview.trendApplications} entries={overview.trendEntries} />
               </div>
-            ) : null}
+            </details>
         </ConsoleSection>
-          {preparing ? (
-            <div className={styles.peerGrid}>
-            <ConsoleSection headingId="event-readiness-heading" title="행사 준비 확인">
-              <ul className={styles.readinessList}>
-                <li>
-                  <span className={styles.readinessIcon} aria-hidden="true">
-                    <svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="17" rx="2" /><path d="M9 4a3 3 0 0 1 6 0M9 11h6M9 15h4" /></svg>
-                  </span>
-                  <div><strong>참가 접수</strong><span>{intakeShort}{overview.registrationOpen ? "" : " · 양식을 게시하면 접수 시작"}</span></div>
-                  <Link className="button button-secondary" href={`${base}/settings#settings-intake`}>접수 설정</Link>
-                </li>
-                <li>
-                  <span className={styles.readinessIcon} aria-hidden="true">
-                    <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3" /><circle cx="17" cy="9" r="2.2" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0M15.5 14.5a4.5 4.5 0 0 1 6 4.5" /></svg>
-                  </span>
-                  <div><strong>현장 준비</strong><span>데스크 {overview.deskCount} · 배정 {overview.deskAssignmentCount} · 현장 운영에서 세부 확인</span></div>
-                  <Link className="button button-secondary" href={`${base}/operations`}>현장 운영 확인</Link>
-                </li>
-                <li className={styles.designRow}>
-                  <div><span className={styles.designTitle}>참가자 디자인 · 선택 사항</span><span>{overview.pagePublished ? (overview.pageDraftDiffers ? "게시됨 · 새 초안 있음" : "게시됨") : "기본 디자인 사용 중 · 꾸미기는 선택 사항입니다"}</span></div>
-                  <Link className={styles.designLink} href={`${base}/page`}>디자인 편집</Link>
-                </li>
-              </ul>
+          <aside className={`${styles.rail} ${styles.regionSecondary}`}>
+          <div className={styles.monitorHead}>
+            <span className={styles.monitorLive} data-live={currentStage === "LIVE"}><i aria-hidden="true" /> {stageText}</span>
+            <time dateTime={overview.updatedAt}>조회 {UPDATED_TIME_FORMAT.format(new Date(overview.updatedAt))}</time>
+          </div>
+
+          {schedule.length > 0 ? (
+            <ConsoleSection
+              headingId="event-schedule-heading"
+              title="현재·다음 일정"
+              className={styles.scheduleRail}
+            >
+              <ol className={styles.programList}>
+                {schedule.map((program) => (
+                  <li key={program.id}>
+                    <div className={styles.programTime}>
+                      <span>{formatEventDate(program.date)}</span>
+                      <span>{formatProgramTime(program)}</span>
+                    </div>
+                    <div className={styles.programInfo}>
+                      <strong>{program.title}</strong>
+                      {program.place ? <span>{program.place}</span> : null}
+                    </div>
+                    <span className={styles.scheduledBadge}>예정</span>
+                  </li>
+                ))}
+              </ol>
             </ConsoleSection>
-            <ConsoleSection headingId="event-period-heading" title="기간별 신청·입장">
-              <div className={styles.peerPeriod}>
-                <PeriodDetails rows={periodRows} />
-              </div>
-            </ConsoleSection>
-            </div>
           ) : null}
+          </aside>
+          </div>
       </>
       ) : (
         <p className={styles.restrictedNote}>행사 지표는 행사 운영자에게 표시됩니다.</p>
       )}
 
       {preparing && overview.recent.length === 0 ? (
-        <div className={styles.recentCompact}>
+        <div className={`${styles.recentCompact} ${styles.regionRecent}`}>
           <h2 id="event-recent-heading" className={styles.recentCompactTitle}>
             {overview.canManageEvent ? "최근 입퇴장" : "배정 데스크 최근 입퇴장"}
           </h2>
           <span className={styles.recentCount}>0건</span>
           <span className={styles.recentCompactMeta}>
-            자동 갱신되지 않습니다 · <time dateTime={overview.updatedAt}>마지막 갱신 {UPDATED_TIME_FORMAT.format(new Date(overview.updatedAt))}</time>
+            다른 화면에서 돌아오면 갱신 · <time dateTime={overview.updatedAt}>마지막 갱신 {UPDATED_TIME_FORMAT.format(new Date(overview.updatedAt))}</time>
           </span>
           <button
             type="button"
@@ -800,22 +1264,18 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             </svg>
           </button>
           {refreshing ? <p className={styles.refreshStatus} role="status">최신 운영 현황을 불러오고 있습니다.</p> : null}
-          {refreshError ? <p className="state-error" role="alert">{refreshError} 이전에 불러온 내용은 유지됩니다.</p> : null}
           <p className={styles.recentCompactEmpty}>
             {overview.canManageEvent
-              ? "아직 입퇴장 기록이 없습니다."
-              : "배정된 데스크에 아직 입퇴장 기록이 없습니다."}
+              ? "아직 입퇴장 기록이 없습니다. 현장 운영의 데스크에서 입장을 기록하면 여기에 표시됩니다."
+              : "배정된 데스크에 아직 입퇴장 기록이 없습니다. 담당 데스크에서 입장 기록이 생기면 여기에 표시됩니다."}
           </p>
         </div>
       ) : (
       <ConsoleSection
         headingId="event-recent-heading"
         title={overview.canManageEvent ? "최근 입퇴장" : "배정 데스크 최근 입퇴장"}
-        description={(
-          <>
-            자동 갱신되지 않습니다 · <time dateTime={overview.updatedAt}>마지막 갱신 {UPDATED_TIME_FORMAT.format(new Date(overview.updatedAt))}</time>
-          </>
-        )}
+        className={styles.regionRecent}
+        description={<time dateTime={overview.updatedAt}>마지막 갱신 {UPDATED_TIME_FORMAT.format(new Date(overview.updatedAt))}</time>}
         action={(
           <div className={styles.recentActions}>
             <span className={styles.recentCount}>{overview.recent.length}건</span>
@@ -835,10 +1295,8 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             </button>
           </div>
         )}
-        surface="panel"
       >
         {refreshing ? <p className={styles.refreshStatus} role="status">최신 운영 현황을 불러오고 있습니다.</p> : null}
-        {refreshError ? <p className="state-error" role="alert">{refreshError} 이전에 불러온 내용은 유지됩니다.</p> : null}
         {overview.recent.length ? (
           <ul className={styles.activityList}>
             {overview.recent.map((check) => (
@@ -859,37 +1317,13 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         ) : (
           <p className="empty-state">
             {overview.canManageEvent
-              ? "아직 입퇴장 기록이 없습니다."
-              : "배정된 데스크에 아직 입퇴장 기록이 없습니다."}
+              ? "아직 입퇴장 기록이 없습니다. 현장 운영의 데스크에서 입장을 기록하면 여기에 표시됩니다."
+              : "배정된 데스크에 아직 입퇴장 기록이 없습니다. 담당 데스크에서 입장 기록이 생기면 여기에 표시됩니다."}
           </p>
         )}
       </ConsoleSection>
       )}
-      {overview.canManageEvent && schedule.length > 0 ? (
-        <ConsoleSection
-          headingId="event-schedule-heading"
-          title="현재·다음 일정"
-          description="게시 여부와 관계없이 등록된 일정입니다. 실제 진행 상태가 아닌 예정 기준입니다."
-          action={<Link className="button button-secondary" href={`${base}/content`}>프로그램 일정</Link>}
-          surface="panel"
-        >
-          <ol className={styles.programList}>
-            {schedule.map((program) => (
-              <li key={program.id}>
-                <div className={styles.programTime}>
-                  <span>{formatEventDate(program.date)}</span>
-                  <span>{formatProgramTime(program)}</span>
-                </div>
-                <div className={styles.programInfo}>
-                  <strong>{program.title}</strong>
-                  {program.place ? <span>{program.place}</span> : null}
-                </div>
-                <span className={styles.scheduledBadge}>예정</span>
-              </li>
-            ))}
-          </ol>
-        </ConsoleSection>
-      ) : null}
+      </div>
     </ConsolePage>
   );
 }

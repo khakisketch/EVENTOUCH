@@ -149,7 +149,7 @@ test('handoff opens the dialog once after load, validates, then consumes the par
   const source = read(OPS);
   assert.match(source, /readAssignAccountParam\(window\.location\.search\)/u);
   assert.match(source, /assignHandoffAppliedRef\.current === eventId/u, 'one application per event');
-  assert.match(source, /handoffBlocked = handoffArchived \|\| !state\.canManage/u, 'permission and archived gate the open');
+  assert.match(source, /handoffBlocked = handoffArchived \|\| !canWriteOnsite/u, 'onsite permission and archived gate the open');
   assert.match(source, /person\.role !== "STAFF" \|\| !person\.active/u, 'only active staff preselect');
   assert.match(source, /setAssignPreset\(\{ accountId: person\.id \}\)/u, 'the preset carries the person, no target');
   assert.match(source, /url\.searchParams\.delete\("assignAccount"\)/u, 'only that param is removed');

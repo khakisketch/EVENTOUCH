@@ -7,14 +7,17 @@ process.env.EVENTOUCH_SMS_MOCK = '1';
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const { prepareCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = require('./capture-dir.cjs');
 const path = require('node:path');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const before = process.argv.includes('--before');
-const out = `/tmp/opencode/eventouch-captures/task-first-final/${before ? 'before' : 'after'}`;
+const captureRoot = process.env.EVENTOUCH_TASK_FINAL_CAPTURE_ROOT || defaultCaptureDir(`task-first-final-${runStamp()}`);
+const out = path.join(captureRoot, before ? 'before' : 'after');
 
 async function main() {
-  fs.mkdirSync(out, { recursive: true });
+  prepareCaptureDir(out);
+  process.env.TMPDIR = ensureRunTmpDir(out);
   const f = await startAuditFixture();
   let browser;
   const errors = [], checks = [];
@@ -105,11 +108,12 @@ async function main() {
       const signupRoute = '**/api/events/*/signup';
       await page.route(signupRoute, route => route.abort('failed'));
       await page.getByRole('button', { name: '신청하기', exact: true }).click();
-      await page.getByRole('alert').filter({ hasText: '연결하지 못했습니다' }).waitFor();
+      await page.getByRole('alert').filter({ hasText: '신청 결과를 확인하지 못했습니다' }).waitFor();
       assert.equal(await page.locator('#field-name').inputValue(), '최종 과제 참가자');
+      assert.equal(await page.locator('#field-name').isDisabled(), true);
       await shot('attendee-register-problem', 390);
       await page.unroute(signupRoute);
-      await page.getByRole('button', { name: '신청하기', exact: true }).click();
+      await page.getByRole('button', { name: '신청 결과 다시 확인', exact: true }).click();
       await page.getByRole('img', { name: /님의 행사 입장 및 퇴장용 QR/ }).waitFor();
       await page.waitForURL(url => url.pathname.endsWith('/ticket') && !url.searchParams.has('ticket'));
       await shot('attendee-ticket-normal', 390);
@@ -151,24 +155,32 @@ async function main() {
 
       // Empty assignment and failed bootstrap are separate product states.
       const emptyId = `empty-staff-${f.suffix}`;
-      await f.helpers.insertAccount(f.harness.database, { id: emptyId, role: 'STAFF', name: '미배정 스태프', email: `${emptyId}@example.test` });
+      await f.helpers.insertAccount(f.harness.database, { orgId: f.helpers.LEGACY_ORG, id: emptyId, role: 'STAFF', name: '미배정 스태프', email: `${emptyId}@example.test` });
       const emptyCookie = await f.helpers.sessionCookie(f.harness, emptyId);
       await setAuth(emptyCookie);
       await page.goto(f.baseUrl + '/staff', { waitUntil: 'networkidle' });
       await page.getByText('배정된 업무가 없습니다. 운영자에게 문의하세요.', { exact: true }).waitFor();
       await shot('staff-empty', 390);
       await setAuth(f.staff.cookie);
-      await page.route('**/api/bootstrap', route => route.abort('failed'));
+      // The staff workspace now reads the lightweight addresses; the same
+      // transport fault is injected on every read address so the retry UI is
+      // exercised whichever address the build uses. Recovery below still
+      // requires the real fetch — nothing is mocked to succeed.
+      for (const pattern of ['**/api/bootstrap', '**/api/console/directory', '**/api/events/*/bootstrap']) {
+        await page.route(pattern, route => route.abort('failed'));
+      }
       await page.goto(f.baseUrl + `/staff/events/${f.eventId}`, { waitUntil: 'networkidle' });
       await page.getByRole('button', { name: '다시 불러오기', exact: true }).waitFor();
       await shot('staff-load-problem', 390);
       await page.unroute('**/api/bootstrap');
+      await page.unroute('**/api/console/directory');
+      await page.unroute('**/api/events/*/bootstrap');
       await page.getByRole('button', { name: '다시 불러오기', exact: true }).click();
       await page.locator('#staff-desk').waitFor();
       checks.push({ name: 'staff-empty-problem-recovery', emptyAssignment: true, failedFetch: 'injected transport abort', realRetry: true, multipleDesksRequireChoice: true });
     }
     assert.deepEqual(errors, []);
-    fs.writeFileSync(path.join(out, 'verification.json'), JSON.stringify({ at: new Date().toISOString(), buildId: fs.readFileSync('apps/web/.next/BUILD_ID', 'utf8').trim(), roles: ['AGENCY', 'STAFF', 'anonymous'], simulation: 'Chromium and task-local PostgreSQL/API, no real sending/devices', checks, errors, seededBooth: Boolean(booth) }, null, 2));
+    fs.writeFileSync(path.join(out, 'verification.json'), JSON.stringify({ at: new Date().toISOString(), buildId: fs.readFileSync('apps/web/.next/BUILD_ID', 'utf8').trim(), roles: ['AGENCY', 'STAFF', 'anonymous'], simulation: 'Chromium and task-local PostgreSQL/API, no real sending/devices', checks, errors, seededBooth: Boolean(booth) }, null, 2), { mode: 0o600 });
     console.log(`[task-first-final] ${checks.length} rendered checks passed (${before ? 'before' : 'after'})`);
   } finally {
     if (browser) await browser.close();

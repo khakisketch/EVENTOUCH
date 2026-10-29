@@ -7,15 +7,18 @@ for (const key of ['SOLAPI_API_KEY', 'SOLAPI_API_SECRET', 'SOLAPI_SENDER', 'SOLA
 process.env.EVENTOUCH_SMS_MOCK = '1';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { prepareCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = require('./capture-dir.cjs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const before = process.argv.includes('--before');
-const out = `/tmp/opencode/eventouch-captures/design-review/${before ? 'before' : 'after'}`;
+const out = (process.env.CAPTURE_DIR || '').trim()
+  || path.join(defaultCaptureDir(`design-review-${runStamp()}`), before ? 'before' : 'after');
 
 async function main() {
-  fs.mkdirSync(out, { recursive: true });
+  prepareCaptureDir(out);
+  process.env.TMPDIR = ensureRunTmpDir(out);
   const f = await startAuditFixture();
   let browser;
   const errors = [];
@@ -42,7 +45,7 @@ async function main() {
     await run('report.create', { title: '행사 결과', subtitle: '행사 운영 결과', summary: '현장 운영 결과를 기록합니다.', sections: ['overview', 'attendance'] });
     for (const [stage, name] of [['ENDED', '읽기전용 종료 행사'], ['ARCHIVED', '읽기전용 보관 행사']]) {
       const id = `design-${stage.toLowerCase()}-${f.suffix}`;
-      await f.helpers.insertEvent(f.harness.database, { id, slug: id,
+      await f.helpers.insertEvent(f.harness.database, { orgId: f.helpers.LEGACY_ORG, id, slug: id,
         payload: { id, slug: id, name, stage, date: '2027-01-16', start: '09:00', end: '17:00', features: ['screen'] },
         workspace: f.helpers.emptyWorkspace(),
       });
@@ -103,7 +106,7 @@ async function main() {
       }
     }
     assert.deepEqual(errors, []);
-    fs.writeFileSync(path.join(out, 'verification.json'), JSON.stringify({ at: new Date().toISOString(), buildId: fs.readFileSync(path.join(__dirname, '../apps/web/.next/BUILD_ID'), 'utf8').trim(), role: 'AGENCY', simulation: 'isolated PostgreSQL fixture and Chromium; no provider delivery', checks, errors }, null, 2));
+    fs.writeFileSync(path.join(out, 'verification.json'), JSON.stringify({ at: new Date().toISOString(), buildId: fs.readFileSync(path.join(__dirname, '../apps/web/.next/BUILD_ID'), 'utf8').trim(), role: 'AGENCY', simulation: 'isolated PostgreSQL fixture and Chromium; no provider delivery', checks, errors }, null, 2), { mode: 0o600 });
     console.log(`[design-review] ${checks.length} rendered/interaction checks passed (${before ? 'before' : 'after'})`);
   } finally {
     if (browser) await browser.close();

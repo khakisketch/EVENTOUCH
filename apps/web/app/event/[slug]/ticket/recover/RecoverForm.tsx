@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import ticketStyles from "../ticket.module.css";
 
 type Failure = { message: string; field?: string };
 
@@ -100,9 +101,11 @@ export default function RecoverForm({ slug }: { slug: string }) {
             />
           </div>
           {failure ? <p role="alert">{failure.message}</p> : null}
-          <button type="submit" className="button button-primary" disabled={working}>
-            {working ? "보내는 중입니다" : "인증번호 받기"}
-          </button>
+          <p className={ticketStyles.ticketMessageActions}>
+            <button type="submit" className="button button-primary" disabled={working}>
+              {working ? "보내는 중입니다" : "인증번호 받기"}
+            </button>
+          </p>
         </form>
       ) : (
         <form className="registration-form" onSubmit={confirmCode}>
@@ -110,8 +113,7 @@ export default function RecoverForm({ slug }: { slug: string }) {
             {phone} 번호로 인증번호 요청을 접수했습니다. 10분 안에 입력해 주세요.
           </p>
           <p className="recover-note">
-            이 화면에서는 문자 도착 여부를 확인할 수 없습니다. 코드가 오지 않으면 다시 받거나 행사 안내에서
-            운영 정보를 확인하세요.
+            문자가 오지 않으면 아래에서 다시 받으세요.
           </p>
           <div className="form-field">
             <label htmlFor="recover-code">인증번호 6자리</label>
@@ -128,9 +130,12 @@ export default function RecoverForm({ slug }: { slug: string }) {
             />
           </div>
           {failure ? <p role="alert">{failure.message}</p> : null}
-          <button type="submit" className="button button-primary" disabled={working}>
-            {working ? "확인 중입니다" : "내 티켓 열기"}
-          </button>
+          <p className={ticketStyles.ticketMessageActions}>
+            <button type="submit" className="button button-primary" disabled={working}>
+              {working ? "확인 중입니다" : "내 티켓 열기"}
+            </button>
+          </p>
+          <p className={ticketStyles.ticketMessageActions}>
           <button
             type="button"
             className="button button-secondary"
@@ -139,6 +144,8 @@ export default function RecoverForm({ slug }: { slug: string }) {
           >
             {working ? "보내는 중입니다" : "인증번호 다시 받기"}
           </button>
+          </p>
+          <p className={ticketStyles.ticketMessageActions}>
           <button
             type="button"
             className="button button-secondary"
@@ -151,9 +158,10 @@ export default function RecoverForm({ slug }: { slug: string }) {
           >
             연락처 바꾸기
           </button>
+          </p>
         </form>
       )}
-      <p>
+      <p className={ticketStyles.ticketMessageActions}>
         <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내·문의처 보기</Link>
       </p>
     </div>

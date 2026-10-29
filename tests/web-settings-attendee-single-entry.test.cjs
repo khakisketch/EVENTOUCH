@@ -144,9 +144,12 @@ test('settings-attendee-single-entry: retries reuse one id per command fingerpri
   // The actor comes from the concurrent session/bootstrap read, not from an
   // account directory: AGENCY everywhere, MANAGER on their own events. The
   // server still authorizes every settings command.
-  assert.match(settings, /fetch\("\/api\/auth\/me", \{ cache: "no-store" \}\)/);
-  assert.match(settings, /fetch\("\/api\/bootstrap", \{ cache: "no-store" \}\)/);
+  assert.match(settings, /consoleFetch\("\/api\/auth\/me", \{ cache: "no-store" \}\)/);
+  assert.match(settings, /consoleFetch\(`\/api\/events\/\$\{encodeURIComponent\(eventId\)\}\/bootstrap`, \{ cache: "no-store" \}\)/);
   assert.match(settings, /const user = record\(record\(meData\)\?\.user\)/);
-  assert.match(settings, /const canManageEvent = role === "AGENCY" \|\| \(role === "MANAGER" && memberships\.some\(/);
-  assert.match(settings, /Display gate only: AGENCY everywhere, MANAGER on their own events/);
+  assert.match(settings, /const role = text\(user\.role\)/);
+  assert.match(settings, /const myId = text\(user\.id\)/);
+  assert.match(settings, /const canWriteSettings = canWriteEvent\(capabilities, "event\.update"\)/);
+  assert.match(settings, /const canWriteIntake = canWriteEvent\(capabilities, "form\.publish"\)/);
+  assert.match(settings, /if \(!canWriteEvent\(\{ role: state\.role, userId: state\.userId, memberships: state\.memberships, eventId \}, command\)\) return false/);
 });

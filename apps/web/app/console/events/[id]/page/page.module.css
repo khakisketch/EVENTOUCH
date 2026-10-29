@@ -11,7 +11,7 @@
 .statePill {
   display: inline-flex;
   align-items: center;
-  min-height: 28px;
+  min-height: 32px;
   padding: 3px 10px;
   border: 1px solid var(--line-strong);
   border-radius: 999px;
@@ -71,7 +71,7 @@
 .conflictPanel h2,
 .recoveryGroup h2 {
   margin: 0 0 var(--s1);
-  font-size: 18px;
+  font-size: var(--h3);
 }
 
 .conflictPanel p { margin: 0; font-size: var(--small); line-height: 1.45; }
@@ -80,16 +80,17 @@
 
 .editorLayout {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(340px, 0.95fr);
+  grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr);
   align-items: start;
-  gap: var(--s5);
+  gap: var(--s7);
   min-width: 0;
 }
 
 .controls {
   display: grid;
-  gap: var(--s4);
+  gap: var(--s5);
   min-width: 0;
+  scroll-margin-top: var(--s4);
 }
 
 /* In-form skip link to the save/publish actions. Unlike the global
@@ -100,12 +101,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  justify-self: start;
+  max-width: 100%;
   min-height: 44px;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--info-line);
   border-radius: var(--radius);
   background: var(--info-soft);
   color: var(--info);
+  font-size: var(--small);
   font-weight: 700;
   text-underline-offset: 4px;
 }
@@ -129,20 +133,18 @@
   outline-offset: 2px;
 }
 
-/* The save/publish region rides at the bottom of the viewport while the
-   form scrolls above it, so change state and both actions stay visible.
-   It settles into the normal flow once its own place is reached. */
+/* The save/publish region sits in the normal form flow after the fields,
+   not over them: a sticky overlay would cover the last control and force
+   scroll-clearance hacks on every focus target below. */
 .saveBar {
-  position: sticky;
-  bottom: calc(var(--s3) + env(safe-area-inset-bottom, 0px));
-  z-index: 5;
+  position: static;
   display: grid;
   gap: var(--s3);
   padding: var(--s4);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   background: var(--paper);
-  box-shadow: 0 -4px 18px var(--shadow-color);
+  box-shadow: none;
 }
 
 /* The sticky bar reads as one compact row: the pill keeps its size while
@@ -159,6 +161,7 @@
 .saveBar .versionSummary > span:last-child {
   min-width: 0;
   overflow-wrap: anywhere;
+  font-weight: 600;
 }
 
 /* Detail diff folds into one summary row; the full existing sentence stays
@@ -181,31 +184,65 @@
   }
 }
 
-/* The sticky bar overlays the column end: focused controls keep clearance
-   above the bar when the browser scrolls them into view. */
+/* The save region is in-flow, so focused controls need no extra clearance
+   above a bar that no longer overlaps them. */
 .controls :is(a[href], button, input, select, summary, [tabindex]) {
-  scroll-margin-bottom: 220px;
+  scroll-margin-bottom: var(--s4);
 }
 
 /* Advanced banner controls fold into a native disclosure: the basic edit
    (background, banner image, copy) stays on top. The summary is a real
-   keyboard control with a 44px target. */
+   keyboard control with a 44px target. Paper surface + strong border +
+   persistent chevron keep it reading as a collapsed control, never as a
+   disabled field. */
 .advanced {
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-small);
-  background: var(--surface-muted);
+  background: var(--paper);
 }
 
 .advancedSummary {
   display: flex;
   align-items: center;
+  gap: var(--s2);
   min-height: 44px;
   padding: var(--s2) var(--s3);
   border-radius: var(--radius-small);
   color: var(--ink);
   font-size: var(--small);
-  font-weight: 650;
+  font-weight: 700;
   cursor: pointer;
+  list-style: none;
+}
+
+.advancedSummary::-webkit-details-marker {
+  display: none;
+}
+
+.advancedSummary::before {
+  content: "+";
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--brand-text);
+  font-size: var(--small);
+  font-weight: 800;
+}
+
+.advanced[open] > .advancedSummary::before {
+  content: "−";
+  border-color: var(--brand);
+  background: var(--soft);
+}
+
+.advancedSummary:hover {
+  background: var(--surface-muted);
 }
 
 .advancedSummary::marker {
@@ -228,17 +265,17 @@
   gap: var(--s3);
   min-width: 0;
   margin: 0;
-  padding: var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
+  padding: var(--s5) 0 var(--s4);
+  border: 0;
+  border-top: 1px solid var(--line);
 }
 
 .controlGroup legend {
-  padding: 0 8px;
+  padding: 0 var(--s3) 0 0;
   color: var(--ink);
-  font-size: 19px;
-  font-weight: 750;
+  font-size: var(--h3);
+  font-weight: 700;
+  word-break: keep-all;
 }
 
 .help {
@@ -282,13 +319,22 @@
   gap: var(--s2);
   min-height: 44px;
   padding: 9px 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-small);
-  background: var(--surface-muted);
+  background: var(--paper);
 }
 
-.imageStatusName { min-width: 0; overflow-wrap: anywhere; font-weight: 650; }
-.imageStatusMeta { margin-left: auto; color: var(--muted); font-size: 13px; }
+.imageStatusName { min-width: 0; overflow-wrap: anywhere; font-weight: 700; color: var(--ink); }
+.imageStatusMeta {
+  margin-left: auto;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
 
 .fileButton {
   position: relative;
@@ -396,10 +442,12 @@
   display: grid;
   gap: var(--s3);
   min-width: 0;
-  padding: var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
+  width: 100%;
+  max-width: 460px;
+  justify-self: end;
+  padding-left: var(--s5);
+  border-left: 1px solid var(--line);
+  scroll-margin-top: var(--s4);
 }
 
 .previewHeader {
@@ -415,7 +463,7 @@
   min-width: 0;
 }
 
-.previewHeader h2 { margin: 0 0 var(--s1); font-size: 19px; word-break: keep-all; overflow-wrap: anywhere; }
+.previewHeader h2 { margin: 0 0 var(--s1); font-size: var(--h3); word-break: keep-all; overflow-wrap: anywhere; }
 .previewHeader p { margin: 0; color: var(--muted); font-size: 13px; }
 
 .liveMark {
@@ -438,7 +486,32 @@
 
 .viewportChoices { display: flex; flex-wrap: wrap; gap: 6px; }
 
-.sourceSwitch { display: flex; flex-wrap: wrap; gap: 6px; }
+.sourceSwitch { display: inline-flex; flex-wrap: wrap; gap: 0; width: max-content; max-width: 100%; border: 1px solid var(--line-strong); border-radius: 999px; padding: 3px; background: var(--paper); }
+
+.sourceSwitch .viewportChoice {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.sourceSwitch .viewportChoice[aria-pressed="true"] {
+  border: 0;
+  background: var(--soft);
+  color: var(--brand-text);
+  font-weight: 800;
+}
+
+.viewportChoices .viewportChoice {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.viewportChoices .viewportChoice[aria-pressed="true"] {
+  border-color: var(--brand);
+  background: var(--soft);
+  color: var(--ink);
+  font-weight: 700;
+}
 
 .viewportChoice {
   min-height: 44px;
@@ -464,7 +537,6 @@
   justify-content: center;
   min-width: 0;
   padding: var(--s3);
-  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface-muted);
 }
@@ -499,7 +571,7 @@
 
 @media (max-width: 1080px) {
   .editorLayout { grid-template-columns: minmax(0, 1fr); }
-  .previewPanel { position: static; }
+  .previewPanel { position: static; max-width: none; justify-self: stretch; padding: var(--s5) 0 0; border: 0; border-top: 1px solid var(--line); }
 }
 
 @media (max-width: 680px) {
@@ -507,13 +579,119 @@
   .conflictActions { justify-content: flex-start; }
   .fieldGrid { grid-template-columns: minmax(0, 1fr); }
   .toggleGrid { grid-template-columns: minmax(0, 1fr); }
-  .controlGroup { padding: var(--s3); }
-  .previewPanel { padding: var(--s3); }
+  .controlGroup { padding: var(--s4) 0 var(--s3); }
+  .previewPanel { padding: var(--s3) 0 0; }
+  .phoneStage { padding: var(--s2); }
   .saveBar { padding: var(--s3); gap: var(--s2); }
+}
+
+/* Editing-head status mirror: one quiet row carrying the same pill + version
+   line as the save region, so the draft/publish state reads before the
+   field list instead of only after it. The mirrored text stays
+   aria-hidden in markup; the save region below keeps the live region. */
+.editStatus {
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+/* Per-group unsaved marker: an inline flag inside the group legend naming
+   which editing unit holds unsaved changes. Derived from the same saved
+   baselines as the save guard; warning soft/light/dark triplet only. */
+.groupFlag {
+  display: inline-block;
+  margin-left: var(--s2);
+  padding: 2px 10px;
+  border: 1px solid var(--warning-line);
+  border-radius: 999px;
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+  vertical-align: middle;
+  word-break: keep-all;
+}
+
+/* Preview switch blocks: each control row keeps a visible micro-label so
+   the two pill rows stop competing as one ambiguous cluster. The block
+   keeps label and row tight while the panel gap separates the blocks. */
+.switchBlock {
+  display: grid;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.switchLabel {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  word-break: keep-all;
 }
 
 /* The jump nav marks the section in view on its own link, so a long editor
    page with the preview at the bottom still says where the operator is. */
 .navSticky {
+  display: grid;
+  gap: var(--s1);
   min-width: 0;
+}
+
+/* Visible in-page index context: a quiet scope label above the shared
+   jump nav so the anchor row reads as a contents index, not app tabs.
+   aria-hidden: the nav's own aria-label carries screen-reader naming
+   once. Static wrapper — never covers the section it jumps to. */
+.navIndexLabel {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+/* The workflow starts with its current publication state and actions, not
+   a long list of fields. Both directions remain ordinary in-page links. */
+.workspaceIntro { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: var(--s3); }
+.workspaceIntro h2, .editHeading h2 { margin: 0 0 var(--s1); font-size: var(--h3); }
+.workspaceIntro p, .editHeading p, .workflowHelp, .changeSummary { margin: 0; color: var(--muted); font-size: var(--small); line-height: 1.5; }
+.changeSummary { color: var(--ink); overflow-wrap: anywhere; }
+.previewJump, .backToEdit { display: inline-flex; align-items: center; min-height: 44px; color: var(--brand-text); font-weight: 700; text-underline-offset: 4px; }
+.previewJump:focus-visible, .backToEdit:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.editHeading { padding-top: var(--s2); }
+.backToEdit { display: none; }
+@media (max-width: 1080px) { .backToEdit { display: inline-flex; justify-self: start; } }
+.reviewChanges { min-width: 0; border-top: 1px solid var(--line); }
+.reviewChanges summary { display: flex; align-items: center; min-height: 44px; color: var(--brand-text); cursor: pointer; font-size: var(--small); font-weight: 700; }
+.reviewChanges summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.reviewChanges p { margin: 0 0 var(--s2); color: var(--muted); font-size: var(--small); }
+.reviewChanges dl { display: grid; gap: var(--s2); margin: 0; }
+.reviewChanges dl > div { display: grid; grid-template-columns: minmax(90px, 0.35fr) minmax(0, 1fr); gap: var(--s2); font-size: var(--small); }
+.reviewChanges dt { font-weight: 700; }
+.reviewChanges dd { margin: 0; overflow-wrap: anywhere; }
+.reviewChanges dd span { color: var(--muted); }
+
+/* On narrow screens the real preview and editor share a workspace. Neither
+   is unmounted, so inputs, upload state and disclosures survive switching. */
+.mobileSwitcher, .inlinePreview { display: none; }
+.editStatusLine { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--s2); color: var(--muted); font-size: var(--small); }
+.editStatusLine a { display: inline-flex; align-items: center; min-height: 44px; color: var(--brand-text); font-weight: 700; text-underline-offset: 4px; }
+.editStatusLine a:focus-visible, .inlinePreview:focus-visible, .mobileSwitcher button:focus-visible, .backToEdit:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+@media (max-width: 1080px) {
+  .mobileSwitcher { display: flex; gap: var(--s2); margin-bottom: var(--s3); }
+  .mobileSwitcher button, .inlinePreview, .backToEdit { min-height: 44px; padding: 8px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-small); background: var(--paper); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; }
+  .mobileSwitcher button[aria-pressed="true"] { background: var(--soft); color: var(--brand-text); border-color: var(--brand); }
+  .inlinePreview { display: inline-flex; justify-self: start; align-items: center; }
+  .backToEdit { display: inline-flex; justify-self: start; align-items: center; }
+  .editorLayout[data-mobile-view="edit"] .previewPanel, .editorLayout[data-mobile-view="preview"] .controls { display: none; }
+  .editorLayout[data-mobile-view="preview"] .previewPanel { padding-top: 0; border-top: 0; }
+  .controls { gap: var(--s3); }
+}
+
+/* In the phone console, the fixed shell header must not cover a focused
+   preview heading, edit return control or save-review destination. */
+@media (max-width: 768px) {
+  .previewHeader h2, .inlinePreview, .controls, .saveAnchor { scroll-margin-top: 72px; }
 }

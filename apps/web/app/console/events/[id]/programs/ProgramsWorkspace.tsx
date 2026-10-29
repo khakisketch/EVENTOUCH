@@ -13,6 +13,8 @@ import ConsoleFormActions from "../../../console-ui/ConsoleFormActions";
 import { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import { useConsoleDraftGuard } from "../../../console-draft-guard";
+import { consoleFetch, subscribeConsoleFreshness } from "../../../../../lib/console-api";
+import { canWriteEvent } from "../../../../../lib/event-capabilities";
 import styles from "./programs.module.css";
 import { useEventCloseHandoff } from "../../../use-event-close-handoff";
 import { readCloseSnapshot, type CloseSnapshot } from "../../../console-event-close";
@@ -68,6 +70,7 @@ type WorkspaceState =
       archived: boolean;
       features: string[];
       canManage: boolean;
+      canWritePrograms: boolean;
       modules: Module[];
       responses: Response[];
       questions: Question[];
@@ -109,6 +112,44 @@ const MODULE_TYPES: Array<{ id: string; label: string }> = [
 // Plain slicing only; creation/edit/status affordances stay above the
 // fold and the existing empty states are untouched.
 const MODULE_PAGE_SIZE = 12;
+// Nested moderation lists stay bounded the same way: first page only,
+// then grow on demand. Drafts are keyed by id so paging/filtering never
+// drops them.
+const MODERATION_PAGE_SIZE = 10;
+
+// Quick-review shortcut target: one backlog class at a time. Q&A keeps its
+// two overlapping classes separate (미답변 vs 승인 대기 overlap, so no
+// summed total is ever shown).
+type ReviewTarget = "qa-unanswered" | "qa-pending" | "photo" | "post";
+
+// __NEXT_VISIBLE_MODERATION_ID_BEGIN__
+// Next visible moderation target within one rendered list, in DOM order:
+// the row after the processed one, else null so the caller always falls
+// back to #moderation-status. Pure order math over the visible row ids —
+// never the global store, never a hidden filtered row.
+export function nextVisibleModerationId(visibleIds: string[], currentId: string): string | null {
+  const at = visibleIds.indexOf(currentId);
+  if (at === -1) return visibleIds.length ? visibleIds[0] : null;
+  return at + 1 < visibleIds.length ? visibleIds[at + 1] : null;
+}
+// __NEXT_VISIBLE_MODERATION_ID_END__
+
+// Visible row ids of the single rendered list that contains the processed
+// row, in DOM order. Scoped to the row's own <ul> so a next target can never
+// come from another module or a filtered-out page.
+function visibleModerationRowIds(kind: "question" | "photo" | "post", currentId: string): string[] {
+  if (typeof document === "undefined") return [];
+  const prefix = `moderation-${kind}-`;
+  const current = document.getElementById(`${prefix}${currentId}`);
+  const list = current?.closest("ul");
+  if (!list) return [];
+  const ids: string[] = [];
+  list.querySelectorAll(`li[id^="${prefix}"]`).forEach((row) => {
+    const id = row.id.slice(prefix.length);
+    if (id) ids.push(id);
+  });
+  return ids;
+}
 
 // Survey average reuses the reports snapshot math (one decimal, null on empty).
 function averageLabel(values: number[]): string | null {
@@ -273,6 +314,13 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
   // contract is untouched, filtering reads the already-loaded modules.
   const [programQuery, setProgramQuery] = useState("");
   const [programStatusFilter, setProgramStatusFilter] = useState("");
+  // Nested moderation filters live here (not in the lists) so a quick-review
+  // shortcut can set them explicitly in the same batch as clearing the
+  // program-level search. Drafts (module dialog, Q&A answers) are untouched
+  // by every filter change below.
+  const [qaFilter, setQaFilter] = useState<"all" | "unanswered" | "pending">("all");
+  const [photoFilter, setPhotoFilter] = useState<"all" | "PENDING" | "APPROVED" | "HIDDEN">("PENDING");
+  const [postFilter, setPostFilter] = useState<"all" | "PENDING" | "APPROVED" | "HIDDEN">("PENDING");
   // Create lands appended at the end of the server list, so a 13th+ module
   // would hide behind 더 보기. A successful create reveals the full list and
   // parks a focus request for the new card heading (effect below).
@@ -284,10 +332,18 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
   // against the filtered list, so focus lands on the filtered card instead
   // of the unfiltered position. Assigned during render below.
   const visibleModulesRef = useRef<Module[]>([]);
+  // After a successful moderation, focus lands on the next visible row of
+  // the same rendered list (same module, same filter page), else the
+  // moderation status line. Row containers carry tabIndex -1 so keyboard
+  // operators stay in flow. The request is scheduled only after a confirmed
+  // success, never before the write and never on failure, so a pending
+  // request can never steal focus later.
+  const moderationFocusRef = useRef<{ kind: "question" | "photo" | "post"; id: string | null } | null>(null);
 
   // 보관된 행사는 서버가 모든 쓰기를 거부하므로(409) 쓰기 affordance를
-  // 잠그고 읽기·내보내기만 둡니다. 역할·멤버십 게이트는 그대로 둡니다.
-  const writeLocked = state.kind === "ready" && state.archived;
+  // 잠그고 읽기·내보내기만 둡니다. programs 스코프가 없는 멤버십([] 등)은
+  // 같은 읽기 전용 취급이며, 역할·멤버십 존재 게이트는 그대로 둡니다.
+  const writeLocked = state.kind === "ready" && (state.archived || !state.canWritePrograms);
 
   // Display-only feature gate mirror: the server rejects every module write
   // with 409 when the module type is off, so writes are pre-blocked with the
@@ -299,6 +355,39 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
   function revealMoreModules() {
     programRevealRef.current = moduleLimit;
     setModuleLimit((limit) => limit + MODULE_PAGE_SIZE);
+  }
+
+  // Quick-review shortcut: one batch that clears the obstructing
+  // program-level search/status, reveals through the relevant module, applies the
+  // matching nested filter, then lands keyboard focus on the first visible
+  // row of that class. Input drafts are never touched here.
+  function runReviewShortcut(target: ReviewTarget) {
+    if (state.kind !== "ready") return;
+    setProgramQuery("");
+    setProgramStatusFilter("");
+    const targetModuleIds = new Set(state.questions.filter((question) =>
+      target === "qa-unanswered" ? !question.answer.trim() : !question.approved
+    ).map((question) => question.moduleId));
+    const targetIndex = state.modules.findIndex((module) =>
+      target === "photo" ? module.type === "photo" : target === "post" ? module.type === "board" : targetModuleIds.has(module.id)
+    );
+    setModuleLimit((current) => Math.max(current, targetIndex + 1));
+    if (target === "qa-unanswered") setQaFilter("unanswered");
+    else if (target === "qa-pending") setQaFilter("pending");
+    else if (target === "photo") setPhotoFilter("PENDING");
+    else setPostFilter("PENDING");
+    const kind = target === "photo" ? "photo" : target === "post" ? "post" : "question";
+    window.setTimeout(() => {
+      const row = document.querySelector(`li[id^="moderation-${kind}-"]`);
+      if (row) {
+        row.scrollIntoView({ block: "nearest" });
+        (row as HTMLElement).focus({ preventScroll: true });
+        return;
+      }
+      const status = document.getElementById("moderation-status");
+      status?.scrollIntoView({ block: "nearest" });
+      (status as HTMLElement | null)?.focus?.({ preventScroll: true });
+    }, 0);
   }
 
   function moduleInitialDraft(module: Module): ModuleDraft {
@@ -334,8 +423,8 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     if (!silent) setState({ kind: "loading" });
     try {
       const [meRes, bootRes] = await Promise.all([
-        fetch("/api/auth/me", { cache: "no-store" }),
-        fetch("/api/bootstrap", { cache: "no-store" }),
+        consoleFetch("/api/auth/me", { cache: "no-store" }),
+        consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store" }),
       ]);
       if (meRes.status === 401 || bootRes.status === 401) {
         router.push(loginHrefForLocation(window.location.pathname, window.location.search));
@@ -359,17 +448,29 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       }
       const role = typeof me.user.role === "string" ? me.user.role : "";
       const myId = typeof me.user.id === "string" ? me.user.id : "";
-      const memberships: Array<{ accountId: string; eventId: string }> = Array.isArray(bootstrap.memberships)
+      // Retain the raw membership grant: omitted write means full access,
+      // [] means read-only. Never default a missing grant to [] here; the
+      // capability helper owns that distinction.
+      const memberships: Array<{ accountId: string; eventId: string; write?: unknown }> = Array.isArray(bootstrap.memberships)
         ? bootstrap.memberships.flatMap((item) => {
             const membership = asRecord(item);
             if (!membership || typeof membership.accountId !== "string" || typeof membership.eventId !== "string") return [];
-            return [{ accountId: membership.accountId, eventId: membership.eventId }];
+            return [{ accountId: membership.accountId, eventId: membership.eventId, write: membership.write }];
           })
         : [];
       const canManage =
         role === "AGENCY" ||
         (role === "MANAGER" &&
           memberships.some((membership) => membership.accountId === myId && membership.eventId === eventId));
+      // Programs-scoped write gate (server/event-permissions.js authority).
+      // Unknown membership shapes are accepted by the helper; a thrown
+      // helper never blocks reads.
+      let canWritePrograms = canManage;
+      try {
+        canWritePrograms = canWriteEvent({ role, userId: myId, memberships, eventId }, "module.save");
+      } catch {
+        canWritePrograms = canManage;
+      }
       const event = Array.isArray(bootstrap.events)
         ? bootstrap.events.flatMap((item) => {
             const record = asRecord(item);
@@ -464,6 +565,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
           ? event.features.filter((feature): feature is string => typeof feature === "string")
           : [],
         canManage,
+        canWritePrograms,
         modules,
         responses,
         questions,
@@ -479,6 +581,17 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
+
+  // Shared freshness: safe silent lists only. Drafts (module dialog, Q&A
+  // answers, pending idempotent keys, in-flight writes) must never be
+  // blindly reloaded, so the shared signal only refreshes a clean screen.
+  useEffect(() => {
+    return subscribeConsoleFreshness(() => {
+      if (dialogDirty || answerDirty || pendingRetry || busy !== null || sendingRef.current) return;
+      void load(true);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId, dialogDirty, answerDirty, pendingRetry, busy]);
 
   // After a create reveal or a 더 보기 expansion, focus the destination card
   // heading. The row heading itself is focusable (tabIndex -1), so no extra
@@ -506,6 +619,24 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       heading?.scrollIntoView({ block: "nearest" });
       heading?.focus({ preventScroll: true });
     }
+    // Moderation follow-through: runs only when a request was scheduled
+    // after a confirmed success (the ref stays null while a write is
+    // in-flight or failed, so initiating setBusy can never steal focus).
+    // Lands on the next visible row of the same list, else always falls
+    // back to the moderation status line.
+    if (moderationFocusRef.current !== null) {
+      const request = moderationFocusRef.current;
+      moderationFocusRef.current = null;
+      const row = request.id ? document.getElementById(`moderation-${request.kind}-${request.id}`) : null;
+      if (row) {
+        row.scrollIntoView({ block: "nearest" });
+        row.focus({ preventScroll: true });
+        return;
+      }
+      const status = document.getElementById("moderation-status");
+      status?.scrollIntoView({ block: "nearest" });
+      (status as HTMLElement | null)?.focus?.({ preventScroll: true });
+    }
   }, [state, moduleLimit]);
 
   async function postCommand(command: string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -515,7 +646,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     const commandId = pendingCommandsRef.current.get(attempt) ?? randomCommandId();
     pendingCommandsRef.current.set(attempt, commandId);
     try {
-      const response = await fetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
+      const response = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ commandId, command, payload }),
@@ -654,7 +785,6 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
 
   async function revealQuiz(module: Module) {
     if (writeLocked || !isTypeEnabled("quiz")) return;
-    if (writeLocked) return;
     setBusy(`reveal:${module.id}`);
     setNotice(null);
     setFailure(null);
@@ -682,7 +812,6 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
 
   async function runDraw(module: Module, countOverride?: number) {
     if (writeLocked || !isTypeEnabled("draw")) return;
-    if (writeLocked) return;
     const count = countOverride ?? Number(drawCounts[module.id] ?? "1");
     if (!Number.isInteger(count) || count < 1 || count > 20) {
       setDrawFailure({ id: module.id, message: "당첨 인원은 1~20명으로 입력하세요.", field: "count" });
@@ -715,7 +844,6 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
 
   async function publishDraw(module: Module) {
     if (writeLocked || !isTypeEnabled("draw")) return;
-    if (writeLocked) return;
     setBusy(`publish:${module.id}`);
     setDrawFailure(null);
     setNotice(null);
@@ -738,7 +866,6 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
 
   async function manageQuestion(question: Question, approved: boolean) {
     if (writeLocked || !isTypeEnabled("qa")) return;
-    if (writeLocked) return;
     const answer = (answerDrafts[question.id] ?? question.answer).trim();
     if (approved && !answer) {
       setAnswerFailure({ id: question.id, message: "답변을 입력한 뒤 공개하세요.", field: "answer" });
@@ -762,6 +889,14 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       setNotice(approved
         ? question.approved ? "답변을 저장했습니다. 공개 상태를 유지합니다." : "답변을 저장하고 질문을 공개했습니다."
         : question.approved ? "질문을 비공개로 전환했습니다." : "답변을 저장했습니다. 비공개 상태를 유지합니다.");
+      // Confirmed success only: park the next visible row of this same
+      // rendered list (same module, same filter page), else fall back to
+      // the moderation status line. answerDrafts for the other rows are
+      // untouched by the refresh below. Never scheduled on failure.
+      moderationFocusRef.current = {
+        kind: "question",
+        id: nextVisibleModerationId(visibleModerationRowIds("question", question.id), question.id),
+      };
       await load(true);
     } catch (error) {
       setAnswerFailure({
@@ -781,7 +916,6 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
 
   async function moderatePhoto(photo: Photo, status: "APPROVED" | "HIDDEN") {
     if (writeLocked || !isTypeEnabled("photo")) return;
-    if (writeLocked) return;
     const action = status === "APPROVED" ? "승인" : "반려";
     setBusy(`photo:${photo.id}`);
     setNotice(null);
@@ -789,6 +923,12 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     try {
       await postCommand("photo.moderate", { id: photo.id, status });
       setNotice(`사진을 ${action}했습니다.`);
+      // Confirmed success only: next visible row of this same rendered
+      // list, else the moderation status line. Never on failure.
+      moderationFocusRef.current = {
+        kind: "photo",
+        id: nextVisibleModerationId(visibleModerationRowIds("photo", photo.id), photo.id),
+      };
       await load(true);
     } catch (error) {
       setFailure(error instanceof Error ? error.message : "사진을 처리하지 못했습니다.");
@@ -805,7 +945,6 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
 
   async function moderatePost(post: Post, status: "APPROVED" | "HIDDEN") {
     if (writeLocked || !isTypeEnabled("board")) return;
-    if (writeLocked) return;
     const action = status === "APPROVED" ? "승인" : "반려";
     setBusy(`post:${post.id}`);
     setNotice(null);
@@ -813,6 +952,12 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     try {
       await postCommand("post.moderate", { id: post.id, status });
       setNotice(`게시글을 ${action}했습니다.`);
+      // Confirmed success only: next visible row of this same rendered
+      // list, else the moderation status line. Never on failure.
+      moderationFocusRef.current = {
+        kind: "post",
+        id: nextVisibleModerationId(visibleModerationRowIds("post", post.id), post.id),
+      };
       await load(true);
     } catch (error) {
       setFailure(error instanceof Error ? error.message : "게시글을 처리하지 못했습니다.");
@@ -862,6 +1007,13 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     setProgramStatusFilter("");
   }
 
+  // Backlog classes for the quick-review strip. Q&A 미답변 and 승인 대기는
+  // overlapping classes, so each keeps its own count and no summed total.
+  const backlogUnanswered = state.kind === "ready" ? state.questions.filter((question) => !question.answer.trim()).length : 0;
+  const backlogQaPending = state.kind === "ready" ? state.questions.filter((question) => !question.approved).length : 0;
+  const backlogPhotoPending = state.kind === "ready" ? state.photos.filter((photo) => photo.status === "PENDING").length : 0;
+  const backlogPostPending = state.kind === "ready" ? state.posts.filter((post) => post.status === "PENDING").length : 0;
+
   return (
     <ConsolePage
       pageId="programs"
@@ -871,7 +1023,15 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       meta={state.eventMeta}
       headerActions={<Link className="button button-secondary" href={settingsHref}>행사 설정</Link>}
       toolbar={state.canManage ? (
-        <ConsoleToolbar
+        <>
+          <ReviewStrip
+            unanswered={backlogUnanswered}
+            qaPending={backlogQaPending}
+            photoPending={backlogPhotoPending}
+            postPending={backlogPostPending}
+            onShortcut={runReviewShortcut}
+          />
+          <ConsoleToolbar
           filters={
             <>
               <label>
@@ -911,6 +1071,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
             </>
           }
         />
+        </>
       ) : undefined}
       feedback={
         <>
@@ -921,6 +1082,9 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
           ) : null}
           {state.canManage && state.archived ? (
             <ConsoleFeedback kind="warning">보관된 행사는 읽기 전용입니다. 프로그램과 응답을 볼 수 있지만 만들거나 바꿀 수 없습니다.</ConsoleFeedback>
+          ) : null}
+          {state.canManage && !state.archived && !state.canWritePrograms ? (
+            <ConsoleFeedback kind="warning">이 행사에 대한 프로그램 쓰기 권한이 없습니다. 목록·결과·내보내기는 볼 수 있지만 만들거나 바꿀 수 없습니다.</ConsoleFeedback>
           ) : null}
         </>
       }
@@ -961,6 +1125,12 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
                 answerDrafts={answerDrafts}
                 setAnswerDrafts={setAnswerDrafts}
                 answerFailure={answerFailure}
+                qaFilter={qaFilter}
+                onQaFilter={setQaFilter}
+                photoFilter={photoFilter}
+                onPhotoFilter={setPhotoFilter}
+                postFilter={postFilter}
+                onPostFilter={setPostFilter}
                 onEdit={() => openEdit(module)}
                 closeHref={closeHref}
                 statusPending={statusPending?.id === module.id ? statusPending : null}
@@ -1113,6 +1283,12 @@ function ModuleCard(props: {
   answerDrafts: Record<string, string>;
   setAnswerDrafts: (updater: (current: Record<string, string>) => Record<string, string>) => void;
   answerFailure: { id: string; message: string; field: string | null } | null;
+  qaFilter: "all" | "unanswered" | "pending";
+  onQaFilter: (filter: "all" | "unanswered" | "pending") => void;
+  photoFilter: "all" | "PENDING" | "APPROVED" | "HIDDEN";
+  onPhotoFilter: (filter: "all" | "PENDING" | "APPROVED" | "HIDDEN") => void;
+  postFilter: "all" | "PENDING" | "APPROVED" | "HIDDEN";
+  onPostFilter: (filter: "all" | "PENDING" | "APPROVED" | "HIDDEN") => void;
   onEdit: () => void;
   statusPending: { id: string; status: "DRAFT" | "OPEN" | "CLOSED" } | null;
   onRequestStatus: (status: "DRAFT" | "OPEN" | "CLOSED") => void;
@@ -1154,7 +1330,7 @@ function ModuleCard(props: {
     <li className={styles.moduleCard}>
       <div className={styles.moduleTop}>
         <div className={styles.moduleTitle}>
-          <h3 id={`module-title-${module.id}`} tabIndex={-1}>{module.title}</h3>
+          <h2 id={`module-title-${module.id}`} tabIndex={-1}>{module.title}</h2>
           <p className={styles.moduleMeta}>
             <span className={styles.typeBadge}>{typeLabel(module.type)}</span>
             <span className={`${styles.status} ${module.status === "OPEN" ? styles.statusOpen : module.status === "CLOSED" ? styles.statusClosed : styles.statusDraft}`}>
@@ -1313,14 +1489,16 @@ function ModuleCard(props: {
           answerDrafts={props.answerDrafts}
           setAnswerDrafts={props.setAnswerDrafts}
           answerFailure={props.answerFailure}
+          filter={props.qaFilter}
+          onFilterChange={props.onQaFilter}
           onManage={props.onManageQuestion}
         />
       ) : null}
       {module.type === "photo" ? (
-        <PhotoList photos={props.photos} busy={props.busy} locked={props.locked} featureOn={props.featureOn} eventId={props.eventId} pending={props.photoPending} onRequestModerate={props.onRequestModeratePhoto} onConfirmModerate={props.onConfirmModeratePhoto} onCancelModerate={props.onCancelModeratePhoto} />
+        <PhotoList photos={props.photos} busy={props.busy} locked={props.locked} featureOn={props.featureOn} eventId={props.eventId} pending={props.photoPending} filter={props.photoFilter} onFilterChange={props.onPhotoFilter} onRequestModerate={props.onRequestModeratePhoto} onConfirmModerate={props.onConfirmModeratePhoto} onCancelModerate={props.onCancelModeratePhoto} />
       ) : null}
       {module.type === "board" ? (
-        <PostList posts={props.posts} busy={props.busy} locked={props.locked} featureOn={props.featureOn} pending={props.postPending} onRequestModerate={props.onRequestModeratePost} onConfirmModerate={props.onConfirmModeratePost} onCancelModerate={props.onCancelModeratePost} />
+        <PostList posts={props.posts} busy={props.busy} locked={props.locked} featureOn={props.featureOn} pending={props.postPending} filter={props.postFilter} onFilterChange={props.onPostFilter} onRequestModerate={props.onRequestModeratePost} onConfirmModerate={props.onConfirmModeratePost} onCancelModerate={props.onCancelModeratePost} />
       ) : null}
       <ResultDisclosure
         module={module}
@@ -1421,6 +1599,43 @@ function ResultDisclosure(props: {
   );
 }
 
+// Compact actionable review strip rendered before the toolbar. Each backlog
+// class owns its own button (no summed total; Q&A 미답변/승인 대기는 겹치는
+// 분류). Zero-count classes render no control. With no backlog at all the
+// strip stays a calm one-liner and doubles as the moderation focus anchor.
+function ReviewStrip(props: {
+  unanswered: number;
+  qaPending: number;
+  photoPending: number;
+  postPending: number;
+  onShortcut: (target: ReviewTarget) => void;
+}) {
+  const shortcuts: Array<{ target: ReviewTarget; label: string }> = [];
+  if (props.unanswered > 0) shortcuts.push({ target: "qa-unanswered", label: `미답변 ${props.unanswered}건 검토` });
+  if (props.qaPending > 0) shortcuts.push({ target: "qa-pending", label: `승인 대기 질문 ${props.qaPending}건 검토` });
+  if (props.photoPending > 0) shortcuts.push({ target: "photo", label: `사진 대기 ${props.photoPending}건 검토` });
+  if (props.postPending > 0) shortcuts.push({ target: "post", label: `게시글 대기 ${props.postPending}건 검토` });
+  return (
+    <div className={styles.reviewStrip} id="moderation-status" tabIndex={-1} role="status">
+      <span className={styles.reviewStripLabel}>검토</span>
+      {shortcuts.length ? (
+        shortcuts.map((shortcut) => (
+          <button
+            key={shortcut.target}
+            type="button"
+            className="button button-secondary"
+            onClick={() => props.onShortcut(shortcut.target)}
+          >
+            {shortcut.label}
+          </button>
+        ))
+      ) : (
+        <span className={styles.itemMeta}>검토할 항목이 없습니다.</span>
+      )}
+    </div>
+  );
+}
+
 function QuestionList(props: {
   questions: Question[];
   busy: string | null;
@@ -1429,66 +1644,118 @@ function QuestionList(props: {
   answerDrafts: Record<string, string>;
   setAnswerDrafts: (updater: (current: Record<string, string>) => Record<string, string>) => void;
   answerFailure: { id: string; message: string; field: string | null } | null;
+  filter: "all" | "unanswered" | "pending";
+  onFilterChange: (filter: "all" | "unanswered" | "pending") => void;
   onManage: (question: Question, approved: boolean) => void;
 }) {
+  const { filter, onFilterChange } = props;
+  const [limit, setLimit] = useState(MODERATION_PAGE_SIZE);
   if (!props.questions.length) return <p className={styles.help}>등록된 질문이 없습니다.</p>;
+  const unanswered = props.questions.filter((question) => !question.answer.trim()).length;
+  const pending = props.questions.filter((question) => !question.approved).length;
+  const filtered = props.questions.filter((question) => {
+    if (filter === "unanswered") return !question.answer.trim();
+    if (filter === "pending") return !question.approved;
+    return true;
+  });
+  const shown = filtered.slice(0, limit);
+  const remaining = filtered.length - shown.length;
   return (
-    <ul className={styles.itemList}>
-      {props.questions.map((question) => {
-        const failure = props.answerFailure?.id === question.id ? props.answerFailure : null;
-        return (
-          <li key={question.id} className={styles.itemRow}>
-            <p className={styles.itemText}><strong>{question.name}</strong> · {question.text}</p>
-            <p className={styles.itemMeta}>
-              {question.approved ? "공개됨" : "대기 중"} · 좋아요 {question.likes}개
-              {question.answer ? ` · 답변: ${question.answer}` : " · 답변 없음"}
-            </p>
-            <label htmlFor={`answer-${question.id}`}>답변</label>
-            <textarea
-              id={`answer-${question.id}`}
-              rows={2}
-              maxLength={500}
-              value={props.answerDrafts[question.id] ?? question.answer}
-              aria-invalid={failure?.field === "answer"}
-              aria-describedby={failure ? `answer-${question.id}-error` : undefined}
-              onChange={(event) =>
-                props.setAnswerDrafts((current) => ({ ...current, [question.id]: event.target.value }))
-              }
-            />
-            {failure ? <p className={styles.fieldError} id={`answer-${question.id}-error`} role="alert">{failure.message}</p> : null}
-            <div className={styles.itemActions}>
-              <button
-                type="button"
-                className="button button-secondary"
-                disabled={props.busy !== null || props.locked || !props.featureOn}
-                onClick={() => props.onManage(question, question.approved)}
-              >
-                {question.approved ? "답변 저장·공개 유지" : "답변 저장"}
-              </button>
-              {question.approved ? (
+    <>
+      <p className={styles.itemMeta} role="status">
+        미답변 {unanswered}건 · 승인 대기 {pending}건 · 전체 조건 {filtered.length}건 중 {shown.length}건 표시
+      </p>
+      <p className={styles.itemMeta}>
+        <label htmlFor={`qa-filter-${props.questions[0]?.moduleId ?? "all"}`}>질문 상태별 보기</label>{" "}
+        <select
+          id={`qa-filter-${props.questions[0]?.moduleId ?? "all"}`}
+          value={filter}
+          onChange={(event) => {
+            onFilterChange(event.target.value as "all" | "unanswered" | "pending");
+            setLimit(MODERATION_PAGE_SIZE);
+          }}
+        >
+          <option value="all">전체 질문</option>
+          <option value="unanswered">미답변만</option>
+          <option value="pending">승인 대기만</option>
+        </select>
+      </p>
+      <ul className={styles.itemList}>
+        {shown.map((question) => {
+          const failure = props.answerFailure?.id === question.id ? props.answerFailure : null;
+          return (
+            <li key={question.id} id={`moderation-question-${question.id}`} tabIndex={-1} className={styles.itemRow}>
+              <p className={styles.itemText}><strong>{question.name}</strong> · {question.text}</p>
+              <p className={styles.itemMeta}>
+                {question.approved ? "공개됨" : "대기 중"} · 좋아요 {question.likes}개
+                {question.answer ? ` · 답변: ${question.answer}` : " · 답변 없음"}
+              </p>
+              <label htmlFor={`answer-${question.id}`}>답변</label>
+              <textarea
+                id={`answer-${question.id}`}
+                rows={2}
+                maxLength={500}
+                value={props.answerDrafts[question.id] ?? question.answer}
+                aria-invalid={failure?.field === "answer"}
+                aria-describedby={failure ? `answer-${question.id}-error` : undefined}
+                onChange={(event) =>
+                  props.setAnswerDrafts((current) => ({ ...current, [question.id]: event.target.value }))
+                }
+              />
+              {failure ? <p className={styles.fieldError} id={`answer-${question.id}-error`} role="alert">{failure.message}</p> : null}
+              <div className={styles.itemActions}>
                 <button
                   type="button"
                   className="button button-secondary"
                   disabled={props.busy !== null || props.locked || !props.featureOn}
-                  onClick={() => props.onManage(question, false)}
+                  onClick={() => props.onManage(question, question.approved)}
                 >
-                  공개 취소
+                  {question.approved ? "답변 저장·공개 유지" : "답변 저장"}
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  className="button button-secondary"
-                  disabled={props.busy !== null || props.locked || !props.featureOn}
-                  onClick={() => props.onManage(question, true)}
-                >
-                  승인·공개
-                </button>
-              )}
-            </div>
-          </li>
-        );
-      })}
-    </ul>
+                {question.approved ? (
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    disabled={props.busy !== null || props.locked || !props.featureOn}
+                    onClick={() => props.onManage(question, false)}
+                  >
+                    공개 취소
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    disabled={props.busy !== null || props.locked || !props.featureOn}
+                    onClick={() => props.onManage(question, true)}
+                  >
+                    승인·공개
+                  </button>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {filtered.length === 0 ? <p className={styles.help}>조건에 맞는 질문이 없습니다.</p> : null}
+      {remaining > 0 ? (
+        <p className={styles.moreRow}>
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={() => {
+              const nextIndex = limit;
+              setLimit((current) => current + MODERATION_PAGE_SIZE);
+              const next = filtered[nextIndex];
+              window.setTimeout(() => {
+                if (next) document.getElementById(`moderation-question-${next.id}`)?.focus({ preventScroll: false });
+              }, 0);
+            }}
+          >
+            더 보기 ({remaining})
+          </button>
+        </p>
+      ) : null}
+    </>
   );
 }
 
@@ -1512,12 +1779,20 @@ function PhotoList(props: {
   featureOn: boolean;
   eventId: string;
   pending: { id: string; status: "APPROVED" | "HIDDEN" } | null;
+  filter: "all" | "PENDING" | "APPROVED" | "HIDDEN";
+  onFilterChange: (filter: "all" | "PENDING" | "APPROVED" | "HIDDEN") => void;
   onRequestModerate: (photo: Photo, status: "APPROVED" | "HIDDEN") => void;
   onConfirmModerate: (photo: Photo, status: "APPROVED" | "HIDDEN") => void;
   onCancelModerate: () => void;
 }) {
+  const { filter, onFilterChange } = props;
+  const [limit, setLimit] = useState(MODERATION_PAGE_SIZE);
   const approvedPhotos = props.photos.filter((photo) => photo.status === "APPROVED" && photo.fileId);
   if (!props.photos.length) return <p className={styles.help}>공유된 사진이 없습니다.</p>;
+  const pendingCount = props.photos.filter((photo) => photo.status === "PENDING").length;
+  const filtered = props.photos.filter((photo) => (filter === "all" ? true : photo.status === filter));
+  const shown = filtered.slice(0, limit);
+  const remaining = filtered.length - shown.length;
   return (
     <>
       <div className={styles.photoArchiveTools}>
@@ -1533,9 +1808,26 @@ function PhotoList(props: {
           <span className={styles.itemMeta}>다운로드할 승인 사진이 없습니다.</span>
         )}
       </div>
+      <p className={styles.itemMeta} role="status">대기 {pendingCount}건 · 전체 조건 {filtered.length}건 중 {shown.length}건 표시</p>
+      <p className={styles.itemMeta}>
+        <label htmlFor="photo-status-filter">사진 상태별 보기</label>{" "}
+        <select
+          id="photo-status-filter"
+          value={filter}
+          onChange={(event) => {
+            onFilterChange(event.target.value as "all" | "PENDING" | "APPROVED" | "HIDDEN");
+            setLimit(MODERATION_PAGE_SIZE);
+          }}
+        >
+          <option value="PENDING">대기 중만</option>
+          <option value="all">전체</option>
+          <option value="APPROVED">승인됨만</option>
+          <option value="HIDDEN">반려됨만</option>
+        </select>
+      </p>
       <ul className={styles.itemList}>
-        {props.photos.map((photo) => (
-          <li key={photo.id} className={styles.itemRow}>
+        {shown.map((photo) => (
+          <li key={photo.id} id={`moderation-photo-${photo.id}`} tabIndex={-1} className={styles.itemRow}>
             {photo.fileId ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -1586,6 +1878,25 @@ function PhotoList(props: {
           </li>
         ))}
       </ul>
+      {filtered.length === 0 ? <p className={styles.help}>조건에 맞는 사진이 없습니다.</p> : null}
+      {remaining > 0 ? (
+        <p className={styles.moreRow}>
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={() => {
+              const nextIndex = limit;
+              setLimit((current) => current + MODERATION_PAGE_SIZE);
+              const next = filtered[nextIndex];
+              window.setTimeout(() => {
+                if (next) document.getElementById(`moderation-photo-${next.id}`)?.focus({ preventScroll: false });
+              }, 0);
+            }}
+          >
+            더 보기 ({remaining})
+          </button>
+        </p>
+      ) : null}
     </>
   );
 }
@@ -1596,15 +1907,41 @@ function PostList(props: {
   locked: boolean;
   featureOn: boolean;
   pending: { id: string; status: "APPROVED" | "HIDDEN" } | null;
+  filter: "all" | "PENDING" | "APPROVED" | "HIDDEN";
+  onFilterChange: (filter: "all" | "PENDING" | "APPROVED" | "HIDDEN") => void;
   onRequestModerate: (post: Post, status: "APPROVED" | "HIDDEN") => void;
   onConfirmModerate: (post: Post, status: "APPROVED" | "HIDDEN") => void;
   onCancelModerate: () => void;
 }) {
+  const { filter, onFilterChange } = props;
+  const [limit, setLimit] = useState(MODERATION_PAGE_SIZE);
   if (!props.posts.length) return <p className={styles.help}>작성된 게시글이 없습니다.</p>;
+  const pendingCount = props.posts.filter((post) => post.status === "PENDING").length;
+  const filtered = props.posts.filter((post) => (filter === "all" ? true : post.status === filter));
+  const shown = filtered.slice(0, limit);
+  const remaining = filtered.length - shown.length;
   return (
-    <ul className={styles.itemList}>
-      {props.posts.map((post) => (
-        <li key={post.id} className={styles.itemRow}>
+    <>
+      <p className={styles.itemMeta} role="status">대기 {pendingCount}건 · 전체 조건 {filtered.length}건 중 {shown.length}건 표시</p>
+      <p className={styles.itemMeta}>
+        <label htmlFor="post-status-filter">게시글 상태별 보기</label>{" "}
+        <select
+          id="post-status-filter"
+          value={filter}
+          onChange={(event) => {
+            onFilterChange(event.target.value as "all" | "PENDING" | "APPROVED" | "HIDDEN");
+            setLimit(MODERATION_PAGE_SIZE);
+          }}
+        >
+          <option value="PENDING">대기 중만</option>
+          <option value="all">전체</option>
+          <option value="APPROVED">승인됨만</option>
+          <option value="HIDDEN">반려됨만</option>
+        </select>
+      </p>
+      <ul className={styles.itemList}>
+        {shown.map((post) => (
+          <li key={post.id} id={`moderation-post-${post.id}`} tabIndex={-1} className={styles.itemRow}>
           <p className={styles.itemText}><strong>{post.name}</strong> · {post.body}</p>
           <p className={styles.itemMeta}>{post.status === "APPROVED" ? "승인됨" : post.status === "HIDDEN" ? "반려됨" : "대기 중"}</p>
           <div className={styles.itemActions}>
@@ -1637,6 +1974,26 @@ function PostList(props: {
         </li>
       ))}
     </ul>
+      {filtered.length === 0 ? <p className={styles.help}>조건에 맞는 게시글이 없습니다.</p> : null}
+      {remaining > 0 ? (
+        <p className={styles.moreRow}>
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={() => {
+              const nextIndex = limit;
+              setLimit((current) => current + MODERATION_PAGE_SIZE);
+              const next = filtered[nextIndex];
+              window.setTimeout(() => {
+                if (next) document.getElementById(`moderation-post-${next.id}`)?.focus({ preventScroll: false });
+              }, 0);
+            }}
+          >
+            더 보기 ({remaining})
+          </button>
+        </p>
+      ) : null}
+    </>
   );
 }
 

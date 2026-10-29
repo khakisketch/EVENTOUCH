@@ -31,7 +31,10 @@ test('web-console-programs-uses-the-engagement-operator-commands', () => {
     assert.match(workspace, new RegExp(command.replace('.', '\\.')));
   }
   assert.match(workspace, /\/api\/events\/\$\{encodeURIComponent\(eventId\)\}\/commands/);
-  assert.match(workspace, /\/api\/bootstrap/);
+  // Reads go through the shared transport; the event read is the scoped
+  // event bootstrap, never the full directory.
+  assert.match(workspace, /consoleFetch\(`\/api\/events\/\$\{encodeURIComponent\(eventId\)\}\/bootstrap`/);
+  assert.doesNotMatch(workspace, /consoleFetch\("\/api\/bootstrap"/);
   assert.match(workspace, /commandId/);
   assert.match(workspace, /eventouch:shell-reload/);
   assert.match(workspace, /다시 불러오기/);
@@ -106,22 +109,24 @@ test('web-console-programs-dialog-is-modal-and-wires-field-errors', () => {
 
 test('web-console-shell-links-programs-between-operations-and-settings', () => {
   const shell = read('app/console/ConsoleShell.tsx');
-  // The rail renders the registry order with registry labels and hrefs, not
+  // The rail renders the hub order with registry labels and hrefs, not
   // literal duplicate routes; badges and feature gates stay in the shell.
-  assert.match(shell, /EVENT_PAGE_IDS\.map\(\(pageId\)/);
+  assert.match(shell, /EVENT_HUBS\.map\(\(hub\)/);
   assert.match(shell, /CONSOLE_PAGES\[pageId\]\.label/);
   assert.match(shell, /consolePageHref\(pageId, eventId/);
   assert.match(shell, /nav-badge/);
-  assert.match(shell, /features\.includes\("reward"\)/);
+  assert.match(shell, /eventFeatures\.includes\("reward"\)/);
   const navigation = read('app/console/console-navigation.ts');
   assert.match(navigation, /programs: \{ label: "참여 프로그램"/);
   assert.match(navigation, /return `\$\{base\}\/programs`/);
-  const eventIds = navigation.slice(navigation.indexOf('EVENT_PAGE_IDS'), navigation.indexOf('];', navigation.indexOf('EVENT_PAGE_IDS')));
-  const operationsAt = eventIds.indexOf('"operations"');
-  const programsAt = eventIds.indexOf('"programs"');
-  const settingsAt = eventIds.indexOf('"settings"');
-  assert.ok(operationsAt >= 0 && programsAt >= 0 && settingsAt >= 0);
-  assert.ok(operationsAt < programsAt && programsAt < settingsAt);
+  // Hub order is the operator's setup-to-live sequence: preparation (settings
+  // through programs) before the onsite hub that holds operations.
+  assert.match(navigation, /pageIds: \["settings", "attendeePage", "content", "programs"\]/);
+  assert.match(navigation, /pageIds: \["operations", "photos"\]/);
+  const hubsBlock = navigation.slice(navigation.indexOf('EVENT_HUBS'));
+  const prepareAt = hubsBlock.indexOf('"prepare"');
+  const onsiteAt = hubsBlock.indexOf('"onsite"');
+  assert.ok(prepareAt >= 0 && onsiteAt >= 0 && prepareAt < onsiteAt);
 });
 
 test('web-engage-reads-the-public-projection-and-reuses-the-ticket-key', () => {

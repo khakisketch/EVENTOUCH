@@ -12,6 +12,7 @@ const {
   insertAccount,
   sessionCookie,
   requestJson,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 
 const test = databaseUrl
@@ -43,10 +44,10 @@ async function login(email, password) {
 before(async () => {
   if (!databaseUrl) return;
   harness = await startApiHarness();
-  await insertAccount(harness.database, {
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,
     id: 'agency-owner', role: 'AGENCY', name: '운영사', email: 'agency-owner@example.test',
   });
-  await insertAccount(harness.database, {
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,
     id: 'team-manager', role: 'MANAGER', name: '매니저', email: 'team-manager@example.test',
   });
   cookies = {

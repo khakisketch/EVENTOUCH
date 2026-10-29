@@ -109,12 +109,12 @@ function sessionExpiry(eventEndMs, nowMs) {
 function createAttendeeAccess(database, { transport } = {}) {
   async function findEvent(ref) {
     const byId = await database.query(
-      'SELECT id, slug, payload FROM events WHERE id = $1 LIMIT 1',
+      'SELECT id, slug, org_id, payload FROM events WHERE id = $1 LIMIT 1',
       [String(ref || '')]
     );
     if (byId.rows[0]) return byId.rows[0];
     const bySlug = await database.query(
-      'SELECT id, slug, payload FROM events WHERE slug = $1 LIMIT 1',
+      'SELECT id, slug, org_id, payload FROM events WHERE slug = $1 LIMIT 1',
       [String(ref || '')]
     );
     return bySlug.rows[0] || null;
@@ -153,15 +153,29 @@ function createAttendeeAccess(database, { transport } = {}) {
     if (!event) return { challengeId: null, expiresAt: null };
     const now = Date.now();
 
-    const hourly = await database.query(
-      `SELECT COUNT(*)::int AS n FROM attendee_challenges
-        WHERE created_at > now() - interval '1 hour'`
+    const id = `ac-${randomToken(16)}`;
+    const code = randomCode();
+    const expiresAt = new Date(now + CODE_TTL_MINUTES * 60 * 1000).toISOString();
+    // Reserve the send under a short lock. Supplier I/O stays after commit,
+    // but simultaneous clicks cannot overspend the cooldown/daily limits.
+    await database.transaction(async (client) => {
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended('attendee-challenge-admission', 0))");
+    // Hourly admission cap is per-organization (event -> org join), so one
+    // org's traffic can never starve another into 429s. Pre-011 rows without
+    // an org match only their own NULL partition and never another org.
+    const eventOrgId = event.org_id ? String(event.org_id) : null;
+    const hourly = await client.query(
+      `SELECT COUNT(*)::int AS n FROM attendee_challenges c
+        LEFT JOIN events e ON e.id = c.event_id
+       WHERE c.created_at > now() - interval '1 hour'
+         AND e.org_id IS NOT DISTINCT FROM $1::text`,
+      [eventOrgId]
     );
     const hourlyCap = Number(process.env.EVENTOUCH_VERIFY_HOURLY_CAP || HOURLY_GLOBAL_CAP);
     if (hourly.rows[0].n >= hourlyCap) {
       throw failure(429, '요청이 많습니다. 잠시 후 다시 시도하세요');
     }
-    const recent = await database.query(
+    const recent = await client.query(
       `SELECT id, created_at FROM attendee_challenges
         WHERE event_id = $1 AND phone = $2 AND consumed_at IS NULL
           AND expires_at > now()
@@ -178,7 +192,7 @@ function createAttendeeAccess(database, { transport } = {}) {
         throw failure(429, '이전 인증번호를 먼저 입력하세요', 'phone');
       }
     }
-    const daily = await database.query(
+    const daily = await client.query(
       `SELECT COUNT(*)::int AS n FROM attendee_challenges
         WHERE event_id = $1 AND phone = $2 AND created_at > date_trunc('day', now())`,
       [event.id, phone]
@@ -187,18 +201,27 @@ function createAttendeeAccess(database, { transport } = {}) {
       throw failure(429, '오늘 받을 수 있는 횟수를 초과했습니다. 내일 다시 시도하세요', 'phone');
     }
 
-    const id = `ac-${randomToken(16)}`;
-    const code = randomCode();
-    const expiresAt = new Date(now + CODE_TTL_MINUTES * 60 * 1000).toISOString();
-    await database.query(
+    await client.query(
       `INSERT INTO attendee_challenges
          (id, event_id, phone, purpose, code_hash, max_attempts, expires_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7::timestamptz)`,
       [id, event.id, phone, cleanPurpose, sha256(code), CODE_MAX_ATTEMPTS, expiresAt]
     );
+    });
 
     const eventName = String((event.payload && event.payload.name) || '행사');
-    const send = transport
+    // Deployment SMS credentials are legacy-org bound and never auto-inherited:
+    // a new org's event does not send through them (honest NOT_CONFIGURED,
+    // same as an unconfigured install). The explicit mock transport keeps
+    // working everywhere for tests/dev. A NULL org only exists on legacy test
+    // fixtures written before 011; migration backfills every real row.
+    const { LEGACY_ORG_ID } = require('./tenancy');
+    const eventOrgId = event.org_id ? String(event.org_id) : null;
+    const transportMode = transport && typeof transport.state === 'function'
+      ? transport.state().mode
+      : 'none';
+    const smsAllowed = transport && !(transportMode === 'solapi' && eventOrgId && eventOrgId !== String(LEGACY_ORG_ID));
+    const send = smsAllowed
       ? await transport.sendCode({ to: phone, code, eventName })
       : { sent: false, reason: 'NOT_CONFIGURED' };
     if (!send.sent) {
@@ -228,33 +251,37 @@ function createAttendeeAccess(database, { transport } = {}) {
     const event = await findEvent(eventRef);
     if (!event) throw genericConfirmFailure();
 
-    const pending = await database.query(
+    const verified = await database.transaction(async (client) => {
+    const pending = await client.query(
       `SELECT * FROM attendee_challenges
-        WHERE event_id = $1 AND phone = $2 AND consumed_at IS NULL AND expires_at > now()
-        ORDER BY created_at DESC LIMIT 1`,
+         WHERE event_id = $1 AND phone = $2
+         ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
       [event.id, phone]
     );
     const challenge = pending.rows[0];
-    if (!challenge) throw genericConfirmFailure();
+    if (!challenge || challenge.consumed_at || Date.parse(challenge.expires_at) <= Date.now() ||
+        Number(challenge.attempts) >= Number(challenge.max_attempts || CODE_MAX_ATTEMPTS)) return null;
     const expected = Buffer.from(String(challenge.code_hash), 'hex');
     const probe = Buffer.from(sha256(code), 'hex');
     const matches = expected.length === probe.length && crypto.timingSafeEqual(expected, probe);
     if (!matches) {
       const attempts = Number(challenge.attempts || 0) + 1;
       if (attempts >= Number(challenge.max_attempts || CODE_MAX_ATTEMPTS)) {
-        await database.query(
+        await client.query(
           `UPDATE attendee_challenges SET attempts = $2, consumed_at = now() WHERE id = $1`,
           [challenge.id, attempts]
         );
       } else {
-        await database.query(
+        await client.query(
           `UPDATE attendee_challenges SET attempts = $2 WHERE id = $1`,
           [challenge.id, attempts]
         );
       }
-      throw genericConfirmFailure();
+      // Return, rather than throw: failed attempts must commit even though
+      // the HTTP result is a generic verification failure.
+      return null;
     }
-    await database.query(
+    await client.query(
       `UPDATE attendee_challenges SET attempts = attempts + 1, consumed_at = now() WHERE id = $1`,
       [challenge.id]
     );
@@ -262,13 +289,17 @@ function createAttendeeAccess(database, { transport } = {}) {
     if (challenge.purpose === 'ENROLL') {
       const grant = randomToken(32);
       const grantExpiresAt = new Date(Date.now() + GRANT_TTL_MINUTES * 60 * 1000).toISOString();
-      await database.query(
+      await client.query(
         `INSERT INTO attendee_grants (token_hash, event_id, phone, purpose, expires_at)
          VALUES ($1, $2, $3, 'ENROLL', $4::timestamptz)`,
         [sha256(grant), event.id, phone, grantExpiresAt]
       );
       return { kind: 'grant', grant, grantExpiresAt, eventId: event.id };
     }
+    return { kind: 'recover' };
+    });
+    if (!verified) throw genericConfirmFailure();
+    if (verified.kind === 'grant') return verified;
 
     // RECOVER: the number must belong to a live participant, but the
     // response never says whether it does.

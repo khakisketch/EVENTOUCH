@@ -14,6 +14,7 @@ const {
   insertAccount,
   sessionCookie,
   requestJson,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 
 const test = databaseUrl
@@ -32,8 +33,8 @@ let managerCookie;
 before(async () => {
   if (!databaseUrl) return;
   harness = await startApiHarness();
-  await insertAccount(harness.database, { id: ids.agency, role: 'AGENCY', name: '보안 관리자', email: `${ids.agency}@example.test` });
-  await insertAccount(harness.database, { id: ids.manager, role: 'MANAGER', name: '행사 매니저', email: `${ids.manager}@example.test` });
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,  id: ids.agency, role: 'AGENCY', name: '보안 관리자', email: `${ids.agency}@example.test` });
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,  id: ids.manager, role: 'MANAGER', name: '행사 매니저', email: `${ids.manager}@example.test` });
   agencyCookie = await sessionCookie(harness, ids.agency);
   managerCookie = await sessionCookie(harness, ids.manager);
 });
@@ -57,7 +58,9 @@ test('login protection overview is agency-only and honest about its shape', asyn
 });
 
 test('failed logins surface as counters, never as access history', async () => {
-  const probe = `security-probe-${suffix}@example.test`;
+  // Counters are attributable per-org member: an unknown email has no org to
+  // show under, so the probe uses the manager member with a wrong password.
+  const probe = `${ids.manager}@example.test`;
   const failed = await requestJson(harness.baseUrl, '/api/auth/login', {
     method: 'POST',
     body: { email: probe, password: 'wrong-password' },

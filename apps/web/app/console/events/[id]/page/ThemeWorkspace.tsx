@@ -24,6 +24,8 @@ import { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import { useConsoleDraftGuard } from "../../../console-draft-guard";
 import styles from "./page.module.css";
+import { consoleFetch } from "../../../../../lib/console-api";
+import { canWriteEvent } from "../../../../../lib/event-capabilities";
 
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const IMAGE_MAX_BYTES = 600_000;
@@ -148,9 +150,25 @@ function parseSnapshot(
   const accounts = Array.isArray(bootstrap.accounts) ? bootstrap.accounts.map(record).filter((item): item is Record<string, unknown> => item !== null) : [];
   const account = accounts.find((item) => item.id === userId);
   const isOwner = role === "AGENCY" || account?.orgOwner === true;
-  const memberships = Array.isArray(bootstrap.memberships) ? bootstrap.memberships.map(record).filter((item): item is Record<string, unknown> => item !== null) : [];
-  const isMember = memberships.some((item) => item.accountId === userId && item.eventId === eventId);
-  if (!isOwner && !(role === "MANAGER" && isMember)) {
+  const memberships = Array.isArray(bootstrap.memberships)
+    ? bootstrap.memberships
+        .map(record)
+        .filter((item): item is Record<string, unknown> => item !== null)
+        .flatMap((item) => (
+          typeof item.accountId === "string" && typeof item.eventId === "string"
+            ? [{ accountId: item.accountId, eventId: item.eventId, write: item.write }]
+            : []
+        ))
+    : [];
+  // Page write gate mirrors the server scope map (attendee.page.save is page
+  // scope): owners and fully/granted managers edit, everyone else is denied
+  // with the reason. The server re-checks save/publish either way.
+  const canWritePage = canWriteEvent({ role, userId, memberships, eventId }, "attendee.page.save");
+  if (!isOwner && !canWritePage) {
+    const isMember = memberships.some((item) => item.accountId === userId && item.eventId === eventId);
+    if (isMember && role === "MANAGER") {
+      return { denied: "참가자 화면 쓰기 권한이 없습니다. 화면 구성 변경이 필요하면 담당 행사 운영자에게 요청하세요." };
+    }
     return { denied: "이 행사의 참가자 화면을 관리할 권한이 없습니다." };
   }
   const events = Array.isArray(bootstrap.events) ? bootstrap.events.map(record).filter((item): item is Record<string, unknown> => item !== null) : [];
@@ -260,6 +278,18 @@ function describeChangedDesign(from: DesignForm, to: DesignForm): string[] {
   return changed;
 }
 
+function comparisonRows(fromForm: DesignForm, fromFields: PageFields, toForm: DesignForm, toFields: PageFields): Array<{ label: string; before: string; after: string }> {
+  const choices: Record<string, string> = { centered: "가운데 제목", "bottom-overlay": "아래쪽 제목", "image-only": "이미지만", standard: "기본", large: "크게", center: "가운데", left: "왼쪽", right: "오른쪽", top: "위쪽", bottom: "아래쪽", light: "흰색", dark: "짙은 색", none: "없음", soft: "부드럽게", strong: "강하게" };
+  const display = (value: unknown) => typeof value === "boolean" ? (value ? "보기" : "숨김") : typeof value === "string" ? (choices[value] || value || "기본값") : "기본값";
+  const rows = HOME_STYLE_LABELS.flatMap(([key, label]) => fromForm.homeStyle[key] !== toForm.homeStyle[key]
+    ? [{ label, before: display(fromForm.homeStyle[key]), after: display(toForm.homeStyle[key]) }] : []);
+  if (!sameHomeImage(fromForm.keyvisual, toForm.keyvisual)) rows.push({ label: "배너 이미지", before: homeImageLabel(fromForm.keyvisual), after: homeImageLabel(toForm.keyvisual) });
+  for (const [key, label] of PAGE_FIELD_LABELS) {
+    if (fromFields[key] !== toFields[key]) rows.push({ label, before: display(fromFields[key]), after: display(toFields[key]) });
+  }
+  return rows;
+}
+
 function homeBackgroundInk(color: string): string {
   const rgb = color.slice(1).match(/.{2}/g)?.map((channel) => parseInt(channel, 16) / 255) ?? [0, 0, 0];
   const [r, g, b] = rgb.map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
@@ -275,8 +305,8 @@ function homeBackgroundInk(color: string): string {
 
 async function loadSnapshot(eventId: string): Promise<Snapshot | { denied: string }> {
   const [meResponse, bootstrapResponse] = await Promise.all([
-    fetch("/api/auth/me", { cache: "no-store" }),
-    fetch("/api/bootstrap", { cache: "no-store" }),
+    consoleFetch("/api/auth/me", { cache: "no-store" }),
+    consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store" }),
   ]);
   if (meResponse.status === 401 || bootstrapResponse.status === 401) {
     const error = new Error("로그인이 필요합니다.");
@@ -295,6 +325,8 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
   const router = useRouter();
   const [state, setState] = useState<EditorState>({ kind: "loading" });
   const [activeSection, setActiveSection] = useState("theme-edit");
+  const [mobileView, setMobileView] = useState<"edit" | "preview">("edit");
+  const lastEditTarget = useRef<HTMLElement | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
   const [upload, setUpload] = useState<UploadIntent | null>(null);
   const [previewSize, setPreviewSize] = useState({ width: 390, height: 700 });
@@ -323,19 +355,12 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
   // stop on the save button itself.
   const saveActionsRef = useRef<HTMLDivElement>(null);
 
-  const jumpToSaveActions = useCallback((event: ReactMouseEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    const target = document.getElementById("theme-save-draft") ?? saveActionsRef.current;
-    if (!(target instanceof HTMLElement)) return;
-    target.focus({ preventScroll: true });
-    target.scrollIntoView({ block: "start" });
-  }, []);
-
   // The active link follows where the operator actually is: explicit jumps and
   // real focus move it; scrolling only moves it through the genuine
   // document flow (see the observer below).
   const syncSectionFromFocus = useCallback((event: ReactFocusEvent<HTMLElement>) => {
     const target = event.target as Element | null;
+    if (target instanceof HTMLElement && target.matches("input, select, textarea") && target.closest("#theme-edit")) lastEditTarget.current = target;
     // Preview auxiliaries (source/viewport switches) never rename the
     // location: only the explicit preview jump, which focuses the heading
     // itself, may name the preview. Real scroll arrival stays the
@@ -412,13 +437,17 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
   // active link. This covers fragment changes that move no focus.
   useEffect(() => {
     const sync = () => {
-      const target = document.getElementById(window.location.hash.slice(1));
+      const id = window.location.hash.slice(1);
+      const target = document.getElementById(id);
+      if (id === "home-preview-heading") setMobileView("preview");
+      else if (id === "theme-edit" || id === "theme-save" || id === "theme-save-draft") setMobileView("edit");
       const section = sectionForNode(target);
       if (section && section in THEME_SECTION_LABELS) setActiveSection(section);
     };
+    sync();
     window.addEventListener("hashchange", sync);
     return () => window.removeEventListener("hashchange", sync);
-  }, []);
+  }, [state.kind]);
 
   // Names the section in view for the jump-nav active link. Canonical
   // document order wins ties, so a sticky panel behind the arrival point
@@ -473,7 +502,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
     setUpload({ ...intent, status: "uploading", error: undefined });
     try {
       const url = `/api/events/${encodeURIComponent(eventId)}/files?name=${encodeURIComponent(intent.file.name)}&commandId=${encodeURIComponent(intent.commandId)}`;
-      const response = await fetch(url, {
+      const response = await consoleFetch(url, {
         method: "POST",
         headers: { "content-type": intent.file.type },
         body: intent.file,
@@ -852,7 +881,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
     setFailure(null);
     setNotice(null);
     try {
-      const response = await fetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
+      const response = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ commandId, command: "attendee.page.save", payload }),
@@ -948,7 +977,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
     setFailure(null);
     setNotice(null);
     try {
-      const response = await fetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
+      const response = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -1062,6 +1091,20 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
   } as CSSProperties;
   const showingPublished = previewSource === "published";
   const hasPublished = Boolean(state.publishedAt);
+  // Per-group unsaved markers derive from the same saved baselines the
+  // save guard compares: no new data, only a group-level reading of the
+  // existing dirty state so a long form shows where the changes sit.
+  // NOTE on preview truth: the preview below receives only homeStyle +
+  // banner (see the AttendeeHomeLanding call site). pageFields (intro,
+  // accent, visibility) apply on publish only, so only homeStyle/banner
+  // dirt counts as "reflected in preview".
+  const designDirty = formIsDirty(state.form, state.savedForm);
+  const backgroundDirty = state.form.homeStyle.backgroundColor !== state.savedForm.homeStyle.backgroundColor;
+  const imageDirty = !sameHomeImage(state.form.keyvisual, state.savedForm.keyvisual) || upload !== null;
+  const exposureDirty = JSON.stringify(state.pageFields) !== JSON.stringify(state.savedPageFields);
+  const copyDirty = (Object.keys(state.form.homeStyle) as (keyof HomeStyle)[]).some(
+    (key) => key !== "backgroundColor" && state.form.homeStyle[key] !== state.savedForm.homeStyle[key]
+  );
   const publishedVisibility = [
     state.publishedPageFields.showAnnouncements ? null : "공지 숨김",
     state.publishedPageFields.showSchedule ? null : "일정 숨김",
@@ -1072,8 +1115,32 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
     ...describeChangedDesign(state.publishedDesign, state.savedForm),
     ...describeChangedPageFields(state.publishedPageFields, state.savedPageFields),
   ];
+  const reviewRows = dirty
+    ? comparisonRows(state.savedForm, state.savedPageFields, state.form, state.pageFields)
+    : state.publishedAt ? comparisonRows(state.publishedDesign, state.publishedPageFields, state.savedForm, state.savedPageFields) : [];
   const latestChanges = conflict?.latest ? describeChangedDesign(state.savedForm, conflict.latest.form) : [];
   const canEditImage = !commandBusy && !state.archived && upload?.status !== "uploading" && upload?.status !== "failed";
+
+  function switchMobileView(view: "edit" | "preview", returnTarget?: HTMLElement | null) {
+    if (view === "preview" && returnTarget) lastEditTarget.current = returnTarget;
+    const fragment = view === "preview" ? "#home-preview-heading" : "#theme-edit";
+    if (window.location.hash !== fragment) window.history.pushState(null, "", fragment);
+    setMobileView(view);
+    setActiveSection(view === "preview" ? "home-preview-heading" : "theme-edit");
+    requestAnimationFrame(() => {
+      const target = view === "preview" ? document.getElementById("home-preview-heading") : (lastEditTarget.current || document.getElementById("theme-edit"));
+      if (target instanceof HTMLElement) { target.focus({ preventScroll: true }); target.scrollIntoView({ block: "start", behavior: "instant" }); }
+    });
+  }
+
+  function jumpToSaveActions(event: ReactMouseEvent<HTMLAnchorElement>) {
+    event.preventDefault();
+    const save = document.getElementById("theme-save-draft");
+    const target = save instanceof HTMLButtonElement && !save.disabled ? save : saveActionsRef.current;
+    if (!target) return;
+    target.focus({ preventScroll: true });
+    target.scrollIntoView({ block: "center", behavior: "instant" });
+  }
 
   function changeHomeStyle<K extends keyof HomeStyle>(field: K, value: HomeStyle[K]) {
     updateForm((form) => ({ ...form, homeStyle: { ...form.homeStyle, [field]: value } }));
@@ -1099,9 +1166,18 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
       }
       sectionNav={
         <div className={styles.navSticky}>
+          <p className={styles.navIndexLabel} aria-hidden="true">참가자 페이지 목차</p>
           <ConsoleSectionNav
             label="참가자 페이지 구역"
             activeId={activeSection}
+            onNavigate={(id) => {
+              setMobileView(id === "home-preview-heading" ? "preview" : "edit");
+              setActiveSection(id);
+              requestAnimationFrame(() => {
+                const target = document.getElementById(id);
+                if (target) { target.focus({ preventScroll: true }); target.scrollIntoView({ block: "start", behavior: "instant" }); }
+              });
+            }}
             items={[
               { id: "theme-edit", label: "편집" },
               { id: "theme-save", label: "저장·게시" },
@@ -1172,13 +1248,18 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
         </section>
       ) : null}
 
-      <div className={styles.editorLayout} onFocusCapture={syncSectionFromFocus}>
-        <div className={styles.controls} id="theme-edit">
-          <a className={styles.editorSkip} href="#theme-save-draft" data-skip-to="theme-save-draft" onClick={jumpToSaveActions}>
-            편집 항목을 건너뛰고 저장·게시로 이동
-          </a>
+      <div className={styles.mobileSwitcher} role="group" aria-label="편집과 미리보기">
+        <button type="button" aria-pressed={mobileView === "edit"} onClick={() => switchMobileView("edit")}>편집</button>
+        <button type="button" aria-pressed={mobileView === "preview"} onClick={() => switchMobileView("preview")}>미리보기</button>
+      </div>
+      <div className={styles.editorLayout} data-mobile-view={mobileView} onFocusCapture={syncSectionFromFocus}>
+        <div className={styles.controls} id="theme-edit" tabIndex={-1}>
+          <div className={styles.editStatusLine}>
+            <span>{uploadBlocked ? (upload?.status === "uploading" ? "이미지 업로드 중" : "이미지 업로드 확인 필요") : dirty ? "저장되지 않은 변경" : alreadyPublished ? "현재 초안 게시됨" : "저장된 초안"}</span>
+            <a href="#theme-save" data-skip-to="theme-save-draft" onClick={jumpToSaveActions}>저장·게시 검토</a>
+          </div>
           <fieldset className={styles.controlGroup} disabled={Boolean(commandBusy || conflict || state.archived)}>
-            <legend>배경</legend>
+            <legend>배경{backgroundDirty ? <span className={styles.groupFlag}>미저장 변경</span> : null}</legend>
             <p className={styles.help}>행사 홈과 상세 안내의 배경에 적용됩니다. 타일과 티켓은 읽기 쉽도록 밝은 카드로 유지됩니다.</p>
             <div className={styles.colorRow}>
               <label className={styles.colorLabel} htmlFor="home-background">배경색</label>
@@ -1192,8 +1273,9 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
             </div>
           </fieldset>
 
+          <button className={styles.inlinePreview} type="button" onClick={(event) => switchMobileView("preview", event.currentTarget)}>현재 디자인 미리보기</button>
           <fieldset className={styles.controlGroup} disabled={Boolean(commandBusy || conflict || state.archived)}>
-            <legend>배너 이미지</legend>
+            <legend>배너 이미지{imageDirty ? <span className={styles.groupFlag}>미저장 변경</span> : null}</legend>
             <p className={styles.help}>PNG, JPEG, WEBP · 최대 600KB. 업로드 후 저장하고 게시해야 참가자에게 적용됩니다.</p>
             <div className={styles.imageStatus}>
               <span className={styles.imageStatusName}>{upload?.status === "uploading" ? upload.file.name : homeImageLabel(state.form.keyvisual)}</span>
@@ -1256,68 +1338,9 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
             </details>
           </fieldset>
 
+          <button className={styles.inlinePreview} type="button" onClick={(event) => switchMobileView("preview", event.currentTarget)}>현재 디자인 미리보기</button>
           <fieldset className={styles.controlGroup} disabled={Boolean(commandBusy || conflict || state.archived)}>
-            <legend>소개와 노출</legend>
-            <p className={styles.help}>참가자 홈에 보이는 소개와 항목입니다. 저장 후 게시해야 적용됩니다.</p>
-            <label className={styles.field} htmlFor="home-intro">
-              행사 소개 <span>최대 160자</span>
-              <input
-                id="home-intro"
-                type="text"
-                maxLength={160}
-                value={state.pageFields.intro}
-                onChange={(event) => updatePageField("intro", event.target.value)}
-                aria-invalid={failure?.field === "intro" || undefined}
-              />
-            </label>
-            <div className={styles.colorRow}>
-              <label className={styles.colorLabel} htmlFor="home-accent">강조색</label>
-              <input
-                id="home-accent"
-                type="color"
-                value={state.pageFields.accent}
-                onChange={(event) => updatePageField("accent", event.target.value.toUpperCase())}
-              />
-              <output htmlFor="home-accent">{state.pageFields.accent}</output>
-            </div>
-            <div className={styles.toggleGrid}>
-              <label className={styles.check}>
-                <input
-                  type="checkbox"
-                  checked={state.pageFields.showAnnouncements}
-                  onChange={(event) => updatePageField("showAnnouncements", event.target.checked)}
-                />
-                공지 보기
-              </label>
-              <label className={styles.check}>
-                <input
-                  type="checkbox"
-                  checked={state.pageFields.showSchedule}
-                  onChange={(event) => updatePageField("showSchedule", event.target.checked)}
-                />
-                일정 보기
-              </label>
-              <label className={styles.check}>
-                <input
-                  type="checkbox"
-                  checked={state.pageFields.showVenue}
-                  onChange={(event) => updatePageField("showVenue", event.target.checked)}
-                />
-                장소 보기
-              </label>
-              <label className={styles.check}>
-                <input
-                  type="checkbox"
-                  checked={state.pageFields.showPrograms}
-                  onChange={(event) => updatePageField("showPrograms", event.target.checked)}
-                />
-                프로그램 보기
-              </label>
-            </div>
-          </fieldset>
-
-          <fieldset className={styles.controlGroup} disabled={Boolean(commandBusy || conflict || state.archived)}>
-            <legend>문구와 배치</legend>
+            <legend>문구와 배치{copyDirty ? <span className={styles.groupFlag}>미저장 변경</span> : null}</legend>
             <p className={styles.help}>행사명은 기본 제목입니다. 보조 문구는 기존 행사 소개와 별개로 배너에 표시됩니다.</p>
             <label className={styles.field} htmlFor="home-hero-title">
               배너 제목 <span>최대 80자</span>
@@ -1388,6 +1411,129 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
             </details>
           </fieldset>
 
+          <button className={styles.inlinePreview} type="button" onClick={(event) => switchMobileView("preview", event.currentTarget)}>현재 디자인 미리보기</button>
+          <fieldset className={styles.controlGroup} disabled={Boolean(commandBusy || conflict || state.archived)}>
+            <legend>소개와 노출{exposureDirty ? <span className={styles.groupFlag}>미저장 변경</span> : null}</legend>
+            <p className={styles.help}>소개, 강조색과 노출 항목은 이 미리보기에 반영되지 않습니다. 저장 후 게시하면 참가자 화면에 적용됩니다.</p>
+            <label className={styles.field} htmlFor="home-intro">
+              행사 소개 <span>최대 160자</span>
+              <input
+                id="home-intro"
+                type="text"
+                maxLength={160}
+                value={state.pageFields.intro}
+                onChange={(event) => updatePageField("intro", event.target.value)}
+                aria-invalid={failure?.field === "intro" || undefined}
+              />
+            </label>
+            <div className={styles.colorRow}>
+              <label className={styles.colorLabel} htmlFor="home-accent">강조색</label>
+              <input
+                id="home-accent"
+                type="color"
+                value={state.pageFields.accent}
+                onChange={(event) => updatePageField("accent", event.target.value.toUpperCase())}
+              />
+              <output htmlFor="home-accent">{state.pageFields.accent}</output>
+            </div>
+            <div className={styles.toggleGrid}>
+              <label className={styles.check}>
+                <input
+                  type="checkbox"
+                  checked={state.pageFields.showAnnouncements}
+                  onChange={(event) => updatePageField("showAnnouncements", event.target.checked)}
+                />
+                공지 보기
+              </label>
+              <label className={styles.check}>
+                <input
+                  type="checkbox"
+                  checked={state.pageFields.showSchedule}
+                  onChange={(event) => updatePageField("showSchedule", event.target.checked)}
+                />
+                일정 보기
+              </label>
+              <label className={styles.check}>
+                <input
+                  type="checkbox"
+                  checked={state.pageFields.showVenue}
+                  onChange={(event) => updatePageField("showVenue", event.target.checked)}
+                />
+                장소 보기
+              </label>
+              <label className={styles.check}>
+                <input
+                  type="checkbox"
+                  checked={state.pageFields.showPrograms}
+                  onChange={(event) => updatePageField("showPrograms", event.target.checked)}
+                />
+                프로그램 보기
+              </label>
+            </div>
+          </fieldset>
+
+          <div id="theme-save" ref={saveActionsRef} tabIndex={-1} className={`${styles.saveAnchor} ${styles.saveBar}`}>
+            <div className={styles.versionSummary} aria-live="polite">
+              <span className={styles.statePill} data-state={dirty ? "dirty" : alreadyPublished ? "published" : "draft"}>
+                {dirty ? "저장되지 않은 변경" : alreadyPublished ? "현재 초안 게시됨" : "저장된 초안"}
+              </span>
+              <span>
+                {state.publishedAt
+                  ? `게시 버전 ${state.publishedVersion} · 초안 ${state.draftVersion}`
+                  : `아직 게시하지 않음 · 초안 ${state.draftVersion}`}
+              </span>
+            </div>
+            <p className={styles.workflowHelp}>{dirty ? "편집 내용은 아직 저장되지 않았습니다. 초안 저장은 참가자 화면을 바꾸지 않습니다." : alreadyPublished ? "저장된 초안이 참가자 화면에 게시되어 있습니다." : "저장된 초안은 아직 참가자 화면에 적용되지 않았습니다. 게시를 눌러 확인하세요."}</p>
+            {dirty ? <p className={styles.changeSummary}>저장할 변경: {[...describeChangedDesign(state.savedForm, state.form), ...describeChangedPageFields(state.savedPageFields, state.pageFields)].join(" · ") || "선택한 이미지"}</p> : null}
+            {reviewRows.length ? (
+              <details className={styles.reviewChanges}>
+                <summary>{dirty ? "저장 전 변경 내용 확인" : "게시할 변경 내용 확인"} ({reviewRows.length})</summary>
+                <p>{dirty ? "저장된 초안 → 편집 중" : "게시본 → 저장된 초안"}</p>
+                <dl>{reviewRows.map((row) => <div key={row.label}><dt>{row.label}</dt><dd><span>{row.before}</span> → <strong>{row.after}</strong></dd></div>)}</dl>
+              </details>
+            ) : null}
+            {state.publishedAt && publishedChanges.length ? (
+              <details className={styles.diffFold}>
+                <summary className={styles.advancedSummary}>게시본과 다른 저장된 변경 {publishedChanges.length}개</summary>
+                <p className={styles.publishedNote}>게시본과 다른 저장된 변경: {publishedChanges.join(" · ")}</p>
+              </details>
+            ) : null}
+            {dirty && !uploadBlocked ? <p className={styles.inlineHelp}>게시 버튼은 저장된 초안에만 작동합니다. 먼저 초안을 저장하세요.</p> : null}
+            {uploadBlocked ? (
+              <p className={styles.inlineHelp}>
+                {upload?.status === "uploading" ? "이미지를 올리는 중입니다. 완료될 때까지 초안 저장이 잠깁니다." : "이미지 업로드 결과를 확인해야 초안을 저장할 수 있습니다. 같은 요청으로 다시 시도하세요."}
+              </p>
+            ) : null}
+            <div className={styles.saveButtons}>
+            <ConsoleFormActions>
+              <button id="theme-save-draft" className="button button-primary" type="button" onClick={() => void saveDraft()} disabled={!canSave}>
+                {commandBusy === "save" ? "초안 저장 중…" : "초안 저장"}
+              </button>
+              <button className="button button-secondary" type="button" onClick={() => void requestPublishDraft()} disabled={!canPublish}>
+                {commandBusy === "publish" ? "게시 중…" : "게시"}
+              </button>
+            </ConsoleFormActions>
+            </div>
+            {publishPending ? (
+              <ConsoleConfirm
+                summary={(
+                  <>
+                    &ldquo;{state.eventName}&rdquo;의 저장된 디자인을 참가자 화면에 게시할까요?
+                    <br />
+                    <br />
+                    {publishedChanges.length ? `게시될 변경: ${publishedChanges.join(" · ")}` : "현재 기본 참가자 화면을 게시합니다."}
+                    <br />
+                    <br />
+                    게시 후 같은 행사를 보는 모든 참가자에게 적용됩니다.
+                  </>
+                )}
+                confirmLabel="게시하기"
+                busy={commandBusy === "publish"}
+                onConfirm={() => void confirmPublishDraft()}
+                onCancel={() => setPublishPending(false)}
+              />
+            ) : null}
+          </div>
           <section className={styles.recoveryGroup} aria-labelledby="page-recovery-heading">
             <h2 id="page-recovery-heading">되돌리기</h2>
             <p className={styles.help}>아래 동작은 편집기에만 적용됩니다. 저장과 게시를 따로 해야 참가자 화면이 바뀝니다.</p>
@@ -1424,70 +1570,21 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
             ) : null}
           </section>
 
-          <div id="theme-save" ref={saveActionsRef} tabIndex={-1} className={`${styles.saveAnchor} ${styles.saveBar}`}>
-            <div className={styles.versionSummary} aria-live="polite">
-              <span className={styles.statePill} data-state={dirty ? "dirty" : alreadyPublished ? "published" : "draft"}>
-                {dirty ? "저장되지 않은 변경" : alreadyPublished ? "현재 초안 게시됨" : "저장된 초안"}
-              </span>
-              <span>
-                {state.publishedAt
-                  ? `게시 버전 ${state.publishedVersion} · 초안 ${state.draftVersion}`
-                  : `아직 게시하지 않음 · 초안 ${state.draftVersion}`}
-              </span>
-            </div>
-            {state.publishedAt && publishedChanges.length ? (
-              <details className={styles.diffFold}>
-                <summary className={styles.advancedSummary}>게시본과 다른 저장된 변경 {publishedChanges.length}개</summary>
-                <p className={styles.publishedNote}>게시본과 다른 저장된 변경: {publishedChanges.join(" · ")}</p>
-              </details>
-            ) : null}
-            {dirty && !uploadBlocked ? <p className={styles.inlineHelp}>게시 버튼은 저장된 초안에만 작동합니다. 먼저 초안을 저장하세요.</p> : null}
-            {uploadBlocked ? (
-              <p className={styles.inlineHelp} role="status">
-                {upload?.status === "uploading" ? "이미지를 올리는 중입니다. 완료될 때까지 초안 저장이 잠깁니다." : "이미지 업로드 결과를 확인해야 초안을 저장할 수 있습니다. 같은 요청으로 다시 시도하세요."}
-              </p>
-            ) : null}
-            <div className={styles.saveButtons}>
-            <ConsoleFormActions>
-              <button id="theme-save-draft" className="button button-primary" type="button" onClick={() => void saveDraft()} disabled={!canSave}>
-                {commandBusy === "save" ? "초안 저장 중…" : "초안 저장"}
-              </button>
-              <button className="button button-secondary" type="button" onClick={() => void requestPublishDraft()} disabled={!canPublish}>
-                {commandBusy === "publish" ? "게시 중…" : "게시"}
-              </button>
-            </ConsoleFormActions>
-            </div>
-            {publishPending ? (
-              <ConsoleConfirm
-                summary={(
-                  <>
-                    &ldquo;{state.eventName}&rdquo;의 저장된 디자인을 참가자 화면에 게시할까요?
-                    <br />
-                    <br />
-                    {publishedChanges.length ? `게시될 변경: ${publishedChanges.join(" · ")}` : "현재 기본 참가자 화면을 게시합니다."}
-                    <br />
-                    <br />
-                    게시 후 같은 행사를 보는 모든 참가자에게 적용됩니다.
-                  </>
-                )}
-                confirmLabel="게시하기"
-                busy={commandBusy === "publish"}
-                onConfirm={() => void confirmPublishDraft()}
-                onCancel={() => setPublishPending(false)}
-              />
-            ) : null}
-          </div>
+
         </div>
 
         <section className={styles.previewPanel} aria-labelledby="home-preview-heading">
           <div className={styles.previewHeader}>
             <div>
-              <h2 id="home-preview-heading">홈 디자인 미리보기</h2>
-              <p>저장 여부와 관계없이 현재 편집 중인 홈 디자인을 표시합니다. 행사 소개와 항목 노출은 게시 후 참가자 화면에서 확인하세요.</p>
+              <h2 id="home-preview-heading" tabIndex={-1}>홈 디자인 미리보기</h2>
+              <p>{showingPublished ? (hasPublished ? "현재 게시된 디자인을 표시합니다." : "아직 게시된 디자인이 없습니다.") : "저장 전 변경을 포함한 편집 중 디자인을 표시합니다."} 소개·강조색·항목 노출은 이 화면에 반영되지 않습니다.</p>
             </div>
-            <span className={styles.liveMark}><span aria-hidden="true" />실시간</span>
+            <span className={styles.liveMark}><span aria-hidden="true" />{showingPublished ? "게시본" : "편집 중"}</span>
           </div>
-          <div className={styles.sourceSwitch} role="group" aria-label="미리보기 기준">
+          <button className={styles.backToEdit} type="button" onClick={() => switchMobileView("edit")}>편집하던 곳으로 돌아가기</button>
+          <div className={styles.switchBlock}>
+            <p className={styles.switchLabel} id="preview-source-label">미리보기 기준</p>
+            <div className={styles.sourceSwitch} role="group" aria-labelledby="preview-source-label">
             <button
               className={styles.viewportChoice}
               type="button"
@@ -1505,7 +1602,10 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
               게시본
             </button>
           </div>
-          <div className={styles.viewportChoices} role="group" aria-label="미리보기 화면 크기">
+          </div>
+          <div className={styles.switchBlock}>
+            <p className={styles.switchLabel} id="preview-viewport-label">미리보기 화면 크기</p>
+            <div className={styles.viewportChoices} role="group" aria-labelledby="preview-viewport-label">
             {[
               { width: 320, height: 568, label: "짧은 화면 320×568" },
               { width: 390, height: 700, label: "390×700" },
@@ -1521,6 +1621,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
                 {size.label}
               </button>
             ))}
+            </div>
           </div>
           <div className={styles.phoneStage}>
             <div
@@ -1547,6 +1648,10 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
               )}
             </div>
           </div>
+          {/* Preview reflects homeStyle + banner only (intro/accent/visibility
+              apply on publish, per the notice below). Claim reflection only
+              for design dirt with no unsettled upload. */}
+          {!showingPublished && designDirty && !uploadBlocked ? <p className={styles.previewNote}>미저장 변경이 미리보기에 바로 반영됩니다.</p> : null}
           {!showingPublished && upload?.status === "failed" ? <p className={styles.previewNote}>업로드가 확인되지 않았습니다. 미리보기에는 선택한 파일을 표시하고 있어요.</p> : null}
           {!showingPublished && state.form.homeStyle.heroLayout === "image-only" ? <p className={styles.previewNote}>이미지만 배치해도 제목은 스크린리더용으로 유지됩니다.</p> : null}
           {showingPublished && hasPublished ? (

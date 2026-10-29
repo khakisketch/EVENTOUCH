@@ -5,16 +5,19 @@
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const { prepareCaptureDir, ensureCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = require('./capture-dir.cjs');
 const path = require('node:path');
-process.env.TMPDIR = '/tmp/opencode';
+const { startOwnedNext, ensureAuditDatabaseEnv } = require('./audit-fixture.cjs');
+ensureAuditDatabaseEnv();
 const { chromium } = require('playwright');
 const axeSource = require('axe-core').source;
 const { emptyWorkspace } = require('../server/state');
-const { startApiHarness, insertAccount, insertEvent, insertMembership, sessionCookie, requestJson } = require('../tests/helpers/postgres-api-server.cjs');
+const { startApiHarness, insertAccount, insertEvent, insertMembership, sessionCookie, requestJson, LEGACY_ORG } = require('../tests/helpers/postgres-api-server.cjs');
 const { startWebApiGateway } = require('../tests/helpers/web-api-gateway.cjs');
 
-const directory = '/tmp/opencode/eventouch-captures/theme-real';
-const webBase = process.env.WEB_BASE || 'http://127.0.0.1:8777';
+const directory = process.env.EVENTOUCH_CAPTURE_ROOT
+  ? path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'theme-real')
+  : defaultCaptureDir(`theme-real-${runStamp()}`);
 
 async function commandClick(page, button, name) {
   const pending = page.waitForResponse((response) => {
@@ -23,6 +26,10 @@ async function commandClick(page, button, name) {
   });
   pending.catch(() => {});
   await button.click();
+  if (name === 'attendee.page.publish') {
+    await page.getByRole('group', { name: '실행 확인', exact: true })
+      .getByRole('button', { name: '게시하기', exact: true }).click();
+  }
   const response = await pending;
   const data = await response.json();
   assert.ok(response.ok(), `${name}: ${response.status()} ${JSON.stringify(data)}`);
@@ -43,8 +50,11 @@ async function assertAxe(page, name) {
 }
 
 async function main() {
-  fs.mkdirSync(directory, { recursive: true });
-  let harness, gateway, browser;
+  prepareCaptureDir(directory);
+  // Uploaded banners and browser profiles stay under this run's
+  // private tree, never the shared /tmp/opencode directory.
+  process.env.TMPDIR = ensureRunTmpDir(directory);
+  let harness, owned, gateway, browser;
   const pages = [];
   const errors = [];
   let phase = 'setup';
@@ -53,9 +63,10 @@ async function main() {
     const suffix = crypto.randomUUID().replace(/-/g, '');
     const managerId = `theme-manager-${suffix}`;
     const eventA = `theme-a-${suffix}`, eventB = `theme-b-${suffix}`;
-    await insertAccount(harness.database, { id: managerId, role: 'MANAGER', name: '디자인 검증 운영자', email: `${managerId}@example.test` });
+    await insertAccount(harness.database, { orgId: LEGACY_ORG, id: `theme-owner-${suffix}`, role: 'AGENCY', name: '디자인 검증 소유자', email: `theme-owner-${suffix}@example.test` });
+    await insertAccount(harness.database, { orgId: LEGACY_ORG, id: managerId, role: 'MANAGER', name: '디자인 검증 운영자', email: `${managerId}@example.test` });
     for (const [id, name] of [[eventA, '디자인 검증 행사 A'], [eventB, '변경하지 않은 행사 B']]) {
-      await insertEvent(harness.database, { id, slug: id, payload: { id, slug: id, name, stage: 'LIVE', date: '2027-01-17', start: '09:00', end: '17:00', capacity: 100, features: ['draw', 'poll', 'screen'] }, workspace: emptyWorkspace() });
+      await insertEvent(harness.database, { orgId: LEGACY_ORG, id, slug: id, payload: { id, slug: id, name, stage: 'LIVE', date: '2027-01-17', start: '09:00', end: '17:00', capacity: 100, features: ['draw', 'poll', 'screen'] }, workspace: emptyWorkspace() });
     }
     await insertMembership(harness.database, managerId, eventA, ['all']);
     const cookie = await sessionCookie(harness, managerId);
@@ -64,7 +75,8 @@ async function main() {
       body: { commandId: `theme-person-${crypto.randomUUID()}`, command: 'participant.import', payload: { rows: [{ name: '디자인 검증 참가자', phone: '01000000001', company: '검증 업체' }] } },
     });
     assert.equal(imported.status, 200);
-    gateway = await startWebApiGateway({ apiBase: harness.baseUrl, webBase, loseFirstResponseFor: ['attendee.page.save', 'attendee.page.publish'] });
+    owned = await startOwnedNext({ apiBase: harness.baseUrl });
+    gateway = await startWebApiGateway({ apiBase: harness.baseUrl, webBase: owned.baseUrl, loseFirstResponseFor: ['attendee.page.save', 'attendee.page.publish'] });
     browser = await chromium.launch(process.env.CHROMIUM_EXECUTABLE ? { executablePath: process.env.CHROMIUM_EXECUTABLE } : {});
     const newPage = async (context) => {
       const page = await context.newPage(); pages.push(page);
@@ -139,11 +151,16 @@ async function main() {
 
     phase = 'publish with lost committed response';
     const publish = editor.getByRole('button', { name: /^(게시|게시하기|변경사항 게시)$/ });
+    const publishCount = gateway.commands.filter((call) => call.command === 'attendee.page.publish').length;
     await publish.click();
+    assert.equal(gateway.commands.filter((call) => call.command === 'attendee.page.publish').length, publishCount, 'opening review never publishes');
+    await editor.getByRole('group', { name: '실행 확인', exact: true })
+      .getByRole('button', { name: '게시하기', exact: true }).click();
     await gateway.waitForResponseLoss('attendee.page.publish');
     await editor.getByRole('alert').filter({ hasText: /응답|연결|게시/ }).waitFor();
     await commandClick(editor, publish, 'attendee.page.publish');
     const publishCalls = gateway.commands.filter((call) => call.command === 'attendee.page.publish');
+    assert.equal(publishCalls.length, 2);
     assert.equal(publishCalls[0].commandId, publishCalls[1].commandId);
     let published = await readPublic();
     assert.equal(published.homeStyle.backgroundColor, '#E8EFE9');
@@ -197,6 +214,10 @@ async function main() {
     assert.ok(headingVisuallyHidden, 'image-only must hide the overlay visually while retaining its semantic heading');
     await attendee.screenshot({ path: path.join(directory, 'published-image-only-390.png'), fullPage: true });
     await editor.getByRole('button', { name: '배너 이미지 제거', exact: true }).click();
+    assert.equal((await readWorkspace()).pageExperience.draft.keyvisual.fileId, fileId, 'opening removal review must preserve the saved image');
+    await editor.getByRole('group', { name: '실행 확인', exact: true })
+      .getByRole('button', { name: '연결 해제하기', exact: true }).click();
+    await editor.getByRole('button', { name: '기본 이미지 사용 중', exact: true }).waitFor();
     await editor.locator('#home-layout').selectOption('centered');
     await editor.locator('#home-hero-title').fill('');
     await editor.locator('#home-hero-subtitle').fill('');
@@ -226,6 +247,9 @@ async function main() {
     assert.equal(await stale.locator('#home-hero-title').inputValue(), '이전 창에서 편집 중인 문구');
     await stale.getByRole('button', { name: '최신 초안 확인', exact: true }).click();
     await stale.getByRole('button', { name: /최신 초안.*불러오기/ }).click();
+    assert.equal(await stale.locator('#home-hero-title').inputValue(), '이전 창에서 편집 중인 문구', 'opening replacement review keeps unsaved input');
+    await stale.getByRole('group', { name: '실행 확인', exact: true })
+      .getByRole('button', { name: '최신 초안으로 바꾸기', exact: true }).click();
     await stale.getByRole('heading', { name: '다른 창에서 저장한 최신 초안', exact: true }).waitFor();
     assert.equal(await stale.locator('#home-hero-title').inputValue(), '다른 창에서 저장한 최신 초안');
     assert.deepEqual(await readPublic(), published, 'a recovered newer draft must still not change published content');
@@ -242,13 +266,13 @@ async function main() {
     assert.equal((await harness.database.query('SELECT COUNT(*) AS total FROM stored_files WHERE event_id=$1', [eventA])).rows[0].total, '1');
     assert.deepEqual(errors, []);
     const result = { outcome: 'passed', apiResponsesMocked: false, draftPrivate: true, draftReloaded: true, sameSaveReceiptOnResponseLoss: true, samePublishReceiptOnResponseLoss: true, independentBrowsersSamePublishedTheme: true, ticketHolderSameTheme: true, detailsRetainEventBackground: true, anotherEventUnchanged: true, uploadedFiles: 1, unpublishedFilePrivate: true, publishedFileAccessible: true, imageOnlyRetainsSemanticHeading: true, imageRemovalPublishedAndPrivateAgain: true, staleDraftRejectedAndRecoveredWithoutPublishing: true, persistedAfterHttpRestart: true, seriousCriticalAxe: 0, pageErrors: 0, captures: directory };
-    fs.writeFileSync(path.join(directory, 'verification.json'), JSON.stringify(result, null, 2)); console.log(JSON.stringify(result));
+    fs.writeFileSync(path.join(directory, 'verification.json'), JSON.stringify(result, null, 2), { mode: 0o600 }); console.log(JSON.stringify(result));
   } catch (error) {
     console.error(`Failed phase: ${phase}`);
     for (let index = 0; index < pages.length; index += 1) await pages[index].screenshot({ path: path.join(directory, `failure-${index}.png`), fullPage: true }).catch(() => {});
     throw error;
   } finally {
-    if (browser) await browser.close(); if (gateway) await gateway.close(); if (harness) await harness.close();
+    if (browser) await browser.close(); if (gateway) await gateway.close(); if (owned) await owned.close(); if (harness) await harness.close();
   }
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

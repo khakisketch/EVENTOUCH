@@ -1,0 +1,147 @@
+/* Staff account menu: who is signed in and which organization is operating.
+   Token-only styling; the disclosure panel floats above the work screens
+   without moving them. All interactive targets meet the 44px minimum. */
+.accountMenu {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--s3);
+}
+
+.menuButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 44px;
+  max-width: 100%;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--small);
+  cursor: pointer;
+}
+
+.menuButton:hover {
+  background: var(--surface-muted);
+}
+
+.menuLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menuCaret {
+  flex: none;
+  width: 0;
+  height: 0;
+  border-right: 5px solid transparent;
+  border-left: 5px solid transparent;
+  border-top: 6px solid var(--muted);
+}
+
+.menuButton[aria-expanded="true"] .menuCaret {
+  border-top: 0;
+  border-bottom: 6px solid var(--muted);
+}
+
+.menuPanel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + var(--s1));
+  right: 0;
+  display: grid;
+  gap: var(--s3);
+  width: min(22rem, calc(100vw - var(--s5)));
+  padding: var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: 0 8px 24px var(--shadow-color);
+}
+
+.menuPanel[hidden] {
+  display: none;
+}
+
+.accountFacts {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+}
+
+.accountFacts > div {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr);
+  gap: var(--s2);
+  align-items: baseline;
+}
+
+.accountFacts dt {
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.accountFacts dd {
+  margin: 0;
+  font-size: var(--small);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.menuNote {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  line-height: 1.55;
+}
+
+.menuRetry,
+.menuClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.menuRetry:hover,
+.menuClose:hover {
+  background: var(--surface-muted);
+}
+
+.menuClose {
+  justify-self: stretch;
+}
+
+/* Account-level recovery entry: the holder's own mailbox proof. This is not
+   an organization settings menu — it never touches org scope, roles, or the
+   parent switcher — so it lives beside the account facts, not inside the
+   switcher. Same 44px target and surface as the panel actions. */
+.menuLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.menuLink:hover {
+  background: var(--surface-muted);
+}

@@ -1,3 +1,6 @@
+/* Public entry in the same white product world. Product evidence stays
+   distinct from marketing claims and customer-owned attendee artwork. */
+
 .page {
   width: calc(100% - var(--s6));
   max-width: var(--web-content-max);
@@ -12,13 +15,17 @@
   outline-offset: 3px;
 }
 
+/* Sticky entry bar: brand, in-page menu, and sign-in stay reachable. */
 .header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--s4);
-  padding-bottom: var(--s4);
+  padding-block: var(--s2);
   border-bottom: 1px solid var(--line);
+  background: var(--paper);
 }
 
 .brand {
@@ -26,6 +33,7 @@
   min-height: 44px;
   align-content: center;
   gap: var(--s1);
+  margin-right: auto;
   color: var(--ink);
   text-decoration: none;
 }
@@ -87,12 +95,13 @@
   background: var(--surface-muted);
 }
 
+/* Hero: the job is to answer what / for whom / next action in one glance. */
 .hero {
   display: grid;
   grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
   align-items: center;
   gap: var(--s6);
-  padding-block: var(--s8) var(--s7);
+  padding-block: var(--s8) var(--s6);
 }
 
 .heroCopy {
@@ -177,10 +186,10 @@
   min-width: 0;
   margin: 0;
   overflow: hidden;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--paper);
-  box-shadow: 0 12px 32px var(--shadow-color);
+  box-shadow: 0 10px 30px var(--shadow-color);
 }
 
 .consoleEvidence img {
@@ -206,6 +215,45 @@
   font-weight: 750;
 }
 
+/* Honesty strip: the three facts that decide fit, before the fold of detail. */
+.factStrip {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  margin: var(--s6) 0 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  list-style: none;
+}
+
+.factStrip li {
+  display: flex;
+  min-width: 0;
+}
+
+.factStrip li + li {
+  border-left: 1px solid var(--line);
+}
+
+.factStrip a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  padding: var(--s2) var(--s5);
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 4px;
+}
+
+.factStrip a:hover {
+  color: var(--brand-text);
+}
+
+/* Journey as a ledger: numbered rows, each naming who acts and where. */
 .flowSection {
   padding-block: var(--s7) var(--s8);
 }
@@ -239,59 +287,43 @@
   font-size: var(--small);
 }
 
-.flowSteps {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0;
+.flowLedger {
   margin: 0;
   padding: 0;
+  border-top: 1px solid var(--line-strong);
   list-style: none;
 }
 
-.flowSteps::before {
-  position: absolute;
-  inset: 0 0 auto;
-  height: 1px;
-  background: var(--line-strong);
-  content: "";
+.flowRow {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  gap: var(--s4) var(--s5);
+  padding-block: var(--s5);
+  border-bottom: 1px solid var(--line);
 }
 
-.flowStep {
-  position: relative;
+.flowIndex {
+  font-family: var(--display-font);
+  font-size: var(--h2);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  color: var(--brand-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.flowBody {
   min-width: 0;
-  padding: var(--s5) var(--s5) 0 0;
 }
 
-.flowStep + .flowStep {
-  padding-left: var(--s5);
-  border-left: 1px solid var(--line);
-}
-
-.flowStep::before {
-  position: absolute;
-  top: -5px;
-  left: 0;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--brand);
-  content: "";
-}
-
-.flowStep + .flowStep::before {
-  left: var(--s5);
-}
-
-.phaseLabel {
-  display: block;
-  margin-bottom: var(--s2);
+.flowPhase {
+  margin: 0 0 var(--s1);
   color: var(--brand-text);
   font-size: var(--small);
   font-weight: 750;
 }
 
-.flowStep h3 {
+.flowBody h3 {
   margin: 0 0 var(--s2);
   font-family: var(--display-font);
   font-size: var(--h3);
@@ -299,14 +331,21 @@
   letter-spacing: -0.025em;
 }
 
-.flowStep p {
-  max-width: 36ch;
+.flowBody p {
+  max-width: 62ch;
   margin: 0;
   color: var(--muted);
   font-size: var(--small);
   word-break: keep-all;
 }
 
+.flowScreens {
+  margin-top: var(--s2);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* A quiet role comparison; the product screenshots carry their own color. */
 .fieldSection {
   width: 100vw;
   margin-inline: calc(50% - 50vw);
@@ -318,7 +357,7 @@
 
 .fieldLayout {
   display: grid;
-  grid-template-columns: minmax(260px, 0.75fr) minmax(0, 1.25fr);
+  grid-template-columns: minmax(260px, 0.62fr) minmax(0, 1.38fr);
   align-items: center;
   gap: var(--s7);
   width: 100%;
@@ -349,29 +388,24 @@
 }
 
 .mobileEvidence {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
   gap: clamp(var(--s4), 3vw, var(--s6));
   min-width: 0;
 }
 
 .phoneFigure {
-  width: clamp(200px, 22vw, 286px);
   min-width: 0;
   margin: 0;
-}
-
-.staffFigure {
-  margin-top: var(--s7);
 }
 
 .phoneFrame {
   overflow: hidden;
   padding: 6px;
-  border: 1px solid var(--nav-active);
+  border: 1px solid var(--line);
   border-radius: 28px;
-  background: var(--nav-active);
+  background: var(--paper);
   box-shadow: 0 20px 40px var(--shadow-color);
 }
 
@@ -450,9 +484,22 @@
   height: auto;
 }
 
+.reportEvidence picture {
+  display: block;
+  background: var(--surface-muted);
+}
+
 .reportEvidence figcaption {
   padding: var(--s3) var(--s4);
   border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.reportCropNote {
+  display: none;
+  margin: 0;
+  padding: 0 var(--s4) var(--s3);
   color: var(--muted);
   font-size: var(--small);
 }
@@ -461,6 +508,7 @@
   max-width: 900px;
   margin-inline: auto;
   padding-block: var(--s8);
+  scroll-margin-top: var(--s5);
 }
 
 .faqSection h2 {
@@ -469,6 +517,7 @@
 
 .faqItem {
   border-top: 1px solid var(--line);
+  scroll-margin-top: var(--s6);
 }
 
 .faqItem:last-child {
@@ -529,6 +578,7 @@
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   background: var(--soft);
+  scroll-margin-top: var(--s5);
 }
 
 .contactSection h2 {
@@ -538,7 +588,7 @@
 
 .contactSection > div:first-child p {
   margin: 0;
-  color: var(--muted);
+  color: var(--ink);
 }
 
 .contactDetails {
@@ -550,6 +600,9 @@
 }
 
 .contactDetails > a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
   color: var(--ink);
   font-weight: 700;
   text-underline-offset: 4px;
@@ -606,18 +659,10 @@
   color: var(--ink);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
   .hero {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--s6);
-  }
-
-  .heroTitle {
-    font-size: clamp(var(--display-large), 6vw, var(--display-xl));
-  }
-
-  .heroDescription {
-    font-size: var(--body);
   }
 
   .fieldLayout {
@@ -627,14 +672,6 @@
 
   .fieldCopy {
     max-width: 60ch;
-  }
-
-  .mobileEvidence {
-    justify-content: flex-start;
-  }
-
-  .phoneFigure {
-    width: min(34vw, 286px);
   }
 
   .reportLayout {
@@ -652,35 +689,37 @@
   }
 }
 
-@media (max-width: 680px) {
+@media (max-width: 768px) {
   .page {
     width: calc(100% - var(--s5));
     padding-block: var(--s3) var(--s6);
   }
 
   .header {
-    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--s2) var(--s3);
   }
 
   .brandName {
     font-size: var(--h3);
   }
 
-  .brandDescription {
+  .siteNav {
+    order: 3;
+    flex-basis: 100%;
+    gap: var(--s4);
+    overflow-x: auto;
+  }
+
+  .siteNav a {
     font-size: var(--small);
   }
 
   .loginLink {
     padding-inline: var(--s3);
-    font-size: var(--small);
-  }
-
-  .siteNav {
-    display: none;
   }
 
   .hero {
-    grid-template-columns: minmax(0, 1fr);
     gap: var(--s5);
     padding-block: var(--s7);
   }
@@ -697,7 +736,20 @@
 
   .consoleEvidence figcaption {
     padding: var(--s2) var(--s3);
-    font-size: var(--small);
+  }
+
+  .factStrip {
+    flex-direction: column;
+  }
+
+  .factStrip li + li {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .factStrip a {
+    width: 100%;
+    padding-inline: 0;
   }
 
   .flowSection {
@@ -721,45 +773,13 @@
     margin-top: var(--s2);
   }
 
-  .flowSteps {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0;
-    margin-left: 4px;
-  }
-
-  .flowSteps::before {
-    inset: 0 auto 0 0;
-    width: 1px;
-    height: auto;
-  }
-
-  .flowStep,
-  .flowStep + .flowStep {
-    padding: 0 0 var(--s5) var(--s5);
-    border: 0;
-  }
-
-  .flowStep::before,
-  .flowStep + .flowStep::before {
-    top: 4px;
-    left: -5px;
-  }
-
-  .flowStep:last-child {
-    padding-bottom: 0;
-  }
-
-  .flowStep h3 {
-    font-size: var(--body);
-  }
-
-  .flowStep p {
-    max-width: 48ch;
-    margin-bottom: 0;
+  .flowRow {
+    gap: var(--s3) var(--s4);
   }
 
   .fieldSection {
-    padding: var(--s7) var(--s3);
+    --field-gutter: var(--s3);
+    padding: var(--s7) var(--field-gutter);
   }
 
   .fieldLayout {
@@ -767,21 +787,31 @@
   }
 
   .mobileEvidence {
-    align-items: center;
-    flex-direction: column;
-    gap: var(--s6);
+    display: flex;
+    gap: var(--s4);
+    max-width: none;
+    margin-inline: calc(var(--field-gutter) * -1);
+    padding-inline: var(--field-gutter);
+    padding-bottom: var(--s2);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
   }
 
-  .phoneFigure {
-    width: min(260px, 78vw);
+  .mobileEvidence .phoneFigure {
+    flex: 0 0 min(240px, 78%);
+    scroll-snap-align: center;
   }
 
-  .staffFigure {
-    margin-top: 0;
+  .mobileEvidence:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  .reportEvidence .reportCropNote {
+    display: block;
   }
 
   .phoneFigure figcaption {
-    gap: var(--s1);
     margin-top: var(--s2);
   }
 
@@ -807,10 +837,6 @@
     width: 100%;
   }
 
-  .contactDetails {
-    gap: var(--s2) var(--s3);
-  }
-
   .footer {
     flex-direction: column;
     margin-top: var(--s5);
@@ -827,7 +853,7 @@
   }
 
   .fieldSection {
-    padding-inline: var(--s2);
+    --field-gutter: var(--s2);
   }
 
   .brandDescription {
@@ -835,7 +861,7 @@
   }
 
   .heroActions {
-    align-items: flex-start;
+    align-items: stretch;
     flex-direction: column;
   }
 
@@ -855,5 +881,18 @@
   .primaryAction,
   .faqItem summary::after {
     transition: none;
+  }
+}
+
+@media print {
+  .header {
+    position: static;
+  }
+
+  .siteNav,
+  .heroActions,
+  .contactDetails button,
+  .contactSection .primaryAction {
+    display: none;
   }
 }

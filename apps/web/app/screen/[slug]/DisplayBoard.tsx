@@ -396,6 +396,13 @@ function NeutralRouletteWheel({ className, spinning = false }: { className?: str
 export default function DisplayBoard({ slug }: { slug: string }) {
   const [state, setState] = useState<BoardState>({ kind: "loading" });
   const [revealId, setRevealId] = useState<string | null>(null);
+  // Manual recovery trigger: the poll loop already retries on its own, but a
+  // staffer standing in front of the venue screen needs a visible control
+  // that fetches now instead of waiting out the next interval.
+  const [retryTick, setRetryTick] = useState(0);
+  function refreshNow() {
+    setRetryTick((tick) => tick + 1);
+  }
   const seenDrawIdsRef = useRef<Map<string, string> | null>(null);
   const visibleDrawReady = state.kind === "ready" && (
     state.data.display.type === "draw" || state.data.modules.some((module) => module.type === "draw")
@@ -515,7 +522,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       if (timer !== null) window.clearTimeout(timer);
     };
-  }, [slug, pollDelay]);
+  }, [slug, pollDelay, retryTick]);
 
   if (state.kind === "loading") return <p className="display-status" role="status">화면을 준비하고 있습니다.</p>;
   if (state.kind === "missing") {
@@ -529,7 +536,21 @@ export default function DisplayBoard({ slug }: { slug: string }) {
       </section>
     );
   }
-  if (state.kind === "failed") return <p className="display-status" role="alert">{state.message}</p>;
+  if (state.kind === "failed") {
+    // First load never produced a frame, so there is nothing to keep: the
+    // poll loop retries on its own, and this button fetches now for the
+    // staffer standing in front of the screen.
+    return (
+      <section className="display-state" aria-label="화면 오류">
+        <p role="alert">{state.message}</p>
+        <p>
+          <button type="button" className="button button-secondary" onClick={refreshNow}>
+            다시 시도
+          </button>
+        </p>
+      </section>
+    );
+  }
 
   const { data, frame, stale } = state;
   const module = data.display.moduleId
@@ -637,6 +658,11 @@ export default function DisplayBoard({ slug }: { slug: string }) {
         <header className="display-header">
           {!drawSelected ? <span className="display-brand">EVENTOUCH</span> : null}
           {stale ? <p className="display-stale" role="status">연결 확인 중 · 마지막 화면입니다</p> : null}
+          {stale ? (
+            <button type="button" className="button button-secondary" onClick={refreshNow}>
+              새로고침
+            </button>
+          ) : null}
           <p className="display-date">{data.date}</p>
         </header>
         <div className={`display-content ${drawSelected ? drawStyles.cinematicContent : ""}`}>
@@ -699,13 +725,24 @@ export default function DisplayBoard({ slug }: { slug: string }) {
     });
   }
   if (!frames.length) {
+    // Idle keeps the same footer as a selected board: the venue stays
+    // visible while waiting, and the idle→selected switch adds content
+    // without shifting the frame.
     return (
       <section className="display-board display-idle">
         <p>EVENTOUCH</p>
         <h1>{data.name}</h1>
         <p>{data.date}</p>
         {stale ? <p className="display-stale" role="status">연결 확인 중 · 마지막 화면입니다</p> : null}
+        {stale ? (
+          <p>
+            <button type="button" className="button button-secondary" onClick={refreshNow}>
+              새로고침
+            </button>
+          </p>
+        ) : null}
         <p>화면 준비 중</p>
+        <footer className="display-footer"><span>행사 운영 워크스페이스</span><span>{data.venueName}</span></footer>
       </section>
     );
   }
@@ -715,6 +752,11 @@ export default function DisplayBoard({ slug }: { slug: string }) {
       <header className="display-header">
         <span className="display-brand">EVENTOUCH</span>
         {stale ? <p className="display-stale" role="status">연결 확인 중 · 마지막 화면입니다</p> : null}
+        {stale ? (
+          <button type="button" className="button button-secondary" onClick={refreshNow}>
+            새로고침
+          </button>
+        ) : null}
         <p className="display-date">{data.date}</p>
       </header>
       <div className="display-content">

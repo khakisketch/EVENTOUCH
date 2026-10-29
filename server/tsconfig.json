@@ -4,11 +4,12 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,
+    "erasableSyntaxOnly": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "types": ["node"]
   },
-  "include": ["commands/**/*.ts", "fastify/**/*.ts"]
+  "include": ["commands/**/*.ts", "fastify/**/*.ts", "runtime-security.ts", "signup-protection.ts", "request-observability.ts"]
 }

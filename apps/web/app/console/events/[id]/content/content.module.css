@@ -1,11 +1,12 @@
 /* Row layout (this workspace only): main content and actions share the
-   first row; an in-place ConsoleConfirm ([role="group"]) always spans the
-   full row below instead of squeezing in as a third flex column. Mobile
-   stacks to one column like the shared row behavior. */
+   first row, top-aligned so tall action clusters do not center-float
+   against short titles; an in-place ConsoleConfirm ([role="group"])
+   always spans the full row below instead of squeezing in as a third
+   flex column. Mobile stacks to one column like the shared row behavior. */
 li.recordRow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
+  align-items: start;
 }
 
 li.recordRow > * {
@@ -23,7 +24,7 @@ li.recordRow > [role="group"] {
 }
 
 .recordTitle {
-  margin: 0 0 var(--s1);
+  margin: 0;
   font-size: var(--h3);
   word-break: keep-all;
   overflow-wrap: break-word;
@@ -33,8 +34,8 @@ li.recordRow > [role="group"] {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--s2);
-  margin-bottom: var(--s2);
+  gap: var(--s1) var(--s2);
+  margin: var(--s1) 0 0;
 }
 
 .badge {
@@ -61,7 +62,7 @@ li.recordRow > [role="group"] {
 }
 
 .body {
-  margin: var(--s2) 0 0;
+  margin: var(--s1) 0 0;
   overflow-wrap: break-word;
 }
 
@@ -113,12 +114,122 @@ button.dangerGhost:hover {
   border-radius: var(--radius);
   color: var(--muted);
   text-align: center;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .help {
   margin: 0;
   color: var(--muted);
   font-size: var(--small);
+}
+
+/* Visible in-page index context (this workspace only): a quiet scope
+   label above the shared jump nav so the anchor row reads as a contents
+   index, not app tabs. aria-hidden: the nav's own aria-label carries
+   screen-reader naming once. Static wrapper — no sticky, so short phone
+   rows never cover the section they jump to. */
+.navIndex {
+  display: grid;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.navIndexLabel {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+/* Task-per-section stack (this workspace only): 공지 full-width ledger
+   first, then 일정 ledger, then 장소 안내 form — each section owns its
+   natural height in DOM order on every viewport. A side-by-side
+   일정/장소 pairing stranded whitespace under an empty ledger beside the
+   long venue form and blurred which task the eye was on, so the pairing
+   is removed; the shared page section rhythm separates the tasks instead.
+   Wrapper only — anchors, order, ids and commands untouched. */
+.supportGrid {
+  display: grid;
+  min-width: 0;
+  gap: var(--s5);
+}
+
+/* Short-entry rows (notices only): a one-line body cannot fill a side
+   action column, so the 4–5 grouped buttons stretched the row into a
+   left-content/right-buttons chasm. These rows stack instead — entry on
+   top, its lifecycle | exposure | delete toolbar left-aligned beneath —
+   while the richer 일정 rows keep side actions on desktop. Mobile already
+   stacks; the confirm region still spans the full row below. */
+li.stackedRow {
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: var(--s2);
+}
+
+/* Row action clusters (this workspace only): lifecycle (편집·게시) |
+   노출 (고정·전광판 출력) | 삭제. Same buttons, same order, grouped by
+   consequence so the destructive choice never sits beside the daily one.
+   Mirrors the operations separator grammar. Desktop keeps an airier
+   column rhythm so grouped actions do not read as one wall. */
+.compactActions {
+  column-gap: var(--s3);
+}
+
+.actionSeparator {
+  flex: none;
+  align-self: stretch;
+  width: 1px;
+  margin-inline: var(--s1);
+  background: var(--line);
+}
+
+@media (max-width: 768px) {
+  .actionSeparator {
+    display: none;
+  }
+
+  /* Phone row actions (this workspace only): intrinsic-width wrapping
+     list, not forced 2-col equal boxes. Daily and exposure actions keep
+     their order, delete stays last with danger tone but never equal
+     weight or a full-width primary-like bar. 44px and focus ride globals. */
+  .compactActions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: center;
+    gap: var(--s2);
+  }
+
+  .compactActions > :global(.button) {
+    flex: 0 1 auto;
+    width: auto;
+    max-width: 100%;
+  }
+}
+
+/* Form sub-groups (this workspace only): one task per group with its own
+   small title so the uniform row stack reads as 2 steps. Wrappers only —
+   ids, names, order, validation and focus are untouched. Rhythm matches
+   the settings groups: air above, tight inside. */
+.fieldGroup {
+  display: grid;
+  gap: var(--s2);
+  min-width: 0;
+  margin: 0;
+  padding-top: var(--s5);
+  border-top: 1px solid var(--line);
+}
+
+.fieldGroup:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.groupTitle {
+  margin: 0 0 var(--s1);
+  font-size: var(--body);
+  font-weight: 700;
+  overflow-wrap: break-word;
 }
 
 .featureOff {

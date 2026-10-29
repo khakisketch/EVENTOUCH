@@ -34,17 +34,39 @@ test("the shared confirmation announces itself and takes focus", () => {
 
 test("no console command still confirms through a native dialog", () => {
   const offenders = [];
+  const dirtyDismissals = [];
   for (const file of consoleFiles()) {
-    const lines = read(path.relative(appRoot, file)).split("\n");
+    const relative = path.relative(appRoot, file);
+    const lines = read(relative).split("\n");
+    let scope = "";
     lines.forEach((line, index) => {
+      const fn = line.match(/^\s*function (\w+)\s*\(/);
+      if (fn) scope = fn[1];
       if (!line.includes("window.confirm")) return;
       const trimmed = line.trim();
       if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) return;
       if (GATE.test(line)) return;
-      offenders.push(`${path.relative(appRoot, file)}:${index + 1} ${line.trim().slice(0, 90)}`);
+      // Dirty-dismissal guards only abandon unsaved input; they never run an
+      // effectful operation. Allowed in the team permission editor, where the
+      // same DIRTY_CLOSE_MESSAGE constant names the discarded scope draft —
+      // and only inside the three switch paths that would drop it.
+      if (
+        relative === "console/team/TeamWorkspace.tsx" &&
+        /window\.confirm\(DIRTY_CLOSE_MESSAGE\)/.test(line) &&
+        ["openEditor", "changeEvent", "cancelEdit"].includes(scope)
+      ) {
+        dirtyDismissals.push(`${relative}:${index + 1} ${scope}`);
+        return;
+      }
+      offenders.push(`${relative}:${index + 1} ${line.trim().slice(0, 90)}`);
     });
   }
   assert.deepEqual(offenders, [], "effectful commands must confirm in place");
+  assert.deepEqual(
+    [...new Set(dirtyDismissals.map((entry) => entry.split(" ").pop()))].sort(),
+    ["cancelEdit", "changeEvent", "openEditor"],
+    "the team editor guards every dirty scope switch, and only those"
+  );
 });
 
 test("every screen that changes something irreversible uses the shared confirmation", () => {
@@ -87,12 +109,16 @@ test("the roster keeps one-tap approval and folds the rest of the row tools", ()
   assert.match(list, /승인/u);
   // The toggle says what it opens, and names the participant for a screen
   // reader: the row list is read one row at a time.
-  assert.match(list, /더보기/u);
+  assert.match(list, /상세/u);
   // The accessible name has to contain the visible label (WCAG label in name).
-  assert.match(list, /aria-label=\{`\$\{person\.name\} 참가자 작업 더보기`\}/u);
+  assert.match(list, /aria-label=\{`\$\{person\.name\} 참가자 상세`\}/u);
   assert.match(list, /const detailsOpen = toolsOpenId === person\.id/u);
   assert.match(list, /aria-expanded=\{detailsOpen\}/u);
-  assert.match(list, /showRowActions && detailsOpen/u);
+  // The row no longer grows a card; details open in the roster inspector.
+  // The toggle keeps its aria-expanded/id contract and the inspector owns
+  // the same status/reward gates and cancel confirm.
+  assert.match(list, /showRowActions \? \(/u);
+  assert.match(list, /rosterInspector/u);
   assert.match(css, /\.participantActions \.rowToolsToggle \{\s*display: inline-flex;/u);
   assert.match(css, /\.participantDetails \{/u);
   assert.match(css, /\.rowConfirm \{\s*grid-column: 1 \/ -1;/u);

@@ -21,6 +21,7 @@
 // any viewport fails the run. Moderate axe findings are reported for triage.
 
 const path = require('node:path');
+const { prepareCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = require('./capture-dir.cjs');
 const fs = require('node:fs');
 const axeSource = require('axe-core').source;
 const { launchBrowser } = require('./audit-browser.cjs');
@@ -178,6 +179,13 @@ async function attendeeTicket(baseUrl, eventId, fixture) {
 }
 
 async function main() {
+  const captureDir = process.env.EVENTOUCH_CAPTURE_ROOT
+    ? path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'web')
+    : defaultCaptureDir(`web-audit-${runStamp()}`);
+  // Fail before starting the fixture: a refused existing/unsafe evidence path
+  // must not strand its API, Next process or temporary schema.
+  prepareCaptureDir(captureDir);
+  process.env.TMPDIR = ensureRunTmpDir(captureDir);
   let fixture;
   try {
     fixture = await startAuditFixture();
@@ -186,10 +194,6 @@ async function main() {
     process.exitCode = 2;
     return;
   }
-  const captureDir = process.env.EVENTOUCH_CAPTURE_ROOT
-    ? path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'web')
-    : '/tmp/opencode/eventouch-captures/web-audit';
-  fs.mkdirSync(captureDir, { recursive: true });
   const baseUrl = fixture.baseUrl;
   const slug = fixture.slug;
   const eventId = fixture.eventId;

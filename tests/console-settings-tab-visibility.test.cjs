@@ -68,7 +68,7 @@ test('the effect re-applies on tab switches and width changes without stealing s
   assert.doesNotMatch(body, /window\.scrollTo|window\.scrollBy/u, 'no window scrolling from the adjustment');
 });
 
-test('tabs, panels, dirty marks and the mobile help stay intact', () => {
+test('tabs retain their behavior while all four destinations are visible on phones', () => {
   assert.match(SOURCE, /role="tablist"/u);
   assert.match(SOURCE, /role="tab"/u);
   assert.match(SOURCE, /role="tabpanel"/u);
@@ -77,8 +77,9 @@ test('tabs, panels, dirty marks and the mobile help stay intact', () => {
   assert.match(SOURCE, /hidden=\{activeTab !==/u, 'panels stay mounted hidden');
   assert.match(SOURCE, /tabDirtyDot/u, 'dirty dots stay');
   assert.match(SOURCE, /저장 안 됨/u);
-  assert.match(SOURCE, /설정 4개 구역 · 좌우로 밀어 진행 단계까지 확인하세요/u, 'mobile overflow help stays');
-  assert.match(CSS, /\.tabsHelp\s*\{[^}]*font-size:\s*var\(--small\)/su, 'help uses tokens');
-  assert.match(CSS, /@media \(min-width:\s*769px\)\s*\{[^}]*\.tabsHelp\s*\{[^}]*display:\s*none/su, 'help hides where all four tabs fit');
+  // Presentation change: visible 2x2 tabs replace swipe-only overflow. All
+  // draft, hash, roving-focus and panel-mount assertions above remain.
+  assert.doesNotMatch(SOURCE, /좌우로 밀어 진행 단계까지/u);
+  assert.match(CSS, /@media \(max-width:\s*768px\)\s*\{\s*\.tabs\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/su);
   assert.doesNotMatch(CSS, /#[0-9a-fA-F]{3,8}/u);
 });

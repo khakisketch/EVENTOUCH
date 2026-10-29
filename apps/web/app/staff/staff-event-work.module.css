@@ -156,6 +156,8 @@
 
 .resultBlock .scan-result {
   border-radius: var(--radius-small);
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .nextStep {
@@ -163,6 +165,24 @@
   color: var(--muted);
   font-size: var(--small);
   line-height: 1.5;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* Fixed current-organization line: always present near the risk work so the
+   operator never scans, corrects, or collects under the wrong organization
+   by mistake. Token text only; the account menu next to it owns switching. */
+.orgLine {
+  margin: 0 0 var(--s3);
+  padding-block: var(--s2);
+  color: var(--muted);
+  font-size: var(--label);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.orgLine strong {
+  font-weight: 800;
 }
 
 .nextActions {
@@ -212,7 +232,13 @@
 /* Booth QR: the QR standard asks for four clear modules around the code.
    A participant scans this with a phone camera, and without the quiet zone
    the camera has no clean edge to lock onto, so the code is framed in white
-   with a margin on every side. */
+   with a margin on every side. The visible caption names the booth so the
+   wrong code cannot be shown by habit when several booths share a screen. */
+.boothQrCaption {
+  margin: 0 0 var(--s2);
+  font-weight: 800;
+}
+
 .boothQr {
   display: inline-block;
   padding: var(--s5);
@@ -224,6 +250,8 @@
 
 .boothQr svg {
   display: block;
+  max-width: 100%;
+  height: auto;
 }
 
 .recentRow {
@@ -232,6 +260,133 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--s2) var(--s3);
+}
+
+/* Field rhythm: keep the selected location, scan, result and recent work
+   distinct without adding artificial numbered steps or nested cards. */
+.workSection {
+  display: grid;
+  gap: var(--s3);
+  margin: 0;
+  padding: var(--s4) 0 0;
+  border-top: 1px solid var(--line);
+}
+
+.workSection:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: var(--h3);
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* Scan hierarchy: camera first as the unmissable primary, the typed code
+   as an explicit fallback group below the same hairline — never a competing
+   twin. The bar stays in normal flow on every viewport (no sticky, no
+   fixed): at 320×568 a riding dock would cover the very selector, org line,
+   ledger, or SELF QR the operator needs, so reachability comes from scroll
+   order plus focus scroll, never from an overlay. */
+.scanPrimary {
+  min-height: 56px;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+/* Operating context at the action: after any scroll the operator still sees
+   which desk/booth and action the scan below will commit to. One ink line,
+   not a panel; the select, direction hint, and scan hint stay authoritative. */
+.scanContext {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 700;
+  line-height: 1.55;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.fallbackBlock {
+  display: grid;
+  gap: var(--s2);
+  padding-top: var(--s3);
+  border-top: 1px dashed var(--line-strong);
+}
+
+.fallbackLabel {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--label);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.fallbackBlock button[type="submit"] {
+  min-height: 48px;
+  font-weight: 750;
+}
+
+/* Assignment hub: one open row per event with the scope summary up front and
+   the single opening action right-aligned (stacked on narrow phones). */
+.hubHeading {
+  margin: 0;
+  font-size: var(--h3);
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+/* Hub empty/error guidance: Korean reads by word (eojeol), never split
+   mid-syllable. keep-all preserves 문의/스태프 units at 320px; break-word
+   still breaks long codes/paths when the viewport demands it. */
+.hubNote {
+  margin: 0;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.hubCount {
+  color: var(--brand-text);
+}
+
+.hubRow {
+  align-items: start;
+}
+
+.hubEventName {
+  font-size: var(--body-work);
+  font-weight: 800;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.hubScope {
+  color: var(--muted);
+  font-size: var(--small);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .hubRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hubRow :global(.button) {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scanInput {
+    scroll-behavior: auto;
+  }
 }
 
 .recentRow span {
@@ -267,6 +422,18 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .workSection {
+    padding-top: var(--s2);
+  }
+
+  .scanInput {
+    gap: var(--s2);
+  }
+
+  .fallbackBlock {
+    padding-top: var(--s2);
+  }
+
   .lookupForm button,
   .rewardItem button,
   .prizeHeader button,
@@ -280,9 +447,6 @@
   }
 
   .scanInput {
-    position: sticky;
-    bottom: 0;
-    z-index: 1;
     padding: var(--s3) 0;
     border-top: 1px solid var(--line);
     background: var(--paper);
@@ -301,5 +465,88 @@
   .rewardItem {
     align-items: stretch;
     flex-direction: column;
+  }
+}
+
+/* Page-local scope marker for the event field-work screen: lets the rules
+   below tighten shared chrome for this small-phone scanner only. Globals
+   and every other page keep their own spacing. */
+.eventWorkPage {
+  min-width: 0;
+}
+
+/* Header context companion (global .staff-event-context stays untouched): the
+   back link and the event name share the first row while the kiosk toggle —
+   a mode switch, not a peer of the breadcrumb — takes its own full-width row
+   on phones. Without this the toggle squeezes beside a truncating event name
+   at 390px and wraps to a ragged half-row at 320px. */
+.eventContext > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .eventContext {
+    row-gap: var(--s2);
+  }
+
+  .eventContext :global(.kiosk-toggle) {
+    flex: 1 1 100%;
+  }
+}
+
+/* Correction submit: the global .correction-form is ungridded flow, so the
+   button renders content-width while every sibling action (camera primary,
+   code submit, retry) spans full width on phones. Same 48px commitment as
+   the code submit, full row on narrow screens. */
+.correctSubmit {
+  min-height: 48px;
+  font-weight: 750;
+}
+
+@media (max-width: 560px) {
+  .correctSubmit {
+    width: 100%;
+  }
+}
+
+/* 320px-class phones: recover the ~60px the primary needs to sit fully
+   inside the first 568px viewport, plus the fallback label peek. Only
+   unnecessary space is cut — control heights (44px+), text sizes, wrapping,
+   and every block stay intact, and nothing is positioned, so no overlay can
+   ever cover the selector, the org line, the ledger, or the SELF-booth QR.
+   The duplicated form hairline is collapsed in globals (staff-workspace
+   scope); here only rhythm is tightened and the fallback keeps a scroll
+   margin so keyboard focus never lands it under an edge. */
+@media (max-width: 360px) {
+  .eventWorkPage :global(.staff-header) {
+    margin-bottom: var(--s2);
+    padding-bottom: var(--s1);
+  }
+
+  .eventWorkPage :global(.staff-workspace) {
+    gap: var(--s2);
+  }
+
+  .eventWorkPage :global(.staff-event-context) {
+    padding-bottom: var(--s1);
+  }
+
+  .orgLine {
+    margin-bottom: var(--s1);
+    padding-block: var(--s1);
+  }
+
+  .workSection {
+    padding-top: var(--s1);
+  }
+
+  .scanInput {
+    padding: var(--s1) 0;
+  }
+
+  .fallbackBlock {
+    padding-top: var(--s2);
+    scroll-margin-top: var(--s3);
   }
 }

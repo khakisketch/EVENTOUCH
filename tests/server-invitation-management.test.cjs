@@ -16,6 +16,7 @@ const {
   insertEvent,
   sessionCookie,
   requestJson,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 const { emptyWorkspace } = require('../server/state');
 
@@ -51,24 +52,24 @@ async function createInvitation(cookie, body) {
 before(async () => {
   if (!databaseUrl) return;
   harness = await startApiHarness();
-  await insertAccount(harness.database, {
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,
     id: 'agency-owner', role: 'AGENCY', name: '운영사', email: 'agency-owner@example.test',
   });
-  await insertAccount(harness.database, {
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,
     id: 'team-manager', role: 'MANAGER', name: '매니저', email: 'team-manager@example.test',
   });
-  await insertAccount(harness.database, {
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,
     id: 'field-staff', role: 'STAFF', name: '스태프', email: 'field-staff@example.test',
   });
   eventId = `evt-${crypto.randomUUID()}`;
-  await insertEvent(harness.database, {
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,
     id: eventId,
     slug: `slug-${crypto.randomUUID()}`,
     payload: { name: '테스트 행사', stage: 'DRAFT' },
     workspace: emptyWorkspace(),
   });
   archivedEventId = `evt-${crypto.randomUUID()}`;
-  await insertEvent(harness.database, {
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,
     id: archivedEventId,
     slug: `slug-${crypto.randomUUID()}`,
     payload: { name: '보관 행사', stage: 'ARCHIVED' },
@@ -105,14 +106,16 @@ test('invitation writes recheck the current agency role inside the transaction',
         cookie: cookies.agency, method: 'POST', body: { commandId: commandId() },
       });
       await arrival;
-      await harness.database.query("UPDATE accounts SET role='MANAGER' WHERE id='agency-owner'");
+      // Membership is the authority (not accounts.role): a mid-flight demotion
+      // inside this org must deny, while other orgs keep their own truth.
+      await harness.database.query("UPDATE organization_memberships SET role='MANAGER' WHERE org_id='org-legacy' AND account_id='agency-owner'");
       release();
       assert.equal((await pending).status, 403);
       assert.equal((await harness.database.query('SELECT status FROM invitations WHERE id=$1',
         [existing.json.invitation.id])).rows[0].status, 'PENDING');
     } finally {
       release(); harness.database.transaction = original;
-      await harness.database.query("UPDATE accounts SET role='AGENCY' WHERE id='agency-owner'");
+      await harness.database.query("UPDATE organization_memberships SET role='AGENCY' WHERE org_id='org-legacy' AND account_id='agency-owner'");
     }
   }
 });
@@ -145,8 +148,19 @@ test('manager and staff cannot create or revoke invitations', async () => {
 });
 
 test('invitation creation validates role, email, event and command identity', async () => {
+  // Owner invitations are org-scoped (owner-only, no event): allowed.
+  const ownerInvite = await createInvitation(cookies.agency, {
+    commandId: commandId(), name: '새 소유자', email: uniqueEmail('owner'), role: 'AGENCY',
+  });
+  assert.equal(ownerInvite.status, 201);
+  const ownerScoped = await createInvitation(cookies.agency, {
+    commandId: commandId(), name: '행사 소유자', email: uniqueEmail('owner-scoped'), role: 'AGENCY', eventId: eventId,
+  });
+  assert.equal(ownerScoped.status, 400);
+  assert.equal(ownerScoped.json.field, 'eventId');
+
   const badRole = await createInvitation(cookies.agency, {
-    commandId: commandId(), name: '홍길동', email: uniqueEmail('role'), role: 'AGENCY',
+    commandId: commandId(), name: '홍길동', email: uniqueEmail('role'), role: 'BILLING',
   });
   assert.equal(badRole.status, 400);
 
@@ -263,6 +277,109 @@ test('staff invitation without an event accepts but grants no membership', async
   assert.equal(membership.rowCount, 0);
 });
 
+test('a stale staff invitation cannot demote the last active owner', async () => {
+  const email = uniqueEmail('last-owner');
+  const inviteeId = `acct-${crypto.randomUUID()}`;
+  // The invitee exists as a global account but is not yet a member of this
+  // org, so the invitation can be issued. Membership arrives afterwards.
+  await harness.database.query(
+    `INSERT INTO accounts (id, email, name, role, password_hash, org_permissions)
+     VALUES ($1, $2, $3, 'MANAGER', 'scrypt:test:test', '[]'::jsonb)`,
+    [inviteeId, email, '마지막 소유자']
+  );
+  const created = await createInvitation(cookies.agency, {
+    commandId: commandId(), name: '마지막 소유자', email, role: 'STAFF',
+  });
+  assert.equal(created.status, 201);
+
+  // The invitee joins as the org's only active owner after the STAFF
+  // invitation was issued; accepting it must not leave the org ownerless.
+  await harness.database.query(
+    `INSERT INTO organization_memberships (org_id, account_id, role, active, permissions)
+     VALUES ($1, $2, 'AGENCY', true, '[]'::jsonb)`,
+    [LEGACY_ORG, inviteeId]
+  );
+  await harness.database.query(
+    "UPDATE organization_memberships SET role='MANAGER' WHERE org_id=$1 AND account_id='agency-owner'",
+    [LEGACY_ORG]
+  );
+  try {
+    const cookie = await sessionCookie(harness, inviteeId);
+    const rejected = await requestJson(harness.baseUrl, `/api/auth/invitations/${created.json.token}/accept`, {
+      cookie,
+      method: 'POST',
+      body: {},
+    });
+    assert.equal(rejected.status, 409);
+    assert.equal(rejected.json.code, 'LAST_OWNER');
+    const membership = await harness.database.query(
+      'SELECT role, active FROM organization_memberships WHERE org_id=$1 AND account_id=$2',
+      [LEGACY_ORG, inviteeId]
+    );
+    assert.deepEqual({ role: membership.rows[0].role, active: membership.rows[0].active }, { role: 'AGENCY', active: true });
+    const invitation = await harness.database.query('SELECT status FROM invitations WHERE id=$1', [created.json.invitation.id]);
+    assert.equal(invitation.rows[0].status, 'PENDING');
+  } finally {
+    await harness.database.query(
+      "UPDATE organization_memberships SET role='AGENCY' WHERE org_id=$1 AND account_id='agency-owner'",
+      [LEGACY_ORG]
+    );
+    await harness.database.query(
+      'DELETE FROM organization_memberships WHERE org_id=$1 AND account_id=$2',
+      [LEGACY_ORG, inviteeId]
+    );
+  }
+});
+
+test('concurrent stale invitations and role edits preserve an active owner', { timeout: 20000 }, async () => {
+  for (const competingPath of ['invitation', 'role-edit']) {
+    const invitees = [];
+    for (let index = 0; index < 2; index += 1) {
+      const id = `acct-${crypto.randomUUID()}`;
+      const email = uniqueEmail('owner-race');
+      await insertAccount(harness.database, { orgId: LEGACY_ORG, id, email, name: '소유자 경합', role: 'MANAGER' });
+      await harness.database.query('DELETE FROM organization_memberships WHERE org_id=$1 AND account_id=$2', [LEGACY_ORG, id]);
+      const invitation = await createInvitation(cookies.agency, {
+        commandId: commandId(), email, name: '소유자 경합', role: 'STAFF',
+      });
+      assert.equal(invitation.status, 201);
+      invitees.push({ id, token: invitation.json.token, invitationId: invitation.json.invitation.id });
+    }
+    try {
+      for (const invitee of invitees) {
+        await harness.database.query(
+          `INSERT INTO organization_memberships (org_id, account_id, role, active, permissions)
+           VALUES ($1, $2, 'AGENCY', true, '[]'::jsonb)`, [LEGACY_ORG, invitee.id]
+        );
+      }
+      await harness.database.query("UPDATE organization_memberships SET role='MANAGER' WHERE org_id=$1 AND account_id='agency-owner'", [LEGACY_ORG]);
+      const accept = (invitee) => harness.auth.acceptInvitation(invitee.token, undefined, { id: invitee.id });
+      const results = await Promise.allSettled([
+        accept(invitees[0]),
+        competingPath === 'invitation'
+          ? accept(invitees[1])
+          : harness.auth.setOrgMembership({ id: invitees[1].id }, LEGACY_ORG, invitees[1].id, { commandId: commandId(), role: 'STAFF' }),
+      ]);
+      assert.equal(results.filter((item) => item.status === 'fulfilled').length, 1, competingPath);
+      const denied = results.find((item) => item.status === 'rejected');
+      assert.equal(denied?.reason.status, 409, `${competingPath}: denial, not a deadlock/500`);
+      assert.match(denied.reason.message, /마지막 조직 소유자/);
+      const owners = await harness.database.query("SELECT count(*)::int AS count FROM organization_memberships WHERE org_id=$1 AND role='AGENCY' AND active=true", [LEGACY_ORG]);
+      assert.equal(owners.rows[0].count, 1);
+      for (const [index, result] of results.entries()) {
+        if (result.status !== 'rejected' || (index === 1 && competingPath !== 'invitation')) continue;
+        const row = await harness.database.query('SELECT status FROM invitations WHERE id=$1', [invitees[index].invitationId]);
+        assert.equal(row.rows[0].status, 'PENDING', 'failed acceptance does not consume the token');
+      }
+    } finally {
+      await harness.database.query("UPDATE organization_memberships SET role='AGENCY' WHERE org_id=$1 AND account_id='agency-owner'", [LEGACY_ORG]);
+      for (const invitee of invitees) {
+        await harness.database.query('DELETE FROM organization_memberships WHERE org_id=$1 AND account_id=$2', [LEGACY_ORG, invitee.id]);
+      }
+    }
+  }
+});
+
 test('revoked invitations are denied by lookup and accept; revocation is idempotent', async () => {
   const email = uniqueEmail('rev');
   const created = await createInvitation(cookies.agency, {
@@ -317,7 +434,7 @@ test('pending duplicates and existing active accounts are rejected', async () =>
   assert.equal(duplicate.status, 409);
 
   const taken = uniqueEmail('taken');
-  await insertAccount(harness.database, {
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,
     id: `acct-${crypto.randomUUID()}`, role: 'STAFF', name: '기존 계정', email: taken,
   });
   const existing = await createInvitation(cookies.agency, {

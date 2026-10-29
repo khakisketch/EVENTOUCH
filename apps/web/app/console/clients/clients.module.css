@@ -1,0 +1,70 @@
+/* Clients directory: the client name owns the row, contact/document facts
+   group beneath it, and the three file tasks (info, logo, license) group
+   beside the identity instead of scattering as five equal buttons. Shared
+   ledger rows, toolbar slots, dialog copy and file contracts stay pinned. */
+
+.clientRow {
+  width: 100%;
+}
+
+.clientMain {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.clientActions {
+  flex: none;
+  max-width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s2) var(--s3);
+  row-gap: var(--s2);
+}
+
+.clientInfoGroup,
+.clientFileGroup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.clientFileGroup {
+  padding-left: var(--s3);
+  border-left: 1px solid var(--line);
+}
+
+.clientFileGroup > :global(.button) {
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .clientActions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .clientInfoGroup,
+  .clientFileGroup {
+    flex: 1 1 100%;
+  }
+
+  .clientFileGroup {
+    padding-top: var(--s2);
+    padding-left: 0;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+
+  /* Natural-width file buttons, left aligned: the shared ledger rule
+     stretches bare row buttons full-width, but a file group owns its own
+     compact cluster so 로고/서류 등록 never reads as a primary CTA. The
+     extra ancestor keeps this above the shared rule whatever the chunk
+     order. */
+  .clientActions .clientFileGroup > :global(.button) {
+    flex: 0 1 auto;
+  }
+}

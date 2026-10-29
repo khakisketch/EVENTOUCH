@@ -3,12 +3,18 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import TicketView from "../ticket/TicketView";
 import styles from "./home.module.css";
 import AttendeeHomeLanding, { HOME_MENUS, type HomeMenuKey } from "./AttendeeHomeLanding";
-import CameraScan from "../../../CameraScan";
 import { DEFAULT_HOME_STYLE, normalizeHomeStyle, type HomeStyle } from "../../../../lib/attendee-home";
 import { isRecoveryBlocked, useVerificationMode } from "../../../../lib/use-verification-mode";
+
+// The scanner (and its decoder) loads only when the attendee opens it: the
+// home shell never pays for jsQR until the first booth scan.
+const CameraScan = dynamic(() => import("../../../CameraScan"), {
+  ssr: false,
+});
 
 // Attendee home shell: five tabs (QR / notices / lucky number / roulette /
 // vote) on one route. The ticket bearer lives in tab memory only
@@ -78,7 +84,17 @@ type TicketWorkspace = {
 
 type LoadState =
   | { kind: "loading" }
-  | { kind: "failed"; message: string; eventName: string }
+  // Event lookup, ticket, and transport failures read differently and
+  // recover differently: an unknown slug is not a lost ticket, and a lost
+  // ticket link is not a dropped connection. The reason keeps the panel
+  // honest and the retry scoped to the same tab and context.
+  | {
+      kind: "failed";
+      reason: "event-missing" | "ticket-invalid" | "transient";
+      message: string;
+      eventName: string;
+      hasTicket: boolean;
+    }
   | {
       kind: "ready";
       eventId: string;
@@ -222,8 +238,13 @@ export default function HomeShell({ slug }: { slug: string }) {
           if (!cancelled) {
             setState({
               kind: "failed",
-              message: publicRes.status === 404 ? "행사를 찾을 수 없습니다." : "행사 정보를 불러오지 못했습니다.",
+              reason: publicRes.status === 404 ? "event-missing" : "transient",
+              message:
+                publicRes.status === 404
+                  ? "요청한 행사 주소를 확인하세요."
+                  : "행사 정보를 불러오지 못했습니다.",
               eventName,
+              hasTicket: Boolean(ticket),
             });
           }
           return;
@@ -285,13 +306,28 @@ export default function HomeShell({ slug }: { slug: string }) {
         } | null;
         if (!ticketRes.ok || !ticketData?.participant || !ticketData.workspace) {
           if (!cancelled) {
+            const invalid = ticketRes.status === 404 || ticketRes.status === 401;
+            // The server says this link is not usable: stop replaying it on
+            // the next load, exactly like the ticket screen. A dropped
+            // connection keeps the stored bearer for the retry instead.
+            if (ticketRes.status === 404) {
+              try {
+                window.sessionStorage.removeItem(STORAGE_PREFIX + slug);
+              } catch {
+                // Private mode: nothing persisted to clear.
+              }
+            }
             setState({
               kind: "failed",
+              reason: invalid ? "ticket-invalid" : "transient",
               message:
                 typeof ticketData?.error === "string"
                   ? ticketData.error
-                  : "티켓을 확인할 수 없습니다.",
+                  : invalid
+                    ? "티켓을 확인할 수 없습니다."
+                    : "티켓 응답을 확인하지 못했습니다. 같은 화면에서 다시 시도하세요.",
               eventName,
+              hasTicket: true,
             });
           }
           return;
@@ -442,7 +478,13 @@ export default function HomeShell({ slug }: { slug: string }) {
         }
       } catch {
         if (!cancelled) {
-          setState({ kind: "failed", message: "연결하지 못했습니다. 다시 시도하세요.", eventName: "" });
+          setState({
+            kind: "failed",
+            reason: "transient",
+            message: "연결하지 못했습니다. 다시 시도하세요.",
+            eventName: "",
+            hasTicket: Boolean(ticketRef.current),
+          });
         }
       }
     }
@@ -521,25 +563,54 @@ export default function HomeShell({ slug }: { slug: string }) {
     );
   }
   if (state.kind === "failed") {
+    // Same tab, same context: the retry only bumps the reload tick. The
+    // open detail tab (URL ?view=) and the tab-kept ticket bearer stay
+    // untouched, so recovery never restarts the whole flow. An unknown slug
+    // is final enough that retrying it is not offered; a rejected ticket
+    // points at recovery instead of a pointless replay.
+    function retrySameTab() {
+      setState({ kind: "loading" });
+      setReloadTick((tick) => tick + 1);
+    }
+    const title =
+      state.reason === "event-missing"
+        ? "행사를 찾을 수 없습니다"
+        : state.reason === "ticket-invalid"
+          ? "티켓을 확인할 수 없습니다"
+          : "행사를 불러올 수 없습니다";
     return (
       <main id="main-content" tabIndex={-1} className={styles.homePage}>
         <section className={styles.statePanel}>
-          <h1 className={styles.stateTitle}>행사를 불러올 수 없습니다</h1>
-          <p className={styles.stateMessage}>{state.message}</p>
-          {recoveryBlocked ? (
+          <h1 className={styles.stateTitle}>{title}</h1>
+          <p className={styles.stateMessage} role={state.reason === "transient" ? "alert" : undefined}>{state.message}</p>
+          {state.reason === "ticket-invalid" && recoveryBlocked ? (
             <p className={styles.stateMessage} role="note">
               이 행사에서는 문자로 티켓을 다시 연결할 수 없어 신청한 기기에서만 열 수 있습니다.
               티켓을 잃었다면 행사 안내의 문의처로 운영자에게 연락하세요.
             </p>
           ) : null}
           <p className={styles.stateAction}>
-            {recoveryBlocked ? null : (
+            {state.reason === "transient" ? (
+              <>
+                <button type="button" className={styles.stateButton} onClick={retrySameTab}>
+                  다시 시도
+                </button>{" "}
+              </>
+            ) : null}
+            {state.reason === "ticket-invalid" && !recoveryBlocked ? (
               <>
                 <Link className={styles.stateButton} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>
                   내 티켓 찾기
                 </Link>{" "}
               </>
-            )}
+            ) : null}
+            {state.reason === "event-missing" ? (
+              <>
+                <Link className={styles.stateButton} href="/">
+                  처음으로
+                </Link>{" "}
+              </>
+            ) : null}
             <Link className={styles.stateButton} href={`/event/${encodeURIComponent(slug)}`}>
               행사 안내로
             </Link>
@@ -667,7 +738,18 @@ function homeSurfaceStyle(homeStyle: HomeStyle): CSSProperties {
     return (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
       (Math.min(foregroundLuminance, backgroundLuminance) + 0.05);
   };
-  const ink = contrast(dark, homeStyle.backgroundColor) >= contrast(light, homeStyle.backgroundColor) ? dark : light;
+  // Brand-adjacent candidates first; on mid-luminance customer backgrounds
+  // both can fall below the 4.5:1 body-text floor (e.g. #75828E: dark 4.00,
+  // white 3.93), so escalate to whichever of pure black/white clears it.
+  // The guard uses 4.55, not 4.5, so boundary picks keep a real margin
+  // against float rounding in the checker. The pick always adapts to the
+  // background — never an unconditional gray.
+  let ink = contrast(dark, homeStyle.backgroundColor) >= contrast(light, homeStyle.backgroundColor) ? dark : light;
+  if (contrast(ink, homeStyle.backgroundColor) < 4.55) {
+    ink = contrast("#000000", homeStyle.backgroundColor) >= contrast("#FFFFFF", homeStyle.backgroundColor)
+      ? "#000000"
+      : "#FFFFFF";
+  }
   return {
     ...style,
     "--home-background-ink": ink,
@@ -916,9 +998,6 @@ function RouletteTab({
   const open = config?.open === true;
   const prizes = config?.prizes ?? [];
   const matchedPrizeIndex = result ? roulettePrizeIndex(prizes, result) : -1;
-  const labelsFitOnWheel = prizes.length <= 6 && prizes.every((prize) =>
-    prize.label.trim().length > 0 && Array.from(prize.label).length <= 8
-  );
 
   return (
     <section className={styles.roulettePanel}>
@@ -934,7 +1013,6 @@ function RouletteTab({
                 settlingResult={settlingResult}
                 spinning={spinning}
                 showStart={!result && open}
-                showLabels={labelsFitOnWheel}
                 onSpin={spin}
                 onSettled={() => {
                   if (settlingResult) finishSpin(settlingResult);
@@ -951,6 +1029,7 @@ function RouletteTab({
             </ol>
             <p className={styles.rouletteOddsNote}>
               각 섹터는 경품 목록을 보여주는 표시용입니다. 섹터 크기는 당첨 확률을 나타내지 않습니다.
+              섹터 안 번호는 경품 목록 번호와 같습니다.
             </p>
           </>
         ) : (
@@ -1021,14 +1100,16 @@ function rouletteSlicePath(index: number, count: number): string {
   return `M 160 160 L ${x1} ${y1} A ${radius} ${radius} 0 ${step > 180 ? 1 : 0} 1 ${x2} ${y2} Z`;
 }
 
-function rouletteLabelPosition(index: number, count: number): { x: number; y: number; rotation: number } {
-  if (count === 1) return { x: 160, y: 76, rotation: 0 };
+function rouletteLabelPosition(index: number, count: number): { x: number; y: number } {
+  if (count === 1) return { x: 160, y: 76 };
   const centerAngle = -90 + (index + 0.5) * (360 / count);
   const radians = centerAngle * Math.PI / 180;
+  // Sector-center anchor only. Glyph orientation is handled in RouletteWheel
+  // by counter-rotating each label against the rotor angle, so a bare
+  // rotation here would compose with the rotor and tilt the text.
   return {
     x: Number((160 + 103 * Math.cos(radians)).toFixed(2)),
     y: Number((160 + 103 * Math.sin(radians)).toFixed(2)),
-    rotation: centerAngle + 90,
   };
 }
 
@@ -1038,7 +1119,6 @@ function RouletteWheel({
   settlingResult,
   spinning,
   showStart,
-  showLabels,
   onSpin,
   onSettled,
 }: {
@@ -1047,7 +1127,6 @@ function RouletteWheel({
   settlingResult: RouletteResult | null;
   spinning: boolean;
   showStart: boolean;
-  showLabels: boolean;
   onSpin: () => void;
   onSettled: () => void;
 }) {
@@ -1057,6 +1136,13 @@ function RouletteWheel({
   const rotation = rotating
     ? ROULETTE_SPIN_TURNS * 360 + rouletteRestingRotation(settlingIndex, prizes.length)
     : resultIndex >= 0 ? rouletteRestingRotation(resultIndex, prizes.length) : 0;
+  // Counter-rotate glyphs against the rotor so sector numbers read upright
+  // on screen at rest (net orientation rotation + labelRotation = 0, hence no
+  // 6/9 ambiguity once stopped). While the settle animation runs the numbers
+  // necessarily travel with the wheel; nothing is read mid-spin (the status
+  // line announces the spin and the saved-result panel + legend carry the
+  // authoritative result after it stops). Positions still rotate with their
+  // sectors, so sector-legend-server-winner mapping is untouched.
 
   return (
     <div className={styles.wheelAssembly}>
@@ -1065,8 +1151,8 @@ function RouletteWheel({
         viewBox="0 0 320 320"
         role="img"
         aria-label={result && resultIndex < 0
-          ? `등록된 경품 ${prizes.length}개 룰렛입니다. 저장된 당첨 결과와 일치하는 섹터가 없습니다. 아래 경품 목록을 확인하세요.`
-          : `등록된 경품 ${prizes.length}개를 동일 크기 섹터로 표시한 룰렛. 아래 경품 목록을 확인하세요.`}
+          ? `등록된 경품 ${prizes.length}개 룰렛입니다. 저장된 당첨 결과와 일치하는 섹터가 없습니다. 경품 목록을 확인하세요.`
+          : `등록된 경품 ${prizes.length}개를 동일 크기 섹터로 표시한 룰렛. 섹터 번호는 경품 목록 번호와 같습니다.`}
       >
         <g
           className={`${styles.wheelRotor} ${rotating ? styles.wheelRotorAnimating : ""}`}
@@ -1081,9 +1167,12 @@ function RouletteWheel({
         >
           {prizes.map((prize, index) => {
             const position = rouletteLabelPosition(index, prizes.length);
-            const label = showLabels && prize.label.trim()
-              ? prize.label
-              : String(roulettePrizeTier(prize, index));
+            // The wheel carries only the legend number: full prize names stay
+            // verbatim in the numbered legend and the saved-result panel.
+            // Numbers are counter-rotated below so they read upright at rest
+            // for any prize count; mapping still comes from the sector index.
+            const label = String(roulettePrizeTier(prize, index));
+            const labelRotation = -rotation;
             return (
               <g key={prize.id}>
                 {prizes.length === 1 ? (
@@ -1107,7 +1196,7 @@ function RouletteWheel({
                   y={position.y}
                   textAnchor="middle"
                   dominantBaseline="middle"
-                  transform={`rotate(${position.rotation} ${position.x} ${position.y})`}
+                  transform={`rotate(${labelRotation} ${position.x} ${position.y})`}
                 >
                   {label}
                 </text>
@@ -1288,6 +1377,9 @@ function VoteTab({
   const publishedRows = teams
     .map((team) => ({ team, count: voteCounts[team.id]?.count ?? 0 }))
     .sort((a, b) => b.count - a.count || a.team.order - b.team.order);
+  const ownTeamIds = new Set(
+    ownPicks.map((pick) => pick.teamId).filter((teamId) => teams.some((team) => team.id === teamId)),
+  );
 
   function toggle(teamId: string) {
     setError(null);
@@ -1338,7 +1430,7 @@ function VoteTab({
           <p className={styles.voteSubmittedNote}>내 투표 기록은 저장되어 있습니다.</p>
         )}
         {isClosed ? <p className={styles.voteStateNote}>투표가 마감되었습니다.</p> : null}
-        {resultsPublished ? <PublishedVoteResults rows={publishedRows} /> : null}
+        {resultsPublished ? <PublishedVoteResults rows={publishedRows} ownTeamIds={ownTeamIds} /> : null}
       </section>
     );
   }
@@ -1348,7 +1440,7 @@ function VoteTab({
       <section className={styles.voteWaiting}>
         <p className={styles.voteStateTitle}>투표가 마감되었습니다.</p>
         <p className={styles.voteStateNote}>결과가 공개되면 이 화면에 표시됩니다.</p>
-        {resultsPublished ? <PublishedVoteResults rows={publishedRows} /> : null}
+        {resultsPublished ? <PublishedVoteResults rows={publishedRows} ownTeamIds={ownTeamIds} /> : null}
       </section>
     );
   }
@@ -1412,20 +1504,29 @@ function VoteTab({
       >
         {loading ? "제출 중입니다" : "투표 제출"}
       </button>
-      {resultsPublished ? <PublishedVoteResults rows={publishedRows} /> : null}
+      {resultsPublished ? <PublishedVoteResults rows={publishedRows} ownTeamIds={ownTeamIds} /> : null}
     </section>
   );
 }
 
-function PublishedVoteResults({ rows }: { rows: Array<{ team: Team; count: number }> }) {
+function PublishedVoteResults({ rows, ownTeamIds }: { rows: Array<{ team: Team; count: number }>; ownTeamIds?: ReadonlySet<string> }) {
   if (!rows.length) return null;
   return (
     <section className={styles.publishedVoteResults} aria-label="공개된 투표 현황">
       <h3>공개된 선택 현황</h3>
       <ul>
-        {rows.map(({ team, count }) => (
-          <li key={team.id}><span>{team.name}</span><strong>{count}표</strong></li>
-        ))}
+        {rows.map(({ team, count }) => {
+          const isOwn = ownTeamIds?.has(team.id) === true;
+          return (
+            <li key={team.id} className={isOwn ? styles.publishedVoteOwnRow : undefined}>
+              <span className={isOwn ? styles.publishedVoteOwnName : undefined}>
+                {team.name}
+                {isOwn ? <span className={styles.publishedVoteOwn}>내 선택</span> : null}
+              </span>
+              <strong>{count}표</strong>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

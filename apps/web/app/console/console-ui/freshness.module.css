@@ -1,0 +1,34 @@
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  margin-bottom: var(--s4);
+  border: 1px solid var(--info-line);
+  border-radius: var(--radius);
+  background: var(--info-soft);
+  color: var(--info);
+  font-size: var(--small);
+}
+
+.contextLine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s2);
+  max-width: var(--web-content-max);
+  margin: 0 auto var(--s4);
+  color: var(--muted);
+  font-size: var(--small);
+}
+.contextLine strong { color: var(--ink); overflow-wrap: anywhere; }
+.contextLock { border: 0; padding: 0; margin: 0; min-width: 0; }
+.selectionRequired { max-width: var(--web-reading-max); margin: 0 auto; display: grid; gap: var(--s4); }
+.selectionRequired h1, .selectionRequired p { margin: 0; }
+
+@media (max-width: 768px) {
+  .notice { align-items: stretch; flex-direction: column; }
+  /* The context line sits directly above the page header on phones; keep
+     its 44px-free text tight so the first content starts on screen. */
+  .contextLine { margin-bottom: var(--s2); }
+}

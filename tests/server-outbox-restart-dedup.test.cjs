@@ -16,6 +16,7 @@ const {
   insertAccount,
   insertEvent,
   insertMembership,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 const { drainMessageOutbox } = require('../server/message-outbox');
 
@@ -51,7 +52,10 @@ function batchProvider() {
       groupQueryCalls += 1;
       assert.equal(groupId, 'SUPPLIER-GROUP-1');
       if (!supplierKnowsGroup) return { ok: false, reason: 'NOT_FOUND' };
-      return { ok: true, messages: {} };
+      // The supplier demonstrably holds the acceptance: its listing names
+      // the message. (An empty ok:true listing is not holding evidence and
+      // would hold the row instead — see message-outbox-triage.)
+      return { ok: true, messages: { M1: { messageId: 'M1', to: '01000000000' } } };
     },
   };
 }
@@ -75,7 +79,7 @@ async function createRestartFixture({ withGroupId = false } = {}) {
   const id = `dedup-${fixtureNumber}-${suffix}`;
   const person = makeParticipant(id, '수신자');
   const messageId = `dedup-message-${fixtureNumber}-${suffix}`;
-  await insertEvent(harness.database, {
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,
     id,
     slug: id,
     payload: {
@@ -137,7 +141,7 @@ before(async () => {
     ['agency', 'AGENCY', '운영사 관리자'],
     ['manager', 'MANAGER', '행사 매니저'],
   ]) {
-    await insertAccount(harness.database, {
+    await insertAccount(harness.database, {orgId: LEGACY_ORG,
       id: accountIds[key], role, name, email: `${accountIds[key]}@example.test`,
     });
   }
@@ -202,4 +206,43 @@ test('a group the supplier does not know is still re-sent', async (t) => {
   } finally {
     supplierKnowsGroup = true;
   }
+});
+
+test('a-rate-limited-group-read-holds-the-row-for-a-later-drain', async (t) => {
+  if (!databaseUrl) return t.skip('set EVENTOUCH_TEST_DATABASE_URL to an isolated PostgreSQL test database');
+  sendBatchCalls = 0;
+  groupQueryCalls = 0;
+  // 429 says nothing about whether the supplier holds the group, so the
+  // drain must send nothing, settle nothing, and keep the row queued on its
+  // backoff for a later drain.
+  const limited = batchProvider();
+  limited.groupMessages = async () => {
+    groupQueryCalls += 1;
+    return { ok: false, reason: 'RATE_LIMITED', status: 429 };
+  };
+  const fixture = await createRestartFixture({ withGroupId: true });
+  const held = await drainMessageOutbox(harness.database, limited);
+  assert.equal(held.dispatched, 0, JSON.stringify(held));
+  assert.equal(held.deferred, 1, JSON.stringify(held));
+  assert.equal(sendBatchCalls, 0, 'an unknown lookup must not send');
+  assert.equal(await outboxCount(), 1, 'the row stays queued');
+  const row = await harness.database.query(
+    'SELECT attempts, next_attempt_at FROM message_outbox WHERE message_id = $1', [fixture.messageId]
+  );
+  assert.equal(row.rows[0].attempts, 1);
+  assert.ok(Date.parse(row.rows[0].next_attempt_at) > Date.now(), 'the claim pushed the next attempt into the future');
+
+  // The limit lifts and the backoff expires: the next drain reconciles the
+  // held group without a send.
+  await harness.database.query(
+    "UPDATE message_outbox SET next_attempt_at = now() WHERE message_id = $1", [fixture.messageId]
+  );
+  const recovered = batchProvider();
+  const second = await drainMessageOutbox(harness.database, recovered);
+  assert.ok(second.reconciled >= 1, JSON.stringify(second));
+  assert.equal(sendBatchCalls, 0, 'the held campaign is reconciled, not duplicated');
+  assert.equal(await outboxCount(), 0);
+  const kept = await readMessage(fixture.id, fixture.messageId);
+  assert.equal(kept.status, 'SENDING');
+  assert.equal(kept.providerGroupId, 'SUPPLIER-GROUP-1');
 });

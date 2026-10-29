@@ -18,6 +18,7 @@ const {
   insertAssignment,
   sessionCookie,
   requestJson,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 const { buildMessageDispatch } = require('../server/commands/content-results.js');
 const { drainMessageOutbox } = require('../server/message-outbox.js');
@@ -127,7 +128,7 @@ async function createFixture({
   fixtureNumber += 1;
   const id = `hanwool-${fixtureNumber}-${suffix}`;
   const slug = `hanwool-${fixtureNumber}-${suffix}`;
-  await insertEvent(harness.database, {
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,
     id,
     slug,
     payload: {
@@ -227,7 +228,7 @@ before(async () => {
     ['manager', 'MANAGER', '행사 매니저'],
     ['staff', 'STAFF', '현장 스태프'],
   ]) {
-    await insertAccount(harness.database, {
+    await insertAccount(harness.database, {orgId: LEGACY_ORG,
       id: accounts[key],
       role,
       name,

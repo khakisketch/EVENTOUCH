@@ -40,9 +40,11 @@ test('navigation registry covers all sixteen menu pages as metadata only', () =>
     'attendeePage', 'rewards', 'settings', 'reports',
   ]);
 
+  // The rail names the participants destination apart from its hub: the
+  // hub reads "참가자", the page reads "참가자 명단".
   const labels = {
     events: '행사', clients: '고객사', team: '팀·권한', overview: '운영 현황',
-    participants: '참가자', participantImport: '명단 가져오기', messages: '메시지',
+    participants: '참가자 명단', participantImport: '명단 가져오기', messages: '메시지',
     operations: '현장 운영', programs: '참여 프로그램', draws: '추첨·투표',
     photos: '현장 사진', content: '콘텐츠', attendeePage: '참가자 페이지',
     rewards: '경품', settings: '행사 설정', reports: '결과 보고서',
@@ -59,12 +61,22 @@ test('navigation registry covers all sixteen menu pages as metadata only', () =>
 test('navigation exposes rail order, root ids and existing routes', () => {
   const nav = readWeb('app/console/console-navigation.ts');
 
-  const eventIds = nav.match(/export const EVENT_PAGE_IDS: readonly ConsolePageId\[\] = \[([\s\S]*?)\];/u);
-  assert.ok(eventIds, 'EVENT_PAGE_IDS is exported');
-  assert.deepEqual(quotedList(eventIds[1]), [
-    'overview', 'participants', 'messages', 'content', 'attendeePage',
-    'operations', 'programs', 'draws', 'rewards', 'photos', 'reports', 'settings',
-  ]);
+  // One ordering authority: the flat page list derives from the hubs, and
+  // participantImport rides the participants hub so the rail can name it.
+  assert.match(nav, /export const EVENT_PAGE_IDS: readonly ConsolePageId\[\] = EVENT_HUBS\.flatMap\(\(hub\) => hub\.pageIds\);/u, 'hubs own the order');
+  for (const pages of [
+    'pageIds: ["overview"]',
+    'pageIds: ["settings", "attendeePage", "content", "programs"]',
+    'pageIds: ["participants", "participantImport", "messages"]',
+    'pageIds: ["operations", "photos"]',
+    'pageIds: ["draws", "rewards", "reports"]',
+  ]) {
+    assert.ok(nav.includes(pages), `hub keeps ${pages}`);
+  }
+  const hubOrder = ['"today"', '"prepare"', '"participants"', '"onsite"', '"results"']
+    .map((hub) => nav.indexOf(`{ id: ${hub}`));
+  assert.ok(hubOrder.every((position) => position >= 0), 'all five hubs exist');
+  assert.deepEqual(hubOrder, [...hubOrder].sort((a, b) => a - b), 'hubs follow the setup-to-live sequence');
 
   const mainIds = nav.match(/export const MAIN_PAGE_IDS: readonly ConsolePageId\[\] = \[([\s\S]*?)\];/u);
   assert.ok(mainIds, 'MAIN_PAGE_IDS is exported');
@@ -172,18 +184,20 @@ test('feedback and section surfaces reuse tokens with stable semantics', () => {
   assert.match(section, /width = "full"/u);
   assert.match(section, /<div className=\{styles\.sectionBody\}>\{children\}<\/div>/u);
   assert.doesNotMatch(section, HOOK_CALL);
-  assert.match(css, /\.sectionPanel\s*\{[^}]*padding:\s*var\(--s5\)[^}]*background:\s*var\(--paper\)/su);
+  // Open section treatment replaces the old enclosing paper card; the
+  // surface prop, heading, body and behavior stay intact.
+  assert.match(css, /\.sectionPanel\s*\{[^}]*padding-block:\s*var\(--s4\)[^}]*border-top:\s*1px solid var\(--line\)/su);
   assert.match(css, /\.sectionForm\s*>\s*\.sectionBody\s*\{[^}]*max-width:\s*var\(--web-reading-max\)/su);
 
   const header = readUi('ConsolePageHeader.tsx');
   assert.match(header, /context\?: ReactNode;/u);
   const order = [
-    header.indexOf('styles.pageContext'),
     header.indexOf('className={styles.backLink}'),
     header.indexOf('<h1>{title}</h1>'),
+    header.indexOf('styles.pageContext'),
   ];
   assert.ok(order.every((position) => position >= 0));
-  assert.deepEqual(order, [...order].sort((a, b) => a - b), 'context precedes the existing header order');
+  assert.deepEqual(order, [...order].sort((a, b) => a - b), 'optional back stays first; task title precedes its event context');
   assert.doesNotMatch(header, HOOK_CALL);
 });
 

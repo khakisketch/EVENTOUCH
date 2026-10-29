@@ -17,7 +17,8 @@ import ConsoleStatePanel from "../../../../console-ui/ConsoleStatePanel";
 import { useConsoleDraftGuard } from "../../../../console-draft-guard";
 import consoleUiStyles from "../../../../console-ui/console-ui.module.css";
 import styles from "./import.module.css";
-import * as XLSX from "xlsx";
+import { consoleFetch } from "../../../../../../lib/console-api";
+import { canWriteEvent } from "../../../../../../lib/event-capabilities";
 
 type ImportMap = { name: string; phone: string; email: string; company: string };
 type ValidRow = { name: string; phone: string; email: string; company: string };
@@ -26,7 +27,7 @@ type RowError = { row: number; reason: string };
 type GateState =
   | { kind: "loading" }
   | { kind: "failed"; message: string }
-  | { kind: "ready"; eventName: string; eventMeta: ConsoleEventMeta; eventStage: string; canManage: boolean };
+  | { kind: "ready"; eventName: string; eventMeta: ConsoleEventMeta; eventStage: string; role: string; userId: string; memberships: Array<{ accountId: string; eventId: string; write?: unknown }> };
 
 const MAX_BYTES = 1048576;
 const MAX_ROWS = 1000;
@@ -89,8 +90,12 @@ function parseCsv(text: string): string[][] {
 
 // XLSX: the first worksheet becomes header + data rows. Values are read as
 // displayed text (no formulas), trimmed to the same limits as CSV cells, and
-// flow into the same column-mapping and validation below.
-function parseWorkbook(buffer: ArrayBuffer): { headers: string[]; rows: string[][] } {
+// flow into the same column-mapping and validation below. The parser loads
+// lazily — only an actual Excel file downloads it; CSV·TXT·template flows
+// never pay for it. No new dependency: the declared xlsx build is split
+// into its own chunk by the dynamic import below.
+async function parseWorkbook(buffer: ArrayBuffer): Promise<{ headers: string[]; rows: string[][] }> {
+  const XLSX = await import("xlsx");
   const workbook = XLSX.read(buffer, {
     type: "array",
     cellDates: false,
@@ -230,6 +235,7 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
   const [fileKind, setFileKind] = useState<"csv" | "txt" | null>(null);
   const [map, setMap] = useState<ImportMap>({ name: "", phone: "", email: "", company: "" });
   const [preview, setPreview] = useState<{ valid: ValidRow[]; errors: RowError[] } | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [commitError, setCommitError] = useState<string | null>(null);
   const [committed, setCommitted] = useState<number | null>(null);
@@ -251,6 +257,7 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
     setHeaders(null);
     setDataRows([]);
     setFileKind(null);
+    setFileName(null);
     setMap({ name: "", phone: "", email: "", company: "" });
     setPreview(null);
     setFileError(null);
@@ -264,8 +271,8 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
     async function load() {
       try {
         const [meRes, bootRes] = await Promise.all([
-          fetch("/api/auth/me", { cache: "no-store" }),
-          fetch("/api/bootstrap", { cache: "no-store" }),
+          consoleFetch("/api/auth/me", { cache: "no-store" }),
+          consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store" }),
         ]);
         if (cancelled) return;
         if (meRes.status === 401 || bootRes.status === 401) {
@@ -292,19 +299,18 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
         }
         const role = typeof me.user.role === "string" ? me.user.role : "";
         const myId = typeof me.user.id === "string" ? me.user.id : "";
+        // Raw membership grants ride along untouched: omitted write reads as
+        // full access, an explicit [] as read-only. The render gate below
+        // re-checks the participant.import scope through the capability
+        // helper (server/event-permissions.js stays the authority).
         const memberships = Array.isArray(bootstrap.memberships)
-          ? bootstrap.memberships.filter(
-              (item): item is Record<string, unknown> =>
-                typeof item === "object" && item !== null
-            )
+          ? bootstrap.memberships.flatMap((item): Array<{ accountId: string; eventId: string; write?: unknown }> => {
+              if (typeof item !== "object" || item === null) return [];
+              const membership = item as Record<string, unknown>;
+              if (typeof membership.accountId !== "string" || typeof membership.eventId !== "string") return [];
+              return [{ accountId: membership.accountId, eventId: membership.eventId, write: membership.write }];
+            })
           : [];
-        const canManage =
-          role === "AGENCY" ||
-          (role === "MANAGER" &&
-            memberships.some(
-              (membership) =>
-                membership.accountId === myId && membership.eventId === eventId
-            ));
         const event = Array.isArray(bootstrap.events)
           ? bootstrap.events.find(
               (item): item is Record<string, unknown> =>
@@ -342,7 +348,9 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
             // participant.import stops at ENDED/ARCHIVED on the server; the
             // commit control below mirrors that while preview reads stay.
             eventStage: typeof event?.stage === "string" ? event.stage : "",
-            canManage,
+            role,
+            userId: myId,
+            memberships,
           });
         }
       } catch {
@@ -358,6 +366,7 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
   async function readFile(file: File) {
     if (submittingRef.current) return;
     setFileError(null);
+    setFileName(null);
     setPreview(null);
     setCommitted(null);
     try {
@@ -367,7 +376,7 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
         file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
         file.type === "application/vnd.ms-excel";
       if (looksWorkbook) {
-        const parsed = parseWorkbook(await file.arrayBuffer());
+        const parsed = await parseWorkbook(await file.arrayBuffer());
         if (!parsed.rows.length || parsed.rows.length > MAX_ROWS) {
           throw new Error("1~1,000개 데이터 행이 필요합니다.");
         }
@@ -383,6 +392,7 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
         setFileKind("csv");
         setMap(next);
         previewFor(parsed.rows, next);
+        setFileName(file.name);
         return;
       }
       const text = stripBom(await file.text());
@@ -400,6 +410,7 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
         const txtMap = { name: "0", phone: "1", email: "2", company: "3" };
         setMap(txtMap);
         previewFor(parsed.rows, txtMap);
+        setFileName(file.name);
       } else {
         const rows = parseCsv(text);
         if (rows.length < 2 || rows.length > MAX_ROWS + 1) {
@@ -418,6 +429,7 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
         setFileKind("csv");
         setMap(next);
         previewFor(rows, next);
+        setFileName(file.name);
       }
     } catch (error) {
       setHeaders(null);
@@ -453,7 +465,7 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
     pendingImportRef.current = attempt;
     const commandId = attempt.commandId;
     try {
-      const res = await fetch(
+      const res = await consoleFetch(
         `/api/events/${encodeURIComponent(eventId)}/commands`,
         {
           method: "POST",
@@ -487,6 +499,7 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
       setDataRows([]);
       setPreview(null);
       setFileKind(null);
+      setFileName(null);
     } catch {
       setCommitError("연결하지 못했습니다. 다시 시도하세요.");
     } finally {
@@ -531,8 +544,16 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
 
   // participant.import stops at ENDED/ARCHIVED on the server: the commit
   // control mirrors that while the file/preview reads stay available.
+  // The write gate mirrors the server's per-command scope map: only a
+  // participants grant (or full access) opens the wizard. Reads — the step
+  // explainer, the template download and the back link — stay on every
+  // membership.
   const stageKey = gate.eventStage.toUpperCase();
   const stageBlocked = stageKey === "ENDED" || stageKey === "ARCHIVED";
+  const canWriteImport = canWriteEvent(
+    { role: gate.role, userId: gate.userId, memberships: gate.memberships, eventId },
+    "participant.import"
+  );
   return (
     <ConsolePage
       pageId="participantImport"
@@ -544,37 +565,36 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
           {committed !== null ? (
             <ConsoleFeedback kind="success">{committed}명을 반영했습니다.</ConsoleFeedback>
           ) : null}
-          {!gate.canManage ? (
+          {!canWriteImport ? (
             <ConsoleFeedback kind="warning">가져오기 권한이 없습니다. 변경이 필요하면 담당 행사 운영자에게 요청하세요.</ConsoleFeedback>
           ) : null}
-          {gate.canManage && stageBlocked ? (
+          {canWriteImport && stageBlocked ? (
             <ConsoleFeedback kind="warning">종료된 행사에는 명단을 가져올 수 없습니다. 파일 검토까지만 확인할 수 있습니다.</ConsoleFeedback>
           ) : null}
         </>
       }
     >
-      {gate.canManage ? (
+      {canWriteImport ? (
         <>
         {/* The step line is context, not a ceremony: import is an optional
-            shortcut, so it appears once a file is actually chosen. */}
-        {importStep > 1 ? (
-          <ol className={styles.importSteps} aria-label="명단 가져오기 단계">
-            {(["파일 선택", "열 연결", "검토 후 반영"] as const).map((label, index) => {
-              const number = index + 1;
-              const state = number < importStep ? "done" : number === importStep ? "current" : "todo";
-              return (
-                <li
-                  key={label}
-                  className={`${styles.importStep} ${styles[`importStep${state === "done" ? "Done" : state === "current" ? "Current" : "Todo"}`]}`}
-                  aria-current={state === "current" ? "step" : undefined}
-                >
-                  <span className={styles.importStepNumber}>{number}</span>
-                  <span className={styles.importStepLabel}>{label}</span>
-                </li>
-              );
-            })}
-          </ol>
-        ) : null}
+            shortcut, so it stays visible from the first screen with the
+            current step marked. */}
+        <ol className={styles.importSteps} aria-label="명단 가져오기 단계">
+          {(["파일 선택", "열 연결", "검토 후 반영"] as const).map((label, index) => {
+            const number = index + 1;
+            const state = number < importStep ? "done" : number === importStep ? "current" : "todo";
+            return (
+              <li
+                key={label}
+                className={`${styles.importStep} ${styles[`importStep${state === "done" ? "Done" : state === "current" ? "Current" : "Todo"}`]}`}
+                aria-current={state === "current" ? "step" : undefined}
+              >
+                <span className={styles.importStepNumber}>{number}</span>
+                <span className={styles.importStepLabel}>{label}</span>
+              </li>
+            );
+          })}
+        </ol>
         <ConsoleSection
           headingId="participant-import-file-heading"
           title="1. 파일 선택"
@@ -586,9 +606,12 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
           </p>
           <ConsoleToolbar
             filters={
-              <label>
+              <label className={committing ? `${styles.filePicker} ${styles.filePickerDisabled}` : styles.filePicker}>
                 <span className="sr-only">CSV·TXT·XLSX 파일 선택</span>
+                <span className={styles.fileButton} aria-hidden="true">파일 선택</span>
+                <span className={styles.fileName}>{fileName ?? "선택된 파일 없음"}</span>
                 <input
+                  className={styles.fileInput}
                   type="file"
                   disabled={committing}
                   accept=".csv,text/csv,.txt,text/plain,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
@@ -615,7 +638,7 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
               </button>
             }
           />
-          <p className="landing-note">CSV·TXT·XLSX · 최대 1MB, 1,000행. 엑셀은 첫 시트의 첫 행을 헤더로 읽으며 256열까지 연결할 수 있습니다. TXT는 한 줄에 한 명: 이름, 연락처, 이메일(선택), 소속(선택).</p>
+          <p className={`landing-note ${styles.fileMeta}`}>CSV·TXT·XLSX · 최대 1MB, 1,000행. 엑셀은 첫 시트의 첫 행을 헤더로 읽으며 256열까지 연결할 수 있습니다. TXT는 한 줄에 한 명: 이름, 연락처, 이메일(선택), 소속(선택).</p>
           {fileError ? <ConsoleFeedback kind="error">{fileError}</ConsoleFeedback> : null}
         </ConsoleSection>
           {headers ? (
@@ -626,7 +649,7 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
             >
               <ConsoleToolbar
                 filters={
-                  <>
+                  <div className={styles.mapGrid}>
                     {FIELDS.map((field) => (
                       <label key={field.id}>
                         <span>{field.label}{field.required ? " *" : ""}</span>
@@ -648,7 +671,7 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
                         </select>
                       </label>
                     ))}
-                  </>
+                  </div>
                 }
                 actions={
                   <button type="button" className="button button-secondary" disabled={committing} onClick={() => buildPreview(map)}>
@@ -664,9 +687,11 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
               title="3. 검토 후 반영"
               surface="panel"
             >
-              <p className="landing-note" role="status">
-                유효 {preview.valid.length}행 · 오류 {preview.errors.length}행. 오류 행은 제외되며 원본 파일에서 수정 후 다시 가져올 수 있습니다.
-              </p>
+              <div className={styles.reviewSummary} role="status">
+                <span className={styles.reviewCount} data-tone="good">유효 {preview.valid.length}행</span>
+                <span className={styles.reviewCount} data-tone={preview.errors.length ? "bad" : undefined}>오류 {preview.errors.length}행</span>
+                <span className="landing-note">오류 행은 제외되며 원본 파일에서 수정 후 다시 가져올 수 있습니다.</span>
+              </div>
               {preview.valid.length ? (
                 <>
                   <p className="landing-note">
@@ -717,6 +742,7 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
                     setDataRows([]);
                     setPreview(null);
                     setFileKind(null);
+                    setFileName(null);
                   }}
                 >
                   검토 취소

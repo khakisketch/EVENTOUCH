@@ -49,6 +49,13 @@ export function ConsoleDraftGuardProvider({ children }: { children: ReactNode })
   }, []);
 
   useEffect(() => {
+    const confirmedOrganizationExit = () => {
+      // Emitted only after explicit confirmation AND a successful org
+      // selection. Do not remove warnings while its result is unknown.
+      drafts.current.clear();
+      window.removeEventListener("beforeunload", beforeUnload);
+    };
+    window.addEventListener("eventouch:organization-confirmed-exit", confirmedOrganizationExit);
     const onLink = (event: MouseEvent) => {
       if (!drafts.current.size || event.defaultPrevented || event.button !== 0 ||
         event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -66,6 +73,7 @@ export function ConsoleDraftGuardProvider({ children }: { children: ReactNode })
     };
     document.addEventListener("click", onLink, true);
     return () => {
+      window.removeEventListener("eventouch:organization-confirmed-exit", confirmedOrganizationExit);
       document.removeEventListener("click", onLink, true);
       window.removeEventListener("beforeunload", beforeUnload);
       drafts.current.clear();
@@ -88,4 +96,8 @@ export function useConsoleDraftGuard(dirty: boolean, reason = DEFAULT_REASON): v
 /** For explicit exits such as logout; successful save navigation stays owned by its workspace. */
 export function useConsoleLeaveConfirmation(): () => boolean {
   return useContext(GuardContext)?.confirmLeave ?? allowLeave;
+}
+
+export function useConsoleDraftGuardAvailable(): boolean {
+  return useContext(GuardContext) !== null;
 }

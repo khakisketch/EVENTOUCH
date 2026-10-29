@@ -59,14 +59,16 @@ export default function ConsolePageHeader({
   return (
     <header className={classNames}>
       <div className={styles.pageIdentity}>
-        {context ? <div className={styles.pageContext}>{context}</div> : null}
         {back ? (
           <Link className={styles.backLink} href={back.href}>
             {back.label}
           </Link>
         ) : null}
         <h1>{title}</h1>
-        {meta ? <p className={styles.pageMeta}>{meta}</p> : null}
+        {context || meta ? <div className={styles.pageSubline}>
+          {context ? <div className={styles.pageContext}>{context}</div> : null}
+          {meta ? <p className={styles.pageMeta}>{meta}</p> : null}
+        </div> : null}
         {badges ? <div className={styles.pageBadges}>{badges}</div> : null}
       </div>
       {actions ? <div className={styles.pageActions}>{actions}</div> : null}

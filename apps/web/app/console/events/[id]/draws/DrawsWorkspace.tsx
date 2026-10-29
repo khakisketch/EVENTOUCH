@@ -14,6 +14,8 @@ import ConsoleSection from "../../../console-ui/ConsoleSection";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import { useConsoleDraftGuard } from "../../../console-draft-guard";
 import styles from "./draws.module.css";
+import { consoleFetch } from "../../../../../lib/console-api";
+import { canWriteEvent } from "../../../../../lib/event-capabilities";
 import { useEventCloseHandoff } from "../../../use-event-close-handoff";
 import { readCloseSnapshot, type CloseSnapshot } from "../../../console-event-close";
 
@@ -96,7 +98,9 @@ type WorkspaceState =
       eventMeta?: string;
       archived: boolean;
       features: string[];
-      canManage: boolean;
+      role: string;
+      userId: string;
+      memberships: Array<{ accountId: string; eventId: string; write?: unknown }>;
       drawEnabled: boolean;
       pollEnabled: boolean;
       rewardEnabled: boolean;
@@ -274,8 +278,8 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
     if (!silent) setState({ kind: "loading" });
     try {
       const [meRes, bootRes] = await Promise.all([
-        fetch("/api/auth/me", { cache: "no-store" }),
-        fetch("/api/bootstrap", { cache: "no-store" }),
+        consoleFetch("/api/auth/me", { cache: "no-store" }),
+        consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store" }),
       ]);
       if (meRes.status === 401 || bootRes.status === 401) {
         router.push(loginHrefForLocation(window.location.pathname, window.location.search));
@@ -299,17 +303,18 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
       }
       const role = typeof me.user.role === "string" ? me.user.role : "";
       const myId = typeof me.user.id === "string" ? me.user.id : "";
-      const memberships: Array<{ accountId: string; eventId: string }> = Array.isArray(bootstrap.memberships)
+      // Raw membership grants ride along untouched: omitted write reads as
+      // full access, an explicit [] as read-only. Render gates below
+      // re-check per scope (draw/vote/lucky/roulette programs, team
+      // config and display linkage are programs; 업체 수령자 지정 is
+      // reward.assign in results) through the capability helper.
+      const memberships: Array<{ accountId: string; eventId: string; write?: unknown }> = Array.isArray(bootstrap.memberships)
         ? bootstrap.memberships.flatMap((item) => {
             const membership = asRecord(item);
             if (!membership || typeof membership.accountId !== "string" || typeof membership.eventId !== "string") return [];
-            return [{ accountId: membership.accountId, eventId: membership.eventId }];
+            return [{ accountId: membership.accountId, eventId: membership.eventId, write: membership.write }];
           })
         : [];
-      const canManage =
-        role === "AGENCY" ||
-        (role === "MANAGER" &&
-          memberships.some((membership) => membership.accountId === myId && membership.eventId === eventId));
       const event = Array.isArray(bootstrap.events)
         ? bootstrap.events.flatMap((item) => {
             const record = asRecord(item);
@@ -508,7 +513,9 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
         }),
         archived: text(event.stage).toUpperCase() === "ARCHIVED",
         features,
-        canManage,
+        role,
+        userId: myId,
+        memberships,
         drawEnabled: features.includes("draw"),
         pollEnabled: features.includes("poll"),
         rewardEnabled: features.includes("reward"),
@@ -583,7 +590,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
       commandId = randomCommandId();
       pendingCommands.current.set(attempt, commandId);
     }
-    const response = await fetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
+    const response = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ commandId, command, payload }),
@@ -1022,6 +1029,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
   async function assignCompanyRecipient(reward: RewardRecord) {
     const participantId = rewardRecipient[reward.id];
     if (writeLocked) return;
+    if (!canWriteRewardAssign) return;
     if (!participantId || busy) return;
     setBusy(`reward:${reward.id}`);
     setNotice(null);
@@ -1066,6 +1074,12 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
   const companyOptions = [...new Set(state.participants.map((person) => person.company).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko"));
   const configuredTierTotal = programTiers.reduce((sum, tier) => sum + (Number(tier.count) || 0), 0);
   const screenEnabled = state.features.includes("screen");
+  // Draw/vote/lucky/roulette/team config and display linkage are programs
+  // scope; 업체 수령자 지정 (reward.assign) is results scope. Neither gate
+  // invents access; the server re-checks every command.
+  const capabilities = { role: state.role, userId: state.userId, memberships: state.memberships, eventId };
+  const canWriteDraws = canWriteEvent(capabilities, "draw.run");
+  const canWriteRewardAssign = canWriteEvent(capabilities, "reward.assign");
 
   return (
     <ConsolePage
@@ -1076,6 +1090,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
       meta={state.eventMeta}
       sectionNav={
         <div className={styles.navSticky}>
+          <p className={styles.navIndexLabel} aria-hidden="true">추첨·투표 목차</p>
           <ConsoleSectionNav
             label="추첨·투표 구역"
             activeId={activeSection}
@@ -1093,7 +1108,10 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
         <>
           {notice ? <ConsoleFeedback kind="success">{notice}</ConsoleFeedback> : null}
           {failure ? <ConsoleFeedback kind="error">{failure}</ConsoleFeedback> : null}
-          {state.canManage && state.archived ? (
+          {!canWriteDraws ? (
+            <ConsoleFeedback kind="warning">추첨·투표 설정 변경은 추첨(프로그램) 쓰기 권한이 필요합니다. 결과 조회는 그대로 볼 수 있습니다.</ConsoleFeedback>
+          ) : null}
+          {canWriteDraws && state.archived ? (
             <ConsoleFeedback kind="warning">보관된 행사는 읽기 전용입니다. 설정과 결과를 볼 수 있지만 바꿀 수 없습니다.</ConsoleFeedback>
           ) : null}
         </>
@@ -1135,12 +1153,12 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
         {!state.drawEnabled ? <p className={styles.featureOff}>이 행사에서 무대 추첨 기능이 꺼져 있습니다.</p> : (
           <>
             <p className={styles.hint}>실행 인원은 매번 1~20명으로 지정합니다(기본 1명). 프로그램 대상·쿼터·등급은 첫 당첨 뒤 잠기고, 공개 여부는 별도로 관리합니다.</p>
-            {!screenEnabled && state.canManage ? (
+            {!screenEnabled && canWriteDraws ? (
               <p className={styles.stagePrerequisite} id="stage-screen-prerequisite">
                 무대 터치 실행은 당첨 결과·경품 생성과 전광판 선택을 한 번에 저장합니다. 사용 전 <Link href={closeHref(`/console/events/${encodeURIComponent(eventId)}/settings#settings-features`)}>행사 설정에서 행사장 출력을 켜세요.</Link>
               </p>
             ) : null}
-            {!state.drawModules.some((module) => module.published) && !state.drawPrograms.length && state.canManage ? (
+            {!state.drawModules.some((module) => module.published) && !state.drawPrograms.length && canWriteDraws ? (
               <p className={styles.stagePrerequisite}>
                 {state.drawModules.length
                   ? <>무대 터치 실행에는 공개된 추첨 무대가 필요합니다. 기존 비공개 결과는 자동 공개하지 않습니다. <Link href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 프로그램에서 무대 운영을 시작해 공개하세요.</Link></>
@@ -1219,6 +1237,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                                 </div>
                                 {winner.kind === "COMPANY" ? (
                                   reward?.status === "PENDING" ? (
+                                    canWriteRewardAssign ? (
                                     <div className={styles.recipientAssign}>
                                       <label htmlFor={`recipient-${reward.id}`}>업체 수령자 지정</label>
                                       <div className={styles.recipientControls}>
@@ -1230,6 +1249,9 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                                       </div>
                                       <p className={styles.hint}>수령자는 자동으로 정하지 않습니다. 지정 후 현장 DESK에서 수령 처리할 수 있습니다.</p>
                                     </div>
+                                    ) : (
+                                      <p className={styles.programMetaText}>업체 수령자 지정은 경품 쓰기 권한이 필요합니다. 필요하면 담당 행사 운영자에게 요청하세요.</p>
+                                    )
                                   ) : reward?.participantId ? (
                                     <p className={styles.programMetaText}>수령자 지정 · {recipient?.name ?? "참가 확정자"} · {reward.status === "RECEIVED" ? "수령 완료" : "수령 대기"}</p>
                                   ) : <p className={styles.programMetaText}>수령자 정보를 확인할 수 없습니다. 경품 목록에서 해당 업체의 보류 경품을 확인하세요.</p>
@@ -1239,7 +1261,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                           })}
                         </ul>
                       ) : <p className={styles.programWinners}>아직 추첨 결과가 없습니다.</p>}
-                      {state.canManage ? (
+                      {canWriteDraws ? (
                         <div className={styles.programActions}>
                           {!program.winners.length ? <button type="button" className="button button-secondary" disabled={busy !== null || writeLocked} onClick={() => {
                             setProgramFormOpen(true);
@@ -1261,7 +1283,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                               </div>
                               <div className={styles.runActions} role="group" aria-label={`${program.name} 추첨 실행`}>
                                 <button type="button" className="button button-primary" aria-describedby={runBlockers.length ? runBlockerId : undefined} disabled={!canRun || busy !== null || writeLocked} onClick={() => runProgram(program)}>{busy === `run:${program.id}` ? "추첨 중입니다" : `${runCount}명 추첨 실행`}</button>
-                                <button type="button" className={`button button-primary ${styles.stageButton}`} aria-describedby={[...stagePrerequisites, runBlockerId].join(" ") || undefined} disabled={!canRun || !screenEnabled || moduleNeedsPublishing || busy !== null || writeLocked} onClick={() => runProgram(program, true)}>{busy === `stage:${program.id}` ? "무대 결과 준비 중" : "무대 터치 실행"}</button>
+                                <button type="button" className={`button button-secondary ${styles.stageButton}`} aria-describedby={[...stagePrerequisites, runBlockerId].join(" ") || undefined} disabled={!canRun || !screenEnabled || moduleNeedsPublishing || busy !== null || writeLocked} onClick={() => runProgram(program, true)}>{busy === `stage:${program.id}` ? "무대 결과 준비 중" : "무대 터치 실행"}</button>
                                 {runBlockers.length ? (
                                   <p className={styles.runBlocker} id={runBlockerId}>실행 전제: {runBlockers.join(" · ")} · {runNextAction} 실행할 수 있습니다</p>
                                 ) : null}
@@ -1282,7 +1304,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                 })}
               </ul>
             ) : <p className={styles.empty}>등록된 추첨 프로그램이 없습니다. 쿼터·대상·중복 정책을 정해 첫 프로그램을 만드세요.</p>}
-            {state.canManage ? (
+            {canWriteDraws ? (
                     <details className={styles.setupDetails} open={programFormOpen} onToggle={(event) => setProgramFormOpen((event.target as HTMLDetailsElement).open)}>
         <summary className={styles.setupSummary}>추첨 프로그램 설정 · {state.drawPrograms.length}개</summary>
 <form ref={programFormRef} className={styles.programForm} onSubmit={saveProgram}>
@@ -1385,7 +1407,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
         {!state.pollEnabled ? <p className={styles.featureOff}>이 행사에서 투표 기능이 꺼져 있습니다.</p> : (
           <>
             <p className={styles.hint}>선택 수는 1~20개로 설정합니다. 첫 투표 접수 뒤에는 선택 수와 팀 구성이 잠깁니다. 집계는 서버 순위와 동률을 그대로 표시하며 임의 순위를 만들지 않습니다.</p>
-            {state.canManage ? (
+            {canWriteDraws ? (
               <form className={styles.configForm} onSubmit={saveVoteConfig}>
                 <div className={styles.configGrid}>
                   <div className={styles.programField}>
@@ -1412,7 +1434,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                 </ConsoleFormActions>
               </form>
             ) : null}
-            {state.canManage ? (
+            {canWriteDraws ? (
               // Team registration is setup work; the roster and the tally are
               // what the operator reads during the event.
               <details className={styles.setupDetails}>
@@ -1448,7 +1470,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                 })}
               </ul>
             ) : <p className={styles.empty}>등록된 투표 팀이 없습니다.</p>}
-            {state.canManage ? (
+            {canWriteDraws ? (
               <div className={styles.tallyActions}>
                 <button type="button" className="button button-secondary" onClick={refreshVoteTally} disabled={tallyLoading || writeLocked || state.teams.length === 0}>
                   {tallyLoading ? "집계 중입니다" : "서버 집계 새로고침"}
@@ -1470,7 +1492,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
         {!state.drawEnabled ? <p className={styles.featureOff}>이 행사에서 룰렛 기능이 꺼져 있습니다.</p> : (
           <>
             <p className={styles.hint}>모바일 룰렛은 무대 추첨과 별도로 운영됩니다. 유한 재고는 남은 수량이 기본 가중치이며, 무제한 경품은 명시한 양의 가중치로 반영됩니다.</p>
-            {state.canManage ? (
+            {canWriteDraws ? (
                     <details className={styles.setupDetails} >
         <summary className={styles.setupSummary}>룰렛 운영 설정 · {rouletteStatus === "OPEN" ? "운영 중" : rouletteStatus === "DRAFT" ? "준비" : "마감"}</summary>
 <form className={styles.programForm} onSubmit={saveRouletteConfig}>
@@ -1545,7 +1567,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
         {!state.drawEnabled ? <p className={styles.featureOff}>이 행사에서 럭키번호 기능이 꺼져 있습니다.</p> : (
           <>
             <p className={styles.hint}>알림 캠페인을 보내기 전에 승인 참가자에게 번호를 미리 배정할 수 있습니다. 번호는 범위 내에서 고유하며 기존 발급 번호는 유지됩니다.</p>
-            {state.canManage ? (
+            {canWriteDraws ? (
                     <details className={styles.setupDetails} >
         <summary className={styles.setupSummary}>럭키번호 범위 설정 · {state.luckyMin}–{state.luckyMax}</summary>
 <form className={styles.configForm} onSubmit={saveLuckyConfig}>
@@ -1560,7 +1582,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
               </form>
       </details>
             ) : <p className={styles.hint}>범위 {state.luckyMin}–{state.luckyMax} · 발급 {state.luckyIssued}명</p>}
-            {state.canManage ? (
+            {canWriteDraws ? (
               <div className={styles.preassignBox}>
                 <label className={styles.checkLine}>
                   <input type="checkbox" checked={preassignAllApproved} onChange={(event) => setPreassignAllApproved(event.target.checked)} />

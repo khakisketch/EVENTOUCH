@@ -37,13 +37,15 @@
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const { prepareCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = require('./capture-dir.cjs');
 const path = require('node:path');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 
 const before = process.argv.includes('--before');
-const out = `/tmp/opencode/eventouch-captures/task-flow/${before ? 'before' : 'after'}`;
-fs.mkdirSync(out, { recursive: true });
+const out = (process.env.CAPTURE_DIR || '').trim()
+  || path.join(defaultCaptureDir(`task-flow-${runStamp()}`), before ? 'before' : 'after');
+prepareCaptureDir(out);
 
 const STEP_CAP = 12;
 const EVENT_DATE = '2027-04-15';
@@ -85,6 +87,7 @@ async function apiCommand(helpers, baseUrl, cookie, eventId, command, payload) {
 }
 
 async function main() {
+  process.env.TMPDIR = ensureRunTmpDir(out);
   let fixture = null;
   let browser = null;
   const errors = [];
@@ -557,7 +560,7 @@ async function main() {
       ticketParticipantId: ticketPerson.id,
       results, errors,
     };
-    fs.writeFileSync(path.join(out, 'journey-results.json'), JSON.stringify(report, null, 2));
+    fs.writeFileSync(path.join(out, 'journey-results.json'), JSON.stringify(report, null, 2), { mode: 0o600 });
     console.log(JSON.stringify(results.map((task) => ({
       key: task.key, steps: task.steps, scrolls: task.scrolls, writes: task.writes,
       screens: task.screens, fields: task.fields, state: task.state,

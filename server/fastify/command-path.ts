@@ -64,10 +64,12 @@ export type CommandPathDeps = {
       targetId?: unknown;
     }) => Promise<unknown>;
   };
-  sessionFromCookie: (cookieHeader: string | undefined) => Promise<unknown | null>;
+  /** Second arg is the raw request: the server wrapper copies the tab org headers onto the account. */
+  sessionFromCookie: (cookieHeader: string | undefined, req?: unknown) => Promise<unknown | null>;
   attendeeCookie: (token: string, maxAgeSeconds: number) => string;
   /** Same message rule as server/http.js: only explicit failures echo. */
   failureMessage: (error: unknown, fallback: string) => string;
+  guardSignup?: (input: { slug: string; commandId: unknown; request: FastifyRequest["raw"] }) => Promise<void>;
 };
 
 const NO_DATABASE = "데이터베이스를 사용할 수 없습니다";
@@ -94,14 +96,14 @@ function resultStatus(result: CommandResult): Parameters<FastifyReply["code"]>[0
 }
 
 async function currentAccount(deps: CommandPathDeps, request: FastifyRequest): Promise<unknown> {
-  const account = await deps.sessionFromCookie(request.headers.cookie);
+  const account = await deps.sessionFromCookie(request.headers.cookie, request);
   if (!account) throw Object.assign(new Error(LOGIN_REQUIRED), { status: 401 });
   return account;
 }
 
 function failWith(deps: CommandPathDeps, reply: FastifyReply, error: unknown, fallback: string) {
   const mapped = failureFields(error, fallback, deps.failureMessage);
-  return fail(reply, mapped.status, mapped.message, mapped.field);
+  return fail(reply, mapped.status, mapped.message, mapped.field, mapped.code);
 }
 
 async function signup(deps: CommandPathDeps, parts: string[], request: FastifyRequest, reply: FastifyReply, body: unknown) {
@@ -110,6 +112,7 @@ async function signup(deps: CommandPathDeps, parts: string[], request: FastifyRe
   reply.header("cache-control", "no-store");
   if (!deps.participantCommands) return fail(reply, 503, NO_DATABASE);
   try {
+    await deps.guardSignup?.({ slug, commandId: (body as { commandId?: unknown }).commandId, request: request.raw });
     const result = await deps.participantCommands.signup({
       slug,
       // The legacy expression read straight off the parsed body; null threw
@@ -124,6 +127,9 @@ async function signup(deps: CommandPathDeps, parts: string[], request: FastifyRe
     }
     return reply.code(resultStatus(result)).send(result.body);
   } catch (error) {
+    if (error && typeof error === "object" && "retryAfterSeconds" in error) {
+      reply.header("retry-after", String((error as { retryAfterSeconds: unknown }).retryAfterSeconds));
+    }
     return failWith(deps, reply, error, GENERIC_FAILURE);
   }
 }

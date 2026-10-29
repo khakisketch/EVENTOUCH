@@ -17,6 +17,7 @@ const {
   insertMembership,
   sessionCookie,
   requestJson,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 const { fillTicketHashes } = require('../scripts/backfill-ticket-hashes.cjs');
 const { hashTicket } = require('../server/commands/shared.ts');
@@ -38,13 +39,13 @@ function commandId() {
 before(async () => {
   if (!databaseUrl) return;
   harness = await startApiHarness();
-  await insertAccount(harness.database, {
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,
     id: managerId,
     role: 'AGENCY',
     name: 'Ticket Projection',
     email: `ticket-proj-${suffix}@example.test`,
   });
-  await insertEvent(harness.database, {
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,
     id: eventId,
     slug: `ticket-proj-${suffix}`,
     payload: { id: eventId, slug: `ticket-proj-${suffix}`, name: '티켓 투영 검증', stage: 'LIVE', features: [] },

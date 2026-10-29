@@ -6,6 +6,10 @@
 
 const fs = require('node:fs');
 const { sendJson, readJsonBody, failureMessage } = require('./http');
+const { stampOrgHeaders } = require('./tenancy');
+function stampOrg(res, account) {
+  stampOrgHeaders((name, value) => res.setHeader(name, value), account);
+}
 const { attendeeCookie } = require('./attendees');
 const { EVIDENCE_SECTIONS } = require('./commands/event-evidence');
 const {
@@ -24,9 +28,10 @@ function text(value) {
   return String(value === undefined || value === null ? '' : value).trim();
 }
 
-function err(res, status, message, field) {
+function err(res, status, message, field, code) {
   const body = { error: message };
   if (field) body.field = field;
+  if (code) body.code = code;
   sendJson(res, status, body);
 }
 
@@ -39,6 +44,12 @@ function isEmail(value) {
 async function requireUser(auth, req) {
   const account = auth && await auth.sessionFromCookie(req.headers.cookie);
   if (!account) throw Object.assign(new Error('로그인이 필요합니다'), { status: 401 });
+  try {
+    require('./tenancy').attachOrgRequest(account, req);
+  } catch (error) {
+    throw error;
+  }
+  if (account && account.orgHeaderError) throw account.orgHeaderError;
   return account;
 }
 
@@ -123,6 +134,7 @@ async function streamPhotoArchive(req, res, security, { account, eventId, refs, 
   if (resolved.length > MAX_ARCHIVE_FILES || totalBytes > MAX_ARCHIVE_BYTES) {
     return err(res, 413, '사진 묶음이 1000장 또는 512MB 한도를 초과했습니다. 사진을 나누거나 개별 원본을 내려받으세요');
   }
+  stampOrg(res, account);
   res.writeHead(200, {
     'content-type': 'application/zip',
     'content-disposition': `attachment; filename="${filename}"`,
@@ -225,7 +237,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       return sendJson(res, 200, { ok: true, expiresAt: confirmed.session.expiresAt });
     } catch (error) {
       if (error && error.code === 'NEEDS_CONNECTION') return err(res, 503, error.message);
-      return err(res, error.status || 500, failureMessage(error, '요청을 처리하지 못했습니다'), error.field);
+      return err(res, error.status || 500, failureMessage(error, '요청을 처리하지 못했습니다'), error.field, error.code);
     }
   }
 
@@ -236,9 +248,10 @@ async function handleApi(req, res, store, urlPath, security = {}) {
     try {
       const account = await requireUser(auth, req);
       const projection = await state.loadBootstrap(account);
+      stampOrg(res, account);
       return sendJson(res, 200, { state: projection });
     } catch (error) {
-      return err(res, error.status || 500, failureMessage(error, '요청을 처리하지 못했습니다'));
+      return err(res, error.status || 500, failureMessage(error, '요청을 처리하지 못했습니다'), undefined, error.code);
     }
   }
 
@@ -302,7 +315,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       if (!result) return err(res, 404, '티켓 링크를 확인할 수 없습니다');
       return sendJson(res, 200, result);
     } catch (error) {
-      return err(res, error.status || 500, failureMessage(error, '요청을 처리하지 못했습니다'));
+      return err(res, error.status || 500, failureMessage(error, '요청을 처리하지 못했습니다'), undefined, error.code);
     }
   }
 
@@ -313,9 +326,10 @@ async function handleApi(req, res, store, urlPath, security = {}) {
     try {
       const account = await requireUser(auth,req);
       const eventId = decodedSegment(parts[2]);
-      await access.authorize({account,eventId,command:req.method === 'POST' ? 'file.upload' : 'file.read'});
+      await access.authorize({account,eventId,command:req.method === 'POST' ? 'file.upload' : 'file.read',forWrite:req.method !== 'GET'});
       if (req.method === 'GET') {
         const file = await files.readOperator({account,eventId,fileId:decodedSegment(parts[4])});
+        stampOrg(res, account);
         res.writeHead(200,{'content-type':file.type,'content-length':file.size,'x-content-type-options':'nosniff'});
         fs.createReadStream(file.absolutePath).on('error', () => res.destroy()).pipe(res);
         return;
@@ -325,7 +339,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       const result = await files.upload({account,eventId,commandId:params.get('commandId'),name:params.get('name'),
         contentType:String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase(),bytes});
       return sendJson(res,result.replayed ? 200 : 201,{file:result.file});
-    } catch (error) { return err(res,error.status || 500,error.status ? error.message : '파일을 저장하지 못했습니다'); }
+    } catch (error) { return err(res,error.status || 500,error.status ? error.message : '파일을 저장하지 못했습니다', undefined, error.code); }
   }
   // Operator-only bulk photo export. No public archive exists: both routes
   // require the same grant as operator file read (AGENCY or event-member
@@ -337,7 +351,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       const account = await requireUser(auth, req);
       const eventId = decodedSegment(parts[2]);
       if (!eventId) return err(res, 404, '요청한 행사를 찾을 수 없습니다');
-      await access.authorize({ account, eventId, command: 'file.read' });
+      await access.authorize({ account, eventId, command: 'file.read', forWrite: false });
       const eventRow = await database.query('SELECT 1 FROM events WHERE id = $1 LIMIT 1', [eventId]);
       if (!eventRow.rowCount) return err(res, 404, '요청한 행사를 찾을 수 없습니다');
       const workspaceRow = await database.query(
@@ -374,7 +388,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
         res.destroy();
         return;
       }
-      return err(res, error.status || 500, error.status ? error.message : '사진 묶음을 만들지 못했습니다');
+      return err(res, error.status || 500, error.status ? error.message : '사진 묶음을 만들지 못했습니다', undefined, error.code);
     }
   }
   // Organization-level client files (logos, registration documents). No
@@ -387,6 +401,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       const clientId = decodedSegment(parts[2]);
       if (req.method === 'GET') {
         const file = await files.readClientFile({account,clientId,fileId:decodedSegment(parts[4])});
+        stampOrg(res, account);
         res.writeHead(200,{'content-type':file.type,'content-length':file.size,'x-content-type-options':'nosniff'});
         fs.createReadStream(file.absolutePath).on('error', () => res.destroy()).pipe(res);
         return;
@@ -396,7 +411,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       const result = await files.uploadClientFile({account,clientId,commandId:params.get('commandId'),name:params.get('name'),
         contentType:String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase(),bytes});
       return sendJson(res,result.replayed ? 200 : 201,{file:result.file});
-    } catch (error) { return err(res,error.status || 500,error.status ? error.message : '파일을 저장하지 못했습니다'); }
+    } catch (error) { return err(res,error.status || 500,error.status ? error.message : '파일을 저장하지 못했습니다', undefined, error.code); }
   }
   if (req.method === 'POST' && parts[1] === 'events' && parts[3] === 'files' && parts.length === 4) {
     try {
@@ -421,6 +436,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       const account = await requireUser(auth, req);
       const projection = await state.loadBootstrap(account);
       res.setHeader('cache-control', 'no-store');
+      stampOrg(res, account);
       return sendJson(res, 200, {
         events: projection.events,
         activeEventId: projection.activeEventId,
@@ -441,7 +457,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
         const result = await state.saveClient(account, body);
         return sendJson(res, result.replayed ? 200 : 201, { client: result.client });
       } catch (error) {
-        return err(res, error.status || 500, failureMessage(error, '고객사 정보를 저장하지 못했습니다'), error.field);
+        return err(res, error.status || 500, failureMessage(error, '고객사 정보를 저장하지 못했습니다'), error.field, error.code);
       }
     }
 
@@ -452,7 +468,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
         const result = await state.saveOrgPermissions(account, decodedSegment(parts[2]), body);
         return sendJson(res, result.replayed ? 200 : 201, { account: result.account });
       } catch (error) {
-        return err(res, error.status || 500, failureMessage(error, '조직 권한을 저장하지 못했습니다'), error.field);
+        return err(res, error.status || 500, failureMessage(error, '조직 권한을 저장하지 못했습니다'), error.field, error.code);
       }
     }
 
@@ -478,7 +494,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
         }
         return sendJson(res, result.status, result.body);
       } catch (error) {
-        return err(res, error.status || 500, failureMessage(error, '요청을 처리하지 못했습니다'), error.field);
+        return err(res, error.status || 500, failureMessage(error, '요청을 처리하지 못했습니다'), error.field, error.code);
       }
     }
 
@@ -491,7 +507,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
         const result = await state.assignMember(account, eventId, body);
         return sendJson(res, result.replayed ? 200 : 201, { membership: result.membership });
       } catch (error) {
-        return err(res, error.status || 500, failureMessage(error, '행사 권한을 저장하지 못했습니다'), error.field);
+        return err(res, error.status || 500, failureMessage(error, '행사 권한을 저장하지 못했습니다'), error.field, error.code);
       }
     }
 
@@ -609,7 +625,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
     if (parts[1] === 'summary' && parts.length === 2 && req.method === 'GET') {
       const account = await requireUser(auth, req);
       if (state) return err(res, 410, '이전 저장 API는 종료되었습니다. 서버 행사 명령 API를 사용하세요');
-      await access.authorize({ account, command: 'organization.summary' });
+      await access.authorize({ account, command: 'organization.summary', forWrite: false });
       return sendJson(res, 200, { summary: agencySummary(readEvents(store)) });
     }
     if (parts[1] === 'events') {
@@ -621,7 +637,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
     }
     return sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
   } catch (e) {
-    return err(res, e.status || 500, failureMessage(e, '요청을 처리하지 못했습니다'), e.field);
+    return err(res, e.status || 500, failureMessage(e, '요청을 처리하지 못했습니다'), e.field, e.code);
   }
 }
 

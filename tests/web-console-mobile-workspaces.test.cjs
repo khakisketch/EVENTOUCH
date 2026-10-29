@@ -63,13 +63,13 @@ test('mobile-workspaces: roster selects keep their accessible names inside the p
   }
   assert.match(list, /filters=\{/u, 'toolbar keeps its filters slot');
   assert.match(list, /actions=\{/u, 'toolbar keeps its actions slot');
-  assert.match(list, /selection=\{\s*anySelected/u, 'selection row stays conditional');
+  assert.match(list, /styles\.selectionWorkbench\}[\s\S]*?anySelected && canAssignGroup/u, 'selection actions stay conditional and adjacent to the list');
   assert.match(list, /id="roster-send-message"/u, 'message handoff selector stays');
 });
 
 test('mobile-workspaces: roster disclosure CSS hides without focus traps', () => {
   const css = read(PARTICIPANTS_CSS);
-  assert.match(css, /\.filterToggle\s*\{[^}]*display:\s*none/su, 'toggle is desktop-hidden');
+  assert.match(css, /\.filterToggle\s*\{[^}]*display:\s*inline-flex/su, 'B workbench discloses optional filters at every width');
   assert.match(css, /\.advancedFilters\s*\{[^}]*display:\s*contents/su, 'panel joins the desktop toolbar row');
   assert.match(css, /\.advancedFilters\[data-open="false"\]\s*\{[^}]*display:\s*none/su, 'closed panel collapses on mobile');
   assert.match(css, /\.advancedFilters\[data-open="true"\]/su, 'open panel lays out on mobile');
@@ -84,10 +84,10 @@ test('mobile-workspaces: CSV and import ride one compact secondary pair', () => 
   // Support utilities, not the every-visit primary: paired inline, both
   // secondary, never a tall full-width primary ahead of the list.
   assert.match(list, /data-toolbar-inline/u, 'utilities opt into the paired inline group');
-  assert.match(list, /목록 CSV · \{visiblePeople\.length\}명/u, 'export still names the visible count it writes');
+  assert.match(list, /CSV 내보내기 · 검색·필터 결과 \$\{visiblePeople\.length\}명/u, 'export accessible name retains its exact filtered count');
   assert.match(list, /EVENTOUCH_participants\.csv/u, 'download target stays');
   assert.match(list, /participants\/import/u, 'import route stays');
-  assert.match(list, /파일로 등록/u, 'import action stays');
+  assert.match(list, /명단 가져오기/u, 'import action stays and matches its destination');
   assert.doesNotMatch(list, /button-primary" href=\{`\/console\/events\/\$\{encodeURIComponent\(eventId\)\}\/participants\/import`\}/u, 'import is no longer a full-width primary');
   assert.match(list, /canMutateStatus \? \(\s*<Link className="button button-secondary" href=\{`\/console\/events\/\$\{encodeURIComponent\(eventId\)\}\/participants\/import`\}/u, 'import stays gated and secondary');
 });
@@ -114,11 +114,14 @@ test('mobile-workspaces: analysis header folds refresh and stamp beside the KPIs
   assert.match(reports, /조회 기준 시각/u, 'stamp phrase persists');
   assert.match(reports, /styles\.stamp/u, 'stamp rides the compact header style');
   assert.doesNotMatch(reports, /<p className=\{styles\.help\}>조회 기준 시각/u, 'stamp no longer stacks a body row');
-  // The create primary stays obvious in the sanctioned toolbar slot (the
-  // shared toolbar contract requires it there); the saving comes from the
-  // folded header, not from moving the primary.
-  assert.match(reports, /<ConsoleToolbar/u, 'create rides the body toolbar');
-  assert.match(reports, />\s*보고서 만들기\s*</u, 'create action stays obvious');
+  // The redesign moves the create action from a separate toolbar into the
+  // report-list header. It remains a real, permission-gated action; the
+  // toolbar's former DOM placement was a presentation-only contract.
+  const reportList = reports.slice(reports.indexOf('headingId="reports-list"'), reports.indexOf('</ConsoleSection>', reports.indexOf('headingId="reports-list"')));
+  assert.match(reportList, /action=\{\(/u, 'create lives in the report section header');
+  assert.match(reportList, /disabled=\{writeLocked\}/u, 'create respects write permission and archive lock');
+  assert.match(reportList, /onClick=\{openReportCreate\}/u, 'create opens the existing protected form');
+  assert.match(reportList, />\s*보고서 만들기\s*</u, 'create action stays obvious');
   // Print/snapshot output is untouched: no DOM-cloning changes.
   assert.match(reports, /cloneNode\(true\)/u, 'print still clones the rendered article');
   assert.match(reports, /EVENTOUCH · 결과 보고서/u, 'print eyebrow stays');

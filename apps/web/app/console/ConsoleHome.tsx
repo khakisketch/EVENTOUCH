@@ -9,10 +9,12 @@ import ConsolePage from "./console-ui/ConsolePage";
 import ConsoleToolbar from "./console-ui/ConsoleToolbar";
 import ConsoleSection from "./console-ui/ConsoleSection";
 import ConsoleStatePanel from "./console-ui/ConsoleStatePanel";
+import ConsoleFeedback from "./console-ui/ConsoleFeedback";
 import CreateEventDialog from "./CreateEventDialog";
 import type { CSSProperties } from "react";
-import { cardHeaderTheme, readPublishedCardColor } from "./event-card-theme";
+import { cardHeaderTheme } from "./event-card-theme";
 import styles from "./console-home.module.css";
+import { consoleFetch, subscribeConsoleFreshness } from "../../lib/console-api";
 
 type ConsoleEvent = {
   id: string;
@@ -186,11 +188,15 @@ function EventCard({
       >
         <div className={styles.eventCardZone} style={zoneStyle}>
           <h3 className={styles.eventName}>{event.name}</h3>
-          <p className={styles.eventDateTime}>{dateTime}</p>
+          <p className={styles.eventDateTime} data-soon={recencySoon || undefined}>{dateTime}</p>
         </div>
         <div className={styles.eventCardBody}>
           <p className={styles.eventClient}>
             {clientAndVenue || "고객사·장소 미지정"}
+          </p>
+          <p className={styles.eventInventory}>
+            {event.capacity > 0 ? `정원 ${event.capacity}명` : "정원 제한 없음"}
+            {event.pending > 0 ? ` · 승인 대기 ${event.pending}명` : ""}
           </p>
           <div className={styles.eventCardFoot}>
             {stageKnown ? (
@@ -244,6 +250,10 @@ export default function ConsoleHome() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  useEffect(() => subscribeConsoleFreshness(() => {
+    if (!createOpen) setReloadTick((tick) => tick + 1);
+  }), [createOpen]);
   // URL-synced directory filters (participants-style replaceState, never
   // router navigation): typing must not refetch or reroute. The init effect
   // owns the first read; the sync effect skips it via skipFirstSyncRef.
@@ -360,7 +370,7 @@ export default function ConsoleHome() {
     let cancelled = false;
     async function load() {
       try {
-        const res = await fetch("/api/bootstrap", { cache: "no-store" });
+        const res = await consoleFetch("/api/console/directory", { cache: "no-store" });
         if (cancelled) return;
         if (res.status === 401) {
           router.push(
@@ -369,7 +379,7 @@ export default function ConsoleHome() {
           return;
         }
         const data = (await res.json().catch(() => null)) as {
-          state?: {
+          directory?: {
             events?: unknown;
             clients?: unknown;
             // Counts stay adjacent to the identity fields; everything else
@@ -380,32 +390,22 @@ export default function ConsoleHome() {
             }>;
           } | null;
         } | null;
-        if (!res.ok || !data?.state) {
-          setState({ kind: "failed", message: "행사 목록을 불러오지 못했습니다." });
+        if (!res.ok || !data?.directory) {
+          const message = "행사 목록을 불러오지 못했습니다.";
+          setRefreshError(message);
+          setState((current) => current.kind === "ready" ? current : { kind: "failed", message });
           return;
         }
-        const workspaces = data.state.workspaces ?? {};
-        const countPending = (eventId: string): number => {          const people = workspaces[eventId]?.participants;
-          if (!Array.isArray(people)) return 0;
-          let pending = 0;
-          for (const item of people) {
-            if (typeof item !== "object" || item === null) continue;
-            const person = item as Record<string, unknown>;
-            if (person.status === "PENDING") pending += 1;
-          }
-          return pending;
-        };
-        const events = Array.isArray(data.state.events)
-          ? data.state.events.flatMap((item) => {
+        const events = Array.isArray(data.directory.events)
+          ? data.directory.events.flatMap((item) => {
               if (typeof item !== "object" || item === null) return [];
               const event = item as Record<string, unknown>;
               if (typeof event.id !== "string" || !event.id) return [];
-              const venueSource = workspaces[event.id]?.venue;
               const capacity = Number(event.capacity);
-              // Published-only card theme from the same bootstrap read: no
-              // per-card fetch, no draft leak. STAFF projections carry no
-              // pageExperience, so those cards fall back to `--soft`.
-              const themeColor = readPublishedCardColor(workspaces[event.id]);
+               // Server directory summarizes the same published-only color:
+               // no per-card reads or draft preview leaks into A2 cards.
+               const themeColor = typeof event.themeColor === "string" && /^#[0-9a-f]{6}$/i.test(event.themeColor)
+                 ? event.themeColor : null;
               return [{
                 id: event.id,
                 name: typeof event.name === "string" ? event.name : event.id,
@@ -415,20 +415,16 @@ export default function ConsoleHome() {
                 start: typeof event.start === "string" ? event.start : "",
                 end: typeof event.end === "string" ? event.end : "",
                 stage: typeof event.stage === "string" ? event.stage : "",
-                venue:
-                  typeof venueSource === "object" && venueSource !== null &&
-                  typeof (venueSource as Record<string, unknown>).name === "string"
-                    ? String((venueSource as Record<string, unknown>).name)
-                    : "",
-                 pending: countPending(event.id),
+                 venue: typeof event.venue === "string" ? event.venue : "",
+                 pending: typeof event.pending === "number" ? event.pending : 0,
                 capacity: Number.isFinite(capacity) && capacity > 0 ? capacity : 0,
                 themeColor,
               }];
             })
           : [];
         const clients = new Map<string, string>();
-        if (Array.isArray(data.state.clients)) {
-          for (const item of data.state.clients) {
+        if (Array.isArray(data.directory.clients)) {
+          for (const item of data.directory.clients) {
             if (typeof item !== "object" || item === null) continue;
             const client = item as Record<string, unknown>;
             if (typeof client.id === "string" && typeof client.name === "string") {
@@ -437,9 +433,12 @@ export default function ConsoleHome() {
           }
         }
         setState({ kind: "ready", events, clients });
+        setRefreshError(null);
       } catch {
         if (!cancelled) {
-          setState({ kind: "failed", message: "연결하지 못했습니다. 다시 시도하세요." });
+          const message = "연결하지 못했습니다. 다시 시도하세요.";
+          setRefreshError(message);
+          setState((current) => current.kind === "ready" ? current : { kind: "failed", message });
         }
       }
     }
@@ -579,7 +578,7 @@ export default function ConsoleHome() {
         aria-pressed={view === "cards"}
         onClick={() => setView("cards")}
       >
-        카드
+        콜시트
       </button>
       <button
         type="button"
@@ -643,6 +642,7 @@ export default function ConsoleHome() {
           }
         />
       }
+      feedback={refreshError ? <ConsoleFeedback kind="error">{refreshError} 이전 목록은 유지됩니다. <button className="button button-secondary" type="button" onClick={() => setReloadTick((tick) => tick + 1)}>다시 불러오기</button></ConsoleFeedback> : undefined}
     >
 
       {createOpen ? (
@@ -659,7 +659,7 @@ export default function ConsoleHome() {
             capacity: event.capacity,
             stage: event.stage,
           }))}
-          onClose={() => setCreateOpen(false)}
+          onClose={() => { setCreateOpen(false); setReloadTick((tick) => tick + 1); }}
           onClientRegistered={(client) => setState((current) => current.kind === "ready"
             ? { ...current, clients: new Map(current.clients).set(client.id, client.name) }
             : current)}

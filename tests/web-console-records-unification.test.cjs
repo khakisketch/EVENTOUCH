@@ -71,8 +71,10 @@ test('toolbars separate filters, actions and conditional selection', () => {
   assert.match(participants, /actions=\{/u);
   // Bulk selection owns a second row only while something is selected; the
   // compact select-all stays discoverable next to the count when none is.
-  assert.match(participants, /selection=\{\s*anySelected/u);
-  assert.match(participants, /검색·필터 결과 \{visiblePeople\.length\}명 전체 선택/u);
+  // Short label ("전체 N명 선택") keeps the 390px toolbar on one scroll row;
+  // scope stays in the aria-describedby help text.
+  assert.match(participants, /styles\.selectionWorkbench\}[\s\S]*?anySelected && canAssignGroup/u);
+  assert.match(participants, /전체 \{visiblePeople\.length\}명 선택/u);
   const home = read(PAGES.home);
   assert.match(home, /filters=\{/u);
   assert.match(home, /actions=\{/u);
@@ -144,14 +146,19 @@ test('write gates mirror server role, membership and stage', () => {
   // screen, plus the domain ARCHIVED block. Reads stay on every stage.
   const rewards = read(PAGES.rewards);
   assert.match(rewards, /\/api\/auth\/me/u);
-  assert.match(rewards, /memberships\.some/u);
-  assert.match(rewards, /role === "AGENCY"/u);
+  assert.match(rewards, /canWriteEvent\(\{ role: state\.role, userId: state\.userId, memberships: state\.memberships, eventId \}, "reward\.create"\)/u);
+  assert.match(rewards, /const role = typeof me\.user\.role === "string" \? me\.user\.role : ""/u);
+  assert.match(rewards, /const myId = typeof me\.user\.id === "string" \? me\.user\.id : ""/u);
+  const capability = fs.readFileSync(path.join(WEB, 'lib/event-capabilities.ts'), 'utf8');
+  assert.match(capability, /if \(role === "AGENCY"\) return true/u);
+  assert.match(capability, /if \(role !== "MANAGER"\) return false/u);
+  assert.match(capability, /item\.accountId === userId && item\.eventId === eventId/u);
   assert.match(rewards, /ARCHIVED/);
   assert.match(rewards, /보관된 행사는 변경할 수 없습니다/u);
   assert.doesNotMatch(rewards, /canManage !== false/u);
   // Participants: participant.* writes stop at ENDED/ARCHIVED, domain
-  // writes (group.assign, reward.create) at ARCHIVED. No granular write
-  // permission policy is invented.
+  // writes (group.assign, reward.create) at ARCHIVED. Per-command grants
+  // mirror the existing server authority rather than widening access.
   const participants = read(PAGES.participants);
   assert.match(participants, /participantsLocked/);
   assert.match(participants, /canMutateStatus/);
@@ -200,16 +207,17 @@ test('records use shared body patterns and keep domain specifics', () => {
   assert.match(read(PAGES.team), /headingId="team-members" title="구성원"/u);
   assert.match(read(PAGES.participantImport), /surface="panel"/u, 'import steps read as panels');
   assert.match(read(PAGES.participants), /surface="plain"[\s\S]{0,120}width="full"/u, 'roster stays a full-width plain list');
-  // Row-action columns stay consistent: full tracks when actions can show,
-  // a narrower shared 3-track grid when only selection applies, the viewer
-  // grid when read-only — never an empty action column.
+  // B workbench uses native columns with permission-gated headers/cells,
+  // rather than preserving the old grid's fixed track strings.
   const roster = read(PAGES.participants);
   const rosterCss = read('app/console/events/[id]/participants/participants.module.css');
   assert.match(roster, /showRowActions/u);
-  assert.match(roster, /headClass/u);
   assert.match(roster, /rowClass/u);
-  assert.match(rosterCss, /\.rosterHeadNoActions\s*\{[^}]*grid-template-columns:\s*44px minmax\(0, 1fr\) 136px 112px;/su);
-  assert.match(rosterCss, /\.participantRowNoActions\s*\{[^}]*grid-template-columns:\s*44px minmax\(0, 1fr\) 136px 112px;/su);
+  assert.match(roster, /showRowActions \? <th scope="col"/u);
+  assert.match(roster, /showRowActions \? <td className=\{styles\.actionColumn\}/u);
+  assert.match(roster, /canAssignGroup \? <th scope="col"/u);
+  assert.match(roster, /canAssignGroup \? <td className=\{styles\.selectColumn\}/u);
+  assert.match(rosterCss, /\.rosterTable\s*\{[^}]*border-collapse:\s*separate/su);
   // Form layouts use the shared stack/field patterns inside dialogs.
   for (const rel of [PAGES.clients, PAGES.team]) {
     assert.match(read(rel), /formStack/u, `${rel} stacks dialog forms on the shared pattern`);
@@ -221,7 +229,7 @@ test('csv export guards formulas and matches the visible filter', () => {
   const list = read(PAGES.participants);
   assert.match(list, /function csvCell/u);
   assert.match(list, /'\$\{cell\}/u, 'formula-leading cells get the text marker');
-  assert.match(list, /목록 CSV · \{visiblePeople\.length\}명/u, 'export names the visible count it writes');
+  assert.match(list, /CSV 내보내기 · 검색·필터 결과 \$\{visiblePeople\.length\}명/u, 'export accessible name retains the exact filtered count');
   assert.match(list, /EVENTOUCH_participants\.csv/u);
 });
 
@@ -293,13 +301,13 @@ test('roster quick approval keeps the gated status menu in row details', () => {
   assert.match(list, /"승인"/u);
   assert.match(list, /경품 등록/u);
   assert.match(list, /canMutateStatus \? \(\s*<select/u, 'status menu renders under the same gate');
-  assert.match(list, /aria-label=\{`?\$\{person\.name\} 상태 변경`?\}/u, 'menu names its row for keyboard users');
+  assert.match(list, /aria-label=\{`?\$\{selectedPerson\.name\} 상태 변경`?\}/u, 'inspector menu names its participant for keyboard users');
   // Revealed controls keep the same touch floor.
   assert.match(
     read('app/console/events/[id]/participants/participants.module.css'),
     /\.detailActions select\s*\{[^}]*min-height:\s*44px/su
   );
-  assert.match(list, /showRowActions && detailsOpen/u);
+  assert.match(list, /rosterInspector/u);
 });
 
 test('roster hands its selection to messages through ?to=', () => {
@@ -309,14 +317,14 @@ test('roster hands its selection to messages through ?to=', () => {
   // travels as ?to=<comma-separated ids>, capped at 200 with mobile 44px.
   assert.match(list, /handoffIds/u, 'handoff uses the full known selection including hidden rows');
   assert.match(list, /id="roster-send-message"/u, 'handoff action has a stable selector');
-  assert.match(list, /메시지 보내기/u);
+  assert.match(list, /메시지 작성/u);
   assert.match(list, /\/messages\?to=/u, 'handoff links to the messages workspace with ?to=');
   assert.match(list, /handoffOverLimit/u);
   assert.match(list, /> 200/u, 'handoff caps at 200 ids');
   assert.match(list, /대상이 너무 많습니다\. 필터로 대상을 좁혀 주세요/u, 'over-limit handoff explains how to narrow');
   assert.match(list, /selectionButton/u, 'handoff keeps the 44px selection target');
   const groupAt = list.indexOf('그룹 지정');
-  const handoffAt = list.indexOf('메시지 보내기');
+  const handoffAt = list.indexOf('메시지 작성');
   const clearAt = list.indexOf('선택 해제');
   assert.ok(groupAt >= 0 && handoffAt > groupAt && clearAt > handoffAt, 'order stays group, handoff, deselect');
 });
@@ -416,7 +424,7 @@ test('roster over-limit handoff shows counts and a visible recovery', () => {
   // text with the selected/hidden counts and the 200 limit.
   assert.match(list, /id="roster-handoff-limit"/u, 'over-limit guidance is visible text, not just a title');
   assert.match(list, /최대 200명까지 전송 가능/u, 'visible text names the 200 limit');
-  assert.match(list, /전체 선택 \{handoffIds\.length\}명/u, 'selection row names the full handoff count');
+  assert.match(list, /선택한 참가자 \{handoffIds\.length\}명/u, 'selection row names the full handoff count');
   assert.match(list, /id="roster-exclude-hidden"/u, 'visible recovery action exists');
   assert.match(list, /숨김 제외/u);
   assert.match(list, /current\.filter\(\(id\) => visibleIds\.has\(id\)\)/u, 'recovery clears selections outside the visible list');

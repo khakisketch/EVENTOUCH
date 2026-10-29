@@ -32,6 +32,21 @@ export type ConsolePageScope = "organization" | "event";
 
 export type ConsolePageLayout = "directory" | "workspace";
 
+/**
+ * Event work is grouped into five operator questions, not one flat list.
+ * A hub is navigation metadata only; permissions and feature gates stay on
+ * the pages and the server. `pageIds` is ordered as the operator reads it:
+ * the hub's default destination first where possible.
+ */
+export type ConsoleHubId = "today" | "prepare" | "participants" | "onsite" | "results";
+
+export type ConsoleHub = {
+  id: ConsoleHubId;
+  label: string;
+  pageIds: readonly ConsolePageId[];
+  defaultPageId: ConsolePageId;
+};
+
 export type ConsolePageMeta = {
   /** Rail/menu label. */
   label: string;
@@ -51,9 +66,9 @@ export const CONSOLE_PAGES: Record<ConsolePageId, ConsolePageMeta> = {
   clients: { label: "고객사", title: "고객사", scope: "organization", layout: "workspace" },
   team: { label: "팀·권한", title: "팀·권한", scope: "organization", layout: "workspace" },
   overview: { label: "운영 현황", title: "운영 현황", scope: "event", layout: "workspace" },
-  participants: { label: "참가자", title: "참가자", scope: "event", layout: "workspace" },
+  participants: { label: "참가자 명단", title: "참가자 명단", scope: "event", layout: "workspace" },
   participantImport: { label: "명단 가져오기", title: "명단 가져오기", scope: "event", layout: "workspace" },
-  messages: { label: "메시지", title: "메시지", scope: "event", layout: "workspace" },
+  messages: { label: "메시지", title: "메시지 발송", scope: "event", layout: "workspace" },
   operations: { label: "현장 운영", title: "현장 운영", scope: "event", layout: "workspace" },
   programs: { label: "참여 프로그램", title: "참여 프로그램", scope: "event", layout: "workspace" },
   draws: { label: "추첨·투표", title: "추첨·투표", scope: "event", layout: "workspace" },
@@ -66,39 +81,26 @@ export const CONSOLE_PAGES: Record<ConsolePageId, ConsolePageMeta> = {
 };
 
 /**
- * Work-group rail order for the event branch. `participantImport` is reached
- * from the participants workspace, not the rail, so it is intentionally
- * absent here.
+ * Event rail order. The five hubs are the primary grouping; the page order
+ * inside each hub follows the operator's actual setup-to-live-to-results
+ * sequence. `participantImport` is a participants subpage, not a separate
+ * hub, and is included so the rail can name where the operator is.
  */
-export const EVENT_PAGE_IDS: readonly ConsolePageId[] = [
-  "overview",
-  "participants",
-  "messages",
-  "content",
-  "attendeePage",
-  "operations",
-  "programs",
-  "draws",
-  "rewards",
-  "photos",
-  "reports",
-  "settings",
+export const EVENT_HUBS: readonly ConsoleHub[] = [
+  { id: "today", label: "오늘", pageIds: ["overview"], defaultPageId: "overview" },
+  { id: "prepare", label: "준비", pageIds: ["settings", "attendeePage", "content", "programs"], defaultPageId: "settings" },
+  { id: "participants", label: "참가자", pageIds: ["participants", "participantImport", "messages"], defaultPageId: "participants" },
+  { id: "onsite", label: "현장", pageIds: ["operations", "photos"], defaultPageId: "operations" },
+  { id: "results", label: "결과", pageIds: ["draws", "rewards", "reports"], defaultPageId: "draws" },
 ];
 
-/** Non-interactive work labels. They never change routes or gates.
- * Overview, reports and bottom settings remain independent destinations.
- */
-export const EVENT_PAGE_GROUPS: Partial<Record<ConsolePageId, string>> = {
-  participants: "모집·안내",
-  messages: "모집·안내",
-  content: "모집·안내",
-  attendeePage: "모집·안내",
-  operations: "현장 진행",
-  programs: "현장 진행",
-  draws: "현장 진행",
-  rewards: "현장 진행",
-  photos: "현장 진행",
-};
+/** Flattened order for callers that only need a page list. */
+export const EVENT_PAGE_IDS: readonly ConsolePageId[] = EVENT_HUBS.flatMap((hub) => hub.pageIds);
+
+/** Finds the hub that owns a page. Organization pages return undefined. */
+export function consoleHubForPage(pageId: ConsolePageId): ConsoleHub | undefined {
+  return EVENT_HUBS.find((hub) => hub.pageIds.includes(pageId));
+}
 
 /** Organization root destinations. Team lives in the operator menu. */
 export const MAIN_PAGE_IDS: readonly ConsolePageId[] = ["events", "clients"];

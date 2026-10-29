@@ -60,7 +60,7 @@ function activeTicket(workspace, token, { allowPendingPayment = false } = {}) {
 
 async function lockEvent(client, eventId) {
   const result = await client.query(
-    `SELECT e.id, e.slug, e.client_id, e.payload, e.revision,
+    `SELECT e.id, e.slug, e.client_id, e.org_id, e.payload, e.revision,
             w.payload AS workspace_payload, w.revision AS workspace_revision
      FROM events e JOIN event_workspaces w ON w.event_id = e.id
      WHERE e.id = $1
@@ -70,17 +70,15 @@ async function lockEvent(client, eventId) {
   return result.rows[0] || null;
 }
 
-async function authorizeOperator(client, event, account, command) {
-  if (!account || !account.id) throw failure(401, '로그인이 필요합니다');
-  const result = await client.query(
-    'SELECT role, active FROM accounts WHERE id = $1 LIMIT 1 FOR SHARE',
-    [String(account.id)]
-  );
-  const current = result.rows[0];
-  if (!current || current.active !== true || !['AGENCY', 'MANAGER'].includes(current.role)) {
-    throw failure(current ? 403 : 401, current ? '권한을 확인하세요' : '로그인이 필요합니다');
+// Grant verdicts run AFTER the receipt lookup (AGENTS order: idlock ->
+// rowlock -> receipt -> permission -> apply), so a committed write retried
+// after a permission change still replays. The org boundary (identity, org,
+// event-in-org) runs before the receipt via resolveEventAuthority.
+async function authorizeGrants(client, event, account, command, org) {
+  if (!['AGENCY', 'MANAGER'].includes(org.role)) {
+    throw failure(403, '권한을 확인하세요');
   }
-  if (current.role === 'MANAGER') {
+  if (org.role === 'MANAGER') {
     const membership = await client.query(
       'SELECT write_permissions FROM memberships WHERE account_id = $1 AND event_id = $2 LIMIT 1 FOR SHARE',
       [String(account.id), event.id]
@@ -93,7 +91,7 @@ async function authorizeOperator(client, event, account, command) {
       throw failure(403, '권한을 확인하세요');
     }
   }
-  return { id: String(account.id), role: current.role };
+  return { id: String(account.id), role: org.role, orgId: org.orgId };
 }
 
 async function resolveStoredFile(client, input, { eventId, contentTypes, maxBytes }) {
@@ -170,17 +168,33 @@ function createDomainCommands(database, options = {}) {
       const event = normalizeEvent(row);
       const workspace = normalizeWorkspace(row.workspace_payload);
 
-      let actor = guest ? null : await authorizeOperator(client, event, account, command);
+      let scope = null;
+      let actor = null;
+      if (!guest) {
+        const { resolveEventAuthority } = require('../tenancy');
+        try {
+          scope = await resolveEventAuthority(client, account, event.id);
+        } catch (error) {
+          throw failure(error.status || 403, error.message || '권한을 확인하세요', undefined, error.code);
+        }
+      }
 
       const receiptResult = await client.query(
-        'SELECT event_id, actor_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1',
+        'SELECT event_id, actor_id, org_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1',
         [id]
       );
       const receipt = receiptResult.rows[0];
       if (receipt) {
+        const { checkReceiptScope } = require('../tenancy');
+        const receiptScope = guest ? String(event.orgId || event.org_id || '') : String(scope.orgId || '');
+        try {
+          checkReceiptScope(receipt, receiptScope || undefined);
+        } catch (error) {
+          throw failure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다', undefined, error.code);
+        }
         const stored = object(receipt.result);
         const storedActorId = receipt.actor_id == null ? null : String(receipt.actor_id);
-        const expectedActorId = guest ? null : String(actor.id);
+        const expectedActorId = guest ? null : String(account.id);
         if (String(receipt.event_id) !== String(event.id) || storedActorId !== expectedActorId ||
           stored.command !== command || (stored.ticketHash || null) !== hashTicket(guest ? ticketToken : null)) {
           throw failure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
@@ -200,7 +214,12 @@ function createDomainCommands(database, options = {}) {
         return { status: 200, body: structuredClone(object(stored.response)), replayed: true };
       }
 
-      if (guest) actor = activeTicket(workspace, ticketToken, { allowPendingPayment: command === 'payment.simulate' });
+      // Grant verdicts only when no receipt matched (see authorizeGrants).
+      if (guest) {
+        actor = activeTicket(workspace, ticketToken, { allowPendingPayment: command === 'payment.simulate' });
+      } else {
+        actor = await authorizeGrants(client, event, account, command, scope);
+      }
 
       const input = object(payload);
       const now = new Date().toISOString();
@@ -218,7 +237,10 @@ function createDomainCommands(database, options = {}) {
         participant: guest ? actor : null,
         clean,
         fail: failure,
-        messaging: { connected: Boolean(provider && provider.state && provider.state.connected) },
+        // The deployment provider credentials are legacy-org bound: a new
+        // org's campaign never sends through them, it records NEEDS_CONNECTION.
+        messaging: { connected: Boolean(provider && provider.state && provider.state.connected) &&
+          String(event.orgId || '') === String(require('../tenancy').LEGACY_ORG_ID) },
         makeId: nextId,
         resolveFile: (file, rules) => resolveStoredFile(client, file, rules),
       };
@@ -268,9 +290,9 @@ function createDomainCommands(database, options = {}) {
       }
       const response = result.body || {};
       await client.query(
-        `INSERT INTO command_receipts (command_id, event_id, actor_id, result)
-         VALUES ($1, $2, $3, $4::jsonb)`,
-        [id, event.id, guest ? null : actor.id, JSON.stringify({
+        `INSERT INTO command_receipts (command_id, event_id, actor_id, org_id, result)
+         VALUES ($1, $2, $3, $4, $5::jsonb)`,
+        [id, event.id, guest ? null : actor.id, guest ? (event.orgId || event.org_id || null) : (actor.orgId || actor.org_id || null), JSON.stringify({
           command,
           response,
           ticketHash: hashTicket(guest ? ticketToken : null),

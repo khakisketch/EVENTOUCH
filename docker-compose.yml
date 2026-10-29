@@ -15,7 +15,12 @@ services:
     restart: unless-stopped
 
   eventouch:
-    build: .
+    build:
+      context: .
+      args:
+        # Release identifier: a real source hash/tag or "unknown" (default
+        # claims nothing). Displayed by /api/diagnostics (owner-only).
+        EVENTOUCH_BUILD_REVISION: ${EVENTOUCH_BUILD_REVISION:-unknown}
     depends_on:
       db:
         condition: service_healthy
@@ -25,6 +30,7 @@ services:
       - "8776"
     environment:
       PORT: 8776
+      EVENTOUCH_BUILD_REVISION: ${EVENTOUCH_BUILD_REVISION:-unknown}
       DATABASE_URL: postgresql://${POSTGRES_USER:-eventouch}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD을 설정하세요}@db:5432/${POSTGRES_DB:-eventouch}
       # JSON store is retained only to avoid discarding any pre-migration local data.
       DATA_DIR: /data/db
@@ -33,6 +39,22 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-0}
       EVENTOUCH_PUBLIC_URL: ${EVENTOUCH_PUBLIC_URL:-}
       EVENTOUCH_SMS_MOCK: ${EVENTOUCH_SMS_MOCK:-0}
+      # The only container allowed to state the browser address. The web
+      # service overwrites X-Forwarded-For with the socket peer; pinning its
+      # address keeps the login address throttle per real client instead of
+      # per proxy (which would let 20 bad logins lock out every operator).
+      EVENTOUCH_TRUSTED_PROXIES: ${EVENTOUCH_TRUSTED_PROXIES:-${EVENTOUCH_WEB_PROXY_IP:-10.89.0.10}}
+      EVENTOUCH_REQUEST_LOGS: ${EVENTOUCH_REQUEST_LOGS:-1}
+      EVENTOUCH_SIGNUP_ADDRESS_LIMIT: ${EVENTOUCH_SIGNUP_ADDRESS_LIMIT:-600}
+      EVENTOUCH_SIGNUP_EVENT_LIMIT: ${EVENTOUCH_SIGNUP_EVENT_LIMIT:-3000}
+      EVENTOUCH_SIGNUP_WINDOW_SECONDS: ${EVENTOUCH_SIGNUP_WINDOW_SECONDS:-60}
+      EVENTOUCH_MESSAGE_MAINTENANCE: ${EVENTOUCH_MESSAGE_MAINTENANCE:-0}
+      EVENTOUCH_MESSAGE_AUTO_SEND_DUE: ${EVENTOUCH_MESSAGE_AUTO_SEND_DUE:-0}
+      EVENTOUCH_MESSAGE_MAINTENANCE_INTERVAL_MS: ${EVENTOUCH_MESSAGE_MAINTENANCE_INTERVAL_MS:-60000}
+      SOLAPI_API_KEY: ${SOLAPI_API_KEY:-}
+      SOLAPI_API_SECRET: ${SOLAPI_API_SECRET:-}
+      SOLAPI_SENDER: ${SOLAPI_SENDER:-}
+      SOLAPI_KAKAO_PFID: ${SOLAPI_KAKAO_PFID:-}
       ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL을 설정하세요}
       ADMIN_NAME: ${ADMIN_NAME:-관리자}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD을 설정하세요}
@@ -53,6 +75,7 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         EVENTOUCH_API_URL: http://eventouch:8776
+        EVENTOUCH_BUILD_REVISION: ${EVENTOUCH_BUILD_REVISION:-unknown}
     depends_on:
       eventouch:
         condition: service_healthy
@@ -62,8 +85,21 @@ services:
     environment:
       PORT: 8777
       EVENTOUCH_API_URL: http://eventouch:8776
+      EVENTOUCH_BUILD_REVISION: ${EVENTOUCH_BUILD_REVISION:-unknown}
       COOKIE_SECURE: ${COOKIE_SECURE:-0}
+    networks:
+      default:
+        # Fixed address: the API trusts exactly this peer for the browser
+        # address. Changing it without updating EVENTOUCH_TRUSTED_PROXIES
+        # silently collapses every client onto the proxy IP again.
+        ipv4_address: ${EVENTOUCH_WEB_PROXY_IP:-10.89.0.10}
     restart: unless-stopped
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${EVENTOUCH_PROXY_SUBNET:-10.89.0.0/24}
 
 volumes:
   eventouch-pgdata:

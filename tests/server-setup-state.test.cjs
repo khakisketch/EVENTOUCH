@@ -130,6 +130,11 @@ test('creating-the-administrator-flips-the-install-state', async () => {
      VALUES ('setup-admin', 'owner@example.test', 'Owner', 'AGENCY', $1)`,
     [hashPassword('setup-admin-password')]
   );
+  await db.query(
+    `INSERT INTO organization_memberships (org_id, account_id, role, active, permissions)
+     VALUES ('org-legacy', 'setup-admin', 'AGENCY', true, '[]'::jsonb)
+     ON CONFLICT (org_id, account_id) DO NOTHING`
+  );
   const res = await fetch(`${BASE}/api/auth/setup-state`);
   assert.deepEqual(await res.json(), { ready: true, administratorConfigured: true });
 
@@ -155,14 +160,17 @@ test('a-wrong-password-on-a-configured-install-is-still-an-ordinary-rejection', 
 
 test('the-next-login-form-surfaces-the-setup-failure-instead-of-a-credential-error', () => {
   // The retired vanilla server-presentation.js rendered an explicit setup
-  // notice; the sole UI is apps/web now. The shared login posts to the same
-  // API and announces whatever the server reports via role=alert, so the
-  // unconfigured-install message ("운영자 계정이 아직 설정되지 않았습니다")
-  // reaches the operator instead of reading as a wrong password.
+  // notice; the sole UI is apps/web now. The setup-required flag drives a
+  // dedicated setup notice (never a wrong-password read), and credential or
+  // transport failures use fixed actionable messages instead of rendering
+  // server wording. The shared login posts to the same API and announces
+  // failures via role=alert with focus moved to the summary.
   const source = fs.readFileSync(path.join(__dirname, '..', 'apps', 'web', 'app', 'login', 'LoginForm.tsx'), 'utf8');
   assert.match(source, /\/api\/auth\/login/);
   assert.match(source, /role="alert"/);
-  assert.match(source, /data\?\.error/);
+  assert.match(source, /data\?\.setupRequired === true/);
+  assert.match(source, /이메일 또는 비밀번호가 일치하지 않습니다/);
+  assert.doesNotMatch(source, /data\?\.error/, 'server wording is never rendered verbatim');
   assert.match(source, /\/api\/auth\/setup-state/);
   assert.match(source, /administratorConfigured === false/);
   assert.match(source, /설정 상태 다시 확인/);
@@ -174,4 +182,5 @@ test('the-next-login-form-surfaces-the-setup-failure-instead-of-a-credential-err
   assert.match(source, /재설정 요청/);
   assert.match(source, /mailto:\$\{administrator\.email\}/);
   assert.match(source, /등록된 관리자 연락처가 없습니다/);
+  assert.match(source, /여러 조직에 속한 계정은 한 조직의 관리자가 재설정할 수 없습니다/);
 });

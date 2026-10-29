@@ -7,8 +7,14 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../auth-redirect";
-import { CONSOLE_PAGES, EVENT_PAGE_IDS, EVENT_PAGE_GROUPS, consolePageHref, resolveConsolePage } from "./console-navigation";
+import { CONSOLE_PAGES, EVENT_HUBS, consoleHubForPage, consolePageHref, resolveConsolePage, type ConsoleHub, type ConsolePageId } from "./console-navigation";
+import { BarsIcon } from "./console-ui/ConsoleIcons";
 import { useConsoleLeaveConfirmation } from "./console-draft-guard";
+import { consoleFetch, invalidateConsoleReads, subscribeConsoleFreshness } from "../../lib/console-api";
+import freshnessStyles from "./console-ui/freshness.module.css";
+import OrganizationSwitcher, { OrganizationContextNotice } from "../OrganizationSwitcher";
+import { ensureOperatorContext, getOperatorContextSnapshot, isOrganizationContextBlock, isOrganizationSelectionRequired, resetOperatorContext } from "../../lib/operator-context";
+import { useOperatorContextSnapshot } from "../../lib/use-operator-context";
 
 type JsonRecord = Record<string, unknown>;
 type ShellData = {
@@ -30,6 +36,7 @@ type ShellData = {
     venue: string;
     pending: number;
     messageAttention: number;
+    manualDue: number;
   } | null;
   triage: Array<{
     id: string;
@@ -100,20 +107,33 @@ function ClientsIcon() {
   );
 }
 
+function TeamIcon() {
+  return (
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+      <circle cx="9" cy="8" r="3" />
+      <path d="M3 20.25c0-3.15 2.7-5.25 6-5.25s6 2.1 6 5.25M16 5.5a3 3 0 0 1 0 5.8M18 20.25c0-2.4-1-4.2-3-5" />
+    </svg>
+  );
+}
+
 export default function ConsoleShell({ children }: { children: React.ReactNode }) {
+  const organization = useOperatorContextSnapshot();
   const pathname = usePathname() ?? "/console";
   const router = useRouter();
   const confirmLeave = useConsoleLeaveConfirmation();
   const currentPage = resolveConsolePage(pathname);
   const eventId = currentPage?.eventId ?? null;
-  const activePageId = currentPage?.pageId === "participantImport" ? "participants" : currentPage?.pageId;
+  const currentPageId = currentPage?.pageId;
   const isHome = currentPage?.pageId === "events";
   const isClients = currentPage?.pageId === "clients";
+  const isTeam = currentPage?.pageId === "team";
   const isEventPath = Boolean(eventId);
   const eventBasePath = eventId ? consolePageHref("overview", eventId) ?? "" : "";
 
   const [shellData, setShellData] = useState<ShellData | null>(null);
   const [shellTick, setShellTick] = useState(0);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [pageRevision, setPageRevision] = useState(0);
   // Visible when the shell's own navigation/permission data could not load:
   // pages keep their own errors, but the rail must not silently pretend.
   const [shellError, setShellError] = useState(false);
@@ -129,8 +149,6 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const operatorMenuRef = useRef<HTMLDivElement>(null);
   const globalTriggerRef = useRef<HTMLButtonElement>(null);
   const globalMenuRef = useRef<HTMLElement>(null);
-  const mobileEventBranchRef = useRef<HTMLDivElement>(null);
-  const mobileScrollPositionsRef = useRef(new Map<string, number>());
   const menuFocusPendingRef = useRef(false);
   const globalFocusPendingRef = useRef(false);
 
@@ -142,12 +160,17 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     let cancelled = false;
     async function loadShellData() {
       try {
-        const [meResponse, bootstrapResponse] = await Promise.all([
-          fetch("/api/auth/me", { cache: "no-store" }),
-          fetch("/api/bootstrap", { cache: "no-store" }),
-        ]);
+        const workingContext = await ensureOperatorContext();
+        if (getOperatorContextSnapshot().changed) return;
+        // Staff keep their assigned-desk hub as the default home, but an
+        // explicitly opened event workspace stays readable: every screen
+        // degrades to its server-scoped read-only state through the same
+        // per-screen gates (the roster names this for non-writers). Only the
+        // event-less console home bounces staff back to /staff.
+        if (workingContext.role === "STAFF" && !eventId) { router.replace("/staff"); return; }
+        const bootstrapResponse = await consoleFetch("/api/console/directory", { cache: "no-store" });
         if (cancelled) return;
-        if (meResponse.status === 401 || bootstrapResponse.status === 401) {
+        if (bootstrapResponse.status === 401) {
           router.replace(
             loginHrefForLocation(
               typeof window !== "undefined" ? window.location.pathname : pathname,
@@ -156,19 +179,16 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           );
           return;
         }
-        const [mePayload, bootstrapPayload] = await Promise.all([
-          meResponse.json().catch(() => null) as Promise<unknown>,
-          bootstrapResponse.json().catch(() => null) as Promise<unknown>,
-        ]);
-        const user = record(record(mePayload)?.user);
-        if (!meResponse.ok || !user) {
+        const bootstrapPayload: unknown = await bootstrapResponse.json().catch(() => null);
+        const state = record(record(bootstrapPayload)?.directory);
+        const user = record(state?.viewer);
+        if (!bootstrapResponse.ok || !user) {
           if (!cancelled) setShellError(true);
           return;
         }
 
-        const userId = text(user.id);
-        const role = text(user.role);
-        const state = record(record(bootstrapPayload)?.state);
+        const userId = workingContext.userId;
+        const role = workingContext.role;
         if (!bootstrapResponse.ok || !state) {
           // Navigation/permission context is unusable; the shell says so.
           if (!cancelled) setShellError(true);
@@ -178,10 +198,11 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           ? state.accounts.map(record).filter((item): item is JsonRecord => item !== null)
           : [];
         const account = accounts.find((item) => item.id === userId);
-        const orgPermissions = Array.isArray(account?.orgPermissions)
-          ? account.orgPermissions.filter((value): value is string => typeof value === "string")
+        const rawOrgPermissions = account?.orgPermissions ?? user.orgPermissions;
+        const orgPermissions = Array.isArray(rawOrgPermissions)
+          ? rawOrgPermissions.filter((value): value is string => typeof value === "string")
           : [];
-        const isOrganizationOwner = role === "AGENCY" || account?.orgOwner === true;
+        const isOrganizationOwner = role === "AGENCY" || account?.orgOwner === true || user.orgOwner === true;
         const hasOrgPermission = (permission: string) =>
           isOrganizationOwner || orgPermissions.includes(permission);
         const memberships = Array.isArray(state?.memberships)
@@ -201,33 +222,16 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
         // Sidebar switching needs the same signals as the home cards: stage,
         // date, venue, and pending approvals. The server already scopes both
         // lists to what this account may see.
-        const workspaces = record(state?.workspaces) ?? {};
         const pendingOf = (eventId: string): number => {
-          const workspace = record(workspaces[eventId]);
-          const people = workspace ? workspace.participants : undefined;
-          if (!Array.isArray(people)) return 0;
-          let pending = 0;
-          for (const item of people) {
-            const person = record(item);
-            if (person && person.status === "PENDING") pending += 1;
-          }
-          return pending;
+          const event = events.find((item) => item.id === eventId);
+          return typeof event?.pending === "number" ? event.pending : 0;
         };
         const messageAttentionOf = (eventId: string): number => {
-          const workspace = record(workspaces[eventId]);
-          const campaigns = workspace?.messages;
-          if (!Array.isArray(campaigns)) return 0;
-          return campaigns.reduce((count, item) => {
-            const status = text(record(item)?.status);
-            return ["FAILED", "PARTIAL", "NEEDS_CONNECTION"].includes(status)
-              ? count + 1
-              : count;
-          }, 0);
+          const event = events.find((item) => item.id === eventId);
+          return typeof event?.messageAttention === "number" ? event.messageAttention : 0;
         };
         const venueOf = (eventId: string): string => {
-          const workspace = record(workspaces[eventId]);
-          const venue = workspace ? record(workspace.venue) : null;
-          return venue ? text(venue.name) : "";
+          return text(events.find((item) => item.id === eventId)?.venue);
         };
         const summarize = (item: JsonRecord) => ({
           id: text(item.id),
@@ -241,6 +245,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           ? {
               ...summarize(currentEvent),
               messageAttention: messageAttentionOf(text(currentEvent.id)),
+              manualDue: typeof currentEvent.manualDue === "number" ? currentEvent.manualDue : 0,
             }
           : null;
         // Triage, not a directory: events that need hands (pending approvals)
@@ -269,7 +274,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
         if (!cancelled) {
           setShellError(false);
           setShellData({
-            userName: text(user.name).trim() || "운영자",
+            userName: workingContext.userName.trim() || "운영자",
             role,
             roleLabel,
             canSeeEvents:
@@ -289,7 +294,16 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
             triage,
           });
         }
-      } catch {
+      } catch (error) {
+        if (isOrganizationSelectionRequired(error)) {
+          if (!cancelled) { setShellError(false); setShellData(null); }
+          return;
+        }
+        if (isOrganizationContextBlock(error)) return;
+        if (typeof error === "object" && error !== null && "status" in error && error.status === 401) {
+          router.replace(loginHrefForLocation(window.location.pathname, window.location.search));
+          return;
+        }
         // The routed screen owns its data error; the shell advertises its
         // own degraded state and offers a retry instead of hiding silently.
         if (!cancelled) setShellError(true);
@@ -299,7 +313,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     return () => {
       cancelled = true;
     };
-  }, [eventId, router, shellTick]);
+  }, [eventId, router, shellTick, organization.context?.contextVersion]);
 
   useEffect(() => {
     // Screens that own a retry (e.g. the event home) notify the shell so a
@@ -309,15 +323,24 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     return () => window.removeEventListener("eventouch:shell-reload", reload);
   }, []);
 
+  useEffect(() => subscribeConsoleFreshness(({ source }) => {
+    setShellTick((tick) => tick + 1);
+    if (source !== "write") setUpdateAvailable(true);
+  }), []);
+
+  useEffect(() => setUpdateAvailable(false), [pathname]);
+
   const userName = shellData?.userName ?? "운영자";
   const canSeeEvents = shellData?.canSeeEvents ?? false;
   const canSeeClients = shellData?.canSeeClients ?? false;
   const canManageTeam = shellData?.canManageTeam ?? false;
   const canManageIntegrations = shellData?.canManageIntegrations ?? false;
   // The top "메뉴" trigger only exists when at least one permitted
-  // destination exists. Loading or denied states render no trigger and no
-  // fallback access: the gates inside the link renderers stay authoritative.
-  const showGlobalTrigger = canSeeEvents || canSeeClients;
+  // destination exists. An event is a destination too: an event-scoped
+  // operator without the organization roots still needs the event hubs.
+  // Loading or denied states render no trigger and no fallback access: the
+  // gates inside the link renderers stay authoritative.
+  const showGlobalTrigger = canSeeEvents || canSeeClients || Boolean(eventId && shellData?.canAccessCurrentEvent);
   const showCurrentEvent = Boolean(
     isEventPath && shellData?.scopedEventId === eventId && shellData?.canAccessCurrentEvent && shellData.currentEventName
   );
@@ -325,47 +348,22 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const showOperatorNavBadges = Boolean(
     shellData && ["AGENCY", "MANAGER"].includes(shellData.role)
   );
+  const eventMeta = shellData?.currentEventMeta ?? null;
+  const eventFeatures = shellData?.currentEventFeatures ?? [];
+  const showPendingApprovalBadge = Boolean(
+    showOperatorNavBadges && eventMeta && eventMeta.pending > 0 && isApprovalQueueRelevant(eventMeta.stage)
+  );
+  const showMessageAttentionBadge = Boolean(
+    showOperatorNavBadges && eventMeta && eventMeta.messageAttention > 0
+  );
+  const showManualDueBadge = Boolean(showOperatorNavBadges && eventMeta && eventMeta.manualDue > 0);
+  const activeHubId = currentPageId ? consoleHubForPage(currentPageId)?.id : undefined;
 
   useEffect(() => {
     if (!currentPage) return;
     const name = showCurrentEvent ? shellData?.currentEventName : null;
     document.title = [CONSOLE_PAGES[currentPage.pageId].title, name, "EVENTOUCH"].filter(Boolean).join(" · ");
   }, [currentPage?.pageId, showCurrentEvent, shellData?.currentEventName]);
-
-  useEffect(() => {
-    if (!showCurrentEvent) return;
-    const branch = mobileEventBranchRef.current;
-    if (!branch) return;
-    if (eventId) branch.scrollLeft = mobileScrollPositionsRef.current.get(eventId) ?? 0;
-
-    const revealCurrentDestination = () => {
-      if (!window.matchMedia("(max-width: 768px)").matches) return;
-      const activeLink = branch.querySelector<HTMLElement>(".console-subnav-item.active");
-      if (!activeLink) return;
-
-      const branchBounds = branch.getBoundingClientRect();
-      const activeBounds = activeLink.getBoundingClientRect();
-      const inset = 8;
-      let nextScrollLeft = branch.scrollLeft;
-      if (activeBounds.left < branchBounds.left + inset) {
-        nextScrollLeft -= branchBounds.left + inset - activeBounds.left;
-      } else if (activeBounds.right > branchBounds.right - inset) {
-        nextScrollLeft += activeBounds.right - (branchBounds.right - inset);
-      }
-
-      branch.scrollLeft = Math.max(
-        0,
-        Math.min(branch.scrollWidth - branch.clientWidth, nextScrollLeft)
-      );
-    };
-
-    const frame = window.requestAnimationFrame(revealCurrentDestination);
-    window.addEventListener("resize", revealCurrentDestination);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("resize", revealCurrentDestination);
-    };
-   }, [pathname, showCurrentEvent, eventId]);
 
   function getVisibleOperatorTrigger() {
     const mobileTrigger = mobileOperatorTriggerRef.current;
@@ -409,9 +407,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     const maxHeight = Math.max(120, window.innerHeight - gutter * 4);
     const menuHeight = Math.min(menu.scrollHeight, maxHeight);
     const isMobileShell = window.matchMedia("(max-width: 768px)").matches;
-    const width = isMobileShell
-      ? Math.min(320, window.innerWidth - gutter * 2)
-      : Math.min(rect.width, window.innerWidth - gutter * 2);
+    const width = Math.min(320, window.innerWidth - gutter * 2);
     const left = isMobileShell
       ? window.innerWidth - width - gutter
       : Math.min(Math.max(gutter, rect.left), window.innerWidth - width - gutter);
@@ -459,9 +455,10 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
       }
       if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
       if (!operatorMenuRef.current?.contains(document.activeElement)) return;
+      if (document.activeElement?.matches("input, select, textarea")) return;
       const items = Array.from(
         operatorMenuRef.current?.querySelectorAll<HTMLElement>(
-          '[role="menuitem"]:not(:disabled)'
+          '.operator-menu-item:not(:disabled)'
         ) ?? []
       );
       if (!items.length) return;
@@ -478,11 +475,14 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     window.addEventListener("scroll", updateOperatorMenuPosition, true);
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
+    const observer = new ResizeObserver(updateOperatorMenuPosition);
+    if (operatorMenuRef.current) observer.observe(operatorMenuRef.current);
     return () => {
       window.removeEventListener("resize", updateOperatorMenuPosition);
       window.removeEventListener("scroll", updateOperatorMenuPosition, true);
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
+      observer.disconnect();
     };
   }, [operatorMenuOpen]);
 
@@ -491,7 +491,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     menuFocusPendingRef.current = false;
     const frame = window.requestAnimationFrame(() => {
       operatorMenuRef.current
-        ?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)')
+        ?.querySelector<HTMLElement>('select:not(:disabled), input:not(:disabled), button:not(:disabled), a[href]')
         ?.focus();
     });
     return () => window.cancelAnimationFrame(frame);
@@ -542,7 +542,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
       if (!globalMenuRef.current?.contains(document.activeElement)) return;
       const items = Array.from(
         globalMenuRef.current?.querySelectorAll<HTMLElement>(
-          "a.console-nav-item"
+          "a[href]"
         ) ?? []
       );
       if (!items.length) return;
@@ -584,7 +584,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     globalFocusPendingRef.current = false;
     const frame = window.requestAnimationFrame(() => {
       globalMenuRef.current
-        ?.querySelector<HTMLElement>("a.console-nav-item")
+        ?.querySelector<HTMLElement>("a[href]")
         ?.focus();
     });
     return () => window.cancelAnimationFrame(frame);
@@ -595,11 +595,13 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     setLogoutError(null);
     setLogoutPending(true);
     try {
-      const response = await fetch("/api/auth/logout", { method: "POST" });
+      const response = await consoleFetch("/api/auth/logout", { method: "POST" });
       if (!response.ok) {
         setLogoutError("로그아웃하지 못했습니다. 다시 시도하세요.");
         return;
       }
+      resetOperatorContext();
+      invalidateConsoleReads();
       router.replace("/login");
       router.refresh();
     } catch {
@@ -697,29 +699,204 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     ) : null;
   }
 
-  function renderEventBranch(eventsLinkId: string, mobile = false) {
-    // Mobile keeps the compact in-row switcher; the triage list lives on
-    // desktop where the sidebar has room. Switching happens on /console home.
-    if (mobile) {
-      // The old bottom bar (and its link id) is gone, so this group carries
-      // its own always-present label instead of a dangling labelledby ref.
-      // The parent nav's "현재 행사 메뉴" label stays as the outer landmark.
-      return showCurrentEvent && eventId ? (
-        <div
-          ref={mobileEventBranchRef}
-          className="nav-event-branch"
-          role="group"
-          aria-label="현재 행사 업무"
-          onScroll={(event) => mobileScrollPositionsRef.current.set(eventId, event.currentTarget.scrollLeft)}
-        >
-          <div className="nav-current-event">
-            <strong title={shellData?.currentEventName ?? undefined}>{shellData?.currentEventName}</strong>
-            <Link className="nav-event-switch" href="/console">목록에서 전환</Link>
-          </div>
-          {renderEventSubnav()}
-        </div>
-      ) : null;
+  function renderTeamLink(id: string, label?: string) {
+    return canManageTeam ? (
+      <Link
+        id={id}
+        className={`console-nav-item console-nav-root-item${isTeam ? " active" : ""}`}
+        href={consolePageHref("team")!}
+        aria-current={isTeam ? "page" : undefined}
+      >
+        <TeamIcon />
+        <span>{label ?? CONSOLE_PAGES.team.label}</span>
+      </Link>
+    ) : null;
+  }
+
+  function pageHref(pageId: ConsolePageId): string | undefined {
+    if (!eventId) return undefined;
+    if (pageId === "participants") {
+      return showPendingApprovalBadge
+        ? `${eventBasePath}/participants?status=PENDING`
+        : `${eventBasePath}/participants`;
     }
+    if (pageId === "messages") {
+      return showMessageAttentionBadge || showManualDueBadge
+        ? `${eventBasePath}/messages?attention=1#history-heading`
+        : `${eventBasePath}/messages`;
+    }
+    return consolePageHref(pageId, eventId);
+  }
+
+  function isPageVisible(pageId: ConsolePageId): boolean {
+    if (pageId === "photos" && !shellData?.canManageEvidencePhotos) return false;
+    if (pageId === "rewards" && !eventFeatures.includes("reward")) return false;
+    if (pageId === "draws" && !eventFeatures.some((feature) => feature === "draw" || feature === "poll")) return false;
+    if (pageId === "programs" && !eventFeatures.some((feature) =>
+      ["poll", "quiz", "qa", "draw", "survey", "stamp", "photo", "board"].includes(feature))) return false;
+    return true;
+  }
+
+  function visiblePagesForHub(hub: ConsoleHub): ConsolePageId[] {
+    return hub.pageIds.filter(isPageVisible);
+  }
+
+  function hubHref(hub: ConsoleHub, pages: ConsolePageId[]): string | undefined {
+    if (!eventId) return undefined;
+    const pageId = pages.includes(hub.defaultPageId) ? hub.defaultPageId : pages[0];
+    return pageId ? consolePageHref(pageId, eventId) : undefined;
+  }
+
+  function renderPageBadges(pageId: ConsolePageId) {
+    if (pageId === "participants" && showPendingApprovalBadge) {
+      return (
+        <span className="nav-badge" role="img" aria-label={`승인 대기 ${eventMeta?.pending ?? 0}건`}>
+          {eventMeta?.pending}
+        </span>
+      );
+    }
+    if (pageId === "messages") {
+      return (
+        <>
+          {showMessageAttentionBadge ? (
+            <span className="nav-badge" role="img" aria-label={`발송 확인 ${eventMeta?.messageAttention ?? 0}건`}>
+              {eventMeta?.messageAttention}
+            </span>
+          ) : null}
+          {showManualDueBadge ? (
+            <span
+              className="nav-badge nav-badge-manual"
+              role="img"
+              aria-label={`${eventMeta?.stage === "ARCHIVED" ? "예약 확인" : "실행할 예약"} ${eventMeta?.manualDue ?? 0}건`}
+              title="예약 시각이 지난 수동 예약입니다. 자동 발송되지 않습니다."
+            >
+              예약 {eventMeta?.manualDue}
+            </span>
+          ) : null}
+        </>
+      );
+    }
+    return null;
+  }
+
+  function renderEventHubs() {
+    return EVENT_HUBS.map((hub) => {
+      const pages = visiblePagesForHub(hub);
+      if (!pages.length) return null;
+      const href = hubHref(hub, pages);
+      if (!href) return null;
+      const hubActive = activeHubId === hub.id;
+      const hasSubnav = pages.length > 1;
+      const currentSubpage = currentPageId && pages.includes(currentPageId) ? currentPageId : null;
+      const headerIsCurrent = !hasSubnav && currentSubpage !== null;
+      const hubBadge = hub.id === "participants" && showPendingApprovalBadge && (!hubActive || !hasSubnav)
+        ? (
+          <span className="nav-badge" role="img" aria-label={`승인 대기 ${eventMeta?.pending ?? 0}건`}>
+            {eventMeta?.pending}
+          </span>
+        )
+        : null;
+      return (
+        <Fragment key={hub.id}>
+          <Link
+            className={`console-nav-item console-hub-item${headerIsCurrent ? " active" : ""}`}
+            data-active={hubActive && hasSubnav ? "true" : undefined}
+            href={href}
+            aria-current={headerIsCurrent ? "page" : undefined}
+          >
+            <span>{hub.label}</span>
+            {hubBadge}
+            {hasSubnav ? (
+              <svg className="console-hub-chevron" aria-hidden="true" focusable="false" viewBox="0 0 12 12">
+                <path d="M3 4.5 6 7.5 9 4.5" />
+              </svg>
+            ) : null}
+          </Link>
+          {hasSubnav && hubActive ? (
+            <div className="console-hub-subnav">
+              {pages.map((pageId) => {
+                const pageLink = pageHref(pageId);
+                if (!pageLink) return null;
+                const active = currentPageId === pageId;
+                return (
+                  <Link
+                    key={pageId}
+                    className={`console-nav-item console-hub-subitem${active ? " active" : ""}`}
+                    href={pageLink}
+                    aria-current={active ? "page" : undefined}
+                  >
+                    <span>{CONSOLE_PAGES[pageId].label}</span>
+                    {renderPageBadges(pageId)}
+                  </Link>
+                );
+              })}
+            </div>
+          ) : null}
+        </Fragment>
+      );
+    });
+  }
+
+  /**
+   * Phone menu: the complete event map, hubs as section labels and every
+   * visible page as a 44px row. Unlike the rail (which expands only the hub
+   * the operator is in) the menu is opened to jump anywhere, so nothing is
+   * hidden behind another tap. Hub labels are not links: the row below
+   * already names the same destination, and two links to one page read as a
+   * duplicate.
+   */
+  function renderMobileEventMenu() {
+    if (!showCurrentEvent || !eventId) return null;
+    const date = eventMeta?.date ?? "";
+    const facts = [
+      /^\d{4}-\d{2}-\d{2}$/.test(date) ? formatShortDate(date) : "",
+      eventMeta?.venue ?? "",
+    ].filter(Boolean).join(" · ");
+    const meta = [stageLabel(eventMeta?.stage ?? ""), facts].filter(Boolean).join(" · ");
+    return (
+      <div className="console-menu-event">
+        <p className="console-menu-section-label">현재 행사</p>
+        <p className="console-menu-event-name">{shellData?.currentEventName}</p>
+        <p className="console-menu-event-meta">{meta}</p>
+        <div className="console-menu-hubs">
+          {EVENT_HUBS.map((hub) => {
+            const pages = visiblePagesForHub(hub);
+            if (!pages.length) return null;
+            return (
+              <div key={hub.id} className="console-menu-hub-group">
+                <p
+                  className="console-menu-hub"
+                  data-active={activeHubId === hub.id ? "true" : undefined}
+                >
+                  {hub.label}
+                </p>
+                <div className="console-menu-subnav">
+                  {pages.map((pageId) => {
+                    const pageLink = pageHref(pageId);
+                    if (!pageLink) return null;
+                    const active = currentPageId === pageId;
+                    return (
+                      <Link
+                        key={pageId}
+                        className="console-menu-subitem"
+                        href={pageLink}
+                        aria-current={active ? "page" : undefined}
+                      >
+                        <span>{CONSOLE_PAGES[pageId].label}</span>
+                        {renderPageBadges(pageId)}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  function renderEventBranch(eventsLinkId: string) {
     return showCurrentEvent && eventId ? (
       <>
         <div
@@ -743,7 +920,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
               <strong title={shellData?.currentEventName ?? undefined}>{shellData?.currentEventName}</strong>
             </div>
           )}
-          {renderEventSubnav()}
+          <div className="console-hub-list">{renderEventHubs()}</div>
         </div>
         {shellData && shellData.triage.length ? (
           <div className="nav-triage" role="group" aria-label="손봐야 할 행사">
@@ -770,56 +947,6 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     ) : null;
   }
 
-  function renderEventSubnav() {
-    const eventMeta = shellData?.currentEventMeta;
-    const showPendingApprovalBadge = Boolean(
-      showOperatorNavBadges && eventMeta && eventMeta.pending > 0 &&
-      isApprovalQueueRelevant(eventMeta.stage)
-    );
-    const showMessageAttentionBadge = Boolean(
-      showOperatorNavBadges && eventMeta && eventMeta.messageAttention > 0
-    );
-    const participantsHref = showPendingApprovalBadge
-      ? `${eventBasePath}/participants?status=PENDING`
-      : `${eventBasePath}/participants`;
-    const messagesHref = showMessageAttentionBadge
-      ? `${eventBasePath}/messages?attention=1#history-heading`
-      : `${eventBasePath}/messages`;
-
-    const features = shellData?.currentEventFeatures ?? [];
-    let previousGroup: string | undefined;
-    return EVENT_PAGE_IDS.map((pageId) => {
-      if (pageId === "photos" && !shellData?.canManageEvidencePhotos) return null;
-      if (pageId === "rewards" && !features.includes("reward")) return null;
-      if (pageId === "draws" && !features.some((feature) => feature === "draw" || feature === "poll")) return null;
-      if (pageId === "programs" && !features.some((feature) =>
-        ["poll", "quiz", "qa", "draw", "survey", "stamp", "photo", "board"].includes(feature))) return null;
-      const href = pageId === "participants" ? participantsHref
-        : pageId === "messages" ? messagesHref
-        : consolePageHref(pageId, eventId ?? undefined);
-      if (!href) return null;
-      const active = activePageId === pageId;
-      const group = EVENT_PAGE_GROUPS[pageId];
-      const showGroup = Boolean(group && group !== previousGroup);
-      previousGroup = group;
-      return (
-        <Fragment key={pageId}>
-        {showGroup ? <span className="nav-work-group-label">{group}</span> : null}
-        <Link key={pageId} className={`console-nav-item console-subnav-item${active ? " active" : ""}`}
-          href={href} aria-current={active ? "page" : undefined}>
-          {CONSOLE_PAGES[pageId].label}
-          {pageId === "participants" && showPendingApprovalBadge ? (
-            <span className="nav-badge" role="img" aria-label={`승인 대기 ${eventMeta?.pending ?? 0}건`}>{eventMeta?.pending}</span>
-          ) : null}
-          {pageId === "messages" && showMessageAttentionBadge ? (
-            <span className="nav-badge" role="img" aria-label={`발송 확인 ${eventMeta?.messageAttention ?? 0}건`}>{eventMeta?.messageAttention}</span>
-          ) : null}
-        </Link>
-        </Fragment>
-      );
-    });
-  }
-
   const organizationPermissionSummary = shellData
     ? [
         canSeeEvents ? "행사" : null,
@@ -835,7 +962,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           ref={operatorMenuRef}
           id="operator-menu"
           className="operator-menu"
-          role="menu"
+          role="dialog"
           aria-label="운영자 메뉴"
           hidden={!operatorMenuOpen}
           style={operatorMenuOpen ? operatorMenuPosition ?? { visibility: "hidden" } : undefined}
@@ -853,17 +980,20 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
               <span>{organizationPermissionSummary}</span>
             </p>
           </div>
+          <div className="operator-organization-panel"><OrganizationSwitcher confirmLeave={confirmLeave} /></div>
+          <Link className="operator-menu-item" href="/account/email">
+            <span>내 계정 이메일 인증</span>
+          </Link>
           {canManageTeam ? (
             <Link
               className="operator-menu-item"
-              role="menuitem"
               href={consolePageHref("team")!}
             >
               <span>{CONSOLE_PAGES.team.label}</span>
             </Link>
           ) : null}
           {canManageIntegrations ? (
-            <button type="button" className="operator-menu-item" role="menuitem" disabled>
+            <button type="button" className="operator-menu-item" disabled>
               <span>서비스 연동</span><span className="operator-menu-status">준비 중</span>
             </button>
           ) : null}
@@ -873,7 +1003,6 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           <button
             type="button"
             className="operator-menu-item operator-menu-logout"
-            role="menuitem"
             onClick={logout}
             disabled={logoutPending}
           >
@@ -897,14 +1026,12 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
               ref={globalTriggerRef}
               type="button"
               className="console-global-trigger"
+              aria-label="메뉴"
               aria-expanded={globalMenuOpen}
               aria-controls="console-global-menu"
               onClick={handleGlobalMenuTrigger}
             >
-              <span>메뉴</span>
-              <svg className="console-global-trigger-chevron" aria-hidden="true" focusable="false" viewBox="0 0 12 12">
-                <path d="M3 4.5 6 7.5 9 4.5" />
-              </svg>
+              <BarsIcon className="console-global-trigger-bars" />
             </button>
             <nav
               ref={globalMenuRef}
@@ -916,6 +1043,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
             >
               {renderEventsLink("workspace-events-link-global", "행사 목록")}
               {renderClientsLink("workspace-clients-link-global")}
+              {renderMobileEventMenu()}
             </nav>
           </div>
         ) : null}
@@ -928,7 +1056,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           type="button"
           className="operator-block operator-menu-trigger operator-mobile-trigger"
           aria-label={`계정 메뉴, ${userName}, ${shellData?.roleLabel ?? "역할 확인 중"}`}
-          aria-haspopup="menu"
+          aria-haspopup="dialog"
           aria-expanded={operatorMenuOpen}
           aria-controls="operator-menu"
           onClick={handleOperatorMenuTrigger}
@@ -940,10 +1068,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           {renderEventsLink("workspace-events-link")}
           {renderEventBranch("workspace-events-link")}
           {renderClientsLink("workspace-clients-link")}
-        </nav>
-
-        <nav className="side-nav mobile-event-nav" aria-label="현재 행사 메뉴">
-          {renderEventBranch("workspace-events-link", true)}
+          {renderTeamLink("workspace-team-link")}
         </nav>
 
         <div className="sidebar-bottom">
@@ -951,7 +1076,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
             ref={operatorTriggerRef}
             type="button"
             className="operator-block operator-menu-trigger"
-            aria-haspopup="menu"
+            aria-haspopup="dialog"
             aria-expanded={operatorMenuOpen}
             aria-controls="operator-menu"
             onClick={handleOperatorMenuTrigger}
@@ -959,6 +1084,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
             <span className="operator-avatar" aria-hidden="true">{avatar}</span>
             <span className="operator-identity">
               <strong>{userName}</strong>
+              <small>{organization.context?.organizationName ?? "운영사"} · {shellData?.roleLabel ?? "역할 확인 중"}</small>
             </span>
             <span className="operator-menu-caret" aria-hidden="true" />
           </button>
@@ -969,6 +1095,12 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
 
       <div className="console-content-shell">
         <main id="main-content" className="console-main" tabIndex={-1}>
+          <OrganizationContextNotice confirmLeave={confirmLeave} />
+          {!organization.context ? <section className={freshnessStyles.selectionRequired}>
+            <h1>작업할 운영사를 선택하세요</h1>
+            <p>소속 운영사와 그곳에서 맡은 역할을 확인한 뒤 이동합니다.</p>
+            <OrganizationSwitcher />
+          </section> : <>
           {shellError ? (
             <div className="console-shell-error" role="alert">
               <span>내비게이션 정보를 불러오지 못했습니다. 화면 일부가 제한되어 보일 수 있습니다.</span>
@@ -977,7 +1109,22 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
               </button>
             </div>
           ) : null}
-          <div key={eventId ?? "organization"} className="console-route-content">{children}</div>
+          {updateAvailable && !organization.changed && !["participants", "overview", "events"].includes(currentPage?.pageId ?? "") ? (
+            <div className={freshnessStyles.notice} role="status">
+              <span>다른 작업의 변경이 있을 수 있습니다. 작성 중인 입력은 그대로 유지했습니다.</span>
+              <button type="button" className="button button-secondary" onClick={() => {
+                if (!confirmLeave()) return;
+                invalidateConsoleReads();
+                setPageRevision((value) => value + 1);
+                setUpdateAvailable(false);
+              }}>최신 내용 불러오기</button>
+            </div>
+          ) : null}
+          <fieldset disabled={organization.changed} className={freshnessStyles.contextLock}>
+            <legend className="sr-only">{organization.context.organizationName} 작업 화면{organization.changed ? " · 문맥 변경으로 잠김" : ""}</legend>
+            <div key={`${eventId ?? "organization"}:${pageRevision}`} className="console-route-content">{children}</div>
+          </fieldset>
+          </>}
         </main>
       </div>
     </div>

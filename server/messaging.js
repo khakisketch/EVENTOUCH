@@ -423,6 +423,23 @@ function failAllRecipients(dispatch, reason, error) {
 // polling loop would need one to be reliable.
 async function resolveDelivery(database, provider, eventId, { now = new Date().toISOString() } = {}) {
   if (!provider || typeof provider.pollResults !== 'function') return { skipped: true };
+  // Delivery polling talks to the deployment supplier account, which is
+  // legacy-org bound: a new org's campaigns are never resolved through it.
+  // (The worker only enumerates legacy events; this guards the operator
+  // retry path that reaches here with an explicit event id.)
+  // Skip only on positive evidence: an explicit non-legacy org. A lookup
+  // failure (or a double without the column) keeps the previous behaviour so
+  // infra noise can neither send through the wrong account nor silently drop
+  // a campaign the operator is watching.
+  try {
+    const owner = await database.query('SELECT org_id FROM events WHERE id = $1 LIMIT 1', [String(eventId)]);
+    const orgId = owner.rows[0] ? owner.rows[0].org_id : null;
+    if (orgId && String(orgId) !== String(require('./tenancy').LEGACY_ORG_ID)) {
+      return { skipped: true, reason: 'ORG_ISOLATED' };
+    }
+  } catch (error) {
+    // Fall through to the historical path.
+  }
 
   const row = await database.query('SELECT payload FROM event_workspaces WHERE event_id = $1', [eventId]);
   if (!row.rows[0]) return { skipped: true };
@@ -434,14 +451,27 @@ async function resolveDelivery(database, provider, eventId, { now = new Date().t
   if (!pending.length) return { resolved: 0, pending: 0 };
 
   let resolvedCount = 0;
+  let pendingCount = 0;
   const updates = [];
 
   for (const message of pending) {
-    let ids = message.deliveries.map((delivery) => delivery.solapiMessageId).filter(Boolean);
-
-    // The id map can be missing when the group read failed at dispatch time.
-    // Recovering it here keeps the campaign resolvable instead of stuck.
-    if (!ids.length && message.providerGroupId && typeof provider.groupMessages === 'function') {
+    // Identity of the campaign drive this resolve observed. The workspace was
+    // read without a lock and the supplier calls above ran unlocked, so a
+    // manual poll, a worker, or an operator retry may have re-driven the
+    // campaign meanwhile. The write below re-checks this fingerprint and
+    // skips rather than clobbering newer state with a stale outcome.
+    const observed = {
+      providerGroupId: message.providerGroupId || null,
+      dispatchedAt: message.dispatchedAt || null,
+      attempts: Number(message.attempts) || 0,
+      deliveryCount: Array.isArray(message.deliveries) ? message.deliveries.length : 0,
+    };
+    // The id map can be missing or partial when the group read failed at
+    // dispatch time. Recover whatever is missing here so one unreadable id
+    // does not pin the whole campaign in SENDING forever: known ids stay
+    // pollable even when the recovery read itself fails.
+    const missing = message.deliveries.filter((delivery) => !delivery.solapiMessageId);
+    if (missing.length && message.providerGroupId && typeof provider.groupMessages === 'function') {
       try {
         const group = await provider.groupMessages(message.providerGroupId);
         if (group && group.ok) {
@@ -449,16 +479,17 @@ async function resolveDelivery(database, provider, eventId, { now = new Date().t
           for (const value of Object.values(group.messages || {})) {
             byNumber.set(String(value.to || '').replace(/[^0-9]/g, ''), value.messageId);
           }
-          for (const delivery of message.deliveries) {
+          for (const delivery of missing) {
             const id = byNumber.get(phoneForRecipient(message, delivery.participantId));
             if (id) delivery.solapiMessageId = id;
           }
-          ids = message.deliveries.map((delivery) => delivery.solapiMessageId).filter(Boolean);
         }
       } catch (error) {
-        // Fall through: the campaign stays SENDING and will be retried.
+        // Fall through with the ids already known: the missing deliveries
+        // stay SENDING and a later resolve retries the recovery.
       }
     }
+    const ids = message.deliveries.map((delivery) => delivery.solapiMessageId).filter(Boolean);
 
     if (!ids.length) continue;
     const polled = await provider.pollResults(ids);
@@ -496,7 +527,8 @@ async function resolveDelivery(database, provider, eventId, { now = new Date().t
       message.deliveredCount = delivered;
       message.failedCount = failed;
       message.deliveryUnconfirmed = true;
-      updates.push(message);
+      updates.push({ message, base: observed, resolved: false });
+      pendingCount += 1;
       continue;
     }
 
@@ -506,33 +538,51 @@ async function resolveDelivery(database, provider, eventId, { now = new Date().t
     message.failedCount = failed;
     message.deliveryUnconfirmed = false;
     message.resolvedAt = now;
-    updates.push(message);
+    updates.push({ message, base: observed, resolved: true });
   }
 
   if (updates.length) {
+    const applied = new Set();
     await database.transaction(async (client) => {
       const locked = await client.query('SELECT payload FROM event_workspaces WHERE event_id = $1 FOR UPDATE', [eventId]);
       if (!locked.rows[0]) return;
       const current = typeof locked.rows[0].payload === 'string' ? JSON.parse(locked.rows[0].payload) : locked.rows[0].payload;
       if (!current || !Array.isArray(current.messages)) return;
-      for (const updated of updates) {
+      for (const { message: updated, base } of updates) {
         const target = current.messages.find((item) => item.id === updated.id);
         if (!target) continue;
+        // Re-driven since the unlocked read (retry, cancel, or a concurrent
+        // worker): the stale outcome must not overwrite the newer drive.
+        // The campaign is still some worker's business, so it counts as
+        // pending rather than resolved.
+        const sameDrive = target.status === 'SENDING'
+          && (target.providerGroupId || null) === (base.providerGroupId || null)
+          && (target.dispatchedAt || null) === (base.dispatchedAt || null)
+          && (Number(target.attempts) || 0) === (Number(base.attempts) || 0)
+          && (Array.isArray(target.deliveries) ? target.deliveries.length : 0) === (Number(base.deliveryCount) || 0);
+        if (!sameDrive) continue;
         target.status = updated.status;
         target.deliveries = updated.deliveries;
         target.deliveredCount = updated.deliveredCount;
         target.failedCount = updated.failedCount;
         target.deliveryUnconfirmed = updated.deliveryUnconfirmed;
         target.resolvedAt = updated.resolvedAt;
+        applied.add(updated.id);
       }
       await client.query(
         'UPDATE event_workspaces SET payload = $2::jsonb, revision = revision + 1, updated_at = now() WHERE event_id = $1',
         [eventId, JSON.stringify(current)]
       );
     });
+    for (const { message: updated, resolved } of updates) {
+      if (!applied.has(updated.id) && resolved) {
+        resolvedCount -= 1;
+        pendingCount += 1;
+      }
+    }
   }
 
-  return { resolved: resolvedCount, pending: updates.length - resolvedCount, total: pending.length, messages: updates };
+  return { resolved: resolvedCount, pending: pendingCount, total: pending.length, messages: updates.map((entry) => entry.message) };
 }
 
 module.exports.dispatchCampaign = dispatchCampaign;

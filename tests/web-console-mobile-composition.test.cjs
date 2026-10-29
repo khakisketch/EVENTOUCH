@@ -194,16 +194,52 @@ test('shared section nav wraps to fully reachable rows on mobile', () => {
   // No horizontal scroll hiding destinations at phone widths.
   assert.doesNotMatch(css, /\.sectionNavList\s*\{[^}]*overflow-x:\s*auto/su);
   assert.doesNotMatch(css, /\.sectionNavList\s*\{[^}]*flex-wrap:\s*nowrap/su);
+  // 표현 고정 갱신(동작 불변): 2열 중앙 그리드(repeat(auto-fit,minmax(140px)))
+  // 는 앵커임에도 분할 탭처럼 보여 3개 항목 화면에서 3번째가 단독 행에
+  // 고립됐다. 좌정렬 플로우 목차로 바꿔 모든 목적지를 스크롤 발견 없이
+  // 노출하고 고아 행·버튼 모방을 없앤다. 44px·앵커·현재 표시 유지.
   assert.match(
     css,
-    /\.sectionNavList\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(/su
+    /\.sectionNavList\s*\{[^}]*display:\s*flex[^}]*flex-wrap:\s*wrap/su
   );
-  // Links fill their cell as purposeful segmented buttons, keep the 44px
-  // floor, and wrap inside the cell instead of cutting phrases.
+  assert.match(css, /\.sectionNavList\s*\{[^}]*justify-content:\s*flex-start/su);
+  assert.doesNotMatch(
+    css,
+    /@media\s*\(max-width:\s*768px\)[\s\S]*?\.sectionNavList\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(/su
+  );
+  // Links read as TOC entries, not segmented buttons: intrinsic width,
+  // left aligned, wrap inside instead of cutting phrases. Idle links stay
+  // ink — only the current section takes brand color + rule (주황 탭 무리
+  // 해소, 선택 1곳 원칙). Weight joins the current marker, never color alone.
   assert.match(css, /\.sectionNavLink\s*\{[^}]*min-height:\s*44px/su);
-  assert.match(css, /\.sectionNavLink\s*\{[^}]*width:\s*100%/su);
-  assert.match(css, /\.sectionNavLink\s*\{[^}]*box-sizing:\s*border-box/su);
+  // 320px 실측 계열: 짧은 목차(공지·부스)가 40px로 목표 미달이었으므로
+  // 너비 하한도 44px로 고정한다. 좌정렬·래핑·앵커 동작은 그대로.
+  assert.match(css, /\.sectionNavLink\s*\{[^}]*min-width:\s*44px/su);
+  assert.match(css, /\.sectionNavLink\s*\{[^}]*color:\s*var\(--ink\)/su);
+  assert.match(css, /\.sectionNavLink\[aria-current="location"\]\s*\{[^}]*color:\s*var\(--brand-text\)/su);
+  assert.match(css, /\.sectionNavLink\[aria-current="location"\]\s*\{[^}]*border-bottom-color:\s*var\(--brand\)/su);
+  assert.match(css, /\.sectionNavLink\[aria-current="location"\]\s*\{[^}]*font-weight:\s*800/su);
+  assert.match(css, /@media\s*\(max-width:\s*768px\)[\s\S]*?\.sectionNavLink\s*\{[^}]*text-align:\s*left/su);
+  assert.match(css, /@media\s*\(max-width:\s*768px\)[\s\S]*?\.sectionNavLink\s*\{[^}]*width:\s*auto/su);
   assert.match(css, /\.sectionNavLink\s*\{[^}]*white-space:\s*normal/su);
+  // Visible index context: content/reports name their scope above the row
+  // (operations keeps its own move guide); SR naming stays on the nav's
+  // aria-label alone via aria-hidden, so nothing is announced twice.
+  const content = read('app/console/events/[id]/content/ContentWorkspace.tsx');
+  assert.match(content, /navIndexLabel[^>]*aria-hidden="true">콘텐츠 목차/u);
+  assert.match(content, /label="콘텐츠 구역"/u);
+  const reports = read('app/console/events/[id]/reports/ReportsWorkspace.tsx');
+  assert.match(reports, /navIndexLabel[^>]*aria-hidden="true">결과 목차/u);
+  assert.match(reports, /label="결과 보고서 구역"/u);
+  // Draws and the attendee page editor get the same quiet index signal in
+  // their own scope words (no new buttons, no behavior change): the shared
+  // ink/current-ink grammar already covers all consumers via CSS.
+  const draws = read('app/console/events/[id]/draws/DrawsWorkspace.tsx');
+  assert.match(draws, /navIndexLabel[^>]*aria-hidden="true">추첨·투표 목차/u);
+  assert.match(draws, /label="추첨·투표 구역"/u);
+  const theme = read('app/console/events/[id]/page/ThemeWorkspace.tsx');
+  assert.match(theme, /navIndexLabel[^>]*aria-hidden="true">참가자 페이지 목차/u);
+  assert.match(theme, /label="참가자 페이지 구역"/u);
   // API and semantics are untouched: native anchors, list markup, label.
   const nav = read('app/console/console-ui/ConsoleSectionNav.tsx');
   assert.match(nav, /<nav className=\{styles\.sectionNav\} aria-label=\{label \?\? "섹션 바로가기"\}>/u);

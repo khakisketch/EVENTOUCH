@@ -13,6 +13,7 @@ const {
   insertAccount,
   sessionCookie,
   requestJson,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 
 const test = databaseUrl
@@ -28,7 +29,7 @@ let cookie;
 before(async () => {
   if (!databaseUrl) return;
   harness = await startApiHarness();
-  await insertAccount(harness.database, {
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,
     id: agencyId,
     role: 'AGENCY',
     name: 'Org Schema Agency',
@@ -87,9 +88,16 @@ test('organization tables exist with their keys and checks', async () => {
 
 test('existing paths ignore organization rows', async () => {
   // With org rows present, the org-agnostic endpoints answer as before.
+  // The agency holds two memberships by now, so the write carries the
+  // explicit session context; the legacy record shape is unchanged.
+  const me = await requestJson(harness.baseUrl, '/api/auth/me', { cookie });
   const created = await requestJson(harness.baseUrl, '/api/clients', {
     cookie,
     method: 'POST',
+    headers: {
+      'x-eventouch-organization-id': LEGACY_ORG,
+      'x-eventouch-context-version': String(me.json.user.contextVersion),
+    },
     body: { commandId: `org-client-${suffix}`, name: `Org Schema Client ${suffix}` },
   });
   assert.equal(created.status, 201);

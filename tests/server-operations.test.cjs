@@ -13,6 +13,7 @@ const {
   sessionCookie,
   requestJson,
   deleteFixtureRows,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 
 const test = databaseUrl
@@ -97,7 +98,7 @@ async function createFixture({
     stampMode,
     allowReentry,
   };
-  await insertEvent(harness.database, {
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,
     id,
     slug,
     payload: {
@@ -203,7 +204,7 @@ before(async () => {
     ['staff', 'STAFF', '현장 스태프'],
     ['otherStaff', 'STAFF', '다른 스태프'],
   ]) {
-    await insertAccount(harness.database, {
+    await insertAccount(harness.database, {orgId: LEGACY_ORG,
       id: accountIds[key],
       role,
       name,

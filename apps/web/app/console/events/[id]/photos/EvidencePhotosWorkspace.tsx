@@ -12,6 +12,8 @@ import ConsoleSection from "../../../console-ui/ConsoleSection";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import { useConsoleDraftGuard } from "../../../console-draft-guard";
 import styles from "./evidence-photos.module.css";
+import { consoleFetch } from "../../../../../lib/console-api";
+import { canWriteEvent } from "../../../../../lib/event-capabilities";
 
 const EVIDENCE_SECTIONS = [
   { key: "SPACE", label: "공간구성" },
@@ -72,7 +74,9 @@ type WorkspaceState =
       eventName: string;
       eventMeta?: string;
       archived: boolean;
-      canManage: boolean;
+      role: string;
+      userId: string;
+      memberships: Array<{ accountId: string; eventId: string; write?: unknown }>;
       photos: EvidencePhoto[];
     };
 
@@ -202,8 +206,16 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
   const actionCommandIdsRef = useRef(new Map<string, string>());
 
   // 보관된 행사는 서버가 모든 쓰기를 거부하므로(409) 쓰기 affordance를
-  // 잠그고 보기·내보내기만 둡니다. 역할·멤버십 게이트는 그대로 둡니다.
-  const writeLocked = state.kind === "ready" && state.archived;
+  // 잠그고 보기·내보내기만 둡니다. 증빙 사진 쓰기(evidence.photo.*)는 결과
+  // 쓰기 권한이 필요하며, 서버가 매번 다시 확인합니다. 읽기는 행사 구성원
+  // 자격이면 열립니다.
+  const photosCapability = state.kind === "ready"
+    ? { role: state.role, userId: state.userId, memberships: state.memberships, eventId }
+    : null;
+  const canWritePhotos = photosCapability
+    ? canWriteEvent(photosCapability, "evidence.photo.add")
+    : false;
+  const writeLocked = state.kind === "ready" && (state.archived || !canWritePhotos);
 
   // Cross-route guard predicate: any upload job that is not settled in the
   // archive (staged drafts, queued/in-flight work, failed retries). Settled
@@ -261,8 +273,8 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
     if (!silent) setState({ kind: "loading" });
     try {
       const [meResponse, bootstrapResponse] = await Promise.all([
-        fetch("/api/auth/me", { cache: "no-store" }),
-        fetch("/api/bootstrap", { cache: "no-store" }),
+        consoleFetch("/api/auth/me", { cache: "no-store" }),
+        consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store" }),
       ]);
       if (requestId !== loadSequenceRef.current) return;
       if (meResponse.status === 401 || bootstrapResponse.status === 401) {
@@ -285,12 +297,18 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
       const role = text(user.role);
       const userId = text(user.id);
       const memberships = Array.isArray(bootstrap.memberships)
-        ? bootstrap.memberships.map(asRecord).filter((item): item is Record<string, unknown> => item !== null)
+        ? bootstrap.memberships
+            .map(asRecord)
+            .filter((item): item is Record<string, unknown> => item !== null)
+            .flatMap((item) => (
+              typeof item.accountId === "string" && typeof item.eventId === "string"
+                ? [{ accountId: item.accountId, eventId: item.eventId, write: item.write }]
+                : []
+            ))
         : [];
       const isMember = memberships.some((membership) =>
         membership.accountId === userId && membership.eventId === eventId
       );
-      const canManage = role === "AGENCY" || (role === "MANAGER" && isMember);
       const events = Array.isArray(bootstrap.events)
         ? bootstrap.events.map(asRecord).filter((item): item is Record<string, unknown> => item !== null)
         : [];
@@ -309,7 +327,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
         : [];
       const clientName = clients.find((client) => client.id === event.clientId)?.name;
       const venue = asRecord(workspace.venue);
-      const photos: EvidencePhoto[] = canManage && Array.isArray(workspace.evidencePhotos)
+      const photos: EvidencePhoto[] = (role === "AGENCY" || isMember) && Array.isArray(workspace.evidencePhotos)
         ? workspace.evidencePhotos.flatMap((value) => {
             const item = asRecord(value);
             const image = asRecord(item?.image);
@@ -347,7 +365,9 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
           venue: text(venue?.name),
         }),
         archived: text(event.stage).toUpperCase() === "ARCHIVED",
-        canManage,
+        role,
+        userId,
+        memberships,
         photos,
       });
     } catch {
@@ -380,7 +400,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
       if (!job.uploadedFile) {
         updateJob(job.id, { status: "uploading", error: null });
         const uploadUrl = new URLSearchParams({ name: job.file.name, commandId: job.uploadCommandId });
-        const uploadResponse = await fetch(
+        const uploadResponse = await consoleFetch(
           `/api/events/${encodeURIComponent(eventId)}/files?${uploadUrl.toString()}`,
           { method: "POST", headers: { "content-type": job.contentType }, body: job.file }
         );
@@ -398,7 +418,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
       }
 
       updateJob(job.id, { status: "recording", error: null });
-      const recordResponse = await fetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
+      const recordResponse = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -507,7 +527,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
     commandId: string,
     fallback: string
   ) {
-    const response = await fetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
+    const response = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ commandId, command, payload }),
@@ -604,7 +624,10 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
     );
   }
 
-  if (!state.canManage) {
+  // Reads stay open to every event member; only the upload/move/delete
+  // affordances above need the results grant (writeLocked covers both the
+  // archived stage and the missing grant).
+  if (!(state.role === "AGENCY" || state.memberships.some((membership) => membership.accountId === state.userId && membership.eventId === eventId))) {
     return (
       <ConsolePage pageId="photos" eventId={eventId}>
         <ConsoleStatePanel
@@ -644,6 +667,9 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
           {failure ? <ConsoleFeedback kind="error">{failure}</ConsoleFeedback> : null}
           {state.archived ? (
             <ConsoleFeedback kind="warning">보관된 행사는 읽기 전용입니다. 사진을 보고 내려받을 수 있지만 올리거나 옮길 수 없습니다.</ConsoleFeedback>
+          ) : null}
+          {!state.archived && !canWritePhotos ? (
+            <ConsoleFeedback kind="warning">증빙 사진 올리기·옮기기·삭제는 결과 쓰기 권한이 필요합니다. 보기·내보내기는 그대로 할 수 있습니다.</ConsoleFeedback>
           ) : null}
         </>
       }
@@ -749,6 +775,10 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
             disabled={queueBusy || writeLocked}
             tabIndex={-1}
             aria-hidden="true"
+            // The visible "파일 찾아보기" button is the single keyboard entry
+            // point; this input stays programmatic-only by design. The label
+            // below keeps it named for assistive tech instead of labelless.
+            aria-label="증빙 사진 파일 선택 (PNG, JPG, WebP)"
             onChange={(event) => {
               selectFiles(event.currentTarget.files);
               event.currentTarget.value = "";
@@ -977,7 +1007,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
           ) : null}
           </>
         ) : (
-          <p className={styles.empty}>이 구간에는 아직 등록된 사진이 없습니다.</p>
+          <p className={styles.empty}>이 구간에는 아직 등록된 사진이 없습니다. 위 업로드 영역에서 파일을 선택해 첫 사진을 올리세요.</p>
         )}
       </ConsoleSection>
 

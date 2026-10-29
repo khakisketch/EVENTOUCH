@@ -14,11 +14,14 @@ export type PublishedField = {
 
 export type RegisterData = {
   name: string;
+  stage: string;
   consentText: string;
   consentVersion: number;
   registrationOpen: boolean;
   publishedVersion: number;
   verificationRequired: boolean;
+  approvalRequired: boolean;
+  paymentPending: boolean;
   fields: PublishedField[];
 };
 
@@ -52,16 +55,21 @@ async function loadRegisterData(slug: string): Promise<RegisterData | null> {
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`행사 정보를 불러오지 못했습니다 (${res.status})`);
   const data = (await res.json()) as {
-    event?: { name?: unknown } | null;
+    event?: { name?: unknown; stage?: unknown; features?: unknown } | null;
     workspace?: Record<string, unknown> | null;
   };
   if (!data.event) return null;
   const workspace = data.workspace ?? {};
+  // Stage already ships in this payload: an ENDED event with the intake
+  // flag still on must render the closed state, because the public signup
+  // writer rejects ENDED (participants writer rule). No API change.
+  const eventStage = typeof data.event.stage === "string" ? data.event.stage.toUpperCase() : "";
   const rawFields = Array.isArray(workspace.publishedFields)
     ? workspace.publishedFields
     : [];
   return {
     name: typeof data.event.name === "string" ? data.event.name : "",
+    stage: eventStage,
     consentText:
       typeof workspace.consentText === "string" ? workspace.consentText : "",
     consentVersion:
@@ -74,6 +82,13 @@ async function loadRegisterData(slug: string): Promise<RegisterData | null> {
         ? workspace.publishedVersion
         : 0,
     verificationRequired: workspace.verificationRequired === true,
+    approvalRequired: workspace.approvalRequired === true,
+    // Paid-flow mirror of the participants writer rule (payment feature
+    // plus a positive price): signup has a PENDING payment, regardless of
+    // approval status, so the form must not promise an immediately usable ticket.
+    // Read-only copy input; no payment behavior is added (v1-excluded).
+    paymentPending: (Array.isArray(data.event.features) && data.event.features.includes('payment'))
+      && Number(workspace.price) > 0,
     fields: rawFields
       .map(asField)
       .filter((field): field is PublishedField => field !== null),
@@ -110,7 +125,7 @@ export default async function RegisterPage({
       </main>
     );
   }
-  if (!data.registrationOpen) {
+  if (!data.registrationOpen || data.stage === "ENDED") {
     const recoveryUnavailable = verificationMode === "mock" || verificationMode === "none";
     return (
       <main id="main-content" tabIndex={-1} className="site-page registration-page registration-state">
@@ -162,6 +177,8 @@ export default async function RegisterPage({
         consentText={data.consentText}
         formVersion={data.publishedVersion}
         verificationRequired={data.verificationRequired}
+        approvalRequired={data.approvalRequired}
+        paymentPending={data.paymentPending}
         recoveryBlocked={verificationMode === "none" || verificationMode === "mock"}
       />
     </main>

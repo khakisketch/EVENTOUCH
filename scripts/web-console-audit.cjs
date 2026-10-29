@@ -16,7 +16,7 @@
 // simulate=true, so nothing can actually send.
 //
 // Evidence: full-page captures under
-// /tmp/opencode/eventouch-captures/console-unification/ (never in the repo).
+// /tmp/eventouch-private-<uid>/eventouch-captures/console-unification-<run>/ (never in the repo; fresh per run).
 // Print is covered by DOM/print-emulation simulation, never a physical
 // printer.
 //
@@ -30,6 +30,7 @@ process.env.EVENTOUCH_SMS_MOCK = '1';
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const { prepareCaptureDir, ensureCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = require('./capture-dir.cjs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const axeSource = require('axe-core').source;
@@ -40,7 +41,7 @@ const { auditLongListBoundaries } = require('./web-console-boundaries.cjs');
 const BLOCKING = new Set(['serious', 'critical']);
 const CAPTURE_DIR = process.env.EVENTOUCH_CAPTURE_ROOT
   ? path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'console')
-  : '/tmp/opencode/eventouch-captures/console-unification';
+  : defaultCaptureDir(`console-unification-${runStamp()}`);
 const VIEWPORTS = [
   { width: 1280, height: 900 },
   { width: 390, height: 844 },
@@ -54,9 +55,9 @@ const SCREENS = [
   { key: 'clients', path: '/console/clients', title: '고객사', scope: 'organization', marker: { css: '#client-list-heading' } },
   { key: 'team', path: '/console/team', title: '팀·권한', scope: 'organization', marker: { css: '#team-members' } },
   { key: 'overview', path: '/console/events/:id', title: '운영 현황', scope: 'event', marker: { css: '#event-metrics-heading' } },
-  { key: 'participants', path: '/console/events/:id/participants', title: '참가자', scope: 'event', marker: { css: 'input[placeholder*="이름·소속·연락처 검색"]' } },
+  { key: 'participants', path: '/console/events/:id/participants', title: '참가자 명단', scope: 'event', marker: { css: 'input[placeholder*="이름·소속·연락처 검색"]' } },
   { key: 'import', path: '/console/events/:id/participants/import', title: '명단 가져오기', scope: 'event', marker: { css: '#participant-import-file-heading' } },
-  { key: 'messages', path: '/console/events/:id/messages', title: '메시지', scope: 'event', marker: { css: '#campaign-title' } },
+  { key: 'messages', path: '/console/events/:id/messages', title: '메시지 발송', scope: 'event', marker: { css: '#history-heading' } },
   { key: 'operations', path: '/console/events/:id/operations', title: '현장 운영', scope: 'event', marker: { css: '#ops-desks' } },
   { key: 'programs', path: '/console/events/:id/programs', title: '참여 프로그램', scope: 'event', marker: { role: 'button', name: '프로그램 만들기' } },
   { key: 'draws', path: '/console/events/:id/draws', title: '추첨·투표', scope: 'event', marker: { css: '#draws-vote' } },
@@ -236,6 +237,7 @@ async function extendFixtureSeed(fixture) {
     const workspace = helpers.emptyWorkspace();
     workspace.participants = [readonlyPerson(tag)];
     await helpers.insertEvent(harness.database, {
+      orgId: helpers.LEGACY_ORG,
       id,
       slug: id,
       payload: {
@@ -251,6 +253,7 @@ async function extendFixtureSeed(fixture) {
   // direct-access visibility check (no permission is invented for them).
   const outsiderId = `console-audit-outsider-${fixture.suffix}`;
   await helpers.insertAccount(harness.database, {
+    orgId: helpers.LEGACY_ORG,
     id: outsiderId, role: 'STAFF', name: '통합 감사 외부 스태프', email: `${outsiderId}@example.test`,
   });
   const outsiderCookie = await helpers.sessionCookie(harness, outsiderId);
@@ -400,7 +403,7 @@ async function saveShot(page, name) {
 async function assertResponseLossRetry(page, helpers, baseUrl, eventId, eventName, {
   label, screen, openName, fields, submitName, routePattern,
   matchRequest, failureText, dialogShot, readRecords, isNewRecord,
-  guardSelector, guardPathname,
+  guardSelector, guardPathname, hubSelector, hubPathname,
 }) {
   await page.goto(`${baseUrl}${screenPath(screen, eventId)}`, { waitUntil: 'networkidle', timeout: 30000 });
   await page.waitForTimeout(800);
@@ -497,6 +500,24 @@ async function assertResponseLossRetry(page, helpers, baseUrl, eventId, eventNam
     unexpectedConfirm = confirm.message();
     await confirm.dismiss();
   });
+  // Hub rail: a collapsed hub renders no sublink, and the phone rail is
+  // gone entirely, so reach the destination the way an operator does —
+  // through the hub header on desktop, through the menu on phones. The
+  // dialog listener above stays attached, so a false guard on the
+  // intermediate step fails the phase exactly like one on the last step.
+  if (hubSelector && hubPathname && !(await page.locator(guardSelector).first().isVisible().catch(() => false))) {
+    if (await page.locator('.desktop-side-nav').isVisible()) {
+      await page.locator(hubSelector).first().click();
+      await page.waitForFunction(
+        (expected) => window.location.pathname === expected || window.location.pathname.endsWith(expected),
+        hubPathname,
+        { timeout: 15000 },
+      );
+    } else {
+      await page.locator('.console-global-trigger').click();
+      await page.locator('#console-global-menu').waitFor({ state: 'visible', timeout: 10000 });
+    }
+  }
   await page.locator(guardSelector).first().click();
   await page.waitForTimeout(800);
   if (unexpectedConfirm !== null) {
@@ -514,8 +535,9 @@ async function assertResponseLossRetry(page, helpers, baseUrl, eventId, eventNam
 }
 
 async function main() {
-  fs.mkdirSync(CAPTURE_DIR, { recursive: true });
-  fs.mkdirSync(path.join(CAPTURE_DIR, 'sweep'), { recursive: true });
+  prepareCaptureDir(CAPTURE_DIR);
+  process.env.TMPDIR = ensureRunTmpDir(CAPTURE_DIR);
+  ensureCaptureDir(path.join(CAPTURE_DIR, 'sweep'));
   let fixture;
   try {
     fixture = await startAuditFixture();
@@ -602,9 +624,35 @@ async function main() {
               if (!await zone.locator('h3').isVisible()) throw new Error('card title left the tinted zone');
             }
           }
+          if (screen.key === 'team' && viewport.width === 1280) {
+            // A wide action rail used to squeeze some long member names and
+            // emails into a tiny column even on desktop. Check the rendered
+            // identity column rather than merely asserting zero page overflow.
+            const widths = await page.locator('ul[aria-label="구성원 목록"] > li').evaluateAll((rows) =>
+              rows.map((row) => row.querySelector('[class*="memberMain"]')?.getBoundingClientRect().width ?? 0));
+            if (!widths.length || Math.min(...widths) < 200) {
+              throw new Error(`team identity column is compressed at desktop width: ${JSON.stringify(widths)}`);
+            }
+          }
+          if (screen.key === 'overview' && viewport.width === 1280) {
+            // A full-width queue should not separate a short task from its
+            // corresponding action by hundreds of blank pixels. Measure the
+            // painted hint, not its potentially stretched grid container.
+            const queue = page.locator('section[aria-labelledby="event-now-heading"]');
+            const hint = queue.getByText('검토가 필요한 신청입니다.', { exact: true });
+            const action = queue.getByRole('link', { name: '승인 대기 처리', exact: true });
+            const hintRight = await hint.evaluate((element) => {
+              const range = document.createRange(); range.selectNodeContents(element);
+              return range.getBoundingClientRect().right;
+            });
+            const box = await action.boundingBox();
+            if (!box || box.x < hintRight || box.x - hintRight > 120) {
+              throw new Error(`overview task and action are visually detached: ${JSON.stringify({ hintRight, action: box })}`);
+            }
+          }
           const geometry = await headerGeometry(page);
           if (!geometry) throw new Error('header geometry unreadable');
-          geometries.push({ viewport: tag, scope: screen.scope, ...geometry });
+          geometries.push({ viewport: tag, scope: screen.scope, screen: screen.key, ...geometry });
           const box = await overflow(page);
           if (box.scrollWidth > box.innerWidth + 1) {
             throw new Error(`horizontal overflow ${box.scrollWidth}px > ${box.innerWidth}px`);
@@ -621,9 +669,157 @@ async function main() {
       }
       await context.close();
     }
+    // The empty schedule is short Korean UI copy, not an unbreakable token.
+    // Measure the painted glyph lines so it cannot end as "추가하세 / 요".
+    for (const width of [320, 390]) {
+      await check(`content-empty-wrap@${width}`, async () => {
+        const context = await newContext({ viewport: { width, height: 844 }, reducedMotion: 'reduce' });
+        try {
+          await context.addCookies([{ name: 'etko_session', value: ownerSession, httpOnly: true, sameSite: 'Lax', url: baseUrl }]);
+          const page = await context.newPage();
+          await page.goto(`${baseUrl}${screenPath(SCREENS.find((screen) => screen.key === 'content'), eventId)}`, { waitUntil: 'networkidle' });
+          const empty = page.locator('section[aria-labelledby="content-program"]').getByText('등록된 일정이 없습니다.', { exact: false });
+          await empty.waitFor();
+          const broken = await empty.evaluate((node) => {
+            const range = document.createRange(), chars = [];
+            const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+            let text;
+            while ((text = walker.nextNode())) {
+              for (let i = 0; i < text.data.length; i++) {
+                range.setStart(text, i); range.setEnd(text, i + 1);
+                const rect = range.getClientRects()[0];
+                chars.push({ char: text.data[i], top: rect ? Math.round(rect.top) : null });
+              }
+            }
+            return chars.flatMap((char, index) => {
+              const previous = chars[index - 1];
+              return previous && char.top !== null && previous.top !== null && char.top !== previous.top && /[가-힣]/.test(previous.char) && /[가-힣]/.test(char.char)
+                ? [`${previous.char}/${char.char}`] : [];
+            });
+          });
+          if (broken.length) throw new Error(`content empty copy breaks inside Korean words: ${JSON.stringify(broken)}`);
+          await empty.scrollIntoViewIfNeeded();
+          await page.screenshot({ path: path.join(CAPTURE_DIR, `content-empty-${width}.png`) });
+        } finally {
+          await context.close();
+        }
+      });
+    }
+    // Keep the registration policy's real help text legible at the widths
+    // operators use. Reading painted character positions catches breaks such
+    // as "상 / 태" that page-level overflow checks cannot see.
+    for (const width of [320, 390, 1280]) {
+      await check(`settings-policy-wrap@${width}`, async () => {
+        const context = await newContext({ viewport: { width, height: width === 1280 ? 900 : 844 }, reducedMotion: 'reduce' });
+        try {
+          await context.addCookies([{ name: 'etko_session', value: ownerSession, httpOnly: true, sameSite: 'Lax', url: baseUrl }]);
+          const page = await context.newPage();
+          const screen = SCREENS.find((item) => item.key === 'settings');
+          await page.goto(`${baseUrl}${screenPath(screen, eventId)}`, { waitUntil: 'networkidle' });
+          await waitForMarker(page, screen.marker);
+          const hint = page.getByText('인증번호는 신청자의 휴대전화로 발송됩니다.', { exact: false });
+          await hint.waitFor();
+          const broken = await hint.evaluate((node) => {
+            const range = document.createRange(), chars = [];
+            const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+            let text;
+            while ((text = walker.nextNode())) {
+              for (let i = 0; i < text.data.length; i++) {
+                range.setStart(text, i); range.setEnd(text, i + 1);
+                const rect = range.getClientRects()[0];
+                chars.push({ char: text.data[i], top: rect ? Math.round(rect.top) : null });
+              }
+            }
+            return chars.flatMap((char, index) => {
+              const previous = chars[index - 1];
+              return previous && char.top !== null && previous.top !== null && char.top !== previous.top && /[가-힣]/.test(previous.char) && /[가-힣]/.test(char.char)
+                ? [`${previous.char}/${char.char}`] : [];
+            });
+          });
+          if (broken.length) throw new Error(`settings policy copy breaks inside Korean words: ${JSON.stringify(broken)}`);
+          const box = await overflow(page);
+          if (box.scrollWidth > box.innerWidth + 1) throw new Error('settings policy causes horizontal overflow');
+          await hint.scrollIntoViewIfNeeded();
+          await page.screenshot({ path: path.join(CAPTURE_DIR, `settings-policy-${width}.png`) });
+        } finally {
+          await context.close();
+        }
+      });
+    }
+    // The draw form's selected-group chips are dynamically created; they do
+    // not exist in the ordinary sweep. Measure their real button boxes and
+    // center hit targets on small screens, then remove one with the keyboard.
+    for (const width of [320, 390]) {
+      await check(`draw-filter-chips@${width}`, async () => {
+        const context = await newContext({ viewport: { width, height: 844 }, reducedMotion: 'reduce' });
+        try {
+          await context.addCookies([{ name: 'etko_session', value: ownerSession, httpOnly: true, sameSite: 'Lax', url: baseUrl }]);
+          const page = await context.newPage();
+          await page.goto(`${baseUrl}${screenPath(SCREENS.find((screen) => screen.key === 'draws'), eventId)}`, { waitUntil: 'networkidle' });
+          await waitForMarker(page, SCREENS.find((screen) => screen.key === 'draws').marker);
+          // Check painted text lines, not only CSS or element overflow. The
+          // execution premise previously split Korean words on the phone.
+          const wrap = await page.evaluate(() => {
+            const nodes = [...document.querySelectorAll('[id^="run-blockers-"], #stage-screen-prerequisite')].filter(e => e.getClientRects().length);
+            const range = document.createRange(), broken = [];
+            for (const node of nodes) {
+              const chars = [];
+              const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+              let text;
+              while ((text = walker.nextNode())) {
+                for (let i = 0; i < text.data.length; i++) {
+                  range.setStart(text, i); range.setEnd(text, i + 1);
+                  const rect = range.getClientRects()[0];
+                  chars.push({ char: text.data[i], top: rect ? Math.round(rect.top) : null });
+                }
+              }
+              for (let i = 1; i < chars.length; i++) {
+                if (chars[i].top !== null && chars[i - 1].top !== null && chars[i].top !== chars[i - 1].top && /[가-힣]/.test(chars[i - 1].char) && /[가-힣]/.test(chars[i].char)) {
+                  broken.push(`${chars[i - 1].char}/${chars[i].char}`);
+                }
+              }
+            }
+            return { checked: nodes.length, broken };
+          });
+          if (!wrap.checked || wrap.broken.length) throw new Error(`Korean draw premise breaks inside words: ${JSON.stringify(wrap)}`);
+          await page.locator('summary').filter({ hasText: '추첨 프로그램 설정' }).click();
+          const input = page.locator('#draw-groups-input');
+          await input.fill('알파 운영팀');
+          await input.press('Enter');
+          await input.fill('베타 운영팀');
+          await input.press('Enter');
+          const first = page.getByRole('button', { name: '알파 운영팀 제외', exact: true });
+          const second = page.getByRole('button', { name: '베타 운영팀 제외', exact: true });
+          await first.scrollIntoViewIfNeeded();
+          await second.scrollIntoViewIfNeeded();
+          const boxes = [];
+          for (const button of [first, second]) {
+            const box = await button.boundingBox();
+            if (!box || box.width < 44 || box.height < 44) throw new Error(`chip button below 44px: ${JSON.stringify(box)}`);
+            const hit = await button.evaluate((element) => {
+              const rect = element.getBoundingClientRect();
+              const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+              return target === element || element.contains(target);
+            });
+            if (!hit) throw new Error('chip center hit lands outside its own button');
+            boxes.push(box);
+          }
+          const [a, b] = boxes;
+          if (a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height) {
+            throw new Error('adjacent chip buttons overlap');
+          }
+          await page.screenshot({ path: path.join(CAPTURE_DIR, `draw-filter-chips-${width}.png`) });
+          await first.focus();
+          await page.keyboard.press('Enter');
+          if (await first.count() !== 0 || !await second.isVisible()) throw new Error('keyboard removal changed the wrong chip');
+        } finally {
+          await context.close();
+        }
+      });
+    }
     await check('frame/common-header-geometry', async () => {
-      // The chrome around domain bodies does not differ: same viewport and
-      // scope share header x/width/font-size within 2px.
+      // Shared alignment remains fixed. The approved B participant workbench
+      // uses the compact 28px title; other pages retain their current scale.
       const groups = new Map();
       for (const entry of geometries) {
         const key = `${entry.viewport}|${entry.scope}`;
@@ -639,7 +835,8 @@ async function main() {
               throw new Error(`${key}: header ${field} ${entry[field]} vs ${first[field]}`);
             }
           }
-          if (entry.fontSize !== first.fontSize) throw new Error(`${key}: H1 font-size ${entry.fontSize} vs ${first.fontSize}`);
+          const expectedSize = ['participants', 'messages'].includes(entry.screen) ? '28px' : first.fontSize;
+          if (entry.fontSize !== expectedSize) throw new Error(`${key}: H1 font-size ${entry.fontSize} vs ${expectedSize}`);
         }
       }
     });
@@ -673,7 +870,10 @@ async function main() {
               filterGap: approval.x - label.right, countGap: count.top - title.getBoundingClientRect().bottom };
           });
           if (stage.background !== 'rgba(0, 0, 0, 0)' || stage.border !== '0px' || stage.radius !== '0px' || stage.height < 44) throw new Error('stage filter regained card styling or lost its touch height');
-          if (Math.abs(stage.filterGap - 12) > 1 || stage.countGap > 4.5) throw new Error('home filter or title-summary spacing drifted');
+          // The compact directory intentionally uses the 8px spacing token
+          // between the stage and pending filters (previous layout used 12px).
+          // Keep the relationship and title-summary bound measurable.
+          if (Math.abs(stage.filterGap - 8) > 1 || stage.countGap > 4.5) throw new Error(`home filter or title-summary spacing drifted: ${JSON.stringify(stage)}`);
           const heading = page.locator('section[aria-labelledby="console-event-directory"]');
           if (!await heading.getByRole('button', { name: '달력', exact: true }).isVisible()) throw new Error('view switch detached from list');
           await shot('events');
@@ -809,8 +1009,9 @@ async function main() {
           await toggle.click();
           await page.locator('#roster-filter-reset').click();
           if (!await selected.isChecked()) throw new Error('filter reset discarded selection');
+          await page.getByText('명단 도구', { exact: true }).click();
           const download = page.waitForEvent('download');
-          await page.getByRole('button', { name: /목록 CSV/ }).click();
+          await page.getByRole('button', { name: /CSV 내보내기/ }).click();
           if (!(await download).suggestedFilename().endsWith('.csv')) throw new Error('CSV no longer downloads');
           await go('participants', '?status=PENDING');
           if (await toggle.getAttribute('aria-expanded') !== 'true' || !await page.getByLabel('상태별 보기', { exact: true }).isVisible()) throw new Error('pending deep link does not disclose its filter');
@@ -859,7 +1060,8 @@ async function main() {
         });
         await check(`phone/preview-status@${width}`, async () => {
           await go('attendeePage');
-          const status = page.getByText('실시간', { exact: true });
+          await page.getByRole('button', { name: '미리보기', exact: true }).click();
+          const status = page.locator('section[aria-labelledby="home-preview-heading"]').getByText('편집 중', { exact: true }).first();
           const box = await status.boundingBox();
           if (!box || box.height > 30 || box.width < 40) throw new Error('preview status squeezed into vertical Korean');
           await status.scrollIntoViewIfNeeded();
@@ -952,35 +1154,68 @@ async function main() {
     // dismiss stays with the value preserved, accept navigates. The theme
     // surface gets the same treatment as an additional guarded workspace.
     // A missing confirm is a real failure, never rerouted to an easier page.
-    const assertDraftGuard = async (page, { fromPath, toSuffix, inputSelector, draftValue, reasonFragment }) => {
+    const assertDraftGuard = async (page, { fromPath, toSuffix, viaSuffix, inputSelector, draftValue, reasonFragment }) => {
       await page.goto(`${baseUrl}${fromPath}`, { waitUntil: 'networkidle', timeout: 30000 });
       await page.locator(inputSelector).waitFor({ state: 'visible', timeout: 15000 });
       await page.locator(inputSelector).fill(draftValue);
-      const targetLink = page.locator(`.desktop-side-nav a[href$="${toSuffix}"]`).first();
-      let dialogMessage = null;
-      page.on('dialog', async (dialog) => {
-        dialogMessage = dialog.message();
-        await dialog.dismiss();
-      });
-      await targetLink.click();
-      await page.waitForTimeout(800);
-      if (!dialogMessage || !dialogMessage.includes(reasonFragment)) {
-        throw new Error(`cancel path: no draft confirm (saw ${JSON.stringify(dialogMessage)})`);
+      const cancelNav = async (link) => {
+        let dialogMessage = null;
+        const handler = async (dialog) => {
+          dialogMessage = dialog.message();
+          await dialog.dismiss();
+        };
+        page.on('dialog', handler);
+        try {
+          await link.click();
+          await page.waitForTimeout(800);
+        } finally {
+          page.removeAllListeners('dialog');
+        }
+        if (!dialogMessage || !dialogMessage.includes(reasonFragment)) {
+          throw new Error(`cancel path: no draft confirm (saw ${JSON.stringify(dialogMessage)})`);
+        }
+        if (new URL(page.url()).pathname !== fromPath) {
+          throw new Error(`cancel path: left the page to ${page.url()}`);
+        }
+        if ((await page.locator(inputSelector).inputValue()) !== draftValue) {
+          throw new Error('cancel path: draft input was not preserved');
+        }
+      };
+      const acceptNav = async (link, arrived) => {
+        page.on('dialog', async (dialog) => dialog.accept());
+        try {
+          await Promise.all([
+            page.waitForURL(arrived, { timeout: 15000 }),
+            link.click(),
+          ]);
+        } finally {
+          page.removeAllListeners('dialog');
+        }
+        return new URL(page.url()).pathname;
+      };
+      const direct = page.locator(`.desktop-side-nav a[href$="${toSuffix}"]`);
+      if (viaSuffix && (await direct.count()) === 0) {
+        // Hub rail: the destination subpage only renders once its hub is
+        // active, so the guard is exercised on the hub header first (same
+        // confirm hook, same assertions), then the subpage is reached clean.
+        const viaLink = page.locator(`.desktop-side-nav a[href$="${viaSuffix}"]`).first();
+        await cancelNav(viaLink);
+        const landedVia = await acceptNav(viaLink, new RegExp(`${viaSuffix.replace(/\//g, '\\/')}($|[?#])`));
+        if (!landedVia.endsWith(viaSuffix)) throw new Error(`accept path: hub landed on ${landedVia}`);
+        const targetLink = page.locator(`.desktop-side-nav a[href$="${toSuffix}"]`).first();
+        await targetLink.click();
+        await page.waitForFunction(
+          (expected) => window.location.pathname === expected || window.location.pathname.endsWith(expected),
+          toSuffix,
+          { timeout: 15000 },
+        );
+        if (!new URL(page.url()).pathname.endsWith(toSuffix)) throw new Error(`hub path: landed on ${page.url()}`);
+        return;
       }
-      if (new URL(page.url()).pathname !== fromPath) {
-        throw new Error(`cancel path: left the page to ${page.url()}`);
-      }
-      if ((await page.locator(inputSelector).inputValue()) !== draftValue) {
-        throw new Error('cancel path: draft input was not preserved');
-      }
-      page.removeAllListeners('dialog');
-      page.on('dialog', async (dialog) => dialog.accept());
+      const targetLink = direct.first();
+      await cancelNav(targetLink);
       const arrived = new RegExp(`${toSuffix.replace(/\//g, '\\/')}($|[?#])`);
-      await Promise.all([
-        page.waitForURL(arrived, { timeout: 15000 }),
-        targetLink.click(),
-      ]);
-      const landed = new URL(page.url()).pathname;
+      const landed = await acceptNav(targetLink, arrived);
       if (!landed.endsWith(toSuffix)) throw new Error(`accept path: landed on ${page.url()}`);
     };
     await check('guard/settings-dirty-navigate', async () => {
@@ -995,6 +1230,7 @@ async function main() {
         await assertDraftGuard(page, {
           fromPath: settingsPath,
           toSuffix: '/messages',
+          viaSuffix: '/participants',
           inputSelector: '#set-name',
           draftValue: `${original} · 가드 검증`,
           reasonFragment: '저장하지 않은 행사 설정',
@@ -1012,6 +1248,7 @@ async function main() {
         await assertDraftGuard(page, {
           fromPath: `/console/events/${encodeURIComponent(eventId)}/page`,
           toSuffix: '/messages',
+          viaSuffix: '/participants',
           inputSelector: '#home-intro',
           draftValue: `가드 검증 소개 ${Date.now()}`,
           reasonFragment: '저장하지 않은 변경',
@@ -1378,6 +1615,8 @@ async function main() {
           isNewRecord: (notice) => notice && notice.title === noticeTitle,
           guardSelector: 'a[href$="/messages"]:visible',
           guardPathname: `/console/events/${encodeURIComponent(eventId)}/messages`,
+          hubSelector: '.desktop-side-nav a.console-hub-item[href$="/participants"]',
+          hubPathname: `/console/events/${encodeURIComponent(eventId)}/participants`,
         });
       } finally {
         await page.close();
@@ -1403,6 +1642,8 @@ async function main() {
           isNewRecord: (desk) => desk && desk.name === deskName,
           guardSelector: 'a[href$="/messages"]:visible',
           guardPathname: `/console/events/${encodeURIComponent(eventId)}/messages`,
+          hubSelector: '.desktop-side-nav a.console-hub-item[href$="/participants"]',
+          hubPathname: `/console/events/${encodeURIComponent(eventId)}/participants`,
         });
       } finally {
         await page.close();
@@ -1445,7 +1686,7 @@ async function main() {
         if (await directionDialog.getByRole('button', { name: '데스크 저장' }).isEnabled()) throw new Error('direction change saved without confirmation');
         await directionDialog.locator('#desk-direction-confirm').check();
         await directionDialog.getByRole('button', { name: '데스크 저장' }).click();
-        await page.waitForFunction(() => !document.querySelector('[role="dialog"]'), null, { timeout: 10000 });
+        await page.waitForFunction(() => ![...document.querySelectorAll('[role="dialog"]')].some((element) => element instanceof HTMLElement && element.offsetParent !== null), null, { timeout: 10000 });
         const desks = (await readBootstrap(helpers, baseUrl, extended.ownerCookie)).workspaces[eventId].desks;
         const saved = desks.find((desk) => desk.name === `${deskName} 수정`);
         if (!saved || saved.action !== 'OUT' || saved.mode !== 'tablet' || saved.open !== false) {
@@ -1462,9 +1703,9 @@ async function main() {
     await check('ops/map-draft-publish', async () => {
       const fixture = path.join(CAPTURE_DIR, 'ops-map-fixture.png');
       fs.writeFileSync(fixture, Buffer.from(
-        'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAOklEQVR42u3PMQEAAAgDoJdc/9C3gR9JgVx3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3dw8t5QABvTqR5QAAAABJRU5ErkJggg==',
+        'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAKUlEQVR4nO3NMQEAAAjDMMC/52ECvlRA00nqs3m9AwAAAAAAAAAAgMMWx/EDPS4YA2MAAAAASUVORK5CYII=',
         'base64'
-      ));
+      ), { mode: 0o600 });
       const context = await ownerCtxFor({ width: 1280, height: 900 });
       const page = await context.newPage();
       try {
@@ -1473,9 +1714,13 @@ async function main() {
         if (!await page.locator('#ops-booth-map').count()) throw new Error('booth map section missing');
         await page.locator('section[aria-labelledby="ops-booth-map"] summary').click();
         // `headingId` labels the section; the file input lives inside it.
-        await page.locator('section[aria-labelledby="ops-booth-map"] input[type="file"]').setInputFiles(fixture);
+        // A sandboxed browser may not share the host's /tmp namespace.
+        await page.locator('section[aria-labelledby="ops-booth-map"] input[type="file"]').setInputFiles({
+          name: 'ops-map-fixture.png', mimeType: 'image/png', buffer: fs.readFileSync(fixture),
+        });
         const saveDraft = page.getByRole('button', { name: '초안 저장' });
         await saveDraft.waitFor({ timeout: 15000 });
+        await page.getByRole('img', { name: '부스 배치도', exact: true }).evaluate((image) => image.decode());
         await saveDraft.click();
         await page.getByText('초안이 아직 게시되지 않았습니다.', { exact: false }).first().waitFor({ timeout: 15000 });
         await page.getByRole('button', { name: '게시', exact: true }).click();
@@ -1537,7 +1782,7 @@ async function main() {
       const qrShot = path.join(CAPTURE_DIR, 'attendee/booth-qr.png');
       const qrPadded = path.join(CAPTURE_DIR, 'attendee/booth-qr-padded.png');
       const qrVideo = path.join(CAPTURE_DIR, 'attendee/booth-qr.y4m');
-      fs.mkdirSync(path.dirname(qrShot), { recursive: true });
+      ensureCaptureDir(path.dirname(qrShot));
       const staffContext = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
       await staffContext.addCookies([{ name: 'etko_session', value: sessionValue(fixture.staff.cookie), httpOnly: true, sameSite: 'Lax', url: baseUrl }]);
       const staffPage = await staffContext.newPage();
@@ -1566,15 +1811,23 @@ async function main() {
       execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-loop', '1', '-i', qrPadded,
         '-vf', 'scale=600:600:flags=neighbor', '-t', '10', '-r', '10', '-pix_fmt', 'yuv420p', qrVideo]);
       const { chromium } = loadPlaywright();
-      const scanBrowser = await chromium.launch({
-        ...launchOptions(),
-        args: [
-          '--use-fake-ui-for-media-stream',
-          '--use-fake-device-for-media-stream',
-          `--use-file-for-fake-video-capture=${qrVideo}`,
-        ],
-      });
+      // Native Chromium sees CAPTURE_DIR directly. A sandboxed executable can
+      // opt into a shared, browser-readable temporary media root. Only our
+      // random directory/file is created there and it is removed on every exit.
+      const mediaRoot = process.env.EVENTOUCH_CAMERA_MEDIA_ROOT;
+      const mediaDir = mediaRoot ? fs.mkdtempSync(path.join(path.resolve(mediaRoot), 'eventouch-camera-')) : null;
+      const cameraVideo = mediaDir ? path.join(mediaDir, 'booth-qr.y4m') : qrVideo;
+      let scanBrowser;
       try {
+        if (mediaDir) fs.copyFileSync(qrVideo, cameraVideo);
+        scanBrowser = await chromium.launch({
+          ...launchOptions(),
+          args: [
+            '--use-fake-ui-for-media-stream',
+            '--use-fake-device-for-media-stream',
+            `--use-file-for-fake-video-capture=${cameraVideo}`,
+          ],
+        });
         const context = await scanBrowser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
         const page = await context.newPage();
         page.on('pageerror', (error) => failures.push(`pageerror attendee scan: ${error.message}`));
@@ -1597,7 +1850,11 @@ async function main() {
         await saveShot(page, 'attendee/booth-scan-done.png');
         await context.close();
       } finally {
-        await scanBrowser.close();
+        if (scanBrowser) await scanBrowser.close();
+        if (mediaDir) {
+          if (fs.existsSync(cameraVideo)) fs.unlinkSync(cameraVideo);
+          fs.rmdirSync(mediaDir);
+        }
       }
     });
 
@@ -1855,12 +2112,14 @@ async function main() {
       try {
         await page.goto(`${baseUrl}/console/events/${eventId}/participants?status=PENDING`, { waitUntil: 'networkidle', timeout: 30000 });
         await assertConsoleScreen(page, SCREENS.find((screen) => screen.key === 'participants'), eventId, eventName);
-        const pendingBoxes = page.getByRole('checkbox', { name: /선택$/ });
+        // Count participant records, not the new page-selection header.
+        const pendingBoxes = page.getByRole('table', { name: /참가자 목록/ }).locator('tbody').getByRole('checkbox', { name: /선택$/ });
         const count = await pendingBoxes.count();
         if (count < 2) throw new Error(`expected several waiting participants, got ${count}`);
         await pendingBoxes.nth(0).check();
         await pendingBoxes.nth(1).check();
-        await page.getByRole('button', { name: '선택 승인', exact: true }).click();
+        if (!(await page.locator('#roster-approve-selected').innerText()).includes('승인 대기 2명 승인')) throw new Error('bulk action does not show the pending target count');
+        await page.locator('#roster-approve-selected').click();
         await page.getByText(/명을 승인했습니다/).first().waitFor({ timeout: 15000 });
         const after = await readBootstrap(helpers, baseUrl, extended.ownerCookie);
         const waiting = after.workspaces[eventId].participants.filter((person) => person.status === 'PENDING');
@@ -1887,8 +2146,30 @@ async function main() {
             if (await trigger.count()) throw new Error('staff was offered an empty or unauthorized global menu');
           } else {
             await trigger.click();
-            const links = page.locator('#console-global-menu').getByRole('link');
-            if (await links.count() !== 1 || await links.first().innerText() !== '행사 목록') throw new Error('manager global destinations exceed the existing permission projection');
+            const menu = page.locator('#console-global-menu');
+            await menu.waitFor({ state: 'visible', timeout: 10000 });
+            const links = menu.getByRole('link');
+            // The hub rail replaced the horizontal event strip: the phone
+            // menu carries the whole permitted map, so it holds more than
+            // the org root alone. The root escape stays first, and every
+            // other destination must stay inside the accessible event —
+            // no cross-event leakage, no unauthorized org destinations.
+            if (await links.count() < 2 || await links.first().innerText() !== '행사 목록') {
+              throw new Error('manager global menu lost its list escape or event map');
+            }
+            const eventBase = `/console/events/${encodeURIComponent(eventId)}`;
+            for (const link of await links.all()) {
+              const href = await link.getAttribute('href');
+              if (href !== '/console' && !(href && href.startsWith(eventBase))) {
+                throw new Error(`manager global destination escapes the permitted scope: ${href}`);
+              }
+            }
+            if (!await menu.getByText('현재 행사', { exact: true }).count()) {
+              throw new Error('manager global menu names no current event section');
+            }
+            if (!await menu.getByRole('link', { name: '메시지', exact: true }).count()) {
+              throw new Error('manager global menu lost the event map subpages');
+            }
           }
           await page.screenshot({ path: path.join(CAPTURE_DIR, `phone-global-menu-${role.toLowerCase()}.png`) });
         } finally {
@@ -1921,7 +2202,7 @@ async function main() {
       try {
         await outsiderPage.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/participants`, { waitUntil: 'networkidle', timeout: 30000 });
         await outsiderPage.getByText('행사를 찾을 수 없거나 접근 권한이 없습니다.', { exact: false }).first().waitFor({ timeout: 15000 });
-        if (await outsiderPage.getByRole('link', { name: '파일로 등록' }).count()) {
+        if (await outsiderPage.getByRole('link', { name: '명단 가져오기' }).count()) {
           throw new Error('unassigned staff was offered the import action');
         }
       } finally {
@@ -1941,7 +2222,7 @@ async function main() {
         if (!await staffPage.locator('input[placeholder*="이름·소속·연락처 검색"]').count()) {
           throw new Error('assigned staff lost participant read access');
         }
-        if (await staffPage.getByRole('link', { name: '파일로 등록' }).count()) {
+        if (await staffPage.getByRole('link', { name: '명단 가져오기' }).count()) {
           throw new Error('assigned staff was offered the import action');
         }
         if (await staffPage.getByRole('checkbox', { name: '통합 확정 미입장 선택' }).count()) {
@@ -1972,7 +2253,7 @@ async function main() {
       try {
         await managerPage.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/participants`, { waitUntil: 'networkidle', timeout: 30000 });
         await waitForMarker(managerPage, SCREENS.find((screen) => screen.key === 'participants').marker);
-        if (!await managerPage.getByRole('link', { name: '파일로 등록' }).count()) {
+        if (!await managerPage.getByRole('link', { name: '명단 가져오기' }).count()) {
           throw new Error('assigned manager lost the import action');
         }
       } finally {
@@ -1986,7 +2267,7 @@ async function main() {
     fs.writeFileSync(path.join(CAPTURE_DIR, 'verification.json'), JSON.stringify({
       at: new Date().toISOString(), buildId: fs.readFileSync(path.join(__dirname, '../apps/web/.next/BUILD_ID'), 'utf8').trim(),
       viewports: VIEWPORTS, phases, failures, moderate,
-    }, null, 2));
+    }, null, 2), { mode: 0o600 });
   }
 
   for (const line of moderate) process.stdout.write(`[console-audit] moderate: ${line}\n`);

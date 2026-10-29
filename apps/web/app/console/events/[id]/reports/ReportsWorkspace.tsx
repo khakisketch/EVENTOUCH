@@ -6,7 +6,6 @@ import Link from "next/link";
 import { loginHrefForLocation } from "../../../../auth-redirect";
 import { closeHandoffHref, eventCloseHref } from "../../../console-event-close";
 import ConsolePage from "../../../console-ui/ConsolePage";
-import ConsoleToolbar from "../../../console-ui/ConsoleToolbar";
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
 import ConsoleFormActions from "../../../console-ui/ConsoleFormActions";
 import ConsoleDialog from "../../../console-ui/ConsoleDialog";
@@ -18,6 +17,8 @@ import { useConsoleDraftGuard } from "../../../console-draft-guard";
 import ui from "../../../console-ui/console-ui.module.css";
 import styles from "./reports.module.css";
 import EventCloseFlow from "./EventCloseFlow";
+import { consoleFetch } from "../../../../../lib/console-api";
+import { canWriteEvent } from "../../../../../lib/event-capabilities";
 
 type ReportSnapshot = {
   event?: { name?: unknown; date?: unknown; start?: unknown; end?: unknown; venue?: unknown; client?: unknown };
@@ -64,6 +65,9 @@ type Ready = {
   photoCount: number;
   photoCaptions: string[];
   reports: Report[];
+  role: string;
+  userId: string;
+  memberships: Array<{ accountId: string; eventId: string; write?: unknown }>;
 };
 
 type State = { kind: "loading" } | { kind: "failed"; message: string } | Ready;
@@ -110,7 +114,12 @@ function averageLabel(values: number[]): string | null {
 // 집계 기준 stays distinct from date-only shared/published stamps.
 function capturedLabel(value: unknown): string {
   if (typeof value !== "string" || !value) return "";
-  return value.slice(0, 16).replace("T", " ");
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).format(date);
 }
 
 function snapshotImageFileId(image: unknown): string {
@@ -145,32 +154,60 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
 
   // 보관된 행사는 서버가 모든 쓰기를 거부하므로(409) 쓰기 affordance를
   // 잠그고 읽기·내보내기(내용 보기·JSON 저장·인쇄)만 둡니다.
-  const writeLocked = state.kind === "ready" && state.archived;
+  // 보고서 작성·게시(report.*)는 결과 쓰기 권한이 필요하며, 서버가 매번 다시
+  // 확인합니다. 읽기와 마감 지도·전제 확인은 구성원 자격이면 열립니다.
+  const reportCapability = state.kind === "ready"
+    ? { role: state.role, userId: state.userId, memberships: state.memberships, eventId }
+    : null;
+  const canWriteReports = reportCapability
+    ? canWriteEvent(reportCapability, "report.create")
+    : false;
+  const writeLocked = state.kind === "ready" && (state.archived || !canWriteReports);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const res = await fetch("/api/bootstrap", { cache: "no-store" });
+        const [meRes, res] = await Promise.all([
+          consoleFetch("/api/auth/me", { cache: "no-store" }),
+          consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store" }),
+        ]);
         if (cancelled) return;
-        if (res.status === 401) {
+        if (meRes.status === 401 || res.status === 401) {
           router.push(
             loginHrefForLocation(window.location.pathname, window.location.search)
           );
           return;
         }
+        const me = (await meRes.json().catch(() => null)) as {
+          user?: { id?: unknown; role?: unknown } | null;
+        } | null;
         const data = (await res.json().catch(() => null)) as {
           state?: {
             events?: unknown;
             clients?: unknown;
             workspaces?: Record<string, Record<string, unknown>>;
+            memberships?: unknown;
           } | null;
         } | null;
         const bootstrap = data?.state;
-        if (!res.ok || !bootstrap) {
+        if (!meRes.ok || !res.ok || !me?.user || !bootstrap) {
           setState({ kind: "failed", message: "결과 데이터를 불러오지 못했습니다." });
           return;
         }
+        const role = typeof me.user.role === "string" ? me.user.role : "";
+        const userId = typeof me.user.id === "string" ? me.user.id : "";
+        // Raw membership grants ride along untouched (omitted write is full
+        // access, [] is read-only); the results probe below re-checks report
+        // commands through the capability helper. Reads stay open to members.
+        const memberships: Array<{ accountId: string; eventId: string; write?: unknown }> = Array.isArray(bootstrap.memberships)
+          ? bootstrap.memberships.flatMap((item) => {
+              if (typeof item !== "object" || item === null) return [];
+              const membership = item as Record<string, unknown>;
+              if (typeof membership.accountId !== "string" || typeof membership.eventId !== "string") return [];
+              return [{ accountId: membership.accountId, eventId: membership.eventId, write: membership.write }];
+            })
+          : [];
         const event = (Array.isArray(bootstrap.events) ? bootstrap.events : []).find(
           (item): item is Record<string, unknown> =>
             typeof item === "object" && item !== null &&
@@ -241,6 +278,9 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
             }),
             archived: text(event.stage).toUpperCase() === "ARCHIVED",
             stage: text(event.stage).toUpperCase(),
+            role,
+            userId,
+            memberships,
             // Live archive prerequisites, kept apart from the frozen
             // snapshots below: intake state and still-open programs are
             // what the settings stage gate checks before 보관.
@@ -407,7 +447,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
     setFailure(null);
     setNotice(null);
     try {
-      const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
+      const res = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ commandId, command, payload }),
@@ -454,6 +494,13 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
   }
 
   const articleRef = useRef<HTMLElement>(null);
+  // Local view only: A4 portrait (default) or 16:9 presentation width for
+  // the selected frozen article. It changes on-screen measure only — never
+  // the stored report version, payload, snapshot, or live analysis — and
+  // adds no command, receipt, or template editing. Printing always prints
+  // the frozen article as-is with natural pagination; paper orientation
+  // follows the browser print dialog (see the note below the toggle).
+  const [printLayout, setPrintLayout] = useState<"a4" | "wide">("a4");
 
   function cleanupReportPrint() {
     if (typeof document === "undefined") return;
@@ -466,13 +513,17 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
   // then clean up on afterprint and on unmount. cloneNode preserves module
   // classes and the inline cover color; nothing reloads and no new data,
   // assets or history tricks are involved. The live analysis section and
-  // any open modal stay out of the printed page by construction.
+  // any open modal stay out of the printed page by construction. Long
+  // content paginates instead of shrinking or clipping; the selected
+  // A4/16:9 view is stamped on the clone so the printed measure matches the
+  // screen choice, while paper orientation still follows the browser dialog.
   function printReport() {
     const source = articleRef.current;
     if (!source || typeof document === "undefined" || typeof window === "undefined") return;
     cleanupReportPrint();
     const clone = source.cloneNode(true) as HTMLElement;
     clone.id = "eventouch-report-print";
+    clone.dataset.layout = printLayout;
     // The clone must not duplicate in-page ids: assistive tech and fragment
     // navigation would otherwise see two owners for one id.
     clone.querySelectorAll("[id]").forEach((node) => node.removeAttribute("id"));
@@ -540,6 +591,17 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
   const sectionLabel = (id: string) =>
     SECTION_LABELS.find((section) => section.id === id)?.label ?? "항목 확인 필요";
 
+  // The deliverable owns its creation: the 만들기 control lives in the
+  // list header instead of a separate toolbar strip, so 결과 문서 reads
+  // as one unit (heading + action + rows) rather than label row + list.
+  function openReportCreate() {
+    closeCreateRef.current = false;
+    setDetailId(null);
+    setFailure(null);
+    dialogUnresolvedRef.current = false;
+    setCreateOpen(true);
+  }
+
   return (
     <ConsolePage
       pageId="reports"
@@ -547,22 +609,26 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
       eventName={state.eventName}
       meta={state.eventMeta}
       sectionNav={
-        <ConsoleSectionNav
-          items={
+        <div className={styles.navIndex}>
+          <p className={styles.navIndexLabel} aria-hidden="true">결과 목차</p>
+          <ConsoleSectionNav
+            label="결과 보고서 구역"
+            items={
             detail
               ? [
                    { id: "event-close", label: "행사 마감" },
-                   { id: "reports-analysis", label: "결과 분석" },
-                  { id: "reports-list", label: "보고서" },
+                   { id: "reports-list", label: "보고서" },
+                    { id: "reports-analysis", label: "결과 분석" },
                   { id: "report-detail", label: "보고서 내용" },
                 ]
               : [
                    { id: "event-close", label: "행사 마감" },
-                   { id: "reports-analysis", label: "결과 분석" },
-                  { id: "reports-list", label: "보고서" },
+                   { id: "reports-list", label: "보고서" },
+                    { id: "reports-analysis", label: "결과 분석" },
                 ]
           }
-        />
+          />
+        </div>
       }
       feedback={
         <>
@@ -570,6 +636,9 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
           {notice ? <ConsoleFeedback kind="success">{notice}</ConsoleFeedback> : null}
           {state.archived ? (
             <ConsoleFeedback kind="warning">보관된 행사는 읽기 전용입니다. 분석과 보고서를 볼 수 있지만 만들거나 바꿀 수 없습니다.</ConsoleFeedback>
+          ) : null}
+          {!state.archived && !canWriteReports ? (
+            <ConsoleFeedback kind="warning">보고서 만들기·게시는 결과 쓰기 권한이 필요합니다. 분석 보기와 마감 전제 확인은 그대로 할 수 있습니다.</ConsoleFeedback>
           ) : null}
         </>
       }
@@ -582,20 +651,48 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
         onCreate={() => { closeCreateRef.current = true; setDetailId(null); setFailure(null); dialogUnresolvedRef.current = false; setCreateOpen(true); }}
         onReview={() => { if (closeReportId) { detailFocusRef.current = true; setDetailId(closeReportId); setReloadTick((tick) => tick + 1); } }}
         onRefresh={() => setReloadTick((tick) => tick + 1)} />
-      <ConsoleToolbar actions={
-        <button type="button" className="button button-secondary" disabled={writeLocked}
-          onClick={() => { closeCreateRef.current = false; setDetailId(null); setFailure(null); dialogUnresolvedRef.current = false; setCreateOpen(true); }}>
-          보고서 만들기
-        </button>
-      } />
+      <ConsoleSection
+        headingId="reports-list"
+        title="보고서"
+        description="생성 시점 고정 · 파일 전달 후 공유 완료 기록"
+        action={(
+          <button type="button" className="button button-secondary" disabled={writeLocked}
+            onClick={openReportCreate}>
+            보고서 만들기
+          </button>
+        )}
+      >
+        {state.reports.length ? (
+          <ul className={ui.collection}>
+            {state.reports.map((report) => (
+              <li key={report.id} className={ui.recordRow}>
+                <div className={ui.recordMain}>
+                  <strong>{report.title}</strong>
+                  <p className={ui.recordMeta}>
+                    버전 {report.version}
+                    {capturedLabel(report.snapshot?.capturedAt) ? ` · 집계 기준 ${capturedLabel(report.snapshot?.capturedAt)}` : ""}
+                  </p>
+                </div>
+                <div className={ui.recordActions}>
+                  <span className={`${styles.badge} ${report.status === "PUBLISHED" ? styles.badgePublished : styles.badgeDraft}`}>
+                    {report.status === "PUBLISHED" ? "공유 완료 기록" : "초안"}
+                  </span>
+                  <button type="button" className="button button-secondary" onClick={() => { detailFocusRef.current = true; setDetailId(report.id); setPublishId(null); setSuccessorId(null); }}>
+                    내용 보기
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className={styles.help}>아직 보고서가 없습니다. 보고서 만들기 버튼으로 첫 버전을 생성하세요.</p>
+        )}
+      </ConsoleSection>
       <ConsoleSection
         headingId="reports-analysis"
         title="결과 분석"
         description={
-          <>
-            누적 입장은 한 번 이상 입장한 참가자 기준이며 재입장을 중복 집계하지 않습니다. 취소된 신청은 제외합니다.{" "}
-            <span className={styles.stamp}>조회 기준 시각 {loadedAt ? capturedLabel(loadedAt) : "확인 중"}</span>
-          </>
+          <span className={styles.stamp}>취소 제외 등록 기준 · 조회 기준 시각 {loadedAt ? capturedLabel(loadedAt) : "확인 중"}</span>
         }
         className={styles.analysisSubheads}
         action={
@@ -604,11 +701,14 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
           </button>
         }
       >
+        {/* Headline first: the outcome rate leads at double width, the
+            supporting counts follow. Same five values, same labels, only
+            reading order and proportion change. */}
         <div className={styles.metricGrid}>
-          <div className={styles.metricCard}><strong>{state.metrics.total}</strong><span>취소 제외 등록 (명)</span></div>
+          <div className={`${styles.metricCard} ${styles.metricLead}`}><strong>{state.metrics.rate}</strong><span>누적 입장률 (%)</span></div>
           <div className={styles.metricCard}><strong>{state.metrics.checked}</strong><span>누적 입장 (명)</span></div>
+          <div className={styles.metricCard}><strong>{state.metrics.total}</strong><span>취소 제외 등록 (명)</span></div>
           <div className={styles.metricCard}><strong>{state.metrics.inside}</strong><span>현재 입장 (명)</span></div>
-          <div className={styles.metricCard}><strong>{state.metrics.rate}</strong><span>누적 입장률 (%)</span></div>
           {state.metrics.pending > 0 ? (
             <div className={styles.metricCard}>
               <strong>{state.metrics.pending}</strong>
@@ -616,6 +716,12 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
             </div>
           ) : null}
         </div>
+        <details className={styles.analysisNote}>
+          <summary>집계 기준</summary>
+          <p>누적 입장은 한 번 이상 입장한 참가자 기준이며 재입장을 중복 집계하지 않습니다. 취소된 신청은 제외합니다.</p>
+        </details>
+        <details className={styles.analysisDetails}>
+          <summary>그룹·부스·프로그램별 상세 집계</summary>
         <div className={styles.subgroup}>
         <h3>등록 그룹</h3>
         {state.groups.length ? (
@@ -698,43 +804,34 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
         )}
         </div>
         <p className={styles.help}>승인 사진 {state.photoCount}건{state.photoCaptions.length ? ` · ${state.photoCaptions.slice(0, 3).join(" · ")}` : ""}</p>
-      </ConsoleSection>
-
-      <ConsoleSection
-        headingId="reports-list"
-        title="보고서"
-        description="생성 시점의 집계와 승인 사진을 보관하며, 이후 운영 변경은 자동 반영되지 않습니다. 고객사에 파일을 별도로 전달한 뒤 공유 완료를 기록하세요."
-      >
-        {state.reports.length ? (
-          <ul className={ui.collection}>
-            {state.reports.map((report) => (
-              <li key={report.id} className={ui.recordRow}>
-                <div className={ui.recordMain}>
-                  <strong>{report.title}</strong>
-                  <p className={ui.recordMeta}>
-                    버전 {report.version}
-                    {capturedLabel(report.snapshot?.capturedAt) ? ` · 집계 기준 ${capturedLabel(report.snapshot?.capturedAt)}` : ""}
-                  </p>
-                </div>
-                <div className={ui.recordActions}>
-                  <span className={`${styles.badge} ${report.status === "PUBLISHED" ? styles.badgePublished : styles.badgeDraft}`}>
-                    {report.status === "PUBLISHED" ? "공유 완료 기록" : "초안"}
-                  </span>
-                  <button type="button" className="button button-secondary" onClick={() => { detailFocusRef.current = true; setDetailId(report.id); setPublishId(null); setSuccessorId(null); }}>
-                    내용 보기
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className={styles.help}>아직 보고서가 없습니다.</p>
-        )}
+        </details>
       </ConsoleSection>
 
       {detail ? (
         <ConsoleSection headingId="report-detail" title="보고서 내용">
-          <article ref={articleRef} className={styles.reportDoc}>
+          <div className={styles.reportViewBar} role="group" aria-label="보고서 보기 방식">
+            <span className={styles.help}>보기: {printLayout === "wide" ? "발표용 16:9" : "A4 세로"}</span>
+            <button
+              type="button"
+              className="button button-secondary"
+              aria-pressed={printLayout === "a4"}
+              disabled={printLayout === "a4"}
+              onClick={() => setPrintLayout("a4")}
+            >
+              A4 세로
+            </button>
+            <button
+              type="button"
+              className="button button-secondary"
+              aria-pressed={printLayout === "wide"}
+              disabled={printLayout === "wide"}
+              onClick={() => setPrintLayout("wide")}
+            >
+              발표용 16:9
+            </button>
+          </div>
+          <p className={styles.help}>보기는 화면 표시만 바꿉니다. 저장된 보고서 내용·버전은 그대로이며, PPT를 만들거나 서식을 편집하지 않습니다. 인쇄·PDF는 아래 인쇄 버튼 뒤 브라우저 대화상자에서 용지 방향을 고르세요. 긴 내용은 페이지가 나뉘어 모두 인쇄됩니다.</p>
+          <article ref={articleRef} className={`${styles.reportDoc} ${printLayout === "wide" ? styles.reportDocWide : styles.reportDocA4}`} data-layout={printLayout}>
             <header className={styles.reportCover} style={{ borderColor: detail.color }}>
               <p className="eyebrow">EVENTOUCH · 결과 보고서</p>
               <h3>{detail.title}</h3>
@@ -744,7 +841,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                   {[text(detail.snapshot.event.name), text(detail.snapshot.event.date), text(detail.snapshot.event.client), text(detail.snapshot.event.venue)].filter(Boolean).join(" · ")}
                 </p>
               ) : null}
-              <p className={styles.help}>버전 {detail.version} · {detail.status === "PUBLISHED" ? `공유 완료 기록 · 편집 잠김${detail.publishedAt ? ` · ${detail.publishedAt.slice(0, 10)}` : ""}` : "초안"}</p>
+              <p className={styles.help}>버전 {detail.version} · {detail.status === "PUBLISHED" ? `공유 완료 기록 · 편집 잠김${detail.publishedAt ? ` · ${capturedLabel(detail.publishedAt)}` : ""}` : "초안"}</p>
               {capturedLabel(detail.snapshot?.capturedAt) ? (
                 <p className={styles.help}>집계 기준 {capturedLabel(detail.snapshot?.capturedAt)}</p>
               ) : null}

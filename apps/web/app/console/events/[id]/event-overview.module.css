@@ -1,6 +1,87 @@
-.stagePill {
-  border-radius: var(--s6);
+/* Independent columns keep the schedule directly after the work queue even
+   when analysis or a long metric makes the context column taller. */
+.overviewCanvas {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  grid-template-areas:
+    "alert alert"
+    "status status"
+    "primary context"
+    "recent recent";
+  column-gap: var(--s5);
+  row-gap: 0;
+  align-items: start;
+  min-width: 0;
 }
+
+/* Read-only staff view: no region areas, one honest stack. */
+.overviewSingle {
+  display: grid;
+  gap: var(--s5);
+  align-content: start;
+  min-width: 0;
+}
+
+.regionStatus,
+.regionMetrics,
+.regionQueue,
+.regionRunbook,
+.regionSecondary,
+.regionReadiness {
+  min-width: 0;
+  margin-bottom: var(--s5);
+}
+
+.regionRecent {
+  min-width: 0;
+}
+
+.regionStatus { grid-area: status; }
+.regionMetrics { grid-area: metrics; }
+.regionQueue { grid-area: queue; }
+.regionRunbook { grid-area: runbook; }
+.regionSecondary { grid-area: secondary; }
+.regionReadiness { grid-area: readiness; }
+.regionRecent { grid-area: recent; }
+.primaryColumn { grid-area: primary; min-width: 0; }
+.contextColumn { grid-area: context; min-width: 0; }
+.refreshAlert { grid-area: alert; margin: 0 0 var(--s4); }
+.overviewSingle > .refreshAlert { grid-area: auto; }
+
+/* The work queue and its evidence form the first decision surface. */
+.regionQueue {
+  padding: var(--s4) var(--s5);
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.regionMetrics {
+  padding: var(--s4) 0 var(--s4) var(--s4);
+  border-left: 1px solid var(--line);
+}
+.regionQueue .nowTileTitle { font-size: var(--body); }
+.runbookCopy strong, .runbookCopy span, .programInfo strong, .deskName {
+  overflow-wrap: anywhere;
+}
+.runbookCopy span { overflow: visible; white-space: normal; }
+
+/* The restricted view has no named areas. Reset the desktop placement there
+   so the permission note and assigned-desk records remain one full-width stack. */
+.overviewSingle > .regionRecent {
+  grid-area: auto;
+}
+
+.rail {
+  display: grid;
+  gap: var(--s4);
+  align-content: start;
+  position: sticky;
+  top: var(--s4);
+  padding-left: var(--s4);
+  border-left: 1px solid var(--line);
+}
+
+
 
 .stagePill,
 .intakeBadge,
@@ -51,16 +132,15 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
 .metricCard {
   display: grid;
   gap: var(--s1);
   min-width: 0;
-  padding: var(--s3) var(--s4);
+  padding: var(--s4) var(--s2);
   color: var(--ink);
   text-decoration: none;
 }
@@ -82,6 +162,8 @@
   margin: 0;
   font-size: var(--small);
   font-weight: 700;
+  letter-spacing: -0.01em;
+  word-break: keep-all;
   color: var(--muted);
 }
 
@@ -89,9 +171,11 @@
   margin: 0;
   min-width: 0;
   color: var(--ink);
-  font-size: var(--h2);
-  font-weight: 750;
-  line-height: 1.2;
+  font-family: var(--display-font);
+  font-size: var(--h1);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -108,7 +192,7 @@
   }
 
   .metricValue {
-    font-size: var(--h3);
+    font-size: var(--h2);
   }
 }
 
@@ -120,9 +204,9 @@
 
 .entrySummary {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: var(--s4);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--s3);
   min-width: 0;
 }
 
@@ -142,22 +226,22 @@
 
 .entryCount {
   color: var(--ink);
-  font-size: var(--display);
+  font-size: var(--h1);
   font-weight: 800;
-  line-height: 1.05;
+  line-height: 1.1;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .entryCount span {
   color: var(--muted);
-  font-size: var(--h3);
+  font-size: var(--body);
   font-weight: 650;
 }
 
 .entryRate {
   color: var(--brand-text);
-  font-size: var(--h2);
+  font-size: var(--h3);
   font-weight: 750;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -169,18 +253,17 @@
 }
 
 .notEntered {
-  display: grid;
-  min-width: 150px;
-  min-height: 56px;
-  align-content: center;
-  justify-items: end;
-  gap: var(--s1);
-  padding: var(--s2) var(--s3);
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s1) var(--s3);
   border: 1px solid var(--warning-line);
   border-radius: var(--radius-small);
   background: var(--warning-soft);
   color: var(--warning);
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .notEntered:hover {
@@ -189,18 +272,19 @@
   text-underline-offset: 3px;
 }
 
-.notEntered span,
-.readOnlyNote {
+.notEntered span {
   font-size: var(--small);
+  font-weight: 700;
 }
 
 .notEntered strong {
-  font-size: var(--h3);
+  font-size: var(--body);
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 
 .entryTrack {
-  height: 14px;
+  height: var(--s4);
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--s6);
@@ -223,6 +307,20 @@
   gap: var(--s1) var(--s3);
   color: var(--muted);
   font-size: var(--small);
+}
+
+.entryFoot a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  color: var(--brand-text);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.entryFoot a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .summaryFacts {
@@ -464,13 +562,6 @@
     gap: var(--s3);
   }
 
-  .notEntered {
-    display: flex;
-    min-height: 44px;
-    align-items: center;
-    justify-content: space-between;
-  }
-
   .entryFoot {
     align-items: flex-start;
     flex-direction: column;
@@ -579,24 +670,166 @@
   text-align: left;
 }
 
-.readinessList {
+.rangeBlock {
+  display: grid;
+  gap: var(--s2);
+  margin-top: var(--s4);
+  padding-top: var(--s3);
+  border-top: 1px dashed var(--line-strong);
+}
+
+.rangeTitle {
+  margin: 0;
+  font-size: var(--body);
+}
+
+.rangeNote {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  overflow-wrap: anywhere;
+}
+
+.rangeError {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.rangeFields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s4);
+}
+
+.rangeFields > div {
+  display: grid;
+  gap: var(--s1);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.rangeFields input {
+  min-height: 44px;
+  font-size: var(--body);
+}
+
+.rangeSummary {
+  margin: 0;
+  font-size: var(--small);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.rangeChart {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.rangeGrid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.rangeAxis {
+  fill: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rangeBarApplications {
+  fill: var(--brand);
+}
+
+.rangeBarEntries {
+  fill: var(--info);
+}
+
+.rangeLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--small);
+  color: var(--muted);
+}
+
+.rangeLegend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  min-height: 44px;
+}
+
+.rangeSwatch {
+  display: inline-block;
+  width: var(--s3);
+  height: var(--s3);
+  border-radius: var(--radius-small);
+}
+
+/* 준비 상태 index: rail 할 일 타일이 유일한 행동 표면이므로, 본문은
+   같은 목적지의 가벼운 상태 목록으로 둔다. 버튼·아이콘 행을 두지 않는다. */
+.readinessIndex {
   margin: 0;
   padding: 0;
   list-style: none;
   border-top: 1px solid var(--line);
 }
 
+.readinessIndex li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "label link"
+    "status link";
+  gap: 0 var(--s3);
+  align-items: center;
+  padding-block: var(--s2);
+  border-bottom: 1px solid var(--line);
+}
+
+.readinessLabel {
+  grid-area: label;
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.readinessStatus {
+  grid-area: status;
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.readinessLink {
+  grid-area: link;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--brand-text);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.readinessLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .stageBand {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
+  align-items: baseline;
   gap: var(--s1) var(--s3);
-  margin: 0 0 var(--s2);
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface-muted);
+  margin: 0;
+  padding: var(--s1) 0;
   font-size: var(--small);
 }
 
@@ -623,12 +856,10 @@
 .nextCondition {
   display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
   gap: var(--s1) var(--s3);
-  margin: 0 0 var(--s2);
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface-muted);
+  margin: 0;
+  padding: var(--s1) 0;
   font-size: var(--small);
 }
 
@@ -640,39 +871,12 @@
   color: var(--muted);
 }
 
-.nextConditionBlocked {
-  border-color: var(--warning-line);
-  background: var(--warning-soft);
-}
-
 .nextConditionBlocked > strong {
   color: var(--warning);
 }
 
 .nextConditionBlocked > span {
   color: var(--warning);
-}
-
-.readinessIcon {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface-muted);
-  color: var(--ink);
-}
-
-.readinessIcon svg {
-  width: 24px;
-  height: 24px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
 .metricConfig {
@@ -689,51 +893,6 @@
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
-
-.readinessList li {
-  display: flex;
-  align-items: center;
-  gap: var(--s3);
-  padding-block: var(--s3);
-  border-bottom: 1px solid var(--line);
-}
-
-.readinessList li > div {
-  display: grid;
-  flex: 1 1 auto;
-  gap: var(--s1);
-  min-width: 0;
-}
-
-/* 꾸미기 종속행: 위 두 준비행과 같은 아이콘+외곽선 동등행이 아닌 낮은
-   강도 종속행. 펼침 없이 기본 상태가 보인다. */
-.designRow {
-  align-items: center;
-}
-
-.designTitle {
-  color: var(--ink);
-  font-size: var(--body);
-  font-weight: 650;
-}
-
-.designLink {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  min-height: 44px;
-  color: var(--brand-text);
-  font-weight: 700;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.readinessList li span {
-  color: var(--muted);
-  font-size: var(--small);
-}
-
-.readinessList li > a { flex: none; }
 
 .closeStatus {
   display: flex;
@@ -766,6 +925,93 @@
   min-width: 0;
 }
 
+/* "지금 할 일" ledger: one open item per hairline row, sharing the metrics
+   strip and roster-row language instead of a card pile. DOM order is the
+   reading order; no reordering, no nested panels. */
+.nowList {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+
+.nowTile {
+  display: grid;
+  grid-template-columns: fit-content(60ch) auto;
+  justify-content: start;
+  align-items: center;
+  gap: var(--s2) var(--s4);
+  min-width: 0;
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+}
+
+.nowList > .nowTile:last-child {
+  border-bottom: 0;
+}
+
+.nowTileCopy {
+  display: grid;
+  gap: var(--s1);
+  align-content: start;
+  min-width: 0;
+}
+
+.nowTileHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s1) var(--s2);
+  min-width: 0;
+}
+
+.nowTileTitle {
+  margin: 0;
+  font-size: var(--small);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  word-break: keep-all;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.nowTileCount {
+  color: var(--ink);
+  font-size: var(--h3);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.nowTileHint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  overflow-wrap: anywhere;
+}
+
+.nowTileAction {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-top: 0;
+}
+
+.nowTileAction :global(.button) {
+  flex: none;
+  white-space: nowrap;
+}
+
+.nowEmpty {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+
 .peerPeriod .periodTable th,
 .peerPeriod .periodTable td {
   padding: var(--s1) var(--s2);
@@ -778,27 +1024,26 @@
 }
 
 @media (max-width: 768px) {
-  .readinessList li {
-    display: grid;
-    grid-template-columns: 44px minmax(0, 1fr);
-    align-items: center;
-  }
-
-  /* 아이콘 없는 종속행은 빈 첫 칸 없이 한 열로 읽힌다. */
-  .readinessList li.designRow {
+  .readinessIndex li {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "label"
+      "status"
+      "link";
+    gap: var(--s1);
   }
 
-  .readinessList li.designRow > a {
-    grid-column: auto;
-    width: auto;
+  .nowTile {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .nowTileAction {
     justify-content: flex-start;
   }
 
-  .readinessList li > a {
-    grid-column: 1 / -1;
-    width: 100%;
-    justify-content: center;
+  .readinessLink {
+    justify-content: flex-start;
   }
 }
 
@@ -828,4 +1073,328 @@
 .recentCompactEmpty {
   flex-basis: 100%;
   margin: 0;
+}
+
+/* Analysis is a secondary drill-down: the overview first answers what needs
+   action, then opens the period table and chart on demand. */
+.analysisDetails {
+  border-top: 1px solid var(--line);
+  padding-top: var(--s2);
+}
+
+.analysisDetails > summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--brand-text);
+  font-size: var(--small);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.analysisDetails > summary::before {
+  content: "+";
+  font-weight: 800;
+}
+
+.analysisDetails[open] > summary::before {
+  content: "−";
+}
+
+.analysisDetails[open] > summary {
+  margin-bottom: var(--s3);
+}
+
+/* The rail keeps the monitor status and the next-up schedule beside the
+   full day order: a deliberate secondary region, not a second queue. */
+.rail {
+  color: var(--ink);
+}
+
+.rail h2 {
+  color: var(--ink);
+}
+
+.rail .sectionDescription,
+.rail .programTime,
+.rail .programInfo > span {
+  color: var(--nav-muted);
+}
+
+.rail .programList {
+  border-top-color: var(--line);
+}
+
+.rail .programList li {
+  border-bottom-color: var(--line);
+}
+
+.rail .scheduledBadge {
+  border-color: var(--line);
+  background: var(--surface-muted);
+  color: var(--muted);
+}
+
+.rail .sectionAction :global(.button-secondary) {
+  border-color: var(--line);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.runbookMeta {
+  font-family: var(--body-font);
+  font-size: var(--label);
+  font-variant-numeric: tabular-nums;
+}
+
+.runbookList {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+
+.runbookList::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 68px;
+  width: 1px;
+  background: var(--line);
+  content: "";
+}
+
+.runbookCue {
+  position: relative;
+  display: grid;
+  grid-template-columns: 48px 16px minmax(0, 1fr) 56px;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  min-height: 56px;
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.runbookCue:last-child {
+  border-bottom: 0;
+}
+
+.runbookCue time {
+  color: var(--muted);
+  font-family: var(--mono-font);
+  font-size: var(--label);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.runbookDot {
+  z-index: 1;
+  width: 9px;
+  height: 9px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--paper);
+  justify-self: center;
+}
+
+.runbookCue.done .runbookDot {
+  border-color: var(--success);
+  background: var(--success);
+}
+
+.runbookCue.current {
+  margin: 0 calc(-1 * var(--s4));
+  padding-inline: var(--s4);
+  border-bottom-color: var(--line-strong);
+  border-radius: var(--radius-small);
+  background: var(--soft);
+}
+
+.runbookCue.current .runbookDot {
+  border-color: var(--brand);
+  background: var(--brand);
+  box-shadow: 0 0 0 3px var(--paper), 0 0 0 4px var(--brand);
+}
+
+.runbookCopy {
+  display: grid;
+  min-width: 0;
+  gap: var(--s1);
+}
+
+.runbookCopy strong {
+  color: var(--ink);
+  font-size: var(--body);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.runbookCopy span {
+  overflow: hidden;
+  color: var(--muted);
+  font-family: var(--body-font);
+  font-size: var(--label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runbookStatus {
+  justify-self: end;
+  color: var(--muted);
+  font-family: var(--body-font);
+  font-size: var(--label);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.runbookCue.done .runbookStatus {
+  color: var(--success);
+}
+
+.runbookCue.current .runbookStatus {
+  padding: 3px 6px;
+  background: var(--brand);
+  color: var(--on-brand);
+  font-weight: 800;
+}
+
+.runbookEmpty {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+/* An event with no cues yet keeps its heading (and its place in the flow)
+   but costs one line instead of an empty panel: metrics stay in view. */
+.runbookIdle {
+  gap: var(--s1);
+}
+
+.runbookIdle .runbookEmpty {
+  padding-bottom: var(--s1);
+}
+
+@media (max-width: 1024px) {
+  .overviewCanvas {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "alert"
+      "status"
+      "primary"
+      "context"
+      "recent";
+  }
+
+  .rail {
+    position: static;
+    padding: var(--s4) 0 0;
+    border: 0;
+    border-top: 1px solid var(--line);
+  }
+  .regionMetrics { padding: 0; border-left: 0; }
+}
+
+@media (max-width: 768px) {
+  .rail {
+    padding: var(--s4) 0;
+  }
+
+  .regionQueue { padding: var(--s4); }
+  .regionQueue .nowTile { grid-template-columns: minmax(0, 1fr); }
+
+  .runbookList::before {
+    left: 57px;
+  }
+
+  .runbookCue {
+    grid-template-columns: 42px 14px minmax(0, 1fr) 46px;
+    gap: var(--s2);
+    min-height: 56px;
+  }
+
+  .runbookCue.current {
+    margin: 0 calc(-1 * var(--s3));
+    padding-inline: var(--s3);
+  }
+
+  .runbookCopy strong {
+    font-size: var(--small);
+  }
+}
+
+.monitorHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  color: var(--nav-muted);
+  font-family: var(--body-font);
+  font-size: var(--label);
+  font-variant-numeric: tabular-nums;
+}
+
+.monitorLive {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--nav-text);
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.monitorLive i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--nav-muted);
+}
+
+.monitorLive[data-live="true"] {
+  color: var(--success);
+}
+
+.monitorLive[data-live="true"] i {
+  background: var(--success);
+}
+
+.rail .programList li {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s1);
+  padding: var(--s3) 0;
+}
+
+.rail .programTime {
+  display: flex;
+  gap: var(--s2);
+  font-size: var(--label);
+}
+
+.rail .programInfo strong {
+  font-size: var(--small);
+}
+
+.rail .scheduledBadge {
+  justify-self: start;
+  margin-top: var(--s1);
+}
+
+/* Long program names and places remain readable rather than being clipped. */
+.runbookCopy strong,
+.runbookCopy span,
+.programInfo strong,
+.deskName { overflow-wrap: anywhere; }
+.runbookCopy span { overflow: visible; white-space: normal; }
+
+@media (min-width: 1025px) {
+  .regionMetrics .metricGrid { grid-template-columns: minmax(0, 1fr); }
+  .regionMetrics .metricCard {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: baseline;
+    padding: var(--s2) 0;
+  }
+  .regionMetrics .metricCard + .metricCard { border-left: 0; border-top: 1px solid var(--line); }
+  .regionMetrics .metricDetail { grid-column: 1 / -1; }
+  .regionMetrics .entryFoot { align-items: flex-start; flex-direction: column; }
 }

@@ -56,7 +56,7 @@ test("message templates cover the channels a campaign can send, including MMS", 
   assert.match(templateChannel, /MMS 이미지는 발송할 때 첨부합니다/u);
   // A failed send has no retry path on the server, so the row must say what
   // to do instead of leaving the operator without a next step.
-  assert.match(messages, /발송이 실패했습니다\. 같은 내용으로 다시 보내려면 위에서 새 캠페인을 만드세요/u);
+  assert.match(messages, /발송이 실패했습니다\. 행의 내용·대상 불러오기로 새 발송을 준비하세요/u);
 });
 
 test("the stage-board output says when a selection is not applied yet", () => {

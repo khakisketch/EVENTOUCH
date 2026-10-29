@@ -1,4 +1,5 @@
 'use strict';
+const { ensureRunTmpDir, defaultCaptureDir, runStamp } = require('./capture-dir.cjs');
 
 // Accessibility audit of the new Next.js app (apps/web) against a live
 // build with a real API and an isolated PostgreSQL schema.
@@ -44,6 +45,7 @@ async function audit(page) {
 }
 
 async function main() {
+  process.env.TMPDIR = ensureRunTmpDir(defaultCaptureDir(`a11y-run-${runStamp()}`));
   let fixture;
   let browser;
   const failures = [];

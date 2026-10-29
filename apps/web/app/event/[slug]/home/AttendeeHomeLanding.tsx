@@ -20,6 +20,9 @@ export const HOME_MENUS: Menu[] = [
   { key: "stamp", label: "부스 인증", category: "Engagement" },
 ];
 
+/** Tiles that need a ticket before they do anything useful. */
+const NEEDS_TICKET: ReadonlySet<HomeMenuKey> = new Set(["lucky", "roulette", "vote", "stamp"]);
+
 // Participant-facing Korean labels; the internal keys stay for styling.
 const CATEGORY_LABEL: Record<Menu["category"], string> = {
   Utility: "필수",
@@ -29,9 +32,8 @@ const CATEGORY_LABEL: Record<Menu["category"], string> = {
 
 type AttendeeHomeLandingProps = {
   eventName: string;
-  // Whether this browser actually holds a ticket. A QR is not handed to every
-  // participant, so the landing says what the tiles need instead of leaving
-  // the attendee to find out one dead tile at a time.
+  // Whether this browser actually holds a ticket. Tiles that need one say
+  // so on the tile instead of failing one tap later.
   hasTicket: boolean;
   // The landing stays the simple entry list. A QR is not handed to every
   // participant, so the home never assumes one; the ticket opens from the
@@ -112,6 +114,7 @@ export default function AttendeeHomeLanding({
           <MenuButton
             key={menu.key}
             menu={menu}
+            needsTicket={!hasTicket && NEEDS_TICKET.has(menu.key)}
             onOpen={onOpen ? () => onOpen(menu.key) : undefined}
             buttonRef={menuButtonRef ? (node) => menuButtonRef(menu.key, node) : undefined}
             preview={preview}
@@ -128,11 +131,13 @@ function capitalize(value: string): string {
 
 function MenuButton({
   menu,
+  needsTicket,
   onOpen,
   buttonRef,
   preview,
 }: {
   menu: Menu;
+  needsTicket: boolean;
   onOpen?: () => void;
   buttonRef?: (node: HTMLButtonElement | null) => void;
   preview: boolean;
@@ -154,6 +159,10 @@ function MenuButton({
       <span className={`${styles.menuBadge} ${categoryClass}`} aria-hidden="true">{CATEGORY_LABEL[menu.category]}</span>
       <MenuIcon type={menu.key} />
       <span className={styles.menuLabel}>{menu.label}</span>
+      {/* Visual cue only: the detail screen announces the ticket need in
+          full sentences, so the badge stays out of the accessible name and
+          exact-name activation keeps working. */}
+      {needsTicket ? <span className={styles.menuNeedTicket} aria-hidden="true">티켓 필요</span> : null}
     </button>
   );
 }

@@ -85,10 +85,9 @@ async function readHostCounts(connectionString) {
   const pool = new Pool({ connectionString });
   try {
     const counts = {};
-    for (const table of lib.COUNT_TABLES) {
-      const result = await pool.query(`SELECT count(*)::text AS value FROM ${table}`);
-      counts[table] = Number(result.rows[0].value);
-    }
+    const inventory = await pool.query("SELECT tablename FROM pg_tables WHERE schemaname = current_schema() ORDER BY tablename");
+    const result = await pool.query(lib.countsQuery(inventory.rows.map(row => row.tablename)));
+    for (const row of result.rows) counts[row.name] = Number(row.value);
     const migrations = await pool.query('SELECT version FROM schema_migrations ORDER BY version');
     const version = await pool.query('SHOW server_version');
     return {
@@ -180,7 +179,7 @@ async function verifyComposeBackup(project, user, database, outDirectory, manife
   await lib.compose(project, ['exec', '-T', 'db', 'createdb', '-U', user, scratch]);
   try {
     await lib.restoreDatabase(project, user, scratch, path.join(outDirectory, manifest.database.file));
-    const restoredCounts = await lib.readCounts(project, user, scratch);
+    const restoredCounts = await lib.readCounts(project, user, scratch, { tables: Object.keys(manifest.counts) });
     const restoredMigrations = await lib.readMigrations(project, user, scratch);
     if (manifest.countsStable === false) {
       lib.log('백업 중 쓰기가 있어 행 수 비교를 건너뜁니다 (복원·마이그레이션·파일 검사는 계속)');

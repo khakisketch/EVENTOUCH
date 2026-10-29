@@ -10,11 +10,13 @@ const { createDatabaseAuth, hashPassword } = require('../../server/auth');
 const { createAccess } = require('../../server/access');
 const { openStore } = require('../../server/store');
 const { createHttpServer } = require('../../server/server');
+const { createEmailTransport } = require('../../server/email-transport');
+const { createAccountRecovery } = require('../../server/account-recovery');
 
 const databaseUrl = testDatabaseUrl();
 const testPasswordHash = hashPassword('not-a-real-test-password');
 
-async function startApiHarness({ storageDir } = {}) {
+async function startApiHarness({ storageDir, env } = {}) {
   if (!databaseUrl) throw new Error('EVENTOUCH_TEST_DATABASE_URL is required');
   const schema = `eventouch_api_test_${crypto.randomUUID().replace(/-/g, '')}`;
   const adminDatabase = createDatabase({ connectionString: databaseUrl });
@@ -30,8 +32,16 @@ async function startApiHarness({ storageDir } = {}) {
     database = createDatabase({ connectionString: scopedUrl.toString() });
     await database.migrate();
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'eventouch-api-test-'));
-    const auth = createDatabaseAuth(database);
-    server = createHttpServer(openStore(dataDir), auth, createAccess(database), database, { storageDir: storageDir || path.join(dataDir, 'storage') });
+    // Self-service recovery wiring mirrors server.js: a standards-neutral
+    // mail seam with NO provider selected. Tests opt into the loopback fake
+    // mail by passing env { EVENTOUCH_MAIL_MOCK: '1',
+    // EVENTOUCH_PUBLIC_URL: 'http://...' }; without it the transport stays
+    // mode 'none' and delivery-dependent paths answer honestly/generically.
+    const harnessEnv = { ...process.env, ...(env || {}) };
+    const emailTransport = createEmailTransport({ env: harnessEnv });
+    const recovery = createAccountRecovery(database, { transport: emailTransport, env: harnessEnv });
+    const auth = createDatabaseAuth(database, { recovery });
+    server = createHttpServer(openStore(dataDir), auth, createAccess(database), database, { storageDir: storageDir || path.join(dataDir, 'storage'), env });
 
     await new Promise((resolve, reject) => {
       server.once('error', reject);
@@ -48,7 +58,7 @@ async function startApiHarness({ storageDir } = {}) {
         server.closeAllConnections();
         await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
         server = createHttpServer(openStore(dataDir), auth, createAccess(database), database,
-          { storageDir: storageDir || path.join(dataDir, 'storage') });
+          { storageDir: storageDir || path.join(dataDir, 'storage'), env });
         await new Promise((resolve, reject) => {
           server.once('error', reject);
           server.listen(address.port, '127.0.0.1', resolve);
@@ -84,18 +94,31 @@ async function startApiHarness({ storageDir } = {}) {
   }
 }
 
-async function insertAccount(database, { id, role, name, email, orgPermissions = [] }) {
+// Fixture accounts are explicit about their org: there is no default legacy
+// fallthrough (use LEGACY_ORG for single-org setups). The membership row is
+// the authority the server reads; accounts.role mirrors it for fixtures.
+const LEGACY_ORG = 'org-legacy';
+
+async function insertAccount(database, { id, role, name, email, orgPermissions = [], orgId }) {
+  if (!orgId) throw new Error('insertAccount requires an explicit orgId');
   await database.query(
     `INSERT INTO accounts (id, email, name, role, password_hash, org_permissions)
      VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
     [id, email, name, role, testPasswordHash, JSON.stringify(orgPermissions)]
   );
+  await database.query(
+    `INSERT INTO organization_memberships (org_id, account_id, role, active, permissions)
+     VALUES ($1, $2, $3, true, $4::jsonb)
+     ON CONFLICT (org_id, account_id) DO NOTHING`,
+    [orgId, id, role, JSON.stringify(orgPermissions)]
+  );
 }
 
-async function insertEvent(database, { id, slug, payload, workspace }) {
+async function insertEvent(database, { id, slug, payload, workspace, orgId }) {
+  if (!orgId) throw new Error('insertEvent requires an explicit orgId');
   await database.query(
-    'INSERT INTO events (id, slug, payload) VALUES ($1, $2, $3::jsonb)',
-    [id, slug, JSON.stringify(payload)]
+    'INSERT INTO events (id, slug, payload, org_id) VALUES ($1, $2, $3::jsonb, $4)',
+    [id, slug, JSON.stringify(payload), orgId]
   );
   await database.query(
     'INSERT INTO event_workspaces (event_id, payload) VALUES ($1, $2::jsonb)',
@@ -123,8 +146,8 @@ async function sessionCookie(harness, accountId) {
   return `etko_session=${encodeURIComponent(token)}`;
 }
 
-async function requestJson(baseUrl, url, { cookie, bearer, method = 'GET', body } = {}) {
-  const headers = { connection: 'close' };
+async function requestJson(baseUrl, url, { cookie, bearer, method = 'GET', body, headers: extraHeaders } = {}) {
+  const headers = { connection: 'close', ...(extraHeaders || {}) };
   if (cookie) headers.cookie = cookie;
   if (bearer) headers.authorization = `Bearer ${bearer}`;
   if (body !== undefined) headers['content-type'] = 'application/json';
@@ -153,6 +176,7 @@ async function deleteFixtureRows(database, { eventIds = [], accountIds = [], cli
 }
 
 module.exports = {
+  LEGACY_ORG,
   databaseUrl,
   startApiHarness,
   insertAccount,

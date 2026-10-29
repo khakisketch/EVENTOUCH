@@ -30,12 +30,10 @@
    than full-width form boxes competing with the event cards. */
 .homeFilters {
   display: grid;
-  grid-template-areas:
-    "search search"
-    "stage work";
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: var(--s2) var(--s3);
-  flex: 1 1 100%;
+  grid-template-areas: "search stage work";
+  grid-template-columns: minmax(180px, 320px) max-content max-content;
+  gap: var(--s2);
+  flex: 1 1 640px;
   min-width: 0;
 }
 
@@ -159,8 +157,9 @@
 }
 
 .viewActive {
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--soft);
+  color: var(--brand-text);
+  font-weight: 800;
 }
 
 .viewButton:focus-visible,
@@ -223,10 +222,7 @@
 }
 
 .eventCard:hover {
-  border-color: var(--brand);
-  box-shadow: 0 4px 12px var(--shadow-color);
-  transform: translateY(-2px);
-  transition: all var(--enter) ease-out;
+  border-color: var(--line-strong);
 }
 
 .eventCardLink:focus-visible {
@@ -239,11 +235,10 @@
   flex-direction: column;
   height: 100%;
   min-height: 220px;
-  border: 2px solid var(--line);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--paper);
   overflow: hidden;
-  transition: all var(--enter) ease-out;
 }
 
 /* A2 soft-tinted header: title + grouped date·time. The surface defaults to
@@ -260,7 +255,8 @@
 .eventDateTime {
   margin: 0;
   color: var(--card-zone-ink, var(--brand-text));
-  font-size: var(--small);
+  font-family: var(--body-font);
+  font-size: var(--label);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -350,7 +346,7 @@
   word-break: keep-all;
   overflow-wrap: break-word;
   font-family: var(--display-font);
-  font-weight: 800;
+  font-weight: 650;
   letter-spacing: -0.02em;
 }
 
@@ -361,23 +357,31 @@
   font-weight: 600;
 }
 
-/* A follow-up only when a queue exists, not a permanent third KPI. */
+/* A follow-up only when a queue exists, not a permanent third KPI.
+   It is an action chip, not body copy: no persistent underline. */
 .approvalLink {
   display: inline-flex;
   align-items: center;
   min-width: 0;
   min-height: 44px;
   min-inline-size: var(--s7);
+  padding-inline: var(--s2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--surface-muted);
   color: var(--brand-text);
   font-size: var(--small);
   font-weight: 700;
   overflow-wrap: anywhere;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration: none;
 }
 
 .approvalLink:hover {
+  border-color: var(--line-strong);
+  background: var(--paper);
   color: var(--brand-hover);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .approvalLink:focus-visible {
@@ -468,9 +472,10 @@
   display: grid;
   justify-items: start;
   gap: var(--s2);
-  padding: var(--s4);
-  border-bottom: 1px solid var(--line);
-  background: var(--surface-muted);
+  padding: var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
 }
 
 .emptyState h3,
@@ -631,5 +636,273 @@
 
   .monthGrid {
     gap: 2px;
+  }
+}
+
+/* Ledger rows: one identity column and one facts column, no cards. The
+   published participant-home tint stays as the left identity dot; the
+   operator reads name → date, then client · inventory · stage · recency
+   as one line of work. A pending queue continues the same row as a quiet
+   follow-up link instead of a detached boxed action. */
+.eventGrid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  margin-top: var(--s2);
+  border-top: 1px solid var(--line);
+}
+
+.eventCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+  height: auto;
+  align-items: stretch;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+.eventCard:hover {
+  border-color: var(--line);
+  background: var(--surface-muted);
+}
+
+.eventCardLink {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--s4);
+}
+
+.eventCardZone {
+  align-content: center;
+  padding: var(--s3) 0 var(--s3) var(--s4);
+  border-radius: 0;
+}
+
+.eventCardBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "client foot"
+    "inventory foot";
+  align-items: center;
+  gap: var(--s1) var(--s3);
+  padding: var(--s3) var(--s4) var(--s3) 0;
+  background: transparent;
+}
+
+.eventCardBody .eventClient {
+  grid-area: client;
+  margin: 0;
+}
+
+.eventInventory {
+  grid-area: inventory;
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--body-font);
+  font-size: var(--label);
+  font-variant-numeric: tabular-nums;
+}
+
+.eventCardFoot {
+  grid-area: foot;
+}
+
+.eventCardFoot {
+  margin: 0;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  row-gap: var(--s1);
+}
+
+.eventCardActions {
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 var(--s4) var(--s2);
+  border-top: 0;
+  border-left: 0;
+}
+
+/* The queue follow-up reads as the row's next line with the waiting tone,
+   not a detached box or a quiet text link that is easy to miss. */
+.eventCardActions .approvalLink {
+  min-inline-size: 0;
+  padding: var(--s1) var(--s3);
+  border: 1px solid var(--warning-line);
+  border-radius: var(--radius-small);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-weight: 800;
+}
+
+.eventCardActions .approvalLink:hover {
+  border-color: var(--warning);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+@media (max-width: 768px) {
+  .eventCard {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .eventCardLink {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 0;
+  }
+
+  .eventCardZone {
+    padding: var(--s3) var(--s4) var(--s1);
+  }
+
+  .eventCardBody {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "client"
+      "inventory"
+      "foot";
+    gap: var(--s1);
+    padding: var(--s1) var(--s4) var(--s2);
+  }
+
+  .eventCardFoot {
+    justify-content: flex-start;
+  }
+
+  .eventCardActions {
+    padding: 0 var(--s4) var(--s3);
+    border-top: 0;
+    border-left: 0;
+    justify-content: flex-start;
+  }
+}
+
+/* Published event color is an identity dot, not a colored box around a row. */
+.eventCardZone {
+  background: var(--paper);
+}
+
+.eventCardZone .eventName::before {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: var(--s2);
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--card-zone, var(--soft));
+  content: "";
+}
+
+.eventCard:hover .eventCardZone {
+  background: var(--surface-muted);
+}
+
+/* Create/duplicate long form inside the sticky dialog chrome: the footer and
+   header stick, so focused fields and inline errors keep a scroll margin and
+   never slide under the fixed bars. Tokens only, no new hues. */
+.createForm {
+  min-width: 0;
+  padding-bottom: var(--s1);
+}
+
+.createForm :where(input, select, textarea, button, [role="alert"], [role="status"], [role="note"]) {
+  scroll-margin-top: calc(var(--s5) * 2 + var(--s7));
+  scroll-margin-bottom: calc(var(--s5) * 2 + var(--s7) + var(--s8));
+}
+
+/* Sticky footer wrapper owned by this dialog only (shared ConsoleFormActions
+   and dialog tokens stay untouched). Desktop keeps the shared right-aligned
+   voice; narrow screens keep both actions on one intrinsic row so the fixed
+   chrome never over-occupies the dialog and covers fields or errors. */
+.createFooter {
+  min-width: 0;
+}
+
+@media (max-width: 480px) {
+  .createFooter {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+
+  .createFooter > div {
+    width: 100%;
+  }
+
+  .createFooter > div > div {
+    flex: 1 1 auto;
+    width: 100%;
+    flex-wrap: nowrap;
+  }
+
+  .createFooter.createFooter :global(.button) {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: var(--s2);
+    font-size: var(--small);
+    white-space: normal;
+    word-break: keep-all;
+    text-align: center;
+  }
+}
+
+/* Keep-all wrapping owned by this dialog only: the shared base lets long
+   hint/description lines break mid-syllable (하이/픈, 바/로). Applied only
+   to the local create/customer copy below so other callers stay untouched. */
+.createWrap {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+@media (max-width: 1200px) {
+  .homeFilters {
+    grid-template-areas: "search search" "stage work";
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+}
+
+/* Readability pass: every pinned selector and declaration above stays
+   untouched. Only the row reading tone changes here: the date line rests
+   quiet by default and only sessions at hand take the brand voice, the
+   event name carries a firmer weight, and the row arrow answers hover. */
+.eventCardZone .eventDateTime {
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.eventCardZone .eventDateTime[data-soon="true"] {
+  color: var(--brand-text);
+  font-weight: 800;
+}
+
+.eventName {
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.eventCardBody .eventClient {
+  color: var(--ink);
+}
+
+.cardArrow {
+  color: var(--muted);
+  transition: transform 160ms ease-out, color 160ms ease-out;
+}
+
+.eventCard:hover .cardArrow {
+  color: var(--brand-text);
+  transform: translateX(2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cardArrow {
+    transition: none;
+  }
+
+  .eventCard:hover .cardArrow {
+    transform: none;
   }
 }

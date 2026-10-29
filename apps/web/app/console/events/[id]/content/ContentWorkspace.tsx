@@ -19,6 +19,8 @@ import ConsoleSection from "../../../console-ui/ConsoleSection";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import uiStyles from "../../../console-ui/console-ui.module.css";
 import styles from "./content.module.css";
+import { consoleFetch } from "../../../../../lib/console-api";
+import { canWriteEvent } from "../../../../../lib/event-capabilities";
 
 // Console authoring for notices, schedule programs, and venue guidance.
 // Reads the operator bootstrap; every write goes through the idempotent
@@ -82,7 +84,9 @@ type WorkspaceState =
       stage: string;
       eventMeta: ConsoleEventMeta;
       features: string[];
-      canManage: boolean;
+      role: string;
+      userId: string;
+      memberships: Array<{ accountId: string; eventId: string; write?: unknown }>;
       notices: Notice[];
       program: ProgramItem[];
       venue: Venue;
@@ -257,8 +261,8 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
     if (!silent) setState({ kind: "loading" });
     try {
       const [meRes, bootRes] = await Promise.all([
-        fetch("/api/auth/me", { cache: "no-store" }),
-        fetch("/api/bootstrap", { cache: "no-store" }),
+        consoleFetch("/api/auth/me", { cache: "no-store" }),
+        consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store" }),
       ]);
       if (meRes.status === 401 || bootRes.status === 401) {
         router.push(loginHrefForLocation(window.location.pathname, window.location.search));
@@ -282,17 +286,17 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
       }
       const role = typeof me.user.role === "string" ? me.user.role : "";
       const myId = typeof me.user.id === "string" ? me.user.id : "";
-      const memberships: Array<{ accountId: string; eventId: string }> = Array.isArray(bootstrap.memberships)
+      // Raw membership grants ride along untouched: omitted write reads as
+      // full access, an explicit [] as read-only. Gates below re-check per
+      // section (notice.save for 공지·장소, program.save for 일정) through
+      // the capability helper; server/event-permissions.js stays authoritative.
+      const memberships: Array<{ accountId: string; eventId: string; write?: unknown }> = Array.isArray(bootstrap.memberships)
         ? bootstrap.memberships.flatMap((item) => {
             const membership = asRecord(item);
             if (!membership || typeof membership.accountId !== "string" || typeof membership.eventId !== "string") return [];
-            return [{ accountId: membership.accountId, eventId: membership.eventId }];
+            return [{ accountId: membership.accountId, eventId: membership.eventId, write: membership.write }];
           })
         : [];
-      const canManage =
-        role === "AGENCY" ||
-        (role === "MANAGER" &&
-          memberships.some((membership) => membership.accountId === myId && membership.eventId === eventId));
       const event = Array.isArray(bootstrap.events)
         ? bootstrap.events.flatMap((item) => {
             const record = asRecord(item);
@@ -342,7 +346,9 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
           venue: venue.name || text(event.venue),
         },
         features,
-        canManage,
+        role,
+        userId: myId,
+        memberships,
         notices,
         program,
         venue,
@@ -407,7 +413,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
       commandIdCache.current.set(fingerprint, commandId);
     }
     try {
-      const response = await fetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
+      const response = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ commandId, command, payload }),
@@ -636,7 +642,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
     setUploadingAttachment(true);
     setProgramDialogFailure(null);
     try {
-      const res = await fetch(
+      const res = await consoleFetch(
         `/api/events/${encodeURIComponent(eventId)}/files?name=${encodeURIComponent(file.name)}&commandId=${encodeURIComponent(randomCommandId())}`,
         { method: "POST", headers: { "content-type": file.type }, body: file }
       );
@@ -803,10 +809,16 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
   const archived = state.stage === "ARCHIVED";
   const archivedReason = "보관된 행사는 읽기 전용입니다";
   // Direct output is a same-screen shortcut for the operations display: only
-  // when the screen feature is on, the operator can write, and the row is
-  // published. Unpublished rows, a switched-off screen, and readonly states
-  // hide the action instead of disabling it.
-  const canOutputNotice = state.screenEnabled && state.canManage && !archived;
+  // when the screen feature is on, the operator holds the programs grant for
+  // display.set, and the row is published. Unpublished rows, a switched-off
+  // screen, and readonly states hide the action instead of disabling it.
+  // Section gates mirror the server scope map: 공지·장소는 page (notice.save),
+  // 프로그램 일정은 programs (program.save). Neither gate invents access;
+  // the server re-checks every command.
+  const capabilities = { role: state.role, userId: state.userId, memberships: state.memberships, eventId };
+  const canWritePage = canWriteEvent(capabilities, "notice.save");
+  const canWritePrograms = canWriteEvent(capabilities, "program.save");
+  const canOutputNotice = state.screenEnabled && canWritePrograms && !archived;
 
   return (
     <ConsolePage
@@ -820,14 +832,17 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
         </Link>
       )}
       sectionNav={(
-        <ConsoleSectionNav
-          label="콘텐츠 구역"
-          items={[
-            { id: "content-notices", label: "공지" },
-            { id: "content-program", label: "프로그램 일정" },
-            { id: "content-venue", label: "장소 안내" },
-          ]}
-        />
+        <div className={styles.navIndex}>
+          <p className={styles.navIndexLabel} aria-hidden="true">콘텐츠 목차</p>
+          <ConsoleSectionNav
+            label="콘텐츠 구역"
+            items={[
+              { id: "content-notices", label: "공지" },
+              { id: "content-program", label: "프로그램 일정" },
+              { id: "content-venue", label: "장소 안내" },
+            ]}
+          />
+        </div>
       )}
       feedback={(
         <>
@@ -843,15 +858,21 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
         </>
       )}
     >
-      {!state.canManage ? (
+      {!canWritePage && !canWritePrograms ? (
         <ConsoleFeedback kind="error">콘텐츠를 관리할 운영 권한이 없습니다.</ConsoleFeedback>
       ) : (
         <>
+          {!canWritePage ? (
+            <ConsoleFeedback kind="warning">공지·장소 쓰기 권한이 없습니다. 일정만 볼 수 있으며, 변경이 필요하면 담당 행사 운영자에게 요청하세요.</ConsoleFeedback>
+          ) : null}
+          {!canWritePrograms ? (
+            <ConsoleFeedback kind="warning">프로그램 일정 변경은 참여 프로그램 쓰기 권한이 필요합니다. 일정 목록은 볼 수 있으며, 필요하면 담당 행사 운영자에게 요청하세요.</ConsoleFeedback>
+          ) : null}
           <ConsoleSection
             headingId="content-notices"
             title="공지"
             description="게시한 항목만 참가자에게 보입니다."
-            action={(
+            action={canWritePage ? (
               <button
                 type="button"
                 className="button button-secondary"
@@ -861,7 +882,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
               >
                 공지 작성
               </button>
-            )}
+            ) : undefined}
           >
             {state.notices.length ? (
               <ul className={uiStyles.collection}>
@@ -883,7 +904,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                         : { text: "전광판 출력으로 선택됨", live: true };
                   const canOutput = canOutputNotice && item.published;
                   return (
-                  <li key={item.id} className={`${uiStyles.recordRow} ${styles.recordRow}`}>
+                  <li key={item.id} className={`${uiStyles.recordRow} ${styles.recordRow} ${styles.stackedRow}`}>
                     <div className={uiStyles.recordMain}>
                       <h3 className={styles.recordTitle}>
                         {item.title}
@@ -892,8 +913,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                         <span className={`${styles.badge} ${item.published ? styles.badgeOn : styles.badgeOff}`}>
                           {item.published ? "게시 중" : "비공개"}
                         </span>
-                        {item.pinned ? <span className={styles.badge}>고정됨</span> : null}
-                        {displayBadge ? (
+                        {item.pinned ? <span className={styles.badge}>고정됨</span> : null}                        {displayBadge ? (
                           <span className={`${styles.badge} ${displayBadge.live ? styles.badgeOn : ""}`}>
                             {displayBadge.text}
                           </span>
@@ -901,7 +921,8 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                       </p>
                       {item.body ? <p className={`${styles.body} preserve-lines`}>{item.body}</p> : null}
                     </div>
-                    <div className={uiStyles.recordActions}>
+                    {canWritePage ? (
+                    <div className={`${uiStyles.recordActions} ${styles.compactActions}`}>
                       <button
                         type="button"
                         className="button button-secondary"
@@ -920,6 +941,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                       >
                         {busy === `notice-publish:${item.id}` ? "처리 중…" : item.published ? "비게시" : "게시"}
                       </button>
+                      <span className={styles.actionSeparator} aria-hidden="true" />
                       <button
                         type="button"
                         className="button button-secondary"
@@ -929,16 +951,9 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                       >
                         {item.pinned ? "고정 해제" : "고정"}
                       </button>
-                      <button
-                        type="button"
-                        className={`button button-secondary ${styles.dangerGhost}`}
-                        disabled={busy !== null || archived}
-                        title={archived ? archivedReason : undefined}
-                        onClick={() => requestNoticeDelete(item)}
-                      >
-                        삭제
-                      </button>
                       {canOutput ? (
+                        <>
+                        <span className={styles.actionSeparator} aria-hidden="true" />
                         <button
                           type="button"
                           className="button button-secondary"
@@ -948,8 +963,20 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                         >
                           {busy === `notice-display:${item.id}` ? "처리 중…" : "전광판 출력"}
                         </button>
+                        </>
                       ) : null}
+                      <span className={styles.actionSeparator} aria-hidden="true" />
+                      <button
+                        type="button"
+                        className={`button button-secondary ${styles.dangerGhost}`}
+                        disabled={busy !== null || archived}
+                        title={archived ? archivedReason : undefined}
+                        onClick={() => requestNoticeDelete(item)}
+                      >
+                        삭제
+                      </button>
                     </div>
+                    ) : null}
                     {noticeDisplayPendingId === item.id && canOutput && noticeDeletePendingId !== item.id ? (
                       <ConsoleConfirm
                         summary={`“${item.title}” 공지를 행사장 전광판에 출력할까요? 참가자 화면과 같은 내용이 외부 화면에 나옵니다.`}
@@ -974,15 +1001,19 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                 })}
               </ul>
             ) : (
-              <p className={styles.empty}>등록된 공지가 없습니다. 위에서 첫 공지를 작성하세요.</p>
+              <p className={styles.empty}>등록된 공지가 없습니다.{canWritePage ? " 위에서 첫 공지를 작성하세요." : ""}</p>
             )}
           </ConsoleSection>
 
+          {/* Supporting work shares one row on desktop: 일정 (wider ledger)
+              beside 장소 안내 (narrower form), DOM order stacked on phones.
+              Section anchors, order, gates and commands are unchanged. */}
+          <div className={styles.supportGrid}>
           <ConsoleSection
             headingId="content-program"
             title="프로그램 일정"
             description="날짜·시작 시간 순으로 정렬되어 참가자에게 보입니다."
-            action={(
+            action={canWritePrograms ? (
               <button
                 type="button"
                 className="button button-secondary"
@@ -992,7 +1023,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
               >
                 일정 추가
               </button>
-            )}
+            ) : undefined}
           >
             {state.program.length ? (
               <ul className={uiStyles.collection}>
@@ -1020,7 +1051,8 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                         </p>
                       ) : null}
                     </div>
-                    <div className={uiStyles.recordActions}>
+                    {canWritePrograms ? (
+                    <div className={`${uiStyles.recordActions} ${styles.compactActions}`}>
                       <button
                         type="button"
                         className="button button-secondary"
@@ -1039,6 +1071,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                       >
                         {busy === `program-publish:${item.id}` ? "처리 중…" : item.published ? "비게시" : "게시"}
                       </button>
+                      <span className={styles.actionSeparator} aria-hidden="true" />
                       <button
                         type="button"
                         className={`button button-secondary ${styles.dangerGhost}`}
@@ -1049,6 +1082,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                         삭제
                       </button>
                     </div>
+                    ) : null}
                     {programDeletePendingId === item.id ? (
                       <ConsoleConfirm
                         summary={`“${item.title}” 일정을 삭제할까요?`}
@@ -1063,7 +1097,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                 ))}
               </ul>
             ) : (
-              <p className={styles.empty}>등록된 일정이 없습니다. 위에서 첫 일정을 추가하세요.</p>
+              <p className={styles.empty}>등록된 일정이 없습니다.{canWritePrograms ? " 위에서 첫 일정을 추가하세요." : ""}</p>
             )}
           </ConsoleSection>
 
@@ -1075,8 +1109,10 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                 기능을 먼저 켜세요. 켜기 전에는 저장이 반영되지 않습니다.
               </p>
             ) : null}
-            {venueDraft ? (
+            {venueDraft && canWritePage ? (
               <form className={uiStyles.formStack} onSubmit={(event) => void saveVenue(event)}>
+                <div className={styles.fieldGroup}>
+                  <h3 className={styles.groupTitle}>장소 기본</h3>
                 <div>
                   <label htmlFor="content-venue-name">장소 이름</label>
                   <input
@@ -1097,6 +1133,9 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                     onChange={(event) => setVenueDraft({ ...venueDraft, address: event.target.value })}
                   />
                 </div>
+                </div>
+                <div className={styles.fieldGroup}>
+                  <h3 className={styles.groupTitle}>참가자 안내 문구</h3>
                 <div>
                   <label htmlFor="content-venue-directions">길찾기</label>
                   <textarea
@@ -1127,6 +1166,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                     onChange={(event) => setVenueDraft({ ...venueDraft, description: event.target.value })}
                   />
                 </div>
+                </div>
                 <ConsoleFormActions>
                   <button
                     type="submit"
@@ -1138,8 +1178,17 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                   </button>
                 </ConsoleFormActions>
               </form>
+            ) : !canWritePage ? (
+              <div className={uiStyles.recordMain}>
+                <span>장소 이름: {state.venue.name || "미등록"}</span>
+                <p className={uiStyles.recordMeta}>주소: {state.venue.address || "미등록"}</p>
+                <p className={uiStyles.recordMeta}>길찾기: {state.venue.directions || "미등록"}</p>
+                <p className={uiStyles.recordMeta}>문의: {state.venue.contact || "미등록"}</p>
+                <p className={uiStyles.recordMeta}>안내 문구: {state.venue.description || "미등록"}</p>
+              </div>
             ) : null}
           </ConsoleSection>
+          </div>
         </>
       )}
 

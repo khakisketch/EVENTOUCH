@@ -19,6 +19,7 @@ const {
   insertAssignment,
   sessionCookie,
   requestJson,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 const { createDatabase } = require('../server/db');
 const { runMigrations } = require('../server/migrate');
@@ -57,7 +58,7 @@ async function createFixture({ stage = 'LIVE', participants = [] } = {}) {
   const slug = `records-${fixtureNumber}-${suffix}`;
   const deskIn = `desk-in-${fixtureNumber}-${suffix}`;
   const deskOut = `desk-out-${fixtureNumber}-${suffix}`;
-  await insertEvent(harness.database, {
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,
     id,
     slug,
     payload: {
@@ -126,7 +127,7 @@ before(async () => {
     ['manager', 'MANAGER', '행사 매니저'],
     ['staff', 'STAFF', '현장 스태프'],
   ]) {
-    await insertAccount(harness.database, {
+    await insertAccount(harness.database, {orgId: LEGACY_ORG,
       id: accountIds[key], role, name, email: `${accountIds[key]}@example.test`,
     });
     cookies[key] = await sessionCookie(harness, accountIds[key]);
@@ -220,11 +221,14 @@ test('migration-005-backfills-checks-written-before-the-table-existed', async ()
       }
       await runMigrations(db, tmpd);
       const eventId = `records-legacy-${suffix}`;
-      await insertEvent(db, {
-        id: eventId,
-        slug: `records-legacy-${suffix}`,
-        payload: { id: eventId },
-        workspace: {
+      // Pre-011 row shape: no org_id column exists yet. 011 must map it.
+      await db.query(
+        'INSERT INTO events (id, slug, payload) VALUES ($1, $2, $3::jsonb)',
+        [eventId, `records-legacy-${suffix}`, JSON.stringify({ id: eventId })]
+      );
+      await db.query(
+        'INSERT INTO event_workspaces (event_id, payload) VALUES ($1, $2::jsonb)',
+        [eventId, JSON.stringify({
           participants: [{ id: 'p1', name: '이전 기록' }],
           checks: [
             {
@@ -238,10 +242,13 @@ test('migration-005-backfills-checks-written-before-the-table-existed', async ()
               before: { inside: true, everIn: true }, corrected: true,
             },
           ],
-        },
-      });
+        })]
+      );
       const applied = await runMigrations(db);
       assert.ok(applied.includes('005_checkin-records.sql'), `applied: ${applied.join(',')}`);
+      assert.ok(applied.includes('011_organizations-scope.sql'), `applied: ${applied.join(',')}`);
+      const mapped = await db.query('SELECT org_id FROM events WHERE id = $1', [eventId]);
+      assert.equal(mapped.rows[0].org_id, 'org-legacy');
 
       const rows = await db.query(
         `SELECT id, event_id, participant_id, name, action, desk_id, actor_id,

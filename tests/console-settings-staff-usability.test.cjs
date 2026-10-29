@@ -64,13 +64,16 @@ test("settings keeps its tabs, save state, and scope note", () => {
 
 test("staff success folds the input and hands off to the next participant", () => {
   // The result block keeps its exact next-step grammar: primary "다음
-  // 참가자" first, auxiliary nametag after it.
+  // 참가자" first, auxiliary nametag after it. The step locks while a
+  // correction result is unresolved (or the organization changed in another
+  // tab), so a tap cannot skip the review or strand retained work.
   assert.match(staff, /aria-label="스캔 결과"/u);
   assert.match(
     staff,
-    /className="button button-primary" onClick=\{prepareNextParticipant\}>[\s\S]*?다음 참가자/u
+    /<button type="button" ref=\{nextParticipantRef\} className="button button-primary" disabled=\{writeLocked\} onClick=\{prepareNextParticipant\}>\s*다음 참가자/u
   );
   assert.match(staff, /ref=\{nextParticipantRef\}/u);
+  assert.match(staff, /const writeLocked = correctionLocked \|\| orgChanged/u);
   // Preparing the next participant clears the just-processed input (no stale
   // value left to resend) and restores the folded input for the next person.
   const prepare = staff.slice(
@@ -111,27 +114,34 @@ test("staff booth codes stay fully readable with a client-side copy path", () =>
   assert.doesNotMatch(staffCss, /rgb\(/u);
 });
 
-test("no API surface changes on either screen", () => {
+test("existing event command paths remain fixed; approved organization REST paths are explicit", () => {
+  const expected = {
+    // Settings reads the scoped event bootstrap plus the directory client
+    // list through the shared transport; writes keep the command endpoint.
+    settings: ["/api/auth/me", "/api/events/:param/bootstrap", "/api/console/directory", "/api/events/:param/commands"],
+    // Staff keeps the full bootstrap read (assignment projection) through
+    // the shared operator transport; writes keep the command endpoint.
+    staff: ["/api/bootstrap", "/api/events/:param/commands"],
+  };
   for (const [name, source] of [
     ["settings", settings],
     ["staff", staff],
   ]) {
     const fetched = [
-      ...source.matchAll(/fetch\("([^"]+)"|fetch\(`([^`]+)`/ug),
-    ].map((match) =>
-      (match[1] ?? match[2]).replace(/\$\{[^}]*\}/g, ":param")
-    );
-    assert.ok(fetched.length > 0, `${name} has fetch calls to audit`);
-    const allowed = new Set([
-      "/api/auth/me",
-      "/api/bootstrap",
-      "/api/events/:param/commands",
-    ]);
-    for (const url of fetched) {
-      assert.ok(allowed.has(url), `${name} unexpected API surface: ${url}`);
-    }
+      ...source.matchAll(/(?:consoleFetch|operatorFetch|fetch)\(\s*[`"']([^`"']+)["`']/ug),
+    ].map((match) => match[1].replace(/\$\{[^}]*\}/g, ":param"));
+    assert.deepEqual([...new Set(fetched)].sort(), [...expected[name]].sort(), `${name} API surface`);
     assert.doesNotMatch(source, /localStorage/u);
     assert.doesNotMatch(source, /sessionStorage/u);
+  }
+  for (const [file, allowed] of [
+    ["apps/web/app/OrganizationSwitcher.tsx", ["/api/auth/me", "/api/auth/organizations", "/api/auth/organizations/select"]],
+    ["apps/web/lib/organization-selection.ts", ["/api/auth/organizations/select"]],
+  ]) {
+    const source = read(file);
+    const paths = [...source.matchAll(/operatorFetch\(\s*[`"']([^`"']+)["`']/ug)].map((match) => match[1]);
+    assert.deepEqual([...new Set(paths)].sort(), allowed, `${file} uses only approved organization REST paths`);
+    assert.doesNotMatch(source, /(?:localStorage|sessionStorage)/u, "no credential or organization state in browser persistence");
   }
   for (const command of [
     "event.update",

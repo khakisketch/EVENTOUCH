@@ -194,9 +194,14 @@
   font: inherit;
   font-size: var(--small);
   font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.textButton:hover {
+  background: var(--surface-muted);
   text-decoration: underline;
   text-underline-offset: 3px;
-  cursor: pointer;
 }
 
 .textButton:disabled {
@@ -474,8 +479,13 @@
   align-items: center;
   color: var(--brand-text);
   font-weight: 700;
-  text-decoration-thickness: 1px;
+  text-decoration: none;
   text-underline-offset: 3px;
+}
+
+.originalLink:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
 }
 
 .photoManage {

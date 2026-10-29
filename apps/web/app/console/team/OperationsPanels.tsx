@@ -5,6 +5,7 @@ import ConsoleSection from "../console-ui/ConsoleSection";
 import consoleUiStyles from "../console-ui/console-ui.module.css";
 import teamStyles from "./team.module.css";
 import { getActivityLabel, isKnownActivityType } from "./activity-labels";
+import { consoleFetch } from "../../../lib/console-api";
 
 // Operations visibility for the team screen: integration status, recent
 // activity, and login protection. All three are read-only; the server owns
@@ -15,8 +16,11 @@ type Health = {
   messaging: boolean;
   messagingProvider: string | null;
   verification: string;
-  outboxPending: number | null;
 };
+
+type OrgOutbox =
+  | { kind: "ready"; pending: number }
+  | { kind: "unavailable"; reason: "미확인" | "미제공" };
 
 type Attempt = {
   scope: string;
@@ -24,6 +28,15 @@ type Attempt = {
   failures: number;
   firstFailureAt: string;
   lastFailureAt: string;
+};
+
+type OrgDirectory = {
+  orgName: string;
+  role: string;
+  connected: boolean;
+  sender: string;
+  provider: string;
+  orgIsolated: boolean;
 };
 
 type AuditEntry = {
@@ -77,7 +90,16 @@ const ACTIVITY_MAX_ROWS = 20;
 
 export default function OperationsPanels() {
   const [health, setHealth] = useState<Health | null>(null);
+  // Current-org directory authority for the messaging display below. The
+  // process-shared /api/health messaging state belongs to the legacy org
+  // deployment and must never read as this org's connection.
+  const [directory, setDirectory] = useState<OrgDirectory | null>(null);
+  const [directoryFailed, setDirectoryFailed] = useState(false);
   const [attempts, setAttempts] = useState<Attempt[] | null>(null);
+  // Owner-only own-org send queue: read from the authenticated diagnostics
+  // route only for an AGENCY viewer, non-blocking. Any denial or failure
+  // stays an explicit unknown/unprovided state — never a global substitute.
+  const [outbox, setOutbox] = useState<OrgOutbox | null>(null);
   const [audit, setAudit] = useState<AuditEntry[] | null>(null);
   const [visibleActivityCount, setVisibleActivityCount] = useState(ACTIVITY_INITIAL_ROWS);
   const activityListRef = useRef<HTMLUListElement | null>(null);
@@ -90,26 +112,82 @@ export default function OperationsPanels() {
     let cancelled = false;
     async function load() {
       try {
-        const healthRes = await fetch("/api/health", { cache: "no-store" });
+        const healthRes = await consoleFetch("/api/health", { cache: "no-store" });
         const healthData = (await healthRes.json().catch(() => null)) as {
           messaging?: unknown;
           messagingProvider?: unknown;
           verification?: unknown;
-          outboxPending?: unknown;
         } | null;
         if (!cancelled && healthData) {
           setHealth({
             messaging: healthData.messaging === true,
             messagingProvider: typeof healthData.messagingProvider === "string" ? healthData.messagingProvider : null,
             verification: typeof healthData.verification === "string" ? healthData.verification : "off",
-            outboxPending: typeof healthData.outboxPending === "number" ? healthData.outboxPending : null,
           });
         }
       } catch {
         // Health stays empty; the panel says so instead of breaking.
       }
+      // Current-org directory authority for the messaging display: the
+      // scoped integrations plus the org name. Independent branch, so a
+      // failure degrades to an explicit unavailable note, never the screen.
       try {
-        const securityRes = await fetch("/api/auth/security", { cache: "no-store" });
+        const dirRes = await consoleFetch("/api/console/directory", { cache: "no-store" });
+        const dirData = (await dirRes.json().catch(() => null)) as {
+          directory?: {
+            viewer?: { organizationName?: unknown } | null;
+            integrations?: { connected?: unknown; sender?: unknown; provider?: unknown } | null;
+          } | null;
+        } | null;
+        const dir = dirData?.directory;
+        if (!cancelled && dir && typeof dir === "object") {
+          const viewer = (dir.viewer ?? {}) as Record<string, unknown>;
+          const integrations = (dir.integrations ?? {}) as Record<string, unknown>;
+          const viewerRole = text(viewer.role);
+          setDirectory({
+            orgName: text(viewer.organizationName),
+            role: viewerRole,
+            connected: integrations.connected === true,
+            orgIsolated: integrations.orgIsolated === true,
+            sender: text(integrations.sender),
+            provider: text(integrations.provider),
+          });
+          // Owner-only own-org queue, independent branch: a non-owner never
+          // sends this request (explicit unprovided), and any owner-side
+          // denial or failure stays explicitly unknown. Health's removed
+          // global count is never a substitute.
+          // Fenced with a plain fetch on purpose: diagnostics authorization
+          // outcomes (403/409/unselected) are endpoint verdicts, never
+          // evidence that the pinned org view moved, so they must not flow
+          // through the shared guarded transport that marks drift and locks
+          // this screen on a 409 code.
+          if (viewerRole === "AGENCY") {
+            try {
+              const diagRes = await fetch("/api/diagnostics", { cache: "no-store" });
+              const diagData = (await diagRes.json().catch(() => null)) as {
+                outboxPending?: unknown;
+              } | null;
+              if (!cancelled) {
+                setOutbox(
+                  diagRes.ok && typeof diagData?.outboxPending === "number"
+                    ? { kind: "ready", pending: diagData.outboxPending }
+                    : { kind: "unavailable", reason: "미확인" }
+                );
+              }
+            } catch {
+              if (!cancelled) setOutbox({ kind: "unavailable", reason: "미확인" });
+            }
+          } else if (!cancelled) {
+            setOutbox({ kind: "unavailable", reason: "미제공" });
+          }
+        } else if (!cancelled) {
+          setDirectoryFailed(true);
+        }
+      } catch {
+        if (!cancelled) setDirectoryFailed(true);
+      }
+      try {
+        const securityRes = await consoleFetch("/api/auth/security", { cache: "no-store" });
         // Denial (normal MANAGER) ends only this branch: the security panel
         // stays hidden while health/activity keep loading independently.
         if (securityRes.status === 403 || securityRes.status === 401) {
@@ -140,7 +218,7 @@ export default function OperationsPanels() {
         if (!cancelled) setAttempts([]);
       }
       try {
-        const bootRes = await fetch("/api/bootstrap", { cache: "no-store" });
+        const bootRes = await consoleFetch("/api/bootstrap", { cache: "no-store" });
         if (bootRes.status === 401) {
           if (!cancelled) setAudit([]);
           return;
@@ -221,24 +299,34 @@ export default function OperationsPanels() {
   return (
     <>
       <ConsoleSection headingId="operations-integrations" title="연동 상태" surface="plain" width="full">
+        {directory ? (
+          <dl className="client-meta">
+            <div>
+              <dt>현재 조직</dt>
+              <dd>{directory.orgName || "이름 확인 필요"}</dd>
+            </div>
+            <div>
+              <dt>문자·알림톡(현재 조직)</dt>
+              <dd>{directory.connected ? `연결됨${directory.provider ? ` (${directory.provider})` : ""}${directory.sender ? ` · 발신 ${directory.sender}` : ""}` : directory.orgIsolated ? "미연동 · 새 운영사는 모의 기록만 사용합니다" : "미연동 (연결 필요 상태로 기록됩니다)"}</dd>
+            </div>
+            <div>
+              <dt>현재 운영사 발송 대기</dt>
+              <dd>{outbox ? outbox.kind === "ready" ? `${outbox.pending}건` : outbox.reason === "미제공" ? "소유자에게만 제공됩니다" : "확인할 수 없습니다" : "불러오고 있습니다"}</dd>
+            </div>
+          </dl>
+        ) : directoryFailed ? (
+          <p className="notice" role="status">현재 조직의 연동 상태를 확인할 수 없습니다.</p>
+        ) : (
+          <p className="notice" role="status">현재 조직의 연동 상태를 불러오고 있습니다.</p>
+        )}
         {!health ? (
-          <p className="notice" role="status">연동 상태를 불러오고 있습니다.</p>
+          <p className="notice" role="status">서버 처리 상태를 불러오고 있습니다.</p>
         ) : (
           <dl className="client-meta">
             <div>
-              <dt>문자·알림톡</dt>
-              <dd>{health.messaging ? `연결됨${health.messagingProvider ? ` (${health.messagingProvider})` : ""}` : "미연동 (연결 필요 상태로 기록됩니다)"}</dd>
-            </div>
-            <div>
-              <dt>참가자 인증번호</dt>
+              <dt>참가자 인증번호(서버 전역)</dt>
               <dd>{verificationLabel(health.verification)}</dd>
             </div>
-            {health.outboxPending !== null ? (
-              <div>
-                <dt>발송 대기</dt>
-                <dd>{health.outboxPending}건</dd>
-              </div>
-            ) : null}
           </dl>
         )}
         <p className="landing-note">자격증명·발신번호·승인 템플릿은 서버 환경에서 관리하며 화면에 입력하지 않습니다.</p>

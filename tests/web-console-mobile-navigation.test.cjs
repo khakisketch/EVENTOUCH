@@ -32,11 +32,18 @@ test('bottom bar markup is gone from the shell', () => {
   assert.doesNotMatch(source, /workspace-clients-link-mobile/u);
 });
 
-test('top trigger is a labelled disclosure with one authored chevron, not unicode', () => {
+test('top trigger is an icon-only hamburger disclosure with a stable name, not unicode', () => {
   const source = shell();
   assert.match(source, /console-global-trigger/u);
-  assert.match(source, /<span>메뉴<\/span>/u);
-  assert.match(source, /console-global-trigger-chevron/u);
+  // User asked for a recognizable hamburger instead of the text+chevron
+  // look: the trigger carries no visible text, so the familiar "메뉴"
+  // accessible name stays on the button itself for screen readers and
+  // voice control. One authored bars icon morphs into an X through the
+  // existing disclosure state, so no second chevron competes with it.
+  assert.match(source, /aria-label="메뉴"/u);
+  assert.doesNotMatch(source, /<span>메뉴<\/span>/u);
+  assert.match(source, /console-global-trigger-bars/u);
+  assert.doesNotMatch(source, /console-global-trigger-chevron/u);
   assert.doesNotMatch(source, /console-global-trigger-icon/u);
   assert.match(source, /aria-expanded=\{globalMenuOpen\}/u);
   assert.match(source, /aria-controls="console-global-menu"/u);
@@ -132,9 +139,11 @@ test('Escape restores trigger focus; leaving never steals focus', () => {
 
 test('opening focuses the first permitted link; desktop width closes silently', () => {
   const source = shell();
+  // Menu rows are hub labels and page subitems now, not rail items: the
+  // first-link focus still lands on the first permitted href.
   assert.match(
     source,
-    /globalMenuRef\.current\s*\?\.querySelector<HTMLElement>\("a\.console-nav-item"\)\s*\?\.focus\(\)/su
+    /globalMenuRef\.current\s*\?\.querySelector<HTMLElement>\("a\[href\]"\)\s*\?\.focus\(\)/su
   );
   assert.match(source, /min-width:\s*769px/u);
 });
@@ -161,10 +170,13 @@ test('no guard bypass: shell keeps the shared leave check and native routing', (
   assert.equal(source.match(/createPortal\(/gu)?.length ?? 0, 1);
 });
 
-test('mobile event group carries its own label, desktop keeps labelledby', () => {
+test('event map carries its own section label in the phone menu', () => {
   const source = shell();
-  assert.match(source, /role="group"\s*aria-label="현재 행사 업무"/u);
-  assert.match(source, /aria-labelledby=\{eventsLinkId\}/u);
+  // The horizontal strip is gone: the menu names the current event and its
+  // hubs, so the map reads as labelled sections, not bare links.
+  assert.match(source, /renderMobileEventMenu\(\)/u);
+  assert.match(source, /console-menu-section-label/u);
+  assert.match(source, /현재 행사/u);
 });
 
 test('bottom-bar styles are gone; ordinary bottom spacing stays', () => {
@@ -195,9 +207,13 @@ test('trigger and popup stay phone-only in the dark sidebar voice', () => {
   const css = globalStyles();
   assert.match(css, /\.console-global-nav\s*\{\s*display:\s*none;\s*\}/u);
   assert.match(css, /\.console-global-trigger\s*\{[^}]*min-height:\s*44px/su);
+  // The hamburger is an authored stroke icon, not a unicode glyph: it stays
+  // recognizable at phone widths and inherits the trigger color.
+  assert.match(css, /\.console-global-trigger-bars\s*\{[^}]*stroke:\s*currentColor/su);
   assert.match(css, /\.console-global-menu\s*\{[^}]*z-index:\s*30/su);
-  assert.match(css, /\.console-global-menu\s*\{[^}]*width:\s*220px/su);
-  assert.match(css, /\.console-global-menu\s*\{[^}]*max-width:\s*calc\(100vw - var\(--s5\)\)/su);
+  assert.match(css, /\.console-global-menu\s*\{[^}]*width:\s*min\(320px,\s*calc\(100vw - var\(--s5\)\)\)/su);
+  assert.match(css, /\.console-global-menu\s*\{[^}]*max-height:\s*min\(70svh,\s*560px\)/su);
+  assert.match(css, /\.console-global-menu\s*\{[^}]*overflow-y:\s*auto/su);
   assert.match(css, /\.console-global-menu\s*\{[^}]*background:\s*var\(--nav\)/su);
   assert.match(css, /\.console-global-menu\[hidden\]\s*\{\s*display:\s*none/su);
   assert.match(css, /\.console-global-menu \.console-nav-item\s*\{[^}]*min-height:\s*44px/su);

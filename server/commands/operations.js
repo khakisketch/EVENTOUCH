@@ -55,7 +55,7 @@ function commandReceiptMatches(receipt, { eventId, actorId, command, ticketToken
 }
 
 async function lockEvent(client, eventId) {  const result = await client.query(
-    `SELECT e.id, e.slug, e.client_id, e.payload, e.revision,
+    `SELECT e.id, e.slug, e.client_id, e.org_id, e.payload, e.revision,
             w.payload AS workspace_payload, w.revision AS workspace_revision
      FROM events e JOIN event_workspaces w ON w.event_id = e.id
      WHERE e.id = $1
@@ -81,17 +81,16 @@ async function currentAssignments(client, eventId) {
   }));
 }
 
-async function authorize(client, event, workspace, account, command, assignmentId) {
-  if (!account || !account.id) throw failure(401, '로그인이 필요합니다');
-  const accountResult = await client.query(
-    'SELECT role, active FROM accounts WHERE id = $1 LIMIT 1',
-    [String(account.id)]
-  );
-  const current = accountResult.rows[0];
-  if (!current || current.active !== true || !['AGENCY', 'MANAGER', 'STAFF'].includes(current.role)) {
+// Grant verdicts run AFTER the receipt lookup (AGENTS order), so a committed
+// write retried after a permission change still replays. Scope (identity,
+// org, event, assignment existence) is verified pre-receipt via
+// resolveEventAuthority at the call site.
+async function authorizeGrants(client, event, workspace, account, command, assignmentId, org) {
+  const current = { role: org.role, active: true };
+  if (!['AGENCY', 'MANAGER', 'STAFF'].includes(current.role)) {
     throw failure(401, '로그인이 필요합니다');
   }
-  if (current.role === 'AGENCY') return { role: current.role, assignment: null };
+  if (current.role === 'AGENCY') return { role: current.role, assignment: null, orgId: org.orgId };
   if (current.role === 'MANAGER') {
     const membership = await client.query(
       'SELECT write_permissions FROM memberships WHERE account_id = $1 AND event_id = $2 LIMIT 1 FOR SHARE',
@@ -103,7 +102,7 @@ async function authorize(client, event, workspace, account, command, assignmentI
     if (!managerWriteAllowed(membership.rows[0].write_permissions, command)) {
       throw failure(403, '권한을 확인하세요');
     }
-    return { role: current.role, assignment: null };
+    return { role: current.role, assignment: null, orgId: org.orgId };
   }
 
   const expectedType = STAFF_ASSIGNMENTS.get(command);
@@ -124,6 +123,7 @@ async function authorize(client, event, workspace, account, command, assignmentI
   return {
     role: current.role,
     assignment: { id: String(row.id), type: String(row.type), targetId: target },
+    orgId: org.orgId,
   };
 }
 
@@ -189,14 +189,22 @@ async function assignStaff(client, event, workspace, input) {
   if (!accountId || !['DESK', 'BOOTH'].includes(type) || !targetId) {
     throw failure(400, '스태프와 담당 업무를 확인하세요');
   }
+  // Assignment targets resolve through the EVENT's org membership, never the
+  // global accounts.role: a shared account staffs here when it is STAFF in
+  // this org, whatever it is elsewhere. Global active still applies.
   const accountResult = await client.query(
-    'SELECT role, active FROM accounts WHERE id = $1 LIMIT 1',
-    [accountId]
+    `SELECT a.active AS active, m.role AS role, m.active AS member_active
+     FROM accounts a
+     LEFT JOIN organization_memberships m
+       ON m.account_id = a.id AND m.org_id = (SELECT org_id FROM events WHERE id = $2 LIMIT 1)
+     WHERE a.id = $1 LIMIT 1`,
+    [accountId, event.id]
   );
   const targetExists = type === 'DESK'
     ? list(workspace.desks).some((desk) => desk && String(desk.id) === targetId)
     : list(workspace.booths).some((booth) => booth && String(booth.id) === targetId);
-  if (!accountResult.rows[0] || accountResult.rows[0].active !== true || accountResult.rows[0].role !== 'STAFF') {
+  if (!accountResult.rows[0] || accountResult.rows[0].active !== true ||
+      accountResult.rows[0].role !== 'STAFF' || accountResult.rows[0].member_active !== true) {
     throw failure(400, '활성 현장 스태프를 선택하세요.');
   }
   if (!targetExists) throw failure(404, '선택한 업무 대상을 찾을 수 없습니다.');
@@ -602,15 +610,36 @@ function createOperationsCommands(database) {
       workspace.assignments = await currentAssignments(client, event.id);
       const guestPerson = guest ? activeParticipant(workspace, ticketToken) : null;
       const operationActor = guest ? { id: guestPerson.id } : account;
+      // Scope boundary pre-receipt; grant verdicts post-receipt (see
+      // authorizeGrants): a committed write retried after a permission change
+      // still replays.
+      let opScope = null;
+      if (!guest) {
+        const { resolveEventAuthority } = require('../tenancy');
+        try {
+          opScope = await resolveEventAuthority(client, account, event.id);
+        } catch (error) {
+          throw failure(error.status || 403, error.message || '권한을 확인하세요', undefined, error.code);
+        }
+      }
       const authorized = guest
-        ? { role: 'GUEST', assignment: null }
-        : await authorize(client, event, workspace, account, command, assignmentId);
+        ? { role: 'GUEST', assignment: null, orgId: null }
+        : { role: null, assignment: null, orgId: opScope.orgId, deferred: opScope };
 
       const receiptResult = await client.query(
-        'SELECT event_id, actor_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1',
+        'SELECT event_id, actor_id, org_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1',
         [id]
       );
       const receipt = receiptResult.rows[0];
+      if (receipt) {
+        const { checkReceiptScope } = require('../tenancy');
+        const receiptScope = guest ? event.orgId : authorized.orgId;
+        try {
+          checkReceiptScope(receipt, receiptScope || undefined);
+        } catch (scopeError) {
+          throw failure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다.', undefined, scopeError.code);
+        }
+      }
       const pendingInput = object(payload);
       const pendingTicket = command === 'check.scan' ? ticketCode(pendingInput.ticket) : '';
       const pendingParticipantId = command === 'check.scan' && !pendingTicket
@@ -628,6 +657,11 @@ function createOperationsCommands(database) {
         }
         return { status: 200, body: structuredClone(object(receipt.result).response), replayed: true };
       }
+
+      const granted = guest
+        ? authorized
+        : await authorizeGrants(client, event, workspace, account, command, assignmentId, authorized.deferred);
+      Object.assign(authorized, granted);
 
       const input = pendingInput;
       const now = new Date().toISOString();
@@ -689,9 +723,9 @@ function createOperationsCommands(database) {
         [event.id, JSON.stringify(workspace)]
       );
       await client.query(
-        `INSERT INTO command_receipts (command_id, event_id, actor_id, result)
-         VALUES ($1, $2, $3, $4::jsonb)`,
-        [id, event.id, guest ? null : String(account.id), JSON.stringify({
+        `INSERT INTO command_receipts (command_id, event_id, actor_id, org_id, result)
+         VALUES ($1, $2, $3, $4, $5::jsonb)`,
+        [id, event.id, guest ? null : String(account.id), guest ? event.orgId : authorized.orgId, JSON.stringify({
           command,
           response: result.body || {},
           ticketHash: ticketHash(guest ? ticketToken : null),

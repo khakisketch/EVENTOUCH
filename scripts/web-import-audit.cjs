@@ -6,16 +6,23 @@
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const { prepareCaptureDir, ensureCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = require('./capture-dir.cjs');
 const path = require('node:path');
-process.env.TMPDIR = '/tmp/opencode';
+for (const key of ['SOLAPI_API_KEY', 'SOLAPI_API_SECRET', 'SOLAPI_SENDER', 'SOLAPI_KAKAO_PFID', 'SOLAPI_API_HOST']) delete process.env[key];
+process.env.EVENTOUCH_SMS_MOCK = '1';
+process.env.EVENTOUCH_MAIL_MOCK = '1';
+const { startOwnedNext, ensureAuditDatabaseEnv } = require('./audit-fixture.cjs');
+ensureAuditDatabaseEnv();
 const { chromium } = require('playwright');
 const XLSX = require('../apps/web/node_modules/xlsx');
 const { emptyWorkspace } = require('../server/state');
-const { startApiHarness, insertAccount, insertEvent, insertMembership, sessionCookie } = require('../tests/helpers/postgres-api-server.cjs');
+const { startApiHarness, insertAccount, insertEvent, insertMembership, sessionCookie, LEGACY_ORG } = require('../tests/helpers/postgres-api-server.cjs');
 const { startWebApiGateway } = require('../tests/helpers/web-api-gateway.cjs');
 
-const webBase = process.env.WEB_BASE || 'http://127.0.0.1:8777';
-const captureDir = '/tmp/opencode/eventouch-captures/import-real';
+const webBaseExplicit = Object.hasOwn(process.env, 'WEB_BASE');
+const captureDir = process.env.EVENTOUCH_CAPTURE_ROOT
+  ? path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'import-real')
+  : defaultCaptureDir(`import-real-${runStamp()}`);
 
 function workbookBuffer(count, offset, bookType, wide = false) {
   const extra = wide ? Array.from({ length: 8 }, (_, index) => `기타 ${index + 1}`) : [];
@@ -33,25 +40,39 @@ function workbookBuffer(count, offset, bookType, wide = false) {
 }
 
 async function main() {
-  fs.mkdirSync(captureDir, { recursive: true });
+  prepareCaptureDir(captureDir);
+  // Uploaded workbooks and browser profiles stay under this run's
+  // private tree, never the shared /tmp/opencode directory.
+  process.env.TMPDIR = ensureRunTmpDir(captureDir);
+  const buildId = fs.readFileSync(path.join(__dirname, '..', 'apps', 'web', '.next', 'BUILD_ID'), 'utf8').trim();
+  assert.ok(buildId, 'import audit requires a production Next build');
   let harness;
+  let owned;
   let gateway;
   let browser;
   let page;
   try {
     harness = await startApiHarness();
+    if (webBaseExplicit) process.stderr.write('[import-audit] WEB_BASE is superseded: auditing the isolated owned Next server\n');
+    owned = await startOwnedNext({ apiBase: harness.baseUrl });
+    {
+      const probe = await fetch(`${owned.baseUrl}/login`, { headers: { connection: 'close' } });
+      await probe.text().catch(() => '');
+      assert.equal(probe.status, 200, 'owned Next must serve the login shell before the browser runs');
+    }
     const suffix = crypto.randomUUID().replace(/-/g, '');
     const eventId = `browser-import-${suffix}`;
     const accountId = `browser-import-manager-${suffix}`;
-    await insertAccount(harness.database, { id: accountId, role: 'MANAGER', name: '가져오기 검증 운영자', email: `${accountId}@example.test` });
+    await insertAccount(harness.database, { orgId: LEGACY_ORG, id: accountId, role: 'MANAGER', name: '가져오기 검증 운영자', email: `${accountId}@example.test` });
     await insertEvent(harness.database, {
+      orgId: LEGACY_ORG,
       id: eventId,
       slug: eventId,
       payload: { id: eventId, slug: eventId, name: '가져오기 검증 행사', stage: 'LIVE', date: '2027-01-16', start: '09:00', end: '17:00', capacity: 100, features: ['draw', 'poll', 'reward'] },
       workspace: emptyWorkspace(),
     });
     await insertMembership(harness.database, accountId, eventId, ['all']);
-    gateway = await startWebApiGateway({ apiBase: harness.baseUrl, webBase, loseFirstResponseFor: 'participant.import' });
+    gateway = await startWebApiGateway({ apiBase: harness.baseUrl, webBase: owned.baseUrl, loseFirstResponseFor: 'participant.import' });
     browser = await chromium.launch(process.env.CHROMIUM_EXECUTABLE ? { executablePath: process.env.CHROMIUM_EXECUTABLE } : {});
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     const cookie = await sessionCookie(harness, accountId);
@@ -61,11 +82,33 @@ async function main() {
     page.on('pageerror', (error) => pageErrors.push(error.message));
     await page.goto(`${gateway.baseUrl}/console/events/${eventId}/participants/import`, { waitUntil: 'networkidle' });
     const file = page.locator('input[type="file"]');
-    await file.setInputFiles({ name: '참가자.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: workbookBuffer(8, 0, 'xlsx') });
-    await page.getByText(/유효 8행 · 오류 0행/).waitFor();
-    await page.getByRole('button', { name: '유효 행 반영', exact: true }).click();
+    // The redesigned picker keeps the real input keyboard-focusable while
+    // rendering its Korean label as the visible control. Exercise Tab and
+    // native Space/filechooser, not a fabricated button click. Chromium's
+    // native file input did not open with Enter after Tab in a minimal
+    // independent reproduction; Space opens it without app-specific handlers.
+    await file.focus();
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Tab');
+    assert.equal(await file.evaluate(element => element === document.activeElement), true, 'Tab returns to the real file input');
+    const picker = page.locator('label').filter({ has: file });
+    const visibleControl = picker.getByText('파일 선택', { exact: true });
+    const controlGeometry = await visibleControl.evaluate(element => {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return { width: rect.width, height: rect.height, outline: style.outlineStyle, outlineWidth: parseFloat(style.outlineWidth) };
+    });
+    assert.ok(controlGeometry.width >= 44 && controlGeometry.height >= 44 && controlGeometry.outline !== 'none' && controlGeometry.outlineWidth >= 2, `file-picker focus or touch target: ${JSON.stringify(controlGeometry)}`);
+    const fileChooser = page.waitForEvent('filechooser');
+    await page.keyboard.press('Space');
+    await (await fileChooser).setFiles({ name: '참가자.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: workbookBuffer(8, 0, 'xlsx') });
+    const review = page.locator('section[aria-labelledby="participant-import-review-heading"]');
+    await review.getByText('유효 8행', { exact: true }).waitFor();
+    await review.getByText('오류 0행', { exact: true }).waitFor();
+    assert.equal(await picker.getByText('참가자.xlsx', { exact: true }).isVisible(), true, 'selected filename is visible');
+    await page.getByRole('button', { name: /유효 8행 반영/ }).click();
     await page.getByRole('alert').filter({ hasText: /연결하지 못했습니다/ }).waitFor();
-    await page.getByRole('button', { name: '유효 행 반영', exact: true }).click();
+    await page.getByRole('button', { name: /유효 8행 반영/ }).click();
     await page.getByText('8명을 반영했습니다.', { exact: true }).waitFor();
     const calls = gateway.commands.filter((item) => item.command === 'participant.import');
     assert.equal(calls.length, 2);
@@ -77,8 +120,9 @@ async function main() {
     await page.screenshot({ path: path.join(captureDir, 'xlsx-retry-1280.png'), fullPage: true });
 
     await file.setInputFiles({ name: '추가참가자.xls', mimeType: 'application/vnd.ms-excel', buffer: workbookBuffer(2, 8, 'biff8') });
-    await page.getByText(/유효 2행 · 오류 0행/).waitFor();
-    await page.getByRole('button', { name: '유효 행 반영', exact: true }).click();
+    await review.getByText('유효 2행', { exact: true }).waitFor();
+    await review.getByText('오류 0행', { exact: true }).waitFor();
+    await page.getByRole('button', { name: /유효 2행 반영/ }).click();
     await page.getByText('2명을 반영했습니다.', { exact: true }).waitFor();
     stored = (await harness.database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [eventId])).rows[0].payload;
     assert.equal(stored.participants.length, 10);
@@ -89,8 +133,9 @@ async function main() {
     await page.screenshot({ path: path.join(captureDir, 'xls-1280.png'), fullPage: true });
 
     await file.setInputFiles({ name: '여러열참가자.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: workbookBuffer(2, 10, 'xlsx', true) });
-    await page.getByText(/유효 2행 · 오류 0행/).waitFor();
-    await page.getByRole('button', { name: '유효 행 반영', exact: true }).click();
+    await review.getByText('유효 2행', { exact: true }).waitFor();
+    await review.getByText('오류 0행', { exact: true }).waitFor();
+    await page.getByRole('button', { name: /유효 2행 반영/ }).click();
     await page.getByText('2명을 반영했습니다.', { exact: true }).waitFor();
     stored = (await harness.database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [eventId])).rows[0].payload;
     assert.equal(stored.participants.length, 12);
@@ -106,13 +151,14 @@ async function main() {
     const persisted = await reloaded.json();
     assert.equal(persisted.state.workspaces[eventId].participants.length, 12);
     assert.deepEqual(pageErrors, []);
-    console.log(JSON.stringify({ outcome: 'passed', apiResponsesMocked: false, formats: ['xlsx', 'xls'], imported: 12, leadingZeroPreserved: true, wideColumnsMapped: true, oversizedWorkbookRejected: true, lostResponseReplayed: true, persistedAfterHttpRestart: true, pageErrors: 0, captures: captureDir }));
+    console.log(JSON.stringify({ outcome: 'passed', buildId, ownedNext: owned.baseUrl, apiResponsesMocked: false, formats: ['xlsx', 'xls'], imported: 12, leadingZeroPreserved: true, wideColumnsMapped: true, oversizedWorkbookRejected: true, lostResponseReplayed: true, persistedAfterHttpRestart: true, pageErrors: 0, captures: captureDir }));
   } catch (error) {
     if (page) await page.screenshot({ path: path.join(captureDir, 'failure.png'), fullPage: true }).catch(() => {});
     throw error;
   } finally {
     if (browser) await browser.close();
-    if (gateway) await gateway.close();
+    if (gateway) await gateway.close().catch(() => {});
+    if (owned) await owned.close().catch(() => {});
     if (harness) await harness.close();
   }
 }

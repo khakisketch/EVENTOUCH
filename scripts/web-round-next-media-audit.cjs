@@ -21,14 +21,14 @@ process.env.EVENTOUCH_SMS_MOCK = '1';
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const { prepareCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = require('./capture-dir.cjs');
 const path = require('node:path');
 const { startAuditFixture, resolveAuditDatabaseUrl } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 
 const BASELINE_BUILD_ID = 'q91_6FU24tTszHkkmPzIy';
 const UI_TIMEOUT = 20000;
-const CAPTURE_DIR = process.env.CAPTURE_DIR
-  || '/tmp/opencode/eventouch-captures/round-next/before';
+const CAPTURE_DIR = process.env.CAPTURE_DIR || defaultCaptureDir(`round-next/before-${runStamp()}`);
 
 // Minimal PNG reader (signature + IHDR dims + SHA-256). No new dependencies.
 function parsePng(buffer, label) {
@@ -63,7 +63,8 @@ async function main() {
   if (process.env.ROUND_NEXT_BASELINE === '1') {
     assert.equal(buildId, BASELINE_BUILD_ID, `baseline build changed (got ${buildId}); stop, do not rebuild from this worker`);
   }
-  fs.mkdirSync(CAPTURE_DIR, { recursive: true });
+  prepareCaptureDir(CAPTURE_DIR);
+  process.env.TMPDIR = ensureRunTmpDir(CAPTURE_DIR);
 
   const f = await startAuditFixture();
   let browser;
@@ -430,7 +431,7 @@ async function main() {
       ],
       checks: judgments,
     };
-    fs.writeFileSync(path.join(CAPTURE_DIR, 'round-next-media-verification.json'), `${JSON.stringify(result, null, 2)}\n`);
+    fs.writeFileSync(path.join(CAPTURE_DIR, 'round-next-media-verification.json'), `${JSON.stringify(result, null, 2)}\n`, { mode: 0o600 });
     console.log(`[round-next-media] judgments=${judgments.length} failures=0 build=${buildId} dir=${CAPTURE_DIR}`);
   } finally {
     if (browser) await browser.close();

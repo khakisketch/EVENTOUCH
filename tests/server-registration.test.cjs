@@ -13,6 +13,7 @@ const {
   sessionCookie,
   requestJson,
   deleteFixtureRows,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 
 const test = databaseUrl
@@ -142,19 +143,19 @@ function expiredParticipant(ticket) {
 before(async () => {
   if (!databaseUrl) return;
   harness = await startApiHarness();
-  await insertAccount(harness.database, {
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,
     id: accountIds.agency,
     role: 'AGENCY',
     name: '운영사 관리자',
     email: `${accountIds.agency}@example.test`,
   });
-  await insertAccount(harness.database, {
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,
     id: accountIds.manager,
     role: 'MANAGER',
     name: '행사 매니저',
     email: `${accountIds.manager}@example.test`,
   });
-  await insertAccount(harness.database, {
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,
     id: accountIds.staff,
     role: 'STAFF',
     name: '현장 스태프',
@@ -169,7 +170,7 @@ before(async () => {
         ? [expiredParticipant(expiredTicket)]
         : [],
     });
-    await insertEvent(harness.database, {
+    await insertEvent(harness.database, {orgId: LEGACY_ORG,
       id: ids[name],
       slug: slugs[name],
       payload: eventPayload(ids[name], slugs[name], ['capacity', 'parallel', 'signup', 'importOverflow'].includes(name)

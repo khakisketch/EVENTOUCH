@@ -58,3 +58,169 @@
   background: var(--soft);
   color: var(--brand-text);
 }
+
+.importStepTodo {
+  border-style: dashed;
+}
+
+/* Step 1 explainer: quiet intro copy, not a banner. The same consent and
+   limit facts stay; only the rhythm changes so the file task reads first. */
+.help {
+  max-width: 68ch;
+  margin: 0 0 var(--s3);
+  color: var(--muted);
+  font-size: var(--small);
+  line-height: 1.6;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.help b {
+  color: var(--ink);
+}
+
+/* File task: one honest native control, not a drop region. The label reads
+   as a single row — a Korean-named button plus the real selected file name
+   as plain status text. The actual <input type="file"> stays a real,
+   keyboard-focusable control (visually hidden, never display:none); the
+   visible button text is its aria-hidden mirror so the name is announced
+   once from the sr-only label. No drop behavior is implied anywhere. */
+.filePicker {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  min-width: 0;
+  min-height: 44px;
+  font-size: var(--small);
+  cursor: pointer;
+}
+
+.fileButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-small);
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.filePicker:hover .fileButton {
+  background: var(--surface-muted);
+}
+
+.fileName {
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The hidden input keeps keyboard focus: the visible button carries the
+   3px focus ring whenever anything inside the label — the real file
+   input — has it. Plain :focus-within, no :has dependency. The commit
+   flight toggles the explicit disabled class alongside the input's own
+   disabled attribute, so dimming never depends on selectors either. */
+.filePicker:focus-within .fileButton {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.filePickerDisabled {
+  cursor: not-allowed;
+}
+
+.filePickerDisabled .fileButton {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Format limits: one quiet constraint line under the file card, wrapping
+   intact at 320px instead of competing with the picker. */
+.fileMeta {
+  max-width: 72ch;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* Step 2 mapping: four related selects share one grid so name/phone read
+   as the required pair and the optional pair sits beside them. */
+.mapGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s2) var(--s3);
+  min-width: 0;
+}
+
+.mapGrid label {
+  display: grid;
+  gap: var(--s1);
+  min-width: 0;
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.mapGrid select {
+  min-height: 44px;
+}
+
+@media (max-width: 680px) {
+  .mapGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Step 3 review: valid/error counts read as one status line above the
+   shared ledger rows; the rows themselves stay untouched. */
+.reviewSummary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0 0 var(--s2);
+  font-size: var(--small);
+}
+
+.reviewCount {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--ink);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.reviewCount[data-tone="good"] {
+  border-color: var(--success-line);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.reviewCount[data-tone="bad"] {
+  border-color: var(--danger-line);
+  background: var(--danger-soft);
+  color: var(--danger);
+}

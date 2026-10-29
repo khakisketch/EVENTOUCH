@@ -296,3 +296,19 @@
 .pageFooter .button {
   min-height: 44px;
 }
+
+/* 390px phones: the card padding steps down one token so the form fields keep
+   a comfortable measure; type scale and 44px targets stay untouched. */
+@media (max-width: 480px) {
+  .page {
+    padding: var(--s3);
+  }
+
+  .moduleCard {
+    padding: var(--s3);
+  }
+
+  .noticeCard {
+    padding: var(--s4);
+  }
+}

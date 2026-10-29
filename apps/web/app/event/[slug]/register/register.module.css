@@ -1,0 +1,75 @@
+/* Participant registration rhythm (white work SaaS, open sections).
+   The form reads as grouped sections — 본인 확인, 신청 결과 안내, 신청 정보,
+   동의 — so the outcome promise, field groups, and consent never collapse
+   into one undifferentiated stack on a 390px phone. Hairlines and section
+   titles group the work; inputs, validation, and guards stay global. */
+.form {
+  gap: var(--s4);
+}
+
+.stepSection {
+  display: grid;
+  gap: var(--s3);
+  margin: 0;
+  padding: var(--s4) 0 0;
+  border-top: 1px solid var(--line);
+}
+
+.stepSection:first-of-type {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.stepLabel {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--label);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+}
+
+.stepTitle {
+  margin: 0;
+  font-size: var(--h3);
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+/* The outcome promise (receipt vs immediate ticket) is the attendee's event
+   context: an info strip with the same weight as verification, never a
+   quiet footnote that long forms bury. Device-binding, when it applies,
+   joins the same strip instead of repeating underneath it. */
+.outcomeNote {
+  margin: 0;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--info-line);
+  border-radius: var(--radius-small);
+  background: var(--info-soft);
+  color: var(--info);
+  font-size: var(--small);
+  font-weight: 700;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+.consentPanel {
+  display: grid;
+  gap: var(--s2);
+}
+
+.submitBlock {
+  display: grid;
+  gap: var(--s3);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .form {
+    scroll-behavior: auto;
+  }
+}

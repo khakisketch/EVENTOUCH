@@ -1,0 +1,11 @@
+# EVENTOUCH 백업 스케줄 예시 (복사해서 사용하지 말고 값을 채워서 사용).
+# 보존 일수·오프사이트 위치·암호화 키·알림 수신처는 정책 미정이므로
+# 이 예시는 삭제·업로드·발송을 포함하지 않는다. 정책이 정해지면 이 파일과
+# scripts/backup-schedule.cjs·ops-notify.cjs를 함께 갱신한다.
+
+# 매일 03:10 KST: 백업 + 즉시 무결성 검사. 실패는 로그에만 남는다.
+10 3 * * * root /usr/bin/node /opt/eventouch/scripts/backup-schedule.cjs --backup-root /var/backups/eventouch --check >> /var/log/eventouch-backup.log 2>&1
+
+# 매시간 정시: 운영 readiness 확인 (API+rewrite+백업鮮도+outbox+디스크).
+# --max-backup-age-hours 값은 보존 정책이 정해지면 채운다 (지금은 미판정 보고).
+0 * * * * root /usr/bin/node /opt/eventouch/scripts/ops-readiness.cjs --api-base http://127.0.0.1:8776 --web-base http://127.0.0.1:8777 --backup-root /var/backups/eventouch --disk-path /var/backups/eventouch --json >> /var/log/eventouch-readiness.log 2>&1

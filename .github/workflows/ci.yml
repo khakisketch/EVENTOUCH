@@ -55,6 +55,9 @@ jobs:
       - name: Install root and web dependencies
         run: npm run setup
 
+      - name: Install Chromium for browser-backed regression tests
+        run: npx playwright install --with-deps chromium
+
       - name: Verify migrations apply to a clean database
         # Proves the migration chain is valid on its own, independently of
         # whether the integration suites happen to touch every table.
@@ -84,6 +87,27 @@ jobs:
 
       - name: Build the new app
         run: npm --prefix apps/web run build
+
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install root and web dependencies
+        run: npm run setup
+
+      - name: Dependency vulnerability gate (root omit=dev + web, moderate+)
+        # Conservative and explicit: the default gate fails on moderate and
+        # above for both lockfiles. Loosening it needs an explicit --level
+        # flag, so a weakened threshold always shows in the diff.
+        run: npm run security:audit
 
   mobile:
     runs-on: ubuntu-latest
@@ -223,30 +247,102 @@ jobs:
       - name: Build the new app
         run: npm --prefix apps/web run build
 
+      - name: Create fresh private evidence root
+        # Every web job run owns a fresh, owner-private evidence root. mktemp
+        # guarantees a new directory per run, so consecutive runs can never
+        # silently reuse (or overwrite) each other's logs and captures.
+        # The exact paths are conveyed to the audit and upload steps below
+        # through $GITHUB_ENV — no step re-derives or hardcodes them.
+        run: |
+          set -euo pipefail
+          umask 077
+          EVIDENCE_ROOT="$(mktemp -d /tmp/eventouch-ci-evidence-XXXXXX)"
+          chmod 700 "$EVIDENCE_ROOT"
+          mkdir -m 700 "$EVIDENCE_ROOT/logs" "$EVIDENCE_ROOT/captures"
+          chmod 700 "$EVIDENCE_ROOT" "$EVIDENCE_ROOT/logs" "$EVIDENCE_ROOT/captures"
+          printf 'EVENTOUCH_CI_EVIDENCE_ROOT=%s\n' "$EVIDENCE_ROOT" >> "$GITHUB_ENV"
+          printf 'EVENTOUCH_CI_LOGS=%s\n' "$EVIDENCE_ROOT/logs" >> "$GITHUB_ENV"
+          printf 'EVENTOUCH_CI_CAPTURES=%s\n' "$EVIDENCE_ROOT/captures" >> "$GITHUB_ENV"
+
       - name: Run the browser audits serially against one Next build
-        # web:audit is portable (shared fixture + portable browser). The
-        # import/hanwool/theme/retirement audits run with the same isolated
-        # database; all support CHROMIUM_EXECUTABLE or the bundled browser,
-        # so the installed Chromium is used
-        # on any machine with no hardcoded paths.
+        # Each browser audit owns its Next and API processes against an
+        # isolated schema, while reusing the same production build.
         env:
           EVENTOUCH_TEST_DATABASE_URL: postgresql://eventouch:eventouch@localhost:5432/eventouch_web
           EVENTOUCH_A11Y_DATABASE_URL: postgresql://eventouch:eventouch@localhost:5432/eventouch_web
           EVENTOUCH_MOBILE_DATABASE_URL: postgresql://eventouch:eventouch@localhost:5432/eventouch_web
           DATABASE_URL: postgresql://eventouch:eventouch@localhost:5432/eventouch_web
-          WEB_BASE: http://127.0.0.1:8777
+          # Screenshots and JSON use synthetic, isolated fixture data under
+          # the fresh per-job evidence root created above.
+          EVENTOUCH_CAPTURE_ROOT: ${{ env.EVENTOUCH_CI_CAPTURES }}
         run: |
-          npm run db:migrate
-          (PORT=8777 npm --prefix apps/web run start & echo $! > /tmp/next-web.pid)
-          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8777/ >/dev/null && break; sleep 2; done
-          npm run web:audit
-          npm run web:console:audit
-          npm run web:import:audit
-          npm run web:hanwool:audit
-          npm run web:theme:audit
-          npm run web:retirement:audit
+          # pipefail: every piped command below (each audit teed to its own
+          # log) keeps its real exit code, so a failing audit still fails
+          # the step instead of reporting tee's success.
+          set -o pipefail
+          # Failure logs are evidence too: the evidence root is already a
+          # fresh 0700 directory from the previous step. Refuse to run when
+          # the conveyed paths are missing instead of falling back to a
+          # shared fixed directory, and refuse to overwrite preexisting logs.
+          : "${EVENTOUCH_CI_LOGS:?evidence root missing: run the evidence-root step first}"
+          : "${EVENTOUCH_CI_CAPTURES:?evidence root missing: run the evidence-root step first}"
+          umask 077
+          mkdir -p /tmp/opencode
+          test -d "$EVENTOUCH_CI_LOGS"
+          test -d "$EVENTOUCH_CI_CAPTURES"
+          # Reserve every log before starting any gate: piping directly into
+          # a no-clobber writer would start the producer concurrently, before
+          # an existing file is detected. Earlier evidence is never truncated.
+          set -o noclobber
+          for log in db-migrate web-audit web-console-audit web-system-audit web-organizations-audit web-organization-roles-audit web-recovery-audit web-import-audit web-hanwool-audit web-theme-audit web-retirement-audit web-preparation-audit web-signup-retry-audit web-crossrole-audit web-lifecycle-audit web-account-recovery-audit web-close-audit web-workbench-audit web-cards-audit audit-usability; do
+            : > "$EVENTOUCH_CI_LOGS/$log.log" || { echo "Existing CI evidence; refusing to run: $EVENTOUCH_CI_LOGS/$log.log" >&2; exit 1; }
+          done
+          set +o noclobber
+          # Append only to the files just reserved inside the private root.
+          ci_tee() {
+            local dest="$1"
+            tee -a "$dest"
+          }
+          npm run db:migrate 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/db-migrate.log"
+          npm run web:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-audit.log"
+          npm run web:console:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-console-audit.log"
+          npm run web:system:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-system-audit.log"
+          npm run web:organizations:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-organizations-audit.log"
+          npm run web:organization-roles:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-organization-roles-audit.log"
+          npm run web:recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-recovery-audit.log"
+          npm run web:import:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-import-audit.log"
+          npm run web:hanwool:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-hanwool-audit.log"
+          npm run web:theme:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-theme-audit.log"
+          npm run web:retirement:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-retirement-audit.log"
+          # Preparation / close / workbench / card journeys run against the
+          # same isolated database; caps and assertions live in the scripts,
+          # CI only wires them so a green build means they really ran.
+          npm run web:preparation:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-preparation-audit.log"
+          npm run web:signup-retry:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-signup-retry-audit.log"
+          npm run web:crossrole:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-crossrole-audit.log"
+          npm run web:lifecycle:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-lifecycle-audit.log"
+          npm run web:account-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-account-recovery-audit.log"
+          npm run web:close:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-close-audit.log"
+          npm run web:workbench:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-workbench-audit.log"
+          npm run web:cards:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-cards-audit.log"
           # Usability as a gate, not a review: every goal must still be
           # reachable in a handful of actions, with the keyboard path and the
           # server state behind it measured.
-          npm run audit:usability
-          kill "$(cat /tmp/next-web.pid)"
+          npm run audit:usability 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/audit-usability.log"
+
+      # Failure evidence only: per-command stdout logs plus screenshots/JSON
+      # from the isolated synthetic fixture, kept 7 days. Success uploads
+      # nothing (no PII retention). No secrets flow through these logs: the
+      # only credentials in this job's env are the ephemeral CI PostgreSQL
+      # user/password (eventouch/eventouch), and the audit scripts delete
+      # provider keys and run with EVENTOUCH_SMS_MOCK=1.
+      - name: Upload audit logs and captures on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-audit-evidence
+          path: |
+            ${{ env.EVENTOUCH_CI_LOGS }}
+            ${{ env.EVENTOUCH_CI_CAPTURES }}
+          retention-days: 7
+          if-no-files-found: ignore

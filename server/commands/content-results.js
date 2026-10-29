@@ -248,6 +248,33 @@ function syncMessage(ctx, input) {
   return { body: { message: scope, pending: true }, resolvePending: true };
 }
 
+// Pre-send guards shared by the operator path (retryMessage) and the
+// opt-in maintenance worker (enqueueDueScheduled). One pure function, so a
+// guard added or tightened here applies to both and cannot drift between a
+// hand tap and an automatic run. Returns null when the campaign may proceed,
+// otherwise { reason, missing } with one of:
+//   NOT_DUE / NO_PUBLIC_ORIGIN / LUCKY_NUMBER_MISSING
+// Status handling (SCHEDULED vs NEEDS_CONNECTION) and simulate marking stay
+// with each caller: their semantics legitimately differ.
+function dueScheduleGuards(message, workspace, { now = Date.now(), origin } = {}) {
+  const at = Number(now) || Date.now();
+  const scheduled = message && message.scheduled ? Date.parse(message.scheduled) : NaN;
+  if (Number.isFinite(scheduled) && scheduled > at) return { reason: 'NOT_DUE', missing: 0 };
+  const resolvedOrigin = origin === undefined ? publicOrigin() : origin;
+  if (String(message && message.body).includes('{{티켓링크}}') && !resolvedOrigin) {
+    return { reason: 'NO_PUBLIC_ORIGIN', missing: 0 };
+  }
+  if (String(message && message.body).includes('{{럭키번호}}')) {
+    const numbers = Array.isArray(workspace && workspace.luckyNumbers) ? workspace.luckyNumbers : [];
+    const recipients = Array.isArray(message && message.recipientIds) ? message.recipientIds : [];
+    const missing = recipients.filter((id) =>
+      !numbers.some((item) => item && item.participantId === id && Number.isInteger(item.number))
+    );
+    if (missing.length) return { reason: 'LUCKY_NUMBER_MISSING', missing: missing.length };
+  }
+  return null;
+}
+
 // The dispatcher needs a reachable address per recipient; the snapshot
 // is the only place the phone number is kept. Variables are computed here
 // and never persisted: a ticket link is a bearer credential, and campaign
@@ -288,30 +315,21 @@ async function retryMessage(ctx, input) {
   if (!message || !['SCHEDULED', 'NEEDS_CONNECTION'].includes(message.status)) {
     throw ctx.fail(409, '실행할 수 없는 상태입니다');
   }
-  if (message.scheduled && Date.parse(message.scheduled) > Date.now()) throw ctx.fail(409, '예약 시각 전입니다');
-
-  // A {{티켓링크}} campaign without a valid public origin can never produce
-  // its entry URL, so it is refused before enqueue (no attempts increment,
-  // no outbox row) instead of sending the literal placeholder.
-  if (String(message.body).includes('{{티켓링크}}') && !publicOrigin()) {
-    throw ctx.fail(409, '참가자 초대 링크를 만들 공개 주소가 설정되지 않았습니다. EVENTOUCH_PUBLIC_URL을 http(s) 주소로 설정하세요');
-  }
-
-  // A {{럭키번호}} campaign must never go out with a silently empty number:
-  // refuse before enqueue while any recipient still lacks one, so the
-  // operator pre-assigns first instead of sending broken invitations.
-  if (String(message.body).includes('{{럭키번호}}')) {
-    const numbers = Array.isArray(ctx.workspace.luckyNumbers) ? ctx.workspace.luckyNumbers : [];
-    const missing = list(message.recipientIds).filter((id) =>
-      !numbers.some((item) => item && item.participantId === id && Number.isInteger(item.number))
-    );
-    if (missing.length) {
-      throw ctx.fail(
-        409,
-        `럭키번호가 배정되지 않은 대상이 ${missing.length}명 있습니다. 먼저 럭키번호를 배정하세요`,
-        'ids'
-      );
+  // Pre-send guards are shared with the maintenance worker
+  // (dueScheduleGuards): the operator's tap and an automatic run refuse the
+  // same broken campaigns. Refused here means before enqueue: no attempts
+  // increment, no outbox row.
+  const guard = dueScheduleGuards(message, ctx.workspace, { now: Date.now() });
+  if (guard) {
+    if (guard.reason === 'NOT_DUE') throw ctx.fail(409, '예약 시각 전입니다');
+    if (guard.reason === 'NO_PUBLIC_ORIGIN') {
+      throw ctx.fail(409, '참가자 초대 링크를 만들 공개 주소가 설정되지 않았습니다. EVENTOUCH_PUBLIC_URL을 http(s) 주소로 설정하세요');
     }
+    throw ctx.fail(
+      409,
+      `럭키번호가 배정되지 않은 대상이 ${guard.missing}명 있습니다. 먼저 럭키번호를 배정하세요`,
+      'ids'
+    );
   }
 
   message.attempts = (Number(message.attempts) || 0) + 1;
@@ -664,4 +682,4 @@ async function apply(ctx) {
   }
 }
 
-module.exports = { COMMANDS, apply, buildMessageDispatch };
+module.exports = { COMMANDS, apply, buildMessageDispatch, dueScheduleGuards };

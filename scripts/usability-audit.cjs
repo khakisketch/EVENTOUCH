@@ -52,7 +52,7 @@
 // actually achieved values, never loosened to force a pass.
 //
 // Evidence: result JSON + per-task screenshots under
-// /tmp/opencode/eventouch-captures/usability-<YYYYMMDD>/ (never in the repo).
+// /tmp/eventouch-private-<uid>/eventouch-captures/usability-<YYYYMMDD>-<run>/ (never in the repo; fresh per run).
 //
 // What this tool cannot measure (by design): comprehension, preference,
 // satisfaction, screen-reader experience, real-device touch behavior, and
@@ -65,6 +65,7 @@ process.env.EVENTOUCH_SMS_MOCK = '1';
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const { prepareCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = require('./capture-dir.cjs');
 const path = require('node:path');
 const { launchBrowser } = require('./audit-browser.cjs');
 const { startAuditFixture } = require('./audit-fixture.cjs');
@@ -90,7 +91,7 @@ function datestamp() {
 
 const CAPTURE_DIR = process.env.EVENTOUCH_CAPTURE_ROOT
   ? path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'usability')
-  : `/tmp/opencode/eventouch-captures/usability-${datestamp()}`;
+  : path.join(defaultCaptureDir(), `usability-${datestamp()}-${runStamp()}`);
 
 function sessionValue(cookie) {
   return decodeURIComponent(String(cookie).slice('etko_session='.length));
@@ -153,6 +154,7 @@ async function extendFixtureSeed(fixture) {
   // account. accounts.active defaults to true (001_initial.sql).
   const staff2Id = `usability-staff2-${suffix}`.toLowerCase();
   await helpers.insertAccount(harness.database, {
+    orgId: helpers.LEGACY_ORG,
     id: staff2Id, role: 'STAFF', name: '사용성 스태프', email: `${staff2Id}@example.test`,
   });
 
@@ -283,8 +285,14 @@ function attachErrorListeners(page, task, baseUrl) {
   });
 }
 
-// Visible failure copy at task end. Static help text on these screens never
-// contains these phrases; anything matched here is a real failure surface.
+// Visible failure copy at task end. Only rendered text counts, and a
+// closed status-filter <select> is never a live failure surface: its
+// option list is excluded at the DOM boundary (hidden in place while the
+// scan reads), so an unselected "발송 실패" choice cannot flag while a
+// visible "발송 실패" chip or "발송이 실패했습니다" hint elsewhere stays
+// in the scan and still fails. No global string subtraction runs: text
+// belonging to other visible elements is never removed. Alerts,
+// pageerrors and bad HTTP always fail regardless of this scan.
 async function collectFailureCopy(page, task) {
   const texts = await page.evaluate(() => {
     const alerts = [...document.querySelectorAll('[role="alert"]')]
@@ -293,7 +301,31 @@ async function collectFailureCopy(page, task) {
         return rect.width > 0 && rect.height > 0;
       })
       .map((element) => element.innerText.replace(/\s+/g, ' ').trim());
-    const body = document.body ? document.body.innerText.replace(/\s+/g, ' ').slice(0, 4000) : '';
+    const body = (() => {
+      const root = document.body;
+      if (!root || typeof root.innerText !== 'string') return '';
+      try {
+        // DOM-boundary exclusion: hide only the select elements themselves
+        // while reading native innerText, then restore. Native spacing is
+        // preserved so task failureIgnore patterns keep matching, and only
+        // select/option content leaves the scan.
+        const selects = [...root.querySelectorAll('select')];
+        const previous = selects.map((element) => element.getAttribute('style'));
+        try {
+          // Override even an existing !important display declaration. Restore
+          // the entire original attribute (or its absence), including priority.
+          for (const element of selects) element.setAttribute('style', 'display: none !important;');
+          return root.innerText.replace(/\s+/g, ' ').slice(0, 4000);
+        } finally {
+          for (let index = 0; index < selects.length; index += 1) {
+            if (previous[index] === null) selects[index].removeAttribute('style');
+            else selects[index].setAttribute('style', previous[index]);
+          }
+        }
+      } catch {
+        return root.innerText.replace(/\s+/g, ' ').slice(0, 4000);
+      }
+    })();
     return { alerts, body };
   }).catch(() => ({ alerts: [], body: '' }));
   for (const alert of texts.alerts) {
@@ -608,7 +640,8 @@ async function settledVisibleText(page, text, timeout = 15000) {
 }
 
 async function main() {
-  fs.mkdirSync(CAPTURE_DIR, { recursive: true });
+  prepareCaptureDir(CAPTURE_DIR);
+  process.env.TMPDIR = ensureRunTmpDir(CAPTURE_DIR);
   let fixture;
   try {
     fixture = await startAuditFixture();
@@ -697,10 +730,12 @@ async function main() {
         await act(task, () => page.locator('#roster-approve-selected').click());
         await page.getByText(/명을 승인했습니다/).first().waitFor({ timeout: 15000 });
         const notice = await page.getByText(/명을 승인했습니다/).first().innerText().catch(() => '');
-        // Scope the chip to the person's row: the status filter <select>
-        // above holds hidden <option> copies of the same labels, so an
-        // unscoped first-match would read the filter, not the list.
-        const row = page.locator('li').filter({ hasText: seed.pendingName }).first();
+        // Scope the chip to the person's table row: the desktop roster
+        // renders rows as <tr> (the mobile <ul> card list is display:none at
+        // this viewport), and the status filter holds hidden copies of the
+        // same labels, so an unscoped first-match would read the filter, not
+        // the list. The notice above already names the approved person.
+        const row = page.locator('table tbody tr').filter({ hasText: seed.pendingName }).first();
         const approvedChip = await settledVisible(row.getByText('참가 확정', { exact: true }));
         task.resultVisible = notice.includes(seed.pendingName) && approvedChip;
         task.resultNote = `승인 안내 "${notice.replace(/\s+/g, ' ').slice(0, 60)}" + 목록에 참가 확정 표시`;
@@ -776,6 +811,7 @@ async function main() {
       attachErrorListeners(page, task, baseUrl);
       try {
         await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/messages`, { waitUntil: 'networkidle', timeout: 30000 });
+        await act(task, () => page.locator('#message-compose-open').click());
         await page.locator('#campaign-title').waitFor({ state: 'visible', timeout: 15000 });
         await verifySkipLink(page, task);
         await installScrollCounter(page);
@@ -791,15 +827,20 @@ async function main() {
         await page.getByRole('button', { name: '발송 요청한다', exact: true }).waitFor({ state: 'visible', timeout: 10000 });
         await act(task, () => page.getByRole('button', { name: '발송 요청한다', exact: true }).click());
         await page.getByText('발송 요청을 기록했습니다').first().waitFor({ timeout: 15000 });
-        // Read the status off the new history row itself: the page also
+        // Read the status off the new history table row itself: the page also
         // carries a static "모의 발송도 전달되지 않습니다" warning, so a
-        // body-wide match would prove nothing about this campaign.
-        const historyItem = page.locator('li').filter({ hasText: title }).first();
+        // body-wide match would prove nothing about this campaign. History
+        // renders as <tr data-history-row> (deliveries are nested <li> inside
+        // a collapsed detail), so the row — not a global <li> — is scoped by
+        // the exact campaign title.
+        const historyItem = page.locator('tr[data-history-row]').filter({ hasText: title }).first();
         const historyTitle = await settledVisible(historyItem);
+        const titleExact = historyTitle ? await settledVisible(historyItem.getByText(title, { exact: true })) : false;
         const itemText = await historyItem.innerText().catch(() => '');
         const statusRead = itemText.includes('연결 필요') ? '연결 필요'
           : ['모의 발송', '예약', '발송 요청', '전달'].find((word) => itemText.includes(word)) || '';
-        task.resultVisible = historyTitle && statusRead !== '';
+        const statusExact = historyTitle && statusRead ? await settledVisible(historyItem.getByText(statusRead, { exact: true })) : false;
+        task.resultVisible = historyTitle && titleExact && statusRead !== '' && statusExact;
         task.resultNote = `발송 기록에 "${title}" 표시 + 상태 "${statusRead || '읽히지 않음'}"`;
         try {
           const state = await readBootstrap(helpers, baseUrl, fixture.manager.cookie);
@@ -808,6 +849,14 @@ async function main() {
           if (!task.serverState) task.serverNote = '서버 발송 기록에 제목 없음';
         } catch (error) {
           task.serverNote = `bootstrap 확인 불가: ${error.message.split('\n')[0]}`;
+        }
+        // Frame the verified history row for inspectable evidence. The
+        // scroll is a real user cost and stays in the measured scrolls
+        // (caps unchanged); it runs after the result check, never before.
+        try {
+          await historyItem.scrollIntoViewIfNeeded({ timeout: 5000 });
+        } catch {
+          // Keep the end-state viewport on framing failure.
         }
         await shot(page, 'task-3-message.png');
       } catch (error) {
@@ -1197,6 +1246,7 @@ async function main() {
       attachErrorListeners(page, task, baseUrl);
       try {
         await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/messages`, { waitUntil: 'networkidle', timeout: 30000 });
+        await act(task, () => page.locator('#message-compose-open').click());
         await page.locator('#campaign-title').waitFor({ state: 'visible', timeout: 15000 });
         await verifySkipLink(page, task);
         await installScrollCounter(page);
@@ -1213,10 +1263,12 @@ async function main() {
         await page.getByRole('button', { name: '예약 등록한다', exact: true }).waitFor({ state: 'visible', timeout: 10000 });
         await act(task, () => page.getByRole('button', { name: '예약 등록한다', exact: true }).click());
         await page.getByText('예약 등록했습니다').first().waitFor({ timeout: 15000 });
-        const historyItem = page.locator('li').filter({ hasText: title }).first();
+        const historyItem = page.locator('tr[data-history-row]').filter({ hasText: title }).first();
         const historyTitle = await settledVisible(historyItem);
+        const titleExact = historyTitle ? await settledVisible(historyItem.getByText(title, { exact: true })) : false;
         const itemText = await historyItem.innerText().catch(() => '');
-        task.resultVisible = historyTitle && itemText.includes('예약');
+        const statusExact = historyTitle ? await settledVisible(historyItem.getByText('예약', { exact: true })) : false;
+        task.resultVisible = historyTitle && titleExact && itemText.includes('예약') && statusExact;
         task.resultNote = `발송 기록에 "${title}" + 상태 "예약" 표시`;
         try {
           const state = await readBootstrap(helpers, baseUrl, fixture.manager.cookie);
@@ -1225,6 +1277,14 @@ async function main() {
           if (!task.serverState) task.serverNote = '서버 발송 기록에 제목 없음';
         } catch (error) {
           task.serverNote = `bootstrap 확인 불가: ${error.message.split('\n')[0]}`;
+        }
+        // Frame the verified history row for inspectable evidence. The
+        // scroll is a real user cost and stays in the measured scrolls
+        // (caps unchanged); it runs after the result check, never before.
+        try {
+          await historyItem.scrollIntoViewIfNeeded({ timeout: 5000 });
+        } catch {
+          // Keep the end-state viewport on framing failure.
         }
         await shot(page, 'task-12-scheduled.png');
       } catch (error) {
@@ -1304,8 +1364,8 @@ async function main() {
         // Wide viewports expose the reward action directly on approved rows;
         // narrower ones hide it behind the row-tools toggle. Follow what is
         // actually rendered instead of assuming one shape.
-        if (await page.getByRole('button', { name: `${targetName} 참가자 작업 더보기` }).count()) {
-          await act(task, () => page.getByRole('button', { name: `${targetName} 참가자 작업 더보기` }).click());
+        if (await page.getByRole('button', { name: `${targetName} 참가자 상세` }).count()) {
+          await act(task, () => page.getByRole('button', { name: `${targetName} 참가자 상세` }).click());
         }
         await act(task, () => page.getByRole('button', { name: '경품 등록', exact: true }).click());
         await page.locator('#reward-name').waitFor({ state: 'visible', timeout: 10000 });
@@ -1753,7 +1813,7 @@ async function main() {
     })),
     passed: measured.every((task) => task.passed),
   };
-  fs.writeFileSync(path.join(CAPTURE_DIR, 'result.json'), `${JSON.stringify(report, null, 2)}\n`);
+  fs.writeFileSync(path.join(CAPTURE_DIR, 'result.json'), `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
 
   const line = (text) => process.stdout.write(`${text}\n`);
   line('');
@@ -1847,4 +1907,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = {};
+module.exports = { collectFailureCopy, FAILURE_COPY };

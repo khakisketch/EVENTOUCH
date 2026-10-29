@@ -1,11 +1,10 @@
 /* EVENTOUCH Next.js — Participant Ticket UI improvements.
    Reuses tokens from app/tokens.css. Imported by TicketView.tsx. */
 .ticketCard {
-  border: 2px solid var(--brand);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--paper);
   padding: var(--s5);
-  box-shadow: 0 4px 12px var(--shadow-color);
   max-width: var(--web-ticket-max);
   margin: 0 auto;
 }
@@ -14,6 +13,21 @@
   border-color: var(--line-strong);
   text-align: center;
   padding: var(--s6) var(--s5);
+}
+
+/* Fresh-registration receipt: one status line above the ticket heading. It
+   reads as a completion first and a pass second, then never replays. */
+.ticketSuccess {
+  margin: 0 0 var(--s4);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--success-line);
+  border-radius: var(--radius-small);
+  background: var(--success-soft);
+  color: var(--success);
+  font-size: var(--small);
+  font-weight: 700;
+  line-height: 1.55;
+  text-align: center;
 }
 
 .ticketMessage h1 {
@@ -109,7 +123,7 @@
 
 .ticketQrWrapper {
   text-align: center;
-  margin-bottom: var(--s4);
+  margin-bottom: var(--s3);
 }
 
 /* Staff scan this code at the desk: the QR standard asks for four clear
@@ -131,10 +145,10 @@
 }
 
 .ticketInstruction {
-  font-size: 11px;
+  font-size: var(--label);
   color: var(--muted);
   margin-top: var(--s2);
-  margin-bottom: var(--s4);
+  margin-bottom: 0;
   max-width: none;
 }
 
@@ -160,6 +174,25 @@
 
 .ticketRecovery a {
   font-weight: 700;
+}
+
+/* Manual re-check failure: the info strip above already owns the neutral
+   recovery guidance, so a failed re-check reads as an error (danger voice)
+   instead of a second identical blue panel. The QR stays mounted; only the
+   verdict wording changes. */
+.ticketRecheckError {
+  margin: var(--s2) 0 0;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--danger-line);
+  border-radius: var(--radius);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--small);
+  font-weight: 700;
+  line-height: 1.55;
+  text-align: center;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
 }
 
 .buttonPrimary,
@@ -192,6 +225,7 @@
 .buttonPrimary:hover {
   background: var(--brand-hover);
   border-color: var(--brand-hover);
+  color: var(--on-brand-hover);
 }
 
 .buttonSecondary:hover {
@@ -205,13 +239,102 @@
   max-width: none;
 }
 
+/* Receipt, entry and recovery instructions remain readable by word on
+   phones; a genuinely unbroken long token may still wrap rather than spill. */
+.ticketSuccess,
+.ticketInstruction,
+.ticketRecovery,
+.ticketRecheckError,
+.ticketUnusable {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
 @media (max-width: 480px) {
   .ticketCard {
     padding: var(--s4);
   }
 
+  .ticketPassDivider {
+    margin-inline: calc(var(--s4) * -1);
+  }
+
   .ticketQr svg {
     width: 180px !important;
     height: 180px !important;
+  }
+}
+
+/* Ticket reading order (white work SaaS, open pass): receipt → event → who →
+   entry state → code → what to do. Eyebrow labels separate the groups so a
+   first-time attendee never mistakes the receipt for the pass; the QR keeps
+   its quiet zone and gains a functional perforation cut above the stub. */
+.ticketEventName {
+  font-family: var(--display-font);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.3;
+  margin: var(--s2) 0 var(--s1);
+  letter-spacing: -0.02em;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.ticketAttendeeName {
+  font-size: 24px;
+  font-weight: 800;
+  margin: 0;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.ticketEntryState {
+  min-height: 44px;
+  padding: 6px 18px;
+  font-size: var(--small);
+}
+
+.ticketPassDivider {
+  margin: var(--s4) calc(var(--s5) * -1) 0;
+  border-top: 2px dashed var(--line-strong);
+}
+
+.ticketQrFrame {
+  display: grid;
+  justify-items: center;
+  gap: var(--s2);
+  padding-top: var(--s4);
+}
+
+.ticketActionsStack {
+  display: grid;
+  gap: var(--s2);
+  justify-items: center;
+  margin-bottom: var(--s4);
+}
+
+.ticketActionsStack .buttonPrimary,
+.ticketActionsStack .buttonSecondary {
+  min-height: 48px;
+  min-width: min(100%, 320px);
+  font-weight: 750;
+}
+
+.ticketMessageActions {
+  display: grid;
+  gap: var(--s2);
+  justify-items: center;
+  margin: var(--s3) 0 0;
+}
+
+.ticketMessageActions .buttonPrimary,
+.ticketMessageActions .buttonSecondary {
+  min-height: 48px;
+  min-width: min(100%, 320px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticketCard {
+    scroll-behavior: auto;
   }
 }

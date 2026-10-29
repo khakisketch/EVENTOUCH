@@ -121,8 +121,12 @@ test('event context is centralized while domain actions retain their meaning and
   assert.doesNotMatch(frame, /\bback=\{/u);
 
   const content = read(targets[3]);
-  assert.match(content, /action=\{\(\s*<button\b[^>]*className="button button-secondary"[^>]*onClick=\{openNoticeCreate\}[^>]*>\s*공지 작성/su);
-  assert.match(content, /title="프로그램 일정"[\s\S]*?action=\{\([\s\S]*?className="button button-secondary"[\s\S]*?일정 추가/u);
+  // Write affordances gate on the page/programs grants but keep their exact
+  // shape; reads (lists, links) never gate.
+  assert.match(content, /action=\{canWritePage \? \(\s*<button\b[^>]*className="button button-secondary"[^>]*onClick=\{openNoticeCreate\}[^>]*>\s*공지 작성/su);
+  assert.match(content, /title="프로그램 일정"[\s\S]*?action=\{canWritePrograms \? \([\s\S]*?className="button button-secondary"[\s\S]*?일정 추가/u);
+  assert.match(content, /canWritePage = canWriteEvent\(capabilities, "notice\.save"\)/u);
+  assert.match(content, /canWritePrograms = canWriteEvent\(capabilities, "program\.save"\)/u);
 
   const participants = read(targets[1]);
   assert.match(participants, /className="button button-secondary"[\s\S]*?changeStatus\(person, "APPROVED"\)/u);
@@ -212,7 +216,7 @@ test('evidence photos stay separate, section-scoped and retry-safe', () => {
     assert.match(photos, new RegExp(`key: "${key}"`), `${key} section is available`);
   }
   assert.match(shell, /canManageEvidencePhotos:\s*role\s*===\s*"AGENCY"\s*\|\|\s*\(role\s*===\s*"MANAGER"\s*&&\s*hasCurrentMembership\)/u);
-  assert.match(shell, /pageId === "photos" && !shellData\?\.canManageEvidencePhotos\) return null/u, 'photo navigation stays hidden outside agency/event-member manager roles');
+  assert.match(shell, /pageId === "photos" && !shellData\?\.canManageEvidencePhotos\) return false/u, 'photo navigation stays hidden outside agency/event-member manager roles');
   // The shell advertises its own degraded state instead of silently hiding
   // navigation: a visible alert with retry, never a fake empty shell.
   assert.match(shell, /const \[shellError, setShellError\] = useState\(false\)/u);

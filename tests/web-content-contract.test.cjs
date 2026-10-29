@@ -29,7 +29,10 @@ test('web-console-content-uses-the-preparation-content-commands', () => {
     assert.match(workspace, new RegExp(command.replace('.', '\\.')));
   }
   assert.match(workspace, /\/api\/events\/\$\{encodeURIComponent\(eventId\)\}\/commands/);
-  assert.match(workspace, /\/api\/bootstrap/);
+  // Reads go through the shared transport; the event read is the scoped
+  // event bootstrap, never the full directory.
+  assert.match(workspace, /consoleFetch\(`\/api\/events\/\$\{encodeURIComponent\(eventId\)\}\/bootstrap`/);
+  assert.doesNotMatch(workspace, /consoleFetch\("\/api\/bootstrap"/);
   assert.match(workspace, /commandId/);
   assert.match(workspace, /eventouch:shell-reload/);
   assert.match(workspace, /다시 불러오기/);
@@ -86,9 +89,15 @@ test('web-console-content-keeps-the-publish-flow-visible', () => {
 
 test('web-console-content-gates-on-the-same-management-membership', () => {
   const workspace = read('app/console/events/[id]/content/ContentWorkspace.tsx');
-  assert.match(workspace, /canManage/);
-  assert.match(workspace, /memberships\.some/);
+  // Membership plus per-command scopes: notices/venue are page scope,
+  // programs are programs scope. The denial copy stays for the fully
+  // ungranted operator; partial grants get their own cross-scope notes.
+  assert.match(workspace, /memberships/);
+  assert.match(workspace, /canWriteEvent\(capabilities, "notice\.save"\)/);
+  assert.match(workspace, /canWriteEvent\(capabilities, "program\.save"\)/);
   assert.match(workspace, /콘텐츠를 관리할 운영 권한이 없습니다/);
+  assert.match(workspace, /공지·장소 쓰기 권한이 없습니다/);
+  assert.match(workspace, /프로그램 일정 변경은 참여 프로그램 쓰기 권한이 필요합니다/);
 });
 
 test('web-console-content-dialogs-are-modal-and-wire-field-errors', () => {
@@ -121,10 +130,10 @@ test('web-console-content-dialogs-are-modal-and-wire-field-errors', () => {
 
 test('web-console-shell-groups-content-before-field-programs-and-settings', () => {
   const shell = read('app/console/ConsoleShell.tsx');
-  // The rail renders the registry order with registry labels and hrefs, not
+  // The rail renders the hub order with registry labels and hrefs, not
   // literal duplicate routes: badges, permissions and feature gates stay in
   // the shell while the registry owns destinations.
-  assert.match(shell, /EVENT_PAGE_IDS\.map\(\(pageId\)/);
+  assert.match(shell, /EVENT_HUBS\.map\(\(hub\)/);
   assert.match(shell, /CONSOLE_PAGES\[pageId\]\.label/);
   assert.match(shell, /consolePageHref\(pageId, eventId/);
   assert.match(shell, /nav-badge/);
@@ -133,10 +142,7 @@ test('web-console-shell-groups-content-before-field-programs-and-settings', () =
   const navigation = read('app/console/console-navigation.ts');
   assert.match(navigation, /content: \{ label: "콘텐츠"/);
   assert.match(navigation, /return `\$\{base\}\/content`/);
-  const eventIds = navigation.slice(navigation.indexOf('EVENT_PAGE_IDS'), navigation.indexOf('];', navigation.indexOf('EVENT_PAGE_IDS')));
-  const programsAt = eventIds.indexOf('"programs"');
-  const contentAt = eventIds.indexOf('"content"');
-  const settingsAt = eventIds.indexOf('"settings"');
-  assert.ok(programsAt >= 0 && contentAt >= 0 && settingsAt >= 0);
-  assert.ok(contentAt < programsAt && programsAt < settingsAt);
+  // Preparation hub order: settings opens the setup sequence, content feeds
+  // programs, so content sits before programs inside one hub.
+  assert.match(navigation, /pageIds: \["settings", "attendeePage", "content", "programs"\]/);
 });

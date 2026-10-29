@@ -29,7 +29,10 @@ import { bodyOf, decodedSegment, fail, failureFields, readBody } from "./legacy-
 
 export type OrganizationRestDeps = {
   /** Session lookup for the cookie the browser already holds. */
-  sessionFromCookie: (cookieHeader: string | undefined) => Promise<unknown | null>;
+  /** Second arg is the raw request: the server wrapper copies the tab org headers onto the account. */
+  sessionFromCookie: (cookieHeader: string | undefined, req?: unknown) => Promise<unknown | null>;
+  /** Stamps the verified session org + revision on success responses. */
+  stampOrgHeaders?: (reply: FastifyReply, account: unknown) => void;
   loadBootstrap: (account: unknown) => Promise<{ events?: unknown; activeEventId?: unknown }>;
   createEvent: (account: unknown, body: unknown) => Promise<{ event: unknown; replayed?: unknown }>;
   duplicateEvent: (
@@ -69,14 +72,14 @@ export function organizationRestPath(urlPath: string, method: string): boolean {
 }
 
 async function currentAccount(deps: OrganizationRestDeps, request: FastifyRequest): Promise<unknown> {
-  const account = await deps.sessionFromCookie(request.headers.cookie);
+  const account = await deps.sessionFromCookie(request.headers.cookie, request);
   if (!account) throw Object.assign(new Error(LOGIN_REQUIRED), { status: 401 });
   return account;
 }
 
 function failWith(deps: OrganizationRestDeps, reply: FastifyReply, error: unknown, fallback: string) {
   const mapped = failureFields(error, fallback, deps.failureMessage);
-  return fail(reply, mapped.status, mapped.message, mapped.field);
+  return fail(reply, mapped.status, mapped.message, mapped.field, mapped.code);
 }
 
 async function organizationRest(
@@ -102,6 +105,7 @@ async function organizationRest(
       const account = await currentAccount(deps, request);
       const projection = await deps.loadBootstrap(account);
       reply.header("cache-control", "no-store");
+      deps.stampOrgHeaders?.(reply, account);
       return reply.send({ events: projection.events, activeEventId: projection.activeEventId });
     }
 

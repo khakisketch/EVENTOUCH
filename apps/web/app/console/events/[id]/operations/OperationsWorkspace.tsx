@@ -17,6 +17,8 @@ import ConsoleSection from "../../../console-ui/ConsoleSection";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import uiStyles from "../../../console-ui/console-ui.module.css";
 import styles from "./operations.module.css";
+import { consoleFetch } from "../../../../../lib/console-api";
+import { canWriteEvent } from "../../../../../lib/event-capabilities";
 
 type Desk = { id: string; name: string; action: string; mode: string; open: boolean };
 type Booth = {
@@ -63,8 +65,11 @@ type State =
   | {
       kind: "ready";
       eventName: string;
+      eventSlug: string;
       stage: string;
-      canManage: boolean;
+      role: string;
+      userId: string;
+      memberships: Array<{ accountId: string; eventId: string; write?: unknown }>;
       eventMeta?: string;
       eventId: string;
       stampEnabled: boolean;
@@ -197,12 +202,13 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
     async function load() {
       try {
         // The actor comes from the session (/api/auth/me), concurrent with
-        // bootstrap: this console 403s STAFF writes on the server, so the
-        // write affordances below gate on the same role+membership contract.
-        // No granular write array exists server-side; none is consulted.
+        // the scoped event bootstrap: this console 403s STAFF writes on the
+        // server, so the write affordances below gate per command scope
+        // (desks/staff onsite, booths/map booth, display programs) through
+        // the capability helper on the raw membership grants.
         const [meRes, bootRes] = await Promise.all([
-          fetch("/api/auth/me", { cache: "no-store" }),
-          fetch("/api/bootstrap", { cache: "no-store" }),
+          consoleFetch("/api/auth/me", { cache: "no-store" }),
+          consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store" }),
         ]);
         if (cancelled) return;
         if (meRes.status === 401 || bootRes.status === 401) {
@@ -369,30 +375,25 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
               .map((item) => item && typeof item === "object" ? item as Record<string, unknown> : null)
               .find((client) => client?.id === event.clientId)?.name
           : "";
-        const eventMemberships: Array<{ accountId: string; eventId: string }> = Array.isArray(bootstrap.memberships)
+        const eventMemberships: Array<{ accountId: string; eventId: string; write?: unknown }> = Array.isArray(bootstrap.memberships)
           ? bootstrap.memberships.flatMap((item) => {
               if (typeof item !== "object" || item === null) return [];
               const membership = item as Record<string, unknown>;
               if (typeof membership.accountId !== "string" || typeof membership.eventId !== "string") return [];
-              return [{ accountId: membership.accountId, eventId: membership.eventId }];
+              return [{ accountId: membership.accountId, eventId: membership.eventId, write: membership.write }];
             })
           : [];
-        // Display gate mirroring the current server contract: AGENCY
-        // everywhere, MANAGER on their own events. STAFF console writes 403
-        // server-side, so mutation affordances below stay disabled for them
-        // while reads keep working. The server stays authoritative.
-        const canManage =
-          role === "AGENCY" ||
-          (role === "MANAGER" &&
-            eventMemberships.some((membership) => membership.accountId === myId && membership.eventId === eventId));
         const venue = workspace.venue && typeof workspace.venue === "object"
           ? workspace.venue as Record<string, unknown>
           : {};
         setState({
           kind: "ready",
           eventName: text(event.name),
+          eventSlug: text(event.slug),
           stage: text(event.stage).toUpperCase(),
-          canManage,
+          role,
+          userId: myId,
+          memberships: eventMemberships,
           eventMeta: formatConsoleEventMeta({
             clientName: text(clientName),
             date: text(event.date),
@@ -538,7 +539,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       // The handoff still applies; only the shareable URL keeps the param.
     }
     const handoffArchived = state.stage === "ARCHIVED";
-    const handoffBlocked = handoffArchived || !state.canManage;
+    const handoffBlocked = handoffArchived || !canWriteOnsite;
     if (handoffBlocked) {
       setAssignHandoffNotice(
         handoffArchived
@@ -640,7 +641,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
     if (busy || commandBusyRef.current) return false;
     // Archived and unauthorized writes never reach the server from here;
     // the server stays authoritative either way.
-    if (writeBlocked) return false;
+    if (commandBlocked(command)) return false;
     commandBusyRef.current = true;
     setBusy(true);
     setFailure(null);
@@ -652,7 +653,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       commandIdCache.current.set(fingerprint, commandId);
     }
     try {
-      const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
+      const res = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ commandId, command, payload }),
@@ -767,13 +768,35 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   // 잠그고 이유를 밝힌다. 조회·기록 확인은 그대로 둔다.
   const archived = state.stage === "ARCHIVED";
   const archivedReason = "보관된 행사는 읽기 전용입니다";
-  // Write gate: archived events reject every command server-side, and STAFF
-  // console writes 403 server-side (their staff work routes are separate and
-  // unaffected). Reads, placement previews and downloads keep working.
-  const writeBlocked = archived || !state.canManage;
-  const writeBlockedReason = archived
+  // Write gates mirror the server scope map per section: desks and staff
+  // assignment are onsite, booths/map/mode are booth, the display picker is
+  // programs (display.set). Archived events reject every command server-side,
+  // and STAFF console writes 403 server-side (their staff work routes are
+  // separate and unaffected). Reads, placement previews and downloads keep
+  // working. Neither gate invents access; the server re-checks every command.
+  const capabilities = { role: state.role, userId: state.userId, memberships: state.memberships, eventId };
+  const canWriteOnsite = canWriteEvent(capabilities, "desk.save");
+  const canWriteBooth = canWriteEvent(capabilities, "booth.save");
+  const canWriteDisplay = canWriteEvent(capabilities, "display.set");
+  const onsiteBlocked = archived || !canWriteOnsite;
+  const onsiteNoWriteReason = archived
     ? archivedReason
     : "현장 운영을 변경할 운영 권한이 없습니다";
+  const boothBlocked = archived || !canWriteBooth;
+  const boothNoWriteReason = archived
+    ? archivedReason
+    : "부스·스탬프 지도를 변경할 부스 권한이 없습니다. 필요하면 담당 행사 운영자에게 요청하세요.";
+  const displayBlocked = archived || !canWriteDisplay;
+  const displayNoWriteReason = archived
+    ? archivedReason
+    : "전광판 출력을 변경할 프로그램 권한이 필요합니다. 필요하면 담당 행사 운영자에게 요청하세요.";
+  // Per-command guard for the shared writer: the button gates above already
+  // prevent the call, this only mirrors the same scope map. Called after
+  // render, so the render-scope gates it closes over are initialized.
+  function commandBlocked(command: string): boolean {
+    if (archived) return true;
+    return !canWriteEvent(capabilities, command);
+  }
   const accountName = new Map(accounts.map((account) => [account.id, account.name]));
   const deskName = new Map(desks.map((desk) => [desk.id, desk.name]));
   const boothName = new Map(booths.map((booth) => [booth.id, booth.name]));
@@ -870,7 +893,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   // working set, and each placement is normalized to 0..1 so the published
   // map scales to any board size.
   async function uploadMapImage(file: File) {
-    if (writeBlocked) return;
+    if (boothBlocked) return;
     if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
       setFailure({ message: "배치도는 PNG·JPG·WebP 이미지를 사용하세요." });
       return;
@@ -882,7 +905,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
     setMapUploading(true);
     setFailure(null);
     try {
-      const res = await fetch(
+      const res = await consoleFetch(
         `/api/events/${encodeURIComponent(eventId)}/files?name=${encodeURIComponent(file.name)}&commandId=${encodeURIComponent(randomCommandId())}`,
         { method: "POST", headers: { "content-type": file.type }, body: file }
       );
@@ -955,9 +978,24 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             <ConsoleFeedback kind="warning">
               보관된 행사는 읽기 전용입니다. 운영 현황은 볼 수 있지만 추가·변경·게시할 수 없습니다.
             </ConsoleFeedback>
-          ) : !state.canManage ? (
+          ) : !canWriteOnsite && !canWriteBooth && !canWriteDisplay ? (
             <ConsoleFeedback kind="warning">
               현장 운영을 변경할 운영 권한이 없습니다. 현황 조회는 그대로 볼 수 있습니다.
+            </ConsoleFeedback>
+          ) : null}
+          {(canWriteOnsite || canWriteBooth || canWriteDisplay) && !canWriteOnsite ? (
+            <ConsoleFeedback kind="warning">
+              데스크·스태프 배정 변경은 현장 운영 권한이 없습니다. 다른 구역은 그대로 변경할 수 있습니다.
+            </ConsoleFeedback>
+          ) : null}
+          {(canWriteOnsite || canWriteBooth || canWriteDisplay) && !canWriteBooth ? (
+            <ConsoleFeedback kind="warning">
+              부스·스탬프 지도 변경은 부스 권한이 없습니다. 다른 구역은 그대로 변경할 수 있습니다.
+            </ConsoleFeedback>
+          ) : null}
+          {(canWriteOnsite || canWriteBooth || canWriteDisplay) && !canWriteDisplay ? (
+            <ConsoleFeedback kind="warning">
+              전광판 출력 변경은 프로그램 권한이 필요합니다. 다른 구역은 그대로 변경할 수 있습니다.
             </ConsoleFeedback>
           ) : null}
           {failure && !(deskOpen || boothOpen || assignOpen) ? (
@@ -978,8 +1016,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           <button
             type="button"
             className="button button-secondary"
-            disabled={writeBlocked}
-            title={writeBlocked ? writeBlockedReason : undefined}
+            disabled={onsiteBlocked}
+            title={onsiteBlocked ? onsiteNoWriteReason : undefined}
             onClick={() => { setEditingDesk(null); setDeskOpen(true); setFailure(null); }}
           >
             데스크 추가
@@ -993,7 +1031,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                 .filter((assignment) => assignment.type === "DESK" && assignment.targetId === desk.id)
                 .map((assignment) => accountName.get(assignment.accountId) ?? "알 수 없는 계정");
               return (
-              <li key={desk.id} className={uiStyles.recordRow}>
+              <li key={desk.id} className={`${uiStyles.recordRow} ${styles.rowStart}`}>
                 <div className={uiStyles.recordMain}>
                   <div className={styles.resourceHead}>
                     <strong>{desk.name}</strong>
@@ -1010,12 +1048,12 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                     {deskStaffNames.length ? `배정: ${deskStaffNames.join(", ")}` : "배정된 스태프 없음"}
                   </p>
                 </div>
-                <div className={uiStyles.recordActions}>
+                <div className={`${uiStyles.recordActions} ${styles.compactActions}`}>
                   <button
                     type="button"
                     className="button button-secondary"
-                    disabled={busy || writeBlocked}
-                    title={writeBlocked ? writeBlockedReason : undefined}
+                    disabled={busy || onsiteBlocked}
+                    title={onsiteBlocked ? onsiteNoWriteReason : undefined}
                     onClick={() => { setEditingDesk(desk); setDeskOpen(true); setFailure(null); }}
                   >
                     편집
@@ -1023,8 +1061,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                   <button
                     type="button"
                     className="button button-secondary"
-                    disabled={busy || writeBlocked}
-                    title={writeBlocked ? writeBlockedReason : undefined}
+                    disabled={busy || onsiteBlocked}
+                    title={onsiteBlocked ? onsiteNoWriteReason : undefined}
                     aria-label={`${desk.name}에 스태프 배정`}
                     onClick={() => { setAssignPreset({ type: "DESK", targetId: desk.id }); setAssignOpen(true); setFailure(null); }}
                   >
@@ -1034,8 +1072,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                   <button
                     type="button"
                     className={`button ${desk.open ? styles.stateStop : styles.stateStart}`}
-                    disabled={busy || writeBlocked}
-                    title={writeBlocked ? writeBlockedReason : undefined}
+                    disabled={busy || onsiteBlocked}
+                    title={onsiteBlocked ? onsiteNoWriteReason : undefined}
                     onClick={() => void runCommand(
                       "desk.set-open",
                       { id: desk.id, open: !desk.open },
@@ -1054,6 +1092,11 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         )}
       </ConsoleSection>
 
+      {/* The floor as attendees experience it: 전광판 출력 and 부스 share
+          one desktop row (stacked in DOM order on phones). Desks stay the
+          full-width primary roster above, staff below. Section anchors,
+          order, jump-nav and write gates are unchanged. */}
+      <div className={styles.floorGrid}>
       {screenEnabled ? (
         <ConsoleSection headingId="ops-display" title="전광판 출력" description={displaySummary} className={styles.anchorSection}>
           <div className={styles.buttonRow}>
@@ -1071,10 +1114,10 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             <button
               type="button"
               className="button button-primary"
-              disabled={busy || !displayChoice || displayChoice === currentDisplayValue || writeBlocked}
+              disabled={busy || !displayChoice || displayChoice === currentDisplayValue || displayBlocked}
               title={
-                writeBlocked
-                  ? writeBlockedReason
+                displayBlocked
+                  ? displayNoWriteReason
                   : !displayChoice
                     ? "출력을 먼저 고르세요"
                     : displayChoice === currentDisplayValue
@@ -1083,12 +1126,24 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
               }
               onClick={() => void applyDisplayChoice()}
             >
-              {displayChoice && displayChoice !== currentDisplayValue ? (displayChoice.startsWith("idle") ? "유휴로 내리기" : "출력 적용") : "출력 적용"}
+              {busy ? "적용 중입니다" : displayChoice && displayChoice !== currentDisplayValue ? (displayChoice.startsWith("idle") ? "유휴로 내리기" : "출력 적용") : "출력 적용"}
             </button>
           </div>
           <p className={styles.hint}>
             게시한 공지·공개된 프로그램만 고를 수 있습니다. 참가자 화면과 같은 내용이 행사장 화면에 나옵니다.
           </p>
+          {state.eventSlug ? (
+            <p className={styles.hint}>
+              <Link
+                className="button button-secondary"
+                href={`/screen/${encodeURIComponent(state.eventSlug)}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                행사장 화면 열기
+              </Link>
+            </p>
+          ) : null}
           {displayChoice && displayChoice !== currentDisplayValue ? (
             <p className="notice" role="status">선택한 출력은 아직 적용되지 않았습니다. ‘출력 적용’을 눌러야 행사장 화면에 나옵니다.</p>
           ) : null}
@@ -1104,8 +1159,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           <button
             type="button"
             className="button button-secondary"
-            disabled={writeBlocked}
-            title={writeBlocked ? writeBlockedReason : undefined}
+            disabled={boothBlocked}
+            title={boothBlocked ? boothNoWriteReason : undefined}
             onClick={() => { setEditingBooth(null); setBoothOpen(true); setFailure(null); }}
           >
             부스 추가
@@ -1131,7 +1186,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                 .filter((assignment) => assignment.type === "BOOTH" && assignment.targetId === booth.id)
                 .map((assignment) => accountName.get(assignment.accountId) ?? "알 수 없는 계정");
               return (
-              <li key={booth.id} className={uiStyles.recordRow}>
+              <li key={booth.id} className={`${uiStyles.recordRow} ${styles.rowStart}`}>
                 <div className={uiStyles.recordMain}>
                   <div className={styles.resourceHead}>
                     <strong>{booth.name}</strong>
@@ -1155,12 +1210,12 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                     {boothStaffNames.length ? `배정: ${boothStaffNames.join(", ")}` : "배정된 스태프 없음"}
                   </p>
                 </div>
-                <div className={uiStyles.recordActions}>
+                <div className={`${uiStyles.recordActions} ${styles.compactActions}`}>
                   <button
                     type="button"
                     className="button button-secondary"
-                    disabled={busy || writeBlocked}
-                    title={writeBlocked ? writeBlockedReason : undefined}
+                    disabled={busy || boothBlocked}
+                    title={boothBlocked ? boothNoWriteReason : undefined}
                     onClick={() => { setEditingBooth(booth); setBoothOpen(true); setFailure(null); }}
                   >
                     편집
@@ -1168,8 +1223,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                   <button
                     type="button"
                     className="button button-secondary"
-                    disabled={busy || writeBlocked}
-                    title={writeBlocked ? writeBlockedReason : undefined}
+                    disabled={busy || boothBlocked}
+                    title={boothBlocked ? boothNoWriteReason : undefined}
                     aria-label={`${booth.name}에 스태프 배정`}
                     onClick={() => { setAssignPreset({ type: "BOOTH", targetId: booth.id }); setAssignOpen(true); setFailure(null); }}
                   >
@@ -1184,16 +1239,17 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           <p className="empty-state">등록된 부스가 없습니다.</p>
         )}
       </ConsoleSection>
+      </div>
 
-      <ConsoleSection headingId="ops-staff" title="스태프 배정" description={staffSummary} className={styles.anchorSection}>
+      <ConsoleSection headingId="ops-staff" title="스태프 배정" description={staffSummary} className={styles.anchorSection} density="compact">
         <div className={styles.primarySectionAction}>
           <button
             id="ops-staff-assign"
             type="button"
             className="button button-primary"
             onClick={() => { setAssignPreset(null); setAssignOpen(true); setFailure(null); }}
-            disabled={assignableTargets === 0 || writeBlocked}
-            title={writeBlocked ? writeBlockedReason : assignableTargets === 0 ? "데스크나 부스를 먼저 만드세요" : undefined}
+            disabled={assignableTargets === 0 || onsiteBlocked}
+            title={onsiteBlocked ? onsiteNoWriteReason : assignableTargets === 0 ? "데스크나 부스를 먼저 만드세요" : undefined}
           >
             스태프 배정
           </button>
@@ -1212,12 +1268,12 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                       : boothName.get(assignment.targetId)) ?? "알 수 없는 담당"}
                   </p>
                 </div>
-                <div className={uiStyles.recordActions}>
+                <div className={`${uiStyles.recordActions} ${styles.compactActions}`}>
                   <button
                     type="button"
                     className={`button ${styles.dangerGhost}`}
-                    disabled={busy || writeBlocked}
-                    title={writeBlocked ? writeBlockedReason : undefined}
+                    disabled={busy || onsiteBlocked}
+                    title={onsiteBlocked ? onsiteNoWriteReason : undefined}
                     onClick={() => void runCommand(
                       "staff.unassign",
                       { id: assignment.id },
@@ -1261,8 +1317,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             <button
               type="button"
               className={`button ${stampMode === "STAFF" ? "button-primary" : "button-secondary"}`}
-              disabled={busy || visitsCount > 0 || stampMode === "STAFF" || writeBlocked}
-              title={writeBlocked ? writeBlockedReason : undefined}
+              disabled={busy || visitsCount > 0 || stampMode === "STAFF" || boothBlocked}
+              title={boothBlocked ? boothNoWriteReason : undefined}
               aria-pressed={stampMode === "STAFF"}
               onClick={() => requestStampMode("STAFF")}
             >
@@ -1271,8 +1327,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             <button
               type="button"
               className={`button ${stampMode === "SELF" ? "button-primary" : "button-secondary"}`}
-              disabled={busy || visitsCount > 0 || stampMode === "SELF" || writeBlocked}
-              title={writeBlocked ? writeBlockedReason : undefined}
+              disabled={busy || visitsCount > 0 || stampMode === "SELF" || boothBlocked}
+              title={boothBlocked ? boothNoWriteReason : undefined}
               aria-pressed={stampMode === "SELF"}
               onClick={() => requestStampMode("SELF")}
             >
@@ -1310,13 +1366,13 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             배치도를 올리고, 부스를 골라 이미지를 눌러 위치를 찍습니다. 게시해야 참가자 화면에 보입니다.
           </p>
           <div className={styles.buttonRow}>
-            <label className="button button-secondary" title={writeBlocked ? writeBlockedReason : undefined}>
+            <label className="button button-secondary" title={boothBlocked ? boothNoWriteReason : undefined}>
               {mapUploading ? "올리는 중…" : boothMap.draft ? "배치도 교체" : "배치도 올리기"}
               <input
                 type="file"
                 className="sr-only"
                 accept="image/png,image/jpeg,image/webp"
-                disabled={mapUploading || busy || writeBlocked}
+                disabled={mapUploading || busy || boothBlocked}
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   if (file) void uploadMapImage(file);
@@ -1326,16 +1382,16 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             </label>
             {mapImageOverride || boothMap.draft ? (
               <>
-                <button type="button" className="button button-primary" disabled={busy || mapUploading || writeBlocked} title={writeBlocked ? writeBlockedReason : undefined} onClick={() => void saveBoothMapDraft()}>
+                <button type="button" className="button button-primary" disabled={busy || mapUploading || boothBlocked} title={boothBlocked ? boothNoWriteReason : undefined} onClick={() => void saveBoothMapDraft()}>
                   초안 저장
                 </button>
-                <button type="button" className="button button-secondary" disabled={busy || !boothMap.draft || writeBlocked} title={writeBlocked ? writeBlockedReason : !boothMap.draft ? "초안을 먼저 저장하세요" : undefined} onClick={() => void publishBoothMap()}>
+                <button type="button" className="button button-secondary" disabled={busy || !boothMap.draft || boothBlocked} title={boothBlocked ? boothNoWriteReason : !boothMap.draft ? "초안을 먼저 저장하세요" : undefined} onClick={() => void publishBoothMap()}>
                   게시
                 </button>
               </>
             ) : null}
             {boothMap.published ? (
-              <button type="button" className="button button-secondary" disabled={busy || writeBlocked} title={writeBlocked ? writeBlockedReason : undefined} onClick={() => requestUnpublishBoothMap()}>
+              <button type="button" className="button button-secondary" disabled={busy || boothBlocked} title={boothBlocked ? boothNoWriteReason : undefined} onClick={() => requestUnpublishBoothMap()}>
                 게시 내리기
               </button>
             ) : null}
@@ -1368,7 +1424,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                   src={`/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(image.fileId)}`}
                   alt="부스 배치도"
                   onClick={(event) => {
-                    if (!mapPlacing || writeBlocked) return;
+                    if (!mapPlacing || boothBlocked) return;
                     const rect = event.currentTarget.getBoundingClientRect();
                     const x = (event.clientX - rect.left) / rect.width;
                     const y = (event.clientY - rect.top) / rect.height;
@@ -1411,8 +1467,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                       <button
                         type="button"
                         className="button button-secondary"
-                        disabled={busy || writeBlocked}
-                        title={writeBlocked ? writeBlockedReason : undefined}
+                        disabled={busy || boothBlocked}
+                        title={boothBlocked ? boothNoWriteReason : undefined}
                         onClick={() => setMapPlacing(mapPlacing === booth.id ? "" : booth.id)}
                       >
                         {mapPlacing === booth.id ? "지정 취소" : point ? "다시 지정" : "위치 지정"}

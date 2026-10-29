@@ -593,3 +593,118 @@ test('an-unconfigured-provider-uploads-nothing', async () => {
   assert.equal(uploaded.ok, false);
   assert.equal(uploaded.reason, 'NOT_CONFIGURED');
 });
+
+// --- group pagination and absence -------------------------------------------
+//
+// groupMessages pages through /messages/v4/list with the response's nextKey
+// sent back as the next request's startKey. These tests drive the transport
+// directly so each page can differ.
+
+function stubFetch(pages) {
+  const calls = [];
+  const fetchImpl = async (url) => {
+    const parsed = new URL(url);
+    const query = Object.fromEntries(parsed.searchParams);
+    calls.push({ path: parsed.pathname, query });
+    const key = query.startKey || '';
+    const page = Object.hasOwn(pages, key) ? pages[key] : { messageList: {}, nextKey: null };
+    if (page.status) {
+      return { ok: false, status: page.status, json: async () => page.body || {}, headers: { get: () => null } };
+    }
+    return { ok: true, status: 200, json: async () => page, headers: { get: () => null } };
+  };
+  return { calls, fetchImpl };
+}
+
+test('the-next-page-is-requested-with-the-start-key', async () => {
+  const { calls, fetchImpl } = stubFetch({
+    '': { messageList: { M1: { messageId: 'M1', to: '01011111111' } }, limit: 500, nextKey: 'CURSOR-2' },
+    'CURSOR-2': { messageList: { M2: { messageId: 'M2', to: '01022222222' } }, limit: 500, nextKey: null },
+  });
+  const provider = solapi.createSolapiProvider(config({ host: 'https://solapi.test' }), { fetchImpl });
+  const result = await provider.groupMessages('G-1');
+  assert.equal(result.ok, true);
+  assert.deepEqual(Object.keys(result.messages).sort(), ['M1', 'M2']);
+  assert.equal(calls.length, 2, 'one call per page');
+  assert.equal(calls[0].query.groupId, 'G-1');
+  assert.ok(!('startKey' in calls[0].query), 'first page carries no cursor');
+  assert.equal(calls[1].query.startKey, 'CURSOR-2', 'the cursor is actually sent back');
+  assert.equal(calls[1].query.groupId, 'G-1', 'the group filter stays on every page');
+});
+
+test('a-repeated-cursor-stops-instead-of-rereading-the-same-page', async () => {
+  const { calls, fetchImpl } = stubFetch({
+    '': { messageList: { M1: { messageId: 'M1', to: '01011111111' } }, limit: 500, nextKey: 'STUCK' },
+    STUCK: { messageList: { M1: { messageId: 'M1', to: '01011111111' } }, limit: 500, nextKey: 'STUCK' },
+  });
+  const provider = solapi.createSolapiProvider(config({ host: 'https://solapi.test' }), { fetchImpl });
+  const result = await provider.groupMessages('G-1');
+  assert.equal(result.ok, true);
+  assert.deepEqual(Object.keys(result.messages), ['M1']);
+  assert.equal(result.truncated, true, 'pages were left unread: never read as complete');
+  assert.equal(calls.length, 2, 'the second identical cursor ends the loop');
+});
+
+test('paging-has-an-upper-bound', async () => {
+  const pages = {};
+  for (let page = 0; page < 60; page += 1) {
+    pages[page === 0 ? '' : `C${page}`] = {
+      messageList: { [`M${page}`]: { messageId: `M${page}`, to: '01011111111' } },
+      limit: 500,
+      nextKey: `C${page + 1}`,
+    };
+  }
+  const { calls, fetchImpl } = stubFetch(pages);
+  const provider = solapi.createSolapiProvider(config({ host: 'https://solapi.test' }), { fetchImpl });
+  const result = await provider.groupMessages('G-1');
+  assert.equal(result.ok, true);
+  assert.equal(calls.length, 20, 'at most twenty pages are read');
+  assert.equal(Object.keys(result.messages).length, 20);
+  assert.equal(result.truncated, true, 'the cap left pages unread: never read as complete');
+  assert.equal(result.pages, 20);
+});
+
+test('a-fully-exhausted-listing-reads-as-complete', async () => {
+  const { fetchImpl } = stubFetch({
+    '': { messageList: { M1: { messageId: 'M1', to: '01011111111' } }, limit: 500, nextKey: null },
+  });
+  const provider = solapi.createSolapiProvider(config({ host: 'https://solapi.test' }), { fetchImpl });
+  const result = await provider.groupMessages('G-1');
+  assert.equal(result.ok, true);
+  assert.deepEqual(Object.keys(result.messages), ['M1']);
+  assert.equal(result.truncated, undefined, 'nothing left unread');
+});
+
+test('a-404-group-read-is-an-explicit-not-found', async () => {
+  const { fetchImpl } = stubFetch({ '': { status: 404, body: { errorCode: 'NotFoundGroup' } } });
+  const provider = solapi.createSolapiProvider(config({ host: 'https://solapi.test' }), { fetchImpl });
+  const result = await provider.groupMessages('G-NOPE');
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'NOT_FOUND', 'absence has one explicit signal');
+  assert.equal(result.status, 404);
+});
+
+test('a-429-group-read-stays-a-retryable-unknown', async () => {
+  const { fetchImpl } = stubFetch({ '': { status: 429, body: { errorCode: 'TooManyRequests' } } });
+  const provider = solapi.createSolapiProvider(config({ host: 'https://solapi.test' }), { fetchImpl });
+  const result = await provider.groupMessages('G-1');
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'RATE_LIMITED', 'never mistaken for absence');
+});
+
+test('a-mid-pagination-failure-keeps-the-pages-already-read', async () => {
+  const calls = [];
+  const fetchImpl = async (url) => {
+    const parsed = new URL(url);
+    calls.push(Object.fromEntries(parsed.searchParams));
+    const key = parsed.searchParams.get('startKey') || '';
+    if (!key) {
+      return { ok: true, status: 200, json: async () => ({ messageList: { M1: { messageId: 'M1' } }, nextKey: 'C2' }), headers: { get: () => null } };
+    }
+    return { ok: false, status: 500, json: async () => ({ errorCode: 'ServerError' }), headers: { get: () => null } };
+  };
+  const provider = solapi.createSolapiProvider(config({ host: 'https://solapi.test' }), { fetchImpl });
+  const result = await provider.groupMessages('G-1');
+  assert.equal(result.ok, false, 'a partial collection is not presented as complete');
+  assert.equal(result.reason, 'PROVIDER_REJECTED');
+});

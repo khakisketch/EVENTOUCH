@@ -1,5 +1,3 @@
-.campaignTop,
-.campaignTitle,
 .campaignActions,
 .templateActions,
 .recipientTools {
@@ -13,6 +11,8 @@
   margin: 0;
   color: var(--muted);
   font-size: var(--small);
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .recipientFieldset legend {
@@ -24,13 +24,14 @@
 .recipientFieldset {
   min-width: 0;
   margin: 0;
-  padding: var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  padding: 0;
+  border: 0;
 }
 
 .recipientFieldset legend {
-  padding-inline: var(--s1);
+  padding: 0;
+  font-size: var(--h3);
+  font-weight: 650;
 }
 
 .recipientTools {
@@ -38,6 +39,25 @@
   margin-bottom: var(--s2);
   color: var(--muted);
   font-size: var(--small);
+}
+
+.selectAllOption {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0 !important;
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.selectAllOption input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  accent-color: var(--brand-text);
 }
 
 .recipientFilters {
@@ -82,7 +102,7 @@
 .riskWarning {
   margin: var(--s2) 0 0;
   padding: var(--s2) var(--s3);
-  border-left: 3px solid var(--warning-line);
+  border-left: 1px solid var(--warning-line);
   background: var(--warning-soft);
   color: var(--warning);
   font-size: var(--small);
@@ -102,8 +122,7 @@
   cursor: pointer;
 }
 
-/* History folds under the composer in a native details region. The
-   summary carries the count so the folded state still reports it. */
+/* History is the first work surface, open by default. Folding is optional. */
 .historyDetails {
   border-top: 1px solid var(--line);
 }
@@ -117,11 +136,6 @@
   cursor: pointer;
 }
 
-.recipientTools > div {
-  display: flex;
-  gap: var(--s3);
-}
-
 .recipientSearch {
   margin-bottom: 0;
 }
@@ -131,7 +145,10 @@
 }
 
 .textButton {
+  display: inline-flex;
   min-height: 44px;
+  align-items: center;
+  gap: var(--s2);
   padding: var(--s2);
   border: 0;
   border-radius: var(--radius-small);
@@ -142,9 +159,12 @@
   text-underline-offset: 3px;
 }
 
+.textButton:hover {
+  background: var(--surface-muted);
+}
+
 .recipientList,
 .templateList,
-.campaignList,
 .deliveries ul {
   margin: 0;
   padding: 0;
@@ -198,7 +218,11 @@
   color: var(--muted);
   font-size: var(--small);
   text-align: left;
-  overflow-wrap: anywhere;
+  /* Korean status wraps at phrase boundaries; genuinely long tokens
+     (emails, masked numbers) break only when they would overflow. anywhere
+     split mid-syllable (참가 확/정), so it must not return here. */
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .simulateOption {
@@ -270,11 +294,7 @@
 
 .templateActions {
   flex: none;
-  gap: var(--s1);
-}
-
-.templateActions .textButton {
-  padding-inline: var(--s1);
+  gap: var(--s2);
 }
 
 .templateDetails form {
@@ -287,40 +307,20 @@
   font-size: var(--h3);
 }
 
-.campaignList {
-  display: grid;
-  gap: var(--s3);
-}
-
 .campaignCard {
   display: grid;
   gap: var(--s3);
   padding: var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
-}
-
-.campaignTop {
-  align-items: flex-start;
-}
-
-.campaignTitle {
-  min-width: 0;
-  flex-wrap: wrap;
-  justify-content: flex-start;
-}
-
-.campaignTitle h3 {
-  min-width: 0;
-  margin: 0;
-  font-size: var(--h3);
-  overflow-wrap: anywhere;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .campaignActions {
   flex: none;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--s1);
 }
 
 .status {
@@ -333,6 +333,8 @@
   font-size: var(--small);
   font-weight: 700;
   line-height: 1.2;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .statusGood {
@@ -385,7 +387,7 @@
 .campaignHint {
   margin: 0;
   padding: var(--s2) var(--s3);
-  border-left: 3px solid var(--warning-line);
+  border-left: 1px solid var(--warning-line);
   background: var(--warning-soft);
   color: var(--warning);
   font-size: var(--small);
@@ -485,11 +487,6 @@
     text-align: left;
   }
 
-  .campaignTop {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
   .campaignActions {
     justify-content: flex-start;
   }
@@ -511,6 +508,10 @@
   margin-top: var(--s2);
 }
 
+.recipientDetails .recipientFilters {
+  margin-top: var(--s3);
+}
+
 .recipientSummaryButton {
   display: flex;
   align-items: center;
@@ -529,9 +530,30 @@
   font-weight: 700;
 }
 
-/* Compose-head order guide: recipients lead the DOM on every viewport
-   while desktop keeps the draft-left visual split, so the head states that
-   either order works and jumps straight to the picker or the review.
+/* Native disclosure keeps its behavior and accessible name; the chevron and
+   underline keep the summary reading as a control next to the muted count.
+   Tokens only: currentColor chevron, no glyphs, no hex. */
+.recipientSummaryButton::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+}
+
+.recipientDetails[open] .recipientSummaryButton::before {
+  transform: rotate(45deg);
+}
+
+.recipientSummaryLabel {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Recipients lead both the DOM and the visual reading order. The operator
+   may still write first using the skip, or jump straight to review.
    A focus-only skip ahead of it bypasses the long list into the draft.
    Tokens only. */
 .recipientTopBar {
@@ -565,17 +587,12 @@
   scroll-margin-bottom: 48px;
 }
 
-/* Compose grid: draft (left) + recipients (right) on desktop, one column
-   at or below the product 1024 breakpoint. The left column reuses the
-   shared form rhythm; the fieldset keeps its own recipient styles. DOM
-   order is recipients first so the mobile reading/keyboard order meets
-   the selection before the long draft; desktop restores the visual
-   draft-left/recipients-right split with grid areas only. */
+/* Two real task areas, not an empty detail rail. */
 .composeGrid {
   display: grid;
-  grid-template-areas: "draft recipients";
-  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-  gap: var(--s5);
+  grid-template-areas: "recipients draft";
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: var(--s7);
   align-items: start;
   min-width: 0;
 }
@@ -583,6 +600,45 @@
 .composeDraft {
   grid-area: draft;
   min-width: 0;
+  padding-left: var(--s5);
+  border-left: 1px solid var(--line);
+}
+
+.draftPreview {
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
+  padding: var(--s4);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.draftPreviewHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.draftPreviewHead h3 {
+  margin: 0;
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.draftPreviewHead > span {
+  color: var(--muted);
+  font-size: var(--label);
+}
+
+.draftPreviewBody {
+  max-width: none;
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--small);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .composeGrid > fieldset {
@@ -590,9 +646,8 @@
   grid-area: recipients;
 }
 
-/* Review bar: the send checklist and the single submit sit together
-   directly above the confirm. The submit keeps its id, disabled rules
-   and confirm flow; only its default label moves here. Tokens only. */
+/* Review follows BOTH columns in normal flow: recipients remain readable
+   when the operator checks the summary, including on desktop. */
 .reviewBar {
   display: flex;
   flex-wrap: wrap;
@@ -602,6 +657,8 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface-muted);
+  position: static;
+  margin-top: var(--s3);
 }
 
 .reviewSummary {
@@ -612,6 +669,21 @@
   font-weight: 650;
 }
 
+.reviewInvalidated {
+  margin: 0;
+  color: var(--warning);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+/* The disabled-submit jump lands here to announce the blocker reason:
+   programmatic focus on a paragraph does not draw :focus-visible, so the
+   outline is explicit. Tokens only. */
+:global(#campaign-submit-warning):focus {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
 @media (max-width: 1024px) {
   .composeGrid {
     grid-template-areas:
@@ -619,9 +691,456 @@
       "draft";
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .composeDraft {
+    padding: var(--s5) 0 0;
+    border: 0;
+    border-top: 1px solid var(--line);
+  }
+}
+
+/* Phone: the checklist closes the form in normal flow. A sticky bar here
+   covered the recipient fields at first paint and left no scroll padding,
+   so the operator could not see who they were sending to. */
+@media (max-width: 768px) {
+  .reviewBar {
+    position: static;
+    margin-top: var(--s3);
+    box-shadow: none;
+  }
 }
 .closeArchive {
   flex-basis: 100%;
   display: grid;
   gap: var(--s2);
+}
+
+/* Approved B: history ledger first; the same mounted draft is revealed on
+   request. Returning to history never clears input, recipients or receipts. */
+.workbenchPage { gap: var(--s3); }
+.workbenchPage > header h1 { font-size: var(--h1); }
+.historySection { min-width: 0; gap: var(--s2); }
+.connectionDetails { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-muted); padding: var(--s3) var(--s4); }
+.connectionDetails > summary { color: var(--ink); font-size: var(--body-work); font-weight: 700; }
+.connectionDetails > summary::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: var(--s2); border-radius: 999px; background: currentColor; vertical-align: baseline; }
+.connectionDetails .help { margin-top: var(--s2); }
+/* The strip tells the connection truth before the sentence does: unconnected
+   is a warning, new-org simulation-only is information, a live connection is
+   a success. Approved soft/line/ink feedback pairs only, no new colors. */
+.connectionOff { border-color: var(--warning-line); background: var(--warning-soft); }
+.connectionOff > summary { color: var(--warning); }
+.connectionSim { border-color: var(--info-line); background: var(--info-soft); }
+.connectionSim > summary { color: var(--info); }
+.connectionOk { border-color: var(--success-line); background: var(--success-soft); }
+.connectionOk > summary { color: var(--success); }
+.composeReturn { display: grid; justify-items: end; gap: var(--s1); }
+.composeReturn small { color: var(--muted); font-size: var(--label); }
+.historyFootnote { padding-top: var(--s2); font-size: var(--label); }
+.historyTools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+.historyFilters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); padding-block: var(--s3); color: var(--ink); }
+.historyFilters label { flex: 1 1 180px; min-width: 0; }
+.historyFilters input, .historyFilters select { width: 100%; min-height: 44px; background: var(--paper); color: var(--ink); border-color: var(--line-strong); }
+.historyFilters input::placeholder { color: var(--muted); opacity: 1; }
+.historyFilters > span { color: var(--ink); font-size: var(--small); font-weight: 650; font-variant-numeric: tabular-nums; }
+.historyDetails { border: 0; }
+.historyDetails > summary { font-size: var(--small); }
+.historyScroll { min-width: 0; border-block: 1px solid var(--line); background: var(--paper); }
+.historyTable { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--small); }
+.historyTable th, .historyTable td { text-align: left; vertical-align: middle; padding: var(--s3); border-bottom: 1px solid var(--line); }
+.historyTable th { background: var(--surface-muted); color: var(--muted); font-size: var(--label); font-weight: 550; white-space: nowrap; }
+.historyTable th:first-child { width: 24%; }
+.historyIdentity { min-width: 0; }
+.historyIdentity h3 { margin: 0; font-family: var(--body-font); font-size: var(--body-work); font-weight: 750; overflow-wrap: anywhere; }
+.historyIdentity small, .historyTime small { display: block; margin-top: var(--s1); color: var(--muted); font-size: var(--label); }
+.historyCount, .historyChannel { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.historyTime { font-size: var(--label); font-variant-numeric: tabular-nums; word-break: keep-all; }
+.historyTime small { word-break: keep-all; }
+.historyStatus { max-width: 180px; word-break: keep-all; }
+/* The status cell stays a table-cell on desktop: its border draws the row
+   boundary, so an inner grid here would split that line mid-column. Chips
+   wrap between whole phrases instead of stacking in a nested grid. */
+.historyStatus .status { margin: var(--s1) var(--s2) var(--s1) 0; font-size: var(--label); }
+.historyStatus .status:last-child { margin-right: 0; }
+/* Review and draft summaries state the safety outcome in one sentence each:
+   keep Korean phrases whole so 모의/실제 wording never splits mid-syllable. */
+.reviewSummary, .draftSummary li, .historyIdentity h3 { word-break: keep-all; }
+.historyActionCell { max-width: 224px; }
+.campaignActions :global(.button) { min-width: 44px; min-height: 44px; font-size: var(--small); padding-inline: var(--s2); }
+.historyDetailRow > td { padding: 0; background: var(--surface-muted); }
+.mobileCellLabel { display: none; }
+.composeSection { scroll-margin-top: 120px; }
+:global(#campaign-heading) { scroll-margin-top: 120px; }
+.composeSection .recipientTopBar { padding: 0; border: 0; background: transparent; }
+.composeSection .recipientTopBar .textButton { margin-left: 0; }
+.composeDraft textarea { min-height: 160px; }
+.recipientList { max-height: 384px; scrollbar-width: thin; scrollbar-color: var(--line-strong) var(--paper); }
+
+@media (max-width: 768px) {
+  .historySection > div:first-child { display: flex; flex-direction: column; align-items: stretch; gap: var(--s2); }
+  .historyTools { width: 100%; }
+  .historyTools > :global(.button) { flex: 1 1 120px; white-space: normal; word-break: keep-all; }
+  .historyFilters { padding: var(--s2) 0; }
+  .historyFilters label { flex-basis: 120px; }
+  .historyFilters > span { flex-basis: 100%; font-size: var(--label); }
+  .historyTable, .historyTable tbody { display: block; }
+  .historyTable thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .historyTable tr[data-history-row] { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: start; gap: var(--s1) var(--s3); padding: var(--s3); border-bottom: 1px solid var(--line); }
+  .historyTable td { display: block; min-width: 0; padding: 0; border: 0; }
+  .historyIdentity { grid-column: 1 / 3; grid-row: 1; }
+  .historyChannel { grid-column: 1; grid-row: 2; font-size: var(--label); }
+  .historyCount { grid-column: 2; grid-row: 2; font-size: var(--label); }
+  .historyTime { grid-column: 1 / -1; grid-row: 3; color: var(--muted); display: grid; gap: var(--s1); }
+  .historyStatus { grid-column: 3; grid-row: 1 / span 2; text-align: right !important; max-width: 120px; display: grid; gap: var(--s1); justify-items: end; align-content: start; }
+  .historyActionCell { grid-column: 1 / -1; grid-row: 4; max-width: none; }
+  .historyActionCell .campaignActions { justify-content: flex-end; }
+  .historyTable .historyDetailRow:not([hidden]) { display: block; }
+  .historyDetailRow .campaignCard { padding: var(--s3); }
+  .mobileCellLabel { display: inline; color: var(--muted); }
+  /* Request and reservation stay on separate stacked lines: the inline
+     run-on ("요청 … 예약 …" on one wrapped line) read as one timestamp. */
+  .historyTime small { display: block; margin: var(--s1) 0 0; }
+  .composeSection .recipientTopBar { gap: var(--s1); }
+  .composeSection .recipientTopBar .textButton { padding-inline: var(--s1); }
+  .templateRow { flex-wrap: wrap; }
+}
+
+/* ---- Message workbench respace: browse the ledger first, compose in grouped zones ----
+   History leads while browsing. Composing is its own surface: the ledger
+   stays mounted (filters, paging, receipts and detail state untouched) but
+   fully hidden, so no history chrome pushes the active draft down on any
+   viewport. The composer's own 발송 기록 보기 button is the single explicit
+   return; a proven send closes the composer so the new row shows in the
+   ledger. Nothing unmounts and drafts, selections and receipts survive. */
+.workbenchPage {
+  gap: var(--s5);
+}
+
+.historySection {
+  min-width: 0;
+}
+
+.historyFilters {
+  padding: var(--s2) 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.historyScroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.historyTable tbody tr[data-history-row]:hover {
+  background: var(--surface-muted);
+}
+
+.historyTable tbody tr[data-history-row]:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
+}
+
+.workbenchPage:has([id="message-composer"]:not([hidden])) .historySection {
+  display: none;
+}
+
+/* ---- Grouped compose zones: recipients rail · content · send mode · review ----
+   Zones read as one task each through spacing, rules and background — no
+   kicker lines, no sequence numbers: this is one workspace, not a wizard. */
+
+/* Recipients become a muted rail so the white draft reads as the work. */
+.composeGrid > fieldset {
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.selectionSummary {
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--paper);
+  font-size: var(--body-work);
+  font-weight: 800;
+}
+
+.recipientList {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--paper);
+}
+
+/* The outgoing message carries the visual weight: large title, roomy
+   body, and a preview that reads as the receiver's screen. */
+.contentFields {
+  display: grid;
+  gap: var(--s4);
+  margin-bottom: var(--s4);
+  padding-bottom: var(--s4);
+  border-bottom: 1px solid var(--line);
+}
+
+.composeDraft [id="campaign-title"] {
+  min-height: 52px;
+  font-size: var(--h3);
+  font-weight: 700;
+}
+
+.composeDraft textarea[id="campaign-body"] {
+  min-height: 220px;
+  font-size: var(--body-work);
+  line-height: 1.7;
+}
+
+.draftPreview {
+  border: 1px solid var(--line);
+  background: var(--surface-muted);
+}
+
+.draftPreviewBody {
+  min-height: 120px;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--paper);
+  font-size: var(--body-work);
+  line-height: 1.7;
+}
+
+/* Send mode stays one open division above review, never a nested card. */
+.sendCard {
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+.sendBlock {
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+/* Review is the closing gate: a neutral draft summary first, then the guarded submit.
+   The summary states what is entered so far; it never claims send readiness —
+   MMS attachment, approved 알림톡 template, permissions, provider and field
+   validation stay with the existing submit guard, per-field errors and the
+   explicit confirmation. */
+.reviewCard {
+  display: grid;
+  gap: var(--s2);
+  margin-top: var(--s4);
+  padding: var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.draftSummary {
+  display: grid;
+  gap: var(--s1);
+  margin: 0;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+  list-style: none;
+}
+
+.draftSummary li {
+  min-width: 0;
+  color: var(--ink);
+  font-size: var(--small);
+  overflow-wrap: anywhere;
+}
+
+.reviewCard .reviewBar {
+  margin-top: var(--s2);
+  padding: var(--s2) 0 0;
+  border: 0;
+  background: transparent;
+}
+
+.reviewCard .reviewSummary {
+  font-size: var(--body-work);
+}
+
+.templateSection {
+  min-width: 0;
+}
+
+@media (min-width: 1025px) {
+  .composeGrid {
+    grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+  }
+
+  .composeDraft {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    align-items: start;
+    column-gap: var(--s5);
+  }
+
+  .contentFields {
+    grid-column: 1;
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+
+  /* No sticky: a stuck preview overlaid scheduling, simulation and error
+     controls while scrolling. The grid cell keeps it beside the editor on
+     wide screens without ever covering anything. */
+  .draftPreview {
+    grid-column: 2;
+  }
+
+  .sendBlock,
+  .sendCard {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 768px) {
+  .composeGrid > fieldset {
+    padding: var(--s3);
+  }
+
+  .composeSection .recipientTopBar .textButton {
+    padding-inline: var(--s2);
+    white-space: nowrap;
+  }
+
+  .reviewCard {
+    padding: var(--s3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workbenchPage *,
+  .workbenchPage *::before,
+  .workbenchPage *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* The ledger starts with actionable work, rather than a second copy of the
+   table. Counts are filters, not claims that an operation has completed. */
+.historyOverview {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.2fr) repeat(2, minmax(0, 1fr));
+  border-block: 1px solid var(--line);
+  margin: var(--s2) 0 var(--s3);
+}
+.historyOverviewIntro, .historyOverviewItem {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s1);
+  min-width: 0;
+  padding: var(--s4);
+  text-align: left;
+}
+.historyOverviewIntro { padding-left: 0; justify-content: center; }
+.historyOverviewIntro strong { font-size: var(--h3); }
+.historyOverviewIntro span, .historyOverviewItem small { color: var(--muted); font-size: var(--small); word-break: keep-all; }
+.historyOverviewItem {
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.historyOverviewItem:hover { background: var(--surface-muted); }
+.historyOverviewItem[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand-text); }
+.historyOverviewItem span { font-size: var(--small); font-weight: 650; }
+.historyOverviewItem strong { font-size: var(--h1); line-height: 1.2; font-variant-numeric: tabular-nums; }
+.historyOverviewItem:focus-visible, .composeNavigator button:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+
+/* Visible, non-linear task map: it jumps to the real controls, not to a
+   wizard or a submission. The mounted form retains selections and files. */
+.composeNavigator {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-block: 1px solid var(--line);
+}
+.composeNavigator button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s1);
+  min-width: 0;
+  min-height: 72px;
+  padding: var(--s3) var(--s4);
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.composeNavigator button:first-child { padding-left: 0; }
+.composeNavigator button:last-child { border-right: 0; }
+.composeNavigator button:hover { background: var(--surface-muted); }
+.composeNavigator span { color: var(--muted); font-size: var(--small); word-break: keep-all; }
+.recipientTopBar[hidden] { display: none; }
+.reviewHeading h3 { margin: 0; font-size: var(--h3); }
+.reviewHeading p { margin: var(--s1) 0 var(--s2); color: var(--muted); font-size: var(--small); }
+
+/* Give the work areas their own hierarchy instead of three nested panels. */
+.composeGrid > fieldset { background: transparent; border: 0; border-radius: 0; padding: 0; }
+.selectionSummary { background: var(--surface-muted); border: 0; }
+.reviewCard { border: 0; border-top: 1px solid var(--line-strong); border-radius: 0; padding: var(--s5) 0 0; }
+.draftSummary { border: 0; border-radius: 0; }
+
+@media (max-width: 768px) {
+  .historyOverview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .historyOverviewIntro { grid-column: 1 / -1; padding: var(--s3) 0; }
+  .historyOverviewItem { border-top: 1px solid var(--line); }
+  .historyOverviewItem:nth-child(2) { border-left: 0; padding-left: 0; }
+  .historyOverviewItem strong { font-size: var(--h3); }
+  .composeNavigator button { padding: var(--s2); }
+  .composeNavigator strong, .composeNavigator span { font-size: var(--small); }
+  .reviewCard { padding: var(--s4) 0 0; }
+}
+
+/* In an empty ledger the next action is the existing compose button, not
+   a dashboard of zeroes. With records, quick filters occupy a single tool
+   row and only appear when there is relevant work (or an active filter). */
+.firstMessage {
+  padding: var(--s5) 0;
+  border-bottom: 1px solid var(--line);
+}
+.firstMessage strong { font-size: var(--h3); }
+.firstMessage p { margin: var(--s2) 0 0; color: var(--muted); font-size: var(--small); word-break: keep-all; }
+.historyOverview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin: var(--s2) 0 0;
+  border: 0;
+}
+.historyOverviewItem {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 44px;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  font-size: var(--small);
+  font-weight: 650;
+}
+.historyOverviewItem strong { font-size: inherit; line-height: inherit; }
+.historyOverviewItem[aria-pressed="true"] { border-color: var(--brand-text); }
+@media (max-width: 768px) {
+  .historyOverviewItem:nth-child(2) { border: 1px solid var(--line-strong); padding: var(--s2) var(--s3); }
+  .historyOverviewItem:nth-child(2)[aria-pressed="true"] { border-color: var(--brand-text); }
+  .composeSection .recipientTopBar { gap: 0 var(--s2); }
+  .composeSection .recipientTopBar .textButton { padding-inline: 0; }
+  .composeGrid { gap: var(--s4); }
+  .composeDraft { padding-top: var(--s4); }
 }

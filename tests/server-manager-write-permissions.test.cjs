@@ -16,6 +16,7 @@ const {
   sessionCookie,
   requestJson,
   deleteFixtureRows,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 
 const test = databaseUrl
@@ -54,15 +55,15 @@ function run(cookie, command, payload) {
 before(async () => {
   if (!databaseUrl) return;
   harness = await startApiHarness();
-  await insertAccount(harness.database, {
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,
     id: ids.agency, role: 'AGENCY', name: '조직 소유자', email: `${ids.agency}@example.test`,
   });
   for (const key of ['participants', 'page', 'onsite', 'settings', 'results', 'messages', 'empty', 'all']) {
-    await insertAccount(harness.database, {
+    await insertAccount(harness.database, {orgId: LEGACY_ORG,
       id: ids[key], role: 'MANAGER', name: `매니저 ${key}`, email: `${ids[key]}@example.test`,
     });
   }
-  await insertEvent(harness.database, {
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,
     id: ids.event,
     slug: ids.event,
     payload: {
@@ -195,7 +196,7 @@ test('omitted write on registration defaults to full access', async (t) => {
   if (!databaseUrl) return t.skip('set EVENTOUCH_TEST_DATABASE_URL to an isolated PostgreSQL test database');
   const accountId = `perm-manager-omitted-${suffix}`;
   extraAccountIds.push(accountId);
-  await insertAccount(harness.database, {
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,
     id: accountId, role: 'MANAGER', name: '생략 등록 매니저', email: `${accountId}@example.test`,
   });
   const granted = await requestJson(harness.baseUrl, `/api/events/${ids.event}/members`, {

@@ -217,7 +217,7 @@ async function main() {
   await lib.restoreDatabase(options.project, user, database, path.join(directory, manifest.database.file));
   log('DB 복원 완료');
 
-  const restoredCounts = await lib.readCounts(options.project, user, database);
+  const restoredCounts = await lib.readCounts(options.project, user, database, { tables: Object.keys(manifest.counts) });
   const restoredMigrations = await lib.readMigrations(options.project, user, database);
   const countDifferences = lib.sameCounts(manifest.counts, restoredCounts);
   if (countDifferences.length) lib.fail(`복원 후 행 수가 다릅니다:\n${countDifferences.join('\n')}`);

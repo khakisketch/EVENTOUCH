@@ -5,7 +5,7 @@ Node API 서버와 PostgreSQL이 뒤에서 행사 데이터를 권위로 들고 
 운영사 콘솔, 현장 스태프 화면, 참가자 웹(신청·티켓 QR), 행사장 전광판을 같은 오리진에서 제공한다.
 
 - 지금 상태·검증 수치·블로커: **[docs/STATUS.md](docs/STATUS.md)** (현황 정본)
-- 구조: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · 디자인: [docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md)
+- 구조: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · 디자인: [화이트 업무용 SaaS](DESIGN.md) · [적용·검증 상태](docs/STATUS.md)
 - 배포: [docs/DEPLOY.md](docs/DEPLOY.md) · 연동: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)
 
 ## 스택
@@ -54,15 +54,45 @@ POSTGRES_PASSWORD=... ADMIN_EMAIL=... ADMIN_PASSWORD=... docker compose up -d --
 
 `HOST_PORT`로 호스트에 게시되는 Next 포트를 바꾼다(내부 API는 공개 포트가 없다).
 
+### 다른 컴퓨터에서 이어서 개발
+
+Node.js 24와 npm을 준비하고, 이 프로젝트 전용 PostgreSQL을 별도로 마련한다.
+공개 GitHub 저장소에는 DB·업로드 파일·비밀번호·검증 캡처가 포함되지 않는다.
+
+```bash
+git clone --branch main https://github.com/khakisketch/EVENTOUCH.git
+cd EVENTOUCH
+npm run setup
+```
+
+개발용 DB 연결과 최초 관리자 정보를 **실행 환경**에 설정한 뒤 `npm run dev`를 실행한다.
+`DATABASE_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` 등의 설정과 Docker 실행 방법은
+[배포 안내](docs/DEPLOY.md)를 따른다. 실제 운영 자격증명이나 사용자 데이터를 Git에 넣지 않는다.
+문자 검증에는 실발송 자격증명 대신 `EVENTOUCH_SMS_MOCK=1`을 사용한다.
+
+전체 회귀에는 개발 DB와 분리된 loopback 테스트 DB와 Chromium이 필요하다. 아래 URL은 예시이며,
+별도로 만든 테스트 DB의 접속 정보를 사용한다.
+
+```bash
+npx playwright install --with-deps chromium
+EVENTOUCH_TEST_DATABASE_URL='postgres://<user>:<password>@127.0.0.1:5432/eventouch_test' npm run verify:system
+```
+
+기존 컴퓨터의 DB·파일을 옮겨야 한다면 [백업·복구 절차](docs/DEPLOY.md#백업과-복구)를
+별도로 검토한다. Git 복제만으로 기존 사용자 데이터가 이전되지는 않는다.
+
 ## 검증
 
 DB가 있어야 백엔드 테스트와 감사가 실제로 돈다. 없이 돌리면 스킵되고, 러너가 그것을 실패로 처리한다.
+전체 테스트와 브라우저 감사에는 Chromium도 필요하다. 의존성 설치 후
+`npx playwright install --with-deps chromium`을 실행하거나 `CHROMIUM_EXECUTABLE`로 호환 브라우저를 지정한다.
 
 ```bash
 EVENTOUCH_TEST_DATABASE_URL='postgres://...' npm test    # 스킵 0이어야 통과(최신 수치는 docs/STATUS.md)
 EVENTOUCH_A11Y_DATABASE_URL='postgres://...' npm run a11y # 기존 Next 빌드로 격리 접근성 감사
 EVENTOUCH_MOBILE_DATABASE_URL='postgres://...' npm run mobile # 6기기×2방향×6실경로=72 레이아웃 검사(넘침·44px)
 npm run web:audit                                       # 격리 접근성·넘침·참가자 홈 기하 감사
+EVENTOUCH_TEST_DATABASE_URL='postgres://.../eventouch_test' npm run verify:system # 빌드부터 전체 직렬 검증·로그 보존
 EVENTOUCH_TEST_DATABASE_URL='postgres://...' npm run web:console:audit # 콘솔 공통 구조·입력 보호·재시도·보고서 출력
 ```
 
@@ -71,8 +101,8 @@ EVENTOUCH_TEST_DATABASE_URL='postgres://...' npm run web:console:audit # 콘솔 
 서버 렌더도 같은 격리 API를 사용하며 종료 때 자기 서버와 픽스처만 정리한다.
 이 명령들의 `WEB_BASE`는 대체되며, 외부 실행 서버·배포본을 검사한 증거가 아니다.
 참가자 가져오기·한울·테마 브라우저 감사는 `npm run web:import:audit`·
-`npm run web:hanwool:audit`·`npm run web:theme:audit`이며, 격리 DB와 실행 중
-빌드(`WEB_BASE`, 기본 `http://127.0.0.1:8777`)가 필요하다.
+`npm run web:hanwool:audit`·`npm run web:theme:audit`이며, 격리 DB와 먼저 만든
+빌드가 필요하다. 각 감사가 자체 Next·API를 실행하므로 외부 `WEB_BASE`를 검사하지 않는다.
 
 ## 백업·복구
 

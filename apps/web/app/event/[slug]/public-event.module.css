@@ -4,25 +4,78 @@
   color: var(--muted);
 }
 
+/* Hero title: the global .event-intro h1 floors at --display (40px), which
+   overwhelms a 390px phone and wraps the event name mid-syllable. The title
+   leads at h1 scale on mobile and grows only with room. Balance keeps the
+   event code (e.g. trailing "30b1ba") from stranding alone on its own line. */
+.eventTitle {
+  margin: 0 0 var(--s3);
+  font-size: clamp(var(--h1), 8vw, var(--display));
+  line-height: 1.2;
+  letter-spacing: -0.04em;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+/* Published keyvisual: the first thing an invited attendee sees. It scales
+   to the reading width and never shifts the facts below it. */
+.keyvisual {
+  display: block;
+  width: 100%;
+  max-width: var(--web-reading-max, 68ch);
+  height: auto;
+  margin-bottom: var(--s4);
+  border-radius: var(--radius);
+}
+
 .cta {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   flex-wrap: wrap;
-  gap: var(--s3);
+  gap: var(--s2);
   margin-top: var(--s4);
+}
+
+/* One primary per screen: the signup fills the row, the way-back links share
+   the next row at the same 44px target without competing for it. */
+.cta > a:first-child,
+.cta > p:first-child {
+  flex: 1 1 100%;
 }
 
 .recoveryLink {
   max-width: 100%;
+  flex: 1 1 auto;
 }
 
 .homeLink {
   max-width: 100%;
+  flex: 1 1 auto;
 }
 
 .registrationClosed {
   margin: 0;
   color: var(--muted);
+}
+
+/* Recovery guidance that shares the CTA row: the same device-binding rule is
+   repeated on the register and ticket screens, so here it reads as one info
+   strip (the register outcome-note voice) instead of a quiet paragraph that
+   splits the primary from the way-back links. */
+.recoveryNote {
+  margin: 0;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--info-line);
+  border-radius: var(--radius-small);
+  background: var(--info-soft);
+  color: var(--info);
+  font-size: var(--small);
+  font-weight: 700;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+  flex: 1 1 100%;
 }
 
 .section {
@@ -83,6 +136,20 @@
   font-size: var(--small);
 }
 
+/* The global .event-facts grid holds two columns at every width; on a phone
+   each fact squeezes to ~165px and the date wraps mid-phrase. One column on
+   narrow screens keeps 일정·장소 readable. Globals stay untouched. */
+@media (max-width: 768px) {
+  :global(.event-facts) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cta > a:first-child,
+  .cta > p:first-child {
+    flex: 1 1 100%;
+  }
+}
+
 @media (max-width: 768px) {
   .section {
     margin-top: var(--s5);
@@ -92,6 +159,19 @@
   .noticeList li,
   .programList li {
     padding: var(--s3);
+  }
+}
+
+/* 390px-class phones: the CTA keeps primary-first rhythm (full-width primary,
+   one shared row for the way-back links) with a tighter gap so the recovery
+   strip, the primary, and the links read as one decision group. */
+@media (max-width: 480px) {
+  .eventTitle {
+    font-size: clamp(var(--h1), 7vw, 30px);
+  }
+
+  .cta {
+    gap: var(--s2);
   }
 }
 
@@ -118,7 +198,7 @@
   padding: 2px var(--s2);
   border-radius: 999px;
   background: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
   font-size: var(--small);
   font-weight: 800;
   white-space: nowrap;

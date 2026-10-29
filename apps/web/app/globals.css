@@ -9,6 +9,7 @@
 html {
   min-width: 320px;
   scroll-behavior: smooth;
+  scrollbar-color: var(--line-strong) var(--surface-muted);
 }
 
 body {
@@ -16,6 +17,11 @@ body {
   background: var(--ground);
   color: var(--ink);
   font: var(--body)/1.6 var(--body-font);
+  font-feature-settings: "ss01", "cv05";
+  font-optical-sizing: auto;
+  letter-spacing: -0.006em;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
 h1,
@@ -104,6 +110,7 @@ textarea {
   border-radius: var(--radius);
   background: var(--paper);
   color: var(--ink);
+  caret-color: var(--brand-text);
 }
 
 input::placeholder {
@@ -189,7 +196,7 @@ select[aria-invalid="true"] {
   color: var(--ink);
   font-size: var(--h2);
   font-weight: 800;
-  letter-spacing: -0.05em;
+  letter-spacing: -0.025em;
   line-height: 1.2;
   text-decoration: none;
 }
@@ -226,11 +233,16 @@ select[aria-invalid="true"] {
   border-radius: var(--radius);
   background: var(--paper);
   color: var(--ink);
-  font-weight: 700;
+  font-weight: 600;
+  letter-spacing: -0.008em;
   line-height: 1.3;
   text-align: center;
   text-decoration: none;
-  transition: background var(--enter) ease-out, border-color var(--enter) ease-out;
+  transition: background 160ms ease-out, border-color 160ms ease-out, transform 160ms ease-out;
+}
+
+.button:active {
+  transform: translateY(1px);
 }
 
 .button-primary {
@@ -239,8 +251,182 @@ select[aria-invalid="true"] {
   color: var(--on-brand);
 }
 
+.button-primary:hover {
+  border-color: var(--brand-hover);
+  background: var(--brand-hover);
+  color: var(--on-brand-hover);
+}
+
 .button-secondary {
   background: var(--paper);
+}
+
+.button-secondary:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-muted);
+}
+
+/* Quiet: the ledger's tertiary voice for refresh, reset, disclosure and
+   other non-committal work. Same 44px target, no box — distinguished from
+   both filters (pills) and committing buttons by design, not by label. */
+.button-quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink);
+}
+
+.button-quiet:hover {
+  border-color: var(--line);
+  background: var(--surface-muted);
+}
+
+/* Danger: reserved for hard-to-undo work (revoke, disable, reset). Always
+   quiet — never a filled red or orange block — and always at the row end. */
+.button-danger {
+  border-color: transparent;
+  background: transparent;
+  color: var(--danger);
+}
+
+.button-danger:hover {
+  border-color: var(--danger-line);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* Paired header actions (open + copy): one flex item so the pair never
+   splits across rows on a phone. The copy stays an icon-only 44px button
+   with a descriptive accessible name; the result is announced next to it. */
+.console-header-group {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: var(--s2);
+  align-items: center;
+  min-width: 0;
+}
+
+.console-icon-button {
+  flex: none;
+  width: 44px;
+  padding-left: 0;
+  padding-right: 0;
+  justify-content: center;
+}
+
+/* Shared action icons: one authored stroke family (see console-ui/ConsoleIcons).
+   Actions have visible labels or, when context is clear, an accessible name.
+   18px in buttons; 20px in the nav rail and phone menu trigger below. */
+svg.action-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.button-quiet:disabled,
+.button-danger:disabled {
+  opacity: 0.6;
+}
+
+/* ------------------------------------------------------------------
+   Operational ledger primitives. Paper tiles on the ground, divided by
+   hairlines — never gradient, glass, or floating card piles. Orange is
+   reserved for the single screen primary; tiles themselves stay quiet.
+   ------------------------------------------------------------------ */
+
+.work-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.work-tile {
+  display: grid;
+  gap: var(--s1);
+  min-width: 0;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+a.work-tile:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-muted);
+  text-decoration: none;
+}
+
+.work-tile strong {
+  font-size: var(--body);
+  overflow-wrap: anywhere;
+}
+
+.work-tile small {
+  color: var(--muted);
+  font-size: var(--small);
+  overflow-wrap: anywhere;
+}
+
+.work-tile-count {
+  color: var(--brand-text);
+  font-size: var(--h3);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.work-tile-action {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-top: var(--s1);
+}
+
+/* Filter pills: the lookup voice, visually separate from buttons. Native
+   controls keep their behavior; the pill is shape and tone only. */
+.pill {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: var(--s1);
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.pill[aria-pressed="true"],
+.pill[aria-expanded="true"] {
+  border-color: var(--brand-text);
+  background: var(--soft);
+  color: var(--brand-text);
+}
+
+button.pill:hover,
+a.pill:hover {
+  border-color: var(--line-strong);
+  text-decoration: none;
+}
+
+.pill[aria-pressed="true"]:hover,
+.pill[aria-expanded="true"]:hover {
+  border-color: var(--brand-text);
+  background: var(--soft);
+  color: var(--brand-text);
 }
 
 .button:disabled {
@@ -373,6 +559,12 @@ select[aria-invalid="true"] {
   border-color: var(--brand);
 }
 
+.action-chip.primary:hover {
+  background: var(--brand-hover);
+  border-color: var(--brand-hover);
+  color: var(--on-brand-hover);
+}
+
 .action-chip.secondary:hover { background: var(--surface-muted); }
 
 .card-grid {
@@ -389,7 +581,6 @@ select[aria-invalid="true"] {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--paper);
-  box-shadow: 0 1px 3px var(--shadow-color);
 }
 
 .card:hover { border-color: var(--line-strong); }
@@ -766,11 +957,40 @@ select[aria-invalid="true"] {
 
 .registration-form {
   display: grid;
-  gap: var(--s4);
-  padding: var(--s5);
-  border: 1px solid var(--line);
+  gap: var(--s5);
+  padding-block: var(--s4);
+}
+
+.registration-fields {
+  display: grid;
+  min-width: 0;
+  gap: var(--s5);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.registration-retry {
+  padding: var(--s4);
+  border: 1px solid var(--warning-line);
   border-radius: var(--radius);
-  background: var(--paper);
+  background: var(--warning-soft);
+  color: var(--ink);
+}
+
+.registration-retry h2 {
+  margin: 0 0 var(--s2);
+  font-size: 1rem;
+}
+
+.registration-retry p {
+  margin: var(--s2) 0 0;
+  font-size: var(--small);
+}
+
+.registration-retry a {
+  color: var(--brand-text);
+  font-weight: 700;
 }
 
 .form-field {
@@ -809,7 +1029,8 @@ select[aria-invalid="true"] {
 
 .registration-form button[type="submit"] {
   width: 100%;
-  min-height: var(--s8);
+  min-height: var(--s7);
+  scroll-margin-block-end: var(--s4);
   border: 1px solid var(--brand);
   border-radius: var(--radius);
   background: var(--brand);
@@ -1030,7 +1251,7 @@ select[aria-invalid="true"] {
 /* Staff operations: selection, manual scan and recent activity stay reachable
    in a single mobile column; the camera is an enhancement, never a blocker. */
 .staff-page {
-  max-width: var(--web-reading-max);
+  max-width: var(--web-form-max);
 }
 
 .staff-header {
@@ -1045,6 +1266,8 @@ select[aria-invalid="true"] {
 
 .staff-header h1 {
   margin-bottom: 0;
+  font-size: var(--h1);
+  font-weight: 700;
 }
 
 .staff-live {
@@ -1064,9 +1287,7 @@ select[aria-invalid="true"] {
 .staff-workspace {
   display: grid;
   gap: var(--s4);
-  padding: var(--s5);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  padding-block: var(--s3);
   background: var(--paper);
 }
 
@@ -1075,18 +1296,21 @@ select[aria-invalid="true"] {
 }
 
 .staff-event-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s3);
   margin: 0;
-  padding: var(--s3);
-  border-left: 3px solid var(--brand);
-  background: var(--soft);
-  font-weight: 700;
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--line);
+  font-weight: 650;
 }
 
 .staff-event-context .staff-back-link {
   display: inline-flex;
   min-height: 44px;
   align-items: center;
-  margin-right: var(--s3);
+  margin-right: 0;
   font-weight: 600;
 }
 
@@ -1137,6 +1361,18 @@ select[aria-invalid="true"] {
   margin-top: calc(var(--s2) * -1);
 }
 
+/* 320px-class staff scan: the form carries a solid hairline above the
+   fallback's own dashed hairline. Collapsing the outer one here saves the
+   final ~12px that keeps the fallback label peeking into the first 568px
+   viewport. Scoped to .staff-workspace so no other page changes; normal flow
+   only, never sticky/fixed. */
+@media (max-width: 360px) {
+  .staff-workspace .scan-form {
+    padding-top: var(--s1);
+    border-top: 0;
+  }
+}
+
 .staff-task-switch {
   display: flex;
   flex-wrap: wrap;
@@ -1169,8 +1405,7 @@ select[aria-invalid="true"] {
 
 .activity-list li {
   padding: var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-small);
+  border-bottom: 1px solid var(--line);
   background: var(--surface-muted);
 }
 
@@ -1178,6 +1413,15 @@ select[aria-invalid="true"] {
   margin: 0;
   padding: var(--s3) var(--s4);
   font-weight: 700;
+}
+
+/* Staff warnings/results: Korean wraps by word (eojeol), never mid-syllable
+   like 티/켓. keep-all preserves 티켓 units at 390/320px; break-word still
+   breaks long codes/paths when the viewport demands it. Scoped to
+   .staff-workspace and .staff-direction-hint so no other page changes. */
+.staff-workspace .scan-result {
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .exit-prize-panel {
@@ -1336,6 +1580,35 @@ select[aria-invalid="true"] {
   gap: var(--s2);
   margin: 0;
   padding-left: var(--s5);
+}
+
+/* Idle board: no operator selection yet. Big event name, one status line —
+   never a blank frame while the venue screen is already on air. */
+.display-board.display-idle {
+  justify-content: center;
+  text-align: center;
+}
+
+.display-board.display-idle > p:first-child {
+  margin: 0 0 var(--s4);
+  color: var(--brand-text);
+  font-family: var(--display-font);
+  font-size: var(--h3);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.display-board.display-idle > h1 {
+  max-width: 20ch;
+  margin: 0 auto var(--s3);
+  font-size: clamp(var(--display-large), 6vw, var(--display-stage));
+  line-height: 1.1;
+}
+
+.display-board.display-idle > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: clamp(var(--h3), 2.4vw, var(--display));
 }
 
 .program-item {
@@ -1504,13 +1777,13 @@ select[aria-invalid="true"] {
   font-size: var(--display-large);
 }
 
-/* Operator console: a persistent dark navigation rail and compact, scannable
-   rows keep the work surface aligned with the established console IA. */
+/* Operator console: quiet navigation and an open white work surface. */
 .console-shell {
   display: grid;
   min-height: 100svh;
-  grid-template-columns: 264px minmax(0, 1fr);
+  grid-template-columns: 232px minmax(0, 1fr);
   background: var(--ground);
+  font-size: var(--body-work);
 }
 
 .console-sidebar {
@@ -1520,9 +1793,9 @@ select[aria-invalid="true"] {
   height: 100svh;
   min-height: 0;
   flex-direction: column;
-  gap: var(--s4);
+  gap: var(--s2);
   overflow: hidden;
-  padding: var(--s5) var(--s4) var(--s4);
+  padding: var(--s4) var(--s3) var(--s3);
   background: var(--nav);
   color: var(--nav-text);
 }
@@ -1569,18 +1842,6 @@ select[aria-invalid="true"] {
   scrollbar-width: thin;
 }
 
-.mobile-event-nav {
-  display: none;
-}
-
-.nav-work-group-label {
-  margin-top: var(--s3);
-  padding: var(--s2) var(--s3) var(--s1);
-  color: var(--nav-muted);
-  font-size: var(--small);
-  font-weight: 400;
-}
-
 .console-global-nav {
   display: none;
 }
@@ -1595,7 +1856,8 @@ select[aria-invalid="true"] {
   padding: var(--s2) var(--s3);
   border-radius: var(--radius-small);
   color: var(--nav-muted);
-  font-weight: 700;
+  font-size: var(--small);
+  font-weight: 550;
   line-height: 1.35;
   text-decoration: none;
   transition: background var(--enter) ease-out, color var(--enter) ease-out;
@@ -1632,12 +1894,12 @@ select[aria-invalid="true"] {
 .console-nav-item.active,
 .console-nav-item.active-path {
   background: var(--nav-active);
-  color: var(--nav-text);
+  color: var(--brand-text);
 }
 
 .console-nav-item.active::before,
 .console-nav-item.active-path::before {
-  background: var(--brand);
+  background: transparent;
 }
 
 .console-nav-item:focus-visible {
@@ -1680,9 +1942,9 @@ select[aria-invalid="true"] {
   gap: var(--s1);
   margin: var(--s1) 0;
   padding: var(--s3);
-  border: 1px solid var(--nav-active);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: var(--nav-hover);
+  background: var(--paper);
 }
 
 .nav-event-head {
@@ -1697,7 +1959,7 @@ select[aria-invalid="true"] {
   min-width: 0;
   overflow: hidden;
   color: var(--nav-text);
-  font-size: var(--body);
+  font-size: var(--small);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1716,8 +1978,54 @@ select[aria-invalid="true"] {
 
 .nav-event-meta {
   color: var(--nav-muted);
-  font-size: var(--small);
+  font-size: var(--label);
   overflow-wrap: anywhere;
+}
+
+/* Event hubs: five operator questions instead of twelve equal rows. The hub
+   the operator is inside opens its subpages; the other four stay one row, so
+   the whole event still fits the rail. A hub header links to its first page,
+   so expansion follows the route and there is no hidden local state. */
+.console-hub-list {
+  display: grid;
+  min-width: 0;
+  gap: var(--s1);
+}
+
+.console-hub-item {
+  font-weight: 600;
+}
+
+.console-hub-item[data-active="true"] {
+  background: var(--nav-hover);
+  color: var(--nav-text);
+}
+
+.console-nav-item .console-hub-chevron {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  margin-left: auto;
+  stroke-width: 1.8;
+  transition: transform var(--enter) ease-out;
+}
+
+.console-hub-item[data-active="true"] .console-hub-chevron {
+  transform: rotate(180deg);
+}
+
+.console-hub-subnav {
+  display: grid;
+  min-width: 0;
+  gap: var(--s1);
+  margin: 0 0 var(--s1) var(--s3);
+  padding-left: var(--s2);
+  border-left: 1px solid var(--line);
+}
+
+.console-hub-subitem {
+  font-size: var(--small);
+  font-weight: 600;
 }
 
 /* Triage list: quick-switch rows with the same signals as the home cards.
@@ -1797,38 +2105,17 @@ select[aria-invalid="true"] {
   text-align: center;
 }
 
-.nav-event-switch {
-  display: flex;
-  min-height: 44px;
-  align-items: center;
-  color: var(--nav-muted);
-  font-size: var(--small);
-  font-weight: 650;
-  line-height: 1.35;
-  text-decoration: none;
+.nav-badge-manual {
+  background: var(--info-soft);
+  color: var(--info);
 }
 
-.nav-event-switch:hover {
-  color: var(--nav-text);
-  text-decoration: underline;
-}
-
-.nav-event-switch:focus-visible {
-  outline-color: var(--nav-text);
-  outline-offset: 2px;
-}
-
-.console-subnav-item {
-  min-height: 44px;
-  padding-inline: var(--s3);
-  font-size: var(--small);
-  font-weight: 650;
-}
+.nav-badge + .nav-badge-manual { margin-left: var(--s1); }
 
 .sidebar-bottom {
   flex: none;
   padding-top: var(--s3);
-  border-top: 1px solid var(--nav-active);
+  border-top: 1px solid var(--line);
 }
 
 .operator-block.operator-mobile-trigger {
@@ -1875,10 +2162,12 @@ select[aria-invalid="true"] {
 .operator-identity small {
   overflow: hidden;
   color: var(--nav-muted);
-  font-size: var(--small);
-  line-height: 1.3;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 10px;
+  line-height: 1.35;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .operator-menu-trigger {
@@ -1937,6 +2226,13 @@ select[aria-invalid="true"] {
   display: none;
 }
 
+.operator-organization-panel {
+  padding: var(--s3);
+  border-radius: var(--radius-small);
+  background: var(--paper);
+  color: var(--ink);
+}
+
 .operator-menu-item {
   display: flex;
   width: 100%;
@@ -1989,7 +2285,7 @@ select[aria-invalid="true"] {
 .operator-menu-error {
   margin: 0;
   padding: var(--s2) var(--s3);
-  color: var(--danger-soft);
+  color: var(--danger);
   font-size: var(--small);
   line-height: 1.4;
 }
@@ -2307,6 +2603,24 @@ select[aria-invalid="true"] {
   font-variant-numeric: tabular-nums;
 }
 
+@media (max-width: 768px) {
+  /* The roster count and its select-all action share one row on phones so
+     the list starts on the first screen; the button keeps its 44px target
+     and wraps below only on very narrow widths. */
+  .participant-count {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s1) var(--s3);
+  }
+  .participant-count .button {
+    flex: none;
+  }
+  .participant-count {
+    margin-top: 0;
+  }
+}
+
 .participant-row {
   display: flex;
   min-height: var(--s8);
@@ -2432,6 +2746,33 @@ select[aria-invalid="true"] {
   overflow-wrap: anywhere;
 }
 
+/* Session recheck line above the sign-in form: the form itself never waits
+   for /auth/me, so a hung session read surfaces here with a retry instead
+   of blocking input. */
+.auth-session-stale {
+  margin: 0 0 var(--s4);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--radius-small);
+  background: var(--surface-muted);
+  color: var(--ink);
+  font-size: var(--small);
+}
+
+.auth-session-stale .auth-help-link {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--brand-text);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
 @media (hover: hover) {
   a:hover {
     color: var(--brand-text);
@@ -2485,9 +2826,7 @@ select[aria-invalid="true"] {
     display: grid;
     height: auto;
     min-height: 0;
-    grid-template-areas:
-      "menu brand profile"
-      "context context context";
+    grid-template-areas: "menu brand profile";
     grid-template-columns: auto minmax(0, 1fr) 44px;
     align-items: center;
     gap: var(--s1) var(--s3);
@@ -2515,32 +2854,7 @@ select[aria-invalid="true"] {
     display: none;
   }
 
-  .side-nav {
-    display: flex;
-    flex: none;
-    flex-wrap: wrap;
-    align-content: start;
-    gap: var(--s1) var(--s2);
-    overflow: visible;
-    padding-block: var(--s1) 0;
-  }
-
   .desktop-side-nav {
-    display: none;
-  }
-
-  .mobile-event-nav {
-    grid-area: context;
-    display: flex;
-    gap: 0;
-    padding: 0;
-    container-type: inline-size;
-    flex-direction: column;
-  }
-
-  .nav-work-group-label { display: none; }
-
-  .mobile-event-nav:empty {
     display: none;
   }
 
@@ -2584,22 +2898,50 @@ select[aria-invalid="true"] {
     background: var(--nav-hover);
   }
 
-  .console-global-trigger-chevron {
-    width: 12px;
-    height: 12px;
+  /* Phone menu trigger: a recognizable icon-only hamburger. The
+     accessible name stays the familiar "메뉴", so screen readers and voice
+     control keep working; sighted operators get the conventional shape
+     without a redundant text label beside it. Open state morphs the bars
+     into an X via the existing disclosure (aria-expanded), so one authored
+     icon carries both states instead of a second chevron competing with it.
+     Reduced-motion users get the global transition kill; meaning never
+     depends on the animation. */
+  .console-global-trigger {
+    justify-content: center;
+  }
+
+  .console-global-trigger-bars {
+    width: 20px;
+    height: 20px;
     flex: none;
     fill: none;
     stroke: currentColor;
-    stroke-width: 1.8;
+    stroke-width: 2;
     stroke-linecap: round;
-    stroke-linejoin: round;
     transition: transform var(--enter) ease-out;
   }
 
-  .console-global-trigger[aria-expanded="true"] .console-global-trigger-chevron {
-    transform: rotate(180deg);
+  .console-global-trigger-bars path {
+    transition: transform var(--enter) ease-out, opacity var(--enter) ease-out;
+    transform-box: fill-box;
+    transform-origin: center;
   }
 
+  .console-global-trigger[aria-expanded="true"] .console-global-trigger-bars .bar-top {
+    transform: translateY(4.5px) rotate(45deg);
+  }
+
+  .console-global-trigger[aria-expanded="true"] .console-global-trigger-bars .bar-mid {
+    opacity: 0;
+  }
+
+  .console-global-trigger[aria-expanded="true"] .console-global-trigger-bars .bar-bot {
+    transform: translateY(-4.5px) rotate(-45deg);
+  }
+
+  /* Phone menu: the whole console map in one disclosure. It is taller than
+     the old two-row popup, so it scrolls inside its own box and never
+     pushes the page. */
   .console-global-menu {
     position: absolute;
     z-index: 30;
@@ -2607,13 +2949,17 @@ select[aria-invalid="true"] {
     left: 0;
     display: grid;
     gap: var(--s1);
-    width: 220px;
-    max-width: calc(100vw - var(--s5));
+    width: min(320px, calc(100vw - var(--s5)));
+    max-height: min(70svh, 560px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
     padding: var(--s2);
     border: 1px solid var(--nav-active);
     border-radius: var(--radius);
     background: var(--nav);
     box-shadow: 0 8px 24px var(--scrim);
+    scrollbar-color: var(--nav-active) transparent;
+    scrollbar-width: thin;
   }
 
   .console-global-menu[hidden] {
@@ -2625,68 +2971,105 @@ select[aria-invalid="true"] {
     min-height: 44px;
   }
 
-  .side-nav:empty {
-    display: none;
+  .console-menu-event {
+    display: grid;
+    min-width: 0;
+    gap: var(--s1);
+    margin-top: var(--s1);
+    padding-top: var(--s3);
+    border-top: 1px solid var(--nav-active);
+  }
+
+  .console-menu-section-label {
+    margin: 0;
+    color: var(--nav-muted);
+    font-size: var(--small);
+    font-weight: 800;
+    letter-spacing: 0.04em;
+  }
+
+  .console-menu-event-name {
+    margin: 0;
+    color: var(--nav-text);
+    font-weight: 750;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  .console-menu-event-meta {
+    margin: 0;
+    color: var(--nav-muted);
+    font-size: var(--small);
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+
+  .console-menu-hubs {
+    display: grid;
+    min-width: 0;
+    gap: var(--s2);
+    margin-top: var(--s1);
+  }
+
+  .console-menu-hub-group {
+    display: grid;
+    min-width: 0;
+    gap: var(--s1);
+  }
+
+  /* A hub label is a signpost, not a destination: the rows beneath it are
+     the links, so there is no second control for the same page. */
+  .console-menu-hub {
+    margin: 0;
+    padding: var(--s1) var(--s3) 0;
+    color: var(--nav-muted);
+    font-size: var(--small);
+    font-weight: 800;
+    letter-spacing: 0.04em;
+  }
+
+  .console-menu-hub[data-active="true"] {
+    color: var(--nav-text);
+  }
+
+  .console-menu-subnav {
+    display: grid;
+    min-width: 0;
+    gap: var(--s1);
+  }
+
+  .console-menu-subitem {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+    gap: var(--s2);
+    padding: var(--s2) var(--s3);
+    border-radius: var(--radius-small);
+    color: var(--nav-muted);
+    font-weight: 650;
+    line-height: 1.35;
+    text-decoration: none;
+  }
+
+  .console-menu-subitem:hover {
+    background: var(--nav-hover);
+    color: var(--nav-text);
+    text-decoration: none;
+  }
+
+  .console-menu-subitem:focus-visible {
+    outline-color: var(--nav-text);
+    outline-offset: -3px;
+  }
+
+  .console-menu-subitem[aria-current="page"] {
+    background: var(--nav-active);
+    color: var(--nav-text);
   }
 
   .console-nav-item {
     gap: var(--s2);
     padding-inline: var(--s2);
-  }
-
-  .nav-event-branch {
-    order: 3;
-    flex: none;
-    display: flex;
-    width: calc(100% + var(--s4));
-    min-width: 0;
-    align-items: center;
-    gap: var(--s1);
-    margin-block: 0;
-    margin-inline-start: calc(-1 * var(--s2));
-    padding: var(--s1) var(--s2) 0;
-    border-left: 0;
-    overflow-x: auto;
-    scroll-padding-inline: var(--s2);
-    scroll-snap-type: x proximity;
-    scrollbar-color: var(--nav-active) transparent;
-    scrollbar-width: thin;
-  }
-
-  .nav-current-event {
-    display: none;
-  }
-
-  .nav-event-branch .console-nav-item {
-    width: auto;
-    flex: none;
-    white-space: nowrap;
-    scroll-snap-align: start;
-  }
-
-  /* Keep the active event destination wholly visible when the subnav is
-     wider than a narrow phone viewport. */
-  .nav-event-branch .console-subnav-item.active {
-    scroll-snap-align: end;
-  }
-
-  .nav-event-branch .console-subnav-item.active::before {
-    top: auto;
-    right: auto;
-    bottom: 0;
-    left: 50%;
-    width: 24px;
-    height: 2px;
-    transform: translateX(-50%);
-  }
-
-  .nav-current-event strong {
-    flex: 1;
-    -webkit-line-clamp: 1;
-  }
-
-  .nav-event-switch {
-    flex: none;
   }
 
   .sidebar-bottom {
@@ -2820,11 +3203,12 @@ select[aria-invalid="true"] {
     padding-block: var(--s6);
   }
 
-  .registration-form,
   .auth-card,
-  .staff-workspace {
+  .registration-form {
     padding: var(--s4);
   }
+
+  .registration-form { padding-inline: 0; }
 
   .event-list {
     grid-template-columns: 1fr;
@@ -2865,19 +3249,6 @@ select[aria-invalid="true"] {
   .display-frame p,
   .display-frame li {
     font-size: var(--h3);
-  }
-
-  @container (max-width: 340px) {
-    .mobile-event-nav .nav-event-branch {
-      flex-basis: calc(100% + var(--s6));
-      width: calc(100% + var(--s6));
-      margin-inline-start: calc(-1 * var(--s4));
-      justify-content: space-between;
-    }
-
-    .mobile-event-nav .console-subnav-item {
-      padding-inline: var(--s1);
-    }
   }
 }
 
@@ -2983,6 +3354,12 @@ select[aria-invalid="true"] {
     margin: 0;
   }
 
+  /* Frozen report clone paginates instead of shrinking or clipping: long
+     lists flow across pages while single photos/rows stay intact. */
+  body.report-printing > #eventouch-report-print li {
+    break-inside: avoid;
+  }
+
   .console-sidebar,
   .console-topbar,
   .console-footer {
@@ -3058,6 +3435,8 @@ select[aria-invalid="true"] {
   margin: var(--s1) 0 0;
   color: var(--muted);
   font-size: var(--small);
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .nametag-sheet {
@@ -3125,4 +3504,328 @@ select[aria-invalid="true"] {
   margin: 0 0 var(--s3);
   color: var(--muted);
   font-size: var(--small);
+}
+
+/* White workspace chrome. Permission-aware navigation and account/organization
+   switching retain the same markup and interaction owners. */
+.console-shell {
+  grid-template-columns: 232px minmax(0, 1fr);
+  background: var(--ground);
+}
+
+.console-sidebar {
+  background: var(--nav);
+  color: var(--nav-text);
+  border-right: 1px solid var(--line);
+}
+
+.console-brand {
+  padding-bottom: var(--s3);
+  padding-inline: var(--s2);
+}
+
+.console-wordmark {
+  color: var(--nav-text);
+  font-family: var(--display-font);
+  font-size: 20px;
+  letter-spacing: -0.025em;
+}
+
+.console-wordmark::first-letter { color: var(--brand-text); }
+
+.console-brand:hover {
+  color: var(--nav-text);
+}
+
+.console-tagline {
+  color: var(--nav-muted);
+}
+
+.console-nav-item {
+  border-radius: var(--radius-small);
+  color: var(--nav-muted);
+  font-weight: 550;
+}
+
+.console-nav-item:hover {
+  background: var(--nav-hover);
+  color: var(--nav-text);
+}
+
+.console-nav-item.active,
+.console-nav-item.active-path {
+  background: var(--nav-active);
+  color: var(--brand-text);
+  font-weight: 650;
+}
+
+.console-nav-item.active::before,
+.console-nav-item.active-path::before {
+  display: none;
+}
+
+.nav-event-card {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: var(--s1) var(--s3);
+}
+
+.nav-event-card .nav-event-head strong {
+  color: var(--nav-text);
+}
+
+.nav-event-meta,
+.nav-section-label {
+  color: var(--nav-muted);
+}
+
+.nav-event-branch,
+.console-hub-subnav {
+  border-left-color: var(--line);
+}
+
+.console-hub-item[data-active="true"] {
+  background: transparent;
+  color: var(--nav-text);
+}
+
+.sidebar-bottom {
+  border-top-color: var(--line);
+}
+
+.operator-avatar {
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--nav-hover);
+  color: var(--ink);
+}
+
+.operator-menu {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: 0 14px 34px var(--shadow-color);
+}
+
+.operator-menu-trigger:hover {
+  background: var(--nav-hover);
+}
+
+.operator-menu-item {
+  border-radius: var(--radius-small);
+  color: var(--ink);
+}
+
+.operator-menu-item:not(:disabled):hover {
+  background: var(--soft);
+}
+
+.operator-organization-panel {
+  border-radius: var(--radius-small);
+  background: var(--surface-muted);
+}
+
+.console-topbar {
+  min-height: 52px;
+  border-bottom: 1px solid var(--line);
+  background: var(--ground);
+}
+
+.console-breadcrumb {
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 500;
+}
+
+.console-main {
+  padding: var(--s6) clamp(var(--s5), 3vw, var(--s7)) var(--s8);
+}
+
+.console-shell-error {
+  border-radius: var(--radius);
+}
+
+@media (max-width: 1024px) {
+  .console-shell {
+    grid-template-columns: 216px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .console-sidebar {
+    background: var(--nav);
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .console-wordmark {
+    font-size: var(--h3);
+    letter-spacing: -0.02em;
+  }
+
+  .console-main {
+    padding: var(--s5) var(--s4) var(--s7);
+  }
+
+  .console-global-menu {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--paper);
+  }
+}
+
+/* Invitations share the quiet sign-in frame in every account/link state. */
+.invite-page.auth-page {
+  width: 100%;
+  max-width: calc(380px + var(--s5) * 2);
+  gap: var(--s6);
+  padding: var(--s7) var(--s5);
+}
+
+.invite-page .auth-brand {
+  padding: 0;
+  border: 0;
+}
+
+.invite-page .wordmark {
+  font-size: 21px;
+  letter-spacing: -0.025em;
+  text-decoration: none;
+}
+
+.invite-page .invite-card {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+
+.invite-page .invite-card h1 {
+  margin-bottom: var(--s4);
+  font-size: var(--h1);
+  line-height: 1.35;
+  letter-spacing: -0.025em;
+}
+
+.invite-page .invite-card > p {
+  color: var(--muted);
+  font-size: var(--small);
+  overflow-wrap: anywhere;
+}
+
+.invite-page .registration-form {
+  gap: var(--s4);
+  padding: var(--s4) 0 0;
+}
+
+/* Sign-in is a task, not a second marketing page. Brand, form and recovery
+   fit one centered column on desktop and phone. */
+.login-page.auth-page {
+  display: flex;
+  width: 100%;
+  max-width: none;
+  min-height: 100svh;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s6);
+  margin: 0;
+  padding: var(--s7) var(--s5);
+  border: 0;
+  background: var(--paper);
+}
+
+.login-page .auth-brand {
+  display: flex;
+  width: min(100%, 380px);
+  flex-direction: column;
+  gap: var(--s3);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--ink);
+}
+
+.login-page .auth-brand .wordmark {
+  order: -1;
+  color: var(--ink);
+  font-family: var(--display-font);
+  font-size: 21px;
+  line-height: 1.3;
+}
+
+.login-page .auth-brand .wordmark span {
+  margin-top: var(--s1);
+  color: var(--nav-muted);
+  font-family: var(--body-font);
+  font-size: var(--small);
+  font-weight: 400;
+}
+
+.login-page .auth-brand,
+.login-page .auth-brand:hover {
+  text-decoration: none;
+}
+
+.login-page .auth-card {
+  display: flex;
+  width: min(100%, 380px);
+  flex-direction: column;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.login-page .auth-card h1 {
+  margin: 0 0 var(--s6);
+  font-family: var(--display-font);
+  font-size: var(--h1);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.login-page .auth-form button[type="submit"] {
+  min-height: var(--s7);
+  border-radius: var(--radius);
+}
+
+.login-page .auth-promise {
+  max-width: none;
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--display-font);
+  font-size: var(--small);
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+@media (max-width: 900px) {
+  .login-page.auth-page {
+    min-height: 100svh;
+    padding: var(--s6) var(--s5);
+  }
+
+  .login-page .auth-brand {
+    padding: 0;
+  }
+
+  .login-page .auth-promise {
+    margin: 0;
+  }
+
+  .login-page .auth-brand .wordmark {
+    font-size: 21px;
+  }
+
+  .login-page .auth-card {
+    margin: 0;
+    padding: 0;
+  }
+
+  .login-page .auth-card h1 {
+    margin-bottom: var(--s4);
+    font-size: var(--h1);
+  }
 }

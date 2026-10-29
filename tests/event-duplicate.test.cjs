@@ -16,6 +16,7 @@ const {
   sessionCookie,
   requestJson,
   deleteFixtureRows,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 
 const test = databaseUrl
@@ -60,7 +61,7 @@ before(async () => {
     ['agency', 'AGENCY', '복제 운영사 관리자'],
     ['manager', 'MANAGER', '복제 행사 매니저'],
   ]) {
-    await insertAccount(harness.database, {
+    await insertAccount(harness.database, {orgId: LEGACY_ORG,
       id: accountIds[key],
       role,
       name,
@@ -69,7 +70,7 @@ before(async () => {
     cookies[key] = await sessionCookie(harness, accountIds[key]);
   }
 
-  await insertEvent(harness.database, {
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,
     id: sourceId,
     slug: sourceSlug,
     payload: {

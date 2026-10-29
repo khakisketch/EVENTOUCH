@@ -13,8 +13,9 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
 
 test("roster selection count names the visible subset and the full selection", () => {
   const list = read("console/events/[id]/participants/ParticipantList.tsx");
-  assert.match(list, /현재 표시 \{pageSelectedCount\}명 선택 · 전체 선택 \{handoffIds\.length\}명 · 최대 200명/u);
-  assert.match(list, /선택 승인·그룹 지정: 필터 범위 \$\{effectiveSelection\.length\}명/u);
+  assert.match(list, /선택한 참가자 \{handoffIds\.length\}명/u);
+  assert.match(list, /현재 필터 \$\{effectiveSelection\.length\}명 · 이 페이지 \$\{pageSelectedCount\}명/u);
+  assert.match(list, /승인·그룹 지정은 현재 필터의 선택만, 메시지는 숨김 선택까지 포함합니다/u);
   assert.doesNotMatch(list, /\}명 선택됨 · 전체 \{handoffIds\.length\}명/u, "the ambiguous 전체 label is gone");
   assert.match(list, /hiddenSelectedCount \? ` · 숨김 \$\{hiddenSelectedCount\}명\(그룹 지정 제외\)`/u, "hidden selection stays visible and its scope is named");
 });
@@ -93,13 +94,22 @@ test("participant home offers self-service booth stamping in the ticket tab", ()
   assert.match(home, /부스에 붙은 QR을 이 화면에서 바로 찍거나, 코드를 복사해 아래에 붙여넣으세요\./u);
   // The participant scans in-app with the shared camera component; the decoded
   // string goes through the same submit as a typed code, and the listener
-  // stays outside the render-scoped helpers.
-  assert.match(home, /import CameraScan from "\.\.\/\.\.\/\.\.\/CameraScan";/u);
+  // stays outside the render-scoped helpers. The scanner (and its decoder)
+  // loads lazily only when opened: no static import, ssr off, rendered only
+  // while cameraOpen.
+  assert.match(home, /import dynamic from "next\/dynamic";/u);
+  assert.match(home, /const CameraScan = dynamic\(\(\) => import\("\.\.\/\.\.\/\.\.\/CameraScan"\), \{\s*ssr: false,\s*\}\);/su);
+  assert.doesNotMatch(home, /import CameraScan from/u, "the scanner is never in the home bundle");
+  assert.match(home, /\{cameraOpen \? \(\s*<CameraScan/u);
   assert.match(home, /onDetected=\{\(scanned\) => \{\s*setCameraOpen\(false\);\s*void submit\(scanned\);\s*\}\}/su);
   assert.match(home, /manualHint="부스 코드를 직접 입력하세요\."/u);
   const scanner = read("CameraScan.tsx");
   assert.doesNotMatch(scanner, /fetch\(/u, 'the camera never decides anything');
-  assert.match(scanner, /jsQR\(image\.data, image\.width, image\.height\)/u);
+  // The decoder is lazy too: jsQR loads only when a scan actually starts,
+  // never in the route bundle; the camera stays decode-only either way.
+  assert.doesNotMatch(scanner, /from ["']jsqr["']/u, 'no static decoder import');
+  assert.doesNotMatch(scanner, /import ["']jsqr["']/u);
+  assert.match(scanner, /await import\("jsqr"\)/u);
   assert.match(scanner, /manualHint = "티켓 코드를 직접 입력하세요\."/u);
   const landing = read("event/[slug]/home/AttendeeHomeLanding.tsx");
   assert.match(landing, /export type HomeMenuKey = "qr" \| "notice" \| "lucky" \| "roulette" \| "vote" \| "stamp";/u);

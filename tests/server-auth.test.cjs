@@ -93,10 +93,28 @@ integrationTest('email-login-uses-case-insensitive-account-and-hashed-database-s
   });
   assert.equal(res.status, 200);
   const body = await res.json();
-  assert.deepEqual(body.user, {
-    id: 'admin', email: ADMIN_EMAIL, name: '관리자', role: 'AGENCY',
-  });
-  const cookie = res.headers.get('set-cookie') || '';
+  assert.deepEqual(
+    {
+      ...body.user,
+      contextVersion: typeof body.user.contextVersion === 'number' ? 'number' : body.user.contextVersion,
+      sessionOrgVersion: typeof body.user.sessionOrgVersion === 'number' ? 'number' : body.user.sessionOrgVersion,
+      sessionRevision: typeof body.user.sessionRevision === 'number' ? 'number' : body.user.sessionRevision,
+    },
+    {
+      id: 'admin', email: ADMIN_EMAIL, name: '관리자', role: 'AGENCY',
+      organizationId: 'org-legacy', organizationName: '기존 조직',
+      contextVersion: 'number', effectiveRole: 'AGENCY',
+      sessionRevision: 'number', sessionOrgVersion: 'number',
+    }
+  );
+  const rawCookie = res.headers.get('set-cookie') || '';
+  const listed = await fetch(`${BASE}/api/auth/organizations`, { headers: { cookie: sessionCookie(res) } });
+  assert.equal(listed.status, 200);
+  const orgs = await listed.json();
+  assert.deepEqual(orgs.organizations, [{ id: 'org-legacy', name: '기존 조직', role: 'AGENCY' }]);
+  assert.equal(orgs.activeOrganizationId, body.user.organizationId);
+  assert.equal(orgs.contextVersion, body.user.contextVersion);
+  const cookie = rawCookie;
   assert.match(cookie, /HttpOnly/i);
   assert.match(cookie, /SameSite=Lax/i);
   assert.match(cookie, /; Secure/i);
@@ -117,12 +135,12 @@ integrationTest('invitation-link-acceptance-creates-manager-once-and-hides-token
   const email = `invite-${crypto.randomUUID()}@example.test`;
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
   await db.query(
-    'INSERT INTO events (id, slug, payload) VALUES ($1, $2, $3::jsonb)',
-    [eventId, `invite-${crypto.randomUUID()}`, JSON.stringify({ name: '테스트 행사' })]
+    'INSERT INTO events (id, slug, org_id, payload) VALUES ($1, $2, $3, $4::jsonb)',
+    [eventId, `invite-${crypto.randomUUID()}`, 'org-legacy', JSON.stringify({ name: '테스트 행사' })]
   );
   await db.query(
-    `INSERT INTO invitations (id, token_hash, email, name, role, event_id, payload, status, expires_at)
-     VALUES ($1, $2, $3, $4, 'MANAGER', $5, '{}'::jsonb, 'PENDING', now() + interval '1 day')`,
+    `INSERT INTO invitations (id, token_hash, email, name, role, event_id, org_id, payload, status, expires_at)
+     VALUES ($1, $2, $3, $4, 'MANAGER', $5, 'org-legacy', '{}'::jsonb, 'PENDING', now() + interval '1 day')`,
     [`inv-${crypto.randomUUID()}`, tokenHash, email, '초대 매니저', eventId]
   );
 
@@ -146,8 +164,8 @@ integrationTest('invitation-link-acceptance-creates-manager-once-and-hides-token
   assert.equal(accepted.status, 201);
   const account = (await accepted.json()).account;
   assert.deepEqual(
-    { email: account.email, name: account.name, role: account.role },
-    { email, name: '초대 매니저', role: 'MANAGER' }
+    { email: account.email, name: account.name, role: account.role, organizationId: account.organizationId },
+    { email, name: '초대 매니저', role: 'MANAGER', organizationId: 'org-legacy' }
   );
   assert.equal(JSON.stringify(account).includes('password_hash'), false);
   const membership = await db.query(
@@ -155,6 +173,11 @@ integrationTest('invitation-link-acceptance-creates-manager-once-and-hides-token
     [account.id, eventId]
   );
   assert.equal(membership.rowCount, 1);
+  const orgMembership = await db.query(
+    'SELECT role FROM organization_memberships WHERE account_id = $1 AND org_id = $2 AND active = true',
+    [account.id, 'org-legacy']
+  );
+  assert.equal(orgMembership.rows[0] && orgMembership.rows[0].role, 'MANAGER');
   assert.equal(replay.status, 409);
   const login = await fetch(`${BASE}/api/auth/login`, {
     method: 'POST',
@@ -220,6 +243,11 @@ integrationTest('disabled-account-cannot-login-or-use-an-existing-session', asyn
     `INSERT INTO accounts (id, email, name, role, password_hash, active)
      VALUES ($1, $2, '비활성 계정', 'MANAGER', $3, true)`,
     [id, email, hashPassword('disabled-test-password')]
+  );
+  await db.query(
+    `INSERT INTO organization_memberships (org_id, account_id, role, active, permissions)
+     VALUES ('org-legacy', $1, 'MANAGER', true, '[]'::jsonb)`,
+    [id]
   );
   const cookie = sessionCookie(await login(email, 'disabled-test-password'));
   assert.ok(cookie);
@@ -316,6 +344,7 @@ integrationTest('development quick login issues a session for the configured acc
       COOKIE_SECURE: '1',
       SESSION_TTL_HOURS: '1',
       EVENTOUCH_DEV_QUICK_LOGIN: ADMIN_EMAIL,
+      NODE_ENV: 'development',
     },
     stdio: 'ignore',
   });

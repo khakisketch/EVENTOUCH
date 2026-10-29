@@ -141,10 +141,19 @@ async function assertVolume(volume) {
   }
 }
 
-async function readCounts(project, user, database) {
-  const query = COUNT_TABLES
-    .map((table) => `SELECT '${table}' AS name, count(*)::text AS value FROM ${table}`)
-    .join(' UNION ALL ');
+async function readCounts(project, user, database, { tables } = {}) {
+  const inventory = await compose(project, [
+    'exec', '-T', 'db', 'psql', '-U', user, '-d', database, '-XAt', '-c',
+    "SELECT tablename FROM pg_tables WHERE schemaname = current_schema() ORDER BY tablename",
+  ]);
+  const discovered = String(inventory).trim().split('\n').filter(Boolean);
+  // Old format-1 backups recorded the original minimum only. Restore all
+  // counts they actually recorded; new backups record the full inventory.
+  const selected = tables === undefined ? discovered : tables;
+  for (const table of selected) {
+    if (!discovered.includes(table)) fail(`복원 대상 테이블이 없습니다: ${table}`);
+  }
+  const query = countsQuery(selected);
   const output = await compose(project, [
     'exec', '-T', 'db', 'psql', '-U', user, '-d', database, '-XAt', '-F', '|', '-c', query,
   ]);
@@ -155,6 +164,16 @@ async function readCounts(project, user, database) {
     counts[name] = Number(value);
   }
   return counts;
+}
+
+// Discover additive tables too: a migration must not silently fall outside
+// restore verification. Keep the original minimum-table requirement intact.
+function countsQuery(tables) {
+  const names = [...new Set(tables.map(table => identifier(table, 'table')))];
+  for (const required of COUNT_TABLES) {
+    if (!names.includes(required)) fail(`백업 대상 필수 테이블이 없습니다: ${required}`);
+  }
+  return names.sort().map(table => `SELECT '${table}' AS name, count(*)::text AS value FROM "${table}"`).join(' UNION ALL ');
 }
 
 async function readMigrations(project, user, database) {
@@ -259,14 +278,30 @@ async function readManifest(directory) {
   const file = path.join(directory, MANIFEST);
   let manifest;
   try {
+    const directoryInfo = await fsp.lstat(directory);
+    const manifestInfo = await fsp.lstat(file);
+    if (directoryInfo.isSymbolicLink() || !directoryInfo.isDirectory() || manifestInfo.isSymbolicLink() || !manifestInfo.isFile()) {
+      fail('백업 디렉터리와 매니페스트는 심볼릭 링크가 아닌 실제 디렉터리·파일이어야 합니다');
+    }
     manifest = JSON.parse(await fsp.readFile(file, 'utf8'));
   } catch (error) {
     fail(`매니페스트를 읽지 못했습니다 (${file}): ${error.message}`);
   }
-  if (manifest.format !== FORMAT) fail(`지원하지 않는 백업 형식입니다: ${manifest.format}`);
+  if (!manifest || manifest.format !== FORMAT) fail(`지원하지 않는 백업 형식입니다: ${manifest && manifest.format}`);
+  if (!manifest.source || !Array.isArray(manifest.source.migrations) ||
+      !manifest.source.migrations.every(version => typeof version === 'string' && version.length > 0)) {
+    fail('매니페스트에 마이그레이션 목록이 없습니다');
+  }
+  identifier(manifest.source.database, '원본 DB');
+  if (!manifest.counts || typeof manifest.counts !== 'object' || Array.isArray(manifest.counts)) fail('매니페스트에 테이블 행 수가 없습니다');
+  countsQuery(Object.keys(manifest.counts));
+  if (!Object.values(manifest.counts).every(value => Number.isSafeInteger(value) && value >= 0)) fail('매니페스트 행 수가 올바르지 않습니다');
   for (const key of ['database', 'storage']) {
     const entry = manifest[key];
     if (!entry || !entry.file || !entry.sha256) fail(`매니페스트에 ${key} 항목이 없습니다`);
+    if (typeof entry.file !== 'string' || path.isAbsolute(entry.file) || path.basename(entry.file) !== entry.file ||
+        entry.file === '..' || entry.file === '.' || !/^[a-f0-9]{64}$/.test(entry.sha256) ||
+        !Number.isSafeInteger(entry.bytes) || entry.bytes < 0) fail(`매니페스트 ${key} 파일 정보가 올바르지 않습니다`);
   }
   return manifest;
 }
@@ -276,10 +311,11 @@ async function verifyChecksums(directory, manifest) {
     const file = path.join(directory, entry.file);
     let stat;
     try {
-      stat = await fsp.stat(file);
+      stat = await fsp.lstat(file);
     } catch {
       fail(`${label} 파일이 없습니다: ${file}`);
     }
+    if (!stat.isFile() || stat.isSymbolicLink()) fail(`${label} 파일은 심볼릭 링크가 아닌 정규 파일이어야 합니다`);
     if (Number(stat.size) !== Number(entry.bytes)) fail(`${label} 파일 크기가 매니페스트와 다릅니다`);
     const digest = await sha256File(file);
     if (digest !== entry.sha256) fail(`${label} 파일 체크섬이 매니페스트와 다릅니다`);
@@ -347,6 +383,7 @@ module.exports = {
   BACKUP_STORAGE,
   MANIFEST,
   COUNT_TABLES,
+  countsQuery,
   log,
   fail,
   identifier,

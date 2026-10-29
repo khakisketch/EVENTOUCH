@@ -10,6 +10,9 @@ WORKDIR /app
 # needs the same API base the container will proxy to at runtime — not the
 # loopback default developers build with on their laptops.
 ARG EVENTOUCH_API_URL=http://127.0.0.1:8776
+# Release identifier contract, same as the API image: [A-Za-z0-9_.-]{1,64}
+# or "unknown". Default claims nothing.
+ARG EVENTOUCH_BUILD_REVISION=unknown
 COPY apps/web/package.json apps/web/package-lock.json ./
 RUN npm ci
 COPY apps/web/ ./
@@ -19,11 +22,16 @@ RUN npm run build
 
 FROM node:24-alpine
 WORKDIR /app
-ENV NODE_ENV=production PORT=8777
+ARG EVENTOUCH_BUILD_REVISION=unknown
+ENV NODE_ENV=production PORT=8777 EVENTOUCH_BUILD_REVISION=$EVENTOUCH_BUILD_REVISION
+LABEL org.opencontainers.image.revision=$EVENTOUCH_BUILD_REVISION
 # Whole build output: sources, configs and .next — the app keeps them
 # together on purpose so `next start` resolves exactly what was built.
 COPY --from=build /app ./
 USER node
 EXPOSE 8777
 HEALTHCHECK --interval=30s --timeout=5s CMD wget -q -O /dev/null http://127.0.0.1:8777/ || exit 1
-CMD ["npx", "next", "start", "-p", "8777"]
+# Custom entry, not `next start`: it replaces a client-supplied
+# X-Forwarded-For with the real socket peer before Next proxies /api/*, so
+# the API's login address throttle cannot be evaded by rotating the header.
+CMD ["node", "web-server.cjs"]

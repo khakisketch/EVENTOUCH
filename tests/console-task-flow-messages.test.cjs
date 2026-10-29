@@ -124,11 +124,16 @@ test('unsent staged confirmation allows the reload overwrite confirm', () => {
 test('reload is offered on FAILED only, behind busy/uploading/archived/permission gates', () => {
   assert.match(SOURCE, /내용·대상 불러오기/u);
   assert.match(SOURCE, /campaign\.status === "FAILED" \? \(/u);
-  assert.match(SOURCE, /disabled=\{busyAction !== null \|\| uploadingImage \|\| archived \|\| !state\.canManage\}/u);
-  assert.match(SOURCE, /if \(state\.kind !== "ready" \|\| !state\.canManage \|\| archived\) return;/u);
+  // The reload button locks on the messages capability (messagesLocked covers
+  // archived plus the missing messages grant) with the membership existence
+  // kept alongside, so a scoped-out manager gets the reason, not a silent act.
+  assert.match(SOURCE, /disabled=\{busyAction !== null \|\| uploadingImage \|\| messagesLocked \|\| !state\.canManage\}/u);
+  assert.match(SOURCE, /title=\{messagesLocked \? messagesLockReason : undefined\}/u);
+  assert.match(SOURCE, /메시지 쓰기 권한이 없습니다\. 기록은 볼 수 있습니다/u);
+  assert.match(SOURCE, /if \(state\.kind !== "ready" \|\| !state\.canManage \|\| !state\.canWriteMessages \|\| state\.stage === "ARCHIVED"\) return;/u);
   assert.match(SOURCE, /if \(inFlightRef\.current \|\| uploadingImage\) return;/u);
   // Existing FAILED explanation stays verbatim; only a next-action sentence is added.
-  assert.match(SOURCE, /발송이 실패했습니다\. 같은 내용으로 다시 보내려면 위에서 새 캠페인을 만드세요\./u);
+  assert.match(SOURCE, /발송이 실패했습니다\. 행의 내용·대상 불러오기로 새 발송을 준비하세요\./u);
   // No reload affordance leaks onto other terminal/transient rows.
   const failedBlockStart = SOURCE.indexOf('campaign.status === "FAILED" ? (');
   assert.ok(failedBlockStart !== -1, 'expected the FAILED block');
@@ -171,10 +176,10 @@ test('overwrite confirm re-validates at confirm time because it is nonmodal', ()
   const applyEnd = SOURCE.indexOf('function requestFailedReload', applyStart);
   assert.ok(applyEnd > applyStart, 'expected requestFailedReload after applyFailedReload');
   const applyBody = SOURCE.slice(applyStart, applyEnd);
-  // Role/stage, in-flight/uploading, and ambiguous receipts are rechecked
-  // inside apply: the request-time guard cannot cover edits, submits, or
-  // uploads made while the confirm stayed open.
-  assert.match(applyBody, /if \(!state\.canManage \|\| archived\) return;/u);
+  // Role/stage, capability, in-flight/uploading, and ambiguous receipts are
+  // rechecked inside apply: the request-time guard cannot cover edits,
+  // submits, uploads, or a lost grant made while the confirm stayed open.
+  assert.match(applyBody, /if \(!state\.canManage \|\| !state\.canWriteMessages \|\| state\.stage === "ARCHIVED"\) return;/u);
   assert.match(applyBody, /if \(inFlightRef\.current \|\| uploadingImage\) return;/u);
   assert.match(applyBody, /if \(failedReloadBlocked\(\)\)/u);
   // A background refresh may have changed the row under the open confirm,

@@ -18,6 +18,10 @@ const ticketView = read("apps/web/app/event/[slug]/ticket/TicketView.tsx");
 test("the landing is the simple entry list and prints no QR", () => {
   assert.match(landing, /styles\.menuBoard/u);
   assert.match(landing, /HOME_MENUS\.map/u);
+  // The home keeps the simple fixed menu: the ticket need reads on the
+  // tile that needs it, never as a notice line above the entries.
+  assert.match(landing, /menuNeedTicket/u);
+  assert.match(landing, /티켓 필요/u);
   // No QR is drawn on the landing itself: an attendee without a ticket must
   // still see a complete home.
   assert.doesNotMatch(landing, /QRCode/u);
@@ -33,12 +37,14 @@ test("the ticket stays one tap away in the first entry", () => {
   assert.match(ticketView, /<QRCode value=\{state\.ticket\} size=\{220\} \/>/u);
 });
 
-test("the landing keeps one screen: no ticket notice above the entries", () => {
-  // The customer decided the home stays the simple six-entry list, and the
+test("the landing keeps one screen: ticket need reads on the tile itself", () => {
+  // The customer decided the home stays a simple six-entry list, and the
   // web audit keeps the whole home inside the first screen on a phone. A
   // notice line above the entries pushed the tiles below the fold, so the
-  // no-ticket case is explained inside the tile that needs it instead.
+  // ticket need reads on the tile that needs it instead.
   assert.match(landing, /hasTicket: boolean/u);
+  assert.match(landing, /menuNeedTicket/u);
+  assert.match(landing, /티켓 필요/u);
   assert.doesNotMatch(landing, /styles\.ticketNeeded/u);
   assert.doesNotMatch(landing, /티켓이 있어야 일부 기능/u);
   assert.match(shell, /hasTicket=\{state\.hasTicket && Boolean\(state\.ticketToken\)\}/u);

@@ -100,6 +100,7 @@ function normalizeEvent(row) {
     name: '',
     slug: String(row.slug),
     clientId: row.client_id || null,
+    orgId: row.org_id !== undefined && row.org_id !== null ? String(row.org_id) : null,
     date: '',
     start: '09:00',
     end: '17:00',
@@ -110,10 +111,33 @@ function normalizeEvent(row) {
     id: String(row.id),
     slug: String(row.slug),
     clientId: row.client_id || null,
+    orgId: row.org_id === undefined || row.org_id === null ? null : String(row.org_id),
     revision: Number(row.revision) || 0,
   };
   event.features = array(event.features).filter((feature) => typeof feature === 'string');
   return event;
+}
+
+// Event format is display metadata only ('진행 형태(선택)'): offline (현장),
+// online, hybrid, or an absent key when unspecified. It never changes URLs,
+// streaming, features, venue requirements, or stages, and the normalizer
+// never invents a value for legacy rows that predate the key.
+const EVENT_FORMATS = new Set(['offline', 'online', 'hybrid']);
+
+function normalizeEventFormat(value) {
+  return typeof value === 'string' && EVENT_FORMATS.has(value) ? value : null;
+}
+
+// Write-side parsing. Returns undefined for "not provided" (the caller
+// decides keep-vs-clear), null for an explicit '' clear, or the stored
+// value. Only the exact lowercase kinds store; anything else is a 400 with
+// field=format.
+function parseEventFormatInput(value) {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') throw rejected(400, '진행 형태를 확인하세요', 'format');
+  if (value === '') return null;
+  if (!EVENT_FORMATS.has(value)) throw rejected(400, '진행 형태를 확인하세요', 'format');
+  return value;
 }
 
 function staffEvent(event) {
@@ -165,6 +189,18 @@ function accountProjection(row, fullOrganization) {
     active: row.active === true,
     orgOwner: row.role === 'AGENCY',
     orgPermissions: fullOrganization && Array.isArray(row.org_permissions) ? copy(row.org_permissions) : [],
+    // Shared global identity (memberships in more than one org, however
+    // flagged): boolean only, never the other orgs' names. Lets the console
+    // explain why a global reset is blocked without leaking anything.
+    ...(fullOrganization && row.shared_account !== undefined
+      ? { sharedAccount: row.shared_account === true }
+      : {}),
+    // The target membership row's revision is the expected-version guard for
+    // role/active writes (server/auth.js setOrgMembership). It is scoped to
+    // this org and is not the session's organization selection revision.
+    ...(row.membership_version !== undefined && row.membership_version !== null
+      ? { membershipVersion: Number(row.membership_version) || 0 }
+      : {}),
   };
 }
 
@@ -243,6 +279,36 @@ function createState(database) {
     return target;
   }
 
+  // Per-request org authority for reads and writes. The session account
+  // carries header hints (requestedOrgId/expectedVersion); the membership
+  // table decides. Errors keep their {status, code} for the UI contract.
+  async function resolveStateOrg(client, account, forWrite = true) {
+    const { resolveActorOrg } = require('./tenancy');
+    try {
+      return await resolveActorOrg(client, account, { requireHeaders: forWrite });
+    } catch (error) {
+      throw withOrgCode(error);
+    }
+  }
+
+  // Normalizes an org-authority failure onto rejected() without dropping the
+  // machine code the UI contract keys on (ORGANIZATION_CONTEXT_CHANGED etc.).
+  function withOrgCode(error) {
+    if (!error || !error.status) return error;
+    const mapped = rejected(error.status, error.message, error.field);
+    if (error.code) mapped.code = error.code;
+    return mapped;
+  }
+
+  // Provider credentials bound to this deployment belong to the legacy org
+  // only and are never inherited by new orgs: their console reports
+  // disconnected until an explicit per-org credential story ships.
+  function integrationsForOrg(orgId) {
+    const { LEGACY_ORG_ID } = require('./tenancy');
+    if (String(orgId) === String(LEGACY_ORG_ID)) return require('./messaging').activeMessagingState();
+    return { connected: false, sender: null, orgIsolated: true };
+  }
+
   async function createEvent(account, input = {}) {
     const idempotencyKey = String(input.commandId || '').trim();
     if (!/^[A-Za-z0-9_-]{8,128}$/.test(idempotencyKey)) {
@@ -264,25 +330,36 @@ function createState(database) {
     }
     if (!isSafeIntegerCapacity(capacity)) throw rejected(400, '정원은 0 이상의 정수로 입력하세요', 'capacity');
     if (clientId && clientId.length > 160) throw rejected(400, '고객사를 확인하세요', 'clientId');
+    const formatInput = parseEventFormatInput(input.format);
+    // Unspecified stays exactly the legacy 7-field shape: no unconditional
+    // format:null, so an old nonce retried without format still replays.
+    // A specified format joins the fingerprint, so the same nonce with a
+    // different format is a 409 conflict, not a silent overwrite.
+    const format = formatInput === undefined ? null : formatInput;
 
     const request = { name, slug, date: eventDate, start, end, capacity, clientId };
+    if (format !== null) request.format = format;
     try {
       return await database.transaction(async (client) => {
         await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [idempotencyKey]);
-        const accountResult = await client.query(
-          'SELECT role, active FROM accounts WHERE id = $1 LIMIT 1 FOR SHARE',
-          [String(account && account.id || '')]
-        );
-        const actor = accountResult.rows[0];
-        if (!actor || actor.active !== true || !ROLES.has(actor.role)) throw denied();
-        if (actor.role !== 'AGENCY') throw rejected(403, '행사 생성 권한을 확인하세요');
-
+        const { resolveActorOrg, checkReceiptScope, requireClientInOrg, requireEventInOrg } = require('./tenancy');
+        let org;
+        try {
+          org = await resolveActorOrg(client, account);
+        } catch (error) {
+          throw withOrgCode(error);
+        }
         const receiptResult = await client.query(
-          'SELECT event_id, actor_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1 FOR UPDATE',
+          'SELECT event_id, actor_id, org_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1 FOR UPDATE',
           [idempotencyKey]
         );
         if (receiptResult.rowCount) {
           const receipt = receiptResult.rows[0];
+          try {
+            checkReceiptScope(receipt, org.orgId);
+          } catch (scopeError) {
+            throw rejected(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+          }
           const stored = object(receipt.result);
           const storedRequest = object(stored.request);
           const sameRequest = Object.keys(storedRequest).length === Object.keys(request).length &&
@@ -294,10 +371,15 @@ function createState(database) {
           }
           return { event: copy(stored.response.event), replayed: true };
         }
+        if (org.role !== 'AGENCY') throw rejected(403, '행사 생성 권한을 확인하세요');
 
         if (clientId) {
-          const clientResult = await client.query('SELECT 1 FROM clients WHERE id = $1 LIMIT 1', [clientId]);
-          if (!clientResult.rowCount) throw rejected(400, '고객사를 확인하세요', 'clientId');
+          try {
+            await requireClientInOrg(client, clientId, org.orgId);
+          } catch (error) {
+            if (error && error.code === 'ORGANIZATION_CONTEXT_CHANGED') throw error;
+            throw rejected(400, '고객사를 확인하세요', 'clientId');
+          }
         }
         const duplicateSlug = await client.query('SELECT 1 FROM events WHERE slug = $1 LIMIT 1', [slug]);
         if (duplicateSlug.rowCount) throw rejected(409, '행사 주소 코드가 이미 사용 중입니다', 'slug');
@@ -314,11 +396,12 @@ function createState(database) {
           capacity,
           stage: 'DRAFT',
           features: [],
+          ...(format !== null ? { format } : {}),
         };
-        const event = normalizeEvent({ id: eventId, slug, client_id: clientId, payload, revision: 0 });
+        const event = normalizeEvent({ id: eventId, slug, client_id: clientId, org_id: org.orgId, payload, revision: 0 });
         await client.query(
-          'INSERT INTO events (id, slug, client_id, payload) VALUES ($1, $2, $3, $4::jsonb)',
-          [eventId, slug, clientId, JSON.stringify(payload)]
+          'INSERT INTO events (id, slug, client_id, org_id, payload) VALUES ($1, $2, $3, $4, $5::jsonb)',
+          [eventId, slug, clientId, org.orgId, JSON.stringify(payload)]
         );
         await client.query(
           'INSERT INTO event_workspaces (event_id, payload) VALUES ($1, $2::jsonb)',
@@ -326,9 +409,9 @@ function createState(database) {
         );
         const response = { event };
         await client.query(
-          `INSERT INTO command_receipts (command_id, event_id, actor_id, result)
-           VALUES ($1, $2, $3, $4::jsonb)`,
-          [idempotencyKey, eventId, account.id, JSON.stringify({ command: 'event.create', request, response })]
+          `INSERT INTO command_receipts (command_id, event_id, actor_id, org_id, result)
+           VALUES ($1, $2, $3, $4, $5::jsonb)`,
+          [idempotencyKey, eventId, account.id, org.orgId, JSON.stringify({ command: 'event.create', request, response })]
         );
         return { event, replayed: false };
       });
@@ -360,20 +443,24 @@ function createState(database) {
     try {
       return await database.transaction(async (client) => {
         await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [idempotencyKey]);
-        const accountResult = await client.query(
-          'SELECT role, active FROM accounts WHERE id = $1 LIMIT 1 FOR SHARE',
-          [String(account && account.id || '')]
-        );
-        const actor = accountResult.rows[0];
-        if (!actor || actor.active !== true || !ROLES.has(actor.role)) throw denied();
-        if (actor.role !== 'AGENCY') throw rejected(403, '행사 복제 권한을 확인하세요');
-
+        const { resolveActorOrg, checkReceiptScope, requireClientInOrg, requireEventInOrg } = require('./tenancy');
+        let org;
+        try {
+          org = await resolveActorOrg(client, account);
+        } catch (error) {
+          throw withOrgCode(error);
+        }
         const receiptResult = await client.query(
-          'SELECT event_id, actor_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1 FOR UPDATE',
+          'SELECT event_id, actor_id, org_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1 FOR UPDATE',
           [idempotencyKey]
         );
         if (receiptResult.rowCount) {
           const receipt = receiptResult.rows[0];
+          try {
+            checkReceiptScope(receipt, org.orgId);
+          } catch (scopeError) {
+            throw rejected(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+          }
           const stored = object(receipt.result);
           const storedRequest = object(stored.request);
           const sameRequest = Object.keys(storedRequest).length === Object.keys(request).length &&
@@ -385,7 +472,14 @@ function createState(database) {
           }
           return { event: copy(stored.response.event), replayed: true };
         }
+        if (org.role !== 'AGENCY') throw rejected(403, '행사 복제 권한을 확인하세요');
 
+        try {
+          await requireEventInOrg(client, sourceId, org.orgId);
+        } catch (error) {
+          if (error && error.code === 'ORGANIZATION_CONTEXT_CHANGED') throw error;
+          throw rejected(404, '행사를 찾을 수 없습니다');
+        }
         const sourceResult = await client.query(
           `SELECT e.id, e.slug, e.client_id, e.payload, w.payload AS workspace_payload
            FROM events e JOIN event_workspaces w ON w.event_id = e.id
@@ -415,6 +509,8 @@ function createState(database) {
         if (duplicateSlug.rowCount) throw rejected(409, '행사 주소 코드가 이미 사용 중입니다', 'slug');
 
         const eventId = `event-${crypto.randomUUID()}`;
+        // Format copies as setting metadata; stage/registration/files rules below stay untouched.
+        const copiedFormat = normalizeEventFormat(source.format);
         const payload = {
           id: eventId,
           name,
@@ -426,11 +522,12 @@ function createState(database) {
           capacity,
           stage: 'DRAFT',
           features: copy(source.features),
+          ...(copiedFormat ? { format: copiedFormat } : {}),
         };
-        const event = normalizeEvent({ id: eventId, slug, client_id: source.clientId, payload, revision: 0 });
+        const event = normalizeEvent({ id: eventId, slug, client_id: source.clientId, org_id: org.orgId, payload, revision: 0 });
         await client.query(
-          'INSERT INTO events (id, slug, client_id, payload) VALUES ($1, $2, $3, $4::jsonb)',
-          [eventId, slug, source.clientId, JSON.stringify(payload)]
+          'INSERT INTO events (id, slug, client_id, org_id, payload) VALUES ($1, $2, $3, $4, $5::jsonb)',
+          [eventId, slug, source.clientId, org.orgId, JSON.stringify(payload)]
         );
         await client.query(
           'INSERT INTO event_workspaces (event_id, payload) VALUES ($1, $2::jsonb)',
@@ -438,9 +535,9 @@ function createState(database) {
         );
         const response = { event };
         await client.query(
-          `INSERT INTO command_receipts (command_id, event_id, actor_id, result)
-           VALUES ($1, $2, $3, $4::jsonb)`,
-          [idempotencyKey, eventId, account.id, JSON.stringify({ command: 'event.duplicate', request, response })]
+          `INSERT INTO command_receipts (command_id, event_id, actor_id, org_id, result)
+           VALUES ($1, $2, $3, $4, $5::jsonb)`,
+          [idempotencyKey, eventId, account.id, org.orgId, JSON.stringify({ command: 'event.duplicate', request, response })]
         );
         return { event, replayed: false };
       });
@@ -472,29 +569,42 @@ function createState(database) {
 
     return database.transaction(async (client) => {
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [idempotencyKey]);
-      const accountResult = await client.query(
-        'SELECT role, active FROM accounts WHERE id = $1 LIMIT 1 FOR SHARE',
-        [String(account && account.id || '')]
-      );
-      const actor = accountResult.rows[0];
-      if (!actor || actor.active !== true || !ROLES.has(actor.role)) throw denied();
-      // Client records are organisation-level: a manager scoped to one event
-      // must not be able to add or rewrite the customer list.
-      if (actor.role !== 'AGENCY') throw rejected(403, '고객사 관리 권한을 확인하세요');
-
+      const { resolveActorOrg: resolveOrg, checkReceiptScope: checkScope, requireClientInOrg: requireClient } = require('./tenancy');
+      let org;
+      try {
+        org = await resolveOrg(client, account);
+      } catch (error) {
+        throw withOrgCode(error);
+      }
       const receiptResult = await client.query(
-        'SELECT actor_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1 FOR UPDATE',
+        'SELECT actor_id, org_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1 FOR UPDATE',
         [idempotencyKey]
       );
       if (receiptResult.rowCount) {
         const receipt = receiptResult.rows[0];
+        try {
+          checkScope(receipt, org.orgId);
+        } catch (scopeError) {
+          throw rejected(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+        }
         const stored = object(receipt.result);
         if (String(receipt.actor_id || '') !== String(account.id) || stored.command !== 'client.save' || !stored.response?.client) {
           throw rejected(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
         }
         return { client: copy(stored.response.client), replayed: true };
       }
+      // Client records are organisation-level: a manager scoped to one event
+      // must not be able to add or rewrite the customer list.
+      if (org.role !== 'AGENCY') throw rejected(403, '고객사 관리 권한을 확인하세요');
 
+      if (requestedId) {
+        try {
+          await requireClient(client, requestedId, org.orgId);
+        } catch (error) {
+          if (error && error.code === 'ORGANIZATION_CONTEXT_CHANGED') throw error;
+          throw rejected(404, '고객사를 찾을 수 없습니다');
+        }
+      }
       const existing = requestedId
         ? (await client.query('SELECT payload FROM clients WHERE id = $1 LIMIT 1 FOR UPDATE', [requestedId])).rows[0]
         : null;
@@ -526,15 +636,15 @@ function createState(database) {
         );
       } else {
         await client.query(
-          'INSERT INTO clients (id, payload) VALUES ($1, $2::jsonb)',
-          [clientId, JSON.stringify(payload)]
+          'INSERT INTO clients (id, org_id, payload) VALUES ($1, $2, $3::jsonb)',
+          [clientId, org.orgId, JSON.stringify(payload)]
         );
       }
       const saved = { ...payload, id: clientId };
       await client.query(
-        `INSERT INTO command_receipts (command_id, event_id, actor_id, result)
-         VALUES ($1, NULL, $2, $3::jsonb)`,
-        [idempotencyKey, account.id, JSON.stringify({ command: 'client.save', response: { client: saved } })]
+        `INSERT INTO command_receipts (command_id, event_id, actor_id, org_id, result)
+         VALUES ($1, NULL, $2, $3, $4::jsonb)`,
+        [idempotencyKey, account.id, org.orgId, JSON.stringify({ command: 'client.save', response: { client: saved } })]
       );
       return { client: saved, replayed: false };
     });
@@ -552,32 +662,55 @@ function createState(database) {
 
     return database.transaction(async (client) => {
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [idempotencyKey]);
-      const actorResult = await client.query('SELECT role, active FROM accounts WHERE id = $1 LIMIT 1 FOR SHARE', [String(account && account.id || '')]);
-      const actor = actorResult.rows[0];
-      if (!actor || actor.active !== true || !ROLES.has(actor.role)) throw denied();
-      if (actor.role !== 'AGENCY') throw rejected(403, '조직 권한을 변경할 권한이 없습니다');
-
-      const receipt = await client.query('SELECT actor_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1 FOR UPDATE', [idempotencyKey]);
+      const { resolveActorOrg: resolveOrgPerms, checkReceiptScope: checkPermScope, bumpOrgContext: bumpPerms } = require('./tenancy');
+      let org;
+      try {
+        org = await resolveOrgPerms(client, account);
+      } catch (error) {
+        throw withOrgCode(error);
+      }
+      const receipt = await client.query('SELECT actor_id, org_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1 FOR UPDATE', [idempotencyKey]);
       if (receipt.rowCount) {
+        try {
+          checkPermScope(receipt.rows[0], org.orgId);
+        } catch (scopeError) {
+          throw rejected(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+        }
         const stored = object(receipt.rows[0].result);
         if (String(receipt.rows[0].actor_id || '') !== String(account.id) || stored.command !== 'org.permissions.save') {
           throw rejected(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
         }
         return { account: copy(stored.response.account), replayed: true };
       }
+      if (org.role !== 'AGENCY') throw rejected(403, '조직 권한을 변경할 권한이 없습니다');
 
-      const targetResult = await client.query('SELECT id, name, email, role, active, org_permissions FROM accounts WHERE id = $1 LIMIT 1 FOR UPDATE', [targetId]);
+
+      // Permission truth lives in the org membership, so the target must
+      // belong to THIS org (404 otherwise: no cross-org probing). The grant
+      // touches only this membership; other orgs of a shared account keep
+      // their own grants.
+      const targetResult = await client.query(
+        `SELECT a.id, a.name, a.email, a.active, m.role, m.permissions
+         FROM accounts a JOIN organization_memberships m
+           ON m.account_id = a.id AND m.org_id = $2
+         WHERE a.id = $1 LIMIT 1 FOR UPDATE OF a, m`,
+        [targetId, org.orgId]
+      );
       const target = targetResult.rows[0];
       if (!target || target.active !== true) throw rejected(404, '구성원을 찾을 수 없습니다');
       // The organisation owner's own scope is not editable through this command.
       if (target.role === 'AGENCY') throw rejected(403, '조직 소유자의 권한은 변경할 수 없습니다');
 
-      await client.query('UPDATE accounts SET org_permissions = $2::jsonb WHERE id = $1', [targetId, JSON.stringify(permissions)]);
-      const projection = accountProjection({ ...target, org_permissions: permissions }, true);
       await client.query(
-        `INSERT INTO command_receipts (command_id, event_id, actor_id, result)
-         VALUES ($1, NULL, $2, $3::jsonb)`,
-        [idempotencyKey, account.id, JSON.stringify({ command: 'org.permissions.save', response: { account: projection } })]
+        'UPDATE organization_memberships SET permissions = $3::jsonb, revision = revision + 1 WHERE org_id = $1 AND account_id = $2',
+        [org.orgId, targetId, JSON.stringify(permissions)]
+      );
+      await bumpPerms(client, org.orgId);
+      const projection = accountProjection({ id: target.id, name: target.name, email: target.email, role: target.role, active: true, org_permissions: permissions }, true);
+      await client.query(
+        `INSERT INTO command_receipts (command_id, event_id, actor_id, org_id, result)
+         VALUES ($1, NULL, $2, $3, $4::jsonb)`,
+        [idempotencyKey, account.id, org.orgId, JSON.stringify({ command: 'org.permissions.save', response: { account: projection } })]
       );
       return { account: projection, replayed: false };
     });
@@ -601,24 +734,43 @@ function createState(database) {
 
     return database.transaction(async (client) => {
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [idempotencyKey]);
-      const actorResult = await client.query('SELECT role, active FROM accounts WHERE id = $1 LIMIT 1 FOR SHARE', [String(account && account.id || '')]);
-      const actor = actorResult.rows[0];
-      if (!actor || actor.active !== true || !ROLES.has(actor.role)) throw denied();
-      if (actor.role !== 'AGENCY') throw rejected(403, '행사 권한을 변경할 권한이 없습니다');
+      const { resolveActorOrg: resolveAssignOrg, checkReceiptScope: checkAssignScope, requireEventInOrg: requireAssignEvent } = require('./tenancy');
+      let org;
+      try {
+        org = await resolveAssignOrg(client, account);
+      } catch (error) {
+        throw withOrgCode(error);
+      }
+      try {
+        await requireAssignEvent(client, String(eventId || ''), org.orgId);
+      } catch (error) {
+        if (error && error.code === 'ORGANIZATION_CONTEXT_CHANGED') throw error;
+        throw rejected(404, '행사를 찾을 수 없습니다');
+      }
 
-      const eventResult = await client.query('SELECT id FROM events WHERE id = $1 LIMIT 1 FOR SHARE', [String(eventId || '')]);
-      if (!eventResult.rowCount) throw rejected(404, '행사를 찾을 수 없습니다');
-
-      const receipt = await client.query('SELECT actor_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1 FOR UPDATE', [idempotencyKey]);
+      const receipt = await client.query('SELECT actor_id, org_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1 FOR UPDATE', [idempotencyKey]);
       if (receipt.rowCount) {
+        try {
+          checkAssignScope(receipt.rows[0], org.orgId);
+        } catch (scopeError) {
+          throw rejected(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+        }
         const stored = object(receipt.rows[0].result);
         if (String(receipt.rows[0].actor_id || '') !== String(account.id) || stored.command !== 'member.assign') {
           throw rejected(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
         }
         return { membership: copy(stored.response.membership), replayed: true };
       }
+      if (org.role !== 'AGENCY') throw rejected(403, '행사 권한을 변경할 권한이 없습니다');
 
-      const targetResult = await client.query('SELECT id, role, active FROM accounts WHERE id = $1 LIMIT 1 FOR UPDATE', [targetId]);
+      // Event grants stay inside the org: the target must hold an active
+      // membership HERE (404 otherwise — other-org accounts are invisible).
+      const targetResult = await client.query(
+        `SELECT a.id, m.role, m.active AS active FROM accounts a
+         JOIN organization_memberships m ON m.account_id = a.id AND m.org_id = $2
+         WHERE a.id = $1 AND a.active = true LIMIT 1 FOR UPDATE OF a, m`,
+        [targetId, org.orgId]
+      );
       const target = targetResult.rows[0];
       if (!target || target.active !== true || !ROLES.has(target.role)) throw rejected(404, '구성원을 찾을 수 없습니다');
       if (target.role === 'AGENCY') throw rejected(403, '조직 소유자는 모든 행사에 접근합니다');
@@ -636,9 +788,9 @@ function createState(database) {
         await client.query('DELETE FROM memberships WHERE account_id = $1 AND event_id = $2', [target.id, String(eventId)]);
       }
       await client.query(
-        `INSERT INTO command_receipts (command_id, event_id, actor_id, result)
-         VALUES ($1, $2, $3, $4::jsonb)`,
-        [idempotencyKey, String(eventId), account.id, JSON.stringify({ command: 'member.assign', response: { membership } })]
+        `INSERT INTO command_receipts (command_id, event_id, actor_id, org_id, result)
+         VALUES ($1, $2, $3, $4, $5::jsonb)`,
+        [idempotencyKey, String(eventId), account.id, org.orgId, JSON.stringify({ command: 'member.assign', response: { membership } })]
       );
       return { membership, replayed: false };
     });
@@ -651,34 +803,37 @@ function createState(database) {
     return database.transaction(async (client) => {
       await client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
       const accountResult = await client.query(
-        `SELECT id, email, name, role, active, org_permissions
-         FROM accounts WHERE id = $1 LIMIT 1`,
+        'SELECT id, email, name, active FROM accounts WHERE id = $1 LIMIT 1',
         [accountId]
       );
-      const actor = accountResult.rows[0];
-      if (!actor || actor.active !== true || !ROLES.has(actor.role)) throw denied();
+      const identity = accountResult.rows[0];
+      if (!identity || identity.active !== true) throw denied();
+      const org = await resolveStateOrg(client, account, false);
+      const actor = { id: identity.id, email: identity.email, name: identity.name, active: true, role: org.role };
 
       let eventQuery;
       let eventValues = [];
       if (actor.role === 'AGENCY') {
-        eventQuery = `SELECT e.id, e.slug, e.client_id, e.payload, e.revision, e.created_at,
+        eventQuery = `SELECT e.id, e.slug, e.client_id, e.org_id, e.payload, e.revision, e.created_at,
                              w.payload AS workspace_payload, w.revision AS workspace_revision
                       FROM events e LEFT JOIN event_workspaces w ON w.event_id = e.id
+                      WHERE e.org_id = $1
                       ORDER BY e.created_at, e.id`;
+        eventValues = [org.orgId];
       } else if (actor.role === 'MANAGER') {
-        eventQuery = `SELECT DISTINCT e.id, e.slug, e.client_id, e.payload, e.revision, e.created_at,
+        eventQuery = `SELECT DISTINCT e.id, e.slug, e.client_id, e.org_id, e.payload, e.revision, e.created_at,
                              w.payload AS workspace_payload, w.revision AS workspace_revision
                       FROM events e JOIN memberships m ON m.event_id = e.id
                       LEFT JOIN event_workspaces w ON w.event_id = e.id
-                      WHERE m.account_id = $1 ORDER BY e.created_at, e.id`;
-        eventValues = [actor.id];
+                      WHERE m.account_id = $1 AND e.org_id = $2 ORDER BY e.created_at, e.id`;
+        eventValues = [actor.id, org.orgId];
       } else {
-        eventQuery = `SELECT DISTINCT e.id, e.slug, e.client_id, e.payload, e.revision, e.created_at,
+        eventQuery = `SELECT DISTINCT e.id, e.slug, e.client_id, e.org_id, e.payload, e.revision, e.created_at,
                              w.payload AS workspace_payload, w.revision AS workspace_revision
                       FROM events e JOIN staff_assignments a ON a.event_id = e.id
                       LEFT JOIN event_workspaces w ON w.event_id = e.id
-                      WHERE a.account_id = $1 AND a.active = true ORDER BY e.created_at, e.id`;
-        eventValues = [actor.id];
+                      WHERE a.account_id = $1 AND a.active = true AND e.org_id = $2 ORDER BY e.created_at, e.id`;
+        eventValues = [actor.id, org.orgId];
       }
       const eventResult = await client.query(eventQuery, eventValues);
       const rows = eventResult.rows;
@@ -690,7 +845,10 @@ function createState(database) {
       if (actor.role === 'AGENCY') {
         assignmentResult = await client.query(
           `SELECT id, account_id, event_id, type, target_id
-           FROM staff_assignments WHERE active = true ORDER BY event_id, id`
+           FROM staff_assignments
+           WHERE active = true AND event_id IN (SELECT id FROM events WHERE org_id = $1)
+           ORDER BY event_id, id`,
+          [org.orgId]
         );
       } else if (actor.role === 'MANAGER') {
         assignmentResult = await client.query(
@@ -722,8 +880,10 @@ function createState(database) {
       let membershipQuery;
       let membershipValues;
       if (actor.role === 'AGENCY') {
-        membershipQuery = 'SELECT account_id, event_id, write_permissions FROM memberships ORDER BY event_id, account_id';
-        membershipValues = [];
+        membershipQuery = `SELECT account_id, event_id, write_permissions FROM memberships
+                           WHERE event_id IN (SELECT id FROM events WHERE org_id = $1)
+                           ORDER BY event_id, account_id`;
+        membershipValues = [org.orgId];
       } else if (actor.role === 'MANAGER') {
         membershipQuery = `SELECT account_id, event_id, write_permissions
                             FROM memberships WHERE event_id = ANY($1::text[]) ORDER BY event_id, account_id`;
@@ -740,31 +900,42 @@ function createState(database) {
         write: Array.isArray(row.write_permissions) ? copy(row.write_permissions) : [],
       }));
 
+      // Role/active/permissions truth is the org membership, joined here so
+      // the console keeps seeing the same permission signals per org. Only
+      // members of THIS org are ever listed: other-org accounts are invisible.
+      const membershipColumns = `m.role AS role, m.active AS active, m.revision AS membership_version,
+        COALESCE(m.permissions, a.org_permissions, '[]'::jsonb) AS org_permissions`;
       let accountQuery;
       let accountValues;
       if (actor.role === 'AGENCY') {
-        accountQuery = `SELECT id, email, name, role, active, org_permissions
-                        FROM accounts ORDER BY created_at, id`;
-        accountValues = [];
+        accountQuery = `SELECT a.id, a.email, a.name, ${membershipColumns},
+                         EXISTS (SELECT 1 FROM organization_memberships m2 WHERE m2.account_id = a.id AND m2.org_id <> $1) AS shared_account
+                        FROM accounts a
+                        JOIN organization_memberships m ON m.account_id = a.id AND m.org_id = $1
+                        ORDER BY a.created_at, a.id`;
+        accountValues = [org.orgId];
       } else if (actor.role === 'MANAGER') {
         // The assignment dialog is how a staff account gets attached to an
         // event, so a manager also sees staff accounts that are not attached
         // to any event yet. Without this the flow deadlocks: an account only
         // became visible after it had an assignment, and the assignment is
         // what the manager was trying to make.
-        accountQuery = `SELECT DISTINCT a.id, a.email, a.name, a.role, a.active, a.org_permissions
+        accountQuery = `SELECT DISTINCT a.id, a.email, a.name, ${membershipColumns}
                         FROM accounts a
+                        JOIN organization_memberships m ON m.account_id = a.id AND m.org_id = $3
                         WHERE a.id = $1
                            OR a.id IN (SELECT account_id FROM memberships WHERE event_id = ANY($2::text[]))
                            OR a.id IN (SELECT account_id FROM staff_assignments WHERE event_id = ANY($2::text[]))
-                           OR (a.role = 'STAFF'
+                           OR (m.role = 'STAFF'
                                AND NOT EXISTS (SELECT 1 FROM staff_assignments sa WHERE sa.account_id = a.id))
                         ORDER BY a.id`;
-        accountValues = [actor.id, eventIds];
+        accountValues = [actor.id, eventIds, org.orgId];
       } else {
-        accountQuery = `SELECT id, email, name, role, active, org_permissions
-                        FROM accounts WHERE id = $1 LIMIT 1`;
-        accountValues = [actor.id];
+        accountQuery = `SELECT a.id, a.email, a.name, ${membershipColumns}
+                        FROM accounts a
+                        JOIN organization_memberships m ON m.account_id = a.id AND m.org_id = $2 AND m.active = true
+                        WHERE a.id = $1 LIMIT 1`;
+        accountValues = [actor.id, org.orgId];
       }
       const accountRows = (await client.query(accountQuery, accountValues)).rows;
       const accounts = accountRows.map((row) => accountProjection(row, actor.role === 'AGENCY'));
@@ -772,12 +943,12 @@ function createState(database) {
       const clientIds = [...new Set(rows.map((row) => row.client_id).filter(Boolean).map(String))];
       let clients = [];
       if (actor.role === 'AGENCY') {
-        clients = (await client.query('SELECT id, payload FROM clients ORDER BY id')).rows.map((row) => ({
+        clients = (await client.query('SELECT id, payload FROM clients WHERE org_id = $1 ORDER BY id', [org.orgId])).rows.map((row) => ({
           ...object(copy(row.payload)),
           id: String(row.id),
         }));
       } else if (clientIds.length) {
-        clients = (await client.query('SELECT id, payload FROM clients WHERE id = ANY($1::text[]) ORDER BY id', [clientIds])).rows.map((row) => ({
+        clients = (await client.query('SELECT id, payload FROM clients WHERE id = ANY($1::text[]) AND org_id = $2 ORDER BY id', [clientIds, org.orgId])).rows.map((row) => ({
           id: String(row.id),
           name: String(object(row.payload).name || ''),
         }));
@@ -787,7 +958,8 @@ function createState(database) {
       if (actor.role === 'AGENCY') {
         invitations = (await client.query(
           `SELECT id, email, name, role, event_id, status, expires_at, created_at
-           FROM invitations ORDER BY created_at, id`
+           FROM invitations WHERE org_id = $1 ORDER BY created_at, id`,
+          [org.orgId]
         )).rows.map((row) => ({
           id: String(row.id),
           email: String(row.email),
@@ -845,6 +1017,15 @@ function createState(database) {
         version: 9,
         revision,
         activeEventId: projectedEvents[0] ? projectedEvents[0].id : null,
+        viewer: {
+          id: String(actor.id),
+          name: String(actor.name || ''),
+          role: String(actor.role),
+          organizationId: org.orgId,
+          organizationName: org.orgName,
+          contextVersion: account.sessionRevision ?? null,
+          orgPermissions: Array.isArray(org.permissions) ? copy(org.permissions) : [],
+        },
         events: projectedEvents,
         workspaces,
         clients,
@@ -853,12 +1034,493 @@ function createState(database) {
         invitations,
         globalAudit: [],
         commands: [],
-        integrations: require('./messaging').activeMessagingState(),
+        integrations: integrationsForOrg(org.orgId),
       };
     });
   }
 
-  return { loadBootstrap, createEvent, duplicateEvent, saveClient, saveOrgPermissions, assignMember };
+  const DIRECTORY_HEX_COLOR = /^#[0-9a-f]{6}$/i;
+
+  // Published card tint marker, same rule as the console's readPublishedCardColor:
+  // a non-empty publishedAt next to the published block plus a valid hex.
+  // Drafts never contribute.
+  function publishedThemeColor(publishedAt, rawColor) {
+    if (typeof publishedAt !== 'string' || !publishedAt.trim()) return null;
+    if (typeof rawColor !== 'string' || !DIRECTORY_HEX_COLOR.test(rawColor.trim())) return null;
+    return rawColor.trim().toUpperCase();
+  }
+
+  // Lightweight shell/directory read (additive; loadBootstrap is untouched).
+  //
+  // Contract:
+  // - Same session/role scoping as loadBootstrap (AGENCY all events, MANAGER
+  //   membership events, STAFF actively assigned events). No new isolation.
+  // - Never selects event_workspaces.payload: per-event venue, PENDING and
+  //   message-attention counts, and the published card color are extracted in
+  //   SQL as scalars. Participant rows, tickets, contact secrets, message
+  //   bodies, reports and global prizes never leave the database here.
+  // - Membership/account/client/invitation scoping mirrors loadBootstrap so
+  //   the shell keeps seeing the same permission signals, only the workspace
+  //   weight is gone. Freshness matches bootstrap: READ ONLY transaction,
+  //   `cache-control: no-store` (set by the route layer).
+  async function loadDirectory(account) {
+    const accountId = account && typeof account.id === 'string' ? account.id.trim() : '';
+    if (!accountId) throw denied();
+
+    return database.transaction(async (client) => {
+      await client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
+      const accountResult = await client.query(
+        'SELECT id, email, name, active FROM accounts WHERE id = $1 LIMIT 1',
+        [accountId]
+      );
+      const identity = accountResult.rows[0];
+      if (!identity || identity.active !== true) throw denied();
+      const org = await resolveStateOrg(client, account, false);
+      const actor = { id: identity.id, email: identity.email, name: identity.name, active: true, role: org.role };
+
+      let eventIds;
+      if (actor.role === 'AGENCY') {
+        const all = await client.query('SELECT id FROM events WHERE org_id = $1 ORDER BY created_at, id', [org.orgId]);
+        eventIds = all.rows.map((row) => String(row.id));
+      } else if (actor.role === 'MANAGER') {
+        const memberRows = await client.query(
+          `SELECT m.event_id FROM memberships m JOIN events e ON e.id = m.event_id
+           WHERE m.account_id = $1 AND e.org_id = $2 ORDER BY m.event_id`,
+          [actor.id, org.orgId]
+        );
+        eventIds = memberRows.rows.map((row) => String(row.event_id));
+      } else {
+        const assignedRows = await client.query(
+          `SELECT DISTINCT a.event_id FROM staff_assignments a JOIN events e ON e.id = a.event_id
+           WHERE a.account_id = $1 AND a.active = true AND e.org_id = $2 ORDER BY a.event_id`,
+          [actor.id, org.orgId]
+        );
+        eventIds = assignedRows.rows.map((row) => String(row.event_id));
+      }
+
+      let summaryRows = [];
+      if (actor.role === 'AGENCY' || eventIds.length) {
+        const filter = actor.role === 'AGENCY' ? 'WHERE e.org_id = $1' : 'WHERE e.id = ANY($1::text[]) AND e.org_id = $2';
+        const values = actor.role === 'AGENCY' ? [org.orgId] : [eventIds, org.orgId];
+        summaryRows = (await client.query(
+          `SELECT e.id, e.slug, e.client_id, e.payload, e.revision,
+                  w.revision AS workspace_revision,
+                  NULLIF(w.payload->'venue'->>'name', '') AS venue,
+                  CASE WHEN jsonb_typeof(COALESCE(w.payload->'participants', '[]'::jsonb)) = 'array'
+                       THEN (SELECT COUNT(*) FROM jsonb_array_elements(COALESCE(w.payload->'participants', '[]'::jsonb)) AS p
+                             WHERE p->>'status' = 'PENDING')
+                       ELSE 0 END::int AS pending,
+                  CASE WHEN jsonb_typeof(COALESCE(w.payload->'messages', '[]'::jsonb)) = 'array'
+                       THEN (SELECT COUNT(*) FROM jsonb_array_elements(COALESCE(w.payload->'messages', '[]'::jsonb)) AS m
+                             WHERE m->>'status' IN ('FAILED', 'PARTIAL', 'NEEDS_CONNECTION'))
+                        ELSE 0 END::int AS attention,
+                   CASE WHEN jsonb_typeof(COALESCE(w.payload->'messages', '[]'::jsonb)) = 'array'
+                        THEN ARRAY(SELECT m->>'scheduled' FROM jsonb_array_elements(COALESCE(w.payload->'messages', '[]'::jsonb)) AS m
+                                   WHERE m->>'status' = 'SCHEDULED')
+                        ELSE ARRAY[]::text[] END AS scheduled_times,
+                  w.payload->'pageExperience'->>'publishedAt' AS published_at,
+                  w.payload->'pageExperience'->'published'->'homeStyle'->>'backgroundColor' AS theme_color
+           FROM events e LEFT JOIN event_workspaces w ON w.event_id = e.id
+           ${filter}
+           ORDER BY e.created_at, e.id`,
+          values
+        )).rows;
+      }
+
+      const events = summaryRows.map((row) => {
+        const event = normalizeEvent(row);
+        const eventRevision = Math.max(Number(row.revision) || 0, Number(row.workspace_revision) || 0);
+        return {
+          id: event.id,
+          name: event.name,
+          slug: event.slug,
+          clientId: event.clientId,
+          date: event.date,
+          start: event.start,
+          end: event.end,
+          capacity: event.capacity,
+          stage: event.stage,
+          features: event.features,
+          // Format rides only when set: unspecified stays absent here exactly
+          // as in full/detail reads, and legacy summaries keep their shape.
+          ...(event.format ? { format: event.format } : {}),
+          revision: eventRevision,
+          venue: typeof row.venue === 'string' ? row.venue : '',
+          pending: Number(row.pending) || 0,
+          messageAttention: Number(row.attention) || 0,
+          manualDue: (Array.isArray(row.scheduled_times) ? row.scheduled_times : []).filter(time => {
+            const scheduled = Date.parse(time);
+            return Number.isFinite(scheduled) && scheduled <= Date.now();
+          }).length,
+          themeColor: publishedThemeColor(row.published_at, row.theme_color),
+        };
+      });
+
+      let membershipResult;
+      if (actor.role === 'AGENCY') {
+        membershipResult = await client.query(
+          `SELECT m.account_id, m.event_id, m.write_permissions FROM memberships m
+           JOIN events e ON e.id = m.event_id
+           WHERE e.org_id = $1 ORDER BY m.event_id, m.account_id`,
+          [org.orgId]
+        );
+      } else if (actor.role === 'MANAGER' && eventIds.length) {
+        membershipResult = await client.query(
+          `SELECT account_id, event_id, write_permissions
+           FROM memberships WHERE event_id = ANY($1::text[]) ORDER BY event_id, account_id`,
+          [eventIds]
+        );
+      } else if (actor.role === 'STAFF' && eventIds.length) {
+        // Same as loadBootstrap: staff see only their own membership rows.
+        membershipResult = await client.query(
+          `SELECT account_id, event_id, write_permissions
+           FROM memberships WHERE account_id = $1 AND event_id = ANY($2::text[]) ORDER BY event_id`,
+          [actor.id, eventIds]
+        );
+      } else {
+        membershipResult = { rows: [] };
+      }
+      // Stored grants ride through verbatim: an omitted grant was stored as
+      // ['all'] at assign time, an explicit [] stays [] (read-only).
+      const memberships = membershipResult.rows.map((row) => ({
+        accountId: String(row.account_id),
+        eventId: String(row.event_id),
+        write: Array.isArray(row.write_permissions) ? copy(row.write_permissions) : [],
+      }));
+
+      const directoryColumns = `m.role AS role, m.active AS active, m.revision AS membership_version,
+        COALESCE(m.permissions, a.org_permissions, '[]'::jsonb) AS org_permissions`;
+      let accountRows;
+      if (actor.role === 'AGENCY') {
+        accountRows = (await client.query(
+          `SELECT a.id, a.email, a.name, ${directoryColumns},
+           EXISTS (SELECT 1 FROM organization_memberships m2 WHERE m2.account_id = a.id AND m2.org_id <> $1) AS shared_account
+           FROM accounts a
+           JOIN organization_memberships m ON m.account_id = a.id AND m.org_id = $1
+           ORDER BY a.created_at, a.id`,
+          [org.orgId]
+        )).rows;
+      } else if (actor.role === 'MANAGER') {
+        accountRows = (await client.query(
+          `SELECT DISTINCT a.id, a.email, a.name, ${directoryColumns}
+           FROM accounts a
+           JOIN organization_memberships m ON m.account_id = a.id AND m.org_id = $3
+           WHERE a.id = $1
+              OR a.id IN (SELECT account_id FROM memberships WHERE event_id = ANY($2::text[]))
+              OR a.id IN (SELECT account_id FROM staff_assignments WHERE event_id = ANY($2::text[]))
+              OR (m.role = 'STAFF'
+                  AND NOT EXISTS (SELECT 1 FROM staff_assignments sa WHERE sa.account_id = a.id))
+           ORDER BY a.id`,
+          [actor.id, eventIds, org.orgId]
+        )).rows;
+      } else {
+        accountRows = (await client.query(
+          `SELECT a.id, a.email, a.name, ${directoryColumns}
+           FROM accounts a
+           JOIN organization_memberships m ON m.account_id = a.id AND m.org_id = $2 AND m.active = true
+           WHERE a.id = $1 LIMIT 1`,
+          [actor.id, org.orgId]
+        )).rows;
+      }
+      const accounts = accountRows.map((row) => accountProjection(row, actor.role === 'AGENCY'));
+
+      const clientIds = [...new Set(summaryRows.map((row) => row.client_id).filter(Boolean).map(String))];
+      let clients = [];
+      if (actor.role === 'AGENCY') {
+        clients = (await client.query('SELECT id, payload FROM clients WHERE org_id = $1 ORDER BY id', [org.orgId])).rows.map((row) => ({
+          ...object(copy(row.payload)),
+          id: String(row.id),
+        }));
+      } else if (clientIds.length) {
+        clients = (await client.query(
+          'SELECT id, payload FROM clients WHERE id = ANY($1::text[]) AND org_id = $2 ORDER BY id', [clientIds, org.orgId]
+        )).rows.map((row) => ({
+          id: String(row.id),
+          name: String(object(row.payload).name || ''),
+        }));
+      }
+
+      let invitations = [];
+      if (actor.role === 'AGENCY') {
+        invitations = (await client.query(
+          `SELECT id, email, name, role, event_id, status, expires_at, created_at
+           FROM invitations WHERE org_id = $1 ORDER BY created_at, id`,
+          [org.orgId]
+        )).rows.map((row) => ({
+          id: String(row.id),
+          email: String(row.email),
+          name: String(row.name),
+          role: String(row.role),
+          eventId: row.event_id ? String(row.event_id) : null,
+          status: String(row.status),
+          expiresAt: new Date(row.expires_at).toISOString(),
+          at: new Date(row.created_at).toISOString(),
+        }));
+      }
+
+      const revision = summaryRows.reduce(
+        (max, row) => Math.max(max, Number(row.revision) || 0, Number(row.workspace_revision) || 0), 0
+      );
+      return {
+        version: 1,
+        revision,
+        activeEventId: events[0] ? events[0].id : null,
+        viewer: {
+          id: String(actor.id),
+          name: String(actor.name || ''),
+          role: String(actor.role),
+          orgOwner: actor.role === 'AGENCY',
+          organizationId: org.orgId,
+          organizationName: org.orgName,
+          contextVersion: account.sessionRevision ?? null,
+          orgPermissions: Array.isArray(org.permissions) ? copy(org.permissions) : [],
+        },
+        events,
+        clients,
+        accounts,
+        memberships,
+        invitations,
+        integrations: integrationsForOrg(org.orgId),
+      };
+    });
+  }
+
+  // Event-scoped detail read (additive; loadBootstrap is untouched).
+  //
+  // Contract:
+  // - Same `{ state }` shape as GET /api/bootstrap (version 9, same keys) so
+  //   event screens can migrate one by one, but `events` holds exactly the
+  //   one event and `workspaces` exactly its workspace.
+  // - Same role scoping and STAFF projection as loadBootstrap. A caller with
+  //   no visibility into the event gets 404 ('행사를 찾을 수 없습니다'), the
+  //   same as an unknown id, so membership cannot be probed.
+  // - `clients`/`accounts`/`memberships`/`invitations` carry only what the
+  //   event screen needs: the event's client, the event's members and
+  //   assignees (plus unassigned STAFF for managers, the full list for
+  //   AGENCY), the event's memberships, and (AGENCY only) the event's and
+  //   global invitations.
+  async function loadEventBootstrap(account, eventId) {
+    const accountId = account && typeof account.id === 'string' ? account.id.trim() : '';
+    if (!accountId) throw denied();
+    const targetId = String(eventId || '').trim();
+    if (!targetId || targetId.length > 160) throw rejected(404, '행사를 찾을 수 없습니다');
+
+    return database.transaction(async (client) => {
+      await client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
+      const accountResult = await client.query(
+        'SELECT id, email, name, active FROM accounts WHERE id = $1 LIMIT 1',
+        [accountId]
+      );
+      const identity = accountResult.rows[0];
+      if (!identity || identity.active !== true) throw denied();
+      const org = await resolveStateOrg(client, account, false);
+      const actor = { id: identity.id, email: identity.email, name: identity.name, active: true, role: org.role };
+
+      // Ownership first: another org's event is 404 (no probing oracle),
+      // even for an org owner. Visibility inside the org follows.
+      const ownerCheck = await client.query('SELECT org_id FROM events WHERE id = $1 LIMIT 1', [targetId]);
+      if (!ownerCheck.rowCount || String(ownerCheck.rows[0].org_id || '') !== String(org.orgId)) {
+        throw rejected(404, '행사를 찾을 수 없습니다');
+      }
+
+      if (actor.role === 'MANAGER') {
+        const visible = await client.query(
+          `SELECT 1 FROM memberships m JOIN events e ON e.id = m.event_id
+           WHERE m.account_id = $1 AND m.event_id = $2 LIMIT 1`,
+          [actor.id, targetId]
+        );
+        if (!visible.rowCount) throw rejected(404, '행사를 찾을 수 없습니다');
+      } else if (actor.role === 'STAFF') {
+        const visible = await client.query(
+          `SELECT 1 FROM staff_assignments a JOIN events e ON e.id = a.event_id
+           WHERE a.account_id = $1 AND a.event_id = $2 AND a.active = true LIMIT 1`,
+          [actor.id, targetId]
+        );
+        if (!visible.rowCount) throw rejected(404, '행사를 찾을 수 없습니다');
+      }
+
+      const eventResult = await client.query(
+        `SELECT e.id, e.slug, e.client_id, e.org_id, e.payload, e.revision,
+                w.payload AS workspace_payload, w.revision AS workspace_revision
+         FROM events e LEFT JOIN event_workspaces w ON w.event_id = e.id
+         WHERE e.id = $1 LIMIT 1`,
+        [targetId]
+      );
+      if (!eventResult.rowCount) throw rejected(404, '행사를 찾을 수 없습니다');
+      const row = eventResult.rows[0];
+      const event = normalizeEvent(row);
+      const projectedEvent = actor.role === 'STAFF' ? staffEvent(event) : event;
+
+      const assignmentResult = actor.role === 'AGENCY'
+        ? await client.query(
+          `SELECT id, account_id, event_id, type, target_id
+           FROM staff_assignments WHERE active = true AND event_id = $1 ORDER BY event_id, id`,
+          [targetId]
+        )
+        : await client.query(
+          `SELECT id, account_id, event_id, type, target_id
+           FROM staff_assignments WHERE active = true AND event_id = $1
+             AND ($2::text = 'MANAGER' OR account_id = $3)
+           ORDER BY event_id, id`,
+          [targetId, actor.role, actor.id]
+        );
+      const assignments = assignmentResult.rows.map((item) => ({
+        id: String(item.id),
+        accountId: String(item.account_id),
+        type: String(item.type),
+        targetId: String(item.target_id),
+      }));
+
+      const membershipResult = actor.role === 'STAFF'
+        ? await client.query(
+          `SELECT account_id, event_id, write_permissions FROM memberships
+           WHERE account_id = $1 AND event_id = $2 ORDER BY event_id`,
+          [actor.id, targetId]
+        )
+        : await client.query(
+          `SELECT account_id, event_id, write_permissions FROM memberships
+           WHERE event_id = $1 ORDER BY event_id, account_id`,
+          [targetId]
+        );
+      const memberships = membershipResult.rows.map((item) => ({
+        accountId: String(item.account_id),
+        eventId: String(item.event_id),
+        write: Array.isArray(item.write_permissions) ? copy(item.write_permissions) : [],
+      }));
+
+      const eventMemberColumns = `m.role AS role, m.active AS active, m.revision AS membership_version,
+        COALESCE(m.permissions, a.org_permissions, '[]'::jsonb) AS org_permissions`;
+      let accountRows;
+      if (actor.role === 'AGENCY') {
+        accountRows = (await client.query(
+          `SELECT a.id, a.email, a.name, ${eventMemberColumns},
+           EXISTS (SELECT 1 FROM organization_memberships m2 WHERE m2.account_id = a.id AND m2.org_id <> $1) AS shared_account
+           FROM accounts a
+           JOIN organization_memberships m ON m.account_id = a.id AND m.org_id = $1
+           ORDER BY a.created_at, a.id`,
+          [org.orgId]
+        )).rows;
+      } else if (actor.role === 'MANAGER') {
+        accountRows = (await client.query(
+          `SELECT DISTINCT a.id, a.email, a.name, ${eventMemberColumns}
+           FROM accounts a
+           JOIN organization_memberships m ON m.account_id = a.id AND m.org_id = $3
+           WHERE a.id = $1
+              OR a.id IN (SELECT account_id FROM memberships WHERE event_id = $2)
+              OR a.id IN (SELECT account_id FROM staff_assignments WHERE event_id = $2)
+              OR (m.role = 'STAFF'
+                  AND NOT EXISTS (SELECT 1 FROM staff_assignments sa WHERE sa.account_id = a.id))
+           ORDER BY a.id`,
+          [actor.id, targetId, org.orgId]
+        )).rows;
+      } else {
+        accountRows = (await client.query(
+          `SELECT a.id, a.email, a.name, ${eventMemberColumns}
+           FROM accounts a
+           JOIN organization_memberships m ON m.account_id = a.id AND m.org_id = $2 AND m.active = true
+           WHERE a.id = $1 LIMIT 1`,
+          [actor.id, org.orgId]
+        )).rows;
+      }
+      const accounts = accountRows.map((item) => accountProjection(item, actor.role === 'AGENCY'));
+
+      let clients = [];
+      if (row.client_id) {
+        const clientRows = (await client.query('SELECT id, payload FROM clients WHERE id = $1 AND org_id = $2 LIMIT 1', [String(row.client_id), org.orgId])).rows;
+        if (clientRows.length) {
+          clients = actor.role === 'AGENCY'
+            ? [{ ...object(copy(clientRows[0].payload)), id: String(clientRows[0].id) }]
+            : [{ id: String(clientRows[0].id), name: String(object(clientRows[0].payload).name || '') }];
+        }
+      } else if (actor.role === 'AGENCY') {
+        clients = [];
+      }
+
+      let invitations = [];
+      if (actor.role === 'AGENCY') {
+        invitations = (await client.query(
+          `SELECT id, email, name, role, event_id, status, expires_at, created_at
+           FROM invitations WHERE org_id = $2 AND (event_id IS NULL OR event_id = $1) ORDER BY created_at, id`,
+          [targetId, org.orgId]
+        )).rows.map((item) => ({
+          id: String(item.id),
+          email: String(item.email),
+          name: String(item.name),
+          role: String(item.role),
+          eventId: item.event_id ? String(item.event_id) : null,
+          status: String(item.status),
+          expiresAt: new Date(item.expires_at).toISOString(),
+          at: new Date(item.created_at).toISOString(),
+        }));
+      }
+
+      const workspace = normalizeWorkspace(row.workspace_payload);
+      workspace.assignments = copy(assignments);
+      let projectedWorkspace;
+      if (actor.role === 'STAFF') {
+        // Same minimal projection as loadBootstrap: assigned targets only,
+        // no tickets, phones, emails, unassigned checks/visits, reports or
+        // global prize state.
+        const deskIds = new Set(assignments.filter((item) => item.type === 'DESK').map((item) => item.targetId));
+        const boothIds = new Set(assignments.filter((item) => item.type === 'BOOTH').map((item) => item.targetId));
+        const projected = publicWorkspace(workspace, event);
+        projected.participants = deskIds.size ? array(workspace.participants).map((person) => ({
+          id: String(person.id || ''),
+          name: String(person.name || ''),
+          company: String(person.company || ''),
+          group: String(person.group || ''),
+          status: String(person.status || ''),
+          inside: person.inside === true,
+          everIn: person.everIn === true,
+          paymentStatus: String(person.paymentStatus || ''),
+        })) : [];
+        projected.desks = array(workspace.desks).filter((desk) => deskIds.has(String(desk.id))).map((desk) => ({
+          id: String(desk.id), name: String(desk.name || ''), action: String(desk.action || ''),
+        }));
+        projected.booths = array(workspace.booths).filter((booth) => boothIds.has(String(booth.id))).map((booth) => ({
+          id: String(booth.id), name: String(booth.name || ''), zone: String(booth.zone || ''), status: String(booth.status || ''),
+        }));
+        projected.assignments = copy(assignments);
+        projected.checks = deskIds.size ? array(workspace.checks).filter((check) => deskIds.has(String(check.deskId))).map((check) => ({
+          id: String(check.id || ''), participantId: String(check.participantId || ''), name: String(check.name || ''),
+          action: String(check.action || ''), deskId: String(check.deskId || ''), at: String(check.at || ''), corrected: check.corrected === true,
+        })) : [];
+        projected.visits = boothIds.size ? array(workspace.visits).filter((visit) => boothIds.has(String(visit.boothId))).map((visit) => ({
+          id: String(visit.id || ''), boothId: String(visit.boothId || ''), participantId: String(visit.participantId || ''), at: String(visit.at || ''),
+        })) : [];
+        projectedWorkspace = projected;
+      } else {
+        projectedWorkspace = workspace;
+      }
+
+      const revision = Math.max(Number(row.revision) || 0, Number(row.workspace_revision) || 0);
+      return {
+        version: 9,
+        revision,
+        activeEventId: event.id,
+        viewer: {
+          id: String(actor.id),
+          name: String(actor.name || ''),
+          role: String(actor.role),
+          organizationId: org.orgId,
+          organizationName: org.orgName,
+          contextVersion: account.sessionRevision ?? null,
+          orgPermissions: Array.isArray(org.permissions) ? copy(org.permissions) : [],
+        },
+        events: [projectedEvent],
+        workspaces: { [event.id]: projectedWorkspace },
+        clients,
+        accounts,
+        memberships,
+        invitations,
+        globalAudit: [],
+        commands: [],
+        integrations: integrationsForOrg(org.orgId),
+      };
+    });
+  }
+
+  return { loadBootstrap, loadDirectory, loadEventBootstrap, createEvent, duplicateEvent, saveClient, saveOrgPermissions, assignMember };
 }
 
-module.exports = { createState, emptyWorkspace, normalizeEvent, normalizeWorkspace, projectParticipant };
+module.exports = { createState, emptyWorkspace, normalizeEvent, normalizeWorkspace, projectParticipant, EVENT_FORMATS, normalizeEventFormat, parseEventFormatInput };

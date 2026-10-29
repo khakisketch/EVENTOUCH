@@ -5,33 +5,39 @@
  * dependency.
  */
 :root {
-  --brand: #E76D26;
-  --brand-hover: #D85F1D;
-  --brand-text: #A34410;
-  --on-brand: #17252B;
-  --on-brand-hover: #111111;
-  --soft: #FFF1E8;
+  color-scheme: light;
+  /* White work surfaces; orange marks action, not the whole workspace.
+     Stage colors remain available to the separate projection surface. */
+  --stage: #101114;
+  --stage-2: #1B1D21;
+  --stage-line: #34363B;
+  --brand: #F05A24;
+  --brand-hover: #B83C10;
+  --brand-text: #AA3A10;
+  --on-brand: #171A1F;
+  --on-brand-hover: #FFFFFF;
+  --soft: #FFF3EB;
 
-  --ink: #17252B;
-  --muted: #52636B;
-  --line: #DCE4E6;
-  --line-strong: #A9B8BD;
+  --ink: #252A34;
+  --muted: #626B78;
+  --line: #E6E8EC;
+  --line-strong: #8A939F;
   --paper: #FFFFFF;
-  --ground: #F4F5F7;
-  --surface-muted: #F8F9FB;
+  --ground: #FFFFFF;
+  --surface-muted: #F7F8FA;
 
-  --nav: #202329;
-  --nav-hover: #30343C;
-  --nav-active: #414650;
-  --nav-text: #F4F5F7;
-  --nav-muted: #BEC6CF;
+  --nav: #FAFBFC;
+  --nav-hover: #EFF1F4;
+  --nav-active: #FFF0E6;
+  --nav-text: #252A34;
+  --nav-muted: #626B78;
 
-  --danger: #AD3D3D;
-  --danger-soft: #FFF0F0;
-  --danger-line: #D1A1A1;
-  --success: #226A4F;
-  --success-soft: #E6F3ED;
-  --success-line: #BDD8D2;
+  --danger: #B21E35;
+  --danger-soft: #F7E4E7;
+  --danger-line: #E0B4BA;
+  --success: #2F6B4F;
+  --success-soft: #E4EFE7;
+  --success-line: #A8C3B3;
   --warning: #81520E;
   --warning-soft: #FFF4E1;
   --warning-line: #D9BB84;
@@ -39,19 +45,19 @@
   --info-soft: #EAF0F7;
   --info-line: #BDCEDF;
 
-  --focus: #A34410;
+  --focus: #AA3A10;
   --report-color: var(--brand);
-  --scrim: #17252B80;
-  --shadow-color: #17252B26;
+  --scrim: #10111480;
+  --shadow-color: #252A3412;
   --chart: var(--brand);
-  --chart-track: #414650;
+  --chart-track: #E6E8EC;
 
-  --body-font: 'Segoe UI', 'Malgun Gothic', system-ui, sans-serif;
-  --display-font: Bahnschrift, 'Malgun Gothic', sans-serif;
-  --mono-font: ui-monospace, Consolas, monospace;
+  --body-font: 'Pretendard Variable', Pretendard, 'Noto Sans KR', 'Segoe UI', 'Malgun Gothic', system-ui, sans-serif;
+  --display-font: var(--body-font);
+  --mono-font: 'Noto Sans Mono', ui-monospace, Consolas, monospace;
 
   --radius: 8px;
-  --radius-small: 4px;
+  --radius-small: 6px;
   --s1: 4px;
   --s2: 8px;
   --s3: 12px;
@@ -64,13 +70,15 @@
   --enter: 200ms;
   --exit: 120ms;
   --body: 16px;
+  --body-work: 15px;
   --small: 14px;
-  --h3: 20px;
+  --label: 12px;
+  --h3: 18px;
   --h2: 24px;
-  --h1: 32px;
-  --display: 40px;
-  --display-large: 48px;
-  --display-xl: 56px;
+  --h1: 28px;
+  --display: 48px;
+  --display-large: 56px;
+  --display-xl: 64px;
   --display-stage: 88px;
   --od-gap: 8px;
 

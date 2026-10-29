@@ -1,4 +1,5 @@
 'use strict';
+const { ensureRunTmpDir, defaultCaptureDir, runStamp } = require('./capture-dir.cjs');
 
 // Mobile audit of the new Next.js app (apps/web) across real device
 // profiles in both orientations.
@@ -87,6 +88,7 @@ function probe() {
 }
 
 async function main() {
+  process.env.TMPDIR = ensureRunTmpDir(defaultCaptureDir(`mobile-run-${runStamp()}`));
   let fixture;
   let browser;
   const findings = [];

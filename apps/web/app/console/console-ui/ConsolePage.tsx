@@ -31,7 +31,7 @@ type ConsolePageProps = {
  * context link, one body rhythm. Domain bodies differ inside; the chrome
  * around them does not.
  *
- * Event pages show `행사 / {eventName}` above the H1, linked to the event
+ * Event pages show `행사 / {eventName}` below the H1, linked to the event
  * overview. There is no repeated giant event H1 and no back row: the rail
  * already owns event navigation. Organization pages render no context row.
  *

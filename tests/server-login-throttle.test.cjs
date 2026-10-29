@@ -100,6 +100,14 @@ before(async () => {
      ON CONFLICT (id) DO NOTHING`,
     [ADMIN_EMAIL, hashPassword(ADMIN_PASSWORD)]
   );
+  // Sessions resolve their org from the membership (the authority), so the
+  // fixtures join the legacy org explicitly — same org the migration assigns.
+  await db.query(
+    `INSERT INTO organization_memberships (org_id, account_id, role, active, permissions)
+     VALUES ('org-legacy', 'throttle-victim', 'MANAGER', true, '[]'::jsonb),
+            ('org-legacy', 'throttle-operator', 'AGENCY', true, '[]'::jsonb)
+     ON CONFLICT (org_id, account_id) DO NOTHING`
+  );
   await startServer();
   await resetThrottle();
 });

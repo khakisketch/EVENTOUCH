@@ -153,7 +153,9 @@ test('web-attendee-verification-precedes-signup-and-recovery-without-accounts', 
   // The recovery note stays a quiet footnote; the wording changed with it.
   assert.match(view, /이 티켓은 현재 탭에만 보관됩니다/);
   const event = read('app/event/[slug]/page.tsx');
-  assert.match(event, /이미 신청했다면 · 내 티켓 찾기/);
+  // 표현 고정 갱신(2026-10-25 외부 대면 마감): 조건+행동 한 레이블의 가운데점
+  // 제거. ux-copy — 같은 단어, 390px 줄바꿈 noise 감소. 동작 계약 변경 없음.
+  assert.match(event, /이미 신청했다면 내 티켓 찾기/);
   assert.match(event, /참가자 홈/);
   const home = read('app/event/[slug]/home/page.tsx');
   assert.match(home, /HomeShell/);
@@ -243,7 +245,7 @@ test('web-attendee-home-command-contracts', () => {
   assert.match(messaging, /럭키번호/);
   // The rail renders registry destinations, not literal duplicate routes.
   const shellNav = read('app/console/ConsoleShell.tsx');
-  assert.match(shellNav, /EVENT_PAGE_IDS\.map\(\(pageId\)/);
+  assert.match(shellNav, /EVENT_HUBS\.map\(\(hub\)/);
   assert.match(shellNav, /CONSOLE_PAGES\[pageId\]\.label/);
   assert.match(shellNav, /consolePageHref\(pageId, eventId/);
   const navigation = read('app/console/console-navigation.ts');
@@ -355,11 +357,17 @@ test('web-console-home-reads-bootstrap-before-any-write-paths', () => {
   const login = read('app/login/LoginForm.tsx');
   assert.match(login, /\/staff/);
   assert.match(login, /\/console/);
-  // No public signup by design: accounts are invitation-only, and a
-  // forgotten password goes through the organization owner.
+  // Accounts are invitation-only. A forgotten password goes through the
+  // holder's verified-email self-service first ("이메일+수동 예외"); holders
+  // with no proven channel stay on the organization owner and the separately
+  // decided manual process.
   assert.match(login, /조직 관리자에게 재설정을 요청/);
+  assert.match(login, /이메일로 직접 재설정/);
   const home = read('app/console/ConsoleHome.tsx');
-  assert.match(home, /\/api\/bootstrap/);
+  // Home reads the lightweight directory (never the full bootstrap, never
+  // local storage); event creation stays the only write.
+  assert.match(home, /\/api\/console\/directory/);
+  assert.doesNotMatch(home, /\/api\/bootstrap/);
   assert.doesNotMatch(home, /localStorage/);
   assert.doesNotMatch(home, /sessionStorage/);
   // Event creation is the only write on the home and goes through the
@@ -410,10 +418,12 @@ test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   assert.match(home, /value=\{filter\}/);
   assert.match(home, /FILTERS\.map\(\(item\) =>/);
   assert.match(home, /counts\[item\.id\]/);
-  // Triage: the pending queue outranks the calendar when asked.
+  // Triage: the pending queue outranks the calendar when asked. Counts come
+  // from the directory event summaries, never a client-side roster scan.
   assert.match(home, /승인 대기 있는 행사만/);
   assert.match(home, /needsWork/);
   assert.match(home, /event\.pending > 0/);
+  assert.match(home, /typeof event\.pending === "number" \? event\.pending : 0/);
   assert.match(home, /b\.pending - a\.pending/);
   assert.match(home, /workFilter/);
   assert.doesNotMatch(home, /nextAction|승인 처리하기|현장 보기|이어서 만들기/);
@@ -439,9 +449,11 @@ test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   assert.match(home, /className=\{styles\.eventCardBody\}/);
   assert.match(home, /className=\{styles\.eventCardFoot\}/);
   // The approved directory summary leaves statistics in the event home.
-  // Only a nonempty approval queue earns a small follow-up link.
+  // Only a nonempty approval queue earns a small follow-up link. The count
+  // rides the directory summary (server-counted), never a local scan.
   assert.doesNotMatch(home, /eventMetrics|등록 인원|현재 입장/);
-  assert.match(home, /pending: countPending\(event\.id\)/);
+  assert.match(home, /pending: typeof event\.pending === "number" \? event\.pending : 0/);
+  assert.doesNotMatch(home, /countPending/);
   assert.match(home, /event\.pending > 0 \? \(\s*<div className=\{styles\.eventCardActions\}>/);
   const overview = read('app/console/events/[id]/EventOverview.tsx');
   assert.match(overview, /headingId="event-metrics-heading"/);
@@ -513,13 +525,18 @@ test('web-invite-accept-and-team-reset-cover-invitation-only-accounts', () => {
   assert.match(invitePage, /\/api\/auth\/invitations\//);
   assert.doesNotMatch(invitePage, /localStorage/);
   // Password resets are owner-only, idempotent by command id, and revoke
-  // other sessions; the UI gates on the same permission the server enforces.
-  // Reset and invite dialogs mount the shared shell with caller-owned
-  // dismissal gates; focus mechanics live centrally.
+  // other sessions; the UI gates on the same owner-only rule the server
+  // enforces. team.manage grants no team writes anywhere, so the UI never
+  // consults it; orgPermissions normalizes to [] when missing and only ever
+  // explains. Reset and invite dialogs mount the shared shell with
+  // caller-owned dismissal gates; focus mechanics live centrally.
   const team = read('app/console/team/TeamWorkspace.tsx');
   assert.match(team, /\/api\/auth\/accounts\/\$\{encodeURIComponent\(account\.id\)\}\/password/);
   assert.match(team, /commandId/);
-  assert.match(team, /team\.manage/);
+  assert.doesNotMatch(team, /team\.manage/, "team.manage grants no team writes");
+  assert.match(team, /orgPermissions: Array\.isArray\(account\.orgPermissions\)/u, "missing orgPermissions normalizes to []");
+  assert.match(team, /const isOwner = role === "AGENCY" \|\| mine\?\.orgOwner === true;/u);
+  assert.match(team, /const canManageTeam = isOwner;/u, "reset stays owner-only");
   assert.match(team, /<ConsoleDialog/);
   assert.match(team, /titleId="reset-title"/);
   assert.match(team, /titleId="invite-title"/);
@@ -573,7 +590,7 @@ test('web-participant-status-goes-through-the-operator-command-path', () => {
   // The overview approval CTA lands pre-filtered via ?status=.
   assert.match(list, /URLSearchParams\(window\.location\.search\)/);
   assert.match(list, /styles\.participantIdentity/);
-  assert.match(read('app/console/events/[id]/participants/participants.module.css'), /\.participantIdentity\s*\{/);
+  assert.match(read('app/console/events/[id]/participants/participants.module.css'), /\.participantIdentity(?:\s*,[^{}]*)?\s*\{/);
   assert.match(list, /maskPhone/);
   assert.match(list, /"승인"/);
   assert.match(list, /승인 중/);
@@ -651,12 +668,19 @@ test('web-participant-import-maps-and-reviews-before-the-command-path', () => {
   assert.match(wizard, /양식 CSV/);
   assert.match(wizard, /EVENTOUCH_import_template\.csv/);
   assert.match(wizard, /동의 기록은 가져오기만으로 생성하지 않습니다/);
-  assert.match(wizard, /canManage/);
+  // The wizard opens on the participants grant and names the missing grant
+  // when it is absent; reads (steps, template, back link) never gate.
+  assert.match(wizard, /canWriteImport/);
+  assert.match(wizard, /canWriteEvent\(\s*\{\s*role: gate\.role, userId: gate\.userId, memberships: gate\.memberships, eventId\s*\},\s*"participant\.import"\s*\)/u);
+  assert.match(wizard, /가져오기 권한이 없습니다/);
   assert.doesNotMatch(wizard, /localStorage/);
   assert.doesNotMatch(wizard, /sessionStorage/);
   // Excel workbooks are read in the browser (first sheet, header row) and
-  // flow into the same column mapping and validation as CSV.
-  assert.match(wizard, /from "xlsx"/);
+  // flow into the same column mapping and validation as CSV. The parser
+  // loads lazily only for an actual Excel file: CSV/TXT/template flows
+  // never pay for it, and no new dependency is added.
+  assert.doesNotMatch(wizard, /from "xlsx"/, "no static xlsx import remains");
+  assert.match(wizard, /await import\("xlsx"\)/u);
   assert.match(wizard, /parseWorkbook/);
   assert.match(wizard, /\.xlsx\?/);
 });
@@ -687,8 +711,12 @@ test('web-messaging-uses-operator-commands-and-keeps-ticket-bearers-out-of-histo
   assert.match(messaging, /visibleRecipients/);
   assert.match(messaging, /다시 불러오기/);
   // Visible add/remove preserves other views; explicit full clear is separate.
-  assert.match(messaging, />표시 추가<\/button>/);
-  assert.match(messaging, />표시 해제<\/button>/);
+  // One tri-state native checkbox drives the visible set (check adds the
+  // visible recipients by union, uncheck removes only them); the full clear
+  // stays its own explicit control.
+  assert.match(messaging, /표시 \{visibleRecipients\.length\}명 모두 선택/u);
+  assert.match(messaging, /node\.indeterminate = someVisibleSelected/u);
+  assert.match(messaging, /setAllRecipients\(event\.target\.checked, visibleRecipients\)/u);
   assert.match(messaging, /id="recipient-clear-all"/);
   assert.match(messaging, /\[\.\.\.new Set\(\[\.\.\.current, \.\.\.ids\]\)\]/);
   assert.match(messaging, /eventouch:shell-reload/);
@@ -731,36 +759,41 @@ test('web-console-shell-keeps-decided-navigation-and-clients-read-only', () => {
   assert.match(navigation, /rewards: \{ label: "경품"/);
   assert.match(navigation, /return `\$\{base\}\/content`/);
   assert.match(navigation, /return `\$\{base\}\/rewards`/);
-  assert.match(shell, /EVENT_PAGE_IDS\.map\(\(pageId\)/);
+  // Five hubs own the rail: the active hub expands its pages, the other four
+  // stay one row, and the phone menu carries the same map without a
+  // horizontal strip.
+  assert.match(shell, /EVENT_HUBS\.map\(\(hub\)/);
   assert.match(shell, /consolePageHref\(pageId, eventId/);
-  assert.match(shell, /features\.includes\("reward"\)/);
+  assert.match(shell, /eventFeatures\.includes\("reward"\)/);
   assert.match(shell, /currentEventMeta/);
-  assert.match(shell, /renderEventSubnav/);
+  assert.match(shell, /renderEventHubs/);
+  assert.match(shell, /renderMobileEventMenu/);
   assert.match(globalStyles, /\.nav-event-card/);
   assert.match(globalStyles, /\.nav-event-pick/);
+  assert.match(globalStyles, /\.console-hub-subnav/);
+  assert.match(globalStyles, /\.console-menu-subnav/);
+  assert.doesNotMatch(shell, /EVENT_PAGE_IDS\.map\(\(pageId\)/, 'the flat twelve-row rail is gone');
+  assert.doesNotMatch(shell, /mobile-event-nav/, 'the horizontal event strip is gone; the menu carries the map');
+  assert.doesNotMatch(globalStyles, /\.mobile-event-nav\s*\{/, 'no strip styles remain');
   assert.doesNotMatch(shell, /mobile-primary-nav/, 'global destinations no longer occupy a persistent bottom bar');
   assert.match(shell, /aria-expanded=\{[^}]*\}/, 'top menu exposes its disclosure state');
   assert.match(shell, /행사 목록/, 'there is an explicit list escape beyond the logo');
-  assert.match(shell, /mobile-event-nav/);
-  assert.match(shell, /mobileEventBranchRef/);
-  assert.match(shell, /revealCurrentDestination/);
   assert.match(shell, /aria-current=\{isHome \? "page" : isEventPath \? "location"/);
   assert.match(shell, /mobileOperatorTriggerRef\.current\?\.contains\(target\)/);
   assert.doesNotMatch(globalStyles, /\.mobile-primary-nav\s*\{[^}]*position:\s*fixed;/s, 'no replacement bottom dock');
   assert.match(globalStyles, /safe-area-inset-bottom/);
-  assert.match(globalStyles, /container-type:\s*inline-size/);
-  assert.match(globalStyles, /@container\s*\(max-width:\s*340px\)/);
-  assert.match(globalStyles, /\.nav-event-branch \.console-subnav-item\.active::before/);
-  assert.match(globalStyles, /scroll-snap-type:\s*x proximity/);
   // Exactly one account trigger per viewport: the two-class hide rule must
   // beat .operator-block's later display:flex on desktop, and the mobile
   // rule must win it back inside the media query.
   assert.match(globalStyles, /\.operator-block\.operator-mobile-trigger\s*\{[^}]*display:\s*none/s);
   assert.match(globalStyles, /\.operator-block\.operator-mobile-trigger\s*\{[^}]*grid-area:\s*profile/s);
   const clients = read('app/console/clients/ClientsList.tsx');
-  assert.match(clients, /\/api\/bootstrap/);
-  // Client records live on the organization REST path (agency-only on the
-  // server), never the event command path; files travel the file routes.
+  // Clients read the lightweight directory through the shared transport
+  // (imported under its fetch name); records live on the organization REST
+  // path (agency-only on the server), never the event command path.
+  assert.match(clients, /import \{ consoleFetch as fetch \} from "\.\.\/\.\.\/\.\.\/lib\/console-api";/u);
+  assert.match(clients, /fetch\("\/api\/console\/directory"/u);
+  assert.doesNotMatch(clients, /fetch\("\/api\/bootstrap"/u);
   assert.match(clients, /\/api\/clients/);
   assert.match(clients, /method:\s*"POST"/i);
   assert.doesNotMatch(clients, /\/commands/);
@@ -779,8 +812,14 @@ test('web-retry-keeps-one-command-id-per-attempt-on-signup-and-scan', () => {
   // A lost response must replay the same request id, or the retry becomes a
   // second registration / a confusing duplicate scan.
   const register = read('app/event/[slug]/register/RegisterForm.tsx');
-  assert.match(register, /commandIdRef\.current/);
-  assert.match(register, /useRef<string \| null>/);
+  // The immutable body contains both the ID and the original input; keeping
+  // only an ID could replay an old ticket against edited personal details.
+  assert.match(register, /attemptRef = useRef<\{ body: Record<string, unknown> \} \| null>/);
+  assert.match(register, /body: JSON\.stringify\(attemptRef\.current\.body\)/);
+  assert.match(register, /disabled=\{submitting \|\| retryPending\}/);
+  assert.match(register, /retryPending \|\| !rejected/);
+  assert.match(register, /addEventListener\("beforeunload", warnBeforeLeaving\)/);
+  assert.match(register, /crypto\.getRandomValues/);
   const staff = read('app/staff/StaffEventWork.tsx');
   assert.match(staff, /pendingScanIdRef\.current/);
   // A pending scan belongs to one ticket + assignment, never the next person
@@ -883,6 +922,20 @@ test('web-display-honors-the-operator-selection-from-the-public-projection', () 
   assert.match(board, /stale/);
   assert.match(board, /연결 확인 중/);
   assert.match(board, /display-idle/);
+});
+
+test('web-display-failed-first-load-and-stale-offer-manual-recovery', () => {
+  // 현장 마감 사유: 첫 로드 실패는 자동 폴링만으로는 화면 앞에 선 스태프가
+  // 할 일이 없으므로 '다시 시도'로 즉시 회복한다. stale은 마지막 화면 유지
+  // 그대로 두고 '새로고침'으로 같은 즉시 회복을 준다. idle도 선택 화면과
+  // 같은 푸터를 써서 idle→선택 전환에 틀이 흔들리지 않는다.
+  const board = read('app/screen/[slug]/DisplayBoard.tsx');
+  assert.match(board, /aria-label="화면 오류"/);
+  assert.match(board, /onClick=\{refreshNow\}>\s*다시 시도/);
+  assert.match(board, /onClick=\{refreshNow\}>\s*새로고침/);
+  assert.match(board, /\[slug, pollDelay, retryTick\]/);
+  const idle = board.slice(board.indexOf('display-board display-idle'));
+  assert.match(idle, /display-footer/);
 });
 
 test('web-staff-booth-work-uses-the-booth-visit-command-and-stamp-mode', () => {
@@ -1049,10 +1102,10 @@ test('web-settings-uses-the-preparation-command-set', () => {
   // Phone-verification opt-in rides the basics form into event.update.
   assert.match(settings, /verificationRequired/);
   assert.match(settings, /참가 신청 전 연락처 인증 필요/);
-  // The shell renders every live event destination from the registry, not
-  // literal duplicate routes.
+  // The shell renders every live event destination from the registry hubs,
+  // not literal duplicate routes.
   const shell = read('app/console/ConsoleShell.tsx');
-  assert.match(shell, /EVENT_PAGE_IDS\.map\(\(pageId\)/);
+  assert.match(shell, /EVENT_HUBS\.map\(\(hub\)/);
   assert.match(shell, /CONSOLE_PAGES\[pageId\]\.label/);
   assert.match(shell, /consolePageHref\(pageId, eventId/);
   const navigation = read('app/console/console-navigation.ts');
@@ -1097,16 +1150,15 @@ test('web-overview-shows-calendar-period-registration-and-entry-counts', () => {
     assert.match(overview, new RegExp(label));
   }
   // Module-level helper keeps the real aggregation and the full definitions
-  // in one place; preparation pairs readiness with the period section, and
-  // the empty preparing recent stays a compact row, not a full section.
-  assert.match(overview, /function PeriodDetails\(\{ rows \}/u);
-  assert.match(overview, /<PeriodDetails rows=\{periodRows\} \/>/u);
-  assert.match(overview, /peerGrid/u);
-  assert.match(overview, /headingId="event-period-heading"/u);
+  // in one place; the period table/chart is a disclosure inside the metrics
+  // section, and the empty preparing recent stays a compact row.
+  assert.match(overview, /function PeriodDetails\(\{ rows, applications, entries \}: \{/u);
+  assert.match(overview, /<PeriodDetails rows=\{periodRows\} applications=\{overview\.trendApplications\} entries=\{overview\.trendEntries\} \/>/u);
+  assert.match(overview, /analysisDetails/u);
   assert.match(overview, /recentCompact/u);
   assert.match(overview, /recentCompactEmpty/u);
   const css = read('app/console/events/[id]/event-overview.module.css');
   assert.match(css, /\.periodTable\s*\{/);
-  assert.match(css, /\.peerGrid\s*\{/u);
+  assert.match(css, /\.analysisDetails\s*\{/u);
   assert.match(css, /\.recentCompact\s*\{/u);
 });

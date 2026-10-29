@@ -16,6 +16,7 @@ const {
   insertMembership,
   sessionCookie,
   requestJson,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 const { drainMessageOutbox } = require('../server/message-outbox');
 
@@ -65,7 +66,7 @@ async function createFixture({ participants = [] } = {}) {
   fixtureNumber += 1;
   const id = `outbox-${fixtureNumber}-${suffix}`;
   const slug = `outbox-${fixtureNumber}-${suffix}`;
-  await insertEvent(harness.database, {
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,
     id,
     slug,
     payload: {
@@ -136,7 +137,7 @@ before(async () => {
     ['agency', 'AGENCY', '운영사 관리자'],
     ['manager', 'MANAGER', '행사 매니저'],
   ]) {
-    await insertAccount(harness.database, {
+    await insertAccount(harness.database, {orgId: LEGACY_ORG,
       id: accountIds[key], role, name, email: `${accountIds[key]}@example.test`,
     });
     cookies[key] = await sessionCookie(harness, accountIds[key]);
@@ -173,7 +174,7 @@ test('retry-with-a-working-provider-sends-and-settles-the-outbox-row', async () 
   // The outcome is recorded, so no work may be left queued.
   assert.deepEqual(await outboxRows(), []);
   const health = await requestJson(harness.baseUrl, '/api/health');
-  assert.equal(health.json.outboxPending, 0);
+  assert.equal(Object.hasOwn(health.json, 'outboxPending'), false, 'public health never reports tenant queue activity');
 });
 
 test('retry-with-a-rejecting-provider-records-failure-and-leaves-no-queued-work', async () => {

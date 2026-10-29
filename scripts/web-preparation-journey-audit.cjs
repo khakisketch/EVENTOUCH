@@ -6,18 +6,20 @@ for (const key of ['SOLAPI_API_KEY', 'SOLAPI_API_SECRET', 'SOLAPI_SENDER', 'SOLA
 process.env.EVENTOUCH_SMS_MOCK = '1';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { prepareCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = require('./capture-dir.cjs');
 const path = require('node:path');
 const axeSource = require('axe-core').source;
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const BEFORE = process.argv.includes('--before');
-const ROOT = process.env.EVENTOUCH_CAPTURE_ROOT || '/tmp/opencode/eventouch-captures/round-preparation';
+const ROOT = process.env.EVENTOUCH_CAPTURE_ROOT || defaultCaptureDir(`round-preparation-${runStamp()}`);
 const OUT = path.join(ROOT, BEFORE ? 'before' : 'after');
 const OPERATOR_CAP = 12;
 const KEYBOARD_CAP = 40;
 
 async function main() {
-  fs.mkdirSync(OUT, { recursive: true });
+  prepareCaptureDir(OUT);
+  process.env.TMPDIR = ensureRunTmpDir(OUT);
   const checks = [], renders = [], journeys = [], errors = [], states = [];
   const check = (name, ok, detail = null) => {
     checks.push({ name, ok: Boolean(ok), detail });
@@ -32,7 +34,7 @@ async function main() {
       const id = `${f.eventId}-preparation-${width}`;
       const base = `/console/events/${id}`;
       const slug = `preparation-${width}-${f.suffix.slice(0, 12)}`;
-      await f.helpers.insertEvent(f.harness.database, { id, slug,
+      await f.helpers.insertEvent(f.harness.database, { orgId: f.helpers.LEGACY_ORG, id, slug,
         payload: { id, slug, name: '모집 준비 흐름 검증 행사', stage: 'DRAFT', date: '2027-01-16', start: '09:00', end: '17:00', capacity: 100, features: [] },
         workspace: f.helpers.emptyWorkspace(),
       });
@@ -212,7 +214,7 @@ async function main() {
         await page.unroute(`**/api/events/${id}/commands`);
         await capture('09-response-loss-recovered');
         await page.addScriptTag({ content: axeSource });
-        const violations = await page.evaluate(async () => (await axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa'] } })).violations.filter(v => ['serious', 'critical'].includes(v.impact)).map(v => ({ id: v.id, impact: v.impact })));
+        const violations = await page.evaluate(async () => (await axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa'] } })).violations.filter(v => ['serious', 'critical'].includes(v.impact)).map(v => ({ id: v.id, impact: v.impact, nodes: v.nodes.map(n => ({ target: n.target, html: n.html, failureSummary: n.failureSummary })) })));
         check(`${width} settings axe serious critical zero`, violations.length === 0, violations);
       }
       const eventRow = await f.harness.database.query('SELECT payload FROM events WHERE id=$1', [id]);
@@ -224,7 +226,7 @@ async function main() {
         // 1000 people, set waitlist/pending, then test unlimited/long capacity.
         const boundaryId = `${id}-boundary`;
         const boundarySlug = `boundary-${f.suffix.slice(0, 12)}`;
-        await f.helpers.insertEvent(f.harness.database, { id: boundaryId, slug: boundarySlug,
+        await f.helpers.insertEvent(f.harness.database, { orgId: f.helpers.LEGACY_ORG, id: boundaryId, slug: boundarySlug,
           payload: { id: boundaryId, slug: boundarySlug, name: '긴 행사 이름과 대기 명단 정원 표시 경계 검증', stage: 'READY', date: '2027-01-16', start: '09:00', end: '17:00', capacity: 0, features: [] }, workspace: f.helpers.emptyWorkspace() });
         await f.helpers.insertMembership(f.harness.database, f.manager.id, boundaryId, ['all']);
         const setup = async (command, payload) => {
@@ -264,7 +266,7 @@ async function main() {
       let index = 0;
       for (const context of browser.contexts()) for (const page of context.pages()) {
         await page.screenshot({ path: `${OUT}/failure-${index}.png`, fullPage: true }).catch(() => {});
-        fs.writeFileSync(`${OUT}/failure-${index++}.txt`, `${page.url()}\n${await page.locator('body').innerText().catch(() => '')}`);
+        fs.writeFileSync(`${OUT}/failure-${index++}.txt`, `${page.url()}\n${await page.locator('body').innerText().catch(() => '')}`, { mode: 0o600 });
       }
     }
     throw e;
@@ -274,7 +276,7 @@ async function main() {
       environment: 'isolated API + random PostgreSQL schema; real commands; anonymous public context; no deployed data',
       caps: { operator: OPERATOR_CAP, participant: 10, keyboard: KEYBOARD_CAP },
       measurement: 'Each click/fill/key is one operation. Initial goto/login excluded. Scroll gestures are unmeasured (null), not zero. No task time or comprehension claims.',
-      checks, journeys, renders, states, errors, failure: failure || null }, null, 2));
+      checks, journeys, renders, states, errors, failure: failure || null }, null, 2), { mode: 0o600 });
     if (browser) await browser.close();
     if (f) await f.close();
   }

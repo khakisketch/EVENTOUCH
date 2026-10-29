@@ -2,20 +2,47 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import CameraScan from "../CameraScan";
 import QRCode from "react-qr-code";
 import { loginHrefForLocation } from "../auth-redirect";
 import { buildStaffScopes, resolveStaffScopeId, type StaffScope } from "./staff-scope";
+import {
+  buildCorrectionPending,
+  isCorrectionLocked,
+  type CorrectionPending,
+} from "./correction-retry";
+import {
+  describeWorkingOrg,
+  isSelectionRequiredError,
+  resolveStaffLeave,
+} from "./staff-org-guard";
+import {
+  ensureOperatorContext,
+  operatorFetch,
+} from "../../lib/operator-context";
+import { OrganizationContextNotice } from "../OrganizationSwitcher";
+import StaffAccountMenu from "./StaffAccountMenu";
+import { CopyIcon } from "../console/console-ui/ConsoleIcons";
+import { useOperatorContextSnapshot } from "./use-operator-context";
 import prizeStyles from "./staff-event-work.module.css";
+
+// The scanner (and its decoder) loads only when the operator opens it: the
+// field screen never pays for jsQR until the first scan.
+const CameraScan = dynamic(() => import("../CameraScan"), {
+  ssr: false,
+  loading: () => <p className="loading-state" role="status">카메라를 준비하고 있습니다.</p>,
+});
 
 type DeskReward = { id: string; name: string; status: string; method: string };
 type RewardParticipant = { id: string; name: string; company: string };
 
+type ScanPlace = { task: "desk" | "booth"; placeName: string; actionLabel: string };
+
 type ScanResult =
   | { kind: "idle" }
-  | { kind: "ok"; participantId: string; name: string; action: string; reentry: boolean; booth?: string }
-  | { kind: "failed"; message: string };
+  | { kind: "ok"; participantId: string; name: string; action: string; reentry: boolean; booth?: string; place: ScanPlace }
+  | { kind: "failed"; message: string; uncertain: boolean; place: ScanPlace };
 
 type Nametag = {
   name: string;
@@ -74,6 +101,13 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   const [result, setResult] = useState<ScanResult>({ kind: "idle" });
   const [correctReason, setCorrectReason] = useState("");
   const [correctNotice, setCorrectNotice] = useState<string | null>(null);
+  // An unconfirmed correction keeps its full identity: event, assignment,
+  // record, payload, and command id. While the outcome is unknown the reason
+  // field locks and the desk/task/kiosk/scan controls lock with it, so the
+  // pending request can never be silently swapped underneath the retry.
+  const [correctUnknown, setCorrectUnknown] = useState(false);
+  const correctingRef = useRef(false);
+  const pendingCorrectRef = useRef<CorrectionPending | null>(null);
   const [boothCopyNotice, setBoothCopyNotice] = useState<string | null>(null);
   // Copy feedback for the ticket/booth code typed into the scan form. Kept
   // separate from the SELF-mode QR copy notice so each message stays next to
@@ -103,7 +137,32 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   // The primary next step after a successful scan, focused on success so
   // keyboard and screen-reader users land on the next action.
   const nextParticipantRef = useRef<HTMLButtonElement | null>(null);
+  const scanInputRef = useRef<HTMLDivElement | null>(null);
+  const scanFailureRef = useRef<HTMLElement | null>(null);
+  const retryFailedRef = useRef<HTMLButtonElement | null>(null);
+  const scanFocusAtSubmitRef = useRef<Element | null>(null);
+  const scanEditRevisionRef = useRef(0);
+  const scanEditAtSubmitRef = useRef(0);
   scopeRef.current = scope;
+  // Shared operator context: the active organization, role, and whether
+  // another tab changed the organization underneath this screen.
+  const orgSnapshot = useOperatorContextSnapshot();
+  const orgChanged = orgSnapshot.changed;
+  // The shared switcher dispatches this only after an explicitly confirmed,
+  // successful select, immediately before the native role-home navigation.
+  // From that point our own beforeunload warnings would only duplicate the
+  // browser prompt — suppress them. Nothing is cleared here: the result is
+  // known and the navigation owns the rest.
+  const confirmedExitRef = useRef(false);
+  useEffect(() => {
+    const markConfirmedExit = () => {
+      confirmedExitRef.current = true;
+    };
+    window.addEventListener("eventouch:organization-confirmed-exit", markConfirmedExit);
+    return () => {
+      window.removeEventListener("eventouch:organization-confirmed-exit", markConfirmedExit);
+    };
+  }, []);
 
   function focusTicketField() {
     window.requestAnimationFrame(() => {
@@ -116,8 +175,18 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   // resent, and folds the scan input away: the result block next to it owns
   // the "다음 참가자" step. That step restores the input for the next person.
   function prepareNextParticipant() {
+    if (scanBusyRef.current) return;
     setTicket("");
     setTicketCopyNotice(null);
+    setResult({ kind: "idle" });
+    focusTicketField();
+  }
+
+  // A failed scan keeps the typed code in place: the operator pressed
+  // "다시 시도" because the same ticket should go again, not because the
+  // input was wrong. Clearing it here would force a retype of a long code
+  // while the line waits. Only a success folds the input away.
+  function retryFailedScan() {
     setResult({ kind: "idle" });
     focusTicketField();
   }
@@ -137,7 +206,89 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     }
   }
 
-  async function load(silent = false) {
+  // Organization-switch gate for this screen: busy or uncertain writes block
+  // even if the operator would confirm, so an unconfirmed receipt can never
+  // move into another organization. Unsaved input asks once with the
+  // existing wording; cancel preserves every draft, selection, and retained
+  // id in place. Recovery itself is explicit in the parent notice/switcher.
+  // The block reads this screen's own in-flight/retained refs — not the
+  // adapter's uncertain registry, which also retains definitively answered
+  // receipts as a cross-version rebind guard.
+  function staffLeaveState(): {
+    busyWrites: boolean;
+    uncertainWrites: boolean;
+    unsavedDraft: boolean;
+  } {
+    return {
+      busyWrites:
+        submitting ||
+        scanBusyRef.current ||
+        correcting ||
+        correctingRef.current ||
+        rewardLookupLoading ||
+        rewardCollectingId !== null,
+      uncertainWrites:
+        correctUnknown ||
+        pendingCorrectRef.current !== null ||
+        pendingScanIdRef.current.size > 0 ||
+        pendingRewardCommandsRef.current.size > 0,
+      unsavedDraft:
+        ticket.trim() !== "" ||
+        correctReason.trim() !== "" ||
+        rewardLookupTicket.trim() !== "" ||
+        cameraOpen ||
+        nametag !== null,
+    };
+  }
+
+  function confirmLeaveStaff(): boolean {
+    const verdict = resolveStaffLeave(staffLeaveState());
+    if (!verdict.allow) return false;
+    if (verdict.needsConfirm) {
+      return window.confirm("입력 중인 내용이 있습니다. 조직을 전환하면 이 화면의 입력이 유지되지 않을 수 있습니다. 그래도 전환하시겠습니까?");
+    }
+    return true;
+  }
+
+  // Account-page gate for this screen: the same verdict inputs as the
+  // organization switch, but the confirm names leaving for the account page
+  // — never an organization switch. Busy or uncertain work blocks silently
+  // (the in-flight or unknown-verdict work is visible on screen); a draft
+  // asks once with the account wording; cancel keeps everything.
+  function confirmLeaveAccountPage(): boolean {
+    const verdict = resolveStaffLeave(staffLeaveState());
+    if (!verdict.allow) return false;
+    if (verdict.needsConfirm) {
+      return window.confirm("입력 중인 내용이 있습니다. 내 계정 페이지로 이동하면 이 화면의 입력이 유지되지 않을 수 있습니다. 그래도 이동하시겠습니까?");
+    }
+    return true;
+  }
+
+  // Live at-risk check for navigation warnings: retained receipts (refs) plus
+  // the current draft/selection state.
+  function staffWorkAtRisk(): boolean {
+    return (
+      pendingCorrectRef.current !== null ||
+      pendingScanIdRef.current.size > 0 ||
+      pendingRewardCommandsRef.current.size > 0 ||
+      submitting ||
+      correcting ||
+      ticket.trim() !== "" ||
+      correctReason.trim() !== "" ||
+      rewardLookupTicket.trim() !== "" ||
+      cameraOpen
+    );
+  }
+
+  function orgLineText(): string {
+    return describeWorkingOrg(
+      orgSnapshot.context,
+      orgSnapshot.loading,
+      !orgSnapshot.context && !orgSnapshot.loading && isSelectionRequiredError(orgSnapshot.error)
+    );
+  }
+
+  async function load(silent = false, signal?: AbortSignal) {
     // A post-scan refresh must not unmount the result the operator just
     // read: only the first load takes over the screen.
     if (!silent) {
@@ -146,7 +297,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     }
     setLoadError(null);
     try {
-      const res = await fetch("/api/bootstrap", { cache: "no-store" });
+      const res = await operatorFetch("/api/bootstrap", { cache: "no-store", signal });
       if (res.status === 401) {
         router.push(
           loginHrefForLocation(window.location.pathname, window.location.search)
@@ -237,6 +388,8 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   useEffect(() => {
     pendingScanIdRef.current.clear();
     pendingRewardCommandsRef.current.clear();
+    pendingCorrectRef.current = null;
+    setCorrectUnknown(false);
     setRewardTarget(null);
     setTargetRewards([]);
     setRewardDataLoaded(false);
@@ -244,6 +397,11 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     setLastScannedTicket("");
     setRewardError(null);
     setRewardNotice(null);
+    // Seed the shared organization context; the bootstrap below stays the
+    // assignment source and the server preserves its shape.
+    // Selection and transport failures already surface through the shared
+    // context banner, not as an unrelated unhandled runtime exception.
+    void ensureOperatorContext().catch(() => {});
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetEventId]);
@@ -268,13 +426,57 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       window.removeEventListener("afterprint", liftPrintFlag);
     };
   }, [nametag]);
+  // A refresh or tab close during an unconfirmed correction drops the
+  // retained id: warn with the platform dialog while the outcome is unknown.
+  // In-app back navigation gets its own confirm on the back link below.
+  useEffect(() => {
+    if (!correctUnknown) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      // After an explicitly confirmed, successful organization switch the
+      // navigation owns the exit: never double-prompt on top of it.
+      if (confirmedExitRef.current) return;
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => {
+      window.removeEventListener("beforeunload", warn);
+    };
+  }, [correctUnknown]);
+  // Same for an other-tab organization change with work at risk: the
+  // retained receipts and drafts live in this tab only. Console draft
+  // guards are separate; the staff-local dialog stays.
+  useEffect(() => {
+    if (!orgChanged) return;
+    const warnChanged = (event: BeforeUnloadEvent) => {
+      // Suppressed after a confirmed exit exactly like the correction
+      // warning above: the successful switch owns the navigation.
+      if (confirmedExitRef.current) return;
+      if (
+        pendingCorrectRef.current !== null ||
+        pendingScanIdRef.current.size > 0 ||
+        pendingRewardCommandsRef.current.size > 0 ||
+        ticket.trim() !== "" ||
+        correctReason.trim() !== "" ||
+        rewardLookupTicket.trim() !== ""
+      ) {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener("beforeunload", warnChanged);
+    return () => {
+      window.removeEventListener("beforeunload", warnChanged);
+    };
+  }, [orgChanged, ticket, correctReason, rewardLookupTicket]);
   // The booth QR is shown to the participant, so it has to be fully on
   // screen: scroll it into view whenever a booth is picked.
+  // Booth QR scroll respects reduced motion: a smooth glide is decoration,
+  // not the task, and must not move under a motion-sensitive operator.
   useEffect(() => {
     if (!boothId || task !== "booth") return;
     const node = boothQrRef.current;
     if (!node) return;
-    node.scrollIntoView({ block: "center", behavior: "smooth" });
+    const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    node.scrollIntoView({ block: "center", behavior: calm ? "auto" : "smooth" });
   }, [boothId, task]);
 
   // After a successful scan the next step is the "다음 참가자" button in the
@@ -282,27 +484,62 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   // input. Failures keep focus where the retry happens.
   useEffect(() => {
     if (result.kind !== "ok") return;
+    const active = document.activeElement;
+    // Do not pull someone back from another task while a response is late.
+    // The removed scan input leaves body focused, which is safe to recover.
+    if (active && active !== document.body && active !== scanFocusAtSubmitRef.current && !scanInputRef.current?.contains(active)) return;
     const node = nextParticipantRef.current;
     if (node) node.focus();
   }, [result]);
 
-  if (loading) return <p className="loading-state" role="status">업무 정보를 불러오고 있습니다.</p>;
-  if (missingAssignment || (!scope && loadError)) {
+  // A completed scan request must not leave its result below a short screen.
+  // Only move focus when the operator is still in the scan task (or the
+  // camera has just closed); never interrupt work they deliberately moved to.
+  useEffect(() => {
+    if (result.kind !== "failed") return;
+    const active = document.activeElement;
+    if (scanEditRevisionRef.current !== scanEditAtSubmitRef.current) return;
+    if (active && active !== document.body && (active !== scanFocusAtSubmitRef.current || !scanInputRef.current?.contains(active))) return;
+    scanFailureRef.current?.scrollIntoView({ block: "nearest", behavior: "instant" });
+    retryFailedRef.current?.focus({ preventScroll: true });
+  }, [result]);
+
+  if (loading) {
     return (
-      <section className="staff-workspace state-panel">
-        <p role="alert">{loadError ?? "이 행사에 대한 업무 배정이 없습니다. 운영자에게 문의하세요."}</p>
-        <p>
-          <button type="button" className="button button-secondary" onClick={() => load()}>
-            다시 불러오기
-          </button>{" "}
-          <Link className="button button-secondary" href="/staff">
-            내 업무로
-          </Link>
-        </p>
-      </section>
+      <>
+        <StaffAccountMenu confirmLeave={confirmLeaveStaff} confirmLeaveAccount={confirmLeaveAccountPage} />
+        <p className="loading-state" role="status">업무 정보를 불러오고 있습니다.</p>
+      </>
     );
   }
-  if (!scope) return <p className="loading-state">배정된 업무가 없습니다.</p>;
+  if (missingAssignment || (!scope && loadError)) {
+    return (
+      <>
+        <StaffAccountMenu confirmLeave={confirmLeaveStaff} confirmLeaveAccount={confirmLeaveAccountPage} />
+        <p className={prizeStyles.orgLine}>{orgLineText()}</p>
+        {orgChanged ? <OrganizationContextNotice confirmLeave={confirmLeaveStaff} /> : null}
+        <section className="staff-workspace state-panel">
+          <p role="alert">{loadError ?? "이 행사에 대한 업무 배정이 없습니다. 운영자에게 문의하세요."}</p>
+          <p>
+            <button type="button" className="button button-secondary" onClick={() => load()}>
+              다시 불러오기
+            </button>{" "}
+            <Link className="button button-secondary" href="/staff">
+              내 업무로
+            </Link>
+          </p>
+        </section>
+      </>
+    );
+  }
+  if (!scope) {
+    return (
+      <>
+        <StaffAccountMenu confirmLeave={confirmLeaveStaff} confirmLeaveAccount={confirmLeaveAccountPage} />
+        <p className="loading-state">배정된 업무가 없습니다.</p>
+      </>
+    );
+  }
 
   function clearRewardPanel() {
     setRewardTarget(null);
@@ -321,6 +558,12 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     ? activeScope.assignments.find((item) => item.targetId === deskId) ?? null
     : activeScope.boothAssignments.find((item) => item.targetId === boothId) ?? null;
   const selectedDesk = activeScope.desks.find((desk) => desk.id === deskId) ?? null;
+  // The SELF booth QR is shown to the participant, so its visible caption
+  // names the booth: with several booths on one screen the wrong code is a
+  // one-tap mistake the camera cannot catch.
+  const selectedBooth = activeTask === "booth"
+    ? activeScope.booths.find((booth) => booth.id === boothId) ?? null
+    : null;
   const isExitDesk = activeTask === "desk" && selectedDesk?.action === "OUT";
   // In the SELF booth task the staff shows a QR instead of scanning one, so
   // the scan input would be empty. An empty sticky input still floats over
@@ -339,25 +582,74 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   const scanHint = !ready
     ? activeTask === "desk" ? "데스크를 먼저 선택하세요." : "운영 중인 부스를 먼저 선택하세요."
     : "카메라로 QR을 스캔하거나 티켓 코드를 입력하세요.";
+  // Operating context at the action: after any scroll, the operator still
+  // sees which desk/booth and action the scan below will commit to. Shown
+  // only when the scan is actionable (ready + selected); the select and the
+  // direction hint stay the single sources otherwise.
+  const scanContext = !ready
+    ? null
+    : activeTask === "desk"
+      ? (selectedDesk ? `현재 ${selectedDesk.name} · ${selectedDesk.action === "OUT" ? "퇴장" : "입장"}` : null)
+      : (selectedBooth ? `현재 ${selectedBooth.name} · 부스 인증` : null);
+  // The scan input owns exactly one context line: the commit target when
+  // actionable, otherwise the missing-selection guidance (a degenerate
+  // ready-without-selection falls back to the how-to). It stays mounted in
+  // the failed state too, so the input always names where the next submit
+  // will go — separate from the failed verdict's request snapshot below.
+  // The id stays mounted with the input so the camera button and code field
+  // descriptors resolve.
+  const scanLine = scanContext ?? scanHint;
+  // While a correction is in flight or unconfirmed, the desk, task, kiosk,
+  // and scan controls lock so the retained identity cannot be silently
+  // swapped underneath the retry. The retry control itself stays enabled.
+  const correctionLocked = isCorrectionLocked(correcting, correctUnknown);
+  // An other-tab organization change locks new writes synchronously while
+  // every draft, ticket, selection, record, and retained id stays in place.
+  // No automatic navigation or role-home redirect happens; the notice above
+  // the work body owns the explicit recovery. The unconfirmed-correction
+  // retry keeps resolving through the frozen request organization, never
+  // switching the old receipt into the new organization.
+  const writeLocked = correctionLocked || orgChanged;
 
   async function submitTicket(code: string) {
     const activeAssignment = assignment;
-    if (scanBusyRef.current || submitting || !activeAssignment || !code.trim()) return;
+    // Synchronous write lock: no new scan starts while a correction is
+    // unresolved or another tab changed the organization.
+    if (scanBusyRef.current || submitting || writeLocked || !activeAssignment || !code.trim()) return;
+    scanFocusAtSubmitRef.current = document.activeElement;
+    scanEditAtSubmitRef.current = scanEditRevisionRef.current;
     scanBusyRef.current = true;
     setSubmitting(true);
+    // Closing an already-open camera also prevents a late detection from
+    // replacing the ticket whose request is currently being resolved.
+    setCameraOpen(false);
     setResult({ kind: "idle" });
     setTicketCopyNotice(null);
     clearRewardPanel();
     // Bind a retry to the exact ticket AND desk/booth assignment. A gateway
     // error can happen after commit; a different person's scan is not a retry.
     const isDesk = activeTask === "desk";
+    // Request-bound location: the verdict below names the desk/booth this
+    // request committed to, never the currently selected value. Any later
+    // desk/booth/task change clears the result (see selectors below), so a
+    // stale name can never stick to a previous verdict — including an
+    // uncertain retry after the operator picked another desk or a late
+    // response that lands after the selection moved.
+    const requestPlace: ScanPlace = isDesk
+      ? { task: "desk", placeName: selectedDesk?.name ?? "", actionLabel: selectedDesk?.action === "OUT" ? "퇴장" : "입장" }
+      : { task: "booth", placeName: selectedBooth?.name ?? "", actionLabel: "부스 인증" };
     const payload = isDesk ? { deskId, ticket: code.trim() } : { boothId, ticket: code.trim() };
     const attempt = JSON.stringify([activeScope.eventId, activeAssignment.id, activeTask, payload]);
     const commandId = pendingScanIdRef.current.get(attempt) ?? randomCommandId();
     pendingScanIdRef.current.set(attempt, commandId);
+    // Bound the temporary editing lock even when the network stops responding.
+    // An abort never proves failure: the retained command ID is used to retry.
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
     try {
-      const res = await fetch(`/api/events/${encodeURIComponent(activeScope.eventId)}/commands`, {
+      const res = await operatorFetch(`/api/events/${encodeURIComponent(activeScope.eventId)}/commands`, {
         method: "POST",
+        signal: controller.signal,
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           commandId,
@@ -380,6 +672,8 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         if (!uncertain) pendingScanIdRef.current.delete(attempt);
         setResult({
           kind: "failed",
+          uncertain,
+          place: requestPlace,
           message: uncertain
             ? "처리 응답을 확인하지 못했습니다. 같은 업무·티켓으로 다시 시도하세요."
             : typeof data?.error === "string" ? data.error : "처리하지 못했습니다.",
@@ -389,7 +683,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       if (!data || typeof data.name !== "string" ||
         (isDesk && (typeof data.id !== "string" || (data.action !== "IN" && data.action !== "OUT"))) ||
         (!isDesk && typeof data.booth !== "string")) {
-        setResult({ kind: "failed", message: "처리 응답을 확인하지 못했습니다. 같은 업무·티켓으로 다시 시도하세요." });
+        setResult({ kind: "failed", uncertain: true, place: requestPlace, message: "처리 응답을 확인하지 못했습니다. 같은 업무·티켓으로 다시 시도하세요." });
         return;
       }
       pendingScanIdRef.current.delete(attempt);
@@ -399,6 +693,14 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       const participantId = typeof data?.id === "string" ? data.id : "";
       const participantName = typeof data?.name === "string" ? data.name : "";
       if (isDesk) setLastScannedTicket(code.trim());
+      if (isDesk && scanAction === "OUT" && participantId && rewardEnabled) {
+        setRewardTarget({ id: participantId, name: participantName, company: directory[participantId] ?? "" });
+        setTargetRewards(parseRewardList(data?.rewards));
+        setRewardDataLoaded(Array.isArray(data?.rewards));
+      }
+      // Keep the input protected until the bounded refresh finishes too: the
+      // success action must never look available while the busy guard rejects it.
+      await load(true, controller.signal);
       setResult({
         kind: "ok",
         participantId,
@@ -406,17 +708,13 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         action: scanAction,
         reentry: data?.reentry === true,
         booth: typeof data?.booth === "string" ? data.booth : "",
+        place: requestPlace,
       });
-      if (isDesk && scanAction === "OUT" && participantId && rewardEnabled) {
-        setRewardTarget({ id: participantId, name: participantName, company: directory[participantId] ?? "" });
-        setTargetRewards(parseRewardList(data?.rewards));
-        setRewardDataLoaded(Array.isArray(data?.rewards));
-      }
       setTicket("");
-      await load(true);
     } catch {
-      setResult({ kind: "failed", message: "연결하지 못했습니다. 같은 업무·티켓으로 다시 시도하세요." });
+      setResult({ kind: "failed", uncertain: true, place: requestPlace, message: "연결하지 못했습니다. 같은 업무·티켓으로 다시 시도하세요." });
     } finally {
+      window.clearTimeout(timeout);
       scanBusyRef.current = false;
       setSubmitting(false);
     }
@@ -428,11 +726,14 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   }
 
   async function postRewardCommand(command: "reward.lookup" | "reward.collect", payload: Record<string, unknown>) {
+    if (orgChanged) {
+      throw new Error("다른 탭에서 조직이 전환됐습니다. 위 안내에서 전환을 먼저 확인하세요.");
+    }
     if (!assignment || activeTask !== "desk") throw new Error("배정된 데스크를 먼저 선택하세요.");
     const attempt = JSON.stringify([activeScope.eventId, assignment.id, command, payload]);
     const commandId = pendingRewardCommandsRef.current.get(attempt) ?? randomCommandId();
     pendingRewardCommandsRef.current.set(attempt, commandId);
-    const response = await fetch(`/api/events/${encodeURIComponent(activeScope.eventId)}/commands`, {
+    const response = await operatorFetch(`/api/events/${encodeURIComponent(activeScope.eventId)}/commands`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ commandId, command, assignmentId: assignment.id, payload }),
@@ -536,42 +837,108 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       ) ?? null
     : null;
 
-  async function correctLatest(event: React.FormEvent) {
+  async function correctLatest(event: React.FormEvent, retrySame = false) {
     event.preventDefault();
-    if (correcting || !correctableCheck || !assignment || !correctReason.trim()) return;
+    // Synchronous double-click guard: `correcting` state lands a render
+    // late, so two rapid submits would otherwise both fire in the same tick.
+    if (correctingRef.current || correcting) return;
+    const stored = pendingCorrectRef.current;
+    let pending: CorrectionPending;
+    if (retrySame && stored) {
+      // Replay the stored request verbatim: same event, assignment, record,
+      // payload, and command id — never the currently selected context.
+      pending = stored;
+    } else {
+      // The outcome is still unknown: resolve the stored request first
+      // instead of minting a second correction for another target.
+      if (correctUnknown) return;
+      // No new correction starts after an other-tab organization change;
+      // the retained retry below still resolves through the frozen request
+      // organization in the shared adapter.
+      if (orgChanged) return;
+      if (!correctableCheck || !assignment || !correctReason.trim()) return;
+      pending = buildCorrectionPending({
+        eventId: activeScope.eventId,
+        assignmentId: assignment.id,
+        checkId: correctableCheck.id,
+        reason: correctReason.trim(),
+        stored,
+      });
+      // Mint and retain before the first await: a rapid second attempt (or a
+      // render between ticks) reuses this identity instead of minting another.
+      pendingCorrectRef.current = pending;
+    }
+    correctingRef.current = true;
     setCorrecting(true);
     setCorrectNotice(null);
     try {
-      const res = await fetch(`/api/events/${encodeURIComponent(activeScope.eventId)}/commands`, {
+      const res = await operatorFetch(`/api/events/${encodeURIComponent(pending.eventId)}/commands`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          commandId: randomCommandId(),
+          commandId: pending.commandId,
           command: "check.correct",
-          assignmentId: assignment.id,
-          payload: { id: correctableCheck.id, reason: correctReason.trim() },
+          assignmentId: pending.assignmentId,
+          payload: { id: pending.checkId, reason: pending.reason },
         }),
       });
       const data = (await res.json().catch(() => null)) as { error?: unknown } | null;
       if (!res.ok) {
-        setCorrectNotice(typeof data?.error === "string" ? data.error : "정정하지 못했습니다.");
+        const uncertain = res.status >= 500 || res.status === 408;
+        if (uncertain) {
+          setCorrectUnknown(true);
+          setCorrectNotice("정정 응답을 확인하지 못했습니다. 대상·사유를 바꾸지 말고 같은 요청으로 다시 시도하세요.");
+        } else {
+          if (pendingCorrectRef.current?.key === pending.key) pendingCorrectRef.current = null;
+          setCorrectUnknown(false);
+          setCorrectNotice(typeof data?.error === "string" ? data.error : "정정하지 못했습니다.");
+        }
         return;
       }
+      if (pendingCorrectRef.current?.key === pending.key) pendingCorrectRef.current = null;
+      setCorrectUnknown(false);
       setCorrectNotice("기록을 정정했습니다. 현재 입장 상태에 반영되었습니다.");
       setCorrectReason("");
       setResult({ kind: "idle" });
       await load(true);
     } catch {
-      setCorrectNotice("연결하지 못했습니다. 다시 시도하세요.");
+      // Offline or dropped connection: the server may still have committed,
+      // so the retained id stays for a same-request replay. Nothing is queued.
+      setCorrectUnknown(true);
+      setCorrectNotice("연결하지 못했습니다. 대상·사유를 바꾸지 말고 같은 요청으로 다시 시도하세요.");
     } finally {
+      correctingRef.current = false;
       setCorrecting(false);
     }
   }
 
   return (
     <section className={`staff-workspace${kiosk ? " kiosk-mode" : ""}`} aria-label={`${activeScope.eventName} 현장 업무`}>
-      <p className="staff-event-context">
-        <Link className="staff-back-link" href="/staff">
+      <p className={`staff-event-context ${prizeStyles.eventContext}`}>
+        <Link
+          className="staff-back-link"
+          href="/staff"
+          onClick={(event) => {
+            // Leaving with an unconfirmed correction drops the retained id:
+            // confirm first so the operator can stay and replay it instead.
+            if (
+              correctUnknown &&
+              !window.confirm("정정 응답을 아직 확인하지 못했습니다. 떠나면 같은 요청으로 다시 시도할 수 없습니다. 그래도 떠나시겠습니까?")
+            ) {
+              event.preventDefault();
+              return;
+            }
+            // Same after an other-tab organization change with work at risk:
+            // leaving unmounts this tab's retained drafts and receipts.
+            if (
+              orgChanged &&
+              staffWorkAtRisk() &&
+              !window.confirm("다른 탭에서 조직이 전환됐습니다. 떠나면 확인 중인 정정·입력을 잃을 수 있습니다. 그래도 떠나시겠습니까?")
+            ) {
+              event.preventDefault();
+            }
+          }}
+        >
           ← 내 업무
         </Link>
         <span>{activeScope.eventName}</span>
@@ -579,6 +946,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           type="button"
           className="button button-secondary kiosk-toggle"
           aria-pressed={kiosk}
+          disabled={writeLocked || submitting}
           onClick={() => {
             setKiosk((current) => !current);
             setResult({ kind: "idle" });
@@ -588,6 +956,9 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           {kiosk ? "일반 화면" : "키오스크 모드"}
         </button>
       </p>
+      <StaffAccountMenu confirmLeave={confirmLeaveStaff} confirmLeaveAccount={confirmLeaveAccountPage} />
+      <p className={prizeStyles.orgLine}>{orgLineText()}</p>
+      {orgChanged ? <OrganizationContextNotice confirmLeave={confirmLeaveStaff} /> : null}
       {kiosk ? (
         <p className="notice" role="status">
           공용 태블릿용 큰 화면입니다. 같은 배정·같은 로그인으로 처리하며, 무인 셀프 체크인은 지원하지 않습니다.
@@ -599,6 +970,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             type="button"
             className={`button ${activeTask === "desk" ? "button-primary" : "button-secondary"}`}
             aria-pressed={activeTask === "desk"}
+            disabled={writeLocked || submitting}
             onClick={() => {
               setTask("desk");
               setResult({ kind: "idle" });
@@ -612,6 +984,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             type="button"
             className={`button ${activeTask === "booth" ? "button-primary" : "button-secondary"}`}
             aria-pressed={activeTask === "booth"}
+            disabled={writeLocked || submitting}
             onClick={() => {
               setTask("booth");
               setResult({ kind: "idle" });
@@ -624,11 +997,13 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         </div>
       ) : null}
       {activeTask === "desk" ? (
+        <section className={prizeStyles.workSection} aria-label="처리 위치 선택">
         <div className="staff-select-field">
           <label htmlFor="staff-desk">데스크</label>
           <select
             id="staff-desk"
             value={deskId}
+            disabled={writeLocked || submitting}
             onChange={(event) => {
               setDeskId(event.target.value);
               setCameraOpen(false);
@@ -655,12 +1030,15 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             </p>
           ) : null}
         </div>
+        </section>
       ) : (
+        <section className={prizeStyles.workSection} aria-label="운영 부스 선택">
         <div className="staff-select-field">
           <label htmlFor="staff-booth">부스</label>
           <select
             id="staff-booth"
             value={boothId}
+            disabled={writeLocked || submitting}
             onChange={(event) => {
               setBoothId(event.target.value);
               setBoothCopyNotice(null);
@@ -694,6 +1072,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             return null;
           })()}
         </div>
+        </section>
       )}
       {activeTask === "booth" && activeScope.stampMode === "SELF" ? (
         <p className="notice" role="status">
@@ -704,13 +1083,14 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       {activeTask === "booth" && activeScope.stampMode === "SELF" && boothId ? (
         <div className="staff-booth-code">
           <p>이 QR을 참가자에게 보여주세요. 참가자는 참가자 홈 &gt; 부스 인증에서 카메라로 찍어 바로 인증하고, 카메라를 쓸 수 없으면 아래 코드를 직접 입력합니다.</p>
+          <p className={prizeStyles.boothQrCaption}>{selectedBooth?.name ?? "부스"} 인증 QR</p>
           <div
             className={prizeStyles.boothQr}
             role="img"
-            aria-label={`${activeScope.booths.find((booth) => booth.id === boothId)?.name ?? "부스"} 인증 QR`}
+            aria-label={`${selectedBooth?.name ?? "부스"} 인증 QR`}
             ref={boothQrRef}
           >
-            <QRCode value={`ET:BOOTH:${activeScope.eventId}:${boothId}`} size={200} />
+            <QRCode value={`ET:BOOTH:${activeScope.eventId}:${boothId}`} size={220} />
           </div>
           <p>
             <button
@@ -725,6 +1105,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                 }
               }}
             >
+              <CopyIcon />
               코드 복사
             </button>
           </p>
@@ -735,23 +1116,54 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           </details>
         </div>
       ) : null}
-      {activeTask !== "booth" || activeScope.stampMode !== "SELF" ? (
-        <p id="staff-scan-hint" className="staff-direction-hint" role="status">{scanHint}</p>
+      {correctionLocked ? (
+        <p className="notice" role="status">정정 응답을 확인하는 중입니다. 데스크·스캔 전환은 잠겨 있습니다.</p>
+      ) : null}
+      {orgChanged ? (
+        <p className="notice" role="status">다른 탭에서 조직이 전환됐습니다. 입력한 티켓·사유와 선택·기록은 그대로 유지됩니다. 스캔·정정·경품 쓰기는 잠시 잠겨 있습니다. 위 안내에서 전환을 먼저 확인하세요. 정정 응답 확인이 남아 있다면 같은 요청으로 다시 시도할 수 있습니다.</p>
       ) : null}
       {scanInputHasWork && result.kind !== "ok" ? (
-      <div className={prizeStyles.scanInput}>
+      <div className={prizeStyles.scanInput} ref={scanInputRef}>
+      {/* Field order is scan-first: a moving line points the camera, and the
+          manual input stays as the fallback for unreadable codes. The bar
+          stays in normal flow (never a fixed overlay), so the selector, the
+          org line, and the SELF QR below can never be covered by it. One
+          context line only (see scanLine): the duplicate how-to hint that
+          used to sit above this block is gone. */}
+      {scanLine ? <p id="staff-scan-hint" className={scanContext ? prizeStyles.scanContext : "staff-direction-hint"} role="status">{scanLine}</p> : null}
+      {submitting ? <p id="staff-scan-wait" className="notice" role="status">처리 결과를 확인하고 있습니다. 확인이 끝나면 티켓과 업무를 다시 바꿀 수 있습니다.</p> : null}
+      <div className="camera-action">
+        {activeTask === "booth" && activeScope.stampMode === "SELF" ? null : (
+          <button
+            type="button"
+            disabled={!ready || writeLocked || submitting}
+            aria-describedby="staff-scan-hint"
+            className={`button button-primary ${prizeStyles.scanPrimary}`}
+            onClick={() => {
+              setResult({ kind: "idle" });
+              setCameraOpen(true);
+            }}
+          >
+            카메라로 스캔
+          </button>
+        )}
+      </div>
       {activeTask === "booth" && activeScope.stampMode !== "SELF" ? (
         <form className="scan-form" onSubmit={onScan}>
+          <div className={prizeStyles.fallbackBlock}>
+            <p className={prizeStyles.fallbackLabel}>카메라가 안 될 때 · 코드로 인증</p>
           <div className="form-field">
             <label htmlFor="staff-ticket">티켓 코드</label>
             <input
               id="staff-ticket"
               type="text"
               autoComplete="off"
-              placeholder="티켓 코드를 입력하거나 스캔하세요"
+              placeholder="카메라가 안 되면 코드를 직접 입력하세요"
               value={ticket}
-              aria-describedby="staff-scan-hint"
-              onChange={(event) => setTicket(event.target.value)}
+              aria-describedby={submitting ? "staff-scan-hint staff-scan-wait" : result.kind === "failed" ? "staff-scan-hint staff-scan-retry-hint" : "staff-scan-hint"}
+              disabled={writeLocked}
+              readOnly={submitting}
+              onChange={(event) => { if (!scanBusyRef.current) { scanEditRevisionRef.current += 1; setTicket(event.target.value); } }}
             />
           </div>
           {ticket ? (
@@ -766,55 +1178,47 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             disabled={!ticket.trim() || submitting}
             onClick={copyTicketCode}
           >
+            <CopyIcon />
             코드 복사
           </button>
           {ticketCopyNotice ? <p role="status" className={prizeStyles.nextStep}>{ticketCopyNotice}</p> : null}
-          <button className="button button-primary" type="submit" disabled={submitting || !ready || !ticket.trim()}>
+          <button className="button button-secondary" type="submit" disabled={submitting || writeLocked || !ready || !ticket.trim()}>
             {submitting ? "처리 중입니다" : "부스 인증"}
           </button>
+          </div>
         </form>
       ) : null}
       {activeTask === "desk" ? (
         <form className="scan-form" onSubmit={onScan}>
+          <div className={prizeStyles.fallbackBlock}>
+            <p className={prizeStyles.fallbackLabel}>카메라가 안 될 때 · 코드로 처리</p>
           <div className="form-field">
             <label htmlFor="staff-ticket">티켓 코드</label>
             <input
               id="staff-ticket"
               type="text"
               autoComplete="off"
-              placeholder="티켓 코드를 입력하거나 스캔하세요"
+              placeholder="카메라가 안 되면 코드를 직접 입력하세요"
               value={ticket}
-              aria-describedby="staff-scan-hint"
-              onChange={(event) => setTicket(event.target.value)}
+              aria-describedby={submitting ? "staff-scan-hint staff-scan-wait" : result.kind === "failed" ? "staff-scan-hint staff-scan-retry-hint" : "staff-scan-hint"}
+              disabled={writeLocked}
+              readOnly={submitting}
+              onChange={(event) => { if (!scanBusyRef.current) { scanEditRevisionRef.current += 1; setTicket(event.target.value); } }}
             />
           </div>
-          <button className="button button-primary" type="submit" disabled={submitting || !ready || !ticket.trim()}>
+          <button className="button button-secondary" type="submit" disabled={submitting || writeLocked || !ready || !ticket.trim()}>
             {submitting ? "처리 중입니다" : isExitDesk ? "퇴장 처리" : "입장 처리"}
           </button>
+          </div>
         </form>
       ) : null}
-      <div className="camera-action">
-        {activeTask === "booth" && activeScope.stampMode === "SELF" ? null : (
-          <button
-            type="button"
-            disabled={!ready}
-            aria-describedby="staff-scan-hint"
-            className="button button-secondary"
-            onClick={() => {
-              setResult({ kind: "idle" });
-              setCameraOpen(true);
-            }}
-          >
-            카메라로 스캔
-          </button>
-        )}
-      </div>
       </div>
       ) : null}
-      {cameraOpen && ready ? (
+      {cameraOpen && ready && !orgChanged ? (
         <CameraScan
           onDetected={(code) => {
             setCameraOpen(false);
+            if (scanBusyRef.current || submitting || writeLocked) return;
             setTicket(code);
             submitTicket(code);
           }}
@@ -822,29 +1226,36 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         />
       ) : null}
       {result.kind === "ok" ? (
-        <section className={prizeStyles.resultBlock} aria-label="스캔 결과">
-          <p className="scan-result scan-success" role="status">
+        <section className={prizeStyles.workSection} aria-label="스캔 결과">
+          <h2 className={prizeStyles.sectionTitle}>방금 처리한 참가자</h2>
+        <section className={prizeStyles.resultBlock} aria-label="스캔 결과 상세">
+          <p className={correctionLocked ? "scan-result notice" : "scan-result scan-success"} role="status">
+            {correctionLocked ? "마지막 확인: " : ""}
             {result.name} ·{" "}
             {result.action === "STAMP"
               ? `부스 인증${result.booth ? ` · ${result.booth}` : ""}`
               : result.action === "IN" ? "입장" : "퇴장"}
             {result.reentry ? " (재입장)" : ""}
           </p>
-          <p className={prizeStyles.nextStep}>다음 참가자를 스캔하세요. 입력창을 비우고 포커스를 돌려놓습니다.</p>
+          {result.place.placeName ? (
+            <p className={prizeStyles.nextStep}>처리 위치: {result.place.placeName} · {result.place.actionLabel}</p>
+          ) : null}
+          <p className={prizeStyles.nextStep}>{correctionLocked ? "정정 결과를 먼저 확인하세요. 위 기록은 정정 전 마지막으로 확인한 스캔입니다." : "다음 참가자를 스캔하세요."}</p>
           <div className={prizeStyles.nextActions}>
-            <button type="button" ref={nextParticipantRef} className="button button-primary" onClick={prepareNextParticipant}>
+            <button type="button" ref={nextParticipantRef} className="button button-primary" disabled={writeLocked} onClick={prepareNextParticipant}>
               다음 참가자
             </button>
             {result.action === "IN" ? (
               <button
                 type="button"
                 className={`button button-secondary ${prizeStyles.auxAction}`}
+                disabled={writeLocked}
                 onClick={() => {
                   setNametag({
                     name: result.name,
                     company: (result.participantId && directory[result.participantId]) || "",
                     eventName: activeScope.eventName,
-                    deskName: activeScope.desks.find((desk) => desk.id === deskId)?.name ?? "",
+                    deskName: result.place.task === "desk" ? result.place.placeName : "",
                     action: result.action,
                     at: new Date().toISOString(),
                   });
@@ -859,30 +1270,46 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             ) : null}
           </div>
         </section>
+        </section>
       ) : null}
       {result.kind === "failed" ? (
-        <section className={prizeStyles.resultBlock} aria-label="스캔 실패">
+        <section ref={scanFailureRef} className={prizeStyles.workSection} aria-label={result.uncertain ? "스캔 결과 미확인과 복구" : "스캔 실패와 복구"}>
+          <h2 className={prizeStyles.sectionTitle}>{result.uncertain ? "처리 결과를 확인하지 못했습니다" : "처리에 실패했습니다"}</h2>
+        <section className={prizeStyles.resultBlock} aria-label={result.uncertain ? "스캔 결과 미확인" : "스캔 실패"}>
           <p className="scan-result scan-failure" role="alert">{result.message}</p>
+          {/* Request-bound snapshot: always names the desk/booth this request
+              committed to, even when the input line above currently names the
+              same place. The crossrole audit pins both lines visible together
+              after a ticket edit ("현재 …" at the input, "처리 위치:" at the
+              verdict); wording and placement carry the distinction. */}
+          {result.place.placeName ? (
+            <p className={prizeStyles.nextStep}>처리 위치: {result.place.placeName} · {result.place.actionLabel}</p>
+          ) : null}
           {/* Server verdicts (중복·미등록·만료) carry no recovery steps, while
               uncertain-network messages already ask for a retry: add only the
               missing half so the same "다시 시도" guidance never repeats. */}
-          <p className={prizeStyles.nextStep}>
+          {/* Recovery guidance carries its own id: in the failed state the
+              code inputs are described by both the current-target line above
+              and this recovery text, never by nothing and never by one id
+              twice. */}
+          <p id="staff-scan-retry-hint" className={prizeStyles.nextStep}>
             {result.message.includes("다시 시도")
               ? "카메라가 안 되면 티켓 코드를 직접 입력하세요."
               : "같은 업무·같은 티켓으로 다시 시도하세요. 카메라가 안 되면 티켓 코드를 직접 입력하세요."}
           </p>
           <div className={prizeStyles.nextActions}>
-            <button type="button" className="button button-primary" onClick={prepareNextParticipant}>
+            <button type="button" ref={retryFailedRef} className="button button-primary" disabled={writeLocked} onClick={retryFailedScan}>
               다시 시도
             </button>
           </div>
+        </section>
         </section>
       ) : null}
       {result.kind === "ok" && result.action === "OUT" && !rewardEnabled ? (
         <p className="notice" role="status">이 행사에서 경품 기능이 꺼져 있어 현장 경품 조회·수령 처리를 사용할 수 없습니다.</p>
       ) : null}
       {rewardEnabled && isExitDesk && assignment ? (
-        <section className={prizeStyles.prizeWorkspace} aria-label="경품 확인 및 수령">
+        <section className={`${prizeStyles.workSection} ${prizeStyles.prizeWorkspace}`} aria-label="경품 확인 및 수령">
           <div className={prizeStyles.prizeHeader}>
             <div>
               <h3>경품 확인·수령</h3>
@@ -975,8 +1402,10 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           <p className={prizeStyles.prizeNote}>각 경품은 개별 확인 후 수령 처리합니다. 퇴장만으로는 경품을 수령 완료 처리하지 않습니다.</p>
         </section>
       ) : null}
-      {correctableCheck ? (
-        <form className="correction-form" onSubmit={correctLatest}>
+      {correctableCheck || correctUnknown ? (
+        <section className={prizeStyles.workSection} aria-label="기록 정정">
+          <h2 className={prizeStyles.sectionTitle}>잘못 스캔했다면 바로 정정하세요</h2>
+        <form className="correction-form" onSubmit={(event) => { void correctLatest(event); }}>
           <p className="staff-direction-hint">다른 분의 QR을 처리했다면 여기서 바로 정정하세요. 본인 배정 데스크의 최신 기록만 정정됩니다.</p>
           <div className="form-field">
             <label htmlFor="correct-reason">정정 사유</label>
@@ -986,15 +1415,32 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
               maxLength={300}
               placeholder="예: 다른 분 티켓을 잘못 스캔함"
               value={correctReason}
+              disabled={writeLocked}
               onChange={(event) => setCorrectReason(event.target.value)}
             />
           </div>
-          <button className="button button-secondary" type="submit" disabled={correcting || !correctReason.trim()}>
-            {correcting ? "정정 중입니다" : "최신 기록 정정"}
-          </button>
+          {correctUnknown ? (
+            <p className={prizeStyles.nextStep} role="alert">응답을 확인하기 전까지 정정 대상·사유를 바꾸지 마세요. 같은 정정 요청으로 다시 시도하면 중복 정정 없이 확인할 수 있습니다.</p>
+          ) : null}
+          {correctUnknown ? (
+            <button
+              className="button button-primary"
+              type="button"
+              disabled={correcting}
+              onClick={(event) => { void correctLatest(event, true); }}
+            >
+              {correcting ? "확인 중입니다" : "같은 요청으로 다시 시도"}
+            </button>
+          ) : (
+            <button className={`button button-secondary ${prizeStyles.correctSubmit}`} type="submit" disabled={correcting || orgChanged || !correctReason.trim()}>
+              {correcting ? "정정 중입니다" : "최신 기록 정정"}
+            </button>
+          )}
         </form>
+        </section>
       ) : null}
-      {correctNotice ? <p className="scan-result" role="status">{correctNotice}</p> : null}
+      {correctNotice ? <p className="scan-result" role={correctUnknown ? "alert" : "status"}>{correctNotice}</p> : null}
+      <section className={prizeStyles.workSection} aria-label="최근 처리 기록">
       <h2 className="activity-heading">최근 처리 · {activeTask === "booth" ? "부스 인증" : "데스크 체크인"}</h2>
       <p className={prizeStyles.nextStep}>같은 티켓을 다시 스캔하면 같은 결과가 나옵니다. 아래에서 무엇이 처리됐는지 확인하고 다음 참가자로 넘어가세요.</p>
       {loadError && scope ? (
@@ -1024,6 +1470,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                   type="button"
                   className="button button-secondary"
                   aria-label={`${check.name} 다시 스캔 준비`}
+                  disabled={submitting}
                   onClick={prepareNextParticipant}
                 >
                   다시 스캔
@@ -1035,6 +1482,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       ) : (
         <p>아직 처리 기록이 없습니다.</p>
       )}
+      </section>
       {nametag ? (
         <section
           className="nametag-sheet"

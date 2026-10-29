@@ -49,16 +49,73 @@
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: var(--s1) var(--s3);
   margin: 0;
-  padding: var(--s3) var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
+  padding-block: var(--s2);
+  border-bottom: 1px solid var(--line);
 }
 
 .help {
   margin: 0;
   color: var(--muted);
   font-size: var(--small);
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* 기본 정보 탭 안의 과제 묶음(식별 → 일시·규모 → 접수 정책): 위에는
+   여백을 넉넉히, 안은 촘촘히. 래퍼·소제목만 추가하며 입력 id·순서·
+   검증·포커스·44px 규칙은 그대로. */
+.fieldGroup {
+  display: grid;
+  gap: var(--s2);
+  min-width: 0;
+  margin: 0;
+  padding-top: var(--s5);
+  border-top: 1px solid var(--line);
+}
+
+.fieldGroup:first-of-type {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.groupTitle {
+  margin: 0 0 var(--s1);
+  font-size: var(--body);
+  font-weight: 700;
+  overflow-wrap: break-word;
+}
+
+/* 접수 정책 선택지: 떠다니는 체크 3행을 원장 ledger로 묶는다. 행 사이
+   공백이 아니라 헤어라인으로 구분해 밀도를 올리고, 도움말은 목록 밖에
+   둔다. 입력 id·순서·검증·44px는 그대로. */
+.policyList {
+  display: grid;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.policyList > .check {
+  margin: 0;
+  padding: var(--s1) var(--s3);
+}
+
+.policyList > .check + .check {
+  border-top: 1px solid var(--line);
+}
+
+/* 참가 접수 현재 상태: 본문과 같은 크기의 맨문장이 아니라 상태 줄로
+   읽힌다. 문구·버전·조건 분기는 그대로, 래퍼만 상태 스트립으로. */
+.intakeSummary {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--surface-muted);
+  font-size: var(--small);
+  overflow-wrap: anywhere;
 }
 
 .scopeNote {
@@ -67,23 +124,10 @@
   font-size: var(--small);
 }
 
-/* 설정 탭: 네 개의 실제 탭. 가로 스크롤로 좁은 폭을 처리한다. */
+/* Four visible destinations: small screens use two rows, not a hidden
+   fourth tab that requires discovering a horizontal swipe. */
 .tabsWrap {
   min-width: 0;
-}
-
-/* 가로 탐색 안내: 조작이 아니라 숨은 구역을 알리는 도움말. 일반 폭에서는
-   네 탭이 모두 보이므로 감춘다. */
-.tabsHelp {
-  margin: 0 0 var(--s1);
-  color: var(--muted);
-  font-size: var(--small);
-}
-
-@media (min-width: 769px) {
-  .tabsHelp {
-    display: none;
-  }
 }
 
 .tabs {
@@ -101,13 +145,12 @@
   min-height: 44px;
   margin-bottom: -1px;
   padding: var(--s2) var(--s4);
-  border: 1px solid transparent;
-  border-bottom: 0;
-  border-radius: var(--radius) var(--radius) 0 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--muted);
-  font-size: var(--body);
-  font-weight: 700;
+  font-size: var(--small);
+  font-weight: 550;
   white-space: nowrap;
 }
 
@@ -116,9 +159,33 @@
 }
 
 .tab[aria-selected="true"] {
-  border-color: var(--line);
-  background: var(--paper);
-  color: var(--ink);
+  border-bottom-color: var(--brand);
+  color: var(--brand-text);
+  font-weight: 650;
+}
+
+@media (max-width: 768px) {
+  .tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow-x: visible;
+    gap: var(--s1);
+    border-bottom: 0;
+  }
+
+  .tab {
+    justify-content: center;
+    margin: 0;
+    padding-inline: var(--s2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    font-size: var(--small);
+  }
+
+  .tab[aria-selected="true"] {
+    border-color: var(--brand-text);
+    background: var(--soft);
+  }
 }
 
 .tabDirtyDot {
@@ -129,6 +196,14 @@
 .tabPanel {
   min-width: 0;
   padding-top: var(--s4);
+}
+
+.basicsForm {
+  max-width: 680px;
+}
+
+.identityFields {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .settingsFooter {
@@ -316,4 +391,15 @@
   .twoCols {
     grid-template-columns: 1fr;
   }
+}
+
+/* Capability-gated read-only wrapper: keeps the form's own rhythm while the
+   native disabled fieldset blocks every control inside. No new spacing. */
+.bareFieldset {
+  display: grid;
+  gap: var(--s4);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }

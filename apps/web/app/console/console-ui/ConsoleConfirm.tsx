@@ -50,6 +50,14 @@ export default function ConsoleConfirm({
           type="button"
           className={confirmClassName}
           onClick={onConfirm}
+          onKeyDown={(event) => {
+            // Opening review moves focus here. A held activation key must
+            // not confirm the new operation without a separate key press.
+            if (event.repeat && (event.key === "Enter" || event.key === " ")) {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+          }}
           disabled={busy}
         >
           {busy ? "처리 중…" : confirmLabel}

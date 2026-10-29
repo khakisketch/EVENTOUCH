@@ -282,7 +282,7 @@ function commandBody(command, payload) {
 }
 
 async function seedAuditFixture(harness, helpers, { suffix = crypto.randomUUID().replace(/-/g, '') } = {}) {
-  const { insertAccount, insertEvent, insertMembership, insertAssignment, sessionCookie, requestJson, emptyWorkspace, hashPassword } = helpers;
+  const { insertAccount, insertEvent, insertMembership, insertAssignment, sessionCookie, requestJson, emptyWorkspace, hashPassword, LEGACY_ORG } = helpers;
   const eventId = `audit-event-${suffix}`.toLowerCase();
   const slug = eventId;
   const managerId = `audit-manager-${suffix}`.toLowerCase();
@@ -292,14 +292,15 @@ async function seedAuditFixture(harness, helpers, { suffix = crypto.randomUUID()
 
   // A configured product has an organization owner before event managers and
   // staff sign in. Keep that real install invariant in browser fixtures too.
-  await insertAccount(harness.database, { id: `audit-owner-${suffix}`, role: 'AGENCY', name: '감사 조직 운영자', email: `audit-owner-${suffix}@example.test` });
-  await insertAccount(harness.database, { id: managerId, role: 'MANAGER', name: '감사 운영자', email: managerEmail });
-  await insertAccount(harness.database, { id: staffId, role: 'STAFF', name: '감사 스태프', email: staffEmail });
+  await insertAccount(harness.database, { orgId: LEGACY_ORG, id: `audit-owner-${suffix}`, role: 'AGENCY', name: '감사 조직 운영자', email: `audit-owner-${suffix}@example.test` });
+  await insertAccount(harness.database, { orgId: LEGACY_ORG, id: managerId, role: 'MANAGER', name: '감사 운영자', email: managerEmail });
+  await insertAccount(harness.database, { orgId: LEGACY_ORG, id: staffId, role: 'STAFF', name: '감사 스태프', email: staffEmail });
   // UI logins type the fixture password; cookie logins use sessions.
   const passwordHash = hashPassword(FIXTURE_PASSWORD);
   await harness.database.query('UPDATE accounts SET password_hash=$1 WHERE id=ANY($2)', [passwordHash, [managerId, staffId]]);
 
   await insertEvent(harness.database, {
+    orgId: LEGACY_ORG,
     id: eventId,
     slug,
     payload: {

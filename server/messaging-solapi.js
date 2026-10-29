@@ -25,6 +25,10 @@ const SEND_PATH = '/messages/v4/send-many/detail';
 const LIST_PATH = '/messages/v4/list';
 const REQUEST_TIMEOUT_MS = 15000;
 
+// One group read pulls at most this many pages; with the default 500-entry
+// page that bounds a single campaign's id recovery to 10,000 entries.
+const MAX_GROUP_PAGES = 20;
+
 // Solapi's published limits: 90 bytes for SMS, 2000 for LMS. Korean characters
 // count as two bytes, which is why the SMS limit is often quoted as 45 chars.
 const SMS_MAX_BYTES = 90;
@@ -178,9 +182,14 @@ function createSolapiProvider(config, { fetchImpl = globalThis.fetch, timeoutMs 
         payload = null;
       }
       if (!response.ok) {
+        // Absence is an explicit, checkable signal: only a 404 means the
+        // supplier has no record under this id. Anything else (429, 5xx,
+        // auth failures) says nothing about absence, so it keeps its own
+        // reason and the caller must treat it as unknown rather than absent.
+        const absent = response.status === 404;
         return {
           ok: false,
-          reason: response.status === 429 ? 'RATE_LIMITED' : 'PROVIDER_REJECTED',
+          reason: absent ? 'NOT_FOUND' : response.status === 429 ? 'RATE_LIMITED' : 'PROVIDER_REJECTED',
           status: response.status,
           retryAfterSeconds: Number(response.headers && response.headers.get && response.headers.get('x-retry-after')) || null,
           error: (payload && (payload.message || payload.errorCode)) || `공급사가 요청을 거부했습니다 (${response.status})`,
@@ -310,20 +319,34 @@ function createSolapiProvider(config, { fetchImpl = globalThis.fetch, timeoutMs 
   // Message ids are needed to poll, and Solapi returns them through the list
   // endpoint keyed by group rather than in the send response, so they are read
   // back from the group.
+  //
+  // Pagination follows the documented contract: the response's nextKey is sent
+  // back as the next request's startKey until it is absent. A cursor that does
+  // not advance (same or repeated key) stops the loop instead of re-reading
+  // the same page forever; at most MAX_GROUP_PAGES pages are read so one
+  // campaign cannot pull an unbounded list into memory. Any stop with a next
+  // page still pending is reported as truncated:true, so a caller can never
+  // mistake a partial collection for a complete one.
   async function groupMessages(groupId, { limit = 500 } = {}) {
     const collected = {};
+    const seenCursors = new Set(['']);
     let startKey = '';
-    for (let page = 0; page < 20; page += 1) {
-      const result = await call(LIST_PATH, { query: { groupId, limit } });
+    for (let page = 0; page < MAX_GROUP_PAGES; page += 1) {
+      const result = await call(LIST_PATH, {
+        query: { groupId, limit, ...(startKey ? { startKey } : {}) },
+      });
       if (!result.ok) return { ok: false, ...result };
       const list = (result.payload && result.payload.messageList) || {};
       for (const [id, value] of Object.entries(list)) collected[id] = value;
       const next = result.payload && result.payload.nextKey;
-      if (!next) break;
+      if (!next) return { ok: true, messages: collected };
+      if (seenCursors.has(next)) return { ok: true, messages: collected, truncated: true, pages: page + 1 };
+      seenCursors.add(next);
       startKey = next;
-      if (!startKey) break;
     }
-    return { ok: true, messages: collected };
+    // The page cap stopped the walk with a cursor still pending: pages were
+    // left unread, so this collection must not read as complete.
+    return { ok: true, messages: collected, truncated: true, pages: MAX_GROUP_PAGES };
   }
 
   async function pollResults(messageIds, { limit = 500 } = {}) {

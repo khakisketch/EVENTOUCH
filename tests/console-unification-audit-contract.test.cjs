@@ -20,9 +20,9 @@ const EXPECTED_TITLES = {
   clients: '고객사',
   team: '팀·권한',
   overview: '운영 현황',
-  participants: '참가자',
+  participants: '참가자 명단',
   import: '명단 가져오기',
-  messages: '메시지',
+  messages: '메시지 발송',
   operations: '현장 운영',
   programs: '참여 프로그램',
   draws: '추첨·투표',
@@ -100,7 +100,7 @@ test('console-audit-asserts-the-shared-frame-not-just-headings', () => {
   assert.match(source, /← 운영 현황/, 'the legacy back row fails the run');
   for (const marker of [
     '#console-event-directory', '#client-list-heading', '#team-members',
-    '#event-metrics-heading', '#participant-import-file-heading', '#campaign-title',
+    '#event-metrics-heading', '#participant-import-file-heading', '#history-heading',
     '#ops-desks', '#draws-vote', '#evidence-photo-sections', '#content-notices',
     '#home-intro', '#rewards-list', '#set-name', '#reports-list',
   ]) {
@@ -207,7 +207,7 @@ test('console-audit-guards-settings-dirty-navigation-as-the-criterion', () => {
 
 test('console-audit-fails-loud-and-keeps-evidence-out-of-the-repo', () => {
   const source = read('scripts/web-console-audit.cjs');
-  assert.match(source, /\/tmp\/opencode\/eventouch-captures\/console-unification/, 'captures land outside the repo');
+  assert.match(source, /defaultCaptureDir\(`console-unification-\$\{runStamp\(\)\}`\)/, 'captures default to a fresh private per-user leaf outside the repo');
   assert.doesNotMatch(source, /apps\/web\/public/, 'no committed images');
   assert.match(source, /BLOCKING\.has\(violation\.impact\)/, 'serious/critical axe fails the run');
   assert.match(source, /horizontal overflow/, 'overflow fails the run');

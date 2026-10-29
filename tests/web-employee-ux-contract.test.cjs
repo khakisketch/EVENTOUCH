@@ -48,9 +48,13 @@ test('public-event-error-recovery-never-renders-raw-framework-errors', () => {
   const source = read('event/[slug]/error.tsx');
   assert.doesNotMatch(source, /error\?\.message|\{error\.message\}/);
   assert.match(source, /연결 상태를 확인한 뒤 다시 시도하세요/);
-  assert.match(source, /onClick=\{\(\) => reset\(\)\}/);
+  assert.match(source, /<RuntimeRecovery error=\{error\} retry=\{retry\}/);
+  assert.doesNotMatch(source, /reset\(\)/);
   assert.match(source, /행사 안내로/);
-  assert.match(source, /<main id="main-content"/);
+  const recovery = read('RuntimeRecovery.tsx');
+  assert.match(recovery, /<main id="main-content"/);
+  assert.match(recovery, /onClick=\{retrySegment\}/);
+  assert.doesNotMatch(recovery, /\{error\.message\}/);
 });
 
 test('primary-hover-uses-the-existing-high-contrast-foreground-token', () => {

@@ -5,22 +5,26 @@
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const { prepareCaptureDir, ensureCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = require('./capture-dir.cjs');
 const path = require('node:path');
-process.env.TMPDIR = '/tmp/opencode';
 process.env.EVENTOUCH_SMS_MOCK = '1';
-delete process.env.SOLAPI_API_KEY;
-delete process.env.SOLAPI_API_SECRET;
+process.env.EVENTOUCH_MAIL_MOCK = '1';
+for (const key of ['SOLAPI_API_KEY', 'SOLAPI_API_SECRET', 'SOLAPI_SENDER', 'SOLAPI_KAKAO_PFID', 'SOLAPI_API_HOST']) delete process.env[key];
+const { startOwnedNext, ensureAuditDatabaseEnv } = require('./audit-fixture.cjs');
+ensureAuditDatabaseEnv();
 const { chromium } = require('playwright');
 const XLSX = require('../apps/web/node_modules/xlsx');
 const jsQR = require('../apps/web/node_modules/jsqr');
 const axeSource = require('axe-core').source;
 const { emptyWorkspace } = require('../server/state');
 const { buildMessageDispatch } = require('../server/commands/content-results');
-const { startApiHarness, insertAccount, insertEvent, insertMembership, insertAssignment, sessionCookie, requestJson } = require('../tests/helpers/postgres-api-server.cjs');
+const { startApiHarness, insertAccount, insertEvent, insertMembership, insertAssignment, sessionCookie, requestJson, LEGACY_ORG } = require('../tests/helpers/postgres-api-server.cjs');
 const { startWebApiGateway } = require('../tests/helpers/web-api-gateway.cjs');
 
-const captures = '/tmp/opencode/eventouch-captures/hanwool-real';
-const webBase = process.env.WEB_BASE || 'http://127.0.0.1:8777';
+const captures = process.env.EVENTOUCH_CAPTURE_ROOT
+  ? path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'hanwool-real')
+  : defaultCaptureDir(`hanwool-real-${runStamp()}`);
+const webBaseExplicit = Object.hasOwn(process.env, 'WEB_BASE');
 let phase = 'setup';
 
 function matchesCommand(response, command) {
@@ -32,6 +36,74 @@ async function clickCommand(page, button, command) {
   const pending = page.waitForResponse((response) => matchesCommand(response, command), { timeout: 15000 });
   pending.catch(() => {}); // Keep an actionability failure from masking its own error during teardown.
   await button.click();
+  const response = await pending;
+  const data = await response.json();
+  assert.ok(response.ok(), `${command}: ${response.status()} ${JSON.stringify(data)}`);
+  await page.waitForLoadState('networkidle');
+  return data;
+}
+
+// Participant guidance/result copy must wrap by eojeol (word-break keep-all),
+// never mid-syllable (확/률, 있습/니다), at narrow phone widths. CSS-module
+// hashes are production-build unstable, so helpers locate copy by its real
+// text and check layout facts only: computed wrapping + per-word line boxes
+// + document overflow. No API data is fabricated or altered here.
+async function assertNoHorizontalOverflow(page, label) {
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
+  assert.equal(overflow, false, `${label}: horizontal overflow`);
+}
+
+async function assertEojeolWrap(page, textPattern, label) {
+  // getByText matches ancestors too (they precede descendants in DOM order),
+  // so the deepest match — the wrapping paragraph itself — is last.
+  const target = page.getByText(textPattern).last();
+  await target.waitFor();
+  const kept = await target.evaluate((element) => window.getComputedStyle(element).wordBreak);
+  assert.equal(kept, 'keep-all', `${label}: helper copy must keep eojeol together`);
+  const broken = await target.evaluate((element) => {
+    const nodes = [];
+    const collector = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    let textNode;
+    while ((textNode = collector.nextNode())) nodes.push(textNode.data);
+    const joined = nodes.join('');
+    const words = joined.split(/\s+/).filter(Boolean);
+    const range = document.createRange();
+    const live = [];
+    const liveCollector = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    let liveNode;
+    while ((liveNode = liveCollector.nextNode())) live.push(liveNode);
+    const brokenWords = [];
+    let searchFrom = 0;
+    for (const word of words) {
+      const at = joined.indexOf(word, searchFrom);
+      if (at === -1) continue;
+      searchFrom = at + word.length;
+      let acc = 0, startNode = null, startOff = 0, endNode = null, endOff = 0;
+      for (const node of live) {
+        const next = acc + node.data.length;
+        if (startNode === null && at < next) { startNode = node; startOff = at - acc; }
+        if (startNode !== null && at + word.length <= next) { endNode = node; endOff = at + word.length - acc; break; }
+        acc = next;
+      }
+      if (!startNode || !endNode) continue;
+      range.setStart(startNode, startOff);
+      range.setEnd(endNode, endOff);
+      if (range.getClientRects().length > 1) brokenWords.push(word);
+    }
+    return brokenWords;
+  });
+  assert.deepEqual(broken, [], `${label}: mid-syllable line break`);
+}
+
+// Product execution-confirm: the trigger opens an in-place '실행 확인'
+// group and only the confirming button sends the command. The response
+// waiter is armed before the trigger so the same receipt/idempotence
+// assertions as clickCommand hold; only the extra confirm click is new.
+async function clickCommandConfirm(page, button, confirmName, command) {
+  const pending = page.waitForResponse((response) => matchesCommand(response, command), { timeout: 20000 });
+  pending.catch(() => {});
+  await button.click();
+  await page.getByRole('group', { name: '실행 확인', exact: true }).getByRole('button', { name: confirmName, exact: true }).click();
   const response = await pending;
   const data = await response.json();
   assert.ok(response.ok(), `${command}: ${response.status()} ${JSON.stringify(data)}`);
@@ -65,13 +137,26 @@ async function decodeRenderedTicket(page) {
 }
 
 async function main() {
-  fs.mkdirSync(captures, { recursive: true });
+  prepareCaptureDir(captures);
+  // Browser profiles (session cookies) and the harness file store
+  // (uploaded fixture bytes) must live under this run's private tree,
+  // never the shared /tmp/opencode directory.
+  process.env.TMPDIR = ensureRunTmpDir(captures);
+  const buildId = fs.readFileSync(path.join(__dirname, '..', 'apps', 'web', '.next', 'BUILD_ID'), 'utf8').trim();
+  assert.ok(buildId, 'hanwool audit requires a production Next build');
   const oldOrigin = process.env.EVENTOUCH_PUBLIC_URL;
-  let harness, gateway, browser;
+  let harness, owned, gateway, browser;
   let fixtureEventId;
   const pages = [];
   try {
     harness = await startApiHarness();
+    if (webBaseExplicit) process.stderr.write('[hanwool-audit] WEB_BASE is superseded: auditing the isolated owned Next server\n');
+    owned = await startOwnedNext({ apiBase: harness.baseUrl });
+    {
+      const probe = await fetch(`${owned.baseUrl}/login`, { headers: { connection: 'close' } });
+      await probe.text().catch(() => '');
+      assert.equal(probe.status, 200, 'owned Next must serve the login shell before the browser runs');
+    }
     const suffix = crypto.randomUUID().replace(/-/g, '');
     const eventId = `browser-hanwool-${suffix}`;
     fixtureEventId = eventId;
@@ -79,9 +164,9 @@ async function main() {
     const managerId = `browser-manager-${suffix}`;
     const staffId = `browser-staff-${suffix}`;
     const event = { id: eventId, slug, name: '실제 연동 검증 행사', date: '2027-01-16', start: '09:00', end: '17:00', capacity: 100, stage: 'LIVE', features: ['draw', 'poll', 'reward', 'screen', 'venue'] };
-    await insertAccount(harness.database, { id: managerId, role: 'MANAGER', name: '검증 운영자', email: `${managerId}@example.test` });
-    await insertAccount(harness.database, { id: staffId, role: 'STAFF', name: '검증 스태프', email: `${staffId}@example.test` });
-    await insertEvent(harness.database, { id: eventId, slug, payload: event, workspace: emptyWorkspace() });
+    await insertAccount(harness.database, { orgId: LEGACY_ORG, id: managerId, role: 'MANAGER', name: '검증 운영자', email: `${managerId}@example.test` });
+    await insertAccount(harness.database, { orgId: LEGACY_ORG, id: staffId, role: 'STAFF', name: '검증 스태프', email: `${staffId}@example.test` });
+    await insertEvent(harness.database, { orgId: LEGACY_ORG, id: eventId, slug, payload: event, workspace: emptyWorkspace() });
     await insertMembership(harness.database, managerId, eventId, ['all']);
     const managerCookie = await sessionCookie(harness, managerId);
     const staffCookie = await sessionCookie(harness, staffId);
@@ -99,7 +184,7 @@ async function main() {
     const inAssignment = `browser-in-${suffix}`, outAssignment = `browser-out-${suffix}`;
     await insertAssignment(harness.database, { id: inAssignment, accountId: staffId, eventId, type: 'DESK', targetId: inDesk.id });
     await insertAssignment(harness.database, { id: outAssignment, accountId: staffId, eventId, type: 'DESK', targetId: outDesk.id });
-    gateway = await startWebApiGateway({ apiBase: harness.baseUrl, webBase, loseFirstResponseFor: ['draw.program.run', 'reward.collect'] });
+    gateway = await startWebApiGateway({ apiBase: harness.baseUrl, webBase: owned.baseUrl, loseFirstResponseFor: ['draw.program.run', 'reward.collect'] });
     process.env.EVENTOUCH_PUBLIC_URL = gateway.baseUrl;
     browser = await chromium.launch(process.env.CHROMIUM_EXECUTABLE ? { executablePath: process.env.CHROMIUM_EXECUTABLE } : {});
     const errors = [];
@@ -120,14 +205,21 @@ async function main() {
     phase = 'UI Excel import';
     await operator.goto(`${gateway.baseUrl}/console/events/${eventId}/participants/import`, { waitUntil: 'networkidle' });
     await operator.locator('input[type=file]').setInputFiles({ name: '검증참가자.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: participantWorkbook() });
-    await operator.getByText(/유효 8행 · 오류 0행/).waitFor();
-    await clickCommand(operator, operator.getByRole('button', { name: '유효 행 반영', exact: true }), 'participant.import');
+    // Counts are now separate status pills; still require both the exact
+    // accepted and rejected counts before committing the same real import.
+    const review = operator.locator('section[aria-labelledby="participant-import-review-heading"]');
+    await review.getByText('유효 8행', { exact: true }).waitFor();
+    await review.getByText('오류 0행', { exact: true }).waitFor();
+    await clickCommand(operator, operator.getByRole('button', { name: /유효 8행 반영/ }), 'participant.import');
     let workspace = await read();
     assert.equal(workspace.participants.length, 8);
     const people = workspace.participants;
 
     phase = 'UI teams, exact ballot and lucky preassignment';
     await operator.goto(`${gateway.baseUrl}/console/events/${eventId}/draws`, { waitUntil: 'networkidle' });
+    // Setup sections render collapsed; expand them so the existing setup
+    // controls stay drivable without changing what the audit asserts.
+    await operator.evaluate(() => { document.querySelectorAll('details:not([open])').forEach((el) => { el.open = true; }); });
     for (let index = 1; index <= 20; index += 1) {
       await operator.locator('#draws-team-name').fill(`검증팀 ${String(index).padStart(2, '0')}`);
       await clickCommand(operator, operator.getByRole('button', { name: '팀 등록', exact: true }), 'team.save');
@@ -138,7 +230,7 @@ async function main() {
     await operator.locator('#lucky-min').fill('1'); await operator.locator('#lucky-max').fill('900');
     await clickCommand(operator, operator.getByRole('button', { name: '번호 범위 저장', exact: true }), 'lucky.config.save');
     await operator.getByRole('checkbox', { name: /승인 참가자 전체 8명 선택/ }).check();
-    await clickCommand(operator, operator.getByRole('button', { name: '8명 번호 일괄 배정', exact: true }), 'lucky.preassign');
+    await clickCommandConfirm(operator, operator.getByRole('button', { name: '8명 번호 일괄 배정', exact: true }), '번호 배정', 'lucky.preassign');
     workspace = await read();
     assert.equal(workspace.luckyNumbers.length, 8);
     assert.equal(new Set(workspace.luckyNumbers.map((item) => item.number)).size, 8);
@@ -146,11 +238,13 @@ async function main() {
 
     phase = 'UI simulated invitation and real personalized entry';
     await operator.goto(`${gateway.baseUrl}/console/events/${eventId}/messages`, { waitUntil: 'networkidle' });
+    await operator.locator('#message-compose-open').click();
     await operator.locator('#campaign-title').fill('검증 초대');
     await operator.locator('#campaign-body').fill('{{이름}}님, 럭키번호 {{럭키번호}} / {{티켓링크}}');
-    await operator.getByRole('button', { name: '표시된 대상 추가 선택', exact: true }).click();
+    await operator.getByRole('button', { name: /수신자 목록 열기/, exact: false }).click().catch(() => {});
+    await operator.getByRole('checkbox', { name: /표시 \d+명 모두 선택/ }).check();
     await operator.getByRole('checkbox', { name: /모의 발송으로 기록/ }).check();
-    await clickCommand(operator, operator.getByRole('button', { name: '모의 발송 기록', exact: true }), 'message.create');
+    await clickCommandConfirm(operator, operator.getByRole('button', { name: '발송 검토', exact: true }), '모의 발송을 기록한다', 'message.create');
     workspace = await read();
     const invitation = workspace.messages.find((message) => message.title === '검증 초대');
     assert.equal(invitation.status, 'SIMULATED'); assert.equal(invitation.simulate, true);
@@ -183,6 +277,7 @@ async function main() {
     await mobile.getByRole('button', { name: '참가 메뉴', exact: true }).click();
     await mobile.getByRole('button', { name: '순위 투표', exact: true }).click();
     await operator.goto(`${gateway.baseUrl}/console/events/${eventId}/draws`, { waitUntil: 'networkidle' });
+    await operator.evaluate(() => { document.querySelectorAll('details:not([open])').forEach((el) => { el.open = true; }); });
     await operator.locator('#vote-status').selectOption('OPEN');
     await clickCommand(operator, operator.getByRole('button', { name: '투표 설정 저장', exact: true }), 'vote.config.save');
     const choice = (index) => mobile.getByRole('button', { name: `검증팀 ${String(index).padStart(2, '0')} 선택`, exact: true });
@@ -210,6 +305,8 @@ async function main() {
     assert.equal(publishedVote.json.workspace.ownVote, null);
     await mobile.reload({ waitUntil: 'networkidle' }); await mobile.getByText('투표가 접수되었습니다.', { exact: true }).waitFor();
     await mobile.screenshot({ path: path.join(captures, 'vote-submitted-390.png'), fullPage: true });
+    await assertEojeolWrap(mobile, /내 선택 ·/, 'vote-submitted-390');
+    await assertNoHorizontalOverflow(mobile, 'vote-submitted-390');
 
     phase = 'independent mobile roulette and persisted entitlement';
     const spinControl = mobile.getByRole('button', { name: /^START/ });
@@ -224,9 +321,11 @@ async function main() {
     await mobile.getByRole('button', { name: '룰렛 이벤트', exact: true }).click();
     assert.equal(await spinControl.count(), 0);
     await operator.locator('#roulette-status').selectOption('OPEN');
-    await clickCommand(operator, operator.getByRole('button', { name: '룰렛 설정 저장', exact: true }), 'roulette.config.save');
+    await clickCommandConfirm(operator, operator.getByRole('button', { name: '룰렛 설정 저장', exact: true }), '룰렛 운영 시작', 'roulette.config.save');
     await spinControl.waitFor();
     await mobile.screenshot({ path: path.join(captures, 'roulette-ready-390.png'), fullPage: true });
+    await assertEojeolWrap(mobile, /섹터 크기는 당첨 확률을/, 'roulette-ready-390');
+    await assertNoHorizontalOverflow(mobile, 'roulette-ready-390');
     await clickCommand(mobile, spinControl, 'roulette.spin');
     workspace = await read(); assert.equal(workspace.rouletteResults.length, 1);
     const spin = workspace.rouletteResults[0];
@@ -257,6 +356,48 @@ async function main() {
     assert.equal(await spinControl.count(), 0);
     assert.equal(await rotor.evaluate((element) => element.style.transform), rotation, 'reload must restore the same stopped sector without a new spin');
     await mobile.screenshot({ path: path.join(captures, 'roulette-result-390.png'), fullPage: true });
+    await assertEojeolWrap(mobile, /당첨 결과는 저장되어/, 'roulette-result-390');
+    await assertNoHorizontalOverflow(mobile, 'roulette-result-390');
+
+    phase = 'narrow 320 word wrap and overflow';
+    const narrowEntry = new URL(dispatch.recipients.find((recipient) => recipient.participantId === people[0].id).variables.티켓링크);
+    const narrow = await newPage(await browser.newContext({ viewport: { width: 320, height: 844 }, isMobile: true, hasTouch: true }));
+    narrowEntry.searchParams.set('view', 'roulette');
+    await narrow.goto(narrowEntry.href, { waitUntil: 'networkidle' });
+    await narrow.getByText(spin.label, { exact: true }).first().waitFor();
+    await narrow.screenshot({ path: path.join(captures, 'roulette-result-320.png'), fullPage: true });
+    await assertEojeolWrap(narrow, /당첨 결과는 저장되어/, 'roulette-result-320');
+    await assertNoHorizontalOverflow(narrow, 'roulette-result-320');
+    narrowEntry.searchParams.set('view', 'vote');
+    await narrow.goto(narrowEntry.href, { waitUntil: 'networkidle' });
+    await narrow.getByText('투표가 접수되었습니다.', { exact: true }).waitFor();
+    await narrow.screenshot({ path: path.join(captures, 'vote-submitted-320.png'), fullPage: true });
+    await assertEojeolWrap(narrow, /내 선택 ·/, 'vote-submitted-320');
+    await assertNoHorizontalOverflow(narrow, 'vote-submitted-320');
+
+    phase = 'published light, dark and mid-tone background contrast';
+    for (const [styleName, backgroundColor] of [['light', '#FFFFFF'], ['dark', '#1E2A38'], ['mid', '#75828E']]) {
+      const savedPage = await command('attendee.page.save', {
+        intro: '참가에 필요한 안내와 내 티켓을 확인하세요.',
+        accent: '#E76D26',
+        homeStyle: { backgroundColor },
+      });
+      assert.ok(savedPage.draftVersion >= 1, `${styleName}: page draft saved`);
+      const publishedPage = await command('attendee.page.publish', {});
+      assert.equal(publishedPage.published.homeStyle.backgroundColor, backgroundColor, `${styleName}: style published`);
+      narrowEntry.searchParams.set('view', 'vote');
+      await narrow.goto(narrowEntry.href, { waitUntil: 'networkidle' });
+      await narrow.getByText('투표가 접수되었습니다.', { exact: true }).waitFor();
+      await narrow.screenshot({ path: path.join(captures, `vote-submitted-320-${styleName}.png`), fullPage: true });
+      await assertEojeolWrap(narrow, /내 선택 ·/, `vote-submitted-320-${styleName}`);
+      await assertNoHorizontalOverflow(narrow, `vote-submitted-320-${styleName}`);
+      await narrow.evaluate(axeSource);
+      const styleFindings = await narrow.evaluate(async () => {
+        const results = await window.axe.run(document, { resultTypes: ['violations'], runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] } });
+        return results.violations.filter((violation) => violation.impact === 'serious' || violation.impact === 'critical');
+      });
+      assert.deepEqual(styleFindings.map((finding) => finding.id), [], `${styleName} background: blocking accessibility findings`);
+    }
 
     phase = 'UI stage modules and individual draw';
     async function createModule(title) {
@@ -267,13 +408,14 @@ async function main() {
       await clickCommand(operator, dialog.getByRole('button', { name: /저장|만들기/, exact: false }).last(), 'module.save');
       const module = (await read()).modules.find((item) => item.title === title);
       const card = operator.locator('li').filter({ has: operator.getByText(title, { exact: true }) }).first();
-      await clickCommand(operator, card.getByRole('button', { name: '시작', exact: true }), 'module.status');
+      await clickCommandConfirm(operator, card.getByRole('button', { name: '시작', exact: true }), '시작한다', 'module.status');
       return module;
     }
     const personModule = await createModule('개인 검증 무대');
     const companyModule = await createModule('업체 검증 무대');
     await operator.goto(`${gateway.baseUrl}/console/events/${eventId}/draws`, { waitUntil: 'networkidle' });
     async function createProgram(name, module, eligibility, quota, tier) {
+      await operator.evaluate(() => { document.querySelectorAll('details:not([open])').forEach((el) => { el.open = true; }); });
       await operator.locator('#draws-program-name').fill(name); await operator.locator('#draws-program-quota').fill(String(quota));
       await operator.locator('#draws-program-module').selectOption(module.id); await operator.locator('#draws-program-eligibility').selectOption(eligibility);
       await operator.locator('#draws-program-overlap').selectOption('PROGRAM');
@@ -282,7 +424,7 @@ async function main() {
       await clickCommand(operator, operator.getByRole('button', { name: '추첨 만들기', exact: true }), 'draw.program.save');
       const program = (await read()).drawPrograms.find((item) => item.name === name);
       const card = () => operator.locator('li').filter({ has: operator.getByText(name, { exact: true }) }).first();
-      await clickCommand(operator, card().getByRole('button', { name: '운영 시작', exact: true }), 'draw.program.save');
+      await clickCommandConfirm(operator, card().getByRole('button', { name: '운영 시작', exact: true }), '시작한다', 'draw.program.save');
       return { program, card };
     }
     const personRun = await createProgram('개인 검증 추첨', personModule, 'PERSON', 1, '개인 검증상');
@@ -296,13 +438,14 @@ async function main() {
     stageUpdated.catch(() => {});
     const touchAt = Date.now();
     await personRun.card().getByRole('button', { name: '무대 터치 실행', exact: true }).click();
+    await operator.getByRole('group', { name: '실행 확인', exact: true }).getByRole('button', { name: '추첨하고 전광판에 표시', exact: true }).click();
     await gateway.waitForResponseLoss('draw.program.run');
     await operator.getByRole('alert').filter({ hasText: /응답|연결|Failed to fetch/ }).waitFor();
     const firstStageDelayMs = (await stageUpdated) - touchAt;
     assert.ok(firstStageDelayMs < 2500, `first MC touch reached public stage too late: ${firstStageDelayMs}ms`);
     await operator.screenshot({ path: path.join(captures, 'stage-retry-1440.png'), fullPage: true });
     workspace = await read(); assert.equal(workspace.drawPrograms[0].winners.length, 1); assert.equal(workspace.display.moduleId, personModule.id);
-    await clickCommand(operator, personRun.card().getByRole('button', { name: '무대 터치 실행', exact: true }), 'draw.program.run');
+    await clickCommandConfirm(operator, personRun.card().getByRole('button', { name: '무대 터치 실행', exact: true }), '추첨하고 전광판에 표시', 'draw.program.run');
     const drawCalls = gateway.commands.filter((item) => item.command === 'draw.program.run');
     assert.equal(drawCalls[0].commandId, drawCalls[1].commandId);
     workspace = await read();
@@ -316,7 +459,7 @@ async function main() {
     for (const person of people.slice(1)) await command('check.scan', { deskId: inDesk.id, ticket: person.ticket }, { cookie: staffCookie, assignmentId: inAssignment });
     const companyRun = await createProgram('업체 검증 추첨', companyModule, 'COMPANY', 4, '업체 검증상');
     for (let index = 0; index < 4; index += 1) {
-      await clickCommand(operator, companyRun.card().getByRole('button', { name: '무대 터치 실행', exact: true }), 'draw.program.run');
+      await clickCommandConfirm(operator, companyRun.card().getByRole('button', { name: '무대 터치 실행', exact: true }), '추첨하고 전광판에 표시', 'draw.program.run');
       const current = (await read()).drawPrograms.find((item) => item.id === companyRun.program.id);
       assert.equal(current.winners.length, index + 1);
     }
@@ -360,7 +503,7 @@ async function main() {
     await clickCommand(staff, staff.getByRole('button', { name: '경품 조회', exact: true }), 'reward.lookup');
     assert.equal(await staff.getByRole('region', { name: '경품 확인 및 수령', exact: true }).getByRole('button', { name: '수령 확인', exact: true }).count(), 0);
     phase = 'real-content accessibility and overflow';
-    for (const [name, page] of [['operator', operator], ['staff', staff], ['mobile', mobile], ['reduced-motion', reduced], ['stage', stage]]) {
+    for (const [name, page] of [['operator', operator], ['staff', staff], ['mobile', mobile], ['reduced-motion', reduced], ['narrow-320', narrow], ['stage', stage]]) {
       await page.evaluate(axeSource);
       const findings = await page.evaluate(async () => {
         const results = await window.axe.run(document, { resultTypes: ['violations'], runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] } });
@@ -377,8 +520,8 @@ async function main() {
     assert.equal(persisted.json.state.workspaces[eventId].rouletteResults.length, 2);
     assert.equal(persisted.json.state.workspaces[eventId].rewards.filter((reward) => reward.status === 'RECEIVED').length, 3);
     assert.deepEqual(errors, []);
-    const result = { outcome: 'passed', apiResponsesMocked: false, realDeliveryAttempted: false, participants: 8, teams: 20, exactPicks: 5, browserBallots: 1, apiFixtureBallots: 5, renderedQrDecoded: true, browserAdmissions: 1, apiFixtureAdmissions: 7, independentRoulette: true, wheelStopsAtServerPrize: true, wheelStopRestoredOnReload: true, reducedMotionImmediateResult: true, browserRouletteParticipants: 2, individualTouchReplayedWithoutDuplicate: true, companyTouches: 4, companyRecipientsExplicit: true, firstStageDelayMs, staffBootstrapGlobalRewards: 0, collectedPrizes: 3, collectionRetryReusedId: true, persistedAfterHttpRestart: true, realContentAxeBlockingFindings: 0, horizontalOverflow: 0, pageErrors: 0, captures };
-    fs.writeFileSync(path.join(captures, 'verification.json'), JSON.stringify(result, null, 2));
+    const result = { outcome: 'passed', buildId, ownedNext: owned.baseUrl, apiResponsesMocked: false, realDeliveryAttempted: false, participants: 8, teams: 20, exactPicks: 5, browserBallots: 1, apiFixtureBallots: 5, renderedQrDecoded: true, browserAdmissions: 1, apiFixtureAdmissions: 7, independentRoulette: true, wheelStopsAtServerPrize: true, wheelStopRestoredOnReload: true, reducedMotionImmediateResult: true, browserRouletteParticipants: 2, narrowWordWrapScreens: 2, eojeolWrapViolations: 0, publishedStyleContrastScreens: 3, individualTouchReplayedWithoutDuplicate: true, companyTouches: 4, companyRecipientsExplicit: true, firstStageDelayMs, staffBootstrapGlobalRewards: 0, collectedPrizes: 3, collectionRetryReusedId: true, persistedAfterHttpRestart: true, realContentAxeBlockingFindings: 0, horizontalOverflow: 0, pageErrors: 0, captures };
+    fs.writeFileSync(path.join(captures, 'verification.json'), JSON.stringify(result, null, 2), { mode: 0o600 });
     console.log(JSON.stringify(result));
   } catch (error) {
     if (harness && fixtureEventId) {
@@ -390,7 +533,8 @@ async function main() {
     console.error(`Failed phase: ${phase}`); throw error;
   } finally {
     if (browser) await browser.close();
-    if (gateway) await gateway.close();
+    if (gateway) await gateway.close().catch(() => {});
+    if (owned) await owned.close().catch(() => {});
     if (harness) await harness.close();
     if (oldOrigin === undefined) delete process.env.EVENTOUCH_PUBLIC_URL; else process.env.EVENTOUCH_PUBLIC_URL = oldOrigin;
   }

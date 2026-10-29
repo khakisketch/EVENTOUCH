@@ -81,6 +81,7 @@ export type FailureFields = {
   status: Parameters<FastifyReply["code"]>[0];
   message: string;
   field: string | null;
+  code: string | null;
 };
 
 export function failureFields(
@@ -89,10 +90,12 @@ export function failureFields(
   failureMessage: (error: unknown, fallback: string) => string
 ): FailureFields {
   const field = error && typeof error === "object" ? (error as { field?: unknown }).field : undefined;
+  const code = error && typeof error === "object" ? (error as { code?: unknown }).code : undefined;
   return {
     status: errorStatus(error),
     message: failureMessage(error, fallback),
     field: typeof field === "string" && field ? field : null,
+    code: typeof code === "string" && code ? code : null,
   };
 }
 
@@ -101,9 +104,11 @@ export function fail(
   reply: FastifyReply,
   status: Parameters<FastifyReply["code"]>[0],
   message: string,
-  field?: string | null
+  field?: string | null,
+  code?: string | null
 ) {
   const body: Record<string, unknown> = { error: message };
   if (field) body.field = field;
+  if (code) body.code = code;
   return reply.code(status).send(body);
 }

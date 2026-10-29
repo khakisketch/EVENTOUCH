@@ -15,8 +15,8 @@ data/storage/
 backups/
 
 # Verification evidence stays outside the repository.
-# Captures go to /tmp/opencode/eventouch-captures/ (see AGENTS.md); these guards
-# only catch a stray write if some tool defaults back to an in-repo path.
+# New captures go to an owner-private directory outside the repo (AGENTS.md);
+# these guards only catch a stray write if a tool defaults to an in-repo path.
 design-inputs/
 design-previews/
 

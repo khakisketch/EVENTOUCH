@@ -17,6 +17,7 @@ const {
   sessionCookie,
   requestJson,
   deleteFixtureRows,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 const {
   mockOutbox,
@@ -127,19 +128,19 @@ before(async () => {
   mockEnvWas = process.env.EVENTOUCH_SMS_MOCK;
   process.env.EVENTOUCH_SMS_MOCK = '1';
   harness = await startApiHarness();
-  await insertAccount(harness.database, {
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,
     id: agencyId,
     role: 'AGENCY',
     name: '검증 담당',
     email: `attendee-agency-${suffix}@example.test`,
   });
-  await insertEvent(harness.database, {
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,
     id: ids.gated,
     slug: slugs.gated,
     payload: eventPayload(ids.gated, slugs.gated),
     workspace: workspace({ verificationRequired: true }),
   });
-  await insertEvent(harness.database, {
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,
     id: ids.open,
     slug: slugs.open,
     payload: eventPayload(ids.open, slugs.open),

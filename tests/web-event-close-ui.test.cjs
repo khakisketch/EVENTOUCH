@@ -128,7 +128,8 @@ test('inline close archive reuses the exact stage confirmation, permissions and 
   const message = read('events/[id]/messages/MessagingWorkspace.tsx');
   const settings = read('events/[id]/settings/SettingsWorkspace.tsx');
   const confirmation = read('console-ui/StageTransitionConfirmation.tsx');
-  assert.match(message, /state\.canManage && state\.stage === "ENDED" && !state\.closeSnapshot\.registrationOpen && state\.closeSnapshot\.openModules\.length === 0/);
+  assert.match(message, /state\.canManage && state\.canArchive && state\.stage === "ENDED" && !state\.closeSnapshot\.registrationOpen && state\.closeSnapshot\.openModules\.length === 0/);
+  assert.match(message, /canArchive = canWriteEvent\(\{ role, userId: myId, memberships, eventId \}, "event\.stage"\)/);
   assert.match(message, /postCommand\("event\.stage", \{ stage: "ARCHIVED" \}, id\)/);
   assert.match(message, /archiveCommandRef\.current \?\? commandId\(\)/);
   assert.match(message, /event\.id !== eventId \|\| text\(event\.stage\)\.toUpperCase\(\) !== "ARCHIVED"/);

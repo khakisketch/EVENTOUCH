@@ -3,17 +3,17 @@ const {test:nodeTest,before,after} = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
-const {databaseUrl,startApiHarness,insertAccount,insertEvent,insertAssignment,sessionCookie,requestJson} = require('./helpers/postgres-api-server.cjs');
+const {databaseUrl,startApiHarness,insertAccount,insertEvent,insertAssignment,sessionCookie,requestJson, LEGACY_ORG } = require('./helpers/postgres-api-server.cjs');
 const {floorplanPng} = require('./helpers/floorplan-image.cjs');
 const test = databaseUrl ? nodeTest : (name,fn) => nodeTest(name,{skip:'isolated PostgreSQL required'},fn);
 let h,dir,cookie,staff;
 before(async()=>{
  if(!databaseUrl)return;
  dir=fs.mkdtempSync('/tmp/opencode/eventouch-map-journey-');h=await startApiHarness({storageDir:dir});
- for(const [id,role] of [['agency','AGENCY'],['staff','STAFF']])await insertAccount(h.database,{id,role,name:id,email:`${id}@example.test`});
+ for(const [id,role] of [['agency','AGENCY'],['staff','STAFF']])await insertAccount(h.database,{orgId: LEGACY_ORG, id,role,name:id,email:`${id}@example.test`});
  cookie=await sessionCookie(h,'agency');staff=await sessionCookie(h,'staff');
  for(const [id,mode] of [['self-event','SELF'],['staff-event','STAFF']]){
-  await insertEvent(h.database,{id,slug:id,payload:{id,slug:id,name:id,stage:'LIVE',features:['stamp'],capacity:20},workspace:{
+  await insertEvent(h.database,{orgId: LEGACY_ORG, id,slug:id,payload:{id,slug:id,name:id,stage:'LIVE',features:['stamp'],capacity:20},workspace:{
    registrationOpen:true,publishedVersion:1,consentVersion:1,approvalRequired:false,price:0,stampMode:mode,
    publishedFields:[{id:'name',label:'이름',type:'text',required:true},{id:'phone',label:'연락처',type:'text',required:true}],
    booths:[{id:'booth-a',name:'같은 부스',status:'OPEN',used:0,capacity:0,limit:2},

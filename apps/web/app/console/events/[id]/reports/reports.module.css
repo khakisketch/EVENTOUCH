@@ -4,35 +4,88 @@
   font-size: var(--small);
 }
 
+/* Visible in-page index context (this workspace only): a quiet scope
+   label above the shared jump nav so the anchor row reads as a contents
+   index, not app tabs. aria-hidden: the nav's own aria-label carries
+   screen-reader naming once. Static wrapper — no sticky, so short phone
+   rows never cover the section they jump to. */
+.navIndex {
+  display: grid;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.navIndexLabel {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
 /* The frozen basis stamp rides inside the analysis description (next to the
    새로고침 section action) instead of stacking its own row above the KPIs. */
 .stamp {
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .metricGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: var(--s3);
+  overflow: hidden;
+  border-block: 1px solid var(--line);
 }
 
 .metricCard {
   display: grid;
   gap: var(--s1);
-  padding: var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  padding: var(--s4) 0;
+  border: 0;
+  border-radius: 0;
   background: var(--paper);
 }
 
 .metricCard strong {
   font-size: var(--h2);
   font-family: var(--display-font);
+  font-variant-numeric: tabular-nums;
 }
 
 .metricCard span {
   color: var(--muted);
   font-size: var(--small);
+}
+
+/* Headline metric (this workspace only): the outcome rate reads first at
+   double width on desktop, full row on phones. Same value and label —
+   only order and proportion change, never the snapshot or its basis.
+   Desktop dividers turn the stretched row into one connected strip so
+   the numbers read as a set instead of five floating figures. */
+@media (min-width: 1024px) {
+  .metricGrid {
+    gap: 0;
+  }
+
+  .metricCard {
+    padding: var(--s3) var(--s4);
+  }
+
+  .metricCard + .metricCard {
+    border-left: 1px solid var(--line);
+  }
+
+  .metricCard:first-child {
+    padding-left: 0;
+  }
+
+  .metricLead {
+    grid-column: span 2;
+  }
+
+  .metricLead strong {
+    font-size: var(--h1);
+  }
 }
 
 .dataTable {
@@ -57,6 +110,31 @@
   display: grid;
   gap: var(--s2);
   margin-top: var(--s5);
+}
+
+/* The deliverable list leads; complete live breakdowns remain one native
+   disclosure away, including the real zero values (never filtered away). */
+.analysisDetails {
+  border-top: 1px solid var(--line);
+}
+
+.analysisDetails > summary {
+  display: list-item;
+  min-height: 44px;
+  padding-block: var(--s3);
+  color: var(--brand-text);
+  font-size: var(--small);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.analysisDetails[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.analysisDetails > summary:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
 }
 
 .analysisSubheads .subgroup > h3 {
@@ -183,6 +261,37 @@
   margin: 0;
 }
 
+/* Local frozen-article view only: A4 portrait measure (default) or the
+   wider 16:9 presentation measure. Screen presentation alone — the stored
+   snapshot never changes. */
+.reportDocA4 {
+  max-width: 46rem;
+}
+
+.reportDocWide {
+  max-width: 64rem;
+}
+
+.reportViewBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+}
+
+.reportViewBar .button {
+  min-height: 44px;
+}
+
+/* Phone: the view label owns its row so A4/16:9 stay paired below,
+   never squeezed beside the label at 320px. Buttons, article payload,
+   print/archive gates and snapshot semantics are untouched. */
+@media (max-width: 768px) {
+  .reportViewBar > .help {
+    flex-basis: 100%;
+  }
+}
+
 .reportCover {
   display: grid;
   gap: var(--s2);
@@ -254,8 +363,19 @@
 /* Phone density: tighter KPI rhythm without touching type sizes — the first
    KPI row must read inside a 412px viewport below the folded header. */
 @media (max-width: 768px) {
+  /* All cards share one uniform two-column grid on phones, lead included:
+     order (outcome first) is the hierarchy, not width. Spanning the lead
+     here stranded the fourth card on its own row, so width stays uniform
+     and only the pre-existing odd-last rule absorbs a five-card orphan. */
   .metricGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--s2);
+  }
+
+  /* Five KPIs leave one empty track in a two-column phone grid; the last
+     odd card spans both columns instead of reading as a missing metric. */
+  .metricCard:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
   }
 
   .metricCard {
@@ -263,25 +383,74 @@
   }
 }
 .closeFlow {
-  padding: var(--s4);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  background: var(--paper);
+  padding: var(--s4) 0;
+  border: 0;
+  border-block: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
 
 .closeFacts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s3) var(--s6);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s2) var(--s4);
   margin: 0;
 }
 
 .closeFacts > div { display: grid; gap: var(--s1); }
 .closeFacts dt { color: var(--muted); font-size: var(--small); }
 .closeFacts dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+@media (min-width: 1024px) {
+  .closeFacts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
 .closeNext { display: grid; gap: var(--s2); margin-top: var(--s3); }
 .closeNext > p { margin: 0; }
 .closeDetails { margin-top: var(--s3); border-top: 1px solid var(--line); }
-.closeDetails > summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; text-decoration: underline; text-underline-offset: var(--s1); }
+.closeDetails > summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; text-decoration: none; }
 .closeDetails > summary::before { content: "+"; margin-right: var(--s2); }
 .closeDetails[open] > summary::before { content: "−"; }
+
+.analysisNote {
+  border-top: 1px solid var(--line);
+  padding-top: var(--s2);
+}
+
+.analysisNote > summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--brand-text);
+  font-size: var(--small);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.analysisNote > summary::before {
+  content: "+";
+  font-weight: 800;
+}
+
+.analysisNote[open] > summary::before {
+  content: "−";
+}
+
+.analysisNote p {
+  margin: var(--s2) 0 0;
+  color: var(--muted);
+  font-size: var(--small);
+  line-height: 1.55;
+}
+
+/* The report create action sits in the shared body toolbar; the quiet label
+   makes that row read as part of the close workflow, not a floating button. */
+.toolbarLabel {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--mono-font);
+  font-size: var(--label);
+  letter-spacing: 0.04em;
+}

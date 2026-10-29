@@ -57,8 +57,13 @@ test('unified-frame: primary actions live in toolbars or editing areas, feedback
   assert.match(programs, /<ConsoleToolbar/, 'programs create/refresh ride the body toolbar');
   assert.match(programs, />\s*프로그램 만들기\s*</, 'programs keeps the standard create action');
   const reports = read(REPORTS);
-  assert.match(reports, /<ConsoleToolbar/, 'reports create rides the body toolbar');
-  assert.match(reports, />\s*보고서 만들기\s*</, 'reports keeps the standard create action');
+  // The task-first redesign puts create alongside its report list instead of
+  // in a separate toolbar, while retaining its real permission gate.
+  const reportList = reports.slice(reports.indexOf('headingId="reports-list"'), reports.indexOf('</ConsoleSection>', reports.indexOf('headingId="reports-list"')));
+  assert.match(reportList, /action=\{\(/, 'reports create rides the list header action');
+  assert.match(reportList, /disabled=\{writeLocked\}/, 'reports create keeps the write gate');
+  assert.match(reportList, /onClick=\{openReportCreate\}/, 'reports create opens the existing form');
+  assert.match(reportList, />\s*보고서 만들기\s*</, 'reports keeps the standard create action');
   for (const file of ALL) {
     assert.match(read(file), /<ConsoleFeedback kind=/, `${file} reports through shared feedback`);
   }
@@ -85,7 +90,7 @@ test('unified-frame: domain sections keep their identities, duplicate menu title
   assert.match(programs, /className=\{styles\.moduleList\}/, 'programs keeps the module collection body');
   const theme = read(THEME);
   for (const legend of ['배경', '배너 이미지', '소개와 노출', '문구와 배치']) {
-    assert.match(theme, new RegExp(`<legend>${legend}<\\/legend>`), `theme retains the ${legend} group`);
+    assert.match(theme, new RegExp(`<legend>${legend}(?:\\{[^\\n]*\\})?<\\/legend>`), `theme retains the ${legend} group and optional change marker`);
   }
 });
 
@@ -239,7 +244,7 @@ test('unified-frame: theme keeps only locally changed leaves on newer drafts', (
   assert.match(theme, /유지할 내 변경/, 'confirm names the kept leaves');
   assert.match(theme, /둘 다 바꾼 항목/, 'confirm and notice name same-leaf conflicts');
   assert.match(theme, /홈 디자인 미리보기/, 'preview names only what it shows');
-  assert.match(theme, /행사 소개와 항목 노출은 게시 후 참가자 화면에서 확인하세요/, 'preview defers intro and visibility to publish');
+  assert.match(theme, /소개·강조색·항목 노출은 이 화면에 반영되지 않습니다/, 'preview honestly identifies what it does not render');
 });
 
 test('unified-frame: programs pre-block writes for switched-off types', () => {
@@ -301,7 +306,8 @@ test('unified-frame: dialogs keep dirty and unresolved dismissal gates', () => {
 test('unified-frame: printing emits only the chosen saved snapshot', () => {
   const reports = read(REPORTS);
   assert.match(reports, /articleRef = useRef<HTMLElement>\(null\)/);
-  assert.match(reports, /<article ref=\{articleRef\} className=\{styles\.reportDoc\}>/);
+  assert.match(reports, /<article ref=\{articleRef\} className=\{`?\$\{styles\.reportDoc\}/);
+  assert.match(reports, /data-layout=\{printLayout\}/);
   assert.match(reports, /cloneNode\(true\)/);
   assert.match(reports, /clone\.id = "eventouch-report-print"/);
   assert.match(reports, /classList\.add\("report-printing"\)/);
@@ -412,7 +418,7 @@ test('engagement-growth: creating a program reveals and focuses the new card', (
   assert.match(programs, /createdFocusRef\.current =/, 'create parks a focus request for the new module');
   assert.match(programs, /__latest__/, 'a receipt without an id still lands on the appended last module');
   assert.match(programs, /id=\{`module-title-\$\{module\.id\}`\}/, 'card headings carry a stable focus target');
-  assert.match(programs, /<h3 id=\{`module-title-/, 'heading focus target selector stays');
+  assert.match(programs, /<h2 id=\{`module-title-/, 'module headings follow the page H1 without skipping a level; focus target stays');
   assert.match(programs, /scrollIntoView\(\{ block: "nearest" \}\)/, 'create scrolls the new card into view');
   assert.match(programs, /slice\(0, moduleLimit\)/, 'server ordering stays windowed, never re-sorted');
   assert.match(programs, /onEdit=\{\(\) => openEdit\(module\)\}/, 'edit behavior stays wired per card');

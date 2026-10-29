@@ -27,7 +27,12 @@
    가동 시작/중지는 별도 상태 그룹으로 구분선 뒤에 둔다. 중지는 재개
    가능하므로 경고 토큰(일괄 빨강 금지), 가동 시작은 중립/성공 약한
    강조. '해제'는 외곽선과 구별되는 danger 텍스트·고스트. 버튼 라벨,
-   확인 문법, runCommand 경로는 그대로. */
+   확인 문법, runCommand 경로는 그대로. Desktop keeps an airier column
+   rhythm so grouped actions do not read as one wall. */
+.compactActions {
+  column-gap: var(--s3);
+}
+
 .actionSeparator {
   flex: none;
   align-self: stretch;
@@ -148,6 +153,34 @@
   scroll-margin-top: 0;
 }
 
+/* Floor grid (this workspace only): 전광판 출력 and 부스 share an even
+   desktop row and stack in DOM order on phones. The picker wraps within its
+   column; anchors, order, jump-nav and write gates stay unchanged. */
+.floorGrid {
+  display: grid;
+  min-width: 0;
+  gap: var(--s5);
+}
+
+@media (min-width: 1024px) {
+  .floorGrid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: var(--s4) var(--s6);
+  }
+}
+
+/* Tall ledger rows (this workspace only): name + two meta lines read
+   top-down, so actions dock to the title row instead of center-floating
+   against the whole block. Shared record paddings, ids and copy stay.
+   li-qualified to outrank the shared row without depending on import order;
+   desktop only, phones keep the shared stacked stretch. */
+@media (min-width: 769px) {
+  li.rowStart {
+    align-items: flex-start;
+  }
+}
+
 /* Before-the-day presets start folded (draws setup-details same
    grammar): the summary always names the current value so a folded row
    still answers "what is it now". Same-day controls stay unfolded. */
@@ -188,10 +221,33 @@
     background: var(--ground);
   }
 
+  /* Display picker stacks on phones: the select owns its row so the
+     적용 action and 행사장 link read as the next row, never squeezed
+     beside the select at 320px. */
+  .buttonRow > select {
+    flex-basis: 100%;
+  }
+
   .actionSeparator {
-    width: 100%;
-    height: 1px;
-    margin: 0;
+    display: none;
+  }
+
+  /* Phone row actions (this workspace only): intrinsic-width wrapping
+     list, not forced 2-col equal boxes. Ordinary, state and 해제 actions
+     keep order and tone; 가동 중지·해제는 마지막에 danger·경고 톤으로
+     남되 절반 규격으로 키우지 않는다. 44px와 포커스는 전역 규칙. */
+  .compactActions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: center;
+    gap: var(--s2);
+  }
+
+  .compactActions > :global(.button) {
+    flex: 0 1 auto;
+    width: auto;
+    max-width: 100%;
   }
 
   .anchorSection {

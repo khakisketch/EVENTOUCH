@@ -26,6 +26,16 @@ type ConsoleDialogProps = {
   children: ReactNode;
   footer?: ReactNode;
   wide?: boolean;
+  /**
+   * Opt-in sticky chrome for long forms (event create/duplicate). When true
+   * the title row (with an explicit header close using the same
+   * busy/canClose gate as Escape/backdrop) sticks to the top and the footer
+   * sticks to the bottom of the shared `.dialog` scroller via inline token
+   * styles. Default false keeps every existing caller byte-identical.
+   */
+  stickyChrome?: boolean;
+  /** Visible header-close label; defaults to "닫기". */
+  closeLabel?: string;
 };
 
 const FOCUSABLE_SELECTOR =
@@ -57,6 +67,8 @@ export default function ConsoleDialog({
   children,
   footer,
   wide = false,
+  stickyChrome = false,
+  closeLabel = "닫기",
 }: ConsoleDialogProps) {
   const fallbackId = useId();
   const headingId = titleId ?? `console-dialog-${fallbackId}`;
@@ -162,10 +174,58 @@ export default function ConsoleDialog({
         aria-describedby={description ? descriptionElementId : undefined}
         tabIndex={-1}
       >
-        <h2 id={headingId}>{title}</h2>
+        {stickyChrome ? (
+          <div
+            style={{
+              position: "sticky",
+              top: "calc(var(--s5) * -1)",
+              zIndex: 2,
+              margin: "calc(var(--s5) * -1) calc(var(--s5) * -1) 0",
+              padding: "var(--s5) clamp(var(--s3), 4vw, var(--s5)) var(--s3)",
+              background: "var(--paper)",
+              borderBottom: "1px solid var(--line)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "var(--s3)",
+            }}
+          >
+            <h2 id={headingId} style={{ margin: 0 }}>{title}</h2>
+            <button
+              type="button"
+              className="button button-secondary"
+              style={{ flex: "none" }}
+              onClick={() => requestClose()}
+              disabled={busy}
+            >
+              {closeLabel}
+            </button>
+          </div>
+        ) : (
+          <h2 id={headingId}>{title}</h2>
+        )}
         {description ? <div className={styles.dialogDescription} id={descriptionElementId}>{description}</div> : null}
         {children}
-        {footer ? <div className="dialog-actions">{footer}</div> : null}
+        {footer ? (
+          stickyChrome ? (
+            <div
+              className="dialog-actions"
+              style={{
+                position: "sticky",
+                bottom: "calc(var(--s5) * -1)",
+                zIndex: 2,
+                margin: "0 calc(var(--s5) * -1) calc(var(--s5) * -1)",
+                padding: "var(--s3) clamp(var(--s3), 4vw, var(--s5)) var(--s5)",
+                background: "var(--paper)",
+                borderTop: "1px solid var(--line)",
+              }}
+            >
+              {footer}
+            </div>
+          ) : (
+            <div className="dialog-actions">{footer}</div>
+          )
+        ) : null}
       </div>
     </div>
   );

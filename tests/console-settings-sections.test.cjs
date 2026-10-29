@@ -184,15 +184,25 @@ test("tab and status styles reuse existing tokens and keep 44px targets", () => 
 });
 
 test("no server contract, permission, or API surface changes", () => {
-  const fetched = [...source.matchAll(/fetch\("([^"]+)"/ug)].map((match) =>
+  // Reads go through the shared transport (consoleFetch, any quote style);
+  // the event read is the scoped bootstrap and the client list comes from
+  // the directory. Writes keep the same command endpoint.
+  const fetched = [...source.matchAll(/(?:consoleFetch|fetch)\(\s*[`"']([^`"']+)["`']/ug)].map((match) =>
     match[1].replace(/\$\{[^}]*\}/g, ":param")
   );
   assert.ok(fetched.length > 0, "expected fetch calls to audit");
   const allowed = new Set([
     "/api/auth/me",
-    "/api/bootstrap",
+    "/api/events/:param/bootstrap",
+    "/api/console/directory",
     "/api/events/:param/commands",
   ]);
+  for (const url of fetched) {
+    assert.ok(allowed.has(url), `unexpected API surface: ${url}`);
+  }
+  assert.ok(fetched.includes("/api/events/:param/bootstrap"), "scoped event read is present");
+  assert.ok(fetched.includes("/api/console/directory"), "client list comes from the directory");
+  assert.doesNotMatch(source, /(?:consoleFetch|fetch)\("\/api\/bootstrap"/u, "no full bootstrap read remains");
   for (const url of fetched) {
     assert.ok(allowed.has(url), `unexpected API surface: ${url}`);
   }

@@ -6,13 +6,22 @@
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const { prepareCaptureDir, ensureCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = require('./capture-dir.cjs');
 const http = require('node:http');
-process.env.TMPDIR = '/tmp/opencode';
+const path = require('node:path');
+for (const key of ['SOLAPI_API_KEY', 'SOLAPI_API_SECRET', 'SOLAPI_SENDER', 'SOLAPI_KAKAO_PFID', 'SOLAPI_API_HOST']) delete process.env[key];
+process.env.EVENTOUCH_SMS_MOCK = '1';
+process.env.EVENTOUCH_MAIL_MOCK = '1';
+const { startOwnedNext, ensureAuditDatabaseEnv } = require('./audit-fixture.cjs');
+ensureAuditDatabaseEnv();
 const { chromium } = require('playwright');
-const { startApiHarness, insertAccount } = require('../tests/helpers/postgres-api-server.cjs');
+const { startApiHarness, insertAccount, LEGACY_ORG } = require('../tests/helpers/postgres-api-server.cjs');
 const { startWebApiGateway } = require('../tests/helpers/web-api-gateway.cjs');
 
-const directory = '/tmp/opencode/eventouch-captures/retirement-real';
+const directory = process.env.EVENTOUCH_CAPTURE_ROOT
+  ? path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'retirement-real')
+  : defaultCaptureDir(`retirement-real-${runStamp()}`);
+const webBaseExplicit = Object.hasOwn(process.env, 'WEB_BASE');
 const fixtureWorker = `
 self.addEventListener('install', event => event.waitUntil((async () => {
   const cache = await caches.open('eventouch-shell-retirement-fixture');
@@ -25,13 +34,25 @@ self.addEventListener('fetch', event => {
 });`;
 
 async function main() {
-  fs.mkdirSync(directory, { recursive: true });
-  let api, gateway, proxy, browser, page;
+  prepareCaptureDir(directory);
+  // Browser profiles and harness file stores stay under this run's
+  // private tree, never the shared /tmp/opencode directory.
+  process.env.TMPDIR = ensureRunTmpDir(directory);
+  const buildId = fs.readFileSync(path.join(__dirname, '..', 'apps', 'web', '.next', 'BUILD_ID'), 'utf8').trim();
+  assert.ok(buildId, 'retirement audit requires a production Next build');
+  let api, owned, gateway, proxy, browser, page;
   let oldMode = true;
   try {
     api = await startApiHarness();
+    if (webBaseExplicit) process.stderr.write('[retirement-audit] WEB_BASE is superseded: auditing the isolated owned Next server\n');
+    owned = await startOwnedNext({ apiBase: api.baseUrl });
+    {
+      const probe = await fetch(`${owned.baseUrl}/login`, { headers: { connection: 'close' } });
+      await probe.text().catch(() => '');
+      assert.equal(probe.status, 200, 'owned Next must serve the login shell before the browser runs');
+    }
     const email = `retirement-${crypto.randomUUID()}@example.test`;
-    gateway = await startWebApiGateway({ apiBase: api.baseUrl, webBase: process.env.WEB_BASE || 'http://127.0.0.1:8777' });
+    gateway = await startWebApiGateway({ apiBase: api.baseUrl, webBase: owned.baseUrl });
     proxy = http.createServer((request, response) => {
       if (oldMode && request.url === '/sw.js') {
         response.writeHead(200, { 'content-type': 'application/javascript', 'cache-control': 'no-store', 'service-worker-allowed': '/' });
@@ -103,22 +124,22 @@ async function main() {
     await page.getByRole('alert').filter({ hasText: '운영자 계정이 아직 설정되지 않았습니다.' }).waitFor();
     assert.equal(await page.locator('#login-password').count(), 0, 'an unconfigured install must explain setup before collecting credentials');
     await page.screenshot({ path: `${directory}/unconfigured-new-app.png`, fullPage: true });
-    await insertAccount(api.database, { id: 'retirement-manager', role: 'AGENCY', name: '새 앱 검증 운영자', email });
+    await insertAccount(api.database, { orgId: LEGACY_ORG, id: 'retirement-manager', role: 'AGENCY', name: '새 앱 검증 운영자', email });
     await page.getByRole('button', { name: '설정 상태 다시 확인', exact: true }).click();
     await page.fill('#login-email', email); await page.fill('#login-password', 'not-a-real-test-password');
     await page.getByRole('button', { name: /로그인/ }).click();
     await page.waitForURL(/\/console(?:\/|$)/, { timeout: 15000 });
     await page.screenshot({ path: `${directory}/new-console-after-worker-retirement.png`, fullPage: true });
     assert.deepEqual(errors, []);
-    const result = { outcome: 'passed', installedSimulatedLegacyWorker: true, actualRetirementWorkerFromNewApp: true, oldCacheRemoved: true, workerUnregistered: true, controlledPageRefreshedIntoNext: true, userStorageAndCookieRetained: true, unrelatedCacheRetained: true, productionCspAndNonces: true, unconfiguredInstallExplainedBeforeCredentials: true, configuredInstallRecoveredWithoutReload: true, realApiLoginHydrated: true, apiResponsesMocked: false, pageErrors: 0 };
-    fs.writeFileSync(`${directory}/verification.json`, JSON.stringify(result, null, 2)); console.log(JSON.stringify(result));
+    const result = { outcome: 'passed', buildId, ownedNext: owned.baseUrl, installedSimulatedLegacyWorker: true, actualRetirementWorkerFromNewApp: true, oldCacheRemoved: true, workerUnregistered: true, controlledPageRefreshedIntoNext: true, userStorageAndCookieRetained: true, unrelatedCacheRetained: true, productionCspAndNonces: true, unconfiguredInstallExplainedBeforeCredentials: true, configuredInstallRecoveredWithoutReload: true, realApiLoginHydrated: true, apiResponsesMocked: false, pageErrors: 0 };
+    fs.writeFileSync(`${directory}/verification.json`, JSON.stringify(result, null, 2), { mode: 0o600 }); console.log(JSON.stringify(result));
   } catch (error) {
     if (page) await page.screenshot({ path: `${directory}/failure.png`, fullPage: true }).catch(() => {});
     throw error;
   } finally {
     if (browser) await browser.close();
     if (proxy) { proxy.closeAllConnections(); await new Promise((resolve) => proxy.close(resolve)); }
-    if (gateway) await gateway.close(); if (api) await api.close();
+    if (gateway) await gateway.close().catch(() => {}); if (owned) await owned.close().catch(() => {}); if (api) await api.close();
   }
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

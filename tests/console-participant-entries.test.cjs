@@ -14,8 +14,8 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
 test("the roster offers hand-written registration next to the file tool", () => {
   const list = read("apps/web/app/console/events/[id]/participants/ParticipantList.tsx");
   assert.match(list, /참가자 추가/u);
-  assert.match(list, /파일로 등록/u);
-  assert.match(list, /목록 CSV · \{visiblePeople\.length\}명/u);
+  assert.match(list, /명단 가져오기/u);
+  assert.match(list, /CSV 내보내기 · 검색·필터 결과 \$\{visiblePeople\.length\}명/u);
   // The file import is a tool, not the only door into the roster.
   assert.match(list, /participants\/import/u);
   // Adding one participant posts the ordinary command path with a stable id.
@@ -37,7 +37,7 @@ test("the add dialog keeps the working fields first and names the collection mod
 
 test("an empty roster names the ways to fill it instead of only waiting", () => {
   const list = read("apps/web/app/console/events/[id]/participants/ParticipantList.tsx");
-  assert.match(list, /참가자를 직접 추가하거나 파일로 등록할 수 있습니다/u);
+  assert.match(list, /참가자 추가로 한 명씩 등록하거나 명단 가져오기로 여러 명을 등록하세요/u);
   assert.match(list, /행사 설정의 참가 접수를 열어 주세요/u);
   assert.match(list, /참가 신청 링크 복사/u);
 });

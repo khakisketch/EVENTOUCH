@@ -38,8 +38,10 @@ test('a focus-only skip leads into the draft before the recipient list', () => {
   assert.ok(skipAt < SOURCE.indexOf('id="campaign-recipients"'), 'skip precedes the recipient picker');
 });
 
-test('the two visible jumps stay while the selected-only label drops its duplicated count', () => {
-  assert.match(SOURCE, /수신자 선택으로 이동/u, 'recipient jump stays');
+test('compose and review keep their visible return paths while selected-only avoids a duplicate count', () => {
+  assert.match(SOURCE, /내용 작성으로 계속/u, 'draft jump stays beside recipient selection');
+  assert.match(SOURCE, /수신자 다시 확인/u, 'review returns to the recipient picker');
+  assert.match(SOURCE, /onClick=\{jumpToRecipientFilter\}/u, 'the return opens and focuses the picker');
   assert.match(SOURCE, /발송 검토로 이동/u, 'review jump stays');
   assert.match(SOURCE, /id="recipient-selected-only"/u, 'selected-only toggle stays');
   assert.match(SOURCE, /선택 대상만 보기/u);

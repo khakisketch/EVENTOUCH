@@ -1,18 +1,20 @@
 .moduleList {
   display: grid;
-  gap: var(--s3);
+  gap: 0;
   margin: 0;
   padding: 0;
   list-style: none;
+  border-top: 1px solid var(--line);
 }
 
 .moduleCard {
   display: grid;
-  gap: var(--s3);
-  padding: var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
+  gap: var(--s4);
+  padding: var(--s4) 0 var(--s5);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
 
 .moduleTop {
@@ -29,14 +31,14 @@
   min-width: 0;
 }
 
-.moduleTitle h3 {
+.moduleTitle h2 {
   margin: 0;
   font-size: var(--h3);
   word-break: keep-all;
   overflow-wrap: break-word;
 }
 
-.moduleTitle h3:focus-visible {
+.moduleTitle h2:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 3px;
 }
@@ -129,10 +131,11 @@
 .drawBox {
   display: grid;
   gap: var(--s2);
-  padding: var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-small);
-  background: var(--surface-muted);
+  padding: var(--s3) 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
 
 .drawControls {
@@ -143,6 +146,7 @@
 }
 
 .drawControls label {
+  flex-basis: 100%;
   font-size: var(--small);
   font-weight: 650;
 }
@@ -154,19 +158,26 @@
 
 .itemList {
   display: grid;
-  gap: var(--s2);
-  margin: 0;
+  gap: 0;
+  margin: var(--s2) 0 0;
   padding: 0;
   list-style: none;
+  border-top: 1px solid var(--line);
 }
 
 .itemRow {
   display: grid;
-  gap: var(--s1);
-  padding: var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-small);
-  background: var(--paper);
+  gap: var(--s2);
+  padding: var(--s4) 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.itemRow:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
 }
 
 .itemText {
@@ -240,6 +251,32 @@
   margin: 0 0 var(--s3);
   color: var(--muted);
   font-size: var(--small);
+}
+
+.reviewStrip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s2);
+  margin: 0 0 var(--s2);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  font-size: var(--small);
+}
+
+.reviewStrip:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.reviewStripLabel {
+  font-weight: 700;
+}
+
+.reviewStrip .button {
+  min-height: 44px;
 }
 
 .resultCount .button {
@@ -324,6 +361,14 @@
     align-items: stretch;
   }
 
+  .moduleActions {
+    display: flex;
+  }
+
+  .moduleActions .button {
+    flex: 1 1 140px;
+  }
+
   .photoArchiveTools {
     align-items: stretch;
     flex-direction: column;
@@ -332,4 +377,25 @@
   .photoArchiveTools :global(.button) {
     width: 100%;
   }
+}
+
+/* Korean prose wraps at 어절 boundaries (keep-all, DESIGN.md typography),
+   never mid-syllable at 320–390px. .detail/.itemText/.itemMeta/.resultList
+   already carry break-word for unbroken tokens; this only changes where
+   normal Korean may break. */
+.help,
+.detail,
+.empty,
+.featureOff,
+.lockNote,
+.itemText,
+.itemMeta,
+.resultList,
+.resultCount,
+.reviewStrip,
+.fieldError,
+.drawControls label,
+.itemRow label,
+.form label {
+  word-break: keep-all;
 }

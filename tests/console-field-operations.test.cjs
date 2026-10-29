@@ -124,6 +124,13 @@ test("staff assignment keeps its guidance and its release path", () => {
   assert.match(source, />\s*해제\s*<\/button>/u, "the release affordance stays on the row");
 });
 
+test("display apply names its busy state on the button", () => {
+  // 현장 마감 사유: 전광판 적용은 공용 작성자 잠금을 쓰므로 버튼 문구가
+  // '적용 중입니다'로 바뀌어야 대기 상태가 보인다. 명령·권한 게이트 불변.
+  const source = ops();
+  assert.match(source, /\{busy \? "적용 중입니다" : displayChoice/);
+});
+
 test("no server contract moves with this change", () => {
   const source = ops();
   for (const command of [

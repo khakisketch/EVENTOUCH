@@ -102,6 +102,7 @@ test('event-close audit separates direct reference from the linear path and pres
 });
 
 test('linear measured phases use direct next controls and a single settings intake/end visit', () => {
+
   const source = read();
   const phases = source.slice(source.indexOf('// ---- Phase 1:'), source.indexOf('// ---- Final proof'));
   assert.doesNotMatch(phases, /backToHub\(|page\.goto\(/, 'no mandatory hub return or hidden measured navigation');
@@ -111,4 +112,28 @@ test('linear measured phases use direct next controls and a single settings inta
   assert.match(source, /linear-completed-messages/);
   assert.match(source, /totals\.pathChanges <= 6/, 'the original six-transition goal is not raised');
   assert.match(source, /result notice and archive stay on the messages screen/);
+});
+
+test('approve phase clicks the current filter-scope roster select-all, not retired copy', () => {
+  const source = read();
+  assert.doesNotMatch(source, /검색·필터 결과 \\d/, 'the retired roster select-all label is gone from the audit');
+  assert.match(source, /\/\^전체 \\d\+명 선택\$\//, 'phase 1 anchors to the exact filter-scope label');
+  const list = fs.readFileSync(path.join(
+    __dirname, '..', 'apps', 'web', 'app', 'console', 'events', '[id]', 'participants', 'ParticipantList.tsx',
+  ), 'utf8');
+  assert.match(list, /전체 \{visiblePeople\.length\}명 선택/, 'the product still renders the filter-scope select-all the audit clicks');
+  assert.match(list, /function selectVisible\(\) \{\s*\n?.*visiblePeople\.map/, 'that label selects the whole filter scope, not just the page');
+});
+
+test('out-of-order recovery opens the collapsed composer before drafting the guard probe', () => {
+  const source = read();
+  const recovery = source.slice(
+    source.indexOf('linear-out-of-order-warning'),
+    source.indexOf('archiveDraftCancelled'),
+  );
+  assert.ok(recovery.includes('#message-compose-open'), 'collapsed composer is opened first');
+  assert.ok(
+    recovery.indexOf('#message-compose-open') < recovery.indexOf('#campaign-title'),
+    'composer opens before the draft fill, mirroring the measured result-notify handoff',
+  );
 });

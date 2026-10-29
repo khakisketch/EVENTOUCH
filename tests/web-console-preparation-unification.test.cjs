@@ -129,26 +129,52 @@ test('archived events read as read-only with the reason on every write control',
     assert.match(source, /=== "ARCHIVED"/u, `${pageId} derives the archived gate from server stage`);
     assert.match(source, /보관된 행사는 읽기 전용입니다/u, `${pageId} names the reason`);
   }
-  assert.match(PAGES.settings, /disabled=\{busy \|\| archived\}/u);
-  assert.match(PAGES.messages, /disabled=\{selectedCount === 0 \|\| busyAction !== null \|\| uploadingImage \|\| archived\}/u);
+  assert.match(PAGES.settings, /disabled=\{busy \|\| archived \|\| !canWriteSettings\}/u);
+  assert.match(PAGES.settings, /disabled=\{busy \|\| archived \|\| !canWriteIntake\}/u);
+  assert.match(PAGES.messages, /const messagesLocked = archived \|\| !state\.canWriteMessages/u);
+  assert.match(PAGES.messages, /disabled=\{selectedCount === 0 \|\| busyAction !== null \|\| uploadingImage \|\| messagesLocked\}/u);
   assert.match(PAGES.content, /disabled=\{busy !== null \|\| archived\}/u);
-  assert.match(PAGES.operations, /const writeBlocked = archived \|\| !state\.canManage/u);
-  assert.match(PAGES.operations, /disabled=\{busy \|\| writeBlocked\}/u);
-  assert.match(PAGES.operations, /title=\{writeBlocked \? writeBlockedReason : undefined\}/u);
+  for (const [section, permission] of [['onsite', 'Onsite'], ['booth', 'Booth'], ['display', 'Display']]) {
+    assert.match(PAGES.operations, new RegExp(`const ${section}Blocked = archived \\|\\| !canWrite${permission}`, 'u'));
+    if (section === 'display') {
+      assert.match(PAGES.operations, /disabled=\{busy \|\| !displayChoice \|\| displayChoice === currentDisplayValue \|\| displayBlocked\}/u);
+      assert.match(PAGES.operations, /title=\{\s*displayBlocked\s*\? displayNoWriteReason/u);
+    } else {
+      assert.match(PAGES.operations, new RegExp(`disabled=\\{busy \\|\\| ${section}Blocked\\}`, 'u'));
+      assert.match(PAGES.operations, new RegExp(`title=\\{${section}Blocked \\? ${section}NoWriteReason : undefined\\}`, 'u'));
+    }
+  }
+  assert.match(PAGES.operations, /function commandBlocked\(command: string\): boolean \{\s*if \(archived\) return true;\s*return !canWriteEvent\(capabilities, command\)/u);
 });
 
 test('settings gates on the signed-in actor, not the account directory', () => {
   assert.match(PAGES.settings, /\/api\/auth\/me/u);
-  assert.match(PAGES.settings, /memberships\.some\(/u);
-  assert.match(PAGES.settings, /role === "AGENCY"/u);
+  assert.match(PAGES.settings, /const user = record\(record\(meData\)\?\.user\)/u);
+  assert.match(PAGES.settings, /const role = text\(user\.role\)/u);
+  assert.match(PAGES.settings, /const myId = text\(user\.id\)/u);
+  assert.match(PAGES.settings, /const capabilities = \{ role: state\.role, userId: state\.userId, memberships: state\.memberships, eventId \}/u);
+  assert.match(PAGES.settings, /canWriteEvent\(capabilities, "event\.update"\)/u);
+  assert.match(PAGES.settings, /canWriteEvent\(capabilities, "form\.publish"\)/u);
+  const capabilities = read('lib/event-capabilities.ts');
+  assert.match(capabilities, /if \(role === "AGENCY"\) return true/u);
+  assert.match(capabilities, /if \(role !== "MANAGER"\) return false/u);
+  assert.match(capabilities, /item\.accountId === userId && item\.eventId === eventId/u);
+  assert.match(capabilities, /if \(grants === null\) return false/u);
   assert.doesNotMatch(PAGES.settings, /canManageEvent = accounts\.some/u);
 });
 
 test('render corrections: warning spacing and truthful draft guard', () => {
   assert.match(
     PAGES.messages,
-    /공급사 응답을 기준으로 표시합니다\.<\/strong>\{" "\}/u,
+    /발송 상태는 공급사 응답을 기준으로 표시합니다\.\{" "\}/u,
     'provider warning keeps a real space between lead and body'
+  );
+  assert.match(
+    PAGES.messages,
+    // Presentation change: retain the provider state and require the actual
+    // delivery limit in the always-visible summary, not only inside details.
+    /<summary>발송 연결 · \{state\.integrations\.connected \? "연결됨" : "미연동 · 실제 전달 안 됨"\}<\/summary>/u,
+    'provider state AND the non-delivery limit stay visible before sending'
   );
   assert.match(
     PAGES.operations,
@@ -247,7 +273,7 @@ test('message history reveal moves focus to the first new row', () => {
   // the attention anchor semantics stay untouched.
   assert.match(messages, /pendingHistoryFocusRef/u, 'reveal records the first new row index');
   assert.match(messages, /pendingHistoryFocusRef\.current = shownCampaigns\.length/u, 'pending index is the pre-reveal window end');
-  assert.match(messages, /historyListRef\.current\?\.children\[target\]/u, 'focus lands on the first newly revealed row');
+  assert.match(messages, /historyListRef\.current\?\.querySelectorAll<HTMLElement>\("\[data-history-row\]"\)\[target\]/u, 'focus lands on the first newly revealed record, not its optional detail row');
   assert.match(messages, /data-history-row/u, 'revealed rows carry a stable marker');
   assert.match(messages, /attentionParam === "1"/u, 'attention anchor semantics stay');
 });

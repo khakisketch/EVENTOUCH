@@ -13,6 +13,7 @@ const {
   sessionCookie,
   requestJson,
   deleteFixtureRows,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 
 const test = databaseUrl
@@ -94,32 +95,32 @@ function eventWorkspace() {
 before(async () => {
   if (!databaseUrl) return;
   harness = await startApiHarness();
-  await insertAccount(harness.database, {
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,
     id: ids.agency,
     role: 'AGENCY',
     name: '조직 관리자',
     email: `${ids.agency}@example.test`,
     orgPermissions: ['events.all'],
   });
-  await insertAccount(harness.database, {
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,
     id: ids.manager,
     role: 'MANAGER',
     name: '행사 매니저',
     email: `${ids.manager}@example.test`,
   });
-  await insertAccount(harness.database, {
+  await insertAccount(harness.database, {orgId: LEGACY_ORG,
     id: ids.staff,
     role: 'STAFF',
     name: '현장 스태프',
     email: `${ids.staff}@example.test`,
   });
-  await insertEvent(harness.database, {
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,
     id: ids.eventA,
     slug: slugs.eventA,
     payload: eventPayload(ids.eventA, slugs.eventA, '행사 A'),
     workspace: eventWorkspace(),
   });
-  await insertEvent(harness.database, {
+  await insertEvent(harness.database, {orgId: LEGACY_ORG,
     id: ids.eventB,
     slug: slugs.eventB,
     payload: eventPayload(ids.eventB, slugs.eventB, '행사 B'),

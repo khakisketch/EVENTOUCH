@@ -39,17 +39,18 @@
 //             "<label> <count>장" — the #evidence-photo-section select is
 //             mobile-only and MUST NOT be driven on desktop),
 //             li#evidence-photo-<id>[tabIndex=-1], button "더 보기 (N)"
-// - messages: #campaign-title, li[data-history-row]#campaign-<id>,
+// - messages: #history-heading, [data-history-row]#campaign-<id>,
 //             #campaign-history-more "이전 발송 더 보기 (N)"
 // - programs: button "프로그램 만들기", #program-title, #program-type,
 //             #program-options, dialog submit "만들기",
-//             h3#module-title-<id>[tabIndex=-1], button "더 보기 (N)"
+//             h2#module-title-<id>[tabIndex=-1], button "더 보기 (N)"
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const { prepareCaptureDir, ensureCaptureDir, defaultCaptureDir, runStamp } = require('./capture-dir.cjs');
 const path = require('node:path');
 
-const DEFAULT_CAPTURE_DIR = '/tmp/opencode/eventouch-captures/console-unification';
+const DEFAULT_CAPTURE_DIR = defaultCaptureDir(`console-unification-fallback-${runStamp()}`);
 const DESKTOP_VIEWPORT = { width: 1280, height: 900 };
 const GOTO_TIMEOUT = 30000;
 const UI_TIMEOUT = 15000;
@@ -209,7 +210,7 @@ async function closeOwnerPage(context, page) {
 }
 
 async function saveShot(page, captureDir, name) {
-  fs.mkdirSync(captureDir, { recursive: true });
+  ensureCaptureDir(captureDir);
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.waitForTimeout(300);
   await page.screenshot({ path: path.join(captureDir, name), fullPage: true });
@@ -362,14 +363,10 @@ async function messagesPhase({ fixture, ownerCookie, baseUrl, eventId, ownerSess
       ownerSession,
       url: `${baseUrl}${eventPath(eventId, '/messages')}`,
     }));
-    await page.locator('#campaign-title').first().waitFor({ state: 'visible', timeout: UI_TIMEOUT });
-    await page.waitForTimeout(800);
-    const historyDisclosure = page.locator('summary', { hasText: '발송 기록 열기' });
-    await historyDisclosure.focus();
-    await page.keyboard.press('Enter');
-    await page.locator('summary', { hasText: '발송 기록 닫기' }).waitFor();
+    await page.locator('#history-heading').waitFor({ state: 'visible', timeout: UI_TIMEOUT });
+    await page.locator('summary', { hasText: '기록 목록 접기' }).waitFor();
 
-    const rowSelector = 'li[data-history-row]';
+    const rowSelector = '[data-history-row]';
     let ids = await page.evaluate((selector) => [...document.querySelectorAll(selector)].map((node) => node.id), rowSelector);
     if (ids.length === 0) {
       throw new Error('messages: empty history rendered; refusing to claim more-expansion verified');
@@ -432,7 +429,7 @@ async function programsPhase({ fixture, ownerCookie, baseUrl, eventId, ownerSess
     throw new Error(`programs: server holds ${(state.workspaces[eventId].modules || []).length} modules, expected ${fill} before UI creation`);
   }
 
-  const headingSelector = 'h3[id^="module-title-"]';
+  const headingSelector = 'h2[id^="module-title-"]';
   let context = null;
   let page = null;
   try {
@@ -548,7 +545,11 @@ async function auditLongListBoundaries({
   if (typeof ownerSession !== 'string' || !ownerSession) throw new Error('boundaries: ownerSession missing');
   if (typeof newContext !== 'function') throw new Error('boundaries: newContext missing');
   if (typeof check !== 'function') throw new Error('boundaries: check missing');
-  const captures = captureDir || DEFAULT_CAPTURE_DIR;
+  const root = captureDir || DEFAULT_CAPTURE_DIR;
+  if (!captureDir) prepareCaptureDir(root);
+  // The supplied directory belongs to the caller. Claim a fresh namespace
+  // for this invocation rather than replacing same-named caller evidence.
+  const captures = prepareCaptureDir(path.join(root, 'long-list-boundaries'));
   const ownerCookie = extended.ownerCookie;
   const stamp = Date.now();
   const shared = { fixture, ownerCookie, baseUrl, eventId, ownerSession, newContext, captureDir: captures, stamp };

@@ -1,6 +1,9 @@
 # EVENTOUCH 구조
 
-Updated: 2026-10-17 · 기준 브랜치: `master` (구현 기준은 현재 저장소 코드와 테스트)
+Updated: 2026-10-29 · 기준 브랜치: `main` (구현 기준은 현재 작업 트리와 테스트)
+
+공유형 조직 격리·소유권 관리로 전환 중이다. 운영 반영 및 현재 검증 완료 범위는
+`docs/STATUS.md`, 사용자 확정 정책과 조직 경계는 `docs/MULTI-TENANCY.md`를 따른다.
 
 이 문서는 현재 구현과 목표 아키텍처를 구분해 기록한다. 제안서(`EVENTOUCH_서비스 기획 및
 제안.html`)나 `행사운영플랫폼_개발기획안.pdf`는 초기 기획이므로 구현 판단의 근거로 쓰지 않는다.
@@ -88,11 +91,13 @@ Updated: 2026-10-17 · 기준 브랜치: `master` (구현 기준은 현재 저�
 
 ## 2. 역할과 권한
 
-역할은 셋이다(`server/access.js`, `server/auth.js`).
+역할은 셋이다(`server/access.js`, `server/auth.js`). 계정은 전역 로그인 신원이며,
+현재 선택된 운영사의 `organization_memberships`가 실효 역할·소속 활성·조직 권한을 결정한다.
+`accounts.role`을 다른 운영사의 권한으로 사용하지 않는다.
 
 | 역할 | 범위 | 판정 방식 |
 |---|---|---|
-| `AGENCY` | 조직 전체 | 항상 허용 |
+| `AGENCY` | 현재 운영사 전체 | 검증된 조직 문맥 안에서 허용 |
 | `MANAGER` | 배정된 행사 | `memberships` 행 존재 |
 | `STAFF` | 배정된 데스크·부스 | `staff_assignments` + 커맨드 허용목록 |
 
@@ -111,6 +116,10 @@ Updated: 2026-10-17 · 기준 브랜치: `master` (구현 기준은 현재 저�
 행사 단위 쓰기 권한은 `memberships.write_permissions` 배열이며 `'all'` 또는 기능 키다.
 화면 접근은 라우트 → 셸 메뉴(행사·고객사 + 행사 하위 목적지, 2메뉴 정본) → 그룹 권한 순으로
 판정한다. 메뉴 표시는 게이트일 뿐이며 권한 판정은 항상 서버가 한다.
+
+운영사 소유권·역할 변경과 행사별 쓰기 범위는 별개다. 기존 팀 화면 안에서 관리하되
+소유권 변경으로 전역 계정 신원이나 다른 운영사의 역할을 바꾸지 않는다.
+조직 선택·소속 해제·이전 탭·응답 유실의 구체 계약은 [MULTI-TENANCY.md](MULTI-TENANCY.md)에 둔다.
 
 ## 3. 행사 생명주기와 기능
 
@@ -185,21 +194,26 @@ PostgreSQL이 행사 데이터의 유일한 권위다. JSON 파일 저장소(`DA
 
 | 테이블 | 역할 |
 |---|---|
-| `accounts` | 구성원. `role`, `org_permissions`, scrypt 해시 |
-| `sessions` | 세션 토큰 해시·만료 |
+| `accounts` | 전역 로그인 신원·scrypt 해시·본인이 검증한 이메일. 기존 역할/권한 필드는 호환 자료이며 운영사 권한의 정본이 아님 |
+| `organizations` | 운영사 식별·이름·권한 변경 시계 |
+| `organization_memberships` | 계정↔운영사 실효 역할·권한·활성·멤버십 리비전 |
+| `sessions` | 세션 토큰 해시·만료·선택 운영사·세션별 선택 리비전과 멤버십 바인딩 |
+| `account_email_proofs` | 계정 이메일 확인·비밀번호 복구의 목적별 일회용 토큰 해시와 만료·사용 상태 |
 | `invitations` | 초대. 상태 `PENDING`/`ACCEPTED`/`REVOKED`, 만료 |
-| `clients` | 고객사 |
-| `events` | 행사 메타(이름·slug·일정·단계·기능) `payload` jsonb |
+| `clients` | 운영사 소유 고객사 |
+| `events` | 운영사 소유 행사 메타(이름·slug·일정·단계·기능) `payload` jsonb |
 | `event_workspaces` | 행사 업무 데이터 전체 `payload` jsonb + `revision` |
 | `memberships` | 계정↔행사 쓰기 권한 |
 | `staff_assignments` | 스태프 배정(데스크/부스) |
 | `stored_files` | 업로드 파일 메타(치수 포함) |
-| `command_receipts` | 커맨드 멱등성 영수증 |
+| `command_receipts` | 조직·행사·주체에 묶인 멱등성 영수증. 전역 요청 키 충돌 의미는 유지 |
 | `message_outbox` | 발송 의도(커맨드와 같은 트랜잭션 기록, 결과 기록 후 삭제, 부팅 드레인) |
 | `checkin_records` | 체크인 이력의 write-through 투영(JSONB가 읽기 권위, 005가 기존 기록 백필) |
 | `tickets` | 티켓 식별의 write-through 투영(JSONB가 읽기 권위, 006 백필은 식별자만·해시는 첫 변경 시 채움) |
-| `login_attempts` | 로그인 실패 카운터(계정·주소 스코프) |
+| `login_attempts` | 로그인 실패와 계정 복구·이메일 확인의 별도 요청 제한 카운터 |
 | `login_lockout_overrides` | 관리자 잠금 해제 기록 |
+| `attendee_challenges`·`attendee_grants`·`attendee_sessions` | 행사별 연락처 인증·일회성 신청 권한·브라우저의 행사별 접근 권한. 운영자 조직 세션과 별개 |
+| `signup_request_attempts` | 공개 신청의 단기 남용 방어. 영수증과 별개이며 원문 주소/요청 키를 저장하지 않음 |
 | `global_state` | 전역 키-값 |
 
 설계상 중요한 점: 행사 업무 데이터는 **하나의 `event_workspaces.payload` jsonb**에
@@ -213,7 +227,8 @@ PostgreSQL이 행사 데이터의 유일한 권위다. JSON 파일 저장소(`DA
 
 - `message_outbox` — 발송 의도. `message.retry`가 SENDING으로 바꿀 때 같은
   트랜잭션에서 행을 남기고, 결과 기록 후 삭제한다. 부팅 드레인이 남은 행을
-  재처리한다. `/api/health`는 대기 건수(`outboxPending`)를 함께 둔다.
+  재처리한다. 공개 `/api/health`에는 운영사 간 업무량을 드러내는 대기 건수를 두지 않는다.
+  인증된 현재 운영사 소유자의 `/api/diagnostics`가 자기 운영사 적체만 보고한다.
 - `checkin_records` — 체크인 이력의 write-through 투영. `check.scan`·
   `check.correct`와 같은 트랜잭션에서 기록하므로 JSONB와 어긋날 수 없다.
   읽기는 `workspace.checks`가 계속 맡는다. 005 마이그레이션이 기존 기록을
@@ -223,6 +238,12 @@ PostgreSQL이 행사 데이터의 유일한 권위다. JSON 파일 저장소(`DA
   비워 둔다(SQL 마이그레이션은 공유 DB의 암호 확장을 가정하지 않는다).
   `scripts/backfill-ticket-hashes.cjs`가 NULL 해시를 채운다(멱등, `--dry-run` 지원).
   읽기 전환 전에는 이 스크립트 실행이 먼저다.
+
+운영 콘솔의 목록·셸은 `GET /api/console/directory`의 경량 요약을 읽고, 행사 화면은
+`GET /api/events/:id/bootstrap`에서 해당 행사 하나의 상태를 읽는다. 기존 `/api/bootstrap`은
+호환 경로로 유지하되 같은 운영사·역할 투영을 적용한다. 브라우저의 공유 읽기는 탭 메모리의
+진행 요청만 합치고 쓰기·조직 전환에 무효화한다. 참가자 전체 선택·CSV·메시지 인계 계약을
+유지하기 위해 행사 상세의 명단을 서버 페이지네이션으로 임의 변경하지 않는다.
 
 ## 5. 서버 권위와 커맨드 흐름
 
@@ -250,7 +271,8 @@ PostgreSQL이 행사 데이터의 유일한 권위다. JSON 파일 저장소(`DA
 - outbox 확정 (`message_outbox` 행 삭제) — 결과가 기록됐을 때만. 공급사 호출이
   예외로 끝나거나 프로세스가 먼저 죽으면 행이 남아 부팅 드레인이 재발송한다.
   이미 결과가 기록된 채 남은 행은 재발송 없이 정리한다.
-  주기 실행자는 없다. 드레인은 부팅 시 1회이며, 미연동이면 건너뛴다.
+  기본은 부팅 드레인과 수동 도달 확인이다. 선택적 유지보수·예약 실행의 이중 게이트와
+  공급사 조회 불명의 보류 규칙은 [INTEGRATIONS.md](INTEGRATIONS.md)를 따른다.
 
 이유: 공급사 호출이 실패해도 운영자가 이미 성공으로 본 커맨드를 롤백하면 안 되고,
 공급사가 접수한 메시지를 롤백으로 잃으면 안 된다.
@@ -310,6 +332,11 @@ MANAGER만 호출할 수 있다. 파일 참조는 같은 행사에 운영자가 
 - 잠금 응답(429)은 "잠겼다"고 알리지 않는다(공격자에게 신호가 되므로).
 - 미마이그레이션 DB에서는 제한 테이블 부재를 감지해 **제한 없이 로그인을 계속 허용**한다.
   운영자가 자기 제품에 잠기는 것이 더 나쁜 실패이기 때문이다.
+- 계정 복구는 로그인과 별개다. 사전에 로그인한 본인이 현재 비밀번호와 이메일 소유를
+  확인한 주소에만 복구 링크를 보낸다. 기존 이메일·초대 수락을 소유 증명으로 보지 않는다.
+  복구 토큰은 해시·만료·일회 사용으로 관리하고, 비밀번호 변경과 기존 세션 전부의
+  무효화를 한 트랜잭션에서 처리한다. 복구 제한 스키마가 없으면 복구는 허용하지 않는다.
+  공급사·수동 예외의 미정 상태는 `docs/INTEGRATIONS.md`를 따른다.
 - 보안 헤더: API는 nonce 기반 CSP · `X-Frame-Options: SAMEORIGIN` · `nosniff` ·
   `Referrer-Policy` · `Permissions-Policy` · HSTS(`COOKIE_SECURE=1`일 때) · COOP를
   모든 응답에 적용한다. CSP의 `frame-ancestors 'self'`는 같은 출처의 참가자 화면을
@@ -327,10 +354,12 @@ MANAGER만 호출할 수 있다. 파일 참조는 같은 행사에 운영자가 
 ## 7. 프론트엔드 (유일한 제품 UI)
 
 `apps/web`(Next.js + TypeScript App Router)이 제품의 유일한 프론트엔드다. 구 바닐라 앱은
-2026-10-17 은퇴로 제거됐으므로 아래만 현재 계약이다. 제품 토큰 정본은
+2026-10-17 은퇴로 제거됐으므로 아래만 현재 계약이다. 현재 제품의 토큰 구현은
 `apps/web/app/tokens.css`, 화면 스타일은 CSS 모듈 + 공용 콘솔 부품
 (`apps/web/app/console/console-ui/`의 `ConsolePageHeader`·`ConsoleSection`·
-`ConsoleStatePanel`)으로 구현한다. 시각 세부 규칙은 [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md)를 따른다.
+`ConsoleStatePanel`)으로 구현한다. 기존 시각 기준은 2026-10-27 사용자 요청으로 제거했고,
+이후 사용자가 레퍼런스 기반 화이트 체계의 실제 제품 전체 적용을 승인했다.
+현재 시각 체계는 [DESIGN.md](../DESIGN.md), 적용·검증 상태는 `docs/STATUS.md`를 따른다.
 
 브라우저는 새 앱의 오리진에만 닿는다. `/api/*`는 새 앱의 rewrite가 API로
 전달한다(`EVENTOUCH_API_URL`, 기본 `http://127.0.0.1:8776`). 프론트가 API
@@ -451,6 +480,7 @@ EVENTOUCH / 행사 운영              워드마크 + 제품 한 줄
 | `server/server.js` | API 전용 진입점. `/api/*` 라우팅 + 은퇴 워커 `/sw.js`. 저장소 정적 파일 서빙 없음 |
 | `server/api.js` | API 경로 해석, 인증 게이트, 커맨드·조직 범위 REST 위임 |
 | `server/auth.js` | 세션·비밀번호·초대·로그인 제한 |
+| `server/account-recovery.js`·`server/email-transport.js` | 본인 이메일 확인·복구 토큰과 제한, 기본 비활성 메일 발송 연결 지점 |
 | `server/access.js` | 역할·배정 기반 권한 판정 |
 | `server/state.js` | 부트스트랩 투영(역할별로 보이는 범위), 행사 생성·고객사 저장·조직/행사 권한 저장 |
 | `server/db.js` | 커넥션 풀, 트랜잭션, 마이그레이션 연결 |
@@ -493,7 +523,7 @@ EVENTOUCH / 행사 운영              워드마크 + 제품 한 줄
 | 서버·API·권한·멱등 | `npm test` (PostgreSQL 주입, 직렬, 스킵 실패) | 최신 실측값은 `docs/STATUS.md` 참조 |
 | 새 앱 접근성 | `npm run a11y` (실행 중 Next + 격리 API·DB 픽스처, axe) | serious+ 0 |
 | 새 앱 반응형·터치 | `npm run mobile` (6기기×2방향×6실경로=72검사) | 넘침·44px 미만 0 |
-| 새 앱 접근성·넘침·홈 기하 | `npm run web:audit` (실행 중 빌드, `WEB_BASE`) | serious+·넘침 0 |
+| 새 앱 접근성·넘침·홈 기하 | `npm run web:audit` (기존 빌드 + 격리 API·DB 픽스처) | serious+·넘침 0 |
 | 가져오기·한울·테마 흐름 | `npm run web:import:audit`·`web:hanwool:audit`·`web:theme:audit` (실제 API·격리 DB) | 각 감사 통과 |
 | 발송 | `docs/INTEGRATIONS.md` 체크리스트 | mock 검증 완료, 실발송 미검증 |
 | 실기기 | `scripts/device-checklist.md` | 미수행(출시 게이트 아님) |
@@ -501,7 +531,7 @@ EVENTOUCH / 행사 운영              워드마크 + 제품 한 줄
 
 CI(`.github/workflows/ci.yml`)는 루트 의존성 설치 + DB 마이그레이션 + `npm test` +
 서버 타입 검사 잡, 모바일·접근성 감사 잡, 새 앱 설치·타입 검사·빌드 잡을 모두 돌린다.
-원격 저장소가 없어 아직 실제로 실행된 적은 없다. 구 앱 대상 검사는 은퇴했고, 그 검사가
+원격 CI의 실행 여부와 결과는 `docs/STATUS.md`를 따른다. 구 앱 대상 검사는 은퇴했고, 그 검사가
 사라진 것은 의도된 계약 은퇴이지 API 커버리지 손실이 아니다. 검사를 약화해서 수치를
 맞추지 않는다.
 

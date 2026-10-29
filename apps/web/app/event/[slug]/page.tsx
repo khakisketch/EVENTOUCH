@@ -33,10 +33,28 @@ type PublicWorkspace = {
   program?: unknown;
   venue?: { name?: unknown; address?: unknown; directions?: unknown; contact?: unknown } | null;
   registrationOpen?: unknown;
-  pageExperience?: { published?: { intro?: unknown } } | null;
+  pageExperience?: { published?: {
+    intro?: unknown;
+    accent?: unknown;
+    showAnnouncements?: unknown;
+    showSchedule?: unknown;
+    showVenue?: unknown;
+    showPrograms?: unknown;
+    keyvisual?: { fileId?: unknown; data?: unknown } | null;
+  } } | null;
   boothMap?: { published?: unknown } | null;
   booths?: unknown;
 };
+
+function keyvisualSource(slug: string, value: unknown): string | null {
+  if (!value || typeof value !== "object") return null;
+  const image = value as Record<string, unknown>;
+  const data = typeof image.data === "string" ? image.data : "";
+  if (/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(data)) return data;
+  const fileId = typeof image.fileId === "string" ? image.fileId : "";
+  if (!/^[A-Za-z0-9_-]{1,160}$/.test(fileId)) return null;
+  return `/api/public/events/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}`;
+}
 
 function apiBase(): string {
   return process.env.EVENTOUCH_API_URL ?? "http://127.0.0.1:8776";
@@ -81,9 +99,23 @@ export default async function EventPage({
   // guidance replaces the link instead.
   const recoveryBlocked = verificationMode === "mock" || verificationMode === "none";
 
+  const published = workspace.pageExperience?.published ?? {};
   const intro =
-    text(workspace.pageExperience?.published?.intro) || "참가에 필요한 안내를 확인하세요.";
+    text(published.intro) || "참가에 필요한 안내를 확인하세요.";
+  // The page builder's visibility toggles are a promise to attendees: a
+  // hidden section never renders here, it only stays editable in console.
+  const showAnnouncements = published.showAnnouncements !== false;
+  const showSchedule = published.showSchedule !== false;
+  const showVenue = published.showVenue !== false;
+  const showPrograms = published.showPrograms !== false;
+  const keyvisual = keyvisualSource(slug, published.keyvisual);
   const registrationOpen = workspace.registrationOpen === true;
+  // The public signup writer only runs on READY/LIVE (participants writer
+  // rule publicSignupEvent): an ENDED event with the intake flag still on
+  // must not offer a form that can only fail. No API change: the stage
+  // already ships in this payload.
+  const acceptingSignup =
+    registrationOpen && (event.stage === "READY" || event.stage === "LIVE");
   const notices: Notice[] = Array.isArray(workspace.notices)
     ? workspace.notices.flatMap((item) => {
         if (typeof item !== "object" || item === null) return [];
@@ -162,9 +194,19 @@ export default async function EventPage({
         <span className="eyebrow">행사 안내</span>
       </header>
       <section className="event-intro">
-        <h1>{event.name}</h1>
+        {keyvisual ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            className={styles.keyvisual}
+            src={keyvisual}
+            alt=""
+            fetchPriority="high"
+          />
+        ) : null}
+        <h1 className={styles.eventTitle}>{event.name}</h1>
         <p className={styles.introLine}>{intro}</p>
         <dl className="event-facts">
+          {showSchedule ? (
           <div className="event-fact">
             <dt>일정</dt>
             <dd>
@@ -173,7 +215,8 @@ export default async function EventPage({
               {event.end ? ` ~ ${event.end}` : ""}
             </dd>
           </div>
-          {venueName ? (
+          ) : null}
+          {showVenue && venueName ? (
             <div className="event-fact">
               <dt>장소</dt>
               <dd>{venueName}</dd>
@@ -185,7 +228,7 @@ export default async function EventPage({
           </div>
         </dl>
         <div className={styles.cta}>
-          {registrationOpen ? (
+          {acceptingSignup ? (
             <Link
               className="button button-primary"
               href={`/event/${encodeURIComponent(slug)}/register`}
@@ -196,13 +239,13 @@ export default async function EventPage({
             <p className={styles.registrationClosed} role="status">현재 신청을 받지 않습니다.</p>
           )}
           {recoveryBlocked ? (
-            <p className={styles.registrationClosed} role="note">이미 신청했다면 신청한 기기에서 티켓을 여세요. 문자로 다시 연결할 수 없는 행사입니다. 티켓을 잃었다면 아래 문의처로 운영자에게 연락하세요.</p>
+            <p className={styles.recoveryNote} role="note">이미 신청했다면 신청한 기기에서 티켓을 여세요. 문자로 다시 연결할 수 없는 행사입니다. 티켓을 잃었다면 {venueContact ? `${venueContact}(으)로` : "행사 안내의 문의처로"} 운영자에게 연락하세요.</p>
           ) : (
             <Link
               className={`button button-secondary ${styles.recoveryLink}`}
               href={`/event/${encodeURIComponent(slug)}/ticket/recover`}
             >
-              이미 신청했다면 · 내 티켓 찾기
+              이미 신청했다면 내 티켓 찾기
             </Link>
           )}
           <Link
@@ -214,7 +257,7 @@ export default async function EventPage({
         </div>
       </section>
 
-      {notices.length ? (
+      {showAnnouncements && notices.length ? (
         <section className={styles.section} aria-labelledby="public-notices">
           <h2 id="public-notices">공지</h2>
           <ul className={styles.noticeList}>
@@ -231,7 +274,7 @@ export default async function EventPage({
         </section>
       ) : null}
 
-      {program.length ? (
+      {showPrograms && program.length ? (
         <section className={styles.section} aria-labelledby="public-program">
           <h2 id="public-program">프로그램</h2>
           <ul className={styles.programList}>
@@ -287,7 +330,7 @@ export default async function EventPage({
         </section>
       ) : null}
 
-      {hasVenue ? (
+      {showVenue && hasVenue ? (
         <section className={styles.section} aria-labelledby="public-venue">
           <h2 id="public-venue">오시는 길</h2>
           <dl className="event-facts">

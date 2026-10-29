@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const {
   databaseUrl, startApiHarness, insertAccount, insertEvent, insertMembership,
   insertAssignment, sessionCookie, requestJson,
+  LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 const { emptyWorkspace } = require('../server/state');
 
@@ -25,11 +26,11 @@ before(async () => {
   if (!databaseUrl) return;
   harness = await startApiHarness();
   for (const role of ['agency', 'manager', 'staff']) {
-    await insertAccount(harness.database, { id: ids[role], role: role.toUpperCase(), name: role, email: `${role}@api.example.test` });
+    await insertAccount(harness.database, {orgId: LEGACY_ORG,  id: ids[role], role: role.toUpperCase(), name: role, email: `${role}@api.example.test` });
     cookies[role] = await sessionCookie(harness, ids[role]);
   }
   for (const id of [ids.event, ids.other]) {
-    await insertEvent(harness.database, { id, slug: id, payload: payload(id, id), workspace: emptyWorkspace() });
+    await insertEvent(harness.database, {orgId: LEGACY_ORG,  id, slug: id, payload: payload(id, id), workspace: emptyWorkspace() });
   }
   await insertMembership(harness.database, ids.manager, ids.event, ['all']);
   await insertAssignment(harness.database, { id: 'api-desk-assignment', accountId: ids.staff, eventId: ids.event, type: 'DESK', targetId: 'api-desk' });

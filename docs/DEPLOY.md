@@ -66,18 +66,30 @@ API 컨테이너는 UID 1000(`node`)으로 실행된다. 새 데이터/업로드
 
 ## 검증
 
+전체 묶음은 `EVENTOUCH_TEST_DATABASE_URL='postgres://.../eventouch_test' npm run verify:system`이다.
+명시적 loopback 작업 DB만 받고 빌드·직렬 테스트·업무/접근성/모바일 감사를 순서대로 실행한다.
+증거는 기본적으로 저장소 밖 `/tmp/eventouch-private-<uid>/`의 새 사설 디렉터리에 남긴다.
+`EVENTOUCH_CAPTURE_ROOT`로 다른 새 디렉터리를 지정할 수 있으나, 안전하지 않은 상위 경로·
+심볼릭 링크·기존 결과를 덮어쓰는 경로는 거부한다. 이전 증거의 경로와 파일은 그대로 보존한다.
+배포 URL·실발송 자격증명·자동 발송 옵션을 검사 프로세스에 상속하지 않는다. 실행 목록만 보려면
+`npm run verify:system -- --list`를 사용한다. DB 이름 검사만으로 격리가 보장되는 것은 아니므로
+공유 운영 DB 대신 별도 인스턴스/작업 DB를 마련해야 한다.
+통합 검증 빌드의 API rewrite는 연결할 수 없는 루프백 주소로 고정된다(감사는 자체 API를 쓴다).
+검증 후 그 빌드를 제품 실행에 재사용하지 말고 목적 환경의 `EVENTOUCH_API_URL`로 다시 빌드한다.
+
     npm run setup   # 루트 + apps/web 의존성 설치
+    npx playwright install --with-deps chromium # 브라우저 회귀 테스트와 감사에 필요
     npm run build   # server:typecheck + apps/web 빌드
     npm test   # PostgreSQL 포함 전체 스위트. 스킵이 하나라도 있으면 실패한다.
     npm run a11y   # 실행 중 Next 빌드 대상 접근성 감사
     npm run mobile # 실기기 프로필 6종 × 가로/세로 × 6실경로 = 72 레이아웃 검사
     npm run web:audit # 실행 중 Next 빌드 대상 접근성·넘침·참가자 홈 기하 감사
 
-두 명령 모두 DB와 실행 중 빌드가 있어야 정상 동작한다. `EVENTOUCH_TEST_DATABASE_URL`,
-`EVENTOUCH_A11Y_DATABASE_URL`이 없으면 백엔드 테스트는 스킵으로 처리되고,
-접근성 감사는 실행되지 않는다. 웹 감사는 `npm run build` 후 실행 중인 빌드
-(`WEB_BASE`, 기본 `http://127.0.0.1:8777`)가 필요하다. CI는 값을 주입하므로 빌드가
-통과했다면 해당 검사들이 실제로 수행된 것이다.
+검사에는 격리 PostgreSQL URL과 Chromium이 필요하며, 감사에는 먼저 만든 `.next`도 필요하다.
+대신 `CHROMIUM_EXECUTABLE`로 호환 브라우저 경로를 지정할 수도 있다. `npm test`는 DB가 없어
+스킵되면 실패한다. 접근성·모바일·웹·콘솔 감사는 자기 API·Next와 합성 스키마를 실행하며,
+`WEB_BASE`로 지정한 외부 실행 서버를 검사한 증거가 아니다. 빌드 통과와 감사 통과도 별개다.
+원격 CI 실행 여부와 최신 결과는 `docs/STATUS.md`에서 확인한다.
 
 
 `npm run mobile`은 오버플로와 44px 미만 조작 요소를 잡는다. 카메라
@@ -92,6 +104,32 @@ API 컨테이너는 UID 1000(`node`)으로 실행된다. 새 데이터/업로드
   재배포·재시작 때 보존한다. `down -v` 금지. NAS 연결 시 compose 볼륨을 NAS 경로로 교체한다.
 
 ## 운영 주의
+
+- API 이미지는 `NODE_ENV=production`으로 실행한다. `EVENTOUCH_DEV_QUICK_LOGIN`은
+  명시적 `NODE_ENV=development`에서만 허용하며 운영·미지정 환경에 남으면 기동을 거부한다.
+- 프록시 뒤 클라이언트 주소는 `EVENTOUCH_TRUSTED_PROXIES`의 명시적 IP/CIDR 허용 목록을
+  적용한다. 기본은 전달 헤더를 신뢰하지 않는다. 실제 프록시 경로에서 가까운 신뢰하지 않는
+  주소를 고르므로 임의의 가장 왼쪽 `X-Forwarded-For`를 사용자 IP로 삼지 않는다.
+- compose는 기본 네트워크를 `10.89.0.0/24`로 고정하고 `web`에 `10.89.0.10`을 준다.
+  API는 이 주소만 프록시로 신뢰한다(`EVENTOUCH_TRUSTED_PROXIES` 기본값). `web`은
+  `next start` 대신 `web-server.cjs`로 기동해 들어온 `X-Forwarded-For`를 실제 소켓
+  주소로 **덮어쓴다**. 그래야 로그인 주소 스로틀이 프록시 IP 하나로 뭉치지 않고
+  (20회 실패로 전 사용자 잠금), 헤더를 돌려 스로틀을 피하지도 못한다.
+  다른 네트워크와 충돌하면 `EVENTOUCH_PROXY_SUBNET`과 그 범위 안의
+  `EVENTOUCH_WEB_PROXY_IP`를 함께 바꾼다. API 기본 신뢰 주소도 이 IP를 따른다.
+  `EVENTOUCH_TRUSTED_PROXIES`를 직접 지정한다면 반드시 웹 IP를 포함해야 한다.
+  기존 배포의 자동 할당 네트워크는 이 설정으로 **재생성**되므로, 배포 시 잠깐의
+  네트워크 재구성이 필요하다(볼륨·데이터는 유지).
+- 현재 웹 입구는 **직접 연결한 소켓 주소**를 사용한다. 앞에 NAS·로드밸런서 등
+  다른 프록시를 두면 사용자별 주소가 그 프록시 하나로 모인다. API 허용 목록에
+  주소를 추가해도 웹이 전달 헤더를 덮어쓰므로 해결되지 않는다. 그런 구성에서는
+  신뢰할 실제 인입 경로의 검증·설정이 별도로 필요하며, 직접 공개 compose 검증을
+  외부 프록시 환경까지 검증한 것으로 보지 않는다.
+- 이미지 빌드·compose 실행에 같은 `EVENTOUCH_BUILD_REVISION`을 전달한다. 미지정은 `unknown`이며
+  실제 소스 해시를 임의로 추정하지 않는다. 조직 소유자의 `/api/diagnostics`에서 실행 식별자와
+  자기 운영사의 발송 적체를 확인한다. 다른 운영사 요청량을 포함한 전역 집계는 HTTP로 노출하지 않는다.
+  HTTP 응답의 `X-Request-ID`로 요청을 연결하고 원시 URL·토큰·개인정보는
+  액세스 로그에 남기지 않는다. `EVENTOUCH_REQUEST_LOGS`로 로그를 명시적으로 제어할 수 있다.
 
 - `/api/health`는 프로세스 생존과 발송 연동 상태를, `/api/readyz`는 DB `SELECT 1`까지 확인한다.
   API 컨테이너 HEALTHCHECK는 `/api/readyz`를 쓴다. JSON 폴백 모드(무DB)는 readyz 503이며
@@ -117,6 +155,8 @@ API 컨테이너는 UID 1000(`node`)으로 실행된다. 새 데이터/업로드
   격리 프로젝트에서 리허설한다. 백업 중 쓰기가 감지되어 `countsStable`이 false이면 행 수
   비교만 건너뛰고 마이그레이션·파일 검사는 계속한다(거짓 실패 방지). 백업 자체는
   `pg_dump`의 트랜잭션 스냅샷이다.
+- 새 백업은 현재 스키마의 추가 테이블도 행 수 목록에 포함한다. 이전 format-1 백업은 그 당시
+  기록한 검증 대상 전체를 유지해 비교하며 새 테이블 목록이 없다는 이유로 복원을 깨뜨리지 않는다.
 - 복원은 체크섬뿐 아니라 파일 아카이브 판독 가능 여부와 대상 볼륨/디렉터리 점유 여부를
   **DB를 변경하기 전에** 검사한다. 사전 검사에서 실패하면 대상 DB는 그대로 남는다.
 - 파일은 배타 생성이라 덮어쓰지 않는다. DB 스냅샷 뒤에 추가된 파일은 백업에 더 들어갈 수 있지만
@@ -137,6 +177,24 @@ API 컨테이너는 UID 1000(`node`)으로 실행된다. 새 데이터/업로드
   미이관 자료가 남아 있다면 별도로 보관한다.
 - 호스트에 PostgreSQL 클라이언트가 있으면 compose 없이도 백업할 수 있다.
   `node scripts/backup.cjs --database-url ... --storage-dir ...` (복원 리허설은 compose 전용).
+
+### 예약 실행·운영 점검 도구
+
+`ops/backup-schedule.example.cron`과 `ops/ops.env.example`은 자동화 설정 예시이며 설치하거나
+운영 값을 확정한 것이 아니다. 아래 도구는 보존기간에 따른 삭제나 오프사이트 전송을 하지 않는다.
+
+- `npm run backup:scheduled -- --project <project> --backup-root <저장소밖_백업루트> --check`
+  는 백업을 생성하고 결과를 검사한다. 실제 DB·파일을 다루므로 지정한 프로젝트가 맞는지 확인한다.
+- `npm run backup:check -- --backup-root <백업루트> --project <project> --verify-checksums`
+  는 최신 매니페스트·크기·체크섬을 검사한다. `--max-age-hours`가 없으면 신선도 정책 미설정으로 보고한다.
+- `npm run ops:readiness -- --help`로 API·웹 rewrite 경유 readyz·발송 적체·백업·디스크 점검 옵션을 확인한다.
+  JSON 보고서는 `--json`으로 출력할 수 있다.
+  공개 health에는 운영사 전체의 발송량을 노출하지 않는다. 적체 수치는 인증된 현재 운영사 소유자의
+  `/api/diagnostics`에서 확인한다. 준비 상태 도구에 적체 상한을 지정했는데 측정값이 없으면 미검증 실패이며,
+  상한을 지정하지 않으면 미측정 상태를 보고만 한다.
+- `npm run ops:notify`는 보고서 기록 전용이다. 외부 수신처·채널 정책이 없으므로 실제 알림 전송은 제공하지 않는다.
+- `npm run security:audit`는 루트 운영 의존성과 웹 의존성을 함께 검사하고 기본 보통(moderate) 이상이면 실패한다.
+  원격 CI의 새 업무 감사와 실패 아티팩트는 합성 데이터만 대상으로 하며 보존기간을 제한한다.
 
 ## 파일 API 계약
 
