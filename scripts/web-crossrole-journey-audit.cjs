@@ -3,8 +3,9 @@
 // Cross-role product journey: participant signup → ticket → assigned staff
 // check-in → operator report, plus receipt-wording branches (waitlist,
 // immediate-approved, unpaid, cancelled) and a storage-denied re-check.
-// Drives the real rendered UI against the real isolated API/PostgreSQL; only
-// committed-response loss is ever injected (disclosed), and a QR read is
+// Drives the real rendered UI against the real isolated API/PostgreSQL;
+// committed-response loss and one delayed roster refresh are injected
+// (disclosed), and a QR read is
 // simulated by typing the participant-held ticket code into the staff form
 // (no physical scanner).
 // Seeded preconditions (disclosed): approvalRequired=true so public signups
@@ -75,6 +76,15 @@ async function bounded(promise, label, milliseconds = 15000) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+// A status success notice can precede the roster refresh finishing. The
+// dialog deliberately ignores Escape while busy, so wait for its real close
+// button to become actionable and verify that the backdrop is actually gone.
+async function closeParticipantDetails(roster, name) {
+  const dialog = roster.getByRole('dialog', { name, exact: true });
+  await dialog.getByRole('button', { name: '닫기', exact: true }).click({ timeout: 15000 });
+  await dialog.waitFor({ state: 'hidden', timeout: 15000 });
 }
 
 async function main() {
@@ -231,14 +241,14 @@ async function main() {
     await axePage(roster, 'roster 1280');
     await roster.locator('input[placeholder*="이름·소속·연락처 검색"]').fill('여정 참가자 갑');
     await roster.getByRole('button', { name: '승인', exact: true }).first().click();
-    await roster.getByText(/승인했습니다|바꿨습니다/).first().waitFor({ timeout: 15000 });
+    await roster.getByText('여정 참가자 갑 상태를 참가 확정(으)로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
     check('operator approval notice names the action', true);
     await roster.screenshot({ path: path.join(OUT, 'op-roster-approved-1280.png'), fullPage: true });
     const afterApproveA = (await snapshot()).participants.find((p) => p.phone === '01055500101');
     check('approval persists APPROVED for A', afterApproveA && afterApproveA.status === 'APPROVED');
     await roster.locator('input[placeholder*="이름·소속·연락처 검색"]').fill('여정 참가자 을');
     await roster.getByRole('button', { name: '승인', exact: true }).first().click();
-    await roster.getByText(/승인했습니다|바꿨습니다/).first().waitFor({ timeout: 15000 });
+    await roster.getByText('여정 참가자 을 상태를 참가 확정(으)로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
     const afterApproveB = (await snapshot()).participants.find((p) => p.phone === '01055500102');
     check('approval persists APPROVED for B', afterApproveB && afterApproveB.status === 'APPROVED');
 
@@ -808,7 +818,7 @@ async function main() {
       await roster.getByRole('button', { name: /새로고침( 중…)?/, exact: true }).click();
       await roster.locator('input[placeholder*="이름·소속·연락처 검색"]').fill('저장 거부 참가자');
       await roster.getByRole('button', { name: '승인', exact: true }).first().click();
-      await roster.getByText(/승인했습니다|바꿨습니다/).first().waitFor({ timeout: 15000 });
+      await roster.getByText('저장 거부 참가자 상태를 참가 확정(으)로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
       await regD.getByRole('button', { name: '상태 다시 확인', exact: true }).click();
       await regD.getByRole('img', { name: /님의 행사 입장 및 퇴장용 QR/ }).waitFor({ timeout: 15000 });
       check('denied-storage re-check reaches the approved QR', true);
@@ -842,13 +852,13 @@ async function main() {
       await regE.getByRole('button', { name: '신청하기', exact: true }).click();
       await regE.getByText('승인 대기').first().waitFor({ timeout: 15000 });
       await deniedE.clearCookies();
-      await roster.keyboard.press('Escape').catch(() => {});
       await roster.getByRole('button', { name: /새로고침( 중…)?/, exact: true }).click();
       await roster.locator('input[placeholder*="이름·소속·연락처 검색"]').fill('무효 검증 참가자');
       await roster.getByRole('button', { name: '무효 검증 참가자 참가자 상세', exact: true }).click();
       await roster.getByLabel('무효 검증 참가자 상태 변경').selectOption('CANCELLED');
       await roster.getByRole('button', { name: '신청 취소', exact: true }).click();
-      await roster.getByText(/바꿨습니다/).first().waitFor({ timeout: 15000 });
+      await roster.getByText('무효 검증 참가자 상태를 신청 취소(으)로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
+      await closeParticipantDetails(roster, '무효 검증 참가자');
       await regE.getByRole('button', { name: '상태 다시 확인', exact: true }).click();
       await regE.getByText('티켓을 사용할 수 없습니다').waitFor({ timeout: 15000 });
       check('cancelled bearer fails definitively after re-check', true);
@@ -953,12 +963,12 @@ async function main() {
       // (cancel one import) leaves the waitlisted receipt on WAITLIST after
       // a re-check; only an explicit APPROVED transition admits. Capacity is
       // pinned, so cancel first, re-check, then approve via the dialog.
-      await roster.keyboard.press('Escape').catch(() => {});
       await roster.locator('input[placeholder*="이름·소속·연락처 검색"]').fill('감사 참가자 1');
       await roster.getByRole('button', { name: /참가자 상세/, exact: false }).first().click();
       await roster.getByLabel('감사 참가자 1 상태 변경').selectOption('CANCELLED');
       await roster.getByRole('button', { name: '신청 취소', exact: true }).click();
-      await roster.getByText(/바꿨습니다/).first().waitFor({ timeout: 15000 });
+      await roster.getByText('감사 참가자 1 상태를 신청 취소(으)로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
+      await closeParticipantDetails(roster, '감사 참가자 1');
       const refreshed = page.waitForResponse((response) =>
         response.url().includes(`/api/public/events/${fixture.slug}/ticket`) && response.status() === 200);
       await page.getByRole('button', { name: '상태 다시 확인', exact: true }).click();
@@ -967,13 +977,47 @@ async function main() {
       const afterFree = (await snapshot()).participants.find((p) => p.phone === '01055500103');
       check('freed seat does not auto-promote (still WAITLIST)', afterFree && afterFree.status === 'WAITLIST');
       await page.screenshot({ path: path.join(OUT, 'w-ticket-waitlist-after-free-seat-390.png') });
-      await roster.keyboard.press('Escape').catch(() => {});
       await roster.locator('input[placeholder*="이름·소속·연락처 검색"]').fill('여정 참가자 병');
       await roster.getByRole('button', { name: '여정 참가자 병 참가자 상세', exact: true }).click();
-      await roster.getByLabel('여정 참가자 병 상태 변경').selectOption('APPROVED');
-      await roster.getByText(/바꿨습니다/).first().waitFor({ timeout: 15000 });
-      // Dismiss the detail dialog: its backdrop owns pointer events until closed.
-      await roster.keyboard.press('Escape').catch(() => {});
+      const waitlistDetails = roster.getByRole('dialog', { name: '여정 참가자 병', exact: true });
+      let bootstrapStarted = false;
+      let resolveBootstrap, rejectBootstrap, releaseBootstrap, finishBootstrap;
+      const bootstrapReady = new Promise((resolve, reject) => { resolveBootstrap = resolve; rejectBootstrap = reject; });
+      void bootstrapReady.catch(() => {});
+      const bootstrapGate = new Promise((resolve) => { releaseBootstrap = resolve; });
+      const bootstrapDone = new Promise((resolve) => { finishBootstrap = resolve; });
+      const delayedBootstrap = async (route) => {
+        bootstrapStarted = true;
+        try {
+          const response = await route.fetch();
+          resolveBootstrap(response.status());
+          await bootstrapGate;
+          await route.fulfill({ response });
+        } catch (error) {
+          rejectBootstrap(error);
+          await route.abort().catch(() => {});
+        } finally {
+          finishBootstrap();
+        }
+      };
+      await roster.route('**/api/events/*/bootstrap', delayedBootstrap);
+      let closingWaitlistDetails;
+      try {
+        await roster.getByLabel('여정 참가자 병 상태 변경').selectOption('APPROVED');
+        check('waitlist approval reload reaches the real API', await bounded(bootstrapReady, 'held roster refresh') === 200);
+        await roster.getByText('여정 참가자 병 상태를 참가 확정(으)로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
+        check('waitlist details remain busy while the real refresh response is delayed',
+          await waitlistDetails.getByRole('button', { name: '닫기', exact: true }).isDisabled());
+        await roster.keyboard.press('Escape');
+        check('busy waitlist details reject dismissal', await waitlistDetails.isVisible());
+        closingWaitlistDetails = closeParticipantDetails(roster, '여정 참가자 병');
+        void closingWaitlistDetails.catch(() => {});
+      } finally {
+        releaseBootstrap();
+        if (bootstrapStarted) await bounded(bootstrapDone, 'held roster refresh cleanup');
+        await roster.unroute('**/api/events/*/bootstrap', delayedBootstrap);
+      }
+      await closingWaitlistDetails;
       await page.getByRole('button', { name: '상태 다시 확인', exact: true }).click();
       await page.getByRole('img', { name: /님의 행사 입장 및 퇴장용 QR/ }).waitFor({ timeout: 15000 });
       check('explicit approval admits the waitlisted ticket', true);
@@ -1058,7 +1102,7 @@ async function main() {
     await roster.getByRole('button', { name: /새로고침( 중…)?/, exact: true }).click();
     await roster.locator('input[placeholder*="이름·소속·연락처 검색"]').fill('복합 조건 참가자');
     await roster.getByRole('button', { name: '승인', exact: true }).first().click();
-    await roster.getByText(/승인했습니다|바꿨습니다/).first().waitFor({ timeout: 15000 });
+    await roster.getByText('복합 조건 참가자 상태를 참가 확정(으)로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
     await regK.getByRole('button', { name: '상태 다시 확인', exact: true }).click();
     await regK.getByText('결제 확인 필요').first().waitFor({ timeout: 15000 });
     check('approval alone does not yield the QR on a combined event',
@@ -1070,14 +1114,13 @@ async function main() {
     // CANCELLED: the operator cancels through the rendered dialog; the open
     // ticket re-check then hits a definitive 404 and must explain, not spin.
     // The roster loaded before the wording-branch signups, so refresh first.
-    // A previous detail dialog may still own the backdrop: dismiss first.
-    await roster.keyboard.press('Escape').catch(() => {});
     await roster.getByRole('button', { name: /새로고침( 중…)?/, exact: true }).click();
     await roster.locator('input[placeholder*="이름·소속·연락처 검색"]').fill('여정 참가자 무');
     await roster.getByRole('button', { name: '여정 참가자 무 참가자 상세', exact: true }).click();
     await roster.getByLabel('여정 참가자 무 상태 변경').selectOption('CANCELLED');
     await roster.getByRole('button', { name: '신청 취소', exact: true }).click();
-    await roster.getByText(/바꿨습니다/).first().waitFor({ timeout: 15000 });
+    await roster.getByText('여정 참가자 무 상태를 신청 취소(으)로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
+    await closeParticipantDetails(roster, '여정 참가자 무');
     check('operator cancel persists CANCELLED', ((await snapshot()).participants.find((p) => p.phone === '01055500105') || {}).status === 'CANCELLED');
     await regU.getByRole('button', { name: '상태 다시 확인', exact: true }).click();
     await regU.getByText('티켓을 사용할 수 없습니다').waitFor({ timeout: 15000 });
@@ -1220,6 +1263,7 @@ async function main() {
           'storage-denied re-check covered in-repo: ticket keys throw, session cookie cleared, one intercepted 500 then retry, rendered approval, same in-tab bearer to QR, and a cancelled bearer proven unable to regain authority',
           'superseded-load race covered in-repo: hung first re-check, full reload completing from storage, late 404 released, storage asserted intact and ticket surviving a second reload (reload aborts the hung fetch, so this pins the property as defense-in-depth; the guard shape itself is pinned by the source test)',
           'waitlist wording fixed after proving a freed seat does not auto-promote (explicit APPROVED transition only); free-seat, approval and QR all driven through rendered UI',
+          'waitlist approval delays one real roster-refresh response: Escape is rejected while busy, then the close button is used and the dialog is confirmed gone after the response is released',
           'combined approval+payment branch covered in-repo: combined lead and receipt name both gates, rendered approval provably yields no QR until payment confirms; no payment behavior changed',
           'no real SMS/email; verification path not exercised here (covered by prior signup-retry audit)',
           'keyboard paths include pending re-check (Tab + Enter), staff camera, ticket submit, retry and task switch (focus setup + Enter); not a complete keyboard-only walkthrough',

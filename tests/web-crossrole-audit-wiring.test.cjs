@@ -22,3 +22,18 @@ test('cross-role journey is wired into npm and the isolated web audit job', () =
   assert.match(webJob, /set -o pipefail/, 'a failed audit must not be hidden by tee');
   assert.match(webJob, /EVENTOUCH_TEST_DATABASE_URL: postgresql:\/\/[^\s]+@localhost:\d+\/[^\s]+/);
 });
+
+test('cross-role audit checks a delayed real roster refresh and waits for each inspector to close', () => {
+  const source = fs.readFileSync(path.join(root, 'scripts/web-crossrole-journey-audit.cjs'), 'utf8');
+  assert.match(source, /const response = await route\.fetch\(\)/, 'the delayed refresh uses the real API');
+  assert.match(source, /await route\.fulfill\(\{ response \}\)/, 'the unchanged real response is released');
+  assert.match(source, /waitlist details remain busy while the real refresh response is delayed/);
+  assert.match(source, /busy waitlist details reject dismissal/);
+  assert.match(source, /async function closeParticipantDetails\(/);
+  assert.match(source, /dialog\.getByRole\('button', \{ name: '닫기', exact: true \}\)\.click\(/);
+  assert.match(source, /dialog\.waitFor\(\{ state: 'hidden'/);
+  for (const name of ['무효 검증 참가자', '감사 참가자 1', '여정 참가자 병', '여정 참가자 무']) {
+    assert.ok(source.includes(`closeParticipantDetails(roster, '${name}')`), `${name}: wait for the matching inspector`);
+  }
+  assert.doesNotMatch(source, /roster\.keyboard\.press\('Escape'\)\.catch\(/, 'do not ignore a failed dismissal');
+});
