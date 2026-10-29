@@ -239,6 +239,12 @@ jobs:
       - name: Install the browser for the audits
         run: npx playwright install --with-deps chromium
 
+      - name: Install ffmpeg for the camera audit
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          ffmpeg -version
+
       # The new app has its own lockfile and build; this job is the place CI
       # proves it typechecks and builds before any browser touches it.
       - name: Typecheck the new app

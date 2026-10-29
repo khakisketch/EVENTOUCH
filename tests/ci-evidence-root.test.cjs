@@ -45,6 +45,16 @@ const EXPECTED_GATES = [
   'npm run audit:usability',
 ];
 
+test('web job installs the camera audit video dependency before running gates', () => {
+  const web = webJob();
+  const installAt = web.indexOf('name: Install ffmpeg for the camera audit');
+  const auditAt = web.indexOf('name: Run the browser audits serially');
+  assert.ok(installAt >= 0 && installAt < auditAt, 'ffmpeg must be installed before the console camera audit');
+  const install = web.slice(installAt, auditAt);
+  assert.match(install, /apt-get install[^\n]*\bffmpeg\b/, 'the runner must explicitly install ffmpeg');
+  assert.match(install, /ffmpeg -version/, 'the job must verify that the executable is available');
+});
+
 test('web job creates one fresh owner-private evidence root per run', () => {
   const web = webJob();
   const createAt = web.indexOf('name: Create fresh private evidence root');

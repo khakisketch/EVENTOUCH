@@ -535,6 +535,13 @@ async function assertResponseLossRetry(page, helpers, baseUrl, eventId, eventNam
 }
 
 async function main() {
+  // The synthetic QR camera feed uses ffmpeg. Fail before starting the
+  // isolated fixture instead of reporting a later dependent scan failure.
+  try {
+    execFileSync('ffmpeg', ['-version'], { stdio: 'ignore', timeout: 5000 });
+  } catch {
+    throw new Error('ffmpeg가 필요합니다. 콘솔 카메라 감사를 실행하기 전에 설치하고 PATH를 확인하세요.');
+  }
   prepareCaptureDir(CAPTURE_DIR);
   process.env.TMPDIR = ensureRunTmpDir(CAPTURE_DIR);
   ensureCaptureDir(path.join(CAPTURE_DIR, 'sweep'));

@@ -84,7 +84,8 @@ EVENTOUCH_TEST_DATABASE_URL='postgres://<user>:<password>@127.0.0.1:5432/eventou
 ## 검증
 
 DB가 있어야 백엔드 테스트와 감사가 실제로 돈다. 없이 돌리면 스킵되고, 러너가 그것을 실패로 처리한다.
-전체 테스트와 브라우저 감사에는 Chromium도 필요하다. 의존성 설치 후
+전체 테스트와 브라우저 감사에는 Chromium도 필요하다. 콘솔 감사의 모의 카메라 영상에는
+`ffmpeg` 실행 파일이 필요하다(Ubuntu: `sudo apt-get install ffmpeg`). 의존성 설치 후
 `npx playwright install --with-deps chromium`을 실행하거나 `CHROMIUM_EXECUTABLE`로 호환 브라우저를 지정한다.
 
 ```bash

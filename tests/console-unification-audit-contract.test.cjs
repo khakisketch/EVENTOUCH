@@ -10,10 +10,28 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 
 const ROOT = path.join(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+
+test('console audit reports missing ffmpeg before creating evidence or starting a fixture', () => {
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'console-audit-ffmpeg-test-'));
+  try {
+    const captureRoot = path.join(parent, 'captures');
+    fs.mkdirSync(captureRoot, { mode: 0o700 });
+    const run = spawnSync(process.execPath, [path.join(ROOT, 'scripts/web-console-audit.cjs')], {
+      cwd: ROOT,
+      env: { ...process.env, PATH: parent, TMPDIR: parent, EVENTOUCH_CAPTURE_ROOT: captureRoot },
+      encoding: 'utf8', timeout: 10000,
+    });
+    assert.notEqual(run.status, 0, 'a missing camera-audit dependency must fail');
+    assert.match(run.stderr, /ffmpeg.*필요/, 'the error must identify the missing dependency');
+    assert.equal(fs.existsSync(path.join(captureRoot, 'console')), false, 'do not create evidence or start a fixture before preflight');
+  } finally { fs.rmSync(parent, { recursive: true, force: true }); }
+});
 
 const EXPECTED_TITLES = {
   events: '행사',
