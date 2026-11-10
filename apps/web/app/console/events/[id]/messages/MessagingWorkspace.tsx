@@ -295,6 +295,10 @@ const TEMPLATE_CHANNEL_CHOICES = MESSAGE_CHANNEL_CHOICES.map(choice => ({ ...cho
 function textFamilyChannel(channel: string, imageFileId: string): string {
   return channel === "ALIMTALK" ? "ALIMTALK" : imageFileId ? "MMS" : "SMS";
 }
+// 채널 표기 어휘(의도적 구분, 혼용 아님):
+// - familyLabel: 과금·발송 계열 구분(문자 vs 카카오 알림톡). 수신자 선택·검토 요약에 사용.
+// - channelLabel: 확정된 전송 유형 표시(SMS/LMS/MMS/알림톡). 발송 확인 문구·이력에 사용.
+// - authoringTypeLabel: 작성 중 미리보기의 유형 힌트. 작성 화면에만 사용.
 function familyLabel(channel: string): string {
   return channel === "ALIMTALK" ? "카카오 알림톡" : "문자";
 }
@@ -3424,6 +3428,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                 {composeStep !== 3 ? <div className={styles.stepActions}>
                   {composeStep === 2 ? <button type="button" className="button button-secondary" onClick={() => goComposeStep(1)}>이전</button> : null}
                   <button type="button" className="button button-primary" disabled={busyAction !== null || uploadingImage || Boolean(uncertainCreate) || recipientReviewRequired} onClick={() => goComposeStep(composeStep === 1 ? 2 : 3)}>{composeStep === 1 ? "내용 작성" : "발송 검토로"}</button>
+                  {composeStep === 2 ? <p className={styles.help}>예약 발송과 모의 발송 설정은 다음 검토 단계에서 입력합니다.</p> : null}
                 </div> : null}
                 {campaignError && !uncertainCreate ? <p className={styles.fieldError} id="campaign-request-error" role="alert">{campaignError}</p> : null}
                 <section className={styles.reviewCard} hidden={composeStep !== 3} aria-labelledby="campaign-review-heading">

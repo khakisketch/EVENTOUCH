@@ -438,7 +438,8 @@
   gap: var(--s2);
   margin-top: var(--s4);
   padding: var(--s4);
-  border-left: 3px solid var(--brand);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
   background: var(--surface-muted);
 }
 .scheduleReview h3, .scheduleReview p { margin: 0; }
