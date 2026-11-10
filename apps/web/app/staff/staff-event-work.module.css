@@ -4,6 +4,8 @@
   gap: var(--s2);
   margin-top: var(--s3);
   padding: var(--s3);
+  border: 1px solid var(--warning-line);
+  border-radius: var(--radius);
   background: var(--warning-soft);
   color: var(--ink);
 }
@@ -35,6 +37,7 @@
   gap: var(--s3);
 }
 
+.prizeHeader h2,
 .prizeHeader h3 {
   margin: 0 0 var(--s1);
   font-size: var(--h3);
@@ -231,6 +234,11 @@
   gap: var(--s3);
   padding: var(--s3) 0;
   border-bottom: 1px solid var(--line);
+}
+
+.manualResults li:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
 }
 
 .manualResults li > div { display: grid; min-width: 0; gap: var(--s1); }

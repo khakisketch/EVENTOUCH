@@ -365,6 +365,7 @@ async function main() {
       await act(() => page.getByRole('tab', { name: '참가 접수', exact: true }).click());
       await page.locator('[role="tabpanel"]:visible').first().waitFor({ state: 'visible', timeout: 15000 });
       await act(() => page.getByRole('button', { name: '접수 닫기', exact: true }).click());
+      await act(() => page.getByRole('dialog').getByRole('button', { name: '접수 닫기', exact: true }).click());
       await page.getByText('접수 닫힘', { exact: false }).first().waitFor({ timeout: 15000 });
       const workspace = (await readBootstrap(helpers, harness.baseUrl, ownerCookie)).workspaces[createdEventId];
       assert.equal(workspace.registrationOpen, false);

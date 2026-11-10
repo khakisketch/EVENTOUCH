@@ -284,7 +284,7 @@ async function main() {
 
     // ---- 4. Publish while still DRAFT: open-DRAFT variant + mouse link ----
     await login.getByRole('button', { name: '양식 게시·접수 열기', exact: true }).click();
-    await login.getByText('양식을 게시했습니다. 진행 단계에서 운영 준비(으)로 전환하면 접수가 열립니다.').first().waitFor({ timeout: 15000 });
+    await login.getByText('양식을 게시했습니다. 진행 단계에서 운영 준비 단계로 전환하면 접수가 열립니다.').first().waitFor({ timeout: 15000 });
     check('DRAFT publish success names the remaining stage step', true);
     check('registration published through settings UI', (await snapshot()).registrationOpen === true);
     check('approval gate persists server-side', (await snapshot()).approvalRequired === true);
@@ -328,11 +328,11 @@ async function main() {
 
     // ---- 5. DRAFT→READY; both note variants clear once public ----
     await login.getByRole('tab', { name: '진행 단계' }).click();
-    await login.getByRole('button', { name: '운영 준비(으)로 전환', exact: true }).click();
+    await login.getByRole('button', { name: '운영 준비 단계로 전환', exact: true }).click();
     await login.getByRole('button', { name: '정말 전환합니다 · 운영 준비 단계로', exact: true }).waitFor({ timeout: 15000 });
     await login.screenshot({ path: path.join(OUT, '07b-stage-to-ready-1280.png') });
     await login.getByRole('button', { name: '정말 전환합니다 · 운영 준비 단계로', exact: true }).click();
-    await login.getByText(/행사를 운영 준비\(으\)로 전환했습니다/).first().waitFor({ timeout: 15000 });
+    await login.getByText(/행사를 운영 준비 단계로 전환했습니다/).first().waitFor({ timeout: 15000 });
     check('event reaches READY before public signup', (await eventRow()).payload.stage === 'READY');
     await login.getByRole('tab', { name: '참가 접수' }).click();
     check('DRAFT gate notes clear once the event is public (READY)',
@@ -466,7 +466,7 @@ async function main() {
     // ---- 13. READY→LIVE with the intake still open (ENDED edge needs it) ----
     await login.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/settings`);
     await login.getByRole('tab', { name: '진행 단계' }).click();
-    await login.getByRole('button', { name: '진행 중(으)로 전환', exact: true }).click();
+    await login.getByRole('button', { name: '진행 중 단계로 전환', exact: true }).click();
     await login.getByRole('button', { name: '정말 전환합니다 · 진행 중 단계로', exact: true }).waitFor({ timeout: 15000 });
     await login.screenshot({ path: path.join(OUT, '18-stage-to-live-1280.png') });
     await login.getByRole('button', { name: '정말 전환합니다 · 진행 중 단계로', exact: true }).click();
@@ -696,9 +696,9 @@ async function main() {
     await login.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/settings`);
     await login.getByRole('tab', { name: '진행 단계' }).click();
     check('ENDED transition is offered while the intake is still open',
-      (await login.getByRole('button', { name: '종료(으)로 전환', exact: true }).count()) === 1
+      (await login.getByRole('button', { name: '종료 단계로 전환', exact: true }).count()) === 1
       && (await login.locator('#settings-stage-precondition').count()) === 0);
-    await login.getByRole('button', { name: '종료(으)로 전환', exact: true }).click();
+    await login.getByRole('button', { name: '종료 단계로 전환', exact: true }).click();
     await login.getByRole('button', { name: '정말 전환합니다 · 종료 단계로', exact: true }).waitFor({ timeout: 15000 });
     await login.screenshot({ path: path.join(OUT, '30a-stage-to-ended-open-1280.png') });
     await login.getByRole('button', { name: '정말 전환합니다 · 종료 단계로', exact: true }).click();
@@ -750,10 +750,11 @@ async function main() {
     }
     // Intake can still be closed from ENDED through the same UI.
     await login.getByRole('button', { name: '접수 닫기', exact: true }).click();
+    await login.getByRole('dialog').getByRole('button', { name: '접수 닫기', exact: true }).click();
     await login.getByText('접수를 닫았습니다').first().waitFor({ timeout: 15000 });
     check('intake closed through settings UI in ENDED', (await snapshot()).registrationOpen === false);
     await login.getByRole('tab', { name: '진행 단계' }).click();
-    await login.getByRole('button', { name: '보관(으)로 전환', exact: true }).click();
+    await login.getByRole('button', { name: '보관 단계로 전환', exact: true }).click();
     await login.getByRole('button', { name: '정말 전환합니다 · 보관 단계로', exact: true }).waitFor({ timeout: 15000 });
     await login.screenshot({ path: path.join(OUT, '30-stage-to-보관-1280.png') });
     await login.getByRole('button', { name: '정말 전환합니다 · 보관 단계로', exact: true }).click();

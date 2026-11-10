@@ -14,10 +14,15 @@
   display: inline-flex;
   align-items: center;
   min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--brand-text);
+  font: inherit;
   font-weight: 650;
   text-decoration: underline;
   text-underline-offset: 3px;
+  cursor: pointer;
 }
 
 .ticketCard {

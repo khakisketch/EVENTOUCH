@@ -53,8 +53,10 @@ test('recent-checks-read-as-one-line-and-offer-next-scan-flow', () => {
   assert.match(work, /부스 인증/);
   assert.match(work, /정정됨/);
   assert.match(work, /slice\(0, 10\)/);
-  assert.match(work, /aria-label=\{\`\$\{check\.name\} 다시 스캔 준비\`\}/);
-  assert.match(work, />\s*다시 스캔\s*</);
+  // 2026-11-10: 버튼이 실제 동작(다음 참가자 입력 준비)과 다른 '다시 스캔'을
+  // 약속하던 문제를 고쳤다. 동작은 그대로 두고 라벨만 정직하게 바꿨다.
+  assert.match(work, /aria-label=\{\`\$\{check\.name\} 기록 확인 · 다음 참가자 입력 준비\`\}/);
+  assert.match(work, />\s*다음 참가자\s*</);
   assert.match(work, /onClick=\{prepareNextParticipant\}/);
 });
 

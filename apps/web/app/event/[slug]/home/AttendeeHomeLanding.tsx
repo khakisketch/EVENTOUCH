@@ -127,7 +127,7 @@ export default function AttendeeHomeLanding({
       <nav className={`${styles.menuBoard}${preview && shortViewport ? ` ${styles.previewShortMenu}` : ""}`} aria-label="참가 메뉴">
         {visibleMenus.map((menu, index) => (
           <Fragment key={menu.key}>
-          {menu.category !== "Utility" && visibleMenus[index - 1]?.category !== menu.category ? <p className={styles.menuGroupLabel}>{menu.category === "info" ? "행사 안내" : "행사 참여"}</p> : null}
+          {menu.category !== "Utility" && visibleMenus[index - 1]?.category !== menu.category ? <h2 className={styles.menuGroupLabel}>{menu.category === "info" ? "행사 안내" : "행사 참여"}</h2> : null}
           <MenuButton
             key={menu.key}
             menu={menu}

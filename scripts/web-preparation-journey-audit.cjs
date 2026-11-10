@@ -110,10 +110,10 @@ async function main() {
       await phase('DRAFT → READY → 현황 재확인', async act => {
         await toStage(act);
         await capture('02-stage-settings');
-        await act(() => page.getByRole('button', { name: '운영 준비(으)로 전환', exact: true }).click());
+        await act(() => page.getByRole('button', { name: '운영 준비 단계로 전환', exact: true }).click());
         check(`${width} transition review does not write`, (await snapshot('ready-confirm')).stage === 'DRAFT');
         await act(() => page.getByRole('button', { name: '정말 전환합니다 · 운영 준비 단계로', exact: true }).click());
-        await page.getByText('행사를 운영 준비(으)로 전환했습니다.', { exact: true }).waitFor();
+        await page.getByText('행사를 운영 준비 단계로 전환했습니다.', { exact: true }).waitFor();
         await page.getByRole('button', { name: '진행 중(으)로 전환', exact: true }).waitFor();
         s = await snapshot('ready-settings');
         check(`${width} READY default home public without design`, s.stage === 'READY' && s.publicStatus === 200 && !s.registrationOpen && !s.homeDesignPublished, s);

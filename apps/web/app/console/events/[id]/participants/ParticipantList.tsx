@@ -275,7 +275,7 @@ function formatClock(value: number): string {
 }
 
 function identityOrg(person: { company: string; group: string }): string {
-  const parts = [person.company, person.group === "일반" ? "" : person.group]
+  const parts = [person.company.trim() || "소속 미입력", person.group === "일반" ? "" : person.group]
     .map((part) => part.trim())
     .filter(Boolean);
   return parts.join(" · ");
@@ -2080,9 +2080,9 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         </span>
         <span className={styles.metaShort} aria-hidden="true">
           {statusFilter || groupFilter || attendanceFilter || ticketFilter || search
-            ? `${visiblePeople.length} / ${state.people.length}명`
-            : `전체 ${state.people.length}명`}
-          {fetchedAt && !refreshing ? ` · ${formatClock(fetchedAt)}` : ""}
+            ? `${visiblePeople.length}명 / 전체 ${state.people.length}명(취소 포함)`
+            : `전체 ${state.people.length}명(취소 포함)`}
+          {fetchedAt && !refreshing ? ` · 조회 ${formatClock(fetchedAt)}` : ""}
           {refreshing ? " · 갱신 중" : ""}
         </span>
       </p>
@@ -2253,7 +2253,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                 </th> : null}
                 <th scope="col" aria-sort={nameSort === "original" ? undefined : nameSort}>
                   <button type="button" className={styles.sortButton} onClick={() => { setNameSort((current) => current === "ascending" ? "descending" : "ascending"); setPage(1); }}>
-                    참가자 <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16" fill="none"><path d={nameSort === "descending" ? "M8 3v10m-4-4 4 4 4-4" : "M8 13V3m-4 4 4-4 4 4"} stroke="currentColor" strokeWidth="1.5" /></svg>
+                    참가자 <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16" fill="none"><path d={nameSort === "descending" ? "M8 3v10m-4-4 4 4 4-4" : nameSort === "ascending" ? "M8 13V3m-4 4 4-4 4 4" : "M5.5 6.5L8 4l2.5 2.5M5.5 9.5L8 12l2.5-2.5"} stroke="currentColor" strokeWidth="1.5" /></svg>
                     <span className="sr-only">이름순 정렬</span>
                   </button>
                 </th>

@@ -290,7 +290,8 @@ test('unified-frame: frozen reports render their own snapshot, never live data',
   assert.match(reports, /원본 파일을 확인할 수 없습니다/, 'missing frozen files read as unavailable');
   assert.match(reports, /조회 기준 시각/, 'live analysis stamps its own basis');
   assert.match(reports, /setLoadedAt\(new Date\(\)\.toISOString\(\)\)/, 'every successful load restamps the analysis');
-  assert.match(reports, /<ConsoleRefreshButton label="새로고침"/, 'analysis offers an explicit refresh');
+  // 2026-11-10: 동일한 새로고침 버튼의 접근 이름을 화면에 맞게 구체화했다(시각 변화 없음).
+  assert.match(reports, /<ConsoleRefreshButton label="결과 분석 새로고침"/, 'analysis offers an explicit refresh');
 });
 
 test('unified-frame: dialogs keep dirty and unresolved dismissal gates', () => {

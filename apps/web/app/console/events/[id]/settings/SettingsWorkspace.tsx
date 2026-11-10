@@ -298,6 +298,17 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   const [refreshingAfterWrite, setRefreshingAfterWrite] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<{ message: string; field?: string } | null>(null);
+  // 오류가 다른 탭의 입력에 있으면 해당 탭에 표시한다. 전역 배너만으로는
+  // 오류 탭을 찾을 수 없기 때문이다. 패널은 hidden으로 마운트 유지되므로
+  // DOM 조회로 탭을 특정할 수 있다(SSR 불일치 방지를 위해 effect에서 계산).
+  const [failureTabId, setFailureTabId] = useState<SettingsTabId | null>(null);
+  useEffect(() => {
+    if (!failure?.field || failure.field === "serverUnsupported") { setFailureTabId(null); return; }
+    if (failure.field === "consentText") { setFailureTabId("intake"); return; }
+    const panel = document.getElementById(failure.field)?.closest('[role="tabpanel"]');
+    const anchor = panel?.id.replace(/^panel-/, "");
+    setFailureTabId(SETTINGS_TABS.find((tab) => tab.anchor === anchor)?.id ?? null);
+  }, [failure]);
   const [notice, setNotice] = useState<string | null>(null);
   const [showTicketReview, setShowTicketReview] = useState(false);
   const [showScheduleReview, setShowScheduleReview] = useState(false);
@@ -346,6 +357,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   }, [keepActiveTabVisible]);
   const [stageBusy, setStageBusy] = useState(false);
   const [stageConfirm, setStageConfirm] = useState(false);
+  const [closeIntakeConfirm, setCloseIntakeConfirm] = useState(false);
   const [archiveRecheckRequired, setArchiveRecheckRequired] = useState(false);
   const [stageError, setStageError] = useState<string | null>(null);
   const [stageNotice, setStageNotice] = useState<string | null>(null);
@@ -1319,7 +1331,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       { ...(consentText.trim() ? { consentText } : {}), expectedFormVersion: state.formVersion,
         expectedConsentVersion: state.consentVersion, expectedConsentText: state.consentText },
       currentStage === "DRAFT"
-        ? "양식을 게시했습니다. 진행 단계에서 운영 준비(으)로 전환하면 접수가 열립니다."
+        ? "양식을 게시했습니다. 진행 단계에서 운영 준비 단계로 전환하면 접수가 열립니다."
         : "양식을 게시하고 접수를 열었습니다.",
       "intake"
     );
@@ -1332,7 +1344,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     if (!stageCommandIdRef.current) stageCommandIdRef.current = randomCommandId();
     const commandId = stageCommandIdRef.current;
     await executeSettingsAttempt({ eventId, command: "event.stage", payload,
-      successMessage: `행사를 ${eventStageLabel(nextStage)}(으)로 전환했습니다.`, section: "stage",
+      successMessage: `행사를 ${eventStageLabel(nextStage)} 단계로 전환했습니다.`, section: "stage",
       commandId, fingerprint: `event.stage:${stableStringify(payload)}` });
   }
 
@@ -1415,6 +1427,12 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
                   <>
                     <span className={styles.tabDirtyDot} aria-hidden="true">●</span>
                     <span className="sr-only"> 저장 안 됨</span>
+                  </>
+                ) : null}
+                {failureTabId === tab.id ? (
+                  <>
+                    <span className={styles.tabErrorDot} aria-hidden="true">●</span>
+                    <span className="sr-only"> 입력 확인 필요</span>
                   </>
                 ) : null}
               </button>
@@ -1773,13 +1791,13 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         {currentStage === "DRAFT" && !state.registrationOpen ? (
           <p className={styles.help} role="note">
             공개 접수: 닫힘 — 기획 단계에서는 공개 페이지가 열리지 않습니다. 접수를 열려면 양식을 게시하고,{" "}
-            <a href="#settings-stage">진행 단계에서 운영 준비(으)로 전환</a>하세요.
+            <a href="#settings-stage">진행 단계에서 운영 준비 단계로 전환</a>하세요.
           </p>
         ) : null}
         {currentStage === "DRAFT" && state.registrationOpen ? (
           <p className={styles.help} role="note">
             공개 접수: 닫힘 — 기획 단계에서는 공개 페이지가 열리지 않아 참가 신청을 받을 수 없습니다.{" "}
-            <a href="#settings-stage">진행 단계에서 운영 준비(으)로 전환</a>하면 게시된 양식대로 접수가 열립니다.
+            <a href="#settings-stage">진행 단계에서 운영 준비 단계로 전환</a>하면 게시된 양식대로 접수가 열립니다.
           </p>
         ) : null}
         {currentStage === "ENDED" && state.registrationOpen ? (
@@ -1848,15 +1866,23 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               {busy ? "처리 중입니다" : "양식 게시·접수 열기"}
             </button>
             {state.registrationOpen ? (
+              <>
               <button
                 type="button"
                 className="button button-secondary"
                 disabled={settingsLocked || Boolean(intakeConflict) || archived || !canWriteIntake}
                 title={archived ? archivedReason : !canWriteIntake ? intakeNoWriteReason : undefined}
-                onClick={() => void runCommand("form.close", {}, "접수를 닫았습니다.", "intake")}
+                onClick={() => setCloseIntakeConfirm(true)}
               >
                 접수 닫기
               </button>
+              {closeIntakeConfirm ? <ConsoleConfirm
+                summary="접수를 닫으면 새 신청을 받지 않습니다. 이미 접수된 참가자와 티켓은 유지됩니다. 접수를 닫을까요?"
+                confirmLabel="접수 닫기"
+                onConfirm={() => { setCloseIntakeConfirm(false); void runCommand("form.close", {}, "접수를 닫았습니다.", "intake"); }}
+                onCancel={() => setCloseIntakeConfirm(false)}
+              /> : null}
+              </>
             ) : (
               <p role="status" className={styles.help}>
                 {endedPublishBlocked
@@ -2032,7 +2058,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
                 disabled={settingsLocked || stageBlocked}
                 aria-describedby={stageBlocked ? "settings-stage-precondition" : undefined}
               >
-                {eventStageLabel(nextStage)}(으)로 전환
+                {eventStageLabel(nextStage)} 단계로 전환
               </button>
             ) : nextStage ? (
               <StageTransitionConfirmation className={styles.stageConfirmation} label={eventStageLabel(nextStage)}

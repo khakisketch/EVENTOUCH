@@ -1509,7 +1509,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                 })}
               </ul>
             ) : (
-              <p className={styles.empty}>등록된 공지가 없습니다.{canWritePage ? " 위에서 첫 공지를 작성하세요." : ""}</p>
+              <p className={styles.empty}>등록된 공지가 없습니다.{canWritePage ? " 위 ‘공지 작성’으로 첫 공지를 작성하세요." : ""}</p>
             )}
           </ConsoleSection>
 
@@ -1607,7 +1607,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                 ))}
               </ul>
             ) : (
-              <p className={styles.empty}>등록된 일정이 없습니다.{canWritePrograms ? " 위에서 첫 일정을 추가하세요." : ""}</p>
+              <p className={styles.empty}>등록된 일정이 없습니다.{canWritePrograms ? " 위 ‘일정 추가’로 첫 일정을 추가하세요." : ""}</p>
             )}
           </ConsoleSection>
 
@@ -1736,7 +1736,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                 <ConsoleFormActions>
                   <button
                     type="submit"
-                    className="button button-secondary"
+                    className="button button-primary"
                     disabled={busy !== null || !venueFeatureOn || archived || Boolean(pendingContent) || otherContentReceipt}
                     title={archived ? archivedReason : venueFeatureOn ? undefined : "행사 설정에서 장소 안내 기능을 먼저 켜세요"}
                   >

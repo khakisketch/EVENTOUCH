@@ -1620,7 +1620,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
             </div>
           </fieldset>
 
-          <button className={styles.inlinePreview} type="button" onClick={(event) => switchMobileView("preview", event.currentTarget)}>현재 디자인 미리보기</button>
+          <button className={styles.inlinePreview} type="button" onClick={(event) => switchMobileView("preview", event.currentTarget)}>배경 미리보기</button>
           <fieldset className={styles.controlGroup} disabled={Boolean(commandBusy || conflict || state.archived)}>
             <legend>배너 이미지{imageDirty ? <span className={styles.groupFlag}>미저장 변경</span> : null}</legend>
             <p className={styles.help}>PNG, JPEG, WEBP · 최대 600KB. 업로드 후 저장하고 게시해야 참가자에게 적용됩니다.</p>
@@ -1685,7 +1685,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
             </details>
           </fieldset>
 
-          <button className={styles.inlinePreview} type="button" onClick={(event) => switchMobileView("preview", event.currentTarget)}>현재 디자인 미리보기</button>
+          <button className={styles.inlinePreview} type="button" onClick={(event) => switchMobileView("preview", event.currentTarget)}>배너 미리보기</button>
           <fieldset className={styles.controlGroup} disabled={Boolean(commandBusy || conflict || state.archived)}>
             <legend>문구와 배치{copyDirty ? <span className={styles.groupFlag}>미저장 변경</span> : null}</legend>
             <p className={styles.help}>행사명은 기본 제목입니다. 보조 문구는 기존 행사 소개와 별개로 배너에 표시됩니다.</p>
@@ -1758,7 +1758,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
             </details>
           </fieldset>
 
-          <button className={styles.inlinePreview} type="button" onClick={(event) => switchMobileView("preview", event.currentTarget)}>현재 디자인 미리보기</button>
+          <button className={styles.inlinePreview} type="button" onClick={(event) => switchMobileView("preview", event.currentTarget)}>문구 미리보기</button>
           <fieldset className={styles.controlGroup} disabled={Boolean(commandBusy || conflict || state.archived)}>
             <legend>소개와 노출{exposureDirty ? <span className={styles.groupFlag}>미저장 변경</span> : null}</legend>
             <p className={styles.help}>공지 설정은 참가자 홈에도 적용됩니다. 행사 일시·장소를 숨겨도 티켓의 행사일, 프로그램 일정의 일시·장소, 부스 지도와 전광판은 별도로 표시될 수 있습니다.</p>

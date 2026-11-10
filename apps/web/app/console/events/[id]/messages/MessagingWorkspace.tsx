@@ -307,7 +307,7 @@ function channelLabel(channel: string): string {
     case "LMS": return "LMS · 장문";
     case "MMS": return "MMS · 사진";
     case "ALIMTALK": return "알림톡";
-    case "SMS": return "문자 · SMS/LMS";
+    case "SMS": return "문자(SMS/LMS 자동 결정)";
     default: return "채널 확인 필요";
   }
 }
@@ -3000,13 +3000,13 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                 else requestCampaignCreate(event);
               }}>
                 <nav className={styles.composeSteps} aria-label="메시지 작성 단계">
-                  {(["수신자", "내용", "검토·발송"] as const).map((label, index) => <button key={label} type="button" aria-current={composeStep === index + 1 ? "step" : undefined} disabled={compositionPending || (!messagesLocked && index + 1 > composeStep)} onClick={() => goComposeStep((index + 1) as 1 | 2 | 3)}><span>{index + 1}</span>{label}</button>)}
+                  {(["수신자", "내용", "검토·발송"] as const).map((label, index) => <button key={label} type="button" aria-current={composeStep === index + 1 ? "step" : undefined} disabled={compositionPending || (!messagesLocked && index + 1 > composeStep)} title={index === 1 && selectedIds.length === 0 ? "수신자를 먼저 선택하세요" : index === 2 && (!campaignDraft.title.trim() || !campaignDraft.body.trim()) ? "제목과 내용을 먼저 입력하세요" : undefined} onClick={() => goComposeStep((index + 1) as 1 | 2 | 3)}><span>{index + 1}</span>{label}</button>)}
                 </nav>
                 <fieldset className={styles.composeLock} disabled={messagesLocked || compositionPending}>
                 <legend className="sr-only">발송 내용과 수신자</legend>
 
                 {composeStep !== 1 ? <div className={styles.stepRecipientSummary} role="group" aria-label="선택한 수신자 요약">
-                  <div><p><span className={styles.recipientCountLabel}>수신자</span> <strong>{selectedIds.length}명</strong><span>{recipientIdentity}</span></p><p className={styles.recipientSummaryMeta}>{recipientStatusSummary}</p></div>
+                  <div><p><span className={styles.recipientCountLabel}>수신자</span> <strong>{selectedIds.length}명</strong><span>{recipientIdentity}</span></p>{recipientStatusSummary ? <p className={styles.recipientSummaryMeta}>{recipientStatusSummary}</p> : null}</div>
                   <button type="button" className="button button-secondary" onClick={jumpToRecipientFilter}>수신자 변경</button>
                 </div> : null}
 
@@ -3123,7 +3123,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                           <input
                             id="recipient-search"
                             type="search"
-                            placeholder="이름·소속·연락처 검색"
+                            placeholder="수신자 이름·소속·연락처 검색"
                             value={recipientQuery}
                             onChange={(event) => setRecipientQuery(event.target.value)}
                           />
@@ -3455,6 +3455,11 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                         : simulateDraft
                           ? "모의 발송 · 실제 전달 없음"
                           : "즉시 발송 시도"}
+                    </li>
+                    <li>
+                      {campaignDraft.imageFileId
+                        ? `첨부 사진: ${campaignDraft.imageName || "사진 1장"} · MMS로 발송`
+                        : "첨부 사진 없음"}
                     </li>
                   </ul>
                   {ticketLinkInvalidCount > 0 ? <p className={styles.help} role="note">

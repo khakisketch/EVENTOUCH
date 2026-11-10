@@ -1779,7 +1779,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                   const stageBlockerId = `stage-blockers-${program.id}`;
                   const runNextAction = !program.published
                     ? "결과를 공개하면"
-                    : `실행 인원을 1~${countLimit}명 범위로 고치면`;
+                    : `실행 인원을 1~${countLimit}명 범위로 입력하면`;
                   return (
                     <li key={program.id} id={`draw-program-${program.id}`} className={styles.programItem}>
                       <div className={styles.programTop}>
@@ -1996,7 +1996,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
       <ConsoleSection headingId="draws-vote" title={`순위 투표 · ${state.voteTotal}표`}>
         {!state.pollEnabled ? <p className={styles.featureOff}>이 행사에서 투표 기능이 꺼져 있습니다.</p> : (
           <>
-            <p className={styles.hint}>선택 수는 1~20개로 설정합니다. 첫 투표 접수 뒤에는 선택 수와 팀 구성이 잠깁니다. 집계는 서버 순위와 동률을 그대로 표시하며 임의 순위를 만들지 않습니다.</p>
+            <p className={styles.hint}>{state.voteTotal > 0 ? "집계는 서버 순위와 동률을 그대로 표시하며 임의 순위를 만들지 않습니다." : "선택 수는 1~20개로 설정합니다. 첫 투표 접수 뒤에는 선택 수와 팀 구성이 잠깁니다. 집계는 서버 순위와 동률을 그대로 표시하며 임의 순위를 만들지 않습니다."}</p>
             {canWriteDraws ? (
               <ValidatedForm className={styles.configForm} onSubmit={saveVoteConfig}>
                 <div className={styles.configGrid}>
@@ -2229,7 +2229,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
               <div className={styles.preassignBox}>
                 <label className={styles.checkLine}>
                   <input type="checkbox" checked={preassignAllApproved} disabled={selectedLucky.eligible.length === 0 || missingLuckyCount === 0 || writeLocked || Boolean(luckyRangeConflict) || busy === "lucky:preassign"} onChange={(event) => setPreassignAllApproved(event.target.checked)} />
-                  가져온 참가자를 포함해 승인 참가자 전체 {selectedLucky.eligible.length}명 선택 (기존 번호 유지)
+                  승인 참가자 전체 {selectedLucky.eligible.length}명 선택 (기존 번호 유지)
                 </label>
                 {selectedLucky.excluded > 0 ? <p role="note">취소·티켓 상태나 참가자 식별을 확인해야 하는 기록 {selectedLucky.excluded}건은 배정에서 제외됩니다. 참가자 명단에서 확인하세요.</p> : null}
                 {selectedLucky.eligible.length > 0 && missingLuckyCount === 0 ? <p role="status">승인 참가자에게 번호가 모두 배정되었습니다.</p> : null}

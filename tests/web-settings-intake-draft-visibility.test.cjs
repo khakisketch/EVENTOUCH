@@ -62,7 +62,9 @@ test('intake gate: ENDED publish is honestly disabled, close stays open', () => 
   // form.close keeps its existing gate so the archive precondition
   // (registration shut) stays reachable from ENDED: the publish button is
   // the only intake control carrying endedPublishBlocked.
-  assert.match(text, /onClick=\{\(\) => void runCommand\("form\.close"/);
+  // 2026-11-10: 접수 닫기는 확인 다이얼로그를 거쳐 같은 runCommand로 실행한다.
+  assert.match(text, /onClick=\{\(\) => setCloseIntakeConfirm\(true\)\}/);
+  assert.match(text, /void runCommand\("form\.close"/);
   assert.match(text, /disabled=\{settingsLocked \|\| Boolean\(intakeConflict\) \|\| archived \|\| !canWriteIntake\}/);
   assert.match(text, /disabled=\{settingsLocked \|\| Boolean\(intakeConflict\) \|\| archived \|\| !canWriteIntake \|\| endedPublishBlocked\}/);
 });
@@ -74,7 +76,8 @@ test('intake draft gate: publish/close copy and stage authority are untouched', 
   assert.match(text, /접수를 닫았습니다/);
   assert.match(text, /현재 \{state\.registrationOpen \? "접수 중" : "접수 닫힘"\}/);
   // DRAFT names the remaining step instead of claiming a real opening.
-  assert.match(text, /양식을 게시했습니다\. 진행 단계에서 운영 준비\(으\)로 전환하면 접수가 열립니다\./);
+  // 2026-11-10: (으)로 조사를 단계로 표현으로 고쳤다.
+  assert.match(text, /양식을 게시했습니다\. 진행 단계에서 운영 준비 단계로 전환하면 접수가 열립니다\./);
   // The notes are additive and conditional: they never edit the stage flow.
-  assert.match(text, /진행 단계에서 운영 준비\(으\)로 전환/);
+  assert.match(text, /진행 단계에서 운영 준비 단계로 전환/);
 });

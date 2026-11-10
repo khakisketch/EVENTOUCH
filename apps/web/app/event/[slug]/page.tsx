@@ -275,7 +275,7 @@ export default async function EventPage({
             {notices.map((notice) => (
               <li key={notice.id}>
                 <h3>
-                  {notice.pinned ? <span className={styles.pin} aria-label="고정 공지">📌</span> : null}
+                  {notice.pinned ? <span className={styles.pin}>고정</span> : null}
                   {notice.title}
                 </h3>
                 {notice.body ? <p className="preserve-lines">{notice.body}</p> : null}

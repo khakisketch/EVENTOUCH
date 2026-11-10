@@ -195,6 +195,11 @@
   font-size: var(--small);
 }
 
+.tabErrorDot {
+  color: var(--danger);
+  font-size: var(--small);
+}
+
 .tabPanel {
   min-width: 0;
   padding-top: var(--s4);

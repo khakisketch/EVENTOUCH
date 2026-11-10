@@ -886,7 +886,8 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     return (
       <>
         <StaffAccountMenu confirmLeave={confirmLeaveStaff} confirmLeaveAccount={confirmLeaveAccountPage} />
-        <p className="loading-state">배정된 업무가 없습니다.</p>
+        <p className="loading-state">배정된 업무가 없습니다. 내 업무 목록에서 배정을 확인하거나, 현장 책임자에게 배정을 요청하세요.</p>
+        <p><Link className="button button-secondary" href="/staff">내 업무 보기</Link></p>
       </>
     );
   }
@@ -1537,7 +1538,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
               return;
             }
             if (!confirmed && !orgChanged && (ticket.trim() || manualTarget || correctReason.trim() || rewardLookupTicket.trim()) &&
-                !window.confirm("입력 중인 내용이 있습니다. 떠나면 입력한 내용이 사라집니다. 이동할까요?")) event.preventDefault();
+                !window.confirm("입력 중인 내용이 있습니다. 떠나면 사라집니다. 이동할까요?")) event.preventDefault();
           }}
         >
           ← 내 업무
@@ -1588,7 +1589,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       {assignmentStale ? <p className="notice" role="alert">{loadError || "현재 업무 배정을 확인할 수 없습니다."} 새 현장 처리는 잠겼으며 입력과 마지막 결과는 유지됩니다. {!receiptRefreshNeeded ? <button type="button" className="button button-secondary" disabled={refreshing} onClick={() => void load(true)}>{refreshing ? "배정 확인 중" : "배정 다시 확인"}</button> : null}</p> : null}
       {kiosk ? (
         <p className="notice" role="status">
-          공용 태블릿용 큰 화면입니다. 같은 배정·같은 로그인으로 처리하며, 무인 셀프 체크인은 지원하지 않습니다.
+          공용 태블릿용 큰 화면입니다. 무인 셀프 체크인은 지원하지 않습니다.
         </p>
       ) : null}
       {hasDeskWork && hasBoothWork ? (
@@ -1652,7 +1653,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             <section className={prizeStyles.directionReview} aria-labelledby="staff-direction-review-title">
               <div role="alert">
                 <strong id="staff-direction-review-title">데스크 업무 방향을 확인해 주세요</strong>
-                <p>{directionReview.from === null ? "시작하기 전에 업무 방향을 확인해 주세요." : directionReview.from === directionReview.to ? "현재 업무 방향을 다시 확인해 주세요." : `이전에 확인한 방향은 ${directionReview.from === "IN" ? "입장" : "퇴장"}입니다.`} {directionReview.to ? `현재 방향은 ${directionReview.to === "IN" ? "입장" : "퇴장"}입니다.` : "현재 데스크 방향이나 배정을 확인할 수 없습니다."}</p>
+                <p>{directionReview.from === null ? "시작하기 전에 업무 방향을 확인해 주세요." : directionReview.from === directionReview.to ? `방향은 그대로 ${directionReview.to === "IN" ? "입장" : "퇴장"}입니다. 계속하려면 확인해 주세요.` : `이전에 확인한 방향은 ${directionReview.from === "IN" ? "입장" : "퇴장"}입니다. ${directionReview.to ? `현재 방향은 ${directionReview.to === "IN" ? "입장" : "퇴장"}입니다.` : "현재 데스크 방향이나 배정을 확인할 수 없습니다."}`}</p>
                 <p>업무 방향을 확인하기 전까지 다음 참가자 처리는 잠깁니다. {result.kind === "ok" ? "마지막 처리 결과는 유지됩니다." : "입력한 내용은 유지됩니다."}</p>
                 {deskClosed ? <p>현재 데스크는 가동 중지 상태입니다. 운영자에게 확인하세요.</p> : null}
                 {loadError ? <p>{loadError}</p> : null}
@@ -1735,7 +1736,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       )}
       {activeTask === "booth" && activeScope.stampAvailable && activeScope.stampMode === "SELF" && (!selectedBooth || ready) ? (
         <p className="notice" role="status">
-          참가자가 직접 인증하는 방식입니다. QR을 보여주고 참가자 홈 &gt; 부스 인증에서 카메라로 바로 인증하게 안내하세요.
+          참가자가 직접 인증하는 방식입니다. QR을 보여주고 참가자 홈 &gt; 부스 인증에서 카메라로 바로 인증하도록 안내하세요.
           이 화면에서 티켓을 대신 처리하지 않습니다.
         </p>
       ) : null}
@@ -1909,7 +1910,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         <details ref={manualSearchRef} className={prizeStyles.manualSearch}>
           <summary>카메라가 안 될 때 · 참가자 명단 확인</summary>
           <div className={prizeStyles.manualSearchBody}>
-            <p>참가자에게 이름과 소속을 확인한 뒤 처리하세요. 같은 이름과 소속이 여럿이면 현장 책임자에게 확인을 요청하세요.</p>
+            <p>참가자의 이름과 소속을 확인한 뒤 처리하세요. 같은 이름과 소속이 여럿이면 현장 책임자에게 확인을 요청하세요.</p>
             <div className={prizeStyles.manualSearchHeading}>
               <label htmlFor="staff-manual-search">참가자 이름</label>
               <button type="button" className={`button button-quiet ${prizeStyles.manualRefresh}`} aria-label="참가자 명단 새로고침" title="참가자 명단 새로고침"
@@ -2132,7 +2133,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         <section className={`${prizeStyles.workSection} ${prizeStyles.prizeWorkspace}`} aria-label="경품 확인 및 수령">
           <div className={prizeStyles.prizeHeader}>
             <div>
-              <h3>경품 확인·수령</h3>
+              <h2>경품 확인·수령</h2>
               <p>퇴장 처리 응답 또는 티켓 조회로 해당 참가자의 경품만 확인합니다.</p>
             </div>
           </div>
@@ -2253,7 +2254,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         <section className={prizeStyles.workSection} aria-label="기록 정정">
           <h2 className={prizeStyles.sectionTitle}>잘못 스캔했다면 바로 정정하세요</h2>
         <ValidatedForm className="correction-form" onSubmit={(event) => { void correctLatest(event); }}>
-          <p className="staff-direction-hint">잘못 처리했다면 사유를 입력하세요. 이 참가자의 가장 최근 기록이며 본인이 처리한 건만 정정할 수 있습니다.</p>
+          <p className="staff-direction-hint">잘못 처리했다면 사유를 입력하세요. 정정 대상은 이 참가자의 가장 최근 기록이며, 본인이 처리한 건만 정정할 수 있습니다.</p>
           <div className="form-field">
             <label htmlFor="correct-reason">정정 사유</label>
             <input
@@ -2289,7 +2290,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       {correctNotice ? <p className="scan-result" role={correctUnknown ? "alert" : "status"}>{correctNotice}</p> : null}
       <section className={prizeStyles.workSection} aria-label="최근 처리 기록">
       <h2 className="activity-heading">최근 처리 · {activeTask === "booth" ? "부스 인증" : "데스크 체크인"}</h2>
-      <p className={prizeStyles.nextStep}>{activeTask === "booth" ? "저장된 부스 인증을 최근 순서로 확인할 수 있습니다." : "같은 티켓을 다시 스캔하면 같은 결과가 나옵니다. 아래에서 무엇이 처리됐는지 확인하고 다음 참가자로 넘어가세요."}</p>
+      <p className={prizeStyles.nextStep}>{activeTask === "booth" ? "저장된 부스 인증을 최근 순서로 확인할 수 있습니다." : "같은 티켓을 다시 스캔하면 같은 결과가 나옵니다. 아래에서 처리된 내역을 확인하고 다음 참가자로 넘어가세요."}</p>
       {boothVisits.length ? (
         <ul className="activity-list">
           {boothVisits.map((visit) => (
@@ -2319,11 +2320,11 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                 <button
                   type="button"
                   className="button button-secondary"
-                  aria-label={`${check.name} 다시 스캔 준비`}
+                  aria-label={`${check.name} 기록 확인 · 다음 참가자 입력 준비`}
                   disabled={submitting || scanUnknown || writeLocked}
                   onClick={prepareNextParticipant}
                 >
-                  다시 스캔
+                  다음 참가자
                 </button>
               </li>
             );

@@ -38,7 +38,7 @@ async function main() {
     await page.getByRole('tab', { name: '진행 단계', exact: true }).click();
     const stage = page.locator('[data-workspace-section="settings-stage"]');
     await stage.waitFor();
-    const archive = stage.getByRole('button', { name: '보관(으)로 전환', exact: true });
+    const archive = stage.getByRole('button', { name: '보관 단계로 전환', exact: true });
     if (process.argv.includes('--baseline')) {
       assert.equal(await archive.isEnabled(), true, 'baseline offers archive although module source is malformed');
       assert.doesNotMatch(await stage.innerText(), /확인할 수 없/);
@@ -115,7 +115,7 @@ async function main() {
     assert.equal(await archive.isDisabled(), true, 'an unknown intake state cannot become closed');
     noIntake.registrationOpen = false; await save(noIntake);
     await stage.getByRole('button', { name: '상태 다시 확인', exact: true }).click();
-    await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button => button.textContent.trim() === '보관(으)로 전환' && !button.disabled));
+    await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button => button.textContent.trim() === '보관 단계로 전환' && !button.disabled));
     const bootstrap = `**/api/events/${f.eventId}/bootstrap`;
     await page.route(bootstrap, async route => {
       const response = await route.fetch(); const body = await response.json();
@@ -127,7 +127,7 @@ async function main() {
     assert.equal(await archive.isDisabled(), true, 'an older server without proof is not assumed safe');
     await page.unroute(bootstrap);
     await stage.getByRole('button', { name: '상태 다시 확인', exact: true }).click();
-    await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button => button.textContent.trim() === '보관(으)로 전환' && !button.disabled));
+    await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button => button.textContent.trim() === '보관 단계로 전환' && !button.disabled));
     // A source may become unreadable after the confirmation is opened. The
     // transaction guards the actual click and the UI requires a fresh read.
     await archive.click();
@@ -146,7 +146,7 @@ async function main() {
     assert.equal(await archive.isDisabled(), true);
     changed.modules = modules; await save(changed);
     await stage.getByRole('button', { name: '상태 다시 확인', exact: true }).click();
-    await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button => button.textContent.trim() === '보관(으)로 전환' && !button.disabled));
+    await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button => button.textContent.trim() === '보관 단계로 전환' && !button.disabled));
     await archive.click();
     await stage.getByRole('button', { name: '정말 전환합니다 · 보관 단계로', exact: true }).click();
     await page.getByText(/보관된 행사는 읽기 전용/).first().waitFor();

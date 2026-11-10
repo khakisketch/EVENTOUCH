@@ -18,7 +18,7 @@ const WORK = 'app/staff/StaffEventWork.tsx';
 
 test('self booth guidance points at the in-home camera scan', () => {
   const work = read(WORK);
-  assert.match(work, /참가자 홈.*부스 인증에서 카메라로 바로 인증하게 안내/u, 'staff wording matches the participant path');
+  assert.match(work, /참가자 홈.*부스 인증에서 카메라로 바로 인증하도록 안내/u, 'staff wording matches the participant path');
   assert.match(work, /카메라를 쓸 수 없으면 아래 코드를 직접 입력/u, 'manual entry stays for camera failures');
   assert.match(work, /코드 직접 복사/u, 'clipboard fallback stays on the staff side');
   const stamp = read('app/event/[slug]/home/HomeShell.tsx');

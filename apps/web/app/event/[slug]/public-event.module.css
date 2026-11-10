@@ -123,7 +123,17 @@
 }
 
 .pin {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
   margin-right: var(--s2);
+  padding-inline: var(--s2);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 700;
+  vertical-align: baseline;
 }
 
 .programMeta {

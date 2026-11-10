@@ -439,11 +439,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
     return <div className="ticket-state">
       <p className={styles.ticketLoadingStatus} role="status">티켓을 확인하고 있습니다.</p>
       <p className={styles.ticketLoadingHelp}>확인이 오래 걸리면 인터넷 연결을 확인해 주세요.</p>
-      <a className={styles.ticketLoadingRetry} href="" onClick={(event) => {
-        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-        event.preventDefault();
-        setReloadTick((value) => value + 1);
-      }}>다시 불러오기</a>
+      <button className={styles.ticketLoadingRetry} type="button" onClick={() => setReloadTick((value) => value + 1)}>다시 불러오기</button>
     </div>;
   }
   if (state.kind === "missing") {
@@ -465,10 +461,10 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
           </p>
         ) : null}
         {recoveryBlocked ? <p className={styles.ticketMessageActions}>
-          <Link className={storageAvailable ? styles.buttonPrimary : styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}`}>행사 안내 확인</Link>
+          <Link className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}`}>행사 안내 확인</Link>
         </p> : null}
         <p className={styles.ticketMessageActions}>
-          <Link className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/register`}>처음 신청하기</Link>
+          <Link className={recoveryBlocked ? styles.buttonPrimary : styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/register`}>처음 신청하기</Link>
         </p>
       </section>
     );
@@ -516,7 +512,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
     <button
       type="button"
       className={mode === "ticket" && !usable ? styles.buttonPrimary : styles.buttonSecondary}
-      aria-disabled={rechecking}
+      disabled={rechecking}
       onClick={() => void recheckTicket()}
     >
       {rechecking ? "확인 중입니다" : "상태 다시 확인"}

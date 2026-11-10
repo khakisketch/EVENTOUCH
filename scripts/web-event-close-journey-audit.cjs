@@ -422,7 +422,7 @@ async function main() {
       await page.locator(`#${panelId}:visible`).waitFor({ state: 'visible', timeout: 15000 });
     };
     const confirmTransition = async (act, task, touch, stageLabel) => {
-      const first = page.getByRole('button', { name: `${stageLabel}(으)로 전환`, exact: true });
+      const first = page.getByRole('button', { name: `${stageLabel} 단계로 전환`, exact: true });
       await touch(first, `${stageLabel} 전환 열기`);
       await act('click', () => first.click());
       await page.getByRole('group', { name: '단계 전환 확인' }).waitFor({ timeout: 10000 });
@@ -551,6 +551,7 @@ async function main() {
         const close = page.getByRole('button', { name: '접수 닫기', exact: true });
         await touchOk(close, '접수 닫기');
         await act('click', () => close.click());
+        await act('confirm', () => page.getByRole('dialog').getByRole('button', { name: '접수 닫기', exact: true }).click());
         await page.getByText(/접수를 닫았습니다/, { exact: false }).first().waitFor({ timeout: 15000 });
         const workspace = (await readBootstrap(helpers, harness.baseUrl, ownerCookie)).workspaces[eventId];
         assert.equal(workspace.registrationOpen, false);
@@ -564,13 +565,13 @@ async function main() {
 
       // ---- Phase 4: LIVE -> ENDED through the stage gate ----
       let endedStage = null;
-      await measure('stage-end', '종료 단계로 전환 (진행 단계 → 종료(으)로 전환 → 확정)', async (act, task, { touchOk }) => {
+      await measure('stage-end', '종료 단계로 전환 (진행 단계 → 종료 단계로 전환 → 확정)', async (act, task, { touchOk }) => {
         task.screens = [eventPath('/settings')];
-        task.fields = ['tab 진행 단계', '종료(으)로 전환', '단계 전환 확인 / 정말 전환합니다'];
+        task.fields = ['tab 진행 단계', '종료 단계로 전환', '단계 전환 확인 / 정말 전환합니다'];
         if (before) await selectSettingsTab(act, '진행 단계');
         else {
           const pathBefore = new URL(page.url()).pathname;
-          await followLinear(act, 'button:has-text("종료(으)로 전환")', /ENDED/);
+          await followLinear(act, 'button:has-text("종료 단계로 전환")', /ENDED/);
           assert.equal(new URL(page.url()).pathname, pathBefore, 'intake and ENDED stay in one settings visit');
         }
         await stagePanelReady();
@@ -692,9 +693,9 @@ async function main() {
       });
 
       // ---- Phase 8: archive only after the result notice (writes lock) ----
-      await measure('archive', '보관 단계로 전환 (진행 단계 → 보관(으)로 전환 → 확정)', async (act, task, { touchOk }) => {
+      await measure('archive', '보관 단계로 전환 (진행 단계 → 보관 단계로 전환 → 확정)', async (act, task, { touchOk }) => {
         task.screens = [eventPath(before ? '/settings' : '/messages')];
-        task.fields = before ? ['tab 진행 단계', '보관(으)로 전환', '단계 전환 확인 / 정말 전환합니다'] : ['다음: 보관', 'shared 단계 전환 확인 / 정말 전환합니다'];
+        task.fields = before ? ['tab 진행 단계', '보관 단계로 전환', '단계 전환 확인 / 정말 전환합니다'] : ['다음: 보관', 'shared 단계 전환 확인 / 정말 전환합니다'];
         if (before) {
           await menuTo('/settings', '#set-name', act);
           await selectSettingsTab(act, '진행 단계');

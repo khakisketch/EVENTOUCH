@@ -1128,7 +1128,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
         }
         className={styles.analysisSubheads}
         action={
-          <ConsoleRefreshButton label="새로고침" busy={refreshing} onRefresh={() => setReloadTick((tick) => tick + 1)} />
+          <ConsoleRefreshButton label="결과 분석 새로고침" busy={refreshing} onRefresh={() => setReloadTick((tick) => tick + 1)} />
         }
       >
         {attendanceAvailable && !reportSourcesAvailable ? <ConsoleFeedback kind="warning">{missingSourceText} 자료를 확인할 수 없습니다. 다른 집계는 확인 가능한 자료를 표시합니다. 새로고침해도 계속되면 시스템 관리자에게 문의하세요.</ConsoleFeedback> : null}
@@ -1136,7 +1136,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
             supporting counts follow. Same five values, same labels, only
             reading order and proportion change. */}
         {attendanceAvailable ? <div className={styles.metricGrid}>
-          <div className={`${styles.metricCard} ${styles.metricLead}`}><strong>{state.metrics.rate}</strong><span>누적 입장률 (%)</span></div>
+          <div className={`${styles.metricCard} ${styles.metricLead}`}><strong>{state.metrics.rate}<span aria-hidden="true">%</span></strong><span>누적 입장률</span></div>
           <div className={styles.metricCard}><strong>{state.metrics.checked}</strong><span>누적 입장 (명)</span></div>
           <div className={styles.metricCard}><strong>{state.metrics.total}</strong><span>{state.metrics.cancellationReview > 0 ? "신청 상태 기준 등록 (명)" : "취소 제외 등록 (명)"}</span></div>
           <div className={styles.metricCard}><strong>{state.metrics.inside}</strong><span>현재 입장 (명)</span></div>
@@ -1273,18 +1273,16 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
             <span className={styles.help}>보기: {printLayout === "wide" ? "발표용 16:9" : "A4 세로"}</span>
             <button
               type="button"
-              className="button button-secondary"
+              className="pill"
               aria-pressed={printLayout === "a4"}
-              disabled={printLayout === "a4"}
               onClick={() => setPrintLayout("a4")}
             >
               A4 세로
             </button>
             <button
               type="button"
-              className="button button-secondary"
+              className="pill"
               aria-pressed={printLayout === "wide"}
-              disabled={printLayout === "wide"}
               onClick={() => setPrintLayout("wide")}
             >
               발표용 16:9

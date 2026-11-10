@@ -340,7 +340,7 @@ async function main() {
       await page.screenshot({ path: `${OUT}/theme-dirty-1280.png`, fullPage: true });
       await page.setViewportSize({ width: 390, height: 844 });
       await page.screenshot({ path: `${OUT}/theme-dirty-390.png`, fullPage: true });
-      const previewJump = page.getByRole('button', { name: '현재 디자인 미리보기', exact: true }).first();
+      const previewJump = page.getByRole('button', { name: '배경 미리보기', exact: true }).first();
       await previewJump.focus();
       await page.keyboard.press('Enter');
       await page.locator('#home-preview-heading').waitFor({ state: 'visible' });
@@ -351,7 +351,7 @@ async function main() {
       check('mobile preview focus is not under the console header', previewPosition.top >= previewPosition.barBottom, previewPosition);
       await page.screenshot({ path: `${OUT}/theme-mobile-preview-390.png` });
       await page.getByRole('button', { name: '편집하던 곳으로 돌아가기', exact: true }).click();
-      await page.waitForFunction(() => document.activeElement?.textContent?.trim() === '현재 디자인 미리보기');
+      await page.waitForFunction(() => document.activeElement?.textContent?.trim() === '배경 미리보기');
       check('mobile preview returns to its initiating control with unsaved edit intact', await previewJump.evaluate(e => e === document.activeElement) && (await page.locator('#home-background').inputValue()).toLowerCase() === '#fff1e8');
       // The section nav is now the only top-level mobile switch. Exercise it
       // with keyboard input, including saving from the preview state: the
