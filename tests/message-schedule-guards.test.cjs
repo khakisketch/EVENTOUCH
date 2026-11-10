@@ -6,7 +6,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { dueScheduleGuards } = require('../server/commands/content-results');
+const { dueScheduleGuards, ticketLinkGuard } = require('../server/commands/content-results');
 
 const NOW = Date.parse('2026-10-24T00:00:00.000Z');
 const PAST = new Date(NOW - 60000).toISOString();
@@ -38,8 +38,24 @@ test('a-future-schedule-is-not-due', () => {
   );
 });
 
-test('an-unparseable-schedule-is-not-treated-as-future', () => {
-  assert.equal(dueScheduleGuards(message({ scheduled: 'garbage' }), workspaceWith(), { now: NOW, origin: null }), null);
+test('a previous reservation cannot bypass its invalid time by changing status', () => {
+  for (const status of ['NEEDS_CONNECTION', 'FAILED']) assert.deepEqual(
+    dueScheduleGuards(message({ status, scheduled: '2026-10-24T09:00' }), workspaceWith(), { now: NOW, origin: null }),
+    { reason: 'INVALID_SCHEDULE', missing: 0 }
+  );
+});
+
+test('a reservation with an invalid or missing schedule cannot be dispatched', () => {
+  for (const scheduled of ['', 'garbage', '2026-10-24T09:00', '2026-02-30T09:00:00+09:00', '2026-10-24T09:00:00+14:30']) assert.deepEqual(
+    dueScheduleGuards(message({ status: 'SCHEDULED', scheduled }), workspaceWith(), { now: NOW, origin: null }),
+    { reason: 'INVALID_SCHEDULE', missing: 0 }
+  );
+});
+
+test('explicit offsets identify the same instant on every server', () => {
+  for (const scheduled of ['2026-10-24T08:59:00+09:00', '2026-10-23T23:59:00Z', '2026-10-24T08:59+0900']) {
+    assert.equal(dueScheduleGuards(message({ status: 'SCHEDULED', scheduled }), workspaceWith(), { now: NOW, origin: null }), null);
+  }
 });
 
 test('a-ticket-link-without-an-origin-is-refused', () => {
@@ -50,10 +66,21 @@ test('a-ticket-link-without-an-origin-is-refused', () => {
 });
 
 test('a-ticket-link-with-an-origin-passes', () => {
+  const person = { id: 'p1', status: 'APPROVED', ticket: 'A'.repeat(32), ticketExpiresAt: new Date(NOW + 60000).toISOString() };
   assert.equal(
-    dueScheduleGuards(message({ body: '{{티켓링크}} 안내' }), workspaceWith(), { now: NOW, origin: 'https://example.test' }),
+    dueScheduleGuards(message({ body: '{{티켓링크}} 안내', recipientSnapshot: [{ id: 'p1' }] }), { participants: [person] }, { now: NOW, origin: 'https://example.test' }),
     null
   );
+});
+
+test('ticket links reject missing, expired, revoked and malformed participants', () => {
+  const valid = { id: 'p1', status: 'APPROVED', ticket: 'A'.repeat(32), ticketExpiresAt: new Date(NOW + 60000).toISOString() };
+  const body = message({ body: '{{티켓링크}} 안내', recipientSnapshot: [{ id: 'p1' }] });
+  for (const person of [null, { ...valid, ticketExpiresAt: new Date(NOW).toISOString() }, { ...valid, revoked: true }, { ...valid, ticket: 'broken' }]) {
+    assert.deepEqual(ticketLinkGuard(body, { participants: person ? [person] : [] }, { now: NOW }), { reason: 'TICKET_UNAVAILABLE', missing: 1 });
+  }
+  assert.deepEqual(dueScheduleGuards(message({ body: '{{티켓링크}}' }), workspaceWith(), { now: NOW, origin: 'https://example.test' }), { reason: 'TICKET_RECIPIENTS_UNAVAILABLE', missing: 0 });
+  assert.equal(dueScheduleGuards({ ...body, simulate: true }, { participants: [] }, { now: NOW, origin: 'https://example.test' }), null);
 });
 
 test('a-campaign-without-placeholders-ignores-the-origin', () => {

@@ -23,6 +23,7 @@ async function boundary({ handler = async () => {}, env = {} } = {}) {
     require(name) {
       if (name === 'node:http') return { createServer(callback) { onRequest = callback; return server; } };
       if (name === 'next') return () => ({ prepare: async () => {}, getRequestHandler: () => handler });
+      if (name === './lib/client-address.mts') return require('../apps/web/lib/client-address.mts');
       throw new Error(`unexpected dependency: ${name}`);
     },
     process: { env, stdout: { write() {} }, stderr: { write() {} }, exit(code) { exits.push(code); }, on() {} },
@@ -42,6 +43,27 @@ test('web boundary replaces spoofed forwarded addresses with the real socket pee
     await onRequest(req, {});
   }
   assert.deepEqual(seen, Array(4).fill('::ffff:192.0.2.20'));
+});
+
+test('web boundary accepts client addresses only from trusted ingress peers', async () => {
+  const seen = [];
+  const { onRequest } = await boundary({
+    env: { EVENTOUCH_WEB_TRUSTED_PROXIES: '10.89.231.20,10.89.232.0/28' },
+    handler: async req => { seen.push(req.headers['x-forwarded-for']); },
+  });
+  for (const [remoteAddress, forwarded] of [
+    ['::ffff:10.89.231.20', '192.0.2.99, 203.0.113.8, 10.89.232.4'],
+    ['10.89.231.21', '203.0.113.8, 10.89.231.20'],
+    ['10.89.231.20', 'unknown, 203.0.113.8'],
+    ['10.89.231.20', undefined],
+  ]) {
+    await onRequest({ headers: { 'x-forwarded-for': forwarded }, socket: { remoteAddress } }, {});
+  }
+  assert.deepEqual(seen, ['203.0.113.8', '10.89.231.21', '10.89.231.20', '10.89.231.20']);
+});
+
+test('invalid web ingress trust configuration refuses to start', async () => {
+  await assert.rejects(boundary({ env: { EVENTOUCH_WEB_TRUSTED_PROXIES: '*' } }), /EVENTOUCH_WEB_TRUSTED_PROXIES/);
 });
 
 test('web binding ignores the Docker container hostname and supports an explicit bind address', async () => {

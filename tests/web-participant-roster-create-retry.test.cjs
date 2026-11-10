@@ -17,6 +17,16 @@ function read(rel) {
   return fs.readFileSync(path.join(WEB, rel), 'utf8');
 }
 
+test('selection summary distinguishes page, filter and retained hidden targets', () => {
+  const list = read('app/console/events/[id]/participants/ParticipantList.tsx');
+  const summary = list.slice(list.indexOf('id="roster-selection-count"'), list.indexOf('className={styles.selectionActions}'));
+  assert.match(summary, /현재 필터 \$\{effectiveSelection\.length\}명/);
+  assert.match(summary, /이 페이지 \$\{pageSelectedCount\}명/);
+  assert.match(summary, /다른 페이지 \$\{otherPageSelectedCount\}명/);
+  assert.match(summary, /필터 밖 \$\{hiddenSelectedCount\}명/);
+  assert.match(summary, /승인·그룹은 현재 필터만, 메시지는 전체 선택/);
+});
+
 test('web-participant-row-reuse-prefills-name-company-only-and-guards-dirty-forms', () => {
   const list = read('app/console/events/[id]/participants/ParticipantList.tsx');
   // One explicit per-row action, gated by the existing roster write gate.
@@ -61,11 +71,12 @@ test('web-participant-row-reuse-prefills-name-company-only-and-guards-dirty-form
   // scope travel untouched through the same createParticipant path.
   assert.match(list, /"participant\.create"/);
   assert.match(list, /pendingAddRef\.current\?\.fingerprint === fingerprint/);
-  // Ambiguous outcomes keep the frozen id with retry guidance; definitive
-  // rejections surface the server reason and clear the id.
-  assert.match(list, /const ambiguous = res\.status >= 500 \|\| res\.status === 408/);
+  // Ambiguous outcomes keep the frozen id with retry guidance; a later
+  // rejection cannot prove whether the earlier attempt committed.
+  assert.match(list, /const ambiguous = res\.status >= 500 \|\| \[408, 425, 429\]\.includes\(res\.status\)/);
   assert.match(list, /응답을 확인하지 못했습니다\. 같은 내용으로 다시 시도하세요\./);
-  assert.match(list, /if \(!ambiguous\) pendingAddRef\.current = null/);
+  assert.match(list, /const stillUnconfirmed = addUnconfirmed \|\| ambiguous/);
+  assert.match(list, /if \(!stillUnconfirmed\) pendingAddRef\.current = null/);
 });
 
 test('web-participant-roster-is-compact-with-coherent-columns', () => {
@@ -79,7 +90,7 @@ test('web-participant-roster-is-compact-with-coherent-columns', () => {
   assert.match(css, /\.participantStatus\s*\{/);
   assert.match(list, /<table className=\{styles\.rosterTable\}>/);
   assert.match(list, /<thead className=\{styles\.rosterHead\}>/);
-  for (const label of ['연락처', '그룹', '신청 상태', '출입']) assert.ok(list.includes(`<th scope="col">${label}</th>`), label);
+  for (const label of ['연락처', '그룹', '신청 상태', '출입']) assert.match(list, new RegExp(`<th scope="col"[^>]*>${label}</th>`), label);
   assert.match(list, /aria-sort=\{nameSort/);
   assert.match(css, /\.rosterTable\s*\{[^}]*width:\s*100%/s);
   assert.doesNotMatch(list, /목록 요약|inspectorSummary/, 'closed details do not reserve a summary column');
@@ -144,7 +155,7 @@ test('web-participant-writes-reuse-one-command-id-per-request', () => {
   assert.match(list, /pendingGroupRef/);
   assert.match(list, /pendingRewardRef/);
   assert.match(list, /fingerprint/);
-  // Definitive 4xx (not 408) clears the id; 5xx/408/network/malformed
+  // Definitive 4xx (not 408/425/429) clears the id; 5xx/408/425/429/network/malformed
   // success keep it for a same-request replay.
   assert.match(list, /408/);
   assert.match(list, /isDefinitiveClientError/);
@@ -186,8 +197,8 @@ test('web-create-dialog-retries-with-the-same-command-id', () => {
   assert.match(dialog, /commandId/);
   assert.match(dialog, /fingerprint/);
   assert.match(dialog, /commandIdRef\.current/);
-  // Cleared on proven success and definitive 4xx (not 408); kept on
-  // ambiguous 5xx/unparseable success/network. Payload edits mint a new id.
+  // A first definitive 4xx clears the id; an earlier ambiguous response
+  // keeps its original inputs and id until the result is checked.
   assert.match(dialog, /408/);
   assert.match(dialog, /isDefinitiveClientError/);
   assert.match(dialog, /generatedSlugRef/);
@@ -200,11 +211,11 @@ test('web-create-dialog-retries-with-the-same-command-id', () => {
   assert.match(dialog, /<ConsoleDialog/);
   assert.match(dialog, /initialFocusRef=\{nameRef\}/);
   assert.match(dialog, /canClose=\{canClose\}/);
-  assert.match(dialog, /busy=\{submitting\}/);
-  assert.match(dialog, /disabled=\{submitting\}/);
+  assert.match(dialog, /busy=\{submitting \|\| clientSaving \|\| checkingResult\}/);
+  assert.match(dialog, /disabled=\{submitting \|\| checkingResult\}/);
   const shell = read('app/console/console-ui/ConsoleDialog.tsx');
   assert.match(shell, /role="dialog"/);
-  assert.match(shell, /aria-modal="true"/);
+  assert.match(shell, /aria-modal=\{docked \? undefined : true\}/);
   assert.match(shell, /event\.key === "Escape"/);
   assert.match(shell, /event\.key !== "Tab"/);
   assert.match(shell, /previouslyFocused/);
@@ -215,10 +226,12 @@ test('web-create-dialog-retries-with-the-same-command-id', () => {
   // same-turn gate backs the submitting state, and the shared dialog owns
   // the busy gate with the caller dismissal predicate.
   assert.match(dialog, /submitGateRef = useRef\(false\)/);
-  assert.match(dialog, /if \(submitGateRef\.current\) return false/);
+  assert.match(dialog, /if \(submitGateRef\.current \|\| checkingResult\) return false/);
   assert.match(dialog, /submitGateRef\.current = true/);
-  assert.match(dialog, /busy=\{submitting\}/);
-  assert.match(dialog, /disabled=\{submitting\}/);
+  assert.match(dialog, /busy=\{submitting \|\| clientSaving \|\| checkingResult\}/);
+  assert.match(dialog, /disabled=\{submitting \|\| checkingResult\}/);
+  assert.match(dialog, /commandIdRef\.current\?\.uncertain/);
+  assert.match(dialog, /confirmsEventCreation\(payload, data\)/);
   assert.match(dialog, /duplicateOf/);
   assert.match(dialog, /\/api\/events\/\$\{encodeURIComponent\(effectiveDuplicate\.id\)\}\/duplicate/);
   assert.match(dialog, /참가자·티켓·입장·발송·당첨 기록/);

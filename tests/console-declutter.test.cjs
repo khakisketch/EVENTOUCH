@@ -7,8 +7,8 @@ const read = (file) => fs.readFileSync(path.join(__dirname, '..', 'apps/web/app'
 
 test('overview explains registration and approval once beside their values', () => {
   const source = read('console/events/[id]/EventOverview.tsx');
-  assert.match(source, /label: "신청"[^\n]*detail: "취소 제외 등록"/u);
-  assert.match(source, /label: "참가 확정"[^\n]*detail: "승인된 참가자"/u);
+  assert.match(source, /label: "신청"[^\n]*detail: overview\.cancellationReview \? "신청 상태 기준" : "취소 제외 등록"/u);
+  assert.match(source, /label: overview\.cancellationReview \? "승인 상태" : "참가 확정"[^\n]*detail: overview\.cancellationReview \? "취소 확인 필요 인원 포함" : "승인된 참가자"/u);
   assert.match(source, /className=\{styles.metricDetail\}>\{metric.detail\}/u);
   assert.doesNotMatch(source, /신청은 취소 제외 · 확정은 승인된 참가자/u);
   assert.match(source, /정원 제한 없음 · 대기/u, 'capacity and waitlist remain separate configuration facts');

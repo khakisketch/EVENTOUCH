@@ -48,14 +48,15 @@ test('web-console-programs-gates-on-the-same-management-membership', () => {
   const workspace = read('app/console/events/[id]/programs/ProgramsWorkspace.tsx');
   assert.match(workspace, /canManage/);
   assert.match(workspace, /memberships\.some/);
-  assert.match(workspace, /참여 프로그램을 관리할 운영 권한이 없습니다/);
+  assert.match(workspace, /참여 콘텐츠를 관리할 운영 권한이 없습니다/);
   const page = read('app/console/events/[id]/programs/page.tsx');
   assert.match(page, /ProgramsWorkspace/);
 });
 
 test('web-console-programs-locks-edits-once-attendees-respond', () => {
   const workspace = read('app/console/events/[id]/programs/ProgramsWorkspace.tsx');
-  assert.match(workspace, /응답이 있어 문제를 수정할 수 없습니다\. 새 프로그램을 만드세요/);
+  assert.match(workspace, /접수된 응답이 있어 콘텐츠 설정을 바꿀 수 없습니다/);
+  assert.match(workspace, /질문과 답변은 아래에서 관리하세요/);
   assert.match(workspace, /editLockReason/);
   assert.match(workspace, /lockReason !== null/);
   assert.match(workspace, /DRAFT/);
@@ -96,7 +97,7 @@ test('web-console-programs-dialog-is-modal-and-wires-field-errors', () => {
   assert.match(workspace, /if \(!busy && canClose\(\)\) onClose\(\)/);
   const dialog = read('app/console/console-ui/ConsoleDialog.tsx');
   assert.match(dialog, /role="dialog"/);
-  assert.match(dialog, /aria-modal="true"/);
+  assert.match(dialog, /aria-modal=\{docked \? undefined : true\}/);
   assert.match(dialog, /previouslyFocused/);
   assert.match(dialog, /event\.key === "Escape"/);
   assert.match(dialog, /event\.key !== "Tab"/);
@@ -117,16 +118,16 @@ test('web-console-shell-links-programs-between-operations-and-settings', () => {
   assert.match(shell, /nav-badge/);
   assert.match(shell, /eventFeatures\.includes\("reward"\)/);
   const navigation = read('app/console/console-navigation.ts');
-  assert.match(navigation, /programs: \{ label: "참여 프로그램"/);
+  assert.match(navigation, /programs: \{ label: "참여 콘텐츠"/);
   assert.match(navigation, /return `\$\{base\}\/programs`/);
   // Hub order is the operator's setup-to-live sequence: preparation (settings
   // through programs) before the onsite hub that holds operations.
-  assert.match(navigation, /pageIds: \["settings", "attendeePage", "content", "programs"\]/);
-  assert.match(navigation, /pageIds: \["operations", "photos"\]/);
+  assert.match(navigation, /pageIds: \["attendeePage", "content", "programs", "settings"\]/);
+  assert.match(navigation, /pageIds: \["operations", "draws", "rewards", "photos"\]/);
   const hubsBlock = navigation.slice(navigation.indexOf('EVENT_HUBS'));
   const prepareAt = hubsBlock.indexOf('"prepare"');
   const onsiteAt = hubsBlock.indexOf('"onsite"');
-  assert.ok(prepareAt >= 0 && onsiteAt >= 0 && prepareAt < onsiteAt);
+  assert.ok(prepareAt >= 0 && onsiteAt >= 0 && onsiteAt < prepareAt);
 });
 
 test('web-engage-reads-the-public-projection-and-reuses-the-ticket-key', () => {

@@ -42,12 +42,12 @@ const EXPECTED_TITLES = {
   import: '명단 가져오기',
   messages: '메시지 발송',
   operations: '현장 운영',
-  programs: '참여 프로그램',
+  programs: '참여 콘텐츠',
   draws: '추첨·투표',
   photos: '현장 사진',
-  content: '콘텐츠',
+  content: '공지·안내',
   attendeePage: '참가자 페이지',
-  rewards: '경품',
+  rewards: '경품 수령',
   settings: '행사 설정',
   reports: '결과 보고서',
 };
@@ -119,7 +119,7 @@ test('console-audit-asserts-the-shared-frame-not-just-headings', () => {
   for (const marker of [
     '#console-event-directory', '#client-list-heading', '#team-members',
     '#event-metrics-heading', '#participant-import-file-heading', '#history-heading',
-    '#ops-desks', '#draws-vote', '#evidence-photo-sections', '#content-notices',
+    '#ops-desks', '#draws-programs', '#evidence-photo-sections', '#content-notices',
     '#home-intro', '#rewards-list', '#set-name', '#reports-list',
   ]) {
     assert.ok(source.includes(marker), `loaded marker kept: ${marker}`);
@@ -135,7 +135,8 @@ test('console-audit-asserts-the-shared-frame-not-just-headings', () => {
 test('console-audit-keeps-every-representative-interaction', () => {
   const source = read('scripts/web-console-audit.cjs');
   assert.match(source, /status=APPROVED&attendance=NOT_ENTERED/, 'overview deep link is exact');
-  assert.match(source, /숨김/, 'cross-filter selection survival is asserted');
+  assert.match(source, /필터 밖/, 'cross-filter hidden selection remains visible');
+  assert.match(source, /selection did not survive the cross-filter excursion/, 'returning to the filter still verifies the original selection');
   assert.match(source, /저장하지 않은 변경/, 'draft-guard confirm is asserted');
   assert.match(source, /program-dialog|#program-title/, 'create-dialog focus target is stable');
   assert.match(source, /route\.fulfill\(\{ status: 502/, 'labeled 502 injection, never a fake 200');
@@ -213,8 +214,8 @@ test('console-audit-guards-settings-dirty-navigation-as-the-criterion', () => {
   assert.match(settings, /sectionsDirty/, 'settings diffs dirty sections against server baselines');
   assert.match(
     settings,
-    /useConsoleDraftGuard\(\s*sectionsDirty \|\| pendingIntent,/,
-    'settings registers dirty sections and pending intent',
+    /useConsoleDraftGuard\(\s*sectionsDirty \|\| pendingIntent \|\| unresolvedConflict,/,
+    'settings registers dirty sections, pending intent, and unresolved conflicts',
   );
   const audit = read('scripts/web-console-audit.cjs');
   assert.match(audit, /guard\/settings-dirty-navigate/, 'settings dirty-navigate is its own phase');

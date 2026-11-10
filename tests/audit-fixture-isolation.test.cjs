@@ -95,3 +95,39 @@ test('audit-gates-do-not-weaken-existing-axe-and-layout-coverage', () => {
   }
   assert.match(read('scripts/web-audit.cjs'), /attendeeHomeNavigation/);
 });
+
+
+test('test harness masks inherited senders without mutating or freezing other settings', () => {
+  const { isolatedTestEnvironment } = require('./helpers/test-provider-env.cjs');
+  const { activeMessagingState } = require('../server/messaging');
+  const source = {
+    EVENTOUCH_MESSAGING_ENDPOINT: 'https://provider.example.test/send', EVENTOUCH_MESSAGING_TOKEN: 'secret',
+    SOLAPI_API_KEY: 'production-key', SOLAPI_API_SECRET: 'secret', SOLAPI_SENDER: '0212345678',
+    EVENTOUCH_SMTP_PASSWORD: 'secret', EVENTOUCH_MAIL_TRANSPORT: 'smtp', EVENTOUCH_PUBLIC_URL: 'http://127.0.0.1:1234',
+  };
+  const safe = isolatedTestEnvironment(source);
+  assert.equal(safe.EVENTOUCH_MESSAGING_ENDPOINT, undefined);
+  assert.equal(safe.SOLAPI_API_KEY, undefined);
+  assert.equal(safe.EVENTOUCH_MAIL_TRANSPORT, undefined);
+  assert.equal('EVENTOUCH_MESSAGING_TOKEN' in safe, false);
+  assert.equal(Object.keys(safe).includes('EVENTOUCH_SMTP_PASSWORD'), false);
+  assert.equal(activeMessagingState(safe).connected, false);
+  source.EVENTOUCH_PUBLIC_URL = 'http://127.0.0.1:4321';
+  assert.equal(safe.EVENTOUCH_PUBLIC_URL, 'http://127.0.0.1:4321');
+  assert.equal(source.SOLAPI_API_KEY, 'production-key');
+});
+
+test('a fake Solapi requires an explicit literal loopback origin and replaces all keys', () => {
+  const { fixtureSolapiEnvironment } = require('./helpers/test-provider-env.cjs');
+  const source = { SOLAPI_API_KEY: 'production-key', EVENTOUCH_MESSAGING_TOKEN: 'secret', EVENTOUCH_SMTP_PASSWORD: 'secret' };
+  const fixture = fixtureSolapiEnvironment(source, 'http://127.0.0.1:12345');
+  assert.equal(fixture.SOLAPI_API_KEY, 'fixture-key');
+  assert.equal(fixture.SOLAPI_API_HOST, 'http://127.0.0.1:12345');
+  assert.equal(fixture.EVENTOUCH_MESSAGING_TOKEN, undefined);
+  assert.equal(fixture.EVENTOUCH_SMTP_PASSWORD, undefined);
+  for (const host of ['https://provider.example.test', 'http://localhost:1234', 'http://127.0.0.1.evil.test:1234',
+    'http://127.0.0.1@provider.example.test:1234', 'http://user:pass@127.0.0.1:1234',
+    'http://127.0.0.1:1234/forward', 'http://127.0.0.1:1234/?forward=1', 'http://127.0.0.1']) {
+    assert.throws(() => fixtureSolapiEnvironment(source, host), /literal loopback/, host);
+  }
+});

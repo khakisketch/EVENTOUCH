@@ -28,8 +28,8 @@ function commandsOf(source) {
 
 test("draw run buttons keep the premise line next to the buttons with a next action", () => {
   // The existing premise line survives (no text removed, no second copy).
-  const premiseCount = (draws.match(/실행 전제: \{/gu) || []).length;
-  assert.equal(premiseCount, 1, "the 실행 전제 line stays exactly once");
+  const ordinaryPremise = (draws.match(/실행 전제: \{runBlockers/gu) || []).length;
+  assert.equal(ordinaryPremise, 1, "ordinary draw prerequisites stay together once");
   // Buttons and the blocker live in one group so the blocker reads as
   // attached to the action, and the line names what resolves it.
   assert.match(draws, /styles\.runActions/u);
@@ -38,7 +38,8 @@ test("draw run buttons keep the premise line next to the buttons with a next act
   assert.match(draws, /결과를 공개하면/u);
   // Screen-reader wiring survives: both run buttons describe the blocker.
   assert.match(draws, /aria-describedby=\{runBlockers\.length \? runBlockerId : undefined\}/u);
-  assert.match(draws, /aria-describedby=\{\[\.\.\.stagePrerequisites, runBlockerId\]/u);
+  assert.match(draws, /stageOnlyBlockers\.length \? stageBlockerId : null/u);
+  assert.match(draws, /무대 터치 실행 전제: \{stageOnlyBlockers/u);
   // Still actually disabled until every premise holds.
   assert.match(draws, /disabled=\{!canRun \|\| busy !== null \|\| writeLocked\}/u);
 });
@@ -58,13 +59,13 @@ test("disabled run buttons stay readable while clearly disabled, tokens only", (
 
 test("program list filters client-side with a count and a zero-result reset", () => {
   // Search + status filter, same grammar as the rewards/clients lists.
-  assert.match(programs, /프로그램 이름·유형 검색/u);
+  assert.match(programs, /콘텐츠 이름·유형 검색/u);
   assert.match(programs, /type="search"/u);
   assert.match(programs, /<option value="DRAFT">준비 중<\/option>/u);
   assert.match(programs, /<option value="OPEN">진행 중<\/option>/u);
   assert.match(programs, /<option value="CLOSED">종료<\/option>/u);
   // "전체 N개 중 M개" count with a status role.
-  assert.match(programs, /전체 \{state\.modules\.length\}개 중 \{visibleModules\.length\}개/u);
+  assert.match(programs, /전체 \{state\.modules\.length\}개 중 \{Math\.min\(moduleLimit, visibleModules\.length\)\}개 표시/u);
   assert.match(programs, /className=\{styles\.resultCount\} role="status"/u);
   // Client-side only: filters the already-loaded modules, no new request.
   assert.match(programs, /visibleModules = state\.modules\.filter/u);
@@ -72,22 +73,26 @@ test("program list filters client-side with a count and a zero-result reset", ()
   // All reads go through the shared transport; the event read is the scoped
   // event bootstrap, never the full directory.
   const fetches = [...programs.matchAll(/(?:consoleFetch|fetch)\(\s*[`"']([^`"']+)/gu)].map((match) => match[1]);
-  assert.deepEqual(fetches, ["/api/auth/me", "/api/events/${encodeURIComponent(eventId)}/bootstrap", "/api/events/${encodeURIComponent(eventId)}/commands"]);
+  assert.deepEqual([...new Set(fetches)], ["/api/auth/me", "/api/events/${encodeURIComponent(eventId)}/bootstrap", "/api/events/${encodeURIComponent(eventId)}/commands", "/api/events/${encodeURIComponent(eventId)}/command-receipts/${encodeURIComponent(attempt.commandId)}", "/api/events/${encodeURIComponent(eventId)}/command-receipts/${encodeURIComponent(commandId)}"]);
+  assert.match(programs, /command-receipts[\s\S]*?cache: "no-store"/, "status-only confirmation is an explicit fresh read");
+  assert.equal(fetches.filter((url) => url.includes("/command-receipts/")).length, 4, "question, edit, module and program operation checks are explicit scoped reads");
+  const operationCheck = programs.slice(programs.indexOf("async function recoverProgramOperation"), programs.indexOf("async function submitGrade"));
+  assert.match(operationCheck, /command-receipts\/\$\{encodeURIComponent\(attempt\.commandId\)\}[\s\S]*?cache: "no-store"/u);
   // Zero results guide back with a reset, without touching the real empty state.
-  assert.match(programs, /조건에 맞는 프로그램이 없습니다/u);
+  assert.match(programs, /조건에 맞는 콘텐츠가 없습니다/u);
   assert.match(programs, /검색어·상태 조건을 바꾸거나 지우고 다시 찾아보세요/u);
   assert.ok((programs.match(/검색·필터 지우기/gu) || []).length >= 2, "count line and zero-result both reset");
-  assert.match(programs, /등록된 프로그램이 없습니다\. 위에서 첫 프로그램을 만드세요\./u);
+  assert.match(programs, /등록된 콘텐츠가 없습니다\. 위에서 첫 콘텐츠를 만드세요\./u);
 });
 
-test("draw and program command/API surface is unchanged", () => {
+test("draw surface stays stable and programs add response grading and question-edit decisions", () => {
   assert.deepEqual(commandsOf(draws), [
     "draw.program.run",
     "draw.program.save",
-    "lucky.config.save",
-    "lucky.preassign",
+    "lucky.config.save-reviewed",
+    "lucky.preassign-range-reviewed",
     "reward.assign",
-    "roulette.config.save",
+    "roulette.config.save-reviewed",
     "team.save",
     "vote.config.save",
     "vote.tally",
@@ -100,7 +105,10 @@ test("draw and program command/API surface is unchanged", () => {
     "module.status",
     "photo.moderate",
     "post.moderate",
+    "question.edit.approve",
+    "question.edit.reject",
     "question.manage",
+    "response.grade",
   ]);
   // Risky/side-effectful behavior reads exactly as before.
   assert.match(draws, /toStage \? "추첨하고 전광판에 표시" : "추첨 실행"/u);

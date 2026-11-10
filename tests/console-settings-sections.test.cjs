@@ -64,10 +64,14 @@ test("each saving tab keeps its own success/failure line with a clock time", () 
   assert.match(source, /role="status"/u);
   assert.match(source, /formatClockNow/u);
   // Both outcomes land in place, not only in the page-top banner.
-  assert.match(source, /kind: "success", message: successMessage/u);
+  assert.match(source, /sectionStatusSetter\(attempt\.section\)\(\{ kind: "success", message, at: formatClockNow\(\) \}\)/u);
   assert.match(source, /kind: "error", message/u);
   // The page-top feedback strip is retained (no silent removal).
-  assert.match(source, /\{failure \? <ConsoleFeedback kind="error"/u);
+  assert.match(source, /\{failure && failure\.field !== "serverUnsupported" && \(failure\.field !== "consentText" \|\| activeTab !== "intake"\) \? <ConsoleFeedback kind="error"/u);
+  // The old-server error remains actionable by the save button and is
+  // announced there once rather than repeated at the top and footer.
+  assert.match(source, /role=\{status\.kind === "error" && failure\?\.field === "serverUnsupported" \? "alert" : "status"\}/u);
+  assert.match(source, /failure\.field === "consentText" \|\| failure\.field === "serverUnsupported" \? null/u);
   assert.match(source, /\{notice \? <ConsoleFeedback kind="success"/u);
   // Tab saves thread their section through the shared command runner.
   assert.match(source, /"기본 정보를 저장했습니다\.", "basics"/u);
@@ -113,8 +117,9 @@ test("settings uses four real tabs; only the optional page block discloses", () 
   assert.match(source, /aria-current=\{isCurrent \? "step" : undefined\}/u);
   assert.match(source, /STAGE_ORDER\.map\(\(stage\)/u);
   // Tab order follows the preparation flow.
+  const tabs = source.slice(source.indexOf('const SETTINGS_TABS:'), source.indexOf('const TAB_ANCHORS:'));
   const tabOrder = ["기본 정보", "참가 접수", "운영 기능", "진행 단계"].map((label) =>
-    source.indexOf(label)
+    tabs.indexOf(`label: "${label}"`)
   );
   assert.ok(tabOrder.every((position) => position >= 0));
   assert.deepEqual(tabOrder, [...tabOrder].sort((a, b) => a - b));
@@ -196,12 +201,14 @@ test("no server contract, permission, or API surface changes", () => {
     "/api/events/:param/bootstrap",
     "/api/console/directory",
     "/api/events/:param/commands",
+    "/api/events/:param/command-receipts/:param",
   ]);
   for (const url of fetched) {
     assert.ok(allowed.has(url), `unexpected API surface: ${url}`);
   }
   assert.ok(fetched.includes("/api/events/:param/bootstrap"), "scoped event read is present");
   assert.ok(fetched.includes("/api/console/directory"), "client list comes from the directory");
+  assert.match(source, /command-receipts\/\$\{encodeURIComponent\(attempt\.commandId\)\}`, \{ cache: "no-store" \}/u);
   assert.doesNotMatch(source, /(?:consoleFetch|fetch)\("\/api\/bootstrap"/u, "no full bootstrap read remains");
   for (const url of fetched) {
     assert.ok(allowed.has(url), `unexpected API surface: ${url}`);
@@ -211,5 +218,5 @@ test("no server contract, permission, or API surface changes", () => {
   assert.match(source, /"event\.update"/u);
   assert.match(source, /"event\.features"/u);
   assert.match(source, /"event\.stage"/u);
-  assert.match(source, /payload: \{ stage: nextStage \}/u);
+  assert.match(source, /const payload = \{ stage: nextStage \}/u);
 });

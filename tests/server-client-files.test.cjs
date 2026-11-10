@@ -186,6 +186,23 @@ test('client records pin validated file references and clear them', async () => 
   assert.equal(pinned.status, 201);
   assert.equal(pinned.json.client.logoFileId, logo.json.file.fileId);
 
+  const doc = await uploadFile(clientId, { name: 'registration.pdf', bytes: pdfBytes(), type: 'application/pdf' });
+  assert.equal(doc.status, 201);
+  const withDocument = await requestJson(harness.baseUrl, '/api/clients', {
+    method: 'POST', cookie: agencyCookie,
+    body: { commandId: `clientfile-document-${suffix}`, id: clientId, name: '첨부고객사', docFileId: doc.json.file.fileId },
+  });
+  assert.equal(withDocument.json.client.logoFileId, logo.json.file.fileId, 'adding a document preserves the logo');
+  assert.equal(withDocument.json.client.docFileId, doc.json.file.fileId);
+
+  const edited = await requestJson(harness.baseUrl, '/api/clients', {
+    method: 'POST', cookie: agencyCookie,
+    body: { commandId: `clientfile-edit-${suffix}`, id: clientId, name: '첨부고객사 수정', contact: '담당자' },
+  });
+  assert.equal(edited.status, 201);
+  assert.equal(edited.json.client.logoFileId, logo.json.file.fileId, 'editing text preserves the logo');
+  assert.equal(edited.json.client.docFileId, doc.json.file.fileId, 'editing text preserves the document');
+
   const bootstrap = await requestJson(harness.baseUrl, '/api/bootstrap', { cookie: agencyCookie });
   const projected = bootstrap.json.state.clients.find((item) => item.id === clientId);
   assert.equal(projected.logoFileId, logo.json.file.fileId);
@@ -197,4 +214,5 @@ test('client records pin validated file references and clear them', async () => 
   });
   assert.equal(cleared.status, 201);
   assert.equal(cleared.json.client.logoFileId, '');
+  assert.equal(cleared.json.client.docFileId, doc.json.file.fileId, 'clearing one attachment preserves the other');
 });

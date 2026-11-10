@@ -117,8 +117,8 @@ function lastMockCode(phone) {
 
 function attendeeCookieFrom(response) {
   const header = response.headers.get('set-cookie') || '';
-  const match = /etko_attendee=([^;]+)/.exec(header);
-  return match ? `etko_attendee=${match[1]}` : null;
+  const match = /(etko_attendee_[a-f0-9]{24})=([^;]+)/.exec(header);
+  return match ? `${match[1]}=${match[2]}` : null;
 }
 
 before(async () => {
@@ -230,7 +230,7 @@ test('attendee-enroll-grant-signs-up-once-and-opens-a-session', async () => {
   assert.ok(signed.json.participant.ticket);
   const cookie = attendeeCookieFrom(signed);
   assert.ok(cookie);
-  assert.match(attendeeCookieFrom(signed) || '', /^etko_attendee=/);
+  assert.match(attendeeCookieFrom(signed) || '', /^etko_attendee_[a-f0-9]{24}=/);
 
   // A spent grant cannot sign up twice.
   const replay = await requestJson(harness.baseUrl, `/api/events/${slugs.gated}/signup`, {
@@ -245,6 +245,62 @@ test('attendee-enroll-grant-signs-up-once-and-opens-a-session', async () => {
   });
   assert.equal(viaSession.status, 200);
   assert.equal(viaSession.json.participant.ticket, signed.json.participant.ticket);
+});
+
+test('verified signup preserves an unused grant on rejected input and replays a concurrent submission', async () => {
+  clearMockOutbox();
+  const phone = '01078781111';
+  assert.equal((await verifyRequest(slugs.gated, { phone, purpose: 'ENROLL' })).status, 200);
+  const confirmed = await verifyConfirm(slugs.gated, { phone, code: lastMockCode(phone) });
+  assert.equal(confirmed.status, 200);
+  const body = signupBody('인증 신청 검증', phone, { verificationGrant: confirmed.json.grant });
+  const submit = value => requestJson(harness.baseUrl, `/api/events/${slugs.gated}/signup`, { method: 'POST', body: value });
+  const wrongPhone = await submit({ ...body, phone: '01078782222' });
+  assert.equal(wrongPhone.status, 409);
+  assert.equal(wrongPhone.json.field, 'phone');
+  const oldForm = await submit({ ...body, formVersion: 2 });
+  assert.equal(oldForm.status, 409);
+  assert.equal(oldForm.json.field, 'formVersion');
+  const invalidAnswer = await submit({ ...body, meal: '' });
+  assert.equal(invalidAnswer.status, 400);
+  assert.equal(invalidAnswer.json.field, 'meal');
+
+  const results = await Promise.all([submit(body), submit(body)]);
+  assert.deepEqual(results.map(result => result.status).sort(), [200, 201]);
+  assert.ok(results[0].json.participant.ticket);
+  assert.deepEqual(results[0].json.participant, results[1].json.participant);
+  const mismatchedReplay = await submit({ ...body, phone: '01078782222' });
+  assert.equal(mismatchedReplay.status, 200);
+  assert.equal(mismatchedReplay.json.participant.phone, phone);
+  const state = (await harness.database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [ids.gated])).rows[0].payload;
+  assert.equal(state.participants.filter(person => person.phone === phone).length, 1);
+  const participant = state.participants.find(person => person.phone === phone);
+  const originalCookie = attendeeCookieFrom(results[0]);
+  assert.equal((await requestJson(harness.baseUrl, `/api/public/events/${slugs.gated}/ticket`, { cookie: originalCookie })).status, 200);
+  participant.phone = '01078783333';
+  await harness.database.query('UPDATE event_workspaces SET payload=$2::jsonb WHERE event_id=$1', [ids.gated, JSON.stringify(state)]);
+  const outdated = await submit(body);
+  assert.equal(outdated.status, 409);
+  assert.equal(outdated.json.code, 'SIGNUP_RESULT_SUPERSEDED');
+  assert.equal(outdated.json.participant, undefined);
+  assert.equal(attendeeCookieFrom(outdated), null);
+  assert.equal((await requestJson(harness.baseUrl, `/api/public/events/${slugs.gated}/ticket`, { cookie: originalCookie })).status, 404);
+  const currentPhone = '01078783333';
+  assert.equal((await verifyRequest(slugs.gated, { phone: currentPhone, purpose: 'RECOVER' })).status, 200);
+  const recovered = await verifyConfirm(slugs.gated, { phone: currentPhone, code: lastMockCode(currentPhone) });
+  assert.equal(recovered.status, 200);
+  const currentTicket = await requestJson(harness.baseUrl, `/api/public/events/${slugs.gated}/ticket`, { cookie: attendeeCookieFrom(recovered) });
+  assert.equal(currentTicket.status, 200);
+  assert.equal(currentTicket.json.participant.phone, currentPhone);
+  assert.equal(currentTicket.json.participant.ticket, results[0].json.participant.ticket);
+  const recoveredCookie = attendeeCookieFrom(recovered);
+  const token = decodeURIComponent(recoveredCookie.slice(recoveredCookie.indexOf('=') + 1));
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  await harness.database.query(
+    "UPDATE attendee_sessions SET grants = (SELECT jsonb_agg(item - 'phone') FROM jsonb_array_elements(grants) item) WHERE token_hash=$1",
+    [tokenHash]
+  );
+  assert.equal((await requestJson(harness.baseUrl, `/api/public/events/${slugs.gated}/ticket`, { cookie: recoveredCookie })).status, 404);
 });
 
 test('attendee-recover-restores-an-existing-registration-by-session', async () => {

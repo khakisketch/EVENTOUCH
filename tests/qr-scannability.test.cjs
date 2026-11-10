@@ -62,11 +62,11 @@ test('the-empty-scan-dock-never-floats-over-the-booth-qr', () => {
   // The dock is shown only when it holds something (the SELF booth task has no
   // scan form), and it folds away once a scan succeeded so the next action is
   // the result, not the old input.
-  assert.match(staffWork, /const scanInputHasWork = activeTask === "desk" \|\| activeScope\.stampMode !== "SELF";/);
-  assert.match(staffWork, /\{scanInputHasWork && result\.kind !== "ok" \? \(/);
+  assert.match(staffWork, /const scanInputHasWork = activeTask === "desk" \|\|\s*\(activeScope\.stampMode !== "SELF" && boothAvailable/);
+  assert.match(staffWork, /\{scanInputHasWork && result\.kind !== "ok" && !scanUnknown \? \(/);
   // Assert that the actual dock remains inside the condition, not merely
   // that the class appears elsewhere in the component.
-  const dock = staffWork.slice(staffWork.indexOf('{scanInputHasWork && result.kind !== "ok" ? ('), staffWork.indexOf('{cameraOpen && ready'));
+  const dock = staffWork.slice(staffWork.indexOf('{scanInputHasWork && result.kind !== "ok" && !scanUnknown ? ('), staffWork.indexOf('{cameraOpen && ready'));
   assert.match(dock, /<div className=\{prizeStyles\.scanInput\} ref=\{scanInputRef\}>/);
 });
 

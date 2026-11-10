@@ -17,7 +17,7 @@ test("the roster offers hand-written registration next to the file tool", () => 
   assert.match(list, /명단 가져오기/u);
   assert.match(list, /CSV 내보내기 · 검색·필터 결과 \$\{visiblePeople\.length\}명/u);
   // The file import is a tool, not the only door into the roster.
-  assert.match(list, /participants\/import/u);
+  assert.match(list, /<ImportWizard eventId=\{eventId\}/u);
   // Adding one participant posts the ordinary command path with a stable id.
   assert.match(list, /command: "participant\.create"/u);
   assert.match(list, /pendingAddRef/u);
@@ -30,8 +30,9 @@ test("the add dialog keeps the working fields first and names the collection mod
   assert.match(list, /htmlFor="participant-add-name"/u);
   assert.match(list, /htmlFor="participant-add-phone"/u);
   assert.match(list, /id="participant-add-type"/u);
-  assert.match(list, /<option value="PRE">사전 등록<\/option>/u);
-  assert.match(list, /<option value="ONSITE">현장 등록<\/option>/u);
+  assert.match(list, /value: "PRE", label: "사전 등록"/u);
+  assert.match(list, /value: "ONSITE", label: "현장 등록"/u);
+  assert.match(list, /<ConsoleChoiceGroup id="participant-add-type"/u);
   assert.match(list, /사전 등록은 이름이 이미 정해진 명단/u);
 });
 
@@ -53,7 +54,9 @@ test("waiting applications can be settled in one action", () => {
   // The server applies one status to many ids; the roster finally uses it.
   assert.match(list, /id="roster-approve-selected"/u);
   assert.match(list, /command: "participant\.status"/u);
-  assert.match(list, /payload: \{ ids, status: "APPROVED" \}/u);
+  assert.match(list, /payload: \{ ids, status: "APPROVED", expectedStatus: attempt\.sourceStatus \}/u);
+  assert.match(list, /id="roster-approve-waitlist"/u);
+  assert.match(list, /approveSelected\(false, "WAITLIST"\)/u);
   assert.match(list, /status === "PENDING"/u);
   assert.match(list, /명을 승인했습니다/u);
 });

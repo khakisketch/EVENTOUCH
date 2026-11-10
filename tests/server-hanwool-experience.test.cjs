@@ -815,6 +815,268 @@ test('ticket-projection-exposes-safe-vote-and-roulette-views-behind-feature-gate
   assert.equal(soldOut.json.workspace.rouletteView.status, 'OPEN');
 });
 
+test('lucky numbers can fill every remaining number without duplicates', async () => {
+  const event = await createFixture({});
+  const people = Array.from({ length: 900 }, (_, index) => person(event.id, `합성 참가자 ${index + 1}`));
+  const ws = await readWorkspace(event.id);
+  ws.participants = people;
+  ws.luckyConfig = { min: 1, max: 900 };
+  await harness.database.query('UPDATE event_workspaces SET payload = $2::jsonb WHERE event_id = $1', [event.id, JSON.stringify(ws)]);
+  const id = commandId();
+  const payload = { participantIds: people.map(p => p.id) };
+  const batch = await operator(event, 'lucky.preassign', payload, { id });
+  assert.equal(batch.status, 200, JSON.stringify(batch.json));
+  assert.equal(batch.json.assigned.length, 900);
+  const numbers = batch.json.assigned.map(entry => entry.number).sort((a, b) => a - b);
+  assert.deepEqual(numbers, Array.from({ length: 900 }, (_, index) => index + 1));
+  const replay = await operator(event, 'lucky.preassign', payload, { id });
+  assert.equal(replay.status, 200);
+  assert.deepEqual(replay.json.assigned, batch.json.assigned);
+  assert.equal((await readWorkspace(event.id)).luckyNumbers.length, 900);
+});
+
+test('reviewed lucky batches preserve their targets and reject changed participant eligibility', async () => {
+  const event = await createFixture({});
+  const people = [person(event.id, '합성 A'), person(event.id, '합성 B')];
+  const ws = await readWorkspace(event.id);
+  ws.participants = people;
+  ws.luckyConfig = { min: 1, max: 10 };
+  await harness.database.query('UPDATE event_workspaces SET payload = $2::jsonb WHERE event_id = $1', [event.id, JSON.stringify(ws)]);
+  ws.participants[1].status = 'PENDING';
+  await harness.database.query('UPDATE event_workspaces SET payload = $2::jsonb WHERE event_id = $1', [event.id, JSON.stringify(ws)]);
+  const rejected = await operator(event, 'lucky.preassign-reviewed', { participantIds: people.map(p => p.id) });
+  assert.equal(rejected.status, 409);
+  assert.equal(rejected.json.code, 'LUCKY_TARGET_CHANGED');
+  assert.deepEqual((await readWorkspace(event.id)).luckyNumbers, []);
+  ws.participants[1].status = 'APPROVED';
+  await harness.database.query('UPDATE event_workspaces SET payload = $2::jsonb WHERE event_id = $1', [event.id, JSON.stringify(ws)]);
+  const id = commandId(), payload = { participantIds: people.map(p => p.id) };
+  const saved = await operator(event, 'lucky.preassign-reviewed', payload, { id });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.json.assigned.length, 2);
+  const replay = await operator(event, 'lucky.preassign-reviewed', payload, { id });
+  assert.deepEqual(replay.json.assigned, saved.json.assigned);
+  const changed = await operator(event, 'lucky.preassign-reviewed', { participantIds: [people[0].id] }, { id });
+  assert.equal(changed.status, 409);
+  assert.equal(changed.json.code, 'LUCKY_RECEIPT_MISMATCH');
+  assert.equal((await readWorkspace(event.id)).luckyNumbers.length, 2);
+});
+
+test('reviewed lucky allocation stops when the confirmed number range changes', async () => {
+  const event = await createFixture({});
+  const attendee = person(event.id, '합성 범위 확인 참가자');
+  const ws = await readWorkspace(event.id);
+  ws.participants = [attendee];
+  ws.luckyConfig = { min: 1, max: 1 };
+  await harness.database.query('UPDATE event_workspaces SET payload = $2::jsonb WHERE event_id = $1', [event.id, JSON.stringify(ws)]);
+  const changed = await operator(event, 'lucky.config.save', { min: 2, max: 2 });
+  assert.equal(changed.status, 200);
+  const allocation = await operator(event, 'lucky.preassign-range-reviewed', { participantIds: [attendee.id], expectedRange: { min: 1, max: 1 } });
+  assert.equal(allocation.status, 409, JSON.stringify(allocation.json));
+  assert.equal(allocation.json.code, 'LUCKY_RANGE_CHANGED');
+  assert.deepEqual((await readWorkspace(event.id)).luckyNumbers, []);
+  const invalid = await operator(event, 'lucky.preassign-range-reviewed', { participantIds: [attendee.id] });
+  assert.equal(invalid.status, 400);
+  const id = commandId(), payload = { participantIds: [attendee.id], expectedRange: { min: 2, max: 2 } };
+  const success = await operator(event, 'lucky.preassign-range-reviewed', payload, { id });
+  assert.equal(success.status, 200);
+  assert.equal(success.json.assigned[0].number, 2);
+  assert.equal((await operator(event, 'lucky.config.save', { min: 2, max: 3 })).status, 200);
+  const replay = await operator(event, 'lucky.preassign-range-reviewed', payload, { id });
+  assert.deepEqual(replay.json, success.json);
+  const mismatch = await operator(event, 'lucky.preassign-range-reviewed', { ...payload, expectedRange: { min: 2, max: 3 } }, { id });
+  assert.equal(mismatch.status, 409);
+  assert.equal(mismatch.json.code, 'LUCKY_RECEIPT_MISMATCH');
+  assert.equal((await readWorkspace(event.id)).luckyNumbers.length, 1);
+});
+
+test('lucky range save rejects a change made after editing began', async () => {
+  const event = await createFixture({});
+  const ws = await readWorkspace(event.id);
+  ws.luckyConfig = { min: 1, max: 10 };
+  await harness.database.query('UPDATE event_workspaces SET payload = $2::jsonb WHERE event_id = $1', [event.id, JSON.stringify(ws)]);
+  assert.equal((await operator(event, 'lucky.config.save', { min: 1, max: 20 })).status, 200);
+  const stale = await operator(event, 'lucky.config.save-reviewed', { min: 1, max: 15, expectedRange: { min: 1, max: 10 } });
+  assert.equal(stale.status, 409, JSON.stringify(stale.json));
+  assert.equal(stale.json.code, 'LUCKY_RANGE_CHANGED');
+  assert.deepEqual((await readWorkspace(event.id)).luckyConfig, { min: 1, max: 20 });
+  const limitedId = `lucky-readonly-${crypto.randomUUID()}`;
+  await insertAccount(harness.database, { orgId: LEGACY_ORG, id: limitedId, role: 'MANAGER', name: '현장 전용 운영자', email: `${limitedId}@example.test` });
+  await insertMembership(harness.database, limitedId, event.id, ['onsite']);
+  const limited = await sessionCookie(harness, limitedId);
+  for (const [command, payload] of [
+    ['lucky.config.save-reviewed', { min: 1, max: 15, expectedRange: { min: 1, max: 20 } }],
+    ['lucky.preassign-range-reviewed', { participantIds: ['synthetic-person'], expectedRange: { min: 1, max: 20 } }],
+  ]) {
+    const denied = await requestJson(harness.baseUrl, `/api/events/${event.id}/commands`, { method: 'POST', cookie: limited, body: { commandId: commandId(), command, payload } });
+    assert.equal(denied.status, 403);
+  }
+  assert.deepEqual((await readWorkspace(event.id)).luckyConfig, { min: 1, max: 20 });
+  assert.equal((await operator(event, 'lucky.config.save-reviewed', { min: 1, max: 15 })).status, 400);
+  const id = commandId(), payload = { min: 1, max: 15, expectedRange: { min: 1, max: 20 } };
+  const saved = await operator(event, 'lucky.config.save-reviewed', payload, { id });
+  assert.equal(saved.status, 200);
+  assert.deepEqual(saved.json.luckyConfig, { min: 1, max: 15 });
+  const replay = await operator(event, 'lucky.config.save-reviewed', payload, { id });
+  assert.deepEqual(replay.json, saved.json);
+  const mismatch = await operator(event, 'lucky.config.save-reviewed', { ...payload, max: 16 }, { id });
+  assert.equal(mismatch.status, 409);
+  assert.equal(mismatch.json.code, 'LUCKY_RECEIPT_MISMATCH');
+});
+
+test('simultaneous reviewed allocation and range change cannot assign an unreviewed number', async () => {
+  const event = await createFixture({});
+  const attendee = person(event.id, '합성 동시 작업 참가자');
+  const ws = await readWorkspace(event.id);
+  ws.participants = [attendee];
+  ws.luckyConfig = { min: 1, max: 1 };
+  await harness.database.query('UPDATE event_workspaces SET payload = $2::jsonb WHERE event_id = $1', [event.id, JSON.stringify(ws)]);
+  const [allocation, change] = await Promise.all([
+    operator(event, 'lucky.preassign-range-reviewed', { participantIds: [attendee.id], expectedRange: { min: 1, max: 1 } }),
+    operator(event, 'lucky.config.save', { min: 2, max: 2 }),
+  ]);
+  assert.deepEqual([allocation.status, change.status].sort(), [200, 409]);
+  const final = await readWorkspace(event.id);
+  if (allocation.status === 200) {
+    assert.equal(final.luckyNumbers[0].number, 1);
+    assert.deepEqual(final.luckyConfig, { min: 1, max: 1 });
+  } else {
+    assert.equal(allocation.json.code, 'LUCKY_RANGE_CHANGED');
+    assert.deepEqual(final.luckyNumbers, []);
+    assert.deepEqual(final.luckyConfig, { min: 2, max: 2 });
+  }
+});
+
+test('a 5000-person pool supports near-full allocation and serializes the final number', async () => {
+  const event = await createFixture({});
+  const people = Array.from({ length: 5001 }, (_, index) => person(event.id, `합성 대량 참가자 ${index + 1}`));
+  const ws = await readWorkspace(event.id);
+  ws.participants = people;
+  ws.luckyConfig = { min: 100, max: 5099 };
+  await harness.database.query('UPDATE event_workspaces SET payload = $2::jsonb WHERE event_id = $1', [event.id, JSON.stringify(ws)]);
+  const first = await operator(event, 'lucky.preassign', { participantIds: people.slice(0, 4999).map(p => p.id) });
+  assert.equal(first.status, 200, JSON.stringify(first.json));
+  assert.equal(first.json.assigned.length, 4999);
+  const contenders = await Promise.all(people.slice(4999).map(p => operator(event, 'lucky.preassign', { participantIds: [p.id] })));
+  assert.deepEqual(contenders.map(item => item.status).sort(), [200, 409]);
+  const final = await readWorkspace(event.id);
+  assert.equal(final.luckyNumbers.length, 5000);
+  assert.equal(new Set(final.luckyNumbers.map(item => item.number)).size, 5000);
+  assert.ok(final.luckyNumbers.every(item => item.number >= 100 && item.number <= 5099));
+});
+
+test('reviewed roulette settings reject stale edits and bind the receipt to the request', async () => {
+  const event = await createFixture({});
+  const prizes = [{ id: 'p1', label: '합성 경품', quantity: 5 }];
+  const initial = await operator(event, 'roulette.config.save', { status: 'OPEN', prizes });
+  assert.equal(initial.status, 200);
+  assert.equal(initial.json.rouletteConfigVersion, 1);
+  const newer = await operator(event, 'roulette.config.save-reviewed', { expectedVersion: 1, status: 'CLOSED', prizes });
+  assert.equal(newer.status, 200);
+  assert.equal(newer.json.rouletteConfigVersion, 2);
+  const stale = await operator(event, 'roulette.config.save-reviewed', { expectedVersion: 1, status: 'OPEN', prizes: [{ ...prizes[0], quantity: 4 }] });
+  assert.equal(stale.status, 409);
+  assert.equal(stale.json.code, 'ROULETTE_CONFIG_CHANGED');
+  let workspace = await readWorkspace(event.id);
+  assert.equal(workspace.rouletteConfig.status, 'CLOSED');
+  assert.equal(workspace.rouletteConfig.prizes[0].quantity, 5);
+  assert.equal(workspace.rouletteConfigVersion, 2);
+  const id = commandId();
+  const payload = { expectedVersion: 2, status: 'CLOSED', prizes: [{ ...prizes[0], quantity: 4 }] };
+  const saved = await operator(event, 'roulette.config.save-reviewed', payload, { id });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.json.rouletteConfigVersion, 3);
+  const replay = await operator(event, 'roulette.config.save-reviewed', payload, { id });
+  assert.equal(replay.status, 200);
+  assert.equal(replay.json.rouletteConfigVersion, 3);
+  const mismatch = await operator(event, 'roulette.config.save-reviewed', { ...payload, status: 'OPEN' }, { id });
+  assert.equal(mismatch.status, 409);
+  assert.equal(mismatch.json.code, 'ROULETTE_RECEIPT_MISMATCH');
+  const legacy = await operator(event, 'roulette.config.save', { status: 'CLOSED' });
+  assert.equal(legacy.status, 200);
+  assert.equal(legacy.json.rouletteConfigVersion, 4);
+  const oldBaseline = await operator(event, 'roulette.config.save-reviewed', { ...payload, expectedVersion: 3 });
+  assert.equal(oldBaseline.status, 409);
+  workspace = await readWorkspace(event.id);
+  assert.equal(workspace.rouletteConfig.status, 'CLOSED');
+  assert.equal(workspace.rouletteConfigVersion, 4);
+  const limitedId = `roulette-readonly-${crypto.randomUUID()}`;
+  await insertAccount(harness.database, { orgId: LEGACY_ORG, id: limitedId, role: 'MANAGER', name: '읽기 전용 운영자', email: `${limitedId}@example.test` });
+  await insertMembership(harness.database, limitedId, event.id, ['onsite']);
+  const limited = await sessionCookie(harness, limitedId);
+  const denied = await requestJson(harness.baseUrl, `/api/events/${event.id}/commands`, { method: 'POST', cookie: limited,
+    body: { commandId: commandId(), command: 'roulette.config.save-reviewed', payload: { ...payload, expectedVersion: 4 } } });
+  assert.equal(denied.status, 403);
+  assert.equal((await readWorkspace(event.id)).rouletteConfigVersion, 4);
+  workspace = await readWorkspace(event.id);
+  workspace.rouletteConfigVersion = '손상된 버전';
+  await harness.database.query('UPDATE event_workspaces SET payload = $2::jsonb WHERE event_id = $1', [event.id, JSON.stringify(workspace)]);
+  const corrupt = await operator(event, 'roulette.config.save-reviewed', { ...payload, expectedVersion: 0 });
+  assert.equal(corrupt.status, 409);
+  assert.equal(corrupt.json.code, 'ROULETTE_VERSION_INVALID');
+  assert.equal((await readWorkspace(event.id)).rouletteConfigVersion, '손상된 버전');
+
+  const other = await createFixture({});
+  const participant = person(other.id, '추첨 참가자');
+  const otherWorkspace = await readWorkspace(other.id);
+  otherWorkspace.participants = [participant];
+  await harness.database.query('UPDATE event_workspaces SET payload = $2::jsonb WHERE event_id = $1', [other.id, JSON.stringify(otherWorkspace)]);
+  assert.equal((await operator(other, 'roulette.config.save', { status: 'OPEN', prizes })).status, 200);
+  assert.equal((await attendee(other, participant.ticket, 'roulette.spin', {})).status, 200);
+  const afterSpin = await operator(other, 'roulette.config.save-reviewed', { expectedVersion: 1, status: 'CLOSED', prizes });
+  assert.equal(afterSpin.status, 200, 'participant results do not conflict with configuration edits');
+  const simultaneous = await Promise.all([
+    operator(other, 'roulette.config.save-reviewed', { expectedVersion: 2, status: 'CLOSED', prizes: [{ ...prizes[0], quantity: 4 }] }),
+    operator(other, 'roulette.config.save-reviewed', { expectedVersion: 2, status: 'CLOSED', prizes: [{ ...prizes[0], quantity: 3 }] }),
+  ]);
+  assert.deepEqual(simultaneous.map(result => result.status).sort(), [200, 409]);
+  assert.equal(simultaneous.find(result => result.status === 409).json.code, 'ROULETTE_CONFIG_CHANGED');
+  assert.equal((await readWorkspace(other.id)).rouletteConfigVersion, 3);
+});
+
+test('roulette blocks a new spin when the saved schedule cannot be verified', async () => {
+  const event = await createFixture({});
+  const participant = person(event.id, '시간 검증 참가자');
+  const ws = await readWorkspace(event.id);
+  ws.participants = [participant];
+  ws.rouletteConfig = { status: 'OPEN', startsAt: 'not-a-date', endsAt: null,
+    prizes: [{ id: 'prize', label: '검증 경품', quantity: 3, weight: null }] };
+  await harness.database.query('UPDATE event_workspaces SET payload = $2::jsonb WHERE event_id = $1', [event.id, JSON.stringify(ws)]);
+  const view = await requestJson(harness.baseUrl, `/api/public/events/${event.slug}/ticket`, { bearer: participant.ticket });
+  assert.equal(view.json.workspace.rouletteView.open, false);
+  const spin = await attendee(event, participant.ticket, 'roulette.spin', {});
+  assert.equal(spin.status, 409);
+  assert.match(spin.json.error, /운영 시간/);
+  const after = await readWorkspace(event.id);
+  assert.equal(after.rouletteResults.length, 0);
+  assert.equal(after.rewards.length, 0);
+  for (const [startsAt, endsAt] of [
+    ['2026-11-08T09:00', null], ['2026-02-31T09:00:00+09:00', null],
+    ['2026-11-08T09:00:00+15:00', null], [{ invalid: true }, null],
+    ['2027-01-02T00:00:00Z', '2027-01-01T00:00:00Z'],
+  ]) {
+    after.rouletteConfig.startsAt = startsAt; after.rouletteConfig.endsAt = endsAt;
+    await harness.database.query('UPDATE event_workspaces SET payload = $2::jsonb WHERE event_id = $1', [event.id, JSON.stringify(after)]);
+    const projection = await requestJson(harness.baseUrl, `/api/public/events/${event.slug}/ticket`, { bearer: participant.ticket });
+    assert.equal(projection.json.workspace.rouletteView.open, false);
+    assert.equal(projection.json.workspace.rouletteView.scheduleNeedsReview, true);
+    assert.equal((await attendee(event, participant.ticket, 'roulette.spin', {})).status, 409);
+  }
+  const invalidWrite = await operator(event, 'roulette.config.save', { status: 'OPEN', startsAt: '2026-11-08T09:00', endsAt: '', prizes: [{ id: 'prize', label: '검증 경품', quantity: 3 }] });
+  assert.equal(invalidWrite.status, 400);
+  const repaired = await operator(event, 'roulette.config.save', { status: 'OPEN', startsAt: '', endsAt: '', prizes: [{ id: 'prize', label: '검증 경품', quantity: 3 }] });
+  assert.equal(repaired.status, 200);
+  const success = await attendee(event, participant.ticket, 'roulette.spin', {});
+  assert.equal(success.status, 200);
+  const withResult = await readWorkspace(event.id);
+  withResult.rouletteConfig.startsAt = 'invalid';
+  await harness.database.query('UPDATE event_workspaces SET payload = $2::jsonb WHERE event_id = $1', [event.id, JSON.stringify(withResult)]);
+  const replay = await attendee(event, participant.ticket, 'roulette.spin', {});
+  assert.equal(replay.status, 200);
+  assert.equal(replay.json.roulette.rewardId, success.json.roulette.rewardId);
+  assert.equal((await readWorkspace(event.id)).rouletteResults.length, 1);
+});
+
 test('capability-views-hide-behind-disabled-features', async () => {
   const event = await createFixture({ features: ['draw'] });
   const people = [person(event.id, 'F1')];
@@ -917,11 +1179,12 @@ test('lucky-campaign-creates-no-outbox-row-and-every-enqueue-is-gated', async ()
     ids: people.map((p) => p.id),
   });
   assert.equal(created.status, 201, JSON.stringify(created.json));
-  // message.create is never an enqueue path: no outbox row exists yet.
+  // This harness has no provider, so creation stays unconnected and does
+  // not enqueue; retry still must guard the missing number before a send.
   const queued = await harness.database.query('SELECT message_id FROM message_outbox WHERE message_id = $1', [created.json.message.id]);
   assert.equal(queued.rowCount, 0);
 
-  // The only enqueue path (retry) refuses while the number is absent…
+  // Retrying the unconnected record refuses while the number is absent…
   const blocked = await operator(event, 'message.retry', { id: created.json.message.id });
   assert.equal(blocked.status, 409);
   assert.match(String(blocked.json.error), /럭키번호/);
@@ -965,20 +1228,29 @@ test('staff-out-scan-returns-only-the-scanned-person-rewards-and-collects-once',
   assert.doesNotMatch(JSON.stringify(scannedOut.json), /남의 경품/);
 
   // Scoped lookup: only the requested person, unknown ids 404.
-  const lookup = await staffCall(event, 'reward.lookup', { participantId: people[0].id }, deskOut.assignmentId);
+  const lookup = await staffCall(event, 'reward.lookup', {
+    participantId: people[0].id, verificationId: scannedOut.json.rewardVerificationId,
+  }, deskOut.assignmentId);
   assert.equal(lookup.status, 200, JSON.stringify(lookup.json));
   assert.equal(lookup.json.participant.id, people[0].id);
   assert.ok(!('phone' in lookup.json.participant) && !('ticket' in lookup.json.participant));
   assert.deepEqual(lookup.json.rewards.map((r) => r.id), ['reward-mine']);
   assert.equal((await staffCall(event, 'reward.lookup', { participantId: 'no-such-person' }, deskOut.assignmentId)).status, 404);
+  assert.equal((await staffCall(event, 'reward.lookup', { participantId: people[0].id }, deskOut.assignmentId)).status, 409);
+  const collect = (id, command) => staffCall(event, 'reward.collect', { id, verificationId: lookup.json.rewardVerificationId }, deskOut.assignmentId, command);
+  assert.equal((await collect('reward-theirs')).json.code, 'REWARD_VERIFICATION_CHANGED');
+  assert.equal((await staffCall(event, 'reward.collect', { id: 'reward-mine' }, deskOut.assignmentId)).json.code, 'REWARD_VERIFICATION_CHANGED');
 
-  // Permitted fulfillment once; duplicates and replays refuse.
-  const collectId = commandId();
-  const collected = await staffCall(event, 'reward.collect', { id: 'reward-mine' }, deskOut.assignmentId, collectId);
-  assert.equal(collected.status, 200, JSON.stringify(collected.json));
+  // Two distinct requests may arrive together, but only one fulfills.
+  const collectIds = [commandId(), commandId()];
+  const responses = await Promise.all(collectIds.map(id => collect('reward-mine', id)));
+  assert.deepEqual(responses.map(response => response.status).sort(), [200, 409]);
+  const acceptedIndex = responses.findIndex(response => response.status === 200);
+  const collected = responses[acceptedIndex];
+  assert.equal(responses[1 - acceptedIndex].json.code, 'REWARD_ALREADY_RECEIVED');
   assert.equal(collected.json.reward.status, 'RECEIVED');
-  assert.equal((await staffCall(event, 'reward.collect', { id: 'reward-mine' }, deskOut.assignmentId)).status, 409);
-  const collectReplay = await staffCall(event, 'reward.collect', { id: 'reward-mine' }, deskOut.assignmentId, collectId);
+  assert.equal((await collect('reward-mine')).status, 409);
+  const collectReplay = await collect('reward-mine', collectIds[acceptedIndex]);
   assert.equal(collectReplay.status, 200);
   assert.equal(collectReplay.json.reward.status, 'RECEIVED');
 
@@ -986,6 +1258,50 @@ test('staff-out-scan-returns-only-the-scanned-person-rewards-and-collects-once',
   const stored = await readWorkspace(event.id);
   assert.equal(stored.rewards.find((item) => item.id === 'reward-mine').status, 'RECEIVED');
   assert.equal(stored.rewards.find((item) => item.id === 'reward-theirs').status, 'READY');
+
+  const gift = await operator(event, 'reward.create', { participantId: people[0].id, name: '모의 기프티콘', method: 'GIFT' });
+  assert.equal(gift.status, 201);
+  const giftId = gift.json.reward.id;
+  const giftCollect = await collect(giftId);
+  assert.equal(giftCollect.status, 409);
+  assert.equal(giftCollect.json.code, 'REWARD_ONSITE_ONLY');
+  assert.equal((await readWorkspace(event.id)).rewards.find(item => item.id === giftId).status, 'READY');
+  const simulatedGift = await operator(event, 'reward.fulfill', { id: giftId });
+  assert.equal(simulatedGift.status, 200);
+  assert.equal(simulatedGift.json.reward.status, 'NEEDS_CONNECTION');
+
+  const onsite = await operator(event, 'reward.create', { participantId: people[0].id, name: '취소할 현장 경품', method: 'ONSITE' });
+  assert.equal(onsite.status, 201);
+  const onsiteId = onsite.json.reward.id;
+  assert.equal((await operator(event, 'reward.cancel', { id: onsiteId })).status, 200);
+  const cancelled = await collect(onsiteId);
+  assert.equal(cancelled.status, 409);
+  assert.equal(cancelled.json.code, 'REWARD_CANCELLED');
+
+  const waiting = (await operator(event, 'reward.create', { participantId: people[0].id, name: '티켓 재확인 경품', method: 'ONSITE' })).json.reward;
+  const reissued = await operator(event, 'ticket.reissue', { id: people[0].id });
+  assert.equal(reissued.status, 200);
+  assert.equal((await collect(waiting.id)).json.code, 'REWARD_VERIFICATION_CHANGED');
+  assert.equal((await staffCall(event, 'reward.lookup', { ticket: people[0].ticket }, deskOut.assignmentId)).status, 409);
+  const fresh = await staffCall(event, 'reward.lookup', { ticket: reissued.json.participant.ticket }, deskOut.assignmentId);
+  assert.equal(fresh.status, 200);
+  assert.doesNotMatch(JSON.stringify(fresh.json), /ticketHash/);
+  const otherOut = await seedDesk(event, { name: '다른 출구', action: 'OUT' });
+  const verified = { id: waiting.id, verificationId: fresh.json.rewardVerificationId };
+  assert.equal((await staffCall(event, 'reward.collect', verified, otherOut.assignmentId)).json.code, 'REWARD_VERIFICATION_CHANGED');
+  assert.equal((await operator(event, 'desk.set-open', { id: deskOut.desk.id, open: false })).status, 200);
+  const newCollect = () => staffCall(event, 'reward.collect', verified, deskOut.assignmentId);
+  assert.equal((await newCollect()).json.code, 'REWARD_DESK_CHANGED');
+  assert.equal((await collect('reward-mine', collectIds[acceptedIndex])).status, 200, 'committed receipt remains replayable');
+  assert.equal((await readWorkspace(event.id)).rewards.find(item => item.id === waiting.id).status, 'READY');
+  assert.equal((await operator(event, 'desk.set-open', { id: deskOut.desk.id, open: true })).status, 200);
+  const setDirection = (action) => operator(event, 'desk.save', { id: deskOut.desk.id, name: deskOut.desk.name, action, confirmDirectionChange: true });
+  assert.equal((await setDirection('IN')).status, 200);
+  assert.equal((await operator(event, 'desk.set-open', { id: deskOut.desk.id, open: true })).status, 200);
+  assert.equal((await newCollect()).json.code, 'REWARD_DESK_CHANGED');
+  assert.equal((await setDirection('OUT')).status, 200);
+  assert.equal((await operator(event, 'desk.set-open', { id: deskOut.desk.id, open: true })).status, 200);
+  assert.equal((await newCollect()).status, 200);
 });
 
 test('published-company-and-person-outcomes-project-with-safe-stage-metadata', async () => {
@@ -1624,29 +1940,61 @@ test('draw-run-show-on-screen-selects-stage-display-in-the-same-transaction', as
   });
   assert.equal(saved.status, 200);
   const programId = saved.json.program.id;
+  const edited = await operator(event, 'draw.program.save', { id: programId, name: '설정이 바뀐 무대 추첨' });
+  assert.equal(edited.status, 200);
+  const stale = await operator(event, 'draw.program.run', { id: programId, count: 1, expectedRevision: saved.json.program.revision });
+  assert.equal(stale.status, 409);
+  assert.equal(stale.json.code, 'DRAW_PROGRAM_CHANGED');
+  const malformed = await operator(event, 'draw.program.run', { id: programId, count: 1, expectedRevision: String(edited.json.program.revision) });
+  assert.equal(malformed.status, 400);
 
   // One touch draws one winner AND selects the stage display atomically.
-  const touchId = commandId();
-  const touch = await operator(event, 'draw.program.run', { id: programId, count: 1, showOnScreen: true }, { id: touchId });
+  const touches = [commandId(), commandId()];
+  const payload = { id: programId, count: 1, showOnScreen: true, expectedRevision: edited.json.program.revision };
+  const results = await Promise.all(touches.map((id) => operator(event, 'draw.program.run', payload, { id })));
+  assert.deepEqual(results.map((result) => result.status).sort(), [200, 409]);
+  const accepted = results.findIndex((result) => result.status === 200);
+  const touchId = touches[accepted];
+  const touch = results[accepted];
+  assert.equal(results[1 - accepted].json.code, 'DRAW_PROGRAM_CHANGED');
   assert.equal(touch.status, 200, JSON.stringify(touch.json));
   assert.equal(touch.json.winners.length, 1);
-  assert.deepEqual(touch.json.display, { type: 'draw', moduleId: module.id, noticeId: null, at: touch.json.display.at });
+  assert.equal(touch.json.program.revision, payload.expectedRevision + 1);
+  assert.deepEqual(touch.json.display, { type: 'draw', moduleId: module.id, noticeId: null, at: touch.json.display.at, drawId: touchId });
   const stored = await readWorkspace(event.id);
   assert.equal(stored.drawPrograms.find((p) => p.id === programId).winners.length, 1);
   assert.equal(stored.rewards.filter((item) => String(item.id).startsWith(`drawreward-${programId}-`)).length, 1);
+  assert.equal(stored.modules.find((item) => item.id === module.id).drawHistory.length, 1);
   assert.deepEqual(stored.display, touch.json.display);
 
   // Same-ID replay returns the identical outcome without duplicating.
-  const replay = await operator(event, 'draw.program.run', { id: programId, count: 1, showOnScreen: true }, { id: touchId });
+  const replay = await operator(event, 'draw.program.run', payload, { id: touchId });
   assert.equal(replay.status, 200);
   assert.deepEqual(replay.json, touch.json);
   const storedAgain = await readWorkspace(event.id);
   assert.equal(storedAgain.drawPrograms.find((p) => p.id === programId).winners.length, 1);
 
   // Omitted opt-in keeps legacy headless behavior: no display key at all.
-  const headless = await operator(event, 'draw.program.run', { id: programId, count: 1 });
+  const headlessId = commandId();
+  const headless = await operator(event, 'draw.program.run', { id: programId, count: 1 }, { id: headlessId });
   assert.equal(headless.status, 200, JSON.stringify(headless.json));
   assert.ok(!('display' in headless.json));
+  const publicEvent = () => requestJson(harness.baseUrl, `/api/public/events/${event.slug}`);
+  let projected = (await publicEvent()).json.workspace;
+  assert.equal(projected.display.drawId, touchId);
+  const history = projected.modules.find(item => item.id === module.id).drawHistory;
+  assert.equal(history[0].id, headlessId);
+  assert.equal(history.find(item => item.id === touchId).programName, '설정이 바뀐 무대 추첨');
+
+  const missing = await operator(event, 'display.set', { type: 'draw', moduleId: module.id, drawId: commandId() });
+  assert.equal(missing.status, 409);
+  const manual = await operator(event, 'display.set', { type: 'draw', moduleId: module.id, drawId: headlessId });
+  assert.equal(manual.status, 200);
+  assert.equal(manual.json.display.drawId, headlessId);
+  assert.equal((await operator(event, 'draw.program.save', { id: programId, published: false })).status, 200);
+  projected = (await publicEvent()).json.workspace;
+  assert.deepEqual(projected.display, { type: 'idle', moduleId: null });
+  assert.equal(projected.modules.find(item => item.id === module.id).drawHistory.length, 0);
 });
 
 test('draw-run-show-on-screen-rejects-atomically-without-screen-setup', async () => {

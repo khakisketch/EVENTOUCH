@@ -45,9 +45,9 @@ test('navigation registry covers all sixteen menu pages as metadata only', () =>
   const labels = {
     events: '행사', clients: '고객사', team: '팀·권한', overview: '운영 현황',
     participants: '참가자 명단', participantImport: '명단 가져오기', messages: '메시지',
-    operations: '현장 운영', programs: '참여 프로그램', draws: '추첨·투표',
-    photos: '현장 사진', content: '콘텐츠', attendeePage: '참가자 페이지',
-    rewards: '경품', settings: '행사 설정', reports: '결과 보고서',
+    operations: '현장 운영', programs: '참여 콘텐츠', draws: '추첨·투표',
+    photos: '현장 사진', content: '공지·안내', attendeePage: '참가자 페이지',
+    rewards: '경품 수령', settings: '행사 설정', reports: '결과 보고서',
   };
   for (const [id, label] of Object.entries(labels)) {
     const scope = ['events', 'clients', 'team'].includes(id) ? 'organization' : 'event';
@@ -65,18 +65,14 @@ test('navigation exposes rail order, root ids and existing routes', () => {
   // participantImport rides the participants hub so the rail can name it.
   assert.match(nav, /export const EVENT_PAGE_IDS: readonly ConsolePageId\[\] = EVENT_HUBS\.flatMap\(\(hub\) => hub\.pageIds\);/u, 'hubs own the order');
   for (const pages of [
-    'pageIds: ["overview"]',
-    'pageIds: ["settings", "attendeePage", "content", "programs"]',
-    'pageIds: ["participants", "participantImport", "messages"]',
-    'pageIds: ["operations", "photos"]',
-    'pageIds: ["draws", "rewards", "reports"]',
-  ]) {
-    assert.ok(nav.includes(pages), `hub keeps ${pages}`);
-  }
-  const hubOrder = ['"today"', '"prepare"', '"participants"', '"onsite"', '"results"']
-    .map((hub) => nav.indexOf(`{ id: ${hub}`));
-  assert.ok(hubOrder.every((position) => position >= 0), 'all five hubs exist');
-  assert.deepEqual(hubOrder, [...hubOrder].sort((a, b) => a - b), 'hubs follow the setup-to-live sequence');
+    'pageIds: ["overview", "participants", "messages"]',
+    'pageIds: ["operations", "draws", "rewards", "photos"]',
+    'pageIds: ["attendeePage", "content", "programs", "settings"]',
+    'pageIds: ["reports"]',
+  ]) assert.ok(nav.includes(pages), `work group keeps ${pages}`);
+  const hubOrder = ['"today"', '"onsite"', '"prepare"', '"results"'].map((id) => nav.indexOf(`{ id: ${id}`));
+  assert.ok(hubOrder.every((position) => position >= 0));
+  assert.deepEqual(hubOrder, [...hubOrder].sort((a, b) => a - b));
 
   const mainIds = nav.match(/export const MAIN_PAGE_IDS: readonly ConsolePageId\[\] = \[([\s\S]*?)\];/u);
   assert.ok(mainIds, 'MAIN_PAGE_IDS is exported');
@@ -122,7 +118,7 @@ test('console frame shares one title, context link and body rhythm', () => {
   assert.doesNotMatch(page, /\bback=\{/u, 'no repeated back row; the rail owns navigation (Suspense fallback is not a back prop)');
 
   assert.match(page, /CONSOLE_PAGES\[pageId\]/u, 'menu title comes from the registry');
-  assert.match(page, /title=\{page\.title\}/u);
+  assert.match(page, /title=\{title \?\? page\.title\}/u, 'nested task title falls back to the registered menu title');
   assert.match(page, /badges=\{badges\}/u, 'shared header state passes through to the header badges slot');
   assert.match(page, /consolePageHref\("overview", eventId\)/u, 'context links to the overview');
   assert.match(page, /`행사 \/ \$\{trimmedName\}`/u);
@@ -150,7 +146,8 @@ test('toolbar, section nav and form actions render only what they are given', ()
   assert.match(nav, /if \(!items\.length\) return null;/u, 'empty nav keeps no dead space');
   assert.match(nav, /href=\{`#\$\{item\.id\}`\}/u, 'native anchors to existing heading ids');
   assert.match(nav, /aria-label=\{label \?\? "섹션 바로가기"\}/u);
-  assert.doesNotMatch(nav, HOOK_CALL);
+  assert.match(nav, /mode === "tabs"/u);
+  assert.match(nav, /role="tablist"/u);
 
   const actions = readUi('ConsoleFormActions.tsx');
   assert.match(actions, /children: ReactNode;/u);
@@ -193,11 +190,11 @@ test('feedback and section surfaces reuse tokens with stable semantics', () => {
   assert.match(header, /context\?: ReactNode;/u);
   const order = [
     header.indexOf('className={styles.backLink}'),
-    header.indexOf('<h1>{title}</h1>'),
     header.indexOf('styles.pageContext'),
+    header.indexOf('<h1>{title}</h1>'),
   ];
   assert.ok(order.every((position) => position >= 0));
-  assert.deepEqual(order, [...order].sort((a, b) => a - b), 'optional back stays first; task title precedes its event context');
+  assert.deepEqual(order, [...order].sort((a, b) => a - b), 'optional back stays first; event context precedes its task title');
   assert.doesNotMatch(header, HOOK_CALL);
 });
 
@@ -215,7 +212,7 @@ test('dialog owns chrome only, with safe focus handling and busy gating', () => 
     assert.ok(dialog.includes(prop), `ConsoleDialog exposes ${prop}`);
   }
 
-  assert.match(dialog, /role="dialog"\s+aria-modal="true"\s+aria-labelledby=\{headingId\}/u);
+  assert.match(dialog, /role="dialog"\s+aria-modal=\{docked \? undefined : true\}\s+aria-labelledby=\{headingId\}/u);
   assert.match(dialog, /aria-describedby=\{description \? descriptionElementId : undefined\}/u, 'safety copy stays associated');
   assert.match(dialog, /descriptionId \?\? `\$\{headingId\}-description`/u, 'deterministic description id');
   assert.match(dialog, /id=\{descriptionElementId\}/u);
@@ -227,14 +224,14 @@ test('dialog owns chrome only, with safe focus handling and busy gating', () => 
   assert.match(dialog, /if \(busyRef\.current\) return;/u, 'Escape and backdrop wait while busy');
   assert.match(dialog, /if \(canCloseRef\.current && !canCloseRef\.current\(\)\) return;/u, 'synchronous dismissal gate');
   assert.match(dialog, /requestCloseRef\.current\(\);/u, 'Escape uses the guarded path');
-  assert.match(dialog, /if \(event\.target === event\.currentTarget\) requestClose\(\);/u, 'backdrop uses the guarded path');
+  assert.match(dialog, /if \(!docked && event\.target === event\.currentTarget\) requestClose\(\);/u, 'backdrop uses the guarded path');
   assert.match(dialog, /!requested\.matches\(":disabled"\)/u, 'initial focus skips disabled controls');
   assert.match(dialog, /document\.body\.style\.overflow = "hidden";/u);
   assert.match(dialog, /document\.body\.style\.overflow = previousOverflow;/u);
   assert.match(dialog, /previouslyFocused && previouslyFocused\.isConnected/u, 'focus restores only when connected');
-  assert.match(dialog, /className=\{wide \? `dialog \$\{styles\.dialogWide\}` : "dialog"\}/u);
+  assert.match(dialog, /className=\{docked \? styles\.inspectorPanel : wide \? `dialog \$\{styles\.dialogWide\}` : "dialog"\}/u);
   assert.match(dialog, /<div className="dialog-actions">\{footer\}<\/div>/u);
-  assert.doesNotMatch(dialog, /useState\s*\(/u, 'no form state');
+  assert.match(dialog, /useSyncExternalStore\(subscribeWideViewport/u, 'responsive presentation uses the current viewport snapshot');
   assert.doesNotMatch(dialog, /commandId/i, 'no idempotency ownership');
 });
 

@@ -32,7 +32,7 @@ test('event-home-pre-event-metrics-are-compact-and-data-backed', () => {
   // Exactly three metric cards: capacity and waitlist survive as metadata,
   // never as a fourth card.
   assert.doesNotMatch(metrics, /대기 명단 \/ 정원/u);
-  assert.equal((metrics.match(/label: "/g) || []).length, 3, 'exactly 3 pre-event metrics');
+  assert.equal((metrics.match(/label: "신청"|label: overview\.cancellationReview \? "승인 상태" : "참가 확정"|label: "승인 대기"/g) || []).length, 3, 'exactly 3 pre-event metrics');
   assert.match(overview, /capacity|정원/u);
   assert.match(overview, /waitlist|대기/u);
   assert.match(metrics, /return \[\];/);
@@ -51,13 +51,13 @@ test('event-home-leads-with-action-and-keeps-stage-metrics-and-optional-design-c
   const scheduleAt = overview.indexOf('headingId="event-runbook-heading"');
   const readinessAt = overview.indexOf('headingId="event-readiness-heading"');
   assert.ok(metricsAt >= 0 && scheduleAt >= 0 && readinessAt >= 0);
-  const queueAt = overview.indexOf('{nowSection}', overview.indexOf('return (\n    <ConsolePage'));
-  assert.ok(queueAt >= 0 && queueAt < scheduleAt && scheduleAt < readinessAt && readinessAt < metricsAt, 'actions and schedule precede metrics in reading order');
-  // Preparation opens with the stage band above the counts; period analysis
-  // is a disclosure inside the metrics section, and the empty recent stays
-  // compact. The duplicate period section was removed in the Cobalt remake.
+  const queueAt = overview.indexOf('currentStage !== "ARCHIVED" ? nowSection : null', overview.indexOf('return (\n    <ConsolePage'));
+  assert.ok(queueAt >= 0 && metricsAt < queueAt && queueAt < scheduleAt && scheduleAt < readinessAt, 'actions and metrics precede the schedule in reading order');
+  // Preparation still opens with the stage band above the counts; archived
+  // events use their close status instead of an empty work queue.
   const bandAt = overview.indexOf('stageBand');
   assert.ok(bandAt >= 0 && bandAt < metricsAt, 'stage band tops the preparation flow');
+  assert.ok(overview.indexOf('headingId="event-close-status-heading"') < metricsAt, 'finished events keep close status ahead of metrics');
   assert.match(overview, /analysisDetails/u);
   assert.match(overview, /recentCompact/u);
   assert.match(overview, /기본 디자인 사용 중/u);
@@ -66,22 +66,23 @@ test('event-home-leads-with-action-and-keeps-stage-metrics-and-optional-design-c
 });
 
 test('event-home-entry-rate-matches-the-report-definition', () => {
-  assert.match(overview, /records\(workspace\.participants\)\.filter\(\s*\(person\) => person\.status !== "CANCELLED"\s*\)/);
+  assert.match(overview, /records\(workspace\.participants\)\.filter\(\s*\(person\) => String\(person\.status \|\| ""\)\.toUpperCase\(\) !== "CANCELLED"\s*\)/);
   assert.match(overview, /const everIn = participantRows\.filter\(\(person\) => person\.everIn === true\)\.length/);
   assert.match(overview, /entryRate: registered \? Math\.round\(\(everIn \/ registered\) \* 100\) : 0/);
-  assert.match(overview, /취소 제외 등록 대비 입장률/);
+  assert.match(overview, /등록 인원 기준 · 취소 제외/);
   assert.doesNotMatch(overview, /승인된 참가자[^\n]*입장률/);
 });
 
 test('event-home-refresh-stamps-a-successful-read-and-wakes-the-shell', () => {
   assert.match(overview, /updatedAt: now\.toISOString\(\)/);
   assert.match(overview, /<time dateTime=\{overview\.updatedAt\}>마지막 갱신/);
-  // No silent auto-refresh promise: returning from another screen refreshes
-  // on focus instead, through the shared freshness subscription.
+  // Focus still refreshes the page. The timer is scoped to the live
+  // operator overview and manual refresh still wakes the shell.
   assert.match(overview, /다른 화면에서 돌아오면 갱신/);
   assert.match(overview, /subscribeConsoleFreshness/);
-  assert.match(overview, /consoleFetch\(`\/api\/events\/\$\{encodeURIComponent\(eventId\)\}\/bootstrap`, \{ cache: "no-store" \}\)/);
-  assert.match(overview, /setReloadTick\(\(tick\) => tick \+ 1\)/);
+  assert.match(overview, /const endpoint = `\/api\/events\/\$\{encodeURIComponent\(eventId\)\}\/bootstrap`/);
+  assert.match(overview, /consoleFetch\(version \? `\$\{endpoint\}\?ifVersion=\$\{encodeURIComponent\(version\)\}&messageRecipientReview=1` : `\$\{endpoint\}\?messageRecipientReview=1`, \{\s*cache: "no-store", signal: controller\.signal/);
+  assert.match(overview, /setReloadRequest\(\(\{ sequence \}\) => \(\{ sequence: sequence \+ 1, automatic: false \}\)\)/);
   assert.match(overview, /eventouch:shell-reload/);
   assert.match(overview, /formatCheckTime\(check\.at\)/);
   assert.match(overview, /<time className=\{styles\.timestamp\} dateTime=\{check\.at \|\| undefined\}>/);
@@ -93,10 +94,10 @@ test('event-home-keeps-permission-and-stage-transition-contracts', () => {
     path.join(ROOT, 'apps/web/app/console/events/[id]/settings/SettingsWorkspace.tsx'),
     'utf8'
   );
-  assert.match(settings, /\/api\/events\/\$\{encodeURIComponent\(eventId\)\}\/commands/);
+  assert.match(settings, /\/api\/events\/\$\{encodeURIComponent\(attempt\.eventId\)\}\/commands/);
   assert.match(settings, /command: "event\.stage"/);
-  assert.match(settings, /commandId: stageCommandIdRef\.current/);
-  assert.match(settings, /payload: \{\s*stage: nextStage\s*\}/);
+  assert.match(settings, /const commandId = stageCommandIdRef\.current/);
+  assert.match(settings, /const payload = \{\s*stage: nextStage\s*\}/);
   assert.match(settings, /setStageConfirm\(true\)/);
   const confirmation = fs.readFileSync(path.join(ROOT, 'apps/web/app/console/console-ui/StageTransitionConfirmation.tsx'), 'utf8');
   assert.match(settings, /<StageTransitionConfirmation/);

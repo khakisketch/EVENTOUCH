@@ -60,6 +60,32 @@ test('browser test gateway forwards real HTTP and loses only the selected respon
   }
 });
 
+test('browser test gateway reuses upstream connections and closes its pool', async () => {
+  const sockets = [];
+  let finishClose;
+  const closed = new Promise(resolve => { finishClose = resolve; });
+  const api = await upstream((request, response) => {
+    if (!sockets.length) request.socket.once('close', finishClose);
+    sockets.push(request.socket.remotePort); response.end('api');
+  });
+  const web = await upstream((_request, response) => response.end('web'));
+  const gateway = await startWebApiGateway({ apiBase: api.baseUrl, webBase: web.baseUrl });
+  let stopped = false;
+  try {
+    assert.equal(await (await fetch(`${gateway.baseUrl}/api/first`)).text(), 'api');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(await (await fetch(`${gateway.baseUrl}/api/second`)).text(), 'api');
+    assert.equal(sockets.length, 2);
+    assert.equal(sockets[0], sockets[1], 'sequential upstream requests should reuse the same connection');
+    await gateway.close(); stopped = true;
+    let timeout;
+    try { await Promise.race([closed, new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('upstream socket remains open')), 1000); })]); }
+    finally { clearTimeout(timeout); }
+  } finally {
+    if (!stopped) await gateway.close(); await api.close(); await web.close();
+  }
+});
+
 test('browser test gateway refuses paths escaping its fixed upstream origins', async () => {
   let calls = 0;
   const api = await upstream((_request, response) => { calls += 1; response.end('api'); });

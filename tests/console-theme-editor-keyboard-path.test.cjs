@@ -67,7 +67,7 @@ test('activating the link hands focus to the save actions with the viewport', ()
   assert.match(themeCss, /\.saveBar\s*\{[^}]*position:\s*static/su);
   const saveRegionAt = theme.indexOf('<div id="theme-save"');
   const saveButtonAt = theme.indexOf('초안 저장', saveRegionAt);
-  const publishButtonAt = theme.indexOf(': "게시"', saveRegionAt);
+  const publishButtonAt = theme.indexOf(': "게시 검토"', saveRegionAt);
   assert.ok(saveRegionAt >= 0 && saveButtonAt > saveRegionAt, 'the save button lives inside the landing target');
   assert.ok(publishButtonAt > saveButtonAt, 'publish still follows save inside the region');
   // The handler lands directly on the enabled save button; when it is
@@ -87,6 +87,16 @@ test('the top jump nav marks the position on its own links, with no second reado
   assert.doesNotMatch(themeCss, /\.navNow \{/u, 'the readout style is gone');
 });
 
+test('the section navigation is the only top-level mobile view switch', () => {
+  assert.doesNotMatch(theme, /styles\.mobileSwitcher/u);
+  assert.match(theme, /setMobileView\(id === "home-preview-heading" \? "preview" : "edit"\)/u);
+  assert.match(theme, /requestAnimationFrame\(\(\) => \{\s*const target = document\.getElementById\(id\)/u, 'navigation focuses after the hidden destination is shown');
+  assert.match(theme, /document\.activeElement !== origin && document\.activeElement !== target/u, 'a later focus move is not overwritten');
+  assert.match(theme, /switchMobileView\("preview", event\.currentTarget\)/u, 'inline preview keeps its return target');
+  assert.match(theme, /lastEditTarget\.current \|\| document\.getElementById\("theme-edit"\)/u, 'return still restores the edit target');
+  assert.match(themeCss, /data-mobile-view="edit"\] \.previewPanel, \.editorLayout\[data-mobile-view="preview"\] \.controls \{ display: none; \}/u);
+});
+
 test('the in-form jump is visible, touch-sized, and token-styled', () => {
   const skip = cssBlock(themeCss, '.editStatusLine a');
   assert.match(skip, /min-height: 44px/u, '44px touch target');
@@ -102,7 +112,7 @@ test('the in-form jump is visible, touch-sized, and token-styled', () => {
   assert.doesNotMatch(anchor, /#[0-9a-fA-F]{3,8}/u, 'landing target styles use tokens only');
 });
 
-test('no copy removed, no server contract touched', () => {
+test('editor controls remain discoverable and publication uses the reviewed command', () => {
   // Existing fieldset legends keep their names; an optional inline marker
   // now says which group has unsaved edits without removing the fieldset.
   for (const name of ['배경', '배너 이미지', '소개와 노출', '문구와 배치']) {
@@ -111,9 +121,9 @@ test('no copy removed, no server contract touched', () => {
   for (const copy of ['되돌리기', '초안 저장', '게시하기']) {
     assert.ok(theme.includes(copy), `existing copy survives: ${copy}`);
   }
-  // The only commands stay the page save/publish pair.
+  // The only editor commands are draft save and guarded reviewed publication.
   const commands = [...theme.matchAll(/command: "(attendee\.[^"]+)"/gu)].map((match) => match[1]).sort();
-  assert.deepEqual(commands, ['attendee.page.publish', 'attendee.page.save']);
+  assert.deepEqual(commands, ['attendee.page.publish-reviewed', 'attendee.page.save']);
   // All reads go through the shared transport; the event read is the scoped
   // event bootstrap. The file upload builds its URL into a variable first
   // (consoleFetch(url, …)), so only the literal auth/scoped/command fetches

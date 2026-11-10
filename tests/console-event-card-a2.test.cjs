@@ -138,7 +138,7 @@ test("create dialog offers new-first with a stage-labeled source select", () => 
   assert.match(dialog, /function guardTransition\(\): boolean/u);
   assert.match(dialog, /if \(!guardTransition\(\)\) return;/u);
   assert.match(dialog, /같은 요청으로 다시 시도해 결과를 확인한 뒤에 바꾸세요/u, "locked transitions point at the same-request retry");
-  assert.match(dialog, /<fieldset className=\{styles\.modeGroup\} disabled=\{submitting \|\| clientSaving\}>/u);
-  assert.match(dialog, /id="create-source"[\s\S]*?disabled=\{submitting \|\| clientSaving\}/u);
+  assert.match(dialog, /<fieldset className=\{styles\.modeGroup\} disabled=\{submitting \|\| clientSaving \|\| eventUncertain \|\| checkingResult\}>/u);
+  assert.match(dialog, /id="create-source"[\s\S]*?disabled=\{submitting \|\| clientSaving \|\| eventUncertain \|\| checkingResult\}/u);
   assert.match(dialog, /\{modeNotice \? <p role="alert">\{modeNotice\}<\/p> : null\}/u);
 });

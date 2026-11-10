@@ -28,7 +28,8 @@ test('the skip link moves focus to the main region, not only the viewport', () =
 
 test('the whole product uses the one skip link', () => {
   assert.match(layout, /<SkipLink \/>/u, "every page gets the skip link");
-  assert.match(consoleShell, /<SkipLink \/>/u, "the console reuses the same rule");
+  assert.doesNotMatch(consoleShell, /<SkipLink \/>/u, "the root link also covers console; do not add a duplicate tab stop");
+  assert.match(consoleShell, /<main id="main-content"[^>]*tabIndex=\{-1\}/u, "the console main receives the root skip link focus");
   assert.doesNotMatch(layout, /<a className="skip-link"/u, "the plain anchor is gone");
 });
 

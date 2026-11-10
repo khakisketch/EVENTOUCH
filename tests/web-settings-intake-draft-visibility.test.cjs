@@ -57,14 +57,14 @@ test('intake gate: stored line names itself a setting outside READY/LIVE', () =>
 test('intake gate: ENDED publish is honestly disabled, close stays open', () => {
   const text = source();
   assert.match(text, /endedPublishBlocked = currentStage === "ENDED"/);
-  assert.match(text, /disabled=\{busy \|\| archived \|\| !canWriteIntake \|\| endedPublishBlocked\}/);
+  assert.match(text, /disabled=\{settingsLocked \|\| Boolean\(intakeConflict\) \|\| archived \|\| !canWriteIntake \|\| endedPublishBlocked\}/);
   assert.match(text, /종료된 행사에서는 양식을 게시할 수 없습니다/);
   // form.close keeps its existing gate so the archive precondition
   // (registration shut) stays reachable from ENDED: the publish button is
   // the only intake control carrying endedPublishBlocked.
   assert.match(text, /onClick=\{\(\) => void runCommand\("form\.close"/);
-  assert.match(text, /disabled=\{busy \|\| archived \|\| !canWriteIntake\}/);
-  assert.match(text, /disabled=\{busy \|\| archived \|\| !canWriteIntake \|\| endedPublishBlocked\}/);
+  assert.match(text, /disabled=\{settingsLocked \|\| Boolean\(intakeConflict\) \|\| archived \|\| !canWriteIntake\}/);
+  assert.match(text, /disabled=\{settingsLocked \|\| Boolean\(intakeConflict\) \|\| archived \|\| !canWriteIntake \|\| endedPublishBlocked\}/);
 });
 
 test('intake draft gate: publish/close copy and stage authority are untouched', () => {

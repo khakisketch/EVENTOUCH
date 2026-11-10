@@ -77,7 +77,7 @@ test('console layout primitives expose stable, hook-free composition', () => {
   assert.ok(headerOrder.every((position) => position >= 0));
   assert.deepEqual(headerOrder, [...headerOrder].sort((a, b) => a - b));
 
-  assert.match(section, /<section className=\{classNames\} aria-labelledby=\{headingId\}>/);
+  assert.match(section, /<section className=\{classNames\} aria-labelledby=\{headingId\} data-workspace-section=\{headingId\}>/);
   assert.match(section, /<h2 className=\{styles\.sectionTitle\} id=\{headingId\}>\{title\}<\/h2>/);
   assert.match(header, /formatConsoleEventMeta/);
   assert.match(header, /actions\?: ReactNode/);
@@ -100,7 +100,7 @@ test('all sixteen menus use the registry-owned page frame, not individual title 
       assert.match(source, new RegExp(`import ${component}\\b`), `${target} imports ${component}`);
       assert.match(source, new RegExp(`<${component}\\b`), `${target} renders ${component}`);
     }
-    assert.match(source, new RegExp(`<ConsolePage\\b[^>]*pageId="${pageId}"`, 'su'), `${target} identifies its real menu`);
+    assert.match(source, new RegExp(`<${pageId === "participantImport" ? "ImportFrame" : "ConsolePage"}\\b[^>]*pageId="${pageId}"`, 'su'), `${target} identifies its real menu`);
     assert.doesNotMatch(source, /<ConsolePageHeader\b|<h1\b/u, `${target} does not redraw the shared title`);
     assert.match(source, /kind="loading"/u, `${target} uses the shared loading state`);
     assert.match(source, /kind="failed"/u, `${target} uses the shared failed state`);
@@ -117,13 +117,13 @@ test('event context is centralized while domain actions retain their meaning and
   const frame = read('app/console/console-ui/ConsolePage.tsx');
   assert.match(frame, /consolePageHref\("overview", eventId\)/u);
   assert.match(frame, /`행사 \/ \$\{trimmedName\}`/u);
-  assert.match(frame, /title=\{page\.title\}/u);
+  assert.match(frame, /title=\{title \?\? page\.title\}/u, 'nested tasks may name their title while other pages keep the registered title');
   assert.doesNotMatch(frame, /\bback=\{/u);
 
   const content = read(targets[3]);
-  // Write affordances gate on the page/programs grants but keep their exact
-  // shape; reads (lists, links) never gate.
-  assert.match(content, /action=\{canWritePage \? \(\s*<button\b[^>]*className="button button-secondary"[^>]*onClick=\{openNoticeCreate\}[^>]*>\s*공지 작성/su);
+  // Write affordances gate on the page/programs grants. The first notice is
+  // primary; subsequent notices remain secondary. Reads never gate.
+  assert.match(content, /action=\{canWritePage \? \(\s*<button\b[^>]*className=\{`button \$\{state\.notices\.length \? "button-secondary" : "button-primary"\}`\}[^>]*onClick=\{openNoticeCreate\}[^>]*>\s*공지 작성/su);
   assert.match(content, /title="프로그램 일정"[\s\S]*?action=\{canWritePrograms \? \([\s\S]*?className="button button-secondary"[\s\S]*?일정 추가/u);
   assert.match(content, /canWritePage = canWriteEvent\(capabilities, "notice\.save"\)/u);
   assert.match(content, /canWritePrograms = canWriteEvent\(capabilities, "program\.save"\)/u);
@@ -134,7 +134,8 @@ test('event context is centralized while domain actions retain their meaning and
   assert.doesNotMatch(read(targets[0]), /button-primary/u, 'operations overview keeps zero primary actions');
 
   const messages = read(targets[4]);
-  assert.equal((messages.match(/className="button button-primary"/gu) ?? []).length, 1);
+  assert.equal((messages.match(/id="campaign-submit"/gu) ?? []).length, 1, 'one final submit remains');
+  assert.match(messages, /composeStep !== 3/u, 'navigation actions are only shown before review');
   assert.doesNotMatch(content, />\s*운영 현황\s*<\/Link>/u);
   assert.doesNotMatch(participants, />\s*운영 현황으로\s*<\/Link>/u);
   assert.doesNotMatch(messages, />\s*운영 현황\s*<\/Link>/u);
@@ -188,7 +189,11 @@ test('root pages keep title-only identity and preserve primary task actions', ()
   assert.match(team, /headingId="pending-invites" title="대기 중인 초대"/u);
   assert.match(team, /headingId="team-members" title="구성원"/u);
   assert.match(team, /등록된 구성원이 없습니다/u);
-  assert.match(team, /!bootstrapResponse\.ok \|\| !bootstrapPayload\?\.state/u, 'bootstrap failure cannot masquerade as an empty team');
+  assert.match(team, /!bootstrapResponse\.ok \|\| !directory/u, 'bootstrap failure cannot masquerade as an empty team');
+  for (const key of ['accounts', 'invitations', 'events', 'memberships']) {
+    assert.match(team, new RegExp(`!validIds\\(directory\\.${key},`), `incomplete ${key} cannot masquerade as an empty list`);
+  }
+  assert.match(team, /current\.kind === "ready" \? current : \{ kind: "failed"/u, 'a failed refresh preserves the existing workspace');
   assert.doesNotMatch(team, /label:\s*"← 운영 현황"|meta=\{/u);
 
   const panels = read('app/console/team/OperationsPanels.tsx');
@@ -200,11 +205,13 @@ test('root pages keep title-only identity and preserve primary task actions', ()
 test('report tables remain complete and keyboard-scrollable on narrow screens', () => {
   const reports = read(eventPhaseTwoTargets[3]);
   assert.equal((reports.match(/className=\{styles\.tableScroll\}/gu) ?? []).length, 4);
-  assert.equal((reports.match(/className=\{styles\.dataTable\}/gu) ?? []).length, 4);
+  assert.equal((reports.match(/className=\{styles\.dataTable\}/gu) ?? []).length, 5);
+  assert.match(reports, /aria-label="보고서와 최근 참가 집계 비교"/u);
   assert.match(reports, /role="region" tabIndex=\{0\} aria-label="등록 그룹별 인원 표"/u);
   assert.match(reports, /role="region" tabIndex=\{0\} aria-label="부스별 인증 수 표"/u);
   assert.match(reports, /role="region" tabIndex=\{0\} aria-label="프로그램별 응답 표"/u);
   assert.match(read('app/console/events/[id]/reports/reports.module.css'), /\.tableScroll\s*\{[^}]*overflow-x:\s*auto/s);
+  assert.match(read('app/console/events/[id]/reports/reports.module.css'), /\.reportComparison \.dataTable\s*\{\s*width: 100%; min-width: 0;/u);
 });
 
 test('evidence photos stay separate, section-scoped and retry-safe', () => {

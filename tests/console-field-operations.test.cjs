@@ -69,22 +69,22 @@ test("same-day and before-the-day sections split through one summary slot", () =
   assert.match(source, /`운영 \$\{boothOpenCount\} \/ 전체 \$\{booths\.length\}`/u);
   assert.match(source, /`배정 \$\{assignments\.length\}건`/u);
   assert.doesNotMatch(source, /modeSummary|mapSummary/u, "the folded summaries alone carry preset state");
-  for (const id of ["ops-desks", "ops-booths", "ops-booth-mode", "ops-booth-map", "ops-display", "ops-staff"]) {
+  for (const id of ["ops-desks", "ops-participation", "ops-booths", "ops-booth-mode", "ops-booth-map", "ops-display", "ops-staff"]) {
     assert.match(source, new RegExp(`headingId="${id}"`), `the ${id} section keeps its anchor`);
   }
-  assert.doesNotMatch(source, /console\/events\/\$\{[^}]*\}\/(?!page)[a-z-]+`(?!\/)/u, "no new menu or route");
+  assert.doesNotMatch(source, /console\/events\/\$\{[^}]*\}\/(?!(?:page|programs)\b)[a-z-]+`(?!\/)/u, "handoffs use only the existing page and participation routes");
 });
 
 test("presets start folded with current values and anchor recovery", () => {
   const source = ops();
   assert.equal(source.match(/<details/g)?.length ?? 0, 2, "only the two presets fold");
-  assert.match(source, /<summary className=\{styles\.presetSummary\}>인증 방식 · \{modeValueLabel\}<\/summary>/u);
-  assert.match(source, /<summary className=\{styles\.presetSummary\}>부스 지도 · \{mapStatusText\}<\/summary>/u);
+  assert.match(source, /<summary className=\{styles\.presetSummary\} data-disclosure-indicator="">인증 방식 · \{modeValueLabel\}<\/summary>/u);
+  assert.match(source, /<summary className=\{styles\.presetSummary\} data-disclosure-indicator="">부스 지도 · \{mapStatusText\}<\/summary>/u);
   assert.match(source, /미게시/u, "an unposted map reads as 미게시 while folded");
   assert.match(source, /참가자 셀프 스캔/u, "the folded mode summary names the live value");
   assert.match(source, /useState\(\{ mode: false, map: false \}\)/u, "presets start folded on every viewport");
   assert.match(source, /open=\{presetOpen\.mode \|\| modeNeedsAttention\}/u);
-  assert.match(source, /open=\{presetOpen\.map \|\| mapNeedsAttention\}/u);
+  assert.match(source, /open=\{presetOpen\.map \|\| mapNeedsAttention \|\| mapUploadUncertain\}/u);
   assert.match(source, /hashchange/u, "preset deep links reveal their target");
   assert.match(source, /onToggle=\{\(event\) => setPresetOpen\(\(prev\)/u, "the operator can unfold either side by hand");
   const desksBody = source.slice(source.indexOf('headingId="ops-desks"'), source.indexOf('headingId="ops-booths"'));

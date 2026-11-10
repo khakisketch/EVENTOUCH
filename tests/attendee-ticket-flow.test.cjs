@@ -62,12 +62,18 @@ test("any non-admitted ticket offers a status re-check", () => {
 
 // 표현 고정 갱신(2026-10-27 재검수): 저장소 거부(비공개·제한 모드)에서도 열린
 // 영수증의 재확인이 동작해야 한다. 탭 내 ref가 현재 bearer를 들고 재시도하고,
-// slug가 바뀌면 물려주지 않으며 404 확정 시 비운다. 새 저장소(localStorage·
-// 쿠키·URL 잔류)는 두지 않는다.
+// slug가 바뀌면 물려주지 않으며 404 확정 시 비운다. 거절 표시는 탭과 URL에
+// 비민감 상태만 남기며 bearer는 localStorage·쿠키·URL에 새로 저장하지 않는다.
 test("status retries keep the in-tab bearer without new persistence", () => {
   assert.match(ticket, /ticketRef\.current\.slug !== slug/u);
   assert.match(ticket, /ticketRef\.current = \{ slug, ticket: "" \}/u);
-  assert.match(ticket, /fromLink \|\| ticketRef\.current\.ticket \|\| readStoredTicket\(slug\)/u);
+  assert.match(ticket, /fromLink \|\| ticketRef\.current\.ticket \|\| initialTicket \|\| getAllowedTicketForTab\(slug\) \|\| \(storageUsable \? readStoredTicket\(slug\) : ""\)/u);
+  assert.match(ticket, /query\.delete\("ticket"\)/u);
+  assert.match(ticket, /window\.history\.replaceState\(null, "", cleaned\)/u);
+  // A failed in-memory recovery must not erase an older tab bearer that
+  // storage rejected replacing. Other confirmed 404s still clear storage.
+  assert.match(ticket, /if \(res\.status === 404 && ticket && !cancelled\) \{\s*if \(!\(hasRecovery && recoveryMode === "memory"\)\) clearStoredTicket\(slug\);\s*ticketRef\.current = \{ slug, ticket: "" \}/u);
+  assert.match(ticket, /\[slug, reloadTick, initialTicket\]/u);
   assert.doesNotMatch(ticket, /localStorage\./u);
   assert.doesNotMatch(ticket, /document\.cookie/u);
 });
@@ -84,7 +90,7 @@ test("a fresh receipt never claims admission before the QR exists", () => {
 // (setParticipantStatus에 자동 승격 없음·명시적 APPROVED 전이만). "자리가
 // 나면 표시됩니다"는 거짓 약속이므로 운영자 승인 조건으로 고친다.
 test("the waitlist names operator approval, not automatic display", () => {
-  assert.match(ticket, /자리가 나면 운영자가 승인할 수 있고, 승인되면 이 화면에 입장 QR이 표시됩니다/u);
+  assert.match(ticket, /자리가 나면 운영자가 확정할 수 있습니다\. 확정 안내를 받았다면 상태를 다시 확인하세요/u);
   assert.doesNotMatch(ticket, /자리가 나면 이 화면에 입장 QR이 표시됩니다/u);
 });
 
@@ -93,16 +99,17 @@ test("the waitlist names operator approval, not automatic display", () => {
 // 마운트된 로드에서만 쓴다.
 test("late responses never clobber the current tab bearer", () => {
   assert.match(ticket, /if \(res\.status === 404 && ticket && !cancelled\)/u);
-  assert.match(ticket, /if \(!cancelled\) \{\s*if \(resolvedTicket\) ticketRef\.current/u);
+  assert.match(ticket, /if \(!cancelled\) \{\s*clearTicketRejected\(slug\);\s*if \(resolvedTicket\) \{\s*ticketRef\.current = \{ slug, ticket: resolvedTicket \};\s*const stored = storeTicket\(slug, resolvedTicket\)/u);
+  assert.match(ticket, /if \(stored && storageUsable\) clearSessionForTab\(slug\);\s*else allowSessionForTab\(slug, resolvedTicket\)/u);
 });
 
 // 표현 고정 갱신(추가 재검수 2): 승인+결제 복합 조건의 영수증도 양쪽 문을
 // 말한다. 결제 플래그가 명시된 경우에만 복합 문구를 쓰고, 기존 문구·핀은
 // 그대로 둔다.
 test("combined gates name approval and payment together", () => {
-  assert.match(ticket, /운영자 승인과 결제 확인이 끝나면 이 화면에 입장 QR이 표시됩니다/u);
-  assert.match(ticket, /승인과 결제 확인이 끝나면 이 화면에 입장 QR이 표시됩니다/u);
-  assert.match(ticket, /신청이 접수되었습니다\. 운영자가 승인하면 이 화면에 입장 QR이 표시됩니다/u);
+  assert.match(ticket, /운영자 승인과 결제 확인 후 상태를 다시 확인하면 입장 QR을 볼 수 있습니다/u);
+  assert.match(ticket, /확정과 결제 확인 후 상태를 다시 확인하세요/u);
+  assert.match(ticket, /신청이 접수되었습니다\. 운영자 승인 후 상태를 다시 확인하면 입장 QR을 볼 수 있습니다/u);
 });
 
 test("the recovery flow shows one step at a time", () => {

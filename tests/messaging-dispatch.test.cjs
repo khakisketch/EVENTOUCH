@@ -752,3 +752,81 @@ test('an-unchanged-campaign-still-applies-its-outcome', async () => {
   assert.equal(result.resolved, 1);
   assert.equal(db.workspace.messages[0].status, 'SENT');
 });
+
+test('a rejected recipient does not keep a partly accepted campaign pending forever', async () => {
+  const workspace = workspaceWith([
+    { participantId: 'p1', phone: '01011111111', status: 'SENDING' },
+    { participantId: 'p2', phone: '01022222222', status: 'SENDING' },
+  ]);
+  const db = fakeDatabase(workspace);
+  const provider = batchProvider({
+    registered: [{ participantId: 'p1', accepted: true, phone: '01011111111' }],
+    rejected: [{ participantId: 'p2', error: '수신번호 오류' }],
+    poll: { M1: { state: 'DELIVERED', type: 'SMS' } },
+  });
+  await dispatchCampaign(db, provider, baseDispatch);
+  const result = await resolveDelivery(db, provider, 'e-1');
+  assert.equal(result.resolved, 1);
+  assert.equal(workspace.messages[0].status, 'PARTIAL');
+  assert.equal(workspace.messages[0].deliveredCount, 1);
+  assert.equal(workspace.messages[0].failedCount, 1);
+  assert.equal(workspace.messages[0].deliveries[1].error, '수신번호 오류');
+});
+
+test('successive polls retain settled delivery results while others are pending', async () => {
+  const workspace = pendingWorkspace([
+    { participantId: 'p1', status: 'SENDING', solapiMessageId: 'M1' },
+    { participantId: 'p2', status: 'SENDING', solapiMessageId: 'M2' },
+    { participantId: 'p3', status: 'FAILED', error: '접수 거부' },
+  ]);
+  const db = fakeDatabase(workspace);
+  let call = 0;
+  const provider = { async pollResults(ids) {
+    call += 1;
+    if (call === 1) {
+      assert.deepEqual(ids, ['M1', 'M2']);
+      return { ok: true, results: { M1: { state: 'DELIVERED' }, M2: { state: 'PENDING' } } };
+    }
+    assert.deepEqual(ids, ['M2'], 'settled deliveries are not polled or reclassified');
+    return { ok: true, results: { M2: { state: 'DELIVERED' } } };
+  } };
+  await resolveDelivery(db, provider, 'e-1');
+  assert.equal(workspace.messages[0].status, 'SENDING');
+  assert.equal(workspace.messages[0].deliveredCount, 1);
+  assert.equal(workspace.messages[0].failedCount, 1);
+  await resolveDelivery(db, provider, 'e-1');
+  assert.equal(workspace.messages[0].status, 'PARTIAL');
+  assert.equal(workspace.messages[0].deliveredCount, 2);
+  assert.equal(workspace.messages[0].failedCount, 1);
+});
+
+test('a stale concurrent poll cannot overwrite newer settled deliveries or return them as applied', async () => {
+  const workspace = pendingWorkspace([
+    { participantId: 'p1', status: 'SENDING', solapiMessageId: 'M1' },
+    { participantId: 'p2', status: 'SENDING', solapiMessageId: 'M2' },
+  ]);
+  const db = fakeDatabase(workspace);
+  const provider = { async pollResults() {
+    workspace.messages[0].deliveries[0].status = 'SENT';
+    workspace.messages[0].deliveredCount = 1;
+    return { ok: true, results: { M1: { state: 'PENDING' }, M2: { state: 'DELIVERED' } } };
+  } };
+  const result = await resolveDelivery(db, provider, 'e-1');
+  assert.equal(workspace.messages[0].deliveries[0].status, 'SENT');
+  assert.equal(workspace.messages[0].deliveries[1].status, 'SENDING');
+  assert.equal(workspace.messages[0].deliveredCount, 1);
+  assert.deepEqual(result.messages, [], 'a skipped stale update is never returned as the committed result');
+});
+
+test('unknown supplier states remain pending and transport failures are counted as pending', async () => {
+  const workspace = pendingWorkspace([{ participantId: 'p1', status: 'SENDING', solapiMessageId: 'M1' }]);
+  const db = fakeDatabase(workspace);
+  let result = await resolveDelivery(db, { async pollResults() {
+    return { ok: true, results: { M1: { state: 'UNRECOGNIZED' } } };
+  } }, 'e-1');
+  assert.equal(workspace.messages[0].status, 'SENDING');
+  assert.equal(result.pending, 1);
+  result = await resolveDelivery(db, { async pollResults() { return { ok: false }; } }, 'e-1');
+  assert.equal(result.pending, 1);
+  assert.equal(workspace.messages[0].status, 'SENDING');
+});

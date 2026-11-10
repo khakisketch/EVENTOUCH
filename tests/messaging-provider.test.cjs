@@ -19,6 +19,8 @@ function startMockProvider() {
       requests.push({ headers: req.headers, body: parsed });
 
       if (behaviour === 'hang') return; // never respond
+      if (behaviour === 'malformed') { res.writeHead(200, { 'content-type': 'application/json' }); res.end('not-json'); return; }
+      if (behaviour === 'id-only') { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"id":"fixture","error":"rejected"}'); return; }
       if (behaviour === 'reject') {
         res.writeHead(400, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ ok: false, error: '잘못된 수신번호입니다' }));
@@ -137,7 +139,7 @@ test('a-provider-rejection-is-never-reported-as-delivered', async () => {
   assert.match(result.error, /잘못된 수신번호/);
 });
 
-test('a-provider-server-error-is-a-failure-not-a-success', async () => {
+test('a-provider-server-error-is-unconfirmed-not-a-definitive-failure', async () => {
   resetMock();
   mock.setBehaviour('server-error');
   const provider = createMessagingProvider(providerConfig({
@@ -146,7 +148,7 @@ test('a-provider-server-error-is-a-failure-not-a-success', async () => {
   }));
   const result = await provider.send({ channel: 'SMS', to: '010-1234-5678', text: 'hi' });
   assert.equal(result.delivered, false);
-  assert.equal(result.reason, 'PROVIDER_REJECTED');
+  assert.equal(result.reason, 'UNCONFIRMED');
 });
 
 test('ok-false-with-a-200-is-still-a-failure', async () => {
@@ -160,6 +162,16 @@ test('ok-false-with-a-200-is-still-a-failure', async () => {
   const result = await provider.send({ channel: 'SMS', to: '010-0000-0000', text: 'hi' });
   assert.equal(result.delivered, false);
   assert.match(result.error, /수신 거부/);
+});
+
+test('2xx without an explicit ok true is not proof of acceptance', async () => {
+  const provider = createMessagingProvider(providerConfig({ EVENTOUCH_MESSAGING_ENDPOINT: endpoint, EVENTOUCH_MESSAGING_TOKEN: 't' }));
+  for (const behavior of ['malformed', 'id-only']) {
+    resetMock(); mock.setBehaviour(behavior);
+    const result = await provider.send({ channel: 'SMS', to: '01012345678', text: '안내' });
+    assert.equal(result.delivered, false);
+    assert.equal(result.reason, 'UNCONFIRMED');
+  }
 });
 
 test('a-hanging-provider-times-out-instead-of-blocking-forever', async () => {
@@ -202,8 +214,10 @@ function fakeDatabase(workspace, options = {}) {
           }
           if (/UPDATE event_workspaces/.test(sql)) {
             writes.push({ sql, params });
+            Object.assign(workspace, JSON.parse(params[1]));
             return { rowCount: 1 };
           }
+          if (/UPDATE message_outbox/.test(sql)) return { rowCount: 1 };
           return { rows: [] };
         },
       });
@@ -229,7 +243,7 @@ const sampleWorkspace = () => ({
   }],
 });
 
-test('a-fully-delivered-campaign-is-recorded-as-sent', async () => {
+test('a-fully-accepted-generic-campaign-does-not-claim-delivery', async () => {
   resetMock();
   mock.setBehaviour('accept');
   const workspace = sampleWorkspace();
@@ -250,10 +264,13 @@ test('a-fully-delivered-campaign-is-recorded-as-sent', async () => {
     ],
   });
 
-  assert.equal(result.delivered, 2);
-  assert.equal(result.message.status, 'SENT');
-  assert.equal(db.writes.length, 1, 'the outcome is persisted');
-  for (const delivery of result.message.deliveries) assert.equal(delivery.status, 'SENT');
+  assert.equal(result.accepted, 2);
+  assert.equal(result.delivered, 0);
+  assert.equal(result.message.status, 'ACCEPTED');
+  assert.equal(result.message.deliveredCount, 0);
+  assert.equal(result.message.acceptedCount, 2);
+  assert.equal(db.writes.length, 2, 'submission intent and outcome are persisted');
+  for (const delivery of result.message.deliveries) assert.equal(delivery.status, 'ACCEPTED');
 });
 
 test('a-partial-send-is-recorded-as-partial-not-sent', async () => {
@@ -277,16 +294,18 @@ test('a-partial-send-is-recorded-as-partial-not-sent', async () => {
     ],
   });
 
-  assert.equal(result.delivered, 1);
-  assert.equal(result.message.status, 'PARTIAL', 'a half-delivered campaign does not claim success');
+  assert.equal(result.accepted, 1);
+  assert.equal(result.delivered, 0);
+  assert.equal(result.message.status, 'ACCEPTED', 'acceptance remains distinct from device delivery');
   const statuses = result.message.deliveries.map((d) => d.status).sort();
-  assert.deepEqual(statuses, ['FAILED', 'SENT']);
+  assert.deepEqual(statuses, ['ACCEPTED', 'FAILED']);
 });
 
 test('a-campaign-where-nothing-sent-is-recorded-as-failed', async () => {
   resetMock();
   mock.setBehaviour('reject');
   const workspace = sampleWorkspace();
+  workspace.messages[0].deliveries = workspace.messages[0].deliveries.slice(0, 1);
   const db = fakeDatabase(workspace);
   const provider = createMessagingProvider(providerConfig({
     EVENTOUCH_MESSAGING_ENDPOINT: endpoint,
@@ -301,6 +320,7 @@ test('a-campaign-where-nothing-sent-is-recorded-as-failed', async () => {
     recipients: [{ participantId: 'p-1', name: '가', phone: '010-1111-1111' }],
   });
 
+  assert.equal(result.accepted, 0);
   assert.equal(result.delivered, 0);
   assert.equal(result.message.status, 'FAILED');
 });
@@ -327,13 +347,13 @@ test('each-delivery-records-whether-it-went-and-what-went-wrong', async () => {
   });
 
   const failed = result.message.deliveries.find((d) => d.status === 'FAILED');
-  const sent = result.message.deliveries.find((d) => d.status === 'SENT');
+  const sent = result.message.deliveries.find((d) => d.status === 'ACCEPTED');
   assert.match(failed.error, /수신 거부/);
   assert.ok(sent.providerId, 'a delivered recipient keeps the provider reference');
   assert.equal(sent.error, null);
 });
 
-test('a-missing-workspace-does-not-throw-away-the-send-result', async () => {
+test('a-missing-workspace-never-sends-without-a-durable-submission-record', async () => {
   resetMock();
   mock.setBehaviour('accept');
   const db = fakeDatabase(null, { missingWorkspace: true });
@@ -348,7 +368,8 @@ test('a-missing-workspace-does-not-throw-away-the-send-result', async () => {
     text: '본문',
     recipients: [{ participantId: 'p-1', name: '가', phone: '010-1111-1111' }],
   });
-  assert.equal(result.delivered, 1, 'the provider result survives a missing workspace');
+  assert.equal(result.attempted, false);
+  assert.equal(mock.requests.length, 0);
 });
 
 test('dispatch-is-a-no-op-without-a-provider-or-a-dispatch', async () => {

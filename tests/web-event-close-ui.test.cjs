@@ -43,7 +43,7 @@ test('one hub owns the complete checklist; detail is a handoff outside print', (
   assert.match(flow, /<details/);
   assert.doesNotMatch(flow, /<details[^>]*\bopen[= >]/);
   assert.match(flow, /다음 할 일/);
-  assert.match(reports, /state\.reports\.find\(\(item\) => item\.id === closeReportId\)/);
+  assert.match(reports, /state\.reports\.find\(\(report\) => report\.id === closeReportId\)/);
   assert.doesNotMatch(reports, /setCloseReportId\(state\.reports\[0\]/);
   assert.match(flow, /초안도 집계가 고정됩니다/);
   assert.match(flow, /보관 후에는 메시지 작성·발송도 잠깁니다/);
@@ -68,7 +68,7 @@ test('shared return handles five existing destinations and keeps draft guards', 
 });
 
 test('linear close skips fulfilled steps and never forces an optional map return', () => {
-  const snapshot = { stage: 'LIVE', pending: 0, registrationOpen: true, openModules: [{ name: 'p', type: 'poll' }], features: ['poll'], reports: [] };
+  const snapshot = { stage: 'LIVE', pending: 0, registrationOpen: true, openModules: [{ name: 'p', type: 'poll' }], features: ['poll'], reports: [], participantsAvailable: true, modulesAvailable: true, registrationAvailable: true, archiveAvailable: true };
   const progress = (page, patch = {}, intent = null, hash = '') => linearCloseProgress('e', page, { ...snapshot, ...patch }, null, intent, hash);
   assert.match(progress('participants').next.href, /\/programs\?/);
   assert.match(progress('participants', { openModules: [] }).next.href, /closeStep=intake/);
@@ -96,7 +96,7 @@ test('linear close skips fulfilled steps and never forces an optional map return
 });
 
 test('linear next warns about unfinished prerequisites without adding a new business gate', () => {
-  const snapshot = { stage: 'LIVE', pending: 2, registrationOpen: true, openModules: [{ name: 'p', type: 'poll' }], features: ['poll'], reports: [] };
+  const snapshot = { stage: 'LIVE', pending: 2, registrationOpen: true, openModules: [{ name: 'p', type: 'poll' }], features: ['poll'], reports: [], participantsAvailable: true, modulesAvailable: true, registrationAvailable: true, archiveAvailable: true };
   const program = linearCloseProgress('e', 'programs', snapshot, null, null, '');
   assert.match(program.warnings.join(' '), /승인 대기 2명/);
   assert.match(program.next.href, /closeStep=intake/);
@@ -109,7 +109,7 @@ test('linear next warns about unfinished prerequisites without adding a new busi
 });
 
 test('linear snapshots come from the page bootstrap, with no polling or success inference', () => {
-  const snapshot = readCloseSnapshot({ stage: 'live', features: ['poll'] }, { participants: [{ status: 'PENDING' }, { status: 'CANCELLED' }], modules: [{ title: 'p', type: 'poll', status: 'OPEN' }], reports: [{ id: 'r', status: 'DRAFT' }], registrationOpen: true });
+  const snapshot = readCloseSnapshot({ stage: 'live', features: ['poll'] }, { participants: [{ status: 'PENDING' }, { status: 'CANCELLED' }], modules: [{ title: 'p', type: 'poll', status: 'OPEN' }], reports: [{ id: 'r', status: 'DRAFT' }], registrationOpen: true, reportSourceAvailability: { participants: true }, archivePreconditions: { version: 1, participantsAvailable: true, registrationAvailable: true, modulesAvailable: true, registrationOpen: true, openModules: 1 } });
   assert.equal(snapshot.stage, 'LIVE');
   assert.equal(snapshot.pending, 1);
   assert.equal(snapshot.openModules.length, 1);
@@ -124,11 +124,36 @@ test('linear snapshots come from the page bootstrap, with no polling or success 
   assert.doesNotMatch(back, /fetch\(|setInterval\(/);
 });
 
+test('linear close never treats missing or inconsistent source proof as a completed step', () => {
+  const event = { stage: 'LIVE', features: ['poll'] };
+  const valid = { participants: [], modules: [], registrationOpen: false, reports: [],
+    reportSourceAvailability: { participants: true },
+    archivePreconditions: { version: 1, participantsAvailable: true, registrationAvailable: true, modulesAvailable: true, registrationOpen: false, openModules: 0 } };
+  for (const workspace of [
+    { ...valid, archivePreconditions: undefined },
+    { ...valid, modules: [{ id: 'q', status: 'open' }] },
+    { ...valid, registrationOpen: null },
+  ]) {
+    const snapshot = readCloseSnapshot(event, workspace);
+    assert.equal(snapshot.archiveAvailable, false);
+    const progress = linearCloseProgress('e', 'programs', snapshot, null, null, '');
+    assert.equal(progress.next, null);
+    assert.ok(progress.warnings.some(warning => /확인할 수 없음/.test(warning)));
+  }
+  const unknown = readCloseSnapshot(event, { ...valid, participants: undefined });
+  const progress = linearCloseProgress('e', 'participants', unknown, null, null, '');
+  assert.equal(progress.complete, false); assert.equal(progress.next, null);
+  assert.match(progress.detail, /참가자 정보를 확인할 수 없어/);
+  const lower = readCloseSnapshot(event, { ...valid, modules: [{ id: 'q', status: 'open' }],
+    archivePreconditions: { ...valid.archivePreconditions, openModules: 1 } });
+  assert.equal(lower.modulesAvailable, true); assert.equal(lower.openModules.length, 1);
+});
+
 test('inline close archive reuses the exact stage confirmation, permissions and safe receipt path', () => {
   const message = read('events/[id]/messages/MessagingWorkspace.tsx');
   const settings = read('events/[id]/settings/SettingsWorkspace.tsx');
   const confirmation = read('console-ui/StageTransitionConfirmation.tsx');
-  assert.match(message, /state\.canManage && state\.canArchive && state\.stage === "ENDED" && !state\.closeSnapshot\.registrationOpen && state\.closeSnapshot\.openModules\.length === 0/);
+  assert.match(message, /state\.canManage && state\.canArchive && state\.stage === "ENDED" && state\.closeSnapshot\.archiveAvailable && !state\.closeSnapshot\.registrationOpen && state\.closeSnapshot\.openModules\.length === 0/);
   assert.match(message, /canArchive = canWriteEvent\(\{ role, userId: myId, memberships, eventId \}, "event\.stage"\)/);
   assert.match(message, /postCommand\("event\.stage", \{ stage: "ARCHIVED" \}, id\)/);
   assert.match(message, /archiveCommandRef\.current \?\? commandId\(\)/);

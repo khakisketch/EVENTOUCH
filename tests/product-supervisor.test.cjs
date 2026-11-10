@@ -7,6 +7,13 @@ const os = require('node:os');
 const path = require('node:path');
 const { supervise, checkPortFree } = require('../scripts/supervise.cjs');
 
+test('local product launchers keep their API on loopback', () => {
+  for (const file of ['start-supervisor.cjs', 'dev-supervisor.cjs']) {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'scripts', file), 'utf8');
+    assert.match(source, /EVENTOUCH_API_BIND:\s*'127\.0\.0\.1'/, `${file} pins the API to loopback`);
+  }
+});
+
 // Focused runtime contract for the product supervisor (scripts/supervise.cjs
 // + dev/start launchers). Pure Node on isolated loopback ports: no database,
 // no Next build, no live services. Ports 18931+ are outside every other

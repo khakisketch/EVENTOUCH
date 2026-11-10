@@ -30,6 +30,8 @@ function campaign(overrides = {}) {
     recipientIds: ['p1'],
     recipientSnapshot: [{ id: 'p1', name: '수신자', phone: '010-1111-2222' }],
     status: 'SCHEDULED',
+    scheduleMode: 'AUTO',
+    autoScheduleIntent: 'confirmed-v1',
     scheduled: PAST_ISO,
     simulate: false,
     attempts: 0,
@@ -75,9 +77,12 @@ function makeMemoryDb(workspaces) {
     if (/SELECT e\.id FROM events/.test(text)) {
       const status = String(params[0]);
       const limit = Number(params[1]) || 50;
+      const afterId = String(params[2] || '');
+      const automaticOnly = params[3] === true;
       const ids = [];
-      for (const [id, entry] of state.events) {
-        if (messagesOf(entry.workspace).some((m) => m && m.status === status)) ids.push(id);
+      for (const [id, entry] of [...state.events].sort(([a], [b]) => a.localeCompare(b))) {
+        if (id <= afterId) continue;
+        if (messagesOf(entry.workspace).some((m) => m && m.status === status && (!automaticOnly || (m.scheduleMode === 'AUTO' && m.autoScheduleIntent === 'confirmed-v1' && m.simulate !== true)))) ids.push(id);
         if (ids.length >= limit) break;
       }
       return { rows: ids.sort().map((id) => ({ id })) };
@@ -90,11 +95,6 @@ function makeMemoryDb(workspaces) {
         payload: clone(entry.payload), revision: 1,
         workspace_payload: clone(entry.workspace), workspace_revision: 1,
       }] };
-    }
-    if (/FROM events e JOIN event_workspaces/.test(text) && /FOR UPDATE OF e(?![\w,])/.test(text)) {
-      const entry = state.events.get(String(params[0]));
-      if (!entry) return { rows: [] };
-      return { rows: [{ id: String(params[0]), event_payload: clone(entry.payload), workspace_payload: clone(entry.workspace) }] };
     }
     if (/UPDATE message_outbox\s+SET status/.test(text)) {
       const limit = Number(params[0]) || 50;
@@ -241,6 +241,56 @@ test('auto-send-off-only-reports-due-schedules', async () => {
   assert.equal(db.message().status, 'SCHEDULED', 'manual reservation meaning is unchanged');
   assert.equal(db.outboxSize(), 0);
   assert.equal(provider.calls.sendBatch, 0);
+});
+
+test('existing and explicitly manual reservations are never auto-enqueued', async () => {
+  const legacy = campaign({ id: 'legacy' });
+  delete legacy.scheduleMode;
+  delete legacy.autoScheduleIntent;
+  const unmarked = campaign({ id: 'unmarked' });
+  delete unmarked.autoScheduleIntent;
+  const manual = campaign({ id: 'manual', scheduleMode: 'MANUAL' });
+  const automatic = campaign({ id: 'auto', scheduleMode: 'AUTO' });
+  const db = makeMemoryDb({ 'e-1': workspaceWith([legacy, unmarked, manual, automatic]) });
+  const { enqueueDueScheduled } = require('../server/message-maintenance');
+  const result = await enqueueDueScheduled(db, { now: NOW_ISO, eventIds: ['e-1'] });
+  assert.equal(result.enqueued, 1);
+  assert.equal(db.message('e-1', 'legacy').status, 'SCHEDULED');
+  assert.equal(db.message('e-1', 'manual').status, 'SCHEDULED');
+  assert.equal(db.message('e-1', 'unmarked').status, 'SCHEDULED');
+  assert.equal(db.message('e-1', 'auto').status, 'SENDING');
+});
+
+test('automatic reservation with an invalid time is never sent', async () => {
+  for (const scheduled of ['', '2026-10-23T09:00', '2026-02-30T09:00:00+09:00']) {
+    const db = makeMemoryDb({ 'e-1': workspaceWith([campaign({ scheduled })]) });
+    const { enqueueDueScheduled } = require('../server/message-maintenance');
+    const result = await enqueueDueScheduled(db, { now: NOW_ISO, eventIds: ['e-1'] });
+    assert.equal(result.enqueued, 0);
+    assert.deepEqual(result.skippedDue, [{ messageId: 'msg-1', reason: 'INVALID_SCHEDULE' }]);
+    assert.equal(db.message().status, 'SCHEDULED');
+    assert.equal(db.outboxSize(), 0);
+  }
+});
+
+test('delivery result polling rotates past unresolved earlier events', async () => {
+  const entries = {};
+  for (let index = 0; index < 51; index += 1) {
+    const id = `e-${String(index).padStart(2, '0')}`;
+    entries[id] = workspaceWith([campaign({ id: `m-${id}`, status: 'SENDING',
+      deliveries: [{ participantId: 'p1', solapiMessageId: `provider-${id}`, status: 'SENDING' }] })]);
+  }
+  const db = makeMemoryDb(entries);
+  const seen = [];
+  const provider = batchProvider(db, { pollResults: async (ids) => { seen.push(...ids); return { ok: false }; } });
+  const { resolvePendingDeliveries } = require('../server/message-maintenance');
+  const cursor = { afterId: '' };
+  await resolvePendingDeliveries(db, provider, { now: NOW_ISO, limit: 50, cursor });
+  assert.equal(seen.length, 50);
+  assert.ok(!seen.includes('provider-e-50'));
+  await resolvePendingDeliveries(db, provider, { now: NOW_ISO, limit: 50, cursor });
+  assert.ok(seen.includes('provider-e-50'));
+  assert.equal(db.state.writes, 0, 'unresolved provider results never change campaign state');
 });
 
 test('future-schedules-are-not-due', async () => {

@@ -30,7 +30,7 @@ test('message commands reuse one id per command+payload fingerprint', () => {
   assert.match(SOURCE, /beginAction\(/u);
   assert.match(SOURCE, /endAction\(\)/u);
   assert.match(SOURCE, /isAmbiguousStatus/u);
-  assert.match(SOURCE, /status >= 500 \|\| status === 408/u);
+  assert.match(SOURCE, /status >= 500 \|\| \[408, 425, 429\]\.includes\(status\)/u);
   assert.match(SOURCE, /내용을 바꾸지 않고 같은 요청으로 다시 시도하세요/u);
   assert.doesNotMatch(SOURCE, /중복 발송되지 않습니다/u);
   assert.doesNotMatch(SOURCE, /중복 저장되지 않습니다/u);
@@ -58,18 +58,22 @@ test('recipient picker filters by status, searches contact fields, and reports s
   assert.match(SOURCE, /승인 대기·대기 명단/u);
 });
 
-test('template management is disclosed on demand while compose keeps template choice', () => {
-  assert.match(SOURCE, /<details className=\{styles\.templateDetails\}/u);
-  assert.match(SOURCE, /템플릿 관리 열기/u);
-  assert.doesNotMatch(SOURCE, /<details className=\{styles\.templateDetails\}[^>]*open/u);
+test('template management uses its own persistent task while compose keeps template choice', () => {
+  assert.match(SOURCE, /<ConsoleSectionNav mode="tabs" label="메시지 업무"/u);
+  assert.match(SOURCE, /id: "templates-heading", label:/u);
   assert.match(SOURCE, /id="campaign-template"/u);
   assert.match(SOURCE, /headingId="templates-heading"/u);
-  assert.match(CSS, /\.templateDetails/u);
+  assert.match(SOURCE, /className=\{styles\.templateManager\} id="template-details"/u);
+  assert.doesNotMatch(SOURCE, /<details[^>]*id="template-details"/u);
+  assert.match(CSS, /\.templateManager/u);
 });
 
-test('scheduling promises manual execution only, with an honest due action', () => {
-  assert.match(SOURCE, /예약 등록\(수동 실행\)/u);
-  assert.match(SOURCE, /예약 시각 이후 이 화면에서 발송 실행을 눌러야 합니다\. 자동 발송은 지원하지 않습니다\./u);
+test('scheduling names the chosen execution mode and a separate simulated path', () => {
+  assert.match(SOURCE, /예약 실행 방식/u);
+  assert.match(SOURCE, /자동 실행 설정을 켜도 이 예약은 자동 발송되지 않습니다/u);
+  assert.match(SOURCE, /나중에 설정을 켜면 발송될 수 있습니다/u);
+  assert.match(SOURCE, /모의 예약은 시각 이후 직접 실행하며, 실행해도 수신자에게 전달되지 않습니다/u);
+  assert.doesNotMatch(SOURCE, /자동 발송은 지원하지 않습니다/u);
   assert.match(SOURCE, /발송 실행/u);
   assert.doesNotMatch(SOURCE, /예약 시각에 발송을 시도합니다/u);
   assert.match(SOURCE, /id="campaign-submit-warning"/u);

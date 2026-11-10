@@ -13,11 +13,11 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
 
 test("roster selection count names the visible subset and the full selection", () => {
   const list = read("console/events/[id]/participants/ParticipantList.tsx");
-  assert.match(list, /선택한 참가자 \{handoffIds\.length\}명/u);
+  assert.match(list, /선택 \{handoffIds\.length\}명/u);
   assert.match(list, /현재 필터 \$\{effectiveSelection\.length\}명 · 이 페이지 \$\{pageSelectedCount\}명/u);
-  assert.match(list, /승인·그룹 지정은 현재 필터의 선택만, 메시지는 숨김 선택까지 포함합니다/u);
+  assert.match(list, /승인·그룹은 현재 필터만, 메시지는 전체 선택/u);
   assert.doesNotMatch(list, /\}명 선택됨 · 전체 \{handoffIds\.length\}명/u, "the ambiguous 전체 label is gone");
-  assert.match(list, /hiddenSelectedCount \? ` · 숨김 \$\{hiddenSelectedCount\}명\(그룹 지정 제외\)`/u, "hidden selection stays visible and its scope is named");
+  assert.match(list, /hiddenSelectedCount \? ` · 필터 밖 \$\{hiddenSelectedCount\}명`/u, "hidden selection stays visible and its scope is named");
 });
 
 test("import review names immediate confirmation and the untouched consent record", () => {
@@ -43,14 +43,17 @@ test("reward list can isolate connection-only gifts", () => {
 test("program draw box points at the quota draw screen and quiz grading names its rule", () => {
   const programs = read("console/events/[id]/programs/ProgramsWorkspace.tsx");
   assert.match(programs, /쿼터·등급·업체 대상 추첨과 경품 연동은\{" "\}\s*<Link href=\{props\.closeHref\(`\/console\/events\/\$\{encodeURIComponent\(props\.eventId\)\}\/draws`\)\}>추첨<\/Link> 화면에서 관리합니다/u);
-  assert.match(programs, /채점은 앞뒤 공백을 제외한 완전 일치 기준입니다/u);
+  assert.match(programs, /자동 비교는 앞뒤 공백을 제외한 완전 일치 기준입니다/u);
 });
 
-test("attendee home badges are Korean labels, never internal English keys", () => {
+test("attendee home keeps six Korean task labels without exposing category keys", () => {
   const landing = read("event/[slug]/home/AttendeeHomeLanding.tsx");
-  assert.match(landing, /const CATEGORY_LABEL: Record<Menu\["category"\], string> = \{\s*Utility: "필수",\s*info: "안내",\s*Engagement: "참여",\s*\}/su);
-  assert.match(landing, /\{CATEGORY_LABEL\[menu\.category\]\}/u);
-  assert.doesNotMatch(landing, /aria-hidden="true">\{menu\.category\}/u);
+  for (const label of ["모바일 티켓", "공지사항", "럭키드로우 번호", "룰렛 이벤트", "순위 투표", "부스 인증"]) {
+    assert.ok(landing.includes(`label: "${label}"`), label);
+  }
+  assert.doesNotMatch(landing, />\{menu\.category\}</u);
+  assert.match(landing, /\{menu\.label\}/u);
+  assert.match(landing, /NEEDS_TICKET/u);
 });
 
 test("operations names booth load, unpublished map drafts, and can edit a desk", () => {
@@ -65,9 +68,9 @@ test("operations names booth load, unpublished map drafts, and can edit a desk",
   assert.match(ops, /initial \? "데스크 편집" : "데스크 추가"/u);
   // Editing keeps the current open state and requires the direction change
   // confirmation the server enforces.
-  assert.match(ops, /\{ id: initial\.id, name, action, mode, open: initial\.open \}/u);
+  assert.match(ops, /\{ id: initial\.id, name, action, mode, open: initial\.open,\s*expectedDesk: \{ name: initial\.name, action: initial\.action, mode: initial\.mode, open: initial\.open \}/u);
   assert.match(ops, /if \(directionChanged && confirmDirection\) payload\.confirmDirectionChange = true/u);
-  assert.match(ops, /disabled=\{busy \|\| !name\.trim\(\) \|\| \(directionChanged && !confirmDirection\)\}/u);
+  assert.match(ops, /disabled=\{busy \|\| blocked \|\| Boolean\(conflict\) \|\| !name\.trim\(\) \|\| !\["IN", "OUT"\]\.includes\(action\) \|\| !\["desk", "tablet"\]\.includes\(mode\) \|\| \(directionChanged && !confirmDirection\)\}/u);
   assert.match(ops, /입장·퇴장 방향을 바꾸면 기존 기록과 섞일 수 있습니다\. 확인했습니다\./u);
 });
 
@@ -84,14 +87,16 @@ test("settings explains that this product does not process payments", () => {
 
 test("participant home offers self-service booth stamping in the ticket tab", () => {
   const home = read("event/[slug]/home/HomeShell.tsx");
-  assert.match(home, /activeTab === "stamp" && \(/u);
+  assert.match(home, /!enabled\.has\("stamp"\) \? \["stamp" as const\]/u);
+  assert.match(home, /activeTab === "stamp" && !state\.unavailable\.includes\(activeTab\) && \(\s*<StampTab/su);
+  assert.match(home, /state\.unavailable\.includes\(activeTab\)[\s\S]*?현재 이 행사에서 제공하지 않습니다/u);
   assert.match(home, /postGuestCommand\(state\.eventId, "stamp", "booth\.visit", \{ code \}\)/u);
   // A camera app hands over the whole scanned text; the token from ET:BOOTH:
   // on is what the server validates, and the field is unused without a ticket.
   assert.match(home, /const marker = "ET:BOOTH:";/u);
   assert.match(home, /return \(at === -1 \? value : value\.slice\(at\)\)\.trim\(\)/u);
   assert.match(home, /if \(!hasTicket\) return <NeedTicket slug=\{slug\} \/>;/u);
-  assert.match(home, /부스에 붙은 QR을 이 화면에서 바로 찍거나, 코드를 복사해 아래에 붙여넣으세요\./u);
+  assert.match(home, /부스 QR을 이 화면에서 찍거나 코드를 복사해 입력하세요\./u);
   // The participant scans in-app with the shared camera component; the decoded
   // string goes through the same submit as a typed code, and the listener
   // stays outside the render-scoped helpers. The scanner (and its decoder)
@@ -112,7 +117,7 @@ test("participant home offers self-service booth stamping in the ticket tab", ()
   assert.match(scanner, /await import\("jsqr"\)/u);
   assert.match(scanner, /manualHint = "티켓 코드를 직접 입력하세요\."/u);
   const landing = read("event/[slug]/home/AttendeeHomeLanding.tsx");
-  assert.match(landing, /export type HomeMenuKey = "qr" \| "notice" \| "lucky" \| "roulette" \| "vote" \| "stamp";/u);
+  assert.match(landing, /export type HomeMenuKey = "qr" \| "application" \| "notice" \| "lucky" \| "roulette" \| "vote" \| "stamp";/u);
   assert.match(landing, /\{ key: "stamp", label: "부스 인증", category: "Engagement" \}/u);
   assert.match(landing, /\{ key: "vote", label: "순위 투표", category: "Engagement" \}/u);
   const staff = read("staff/StaffEventWork.tsx");

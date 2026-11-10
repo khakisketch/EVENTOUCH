@@ -15,8 +15,9 @@ const list = fs.readFileSync(path.join(ROOT, 'apps/web/app/console/events/[id]/p
 test('roster presets reuse the select setters and stay discoverable', () => {
   assert.match(list, /role="group" aria-label="빠른 상태 보기"/u, 'presets are a labelled group');
   assert.match(list, /aria-pressed=\{presetActive\}/u, 'active preset is announced');
-  assert.match(list, /const presetActive = statusFilter === preset\.status && attendanceFilter === preset\.attendance/u, 'active tracking reads both filters');
-  assert.match(list, /function applyRosterPreset\(preset: RosterPreset\) \{\s*setStatusFilter\(preset\.status\);\s*setAttendanceFilter\(preset\.attendance\);\s*\}/u, 'presets write through the same setters');
+  assert.match(list, /const presetActive = !ticketFilter && statusFilter === preset\.status && attendanceFilter === preset\.attendance/u, 'active tracking includes both original filters and ticket review');
+  assert.match(list, /value=\{ticketFilter \? "custom" : rosterPresets\.find/u, 'mobile preset distinguishes a ticket filter from 전체');
+  assert.match(list, /function applyRosterPreset\(preset: RosterPreset\) \{\s*setStatusFilter\(preset\.status\);\s*setAttendanceFilter\(preset\.attendance\);\s*setTicketFilter\(""\);\s*\}/u, 'presets write through the same setters and clear the ticket-only filter');
   for (const [key, status, attendance] of [['pending', 'PENDING', ''], ['approved', 'APPROVED', ''], ['not-entered', 'APPROVED', 'NOT_ENTERED'], ['all', '', '']]) {
     assert.match(list, new RegExp(`key: "${key}", label: "[^"]+", status: "${status}", attendance: "${attendance}"`, 'u'), `${key} preset keeps its filter pair`);
   }

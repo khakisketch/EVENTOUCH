@@ -25,14 +25,14 @@ test('a focus-only skip leads into the draft before the recipient list', () => {
   const skipAt = SOURCE.indexOf('data-skip-to="campaign-title"');
   assert.ok(skipAt !== -1, 'expected the compose skip');
   const skipWindow = SOURCE.slice(Math.max(0, skipAt - 600), skipAt + 600);
-  assert.match(skipWindow, /getElementById\("campaign-title"\)/u, 'skip resolves the real title field');
-  assert.match(skipWindow, /\.focus\(/u, 'focus lands in the draft');
-  assert.match(skipWindow, /scrollIntoView/u, 'the viewport follows');
+  assert.match(skipWindow, /goComposeStep\(2\)/u, 'skip reveals the content stage');
+  assert.match(SOURCE, /target\?\.focus\(\{ preventScroll: true \}\)/u, 'step navigation transfers focus after rendering');
+  assert.match(SOURCE, /scrollIntoView/u, 'the viewport follows');
   assert.match(skipWindow, /event\.preventDefault\(\)/u, 'no navigation side effects');
   assert.doesNotMatch(skipWindow, /postCommand|message\.create/u, 'the skip never sends');
   // Order: form front, ahead of the jumps and the recipient block, so one
   // Tab from the form start reaches the bypass before the long list.
-  const formAt = SOURCE.indexOf('<form className={uiStyles.formStack} onSubmit={requestCampaignCreate}>');
+  const formAt = SOURCE.indexOf('<ValidatedForm className={uiStyles.formStack} onSubmit=');
   assert.ok(formAt >= 0 && formAt < skipAt, 'skip sits at the form front');
   assert.ok(skipAt < SOURCE.indexOf('recipientTopBar'), 'skip precedes the two visible jumps');
   assert.ok(skipAt < SOURCE.indexOf('id="campaign-recipients"'), 'skip precedes the recipient picker');

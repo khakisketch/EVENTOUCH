@@ -69,7 +69,8 @@ test("content keeps its copy, handlers and in-place confirms", () => {
   assert.match(workspace, /<ConsoleConfirm/);
   assert.match(workspace, /onConfirm=\{\(\) => void deleteNotice\(item\)\}/);
   assert.match(workspace, /onConfirm=\{\(\) => void deleteProgram\(item\)\}/);
-  assert.match(workspace, /onClick=\{\(\) => void toggleNoticePublish\(item\)\}/);
+  assert.match(workspace, /<PublicationReview/);
+  assert.match(workspace, /onConfirm=\{\(\) => void applyPublication\(\)\}/);
   assert.match(workspace, /전광판 출력/);
 });
 
@@ -120,8 +121,8 @@ test("report subgroups separate at s5 with s2 inner rhythm", () => {
   noNewHex(css, "reports.module.css");
   const workspace = read("console/events/[id]/reports/ReportsWorkspace.tsx");
   const groups = workspace.match(/className=\{styles\.subgroup\}/g) || [];
-  assert.equal(groups.length, 4, `four analytic subgroups, found ${groups.length}`);
-  for (const heading of ["등록 그룹", "부스 이용", "프로그램 응답", "만족도"]) {
+  assert.equal(groups.length, 5, `five analytic subgroups, found ${groups.length}`);
+  for (const heading of ["등록 그룹", "부스 이용", "프로그램 응답", "만족도", "행사 사진"]) {
     assert.match(workspace, new RegExp(`<div className=\\{styles\\.subgroup\\}>\\s*<h3>${heading}</h3>`));
   }
 });

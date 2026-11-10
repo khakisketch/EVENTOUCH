@@ -87,14 +87,12 @@ test("content: an accepted refresh invalidates pending output intent, failures k
   // Any successful notice/content write refreshes through load(true), so an
   // accepted canonical snapshot clears the pending output confirm: the
   // notice may have been edited or unpublished-then-republished underneath.
-  const loadBody = source.slice(
-    source.indexOf("async function load(silent = false)"),
-    source.indexOf("useEffect(() => {")
-  );
+  const loadStart = source.indexOf("async function load(silent = false, adoptVenue = false)");
+  const loadBody = source.slice(loadStart, source.indexOf("useEffect(() => {", loadStart));
   const accepted = loadBody.slice(loadBody.indexOf('kind: "ready"'));
   assert.match(accepted, /setNoticeDisplayPendingId\(null\)/u, "accepted workspace clears the output intent");
   assert.match(accepted, /Preserve an independently dirty venue draft/u, "venue preservation stays intact");
-  assert.match(accepted, /venueBaselineRef\.current = venue;/u);
+  assert.match(accepted, /venueBaselineRef\.current = venue\.draft;/u);
   for (const failed of ["콘텐츠 정보를 불러오지 못했습니다.", "행사를 찾을 수 없습니다.", "연결하지 못했습니다. 다시 시도하세요."]) {
     const at = loadBody.indexOf(failed);
     assert.ok(at >= 0, `the failed branch still reports: ${failed}`);
@@ -143,7 +141,7 @@ test("operations: row assignment reuses the generic dialog preselected, never au
   assert.match(source, /initialType=\{assignPreset\?\.type \?\? \(desks\.length \? "DESK" : "BOOTH"\)\}/u);
   // Row actions are visible with the same label but carry a distinctive
   // accessible name so an exact-name query still finds only the generic one.
-  assert.match(source, /aria-label=\{`\$\{desk\.name\}에 스태프 배정`\}/u);
+  assert.match(source, /aria-label=\{`\$\{desk\.name \|\| "이름 확인이 필요한 데스크"\}에 스태프 배정`\}/u);
   assert.match(source, /aria-label=\{`\$\{booth\.name\}에 스태프 배정`\}/u);
   assert.match(source, /setAssignPreset\(\{ type: "DESK", targetId: desk\.id \}\)/u);
   assert.match(source, /setAssignPreset\(\{ type: "BOOTH", targetId: booth\.id \}\)/u);
@@ -151,7 +149,7 @@ test("operations: row assignment reuses the generic dialog preselected, never au
   assert.match(source, /initialTargetId\?: string;/u);
   assert.match(source, /useState\(initialTargetId \?\? ""\)/u);
   assert.match(source, /targetId !== \(initialTargetId \?\? ""\)/u, "the dirty baseline is the preset, not a blank");
-  assert.match(source, /disabled=\{busy \|\| !accountId \|\| !currentTarget\}/u, "staff selection still gates submit");
+  assert.match(source, /disabled=\{busy \|\| blocked \|\| !accountId \|\| !currentTarget\}/u, "staff selection and unresolved writes gate submit");
   assert.doesNotMatch(source, /onSubmit\(\{ accountId, type, targetId: currentTarget \}\)[\s\S]{0,80}auto|autoSubmit/u);
   // Prefill survives: dismissal keeps the preset target so an invite
   // round-trip (team screen and back) reopens on the same desk/booth; only
@@ -181,14 +179,15 @@ test("operations: gates, commands, and touch reuse stay pinned", () => {
   // Every mutation button consults its own section gate; reads never gate.
   assert.ok((source.match(/disabled=\{[^}]*onsiteBlocked[^}]*\}/gu) ?? []).length >= 5, "onsite buttons gate");
   assert.ok((source.match(/disabled=\{[^}]*displayBlocked[^}]*\}/gu) ?? []).length >= 1, "display buttons gate");
-  assert.ok((source.match(/disabled=\{[^}]*boothBlocked[^}]*\}/gu) ?? []).length >= 8, "booth buttons gate");
+  assert.match(source, /const mapControlsBlocked = boothBlocked \|\| mapUploadUncertain \|\| mapUploading/u);
+  assert.ok((source.match(/disabled=\{[^}]*(?:boothBlocked|mapControlsBlocked)[^}]*\}/gu) ?? []).length >= 8, "booth and map buttons gate");
   assert.doesNotMatch(source, /writeBlocked/u, "no single-gate remnant may hide a scope");
   assert.match(source, /현장 운영을 변경할 운영 권한이 없습니다/u, "the onsite staff copy is untouched");
   assert.match(source, /const canWriteOnsite = canWriteEvent\(capabilities, "desk\.save"\)/u);
   assert.match(source, /const canWriteBooth = canWriteEvent\(capabilities, "booth\.save"\)/u);
   assert.match(source, /const canWriteDisplay = canWriteEvent\(capabilities, "display\.set"\)/u);
   assert.match(source, /runCommand\("staff\.assign"/u);
-  assert.equal(source.match(/staff\.assign/g)?.length ?? 0, 1, "the existing assign call stays the only one");
+  assert.equal(source.match(/runCommand\("staff\.assign"/g)?.length ?? 0, 1, "the existing assign call stays the only one");
   assert.match(source, /staff\.unassign/u, "the release path is untouched");
   assert.match(source, /배정된 스태프가 없습니다\. 진행 중으로 전환하려면 입장 데스크에 스태프를 배정하세요\./u);
   assert.match(source, /className="button button-secondary"/u, "row actions reuse the shared button sizing");

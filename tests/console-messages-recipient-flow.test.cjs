@@ -54,12 +54,13 @@ test('zero-recipient block is stated next to the submit button, UI-only', () => 
   assert.match(SOURCE, /발송 대상을 선택하세요\./u);
   assert.match(SOURCE, /id="campaign-submit"/u);
   assert.match(SOURCE, /disabled=\{selectedCount === 0 \|\|/u);
-  assert.match(SOURCE, /aria-describedby=\{campaignError \? "campaign-submit-warning campaign-request-error" : "campaign-submit-warning"\}/u);
+  assert.match(SOURCE, /aria-describedby=\{campaignError && !uncertainCreate \? "campaign-submit-warning campaign-request-error" : "campaign-submit-warning"\}/u);
 });
 
 test('send request command and mock-send wording are preserved', () => {
   assert.match(SOURCE, /message\.create/u);
-  assert.match(SOURCE, /postCommand\("message\.create", pending\.payload, pending\.id\)/u);
+  assert.match(SOURCE, /postCommand\("message\.create-charset-reviewed", pending\.payload, pending\.id\)/u);
+  assert.match(SOURCE, /confirmsCharsetReviewedMessageCreate\(pending\.id, pending\.payload, result\)/u);
   assert.match(SOURCE, /발송 요청/u);
   assert.match(SOURCE, /모의 발송/u);
   assert.match(SOURCE, /실행해도 수신자에게 전달되지 않습니다/u);
@@ -72,7 +73,7 @@ test('API surface is unchanged and styling uses tokens only', () => {
   // Reads go through the shared transport; the event read is the scoped
   // event bootstrap, never the full directory.
   assert.match(SOURCE, /consoleFetch\("\/api\/auth\/me"/u);
-  assert.match(SOURCE, /consoleFetch\(`\/api\/events\/\$\{encodeURIComponent\(eventId\)\}\/bootstrap`/u);
+  assert.match(SOURCE, /consoleFetch\(`\/api\/events\/\$\{encodeURIComponent\(eventId\)\}\/bootstrap\?messageRecipientReview=1`/u);
   assert.doesNotMatch(SOURCE, /consoleFetch\("\/api\/bootstrap"/u, "no full bootstrap read remains");
   assert.match(SOURCE, /message\.retry/u);
   assert.match(SOURCE, /message\.sync/u);

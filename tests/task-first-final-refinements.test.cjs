@@ -41,14 +41,14 @@ function loadActivityLabels() {
 // attendee-experience (domain path) and operations.js (operations path),
 // plus the participants keys for forward compatibility.
 const KNOWN_COMMANDS = [
-  "event.update", "event.features", "event.stage",
+  "event.update", "event.basics.save", "event.features", "event.stage",
   "field.save", "field.move", "field.delete",
   "form.publish", "form.close",
   "group.save", "group.assign",
-  "notice.save", "notice.delete",
-  "program.save", "program.delete",
-  "venue.save", "branding.save",
-  "attendee.page.save", "attendee.page.publish",
+  "notice.save", "notice.publish", "notice.publish-reviewed", "notice.delete",
+  "program.save", "program.publish", "program.publish-reviewed", "program.delete",
+  "venue.save", "venue.publish", "venue.publish-reviewed", "branding.save",
+  "attendee.page.save", "attendee.page.publish", "attendee.page.publish-reviewed",
   "module.save", "module.status", "module.reveal",
   "response.submit",
   "question.submit", "question.manage", "question.like",
@@ -56,7 +56,7 @@ const KNOWN_COMMANDS = [
   "post.submit", "post.moderate",
   "draw.run", "draw.publish", "display.set",
   "template.save",
-  "message.create", "message.cancel", "message.retry", "message.sync",
+  "message.create", "message.create-reviewed", "message.record-provider-check", "message.cancel", "message.retry", "message.sync",
   "payment.simulate", "payment.refund-request", "payment.refund",
   "reward.create", "reward.assign", "reward.fulfill", "reward.cancel",
   "report.create", "report.update", "report.publish", "report.successor",
@@ -73,7 +73,7 @@ const KNOWN_COMMANDS = [
   "reward.lookup", "reward.collect",
   "participant.create", "participant.update", "participant.status",
   "participant.self-update", "participant.cancel",
-  "ticket.reissue", "participant.import",
+  "ticket.reissue", "ticket.reissue-reviewed", "participant.import",
 ];
 
 test("activity labels map every known audit command to Korean", () => {
@@ -95,9 +95,12 @@ test("activity labels keep the pinned core vocabulary", () => {
     ["report.create", "보고서 만들기"],
     ["reward.create", "경품 등록"],
     ["message.create", "메시지 발송 요청"],
+    ["message.create-reviewed", "메시지 발송 요청"],
+    ["message.record-provider-check", "공급사 확인 기록"],
+    ["event.basics.save", "행사 정보 변경"],
     ["template.save", "템플릿 저장"],
-    ["module.save", "참여 프로그램 저장"],
-    ["module.status", "참여 프로그램 상태 변경"],
+    ["module.save", "참여 콘텐츠 저장"],
+    ["module.status", "참여 콘텐츠 상태 변경"],
     ["question.submit", "Q&A 질문"],
     ["question.manage", "Q&A 답변"],
     ["notice.save", "공지 저장"],
@@ -184,7 +187,8 @@ test("operations resources promote an explicit textual state badge", () => {
   const source = read("console/events/[id]/operations/OperationsWorkspace.tsx");
   const css = read("console/events/[id]/operations/operations.module.css");
   assert.match(source, /styles\.resourceStatus/u, "desk and booth rows render a state badge");
-  assert.match(source, /data-tone=\{desk\.open \? "good" : "muted"\}/u);
+  assert.match(source, /data-tone=\{desk\.open && !deskIncomplete \? "good" : "muted"\}/u);
+  assert.match(source, /deskIncomplete \? "가동 설정 · 정보 확인 필요" : "가동 중"/u);
   assert.match(source, /data-tone=\{booth\.status === "OPEN" \? "good" : booth\.status === "WAITING" \? "wait" : "muted"\}/u);
   for (const copy of ["가동 중", "중지됨", "대기", "진행", "종료"]) {
     assert.match(source, new RegExp(copy, "u"), `${copy} copy survives`);
@@ -229,7 +233,7 @@ test("photos upload stacks full-width on phones; import file aligns left", () =>
   assert.match(mobile, /\.uploadArea > :global\(\.button\)\s*\{[^}]*width:\s*100%/su, "upload action goes full-width");
   const wizard = read("console/events/[id]/participants/import/ImportWizard.tsx");
   const fileSlot = wizard.slice(wizard.indexOf('filters={'), wizard.indexOf('actions={', wizard.indexOf('filters={')));
-  assert.match(fileSlot, /<label className=/u, "file picker rides the left filter slot on desktop");
+  assert.match(fileSlot, /<label data-import-dropzone/u, "file picker rides the left filter slot on desktop");
   assert.match(fileSlot, /styles\.filePicker/u, "the picker owns its focusable presentation");
   assert.match(fileSlot, /type="file"/u, "the picker remains a native file input");
   const importCss = read("console/events/[id]/participants/import/import.module.css");

@@ -69,15 +69,15 @@ test('web-console-content-follows-the-server-field-contracts', () => {
 test('web-console-content-keeps-the-publish-flow-visible', () => {
   const workspace = read('app/console/events/[id]/content/ContentWorkspace.tsx');
   // Only published notices and programs reach the public event page.
-  assert.match(workspace, /게시한 항목만 참가자에게 보입니다/);
+  assert.match(workspace, /게시 전까지 현재 내용이 유지됩니다/);
   assert.match(workspace, /게시 중/);
   assert.match(workspace, /비공개/);
-  assert.match(workspace, /비게시/);
-  assert.match(workspace, /참가자 화면에 보입니다/);
+  assert.match(workspace, /게시 내리기/);
+  assert.match(workspace, /게시 검토 후 참가자 화면에 반영/);
   // Notices pin; programs read in date+start order like attendees see.
   assert.match(workspace, /고정/);
   assert.match(workspace, /localeCompare\(right\.date \+ right\.start\)/);
-  assert.match(workspace, /날짜·시작 시간 순으로 정렬/);
+  assert.match(workspace, /날짜·시작 시간 순으로 보입니다/);
   // Venue needs its feature flag first; the guidance points at settings.
   assert.match(workspace, /장소 안내 기능이 꺼져 있습니다/);
   assert.match(workspace, /기능을 먼저 켜세요/);
@@ -97,7 +97,7 @@ test('web-console-content-gates-on-the-same-management-membership', () => {
   assert.match(workspace, /canWriteEvent\(capabilities, "program\.save"\)/);
   assert.match(workspace, /콘텐츠를 관리할 운영 권한이 없습니다/);
   assert.match(workspace, /공지·장소 쓰기 권한이 없습니다/);
-  assert.match(workspace, /프로그램 일정 변경은 참여 프로그램 쓰기 권한이 필요합니다/);
+  assert.match(workspace, /프로그램 일정 변경은 참여 콘텐츠 쓰기 권한이 필요합니다/);
 });
 
 test('web-console-content-dialogs-are-modal-and-wire-field-errors', () => {
@@ -113,7 +113,7 @@ test('web-console-content-dialogs-are-modal-and-wire-field-errors', () => {
   assert.match(workspace, /if \(canCloseProgramDialog\(\)\) setProgramDialogOpen\(false\)/);
   const dialog = read('app/console/console-ui/ConsoleDialog.tsx');
   assert.match(dialog, /role="dialog"/);
-  assert.match(dialog, /aria-modal="true"/);
+  assert.match(dialog, /aria-modal=\{docked \? undefined : true\}/);
   assert.match(dialog, /previouslyFocused/);
   assert.match(dialog, /event\.key === "Escape"/);
   assert.match(dialog, /event\.key !== "Tab"/);
@@ -121,7 +121,9 @@ test('web-console-content-dialogs-are-modal-and-wire-field-errors', () => {
   assert.match(workspace, /공지 작성/);
   assert.match(workspace, /일정 추가/);
   assert.match(workspace, /상단 고정/);
-  assert.match(workspace, /게시함/);
+  assert.doesNotMatch(workspace, /게시함 \(참가자 화면에 보임\)/);
+  assert.match(workspace, /초안 저장/);
+  assert.match(workspace, /<PublicationReview/);
   assert.match(workspace, /content-notice-title-error/);
   assert.match(workspace, /content-program-title-error/);
   assert.match(workspace, /role="alert"/);
@@ -140,9 +142,9 @@ test('web-console-shell-groups-content-before-field-programs-and-settings', () =
   assert.match(shell, /showOperatorNavBadges/);
   assert.match(shell, /canManageEvidencePhotos/);
   const navigation = read('app/console/console-navigation.ts');
-  assert.match(navigation, /content: \{ label: "콘텐츠"/);
+  assert.match(navigation, /content: \{ label: "공지·안내"/);
   assert.match(navigation, /return `\$\{base\}\/content`/);
   // Preparation hub order: settings opens the setup sequence, content feeds
   // programs, so content sits before programs inside one hub.
-  assert.match(navigation, /pageIds: \["settings", "attendeePage", "content", "programs"\]/);
+  assert.match(navigation, /pageIds: \["attendeePage", "content", "programs", "settings"\]/);
 });

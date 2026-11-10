@@ -17,6 +17,7 @@ const settingsCss = read(
   "apps/web/app/console/events/[id]/settings/settings.module.css"
 );
 const staff = read("apps/web/app/staff/StaffEventWork.tsx");
+const staffBootstrap = read("apps/web/app/staff/staff-bootstrap.ts");
 const staffCss = read("apps/web/app/staff/staff-event-work.module.css");
 
 test("settings names the selected tab with four real tabs", () => {
@@ -70,7 +71,7 @@ test("staff success folds the input and hands off to the next participant", () =
   assert.match(staff, /aria-label="스캔 결과"/u);
   assert.match(
     staff,
-    /<button type="button" ref=\{nextParticipantRef\} className="button button-primary" disabled=\{writeLocked\} onClick=\{prepareNextParticipant\}>\s*다음 참가자/u
+    /<button type="button" ref=\{nextParticipantRef\} className="button button-primary" disabled=\{writeLocked \|\| Boolean\(directionReview\) \|\| confirmingDirection\} onClick=\{prepareNextParticipant\}>\s*다음 참가자/u
   );
   assert.match(staff, /ref=\{nextParticipantRef\}/u);
   assert.match(staff, /const writeLocked = correctionLocked \|\| orgChanged/u);
@@ -118,14 +119,14 @@ test("existing event command paths remain fixed; approved organization REST path
   const expected = {
     // Settings reads the scoped event bootstrap plus the directory client
     // list through the shared transport; writes keep the command endpoint.
-    settings: ["/api/auth/me", "/api/events/:param/bootstrap", "/api/console/directory", "/api/events/:param/commands"],
+    settings: ["/api/auth/me", "/api/events/:param/bootstrap", "/api/console/directory", "/api/events/:param/commands", "/api/events/:param/command-receipts/:param"],
     // Staff keeps the full bootstrap read (assignment projection) through
     // the shared operator transport; writes keep the command endpoint.
     staff: ["/api/bootstrap", "/api/events/:param/commands"],
   };
   for (const [name, source] of [
     ["settings", settings],
-    ["staff", staff],
+    ["staff", `${staff}\n${staffBootstrap}`],
   ]) {
     const fetched = [
       ...source.matchAll(/(?:consoleFetch|operatorFetch|fetch)\(\s*[`"']([^`"']+)["`']/ug),

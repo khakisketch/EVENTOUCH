@@ -38,6 +38,17 @@ test('manual due reservations are attention work, never future or malformed date
   assert.equal(attention.messageNeedsAttention({ status: 'NEEDS_CONNECTION' }, now), true);
 });
 
+test('message attention covers uncertain outcomes, invalid schedules and reviewed blockers without treating unknown dates as overdue', () => {
+  const now = Date.parse('2026-10-24T12:00:00Z');
+  assert.equal(attention.isOverdueManualMessage({ status: 'SCHEDULED', scheduled: '2020-01-01T09:00' }, now), false);
+  assert.equal(attention.messageNeedsAttention({ status: 'SCHEDULED', scheduled: '2020-01-01T09:00' }, now), true);
+  assert.equal(attention.messageNeedsAttention({ status: 'SENDING', providerSubmission: { id: 'synthetic' } }, now), true);
+  assert.equal(attention.messageNeedsAttention({ status: 'SENDING', deliveries: [{ resultMatchUnconfirmed: true }] }, now), true);
+  assert.equal(attention.messageNeedsAttention({ status: 'SCHEDULED', scheduled: '2999-01-01T00:00:00Z' }, now, true), true);
+  assert.equal(attention.messageNeedsAttention({ status: 'SENT' }, now), false);
+  assert.equal(attention.messageNeedsAttention({ status: 'SCHEDULED', scheduled: '2999-01-01T00:00:00Z' }, now), false);
+});
+
 test('same-tab concurrent reads share transport but each gets an independently consumable body', async () => {
   let calls = 0, resolve;
   const api = moduleAt('apps/web/lib/console-api.ts', {

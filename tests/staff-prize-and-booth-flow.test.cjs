@@ -29,10 +29,12 @@ test('self booth guidance points at the in-home camera scan', () => {
 test('prize lookup replays the last scanned ticket with one touch', () => {
   const work = read(WORK);
   assert.match(work, /const \[lastScannedTicket, setLastScannedTicket\] = useState\(""\)/u, 'last scan is remembered in client memory');
-  assert.match(work, /if \(isDesk\) setLastScannedTicket\(code\.trim\(\)\)/u, 'a successful desk scan records its ticket');
+  assert.match(work, /const requestTicket = "ticket" in pending\.payload \? pending\.payload\.ticket : ""/u, 'a manual-person request has no fabricated ticket');
+  assert.match(work, /if \(isDesk\) setLastScannedTicket\(recordStatus \? "" : requestTicket\)/u, 'current ticket scans are reusable; historical and manual results clear the shortcut');
   assert.match(work, /마지막 스캔 티켓으로 조회/u, 'one-touch lookup exists beside the manual form');
   assert.match(work, /lookupRewardsByTicket\(event, lastScannedTicket\)/u, 'one touch replays through the existing lookup path');
-  assert.match(work, /postRewardCommand\("reward\.lookup", \{ ticket: lookupTicket \}\)/u, 'server contract unchanged: reward.lookup by ticket');
+  assert.match(work, /loadRewards\(\{ ticket: lookupTicket \}\)/u, 'ticket lookup requests the shared fresh reward read');
+  assert.match(work, /postRewardCommand\("reward\.lookup", payload\)/u, 'server contract unchanged: reward.lookup');
 });
 
 test('scan input keeps a role-named identity', () => {
@@ -46,7 +48,8 @@ test('scan input keeps a role-named identity', () => {
 });
 
 test('nametag print flag lifts on afterprint, not only on close', () => {
-  const work = read(WORK);
-  assert.match(work, /window\.addEventListener\("afterprint", liftPrintFlag\)/u, 'cancel/complete both lift the flag');
-  assert.match(work, /document\.body\.classList\.remove\("nametag-printing"\)/u);
+  const print = read('app/ui/NameTagPrint.tsx');
+  assert.match(read(WORK), /<NameTagPrint /u);
+  assert.match(print, /window\.addEventListener\("afterprint", finishPrint\)/u, 'cancel/complete both lift the flag');
+  assert.match(print, /document\.body\.classList\.remove\("nametag-printing"\)/u);
 });

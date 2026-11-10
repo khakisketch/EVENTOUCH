@@ -226,10 +226,10 @@ test('shared section nav wraps to fully reachable rows on mobile', () => {
   // (operations keeps its own move guide); SR naming stays on the nav's
   // aria-label alone via aria-hidden, so nothing is announced twice.
   const content = read('app/console/events/[id]/content/ContentWorkspace.tsx');
-  assert.match(content, /navIndexLabel[^>]*aria-hidden="true">콘텐츠 목차/u);
+  assert.match(content, /navIndexLabel[^>]*aria-hidden="true">콘텐츠 작업/u);
   assert.match(content, /label="콘텐츠 구역"/u);
   const reports = read('app/console/events/[id]/reports/ReportsWorkspace.tsx');
-  assert.match(reports, /navIndexLabel[^>]*aria-hidden="true">결과 목차/u);
+  assert.match(reports, /navIndexLabel[^>]*aria-hidden="true">보고서 작업/u);
   assert.match(reports, /label="결과 보고서 구역"/u);
   // Draws and the attendee page editor get the same quiet index signal in
   // their own scope words (no new buttons, no behavior change): the shared
@@ -242,7 +242,7 @@ test('shared section nav wraps to fully reachable rows on mobile', () => {
   assert.match(theme, /label="참가자 페이지 구역"/u);
   // API and semantics are untouched: native anchors, list markup, label.
   const nav = read('app/console/console-ui/ConsoleSectionNav.tsx');
-  assert.match(nav, /<nav className=\{styles\.sectionNav\} aria-label=\{label \?\? "섹션 바로가기"\}>/u);
+  assert.match(nav, /<nav className=\{`\$\{styles\.sectionNav\} \$\{styles\.anchorNav\}`\} aria-label=\{label \?\? "섹션 바로가기"\}>/u);
   assert.match(nav, /<a\s+className=\{styles\.sectionNavLink\}\s+href=\{`#\$\{item\.id\}`\}/su);
 });
 

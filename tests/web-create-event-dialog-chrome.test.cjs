@@ -56,8 +56,8 @@ test('CreateEventDialog moves long-form actions to the sticky footer with exact 
   assert.match(dialog, /JSON\.stringify\(\[effectiveDuplicate\?\.id \?\? null, payload\]\)/u);
   assert.match(dialog, /const eventFormId = "create-event-form"/u);
   assert.match(dialog, /const clientFormId = "create-client-form"/u);
-  assert.match(dialog, /<form id=\{clientFormId\} onSubmit=\{saveNewClient\}/u);
-  assert.match(dialog, /<form id=\{eventFormId\} onSubmit=\{onSubmit\}/u);
+  assert.match(dialog, /<ValidatedForm id=\{clientFormId\} onSubmit=\{saveNewClient\}/u);
+  assert.match(dialog, /<ValidatedForm id=\{eventFormId\} onSubmit=\{onSubmit\}/u);
   assert.match(dialog, /<button type="submit" form=\{clientFormId\}/u, 'footer submit stays wired to its form');
   assert.match(dialog, /<button type="submit" form=\{eventFormId\}/u);
   assert.match(dialog, /onClick=\{cancelClientCreate\}/u);
@@ -71,7 +71,7 @@ test('CreateEventDialog moves long-form actions to the sticky footer with exact 
   // Guards, receipts, focus and copy stay untouched.
   assert.match(dialog, /<ConsoleDialog/u);
   assert.match(dialog, /canClose=\{canClose\}/u);
-  assert.match(dialog, /busy=\{submitting\}/u);
+  assert.match(dialog, /busy=\{submitting \|\| clientSaving \|\| checkingResult\}/u, 'all writes and result checks keep the dialog busy');
   assert.match(dialog, /initialFocusRef=\{nameRef\}/u);
   assert.match(dialog, /submitGateRef\.current/u);
   assert.match(dialog, /clientWriteRef\.current/u);
@@ -160,7 +160,10 @@ test('event-card-a2 audit proves sticky chrome in an isolated browser without we
   assert.match(audit, /delayed duplicate still saves exactly one event/u);
   assert.match(audit, /lost response retried with the identical command id/u);
   assert.match(audit, /same-id retry replays exactly one record/u);
-  assert.match(audit, /mode switch on an unresolved receipt/u);
+  assert.match(audit, /unresolved mode radios are disabled/u);
+  assert.match(audit, /unresolved source select is disabled/u);
+  assert.match(audit, /unresolved original name is read-only/u);
+  assert.match(audit, /status-only check is available/u);
   assert.match(audit, /console-390-final\.png/u, 'existing 390 capture kept');
   assert.match(audit, /no page errors through the audit/u);
 });

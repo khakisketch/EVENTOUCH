@@ -319,6 +319,37 @@ test('parallel-signups-for-the-final-seat-commit-exactly-one-participant', async
   assert.equal(stored.rows[0].payload.participants.length, 1);
 });
 
+test('approval rejects a stale selection atomically and replays a committed request', async () => {
+  const eventId = `approval-guard-${crypto.randomUUID()}`;
+  await insertEvent(harness.database, { orgId: LEGACY_ORG, id: eventId, slug: eventId,
+    payload: eventPayload(eventId, eventId), workspace: workspace({ approvalRequired: true }) });
+  const first = await publicSignup(eventId, signupBody('승인 대기 하나', '01074440001'));
+  const second = await publicSignup(eventId, signupBody('승인 대기 둘', '01074440002'));
+  assert.equal(first.status, 201);
+  assert.equal(second.status, 201);
+  const ids = [first.json.participant.id, second.json.participant.id];
+  assert.equal((await operatorCommand(eventId, 'participant.status', { id: ids[0], status: 'CANCELLED' }, cookies.agency)).status, 200);
+  const stale = await operatorCommand(eventId, 'participant.status', {
+    ids, status: 'APPROVED', expectedStatus: 'PENDING',
+  }, cookies.agency);
+  assert.equal(stale.status, 409);
+  assert.equal(stale.json.code, 'PARTICIPANT_STATUS_CHANGED');
+  const read = async () => (await harness.database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [eventId])).rows[0].payload;
+  let state = await read();
+  assert.deepEqual(state.participants.map(person => person.status), ['CANCELLED', 'PENDING']);
+  assert.equal(state.participants[0].revoked, true);
+  const approvalId = commandId();
+  const selected = { id: ids[1], status: 'APPROVED', expectedStatus: 'PENDING' };
+  assert.equal((await operatorCommand(eventId, 'participant.status', selected, cookies.agency, approvalId)).status, 200);
+  assert.equal((await operatorCommand(eventId, 'participant.status', { id: ids[1], status: 'CANCELLED' }, cookies.agency)).status, 200);
+  assert.equal((await operatorCommand(eventId, 'participant.status', selected, cookies.agency, approvalId)).status, 200);
+  state = await read();
+  assert.deepEqual(state.participants.map(person => person.status), ['CANCELLED', 'CANCELLED']);
+  assert.equal((await operatorCommand(eventId, 'participant.status', {
+    id: ids[0], status: 'APPROVED', expectedStatus: 'UNKNOWN',
+  }, cookies.agency)).status, 400);
+});
+
 test('replayed-public-command-id-returns-the-original-signup-without-a-second-record', async () => {
   const id = commandId();
   const first = await publicSignup(slugs.replay, signupBody('재시도 참가자', '01000000005', { commandId: id }));
@@ -761,6 +792,46 @@ test('participant-cancellation-preserves-v9-pending-payment-projection', async (
   assert.equal(payment.status, 'PENDING');
 });
 
+test('parallel ticket confirmations can reissue a participant only once for the reviewed revision', async () => {
+  const created = await operatorCommand(ids.operators, 'participant.create', {
+    name: '동시 재발급 참가자', phone: '01012340024', meal: '일반식',
+  }, cookies.manager);
+  assert.equal(created.status, 201);
+  const payload = { id: created.json.participant.id, expectedTicketRevision: 0 };
+  const keys = [commandId(), commandId()];
+  const actors = [cookies.manager, cookies.agency];
+  const results = await Promise.all(keys.map((key, index) => operatorCommand(ids.operators, 'ticket.reissue', payload, actors[index], key)));
+  assert.deepEqual(results.map(result => result.status).sort(), [200, 409]);
+  const winner = results.findIndex(result => result.status === 200);
+  assert.equal(results[1 - winner].json.code, 'TICKET_REVISION_CHANGED');
+  assert.equal(results[winner].json.ticketRevision, 1);
+  const replay = await operatorCommand(ids.operators, 'ticket.reissue', payload, actors[winner], keys[winner]);
+  assert.equal(replay.status, 200);
+  assert.ok(replay.json.participant.ticket === results[winner].json.participant.ticket);
+  const active = await requestJson(harness.baseUrl, `/api/public/events/${slugs.operators}/ticket`, { bearer: replay.json.participant.ticket });
+  assert.equal(active.status, 200);
+  const invalid = await operatorCommand(ids.operators, 'ticket.reissue', {
+    ...payload, expectedTicketRevision: '1',
+  }, cookies.manager);
+  assert.equal(invalid.status, 400);
+  const latest = { ...payload, expectedTicketRevision: 1 };
+  assert.equal((await operatorCommand(ids.operators, 'participant.status', {
+    ids: [payload.id], status: 'CANCELLED',
+  }, cookies.manager)).status, 200);
+  const cancelled = await operatorCommand(ids.operators, 'ticket.reissue', latest, cookies.manager);
+  assert.equal(cancelled.status, 409);
+  assert.equal(cancelled.json.code, 'TICKET_REVISION_CHANGED');
+  assert.equal((await operatorCommand(ids.operators, 'participant.status', {
+    ids: [payload.id], status: 'APPROVED',
+  }, cookies.manager)).status, 200);
+  const reinstated = await operatorCommand(ids.operators, 'ticket.reissue', latest, cookies.manager);
+  assert.equal(reinstated.status, 409);
+  assert.equal(reinstated.json.code, 'TICKET_REVISION_CHANGED');
+  const reviewed = await operatorCommand(ids.operators, 'ticket.reissue', { ...payload, expectedTicketRevision: 2 }, cookies.manager);
+  assert.equal(reviewed.status, 200);
+  assert.equal(reviewed.json.ticketRevision, 3);
+});
+
 test('replaying-an-old-ticket-reissue-does-not-return-a-later-ticket', async () => {
   const created = await operatorCommand(ids.operators, 'participant.create', {
     name: '재발급 재시도 참가자', phone: '01012340023', meal: '일반식',
@@ -770,9 +841,10 @@ test('replaying-an-old-ticket-reissue-does-not-return-a-later-ticket', async () 
   const firstReissue = await operatorCommand(ids.operators, 'ticket.reissue', {
     id: created.json.participant.id,
   }, cookies.manager, firstReissueId);
+  const laterReissueId = commandId();
   const laterReissue = await operatorCommand(ids.operators, 'ticket.reissue', {
     id: created.json.participant.id,
-  }, cookies.manager);
+  }, cookies.manager, laterReissueId);
   const replay = await operatorCommand(ids.operators, 'ticket.reissue', {
     id: created.json.participant.id,
   }, cookies.manager, firstReissueId);
@@ -780,6 +852,16 @@ test('replaying-an-old-ticket-reissue-does-not-return-a-later-ticket', async () 
   assert.equal(firstReissue.status, 200);
   assert.equal(laterReissue.status, 200);
   assert.equal(replay.status, 409);
+  assert.equal(replay.json.code, 'TICKET_RESULT_SUPERSEDED');
+  assert.equal((await operatorCommand(ids.operators, 'participant.status', {
+    ids: [created.json.participant.id], status: 'CANCELLED',
+  }, cookies.manager)).status, 200);
+  const cancelledReplay = await operatorCommand(ids.operators, 'ticket.reissue', {
+    id: created.json.participant.id,
+  }, cookies.manager, laterReissueId);
+  assert.equal(cancelledReplay.status, 409);
+  assert.equal(cancelledReplay.json.code, 'TICKET_RESULT_SUPERSEDED');
+  assert.equal(cancelledReplay.json.participant, undefined);
 });
 
 test('operator-ticket-reissue-invalidates-the-old-token-and-expired-tickets-are-rejected', async () => {
@@ -797,10 +879,17 @@ test('operator-ticket-reissue-invalidates-the-old-token-and-expired-tickets-are-
   const expiredCommand = await attendeeCommand(ids.expired, 'participant.cancel', {}, expiredTicket);
   assert.equal(expiredCommand.status, 404);
 
-  const reissued = await operatorCommand(ids.operators, 'ticket.reissue', {
-    id: created.json.participant.id,
-  }, cookies.manager);
+  const originalPublicUrl = process.env.EVENTOUCH_PUBLIC_URL;
+  process.env.EVENTOUCH_PUBLIC_URL = 'https://tickets.example.test/entry/';
+  let reissued;
+  try {
+    reissued = await operatorCommand(ids.operators, 'ticket.reissue', { id: created.json.participant.id }, cookies.manager);
+  } finally {
+    if (originalPublicUrl === undefined) delete process.env.EVENTOUCH_PUBLIC_URL;
+    else process.env.EVENTOUCH_PUBLIC_URL = originalPublicUrl;
+  }
   assert.equal(reissued.status, 200);
+  assert.equal(reissued.json.ticketPublicBase, 'https://tickets.example.test/entry');
   assert.notEqual(reissued.json.participant.ticket, created.json.participant.ticket);
 
   const oldTicket = await requestJson(

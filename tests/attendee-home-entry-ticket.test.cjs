@@ -17,9 +17,11 @@ const ticketView = read("apps/web/app/event/[slug]/ticket/TicketView.tsx");
 
 test("the landing is the simple entry list and prints no QR", () => {
   assert.match(landing, /styles\.menuBoard/u);
-  assert.match(landing, /HOME_MENUS\.map/u);
-  // The home keeps the simple fixed menu: the ticket need reads on the
-  // tile that needs it, never as a notice line above the entries.
+  // Preview and attendee use the same feature guard; legacy default order
+  // and the mandatory ticket are exercised by web:home-menus:audit.
+  assert.match(landing, /!unavailable\.includes\(menu\.key\)/u);
+  assert.match(landing, /const ordered = \["qr", \.\.\.menuSettings\.order\]/u);
+  // Ticket need reads on the corresponding entry, not in a detached banner.
   assert.match(landing, /menuNeedTicket/u);
   assert.match(landing, /티켓 필요/u);
   // No QR is drawn on the landing itself: an attendee without a ticket must
@@ -31,17 +33,15 @@ test("the landing is the simple entry list and prints no QR", () => {
 
 test("the ticket stays one tap away in the first entry", () => {
   assert.match(landing, /\{ key: "qr", label: "모바일 티켓", category: "Utility" \}/u);
-  assert.match(landing, /\{ key: "qr"/u);
-  assert.match(shell, /activeTab === "qr" && <TicketView slug=\{slug\} \/>/u);
+  assert.match(landing, /HOME_MENUS: Menu\[\] = \[\s*\{ key: "qr"/u);
+  assert.match(landing, /onOpen=\{onOpen \? \(\) => onOpen\(menu\.key\)/u);
+  assert.match(shell, /onOpen=\{openTab\}/u);
+  assert.match(shell, /activeTab === "qr" && <TicketView slug=\{slug\} initialTicket=\{state\.ticketToken\} \/>/u);
   // The ticket itself is unchanged: the desk scans the QR on that screen.
   assert.match(ticketView, /<QRCode value=\{state\.ticket\} size=\{220\} \/>/u);
 });
 
-test("the landing keeps one screen: ticket need reads on the tile itself", () => {
-  // The customer decided the home stays a simple six-entry list, and the
-  // web audit keeps the whole home inside the first screen on a phone. A
-  // notice line above the entries pushed the tiles below the fold, so the
-  // ticket need reads on the tile that needs it instead.
+test("ticket need reads on the entry itself while additional paths may scroll", () => {
   assert.match(landing, /hasTicket: boolean/u);
   assert.match(landing, /menuNeedTicket/u);
   assert.match(landing, /티켓 필요/u);
@@ -51,8 +51,10 @@ test("the landing keeps one screen: ticket need reads on the tile itself", () =>
 });
 
 test("an attendee without a ticket is told how to get one", () => {
-  assert.match(shell, /티켓이 확인되지 않습니다\. 신청 후 이용하세요\./u);
-  assert.match(shell, /참가 신청하기/u);
+  assert.match(shell, /이 탭에서 티켓이 확인되지 않습니다\./u);
+  assert.match(shell, /신청을 완료한 브라우저 탭/u);
+  assert.match(shell, /행사 안내 확인/u);
+  assert.match(shell, /처음 신청하기/u);
   assert.match(shell, /\/register/u);
 });
 
@@ -60,6 +62,13 @@ test("the ticket bearer still lives in tab memory only", () => {
   // The token is read from tab memory and kept in the shell's state; it is
   // never written to persistent storage.
   assert.match(shell, /window\.sessionStorage\.getItem\(STORAGE_PREFIX \+ slug\)/u);
-  assert.match(shell, /ticketToken: ticket/u);
+  // A rejected link and an explicit session selection must take precedence
+  // over the old tab bearer; the normal path retains the same order.
+  assert.match(shell, /const ticket = rejected \? REJECTED_TICKET_BEARER : explicitSession \? "" : fromLink \|\| getAllowedTicketForTab\(slug\) \|\| ticketRef\.current \|\| \(storageUsable \? readStoredTicket\(slug\) : ""\)/u);
+  assert.match(shell, /const resolvedTicket = ticket \|\| text\(ticketData\.participant\.ticket\)/u);
+  assert.match(shell, /ticketToken: resolvedTicket/u);
+  assert.match(shell, /ticketRef\.current = resolvedTicket/u);
+  assert.match(shell, /ticketSlugRef\.current !== slug/u);
   assert.doesNotMatch(shell, /localStorage/u);
+  assert.doesNotMatch(ticketView, /localStorage\./u);
 });

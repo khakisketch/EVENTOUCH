@@ -100,12 +100,29 @@ test('mobile-audit-keeps-72-checks-with-honest-target-exceptions', () => {
 test('web-audit-keeps-the-attendee-home-geometry-outcomes', () => {
   const source = read('scripts/web-audit.cjs');
   for (const marker of [
-    'attendeeHomeNavigation', 'without scrolling', 'outside its touch surface',
-    'two-column menu', 'separate, visible regions', "keyboard.press('Enter')",
+    'attendeeHomeNavigation', 'clipped or overlaps',
+    'full-width ticket followed by two-column task entries', 'separate, visible regions', "keyboard.press('Enter')",
     'browser back did not restore', 'missing browser navigation state',
+    'ticket must be visible initially and entries must not overflow horizontally',
+    'the ticket entry must be reachable in the first viewport',
   ]) {
     assert.ok(source.includes(marker), `web-audit keeps: ${marker}`);
   }
+  assert.match(source, /boxes\.some\(\(box\) => box\.width < 44 \|\| box\.height < 44\)/);
+  const names = source.match(/const names = \[([\s\S]*?)\];/)?.[1];
+  assert.ok(names, 'the audit lists the participant destinations');
+  for (const label of ['모바일 티켓', '공지사항', '럭키드로우 번호', '룰렛 이벤트', '순위 투표', '부스 인증']) {
+    assert.ok(names.includes(label), `the audit reaches ${label}`);
+  }
+  assert.match(source, /for \(let index = 0; index < menu\.length; index \+= 1\)/);
+  assert.match(source, /scrollWidth > box\.innerWidth \+ 1/);
+  assert.match(source, /\[aria-label\*="입장 및 퇴장용 QR"\]/);
+  assert.match(source, /'draw', 'poll', 'stamp'/, 'six-entry audit explicitly enables every optional feature');
+  const visibility = read('scripts/web-attendee-visibility-audit.cjs');
+  assert.doesNotMatch(visibility, /EVENTOUCH_VISIBILITY_BASELINE/, 'visibility assertions cannot be bypassed by a baseline switch');
+  assert.match(visibility, /for \(const view of \['lucky', 'roulette', 'vote', 'stamp'\]\)/);
+  assert.match(visibility, /현재 이 행사에서 제공하지 않습니다/);
+  assert.match(visibility, /enabled \? 1 : 0/);
 });
 
 test('skeleton-and-setup-tests-no-longer-pin-the-retired-shell', () => {

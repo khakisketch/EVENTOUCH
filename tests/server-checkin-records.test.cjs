@@ -23,6 +23,7 @@ const {
 } = require('./helpers/postgres-api-server.cjs');
 const { createDatabase } = require('../server/db');
 const { runMigrations } = require('../server/migrate');
+const { createOperationsCommands } = require('../server/commands/operations');
 
 const test = databaseUrl
   ? nodeTest
@@ -204,6 +205,102 @@ test('concurrent-scans-leave-exactly-one-record-row', async () => {
   ]);
   assert.deepEqual(results.map((result) => result.status).sort(), [200, 409]);
   assert.equal((await readRecords(event.id)).length, 1);
+});
+
+test('a desk receipt proves only the original ticket, desk, assignment and direction', async () => {
+  const event = await createFixture();
+  const person = makeParticipant(event.id, '첫 참가자');
+  const other = makeParticipant(event.id, '다른 참가자');
+  const state = await readWorkspace(event.id);
+  state.participants.push(person, other);
+  await writeWorkspace(event.id, state);
+  const id = commandId();
+  const payload = { deskId: event.deskIn, ticket: person.ticket, expectedAction: 'IN' };
+  const submit = (input, assignmentId = event.assignmentId) => requestJson(harness.baseUrl, `/api/events/${event.id}/commands`, {
+    method: 'POST', cookie: cookies.staff, body: { commandId: id, command: 'check.scan', assignmentId, payload: input },
+  });
+  const entered = await submit(payload);
+  assert.equal(entered.status, 200);
+  const otherAssignment = `assignment-${crypto.randomUUID()}`;
+  await insertAssignment(harness.database, {
+    id: otherAssignment, accountId: accountIds.staff, eventId: event.id, type: 'DESK', targetId: event.deskOut,
+  });
+  for (const [input, assignmentId] of [
+    [{ ...payload, ticket: other.ticket }],
+    [{ ...payload, deskId: event.deskOut }, otherAssignment],
+    [{ ...payload, expectedAction: 'OUT' }],
+  ]) {
+    const mismatched = await submit(input, assignmentId);
+    assert.equal(mismatched.status, 409);
+    assert.equal(mismatched.json.name, undefined);
+  }
+  const operations = createOperationsCommands(harness.database);
+  await assert.rejects(operations.execute({
+    eventId: event.id, commandId: id, command: 'check.scan', payload, assignmentId: otherAssignment,
+    account: { id: accountIds.staff, organizationId: LEGACY_ORG, sessionRevision: 0, sessionOrgVersion: 0 },
+  }), { status: 409 });
+  assert.equal(entered.json.checkId, id);
+  const saved = await readWorkspace(event.id);
+  saved.participants[0].ticket = makeParticipant(event.id, '합성').ticket;
+  await writeWorkspace(event.id, saved);
+  const replay = await submit(payload);
+  assert.equal(replay.status, 200);
+  assert.deepEqual(replay.json, entered.json);
+  assert.equal((await readRecords(event.id)).length, 1);
+});
+
+test('a legacy desk receipt can replay a matching ticket without replaying another person', async () => {
+  const event = await createFixture();
+  const person = makeParticipant(event.id, '이전 참가자');
+  const other = makeParticipant(event.id, '다른 참가자');
+  const state = await readWorkspace(event.id);
+  state.participants.push(person, other);
+  await writeWorkspace(event.id, state);
+  const id = commandId();
+  assert.equal((await scan(event, person, { id })).status, 200);
+  await harness.database.query(
+    "UPDATE command_receipts SET result = (result - 'scanRequest') #- '{response,checkId}' WHERE command_id = $1", [id]
+  );
+  const wrong = await scan(event, other, { id });
+  assert.equal(wrong.status, 409);
+  const replay = await scan(event, person, { id });
+  assert.equal(replay.status, 200);
+  assert.equal(replay.json.checkId, id);
+  assert.equal(replay.json.id, person.id);
+  assert.equal((await readRecords(event.id)).length, 1);
+});
+
+test('a replay reports an earlier entry as history after a newer exit or correction', async () => {
+  const event = await createFixture();
+  const person = makeParticipant(event.id, '입퇴장 기록 대조');
+  const state = await readWorkspace(event.id);
+  state.participants.push(person);
+  await writeWorkspace(event.id, state);
+  const id = commandId();
+  const entered = await scan(event, person, { id });
+  assert.equal(entered.status, 200);
+  const exitId = commandId();
+  assert.equal((await scan(event, person, { actor: 'manager', deskId: event.deskOut, id: exitId })).status, 200);
+  const historical = await scan(event, person, { id });
+  assert.equal(historical.status, 200);
+  assert.deepEqual(historical.json, { ...entered.json, recordStatus: 'SUPERSEDED' });
+  assert.equal((await readWorkspace(event.id)).participants[0].inside, false);
+
+  const correct = async checkId => requestJson(harness.baseUrl, `/api/events/${event.id}/commands`, {
+    method: 'POST', cookie: cookies.manager,
+    body: { commandId: commandId(), command: 'check.correct', payload: { id: checkId, reason: '합성 기록 정정' } },
+  });
+  assert.equal((await correct(exitId)).status, 200);
+  assert.deepEqual((await scan(event, person, { id })).json, entered.json);
+  const changed = await readWorkspace(event.id);
+  changed.participants[0].status = 'CANCELLED';
+  await writeWorkspace(event.id, changed);
+  assert.deepEqual((await scan(event, person, { id })).json, { ...entered.json, recordStatus: 'PARTICIPANT_CHANGED' });
+  changed.participants[0].status = 'APPROVED';
+  await writeWorkspace(event.id, changed);
+  assert.equal((await correct(id)).status, 200);
+  assert.deepEqual((await scan(event, person, { id })).json, { ...entered.json, recordStatus: 'CORRECTED' });
+  assert.equal((await readRecords(event.id)).length, 2);
 });
 
 test('migration-005-backfills-checks-written-before-the-table-existed', async () => {

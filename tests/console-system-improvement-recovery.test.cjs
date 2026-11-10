@@ -73,9 +73,9 @@ test('staff-correction-replays-the-same-request-id', () => {
   // locks until the verdict is known so the pending payload cannot change.
   assert.match(work, /correctUnknown/);
   assert.match(work, /같은 요청으로 다시 시도/);
-  // The lock predicate now covers correction-unresolved OR organization-
-  // changed; the retry path itself stays on `correcting` only.
-  assert.match(work, /const writeLocked = correctionLocked \|\| orgChanged;/);
+  // The lock includes correction, organization drift and stale assignment;
+  // the pending correction retains the original retry identity.
+  assert.match(work, /const writeLocked = correctionLocked \|\| orgChanged \|\| assignmentStale \|\| rewardCollectUncertain \|\| receiptLock \|\| receiptRefreshing \|\| rewardLookupLoading \|\| rewardCollectingId !== null;/);
   assert.match(work, /disabled=\{writeLocked\}/);
   assert.match(work, /대상·사유를 바꾸지 말고/);
   assert.match(work, /role=\{correctUnknown \? "alert" : "status"\}/);

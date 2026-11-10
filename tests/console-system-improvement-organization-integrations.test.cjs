@@ -60,8 +60,8 @@ function loadIsNewOrgSimOnly() {
 test('server keeps provider credentials on the legacy org only', () => {
   assert.match(
     STATE,
-    /function integrationsForOrg\(orgId\)[\s\S]*?LEGACY_ORG_ID[\s\S]*?activeMessagingState\(\)/,
-    'legacy org reports the deployment provider state'
+    /function integrationsForOrg\(orgId\)[\s\S]*?LEGACY_ORG_ID[\s\S]*?activeMessagingState\(env\)/,
+    'legacy org reports the configured server provider state'
   );
   assert.match(
     STATE,
@@ -110,9 +110,11 @@ test('message composer reads the scoped org integrations, never health', () => {
   assert.match(MESSAGES, /const scopedIntegrations = parseOrgIntegrations\(bootstrap\.integrations\)/, 'scoped integrations land in state');
   assert.match(MESSAGES, /state\.integrations\.connected/, 'send-path display keys off scoped state');
   assert.match(MESSAGES, /현재 조직 발송 연결/, 'composer names the org scope of the connection line');
-  assert.match(MESSAGES, /자동 발송은 지원하지 않습니다/, 'manual-execution copy is preserved');
-  const simLock = MESSAGES.slice(MESSAGES.indexOf('const scopedIntegrations = parseOrgIntegrations'), MESSAGES.indexOf('canManage,', MESSAGES.indexOf('const scopedIntegrations = parseOrgIntegrations')));
-  assert.match(simLock, /\{ \.\.\.current, simulate: true \}/, 'the lock only ever forces the flag on');
+  assert.match(MESSAGES, /나중에 설정을 켜면 발송될 수 있습니다/, 'explicit automatic reservation explains later activation');
+  assert.match(MESSAGES, /자동 실행 설정을 켜도 이 예약은 자동 발송되지 않습니다/, 'manual reservations stay manual');
+  const simLockStart = MESSAGES.indexOf('if (isNewOrgSimOnly(scopedIntegrations))');
+  const simLock = MESSAGES.slice(simLockStart, MESSAGES.indexOf('      }', simLockStart));
+  assert.match(simLock, /\{ \.\.\.current, simulate: true, scheduleMode: "MANUAL" \}/, 'the lock forces simulation and clears any prior automatic choice');
   assert.doesNotMatch(simLock, /channel/, 'the lock never rewrites the draft channel');
   assert.doesNotMatch(simLock, /selectedIds|selectedTemplateId/, 'the lock never touches selection');
   assert.match(MESSAGES, /channel: "SMS"/, 'default channel is untouched');
@@ -122,7 +124,7 @@ test('message composer reads the scoped org integrations, never health', () => {
 
 test('new orgs compose simulation-only; legacy disconnects keep NEEDS_CONNECTION', () => {
   assert.match(MESSAGES, /isNewOrgSimOnly\(scopedIntegrations\)/, 'refresh gates the lock on the scoped value');
-  assert.match(MESSAGES, /\{ \.\.\.current, simulate: true \}/, 'the lock only ever forces the flag on');
+  assert.match(MESSAGES, /\{ \.\.\.current, simulate: true, scheduleMode: "MANUAL" \}/, 'the lock forces simulation and clears any prior automatic choice');
   assert.equal((MESSAGES.match(/simulate: false/g) ?? []).length, 1, 'no other write ever clears the flag (single EMPTY_CAMPAIGN default)');
   assert.match(MESSAGES, /disabled=\{newOrgSimOnly\}/, 'the simulate toggle locks with the gate');
   assert.match(MESSAGES, /연결돼도 자동으로 바뀌지 않습니다/, 'no auto-enable on later connection');

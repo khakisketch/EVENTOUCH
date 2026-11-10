@@ -167,6 +167,7 @@ function renderNotice({ contextSnapshot, selectionSnapshot, uncertain = [] }) {
     exports: module.exports, module,
     require(name) {
       if (name === 'react') return { ...RealReact, useSyncExternalStore: () => selectionSnapshot };
+      if (name === './ui/ValidatedForm') return { default: ({ children, ...props }) => RealReact.createElement('form', props, children) };
       if (name === 'react/jsx-runtime') return require('../apps/web/node_modules/react/jsx-runtime');
       if (name === '../lib/use-operator-context') return { useOperatorContextSnapshot: () => contextSnapshot };
       if (name === '../lib/operator-context') return {

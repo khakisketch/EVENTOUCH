@@ -144,10 +144,11 @@ test('org membership disable is owner-only, idempotent, and role-free', () => {
   assert.match(action, /body: JSON\.stringify\(attempt\.body\)/, 'retries replay the identical frozen body');
   assert.match(action, /expectedContextVersion/, 'optimistic org version rides along');
   assert.match(action, /ORGANIZATION_CONTEXT_CHANGED/, 'stale context is named');
-  const stale = bodyBetween(action, 'data?.code === "ORGANIZATION_CONTEXT_CHANGED"', 'if (isDefinitiveClientError(res.status)) {');
+  const stale = bodyBetween(action, 'data?.code === "ORGANIZATION_CONTEXT_CHANGED"', 'if (isDefinitiveClientError(res.status) && !hadUncertainAttempt) {');
   assert.match(stale, /if \(isRetry\)/, 'an uncertain retry is told apart from a fresh stale attempt');
   assert.match(stale, /원래 조직으로 되돌린 뒤 같은 요청으로 다시 시도하세요/, 'uncertain retry points back at the original org');
   assert.match(stale, /pendingRef\.current = null/, 'a fresh stale attempt clears its unused id');
+  assert.match(action, /isDefinitiveClientError\(res.status\) && !hadUncertainAttempt/, 'a later rejection cannot erase an earlier uncertain attempt');
   assert.doesNotMatch(action, /onStaleContext/, 'no auto reload or unmount on drift');
   assert.match(action, /ConsoleConfirm/, 'outward change confirms in place');
   assert.match(action, /다른 조직의 소속과 로그인에는 영향이 없습니다/, 'no cross-org effect is promised');
@@ -168,14 +169,15 @@ test('shared-account resets fail closed and point at verified-email self-service
   assert.match(dialog, /const \[sharedEffectBlocked, setSharedEffectBlocked\] = useState\(false\)/, 'blocked task state exists, default off');
   assert.match(dialog, /setPassword\(""\);\s*setConfirm\(""\);/, 'typed values are cleared with the block, nothing committed');
   assert.match(dialog, /setSharedEffectBlocked\(true\)/, 'definitive 403 arms the block exactly once');
-  assert.match(dialog, /if \(submitGateRef\.current \|\| submitting \|\| sharedEffectBlocked\) return;/, 'submitter is dead once blocked');
+  assert.match(dialog, /if \(submitGateRef\.current \|\| submitting \|\| checkingReset \|\| sharedEffectBlocked \|\| otherResetReceipt\) return;/, 'submitter is dead once blocked or result checking');
   assert.match(dialog, /이 계정은 여기서 재설정할 수 없습니다/, 'blocked description promises no reset');
   assert.match(dialog, /재설정이 허용되는 계정은 성공하면 다른 기기에서 로그아웃됩니다/, 'pre-block wording scopes the logout promise to allowed accounts');
   assert.match(dialog, /sharedEffectBlocked \? \(/, 'blocked branch replaces fields and footer');
   assert.match(dialog, /<button type="button" className="button button-secondary" onClick=\{onClose\}>\s*닫기\s*<\/button>/, 'blocked footer is 닫기 only');
   assert.match(dialog, /\{sharedEffectBlocked \? \(\s*failure \? <ConsoleFeedback kind="error">\{failure\}<\/ConsoleFeedback> : null\s*\) : \(/, 'blocked body shows only the failure note — no fields, no submit');
   assert.doesNotMatch(dialog, /OrgMembershipDisableButton|setCampaignDraft|members\//, 'blocking never auto-disables a membership');
-  const reset = bodyBetween(team, 'SHARED_ACCOUNT_GLOBAL_EFFECT', 'if (isDefinitiveClientError(res.status)) {');
+  const reset = bodyBetween(team, 'SHARED_ACCOUNT_GLOBAL_EFFECT', 'if (isDefinitiveClientError(res.status) && !attempt.uncertain) {');
+  assert.match(reset, /data\?\.code === "SHARED_ACCOUNT_GLOBAL_EFFECT" && !attempt\.uncertain/, 'only a first definitive refusal closes the reset; an earlier uncertain result stays recoverable');
   assert.match(reset, /pendingResetRef\.current = null/, 'definitive refusal clears the id, nothing stays ambiguous');
   // Approved direction ("이메일+수동 예외"): the blocked owner task points at
   // the holder's verified-email self-service on the login screen — never an

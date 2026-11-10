@@ -129,11 +129,15 @@ test('archived events read as read-only with the reason on every write control',
     assert.match(source, /=== "ARCHIVED"/u, `${pageId} derives the archived gate from server stage`);
     assert.match(source, /보관된 행사는 읽기 전용입니다/u, `${pageId} names the reason`);
   }
-  assert.match(PAGES.settings, /disabled=\{busy \|\| archived \|\| !canWriteSettings\}/u);
-  assert.match(PAGES.settings, /disabled=\{busy \|\| archived \|\| !canWriteIntake\}/u);
+  assert.match(PAGES.settings, /disabled=\{settingsLocked \|\| Boolean\(featuresConflict\) \|\| archived \|\| !canWriteSettings\}/u);
+  assert.match(PAGES.settings, /disabled=\{settingsLocked \|\| Boolean\(basicsConflict\) \|\| archived \|\| !canWriteSettings\}/u);
+  assert.match(PAGES.settings, /disabled=\{settingsLocked \|\| Boolean\(intakeConflict\) \|\| archived \|\| !canWriteIntake\}/u);
+  assert.match(PAGES.settings, /const settingsLocked = Boolean\(pendingSettings\) \|\| otherSettingsReceipt \|\| busy \|\| stageBusy \|\| checkingSettings \|\| refreshingAfterWrite/u);
+  assert.match(PAGES.settings, /<fieldset disabled=\{!canWriteSettings \|\| archived \|\| settingsLocked\}/u);
+  assert.match(PAGES.settings, /disabled=\{!canWriteIntake \|\| archived \|\| settingsLocked\}/u);
   assert.match(PAGES.messages, /const messagesLocked = archived \|\| !state\.canWriteMessages/u);
-  assert.match(PAGES.messages, /disabled=\{selectedCount === 0 \|\| busyAction !== null \|\| uploadingImage \|\| messagesLocked\}/u);
-  assert.match(PAGES.content, /disabled=\{busy !== null \|\| archived\}/u);
+  assert.match(PAGES.messages, /disabled=\{selectedCount === 0 \|\| busyAction !== null \|\| uploadingImage \|\| messagesLocked \|\| otherCreateReceipt \|\| uncertainMmsUpload\}/u);
+  assert.match(PAGES.content, /disabled=\{busy !== null \|\| archived \|\| Boolean\(pendingContent\) \|\| otherContentReceipt\}/u);
   for (const [section, permission] of [['onsite', 'Onsite'], ['booth', 'Booth'], ['display', 'Display']]) {
     assert.match(PAGES.operations, new RegExp(`const ${section}Blocked = archived \\|\\| !canWrite${permission}`, 'u'));
     if (section === 'display') {
@@ -153,7 +157,7 @@ test('settings gates on the signed-in actor, not the account directory', () => {
   assert.match(PAGES.settings, /const role = text\(user\.role\)/u);
   assert.match(PAGES.settings, /const myId = text\(user\.id\)/u);
   assert.match(PAGES.settings, /const capabilities = \{ role: state\.role, userId: state\.userId, memberships: state\.memberships, eventId \}/u);
-  assert.match(PAGES.settings, /canWriteEvent\(capabilities, "event\.update"\)/u);
+  assert.match(PAGES.settings, /canWriteEvent\(capabilities, "event\.basics\.save"\)/u);
   assert.match(PAGES.settings, /canWriteEvent\(capabilities, "form\.publish"\)/u);
   const capabilities = read('lib/event-capabilities.ts');
   assert.match(capabilities, /if \(role === "AGENCY"\) return true/u);
@@ -173,7 +177,7 @@ test('render corrections: warning spacing and truthful draft guard', () => {
     PAGES.messages,
     // Presentation change: retain the provider state and require the actual
     // delivery limit in the always-visible summary, not only inside details.
-    /<summary>발송 연결 · \{state\.integrations\.connected \? "연결됨" : "미연동 · 실제 전달 안 됨"\}<\/summary>/u,
+    /<summary data-disclosure-indicator="">발송 연결 · \{state\.integrations\.connected \? "연결됨" : "미연동 · 실제 전달 안 됨"\}<\/summary>/u,
     'provider state AND the non-delivery limit stay visible before sending'
   );
   assert.match(
@@ -193,8 +197,8 @@ test('render corrections: warning spacing and truthful draft guard', () => {
   );
   assert.match(
     PAGES.operations,
-    /res\.status !== 408 && res\.status < 500/u,
-    'definitive rejections clear the receipt id; ambiguous ones keep it'
+    /const uncertain = Boolean\(retry\) \|\| res\.status >= 500 \|\| \[408, 425, 429\]\.includes\(res\.status\)/u,
+    'an earlier ambiguous request remains unresolved even after a later rejection'
   );
 });
 
@@ -242,7 +246,7 @@ test('content keeps venue-draft protection and idempotent writes', () => {
   assert.match(PAGES.content, /venueBaselineRef/u);
   assert.match(PAGES.content, /commandIdCache/u);
   assert.match(PAGES.content, /attachmentDirty/u);
-  assert.match(PAGES.content, /게시한 항목만 참가자에게 보입니다/u);
+  assert.match(PAGES.content, /게시 전까지 현재 내용이 유지됩니다/u);
 });
 
 test('messages applies the roster ?to= handoff once and pages long history', () => {

@@ -52,7 +52,7 @@ test('moderation focus is scheduled only after a confirmed success', () => {
   for (const [name, start, end] of [
     ['manageQuestion', 'async function manageQuestion', 'function requestPhotoModeration'],
     ['moderatePhoto', 'async function moderatePhoto', 'function requestPostModeration'],
-    ['moderatePost', 'async function moderatePost', 'if (state.kind === "loading")'],
+    ['moderatePost', 'async function moderatePost', 'if (state.kind === "loading" ||'],
   ]) {
     const body = bodyBetween(start, end);
     const writeAt = body.indexOf('await postCommand');
@@ -118,12 +118,13 @@ test('review strip sits ahead of the toolbar and drives one backlog class', () =
    assert.match(shortcut, /setModuleLimit\(\(current\) => Math\.max\(current, targetIndex \+ 1\)\)/, 'shortcut exposes the relevant module without unbounding every module');
   assert.match(shortcut, /setQaFilter\("unanswered"\)/, 'unanswered shortcut must set the nested Q&A filter');
   assert.match(shortcut, /setQaFilter\("pending"\)/, 'pending shortcut must set the nested Q&A filter');
+  assert.match(shortcut, /setQaFilter\("edits"\)/, 'edit shortcut must set the nested Q&A filter');
   assert.match(shortcut, /setPhotoFilter\("PENDING"\)/, 'photo shortcut must set the nested photo filter');
   assert.match(shortcut, /setPostFilter\("PENDING"\)/, 'post shortcut must set the nested post filter');
-  assert.match(SOURCE, /filter: "all" \| "unanswered" \| "pending";\s*\n\s*onFilterChange/, 'nested Q&A filter must be lifted, not list-local');
+  assert.match(SOURCE, /filter: "all" \| "unanswered" \| "pending" \| "edits";\s*\n\s*onFilterChange/, 'nested Q&A filter must be lifted, not list-local');
   const strip = bodyBetween('function ReviewStrip', 'function QuestionList');
   assert.ok(!/검토 대기 \d|합계|총 \d+건/.test(strip), 'strip must show no summed total across overlapping classes');
-  for (const gate of ['props.unanswered > 0', 'props.qaPending > 0', 'props.photoPending > 0', 'props.postPending > 0']) {
+  for (const gate of ['props.unanswered > 0', 'props.qaPending > 0', 'props.qaEdits > 0', 'props.photoPending > 0', 'props.postPending > 0']) {
     assert.ok(strip.includes(gate), `zero-count class must render no control (${gate})`);
   }
 });

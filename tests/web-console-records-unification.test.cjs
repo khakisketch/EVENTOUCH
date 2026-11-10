@@ -176,7 +176,7 @@ test('draft guards register before early returns with workspace-owned dirty', ()
   const guarded = {
     clients: '작성 중인 고객사 내용',
     team: '발급된 초대 링크는 한 번만',
-    participants: '작성 중인 그룹·경품 내용',
+    participants: '작성 중인 참가자·그룹·경품 내용',
     participantImport: '가져오기 위해 정리한 명단',
   };
   for (const [key, reason] of Object.entries(guarded)) {
@@ -189,8 +189,13 @@ test('draft guards register before early returns with workspace-owned dirty', ()
     assert.ok(at < source.indexOf('=== "loading"'), `${key} registers before early returns`);
     assert.match(source, new RegExp(reason), `${key} names what would be lost`);
   }
-  // Read-only desks never go dirty; filters and query changes are not dirt.
-  assert.doesNotMatch(read(PAGES.rewards), /useConsoleDraftGuard\(/u);
+  // Reward filters are read-only, but an in-flight or unconfirmed write and
+  // its required refresh must warn before leaving the desk.
+  const rewards = read(PAGES.rewards);
+  const rewardGuard = rewards.indexOf('useConsoleDraftGuard(');
+  assert.ok(rewardGuard >= 0 && rewardGuard < rewards.indexOf('=== "loading"'), 'reward guard registers before early returns');
+  assert.match(rewards, /useConsoleDraftGuard\(Boolean\(busy \|\| pendingAction \|\| otherReceipt \|\| needsRefresh\), UNCONFIRMED_WRITE_CLOSE_MESSAGE\)/u);
+  assert.doesNotMatch(rewards.match(/useConsoleDraftGuard\([^;]+;/u)?.[0] || '', /rewardQuery|rewardStatusFilter/u, 'search and filters remain clean');
   assert.doesNotMatch(read('app/console/team/OperationsPanels.tsx'), /useConsoleDraftGuard\(/u);
   const create = read('app/console/CreateEventDialog.tsx');
   assert.match(create, /useConsoleDraftGuard\(dirty \|\| submitting \|\| Boolean\(commandIdRef\.current\)/u);
@@ -227,8 +232,10 @@ test('records use shared body patterns and keep domain specifics', () => {
 
 test('csv export guards formulas and matches the visible filter', () => {
   const list = read(PAGES.participants);
-  assert.match(list, /function csvCell/u);
-  assert.match(list, /'\$\{cell\}/u, 'formula-leading cells get the text marker');
+  const exportHelper = read('lib/participant-export.ts');
+  assert.match(exportHelper, /function participantCsv/u);
+  assert.match(exportHelper, /'\$\{cell\}/u, 'formula-leading cells get the text marker');
+  assert.match(list, /participantExportRows\(orderedPeople, state\.publishedFields/u);
   assert.match(list, /CSV 내보내기 · 검색·필터 결과 \$\{visiblePeople\.length\}명/u, 'export accessible name retains the exact filtered count');
   assert.match(list, /EVENTOUCH_participants\.csv/u);
 });
@@ -361,9 +368,12 @@ test('team activity maps raw command keys to concise Korean labels', () => {
     ['reward.create', '경품 등록'],
     ['message.create', '메시지 발송 요청'],
     ['template.save', '템플릿 저장'],
-    ['module.save', '참여 프로그램 저장'],
-    ['module.status', '참여 프로그램 상태 변경'],
+    ['module.save', '참여 콘텐츠 저장'],
+    ['module.status', '참여 콘텐츠 상태 변경'],
     ['question.submit', 'Q&A 질문'],
+    ['question.edit', 'Q&A 질문 수정'],
+    ['question.edit.approve', 'Q&A 수정안 승인'],
+    ['question.edit.reject', 'Q&A 수정안 반려'],
     ['question.manage', 'Q&A 답변'],
     ['notice.save', '공지 저장'],
     ['check.scan', '입퇴장 스캔'],
@@ -424,7 +434,7 @@ test('roster over-limit handoff shows counts and a visible recovery', () => {
   // text with the selected/hidden counts and the 200 limit.
   assert.match(list, /id="roster-handoff-limit"/u, 'over-limit guidance is visible text, not just a title');
   assert.match(list, /최대 200명까지 전송 가능/u, 'visible text names the 200 limit');
-  assert.match(list, /선택한 참가자 \{handoffIds\.length\}명/u, 'selection row names the full handoff count');
+  assert.match(list, /선택 \{handoffIds\.length\}명/u, 'selection row names the full handoff count');
   assert.match(list, /id="roster-exclude-hidden"/u, 'visible recovery action exists');
   assert.match(list, /숨김 제외/u);
   assert.match(list, /current\.filter\(\(id\) => visibleIds\.has\(id\)\)/u, 'recovery clears selections outside the visible list');

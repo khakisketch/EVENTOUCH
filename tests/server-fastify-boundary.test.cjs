@@ -131,37 +131,42 @@ test('public reads answer the historical shapes through the boundary', async () 
   assert.equal(root.headers['cache-control'], 'no-store');
 });
 
-test('tickets prefer the bearer and then the same-browser session', async () => {
+test('tickets use the same-browser session only when no authorization was supplied', async () => {
   const calls = [];
   const deps = publicDeps({
-    resolveSession: async (cookie) => {
-      calls.push(['session', cookie]);
-      return cookie ? { grants: [{ eventId: 'e1', participantId: 'p2' }] } : null;
-    },
+    resolveSession: async () => { throw new Error('a separate session read must not be used'); },
   });
   deps.events.loadTicket = async (slug, token) => {
     calls.push(['bearer', slug, token]);
     return token === 'good-token' ? { event: { slug }, workspace: {}, participant: { id: 'p1' } } : null;
   };
-  deps.events.loadSessionTicket = async (slug, grants) => {
-    calls.push(['grant', slug, grants]);
-    return { event: { slug }, workspace: {}, participant: { id: 'p2' } };
+  deps.events.loadSessionTicket = async (slug, cookie) => {
+    calls.push(['session-ticket', slug, cookie]);
+    return cookie ? { event: { slug }, workspace: {}, participant: { id: 'p2' } } : null;
   };
   const app = buildPublicReadsApp(deps);
 
   const bearer = await fetched(app, '/api/public/events/live/ticket', { headers: { authorization: 'Bearer good-token' } });
   assert.equal(bearer.status, 200);
   assert.equal(bearer.json.participant.id, 'p1');
+  assert.ok(Math.abs(Date.now() - bearer.json.serverTimeMs) < 5000, 'bearer ticket includes server response time');
   assert.deepEqual(calls, [['bearer', 'live', 'good-token']]);
+
+  for (const authorization of ['Bearer invalid-token', 'Basic a', 'Bearer', '']) {
+    calls.length = 0;
+    const invalid = await fetched(app, '/api/public/events/live/ticket', { headers: { authorization, cookie: 'eventouch_attendee=abc' } });
+    assert.equal(invalid.status, 404);
+    assert.equal(calls.some(call => call[0] === 'session'), false, 'explicit credential failures must not select another participant');
+  }
 
   calls.length = 0;
   const session = await fetched(app, '/api/public/events/live/ticket', { headers: { cookie: 'eventouch_attendee=abc' } });
   assert.equal(session.status, 200);
   assert.equal(session.json.participant.id, 'p2');
+  assert.ok(Math.abs(Date.now() - session.json.serverTimeMs) < 5000, 'session ticket includes server response time');
   assert.deepEqual(calls, [
     ['bearer', 'live', ''],
-    ['session', 'eventouch_attendee=abc'],
-    ['grant', 'live', [{ eventId: 'e1', participantId: 'p2' }]],
+    ['session-ticket', 'live', 'eventouch_attendee=abc'],
   ]);
 
   const stranger = await fetched(app, '/api/public/events/draft/ticket');
@@ -170,11 +175,9 @@ test('tickets prefer the bearer and then the same-browser session', async () => 
 });
 
 test('a failing session read never replaces the bearer answer', async () => {
-  const app = buildPublicReadsApp(publicDeps({
-    resolveSession: async () => {
-      throw new Error('session store down');
-    },
-  }));
+  const deps = publicDeps({ resolveSession: async () => null });
+  deps.events.loadSessionTicket = async () => { throw new Error('session store down'); };
+  const app = buildPublicReadsApp(deps);
   const response = await fetched(app, '/api/public/events/live/ticket', { headers: { cookie: 'x=1' } });
   assert.equal(response.status, 404);
   assert.deepEqual(response.json, { error: '티켓 링크를 확인할 수 없습니다' });
@@ -703,6 +706,7 @@ test('guest booth visits bypass the session and sessionless ones do not', async 
     command: 'booth.visit',
     assignmentId: 'assignment-1',
     targetId: 'booth-2',
+    deferWriteGrant: true,
   }]);
 });
 
@@ -722,6 +726,7 @@ test('operations commands authorize with the scan target and payload fallbacks',
     command: 'check.scan',
     assignmentId: undefined,
     targetId: 'desk-9',
+    deferWriteGrant: true,
   }]);
   const execute = calls.find((call) => call[0] === 'operations.execute');
   assert.equal(execute[1].commandId, 'command-scan-1', 'the payload commandId is the fallback');
@@ -755,7 +760,7 @@ test('domain commands split guest and session tiers', async () => {
   });
   assert.equal(member.status, 200);
   const authorize = calls.filter((call) => call[0] === 'authorize').at(-1);
-  assert.deepEqual(authorize, ['authorize', { account: { id: 'agency-1', role: 'AGENCY' }, eventId: 'e1', command: 'content.publish' }]);
+  assert.deepEqual(authorize, ['authorize', { account: { id: 'agency-1', role: 'AGENCY' }, eventId: 'e1', command: 'content.publish', deferWriteGrant: true }]);
 });
 
 test('the participant tier keeps the STAFF exception', async () => {

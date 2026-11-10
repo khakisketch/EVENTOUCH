@@ -12,7 +12,9 @@ test('answer-save-preserves-publication-while-unpublish-is-explicit', () => {
   assert.match(source, /onClick=\{\(\) => props\.onManage\(question, false\)\}/);
   assert.match(source, /답변 저장·공개 유지/);
   assert.match(source, /공개 취소/);
-  assert.match(source, /"question\.manage", \{ id: question\.id, answer, approved \}/);
+  assert.match(source, /answerBaselines\[question\.id\] \?\? questionBaseline\(question\)/);
+  assert.match(source, /submitQuestionManagement\(\{ eventId, payload: \{ id: question\.id, answer, approved, expectedText: baseline\.text, expectedQuestion: baseline \}/);
+  assert.match(source, /postCommand\("question\.manage", payload, Boolean\(held\)\)/);
 });
 
 test('report-sharing-record-does-not-imply-customer-delivery-and-errors-stay-in-dialog', () => {

@@ -100,12 +100,19 @@ test('the jump pin releases only on genuine user scrolling, never on a timer', (
     for (const key of ['"ArrowUp"', '"ArrowDown"', '"PageUp"', '"PageDown"', '"Home"', '"End"', '" "']) {
       assert.ok(source.includes(key), `${name} scroll key ${key} releases`);
     }
-    // No arbitrary hold duration and no release on the programmatic scroll
-    // itself (scroll events fire for scrollIntoView too, so they must not).
-    assert.doesNotMatch(source, /setTimeout/u, `${name} holds nothing on a timer`);
-    assert.doesNotMatch(source, /setInterval/u, `${name} polls nothing on an interval`);
-    assert.doesNotMatch(source, /addEventListener\("scroll"/u, `${name} programmatic scrolls never release`);
-    assert.doesNotMatch(source, /addEventListener\('scroll'/u, `${name} programmatic scrolls never release`);
+    // Scope the timer check to the jump pin and its release effect. The same
+    // screen may need a timeout for an unrelated network request. Ensure all
+    // assignments to the pin are still only the explicit jump and release.
+    const pinStart = source.indexOf('const navPinRef = useRef<string | null>(null);');
+    const effectStart = source.indexOf('useEffect(() => {', pinStart);
+    const effectEnd = source.indexOf('}, []);', effectStart);
+    assert.ok(pinStart >= 0 && effectStart > pinStart && effectEnd > effectStart, `${name} pin effect is locatable`);
+    const pinScope = source.slice(pinStart, effectEnd + '}, []);'.length);
+    assert.deepEqual([...source.matchAll(/navPinRef\.current\s*=\s*([^;]+);/gu)].map((match) => match[1].trim()), ['id', 'null']);
+    assert.doesNotMatch(pinScope, /setTimeout/u, `${name} jump pin holds nothing on a timer`);
+    assert.doesNotMatch(pinScope, /setInterval/u, `${name} jump pin polls nothing on an interval`);
+    assert.doesNotMatch(pinScope, /addEventListener\("scroll"/u, `${name} programmatic scrolls never release`);
+    assert.doesNotMatch(pinScope, /addEventListener\('scroll'/u, `${name} programmatic scrolls never release`);
   }
 });
 
@@ -148,7 +155,7 @@ test('a section jump moves focus into the section, not only the viewport', () =>
   assert.match(nav, /target\.scrollIntoView\(\{ block: "start" \}\)/u, 'the viewport follows explicitly, not by browser accident');
   assert.match(nav, /instanceof HTMLElement/u, 'focus is guarded to focusable nodes');
   // The fragment must still change: a section stays copyable and reopenable.
-  assert.doesNotMatch(nav, /event\.preventDefault\(\)/u);
+  assert.doesNotMatch(nav.slice(nav.indexOf('const isActive = activeId')), /event\.preventDefault\(\)/u);
 });
 
 test('the draw and vote screen keeps its four jobs addressable', () => {

@@ -1,6 +1,6 @@
 // Attendee registration: the form states the outcome, recovers from a
-// duplicate application, and puts phone verification before the fields it
-// gates.
+// duplicate application, and explains phone verification before the user
+// starts while placing the request action after its required phone input.
 "use strict";
 
 const assert = require("node:assert/strict");
@@ -26,7 +26,7 @@ test("the registration form states what the attendee gets", () => {
 // 스페이스에 이미 있는 approvalRequired를 읽기만 한다).
 test("an approval-gated event promises a receipt, not an instant ticket", () => {
   assert.match(form, /approvalRequired\?: boolean/u);
-  assert.match(form, /운영자 승인 뒤 입장 QR이 표시됩니다/u);
+  assert.match(form, /신청 접수 후 운영자가 승인하면 입장 QR이 표시됩니다/u);
 });
 
 // 표현 고정 갱신(추가 재검수): 결제 흐름(payments v1-제외지만 서버는
@@ -34,7 +34,7 @@ test("an approval-gated event promises a receipt, not an instant ticket", () => 
 // 프로젝션의 features·price만 읽고 결제 동작은 건드리지 않는다.
 test("a payment-pending event promises confirmation after payment", () => {
   assert.match(form, /paymentPending\?: boolean/u);
-  assert.match(form, /신청이 접수되고, 결제 확인이 끝나면 입장 QR이 표시됩니다/u);
+  assert.match(form, /신청 접수 후 결제 확인이 끝나면 입장 QR이 표시됩니다/u);
 });
 
 // 표현 고정 갱신(추가 재검수 2): 승인+결제 복합 조건에서 승인 단독 약속은
@@ -45,11 +45,12 @@ test("a combined approval and payment gate names both", () => {
   assert.match(form, /운영자 승인과 결제 확인이 모두 끝나면 입장 QR이 표시됩니다/u);
 });
 
-test("phone verification comes before the fields it gates", () => {
+test("phone verification is announced before fields and requested after the phone input", () => {
+  const outcome = form.indexOf('className={styles.outcomeNote}');
   const verification = form.indexOf('className="verification-panel"');
   const fields = form.indexOf("{fields.map(renderField)}");
-  assert.ok(verification > 0 && fields > 0);
-  assert.ok(verification < fields, "verification must not be the thing an attendee discovers after typing everything");
+  assert.ok(outcome > 0 && fields > outcome && verification > fields);
+  assert.match(form, /verificationRequired \? " 신청 전 연락처 인증이 필요합니다\."/u, "the requirement is still disclosed before typing");
 });
 
 test("the supplied field order is rendered without regrouping", () => {

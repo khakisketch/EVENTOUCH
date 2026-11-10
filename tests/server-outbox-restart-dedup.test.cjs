@@ -19,6 +19,7 @@ const {
   LEGACY_ORG,
 } = require('./helpers/postgres-api-server.cjs');
 const { drainMessageOutbox } = require('../server/message-outbox');
+const { resolveDelivery } = require('../server/messaging');
 
 const test = databaseUrl
   ? nodeTest
@@ -245,4 +246,107 @@ test('a-rate-limited-group-read-holds-the-row-for-a-later-drain', async (t) => {
   const kept = await readMessage(fixture.id, fixture.messageId);
   assert.equal(kept.status, 'SENDING');
   assert.equal(kept.providerGroupId, 'SUPPLIER-GROUP-1');
+});
+
+test('a lost batch acceptance stays unresolved across replay and recovers by its persisted token', async () => {
+  const fixture = await createRestartFixture();
+  const initial = await readMessage(fixture.id, fixture.messageId);
+  const phone = initial.recipientSnapshot[0].phone;
+  const accepted = { groupId: 'G-CORRELATED', messageId: 'M-CORRELATED', to: phone };
+  let submissions = 0;
+  let token;
+  let supplierVisible = false;
+  const provider = {
+    state: { connected: true },
+    async sendBatch(_recipients, { submissionId }) {
+      submissions += 1;
+      token = submissionId;
+      assert.equal((await readMessage(fixture.id, fixture.messageId)).providerSubmission.id, token);
+      throw new Error('response connection lost');
+    },
+    async findSubmission({ id }) {
+      assert.equal(id, token);
+      return supplierVisible ? { ok: true, groupId: accepted.groupId, messages: { [accepted.messageId]: accepted } } : { ok: false };
+    },
+    async pollResults(ids) {
+      assert.deepEqual(ids, [accepted.messageId]);
+      return { ok: true, results: { [accepted.messageId]: { state: 'DELIVERED', type: 'SMS' } } };
+    },
+  };
+  await drainMessageOutbox(harness.database, provider);
+  assert.ok(token);
+  const pending = await readMessage(fixture.id, fixture.messageId);
+  assert.equal(pending.status, 'SENDING');
+  assert.equal(pending.deliveryUnconfirmed, true);
+  assert.equal(pending.deliveries[0].status, 'SENDING');
+  await harness.database.query(
+    `INSERT INTO message_outbox (message_id, event_id, status, attempts, next_attempt_at)
+     VALUES ($1, $2, 'PENDING', 0, now())`,
+    [fixture.messageId, fixture.id]
+  );
+  assert.equal((await drainMessageOutbox(harness.database, provider)).dispatched, 0);
+  assert.equal((await resolveDelivery(harness.database, provider, fixture.id)).pending, 1);
+  assert.equal((await readMessage(fixture.id, fixture.messageId)).providerSubmission.id, token);
+  supplierVisible = true;
+  assert.equal((await resolveDelivery(harness.database, provider, fixture.id)).resolved, 1);
+  const resolved = await readMessage(fixture.id, fixture.messageId);
+  assert.equal(resolved.status, 'SENT');
+  assert.equal(resolved.providerGroupId, accepted.groupId);
+  assert.equal(resolved.providerSubmission, undefined);
+  assert.equal(resolved.deliveries[0].solapiMessageId, accepted.messageId);
+  assert.equal(submissions, 1);
+});
+
+test('one supplier receipt cannot confirm two legacy recipients', async () => {
+  const fixture = await createRestartFixture({ withGroupId: true });
+  const { rows } = await harness.database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [fixture.id]);
+  const workspace = rows[0].payload;
+  const campaign = workspace.messages[0];
+  const first = campaign.recipientSnapshot[0];
+  const second = { ...first, id: 'shared-phone-recipient', name: '다른 합성 참가자' };
+  const third = { ...first, id: 'unique-phone-recipient', phone: '01000000000', name: '별도 연락처 참가자' };
+  campaign.recipientSnapshot.push(second, third);
+  campaign.deliveries.push(...[second, third].map(person => ({
+    participantId: person.id, name: person.name, status: 'SENDING',
+  })));
+  const provider = {
+    async groupMessages() {
+      return { ok: true, messages: {
+        shared: { messageId: 'M-SHARED', to: first.phone },
+        unique: { messageId: 'M-UNIQUE', to: third.phone },
+      } };
+    },
+    async pollResults(ids) {
+      return { ok: true, results: Object.fromEntries(ids.map(id => [id, { state: 'DELIVERED', type: 'SMS' }])) };
+    },
+  };
+  // Check both a group lookup and data from an earlier build that saved the
+  // same supplier message ID against two deliveries.
+  for (const storedIds of [false, true]) {
+    if (storedIds) campaign.deliveries.slice(0, 2).forEach(delivery => { delivery.solapiMessageId = 'M-SHARED'; });
+    await harness.database.query('UPDATE event_workspaces SET payload=$2::jsonb WHERE event_id=$1',
+      [fixture.id, JSON.stringify(workspace)]);
+    await resolveDelivery(harness.database, provider, fixture.id);
+    const saved = await readMessage(fixture.id, fixture.messageId);
+    assert.deepEqual(saved.deliveries.map(delivery => delivery.status), ['SENDING', 'SENDING', 'SENT']);
+    assert.deepEqual(saved.deliveries.map(delivery => delivery.resultMatchUnconfirmed === true), [true, true, false]);
+    assert.equal(saved.deliveredCount, 1);
+    assert.equal(saved.status, 'SENDING');
+  }
+  // A later lookup can fix a duplicate association when the two recipients
+  // have distinct snapshot numbers and distinct supplier records.
+  second.phone = '01000000001';
+  provider.groupMessages = async () => ({ ok: true, messages: {
+    first: { messageId: 'M-FIRST', to: first.phone },
+    second: { messageId: 'M-SECOND', to: second.phone },
+    third: { messageId: 'M-UNIQUE', to: third.phone },
+  } });
+  await harness.database.query('UPDATE event_workspaces SET payload=$2::jsonb WHERE event_id=$1',
+    [fixture.id, JSON.stringify(workspace)]);
+  await resolveDelivery(harness.database, provider, fixture.id);
+  const corrected = await readMessage(fixture.id, fixture.messageId);
+  assert.deepEqual(corrected.deliveries.map(delivery => delivery.solapiMessageId), ['M-FIRST', 'M-SECOND', 'M-UNIQUE']);
+  assert.deepEqual(corrected.deliveries.map(delivery => delivery.status), ['SENT', 'SENT', 'SENT']);
+  assert.ok(corrected.deliveries.every(delivery => !delivery.resultMatchUnconfirmed));
+  await harness.database.query('DELETE FROM message_outbox WHERE message_id=$1', [fixture.messageId]);
 });

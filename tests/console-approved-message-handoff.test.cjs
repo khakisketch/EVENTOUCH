@@ -80,7 +80,7 @@ test('bulk approval keeps its success copy and links only proven approvals', () 
   // Lifecycle: cleared on every new attempt, set only on proven success,
   // cleared by every other success notice and on event switch.
   assert.match(list, /const \[approvedHandoffIds, setApprovedHandoffIds\] = useState<string\[\] \| null>\(null\)/u);
-  const approveAt = list.indexOf('async function approveSelected(retry = false)');
+  const approveAt = list.indexOf('async function approveSelected(retry = false,');
   assert.ok(approveAt >= 0, 'bulk approval and explicit retry exist');
   const approveBody = list.slice(approveAt, list.indexOf('async function createParticipant()', approveAt));
   assert.match(approveBody, /setApprovedHandoffIds\(null\)/u, 'a new attempt drops the old link first');
@@ -96,7 +96,8 @@ test('bulk approval keeps its success copy and links only proven approvals', () 
 test('bulk approval still validates and recovers exactly as before', () => {
   const list = read(LIST);
   assert.match(list, /command: "participant\.status"/u);
-  assert.match(list, /payload: \{ ids, status: "APPROVED" \}/u, 'bulk payload is unchanged');
+  assert.match(list, /payload: \{ ids, status: "APPROVED", expectedStatus: attempt\.sourceStatus \}/u, 'bulk approval requires the frozen reviewed status');
+  assert.match(list, /sourceStatus: "PENDING" \| "WAITLIST"/u, 'each attempt freezes whether it approves pending or waitlisted participants');
   assert.match(list, /선택한 참가자 중 승인 대기 중인 사람이 없습니다\./u, 'empty attempt still explains itself');
   assert.match(list, /같은 내용으로 다시 시도하세요\./u, 'lost responses still retry the same request');
   assert.match(list, /pendingBulkRef = useRef<BulkApprovalAttempt \| null>/u, 'unconfirmed bulk request retains a frozen attempt');

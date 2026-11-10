@@ -32,8 +32,8 @@ test('campaign parser keeps the persisted compose snapshot for reload', () => {
 
 test('reload resolves recipients against the live roster, excluding cancelled and missing', () => {
   assert.match(SOURCE, /function applyFailedReload\(campaign: Campaign\)/u);
-  assert.match(SOURCE, /person\.status === "CANCELLED"/u);
-  assert.match(SOURCE, /!person \|\| person\.status === "CANCELLED"/u);
+  assert.match(SOURCE, /person\.status\.toUpperCase\(\) !== "CANCELLED" && person\.ticketReview !== "cancelled"/u);
+  assert.match(SOURCE, /!person \|\| !recipientEligible\(person\)/u);
   assert.match(SOURCE, /제외 \$\{excluded\}명\(취소·삭제\)/u);
   assert.match(SOURCE, /setSelectedIds\(eligible\)/u);
 });
@@ -106,9 +106,11 @@ test('create marker lifecycle: staged unsent, marked on post, cleared on settlem
   // Proven success and settled 4xx clear the whole slot (marker with it);
   // ambiguous outcomes keep the attempted slot for a same-request retry.
   assert.match(SOURCE, /created\.id !== pending\.id/u);
-  const execBody = SOURCE.slice(execStart, SOURCE.indexOf('async function executeRetry', execStart));
-  const clears = execBody.match(/campaignCreateRef\.current = null;/gu) || [];
-  assert.equal(clears.length, 2, 'expected slot cleared on success and on settled 4xx only');
+  const execBody = SOURCE.slice(execStart, SOURCE.indexOf('async function checkCampaignCreate', execStart));
+  assert.match(execBody, /const wasUnconfirmed = uncertainCreateRef\.current\?\.id === pending\.id/u);
+  assert.match(execBody, /!wasUnconfirmed && isOrganizationContextBlock\(error\)/u);
+  assert.match(execBody, /!wasUnconfirmed && error instanceof CommandFailure && typeof status === "number" && !isAmbiguousStatus\(status\)/u);
+  assert.match(execBody, /markUnconfirmed\(\)/u);
 });
 
 test('unsent staged confirmation allows the reload overwrite confirm', () => {
@@ -121,13 +123,22 @@ test('unsent staged confirmation allows the reload overwrite confirm', () => {
   // (leaving the page warns); only the reload block distinguishes unsent.
   assert.match(SOURCE, /campaignCreateRef\.current !== null \|\|/u);
 });
-test('reload is offered on FAILED only, behind busy/uploading/archived/permission gates', () => {
+test('reload requires no acceptance trace and a proven safe charset cancellation, behind permission and pending-work gates', () => {
   assert.match(SOURCE, /내용·대상 불러오기/u);
-  assert.match(SOURCE, /campaign\.status === "FAILED" \? \(/u);
+  const guard = SOURCE.slice(SOURCE.indexOf('function canReloadCampaign('), SOURCE.indexOf('function failedReloadBlocked('));
+  assert.match(guard, /!campaign\.submissionUnconfirmed && !campaign\.genericSubmissionUnconfirmed/u);
+  assert.match(guard, /!campaign\.deliveryUnconfirmed && !campaign\.providerGroupId/u);
+  assert.match(guard, /campaign\.acceptedCount === null \|\| campaign\.acceptedCount === 0/u);
+  assert.match(guard, /campaign\.status === "FAILED" && noAcceptanceTrace/u);
+  assert.match(guard, /campaign\.status === "CANCELLED" && campaign\.recipientChangeCount > 0 && noAcceptanceTrace/u);
+  assert.match(guard, /campaign\.status === "CANCELLED" && campaign\.smsTextReloadSafe/u);
+  assert.match(guard, /campaign\.smsTextProblemCount > 0 \|\| campaign\.smsTextProblemUnknown/u);
+  assert.match(guard, /\|\| safeCharsetCancellation/u);
+  assert.match(SOURCE, /const reloadable = canReloadCampaign\(campaign\)/u);
   // The reload button locks on the messages capability (messagesLocked covers
   // archived plus the missing messages grant) with the membership existence
   // kept alongside, so a scoped-out manager gets the reason, not a silent act.
-  assert.match(SOURCE, /disabled=\{busyAction !== null \|\| uploadingImage \|\| messagesLocked \|\| !state\.canManage\}/u);
+  assert.match(SOURCE, /disabled=\{busyAction !== null \|\| uploadingImage \|\| messagesLocked \|\| !state\.canManage \|\| otherHistoryReceipt \|\| otherCreateReceipt \|\| uncertainMmsUpload\}/u);
   assert.match(SOURCE, /title=\{messagesLocked \? messagesLockReason : undefined\}/u);
   assert.match(SOURCE, /메시지 쓰기 권한이 없습니다\. 기록은 볼 수 있습니다/u);
   assert.match(SOURCE, /if \(state\.kind !== "ready" \|\| !state\.canManage \|\| !state\.canWriteMessages \|\| state\.stage === "ARCHIVED"\) return;/u);
@@ -135,13 +146,10 @@ test('reload is offered on FAILED only, behind busy/uploading/archived/permissio
   // Existing FAILED explanation stays verbatim; only a next-action sentence is added.
   assert.match(SOURCE, /발송이 실패했습니다\. 행의 내용·대상 불러오기로 새 발송을 준비하세요\./u);
   // No reload affordance leaks onto other terminal/transient rows.
-  const failedBlockStart = SOURCE.indexOf('campaign.status === "FAILED" ? (');
-  assert.ok(failedBlockStart !== -1, 'expected the FAILED block');
-  const failedBlock = SOURCE.slice(failedBlockStart, failedBlockStart + 2000);
-  assert.match(failedBlock, /내용·대상 불러오기/u);
+  assert.match(SOURCE, /\{reloadable \? <button[^\n]+내용·대상 불러오기/u);
 });
 
-test('reload preloads content, reveals selected-only review, and lands on the composer title', () => {
+test('reload preloads content, reveals any retained selection, and focuses the active step', () => {
   assert.match(SOURCE, /setCampaignDraft\(\{/u);
   assert.match(SOURCE, /body: source\.body/u);
   assert.match(SOURCE, /simulate: source\.simulate === true/u);
@@ -149,12 +157,12 @@ test('reload preloads content, reveals selected-only review, and lands on the co
   assert.match(SOURCE, /승인된 알림톡 템플릿을 다시 선택하세요\./u);
   assert.match(SOURCE, /setRecipientQuery\(""\)/u);
   assert.match(SOURCE, /setRecipientStatus\("ALL"\)/u);
-  assert.match(SOURCE, /setShowSelectedOnly\(true\)/u);
-  assert.match(SOURCE, /새 발송 전 내용·대상을 확인하세요\. 예약 시각은 다시 지정하세요\./u);
+  assert.match(SOURCE, /setShowSelectedOnly\(eligible\.length > 0\)/u);
+  assert.match(SOURCE, /새 발송 전 내용·대상을 확인하세요\./u);
   // Context lands on the in-form summary, then focuses the title without
   // moving the viewport again (title focus contract preserved).
   assert.match(SOURCE, /getElementById\("campaign-reload-summary"\)\?\.scrollIntoView/u);
-  assert.match(SOURCE, /getElementById\("campaign-title"\)\?\.focus/u);
+  assert.match(SOURCE, /getElementById\(nextStep === 1 \? "recipient-search" : "campaign-title"\)\?\.focus/u);
   assert.doesNotMatch(SOURCE, /getElementById\("campaign-title"\)\?\.scrollIntoView/u);
   // Image references survive only for MMS; other channels drop them.
   assert.match(SOURCE, /imageFileId: isMms \? source\.imageFileId : ""/u);
@@ -183,15 +191,15 @@ test('overwrite confirm re-validates at confirm time because it is nonmodal', ()
   assert.match(applyBody, /if \(inFlightRef\.current \|\| uploadingImage\) return;/u);
   assert.match(applyBody, /if \(failedReloadBlocked\(\)\)/u);
   // A background refresh may have changed the row under the open confirm,
-  // so the reload resolves the live row and requires FAILED still.
+  // so the reload resolves the live row and checks its terminal state.
   assert.match(applyBody, /state\.campaigns\.find\(\(item\) => item\.id === campaign\.id\)/u);
-  assert.match(applyBody, /source\.status !== "FAILED"/u);
+  assert.match(applyBody, /if \(!source \|\| !canReloadCampaign\(source\)\)/u);
   assert.match(applyBody, /발송 기록이 바뀌었습니다\. 상태를 새로고침한 뒤 다시 시도하세요\./u);
 });
 
 test('overwrite confirm stays disabled while any action or upload runs', () => {
-  const failedBlockStart = SOURCE.indexOf('campaign.status === "FAILED" ? (');
-  assert.ok(failedBlockStart !== -1, 'expected the FAILED block');
+  const failedBlockStart = SOURCE.indexOf('{reloadable ? (');
+  assert.ok(failedBlockStart !== -1, 'expected the reloadable details');
   const failedBlock = SOURCE.slice(failedBlockStart, failedBlockStart + 2400);
   assert.match(failedBlock, /confirmLabel="불러온다"/u);
   assert.match(failedBlock, /busy=\{busyAction !== null \|\| uploadingImage\}/u);
@@ -209,7 +217,7 @@ test('reloaded-source summary renders as info before the title, never as global 
   assert.match(SOURCE, /<ConsoleFeedback kind="info" id="campaign-reload-summary">\{reloadSummary\}<\/ConsoleFeedback>/u);
   // Title exposes the summary to assistive tech alongside any field error.
   assert.match(SOURCE, /"campaign-reload-summary campaign-title-error"/u);
-  assert.match(SOURCE, /: \(reloadSummary \? "campaign-reload-summary" : undefined\)/u);
+  assert.match(SOURCE, /: \(reloadSummary && composeStep !== 1 \? "campaign-reload-summary" : undefined\)/u);
   // No duplicate global notice: reload clears it and sets the summary.
   const applyStart = SOURCE.indexOf('function applyFailedReload(campaign: Campaign)');
   const applyEnd = SOURCE.indexOf('function requestFailedReload', applyStart);
@@ -219,14 +227,17 @@ test('reloaded-source summary renders as info before the title, never as global 
   assert.doesNotMatch(applyBody, /setCampaignNotice\(\s*`/u);
 });
 
-test('reload summary wording keeps source, counts, no-autosend, and reservation copy', () => {
-  assert.match(SOURCE, /내용을 불러왔습니다 · 선택 \$\{eligible\.length\}명 · 제외 \$\{excluded\}명\(취소·삭제\)\. 바로 발송되지 않습니다\. 새 발송 전 내용·대상을 확인하세요\. 예약 시각은 다시 지정하세요\./u);
-  assert.match(SOURCE, /내용을 불러왔습니다 · 선택 가능한 대상이 없습니다 · 제외 \$\{excluded\}명\(취소·삭제\)\. 수신자를 새로 선택하세요\. 바로 발송되지 않습니다\. 새 발송 전 내용·대상을 확인하세요\. 예약 시각은 다시 지정하세요\./u);
+test('reload summary keeps source and actionable counts, with reservation copy only for reservations', () => {
+  assert.match(SOURCE, /const reservationLine = source\.scheduled \? " 예약 시각은 다시 지정하세요\." : ""/u);
+  assert.match(SOURCE, /const exclusionLine = conflictExcluded \? ` · 제외 \$\{excluded\}명\(취소·삭제·상태 확인 필요\)` : excluded \? ` · 제외 \$\{excluded\}명\(취소·삭제\)` : ""/u);
+  assert.match(SOURCE, /내용을 불러왔습니다 · 선택 \$\{eligible\.length\}명\$\{exclusionLine\}\. 바로 발송되지 않습니다\. 새 발송 전 내용·대상을 확인하세요\.\$\{reservationLine\}/u);
+  assert.match(SOURCE, /선택 가능한 대상이 없습니다 · 제외 \$\{excluded\}명\(취소·삭제\)\. 수신자를 새로 선택하세요\. 바로 발송되지 않습니다/u);
 });
 
 test('reload summary clears on proven send and on event change only', () => {
   // Proven create consumes the source; the next blank composer shows no summary.
-  const successAt = SOURCE.indexOf('setCampaignDraft(EMPTY_CAMPAIGN)');
+  const createAt = SOURCE.indexOf('async function executeCampaignCreate(');
+  const successAt = SOURCE.indexOf('setCampaignDraft(EMPTY_CAMPAIGN)', createAt);
   assert.ok(successAt !== -1, 'expected the proven-create reset');
   assert.match(SOURCE.slice(successAt, successAt + 400), /setReloadSummary\(null\)/u);
   // Event switch resets the workspace slice including the summary.
@@ -238,16 +249,17 @@ test('reload summary clears on proven send and on event change only', () => {
   assert.doesNotMatch(SOURCE.slice(applyStart, applyEnd), /setTemplateDraft/u);
 });
 
-test('summary scroll is instant to the summary with nav-honoring margin, then title focus', () => {
+test('summary scroll uses the margin for navigation and moves focus to the active step', () => {
   assert.match(SOURCE, /getElementById\("campaign-reload-summary"\)\?\.scrollIntoView\(\{ behavior: "instant" as ScrollBehavior, block: "start" \}\)/u);
-  assert.match(SOURCE, /getElementById\("campaign-title"\)\?\.focus\(\{ preventScroll: true \}\)/u);
+  assert.match(SOURCE, /getElementById\(nextStep === 1 \? "recipient-search" : "campaign-title"\)\?\.focus\(\{ preventScroll: true \}\)/u);
   assert.match(CSS, /#campaign-reload-summary/u);
   // New spacing is tokens-only: s8 + s7 + s5 = 120, no px literal.
   assert.match(CSS, /scroll-margin-top: calc\(var\(--s8\) \+ var\(--s7\) \+ var\(--s5\)\)/u);
 });
 test('duplicate ids never inflate the 취소·삭제 exclusion count', () => {
   // Parser dedupes by contract so strays cannot reach the counter.
-  assert.match(SOURCE, /\[\.\.\.new Set\(item\.recipientIds\.filter\(\(id\): id is string => typeof id === "string"\)\)\]/u);
+  assert.match(SOURCE, /const ids = Array\.isArray\(item\.recipientIds\) \? item\.recipientIds\.filter\(\(id\): id is string => typeof id === "string"\) : \[\]/u);
+  assert.match(SOURCE, /recipientIds: \[\.\.\.new Set\(ids\)\]/u);
   const applyStart = SOURCE.indexOf('function applyFailedReload(campaign: Campaign)');
   const applyEnd = SOURCE.indexOf('function requestFailedReload', applyStart);
   const applyBody = SOURCE.slice(applyStart, applyEnd);
@@ -275,6 +287,6 @@ test('blocked reload recovers focus onto the real submit next to the inline erro
   const requestStart = SOURCE.indexOf('function requestFailedReload', applyStart);
   const applyBody = SOURCE.slice(applyStart, requestStart);
   assert.match(applyBody, /reportBlockedReload\(\);/u);
-  const requestBody = SOURCE.slice(requestStart, SOURCE.indexOf('if (state.kind === "loading")', requestStart));
+  const requestBody = SOURCE.slice(requestStart, SOURCE.indexOf('if (state.kind === "loading" ||', requestStart));
   assert.match(requestBody, /reportBlockedReload\(\);/u);
 });

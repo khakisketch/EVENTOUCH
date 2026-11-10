@@ -55,13 +55,13 @@ test('unified-frame: every engagement page renders the shared frame, not a bespo
 test('unified-frame: primary actions live in toolbars or editing areas, feedback is shared', () => {
   const programs = read(PROGRAMS);
   assert.match(programs, /<ConsoleToolbar/, 'programs create/refresh ride the body toolbar');
-  assert.match(programs, />\s*프로그램 만들기\s*</, 'programs keeps the standard create action');
+  assert.match(programs, />\s*콘텐츠 만들기\s*</, 'programs keeps the standard create action');
   const reports = read(REPORTS);
   // The task-first redesign puts create alongside its report list instead of
   // in a separate toolbar, while retaining its real permission gate.
   const reportList = reports.slice(reports.indexOf('headingId="reports-list"'), reports.indexOf('</ConsoleSection>', reports.indexOf('headingId="reports-list"')));
   assert.match(reportList, /action=\{\(/, 'reports create rides the list header action');
-  assert.match(reportList, /disabled=\{writeLocked\}/, 'reports create keeps the write gate');
+  assert.match(reportList, /disabled=\{writeLocked \|\| !reportSourcesAvailable\}/, 'reports create keeps the write gate and requires available sources');
   assert.match(reportList, /onClick=\{openReportCreate\}/, 'reports create opens the existing form');
   assert.match(reportList, />\s*보고서 만들기\s*</, 'reports keeps the standard create action');
   for (const file of ALL) {
@@ -99,7 +99,7 @@ test('unified-frame: reports navigate analysis and frozen records through the sh
   assert.match(reports, /<ConsoleSectionNav/, 'reports use the shared section nav');
   assert.match(reports, /\{ id: "reports-analysis", label: "결과 분석" \}/, 'analysis jump target stays');
   assert.match(reports, /\{ id: "reports-list", label: "보고서" \}/, 'frozen list jump target stays');
-  assert.match(reports, /\{ id: "report-detail", label: "보고서 내용" \}/, 'detail jump target appears with the record');
+  assert.match(reports, /\{ id: "report-detail", label: "보고서 내용", fragment: reportFragment\(detail\.id\) \}/, 'the detail tab addresses the selected report');
   assert.match(reports, /recordRow/, 'frozen records use the shared record row');
   assert.match(reports, /badgePublished/, 'shared state stays visible on frozen records');
   assert.match(reports, /badgeDraft/, 'draft state stays visible on frozen records');
@@ -146,7 +146,7 @@ test('unified-frame: unsaved work is reported to the cross-route guard before ea
   assert.match(programs, /dialogDirty/, 'programs watch the create/edit draft');
   assert.match(programs, /answerDirty/, 'programs watch per-question answer drafts');
   assert.match(programs, /pendingRetry = pendingCommandsRef\.current\.size > 0/, 'programs watch retained idempotent keys');
-  assert.match(programs, /delete next\[question\.id\]/, 'saved answers release their draft entries');
+  assert.match(programs, /delete next\[payload\.id\]/, 'saved answers release their draft entries');
   const draws = read(DRAWS);
   assert.match(draws, /drawsDirty/, 'draws watch every editing draft');
   assert.match(draws, /normalizedPrizes/, 'draws compare server-trimmed prize labels');
@@ -182,7 +182,7 @@ test('unified-frame: archived events lock writes while reads and exports stay av
 test('unified-frame: theme binds one payload to one command id and never replays stale edits', () => {
   const theme = read(THEME);
   assert.match(theme, /stableStringify/, 'payloads fingerprint deterministically');
-  assert.match(theme, /type PendingIntent = \{ commandId: string; fingerprint: string \}/, 'intents bind id and payload');
+  assert.match(theme, /type PendingIntent = \{ commandId: string; fingerprint: string; uncertain: boolean \}/, 'intents bind id, payload and uncertainty');
   assert.match(theme, /pendingSaveRef = useRef<PendingIntent \| null>/, 'save intents persist across retries');
   assert.match(theme, /pendingPublishRef = useRef<PendingIntent \| null>/, 'publish intents persist across retries');
   assert.match(theme, /pending\.fingerprint === fingerprint \? pending\.commandId : randomCommandId\(\)/, 'unchanged retries reuse the id, edits mint a new one');
@@ -190,15 +190,20 @@ test('unified-frame: theme binds one payload to one command id and never replays
   assert.match(theme, /submittedPageFields = state\.pageFields/, 'save captures the submitted fields');
   assert.match(theme, /formSettled/, 'success adopts server values only where local input is settled');
   assert.match(theme, /fieldsSettled/, 'success preserves newer local fields against the advanced baseline');
-  assert.match(theme, /response\.status !== 408 && response\.status < 500/, 'ambiguous 408/5xx keep the bound id');
+  assert.match(theme, /attempt\.uncertain \|\| isUncertainStatus\(response\.status\)/, 'a later rejection cannot discard an earlier uncertain request');
+  assert.match(theme, /status >= 500 \|\| \[408, 425, 429\]\.includes\(status\)/, 'timeouts and temporary limits remain uncertain');
+  assert.match(theme, /confirmsAttendeePageCommand\("attendee\.page\.save", payload, body\)/, 'the saved draft is checked against its original payload');
   assert.match(theme, /expectedDraftVersion: state\.draftVersion/, 'save still guards on the draft version');
-  assert.match(theme, /payload = \{ expectedDraftVersion: state\.draftVersion \}/, 'publish still guards on the draft version');
+  assert.match(theme, /payload = \{ expectedDraftVersion: state\.draftVersion, expectedDestinations: \{ slug: state\.slug, public: isPublicEventStage\(state\.eventStage\) \} \}/, 'publish binds both the draft version and reviewed destination');
+  assert.match(theme, /body\?\.code === "PAGE_PUBLICATION_CONTEXT_CHANGED"/, 'a proven destination conflict requires a fresh review');
+  assert.match(theme, /attempt\.uncertain && !reviewedConflict/, 'only a proven locked guard can resolve a previously uncertain publish');
   assert.match(theme, /publishedPageFields,/, 'publish refreshes the published field baseline from the receipt');
 });
 
 test('unified-frame: ambiguous draw responses keep their receipts for safe retry', () => {
   const draws = read(DRAWS);
-  assert.match(draws, /response\.status < 500 && response\.status !== 408/, 'draw 408 stays ambiguous like 5xx');
+  assert.match(draws, /pending\.uncertain \|\| response\.status >= 500 \|\| \[408, 425, 429\]\.includes\(response\.status\)/, '408, 5xx and a prior uncertain response keep the bound id');
+  assert.match(draws, /if \(!ambiguous\) pendingCommands\.current\.delete\(attempt\)/, 'only a definitive response can discard the id');
   assert.match(draws, /drawIntent\(program, count, toStage\)/, 'repeated runs bind winner-count intent');
 });
 
@@ -225,7 +230,8 @@ test('unified-frame: theme status lives in header badges and save closes the edi
   assert.match(theme, /<ConsoleFormActions>/, 'save/publish close the editing unit uniformly');
   assert.match(theme, /onClick=\{\(\) => void saveDraft\(\)\}/, 'save selector and handler unchanged');
   assert.match(theme, /setPublishPending\(true\)/, 'publish asks before it runs');
-  assert.match(theme, /confirmLabel="게시하기"/, 'publish confirms in place');
+  assert.match(theme, /<PublicationReview/, 'publish uses the shared explicit review');
+  assert.match(theme, /onConfirm=\{\(\) => void confirmPublishDraft\(\)\}/, 'confirmation keeps the guarded publish handler');
   assert.match(theme, /초안 저장/, 'save label unchanged');
   assert.doesNotMatch(theme, /styles\.actionRow/, 'bespoke top action row is gone');
   assert.doesNotMatch(theme, /styles\.actions[^A-Z]/, 'bespoke top action chrome is gone');
@@ -244,7 +250,8 @@ test('unified-frame: theme keeps only locally changed leaves on newer drafts', (
   assert.match(theme, /유지할 내 변경/, 'confirm names the kept leaves');
   assert.match(theme, /둘 다 바꾼 항목/, 'confirm and notice name same-leaf conflicts');
   assert.match(theme, /홈 디자인 미리보기/, 'preview names only what it shows');
-  assert.match(theme, /소개·강조색·항목 노출은 이 화면에 반영되지 않습니다/, 'preview honestly identifies what it does not render');
+  assert.match(theme, /행사 안내의 소개·강조색·일정·장소·프로그램은 안내 화면에서 확인하세요/, 'preview names the event-page fields it does not render');
+  assert.match(theme, /showingPublished \? state\.publishedPageFields\.showAnnouncements : state\.pageFields\.showAnnouncements/, 'preview uses selected draft or published announcement visibility');
 });
 
 test('unified-frame: programs pre-block writes for switched-off types', () => {
@@ -252,7 +259,7 @@ test('unified-frame: programs pre-block writes for switched-off types', () => {
   assert.match(programs, /isTypeEnabled/, 'type gate mirrors the server 409');
   assert.match(programs, /!props\.featureOn/, 'card writes disable with the type off');
   assert.match(programs, /typeEnabled=\{isTypeEnabled\(draft\.type\)\}/, 'dialog tracks the selected type');
-  assert.match(programs, /꺼져 있는 기능의 프로그램은 저장할 수 없습니다/, 'dialog submit rejects without a round trip');
+  assert.match(programs, /꺼져 있는 기능의 콘텐츠는 저장할 수 없습니다/, 'dialog submit rejects without a round trip');
   assert.match(programs, /이 유형은 꺼져 있습니다/, 'dialog names the reason with a settings link');
   assert.match(programs, /disabled=\{busy \|\| locked \|\| !typeEnabled\}/, 'dialog submit affordance locks with the type off');
 });
@@ -276,13 +283,14 @@ test('unified-frame: frozen reports render their own snapshot, never live data',
   const reports = read(REPORTS);
   assert.match(reports, /capturedLabel/, 'snapshot stamps render compactly');
   assert.match(reports, /집계 기준/, 'captured time reads as the basis, apart from share stamps');
-  assert.match(reports, /num\(group\.count\)/, 'frozen groups carry their counts');
+  assert.match(reports, /savedGroups = snapshotRecords\(detail\?\.snapshot\?\.groups\)/, 'groups come from the frozen report');
+  assert.match(reports, /snapshotValue\(group\.count, "명"\)/, 'saved counts remain visible without inventing zero for invalid data');
   assert.match(reports, /snapshotPhotos/, 'frozen photos render as images');
   assert.match(reports, /\/files\/\$\{encodeURIComponent\(fileId\)\}/, 'frozen photos reuse the existing file route');
   assert.match(reports, /원본 파일을 확인할 수 없습니다/, 'missing frozen files read as unavailable');
   assert.match(reports, /조회 기준 시각/, 'live analysis stamps its own basis');
   assert.match(reports, /setLoadedAt\(new Date\(\)\.toISOString\(\)\)/, 'every successful load restamps the analysis');
-  assert.match(reports, />\s*새로고침\s*</, 'analysis offers an explicit refresh');
+  assert.match(reports, /<ConsoleRefreshButton label="새로고침"/, 'analysis offers an explicit refresh');
 });
 
 test('unified-frame: dialogs keep dirty and unresolved dismissal gates', () => {
@@ -290,8 +298,10 @@ test('unified-frame: dialogs keep dirty and unresolved dismissal gates', () => {
   assert.match(programs, /dialogUnresolvedRef = useRef\(false\)/);
   assert.match(programs, /if \(sendingRef\.current \|\| dialogBusy\) return false;/);
   assert.match(programs, /이미 저장되었을 수 있습니다\. 결과를 확인하지 않고 닫을까요\?/);
-  assert.match(programs, /pendingBefore = pendingCommandsRef\.current\.size/);
-  assert.match(programs, /dialogUnresolvedRef\.current = pendingCommandsRef\.current\.size > pendingBefore/);
+  assert.match(programs, /pendingCommandsRef\.current\.get\(JSON\.stringify\(\[eventId, "module\.save", payload\]\)\)/, 'the original save key remains addressable');
+  assert.match(programs, /moduleSaveRetryRef\.current = pending/);
+  assert.match(programs, /dialogUnresolvedRef\.current = true/);
+  assert.match(programs, /confirmsModuleSave\(payload, data\)/);
   assert.match(programs, /if \(!dialogDirty\) return true;/);
   const reports = read(REPORTS);
   assert.match(reports, /submitGateRef: \{ current: boolean \}/);
@@ -315,7 +325,7 @@ test('unified-frame: printing emits only the chosen saved snapshot', () => {
   assert.match(reports, /removeEventListener\("afterprint"/);
   assert.match(reports, /getElementById\("eventouch-report-print"\)\?\.remove\(\)/);
   assert.match(reports, /classList\.remove\("report-printing"\)/);
-  assert.match(reports, /onClick=\{printReport\}/);
+  assert.match(reports, /onClick=\{\(\) => void printReport\(detail\)\}/);
   assert.doesNotMatch(reports, /onClick=\{\(\) => window\.print\(\)\}/);
 });
 
@@ -324,7 +334,9 @@ test('unified-frame: engagement writes keep their command contracts', () => {
   for (const command of ['module.save', 'module.status', 'module.reveal', 'question.manage', 'photo.moderate', 'post.moderate', 'draw.run', 'draw.publish']) {
     assert.match(programs, new RegExp(command.replace('.', '\\.')), `programs keep ${command}`);
   }
-  assert.match(programs, /"question\.manage", \{ id: question\.id, answer, approved \}/, 'Q&A saves preserve publication state');
+  assert.match(programs, /answerBaselines\[question\.id\] \?\? questionBaseline\(question\)/, 'Q&A uses the original draft baseline');
+  assert.match(programs, /payload: \{ id: question\.id, answer, approved, expectedText: baseline\.text, expectedQuestion: baseline \}/, 'Q&A freezes the reviewed question, answer and publication state');
+  assert.match(programs, /postCommand\("question\.manage", payload, Boolean\(held\)\)/, 'Q&A recovery reuses the frozen request');
   const draws = read(DRAWS);
   for (const command of ['team.save', 'draw.program.save', 'draw.program.run', 'vote.config.save', 'roulette.config.save', 'lucky.preassign', 'reward.assign']) {
     assert.match(draws, new RegExp(command.replace('.', '\\.')), `draws keep ${command}`);
@@ -345,7 +357,7 @@ test('unified-frame: engagement writes keep their command contracts', () => {
 test('engagement-growth: program cards aggregate results without new APIs or identities', () => {
   const programs = read(PROGRAMS);
   assert.match(programs, /<details className=\{styles\.resultDisclosure\}>/, 'result disclosure mounts collapsed by default');
-  assert.match(programs, /<summary>결과 보기<\/summary>/, 'every card offers the result disclosure');
+  assert.match(programs, /<summary data-disclosure-indicator="">결과 보기<\/summary>/, 'every card offers the result disclosure');
   assert.match(programs, /response\.answer === option/, 'poll/quiz tallies derive from loaded answers');
   assert.match(programs, /averageLabel\(ratings\)/, 'survey averages reuse the reports snapshot math');
   assert.match(programs, /미답변/, 'qa splits answered/unanswered counts');
@@ -380,7 +392,7 @@ test('engagement-growth: long program and photo lists page incrementally', () =>
   // The remainder must count what the list actually shows (the list can be
   // filtered), so the button never promises rows that are not there.
   assert.match(programs, /더 보기 \(\{visibleModules\.length - moduleLimit\}\)/, 'programs grow with a remainder count');
-  assert.match(programs, /등록된 프로그램이 없습니다/, 'programs empty state stays');
+  assert.match(programs, /등록된 콘텐츠가 없습니다/, 'programs empty state stays');
   const photos = read(PHOTOS);
   assert.match(photos, /PHOTO_PAGE_SIZE = 12/, 'photos reveal the first 12 of the section');
   assert.match(photos, /slice\(0, photoLimit\)/, 'photos window the current-section grid');

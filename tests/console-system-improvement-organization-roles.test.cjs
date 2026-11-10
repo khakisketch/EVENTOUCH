@@ -63,12 +63,13 @@ test('pre-transmit context blocks retain only earlier unknown attempts, never a 
 
 test('stale context keeps an uncertain retry but clears a fresh stale attempt', () => {
   const role = roleOf();
-  const stale = bodyBetween(role, 'if (data?.code === "ORGANIZATION_CONTEXT_CHANGED")', 'if (isDefinitiveClientError(res.status)) {');
+  const stale = bodyBetween(role, 'if (data?.code === "ORGANIZATION_CONTEXT_CHANGED")', 'if (isDefinitiveClientError(res.status) && !hadUncertainAttempt) {');
   assert.match(stale, /if \(isRetry\)/, 'uncertain retry is told apart from a fresh stale attempt');
   assert.match(stale, /원래 조직으로 되돌린 뒤 같은 요청으로 다시 시도하세요/, 'uncertain retry points back at the original org');
   assert.match(stale, /최신 정보를 확인한 뒤 다시 시도하세요/, 'fresh stale asks for a fresh try, not a replay');
   assert.match(stale, /pendingRef\.current = null/, 'a fresh stale attempt clears its unused id');
   assert.doesNotMatch(stale, /onStaleContext/, 'no auto reload or unmount on drift');
+  assert.match(role, /isDefinitiveClientError\(res.status\) && !hadUncertainAttempt/, 'later rejections cannot erase an uncertain prior attempt');
 });
 
 test('pre-transmit drift never claims a network failure or mints a key', () => {

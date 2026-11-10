@@ -36,8 +36,8 @@ test('event navigation badges count only operator follow-up and link pending app
   assert.doesNotMatch(shell, /person\.status === "PENDING"/, "no client-side roster scan for badges");
   assert.match(shell, /const messageAttentionOf = \(eventId: string\): number =>/);
   // The attention statuses are defined where campaigns are read (the
-  // messages screen); the shell only consumes the server-counted directory
-  // summary, so no client re-derives the set in two places.
+  // messages screen); the shell consumes server-counted directory and
+  // server-evaluated reservation summaries, without a client status list.
   assert.match(shell, /typeof event\?\.messageAttention === "number" \? event\.messageAttention : 0/);
   assert.doesNotMatch(shell, /\["FAILED", "PARTIAL", "NEEDS_CONNECTION"\]/, "shell holds no status list");
   assert.match(shell, /function isApprovalQueueRelevant\(stage: string\)/);
@@ -49,12 +49,14 @@ test('event navigation badges count only operator follow-up and link pending app
   assert.match(shell, /\["AGENCY", "MANAGER"\]\.includes\(shellData\.role\)/);
   assert.match(shell, /This is a display gate only; server reads and command authorization remain authoritative/);
   assert.match(shell, /isApprovalQueueRelevant\(eventMeta\.stage\)/);
-  assert.match(shell, /eventMeta && eventMeta\.messageAttention > 0/);
+  assert.match(shell, /eventMeta\.messageAttention > 0/);
+  assert.match(shell, /messageSummary\.status === "blocked"/);
+  assert.match(shell, /messageSummary\.status === "unknown"/);
   assert.match(subnav, /messages\?attention=1/);
   assert.match(subnav, /showPendingApprovalBadge/);
   assert.match(subnav, /participants\?status=PENDING/);
   assert.match(subnav, /nav-badge" role="img" aria-label=\{`승인 대기/);
-  assert.match(subnav, /nav-badge" role="img" aria-label=\{`발송 확인/);
+  assert.match(subnav, /nav-badge" role="img" aria-label="발송 기록에 확인할 항목이 있습니다"/);
   assert.match(shell, /showOperatorNavBadges && item\.pending > 0/);
   assert.match(shell, /shellData && shellData\.triage\.length/);
 });
@@ -92,11 +94,12 @@ test('settings owns forward-only stage confirmation and reuses the command id af
   assert.match(confirmation, />\s*취소\s*</);
   assert.match(settings, /stageCommandIdRef = useRef<string \| null>\(null\)/);
   assert.match(settings, /if \(!stageCommandIdRef\.current\) stageCommandIdRef\.current = randomCommandId\(\)/);
-  assert.match(settings, /commandId: stageCommandIdRef\.current/);
+  assert.match(settings, /const commandId = stageCommandIdRef\.current/);
   assert.match(settings, /command: "event\.stage"/);
-  assert.match(settings, /Preserve the id so a retry can replay the server receipt after a lost response/);
+  assert.match(settings, /pendingSettingsRef\.current = attempt/);
+  assert.match(settings, /executeSettingsAttempt\(attempt, true\)/);
   assert.match(settings, /진행 중 전환에는 등록 데스크와 데스크 배정이 필요/);
-  assert.match(settings, /보관하려면 접수를 닫고 진행 중인 참여 프로그램을 모두 닫아야/);
+  assert.match(settings, /보관하려면 접수를 닫고 진행 중인 참여 콘텐츠를 모두 닫아야/);
   assert.match(settings, /currentStage === "ARCHIVED"\s*\?\s*"보관된 행사는 읽기 전용입니다\."/);
   assert.match(settings, /"단계 정보가 확인되지 않아 전환할 수 없습니다\."/);
   assert.match(settings, /nextStage && !stageConfirm/);
@@ -107,7 +110,7 @@ test('overview uses a labeled entry progress visualization and removes action/pr
 
   assert.match(overview, /role="progressbar"/);
   assert.match(overview, /aria-label=\{`입장 진행/);
-  assert.match(overview, /취소 제외 등록 대비 입장률 · 결과 보고서와 같은 정의/);
+  assert.match(overview, /등록 인원 기준 · 취소 제외/);
   assert.match(overview, /확정자 중 미입장/);
   assert.match(overview, /surveyResponseCount !== null/);
   assert.match(overview, /getReportStatus\(overview\)/);
@@ -115,7 +118,7 @@ test('overview uses a labeled entry progress visualization and removes action/pr
   assert.match(overview, /overview\.canManageEvent \? \(/);
   assert.match(overview, /행사 지표는 행사 운영자에게 표시됩니다/);
   // Exactly three pre-event metric cards; capacity/waitlist stay as metadata.
-  assert.equal((overview.match(/label: "신청"|label: "참가 확정"|label: "승인 대기"/g) || []).length, 3);
+  assert.equal((overview.match(/label: "신청"|label: overview\.cancellationReview \? "승인 상태" : "참가 확정"|label: "승인 대기"/g) || []).length, 3);
   assert.doesNotMatch(overview, /label: "대기 명단 \/ 정원"/u);
   assert.match(overview, /정원/u);
   assert.doesNotMatch(overview, /event-problems-heading|problemsForStage|problemList/);
@@ -127,8 +130,8 @@ test('recent activity refresh stays icon-only, accessible and reduced-motion awa
   const overview = read('apps/web/app/console/events/[id]/EventOverview.tsx');
   const css = read('apps/web/app/console/events/[id]/event-overview.module.css');
 
-  assert.match(overview, /aria-label="새로고침"/);
-  assert.match(overview, /title="새로고침"/);
+  assert.match(overview, /<ConsoleRefreshButton label="새로고침"/);
+  assert.match(overview, /title="입퇴장 기록 새로고침"/);
   assert.match(overview, /aria-busy=\{refreshing\}/);
   assert.match(overview, /<time dateTime=\{overview\.updatedAt\}>마지막 갱신/);
   assert.match(overview, /<time className=\{styles\.timestamp\} dateTime=\{check\.at \|\| undefined\}>/);

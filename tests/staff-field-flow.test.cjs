@@ -4,6 +4,8 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
+const ts = require('../apps/web/node_modules/typescript');
 
 const work = fs.readFileSync(
   path.join(__dirname, '../apps/web/app/staff/StaffEventWork.tsx'),
@@ -36,9 +38,10 @@ test('scan-success-groups-summary-and-next-action-before-auxiliary-acts', () => 
 
 test('scan-failure-guides-retry-and-manual-entry-without-repeating-itself', () => {
   assert.match(work, /aria-label=\{result\.uncertain \? "스캔 결과 미확인" : "스캔 실패"\}/);
-  assert.match(work, /result\.uncertain \? "처리 결과를 확인하지 못했습니다" : "처리에 실패했습니다"/);
+  assert.match(work, /result\.uncertain \? "처리 결과를 확인하지 못했습니다" : result\.attendanceReviewRequired \? "출입 기록 확인이 필요합니다" : result\.eligibilityReviewRequired \? "참가 상태 확인이 필요합니다" : "처리에 실패했습니다"/);
   assert.match(work, /retryFailedRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
-  assert.match(work, /role="alert">\{result\.message\}/);
+  assert.match(work, /scanFailureRef\.current\?\.scrollIntoView\(\{ block: "center", behavior: "instant" \}\)/);
+  assert.match(work, /role=\{boothLimitReached \? "status" : "alert"\}>\{result\.message\}/);
   assert.match(work, /카메라가 안 되면 티켓 코드를 직접 입력하세요/);
   assert.match(work, /result\.message\.includes\("다시 시도"\)/);
   assert.match(work, />\s*다시 시도\s*</);
@@ -79,6 +82,105 @@ test('pending-scan-temporarily-protects-context-with-a-bounded-uncertain-outcome
   const guard = detected.indexOf('if (scanBusyRef.current || submitting || writeLocked) return;');
   const replace = detected.indexOf('setTicket(code)');
   assert.ok(guard >= 0 && replace > guard, 'a late camera callback must not replace the in-flight ticket');
+});
+
+test('unconfirmed scan offers the original ticket as a direct receipt retry', () => {
+  const scan = work.slice(work.indexOf('async function submitTicket'), work.indexOf('async function onScan'));
+  assert.match(scan, /JSON\.stringify\(\[activeScope\.eventId, activeAssignment!\.id, activeTask, payload\]\)/);
+  assert.match(scan, /pendingScanIdRef\.current\.get\(attempt\) \?\? randomCommandId\(\)/);
+  assert.match(scan, /const requestTicket = "ticket" in pending\.payload \? pending\.payload\.ticket : ""/);
+  assert.equal((scan.match(/requestTarget: pending\.targetLabel/g) || []).length, 3);
+  assert.match(work, /submitTicket\(result\.requestTicket, true\)/);
+  assert.match(work, /같은 요청 재확인/);
+  assert.match(work, /pendingScanRef\.current !== null \|\| pendingRewardCommandsRef\.current\.size > 0/);
+  assert.match(work, /떠나면 같은 요청으로 다시 확인할 수 없습니다/);
+  assert.match(work, /const scanControlsLocked = writeLocked \|\| scanUnknown/);
+  assert.match(work, /scanInputHasWork && result\.kind !== "ok" && !scanUnknown/);
+  assert.match(work, /if \(pendingScanRef\.current\) return;\s*setResult\(\{ kind: "idle" \}\)/);
+  assert.match(work, /!correctUnknown && !submitting && !\(result\.kind === "failed" && result\.uncertain\)/);
+  assert.match(work, /처리됐을 수 있는 요청의 결과를 아직 확인하지 못했습니다/);
+});
+
+test('lost response blocks another ticket and replays the exact frozen desk and booth requests', async () => {
+  const source = work.slice(work.indexOf('async function submitTicket'), work.indexOf('async function onScan'));
+  const js = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
+  for (const task of ['desk', 'booth']) {
+    const calls = [];
+    const outcomes = [];
+    const abandoned = [], forgotten = [];
+    let ids = 0;
+    const sandbox = {
+      assignment: { id: 'assignment-original' }, activeScope: { eventId: 'event-original' }, activeTask: task,
+      deskId: 'desk-original', boothId: 'booth-original', selectedDesk: { name: '원래 데스크', action: 'IN' }, selectedBooth: { name: '원래 부스' },
+      scanBusyRef: { current: false }, pendingScanRef: { current: null }, pendingScanIdRef: { current: new Map() },
+      receiptRefreshRef: { current: false }, rewardRequestRef: { current: null },
+      scanFocusAtSubmitRef: {}, scanEditAtSubmitRef: {}, scanEditRevisionRef: { current: 0 },
+      ready: true, submitting: false, writeLocked: false, rewardLookupLoading: false, rewardCollectingId: null,
+      manualIdentityConfirmed: false, manualTargetCurrent: null, manualTargetDistinct: false,
+      document: { activeElement: null }, window: { setTimeout: () => 1, clearTimeout: () => {} }, AbortController,
+      randomCommandId: () => `command-${++ids}`, setSubmitting: () => {}, setCameraOpen: () => {},
+      setResult: result => outcomes.push(result), setTicketCopyNotice: () => {}, clearRewardPanel: () => {},
+      setLastScannedTicket: () => {}, setRewardTarget: () => {}, setTargetRewards: () => {}, setRewardDataLoaded: () => {},
+      setTicket: () => {}, load: async () => {}, rewardEnabled: false, directory: {},
+      setManualTarget: () => {}, setManualIdentityConfirmed: () => {}, setManualQuery: () => {},
+      abandonOperatorAttempt: id => abandoned.push(id), forgetOperatorReceipt: id => forgotten.push(id),
+      operatorFetch: async (url, options) => {
+        calls.push({ url, body: JSON.parse(options.body) });
+        if (calls.length === 1 || calls.length === 3) throw new Error('response lost after possible commit');
+        return { ok: true, json: async () => task === 'desk'
+          ? { id: 'p', name: '참가자', action: 'IN', checkId: calls.at(-1).body.commandId }
+          : { name: '참가자', booth: '원래 부스', visitId: calls.at(-1).body.commandId,
+            boothId: 'booth-original', participantId: 'p' } };
+      },
+    };
+    vm.createContext(sandbox);
+    vm.runInContext(js, sandbox);
+    sandbox.receiptRefreshRef.current = true;
+    await sandbox.submitTicket('ticket-original');
+    assert.equal(calls.length, 0, 'a status refresh blocks a new scan');
+    sandbox.receiptRefreshRef.current = false;
+    sandbox.rewardRequestRef.current = Symbol('reward-lookup');
+    await sandbox.submitTicket('ticket-original');
+    assert.equal(calls.length, 0, 'a reward lookup blocks a new scan before the UI renders');
+    sandbox.rewardRequestRef.current = null;
+    await sandbox.submitTicket('ticket-original');
+    assert.equal(outcomes.at(-1).uncertain, true);
+    if (task === 'desk') assert.equal(calls[0].body.payload.expectedAction, 'IN');
+    await sandbox.submitTicket('another-ticket');
+    assert.equal(calls.length, 1, 'another ticket cannot overwrite the pending request');
+    sandbox.assignment = { id: 'different-assignment' };
+    sandbox.activeScope = { eventId: 'different-event' };
+    sandbox.activeTask = task === 'desk' ? 'booth' : 'desk';
+    sandbox.selectedDesk = { name: '방향이 바뀐 데스크', action: 'OUT' };
+    sandbox.deskId = 'different-desk'; sandbox.boothId = 'different-booth';
+    await sandbox.submitTicket('another-ticket', true);
+    assert.deepEqual(calls[1], calls[0], 'retry uses exactly the original URL, command ID, assignment and payload');
+    assert.equal(ids, 1);
+    assert.equal(outcomes.at(-1).kind, 'ok');
+    assert.equal(sandbox.pendingScanRef.current, null);
+    // A second uncertain operation is intentionally abandoned; only then is
+    // another scan of the same ticket a new operation, not a receipt replay.
+    sandbox.assignment = { id: 'assignment-original' }; sandbox.activeScope = { eventId: 'event-original' };
+    sandbox.activeTask = task; sandbox.deskId = 'desk-original'; sandbox.boothId = 'booth-original';
+    sandbox.selectedDesk = { name: '원래 데스크', action: 'IN' };
+    await sandbox.submitTicket('ticket-original');
+    assert.equal(outcomes.at(-1).uncertain, true);
+    const start = work.indexOf('if (!window.confirm("처리됐을 수 있는 요청');
+    const end = work.indexOf('}}>확인 중단하고 다른 업무', start);
+    assert.ok(start !== -1 && end !== -1);
+    const abandon = ts.transpileModule(`function abandon() { ${work.slice(start, end)} }`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
+    vm.runInContext(abandon, sandbox);
+    sandbox.window.confirm = () => false;
+    sandbox.abandon();
+    assert.ok(sandbox.pendingScanRef.current, 'cancel keeps the uncertain request');
+    sandbox.window.confirm = () => true;
+    sandbox.abandon();
+    assert.equal(sandbox.pendingScanRef.current, null);
+    assert.deepEqual(abandoned, [calls[2].body.commandId]);
+    assert.deepEqual(forgotten, [calls[2].body.commandId]);
+    await sandbox.submitTicket('ticket-original');
+    assert.notEqual(calls[3].body.commandId, calls[2].body.commandId, 'new scan after deliberate abandonment must not replay the old receipt');
+  }
 });
 
 test('self-booth-qr-names-its-booth-above-the-code', () => {
@@ -150,7 +252,7 @@ test('scan-result-binds-request-location-not-current-selection', () => {
   assert.doesNotMatch(work, /처리 위치:[^}]*selectedDesk\?\.name/s);
   assert.doesNotMatch(work, /처리 위치:[^}]*deskId\)\?\.name/s);
   // Nametag also binds the request desk, not the live selection.
-  assert.match(work, /deskName:\s*result\.place\.task === "desk" \? result\.place\.placeName/);
+  assert.match(work, /context:\s*`\$\{result\.place\.placeName\} · 입장`/);
 });
 
 test('scan-result-clears-when-context-changes-so-stale-place-never-sticks', () => {
@@ -164,7 +266,14 @@ test('scan-result-clears-when-context-changes-so-stale-place-never-sticks', () =
   assert.match(work, /setTask\("booth"\)[\s\S]*?setResult\(\{ kind: "idle" \}\)/);
   // Uncertain keeps the id for same-request retry; definitive clears it.
   const scan = work.slice(work.indexOf('async function submitTicket'), work.indexOf('async function onScan'));
-  assert.match(scan, /if \(!uncertain\) pendingScanIdRef\.current\.delete\(attempt\)/);
+  assert.match(scan, /if \(!uncertain\) \{\s*pendingScanIdRef\.current\.delete\(attempt\);\s*pendingScanRef\.current = null;/);
+  assert.match(scan, /const deskChanged = isDesk && res\.status === 409 &&\s*\(data\?\.code === "DESK_ACTION_CHANGED" \|\| data\?\.code === "DESK_CLOSED"\)/);
+  assert.match(scan, /const manualChanged = isDesk && "participantId" in pending\.payload && res\.status === 409 && data\?\.code === "MANUAL_IDENTITY_CHANGED"/);
+  assert.match(scan, /const attendanceReviewRequired = isDesk && res\.status === 409 && data\?\.code === "CHECK_ATTENDANCE_REVIEW_REQUIRED"/);
+  assert.match(scan, /const sourceUnavailable = isDesk && res\.status === 409 && data\?\.code === "CHECK_SOURCE_UNAVAILABLE"/);
+  assert.match(scan, /\["TICKET_STATUS_CONFLICT", "CHECK_OUT_REVIEW_REQUIRED"\]\.includes\(data\.code\)/);
+  assert.match(scan, /const uncertain = !deskChanged && !manualChanged && !attendanceReviewRequired && !eligibilityReviewRequired && !sourceUnavailable && \(pending\.uncertain \|\| res\.status >= 500 \|\| \[408, 425, 429\]\.includes\(res\.status\)\)/);
+  assert.match(scan, /if \(deskChanged \|\| manualChanged \|\| attendanceReviewRequired \|\| eligibilityReviewRequired \|\| sourceUnavailable\) \{ abandonOperatorAttempt\(pending\.commandId\); forgetOperatorReceipt\(pending\.commandId\); \}/);
   assert.match(scan, /pendingScanIdRef\.current\.delete\(attempt\)/);
   // Late-edit and focus-steal guards stay with the bound result.
   assert.match(scan, /scanEditRevisionRef\.current/);
@@ -209,9 +318,9 @@ test('staff-warnings-wrap-by-word-without-mid-syllable-split', () => {
   assert.match(globals, /\.staff-direction-hint\s*\{[^}]*word-break:\s*keep-all/s);
   // Long arbitrary data still breaks anywhere instead of overflowing.
   assert.match(styles, /\.ticketFullCode\s+code\s*\{[^}]*overflow-wrap:\s*anywhere/s);
-  // No copy/state/snapshot/guard/focus changes ride along.
+  // The definitive booth limit is a status, while scan failures still announce an alert.
   assert.match(work, /처리 응답을 확인하지 못했습니다\. 같은 업무·티켓으로 다시 시도하세요\./);
-  assert.match(work, /role="alert">\{result\.message\}/);
+  assert.match(work, /role=\{boothLimitReached \? "status" : "alert"\}>\{result\.message\}/);
   assert.match(work, /place:\s*requestPlace/);
   assert.match(work, /window\.setTimeout\(\(\) => controller\.abort\(\), 15000\)/);
 });

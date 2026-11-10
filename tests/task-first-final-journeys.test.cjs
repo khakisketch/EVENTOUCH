@@ -159,7 +159,8 @@ test("reports carry the live archive prerequisites from bootstrap", () => {
   assert.match(workspace, /registrationOpen: boolean;/);
   assert.match(workspace, /openModules: Array<\{ name: string; type: string \}>;/);
   assert.match(workspace, /registrationOpen: workspace\.registrationOpen === true/);
-  assert.match(workspace, /text\(module\.status\) === "OPEN"/);
+  assert.match(workspace, /text\(module\.status\)\.toUpperCase\(\) === "OPEN"/);
+  assert.match(workspace, /archiveAvailable: readCloseSnapshot\(event, workspace\)\.archiveAvailable/);
 });
 
 test("frozen detail links to the existing settings stage anchor with exact remainders", () => {
@@ -170,7 +171,7 @@ test("frozen detail links to the existing settings stage anchor with exact remai
   assert.match(flow, /새로고침 시 갱신됩니다/);
   assert.match(workspace, /loadedAt \? capturedLabel\(loadedAt\)/);
   assert.match(flow, /참가 접수 열림 — 보관 전에 접수 닫기가 필요합니다/);
-  assert.match(flow, /진행 중인 참여 프로그램/);
+  assert.match(flow, /진행 중인 참여 콘텐츠/);
   assert.match(workspace, /생성 시점 그대로 유지/);
   assert.doesNotMatch(workspace, /"event\.stage"/);
   assert.match(workspace, /eventCloseHref\(eventId, detail\.id\)/, 'detail returns to the single checklist with the chosen report');

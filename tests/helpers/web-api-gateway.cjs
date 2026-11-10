@@ -9,9 +9,14 @@ const { EventEmitter } = require('node:events');
 async function startWebApiGateway({ apiBase, webBase, loseFirstResponseFor = null }) {
   const commands = [];
   const faults = new Set(Array.isArray(loseFirstResponseFor) ? loseFirstResponseFor : [loseFirstResponseFor]);
+  const faultMode = [...faults].some((name) => typeof name === 'string' && name.length > 0);
   const lostCommands = new Set();
   const completedLosses = new Set();
   const lossEvents = new EventEmitter();
+  // Reuse connections during normal audits. Fault-injection audits retain
+  // one-shot connections so a browser cannot transparently retry the
+  // deliberately destroyed response before the UI observes the loss.
+  const upstreamAgent = new http.Agent({ keepAlive: !faultMode });
   const server = http.createServer(async (request, response) => {
     try {
       if (!request.url || !request.url.startsWith('/') || request.url.startsWith('//')) {
@@ -54,8 +59,9 @@ async function startWebApiGateway({ apiBase, webBase, loseFirstResponseFor = nul
       }
       const upstream = http.request(destination, {
         method: request.method,
+        agent: upstreamAgent,
         // Preserve the public Host/Origin pair, just like a deployment proxy.
-        headers: { ...request.headers, connection: 'close' },
+        headers: { ...request.headers, connection: faultMode ? 'close' : 'keep-alive' },
       }, (reply) => {
         if (command) command.status = reply.statusCode;
         if (restFault) restFault.status = reply.statusCode;
@@ -106,6 +112,7 @@ async function startWebApiGateway({ apiBase, webBase, loseFirstResponseFor = nul
     },
     async close() {
       server.closeAllConnections();
+      upstreamAgent.destroy();
       await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     },
   };

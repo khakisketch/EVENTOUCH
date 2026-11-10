@@ -64,14 +64,15 @@ test('account-recovery audit covers the honest and guarded rendered states', () 
     '모의 인증 요청을 기록했습니다',
     '복구 메일 요청을 접수했습니다',
     '현재 이메일 발송이 설정되지 않아',
-    '요청을 접수하지 못했습니다',
+    '복구 메일 요청 결과를 확인하지 못했습니다',
+    '앞선 복구 메일 요청 결과는 확인되지 않았습니다',
     '인증 상태를 확인하지 못했습니다',
     '내 계정 페이지로 이동하면',
     '연결하지 못했습니다. 같은 업무·티켓으로 다시 시도하세요.',
   ]) {
     assert.ok(source.includes(needle), `audit asserts rendered copy: ${needle}`);
   }
-  for (const needle of ['loseFirstResponseFor', 'unroute', 'route.fulfill', 'getByText(/인증됨 ·/)', '#staff-ticket']) {
+  for (const needle of ['loseFirstResponseFor', 'unroute', 'route.fulfill', 'getByText(/인증됨 ·/)', '#staff-ticket', 'recoveryRequestCommit', 'verify request can commit despite a lost response']) {
     assert.ok(source.includes(needle), `audit exercises the path: ${needle}`);
   }
 });

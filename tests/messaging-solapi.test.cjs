@@ -375,7 +375,7 @@ test('a-message-the-carrier-has-not-settled-yet-stays-pending', () => {
   assert.equal(solapi.interpretStatus({ status: 'SENDING', statusCode: '2000' }).state, 'PENDING');
 });
 
-test('a-completed-message-in-the-4xxx-band-counts-as-delivered', () => {
+test('a-completed-message-with-code-4000-counts-as-delivered', () => {
   const result = solapi.interpretStatus({
     status: 'COMPLETE', statusCode: '4000', messageId: 'M1', type: 'SMS', dateReceived: '2026-01-01T00:00:00Z',
   });
@@ -384,10 +384,18 @@ test('a-completed-message-in-the-4xxx-band-counts-as-delivered', () => {
   assert.equal(result.receivedAt, '2026-01-01T00:00:00Z');
 });
 
-test('a-completed-message-below-the-4xxx-band-counts-as-failed', () => {
-  const result = solapi.interpretStatus({ status: 'COMPLETE', statusCode: '3000', reason: '수신번호 오류' });
+test('a-completed-message-with-a-provider-error-counts-as-failed', () => {
+  const result = solapi.interpretStatus({ status: 'COMPLETE', statusCode: '3010', reason: '수신번호 오류' });
   assert.equal(result.state, 'FAILED');
   assert.match(result.reason, /수신번호 오류/);
+});
+
+test('a-complete-envelope-does-not-settle-an-intermediate-or-unknown-code', () => {
+  for (const statusCode of ['2000', '3000', '3014', '3048', '4001', '5000', '4e3', null, 'unexpected']) {
+    const result = solapi.interpretStatus({ status: 'COMPLETE', statusCode });
+    assert.equal(result.state, 'PENDING', `unconfirmed code ${statusCode}`);
+  }
+  assert.equal(solapi.interpretStatus({ status: 'SENDING', statusCode: '4000' }).state, 'PENDING');
 });
 
 test('an-alimtalk-that-fell-back-to-text-is-flagged-as-replaced', () => {
@@ -414,6 +422,21 @@ test('polling-reads-status-by-message-id', async () => {
   assert.equal(result.results.M2.state, 'PENDING');
   const call = mock.requests.find((r) => r.path === '/messages/v4/list');
   assert.deepEqual(call.query.messageIds, JSON.stringify(['M1', 'M2']));
+});
+
+test('polling-ignores-unrequested-and-mismatched-message-ids', async () => {
+  mock.reset();
+  mock.setList({ messageList: {
+    M1: { messageId: 'M1', status: 'COMPLETE', statusCode: '3010' },
+    M2: { messageId: 'M1', status: 'COMPLETE', statusCode: '4000' },
+    M3: { messageId: 'M3', status: 'COMPLETE', statusCode: '4000' },
+    M4: null,
+  } });
+  const provider = solapi.createSolapiProvider(config({ host }));
+  const result = await provider.pollResults(['M1', 'M2', 'M4']);
+  assert.equal(result.ok, true);
+  assert.deepEqual(Object.keys(result.results), ['M1']);
+  assert.equal(result.results.M1.state, 'FAILED');
 });
 
 test('polling-more-ids-than-one-page-holds-is-split-into-batches', async () => {
@@ -495,6 +518,8 @@ test('active-provider-is-the-solapi-adapter-when-solapi-is-configured', () => {
   // batch capability is what marks the Solapi adapter
   assert.equal(typeof provider.sendBatch, 'function');
   assert.equal(typeof provider.pollResults, 'function');
+  assert.equal(provider.state.connected, true);
+  assert.equal(provider.state.sender, '0212345678');
 });
 
 test('active-provider-falls-back-to-per-recipient-sending', () => {
@@ -505,6 +530,7 @@ test('active-provider-falls-back-to-per-recipient-sending', () => {
   });
   assert.equal(typeof provider.send, 'function');
   assert.equal(provider.sendBatch, undefined);
+  assert.equal(provider.state.connected, true);
 });
 
 test('the-bootstrap-projection-and-the-health-probe-agree', () => {
@@ -514,8 +540,8 @@ test('the-bootstrap-projection-and-the-health-probe-agree', () => {
   const path = require('node:path');
   const state = fs.readFileSync(path.join(__dirname, '..', 'server/state.js'), 'utf8');
   const server = fs.readFileSync(path.join(__dirname, '..', 'server/server.js'), 'utf8');
-  assert.match(state, /activeMessagingState\(\)/, 'state.js must use the shared decision');
-  assert.match(server, /activeMessagingState\(\)/, 'server.js must use the shared decision');
+  assert.match(state, /activeMessagingState\(env\)/, 'state.js must use the request server environment');
+  assert.match(server, /activeMessagingState\(env\)/, 'server.js must use the request server environment');
 });
 
 test('state-js-never-calls-the-generic-state-directly', () => {
@@ -707,4 +733,44 @@ test('a-mid-pagination-failure-keeps-the-pages-already-read', async () => {
   const result = await provider.groupMessages('G-1');
   assert.equal(result.ok, false, 'a partial collection is not presented as complete');
   assert.equal(result.reason, 'PROVIDER_REJECTED');
+});
+
+
+test('personalization-is-applied-before-the-SMS-LMS-and-length-decisions', () => {
+  const provider = solapi.createSolapiProvider(config({ host }));
+  const atBoundary = provider.buildMessage({ channel: 'SMS', to: '01011112222', text: '{{이름}}', variables: { 이름: '가'.repeat(45) } });
+  assert.equal(atBoundary.message.type, 'SMS');
+  assert.equal(atBoundary.bytes, 90);
+  const expanded = provider.buildMessage({ channel: 'SMS', to: '01011112222', text: '{{이름}}', variables: { 이름: '가'.repeat(46) } });
+  assert.equal(expanded.message.type, 'LMS');
+  assert.equal(expanded.bytes, 92);
+  assert.equal(expanded.message.text, '가'.repeat(46));
+  const contracted = provider.buildMessage({ channel: 'SMS', to: '01011112222', text: '{{이름}}'.repeat(300), variables: { 이름: 'A' } });
+  assert.equal(contracted.message.type, 'LMS');
+  assert.equal(contracted.bytes, 300);
+  for (const channel of ['SMS', 'LMS', 'MMS']) {
+    const oversized = provider.buildMessage({ channel, to: '01011112222', text: '{{이름}}', variables: { 이름: '가'.repeat(1001) }, imageId: 'SYNTHETIC_IMAGE' });
+    assert.equal(oversized.error, 'TOO_LONG', channel);
+    assert.equal(oversized.bytes, 2002);
+  }
+});
+
+test('Alimtalk-limit-is-1000-characters-after-personalization', () => {
+  const provider = solapi.createSolapiProvider(config({ host }));
+  const args = { channel: 'ALIMTALK', to: '01011112222', text: '{{이름}}', templateId: 'KAFIXTURE_ONLY' };
+  const accepted = provider.buildMessage({ ...args, variables: { 이름: '가'.repeat(1000) } });
+  assert.equal(accepted.message.type, 'ATA');
+  assert.equal(accepted.message.text.length, 1000);
+  assert.equal(accepted.message.kakaoOptions.variables['#{이름}'].length, 1000);
+  assert.equal(provider.buildMessage({ ...args, variables: { 이름: '가'.repeat(1001) } }).error, 'TOO_LONG');
+});
+
+
+test('long-message-subject-keeps-a-40-byte-prefix-without-cutting-a-character', () => {
+  const provider = solapi.createSolapiProvider(config({ host }));
+  for (const channel of ['LMS', 'MMS']) {
+    const built = provider.buildMessage({ channel, to: '01011112222', text: '가'.repeat(60), subject: '가'.repeat(21), imageId: 'SYNTHETIC_IMAGE' });
+    assert.equal(built.message.subject, '가'.repeat(20));
+    assert.equal(solapi.messageBytes(built.message.subject), 40);
+  }
 });

@@ -141,8 +141,8 @@ test('operations reuses its dialog for the handed-off person, never autosubmits'
   assert.match(source, /setAssignPreset\(null\); setAssignOpen\(true\)/u);
   assert.match(source, /setAssignPreset\(\{ type: "DESK", targetId: desk\.id \}\)/u);
   assert.match(source, /setAssignPreset\(\{ type: "BOOTH", targetId: booth\.id \}\)/u);
-  assert.match(source, /disabled=\{busy \|\| !accountId \|\| !currentTarget\}/u, 'staff choice still gates submit');
-  assert.equal(source.match(/staff\.assign/g)?.length ?? 0, 1, 'the existing assign call stays the only one');
+  assert.match(source, /disabled=\{busy \|\| blocked \|\| !accountId \|\| !currentTarget\}/u, 'staff choice and unresolved requests gate submit');
+  assert.equal(source.match(/runCommand\("staff\.assign"/g)?.length ?? 0, 1, 'the existing assign call stays the only one');
 });
 
 test('handoff opens the dialog once after load, validates, then consumes the param', () => {
@@ -192,11 +192,13 @@ test('display section sits second in the DOM with its copy and handlers intact',
     last = at;
   }
   assert.equal(source.match(/headingId="ops-display"/g)?.length ?? 0, 1, 'one display section, moved not copied');
-  // Verbatim block: title, copy, controls, handler wiring.
+  // Section title, selection guidance, controls and handler wiring.
   assert.match(source, /title="전광판 출력" description=\{displaySummary\}/u);
   assert.match(source, /htmlFor="ops-display-pick">전광판 출력 선택/u);
   assert.match(source, /<option value="">출력 고르기<\/option>/u);
-  assert.match(source, /게시한 공지·공개된 프로그램만 고를 수 있습니다/u);
+  assert.match(source, /추첨은 무대별 최근 공개 결과를 고를 수 있습니다/u);
+  assert.match(source, /if \(notice\.published\) options\.push/u);
+  assert.match(source, /if \(!module\.published\) continue/u);
   assert.match(source, /선택한 출력은 아직 적용되지 않았습니다/u);
   assert.match(source, /onClick=\{\(\) => void applyDisplayChoice\(\)\}/u);
   assert.match(source, /display\.set/u);

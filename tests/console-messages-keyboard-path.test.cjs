@@ -43,24 +43,23 @@ test('in-form move to the send request exists inside the compose form', () => {
   assert.ok(skipAt < SOURCE.indexOf('id="campaign-submit"'), 'skip must sit before the submit button');
 });
 
-test('the move lands focus on the real submit button with scroll following', () => {
-  // The jump handler targets the actual submit button by its stable id.
-  assert.match(SOURCE, /function jumpToCampaignSubmit\(\)/u);
-  const fnAt = SOURCE.indexOf('function jumpToCampaignSubmit()');
-  const fnWindow = SOURCE.slice(fnAt, fnAt + 500);
-  assert.match(fnWindow, /getElementById\("campaign-submit"\)/u);
-  // Focus (not just scroll) lands on the button: the next Tab leaves it
-  // and Enter/Space activates it without re-finding.
-  assert.match(fnWindow, /\.focus\(/u);
-  assert.match(fnWindow, /scrollIntoView/u);
-  // No new command path: the handler never posts, confirms, or submits.
-  assert.doesNotMatch(fnWindow, /postCommand|executeCampaignCreate|requestSubmit|\.submit\(|message\.create/u);
+test('the move reveals review and focuses its heading without sending', () => {
+  assert.match(SOURCE, /function jumpToCampaignSubmit\(\) \{ goComposeStep\(3\); \}/u);
+  const fn = SOURCE.slice(SOURCE.indexOf('function goComposeStep'), SOURCE.indexOf('const focusComposerOnOpenRef'));
+  assert.match(fn, /campaign-review-heading/u);
+  assert.match(fn, /target\?\.focus/u);
+  assert.match(fn, /scrollIntoView/u);
+  assert.match(fn, /!selectedIds\.length/u);
+  assert.match(fn, /!campaignDraft\.body\.trim\(\)/u);
+  assert.doesNotMatch(fn, /postCommand|executeCampaignCreate|requestSubmit|\.submit\(/u);
 });
 
 test('submit button id and labelling are preserved', () => {
   assert.match(SOURCE, /id="campaign-submit"/u);
   const submitAt = SOURCE.indexOf('id="campaign-submit"');
-  const submitWindow = SOURCE.slice(Math.max(0, submitAt - 200), submitAt + 600);
+  const submitEnd = SOURCE.indexOf('</button>', submitAt);
+  assert.ok(submitEnd > submitAt, 'submit button must close');
+  const submitWindow = SOURCE.slice(submitAt, submitEnd);
   assert.match(submitWindow, /type="submit"/u);
   assert.match(submitWindow, /발송 검토/u);
   assert.match(SOURCE, /className=\{styles\.reviewBar\}/u);
@@ -75,7 +74,8 @@ test('existing send, mock and cancel wording plus API surface are intact', () =>
   assert.match(SOURCE, /예약 등록/u);
   assert.match(SOURCE, /발송 요청을 취소할까요/u);
   assert.match(SOURCE, /이미 공급사가 접수한 발송은 취소할 수 없습니다/u);
-  assert.match(SOURCE, /postCommand\("message\.create", pending\.payload, pending\.id\)/u);
+  assert.match(SOURCE, /postCommand\("message\.create-charset-reviewed", pending\.payload, pending\.id\)/u);
+  assert.match(SOURCE, /confirmsCharsetReviewedMessageCreate\(pending\.id, pending\.payload, result\)/u);
   assert.match(SOURCE, /\/api\/events\/\$\{encodeURIComponent\(eventId\)\}\/commands/u);
   assert.match(SOURCE, /message\.retry/u);
   assert.match(SOURCE, /message\.sync/u);

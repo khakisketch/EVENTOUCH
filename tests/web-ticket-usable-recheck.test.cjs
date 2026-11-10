@@ -22,11 +22,10 @@ function source() {
 
 test('usable ticket offers a manual re-check that keeps the QR mounted', () => {
   const view = source();
-  assert.match(view, /recheckUsableTicket/);
+  assert.match(view, /recheckTicket/);
   assert.match(view, /확인 중입니다/);
-  // The QR branch owns the control; the receipt branch keeps its own. The
-  // in-check copy states the uncertainty honestly instead of implying a
-  // working offline entry.
+  // The shared control preserves the last receipt or QR. The in-check copy
+  // states the QR's uncertainty explicitly.
   assert.match(view, /이 QR의 입장 가능 여부는 확정되지 않습니다/);
 });
 
@@ -64,5 +63,6 @@ test('usable re-check drops late responses after a slug change or reload', () =>
   assert.equal(invalidations.length, 2); // fresh load + unmount cleanup
   assert.match(view, /setRechecking\(false\);\s*\n\s*setRecheckError\(null\);/);
   // Even the final reset is scoped: it never clears a newer request.
-  assert.match(view, /finally \{\s*\n\s*if \(live\(\)\) setRechecking\(false\);\s*\n\s*\}/);
+  assert.match(view, /if \(recheckRequestRef\.current === controller\) recheckRequestRef\.current = null;/);
+  assert.match(view, /if \(live\(\)\) setRechecking\(false\);/);
 });

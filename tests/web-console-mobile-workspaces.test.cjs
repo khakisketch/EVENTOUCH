@@ -28,7 +28,7 @@ test('mobile-workspaces: roster search owns its row, advanced selects disclose',
   const list = read(PARTICIPANTS);
   // Search is the primary every-visit control: full width on every viewport.
   assert.match(list, /data-toolbar-span="full"/u, 'search opts into its own toolbar row');
-  // The three advanced selects collapse behind one readable disclosure at
+  // The advanced selects collapse behind one readable disclosure at
   // <=768px. Always rendered (no media-query JS, no hydration split): CSS
   // hides the toggle on desktop and the panel when closed on mobile.
   assert.match(list, /id="roster-filter-toggle"/u, 'disclosure has a stable selector');
@@ -40,12 +40,12 @@ test('mobile-workspaces: roster search owns its row, advanced selects disclose',
   assert.match(list, /개 적용 중/u, 'toggle carries the active count');
   // A pre-filtered deep link (overview ?status=PENDING) opens the disclosure
   // so the operator sees why the list is narrow.
-  assert.match(list, /if \(initial\.status \|\| initial\.group \|\| initial\.attendance\) \{\s*setFiltersOpen\(true\);/u, 'URL filters default the disclosure open');
+  assert.match(list, /if \(initial\.status \|\| initial\.group \|\| initial\.attendance \|\| initial\.ticket\) \{\s*setFiltersOpen\(true\);/u, 'URL filters including ticket review default the disclosure open');
   // Filter values survive open/close; only the explicit reset clears them —
   // and the reset never touches the checkbox selection.
   const reset = list.match(/function clearRosterFilters\(\) \{[^}]*\}/u);
   assert.ok(reset, 'reset is one named function');
-  for (const setter of ['setQuery', 'setStatusFilter', 'setGroupFilter', 'setAttendanceFilter']) {
+  for (const setter of ['setQuery', 'setStatusFilter', 'setGroupFilter', 'setAttendanceFilter', 'setTicketFilter']) {
     assert.match(reset[0], new RegExp(setter), `reset clears via ${setter}`);
   }
   assert.doesNotMatch(reset[0], /setSelectedIds/, 'reset clears ONLY filters, not the selection');
@@ -57,7 +57,7 @@ test('mobile-workspaces: roster selects keep their accessible names inside the p
   const list = read(PARTICIPANTS);
   // Audit locators stay valid: the same label ids and aria wiring, now nested
   // in the disclosure panel (open it first on narrow screens).
-  for (const name of ['search', 'status', 'group', 'attendance']) {
+  for (const name of ['search', 'status', 'group', 'attendance', 'ticket']) {
     assert.match(list, new RegExp(`id="roster-${name}-label"`, 'u'), `${name} label id stays`);
     assert.match(list, new RegExp(`aria-labelledby="roster-${name}-label"`, 'u'), `${name} wiring stays`);
   }
@@ -86,10 +86,10 @@ test('mobile-workspaces: CSV and import ride one compact secondary pair', () => 
   assert.match(list, /data-toolbar-inline/u, 'utilities opt into the paired inline group');
   assert.match(list, /CSV 내보내기 · 검색·필터 결과 \$\{visiblePeople\.length\}명/u, 'export accessible name retains its exact filtered count');
   assert.match(list, /EVENTOUCH_participants\.csv/u, 'download target stays');
-  assert.match(list, /participants\/import/u, 'import route stays');
+  assert.match(list, /<ImportWizard eventId=\{eventId\}/u, 'import route stays');
   assert.match(list, /명단 가져오기/u, 'import action stays and matches its destination');
   assert.doesNotMatch(list, /button-primary" href=\{`\/console\/events\/\$\{encodeURIComponent\(eventId\)\}\/participants\/import`\}/u, 'import is no longer a full-width primary');
-  assert.match(list, /canMutateStatus \? \(\s*<Link className="button button-secondary" href=\{`\/console\/events\/\$\{encodeURIComponent\(eventId\)\}\/participants\/import`\}/u, 'import stays gated and secondary');
+  assert.match(list, /canMutateStatus \? <button type="button" className="button button-secondary" onClick=\{\(\) => setImportOpen\(true\)\}/u, 'import stays gated and opens a secondary modal action');
 });
 
 test('mobile-workspaces: editor preview header wraps without squishing Korean', () => {
@@ -107,7 +107,7 @@ test('mobile-workspaces: analysis header folds refresh and stamp beside the KPIs
   // 새로고침 stays in the section action slot next to the 결과 분석 H2 —
   // a secondary slot action, never a new stacked 44px body row.
   assert.match(reports, /headingId="reports-analysis"/u, 'analysis section stays');
-  assert.match(reports, />\s*새로고침\s*</u, 'refresh action stays');
+  assert.match(reports, /<ConsoleRefreshButton label="새로고침"/u, 'refresh action stays');
   // The frozen basis stamp moves into the description next to the header
   // instead of stacking its own row above the KPIs; the explanation persists.
   assert.match(reports, /누적 입장은 한 번 이상 입장한 참가자 기준/u, 'explanation persists');
@@ -119,7 +119,7 @@ test('mobile-workspaces: analysis header folds refresh and stamp beside the KPIs
   // toolbar's former DOM placement was a presentation-only contract.
   const reportList = reports.slice(reports.indexOf('headingId="reports-list"'), reports.indexOf('</ConsoleSection>', reports.indexOf('headingId="reports-list"')));
   assert.match(reportList, /action=\{\(/u, 'create lives in the report section header');
-  assert.match(reportList, /disabled=\{writeLocked\}/u, 'create respects write permission and archive lock');
+  assert.match(reportList, /disabled=\{writeLocked \|\| !reportSourcesAvailable\}/u, 'create respects permission, archive lock, and source availability');
   assert.match(reportList, /onClick=\{openReportCreate\}/u, 'create opens the existing protected form');
   assert.match(reportList, />\s*보고서 만들기\s*</u, 'create action stays obvious');
   // Print/snapshot output is untouched: no DOM-cloning changes.

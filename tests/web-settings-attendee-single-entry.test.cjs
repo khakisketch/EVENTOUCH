@@ -61,8 +61,9 @@ test('settings-attendee-single-entry: tabs stay in preparation order with deep-l
   assert.match(settings, /role="tablist"/u);
   assert.match(settings, /role="tab"/u);
   assert.match(settings, /role="tabpanel"/u);
+  const tabs = settings.slice(settings.indexOf('const SETTINGS_TABS:'), settings.indexOf('const TAB_ANCHORS:'));
   const order = ['기본 정보', '참가 접수', '운영 기능', '진행 단계']
-    .map((label) => settings.indexOf(label));
+    .map((label) => tabs.indexOf(`label: "${label}"`));
   assert.ok(order.every((position) => position >= 0));
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
   for (const id of ['settings-basics', 'settings-intake', 'settings-features', 'settings-stage']) {
@@ -77,14 +78,15 @@ test('settings-attendee-single-entry: stage preconditions block instead of faili
   const settings = read(SETTINGS);
   assert.match(settings, /stagePrecondition/);
   assert.match(settings, /stageBlocked/);
-  assert.match(settings, /disabled=\{stageBusy \|\| busy \|\| stageBlocked\}/);
+  assert.match(settings, /disabled=\{settingsLocked \|\| stageBlocked\}/);
   assert.match(settings, /!stageConfirm \|\| stageBlocked/);
   assert.match(settings, /\/operations/);
   assert.match(settings, /\/programs/);
   assert.match(settings, /href="#settings-intake"/);
   assert.match(settings, /retry=\{Boolean\(stageCommandIdRef\.current && stageError\)\}/);
   assert.match(read('app/console/console-ui/StageTransitionConfirmation.tsx'), /같은 요청 다시 시도/);
-  assert.match(settings, /Preserve the id so a retry can replay the server receipt after a lost response/);
+  assert.match(settings, /pendingSettingsRef\.current = attempt/);
+  assert.match(settings, /executeSettingsAttempt\(attempt, true\)/);
 });
 
 test('settings-attendee-single-entry: closed registration shows status, not a dead button', () => {
@@ -97,18 +99,19 @@ test('settings-attendee-single-entry: in-flight commands share a synchronous gua
   const settings = read(SETTINGS);
   assert.match(settings, /operationsBusyRef/);
   assert.match(settings, /operationsBusyRef\.current = true/);
-  assert.match(settings, /if \(busy \|\| operationsBusyRef\.current\) return false/);
+  assert.match(settings, /if \(operationsBusyRef\.current \|\| busy \|\| stageBusy\) return false/);
   assert.match(settings, /stageBusy \|\| operationsBusyRef\.current/);
 });
 
 test('settings-attendee-single-entry: empty or misshapen 2xx bodies stay ambiguous', () => {
   const settings = read(SETTINGS);
   assert.match(settings, /isProvenResponse/);
-  assert.match(settings, /text\(event\.id\) === eventId/);
-  assert.match(settings, /data\.registrationOpen === false/);
-  assert.match(settings, /text\(event\.stage\)\.toUpperCase\(\) === expectedStage/);
-  assert.match(settings, /if \(!isProvenResponse\(command, data\)\)/);
-  assert.match(settings, /if \(!isProvenResponse\("event\.stage", data, nextStage\)\)/);
+  assert.match(settings, /confirmsSettingsCommand\(command, eventId, payload, data\)/);
+  assert.match(settings, /if \(!isProvenResponse\(attempt\.command, data, attempt\.payload\)\)/);
+  const transport = read('lib/operator-context.ts');
+  assert.match(transport, /event\.id !== eventId/);
+  assert.match(transport, /result\.registrationOpen === false/);
+  assert.match(transport, /event\.stage === input\.stage\.trim\(\)\.toUpperCase\(\)/);
 });
 
 test('settings-attendee-single-entry: blocked stage buttons reference the visible reason', () => {
@@ -134,8 +137,8 @@ test('settings-attendee-single-entry: retries reuse one id per command fingerpri
   assert.match(settings, /isAmbiguousFailure/);
   assert.match(settings, /408/);
   assert.match(settings, />= 500/);
-  assert.match(settings, /commandIdCache\.current\.delete\(fingerprint\)/);
-  assert.match(settings, /같은 요청으로 다시 시도하세요/);
+  assert.match(settings, /commandIdCache\.current\.delete\(attempt\.fingerprint\)/);
+  assert.match(settings, /같은 요청 다시 시도/);
   assert.match(settings, /liveRef/);
   assert.match(settings, /JSON\.stringify\(live\.basics\)/);
   assert.match(settings, /describedBy/);
@@ -149,7 +152,7 @@ test('settings-attendee-single-entry: retries reuse one id per command fingerpri
   assert.match(settings, /const user = record\(record\(meData\)\?\.user\)/);
   assert.match(settings, /const role = text\(user\.role\)/);
   assert.match(settings, /const myId = text\(user\.id\)/);
-  assert.match(settings, /const canWriteSettings = canWriteEvent\(capabilities, "event\.update"\)/);
+  assert.match(settings, /const canWriteSettings = canWriteEvent\(capabilities, "event\.basics\.save"\)/);
   assert.match(settings, /const canWriteIntake = canWriteEvent\(capabilities, "form\.publish"\)/);
-  assert.match(settings, /if \(!canWriteEvent\(\{ role: state\.role, userId: state\.userId, memberships: state\.memberships, eventId \}, command\)\) return false/);
+  assert.match(settings, /!canWriteEvent\(\{ role: state\.role, userId: state\.userId, memberships: state\.memberships, eventId \}, attempt\.command\)\) return false/);
 });

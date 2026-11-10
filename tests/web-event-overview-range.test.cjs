@@ -34,7 +34,7 @@ test('range analysis reuses the fixed-bucket definitions, never redefines them',
   const custom = between(overview, 'const RANGE_DAYS_CAP', 'export default function EventOverview');
   // Same cancelled-excluded applications (createdAt) as the fixed buckets.
   assert.match(custom, /toLocalKey\(createdAt\)/, 'applications key off the same createdAt days');
-  assert.match(overview, /person\.status !== "CANCELLED"/, 'fixed-bucket cancelled exclusion stays the authority');
+  assert.match(overview, /String\(person\.status \|\| ""\)\.toUpperCase\(\) !== "CANCELLED"/, 'fixed-bucket cancelled exclusion stays the authority');
   // Same uncorrected-IN dedupe per participant: no cancelled filter on
   // checks, corrected excluded upstream, unique keys per day.
   assert.match(custom, /entriesByDay\.get\(key\)\?\.size/, 'daily entries stay per-day unique');

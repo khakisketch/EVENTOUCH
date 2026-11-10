@@ -22,17 +22,16 @@ const CSS = fs.readFileSync(
   'utf8'
 );
 
-test('disabled-submit jump lands on the review summary with its reason', () => {
-  const fnAt = SOURCE.indexOf('function jumpToCampaignSubmit()');
-  assert.ok(fnAt !== -1, 'expected the review jump handler');
-  const fnWindow = SOURCE.slice(fnAt, fnAt + 700);
-  assert.match(fnWindow, /getElementById\("campaign-submit"\)/u, 'jump targets the real submit');
-  assert.match(fnWindow, /\.disabled/u, 'jump reads the disabled state');
-  assert.match(fnWindow, /getElementById\("campaign-submit-warning"\)/u, 'blocked jump lands on the summary');
-  assert.match(fnWindow, /\.focus\(/u, 'blocked landing moves focus so the reason is announced');
-  assert.match(fnWindow, /scrollIntoView/u, 'sighted operators follow the landing');
-  assert.match(fnWindow, /return;/u, 'blocked jump stops before touching the submit');
-  assert.doesNotMatch(fnWindow, /postCommand|executeCampaignCreate|requestSubmit|\.submit\(|message\.create/u, 'the jump never sends');
+test('review navigation shows the relevant input stage when prerequisites are missing', () => {
+  const fn = SOURCE.slice(SOURCE.indexOf('function goComposeStep'), SOURCE.indexOf('const focusComposerOnOpenRef'));
+  assert.match(fn, /!selectedIds\.length/u);
+  assert.match(fn, /field: "ids"/u);
+  assert.match(fn, /field: "title"/u);
+  assert.match(fn, /field: campaignDraft\.channel === "ALIMTALK" \? "templateId" : "body"/u);
+  assert.match(fn, /messageContentIssue\(campaignDraft, template\)/u);
+  assert.match(SOURCE, /campaignFieldError\.field === "ids" \? 1/u);
+  assert.match(SOURCE, /document\.getElementById\(ids\[campaignFieldError\.field\]/u);
+  assert.doesNotMatch(fn, /postCommand|executeCampaignCreate|requestSubmit|\.submit\(/u);
 });
 
 test('the review jump announces its requirement before activation', () => {
@@ -63,9 +62,9 @@ test('a forward exit brackets the recipient list into the draft', () => {
   const fnAt = SOURCE.indexOf('function jumpToCampaignTitle()');
   assert.ok(fnAt !== -1, 'expected the title jump handler');
   const fnWindow = SOURCE.slice(fnAt, fnAt + 400);
-  assert.match(fnWindow, /getElementById\("campaign-title"\)/u, 'exit lands in the draft title');
-  assert.match(fnWindow, /\.focus\(/u, 'exit moves focus');
-  assert.match(fnWindow, /scrollIntoView/u, 'sighted operators follow the exit');
+  assert.match(fnWindow, /goComposeStep\(2\)/u, 'exit reveals the content step before focusing');
+  assert.match(SOURCE, /target\?\.focus/u, 'step changes move focus');
+  assert.match(SOURCE, /scrollIntoView/u, 'sighted operators follow the exit');
   assert.doesNotMatch(fnWindow, /postCommand|executeCampaignCreate|requestSubmit|\.submit\(|message\.create/u, 'the exit never sends');
 });
 

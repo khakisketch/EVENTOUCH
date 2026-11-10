@@ -10,7 +10,8 @@ const source = fs.readFileSync(path.join(__dirname, '../apps/web/app/console/eve
 const css = fs.readFileSync(path.join(__dirname, '../apps/web/app/console/events/[id]/messages/MessagingWorkspace.module.css'), 'utf8');
 
 test('message workbench leads with comparable history and mounts the draft without clearing it', () => {
-  assert.match(source, /return <>\{history\}\{composer\}\{templates\}<\/>/u);
+  assert.match(source, /\{history\}\{composer\}\{templates\}/u);
+  assert.match(source, /<ConsoleSectionNav mode="tabs" label="메시지 업무"/u);
   assert.match(source, /\[historyOpen, setHistoryOpen\] = useState\(true\)/u);
   assert.match(source, /\[composerOpen, setComposerOpen\] = useState\(false\)/u);
   assert.match(source, /id="message-composer" hidden=\{!composerOpen\}/u);
@@ -24,13 +25,15 @@ test('message workbench leads with comparable history and mounts the draft witho
 });
 
 test('handoff, template use and failed-reload recovery reveal the mounted composer', () => {
-  assert.match(source, /setSelectedIds\(valid\);\s*setComposerOpen\(true\)/u);
-  assert.match(source, /function useTemplate\(template: Template\) \{\s*revealComposer\(\)/u);
-  assert.match(source, /setSelectedIds\(eligible\);\s*setComposerOpen\(true\)/u);
-  assert.match(source, /function reportBlockedReload\(\) \{\s*setComposerOpen\(true\)/u);
+  assert.match(source, /setSelectedIds\(valid\);\s*setComposeStep\(valid\.length > 0 && excluded === 0 \? 2 : 1\);\s*setComposerOpen\(true\)/u);
+  const apply = source.slice(source.indexOf('function applyTemplate('), source.indexOf('function useTemplate('));
+  assert.match(apply, /if \(template\.archived\)/u);
+  assert.match(apply, /setComposeStep\(selectedIds\.length \? 2 : 1\);\s*focusComposerOnOpenRef\.current = true;\s*revealComposer\(\)/u);
+  assert.match(source, /setSelectedIds\(eligible\);\s*const nextStep = eligible\.length && !excluded && !source\.recipientChangeCount \? 2 : 1;\s*setComposeStep\(nextStep\);\s*setComposerOpen\(true\)/u);
+  assert.match(source, /function reportBlockedReload\(\) \{\s*setComposeStep\(3\);\s*setComposerOpen\(true\)/u);
   assert.match(source, /id="message-history-search"/u);
   assert.match(source, /historyScope\.filter/u);
-  assert.match(css, /grid-template-areas: "recipients draft"/u, 'DOM and visual order agree');
+  assert.match(css, /\.composeGrid\[data-step="2"\] \.recipientFieldset/u, 'DOM and visual order agree');
   assert.match(css, /\.historyTable tr\[data-history-row\]/u, 'mobile retains every field and action in compact records');
 });
 

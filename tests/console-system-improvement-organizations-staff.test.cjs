@@ -24,7 +24,8 @@ test('staff-reads-and-writes-go-through-the-shared-adapter', () => {
     // Every operator read/write uses the shared context adapter — including
     // the bootstrap and the event command posts — so context headers and
     // the frozen request organization apply uniformly.
-    assert.match(source, /operatorFetch\(/);
+    assert.match(source, /from "\.\/staff-bootstrap"/);
+    assert.match(source, /readStaffBootstrap\(controller/);
     assert.doesNotMatch(source, /(?<!operator)fetch\(/);
     // The adapter contract is imported from the shared lib path; the
     // context is seeded where the screens load their scopes.
@@ -32,7 +33,12 @@ test('staff-reads-and-writes-go-through-the-shared-adapter', () => {
     assert.match(source, /ensureOperatorContext/);
     assert.match(source, /void ensureOperatorContext\(\)\.catch\(\(\) => \{\}\);/, 'snapshot-published initialization failures never become unhandled page errors');
   }
+  const bootstrap = readStaff('staff-bootstrap.ts');
+  assert.match(bootstrap, /from "\.\.\/\.\.\/lib\/operator-context"/);
+  assert.match(bootstrap, /operatorFetch\("\/api\/bootstrap", \{ cache: "no-store", signal: controller\.signal \}\)/);
+  assert.doesNotMatch(bootstrap, /(?<!operator)fetch\(/);
   const work = readStaff('StaffEventWork.tsx');
+  assert.match(work, /operatorFetch\(`\/api\/events\/[^\n]+\/commands`/);
   // Writes carry the frozen request context verbatim: the retry replays the
   // stored event/assignment/record/payload/id and must never switch an
   // uncertain old receipt into another organization.
@@ -150,7 +156,7 @@ test('staff-hub-keeps-chrome-and-never-auto-routes-on-changed-context', () => {
   assert.match(hub, /describeWorkingOrg\(null, false, true\)/);
   assert.match(hub, /isSelectionRequiredError\(orgSnapshot\.error\)/);
   assert.strictEqual((hub.match(/router\.push/g) || []).length, 1);
-  assert.match(hub, /if \(res\.status === 401\)[\s\S]{0,300}?router\.push/);
+  assert.match(hub, /if \(status === 401\)[\s\S]{0,300}?router\.push/);
   assert.strictEqual((hub.match(/\{chrome\}/g) || []).length, 5);
 });
 
@@ -166,9 +172,9 @@ test('staff-event-work-locks-writes-retains-state-and-warns-explicitly', () => {
   assert.match(work, /isSelectionRequiredError\(orgSnapshot\.error\)/);
   // The shared notice sits above the disabled work body on other-tab change.
   assert.match(work, /<OrganizationContextNotice confirmLeave=\{confirmLeaveStaff\} \/>/);
-  // One lock covers correction-unresolved AND organization-changed; only
+  // One lock covers correction, organization change and stale assignment; only
   // the same-request correction retry stays enabled through it.
-  assert.match(work, /const writeLocked = correctionLocked \|\| orgChanged;/);
+  assert.match(work, /const writeLocked = correctionLocked \|\| orgChanged \|\| assignmentStale \|\| rewardCollectUncertain \|\| receiptLock \|\| receiptRefreshing \|\| rewardLookupLoading \|\| rewardCollectingId !== null;/);
   assert.match(work, /disabled=\{writeLocked\}/);
   assert.match(work, /disabled=\{submitting \|\| writeLocked/);
   // Camera remains gated by readiness and organization/correction locks, and
@@ -176,10 +182,16 @@ test('staff-event-work-locks-writes-retains-state-and-warns-explicitly', () => {
   assert.match(work, /disabled=\{!ready \|\| writeLocked \|\| submitting\}/);
   assert.match(work, /다른 탭에서 조직이 전환됐습니다\. 입력한 티켓·사유와 선택·기록은 그대로 유지됩니다/);
   // No new correction starts after a change; the retry replays frozen context.
-  assert.match(work, /if \(orgChanged\) return;/);
-  assert.match(work, /disabled=\{correcting \|\| orgChanged \|\| !correctReason\.trim\(\)\}/);
+  assert.match(work, /if \(orgChanged \|\| assignmentStale\) return;/);
+  assert.match(work, /disabled=\{scanUnknown \|\| correcting \|\| orgChanged \|\| assignmentStale \|\| rewardCollectUncertain \|\| receiptLock \|\| receiptRefreshing \|\| rewardLookupLoading \|\| rewardCollectingId !== null \|\| !correctReason\.trim\(\)\}/);
   // Synchronous handler-level guards back every disabled attribute.
-  assert.match(work, /submitting \|\| writeLocked \|\| !activeAssignment/);
+  assert.match(work, /submitting \|\| receiptRefreshRef\.current \|\| rewardRequestRef\.current \|\| writeLocked/);
+  // A desk can alternatively use the explicitly confirmed current person;
+  // An unready, unassigned or unconfirmed new request is rejected
+  // synchronously while a frozen receipt remains replayable.
+  assert.match(work, /!retrySame && \(!ready \|\| !activeAssignment \|\| \(!code\.trim\(\) && !manualPerson\)\)/);
+  assert.match(work, /person\.id === manualTargetCurrent\?\.id && manualTargetCurrent\.status === "APPROVED" && manualTargetDistinct && manualIdentityConfirmed/);
+  assert.match(work, /!retrySame && pendingScanRef\.current/);
   assert.match(work, /if \(orgChanged\) \{\s*\n\s*throw new Error\("다른 탭에서 조직이 전환됐습니다/);
   assert.match(work, /\{cameraOpen && ready && !orgChanged/);
   // Handlers never clear drafts, selections, records, or retained ids on a

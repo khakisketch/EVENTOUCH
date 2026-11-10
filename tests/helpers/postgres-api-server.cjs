@@ -12,11 +12,12 @@ const { openStore } = require('../../server/store');
 const { createHttpServer } = require('../../server/server');
 const { createEmailTransport } = require('../../server/email-transport');
 const { createAccountRecovery } = require('../../server/account-recovery');
+const { isolatedTestEnvironment } = require('./test-provider-env.cjs');
 
 const databaseUrl = testDatabaseUrl();
 const testPasswordHash = hashPassword('not-a-real-test-password');
 
-async function startApiHarness({ storageDir, env } = {}) {
+async function startApiHarness({ storageDir, env, mailTransport, authOptions } = {}) {
   if (!databaseUrl) throw new Error('EVENTOUCH_TEST_DATABASE_URL is required');
   const schema = `eventouch_api_test_${crypto.randomUUID().replace(/-/g, '')}`;
   const adminDatabase = createDatabase({ connectionString: databaseUrl });
@@ -37,11 +38,18 @@ async function startApiHarness({ storageDir, env } = {}) {
     // mail by passing env { EVENTOUCH_MAIL_MOCK: '1',
     // EVENTOUCH_PUBLIC_URL: 'http://...' }; without it the transport stays
     // mode 'none' and delivery-dependent paths answer honestly/generically.
-    const harnessEnv = { ...process.env, ...(env || {}) };
-    const emailTransport = createEmailTransport({ env: harnessEnv });
+    const inheritedEnv = { ...isolatedTestEnvironment(process.env) };
+    for (const key of Object.keys(inheritedEnv)) {
+      if (/^EVENTOUCH_(?:SMTP_|MAIL_TRANSPORT)/.test(key)) delete inheritedEnv[key];
+    }
+    const harnessEnv = { ...inheritedEnv, ...(env || {}) };
+    // Keep non-provider settings live while hiding inherited senders. Tests
+    // must explicitly pass a local fake provider in env when they need one.
+    const apiEnv = env || isolatedTestEnvironment(process.env);
+    const emailTransport = mailTransport || createEmailTransport({ env: harnessEnv });
     const recovery = createAccountRecovery(database, { transport: emailTransport, env: harnessEnv });
-    const auth = createDatabaseAuth(database, { recovery });
-    server = createHttpServer(openStore(dataDir), auth, createAccess(database), database, { storageDir: storageDir || path.join(dataDir, 'storage'), env });
+    const auth = createDatabaseAuth(database, { recovery, ...(authOptions || {}) });
+    server = createHttpServer(openStore(dataDir), auth, createAccess(database), database, { storageDir: storageDir || path.join(dataDir, 'storage'), env: apiEnv });
 
     await new Promise((resolve, reject) => {
       server.once('error', reject);
@@ -58,7 +66,7 @@ async function startApiHarness({ storageDir, env } = {}) {
         server.closeAllConnections();
         await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
         server = createHttpServer(openStore(dataDir), auth, createAccess(database), database,
-          { storageDir: storageDir || path.join(dataDir, 'storage'), env });
+          { storageDir: storageDir || path.join(dataDir, 'storage'), env: apiEnv });
         await new Promise((resolve, reject) => {
           server.once('error', reject);
           server.listen(address.port, '127.0.0.1', resolve);

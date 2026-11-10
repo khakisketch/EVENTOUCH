@@ -325,7 +325,7 @@ test('directory-gives-agency-both-events-as-summaries-without-workspace-weight',
   const eventA = directory.events[0];
   assert.deepEqual(Object.keys(eventA).sort(), [
     'capacity', 'clientId', 'date', 'end', 'features', 'id',
-    'manualDue', 'messageAttention', 'name', 'pending', 'revision', 'slug',
+    'invalidScheduled', 'manualDue', 'messageAttention', 'messageRefreshVersion', 'name', 'pending', 'revision', 'scheduledMessages', 'slug',
     'stage', 'start', 'themeColor', 'venue',
   ]);
   assert.equal(eventA.venue, 'A홀');
@@ -394,7 +394,8 @@ test('directory-scopes-staff-to-assigned-events-without-contact-or-ticket-secret
   // The staff's own account row (including their own login email) is the
   // same projection bootstrap carries; everyone else's secrets stay out.
   const flat = JSON.stringify(directory);
-  for (const secret of ['010', 'secret-ticket', 'pending1-private@example.test', 'global-prize', 'private-report']) {
+  assert.doesNotMatch(flat, /"phone"\s*:/, 'staff directory must not contain phone fields');
+  for (const secret of ['01011112222', '01033334444', '01055556666', 'secret-ticket', 'pending1-private@example.test', 'global-prize', 'private-report']) {
     assert.ok(!flat.includes(secret), `staff directory must not carry ${secret}`);
   }
 });
@@ -407,11 +408,12 @@ test('directory-requires-a-session-and-hides-events-from-outsiders', async () =>
   assert.equal(loner.activeEventId, null);
 });
 
-test('event-bootstrap-keeps-the-historical-state-shape-for-one-event', async () => {
+test('event-bootstrap-keeps-the-historical-fields-and-adds-a-refresh-version', async () => {
   const full = await state.loadBootstrap({ id: ids.manager });
   const single = await state.loadEventBootstrap({ id: ids.manager }, ids.eventA);
   assert.equal(single.version, 9);
-  assert.deepEqual(Object.keys(single).sort(), Object.keys(full).sort());
+  assert.deepEqual(Object.keys(single).sort(), [...Object.keys(full), 'refreshVersion'].sort());
+  assert.match(single.refreshVersion, /^\d+\.\d+$/);
   assert.deepEqual(single.events, [full.events.find((event) => event.id === ids.eventA)]);
   assert.deepEqual(Object.keys(single.workspaces), [ids.eventA]);
   assert.deepEqual(single.workspaces[ids.eventA], full.workspaces[ids.eventA]);
@@ -441,7 +443,8 @@ test('event-bootstrap-projects-staff-exactly-like-bootstrap', async () => {
   assert.deepEqual(single.accounts, full.accounts);
   assert.deepEqual(single.memberships, full.memberships);
   const flat = JSON.stringify(single);
-  for (const secret of ['secret-ticket', '010', 'pending1-private@example.test', 'private-report', 'global-prize']) {
+  assert.doesNotMatch(flat, /"phone"\s*:/, 'staff event bootstrap must not contain phone fields');
+  for (const secret of ['secret-ticket', '01011112222', '01033334444', '01055556666', 'pending1-private@example.test', 'private-report', 'global-prize']) {
     assert.ok(!flat.includes(secret), `staff event bootstrap must not carry ${secret}`);
   }
 });
@@ -575,6 +578,46 @@ test('http-event-bootstrap-answers-single-event-state-over-the-wired-server', as
   assert.equal(staff.status, 200);
   assert.deepEqual(staff.json.state.events.map((event) => event.id), [ids.eventA]);
   assert.ok(!JSON.stringify(staff.json).includes('secret-ticket-1'));
+});
+
+test('http-event-version-check-is-small-and-uses-both-revisions-after-authorization', async () => {
+  const url = `/api/events/${ids.eventA}/bootstrap`;
+  const viewer = { cookie: cookies.manager };
+  const full = await requestJson(harness.baseUrl, url, viewer);
+  assert.equal(full.status, 200);
+  const token = full.json.state.refreshVersion;
+  assert.match(token, /^\d+\.\d+$/);
+  const conditional = url + '?ifVersion=' + token;
+  const same = await requestJson(harness.baseUrl, conditional, viewer);
+  assert.equal(same.status, 200);
+  assert.equal(same.headers.get('cache-control'), 'no-store');
+  assert.equal(same.headers.get('x-eventouch-organization-id'), full.headers.get('x-eventouch-organization-id'));
+  assert.deepEqual(same.json, { state: { unchanged: true, refreshVersion: token } });
+  assert.ok(Buffer.byteLength(JSON.stringify(same.json)) < 100);
+  assert.equal((await requestJson(harness.baseUrl, conditional)).status, 401);
+
+  const otherUrl = `/api/events/${ids.eventB}/bootstrap`;
+  const other = await requestJson(harness.baseUrl, otherUrl, { cookie: cookies.agency });
+  const denied = await requestJson(harness.baseUrl, otherUrl + '?ifVersion=' + other.json.state.refreshVersion, viewer);
+  assert.equal(denied.status, 404);
+  assert.equal(denied.json.state, undefined);
+
+  const database = harness.database;
+  const [eventRevision, workspaceRevision] = token.split('.');
+  try {
+    await database.query('UPDATE events SET revision = 100 WHERE id = $1', [ids.eventA]);
+    await database.query('UPDATE event_workspaces SET revision = 1 WHERE event_id = $1', [ids.eventA]);
+    const older = await requestJson(harness.baseUrl, url, viewer);
+    await database.query('UPDATE event_workspaces SET revision = 2 WHERE event_id = $1', [ids.eventA]);
+    const changed = await requestJson(harness.baseUrl, url + '?ifVersion=' + older.json.state.refreshVersion, viewer);
+    assert.equal(changed.status, 200);
+    assert.equal(changed.json.state.revision, older.json.state.revision);
+    assert.equal(changed.json.state.refreshVersion, '100.2');
+    assert.deepEqual(Object.keys(changed.json.state.workspaces), [ids.eventA]);
+  } finally {
+    await database.query('UPDATE events SET revision = $2 WHERE id = $1', [ids.eventA, eventRevision]);
+    await database.query('UPDATE event_workspaces SET revision = $2 WHERE event_id = $1', [ids.eventA, workspaceRevision]);
+  }
 });
 
 test('http-scoped-reads-reject-anonymous-and-unseen-events', async () => {

@@ -28,10 +28,12 @@ test('registration hides the dead-end link when recovery is blocked', () => {
   assert.match(form, /recoveryBlocked \? \(/u, 'duplicate-registration branches on availability');
   assert.equal(
     (form.match(/ticket\/recover/g) ?? []).length,
-    1,
-    'exactly one recovery link remains: the available-mode branch only'
+    2,
+    'duplicate and changed-result guidance each provide an available-mode recovery link'
   );
-  assert.match(form, /신청한 기기에서만 열 수 있습니다\. 티켓을 잃었다면 행사 안내의 문의처로 운영자에게 연락하세요\./u, 'blocked duplicate names device + operator');
+  assert.match(form, /signupSuperseded[\s\S]*?recoveryBlocked \? \([\s\S]*?행사 주최 측에 문의하세요[\s\S]*?ticket\/recover/u, 'changed-result guidance also gates recovery');
+  assert.match(form, /신청을 완료한 브라우저 탭을 확인하세요/u, 'blocked duplicate names the original tab');
+  assert.match(form, /recoveryContact \? ` 문의: \$\{recoveryContact\}`/u, 'only a visible contact is shown');
   const page = read('app/event/[slug]/register/page.tsx');
   assert.match(page, /verificationMode === "none" \|\| verificationMode === "mock"/u, 'mock blocks too, like the recover screen');
 });
@@ -40,14 +42,14 @@ test('attendee home gates every recovery entry on availability', () => {
   const home = read('app/event/[slug]/home/HomeShell.tsx');
   assert.match(home, /useVerificationMode\(\)/u, 'home resolves the transport mode');
   assert.match(home, /recoveryBlocked \? null : \(/u, 'need-ticket link steps aside when blocked');
-  assert.match(home, /신청한 기기에서만 열 수 있습니다\./u, 'blocked guidance names the device limit');
+  assert.match(home, /신청을 완료한 브라우저 탭을 확인/u, 'blocked guidance names the tab limit');
 });
 
 test('ticket screen gates missing, failed and kept-ticket recovery copy', () => {
   const view = read('app/event/[slug]/ticket/TicketView.tsx');
   assert.match(view, /useVerificationMode\(\)/u, 'ticket screen resolves the transport mode');
   assert.match(view, /state\.canRecover && !recoveryBlocked/u, 'failed 404 hides recover when blocked');
-  assert.match(view, /다른 기기에서 열 수 없습니다\. 티켓을 잃었다면 행사 안내의 문의처로 운영자에게 연락하세요\./u, 'kept-ticket note stops promising cross-device recovery');
+  assert.match(view, /다른 탭이나 기기에서는 열리지 않을 수 있습니다/u, 'kept-ticket note names the tab boundary');
 });
 
 test('engagement and event pages gate their recovery entries', () => {
@@ -56,7 +58,7 @@ test('engagement and event pages gate their recovery entries', () => {
   const eventPage = read('app/event/[slug]/page.tsx');
   assert.match(eventPage, /loadVerificationMode\(\)/u, 'event page reads the same server-side mode');
   assert.match(eventPage, /recoveryBlocked \? \(/u, 'event page branches on availability');
-  assert.match(eventPage, /문자로 다시 연결할 수 없는 행사입니다/u, 'blocked event page names the limit, not the link');
+  assert.match(eventPage, /이 행사는 문자로 다시 연결할 수 없습니다/u, 'blocked event page names the limit, not the link');
 });
 
 test('recover screen still refuses mock and none transports', () => {

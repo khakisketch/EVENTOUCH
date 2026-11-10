@@ -26,7 +26,8 @@ test("a draw prize names its draw program and links to that program", () => {
 
 test("group assignment states its visible-only scope when rows are hidden", () => {
   const list = read("console/events/[id]/participants/ParticipantList.tsx");
-  assert.match(list, /숨김 \$\{hiddenSelectedCount\}명\(그룹 지정 제외\)/u);
+  assert.match(list, /필터 밖 \$\{hiddenSelectedCount\}명/u);
+  assert.match(list, /승인·그룹은 현재 필터만, 메시지는 전체 선택/u);
   assert.match(list, /화면 밖에서 선택한 \$\{hiddenSelectedCount\}명은 이번 지정에 포함되지 않습니다/u);
 });
 
@@ -37,23 +38,24 @@ test("the report analysis names the approval backlog and the create dialog warns
   assert.match(reports, /participants\?status=PENDING/u);
 });
 
-test("a blocked draw run states every missing prerequisite in one line", () => {
+test("draw and stage actions name their own prerequisites", () => {
   const draws = read("console/events/[id]/draws/DrawsWorkspace.tsx");
   assert.match(draws, /실행 전제: \{runBlockers\.join\(" · "\)\}/u);
   assert.match(draws, /!program\.published \? "결과 공개 필요"/u);
   assert.match(draws, /!screenEnabled \? "행사장 출력 꺼짐"/u);
   assert.match(draws, /moduleNeedsPublishing \? "무대 프로그램 공개 필요"/u);
   assert.match(draws, /aria-describedby=\{runBlockers\.length \? runBlockerId : undefined\}/u);
+  assert.match(draws, /무대 터치 실행 전제: \{stageOnlyBlockers\.join\(" · "\)\}/u);
+  assert.match(draws, /결과 공개 허용/u);
 });
 
-test("message templates cover the channels a campaign can send, including MMS", () => {
+test("message templates use delivery families and leave photo type to composition", () => {
   const messages = read("console/events/[id]/messages/MessagingWorkspace.tsx");
   const templateChannel = messages.slice(messages.indexOf('id="template-channel"'));
-  assert.match(templateChannel, /<option value="SMS">/u);
-  assert.match(templateChannel, /<option value="LMS">/u);
-  assert.match(templateChannel, /<option value="MMS">MMS · 이미지<\/option>/u);
-  assert.match(templateChannel, /<option value="ALIMTALK">/u);
-  assert.match(templateChannel, /MMS 이미지는 발송할 때 첨부합니다/u);
+  assert.match(templateChannel, /options=\{TEMPLATE_CHANNEL_CHOICES\}/u);
+  for (const channel of ['SMS', 'ALIMTALK']) assert.match(messages, new RegExp(`value: "${channel}"`));
+  assert.match(messages, /TEMPLATE_CHANNEL_CHOICES = MESSAGE_CHANNEL_CHOICES\.map/u);
+  assert.match(messages, /사진은 발송할 때 첨부합니다\. 내용과 사진에 따라 문자 유형이 자동 결정됩니다/u);
   // A failed send has no retry path on the server, so the row must say what
   // to do instead of leaving the operator without a next step.
   assert.match(messages, /발송이 실패했습니다\. 행의 내용·대상 불러오기로 새 발송을 준비하세요/u);

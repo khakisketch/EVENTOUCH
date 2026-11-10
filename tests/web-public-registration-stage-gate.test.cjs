@@ -29,8 +29,10 @@ test('public entry offers signup only when the stage admits it', () => {
 
 test('public register closes on ENDED even with the intake flag on', () => {
   const page = read('event/[slug]/register/page.tsx');
-  assert.match(page, /stage: string/);
-  assert.match(page, /data\.event\.stage/);
+  const parser = read('event/[slug]/register/register-data.ts');
+  assert.match(parser, /stage: string/);
+  assert.match(parser, /event\.stage\.toUpperCase\(\)/);
+  assert.match(page, /parseRegisterData\(await res\.json\(\)\)/);
   assert.match(page, /!data\.registrationOpen \|\| data\.stage === "ENDED"/);
   // Same closed branch and copy as an unpublished event.
   assert.match(page, /현재 신청을 받지 않습니다/);

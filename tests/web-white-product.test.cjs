@@ -23,14 +23,17 @@ test('workbench and overview backgrounds cannot accidentally inherit stage black
   }
 });
 
-test('message preview is escaped raw draft text, not fabricated personalized delivery', () => {
+test('message preview is escaped and clearly identifies synthetic substitutions', () => {
   const source = read('console/events/[id]/messages/MessagingWorkspace.tsx');
-  const preview = source.slice(source.indexOf('<section className={styles.draftPreview}'), source.indexOf('{campaignDraft.channel === "MMS" ? (', source.indexOf('<section className={styles.draftPreview}')));
+  const start = source.indexOf('<section className={styles.draftPreview}');
+  const end = source.indexOf('</section>', start);
+  assert.ok(start >= 0 && end > start, 'the actual preview region must exist');
+  const preview = source.slice(start, end + '</section>'.length);
   assert.match(preview, /aria-labelledby="message-preview-heading"/u);
   assert.match(preview, /id="message-draft-preview"/u);
-  assert.match(preview, /\{campaignDraft\.body \|\|/u);
-  assert.match(preview, /개인별 변수는 발송 시 적용/u);
-  assert.match(preview, /처리 결과는.*요청 안내와 발송 기록/u);
+  assert.match(preview, /previewMessageExample\(campaignDraft\.body, state\.eventName, state\.eventDate\)/u);
+  assert.match(preview, /이름·티켓 링크·번호는 예시입니다/u);
+  assert.match(preview, /실제 내용과 길이, 문자 유형은 수신자별로 달라질 수 있습니다/u);
   assert.doesNotMatch(preview, /아직 저장·발송하지 않았습니다/u, 'a committed response may be lost; the preview cannot assert non-delivery');
   assert.doesNotMatch(preview, /dangerouslySetInnerHTML|replaceAll|ticket\}|ticket\.|fetch\(|postCommand|executeCampaignCreate/u);
 });
@@ -51,7 +54,7 @@ test('theme verification owns SSR and never targets a running external web serve
   assert.match(source, /webBase: owned\.baseUrl/u);
   assert.doesNotMatch(source, /process\.env\.WEB_BASE|127\.0\.0\.1:8777/u);
   assert.match(source, /owned\.close\(\)/u);
-  assert.match(source, /if \(name === 'attendee.page.publish'\)/u);
+  assert.match(source, /if \(name === 'attendee.page.publish-reviewed'\)/u);
   assert.match(source, /getByRole\('button', \{ name: '게시하기', exact: true \}\)\.click\(\)/u);
   assert.match(source, /opening review never publishes/u);
 });

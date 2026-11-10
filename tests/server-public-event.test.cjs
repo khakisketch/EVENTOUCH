@@ -149,7 +149,7 @@ function publicEvent(id, slug, name, stage) {
     end: '17:00',
     capacity: 20,
     stage,
-    features: ['poll', 'qa', 'stamp', 'venue'],
+    features: ['poll', 'qa', 'stamp', 'venue', 'screen'],
     clientId: 'private-client-id',
     internalMemo: `private-event-${name}`,
   };

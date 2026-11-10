@@ -15,7 +15,7 @@ const LIB = path.resolve(__dirname, "..", "apps", "web", "lib");
 // logic below executes against that output, never against source text.
 const ts = require(path.join(LIB, "..", "node_modules", "typescript"));
 const compiled = {};
-for (const file of ["operator-context.ts", "console-api.ts"]) {
+for (const file of ["operator-receipts.ts", "booth-availability.ts", "bulk-cancel-proof.ts", "operator-context.ts", "console-api.ts"]) {
   const source = fs.readFileSync(path.join(LIB, file), "utf8");
   compiled[file] = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -47,6 +47,7 @@ function loadWorld() {
   const windowListeners = {};
   const documentListeners = {};
   const channels = [];
+  const storage = new Map();
   const sandbox = {
     console,
     URL,
@@ -62,6 +63,7 @@ function loadWorld() {
     Promise,
     Date,
     Error,
+    Event,
     Map,
     Set,
     setTimeout,
@@ -77,6 +79,15 @@ function loadWorld() {
       removeEventListener: () => {},
       setTimeout,
       clearTimeout,
+      sessionStorage: {
+        getItem: (key) => storage.has(key) ? storage.get(key) : null,
+        setItem: (key, value) => storage.set(key, String(value)),
+        removeItem: (key) => storage.delete(key),
+      },
+      dispatchEvent: (event) => {
+        for (const listener of windowListeners[event.type] || []) listener(event);
+        return true;
+      },
     },
     document: {
       visibilityState: "visible",
@@ -104,6 +115,9 @@ function loadWorld() {
     const module = { exports: {} };
     const localRequire = (spec) => {
       if (spec === "./operator-context") return registry["operator-context"].exports;
+      if (spec === "./operator-receipts") return registry["operator-receipts"].exports;
+      if (spec === "./booth-availability") return registry["booth-availability"].exports;
+      if (spec === "./bulk-cancel-proof") return registry["bulk-cancel-proof"].exports;
       throw new Error(`unexpected require ${spec}`);
     };
     const factory = vm.runInContext(`(function(exports, require, module) { ${source} })`, sandbox);
@@ -111,10 +125,14 @@ function loadWorld() {
     registry[name] = module;
     return module.exports;
   }
+  const receipts = load("operator-receipts", compiled["operator-receipts.ts"]);
+  load("booth-availability", compiled["booth-availability.ts"]);
+  load("bulk-cancel-proof", compiled["bulk-cancel-proof.ts"]);
   const operator = load("operator-context", compiled["operator-context.ts"]);
   const consoleApi = load("console-api", compiled["console-api.ts"]);
   return {
     operator,
+    receipts,
     consoleApi,
     fetchCalls,
     setFetchImpl: (fn) => {
@@ -123,6 +141,10 @@ function loadWorld() {
     windowListeners,
     documentListeners,
     channels,
+    denyReceiptStorage: () => {
+      Object.defineProperty(sandbox.window, 'sessionStorage', { configurable: true, get() { throw new Error('storage denied'); } });
+      Object.defineProperty(sandbox.window, 'localStorage', { configurable: true, get() { throw new Error('storage denied'); } });
+    },
     fireWindow: (type) => {
       for (const fn of windowListeners[type] || []) fn();
     },
@@ -1876,4 +1898,747 @@ test("unpinned reads resolving after pin-then-drift discard quietly", async () =
   assert.equal(snap.context.organizationId, "org-a", "pinned retained");
   assert.equal(snap.observed.organizationId, "org-b", "drift untouched");
   assert.equal(snap.changed, true);
+});
+
+test('receipt tracking never waits for a stalled successful response body', async () => {
+  const world = loadWorld();
+  world.setFetchImpl(async () => meResponse(ORG_A));
+  await world.operator.ensureOperatorContext();
+  let controller;
+  const bodyStream = new ReadableStream({ start(c) { controller = c; } });
+  world.setFetchImpl(async () => new Response(bodyStream, { status: 200 }));
+  const request = world.operator.operatorFetch('/api/events/event-123/commands', {
+    method: 'POST', body: JSON.stringify({ commandId: 'command-stalled-123', command: 'form.close', payload: {} }),
+  });
+  const response = await Promise.race([request, new Promise((_, reject) => setTimeout(() => reject(new Error('response was blocked on receipt parsing')), 250))]);
+  assert.equal(response.status, 200);
+  controller.enqueue(new TextEncoder().encode('{"registrationOpen":false}'));
+  controller.close();
+  await world.flush(5);
+  assert.equal(world.receipts.operatorReceipts().length, 0, 'a readable successful response clears its pointer');
+});
+
+test('unreadable success and a rejection after an ambiguous request retain only scope pointers', async () => {
+  const world = loadWorld();
+  world.setFetchImpl(async () => meResponse(ORG_A));
+  await world.operator.ensureOperatorContext();
+  const body = JSON.stringify({ commandId: 'command-unconfirmed-123', command: 'event.update', payload: { name: 'sensitive draft' } });
+  world.setFetchImpl(async () => new Response('bad json', { status: 200 }));
+  await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+  await world.flush(5);
+  const first = world.receipts.operatorReceipts();
+  assert.equal(first.length, 1);
+  assert.equal(JSON.stringify(first).includes('sensitive draft'), false);
+  world.setFetchImpl(async () => new Response('{"error":"revoked"}', { status: 403 }));
+  await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+  assert.equal(world.receipts.operatorReceipts().length, 1, 'later rejection cannot erase a previously ambiguous outcome');
+});
+
+test('draw response confirmation matches the original request and requires an actual winner receipt', () => {
+  const { operator } = loadWorld();
+  const payload = { id: 'draw-1', count: 1 };
+  const result = { winners: [{ kind: 'PERSON', name: '합성 참가자' }], program: { id: 'draw-1', winners: [{ kind: 'PERSON', name: '합성 참가자' }] }, remaining: 1 };
+  assert.equal(operator.confirmsDrawRun(payload, result), true);
+  assert.equal(operator.confirmsDrawRun(payload, { message: 'ok' }), false);
+  assert.equal(operator.confirmsDrawRun(payload, { ...result, program: { ...result.program, id: 'other' } }), false);
+  assert.equal(operator.confirmsDrawRun(payload, { ...result, winners: [] }), false);
+  assert.equal(operator.confirmsDrawRun({ ...payload, showOnScreen: true }, result), false);
+  assert.equal(operator.confirmsDrawRun({ ...payload, showOnScreen: true }, { ...result, display: { type: 'draw' } }), true);
+  const stagePayload = { ...payload, showOnScreen: true };
+  const stageResult = { ...result, program: { ...result.program, moduleId: 'module-1' }, display: { type: 'draw', moduleId: 'module-1', drawId: 'selected-draw' } };
+  assert.equal(operator.confirmsDrawRun(stagePayload, stageResult, 'other-draw'), false);
+  assert.equal(operator.confirmsDrawRun(stagePayload, stageResult, 'selected-draw'), true);
+  assert.equal(operator.confirmsOperationsCommand('display.set', stageResult.display, { display: { ...stageResult.display, drawId: 'other-draw' } }), false);
+  const reviewed = { ...payload, expectedRevision: 2 };
+  assert.equal(operator.confirmsDrawRun(reviewed, result), false);
+  assert.equal(operator.confirmsDrawRun(reviewed, { ...result, program: { ...result.program, revision: 4 } }), false);
+  assert.equal(operator.confirmsDrawRun(reviewed, { ...result, program: { ...result.program, revision: 3 } }), true);
+});
+
+test('draw and voting receipts match each submitted operation and reject incomplete results', async () => {
+  const world = loadWorld();
+  const { operator } = world;
+  world.setFetchImpl(async () => meResponse(ORG_A));
+  await operator.ensureOperatorContext();
+  const cases = [
+    ['team.save', { name: '합성 팀' }, { team: { id: 'team-1', name: '합성 팀', order: 1 } }, { team: { id: 'team-1', name: '다른 팀', order: 1 } }],
+    ['draw.program.save', { name: '합성 추첨', quota: 2, moduleId: 'module-1', eligibility: 'PERSON', eligibleGroups: [], eligibleCompanies: [], overlap: 'EVENT', prizeTiers: null },
+      { program: { id: 'draw-1', name: '합성 추첨', quota: 2, moduleId: 'module-1', eligibility: 'PERSON', eligibleGroups: [], eligibleCompanies: [], overlap: 'EVENT', prizeTiers: null } },
+      { program: { id: 'draw-1', name: '합성 추첨', quota: 3, moduleId: 'module-1', eligibility: 'PERSON', eligibleGroups: [], eligibleCompanies: [], overlap: 'EVENT', prizeTiers: null } }],
+    ['vote.config.save', { pickCount: 1, status: 'OPEN', resultsPublished: false }, { voteConfig: { pickCount: 1, status: 'OPEN', resultsPublished: false } }, { voteConfig: { pickCount: 1, status: 'CLOSED', resultsPublished: false } }],
+    ['lucky.config.save', { min: 1, max: 20 }, { luckyConfig: { min: 1, max: 20 } }, { luckyConfig: { min: 1, max: 21 } }],
+    ['lucky.config.save-reviewed', { min: 1, max: 20, expectedRange: { min: 1, max: 10 } }, { luckyConfig: { min: 1, max: 20 } }, { luckyConfig: { min: 1, max: 21 } }],
+    ['lucky.preassign', { participantIds: ['p-1', 'p-2'] }, { assigned: [{ participantId: 'p-1', number: 5 }], skipped: 1, range: { min: 1, max: 20 } }, { assigned: [{ participantId: 'p-3', number: 5 }], skipped: 1, range: { min: 1, max: 20 } }],
+    ['lucky.preassign-reviewed', { participantIds: ['p-1', 'p-2'] }, { assigned: [{ participantId: 'p-1', number: 5 }], skipped: 1, range: { min: 1, max: 20 } }, { assigned: [{ participantId: 'p-3', number: 5 }], skipped: 1, range: { min: 1, max: 20 } }],
+    ['lucky.preassign-range-reviewed', { participantIds: ['p-1', 'p-2'], expectedRange: { min: 1, max: 20 } }, { assigned: [{ participantId: 'p-1', number: 5 }], skipped: 1, range: { min: 1, max: 20 } }, { assigned: [{ participantId: 'p-1', number: 5 }], skipped: 1, range: { min: 1, max: 21 } }],
+    ['roulette.config.save', { status: 'DRAFT', startsAt: '', endsAt: '', prizes: [{ id: 'prize-1', label: '합성 상품', quantity: 3 }] },
+      { rouletteConfig: { status: 'DRAFT', startsAt: null, endsAt: null, prizes: [{ id: 'prize-1', label: '합성 상품', quantity: 3, weight: null }] } },
+      { rouletteConfig: { status: 'DRAFT', startsAt: null, endsAt: null, prizes: [{ id: 'prize-1', label: '합성 상품', quantity: 4, weight: null }] } }],
+    ['roulette.config.save-reviewed', { expectedVersion: 2, status: 'DRAFT', startsAt: '', endsAt: '', prizes: [{ id: 'prize-1', label: '합성 상품', quantity: 3 }] },
+      { rouletteConfigVersion: 3, rouletteConfig: { status: 'DRAFT', startsAt: null, endsAt: null, prizes: [{ id: 'prize-1', label: '합성 상품', quantity: 3, weight: null }] } },
+      { rouletteConfigVersion: 2, rouletteConfig: { status: 'DRAFT', startsAt: null, endsAt: null, prizes: [{ id: 'prize-1', label: '합성 상품', quantity: 3, weight: null }] } }],
+    ['reward.assign', { id: 'reward-1', participantId: 'p-1' }, { reward: { id: 'reward-1', participantId: 'p-1', status: 'READY' } }, { reward: { id: 'reward-1', participantId: 'p-2', status: 'READY' } }],
+    ['vote.tally', {}, { results: [{ teamId: 'team-1', name: '팀', selections: 0, rank: 1, tied: false }], totalVotes: 0, published: false }, { results: [{ teamId: 'team-1' }], totalVotes: 0, published: false }],
+  ];
+  for (const [index, [command, payload, valid, invalid]] of cases.entries()) {
+    assert.equal(operator.confirmsDrawOperation(command, payload, valid), true, `${command} accepts matching fields`);
+    assert.equal(operator.confirmsDrawOperation(command, payload, invalid), false, `${command} rejects unrelated fields`);
+    const body = JSON.stringify({ commandId: `draw-operation-${index}`, command, payload });
+    world.setFetchImpl(async () => new Response(JSON.stringify(invalid), { status: 200 }));
+    await operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+    await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length, 1, `${command} keeps the scoped pointer`);
+    assert.equal(JSON.stringify(world.receipts.operatorReceipts()).includes('합성'), false);
+    world.setFetchImpl(async () => new Response(JSON.stringify(valid), { status: 200 }));
+    await operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+    await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length, 0, `${command} clears a matching response`);
+  }
+});
+
+test('template receipts require the submitted name, channel and message without storing them', async () => {
+  const world = loadWorld();
+  world.setFetchImpl(async () => meResponse(ORG_A));
+  await world.operator.ensureOperatorContext();
+  const payload = { name: ' 합성 안내 ', channel: 'SMS', body: ' 합성 본문 ', solapiTemplateId: '' };
+  const valid = { template: { id: 'template-1', name: '합성 안내', channel: 'SMS', body: '합성 본문', solapiTemplateId: null } };
+  const body = JSON.stringify({ commandId: 'template-receipt-123', command: 'template.save', payload });
+  assert.equal(world.operator.confirmsTemplateSave(payload, valid), true);
+  assert.equal(world.operator.confirmsTemplateSave(payload, { template: { ...valid.template, body: '다른 본문' } }), false);
+  assert.equal(world.operator.confirmsTemplateSave({ ...payload, id: 'template-2' }, valid), false);
+  assert.equal(world.operator.confirmsTemplateSave({ ...payload, channel: 'ALIMTALK', solapiTemplateId: 'approved-1' }, { template: { ...valid.template, channel: 'ALIMTALK', solapiTemplateId: 'other' } }), false);
+  world.setFetchImpl(async () => new Response(JSON.stringify({ template: { ...valid.template, name: '다른 안내' } }), { status: 200 }));
+  await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+  await world.flush();
+  assert.equal(world.receipts.operatorReceipts().length, 1);
+  assert.equal(JSON.stringify(world.receipts.operatorReceipts()).includes('합성'), false);
+  world.setFetchImpl(async () => new Response(JSON.stringify(valid), { status: 200 }));
+  await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+  await world.flush();
+  assert.equal(world.receipts.operatorReceipts().length, 0);
+});
+
+test('program operations validate their target and draw receipt before clearing scoped pointers', async () => {
+  const world = loadWorld();
+  world.setFetchImpl(async () => meResponse(ORG_A));
+  await world.operator.ensureOperatorContext();
+  const id = 'program-operation-123';
+  const cases = [
+    ['module.status', { id: 'module-1', status: 'OPEN' }, { module: { id: 'module-1', status: 'OPEN', published: true } }, { module: { id: 'other', status: 'OPEN', published: true } }],
+    ['module.reveal', { id: 'module-1' }, { moduleId: 'module-1', revealed: true }, { moduleId: 'other', revealed: true }],
+    ['photo.moderate', { id: 'photo-1', status: 'HIDDEN' }, { photo: { id: 'photo-1', status: 'HIDDEN' } }, { photo: { id: 'photo-1', status: 'APPROVED' } }],
+    ['post.moderate', { id: 'post-1', status: 'APPROVED' }, { post: { id: 'post-1', status: 'APPROVED' } }, { post: { id: 'other', status: 'APPROVED' } }],
+    ['draw.run', { id: 'module-1', count: 1 }, { winners: [{ id: 'p1', name: '합성 참가자' }], poolCount: 3, draw: { id, winners: [{ id: 'p1', name: '합성 참가자' }], poolCount: 3, published: false } }, { winners: [], poolCount: 3, draw: { id, winners: [], poolCount: 3, published: false } }],
+  ];
+  for (const [command, payload, valid, invalid] of cases) {
+    assert.equal(world.operator.confirmsProgramOperation(command, id, payload, valid), true, command);
+    assert.equal(world.operator.confirmsProgramOperation(command, id, payload, invalid), false, command);
+    const body = JSON.stringify({ commandId: id, command, payload });
+    world.setFetchImpl(async () => new Response(JSON.stringify(invalid), { status: 200 }));
+    await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body }); await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length, 1, command);
+    world.setFetchImpl(async () => new Response(JSON.stringify(valid), { status: 200 }));
+    await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body }); await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length, 0, command);
+  }
+  const payload = { id: 'module-1' };
+  assert.equal(world.operator.confirmsProgramOperation('draw.publish', id, payload, { draw: { id: 'draw-1', published: true } }, 'draw-1'), true);
+  assert.equal(world.operator.confirmsProgramOperation('draw.publish', id, payload, { draw: { id: 'draw-2', published: true } }, 'draw-1'), false);
+  const body = JSON.stringify({ commandId: id, command: 'draw.publish', payload });
+  world.setFetchImpl(async () => new Response('{"draw":{"id":"draw-1","published":true}}', { status: 200 }));
+  await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body }); await world.flush();
+  assert.equal(world.receipts.operatorReceipts().length, 1, 'publish has no module ID in its response; the screen must confirm its known draw');
+  const guarded = JSON.stringify({ commandId: 'guarded-' + id, command: 'draw.publish', payload: { ...payload, expectedDrawId: 'draw-1' } });
+  world.setFetchImpl(async () => new Response('{"draw":{"id":"draw-2","published":true}}', { status: 200 }));
+  await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body: guarded }); await world.flush();
+  assert.equal(world.receipts.operatorReceipts().length, 2, 'another result cannot resolve the guarded request');
+  world.setFetchImpl(async () => new Response('{"draw":{"id":"draw-1","published":true}}', { status: 200 }));
+  await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body: guarded }); await world.flush();
+  assert.equal(world.receipts.operatorReceipts().length, 1);
+});
+
+test('customer and event receipts require a response matching the submitted write', async () => {
+  const world = loadWorld();
+  world.setFetchImpl(async () => meResponse(ORG_A));
+  await world.operator.ensureOperatorContext();
+  const clientBody = JSON.stringify({ commandId: 'customer-unconfirmed-1', name: ' 합성 고객사 ', contact: '개인정보' });
+  world.setFetchImpl(async () => new Response('{"message":"ok"}', { status: 200 }));
+  await world.operator.operatorFetch('/api/clients', { method: 'POST', body: clientBody });
+  await world.flush();
+  assert.equal(world.receipts.operatorReceipts().length, 1);
+  assert.equal(JSON.stringify(world.receipts.operatorReceipts()).includes('개인정보'), false);
+  world.setFetchImpl(async () => new Response('{"client":{"id":"client-1","name":"합성 고객사","contact":"개인정보"}}', { status: 200 }));
+  await world.operator.operatorFetch('/api/clients', { method: 'POST', body: clientBody });
+  await world.flush();
+  assert.equal(world.receipts.operatorReceipts().length, 0);
+
+  const eventBody = JSON.stringify({ commandId: 'event-unconfirmed-1', name: '검증 행사', slug: 'audit-event' });
+  world.setFetchImpl(async () => new Response('{"event":{"id":"wrong-event","name":"다른 행사","slug":"audit-event"}}', { status: 200 }));
+  await world.operator.operatorFetch('/api/events', { method: 'POST', body: eventBody });
+  await world.flush();
+  assert.equal(world.receipts.operatorReceipts().length, 1, 'a different event must not clear the pointer');
+  assert.equal(world.operator.confirmsClientSave({ id: 'client-1', name: '고객사', logoFileId: '' }, { client: { id: 'client-1', name: '고객사', logoFileId: 'still-linked' } }), false);
+  assert.equal(world.operator.confirmsEventCreation({ name: '검증 행사', slug: 'audit-event' }, { event: { id: 'event-1', name: '검증 행사', slug: 'audit-event' } }), true);
+});
+
+test('invitation and password-reset pointers never store credentials and require the matching response', async () => {
+  const world = loadWorld();
+  world.setFetchImpl(async () => meResponse(ORG_A));
+  await world.operator.ensureOperatorContext();
+  const invitation = { commandId: 'invite-unconfirmed-1', name: '합성 이름', email: 'invite@example.invalid', role: 'MANAGER' };
+  world.setFetchImpl(async () => new Response('{"message":"ok"}', { status: 200 }));
+  await world.operator.operatorFetch('/api/auth/invitations', { method: 'POST', body: JSON.stringify(invitation) });
+  await world.flush();
+  assert.equal(world.receipts.operatorReceipts().length, 1);
+  assert.equal(JSON.stringify(world.receipts.operatorReceipts()).includes(invitation.email), false);
+  const issued = { token: 'one-time-secret', invitation: { id: 'inv-1', name: invitation.name, email: invitation.email, role: invitation.role, eventId: null } };
+  world.setFetchImpl(async () => new Response(JSON.stringify(issued), { status: 201 }));
+  await world.operator.operatorFetch('/api/auth/invitations', { method: 'POST', body: JSON.stringify(invitation) });
+  await world.flush();
+  assert.equal(world.receipts.operatorReceipts().length, 0);
+
+  const reset = { commandId: 'password-unconfirmed-1', password: 'synthetic-password-only' };
+  world.setFetchImpl(async () => new Response('{"account":{"id":"different-user"}}', { status: 200 }));
+  await world.operator.operatorFetch('/api/auth/accounts/target-user/password', { method: 'POST', body: JSON.stringify(reset) });
+  await world.flush();
+  assert.equal(world.receipts.operatorReceipts().length, 1);
+  assert.equal(JSON.stringify(world.receipts.operatorReceipts()).includes(reset.password), false);
+  world.setFetchImpl(async () => new Response('{"account":{"id":"target-user"}}', { status: 200 }));
+  await world.operator.operatorFetch('/api/auth/accounts/target-user/password', { method: 'POST', body: JSON.stringify(reset) });
+  await world.flush();
+  assert.equal(world.receipts.operatorReceipts().length, 0);
+
+  const grant = { commandId: 'grant-unconfirmed-1', accountId: 'target-user', write: ['participants'], enabled: true };
+  world.setFetchImpl(async () => new Response('{"membership":{"eventId":"event-1","accountId":"target-user","write":["all"]}}', { status: 200 }));
+  await world.operator.operatorFetch('/api/events/event-1/members', { method: 'POST', body: JSON.stringify(grant) });
+  await world.flush();
+  assert.equal(world.receipts.operatorReceipts().length, 1, 'different grants cannot clear a pointer');
+  world.setFetchImpl(async () => new Response('{"membership":{"eventId":"event-1","accountId":"target-user","write":["participants"]}}', { status: 200 }));
+  await world.operator.operatorFetch('/api/events/event-1/members', { method: 'POST', body: JSON.stringify(grant) });
+  await world.flush();
+  assert.equal(world.receipts.operatorReceipts().length, 0);
+});
+
+test('in-flight status pointers remain available to another screen without exposing inputs', async () => {
+  const world = loadWorld();
+  world.setFetchImpl(async () => meResponse(ORG_A));
+  await world.operator.ensureOperatorContext();
+  let finish;
+  world.setFetchImpl(() => new Promise((resolve) => { finish = resolve; }));
+  const request = world.operator.operatorFetch('/api/clients', { method: 'POST', body: JSON.stringify({ commandId: 'inflight-client-1', name: '합성 개인정보' }) });
+  await world.flush();
+  assert.equal(world.receipts.visibleOperatorReceipts().length, 0, 'the recovery panel hides active requests');
+  assert.equal(world.receipts.operatorReceipts().length, 1, 'another task can still see the minimal active pointer');
+  assert.equal(JSON.stringify(world.receipts.operatorReceipts()).includes('합성 개인정보'), false);
+  finish(new Response('{"client":{"id":"client-1","name":"합성 개인정보"}}', { status: 201 }));
+  await request;
+  await world.flush();
+  assert.equal(world.receipts.operatorReceipts().length, 0);
+});
+
+test('local recovery hides only its presentation and reveals the pointer on leave', async () => {
+  const world = loadWorld();
+  const pointer = { userId: 'user-1', organizationId: 'org-1', eventId: 'event-1', commandId: 'import-managed-1', command: 'participant.import' };
+  assert.equal(world.receipts.beginOperatorReceipt(pointer), false);
+  world.receipts.endOperatorReceipt(pointer.commandId, false);
+  assert.equal(world.receipts.visibleOperatorReceipts().length, 1);
+  const releaseFirst = world.receipts.manageOperatorReceipt(pointer.commandId);
+  const releaseSecond = world.receipts.manageOperatorReceipt(pointer.commandId);
+  assert.equal(world.receipts.visibleOperatorReceipts().length, 0);
+  assert.equal(world.receipts.operatorReceipts().length, 1, 'the status-only pointer is still saved');
+  releaseFirst();
+  assert.equal(world.receipts.visibleOperatorReceipts().length, 0, 'another mounted owner remains');
+  releaseSecond();
+  assert.equal(world.receipts.visibleOperatorReceipts().length, 1, 'leaving reveals the same pointer');
+});
+
+test('roster receipt confirmation requires the original participant, group and reward results', async () => {
+  const world = loadWorld();
+  world.setFetchImpl(async () => meResponse(ORG_A));
+  await world.operator.ensureOperatorContext();
+  const scenarios = [
+    { command: 'participant.create', payload: { name: '합성 참가자', phone: '010-5555-1234' }, valid: { participant: { id: 'p-1', name: '합성 참가자', phone: '01055551234' } }, invalid: { participant: { name: '합성 참가자' } } },
+    { command: 'participant.status', payload: { ids: ['p-1', 'p-2'], status: 'APPROVED' }, valid: { participants: [{ id: 'p-1', status: 'APPROVED' }, { id: 'p-2', status: 'APPROVED' }] }, invalid: { participants: [{ id: 'p-1', status: 'APPROVED' }] } },
+    { command: 'group.assign', payload: { ids: ['p-1', 'p-2'], group: 'VIP' }, valid: { group: 'VIP', participantIds: ['p-2', 'p-1'] }, invalid: { group: 'VIP', participantIds: ['p-1'] } },
+    { command: 'reward.create', payload: { participantId: 'p-1', name: '합성 경품', method: 'ONSITE' }, valid: { reward: { id: 'roster-receipt-3', participantId: 'p-1', name: '합성 경품', method: 'ONSITE' } }, invalid: { reward: { id: 'wrong', participantId: 'p-1' } } },
+    { command: 'participant.import', payload: { rows: [{ name: '합성 1', phone: '01055550001' }, { name: '합성 2', phone: '01055550002' }] }, valid: { participants: [{ id: 'p-2', name: '합성 2', phone: '01055550002' }, { id: 'p-1', name: '합성 1', phone: '01055550001' }] }, invalid: { participants: [{ id: 'p-1', name: '합성 1', phone: '01055550001' }] } },
+  ];
+  for (const [index, scenario] of scenarios.entries()) {
+    const body = JSON.stringify({ commandId: `roster-receipt-${index}`, command: scenario.command, payload: scenario.payload });
+    world.setFetchImpl(async () => new Response(JSON.stringify(scenario.invalid), { status: 200 }));
+    await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+    await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length, 1, `${scenario.command} retains an unverified result`);
+    assert.equal(JSON.stringify(world.receipts.operatorReceipts()).includes('010-5555-1234'), false);
+    world.setFetchImpl(async () => new Response(JSON.stringify(scenario.valid), { status: 200 }));
+    await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+    await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length, 0, `${scenario.command} accepts a matching result`);
+  }
+});
+
+test('staff booth receipt remains recoverable until response identifies the requested visit and booth', async () => {
+  for (const invalid of [
+    {name:'합성 참가자',booth:'합성 부스'},
+    {name:'합성 참가자',booth:'합성 부스',visitId:'another-command',boothId:'booth-a',participantId:'p-1'},
+    {name:'합성 참가자',booth:'합성 부스',visitId:'booth-command-123',boothId:'booth-b',participantId:'p-1'},
+    {name:'합성 참가자',booth:'합성 부스',visitId:'booth-command-123',boothId:'booth-a',participantId:''},
+  ]) {
+    const world=loadWorld();
+    world.setFetchImpl(async()=>meResponse(ORG_A));
+    await world.operator.ensureOperatorContext();
+    const body=JSON.stringify({commandId:'booth-command-123',command:'booth.visit',assignmentId:'assignment-a',
+      payload:{boothId:'booth-a',ticket:'synthetic-private-ticket'}});
+    world.setFetchImpl(async()=>new Response(JSON.stringify(invalid),{status:201}));
+    await world.operator.operatorFetch('/api/events/event-123/commands',{method:'POST',body});
+    await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length,1);
+    assert.equal(JSON.stringify(world.receipts.operatorReceipts()).includes('synthetic-private-ticket'),false);
+    world.setFetchImpl(async()=>new Response(JSON.stringify({name:'합성 참가자',booth:'합성 부스',
+      visitId:'booth-command-123',boothId:'booth-a',participantId:'p-1'}),{status:200}));
+    await world.operator.operatorFetch('/api/events/event-123/commands',{method:'POST',body});
+    await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length,0);
+  }
+});
+
+test('reward receipts stay recoverable until matching target and complete lookup are confirmed', async () => {
+  const cases = [
+    { command:'reward.lookup', payload:{participantId:'p-1',verificationId:'prior-1'},
+      valid:{rewardRequestVersion:1,rewardVerificationId:'reward-command-123',participant:{id:'p-1',name:'합성 참가자'},rewards:[{id:'gift-1',name:'합성 경품',status:'READY',method:'ONSITE'}]},
+      invalid:[{participant:{id:'p-1',name:'합성 참가자'},rewards:[]},
+        {rewardRequestVersion:1,rewardVerificationId:'wrong',participant:{id:'p-1',name:'합성 참가자'},rewards:[]},
+        {rewardRequestVersion:1,rewardVerificationId:'reward-command-123',participant:{id:'p-2',name:'다른 참가자'},rewards:[]},
+        {rewardRequestVersion:1,rewardVerificationId:'reward-command-123',participant:{id:'p-1',name:'합성 참가자'},rewards:[{name:'합성 경품'}]}] },
+    { command:'reward.collect', payload:{id:'gift-1',verificationId:'prior-1',expectedParticipantId:'p-1'},
+      valid:{rewardRequestVersion:1,reward:{id:'gift-1',participantId:'p-1',status:'RECEIVED'}},
+      invalid:[{reward:{id:'gift-1',participantId:'p-1',status:'RECEIVED'}},
+        {rewardRequestVersion:1,reward:{id:'gift-1',participantId:'p-2',status:'RECEIVED'}},
+        {rewardRequestVersion:1,reward:{id:'gift-2',participantId:'p-1',status:'RECEIVED'}}] },
+  ];
+  for(const item of cases) for(const invalid of item.invalid) {
+    const world=loadWorld(); world.setFetchImpl(async()=>meResponse(ORG_A)); await world.operator.ensureOperatorContext();
+    const body=JSON.stringify({commandId:'reward-command-123',command:item.command,assignmentId:'desk-a',payload:item.payload});
+    world.setFetchImpl(async()=>new Response(JSON.stringify(invalid),{status:200}));
+    await world.operator.operatorFetch('/api/events/event-123/commands',{method:'POST',body}); await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length,1,'unproven response must not clear the pointer');
+    world.setFetchImpl(async()=>new Response(JSON.stringify(item.valid),{status:200}));
+    await world.operator.operatorFetch('/api/events/event-123/commands',{method:'POST',body}); await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length,0,'matching response can acknowledge the pointer');
+  }
+});
+
+test('bulk cancellation remains pending until the roster has refreshed', async () => {
+  const world=loadWorld(); world.setFetchImpl(async()=>meResponse(ORG_A)); await world.operator.ensureOperatorContext();
+  const body=JSON.stringify({commandId:'bulk-cancel-command-123',command:'participant.bulk-cancel',payload:{ids:['p-1']}});
+  for (const result of [
+    {participants:[{id:'p-1',status:'CANCELLED'}]},
+    {participants:[{id:'p-2',status:'CANCELLED'}]},
+    {status:'APPLIED',command:'participant.bulk-cancel'},
+  ]) {
+    world.setFetchImpl(async()=>new Response(JSON.stringify(result),{status:200}));
+    await world.operator.operatorFetch('/api/events/event-123/commands',{method:'POST',body}); await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length,1,'only the roster can acknowledge the reviewed target after refresh');
+  }
+  world.setFetchImpl(async()=>new Response(JSON.stringify({status:'APPLIED',command:'participant.bulk-cancel'}),{status:200,headers:{'x-eventouch-organization-id':'org-a','x-eventouch-context-version':'3'}}));
+  await world.operator.operatorFetch('/api/events/event-123/command-receipts/bulk-cancel-command-123',{cache:'no-store'});
+  assert.equal(world.receipts.operatorReceipts().length,1,'a status-only read never clears the target-free pointer');
+  assert.equal(JSON.stringify(world.receipts.operatorReceipts()).includes('p-1'),false,'participant ids are not stored in the pointer');
+  const recovery=fs.readFileSync(path.join(__dirname,'../apps/web/app/ui/OperatorReceiptRecovery.tsx'),'utf8');
+  assert.match(recovery,/"participant\.bulk-cancel":\s*"신청 일괄 취소"/);
+});
+
+test('generic replay never settles unproven cancellation, ticket effects or reward target', async () => {
+  const targets=[{id:'p-1',status:'APPROVED',inside:false,paidPaymentIds:[]}];
+  const basics={name:'합성 행사',slug:'synthetic',date:'2027-06-01',start:'09:00',end:'18:00',capacity:50,expectedBasics:{date:'2027-01-01'}};
+  const campaign={ids:['p-1'],expectedRecipientVersions:['a'.repeat(64)],title:'합성 안내',body:'안내 문구',channel:'SMS',simulate:true};
+  const campaignMessage={id:'target-command-123',recipientIds:['p-1'],title:'합성 안내',body:'안내 문구',channel:'SMS',simulate:true,status:'SIMULATED',scheduled:'',templateId:null};
+  const check={id:'campaign-1',participantId:'p-1',outcome:'NOT_ACCEPTED',expectedSubmissionId:'submission-1'};
+  const checkMessage={id:'campaign-1',status:'FAILED',deliveries:[{participantId:'p-1',status:'FAILED',genericProviderResult:'NOT_ACCEPTED',manualProviderReview:{outcome:'NOT_ACCEPTED',actorId:'user-1',at:'2026-11-07T00:00:00Z'}}]};
+  const pagePublished={intro:'합성 페이지',accent:'#E76D26',showAnnouncements:true,showSchedule:true,showVenue:true,showPrograms:true,
+    homeStyle:{backgroundColor:'#B9DEF0',heroTitle:null,heroSubtitle:'',heroLayout:'centered',titleScale:'standard',imageFocus:'center',textAlign:'center',textTone:'light',overlay:'none'},
+    homeMenus:{order:[],hidden:[],programs:[]},keyvisual:null};
+  const cases=[
+    {command:'check.reviewed-exit',payload:{participantId:'p-1',entryId:'entry-1'},
+      valid:{exitReview:{participantId:'p-1',entryId:'entry-1',exitId:'target-command-123',action:'OUT'}},
+      wrong:{exitReview:{participantId:'p-2',entryId:'entry-1',exitId:'target-command-123',action:'OUT'}}},
+    {command:'check.reconcile',payload:{participantId:'p-1',checkId:'entry-1',action:'IN'},
+      valid:{reconciliation:{id:'target-command-123',participantId:'p-1',checkId:'entry-1',action:'IN',inside:true,everIn:true}},
+      wrong:{reconciliation:{id:'target-command-123',participantId:'p-2',checkId:'entry-1',action:'IN',inside:true,everIn:true}}},
+    {command:'event.basics.save',payload:basics,
+      valid:{event:{...basics,id:'event-123'},ticketPolicyVersion:1,ticketImpact:{extended:2,review:1}},
+      wrong:{event:{...basics,id:'event-123'}}},
+    {command:'attendee.page.publish-reviewed',payload:{expectedDraftVersion:2,expectedDestinations:{slug:'event-123',public:false}},
+      valid:{draftVersion:2,publishedVersion:2,published:pagePublished,reviewedDestinations:{slug:'event-123',public:false}},
+      wrong:{draftVersion:2,publishedVersion:2,published:pagePublished,reviewedDestinations:{slug:'event-123',public:true}}},
+    {command:'attendee.page.publish-reviewed',payload:{expectedDraftVersion:2,expectedDestinations:{slug:'event-123',public:false}},
+      valid:{draftVersion:2,publishedVersion:2,published:pagePublished,reviewedDestinations:{slug:'event-123',public:false}},
+      wrong:{draftVersion:2,publishedVersion:2,published:{...pagePublished,homeMenus:{}},reviewedDestinations:{slug:'event-123',public:false}}},
+    {command:'message.create-reviewed',payload:campaign,valid:{messageRequestVersion:1,message:campaignMessage},wrong:{messageRequestVersion:1,message:{...campaignMessage,recipientIds:['p-2']}}},
+    {command:'message.record-provider-check',payload:check,valid:{message:checkMessage,providerCheck:check},wrong:{message:checkMessage,providerCheck:{...check,participantId:'p-2'}}},
+    {command:'participant.bulk-cancel',payload:{ids:['p-1'],status:'CANCELLED',expectedCancellations:targets,requireRosterRefresh:true},
+      valid:{cancellationReview:{status:'CANCELLED',targets},participants:[{id:'p-1',status:'CANCELLED'}]},
+      wrong:{cancellationReview:{status:'CANCELLED',targets:[{...targets[0],id:'p-2'}]},participants:[{id:'p-2',status:'CANCELLED'}]}},
+    {command:'reward.lookup',payload:{participantId:'p-1',verificationId:'prior-1'},
+      valid:{rewardRequestVersion:1,rewardVerificationId:'target-command-123',participant:{id:'p-1',name:'합성 참가자'},rewards:[]},
+      wrong:{rewardRequestVersion:1,rewardVerificationId:'target-command-123',participant:{id:'p-2',name:'다른 참가자'},rewards:[]}},
+    {command:'reward.collect',payload:{id:'gift-1',verificationId:'prior-1',expectedParticipantId:'p-1'},
+      valid:{rewardRequestVersion:1,reward:{id:'gift-1',participantId:'p-1',status:'RECEIVED'}},
+      wrong:{rewardRequestVersion:1,reward:{id:'gift-1',participantId:'p-2',status:'RECEIVED'}}},
+  ];
+  for (const item of cases) {
+    const world=loadWorld(); world.setFetchImpl(async()=>meResponse(ORG_A)); await world.operator.ensureOperatorContext();
+    const body=JSON.stringify({commandId:'target-command-123',command:item.command,assignmentId:'desk-a',payload:item.payload});
+    world.setFetchImpl(async()=>new Response('temporary',{status:500}));
+    await world.operator.operatorFetch('/api/events/event-123/commands',{method:'POST',body});
+    const key=world.operator.listUncertainAttempts()[0].key;
+    for (const [status,result] of [[200,item.wrong],[400,{field:'command'}],[403,{code:'FORBIDDEN'}],[409,{code:'RECEIPT_MISMATCH'}]]) {
+      world.setFetchImpl(async()=>new Response(JSON.stringify(result),{status}));
+      await world.operator.operatorFetch('/api/events/event-123/commands',{method:'POST',body}); await world.flush();
+      assert.equal(world.operator.listUncertainAttempts().length,1,`${item.command} ordinary retry ${status} remains unresolved`);
+      assert.equal(world.receipts.operatorReceipts().length,1);
+    }
+    for (const [status,result] of [[200,{}],[200,item.wrong],[400,{field:'command'}],[403,{code:'FORBIDDEN'}],[409,{code:'RECEIPT_MISMATCH'}]]) {
+      world.setFetchImpl(async()=>new Response(JSON.stringify(result),{status}));
+      assert.equal((await world.operator.replayUncertainAttempt(key)).settled,false,`${item.command} ${status} remains unresolved`);
+      assert.equal(world.operator.listUncertainAttempts().length,1);
+      assert.equal(world.receipts.operatorReceipts().length,1);
+    }
+    world.setFetchImpl(async()=>new Response(JSON.stringify(item.valid),{status:200}));
+    assert.equal((await world.operator.replayUncertainAttempt(key)).settled,true,`${item.command} exact target may settle generic replay`);
+    assert.equal(world.receipts.operatorReceipts().length,1,'the work surface still owns refresh and pointer');
+  }
+});
+
+test('page publication guard conflicts settle an ambiguous retry but unrelated rejections do not', async () => {
+  for (const conflict of [{code:'PAGE_PUBLICATION_CONTEXT_CHANGED',field:'expectedDestinations'}, {field:'expectedDraftVersion'}]) {
+    const world=loadWorld(); world.setFetchImpl(async()=>meResponse(ORG_A)); await world.operator.ensureOperatorContext();
+    const body=JSON.stringify({commandId:'page-guard-command',command:'attendee.page.publish-reviewed',payload:{expectedDraftVersion:2,expectedDestinations:{slug:'event-123',public:false}}});
+    world.setFetchImpl(async()=>new Response('temporary',{status:500}));
+    await world.operator.operatorFetch('/api/events/event-123/commands',{method:'POST',body});
+    const key=world.operator.listUncertainAttempts()[0].key;
+    world.setFetchImpl(async()=>new Response(JSON.stringify({code:'FORBIDDEN'}),{status:403}));
+    assert.equal((await world.operator.replayUncertainAttempt(key)).settled,false);
+    world.setFetchImpl(async()=>new Response(JSON.stringify(conflict),{status:409}));
+    assert.equal((await world.operator.replayUncertainAttempt(key)).settled,true);
+    assert.equal(world.operator.listUncertainAttempts().length,0);
+    assert.equal(world.receipts.operatorReceipts().length,1,'the screen owns the scoped pointer until it handles the conflict');
+  }
+});
+
+test('reviewed message creation proves recipient, content, schedule and image without changing legacy receipts', () => {
+  const {operator}=loadWorld();
+  const payload={ids:['p-1'],expectedRecipientVersions:['b'.repeat(64)],title:'합성',body:'본문',channel:'MMS',simulate:false,imageFileId:'image-1',scheduled:'2027-11-10T00:00:00Z',scheduleMode:'MANUAL',templateId:'template-1'};
+  const message={id:'send-id-123',recipientIds:['p-1'],title:'합성',body:'본문',channel:'MMS',simulate:false,image:{fileId:'image-1'},scheduled:payload.scheduled,scheduleMode:'MANUAL',templateId:'template-1',status:'SCHEDULED'};
+  const response={messageRequestVersion:1,message};
+  const confirm=value=>operator.confirmsReviewedMessageCreate('send-id-123',payload,value);
+  assert.equal(confirm(response),true);
+  for(const wrong of [
+    {message}, {messageRequestVersion:1,message:{...message,recipientIds:['p-2']}},
+    {messageRequestVersion:1,message:{...message,body:'다른 본문'}}, {messageRequestVersion:1,message:{...message,title:'다른 제목'}},
+    {messageRequestVersion:1,message:{...message,channel:'SMS'}}, {messageRequestVersion:1,message:{...message,image:{fileId:'image-2'}}},
+    {messageRequestVersion:1,message:{...message,scheduled:'2027-11-11T00:00:00Z'}},
+    {messageRequestVersion:1,message:{...message,templateId:'template-2'}}, {messageRequestVersion:1,message:{...message,simulate:true}},
+  ]) assert.equal(confirm(wrong),false);
+  assert.equal(operator.confirmsMessageCreate('send-id-123',payload,{message}),true,'old stored receipts retain their compatibility rule');
+});
+
+test('reviewed event retries preserve in-memory uncertainty when all browser storage is denied', async () => {
+  const world=loadWorld(); world.setFetchImpl(async()=>meResponse(ORG_A)); await world.operator.ensureOperatorContext();
+  world.denyReceiptStorage();
+  const payload={name:'합성 행사',slug:'synthetic',date:'2027-06-01',start:'09:00',end:'18:00',capacity:50,expectedBasics:{date:'2027-01-01'}};
+  const body=JSON.stringify({commandId:'event-basics-storage-denied-123',command:'event.basics.save',payload});
+  world.setFetchImpl(async()=>new Response('temporary',{status:500}));
+  await world.operator.operatorFetch('/api/events/event-123/commands',{method:'POST',body});
+  assert.equal(world.operator.listUncertainAttempts().length,1);
+  for (const [status,result] of [[400,{field:'command'}],[403,{code:'FORBIDDEN'}],[409,{code:'RECEIPT_MISMATCH'}],[200,{event:{...payload,id:'event-123'}}]]) {
+    world.setFetchImpl(async()=>new Response(JSON.stringify(result),{status}));
+    await world.operator.operatorFetch('/api/events/event-123/commands',{method:'POST',body}); await world.flush();
+    assert.equal(world.operator.listUncertainAttempts().length,1,`${status} without original proof must remain uncertain`);
+  }
+  const key=world.operator.listUncertainAttempts()[0].key;
+  world.setFetchImpl(async()=>new Response(JSON.stringify({event:{...payload,id:'event-123'},ticketPolicyVersion:1,ticketImpact:{extended:1,review:0}}),{status:200}));
+  assert.equal((await world.operator.replayUncertainAttempt(key)).settled,true);
+  assert.equal(world.operator.listUncertainAttempts().length,0);
+});
+
+
+test('rate limit and too-early responses retain status pointers until the same request is resolved', async () => {
+  for (const status of [425, 429]) {
+    const world = loadWorld();
+    world.setFetchImpl(async () => meResponse(ORG_A));
+    await world.operator.ensureOperatorContext();
+    const body = JSON.stringify({ commandId: `limit-client-${status}`, name: '합성 고객사' });
+    world.setFetchImpl(async () => new Response('{"error":"retry"}', { status }));
+    await world.operator.operatorFetch('/api/clients', { method: 'POST', body });
+    assert.equal(world.receipts.operatorReceipts().length, 1);
+    world.setFetchImpl(async () => new Response('{"client":{"id":"client-1","name":"합성 고객사"}}', { status: 201 }));
+    await world.operator.operatorFetch('/api/clients', { method: 'POST', body });
+    await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length, 0);
+  }
+});
+
+test('content receipts require the saved values and reject unrelated success bodies', async () => {
+  const world = loadWorld();
+  world.setFetchImpl(async () => meResponse(ORG_A));
+  await world.operator.ensureOperatorContext();
+  const scenarios = [
+    { command: 'notice.save', payload: { title: '합성 공지', body: '내용', published: true, pinned: false }, valid: { notice: { id: 'n1', title: '합성 공지', body: '내용', published: true, pinned: false } }, invalid: { notice: { id: 'n1', title: '다른 공지' } } },
+    { command: 'program.save', payload: { id: 'p1', title: '합성 일정', date: '2027-01-01', start: '09:00', end: '10:00', place: '', description: '', published: false }, valid: { program: { id: 'p1', title: '합성 일정', date: '2027-01-01', start: '09:00', end: '10:00', place: '', description: '', published: false } }, invalid: { program: { id: 'p2' } } },
+    { command: 'venue.save', payload: { name: '장소', address: '', directions: '', contact: '', description: '', map: null }, valid: { venue: { name: '장소', address: '', directions: '', contact: '', description: '' } }, invalid: { venue: { name: '장소' } } },
+    { command: 'notice.delete', payload: { id: 'n1' }, valid: { ok: true }, invalid: { ok: false } },
+    { command: 'display.set', payload: { type: 'notice', noticeId: 'n1' }, valid: { display: { type: 'notice', noticeId: 'n1' } }, invalid: { display: { type: 'notice', noticeId: 'n2' } } },
+  ];
+  for (const [index, scenario] of scenarios.entries()) {
+    const body = JSON.stringify({ commandId: `content-receipt-${index}`, command: scenario.command, payload: scenario.payload });
+    world.setFetchImpl(async () => new Response(JSON.stringify(scenario.invalid), { status: 200 }));
+    await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+    await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length, 1, `${scenario.command} retains an unverified response`);
+    world.setFetchImpl(async () => new Response(JSON.stringify(scenario.valid), { status: 200 }));
+    await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+    await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length, 0, `${scenario.command} accepts matching saved values`);
+  }
+});
+
+test('report receipts match the exact version and saved fields', async () => {
+  const world = loadWorld();
+  world.setFetchImpl(async () => meResponse(ORG_A));
+  await world.operator.ensureOperatorContext();
+  const fields = { title: '합성 보고서', subtitle: '', coverNote: '', summary: '요약', color: '#E76D26', sections: ['overview'] };
+  const scenarios = [
+    { command: 'report.create', payload: fields, valid: { report: { ...fields, id: 'report-receipt-0', status: 'DRAFT', snapshot: {} } }, invalid: { report: { id: 'other', status: 'DRAFT' } } },
+    { command: 'report.update', payload: { ...fields, id: 'existing' }, valid: { report: { ...fields, id: 'existing', status: 'DRAFT' } }, invalid: { report: { ...fields, id: 'other', status: 'DRAFT' } } },
+    { command: 'report.publish', payload: { id: 'existing' }, valid: { report: { id: 'existing', status: 'PUBLISHED' } }, invalid: { report: { id: 'existing', status: 'DRAFT' } } },
+    { command: 'report.successor', payload: { id: 'existing', source: 'current' }, valid: { report: { id: 'report-receipt-3', parentId: 'existing', status: 'DRAFT', snapshot: {} } }, invalid: { report: { id: 'report-receipt-3', parentId: 'other', status: 'DRAFT', snapshot: {} } } },
+  ];
+  for (const [index, scenario] of scenarios.entries()) {
+    const body = JSON.stringify({ commandId: `report-receipt-${index}`, command: scenario.command, payload: scenario.payload });
+    world.setFetchImpl(async () => new Response(JSON.stringify(scenario.invalid), { status: 200 }));
+    await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+    await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length, 1, `${scenario.command} retains an unverified response`);
+    world.setFetchImpl(async () => new Response(JSON.stringify(scenario.valid), { status: 200 }));
+    await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+    await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length, 0, `${scenario.command} accepts the matching result`);
+  }
+});
+
+test('question and grading receipts require the original target and decision', async () => {
+  const world = loadWorld();
+  world.setFetchImpl(async () => meResponse(ORG_A));
+  await world.operator.ensureOperatorContext();
+  const scenarios = [
+    { command: 'module.save', payload: { title: '합성 투표', type: 'poll', options: ['첫째', '둘째'] }, valid: { module: { id: 'm1', title: '합성 투표', type: 'poll', options: ['첫째', '둘째'] } }, invalid: { module: { id: 'm1', title: '합성 투표', type: 'poll', options: ['첫째'] } } },
+    { command: 'question.manage', payload: { id: 'q1', answer: '답변', approved: true, expectedText: '질문' }, valid: { question: { id: 'q1', answer: '답변', approved: true, text: '질문' } }, invalid: { question: { id: 'q2', answer: '답변', approved: true, text: '질문' } } },
+    { command: 'question.edit.approve', payload: { id: 'q1', expectedNewText: '수정안' }, valid: { question: { id: 'q1', approved: true, text: '수정안' } }, invalid: { question: { id: 'q1', approved: true, text: '기존' } } },
+    { command: 'question.edit.reject', payload: { id: 'q1', expectedText: '기존', expectedAnswer: '답변', expectedEditId: 'edit1', expectedNewText: '수정안', reason: '사유' }, valid: { question: { id: 'q1', approved: true, text: '기존', answer: '답변', editRejection: { id: 'edit1', text: '수정안', reason: '사유' } } }, invalid: { question: { id: 'q1', approved: true, text: '기존' } } },
+    { command: 'response.grade', payload: { responseId: 'r1', expectedGradeVersion: 1 }, valid: { responseId: 'r1', gradeVersion: 2 }, invalid: { responseId: 'r1', gradeVersion: 1 } },
+  ];
+  for (const [index, scenario] of scenarios.entries()) {
+    const body = JSON.stringify({ commandId: `qa-receipt-${index}`, command: scenario.command, payload: scenario.payload });
+    world.setFetchImpl(async () => new Response(JSON.stringify(scenario.invalid), { status: 200 }));
+    await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+    await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length, 1, `${scenario.command} retains an unverified response`);
+    world.setFetchImpl(async () => new Response(JSON.stringify(scenario.valid), { status: 200 }));
+    await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+    await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length, 0, `${scenario.command} accepts the matching result`);
+  }
+});
+
+test('evidence photo receipts match the exact image, section and target', async () => {
+  const world = loadWorld();
+  world.setFetchImpl(async () => meResponse(ORG_A));
+  await world.operator.ensureOperatorContext();
+  const scenarios = [
+    { command: 'evidence.photo.add', payload: { section: 'SPACE', image: { fileId: 'file-1' } }, valid: { photo: { id: 'evidence-receipt-0', section: 'SPACE', image: { fileId: 'file-1' } } }, invalid: { photo: { id: 'evidence-receipt-0', section: 'SPACE', image: { fileId: 'other' } } } },
+    { command: 'evidence.photo.move', payload: { id: 'photo-1', section: 'STAGE' }, valid: { photo: { id: 'photo-1', section: 'STAGE' } }, invalid: { photo: { id: 'photo-2', section: 'STAGE' } } },
+    { command: 'evidence.photo.remove', payload: { id: 'photo-1' }, valid: { ok: true, id: 'photo-1' }, invalid: { ok: true, id: 'photo-2' } },
+  ];
+  for (const [index, scenario] of scenarios.entries()) {
+    const body = JSON.stringify({ commandId: `evidence-receipt-${index}`, command: scenario.command, payload: scenario.payload });
+    world.setFetchImpl(async () => new Response(JSON.stringify(scenario.invalid), { status: 200 }));
+    await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+    await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length, 1, `${scenario.command} retains an unverified response`);
+    world.setFetchImpl(async () => new Response(JSON.stringify(scenario.valid), { status: 200 }));
+    await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+    await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length, 0, `${scenario.command} accepts the matching result`);
+  }
+});
+
+test('message receipts retain incomplete or unrelated acknowledgements without storing content', async () => {
+  const world = loadWorld();
+  world.setFetchImpl(async () => meResponse(ORG_A));
+  await world.operator.ensureOperatorContext();
+  const scenarios = [
+    { command: 'message.create', payload: { body: '비공개 합성 본문', ids: ['p1'], simulate: true }, invalid: { message: { id: 'message-receipt-0', status: 'SENT' } }, valid: { message: { id: 'message-receipt-0', status: 'SIMULATED' } } },
+    { command: 'message.retry', payload: { id: 'campaign-1' }, invalid: { message: { id: 'other', status: 'SENDING' } }, valid: { message: { id: 'campaign-1', status: 'SENDING' } } },
+    { command: 'message.cancel', payload: { id: 'campaign-1' }, invalid: { message: { id: 'campaign-1', status: 'SCHEDULED' } }, valid: { message: { id: 'campaign-1', status: 'CANCELLED' } } },
+    { command: 'message.sync', payload: { id: 'campaign-1' }, invalid: { message: { status: 'SENDING' } }, valid: { message: { id: 'campaign-1', status: 'SENDING' } } },
+    { command: 'message.sync', payload: { id: 'campaign-1' }, invalid: { message: { id: 'other-sending', status: 'SENDING' } }, valid: { message: { id: 'campaign-1', status: 'SENDING' } } },
+  ];
+  for (const [index, scenario] of scenarios.entries()) {
+    const body = JSON.stringify({ commandId: `message-receipt-${index}`, command: scenario.command, payload: scenario.payload });
+    world.setFetchImpl(async () => new Response(JSON.stringify(scenario.invalid), { status: 200 }));
+    await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+    await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length, 1, `${scenario.command} retains an unverified response`);
+    assert.equal(JSON.stringify(world.receipts.operatorReceipts()).includes('비공개 합성 본문'), false);
+    world.setFetchImpl(async () => new Response(JSON.stringify(scenario.valid), { status: 200 }));
+    await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+    await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length, 0, `${scenario.command} accepts a matching result`);
+  }
+});
+
+test('floor operation receipts match the original desk, booth, assignment and map', async () => {
+  const world = loadWorld();
+  world.setFetchImpl(async () => meResponse(ORG_A));
+  await world.operator.ensureOperatorContext();
+  const scenarios = [
+    { command: 'desk.save', payload: { name: '합성 데스크', action: 'IN', mode: 'desk' }, invalid: { desk: { id: 'd1', name: '다른 데스크', action: 'IN', mode: 'desk' } }, valid: { desk: { id: 'd1', name: '합성 데스크', action: 'IN', mode: 'desk' } } },
+    { command: 'desk.save', payload: { id: 'd1', name: '합성 데스크', action: 'IN', mode: 'desk', open: false, expectedDesk: { name: '이전', action: 'IN', mode: 'desk', open: false } }, invalid: { desk: { id: 'd1', name: '합성 데스크', action: 'IN', mode: 'desk', open: true } }, valid: { desk: { id: 'd1', name: '합성 데스크', action: 'IN', mode: 'desk', open: false } } },
+    { command: 'desk.save', payload: { id: 'd1', name: '합성 데스크', action: 'OUT', mode: 'desk', open: true, confirmDirectionChange: true, expectedDesk: { name: '이전', action: 'IN', mode: 'desk', open: true } }, invalid: { desk: { id: 'd1', name: '합성 데스크', action: 'OUT', mode: 'desk', open: true } }, valid: { desk: { id: 'd1', name: '합성 데스크', action: 'OUT', mode: 'desk', open: false } } },
+    { command: 'desk.save', payload: { id: 'd1', name: '복구 데스크', action: 'IN', mode: 'desk', open: true, confirmDirectionChange: true, expectedDesk: { name: null, action: null, mode: 'desk', open: true } }, invalid: { desk: { id: 'd1', name: '복구 데스크', action: 'IN', mode: 'desk', open: true } }, valid: { desk: { id: 'd1', name: '복구 데스크', action: 'IN', mode: 'desk', open: false } } },
+    { command: 'desk.set-open', payload: { id: 'd1', open: false }, invalid: { desk: { id: 'd1', open: true } }, valid: { desk: { id: 'd1', open: false } } },
+    { command: 'desk.set-open', payload: { id: 'd1', open: true, expectedOpen: false, expectedDesk: { name: '입장', action: 'IN', mode: 'desk', open: false } }, invalid: { desk: { id: 'd1', open: true } }, valid: { desk: { id: 'd1', name: '입장', action: 'IN', mode: 'desk', open: true } } },
+    { command: 'desk.set-open', payload: { id: 'd1', open: true, expectedOpen: false, expectedDesk: { name: '입장', action: 'IN', mode: 'desk', open: false } }, invalid: { desk: { id: 'd1', name: '입장', action: 'OUT', mode: 'desk', open: true } }, valid: { desk: { id: 'd1', name: '입장', action: 'IN', mode: 'desk', open: true } } },
+    { command: 'desk.set-open', payload: { id: 'd1', open: false, expectedOpen: true, expectedDesk: { name: null, action: null, mode: 'desk', open: true } }, invalid: { desk: { id: 'd1', mode: 'desk', open: false } }, valid: { desk: { id: 'd1', name: null, action: null, mode: 'desk', open: false } } },
+    { command: 'booth.save', payload: { name: '합성 부스', zone: 'A', status: 'WAITING', capacity: 0, limit: 1 }, invalid: { booth: { id: 'b1', name: '합성 부스', zone: 'B', status: 'WAITING', capacity: 0, limit: 1 } }, valid: { booth: { id: 'b1', name: '합성 부스', zone: 'A', status: 'WAITING', capacity: 0, limit: 1 } } },
+    // The current editor omits both schedule fields; a successful response
+    // must still prove that the reviewed values were retained. A different
+    // offset denoting the same instant is an equivalent result.
+    { command: 'booth.save', payload: { id: 'b1', name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, expectedBooth: { name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, startsAt: '2026-01-01T00:00:00.000Z', endsAt: '2027-01-01T00:00:00.000Z' } }, invalid: { booth: { id: 'b1', name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, startsAt: '2026-01-01T00:00:00.000Z' } }, valid: { booth: { id: 'b1', name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, startsAt: '2026-01-01T09:00:00+09:00', endsAt: '2027-01-01T09:00:00+09:00' } } },
+    { command: 'booth.save', payload: { id: 'b1', name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, expectedBooth: { name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, startsAt: '2026-01-01T00:00:00.000Z', endsAt: '2027-01-01T00:00:00.000Z' } }, invalid: { booth: { id: 'b1', name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, startsAt: '', endsAt: '2027-01-01T00:00:00.000Z' } }, valid: { booth: { id: 'b1', name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, startsAt: '2026-01-01T00:00:00.000Z', endsAt: '2027-01-01T00:00:00.000Z' } } },
+    // Explicit schedule changes/clears compare against the submitted values,
+    // while the other omitted time is still compared to its original value.
+    { command: 'booth.save', payload: { id: 'b1', name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, startsAt: '', expectedBooth: { name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, startsAt: '2026-01-01T00:00:00.000Z', endsAt: '2027-01-01T00:00:00.000Z' } }, invalid: { booth: { id: 'b1', name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, startsAt: '2026-01-01T00:00:00.000Z', endsAt: '2027-01-01T00:00:00.000Z' } }, valid: { booth: { id: 'b1', name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, startsAt: '', endsAt: '2027-01-01T00:00:00.000Z' } } },
+    { command: 'booth.save', payload: { id: 'b1', name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, endsAt: '2028-01-01T00:00:00.000Z', expectedBooth: { name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, startsAt: '2026-01-01T00:00:00.000Z', endsAt: '2027-01-01T00:00:00.000Z' } }, invalid: { booth: { id: 'b1', name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, startsAt: '2026-01-01T00:00:00.000Z', endsAt: '2027-01-01T00:00:00.000Z' } }, valid: { booth: { id: 'b1', name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, startsAt: '2026-01-01T00:00:00.000Z', endsAt: '2028-01-01T09:00:00+09:00' } } },
+    { command: 'booth.save', payload: { id: 'b1', name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, expectedBooth: { name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, startsAt: '잘못된 시작', endsAt: '잘못된 종료' } }, invalid: { booth: { id: 'b1', name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, startsAt: '', endsAt: '잘못된 종료' } }, valid: { booth: { id: 'b1', name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, startsAt: '잘못된 시작', endsAt: '잘못된 종료' } } },
+    { command: 'booth.save', payload: { id: 'b1', name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, expectedBooth: { name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, startsAt: '2026-02-31T09:00:00+09:00', endsAt: '' } }, invalid: { booth: { id: 'b1', name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, startsAt: '2026-03-03T00:00:00Z', endsAt: '' } }, valid: { booth: { id: 'b1', name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, startsAt: '2026-02-31T09:00:00+09:00', endsAt: '' } } },
+    // Old stored rows may use null to mean no schedule. The explicit null is
+    // valid proof of that preserved value; a truncated response is not.
+    { command: 'booth.save', payload: { id: 'b1', name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, expectedBooth: { name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, startsAt: '', endsAt: '' } }, invalid: { booth: { id: 'b1', name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, startsAt: null } }, valid: { booth: { id: 'b1', name: '합성 부스', zone: 'A', status: 'OPEN', capacity: 10, limit: 1, startsAt: null, endsAt: null } } },
+    { command: 'staff.assign', payload: { accountId: 's1', type: 'DESK', targetId: 'd1' }, invalid: { assignment: { id: 'a1', accountId: 's1', type: 'DESK', targetId: 'd2' } }, valid: { assignment: { id: 'a1', accountId: 's1', type: 'DESK', targetId: 'd1' } } },
+    { command: 'staff.unassign', payload: { id: 'a1' }, invalid: { ok: false }, valid: { ok: true } },
+    { command: 'booth.mode', payload: { mode: 'STAFF', acknowledge: true }, invalid: { stampMode: 'SELF' }, valid: { stampMode: 'STAFF' } },
+    { command: 'booth.mode-reviewed', payload: { expectedMode: 'STAFF', mode: 'SELF', acknowledge: true }, invalid: { stampMode: 'SELF', previousMode: 'SELF' }, valid: { stampMode: 'SELF', previousMode: 'STAFF' } },
+    { command: 'booth.map.save', payload: { expectedDraftVersion: 1, fileId: 'file1', points: [{ boothId: 'b1', x: 0.2, y: 0.5 }] }, invalid: { boothMap: { draft: { version: 2, image: { fileId: 'file1' }, points: [] } } }, valid: { boothMap: { draft: { version: 2, image: { fileId: 'file1' }, points: [{ boothId: 'b1', x: 0.2, y: 0.5 }] } } } },
+    { command: 'booth.map.publish', payload: { expectedDraftVersion: 2 }, invalid: { boothMap: { published: { version: 1, image: { fileId: 'file1' }, points: [] } } }, valid: { boothMap: { published: { version: 2, image: { fileId: 'file1' }, points: [] } } } },
+    { command: 'booth.map.unpublish', payload: { expectedPublishedVersion: 2 }, invalid: { boothMap: { published: {} } }, valid: { boothMap: { published: null } } },
+  ];
+  for (const [index, scenario] of scenarios.entries()) {
+    const body = JSON.stringify({ commandId: `floor-receipt-${index}`, command: scenario.command, payload: scenario.payload });
+    world.setFetchImpl(async () => new Response(JSON.stringify(scenario.invalid), { status: 200 }));
+    await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+    await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length, 1, `${scenario.command} retains an unverified response`);
+    world.setFetchImpl(async () => new Response(JSON.stringify(scenario.valid), { status: 200 }));
+    await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+    await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length, 0, `${scenario.command} accepts a matching response`);
+  }
+});
+
+test('settings receipts reject unrelated event, feature and stage results', async () => {
+  const world = loadWorld();
+  world.setFetchImpl(async () => meResponse(ORG_A));
+  await world.operator.ensureOperatorContext();
+  const basics = { name: '합성 행사', slug: 'synthetic', date: '2027-01-16', start: '09:00', end: '18:00', capacity: 50, clientId: 'client-1', format: 'offline' };
+  const scenarios = [
+    { command: 'event.update', payload: basics, invalid: { event: { ...basics, id: 'event-123', name: '다른 행사' } }, valid: { event: { ...basics, id: 'event-123' } } },
+    { command: 'event.features', payload: { features: ['qa', 'poll'] }, invalid: { features: ['qa'] }, valid: { features: ['qa', 'poll'] } },
+    { command: 'event.stage', payload: { stage: 'READY' }, invalid: { event: { id: 'event-123', stage: 'LIVE' } }, valid: { event: { id: 'event-123', stage: 'READY' } } },
+    { command: 'form.publish', payload: { consentText: '합성 동의' }, invalid: { publishedVersion: 0 }, valid: { publishedVersion: 2 } },
+    { command: 'form.close', payload: {}, invalid: { registrationOpen: true }, valid: { registrationOpen: false } },
+  ];
+  for (const [index, scenario] of scenarios.entries()) {
+    const body = JSON.stringify({ commandId: `settings-receipt-${index}`, command: scenario.command, payload: scenario.payload });
+    world.setFetchImpl(async () => new Response(JSON.stringify(scenario.invalid), { status: 200 }));
+    await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+    await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length, 1, `${scenario.command} keeps an unverified response`);
+    assert.equal(JSON.stringify(world.receipts.operatorReceipts()).includes('합성'), false);
+    world.setFetchImpl(async () => new Response(JSON.stringify(scenario.valid), { status: 200 }));
+    await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+    await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length, 0, `${scenario.command} accepts the matching response`);
+  }
+});
+
+test('form publication proves the reviewed consent and exact resulting version while accepting old receipts', () => {
+  const world = loadWorld();
+  const confirm = (payload, result) => world.operator.confirmsSettingsCommand('form.publish', 'event-123', payload, result);
+  const legacy = { consentText: '기존 요청', expectedFormVersion: 4 };
+  assert.equal(confirm(legacy, { publishedVersion: 4 }), true, 'a stored pre-upgrade receipt remains readable');
+  assert.equal(confirm(legacy, { publishedVersion: 5 }), false, 'an unrelated legacy response is not proof');
+  const payload = { consentText: '새 동의', expectedFormVersion: 4, expectedConsentVersion: 2, expectedConsentText: '이전 동의' };
+  const valid = { publishedVersion: 5, reviewedFormVersion: 4, reviewedPublishedVersion: 4,
+    reviewedConsentVersion: 2, reviewedConsentText: '이전 동의', consentText: '새 동의', consentVersion: 3, consentChanged: true };
+  assert.equal(confirm(payload, valid), true);
+  for (const invalid of [
+    { publishedVersion: 4 },
+    { ...valid, consentText: '다른 동의' },
+    { ...valid, reviewedConsentText: '다른 이전 동의' },
+    { ...valid, reviewedFormVersion: 3 },
+    { ...valid, reviewedConsentVersion: 1 },
+    { ...valid, consentVersion: 2 },
+    { ...valid, publishedVersion: 6 },
+    { ...valid, consentChanged: false },
+  ]) assert.equal(confirm(payload, invalid), false, 'a mismatched or incomplete result cannot settle the request');
+  const legacyGap = { ...valid, reviewedPublishedVersion: 9, publishedVersion: 10 };
+  assert.equal(confirm(payload, legacyGap), true, 'an older draft advances beyond the current publication');
+  const unchangedPayload = { ...payload, consentText: '이전 동의' };
+  const unchanged = { ...valid, consentText: '이전 동의', consentChanged: false, consentVersion: 2, publishedVersion: 4 };
+  assert.equal(confirm(unchangedPayload, unchanged), true);
+  assert.equal(confirm(unchangedPayload, { ...unchanged, publishedVersion: 5 }), false);
+});
+
+test('participant page receipts require the submitted draft, image and version', async () => {
+  const world = loadWorld();
+  world.setFetchImpl(async () => meResponse(ORG_A));
+  await world.operator.ensureOperatorContext();
+  const menus = { order: ['notice', 'lucky', 'roulette', 'vote', 'stamp'], hidden: ['vote'], programs: [] };
+  const payload = { expectedDraftVersion: 2, intro: '합성 소개', accent: '#E76D26', showAnnouncements: true,
+    showSchedule: true, showVenue: false, showPrograms: true, homeStyle: { heroTitle: '합성 문구', backgroundColor: '#B9DEF0' },
+    homeMenus: menus, keyvisual: { fileId: 'image-1' } };
+  const draft = { ...payload, keyvisual: { fileId: 'image-1', name: 'banner.png' } };
+  const reviewedDraft = { ...draft, homeStyle: { ...draft.homeStyle, heroSubtitle: '', heroLayout: 'centered', titleScale: 'standard', imageFocus: 'center', textAlign: 'center', textTone: 'light', overlay: 'none' } };
+  const scenarios = [
+    { command: 'attendee.page.save', payload, invalid: { draftVersion: 3, draft: { ...draft, intro: '다른 소개' } }, valid: { draftVersion: 3, draft } },
+    { command: 'attendee.page.save', payload, invalid: { draftVersion: 3, draft: { ...draft, keyvisual: { fileId: 'image-2' } } }, valid: { draftVersion: 3, draft } },
+    { command: 'attendee.page.save', payload, invalid: { draftVersion: 4, draft }, valid: { draftVersion: 3, draft } },
+    { command: 'attendee.page.save', payload, invalid: { draftVersion: 3, draft: { ...draft, homeMenus: { ...menus, hidden: [] } } }, valid: { draftVersion: 3, draft } },
+    { command: 'attendee.page.publish', payload: { expectedDraftVersion: 2 }, invalid: { publishedVersion: 1, draftVersion: 2, published: draft }, valid: { publishedVersion: 2, draftVersion: 2, published: draft } },
+    { command: 'attendee.page.publish-reviewed', payload: { expectedDraftVersion: 2, expectedDestinations: { slug: 'event-123', public: false } }, invalid: { publishedVersion: 2, draftVersion: 2, published: reviewedDraft, reviewedDestinations: { slug: 'event-123', public: true } }, valid: { publishedVersion: 2, draftVersion: 2, published: reviewedDraft, reviewedDestinations: { slug: 'event-123', public: false } } },
+    { command: 'attendee.page.publish-reviewed', payload: { expectedDraftVersion: 2, expectedDestinations: { slug: 'event-123', public: true } }, invalid: { publishedVersion: 2, draftVersion: 2, published: reviewedDraft }, valid: { publishedVersion: 2, draftVersion: 2, published: reviewedDraft, reviewedDestinations: { slug: 'event-123', public: true } } },
+    { command: 'attendee.page.publish-reviewed', payload: { expectedDraftVersion: 2, expectedDestinations: { slug: 'event-123', public: true } }, invalid: { publishedVersion: 2, draftVersion: 2, published: { ...reviewedDraft, homeMenus: {} }, reviewedDestinations: { slug: 'event-123', public: true } }, valid: { publishedVersion: 2, draftVersion: 2, published: reviewedDraft, reviewedDestinations: { slug: 'event-123', public: true } } },
+    { command: 'attendee.page.publish-reviewed', payload: { expectedDraftVersion: 2, expectedDestinations: { slug: 'event-123', public: true } }, invalid: { publishedVersion: 2, draftVersion: 2, published: { ...reviewedDraft, homeStyle: {} }, reviewedDestinations: { slug: 'event-123', public: true } }, valid: { publishedVersion: 2, draftVersion: 2, published: reviewedDraft, reviewedDestinations: { slug: 'event-123', public: true } } },
+  ];
+  for (const [index, scenario] of scenarios.entries()) {
+    const body = JSON.stringify({ commandId: `page-receipt-${index}`, command: scenario.command, payload: scenario.payload });
+    world.setFetchImpl(async () => new Response(JSON.stringify(scenario.invalid), { status: 200 }));
+    await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+    await world.flush();
+    assert.equal(world.receipts.operatorReceipts().length, 1, `${scenario.command} keeps an unrelated response`);
+    assert.equal(JSON.stringify(world.receipts.operatorReceipts()).includes('합성'), false);
+    world.setFetchImpl(async () => new Response(JSON.stringify(scenario.valid), { status: 200 }));
+    await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });
+    await world.flush();
+    if (scenario.command === 'attendee.page.publish' || scenario.command === 'attendee.page.publish-reviewed') {
+      assert.equal(world.operator.confirmsAttendeePageCommand(scenario.command, scenario.payload, scenario.valid), true);
+      assert.equal(world.receipts.operatorReceipts().length, 1, 'the editor must verify the published content before clearing');
+      world.operator.acknowledgeOperatorReceipt(`page-receipt-${index}`);
+      world.receipts.forgetOperatorReceipt(`page-receipt-${index}`);
+    } else {
+      assert.equal(world.receipts.operatorReceipts().length, 0, `${scenario.command} accepts the matching version and fields`);
+    }
+  }
 });

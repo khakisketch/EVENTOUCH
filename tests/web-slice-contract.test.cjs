@@ -73,11 +73,13 @@ test('web-service-entry-sends-everyone-through-the-shared-login', () => {
   assert.match(home, /이메일 주소 복사/);
   // Honest messaging claim plus real product evidence, not mockups. The
   // evidence set carries the operating flow: console, attendee, staff, report.
-  assert.match(home, /모의 발송으로 동작합니다/);
-  assert.match(home, /실제 제품 화면/);
-  for (const asset of ['ev-console', 'ev-attendee-event', 'ev-staff', 'ev-report']) {
-    assert.match(home, new RegExp(`/evidence/${asset}\\.png`));
+  assert.match(home, /실제 발송은 발송 연결과 발신번호가 준비된 경우에만 시도/);
+  assert.match(home, /모의 발송이나 미연동 상태에서는 실제로 전달되지 않/);
+  assert.match(home, /화면 구성 예시/);
+  for (const variant of ['console', 'home', 'ticket', 'staff', 'report']) {
+    assert.match(home, new RegExp(`<ProductPreview variant="${variant}"`));
   }
+
   // Auth lookup must not block public content; it has a deadline and fallback.
   assert.match(home, /AbortController/);
   assert.match(home, /4000/);
@@ -108,13 +110,15 @@ test('web-attendee-verification-precedes-signup-and-recovery-without-accounts', 
   assert.match(form, /verification\/confirm/);
   assert.match(form, /verificationGrant/);
   assert.match(form, /연락처 인증을 먼저 완료하세요/);
-  assert.match(form, /setGrantPhone/);
+  assert.match(form, /verificationVersionRef\.current \+= 1/);
+  assert.match(form, /setGrant\(""\)/);
   // Readiness is stated before submission, not discovered through it; the
   // sent code is confirmed with its window and a resend path.
   assert.match(form, /인증을 마쳐야 신청할 수 있습니다/);
-  // The verification panel now leads the form, so the notice points forward
-  // to the fields instead of back at the panel above it.
-  assert.match(form, /연락처 인증을 완료하면 아래에서 신청 정보를 입력할 수 있습니다/);
+  // The phone field precedes the request action; submission directs the
+  // attendee back to the verification panel until the grant is obtained.
+  assert.ok(form.indexOf('{fields.map(renderField)}') < form.indexOf('id="verification-panel"'));
+  assert.match(form, /신청하려면 위에서 연락처 인증을 완료하세요/);
   assert.match(form, /인증번호 다시 받기/);
   assert.match(form, /10분 안에 입력하세요/);
   assert.doesNotMatch(form, /localStorage/);
@@ -149,9 +153,9 @@ test('web-attendee-verification-precedes-signup-and-recovery-without-accounts', 
   assert.match(view, /ticket\/recover/);
   assert.match(view, /연락처 인증으로 티켓 다시 찾기/);
   assert.match(view, /신청 연락처 인증으로 다시 연결/);
-  assert.match(view, /신청한 기기에서만 열 수 있습니다/);
+  assert.match(view, /신청을 완료한 브라우저 탭/);
   // The recovery note stays a quiet footnote; the wording changed with it.
-  assert.match(view, /이 티켓은 현재 탭에만 보관됩니다/);
+  assert.match(view, /이 탭에서 티켓을 확인할 수 있습니다/);
   const event = read('app/event/[slug]/page.tsx');
   // 표현 고정 갱신(2026-10-25 외부 대면 마감): 조건+행동 한 레이블의 가운데점
   // 제거. ux-copy — 같은 단어, 390px 줄바꿈 noise 감소. 동작 계약 변경 없음.
@@ -275,7 +279,7 @@ test('web-ticket-keeps-the-bearer-out-of-history-and-persistent-storage', () => 
   // broken ticket; the usable ticket links onward to participation.
   assert.match(view, /신청이 접수되었습니다/);
   assert.match(view, /대기 명단에 등록되어 있습니다/);
-  assert.match(view, /참여 프로그램 보기/);
+  assert.match(view, /참여 콘텐츠 보기/);
   assert.match(view, /\/engage/);
   assert.match(view, /이 브라우저에 티켓이 보관되어 있지 않습니다/);
   // Entry tone follows usability, and the failure is announced.
@@ -297,7 +301,9 @@ test('web-staff-uses-session-bootstrap-and-server-checked-commands', () => {
   assert.match(guard, /safeNextPath/);
   assert.match(guard, /\/login\?next=/);
   const hub = read('app/staff/StaffHub.tsx');
-  assert.match(hub, /\/api\/bootstrap/);
+  const staffBootstrap = read('app/staff/staff-bootstrap.ts');
+  assert.match(staffBootstrap, /operatorFetch\("\/api\/bootstrap"/);
+  assert.match(hub, /readStaffBootstrap\(controller\)/);
   assert.match(hub, /\/staff\/events\//);
   assert.doesNotMatch(hub, /\/commands/);
   assert.doesNotMatch(hub, /localStorage/);
@@ -305,7 +311,7 @@ test('web-staff-uses-session-bootstrap-and-server-checked-commands', () => {
   // The failed-state retry actually refetches instead of idling on loading.
   assert.match(hub, /setReloadTick\(\(tick\) => tick \+ 1\)/);
   const work = read('app/staff/StaffEventWork.tsx');
-  assert.match(work, /\/api\/bootstrap/);
+  assert.match(work, /readStaffBootstrap\(controller, signal\)/);
   assert.match(work, /\/commands/);
   assert.match(work, /check\.scan/);
   assert.match(work, /assignmentId/);
@@ -478,11 +484,11 @@ test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   assert.match(dialog, /titleId="create-event-title"/);
   assert.match(dialog, /initialFocusRef=\{nameRef\}/);
   assert.match(dialog, /canClose=\{canClose\}/);
-  assert.match(dialog, /busy=\{submitting\}/);
-  assert.match(dialog, /disabled=\{submitting\}/);
+  assert.match(dialog, /busy=\{submitting \|\| clientSaving \|\| checkingResult\}/);
+  assert.match(dialog, /disabled=\{submitting \|\| checkingResult\}/);
   const shellDialog = read('app/console/console-ui/ConsoleDialog.tsx');
   assert.match(shellDialog, /role="dialog"/);
-  assert.match(shellDialog, /aria-modal="true"/);
+  assert.match(shellDialog, /aria-modal=\{docked \? undefined : true\}/);
   assert.match(shellDialog, /event\.key === "Escape"/);
   assert.match(shellDialog, /event\.key !== "Tab"/);
   assert.match(shellDialog, /previouslyFocused/);
@@ -490,7 +496,7 @@ test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   assert.doesNotMatch(dialog, /addEventListener\("keydown"/);
   assert.doesNotMatch(dialog, /document\.body\.style\.overflow/);
   // Escape/backdrop never fake-cancel an in-flight write.
-  assert.match(dialog, /if \(submitGateRef\.current\) return false/);
+  assert.match(dialog, /if \(submitGateRef\.current \|\| checkingResult\) return false/);
   const dialogCss = read('app/globals.css');
   assert.match(dialogCss, /\.dialog-backdrop/);
   assert.match(dialogCss, /\.dialog-actions/);
@@ -545,7 +551,8 @@ test('web-invite-accept-and-team-reset-cover-invitation-only-accounts', () => {
   // Invitation issuing moved in from the legacy app: agency-only create with
   // a once-shown link, pending list, and idempotent revoke.
   assert.match(team, /\/api\/auth\/invitations/);
-  assert.match(team, /\/invite\/\$\{encodeURIComponent\(data\.token\)\}/);
+  assert.match(team, /confirmsInvitation\(payload, data\)/);
+  assert.match(team, /\/invite\/\$\{encodeURIComponent\(issuedToken\)\}/);
   assert.match(team, /초대 링크는 발급 시 한 번만 표시됩니다/);
   assert.match(team, /대기 중인 초대/);
   assert.match(team, /초대 철회/);
@@ -598,7 +605,7 @@ test('web-participant-status-goes-through-the-operator-command-path', () => {
   assert.match(list, /\*\*\*\*/);
   // Export stays client-side; import lives behind the management gate.
   assert.match(list, /EVENTOUCH_participants\.csv/);
-  assert.match(list, /participants\/import/);
+  assert.match(list, /<ImportWizard eventId=\{eventId\}/);
   // Group assignment and reward registration live on the rows, scoped to
   // the visible selection; both ride the command path.
   assert.match(list, /group\.assign/);
@@ -629,7 +636,8 @@ test('web-booth-mode-and-map-editor-are-operations-owned', () => {
   assert.match(ops, /display\.set/);
   assert.match(ops, /전광판 출력/);
   assert.match(ops, /module\.revealed/);
-  assert.match(ops, /hasPublishedDraw/);
+  assert.match(ops, /module\.draws\[0\]/);
+  assert.match(ops, /payload\.drawId = drawId/);
   // The public page renders only the published map with its markers.
   const publicPage = read('app/event/[slug]/page.tsx');
   assert.match(publicPage, /source\.published/);
@@ -755,8 +763,8 @@ test('web-console-shell-keeps-decided-navigation-and-clients-read-only', () => {
   // Content authoring and the reward desk are registry destinations inside
   // the event branch; the shell keeps badges, permissions and feature gates.
   const navigation = read('app/console/console-navigation.ts');
-  assert.match(navigation, /content: \{ label: "콘텐츠"/);
-  assert.match(navigation, /rewards: \{ label: "경품"/);
+  assert.match(navigation, /content: \{ label: "공지·안내"/);
+  assert.match(navigation, /rewards: \{ label: "경품 수령"/);
   assert.match(navigation, /return `\$\{base\}\/content`/);
   assert.match(navigation, /return `\$\{base\}\/rewards`/);
   // Five hubs own the rail: the active hub expands its pages, the other four
@@ -815,8 +823,9 @@ test('web-retry-keeps-one-command-id-per-attempt-on-signup-and-scan', () => {
   // The immutable body contains both the ID and the original input; keeping
   // only an ID could replay an old ticket against edited personal details.
   assert.match(register, /attemptRef = useRef<\{ body: Record<string, unknown> \} \| null>/);
-  assert.match(register, /body: JSON\.stringify\(attemptRef\.current\.body\)/);
-  assert.match(register, /disabled=\{submitting \|\| retryPending\}/);
+  assert.match(register, /\/signup`, attemptRef\.current\.body\)/);
+  assert.match(read('app/event/[slug]/attendee-request.ts'), /body: JSON\.stringify\(body\)/);
+  assert.match(register, /disabled=\{submitting \|\| retryPending \|\| signupSuperseded\}/);
   assert.match(register, /retryPending \|\| !rejected/);
   assert.match(register, /addEventListener\("beforeunload", warnBeforeLeaving\)/);
   assert.match(register, /crypto\.getRandomValues/);
@@ -825,8 +834,12 @@ test('web-retry-keeps-one-command-id-per-attempt-on-signup-and-scan', () => {
   // A pending scan belongs to one ticket + assignment, never the next person
   // in line. Keep it for network/5xx uncertainty, not just thrown fetches.
   assert.match(staff, /pendingScanIdRef = useRef\(new Map<string, string>\(\)\)/);
-  assert.match(staff, /JSON\.stringify\(\[activeScope\.eventId, activeAssignment\.id, activeTask, payload\]\)/);
-  assert.match(staff, /res\.status >= 500 \|\| res\.status === 408/);
+  assert.match(staff, /JSON\.stringify\(\[activeScope\.eventId, activeAssignment!\.id, activeTask, payload\]\)/);
+  assert.match(staff, /pendingScanRef = useRef<PendingScan \| null>\(null\)/);
+  for (const field of ['commandId', 'command', 'assignmentId', 'payload']) {
+    assert.match(staff, new RegExp(`${field}: pending\\.${field}`), `replay preserves ${field}`);
+  }
+  assert.match(staff, /res\.status >= 500 \|\| \[408, 425, 429\]\.includes\(res\.status\)/);
 });
 
 test('web-event-stage-moves-forward-through-the-command-path-only', () => {
@@ -845,14 +858,16 @@ test('web-event-stage-moves-forward-through-the-command-path-only', () => {
   assert.match(settings, /<StageTransitionConfirmation/);
   assert.match(confirmation, /정말 전환합니다/);
   assert.match(confirmation, /취소/);
-  assert.match(settings, /commandId:\s*stageCommandIdRef\.current/);
-  assert.match(settings, /payload:\s*\{\s*stage:\s*nextStage\s*\}/);
+  assert.match(settings, /const commandId = stageCommandIdRef\.current/);
+  assert.match(settings, /const payload = \{\s*stage:\s*nextStage\s*\}/);
   // Metrics follow the event stage instead of a fixed four-card grid; the
   // dedicated event-home contract pins each stage's metric set.
   assert.match(overview, /metricsForStage\(overview, currentStage, base\)/);
   assert.match(overview, /<time[^>]+dateTime/);
   assert.match(overview, /formatCheckTime\(check\.at\)/);
-  assert.match(overview, /overview\.registrationOpen \? "접수 중" : "접수 마감"/);
+  // The saved intake flag is not public availability in DRAFT or ENDED.
+  assert.match(overview, /\["READY", "LIVE"\]\.includes\(currentStage\) && overview\.registrationOpen/);
+  assert.match(overview, /currentStage === "DRAFT"[\s\S]*?"접수 공개 전"/);
   assert.doesNotMatch(overview, /className="notice"/);
   assert.doesNotMatch(overview, /problemsForStage|event-operations-heading|event-stage-heading/);
   assert.doesNotMatch(read('app/console/events/[id]/page.tsx'), /eyebrow/);
@@ -897,7 +912,7 @@ test('web-operations-uses-desk-booth-and-assignment-commands-only', () => {
   assert.match(ops, /<DialogError failure=\{failure\} id="assign-dialog-error" \/>/);
   const shellDialog = read('app/console/console-ui/ConsoleDialog.tsx');
   assert.match(shellDialog, /role="dialog"/);
-  assert.match(shellDialog, /aria-modal="true"/);
+  assert.match(shellDialog, /aria-modal=\{docked \? undefined : true\}/);
   assert.match(shellDialog, /event\.key === "Escape"/);
   assert.match(shellDialog, /event\.key !== "Tab"/);
   assert.match(shellDialog, /previouslyFocused/);
@@ -947,14 +962,20 @@ test('web-staff-booth-work-uses-the-booth-visit-command-and-stamp-mode', () => {
   // names the participant path (home > 부스 인증) the QR code feeds.
   assert.match(staff, /참가자가 직접 인증하는 방식/);
   assert.match(staff, /참가자 홈 &gt; 부스 인증/);
-  // …so the camera action stays out of SELF mode, and a stale refresh says so.
+  // …so the camera action stays out of SELF mode. A revoked assignment
+  // preserves the last result but locks the camera and exposes recovery.
   assert.match(staff, /stampMode === "SELF" \? null/);
-  assert.match(staff, /오래되었을 수 있습니다/);
+  assert.match(staff, /setAssignmentStale\(true\)/);
+  assert.match(staff, /setCameraOpen\(false\)/);
+  assert.match(staff, /배정 다시 확인/);
   // Booth availability is stated truthfully: WAITING and CLOSED are distinct
   // and non-open booths cannot be selected.
-  assert.match(staff, /운영 전/);
-  assert.match(staff, /종료된 부스입니다/);
-  assert.match(staff, /booth\.status !== "" && booth\.status !== "OPEN"/);
+  const availability = read('lib/booth-availability.ts');
+  assert.match(availability, /booth\.status === "WAITING"[^\n]+"운영 대기"/);
+  assert.match(availability, /booth\.status === "CLOSED"[^\n]+"운영 종료"/);
+  assert.match(staff, /const status = boothOperatingStatus\(booth, boothClock\?\.now \?\? null, boothClock\?\.uncertaintyMs\)/);
+  assert.match(staff, /disabled=\{!boothCanAttempt\(status\)\}/);
+  assert.match(staff, /부스 상태 다시 확인/);
   // A silent refresh never strands an operator on an empty screen.
   assert.match(staff, /scopeRef/);
   assert.doesNotMatch(staff, /localStorage/);
@@ -970,16 +991,20 @@ test('web-staff-desk-shows-direction-and-prints-nametags-in-kiosk-mode', () => {
   assert.match(staff, /키오스크 모드/);
   assert.match(staff, /kiosk-mode/);
   assert.match(staff, /무인 셀프 체크인은 지원하지 않습니다/);
-  // Nametags print from the scan result with the company on file.
+  // Nametags preserve the confirmed scan name and resolve the current
+  // company under the staff member's live access before preview and print.
   assert.match(staff, /네임택 인쇄/);
-  assert.match(staff, /nametag-sheet/);
-  assert.match(staff, /nametag-printing/);
+  assert.match(staff, /<NameTagPrint identity=\{/);
+  assert.match(staff, /resolveIdentity=\{\(signal\) => readNameTagIdentity\(targetEventId, result\.participantId, result\.name/);
+  assert.match(staff, /readStaffBootstrap\(new AbortController\(\), signal\)/);
+  assert.match(staff, /typeof person\.company !== "string"/);
+  assert.match(read('app/ui/NameTagPrint.tsx'), /if \(resolverRef\.current\) void verify\(true\)/);
   // Focus follows the sheet in and back to the ticket field on close; the
   // recent list carries time so the last scan is verifiable in a queue.
-  assert.match(staff, /nametagSheetRef\.current\?\.focus\(\)/);
+  assert.match(read('app/ui/NameTagPrint.tsx'), /previewRef\.current\?\.focus\(\)/);
   assert.match(staff, /formatCheckTime\(check\.at\)/);
   const css = read('app/globals.css');
-  assert.match(css, /\.nametag-sheet/);
+  assert.match(read('app/ui/name-tag-print.module.css'), /body\.nametag-printing/);
   assert.match(css, /\.kiosk-mode/);
 });
 
@@ -1098,7 +1123,7 @@ test('web-settings-uses-the-preparation-command-set', () => {
   // Field errors name their control; toggles remain three grouped decisions.
   assert.match(settings, /describedBy/);
   assert.match(settings, /FEATURE_GROUPS/);
-  assert.match(settings, /참여 프로그램/);
+  assert.match(settings, /참여 콘텐츠/);
   // Phone-verification opt-in rides the basics form into event.update.
   assert.match(settings, /verificationRequired/);
   assert.match(settings, /참가 신청 전 연락처 인증 필요/);
@@ -1139,12 +1164,13 @@ test('web-overview-shows-calendar-period-registration-and-entry-counts', () => {
   // Explicit definitions contract: cancelled applications never enter the
   // registration base, corrected records never enter entries, and entries
   // count unique participants per period (not raw scans).
-  assert.match(overview, /person\.status !== "CANCELLED"/u);
+  assert.match(overview, /String\(person\.status \|\| ""\)\.toUpperCase\(\) !== "CANCELLED"/u);
   assert.match(overview, /check\.corrected !== true/u);
   assert.match(overview, /new Set\(/u);
   assert.match(overview, /participantId \|\| check\.id/u);
   assert.match(overview, /<summary>집계 기준<\/summary>/u);
-  assert.match(overview, /신청은 취소된 신청을 제외합니다\. 입장은 정정된 기록을 제외하며 같은 기간의 재입장은 중복 집계하지 않습니다\./u);
+  assert.match(overview, /신청은 신청 상태가 취소인 기록을 제외합니다\./u);
+  assert.match(overview, /입장은 정정된 기록을 제외하며 같은 기간의 재입장은 중복 집계하지 않습니다\./u);
   assert.match(overview, /aria-label="기간별 신청·입장"/u);
   for (const label of ['오늘', '어제', '최근 7일']) {
     assert.match(overview, new RegExp(label));
@@ -1152,8 +1178,8 @@ test('web-overview-shows-calendar-period-registration-and-entry-counts', () => {
   // Module-level helper keeps the real aggregation and the full definitions
   // in one place; the period table/chart is a disclosure inside the metrics
   // section, and the empty preparing recent stays a compact row.
-  assert.match(overview, /function PeriodDetails\(\{ rows, applications, entries \}: \{/u);
-  assert.match(overview, /<PeriodDetails rows=\{periodRows\} applications=\{overview\.trendApplications\} entries=\{overview\.trendEntries\} \/>/u);
+  assert.match(overview, /function PeriodDetails\(\{ rows, applications, entries, cancellationReview \}: \{/u);
+  assert.match(overview, /<PeriodDetails rows=\{periodRows\} applications=\{overview\.trendApplications\} entries=\{overview\.trendEntries\} cancellationReview=\{overview\.cancellationReview\} \/>/u);
   assert.match(overview, /analysisDetails/u);
   assert.match(overview, /recentCompact/u);
   assert.match(overview, /recentCompactEmpty/u);

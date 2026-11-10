@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { sameCounts, sameHashes, parseArgs } = require('../scripts/backup-lib.cjs');
+const { sameCounts, sameHashes, parseArgs, docker } = require('../scripts/backup-lib.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -43,6 +43,10 @@ test('restore accepts a positional backup directory', () => {
   assert.deepEqual(options._, ['/tmp/eventouch-backup']);
   assert.equal(options.project, 'eventouch-restore');
   assert.equal(options.force, true);
+});
+
+test('volume restore can call the shared Docker runner', () => {
+  assert.equal(typeof docker, 'function');
 });
 
 test('restore validates the entire manifest before any database mutation is possible', async () => {

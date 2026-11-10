@@ -13,18 +13,25 @@ test('integrated verification builds first and preserves all serial product gate
   assert.equal(new Set(SCRIPTS).size, SCRIPTS.length, 'verification must not run a gate twice');
   const { scripts } = require('../package.json');
   for (const command of SCRIPTS) assert.equal(typeof scripts[command], 'string', `${command} must name a real npm script`);
-  for (const command of ['web:console:audit', 'web:system:audit', 'web:organizations:audit', 'web:organization-roles:audit', 'web:recovery:audit', 'web:preparation:audit', 'web:close:audit', 'web:workbench:audit', 'web:roster-retry:audit', 'web:cards:audit', 'a11y', 'mobile', 'audit:usability']) {
+  for (const command of ['web:console:audit', 'web:system:audit', 'web:organizations:audit', 'web:organization-roles:audit', 'web:recovery:audit', 'web:preparation:audit', 'web:close:audit', 'web:workbench:audit', 'web:roster-retry:audit', 'web:intake-roster-edit:audit', 'web:reward-recovery:audit', 'web:verification-uncertain:audit', 'web:cards:audit', 'a11y', 'mobile', 'audit:usability']) {
     assert.ok(SCRIPTS.includes(command));
   }
   assert.ok(!SCRIPTS.includes('test:raw'));
 });
 
-test('integrated verification includes all signup, role, lifecycle and account-recovery journeys after the build', () => {
+test('integrated verification includes signup, attendee, role, lifecycle and account-recovery journeys after the build', () => {
   const { scripts } = require('../package.json');
-  for (const command of ['web:signup-retry:audit', 'web:crossrole:audit', 'web:lifecycle:audit', 'web:account-recovery:audit']) {
+  for (const command of ['web:delivery:audit', 'web:qa-schedule:audit', 'web:mms-upload-recovery:audit', 'web:operations-recovery:audit', 'web:settings-recovery:audit', 'web:theme-recovery:audit', 'web:draw-operations-recovery:audit', 'web:program-operations-recovery:audit', 'web:template-recovery:audit', 'web:signup-retry:audit', 'web:attendee:audit', 'web:attendee-visibility:audit', 'web:attendee-retry:audit', 'web:attendee-result:audit', 'web:attendee-booth-retry:audit', 'web:crossrole:audit', 'web:lifecycle:audit', 'web:account-recovery:audit']) {
     assert.equal(SCRIPTS.filter((entry) => entry === command).length, 1, `${command} must run exactly once`);
     assert.ok(SCRIPTS.indexOf(command) > SCRIPTS.indexOf('build'), `${command} must use the freshly built app`);
     assert.equal(typeof scripts[command], 'string', `${command} must name a real npm script`);
+  }
+});
+
+test('UI recovery and workflow audits remain serial gates after the product build', () => {
+  for (const command of ['web:uiux-recovery:audit', 'web:uiux-workflows:audit', 'web:taskflow:audit', 'web:question-like:audit', 'web:booth-receipt:audit', 'web:operator-cross-tab-receipt:audit', 'web:ticket-postponement:audit', 'web:message-ticket-availability:audit', 'web:roster-nametag-freshness:audit', 'web:message-locked-reference:audit']) {
+    assert.equal(SCRIPTS.filter(entry => entry === command).length, 1);
+    assert.ok(SCRIPTS.indexOf(command) > SCRIPTS.indexOf('build'));
   }
 });
 
@@ -257,12 +264,16 @@ test('verification cannot silently fall back to a deployment database or sender'
     EVENTOUCH_TEST_DATABASE_URL: 'postgres://synthetic:synthetic@127.0.0.1/eventouch_test',
     DATABASE_URL: 'protected', SOLAPI_API_KEY: 'do-not-inherit', SOLAPI_API_HOST: 'https://provider.example.test', ADMIN_PASSWORD: 'do-not-inherit',
     EVENTOUCH_PUBLIC_URL: 'https://public.example.test', EVENTOUCH_MESSAGE_MAINTENANCE: '1', EVENTOUCH_MAIL_MOCK: '1',
+    EVENTOUCH_MESSAGING_ENDPOINT: 'https://provider.example.test/send', EVENTOUCH_MESSAGING_TOKEN: 'do-not-inherit', EVENTOUCH_MESSAGING_SENDER: 'do-not-inherit',
     EVENTOUCH_API_URL: 'https://production.example.test', API_PORT: '9999',
     DATA_DIR: '/protected/data', STORAGE_DIR: '/protected/storage', TMPDIR: '/tmp/opencode', COOKIE_SECURE: '1',
     EVENTOUCH_MESSAGE_AUTO_SEND_DUE: '1', EVENTOUCH_DEV_QUICK_LOGIN: 'do-not-inherit', WEB_BASE: 'protected', ERROR_RECOVERY_PHASE: 'baseline',
   }, '/tmp/opencode/synthetic');
   assert.equal(env.SOLAPI_API_KEY, undefined);
   assert.equal(env.SOLAPI_API_HOST, undefined);
+  assert.equal(env.EVENTOUCH_MESSAGING_ENDPOINT, undefined);
+  assert.equal(env.EVENTOUCH_MESSAGING_TOKEN, undefined);
+  assert.equal(env.EVENTOUCH_MESSAGING_SENDER, undefined);
   assert.equal(env.EVENTOUCH_PUBLIC_URL, undefined);
   // Next may load .env.production during a build; a fixed unreachable
   // loopback target must take precedence over any deployment rewrite.
