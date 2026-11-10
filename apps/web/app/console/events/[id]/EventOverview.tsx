@@ -128,7 +128,7 @@ const UPDATED_TIME_FORMAT = new Intl.DateTimeFormat("ko-KR", {
   hour12: false,
 });
 const LIVE_CHECK_TIME_FORMAT = new Intl.DateTimeFormat("ko-KR", {
-  hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+  hour: "2-digit", minute: "2-digit", hour12: false,
 });
 const LIVE_CHECK_INTERVAL_MS = 15000;
 const LIVE_FULL_READ_INTERVAL_MS = 60000;
@@ -1064,11 +1064,6 @@ export default function EventOverview({ eventId }: { eventId: string }) {
               {dDay}
             </span>
           ) : null}
-          {overview.canManageEvent && showApprovalAlert ? (
-            <Link className={styles.mobilePriority} data-overview-priority href={`${base}/participants?status=PENDING`}>
-              승인 대기 {overview.pendingApproval}명 <span aria-hidden="true">→</span>
-            </Link>
-          ) : null}
         </>
   );
   const headerActions = overview.canManageEvent && participantPageHref ? (
@@ -1080,11 +1075,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             </time>
             <ConsoleRefreshButton label="새로고침" busy={refreshing && !reloadRequest.automatic} onRefresh={reloadOverview} />
           </span>
-          {currentStage === "LIVE" ? (
-            <Link className="button button-quiet" href={eventCloseHref(eventId)}>
-              행사 마감
-            </Link>
-          ) : null}
+          {/* 비가역 마감은 헤더가 아닌 본문 마감 구역의 단일 진입점으로만 둔다. 헤더 Quiet 링크는 가벼운 동작으로 읽혀 오조작 위험이 있다. */}
           {/* DRAFT는 비공개(공개 화면 404)이므로 여는 링크를 두지 않는다. READY부터 기본 디자인으로 열린다. */}
           {stageKnown && currentStage !== "DRAFT" ? (
             <span className="console-header-group">
@@ -1305,7 +1296,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
               <div className={styles.entryFoot}>
                 <span>{overview.cancellationReview ? "신청 상태 기준 · 취소 기록 확인 필요 인원 포함" : "등록 인원 기준 · 취소 제외"}</span>
                 <Link href={approvedRosterHref}>
-                  <span>{overview.cancellationReview ? "승인 상태" : "참가 확정"}</span>{" "}<strong>{overview.approved}명</strong>
+                  <span>{overview.cancellationReview ? "승인 상태" : "참가 확정"}</span>{" "}<strong>{overview.approved}명</strong><ArrowRightIcon />
                 </Link>
                 {currentStage === "ARCHIVED" ? null : (
                   <Link
@@ -1313,7 +1304,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
                     href={notEnteredRosterHref}
                   >
                     <span>{overview.cancellationReview ? "승인 상태 중 미입장" : "확정자 중 미입장"}</span>
-                    <strong>{overview.confirmedNotEntered}명</strong>
+                    <strong>{overview.confirmedNotEntered}명</strong><ArrowRightIcon />
                   </Link>
                 )}
               </div>

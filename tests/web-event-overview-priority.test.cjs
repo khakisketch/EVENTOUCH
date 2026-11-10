@@ -13,7 +13,9 @@ test('operator reading order puts work and actual metrics before the schedule', 
   const render = source.slice(source.indexOf('<div className={overview.canManageEvent ?'));
   assert.ok(render.indexOf('headingId="event-metrics-heading"') < render.indexOf('? nowSection : null}'));
   assert.ok(render.indexOf('headingId="event-metrics-heading"') < render.indexOf('headingId="event-runbook-heading"'));
-  assert.match(css, /"metrics metrics" "queue runbook"/);
+  // 2026-11-10 비평 반영 CSS 정리: 섀도잉되던 구 grid 세대를 제거하고 현행 세대를 고정한다.
+  // 읽기 순서(지표 → 작업 → 일정)는 DOM 순서와 현행 grid로 그대로 보장된다.
+  assert.match(css, /"metrics queue" "runbook runbook"/);
   assert.match(css, /"metrics" "queue" "runbook"/);
 });
 
@@ -27,7 +29,7 @@ test('finished and preparation priorities precede the schedule without an archiv
   assert.ok(render.indexOf('다음 진행 중 조건') < queue);
   assert.match(render, /href=\{eventCloseHref\(eventId\)\}/);
   assert.match(render, /href=\{`\$\{base\}\/reports`\}/);
-  assert.match(css, /"status status" "metrics metrics" "queue runbook"/);
+  // 2026-11-10 비평 반영 CSS 정리: 종료·보관 grid 정본(아래 2식)으로 고정한다.
   assert.match(css, /"status status" "metrics metrics" "runbook runbook"/);
   assert.match(css, /"status" "metrics" "runbook"/);
 });

@@ -17,7 +17,8 @@ test('overview explains registration and approval once beside their values', () 
 test('finished overview has one close entry beside its preconditions', () => {
   const source = read('console/events/[id]/EventOverview.tsx');
   const header = source.slice(source.indexOf('const headerActions'), source.indexOf('return (\n    <ConsolePage', source.indexOf('const headerActions')));
-  assert.match(header, /currentStage === "LIVE" \? \([\s\S]*?href=\{eventCloseHref\(eventId\)\}/u);
+  // 비가역 마감은 헤더가 아닌 본문 마감 구역의 단일 진입점으로만 둔다.
+  assert.doesNotMatch(header, /eventCloseHref/u);
   assert.doesNotMatch(header, /행사 마감 확인/u);
   assert.match(source, /\{finished \? \([\s\S]*?headingId="event-close-status-heading"[\s\S]*?href=\{eventCloseHref\(eventId\)\}/u);
   assert.match(source, /자동으로 단계를 바꾸지 않습니다/u);
