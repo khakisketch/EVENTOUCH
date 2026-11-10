@@ -7,6 +7,7 @@ Node API 서버와 PostgreSQL이 뒤에서 행사 데이터를 권위로 들고 
 - 지금 상태·검증 수치·블로커: **[docs/STATUS.md](docs/STATUS.md)** (현황 정본)
 - 구조: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · 디자인: [화이트 업무용 SaaS](DESIGN.md) · [적용·검증 상태](docs/STATUS.md)
 - 배포: [docs/DEPLOY.md](docs/DEPLOY.md) · 연동: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)
+- 참가자 사용 흐름 설계: [로컬 HTML 흐름도](journey-eventouch-attendee.html) (제품 화면이나 구현 완료 판정은 아님)
 
 ## 스택
 
@@ -104,6 +105,10 @@ EVENTOUCH_TEST_DATABASE_URL='postgres://...' npm run web:console:audit # 콘솔 
 참가자 가져오기·한울·테마 브라우저 감사는 `npm run web:import:audit`·
 `npm run web:hanwool:audit`·`npm run web:theme:audit`이며, 격리 DB와 먼저 만든
 빌드가 필요하다. 각 감사가 자체 Next·API를 실행하므로 외부 `WEB_BASE`를 검사하지 않는다.
+참가자 신청 정보·티켓·행사 참여 여정과 행사별 메뉴 노출은
+`web:attendee:audit`·`web:attendee-visibility:audit`로 검사하며 `verify:system`과
+CI 웹 감사에 포함된다. 독립 실행에는 격리 DB와 새
+`EVENTOUCH_CAPTURE_ROOT`가 필요하다.
 
 ## 백업·복구
 

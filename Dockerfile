@@ -7,8 +7,13 @@ ARG EVENTOUCH_BUILD_REVISION=unknown
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY server/ ./server/
+COPY apps/web/lib/client-address.mts ./apps/web/lib/client-address.mts
+COPY apps/web/lib/sms-text-validation.cjs ./apps/web/lib/sms-text-validation.cjs
+COPY apps/web/lib/attendance-state.cjs ./apps/web/lib/attendance-state.cjs
 COPY data/sample.json ./data/sample.json
-RUN mkdir -p /data/db /data/storage \
+RUN chmod -R a+rX /app/server /app/apps/web/lib \
+    && chmod a+r /app/package.json /app/package-lock.json /app/data/sample.json \
+    && mkdir -p /data/db /data/storage \
     && chown node:node /data/db /data/storage \
     && chmod 700 /data/db /data/storage
 # NODE_ENV=production: safe because the server gates the dev quick login to

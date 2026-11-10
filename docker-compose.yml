@@ -38,11 +38,16 @@ services:
       SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
       COOKIE_SECURE: ${COOKIE_SECURE:-0}
       EVENTOUCH_PUBLIC_URL: ${EVENTOUCH_PUBLIC_URL:-}
+      EVENTOUCH_MAIL_TRANSPORT: ${EVENTOUCH_MAIL_TRANSPORT:-}
+      EVENTOUCH_MAIL_MOCK: ${EVENTOUCH_MAIL_MOCK:-0}
+      EVENTOUCH_SMTP_HOST: ${EVENTOUCH_SMTP_HOST:-}
+      EVENTOUCH_SMTP_PORT: ${EVENTOUCH_SMTP_PORT:-587}
+      EVENTOUCH_SMTP_FROM: ${EVENTOUCH_SMTP_FROM:-}
+      EVENTOUCH_SMTP_USER: ${EVENTOUCH_SMTP_USER:-}
+      EVENTOUCH_SMTP_PASSWORD: ${EVENTOUCH_SMTP_PASSWORD:-}
+      EVENTOUCH_LOGIN_HISTORY_DAYS: ${EVENTOUCH_LOGIN_HISTORY_DAYS:-}
       EVENTOUCH_SMS_MOCK: ${EVENTOUCH_SMS_MOCK:-0}
-      # The only container allowed to state the browser address. The web
-      # service overwrites X-Forwarded-For with the socket peer; pinning its
-      # address keeps the login address throttle per real client instead of
-      # per proxy (which would let 20 bad logins lock out every operator).
+      # The only container allowed to state the verified browser address.
       EVENTOUCH_TRUSTED_PROXIES: ${EVENTOUCH_TRUSTED_PROXIES:-${EVENTOUCH_WEB_PROXY_IP:-10.89.0.10}}
       EVENTOUCH_REQUEST_LOGS: ${EVENTOUCH_REQUEST_LOGS:-1}
       EVENTOUCH_SIGNUP_ADDRESS_LIMIT: ${EVENTOUCH_SIGNUP_ADDRESS_LIMIT:-600}
@@ -87,6 +92,8 @@ services:
       EVENTOUCH_API_URL: http://eventouch:8776
       EVENTOUCH_BUILD_REVISION: ${EVENTOUCH_BUILD_REVISION:-unknown}
       COOKIE_SECURE: ${COOKIE_SECURE:-0}
+      # Optional HTTPS ingress peers that may forward client addresses to Next.
+      EVENTOUCH_WEB_TRUSTED_PROXIES: ${EVENTOUCH_WEB_TRUSTED_PROXIES:-}
     networks:
       default:
         # Fixed address: the API trusts exactly this peer for the browser

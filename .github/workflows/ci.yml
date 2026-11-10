@@ -88,6 +88,30 @@ jobs:
       - name: Build the new app
         run: npm --prefix apps/web run build
 
+      - name: Verify API image reads owner-only source as non-root
+        # Docker COPY preserves source modes. Include owner-only files in a
+        # throwaway build context and exercise the image as its declared user.
+        run: |
+          set -eu
+          context="$(mktemp -d)"
+          trap 'rm -rf "$context"' EXIT
+          mkdir -p "$context/apps/web/lib" "$context/data"
+          cp Dockerfile package.json package-lock.json "$context/"
+          cp -R server "$context/server"
+          cp apps/web/lib/client-address.mts apps/web/lib/sms-text-validation.cjs "$context/apps/web/lib/"
+          cp data/sample.json "$context/data/"
+          chmod 600 "$context/package.json" "$context/server/messaging-solapi.js" "$context/server/commands/content-results.js" "$context/apps/web/lib/sms-text-validation.cjs"
+          docker build -t eventouch-ci:api-permissions "$context"
+          docker run --rm --network none --read-only --entrypoint node eventouch-ci:api-permissions -e '
+            const assert = require("node:assert/strict");
+            const solapi = require("/app/server/messaging-solapi.js");
+            require("/app/server/commands/content-results.js");
+            const provider = solapi.createSolapiProvider({configured:true, sender:"01011112222", apiKey:"fixture", apiSecret:"fixture", host:"http://127.0.0.1", kakaoPfId:"fixture"});
+            assert.equal(provider.buildMessage({channel:"SMS", to:"01011112222", text:"hello 🎉"}).error, "SMS_CHARSET_UNSUPPORTED");
+            assert.equal(provider.buildMessage({channel:"SMS", to:"01011112222", text:"안내"}).message.type, "SMS");
+            assert.equal(provider.buildMessage({channel:"ALIMTALK", to:"01011112222", text:"hello 🎉", templateId:"fixture", smsFallback:false}).message.kakaoOptions.disableSms, true);
+          '
+
   security:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -300,7 +324,7 @@ jobs:
           # a no-clobber writer would start the producer concurrently, before
           # an existing file is detected. Earlier evidence is never truncated.
           set -o noclobber
-          for log in db-migrate web-audit web-console-audit web-system-audit web-organizations-audit web-organization-roles-audit web-recovery-audit web-import-audit web-hanwool-audit web-theme-audit web-retirement-audit web-preparation-audit web-signup-retry-audit web-crossrole-audit web-lifecycle-audit web-account-recovery-audit web-close-audit web-workbench-audit web-cards-audit audit-usability; do
+          for log in db-migrate web-audit web-console-audit web-report-data-availability-audit web-report-live-availability-audit web-report-cancellation-review-audit web-archive-preconditions-audit web-staff-source-integrity-audit web-waitlist-approval-audit web-waitlist-overview-audit web-roulette-schedule-audit web-roulette-conflict-audit web-lucky-capacity-audit web-lucky-batches-audit web-lucky-range-config-audit web-system-audit web-organizations-audit web-organization-roles-audit web-recovery-audit web-import-audit web-import-contact-review-audit web-hanwool-audit web-theme-audit web-theme-freshness-audit web-page-visibility-review-audit web-page-publication-context-audit web-retirement-audit web-preparation-audit web-display-continuity-audit web-intake-roster-edit-audit web-operator-cross-tab-receipt-audit web-ticket-postponement-audit web-ticket-reissue-resume-audit web-ticket-copy-recovery-audit web-ticket-loading-recovery-audit web-camera-fallback-audit web-message-ticket-availability-audit web-message-cancellation-conflict-audit web-message-routing-review-audit web-message-routing-details-audit web-message-name-review-audit web-team-role-switch-audit web-team-refresh-recovery-audit web-staff-manual-presence-audit web-report-export-scope-audit web-reward-recovery-audit web-reward-cancellation-conflict-audit web-signup-retry-audit web-register-field-error-audit web-verification-uncertain-audit web-attendee-identity-audit web-attendee-multievent-recovery-audit web-attendee-audit web-attendee-approval-state-audit web-attendee-visibility-audit web-attendee-retry-audit web-attendee-booth-retry-audit web-crossrole-audit web-lifecycle-audit web-account-recovery-audit web-close-audit web-workbench-audit web-ui-audit web-delivery-audit web-qa-schedule-audit web-cards-audit web-uiux-recovery-audit web-uiux-workflows-audit web-taskflow-audit web-template-library-audit web-message-authoring-audit web-message-focus-audit web-message-targeting-audit web-publication-audit web-publication-context-audit web-participation-navigation-audit web-nametag-print-audit web-roster-nametag-freshness-audit web-roster-export-audit web-roster-export-integrity-audit web-roster-presence-audit web-reviewed-exit-audit web-attendance-consistency-audit web-checkin-attendance-guard-audit web-cancellation-conflict-checkin-audit web-staff-inline-recovery-audit web-approval-cancellation-conflict-audit web-cancellation-conflict-review-audit web-attendance-reconciliation-audit web-workspace-preservation-audit web-booth-mode-review-audit web-staff-booth-clock-audit web-booth-server-clock-audit web-overview-message-attention-audit web-message-nav-attention-audit web-message-nav-freshness-audit web-ticket-review-queue-audit web-message-locked-reference-audit web-schedule-review-audit web-attendee-refresh-audit web-venue-visibility-audit web-staff-direction-review-audit web-message-charset-audit audit-usability; do
             : > "$EVENTOUCH_CI_LOGS/$log.log" || { echo "Existing CI evidence; refusing to run: $EVENTOUCH_CI_LOGS/$log.log" >&2; exit 1; }
           done
           set +o noclobber
@@ -312,25 +336,109 @@ jobs:
           npm run db:migrate 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/db-migrate.log"
           npm run web:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-audit.log"
           npm run web:console:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-console-audit.log"
+          npm run web:report-data-availability:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-report-data-availability-audit.log"
+          npm run web:report-live-availability:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-report-live-availability-audit.log"
+          npm run web:report-cancellation-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-report-cancellation-review-audit.log"
+          npm run web:archive-preconditions:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-archive-preconditions-audit.log"
+          npm run web:staff-source-integrity:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-staff-source-integrity-audit.log"
+          npm run web:waitlist-approval:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-waitlist-approval-audit.log"
+          npm run web:waitlist-overview:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-waitlist-overview-audit.log"
+          npm run web:roulette-schedule:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-roulette-schedule-audit.log"
+          npm run web:roulette-conflict:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-roulette-conflict-audit.log"
+          npm run web:lucky-capacity:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-lucky-capacity-audit.log"
+          npm run web:lucky-batches:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-lucky-batches-audit.log"
+          npm run web:lucky-range-config:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-lucky-range-config-audit.log"
           npm run web:system:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-system-audit.log"
           npm run web:organizations:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-organizations-audit.log"
           npm run web:organization-roles:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-organization-roles-audit.log"
           npm run web:recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-recovery-audit.log"
           npm run web:import:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-import-audit.log"
+          npm run web:import-contact-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-import-contact-review-audit.log"
           npm run web:hanwool:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-hanwool-audit.log"
           npm run web:theme:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-theme-audit.log"
+          npm run web:theme-freshness:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-theme-freshness-audit.log"
+          npm run web:page-visibility-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-page-visibility-review-audit.log"
+          npm run web:page-publication-context:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-page-publication-context-audit.log"
           npm run web:retirement:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-retirement-audit.log"
           # Preparation / close / workbench / card journeys run against the
           # same isolated database; caps and assertions live in the scripts,
           # CI only wires them so a green build means they really ran.
           npm run web:preparation:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-preparation-audit.log"
+          npm run web:display-continuity:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-display-continuity-audit.log"
+          npm run web:intake-roster-edit:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-intake-roster-edit-audit.log"
+          npm run web:operator-cross-tab-receipt:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-operator-cross-tab-receipt-audit.log"
+          npm run web:ticket-postponement:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-ticket-postponement-audit.log"
+          npm run web:ticket-reissue-resume:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-ticket-reissue-resume-audit.log"
+          npm run web:ticket-copy-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-ticket-copy-recovery-audit.log"
+          npm run web:ticket-loading-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-ticket-loading-recovery-audit.log"
+          npm run web:camera-fallback:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-camera-fallback-audit.log"
+          npm run web:message-ticket-availability:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-ticket-availability-audit.log"
+          npm run web:message-cancellation-conflict:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-cancellation-conflict-audit.log"
+          npm run web:message-routing-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-routing-review-audit.log"
+          npm run web:message-routing-details:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-routing-details-audit.log"
+          npm run web:message-name-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-name-review-audit.log"
+          npm run web:team-role-switch:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-team-role-switch-audit.log"
+          npm run web:team-refresh-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-team-refresh-recovery-audit.log"
+          npm run web:staff-manual-presence:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-staff-manual-presence-audit.log"
+          npm run web:report-export-scope:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-report-export-scope-audit.log"
+          npm run web:reward-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-reward-recovery-audit.log"
+          npm run web:reward-cancellation-conflict:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-reward-cancellation-conflict-audit.log"
           npm run web:signup-retry:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-signup-retry-audit.log"
+          npm run web:register-field-error:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-register-field-error-audit.log"
+          npm run web:verification-uncertain:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-verification-uncertain-audit.log"
+          npm run web:attendee-identity:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-identity-audit.log"
+          npm run web:attendee-multievent-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-multievent-recovery-audit.log"
+          npm run web:attendee:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-audit.log"
+          npm run web:attendee-approval-state:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-approval-state-audit.log"
+          npm run web:attendee-visibility:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-visibility-audit.log"
+          npm run web:attendee-retry:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-retry-audit.log"
+          npm run web:attendee-booth-retry:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-booth-retry-audit.log"
           npm run web:crossrole:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-crossrole-audit.log"
           npm run web:lifecycle:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-lifecycle-audit.log"
           npm run web:account-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-account-recovery-audit.log"
           npm run web:close:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-close-audit.log"
           npm run web:workbench:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-workbench-audit.log"
+          npm run web:ui:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-ui-audit.log"
+          npm run web:delivery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-delivery-audit.log"
+          npm run web:qa-schedule:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-qa-schedule-audit.log"
           npm run web:cards:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-cards-audit.log"
+          npm run web:uiux-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-uiux-recovery-audit.log"
+          npm run web:uiux-workflows:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-uiux-workflows-audit.log"
+          npm run web:taskflow:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-taskflow-audit.log"
+          npm run web:template-library:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-template-library-audit.log"
+          npm run web:message-authoring:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-authoring-audit.log"
+          npm run web:message-focus:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-focus-audit.log"
+          npm run web:message-targeting:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-targeting-audit.log"
+          npm run web:publication:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-publication-audit.log"
+          npm run web:publication-context:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-publication-context-audit.log"
+          npm run web:participation-navigation:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-participation-navigation-audit.log"
+          npm run web:nametag-print:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-nametag-print-audit.log"
+          npm run web:roster-nametag-freshness:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-roster-nametag-freshness-audit.log"
+          npm run web:roster-export:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-roster-export-audit.log"
+          npm run web:roster-export-integrity:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-roster-export-integrity-audit.log"
+          npm run web:roster-presence:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-roster-presence-audit.log"
+          npm run web:reviewed-exit:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-reviewed-exit-audit.log"
+          npm run web:attendance-consistency:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendance-consistency-audit.log"
+          npm run web:checkin-attendance-guard:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-checkin-attendance-guard-audit.log"
+          npm run web:cancellation-conflict-checkin:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-cancellation-conflict-checkin-audit.log"
+          npm run web:staff-inline-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-staff-inline-recovery-audit.log"
+          npm run web:approval-cancellation-conflict:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-approval-cancellation-conflict-audit.log"
+          npm run web:cancellation-conflict-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-cancellation-conflict-review-audit.log"
+          npm run web:attendance-reconciliation:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendance-reconciliation-audit.log"
+          npm run web:workspace-preservation:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-workspace-preservation-audit.log"
+          npm run web:booth-mode-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-booth-mode-review-audit.log"
+          npm run web:staff-booth-clock:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-staff-booth-clock-audit.log"
+          npm run web:booth-server-clock:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-booth-server-clock-audit.log"
+          npm run web:overview-message-attention:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-overview-message-attention-audit.log"
+          npm run web:message-nav-attention:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-nav-attention-audit.log"
+          npm run web:message-nav-freshness:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-nav-freshness-audit.log"
+          npm run web:ticket-review-queue:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-ticket-review-queue-audit.log"
+          npm run web:message-locked-reference:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-locked-reference-audit.log"
+          npm run web:schedule-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-schedule-review-audit.log"
+          npm run web:attendee-refresh:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-refresh-audit.log"
+          npm run web:venue-visibility:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-venue-visibility-audit.log"
+          npm run web:staff-direction-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-staff-direction-review-audit.log"
+          npm run web:message-charset:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-charset-audit.log"
           # Usability as a gate, not a review: every goal must still be
           # reachable in a handful of actions, with the keyboard path and the
           # server state behind it measured.
