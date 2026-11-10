@@ -1059,7 +1059,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
           <span className={`${styles.intakeBadge} ${publicIntakeOpen ? styles.intakeOpen : styles.intakeClosed}`}>
             {intakeBadgeText}
           </span>
-          {dDay && dDay !== "D-day" ? (
+          {dDay && dDay !== "D-day" && !finished ? (
             <span className={styles.dDay} title="일정 표시이며 단계는 자동 변경되지 않습니다.">
               {dDay}
             </span>
