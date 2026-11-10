@@ -37,6 +37,8 @@ const GRANT_TTL_MINUTES = 15;
 const SESSION_DEFAULT_DAYS = 90;
 const SESSION_EVENT_TAIL_DAYS = 30;
 const SESSION_MAX_DAYS = 180;
+const TICKET_TOKEN = /^(?:[A-Za-z0-9_-]{32,128}|ET:[A-Za-z0-9_-]{1,80}:T-[A-Za-z0-9_-]{32,128})$/;
+const PUBLIC_STAGES = new Set(['READY', 'LIVE', 'ENDED']);
 
 function sha256(value) {
   return crypto.createHash('sha256').update(String(value)).digest('hex');
@@ -58,8 +60,8 @@ function validPhone(phone) {
   return /^\d{9,15}$/.test(phone);
 }
 
-function failure(status, message, field) {
-  return Object.assign(new Error(message), { status }, field ? { field } : {});
+function failure(status, message, field, code) {
+  return Object.assign(new Error(message), { status }, field ? { field } : {}, code ? { code } : {});
 }
 
 // Generic failure shared by every confirm path so responses do not tell
@@ -68,25 +70,47 @@ function genericConfirmFailure() {
   return failure(401, '인증번호를 확인하세요', 'code');
 }
 
-function attendeeCookie(token, maxAgeSeconds) {
+// Each event gets a stable cookie name based on its immutable internal id.
+// A slug can change, and two initial event responses must not overwrite one
+// another's browser credential. Keep the old common name readable.
+function attendeeCookieName(eventId) {
+  return eventId ? `${ATTENDEE_COOKIE}_${sha256(eventId).slice(0, 24)}` : ATTENDEE_COOKIE;
+}
+
+function attendeeCookie(token, maxAgeSeconds, eventId) {
   const secure = process.env.COOKIE_SECURE === '1' ? '; Secure' : '';
   const maxAge = Number.isSafeInteger(maxAgeSeconds) && maxAgeSeconds > 0
     ? `; Max-Age=${maxAgeSeconds}`
     : '';
-  return `${ATTENDEE_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax${secure}${maxAge}`;
+  return `${attendeeCookieName(eventId)}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax${secure}${maxAge}`;
 }
 
-function cookieToken(header) {
+function cookieEntry(header, name) {
+  let found = false;
+  let value = null;
   for (const part of String(header || '').split(';')) {
     const separator = part.indexOf('=');
-    if (separator < 0 || part.slice(0, separator).trim() !== ATTENDEE_COOKIE) continue;
+    if (separator < 0 || part.slice(0, separator).trim() !== name) continue;
+    // Ambiguous duplicate names must never select a different session.
+    if (found) return { present: true, value: null };
+    found = true;
     try {
-      return decodeURIComponent(part.slice(separator + 1).trim()) || null;
+      value = decodeURIComponent(part.slice(separator + 1).trim()) || null;
     } catch (error) {
-      return null;
+      value = null;
     }
   }
-  return null;
+  return { present: found, value };
+}
+
+function cookieToken(header, eventId) {
+  if (eventId) {
+    const scoped = cookieEntry(header, attendeeCookieName(eventId));
+    // Invalid or empty event cookies block legacy fallback: a stale common
+    // grant must not silently select a different participant.
+    if (scoped.present) return scoped.value;
+  }
+  return cookieEntry(header, ATTENDEE_COOKIE).value;
 }
 
 function grantsFromRow(row) {
@@ -130,7 +154,7 @@ function createAttendeeAccess(database, { transport } = {}) {
     const people = (workspacePayload && workspacePayload.participants) || [];
     if (!Array.isArray(people)) return null;
     const person = people.find((item) => item && item.id === participantId) || null;
-    if (!person || person.status === 'CANCELLED' || person.cancelled === true) return null;
+    if (!person || String(person.status || '').toUpperCase() === 'CANCELLED' || person.cancelled === true) return null;
     return person;
   }
 
@@ -138,7 +162,7 @@ function createAttendeeAccess(database, { transport } = {}) {
     const people = (workspacePayload && workspacePayload.participants) || [];
     if (!Array.isArray(people)) return null;
     return people.find((item) =>
-      item && item.status !== 'CANCELLED' && item.cancelled !== true &&
+      item && String(item.status || '').toUpperCase() !== 'CANCELLED' && item.cancelled !== true &&
       normalizePhone(item.phone) === phone
     ) || null;
   }
@@ -244,7 +268,7 @@ function createAttendeeAccess(database, { transport } = {}) {
     return { challengeId: id, expiresAt };
   }
 
-  async function confirmChallenge({ eventRef, phone: rawPhone, code: rawCode }) {
+  async function confirmChallenge({ eventRef, phone: rawPhone, code: rawCode, cookieHeader }) {
     const phone = normalizePhone(rawPhone);
     const code = String(rawCode || '').replace(/\D/g, '').slice(0, 6);
     if (!validPhone(phone) || code.length !== 6) throw genericConfirmFailure();
@@ -252,6 +276,15 @@ function createAttendeeAccess(database, { transport } = {}) {
     if (!event) throw genericConfirmFailure();
 
     const verified = await database.transaction(async (client) => {
+    // Keep event/workspace, challenge, then session in the same lock order
+    // as participant cancellation and phone changes. The code must not be
+    // checked against one participant state and attached to another.
+    const locked = await client.query(
+      `SELECT e.id, e.slug, e.org_id, e.payload, w.payload AS workspace_payload
+         FROM events e JOIN event_workspaces w ON w.event_id = e.id
+        WHERE e.id = $1 FOR UPDATE OF e, w`, [event.id]
+    );
+    if (!locked.rows[0]) return null;
     const pending = await client.query(
       `SELECT * FROM attendee_challenges
          WHERE event_id = $1 AND phone = $2
@@ -296,44 +329,35 @@ function createAttendeeAccess(database, { transport } = {}) {
       );
       return { kind: 'grant', grant, grantExpiresAt, eventId: event.id };
     }
-    return { kind: 'recover' };
+    // Freeze the actual ticket under the same lock as the verified phone.
+    // A later cancellation can invalidate this bearer, but can never make
+    // an old proof return a newly reissued bearer.
+    const person = participantByPhone(locked.rows[0].workspace_payload, phone);
+    const expiration = person && Date.parse(person.ticketExpiresAt);
+    if (!PUBLIC_STAGES.has(String(locked.rows[0].payload?.stage || '').toUpperCase()) ||
+        !person || person.revoked === true || !TICKET_TOKEN.test(String(person.ticket || '')) ||
+        !Number.isFinite(expiration) || expiration <= Date.now()) return null;
+    const session = await mergeGrant({ client, cookieHeader, event: locked.rows[0], participantId: String(person.id), phone });
+    return { kind: 'session', session, eventId: event.id, participantId: String(person.id), ticket: person.ticket };
     });
     if (!verified) throw genericConfirmFailure();
-    if (verified.kind === 'grant') return verified;
-
-    // RECOVER: the number must belong to a live participant, but the
-    // response never says whether it does.
-    const workspaceResult = await database.query(
-      'SELECT payload FROM event_workspaces WHERE event_id = $1 LIMIT 1',
-      [event.id]
-    );
-    const workspace = workspaceResult.rows[0] && workspaceResult.rows[0].payload;
-    const person = participantByPhone(workspace, phone);
-    if (!person) throw genericConfirmFailure();
-    const session = await grantAccess({ event, participantId: String(person.id), phone });
-    return { kind: 'session', session, eventId: event.id, participantId: String(person.id) };
+    return verified;
   }
 
-  // Atomically consumes a signup grant. The loser of a concurrent double
-  // submit gets 409 before any participant row is created.
-  async function consumeGrant({ token, eventId, phone }) {
+  // The signup transaction spends the grant with its participant and receipt.
+  async function consumeGrant(client, { token, eventId, phone }) {
     const grant = String(token || '');
-    if (!grant) throw failure(409, '연락처 인증을 먼저 완료하세요', 'phone');
-    const result = await database.query(
+    if (!grant) throw failure(409, '연락처 인증을 먼저 완료하세요', 'phone', 'SIGNUP_VERIFICATION_REQUIRED');
+    const result = await client.query(
       `UPDATE attendee_grants SET consumed_at = now()
-        WHERE token_hash = $1 AND consumed_at IS NULL AND expires_at > now()
-        RETURNING event_id, phone`,
-      [sha256(grant)]
+        WHERE token_hash = $1 AND event_id = $2 AND phone = $3
+          AND consumed_at IS NULL AND expires_at > now()`,
+      [sha256(grant), eventId, normalizePhone(phone)]
     );
-    const row = result.rows[0];
-    if (!row) throw failure(409, '인증 정보가 만료되었습니다. 다시 인증하세요', 'phone');
-    if (String(row.event_id) !== String(eventId) || normalizePhone(row.phone) !== normalizePhone(phone)) {
-      throw failure(409, '인증한 연락처와 신청 연락처가 다릅니다', 'phone');
-    }
-    return row;
+    if (!result.rowCount) throw failure(409, '이 연락처의 인증 정보를 사용할 수 없습니다. 다시 인증하세요', 'phone', 'SIGNUP_VERIFICATION_REQUIRED');
   }
 
-  async function grantAccess({ event, eventId, participantId, phone }) {
+  async function grantAccess({ event, eventId, participantId, phone, client }) {
     const id = eventId || (event && event.id);
     if (!id || !participantId) throw failure(400, '참가 정보를 확인하세요');
     const endMs = event ? eventEndMs(event) : NaN;
@@ -341,7 +365,7 @@ function createAttendeeAccess(database, { transport } = {}) {
     const grant = { eventId: String(id), participantId: String(participantId), phone: normalizePhone(phone), grantedAt: new Date().toISOString() };
     const token = randomToken(32);
     const tokenHash = sha256(token);
-    await database.query(
+    await (client || database).query(
       `INSERT INTO attendee_sessions (token_hash, grants, expires_at)
        VALUES ($1, $2::jsonb, $3::timestamptz)
        ON CONFLICT (token_hash) DO UPDATE
@@ -351,7 +375,7 @@ function createAttendeeAccess(database, { transport } = {}) {
     return { token, expiresAt };
   }
 
-  async function mergeGrant({ cookieHeader, event, participantId, phone }) {
+  async function mergeGrant({ cookieHeader, event, participantId, phone, client }) {
     const id = event && event.id;
     const grant = {
       eventId: String(id),
@@ -359,32 +383,53 @@ function createAttendeeAccess(database, { transport } = {}) {
       phone: normalizePhone(phone),
       grantedAt: new Date().toISOString(),
     };
-    const incoming = cookieToken(cookieHeader);
-    if (incoming) {
-      const found = await database.query(
-        `SELECT grants, expires_at FROM attendee_sessions
-          WHERE token_hash = $1 AND expires_at > now() LIMIT 1`,
-        [sha256(incoming)]
+    const scoped = cookieEntry(cookieHeader, attendeeCookieName(id));
+    const legacy = cookieEntry(cookieHeader, ATTENDEE_COOKIE);
+    const incoming = scoped.present ? scoped.value : legacy.value;
+    const legacyHash = legacy.value ? sha256(legacy.value) : null;
+    const incomingHash = incoming ? sha256(incoming) : null;
+    const executor = client || database;
+    // When a different per-event session supersedes a legacy common grant,
+    // remove only that event from the common session. Otherwise expiry of
+    // the newer cookie could unexpectedly restore the former participant.
+    if (legacyHash && legacyHash !== incomingHash) {
+      const hashes = [legacyHash, incomingHash].filter(Boolean).sort();
+      if (client) await executor.query('SELECT token_hash FROM attendee_sessions WHERE token_hash = ANY($1::text[]) ORDER BY token_hash FOR UPDATE', [hashes]);
+      await executor.query(
+        `UPDATE attendee_sessions SET grants = (
+           SELECT COALESCE(jsonb_agg(item), '[]'::jsonb)
+           FROM jsonb_array_elements(CASE WHEN jsonb_typeof(grants) = 'array' THEN grants ELSE '[]'::jsonb END) AS item
+           WHERE item->>'eventId' IS DISTINCT FROM $2
+         ) WHERE token_hash = $1`, [legacyHash, grant.eventId]
       );
-      const row = found.rows[0];
-      if (row) {
-        const grants = grantsFromRow(row);
-        const rest = grants.filter((item) =>
-          !(item.eventId === grant.eventId && item.participantId === grant.participantId)
-        );
-        rest.push(grant);
-        const endMs = eventEndMs(event);
-        const expiresAt = sessionExpiry(endMs, Date.now()).toISOString();
-        await database.query(
-          `UPDATE attendee_sessions SET grants = $2::jsonb, expires_at = $3::timestamptz, last_seen_at = now()
-            WHERE token_hash = $1`,
-          [sha256(incoming), JSON.stringify(rest), expiresAt]
-        );
-        return { token: incoming, expiresAt, fresh: false };
+    }
+    if (incoming) {
+      const requestedExpiry = sessionExpiry(eventEndMs(event), Date.now()).toISOString();
+      // UPDATE takes the row lock before rebuilding the array, so concurrent
+      // event enrollments and revocations cannot overwrite one another.
+      const updated = await executor.query(
+        `UPDATE attendee_sessions SET
+           grants = (
+             SELECT COALESCE(jsonb_agg(item), '[]'::jsonb)
+             FROM jsonb_array_elements(
+               CASE WHEN jsonb_typeof(grants) = 'array' THEN grants ELSE '[]'::jsonb END
+             ) AS item
+             WHERE jsonb_typeof(item->'eventId') = 'string'
+               AND jsonb_typeof(item->'participantId') = 'string'
+               AND item->>'eventId' <> $2
+           ) || jsonb_build_array($3::jsonb),
+           expires_at = GREATEST(expires_at, $4::timestamptz),
+           last_seen_at = now()
+         WHERE token_hash = $1 AND expires_at > now()
+         RETURNING expires_at`,
+        [incomingHash, grant.eventId, JSON.stringify(grant), requestedExpiry]
+      );
+      if (updated.rows[0]) {
+        return { token: incoming, expiresAt: new Date(updated.rows[0].expires_at).toISOString(), fresh: false, eventId: grant.eventId };
       }
     }
-    const created = await grantAccess({ event, participantId, phone });
-    return { ...created, fresh: true };
+    const created = await grantAccess({ event, participantId, phone, client });
+    return { ...created, fresh: true, eventId: grant.eventId };
   }
 
   async function resolveSession(cookieHeader) {
@@ -408,14 +453,37 @@ function createAttendeeAccess(database, { transport } = {}) {
   // Drops every grant pointing at a participant whose phone changed or whose
   // registration was cancelled. Reads then fall back to "no access" instead
   // of serving a stale identity.
-  async function revokeParticipant(eventId, participantId) {
-    await database.query(
+  async function revokeParticipants(client, eventId, participantIds, phones = []) {
+    const ids = [...new Set(participantIds.map(String))];
+    if (!ids.length) return;
+    const numbers = [...new Set(phones.map(normalizePhone).filter(Boolean))];
+    if (numbers.length) {
+      // Old, unused recovery codes must not become valid again after a
+      // cancellation and reapproval or a phone number changes away and back.
+      await client.query(
+        `UPDATE attendee_challenges SET consumed_at = now()
+          WHERE event_id = $1 AND phone = ANY($2::text[]) AND purpose = 'RECOVER' AND consumed_at IS NULL`,
+        [String(eventId), numbers]
+      );
+    }
+    // Shared browser sessions can contain several events. Lock them in a
+    // common order so concurrent bulk changes on different events cannot
+    // lock the same sessions in opposite orders.
+    const locked = await client.query(
+      `SELECT token_hash FROM attendee_sessions
+        WHERE EXISTS (
+          SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(grants) = 'array' THEN grants ELSE '[]'::jsonb END) AS item
+           WHERE item->>'eventId' = $1 AND item->>'participantId' = ANY($2::text[])
+        ) ORDER BY token_hash FOR UPDATE`, [String(eventId), ids]
+    );
+    if (!locked.rows.length) return;
+    await client.query(
       `UPDATE attendee_sessions SET grants = (
-         SELECT COALESCE(jsonb_agg(item), '[]'::jsonb) FROM jsonb_array_elements(grants) AS item
-         WHERE NOT (item->>'eventId' = $1::text AND item->>'participantId' = $2::text)
-       )
-       WHERE grants @> jsonb_build_array(jsonb_build_object('eventId', $1::text, 'participantId', $2::text))`,
-      [String(eventId), String(participantId)]
+         SELECT COALESCE(jsonb_agg(item), '[]'::jsonb)
+           FROM jsonb_array_elements(CASE WHEN jsonb_typeof(grants) = 'array' THEN grants ELSE '[]'::jsonb END) AS item
+          WHERE NOT COALESCE(item->>'eventId' = $1 AND item->>'participantId' = ANY($2::text[]), false)
+       ) WHERE token_hash = ANY($3::text[])`,
+      [String(eventId), ids, locked.rows.map(row => row.token_hash)]
     );
   }
 
@@ -427,7 +495,7 @@ function createAttendeeAccess(database, { transport } = {}) {
     mergeGrant,
     resolveSession,
     grantForEvent,
-    revokeParticipant,
+    revokeParticipants,
     activeParticipant,
     participantByPhone,
   };
@@ -436,6 +504,7 @@ function createAttendeeAccess(database, { transport } = {}) {
 module.exports = {
   createAttendeeAccess,
   attendeeCookie,
+  attendeeCookieName,
   cookieToken,
   normalizePhone,
   ATTENDEE_COOKIE,

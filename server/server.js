@@ -77,9 +77,9 @@ function stampSessionOrg(target, account) {
   return stampOrgHeaders(set, account);
 }
 
-function createHttpServer(store, auth, access, database, { storageDir, env = process.env, logWriter } = {}) {
+function createHttpServer(store, auth, access, database, { storageDir, env = process.env, logWriter, messageMaintenance } = {}) {
   const observations = createRequestObservability({ env, write: logWriter });
-  const state = database ? createState(database) : null;
+  const state = database ? createState(database, { env }) : null;
   const publicEvents = database ? createPublicEvents(database) : null;
   const participantCommands = database ? createParticipantCommands(database) : null;
   const operationsCommands = database ? createOperationsCommands(database) : null;
@@ -87,14 +87,19 @@ function createHttpServer(store, auth, access, database, { storageDir, env = pro
   // production path; the generic provider stays for tests and for any vendor
   // reachable through a translation shim. Absent credentials leave every
   // campaign in its recorded, non-sending state.
-  const messaging = genericMessaging.activeProvider();
-  const messagingStatus = genericMessaging.activeMessagingState();
+  const messaging = genericMessaging.activeProvider(env);
+  const messagingStatus = genericMessaging.activeMessagingState(env);
+  // This is process-local observation, not a guarantee of provider delivery
+  // or the state of another replica. No campaign or tenant data is exposed.
+  const maintenance = messageMaintenance || {
+    config: maintenanceConfig(env), workerStarted: false, lastAttemptAt: null, lastResult: 'never',
+  };
   const domainCommands = database ? createDomainCommands(database, { messaging }) : null;
   const files = database ? createFileService(database, { storageDir }) : null;
   // Attendee verification transport: Solapi when credentials exist, explicit
   // mock (EVENTOUCH_SMS_MOCK=1) for development/tests/demo, honest 503
   // otherwise. Verification codes are never returned to HTTP clients.
-  const verificationTransport = createVerificationTransport();
+  const verificationTransport = createVerificationTransport({ env });
   const attendeeAccess = database ? createAttendeeAccess(database, { transport: verificationTransport }) : null;
   // First Fastify increment: /api/health is served through the route
   // boundary (server/fastify/health.ts). Same shape, same headers — the
@@ -109,7 +114,7 @@ function createHttpServer(store, auth, access, database, { storageDir, env = pro
     // Health is public. Global queue depth would reveal activity from every
     // tenant; the authenticated diagnostics route reports only its own org.
     countOutbox: null,
-    includeDevLogin: Boolean(process.env.EVENTOUCH_DEV_QUICK_LOGIN),
+    includeDevLogin: Boolean(env.EVENTOUCH_DEV_QUICK_LOGIN),
   });
   const healthReady = healthApp.ready();
   // Second Fastify increment: public reads (server/fastify/public-reads.ts).
@@ -144,7 +149,71 @@ function createHttpServer(store, auth, access, database, { storageDir, env = pro
     sessionFromCookie: (cookie, req) => sessionWithOrg(auth, cookie, req),
     stampOrgHeaders: (reply, account) => stampSessionOrg(reply, account),
     loadDirectory: (account) => state.loadDirectory(account),
-    loadEventBootstrap: (account, eventId) => state.loadEventBootstrap(account, eventId),
+    loadEventBootstrap: async (account, eventId, ifVersion, messageRecipientReview, messageAttentionSummary, messageVersionOnly, messageChangeId) => {
+      const result = await state.loadEventBootstrap(account, eventId, ifVersion, messageVersionOnly);
+      if (result.unchanged || result.changed) return messageAttentionSummary || messageRecipientReview
+        ? { ...result, messageReadObservedAt: new Date().toISOString() }
+        : result;
+      if (result.viewer.role === 'STAFF') return messageChangeId ? { messageChangeReview: { status: 'unavailable' } } : messageAttentionSummary
+        ? { refreshVersion: result.refreshVersion, messageAttentionSummary: { available: false } }
+        : result;
+      const eligible = String(result.viewer.organizationId) === String(require('./tenancy').LEGACY_ORG_ID);
+      const workspace = result.workspaces[eventId];
+      const messages = Array.isArray(workspace?.messages) ? workspace.messages : [];
+      const { dueScheduleGuards, messageRecipientChangeAssessment, recipientReviewVersion, ticketLinkGuard, smsCharacterGuard, explicitScheduleInstant } = require('./commands/content-results');
+      if (messageChangeId) {
+        const message = messages.find(item => item && item.id === messageChangeId && item.simulate !== true && ['SCHEDULED', 'NEEDS_CONNECTION'].includes(item.status));
+        if (!message) return { messageChangeReview: { status: 'unavailable' } };
+        const assessment = messageRecipientChangeAssessment(message, workspace, { details: true });
+        return { messageChangeReview: { id: messageChangeId, observedAt: new Date().toISOString(),
+          status: assessment.count ? 'changed' : 'unchanged',
+          ...(assessment.count ? { count: assessment.count, details: { available: assessment.available, changes: assessment.changes } } : {}) } };
+      }
+      const recipientReviewVersions = messageRecipientReview && !messageAttentionSummary && Array.isArray(workspace?.participants)
+        ? Object.fromEntries(workspace.participants.flatMap(person => person && typeof person.id === 'string' && person.cancelled !== true && String(person.status || '').toUpperCase() !== 'CANCELLED'
+          ? [[person.id, recipientReviewVersion(person)]] : []))
+        : undefined;
+      const blocked = messages.flatMap((message) => {
+        if (!message || message.simulate === true || typeof message.id !== 'string' ||
+            !['SCHEDULED', 'NEEDS_CONNECTION'].includes(message.status)) return [];
+        if (message.status === 'SCHEDULED' && workspace.auditAvailable === false) {
+          return [{ id: message.id, reason: 'AUDIT_UNAVAILABLE' }];
+        }
+        const assessment = messageRecipientReview ? messageRecipientChangeAssessment(message, workspace) : null;
+        const event = Array.isArray(result.events) ? result.events.find(item => item?.id === eventId) : null;
+        const characterGuard = smsCharacterGuard(message, workspace, { event, providerKind: eligible ? messagingStatus?.provider : null });
+        if (assessment?.count && characterGuard) return [{ id: message.id, reason: characterGuard.reason, missing: characterGuard.missing, field: characterGuard.field }];
+        if (assessment?.count) return [{ id: message.id, reason: 'RECIPIENT_CHANGED', missing: assessment.count }];
+        const ticketGuard = ticketLinkGuard(message, workspace);
+        if (ticketGuard) return [{ id: message.id, reason: ticketGuard.reason, missing: ticketGuard.missing }];
+        if (characterGuard) return [{ id: message.id, reason: characterGuard.reason, missing: characterGuard.missing, field: characterGuard.field }];
+        if (message.status !== 'SCHEDULED') return [];
+        const guard = dueScheduleGuards(message, workspace, { event, providerKind: eligible ? messagingStatus?.provider : null });
+        return guard && ['NO_PUBLIC_ORIGIN', 'LUCKY_NUMBER_MISSING', 'INVALID_SCHEDULE'].includes(guard.reason)
+          ? [{ id: message.id, reason: guard.reason, missing: guard.missing }] : [];
+      });
+      if (messageAttentionSummary) return {
+        refreshVersion: result.refreshVersion,
+        messageAttentionSummary: {
+          available: true,
+          blocked: blocked.length > 0,
+          nextScheduledAt: messages.reduce((earliest, message) => {
+            const instant = message?.status === 'SCHEDULED' ? explicitScheduleInstant(message.scheduled) : NaN;
+            return Number.isFinite(instant) && (earliest === null || instant < earliest) ? instant : earliest;
+          }, null),
+          observedAt: new Date().toISOString(),
+        },
+      };
+      return { ...result, recipientReviewVersions, messageSchedule: {
+        observedAt: new Date().toISOString(),
+        autoConfigured: eligible && Boolean(maintenance.config.enabled && maintenance.config.autoSendDue),
+        eligibleForAuto: eligible,
+        workerStarted: eligible && maintenance.workerStarted === true,
+        lastAttemptAt: eligible ? maintenance.lastAttemptAt : null,
+        lastResult: eligible ? maintenance.lastResult : 'never',
+        blocked,
+      } };
+    },
     failureMessage,
   });
   const scopedReadsReady = scopedReadsApp.ready();
@@ -371,13 +440,8 @@ async function startServer() {
   const database = createDatabase();
   try {
     await database.migrate();
-    // Account-recovery mail transport: standards-neutral seam. The repository
-    // wires NO provider (no selection, no credentials, no live delivery):
-    // explicit mock (EVENTOUCH_MAIL_MOCK=1) for development/tests/demo,
-    // honest NOT_CONFIGURED otherwise. A deployment may inject its own
-    // `send` through createEmailTransport — that choice lives with the
-    // deployment, never here. Recovery links are single-use expiring
-    // bearers; raw tokens never reach logs or health output.
+    // Explicit SMTP or development mock only. Configuration readiness does
+    // not assert delivery; bearer tokens and provider errors are never logged.
     const emailTransport = createEmailTransport();
     const accountRecovery = createAccountRecovery(database, { transport: emailTransport });
     const auth = createDatabaseAuth(database, { recovery: accountRecovery });
@@ -387,10 +451,16 @@ async function startServer() {
       process.stderr.write('[eventouch] administrator is not configured; login is disabled\n');
     }
     const store = openStore(process.env.DATA_DIR || path.join(ROOT, 'data', 'server'));
-    const server = createHttpServer(store, auth, access, database);
+    const messageConfig = maintenanceConfig();
+    const messageMaintenance = { config: messageConfig, workerStarted: false, lastAttemptAt: null, lastResult: 'never', cursor: { afterId: '' }, resolutionCursor: { afterId: '' } };
+    const server = createHttpServer(store, auth, access, database, { messageMaintenance });
     await new Promise((resolve, reject) => {
       server.once('error', reject);
-      server.listen(PORT, () => {
+      // A supervised local web/API pair pins the API to loopback. Standalone
+      // and container deployments keep Node's existing all-interface default
+      // unless their own deployment configuration supplies an address.
+      const bindAddress = String(process.env.EVENTOUCH_API_BIND || '').trim() || undefined;
+      server.listen(PORT, bindAddress, () => {
         server.removeListener('error', reject);
         process.stdout.write(`eventouch server on ${PORT}\n`);
         resolve();
@@ -411,21 +481,25 @@ async function startServer() {
         process.stderr.write('[eventouch] outbox drain failed: ' + (error && error.message) + '\n');
       }
     );
-    const messageConfig = maintenanceConfig();
     let maintenanceRun = null;
     const interval = Number(process.env.EVENTOUCH_MESSAGE_MAINTENANCE_INTERVAL_MS || 60000);
     const maintenanceTimer = messageConfig.enabled ? setInterval(() => {
       if (maintenanceRun) return;
-      maintenanceRun = runMessageMaintenance(database, genericMessaging.activeProvider(), messageConfig)
-        .catch(() => process.stderr.write('[eventouch] message maintenance failed; queued work is retained\n'))
+      messageMaintenance.lastAttemptAt = new Date().toISOString();
+      messageMaintenance.lastResult = 'running';
+      maintenanceRun = runMessageMaintenance(database, genericMessaging.activeProvider(), { ...messageConfig, cursor: messageMaintenance.cursor, resolutionCursor: messageMaintenance.resolutionCursor })
+        .then((result) => { messageMaintenance.lastResult = result.skipped ? 'skipped' : 'ok'; })
+        .catch(() => { messageMaintenance.lastResult = 'failed'; process.stderr.write('[eventouch] message maintenance failed; queued work is retained\n'); })
         .finally(() => { maintenanceRun = null; });
     }, Number.isFinite(interval) ? Math.min(3600000, Math.max(1000, interval)) : 60000) : null;
+    messageMaintenance.workerStarted = Boolean(maintenanceTimer);
     maintenanceTimer?.unref();
     let closing = null;
     const close = () => {
       if (closing) return closing;
       server.eventouchDraining = true;
       if (maintenanceTimer) clearInterval(maintenanceTimer);
+      messageMaintenance.workerStarted = false;
       closing = (async () => {
         await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
         await bootDrain;

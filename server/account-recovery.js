@@ -300,7 +300,7 @@ function createAccountRecovery(database, { transport, env = process.env } = {}) 
     // Connected means a send can actually leave: a transport AND a valid
     // public base for the link. Callers gate honest disabled UI on this, so
     // a mock without a base (or a provider without one) must read false.
-    const connected = (mode === 'mock' || mode === 'injected') && publicBaseUrl(env) !== null;
+    const connected = (mode === 'mock' || mode === 'injected' || mode === 'smtp') && publicBaseUrl(env) !== null;
     return { mode, connected };
   }
 

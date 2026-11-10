@@ -24,13 +24,19 @@
 
 const crypto = require('node:crypto');
 const engagement = require('./engagement');
+const { scheduleInstant, rouletteSchedule } = require('../roulette-schedule');
+const { drawUniqueNumbers } = require('../lucky-number-draw');
 
 const COMMANDS = new Set([
   'lucky.assign',
   'lucky.config.save',
+  'lucky.config.save-reviewed',
   'lucky.preassign',
+  'lucky.preassign-reviewed',
+  'lucky.preassign-range-reviewed',
   'roulette.spin',
   'roulette.config.save',
+  'roulette.config.save-reviewed',
   'vote.ranked',
   'vote.config.save',
   'vote.tally',
@@ -76,7 +82,7 @@ function requireFeature(ctx, feature) {
 
 function ensureAttendee(ctx) {
   const stage = String(ctx.event.stage || '').toUpperCase();
-  if (!ATTENDEE_STAGES.has(stage)) throw ctx.fail(409, '현재 참여 프로그램을 이용할 수 없습니다');
+  if (!ATTENDEE_STAGES.has(stage)) throw ctx.fail(409, '현재 참여 콘텐츠를 이용할 수 없습니다');
   const person = ctx.participant;
   if (!person) throw ctx.fail(401, '티켓 링크를 확인하세요');
   const status = String(person.status || '').toUpperCase();
@@ -86,7 +92,7 @@ function ensureAttendee(ctx) {
 
 function findModule(ctx, id) {
   const module = list(ctx.workspace.modules).find((item) => item && item.id === ctx.clean(id, 120));
-  if (!module) throw ctx.fail(404, '참여 프로그램을 찾을 수 없습니다');
+  if (!module) throw ctx.fail(404, '참여 콘텐츠를 찾을 수 없습니다');
   return module;
 }
 
@@ -106,8 +112,22 @@ function luckyRange(workspace) {
   return { min: 1, max: LEGACY_LUCKY_MAX, configured: false };
 }
 
+function assertReviewedLuckyRange(ctx, expected) {
+  if (!expected || typeof expected !== 'object' || Array.isArray(expected) ||
+      !Number.isSafeInteger(expected.min) || !Number.isSafeInteger(expected.max) ||
+      expected.min < 1 || expected.min > expected.max || expected.max > 999999) {
+    throw ctx.fail(400, '확인한 번호 범위를 다시 불러오세요', 'expectedRange');
+  }
+  const current = luckyRange(ctx.workspace);
+  if (expected.min !== current.min || expected.max !== current.max) {
+    throw ctx.fail(409, '번호 범위가 변경됐습니다. 최신 범위를 확인한 뒤 다시 진행하세요', 'expectedRange', 'LUCKY_RANGE_CHANGED');
+  }
+  return current;
+}
+
 function saveLuckyConfig(ctx, input) {
   requireFeature(ctx, 'draw');
+  if (ctx.command === 'lucky.config.save-reviewed') assertReviewedLuckyRange(ctx, input.expectedRange);
   const old = object(ctx.workspace.luckyConfig);
   const rawMin = input.min === undefined || input.min === null || input.min === ''
     ? (old.min ?? LUCKY_DEFAULT_MIN)
@@ -128,23 +148,6 @@ function saveLuckyConfig(ctx, input) {
   return { body: { luckyConfig: { ...ctx.workspace.luckyConfig } } };
 }
 
-function drawUniqueNumbers(range, taken, count) {
-  const size = range.max - range.min + 1;
-  if (taken.size + count > size) return null;
-  const assigned = [];
-  const guard = size + 64;
-  let attempts = 0;
-  while (assigned.length < count && attempts < guard) {
-    attempts += 1;
-    const candidate = range.min + crypto.randomInt(size);
-    if (!taken.has(candidate)) {
-      taken.add(candidate);
-      assigned.push(candidate);
-    }
-  }
-  return assigned.length === count ? assigned : null;
-}
-
 // Atomic batch pre-assignment: the whole command runs in one transaction, so
 // either every listed participant gets a number or none does. Invitation
 // messaging must run only after this succeeds (message.retry refuses a
@@ -156,22 +159,41 @@ function preassignLuckyNumbers(ctx, input) {
   if (!ids.length || ids.length > 5000) {
     throw ctx.fail(400, '번호를 배정할 참가자를 1~5000명으로 선택하세요', 'participantIds');
   }
+  const rangeReviewed = ctx.command === 'lucky.preassign-range-reviewed';
+  const reviewed = ctx.command === 'lucky.preassign-reviewed' || rangeReviewed;
+  if (reviewed && (rawIds.length !== ids.length || rawIds.some((id) => typeof id !== 'string' || id !== clean(id, 120)))) {
+    throw ctx.fail(400, '확인한 참가자 명단을 다시 불러오세요', 'participantIds');
+  }
+  const byId = new Map();
+  if (reviewed) {
+    for (const person of list(ctx.workspace.participants)) {
+      if (!person || typeof person.id !== 'string') continue;
+      const matches = byId.get(person.id) || [];
+      matches.push(person); byId.set(person.id, matches);
+    }
+  }
   const people = ids.map((id) => {
-    const person = list(ctx.workspace.participants).find((item) => item && item.id === id) || null;
-    if (!person || String(person.status || '').toUpperCase() === 'CANCELLED') {
+    const matches = reviewed ? byId.get(id) || [] : null;
+    const person = reviewed ? (matches.length === 1 ? matches[0] : null) : list(ctx.workspace.participants).find((item) => item && item.id === id) || null;
+    if (reviewed && (!person || String(person.status || '').toUpperCase() !== 'APPROVED' ||
+      (person.revoked != null && person.revoked !== false) || (person.cancelled != null && person.cancelled !== false))) {
+      throw ctx.fail(409, '참가자 상태가 변경됐거나 확인할 수 없습니다. 최신 명단을 확인한 뒤 다시 배정하세요', 'participantIds', 'LUCKY_TARGET_CHANGED');
+    }
+    if (!person || person.cancelled === true || String(person.status || '').toUpperCase() === 'CANCELLED') {
       throw ctx.fail(404, '발송 가능한 참가자를 찾을 수 없습니다', 'participantIds');
     }
     return person;
   });
-  const range = luckyRange(ctx.workspace);
+  const range = rangeReviewed ? assertReviewedLuckyRange(ctx, input.expectedRange) : luckyRange(ctx.workspace);
   const numbers = getLuckyNumbers(ctx.workspace);
   const taken = new Set(numbers.map((item) => item && item.number).filter(Number.isInteger));
   const needy = people.filter((person) => !numbers.some((item) => item && item.participantId === person.id));
   const size = range.max - range.min + 1;
-  if (taken.size + needy.length > size) {
+  const occupied = [...taken].filter(number => number >= range.min && number <= range.max).length;
+  if (occupied + needy.length > size) {
     throw ctx.fail(
       409,
-      `번호가 ${taken.size + needy.length - size}개 부족합니다. 번호 범위를 먼저 넓히세요`,
+      `번호가 ${occupied + needy.length - size}개 부족합니다. 번호 범위를 먼저 넓히세요`,
       'participantIds'
     );
   }
@@ -257,6 +279,18 @@ function rouletteEffectiveWeight(prize, usedCount) {
 function saveRouletteConfig(ctx, input) {
   requireFeature(ctx, 'draw');
   const old = getRouletteConfig(ctx.workspace) || {};
+  const version = ctx.workspace.rouletteConfigVersion === undefined ? 0 : ctx.workspace.rouletteConfigVersion;
+  if (!Number.isSafeInteger(version) || version < 0 || version >= Number.MAX_SAFE_INTEGER) {
+    throw ctx.fail(409, '룰렛 설정 버전을 확인할 수 없습니다. 운영자에게 문의하세요', 'expectedVersion', 'ROULETTE_VERSION_INVALID');
+  }
+  if (ctx.command === 'roulette.config.save-reviewed') {
+    if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0) {
+      throw ctx.fail(400, '확인한 룰렛 설정을 다시 불러오세요', 'expectedVersion');
+    }
+    if (input.expectedVersion !== version) {
+      throw ctx.fail(409, '다른 작업에서 룰렛 설정이 변경되었습니다. 최신 설정을 확인하세요', 'expectedVersion', 'ROULETTE_CONFIG_CHANGED');
+    }
+  }
   const rawPrizes = input.prizes === undefined ? old.prizes : input.prizes;
   if (!Array.isArray(rawPrizes) || !rawPrizes.length || rawPrizes.length > 20) {
     throw ctx.fail(400, '룰렛 상품을 1~20개로 등록하세요', 'prizes');
@@ -299,15 +333,15 @@ function saveRouletteConfig(ctx, input) {
   if (!['DRAFT', 'OPEN', 'CLOSED'].includes(status)) {
     throw ctx.fail(400, '룰렛 상태를 선택하세요', 'status');
   }
-  const startsAt = input.startsAt === undefined ? (old.startsAt || null) : (clean(input.startsAt, 64) || null);
-  const endsAt = input.endsAt === undefined ? (old.endsAt || null) : (clean(input.endsAt, 64) || null);
+  const startsAt = input.startsAt === undefined ? (old.startsAt ?? null) : (clean(input.startsAt, 64) || null);
+  const endsAt = input.endsAt === undefined ? (old.endsAt ?? null) : (clean(input.endsAt, 64) || null);
   for (const key of ['startsAt', 'endsAt']) {
     const value = key === 'startsAt' ? startsAt : endsAt;
-    if (value !== null && !Number.isFinite(Date.parse(value))) {
-      throw ctx.fail(400, '룰렛 운영 시간을 확인하세요', key);
+    if (value !== null && !Number.isFinite(scheduleInstant(value))) {
+      throw ctx.fail(400, '룰렛 운영 시간과 시간대를 확인하세요', key);
     }
   }
-  if (startsAt && endsAt && Date.parse(startsAt) >= Date.parse(endsAt)) {
+  if (startsAt && endsAt && scheduleInstant(startsAt) >= scheduleInstant(endsAt)) {
     throw ctx.fail(400, '종료 시간은 시작 이후여야 합니다', 'endsAt');
   }
   const results = getRouletteResults(ctx.workspace);
@@ -356,13 +390,14 @@ function saveRouletteConfig(ctx, input) {
     }
   }
   ctx.workspace.rouletteConfig = { prizes, status, startsAt, endsAt };
+  ctx.workspace.rouletteConfigVersion = version + 1;
   const remaining = rouletteRemaining(ctx.workspace.rouletteConfig, results).map(({ prize, remaining: left }) => ({
     prizeId: prize.id,
     label: prize.label,
     quantity: prize.quantity,
     remaining: left,
   }));
-  return { body: { rouletteConfig: { ...ctx.workspace.rouletteConfig }, remaining } };
+  return { body: { rouletteConfig: { ...ctx.workspace.rouletteConfig }, rouletteConfigVersion: version + 1, remaining } };
 }
 
 function pickPrizeByRemaining(entries) {
@@ -401,9 +436,11 @@ function spinRoulette(ctx) {
   const config = getRouletteConfig(ctx.workspace);
   if (!config) throw ctx.fail(409, rouletteStatus());
   if (config.status !== 'OPEN') throw ctx.fail(409, rouletteStatus());
+  const schedule = rouletteSchedule(config);
+  if (!schedule.valid) throw ctx.fail(409, '룰렛 운영 시간을 확인하고 있습니다. 현장 운영자에게 문의하세요');
   const nowMs = Date.parse(ctx.now);
-  if (config.startsAt && nowMs < Date.parse(config.startsAt)) throw ctx.fail(409, rouletteStatus());
-  if (config.endsAt && nowMs > Date.parse(config.endsAt)) throw ctx.fail(409, '룰렛 운영이 종료되었습니다');
+  if (schedule.start !== null && nowMs < schedule.start) throw ctx.fail(409, rouletteStatus());
+  if (schedule.end !== null && nowMs > schedule.end) throw ctx.fail(409, '룰렛 운영이 종료되었습니다');
   const used = rouletteUsedCounts(results);
   const entries = rouletteRemaining(config, results)
     .map(({ prize, remaining }) => ({
@@ -636,6 +673,10 @@ function getDrawPrograms(workspace) {
   return Array.isArray(workspace.drawPrograms) ? workspace.drawPrograms : [];
 }
 
+function drawProgramRevision(program) {
+  return Number.isSafeInteger(program?.revision) && program.revision >= 0 ? program.revision : 0;
+}
+
 function cleanStringList(value, maxItems, maxLength) {
   if (value === undefined || value === null) return null;
   if (!Array.isArray(value)) return null;
@@ -762,6 +803,7 @@ function saveDrawProgram(ctx, input) {
     name,
     quota,
     moduleId,
+    revision: drawProgramRevision(old) + 1,
     status: nextStatus,
     published: nextPublished,
     // Internal marker only: records that the operator chose publication
@@ -886,6 +928,16 @@ async function runDrawProgram(ctx, input) {
   const programs = getDrawPrograms(ctx.workspace);
   const program = programs.find((item) => item && item.id === id);
   if (!program) throw ctx.fail(404, '추첨 프로그램을 찾을 수 없습니다');
+  const revision = drawProgramRevision(program);
+  // Existing clients may omit the revision. The console sends the one it reviewed.
+  if (input.expectedRevision !== undefined) {
+    if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 0) {
+      throw ctx.fail(400, '추첨 상태를 확인하세요', 'expectedRevision');
+    }
+    if (input.expectedRevision !== revision) {
+      throw ctx.fail(409, '추첨 내용이 다른 곳에서 바뀌었습니다', 'expectedRevision', 'DRAW_PROGRAM_CHANGED');
+    }
+  }
   if (program.status !== 'OPEN' || program.published !== true) {
     throw ctx.fail(409, '진행 중인 추첨 프로그램을 선택하세요');
   }
@@ -989,6 +1041,7 @@ async function runDrawProgram(ctx, input) {
   }
   winners.push(...drawn);
   program.winners = winners;
+  program.revision = revision + 1;
   if (winners.length >= program.quota) {
     program.status = 'CLOSED';
     program.drawnAt = ctx.now;
@@ -1019,7 +1072,7 @@ async function runDrawProgram(ctx, input) {
     const displayResult = await engagement.apply({
       ...ctx,
       command: 'display.set',
-      input: { type: 'draw', moduleId: module.id },
+      input: { type: 'draw', moduleId: module.id, drawId: ctx.commandId },
     });
     display = displayResult.body.display;
   }
@@ -1037,9 +1090,13 @@ async function apply(ctx) {
   switch (ctx.command) {
     case 'lucky.assign': return assignLuckyNumber(ctx);
     case 'lucky.config.save': return saveLuckyConfig(ctx, ctx.input);
+    case 'lucky.config.save-reviewed': return saveLuckyConfig(ctx, ctx.input);
     case 'lucky.preassign': return preassignLuckyNumbers(ctx, ctx.input);
+    case 'lucky.preassign-reviewed': return preassignLuckyNumbers(ctx, ctx.input);
+    case 'lucky.preassign-range-reviewed': return preassignLuckyNumbers(ctx, ctx.input);
     case 'roulette.spin': return spinRoulette(ctx);
     case 'roulette.config.save': return saveRouletteConfig(ctx, ctx.input);
+    case 'roulette.config.save-reviewed': return saveRouletteConfig(ctx, ctx.input);
     case 'vote.ranked': return submitRankedVote(ctx, ctx.input);
     case 'vote.config.save': return saveVoteConfig(ctx, ctx.input);
     case 'vote.tally': return tallyVoteResults(ctx);

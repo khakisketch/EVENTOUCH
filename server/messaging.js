@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('node:fs/promises');
+const { randomUUID } = require('node:crypto');
 const path = require('node:path');
 
 // Outbound messaging provider.
@@ -41,12 +42,15 @@ function providerConfig(env = process.env) {
   };
 }
 
-function messagingState(env = process.env) {
-  const config = providerConfig(env);
+function messagingStateFromConfig(config) {
   return {
     connected: config.configured,
     sender: config.configured ? config.sender || null : null,
   };
+}
+
+function messagingState(env = process.env) {
+  return messagingStateFromConfig(providerConfig(env));
 }
 
 function createMessagingProvider(config, { fetchImpl = globalThis.fetch, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
@@ -88,6 +92,9 @@ function createMessagingProvider(config, { fetchImpl = globalThis.fetch, timeout
       }
 
       if (!response.ok) {
+        if (response.status === 408 || response.status === 429 || response.status >= 500) {
+          return { delivered: false, reason: 'UNCONFIRMED', status: response.status, error: '공급사의 접수 여부를 확인하지 못했습니다' };
+        }
         return {
           delivered: false,
           reason: 'PROVIDER_REJECTED',
@@ -102,6 +109,9 @@ function createMessagingProvider(config, { fetchImpl = globalThis.fetch, timeout
           status: response.status,
           error: payload.error || '공급사가 발송을 거부했습니다',
         };
+      }
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload) || payload.ok !== true) {
+        return { delivered: false, reason: 'UNCONFIRMED', status: response.status, error: '공급사의 접수 여부를 확인하지 못했습니다' };
       }
       return {
         delivered: true,
@@ -120,7 +130,7 @@ function createMessagingProvider(config, { fetchImpl = globalThis.fetch, timeout
     }
   }
 
-  return { send, state: messagingState() };
+  return { send, state: messagingStateFromConfig(config) };
 }
 
 // The single source of truth for "is outbound messaging live". Solapi wins
@@ -162,13 +172,36 @@ function digitsOnly(value) {
   return String(value == null ? '' : value).replace(/[^0-9]/g, '');
 }
 
+function repeatedKeys(keys) {
+  const seen = new Set();
+  const repeated = new Set();
+  for (const key of keys) {
+    if (!key) continue;
+    if (seen.has(key)) repeated.add(key);
+    seen.add(key);
+  }
+  return repeated;
+}
+
+function supplierIdsByPhone(messages) {
+  const ids = new Map();
+  for (const value of Object.values(messages || {})) {
+    const phone = digitsOnly(value?.to);
+    const id = value?.messageId;
+    if (!phone || typeof id !== 'string' || !id) continue;
+    ids.set(phone, ids.has(phone) && ids.get(phone) !== id ? null : id);
+  }
+  return ids;
+}
+
 function phoneForDispatch(dispatch, participantId) {
   const match = (dispatch.recipients || []).find((recipient) => recipient.participantId === participantId);
   return digitsOnly(match && match.phone);
 }
 
 function phoneForRecipient(message, participantId) {
-  const match = (message.recipientSnapshot || []).find((person) => person.id === participantId);
+  const recipients = Array.isArray(message.recipientSnapshot) ? message.recipientSnapshot : [];
+  const match = recipients.find((person) => person.id === participantId);
   return digitsOnly(match && match.phone);
 }
 
@@ -183,13 +216,48 @@ async function dispatchCampaign(database, provider, dispatch, { now = new Date()
 
   let finalMessage = null;
   const results = [];
+  const { renderText, typedFor } = require('./messaging-solapi');
+  // The generic HTTP contract has no approved Kakao template ID. It must
+  // not claim to have sent an Alimtalk without carrying that approval.
+  const alimtalkUnsupported = String(dispatch.channel || '').toUpperCase() === 'ALIMTALK';
+  // The generic contract also has no attachment field; it cannot send MMS.
+  const mmsUnsupported = String(dispatch.channel || '').toUpperCase() === 'MMS';
+  // A crash after an individual HTTP request can leave the provider's
+  // outcome unknown. Reserve before the first network call so recovery
+  // never resubmits the whole campaign merely because the response vanished.
+  const reserved = await reserveBatchSubmission(database, dispatch, now, { kind: 'HTTP' });
+  if (!reserved.submission) return { attempted: false, message: reserved.message };
   for (const recipient of dispatch.recipients) {
-    const outcome = await provider.send({
-      channel: dispatch.channel,
-      to: recipient.phone,
-      text: dispatch.text,
-      reference: `${dispatch.messageId}:${recipient.participantId}`,
+    // The sender may have been stopped while an earlier recipient was in
+    // flight. Check ownership before beginning each new provider call.
+    const maySend = await database.transaction(async (client) => {
+      const row = await client.query('SELECT payload FROM event_workspaces WHERE event_id=$1 FOR UPDATE', [dispatch.eventId]);
+      const raw = row.rows[0]?.payload;
+      const ws = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      const message = Array.isArray(ws?.messages) ? ws.messages.find(item => item?.id === dispatch.messageId) : null;
+      if (!(message && message.status === 'SENDING' && message.providerSubmission?.id === reserved.submission.id &&
+        message.genericAttemptActive === true && message.genericStopRequested !== true)) return false;
+      // Renew while a live sender advances. The provider call itself has a
+      // bounded timeout; a crashed sender stops renewing and recovery can
+      // conservatively stop the remaining recipients after the lease expires.
+      const renewed = await client.query(
+        "UPDATE message_outbox SET next_attempt_at=now()+interval '5 minutes', updated_at=now() WHERE message_id=$1 AND status='SENDING' RETURNING message_id",
+        [dispatch.messageId]);
+      return renewed.rowCount === 1;
     });
+    if (!maySend) break;
+    const rendered = renderText(dispatch.text, recipient.variables);
+    const planned = typedFor(dispatch.channel, rendered);
+    let outcome;
+    try { outcome = alimtalkUnsupported ? { delivered: false, reason: 'ALIMTALK_UNSUPPORTED', error: '이 발송 연결은 승인된 알림톡 템플릿을 지원하지 않습니다.' }
+      : mmsUnsupported ? { delivered: false, reason: 'MMS_UNSUPPORTED', error: '이 발송 연결은 사진 문자를 지원하지 않습니다.' }
+      : planned.reason ? { delivered: false, reason: planned.reason, error: planned.reason === 'TOO_LONG' ? '개인화된 문자 내용이 발송 한도를 넘었습니다.' : '이 발송 채널을 지원하지 않습니다.' }
+      : await provider.send({
+      channel: planned.type,
+      to: recipient.phone,
+      text: rendered,
+      reference: `${dispatch.messageId}:${recipient.participantId}`,
+    }); } catch { outcome = { delivered: false, reason: 'TRANSPORT', error: '공급사의 접수 여부를 확인하지 못했습니다' }; }
     results.push({ ...recipient, ...outcome });
   }
 
@@ -208,31 +276,54 @@ async function dispatchCampaign(database, provider, dispatch, { now = new Date()
     const workspace = typeof raw === 'string' ? JSON.parse(raw) : raw;
     if (!workspace || !Array.isArray(workspace.messages)) return;
     const message = workspace.messages.find((item) => item.id === dispatch.messageId);
-    if (!message) return;
+    if (!message || (message.providerSubmission?.id || null) !== reserved.submission.id) return;
+    if (alimtalkUnsupported) message.alimtalkUnsupported = true;
+    if (mmsUnsupported) message.mmsUnsupported = true;
+    const tooLong = results.filter(result => result.reason === 'TOO_LONG').length;
+    if (tooLong) message.personalizedTextTooLongCount = tooLong;
 
     const deliveries = Array.isArray(message.deliveries) ? message.deliveries : [];
     let delivered = 0;
+    let unknown = 0;
     for (const result of results) {
       const delivery = deliveries.find((item) => item.participantId === result.participantId);
       if (!delivery) continue;
       if (result.delivered) {
         delivered += 1;
-        delivery.status = 'SENT';
+        // A successful generic HTTP response proves provider acceptance,
+        // not actual delivery to the recipient's device.
+        delivery.status = 'ACCEPTED';
+        delivery.genericProviderResult = 'ACCEPTED';
         delivery.providerId = result.providerId || null;
         delivery.error = null;
+      } else if (!result.reason || ['TIMEOUT', 'TRANSPORT', 'UNCONFIRMED'].includes(result.reason) || Number(result.status) === 408 || Number(result.status) === 429 || Number(result.status) >= 500) {
+        unknown += 1;
+        delivery.status = 'SENDING';
+        delivery.genericProviderResult = 'UNKNOWN';
+        delivery.error = '공급사 접수 여부를 확인하지 못했습니다';
       } else {
         delivery.status = 'FAILED';
+        delivery.genericProviderResult = 'NOT_ACCEPTED';
         delivery.error = result.error || '발송하지 못했습니다';
       }
       delivery.at = now;
     }
+    // Recipients not reached after a stop/crash boundary are left
+    // unconfirmed; the provider contract offers no authoritative lookup.
+    unknown = deliveries.filter(delivery => delivery?.status === 'SENDING').length;
 
     // A partial send is neither a success nor a failure; say so rather than
     // rounding it to one of them.
-    message.status = delivered === 0 ? 'FAILED' : delivered === results.length ? 'SENT' : 'PARTIAL';
+    message.status = unknown ? 'SENDING' : delivered ? 'ACCEPTED' : 'FAILED';
+    message.deliveryUnconfirmed = unknown > 0 || delivered > 0;
+    message.genericSubmissionUnconfirmed = unknown > 0;
+    message.genericTransport = true;
+    message.genericAttemptActive = false;
+    if (!unknown) delete message.providerSubmission;
     message.cost = null;
     message.dispatchedAt = now;
-    message.deliveredCount = delivered;
+    message.acceptedCount = delivered;
+    message.deliveredCount = 0;
 
     finalMessage = message;
     await client.query(
@@ -241,7 +332,37 @@ async function dispatchCampaign(database, provider, dispatch, { now = new Date()
     );
   });
 
-  return { results, delivered: results.filter((item) => item.delivered).length, message: finalMessage };
+  return { results, accepted: results.filter((item) => item.delivered).length, delivered: 0, message: finalMessage };
+}
+
+// Commit a correlation token before submitting. A crash after this point
+// leaves an unresolved submission that can be looked up without resending.
+async function reserveBatchSubmission(database, dispatch, now, { kind } = {}) {
+  return database.transaction(async (client) => {
+    const row = await client.query('SELECT payload FROM event_workspaces WHERE event_id = $1 FOR UPDATE', [dispatch.eventId]);
+    const raw = row.rows[0]?.payload;
+    const workspace = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (!Array.isArray(workspace?.messages)) return {};
+    const message = workspace.messages.find(item => item?.id === dispatch.messageId);
+    if (!message || message.status !== 'SENDING' || message.providerSubmission ||
+      (message.providerGroupId || null) !== (dispatch.providerGroupId || null)) return { message };
+    const submission = { id: randomUUID(), at: now, ...(kind ? { kind } : {}) };
+    message.providerSubmission = submission;
+    message.deliveryUnconfirmed = true;
+    if (kind === 'HTTP') {
+      message.genericTransport = true;
+      message.genericSubmissionUnconfirmed = true;
+      message.genericAttemptActive = true;
+      message.genericStopRequested = false;
+    }
+    message.providerGroupId = null;
+    message.dispatchedAt = now;
+    await client.query(
+      'UPDATE event_workspaces SET payload = $2::jsonb, revision = revision + 1, updated_at = now() WHERE event_id = $1',
+      [dispatch.eventId, JSON.stringify(workspace)]
+    );
+    return { submission, message };
+  });
 }
 
 // Batch dispatch: one provider call for the whole campaign, then a write-back
@@ -251,6 +372,7 @@ async function dispatchCampaignBatch(database, provider, dispatch, { now = new D
   let finalMessage = null;
   let batchResult = null;
   let imageId = null;
+  let submission = null;
   if (String(dispatch && dispatch.channel).toUpperCase() === 'MMS') {
     const image = await loadMmsImage(database, dispatch);
     if (!image.ok) {
@@ -272,6 +394,9 @@ async function dispatchCampaignBatch(database, provider, dispatch, { now = new D
     }
   }
   if (!batchResult) {
+    const reserved = await reserveBatchSubmission(database, dispatch, now);
+    if (!reserved.submission) return { attempted: false, message: reserved.message };
+    submission = reserved.submission;
     try {
       batchResult = await provider.sendBatch(dispatch.recipients.map((recipient) => ({
         participantId: recipient.participantId,
@@ -280,11 +405,16 @@ async function dispatchCampaignBatch(database, provider, dispatch, { now = new D
         text: dispatch.text,
         subject: dispatch.subject,
         variables: recipient.variables,
+        ...(typeof dispatch.smsFallback === 'boolean' ? { smsFallback: dispatch.smsFallback } : {}),
         templateId: dispatch.templateId || null,
         ...(imageId ? { imageId } : {}),
-      })));
-    } catch (error) {
-      batchResult = { accepted: false, reason: 'TRANSPORT', error: error && error.message };
+      })), { submissionId: submission.id });
+    } catch {
+      batchResult = { accepted: false, reason: 'TRANSPORT' };
+    }
+    if (!batchResult || ['TRANSPORT', 'TIMEOUT', 'UNCONFIRMED'].includes(batchResult.reason) ||
+      Number(batchResult.status) === 408 || Number(batchResult.status) >= 500) {
+      return { message: reserved.message, deliveryUnconfirmed: true };
     }
   }
 
@@ -293,14 +423,13 @@ async function dispatchCampaignBatch(database, provider, dispatch, { now = new D
   for (const entry of (batchResult && batchResult.rejected) || []) byParticipant.set(entry.participantId, { ...entry, accepted: false });
 
   // Read the message ids back from the group so a later poll can resolve them.
+  const sharedPhones = repeatedKeys(dispatch.recipients.map(recipient => digitsOnly(recipient.phone)));
   let idsByNumber = new Map();
   if (batchResult && batchResult.accepted && batchResult.groupId && typeof provider.groupMessages === 'function') {
     try {
       const group = await provider.groupMessages(batchResult.groupId);
       if (group && group.ok) {
-        for (const value of Object.values(group.messages || {})) {
-          idsByNumber.set(String(value.to || '').replace(/[^0-9]/g, ''), value.messageId);
-        }
+        idsByNumber = supplierIdsByPhone(group.messages);
       }
     } catch (error) {
       // Polling can still work from the group id alone; a missing id map
@@ -316,7 +445,10 @@ async function dispatchCampaignBatch(database, provider, dispatch, { now = new D
     const workspace = typeof raw === 'string' ? JSON.parse(raw) : raw;
     if (!workspace || !Array.isArray(workspace.messages)) return;
     const message = workspace.messages.find((item) => item.id === dispatch.messageId);
-    if (!message) return;
+    if (!message || message.status !== 'SENDING' ||
+      (message.providerSubmission?.id || null) !== (submission?.id || null)) return;
+    if (provider?.state?.provider === 'solapi') message.providerKind = 'solapi';
+    delete message.providerSubmission;
 
     const deliveries = Array.isArray(message.deliveries) ? message.deliveries : [];
     let accepted = 0;
@@ -332,9 +464,11 @@ async function dispatchCampaignBatch(database, provider, dispatch, { now = new D
         accepted += 1;
         delivery.status = 'SENDING';
         delivery.sentType = outcome.type || null;
-        // Deliveries do not store the number (it lives in the recipient
-        // snapshot), so the id is matched through the dispatch recipients.
-        delivery.solapiMessageId = idsByNumber.get(phoneForDispatch(dispatch, delivery.participantId)) || null;
+        const phone = phoneForDispatch(dispatch, delivery.participantId);
+        const supplierId = idsByNumber.get(phone);
+        if (sharedPhones.has(phone) || supplierId === null) delivery.resultMatchUnconfirmed = true;
+        else delete delivery.resultMatchUnconfirmed;
+        delivery.solapiMessageId = delivery.resultMatchUnconfirmed ? null : supplierId || null;
         delivery.error = null;
       } else {
         delivery.status = 'FAILED';
@@ -418,10 +552,10 @@ function failAllRecipients(dispatch, reason, error) {
 //
 // This is the other half of dispatchCampaignBatch: acceptance is not arrival,
 // so SENDING only becomes SENT/PARTIAL/FAILED once Solapi reports the real
-// result. Called on demand (the operator opening the campaign) rather than by
-// a background worker, because there is no scheduler in this product and a
-// polling loop would need one to be reliable.
-async function resolveDelivery(database, provider, eventId, { now = new Date().toISOString() } = {}) {
+// result. Called by an operator or the configured maintenance worker. The
+// supplier request runs outside the lock and the result is applied only if
+// the observed drive and individual deliveries are still unchanged.
+async function resolveDelivery(database, provider, eventId, { now = new Date().toISOString(), campaignId = null } = {}) {
   if (!provider || typeof provider.pollResults !== 'function') return { skipped: true };
   // Delivery polling talks to the deployment supplier account, which is
   // legacy-org bound: a new org's campaigns are never resolved through it.
@@ -447,7 +581,9 @@ async function resolveDelivery(database, provider, eventId, { now = new Date().t
   const workspace = typeof raw === 'string' ? JSON.parse(raw) : raw;
   const messages = Array.isArray(workspace && workspace.messages) ? workspace.messages : [];
 
-  const pending = messages.filter((message) => message.status === 'SENDING' && Array.isArray(message.deliveries));
+  const pending = messages.filter((message) => message.status === 'SENDING' && message.genericTransport !== true &&
+    message.providerSubmission?.kind !== 'HTTP' && Array.isArray(message.deliveries) &&
+    (campaignId === null || message.id === campaignId));
   if (!pending.length) return { resolved: 0, pending: 0 };
 
   let resolvedCount = 0;
@@ -462,26 +598,42 @@ async function resolveDelivery(database, provider, eventId, { now = new Date().t
     // skips rather than clobbering newer state with a stale outcome.
     const observed = {
       providerGroupId: message.providerGroupId || null,
+      submissionId: message.providerSubmission?.id || null,
       dispatchedAt: message.dispatchedAt || null,
       attempts: Number(message.attempts) || 0,
       deliveryCount: Array.isArray(message.deliveries) ? message.deliveries.length : 0,
+      deliveriesFingerprint: JSON.stringify(message.deliveries),
     };
     // The id map can be missing or partial when the group read failed at
     // dispatch time. Recover whatever is missing here so one unreadable id
     // does not pin the whole campaign in SENDING forever: known ids stay
     // pollable even when the recovery read itself fails.
-    const missing = message.deliveries.filter((delivery) => !delivery.solapiMessageId);
-    if (missing.length && message.providerGroupId && typeof provider.groupMessages === 'function') {
+    const unresolved = message.deliveries.filter((delivery) => !['SENT', 'FAILED'].includes(delivery.status));
+    const previouslySharedIds = repeatedKeys(message.deliveries.map(delivery => delivery.solapiMessageId));
+    for (const delivery of unresolved) {
+      if (!previouslySharedIds.has(delivery.solapiMessageId)) continue;
+      delete delivery.solapiMessageId;
+      delivery.resultMatchUnconfirmed = true;
+    }
+    const missing = unresolved.filter((delivery) => !delivery.solapiMessageId);
+    const recipients = Array.isArray(message.recipientSnapshot) ? message.recipientSnapshot : [];
+    const sharedPhones = repeatedKeys(recipients.map(person => digitsOnly(person.phone)));
+    for (const delivery of missing) {
+      if (sharedPhones.has(phoneForRecipient(message, delivery.participantId))) delivery.resultMatchUnconfirmed = true;
+    }
+    if (missing.length && (message.providerGroupId || message.providerSubmission)) {
       try {
-        const group = await provider.groupMessages(message.providerGroupId);
-        if (group && group.ok) {
-          const byNumber = new Map();
-          for (const value of Object.values(group.messages || {})) {
-            byNumber.set(String(value.to || '').replace(/[^0-9]/g, ''), value.messageId);
-          }
+        const group = message.providerGroupId
+          ? await provider.groupMessages?.(message.providerGroupId)
+          : await provider.findSubmission?.(message.providerSubmission);
+        if (group?.ok) {
+          if (group.groupId && message.providerSubmission) message.providerGroupId = group.groupId;
+          const byNumber = supplierIdsByPhone(group.messages);
           for (const delivery of missing) {
-            const id = byNumber.get(phoneForRecipient(message, delivery.participantId));
-            if (id) delivery.solapiMessageId = id;
+            const phone = phoneForRecipient(message, delivery.participantId);
+            const id = byNumber.get(phone);
+            if (sharedPhones.has(phone) || id === null) delivery.resultMatchUnconfirmed = true;
+            else if (id) delivery.solapiMessageId = id;
           }
         }
       } catch (error) {
@@ -489,17 +641,38 @@ async function resolveDelivery(database, provider, eventId, { now = new Date().t
         // stay SENDING and a later resolve retries the recovery.
       }
     }
-    const ids = message.deliveries.map((delivery) => delivery.solapiMessageId).filter(Boolean);
-
-    if (!ids.length) continue;
-    const polled = await provider.pollResults(ids);
-    if (!polled || !polled.ok) continue;
+    const sharedIds = repeatedKeys(message.deliveries.map(delivery => delivery.solapiMessageId));
+    const ids = [];
+    for (const delivery of unresolved) {
+      if (!delivery.solapiMessageId) continue;
+      if (sharedIds.has(delivery.solapiMessageId)) {
+        delivery.resultMatchUnconfirmed = true;
+        continue;
+      }
+      delete delivery.resultMatchUnconfirmed;
+      ids.push(delivery.solapiMessageId);
+    }
+    let polled = { ok: true, results: {} };
+    if (ids.length) {
+      polled = await provider.pollResults(ids);
+      if (!polled || !polled.ok) { pendingCount += 1; continue; }
+    } else if (unresolved.length || !message.deliveries.length) {
+      if (JSON.stringify(message.deliveries) !== observed.deliveriesFingerprint) {
+        updates.push({ message, base: observed, resolved: false });
+      }
+      pendingCount += 1;
+      continue;
+    }
 
     let delivered = 0;
     let failed = 0;
     let stillPending = 0;
     for (const delivery of message.deliveries) {
-      const result = polled.results[delivery.solapiMessageId];
+      // Provider rejections and earlier polls already settled these entries.
+      // Never turn them back into unknown just because a later poll omits them.
+      if (delivery.status === 'SENT') { delivered += 1; continue; }
+      if (delivery.status === 'FAILED') { failed += 1; continue; }
+      const result = delivery.resultMatchUnconfirmed ? null : (polled.results || {})[delivery.solapiMessageId];
       if (!result) { stillPending += 1; continue; }
       if (result.state === 'PENDING') { stillPending += 1; continue; }
       if (result.state === 'DELIVERED') {
@@ -511,11 +684,14 @@ async function resolveDelivery(database, provider, eventId, { now = new Date().t
         delivery.replacedFallback = Boolean(result.replacement);
         delivery.receivedAt = result.receivedAt || null;
         delivery.error = null;
-      } else {
+      } else if (result.state === 'FAILED') {
         failed += 1;
         delivery.status = 'FAILED';
         delivery.error = result.reason || '발송에 실패했습니다';
         delivery.statusCode = result.statusCode || null;
+      } else {
+        stillPending += 1;
+        continue;
       }
       delivery.at = now;
     }
@@ -541,8 +717,8 @@ async function resolveDelivery(database, provider, eventId, { now = new Date().t
     updates.push({ message, base: observed, resolved: true });
   }
 
+  const applied = new Set();
   if (updates.length) {
-    const applied = new Set();
     await database.transaction(async (client) => {
       const locked = await client.query('SELECT payload FROM event_workspaces WHERE event_id = $1 FOR UPDATE', [eventId]);
       if (!locked.rows[0]) return;
@@ -557,11 +733,18 @@ async function resolveDelivery(database, provider, eventId, { now = new Date().t
         // pending rather than resolved.
         const sameDrive = target.status === 'SENDING'
           && (target.providerGroupId || null) === (base.providerGroupId || null)
+          && (target.providerSubmission?.id || null) === base.submissionId
           && (target.dispatchedAt || null) === (base.dispatchedAt || null)
           && (Number(target.attempts) || 0) === (Number(base.attempts) || 0)
-          && (Array.isArray(target.deliveries) ? target.deliveries.length : 0) === (Number(base.deliveryCount) || 0);
+          && (Array.isArray(target.deliveries) ? target.deliveries.length : 0) === (Number(base.deliveryCount) || 0)
+          && JSON.stringify(target.deliveries) === base.deliveriesFingerprint;
         if (!sameDrive) continue;
+        if (provider?.state?.provider === 'solapi') target.providerKind = 'solapi';
         target.status = updated.status;
+        if (base.submissionId && updated.providerGroupId) {
+          target.providerGroupId = updated.providerGroupId;
+          delete target.providerSubmission;
+        }
         target.deliveries = updated.deliveries;
         target.deliveredCount = updated.deliveredCount;
         target.failedCount = updated.failedCount;
@@ -582,7 +765,7 @@ async function resolveDelivery(database, provider, eventId, { now = new Date().t
     }
   }
 
-  return { resolved: resolvedCount, pending: pendingCount, total: pending.length, messages: updates.map((entry) => entry.message) };
+  return { resolved: resolvedCount, pending: pendingCount, total: pending.length, messages: updates.filter((entry) => applied.has(entry.message.id)).map((entry) => entry.message) };
 }
 
 module.exports.dispatchCampaign = dispatchCampaign;

@@ -239,6 +239,7 @@ function createFileService(database, { storageDir = process.env.STORAGE_DIR || p
     const ws = projection.workspace;
     const refs = [ws.branding.logo,ws.branding.keyvisual,
       ...ws.program.map(p => p.attachment), ...ws.photos.map(p => p.image),
+      ...(ws.venue && ws.venue.map ? [ws.venue.map.image] : []),
       ...(ws.boothMap && ws.boothMap.published ? [ws.boothMap.published.image] : [])];
     if (!refs.some(ref => ref && ref.fileId === fileId)) throw failure(404,'파일을 찾을 수 없습니다');
     return stored(projection.event.id,fileId);

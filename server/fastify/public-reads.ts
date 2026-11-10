@@ -25,7 +25,7 @@ import { bearerToken, decodedSegment, errorStatus } from "./legacy-http.ts";
 export type PublicEventReader = {
   loadPublicEvent: (slug: string) => Promise<unknown | null>;
   loadTicket: (slug: string, token: string) => Promise<unknown | null>;
-  loadSessionTicket: (slug: string, grants: unknown) => Promise<unknown | null>;
+  loadSessionTicket: (slug: string, cookieHeader: string | undefined) => Promise<unknown | null>;
 };
 
 export type PublicFile = {
@@ -122,19 +122,19 @@ async function publicRead(deps: PublicReadsDeps, request: FastifyRequest, reply:
       return reply.send(projection);
     }
     const ticket = await events.loadTicket(slug, bearerToken(request.headers.authorization));
-    if (!ticket && deps.resolveSession) {
+    // An explicit Authorization header selects a specific credential. If it
+    // is invalid, never replace its identity with the browser session's
+    // participant. Session restoration applies only when no header was sent.
+    if (!ticket && request.headers.authorization === undefined && deps.resolveSession) {
       try {
-        const session = await deps.resolveSession(request.headers.cookie);
-        if (session) {
-          const granted = await events.loadSessionTicket(slug, session.grants);
-          if (granted) return reply.send(granted);
-        }
+        const granted = await events.loadSessionTicket(slug, request.headers.cookie);
+        if (granted) return reply.send(typeof granted === "object" && !Array.isArray(granted) ? { ...granted, serverTimeMs: Date.now() } : granted);
       } catch {
         // The session fallback is best-effort; the bearer answer below stands.
       }
     }
     if (!ticket) return reply.code(404).send({ error: NOT_FOUND_TICKET });
-    return reply.send(ticket);
+    return reply.send(typeof ticket === "object" && !Array.isArray(ticket) ? { ...ticket, serverTimeMs: Date.now() } : ticket);
   } catch (error) {
     return reply.code(errorStatus(error)).send({ error: deps.failureMessage(error, GENERIC_FAILURE) });
   }

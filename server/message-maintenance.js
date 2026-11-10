@@ -6,7 +6,9 @@
 // Default is OFF and inert: nothing here changes the product's manual
 // reservation meaning or its live-send mode. Both the worker itself and the
 // due-schedule auto-send are separately gated, so enabling the worker still
-// never auto-sends unless the operator also opts into auto-send:
+// never auto-sends unless the operator also opts into auto-send. Even then,
+// only a newly created reservation carrying the explicit AUTO intent is
+// eligible; legacy, manual and simulated reservations are not dispatched.
 //
 //   EVENTOUCH_MESSAGE_MAINTENANCE=1   run the worker at all (default: off)
 //   EVENTOUCH_MESSAGE_AUTO_SEND_DUE=1 auto-enqueue due SCHEDULED campaigns
@@ -45,7 +47,7 @@ const { resolveDelivery } = require('./messaging');
 // content-results.js): the worker reuses dueScheduleGuards verbatim so an
 // automatic run can never accept a campaign the operator's own retry would
 // refuse. No command, receipt, or permission flow is duplicated here.
-const { dueScheduleGuards } = require('./commands/content-results');
+const { dueScheduleGuards, explicitScheduleInstant } = require('./commands/content-results');
 
 const DEFAULT_BATCH_LIMIT = 50;
 
@@ -75,16 +77,19 @@ function providerConnected(provider) {
 // org under its row lock and skips non-legacy events: the deployment provider
 // credentials are legacy-org bound and never auto-inherited. The per-event
 // gate keeps this working with the same query shapes as before.
-async function scanCandidateEvents(database, status, limit) {
+async function scanCandidateEvents(database, status, limit, { afterId = '', automaticOnly = false } = {}) {
   const result = await database.query(
     `SELECT e.id FROM events e JOIN event_workspaces w ON w.event_id = e.id
      WHERE jsonb_typeof(COALESCE(w.payload->'messages', '[]'::jsonb)) = 'array'
+       AND ($3::text = '' OR e.id > $3)
+       AND (NOT $4::boolean OR e.org_id = $5)
        AND EXISTS (
          SELECT 1 FROM jsonb_array_elements(COALESCE(w.payload->'messages', '[]'::jsonb)) m
          WHERE m->>'status' = $1
+           AND (NOT $4::boolean OR (m->>'scheduleMode' = 'AUTO' AND m->>'autoScheduleIntent' = 'confirmed-v1' AND COALESCE(m->>'simulate', 'false') <> 'true'))
        )
      ORDER BY e.id LIMIT $2`,
-    [String(status), Math.max(1, Math.min(Number(limit) || DEFAULT_BATCH_LIMIT, 500))]
+    [String(status), Math.max(1, Math.min(Number(limit) || DEFAULT_BATCH_LIMIT, 500)), afterId, automaticOnly, require('./tenancy').LEGACY_ORG_ID]
   );
   return (result.rows || []).map((row) => String(row.id));
 }
@@ -107,20 +112,25 @@ function foreignOrgSkipped(eventId, messageId, reason) {
 // rows, one event transaction at a time. Guards are shared with
 // message.retry (dueScheduleGuards in server/commands/content-results.js),
 // not mirrored.
-async function enqueueDueScheduled(database, { now, limit, eventIds } = {}) {
-  const candidates = Array.isArray(eventIds) && eventIds.length
-    ? eventIds.map(String)
-    : await scanCandidateEvents(database, 'SCHEDULED', limit);
+async function enqueueDueScheduled(database, { now, limit, eventIds, cursor, providerKind } = {}) {
+  const explicit = Array.isArray(eventIds) && eventIds.length;
+  const batchLimit = Math.max(1, Math.min(Number(limit) || DEFAULT_BATCH_LIMIT, 500));
+  const afterId = !explicit && cursor && typeof cursor.afterId === 'string' ? cursor.afterId : '';
+  let candidates = explicit ? eventIds.map(String) : await scanCandidateEvents(database, 'SCHEDULED', batchLimit, { afterId, automaticOnly: true });
+  if (!explicit && afterId && !candidates.length) candidates = await scanCandidateEvents(database, 'SCHEDULED', batchLimit, { automaticOnly: true });
+  if (!explicit && cursor) cursor.afterId = candidates.length === batchLimit ? candidates[candidates.length - 1] : '';
   let enqueued = 0;
   let duePending = 0;
   const skippedDue = [];
   for (const eventId of candidates.slice(0, Math.max(1, Math.min(Number(limit) || DEFAULT_BATCH_LIMIT, 500)))) {
     const outcome = await database.transaction(async (client) => {
+      // The campaign state lives in the workspace. Lock it with the event so
+      // a worker waiting on a concurrent enqueue reads the committed state.
       const locked = await client.query(
         `SELECT e.id, e.org_id, e.payload AS event_payload,
                 w.payload AS workspace_payload
          FROM events e JOIN event_workspaces w ON w.event_id = e.id
-         WHERE e.id = $1 FOR UPDATE OF e`,
+         WHERE e.id = $1 FOR UPDATE OF e, w`,
         [String(eventId)]
       );
       if (!locked.rows[0]) return { enqueued: 0, duePending: 0, skipped: [] };
@@ -135,12 +145,16 @@ async function enqueueDueScheduled(database, { now, limit, eventIds } = {}) {
       const skipped = [];
       for (const message of workspace.messages) {
         if (!message || message.status !== 'SCHEDULED') continue;
+        // Missing mode is an existing/manual reservation. Only a new explicit
+        // AUTO choice can become a provider dispatch intent.
+        if (message.scheduleMode !== 'AUTO' || message.autoScheduleIntent !== 'confirmed-v1') continue;
         // Same guards as the operator's message.retry: a campaign the
         // operator could not send stays SCHEDULED with its reason. A future
         // schedule is simply not due yet: not counted, not reported.
         // (EVENTOUCH_PUBLIC_URL is the shared front origin for all orgs;
         // only the provider credentials are legacy-bound.)
-        const guard = dueScheduleGuards(message, workspace, { now: Date.parse(now) });
+        const event = typeof locked.rows[0].event_payload === 'string' ? JSON.parse(locked.rows[0].event_payload) : locked.rows[0].event_payload;
+        const guard = dueScheduleGuards(message, workspace, { now: Date.parse(now), event, providerKind });
         if (guard && guard.reason === 'NOT_DUE') continue;
         pending += 1;
         if (message.simulate === true) {
@@ -149,6 +163,12 @@ async function enqueueDueScheduled(database, { now, limit, eventIds } = {}) {
         }
         if (guard) {
           skipped.push({ messageId: message.id, reason: guard.reason });
+          continue;
+        }
+        // Never erase an explicit malformed audit trail to enqueue a send.
+        // Leave the reservation pending until the underlying data is repaired.
+        if (Object.hasOwn(workspace, 'audit') && !Array.isArray(workspace.audit)) {
+          skipped.push({ messageId: message.id, reason: 'AUDIT_UNAVAILABLE' });
           continue;
         }
         message.attempts = (Number(message.attempts) || 0) + 1;
@@ -198,17 +218,20 @@ async function countDueScheduled(database, { now, limit, eventIds } = {}) {
     if (!workspace || !Array.isArray(workspace.messages)) continue;
     for (const message of workspace.messages) {
       if (!message || message.status !== 'SCHEDULED') continue;
-      if (message.scheduled && Date.parse(message.scheduled) > Date.parse(now)) continue;
+      if (explicitScheduleInstant(message.scheduled) > Date.parse(now)) continue;
       duePending += 1;
     }
   }
   return duePending;
 }
 
-async function resolvePendingDeliveries(database, provider, { now, limit, eventIds } = {}) {
-  const candidates = Array.isArray(eventIds) && eventIds.length
-    ? eventIds.map(String)
-    : await scanCandidateEvents(database, 'SENDING', limit);
+async function resolvePendingDeliveries(database, provider, { now, limit, eventIds, cursor } = {}) {
+  const explicit = Array.isArray(eventIds) && eventIds.length;
+  const batchLimit = Math.max(1, Math.min(Number(limit) || DEFAULT_BATCH_LIMIT, 500));
+  const afterId = !explicit && cursor && typeof cursor.afterId === 'string' ? cursor.afterId : '';
+  let candidates = explicit ? eventIds.map(String) : await scanCandidateEvents(database, 'SENDING', batchLimit, { afterId });
+  if (!explicit && afterId && !candidates.length) candidates = await scanCandidateEvents(database, 'SENDING', batchLimit);
+  if (!explicit && cursor) cursor.afterId = candidates.length === batchLimit ? candidates[candidates.length - 1] : '';
   let resolved = 0;
   let pending = 0;
   let events = 0;
@@ -238,7 +261,7 @@ async function runMessageMaintenance(database, provider, options = {}) {
   let duePending = 0;
   let skippedDue = [];
   if (autoSendDue) {
-    const queued = await enqueueDueScheduled(database, { now, limit, eventIds: options.eventIds });
+    const queued = await enqueueDueScheduled(database, { now, limit, eventIds: options.eventIds, cursor: options.cursor, providerKind: provider?.state?.provider });
     enqueued = queued.enqueued;
     duePending = queued.duePending;
     skippedDue = queued.skippedDue;
@@ -247,7 +270,7 @@ async function runMessageMaintenance(database, provider, options = {}) {
   }
 
   const drain = await drainMessageOutbox(database, provider, { now, limit });
-  const resolved = await resolvePendingDeliveries(database, provider, { now, limit, eventIds: options.eventIds });
+  const resolved = await resolvePendingDeliveries(database, provider, { now, limit, eventIds: options.eventIds, cursor: options.resolutionCursor });
 
   return { at: now, enabled: true, autoSendDue, enqueued, duePending, skippedDue, drain, resolved };
 }

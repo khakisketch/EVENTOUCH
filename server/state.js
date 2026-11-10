@@ -1,8 +1,19 @@
 'use strict';
 
+const { clearCopiedPublication } = require('./content-publication');
+
 const crypto = require('node:crypto');
+const { isDeepStrictEqual } = require('node:util');
 const { publicWorkspace } = require('./public-events');
 const { isCalendarDate, toCapacityNumber, isSafeIntegerCapacity } = require('./validation');
+const { ticketReviewState } = require('./ticket-lifetime');
+const { attendanceNeedsReview, indexLatestChecks } = require('../apps/web/lib/attendance-state.cjs');
+const { reconciliationIndex } = require('./attendance-reconciliation');
+const { operatorMessageLookup } = require('./message-provider-lookup');
+const { cancellationConflictFingerprint, cancellationConflictIndex } = require('./cancellation-conflict-review');
+const { reportSourceAvailability } = require('./report-source-availability');
+const { attendanceSourceAvailability } = require('./attendance-source-availability');
+const { archivePreconditions } = require('./archive-preconditions');
 
 const ROLES = new Set(['AGENCY', 'MANAGER', 'STAFF']);
 // Mirrors the console's permission vocabulary so a stored grant can never be
@@ -175,6 +186,126 @@ function normalizeWorkspace(value) {
   return workspace;
 }
 
+// Normalization is a read convenience. A command must not persist its
+// defaults over unrelated malformed or missing legacy data. Reject a write
+// that would itself replace a malformed collection; never silently repair it.
+function workspaceChangesForSave(raw, before, after) {
+  const names = { participants: '참가자 명단을', notices: '공지를', desks: '현장 데스크를', audit: '행사 활동 기록을', venue: '행사 장소를' };
+  const invalid = (field) => Object.assign(
+    new Error(`${names[field] || '행사 기록을'} 확인할 수 없어 저장하지 못했습니다. 시스템 관리자에게 문의하세요.`),
+    { status: 409, code: 'WORKSPACE_DATA_UNAVAILABLE', field },
+  );
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw invalid('workspace');
+  const saved = { ...raw };
+  const objectFields = new Set(['venue', 'branding', 'display', 'boothMap']);
+  for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    if (isDeepStrictEqual(before[key], after[key]) && Object.hasOwn(before, key) === Object.hasOwn(after, key)) continue;
+    if (Object.hasOwn(raw, key)) {
+      if (ARRAY_FIELDS.includes(key) && !Array.isArray(raw[key])) throw invalid(key);
+      if (objectFields.has(key) && (!raw[key] || typeof raw[key] !== 'object' || Array.isArray(raw[key]))) throw invalid(key);
+    }
+    if (Object.hasOwn(after, key)) saved[key] = after[key];
+    else delete saved[key];
+  }
+  return saved;
+}
+
+// Manager/agency reads need explicit desk fields so a truncated response is
+// distinguishable from an older stored desk. An absent mode already means
+// desk on edit, and an absent open flag already means open when scanning.
+// Missing name/direction are *not* valid defaults: keep them explicitly null
+// so a client can refuse to present an unknown direction as an IN desk.
+// This is a read projection only; never change persisted workspace rows or
+// the deliberately narrower STAFF/public projections.
+function operatorDeskProjection(desk) {
+  if (!desk || typeof desk !== 'object' || Array.isArray(desk)) return desk;
+  return {
+    ...desk,
+    name: typeof desk.name === 'string' ? desk.name : null,
+    action: typeof desk.action === 'string' ? desk.action : null,
+    mode: typeof desk.mode === 'string' && desk.mode ? desk.mode : 'desk',
+    open: desk.open !== false,
+  };
+}
+
+// Invalid legacy JSON values must remain distinguishable from an absent
+// boundary, without exposing arbitrary object contents in an operator form.
+// Escape strings using the same reserved prefix so a later type change can
+// never masquerade as the previously reviewed non-string value.
+function operatorBoothTime(value) {
+  if (value === undefined || value === null) return '';
+  if (typeof value === 'string' && !/^__invalid_booth_(?:time|text)__:/.test(value)) return value;
+  const kind = typeof value === 'string' ? 'text' : 'time';
+  const digest = crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  return `__invalid_booth_${kind}__:${digest}`;
+}
+
+function operatorWorkspaceProjection(workspace, rawWorkspace, event) {
+  const text = (value) => typeof value === 'string' ? value : '';
+  const attendanceChecks = indexLatestChecks(workspace.checks);
+  const reconciliationFor = reconciliationIndex(workspace);
+  const cancellationIndex = cancellationConflictIndex(workspace);
+  const raw = object(rawWorkspace);
+  const auditAvailable = !Object.hasOwn(raw, 'audit') || Array.isArray(raw.audit);
+  const exportBuiltins = new Set(['name', 'company', 'phone', 'email', 'group']);
+  const exportAnswerIds = new Set(array(workspace.publishedFields).flatMap(field =>
+    field && typeof field === 'object' && !Array.isArray(field) && typeof field.id === 'string' && !exportBuiltins.has(field.id)
+      ? [field.id] : []));
+  return {
+    ...workspace,
+    rouletteConfigVersion: !Object.hasOwn(raw, 'rouletteConfigVersion') ? 0
+      : Number.isSafeInteger(raw.rouletteConfigVersion) && raw.rouletteConfigVersion >= 0 ? raw.rouletteConfigVersion : null,
+    auditAvailable,
+    reportSourceAvailability: reportSourceAvailability(rawWorkspace),
+    // Normalization turns a malformed stored array into []; distinguish it
+    // from the established legacy absence before exporting application data.
+    rosterExportFieldsAvailable: !Object.hasOwn(raw, 'publishedFields') || Array.isArray(raw.publishedFields),
+    rosterExportFieldCount: !Object.hasOwn(raw, 'publishedFields') ? 0 : Array.isArray(raw.publishedFields) ? raw.publishedFields.length : null,
+    rosterExportParticipantCount: !Object.hasOwn(raw, 'participants') ? 0 : Array.isArray(raw.participants) ? raw.participants.length : null,
+    archivePreconditions: archivePreconditions(rawWorkspace),
+    reportCancellationReviewVersion: 1,
+    boothVisitsAvailable: !Object.hasOwn(raw, 'visits') || Array.isArray(raw.visits),
+    // Normalization preserves the legacy absent-as-empty behavior. Expose
+    // explicit corruption separately so cancellation cannot review it as zero.
+    paymentReviewAvailable: !Object.hasOwn(object(rawWorkspace), 'payments') || Array.isArray(object(rawWorkspace).payments),
+    messages: array(workspace.messages).map(operatorMessageLookup),
+    desks: array(workspace.desks).map(operatorDeskProjection),
+    // The editing guards and operator reads must agree even for old rows.
+    // Keep this a projection: never write normalized values back on read.
+    booths: array(workspace.booths).map((booth) => {
+      if (!booth || typeof booth !== 'object' || Array.isArray(booth)) return booth;
+      return { ...booth, name: text(booth.name), zone: text(booth.zone), status: text(booth.status) || 'WAITING',
+        capacity: Number(booth.capacity) || 0, limit: Number(booth.limit) || 1,
+        used: Math.max(0, Number(booth.used) || 0), startsAt: operatorBoothTime(booth.startsAt), endsAt: operatorBoothTime(booth.endsAt) };
+    }),
+    // Mirror question.manage's guard for old rows without modifying stored
+    // data. Explicit fields also let clients reject truncated HTTP results.
+    questions: array(workspace.questions).map((question) => {
+      if (!question || typeof question !== 'object' || Array.isArray(question)) return question;
+      return { ...question, text: String(question.text || ''), answer: String(question.answer || ''),
+        approved: question.approved === true };
+    }),
+    participants: array(workspace.participants).map((person) => {
+      if (!person || typeof person !== 'object' || Array.isArray(person)) return person;
+      // Legacy absence has always meant not currently inside. A malformed
+      // explicit value is unknown, so guarded cancellation cannot mistake
+      // it for a reviewed false value. The stored workspace remains intact.
+      const inside = !Object.hasOwn(person, 'inside') ? false : typeof person.inside === 'boolean' ? person.inside : null;
+      const answers = !Object.hasOwn(person, 'answers') ? {} : person.answers;
+      const answerKeys = answers && typeof answers === 'object' && !Array.isArray(answers)
+        ? Object.keys(answers).filter(id => exportAnswerIds.has(id)) : null;
+      return { ...person,
+        // Make legacy absence explicit in reads, so a truncated response can
+        // never silently look like an intentionally empty export value.
+        ...Object.fromEntries(['name', 'phone', 'company', 'email'].filter(key => !Object.hasOwn(person, key)).map(key => [key, ''])),
+        answers, rosterExportAnswerKeys: answerKeys,
+        group: String(person.group ?? '').trim().slice(0, 80) || '일반', inside,
+        cancellationConflictReview: cancellationConflictFingerprint(workspace, rawWorkspace, event, person, cancellationIndex),
+        attendanceReview: attendanceNeedsReview(person, attendanceChecks), attendanceReconciliation: auditAvailable ? reconciliationFor(person) : null, ticketReview: ticketReviewState(person) };
+    }),
+  };
+}
+
 function projectParticipant(workspace, event, participant) {
   if (!participant) return null;
   return publicWorkspace(workspace, event, participant).participants[0] || null;
@@ -204,7 +335,7 @@ function accountProjection(row, fullOrganization) {
   };
 }
 
-function createState(database) {
+function createState(database, { env = process.env } = {}) {
   // Duplicating an event copies configuration and program definitions — never
   // runtime records. Participants, tickets, check-ins, visits, messages,
   // responses, rewards, audit entries and lucky numbers stay with the source
@@ -223,7 +354,7 @@ function createState(database) {
     delete notice.attachment;
     delete notice.fileId;
     notice.published = false;
-    return notice;
+    return clearCopiedPublication('notice', notice);
   }
 
   function duplicatedProgram(item) {
@@ -231,7 +362,7 @@ function createState(database) {
     program.attachment = null;
     delete program.fileId;
     program.published = false;
-    return program;
+    return clearCopiedPublication('program', program);
   }
 
   function duplicatedModule(item) {
@@ -260,8 +391,16 @@ function createState(database) {
 
   function duplicatedWorkspace(source) {
     const target = emptyWorkspace();
+    // The neutral built-in is opt-in metadata on newer events. Old events
+    // and their duplicates keep the historical fallback unless marked.
+    if (source.defaultHomeBanner === 'neutral') target.defaultHomeBanner = 'neutral';
     for (const key of DUPLICATE_WORKSPACE_KEYS) {
       if (source[key] !== undefined) target[key] = copy(source[key]);
+    }
+    // Event-scoped file references cannot be reused by the new event.
+    if (target.venue && typeof target.venue === 'object') {
+      delete target.venue.map;
+      clearCopiedPublication('venue', target.venue);
     }
     target.formVersion = Number(source.formVersion) || 1;
     target.publishedVersion = Number(source.publishedVersion) || 0;
@@ -305,7 +444,7 @@ function createState(database) {
   // disconnected until an explicit per-org credential story ships.
   function integrationsForOrg(orgId) {
     const { LEGACY_ORG_ID } = require('./tenancy');
-    if (String(orgId) === String(LEGACY_ORG_ID)) return require('./messaging').activeMessagingState();
+    if (String(orgId) === String(LEGACY_ORG_ID)) return require('./messaging').activeMessagingState(env);
     return { connected: false, sender: null, orgIsolated: true };
   }
 
@@ -405,7 +544,7 @@ function createState(database) {
         );
         await client.query(
           'INSERT INTO event_workspaces (event_id, payload) VALUES ($1, $2::jsonb)',
-          [eventId, JSON.stringify(emptyWorkspace())]
+          [eventId, JSON.stringify({ ...emptyWorkspace(), defaultHomeBanner: 'neutral' })]
         );
         const response = { event };
         await client.query(
@@ -626,8 +765,12 @@ function createState(database) {
       // so editing a name never silently unlinks anything.
       const payload = {
         ...object(existing && existing.payload), name, contact, email,
-        ...(logoFileId || (existing && Object.hasOwn(object(existing.payload), 'logoFileId')) ? { logoFileId } : {}),
-        ...(docFileId || (existing && Object.hasOwn(object(existing.payload), 'docFileId')) ? { docFileId } : {}),
+        // Omission means "leave the existing attachment alone". Only an
+        // explicitly supplied empty value removes it. This also prevents a
+        // logo update from silently dropping an unrelated document (and
+        // vice versa).
+        ...(Object.hasOwn(input, 'logoFileId') ? { logoFileId } : {}),
+        ...(Object.hasOwn(input, 'docFileId') ? { docFileId } : {}),
       };
       if (existing) {
         await client.query(
@@ -982,7 +1125,11 @@ function createState(database) {
           const deskIds = new Set(eventAssignments.filter((item) => item.type === 'DESK').map((item) => item.targetId));
           const boothIds = new Set(eventAssignments.filter((item) => item.type === 'BOOTH').map((item) => item.targetId));
           const projected = publicWorkspace(workspace, event);
-          projected.participants = deskIds.size ? array(workspace.participants).map((person) => ({
+          const sourceAvailability = attendanceSourceAvailability(row.workspace_payload);
+          projected.checksAvailable = sourceAvailability.checks;
+          projected.participantsAvailable = sourceAvailability.participants;
+          const attendanceChecks = indexLatestChecks(workspace.checks);
+          projected.participants = deskIds.size && sourceAvailability.participants ? array(workspace.participants).map((person) => ({
             id: String(person.id || ''),
             name: String(person.name || ''),
             company: String(person.company || ''),
@@ -990,16 +1137,18 @@ function createState(database) {
             status: String(person.status || ''),
             inside: person.inside === true,
             everIn: person.everIn === true,
+            attendanceReview: attendanceNeedsReview(person, attendanceChecks),
             paymentStatus: String(person.paymentStatus || ''),
           })) : [];
           projected.desks = array(workspace.desks).filter((desk) => deskIds.has(String(desk.id))).map((desk) => ({
-            id: String(desk.id), name: String(desk.name || ''), action: String(desk.action || ''),
+            id: String(desk.id), name: String(desk.name || ''), action: String(desk.action || ''), open: desk.open !== false,
           }));
-          projected.booths = array(workspace.booths).filter((booth) => boothIds.has(String(booth.id))).map((booth) => ({
+          projected.booths = projected.booths.filter((booth) => boothIds.has(String(booth.id))).map((booth) => ({
+            ...booth,
             id: String(booth.id), name: String(booth.name || ''), zone: String(booth.zone || ''), status: String(booth.status || ''),
           }));
           projected.assignments = copy(eventAssignments);
-          projected.checks = deskIds.size ? array(workspace.checks).filter((check) => deskIds.has(String(check.deskId))).map((check) => ({
+          projected.checks = deskIds.size && sourceAvailability.checks ? array(workspace.checks).filter((check) => deskIds.has(String(check.deskId))).map((check) => ({
             id: String(check.id || ''), participantId: String(check.participantId || ''), name: String(check.name || ''),
             action: String(check.action || ''), deskId: String(check.deskId || ''), at: String(check.at || ''), corrected: check.corrected === true,
           })) : [];
@@ -1008,7 +1157,7 @@ function createState(database) {
           })) : [];
           workspaces[String(row.id)] = projected;
         } else {
-          workspaces[String(row.id)] = workspace;
+          workspaces[String(row.id)] = operatorWorkspaceProjection(workspace, row.workspace_payload, event);
         }
       }
 
@@ -1112,7 +1261,14 @@ function createState(database) {
                        ELSE 0 END::int AS pending,
                   CASE WHEN jsonb_typeof(COALESCE(w.payload->'messages', '[]'::jsonb)) = 'array'
                        THEN (SELECT COUNT(*) FROM jsonb_array_elements(COALESCE(w.payload->'messages', '[]'::jsonb)) AS m
-                             WHERE m->>'status' IN ('FAILED', 'PARTIAL', 'NEEDS_CONNECTION'))
+                             WHERE m->>'status' IN ('FAILED', 'PARTIAL', 'NEEDS_CONNECTION')
+                                OR m->'submissionUnconfirmed' = 'true'::jsonb
+                                OR m->'genericSubmissionUnconfirmed' = 'true'::jsonb
+                                OR (jsonb_typeof(m->'providerSubmission'->'id') = 'string'
+                                    AND NULLIF(m->'providerSubmission'->>'id', '') IS NOT NULL)
+                                OR (m->>'status' = 'ACCEPTED' AND m->'deliveries' @> '[{"status":"FAILED"}]'::jsonb)
+                                OR (m->>'status' = 'SENDING'
+                                    AND m->'deliveries' @> '[{"resultMatchUnconfirmed":true}]'::jsonb))
                         ELSE 0 END::int AS attention,
                    CASE WHEN jsonb_typeof(COALESCE(w.payload->'messages', '[]'::jsonb)) = 'array'
                         THEN ARRAY(SELECT m->>'scheduled' FROM jsonb_array_elements(COALESCE(w.payload->'messages', '[]'::jsonb)) AS m
@@ -1127,6 +1283,8 @@ function createState(database) {
         )).rows;
       }
 
+      const { explicitScheduleInstant } = require('./commands/content-results');
+      const summaryNow = Date.now();
       const events = summaryRows.map((row) => {
         const event = normalizeEvent(row);
         const eventRevision = Math.max(Number(row.revision) || 0, Number(row.workspace_revision) || 0);
@@ -1148,9 +1306,15 @@ function createState(database) {
           venue: typeof row.venue === 'string' ? row.venue : '',
           pending: Number(row.pending) || 0,
           messageAttention: Number(row.attention) || 0,
+          ...(actor.role === 'STAFF' ? {} : {
+            messageRefreshVersion: `${row.revision ?? 0}.${row.workspace_revision ?? 0}`,
+            invalidScheduled: Array.isArray(row.scheduled_times) &&
+              row.scheduled_times.some(time => !Number.isFinite(explicitScheduleInstant(time))),
+            scheduledMessages: Array.isArray(row.scheduled_times) ? row.scheduled_times.length : 0,
+          }),
           manualDue: (Array.isArray(row.scheduled_times) ? row.scheduled_times : []).filter(time => {
-            const scheduled = Date.parse(time);
-            return Number.isFinite(scheduled) && scheduled <= Date.now();
+            const scheduled = explicitScheduleInstant(time);
+            return Number.isFinite(scheduled) && scheduled <= summaryNow;
           }).length,
           themeColor: publishedThemeColor(row.published_at, row.theme_color),
         };
@@ -1299,7 +1463,7 @@ function createState(database) {
   //   assignees (plus unassigned STAFF for managers, the full list for
   //   AGENCY), the event's memberships, and (AGENCY only) the event's and
   //   global invitations.
-  async function loadEventBootstrap(account, eventId) {
+  async function loadEventBootstrap(account, eventId, ifVersion, versionOnly = false) {
     const accountId = account && typeof account.id === 'string' ? account.id.trim() : '';
     if (!accountId) throw denied();
     const targetId = String(eventId || '').trim();
@@ -1318,8 +1482,14 @@ function createState(database) {
 
       // Ownership first: another org's event is 404 (no probing oracle),
       // even for an org owner. Visibility inside the org follows.
-      const ownerCheck = await client.query('SELECT org_id FROM events WHERE id = $1 LIMIT 1', [targetId]);
-      if (!ownerCheck.rowCount || String(ownerCheck.rows[0].org_id || '') !== String(org.orgId)) {
+      const ownerCheck = await client.query(
+        `SELECT e.org_id, e.revision AS event_revision, w.revision AS workspace_revision
+         FROM events e LEFT JOIN event_workspaces w ON w.event_id = e.id
+         WHERE e.id = $1 LIMIT 1`,
+        [targetId]
+      );
+      const owner = ownerCheck.rows[0];
+      if (!owner || String(owner.org_id || '') !== String(org.orgId)) {
         throw rejected(404, '행사를 찾을 수 없습니다');
       }
 
@@ -1338,6 +1508,12 @@ function createState(database) {
         );
         if (!visible.rowCount) throw rejected(404, '행사를 찾을 수 없습니다');
       }
+
+      // The counters can advance independently, so a max() can hide changes.
+      // Check both only after authorization, within the same read snapshot.
+      const refreshVersion = `${owner.event_revision ?? 0}.${owner.workspace_revision ?? 0}`;
+      if (ifVersion === refreshVersion) return { unchanged: true, refreshVersion };
+      if (versionOnly) return { changed: true, refreshVersion };
 
       const eventResult = await client.query(
         `SELECT e.id, e.slug, e.client_id, e.org_id, e.payload, e.revision,
@@ -1464,7 +1640,11 @@ function createState(database) {
         const deskIds = new Set(assignments.filter((item) => item.type === 'DESK').map((item) => item.targetId));
         const boothIds = new Set(assignments.filter((item) => item.type === 'BOOTH').map((item) => item.targetId));
         const projected = publicWorkspace(workspace, event);
-        projected.participants = deskIds.size ? array(workspace.participants).map((person) => ({
+        const sourceAvailability = attendanceSourceAvailability(row.workspace_payload);
+        projected.checksAvailable = sourceAvailability.checks;
+        projected.participantsAvailable = sourceAvailability.participants;
+        const attendanceChecks = indexLatestChecks(workspace.checks);
+        projected.participants = deskIds.size && sourceAvailability.participants ? array(workspace.participants).map((person) => ({
           id: String(person.id || ''),
           name: String(person.name || ''),
           company: String(person.company || ''),
@@ -1472,16 +1652,18 @@ function createState(database) {
           status: String(person.status || ''),
           inside: person.inside === true,
           everIn: person.everIn === true,
+          attendanceReview: attendanceNeedsReview(person, attendanceChecks),
           paymentStatus: String(person.paymentStatus || ''),
         })) : [];
         projected.desks = array(workspace.desks).filter((desk) => deskIds.has(String(desk.id))).map((desk) => ({
-          id: String(desk.id), name: String(desk.name || ''), action: String(desk.action || ''),
+          id: String(desk.id), name: String(desk.name || ''), action: String(desk.action || ''), open: desk.open !== false,
         }));
-        projected.booths = array(workspace.booths).filter((booth) => boothIds.has(String(booth.id))).map((booth) => ({
+        projected.booths = projected.booths.filter((booth) => boothIds.has(String(booth.id))).map((booth) => ({
+          ...booth,
           id: String(booth.id), name: String(booth.name || ''), zone: String(booth.zone || ''), status: String(booth.status || ''),
         }));
         projected.assignments = copy(assignments);
-        projected.checks = deskIds.size ? array(workspace.checks).filter((check) => deskIds.has(String(check.deskId))).map((check) => ({
+        projected.checks = deskIds.size && sourceAvailability.checks ? array(workspace.checks).filter((check) => deskIds.has(String(check.deskId))).map((check) => ({
           id: String(check.id || ''), participantId: String(check.participantId || ''), name: String(check.name || ''),
           action: String(check.action || ''), deskId: String(check.deskId || ''), at: String(check.at || ''), corrected: check.corrected === true,
         })) : [];
@@ -1490,13 +1672,14 @@ function createState(database) {
         })) : [];
         projectedWorkspace = projected;
       } else {
-        projectedWorkspace = workspace;
+        projectedWorkspace = operatorWorkspaceProjection(workspace, row.workspace_payload, event);
       }
 
       const revision = Math.max(Number(row.revision) || 0, Number(row.workspace_revision) || 0);
       return {
         version: 9,
         revision,
+        refreshVersion,
         activeEventId: event.id,
         viewer: {
           id: String(actor.id),
@@ -1523,4 +1706,4 @@ function createState(database) {
   return { loadBootstrap, loadDirectory, loadEventBootstrap, createEvent, duplicateEvent, saveClient, saveOrgPermissions, assignMember };
 }
 
-module.exports = { createState, emptyWorkspace, normalizeEvent, normalizeWorkspace, projectParticipant, EVENT_FORMATS, normalizeEventFormat, parseEventFormatInput };
+module.exports = { createState, emptyWorkspace, normalizeEvent, normalizeWorkspace, workspaceChangesForSave, operatorDeskProjection, operatorBoothTime, projectParticipant, EVENT_FORMATS, normalizeEventFormat, parseEventFormatInput };

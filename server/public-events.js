@@ -1,6 +1,10 @@
 'use strict';
 
+const crypto = require('node:crypto');
+const { cookieToken } = require('./attendees');
 const { normalizeHomeStyle } = require('./attendee-home-style');
+const { normalizeHomeMenus } = require('./attendee-home-menus');
+const { rouletteSchedule } = require('./roulette-schedule');
 
 const PUBLIC_STAGES = new Set(['READY', 'LIVE', 'ENDED']);
 const TICKET_TOKEN = /^(?:[A-Za-z0-9_-]{32,128}|ET:[A-Za-z0-9_-]{1,80}:T-[A-Za-z0-9_-]{32,128})$/;
@@ -114,9 +118,10 @@ function publicField(field) {
   };
 }
 
-function publicPage(source) {
+function publicPage(source, publicModuleIds = new Set()) {
   const branding = object(source.branding);
   const page = object(object(source.pageExperience).published);
+  const menus = normalizeHomeMenus(page.homeMenus);
   const accent = /^#[0-9a-f]{6}$/i.test(page.accent) ? page.accent.toUpperCase() : '#E76D26';
   const published = {
     accent,
@@ -127,10 +132,14 @@ function publicPage(source) {
     showPrograms: page.showPrograms !== false,
     logo: publicImage(Object.hasOwn(page, 'logo') ? page.logo : branding.logo),
     keyvisual: publicImage(Object.hasOwn(page, 'keyvisual') ? page.keyvisual : branding.keyvisual),
+    // Optional and additive: old workspaces and older clients retain the
+    // historical default; no published image or homeStyle is rewritten.
+    ...(source.defaultHomeBanner === 'neutral' ? { defaultHomeBanner: 'neutral' } : {}),
     // Published-only design: the draft, version counters, and any internal
     // control state never project. Malformed stored JSON degrades to the
     // default safe allowlist instead of failing the read.
     homeStyle: normalizeHomeStyle(page.homeStyle),
+    homeMenus: { ...menus, programs: menus.programs.filter(id => publicModuleIds.has(id)) },
   };
   return {
     pageExperience: { published },
@@ -158,6 +167,9 @@ function publicModule(module, responses) {
     title: text(source.title, 300),
     status: text(source.status, 24),
     published: true,
+    // A number, not a hash of the definition: an unrevealed quiz answer
+    // must not become guessable from the public projection.
+    contentVersion: Number.isSafeInteger(source.contentVersion) && source.contentVersion >= 0 ? source.contentVersion : 0,
   };
   if (Array.isArray(source.options)) projected.options = source.options.filter((option) => typeof option === 'string').map((option) => option.slice(0, 200));
   if (Array.isArray(source.questions)) projected.questions = source.questions.filter((question) => typeof question === 'string').map((question) => question.slice(0, 300));
@@ -178,6 +190,7 @@ function publicModule(module, responses) {
       id: text(result.id, 120),
       at: text(result.at, 64),
       published: true,
+      ...(result.programName ? { programName: text(result.programName, 80) } : {}),
       // Stage reference keeps name/company for compatibility plus the safe
       // display metadata (kind/tier/drawn lucky number). Internal winner
       // links, tickets, and contact details never project.
@@ -189,9 +202,9 @@ function publicModule(module, responses) {
   return projected;
 }
 
-function publicQuestion(question) {
+function publicQuestion(question, own = false, attendeeId = null) {
   const source = object(question);
-  const likeCount = Math.min(1000, array(source.likes).length);
+  const likedCount = array(source.likes).length;
   return {
     id: text(source.id, 120),
     moduleId: text(source.moduleId, 120),
@@ -199,7 +212,23 @@ function publicQuestion(question) {
     text: text(source.text, 1000),
     answer: text(source.answer, 2000),
     approved: source.approved === true,
-    likes: Array.from({ length: likeCount }, () => true),
+    // Preserve the bounded legacy projection for old clients while exposing
+    // the exact aggregate without any reaction-owner identifiers.
+    likes: Array.from({ length: Math.min(1000, likedCount) }, () => true),
+    likedCount,
+    // A verified participant may see only their own reaction. Never expose
+    // the stored identifiers, and do not personalize the anonymous response.
+    ...(attendeeId ? { likedByMe: array(source.likes).includes(attendeeId) } : {}),
+    ...(own ? {
+      own: true,
+      pendingEdit: source.pendingEdit ? { id: text(source.pendingEdit.id, 120), text: text(source.pendingEdit.text, 500) } : null,
+      // Older servers do not clear this new field on later edits. Never show
+      // a stale decision beside a newer proposal or a changed public question.
+      editRejection: source.approved === true && !source.pendingEdit && source.editRejection && source.editRejection.baseText === source.text ? {
+        id: text(source.editRejection.id, 120), text: text(source.editRejection.text, 500),
+        reason: text(source.editRejection.reason, 300),
+      } : null,
+    } : {}),
   };
 }
 
@@ -230,7 +259,7 @@ function publicPost(post, own = false) {
   };
 }
 
-function publicDisplay(value) {
+function publicDisplay(value, modules) {
   // The venue screen is public by nature, so the operator's selection is
   // public too — but only the selection. Internal fields never cross over.
   const source = object(value);
@@ -238,10 +267,17 @@ function publicDisplay(value) {
     ? source.type
     : 'idle';
   if (type === 'idle') return { type: 'idle', moduleId: null };
+  const moduleId = typeof source.moduleId === 'string' ? source.moduleId.slice(0, 120) : null;
+  const drawId = type === 'draw' ? text(source.drawId, 120) : '';
+  if (drawId && !modules.some((module) => module.id === moduleId && module.type === 'draw' &&
+      module.drawHistory.some((result) => result.id === drawId))) {
+    return { type: 'idle', moduleId: null };
+  }
   return {
     type,
-    moduleId: typeof source.moduleId === 'string' ? source.moduleId.slice(0, 120) : null,
+    moduleId,
     noticeId: typeof source.noticeId === 'string' ? source.noticeId.slice(0, 120) : null,
+    ...(drawId ? { drawId } : {}),
   };
 }
 
@@ -258,7 +294,7 @@ function publicWorkspace(value, event, participant = null) {
     .filter((question) => question && qaModuleIds.has(question.moduleId) && (
       question.approved === true || (attendeeId && question.participantId === attendeeId)
     ))
-    .map(publicQuestion);
+    .map((question) => publicQuestion(question, !!attendeeId && question.participantId === attendeeId, attendeeId));
   const notices = array(source.notices).filter((item) => item && item.published === true).map((item) => ({
     ...pick(item, ['id', 'title', 'body', 'pinned', 'at']),
     published: true,
@@ -341,8 +377,9 @@ function publicWorkspace(value, event, participant = null) {
       used.set(item.prizeId, (used.get(item.prizeId) || 0) + 1);
     }
     const nowMs = Date.now();
-    const inSchedule = (!rouletteConfigSource.startsAt || nowMs >= Date.parse(rouletteConfigSource.startsAt)) &&
-      (!rouletteConfigSource.endsAt || nowMs <= Date.parse(rouletteConfigSource.endsAt));
+    const schedule = rouletteSchedule(rouletteConfigSource);
+    const inSchedule = schedule.valid && (schedule.start === null || nowMs >= schedule.start) &&
+      (schedule.end === null || nowMs <= schedule.end);
     // Same selectability rule as the spin path (see rouletteEffectiveWeight
     // in server/commands/attendee-experience.js): finite prizes need
     // remaining stock (explicit weight replaces the remaining-count weight,
@@ -364,6 +401,7 @@ function publicWorkspace(value, event, participant = null) {
         : rouletteConfigSource.status === 'DRAFT' ? 'DRAFT' : 'CLOSED',
       startsAt: typeof rouletteConfigSource.startsAt === 'string' ? rouletteConfigSource.startsAt.slice(0, 64) : null,
       endsAt: typeof rouletteConfigSource.endsAt === 'string' ? rouletteConfigSource.endsAt.slice(0, 64) : null,
+      scheduleNeedsReview: !schedule.valid,
       open: rouletteConfigSource.status === 'OPEN' && inSchedule && open,
       prizes,
     };
@@ -398,6 +436,16 @@ function publicWorkspace(value, event, participant = null) {
   } : null;
 
   const venue = object(source.venue);
+  const venueMap = object(venue.map);
+  const venueImage = object(venueMap.image);
+  const venueFileId = text(venueImage.fileId, 160);
+  const venueMapAlt = text(venueMap.alt, 240);
+  // The page-only display setting does not control the separately operated
+  // venue screen footer. The feature toggle disables both surfaces.
+  const venueEnabled = allowedFeatures.has('venue');
+  const venueVisible = venueEnabled && object(object(source.pageExperience).published).showVenue !== false;
+  const publishedVenueMap = venueVisible && /^[A-Za-z0-9_-]{1,160}$/.test(venueFileId) && venueMapAlt.trim()
+    ? { image: { fileId: venueFileId }, alt: venueMapAlt } : null;
   const desks = array(source.desks).map((desk) => pick(desk, ['id', 'name', 'action']));
   const booths = array(source.booths).map((booth) => pick(booth, [
     'id', 'name', 'zone', 'status', 'capacity', 'limit', 'used', 'startsAt', 'endsAt',
@@ -415,11 +463,12 @@ function publicWorkspace(value, event, participant = null) {
     notices,
     program,
     venue: {
-      name: text(venue.name, 200),
-      address: text(venue.address, 1000),
-      directions: text(venue.directions, 2000),
-      contact: text(venue.contact, 500),
-      description: text(venue.description, 2000),
+      name: venueEnabled ? text(venue.name, 200) : '',
+      address: venueEnabled ? text(venue.address, 1000) : '',
+      directions: venueEnabled ? text(venue.directions, 2000) : '',
+      contact: venueEnabled ? text(venue.contact, 500) : '',
+      description: venueEnabled ? text(venue.description, 2000) : '',
+      ...(publishedVenueMap ? { map: publishedVenueMap } : {}),
     },
     groups: [],
     desks,
@@ -450,9 +499,9 @@ function publicWorkspace(value, event, participant = null) {
     rouletteView,
     drawPrograms,
     audit: [],
-    display: publicDisplay(source.display),
-    branding: publicPage(source).branding,
-    pageExperience: publicPage(source).pageExperience,
+    display: publicDisplay(allowedFeatures.has('screen') ? source.display : null, modules),
+    branding: publicPage(source, new Set(modules.map(module => module.id))).branding,
+    pageExperience: publicPage(source, new Set(modules.map(module => module.id))).pageExperience,
     stampMode: source.stampMode === 'SELF' ? 'SELF' : 'STAFF',
     allowReentry: source.allowReentry !== false,
     price: Math.max(0, Number(source.price) || 0),
@@ -478,7 +527,7 @@ function publicBoothMap(value,booths) {
 }
 
 function validParticipant(participant, token, now) {
-  if (!participant || participant.ticket !== token || participant.revoked === true || participant.status === 'CANCELLED') return false;
+  if (!participant || participant.ticket !== token || participant.revoked === true || participant.cancelled === true || String(participant.status || '').toUpperCase() === 'CANCELLED') return false;
   const expiresAt = Date.parse(participant.ticketExpiresAt);
   return Number.isFinite(expiresAt) && expiresAt > now;
 }
@@ -524,18 +573,19 @@ function createPublicEvents(database) {
   // as the bearer path (including the QR token, kept in tab memory by the
   // client); cancelled/revoked/expired ones get a status-only record so the
   // screen can explain instead of dead-ending, without usable admission.
-  async function loadParticipantTicket(eventSlugValue, participantIdValue) {
-    const slug = String(eventSlugValue || '');
+  function projectParticipantTicket(row, participantIdValue, expectedPhone) {
     const participantId = String(participantIdValue || '');
-    if (!/^[a-z0-9][a-z0-9-]{0,99}$/.test(slug) || !participantId) return null;
-    const row = await findBySlug(slug);
-    if (!row) return null;
+    if (!row || !participantId) return null;
     const event = publicEvent(row);
     if (!event) return null;
     const source = object(row.workspace_payload);
     const participant = array(source.participants).find((item) => item && item.id === participantId);
     if (!participant) return null;
-    const usable = participant.status !== 'CANCELLED' && participant.cancelled !== true &&
+    if (expectedPhone !== undefined) {
+      const normalized = String(expectedPhone).replace(/\D/g, '');
+      if (normalized !== String(participant.phone || '').replace(/\D/g, '')) return null;
+    }
+    const usable = String(participant.status || '').toUpperCase() !== 'CANCELLED' && participant.cancelled !== true &&
       participant.revoked !== true &&
       (() => {
         const expiresAt = Date.parse(participant.ticketExpiresAt);
@@ -549,7 +599,7 @@ function createPublicEvents(database) {
       participant: {
         id: participant.id,
         name: typeof participant.name === 'string' ? participant.name : '',
-        status: participant.status === 'CANCELLED' ? 'CANCELLED' : '상태 확인 필요',
+        status: String(participant.status || '').toUpperCase() === 'CANCELLED' ? 'CANCELLED' : '상태 확인 필요',
         paymentStatus: typeof participant.paymentStatus === 'string' ? participant.paymentStatus : '',
         inside: false,
         everIn: participant.everIn === true,
@@ -558,18 +608,42 @@ function createPublicEvents(database) {
     };
   }
 
+  async function loadParticipantTicket(eventSlugValue, participantIdValue, expectedPhone) {
+    const slug = String(eventSlugValue || '');
+    if (!/^[a-z0-9][a-z0-9-]{0,99}$/.test(slug)) return null;
+    return projectParticipantTicket(await findBySlug(slug), participantIdValue, expectedPhone);
+  }
+
   // Browser-session entry to the ticket above: matches one of the session's
   // per-event grants against this event. No grant, no read; a photographed
   // QR alone mints nothing because no endpoint exchanges a ticket token for
   // a session.
-  async function loadSessionTicket(eventSlugValue, grants) {
+  async function loadSessionTicket(eventSlugValue, cookieHeader, expectedPhone) {
     const slug = String(eventSlugValue || '');
-    if (!/^[a-z0-9][a-z0-9-]{0,99}$/.test(slug) || !Array.isArray(grants)) return null;
-    const row = await findBySlug(slug);
+    if (!/^[a-z0-9][a-z0-9-]{0,99}$/.test(slug)) return null;
+    const identity = await database.query('SELECT id FROM events WHERE slug = $1 LIMIT 1', [slug]);
+    const eventId = identity.rows[0]?.id;
+    if (!eventId) return null;
+    const token = cookieToken(cookieHeader, eventId);
+    if (!token) return null;
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    // A single SQL statement observes the session, event, and workspace in
+    // one PostgreSQL snapshot. An old grant captured before cancellation can
+    // therefore never be combined with a newly approved participant ticket.
+    const result = await database.query(
+      `SELECT e.id, e.slug, e.payload, w.payload AS workspace_payload, s.grants
+       FROM events e JOIN event_workspaces w ON w.event_id = e.id
+       JOIN attendee_sessions s ON s.token_hash = $2 AND s.expires_at > now()
+       WHERE e.slug = $1 AND e.id = $3 LIMIT 1`,
+      [slug, tokenHash, eventId]
+    );
+    const row = result.rows[0];
     if (!row) return null;
-    const grant = grants.find((item) => item && String(item.eventId) === String(row.id)) || null;
-    if (!grant || !grant.participantId) return null;
-    return loadParticipantTicket(slug, grant.participantId);
+    const grant = array(row.grants).find((item) => item && typeof item.eventId === 'string' &&
+      item.eventId === String(row.id) && typeof item.participantId === 'string') || null;
+    if (!grant || !grant.participantId || typeof grant.phone !== 'string') return null;
+    if (expectedPhone !== undefined && String(expectedPhone).replace(/\D/g, '') !== grant.phone.replace(/\D/g, '')) return null;
+    return projectParticipantTicket(row, grant.participantId, grant.phone);
   }
 
   return { loadPublicEvent, loadTicket, loadParticipantTicket, loadSessionTicket };

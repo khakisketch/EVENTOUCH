@@ -19,6 +19,7 @@
 //     hyphens, so normalisation is mandatory or every send fails.
 
 const crypto = require('node:crypto');
+const { findSmsTextIssue } = require('../apps/web/lib/sms-text-validation.cjs');
 
 const API_HOST = 'https://api.solapi.com';
 const SEND_PATH = '/messages/v4/send-many/detail';
@@ -66,14 +67,17 @@ function providerConfig(env = process.env) {
   };
 }
 
-function messagingState(env = process.env) {
-  const config = providerConfig(env);
+function messagingStateFromConfig(config) {
   return {
     connected: config.configured,
     sender: config.configured ? config.sender : null,
     alimtalkReady: config.kakaoReady,
     provider: config.configured ? 'solapi' : null,
   };
+}
+
+function messagingState(env = process.env) {
+  return messagingStateFromConfig(providerConfig(env));
 }
 
 // Product data stores numbers as "010-1234-5678" or with spaces; Solapi
@@ -93,6 +97,16 @@ function messageBytes(text) {
   return bytes;
 }
 
+function messageSubject(subject) {
+  let prefix = '', bytes = 0;
+  for (const character of String(subject || '').trim()) {
+    const next = messageBytes(character);
+    if (bytes + next > SUBJECT_MAX_BYTES) break;
+    prefix += character; bytes += next;
+  }
+  return prefix;
+}
+
 // Which type Solapi will pick for plain text. Mirrors its documented
 // autoTypeDetect so the operator can be told honestly what will be sent and
 // charged for.
@@ -107,7 +121,10 @@ function resolveTextType(text) {
 function typedFor(channel, text) {
   const requested = String(channel || '').toUpperCase();
   if (!MESSAGE_TYPES.has(requested)) return { type: null, reason: 'UNSUPPORTED_CHANNEL' };
-  if (requested === 'ALIMTALK') return { type: 'ATA', reason: null, bytes: messageBytes(text) };
+  if (requested === 'ALIMTALK') {
+    const characters = Array.from(String(text == null ? '' : text)).length;
+    return { type: characters > 1000 ? null : 'ATA', reason: characters > 1000 ? 'TOO_LONG' : null, bytes: messageBytes(text) };
+  }
   if (requested === 'MMS') {
     const bytes = messageBytes(text);
     return bytes > LMS_MAX_BYTES
@@ -212,13 +229,20 @@ function createSolapiProvider(config, { fetchImpl = globalThis.fetch, timeoutMs 
   // Builds the body Solapi expects for one recipient: digits-only number,
   // explicit type, and kakaoOptions for alimtalk. Returns a rejection instead
   // of sending something that would be charged and then fail.
-  function buildMessage({ channel, to, text, subject, variables, sender, pfId, templateId, imageId }) {
+  function buildMessage({ channel, to, text, subject, variables, sender, pfId, templateId, imageId, smsFallback }) {
     const number = normalizePhone(to);
     if (!number) return { error: 'NO_RECIPIENT' };
 
-    const planned = typedFor(channel, text);
+    const rendered = renderText(text, variables);
+    const planned = typedFor(channel, rendered);
     if (planned.reason === 'TOO_LONG') return { error: 'TOO_LONG', bytes: planned.bytes };
     if (planned.reason) return { error: planned.reason };
+    if ((planned.type !== 'ATA' || smsFallback !== false) && findSmsTextIssue(rendered)) {
+      return { error: 'SMS_CHARSET_UNSUPPORTED', field: 'body' };
+    }
+    if ((planned.type === 'LMS' || planned.type === 'MMS') && findSmsTextIssue(messageSubject(subject))) {
+      return { error: 'SMS_CHARSET_UNSUPPORTED', field: 'title' };
+    }
 
     const message = { to: number, from: normalizePhone(sender || config.sender), type: planned.type };
 
@@ -228,9 +252,9 @@ function createSolapiProvider(config, { fetchImpl = globalThis.fetch, timeoutMs 
       // message with nothing to show.
       if (!imageId) return { error: 'MMS_IMAGE_REQUIRED' };
       message.imageId = imageId;
-      message.text = renderText(text, variables);
-      const trimmed = String(subject || '').trim();
-      if (trimmed) message.subject = trimmed.slice(0, 40);
+      message.text = rendered;
+      const trimmed = messageSubject(subject);
+      if (trimmed) message.subject = trimmed;
       return { message, plannedType: planned.type, bytes: planned.bytes };
     }
 
@@ -245,31 +269,39 @@ function createSolapiProvider(config, { fetchImpl = globalThis.fetch, timeoutMs 
         templateId,
         // Keep the operator's choice available so a failed alimtalk still
         // reaches the attendee by text.
-        disableSms: false,
+        disableSms: smsFallback === false,
       };
-      const rendered = renderText(text, variables);
       message.text = rendered;
       const mapped = templateVariables(text, variables);
       if (Object.keys(mapped).length) message.kakaoOptions.variables = mapped;
     } else {
-      message.text = renderText(text, variables);
+      message.text = rendered;
       if (planned.type === 'LMS') {
-        const trimmed = String(subject || '').trim();
-        if (trimmed) message.subject = trimmed.slice(0, 40);
+        const trimmed = messageSubject(subject);
+        if (trimmed) message.subject = trimmed;
       }
     }
     return { message, plannedType: planned.type, bytes: planned.bytes };
   }
 
-  async function sendBatch(batch) {
+  async function sendBatch(batch, { submissionId } = {}) {
     if (!enabled) return { accepted: false, reason: 'NOT_CONFIGURED' };
     const messages = [];
     const rejected = [];
 
     for (const item of batch) {
       const built = buildMessage(item);
-      if (built.error) rejected.push({ participantId: item.participantId, reason: built.error, bytes: built.bytes });
-      else messages.push({ ...built, participantId: item.participantId });
+      if (built.error) rejected.push({ participantId: item.participantId, reason: built.error, bytes: built.bytes, ...(built.field ? { field: built.field } : {}) });
+      else {
+        if (submissionId) built.message.customFields = { eventouchSubmissionId: submissionId };
+        messages.push({ ...built, participantId: item.participantId });
+      }
+    }
+
+    // A known unsupported character must never cause the remaining
+    // recipients to be sent a partially reviewed campaign.
+    if (rejected.some(item => item.reason === 'SMS_CHARSET_UNSUPPORTED')) {
+      return { accepted: false, reason: 'SMS_CHARSET_UNSUPPORTED', rejected: batch.map(item => ({ participantId: item.participantId, reason: 'SMS_CHARSET_UNSUPPORTED', error: '문자로 보낼 수 없는 글자가 있어 전체 발송을 보류했습니다.' })) };
     }
 
     if (!messages.length) return { accepted: false, reason: 'ALL_REJECTED', rejected };
@@ -280,7 +312,11 @@ function createSolapiProvider(config, { fetchImpl = globalThis.fetch, timeoutMs 
     });
     if (!result.ok) return { accepted: false, ...result, rejected };
 
-    const failed = Array.isArray(result.payload.failedMessageList) ? result.payload.failedMessageList : [];
+    const groupId = result.payload?.groupInfo?.groupId;
+    const failed = result.payload?.failedMessageList;
+    if (typeof groupId !== 'string' || !groupId || !Array.isArray(failed)) {
+      return { accepted: false, reason: 'UNCONFIRMED', rejected };
+    }
     const failedByNumber = new Map();
     for (const entry of failed) failedByNumber.set(normalizePhone(entry.to), entry);
 
@@ -310,7 +346,7 @@ function createSolapiProvider(config, { fetchImpl = globalThis.fetch, timeoutMs 
       accepted: true,
       rejected,
       registered,
-      groupId: (result.payload.groupInfo && result.payload.groupInfo.groupId) || null,
+      groupId,
       // Acceptance is not delivery: the caller must poll before claiming SENT.
       deliveryUnconfirmed: true,
     };
@@ -349,6 +385,40 @@ function createSolapiProvider(config, { fetchImpl = globalThis.fetch, timeoutMs 
     return { ok: true, messages: collected, truncated: true, pages: MAX_GROUP_PAGES };
   }
 
+  // The list API returns message metadata but does not filter on it.
+  // Restrict the read to the sender and submission window, then match the
+  // opaque token exactly. An empty or incomplete lookup proves no absence.
+  async function findSubmission({ id, at }) {
+    const time = Date.parse(at);
+    if (!id || !Number.isFinite(time)) return { ok: false };
+    const query = {
+      criteria: 'from', cond: 'eq', value: normalizePhone(config.sender),
+      startDate: new Date(time - 5 * 60000).toISOString(),
+      endDate: new Date(time + 30 * 60000).toISOString(),
+      limit: 500,
+    };
+    const messages = Object.create(null);
+    const groups = new Set();
+    const cursors = new Set(['']);
+    let startKey = '';
+    for (let page = 0; page < MAX_GROUP_PAGES; page += 1) {
+      const result = await call(LIST_PATH, { query: { ...query, ...(startKey ? { startKey } : {}) } });
+      if (!result.ok || !result.payload?.messageList) break;
+      for (const entry of Object.values(result.payload.messageList)) {
+        if (entry?.customFields?.eventouchSubmissionId !== id ||
+          typeof entry.groupId !== 'string' || !entry.groupId ||
+          typeof entry.messageId !== 'string' || !entry.messageId) continue;
+        groups.add(entry.groupId);
+        messages[entry.messageId] = { messageId: entry.messageId, to: entry.to };
+      }
+      const next = result.payload.nextKey;
+      if (!next || cursors.has(next)) break;
+      cursors.add(next);
+      startKey = next;
+    }
+    return groups.size === 1 ? { ok: true, groupId: [...groups][0], messages } : { ok: false };
+  }
+
   async function pollResults(messageIds, { limit = 500 } = {}) {
     if (!enabled) return { ok: false, reason: 'NOT_CONFIGURED' };
     const ids = [...new Set((messageIds || []).filter(Boolean))];
@@ -356,14 +426,15 @@ function createSolapiProvider(config, { fetchImpl = globalThis.fetch, timeoutMs 
 
     // The list endpoint caps a response at 500 entries, so ids are polled in
     // batches rather than one call per message.
-    const results = {};
+    const results = Object.create(null);
     for (let offset = 0; offset < ids.length; offset += limit) {
       const slice = ids.slice(offset, offset + limit);
       const result = await call(LIST_PATH, { query: { messageIds: JSON.stringify(slice), limit } });
       if (!result.ok) return { ok: false, ...result };
       const list = (result.payload && result.payload.messageList) || {};
-      for (const value of Object.values(list)) {
-        results[value.messageId] = interpretStatus(value);
+      for (const id of slice) {
+        const value = list[id];
+        if (value?.messageId === id) results[id] = interpretStatus(value);
       }
     }
     return { ok: true, results };
@@ -403,7 +474,7 @@ function createSolapiProvider(config, { fetchImpl = globalThis.fetch, timeoutMs 
     return { ok: true, imageId };
   }
 
-  return { sendBatch, pollResults, groupMessages, uploadImage, state: messagingState(), buildMessage, call };
+  return { sendBatch, pollResults, groupMessages, findSubmission, uploadImage, state: messagingStateFromConfig(config), buildMessage, call };
 }
 
 // Solapi reports an accepted message as PENDING/SENDING and only settles to
@@ -412,7 +483,6 @@ function createSolapiProvider(config, { fetchImpl = globalThis.fetch, timeoutMs 
 function interpretStatus(entry) {
   const status = String((entry && entry.status) || '').toUpperCase();
   const statusCode = String((entry && entry.statusCode) || '');
-  const numeric = Number(statusCode) || 0;
   const base = {
     messageId: entry && entry.messageId,
     type: entry && entry.type,
@@ -421,12 +491,12 @@ function interpretStatus(entry) {
     statusCode: statusCode || null,
     receivedAt: (entry && entry.dateReceived) || null,
   };
-  if (status === 'PENDING' || status === 'SENDING') return { ...base, state: 'PENDING' };
-  if (status !== 'COMPLETE') return { ...base, state: 'PENDING' };
-  // 2xxx means accepted, 4xxx means the carrier reported the result. Anything
-  // below the 4xxx band that has settled is a failure.
-  if (numeric >= 4000) return { ...base, state: 'DELIVERED' };
-  return { ...base, state: 'FAILED' };
+  if (status !== 'COMPLETE' || ['2000', '3000', '3014', '3048'].includes(statusCode)) {
+    return { ...base, state: 'PENDING' };
+  }
+  if (statusCode === '4000') return { ...base, state: 'DELIVERED' };
+  if (/^[123]\d{3}$/.test(statusCode)) return { ...base, state: 'FAILED' };
+  return { ...base, state: 'PENDING' };
 }
 
 module.exports = {
@@ -435,6 +505,7 @@ module.exports = {
   messagingState,
   normalizePhone,
   messageBytes,
+  messageSubject,
   resolveTextType,
   typedFor,
   authorizationHeader,

@@ -27,7 +27,7 @@ function createAccess(database) {
   // organization_memberships (never accounts.role); the event must belong to
   // the resolved org. Everything runs in one transaction so the membership
   // read and the event read share a view.
-  async function authorize({ account, eventId, command, assignmentId, targetId, forWrite = true } = {}) {
+  async function authorize({ account, eventId, command, assignmentId, targetId, forWrite = true, deferWriteGrant = false } = {}) {
     if (!account || !account.id) throw denied(401);
     const { resolveEventAuthority } = require('./tenancy');
     // Pool in the route pre-check, transaction client inside executors and
@@ -66,6 +66,10 @@ function createAccess(database) {
           [account.id, String(eventId)]
         );
         if (!membership.rowCount) throw denied();
+        // Registered command executors check feature grants after their scoped
+        // receipt lookup under the event lock. Keep identity/org/membership
+        // here, but do not strand a committed request after a grant changes.
+        if (deferWriteGrant) return true;
         // Reads and file staging stay membership-gated (see
         // server/event-permissions.js); every other command needs its write
         // scope in the grant, and an unmapped command is denied.

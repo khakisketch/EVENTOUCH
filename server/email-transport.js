@@ -1,27 +1,11 @@
 'use strict';
 
-// Outbound email transport seam for account recovery mail (verification and
-// password-reset links). Standards-neutral by design: the product selects NO
-// provider here, holds no credentials, and performs no live delivery.
-//
-// Modes, chosen explicitly (never silently):
-//
-//   1. Injected provider (selected deployments/tests only). Active only when
-//      a `send` function is passed in: `send({ to, link })` must resolve to
-//      `{ sent: true }` or `{ sent: false, reason, error? }`. The repository
-//      never passes one — server.js wires none — so no provider, cost, or
-//      credential decision is made by this codebase.
-//   2. Mock (development/tests only). Active only when EVENTOUCH_MAIL_MOCK=1.
-//      Records the message in process memory (visible to the in-process test
-//      harness) and writes a MASKED line to the server log so a developer can
-//      complete the flow by hand. The raw address and token never reach an
-//      HTTP client; logs carry only the masked address (no token at all).
-//   3. None (default). Anything else reports NOT_CONFIGURED and the caller
-//      answers honestly: an authenticated holder gets 503 EMAIL_NOT_CONFIGURED,
-//      an anonymous recovery request stays generic (fail-closed, no send).
-//
-// Raw tokens and addresses are never logged. Health output exposes only the
-// mode, never recipients or links.
+// Recovery mail defaults to unavailable. SMTP is enabled only through explicit
+// EVENTOUCH_MAIL_TRANSPORT=smtp and a complete TLS SMTP configuration. Injected
+// senders remain supported; explicit development mock never sends externally.
+// SMTP readiness is configuration, not proof of inbox delivery. No token,
+// address, provider exception or message body is logged.
+const { createSmtpSender } = require('./smtp-mail');
 
 const mockOutbox = [];
 
@@ -45,11 +29,14 @@ function maskEmail(email) {
   return `${head}***@${domain}`;
 }
 
-function createEmailTransport({ send, env = process.env } = {}) {
-  const mock = !send && mockEnabled(env);
+function createEmailTransport({ send, env = process.env, createTransport } = {}) {
+  const smtp = !send && createSmtpSender({ env, createTransport });
+  const activeSend = send || smtp;
+  const activeMode = send ? 'injected' : 'smtp';
+  const mock = !activeSend && !env.EVENTOUCH_MAIL_TRANSPORT && mockEnabled(env);
 
   function state() {
-    if (send) return { mode: 'injected', connected: true };
+    if (activeSend) return { mode: activeMode, connected: true };
     if (mock) return { mode: 'mock', connected: true };
     return { mode: 'none', connected: false };
   }
@@ -58,9 +45,9 @@ function createEmailTransport({ send, env = process.env } = {}) {
     const address = String(to || '').trim();
     const url = String(link || '').trim();
     if (!address || !url) return { sent: false, reason: 'NO_RECIPIENT' };
-    if (send) {
-      const result = await send({ to: address, link: url });
-      if (result && result.sent === true) return { sent: true, mode: 'injected' };
+    if (activeSend) {
+      const result = await activeSend({ to: address, link: url });
+      if (result && result.sent === true) return { sent: true, mode: activeMode };
       return {
         sent: false,
         reason: (result && result.reason) || 'PROVIDER_REJECTED',

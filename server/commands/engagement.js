@@ -7,7 +7,11 @@ const COMMANDS = new Set([
   'module.status',
   'module.reveal',
   'response.submit',
+  'response.grade',
   'question.submit',
+  'question.edit',
+  'question.edit.approve',
+  'question.edit.reject',
   'question.manage',
   'question.like',
   'photo.submit',
@@ -39,7 +43,7 @@ function featureEnabled(ctx, feature) {
 
 function ensureAttendeeCanSubmit(ctx) {
   const stage = String(ctx.event.stage || '').toUpperCase();
-  if (!ATTENDEE_CONTENT_STAGES.has(stage)) throw ctx.fail(409, '현재 참여 프로그램을 이용할 수 없습니다');
+  if (!ATTENDEE_CONTENT_STAGES.has(stage)) throw ctx.fail(409, '현재 참여 콘텐츠를 이용할 수 없습니다');
   const person = ctx.participant;
   if (!person || String(person.status).toUpperCase() !== 'APPROVED') {
     throw ctx.fail(403, '참가 확정 후 참여할 수 있습니다');
@@ -48,18 +52,43 @@ function ensureAttendeeCanSubmit(ctx) {
 
 function findModule(ctx, id) {
   const module = list(ctx.workspace.modules).find((item) => item && item.id === ctx.clean(id, 120));
-  if (!module) throw ctx.fail(404, '참여 프로그램을 찾을 수 없습니다');
+  if (!module) throw ctx.fail(404, '참여 콘텐츠를 찾을 수 없습니다');
   return module;
 }
 
 function requireModule(ctx, id, type, { status = 'OPEN' } = {}) {
   const module = findModule(ctx, id);
-  if (module.type !== type) throw ctx.fail(400, '참여 프로그램 종류를 확인하세요');
+  if (module.type !== type) throw ctx.fail(400, '참여 콘텐츠 종류를 확인하세요');
   featureEnabled(ctx, type);
   if (module.published !== true || (status && module.status !== status)) {
     throw ctx.fail(409, '현재 참여할 수 있는 프로그램이 아닙니다');
   }
   return module;
+}
+
+function contentVersion(module) {
+  return Number.isSafeInteger(module && module.contentVersion) && module.contentVersion >= 0 ? module.contentVersion : 0;
+}
+
+function guardContentVersion(ctx, module, input) {
+  if (input.expectedContentVersion === undefined) return;
+  if (!Number.isSafeInteger(input.expectedContentVersion) || input.expectedContentVersion < 0) {
+    throw ctx.fail(400, '확인한 참여 콘텐츠를 다시 불러오세요', 'expectedContentVersion');
+  }
+  if (input.expectedContentVersion !== contentVersion(module)) {
+    throw ctx.fail(409, '참여 내용이 변경되었습니다. 최신 내용을 확인한 뒤 다시 제출하세요', 'expectedContentVersion', 'MODULE_CONTENT_CHANGED');
+  }
+}
+
+function sameDefinition(old, next) {
+  const values = (source) => {
+    const type = String(source.type || '');
+    return [type, String(source.title || ''),
+      type === 'poll' ? list(source.options) : null,
+      type === 'quiz' ? String(source.answer || '') : null,
+      type === 'survey' ? list(source.questions) : null];
+  };
+  return JSON.stringify(values(old)) === JSON.stringify(values(next));
 }
 
 function saveModule(ctx, input) {
@@ -69,7 +98,10 @@ function saveModule(ctx, input) {
   const id = ctx.clean(input.id || ctx.makeId('module'), 120);
   const old = list(ctx.workspace.modules).find((item) => item && item.id === id);
   if (old && list(ctx.workspace.responses).some((response) => response.moduleId === id)) {
-    throw ctx.fail(409, '응답이 있어 문제를 수정할 수 없습니다. 새 프로그램을 만드세요');
+    throw ctx.fail(409, '접수된 응답이 있어 프로그램 설정을 바꿀 수 없습니다. 다른 설정이 필요하면 새 프로그램을 만드세요');
+  }
+  if (old && old.type === 'qa' && list(ctx.workspace.questions).some((question) => question && question.moduleId === id)) {
+    throw ctx.fail(409, '접수된 질문이 있어 프로그램 설정을 바꿀 수 없습니다. 질문과 답변은 아래에서 관리하세요');
   }
   const title = requireText(ctx, input.title, '제목', 100, 'title');
   const options = (Array.isArray(input.options) ? input.options : String(input.options || '').split(/\r?\n/))
@@ -97,6 +129,10 @@ function saveModule(ctx, input) {
     published: old ? old.published === true : false,
     revealed: old ? old.revealed === true : false,
   };
+  const previousVersion = contentVersion(old);
+  const changed = !old || !sameDefinition(old, module);
+  if (changed && previousVersion >= Number.MAX_SAFE_INTEGER) throw ctx.fail(409, '콘텐츠 버전을 갱신할 수 없습니다. 운영자에게 문의하세요');
+  module.contentVersion = previousVersion + (changed ? 1 : 0);
   if (old) Object.assign(old, module);
   else ctx.workspace.modules.push(module);
   return { status: old ? 200 : 201, body: { module } };
@@ -123,11 +159,28 @@ function revealQuiz(ctx, input) {
   return { body: { moduleId: module.id, revealed: true } };
 }
 
+function gradeResponse(ctx, input) {
+  const module = findModule(ctx, input.moduleId);
+  if (module.type !== 'quiz') throw ctx.fail(400, '퀴즈 응답만 채점할 수 있습니다');
+  featureEnabled(ctx, 'quiz');
+  const response = list(ctx.workspace.responses).find(row => row.id === input.responseId && row.moduleId === module.id);
+  if (!response) throw ctx.fail(404, '채점할 응답을 찾을 수 없습니다');
+  if (!['CORRECT', 'INCORRECT', 'AUTO'].includes(input.grade)) throw ctx.fail(400, '채점 결과를 선택하세요', 'grade');
+  const version = Number.isSafeInteger(response.gradeVersion) ? response.gradeVersion : 0;
+  if (!Number.isSafeInteger(input.expectedGradeVersion) || input.expectedGradeVersion !== version) throw ctx.fail(409, '채점 결과가 바뀌었습니다. 다시 불러온 뒤 확인하세요');
+  response.manualGrade = input.grade === 'AUTO' ? null : input.grade;
+  response.gradeVersion = version + 1;
+  response.gradedAt = ctx.now;
+  response.gradedBy = ctx.actor.id;
+  return { body: { responseId: response.id, manualGrade: response.manualGrade, gradeVersion: response.gradeVersion } };
+}
+
 function submitResponse(ctx, input) {
   ensureAttendeeCanSubmit(ctx);
   const moduleId = ctx.clean(input.moduleId, 120);
   const module = findModule(ctx, moduleId);
-  if (!RESPONSE_TYPES.has(module.type)) throw ctx.fail(400, '응답할 참여 프로그램을 확인하세요');
+  guardContentVersion(ctx, module, input);
+  if (!RESPONSE_TYPES.has(module.type)) throw ctx.fail(400, '응답할 참여 콘텐츠를 확인하세요');
   requireModule(ctx, moduleId, module.type);
   if (list(ctx.workspace.responses).some((response) =>
     response.moduleId === module.id && response.participantId === ctx.participant.id
@@ -156,6 +209,7 @@ function submitResponse(ctx, input) {
     moduleId: module.id,
     participantId: ctx.participant.id,
     answer,
+    ...(input.expectedContentVersion !== undefined ? { contentVersion: input.expectedContentVersion } : {}),
     ...(ratings ? { ratings } : {}),
     comment: ctx.clean(input.comment, 1000),
     at: ctx.now,
@@ -170,6 +224,9 @@ function objectRatings(value) {
 
 function submitQuestion(ctx, input) {
   ensureAttendeeCanSubmit(ctx);
+  // Check before the type gate so a Q&A converted to another type is a
+  // definitive stale-context rejection, including after a lost response.
+  guardContentVersion(ctx, findModule(ctx, input.moduleId), input);
   const module = requireModule(ctx, input.moduleId, 'qa');
   const question = {
     id: ctx.commandId,
@@ -177,6 +234,7 @@ function submitQuestion(ctx, input) {
     participantId: ctx.participant.id,
     name: String(ctx.participant.name || ''),
     text: requireText(ctx, input.text, '질문', 500, 'text'),
+    ...(input.expectedContentVersion !== undefined ? { contentVersion: input.expectedContentVersion } : {}),
     answer: '',
     approved: false,
     likes: [],
@@ -192,10 +250,84 @@ function manageQuestion(ctx, input) {
   const module = findModule(ctx, question.moduleId);
   featureEnabled(ctx, 'qa');
   if (module.type !== 'qa') throw ctx.fail(409, 'Q&A 프로그램과 연결된 질문이 아닙니다');
+  // New clients compare the complete state they reviewed. Older clients can
+  // omit this field and retain the existing expectedText behavior below.
+  if (input.expectedQuestion !== undefined) {
+    const expected = input.expectedQuestion;
+    if (!expected || typeof expected !== 'object' || Array.isArray(expected) ||
+        typeof expected.text !== 'string' || typeof expected.answer !== 'string' || typeof expected.approved !== 'boolean') {
+      throw ctx.fail(400, '검토한 질문과 답변 상태를 확인하세요', 'expectedQuestion');
+    }
+    if (expected.text !== String(question.text || '') || expected.answer !== String(question.answer || '') ||
+        expected.approved !== (question.approved === true)) {
+      throw ctx.fail(409, '질문 또는 답변 상태가 변경되었습니다. 최신 내용을 확인한 뒤 다시 검토하세요',
+        'expectedQuestion', 'QUESTION_MANAGEMENT_CHANGED');
+    }
+  }
+  if (question.edited === true && input.expectedText !== question.text) {
+    throw ctx.fail(409, '질문이 변경되었습니다. 새로고침한 뒤 다시 검토하세요');
+  }
   const answer = ctx.clean(input.answer, 500);
   if (input.approved === true && !answer) throw ctx.fail(400, '답변을 입력한 뒤 공개하세요', 'answer');
   question.answer = answer;
   question.approved = input.approved === true;
+  return { body: { question } };
+}
+
+function editQuestion(ctx, input) {
+  ensureAttendeeCanSubmit(ctx);
+  const question = list(ctx.workspace.questions).find((item) => item && item.id === ctx.clean(input.id, 120));
+  if (!question || question.participantId !== ctx.participant.id) throw ctx.fail(404, '질문을 찾을 수 없습니다');
+  requireModule(ctx, question.moduleId, 'qa');
+  const pendingId = question.pendingEdit && question.pendingEdit.id || '';
+  if (input.expectedText !== question.text || input.expectedPendingId !== pendingId || input.expectedApproved !== (question.approved === true)) {
+    throw ctx.fail(409, '질문이 변경되었습니다. 새로고침한 뒤 다시 확인하세요');
+  }
+  const text = requireText(ctx, input.text, '질문', 500, 'text');
+  // A new submission supersedes the previous private decision.
+  delete question.editRejection;
+  if (question.approved === true) question.pendingEdit = { id: ctx.commandId, text };
+  else {
+    question.text = text;
+    question.edited = true;
+    delete question.pendingEdit;
+  }
+  return { body: { questionId: question.id, editId: ctx.commandId } };
+}
+
+function approveQuestionEdit(ctx, input) {
+  const question = list(ctx.workspace.questions).find((item) => item && item.id === ctx.clean(input.id, 120));
+  if (!question) throw ctx.fail(404, '질문을 찾을 수 없습니다');
+  const module = findModule(ctx, question.moduleId);
+  featureEnabled(ctx, 'qa');
+  if (module.type !== 'qa') throw ctx.fail(409, 'Q&A 프로그램과 연결된 질문이 아닙니다');
+  if (question.approved !== true || !question.pendingEdit || question.pendingEdit.id !== input.expectedEditId ||
+      question.text !== input.expectedText || question.answer !== input.expectedAnswer) {
+    throw ctx.fail(409, '질문 또는 수정안이 변경되었습니다. 새로고침한 뒤 다시 검토하세요');
+  }
+  question.text = question.pendingEdit.text;
+  question.edited = true;
+  delete question.pendingEdit;
+  delete question.editRejection;
+  return { body: { question } };
+}
+
+function rejectQuestionEdit(ctx, input) {
+  const question = list(ctx.workspace.questions).find((item) => item && item.id === ctx.clean(input.id, 120));
+  if (!question) throw ctx.fail(404, '질문을 찾을 수 없습니다');
+  const module = findModule(ctx, question.moduleId);
+  featureEnabled(ctx, 'qa');
+  if (module.type !== 'qa') throw ctx.fail(409, 'Q&A 프로그램과 연결된 질문이 아닙니다');
+  if (question.approved !== true || !question.pendingEdit || question.pendingEdit.id !== input.expectedEditId ||
+      question.pendingEdit.text !== input.expectedNewText || question.text !== input.expectedText || question.answer !== input.expectedAnswer) {
+    throw ctx.fail(409, '질문 또는 수정안이 변경되었습니다. 새로고침한 뒤 다시 검토하세요');
+  }
+  if (typeof input.reason !== 'string' || !input.reason.trim() || input.reason.trim().length > 300) {
+    throw ctx.fail(400, '반려 사유를 300자 이내로 입력하세요', 'reason');
+  }
+  question.editRejection = { id: question.pendingEdit.id, text: question.pendingEdit.text,
+    reason: input.reason.trim(), at: ctx.now, baseText: question.text };
+  delete question.pendingEdit;
   return { body: { question } };
 }
 
@@ -210,11 +342,29 @@ function toggleQuestionLike(ctx, input) {
     throw ctx.fail(409, '현재 공개 중인 Q&A가 아닙니다');
   }
   featureEnabled(ctx, 'qa');
+  const guarded = Object.hasOwn(input, 'expectedLiked') || Object.hasOwn(input, 'liked') || Object.hasOwn(input, 'expectedQuestionText');
+  if (guarded && (typeof input.expectedLiked !== 'boolean' || typeof input.liked !== 'boolean' ||
+      typeof input.expectedQuestionText !== 'string' || input.expectedQuestionText.length > 1000)) {
+    throw ctx.fail(400, '질문과 좋아요 상태를 확인한 뒤 다시 시도하세요', 'expectedQuestionText');
+  }
+  const questionText = typeof question.text === 'string' ? question.text : '';
+  if (guarded && input.expectedQuestionText !== questionText) {
+    throw ctx.fail(409, '질문 내용이 변경되었습니다. 최신 질문을 확인하세요', 'expectedQuestionText', 'QUESTION_LIKE_CONTEXT_CHANGED');
+  }
+  const currentLikes = list(question.likes);
+  const wasLiked = currentLikes.includes(ctx.participant.id);
+  if (guarded && input.expectedLiked !== wasLiked) {
+    throw ctx.fail(409, '좋아요 상태가 변경되었습니다. 최신 상태를 확인하세요', 'expectedLiked', 'QUESTION_LIKE_CHANGED');
+  }
   if (!Array.isArray(question.likes)) question.likes = [];
   const index = question.likes.indexOf(ctx.participant.id);
-  if (index >= 0) question.likes.splice(index, 1);
+  if (guarded) {
+    if (input.liked && index < 0) question.likes.push(ctx.participant.id);
+    if (!input.liked && index >= 0) question.likes = question.likes.filter((id) => id !== ctx.participant.id);
+  } else if (index >= 0) question.likes.splice(index, 1);
   else question.likes.push(ctx.participant.id);
-  return { body: { questionId: question.id, liked: index < 0, likes: question.likes.length } };
+  return { body: { questionId: question.id, liked: guarded ? input.liked : index < 0, likes: question.likes.length,
+    ...(guarded ? { confirmedQuestionText: questionText } : {}) } };
 }
 
 async function submitPhoto(ctx, input) {
@@ -305,6 +455,15 @@ function publishDraw(ctx, input) {
   const module = findModule(ctx, input.id);
   const result = list(module.drawHistory)[0];
   if (module.type !== 'draw' || !result) throw ctx.fail(409, '추첨 결과가 없습니다');
+  if (input.expectedDrawId !== undefined) {
+    const expected = ctx.clean(input.expectedDrawId, 120);
+    if (typeof input.expectedDrawId !== 'string' || !expected || expected !== input.expectedDrawId) {
+      throw ctx.fail(400, '검토한 추첨 결과를 확인하세요', 'expectedDrawId');
+    }
+    if (result.id !== expected) {
+      throw ctx.fail(409, '추첨 결과가 바뀌었습니다. 최신 결과를 검토한 뒤 공개하세요', 'expectedDrawId');
+    }
+  }
   result.published = true;
   return { body: { draw: { ...result } } };
 }
@@ -325,8 +484,20 @@ function setDisplay(ctx, input) {
     if (module.type !== type || module.published !== true || !list(ctx.event.features).includes(type)) {
       throw ctx.fail(409, '공개된 프로그램을 선택하세요');
     }
-    if (type === 'draw' && !list(module.drawHistory).some((row) => row.published === true)) {
-      throw ctx.fail(409, '추첨 결과를 먼저 공개하세요');
+    if (type === 'draw') {
+      const history = list(module.drawHistory);
+      if (input.drawId !== undefined) {
+        const drawId = ctx.clean(input.drawId, 120);
+        if (typeof input.drawId !== 'string' || !drawId || drawId !== input.drawId) {
+          throw ctx.fail(400, '출력할 추첨 결과를 확인하세요', 'drawId');
+        }
+        if (module.status === 'DRAFT' || !history.some((row) => row?.id === drawId && row.published === true)) {
+          throw ctx.fail(409, '선택한 추첨 결과가 바뀌었습니다. 최신 출력 목록을 확인하세요', 'drawId');
+        }
+        display.drawId = drawId;
+      } else if (!history.some((row) => row?.published === true)) {
+        throw ctx.fail(409, '추첨 결과를 먼저 공개하세요');
+      }
     }
     if (type === 'quiz' && module.revealed !== true) throw ctx.fail(409, '퀴즈 정답을 먼저 공개하세요');
     if (type === 'qa' && !list(ctx.workspace.questions).some((question) => question.approved === true)) {
@@ -349,7 +520,11 @@ async function apply(ctx) {
     case 'module.status': return updateModuleStatus(ctx, ctx.input);
     case 'module.reveal': return revealQuiz(ctx, ctx.input);
     case 'response.submit': return submitResponse(ctx, ctx.input);
+    case 'response.grade': return gradeResponse(ctx, ctx.input);
     case 'question.submit': return submitQuestion(ctx, ctx.input);
+    case 'question.edit': return editQuestion(ctx, ctx.input);
+    case 'question.edit.approve': return approveQuestionEdit(ctx, ctx.input);
+    case 'question.edit.reject': return rejectQuestionEdit(ctx, ctx.input);
     case 'question.manage': return manageQuestion(ctx, ctx.input);
     case 'question.like': return toggleQuestionLike(ctx, ctx.input);
     case 'photo.submit': return submitPhoto(ctx, ctx.input);

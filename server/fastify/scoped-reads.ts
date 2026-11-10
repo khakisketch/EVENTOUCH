@@ -47,7 +47,7 @@ export type ScopedReadsDeps = {
   /** Lightweight directory for the shell and the event home. */
   loadDirectory: (account: unknown) => Promise<{ events?: unknown; activeEventId?: unknown }>;
   /** Single-event detail in the historical `{ state }` bootstrap shape. */
-  loadEventBootstrap: (account: unknown, eventId: string) => Promise<unknown>;
+  loadEventBootstrap: (account: unknown, eventId: string, ifVersion?: string, messageRecipientReview?: boolean, messageAttentionSummary?: boolean, messageVersionOnly?: boolean, messageChangeId?: string) => Promise<unknown>;
   /** Same message rule as server/http.js: only explicit failures echo. */
   failureMessage: (error: unknown, fallback: string) => string;
 };
@@ -109,7 +109,13 @@ async function scopedReads(
       const account = await currentAccount(deps, request);
       const eventId = decodedSegment(parts[2]);
       if (!eventId) return fail(reply, 404, NOT_FOUND_EVENT);
-      const state = await deps.loadEventBootstrap(account, eventId);
+      const query = request.query as { ifVersion?: unknown; messageRecipientReview?: unknown; messageAttentionSummary?: unknown; messageVersionOnly?: unknown; messageChangeId?: unknown } | undefined;
+      const requested = query?.ifVersion;
+      const ifVersion = typeof requested === "string" && /^\d{1,20}\.\d{1,20}$/.test(requested) ? requested : undefined;
+      const summary = query?.messageAttentionSummary === "1";
+      const versionOnly = summary && Boolean(ifVersion) && query?.messageVersionOnly === "1";
+      const messageChangeId = !summary && query?.messageRecipientReview === "1" && typeof query?.messageChangeId === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(query.messageChangeId) ? query.messageChangeId : undefined;
+      const state = await deps.loadEventBootstrap(account, eventId, messageChangeId ? undefined : ifVersion, summary || query?.messageRecipientReview === "1", summary, versionOnly, messageChangeId);
       deps.stampOrgHeaders?.(reply, account);
       return reply.send({ state });
     } catch (error) {

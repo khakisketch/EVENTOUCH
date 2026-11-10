@@ -205,7 +205,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       parts.length === 6 && req.method === 'POST' && publicEvents && attendeeAccess) {
     const slug = decodedSegment(parts[3]);
     const action = decodedSegment(parts[5]);
-    if (!slug || (action !== 'request' && action !== 'confirm')) {
+    if (!slug || !['request', 'confirm', 'session'].includes(action)) {
       return sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
     }
     res.setHeader('cache-control', 'no-store');
@@ -224,17 +224,34 @@ async function handleApi(req, res, store, urlPath, security = {}) {
         });
         return sendJson(res, 200, { ok: true, challengeId: issued.challengeId, expiresAt: issued.expiresAt });
       }
+      if (action === 'session') {
+        // A lost confirmation may have changed the shared browser session
+        // in another tab. Return a ticket only when the caller's still-held
+        // number matches this session's grant AND the latest participant.
+        const phone = String(challengeBody.phone || '').replace(/\D/g, '');
+        const projection = /^\d{9,15}$/.test(phone)
+          ? await publicEvents.loadSessionTicket(slug, req.headers.cookie, phone) : null;
+        const ticket = projection && projection.participant && projection.participant.ticket;
+        if (typeof ticket !== 'string' || !ticket) return err(res, 404, '연결된 티켓을 확인할 수 없습니다');
+        return sendJson(res, 200, { ok: true, ticket });
+      }
       const confirmed = await attendeeAccess.confirmChallenge({
         eventRef: slug,
         phone: challengeBody.phone,
         code: challengeBody.code,
+        cookieHeader: req.headers.cookie,
       });
       if (confirmed.kind === 'grant') {
         return sendJson(res, 200, { ok: true, grant: confirmed.grant, grantExpiresAt: confirmed.grantExpiresAt });
       }
+      // The verification transaction froze this participant's ticket while
+      // holding the event lock. Re-reading here could return a new ticket
+      // issued after cancellation and reapproval using an older proof.
+      const ticket = confirmed.ticket;
+      if (typeof ticket !== 'string' || !ticket) return err(res, 409, '인증한 티켓을 확인할 수 없습니다. 다시 인증해 주세요');
       const maxAge = Math.max(60, Math.floor((Date.parse(confirmed.session.expiresAt) - Date.now()) / 1000));
-      res.setHeader('set-cookie', attendeeCookie(confirmed.session.token, maxAge));
-      return sendJson(res, 200, { ok: true, expiresAt: confirmed.session.expiresAt });
+      res.setHeader('set-cookie', attendeeCookie(confirmed.session.token, maxAge, confirmed.eventId));
+      return sendJson(res, 200, { ok: true, expiresAt: confirmed.session.expiresAt, ticket });
     } catch (error) {
       if (error && error.code === 'NEEDS_CONNECTION') return err(res, 503, error.message);
       return err(res, error.status || 500, failureMessage(error, '요청을 처리하지 못했습니다'), error.field, error.code);
@@ -249,7 +266,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       const account = await requireUser(auth, req);
       const projection = await state.loadBootstrap(account);
       stampOrg(res, account);
-      return sendJson(res, 200, { state: projection });
+      return sendJson(res, 200, { state: projection, serverTimeMs: Date.now() });
     } catch (error) {
       return err(res, error.status || 500, failureMessage(error, '요청을 처리하지 못했습니다'), undefined, error.code);
     }
@@ -299,21 +316,20 @@ async function handleApi(req, res, store, urlPath, security = {}) {
         return sendJson(res, 200, result);
       }
       const result = await publicEvents.loadTicket(slug, bearerToken(req.headers.authorization));
-      if (!result && attendeeAccess) {
+      // A supplied ticket must not silently become another participant's
+      // browser-session ticket when it is invalid or expired.
+      if (!result && req.headers.authorization === undefined && attendeeAccess) {
         // Same-browser return: a verified session restores the ticket
         // without the bearer. A photographed QR alone mints nothing.
         try {
-          const session = await attendeeAccess.resolveSession(req.headers.cookie);
-          if (session) {
-            const granted = await publicEvents.loadSessionTicket(slug, session.grants);
-            if (granted) return sendJson(res, 200, granted);
-          }
+          const granted = await publicEvents.loadSessionTicket(slug, req.headers.cookie);
+          if (granted) return sendJson(res, 200, { ...granted, serverTimeMs: Date.now() });
         } catch (error) {
           // Fall through to the generic ticket failure below.
         }
       }
       if (!result) return err(res, 404, '티켓 링크를 확인할 수 없습니다');
-      return sendJson(res, 200, result);
+      return sendJson(res, 200, { ...result, serverTimeMs: Date.now() });
     } catch (error) {
       return err(res, error.status || 500, failureMessage(error, '요청을 처리하지 못했습니다'), undefined, error.code);
     }
@@ -432,6 +448,34 @@ async function handleApi(req, res, store, urlPath, security = {}) {
   }
 
   try {
+    // Status-only, read-only receipt lookup. A missing row remains
+    // unconfirmed: an in-flight transaction may commit after this read.
+    if (req.method === 'GET' && parts[1] === 'events' && parts.length === 5 && parts[3] === 'command-receipts') {
+      res.setHeader('cache-control', 'no-store');
+      if (!database) return err(res, 503, '데이터베이스를 사용할 수 없습니다');
+      const eventId = decodedSegment(parts[2]);
+      const commandId = decodedSegment(parts[4]);
+      if (!eventId || !commandId) return err(res, 404, '요청한 API를 찾을 수 없습니다');
+      const ticketToken = bearerToken(req.headers.authorization);
+      const account = ticketToken ? null : await requireUser(auth, req);
+      const ticketReissueView = new URL(req.url, 'http://localhost').searchParams.get('view') === 'ticket-reissue';
+      const cancellationReviewView = new URL(req.url, 'http://localhost').searchParams.get('view') === 'cancellation-review';
+      const result = await require('./command-receipts').eventReceipt(database, { account, eventId, commandId, ticketToken, ticketReissueView, cancellationReviewView });
+      if (account) stampOrg(res, account);
+      return sendJson(res, 200, result);
+    }
+
+    if (req.method === 'GET' && parts[1] === 'command-receipts' && parts.length === 3) {
+      res.setHeader('cache-control', 'no-store');
+      if (!database) return err(res, 503, '데이터베이스를 사용할 수 없습니다');
+      const account = await requireUser(auth, req);
+      const commandId = decodedSegment(parts[2]);
+      if (!commandId) return err(res, 404, '요청한 API를 찾을 수 없습니다');
+      const result = await require('./command-receipts').organizationReceipt(database, { account, commandId });
+      stampOrg(res, account);
+      return sendJson(res, 200, result);
+    }
+
     if (parts[1] === 'events' && parts.length === 2 && req.method === 'GET' && state) {
       const account = await requireUser(auth, req);
       const projection = await state.loadBootstrap(account);
@@ -490,7 +534,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
         });
         if (result.session) {
           const maxAge = Math.max(60, Math.floor((Date.parse(result.session.expiresAt) - Date.now()) / 1000));
-          res.setHeader('set-cookie', attendeeCookie(result.session.token, maxAge));
+          res.setHeader('set-cookie', attendeeCookie(result.session.token, maxAge, result.session.eventId));
         }
         return sendJson(res, result.status, result.body);
       } catch (error) {

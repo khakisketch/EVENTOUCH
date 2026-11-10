@@ -1,6 +1,7 @@
 'use strict';
 
 // Session auth with role users. Passwords: scrypt hashes only.
+const { loginHistoryPolicy, pruneLoginHistory } = require('./login-history');
 const crypto = require('node:crypto');
 const { sendJson, readJsonBody, failureMessage } = require('./http');
 const { createClientAddressResolver, developmentLoginEmail } = require('./runtime-security.ts');
@@ -206,6 +207,7 @@ function createDatabaseAuth(database, options = {}) {
   // server.js. Absent in some test harnesses: verification/status degrade to
   // an honest 503, anonymous recovery stays generic and fail-closed.
   const recovery = options.recovery || null;
+  const historyPolicy = loginHistoryPolicy(env);
   const settings = throttleSettings(env);
   const clientAddress = createClientAddressResolver(env);
   const devQuickLogin = developmentLoginEmail(env);
@@ -325,7 +327,7 @@ function createDatabaseAuth(database, options = {}) {
   // Sessions carry the server-verified org selection. The org stored here is
   // a selection, not a privilege: every request re-checks the membership
   // inside its own transaction (see server/tenancy.js).
-  async function createSession(accountId, orgId = null) {
+  async function createSession(accountId, orgId = null, { recordLogin = false } = {}) {
     const token = crypto.randomBytes(32).toString('base64url');
     const expiresAt = new Date(Date.now() + ttlMs());
     const selected = await database.transaction(async (client) => {
@@ -356,6 +358,10 @@ function createDatabaseAuth(database, options = {}) {
         [tokenHash(token), String(accountId), expiresAt, org ? org.orgId : null, org ? org.revision : 0]
       );
       if (inserted.rowCount !== 1) throw new Error('활성 계정을 찾을 수 없습니다');
+      if (recordLogin && historyPolicy.enabled) {
+        await pruneLoginHistory(client, historyPolicy);
+        await client.query('INSERT INTO account_login_events (id, account_id) VALUES ($1, $2)', [crypto.randomUUID(), String(accountId)]);
+      }
       return org;
     });
     void selected;
@@ -1486,7 +1492,7 @@ function createDatabaseAuth(database, options = {}) {
       await clearFailures('address', throttle.address);
       let token;
       try {
-        token = await createSession(user.id);
+        token = await createSession(user.id, null, { recordLogin: true });
       } catch (error) {
         if (error && error.status) {
           sendJson(res, error.status, Object.assign(
@@ -1532,6 +1538,19 @@ function createDatabaseAuth(database, options = {}) {
       sendJson(res, 200, {
         administrator: state.ready && valid ? { name, email } : null,
       });
+      return;
+    }
+    if (urlPath === '/api/auth/login-history' && req.method === 'GET') {
+      const user = await sessionFromCookie(req.headers.cookie);
+      if (!user) { sendJson(res, 401, { error: '로그인이 필요합니다' }); return; }
+      res.setHeader('cache-control', 'no-store');
+      if (!historyPolicy.enabled) { sendJson(res, 200, { ...historyPolicy, entries: [] }); return; }
+      await pruneLoginHistory(database, historyPolicy);
+      const rows = await database.query(
+        "SELECT occurred_at FROM account_login_events WHERE account_id=$1 AND occurred_at >= now() - ($2::int * interval '1 day') ORDER BY occurred_at DESC, id DESC LIMIT 20",
+        [user.id, historyPolicy.retentionDays]
+      );
+      sendJson(res, 200, { ...historyPolicy, entries: rows.rows.map(row => ({ at: row.occurred_at.toISOString() })) });
       return;
     }
     if (urlPath === '/api/auth/me' && req.method === 'GET') {

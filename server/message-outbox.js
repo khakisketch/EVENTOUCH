@@ -24,13 +24,16 @@ function providerConnected(provider) {
   return true;
 }
 
-async function recordDispatchRequest(client, eventId, messageId) {
+async function recordDispatchRequest(client, eventId, messageId, { claimed = false } = {}) {
   await client.query(
     `INSERT INTO message_outbox (message_id, event_id, status, attempts, next_attempt_at)
-     VALUES ($1, $2, 'PENDING', 0, now())
+     VALUES ($1, $2, CASE WHEN $3 THEN 'SENDING' ELSE 'PENDING' END,
+             CASE WHEN $3 THEN 1 ELSE 0 END,
+             now() + CASE WHEN $3 THEN interval '5 minutes' ELSE interval '0' END)
      ON CONFLICT (message_id) DO UPDATE
-     SET event_id = EXCLUDED.event_id, status = 'PENDING', updated_at = now()`
-    , [String(messageId), String(eventId)]
+     SET event_id = EXCLUDED.event_id, status = EXCLUDED.status, attempts = EXCLUDED.attempts,
+         next_attempt_at = EXCLUDED.next_attempt_at, updated_at = now()`
+    , [String(messageId), String(eventId), claimed]
   );
 }
 
@@ -40,6 +43,25 @@ async function cancelDispatchRequest(client, messageId) {
 
 async function settleDispatch(database, messageId) {
   await database.query('DELETE FROM message_outbox WHERE message_id = $1', [String(messageId)]);
+}
+
+// An older HTTP send may have reached the provider before the process died.
+// Without a provider query API, never treat missing evidence as permission to resend.
+async function markLegacyHttpUnconfirmed(database, eventId, messageId) {
+  return database.transaction(async (client) => {
+    const row = await client.query('SELECT payload FROM event_workspaces WHERE event_id=$1 FOR UPDATE', [String(eventId)]);
+    if (!row.rows[0]) return;
+    const ws = typeof row.rows[0].payload === 'string' ? JSON.parse(row.rows[0].payload) : row.rows[0].payload;
+    const message = Array.isArray(ws?.messages) ? ws.messages.find(item => item?.id === String(messageId)) : null;
+    if (!message || message.status !== 'SENDING') return;
+    message.genericTransport = true;
+    message.genericSubmissionUnconfirmed = true;
+    message.deliveryUnconfirmed = true;
+    // If an old worker is still alive, it must stop before sending another
+    // recipient. Only that worker may record that its loop has terminated.
+    message.genericStopRequested = true;
+    await client.query('UPDATE event_workspaces SET payload=$2::jsonb, revision=revision+1, updated_at=now() WHERE event_id=$1', [String(eventId), JSON.stringify(ws)]);
+  });
 }
 
 function backoffInterval(attempts) {
@@ -89,7 +111,7 @@ async function safeGroupLookup(provider, groupId) {
 // happens in here: the supplier consult (safeGroupLookup) always runs after
 // this transaction has committed, so a slow or hanging provider can never
 // hold the event lock. Returns null when there is nothing to re-send.
-async function snapshotClaimedRow(database, eventId, messageId) {
+async function snapshotClaimedRow(database, eventId, messageId, dispatch = null) {
   return database.transaction(async (client) => {
     const locked = await client.query(
       `SELECT e.id, e.slug, e.client_id, e.org_id, e.payload, e.revision,
@@ -108,8 +130,58 @@ async function snapshotClaimedRow(database, eventId, messageId) {
     // Outcome already recorded (sent, failed, cancelled, or the campaign is
     // gone): there is nothing to re-send, only the row to drop.
     if (!message || message.status !== 'SENDING') return null;
+    if (dispatch) {
+      if (message.providerSubmission ||
+        (dispatch.expectedGroupId !== undefined && (message.providerGroupId || null) !== dispatch.expectedGroupId)) {
+        return { message, blocked: true };
+      }
+      const { messageRecipientChangeCount, ticketLinkGuard, smsCharacterGuard } = require('./commands/content-results');
+      const changed = messageRecipientChangeCount(message, workspace);
+      const invalidTicket = ticketLinkGuard(message, workspace, { now: Date.parse(dispatch.now) || Date.now() });
+      const invalidText = smsCharacterGuard(message, workspace, { event, providerKind: dispatch.providerKind });
+      if (changed || invalidTicket || invalidText) {
+        if (changed) message.recipientChangeCount = changed;
+        if (invalidTicket) {
+          message.ticketLinkProblemCount = invalidTicket.missing;
+          message.ticketLinkProblemUnknown = invalidTicket.reason === 'TICKET_RECIPIENTS_UNAVAILABLE';
+        }
+        if (invalidText) {
+          message.smsTextProblemCount = invalidText.missing;
+          message.smsTextProblemField = invalidText.field;
+          message.smsTextProblemUnknown = invalidText.reason === 'SMS_CHARSET_REVIEW_UNAVAILABLE';
+        }
+        message.deliveryUnconfirmed = dispatch.previousAcceptanceUnknown;
+        if (!dispatch.previousAcceptanceUnknown) {
+          message.status = 'FAILED';
+          message.acceptedCount = 0;
+          for (const delivery of Array.isArray(message.deliveries) ? message.deliveries : []) {
+            delivery.status = 'FAILED';
+            delivery.at = dispatch.now;
+          }
+        }
+        // Only the reviewed message changed. Keep unrelated legacy fields
+        // exactly as stored instead of persisting normalized read defaults.
+        const original = locked.rows[0].workspace_payload;
+        await client.query(
+          'UPDATE event_workspaces SET payload = $2::jsonb, revision = revision + 1, updated_at = now() WHERE event_id = $1',
+          [String(eventId), JSON.stringify({ ...original, messages: workspace.messages })]
+        );
+        return { message, blocked: true };
+      }
+    }
     return { event, workspace, message };
   });
+}
+
+async function sendQueuedCampaign(database, provider, { eventId, messageId }, {
+  now = new Date().toISOString(), previousAcceptanceUnknown = false, expectedGroupId,
+} = {}) {
+  const fresh = await snapshotClaimedRow(database, eventId, messageId, { now, previousAcceptanceUnknown, expectedGroupId, providerKind: provider?.state?.provider });
+  if (!fresh || fresh.blocked) return { attempted: false, message: fresh?.message };
+  const { buildMessageDispatch } = require('./commands/content-results');
+  const dispatch = buildMessageDispatch(fresh.event, fresh.workspace, fresh.message);
+  const result = await dispatchCampaign(database, provider, dispatch, { now });
+  return { attempted: result.attempted !== false, message: result.message };
 }
 // Replays queued dispatch intents. Safe to run at boot and after restarts:
 // rows whose campaign already reached an outcome are settled without
@@ -134,20 +206,19 @@ async function snapshotClaimedRow(database, eventId, messageId) {
 // lost send between the consult and the write.
 async function drainMessageOutbox(database, provider, { now = new Date().toISOString(), limit = DRAIN_LIMIT } = {}) {
   if (!providerConnected(provider)) return { skipped: true, reason: 'NOT_CONNECTED' };
-  // Lazy require: see the module header for why this cannot live at the top.
-  const { buildMessageDispatch } = require('./commands/content-results');
-
   const claimed = await database.transaction(async (client) => {
     const rows = await client.query(
-      `UPDATE message_outbox
-       SET status = 'SENDING', attempts = attempts + 1, updated_at = now(),
-           next_attempt_at = now() + (LEAST(attempts + 1, 12) * interval '5 minutes')
-       WHERE message_id IN (
-         SELECT message_id FROM message_outbox
+      `WITH claim AS (
+         SELECT message_id, status AS previous_status, attempts AS previous_attempts
+         FROM message_outbox
          WHERE status IN ('PENDING', 'SENDING') AND next_attempt_at <= now()
          ORDER BY next_attempt_at LIMIT $1 FOR UPDATE SKIP LOCKED
        )
-       RETURNING message_id, event_id`,
+       UPDATE message_outbox
+       SET status = 'SENDING', attempts = attempts + 1, updated_at = now(),
+           next_attempt_at = now() + (LEAST(attempts + 1, 12) * interval '5 minutes')
+       FROM claim WHERE message_outbox.message_id = claim.message_id
+       RETURNING message_outbox.message_id, message_outbox.event_id, message_outbox.attempts, claim.previous_status, claim.previous_attempts`,
       [Math.max(1, Math.min(Number(limit) || DRAIN_LIMIT, 100))]
     );
     return rows.rows;
@@ -177,11 +248,19 @@ async function drainMessageOutbox(database, provider, { now = new Date().toISOSt
       }
       const { message } = snapshot;
 
-      // Supplier consult with no event lock held. Campaigns that never
-      // reached a supplier (no group id, or a provider without a group
-      // query) skip the consult and go straight to dispatch.
+      if (typeof provider.sendBatch !== 'function' &&
+          !(row.previous_status === 'PENDING' && Number(row.previous_attempts) === 0)) {
+        await markLegacyHttpUnconfirmed(database, row.event_id, row.message_id);
+        await settleDispatch(database, row.message_id);
+        settled += 1;
+        continue;
+      }
+
+      // Consult a known group with no event lock held. Without a group,
+      // the fresh dispatch check below still guards a saved submission.
       let verdict = 'ABSENT';
-      if (message.providerGroupId && provider && typeof provider.groupMessages === 'function') {
+      const canLookUpGroup = message.providerGroupId && typeof provider.groupMessages === 'function';
+      if (canLookUpGroup) {
         verdict = await safeGroupLookup(provider, message.providerGroupId);
       }
 
@@ -207,16 +286,15 @@ async function drainMessageOutbox(database, provider, { now = new Date().toISOSt
       // held, so a cancel, retry, or second worker may have resolved the
       // campaign meanwhile. Dispatching from a stale snapshot could resend
       // a campaign the operator just cancelled.
-      const fresh = await snapshotClaimedRow(database, row.event_id, row.message_id);
-      if (!fresh) {
-        await settleDispatch(database, row.message_id);
-        settled += 1;
-        continue;
-      }
-      const dispatch = buildMessageDispatch(fresh.event, fresh.workspace, fresh.message);
-      await dispatchCampaign(database, provider, { ...dispatch, now });
+      const result = await sendQueuedCampaign(database, provider, { eventId: row.event_id, messageId: row.message_id }, {
+        now,
+        expectedGroupId: message.providerGroupId || null,
+        // A previous worker may have submitted before losing the response.
+        // Keep this uncertainty visible if a recipient change stops the retry.
+        previousAcceptanceUnknown: Number(row.attempts) > 1 && !canLookUpGroup,
+      });
       await settleDispatch(database, row.message_id);
-      dispatched += 1;
+      if (result.attempted) dispatched += 1;
       settled += 1;
     } catch (error) {
       // The claim already pushed next_attempt_at into the future, so a
@@ -236,6 +314,7 @@ module.exports = {
   recordDispatchRequest,
   cancelDispatchRequest,
   settleDispatch,
+  sendQueuedCampaign,
   drainMessageOutbox,
   classifyGroupLookup,
 };

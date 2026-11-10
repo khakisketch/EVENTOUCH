@@ -43,7 +43,7 @@ export type CommandPathDeps = {
       commandId: unknown;
       input: unknown;
       cookieHeader: string | undefined;
-    }) => Promise<CommandResult & { session?: { token: string; expiresAt: string } | null }>;
+    }) => Promise<CommandResult & { session?: { token: string; expiresAt: string; eventId?: string } | null }>;
     execute: (input: CommandExecutorInput) => Promise<CommandResult>;
   } | null;
   operationsCommands: {
@@ -62,11 +62,12 @@ export type CommandPathDeps = {
       command: string;
       assignmentId?: unknown;
       targetId?: unknown;
+      deferWriteGrant?: boolean;
     }) => Promise<unknown>;
   };
   /** Second arg is the raw request: the server wrapper copies the tab org headers onto the account. */
   sessionFromCookie: (cookieHeader: string | undefined, req?: unknown) => Promise<unknown | null>;
-  attendeeCookie: (token: string, maxAgeSeconds: number) => string;
+  attendeeCookie: (token: string, maxAgeSeconds: number, eventId?: string) => string;
   /** Same message rule as server/http.js: only explicit failures echo. */
   failureMessage: (error: unknown, fallback: string) => string;
   guardSignup?: (input: { slug: string; commandId: unknown; request: FastifyRequest["raw"] }) => Promise<void>;
@@ -123,7 +124,7 @@ async function signup(deps: CommandPathDeps, parts: string[], request: FastifyRe
     });
     if (result.session) {
       const maxAge = Math.max(60, Math.floor((Date.parse(result.session.expiresAt) - Date.now()) / 1000));
-      reply.header("set-cookie", deps.attendeeCookie(result.session.token, maxAge));
+      reply.header("set-cookie", deps.attendeeCookie(result.session.token, maxAge, result.session.eventId));
     }
     return reply.code(resultStatus(result)).send(result.body);
   } catch (error) {
@@ -183,7 +184,7 @@ async function commands(deps: CommandPathDeps, parts: string[], request: Fastify
       : command === "booth.visit"
         ? payload.boothId || payload.targetId
         : payload.targetId;
-    await deps.access.authorize({ account, eventId, command, assignmentId, targetId });
+    await deps.access.authorize({ account, eventId, command, assignmentId, targetId, deferWriteGrant: true });
     const result = await deps.operationsCommands.execute({
       eventId,
       commandId,
@@ -208,7 +209,7 @@ async function commands(deps: CommandPathDeps, parts: string[], request: Fastify
       return reply.code(resultStatus(result)).send(result.body);
     }
     const account = await currentAccount(deps, request);
-    await deps.access.authorize({ account, eventId, command });
+    await deps.access.authorize({ account, eventId, command, deferWriteGrant: true });
     const result = await deps.domainCommands.execute({ eventId, commandId, command, payload, account });
     return reply.code(resultStatus(result)).send(result.body);
   }
@@ -218,7 +219,7 @@ async function commands(deps: CommandPathDeps, parts: string[], request: Fastify
     if (command !== "participant.create") throw Object.assign(new Error("권한을 확인하세요"), { status: 403 });
     await deps.access.authorize({ account, eventId, command: "participants.read", assignmentId });
   } else {
-    await deps.access.authorize({ account, eventId, command: "participants.write" });
+    await deps.access.authorize({ account, eventId, command: "participants.write", deferWriteGrant: true });
   }
   const result = await deps.participantCommands.execute({
     eventId,

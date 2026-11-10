@@ -1,6 +1,7 @@
 'use strict';
 
-const { normalizeEvent, normalizeWorkspace } = require('../state');
+const crypto = require('node:crypto');
+const { normalizeEvent, normalizeWorkspace, workspaceChangesForSave } = require('../state');
 const { managerWriteAllowed } = require('../event-permissions');
 const {
   failure,
@@ -17,8 +18,8 @@ const contentResults = require('./content-results');
 const boothMap = require('./booth-map');
 const eventEvidence = require('./event-evidence');
 const attendeeExperience = require('./attendee-experience');
-const { createMessagingProvider, dispatchCampaign } = require('../messaging');
-const { settleDispatch } = require('../message-outbox');
+const { createMessagingProvider } = require('../messaging');
+const { sendQueuedCampaign, settleDispatch } = require('../message-outbox');
 
 const COMMANDS = new Set([
   ...preparation.COMMANDS,
@@ -32,6 +33,7 @@ const COMMANDS = new Set([
 const GUEST_COMMANDS = new Set([
   'response.submit',
   'question.submit',
+  'question.edit',
   'question.like',
   'photo.submit',
   'post.submit',
@@ -40,9 +42,23 @@ const GUEST_COMMANDS = new Set([
   ...attendeeExperience.GUEST_COMMANDS,
 ]);
 
+// The reviewed basics command must only replay for the exact original
+// request, including its concurrency baseline and workspace policy fields.
+// Canonicalize object keys so equivalent JSON key ordering still retries.
+function reviewedRequestHash(payload) {
+  function canonical(value) {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]));
+    }
+    return value;
+  }
+  return crypto.createHash('sha256').update(JSON.stringify(canonical(object(payload)))).digest('hex');
+}
+
 function activeTicket(workspace, token, { allowPendingPayment = false } = {}) {
   const participant = findTicket(workspace, token);
-  if (!participant || participant.revoked === true || String(participant.status || '').toUpperCase() === 'CANCELLED') {
+  if (!participant || participant.revoked === true || participant.cancelled === true || String(participant.status || '').toUpperCase() === 'CANCELLED') {
     throw failure(404, '티켓 링크를 확인할 수 없습니다');
   }
   const expiry = Date.parse(participant.ticketExpiresAt);
@@ -124,7 +140,9 @@ async function resolveStoredFile(client, input, { eventId, contentTypes, maxByte
 
 function appendAudit(workspace, event, actorId, command, input, id, now, guest) {
   if (!Array.isArray(workspace.audit)) workspace.audit = [];
-  const detail = clean(input.reason || input.name || input.title || input.text, 300);
+  // Rejection reasons are intended for the question author, not the
+  // organization-wide activity feed. Keep the action, actor and time only.
+  const detail = command === 'question.edit.reject' ? '' : clean(input.reason || input.name || input.title || input.text, 300);
   workspace.audit.unshift({
     id,
     type: command,
@@ -199,19 +217,38 @@ function createDomainCommands(database, options = {}) {
           stored.command !== command || (stored.ticketHash || null) !== hashTicket(guest ? ticketToken : null)) {
           throw failure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
         }
+        if (command === 'event.basics.save' && stored.basicsRequestHash !== reviewedRequestHash(payload)) {
+          throw failure(409, '이 요청은 다른 행사 정보 저장에 사용되었습니다. 원래 요청을 확인하세요', undefined, 'EVENT_BASICS_RECEIPT_MISMATCH');
+        }
+        if (command === 'roulette.config.save-reviewed' && stored.rouletteRequestHash !== reviewedRequestHash(payload)) {
+          throw failure(409, '이 요청은 다른 룰렛 설정 저장에 사용되었습니다. 원래 요청을 확인하세요', undefined, 'ROULETTE_RECEIPT_MISMATCH');
+        }
+        if (['lucky.config.save-reviewed', 'lucky.preassign-reviewed', 'lucky.preassign-range-reviewed'].includes(command) && stored.luckyRequestHash !== reviewedRequestHash(payload)) {
+          throw failure(409, '이 요청은 다른 번호 배정에 사용되었습니다. 원래 요청을 확인하세요', undefined, 'LUCKY_RECEIPT_MISMATCH');
+        }
+        if (['message.create-reviewed', 'message.create-charset-reviewed', 'message.retry-charset-reviewed', 'message.record-provider-check'].includes(command) &&
+            stored.reviewedRequestHash !== reviewedRequestHash(payload)) {
+          throw failure(409, '이 요청은 다른 발송 작업에 사용되었습니다. 원래 발송 내역을 확인하세요', undefined, 'MESSAGE_RECEIPT_MISMATCH');
+        }
         if (guest) {
           const participant = findTicket(workspace, ticketToken);
           if (!participant || (stored.participantId && String(stored.participantId) !== String(participant.id))) {
             throw failure(404, '티켓 링크를 확인할 수 없습니다');
           }
           const expiry = Date.parse(participant.ticketExpiresAt);
-          const active = participant.revoked !== true && participant.status !== 'CANCELLED' &&
+          const active = participant.revoked !== true && participant.cancelled !== true && String(participant.status || '').toUpperCase() !== 'CANCELLED' &&
             Number.isFinite(expiry) && expiry > Date.now();
           const paymentReplay = command.startsWith('payment.');
           if (!active && !paymentReplay) throw failure(404, '티켓 링크를 확인할 수 없습니다');
           actor = participant;
         }
-        return { status: 200, body: structuredClone(object(stored.response)), replayed: true };
+        const response = object(stored.response);
+        const input = object(payload);
+        if (command === 'message.sync' && Object.hasOwn(input, 'id') &&
+          object(response.message).id !== clean(input.id, 120)) {
+          throw failure(409, '이전 조회 대상이 다릅니다. 발송 기록에서 다시 확인하세요.', 'id');
+        }
+        return { status: 200, body: structuredClone(response), replayed: true };
       }
 
       // Grant verdicts only when no receipt matched (see authorizeGrants).
@@ -223,10 +260,12 @@ function createDomainCommands(database, options = {}) {
 
       const input = object(payload);
       const now = new Date().toISOString();
+      const workspaceBefore = structuredClone(workspace);
       const ctx = {
         client,
         event,
         workspace,
+        rawWorkspace: row.workspace_payload,
         actor,
         input,
         command,
@@ -240,7 +279,8 @@ function createDomainCommands(database, options = {}) {
         // The deployment provider credentials are legacy-org bound: a new
         // org's campaign never sends through them, it records NEEDS_CONNECTION.
         messaging: { connected: Boolean(provider && provider.state && provider.state.connected) &&
-          String(event.orgId || '') === String(require('../tenancy').LEGACY_ORG_ID) },
+          String(event.orgId || '') === String(require('../tenancy').LEGACY_ORG_ID),
+          provider: provider?.state?.provider === 'solapi' && String(event.orgId || '') === String(require('../tenancy').LEGACY_ORG_ID) ? 'solapi' : null },
         makeId: nextId,
         resolveFile: (file, rules) => resolveStoredFile(client, file, rules),
       };
@@ -265,7 +305,7 @@ function createDomainCommands(database, options = {}) {
         `UPDATE event_workspaces
          SET payload = $2::jsonb, revision = revision + 1, updated_at = now()
          WHERE event_id = $1`,
-        [event.id, JSON.stringify(workspace)]
+        [event.id, JSON.stringify(workspaceChangesForSave(row.workspace_payload, workspaceBefore, workspace))]
       );
       if (result.eventChanged) {
         try {
@@ -295,11 +335,18 @@ function createDomainCommands(database, options = {}) {
         [id, event.id, guest ? null : actor.id, guest ? (event.orgId || event.org_id || null) : (actor.orgId || actor.org_id || null), JSON.stringify({
           command,
           response,
+          ...(command === 'event.basics.save' ? { basicsRequestHash: reviewedRequestHash(payload) } : {}),
+          ...(command === 'roulette.config.save-reviewed' ? { rouletteRequestHash: reviewedRequestHash(payload) } : {}),
+          ...(['lucky.config.save-reviewed', 'lucky.preassign-reviewed', 'lucky.preassign-range-reviewed'].includes(command) ? { luckyRequestHash: reviewedRequestHash(payload) } : {}),
+          ...(['message.create-reviewed', 'message.create-charset-reviewed', 'message.retry-charset-reviewed', 'message.record-provider-check'].includes(command) ? { reviewedRequestHash: reviewedRequestHash(payload) } : {}),
           ticketHash: hashTicket(guest ? ticketToken : null),
           participantId: guest ? actor.id : null,
         })]
       );
-      return { status: result.status || 200, body: response, replayed: false, dispatch: result.dispatch || null, resolvePending: result.resolvePending === true };
+      return {
+        status: result.status || 200, body: response, replayed: false, dispatch: result.dispatch || null,
+        resolvePending: result.resolvePending === true, resolveCampaignId: result.resolveCampaignId,
+      };
     });
 
     // The provider call happens after commit on purpose. Failing to send
@@ -309,9 +356,12 @@ function createDomainCommands(database, options = {}) {
     // for the same reason the send does.
     if (outcome.resolvePending && provider && eventId) {
       try {
-        const resolved = await require('../messaging').resolveDelivery(database, provider, eventId);
+        const resolved = await require('../messaging').resolveDelivery(database, provider, eventId, { campaignId: outcome.resolveCampaignId });
         if (outcome.body) {
-          outcome.body.sync = { resolved: resolved.resolved, pending: resolved.pending, total: resolved.total };
+          outcome.body.sync = {
+            resolved: resolved.resolved, pending: resolved.pending,
+            total: resolved.skipped ? undefined : resolved.total ?? 0,
+          };
           // Answer with the state polling just established rather than the
           // pre-poll snapshot, or the operator would keep seeing SENDING.
           const wanted = outcome.body.message && outcome.body.message.id;
@@ -325,7 +375,7 @@ function createDomainCommands(database, options = {}) {
 
     if (outcome.dispatch && provider) {
       try {
-        const sent = await dispatchCampaign(database, provider, outcome.dispatch);
+        const sent = await sendQueuedCampaign(database, provider, outcome.dispatch);
         // Answer with the outcome the operator actually cares about rather
         // than the intermediate SENDING state.
         if (sent && sent.message && outcome.body && outcome.body.message) {
