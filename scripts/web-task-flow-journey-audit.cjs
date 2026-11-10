@@ -1,4 +1,5 @@
 'use strict';
+const { openCreateSettings } = require('./ui-journey-helpers.cjs');
 
 // Missing workflow-stage journeys with exact operator step counts.
 // Boots the same isolated shape as the other web audits: a random
@@ -263,6 +264,7 @@ async function main() {
         const values = await page.locator('#create-client option').evaluateAll((nodes) => nodes.map((node) => node.value));
         assert.ok(values.includes(clientSeed.id),
           `seeded client ${clientSeed.id} missing from #create-client options: ${JSON.stringify(values)}`);
+        await act(() => openCreateSettings(page));
         await act(() => page.locator('#create-client').selectOption(clientSeed.id));
       }
       await act(() => page.locator('#create-date').fill(EVENT_DATE));
@@ -287,15 +289,16 @@ async function main() {
     // ---- Task 2: content program schedule, date blank -> event date ----
     await measure('program-add', '프로그램 일정 추가 (날짜 비움)', async (act, task) => {
       task.screens = [`/console/events/${createdEventId}/content (#content-notices)`];
-      task.fields = ['#content-program-title', '#content-program-date (blank)', '#content-program-start', '#content-program-end', 'submit 만들기'];
+      task.fields = ['tab 프로그램 일정', '#content-program-title', '#content-program-date (blank)', '#content-program-start', '#content-program-end', 'submit 초안 저장'];
       await go(`/console/events/${createdEventId}/content`, '#content-notices');
+      await act(() => page.getByRole('tab', { name: '프로그램 일정', exact: true }).click());
       await act(() => page.getByRole('button', { name: '일정 추가', exact: true }).click());
       await page.locator('#content-program-title').waitFor({ state: 'visible', timeout: 10000 });
       await act(() => page.locator('#content-program-title').fill(PROGRAM_TITLE));
       await act(() => page.locator('#content-program-start').fill(PROGRAM_START));
       await act(() => page.locator('#content-program-end').fill(PROGRAM_END));
       assert.equal(await page.locator('#content-program-date').inputValue(), '', 'program date must stay blank (event date fallback)');
-      await act(() => page.getByRole('dialog').getByRole('button', { name: '만들기', exact: true }).click());
+      await act(() => page.getByRole('dialog').getByRole('button', { name: '초안 저장', exact: true }).click());
       await page.getByRole('heading', { name: PROGRAM_TITLE, exact: true }).first().waitFor({ timeout: 15000 });
       const state = await readBootstrap(helpers, harness.baseUrl, ownerCookie);
       const program = (state.workspaces[createdEventId].program || []).find((item) => item.title === PROGRAM_TITLE);
@@ -310,15 +313,18 @@ async function main() {
     // ---- Task 3: publish a notice ----
     await measure('notice-publish', '공지 작성·게시', async (act, task) => {
       task.screens = [`/console/events/${createdEventId}/content (#content-notices)`];
-      task.fields = ['#content-notice-title', '#content-notice-body', 'checkbox 게시함 (참가자 화면에 보임)', 'submit 만들기'];
+      task.fields = ['#content-notice-title', '#content-notice-body', '게시 검토 → 게시하기', 'submit 초안 저장'];
       await go(`/console/events/${createdEventId}/content`, '#content-notices');
       await act(() => page.getByRole('button', { name: '공지 작성', exact: true }).click());
       await page.locator('#content-notice-title').waitFor({ state: 'visible', timeout: 10000 });
       await act(() => page.locator('#content-notice-title').fill(NOTICE_TITLE));
       await act(() => page.locator('#content-notice-body').fill(NOTICE_BODY));
-      await act(() => page.getByRole('dialog').getByRole('checkbox', { name: /게시함/ }).check());
-      await act(() => page.getByRole('dialog').getByRole('button', { name: '만들기', exact: true }).click());
+      await act(() => page.getByRole('dialog').getByRole('button', { name: '초안 저장', exact: true }).click());
       await page.getByRole('heading', { name: NOTICE_TITLE, exact: true }).first().waitFor({ timeout: 15000 });
+      const row = page.locator('li').filter({ has: page.getByRole('heading', { name: NOTICE_TITLE, exact: true }) }).last();
+      await act(() => row.getByRole('button', { name: '게시 검토', exact: true }).click());
+      await act(() => page.getByRole('dialog', { name: '공지 게시 검토', exact: true }).getByRole('button', { name: '게시하기', exact: true }).click());
+      await page.getByRole('dialog').waitFor({ state: 'hidden' });
       const state = await readBootstrap(helpers, harness.baseUrl, ownerCookie);
       const notice = (state.workspaces[createdEventId].notices || []).find((item) => item.title === NOTICE_TITLE);
       assert.ok(notice, 'notice missing from workspace.notices');
@@ -427,7 +433,7 @@ async function main() {
     );
     await measure('desk-checkin', '스태프 데스크 체크인 (수동 입장 처리)', async (act, task) => {
       task.screens = [`/staff/events/${fixture.eventId} (staff, 데스크 체크인)`];
-      task.fields = ['#staff-desk', '#staff-ticket', 'submit 입장 처리'];
+      task.fields = ['#staff-desk', '입장 업무 확인', '#staff-ticket', 'submit 입장 처리'];
       await go(`/staff/events/${fixture.eventId}`, '#staff-desk');
       if (before) {
         assert.equal(await page.locator('#staff-desk').inputValue(), '', 'baseline requires choosing a desk');
@@ -435,6 +441,7 @@ async function main() {
       } else {
         assert.equal(await page.locator('#staff-desk').inputValue(), fixture.deskId,
           'the only assigned desk is visible and selected; no scan has been submitted');
+        await act(() => page.getByRole('button', { name: '입장 업무 확인', exact: true }).click());
       }
       await act(() => page.locator('#staff-ticket').fill(ticketPerson.ticket));
       const submitted = commandsResponse();
@@ -486,7 +493,8 @@ async function main() {
       const submitted = commandsResponse();
       await act(() => row.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '처리한다', exact: true }).click());
       await submitted;
-      await page.getByText('지급 처리했습니다.', { exact: true }).first().waitFor({ timeout: 15000 });
+      await page.getByText('경품 처리를 확인하고 최신 목록을 불러왔습니다.', { exact: true }).first().waitFor({ timeout: 15000 });
+      await row.getByText('수령 완료', { exact: false }).waitFor({ timeout: 15000 });
       const state = await readBootstrap(helpers, harness.baseUrl, ownerCookie);
       const done = (state.workspaces[fixture.eventId].rewards || [])
         .find((row2) => row2 && String(row2.id) === String(journeyReward.id));

@@ -23,6 +23,7 @@ const path = require('node:path');
 const axe = require('axe-core').source;
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
+const { confirmInitialStaffDesk } = require('./audit-staff-direction.cjs');
 
 // Each default run gets its own evidence directory. Do not overwrite earlier
 // captures; callers such as CI may still select an explicit capture root.
@@ -33,13 +34,17 @@ const OUT = path.join(captureRoot, 'crossrole-journey');
 // Masks the typed ticket code for screenshots only (dots instead of the raw
 // bearer); the field value itself is asserted separately and restored after.
 async function maskTicketInput(page) {
-  await page.locator('#staff-ticket').evaluate((el) => {
+  const input = page.locator('#staff-ticket');
+  if (await input.count() === 0) return;
+  await input.evaluate((el) => {
     if (el instanceof HTMLInputElement) el.dataset.fixtureType = el.type;
     if (el instanceof HTMLInputElement) el.setAttribute('type', 'password');
   });
 }
 async function unmaskTicketInput(page) {
-  await page.locator('#staff-ticket').evaluate((el) => {
+  const input = page.locator('#staff-ticket');
+  if (await input.count() === 0) return;
+  await input.evaluate((el) => {
     if (el instanceof HTMLInputElement) el.setAttribute('type', el.dataset.fixtureType || 'text');
   });
 }
@@ -177,7 +182,7 @@ async function main() {
     await geometry(reg, 'register 390', 'form.registration-form button[type="submit"]', true);
     await axePage(reg, 'register 390');
     check('gated register lead promises approval, not instant issuance',
-      (await reg.getByText('아래 정보를 입력하면 신청이 접수되고, 운영자 승인 뒤 입장 QR이 표시됩니다.').count()) === 1
+      (await reg.getByText('신청 접수 후 운영자가 승인하면 입장 QR이 표시됩니다.').count()) === 1
       && (await reg.getByText(/바로 발급됩니다/).count()) === 0);
     await reg.locator('#field-name').fill('여정 참가자 갑');
     await reg.locator('#field-phone').fill('01055500101');
@@ -186,7 +191,7 @@ async function main() {
     await reg.getByText('승인 대기').first().waitFor({ timeout: 15000 });
     check('signup A lands on a pending receipt', true);
     check('pending receipt keeps Korean words intact at 390', (await splitKoreanWords(reg.getByText('신청이 접수되었습니다. 아래에서 진행 상태를 확인하세요.', { exact: true }))).length === 0);
-    check('pending explanation keeps Korean words intact at 390', (await splitKoreanWords(reg.getByText('신청이 접수되었습니다. 운영자가 승인하면 이 화면에 입장 QR이 표시됩니다.', { exact: true }))).length === 0);
+    check('pending explanation keeps Korean words intact at 390', (await splitKoreanWords(reg.getByText('신청이 접수되었습니다. 운영자 승인 후 상태를 다시 확인하면 입장 QR을 볼 수 있습니다.', { exact: true }))).length === 0);
     await reg.screenshot({ path: path.join(OUT, 'a-ticket-pending-390-first.png') });
     await reg.screenshot({ path: path.join(OUT, 'a-ticket-pending-390-full.png'), fullPage: true });
     await geometry(reg, 'pending ticket 390', null);
@@ -218,7 +223,7 @@ async function main() {
     await regB.getByRole('button', { name: '신청하기', exact: true }).click();
     await regB.getByText('승인 대기').first().waitFor({ timeout: 15000 });
     check('pending receipt keeps Korean words intact at 320', (await splitKoreanWords(regB.getByText('신청이 접수되었습니다. 아래에서 진행 상태를 확인하세요.', { exact: true }))).length === 0);
-    check('pending explanation keeps Korean words intact at 320', (await splitKoreanWords(regB.getByText('신청이 접수되었습니다. 운영자가 승인하면 이 화면에 입장 QR이 표시됩니다.', { exact: true }))).length === 0);
+    check('pending explanation keeps Korean words intact at 320', (await splitKoreanWords(regB.getByText('신청이 접수되었습니다. 운영자 승인 후 상태를 다시 확인하면 입장 QR을 볼 수 있습니다.', { exact: true }))).length === 0);
     await regB.screenshot({ path: path.join(OUT, 'b-ticket-pending-320-first.png') });
     await regB.screenshot({ path: path.join(OUT, 'b-ticket-pending-320-full.png'), fullPage: true });
     await geometry(regB, 'pending ticket 320', null);
@@ -265,7 +270,7 @@ async function main() {
     await regB.keyboard.press('Enter');
     await regB.getByRole('img', { name: /님의 행사 입장 및 퇴장용 QR/ }).waitFor({ timeout: 15000 });
     check('keyboard re-check reaches the approved QR', true);
-    check('ticket recovery guidance keeps Korean words intact at 320', (await splitKoreanWords(regB.getByText('이 티켓은 현재 탭에만 보관됩니다.', { exact: false }))).length === 0);
+    check('ticket recovery guidance keeps Korean words intact at 320', (await splitKoreanWords(regB.getByText('이 탭에서 티켓을 확인할 수 있습니다.', { exact: false }))).length === 0);
     await regB.screenshot({ path: path.join(OUT, 'b-ticket-approved-320.png'), fullPage: true });
 
     // ---- Participant A reloads: approved ticket with QR ----
@@ -275,7 +280,7 @@ async function main() {
     await reg.getByRole('img', { name: /님의 행사 입장 및 퇴장용 QR/ }).waitFor({ timeout: 15000 });
     check('approved ticket presents the entry QR', true);
     await reg.getByText('참가 확정').first().waitFor();
-    check('ticket recovery guidance keeps Korean words intact at 390', (await splitKoreanWords(reg.getByText('이 티켓은 현재 탭에만 보관됩니다.', { exact: false }))).length === 0);
+    check('ticket recovery guidance keeps Korean words intact at 390', (await splitKoreanWords(reg.getByText('이 탭에서 티켓을 확인할 수 있습니다.', { exact: false }))).length === 0);
     await reg.screenshot({ path: path.join(OUT, 'a-ticket-approved-390.png'), fullPage: true });
     await geometry(reg, 'approved ticket 390', null);
 
@@ -293,6 +298,7 @@ async function main() {
     const work = hub;
     await work.locator('#staff-desk').waitFor({ timeout: 15000 });
     await work.screenshot({ path: path.join(OUT, 'staff-work-390-first.png') });
+    await confirmInitialStaffDesk(work);
     await geometry(work, 'staff scan action 390', 'button:has-text("카메라로 스캔")');
     await axePage(work, 'staff work 390');
     // The assigned staff account can also open the restricted event overview.
@@ -390,7 +396,7 @@ async function main() {
     const uncertainView = await uncertainAlert.evaluate(alert => {
       const section = alert.closest('section')?.parentElement;
       const heading = section?.querySelector('h2');
-      const retry = [...(section?.querySelectorAll('button') || [])].find(button => button.textContent?.trim() === '다시 시도');
+      const retry = [...(section?.querySelectorAll('button') || [])].find(button => button.textContent?.trim() === '같은 요청 재확인');
       const probe = element => {
         if (!element) return null;
         const rect = element.getBoundingClientRect();
@@ -405,6 +411,13 @@ async function main() {
     }
     check('lost scan response stays uncertain, not failed', uncertainView.heading === '처리 결과를 확인하지 못했습니다');
     check('uncertain scan explanation and retry are visible, reachable and focused', Boolean(uncertainView.alert?.inViewport && uncertainView.alert?.unobscured && uncertainView.retry?.inViewport && uncertainView.retry?.unobscured && uncertainView.retryFocused));
+    check('uncertain scan cannot be overwritten by another ticket or desk',
+      await work.locator('#staff-ticket').count() === 0 && await work.locator('#staff-desk').isDisabled()
+        && await work.getByRole('button', { name: '카메라로 스캔', exact: true }).count() === 0);
+    work.once('dialog', dialog => dialog.dismiss());
+    await work.getByRole('button', { name: '확인 중단하고 다른 업무', exact: true }).click();
+    check('dismissing the abandon warning retains the uncertain request',
+      await work.locator('section[aria-label="스캔 결과 미확인"]').isVisible() && scanAttempts.length === 1);
     // Request-bound place (390 uncertain): the verdict names the desk the
     // request committed to — source pin alone is not enough.
     const uncertainPlace = await work.locator('section[aria-label="스캔 결과 미확인"]').getByText(/처리 위치:/).first().innerText().catch(() => '');
@@ -432,11 +445,7 @@ async function main() {
     });
     if (uncertainWrap.wordBreak !== 'keep-all' || uncertainWrap.overflowWrap !== 'break-word' || uncertainWrap.split !== false) console.error('[crossrole-journey] uncertain 390 wrap', uncertainWrap);
     check('uncertain 390 warning wraps by word without mid-syllable split', uncertainWrap.wordBreak === 'keep-all' && uncertainWrap.overflowWrap === 'break-word' && uncertainWrap.split === false);
-    await work.getByRole('button', { name: /다시 시도/ }).first().click().catch(() => {});
-    // The retry control may be the same submit; fall back to resubmitting.
-    if (await work.getByRole('button', { name: '다음 참가자', exact: true }).count() === 0) {
-      await work.getByRole('button', { name: '입장 처리', exact: true }).click();
-    }
+    await work.getByRole('button', { name: '같은 요청 재확인', exact: true }).click();
     await work.getByRole('button', { name: '다음 참가자', exact: true }).waitFor({ timeout: 15000 });
     check('retry of the identical scan completes check-in', true);
     check('successful retry places keyboard focus on the next participant', await work.getByRole('button', { name: '다음 참가자', exact: true }).evaluate(element => element === document.activeElement));
@@ -476,6 +485,7 @@ async function main() {
     await work320.goto(`${fixture.baseUrl}/staff/events/${fixture.eventId}`);
     await work320.locator('#staff-desk').waitFor({ timeout: 15000 });
     await work320.screenshot({ path: path.join(OUT, 'staff-work-320-first.png') });
+    await confirmInitialStaffDesk(work320);
     await geometry(work320, 'staff scan action 320', 'button:has-text("카메라로 스캔")');
     // A floating scan dock previously passed the camera-button check while
     // covering the selected desk. Both controls must be genuinely hit-testable
@@ -756,11 +766,10 @@ async function main() {
       check('withheld scan response was committed in the isolated API', await bounded(timeoutResponse, 'withheld committed scan') === 200);
       const timeoutFailure = work320.locator('section[aria-label="스캔 결과 미확인"]');
       await timeoutFailure.waitFor({ timeout: 22000 });
-      check('timed-out scan retains the original ticket and unlocks editing', await work320.locator('#staff-ticket').inputValue() === timeoutParticipant.ticket && await work320.locator('#staff-ticket').getAttribute('readonly') === null && !await work320.locator('#staff-desk').isDisabled());
+      check('timed-out scan protects the unconfirmed request from another ticket or desk', await work320.locator('#staff-ticket').count() === 0 && await work320.locator('#staff-desk').isDisabled() && await timeoutFailure.getByRole('button', { name: '같은 요청 재확인', exact: true }).isVisible());
       releaseTimeout();
       await bounded(timeoutDone, 'withheld scan cleanup');
-      await timeoutFailure.getByRole('button', { name: '다시 시도', exact: true }).click();
-      await work320.getByRole('button', { name: '입장 처리', exact: true }).click();
+      await timeoutFailure.getByRole('button', { name: '같은 요청 재확인', exact: true }).click();
       await work320.getByRole('button', { name: '다음 참가자', exact: true }).waitFor({ timeout: 15000 });
       check('timed-out scan retry reuses the exact request and command id', timeoutAttempts.length === 2 && JSON.stringify(timeoutAttempts[0]) === JSON.stringify(timeoutAttempts[1]));
       check('timed-out scan retry produces one check only', (await snapshot()).checks.filter(check => check.participantId === timeoutParticipant.id && check.action === 'IN').length === 1);
@@ -810,10 +819,12 @@ async function main() {
         return route.continue();
       });
       await regD.getByRole('button', { name: '상태 다시 확인', exact: true }).click();
-      await regD.getByText('티켓을 사용할 수 없습니다').waitFor({ timeout: 15000 });
-      check('lost re-check with denied storage stays retryable (not missing)', true);
-      await regD.getByRole('button', { name: '다시 시도', exact: true }).click();
-      await regD.getByText('승인 대기').first().waitFor({ timeout: 15000 });
+      const recheckError = regD.getByRole('alert').filter({ hasText: '최신 상태를 확인하지 못했습니다.' });
+      await recheckError.waitFor({ timeout: 15000 });
+      check('lost re-check with denied storage keeps the pending receipt visible', await regD.getByText('승인 대기').first().isVisible());
+      await regD.getByRole('button', { name: '상태 다시 확인', exact: true }).click();
+      await recheckError.waitFor({ state: 'hidden' });
+      await regD.getByRole('button', { name: '상태 다시 확인', exact: true }).waitFor();
       check('failed re-check retries from the in-tab bearer', deniedAuth.length >= 2 && deniedAuth.every((h) => typeof h === 'string' && h.startsWith('Bearer ') && h.length > 7));
       await roster.getByRole('button', { name: /새로고침( 중…)?/, exact: true }).click();
       await roster.locator('input[placeholder*="이름·소속·연락처 검색"]').fill('저장 거부 참가자');
@@ -865,9 +876,10 @@ async function main() {
       await regE.screenshot({ path: path.join(OUT, 'e-ticket-denied-invalidated-390.png') });
       // A definitive 404 clears the bearer (no credential left to retry
       // with — the failed state offers recovery guidance, not a replay),
-      // so a reload lands on the missing state instead of the old ticket.
+      // so a reload preserves rejection instead of selecting a session.
       await regE.reload();
-      await regE.getByText('티켓이 확인되지 않습니다').waitFor({ timeout: 15000 });
+      await regE.getByRole('heading', { name: '티켓을 사용할 수 없습니다', exact: true }).waitFor({ timeout: 15000 });
+      assert.equal(await regE.getByRole('img', { name: /님의 행사 입장 및 퇴장용 QR/ }).count(), 0);
       check('stale bearer cannot regain authority after rejection', true);
       await deniedE.close();
       await denied.close();
@@ -1031,7 +1043,7 @@ async function main() {
     {
       const { ctx, page } = await signupFresh('immediate', '여정 참가자 정', '01055500104', async (form) => {
         check('open register lead promises instant issuance',
-          (await form.getByText('아래 정보를 입력하면 입장 티켓이 바로 발급됩니다.').count()) === 1);
+          (await form.getByText('신청하면 입장 티켓이 바로 발급됩니다.').count()) === 1);
       });
       ctxI = ctx; regI = page;
       await page.getByRole('img', { name: /님의 행사 입장 및 퇴장용 QR/ }).waitFor({ timeout: 15000 });
@@ -1052,7 +1064,7 @@ async function main() {
     {
       const { ctx, page } = await signupFresh('unpaid', '여정 참가자 무', '01055500105', async (form) => {
         check('paid register lead promises confirmation after payment, not instant entry',
-          (await form.getByText('아래 정보를 입력하면 신청이 접수되고, 결제 확인이 끝나면 입장 QR이 표시됩니다.').count()) === 1
+          (await form.getByText('신청 접수 후 결제 확인이 끝나면 입장 QR이 표시됩니다.').count()) === 1
           && (await form.getByText(/바로 발급됩니다/).count()) === 0);
         await form.screenshot({ path: path.join(OUT, 'u-register-paid-390.png') });
       });
@@ -1084,7 +1096,7 @@ async function main() {
       await page.goto(`${fixture.baseUrl}/event/${fixture.slug}/register`);
       await page.locator('form.registration-form').waitFor();
       check('combined register lead names both gates',
-        (await page.getByText('아래 정보를 입력하면 신청이 접수되고, 운영자 승인과 결제 확인이 모두 끝나면 입장 QR이 표시됩니다.').count()) === 1
+        (await page.getByText('신청 접수 후 운영자 승인과 결제 확인이 모두 끝나면 입장 QR이 표시됩니다.').count()) === 1
         && (await page.getByText(/바로 발급됩니다/).count()) === 0);
       await page.screenshot({ path: path.join(OUT, 'k-register-combined-390.png') });
       await page.locator('#field-name').fill('복합 조건 참가자');
@@ -1093,7 +1105,7 @@ async function main() {
       await page.getByRole('button', { name: '신청하기', exact: true }).click();
       await page.getByText('승인 대기').first().waitFor({ timeout: 15000 });
       check('combined receipt names both gates',
-        (await page.getByText('운영자 승인과 결제 확인이 끝나면 이 화면에 입장 QR이 표시됩니다.').count()) === 1);
+        (await page.getByText('신청이 접수되었습니다. 운영자 승인과 결제 확인 후 상태를 다시 확인하면 입장 QR을 볼 수 있습니다.').count()) === 1);
       check('combined pending shows no entry QR', (await page.getByRole('img', { name: /님의 행사 입장 및 퇴장용 QR/ }).count()) === 0);
       await page.screenshot({ path: path.join(OUT, 'k-ticket-combined-pending-390.png'), fullPage: true });
       const stored = (await snapshot()).participants.find((p) => p.phone === '01055500602');
@@ -1125,7 +1137,9 @@ async function main() {
     await regU.getByRole('button', { name: '상태 다시 확인', exact: true }).click();
     await regU.getByText('티켓을 사용할 수 없습니다').waitFor({ timeout: 15000 });
     check('cancelled re-check explains invalidation (no recovery link without SMS)',
-      (await regU.getByText('신청한 기기에서만 열 수 있습니다').count()) >= 1);
+      await regU.getByText(/행사 주최 측에 문의하세요/).isVisible()
+      && (await regU.getByRole('link', { name: '연락처 인증으로 티켓 다시 찾기' }).count()) === 0
+      && (await regU.getByRole('img', { name: /님의 행사 입장 및 퇴장용 QR/ }).count()) === 0);
     await regU.screenshot({ path: path.join(OUT, 'u-ticket-cancelled-390.png'), fullPage: true });
     if (ctxI) await ctxI.close();
     if (ctxU) await ctxU.close();
@@ -1231,6 +1245,40 @@ async function main() {
     await multiWork.keyboard.press('Enter');
     await multiWork.waitForFunction(() => document.activeElement?.id === 'staff-ticket', null, { timeout: 15000 });
     check('keyboard retry preserves the submitted ticket and returns focus', await multiWork.locator('#staff-ticket').inputValue() === 'ET-MULTI-INVALID');
+
+    // If an operator explicitly abandons an unconfirmed request after the
+    // warning, a later scan is a new operation, not a silently replayed old
+    // receipt. Simulate a lost response to a real rejected synthetic ticket;
+    // no participant record is changed in this branch.
+    const abandonedAttempts = [];
+    const abandonedRoute = async route => {
+      const body = route.request().postDataJSON() || {};
+      if (body.command !== 'check.scan' || body.payload?.ticket !== 'ET-MULTI-INVALID') return route.continue();
+      abandonedAttempts.push(body);
+      if (abandonedAttempts.length > 1) return route.continue();
+      const actual = await route.fetch();
+      assert.equal(actual.status(), 404);
+      await route.fulfill({ status: 502, contentType: 'application/json', body: '{"error":"simulated lost response"}' });
+    };
+    await multiWork.route('**/api/events/*/commands', abandonedRoute);
+    try {
+      await multiWork.getByRole('button', { name: '입장 처리', exact: true }).click();
+      const unknown = multiWork.locator('section[aria-label="스캔 결과 미확인"]');
+      await unknown.waitFor();
+      let abandonWarning = '';
+      multiWork.once('dialog', async dialog => { abandonWarning = dialog.message(); await dialog.accept(); });
+      await unknown.getByRole('button', { name: '확인 중단하고 다른 업무', exact: true }).click();
+      check('abandoning an uncertain scan requires a clear warning', /처리됐을 수 있는 요청/.test(abandonWarning));
+      await multiWork.locator('#staff-ticket').waitFor({ state: 'visible' });
+      await multiWork.getByRole('button', { name: '입장 처리', exact: true }).click();
+      await multiWork.locator('section[aria-label="스캔 실패"]').waitFor();
+      check('a new scan after explicit abandonment has a new command id',
+        abandonedAttempts.length === 2 && abandonedAttempts[0].commandId !== abandonedAttempts[1].commandId
+          && JSON.stringify(abandonedAttempts[0].payload) === JSON.stringify(abandonedAttempts[1].payload)
+          && abandonedAttempts[0].assignmentId === abandonedAttempts[1].assignmentId);
+    } finally {
+      await multiWork.unroute('**/api/events/*/commands', abandonedRoute);
+    }
     await multi.close();
 
     check('no unexpected browser runtime errors', errors.length === 0);

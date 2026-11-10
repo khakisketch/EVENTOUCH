@@ -53,7 +53,15 @@ async function main() {
     for (const width of [1440, 1280, 390, 320]) {
       await page.setViewportSize({ width, height: width > 768 ? 900 : 844 }); await loaded();
       if (!before) {
-        check(`header@${width}: task title precedes event context`, await page.locator('main header').first().evaluate(el => el.querySelector('h1').getBoundingClientRect().top < el.querySelector('a').getBoundingClientRect().top));
+        const header = await page.locator('main header').first().evaluate(el => {
+          const title = el.querySelector('h1');
+          const event = el.querySelector('a');
+          if (!title || !event) return null;
+          const titleBox = title.getBoundingClientRect();
+          const eventBox = event.getBoundingClientRect();
+          return { title: title.textContent.trim(), eventHref: event.getAttribute('href'), titleBox: { top: titleBox.top, width: titleBox.width, height: titleBox.height }, eventBox: { top: eventBox.top, width: eventBox.width, height: eventBox.height } };
+        });
+        check(`header@${width}: event context and participant title remain visible in order`, header?.title === '참가자 명단' && header.eventHref?.includes('/console/events/') && header.eventBox.width > 0 && header.eventBox.height > 0 && header.titleBox.width > 0 && header.titleBox.height > 0 && header.eventBox.top < header.titleBox.top, header);
         const table = page.getByRole('table', { name: /참가자 목록/ });
         check(`roster@${width}: correct responsive data surface`, width > 768 ? await table.isVisible() : await page.locator('li[class*="participantRow"]').first().isVisible());
         check(`roster@${width}: no permanent inspector`, await page.locator('[class*="rosterInspector"]').count() === 0);
@@ -64,7 +72,19 @@ async function main() {
         // width, Range line boxes, and caption/button row alignment.
         const metaCountWidth = await page.locator('.participant-count').evaluate(el => el.getBoundingClientRect().width);
         check(`roster@${width}: meta count keeps a readable width`, metaCountWidth >= 120, { width: metaCountWidth });
-        const metaCountLines = await page.locator('.participant-count').evaluate(el => { const range = document.createRange(); range.selectNodeContents(el); return range.getClientRects().length; });
+        const metaCountLines = await page.locator('.participant-count').evaluate(el => {
+          // A Range over the whole element includes nested span rectangles as
+          // well as each text node, so counting rectangles is not counting
+          // lines. Measure visible text fragments and group by their top edge.
+          const tops = new Set();
+          const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            if (!node.textContent?.trim()) continue;
+            const range = document.createRange(); range.selectNodeContents(node);
+            for (const rect of range.getClientRects()) if (rect.width > 0 && rect.height > 0) tops.add(Math.round(rect.top));
+          }
+          return tops.size;
+        });
         check(`roster@${width}: meta count avoids letter-by-letter wrapping`, metaCountLines <= 3, { lines: metaCountLines });
         // A 16–20px caption vertically centered beside a 44px button
         // differs in `top` by 10px+ on a healthy row, so same-row means
@@ -78,9 +98,11 @@ async function main() {
           });
           check(`roster@${width}: scope caption stays on its button's line`, scopeRow.overlap >= 8, scopeRow);
         } else {
-          const scope = page.getByText('여러 명 선택', { exact: true });
+          const scope = await page.getByText('여러 명 선택', { exact: true }).isVisible()
+            ? page.getByText('여러 명 선택', { exact: true })
+            : page.getByRole('button', { name: /^전체 \d+명 선택$/ });
           const bounds = await scope.boundingBox();
-          check(`roster@${width}: scope disclosure is visible and touch-sized`, await scope.isVisible() && bounds?.height >= 44, bounds);
+          check(`roster@${width}: the applicable scope action is visible and touch-sized`, await scope.isVisible() && bounds?.height >= 44, bounds);
         }
       }
       await shot('roster', width);
@@ -90,27 +112,27 @@ async function main() {
     await page.getByRole('checkbox', { name: `${pending[0].name} 선택`, exact: true }).check();
     await page.getByRole('checkbox', { name: `${pending[1].name} 선택`, exact: true }).check();
     await page.locator('#roster-search').fill(pending[1].name);
-    check('hidden selection named', (await page.locator('#roster-selection-count').innerText()).includes('숨김 1명'));
+    check('hidden selection named', (await page.locator('#roster-selection-count').innerText()).includes('필터 밖 1명'));
     const handoff = page.locator('#roster-send-message');
     check('message handoff preserves full exact selection', new URL(await handoff.getAttribute('href'), base).searchParams.get('to').split(',').sort().join(',') === pending.slice(0, 2).map(p => p.id).sort().join(','));
     await shot('selected-scope', 1280);
     await page.locator('#roster-filter-toggle').click();
     await page.locator('#roster-filter-reset').click();
-    check('reset retains selection', (await page.locator('#roster-selection-count').innerText()).includes('선택한 참가자 2명'));
+    check('reset retains selection', (await page.locator('#roster-selection-count').innerText()).includes('선택 2명'));
     await page.locator('#roster-search').fill(pending[1].name);
-    await page.getByRole('button', { name: '그룹 지정', exact: true }).click();
+        await page.getByRole('button', { name: '그룹 변경', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel('그룹', { exact: true }).selectOption('VIP');
     await dialog.getByRole('button', { name: '지정', exact: true }).click();
     await f.gateway.waitForResponseLoss('group.assign');
     await dialog.getByText(/같은 요청으로 다시 시도|같은 내용으로 다시 시도/).waitFor();
-    await dialog.getByRole('button', { name: '지정', exact: true }).click();
+    await dialog.getByRole('button', { name: '같은 요청 다시 시도', exact: true }).click();
     await dialog.waitFor({ state: 'hidden' });
     const groupRequests = f.gateway.commands.filter(c => c.command === 'group.assign');
     check('group response loss reuses receipt', groupRequests.length === 2 && groupRequests[0].commandId === groupRequests[1].commandId);
     people = (await workspace()).participants;
     check('group assignment excludes hidden selection', people.find(p => p.id === pending[1].id).group === 'VIP' && people.find(p => p.id === pending[0].id).group !== 'VIP');
-    check('proven group success clears its completed selection', !await page.locator('#roster-selection-count').count());
+    check('group success clears only the processed selection and retains the hidden selection', (await page.locator('#roster-selection-count').innerText()).includes('필터 밖 1명'));
     await loaded();
     const approveRow = page.getByRole('row').filter({ has: page.getByRole('checkbox', { name: `${pending[0].name} 선택`, exact: true }) });
     await approveRow.getByRole('button', { name: '승인', exact: true }).click();
@@ -128,11 +150,29 @@ async function main() {
     await dialog.getByLabel(`${pending[1].name} 상태 변경`, { exact: true }).selectOption('CANCELLED');
     check('cancellation requires explicit confirm', (await workspace()).participants.find(p => p.id === pending[1].id).status === 'PENDING');
     await dialog.getByRole('button', { name: '취소', exact: true }).click();
+    const desktopStatus = dialog.getByLabel(`${pending[1].name} 상태 변경`, { exact: true });
+    await page.waitForFunction(el => el === document.activeElement, await desktopStatus.elementHandle());
+    check('cancelling the confirmation restores focus to participant status', await desktopStatus.evaluate(el => el === document.activeElement));
     await page.keyboard.press('Escape');
+    // The inspector restores focus on the next animation frame after unmount.
+    await page.waitForFunction(el => el === document.activeElement, await detailButton.elementHandle());
     check('detail Escape restores trigger focus', await detailButton.evaluate(el => el === document.activeElement));
+    await page.setViewportSize({ width: 390, height: 844 });
+    const mobileDetailButton = page.getByRole('button', { name: `${pending[1].name} 참가자 상세`, exact: true });
+    await mobileDetailButton.click();
+    const mobileStatus = dialog.getByLabel(`${pending[1].name} 상태 변경`, { exact: true });
+    await mobileStatus.selectOption('CANCELLED');
+    await dialog.getByRole('button', { name: '취소', exact: true }).click();
+    const mobileRestoredStatus = dialog.getByLabel(`${pending[1].name} 상태 변경`, { exact: true });
+    await page.waitForFunction(el => el === document.activeElement, await mobileRestoredStatus.elementHandle());
+    check('mobile cancellation restores focus to participant status', await mobileRestoredStatus.evaluate(el => el === document.activeElement));
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(el => el === document.activeElement, await mobileDetailButton.elementHandle());
+    check('mobile detail Escape restores trigger focus', await mobileDetailButton.evaluate(el => el === document.activeElement));
+    await page.setViewportSize({ width: 1280, height: 900 });
     await page.getByRole('button', { name: /참가자.*이름순 정렬/ }).click();
     check('table sort reports ascending', await page.locator('th[aria-sort="ascending"]').count() === 1);
-    await page.getByText('명단 도구', { exact: true }).click();
+    await page.locator('summary[aria-label="명단 도구"]').click();
     const download = page.waitForEvent('download'); await page.getByRole('button', { name: /CSV 내보내기/ }).click();
     check('CSV download remains real', (await download).suggestedFilename() === 'EVENTOUCH_participants.csv');
 

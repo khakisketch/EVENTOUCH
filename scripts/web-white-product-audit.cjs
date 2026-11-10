@@ -1,4 +1,6 @@
 'use strict';
+const { messageStep } = require('./ui-journey-helpers.cjs');
+
 
 // Approved white product system: real routes and real API, synthetic data in
 // the fixture's owned PostgreSQL schema. No production service, real delivery,
@@ -26,8 +28,8 @@ const CONSOLE = [
   ['import', '/console/events/:id/participants/import', '#participant-import-file-heading'],
   ['messages', '/console/events/:id/messages', '#history-heading'],
   ['operations', '/console/events/:id/operations', '#ops-desks'],
-  ['programs', '/console/events/:id/programs', 'button:has-text("프로그램 만들기")'],
-  ['draws', '/console/events/:id/draws', '#draws-vote'],
+  ['programs', '/console/events/:id/programs', 'button:has-text("콘텐츠 만들기")'],
+  ['draws', '/console/events/:id/draws', '#draws-programs'],
   ['photos', '/console/events/:id/photos', '#evidence-photo-sections'],
   ['content', '/console/events/:id/content', '#content-notices'],
   ['page', '/console/events/:id/page', '#home-intro'],
@@ -167,21 +169,23 @@ async function main() {
         if (role === 'owner') {
           await page.goto(`${f.baseUrl}/console/events/${f.eventId}/messages`, { waitUntil: 'networkidle' });
           await page.locator('#message-compose-open').click();
+          await page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check();
+          await messageStep(page, 2);
           await page.locator('#campaign-title').fill('서밋 입장 안내');
           const body = '{{이름}}님, 반갑습니다.\n행사장 입구에서 모바일 티켓을 준비해 주세요.';
           await page.locator('#campaign-body').fill(body);
-          check(`compose@${width}: raw draft preview, no fabricated personal content`, await page.locator('#message-draft-preview').innerText() === body);
-          await page.getByLabel('모의 발송으로 기록', { exact: false }).check();
-          const recipients = page.locator('#campaign-recipients details');
-          if (!await recipients.evaluate(el => el.open)) await recipients.locator('summary').click();
-          await recipients.locator('ul input[type="checkbox"]').first().check();
+          check(`compose@${width}: preview substitutes an anonymous example without changing the draft`, (await page.locator('#message-draft-preview').innerText()).includes('홍길동님') && await page.locator('#campaign-body').inputValue() === body);
           await render(page, 'compose', width);
+          await messageStep(page, 3);
+          await page.getByLabel('모의 발송으로 기록', { exact: false }).check();
           await page.locator('#campaign-submit').click();
           await page.getByRole('button', { name: '모의 발송을 기록한다', exact: true }).waitFor();
           await render(page, 'message-review', width);
           check(`review@${width}: preview and review do not dispatch`, f.gateway.commands.length === 0);
           await page.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '취소', exact: true }).click();
+          await messageStep(page, 2);
           await page.locator('#campaign-title').fill(''); await page.locator('#campaign-body').fill('');
+          await messageStep(page, 1);
           await page.locator('#recipient-clear-all').click();
         }
         await context.close();
@@ -239,7 +243,7 @@ async function main() {
     let committedStatus;
     await uncertainPage.route(`**/api/events/${f.eventId}/commands`, async route => {
       const body = route.request().postDataJSON();
-      if (body.command !== 'message.create') return route.continue();
+      if (!['message.create', 'message.create-reviewed'].includes(body.command)) return route.continue();
       attempts.push(body);
       if (attempts.length === 1) {
         const actual = await route.fetch();
@@ -252,12 +256,12 @@ async function main() {
     await uncertainPage.goto(`${f.baseUrl}/console/events/${f.eventId}/messages`, { waitUntil: 'networkidle' });
     await uncertainPage.locator('#message-compose-open').click();
     const uncertainTitle = '응답 확인 재시도 검증';
+    await uncertainPage.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check();
+    await messageStep(uncertainPage, 2);
     await uncertainPage.locator('#campaign-title').fill(uncertainTitle);
     await uncertainPage.locator('#campaign-body').fill('{{이름}}님, 행사장 입구에서 티켓을 준비해 주세요.');
+    await messageStep(uncertainPage, 3);
     await uncertainPage.getByLabel('모의 발송으로 기록', { exact: false }).check();
-    const recipientDetails = uncertainPage.locator('#campaign-recipients details');
-    if (!await recipientDetails.evaluate(element => element.open)) await recipientDetails.locator('summary').click();
-    await recipientDetails.locator('ul input[type="checkbox"]').first().check();
     const confirmMessage = async () => {
       await uncertainPage.locator('#campaign-submit').click();
       await uncertainPage.getByRole('button', { name: '모의 발송을 기록한다', exact: true }).click();

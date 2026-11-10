@@ -1,4 +1,5 @@
 'use strict';
+const { openCreateSettings } = require('./ui-journey-helpers.cjs');
 
 // Task-first final journeys: the three workflow connections.
 //
@@ -210,8 +211,10 @@ async function main() {
       await page.locator('#create-name').waitFor({ state: 'visible', timeout: 10000 });
       await act(() => page.locator('#create-name').fill(createdEventName));
       await act(() => page.locator('#create-date').fill(EVENT_DATE));
+      await act(() => openCreateSettings(page));
       const draftFields = ['#create-name', '#create-slug', '#create-client', '#create-date', '#create-start', '#create-end', '#create-capacity'];
       const draftValues = await Promise.all(draftFields.map(field => page.locator(field).inputValue()));
+      await act(() => openCreateSettings(page));
       await act(() => page.getByRole('button', { name: '새 고객사 등록', exact: true }).click());
       await page.locator('#create-new-client-name').waitFor({ state: 'visible', timeout: 10000 });
       await shotBoth('final-event-client-subview');
@@ -222,7 +225,7 @@ async function main() {
       // The committed first response never arrives: the dialog must offer
       // the same-request retry instead of claiming a cancel or a failure.
       await fixture.gateway.waitForResponseLoss('client.save');
-      await page.getByText('연결하지 못했습니다. 같은 요청으로 다시 시도하세요.', { exact: true }).waitFor({ timeout: 15000 });
+      await page.getByText('연결하지 못했습니다. 서버 처리 확인 또는 같은 요청 다시 시도를 선택하세요.', { exact: true }).waitFor({ timeout: 15000 });
       await act(() => page.getByRole('dialog').getByRole('button', { name: '같은 요청 다시 시도', exact: true }).click());
       // Back on the event form: the draft is untouched, the new customer is
       // registered and selected.
@@ -491,6 +494,7 @@ async function main() {
       const clientName = `취소 복귀 고객사 ${suffix.slice(0, 6)}`;
       await go('/console', '#console-event-directory');
       await act(() => page.getByRole('button', { name: '새 행사 만들기', exact: true }).click());
+      await act(() => openCreateSettings(page));
       await act(() => page.getByRole('button', { name: '새 고객사 등록', exact: true }).click());
       await act(() => page.locator('#create-new-client-name').fill(clientName));
       await act(() => page.getByRole('dialog').getByRole('button', { name: '고객사 등록', exact: true }).click());
@@ -503,6 +507,7 @@ async function main() {
       await act(() => page.getByRole('button', { name: '새 행사 만들기', exact: true }).click());
       assert.equal(await page.locator(`#create-client option[value="${clientId}"]`).textContent(), clientName);
       assert.equal(await page.locator('#create-name').inputValue(), '', 'explicitly discarded event draft is not restored');
+      await act(() => openCreateSettings(page));
       await act(() => page.locator('#create-client').selectOption(clientId));
       const state = await readBootstrap(helpers, harness.baseUrl, ownerCookie);
       assert.equal((state.clients || []).filter(item => item.name === clientName).length, 1);

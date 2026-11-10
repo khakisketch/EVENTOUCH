@@ -11,6 +11,7 @@ const { prepareCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = requ
 const path = require('node:path');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
+const { confirmInitialStaffDesk } = require('./audit-staff-direction.cjs');
 const before = process.argv.includes('--before');
 const captureRoot = process.env.EVENTOUCH_TASK_FINAL_CAPTURE_ROOT || defaultCaptureDir(`task-first-final-${runStamp()}`);
 const out = path.join(captureRoot, before ? 'before' : 'after');
@@ -126,6 +127,7 @@ async function main() {
       await page.goto(f.baseUrl + `/staff/events/${f.eventId}`, { waitUntil: 'networkidle' });
       await page.locator('#staff-desk').waitFor();
       assert.equal(await page.locator('#staff-desk').inputValue(), f.deskId);
+      await confirmInitialStaffDesk(page);
       await page.locator('#staff-ticket').fill('invalid-test-ticket');
       await page.getByRole('button', { name: '입장 처리', exact: true }).click();
       await page.locator('.scan-failure').waitFor();
@@ -142,7 +144,7 @@ async function main() {
       assert.equal(await page.getByRole('button', { name: '다음 참가자', exact: true }).evaluate(el => el === document.activeElement), true);
       await page.keyboard.press('Enter');
       assert.equal(await page.locator('#staff-ticket').inputValue(), '');
-      checks.push({ name: 'staff-single-desk', beforeSteps: 3, afterSteps: 2, explicitScan: true, nextParticipantKeyboard: true });
+      checks.push({ name: 'staff-single-desk', beforeSteps: 3, afterSteps: 3, explicitDirectionConfirmation: true, explicitScan: true, nextParticipantKeyboard: true });
       const persisted = (await f.helpers.requestJson(f.harness.baseUrl, '/api/bootstrap', { cookie: owner })).json.state;
       assert.equal(persisted.workspaces[f.eventId].participants.find(p => p.id === person.id).inside, true);
 

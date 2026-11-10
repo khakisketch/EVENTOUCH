@@ -211,7 +211,7 @@ async function main() {
     });
     await first.goto(`${f.baseUrl}/console/events/${cEvent}/messages`);
     await first.locator('#message-compose-open').click();
-    await first.locator('#campaign-title').waitFor();
+    await first.locator('#recipient-status-filter').waitFor();
     const simulation = first.getByLabel('모의 발송으로 기록', { exact: false });
     check('fresh org starts in locked simulation mode without inherited real send', await simulation.isChecked() && await simulation.isDisabled());
     await capture(first, 'new-org-simulation-only-390');
@@ -273,6 +273,125 @@ async function main() {
     check('joined C membership uses STAFF empty assignment without permission promise', new URL(invitePage.url()).pathname === '/staff');
     await capture(invitePage, 'joined-staff-empty-390');
     await inspect(invitePage, 'joined-staff-empty-390');
+
+    // A new-account invite can commit while its response is lost. Do not
+    // claim success from a malformed 2xx or let a second password replace
+    // the one the server may already have recorded.
+    const newInviteEmail = `invite-loss-${f.suffix}@example.test`;
+    const newInvite = await write(ownerCookie, '/api/auth/invitations', { commandId: crypto.randomUUID(), name: '합성 신규 초대', email: newInviteEmail, role: 'STAFF' });
+    assert.ok(newInvite.status < 300);
+    const newContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const newPage = await newContext.newPage();
+    newPage.on('pageerror', (error) => errors.push(error.message));
+    await newPage.goto(`${f.baseUrl}/invite/${newInvite.json.token}`);
+    await newPage.getByLabel('비밀번호 (8자 이상)').fill('audit-invite-password-1');
+    await newPage.getByLabel('비밀번호 확인').fill('audit-invite-password-1');
+    let inviteNavigationWarning = false;
+    newPage.once('dialog', async (dialog) => { inviteNavigationWarning = dialog.message().includes('비밀번호'); await dialog.dismiss(); });
+    await newPage.getByRole('link', { name: 'EVENTOUCH', exact: true }).click();
+    check('new invite input survives cancelled navigation', inviteNavigationWarning && await newPage.getByLabel('비밀번호 (8자 이상)').inputValue() === 'audit-invite-password-1');
+    let newInviteCommit = 0;
+    await newPage.route('**/api/auth/invitations/*/accept', async (route) => {
+      const actual = await route.fetch();
+      newInviteCommit = actual.status();
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+    });
+    await newPage.getByRole('button', { name: '초대 수락', exact: true }).click();
+    await newPage.getByText('초대 수락 결과를 확인하지 못했습니다.').waitFor();
+    check('new invite malformed response follows a real commit without claiming success', newInviteCommit === 201 && await newPage.getByRole('heading', { name: '초대를 수락했습니다' }).count() === 0);
+    check('new invite retains and freezes the original password', await newPage.getByLabel('비밀번호 (8자 이상)').inputValue() === 'audit-invite-password-1' && await newPage.getByLabel('비밀번호 (8자 이상)').getAttribute('readonly') !== null);
+    for (const width of [320, 390]) {
+      await newPage.setViewportSize({ width, height: 844 });
+      const heading = newPage.getByRole('heading', { name: /합성 신규 초대님을 초대했습니다/ });
+      const intact = await heading.evaluate((element) => {
+        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+        const characters = [];
+        let node;
+        while ((node = walker.nextNode())) {
+          for (let offset = 0; offset < node.textContent.length; offset += 1) {
+            const range = document.createRange(); range.setStart(node, offset); range.setEnd(node, offset + 1);
+            characters.push({ value: node.textContent[offset], row: Math.round(range.getBoundingClientRect().top) });
+          }
+        }
+        const start = characters.map((character) => character.value).join('').indexOf('초대했습니다');
+        if (start < 0) return false;
+        return new Set(characters.slice(start, start + '초대했습니다'.length).map((character) => character.row)).size === 1;
+      });
+      check(`invite heading keeps Korean words intact at ${width}`, intact);
+      check(`invite heading has no overflow at ${width}`, await newPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    }
+    await newPage.mouse.move(0, 0);
+    const loginCheck = newPage.getByRole('link', { name: '로그인해 확인 (새 탭)' });
+    const retryInvite = newPage.getByRole('button', { name: '같은 정보로 다시 수락' });
+    const paperColor = await newPage.evaluate(() => {
+      const sample = document.createElement('span'); sample.style.backgroundColor = 'var(--paper)';
+      document.body.appendChild(sample); const color = getComputedStyle(sample).backgroundColor; sample.remove(); return color;
+    });
+    await newPage.waitForFunction((expected) => {
+      const retry = Array.from(document.querySelectorAll('button')).find((button) => button.textContent.includes('같은 정보로 다시 수락'));
+      return retry && getComputedStyle(retry).backgroundColor === expected;
+    }, paperColor);
+    const loginColor = await loginCheck.evaluate((element) => getComputedStyle(element).backgroundColor);
+    const retryColor = await retryInvite.evaluate((element) => getComputedStyle(element).backgroundColor);
+    check('login verification is visually distinct from invitation retry', loginColor !== retryColor && retryColor === paperColor);
+    await newPage.screenshot({ path: `${OUT}/invite-new-unconfirmed-390.png`, mask: [newPage.locator('input[type="password"]')] });
+    await inspect(newPage, 'invite-new-unconfirmed-390');
+    await newPage.unroute('**/api/auth/invitations/*/accept');
+    await newPage.getByRole('button', { name: '같은 정보로 다시 수락' }).click();
+    await newPage.getByText('초대 수락 결과를 확인하지 못했습니다.').waitFor();
+    check('a later consumed-invitation response does not erase the original uncertainty', await newPage.getByLabel('비밀번호 (8자 이상)').inputValue() === 'audit-invite-password-1');
+    const newLoginPopup = newPage.waitForEvent('popup');
+    await newPage.getByRole('link', { name: '로그인해 확인 (새 탭)' }).click();
+    const newLogin = await newLoginPopup;
+    await newLogin.getByLabel('이메일', { exact: true }).fill(newInviteEmail);
+    await newLogin.getByLabel('비밀번호', { exact: true }).fill('audit-invite-password-1');
+    await newLogin.getByRole('button', { name: '로그인', exact: true }).click();
+    await newLogin.waitForURL('**/staff');
+    check('new invite account logs in with the original password after a lost response', true);
+    const newMemberCount = await f.harness.database.query('SELECT count(*)::int AS count FROM accounts WHERE lower(email)=lower($1)', [newInviteEmail]);
+    check('new invite retry does not create a duplicate account', newMemberCount.rows[0].count === 1);
+    await newContext.close();
+
+    // Existing accounts must retain their password and can verify their new
+    // membership in the organization picker after a lost response.
+    const existingId = `invite-existing-${f.suffix}`;
+    const existingEmail = `${existingId}@example.test`;
+    await f.helpers.insertAccount(f.harness.database, { orgId: f.helpers.LEGACY_ORG, id: existingId, role: 'MANAGER', name: '합성 기존 초대', email: existingEmail });
+    const existingInvite = await write(ownerCookie, '/api/auth/invitations', { commandId: crypto.randomUUID(), name: '합성 기존 초대', email: existingEmail, role: 'STAFF' });
+    assert.ok(existingInvite.status < 300);
+    const existingContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    await addCookie(existingContext, await f.helpers.sessionCookie(f.harness, existingId));
+    const existingPage = await existingContext.newPage();
+    existingPage.on('pageerror', (error) => errors.push(error.message));
+    await existingPage.goto(`${f.baseUrl}/invite/${existingInvite.json.token}`);
+    let existingInviteCommit = 0;
+    await existingPage.route('**/api/auth/invitations/*/accept', async (route) => {
+      const actual = await route.fetch();
+      existingInviteCommit = actual.status();
+      await route.fulfill({ status: 502, contentType: 'application/json', body: '{}' });
+    });
+    await existingPage.getByRole('button', { name: '초대 수락', exact: true }).click();
+    await existingPage.getByText('초대 수락 결과를 확인하지 못했습니다.').waitFor();
+    check('existing invite lost response follows a real membership commit', existingInviteCommit === 201 && await existingPage.getByRole('heading', { name: '초대를 수락했습니다' }).count() === 0);
+    const uncertainMembership = existingPage.getByRole('region', { name: '운영사 선택', exact: true });
+    await uncertainMembership.getByLabel('전환할 운영사', { exact: true }).waitFor();
+    check('existing invite membership is visible directly on the invitation', (await uncertainMembership.getByLabel('전환할 운영사', { exact: true }).locator('option').evaluateAll((options, id) => options.some((option) => option.value === id), cOrg.id)));
+    await existingPage.mouse.move(0, 0);
+    await existingPage.waitForFunction((expected) => {
+      const retry = Array.from(document.querySelectorAll('button')).find((button) => button.textContent.includes('같은 초대 다시 수락'));
+      return retry && getComputedStyle(retry).backgroundColor === expected;
+    }, paperColor);
+    await existingPage.screenshot({ path: `${OUT}/invite-existing-unconfirmed-390.png`, fullPage: true });
+    await inspect(existingPage, 'invite-existing-unconfirmed-390');
+    await existingPage.unroute('**/api/auth/invitations/*/accept');
+    await existingPage.getByRole('button', { name: '같은 초대 다시 수락' }).click();
+    await existingPage.getByText('초대 수락 결과를 확인하지 못했습니다.').waitFor();
+    check('existing invite remains unconfirmed after a subsequent consumed-invitation response', await uncertainMembership.getByLabel('전환할 운영사', { exact: true }).isVisible());
+    await uncertainMembership.getByLabel('전환할 운영사', { exact: true }).selectOption(cOrg.id);
+    await uncertainMembership.getByRole('button', { name: '이 운영사로 이동' }).click();
+    await existingPage.waitForURL('**/staff');
+    check('existing invite allows an explicit switch to the confirmed membership', true);
+    await existingContext.close();
 
     // Shared accounts are known up front: do not open a reset form and then
     // surprise the owner with a global-effect refusal. The API also fails

@@ -21,7 +21,6 @@ async function main() {
   const apiPort = Number(process.env.API_PORT || 8776);
   const webPort = Number(process.env.WEB_PORT || 8777);
   const apiBase = process.env.EVENTOUCH_API_URL || `http://127.0.0.1:${apiPort}`;
-  const nextBin = path.join(ROOT, 'apps/web/node_modules/next/dist/bin/next');
   // Rewrites are build artifacts. Never report a healthy product while its
   // web process silently sends requests to a different running API/database.
   assertBuiltApiTarget(path.join(ROOT, 'apps/web'), apiBase);
@@ -36,14 +35,14 @@ async function main() {
       command: process.execPath,
       args: ['server/server.js'],
       cwd: ROOT,
-      env: { ...process.env, PORT: String(apiPort) },
+      env: { ...process.env, PORT: String(apiPort), EVENTOUCH_API_BIND: '127.0.0.1' },
     },
     web: {
       label: 'web',
       command: process.execPath,
-      args: [nextBin, 'start', '-H', '127.0.0.1', '-p', String(webPort)],
+      args: ['web-server.cjs'],
       cwd: path.join(ROOT, 'apps/web'),
-      env: { ...process.env, PORT: String(webPort), EVENTOUCH_API_URL: apiBase },
+      env: { ...process.env, PORT: String(webPort), EVENTOUCH_API_URL: apiBase, EVENTOUCH_WEB_BIND: '127.0.0.1' },
     },
   });
   process.exitCode = code;

@@ -1,4 +1,5 @@
 'use strict';
+const { openCreateSettings, chooseRadio } = require('./ui-journey-helpers.cjs');
 // Safe4 product audit: optional event format, row-reuse registration,
 // arbitrary period analysis, frozen-report A4/16:9 presentation.
 // Standalone main (parent runs it after the build); also exports
@@ -91,10 +92,11 @@ async function runSafe4Audit() {
     // Short slug on purpose: the dialog auto-suggests a slug on name blur,
     // and a long scripted fill can race that suggestion past the 50-char
     // pattern (a script-fill race, not typed input). Keep it well short.
+    await openCreateSettings(page);
     await page.locator('#create-slug').fill(`s4f-${f.suffix.slice(0, 8)}`);
     await page.locator('#create-date').fill('2026-11-10');
-    await page.locator('#create-format').selectOption('online');
-    check('create dialog offers the optional unspecified choice', await page.locator('#create-format option[value=""]').count() === 1);
+    await chooseRadio(page, 'create-format', 'online');
+    check('create dialog offers the optional unspecified choice', await page.locator('#create-format input[type="radio"][value=""]').count() === 1);
     await page.getByRole('button', { name: '행사 만들기', exact: true }).click();
     await page.waitForURL(/\/console\/events\/.+/, { timeout: 15000 });
     const eventId = new URL(page.url()).pathname.split('/').pop();
@@ -103,14 +105,14 @@ async function runSafe4Audit() {
     check('unspecified stays absent / online stores verbatim', created.format === 'online', created);
     await page.goto(`${f.baseUrl}/console/events/${eventId}/settings`);
     await page.getByRole('tab', { name: '기본 정보', exact: true }).click();
-    check('settings basics shows the stored online format', await page.locator('#set-format').inputValue() === 'online');
+    check('settings basics shows the stored online format', await page.locator('#set-format input:checked').inputValue() === 'online');
     await capture('safe4-settings-format-1280');
-    await page.locator('#set-format').selectOption('hybrid');
+    await chooseRadio(page, 'set-format', 'hybrid');
     await page.getByRole('button', { name: '기본 정보 저장', exact: true }).click();
     await page.getByText(/기본 정보를 저장했습니다/, { exact: false }).first().waitFor();
     const hybrid = (await f.harness.database.query(`SELECT payload->>'format' AS format FROM events WHERE id=$1`, [eventId])).rows[0];
     check('settings update stores hybrid without touching other basics', hybrid.format === 'hybrid', hybrid);
-    await page.locator('#set-format').selectOption('');
+    await chooseRadio(page, 'set-format', '');
     await Promise.all([
       page.waitForResponse((response) => response.url().includes('/commands') && response.request().method() === 'POST'),
       page.getByRole('button', { name: '기본 정보 저장', exact: true }).click(),

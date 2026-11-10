@@ -324,7 +324,7 @@ async function main() {
 
       // Guidance copy is present before any file is chosen.
       assert.equal(await page.getByText('가져오기는 선택적인 도구입니다.', { exact: false }).count() >= 1, true, `import/${width}: optional-tool guidance present`);
-      assert.equal(await page.getByText(/CSV·TXT·XLSX · 최대 1MB, 1,000행/, { exact: false }).count() >= 1, true, `import/${width}: format limits guidance present`);
+      assert.equal(await page.getByText(/CSV·TXT·(?:XLS·)?XLSX · 최대 1MB, 1,000행/, { exact: false }).count() >= 1, true, `import/${width}: format limits guidance present`);
       judge(`import/${width} guidance`, { optionalTool: true, limitsNote: true });
 
       if (width === 1280) {

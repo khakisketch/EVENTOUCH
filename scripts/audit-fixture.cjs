@@ -45,6 +45,7 @@ const fs = require('node:fs');
 const net = require('node:net');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const { isolatedTestEnvironment, fixtureSolapiEnvironment } = require('../tests/helpers/test-provider-env.cjs');
 
 const WEB_BASE = (process.env.WEB_BASE || 'http://127.0.0.1:8777').replace(/\/+$/, '');
 const WEB_BASE_EXPLICIT = Object.hasOwn(process.env, 'WEB_BASE');
@@ -150,7 +151,7 @@ async function startOwnedNext({ apiBase, timeoutMs = 90000, dir } = {}) {
   };
   const child = spawn(process.execPath, [bin, 'start', '-p', String(port), '-H', '127.0.0.1'], {
     cwd: root,
-    env: { ...process.env, EVENTOUCH_API_URL: apiBase, PORT: String(port) },
+    env: { ...isolatedTestEnvironment(process.env), EVENTOUCH_API_URL: apiBase, PORT: String(port) },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout.on('data', remember);
@@ -344,7 +345,7 @@ async function seedAuditFixture(harness, helpers, { suffix = crypto.randomUUID()
 // Boots harness + seed + owned Next + gateway. Close with fixture.close(),
 // which unwinds gateway -> owned Next -> harness and only those three.
 // fixture.gateway / fixture.harness stay exposed for compatibility.
-async function startAuditFixture({ webBase, loseFirstResponseFor = null, nextTimeoutMs = 90000 } = {}) {
+async function startAuditFixture({ webBase, loseFirstResponseFor = null, nextTimeoutMs = 90000, fixtureSolapiHost = null, fixtureSolapiKakao = false } = {}) {
   const requestedWebBase = webBase !== undefined ? String(webBase).replace(/\/+$/, '') : null;
   if (requestedWebBase || WEB_BASE_EXPLICIT) {
     process.stderr.write(
@@ -354,7 +355,12 @@ async function startAuditFixture({ webBase, loseFirstResponseFor = null, nextTim
   }
   ensureAuditDatabaseEnv();
   const helpers = loadHelpers();
-  const harness = await helpers.startApiHarness();
+  const env = fixtureSolapiHost ? fixtureSolapiEnvironment(process.env, fixtureSolapiHost) : undefined;
+  // The test-only Kakao identity is permitted only alongside the explicit
+  // loopback provider. Never inherit a real channel from the host environment.
+  if (fixtureSolapiKakao && !env) throw new Error('Synthetic Kakao requires the loopback Solapi fixture');
+  if (fixtureSolapiKakao) env.SOLAPI_KAKAO_PFID = 'fixture-kakao-channel';
+  const harness = await helpers.startApiHarness({ env });
   let owned = null;
   let gateway = null;
   try {

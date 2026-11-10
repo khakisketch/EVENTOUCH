@@ -1,4 +1,5 @@
 'use strict';
+const { chooseRadio } = require('./ui-journey-helpers.cjs');
 
 // Permanent real-browser outcome audit for the console unification: every
 // console menu renders inside the shared ConsolePage frame with one
@@ -59,12 +60,12 @@ const SCREENS = [
   { key: 'import', path: '/console/events/:id/participants/import', title: '명단 가져오기', scope: 'event', marker: { css: '#participant-import-file-heading' } },
   { key: 'messages', path: '/console/events/:id/messages', title: '메시지 발송', scope: 'event', marker: { css: '#history-heading' } },
   { key: 'operations', path: '/console/events/:id/operations', title: '현장 운영', scope: 'event', marker: { css: '#ops-desks' } },
-  { key: 'programs', path: '/console/events/:id/programs', title: '참여 프로그램', scope: 'event', marker: { role: 'button', name: '프로그램 만들기' } },
-  { key: 'draws', path: '/console/events/:id/draws', title: '추첨·투표', scope: 'event', marker: { css: '#draws-vote' } },
+  { key: 'programs', path: '/console/events/:id/programs', title: '참여 콘텐츠', scope: 'event', marker: { role: 'button', name: '콘텐츠 만들기' } },
+  { key: 'draws', path: '/console/events/:id/draws', title: '추첨·투표', scope: 'event', marker: { css: '#draws-programs' } },
   { key: 'photos', path: '/console/events/:id/photos', title: '현장 사진', scope: 'event', marker: { css: '#evidence-photo-sections' } },
-  { key: 'content', path: '/console/events/:id/content', title: '콘텐츠', scope: 'event', marker: { css: '#content-notices' } },
+  { key: 'content', path: '/console/events/:id/content', title: '공지·안내', scope: 'event', marker: { css: '#content-notices' } },
   { key: 'attendeePage', path: '/console/events/:id/page', title: '참가자 페이지', scope: 'event', marker: { css: '#home-intro' } },
-  { key: 'rewards', path: '/console/events/:id/rewards', title: '경품', scope: 'event', marker: { css: '#rewards-list' } },
+  { key: 'rewards', path: '/console/events/:id/rewards', title: '경품 수령', scope: 'event', marker: { css: '#rewards-list' } },
   { key: 'settings', path: '/console/events/:id/settings', title: '행사 설정', scope: 'event', marker: { css: '#set-name' } },
   { key: 'reports', path: '/console/events/:id/reports', title: '결과 보고서', scope: 'event', marker: { css: '#reports-list' } },
 ];
@@ -403,7 +404,7 @@ async function saveShot(page, name) {
 async function assertResponseLossRetry(page, helpers, baseUrl, eventId, eventName, {
   label, screen, openName, fields, submitName, routePattern,
   matchRequest, failureText, dialogShot, readRecords, isNewRecord,
-  guardSelector, guardPathname, hubSelector, hubPathname,
+  guardSelector, guardPathname, hubSelector, hubPathname, retryName = submitName, expectFrozen = false,
 }) {
   await page.goto(`${baseUrl}${screenPath(screen, eventId)}`, { waitUntil: 'networkidle', timeout: 30000 });
   await page.waitForTimeout(800);
@@ -476,12 +477,13 @@ async function assertResponseLossRetry(page, helpers, baseUrl, eventId, eventNam
     for (const field of fields) {
       const actual = await page.locator(field.selector).inputValue();
       if (actual !== field.value) throw new Error(`${label}: lost response overwrote ${field.selector}`);
+      if (expectFrozen && await page.locator(field.selector).isEditable()) throw new Error(`${label}: unresolved input must stay frozen`);
     }
     if (!await dialog.isVisible()) throw new Error(`${label}: dialog closed on the lost response`);
     // Capture the actual error-state dialog as-is: no scroll reset, which
     // would move the fixed overlay's backdrop relative to the viewport.
     await page.screenshot({ path: path.join(CAPTURE_DIR, dialogShot) });
-    await dialog.getByRole('button', { name: submitName, exact: true }).click();
+    await dialog.getByRole('button', { name: retryName, exact: true }).click();
     await dialog.waitFor({ state: 'detached', timeout: 15000 });
   } finally {
     await page.unroute(routePattern).catch(() => {});
@@ -565,6 +567,7 @@ async function main() {
       failures.push(`${label}: ${(error && error.message || String(error)).split('\n')[0]}`);
       phases.push({ label, passed: false, milliseconds: Date.now() - started, error: String(error && error.message || error) });
     }
+    fs.writeFileSync(path.join(CAPTURE_DIR, 'progress.json'), JSON.stringify({ phases, failures }, null, 2), { mode: 0o600 });
   };
 
   let browser;
@@ -644,17 +647,20 @@ async function main() {
           if (screen.key === 'overview' && viewport.width === 1280) {
             // A full-width queue should not separate a short task from its
             // corresponding action by hundreds of blank pixels. Measure the
-            // painted hint, not its potentially stretched grid container.
+            // painted task and count, not the potentially stretched row.
             const queue = page.locator('section[aria-labelledby="event-now-heading"]');
-            const hint = queue.getByText('검토가 필요한 신청입니다.', { exact: true });
+            const task = queue.locator('[data-task="approval"] > div > div');
             const action = queue.getByRole('link', { name: '승인 대기 처리', exact: true });
-            const hintRight = await hint.evaluate((element) => {
+            const taskRight = await task.evaluate((element) => {
               const range = document.createRange(); range.selectNodeContents(element);
               return range.getBoundingClientRect().right;
             });
             const box = await action.boundingBox();
-            if (!box || box.x < hintRight || box.x - hintRight > 120) {
-              throw new Error(`overview task and action are visually detached: ${JSON.stringify({ hintRight, action: box })}`);
+            const row = await task.locator('xpath=../..').boundingBox();
+            // The chosen workspace uses a consistent right action column.
+            // Verify the task and action share a bounded row, not a text-gap limit.
+            if (!box || !row || box.x < taskRight || box.x + box.width > row.x + row.width + 1 || box.y < row.y || box.y + box.height > row.y + row.height + 1) {
+              throw new Error(`overview action is outside its task row: ${JSON.stringify({ taskRight, action: box, row })}`);
             }
           }
           const geometry = await headerGeometry(page);
@@ -685,6 +691,7 @@ async function main() {
           await context.addCookies([{ name: 'etko_session', value: ownerSession, httpOnly: true, sameSite: 'Lax', url: baseUrl }]);
           const page = await context.newPage();
           await page.goto(`${baseUrl}${screenPath(SCREENS.find((screen) => screen.key === 'content'), eventId)}`, { waitUntil: 'networkidle' });
+          await page.getByRole('tab', { name: '프로그램 일정', exact: true }).click();
           const empty = page.locator('section[aria-labelledby="content-program"]').getByText('등록된 일정이 없습니다.', { exact: false });
           await empty.waitFor();
           const broken = await empty.evaluate((node) => {
@@ -1016,7 +1023,7 @@ async function main() {
           await toggle.click();
           await page.locator('#roster-filter-reset').click();
           if (!await selected.isChecked()) throw new Error('filter reset discarded selection');
-          await page.getByText('명단 도구', { exact: true }).click();
+          await page.locator('summary[aria-label="명단 도구"]').click();
           const download = page.waitForEvent('download');
           await page.getByRole('button', { name: /CSV 내보내기/ }).click();
           if (!(await download).suggestedFilename().endsWith('.csv')) throw new Error('CSV no longer downloads');
@@ -1027,7 +1034,7 @@ async function main() {
         await check(`phone/section-destinations@${width}`, async () => {
           for (const key of ['draws', 'operations', 'content']) {
             await go(key);
-            const links = page.locator('main nav a[href^="#"]');
+            const links = page.getByRole('tab');
             if (!await links.count()) throw new Error(`${key}: no section links`);
             for (const link of await links.all()) {
               const box = await link.boundingBox();
@@ -1035,7 +1042,7 @@ async function main() {
             }
             await shot(key);
           }
-          await page.getByRole('link', { name: '장소 안내', exact: true }).click();
+          await page.getByRole('tab', { name: '장소 안내', exact: true }).click();
           await page.waitForURL('**#content-venue');
           const target = await page.locator('#content-venue').boundingBox();
           const rail = await page.locator('.console-sidebar').boundingBox();
@@ -1067,7 +1074,7 @@ async function main() {
         });
         await check(`phone/preview-status@${width}`, async () => {
           await go('attendeePage');
-          await page.getByRole('button', { name: '미리보기', exact: true }).click();
+          await page.getByRole('navigation', { name: '참가자 페이지 구역' }).getByRole('link', { name: '미리보기', exact: true }).click();
           const status = page.locator('section[aria-labelledby="home-preview-heading"]').getByText('편집 중', { exact: true }).first();
           const box = await status.boundingBox();
           if (!box || box.height > 30 || box.width < 40) throw new Error('preview status squeezed into vertical Korean');
@@ -1130,7 +1137,7 @@ async function main() {
         // it away, come back — the choice is still there.
         await page.getByRole('checkbox', { name: '통합 확정 미입장 선택' }).check();
         await page.getByLabel('출입 상태별 보기', { exact: true }).selectOption('INSIDE');
-        await page.getByText(/숨김 \d+명/, { exact: false }).first().waitFor({ timeout: 10000 });
+        await page.locator('#roster-selection-count').getByText(/필터 밖 \d+명/, { exact: false }).first().waitFor({ timeout: 10000 });
         await page.getByLabel('출입 상태별 보기', { exact: true }).selectOption('NOT_ENTERED');
         if (!await page.getByRole('checkbox', { name: '통합 확정 미입장 선택' }).isChecked()) {
           throw new Error('selection did not survive the cross-filter excursion');
@@ -1274,7 +1281,7 @@ async function main() {
       const page = await context.newPage();
       try {
         await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/programs`, { waitUntil: 'networkidle', timeout: 30000 });
-        const opener = page.getByRole('button', { name: '프로그램 만들기' }).first();
+        const opener = page.getByRole('button', { name: '콘텐츠 만들기' }).first();
         await opener.click();
         await page.locator('#program-title').waitFor({ state: 'visible', timeout: 10000 });
         if (await page.evaluate(() => document.activeElement && document.activeElement.id) !== 'program-title') {
@@ -1297,7 +1304,7 @@ async function main() {
         });
         await page.keyboard.press('Escape');
         await page.waitForTimeout(500);
-        if (!dialogMessage || !dialogMessage.includes('작성 중인 프로그램 내용')) {
+        if (!dialogMessage || !dialogMessage.includes('작성 중인 콘텐츠 내용')) {
           throw new Error(`dirty Escape: no confirm (saw ${JSON.stringify(dialogMessage)})`);
         }
         if (!await page.locator('#program-title').isVisible()) throw new Error('dirty Escape dismiss closed the dialog');
@@ -1309,7 +1316,7 @@ async function main() {
         await page.keyboard.press('Escape');
         await page.locator('#program-title').waitFor({ state: 'detached', timeout: 10000 });
         const restored = await page.evaluate(() => document.activeElement && document.activeElement.textContent);
-        if (!String(restored || '').includes('프로그램 만들기')) {
+        if (!String(restored || '').includes('콘텐츠 만들기')) {
           throw new Error('confirmed cancel did not restore focus to the opener');
         }
       } finally {
@@ -1393,7 +1400,7 @@ async function main() {
             await route.fulfill({ status: 502, contentType: 'application/json', body: '{}' });
             return;
           }
-          if (body && (body.command === 'attendee.page.save' || body.command === 'attendee.page.publish')) {
+          if (body && (body.command === 'attendee.page.save' || body.command === 'attendee.page.publish-reviewed')) {
             saveIds.push(body.commandId);
           }
           await route.continue();
@@ -1401,7 +1408,7 @@ async function main() {
         const edited = `${committed} · 추가 편집`;
         await page.locator('#home-intro').fill(edited);
         await page.getByRole('button', { name: '초안 저장', exact: true }).click();
-        await page.getByText('초안을 저장하지 못했습니다.', { exact: false }).first().waitFor({ timeout: 15000 });
+        await page.getByText('저장 응답을 확인하지 못했습니다.', { exact: false }).first().waitFor({ timeout: 15000 });
         if ((await page.locator('#home-intro').inputValue()) !== edited) {
           throw new Error('failed save overwrote the local edit');
         }
@@ -1416,7 +1423,7 @@ async function main() {
         await page.locator('#home-intro').fill(second);
         injectOnce = true;
         await page.getByRole('button', { name: '초안 저장', exact: true }).click();
-        await page.getByText('초안을 저장하지 못했습니다.', { exact: false }).first().waitFor({ timeout: 15000 });
+        await page.getByText('저장 응답을 확인하지 못했습니다.', { exact: false }).first().waitFor({ timeout: 15000 });
         const finalEdit = `${second} · 보존할 새 입력`;
         await page.locator('#home-intro').fill(finalEdit);
         await page.getByRole('button', { name: '초안 저장', exact: true }).click();
@@ -1438,7 +1445,7 @@ async function main() {
         await page.unroute('**/api/events/*/commands');
         await page.getByRole('button', { name: '초안 저장', exact: true }).click();
         await page.getByText('초안을 저장했습니다.', { exact: false }).first().waitFor({ timeout: 15000 });
-        await page.getByRole('button', { name: '게시', exact: true }).click();
+        await page.getByRole('button', { name: '게시 검토', exact: true }).click();
         await page.getByRole('button', { name: '게시하기', exact: true }).click();
         await page.getByText('게시했습니다.', { exact: false }).first().waitFor({ timeout: 15000 });
         const published = await readBootstrap(helpers, baseUrl, extended.ownerCookie);
@@ -1509,6 +1516,7 @@ async function main() {
           deskId: fixture.deskId, ticket: scanTarget.ticket,
         }, `audit-assign-${fixture.suffix}`);
         await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
+        await page.getByRole('tab', { name: '보고서', exact: true }).click();
         await page.getByRole('button', { name: '내용 보기' }).first().click();
         await page.locator('article').first().waitFor({ state: 'visible', timeout: 10000 });
         const afterText = (await page.locator('article').first().innerText()).replace(/\s+/g, ' ');
@@ -1588,7 +1596,9 @@ async function main() {
           submitName: '저장',
           routePattern: '**/api/clients',
           matchRequest: (body) => body && body.name === clientName,
-          failureText: '응답 유실 검증',
+          failureText: '저장 결과를 확인하지 못했습니다',
+          retryName: '같은 요청 다시 시도',
+          expectFrozen: true,
           dialogShot: 'writes-client-dialog-error.png',
           readRecords: async () => (await readBootstrap(helpers, baseUrl, extended.ownerCookie)).clients,
           isNewRecord: (client) => client && client.name === clientName,
@@ -1613,16 +1623,18 @@ async function main() {
             { selector: '#content-notice-title', value: noticeTitle },
             { selector: '#content-notice-body', value: '응답 유실 재시도 검증 본문입니다.' },
           ],
-          submitName: '만들기',
+          submitName: '초안 저장',
           routePattern: '**/api/events/*/commands',
           matchRequest: (body) => body && body.command === 'notice.save' && body.payload && body.payload.title === noticeTitle,
-          failureText: '응답 유실 검증',
+          failureText: '저장 결과를 확인하지 못했습니다',
+          retryName: '같은 요청 다시 시도',
+          expectFrozen: true,
           dialogShot: 'writes-notice-dialog-error.png',
           readRecords: async () => (await readBootstrap(helpers, baseUrl, extended.ownerCookie)).workspaces[eventId].notices,
           isNewRecord: (notice) => notice && notice.title === noticeTitle,
           guardSelector: 'a[href$="/messages"]:visible',
           guardPathname: `/console/events/${encodeURIComponent(eventId)}/messages`,
-          hubSelector: '.desktop-side-nav a.console-hub-item[href$="/participants"]',
+          hubSelector: '.desktop-side-nav a.console-workspace-link[href*="/participants"]',
           hubPathname: `/console/events/${encodeURIComponent(eventId)}/participants`,
         });
       } finally {
@@ -1643,13 +1655,15 @@ async function main() {
           submitName: '데스크 저장',
           routePattern: '**/api/events/*/commands',
           matchRequest: (body) => body && body.command === 'desk.save' && body.payload && body.payload.name === deskName,
-          failureText: '응답 유실 검증',
+          failureText: '처리 결과를 확인하지 못했습니다',
+          retryName: '같은 요청 다시 시도',
+          expectFrozen: true,
           dialogShot: 'writes-desk-dialog-error.png',
           readRecords: async () => (await readBootstrap(helpers, baseUrl, extended.ownerCookie)).workspaces[eventId].desks,
           isNewRecord: (desk) => desk && desk.name === deskName,
           guardSelector: 'a[href$="/messages"]:visible',
           guardPathname: `/console/events/${encodeURIComponent(eventId)}/messages`,
-          hubSelector: '.desktop-side-nav a.console-hub-item[href$="/participants"]',
+          hubSelector: '.desktop-side-nav a.console-workspace-link[href*="/participants"]',
           hubPathname: `/console/events/${encodeURIComponent(eventId)}/participants`,
         });
       } finally {
@@ -1679,7 +1693,7 @@ async function main() {
         if (!await editDialog.getByText('데스크 편집', { exact: true }).count()) throw new Error('edit dialog did not open in edit mode');
         if (await editDialog.locator('#desk-name').inputValue() !== deskName) throw new Error('edit dialog lost the desk name');
         await editDialog.locator('#desk-name').fill(`${deskName} 수정`);
-        await editDialog.locator('#desk-mode').selectOption('tablet');
+        await chooseRadio(editDialog, 'desk-mode', 'tablet');
         if (await editDialog.locator('#desk-direction-confirm').count()) throw new Error('direction confirmation shown without a change');
         await editDialog.getByRole('button', { name: '데스크 저장' }).click();
         const edited = page.getByRole('listitem').filter({ hasText: `${deskName} 수정` }).first();
@@ -1688,7 +1702,7 @@ async function main() {
         if (!editedText.includes('태블릿') || !editedText.includes('가동 중')) throw new Error(`edit lost mode or open state: ${editedText}`);
         await edited.getByRole('button', { name: '편집', exact: true }).click();
         const directionDialog = page.getByRole('dialog');
-        await directionDialog.locator('#desk-action').selectOption('OUT');
+        await chooseRadio(directionDialog, 'desk-action', 'OUT');
         if (!await directionDialog.locator('#desk-direction-confirm').isVisible()) throw new Error('direction change did not ask for confirmation');
         if (await directionDialog.getByRole('button', { name: '데스크 저장' }).isEnabled()) throw new Error('direction change saved without confirmation');
         await directionDialog.locator('#desk-direction-confirm').check();
@@ -1719,6 +1733,7 @@ async function main() {
         await page.goto(`${baseUrl}/console/events/${eventId}/operations`, { waitUntil: 'networkidle', timeout: 30000 });
         await assertConsoleScreen(page, SCREENS.find((screen) => screen.key === 'operations'), eventId, eventName);
         if (!await page.locator('#ops-booth-map').count()) throw new Error('booth map section missing');
+        await page.getByRole('tab', { name: '부스 지도', exact: true }).click();
         await page.locator('section[aria-labelledby="ops-booth-map"] summary').click();
         // `headingId` labels the section; the file input lives inside it.
         // A sandboxed browser may not share the host's /tmp namespace.
@@ -1770,6 +1785,7 @@ async function main() {
         await assertConsoleScreen(page, SCREENS.find((screen) => screen.key === 'programs'), eventId, eventName);
         const drawCard = page.locator('li').filter({ hasText: '통합 감사 추첨 무대' }).first();
         await drawCard.waitFor({ timeout: 10000 });
+        await drawCard.locator('details > summary').filter({ hasText: '진행·응답 관리' }).click();
         const link = drawCard.getByRole('link', { name: '추첨', exact: true });
         if (!await link.count() || !(await link.getAttribute('href')).endsWith('/draws')) {
           throw new Error('program draw card does not link to the draws screen');
@@ -1877,16 +1893,35 @@ async function main() {
           (item) => item.inside === true && item.status === 'APPROVED'
         );
         if (!person || !person.ticket) throw new Error('no checked-in participant with a ticket for stamping');
-        const code = `ET:BOOTH:${eventId}:${extended.boothId}`;
-        await page.goto(`${baseUrl}/event/${encodeURIComponent(fixture.slug)}/home?ticket=${encodeURIComponent(person.ticket)}`, { waitUntil: 'networkidle', timeout: 30000 });
-        await page.getByRole('button', { name: '부스 인증', exact: true }).click();
-        const field = page.getByLabel('부스 코드');
-        await field.waitFor({ timeout: 10000 });
-        await field.fill(code);
-        await page.getByRole('button', { name: '인증하기', exact: true }).click();
-        // The camera-scan phase already used the single allowed visit: the
-        // typed code must be refused by the server and must not double-count.
-        await page.getByRole('alert').getByText(/인증 횟수를 모두 사용했습니다/).waitFor({ timeout: 15000 });
+        const ticketHome = `${baseUrl}/event/${encodeURIComponent(fixture.slug)}/home?ticket=${encodeURIComponent(person.ticket)}`;
+        const openStamp = async () => {
+          await page.goto(ticketHome, { waitUntil: 'networkidle', timeout: 30000 });
+          await page.getByRole('button', { name: '부스 인증', exact: true }).click();
+        };
+        const field = page.getByLabel('부스 코드', { exact: true });
+        await openStamp();
+        await page.getByText('한도 도달', { exact: true }).waitFor();
+        await page.getByText(/지금 인증할 수 있는 부스가 없습니다/).waitFor();
+        if (await field.count()) throw new Error('manual entry was offered when every booth was exhausted');
+
+        const { booth: alternative } = await apiCommand(helpers, baseUrl, fixture.manager.cookie, eventId, 'booth.save', {
+          name: '통합 감사 수동 인증 부스', status: 'OPEN', capacity: 0, limit: 1,
+        });
+        await openStamp();
+        const submitCode = async (boothId) => {
+          await field.fill(`ET:BOOTH:${eventId}:${boothId}`);
+          const [response] = await Promise.all([
+            page.waitForResponse(item => new URL(item.url()).pathname === `/api/events/${eventId}/commands` &&
+              item.request().method() === 'POST' && item.request().postDataJSON().command === 'booth.visit'),
+            page.getByRole('button', { name: '인증하기', exact: true }).click(),
+          ]);
+          return response;
+        };
+        const duplicate = await submitCode(extended.boothId);
+        if (duplicate.status() !== 409 || (await duplicate.json()).code !== 'BOOTH_LIMIT_REACHED') {
+          throw new Error('the server must refuse a typed code for the booth already stamped by camera');
+        }
+        await page.getByRole('alert').filter({ hasText: /인증 횟수를 모두 사용했습니다/ }).waitFor({ timeout: 15000 });
         const after = await readBootstrap(helpers, baseUrl, extended.ownerCookie);
         const visits = after.workspaces[eventId].visits.filter(
           (visit) => visit.boothId === extended.boothId && visit.participantId === person.id
@@ -1895,6 +1930,15 @@ async function main() {
         const boothRow = after.workspaces[eventId].booths.find((item) => item.id === extended.boothId);
         if (Number(boothRow.used) !== 1) throw new Error(`booth.used expected 1, got ${boothRow.used}`);
         await saveShot(page, 'attendee/booth-stamp-limit.png');
+        const manual = await submitCode(alternative.id);
+        if (manual.status() !== 201) throw new Error(`an available booth rejected manual entry: ${manual.status()}`);
+        await page.getByRole('status').filter({ hasText: /인증을 기록했습니다/ }).waitFor();
+        await page.getByText(/지금 인증할 수 있는 부스가 없습니다/).waitFor();
+        const final = await readBootstrap(helpers, baseUrl, extended.ownerCookie);
+        const ownVisits = final.workspaces[eventId].visits.filter(visit => visit.participantId === person.id);
+        if (ownVisits.length !== 2 || !ownVisits.some(visit => visit.boothId === alternative.id)) {
+          throw new Error('expected one camera stamp and one manual stamp for two different booths');
+        }
       } finally {
         await page.close();
         await context.close();
@@ -1911,11 +1955,11 @@ async function main() {
         // The fixture forces SMS mock, so no recovery code can arrive and the
         // recover screen itself refuses: the dead-end link must stay hidden
         // while device + operator guidance reads on screen.
-        await page.getByText('신청한 기기에서만 열 수 있습니다').first().waitFor({ timeout: 10000 });
+        await page.getByText('신청을 완료한 브라우저 탭', { exact: false }).first().waitFor({ timeout: 10000 });
         if (await page.getByRole('link', { name: '내 티켓 찾기' }).count()) {
           throw new Error('recovery link shown where no code can arrive');
         }
-        await page.getByRole('link', { name: '참가 신청하기' }).first().waitFor({ timeout: 5000 });
+        await page.getByRole('link', { name: '처음 신청하기' }).first().waitFor({ timeout: 5000 });
         await saveShot(page, 'attendee/booth-stamp-no-ticket.png');
       } finally {
         await page.close();
@@ -1960,10 +2004,12 @@ async function main() {
         // warns that later approvals will not be reflected.
         await page.goto(`${baseUrl}/console/events/${eventId}/reports`, { waitUntil: 'networkidle', timeout: 30000 });
         await assertConsoleScreen(page, SCREENS.find((screen) => screen.key === 'reports'), eventId, eventName);
+        await page.getByRole('tab', { name: '결과 분석', exact: true }).click();
         const backlog = page.getByText('승인 대기 (명)');
         await backlog.first().waitFor({ timeout: 10000 });
         const backlogValue = await backlog.first().locator('xpath=..').innerText();
         if (!/2/.test(backlogValue)) throw new Error(`approval backlog card shows no pending count: ${backlogValue}`);
+        await page.getByRole('tab', { name: '보고서', exact: true }).click();
         await page.getByRole('button', { name: '보고서 만들기', exact: true }).click();
         const warning = page.getByText(/승인 대기 2명이 남아 있습니다/);
         await warning.first().waitFor({ timeout: 10000 });
@@ -1983,8 +2029,13 @@ async function main() {
         await page.getByRole('checkbox', { name: '통합 대기 둘 선택' }).check();
         const search = page.getByPlaceholder('이름·소속·연락처 검색');
         await search.fill('통합 대기 둘');
-        await page.getByText(/숨김 \d+명\(그룹 지정 제외\)/).first().waitFor({ timeout: 10000 });
-        await page.getByRole('button', { name: '그룹 지정', exact: true }).click();
+        const selection = page.locator('#roster-selection-count');
+        await selection.getByText(/필터 밖 \d+명/, { exact: false }).first().waitFor({ timeout: 10000 });
+        const scopeSummary = await selection.innerText();
+        if (!/필터 밖 \d+명/.test(scopeSummary) || !scopeSummary.includes('승인·그룹은 현재 필터만, 메시지는 전체 선택')) {
+          throw new Error(`hidden selection or task scope missing: ${scopeSummary}`);
+        }
+        await page.getByRole('button', { name: '그룹 변경', exact: true }).click();
         await page.getByText(/화면 밖에서 선택한 \d+명은 이번 지정에 포함되지 않습니다/).first().waitFor({ timeout: 10000 });
         await saveShot(page, 'operator/group-scope.png');
         await page.getByRole('button', { name: '취소', exact: true }).first().click();
@@ -1995,19 +2046,20 @@ async function main() {
         await page.getByText(/실행 전제:/).first().waitFor({ timeout: 10000 });
         await saveShot(page, 'operator/draw-prerequisites.png');
 
-        // Messages: a template can carry every channel a campaign can send.
+        // Text templates store reusable wording; the campaign attachment determines MMS.
         await page.goto(`${baseUrl}/console/events/${eventId}/messages`, { waitUntil: 'networkidle', timeout: 30000 });
         await assertConsoleScreen(page, SCREENS.find((screen) => screen.key === 'messages'), eventId, eventName);
-        await page.getByText('템플릿 관리 열기').click();
+        await page.getByRole('tab', { name: '템플릿 관리', exact: true }).click();
         const channel = page.locator('#template-channel');
         await channel.waitFor({ timeout: 10000 });
-        await channel.selectOption('MMS');
-        await page.getByText('MMS 이미지는 발송할 때 첨부합니다.').first().waitFor({ timeout: 10000 });
+        await chooseRadio(page, 'template-channel', 'SMS');
+        await page.getByText('사진은 발송할 때 첨부합니다. 내용과 사진에 따라 문자 유형이 자동 결정됩니다.').first().waitFor({ timeout: 10000 });
         await saveShot(page, 'operator/template-mms.png');
 
         // Stage board: an unapplied selection says so.
         await page.goto(`${baseUrl}/console/events/${eventId}/operations`, { waitUntil: 'networkidle', timeout: 30000 });
         await assertConsoleScreen(page, SCREENS.find((screen) => screen.key === 'operations'), eventId, eventName);
+        await page.getByRole('tab', { name: '전광판 출력', exact: true }).click();
         const displayPick = page.locator('#ops-display-pick');
         await displayPick.waitFor({ timeout: 10000 });
         const options = await displayPick.locator('option').allTextContents();
@@ -2095,7 +2147,7 @@ async function main() {
         await dialog.getByLabel('이름', { exact: true }).fill(name);
         await dialog.getByLabel('연락처', { exact: true }).fill(phone);
         await dialog.getByLabel('소속 (선택)').fill('감사 업체 9');
-        await dialog.getByLabel('등록 방식', { exact: true }).selectOption('PRE');
+        await chooseRadio(dialog, 'participant-add-type', 'PRE');
         await dialog.getByRole('button', { name: '등록', exact: true }).click();
         await page.getByText(name, { exact: true }).first().waitFor({ timeout: 15000 });
         const after = await readBootstrap(helpers, baseUrl, extended.ownerCookie);
@@ -2125,7 +2177,7 @@ async function main() {
         if (count < 2) throw new Error(`expected several waiting participants, got ${count}`);
         await pendingBoxes.nth(0).check();
         await pendingBoxes.nth(1).check();
-        if (!(await page.locator('#roster-approve-selected').innerText()).includes('승인 대기 2명 승인')) throw new Error('bulk action does not show the pending target count');
+        if (!(await page.locator('#roster-approve-selected').innerText()).includes('신청 승인 2')) throw new Error('bulk action does not show the pending target count');
         await page.locator('#roster-approve-selected').click();
         await page.getByText(/명을 승인했습니다/).first().waitFor({ timeout: 15000 });
         const after = await readBootstrap(helpers, baseUrl, extended.ownerCookie);
@@ -2209,7 +2261,7 @@ async function main() {
       try {
         await outsiderPage.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/participants`, { waitUntil: 'networkidle', timeout: 30000 });
         await outsiderPage.getByText('행사를 찾을 수 없거나 접근 권한이 없습니다.', { exact: false }).first().waitFor({ timeout: 15000 });
-        if (await outsiderPage.getByRole('link', { name: '명단 가져오기' }).count()) {
+        if (await outsiderPage.getByRole('button', { name: '명단 가져오기', exact: true }).count()) {
           throw new Error('unassigned staff was offered the import action');
         }
       } finally {
@@ -2229,13 +2281,13 @@ async function main() {
         if (!await staffPage.locator('input[placeholder*="이름·소속·연락처 검색"]').count()) {
           throw new Error('assigned staff lost participant read access');
         }
-        if (await staffPage.getByRole('link', { name: '명단 가져오기' }).count()) {
+        if (await staffPage.getByRole('button', { name: '명단 가져오기', exact: true }).count()) {
           throw new Error('assigned staff was offered the import action');
         }
         if (await staffPage.getByRole('checkbox', { name: '통합 확정 미입장 선택' }).count()) {
           throw new Error('assigned staff was offered write-only bulk selection');
         }
-        if (await staffPage.getByRole('button', { name: '그룹 지정' }).count()) {
+        if (await staffPage.getByRole('button', { name: '그룹 변경' }).count()) {
           throw new Error('assigned staff was offered the group write');
         }
         // Operations console stays read-only: the reason shows and the
@@ -2260,7 +2312,7 @@ async function main() {
       try {
         await managerPage.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/participants`, { waitUntil: 'networkidle', timeout: 30000 });
         await waitForMarker(managerPage, SCREENS.find((screen) => screen.key === 'participants').marker);
-        if (!await managerPage.getByRole('link', { name: '명단 가져오기' }).count()) {
+        if (!await managerPage.getByRole('button', { name: '명단 가져오기', exact: true }).count()) {
           throw new Error('assigned manager lost the import action');
         }
       } finally {
@@ -2293,4 +2345,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { SCREENS, CAPTURE_DIR };
+module.exports = { SCREENS, CAPTURE_DIR, extendFixtureSeed };

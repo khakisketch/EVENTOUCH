@@ -1,4 +1,6 @@
 'use strict';
+const { messageStep } = require('./ui-journey-helpers.cjs');
+
 
 // Event-close paired journey: one operator closes out a LIVE event end to
 // end against the real isolated stack (random PostgreSQL schema, real API
@@ -182,6 +184,7 @@ async function main() {
       nav.prev = pathname;
     };
     const page = await context.newPage();
+    const injectedDenials = new Set();
     page.on('framenavigated', (frame) => {
       if (frame !== page.mainFrame()) return;
       try {
@@ -196,6 +199,7 @@ async function main() {
     page.on('response', (response) => {
       const status = response.status();
       if (status < 400) return;
+      if (status === 403 && injectedDenials.delete(response.request())) return;
       const url = response.url();
       if (!url.startsWith(baseUrl)) return;
       // Anonymous login checks /auth/me before credentials are submitted.
@@ -243,7 +247,7 @@ async function main() {
       try {
         await page.goto(baseUrl + target, { waitUntil: 'networkidle', timeout: 30000 });
         if (marker === '#campaign-title') await page.locator('#message-compose-open').click();
-        await page.locator(marker).first().waitFor({ state: 'visible', timeout: 15000 });
+        await page.locator(marker === '#campaign-title' ? '#recipient-status-filter' : marker).first().waitFor({ state: 'visible', timeout: 15000 });
       } finally {
         if (scrollCounter) {
           scrollCounter.paused = false;
@@ -438,7 +442,7 @@ async function main() {
       const link = page.locator(`a[href="${href}"]:visible`).first();
       await act('click', () => link.click());
       if (marker === '#campaign-title' && await page.locator('#message-compose-open').isVisible()) await act('click', () => page.locator('#message-compose-open').click());
-      await page.locator(marker).first().waitFor({ state: 'visible', timeout: 15000 });
+      await page.locator(marker === '#campaign-title' ? '#recipient-status-filter' : marker).first().waitFor({ state: 'visible', timeout: 15000 });
     };
 
     const followNext = async (act, marker, label) => {
@@ -448,7 +452,7 @@ async function main() {
       const href = await next.getAttribute('href');
       if (href) assert.ok(new URL(href, baseUrl).searchParams.get('closeReturn'), 'every departure carries an explicit return path');
       await act('click', () => next.click());
-      await page.locator(marker).first().waitFor({ state: 'visible', timeout: 15000 });
+      await page.locator(marker === '#campaign-title' ? '#recipient-status-filter' : marker).first().waitFor({ state: 'visible', timeout: 15000 });
     };
     const followLinear = async (act, marker, label) => {
       const next = page.locator('[data-close-linear-next]');
@@ -457,7 +461,7 @@ async function main() {
       const href = await next.getAttribute('href');
       if (!href.startsWith('#')) assert.ok(new URL(href, baseUrl).searchParams.get('closeReturn'), 'linear handoff retains the optional map return');
       await act('click', () => next.click());
-      await page.locator(marker).first().waitFor({ state: 'visible', timeout: 15000 });
+      await page.locator(marker === '#campaign-title' ? '#recipient-status-filter' : marker).first().waitFor({ state: 'visible', timeout: 15000 });
     };
 
     {
@@ -485,7 +489,8 @@ async function main() {
           await touchOk(mobileScopes, '여러 명 선택');
           await act('click', () => mobileScopes.click());
         }
-        const selectVisible = page.getByRole('button', { name: before ? /^전체 \d+명 선택$/ : /^필터 결과 전체 \d+명 선택$/ });
+        const selectVisible = page.getByRole('button', { name: before ? /^전체 \d+명 선택$/ : /^(?:필터 결과 )?전체 \d+명 선택$/ });
+        if (!before) assert.equal(await selectVisible.getAttribute('aria-describedby'), 'roster-select-all-help', 'selection still describes the full filter scope');
         await touchOk(selectVisible, '전체 선택 (필터 범위)');
         await act('click', () => selectVisible.click());
         const approve = before ? page.getByRole('button', { name: '선택 승인', exact: true }) : page.locator('#roster-approve-selected');
@@ -505,15 +510,15 @@ async function main() {
       });
 
       // ---- Phase 2: close the running participation program ----
-      await measure('program-close', '진행 프로그램 종료 (참여 프로그램 → 종료 → 종료한다)', async (act, task, { touchOk }) => {
+      await measure('program-close', '진행 프로그램 종료 (참여 콘텐츠 → 종료 → 종료한다)', async (act, task, { touchOk }) => {
         task.screens = [eventPath('/programs')];
         task.fields = ['module 종료 button', 'ConsoleConfirm 종료한다'];
-        if (before) await menuTo('/programs', 'text=프로그램 만들기', act);
+        if (before) await menuTo('/programs', 'text=콘텐츠 만들기', act);
         else {
           await page.getByText('승인 대기 없음', { exact: true }).waitFor();
           await page.waitForFunction(() => document.activeElement?.hasAttribute('data-close-linear-next'));
           await shotBoth('linear-approved-next');
-          await followLinear(act, 'text=프로그램 만들기', /진행 중 프로그램 닫기/);
+          await followLinear(act, 'text=콘텐츠 만들기', /진행 중 프로그램 닫기/);
         }
         const card = moduleCard();
         await card.getByRole('heading', { name: MODULE_TITLE }).waitFor({ timeout: 10000 });
@@ -523,7 +528,7 @@ async function main() {
         const confirm = page.getByRole('button', { name: '종료한다', exact: true });
         await touchOk(confirm, '종료 확정');
         await act('click', () => confirm.click());
-        await page.getByText(/프로그램을 종료했습니다/, { exact: false }).first().waitFor({ timeout: 15000 });
+        await page.getByText(/콘텐츠를 종료했습니다/, { exact: false }).first().waitFor({ timeout: 15000 });
         const state = await readBootstrap(helpers, harness.baseUrl, ownerCookie);
         const module = (state.workspaces[eventId].modules || []).find((item) => item.id === openModuleId);
         assert.ok(module, 'setup module missing from workspace.modules');
@@ -657,20 +662,19 @@ async function main() {
         else {
           await act('click', () => page.locator('[data-close-report-next]').click());
           await act('click', () => page.locator('#message-compose-open').click());
-          await page.locator('#campaign-title').waitFor({ state: 'visible', timeout: 15000 });
+          await page.locator('#recipient-status-filter').waitFor({ state: 'visible', timeout: 15000 });
           assert.ok(new URL(page.url()).searchParams.get('closeReturn').includes('closeReport='), 'chosen report survives the messages handoff');
         }
+        const list = page.locator('summary').filter({ hasText: '수신자 목록' });
+        if (!await list.locator('..').evaluate(element => element.open)) await act('click', () => list.click());
+        await act('check', () => page.getByRole('checkbox', { name: /표시 \d+명 모두 선택/ }).check());
+        await act('click', () => messageStep(page, 2));
         await act('fill', () => page.locator('#campaign-title').fill(MSG_TITLE));
         await act('fill', () => page.locator('#campaign-body').fill(MSG_BODY));
+        await act('click', () => messageStep(page, 3));
         const simulate = page.getByRole('checkbox', { name: /모의 발송으로 기록/ });
         await act('check', () => simulate.check());
         assert.ok(await simulate.isChecked(), 'simulate must stay checked: real send is forbidden');
-        const list = page.locator('summary').filter({ hasText: '수신자 목록' });
-        if (!await list.locator('..').evaluate(element => element.open)) {
-          await act('click', () => list.click());
-        }
-        const addVisible = page.getByRole('checkbox', { name: /표시 \d+명 모두 선택/ });
-        await act('check', () => addVisible.check());
         const submit = page.locator('#campaign-submit');
         await touchOk(submit, '발송 검토');
         await act('click', () => submit.click());
@@ -712,7 +716,7 @@ async function main() {
           const committed = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/commands') && response.request().postDataJSON()?.command === 'event.stage');
           await act('click', () => confirm.click());
           assert.ok((await committed).ok());
-          await page.getByText('행사를 보관(으)로 전환했습니다.', { exact: true }).waitFor();
+          await page.getByRole('status').filter({ hasText: /^행사를 보관했습니다\. 보관된 행사는 읽기 전용입니다\./ }).waitFor();
           assert.equal(new URL(page.url()).pathname, from, 'result notice and archive stay on the messages screen');
           task.serverNote = 'Existing event.stage ARCHIVED and shared stage confirmation, executed inline after notice; no second settings visit. ';
         }
@@ -787,6 +791,10 @@ async function main() {
       await apiCommand(helpers, harness.baseUrl, ownerCookie, staleId, 'participant.status', { id: pending.participant.id, status: 'PENDING' });
       const old = await apiCommand(helpers, harness.baseUrl, ownerCookie, staleId, 'report.create', { title: '이전 동결 보고서', sections: ['overview', 'attendance'] });
       await apiCommand(helpers, harness.baseUrl, ownerCookie, staleId, 'report.publish', { id: old.report.id });
+      const late = await apiCommand(helpers, harness.baseUrl, ownerCookie, staleId, 'participant.create', { name: '마감 직전 입장', phone: '01099997778' });
+      await apiCommand(helpers, harness.baseUrl, ownerCookie, staleId, 'participant.status', { id: late.participant.id, status: 'APPROVED' });
+      const desk = await apiCommand(helpers, harness.baseUrl, ownerCookie, staleId, 'desk.save', { name: '마감 데스크', action: 'IN', open: true });
+      await apiCommand(helpers, harness.baseUrl, ownerCookie, staleId, 'check.scan', { deskId: desk.desk.id, participantId: late.participant.id, expectedAction: 'IN' });
       await apiCommand(helpers, harness.baseUrl, ownerCookie, staleId, 'event.stage', { stage: 'ENDED' });
       await go(`/console/events/${staleId}/reports#event-close`, HUB.nextAction);
       await page.getByText(/승인 대기 1명이 남아 있지만 종료 이후에는 참가자를 변경할 수 없습니다/).waitFor();
@@ -804,6 +812,7 @@ async function main() {
       await shotBoth('states-ended-pending-create-dialog');
       await page.keyboard.press('Escape');
       stateChecks.push('ENDED pending: immutable warning, no impossible approval next; old PUBLISHED not auto-selected; Enter/Space disclosure');
+      await page.getByRole('tab', { name: '보고서', exact: true }).click();
       await page.getByRole('button', { name: '내용 보기', exact: true }).click();
       await page.waitForFunction(() => { const rect = document.getElementById('report-detail')?.getBoundingClientRect(); return rect && rect.top >= 0 && rect.top < innerHeight; });
       await page.locator('[data-report-close-return]').click();
@@ -818,6 +827,15 @@ async function main() {
       await page.locator(HUB.nextAction).waitFor();
       assert.match(await page.locator(HUB.nextAction).innerText(), /결과 안내/);
       stateChecks.push('explicit report selection survives reload; capture basis stays visible');
+      await page.getByRole('button', { name: '집계 차이 보기', exact: true }).click();
+      const comparison = page.getByRole('table', { name: '보고서와 최근 참가 집계 비교' });
+      await comparison.getByRole('row', { name: /누적 입장.*0명.*1명/ }).waitFor();
+      const printable = page.locator('article').filter({ hasText: '이전 동결 보고서' });
+      await printable.waitFor();
+      assert.equal(await printable.getByRole('table', { name: '보고서와 최근 참가 집계 비교' }).count(), 0);
+      assert.equal(old.report.snapshot.metrics.checked, 0);
+      await shotBoth('states-close-report-attendance-comparison');
+      stateChecks.push('late entry differs from the selected frozen report; comparison stays outside its printable document');
       await go(`/console/events/${staleId}/programs?closeReturn=${encodeURIComponent(`/console/events/${staleId}/reports?closeReport=${old.report.id}#event-close`)}`, '[data-close-linear-next]');
       await page.getByText(/미충족 전제: 승인 대기 1명 미처리/).waitFor();
       assert.match(await page.locator('[data-close-linear-next]').getAttribute('href'), /\/messages\?/);
@@ -829,7 +847,12 @@ async function main() {
       // The composer now starts collapsed behind #message-compose-open (same
       // as the measured result-notify handoff): open it before drafting.
       if (await page.locator('#message-compose-open').isVisible()) await page.locator('#message-compose-open').click();
-      await page.locator('#campaign-title').waitFor({ state: 'visible', timeout: 15000 });
+      await page.locator('#recipient-status-filter').waitFor();
+      // This ended-event exception intentionally contains only a pending
+      // participant. Broaden the default approved-only view explicitly.
+      await page.locator('#recipient-status-filter').selectOption('ALL');
+      await page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check();
+      await messageStep(page, 2);
       await page.locator('#campaign-title').fill('미저장 안내 초안');
       let archiveDraftCancelled = false;
       page.once('dialog', async dialog => { archiveDraftCancelled = true; await dialog.dismiss(); });
@@ -837,6 +860,8 @@ async function main() {
       assert.equal(archiveDraftCancelled, true, 'inline archive respects the existing unsaved-message guard');
       assert.equal(await page.getByRole('group', { name: '단계 전환 확인' }).count(), 0);
       await page.locator('#campaign-title').fill('');
+      await messageStep(page, 1);
+      await page.locator('#recipient-clear-all').click();
       const archiveAttempts = [];
       let loseArchiveReply = true;
       const archiveRoute = async route => {
@@ -848,6 +873,11 @@ async function main() {
             const actual = await route.fetch();
             assert.ok(actual.ok(), 'fault injection happens only after a real successful API commit');
             await route.abort('connectionreset');
+            return;
+          }
+          if (archiveAttempts.length === 2) {
+            injectedDenials.add(route.request());
+            await route.fulfill({ status: 403, contentType: 'application/json', body: '{"error":"접근을 확인하세요"}' });
             return;
           }
         }
@@ -866,13 +896,17 @@ async function main() {
       const lostStage = (await readBootstrap(helpers, harness.baseUrl, ownerCookie)).events.find(e => e.id === staleId).stage;
       assert.equal(lostStage, 'ARCHIVED', 'archive committed even though its UI response was lost');
       await shotBoth('linear-inline-archive-committed-response-loss');
+      const deniedArchive = page.waitForResponse(response => response.status() === 403 && response.url().includes('/commands'));
+      await page.getByRole('button', { name: '같은 요청 다시 시도 · 보관 단계로', exact: true }).click();
+      await deniedArchive;
+      await page.getByText('보관 응답을 확인하지 못했습니다. 이미 보관됐을 수 있습니다. 같은 요청으로 다시 확인하세요.', { exact: true }).waitFor();
       await page.getByRole('button', { name: '같은 요청 다시 시도 · 보관 단계로', exact: true }).click();
       await page.getByText('보관 완료 · 읽기 전용입니다.', { exact: true }).waitFor();
-      assert.equal(archiveAttempts.length, 2);
+      assert.equal(archiveAttempts.length, 3);
       assert.equal(new Set(archiveAttempts).size, 1, 'inline archive retries the exact same receipt');
       await page.unroute(`**/api/events/${staleId}/commands`, archiveRoute);
       recoveryEvidence.push({ case: 'inline archive committed-response loss', eventId: staleId, commandIds: archiveAttempts, stageBeforeRetry: lostStage, unsavedDraftCancellation: archiveDraftCancelled });
-      stateChecks.push('inline archive shares stage confirmation; cancels dirty notice; suppresses held Enter repeat; real commit plus lost reply retries the same commandId');
+      stateChecks.push('inline archive shares stage confirmation; cancels dirty notice; suppresses held Enter repeat; lost reply followed by 403 retains the same commandId');
 
       const refreshArchiveId = await seedVariant('보관 응답 재조회 복구');
       const refreshReport = await apiCommand(helpers, harness.baseUrl, ownerCookie, refreshArchiveId, 'report.create', { title: '재조회 복구 보고서', sections: ['overview'] });
@@ -893,7 +927,7 @@ async function main() {
       await page.getByRole('button', { name: '정말 전환합니다 · 보관 단계로', exact: true }).click();
       await page.getByText('보관 응답을 확인하지 못했습니다. 이미 보관됐을 수 있습니다. 같은 요청으로 다시 확인하세요.', { exact: true }).waitFor();
       await page.getByRole('button', { name: '상태 새로고침', exact: true }).click();
-      await page.getByText('서버 재조회에서 보관된 행사임을 확인했습니다.', { exact: true }).waitFor();
+      await page.getByRole('status').filter({ hasText: /^서버 재조회에서 보관된 행사임을 확인했습니다\. 보관된 행사는 읽기 전용입니다\./ }).waitFor();
       await page.getByText('보관 완료 · 읽기 전용입니다.', { exact: true }).waitFor();
       let refreshGuardBlocked = false;
       const refreshGuard = async dialog => { refreshGuardBlocked = true; await dialog.dismiss(); };
@@ -905,6 +939,34 @@ async function main() {
       await page.unroute(`**/api/events/${refreshArchiveId}/commands`, refreshLossRoute);
       recoveryEvidence.push({ case: 'inline archive lost reply resolved by authoritative refresh', eventId: refreshArchiveId, guardBlockedAfterVerifiedRefresh: refreshGuardBlocked });
       stateChecks.push('authoritative ARCHIVED refresh resolves unknown archive intent and permits optional map navigation without a stale guard');
+
+      const receiptArchiveId = await seedVariant('보관 영수증 확인 복구');
+      const receiptReport = await apiCommand(helpers, harness.baseUrl, ownerCookie, receiptArchiveId, 'report.create', { title: '영수증 확인 보고서', sections: ['overview'] });
+      await apiCommand(helpers, harness.baseUrl, ownerCookie, receiptArchiveId, 'report.publish', { id: receiptReport.report.id });
+      await apiCommand(helpers, harness.baseUrl, ownerCookie, receiptArchiveId, 'event.stage', { stage: 'ENDED' });
+      await go(`/console/events/${receiptArchiveId}/messages?closeReturn=${encodeURIComponent(`/console/events/${receiptArchiveId}/reports?closeReport=${receiptReport.report.id}#event-close`)}`, '[data-close-inline-archive]');
+      let receiptWrites = 0;
+      const receiptLossRoute = async route => {
+        const payload = route.request().postDataJSON();
+        if (payload.command === 'event.stage' && payload.payload?.stage === 'ARCHIVED') {
+          receiptWrites += 1;
+          if (receiptWrites === 1) { const actual = await route.fetch(); assert.ok(actual.ok()); return route.abort('connectionreset'); }
+        }
+        return route.continue();
+      };
+      await page.route(`**/api/events/${receiptArchiveId}/commands`, receiptLossRoute);
+      await page.locator('[data-close-inline-archive]').click();
+      await page.getByRole('button', { name: '정말 전환합니다 · 보관 단계로', exact: true }).click();
+      await page.getByText('보관 응답을 확인하지 못했습니다. 이미 보관됐을 수 있습니다. 같은 요청으로 다시 확인하세요.', { exact: true }).waitFor();
+      const receiptPanel = page.getByRole('region', { name: '처리 결과 확인' });
+      const receiptRow = receiptPanel.locator('div').filter({ hasText: '보관 영수증 확인 복구' }).first();
+      await receiptRow.getByRole('button', { name: '서버 처리 확인' }).waitFor();
+      await receiptRow.getByRole('button', { name: '서버 처리 확인' }).click();
+      await page.getByRole('status').filter({ hasText: /^서버 재조회에서 보관된 행사임을 확인했습니다\. 보관된 행사는 읽기 전용입니다\./ }).waitFor();
+      await page.getByText('보관 완료 · 읽기 전용입니다.', { exact: true }).waitFor();
+      assert.equal(receiptWrites, 1, 'status-only confirmation does not repeat the archive command');
+      await page.unroute(`**/api/events/${receiptArchiveId}/commands`, receiptLossRoute);
+      recoveryEvidence.push({ case: 'archive receipt status triggers authoritative refresh', eventId: receiptArchiveId, writes: receiptWrites });
 
       const disabledId = await seedVariant('기능 꺼짐 복구');
       const mod = await apiCommand(helpers, harness.baseUrl, ownerCookie, disabledId, 'module.save', { type: 'poll', title: '닫아야 할 투표', options: ['A', 'B'] });
@@ -928,7 +990,7 @@ async function main() {
       stateChecks.push('OPEN+feature OFF routes to settings; keyboard entry; unsaved linear-next cancellation; real event.features then direct programs handoff');
       await page.getByRole('button', { name: '종료', exact: true }).click();
       await page.getByRole('button', { name: '종료한다', exact: true }).click();
-      await page.getByText(/프로그램을 종료했습니다/).first().waitFor();
+      await page.getByText(/콘텐츠를 종료했습니다/).first().waitFor();
       await page.getByText('진행 중 프로그램 없음', { exact: true }).waitFor();
       assert.match(await page.locator('[data-close-linear-next]').getAttribute('href'), /closeStep=end/, 'already-closed intake is skipped');
       stateChecks.push('already-closed intake skips straight from program completion to the existing ENDED control');
@@ -977,6 +1039,7 @@ async function main() {
       stateChecks.push('keyboard Enter on the linear next selects the stage tab and lands focus on the stage heading');
       await shotBoth('states-keyboard-linear-stage-focus');
     }
+    assert.equal(injectedDenials.size, 0, 'the explicitly injected denial was observed');
     assert.equal(errors.length, 0, `browser errors including recovery states: ${errors.join(' | ')}`);
     const report = {
       before, build: buildId(),

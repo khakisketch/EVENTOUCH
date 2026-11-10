@@ -10,6 +10,7 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
+const { confirmInitialStaffDesk } = require('./audit-staff-direction.cjs');
 const baseline = process.env.ERROR_RECOVERY_PHASE === 'baseline';
 const captureRoot = process.env.EVENTOUCH_CAPTURE_ROOT || defaultCaptureDir(`system-improvement-20261024/ux-${runStamp()}`);
 const runId = process.env.EVENTOUCH_AUDIT_RUN_ID || new Date().toISOString().replace(/[:.]/g, '-');
@@ -65,6 +66,7 @@ function chunkWith(marker) {
     });
     await runtimePage.goto(staffUrl);
     await runtimePage.locator('#staff-desk').waitFor();
+    await confirmInitialStaffDesk(runtimePage);
     await runtimePage.getByRole('button', { name: '카메라로 스캔', exact: true }).click();
     await runtimePage.getByRole('heading', { name: '화면을 불러오다 문제가 생겼습니다', exact: true }).waitFor();
     check('render exception reaches Korean route boundary', injectedRender === 1);
@@ -92,6 +94,7 @@ function chunkWith(marker) {
     });
     await chunkPage.goto(staffUrl);
     await chunkPage.locator('#staff-desk').waitFor();
+    await confirmInitialStaffDesk(chunkPage);
     await chunkPage.getByRole('button', { name: '카메라로 스캔', exact: true }).click();
     await chunkPage.getByRole('heading', { name: /화면.*불러오/ }).waitFor();
     const navigationCount = documents;
@@ -106,6 +109,7 @@ function chunkWith(marker) {
       healthyChunk = true;
       await reload.click();
       await chunkPage.locator('#staff-desk').waitFor();
+      await confirmInitialStaffDesk(chunkPage);
       await chunkPage.getByRole('button', { name: '카메라로 스캔', exact: true }).click();
       await chunkPage.getByRole('region', { name: '카메라 스캔', exact: true }).waitFor();
       check('explicit reload clears rejected chunk and preserves staff route', chunkPage.url() === staffUrl && recoveredChunks > 0);

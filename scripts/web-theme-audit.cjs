@@ -26,8 +26,8 @@ async function commandClick(page, button, name) {
   });
   pending.catch(() => {});
   await button.click();
-  if (name === 'attendee.page.publish') {
-    await page.getByRole('group', { name: '실행 확인', exact: true })
+  if (name === 'attendee.page.publish-reviewed') {
+    await page.getByRole('dialog', { name: '참가자 페이지 게시 검토', exact: true })
       .getByRole('button', { name: '게시하기', exact: true }).click();
   }
   const response = await pending;
@@ -76,7 +76,7 @@ async function main() {
     });
     assert.equal(imported.status, 200);
     owned = await startOwnedNext({ apiBase: harness.baseUrl });
-    gateway = await startWebApiGateway({ apiBase: harness.baseUrl, webBase: owned.baseUrl, loseFirstResponseFor: ['attendee.page.save', 'attendee.page.publish'] });
+    gateway = await startWebApiGateway({ apiBase: harness.baseUrl, webBase: owned.baseUrl, loseFirstResponseFor: ['attendee.page.save', 'attendee.page.publish-reviewed'] });
     browser = await chromium.launch(process.env.CHROMIUM_EXECUTABLE ? { executablePath: process.env.CHROMIUM_EXECUTABLE } : {});
     const newPage = async (context) => {
       const page = await context.newPage(); pages.push(page);
@@ -150,16 +150,16 @@ async function main() {
     await attendee.getByRole('heading', { name: '디자인 검증 행사 A', exact: true }).waitFor();
 
     phase = 'publish with lost committed response';
-    const publish = editor.getByRole('button', { name: /^(게시|게시하기|변경사항 게시)$/ });
-    const publishCount = gateway.commands.filter((call) => call.command === 'attendee.page.publish').length;
+    const publish = editor.getByRole('button', { name: /^(게시 검토|게시하기|변경사항 게시)$/ });
+    const publishCount = gateway.commands.filter((call) => call.command === 'attendee.page.publish-reviewed').length;
     await publish.click();
-    assert.equal(gateway.commands.filter((call) => call.command === 'attendee.page.publish').length, publishCount, 'opening review never publishes');
-    await editor.getByRole('group', { name: '실행 확인', exact: true })
+    assert.equal(gateway.commands.filter((call) => call.command === 'attendee.page.publish-reviewed').length, publishCount, 'opening review never publishes');
+    await editor.getByRole('dialog', { name: '참가자 페이지 게시 검토', exact: true })
       .getByRole('button', { name: '게시하기', exact: true }).click();
-    await gateway.waitForResponseLoss('attendee.page.publish');
+    await gateway.waitForResponseLoss('attendee.page.publish-reviewed');
     await editor.getByRole('alert').filter({ hasText: /응답|연결|게시/ }).waitFor();
-    await commandClick(editor, publish, 'attendee.page.publish');
-    const publishCalls = gateway.commands.filter((call) => call.command === 'attendee.page.publish');
+    await commandClick(editor, publish, 'attendee.page.publish-reviewed');
+    const publishCalls = gateway.commands.filter((call) => call.command === 'attendee.page.publish-reviewed');
     assert.equal(publishCalls.length, 2);
     assert.equal(publishCalls[0].commandId, publishCalls[1].commandId);
     let published = await readPublic();
@@ -202,7 +202,7 @@ async function main() {
     await editor.locator('summary', { hasText: '배치·색상 상세 설정' }).click();
     await editor.locator('#home-layout').selectOption('image-only');
     await commandClick(editor, save, 'attendee.page.save');
-    await commandClick(editor, publish, 'attendee.page.publish');
+    await commandClick(editor, publish, 'attendee.page.publish-reviewed');
     await attendee.reload({ waitUntil: 'networkidle' });
     const headingVisuallyHidden = await attendee.getByRole('heading', { name: '우리의 새로운 행사', exact: true }).evaluate((element) => {
       for (let parent = element; parent && parent.tagName !== 'SECTION'; parent = parent.parentElement) {
@@ -223,7 +223,7 @@ async function main() {
     await editor.locator('#home-hero-subtitle').fill('');
     await commandClick(editor, save, 'attendee.page.save');
     assert.equal((await attendee.request.get(`${gateway.baseUrl}/api/public/events/${eventA}/files/${fileId}`)).status(), 200, 'a draft removal must not remove the published image');
-    await commandClick(editor, publish, 'attendee.page.publish');
+    await commandClick(editor, publish, 'attendee.page.publish-reviewed');
     published = await readPublic();
     assert.equal(published.keyvisual, null);
     assert.equal(published.homeStyle.heroTitle, null);

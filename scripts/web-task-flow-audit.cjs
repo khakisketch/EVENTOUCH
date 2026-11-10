@@ -12,6 +12,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
+const { messageStep } = require('./ui-journey-helpers.cjs');
 const before = process.argv.includes('--before');
 const out = (process.env.CAPTURE_DIR || '').trim()
   || path.join(defaultCaptureDir(`task-flow-${runStamp()}`), before ? 'before' : 'after');
@@ -63,6 +64,14 @@ async function main() {
     const go = async (suffix, marker) => { await page.goto(f.baseUrl + base + suffix); await page.locator(marker).waitFor(); };
     const shot = async (name, fullPage = false) => { await page.screenshot({ path: path.join(out, `${name}.png`), fullPage }); };
     const rowFor = title => page.locator('li').filter({ has: page.getByRole('heading', { name: title, exact: true }) }).last();
+    const failedRowAction = async id => {
+      const back = page.getByRole('button', { name: '발송 기록 보기', exact: true });
+      if (await back.isVisible()) await back.click();
+      const expand = page.locator('summary').filter({ hasText: /^기록 목록 펼치기/ });
+      if (await expand.isVisible()) await expand.click();
+      await page.locator(`#campaign-${id}`).getByRole('button', { name: '내용·대상 불러오기', exact: true }).click();
+    };
+
     const measure = async (key, fn) => {
       const task = { key, steps: 0, scrolls: 0, writes: 0 };
       activeTask = task;
@@ -119,6 +128,7 @@ async function main() {
           await act(() => page.getByRole('link', { name: '스태프 배정', exact: true }).click());
           await act(() => page.getByRole('button', { name: '스태프 배정', exact: true }).click());
         } else {
+          if (kind === 'BOOTH') await act(() => page.getByRole('tab', { name: '부스', exact: true }).click());
           await act(() => page.getByRole('button', { name: `${title}에 스태프 배정`, exact: true }).click());
           assert.equal(await page.locator('#assign-type').inputValue(), kind);
           assert.equal(await page.locator('#assign-target').inputValue(), target.id);
@@ -148,13 +158,17 @@ async function main() {
         for (const p of people.slice(0, 2)) await act(() => page.getByRole('checkbox', { name: new RegExp(p.name) }).check());
         await act(() => page.getByRole('checkbox', { name: /모의 발송으로 기록/ }).check());
       } else {
-        await act(() => page.locator(`#campaign-${old.id}`).getByRole('button', { name: '내용·대상 불러오기', exact: true }).click());
+        await act(() => failedRowAction(old.id));
         assert.equal(await page.locator('#campaign-title').inputValue(), old.title);
         assert.equal(await page.locator('#campaign-body').inputValue(), old.body);
         assert.equal(await page.locator('#campaign-scheduled').inputValue(), '');
-        assert.equal(await page.getByRole('checkbox', { name: /모의 발송으로 기록/ }).isChecked(), true);
+        // A cancelled historical recipient sends the operator through the recipient review first.
+        await act(() => messageStep(page, 2));
+        await page.waitForFunction(() => document.activeElement?.id === 'campaign-title');
         assert.equal(await page.locator('#campaign-title').evaluate(el => el === document.activeElement), true);
         await shot('message-recomposed-390');
+        await act(() => messageStep(page, 3));
+        assert.equal(await page.getByRole('checkbox', { name: /모의 발송으로 기록/ }).isChecked(), true);
       }
       assert.equal(task.writes, 0, 'draft preparation never sends automatically');
       await act(() => page.locator('#campaign-submit').click());
@@ -171,28 +185,32 @@ async function main() {
       // Recovering one failed history item must not silently discard another
       // pending draft. Cancel and keyboard-confirm the existing grammar.
       const oldRow = page.locator(`#campaign-${old.id}`);
+      await failedRowAction(old.id);
+      await messageStep(page, 2);
       await page.locator('#campaign-title').fill('덮어쓰지 말아야 할 초안');
       const writes = f.gateway.commands.length;
-      await oldRow.getByRole('button', { name: '내용·대상 불러오기', exact: true }).click();
+      await failedRowAction(old.id);
       const confirm = page.locator(`#campaign-detail-${old.id}`).getByRole('group', { name: '실행 확인' });
       await confirm.getByRole('button', { name: '취소', exact: true }).click();
       assert.equal(await page.locator('#campaign-title').inputValue(), '덮어쓰지 말아야 할 초안');
-      await oldRow.getByRole('button', { name: '내용·대상 불러오기', exact: true }).click();
+      await failedRowAction(old.id);
       await confirm.getByRole('button', { name: '불러온다', exact: true }).waitFor();
       assert.equal(await confirm.getByRole('button', { name: '불러온다', exact: true }).evaluate(el => el === document.activeElement), true);
       await page.keyboard.press('Enter');
+      await messageStep(page, 2);
       await page.locator('#campaign-title').waitFor();
       assert.equal(await page.locator('#campaign-title').inputValue(), old.title);
       assert.equal(f.gateway.commands.length, writes, 'loading a draft is not a write');
       await shot('message-overwrite-keyboard-result-390');
       // An unsent confirmation is not a missing server response. Opening a
       // replacement confirmation must work without sending or false alarms.
+      await messageStep(page, 3);
       await page.locator('#campaign-submit').click();
-      await oldRow.getByRole('button', { name: '내용·대상 불러오기', exact: true }).click();
+      await failedRowAction(old.id);
       await confirm.getByRole('button', { name: '불러온다', exact: true }).waitFor();
       await confirm.getByRole('button', { name: '취소', exact: true }).click();
       assert.equal(f.gateway.commands.length, writes, 'staged send has not posted');
-      await oldRow.getByRole('button', { name: '내용·대상 불러오기', exact: true }).click();
+      await failedRowAction(old.id);
       await confirm.getByRole('button', { name: '불러온다', exact: true }).click();
       assert.equal(f.gateway.commands.length, writes);
       // Commit one real create, then lose only its transport response. Loading
@@ -201,7 +219,7 @@ async function main() {
       const attempts = [];
       await page.route('**/api/events/*/commands', async route => {
         const data = route.request().postDataJSON();
-        if (data.command !== 'message.create') return route.continue();
+        if (!['message.create', 'message.create-reviewed'].includes(data.command)) return route.continue();
         attempts.push(data.commandId);
         if (lostId) return route.continue();
         const response = await route.fetch();
@@ -209,22 +227,24 @@ async function main() {
         lostId = (await response.json()).message.id;
         await route.abort('failed');
       });
+      await messageStep(page, 3);
       await page.locator('#campaign-submit').click();
       await page.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '모의 발송을 기록한다', exact: true }).click();
-      await page.getByText('응답을 확인하지 못했습니다. 내용을 바꾸지 않고 같은 요청으로 다시 시도하세요.', { exact: true }).first().waitFor();
-      await oldRow.getByRole('button', { name: '내용·대상 불러오기', exact: true }).click();
+      const sendRecovery = page.getByRole('region', { name: '발송 요청 확인 필요', exact: true });
+      await sendRecovery.getByRole('alert').filter({ hasText: '발송 요청 결과를 확인하지 못했습니다.' }).waitFor();
+      await failedRowAction(old.id);
       await page.getByText('응답을 확인하지 못한 발송 요청이 있습니다. 결과를 먼저 확인한 뒤 내용을 불러오세요.', { exact: true }).first().waitFor();
-      await page.waitForFunction(() => document.activeElement?.id === 'campaign-submit');
-      const visibleRecoveryError = await page.locator('form [role="alert"]').filter({ hasText: '응답을 확인하지 못한 발송 요청이 있습니다.' }).evaluate(el => {
+      await page.waitForFunction(() => document.activeElement?.id === 'message-recovery-heading');
+      const visibleRecoveryError = await sendRecovery.getByRole('alert').filter({ hasText: '응답을 확인하지 못한 발송 요청이 있습니다.' }).evaluate(el => {
         const rect = el.getBoundingClientRect();
-        return rect.top >= 108 && rect.bottom <= innerHeight;
+        const header = document.querySelector('.console-sidebar')?.getBoundingClientRect().bottom || 0;
+        return rect.top >= header && rect.bottom <= innerHeight;
       });
       assert.equal(visibleRecoveryError, true, 'recovery explanation stays with its action in the viewport');
       assert.equal(await page.locator('#campaign-title').inputValue(), old.title);
       assert.equal(attempts.length, 1);
       await shot('message-ambiguous-reload-blocked-390');
-      await page.locator('#campaign-submit').click();
-      await page.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '모의 발송을 기록한다', exact: true }).click();
+      await sendRecovery.getByRole('button', { name: '같은 요청 다시 시도', exact: true }).click();
       await page.getByText('모의 발송을 기록했습니다. 수신자에게 전달되지 않았습니다.', { exact: true }).first().waitFor();
       assert.deepEqual(attempts, [lostId, lostId]);
       assert.equal((await boot()).workspaces[f.eventId].messages.filter(item => item.id === lostId).length, 1);
@@ -233,11 +253,15 @@ async function main() {
       // not evidence of output; stale/off status must be stated accurately.
       await go('/content', '#content-notices');
       await rowFor(notice.title).getByRole('button', { name: '전광판 출력', exact: true }).click();
-      await rowFor(notice.title).getByRole('button', { name: '비게시', exact: true }).click();
+      await rowFor(notice.title).getByRole('button', { name: '게시 내리기', exact: true }).click();
+      await page.getByRole('dialog', { name: '공지 게시 내리기', exact: true }).getByRole('button', { name: '게시 내리기', exact: true }).click();
+      await page.getByRole('dialog').waitFor({ state: 'hidden' });
       await page.getByText('전광판 선택됨 · 비공개로 출력되지 않음', { exact: true }).waitFor();
       assert.equal(await rowFor(notice.title).getByRole('button', { name: '전광판 출력', exact: true }).count(), 0);
       await shot('notice-unpublished-status-390');
-      await rowFor(notice.title).getByRole('button', { name: '게시', exact: true }).click();
+      await rowFor(notice.title).getByRole('button', { name: '게시 검토', exact: true }).click();
+      await page.getByRole('dialog', { name: '공지 게시 검토', exact: true }).getByRole('button', { name: '게시하기', exact: true }).click();
+      await page.getByRole('dialog').waitFor({ state: 'hidden' });
       await rowFor(notice.title).getByText('게시 중', { exact: true }).waitFor();
       assert.equal(await rowFor(notice.title).getByRole('group', { name: '실행 확인' }).count(), 0, 'refresh invalidates an old output intention');
       results.push({ key: 'recovery-safety', overwriteCancelPreserved: true, keyboardEnterConfirmed: true, noAutoWrite: true, unsentConfirmationReplaceable: true, attemptedResponseLossBlocked: true, receiptReused: true, unpublishedStatusAccurate: true });

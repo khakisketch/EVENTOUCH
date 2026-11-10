@@ -76,8 +76,10 @@ async function hostStorageHashes(directory) {
 }
 
 async function hostArchiveStorage(directory, outDirectory) {
-  await execFileAsync('tar', ['-C', directory, '-czf', path.join(outDirectory, lib.BACKUP_STORAGE), '.']);
-  return path.join(outDirectory, lib.BACKUP_STORAGE);
+  const target = path.join(outDirectory, lib.BACKUP_STORAGE);
+  await execFileAsync('tar', ['-C', directory, '-czf', target, '.']);
+  await fsp.chmod(target, 0o600);
+  return target;
 }
 
 async function readHostCounts(connectionString) {
@@ -226,10 +228,20 @@ async function hostBackup(options) {
   );
 
   const databaseFile = path.join(outDirectory, lib.BACKUP_DB);
-  await execFileAsync('pg_dump', [
-    '--dbname', options.databaseUrl, '--format=custom', '--no-owner', '--no-privileges',
-    '--file', databaseFile,
-  ], { maxBuffer: 1024 * 1024 });
+  // libpq does not interpret '+' as a space in URI query parameters, unlike
+  // node-postgres. Normalize the query only; never rewrite a password's '+'.
+  // Child-process exception command strings can contain credentials; do not
+  // propagate them into operator logs on failure.
+  const dumpUrl = new URL(options.databaseUrl);
+  dumpUrl.search = dumpUrl.search.replace(/\+/g, '%20');
+  try {
+    await execFileAsync('pg_dump', [
+      '--dbname', dumpUrl.toString(), '--format=custom', '--no-owner', '--no-privileges',
+      '--file', databaseFile,
+    ], { maxBuffer: 1024 * 1024 });
+  } catch {
+    lib.fail('pg_dump 실패: 접속 설정·권한·PostgreSQL 클라이언트 버전을 확인하세요 (자격증명과 원문 오류는 기록하지 않습니다)');
+  }
   await fsp.chmod(databaseFile, 0o600);
   lib.log(`DB 덤프 완료 (${await lib.statSize(databaseFile)} bytes)`);
 

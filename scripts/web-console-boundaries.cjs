@@ -41,7 +41,7 @@
 //             li#evidence-photo-<id>[tabIndex=-1], button "더 보기 (N)"
 // - messages: #history-heading, [data-history-row]#campaign-<id>,
 //             #campaign-history-more "이전 발송 더 보기 (N)"
-// - programs: button "프로그램 만들기", #program-title, #program-type,
+// - programs: button "콘텐츠 만들기", #program-title, #program-type,
 //             #program-options, dialog submit "만들기",
 //             h2#module-title-<id>[tabIndex=-1], button "더 보기 (N)"
 
@@ -439,7 +439,7 @@ async function programsPhase({ fixture, ownerCookie, baseUrl, eventId, ownerSess
       ownerSession,
       url: `${baseUrl}${eventPath(eventId, '/programs')}`,
     }));
-    await page.getByRole('button', { name: '프로그램 만들기' }).first().waitFor({ state: 'visible', timeout: UI_TIMEOUT });
+    await page.getByRole('button', { name: '콘텐츠 만들기' }).first().waitFor({ state: 'visible', timeout: UI_TIMEOUT });
     await page.waitForTimeout(800);
 
     let headings = await page.evaluate((selector) => [...document.querySelectorAll(selector)].map((node) => node.id), headingSelector);
@@ -452,7 +452,7 @@ async function programsPhase({ fixture, ownerCookie, baseUrl, eventId, ownerSess
 
     // The 13th via the real creation dialog: typed title + poll options.
     const title13 = `경계 생성 ${stamp}`;
-    await page.getByRole('button', { name: '프로그램 만들기' }).first().click();
+    await page.getByRole('button', { name: '콘텐츠 만들기' }).first().click();
     await page.locator('#program-title').waitFor({ state: 'visible', timeout: UI_TIMEOUT });
     await page.locator('#program-title').fill(title13);
     await page.locator('#program-options').fill('찬성\n반대');
@@ -492,7 +492,7 @@ async function programsPhase({ fixture, ownerCookie, baseUrl, eventId, ownerSess
       throw new Error(`programs: server holds ${(state.workspaces[eventId].modules || []).length} modules, expected ${target}`);
     }
     await page.reload({ waitUntil: 'networkidle', timeout: GOTO_TIMEOUT });
-    await page.getByRole('button', { name: '프로그램 만들기' }).first().waitFor({ state: 'visible', timeout: UI_TIMEOUT });
+    await page.getByRole('button', { name: '콘텐츠 만들기' }).first().waitFor({ state: 'visible', timeout: UI_TIMEOUT });
     await page.waitForTimeout(800);
 
     headings = await page.evaluate((selector) => [...document.querySelectorAll(selector)].map((node) => node.id), headingSelector);

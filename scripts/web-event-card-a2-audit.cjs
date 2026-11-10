@@ -1,4 +1,5 @@
 'use strict';
+const { openCreateSettings } = require('./ui-journey-helpers.cjs');
 
 // Event-card product audit: the approved white directory row (flat white
 // zone + 8px published-color identity dot), published-only theme link, and
@@ -384,21 +385,17 @@ async function main() {
     await lossDialog.getByText('기존 행사 복제', { exact: false }).click();
     await lossDialog.locator('#create-source').selectOption({ value: brandId });
     await lossDialog.getByRole('button', { name: '행사 복제', exact: true }).click();
-    await lossDialog.getByText(/같은 요청으로 다시 시도하세요/).first().waitFor({ timeout: 8000 });
+    await lossDialog.getByText(/행사 생성 결과를 확인하지 못했습니다/).first().waitFor({ timeout: 8000 });
     check('ambiguous duplicate keeps the retry receipt', true);
-    await lossDialog.getByText('새로 만들기', { exact: false }).click();
-    check('mode switch on an unresolved receipt stays in copy mode',
-      (await lossDialog.locator('#create-source').count()) === 1);
-    check('mode switch on an unresolved receipt names the retry',
-      ((await lossDialog.innerText()) || '').includes('같은 요청으로 다시 시도해 결과를 확인한 뒤에 바꾸세요'));
-    check('mode switch on an unresolved receipt keeps the prefill',
+    check('unresolved mode radios are disabled',
+      await lossDialog.locator('input[name="create-mode"]').evaluateAll((els) => els.length === 2 && els.every((el) => el.matches(':disabled'))));
+    check('unresolved source select is disabled', await lossDialog.locator('#create-source').isDisabled());
+    check('unresolved original name is read-only', !(await lossDialog.locator('#create-name').isEditable()));
+    check('unresolved receipt keeps source and prefill',
+      (await lossDialog.locator('#create-source').inputValue()) === brandId &&
       (await lossDialog.locator('#create-name').inputValue()) === '주황 게시 행사 복사본');
-    await lossDialog.locator('#create-source').selectOption({ value: whiteId });
-    check('source switch on an unresolved receipt keeps the source',
-      (await lossDialog.locator('#create-source').inputValue()) === brandId);
-    check('source switch on an unresolved receipt keeps the prefill',
-      (await lossDialog.locator('#create-name').inputValue()) === '주황 게시 행사 복사본');
-    await lossDialog.getByRole('button', { name: '행사 복제', exact: true }).click();
+    check('status-only check is available', await lossDialog.getByRole('button', { name: '서버 처리 확인', exact: true }).isVisible());
+    await lossDialog.getByRole('button', { name: '같은 요청 다시 시도', exact: true }).click();
     await page.waitForURL(/\/console\/events\/.+/, { timeout: 20000 });
     await page.unroute('**/api/events/*/duplicate');
     check('lost response retried with the identical command id',
@@ -537,6 +534,7 @@ async function main() {
       await expectStickyVisible(`footer submit at ${tag}`, footerSubmit);
       check(`no horizontal overflow with dialog at ${tag}`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
       await page.screenshot({ path: path.join(OUT, `dialog-sticky-new-${tag}.png`) });
+      await openCreateSettings(page);
       if (tag === '320x568') {
         const addrHint = stickyDialog.getByText(/참가자 주소에 쓰입니다/);
         check('address hint keeps keep-all wrapping at 320',
@@ -546,7 +544,7 @@ async function main() {
         check('하이픈 stays on one line at 320', hyphen.found === true && hyphen.rects === 1, JSON.stringify(hyphen));
       }
       // Last field stays reachable by scroll and is not covered by the footer.
-      const lastField = stickyDialog.locator('#create-format');
+      const lastField = stickyDialog.locator('#create-slug');
       await lastField.scrollIntoViewIfNeeded();
       await expectStickyVisible(`last field reachable at ${tag}`, lastField);
       await expectStickyVisible(`footer still hit-testable after scroll at ${tag}`, footerSubmit);
@@ -608,6 +606,7 @@ async function main() {
       await page.getByRole('button', { name: '새 행사 만들기' }).click();
       const freshDialog = page.getByRole('dialog');
       await freshDialog.waitFor({ state: 'visible' });
+      await openCreateSettings(page);
       await freshDialog.locator('#create-client').waitFor({ state: 'visible' });
       await freshDialog.getByRole('button', { name: '새 고객사 등록' }).click();
       await freshDialog.locator('#create-new-client-name').waitFor({ state: 'visible' });

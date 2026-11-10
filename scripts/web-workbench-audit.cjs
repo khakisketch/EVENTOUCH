@@ -1,4 +1,7 @@
 'use strict';
+const { messageStep } = require('./ui-journey-helpers.cjs');
+
+const { chooseRadio } = require('./ui-journey-helpers.cjs');
 
 // Real UI workbench journeys. Every write uses a disposable PostgreSQL schema
 // through the existing API; messages are explicitly simulated. No deployed or
@@ -95,6 +98,29 @@ async function main() {
         await page.goto(base + route);
         await page.locator(marker).waitFor({ state: 'attached' });
         await page.locator('h1').waitFor();
+        if (PHASE === 'after' && name === 'overview-live') {
+          // The LIVE board must prioritize both current work and real entry
+          // data before the schedule at every viewport, in DOM as well as
+          // painted order. Compare section bounds, not just heading positions.
+          const order = await page.evaluate(() => {
+            const get = id => document.querySelector(`section[aria-labelledby="${id}"]`);
+            const queue = get('event-now-heading'), metric = get('event-metrics-heading'), schedule = get('event-runbook-heading');
+            if (!queue || !metric || !schedule) return null;
+            const q = queue.getBoundingClientRect(), m = metric.getBoundingClientRect(), s = schedule.getBoundingClientRect();
+            return {
+              dom: Boolean(metric.compareDocumentPosition(queue) & Node.DOCUMENT_POSITION_FOLLOWING)
+                && Boolean(queue.compareDocumentPosition(schedule) & Node.DOCUMENT_POSITION_FOLLOWING),
+              queue: { top: q.top, bottom: q.bottom, left: q.left },
+              metric: { top: m.top, bottom: m.bottom, left: m.left },
+              schedule: { top: s.top },
+            };
+          });
+          check(`LIVE overview prioritizes work and entry before the schedule at ${width}`,
+            Boolean(order && order.dom && order.schedule.top >= Math.max(order.queue.bottom, order.metric.bottom) - 1
+              && (width > 900
+                ? Math.abs(order.queue.top - order.metric.top) <= 2
+                : order.queue.top >= order.metric.bottom - 1)), order);
+        }
         if (name === 'participants-100' && (width === 1280 || width === 390)) {
           // Both the desktop table and phone list exist in the DOM. The
           // visible approval must keep its action name and describe exactly
@@ -133,6 +159,33 @@ async function main() {
     }
     fs.writeFileSync(`${OUT}/metrics.json`, JSON.stringify(metrics, null, 2), { mode: 0o600 });
     if (PHASE === 'after') {
+      // On a short phone with the representative single pending-approval
+      // item, the operator should see both the next action and entry count
+      // without scrolling. Long names or multiple work items may legitimately
+      // require scrolling and are not collapsed or hidden to meet this check.
+      await page.setViewportSize({ width: 320, height: 568 });
+      await page.goto(base);
+      await page.locator('#event-metrics-heading').waitFor();
+      const firstOverview = await page.evaluate(() => {
+        const queue = document.querySelector('section[aria-labelledby="event-now-heading"]');
+        const metric = document.querySelector('section[aria-labelledby="event-metrics-heading"]');
+        const action = queue?.querySelector('[data-task="approval"] a');
+        const count = metric?.querySelector('strong');
+        const probe = element => {
+          if (!element) return null;
+          const r = element.getBoundingClientRect();
+          const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return { top: r.top, bottom: r.bottom, height: r.height, width: r.width, hit: hit === element || element.contains(hit), text: element.textContent };
+        };
+        return { action: probe(action), count: probe(count) };
+      });
+      check('short-phone overview exposes the entry count', Boolean(firstOverview.count && firstOverview.count.top >= 0 && firstOverview.count.bottom <= 568), firstOverview);
+      const priority = page.locator('section[aria-labelledby="event-now-heading"] [data-task="approval"] a').first();
+      await priority.scrollIntoViewIfNeeded();
+      const actionSize = await priority.boundingBox();
+      check('short-phone approval is reachable and meets the touch target', Boolean(await priority.isVisible() && actionSize && actionSize.width >= 44 && actionSize.height >= 44), actionSize);
+      check('short-phone approval still points to pending participants', (await page.locator('section[aria-labelledby="event-now-heading"] [data-task="approval"] a').first().getAttribute('href')).endsWith('/participants?status=PENDING'));
+      await page.screenshot({ path: `${OUT}/overview-live-320-short.png` });
       for (const width of [320, 390]) {
         await page.setViewportSize({ width, height: 844 });
         await page.goto(base + '/participants');
@@ -140,6 +193,16 @@ async function main() {
         await firstRow.waitFor({ state: 'visible' });
         const rowTop = (await firstRow.boundingBox()).y;
         check(`mobile roster starts within the working viewport at ${width}`, rowTop <= 600, rowTop);
+        const picker = page.getByRole('combobox', { name: '빠른 상태 보기', exact: true });
+        const tools = page.locator('summary[aria-label="명단 도구"]');
+        const add = page.getByRole('button', { name: '참가자 추가', exact: true });
+        const controls = await Promise.all([picker.boundingBox(), tools.boundingBox(), add.boundingBox(), page.getByRole('button', { name: '명단 가져오기', exact: true }).boundingBox()]);
+        check(`mobile roster keeps lookup controls together and touch sized at ${width}`,
+          controls.every(box => box && box.width >= 44 && box.height >= 44 && box.x >= 0 && box.x + box.width <= width)
+          && Math.max(...controls.map(box => box.y)) - Math.min(...controls.map(box => box.y)) <= 52, controls);
+        await picker.selectOption('pending');
+        check(`mobile status picker changes the current view at ${width}`, await picker.inputValue() === 'pending');
+        await picker.selectOption('all');
         const scope = page.locator('details').filter({ has: page.getByText('여러 명 선택', { exact: true }) });
         const summary = scope.locator('summary');
         await summary.focus();
@@ -148,16 +211,26 @@ async function main() {
         await scope.getByRole('button', { name: '이 페이지 25명 선택', exact: true }).click();
         check(`mobile page choice closes its menu and restores focus at ${width}`, !(await scope.evaluate(node => node.open)) && await summary.evaluate(node => node === document.activeElement));
         const counts = page.locator('#roster-selection-count');
-        check(`mobile page selection remains page-scoped at ${width}`, (await counts.textContent()).includes('선택한 참가자 25명') && (await counts.textContent()).includes('이 페이지 25명'));
+        check(`mobile page selection remains page-scoped at ${width}`, (await counts.textContent()).includes('선택 25명') && (await counts.textContent()).includes('이 페이지 25명'));
         await page.getByRole('button', { name: '선택 해제', exact: true }).click();
         await summary.focus();
         await page.keyboard.press('Enter');
         await scope.getByRole('button', { name: '필터 결과 전체 100명 선택', exact: true }).click();
         check(`mobile filter choice exposes its results at ${width}`, !(await scope.evaluate(node => node.open)) && await summary.evaluate(node => node === document.activeElement));
-        check(`mobile filter selection includes the other pages at ${width}`, (await counts.textContent()).includes('선택한 참가자 100명') && (await counts.textContent()).includes('다른 페이지 75명 포함'));
+        check(`mobile filter selection includes the other pages at ${width}`, (await counts.textContent()).includes('선택 100명') && (await counts.textContent()).includes('다른 페이지 75명'));
         const brokenWords = [...await splitKoreanWords(counts), ...await splitKoreanWords(page.locator('#roster-approve-selected'))];
         check(`mobile selection text keeps Korean words intact at ${width}`, brokenWords.length === 0, brokenWords);
+        const selectionPanel = page.locator('[aria-label="선택한 참가자 작업"]');
+        check(`selection actions need no disclosure at ${width}`, await selectionPanel.locator('details').count() === 0);
+        for (const label of ['그룹 변경', '신청 취소', '선택 해제']) check(`${label} is immediately available at ${width}`, await selectionPanel.getByRole('button', { name: label, exact: true }).isVisible());
+        check(`group action names its current-filter scope at ${width}`, (await page.locator('#roster-group-scope').textContent()).includes('현재 필터에서 선택한 100명 대상'));
+        check(`message action names its full selection at ${width}`, (await page.locator('#roster-message-scope').textContent()).includes('필터 밖을 포함한 선택 100명 대상'));
+        const bounds = await selectionPanel.boundingBox();
+        check(`selection actions fit the phone at ${width}`, bounds.x >= 0 && bounds.x + bounds.width <= width, bounds);
         await page.screenshot({ path: `${OUT}/roster-mobile-selection-${width}.png` });
+        await selectionPanel.getByRole('button', { name: '선택 해제', exact: true }).focus();
+        await page.keyboard.press('Enter');
+        check(`clearing selection restores the roster focus at ${width}`, await page.evaluate(() => document.activeElement?.id === 'participants-list-heading'));
       }
     }
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -192,7 +265,7 @@ async function main() {
     }
     await act(roster, () => page.getByRole('checkbox', { name: `${later.name} 선택`, exact: true }).check());
     if (PHASE === 'after') {
-      check('page selection separated from full selection', await page.locator('#roster-selection-count').textContent().then(t => t.includes('선택한 참가자 2명') && t.includes('현재 필터 2명') && t.includes('이 페이지 1명') && t.includes('다른 페이지 1명 포함')));
+      check('page selection separated from full selection', await page.locator('#roster-selection-count').textContent().then(t => t.includes('선택 2명') && t.includes('현재 필터 2명') && t.includes('이 페이지 1명') && t.includes('다른 페이지 1명')));
       await act(roster, () => page.getByRole('button', { name: '검색으로 이동', exact: true }).click());
       check('return focuses search', await page.locator('#roster-search').evaluate(e => e === document.activeElement));
       check('return also exposes search in viewport', await page.locator('#roster-search').evaluate(e => { const r = e.getBoundingClientRect(); const rail = document.querySelector('.console-sidebar')?.getBoundingClientRect(); return r.top >= (innerWidth <= 768 ? rail?.bottom ?? 0 : 0) && r.bottom <= innerHeight; }));
@@ -201,7 +274,7 @@ async function main() {
 
     if (PHASE === 'after') {
       await page.getByRole('searchbox', { name: '이름·소속·연락처 검색', exact: true }).fill(later.name);
-      check('filter retains hidden selection', await page.locator('#roster-selection-count').textContent().then(t => t.includes('선택한 참가자 2명') && t.includes('현재 필터 1명') && t.includes('숨김 1명')));
+      check('filter retains hidden selection', await page.locator('#roster-selection-count').textContent().then(t => t.includes('선택 2명') && t.includes('현재 필터 1명') && t.includes('필터 밖 1명')));
       // The reset lives inside the advanced-filters disclosure, which starts
       // collapsed at every width: a real operator opens the disclosure to
       // reach it. The check below still clicks the real reset control.
@@ -209,7 +282,7 @@ async function main() {
         await page.locator('#roster-filter-toggle').click();
       }
       await page.getByRole('button', { name: '검색·필터 초기화', exact: true }).click();
-      check('filter reset retains selection', (await page.locator('#roster-selection-count').textContent()).includes('선택한 참가자 2명'));
+      check('filter reset retains selection', (await page.locator('#roster-selection-count').textContent()).includes('선택 2명'));
       const row = rowFor(first.name);
       await row.getByRole('button', { name: `${first.name} 참가자 상세`, exact: true }).click();
       const detail = page.getByRole('dialog');
@@ -217,7 +290,7 @@ async function main() {
       check('cancel remains explicit before write', (await bootstrap()).workspaces[f.eventId].participants.find(p => p.id === first.id).status === 'APPROVED');
       await detail.getByRole('button', { name: '취소', exact: true }).click();
       await page.keyboard.press('Escape');
-      check('cancel review dismissal preserves selection', (await page.locator('#roster-selection-count').textContent()).includes('선택한 참가자 2명'));
+      check('cancel review dismissal preserves selection', (await page.locator('#roster-selection-count').textContent()).includes('선택 2명'));
     }
 
     const messaging = { name: '선택 명단 → 안내 작성 → 명시적 검토 → 모의 발송', operations: 0, scrollEvents: null };
@@ -229,6 +302,7 @@ async function main() {
     check('handoff never schedules', await page.locator('#campaign-scheduled').inputValue() === '');
     await act(messaging, () => page.locator('#campaign-title').fill('선택 명단 안내'));
     await act(messaging, () => page.locator('#campaign-body').fill('행사 안내를 확인해 주세요.'));
+    await act(messaging, () => messageStep(page, 3));
     await act(messaging, () => page.getByLabel('모의 발송으로 기록', { exact: false }).check());
     await act(messaging, () => page.locator('#campaign-submit').click());
     check('review does not send automatically', (await bootstrap()).workspaces[f.eventId].messages.length === 0);
@@ -279,6 +353,21 @@ async function main() {
       await page.getByRole('button', { name: '편집하던 곳으로 돌아가기', exact: true }).click();
       await page.waitForFunction(() => document.activeElement?.textContent?.trim() === '현재 디자인 미리보기');
       check('mobile preview returns to its initiating control with unsaved edit intact', await previewJump.evaluate(e => e === document.activeElement) && (await page.locator('#home-background').inputValue()).toLowerCase() === '#fff1e8');
+      // The section nav is now the only top-level mobile switch. Exercise it
+      // with keyboard input, including saving from the preview state: the
+      // target must be unhidden before focus moves and the edit must survive.
+      const themeNav = page.locator('nav[aria-label="참가자 페이지 구역"]');
+      await themeNav.getByRole('link', { name: '미리보기', exact: true }).focus();
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => document.activeElement?.id === 'home-preview-heading');
+      check('mobile section nav opens the preview with focus', await page.locator('#home-preview-heading').isVisible() && !await page.locator('#theme-edit').isVisible());
+      await themeNav.getByRole('link', { name: '저장·게시', exact: true }).focus();
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => document.activeElement?.id === 'theme-save');
+      check('mobile section nav reveals the save area from preview without losing edits', await page.locator('#theme-save').isVisible() && (await page.locator('#home-background').inputValue()).toLowerCase() === '#fff1e8');
+      await themeNav.getByRole('link', { name: '편집', exact: true }).focus();
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => document.activeElement?.id === 'theme-edit');
       const saveJump = page.getByRole('link', { name: '저장·게시 검토', exact: true });
       await saveJump.focus();
       await page.keyboard.press('Enter');
@@ -292,7 +381,7 @@ async function main() {
     await page.getByText('초안을 저장했습니다', { exact: false }).first().waitFor();
     let pageExperience = (await bootstrap()).workspaces[f.eventId].pageExperience;
     check('saved draft stays unpublished', !pageExperience.publishedAt && pageExperience.draft.homeStyle.backgroundColor === '#FFF1E8');
-    await act(theme, () => page.getByRole('button', { name: '게시', exact: true }).click());
+    await act(theme, () => page.getByRole('button', { name: '게시 검토', exact: true }).click());
     check('publish review does not publish automatically', !(await bootstrap()).workspaces[f.eventId].pageExperience.publishedAt);
     await act(theme, () => page.getByRole('button', { name: '게시하기', exact: true }).click());
     await page.getByText('게시했습니다. 이 행사를 보는 참가자에게', { exact: false }).first().waitFor();
@@ -339,32 +428,44 @@ async function main() {
     // mobile keyboard paging, empty search, grouped nav and preset anchors.
     await page.goto(base + '/messages');
     await page.locator('#message-compose-open').click();
-    await page.locator('#campaign-title').waitFor();
+    await page.locator('#recipient-status-filter').waitFor();
+    await page.waitForFunction(() => document.activeElement?.id === 'recipient-status-filter');
+    check('opening the composer focuses recipient selection', true);
+    await page.locator('#message-compose-close').click();
+    await page.waitForFunction(() => document.activeElement?.id === 'message-compose-open');
+    check('closing the composer restores focus to the history action', true);
+    await page.evaluate(() => { document.body.setAttribute('tabindex', '-1'); document.body.focus(); });
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => document.activeElement?.id === 'main-content');
+    await page.evaluate(() => new Promise(resolve => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(resolve)), 0)));
+    check('skip-link focus is not stolen back by composer closing',
+      await page.evaluate(() => document.activeElement?.id === 'main-content'));
+    await page.locator('#message-compose-open').click();
+    await page.waitForFunction(() => document.activeElement?.id === 'recipient-status-filter');
+    await page.evaluate(() => { document.body.setAttribute('tabindex', '-1'); document.body.focus(); });
+    await page.keyboard.press('Tab');
+    check('global skip link is reached after opening the composer',
+      await page.evaluate(() => document.activeElement?.textContent?.trim() === '본문으로 건너뛰기'));
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => document.activeElement?.id === 'main-content');
+    await page.evaluate(() => new Promise(resolve => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(resolve)), 0)));
+    check('skip-link focus is not stolen back by composer opening',
+      await page.evaluate(() => document.activeElement?.id === 'main-content'));
     check('zero recipients disables review with visible reason', await page.locator('#campaign-submit').isDisabled() && (await page.locator('#campaign-submit-warning').textContent()).includes('수신자를 먼저 고르세요'));
     // The top review jump must not strand keyboard focus on its old button
     // when the real submit is disabled. Returning to the picker is still an
     // explicit action and neither jump may create a message.
     const commandsBeforeJumps = f.gateway.commands.length;
+    const scheduleDetails = page.locator('details').filter({ has: page.locator('#campaign-scheduled') });
+    const scheduleSummary = scheduleDetails.locator('summary');
+    check('future review controls are mounted and the optional schedule starts closed', !await scheduleDetails.evaluate(element => element.open));
     for (const width of [1280, 390, 320]) {
       await page.setViewportSize({ width, height: width === 1280 ? 900 : 844 });
-      const scheduleBreaks = await splitKoreanWords(page.locator('#campaign-scheduled-help'));
-      check(`manual schedule help keeps Korean words intact at ${width}`, scheduleBreaks.length === 0, scheduleBreaks);
-      await page.locator('#campaign-send-skip').focus();
-      await page.keyboard.press('Enter');
-      const reviewPosition = await page.locator('#campaign-submit-warning').evaluate(e => {
-        const rect = e.getBoundingClientRect();
-        const mobileBar = document.querySelector('.console-sidebar')?.getBoundingClientRect();
-        return { focused: e === document.activeElement, top: rect.top, bottom: rect.bottom, viewport: innerHeight, minimum: innerWidth <= 768 ? mobileBar?.bottom ?? 0 : 0 };
-      });
-      check(`empty review focuses its visible blocker at ${width}`, reviewPosition.focused && reviewPosition.top >= reviewPosition.minimum && reviewPosition.bottom <= reviewPosition.viewport, reviewPosition);
+      await page.getByRole('button', { name: '내용 작성', exact: true }).press('Enter');
+      await page.waitForFunction(() => document.activeElement?.id === 'recipient-status-filter').catch(async e => { console.error('recipient focus diagnostic', await page.evaluate(() => ({ active: document.activeElement?.outerHTML, open: document.querySelector('#campaign-recipients details')?.open, error: document.querySelector('#campaign-recipients-error')?.textContent, selection: document.querySelector('#recipient-summary')?.textContent }))); throw e; });
+      check(`empty review stays at recipients with a visible error at ${width}`, await page.locator('#campaign-recipients-error').isVisible());
       await page.screenshot({ path: `${OUT}/state-message-empty-review-${width}.png` });
-      await page.keyboard.press('Tab');
-      check(`empty review reaches the recipient return by keyboard at ${width}`, await page.evaluate(() => document.activeElement?.textContent?.trim() === '수신자 다시 확인'));
-      await page.keyboard.press('Enter');
-      // The return opens a native disclosure before focusing its filter.
-      // Wait for that real focus transition; never focus the target in test.
-      await page.waitForFunction(() => document.activeElement?.id === 'recipient-status-filter');
-      check(`recipient return focuses the status filter at ${width}`, await page.locator('#recipient-status-filter').evaluate(e => e === document.activeElement));
       await page.locator('#recipient-status-filter').selectOption('ALL');
       const picker = page.locator('#campaign-recipients details');
       const summary = picker.locator('summary');
@@ -395,7 +496,7 @@ async function main() {
       check(`focused recipient summary is in the viewport at ${width}`, focusPosition.top >= focusPosition.minimum && focusPosition.bottom <= focusPosition.viewport, focusPosition);
       await page.screenshot({ path: `${OUT}/state-message-keyboard-${width}.png` });
       await page.keyboard.press('Tab');
-      check(`next Tab reaches the message title at ${width}`, await page.locator('#campaign-title').evaluate(e => e === document.activeElement));
+      check(`next Tab reaches the content continuation at ${width}`, await page.getByRole('button', { name: '내용 작성', exact: true }).evaluate(e => e === document.activeElement));
       await page.keyboard.press('Shift+Tab');
       await page.keyboard.press('Enter');
       check(`reopening keeps the exact selection at ${width}`, await picker.evaluate(e => e.open) && await chosen.isChecked());
@@ -448,24 +549,37 @@ async function main() {
     const changedRecipient = people.find(person => person.name === changedRecipientName);
     check('the second safety recipient is known', Boolean(changedRecipient));
     await safetyBoxes.nth(0).check();
+    await messageStep(page, 2);
     await page.locator('#campaign-title').fill('검토할 안내');
     await page.locator('#campaign-body').fill('실제 발송하지 않는 검토 검사입니다.');
+    await messageStep(page, 3);
+    check('simulation is visible at review', await page.getByLabel('모의 발송으로 기록', { exact: false }).isVisible());
+    await scheduleSummary.focus(); await page.keyboard.press('Enter');
+    check('keyboard opens schedule and help', await page.locator('#campaign-scheduled').isVisible() && await page.locator('#campaign-scheduled-help').isVisible());
+    for (const width of [1280,390,320]) {
+      await page.setViewportSize({width,height:844});
+      check(`schedule help preserves words at ${width}`, (await splitKoreanWords(page.locator('#campaign-scheduled-help'))).length === 0);
+    }
     await page.getByLabel('모의 발송으로 기록', { exact: false }).check();
     const sendConfirmation = page.getByRole('group', { name: '실행 확인' });
     await page.locator('#campaign-submit').click();
     check('review is offered for an unchanged draft', await sendConfirmation.isVisible());
+    await messageStep(page, 1);
     await safetyBoxes.nth(0).uncheck();
     await safetyBoxes.nth(1).check();
     check('changing the recipient invalidates the old confirmation even when the count is unchanged', !await sendConfirmation.isVisible() && (await page.locator('#campaign-review-status').textContent()).includes('발송 검토를 다시 눌러 주세요'));
+    await messageStep(page, 3);
     await page.locator('#campaign-review-status').scrollIntoViewIfNeeded();
     await page.screenshot({ path: `${OUT}/state-message-review-invalidated-320.png` });
     check('changing recipients never sends', f.gateway.commands.length === commandsBeforeJumps);
     await page.locator('#campaign-submit').click();
     check('changed recipient requires and permits a fresh review', await sendConfirmation.isVisible());
+    await messageStep(page, 2);
     await page.locator('#campaign-title').fill('수정된 안내');
     check('changing the message invalidates the old confirmation', !await sendConfirmation.isVisible() && (await page.locator('#campaign-review-status').textContent()).includes('발송 검토를 다시 눌러 주세요'));
     await page.locator('#campaign-title').fill('검토할 안내');
     check('returning to the previous text does not resurrect the old confirmation', !await sendConfirmation.isVisible());
+    await messageStep(page, 3);
     await page.locator('#campaign-submit').click();
     check('the edited draft can be reviewed afresh', await sendConfirmation.isVisible());
     await page.getByLabel('모의 발송으로 기록', { exact: false }).uncheck();
@@ -475,6 +589,37 @@ async function main() {
     await page.locator('#campaign-submit').click();
     await page.locator('#campaign-scheduled').fill('2028-01-16T10:00');
     check('changing the manual schedule invalidates its earlier confirmation', !await sendConfirmation.isVisible());
+    await scheduleSummary.click();
+    check('closed schedule retains its value and shows that execution is manual',
+      !await page.locator('#campaign-scheduled').isVisible()
+      && (await page.locator('#campaign-scheduled').inputValue()) === '2028-01-16T10:00'
+      && (await scheduleSummary.innerText()).includes('수동 실행')
+      && (await page.locator('[aria-label="작성 요약"]').innerText()).includes('수동 실행'));
+    await scheduleSummary.click();
+    await page.getByLabel('모의 발송으로 기록', { exact: false }).uncheck();
+    await scheduleSummary.click();
+    check('real scheduled draft defaults to manual execution even when folded',
+      (await scheduleSummary.innerText()).includes('수동 실행')
+      && (await page.locator('#campaign-review-heading').locator('..').locator('..').innerText()).includes('이 예약은 자동 발송되지 않습니다'));
+    await page.locator('#campaign-submit').click();
+    check('manual reservation confirmation names the mode and action',
+      (await sendConfirmation.innerText()).includes('수동 실행')
+      && (await sendConfirmation.innerText()).includes('직접 발송 실행을 눌러야 합니다')
+      && (await sendConfirmation.innerText()).includes('예약 시각:')
+      && (await sendConfirmation.innerText()).includes('2028'));
+    await sendConfirmation.getByRole('button', { name: '취소', exact: true }).click();
+    await scheduleSummary.click();
+    await chooseRadio(page, 'campaign-schedule-mode', 'AUTO');
+    await scheduleSummary.click();
+    await page.locator('#campaign-submit').click();
+    check('explicit auto reservation confirmation names the mode and future activation',
+      (await sendConfirmation.innerText()).includes('자동 실행')
+      && (await sendConfirmation.innerText()).includes('나중에 설정을 켜면 발송될 수 있습니다'));
+    await sendConfirmation.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `${OUT}/state-real-scheduled-review-320.png` });
+    await sendConfirmation.getByRole('button', { name: '취소', exact: true }).click();
+    await scheduleSummary.click();
+    await page.getByLabel('모의 발송으로 기록', { exact: false }).check();
     await page.locator('#campaign-scheduled').fill('');
     check('removing the new schedule does not revive the earlier confirmation', !await sendConfirmation.isVisible());
     await page.locator('#campaign-submit').click();
@@ -484,17 +629,36 @@ async function main() {
     // Replacing an MMS attachment invalidates review even when the new file
     // is rejected and the previous valid attachment remains in the draft.
     // Only the disposable fixture receives the synthetic JPG upload.
-    await page.locator('#campaign-channel').selectOption('MMS');
+    await messageStep(page, 2);
+    await chooseRadio(page, 'campaign-channel', 'SMS'); // The attachment switches the new request to MMS.
     const jpeg = Buffer.alloc(1024);
     Buffer.from('ffd8ffc0000b080001000a01011100ffd9', 'hex').copy(jpeg);
     await page.locator('#campaign-image').setInputFiles({ name: 'review-test.jpg', mimeType: 'image/jpeg', buffer: jpeg });
     await page.waitForFunction(() => document.querySelector('#campaign-image-help')?.textContent?.includes('첨부됨:'));
+    await messageStep(page, 3);
     await page.locator('#campaign-submit').click();
     check('the original MMS attachment can be reviewed in simulation', await sendConfirmation.isVisible());
     await page.locator('#campaign-image').setInputFiles({ name: 'invalid.txt', mimeType: 'text/plain', buffer: Buffer.from('not a photo') });
     check('even a rejected attachment selection invalidates the older review', !await sendConfirmation.isVisible() && (await page.locator('#campaign-review-status').textContent()).includes('발송 검토를 다시 눌러 주세요'));
-    check('rejected attachment does not transmit a message', f.gateway.commands.filter(command => command.command === 'message.create').length === f.gateway.commands.slice(0, commandsBeforeJumps).filter(command => command.command === 'message.create').length);
-    await page.locator('#campaign-channel').selectOption('SMS');
+    check('rejected attachment does not transmit a message', f.gateway.commands.filter(command => ['message.create', 'message.create-reviewed'].includes(command.command)).length === f.gateway.commands.slice(0, commandsBeforeJumps).filter(command => ['message.create', 'message.create-reviewed'].includes(command.command)).length);
+    await messageStep(page, 2);
+    await page.getByRole('button', { name: '사진 첨부 해제', exact: true }).click();
+    // A real validation response must reopen a closed schedule and return
+    // focus to the field without creating a message or losing its value.
+    await messageStep(page, 3);
+    const beforePastSchedule = (await bootstrap()).workspaces[f.eventId].messages.length;
+    await page.locator('#campaign-scheduled').fill('2020-01-16T10:00');
+    await scheduleSummary.click();
+    await page.locator('#campaign-submit').click();
+    await sendConfirmation.getByRole('button', { name: '예약 등록한다', exact: true }).click();
+    await page.locator('#campaign-scheduled-error').waitFor({ state: 'visible' });
+    await page.waitForFunction(() => document.activeElement?.id === 'campaign-scheduled');
+    check('server schedule error reopens and focuses the original value without creating a message',
+      await scheduleDetails.evaluate(node => node.open)
+      && (await page.locator('#campaign-scheduled').inputValue()) === '2020-01-16T10:00'
+      && (await bootstrap()).workspaces[f.eventId].messages.length === beforePastSchedule);
+    await page.locator('#campaign-scheduled').fill('');
+    check('editing the invalid schedule clears its field error', await page.locator('#campaign-scheduled-error').count() === 0);
     await page.locator('#campaign-submit').click();
     const countBeforeFreshReview = (await bootstrap()).workspaces[f.eventId].messages.length;
     await sendConfirmation.getByRole('button', { name: '모의 발송을 기록한다', exact: true }).click();
@@ -508,11 +672,15 @@ async function main() {
     await page.waitForFunction(id => document.activeElement?.id === `campaign-${id}`, freshReviewMessage.id);
     check('proven simulation returns focus to its history record', !await page.locator('#campaign-title').isVisible());
     await page.locator('#message-compose-open').click();
-    await page.locator('#campaign-title').waitFor({ state: 'visible' });
-    if (await safetyPicker.evaluate(e => e.open)) await safetyPicker.locator('summary').click();
-    await page.locator('#campaign-title').fill('대상을 고르기 전에 작성');
-    check('writing never requires recipient first', await page.locator('#campaign-title').inputValue() === '대상을 고르기 전에 작성');
+    await page.locator('#recipient-status-filter').waitFor({ state: 'visible' });
+    check('a fresh draft starts by choosing recipients', !await page.locator('#campaign-title').isVisible());
+    await safetyPicker.locator('ul input[type="checkbox"]').first().check();
+    await messageStep(page, 2);
+    await page.locator('#campaign-title').fill('선택한 대상에게 작성');
+    check('content opens after selecting a recipient', await page.locator('#campaign-title').inputValue() === '선택한 대상에게 작성');
     await page.locator('#campaign-title').fill('');
+    await messageStep(page, 1);
+    await page.locator('#recipient-clear-all').click();
     await page.goto(base + '/participants?status=PENDING');
     await page.getByRole('combobox', { name: '상태별 보기', exact: true }).waitFor();
     check('pending deep link restores filter', await page.getByRole('combobox', { name: '상태별 보기', exact: true }).inputValue() === 'PENDING');
@@ -544,49 +712,16 @@ async function main() {
     await page.goto(base + '/operations');
     await page.locator('#ops-desks').waitFor();
     check('desktop presets start folded', await page.locator('main details').evaluateAll(nodes => nodes.length === 2 && nodes.every(e => !e.open)));
-    // Event rail regrouped into five hubs (console-navigation.ts EVENT_HUBS):
-    // the old flat .console-subnav-item list and .nav-work-group-label spans
-    // no longer exist. Walk every hub through its real link and prove no
-    // destination was lost in the regrouping; hub subnavs render only for
-    // the active hub, so each hub is actually visited.
-    const hubLabels = await page.locator('.desktop-side-nav .console-hub-item > span:first-child').allTextContents().then(ts => ts.map(t => t.trim()));
-    check('event rail keeps the five approved hubs in order', hubLabels.join('|') === '오늘|준비|참가자|현장|결과', hubLabels);
-    const hubDestinations = [];
-    for (const hub of ['오늘', '준비', '참가자', '현장', '결과']) {
-      // Client-side hub navigation lags the heading: the rail still names
-      // the previous hub until the route actually changes, so the subnav is
-      // read only after the URL and the hub's active mark catch up.
-      const before = page.url();
-      await page.locator('.desktop-side-nav .console-hub-item', { hasText: hub }).click();
-      await page.waitForFunction((u) => location.href !== u, before);
-      await page.locator('h1').first().waitFor();
-      if (hub !== '오늘') {
-        await page.waitForFunction((name) => document.querySelector('.desktop-side-nav .console-hub-item[data-active="true"]')?.textContent?.includes(name), hub);
-      }
-      const entries = await page.locator('.desktop-side-nav .console-hub-subitem').evaluateAll(nodes => nodes.map(e => ({
-        // First span is the destination label; badges append counts after it.
-        label: e.querySelector(':scope > span')?.textContent?.trim() ?? e.textContent.trim(),
-        href: e.getAttribute('href'),
-      })));
-      const headerHref = await page.locator('.desktop-side-nav .console-hub-item', { hasText: hub }).first().getAttribute('href');
-      hubDestinations.push(...(entries.length ? entries : [{ label: `hub:${hub}`, href: headerHref }]));
-    }
+    // Every permitted destination is available without opening another group.
+    const hubLabels = await page.locator('.desktop-side-nav .console-nav-group > .nav-section-label').allTextContents();
+    check('event rail keeps four work groups', hubLabels.join('|') === '운영|현장·참여|행사 준비|결과', hubLabels);
+    const hubDestinations = await page.locator('.desktop-side-nav .console-workspace-link').evaluateAll(nodes => nodes.map(e => ({ label: e.querySelector(':scope > span')?.textContent?.trim(), href: e.getAttribute('href') })));
     const eventBasePath = `/console/events/${f.eventId}`;
     const approvedDestinations = [
-      { label: 'hub:오늘', href: eventBasePath },
-      { label: '행사 설정', href: `${eventBasePath}/settings` },
-      { label: '참가자 페이지', href: `${eventBasePath}/page` },
-      { label: '콘텐츠', href: `${eventBasePath}/content` },
-      { label: '참여 프로그램', href: `${eventBasePath}/programs` },
-      { label: '참가자 명단', href: `${eventBasePath}/participants` },
-      { label: '명단 가져오기', href: `${eventBasePath}/participants/import` },
-      { label: '메시지', href: `${eventBasePath}/messages` },
-      { label: '현장 운영', href: `${eventBasePath}/operations` },
-      { label: '현장 사진', href: `${eventBasePath}/photos` },
-      { label: '추첨·투표', href: `${eventBasePath}/draws` },
-      { label: '경품', href: `${eventBasePath}/rewards` },
-      { label: '결과 보고서', href: `${eventBasePath}/reports` },
+      {label:'운영 현황',href:eventBasePath},
+      ...[['참가자 명단','participants'],['메시지','messages'],['현장 운영','operations'],['추첨·투표','draws'],['경품 수령','rewards'],['현장 사진','photos'],['참가자 페이지','page'],['공지·안내','content'],['참여 콘텐츠','programs'],['행사 설정','settings'],['결과 보고서','reports']].map(([label,route])=>({label,href:`${eventBasePath}/${route}`})),
     ];
+
     check(
       'all event destinations remain in approved hub order with working routes',
       hubDestinations.length === approvedDestinations.length
@@ -604,13 +739,13 @@ async function main() {
     // page select takes only the visible 25, an explicit deselect clears
     // them, and the filter-wide select then takes all 49 across pages.
     await page.getByRole('button', { name: '이 페이지 25명 선택', exact: true }).first().click();
-    check('page-scope selection stays on the current page', await page.locator('#roster-selection-count').textContent().then(t => t.includes('선택한 참가자 25명') && t.includes('현재 필터 25명') && t.includes('이 페이지 25명') && !t.includes('다른 페이지')));
+    check('page-scope selection stays on the current page', await page.locator('#roster-selection-count').textContent().then(t => t.includes('선택 25명') && t.includes('현재 필터 25명') && t.includes('이 페이지 25명') && !t.includes('다른 페이지')));
     await page.getByRole('button', { name: '선택 해제', exact: true }).click();
     check('explicit deselect clears the page-scope selection', await page.locator('#roster-selection-count').count() === 0);
     await page.getByRole('button', { name: '필터 결과 전체 49명 선택', exact: true }).waitFor();
     await page.getByRole('button', { name: '필터 결과 전체 49명 선택', exact: true }).click();
-    check('bulk selection includes other pages without changing displayed count', await page.locator('#roster-selection-count').textContent().then(t => t.includes('선택한 참가자 49명') && t.includes('현재 필터 49명') && t.includes('이 페이지 25명') && t.includes('다른 페이지 24명 포함')));
-    check('bulk approval names its pending target count', (await page.locator('#roster-approve-selected').innerText()).includes('승인 대기 49명 승인'));
+    check('bulk selection includes other pages without changing displayed count', await page.locator('#roster-selection-count').textContent().then(t => t.includes('선택 49명') && t.includes('현재 필터 49명') && t.includes('이 페이지 25명') && t.includes('다른 페이지 24명')));
+    check('bulk approval names its pending target count', (await page.locator('#roster-approve-selected').innerText()).includes('신청 승인 49'));
     await page.locator('#roster-approve-selected').click();
     await page.locator('#roster-approved-message').waitFor();
     check('bulk approval settles all filtered pages', (await bootstrap()).workspaces[f.eventId].participants.every(p => p.status === 'APPROVED'));
@@ -643,16 +778,18 @@ async function main() {
       await page.locator('#event-metrics-heading').waitFor();
       const headings = await page.locator('main h2').evaluateAll(nodes => nodes.map(e => (e.textContent ?? '').trim()));
       if (['DRAFT', 'READY'].includes(stage)) {
-        // Independent desktop columns avoid a tall metric pushing the
-        // schedule down. Reading order follows the task column first.
+        // Work and metrics share the first work row; the schedule follows
+        // both, matching the actual DOM and the approved priority.
         const geometry = await page.evaluate(() => {
-          const rect = id => document.querySelector(`#${id}`)?.getBoundingClientRect();
+          const rect = id => document.querySelector(`section[aria-labelledby="${id}"]`)?.getBoundingClientRect();
           const queue = rect('event-now-heading'), metric = rect('event-metrics-heading'), schedule = rect('event-runbook-heading');
-          return { queueTop: queue?.top, metricTop: metric?.top, queueLeft: queue?.left, metricLeft: metric?.left, scheduleTop: schedule?.top };
+          return { queueTop: queue?.top, queueBottom: queue?.bottom, metricTop: metric?.top, metricBottom: metric?.bottom, queueLeft: queue?.left, metricLeft: metric?.left, scheduleTop: schedule?.top };
         });
-        check(`${stage} leads with actions and presents metrics alongside`, headings[0] === '지금 할 일' && headings[1] === '행사 일정' && headings[2] === '행사 준비 확인' && headings[3] === '주요 지표' && Math.abs(geometry.queueTop - geometry.metricTop) <= 8 && geometry.metricLeft > geometry.queueLeft && geometry.scheduleTop > geometry.queueTop, { headings, geometry });
+        check(`${stage} presents its metrics above work and schedule`, headings[0] === '주요 지표' && headings[1] === '지금 할 일' && headings[2] === '행사 일정' && headings[3] === '행사 준비 확인' && Math.abs(geometry.queueTop - geometry.metricTop) <= 2 && geometry.scheduleTop >= Math.max(geometry.queueBottom, geometry.metricBottom) - 1, { headings, geometry });
       } else {
         check(`${stage} prioritizes its real task`, headings[0] === (stage === 'ARCHIVED' ? '보관된 행사 마감 확인' : '행사 마감'), headings[0]);
+        check(`${stage} retains summary ahead of the schedule`, headings.indexOf('최종 요약') > 0 && headings.indexOf('최종 요약') < headings.indexOf('행사 일정'), headings);
+        if (stage === 'ARCHIVED') check('archived overview does not show an empty work queue', await page.locator('#event-now-heading').count() === 0);
       }
       if (stage === 'DRAFT') {
         // The entry CTA repeats inside the readiness checklist: every

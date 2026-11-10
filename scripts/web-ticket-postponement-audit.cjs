@@ -1,0 +1,119 @@
+'use strict';
+// Isolated fixture only. The fault drops the response after a real commit.
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const axeSource = require('axe-core').source;
+const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
+const { launchBrowser } = require('./audit-browser.cjs');
+const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
+(async () => {
+  if (!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a private capture root');
+  const out = path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'ticket-postponement');
+  prepareCaptureDir(out); process.env.TMPDIR = ensureRunTmpDir(out);
+  const f = await startAuditFixture(); let browser;
+  try {
+    const read = async () => (await f.harness.database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [f.eventId])).rows[0].payload;
+    const w = await read();
+    w.participants[0].ticketExpiresAt = '2020-01-01T00:00:00.000Z';
+    w.participants[1].revoked = true;
+    w.participants[2].ticket = 'malformed-synthetic';
+    w.participants[6].cancelled = true;
+    await f.harness.database.query('UPDATE event_workspaces SET payload=$2::jsonb WHERE event_id=$1', [f.eventId, JSON.stringify(w)]);
+    browser = await launchBrowser();
+    const c = await browser.newContext({ viewport: { width: 1280, height: 900 }, timezoneId: 'Asia/Seoul' });
+    await c.addCookies([{ ...cookieForContext(f, 'manager'), url: f.baseUrl }]);
+    const page = await c.newPage(); const errors = [], commands = [], oldAttempts = [];
+    let oldServer = true, oldRetry = false;
+    page.on('pageerror', e => errors.push(e.message)); page.on('dialog', d => d.accept());
+    await page.route('**/api/events/*/commands', async route => {
+      const body = route.request().postDataJSON();
+      if (body.command !== 'event.basics.save') return route.continue();
+      if (oldServer || oldRetry) {
+        oldAttempts.push(body); oldServer = false; oldRetry = false;
+        return route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: '지원하지 않는 참가자 작업입니다', field: 'command' }) });
+      }
+      commands.push(body);
+      if (commands.length === 1) { const res = await route.fetch(); assert.equal(res.status(), 200); return route.abort('failed'); }
+      return route.continue();
+    });
+    await page.goto(`${f.baseUrl}/console/events/${f.eventId}/settings`, { waitUntil: 'networkidle' });
+    await page.locator('#set-date').fill('2027-12-31');
+    await page.getByText(/현재 유효한 티켓은 새 행사 날짜에 맞춰 연장/).waitFor();
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.locator('#set-date').evaluate(el => el.scrollIntoView({ block: 'center' }));
+      await page.screenshot({ path: path.join(out, `settings-${width}.png`) });
+      await page.locator('#set-date').locator('..').screenshot({ path: path.join(out, `date-detail-${width}.png`) });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
+      if (width === 390) { await page.addScriptTag({ content: axeSource }); assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter(v => ['serious','critical'].includes(v.impact)).map(v => v.id)), []); }
+    }
+    const originalDate = (await f.harness.database.query('SELECT payload FROM events WHERE id=$1', [f.eventId])).rows[0].payload.date;
+    const saveBasics = page.getByRole('button', { name: '기본 정보 저장', exact: true });
+    await saveBasics.focus();
+    await page.keyboard.press('Enter');
+    const unsupported = page.getByRole('alert').filter({ hasText: '현재 서버에서는 행사 정보를 안전하게 저장할 수 없습니다' });
+    await unsupported.waitFor();
+    assert.equal(await page.getByText(/현재 서버에서는 행사 정보를 안전하게 저장할 수 없습니다/).count(), 1, 'the actionable error is not repeated in three places');
+    assert.equal(await saveBasics.evaluate(el => document.activeElement === el), true, 'keyboard focus stays at the failed action');
+    assert.equal(await page.locator('#set-date').inputValue(), '2027-12-31', 'old-server rejection keeps the draft');
+    assert.equal((await f.harness.database.query('SELECT payload FROM events WHERE id=$1', [f.eventId])).rows[0].payload.date, originalDate, 'old-server rejection makes no write');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement === document.body), false, 'keyboard can leave the failed action');
+    await page.keyboard.press('Shift+Tab');
+    assert.equal(await saveBasics.evaluate(el => document.activeElement === el), true, 'keyboard can return to the failed action');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
+    assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter(v => ['serious','critical'].includes(v.impact)).map(v => v.id)), []);
+    await page.screenshot({ path: path.join(out, 'old-server-rejection-390.png'), fullPage: true });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.getByRole('button', { name: '기본 정보 저장', exact: true }).click();
+    const recovery = page.getByRole('region', { name: '행사 설정 처리 확인 필요' }); await recovery.waitFor();
+    await recovery.getByRole('button', { name: '서버 처리 확인' }).click();
+    await recovery.getByText(/저장 내용과 티켓 영향을 확인하려면 같은 요청/).waitFor();
+    assert.equal(commands.length, 1, 'status-only read never resends');
+    oldRetry = true;
+    await recovery.getByRole('button', { name: '같은 요청 다시 시도' }).click();
+    await recovery.getByText(/처리 결과를 확인하지 못했습니다/).waitFor();
+    assert.equal(oldAttempts[1].commandId, commands[0].commandId, 'mixed routing retries the frozen request');
+    assert.equal(commands.length, 1, 'an old-server rejection does not resend to a new server or settle the earlier committed request');
+    await recovery.getByRole('button', { name: '같은 요청 다시 시도' }).click();
+    await recovery.waitFor({ state: 'detached' });
+    await page.getByText(/유효한 티켓 4건을 연장했습니다/).first().waitFor();
+    await page.getByText(/확인이 필요한 티켓 4건/).first().waitFor();
+    assert.equal(commands.length, 2); assert.equal(commands[0].commandId, commands[1].commandId);
+    const guest = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await guest.goto(`${f.baseUrl}/event/${f.slug}/ticket?ticket=${encodeURIComponent(w.participants[3].ticket)}`);
+    await guest.getByRole('img', { name: /행사 입장 및 퇴장용 QR/ }).waitFor();
+    assert.ok(!new URL(guest.url()).searchParams.has('ticket'));
+    await guest.close();
+    await page.getByRole('link', { name: '티켓 확인이 필요한 참가자 보기' }).first().click();
+    await page.waitForURL(/ticket=review/);
+    await page.getByText('감사 참가자 1', { exact: true }).first().waitFor();
+    await page.getByText('감사 참가자 7', { exact: true }).first().waitFor();
+    await page.getByText('취소 상태 확인 필요', { exact: true }).first().waitFor();
+    assert.equal(await page.getByText('감사 참가자 4', { exact: true }).count(), 0);
+    await page.getByRole('button', { name: '감사 참가자 1 참가자 상세' }).first().click();
+    await page.getByText('티켓이 만료됐습니다.', { exact: false }).waitFor();
+    assert.equal(await page.getByRole('button', { name: '티켓 재발급' }).count(), 1);
+    await page.getByRole('button', { name: '닫기', exact: true }).last().click();
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.getByText('감사 참가자 1', { exact: true }).first().waitFor();
+    assert.equal(await page.getByText('감사 참가자 4', { exact: true }).count(), 0);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: path.join(out, 'roster-review-390.png'), fullPage: true });
+    const toggle = page.locator('#roster-filter-toggle');
+    assert.equal(await toggle.getAttribute('aria-expanded'), 'true', 'deep link opens filter controls on mobile');
+    await toggle.click(); assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
+    assert.ok(new URL(page.url()).searchParams.get('ticket') === 'review', 'collapsing filters preserves the URL and selection');
+    assert.equal(await page.getByText('감사 참가자 4', { exact: true }).count(), 0);
+    const preset = page.getByRole('combobox', { name: '빠른 상태 보기' });
+    assert.equal(await preset.inputValue(), 'custom', 'ticket filter does not masquerade as 전체');
+    await preset.selectOption('all');
+    await page.getByText('감사 참가자 4', { exact: true }).last().waitFor();
+    assert.equal(new URL(page.url()).searchParams.has('ticket'), false, '전체 preset clears the ticket filter');
+    assert.deepEqual(errors, []);
+    fs.writeFileSync(path.join(out, 'verification.json'), JSON.stringify({ outcome:'passed', isolated:true, simulatedOldServerRejectedBeforeWrite:true, mixedRoutingRetainedUnknown:true, responseLostAfterCommit:true, statusOnlyRetained:true, sameRequestReplayed:true, expiredRevokedMalformedFound:true, filterSurvivesReload:true, mobileFilterDisclosureAndPresets:true, publicTicketRendersAfterPostponement:true, viewports:[320,390,1280] }, null, 2), { mode:0o600 });
+    console.log('Ticket postponement and roster recovery passed');
+  } finally { if (browser) await browser.close(); await f.close(); }
+})().catch(e => { console.error(e.stack || e); process.exitCode = 1; });

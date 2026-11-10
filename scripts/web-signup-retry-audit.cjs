@@ -14,6 +14,7 @@ const path = require('node:path');
 const axe = require('axe-core').source;
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
+const { confirmInitialStaffDesk } = require('./audit-staff-direction.cjs');
 
 const OUT = process.env.EVENTOUCH_CAPTURE_ROOT
   ? path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'signup-retry')
@@ -76,7 +77,7 @@ async function main() {
       check(`${scenario.name}: focus reaches explanation`, await notice.evaluate(el => el === document.activeElement));
       check(`${scenario.name}: warning explains possible commit and reload`, (await notice.innerText()).includes('이미 신청되었을 수 있습니다') && (await notice.innerText()).includes('새로고침하거나 닫지 마세요'));
       await page.keyboard.press('Tab');
-      check(`${scenario.name}: support link is keyboard reachable`, await page.getByRole('link', { name: /행사 안내·문의처/ }).evaluate(el => el === document.activeElement));
+      check(`${scenario.name}: support link is keyboard reachable`, await page.getByRole('link', { name: '행사 안내 (새 탭)', exact: true }).evaluate(el => el === document.activeElement));
       await page.keyboard.press('Tab');
       check(`${scenario.name}: retry is next in keyboard order`, await retry.evaluate(el => el === document.activeElement));
       check(`${scenario.name}: no personal data or request id persisted`, await page.evaluate(({ phone, id }) =>
@@ -160,13 +161,9 @@ async function main() {
         });
       });
       await new Promise(resolve => supplier.listen(0, '127.0.0.1', resolve));
-      Object.assign(process.env, {
-        SOLAPI_API_KEY: 'fixture-key', SOLAPI_API_SECRET: 'fixture-secret', SOLAPI_SENDER: '0212345678',
-        SOLAPI_API_HOST: `http://127.0.0.1:${supplier.address().port}`,
-      });
       let verifiedFixture;
       try {
-        verifiedFixture = await startAuditFixture();
+        verifiedFixture = await startAuditFixture({ fixtureSolapiHost: `http://127.0.0.1:${supplier.address().port}` });
         await verifiedFixture.harness.database.query(
           "UPDATE event_workspaces SET payload=jsonb_set(payload,'{verificationRequired}','true'::jsonb) WHERE event_id=$1",
           [verifiedFixture.eventId],
@@ -182,12 +179,63 @@ async function main() {
           return route.fulfill({ status: 502, contentType: 'application/json', body: '{"error":"fixture response lost"}' });
         });
         await page.goto(`${verifiedFixture.baseUrl}/event/${verifiedFixture.slug}/register`);
+        check('phone input precedes its verification action', await page.evaluate(() => {
+          const phone = document.querySelector('#field-phone');
+          const request = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === '인증번호 받기');
+          return Boolean(phone && request && (phone.compareDocumentPosition(request) & Node.DOCUMENT_POSITION_FOLLOWING));
+        }));
+        check('optional affiliation is named as optional', await page.getByLabel('소속 (선택)', { exact: true }).count() === 1);
+        await page.getByRole('button', { name: '인증번호 받기', exact: true }).click();
+        check('empty verification request returns focus to the phone field', await page.locator('#field-phone').evaluate(el => el === document.activeElement) && await page.getByText('연락처를 먼저 입력하세요.', { exact: true }).isVisible());
         await page.locator('#field-name').fill('인증 재확인 참가자');
         await page.locator('#field-phone').fill('01098761239');
         if (await page.locator('#consent').count()) await page.locator('#consent').check();
+        check('editing the phone clears its stale error', await page.getByText('연락처를 먼저 입력하세요.', { exact: true }).count() === 0);
+        await page.getByRole('button', { name: '신청하기', exact: true }).click();
+        await page.waitForFunction(() => document.activeElement?.id === 'verification-panel');
+        check('signup without a grant returns to the verification panel without writing', attempts.length === 0 && await page.getByText('연락처 인증을 먼저 완료하세요.', { exact: true }).isVisible());
+        let releaseRequest;
+        let requestArrived;
+        const requestSeen = new Promise(resolve => { requestArrived = resolve; });
+        const requestGate = new Promise(resolve => { releaseRequest = resolve; });
+        await page.route('**/api/public/events/*/verification/request', async route => {
+          const actual = await route.fetch();
+          requestArrived();
+          await requestGate;
+          await route.fulfill({ response: actual });
+        });
+        await page.getByRole('button', { name: '인증번호 받기', exact: true }).click();
+        await requestSeen;
+        await page.locator('#field-phone').fill('');
+        releaseRequest();
+        await page.getByRole('button', { name: '인증번호 받기', exact: true }).waitFor();
+        check('a delayed code response cannot claim a cleared phone is verified', await page.locator('#verify-code').count() === 0 && await page.getByText(/연락처가 바뀌었습니다/).isVisible());
+        await page.unroute('**/api/public/events/*/verification/request');
+        await page.locator('#field-phone').fill('01098761240');
         await page.getByRole('button', { name: '인증번호 받기', exact: true }).click();
         await page.locator('#verify-code').waitFor();
         check('local fake supplier received a code', /^\d{6}$/.test(code));
+        await page.locator('#verify-code').fill(code);
+        let releaseConfirm;
+        let confirmArrived;
+        const confirmSeen = new Promise(resolve => { confirmArrived = resolve; });
+        const confirmGate = new Promise(resolve => { releaseConfirm = resolve; });
+        await page.route('**/api/public/events/*/verification/confirm', async route => {
+          const actual = await route.fetch();
+          confirmArrived();
+          await confirmGate;
+          await route.fulfill({ response: actual });
+        });
+        await page.getByRole('button', { name: '인증 확인', exact: true }).click();
+        await confirmSeen;
+        await page.locator('#field-phone').fill('');
+        releaseConfirm();
+        await page.getByRole('button', { name: '인증번호 받기', exact: true }).waitFor();
+        check('a delayed confirmation cannot grant a cleared phone', await page.getByText(/연락처 인증됨/).count() === 0 && await page.getByText(/연락처가 바뀌었습니다/).isVisible());
+        await page.unroute('**/api/public/events/*/verification/confirm');
+        await page.locator('#field-phone').fill('01098761241');
+        await page.getByRole('button', { name: '인증번호 받기', exact: true }).click();
+        await page.locator('#verify-code').waitFor();
         await page.locator('#verify-code').fill(code);
         await page.getByRole('button', { name: '인증 확인', exact: true }).click();
         await page.getByText(/연락처 인증됨/).waitFor();
@@ -199,11 +247,10 @@ async function main() {
         check('verified retry sends the identical grant and body', attempts.length === 2 && JSON.stringify(attempts[0]) === JSON.stringify(attempts[1]));
         await page.getByRole('img', { name: /님의 행사 입장 및 퇴장용 QR/ }).waitFor();
         const verified = (await verifiedFixture.harness.database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [verifiedFixture.eventId])).rows[0].payload;
-        check('verified retry creates one participant', verified.participants.filter(person => person.phone === '01098761239').length === 1);
+        check('verified retry creates one participant', verified.participants.filter(person => person.phone === '01098761241').length === 1);
         await context.close();
       } finally {
         if (verifiedFixture) await verifiedFixture.close();
-        for (const key of ['SOLAPI_API_KEY', 'SOLAPI_API_SECRET', 'SOLAPI_SENDER', 'SOLAPI_API_HOST']) delete process.env[key];
         await new Promise(resolve => supplier.close(resolve));
       }
     }
@@ -251,13 +298,24 @@ async function main() {
       check('validation error is associated with the phone input', await page.locator('#field-phone').getAttribute('aria-invalid') === 'true' &&
         (await page.locator('#field-phone').getAttribute('aria-describedby')).split(' ').includes('field-phone-error') &&
         await page.locator('#field-phone-error').isVisible());
-      check('definitive validation error does not leave a reload guard', await page.evaluate(() => {
+      check('unsaved input still receives reload protection after validation', await page.evaluate(() => {
+        const event = new Event('beforeunload', { cancelable: true });
+        window.dispatchEvent(event);
+        return event.defaultPrevented;
+      }));
+      check('validation rejection is not described as unknown', await page.getByText('신청 결과를 확인하지 못했습니다').count() === 0);
+      await page.locator('#field-name').fill('');
+      await page.locator('#field-phone').fill('');
+      if (await page.locator('#consent').count()) await page.locator('#consent').uncheck();
+      await page.waitForTimeout(50);
+      check('clearing rejected input removes the reload guard', await page.evaluate(() => {
         const event = new Event('beforeunload', { cancelable: true });
         window.dispatchEvent(event);
         return !event.defaultPrevented;
       }));
-      check('validation rejection is not described as unknown', await page.getByText('신청 결과를 확인하지 못했습니다').count() === 0);
+      await page.locator('#field-name').fill('입력 수정 참가자');
       await page.locator('#field-phone').fill('01098761235');
+      if (await page.locator('#consent').count()) await page.locator('#consent').check();
       await page.getByRole('button', { name: '신청하기', exact: true }).click();
       await page.getByRole('img', { name: /님의 행사 입장 및 퇴장용 QR/ }).waitFor();
       check('corrected validation error uses a new id', attempts.length === 2 && attempts[0].commandId !== attempts[1].commandId);
@@ -274,6 +332,7 @@ async function main() {
       await page.goto(`${fixture.baseUrl}/staff/events/${fixture.eventId}`);
       await page.locator('#staff-desk').waitFor();
       if (await page.locator('#staff-desk').inputValue() !== fixture.deskId) await page.locator('#staff-desk').selectOption(fixture.deskId);
+      await confirmInitialStaffDesk(page);
       await page.locator('#staff-ticket').fill(journeyPerson.ticket);
       await page.getByRole('button', { name: '입장 처리', exact: true }).click();
       await page.getByRole('button', { name: '다음 참가자', exact: true }).waitFor();

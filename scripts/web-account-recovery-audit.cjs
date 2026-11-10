@@ -33,6 +33,7 @@ const { prepareCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = requ
 const path = require('node:path');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
+const { confirmInitialStaffDesk } = require('./audit-staff-direction.cjs');
 const { mockOutbox, clearMockOutbox } = require('../server/email-transport');
 
 const OUT = process.env.EVENTOUCH_CAPTURE_ROOT
@@ -103,10 +104,11 @@ async function runAccountRecoveryAudit() {
     await insertAccount(fixture.harness.database, { orgId: LEGACY_ORG, id: 'ar-member', role: 'MANAGER', name: '복구검증 구성원', email: 'ar-member@example.test' });
     await insertAccount(fixture.harness.database, { orgId: LEGACY_ORG, id: 'ar-loss', role: 'MANAGER', name: '응답유실 검증', email: 'ar-loss@example.test' });
     await insertAccount(fixture.harness.database, { orgId: LEGACY_ORG, id: 'ar-verify-loss', role: 'MANAGER', name: '인증응답 검증', email: 'ar-verify-loss@example.test' });
+    await insertAccount(fixture.harness.database, { orgId: LEGACY_ORG, id: 'ar-request-loss', role: 'MANAGER', name: '요청응답 검증', email: 'ar-request-loss@example.test' });
     // Owner starts verified (DB fixture mirrors a completed proof; the live
     // request/confirm lifecycle is driven below for the member).
     await fixture.harness.database.query(
-      "UPDATE accounts SET email_verified_email = lower(email), email_verified_at = now() WHERE id IN ('ar-owner', 'ar-loss')"
+      "UPDATE accounts SET email_verified_email = lower(email), email_verified_at = now() WHERE id IN ('ar-owner', 'ar-loss', 'ar-request-loss')"
     );
 
     browser = await launchBrowser();
@@ -229,19 +231,37 @@ async function runAccountRecoveryAudit() {
     check('response-loss fixture requests a real recovery link', lossRequest.status === 200 && mockOutbox.length === 1);
     const lossToken = tokenOf(mockOutbox[0].link);
     let committedStatus = 0;
+    let releaseResetReply;
+    let signalResetCommit;
+    const resetCommitted = new Promise((resolve) => { signalResetCommit = resolve; });
+    const holdResetReply = new Promise((resolve) => { releaseResetReply = resolve; });
     await page.route('**/api/auth/recovery/confirm', async (route) => {
       const actual = await route.fetch();
       committedStatus = actual.status();
+      signalResetCommit();
+      await holdResetReply;
       await route.fulfill({ status: 502, contentType: 'application/json', body: '{"error":"fixture response lost"}' });
     });
-    await page.goto(`${base}/recover#t=${lossToken}`, { waitUntil: 'load' });
+    let declinedNewLink = false;
+    page.once('dialog', async (dialog) => { declinedNewLink = dialog.message().includes('비밀번호'); await dialog.dismiss(); });
+    await page.evaluate((token) => { window.location.hash = `#t=${token}`; }, lossToken);
+    await page.waitForFunction(() => window.location.hash === '');
+    check('declining a new same-tab recovery link preserves the original password', declinedNewLink && await page.getByLabel('새 비밀번호 (8자 이상)').inputValue() === 'audit-new-password-2');
+    page.once('dialog', (dialog) => { void dialog.accept(); });
+    await page.evaluate((token) => { window.location.hash = `#t=${token}`; }, lossToken);
+    await page.waitForFunction(() => window.location.hash === '' && document.querySelector('#recover-password')?.value === '');
     await page.getByLabel('새 비밀번호 (8자 이상)').fill('audit-loss-password-1');
     await page.getByLabel('새 비밀번호 확인').fill('audit-loss-password-1');
     await page.getByRole('button', { name: '비밀번호 바꾸기' }).click();
+    await resetCommitted;
+    check('a pending password reset cannot be discarded for a new request', await page.getByRole('button', { name: '새 복구 메일 요청' }).isDisabled());
+    releaseResetReply();
     await page.getByText('비밀번호 변경 결과를 확인하지 못했습니다.').waitFor({ timeout: 15000 });
     check('response loss occurs after the real reset committed', committedStatus === 200);
     check('unknown reset result keeps the new password in the original tab',
       await page.getByLabel('새 비밀번호 (8자 이상)').inputValue() === 'audit-loss-password-1');
+    check('unknown reset result freezes the original password',
+      await page.getByLabel('새 비밀번호 (8자 이상)').getAttribute('readonly') !== null);
     const loginLink = page.getByRole('link', { name: '새 비밀번호로 로그인 확인 (새 탭)' });
     check('unknown reset result offers a separate login check', await loginLink.getAttribute('target') === '_blank');
     await page.screenshot({ path: path.join(OUT, 'recover-response-unknown-1280.png') });
@@ -274,7 +294,9 @@ async function runAccountRecoveryAudit() {
       emptyCommittedStatus = actual.status();
       await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
     });
-    await page.goto(`${base}/recover#t=${emptyToken}`, { waitUntil: 'load' });
+    page.once('dialog', (dialog) => { void dialog.accept(); });
+    await page.evaluate((token) => { window.location.hash = `#t=${token}`; }, emptyToken);
+    await page.waitForFunction(() => window.location.hash === '' && document.querySelector('#recover-password')?.value === '');
     await page.getByLabel('새 비밀번호 (8자 이상)').fill('audit-empty-password-1');
     await page.getByLabel('새 비밀번호 확인').fill('audit-empty-password-1');
     await page.getByRole('button', { name: '비밀번호 바꾸기' }).click();
@@ -285,6 +307,33 @@ async function runAccountRecoveryAudit() {
       await page.getByLabel('새 비밀번호 (8자 이상)').inputValue() === 'audit-empty-password-1');
     await page.unroute('**/api/auth/recovery/confirm');
 
+    // Anonymous recovery remains non-enumerating when a mail request really
+    // committed but a proxy loses its response, and a later rate limit is not
+    // evidence that the earlier request failed.
+    const requestLoss = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    requestLoss.on('pageerror', (error) => errors.push(String((error && error.message) || error)));
+    await requestLoss.goto(`${base}/recover`, { waitUntil: 'load' });
+    await requestLoss.getByLabel('계정 이메일').fill('ar-request-loss@example.test');
+    clearMockOutbox();
+    let recoveryRequestCommit = 0;
+    await requestLoss.route('**/api/auth/recovery/request', async (route) => {
+      const actual = await route.fetch();
+      recoveryRequestCommit = actual.status();
+      await route.fulfill({ status: 502, contentType: 'application/json', body: '{}' });
+    });
+    await requestLoss.getByRole('button', { name: '복구 메일 요청' }).click();
+    await requestLoss.getByText('복구 메일 요청 결과를 확인하지 못했습니다.').waitFor();
+    check('lost anonymous recovery request can have already sent mock mail', recoveryRequestCommit === 200 && mockOutbox.length === 1);
+    await requestLoss.unroute('**/api/auth/recovery/request');
+    await requestLoss.route('**/api/auth/recovery/request', (route) => route.fulfill({ status: 429, contentType: 'application/json', body: '{}' }));
+    await requestLoss.getByRole('button', { name: '복구 메일 요청' }).click();
+    await requestLoss.getByText('앞선 복구 메일 요청 결과는 확인되지 않았습니다.').waitFor();
+    check('later rate limit preserves recovery-request uncertainty and the original email', await requestLoss.getByLabel('계정 이메일').inputValue() === 'ar-request-loss@example.test');
+    check('unknown recovery request has no horizontal overflow', (await overflowX(requestLoss)) <= 0);
+    check('axe unknown recovery request serious/critical 0', (await axeSeriousOrCritical(requestLoss)).length === 0);
+    await requestLoss.screenshot({ path: path.join(OUT, 'recover-request-uncertain-390.png') });
+    await requestLoss.close();
+
     // 4. /account/email unauthenticated: sign-in prompt, no status leak.
     const anon = await browser.newPage({ viewport: { width: 390, height: 844 } });
     await anon.goto(`${base}/account/email`, { waitUntil: 'load' });
@@ -294,7 +343,12 @@ async function runAccountRecoveryAudit() {
     await anon.close();
 
     // 5. Member lifecycle: request -> mailed (mock note) -> confirm -> verified.
+    let resetLeaveWarning = false;
+    const acceptResetLeave = (dialog) => { resetLeaveWarning = true; void dialog.accept(); };
+    page.on('dialog', acceptResetLeave);
     await page.goto(`${base}/login`, { waitUntil: 'load' });
+    page.off('dialog', acceptResetLeave);
+    check('leaving the unconfirmed reset warns before discarding the password', resetLeaveWarning);
     await page.getByLabel('이메일').fill('ar-member@example.test');
     await page.getByLabel('비밀번호').fill('not-a-real-test-password');
     await page.getByRole('button', { name: '로그인', exact: true }).click();
@@ -357,11 +411,35 @@ async function runAccountRecoveryAudit() {
     await verifyLoss.getByText('인증 메일 요청 결과를 확인하지 못했습니다.').waitFor({ timeout: 15000 });
     check('empty verify-request receipt stays uncertain and retains the input',
       await verifyLoss.getByLabel('현재 비밀번호').inputValue() === 'not-a-real-test-password');
+    check('unknown verify-request allows an already received link', await verifyLoss.getByRole('button', { name: '받은 인증 링크 사용' }).isVisible());
     await verifyLoss.unroute('**/api/auth/email/verify/request');
     clearMockOutbox();
+    let requestCommitted = 0;
+    await verifyLoss.route('**/api/auth/email/verify/request', async (route) => {
+      const actual = await route.fetch();
+      requestCommitted = actual.status();
+      await route.fulfill({ status: 502, contentType: 'application/json', body: '{}' });
+    });
     await verifyLoss.getByRole('button', { name: '인증 메일 보내기' }).click();
-    await verifyLoss.getByText('모의 인증 요청을 기록했습니다.').waitFor({ timeout: 15000 });
+    await verifyLoss.getByText('인증 메일 요청 결과를 확인하지 못했습니다.').waitFor({ timeout: 15000 });
+    check('verify request can commit despite a lost response', requestCommitted === 200 && mockOutbox.length === 1);
     const verifyLossToken = tokenOf(mockOutbox[0].link);
+    await verifyLoss.mouse.move(0, 0);
+    const verifyPaperColor = await verifyLoss.evaluate(() => {
+      const sample = document.createElement('span'); sample.style.backgroundColor = 'var(--paper)';
+      document.body.appendChild(sample); const color = getComputedStyle(sample).backgroundColor; sample.remove(); return color;
+    });
+    await verifyLoss.waitForFunction((expected) => {
+      const retry = document.querySelector('button.button-secondary[type="submit"]');
+      return retry && getComputedStyle(retry).backgroundColor === expected;
+    }, verifyPaperColor);
+    check('using the received link is primary while resending is secondary',
+      await verifyLoss.getByRole('button', { name: '받은 인증 링크 사용' }).evaluate((button) => getComputedStyle(button).backgroundColor) !== verifyPaperColor);
+    await verifyLoss.screenshot({ path: path.join(OUT, 'verify-request-lost-390.png'), mask: [verifyLoss.locator('input[type="password"]')] });
+    await verifyLoss.getByRole('button', { name: '받은 인증 링크 사용' }).click();
+    check('the lost-request link can be entered without another send', await verifyLoss.getByLabel('인증 토큰').isVisible() && mockOutbox.length === 1);
+    await verifyLoss.screenshot({ path: path.join(OUT, 'verify-request-uncertain-390.png'), mask: [verifyLoss.locator('#verify-token')] });
+    await verifyLoss.unroute('**/api/auth/email/verify/request');
     // A delivered link is still valid if the delivery service becomes
     // unavailable afterward: only the status reply is faulted here.
     let offlineStatusReplies = 0;
@@ -376,7 +454,10 @@ async function runAccountRecoveryAudit() {
     );
     // A query change forces a new document: hash-only navigation would
     // retain the previous connected status without fetching our fault.
+    const acceptVerificationLeave = (dialog) => { void dialog.accept(); };
+    verifyLoss.on('dialog', acceptVerificationLeave);
     await verifyLoss.goto(`${base}/account/email?delivery-audit=offline#t=${verifyLossToken}`, { waitUntil: 'load' });
+    verifyLoss.off('dialog', acceptVerificationLeave);
     await offlineResponse;
     check('delivery-unavailable status fault actually reached the page', offlineStatusReplies > 0);
     await verifyLoss.getByRole('alert').or(verifyLoss.getByRole('button', { name: '이메일 인증하기' })).first().waitFor({ timeout: 15000 });
@@ -387,6 +468,11 @@ async function runAccountRecoveryAudit() {
       await verifyLoss.getByText('현재 이메일 발송을 사용할 수 없어 새 메일을 요청할 수 없습니다.').isVisible() &&
       await verifyLoss.getByRole('button', { name: '다시 보내기' }).count() === 0);
     const offlineTokenField = verifyLoss.getByLabel('인증 토큰');
+    let tokenReplaceWarning = false;
+    verifyLoss.once('dialog', async (dialog) => { tokenReplaceWarning = dialog.message().includes('토큰'); await dialog.dismiss(); });
+    await verifyLoss.evaluate(() => { window.location.hash = `#t=${'D'.repeat(43)}`; });
+    await verifyLoss.waitForFunction(() => window.location.hash === '');
+    check('declining a new same-tab verification link preserves the issued token', tokenReplaceWarning && await offlineTokenField.inputValue() === verifyLossToken);
     await offlineTokenField.fill('');
     check('editing an issued token to empty preserves the confirmation form', await offlineTokenField.isVisible());
     await offlineTokenField.fill(verifyLossToken);
@@ -399,11 +485,19 @@ async function runAccountRecoveryAudit() {
     await verifyLoss.getByRole('button', { name: '이메일 인증하기' }).click();
     await verifyLoss.getByText('이메일 인증 결과를 확인하지 못했습니다.').waitFor({ timeout: 15000 });
     check('empty verify-confirm receipt follows a real commit but is not presented as success', verifiedCommit === 200);
+    await verifyLoss.mouse.move(0, 0);
+    await verifyLoss.waitForFunction((expected) => {
+      const retry = document.querySelector('button.button-secondary[type="submit"]');
+      return retry && getComputedStyle(retry).backgroundColor === expected;
+    }, verifyPaperColor);
+    check('checking verification status is primary while retrying the token is secondary',
+      await verifyLoss.getByRole('button', { name: '인증 상태 확인', exact: true }).evaluate((button) => getComputedStyle(button).backgroundColor) !== verifyPaperColor);
+    await verifyLoss.screenshot({ path: path.join(OUT, 'verify-confirm-uncertain-390.png'), mask: [verifyLoss.locator('#verify-token')] });
     await verifyLoss.unroute('**/api/auth/email/verify/confirm');
     await verifyLoss.unroute('**/api/auth/email/status');
-    await verifyLoss.goto(`${base}/account/email`, { waitUntil: 'load' });
+    await verifyLoss.getByRole('button', { name: '인증 상태 확인', exact: true }).click();
     await verifyLoss.getByText(/인증됨 ·/).waitFor({ timeout: 15000 });
-    check('reopening email status reveals the committed verification', true);
+    check('status-only check reveals the committed verification without resubmitting', true);
     await verifyLoss.close();
 
     // 7. Staff journey on real event work through the account gate.
@@ -435,6 +529,7 @@ async function runAccountRecoveryAudit() {
     await staffPage.screenshot({ path: path.join(OUT, 'account-email-staff-390.png') });
     await staffPage.goto(`${base}/staff/events/${fixture.eventId}`, { waitUntil: 'load' });
     await staffPage.locator('#staff-ticket').waitFor({ timeout: 15000 });
+    await confirmInitialStaffDesk(staffPage);
     // Draft: typed but unsubmitted input asks with account wording; cancel
     // preserves the draft and stays.
     await staffPage.locator('#staff-ticket').fill('DRAFT-KEEP-1');
@@ -452,11 +547,13 @@ async function runAccountRecoveryAudit() {
       new URL(staffPage.url()).pathname.includes('/staff/events/')
       && (await staffPage.locator('#staff-ticket').inputValue()) === 'DRAFT-KEEP-1');
     staffPage.once('dialog', async (dialog) => { await dialog.accept(); });
+    await staffPage.getByRole('button', { name: /감사 스태프/ }).click();
     await staffPage.getByRole('link', { name: '내 계정 이메일 인증' }).click();
     await staffPage.waitForURL(/\/account\/email/, { timeout: 15000 });
     check('draft accept navigates to account/email', true);
     await staffPage.goto(`${base}/staff/events/${fixture.eventId}`, { waitUntil: 'load' });
     await staffPage.locator('#staff-ticket').waitFor({ timeout: 15000 });
+    await confirmInitialStaffDesk(staffPage);
     // Busy: delay the scan response, click the link mid-flight → blocked.
     await staffPage.route('**/api/events/*/commands', async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 3000));
@@ -472,8 +569,9 @@ async function runAccountRecoveryAudit() {
       new URL(staffPage.url()).pathname.includes('/staff/events/'));
     check('blocked account navigation explains what to do',
       await staffPage.getByRole('status').filter({ hasText: '이 화면을 떠나지 않았습니다.' }).isVisible());
-    check('blocked navigation keeps the menu usable',
-      (await staffPage.getByRole('link', { name: '내 계정 이메일 인증' }).count()) === 1);
+    check('blocked navigation clears the menu from the recovery controls',
+      !await staffPage.getByRole('dialog', { name: '계정 및 조직 전환', exact: true }).isVisible()
+      && await staffPage.getByRole('button', { name: /감사 스태프/ }).isEnabled());
     await staffPage.unrouteAll({ behavior: 'wait' }).catch(() => {});
     await staffPage.getByText('다음 참가자를 스캔하세요.').waitFor({ timeout: 15000 });
     await staffPage.goto(`${base}/staff/events/${fixture.eventId}`, { waitUntil: 'load' });
@@ -501,6 +599,7 @@ async function runAccountRecoveryAudit() {
     await faultPage.getByRole('button', { name: '로그인', exact: true }).click();
     await faultPage.waitForURL(/\/staff\/events\//, { timeout: 15000 });
     await faultPage.locator('#staff-ticket').waitFor({ timeout: 15000 });
+    await confirmInitialStaffDesk(faultPage);
     await faultPage.locator('#staff-ticket').fill(faultTicket);
     await faultPage.getByRole('button', { name: '입장 처리' }).click().catch(() => {});
     await faultPage.getByText('연결하지 못했습니다. 같은 업무·티켓으로 다시 시도하세요.').waitFor({ timeout: 15000 });
@@ -514,8 +613,7 @@ async function runAccountRecoveryAudit() {
       await faultPage.getByRole('status').filter({ hasText: '결과를 확인한 뒤 다시 이동하세요.' }).isVisible());
     await faultPage.screenshot({ path: path.join(OUT, 'staff-unknown-blocked-390.png') });
     // Same-request retry confirms the committed outcome; the gate reopens.
-    await faultPage.locator('#staff-ticket').fill(faultTicket);
-    await faultPage.getByRole('button', { name: '입장 처리' }).click().catch(() => {});
+    await faultPage.getByRole('button', { name: '같은 요청 재확인', exact: true }).click();
     await faultPage.getByText('다음 참가자를 스캔하세요.').waitFor({ timeout: 15000 });
     await faultPage.getByRole('button', { name: /감사 스태프/ }).click();
     await faultPage.getByRole('link', { name: '내 계정 이메일 인증' }).click();
@@ -585,7 +683,7 @@ async function runAccountRecoveryAudit() {
     await failPage.goto(`${base}/recover`, { waitUntil: 'load' });
     await failPage.getByLabel('계정 이메일').fill('anyone@example.test');
     await failPage.getByRole('button', { name: '복구 메일 요청' }).click();
-    await failPage.getByText('요청을 접수하지 못했습니다.').waitFor({ timeout: 15000 });
+    await failPage.getByText('복구 메일 요청 결과를 확인하지 못했습니다.').waitFor({ timeout: 15000 });
     check('recover 5xx is retryable, never a success', true);
     check('failed recover keeps the address for retry',
       (await failPage.getByLabel('계정 이메일').inputValue()) === 'anyone@example.test');
@@ -596,10 +694,13 @@ async function runAccountRecoveryAudit() {
     await failPage.route('**/api/auth/recovery/request', (route) => route.fulfill({
       status: 200, contentType: 'application/json', body: 'not-json{',
     }));
+    const acceptRecoveryReload = (dialog) => { void dialog.accept(); };
+    failPage.on('dialog', acceptRecoveryReload);
     await failPage.goto(`${base}/recover`, { waitUntil: 'load' });
+    failPage.off('dialog', acceptRecoveryReload);
     await failPage.getByLabel('계정 이메일').fill('anyone@example.test');
     await failPage.getByRole('button', { name: '복구 메일 요청' }).click();
-    await failPage.getByText('요청을 접수하지 못했습니다.').waitFor({ timeout: 15000 });
+    await failPage.getByText('복구 메일 요청 결과를 확인하지 못했습니다.').waitFor({ timeout: 15000 });
     check('recover malformed body is retryable, never a success', true);
     await failPage.unroute('**/api/auth/recovery/request');
     // The failure kept the typed address: resubmitting against the real

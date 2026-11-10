@@ -1,4 +1,6 @@
 'use strict';
+const { messageStep } = require('./ui-journey-helpers.cjs');
+
 
 // Usability audit: measures how many user operations it takes to finish real
 // field goals in the running product, and where operators/attendees get
@@ -812,16 +814,14 @@ async function main() {
       try {
         await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/messages`, { waitUntil: 'networkidle', timeout: 30000 });
         await act(task, () => page.locator('#message-compose-open').click());
-        await page.locator('#campaign-title').waitFor({ state: 'visible', timeout: 15000 });
+        await page.locator('#recipient-status-filter').waitFor();
         await verifySkipLink(page, task);
         await installScrollCounter(page);
+        await act(task, () => page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check());
+        await act(task, () => messageStep(page, 2));
         await act(task, () => page.locator('#campaign-title').fill(title));
         await act(task, () => page.locator('#campaign-body').fill('{{이름}}님 사용성 감사 안내입니다.'));
-        if (!await page.locator('#campaign-recipients details').evaluate(element => element.open)) {
-          await act(task, () => page.getByText(/수신자 목록 (열기|닫기)/, { exact: false }).first().click());
-        }
-        await page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().waitFor({ state: 'visible', timeout: 10000 });
-        await act(task, () => page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check());
+        await act(task, () => messageStep(page, 3));
         await probeKeyboard(page, task, page.locator('#campaign-submit'), '발송 요청 버튼');
         await act(task, () => page.locator('#campaign-submit').click());
         await page.getByRole('button', { name: '발송 요청한다', exact: true }).waitFor({ state: 'visible', timeout: 10000 });
@@ -881,6 +881,7 @@ async function main() {
         await page.locator('#ops-desks').waitFor({ state: 'visible', timeout: 15000 });
         await verifySkipLink(page, task);
         await installScrollCounter(page);
+        await act(task, () => page.getByRole('tab', { name: '부스', exact: true }).click());
         await act(task, () => page.getByRole('button', { name: '부스 추가', exact: true }).click());
         await page.locator('#booth-name').waitFor({ state: 'visible', timeout: 10000 });
         await act(task, () => page.locator('#booth-name').fill(boothName));
@@ -921,6 +922,7 @@ async function main() {
       attachErrorListeners(page, task, baseUrl);
       try {
         await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/operations`, { waitUntil: 'networkidle', timeout: 30000 });
+        await act(task, () => page.getByRole('tab', { name: '스태프 배정', exact: true }).click());
         await page.locator('#ops-staff').waitFor({ state: 'visible', timeout: 15000 });
         await verifySkipLink(page, task);
         await installScrollCounter(page);
@@ -1247,16 +1249,15 @@ async function main() {
       try {
         await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/messages`, { waitUntil: 'networkidle', timeout: 30000 });
         await act(task, () => page.locator('#message-compose-open').click());
-        await page.locator('#campaign-title').waitFor({ state: 'visible', timeout: 15000 });
+        await page.locator('#recipient-status-filter').waitFor();
         await verifySkipLink(page, task);
         await installScrollCounter(page);
+        await act(task, () => page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check());
+        await act(task, () => messageStep(page, 2));
         await act(task, () => page.locator('#campaign-title').fill(title));
         await act(task, () => page.locator('#campaign-body').fill('{{이름}}님 사용성 감사 예약 안내입니다.'));
-        if (!await page.locator('#campaign-recipients details').evaluate(element => element.open)) {
-          await act(task, () => page.getByText(/수신자 목록 (열기|닫기)/, { exact: false }).first().click());
-        }
-        await page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().waitFor({ state: 'visible', timeout: 10000 });
-        await act(task, () => page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check());
+        await act(task, () => messageStep(page, 3));
+        await act(task, () => page.locator('details').filter({ has: page.locator('#campaign-scheduled') }).locator('summary').click());
         await act(task, () => page.locator('#campaign-scheduled').fill(scheduled));
         await probeKeyboard(page, task, page.locator('#campaign-submit'), '예약 등록 버튼');
         await act(task, () => page.locator('#campaign-submit').click());
@@ -1446,6 +1447,7 @@ async function main() {
       attachErrorListeners(page, task, baseUrl);
       try {
         await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/draws`, { waitUntil: 'networkidle', timeout: 30000 });
+        await act(task, () => page.getByRole('tab', { name: '순위 투표', exact: true }).click());
         await page.locator('#vote-pick-count').waitFor({ state: 'visible', timeout: 15000 });
         await verifySkipLink(page, task);
         await installScrollCounter(page);
@@ -1615,6 +1617,7 @@ async function main() {
       attachErrorListeners(page, task, baseUrl);
       try {
         await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/operations`, { waitUntil: 'networkidle', timeout: 30000 });
+        await act(task, () => page.getByRole('tab', { name: '전광판 출력', exact: true }).click());
         await page.locator('#ops-display').waitFor({ state: 'visible', timeout: 15000 });
         await verifySkipLink(page, task);
         await installScrollCounter(page);

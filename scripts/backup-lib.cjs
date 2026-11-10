@@ -388,6 +388,7 @@ module.exports = {
   fail,
   identifier,
   parseArgs,
+  docker,
   compose,
   composeDatabaseCredentials,
   assertComposeDb,

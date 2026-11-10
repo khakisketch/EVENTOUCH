@@ -202,7 +202,7 @@ async function main() {
         pass(`approval-next-action-target-${width}`, { bounds, overflow });
       }
       await page.setViewportSize({ width: 1280, height: 900 });
-      const before = fixture.gateway.commands.filter(c => c.command === 'message.create').length;
+      const before = fixture.gateway.commands.filter(c => ['message.create', 'message.create-reviewed'].includes(c.command)).length;
       await handoff.click();
       await page.locator('#recipient-status-filter').waitFor();
       await page.getByText('명단에서 2명을 인계받았습니다', { exact: false }).waitFor();
@@ -218,7 +218,7 @@ async function main() {
       assert.equal(selected, 2);
       assert.ok(await page.getByRole('checkbox', { name: /승인 인계 가/ }).isChecked(), 'first approved recipient stays selected');
       assert.ok(await page.getByRole('checkbox', { name: /승인 인계 나/ }).isChecked(), 'second approved recipient stays selected');
-      assert.equal(fixture.gateway.commands.filter(c => c.command === 'message.create').length, before);
+      assert.equal(fixture.gateway.commands.filter(c => ['message.create', 'message.create-reviewed'].includes(c.command)).length, before);
       await shot('message-approved-recipients-1280.png');
       pass('approve-to-composer-filter-and-exact-recipients', { approved: ids.length, selected, automaticMessageWrites: 0 });
     }

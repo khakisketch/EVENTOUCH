@@ -30,7 +30,7 @@ async function main() {
       command: process.execPath,
       args: ['server/server.js'],
       cwd: ROOT,
-      env: { ...process.env, PORT: String(apiPort) },
+      env: { ...process.env, PORT: String(apiPort), EVENTOUCH_API_BIND: '127.0.0.1' },
     },
     web: {
       label: 'web',

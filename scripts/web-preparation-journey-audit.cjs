@@ -131,20 +131,45 @@ async function main() {
       const publicPage = await anon.newPage();
       await publicPage.goto(`${f.baseUrl}/event/${slug}/home`);
       await publicPage.getByRole('button', { name: '모바일 티켓', exact: true }).waitFor();
-      check(`${width} anonymous default home retains six tiles`, await publicPage.locator('button[class*="menuButton"]').count() === 6);
+      if (BEFORE) {
+        // Historical baseline: the old home exposed every tile regardless of
+        // the event's enabled features. Keep it for comparing the old build.
+        check(`${width} anonymous baseline home retains six tiles`, await publicPage.locator('button[class*="menuButton"]').count() === 6);
+      } else {
+        // This READY fixture intentionally has no optional features and no
+        // custom home design. Its usable default menu is ticket + notices;
+        // the separate all-enabled web audit still exercises all six entries.
+        const menu = publicPage.getByRole('navigation', { name: '참가 메뉴' });
+        check(`${width} anonymous default home shows ticket and notice`,
+          await menu.getByRole('button').count() === 2
+          && await menu.getByRole('button', { name: '모바일 티켓', exact: true }).isVisible()
+          && await menu.getByRole('button', { name: '공지사항', exact: true }).isVisible());
+        for (const label of ['럭키드로우 번호', '룰렛 이벤트', '순위 투표', '부스 인증']) {
+          check(`${width} anonymous default home hides disabled ${label}`,
+            await menu.getByRole('button', { name: label, exact: true }).count() === 0);
+        }
+        check(`${width} anonymous default home offers application and event guide`,
+          await publicPage.getByRole('button', { name: '내 신청 정보', exact: true }).isVisible()
+          && await publicPage.getByRole('link', { name: '행사 안내 보기', exact: true }).isVisible());
+        check(`${width} anonymous default home does not expose a ticket QR`,
+          await publicPage.locator('[aria-label*="입장 및 퇴장용 QR"]').count() === 0);
+      }
       await publicPage.screenshot({ path: `${OUT}/${width}-public-ready-default-home.png`, fullPage: true });
       await phase('접수 게시 → 현황 재확인', async act => {
         await act(() => page.getByRole('link', { name: '접수 설정', exact: true }).click());
         await page.locator('#set-consent').waitFor();
         if (!BEFORE) check(`${width} intake deeplink selects real tab`, await page.getByRole('tab', { name: '참가 접수', exact: false }).getAttribute('aria-selected') === 'true');
+        const beforePublish = (await bootstrap()).workspaces[id];
         await act(() => page.locator('#set-consent').fill('행사 신청과 입장 확인을 위해 이름과 연락처를 사용합니다.'));
         await act(() => page.getByRole('button', { name: '양식 게시·접수 열기', exact: true }).click());
         await page.locator('[data-settings-section-status="intake"]').filter({ hasText: '양식을 게시하고 접수를 열었습니다.' }).waitFor();
-        await page.getByText('현재 접수 중 · 게시된 양식 버전 1', { exact: false }).first().waitFor();
+        const afterPublish = (await bootstrap()).workspaces[id];
+        check(`${width} consent publication advances public form version`, afterPublish.publishedVersion > beforePublish.publishedVersion && afterPublish.publishedVersion === afterPublish.formVersion);
+        await page.getByText(`현재 접수 중 · 게시된 양식 버전 ${afterPublish.publishedVersion}`, { exact: false }).first().waitFor();
         await capture('05-intake-result');
         await toOverview(act);
         s = await snapshot('intake-open-overview');
-        check(`${width} intake independent of custom design`, s.registrationOpen && s.formVersion === 1 && s.publicStatus === 200 && !s.homeDesignPublished, s);
+        check(`${width} intake independent of custom design`, s.registrationOpen && s.formVersion === afterPublish.publishedVersion && s.publicStatus === 200 && !s.homeDesignPublished, s);
         check(`${width} returned overview refreshed intake`, (await page.locator('main').textContent()).includes('접수 중'));
         await capture('06-open-overview');
       });
@@ -202,12 +227,14 @@ async function main() {
           return route.fulfill({ response });
         });
         await page.getByRole('button', { name: '양식 게시·접수 열기', exact: true }).click();
-        await page.getByText('응답을 확인하지 못했습니다. 입력한 내용을 유지한 채 같은 요청으로 다시 시도하세요.', { exact: true }).first().waitFor();
+        const settingsRecovery = page.getByRole('region', { name: '행사 설정 처리 확인 필요' });
+        await settingsRecovery.getByText(/처리 결과를 확인하지 못했습니다/).waitFor();
         check(`${width} committed intake with lost response`, (await bootstrap()).workspaces[id].consentText === '응답 유실 재시도 검증 문구');
+        check(`${width} unconfirmed intake keeps its original text locked`, await page.locator('#set-consent').isDisabled() && await page.locator('#set-consent').inputValue() === '응답 유실 재시도 검증 문구');
         page.once('dialog', d => d.dismiss());
         await page.getByRole('link', { name: '현황으로 돌아가기', exact: true }).first().click();
         check(`${width} unconfirmed request protects return`, new URL(page.url()).pathname.endsWith('/settings'));
-        await page.getByRole('button', { name: '양식 게시·접수 열기', exact: true }).click();
+        await settingsRecovery.getByRole('button', { name: '같은 요청 다시 시도', exact: true }).click();
         await page.waitForFunction(() => !document.querySelector('#panel-settings-intake [class*="unsavedTag"]'));
         check(`${width} response loss retries exact commandId and payload`, attempts.length === 2 && JSON.stringify(attempts[0]) === JSON.stringify(attempts[1]));
         check(`${width} retry does not duplicate consent change`, (await bootstrap()).workspaces[id].consentVersion === previousConsentVersion + 1);

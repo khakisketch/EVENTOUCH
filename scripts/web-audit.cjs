@@ -10,9 +10,9 @@
 // — a real reverse proxy, never a mocked API. Explicit fixture route ids
 // replace the old hard-coded demo-slug dependency; demo accounts are not used.
 //
-// Preserved attendee-home outcomes: the five-tile menu fits short-phone
-// viewports without scrolling (9 viewports), every tile label, category and
-// icon stays inside its touch surface, every tile clears 44px, the event
+// Preserved attendee-home outcomes: the ticket is initially visible and the
+// six entries are reachable on short phones, every label and icon stays inside
+// its touch surface, every tile clears 44px, the event
 // banner stays a separate visible region above the grid, keyboard Enter
 // opens the first destination, each destination has browser navigation
 // state, browser back restores the menu, and details open independently.
@@ -80,32 +80,36 @@ async function attendeeHomeNavigation(page, label, failures, navigate = true) {
   for (const button of menu) {
     await button.waitFor({ state: 'visible', timeout: 10000 });
     boxes.push(await button.boundingBox());
-    const clipped = await button.evaluate((element) => {
+    const geometry = await button.evaluate((element) => {
       const tile = element.getBoundingClientRect();
-      return [...element.querySelectorAll('span, svg')].some((child) => {
-        const rect = child.getBoundingClientRect();
-        if (!rect.width || !rect.height) return false;
+      const children = [...element.querySelectorAll('span, svg')].map(child => child.getBoundingClientRect()).filter(rect => rect.width && rect.height);
+      const clipped = children.some((rect) => {
         return rect.left < tile.left - 1 || rect.right > tile.right + 1
           || rect.top < tile.top - 1 || rect.bottom > tile.bottom + 1;
       });
+      const overlap = children.some((first, index) => children.slice(index + 1).some((second) =>
+        Math.min(first.right, second.right) - Math.max(first.left, second.left) > 1
+        && Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top) > 1));
+      return { clipped, overlap };
     });
-    if (clipped) failures.push(`${label}: a tile label, category or icon extends outside its touch surface`);
+    if (geometry.clipped || geometry.overlap) failures.push(`${label}: a tile label, ticket hint or icon is clipped or overlaps another item`);
   }
   const near = (a, b) => Math.abs(a - b) <= 2;
   if (boxes.some((box) => !box)
-    || boxes.some((box) => !near(box.width, boxes[0].width))
     || boxes.some((box) => box.width < 44 || box.height < 44)
-    || !near(boxes[0].x, boxes[2].x)
-    || !near(boxes[0].x, boxes[4].x)
+    || boxes.slice(1).some((box) => !near(box.width, boxes[1].width))
+    || !near(boxes[0].x, boxes[1].x)
+    || !near(boxes[0].x + boxes[0].width, boxes[2].x + boxes[2].width)
     || !near(boxes[1].x, boxes[3].x)
     || !near(boxes[1].x, boxes[5].x)
-    || !near(boxes[0].y, boxes[1].y)
-    || !near(boxes[2].y, boxes[3].y)
-    || !near(boxes[4].y, boxes[5].y)
-    || boxes[1].x <= boxes[0].x
-    || boxes[2].y <= boxes[0].y
-    || boxes[4].y <= boxes[2].y) {
-    failures.push(`${label}: expected two-column menu rows 1/2, 3/4, 5/6`);
+    || !near(boxes[2].x, boxes[4].x)
+    || !near(boxes[1].y, boxes[2].y)
+    || !near(boxes[3].y, boxes[4].y)
+    || boxes[2].x <= boxes[1].x
+    || boxes[1].y <= boxes[0].y
+    || boxes[3].y <= boxes[1].y
+    || boxes[5].y <= boxes[3].y) {
+    failures.push(`${label}: expected a full-width ticket followed by two-column task entries`);
   }
   const viewport = await page.evaluate(() => ({
     width: window.innerWidth,
@@ -116,10 +120,12 @@ async function attendeeHomeNavigation(page, label, failures, navigate = true) {
   if (!banner || !boxes[0] || banner.y + banner.height > boxes[0].y + 1) {
     failures.push(`${label}: event banner and menu must remain separate, visible regions`);
   }
-  if (viewport.scrollHeight > viewport.height + 1
-    || boxes.some((box) => box && (box.y < 0 || box.y + box.height > viewport.height + 1
-      || box.x < 0 || box.x + box.width > viewport.width + 1))) {
-    failures.push(`${label}: home and every tile must fit without scrolling (${viewport.scrollHeight}px / ${viewport.height}px)`);
+  // Additional task links may extend the page vertically. Keep the ticket in
+  // the first viewport and all entries inside the horizontal viewport; the
+  // navigation loop below still reaches every legacy task and checks Back.
+  if (!boxes[0] || boxes[0].y < 0 || boxes[0].y + boxes[0].height > viewport.height + 1
+    || boxes.some((box) => box && (box.x < 0 || box.x + box.width > viewport.width + 1))) {
+    failures.push(`${label}: ticket must be visible initially and entries must not overflow horizontally`);
   }
   if (!navigate) return;
   const homeURL = page.url();
@@ -201,6 +207,10 @@ async function main() {
   const failures = [];
   const moderate = [];
   try {
+    // Keep the six-entry contract on an all-enabled synthetic event; the
+    // disabled visibility audit exercises the separate disabled case.
+    const eventRow = (await fixture.harness.database.query('SELECT payload FROM events WHERE id=$1', [eventId])).rows[0];
+    await fixture.harness.database.query('UPDATE events SET payload=$2::jsonb WHERE id=$1', [eventId, JSON.stringify({ ...eventRow.payload, features: [...new Set([...(eventRow.payload.features || []), 'draw', 'poll', 'stamp'])] })]);
     // Inside the protected block: if the browser executable is unavailable,
     // the owned fixture (Next + gateway + harness) still unwinds below.
     browser = await launchBrowser();

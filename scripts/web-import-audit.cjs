@@ -108,7 +108,7 @@ async function main() {
     assert.equal(await picker.getByText('참가자.xlsx', { exact: true }).isVisible(), true, 'selected filename is visible');
     await page.getByRole('button', { name: /유효 8행 반영/ }).click();
     await page.getByRole('alert').filter({ hasText: /연결하지 못했습니다/ }).waitFor();
-    await page.getByRole('button', { name: /유효 8행 반영/ }).click();
+    await page.getByRole('button', { name: '같은 요청 다시 시도', exact: true }).click();
     await page.getByText('8명을 반영했습니다.', { exact: true }).waitFor();
     const calls = gateway.commands.filter((item) => item.command === 'participant.import');
     assert.equal(calls.length, 2);

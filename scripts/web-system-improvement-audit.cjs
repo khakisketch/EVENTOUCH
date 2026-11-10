@@ -10,6 +10,7 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { loadPlaywright } = require('./audit-browser.cjs');
+const { confirmInitialStaffDesk } = require('./audit-staff-direction.cjs');
 const captureRoot = process.env.EVENTOUCH_CAPTURE_ROOT || defaultCaptureDir(`system-improvement-20261024/ux-${runStamp()}`);
 const runId = process.env.EVENTOUCH_AUDIT_RUN_ID || new Date().toISOString().replace(/[:.]/g, '-');
 const OUT = path.join(captureRoot, `system-ui-${runId}`);
@@ -108,8 +109,8 @@ async function main() {
     // At the last (phone) viewport badges live inside the closed navigation.
     // Open the real menu rather than counting inaccessible hidden elements.
     await page.locator('.console-global-trigger').click();
-    await page.getByRole('img', { name: '실행할 예약 1건', exact: true }).first().waitFor();
-    check('manual reservation badge is separate from delivery failures', await page.getByRole('img', { name: '실행할 예약 1건', exact: true }).count() > 0 && await page.getByRole('img', { name: '발송 확인 1건', exact: true }).count() === 0);
+    await page.getByRole('img', { name: '발송 기록에 확인할 항목이 있습니다', exact: true }).first().waitFor();
+    check('reservation exposes a compact attention marker', await page.getByRole('img', { name: '발송 기록에 확인할 항목이 있습니다', exact: true }).count() > 0);
     await page.keyboard.press('Escape');
     check('overdue reservation is discoverable through attention deep link', await page.getByText('실행 시점 지남·수동 실행 필요', { exact: true }).isVisible());
     const reservation = page.locator('#campaign-ux-overdue');
@@ -152,7 +153,7 @@ async function main() {
     await page.locator('#roster-search').waitFor();
     const addReadOnly = page.getByRole('button', { name: '참가자 추가', exact: true });
     check('read-only roster has no enabled add action', await addReadOnly.count() === 0 || await addReadOnly.isDisabled());
-    await page.getByText('명단 도구', { exact: true }).click();
+    await page.locator('summary[aria-label="명단 도구"]').click();
     const csvRead = page.getByRole('button', { name: /CSV 내보내기/ });
     check('read-only roster retains CSV read', await csvRead.isVisible() && await csvRead.isEnabled());
     check('read-only roster offers no dead-end page selection', await page.getByRole('button', { name: /이 페이지 .*명 선택/ }).count() === 0);
@@ -162,9 +163,11 @@ async function main() {
     await page.locator('#roster-search').waitFor();
     check('participant scope restores roster add action', await page.getByRole('button', { name: '참가자 추가', exact: true }).isEnabled());
     await page.goto(base + '/messages');
-    await page.locator('#message-compose-open').click();
-    await page.locator('#campaign-title').waitFor();
+    await page.locator('#message-compose-open').waitFor();
+    check('participant-only scope cannot open a new message draft', await page.locator('#message-compose-open').isDisabled());
     check('participant scope cannot send messages', await page.locator('#campaign-submit').isDisabled());
+    check('read-only messaging retains history access', await page.getByRole('heading', { name: '발송 기록', exact: true }).isVisible());
+    await page.setViewportSize({ width: 390, height: 844 });
     await capture('messages-no-write-390');
 
     const owner = await browser.newContext({ viewport: { width: 1280, height: 900 } });
@@ -221,6 +224,7 @@ async function main() {
     staffPage.on('pageerror', (error) => errors.push(error.message));
     await staffPage.goto(`${f.baseUrl}/staff/events/${f.eventId}`);
     await staffPage.locator('#staff-desk').waitFor();
+    await confirmInitialStaffDesk(staffPage);
     await staffPage.getByRole('button', { name: /카메라/ }).click();
     await staffPage.waitForFunction(() => window.__syntheticCameraTracks?.some((track) => track.readyState === 'live'));
     await staffPage.evaluate(() => {

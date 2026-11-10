@@ -1,0 +1,87 @@
+'use strict';
+// Synthetic event and disconnected provider: no external message is sent.
+const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
+const { source: axe } = require('axe-core');
+const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
+const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
+const { launchBrowser } = require('./audit-browser.cjs');
+(async () => {
+  if (!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a private capture root');
+  const out = prepareCaptureDir(path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'message-name-review'));
+  process.env.TMPDIR = ensureRunTmpDir(out);
+  const f = await startAuditFixture(); let browser;
+  try {
+    const db = f.harness.database, cookie = f.manager.cookie;
+    const read = async () => (await db.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [f.eventId])).rows[0].payload;
+    const command = (command, payload) => f.helpers.requestJson(f.harness.baseUrl, `/api/events/${f.eventId}/commands`, { method: 'POST', cookie, body: { commandId: crypto.randomUUID(), command, payload } });
+    const original = await read(), person = original.participants[0];
+    const bootstrap = await f.helpers.requestJson(f.harness.baseUrl, `/api/events/${f.eventId}/bootstrap?messageRecipientReview=1`, { cookie });
+    const version = bootstrap.json.state.recipientReviewVersions[person.id];
+    const reserve = async (title, body) => {
+      const response = await command('message.create-charset-reviewed', { ids: [person.id], expectedRecipientVersions: [version], channel: 'SMS', title, body, simulate: false, scheduled: new Date(Date.now() + 3600000).toISOString(), scheduleMode: 'MANUAL' });
+      assert.equal(response.status, 201, 'synthetic reservation created'); return response.json.message.id;
+    };
+    const namedId = await reserve('합성 이름 예약', '{{이름}}님, 안내드립니다.');
+    const genericId = await reserve('합성 일반 예약', '안내드립니다.');
+    assert.equal((await command('participant.update', { id: person.id, name: '합성 현재 이름' })).status, 200);
+    const ws = await read();
+    for (const message of ws.messages.filter(item => [namedId, genericId].includes(item.id))) message.scheduled = new Date(Date.now() - 60000).toISOString();
+    const unknown = structuredClone(ws.messages.find(item => item.id === namedId));
+    unknown.id = 'synthetic-name-missing'; unknown.title = '합성 이름 확인 불가'; unknown.recipientSnapshot[0].name = '  '; ws.messages.unshift(unknown);
+    const legacy = structuredClone(ws.messages.find(item => item.id === namedId));
+    legacy.id = 'synthetic-legacy-no-snapshot'; legacy.title = '합성 이전 수신자 기록 없음';
+    delete legacy.recipientRoutingReviewVersion; legacy.recipientSnapshot = []; ws.messages.unshift(legacy);
+    await db.query('UPDATE event_workspaces SET payload=$2::jsonb WHERE event_id=$1', [f.eventId, JSON.stringify(ws)]);
+    const latest = await f.helpers.requestJson(f.harness.baseUrl, `/api/events/${f.eventId}/bootstrap?messageRecipientReview=1`, { cookie });
+    const blocks = latest.json.state.messageSchedule.blocked;
+    assert.equal(blocks.find(item => item.id === namedId)?.reason, 'RECIPIENT_CHANGED');
+    assert.equal(blocks.find(item => item.id === genericId), undefined, 'a message without name substitution remains eligible');
+    assert.equal(blocks.find(item => item.id === unknown.id)?.reason, 'RECIPIENT_CHANGED');
+    assert.equal(blocks.find(item => item.id === legacy.id)?.reason, 'RECIPIENT_CHANGED', 'legacy name requests with no recipient snapshot are held');
+    const details = await f.helpers.requestJson(f.harness.baseUrl, `/api/events/${f.eventId}/bootstrap?messageRecipientReview=1&messageChangeId=${namedId}`, { cookie });
+    assert.deepEqual(details.json.state.messageChangeReview.details.changes[0].reasons, ['name']);
+    assert.ok(!JSON.stringify(details.json.state.messageChangeReview).includes(person.phone));
+    const rejected = await command('message.retry-charset-reviewed', { id: namedId });
+    assert.equal(rejected.status, 409); assert.equal(rejected.json.field, 'recipientChange');
+    browser = await launchBrowser(); const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'ko-KR', reducedMotion: 'reduce' });
+    await context.addCookies([{ ...cookieForContext(f, 'manager'), url: f.baseUrl }]);
+    const page = await context.newPage(); page.setDefaultTimeout(12000);
+    await page.goto(`${f.baseUrl}/console/events/${f.eventId}/messages`);
+    const row = page.locator('[data-history-row]').filter({ hasText: '합성 이름 예약' });
+    const generic = page.locator('[data-history-row]').filter({ hasText: '합성 일반 예약' });
+    await row.getByText('수신자 변경 · 발송 보류').waitFor();
+    assert.equal(await row.getByRole('button', { name: '발송 실행' }).isDisabled(), true);
+    assert.equal(await generic.getByRole('button', { name: '발송 실행' }).isEnabled(), true);
+    await row.getByRole('button', { name: '합성 이름 예약 상세' }).click();
+    const detail = page.locator(`#campaign-detail-${namedId}`);
+    await detail.getByText(`요청 당시: ${person.name}`, { exact: true }).waitFor();
+    await detail.getByText('현재 이름: 합성 현재 이름', { exact: true }).waitFor();
+    await detail.getByText('메시지에 삽입할 이름이 변경됐습니다.', { exact: true }).waitFor();
+    await page.evaluate(axe);
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+      assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter(v => ['serious', 'critical'].includes(v.impact)).map(v => v.id)), []);
+      if (width === 390) await detail.screenshot({ path: path.join(out, 'name-detail-390.png') });
+      await page.screenshot({ path: path.join(out, `name-review-${width}.png`), fullPage: true });
+    }
+    const unknownRow = page.locator('[data-history-row]').filter({ hasText: '합성 이름 확인 불가' });
+    await unknownRow.getByRole('button', { name: '합성 이름 확인 불가 상세' }).click();
+    await page.locator('#campaign-detail-synthetic-name-missing').getByText('메시지에 삽입할 이름을 확인할 수 없습니다.', { exact: true }).waitFor();
+    await page.locator('#campaign-detail-synthetic-name-missing').getByText('요청 당시: 이름 확인 필요', { exact: true }).waitFor();
+    const legacyRow = page.locator('[data-history-row]').filter({ hasText: '합성 이전 수신자 기록 없음' });
+    await legacyRow.getByRole('button', { name: '합성 이전 수신자 기록 없음 상세' }).click();
+    await page.locator('#campaign-detail-synthetic-legacy-no-snapshot').getByText('변경된 수신자 상세를 확인할 수 없습니다. 참가자 명단을 다시 확인하세요.', { exact: true }).waitFor();
+    await row.getByRole('button', { name: '예약 취소' }).click();
+    await page.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '예약을 취소한다' }).click();
+    await row.getByRole('button', { name: '내용·대상 불러오기' }).click();
+    await page.locator('#campaign-reload-summary').getByText(/선택 1명/).waitFor();
+    assert.equal(await page.locator('#campaign-body').inputValue(), '{{이름}}님, 안내드립니다.');
+    const final = await read(); assert.equal(final.messages.find(item => item.id === namedId).status, 'CANCELLED');
+    fs.writeFileSync(path.join(out, 'verification.json'), JSON.stringify({ synthetic: true, noExternalProvider: true, changedNameBlocked: true, genericUnaffected: true, unknownNameBlocked: true, recoveryPreservesBody: true, widths: [320, 390, 1280], physicalDevices: false }, null, 2));
+    console.log('message name review: guard, explanation, unknown name and recovery passed');
+  } finally { await browser?.close(); await f.close(); }
+})().catch(error => { console.error(String(error?.stack || error).replace(/https?:\/\/[^\s]+/g, '[url redacted]')); process.exitCode = 1; });

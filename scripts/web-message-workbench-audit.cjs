@@ -1,4 +1,6 @@
 'use strict';
+const { messageStep } = require('./ui-journey-helpers.cjs');
+
 
 // Owned Next + real isolated API/PostgreSQL. Mock delivery only; never use
 // the running production service. --before captures the incumbent build.
@@ -117,7 +119,7 @@ async function main() {
     for (const width of [1440, 1280, 390, 320]) {
       await page.setViewportSize({ width, height: width > 768 ? 900 : 844 }); await loaded();
       if (!before) {
-        check(`header@${width}: task title precedes event context`, await page.locator('main header').first().evaluate(el => el.querySelector('h1').getBoundingClientRect().top < el.querySelector('a').getBoundingClientRect().top));
+        check(`header@${width}: event context precedes the task title`, await page.locator('main header').first().evaluate(el => el.querySelector('a').getBoundingClientRect().bottom <= el.querySelector('h1').getBoundingClientRect().top + 1));
         check(`history@${width}: visible before compose`, await page.locator('[data-history-row]').first().isVisible() && !await page.locator('#campaign-title').isVisible());
         check(`history@${width}: create reachable`, await page.locator('#message-compose-open').isVisible());
       }
@@ -178,7 +180,9 @@ async function main() {
         // The 44px touch floor is width as well as height: the narrowest row
         // action (상세, two syllables) measured 41.98px, so the real button box
         // and its center hit point are asserted, not the stylesheet alone.
-        const detailTouch = await page.locator('[data-history-row]').first().getByRole('button', { name: /상세/ }).evaluate((el) => {
+        const detailButton = page.locator('[data-history-row]').first().getByRole('button', { name: /상세/ });
+        await detailButton.scrollIntoViewIfNeeded();
+        const detailTouch = await detailButton.evaluate((el) => {
           const r = el.getBoundingClientRect();
           const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
           return { width: r.width, height: r.height, centerHit: hit === el || el.contains(hit) };
@@ -205,7 +209,7 @@ async function main() {
             && Math.abs(g.innerTop) <= 2 && Math.abs(g.innerBottom) <= 2), rows);
       }
       if (!before) {
-        await page.locator('#message-compose-open').click(); await page.locator('#campaign-title').waitFor();
+        await page.locator('#message-compose-open').click(); await page.locator('#recipient-status-filter').waitFor();
         check(`compose@${width}: history yields to the active workspace`,
           !await page.locator('#history-heading').isVisible() && await page.locator('#message-compose-close').isVisible());
         await shot('compose', width, '#campaign-heading');
@@ -225,6 +229,7 @@ async function main() {
     check('history return hides but does not destroy draft', !await page.locator('#campaign-title').isVisible());
     await page.locator('#message-compose-open').click();
     check('compose return retains input and exact selection', await page.locator('#campaign-title').inputValue() === '보존할 안내' && (await page.locator('#recipient-summary').innerText()).includes('선택 2명'));
+    await messageStep(page, 1);
     await page.locator('#recipient-selected-only').uncheck();
     await page.locator('#recipient-search').fill(people[0].name);
     check('recipient filter keeps hidden selection', (await page.locator('#recipient-summary').innerText()).includes('화면 밖 선택 1명'));
@@ -238,12 +243,13 @@ async function main() {
     await overwrite.getByRole('button', { name: '불러온다', exact: true }).click();
     await page.locator('#campaign-title').waitFor();
     check('failed reload reveals exact saved content without sending', await page.locator('#campaign-body').inputValue() === failed.body && await page.locator('#campaign-scheduled').inputValue() === '' && f.gateway.commands.length === 0);
+    await messageStep(page, 3);
     await page.getByLabel('모의 발송으로 기록', { exact: false }).check();
     const countBefore = (await workspace()).messages.length;
     let lostId = null; const attempts = [];
     await page.route('**/api/events/*/commands', async route => {
       const data = route.request().postDataJSON();
-      if (data.command !== 'message.create') return route.continue();
+      if (!['message.create', 'message.create-reviewed', 'message.create-charset-reviewed'].includes(data.command)) return route.continue();
       attempts.push(data.commandId);
       if (lostId) return route.continue();
       const response = await route.fetch(); assert.ok(response.ok()); lostId = (await response.json()).message.id;
@@ -252,32 +258,30 @@ async function main() {
     await page.locator('#campaign-submit').click();
     check('review does not send', (await workspace()).messages.length === countBefore);
     await page.getByRole('button', { name: '모의 발송을 기록한다', exact: true }).click();
-    await page.getByText('응답을 확인하지 못했습니다. 내용을 바꾸지 않고 같은 요청으로 다시 시도하세요.', { exact: true }).first().waitFor();
-    await shot('lost-response', 1280, '#campaign-submit');
-    // The preview previously stuck across the next grid row and painted over
-    // the simulation control during this exact scroll. A visible element is
-    // not enough: verify that pointer hit-testing reaches each real option.
-    for (const [label, target] of [
-      ['schedule', page.locator('#campaign-scheduled')],
-      ['simulation', page.getByLabel('모의 발송으로 기록', { exact: false })],
-    ]) {
+    const recovery = page.getByRole('region', { name: '발송 요청 확인 필요', exact: true });
+    await recovery.waitFor();
+    check('lost response freezes the original draft and send request',
+      await page.locator('#campaign-title').isDisabled() && await page.locator('#campaign-body').isDisabled()
+      && await page.locator('#campaign-scheduled').isDisabled() && await page.locator('#campaign-submit').isDisabled());
+    await shot('lost-response', 1280, '#message-recovery-heading');
+    // Recovery actions must remain reachable while the frozen compose fields
+    // cannot change the original request. The preview cannot paint over them.
+    for (const name of ['서버 처리 확인', '같은 요청 다시 시도']) {
+      const target = recovery.getByRole('button', { name, exact: true });
+      await target.scrollIntoViewIfNeeded();
       const geometry = await target.evaluate(element => {
         const rect = element.getBoundingClientRect();
         const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-        const label = element.closest('label');
-        return { left: rect.left, top: rect.top, width: rect.width, height: rect.height,
-          inViewport: rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight,
-          unobscured: hit === element || element.contains(hit) || Boolean(label && label.contains(hit)) };
+        return { width: rect.width, height: rect.height, unobscured: hit === element || element.contains(hit) };
       });
-      check(`lost response: ${label} remains visible and unobscured`, geometry.inViewport && geometry.unobscured, geometry);
+      check(`lost response: ${name} stays reachable`, geometry.width >= 44 && geometry.height >= 44 && geometry.unobscured, geometry);
     }
-    await checkRecipientMeta('lost-response@1280: selected recipient meta keeps whole syllables without overflow');
+    check('lost response preserves the original recipient selection', await page.locator('ul[aria-label="참가자 선택"] input:checked').count() === failed.recipientIds.length);
     await page.locator('#message-compose-close').click();
     await failedRow.getByRole('button', { name: '내용·대상 불러오기', exact: true }).click();
     await page.locator('#campaign-submit').waitFor();
-    check('unresolved receipt recovery reveals composer', await page.locator('#campaign-submit').isVisible() && attempts.length === 1);
-    await page.locator('#campaign-submit').click();
-    await page.getByRole('button', { name: '모의 발송을 기록한다', exact: true }).click();
+    check('unresolved receipt recovery reveals the frozen original request', await page.locator('#campaign-submit').isVisible() && await page.locator('#campaign-submit').isDisabled() && await recovery.isVisible() && attempts.length === 1);
+    await recovery.getByRole('button', { name: '같은 요청 다시 시도', exact: true }).click();
     await page.getByText('모의 발송을 기록했습니다. 수신자에게 전달되지 않았습니다.', { exact: true }).first().waitFor();
     check('lost response reuses receipt exactly once', attempts.length === 2 && attempts[0] === attempts[1] && (await workspace()).messages.filter(m => m.id === lostId).length === 1);
     await page.locator(`#campaign-${lostId}`).waitFor({ state: 'visible' });
@@ -300,8 +304,15 @@ async function main() {
     check('history detail opens by keyboard', await page.locator(`#campaign-detail-${failed.id}`).isVisible());
     await shot('detail', 1280, `#campaign-${failed.id}`);
     await detailsButton.click();
-    const template = page.locator('#template-details'); await template.locator('summary').click();
+    const template = page.locator('#template-details'); await page.getByRole('tab', { name: '템플릿 관리', exact: true }).click();
     await template.getByRole('button', { name: '사용', exact: true }).first().click();
+    const applyTemplate = page.getByRole('button', { name: '템플릿 적용', exact: true });
+    if (await applyTemplate.isVisible()) await applyTemplate.click();
+    await page.locator('#recipient-status-filter').waitFor();
+    check('a completed draft does not leave a stale selected-only filter', !await page.locator('#recipient-selected-only').isChecked());
+    if (!await page.locator('#recipient-list-summary').evaluate(el => el.closest('details').open)) await page.locator('#recipient-list-summary').click();
+    await page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check();
+    await messageStep(page, 2);
     await page.locator('#campaign-title').waitFor();
     check('template use reveals composer without sending', await page.locator('#campaign-body').inputValue() === '{{이름}}님, 안내 데스크에서 티켓을 보여 주세요.');
     await page.setViewportSize({ width: 390, height: 844 });
@@ -311,7 +322,7 @@ async function main() {
     await shot('no-match', 390);
     await page.getByRole('button', { name: '기록 검색·필터 초기화', exact: true }).click();
     check('reset restores records without changing draft', await page.locator('[data-history-row]').count() === countBefore + 1 && await page.locator('#campaign-body').inputValue() === '{{이름}}님, 안내 데스크에서 티켓을 보여 주세요.');
-    const scopedBootstrap = `**/api/events/${f.eventId}/bootstrap`;
+    const scopedBootstrap = `**/api/events/${f.eventId}/bootstrap?messageRecipientReview=1`;
     await page.route(scopedBootstrap, r => r.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: '검수용 연결 실패' }) }));
     await page.reload(); await page.getByRole('button', { name: '다시 불러오기', exact: true }).waitFor();
     await shot('load-error', 390);
@@ -323,14 +334,14 @@ async function main() {
     for (const width of [1280, 390, 320]) {
       await page.setViewportSize({ width, height: width > 768 ? 900 : 844 }); await loaded();
       await shot('long-content', width);
-      check(`long header@${width}: task title remains first`, await page.locator('main header').first().evaluate(el => el.querySelector('h1').getBoundingClientRect().top < el.querySelector('a').getBoundingClientRect().top));
+      check(`long header@${width}: event context stays above the task title`, await page.locator('main header').first().evaluate(el => el.querySelector('a').getBoundingClientRect().bottom <= el.querySelector('h1').getBoundingClientRect().top + 1));
     }
     await page.setViewportSize({ width: 390, height: 844 });
     const emptyId = `${f.eventId}-empty`;
     await f.helpers.insertEvent(f.harness.database, { orgId: f.helpers.LEGACY_ORG, id: emptyId, slug: emptyId, payload: { id: emptyId, slug: emptyId, name: '첫 안내 검수 행사', stage: 'LIVE' }, workspace: f.helpers.emptyWorkspace() });
     await f.helpers.insertMembership(f.harness.database, f.manager.id, emptyId, ['all']);
     await loaded(`${f.baseUrl}/console/events/${emptyId}/messages`);
-    check('first-use retains clear create action', await page.getByText('아직 발송 기록이 없습니다. 메시지 작성에서 첫 안내를 준비하세요.', { exact: true }).isVisible() && await page.locator('#message-compose-open').isVisible());
+    check('first-use retains clear create action', await page.getByText('아직 발송 기록이 없습니다', { exact: true }).isVisible() && await page.locator('#message-compose-open').isVisible());
     await shot('empty', 390);
     check('runtime errors', errors.length === 0, errors);
     check('same build', fs.readFileSync(path.join(__dirname, '../apps/web/.next/BUILD_ID'), 'utf8').trim() === buildId);
