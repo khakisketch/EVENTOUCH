@@ -1,0 +1,28 @@
+.destinations h3, .changes h3 { margin: 0 0 var(--s3); font-size: var(--body-work); }
+.destinations { margin-bottom: var(--s6); }
+.destinations ul { list-style: none; margin: 0; padding: var(--s4); display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: var(--s4); background: var(--surface-muted); border-radius: var(--radius); }
+.destinations p { margin: var(--s1) 0 0; color: var(--muted); word-break: keep-all; overflow-wrap: break-word; }
+.destinations a { display: inline-flex; min-height: 44px; align-items: center; font-weight: 600; }
+.description { word-break: keep-all; overflow-wrap: break-word; }
+.legend, .change { display: grid; grid-template-columns: minmax(72px, .55fr) minmax(0, 1fr) minmax(0, 1fr); gap: var(--s4); }
+.legend { padding: var(--s2) 0; color: var(--muted); font-size: var(--small); }
+.changes dl { margin: 0; }
+.change { padding: var(--s4) 0; border-top: 1px solid var(--line); }
+.change dt { font-weight: 600; }
+.change dd { margin: 0; white-space: pre-wrap; word-break: keep-all; overflow-wrap: break-word; }
+.change[data-changed="true"] dd:last-child { color: var(--brand-text); font-weight: 600; }
+.mobileLabel { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.unchanged { margin-top: var(--s2); color: var(--muted); }
+.unchanged summary { min-height: 44px; padding: var(--s3) 0; cursor: pointer; }
+.actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--s2); }
+.actionError { flex-basis: 100%; margin: 0; color: var(--warning); font-size: var(--small); }
+.warning { color: var(--warning) !important; }
+@media (max-width: 600px) {
+  .destinations li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--s2); }
+  .destinations li > p { grid-row: 2; grid-column: 1 / -1; }
+  .destinations li > a { grid-row: 1; grid-column: 2; }
+  .legend { display: none; }
+  .change { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s3); }
+  .change dt { grid-column: 1 / -1; }
+  .mobileLabel { position: static; display: block; width: auto; height: auto; margin: 0 0 var(--s1); overflow: visible; clip: auto; white-space: normal; color: var(--muted); font-size: var(--small); font-weight: 400; }
+}

@@ -1,10 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { revealDetailsFor } from "../../../../ui/reveal-details";
+import ValidatedForm from "../../../../ui/ValidatedForm";
+
+
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
 import ConsolePage from "../../../console-ui/ConsolePage";
+import ConsoleRefreshButton from "../../../console-ui/ConsoleRefreshButton";
 import ConsoleToolbar from "../../../console-ui/ConsoleToolbar";
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
 import ConsoleDialog from "../../../console-ui/ConsoleDialog";
@@ -15,7 +20,13 @@ import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import { useConsoleDraftGuard } from "../../../console-draft-guard";
 import { consoleFetch, subscribeConsoleFreshness } from "../../../../../lib/console-api";
 import { canWriteEvent } from "../../../../../lib/event-capabilities";
+import { PARTICIPATION_TYPES, participationTypeLabel, readParticipationHandoff, type ParticipationReview } from "../../../../../lib/participation-work";
+import { abandonOperatorAttempt, acknowledgeOperatorReceipt, confirmsModuleSave, confirmsProgramOperation, confirmsQuestionManagement, isOrganizationContextBlock } from "../../../../../lib/operator-context";
+import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../lib/operator-receipts";
+import { useEventReceipts } from "../../../../../lib/use-event-receipts";
+import { useOperatorContextSnapshot } from "../../../../../lib/use-operator-context";
 import styles from "./programs.module.css";
+import QuizGrading, { type GradePayload, type GradeResult } from "./QuizGrading";
 import { useEventCloseHandoff } from "../../../use-event-close-handoff";
 import { readCloseSnapshot, type CloseSnapshot } from "../../../console-event-close";
 
@@ -46,7 +57,7 @@ type Module = {
   drawHistory: DrawResult[];
 };
 
-type Response = { id: string; moduleId: string; answer: string; ratings: Record<string, unknown> };
+type Response = { id: string; moduleId: string; answer: string; ratings: Record<string, unknown>; manualGrade?: "CORRECT" | "INCORRECT" | null; gradeVersion?: number };
 type Question = {
   id: string;
   moduleId: string;
@@ -55,6 +66,21 @@ type Question = {
   answer: string;
   approved: boolean;
   likes: number;
+  pendingEdit: { id: string; text: string } | null;
+};
+type QuestionEditApproval = { id: string; expectedEditId: string; expectedText: string; expectedAnswer: string; expectedNewText: string };
+type QuestionEditRejection = QuestionEditApproval & { reason: string };
+type QuestionBaseline = { text: string; answer: string; approved: boolean };
+type QuestionManageAttempt = { eventId: string; payload: { id: string; answer: string; approved: boolean; expectedText: string; expectedQuestion: QuestionBaseline }; commandId: string; wasApproved: boolean };
+type QuestionConflict = { id: string; baseline: QuestionBaseline; mine: string; latest: QuestionBaseline | null; loading: boolean; error: string | null };
+function questionBaseline(question: Question): QuestionBaseline {
+  return { text: question.text, answer: question.answer, approved: question.approved };
+}
+type ModuleSaveAttempt = { eventId: string; payload: Record<string, unknown>; commandId: string; wasCreate: boolean };
+type ProgramOperationAttempt = { eventId: string; command: string; payload: Record<string, unknown>; commandId: string };
+const PROGRAM_OPERATION_LABELS: Record<string, string> = {
+  "module.status": "콘텐츠 상태 변경", "module.reveal": "퀴즈 정답 공개", "draw.run": "간단 추첨",
+  "draw.publish": "추첨 결과 공개", "photo.moderate": "참여 사진 검토", "post.moderate": "게시글 검토",
 };
 type Photo = { id: string; caption: string; status: string; at: string; name: string; fileId: string; fileName: string };
 type Post = { id: string; body: string; status: string; at: string; name: string };
@@ -66,6 +92,7 @@ type WorkspaceState =
       kind: "ready";
       closeSnapshot: CloseSnapshot;
       eventName: string;
+      eventId: string;
       eventMeta?: string;
       archived: boolean;
       features: string[];
@@ -98,15 +125,7 @@ const EMPTY_DRAFT: ModuleDraft = {
   questionsText: "",
 };
 
-const MODULE_TYPES: Array<{ id: string; label: string }> = [
-  { id: "poll", label: "투표" },
-  { id: "quiz", label: "퀴즈" },
-  { id: "qa", label: "Q&A" },
-  { id: "draw", label: "추첨" },
-  { id: "survey", label: "만족도" },
-  { id: "photo", label: "사진" },
-  { id: "board", label: "게시판" },
-];
+const MODULE_TYPES = PARTICIPATION_TYPES;
 
 // Long-list paging: reveal the first page only, then grow incrementally.
 // Plain slicing only; creation/edit/status affordances stay above the
@@ -120,7 +139,7 @@ const MODERATION_PAGE_SIZE = 10;
 // Quick-review shortcut target: one backlog class at a time. Q&A keeps its
 // two overlapping classes separate (미답변 vs 승인 대기 overlap, so no
 // summed total is ever shown).
-type ReviewTarget = "qa-unanswered" | "qa-pending" | "photo" | "post";
+type ReviewTarget = ParticipationReview;
 
 // __NEXT_VISIBLE_MODERATION_ID_BEGIN__
 // Next visible moderation target within one rendered list, in DOM order:
@@ -164,17 +183,18 @@ function averageLabel(values: number[]): string | null {
 // everything is 미채점. The distribution groups identical trimmed answers
 // with counts; blank answers collapse to 무응답. Aggregate-only: no new API,
 // no identities.
-function quizGradeSummary(correctAnswer: string, answers: string[]): string {
+function quizGradeSummary(correctAnswer: string, answers: string[], manualGrades: Array<string | null | undefined> = []): string {
   const correct = correctAnswer.trim();
-  if (!correct) return `정답 0 · 오답 0 · 미채점 ${answers.length}`;
-  let right = 0;
-  let empty = 0;
-  for (const answer of answers) {
-    const trimmed = answer.trim();
-    if (!trimmed) empty += 1;
-    else if (trimmed === correct) right += 1;
+  let right = 0, wrong = 0;
+  for (const [index, answer] of answers.entries()) {
+    if (manualGrades[index] === "CORRECT") right += 1;
+    else if (manualGrades[index] === "INCORRECT") wrong += 1;
+    else if (correct && answer.trim()) {
+      if (answer.trim() === correct) right += 1;
+      else wrong += 1;
+    }
   }
-  return `정답 ${right} · 오답 ${answers.length - right - empty} · 미채점 ${empty}`;
+  return `정답 ${right} · 오답 ${wrong} · 미채점 ${answers.length - right - wrong}`;
 }
 
 function quizAnswerGroups(answers: string[]): Array<{ label: string; count: number }> {
@@ -190,7 +210,7 @@ function quizAnswerGroups(answers: string[]): Array<{ label: string; count: numb
 }
 
 function typeLabel(type: string): string {
-  return MODULE_TYPES.find((item) => item.id === type)?.label ?? "형식 확인 필요";
+  return participationTypeLabel(type);
 }
 
 function statusLabel(module: Module): string {
@@ -270,10 +290,12 @@ function parseModule(value: unknown): Module | null {
 
 class CommandFailure extends Error {
   field: string | null;
+  code: string | null;
 
-  constructor(failure: Failure) {
+  constructor(failure: Failure & { code?: string | null }) {
     super(failure.message);
     this.field = failure.field;
+    this.code = failure.code ?? null;
   }
 }
 
@@ -282,6 +304,8 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
   const router = useRouter();
   const pendingCommandsRef = useRef(new Map<string, string>());
   const sendingRef = useRef(false);
+  const [gradeRetry, setGradeRetry] = useState<GradePayload | null>(null);
+  const gradeRetryRef = useRef<GradePayload | null>(null);
   // Tracks a dialog save whose outcome is still unknown (ambiguous failure
   // kept its idempotent key). Dismissal must warn that it may already have
   // applied instead of claiming a cancel.
@@ -298,7 +322,114 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
   const [drawCounts, setDrawCounts] = useState<Record<string, string>>({});
   const [drawFailure, setDrawFailure] = useState<{ id: string; message: string; field: string | null } | null>(null);
   const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
+  const [answerBaselines, setAnswerBaselines] = useState<Record<string, QuestionBaseline>>({});
+  const [questionConflict, setQuestionConflict] = useState<QuestionConflict | null>(null);
+  const questionConflictReadRef = useRef<AbortController | null>(null);
+  useEffect(() => () => {
+    questionConflictReadRef.current?.abort();
+    questionConflictReadRef.current = null;
+  }, [eventId]);
   const [answerFailure, setAnswerFailure] = useState<{ id: string; message: string; field: string | null } | null>(null);
+  const moduleSaveRetryRef = useRef<ModuleSaveAttempt | null>(null);
+  const [moduleSaveRetry, setModuleSaveRetry] = useState<ModuleSaveAttempt | null>(null);
+  const [checkingModuleSave, setCheckingModuleSave] = useState(false);
+  const [abandonModuleConfirm, setAbandonModuleConfirm] = useState(false);
+  const questionManageRetryRef = useRef<QuestionManageAttempt | null>(null);
+  const activeQuestionEventRef = useRef(eventId);
+  activeQuestionEventRef.current = eventId;
+  const [questionManageRetry, setQuestionManageRetry] = useState<QuestionManageAttempt | null>(null);
+  const [checkingQuestion, setCheckingQuestion] = useState(false);
+  const [abandonQuestionConfirm, setAbandonQuestionConfirm] = useState(false);
+  const [pendingOperation, setPendingOperation] = useState<ProgramOperationAttempt | null>(null);
+  const pendingOperationRef = useRef<ProgramOperationAttempt | null>(null);
+  const [checkingOperation, setCheckingOperation] = useState(false);
+  const [refreshingOperation, setRefreshingOperation] = useState(false);
+  const [operationError, setOperationError] = useState<string | null>(null);
+  const [abandonOperation, setAbandonOperation] = useState(false);
+  const operationFocusOriginRef = useRef<Element | null>(null);
+  const activeProgramEventRef = useRef(eventId);
+  const loadedProgramEventRef = useRef<string | null>(null);
+  const hadOtherOperationRef = useRef(false);
+  activeProgramEventRef.current = eventId;
+  const operatorContext = useOperatorContextSnapshot();
+  const eventReceipts = useEventReceipts(eventId);
+  const otherOperationReceipt = eventReceipts.some((item) => Object.hasOwn(PROGRAM_OPERATION_LABELS, item.command) &&
+    item.commandId !== pendingOperation?.commandId && ![...pendingCommandsRef.current.values()].includes(item.commandId));
+  useEffect(() => pendingOperation && state.kind === "ready" ? manageOperatorReceipt(pendingOperation.commandId) : undefined, [pendingOperation, state.kind]);
+  useEffect(() => {
+    if (!pendingOperation) return;
+    const frame = window.requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (active && active !== document.body && active !== operationFocusOriginRef.current && active.isConnected) return;
+      const heading = document.getElementById("program-operation-recovery-heading");
+      heading?.scrollIntoView({ block: "center", behavior: "instant" as ScrollBehavior }); heading?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [pendingOperation?.commandId]);
+  const otherQuestionReceipt = eventReceipts.some((item) => item.command === "question.manage" && item.commandId !== questionManageRetryRef.current?.commandId);
+  const otherModuleReceipt = eventReceipts.some((item) => item.command === "module.save" && item.commandId !== moduleSaveRetryRef.current?.commandId);
+  useEffect(() => {
+    if (!moduleSaveRetry || moduleSaveRetry.eventId !== eventId) return;
+    return manageOperatorReceipt(moduleSaveRetry.commandId);
+  }, [eventId, moduleSaveRetry]);
+  useEffect(() => {
+    if (!questionManageRetry || questionManageRetry.eventId !== eventId) return;
+    return manageOperatorReceipt(questionManageRetry.commandId);
+  }, [eventId, questionManageRetry]);
+  useEffect(() => {
+    const held = questionManageRetryRef.current;
+    if (held && held.eventId !== eventId) {
+      pendingCommandsRef.current.delete(JSON.stringify([held.eventId, "question.manage", held.payload]));
+      questionManageRetryRef.current = null;
+      setQuestionManageRetry(null);
+      setAbandonQuestionConfirm(false);
+    }
+    const moduleHeld = moduleSaveRetryRef.current;
+    if (moduleHeld && moduleHeld.eventId !== eventId) {
+      pendingCommandsRef.current.delete(JSON.stringify([moduleHeld.eventId, "module.save", moduleHeld.payload]));
+      moduleSaveRetryRef.current = null;
+      setModuleSaveRetry(null);
+      setAbandonModuleConfirm(false);
+      dialogUnresolvedRef.current = false;
+    }
+  }, [eventId]);
+  const questionEditRetryRef = useRef<QuestionEditApproval | null>(null);
+  const [questionEditRetry, setQuestionEditRetry] = useState<QuestionEditApproval | null>(null);
+  const questionRejectRetryRef = useRef<QuestionEditRejection | null>(null);
+  const [questionRejectRetry, setQuestionRejectRetry] = useState<QuestionEditRejection | null>(null);
+  const [checkingQuestionEdit, setCheckingQuestionEdit] = useState(false);
+  const approvalId = questionEditRetry ? pendingCommandsRef.current.get(JSON.stringify([eventId, "question.edit.approve", questionEditRetry])) : null;
+  const rejectionId = questionRejectRetry ? pendingCommandsRef.current.get(JSON.stringify([eventId, "question.edit.reject", questionRejectRetry])) : null;
+  const otherEditReceipt = eventReceipts.some((item) => ["question.edit.approve", "question.edit.reject"].includes(item.command) && item.commandId !== approvalId && item.commandId !== rejectionId);
+  useEffect(() => {
+    const ids = [approvalId, rejectionId].filter((id): id is string => Boolean(id));
+    const releases = ids.map(manageOperatorReceipt);
+    return () => { releases.forEach((release) => release()); };
+  }, [approvalId, rejectionId]);
+  const editEventRef = useRef(eventId);
+  useEffect(() => {
+    const previousEvent = editEventRef.current;
+    if (previousEvent !== eventId) {
+      if (questionEditRetryRef.current) pendingCommandsRef.current.delete(JSON.stringify([previousEvent, "question.edit.approve", questionEditRetryRef.current]));
+      if (questionRejectRetryRef.current) pendingCommandsRef.current.delete(JSON.stringify([previousEvent, "question.edit.reject", questionRejectRetryRef.current]));
+      questionEditRetryRef.current = null; setQuestionEditRetry(null);
+      questionRejectRetryRef.current = null; setQuestionRejectRetry(null);
+      setCheckingQuestionEdit(false);
+      gradeRetryRef.current = null; setGradeRetry(null);
+      pendingCommandsRef.current.clear();
+      setDialogOpen(false); setDraft(EMPTY_DRAFT);
+      setAnswerDrafts({}); setAnswerBaselines({}); setQuestionConflict(null); setRejectDrafts({});
+      setStatusPending(null); setRevealPendingId(null); setDrawPending(null); setPublishPending(null);
+      setPhotoPending(null); setPostPending(null);
+      setBusy(null); setFailure(null); setNotice(null); setDrawFailure(null);
+      pendingOperationRef.current = null; setPendingOperation(null); setCheckingOperation(false);
+      setRefreshingOperation(false); setOperationError(null); setAbandonOperation(false);
+      hadOtherOperationRef.current = false; loadedProgramEventRef.current = null;
+      editEventRef.current = eventId;
+    }
+  }, [eventId]);
+  const [rejectDrafts, setRejectDrafts] = useState<Record<string, string>>({});
+  const [rejectFailure, setRejectFailure] = useState<{ id: string; editId: string; message: string; field: string | null } | null>(null);
   // In-place confirmations for irreversible/outward-facing commands. One open
   // at a time: each holds only its target (draw also snapshots the count at
   // trigger time). Dialog dismissal gates stay on window.confirm via
@@ -306,7 +437,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
   const [statusPending, setStatusPending] = useState<{ id: string; status: "DRAFT" | "OPEN" | "CLOSED" } | null>(null);
   const [revealPendingId, setRevealPendingId] = useState<string | null>(null);
   const [drawPending, setDrawPending] = useState<{ id: string; count: number } | null>(null);
-  const [publishPendingId, setPublishPendingId] = useState<string | null>(null);
+  const [publishPending, setPublishPending] = useState<{ moduleId: string; draw: DrawResult } | null>(null);
   const [photoPending, setPhotoPending] = useState<{ id: string; status: "APPROVED" | "HIDDEN" } | null>(null);
   const [postPending, setPostPending] = useState<{ id: string; status: "APPROVED" | "HIDDEN" } | null>(null);
   const [moduleLimit, setModuleLimit] = useState(MODULE_PAGE_SIZE);
@@ -318,7 +449,12 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
   // shortcut can set them explicitly in the same batch as clearing the
   // program-level search. Drafts (module dialog, Q&A answers) are untouched
   // by every filter change below.
-  const [qaFilter, setQaFilter] = useState<"all" | "unanswered" | "pending">("all");
+  const handoffAppliedRef = useRef<string | null>(null);
+  const handoffFocusRef = useRef<string | null>(null);
+  const [reviewFocusRequest, setReviewFocusRequest] = useState<{ kind: "question" | "photo" | "post"; moduleId: string | null } | null>(null);
+  const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
+  const [handoffReturn, setHandoffReturn] = useState<{ moduleId: string | null; label: string; href: string } | null>(null);
+  const [qaFilter, setQaFilter] = useState<"all" | "unanswered" | "pending" | "edits">("all");
   const [photoFilter, setPhotoFilter] = useState<"all" | "PENDING" | "APPROVED" | "HIDDEN">("PENDING");
   const [postFilter, setPostFilter] = useState<"all" | "PENDING" | "APPROVED" | "HIDDEN">("PENDING");
   // Create lands appended at the end of the server list, so a 13th+ module
@@ -343,7 +479,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
   // 보관된 행사는 서버가 모든 쓰기를 거부하므로(409) 쓰기 affordance를
   // 잠그고 읽기·내보내기만 둡니다. programs 스코프가 없는 멤버십([] 등)은
   // 같은 읽기 전용 취급이며, 역할·멤버십 존재 게이트는 그대로 둡니다.
-  const writeLocked = state.kind === "ready" && (state.archived || !state.canWritePrograms);
+  const writeLocked = state.kind === "ready" && (state.archived || !state.canWritePrograms || Boolean(pendingOperation || otherOperationReceipt || refreshingOperation || (hadOtherOperationRef.current && !otherOperationReceipt)));
 
   // Display-only feature gate mirror: the server rejects every module write
   // with 409 when the module type is off, so writes are pre-blocked with the
@@ -366,7 +502,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     setProgramQuery("");
     setProgramStatusFilter("");
     const targetModuleIds = new Set(state.questions.filter((question) =>
-      target === "qa-unanswered" ? !question.answer.trim() : !question.approved
+      target === "qa-unanswered" ? !question.answer.trim() : target === "qa-edits" ? Boolean(question.pendingEdit) : !question.approved
     ).map((question) => question.moduleId));
     const targetIndex = state.modules.findIndex((module) =>
       target === "photo" ? module.type === "photo" : target === "post" ? module.type === "board" : targetModuleIds.has(module.id)
@@ -374,21 +510,76 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     setModuleLimit((current) => Math.max(current, targetIndex + 1));
     if (target === "qa-unanswered") setQaFilter("unanswered");
     else if (target === "qa-pending") setQaFilter("pending");
+    else if (target === "qa-edits") setQaFilter("edits");
     else if (target === "photo") setPhotoFilter("PENDING");
     else setPostFilter("PENDING");
     const kind = target === "photo" ? "photo" : target === "post" ? "post" : "question";
-    window.setTimeout(() => {
-      const row = document.querySelector(`li[id^="moderation-${kind}-"]`);
-      if (row) {
-        row.scrollIntoView({ block: "nearest" });
-        (row as HTMLElement).focus({ preventScroll: true });
-        return;
-      }
-      const status = document.getElementById("moderation-status");
-      status?.scrollIntoView({ block: "nearest" });
-      (status as HTMLElement | null)?.focus?.({ preventScroll: true });
-    }, 0);
+    setReviewFocusRequest({ kind, moduleId: targetIndex >= 0 ? state.modules[targetIndex].id : null });
+    return targetIndex >= 0 ? state.modules[targetIndex].id : null;
   }
+
+  useEffect(() => {
+    if (!reviewFocusRequest || state.kind !== "ready" || state.eventId !== eventId) return;
+    const scope = reviewFocusRequest.moduleId
+      ? document.getElementById(`module-title-${reviewFocusRequest.moduleId}`)?.closest("li")
+      : null;
+    const row = scope?.querySelector<HTMLElement>(`li[id^="moderation-${reviewFocusRequest.kind}-"]`);
+    const target = row ?? document.getElementById("moderation-status");
+    if (target) {
+      revealDetailsFor(target);
+      target.scrollIntoView({ block: "nearest" });
+      target.focus({ preventScroll: true });
+    }
+    setReviewFocusRequest(null);
+  }, [reviewFocusRequest, state, moduleLimit, eventId]);
+
+  useEffect(() => {
+    if (state.kind !== "ready" || state.eventId !== eventId || !state.canManage || handoffAppliedRef.current === eventId) return;
+    const url = new URL(window.location.href);
+    const handoff = readParticipationHandoff(url.searchParams);
+    if (!handoff) return;
+    handoffAppliedRef.current = eventId;
+    const fromOverview = url.searchParams.get("from") === "overview";
+    const returnTo = { label: fromOverview ? "운영 현황으로" : "참여 진행으로", href: fromOverview ? `/console/events/${encodeURIComponent(eventId)}` : `/console/events/${encodeURIComponent(eventId)}/operations#ops-participation` };
+    ["review", "module", "status", "from"].forEach(key => url.searchParams.delete(key));
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    if (handoff.kind === "invalid") {
+      setHandoffNotice("요청한 작업을 확인하지 못했습니다. 목록에서 콘텐츠나 검토 항목을 선택하세요.");
+      return;
+    }
+    if (handoff.kind === "review") {
+      const moduleId = runReviewShortcut(handoff.target) ?? null;
+      setHandoffReturn({ ...returnTo, moduleId });
+      setHandoffNotice(moduleId ? "선택한 참여 응답으로 이동했습니다. 확인 후 원래 업무 화면으로 돌아갈 수 있습니다." : "이 검토 조건에 맞는 항목이 없습니다. 최신 목록에서 확인할 항목을 선택하세요.");
+    } else if (handoff.kind === "module") {
+      const at = state.modules.findIndex(module => module.id === handoff.id);
+      if (at < 0) { setHandoffNotice("요청한 참여 콘텐츠를 찾을 수 없습니다. 최신 목록에서 다시 선택하세요."); return; }
+      setProgramQuery(""); setProgramStatusFilter("");
+      setModuleLimit(current => Math.max(current, at + 1));
+      handoffFocusRef.current = handoff.id;
+      setHandoffReturn({ ...returnTo, moduleId: handoff.id });
+      setHandoffNotice("선택한 콘텐츠의 진행·응답 관리를 열었습니다.");
+    } else {
+      setProgramQuery(""); setProgramStatusFilter(handoff.status);
+      setHandoffReturn({ ...returnTo, moduleId: null });
+      setHandoffNotice("선택한 진행 상태의 콘텐츠를 표시했습니다.");
+      window.requestAnimationFrame(() => document.querySelector<HTMLSelectElement>('select[aria-labelledby="program-status-label"]')?.focus());
+    }
+    // The accepted event snapshot owns this one-time navigation intent.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, eventId]);
+
+  useEffect(() => {
+    const id = handoffFocusRef.current;
+    if (!id || state.kind !== "ready" || state.eventId !== eventId) return;
+    const heading = document.getElementById(`module-title-${id}`);
+    const summary = heading?.closest("li")?.querySelector<HTMLElement>(":scope > details > summary");
+    if (!summary) return;
+    handoffFocusRef.current = null;
+    revealDetailsFor(summary);
+    summary.scrollIntoView({ block: "nearest" });
+    summary.focus({ preventScroll: true });
+  }, [state, moduleLimit, eventId, handoffReturn]);
 
   function moduleInitialDraft(module: Module): ModuleDraft {
     return {
@@ -414,21 +605,26 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
   const dialogDirty = dialogBaseline !== null && JSON.stringify(draft) !== JSON.stringify(dialogBaseline);
   const answerDirty = state.kind === "ready" && Object.entries(answerDrafts).some(([id, value]) => {
     const question = state.questions.find((item) => item.id === id);
-    return question ? value !== question.answer : value !== "";
+    return value !== (answerBaselines[id]?.answer ?? question?.answer ?? "");
   });
   const pendingRetry = pendingCommandsRef.current.size > 0;
-  useConsoleDraftGuard(dialogDirty || answerDirty || pendingRetry, "작성 중인 프로그램 내용이 있습니다.");
+  const rejectDirty = state.kind === "ready" && Object.entries(rejectDrafts).some(([editId, value]) =>
+    value.trim() !== "" && state.questions.some((question) => question.pendingEdit?.id === editId));
+  useConsoleDraftGuard(dialogDirty || answerDirty || rejectDirty || pendingRetry || questionConflict !== null, "작성 중인 콘텐츠 내용이 있습니다.");
 
   async function load(silent = false) {
+    const requestEventId = eventId;
     if (!silent) setState({ kind: "loading" });
     try {
       const [meRes, bootRes] = await Promise.all([
         consoleFetch("/api/auth/me", { cache: "no-store" }),
         consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store" }),
       ]);
+      if (activeProgramEventRef.current !== requestEventId) return false;
       if (meRes.status === 401 || bootRes.status === 401) {
+        if (silent && pendingOperationRef.current) { setOperationError("최신 콘텐츠를 불러오지 못했습니다. 현재 계정과 행사 권한을 확인하세요."); return false; }
         router.push(loginHrefForLocation(window.location.pathname, window.location.search));
-        return;
+        return false;
       }
       const me = (await meRes.json().catch(() => null)) as {
         user?: { id?: unknown; role?: unknown } | null;
@@ -442,9 +638,11 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
         } | null;
       } | null;
       const bootstrap = boot?.state;
+      if (activeProgramEventRef.current !== requestEventId) return false;
       if (!meRes.ok || !bootRes.ok || !me?.user || !bootstrap) {
-        setState({ kind: "failed", message: "참여 프로그램 정보를 불러오지 못했습니다." });
-        return;
+        if (silent && pendingOperationRef.current) { setOperationError("최신 콘텐츠를 불러오지 못했습니다. 잠시 후 다시 확인하세요."); return false; }
+        setState({ kind: "failed", message: "참여 콘텐츠 정보를 불러오지 못했습니다." });
+        return false;
       }
       const role = typeof me.user.role === "string" ? me.user.role : "";
       const myId = typeof me.user.id === "string" ? me.user.id : "";
@@ -479,8 +677,9 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
         : undefined;
       const workspace = asRecord(bootstrap.workspaces?.[eventId]);
       if (!event || !workspace) {
+        if (silent && pendingOperationRef.current) { setOperationError("최신 콘텐츠를 불러오지 못했습니다. 행사 접근 권한을 확인하세요."); return false; }
         setState({ kind: "failed", message: "행사를 찾을 수 없습니다." });
-        return;
+        return false;
       }
       const clientName = Array.isArray(bootstrap.clients)
         ? bootstrap.clients
@@ -502,7 +701,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
             // computed from these already-loaded answers/ratings. Participant
             // identities are never rendered (no per-person rows, no ids).
             const ratings = asRecord(item.ratings) ?? {};
-            return [{ id: item.id, moduleId: item.moduleId, answer: text(item.answer), ratings }];
+            return [{ id: item.id, moduleId: item.moduleId, answer: text(item.answer), ratings, manualGrade: item.manualGrade === "CORRECT" || item.manualGrade === "INCORRECT" ? item.manualGrade : null, gradeVersion: Number.isSafeInteger(item.gradeVersion) ? Number(item.gradeVersion) : 0 }];
           })
         : [];
       const questions: Question[] = Array.isArray(workspace.questions)
@@ -517,6 +716,11 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
               answer: text(item.answer),
               approved: item.approved === true,
               likes: Array.isArray(item.likes) ? item.likes.length : 0,
+              pendingEdit: (() => {
+                const edit = asRecord(item.pendingEdit);
+                return edit && typeof edit.id === "string" && typeof edit.text === "string"
+                  ? { id: edit.id, text: edit.text } : null;
+              })(),
             }];
           })
         : [];
@@ -549,8 +753,10 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
             }];
           })
         : [];
+      loadedProgramEventRef.current = requestEventId;
       setState({
         kind: "ready",
+        eventId: requestEventId,
         closeSnapshot: readCloseSnapshot(event, workspace),
         eventName: text(event.name, eventId),
         eventMeta: formatConsoleEventMeta({
@@ -572,15 +778,50 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
         photos,
         posts,
       });
+      return true;
     } catch {
+      if (activeProgramEventRef.current !== requestEventId) return false;
+      if (silent && pendingOperationRef.current) { setOperationError("최신 콘텐츠를 불러오지 못했습니다. 연결을 확인한 뒤 다시 시도하세요."); return false; }
       setState({ kind: "failed", message: "연결하지 못했습니다. 다시 시도하세요." });
+      return false;
     }
   }
 
   useEffect(() => {
+    handoffAppliedRef.current = null;
+    handoffFocusRef.current = null;
+    setReviewFocusRequest(null);
+    setHandoffNotice(null);
+    setHandoffReturn(null);
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
+
+  useEffect(() => {
+    if (hadOtherOperationRef.current && !otherOperationReceipt && !pendingOperation) {
+      setRefreshingOperation(true);
+      const previousEvent = eventId;
+      void load(true).finally(() => { if (activeProgramEventRef.current === previousEvent) setRefreshingOperation(false); });
+    }
+    hadOtherOperationRef.current = otherOperationReceipt;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otherOperationReceipt, pendingOperation]);
+
+  const hadOtherQuestionReceipt = useRef(false);
+  useEffect(() => {
+    const other = otherQuestionReceipt || otherEditReceipt;
+    if (hadOtherQuestionReceipt.current && !other && !questionManageRetryRef.current && !questionEditRetryRef.current && !questionRejectRetryRef.current) void load(true);
+    hadOtherQuestionReceipt.current = other && !sendingRef.current;
+    // A shared, status-only confirmation does not return the question body.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId, otherQuestionReceipt, otherEditReceipt]);
+  const hadOtherModuleReceipt = useRef(false);
+  useEffect(() => {
+    if (hadOtherModuleReceipt.current && !otherModuleReceipt && !moduleSaveRetryRef.current) void load(true);
+    hadOtherModuleReceipt.current = otherModuleReceipt && !sendingRef.current;
+    // The shared confirmation reports commitment, not saved module details.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId, otherModuleReceipt]);
 
   // Shared freshness: safe silent lists only. Drafts (module dialog, Q&A
   // answers, pending idempotent keys, in-flight writes) must never be
@@ -629,6 +870,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       moderationFocusRef.current = null;
       const row = request.id ? document.getElementById(`moderation-${request.kind}-${request.id}`) : null;
       if (row) {
+        revealDetailsFor(row);
         row.scrollIntoView({ block: "nearest" });
         row.focus({ preventScroll: true });
         return;
@@ -639,40 +881,147 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     }
   }, [state, moduleLimit]);
 
-  async function postCommand(command: string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+  async function postCommand(command: string, payload: Record<string, unknown>, wasUnconfirmed = false): Promise<Record<string, unknown>> {
     if (sendingRef.current) throw new Error("이전 요청을 확인하고 있습니다. 잠시 기다려주세요.");
+    const held = pendingOperationRef.current;
+    if (held && (held.command !== command || JSON.stringify(held.payload) !== JSON.stringify(payload))) throw new Error("이전 작업의 처리 결과를 먼저 확인하세요.");
     sendingRef.current = true;
     const attempt = JSON.stringify([eventId, command, payload]);
-    const commandId = pendingCommandsRef.current.get(attempt) ?? randomCommandId();
+    const previous = pendingCommandsRef.current.get(attempt) ?? (held?.command === command && JSON.stringify(held.payload) === JSON.stringify(payload) ? held.commandId : undefined);
+    const commandId = previous ?? randomCommandId();
     pendingCommandsRef.current.set(attempt, commandId);
+    const focusOrigin = document.activeElement;
+    const rememberOperation = () => {
+      if (!Object.hasOwn(PROGRAM_OPERATION_LABELS, command) || activeProgramEventRef.current !== eventId) return;
+      if (!pendingOperationRef.current) operationFocusOriginRef.current = focusOrigin;
+      const frozen: ProgramOperationAttempt = { eventId, command, payload: JSON.parse(JSON.stringify(payload)) as Record<string, unknown>, commandId };
+      pendingOperationRef.current = frozen; setPendingOperation(frozen);
+      setOperationError("처리 결과를 확인하지 못했습니다. 서버에서 확인하거나 원래 요청을 다시 시도하세요.");
+    };
     try {
       const response = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ commandId, command, payload }),
-      }).catch(() => { throw new Error("응답을 확인하지 못했습니다. 같은 내용으로 다시 시도하세요."); });
+      }).catch((error: unknown) => {
+        if (isOrganizationContextBlock(error) && !previous && !wasUnconfirmed) {
+          pendingCommandsRef.current.delete(attempt);
+          throw new Error("현재 조직을 확인한 뒤 다시 시도하세요.");
+        }
+        rememberOperation();
+        throw new Error("응답을 확인하지 못했습니다. 같은 내용으로 다시 시도하세요.");
+      });
       const data = (await response.json().catch(() => null)) as {
         error?: unknown;
         field?: unknown;
       } & Record<string, unknown> | null;
       if (!response.ok) {
-        const uncertain = response.status >= 500 || response.status === 408;
+        // This guard executes after the locked receipt lookup, including on a
+        // retry after response loss. Other 409s/403s remain uncertain there.
+        if (command === "question.manage" && response.status === 409 && data?.code === "QUESTION_MANAGEMENT_CHANGED") {
+          pendingCommandsRef.current.delete(attempt);
+          abandonOperatorAttempt(commandId);
+          forgetOperatorReceipt(commandId);
+          throw new CommandFailure({ message: "질문 또는 답변이 변경되었습니다.", field: "expectedQuestion", code: "QUESTION_MANAGEMENT_CHANGED" });
+        }
+        const uncertain = Boolean(previous) || wasUnconfirmed || response.status >= 500 || [408, 425, 429].includes(response.status);
         if (!uncertain) pendingCommandsRef.current.delete(attempt);
+        else rememberOperation();
         throw new CommandFailure({
           message: uncertain ? "응답을 확인하지 못했습니다. 같은 내용으로 다시 시도하세요." : typeof data?.error === "string" ? data.error : "요청을 처리하지 못했습니다.",
           field: typeof data?.field === "string" ? data.field : null,
         });
       }
-      if (!data || Array.isArray(data)) throw new Error("응답을 확인하지 못했습니다. 같은 내용으로 다시 시도하세요.");
+      if (!data || Array.isArray(data)) { rememberOperation(); throw new Error("응답을 확인하지 못했습니다. 같은 내용으로 다시 시도하세요."); }
+      if (Object.hasOwn(PROGRAM_OPERATION_LABELS, command) && !confirmsProgramOperation(command, commandId, payload, data)) {
+        rememberOperation(); throw new Error("요청 결과를 확인하지 못했습니다. 같은 요청으로 다시 확인하세요.");
+      }
+      if (command === "module.save" && !confirmsModuleSave(payload, data)) throw new Error("콘텐츠 저장 결과를 확인하지 못했습니다. 같은 요청으로 다시 확인하세요.");
+      if (command === "question.manage" && !confirmsQuestionManagement(payload, data)) throw new Error("질문 처리 결과를 확인하지 못했습니다. 같은 요청으로 다시 확인하세요.");
+      if (command === "response.grade" && (data.responseId !== payload.responseId || !Number.isSafeInteger(data.gradeVersion) || Number(data.gradeVersion) <= Number(payload.expectedGradeVersion))) throw new Error("채점 결과를 확인하지 못했습니다. 같은 요청으로 다시 확인하세요.");
+      if (command === "question.edit.approve") {
+        const result = asRecord(data.question);
+        if (!result || result.id !== payload.id || result.text !== payload.expectedNewText || result.approved !== true || result.pendingEdit) {
+          throw new Error("수정안 승인 결과를 확인하지 못했습니다. 같은 요청으로 다시 확인하세요.");
+        }
+      }
+      if (command === "question.edit.reject") {
+        const result = asRecord(data.question);
+        const rejection = asRecord(result?.editRejection);
+        if (!result || result.id !== payload.id || result.text !== payload.expectedText || result.answer !== payload.expectedAnswer ||
+            result.approved !== true || result.pendingEdit || !rejection || rejection.id !== payload.expectedEditId ||
+            rejection.text !== payload.expectedNewText || rejection.reason !== payload.reason) {
+          throw new Error("수정안 반려 결과를 확인하지 못했습니다. 같은 요청으로 다시 확인하세요.");
+        }
+      }
       pendingCommandsRef.current.delete(attempt);
+      if (["module.save", "question.manage", "question.edit.approve", "question.edit.reject", "response.grade"].includes(command) || Object.hasOwn(PROGRAM_OPERATION_LABELS, command)) {
+        acknowledgeOperatorReceipt(commandId);
+        forgetOperatorReceipt(commandId);
+      }
       return data;
     } finally {
       sendingRef.current = false;
     }
   }
 
+  async function recoverProgramOperation(retry: boolean) {
+    const attempt = pendingOperationRef.current;
+    if (!attempt || attempt.eventId !== eventId || checkingOperation || busy !== null || sendingRef.current || operatorContext.changed) return;
+    if (retry && (state.kind !== "ready" || state.archived || !state.canWritePrograms)) {
+      setOperationError("현재 권한이나 행사 상태에서는 같은 요청을 다시 보낼 수 없습니다. 서버 처리 확인을 이용하세요."); return;
+    }
+    const focusOrigin = document.activeElement;
+    const refocus = () => window.requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (active && active !== document.body && active !== focusOrigin && active.isConnected) return;
+      const heading = document.getElementById("program-operation-recovery-heading");
+      heading?.scrollIntoView({ block: "center", behavior: "instant" as ScrollBehavior }); heading?.focus({ preventScroll: true });
+    });
+    setCheckingOperation(true); setOperationError(null);
+    try {
+      if (retry) await postCommand(attempt.command, attempt.payload, true);
+      else {
+        const response = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/command-receipts/${encodeURIComponent(attempt.commandId)}`, { cache: "no-store" });
+        const result = asRecord(await response.json().catch(() => null));
+        if (activeProgramEventRef.current !== attempt.eventId) return;
+        if (!(response.ok && result?.status === "APPLIED" && result.command === attempt.command)) {
+          setOperationError(response.ok && result?.status === "UNCONFIRMED"
+            ? "아직 처리 여부를 확인할 수 없습니다. 요청이 처리 중이거나 도착하지 않았을 수 있습니다."
+            : "처리 결과를 확인하지 못했습니다. 연결과 현재 행사 접근 권한을 확인하세요.");
+          refocus(); return;
+        }
+      }
+      if (activeProgramEventRef.current !== attempt.eventId || !await load(true)) return;
+      pendingCommandsRef.current.delete(JSON.stringify([attempt.eventId, attempt.command, attempt.payload]));
+      acknowledgeOperatorReceipt(attempt.commandId); forgetOperatorReceipt(attempt.commandId);
+      pendingOperationRef.current = null; setPendingOperation(null); setOperationError(null); setAbandonOperation(false);
+      setFailure(null); setDrawFailure(null);
+      setNotice("서버에 반영된 것을 확인하고 최신 콘텐츠 결과를 불러왔습니다.");
+    } catch {
+      if (activeProgramEventRef.current === attempt.eventId) { setOperationError("이전 요청의 처리 여부를 확인하지 못했습니다. 잠시 후 다시 확인하세요."); refocus(); }
+    } finally { if (activeProgramEventRef.current === attempt.eventId) setCheckingOperation(false); }
+  }
+
+  async function submitGrade(payload: GradePayload, unconfirmed: boolean): Promise<GradeResult> {
+    if (writeLocked || sendingRef.current) return { ok: false, message: "이전 작업을 마친 뒤 다시 시도하세요." };
+    const held = gradeRetryRef.current;
+    if (held && JSON.stringify(held) !== JSON.stringify(payload)) return { ok: false, message: "미확인 채점을 먼저 확인하세요." };
+    setBusy(`grade:${payload.responseId}`);
+    try {
+      await postCommand("response.grade", payload, unconfirmed || Boolean(held));
+      gradeRetryRef.current = null; setGradeRetry(null); setNotice("채점을 저장했습니다.");
+      await load(true);
+      return { ok: true };
+    } catch (error) {
+      const uncertain = pendingCommandsRef.current.has(JSON.stringify([eventId, "response.grade", payload]));
+      if (uncertain) { gradeRetryRef.current = payload; setGradeRetry(payload); }
+      return { ok: false, uncertain, message: error instanceof Error ? error.message : "채점을 저장하지 못했습니다." };
+    } finally { setBusy(null); }
+  }
+
   function openCreate() {
-    if (writeLocked) return;
+    if (writeLocked || moduleSaveRetryRef.current || otherModuleReceipt) return;
     dialogUnresolvedRef.current = false;
     setDraft(EMPTY_DRAFT);
     setDialogFailure(null);
@@ -681,7 +1030,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
   }
 
   function openEdit(module: Module) {
-    if (writeLocked) return;
+    if (writeLocked || moduleSaveRetryRef.current || otherModuleReceipt) return;
     dialogUnresolvedRef.current = false;
     setDraft(moduleInitialDraft(module));
     setDialogFailure(null);
@@ -697,41 +1046,48 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
   function confirmDialogClose(): boolean {
     if (sendingRef.current || dialogBusy) return false;
     if (dialogUnresolvedRef.current) {
-      return window.confirm("프로그램 저장 결과를 아직 확인하지 못했습니다. 이미 저장되었을 수 있습니다. 결과를 확인하지 않고 닫을까요?");
+      return window.confirm("콘텐츠 저장 결과를 아직 확인하지 못했습니다. 이미 저장되었을 수 있습니다. 결과를 확인하지 않고 닫을까요?");
     }
     if (!dialogDirty) return true;
-    return window.confirm("작성 중인 프로그램 내용이 있습니다. 닫을까요?");
+    return window.confirm("작성 중인 콘텐츠 내용이 있습니다. 닫을까요?");
   }
 
   async function saveModule(event: React.FormEvent<HTMLFormElement>) {
-    if (writeLocked) return;
     event.preventDefault();
+    if (writeLocked || moduleSaveRetryRef.current || otherModuleReceipt) return;
     setDialogFailure(null);
     setDialogFieldError(null);
     // Pre-block instead of sending for a predictable 409: the server only
     // saves module types whose feature flag is on.
     if (!isTypeEnabled(draft.type)) {
-      setDialogFieldError({ field: "type", message: "꺼져 있는 기능의 프로그램은 저장할 수 없습니다. 행사 설정에서 기능을 먼저 켜세요." });
+      setDialogFieldError({ field: "type", message: "꺼져 있는 기능의 콘텐츠는 저장할 수 없습니다. 행사 설정에서 기능을 먼저 켜세요." });
       return;
     }
-    setDialogBusy(true);
-    // Size growth means this attempt kept its idempotent key: an ambiguous
-    // outcome the dismissal gate must warn about.
-    const pendingBefore = pendingCommandsRef.current.size;
     const wasCreate = !draft.id;
+    const payload: Record<string, unknown> = { type: draft.type, title: draft.title };
+    if (draft.id) payload.id = draft.id;
+    if (draft.type === "poll") payload.options = draft.optionsText.split(/\r?\n/);
+    if (draft.type === "quiz") payload.answer = draft.answer;
+    if (draft.type === "survey") payload.questions = draft.questionsText.split(/\r?\n/);
+    await submitModuleSave({ eventId, payload, commandId: "", wasCreate });
+  }
+
+  async function submitModuleSave(request: ModuleSaveAttempt) {
+    if (request.eventId !== eventId || writeLocked || dialogBusy || checkingModuleSave) return;
+    const held = moduleSaveRetryRef.current;
+    if ((held && JSON.stringify(held.payload) !== JSON.stringify(request.payload)) || (!held && otherModuleReceipt)) return;
+    setDialogBusy(true);
+    setDialogFailure(null);
+    setDialogFieldError(null);
+    const { payload, wasCreate } = request;
     try {
-      const payload: Record<string, unknown> = {
-        type: draft.type,
-        title: draft.title,
-      };
-      if (draft.id) payload.id = draft.id;
-      if (draft.type === "poll") payload.options = draft.optionsText.split(/\r?\n/);
-      if (draft.type === "quiz") payload.answer = draft.answer;
-      if (draft.type === "survey") payload.questions = draft.questionsText.split(/\r?\n/);
-      const receipt = await postCommand("module.save", payload);
+      const receipt = await postCommand("module.save", payload, Boolean(held));
+      if (activeQuestionEventRef.current !== request.eventId) return;
+      moduleSaveRetryRef.current = null;
+      setModuleSaveRetry(null);
       dialogUnresolvedRef.current = false;
       setDialogOpen(false);
-      setNotice(draft.id ? "프로그램을 저장했습니다." : "프로그램을 만들었습니다.");
+      setNotice(wasCreate ? "콘텐츠를 만들었습니다." : "콘텐츠를 저장했습니다.");
       setFailure(null);
       await load(true);
       if (wasCreate) {
@@ -745,14 +1101,82 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
           saved && typeof saved.id === "string" && saved.id ? saved.id : "__latest__";
       }
     } catch (error) {
+      if (activeQuestionEventRef.current !== request.eventId) return;
       const message = error instanceof Error ? error.message : "저장하지 못했습니다.";
       const field = error instanceof CommandFailure ? error.field : null;
       if (field) setDialogFieldError({ field, message });
       else setDialogFailure({ message, field });
-      dialogUnresolvedRef.current = pendingCommandsRef.current.size > pendingBefore;
+      const commandId = pendingCommandsRef.current.get(JSON.stringify([eventId, "module.save", payload]));
+      if (commandId) {
+        const pending = { ...request, commandId };
+        moduleSaveRetryRef.current = pending;
+        setModuleSaveRetry(pending);
+        dialogUnresolvedRef.current = true;
+      } else dialogUnresolvedRef.current = false;
     } finally {
       setDialogBusy(false);
     }
+  }
+
+  async function checkModuleSave() {
+    const attempt = moduleSaveRetryRef.current;
+    if (!attempt || attempt.eventId !== eventId || checkingModuleSave || dialogBusy) return;
+    setCheckingModuleSave(true);
+    setDialogFailure(null);
+    try {
+      const response = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/command-receipts/${encodeURIComponent(attempt.commandId)}`, { cache: "no-store" });
+      const data = await response.json().catch(() => null) as { status?: unknown; command?: unknown } | null;
+      if (activeQuestionEventRef.current !== eventId) return;
+      if (response.ok && data?.status === "APPLIED" && data.command === "module.save") {
+        pendingCommandsRef.current.delete(JSON.stringify([eventId, "module.save", attempt.payload]));
+        acknowledgeOperatorReceipt(attempt.commandId);
+        forgetOperatorReceipt(attempt.commandId);
+        moduleSaveRetryRef.current = null;
+        setModuleSaveRetry(null);
+        dialogUnresolvedRef.current = false;
+        setDialogOpen(false);
+        setModuleLimit(Number.MAX_SAFE_INTEGER);
+        setNotice("콘텐츠 저장이 서버에 반영된 것을 확인했습니다. 최신 목록을 확인하세요.");
+        await load(true);
+      } else if (response.ok && data?.status === "UNCONFIRMED") setDialogFailure({ message: "아직 저장 여부를 확인할 수 없습니다. 잠시 후 다시 확인하세요.", field: null });
+      else setDialogFailure({ message: response.status >= 500 || [425, 429].includes(response.status)
+        ? "일시적으로 처리 결과를 확인하지 못했습니다. 잠시 후 다시 확인하세요."
+        : "결과를 확인하지 못했습니다. 현재 계정과 행사 접근 권한을 확인하세요.", field: null });
+    } catch { setDialogFailure({ message: "서버에 연결하지 못했습니다. 콘텐츠 요청은 다시 보내지 않았습니다.", field: null }); }
+    finally { setCheckingModuleSave(false); }
+  }
+
+  function moduleSaveRecovery(): ReactNode {
+    if (!moduleSaveRetry) return null;
+    return <section className={styles.recovery} aria-labelledby="module-recovery-heading">
+      <h2 id="module-recovery-heading">콘텐츠 저장 확인 필요</h2>
+      <p>서버 확인은 콘텐츠를 다시 만들지 않습니다.</p>
+      {!dialogOpen && dialogFailure ? <p role="alert">{dialogFailure.message}</p> : null}
+      <div className={styles.recoveryActions}>
+        <button type="button" className="button button-secondary" disabled={dialogBusy || checkingModuleSave || abandonModuleConfirm} onClick={() => void checkModuleSave()}>서버 처리 확인</button>
+        <button type="button" className="button button-secondary" disabled={dialogBusy || checkingModuleSave || abandonModuleConfirm || writeLocked} onClick={() => void submitModuleSave(moduleSaveRetry)}>같은 요청 다시 시도</button>
+        <button type="button" className="button button-secondary" disabled={dialogBusy || checkingModuleSave || abandonModuleConfirm} onClick={() => setAbandonModuleConfirm(true)}>확인 전 그만두기</button>
+      </div>
+      {abandonModuleConfirm ? <ConsoleConfirm
+        summary="이미 저장된 콘텐츠는 취소되지 않습니다. 입력 화면을 닫고 최신 목록을 확인할까요?"
+        confirmLabel="확인 그만두기"
+        onConfirm={() => {
+          const attempt = moduleSaveRetryRef.current;
+          if (!attempt) return;
+          pendingCommandsRef.current.delete(JSON.stringify([eventId, "module.save", attempt.payload]));
+          abandonOperatorAttempt(attempt.commandId);
+          forgetOperatorReceipt(attempt.commandId);
+          moduleSaveRetryRef.current = null;
+          setModuleSaveRetry(null);
+          setAbandonModuleConfirm(false);
+          dialogUnresolvedRef.current = false;
+          setDialogOpen(false);
+          setNotice("확인을 그만두었습니다. 서버 처리는 취소되지 않았으므로 최신 목록을 확인하세요.");
+          void load(true);
+        }}
+        onCancel={() => setAbandonModuleConfirm(false)}
+      /> : null}
+    </section>;
   }
 
   function requestStatusChange(module: Module, status: "DRAFT" | "OPEN" | "CLOSED") {
@@ -768,13 +1192,14 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     setFailure(null);
     try {
       await postCommand("module.status", { id: module.id, status });
-      setNotice(`프로그램을 ${action}했습니다.`);
+      if (activeProgramEventRef.current !== eventId) return;
+      setNotice(`콘텐츠를 ${action}했습니다.`);
       await load(true);
     } catch (error) {
+      if (activeProgramEventRef.current !== eventId) return;
       setFailure(error instanceof Error ? error.message : "상태를 바꾸지 못했습니다.");
     } finally {
-      setBusy(null);
-      setStatusPending(null);
+      if (activeProgramEventRef.current === eventId) { setBusy(null); setStatusPending(null); }
     }
   }
 
@@ -790,13 +1215,14 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     setFailure(null);
     try {
       await postCommand("module.reveal", { id: module.id });
+      if (activeProgramEventRef.current !== eventId) return;
       setNotice("퀴즈 정답을 공개했습니다.");
       await load(true);
     } catch (error) {
+      if (activeProgramEventRef.current !== eventId) return;
       setFailure(error instanceof Error ? error.message : "정답을 공개하지 못했습니다.");
     } finally {
-      setBusy(null);
-      setRevealPendingId(null);
+      if (activeProgramEventRef.current === eventId) { setBusy(null); setRevealPendingId(null); }
     }
   }
 
@@ -823,90 +1249,305 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     setFailure(null);
     try {
       await postCommand("draw.run", { id: module.id, count });
+      if (activeProgramEventRef.current !== eventId) return;
       setNotice("추첨을 실행했습니다. 결과를 확인하고 공개하세요.");
       await load(true);
     } catch (error) {
+      if (activeProgramEventRef.current !== eventId) return;
       setDrawFailure({
         id: module.id,
         message: error instanceof Error ? error.message : "추첨을 실행하지 못했습니다.",
         field: error instanceof CommandFailure ? error.field : null,
       });
     } finally {
-      setBusy(null);
-      setDrawPending(null);
+      if (activeProgramEventRef.current === eventId) { setBusy(null); setDrawPending(null); }
     }
   }
 
   function requestDrawPublish(module: Module) {
     if (writeLocked || !isTypeEnabled("draw") || busy !== null) return;
-    setPublishPendingId(module.id);
+    const draw = module.drawHistory[0];
+    if (!draw?.id || draw.published) return;
+    setDrawFailure(null);
+    setPublishPending({ moduleId: module.id, draw });
   }
 
-  async function publishDraw(module: Module) {
+  async function publishDraw(module: Module, reviewed: DrawResult) {
     if (writeLocked || !isTypeEnabled("draw")) return;
     setBusy(`publish:${module.id}`);
     setDrawFailure(null);
     setNotice(null);
     setFailure(null);
     try {
-      await postCommand("draw.publish", { id: module.id });
+      await postCommand("draw.publish", { id: module.id, expectedDrawId: reviewed.id });
+      if (activeProgramEventRef.current !== eventId) return;
       setNotice("추첨 결과를 공개했습니다.");
       await load(true);
     } catch (error) {
+      if (activeProgramEventRef.current !== eventId) return;
       setDrawFailure({
         id: module.id,
         message: error instanceof Error ? error.message : "결과를 공개하지 못했습니다.",
         field: error instanceof CommandFailure ? error.field : null,
       });
+      if (error instanceof CommandFailure && error.field === "expectedDrawId") await load(true);
     } finally {
-      setBusy(null);
-      setPublishPendingId(null);
+      if (activeProgramEventRef.current === eventId) { setBusy(null); setPublishPending(null); }
     }
   }
 
   async function manageQuestion(question: Question, approved: boolean) {
-    if (writeLocked || !isTypeEnabled("qa")) return;
+    if (writeLocked || !isTypeEnabled("qa") || questionConflict || questionEditRetryRef.current || questionRejectRetryRef.current || questionManageRetryRef.current || otherQuestionReceipt || otherEditReceipt) return;
     const answer = (answerDrafts[question.id] ?? question.answer).trim();
     if (approved && !answer) {
       setAnswerFailure({ id: question.id, message: "답변을 입력한 뒤 공개하세요.", field: "answer" });
       return;
     }
-    setBusy(`question:${question.id}`);
+    const baseline = answerBaselines[question.id] ?? questionBaseline(question);
+    await submitQuestionManagement({ eventId, payload: { id: question.id, answer, approved, expectedText: baseline.text, expectedQuestion: baseline }, commandId: "", wasApproved: baseline.approved });
+  }
+
+  async function submitQuestionManagement(request: QuestionManageAttempt) {
+    if (request.eventId !== eventId || writeLocked || !isTypeEnabled("qa") || busy !== null || checkingQuestion || questionEditRetryRef.current || questionRejectRetryRef.current || otherEditReceipt) return;
+    const held = questionManageRetryRef.current;
+    if ((held && JSON.stringify(held.payload) !== JSON.stringify(request.payload)) || (!held && otherQuestionReceipt)) return;
+    const { payload } = request;
+    setBusy(`question:${payload.id}`);
     setAnswerFailure(null);
     setNotice(null);
     setFailure(null);
     try {
-      await postCommand("question.manage", { id: question.id, answer, approved });
+      await postCommand("question.manage", payload, Boolean(held));
+      if (activeQuestionEventRef.current !== request.eventId) return;
+      questionManageRetryRef.current = null;
+      setQuestionManageRetry(null);
       // The draft is now the saved answer: drop the local entry so the
       // textarea falls back to server truth instead of shadowing it and
       // tripping the unsaved guard on whitespace alone.
       setAnswerDrafts((current) => {
-        if (!(question.id in current)) return current;
+        if (!(payload.id in current)) return current;
         const next = { ...current };
-        delete next[question.id];
+        delete next[payload.id];
         return next;
       });
-      setNotice(approved
-        ? question.approved ? "답변을 저장했습니다. 공개 상태를 유지합니다." : "답변을 저장하고 질문을 공개했습니다."
-        : question.approved ? "질문을 비공개로 전환했습니다." : "답변을 저장했습니다. 비공개 상태를 유지합니다.");
+      setAnswerBaselines((current) => { const next = { ...current }; delete next[payload.id]; return next; });
+      setNotice(payload.approved
+        ? request.wasApproved ? "답변을 저장했습니다. 공개 상태를 유지합니다." : "답변을 저장하고 질문을 공개했습니다."
+        : request.wasApproved ? "질문을 비공개로 전환했습니다." : "답변을 저장했습니다. 비공개 상태를 유지합니다.");
       // Confirmed success only: park the next visible row of this same
       // rendered list (same module, same filter page), else fall back to
       // the moderation status line. answerDrafts for the other rows are
       // untouched by the refresh below. Never scheduled on failure.
       moderationFocusRef.current = {
         kind: "question",
-        id: nextVisibleModerationId(visibleModerationRowIds("question", question.id), question.id),
+        id: nextVisibleModerationId(visibleModerationRowIds("question", payload.id), payload.id),
       };
       await load(true);
     } catch (error) {
+      if (activeQuestionEventRef.current !== request.eventId) return;
+      if (error instanceof CommandFailure && error.code === "QUESTION_MANAGEMENT_CHANGED") {
+        questionManageRetryRef.current = null;
+        setQuestionManageRetry(null);
+        setAnswerDrafts((current) => ({ ...current, [payload.id]: current[payload.id] ?? payload.answer }));
+        setAnswerBaselines((current) => ({ ...current, [payload.id]: payload.expectedQuestion }));
+        setAnswerFailure(null);
+        setQuestionConflict({ id: payload.id, baseline: payload.expectedQuestion, mine: answerDrafts[payload.id] ?? payload.answer, latest: null, loading: false, error: null });
+        window.requestAnimationFrame(() => document.getElementById(`question-conflict-${payload.id}`)?.focus());
+        return;
+      }
+      const commandId = pendingCommandsRef.current.get(JSON.stringify([eventId, "question.manage", payload]));
+      if (commandId) {
+        const pending = { ...request, commandId };
+        questionManageRetryRef.current = pending;
+        setQuestionManageRetry(pending);
+      }
       setAnswerFailure({
-        id: question.id,
+        id: payload.id,
         message: error instanceof Error ? error.message : "질문을 처리하지 못했습니다.",
         field: error instanceof CommandFailure ? error.field : null,
       });
     } finally {
       setBusy(null);
     }
+  }
+
+  async function checkQuestionManagement() {
+    const attempt = questionManageRetryRef.current;
+    if (!attempt || attempt.eventId !== eventId || checkingQuestion || busy !== null) return;
+    setCheckingQuestion(true);
+    setFailure(null);
+    try {
+      const response = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/command-receipts/${encodeURIComponent(attempt.commandId)}`, { cache: "no-store" });
+      const data = await response.json().catch(() => null) as { status?: unknown; command?: unknown } | null;
+      if (activeQuestionEventRef.current !== eventId) return;
+      if (response.ok && data?.status === "APPLIED" && data.command === "question.manage") {
+        pendingCommandsRef.current.delete(JSON.stringify([eventId, "question.manage", attempt.payload]));
+        acknowledgeOperatorReceipt(attempt.commandId);
+        forgetOperatorReceipt(attempt.commandId);
+        questionManageRetryRef.current = null;
+        setQuestionManageRetry(null);
+        setAnswerDrafts((current) => { const next = { ...current }; delete next[attempt.payload.id]; return next; });
+        setAnswerBaselines((current) => { const next = { ...current }; delete next[attempt.payload.id]; return next; });
+        setAnswerFailure(null);
+        setNotice("질문 처리가 서버에 반영된 것을 확인했습니다. 최신 답변과 공개 상태를 확인하세요.");
+        await load(true);
+      } else if (response.ok && data?.status === "UNCONFIRMED") setFailure("아직 질문 처리 여부를 확인할 수 없습니다. 잠시 후 다시 확인하세요.");
+      else setFailure(response.status >= 500 || [425, 429].includes(response.status)
+        ? "일시적으로 처리 결과를 확인하지 못했습니다. 잠시 후 다시 확인하세요."
+        : "처리 결과를 확인하지 못했습니다. 현재 계정과 행사 접근 권한을 확인하세요.");
+    } catch { setFailure("서버에 연결하지 못했습니다. 질문 요청은 다시 보내지 않았습니다."); }
+    finally { setCheckingQuestion(false); }
+  }
+
+  async function refreshQuestionConflict() {
+    const conflict = questionConflict;
+    if (!conflict || conflict.loading || busy !== null) return;
+    setQuestionConflict({ ...conflict, latest: null, loading: true, error: null });
+    const controller = new AbortController();
+    questionConflictReadRef.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 12000);
+    try {
+      // The timeout covers both headers and body reads, even when a transport
+      // or test double ignores AbortSignal while consuming a response body.
+      const aborted = new Promise<never>((_, reject) => controller.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true }));
+      const reading = (async () => {
+        const [meResponse, bootstrapResponse] = await Promise.all([
+          consoleFetch("/api/auth/me", { cache: "no-store", signal: controller.signal }),
+          consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store", signal: controller.signal }),
+        ]);
+        const [me, boot] = await Promise.all([
+          meResponse.json().catch(() => null), bootstrapResponse.json().catch(() => null),
+        ]);
+        return { meResponse, bootstrapResponse, me: asRecord(me), boot: asRecord(boot) };
+      })();
+      const { meResponse, bootstrapResponse, me, boot } = await Promise.race([reading, aborted]);
+      if (activeQuestionEventRef.current !== eventId || questionConflictReadRef.current !== controller) return;
+      const user = asRecord(me?.user);
+      const snapshot = asRecord(boot?.state);
+      const workspaces = asRecord(snapshot?.workspaces);
+      const workspace = asRecord(workspaces?.[eventId]);
+      const event = Array.isArray(snapshot?.events) ? snapshot.events.map(asRecord).find((item) => item?.id === eventId) : null;
+      const memberships = Array.isArray(snapshot?.memberships) ? snapshot.memberships.flatMap((item) => {
+        const membership = asRecord(item);
+        return membership && typeof membership.accountId === "string" && typeof membership.eventId === "string"
+          ? [{ accountId: membership.accountId, eventId: membership.eventId, write: membership.write }] : [];
+      }) : null;
+      const row = Array.isArray(workspace?.questions) ? workspace.questions.map(asRecord).find((item) => item?.id === conflict.id) : null;
+      if (!meResponse.ok || !bootstrapResponse.ok || !user || typeof user.id !== "string" || typeof user.role !== "string" ||
+          !memberships || !event || !workspace || !Array.isArray(event.features) || !event.features.includes("qa") ||
+          typeof event.stage !== "string" || event.stage.toUpperCase() === "ARCHIVED" ||
+          !canWriteEvent({ role: user.role, userId: user.id, memberships, eventId }, "question.manage") ||
+          !row || typeof row.text !== "string" || typeof row.answer !== "string" || typeof row.approved !== "boolean") {
+        throw new Error("최신 질문을 확인하지 못했습니다. 행사와 접근 권한을 확인한 뒤 다시 불러오세요.");
+      }
+      const latest = { text: row.text, answer: row.answer, approved: row.approved };
+      setQuestionConflict((current) => current?.id === conflict.id ? { ...current, latest, loading: false, error: null } : current);
+    } catch {
+      if (activeQuestionEventRef.current !== eventId || questionConflictReadRef.current !== controller) return;
+      setQuestionConflict((current) => current?.id === conflict.id ? { ...current, latest: null, loading: false,
+        error: "최신 질문을 확인하지 못했습니다. 연결과 행사 접근 권한을 확인한 뒤 다시 불러오세요." } : current);
+    } finally {
+      window.clearTimeout(timeout);
+      if (questionConflictReadRef.current === controller) questionConflictReadRef.current = null;
+    }
+  }
+
+  function resolveQuestionConflict(choice: "mine" | "latest") {
+    const conflict = questionConflict;
+    if (!conflict?.latest || conflict.loading || writeLocked || !isTypeEnabled("qa")) return;
+    const latest = conflict.latest;
+    setState((current) => current.kind !== "ready" ? current : { ...current,
+      questions: current.questions.map((question) => question.id === conflict.id ? { ...question, ...latest } : question) });
+    setAnswerBaselines((current) => ({ ...current, [conflict.id]: latest }));
+    setAnswerDrafts((current) => ({ ...current, [conflict.id]: choice === "mine" ? conflict.mine : latest.answer }));
+    setQuestionConflict(null);
+    setNotice("최신 질문을 기준으로 다시 검토하세요. 저장하거나 공개하려면 원하는 동작을 다시 선택하세요.");
+    window.requestAnimationFrame(() => document.getElementById(`answer-${conflict.id}`)?.focus());
+  }
+
+  async function approveQuestionEdit(payload: QuestionEditApproval, retry = false) {
+    if (writeLocked || !isTypeEnabled("qa") || busy !== null || questionRejectRetryRef.current || questionManageRetryRef.current || otherQuestionReceipt || otherEditReceipt) return;
+    const held = questionEditRetryRef.current;
+    if (held && JSON.stringify(held) !== JSON.stringify(payload)) return;
+    setBusy(`question-edit:${payload.id}`);
+    setAnswerFailure(null);
+    setNotice(null);
+    try {
+      await postCommand("question.edit.approve", payload, retry || Boolean(held));
+      questionEditRetryRef.current = null;
+      setQuestionEditRetry(null);
+      setRejectDrafts((current) => { const next = { ...current }; delete next[payload.expectedEditId]; return next; });
+      setNotice("수정안을 승인했습니다. 기존 답변은 유지됩니다.");
+      await load(true);
+    } catch (error) {
+      const uncertain = pendingCommandsRef.current.has(JSON.stringify([eventId, "question.edit.approve", payload]));
+      if (uncertain) {
+        questionEditRetryRef.current = payload;
+        setQuestionEditRetry(payload);
+      }
+      setAnswerFailure({ id: payload.id, message: error instanceof Error ? error.message : "수정안을 승인하지 못했습니다.", field: null });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function rejectQuestionEdit(payload: QuestionEditRejection, retry = false) {
+    if (writeLocked || !isTypeEnabled("qa") || busy !== null || questionEditRetryRef.current || questionManageRetryRef.current || otherQuestionReceipt || otherEditReceipt) return;
+    const held = questionRejectRetryRef.current;
+    if (held && JSON.stringify(held) !== JSON.stringify(payload)) return;
+    setBusy(`question-edit:${payload.id}`);
+    setRejectFailure(null);
+    setNotice(null);
+    try {
+      await postCommand("question.edit.reject", payload, retry || Boolean(held));
+      questionRejectRetryRef.current = null;
+      setQuestionRejectRetry(null);
+      setRejectDrafts((current) => { const next = { ...current }; delete next[payload.expectedEditId]; return next; });
+      setNotice("수정안을 반려했습니다. 작성자는 참여 화면에서 사유를 확인할 수 있습니다.");
+      moderationFocusRef.current = {
+        kind: "question",
+        id: nextVisibleModerationId(visibleModerationRowIds("question", payload.id), payload.id),
+      };
+      await load(true);
+    } catch (error) {
+      const uncertain = pendingCommandsRef.current.has(JSON.stringify([eventId, "question.edit.reject", payload]));
+      if (uncertain) { questionRejectRetryRef.current = payload; setQuestionRejectRetry(payload); }
+      setRejectFailure({ id: payload.id, editId: payload.expectedEditId, message: error instanceof Error ? error.message : "수정안을 반려하지 못했습니다.",
+        field: error instanceof CommandFailure ? error.field : null });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function checkQuestionEdit(kind: "approve" | "reject") {
+    const payload = kind === "approve" ? questionEditRetryRef.current : questionRejectRetryRef.current;
+    const command = kind === "approve" ? "question.edit.approve" : "question.edit.reject";
+    if (!payload || checkingQuestionEdit || busy !== null) return;
+    const fingerprint = JSON.stringify([eventId, command, payload]);
+    const commandId = pendingCommandsRef.current.get(fingerprint);
+    if (!commandId) return;
+    setCheckingQuestionEdit(true);
+    setFailure(null);
+    try {
+      const response = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/command-receipts/${encodeURIComponent(commandId)}`, { cache: "no-store" });
+      const data = await response.json().catch(() => null) as { status?: unknown; command?: unknown } | null;
+      if (activeQuestionEventRef.current !== eventId) return;
+      if (response.ok && data?.status === "APPLIED" && data.command === command) {
+        pendingCommandsRef.current.delete(fingerprint);
+        acknowledgeOperatorReceipt(commandId);
+        forgetOperatorReceipt(commandId);
+        if (kind === "approve") { questionEditRetryRef.current = null; setQuestionEditRetry(null); }
+        else { questionRejectRetryRef.current = null; setQuestionRejectRetry(null); }
+        setRejectDrafts((current) => { const next = { ...current }; delete next[payload.expectedEditId]; return next; });
+        setAnswerFailure(null); setRejectFailure(null);
+        setNotice("수정안 처리가 서버에 반영된 것을 확인했습니다. 최신 질문 상태를 확인하세요.");
+        await load(true);
+      } else if (response.ok && data?.status === "UNCONFIRMED") setFailure("아직 수정안 처리 여부를 확인할 수 없습니다. 잠시 후 다시 확인하세요.");
+      else setFailure(response.status >= 500 || [425, 429].includes(response.status)
+        ? "일시적으로 처리 결과를 확인하지 못했습니다. 잠시 후 다시 확인하세요."
+        : "결과를 확인하지 못했습니다. 현재 계정과 행사 접근 권한을 확인하세요.");
+    } catch { setFailure("서버에 연결하지 못했습니다. 수정안 요청은 다시 보내지 않았습니다."); }
+    finally { setCheckingQuestionEdit(false); }
   }
 
   function requestPhotoModeration(photo: Photo, status: "APPROVED" | "HIDDEN") {
@@ -922,6 +1563,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     setFailure(null);
     try {
       await postCommand("photo.moderate", { id: photo.id, status });
+      if (activeProgramEventRef.current !== eventId) return;
       setNotice(`사진을 ${action}했습니다.`);
       // Confirmed success only: next visible row of this same rendered
       // list, else the moderation status line. Never on failure.
@@ -931,10 +1573,10 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       };
       await load(true);
     } catch (error) {
+      if (activeProgramEventRef.current !== eventId) return;
       setFailure(error instanceof Error ? error.message : "사진을 처리하지 못했습니다.");
     } finally {
-      setBusy(null);
-      setPhotoPending(null);
+      if (activeProgramEventRef.current === eventId) { setBusy(null); setPhotoPending(null); }
     }
   }
 
@@ -951,6 +1593,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     setFailure(null);
     try {
       await postCommand("post.moderate", { id: post.id, status });
+      if (activeProgramEventRef.current !== eventId) return;
       setNotice(`게시글을 ${action}했습니다.`);
       // Confirmed success only: next visible row of this same rendered
       // list, else the moderation status line. Never on failure.
@@ -960,17 +1603,17 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       };
       await load(true);
     } catch (error) {
+      if (activeProgramEventRef.current !== eventId) return;
       setFailure(error instanceof Error ? error.message : "게시글을 처리하지 못했습니다.");
     } finally {
-      setBusy(null);
-      setPostPending(null);
+      if (activeProgramEventRef.current === eventId) { setBusy(null); setPostPending(null); }
     }
   }
 
-  if (state.kind === "loading") {
+  if (state.kind === "loading" || (state.kind === "ready" && loadedProgramEventRef.current !== eventId)) {
     return (
       <ConsolePage pageId="programs" eventId={eventId}>
-        <ConsoleStatePanel kind="loading" message="참여 프로그램 정보를 불러오고 있습니다." onRetry={() => {}} />
+        <ConsoleStatePanel kind="loading" message="참여 콘텐츠 정보를 불러오고 있습니다." onRetry={() => {}} />
       </ConsolePage>
     );
   }
@@ -1006,11 +1649,25 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     setProgramQuery("");
     setProgramStatusFilter("");
   }
+  function returnToQuestionConflict(): void {
+    if (!questionConflict) return;
+    const id = questionConflict.id;
+    clearProgramFilters();
+    setQaFilter("all");
+    setModuleLimit(Number.MAX_SAFE_INTEGER);
+    window.requestAnimationFrame(() => {
+      const heading = document.getElementById(`question-conflict-${id}`);
+      revealDetailsFor(heading);
+      heading?.scrollIntoView({ block: "center", behavior: "instant" as ScrollBehavior });
+      heading?.focus({ preventScroll: true });
+    });
+  }
 
   // Backlog classes for the quick-review strip. Q&A 미답변 and 승인 대기는
   // overlapping classes, so each keeps its own count and no summed total.
   const backlogUnanswered = state.kind === "ready" ? state.questions.filter((question) => !question.answer.trim()).length : 0;
   const backlogQaPending = state.kind === "ready" ? state.questions.filter((question) => !question.approved).length : 0;
+  const backlogQaEdits = state.kind === "ready" ? state.questions.filter((question) => question.pendingEdit).length : 0;
   const backlogPhotoPending = state.kind === "ready" ? state.photos.filter((photo) => photo.status === "PENDING").length : 0;
   const backlogPostPending = state.kind === "ready" ? state.posts.filter((post) => post.status === "PENDING").length : 0;
 
@@ -1021,30 +1678,80 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       eventId={eventId}
       eventName={state.eventName}
       meta={state.eventMeta}
-      headerActions={<Link className="button button-secondary" href={settingsHref}>행사 설정</Link>}
+      headerActions={<Link className="button button-secondary" href={handoffReturn?.href ?? `/console/events/${encodeURIComponent(eventId)}/operations#ops-participation`}>{handoffReturn?.label ?? "현장 운영"}</Link>}
       toolbar={state.canManage ? (
         <>
+          <p className={styles.workspacePurpose}>투표·퀴즈·Q&A 등 참가자가 참여할 내용을 만들고 응답을 관리합니다. <Link href={`/console/events/${encodeURIComponent(eventId)}/draws`}>무대 추첨·순위 투표·룰렛 관리</Link></p>
           <ReviewStrip
             unanswered={backlogUnanswered}
             qaPending={backlogQaPending}
+            qaEdits={backlogQaEdits}
             photoPending={backlogPhotoPending}
             postPending={backlogPostPending}
             onShortcut={runReviewShortcut}
           />
+          {moduleSaveRetry && !dialogOpen ? moduleSaveRecovery() : null}
+          {otherModuleReceipt && !moduleSaveRetry && !dialogBusy ? <p role="status">이전 콘텐츠 저장 결과를 위에서 확인한 뒤 변경할 수 있습니다.</p> : null}
+          {questionConflict ? <div className={styles.reviewStrip} role="region" aria-label="질문 변경 확인">
+            <span>변경된 질문을 확인한 뒤 답변을 다시 저장할 수 있습니다.</span>
+            <button type="button" className="button button-secondary" onClick={returnToQuestionConflict}>변경 내용 확인</button>
+          </div> : null}
+          {questionManageRetry ? (
+            <div className={styles.reviewStrip} role="region" aria-label="질문 처리 확인">
+              <span>질문 처리가 반영됐을 수 있습니다. 서버 확인은 요청을 다시 보내지 않습니다.</span>
+              <button type="button" className="button button-secondary" disabled={busy !== null || checkingQuestion || abandonQuestionConfirm} onClick={() => void checkQuestionManagement()}>서버 처리 확인</button>
+              <button type="button" className="button button-secondary" disabled={busy !== null || checkingQuestion || abandonQuestionConfirm || writeLocked} onClick={() => void submitQuestionManagement(questionManageRetry)}>원래 질문 처리 다시 확인</button>
+              <button type="button" className="button button-secondary" disabled={busy !== null || checkingQuestion || abandonQuestionConfirm} onClick={() => setAbandonQuestionConfirm(true)}>확인 전 그만두기</button>
+              {abandonQuestionConfirm ? <ConsoleConfirm
+                summary="이미 반영된 질문 처리는 취소되지 않습니다. 확인을 그만둔 뒤 최신 공개 상태를 살펴보세요."
+                confirmLabel="확인 그만두기"
+                onConfirm={() => {
+                  const attempt = questionManageRetryRef.current;
+                  if (!attempt) return;
+                  pendingCommandsRef.current.delete(JSON.stringify([eventId, "question.manage", attempt.payload]));
+                  abandonOperatorAttempt(attempt.commandId);
+                  forgetOperatorReceipt(attempt.commandId);
+                  questionManageRetryRef.current = null;
+                  setQuestionManageRetry(null);
+                  setAbandonQuestionConfirm(false);
+                  setNotice("확인을 그만두었습니다. 서버 처리는 취소되지 않았으므로 최신 질문을 확인하세요.");
+                  void load(true);
+                }}
+                onCancel={() => setAbandonQuestionConfirm(false)}
+              /> : null}
+            </div>
+          ) : null}
+          {(otherQuestionReceipt || otherEditReceipt) && !questionManageRetry && busy === null ? <p role="status">이전 질문 처리 결과를 위에서 확인한 뒤 질문을 변경할 수 있습니다.</p> : null}
+          {questionEditRetry ? (
+            <div className={styles.reviewStrip} role="alert">
+              <span>수정안 승인 결과를 확인하지 못했습니다. 원래 질문과 수정안으로 다시 확인하세요.</span>
+              <button type="button" className="button button-secondary" disabled={busy !== null || checkingQuestionEdit} onClick={() => void checkQuestionEdit("approve")}>서버 처리 확인</button>
+              <button type="button" className="button button-secondary" disabled={busy !== null || checkingQuestionEdit}
+                onClick={() => void approveQuestionEdit(questionEditRetry, true)}>원래 승인 재확인</button>
+            </div>
+          ) : null}
+          {questionRejectRetry ? (
+            <div className={styles.reviewStrip} role="alert">
+              <span>수정안 반려 결과를 확인하지 못했습니다. 입력한 사유와 원래 요청으로 다시 확인하세요.</span>
+              <button type="button" className="button button-secondary" disabled={busy !== null || checkingQuestionEdit} onClick={() => void checkQuestionEdit("reject")}>서버 처리 확인</button>
+              <button type="button" className="button button-secondary" disabled={busy !== null || checkingQuestionEdit}
+                onClick={() => void rejectQuestionEdit(questionRejectRetry, true)}>원래 반려 재확인</button>
+            </div>
+          ) : null}
           <ConsoleToolbar
           filters={
             <>
               <label>
-                <span className="sr-only" id="program-search-label">프로그램 검색</span>
+                <span className="sr-only" id="program-search-label">콘텐츠 검색</span>
                 <input
                   aria-labelledby="program-search-label"
                   type="search"
-                  placeholder="프로그램 이름·유형 검색"
+                  placeholder="콘텐츠 이름·유형 검색"
                   value={programQuery}
                   onChange={(event) => setProgramQuery(event.target.value)}
                 />
               </label>
-              <label>
+              <label data-toolbar-span="compact">
                 <span className="sr-only" id="program-status-label">진행 상태별 보기</span>
                 <select aria-labelledby="program-status-label" value={programStatusFilter} onChange={(event) => setProgramStatusFilter(event.target.value)}>
                   <option value="">전체 상태</option>
@@ -1056,44 +1763,62 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
             </>
           }
           actions={
-            <>
-              <button type="button" className="button button-primary" onClick={openCreate} disabled={writeLocked}>
-                프로그램 만들기
+            <div data-toolbar-inline className={styles.toolbarActions}>
+              <button type="button" className="button button-primary" onClick={openCreate} disabled={writeLocked || Boolean(moduleSaveRetry) || otherModuleReceipt}>
+                콘텐츠 만들기
               </button>
-              <button
-                type="button"
-                className="button button-secondary"
-                disabled={busy !== null}
-                onClick={() => void load(true)}
-              >
-                새로고침
-              </button>
-            </>
+              <ConsoleRefreshButton label="새로고침" disabled={busy !== null} onRefresh={() => load(true)} />
+            </div>
           }
         />
         </>
       ) : undefined}
       feedback={
         <>
+          {handoffNotice ? <ConsoleFeedback kind="info">{handoffNotice}</ConsoleFeedback> : null}
           {notice ? <ConsoleFeedback kind="success">{notice}</ConsoleFeedback> : null}
-          {failure ? <ConsoleFeedback kind="error">{failure}</ConsoleFeedback> : null}
+          {failure && !pendingOperation ? <ConsoleFeedback kind="error">{failure}</ConsoleFeedback> : null}
+          {gradeRetry ? <ConsoleFeedback kind="warning"><p>채점 결과가 아직 확인되지 않았습니다. 다른 채점을 하기 전에 같은 요청을 확인하세요.</p><button type="button" className="button button-secondary" disabled={busy !== null || writeLocked} onClick={() => void submitGrade(gradeRetry, true)}>같은 채점 다시 확인</button></ConsoleFeedback> : null}
           {!state.canManage ? (
-            <ConsoleFeedback kind="error">참여 프로그램을 관리할 운영 권한이 없습니다.</ConsoleFeedback>
+            <ConsoleFeedback kind="error">참여 콘텐츠를 관리할 운영 권한이 없습니다.</ConsoleFeedback>
           ) : null}
           {state.canManage && state.archived ? (
-            <ConsoleFeedback kind="warning">보관된 행사는 읽기 전용입니다. 프로그램과 응답을 볼 수 있지만 만들거나 바꿀 수 없습니다.</ConsoleFeedback>
+            <ConsoleFeedback kind="warning">보관된 행사는 읽기 전용입니다. 콘텐츠와 응답을 볼 수 있지만 만들거나 바꿀 수 없습니다.</ConsoleFeedback>
           ) : null}
           {state.canManage && !state.archived && !state.canWritePrograms ? (
-            <ConsoleFeedback kind="warning">이 행사에 대한 프로그램 쓰기 권한이 없습니다. 목록·결과·내보내기는 볼 수 있지만 만들거나 바꿀 수 없습니다.</ConsoleFeedback>
+            <ConsoleFeedback kind="warning">이 행사에 대한 콘텐츠 쓰기 권한이 없습니다. 목록·결과·내보내기는 볼 수 있지만 만들거나 바꿀 수 없습니다.</ConsoleFeedback>
           ) : null}
         </>
       }
     >
+      {otherOperationReceipt && !pendingOperation ? <ConsoleFeedback kind="warning">이전 콘텐츠 작업의 처리 결과를 화면 위의 ‘처리 결과 확인’에서 먼저 확인하세요.</ConsoleFeedback> : null}
+      {refreshingOperation ? <ConsoleFeedback kind="info">최신 콘텐츠와 결과를 불러오고 있습니다.</ConsoleFeedback> : null}
+      {pendingOperation ? <section className={styles.recovery} aria-labelledby="program-operation-recovery-heading">
+        <h2 id="program-operation-recovery-heading" tabIndex={-1}>콘텐츠 처리 확인 필요</h2>
+        <p>{PROGRAM_OPERATION_LABELS[pendingOperation.command]} 요청이 반영됐을 수 있습니다. 서버 확인은 요청을 다시 보내지 않습니다.</p>
+        {state.archived || !state.canWritePrograms ? <p>현재 권한이나 행사 상태에서는 같은 요청을 다시 보낼 수 없습니다. 서버 처리 확인을 이용하세요.</p> : null}
+        {operationError ? <p role="alert">{operationError}</p> : null}
+        <div className={styles.recoveryActions}>
+          <button type="button" className="button button-secondary" disabled={busy !== null || checkingOperation || abandonOperation || operatorContext.changed} onClick={() => void recoverProgramOperation(false)}>{checkingOperation ? "확인 중…" : "서버 처리 확인"}</button>
+          <button type="button" className="button button-secondary" disabled={busy !== null || checkingOperation || abandonOperation || operatorContext.changed || state.archived || !state.canWritePrograms} onClick={() => void recoverProgramOperation(true)}>같은 요청 다시 시도</button>
+          <button type="button" className="button button-secondary" disabled={busy !== null || checkingOperation || abandonOperation} onClick={() => setAbandonOperation(true)}>확인 전 그만두기</button>
+        </div>
+        {abandonOperation ? <ConsoleConfirm summary="이미 처리된 콘텐츠 작업은 취소되지 않습니다. 확인을 그만두고 최신 결과를 확인할까요?" confirmLabel="확인 그만두기" onConfirm={() => {
+          const attempt = pendingOperationRef.current;
+          if (!attempt) return;
+          pendingCommandsRef.current.delete(JSON.stringify([attempt.eventId, attempt.command, attempt.payload]));
+          abandonOperatorAttempt(attempt.commandId); forgetOperatorReceipt(attempt.commandId);
+          pendingOperationRef.current = null; setPendingOperation(null); setOperationError(null); setAbandonOperation(false);
+          setFailure("이전 작업이 반영됐을 수 있습니다. 최신 내용을 확인한 뒤 다시 진행하세요.");
+          setRefreshingOperation(true);
+          void load(true).finally(() => { if (activeProgramEventRef.current === attempt.eventId) setRefreshingOperation(false); });
+        }} onCancel={() => setAbandonOperation(false)} /> : null}
+      </section> : null}
       {state.canManage ? (
         state.modules.length ? (
           <>
           <p className={styles.resultCount} role="status">
-            전체 {state.modules.length}개 중 {visibleModules.length}개
+            {hasProgramFilter ? `검색·필터 결과 ${visibleModules.length}개 · ` : ""}전체 {state.modules.length}개 중 {Math.min(moduleLimit, visibleModules.length)}개 표시
             {hasProgramFilter ? (
               <>
                 {" "}
@@ -1113,9 +1838,11 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
                 featureOn={state.features.includes(module.type)}
                 eventId={eventId}
                 busy={busy}
-                locked={writeLocked}
+                locked={writeLocked || questionEditRetry !== null || questionRejectRetry !== null || questionManageRetry !== null || otherQuestionReceipt || otherEditReceipt || moduleSaveRetry !== null || otherModuleReceipt}
                 responses={state.responses.filter((response) => response.moduleId === module.id).length}
                 moduleResponses={state.responses.filter((response) => response.moduleId === module.id)}
+                submitGrade={submitGrade}
+                gradePending={gradeRetry !== null}
                 questions={state.questions.filter((question) => question.moduleId === module.id)}
                 photos={state.photos}
                 posts={state.posts}
@@ -1123,8 +1850,17 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
                 setDrawCounts={setDrawCounts}
                 drawFailure={drawFailure?.id === module.id ? drawFailure : null}
                 answerDrafts={answerDrafts}
-                setAnswerDrafts={setAnswerDrafts}
+                onAnswerChange={(question, value) => {
+                  setAnswerBaselines((current) => current[question.id] ? current : { ...current, [question.id]: questionBaseline(question) });
+                  setAnswerDrafts((current) => ({ ...current, [question.id]: value }));
+                }}
+                questionConflict={questionConflict}
+                onRefreshQuestionConflict={() => void refreshQuestionConflict()}
+                onResolveQuestionConflict={resolveQuestionConflict}
                 answerFailure={answerFailure}
+                rejectDrafts={rejectDrafts}
+                setRejectDrafts={(updater) => { setRejectDrafts(updater); setRejectFailure(null); }}
+                rejectFailure={rejectFailure}
                 qaFilter={qaFilter}
                 onQaFilter={setQaFilter}
                 photoFilter={photoFilter}
@@ -1133,6 +1869,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
                 onPostFilter={setPostFilter}
                 onEdit={() => openEdit(module)}
                 closeHref={closeHref}
+                returnLink={handoffReturn?.moduleId === module.id ? handoffReturn : undefined}
                 statusPending={statusPending?.id === module.id ? statusPending : null}
                 onRequestStatus={(status) => requestStatusChange(module, status)}
                 onConfirmStatus={() => {
@@ -1151,10 +1888,12 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
                   if (pending && pending.id === module.id) void runDraw(module, pending.count);
                 }}
                 onCancelDraw={() => setDrawPending(null)}
-                publishPending={publishPendingId === module.id}
+                publishPending={publishPending?.moduleId === module.id ? publishPending.draw : null}
                 onRequestPublishDraw={() => requestDrawPublish(module)}
-                onConfirmPublishDraw={() => void publishDraw(module)}
-                onCancelPublishDraw={() => setPublishPendingId(null)}
+                onConfirmPublishDraw={() => {
+                  if (publishPending?.moduleId === module.id) void publishDraw(module, publishPending.draw);
+                }}
+                onCancelPublishDraw={() => setPublishPending(null)}
                 photoPending={photoPending}
                 onRequestModeratePhoto={(photo, status) => requestPhotoModeration(photo, status)}
                 onConfirmModeratePhoto={(photo, status) => void moderatePhoto(photo, status)}
@@ -1164,6 +1903,21 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
                 onConfirmModeratePost={(post, status) => void moderatePost(post, status)}
                 onCancelModeratePost={() => setPostPending(null)}
                 onManageQuestion={(question, approved) => void manageQuestion(question, approved)}
+                onApproveQuestionEdit={(question) => {
+                  if (!question.pendingEdit) return;
+                  void approveQuestionEdit({ id: question.id, expectedEditId: question.pendingEdit.id,
+                    expectedText: question.text, expectedAnswer: question.answer, expectedNewText: question.pendingEdit.text });
+                }}
+                onRejectQuestionEdit={(question, reason) => {
+                  if (!question.pendingEdit) return;
+                  if (!reason.trim()) {
+                    setRejectFailure({ id: question.id, editId: question.pendingEdit.id, field: "reason", message: "반려 사유를 입력하세요." });
+                    document.getElementById(`reject-reason-${question.id}`)?.focus();
+                    return;
+                  }
+                  void rejectQuestionEdit({ id: question.id, expectedEditId: question.pendingEdit.id,
+                    expectedText: question.text, expectedAnswer: question.answer, expectedNewText: question.pendingEdit.text, reason: reason.trim() });
+                }}
               />
             ))}
           </ul>
@@ -1181,7 +1935,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
           </>
           ) : (
             <div className={styles.empty}>
-              <p>조건에 맞는 프로그램이 없습니다.</p>
+              <p>조건에 맞는 콘텐츠가 없습니다.</p>
               <p>검색어·상태 조건을 바꾸거나 지우고 다시 찾아보세요.</p>
               <p>
                 <button type="button" className="button button-secondary" onClick={clearProgramFilters}>
@@ -1192,15 +1946,17 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
           )}
           </>
         ) : (
-          <p className={styles.empty}>등록된 프로그램이 없습니다. 위에서 첫 프로그램을 만드세요.</p>
+          <p className={styles.empty}>등록된 콘텐츠가 없습니다. 위에서 첫 콘텐츠를 만드세요.</p>
         )
       ) : null}
 
       {dialogOpen && state.kind === "ready" ? (
         <ModuleDialog
           draft={draft}
-          busy={dialogBusy}
-          locked={writeLocked}
+          busy={dialogBusy || checkingModuleSave}
+          locked={writeLocked || Boolean(moduleSaveRetry) || otherModuleReceipt}
+          frozen={Boolean(moduleSaveRetry) || otherModuleReceipt}
+          recovery={moduleSaveRetry ? moduleSaveRecovery() : null}
           typeEnabled={isTypeEnabled(draft.type)}
           settingsHref={settingsHref}
           failure={dialogFailure}
@@ -1251,21 +2007,22 @@ function countSummary(module: Module, responseCount: number, questions: Question
 function editLockReason(module: Module, responseCount: number, questions: Question[]): string | null {
   if (module.type === "qa") {
     return questions.length
-      ? "질문이 있어 문제를 수정할 수 없습니다. 새 프로그램을 만드세요."
+      ? "접수된 질문이 있어 콘텐츠 설정을 바꿀 수 없습니다. 질문과 답변은 아래에서 관리하세요."
       : null;
   }
   if (module.type === "draw") {
     return module.drawHistory.length
-      ? "추첨 기록이 있어 문제를 수정할 수 없습니다. 새 프로그램을 만드세요."
+      ? "추첨 기록이 있어 콘텐츠 설정을 바꿀 수 없습니다. 다른 설정이 필요하면 새 콘텐츠를 만드세요."
       : null;
   }
   if (module.type === "photo" || module.type === "board") return null;
   return responseCount > 0
-    ? "응답이 있어 문제를 수정할 수 없습니다. 새 프로그램을 만드세요."
+    ? "접수된 응답이 있어 콘텐츠 설정을 바꿀 수 없습니다. 다른 설정이 필요하면 새 콘텐츠를 만드세요."
     : null;
 }
 
 function ModuleCard(props: {
+  returnLink?: { label: string; href: string };
   closeHref: (target: string) => string;
   module: Module;
   featureOn: boolean;
@@ -1274,6 +2031,8 @@ function ModuleCard(props: {
   locked: boolean;
   responses: number;
   moduleResponses: Response[];
+  submitGrade: (payload: GradePayload, unconfirmed: boolean) => Promise<GradeResult>;
+  gradePending: boolean;
   questions: Question[];
   photos: Photo[];
   posts: Post[];
@@ -1281,10 +2040,16 @@ function ModuleCard(props: {
   setDrawCounts: (updater: (current: Record<string, string>) => Record<string, string>) => void;
   drawFailure: { id: string; message: string; field: string | null } | null;
   answerDrafts: Record<string, string>;
-  setAnswerDrafts: (updater: (current: Record<string, string>) => Record<string, string>) => void;
+  onAnswerChange: (question: Question, value: string) => void;
+  questionConflict: QuestionConflict | null;
+  onRefreshQuestionConflict: () => void;
+  onResolveQuestionConflict: (choice: "mine" | "latest") => void;
   answerFailure: { id: string; message: string; field: string | null } | null;
-  qaFilter: "all" | "unanswered" | "pending";
-  onQaFilter: (filter: "all" | "unanswered" | "pending") => void;
+  rejectDrafts: Record<string, string>;
+  setRejectDrafts: (updater: (current: Record<string, string>) => Record<string, string>) => void;
+  rejectFailure: { id: string; editId: string; message: string; field: string | null } | null;
+  qaFilter: "all" | "unanswered" | "pending" | "edits";
+  onQaFilter: (filter: "all" | "unanswered" | "pending" | "edits") => void;
   photoFilter: "all" | "PENDING" | "APPROVED" | "HIDDEN";
   onPhotoFilter: (filter: "all" | "PENDING" | "APPROVED" | "HIDDEN") => void;
   postFilter: "all" | "PENDING" | "APPROVED" | "HIDDEN";
@@ -1302,7 +2067,7 @@ function ModuleCard(props: {
   onRequestDraw: () => void;
   onConfirmDraw: () => void;
   onCancelDraw: () => void;
-  publishPending: boolean;
+  publishPending: DrawResult | null;
   onRequestPublishDraw: () => void;
   onConfirmPublishDraw: () => void;
   onCancelPublishDraw: () => void;
@@ -1315,10 +2080,15 @@ function ModuleCard(props: {
   onConfirmModeratePost: (post: Post, status: "APPROVED" | "HIDDEN") => void;
   onCancelModeratePost: () => void;
   onManageQuestion: (question: Question, approved: boolean) => void;
+  onApproveQuestionEdit: (question: Question) => void;
+  onRejectQuestionEdit: (question: Question, reason: string) => void;
 }) {
   const { module } = props;
   const lockReason = editLockReason(module, props.responses, props.questions);
   const latestDraw = module.drawHistory[0] ?? null;
+  const reviewedDraw = props.publishPending;
+  const reviewedNames = reviewedDraw?.winners.slice(0, 3).map((winner) => winner.name || "이름 미등록").join(", ");
+  const reviewedOthers = Math.max(0, (reviewedDraw?.winners.length ?? 0) - 3);
   const statusAction = props.statusPending
     ? props.statusPending.status === "OPEN"
       ? "시작"
@@ -1349,7 +2119,7 @@ function ModuleCard(props: {
         <div className={styles.moduleActions}>
           <button
             type="button"
-            className="button button-secondary"
+            className="button button-quiet"
             disabled={lockReason !== null || props.locked || !props.featureOn}
             title={lockReason ?? undefined}
             onClick={props.onEdit}
@@ -1369,13 +2139,15 @@ function ModuleCard(props: {
       </div>
       {props.statusPending && statusAction ? (
         <ConsoleConfirm
-          summary={`“${module.title}” 프로그램을 ${statusAction}할까요?`}
+          summary={`“${module.title}” 콘텐츠를 ${statusAction}할까요?`}
           confirmLabel={`${statusAction}한다`}
           busy={props.busy !== null}
           onConfirm={props.onConfirmStatus}
           onCancel={props.onCancelStatus}
         />
       ) : null}
+      <details className={styles.moduleDetails}>
+        <summary data-disclosure-indicator="">진행·응답 관리</summary>
       {lockReason ? <p className={styles.lockNote}>{lockReason}</p> : null}
       {module.type === "poll" && module.options.length ? (
         <p className={styles.detail}>선택지: {module.options.join(" · ")}</p>
@@ -1397,7 +2169,7 @@ function ModuleCard(props: {
           </p>
           {props.revealPending ? (
             <ConsoleConfirm
-              summary={`“${module.title}” 퀴즈 정답을 공개할까요? 공개하면 프로그램이 종료됩니다.`}
+              summary={`“${module.title}” 퀴즈 정답을 공개할까요? 공개하면 콘텐츠가 종료됩니다.`}
               confirmLabel="공개한다"
               busy={props.busy !== null}
               onConfirm={props.onConfirmReveal}
@@ -1451,14 +2223,16 @@ function ModuleCard(props: {
               onCancel={props.onCancelDraw}
             />
           ) : null}
-          {props.publishPending ? (
+          {reviewedDraw && reviewedDraw.id === latestDraw?.id && !latestDraw.published ? (
             <ConsoleConfirm
-              summary="최신 추첨 결과를 참가자에게 공개할까요?"
+              summary={`당첨자 ${reviewedNames || "없음"}${reviewedOthers ? ` 외 ${reviewedOthers}명` : ""}의 결과를 참가자에게 공개할까요?`}
               confirmLabel="공개한다"
               busy={props.busy !== null}
               onConfirm={props.onConfirmPublishDraw}
               onCancel={props.onCancelPublishDraw}
             />
+          ) : reviewedDraw && reviewedDraw.id !== latestDraw?.id ? (
+            <p className={styles.fieldError} role="status">추첨 결과가 바뀌었습니다. 최신 결과를 검토한 뒤 공개하세요.</p>
           ) : null}
           {module.status !== "OPEN" ? (
             <p className={styles.help}>진행 중인 추첨만 실행할 수 있습니다. 먼저 시작하세요.</p>
@@ -1487,11 +2261,19 @@ function ModuleCard(props: {
           locked={props.locked}
           featureOn={props.featureOn}
           answerDrafts={props.answerDrafts}
-          setAnswerDrafts={props.setAnswerDrafts}
+          onAnswerChange={props.onAnswerChange}
+          questionConflict={props.questionConflict}
+          onRefreshQuestionConflict={props.onRefreshQuestionConflict}
+          onResolveQuestionConflict={props.onResolveQuestionConflict}
           answerFailure={props.answerFailure}
+          rejectDrafts={props.rejectDrafts}
+          setRejectDrafts={props.setRejectDrafts}
+          rejectFailure={props.rejectFailure}
           filter={props.qaFilter}
           onFilterChange={props.onQaFilter}
           onManage={props.onManageQuestion}
+          onApproveEdit={props.onApproveQuestionEdit}
+          onRejectEdit={props.onRejectQuestionEdit}
         />
       ) : null}
       {module.type === "photo" ? (
@@ -1503,16 +2285,21 @@ function ModuleCard(props: {
       <ResultDisclosure
         module={module}
         moduleResponses={props.moduleResponses}
+        submitGrade={props.submitGrade}
+        gradePending={props.gradePending}
+        locked={props.locked || props.busy !== null || !props.featureOn}
         questions={props.questions}
         photos={props.photos}
         posts={props.posts}
       />
+      </details>
+      {props.returnLink ? <Link className={`button button-secondary ${styles.returnLink}`} href={props.returnLink.href}>{props.returnLink.label}</Link> : null}
     </li>
   );
 }
 
-// Aggregate-only result summary over the already-loaded workspace data: no new
-// API, no new permission, no per-person rows. Option tallies (poll), free-text
+// Result summary uses the loaded workspace; quiz grading reuses the existing
+// program write scope and the event-command receipt path. Option tallies (poll), free-text
 // answer distribution plus 정답/오답/미채점 grading against the stored answer
 // (quiz), per-question count + average reusing the reports snapshot math
 // (survey),
@@ -1522,7 +2309,10 @@ function ModuleCard(props: {
 // elsewhere and are untouched.
 function ResultDisclosure(props: {
   module: Module;
+  locked: boolean;
   moduleResponses: Response[];
+  submitGrade: (payload: GradePayload, unconfirmed: boolean) => Promise<GradeResult>;
+  gradePending: boolean;
   questions: Question[];
   photos: Photo[];
   posts: Post[];
@@ -1531,7 +2321,7 @@ function ResultDisclosure(props: {
   if (module.type === "draw") return null;
   return (
     <details className={styles.resultDisclosure}>
-      <summary>결과 보기</summary>
+      <summary data-disclosure-indicator="">결과 보기</summary>
       {module.type === "poll" ? (
         <ul className={styles.resultList}>
           {module.options.length ? (
@@ -1548,8 +2338,10 @@ function ResultDisclosure(props: {
       ) : null}
       {module.type === "quiz" ? (
         <>
-          <p className={styles.detail}>{quizGradeSummary(module.answer, props.moduleResponses.map((response) => response.answer))}</p>
-          <p className={styles.detail}>채점은 앞뒤 공백을 제외한 완전 일치 기준입니다. 비슷한 표기는 정답으로 보지 않습니다.</p>
+          <p className={styles.detail}>{quizGradeSummary(module.answer, props.moduleResponses.map(response => response.answer), props.moduleResponses.map(response => response.manualGrade))}</p>
+          <p className={styles.detail}>자동 비교는 앞뒤 공백을 제외한 완전 일치 기준입니다. 수동 채점이 있으면 해당 결과를 우선합니다.</p>
+          <QuizGrading moduleId={module.id} responses={props.moduleResponses} locked={props.locked} pending={props.gradePending} submit={props.submitGrade} />
+          <p className={styles.detail}>원본 답변 분포</p>
           <ul className={styles.resultList}>
             {quizAnswerGroups(props.moduleResponses.map((response) => response.answer)).map((group) => (
               <li key={group.label}>
@@ -1562,7 +2354,7 @@ function ResultDisclosure(props: {
       ) : null}
       {module.type === "survey" ? (
         <ul className={styles.resultList}>
-          {(module.questions.length ? module.questions : ["전반적인 만족도", "프로그램 구성", "현장 운영", "행사장 편의성", "재참석 의향"]).map((name) => {
+          {(module.questions.length ? module.questions : ["전반적인 만족도", "콘텐츠 구성", "현장 운영", "행사장 편의성", "재참석 의향"]).map((name) => {
             const ratings = props.moduleResponses
               .map((response) => response.ratings[name])
               .map(Number)
@@ -1606,6 +2398,7 @@ function ResultDisclosure(props: {
 function ReviewStrip(props: {
   unanswered: number;
   qaPending: number;
+  qaEdits: number;
   photoPending: number;
   postPending: number;
   onShortcut: (target: ReviewTarget) => void;
@@ -1613,17 +2406,18 @@ function ReviewStrip(props: {
   const shortcuts: Array<{ target: ReviewTarget; label: string }> = [];
   if (props.unanswered > 0) shortcuts.push({ target: "qa-unanswered", label: `미답변 ${props.unanswered}건 검토` });
   if (props.qaPending > 0) shortcuts.push({ target: "qa-pending", label: `승인 대기 질문 ${props.qaPending}건 검토` });
+  if (props.qaEdits > 0) shortcuts.push({ target: "qa-edits", label: `질문 수정안 ${props.qaEdits}건 검토` });
   if (props.photoPending > 0) shortcuts.push({ target: "photo", label: `사진 대기 ${props.photoPending}건 검토` });
   if (props.postPending > 0) shortcuts.push({ target: "post", label: `게시글 대기 ${props.postPending}건 검토` });
   return (
-    <div className={styles.reviewStrip} id="moderation-status" tabIndex={-1} role="status">
+    <div className={`${styles.reviewStrip} ${styles.reviewShortcuts}`} id="moderation-status" tabIndex={-1} role="status">
       <span className={styles.reviewStripLabel}>검토</span>
       {shortcuts.length ? (
         shortcuts.map((shortcut) => (
           <button
             key={shortcut.target}
             type="button"
-            className="button button-secondary"
+            className="button button-quiet"
             onClick={() => props.onShortcut(shortcut.target)}
           >
             {shortcut.label}
@@ -1642,11 +2436,19 @@ function QuestionList(props: {
   locked: boolean;
   featureOn: boolean;
   answerDrafts: Record<string, string>;
-  setAnswerDrafts: (updater: (current: Record<string, string>) => Record<string, string>) => void;
+  onAnswerChange: (question: Question, value: string) => void;
+  questionConflict: QuestionConflict | null;
+  onRefreshQuestionConflict: () => void;
+  onResolveQuestionConflict: (choice: "mine" | "latest") => void;
   answerFailure: { id: string; message: string; field: string | null } | null;
-  filter: "all" | "unanswered" | "pending";
-  onFilterChange: (filter: "all" | "unanswered" | "pending") => void;
+  rejectDrafts: Record<string, string>;
+  setRejectDrafts: (updater: (current: Record<string, string>) => Record<string, string>) => void;
+  rejectFailure: { id: string; editId: string; message: string; field: string | null } | null;
+  filter: "all" | "unanswered" | "pending" | "edits";
+  onFilterChange: (filter: "all" | "unanswered" | "pending" | "edits") => void;
   onManage: (question: Question, approved: boolean) => void;
+  onApproveEdit: (question: Question) => void;
+  onRejectEdit: (question: Question, reason: string) => void;
 }) {
   const { filter, onFilterChange } = props;
   const [limit, setLimit] = useState(MODERATION_PAGE_SIZE);
@@ -1654,11 +2456,15 @@ function QuestionList(props: {
   const unanswered = props.questions.filter((question) => !question.answer.trim()).length;
   const pending = props.questions.filter((question) => !question.approved).length;
   const filtered = props.questions.filter((question) => {
+    if (props.questionConflict?.id === question.id) return true;
     if (filter === "unanswered") return !question.answer.trim();
     if (filter === "pending") return !question.approved;
+    if (filter === "edits") return Boolean(question.pendingEdit);
     return true;
   });
   const shown = filtered.slice(0, limit);
+  const conflictQuestion = filtered.find((question) => question.id === props.questionConflict?.id);
+  if (conflictQuestion && !shown.some((question) => question.id === conflictQuestion.id)) shown.push(conflictQuestion);
   const remaining = filtered.length - shown.length;
   return (
     <>
@@ -1671,18 +2477,21 @@ function QuestionList(props: {
           id={`qa-filter-${props.questions[0]?.moduleId ?? "all"}`}
           value={filter}
           onChange={(event) => {
-            onFilterChange(event.target.value as "all" | "unanswered" | "pending");
+            onFilterChange(event.target.value as "all" | "unanswered" | "pending" | "edits");
             setLimit(MODERATION_PAGE_SIZE);
           }}
         >
           <option value="all">전체 질문</option>
           <option value="unanswered">미답변만</option>
           <option value="pending">승인 대기만</option>
+          <option value="edits">수정안 대기만</option>
         </select>
       </p>
       <ul className={styles.itemList}>
         {shown.map((question) => {
           const failure = props.answerFailure?.id === question.id ? props.answerFailure : null;
+          const conflict = props.questionConflict?.id === question.id ? props.questionConflict : null;
+          const rejectionFailure = props.rejectFailure?.id === question.id && props.rejectFailure.editId === question.pendingEdit?.id ? props.rejectFailure : null;
           return (
             <li key={question.id} id={`moderation-question-${question.id}`} tabIndex={-1} className={styles.itemRow}>
               <p className={styles.itemText}><strong>{question.name}</strong> · {question.text}</p>
@@ -1690,24 +2499,74 @@ function QuestionList(props: {
                 {question.approved ? "공개됨" : "대기 중"} · 좋아요 {question.likes}개
                 {question.answer ? ` · 답변: ${question.answer}` : " · 답변 없음"}
               </p>
+              {conflict ? <section className={styles.detail} aria-labelledby={`question-conflict-${question.id}`}>
+                <h4 id={`question-conflict-${question.id}`} tabIndex={-1}>질문 또는 답변이 변경되었습니다</h4>
+                <p role="status">작성한 답변은 보관했습니다. 최신 내용을 확인하고 어떤 답변으로 계속할지 선택하세요.</p>
+                <p><strong>처음 검토한 질문</strong> · {conflict.baseline.text}</p>
+                <p><strong>내가 작성한 답변</strong> · {conflict.mine || "답변 없음"}</p>
+                {conflict.latest ? <>
+                  <p><strong>최신 질문</strong> · {conflict.latest.text}</p>
+                  <p><strong>최신 답변</strong> · {conflict.latest.answer || "답변 없음"}</p>
+                  <p><strong>현재 공개 상태</strong> · {conflict.latest.approved ? "공개됨" : "비공개"}</p>
+                  <p>선택만으로는 저장하거나 공개하지 않습니다.</p>
+                  <div className={styles.itemActions}>
+                    <button type="button" className="button button-secondary" disabled={props.busy !== null || props.locked || !props.featureOn} onClick={() => props.onResolveQuestionConflict("mine")}>내 답변으로 계속</button>
+                    <button type="button" className="button button-secondary" disabled={props.busy !== null || props.locked || !props.featureOn} onClick={() => props.onResolveQuestionConflict("latest")}>최신 답변으로 계속</button>
+                  </div>
+                </> : null}
+                {conflict.error ? <p role="alert">{conflict.error}</p> : null}
+                <button type="button" className="button button-secondary" disabled={conflict.loading || props.busy !== null} onClick={props.onRefreshQuestionConflict}>
+                  {conflict.loading ? "최신 내용 확인 중…" : conflict.latest ? "최신 내용 다시 확인" : "최신 내용 불러오기"}
+                </button>
+              </section> : null}
+              {question.pendingEdit ? (
+                <div className={styles.detail}>
+                  <p><strong>수정안 검토 대기</strong></p>
+                  <p>수정 후: {question.pendingEdit.text}</p>
+                  <p>승인하면 질문이 바뀌며 기존 답변과 좋아요는 유지됩니다.</p>
+                  {(props.answerDrafts[question.id] ?? question.answer) !== question.answer
+                    ? <p>작성 중인 답변을 먼저 저장하거나 되돌린 뒤 수정안을 승인하세요.</p> : null}
+                  <button type="button" className="button button-secondary"
+                    disabled={props.busy !== null || props.locked || !props.featureOn || Boolean(props.questionConflict) || (props.answerDrafts[question.id] ?? question.answer) !== question.answer}
+                    onClick={() => props.onApproveEdit(question)}>수정안 승인</button>
+                  <details className={styles.rejectDisclosure}>
+                    <summary data-disclosure-indicator="">수정안 반려</summary>
+                    <p>기존 질문과 답변은 유지됩니다. 사유는 작성자의 참여 화면에만 표시됩니다.</p>
+                    <ValidatedForm onSubmit={(event) => {
+                      event.preventDefault();
+                      const reason = props.rejectDrafts[question.pendingEdit!.id] ?? "";
+                      if (props.busy === null && !props.locked && props.featureOn && !props.questionConflict) props.onRejectEdit(question, reason);
+                    }}>
+                      <label htmlFor={`reject-reason-${question.id}`}>반려 사유</label>
+                      <textarea id={`reject-reason-${question.id}`} data-resize-none="true" rows={3} maxLength={300} required
+                        value={props.rejectDrafts[question.pendingEdit.id] ?? ""} disabled={props.busy !== null || props.locked || !props.featureOn || Boolean(props.questionConflict)}
+                        aria-invalid={Boolean(rejectionFailure)} aria-describedby={rejectionFailure ? `reject-reason-${question.id}-error` : undefined}
+                        onChange={(event) => props.setRejectDrafts((current) => ({ ...current, [question.pendingEdit!.id]: event.target.value }))} />
+                      {rejectionFailure ? <p className={styles.fieldError} id={`reject-reason-${question.id}-error`} role="alert">{rejectionFailure.message}</p> : null}
+                      <button type="submit" className="button button-secondary" disabled={props.busy !== null || props.locked || !props.featureOn || Boolean(props.questionConflict)}>
+                        사유를 전달하고 반려
+                      </button>
+                    </ValidatedForm>
+                  </details>
+                </div>
+              ) : null}
               <label htmlFor={`answer-${question.id}`}>답변</label>
-              <textarea
+              <textarea data-resize-none="true"
                 id={`answer-${question.id}`}
                 rows={2}
                 maxLength={500}
+                disabled={props.busy !== null || props.locked || !props.featureOn || Boolean(props.questionConflict)}
                 value={props.answerDrafts[question.id] ?? question.answer}
                 aria-invalid={failure?.field === "answer"}
                 aria-describedby={failure ? `answer-${question.id}-error` : undefined}
-                onChange={(event) =>
-                  props.setAnswerDrafts((current) => ({ ...current, [question.id]: event.target.value }))
-                }
+                onChange={(event) => props.onAnswerChange(question, event.target.value)}
               />
               {failure ? <p className={styles.fieldError} id={`answer-${question.id}-error`} role="alert">{failure.message}</p> : null}
               <div className={styles.itemActions}>
                 <button
                   type="button"
                   className="button button-secondary"
-                  disabled={props.busy !== null || props.locked || !props.featureOn}
+                  disabled={props.busy !== null || props.locked || !props.featureOn || Boolean(props.questionConflict)}
                   onClick={() => props.onManage(question, question.approved)}
                 >
                   {question.approved ? "답변 저장·공개 유지" : "답변 저장"}
@@ -1716,7 +2575,7 @@ function QuestionList(props: {
                   <button
                     type="button"
                     className="button button-secondary"
-                    disabled={props.busy !== null || props.locked || !props.featureOn}
+                    disabled={props.busy !== null || props.locked || !props.featureOn || Boolean(props.questionConflict)}
                     onClick={() => props.onManage(question, false)}
                   >
                     공개 취소
@@ -1725,7 +2584,7 @@ function QuestionList(props: {
                   <button
                     type="button"
                     className="button button-secondary"
-                    disabled={props.busy !== null || props.locked || !props.featureOn}
+                    disabled={props.busy !== null || props.locked || !props.featureOn || Boolean(props.questionConflict)}
                     onClick={() => props.onManage(question, true)}
                   >
                     승인·공개
@@ -2001,6 +2860,8 @@ function ModuleDialog(props: {
   draft: ModuleDraft;
   busy: boolean;
   locked: boolean;
+  frozen: boolean;
+  recovery: ReactNode;
   typeEnabled: boolean;
   settingsHref: string;
   failure: Failure | null;
@@ -2010,21 +2871,23 @@ function ModuleDialog(props: {
   onClose: () => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }) {
-  const { draft, busy, locked, typeEnabled, settingsHref, failure, fieldError, canClose, onChange, onClose, onSubmit } = props;
+  const { draft, busy, locked, frozen, recovery, typeEnabled, settingsHref, failure, fieldError, canClose, onChange, onClose, onSubmit } = props;
   const titleInputRef = useRef<HTMLInputElement>(null);
   function fieldMessage(field: string): string | null {
     return fieldError?.field === field ? fieldError.message : null;
   }
   return (
     <ConsoleDialog
-      title={draft.id ? "프로그램 편집" : "프로그램 만들기"}
+      title={draft.id ? "콘텐츠 편집" : "콘텐츠 만들기"}
       titleId="program-dialog-title"
       onClose={onClose}
       busy={busy}
       canClose={canClose}
       initialFocusRef={titleInputRef}
     >
-      <form className={styles.form} onSubmit={onSubmit}>
+      <ValidatedForm className={styles.form} onSubmit={onSubmit}>
+        <fieldset className={styles.draftFields} disabled={frozen || busy}>
+        <legend className="sr-only">콘텐츠 내용</legend>
         <div>
           <label htmlFor="program-title">제목</label>
           <input
@@ -2062,7 +2925,7 @@ function ModuleDialog(props: {
         {draft.type === "poll" ? (
           <div>
             <label htmlFor="program-options">투표 선택지 · 한 줄에 하나씩, 두 개 이상</label>
-            <textarea
+            <textarea data-resize-none="true"
               id="program-options"
               rows={4}
               value={draft.optionsText}
@@ -2091,11 +2954,11 @@ function ModuleDialog(props: {
         {draft.type === "survey" ? (
           <div>
             <label htmlFor="program-questions">만족도 질문 · 한 줄에 하나씩</label>
-            <textarea
+            <textarea data-resize-none="true"
               id="program-questions"
               rows={5}
               value={draft.questionsText}
-              placeholder={"전반적인 만족도\n프로그램 구성\n현장 운영\n행사장 편의성\n재참석 의향"}
+              placeholder={"전반적인 만족도\n콘텐츠 구성\n현장 운영\n행사장 편의성\n재참석 의향"}
               aria-invalid={fieldError?.field === "questions"}
               aria-describedby={fieldMessage("questions") ? "program-questions-error" : undefined}
               onChange={(event) => onChange({ ...draft, questionsText: event.target.value })}
@@ -2103,7 +2966,9 @@ function ModuleDialog(props: {
             {fieldMessage("questions") ? <p className={styles.fieldError} id="program-questions-error" role="alert">{fieldMessage("questions")}</p> : null}
           </div>
         ) : null}
+        </fieldset>
         {failure ? <p className={styles.fieldError} role="alert">{failure.message}</p> : null}
+        {recovery}
         <ConsoleFormActions>
           <button
             type="button"
@@ -2117,7 +2982,7 @@ function ModuleDialog(props: {
             {busy ? "저장 중…" : draft.id ? "저장" : "만들기"}
           </button>
         </ConsoleFormActions>
-      </form>
+      </ValidatedForm>
     </ConsoleDialog>
   );
 }

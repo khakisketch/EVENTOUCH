@@ -1,7 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
-import SkipLink from "../SkipLink";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
@@ -15,6 +14,8 @@ import freshnessStyles from "./console-ui/freshness.module.css";
 import OrganizationSwitcher, { OrganizationContextNotice } from "../OrganizationSwitcher";
 import { ensureOperatorContext, getOperatorContextSnapshot, isOrganizationContextBlock, isOrganizationSelectionRequired, resetOperatorContext } from "../../lib/operator-context";
 import { useOperatorContextSnapshot } from "../../lib/use-operator-context";
+import { clearOperatorReceipts } from "../../lib/operator-receipts";
+import OperatorReceiptRecovery from "../ui/OperatorReceiptRecovery";
 
 type JsonRecord = Record<string, unknown>;
 type ShellData = {
@@ -37,6 +38,9 @@ type ShellData = {
     pending: number;
     messageAttention: number;
     manualDue: number;
+    invalidScheduled: boolean;
+    scheduledMessages: number | null;
+    messageRefreshVersion: string;
   } | null;
   triage: Array<{
     id: string;
@@ -132,6 +136,8 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
 
   const [shellData, setShellData] = useState<ShellData | null>(null);
   const [shellTick, setShellTick] = useState(0);
+  const [messageSummary, setMessageSummary] = useState<{ eventId: string; status: "blocked" | "clear" | "unknown"; due: boolean } | null>(null);
+  const messageRevisionReloadRef = useRef("");
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [pageRevision, setPageRevision] = useState(0);
   // Visible when the shell's own navigation/permission data could not load:
@@ -183,7 +189,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
         const state = record(record(bootstrapPayload)?.directory);
         const user = record(state?.viewer);
         if (!bootstrapResponse.ok || !user) {
-          if (!cancelled) setShellError(true);
+          if (!cancelled) { messageRevisionReloadRef.current = ""; setShellError(true); }
           return;
         }
 
@@ -191,7 +197,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
         const role = workingContext.role;
         if (!bootstrapResponse.ok || !state) {
           // Navigation/permission context is unusable; the shell says so.
-          if (!cancelled) setShellError(true);
+          if (!cancelled) { messageRevisionReloadRef.current = ""; setShellError(true); }
           return;
         }
         const accounts = Array.isArray(state?.accounts)
@@ -246,6 +252,9 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
               ...summarize(currentEvent),
               messageAttention: messageAttentionOf(text(currentEvent.id)),
               manualDue: typeof currentEvent.manualDue === "number" ? currentEvent.manualDue : 0,
+              invalidScheduled: currentEvent.invalidScheduled === true,
+              scheduledMessages: typeof currentEvent.scheduledMessages === "number" ? currentEvent.scheduledMessages : null,
+              messageRefreshVersion: text(currentEvent.messageRefreshVersion),
             }
           : null;
         // Triage, not a directory: events that need hands (pending approvals)
@@ -306,7 +315,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
         }
         // The routed screen owns its data error; the shell advertises its
         // own degraded state and offers a retry instead of hiding silently.
-        if (!cancelled) setShellError(true);
+        if (!cancelled) { messageRevisionReloadRef.current = ""; setShellError(true); }
       }
     }
     loadShellData();
@@ -314,6 +323,84 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
       cancelled = true;
     };
   }, [eventId, router, shellTick, organization.context?.contextVersion]);
+
+  useEffect(() => {
+    if (!eventId || shellData?.scopedEventId !== eventId || !shellData.canAccessCurrentEvent ||
+        !["AGENCY", "MANAGER"].includes(shellData.role) ||
+        (!shellData.currentEventMeta?.scheduledMessages && !shellData.currentEventMeta?.messageRefreshVersion)) {
+      setMessageSummary(null);
+      return;
+    }
+    const baselineVersion = shellData.currentEventMeta?.messageRefreshVersion ?? "";
+    let cancelled = false;
+    let running = false;
+    // When no reservation exists, the directory's same-snapshot version
+    // makes the first and subsequent unchanged checks lightweight too.
+    let version = shellData.currentEventMeta?.scheduledMessages === 0 ? baselineVersion : "";
+    let known = Boolean(version);
+    const versionOnly = shellData.currentEventMeta?.scheduledMessages === 0 && Boolean(baselineVersion);
+    let blocked = false;
+    let nextScheduledAt: number | null = null;
+    const controller = new AbortController();
+    async function refresh() {
+      if (running || document.visibilityState === "hidden") return;
+      running = true;
+      const requestController = new AbortController();
+      const cancelRequest = () => requestController.abort();
+      controller.signal.addEventListener("abort", cancelRequest, { once: true });
+      const timeout = window.setTimeout(cancelRequest, 8000);
+      try {
+        const suffix = version ? `${versionOnly ? "&messageVersionOnly=1" : ""}&ifVersion=${encodeURIComponent(version)}` : "";
+        const response = await consoleFetch(`/api/events/${encodeURIComponent(eventId!)}/bootstrap?messageAttentionSummary=1${suffix}`, { cache: "no-store", signal: requestController.signal });
+        const payload: unknown = await response.json().catch(() => null);
+        if (cancelled) return;
+        if (requestController.signal.aborted) throw new Error("summary timed out");
+        const state = record(record(payload)?.state);
+        if (!response.ok || !state) throw new Error("summary unavailable");
+        if (versionOnly && state.changed === true && text(state.refreshVersion) && text(state.refreshVersion) !== baselineVersion) {
+          const reloadKey = `${eventId}:${text(state.refreshVersion)}`;
+          if (messageRevisionReloadRef.current !== reloadKey) {
+            messageRevisionReloadRef.current = reloadKey;
+            setMessageSummary({ eventId: eventId!, status: "unknown", due: false });
+            setShellTick((tick) => tick + 1);
+          }
+          return;
+        }
+        let observedAt: number;
+        if (state.unchanged === true && known) {
+          observedAt = Date.parse(text(state.messageReadObservedAt));
+        } else {
+          const summary = record(state.messageAttentionSummary);
+          if (summary?.available !== true || typeof summary.blocked !== "boolean" ||
+              !(summary.nextScheduledAt === null || (typeof summary.nextScheduledAt === "number" && Number.isFinite(summary.nextScheduledAt)))) throw new Error("summary unavailable");
+          observedAt = Date.parse(text(summary.observedAt));
+          blocked = summary.blocked;
+          nextScheduledAt = summary.nextScheduledAt;
+          version = text(state.refreshVersion);
+          if (!version) throw new Error("summary version unavailable");
+          known = true;
+          // A different operator may have changed any directory badge, not
+          // just scheduled messages. Refresh its snapshot once per version.
+          const reloadKey = `${eventId}:${version}`;
+          if (baselineVersion && version !== baselineVersion && messageRevisionReloadRef.current !== reloadKey) {
+            messageRevisionReloadRef.current = reloadKey;
+            setShellTick((tick) => tick + 1);
+          }
+        }
+        if (!Number.isFinite(observedAt)) throw new Error("summary clock unavailable");
+        setMessageSummary({ eventId: eventId!, status: blocked ? "blocked" : "clear", due: nextScheduledAt !== null && nextScheduledAt <= observedAt });
+      } catch {
+        if (!cancelled) { version = ""; known = false; setMessageSummary({ eventId: eventId!, status: "unknown", due: false }); }
+      } finally {
+        window.clearTimeout(timeout);
+        controller.signal.removeEventListener("abort", cancelRequest);
+        running = false;
+      }
+    }
+    void refresh();
+    const timer = window.setInterval(refresh, 30000);
+    return () => { cancelled = true; controller.abort(); window.clearInterval(timer); };
+  }, [eventId, shellData?.scopedEventId, shellData?.canAccessCurrentEvent, shellData?.role, shellData?.currentEventMeta?.scheduledMessages, shellData?.currentEventMeta?.messageRefreshVersion, shellTick, organization.context?.contextVersion]);
 
   useEffect(() => {
     // Screens that own a retry (e.g. the event home) notify the shell so a
@@ -354,9 +441,10 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     showOperatorNavBadges && eventMeta && eventMeta.pending > 0 && isApprovalQueueRelevant(eventMeta.stage)
   );
   const showMessageAttentionBadge = Boolean(
-    showOperatorNavBadges && eventMeta && eventMeta.messageAttention > 0
+    showOperatorNavBadges && eventMeta && (eventMeta.messageAttention > 0 || eventMeta.invalidScheduled || (messageSummary?.eventId === eventId && messageSummary.status === "blocked"))
   );
-  const showManualDueBadge = Boolean(showOperatorNavBadges && eventMeta && eventMeta.manualDue > 0);
+  const showManualDueBadge = Boolean(showOperatorNavBadges && eventMeta && (eventMeta.manualDue > 0 || (messageSummary?.eventId === eventId && messageSummary.due)));
+  const showMessageSummaryUnknown = Boolean(showOperatorNavBadges && messageSummary?.eventId === eventId && messageSummary.status === "unknown");
   const activeHubId = currentPageId ? consoleHubForPage(currentPageId)?.id : undefined;
 
   useEffect(() => {
@@ -600,6 +688,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
         setLogoutError("로그아웃하지 못했습니다. 다시 시도하세요.");
         return;
       }
+      clearOperatorReceipts();
       resetOperatorContext();
       invalidateConsoleReads();
       router.replace("/login");
@@ -741,11 +830,6 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     return hub.pageIds.filter(isPageVisible);
   }
 
-  function hubHref(hub: ConsoleHub, pages: ConsolePageId[]): string | undefined {
-    if (!eventId) return undefined;
-    const pageId = pages.includes(hub.defaultPageId) ? hub.defaultPageId : pages[0];
-    return pageId ? consolePageHref(pageId, eventId) : undefined;
-  }
 
   function renderPageBadges(pageId: ConsolePageId) {
     if (pageId === "participants" && showPendingApprovalBadge) {
@@ -756,25 +840,11 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
       );
     }
     if (pageId === "messages") {
-      return (
-        <>
-          {showMessageAttentionBadge ? (
-            <span className="nav-badge" role="img" aria-label={`발송 확인 ${eventMeta?.messageAttention ?? 0}건`}>
-              {eventMeta?.messageAttention}
-            </span>
-          ) : null}
-          {showManualDueBadge ? (
-            <span
-              className="nav-badge nav-badge-manual"
-              role="img"
-              aria-label={`${eventMeta?.stage === "ARCHIVED" ? "예약 확인" : "실행할 예약"} ${eventMeta?.manualDue ?? 0}건`}
-              title="예약 시각이 지난 수동 예약입니다. 자동 발송되지 않습니다."
-            >
-              예약 {eventMeta?.manualDue}
-            </span>
-          ) : null}
-        </>
-      );
+      return showMessageAttentionBadge || showManualDueBadge ? (
+        <span className="nav-badge" role="img" aria-label="발송 기록에 확인할 항목이 있습니다" title="확인할 발송 기록이 있습니다.">확인</span>
+      ) : showMessageSummaryUnknown ? (
+        <span className="nav-badge" role="img" aria-label="예약 발송 상태를 확인하지 못했습니다" title="예약 발송 상태를 확인하지 못했습니다. 발송 기록에서 확인해 주세요.">상태 확인</span>
+      ) : null;
     }
     return null;
   }
@@ -783,68 +853,23 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     return EVENT_HUBS.map((hub) => {
       const pages = visiblePagesForHub(hub);
       if (!pages.length) return null;
-      const href = hubHref(hub, pages);
-      if (!href) return null;
-      const hubActive = activeHubId === hub.id;
-      const hasSubnav = pages.length > 1;
-      const currentSubpage = currentPageId && pages.includes(currentPageId) ? currentPageId : null;
-      const headerIsCurrent = !hasSubnav && currentSubpage !== null;
-      const hubBadge = hub.id === "participants" && showPendingApprovalBadge && (!hubActive || !hasSubnav)
-        ? (
-          <span className="nav-badge" role="img" aria-label={`승인 대기 ${eventMeta?.pending ?? 0}건`}>
-            {eventMeta?.pending}
-          </span>
-        )
-        : null;
       return (
-        <Fragment key={hub.id}>
-          <Link
-            className={`console-nav-item console-hub-item${headerIsCurrent ? " active" : ""}`}
-            data-active={hubActive && hasSubnav ? "true" : undefined}
-            href={href}
-            aria-current={headerIsCurrent ? "page" : undefined}
-          >
-            <span>{hub.label}</span>
-            {hubBadge}
-            {hasSubnav ? (
-              <svg className="console-hub-chevron" aria-hidden="true" focusable="false" viewBox="0 0 12 12">
-                <path d="M3 4.5 6 7.5 9 4.5" />
-              </svg>
-            ) : null}
-          </Link>
-          {hasSubnav && hubActive ? (
-            <div className="console-hub-subnav">
-              {pages.map((pageId) => {
-                const pageLink = pageHref(pageId);
-                if (!pageLink) return null;
-                const active = currentPageId === pageId;
-                return (
-                  <Link
-                    key={pageId}
-                    className={`console-nav-item console-hub-subitem${active ? " active" : ""}`}
-                    href={pageLink}
-                    aria-current={active ? "page" : undefined}
-                  >
-                    <span>{CONSOLE_PAGES[pageId].label}</span>
-                    {renderPageBadges(pageId)}
-                  </Link>
-                );
-              })}
-            </div>
-          ) : null}
-        </Fragment>
+        <div key={hub.id} className="console-nav-group" role="group" aria-label={hub.label}>
+          <p className="nav-section-label">{hub.label}</p>
+          {pages.map((pageId) => {
+            const href = pageHref(pageId);
+            if (!href) return null;
+            return <Link key={pageId} className={`console-nav-item console-workspace-link${currentPageId === pageId ? " active" : ""}`}
+              href={href} aria-current={currentPageId === pageId ? "page" : undefined}>
+              <span>{CONSOLE_PAGES[pageId].label}</span>{renderPageBadges(pageId)}
+            </Link>;
+          })}
+        </div>
       );
     });
   }
 
-  /**
-   * Phone menu: the complete event map, hubs as section labels and every
-   * visible page as a 44px row. Unlike the rail (which expands only the hub
-   * the operator is in) the menu is opened to jump anywhere, so nothing is
-   * hidden behind another tap. Hub labels are not links: the row below
-   * already names the same destination, and two links to one page read as a
-   * duplicate.
-   */
+  /** Phone menu and desktop rail share the complete permitted event map. */
   function renderMobileEventMenu() {
     if (!showCurrentEvent || !eventId) return null;
     const date = eventMeta?.date ?? "";
@@ -1018,7 +1043,6 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
 
   return (
     <div className="console-shell">
-      <SkipLink />
       <aside className="console-sidebar" aria-label="운영 콘솔">
         {showGlobalTrigger ? (
           <div className="console-global-nav">
@@ -1096,6 +1120,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
       <div className="console-content-shell">
         <main id="main-content" className="console-main" tabIndex={-1}>
           <OrganizationContextNotice confirmLeave={confirmLeave} />
+          <OperatorReceiptRecovery currentEventId={eventId} currentEventName={shellData?.currentEventName} />
           {!organization.context ? <section className={freshnessStyles.selectionRequired}>
             <h1>작업할 운영사를 선택하세요</h1>
             <p>소속 운영사와 그곳에서 맡은 역할을 확인한 뒤 이동합니다.</p>

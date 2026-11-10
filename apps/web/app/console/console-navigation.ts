@@ -33,12 +33,12 @@ export type ConsolePageScope = "organization" | "event";
 export type ConsolePageLayout = "directory" | "workspace";
 
 /**
- * Event work is grouped into five operator questions, not one flat list.
+ * Event destinations remain visible in four labeled work groups.
  * A hub is navigation metadata only; permissions and feature gates stay on
  * the pages and the server. `pageIds` is ordered as the operator reads it:
  * the hub's default destination first where possible.
  */
-export type ConsoleHubId = "today" | "prepare" | "participants" | "onsite" | "results";
+export type ConsoleHubId = "today" | "prepare" | "onsite" | "results";
 
 export type ConsoleHub = {
   id: ConsoleHubId;
@@ -70,28 +70,27 @@ export const CONSOLE_PAGES: Record<ConsolePageId, ConsolePageMeta> = {
   participantImport: { label: "명단 가져오기", title: "명단 가져오기", scope: "event", layout: "workspace" },
   messages: { label: "메시지", title: "메시지 발송", scope: "event", layout: "workspace" },
   operations: { label: "현장 운영", title: "현장 운영", scope: "event", layout: "workspace" },
-  programs: { label: "참여 프로그램", title: "참여 프로그램", scope: "event", layout: "workspace" },
+  programs: { label: "참여 콘텐츠", title: "참여 콘텐츠", scope: "event", layout: "workspace" },
   draws: { label: "추첨·투표", title: "추첨·투표", scope: "event", layout: "workspace" },
   photos: { label: "현장 사진", title: "현장 사진", scope: "event", layout: "workspace" },
-  content: { label: "콘텐츠", title: "콘텐츠", scope: "event", layout: "workspace" },
+  content: { label: "공지·안내", title: "공지·안내", scope: "event", layout: "workspace" },
   attendeePage: { label: "참가자 페이지", title: "참가자 페이지", scope: "event", layout: "workspace" },
-  rewards: { label: "경품", title: "경품", scope: "event", layout: "workspace" },
+  rewards: { label: "경품 수령", title: "경품 수령", scope: "event", layout: "workspace" },
   settings: { label: "행사 설정", title: "행사 설정", scope: "event", layout: "workspace" },
   reports: { label: "결과 보고서", title: "결과 보고서", scope: "event", layout: "workspace" },
 };
 
 /**
- * Event rail order. The five hubs are the primary grouping; the page order
+ * Event rail order. Four labels organize a fully expanded rail; the page order
  * inside each hub follows the operator's actual setup-to-live-to-results
  * sequence. `participantImport` is a participants subpage, not a separate
  * hub, and is included so the rail can name where the operator is.
  */
 export const EVENT_HUBS: readonly ConsoleHub[] = [
-  { id: "today", label: "오늘", pageIds: ["overview"], defaultPageId: "overview" },
-  { id: "prepare", label: "준비", pageIds: ["settings", "attendeePage", "content", "programs"], defaultPageId: "settings" },
-  { id: "participants", label: "참가자", pageIds: ["participants", "participantImport", "messages"], defaultPageId: "participants" },
-  { id: "onsite", label: "현장", pageIds: ["operations", "photos"], defaultPageId: "operations" },
-  { id: "results", label: "결과", pageIds: ["draws", "rewards", "reports"], defaultPageId: "draws" },
+  { id: "today", label: "운영", pageIds: ["overview", "participants", "messages"], defaultPageId: "overview" },
+  { id: "onsite", label: "현장·참여", pageIds: ["operations", "draws", "rewards", "photos"], defaultPageId: "operations" },
+  { id: "prepare", label: "행사 준비", pageIds: ["attendeePage", "content", "programs", "settings"], defaultPageId: "attendeePage" },
+  { id: "results", label: "결과", pageIds: ["reports"], defaultPageId: "reports" },
 ];
 
 /** Flattened order for callers that only need a page list. */
@@ -231,6 +230,9 @@ export function resolveConsolePage(pathname: string): ConsolePageResolution | nu
   }
   if (segments.length === 2 && segments[0] === "participants" && segments[1] === "import") {
     return { pageId: "participantImport", eventId };
+  }
+  if (segments.length === 2 && segments[0] === "settings" && segments[1] === "fields") {
+    return { pageId: "settings", eventId };
   }
   return null;
 }

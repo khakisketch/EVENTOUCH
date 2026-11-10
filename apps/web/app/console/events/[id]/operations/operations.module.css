@@ -23,6 +23,24 @@
   min-width: 0;
 }
 
+.deskConflict {
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
+  padding: var(--s4) 0;
+  border-block: 1px solid var(--warning-line);
+}
+.deskConflict h3, .deskConflict p { margin: 0; overflow-wrap: anywhere; }
+.deskConflict h3 { font-size: var(--body); }
+.deskConflict > button { justify-self: start; }
+.deskComparison { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: var(--small); text-align: left; }
+.deskComparison caption { margin-bottom: var(--s2); text-align: left; font-weight: 700; }
+.deskComparison th, .deskComparison td { padding: var(--s2); border-bottom: 1px solid var(--line); overflow-wrap: anywhere; vertical-align: top; }
+.deskComparison thead th { color: var(--muted); font-weight: 650; }
+.deskComparison th:first-child { width: 23%; }
+.comparisonChanged { background: var(--warning-soft); }
+.comparisonDifference { display: block; color: var(--warning); font-size: var(--small); font-weight: 600; }
+
 /* Tool/state action split on desk rows: 편집·스태프 배정은 일반 도구,
    가동 시작/중지는 별도 상태 그룹으로 구분선 뒤에 둔다. 중지는 재개
    가능하므로 경고 토큰(일괄 빨강 금지), 가동 시작은 중립/성공 약한
@@ -253,4 +271,43 @@
   .anchorSection {
     scroll-margin-top: 12rem;
   }
+}
+.dialogFields {
+  display: grid;
+  gap: var(--s4);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.recovery {
+  display: grid;
+  gap: var(--s2);
+  margin: var(--s3) 0;
+  padding: var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.recovery h2, .recovery h3, .recovery p { margin: 0; }
+.recoveryActions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.uploadDisabled { opacity: 0.6; cursor: not-allowed; }
+
+
+.participationGrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s6); }
+.participationColumn { min-width: 0; }
+.participationColumn + .participationColumn { border-left: 1px solid var(--line); padding-left: var(--s6); }
+.participationColumn h3 { margin: 0 0 var(--s3); font-size: var(--h3); }
+.participationCount { margin-left: var(--s2); color: var(--muted); font-size: var(--small); font-weight: 400; }
+.liveContents { margin: 0 0 var(--s4); padding: 0; list-style: none; }
+.liveContents li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--s3); padding-block: var(--s3); }
+.liveContents li + li { border-top: 1px solid var(--line); }
+.liveContents strong { overflow-wrap: anywhere; }
+.liveContents p { margin: var(--s1) 0 0; color: var(--muted); font-size: var(--small); }
+.liveContents a { display: inline-flex; align-items: center; min-height: 44px; color: var(--brand-text); font-weight: 600; }
+@media (max-width: 800px) {
+  .participationGrid { grid-template-columns: minmax(0, 1fr); gap: var(--s5); }
+  .participationColumn + .participationColumn { border-left: 0; border-top: 1px solid var(--line); padding: var(--s5) 0 0; }
 }

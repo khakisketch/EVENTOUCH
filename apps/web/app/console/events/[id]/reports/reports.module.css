@@ -4,6 +4,13 @@
   font-size: var(--small);
 }
 
+.exportScope {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--small);
+  line-height: 1.55;
+}
+
 /* Visible in-page index context (this workspace only): a quiet scope
    label above the shared jump nav so the anchor row reads as a contents
    index, not app tabs. aria-hidden: the nav's own aria-label carries
@@ -220,11 +227,37 @@
   font-size: var(--small);
 }
 
-.form > div > label {
+.form > div > label,
+.form > .draftFields > div > label {
   display: block;
   margin-bottom: var(--s1);
   font-weight: 650;
 }
+
+.draftFields {
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.recovery {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-small);
+}
+
+.recovery h2, .recovery p { margin: 0; }
+.recoveryActions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.reportVersionReview { word-break: keep-all; overflow-wrap: break-word; }
+.reportConflicts { display: grid; gap: var(--s2); margin: 0; }
+.reportConflicts > div { border-top: 1px solid var(--line); padding-top: var(--s2); }
+.reportConflicts dt { font-weight: 650; }
+.reportConflicts dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .form input,
 .form textarea {
@@ -261,6 +294,13 @@
   margin: 0;
 }
 
+.reportEmpty,
+.reportUnavailable {
+  color: var(--muted);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
 /* Local frozen-article view only: A4 portrait measure (default) or the
    wider 16:9 presentation measure. Screen presentation alone — the stored
    snapshot never changes. */
@@ -271,6 +311,20 @@
 .reportDocWide {
   max-width: 64rem;
 }
+
+.reportComparison {
+  display: grid;
+  gap: var(--s2);
+  max-width: 32rem;
+  padding-bottom: var(--s3);
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.reportComparison p { margin: 0; }
+.reportComparison .dataTable { width: 100%; min-width: 0; }
+.reportComparison .dataTable th { white-space: normal; }
+.reportComparison .dataTable th:first-child { padding-left: 0; }
 
 .reportViewBar {
   display: flex;
@@ -332,6 +386,7 @@
   margin: 0;
   color: var(--muted);
   font-size: var(--small);
+  word-break: keep-all;
   overflow-wrap: anywhere;
 }
 

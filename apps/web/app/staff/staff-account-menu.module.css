@@ -145,3 +145,5 @@
 .menuLink:hover {
   background: var(--surface-muted);
 }
+
+.blockedNotice { grid-column: 1 / -1; margin: 0; padding: var(--s2) 0; color: var(--warning); font-size: var(--small); line-height: 1.55; }

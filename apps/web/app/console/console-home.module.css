@@ -501,8 +501,9 @@
    box (44px + border) would turn each radio into a giant circle, so the
    group restores the same 20px checkbox voice the directory filters use. */
 .modeGroup {
-  display: grid;
-  gap: var(--s1);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s3);
   margin: 0;
   padding: 0;
   border: 0;
@@ -905,4 +906,28 @@
   .eventCard:hover .cardArrow {
     transform: none;
   }
+}
+
+
+/* Start with the required event identity; optional metadata stays available
+   without turning routine event creation into a setup wizard. */
+.createAdvanced {
+  min-width: 0;
+  border-top: 1px solid var(--line);
+}
+
+.createAdvanced > summary {
+  min-height: 44px;
+  padding-block: var(--s3);
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.createAdvanced > summary > span {
+  margin-inline-start: var(--s2);
+  font-weight: 400;
+}
+
+.createAdvanced[open] > div {
+  padding-block: var(--s2) var(--s3);
 }

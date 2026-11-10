@@ -1,7 +1,12 @@
 "use client";
+
+import { measureMessage, messageContentIssue } from "../../../../../lib/message-composition";
+import { findSmsTextIssue } from "../../../../../lib/sms-text-validation.cjs";
+import ValidatedForm from "../../../../ui/ValidatedForm";
+
 import { readCloseSnapshot, type CloseSnapshot } from "../../../console-event-close";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -11,6 +16,7 @@ import { useConsoleDraftGuard, useConsoleLeaveConfirmation, UNCONFIRMED_WRITE_CL
 import StageTransitionConfirmation from "../../../console-ui/StageTransitionConfirmation";
 import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
+import ConsoleChoiceGroup from "../../../console-ui/ConsoleChoiceGroup";
 import ConsoleFormActions from "../../../console-ui/ConsoleFormActions";
 import ConsolePage from "../../../console-ui/ConsolePage";
 import {
@@ -18,10 +24,15 @@ import {
   type ConsoleEventMeta,
 } from "../../../console-ui/ConsolePageHeader";
 import ConsoleSection from "../../../console-ui/ConsoleSection";
+import ConsoleRefreshButton from "../../../console-ui/ConsoleRefreshButton";
+import ConsoleSectionNav, { requestConsoleTask } from "../../../console-ui/ConsoleSectionNav";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import { consoleFetch, subscribeConsoleFreshness } from "../../../../../lib/console-api";
-import { isOverdueManualMessage, messageNeedsAttention } from "../../../../../lib/message-attention";
+import { hasValidScheduledInstant, isOverdueManualMessage, messageNeedsAttention } from "../../../../../lib/message-attention";
 import { canWriteEvent } from "../../../../../lib/event-capabilities";
+import { abandonOperatorAttempt, acknowledgeOperatorReceipt, confirmsCharsetReviewedMessageCreate, confirmsProviderCheck, confirmsTemplateSave, confirmsTemplateArchive, isOrganizationContextBlock } from "../../../../../lib/operator-context";
+import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../lib/operator-receipts";
+import { useEventReceipts } from "../../../../../lib/use-event-receipts";
 import uiStyles from "../../../console-ui/console-ui.module.css";
 import { ArrowDownIcon, ArrowUpIcon, PencilIcon, PlusIcon, XIcon } from "../../../console-ui/ConsoleIcons";
 import styles from "./MessagingWorkspace.module.css";
@@ -32,9 +43,14 @@ type Template = {
   channel: string;
   body: string;
   solapiTemplateId: string;
+  archived: boolean;
+  version: number;
 };
-type Participant = { id: string; name: string; company: string; phone: string; status: string };
-type Delivery = { participantId: string; name: string; status: string; at: string };
+type Participant = { id: string; name: string; company: string; group: string; phone: string; status: string; reviewVersion: string; ticketReview: string };
+function recipientEligible(person: Participant): boolean {
+  return person.status.toUpperCase() !== "CANCELLED" && person.ticketReview !== "cancelled";
+}
+type Delivery = { participantId: string; name: string; status: string; at: string; resultMatchUnconfirmed: boolean; genericProviderResult: string; manualProviderReview: string; snapshotPhone: string; reference: string | null };
 type Campaign = {
   id: string;
   title: string;
@@ -44,9 +60,31 @@ type Campaign = {
   recipientIds: string[];
   status: string;
   scheduled: string;
+  scheduleMode: "MANUAL" | "AUTO";
   simulate: boolean;
+  smsFallback: boolean;
   at: string;
   attempts: number;
+  acceptedCount: number | null;
+  submissionUnconfirmed: boolean;
+  recipientChangeCount: number;
+  recipientRoutingReviewed: boolean;
+  ticketLinkProblemCount: number;
+  ticketLinkProblemUnknown: boolean;
+  alimtalkUnsupported: boolean;
+  mmsUnsupported: boolean;
+  personalizedTextTooLongCount: number;
+  smsTextProblemCount: number;
+  smsTextProblemField: string;
+  smsTextProblemUnknown: boolean;
+  smsTextReloadSafe: boolean;
+  deliveryUnconfirmed: boolean;
+  providerGroupId: string;
+  genericTransport: boolean;
+  genericAttemptActive: boolean | null;
+  genericSubmissionUnconfirmed: boolean;
+  submissionId: string | null;
+  providerKind: string;
   imageFileId: string;
   imageName: string;
   deliveries: Delivery[];
@@ -62,10 +100,14 @@ type ReadyState = {
   canWriteMessages: boolean;
   canArchive: boolean;
   integrations: { connected: boolean; sender: string; provider: string; orgIsolated: boolean };
+  messageSchedule: MessageSchedule | null;
   participants: Participant[];
   templates: Template[];
   campaigns: Campaign[];
 };
+type RecipientChange = { id: string; name: string; currentName: string | null; identityPhone: string; reasons: string[]; beforeStatus: string | null; afterStatus: string | null; beforeGroup: string | null; afterGroup: string | null; beforePhone: string | null; afterPhone: string | null };
+type ChangeDetails = { available: boolean; changes: RecipientChange[] };
+type MessageSchedule = { observedAt: string; autoConfigured: boolean; eligibleForAuto: boolean; workerStarted: boolean; lastAttemptAt: string; lastResult: string; blocked: Array<{ id: string; reason: string; missing: number }> };
 type WorkspaceState = { kind: "loading" } | { kind: "failed"; message: string } | ReadyState;
 type TemplateDraft = {
   id: string;
@@ -73,22 +115,28 @@ type TemplateDraft = {
   channel: string;
   body: string;
   solapiTemplateId: string;
+  version?: number;
 };
+type TemplateAttempt = { eventId: string; id: string; command: "template.save" | "template.archive"; fingerprint: string; payload: Record<string, unknown>; draft: TemplateDraft; target?: Template };
 type CampaignDraft = {
   title: string;
   channel: string;
   body: string;
   scheduled: string;
+  scheduleMode: "MANUAL" | "AUTO";
   simulate: boolean;
+  smsFallback: boolean;
   imageFileId: string;
   imageName: string;
 };
 type CommandResult = Record<string, unknown>;
-type ServerError = { message: string; field: string | null };
+type ServerError = { message: string; field: string | null; index?: number };
+type CampaignFieldError = { message: string; field: string; index?: number };
 // In-place confirm for the compose submit: the validated payload snapshot
 // plus the exact summary the operator confirms. Immutable state references
 // bind that confirmation to the draft/selection the operator reviewed.
 type SendPending = {
+  eventId: string;
   payload: Record<string, unknown>;
   id: string;
   summary: string;
@@ -98,6 +146,16 @@ type SendPending = {
   reviewedTemplateId: string;
   reviewedAttachmentRevision: number;
 };
+type ProviderCheckAttempt = {
+  eventId: string; id: string; name: string; uncertain: boolean;
+  payload: { id: string; participantId: string; outcome: "ACCEPTED" | "NOT_ACCEPTED"; expectedSubmissionId: string | null };
+};
+
+function recipientVersionsMatch(pending: SendPending, people: Participant[]): boolean {
+  const versions = pending.payload.expectedRecipientVersions;
+  const current = new Map(people.filter(recipientEligible).map(person => [person.id, person.reviewVersion]));
+  return Array.isArray(versions) && pending.reviewedIds.every((id, index) => current.get(id) === versions[index]);
+}
 
 const EMPTY_TEMPLATE: TemplateDraft = {
   id: "",
@@ -111,10 +169,25 @@ const EMPTY_CAMPAIGN: CampaignDraft = {
   channel: "SMS",
   body: "",
   scheduled: "",
+  scheduleMode: "MANUAL",
   simulate: false,
+  smsFallback: true,
   imageFileId: "",
   imageName: "",
 };
+
+// Illustrative values never contain a real ticket bearer or recipient data.
+// Sending and SMS/LMS classification still use the server's real values.
+function previewMessageExample(body: string, eventName: string, eventDate: string): string {
+  const values: Record<string, string> = {
+    이름: "홍길동",
+    행사명: eventName || "행사명",
+    행사일: eventDate || "행사일",
+    티켓링크: "[개별 티켓 링크]",
+    럭키번호: "[배정된 번호]",
+  };
+  return body.replace(/\{\{(이름|행사명|행사일|티켓링크|럭키번호)\}\}/g, (_match, key: string) => values[key]);
+}
 const FIELD_LABELS: Record<string, string> = {
   name: "템플릿 이름",
   channel: "메시지 채널",
@@ -127,11 +200,11 @@ const FIELD_LABELS: Record<string, string> = {
   scheduled: "예약 시각",
 };
 const ATTENTION_STATUSES = ["FAILED", "PARTIAL", "NEEDS_CONNECTION"];
-// Shared overdue/attention contract (parent-owned lib/message-attention):
-// overdue manual SCHEDULED is a now-task with manual execution and no
-// automatic worker claim. ?attention=1 includes overdue SCHEDULED.
-// The helper reads the stored `scheduled` field exactly.
+// The shared attention contract includes overdue reservations, unconfirmed
+// outcomes and server-reported blockers. Timezone-free dates are never due.
 function isOverdue(campaign: Campaign, now: number): boolean {
+  // An unzoned legacy value cannot be placed on a timeline reliably.
+  if (campaign.scheduled && !hasValidScheduledInstant(campaign.scheduled)) return false;
   try {
     return isOverdueManualMessage(campaign as unknown, now);
   } catch {
@@ -144,6 +217,9 @@ function isOverdue(campaign: Campaign, now: number): boolean {
   }
 }
 function needsAttention(campaign: Campaign, now: number): boolean {
+  if (campaign.submissionUnconfirmed ||
+    (campaign.status === "SENDING" && campaign.deliveries.some(delivery => delivery.resultMatchUnconfirmed))) return true;
+  if (campaign.status === "SCHEDULED" && !hasValidScheduledInstant(campaign.scheduled)) return true;
   try {
     return messageNeedsAttention(campaign as unknown, now);
   } catch {
@@ -188,12 +264,42 @@ function fingerprintFor(command: string, payload: Record<string, unknown>): stri
   return `${command}|${stableStringify(payload)}`;
 }
 
-// 408 and 5xx leave the outcome unknown (the receipt may exist), so the
-// caller must keep the id and retry the same request. Other 4xx are settled
-// rejections: the server did not apply anything, so a corrected request may
-// use a fresh id.
+// Transient responses cannot establish the outcome of an earlier attempt.
 function isAmbiguousStatus(status: number): boolean {
-  return status >= 500 || status === 408;
+  return status >= 500 || [408, 425, 429].includes(status);
+}
+
+const ALIMTALK_FALLBACK_NOTICE = "알림톡 미전달 시 문자(SMS/LMS)로 대체 발송을 시도합니다. 대체 문자 요금이 적용될 수 있습니다.";
+const ALIMTALK_NO_FALLBACK_NOTICE = "알림톡을 전달하지 못해도 문자로 대체 발송하지 않습니다.";
+
+// Only the Solapi integration uses the documented SMS restriction. This is a
+// partial check, not proof that every other character can be delivered.
+function campaignCharsetIssue(draft: CampaignDraft, provider: string): CampaignFieldError | null {
+  if (provider !== "solapi" || draft.simulate || (draft.channel === "ALIMTALK" && !draft.smsFallback)) return null;
+  const body = findSmsTextIssue(draft.body);
+  if (body) return draft.channel === "ALIMTALK"
+    ? { field: "smsFallback", message: "이 템플릿에는 대체 문자로 보낼 수 없는 문자 또는 제어문자가 있습니다. 문자 대체를 끄거나 다른 승인 템플릿을 선택하세요." }
+    : { field: "body", index: body.index, message: "문자로 보낼 수 없는 문자 또는 제어문자가 있습니다. 표시된 위치를 확인하고 수정하세요." };
+  // The title is truncated to 40 bytes and exists only for a recipient whose
+  // final text becomes LMS/MMS. The server checks that actual sent prefix
+  // after personalization, avoiding false rejections for short SMS.
+  return null;
+}
+const MESSAGE_CHANNEL_CHOICES = [
+  { value: "SMS", label: "문자", description: "내용 길이에 따라 SMS/LMS를 자동 결정합니다. 사진을 첨부하면 MMS로 보냅니다." },
+  { value: "ALIMTALK", label: "카카오 알림톡", description: "승인된 알림톡 템플릿을 선택하고 미전달 시 문자 대체 여부를 정합니다." },
+] as const;
+const TEMPLATE_CHANNEL_CHOICES = MESSAGE_CHANNEL_CHOICES.map(choice => ({ ...choice,
+  description: choice.value === "SMS" ? "사진은 발송할 때 첨부합니다. 내용과 사진에 따라 문자 유형이 자동 결정됩니다." : choice.description,
+}));
+function textFamilyChannel(channel: string, imageFileId: string): string {
+  return channel === "ALIMTALK" ? "ALIMTALK" : imageFileId ? "MMS" : "SMS";
+}
+function familyLabel(channel: string): string {
+  return channel === "ALIMTALK" ? "카카오 알림톡" : "문자";
+}
+function authoringTypeLabel(channel: string): string {
+  return channel === "ALIMTALK" ? "카카오 알림톡" : channel === "MMS" ? "MMS · 사진 첨부" : "SMS/LMS · 내용에 따라 자동";
 }
 
 function channelLabel(channel: string): string {
@@ -201,7 +307,7 @@ function channelLabel(channel: string): string {
     case "LMS": return "LMS · 장문";
     case "MMS": return "MMS · 사진";
     case "ALIMTALK": return "알림톡";
-    case "SMS": return "SMS · 단문";
+    case "SMS": return "문자 · SMS/LMS";
     default: return "채널 확인 필요";
   }
 }
@@ -214,23 +320,51 @@ function confirmLines(message: string): ReactNode {
   return parts.flatMap((line, index) => (index === 0 ? [line] : [<br key={index} />, line]));
 }
 
+function scheduleModeNotice(mode: "MANUAL" | "AUTO"): string {
+  return mode === "AUTO"
+    ? "예약 시각 이후 자동 발송을 시도합니다. 자동 실행 설정이나 발송 연결이 꺼져 있으면 처리되지 않으며, 나중에 설정을 켜면 발송될 수 있습니다."
+    : "예약 시각 이후 직접 발송 실행을 눌러야 합니다. 자동 실행 설정을 켜도 이 예약은 자동 발송되지 않습니다.";
+}
+
+function scheduleServerStatus(value: MessageSchedule | null): string {
+  if (!value) return "이 서버의 예약 실행 설정을 확인할 수 없습니다.";
+  const checked = value.observedAt ? ` (${formatDate(value.observedAt)} 조회)` : "";
+  if (!value.eligibleForAuto) return `이 운영사는 현재 자동 예약 실행 대상이 아닙니다.${checked}`;
+  if (!value.autoConfigured) return `이 서버의 예약 자동 실행 설정이 꺼져 있습니다.${checked}`;
+  if (!value.workerStarted) return `이 서버에서 자동 실행 설정은 켜져 있으나 작업자 시작을 확인하지 못했습니다.${checked}`;
+  const result = value.lastResult === "ok" ? "최근 점검 완료"
+    : value.lastResult === "failed" ? "최근 점검 실패"
+      : value.lastResult === "skipped" ? "최근 점검 건너뜀"
+        : value.lastResult === "running" ? "점검 중" : "아직 점검 전";
+  return `이 서버의 예약 자동 실행 설정이 켜져 있습니다. ${result}${value.lastAttemptAt ? ` · ${formatDate(value.lastAttemptAt)}` : ""}.${checked}`;
+}
+
 function campaignCreateSummary(args: {
+  channel?: string;
   scheduled: boolean;
+  scheduledAt: string;
   simulate: boolean;
   isMms: boolean;
   count: number;
   riskLine: string;
+  scheduleStatus: string;
+  scheduleMode: "MANUAL" | "AUTO";
+  smsFallback: boolean;
 }): string {
+  const fallbackLine = args.channel === "ALIMTALK" && !args.simulate ? `\n${args.smsFallback ? ALIMTALK_FALLBACK_NOTICE : ALIMTALK_NO_FALLBACK_NOTICE}` : "";
   if (args.scheduled) {
-    return `선택 ${args.count}명에게 예약 등록(수동 실행)을 진행할까요?\n\n예약 시각 이후 이 화면에서 발송 실행을 눌러야 합니다. 자동 발송은 지원하지 않습니다.${args.simulate ? " 실행해도 수신자에게 전달되지 않습니다." : ""}${args.isMms && !args.simulate ? " MMS 사진 문자로 발송되며 별도 요금이 발생합니다." : ""}${args.riskLine}`;
+    const execution = args.simulate
+      ? "모의 예약은 시각 이후 직접 실행하며, 실행해도 수신자에게 전달되지 않습니다."
+      : `${args.scheduleMode === "AUTO" ? "자동 실행" : "수동 실행"} · ${args.scheduleStatus} ${scheduleModeNotice(args.scheduleMode)} 발송 후에는 되돌릴 수 없습니다.`;
+    return `선택 ${args.count}명에게 ${args.simulate ? "모의 예약" : "예약"} 등록을 진행할까요?\n\n예약 시각: ${formatDate(args.scheduledAt)}\n${execution}${args.isMms && !args.simulate ? " MMS 사진 문자로 발송되며 별도 요금이 발생합니다." : ""}${args.riskLine}${fallbackLine}`;
   }
   if (args.simulate) {
-    return `선택 ${args.count}명에게 모의 발송 기록을 진행할까요?\n\n모의 발송은 실제로 전달되지 않습니다.${args.riskLine}`;
+    return `선택 ${args.count}명에게 모의 발송 기록을 진행할까요?\n\n모의 발송은 실제로 전달되지 않습니다.${args.riskLine}${fallbackLine}`;
   }
   if (args.isMms) {
-    return `선택 ${args.count}명에게 발송 요청을 진행할까요?\n\nMMS 사진 문자로 발송을 시도합니다. 별도 요금이 발생하며 발송은 되돌릴 수 없습니다.${args.riskLine}`;
+    return `선택 ${args.count}명에게 발송 요청을 진행할까요?\n\nMMS 사진 문자로 발송을 시도합니다. 별도 요금이 발생하며 발송은 되돌릴 수 없습니다.${args.riskLine}${fallbackLine}`;
   }
-  return `선택 ${args.count}명에게 발송 요청을 진행할까요?\n\n공급사가 연결되어 있으면 즉시 실제 발송을 시도합니다. 발송은 되돌릴 수 없습니다.${args.riskLine}`;
+  return `선택 ${args.count}명에게 발송 요청을 진행할까요?\n\n공급사가 연결되어 있으면 즉시 실제 발송을 시도합니다. 발송은 되돌릴 수 없습니다.${args.riskLine}${fallbackLine}`;
 }
 
 function retrySummary(campaign: Campaign, label: "retry" | "execute"): string {
@@ -241,9 +375,9 @@ function retrySummary(campaign: Campaign, label: "retry" | "execute"): string {
     return "모의 예약을 실행할까요?\n\n예약 시각이 되어 실행하면 모의 기록으로 남습니다. 실행해도 수신자에게 전달되지 않습니다.";
   }
   if (label === "execute") {
-    return "예약된 발송을 지금 실행할까요?\n\n공급사가 연결되어 있으면 즉시 실제 발송을 시도합니다. 발송은 되돌릴 수 없습니다.";
+    return `예약된 발송을 지금 실행할까요?\n\n공급사가 연결되어 있으면 즉시 실제 발송을 시도합니다. 발송은 되돌릴 수 없습니다.${campaign.channel === "ALIMTALK" ? `\n${campaign.smsFallback ? ALIMTALK_FALLBACK_NOTICE : ALIMTALK_NO_FALLBACK_NOTICE}` : ""}`;
   }
-  return "재시도하면 공급사가 연결된 경우 즉시 다시 발송합니다. 미연동이면 연결 필요 상태로 남습니다.\n발송은 되돌릴 수 없습니다. 계속할까요?";
+  return `재시도하면 공급사가 연결된 경우 즉시 다시 발송합니다. 미연동이면 연결 필요 상태로 남습니다.\n발송은 되돌릴 수 없습니다. 계속할까요?${campaign.channel === "ALIMTALK" ? `\n${campaign.smsFallback ? ALIMTALK_FALLBACK_NOTICE : ALIMTALK_NO_FALLBACK_NOTICE}` : ""}`;
 }
 
 function cancelSummary(campaign: Campaign): string {
@@ -271,13 +405,125 @@ function maskPhone(phone: string): string {
   return `${digits.slice(0, 3)}-****-${digits.slice(-4)}`;
 }
 
+function parseRecipientChanges(value: unknown, count: number): ChangeDetails | null {
+  const data = asRecord(value);
+  if (!data || typeof data.available !== "boolean" || !Array.isArray(data.changes)) return null;
+  if (!data.available) return { available: false, changes: [] };
+  if (!Number.isSafeInteger(count) || count < 1 || data.changes.length !== count) return null;
+  const allowed = new Set(["missing", "ambiguous", "cancelled", "unavailable", "routing", "status", "group", "phone", "name", "name-unavailable"]);
+  const ids = new Set<string>();
+  const changes: RecipientChange[] = [];
+  for (const item of data.changes) {
+    const entry = asRecord(item);
+    if (!entry || typeof entry.id !== "string" || !entry.id || ids.has(entry.id) || typeof entry.name !== "string" ||
+      typeof entry.identityPhone !== "string" || !Array.isArray(entry.reasons) || !entry.reasons.length ||
+      entry.reasons.some((reason) => typeof reason !== "string" || !allowed.has(reason))) return null;
+    for (const [reason, before, after] of [["status", "beforeStatus", "afterStatus"], ["group", "beforeGroup", "afterGroup"], ["phone", "beforePhone", "afterPhone"]]) {
+      if (entry.reasons.includes(reason) && (typeof entry[before] !== "string" || typeof entry[after] !== "string")) return null;
+    }
+    ids.add(entry.id);
+    changes.push({ id: entry.id, name: entry.name, currentName: typeof entry.currentName === "string" ? entry.currentName : null, identityPhone: entry.identityPhone, reasons: entry.reasons as string[],
+      beforeStatus: typeof entry.beforeStatus === "string" ? entry.beforeStatus : null, afterStatus: typeof entry.afterStatus === "string" ? entry.afterStatus : null,
+      beforeGroup: typeof entry.beforeGroup === "string" ? entry.beforeGroup : null, afterGroup: typeof entry.afterGroup === "string" ? entry.afterGroup : null,
+      beforePhone: typeof entry.beforePhone === "string" ? entry.beforePhone : null, afterPhone: typeof entry.afterPhone === "string" ? entry.afterPhone : null });
+  }
+  return { available: true, changes };
+}
+
+function RecipientChangeReview({ eventId, campaignId, observedAt, onRefresh }: { eventId: string; campaignId: string; observedAt: string; onRefresh: () => void }) {
+  const [limit, setLimit] = useState(10);
+  const [attempt, setAttempt] = useState(0);
+  const [result, setResult] = useState<{ kind: "loading" } | { kind: "failed" } | { kind: "unchanged" } | { kind: "ready"; details: ChangeDetails; observedAt: string }>({ kind: "loading" });
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    const timeout = window.setTimeout(() => controller.abort(), 12000);
+    setResult({ kind: "loading" });
+    void (async () => {
+      try {
+        const response = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap?messageRecipientReview=1&messageChangeId=${encodeURIComponent(campaignId)}`, { cache: "no-store", signal: controller.signal });
+        const body = asRecord(await response.json().catch(() => null));
+        const state = asRecord(body?.state);
+        const review = asRecord(state?.messageChangeReview);
+        if (!active) return;
+        if (!response.ok || !review || review.id !== campaignId || typeof review.observedAt !== "string" || !Number.isFinite(Date.parse(review.observedAt))) {
+          setResult({ kind: "failed" }); return;
+        }
+        if (review.status === "unchanged") { setResult({ kind: "unchanged" }); return; }
+        const details = review.status === "changed" && typeof review.count === "number" ? parseRecipientChanges(review.details, review.count) : null;
+        if (!details) { setResult({ kind: "failed" }); return; }
+        setResult({ kind: "ready", details, observedAt: review.observedAt });
+      } catch {
+        if (active) setResult({ kind: "failed" });
+      } finally { window.clearTimeout(timeout); }
+    })();
+    return () => { active = false; window.clearTimeout(timeout); controller.abort(); };
+  }, [eventId, campaignId, observedAt, attempt]);
+  if (result.kind === "loading") return <p className={styles.comparisonNote} role="status">변경된 수신자를 확인하고 있습니다.</p>;
+  if (result.kind === "failed") return <div className={styles.changedRecipients}><p className={styles.campaignHint} role="status">변경 내역을 확인하지 못했습니다. 발송은 계속 보류됩니다.</p><button type="button" className="button button-quiet" onClick={() => setAttempt((value) => value + 1)}>변경 내역 다시 확인</button></div>;
+  if (result.kind === "unchanged") return <div className={styles.changedRecipients}><p className={styles.campaignHint} role="status">최신 명단에서는 변경된 수신자가 없습니다. 발송 기록을 새로고침해 상태를 다시 확인하세요.</p><button type="button" className="button button-quiet" onClick={onRefresh}>발송 기록 새로고침</button></div>;
+  const { details } = result;
+  if (!details.available) return <p className={styles.campaignHint}>변경된 수신자 상세를 확인할 수 없습니다. 참가자 명단을 다시 확인하세요.</p>;
+  return <div className={styles.changedRecipients}>
+    <h4>변경된 수신자 {details.changes.length}명</h4>
+    <ul aria-label="변경된 수신자 목록" aria-live="polite">
+      {details.changes.slice(0, limit).map((entry) => <li key={entry.id}>
+        <div><strong>{entry.currentName && entry.currentName !== entry.name ? `요청 당시: ${entry.name}` : entry.name}</strong> <span>{entry.identityPhone}</span></div>
+        {entry.currentName && entry.currentName !== entry.name ? <p>현재 이름: {entry.currentName}</p> : null}
+        {entry.reasons.includes("name") ? <p>메시지에 삽입할 이름이 변경됐습니다.</p> : null}
+        {entry.reasons.includes("name-unavailable") ? <p>메시지에 삽입할 이름을 확인할 수 없습니다.</p> : null}
+        {entry.reasons.includes("status") ? <p>참가 상태: {participantStatusLabel(entry.beforeStatus ?? "")} → {participantStatusLabel(entry.afterStatus ?? "")}</p> : null}
+        {entry.reasons.includes("group") ? <p>그룹: {entry.beforeGroup} → {entry.afterGroup}</p> : null}
+        {entry.reasons.includes("phone") ? <p>연락처: {entry.beforePhone} → {entry.afterPhone}{entry.beforePhone === entry.afterPhone ? " (표시되지 않은 자리 포함)" : ""}</p> : null}
+        {entry.reasons.includes("routing") ? <p>참가 상태 또는 그룹이 변경됐습니다. 이전 값은 확인할 수 없습니다.</p> : null}
+        {entry.reasons.includes("cancelled") ? <p>취소 또는 티켓 상태를 확인하세요.</p> : null}
+        {entry.reasons.includes("missing") ? <p>현재 참가자 명단에서 찾을 수 없습니다.</p> : null}
+        {entry.reasons.includes("ambiguous") ? <p>같은 식별자의 참가자가 여러 명이라 확인할 수 없습니다.</p> : null}
+        {entry.reasons.includes("unavailable") ? <p>예약 당시 수신자 검토 정보를 확인할 수 없습니다.</p> : null}
+      </li>)}
+    </ul>
+    {limit < details.changes.length ? <button type="button" className="button button-quiet" onClick={() => setLimit((current) => current + 10)}>수신자 더 보기 · {details.changes.length - limit}명 남음</button> : null}
+    <p className={styles.comparisonNote}>{formatDate(result.observedAt)} 확인한 명단 기준입니다. 이후 변경은 다시 확인해야 합니다.</p>
+  </div>;
+}
+
+// This is only a lookup aid. The reference is neither proof of provider
+// acceptance nor authority to unlock or resend an unresolved submission.
+function LockedProviderReference({ name, phone, reference }: { name: string; phone: string; reference: string | null }) {
+  const [copied, setCopied] = useState<"" | "success" | "failed">("");
+  async function copyReference() {
+    if (!reference) return;
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("clipboard unavailable");
+      await navigator.clipboard.writeText(reference);
+      setCopied("success");
+    } catch {
+      setCopied("failed");
+    }
+  }
+  return <details className={styles.providerReference}>
+    <summary data-disclosure-indicator="">공급사 대조 정보</summary>
+    <div>
+      <p>발송 당시 연락처 · {phone || "확인할 수 없음"}</p>
+      {reference ? <>
+        <p>공급사 요청에 사용되는 대조 ID</p>
+        <textarea aria-label={`${name} ${phone || "연락처 확인 불가"} 대조 ID`} readOnly rows={2} value={reference} onFocus={(event) => event.currentTarget.select()} />
+        <button type="button" className="button button-secondary" aria-label={`${name} ${phone || "연락처 확인 불가"} 대조 ID 복사`} onClick={() => void copyReference()}>대조 ID 복사</button>
+        <p role="status">{copied === "success" ? "대조 ID를 복사했습니다." : copied === "failed" ? "복사하지 못했습니다. 위 대조 ID를 직접 선택해 복사하세요." : ""}</p>
+        <p>이 값은 요청에 사용되는 대조 ID이며, 전송이나 접수의 증거가 아닙니다. 발송 종료와 접수 여부를 각각 확인하세요.</p>
+      </> : <p>이전 발송의 참조 정보를 확인할 수 없습니다. 운영 담당자에게 문의하세요.</p>}
+    </div>
+  </details>;
+}
+
 function messageStatusLabel(status: string): string {
   switch (status) {
     case "NEEDS_CONNECTION": return "연결 필요";
     case "SIMULATED": return "모의 발송 · 전달 없음";
     case "SCHEDULED": return "예약";
     case "SENDING": return "발송 중";
-    case "SENT": return "발송 완료";
+    case "ACCEPTED": return "공급사 접수 · 전달 미확인";
+    case "SENT": return "전달 확인";
     case "PARTIAL": return "일부 실패";
     case "FAILED": return "발송 실패";
     case "CANCELLED": return "취소";
@@ -290,7 +536,8 @@ function deliveryStatusLabel(status: string): string {
     case "UNCONNECTED": return "공급자 미연동";
     case "SIMULATED": return "모의 발송 · 전달 없음";
     case "WAITING": return "예약 대기";
-    case "SENDING": return "접수 · 도달 확인 중";
+    case "SENDING": return "접수·전달 상태 확인 중";
+    case "ACCEPTED": return "공급사 접수 · 전달 미확인";
     case "SENT": return "전달 확인";
     case "FAILED": return "실패";
     case "CANCELLED": return "취소";
@@ -301,18 +548,46 @@ function deliveryStatusLabel(status: string): string {
 function statusTone(status: string): string {
   if (status === "SENT") return styles.statusGood;
   if (["FAILED", "PARTIAL"].includes(status)) return styles.statusBad;
-  if (["NEEDS_CONNECTION", "UNCONNECTED", "SIMULATED"].includes(status)) return styles.statusWarning;
+  if (["NEEDS_CONNECTION", "UNCONNECTED", "SIMULATED", "ACCEPTED"].includes(status)) return styles.statusWarning;
   return styles.statusNeutral;
+}
+
+function hasExplicitTimeZone(value: string): boolean {
+  return /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value);
+}
+
+// The composer accepts Korean wall-clock time regardless of the device zone.
+// Validate calendar fields before adding the offset: Date.parse alone silently
+// normalizes dates such as February 30.
+function scheduledInstant(value: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null;
+  const calendar = new Date(`${value}:00Z`);
+  if (!Number.isFinite(calendar.getTime()) || calendar.toISOString().slice(0, 16) !== value) return null;
+  const instant = new Date(`${value}:00+09:00`);
+  return Number.isFinite(instant.getTime()) ? instant.toISOString() : null;
 }
 
 function formatDate(value: string): string {
   if (!value) return "기록 시각 확인 중";
+  if (!hasExplicitTimeZone(value)) return `시간대 미기록 · 원본 ${value} (확인 필요)`;
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "기록 시각 확인 중";
-  return new Intl.DateTimeFormat("ko-KR", {
+  if (Number.isNaN(date.getTime())) return `기록 시각 확인 필요 · 원본 ${value}`;
+  return `${new Intl.DateTimeFormat("ko-KR", {
     dateStyle: "medium",
     timeStyle: "short",
-  }).format(date);
+    timeZone: "Asia/Seoul",
+  }).format(date)} (한국 시간)`;
+}
+
+function formatScheduledInput(value: string): string {
+  const instant = scheduledInstant(value);
+  return instant ? formatDate(instant) : "예약 날짜와 시간 확인 필요";
+}
+
+function formatSavedSchedule(value: string): string {
+  if (!value) return "예약 시각 미기록 (확인 필요)";
+  if (!hasExplicitTimeZone(value)) return `시간대 미기록 · 원본 ${value} (확인 필요)`;
+  return hasValidScheduledInstant(value) ? formatDate(value) : `예약 시각 확인 필요 · 원본 ${value}`;
 }
 
 function serverError(value: unknown): ServerError {
@@ -358,53 +633,97 @@ function parseTemplate(value: unknown): Template | null {
     channel: text(item.channel, "SMS"),
     body: text(item.body),
     solapiTemplateId: text(item.solapiTemplateId),
+    archived: item.archived === true,
+    version: Number.isSafeInteger(item.version) && Number(item.version) >= 0 ? Number(item.version) : 0,
   };
 }
 
-function parseParticipant(value: unknown): Participant | null {
+function parseParticipant(value: unknown, reviewVersions: Record<string, unknown> | null): Participant | null {
   const item = asRecord(value);
   if (!item || typeof item.id !== "string" || !item.id) return null;
   return {
     id: item.id,
     name: text(item.name, "이름 미등록"),
     company: text(item.company),
+    group: text(item.group).trim() || "일반",
     phone: text(item.phone),
     status: text(item.status, "PENDING"),
+    reviewVersion: text(reviewVersions?.[item.id]),
+    ticketReview: text(item.ticketReview, "unknown"),
   };
 }
 
 function parseDelivery(value: unknown): Delivery | null {
   const item = asRecord(value);
   if (!item) return null;
+  const lookup = asRecord(item.providerLookup);
+  const phone = text(lookup?.maskedPhone);
   return {
     participantId: text(item.participantId),
     name: text(item.name, "이름 미등록"),
     status: text(item.status),
     at: text(item.at),
+    resultMatchUnconfirmed: item.resultMatchUnconfirmed === true,
+    genericProviderResult: text(item.genericProviderResult),
+    manualProviderReview: text(asRecord(item.manualProviderReview)?.outcome),
+    snapshotPhone: /^\d{3}-\*{4}-\d{4}$/.test(phone) ? phone : "",
+    reference: typeof lookup?.reference === "string" ? lookup.reference : null,
   };
 }
 
 function parseCampaign(value: unknown): Campaign | null {
   const item = asRecord(value);
   if (!item || typeof item.id !== "string") return null;
+  const ids = Array.isArray(item.recipientIds) ? item.recipientIds.filter((id): id is string => typeof id === "string") : [];
+  const deliveries = Array.isArray(item.deliveries) ? item.deliveries.flatMap((delivery) => {
+    const parsed = parseDelivery(delivery);
+    return parsed ? [parsed] : [];
+  }) : [];
+  const isRecordedHttpAttempt = asRecord(item.providerSubmission)?.kind === "HTTP" &&
+    typeof asRecord(item.providerSubmission)?.id === "string" && Boolean(text(asRecord(item.providerSubmission)?.id));
+  for (const delivery of deliveries) {
+    // A truncated or mismatched response cannot invent a reference. The
+    // server projection already removed ambiguous snapshot information.
+    if (!isRecordedHttpAttempt || !delivery.participantId || delivery.participantId.length > 120 ||
+        !/^[A-Za-z0-9_-]{8,128}$/.test(item.id) || delivery.reference !== `${item.id}:${delivery.participantId}`) delivery.reference = null;
+  }
   return {
     id: item.id,
     title: text(item.title, "제목 없는 발송"),
     channel: text(item.channel, "SMS"),
-    recipientIds: Array.isArray(item.recipientIds)
-      // Server dedupes ids by contract; dedupe here too so a stray
-      // duplicate never inflates the reload exclusion count below.
-      ? [...new Set(item.recipientIds.filter((id): id is string => typeof id === "string"))]
-      : [],
+    // A stray duplicate never inflates the reload exclusion count.
+    recipientIds: [...new Set(ids)],
     status: text(item.status),
     scheduled: text(item.scheduled),
+    scheduleMode: item.scheduleMode === "AUTO" && item.autoScheduleIntent === "confirmed-v1" ? "AUTO" : "MANUAL",
     // Server persists simulate on every message (content-results.js); the
     // history and retry copy below must read this stored mode, never the
     // composer's draft flag, or a simulated reservation executes under
     // real-delivery wording.
     simulate: item.simulate === true,
+    smsFallback: item.smsFallback !== false,
     at: text(item.at),
     attempts: typeof item.attempts === "number" ? item.attempts : 0,
+    acceptedCount: Number.isSafeInteger(item.acceptedCount) && Number(item.acceptedCount) >= 0 ? Number(item.acceptedCount) : null,
+    submissionUnconfirmed: item.submissionUnconfirmed === true || item.genericSubmissionUnconfirmed === true || Boolean(text(asRecord(item.providerSubmission)?.id)),
+    recipientChangeCount: Number.isSafeInteger(item.recipientChangeCount) && Number(item.recipientChangeCount) > 0 ? Number(item.recipientChangeCount) : 0,
+    recipientRoutingReviewed: item.recipientRoutingReviewVersion === 1,
+    ticketLinkProblemCount: Number.isSafeInteger(item.ticketLinkProblemCount) && Number(item.ticketLinkProblemCount) > 0 ? Number(item.ticketLinkProblemCount) : 0,
+    ticketLinkProblemUnknown: item.ticketLinkProblemUnknown === true,
+    alimtalkUnsupported: item.alimtalkUnsupported === true,
+    mmsUnsupported: item.mmsUnsupported === true,
+    personalizedTextTooLongCount: Number.isSafeInteger(item.personalizedTextTooLongCount) && Number(item.personalizedTextTooLongCount) > 0 ? Number(item.personalizedTextTooLongCount) : 0,
+    smsTextProblemCount: Number.isSafeInteger(item.smsTextProblemCount) && Number(item.smsTextProblemCount) > 0 ? Number(item.smsTextProblemCount) : 0,
+    smsTextProblemField: text(item.smsTextProblemField),
+    smsTextProblemUnknown: item.smsTextProblemUnknown === true,
+    smsTextReloadSafe: item.smsTextReloadSafe === true,
+    deliveryUnconfirmed: item.deliveryUnconfirmed === true,
+    providerGroupId: text(item.providerGroupId),
+    genericTransport: item.genericTransport === true || asRecord(item.providerSubmission)?.kind === "HTTP",
+    genericAttemptActive: typeof item.genericAttemptActive === "boolean" ? item.genericAttemptActive : null,
+    genericSubmissionUnconfirmed: item.genericSubmissionUnconfirmed === true,
+    submissionId: text(asRecord(item.providerSubmission)?.id) || null,
+    providerKind: text(item.providerKind),
     // Server persists the full compose snapshot on every message
     // (content-results.js bootstrap): body, templateId and the MMS image
     // reference live here so a FAILED campaign can be reloaded without
@@ -413,12 +732,7 @@ function parseCampaign(value: unknown): Campaign | null {
     templateId: text(item.templateId),
     imageFileId: text(asRecord(item.image)?.fileId) || text(item.imageFileId),
     imageName: text(asRecord(item.image)?.name) || text(item.imageName),
-    deliveries: Array.isArray(item.deliveries)
-      ? item.deliveries.flatMap((delivery) => {
-          const parsed = parseDelivery(delivery);
-          return parsed ? [parsed] : [];
-        })
-      : [],
+    deliveries,
   };
 }
 
@@ -431,8 +745,15 @@ class CommandFailure extends Error {
   }
 }
 
-function MessageWorkbench({ history, composer, templates }: { history: ReactNode; composer: ReactNode; templates: ReactNode }) {
-  return <>{history}{composer}{templates}</>;
+function MessageWorkbench({ history, composer, templates, composerOpen, templateAttention }: { history: ReactNode; composer: ReactNode; templates: ReactNode; composerOpen: boolean; templateAttention: boolean }) {
+  useEffect(() => { if (composerOpen) requestConsoleTask("history-heading"); }, [composerOpen]);
+  return <>
+    <div hidden={composerOpen}><ConsoleSectionNav mode="tabs" label="메시지 업무" initialId="history-heading" items={[
+      { id: "history-heading", label: "발송 기록" },
+      { id: "templates-heading", label: templateAttention ? "템플릿 관리 · 확인 필요" : "템플릿 관리" },
+    ]} /></div>
+    {history}{composer}{templates}
+  </>;
 }
 
 export default function MessagingWorkspace({ eventId }: { eventId: string }) {
@@ -444,13 +765,34 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   const [templateDraft, setTemplateDraft] = useState<TemplateDraft>(EMPTY_TEMPLATE);
   const [campaignDraft, setCampaignDraft] = useState<CampaignDraft>(EMPTY_CAMPAIGN);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [pendingTemplateUse, setPendingTemplateUse] = useState<Template | null>(null);
+  const [templateQuery, setTemplateQuery] = useState("");
+  const [templateScope, setTemplateScope] = useState("ACTIVE");
+  const [templateArchiveConfirm, setTemplateArchiveConfirm] = useState<Template | null>(null);
+  const [templateResetConfirm, setTemplateResetConfirm] = useState(false);
+  const [templateEditConfirm, setTemplateEditConfirm] = useState<Template | null>(null);
+  const [imagePreviewFailed, setImagePreviewFailed] = useState(false);
+  const [imagePreviewRevision, setImagePreviewRevision] = useState(0);
+  useEffect(() => { setImagePreviewFailed(false); setImagePreviewRevision(0); }, [campaignDraft.imageFileId]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [templateError, setTemplateError] = useState<string | null>(null);
   const [campaignError, setCampaignError] = useState<string | null>(null);
   const [templateFieldError, setTemplateFieldError] = useState<{ field: string; message: string } | null>(null);
-  const [campaignFieldError, setCampaignFieldError] = useState<{ field: string; message: string } | null>(null);
+  const [campaignFieldError, setCampaignFieldError] = useState<CampaignFieldError | null>(null);
+  const campaignBodyRef = useRef<HTMLTextAreaElement>(null);
+  const scheduleInputRef = useRef<HTMLInputElement>(null);
+  const [scheduleBadInput, setScheduleBadInput] = useState(false);
+  const scheduleDetailsRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (campaignFieldError?.field !== "scheduled" || !scheduleDetailsRef.current) return;
+    scheduleDetailsRef.current.open = true;
+    requestAnimationFrame(() => document.getElementById("campaign-scheduled")?.focus());
+  }, [campaignFieldError]);
   const [templateNotice, setTemplateNotice] = useState<string | null>(null);
-  const [campaignNotice, setCampaignNotice] = useState<string | null>(null);
+  const [campaignNotice, setCampaignFeedback] = useState<{ message: string; kind: "success" | "warning" } | null>(null);
+  function setCampaignNotice(message: string | null, kind: "success" | "warning" = "success") {
+    setCampaignFeedback(message ? { message, kind } : null);
+  }
   const [closeNoticeStatus, setCloseNoticeStatus] = useState<string | undefined>(undefined);
   const [archiveConfirm, setArchiveConfirm] = useState(false);
   const [archiveError, setArchiveError] = useState<string | null>(null);
@@ -463,9 +805,51 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   // Compose submit confirm (payload snapshot + summary) and one history-row
   // confirm at a time. Triggers stay; confirms render in place below them.
   const [sendPending, setSendPending] = useState<SendPending | null>(null);
+  const [uncertainCreate, setUncertainCreate] = useState<SendPending | null>(null);
+  const [providerCheck, setProviderCheck] = useState<ProviderCheckAttempt | null>(null);
+  const [providerCheckChoice, setProviderCheckChoice] = useState<"ACCEPTED" | "NOT_ACCEPTED" | "">("");
+  const [providerCheckConfirm, setProviderCheckConfirm] = useState(false);
+  const [providerCheckError, setProviderCheckError] = useState<string | null>(null);
+  useConsoleDraftGuard(Boolean(providerCheck?.uncertain), UNCONFIRMED_WRITE_CLOSE_MESSAGE);
+  useEffect(() => providerCheck?.uncertain ? manageOperatorReceipt(providerCheck.id) : undefined, [providerCheck?.id, providerCheck?.uncertain]);
+  const uncertainCreateRef = useRef<SendPending | null>(null);
+  const [checkingCreate, setCheckingCreate] = useState(false);
+  const [abandonCreateConfirm, setAbandonCreateConfirm] = useState(false);
+  const [pendingTemplate, setPendingTemplate] = useState<TemplateAttempt | null>(null);
+  const pendingTemplateRef = useRef<TemplateAttempt | null>(null);
+  const [checkingTemplate, setCheckingTemplate] = useState(false);
+  const [refreshingOtherTemplate, setRefreshingOtherTemplate] = useState(false);
+  const [abandonTemplateConfirm, setAbandonTemplateConfirm] = useState(false);
+  const templateFocusOriginRef = useRef<Element | null>(null);
+  const eventReceipts = useEventReceipts(eventId);
+  const otherCreateReceipt = eventReceipts.some((entry) => ["message.create", "message.create-reviewed", "message.create-charset-reviewed"].includes(entry.command) && entry.commandId !== uncertainCreate?.id);
+  const activeMessageEventRef = useRef(eventId);
+  const loadedMessageEventRef = useRef<string | null>(null);
+  const messageClockRef = useRef<{ eventId: string; serverMs: number; receivedAt: number } | null>(null);
+  function messageNow(): number {
+    const clock = messageClockRef.current;
+    return clock && clock.eventId === eventId && typeof performance !== "undefined"
+      ? clock.serverMs + Math.max(0, performance.now() - clock.receivedAt)
+      : Date.now();
+  }
+  activeMessageEventRef.current = eventId;
+  useEffect(() => uncertainCreate && state.kind === "ready" ? manageOperatorReceipt(uncertainCreate.id) : undefined, [uncertainCreate, state.kind]);
+  useEffect(() => pendingTemplate && state.kind === "ready" ? manageOperatorReceipt(pendingTemplate.id) : undefined, [pendingTemplate, state.kind]);
+  useEffect(() => {
+    if (!pendingTemplate) return;
+    const frame = window.requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (active && active !== document.body && active !== templateFocusOriginRef.current && active.isConnected) return;
+      const heading = document.getElementById("template-recovery-heading");
+      heading?.scrollIntoView({ block: "center", behavior: "instant" as ScrollBehavior });
+      heading?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [pendingTemplate?.id]);
   // The recipient list: desktop unfolds it next to the draft by default
   // (see below); mobile starts folded and unfolds on demand.
   const [recipientListOpen, setRecipientListOpen] = useState(false);
+  const [recipientReviewRequired, setRecipientReviewRequired] = useState(false);
   const desktopListOpenAppliedRef = useRef(false);
   // Desktop starts with the recipient list unfolded next to the draft so
   // counts, off-screen picks and caution targets stay visible. Mobile
@@ -485,6 +869,79 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   // show its row; the operator can fold it otherwise.
   const [historyOpen, setHistoryOpen] = useState(true);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [composeStep, setComposeStep] = useState<1 | 2 | 3>(1);
+  useEffect(() => {
+    if (!campaignFieldError) return;
+    const step = campaignFieldError.field === "ids" ? 1 : campaignFieldError.field === "scheduled" ? 3 : 2;
+    setComposeStep(step);
+    if (recipientReviewRequired) return;
+    const focusOrigin = document.activeElement;
+    const timer = window.setTimeout(() => {
+      const active = document.activeElement;
+      if (active && active !== document.body && active !== focusOrigin && active.isConnected) return;
+      const ids: Record<string, string> = { ids: "recipient-status-filter", title: "campaign-title", body: "campaign-body", smsFallback: "campaign-sms-fallback", templateId: "campaign-template", imageFileId: "campaign-image", scheduled: "campaign-scheduled" };
+      const element = document.getElementById(ids[campaignFieldError.field] || "campaign-title");
+      element?.focus();
+      if (typeof campaignFieldError.index === "number" && (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement)) {
+        const code = element.value.codePointAt(campaignFieldError.index) ?? 0;
+        element.setSelectionRange(campaignFieldError.index, campaignFieldError.index + (code > 0xffff ? 2 : 1));
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [campaignFieldError, recipientReviewRequired]);
+  useEffect(() => {
+    if (recipientReviewRequired && composeStep === 1 && busyAction === null) {
+      document.getElementById("recipient-review-refresh")?.focus();
+    }
+  }, [busyAction, composeStep, recipientReviewRequired]);
+  useEffect(() => { setComposeStep(1); setPendingTemplateUse(null); setRecipientGroup(""); setCharsetCandidatesOnly(false); }, [eventId]);
+  useEffect(() => { if (uncertainCreate) setComposeStep(3); }, [uncertainCreate]);
+
+  function goComposeStep(next: 1 | 2 | 3) {
+    if (inFlightRef.current || uncertainCreateRef.current || uncertainMmsUpload || (recipientReviewRequired && next > 1)) return;
+    if (!messagesLocked && next > 1 && !selectedIds.length) {
+      const picker = document.querySelector<HTMLDetailsElement>("#campaign-recipients details");
+      if (picker) picker.open = true;
+      setRecipientListOpen(true);
+      setCampaignFieldError({ field: "ids", message: "발송 대상이 없습니다. 수신자를 선택하세요." }); return;
+    }
+    if (!messagesLocked && next === 3 && (!campaignDraft.title.trim() || !campaignDraft.body.trim())) {
+      setCampaignFieldError(!campaignDraft.title.trim() ? { field: "title", message: "발송 제목을 입력하세요." } : { field: campaignDraft.channel === "ALIMTALK" ? "templateId" : "body", message: campaignDraft.channel === "ALIMTALK" ? "승인된 알림톡 템플릿을 선택하세요." : "메시지 내용을 입력하세요." }); return;
+    }
+    if (!messagesLocked && next === 3) {
+      const template = state.kind === "ready" ? state.templates.find(item => item.id === selectedTemplateId) : undefined;
+      const issue = messageContentIssue(campaignDraft, template);
+      if (issue) { setCampaignFieldError(issue); return; }
+      const charsetIssue = campaignCharsetIssue(campaignDraft, state.kind === "ready" ? state.integrations.provider : "");
+      if (charsetIssue) { setCampaignFieldError(charsetIssue); return; }
+    }
+    const focusOrigin = document.activeElement;
+    setCampaignFieldError(null); setComposeStep(next);
+    if (next === 1) setRecipientListOpen(true);
+    window.setTimeout(() => {
+      const active = document.activeElement;
+      if (active && active !== document.body && active !== focusOrigin && active.isConnected) return;
+      const target = messagesLocked ? document.querySelector<HTMLElement>('nav[aria-label="메시지 작성 단계"] button[aria-current="step"]') : document.getElementById(next === 1 ? "recipient-status-filter" : next === 2 ? "campaign-title" : "campaign-review-heading");
+      target?.focus({ preventScroll: true });
+      document.getElementById("campaign-heading")?.scrollIntoView({ block: "start" });
+    }, 0);
+  }
+
+  const focusComposerOnOpenRef = useRef(false);
+  const focusHistoryOnCloseRef = useRef(false);
+  // Focus as part of the opening commit, before a later user keystroke can
+  // move elsewhere. A deferred timer can steal focus back from the skip link.
+  useLayoutEffect(() => {
+    if (!composerOpen || !focusComposerOnOpenRef.current) return;
+    focusComposerOnOpenRef.current = false;
+    document.getElementById("campaign-heading")?.scrollIntoView({ block: "start" });
+    document.getElementById(composeStep === 1 ? "recipient-status-filter" : composeStep === 2 ? "campaign-title" : "campaign-review-heading")?.focus({ preventScroll: true });
+  }, [composerOpen, composeStep]);
+  useLayoutEffect(() => {
+    if (composerOpen || !historyOpen || !focusHistoryOnCloseRef.current) return;
+    focusHistoryOnCloseRef.current = false;
+    document.getElementById("message-compose-open")?.focus();
+  }, [composerOpen, historyOpen]);
   const [expandedCampaignId, setExpandedCampaignId] = useState<string | null>(null);
   const [historyQuery, setHistoryQuery] = useState("");
   const [historyStatus, setHistoryStatus] = useState("ALL");
@@ -498,7 +955,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   const [reloadSummary, setReloadSummary] = useState<string | null>(null);
   const [recipientQuery, setRecipientQuery] = useState("");
   const [recipientStatus, setRecipientStatus] = useState("APPROVED");
+  const [recipientGroup, setRecipientGroup] = useState("");
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
+  const [charsetCandidatesOnly, setCharsetCandidatesOnly] = useState(false);
   const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
   const [historyLimit, setHistoryLimit] = useState(10);
   const handoffAppliedRef = useRef<string | null>(null);
@@ -514,6 +973,23 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   const [ambiguousSyncIds, setAmbiguousSyncIds] = useState<string[]>([]);
   const [ambiguousCancelIds, setAmbiguousCancelIds] = useState<string[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [uncertainMmsUpload, setUncertainMmsUpload] = useState(false);
+  const [mmsUploadError, setMmsUploadError] = useState<string | null>(null);
+  const [abandonMmsUploadConfirm, setAbandonMmsUploadConfirm] = useState(false);
+  const mmsUploadRef = useRef<{ eventId: string; file: File; commandId: string; uncertain: boolean } | null>(null);
+  const mmsUploadGateRef = useRef(false);
+  // The file control sits far down the composer. Move focus to the recovery
+  // explanation when it appears so an operator does not encounter a locked
+  // form without seeing why.
+  useEffect(() => {
+    if (!uncertainMmsUpload) return;
+    const frame = window.requestAnimationFrame(() => {
+      const heading = document.getElementById("mms-upload-recovery-heading");
+      heading?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "center" });
+      heading?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [uncertainMmsUpload]);
   // Even a failed new file selection must invalidate an older confirmation.
   const [attachmentRevision, setAttachmentRevision] = useState(0);
   // Re-render clock so a future reservation becomes executable (발송 실행)
@@ -534,15 +1010,125 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   // slot presence.
   const campaignCreateRef = useRef<{ fingerprint: string; commandId: string; attempted: boolean } | null>(null);
   const templateSaveRef = useRef<{ fingerprint: string; commandId: string } | null>(null);
+  useEffect(() => {
+    const id = templateSaveRef.current?.commandId;
+    return busyAction === "template" && id ? manageOperatorReceipt(id) : undefined;
+  }, [busyAction]);
+  const otherTemplateReceipt = eventReceipts.some((entry) => ["template.save", "template.archive"].includes(entry.command) &&
+    entry.commandId !== pendingTemplate?.id && entry.commandId !== templateSaveRef.current?.commandId);
   const retryRefs = useRef(new Map<string, { fingerprint: string; commandId: string }>());
   const syncRefs = useRef(new Map<string, { fingerprint: string; commandId: string }>());
   const cancelRefs = useRef(new Map<string, { fingerprint: string; commandId: string }>());
+  const seenHistoryReceiptsRef = useRef(new Set<string>());
+  const otherHistoryReceipt = eventReceipts.some((entry) => {
+    if (entry.command === "message.record-provider-check") return entry.commandId !== providerCheck?.id;
+    const slot = ["message.retry", "message.retry-charset-reviewed"].includes(entry.command) ? retryRefs.current : entry.command === "message.sync" ? syncRefs.current : entry.command === "message.cancel" ? cancelRefs.current : null;
+    return slot !== null && ![...slot.values()].some((item) => item.commandId === entry.commandId);
+  });
+  const previousMessageEventRef = useRef(eventId);
+  const hadOtherTemplateReceiptRef = useRef(false);
+  const templateRecoveryLocked = Boolean(pendingTemplate || otherTemplateReceipt || refreshingOtherTemplate || (hadOtherTemplateReceiptRef.current && !otherTemplateReceipt));
+  useEffect(() => {
+    if (previousMessageEventRef.current === eventId) return;
+    previousMessageEventRef.current = eventId;
+    loadedMessageEventRef.current = null;
+    hadOtherTemplateReceiptRef.current = false;
+    setRefreshingOtherTemplate(false);
+    pendingTemplateRef.current = null;
+    setPendingTemplate(null); setCheckingTemplate(false); setAbandonTemplateConfirm(false);
+    templateSaveRef.current = null; setTemplateDraft(EMPTY_TEMPLATE); setTemplateError(null);
+    setTemplateFieldError(null); setTemplateNotice(null);
+    setTemplateQuery(""); setTemplateScope("ACTIVE"); setTemplateArchiveConfirm(null); setTemplateResetConfirm(false); setTemplateEditConfirm(null);
+    setCampaignDraft(EMPTY_CAMPAIGN); setSelectedIds([]); setSelectedTemplateId("");
+    setRecipientReviewRequired(false);
+    setCampaignError(null); setCampaignFieldError(null); setCampaignNotice(null);
+    uncertainCreateRef.current = null;
+    setUncertainCreate(null);
+    setAbandonCreateConfirm(false);
+    campaignCreateRef.current = null;
+    setSendPending(null);
+    retryRefs.current.clear();
+    syncRefs.current.clear();
+    cancelRefs.current.clear();
+    seenHistoryReceiptsRef.current.clear();
+    setAmbiguousRetryIds([]);
+    setAmbiguousSyncIds([]);
+    setAmbiguousCancelIds([]);
+    mmsUploadRef.current = null;
+    mmsUploadGateRef.current = false;
+    setUploadingImage(false);
+    setUncertainMmsUpload(false);
+    setMmsUploadError(null);
+    setAbandonMmsUploadConfirm(false);
+  }, [eventId]);
+  useEffect(() => {
+    if (hadOtherTemplateReceiptRef.current && !otherTemplateReceipt && !pendingTemplate) {
+      setRefreshingOtherTemplate(true);
+      const previousEvent = eventId;
+      void refresh(true).finally(() => { if (activeMessageEventRef.current === previousEvent) setRefreshingOtherTemplate(false); });
+    }
+    hadOtherTemplateReceiptRef.current = otherTemplateReceipt;
+    // A shared, status-only confirmation after reload never repeats the save.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otherTemplateReceipt, pendingTemplate]);
+  useEffect(() => {
+    const present = new Set(eventReceipts.map((entry) => entry.commandId));
+    for (const entry of eventReceipts) {
+      if (["message.retry", "message.retry-charset-reviewed", "message.sync", "message.cancel"].includes(entry.command)) seenHistoryReceiptsRef.current.add(entry.commandId);
+    }
+    if (busyAction !== null) return;
+    let changed = false;
+    const prune = (slot: Map<string, { commandId: string }>, ids: string[]) => ids.filter((id) => {
+      const request = slot.get(id);
+      if (!request || !seenHistoryReceiptsRef.current.has(request.commandId) || present.has(request.commandId)) return true;
+      slot.delete(id);
+      seenHistoryReceiptsRef.current.delete(request.commandId);
+      changed = true;
+      return false;
+    });
+    const retry = prune(retryRefs.current, ambiguousRetryIds);
+    const sync = prune(syncRefs.current, ambiguousSyncIds);
+    const cancel = prune(cancelRefs.current, ambiguousCancelIds);
+    if (retry.length !== ambiguousRetryIds.length) setAmbiguousRetryIds(retry);
+    if (sync.length !== ambiguousSyncIds.length) setAmbiguousSyncIds(sync);
+    if (cancel.length !== ambiguousCancelIds.length) setAmbiguousCancelIds(cancel);
+    if (changed) { setCampaignError(null); void refresh(true); }
+  }, [eventReceipts, busyAction, ambiguousRetryIds, ambiguousSyncIds, ambiguousCancelIds]);
+
+  useEffect(() => {
+    const onApplied = (event: Event) => {
+      const detail = (event as CustomEvent<{ eventId?: string; command?: string; commandId?: string }>).detail;
+      if (detail?.eventId !== eventId || detail.command !== "message.retry-charset-reviewed" ||
+          ![...retryRefs.current.values()].some(item => item.commandId === detail.commandId)) return;
+      // This is only a read of the latest history. The frozen request and
+      // receipt remain until the original payload is verified separately.
+      void refresh(true);
+    };
+    window.addEventListener("eventouch:operator-receipt-applied", onApplied);
+    return () => window.removeEventListener("eventouch:operator-receipt-applied", onApplied);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId]);
 
   // Synchronous in-flight gate shared by every command handler. React state
   // updates don't apply until the next render, so two same-turn submissions
   // (double-click, Enter key repeat) would both pass a `busyAction !== null`
   // check and overlap. This ref flips synchronously instead.
   const inFlightRef = useRef(false);
+  const seenArchiveReceiptRef = useRef<{ eventId: string; commandId: string } | null>(null);
+  useEffect(() => {
+    const id = archiveCommandRef.current;
+    if (!archiveUnresolved || !id) { seenArchiveReceiptRef.current = null; return; }
+    if (eventReceipts.some((entry) => entry.command === "event.stage" && entry.commandId === id)) {
+      seenArchiveReceiptRef.current = { eventId, commandId: id };
+      return;
+    }
+    if (seenArchiveReceiptRef.current?.eventId === eventId && seenArchiveReceiptRef.current.commandId === id && busyAction === null) {
+      seenArchiveReceiptRef.current = null;
+      // A shared status check does not resend the request. Refresh the
+      // authoritative event state before clearing the local archive guard.
+      void refresh(true);
+    }
+  }, [archiveUnresolved, eventReceipts, busyAction, eventId]);
 
   function beginAction(label: string): boolean {
     if (inFlightRef.current) return false;
@@ -585,6 +1171,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   // file contract covers). The returned file id is what the campaign sends;
   // bytes never travel through the command path.
   async function uploadMmsImage(file: File) {
+    if (inFlightRef.current || mmsUploadGateRef.current || (mmsUploadRef.current && mmsUploadRef.current.file !== file)) return;
     if (file.size > 200 * 1024) {
       setCampaignFieldError({ field: "imageFileId", message: "MMS 이미지는 JPG 200KB 이하만 가능합니다." });
       return;
@@ -593,58 +1180,94 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       setCampaignFieldError({ field: "imageFileId", message: "MMS 이미지는 JPG 형식을 사용하세요." });
       return;
     }
+    const attempt = mmsUploadRef.current ?? { eventId, file, commandId: commandId(), uncertain: false };
+    mmsUploadRef.current = attempt;
+    mmsUploadGateRef.current = true;
     setUploadingImage(true);
     setCampaignFieldError(null);
+    setMmsUploadError(null);
     try {
       const res = await consoleFetch(
-        `/api/events/${encodeURIComponent(eventId)}/files?name=${encodeURIComponent(file.name)}&commandId=${encodeURIComponent(commandId())}`,
-        { method: "POST", headers: { "content-type": file.type }, body: file }
+        `/api/events/${encodeURIComponent(attempt.eventId)}/files?name=${encodeURIComponent(attempt.file.name)}&commandId=${encodeURIComponent(attempt.commandId)}`,
+        { method: "POST", headers: { "content-type": attempt.file.type }, body: attempt.file }
       );
       const data = (await res.json().catch(() => null)) as {
-        file?: { fileId?: unknown; name?: unknown };
+        file?: { fileId?: unknown; name?: unknown; type?: unknown; size?: unknown; width?: unknown; height?: unknown };
         error?: unknown;
       } | null;
+      if (activeMessageEventRef.current !== attempt.eventId) return;
       const fileId = typeof data?.file?.fileId === "string" ? data.file.fileId : "";
-      if (!res.ok || !fileId) {
-        setCampaignFieldError({
-          field: "imageFileId",
-          message: typeof data?.error === "string" ? data.error : "이미지를 올리지 못했습니다.",
-        });
+      if (!res.ok || !/^[A-Za-z0-9_-]{1,160}$/.test(fileId) || data?.file?.name !== attempt.file.name ||
+          data?.file?.type !== attempt.file.type || data?.file?.size !== attempt.file.size ||
+          !Number.isInteger(data?.file?.width) || Number(data?.file?.width) < 1 ||
+          !Number.isInteger(data?.file?.height) || Number(data?.file?.height) < 1) {
+        const definitive = !attempt.uncertain && !res.ok && res.status >= 400 && res.status < 500 && ![408, 425, 429].includes(res.status);
+        if (definitive) {
+          mmsUploadRef.current = null;
+          setCampaignFieldError({ field: "imageFileId", message: typeof data?.error === "string" ? data.error : "이미지를 올리지 못했습니다." });
+        } else {
+          attempt.uncertain = true;
+          setUncertainMmsUpload(true);
+          setMmsUploadError("업로드 결과를 확인하지 못했습니다. 같은 사진 요청을 다시 시도하세요.");
+        }
         return;
       }
+      mmsUploadRef.current = null;
+      setUncertainMmsUpload(false);
+      setAbandonMmsUploadConfirm(false);
       setCampaignDraft((current) => ({
         ...current,
+        channel: current.channel === "ALIMTALK" ? "ALIMTALK" : "MMS",
         imageFileId: fileId,
-        imageName: typeof data?.file?.name === "string" ? data.file.name : file.name,
+        imageName: typeof data?.file?.name === "string" ? data.file.name : attempt.file.name,
       }));
-    } catch {
-      setCampaignFieldError({ field: "imageFileId", message: "연결하지 못했습니다. 다시 시도하세요." });
+    } catch (error) {
+      if (activeMessageEventRef.current !== attempt.eventId) return;
+      if (!attempt.uncertain && isOrganizationContextBlock(error)) {
+        mmsUploadRef.current = null;
+        setCampaignFieldError({ field: "imageFileId", message: "현재 조직을 확인한 뒤 다시 시도하세요." });
+      } else {
+        attempt.uncertain = true;
+        setUncertainMmsUpload(true);
+        setMmsUploadError("업로드 결과를 확인하지 못했습니다. 같은 사진 요청을 다시 시도하세요.");
+      }
     } finally {
-      setUploadingImage(false);
+      mmsUploadGateRef.current = false;
+      if (activeMessageEventRef.current === attempt.eventId) setUploadingImage(false);
     }
   }
 
-  async function refresh(silent = false) {
+  async function refresh(silent = false, recheckRecipients = false) {
+    const requestEventId = eventId;
     if (!silent) setState({ kind: "loading" });
     try {
       const [meResponse, bootstrapResponse] = await Promise.all([
         consoleFetch("/api/auth/me", { cache: "no-store" }),
-        consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store" }),
+        consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap?messageRecipientReview=1`, { cache: "no-store" }),
       ]);
+      if (activeMessageEventRef.current !== requestEventId) return false;
       if (meResponse.status === 401 || bootstrapResponse.status === 401) {
+        if (recheckRecipients) return false;
+        if (silent && pendingTemplateRef.current) {
+          setTemplateError("서버의 최신 템플릿을 불러오지 못했습니다. 현재 계정과 행사 권한을 확인하세요.");
+          return false;
+        }
         router.push(
           loginHrefForLocation(window.location.pathname, window.location.search)
         );
-        return;
+        return false;
       }
       const meData = await meResponse.json().catch(() => null) as unknown;
       const bootstrapData = await bootstrapResponse.json().catch(() => null) as unknown;
       const user = asRecord(asRecord(meData)?.user);
       const root = asRecord(bootstrapData);
       const bootstrap = asRecord(root?.state);
+      if (activeMessageEventRef.current !== requestEventId) return false;
       if (!meResponse.ok || !bootstrapResponse.ok || !user || !bootstrap) {
+        if (recheckRecipients) return false;
+        if (silent && pendingTemplateRef.current) { setTemplateError("최신 템플릿을 불러오지 못했습니다. 잠시 후 다시 확인하세요."); return false; }
         setState({ kind: "failed", message: "메시지 정보를 불러오지 못했습니다." });
-        return;
+        return false;
       }
       const role = text(user.role);
       const myId = text(user.id);
@@ -666,7 +1289,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       let canWriteMessages = canManage;
       let canArchive = canManage;
       try {
-        canWriteMessages = canWriteEvent({ role, userId: myId, memberships, eventId }, "message.create");
+        canWriteMessages = canWriteEvent({ role, userId: myId, memberships, eventId }, "message.create-reviewed");
       } catch {
         canWriteMessages = canManage;
       }
@@ -680,8 +1303,10 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       const workspaces = asRecord(bootstrap.workspaces);
       const workspace = asRecord(workspaces?.[eventId]);
       if (!event || !workspace) {
+        if (recheckRecipients) return false;
+        if (silent && pendingTemplateRef.current) { setTemplateError("최신 템플릿을 불러오지 못했습니다. 행사 접근 권한을 확인하세요."); return false; }
         setState({ kind: "failed", message: "행사를 찾을 수 없습니다." });
-        return;
+        return false;
       }
       const clients = Array.isArray(bootstrap.clients) ? bootstrap.clients : [];
       const client = clients.map(asRecord).find((item) => item?.id === event.clientId);
@@ -692,8 +1317,22 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       // untouched — and a later connection never unchecks it (the toggle
       // stays user-owned; see the compose section).
       const scopedIntegrations = parseOrgIntegrations(bootstrap.integrations);
+      const schedule = asRecord(bootstrap.messageSchedule);
+      const messageSchedule: MessageSchedule | null = schedule && typeof schedule.autoConfigured === "boolean" &&
+        typeof schedule.eligibleForAuto === "boolean" && typeof schedule.workerStarted === "boolean"
+        ? { observedAt: text(schedule.observedAt), autoConfigured: schedule.autoConfigured, eligibleForAuto: schedule.eligibleForAuto,
+            workerStarted: schedule.workerStarted, lastAttemptAt: text(schedule.lastAttemptAt), lastResult: text(schedule.lastResult),
+            blocked: Array.isArray(schedule.blocked) ? schedule.blocked.flatMap((value) => {
+              const item = asRecord(value);
+              return item && typeof item.id === "string" && typeof item.reason === "string" && item.reason.length > 0
+                ? [{ id: item.id, reason: item.reason, missing: typeof item.missing === "number" ? item.missing : 0 }] : [];
+            }) : [] }
+        : null;
+      const serverMs = Date.parse(messageSchedule?.observedAt ?? "");
+      messageClockRef.current = Number.isFinite(serverMs) && typeof performance !== "undefined"
+        ? { eventId: requestEventId, serverMs, receivedAt: performance.now() } : null;
       if (isNewOrgSimOnly(scopedIntegrations)) {
-        setCampaignDraft((current) => (current.simulate ? current : { ...current, simulate: true }));
+        setCampaignDraft((current) => (current.simulate && current.scheduleMode === "MANUAL" ? current : { ...current, simulate: true, scheduleMode: "MANUAL" }));
       }
       // A deliberate refresh may prove the intended terminal state even
       // when the original receipt response was lost. Resolve only from the
@@ -705,6 +1344,27 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
         setArchiveError(null);
         setArchiveNotice("서버 재조회에서 보관된 행사임을 확인했습니다.");
         window.dispatchEvent(new Event("eventouch:shell-reload"));
+      }
+      loadedMessageEventRef.current = requestEventId;
+      const recipientReviewVersions = asRecord(bootstrap.recipientReviewVersions);
+      if (recheckRecipients && !recipientReviewVersions) return false;
+      const participants = Array.isArray(workspace.participants) ? workspace.participants.flatMap((value) => {
+        const parsed = parseParticipant(value, recipientReviewVersions);
+        return parsed ? [parsed] : [];
+      }) : [];
+      if (recheckRecipients) {
+        const available = new Set(participants.filter(person => recipientEligible(person) && person.reviewVersion).map(person => person.id));
+        const retained = selectedIds.filter(id => available.has(id));
+        setSelectedIds(retained);
+        setShowSelectedOnly(retained.length > 0);
+        setCharsetCandidatesOnly(false);
+        if (!retained.length) {
+          setRecipientStatus("ALL");
+          setRecipientGroup("");
+          setRecipientQuery("");
+        }
+        const removed = selectedIds.length - retained.length;
+        setCampaignNotice(removed > 0 ? `최신 수신자를 불러왔습니다. 발송할 수 없는 ${removed}명을 선택에서 제외했습니다.` : "최신 수신자를 불러왔습니다. 상태와 그룹을 다시 확인하세요.");
       }
       setState({
         kind: "ready",
@@ -727,12 +1387,8 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
         // state). Sending behavior is untouched by this value, except the
         // new-org simulation lock applied in refresh().
         integrations: scopedIntegrations,
-        participants: Array.isArray(workspace.participants)
-          ? workspace.participants.flatMap((value) => {
-              const parsed = parseParticipant(value);
-              return parsed ? [parsed] : [];
-            })
-          : [],
+        messageSchedule,
+        participants,
         templates: Array.isArray(workspace.templates)
           ? workspace.templates.flatMap((value) => {
               const parsed = parseTemplate(value);
@@ -746,8 +1402,13 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
             })
           : [],
       });
+      return true;
     } catch {
+      if (activeMessageEventRef.current !== requestEventId) return false;
+      if (recheckRecipients) return false;
+      if (silent && pendingTemplateRef.current) { setTemplateError("최신 템플릿을 불러오지 못했습니다. 연결을 확인한 뒤 다시 시도하세요."); return false; }
       setState({ kind: "failed", message: "연결하지 못했습니다. 다시 시도하세요." });
+      return false;
     }
   }
 
@@ -793,8 +1454,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     row?.focus?.();
   }, [historyLimit]);
 
-  // Post-action focus: after a history execute/retry/sync/cancel succeeds,
-  // land on the next logical row instead of the page top.
+  // Keep history focus on the row chosen by the completed action.
   useEffect(() => {
     if (state.kind !== "ready") return;
     const id = historyActionFocusRef.current;
@@ -855,16 +1515,21 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     const byId = new Map(state.participants.map((person) => [person.id, person]));
     const valid: string[] = [];
     let excluded = raw.length - unique.length;
+    let conflictExcluded = 0;
     for (const id of unique) {
       const person = byId.get(id);
-      if (!person || person.status === "CANCELLED") excluded += 1;
+      if (!person || !recipientEligible(person)) {
+        excluded += 1;
+        if (person && person.status.toUpperCase() !== "CANCELLED" && person.ticketReview === "cancelled") conflictExcluded += 1;
+      }
       else valid.push(id);
     }
     setSelectedIds(valid);
+    setComposeStep(valid.length > 0 && excluded === 0 ? 2 : 1);
     setComposerOpen(true);
     setHistoryOpen(false);
     window.setTimeout(() => document.getElementById("campaign-heading")?.scrollIntoView({ block: "start" }), 0);
-    if (valid.length > 0) setShowSelectedOnly(true);
+    if (valid.length > 0) { setShowSelectedOnly(true); setCharsetCandidatesOnly(false); }
     // The approval follow-up names its filter explicitly (?status=); any
     // other ?to= link leaves the filter alone. Unknown values fall back to
     // the composer default. Selection mechanics are untouched: no auto-send.
@@ -872,7 +1537,8 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     if (handoffStatus !== null) setRecipientStatus(handoffStatus);
     setHandoffNotice(
       excluded > 0
-        ? `명단에서 ${valid.length}명을 인계받았습니다 · 제외 ${excluded}명(취소·삭제)`
+        ? conflictExcluded ? `명단에서 ${valid.length}명을 인계받았습니다 · 제외 ${excluded}명(취소·삭제·상태 확인 필요)`
+          : `명단에서 ${valid.length}명을 인계받았습니다 · 제외 ${excluded}명(취소·삭제)`
         : `명단에서 ${valid.length}명을 인계받았습니다`
     );
     stripHandoffParams();
@@ -919,6 +1585,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     selectedTemplateId !== "";
   const pendingIntent =
     uploadingImage ||
+    uncertainMmsUpload ||
     campaignCreateRef.current !== null ||
     templateSaveRef.current !== null ||
     retryRefs.current.size > 0 ||
@@ -929,7 +1596,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     ambiguousCancelIds.length > 0;
   useConsoleDraftGuard(
     composeDirty || templateDirty || pendingIntent,
-    "작성 중인 발송 내용이나 응답을 확인하지 못한 발송 요청이 있습니다. 페이지를 떠나면 사라집니다."
+    uncertainMmsUpload
+      ? "MMS 사진이 이미 올라갔을 수 있습니다. 화면을 떠나면 같은 사진 요청을 다시 시도할 수 없습니다."
+      : "작성 중인 발송 내용이나 응답을 확인하지 못한 발송 요청이 있습니다. 페이지를 떠나면 사라집니다."
   );
 
   // Shared freshness: history-only silent refresh. Drafts, selections and
@@ -947,8 +1616,8 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   const hasFutureScheduled = state.kind === "ready" && state.campaigns.some((campaign) =>
     campaign.status === "SCHEDULED" &&
     campaign.scheduled &&
-    Number.isFinite(Date.parse(campaign.scheduled)) &&
-    Date.parse(campaign.scheduled) > Date.now()
+    hasValidScheduledInstant(campaign.scheduled) &&
+    Date.parse(campaign.scheduled) > messageNow()
   );
 
   useEffect(() => {
@@ -983,8 +1652,37 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     return asRecord(data) ?? {};
   }
 
+  async function submitProviderCheck(attempt: ProviderCheckAttempt) {
+    if (attempt.eventId !== activeMessageEventRef.current || !beginAction("provider-check")) return;
+    setProviderCheckError(null);
+    try {
+      const result = await postCommand("message.record-provider-check", attempt.payload, attempt.id);
+      if (activeMessageEventRef.current !== attempt.eventId) return;
+      if (!confirmsProviderCheck(attempt.payload, result)) {
+        setProviderCheck({ ...attempt, uncertain: true });
+        setProviderCheckError("기록 결과를 확인하지 못했습니다. 같은 요청을 다시 확인하세요.");
+        return;
+      }
+      acknowledgeOperatorReceipt(attempt.id); forgetOperatorReceipt(attempt.id);
+      setProviderCheck(null); setProviderCheckChoice(""); setProviderCheckConfirm(false);
+      setCampaignNotice("공급사 확인 결과를 운영자 기록으로 저장했습니다. 실제 단말 전달을 확인한 것은 아닙니다.");
+      await refresh(true);
+    } catch (error) {
+      if (activeMessageEventRef.current !== attempt.eventId) return;
+      const status = error instanceof CommandFailure ? (error as CommandFailure & { status?: number }).status : undefined;
+      if (!attempt.uncertain && typeof status === "number" && !isAmbiguousStatus(status)) {
+        setProviderCheckError(error instanceof Error ? error.message : "공급사 확인 기록을 저장하지 못했습니다.");
+        setProviderCheckConfirm(false);
+      } else {
+        setProviderCheck({ ...attempt, uncertain: true });
+        setProviderCheckError("기록 결과를 확인하지 못했습니다. 같은 요청을 다시 확인하세요.");
+      }
+    } finally { endAction(); }
+  }
+
   async function archiveFromCloseFlow() {
-    if (state.kind !== "ready" || !state.canManage || state.stage !== "ENDED" || state.closeSnapshot.registrationOpen || state.closeSnapshot.openModules.length || !archiveConfirm || !beginAction("archive")) return;
+    if (state.kind !== "ready" || !state.canManage || state.stage !== "ENDED" || !state.closeSnapshot.archiveAvailable || state.closeSnapshot.registrationOpen || state.closeSnapshot.openModules.length || !archiveConfirm || !beginAction("archive")) return;
+    const wasUnresolved = archiveUnresolved && archiveCommandRef.current !== null;
     const id = archiveCommandRef.current ?? commandId();
     archiveCommandRef.current = id;
     setArchiveUnresolved(true);
@@ -998,13 +1696,13 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       }
       archiveCommandRef.current = null;
       setArchiveUnresolved(false);
-      setArchiveNotice("행사를 보관(으)로 전환했습니다.");
+      setArchiveNotice("행사를 보관했습니다.");
       await refresh(true);
       setArchiveConfirm(false);
       window.dispatchEvent(new Event("eventouch:shell-reload"));
     } catch (error) {
       const status = (error as { status?: number }).status;
-      if (typeof status === "number" && !isAmbiguousStatus(status)) {
+      if (!wasUnresolved && typeof status === "number" && !isAmbiguousStatus(status)) {
         archiveCommandRef.current = null;
         setArchiveUnresolved(false);
         setArchiveConfirm(false);
@@ -1032,7 +1730,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
 
   async function saveTemplate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (inFlightRef.current) return;
+    if (inFlightRef.current || pendingTemplateRef.current || templateRecoveryLocked || state.kind !== "ready" || !state.canWriteMessages || state.stage === "ARCHIVED") return;
     setTemplateError(null);
     setTemplateFieldError(null);
     setTemplateNotice(null);
@@ -1043,46 +1741,186 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       body: templateDraft.body,
       solapiTemplateId: templateDraft.solapiTemplateId,
     };
-    if (templateDraft.id) payload.id = templateDraft.id;
+    if (templateDraft.id) { payload.id = templateDraft.id; payload.expectedVersion = templateDraft.version ?? 0; }
     const fingerprint = fingerprintFor("template.save", payload);
     const id = takeCommandId(templateSaveRef, fingerprint);
-    if (!beginAction("template")) return;
+    const attempt: TemplateAttempt = { eventId, id, command: "template.save", fingerprint, payload, draft: { ...templateDraft } };
+    templateFocusOriginRef.current = document.activeElement;
+    await executeTemplateSave(attempt, false);
+  }
+
+  async function executeTemplateSave(attempt: TemplateAttempt, retry: boolean) {
+    if (attempt.eventId !== activeMessageEventRef.current || otherTemplateReceipt || refreshingOtherTemplate ||
+        (pendingTemplateRef.current && pendingTemplateRef.current.id !== attempt.id) ||
+        state.kind !== "ready" || !state.canWriteMessages || state.stage === "ARCHIVED" || !beginAction("template")) return;
+    const wasUnconfirmed = retry && pendingTemplateRef.current?.id === attempt.id;
+    // A freshness read may finish before the write response. Keep its frozen
+    // owner now so a failed background read cannot replace the workspace.
+    pendingTemplateRef.current = attempt;
+    const focusOrigin = document.activeElement;
+    const markUnconfirmed = () => {
+      pendingTemplateRef.current = attempt;
+      setPendingTemplate(attempt);
+      setTemplateError("결과를 확인하지 못했습니다. 서버에서 확인하거나 원래 요청을 다시 시도하세요.");
+      if (wasUnconfirmed) window.requestAnimationFrame(() => {
+        const active = document.activeElement;
+        if (active && active !== document.body && active !== focusOrigin && active.isConnected) return;
+        const heading = document.getElementById("template-recovery-heading");
+        heading?.scrollIntoView({ block: "center", behavior: "instant" as ScrollBehavior });
+        heading?.focus({ preventScroll: true });
+      });
+    };
     try {
-      const result = await postCommand("template.save", payload, id);
+      const result = await postCommand(attempt.command, attempt.payload, attempt.id);
+      if (activeMessageEventRef.current !== attempt.eventId) return;
       const saved = parseTemplate(result.template);
-      // Proven success is a complete template record. Anything else —
-      // including an empty object — is malformed, not success.
-      if (!saved || !saved.id) {
-        setTemplateError("응답을 확인하지 못했습니다. 내용을 바꾸지 않고 같은 요청으로 다시 시도하세요.");
+      if (!saved || !(attempt.command === "template.archive" ? confirmsTemplateArchive(attempt.payload, result, attempt.target) : confirmsTemplateSave(attempt.payload, result))) {
+        markUnconfirmed();
         return;
       }
+      // Keep the original attempt until the refreshed list is available.
+      pendingTemplateRef.current = attempt;
+      const refreshed = await refresh(true);
+      if (activeMessageEventRef.current !== attempt.eventId) return;
+      if (!refreshed) { setPendingTemplate(attempt); return; }
+      acknowledgeOperatorReceipt(attempt.id); forgetOperatorReceipt(attempt.id);
       templateSaveRef.current = null;
-      setTemplateDraft({ ...saved });
-      setTemplateNotice("템플릿을 저장했습니다.");
-      await refresh(true);
+      pendingTemplateRef.current = null; setPendingTemplate(null); setTemplateError(null);
+      if (attempt.command === "template.save") setTemplateDraft((current) => JSON.stringify(current) === JSON.stringify(attempt.draft) ? { ...saved } : current);
+      setTemplateNotice(attempt.command === "template.save" ? "템플릿을 저장했습니다." : saved.archived ? "템플릿을 보관했습니다. 기존 발송 기록과 등록된 예약은 유지됩니다." : "템플릿을 복원했습니다. 새 메시지에서 다시 선택할 수 있습니다.");
     } catch (error) {
+      if (activeMessageEventRef.current !== attempt.eventId) return;
       const status = (error as { status?: unknown }).status;
-      if (typeof status === "number" && isAmbiguousStatus(status)) {
-        setTemplateError("응답을 확인하지 못했습니다. 내용을 바꾸지 않고 같은 요청으로 다시 시도하세요.");
-      } else if (error instanceof CommandFailure) {
-        // Settled 4xx: the server applied nothing, so the next corrected
-        // request takes a fresh id.
+      if (wasUnconfirmed || typeof status === "number" && isAmbiguousStatus(status)) {
+        markUnconfirmed();
+      } else if (isOrganizationContextBlock(error)) {
         templateSaveRef.current = null;
+        pendingTemplateRef.current = null;
+        setTemplateError("현재 조직을 확인한 뒤 다시 시도하세요. 요청은 보내지 않았습니다.");
+      } else if (error instanceof CommandFailure) {
+        templateSaveRef.current = null;
+        pendingTemplateRef.current = null;
         handleCommandError(error, "template");
       } else {
-        setTemplateError("응답을 확인하지 못했습니다. 내용을 바꾸지 않고 같은 요청으로 다시 시도하세요.");
+        markUnconfirmed();
       }
     } finally {
       endAction();
     }
   }
 
-  function useTemplate(template: Template) {
+  async function checkTemplateSave() {
+    const attempt = pendingTemplateRef.current;
+    if (!attempt || attempt.eventId !== activeMessageEventRef.current || checkingTemplate || !beginAction("template-check")) return;
+    setCheckingTemplate(true); setTemplateError(null);
+    try {
+      const response = await consoleFetch(`/api/events/${encodeURIComponent(attempt.eventId)}/command-receipts/${encodeURIComponent(attempt.id)}`, { cache: "no-store" });
+      const result = asRecord(await response.json().catch(() => null));
+      if (activeMessageEventRef.current !== attempt.eventId) return;
+      if (response.ok && result?.status === "APPLIED" && result.command === attempt.command) {
+        if (!await refresh(true) || activeMessageEventRef.current !== attempt.eventId) return;
+        acknowledgeOperatorReceipt(attempt.id); forgetOperatorReceipt(attempt.id);
+        templateSaveRef.current = null; pendingTemplateRef.current = null; setPendingTemplate(null);
+        const settled = attempt.draft.id ? {
+          ...attempt.draft, name: attempt.draft.name.trim(), body: attempt.draft.body.trim(),
+          solapiTemplateId: attempt.draft.solapiTemplateId.trim(),
+          version: typeof attempt.payload.expectedVersion === "number" ? attempt.payload.expectedVersion + 1 : attempt.draft.version,
+        } : EMPTY_TEMPLATE;
+        if (attempt.command === "template.save") setTemplateDraft((current) => JSON.stringify(current) === JSON.stringify(attempt.draft) ? settled : current);
+        setTemplateNotice("서버에 반영된 것을 확인했습니다. 최신 템플릿 목록을 확인하세요.");
+      } else setTemplateError(response.ok && result?.status === "UNCONFIRMED"
+        ? "아직 처리 여부를 확인할 수 없습니다. 요청이 처리 중이거나 도착하지 않았을 수 있습니다."
+        : "결과를 확인하지 못했습니다. 연결과 현재 행사 접근 권한을 확인하세요.");
+    } catch {
+      if (activeMessageEventRef.current === attempt.eventId) setTemplateError("서버에 연결하지 못했습니다. 저장 요청은 다시 보내지 않았습니다.");
+    } finally {
+      if (activeMessageEventRef.current === attempt.eventId) setCheckingTemplate(false);
+      endAction();
+    }
+  }
+
+  function applyTemplate(template: Template) {
+    setReloadSummary(null);
+    if (template.archived) { setTemplateError("보관된 템플릿은 복원한 뒤 사용하세요."); return; }
+    setComposeStep(selectedIds.length ? 2 : 1);
+    focusComposerOnOpenRef.current = true;
     revealComposer();
     setSelectedTemplateId(template.id);
-    setCampaignDraft((current) => ({ ...current, channel: template.channel, body: template.body }));
+    setCampaignDraft((current) => ({ ...current, channel: textFamilyChannel(template.channel, current.imageFileId), body: template.body }));
+    setPendingTemplateUse(null);
     setCampaignFieldError(null);
     setCampaignError(null);
+  }
+  function useTemplate(template: Template) {
+    if (inFlightRef.current || uncertainCreateRef.current || uncertainMmsUpload) return;
+    if (template.archived) { setTemplateError("보관된 템플릿은 복원한 뒤 사용하세요."); return; }
+    if (campaignDraft.body.trim() && campaignDraft.body !== template.body) {
+      setPendingTemplateUse({ ...template });
+      setComposeStep(2);
+      revealComposer();
+      return;
+    }
+    applyTemplate(template);
+  }
+  function openTemplateManager() {
+    if (inFlightRef.current || uploadingImage) return;
+    focusHistoryOnCloseRef.current = false;
+    setComposerOpen(false);
+    setHistoryOpen(true);
+    window.requestAnimationFrame(() => requestConsoleTask("templates-heading", true));
+  }
+
+  async function changeTemplateArchive(template: Template, archived: boolean) {
+    if (inFlightRef.current || templateRecoveryLocked || state.kind !== "ready" || !state.canWriteMessages || state.stage === "ARCHIVED") return;
+    const current = state.templates.find(item => item.id === template.id);
+    setTemplateArchiveConfirm(null); setTemplateError(null); setTemplateFieldError(null); setTemplateNotice(null);
+    if (!current || current.version !== template.version) {
+      setTemplateError("템플릿이 변경됐습니다. 목록을 새로고침한 뒤 다시 확인하세요."); return;
+    }
+    const payload = { id: template.id, archived, expectedVersion: template.version };
+    const fingerprint = fingerprintFor("template.archive", payload);
+    const id = takeCommandId(templateSaveRef, fingerprint);
+    templateFocusOriginRef.current = document.activeElement;
+    await executeTemplateSave({ eventId, id, command: "template.archive", fingerprint, payload, draft: { ...templateDraft }, target: { ...template } }, false);
+  }
+
+  function clearTemplateDraft() {
+    setTemplateDraft(EMPTY_TEMPLATE); setTemplateError(null); setTemplateFieldError(null); setTemplateNotice(null); setTemplateResetConfirm(false); setTemplateEditConfirm(null);
+  }
+  function requestNewTemplate() {
+    if (inFlightRef.current || templateRecoveryLocked) return;
+    setTemplateArchiveConfirm(null); setTemplateEditConfirm(null);
+    if (templateDirty) setTemplateResetConfirm(true); else clearTemplateDraft();
+  }
+  function openTemplateEditor(template: Template) {
+    setTemplateDraft({ ...template }); setTemplateError(null); setTemplateFieldError(null); setTemplateNotice(null); setTemplateEditConfirm(null);
+  }
+  function requestTemplateEdit(template: Template) {
+    if (inFlightRef.current || templateRecoveryLocked || template.archived) return;
+    setTemplateResetConfirm(false); setTemplateArchiveConfirm(null);
+    if (templateDirty) setTemplateEditConfirm({ ...template }); else openTemplateEditor(template);
+  }
+
+  function insertPersonalization(name: string) {
+    if (inFlightRef.current || uncertainCreateRef.current || uncertainMmsUpload || messagesLocked || campaignDraft.channel === "ALIMTALK") return;
+    const textarea = campaignBodyRef.current;
+    if (!textarea) return;
+    const token = `{{${name}}}`;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const nextBody = campaignDraft.body.slice(0, start) + token + campaignDraft.body.slice(end);
+    if (nextBody.length > 2000) {
+      setCampaignFieldError({ field: "body", message: "개인화 정보를 넣으려면 내용을 줄여 주세요. 최대 2,000자까지 작성할 수 있습니다." });
+      textarea.focus();
+      return;
+    }
+    setCampaignDraft(current => ({ ...current, body: nextBody }));
+    setCampaignFieldError(current => current?.field === "body" ? null : current);
+    window.requestAnimationFrame(() => {
+      if (activeMessageEventRef.current !== eventId || textarea.value !== nextBody) return;
+      textarea.focus();
+      textarea.setSelectionRange(start + token.length, start + token.length);
+    });
   }
 
   function toggleRecipient(id: string) {
@@ -1115,27 +1953,13 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   // the submit is disabled (zero recipients, or the locked compose) the
   // button focus is a silent no-op, so land on the review summary instead:
   // the blocker reason already reads there and is announced on focus.
-  function jumpToCampaignSubmit() {
-    const submit = document.getElementById("campaign-submit");
-    if (submit instanceof HTMLButtonElement && submit.disabled) {
-      const reason = document.getElementById("campaign-submit-warning");
-      reason?.scrollIntoView({ block: "center", behavior: "instant" });
-      reason?.focus({ preventScroll: true });
-      return;
-    }
-    submit?.scrollIntoView({ block: "center", behavior: "instant" });
-    submit?.focus({ preventScroll: true });
-  }
+  function jumpToCampaignSubmit() { goComposeStep(3); }
 
   // Forward exit from the recipient picker into the draft: from the first
   // checkboxes Tab would otherwise walk every remaining recipient before
   // reaching the title. One move back to this exit (it sits ahead of the
   // list) then Enter lands in the title. Never sends.
-  function jumpToCampaignTitle() {
-    const target = document.getElementById("campaign-title");
-    target?.scrollIntoView({ block: "start", behavior: "instant" });
-    target?.focus({ preventScroll: true });
-  }
+  function jumpToCampaignTitle() { goComposeStep(2); }
 
   // Back path from the review bar to the picker: the draft sits between
   // them, so Shift+Tab from the submit would otherwise walk the whole
@@ -1143,6 +1967,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   // reveal it first and land after React commits — never into hidden
   // content. Never sends.
   function jumpToRecipientFilter() {
+    setComposeStep(1);
     setRecipientListOpen(true);
     window.setTimeout(() => {
       document.getElementById("campaign-recipients")?.scrollIntoView({ block: "start", behavior: "instant" });
@@ -1152,10 +1977,18 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
 
   function requestCampaignCreate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (inFlightRef.current || uploadingImage) return;
+    if (inFlightRef.current || uploadingImage || uncertainMmsUpload || recipientReviewRequired) return;
+    if (uncertainCreateRef.current || otherCreateReceipt) {
+      setCampaignError("이전 발송 요청의 서버 처리 결과를 먼저 확인하세요.");
+      return;
+    }
     setCampaignError(null);
     setCampaignFieldError(null);
     setCampaignNotice(null);
+    if (sendPending && state.kind === "ready" && !recipientVersionsMatch(sendPending, state.participants)) {
+      requireRecipientReview();
+      return;
+    }
     // A re-submit invalidates any earlier pending summary: validation below
     // either replaces it or leaves it cleared.
     setSendPending(null);
@@ -1163,10 +1996,37 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       setCampaignFieldError({ field: "ids", message: "발송 대상을 선택하세요." });
       return;
     }
+    const reviewedPeople = new Map(state.kind === "ready" ? state.participants.map(person => [person.id, person]) : []);
+    if (selectedIds.some(id => { const person = reviewedPeople.get(id); return !person || !recipientEligible(person); })) {
+      requireRecipientReview("발송할 수 없는 수신자가 있습니다. 최신 목록을 불러와 대상을 다시 확인하세요.");
+      return;
+    }
+    const invalidTickets = campaignDraft.body.includes("{{티켓링크}}")
+      ? selectedIds.filter(id => reviewedPeople.get(id)?.ticketReview !== "valid").length : 0;
+    if (!campaignDraft.simulate && invalidTickets) {
+      setCampaignError(`티켓을 사용할 수 없거나 상태를 확인할 수 없는 수신자가 ${invalidTickets}명입니다. 참가자 명단에서 티켓을 확인한 뒤 다시 검토하세요.`);
+      return;
+    }
+    const expectedRecipientVersions = selectedIds.map(id => reviewedPeople.get(id)?.reviewVersion ?? "");
+    if (expectedRecipientVersions.some(version => !/^[a-f0-9]{64}$/.test(version))) {
+      requireRecipientReview("발송 대상의 최신 정보가 필요합니다. 수신자 목록을 다시 불러오세요.");
+      return;
+    }
+    if (!campaignDraft.title.trim() || !campaignDraft.body.trim()) {
+      setCampaignFieldError(!campaignDraft.title.trim() ? { field: "title", message: "발송 제목을 입력하세요." } : { field: campaignDraft.channel === "ALIMTALK" ? "templateId" : "body", message: campaignDraft.channel === "ALIMTALK" ? "승인된 알림톡 템플릿을 선택하세요." : "메시지 내용을 입력하세요." }); return;
+    }
     const isAlimtalk = campaignDraft.channel === "ALIMTALK";
     const boundTemplate = state.kind === "ready"
       ? state.templates.find((template) => template.id === selectedTemplateId)
       : undefined;
+    const contentIssue = messageContentIssue(campaignDraft, boundTemplate);
+    if (contentIssue) { setCampaignFieldError(contentIssue); return; }
+    const charsetIssue = campaignCharsetIssue(campaignDraft, state.kind === "ready" ? state.integrations.provider : "");
+    if (charsetIssue) { setCampaignFieldError(charsetIssue); return; }
+    if (boundTemplate?.archived) {
+      setCampaignFieldError({ field: "templateId", message: "보관된 템플릿입니다. 복원하거나 다른 템플릿을 선택하세요." });
+      setComposeStep(2); return;
+    }
     if (isAlimtalk && !boundTemplate?.solapiTemplateId) {
       setCampaignFieldError({
         field: "templateId",
@@ -1182,16 +2042,24 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       });
       return;
     }
-    const scheduled = campaignDraft.scheduled
-      ? new Date(campaignDraft.scheduled).toISOString()
-      : "";
+    if (scheduleBadInput || scheduleInputRef.current?.validity.badInput) {
+      setCampaignFieldError({ field: "scheduled", message: "예약 날짜와 시간을 모두 입력하거나 지워 주세요." });
+      return;
+    }
+    const scheduled = campaignDraft.scheduled ? scheduledInstant(campaignDraft.scheduled) : "";
+    if (scheduled === null) {
+      setCampaignFieldError({ field: "scheduled", message: "올바른 예약 날짜와 시간을 입력하세요." });
+      return;
+    }
+    if (scheduled && Date.parse(scheduled) <= messageNow()) {
+      setCampaignFieldError({ field: "scheduled", message: "예약 시각은 현재 이후로 설정하세요." });
+      return;
+    }
     const scheduledCampaign = Boolean(scheduled);
-    const riskCount = state.kind === "ready"
-      ? selectedIds.filter((id) => {
-          const person = state.participants.find((item) => item.id === id);
-          return person?.status === "PENDING" || person?.status === "WAITLIST";
-        }).length
-      : 0;
+    const riskCount = selectedIds.filter(id => {
+      const status = reviewedPeople.get(id)?.status;
+      return status === "PENDING" || status === "WAITLIST";
+    }).length;
     const riskLine = riskCount > 0
       ? `\n선택 대상 중 승인 대기·대기 명단이 ${riskCount}명 포함되어 있습니다.`
       : "";
@@ -1200,21 +2068,24 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     // and selection clear only on proven success below, never on failure.
     const payload: Record<string, unknown> = {
       ids: [...selectedIds],
+      expectedRecipientVersions,
       title: campaignDraft.title,
       channel: campaignDraft.channel,
       body: campaignDraft.body,
       simulate: campaignDraft.simulate,
     };
     if (selectedTemplateId) payload.templateId = selectedTemplateId;
-    if (scheduled) payload.scheduled = scheduled;
+    if (isAlimtalk) payload.smsFallback = campaignDraft.smsFallback;
+    if (scheduled) { payload.scheduled = scheduled; payload.scheduleMode = campaignDraft.scheduleMode; }
     if (isMms) payload.imageFileId = campaignDraft.imageFileId;
-    const fingerprint = fingerprintFor("message.create", payload);
+    const fingerprint = fingerprintFor("message.create-charset-reviewed", payload);
     const id = takeCommandId(campaignCreateRef, fingerprint);
     // Server precedence (content-results.js): scheduled wins over simulate —
     // scheduled+simulate creates a SCHEDULED reservation that never delivers.
     // The confirmation leads with the schedule in every scheduled case and
     // states the simulation outcome explicitly.
     setSendPending({
+      eventId,
       payload,
       id,
       reviewedDraft: campaignDraft,
@@ -1222,11 +2093,16 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       reviewedTemplateId: selectedTemplateId,
       reviewedAttachmentRevision: attachmentRevision,
       summary: campaignCreateSummary({
+        channel: campaignDraft.channel,
         scheduled: scheduledCampaign,
+        scheduledAt: scheduled,
         simulate: campaignDraft.simulate,
         isMms,
         count: selectedIds.length,
         riskLine,
+        scheduleStatus: state.kind === "ready" ? scheduleServerStatus(state.messageSchedule) : "이 서버의 예약 실행 설정을 확인할 수 없습니다.",
+        scheduleMode: campaignDraft.scheduleMode,
+        smsFallback: campaignDraft.smsFallback,
       }),
       confirmLabel: scheduledCampaign
         ? "예약 등록한다"
@@ -1236,8 +2112,39 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     });
   }
 
+  function requireRecipientReview(message = "검토 후 수신자 정보가 바뀌었습니다. 최신 목록을 불러와 대상을 다시 확인하세요.") {
+    setSendPending(null);
+    setRecipientReviewRequired(true);
+    setRecipientListOpen(true);
+    setCampaignFieldError({ field: "ids", message });
+  }
+
+  async function reloadReviewedRecipients() {
+    if (!beginAction("recipient-review")) return;
+    try {
+      const refreshed = await refresh(true, true);
+      if (activeMessageEventRef.current !== eventId) return;
+      if (!refreshed) {
+        setCampaignFieldError({ field: "ids", message: "최신 수신자를 불러오지 못했습니다. 연결을 확인한 뒤 다시 시도하세요." });
+        return;
+      }
+      setRecipientReviewRequired(false);
+      setCampaignFieldError(null);
+      requestAnimationFrame(() => document.getElementById("recipient-status-filter")?.focus());
+    } finally {
+      endAction();
+    }
+  }
+
   async function executeCampaignCreate(pending: SendPending) {
+    if (pending.eventId !== activeMessageEventRef.current) return;
     if (!beginAction("campaign")) return;
+    const wasUnconfirmed = uncertainCreateRef.current?.id === pending.id;
+    const markUnconfirmed = () => {
+      uncertainCreateRef.current = pending;
+      setUncertainCreate(pending);
+      setCampaignError("발송 요청 결과를 확인하지 못했습니다. 서버 처리 확인 또는 같은 요청 다시 시도를 선택하세요.");
+    };
     // The receipt only turns ambiguous once bytes actually leave: mark the
     // staged slot attempted here, keyed on our own commandId identity, so a
     // later FAILED reload blocks only on a real transmission. A same-fingerprint
@@ -1247,16 +2154,23 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       campaignCreateRef.current.attempted = true;
     }
     try {
-      const result = await postCommand("message.create", pending.payload, pending.id);
+      const result = await postCommand("message.create-charset-reviewed", pending.payload, pending.id);
+      if (activeMessageEventRef.current !== pending.eventId) return;
       const created = asRecord(result.message);
       // The server keys the created message by our commandId, so an id that
       // echoes it proves this response belongs to our request. Anything
       // else — including an empty object — is malformed, not success.
-      if (!created || created.id !== pending.id) {
-        setCampaignError("응답을 확인하지 못했습니다. 내용을 바꾸지 않고 같은 요청으로 다시 시도하세요.");
+      if (!created || created.id !== pending.id || !confirmsCharsetReviewedMessageCreate(pending.id, pending.payload, result)) {
+        markUnconfirmed();
         return;
       }
       campaignCreateRef.current = null;
+      uncertainCreateRef.current = null;
+      setUncertainCreate(null);
+      setAbandonCreateConfirm(false);
+      acknowledgeOperatorReceipt(pending.id);
+      forgetOperatorReceipt(pending.id);
+      setCampaignError(null);
       // Copy follows the returned record's status, not the draft flags:
       // scheduled+simulate comes back SCHEDULED, never SIMULATED.
       const createdStatus = text(created.status);
@@ -1265,14 +2179,18 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
         createdStatus === "SCHEDULED"
           ? pending.payload.simulate === true
             ? "모의 예약을 등록했습니다. 예약 시각 이후 이 화면에서 발송 실행을 눌러야 하며, 실행해도 수신자에게 전달되지 않습니다."
-            : "예약 등록했습니다. 예약 시각 이후 이 화면에서 발송 실행을 눌러야 합니다."
+            : `예약 등록했습니다. ${scheduleModeNotice(created.scheduleMode === "AUTO" ? "AUTO" : "MANUAL")}`
           : createdStatus === "SIMULATED"
             ? "모의 발송을 기록했습니다. 수신자에게 전달되지 않았습니다."
             : "발송 요청을 기록했습니다. 결과는 아래 발송 기록에서 확인하세요."
       );
       setCampaignDraft(EMPTY_CAMPAIGN);
       setSelectedTemplateId("");
+      setPendingTemplateUse(null);
       setSelectedIds([]);
+      setComposeStep(1);
+      setShowSelectedOnly(false);
+      setCharsetCandidatesOnly(false);
       // Proven send consumes the reloaded source: its summary must not
       // linger above the next blank composer.
       setReloadSummary(null);
@@ -1314,56 +2232,102 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
         });
       }, 0);
     } catch (error) {
+      if (activeMessageEventRef.current !== pending.eventId) return;
       const status = (error as { status?: unknown }).status;
-      if (typeof status === "number" && isAmbiguousStatus(status)) {
-        setCampaignError("응답을 확인하지 못했습니다. 내용을 바꾸지 않고 같은 요청으로 다시 시도하세요.");
-      } else if (error instanceof CommandFailure) {
-        // Settled 4xx: nothing was applied, so the next corrected request
-        // takes a fresh id.
+      if (error instanceof CommandFailure && status === 409 && error.field === "expectedRecipientVersions") {
+        // The server checked the same command receipt before this guard.
+        // This rejection also settles a previously unconfirmed attempt.
+        campaignCreateRef.current = null;
+        uncertainCreateRef.current = null;
+        setUncertainCreate(null);
+        setAbandonCreateConfirm(false);
+        setCampaignError(null);
+        forgetOperatorReceipt(pending.id);
+        requireRecipientReview();
+      } else if (!wasUnconfirmed && isOrganizationContextBlock(error)) {
+        campaignCreateRef.current = null;
+        setCampaignError("현재 조직을 확인한 뒤 다시 시도하세요.");
+      } else if (!wasUnconfirmed && error instanceof CommandFailure && typeof status === "number" && !isAmbiguousStatus(status)) {
+        // A definitive first response cannot resolve an earlier lost one.
         campaignCreateRef.current = null;
         handleCommandError(error, "campaign");
       } else {
-        setCampaignError("응답을 확인하지 못했습니다. 내용을 바꾸지 않고 같은 요청으로 다시 시도하세요.");
+        markUnconfirmed();
       }
     } finally {
       endAction();
     }
   }
 
+  async function checkCampaignCreate() {
+    const pending = uncertainCreateRef.current;
+    if (!pending || pending.eventId !== activeMessageEventRef.current || !beginAction("campaign-check")) return;
+    setCheckingCreate(true);
+    setCampaignError(null);
+    try {
+      const response = await consoleFetch(`/api/events/${encodeURIComponent(pending.eventId)}/command-receipts/${encodeURIComponent(pending.id)}`, { cache: "no-store" });
+      const data = await response.json().catch(() => null) as { status?: unknown; command?: unknown } | null;
+      if (activeMessageEventRef.current !== pending.eventId) return;
+      if (response.ok && data?.status === "APPLIED" && data.command === "message.create-charset-reviewed") {
+        setCampaignError("서버에 발송 요청 기록이 있습니다. 같은 요청을 다시 확인해 원래 대상과 내용을 확인하세요.");
+      } else {
+        setCampaignError(response.ok && data?.status === "UNCONFIRMED"
+          ? "아직 처리 여부를 확인할 수 없습니다. 잠시 후 다시 확인하세요."
+          : "처리 결과를 확인하지 못했습니다. 현재 계정과 행사 접근 권한을 확인한 뒤 다시 확인하세요.");
+      }
+    } catch {
+      if (activeMessageEventRef.current === pending.eventId) setCampaignError("서버에 연결하지 못했습니다. 발송 요청을 다시 보내지 않았습니다.");
+    } finally {
+      setCheckingCreate(false);
+      endAction();
+    }
+  }
+
   async function executeRetry(campaign: Campaign, label: "retry" | "execute") {
-    if (inFlightRef.current) return;
+    if (inFlightRef.current || otherHistoryReceipt || ambiguousSyncIds.includes(campaign.id) || ambiguousCancelIds.includes(campaign.id)) return;
+    const wasUnconfirmed = ambiguousRetryIds.includes(campaign.id);
     // Stored mode, not the composer draft: a simulated reservation must
     // never execute under real-delivery/cost/no-undo wording. Per server
     // truth only SCHEDULED rows can carry simulate=true here (SIMULATED
     // rows are terminal, NEEDS_CONNECTION implies simulate=false).
     const storedSimulate = campaign.simulate === true;
     const payload = { id: campaign.id };
-    const fingerprint = fingerprintFor("message.retry", payload);
+    const fingerprint = fingerprintFor("message.retry-charset-reviewed", payload);
     const id = takeMapCommandId(retryRefs, campaign.id, fingerprint);
     if (!beginAction(`retry:${campaign.id}`)) return;
     setCampaignError(null);
     setCampaignNotice(null);
     try {
-      const result = await postCommand("message.retry", payload, id);
+      const result = await postCommand("message.retry-charset-reviewed", payload, id);
       const message = asRecord(result.message);
       const status = text(message?.status);
       // The retried campaign echoes its own id; require it so a stray
       // payload can't read as success.
-      if (!message || message.id !== campaign.id || !status) {
+      if (!message || message.id !== campaign.id || !status || result.messageCharsetPolicyVersion !== 1) {
         setAmbiguousRetryIds((current) => [...new Set([...current, campaign.id])]);
         setCampaignError("응답을 확인하지 못했습니다. 내용을 바꾸지 않고 같은 요청으로 다시 시도하세요.");
         return;
       }
       retryRefs.current.delete(campaign.id);
       setAmbiguousRetryIds((current) => current.filter((item) => item !== campaign.id));
+      const submissionUnconfirmed = Boolean(asRecord(message.providerSubmission));
       setCampaignNotice(
-        storedSimulate
+        Number(message.recipientChangeCount) > 0
+          ? "수신자 정보가 변경되어 발송을 중단했습니다. 발송 기록에서 최신 대상을 다시 검토하세요."
+          : storedSimulate
           ? `모의 실행 결과: ${messageStatusLabel(status)}. 수신자에게 전달되지 않았습니다.`
-          : `재시도 결과: ${messageStatusLabel(status)}.`
+          : submissionUnconfirmed
+            ? "공급사 접수 여부를 아직 확인하지 못했습니다. 발송 기록에서 결과를 다시 조회하세요."
+            : `재시도 결과: ${messageStatusLabel(status)}.`,
+        submissionUnconfirmed ? "warning" : "success"
       );
       // Next-logical focus: park the following history row before the
       // refresh so keyboard operators land on the next review target.
-      if (state.kind === "ready") {
+      if (Number(message.recipientChangeCount) > 0) {
+        historyActionFocusRef.current = campaign.id;
+        setHistoryStatus("ALL");
+        setExpandedCampaignId(campaign.id);
+      } else if (state.kind === "ready") {
         const at = state.campaigns.findIndex((item) => item.id === campaign.id);
         const next = (at >= 0 ? state.campaigns.slice(at + 1).concat(state.campaigns.slice(0, at)) : state.campaigns)
           .find((item) => item.id !== campaign.id) ?? campaign;
@@ -1374,7 +2338,14 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       await refresh(true);
     } catch (error) {
       const status = (error as { status?: unknown }).status;
-      if (typeof status === "number" && isAmbiguousStatus(status)) {
+      if (error instanceof CommandFailure && status === 409 && error.field === "recipientChange") {
+        retryRefs.current.delete(campaign.id);
+        setAmbiguousRetryIds((current) => current.filter((item) => item !== campaign.id));
+        setCampaignError(error.message);
+        setExpandedCampaignId(campaign.id);
+        historyActionFocusRef.current = campaign.id;
+        await refresh(true);
+      } else if (wasUnconfirmed || typeof status === "number" && isAmbiguousStatus(status)) {
         setAmbiguousRetryIds((current) => [...new Set([...current, campaign.id])]);
         setCampaignError("응답을 확인하지 못했습니다. 내용을 바꾸지 않고 같은 요청으로 다시 시도하세요.");
       } else if (error instanceof CommandFailure) {
@@ -1392,7 +2363,8 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   }
 
   async function syncCampaign(campaign: Campaign) {
-    if (inFlightRef.current) return;
+    if (inFlightRef.current || otherHistoryReceipt || ambiguousRetryIds.includes(campaign.id) || ambiguousCancelIds.includes(campaign.id)) return;
+    const wasUnconfirmed = ambiguousSyncIds.includes(campaign.id);
     const payload = { id: campaign.id };
     const fingerprint = fingerprintFor("message.sync", payload);
     const id = takeMapCommandId(syncRefs, campaign.id, fingerprint);
@@ -1402,29 +2374,45 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     try {
       const result = await postCommand("message.sync", payload, id);
       const message = asRecord(result.message);
-      // message.sync may answer with a fallback SENDING campaign instead of
-      // the requested one, so require a complete record (id + status)
-      // rather than an id echo.
-      if (!message || typeof message.id !== "string" || !message.id || !text(message?.status)) {
+      if (!message || message.id !== campaign.id || typeof message.status !== "string" || !message.status) {
         setAmbiguousSyncIds((current) => [...new Set([...current, campaign.id])]);
         setCampaignError("응답을 확인하지 못했습니다. 내용을 바꾸지 않고 같은 요청으로 다시 시도하세요.");
         return;
       }
       syncRefs.current.delete(campaign.id);
       setAmbiguousSyncIds((current) => current.filter((item) => item !== campaign.id));
-      setCampaignNotice(`발송 결과를 확인했습니다. 현재 상태: ${messageStatusLabel(text(message?.status))}.`);
-      if (state.kind === "ready") {
-        const at = state.campaigns.findIndex((item) => item.id === campaign.id);
-        const next = (at >= 0 ? state.campaigns.slice(at + 1).concat(state.campaigns.slice(0, at)) : state.campaigns)
-          .find((item) => item.id !== campaign.id) ?? campaign;
-        historyActionFocusRef.current = next.id;
-      } else {
-        historyActionFocusRef.current = campaign.id;
+      historyActionFocusRef.current = campaign.id;
+      if (typeof asRecord(result.sync)?.total !== "number") {
+        if (await refresh(true)) {
+          setCampaignNotice("발송 기록을 갱신했습니다. 선택한 발송 건의 최신 상태를 확인하세요.");
+        }
+        return;
       }
+      const submissionUnconfirmed = Boolean(asRecord(message.providerSubmission));
+      const resultMatchUnconfirmed = Array.isArray(message.deliveries) &&
+        message.deliveries.some(delivery => asRecord(delivery)?.resultMatchUnconfirmed === true);
+      const awaitingDelivery = message.status === "SENDING";
+      setCampaignNotice(
+        submissionUnconfirmed
+          ? "공급사 접수 여부를 아직 확인하지 못했습니다. 잠시 후 다시 조회하세요."
+          : resultMatchUnconfirmed
+            ? "일부 수신자의 결과를 구분하지 못했습니다. 발송 상세에서 확인하세요."
+            : awaitingDelivery
+              ? "아직 전달 결과가 확정되지 않은 수신자가 있습니다. 잠시 후 다시 확인하세요."
+              : `발송 결과를 확인했습니다. ${messageStatusLabel(text(message.status))} 상태입니다.`,
+        submissionUnconfirmed || resultMatchUnconfirmed || awaitingDelivery ? "warning" : "success"
+      );
       await refresh(true);
     } catch (error) {
       const status = (error as { status?: unknown }).status;
-      if (typeof status === "number" && isAmbiguousStatus(status)) {
+      if (error instanceof CommandFailure && error.field === "id" && (status === 404 || status === 409)) {
+        syncRefs.current.delete(campaign.id);
+        setAmbiguousSyncIds((current) => current.filter((item) => item !== campaign.id));
+        abandonOperatorAttempt(id);
+        forgetOperatorReceipt(id);
+        setCampaignError(error.message);
+        await refresh(true);
+      } else if (wasUnconfirmed || typeof status === "number" && isAmbiguousStatus(status)) {
         setAmbiguousSyncIds((current) => [...new Set([...current, campaign.id])]);
         setCampaignError("응답을 확인하지 못했습니다. 내용을 바꾸지 않고 같은 요청으로 다시 시도하세요.");
       } else if (error instanceof CommandFailure) {
@@ -1442,7 +2430,8 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   }
 
   async function executeCancel(campaign: Campaign) {
-    if (inFlightRef.current) return;
+    if (inFlightRef.current || otherHistoryReceipt || ambiguousRetryIds.includes(campaign.id) || ambiguousSyncIds.includes(campaign.id)) return;
+    const wasUnconfirmed = ambiguousCancelIds.includes(campaign.id);
     const scheduled = campaign.status === "SCHEDULED";
     // Only SCHEDULED and NEEDS_CONNECTION are offered here. Anything already
     // accepted by the provider (SENDING and beyond) is not cancellable, and
@@ -1464,11 +2453,18 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       cancelRefs.current.delete(campaign.id);
       setAmbiguousCancelIds((current) => current.filter((item) => item !== campaign.id));
       setCampaignNotice(
-        scheduled
+        Number(message.recipientChangeCount) > 0
+          ? "기존 요청을 취소했습니다. 내용·대상 불러오기로 새 검토를 시작하세요."
+          : scheduled
           ? "예약을 취소했습니다. 이후 발송 실행을 할 수 없습니다."
           : "발송 요청을 취소했습니다. 이후 재시도로 발송되지 않습니다."
       );
-      if (state.kind === "ready") {
+      if (Number(message.recipientChangeCount) > 0) {
+        setAttentionOnly(false);
+        setHistoryStatus("ALL");
+        historyActionFocusRef.current = campaign.id;
+        setExpandedCampaignId(campaign.id);
+      } else if (state.kind === "ready") {
         const at = state.campaigns.findIndex((item) => item.id === campaign.id);
         const next = (at >= 0 ? state.campaigns.slice(at + 1).concat(state.campaigns.slice(0, at)) : state.campaigns)
           .find((item) => item.id !== campaign.id) ?? null;
@@ -1479,7 +2475,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       await refresh(true);
     } catch (error) {
       const status = (error as { status?: unknown }).status;
-      if (typeof status === "number" && isAmbiguousStatus(status)) {
+      if (wasUnconfirmed || typeof status === "number" && isAmbiguousStatus(status)) {
         setAmbiguousCancelIds((current) => [...new Set([...current, campaign.id])]);
         setCampaignError("응답을 확인하지 못했습니다. 내용을 바꾸지 않고 같은 요청으로 다시 시도하세요.");
       } else if (error instanceof CommandFailure) {
@@ -1496,12 +2492,17 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     }
   }
 
-  // FAILED-only reload: message.retry intentionally rejects FAILED, so the
-  // safe repeat is a new composer draft preloaded from the persisted
-  // campaign. PARTIAL/SENDING rows are excluded (duplicate-delivery safety
-  // unclear). Never auto-sends: the existing submit ConsoleConfirm still
-  // gates the new send, and the old campaign id is never reused as a new
-  // create command id (fresh fingerprint → fresh id on submit).
+  // Reload terminal records as a new draft. In-flight and partially delivered
+  // records cannot use this path because some recipients may already have it.
+  function canReloadCampaign(campaign: Campaign) {
+    const noAcceptanceTrace = !campaign.submissionUnconfirmed && !campaign.genericSubmissionUnconfirmed &&
+      !campaign.deliveryUnconfirmed && !campaign.providerGroupId && (campaign.acceptedCount === null || campaign.acceptedCount === 0);
+    const safeCharsetCancellation = campaign.status === "CANCELLED" && campaign.smsTextReloadSafe &&
+      (campaign.smsTextProblemCount > 0 || campaign.smsTextProblemUnknown) &&
+      noAcceptanceTrace;
+    return (campaign.status === "FAILED" && noAcceptanceTrace) || (campaign.status === "CANCELLED" && campaign.recipientChangeCount > 0 && noAcceptanceTrace) || safeCharsetCancellation;
+  }
+
   function failedReloadBlocked(): boolean {
     return (
       // Create slot blocks only once actually transmitted: an unsent staged
@@ -1515,7 +2516,8 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       cancelRefs.current.size > 0 ||
       ambiguousRetryIds.length > 0 ||
       ambiguousSyncIds.length > 0 ||
-      ambiguousCancelIds.length > 0
+      ambiguousCancelIds.length > 0 ||
+      otherCreateReceipt || otherHistoryReceipt || uncertainMmsUpload
     );
   }
 
@@ -1528,10 +2530,25 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   // together. Instant only for this discrete error context transfer; the
   // global jump/motion behavior is untouched.
   function reportBlockedReload() {
+    setComposeStep(3);
     setComposerOpen(true);
     setHistoryOpen(false);
     setReloadPending(null);
+    if (uncertainMmsUpload) {
+      window.requestAnimationFrame(() => document.getElementById("mms-upload-recovery-heading")?.focus());
+      return;
+    }
     setCampaignError("응답을 확인하지 못한 발송 요청이 있습니다. 결과를 먼저 확인한 뒤 내용을 불러오세요.");
+    if (uncertainCreateRef.current) {
+      // The original create owns a locked form. Land on its usable recovery
+      // controls instead of trying to focus the disabled submit button.
+      window.requestAnimationFrame(() => {
+        const heading = document.getElementById("message-recovery-heading");
+        heading?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "start" });
+        heading?.focus({ preventScroll: true });
+      });
+      return;
+    }
     window.setTimeout(() => {
       document.getElementById("campaign-submit")?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "center" });
       document.getElementById("campaign-submit")?.focus({ preventScroll: true });
@@ -1554,7 +2571,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     // background refresh may have changed or removed it while the confirm
     // stayed open.
     const source = state.campaigns.find((item) => item.id === campaign.id);
-    if (!source || source.status !== "FAILED") {
+    if (!source || !canReloadCampaign(source)) {
       setReloadPending(null);
       setCampaignError("발송 기록이 바뀌었습니다. 상태를 새로고침한 뒤 다시 시도하세요.");
       return;
@@ -1566,15 +2583,20 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     const seen = new Set<string>();
     const eligible: string[] = [];
     let excluded = 0;
+    let conflictExcluded = 0;
     for (const id of source.recipientIds) {
       if (seen.has(id)) continue;
       seen.add(id);
       const person = byId.get(id);
-      if (!person || person.status === "CANCELLED") excluded += 1;
+      if (!person || !recipientEligible(person)) {
+        excluded += 1;
+        if (person && person.status.toUpperCase() !== "CANCELLED" && person.ticketReview === "cancelled") conflictExcluded += 1;
+      }
       else eligible.push(id);
     }
     const allowedChannels = ["SMS", "LMS", "MMS", "ALIMTALK"];
-    const channel = allowedChannels.includes(source.channel) ? source.channel : "SMS";
+    const storedChannel = allowedChannels.includes(source.channel) ? source.channel : "SMS";
+    const channel = textFamilyChannel(storedChannel, source.imageFileId);
     const boundTemplate = source.templateId
       ? state.templates.find((template) => template.id === source.templateId)
       : undefined;
@@ -1582,7 +2604,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     // carrying a Solapi approval id the composer stays unbound so the
     // existing submit validation asks for a reselection.
     const templateUsable = Boolean(
-      boundTemplate && (channel !== "ALIMTALK" || boundTemplate.solapiTemplateId)
+      boundTemplate && !boundTemplate.archived && (channel !== "ALIMTALK" || (boundTemplate.channel === "ALIMTALK" && boundTemplate.solapiTemplateId && source.body.trim() === boundTemplate.body.trim()))
     );
     const isMms = channel === "MMS";
     setCampaignDraft({
@@ -1591,12 +2613,17 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       body: source.body,
       // A stale reservation must never replay: the operator re-picks it.
       scheduled: "",
+      scheduleMode: "MANUAL",
       simulate: source.simulate === true,
+      smsFallback: source.smsFallback,
       imageFileId: isMms ? source.imageFileId : "",
       imageName: isMms ? source.imageName : "",
     });
     setSelectedTemplateId(templateUsable && boundTemplate ? boundTemplate.id : "");
+    setPendingTemplateUse(null);
     setSelectedIds(eligible);
+    const nextStep = eligible.length && !excluded && !source.recipientChangeCount ? 2 : 1;
+    setComposeStep(nextStep);
     setComposerOpen(true);
     setHistoryOpen(false);
     // Reveal the reloaded set for review: clear the search/status filters
@@ -1604,7 +2631,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     // draft (templateDraft) is intentionally untouched.
     setRecipientQuery("");
     setRecipientStatus("ALL");
-    setShowSelectedOnly(true);
+    setRecipientGroup("");
+    setShowSelectedOnly(eligible.length > 0);
+    setCharsetCandidatesOnly(false);
     setRecipientListOpen(true);
     setSendPending(null);
     setHistoryPending(null);
@@ -1612,6 +2641,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     setCampaignFieldError(null);
     setCampaignError(null);
     const sourceLabel = `〈${source.title}〉`;
+    const reservationLine = source.scheduled ? " 예약 시각은 다시 지정하세요." : "";
+    const exclusionLine = conflictExcluded ? ` · 제외 ${excluded}명(취소·삭제·상태 확인 필요)` : excluded ? ` · 제외 ${excluded}명(취소·삭제)` : "";
+    const missingPhotoLine = storedChannel === "MMS" && !source.imageFileId ? " 기존 사진이 없어 일반 문자로 불러왔습니다. 사진 문자가 필요하면 사진을 다시 첨부하세요." : "";
     const reselectLine = channel === "ALIMTALK" && !templateUsable
       ? " 승인된 알림톡 템플릿을 다시 선택하세요."
       : "";
@@ -1619,12 +2651,13 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     // a global success notice above the header.
     setCampaignNotice(null);
     if (eligible.length === 0) {
-      setReloadSummary(
-        `${sourceLabel} 내용을 불러왔습니다 · 선택 가능한 대상이 없습니다 · 제외 ${excluded}명(취소·삭제). 수신자를 새로 선택하세요. 바로 발송되지 않습니다. 새 발송 전 내용·대상을 확인하세요. 예약 시각은 다시 지정하세요.${reselectLine}`
+      setReloadSummary(conflictExcluded
+        ? `${sourceLabel} 내용을 불러왔습니다 · 선택 가능한 대상이 없습니다 · 제외 ${excluded}명(취소·삭제·상태 확인 필요). 수신자를 새로 선택하세요. 바로 발송되지 않습니다. 새 발송 전 내용·대상을 확인하세요.${reservationLine}${reselectLine}${missingPhotoLine}`
+        : `${sourceLabel} 내용을 불러왔습니다 · 선택 가능한 대상이 없습니다 · 제외 ${excluded}명(취소·삭제). 수신자를 새로 선택하세요. 바로 발송되지 않습니다. 새 발송 전 내용·대상을 확인하세요.${reservationLine}${reselectLine}${missingPhotoLine}`
       );
     } else {
       setReloadSummary(
-        `${sourceLabel} 내용을 불러왔습니다 · 선택 ${eligible.length}명 · 제외 ${excluded}명(취소·삭제). 바로 발송되지 않습니다. 새 발송 전 내용·대상을 확인하세요. 예약 시각은 다시 지정하세요.${reselectLine}`
+        `${sourceLabel} 내용을 불러왔습니다 · 선택 ${eligible.length}명${exclusionLine}. 바로 발송되지 않습니다. 새 발송 전 내용·대상을 확인하세요.${reservationLine}${reselectLine}${missingPhotoLine}`
       );
     }
     window.setTimeout(() => {
@@ -1632,7 +2665,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       // instantly (no smooth-scroll race), then focus the title without
       // moving the viewport again.
       document.getElementById("campaign-reload-summary")?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "start" });
-      document.getElementById("campaign-title")?.focus({ preventScroll: true });
+      document.getElementById(nextStep === 1 ? "recipient-search" : "campaign-title")?.focus({ preventScroll: true });
     }, 0);
   }
 
@@ -1659,7 +2692,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     applyFailedReload(campaign);
   }
 
-  if (state.kind === "loading") {
+  if (state.kind === "loading" || (state.kind === "ready" && loadedMessageEventRef.current !== eventId)) {
     return (
       <ConsolePage pageId="messages" eventId={eventId}>
         <ConsoleStatePanel
@@ -1689,6 +2722,8 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   const archived = state.stage === "ARCHIVED";
   const archivedReason = "보관된 행사는 읽기 전용입니다";
   const messagesLocked = archived || !state.canWriteMessages;
+  const compositionPending = Boolean(uncertainCreate) || busyAction === "campaign" || busyAction === "recipient-review" || checkingCreate || uncertainMmsUpload;
+  const reviewRecipientsCurrent = !sendPending || recipientVersionsMatch(sendPending, state.participants);
   // React state updates replace the draft and selection, so even editing and
   // then reverting to identical text cannot resurrect an old confirmation.
   const reviewIsCurrent = sendPending !== null &&
@@ -1696,26 +2731,44 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     sendPending.reviewedIds === selectedIds &&
     sendPending.reviewedTemplateId === selectedTemplateId &&
     sendPending.reviewedAttachmentRevision === attachmentRevision &&
-    !messagesLocked && !uploadingImage;
+    reviewRecipientsCurrent &&
+    !messagesLocked && !uploadingImage && !uncertainMmsUpload;
   const messagesLockReason = archived ? archivedReason : "메시지 쓰기 권한이 없습니다. 기록은 볼 수 있습니다";
-  const activeParticipants = state.participants.filter((person) => person.status !== "CANCELLED");
+  const activeTemplates = state.templates.filter(template => !template.archived);
+  const templateSearch = templateQuery.trim().normalize("NFKC").toLocaleLowerCase("ko-KR");
+  const visibleTemplates = state.templates.filter(template =>
+    (templateScope === "ALL" || (templateScope === "ARCHIVED" ? template.archived : !template.archived)) &&
+    (!templateSearch || `${template.name} ${template.body}`.normalize("NFKC").toLocaleLowerCase("ko-KR").includes(templateSearch)));
+  const activeParticipants = state.participants.filter(recipientEligible);
+  const conflictingRecipients = state.participants.filter(person => person.status.toUpperCase() !== "CANCELLED" && person.ticketReview === "cancelled").length;
   const statusFiltered = recipientStatus === "ALL"
     ? activeParticipants
     : activeParticipants.filter((person) => person.status === recipientStatus);
+  const recipientGroups = [...new Set(activeParticipants.map(person => person.group || "일반"))].sort((a, b) => a.localeCompare(b, "ko-KR"));
+  const groupFiltered = recipientGroup ? statusFiltered.filter(person => person.group === recipientGroup) : statusFiltered;
   const recipientSearch = recipientQuery.trim().toLocaleLowerCase("ko-KR");
   const searchedRecipients = !recipientSearch
-    ? statusFiltered
-    : statusFiltered.filter((person) =>
-        `${person.name} ${person.company} ${person.phone}`.toLocaleLowerCase("ko-KR").includes(recipientSearch)
+    ? groupFiltered
+    : groupFiltered.filter((person) =>
+        `${person.name} ${person.company} ${person.group} ${person.phone}`.toLocaleLowerCase("ko-KR").includes(recipientSearch)
       );
-  // 선택 대상만 보기는 상태/검색 필터를 우회하는 전체 선택 검토 모드다:
+  // 선택 대상만 보기는 상태·그룹·검색 필터를 우회하는 전체 선택 검토 모드다:
   // 체크하는 동안 목록에는 선택된 전원이 뜨고, 필터 입력은 그대로 둔다.
-  const visibleRecipients = showSelectedOnly
-    ? activeParticipants.filter((person) => selectedIds.includes(person.id))
+  const selectedSet = new Set(selectedIds);
+  const charsetCheckEnabled = state.integrations.provider === "solapi" && !campaignDraft.simulate &&
+    (campaignDraft.channel !== "ALIMTALK" || campaignDraft.smsFallback);
+  const charsetCandidateIds = new Set(charsetCheckEnabled && campaignDraft.body.includes("{{이름}}")
+    ? activeParticipants.filter(person => selectedSet.has(person.id) && findSmsTextIssue(person.name)).map(person => person.id) : []);
+  const eventNameCharsetIssue = charsetCheckEnabled && campaignDraft.body.includes("{{행사명}}") && Boolean(findSmsTextIssue(state.eventName));
+  const visibleRecipients = charsetCandidatesOnly
+    ? activeParticipants.filter(person => charsetCandidateIds.has(person.id))
+    : showSelectedOnly
+    ? activeParticipants.filter((person) => selectedSet.has(person.id))
     : searchedRecipients;
   const selectedCount = selectedIds.length;
-  const selectedSet = new Set(selectedIds);
   const selectedPeople = activeParticipants.filter((person) => selectedSet.has(person.id));
+  const ticketLinkInvalidCount = campaignDraft.body.includes("{{티켓링크}}")
+    ? selectedPeople.filter(person => person.ticketReview !== "valid").length + selectedCount - selectedPeople.length : 0;
   const visibleSelectedCount = visibleRecipients.filter((person) => selectedSet.has(person.id)).length;
   const outsideVisibleCount = selectedCount - visibleSelectedCount;
   const selectedApproved = selectedPeople.filter((person) => person.status === "APPROVED").length;
@@ -1723,6 +2776,16 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   const selectedWaitlist = selectedPeople.filter((person) => person.status === "WAITLIST").length;
   const selectedMissing = selectedCount - selectedPeople.length;
   const pendingRiskCount = selectedPending + selectedWaitlist;
+  const selectedGroups = [...new Set(selectedPeople.map(person => person.group || "일반"))];
+  const recipientIdentity = selectedPeople.length === 1 ? selectedPeople[0].name
+    : selectedPeople.length > 0 && selectedPeople.length === activeParticipants.length && !selectedMissing ? "전체 참가자"
+    : selectedGroups.length === 1 ? `${selectedGroups[0]} 그룹에서 선택`
+    : selectedGroups.length > 1 ? `${selectedGroups.slice(0, 2).join(" · ")}${selectedGroups.length > 2 ? ` 외 ${selectedGroups.length - 2}개 그룹` : ""}` : "선택한 수신자";
+  const recipientStatusSummary = [selectedApproved ? `참가 확정 ${selectedApproved}명` : "", selectedPending ? `승인 대기 ${selectedPending}명` : "", selectedWaitlist ? `대기 명단 ${selectedWaitlist}명` : "", selectedMissing ? `목록 제외 ${selectedMissing}명` : ""].filter(Boolean).join(" · ");
+  const bodyMeasure = measureMessage(campaignDraft.body);
+  const contentIssue = messageContentIssue(campaignDraft, state.templates.find(item => item.id === selectedTemplateId));
+  const charsetIssue = campaignCharsetIssue(campaignDraft, state.integrations.provider);
+
   // Bulk select for the visible (filtered) set only: checking adds the
   // visible recipients without touching other views (union, never replace),
   // unchecking removes only the visible ones. The separate full clear below
@@ -1731,14 +2794,15 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected;
   // Subscribe this render to the 30s clock so a due reservation flips to
   // 발송 실행 while the page stays open. The shared helper owns the
-  // overdue/manual definition; ?attention=1 includes overdue SCHEDULED.
+  // overdue definition; ?attention=1 includes overdue SCHEDULED.
   // New-org simulation-only composer: a fresh org never inherits the
   // deployment provider. Distinct from process health and from a legacy
   // org's real NEEDS_CONNECTION attempt path.
   void nowTick;
-  const nowMs = Date.now();
+  const nowMs = messageNow();
   const newOrgSimOnly = state.kind === "ready" && isNewOrgSimOnly(state.integrations);
-  const attentionCampaigns = state.campaigns.filter((campaign) => needsAttention(campaign, nowMs));
+  const blockedById = new Map(state.messageSchedule?.blocked.map(item => [item.id, item]));
+  const attentionCampaigns = state.campaigns.filter((campaign) => needsAttention(campaign, nowMs) || blockedById.has(campaign.id));
   const overdueCampaigns = state.campaigns.filter((campaign) => isOverdue(campaign, nowMs));
   const historyScope = attentionOnly ? attentionCampaigns : state.campaigns;
   const historySearch = historyQuery.trim().toLocaleLowerCase("ko-KR");
@@ -1754,21 +2818,32 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   const simulateDraft = campaignDraft.simulate === true;
   // Scheduled-first, mirroring server precedence: a scheduled draft is a
   // reservation even when the simulate box is checked.
-  const submitModeLabel = scheduledDraft
+  const submitModeLabel = scheduleBadInput ? "예약 날짜·시간 확인 필요" : scheduledDraft
     ? simulateDraft
       ? "모의 예약·수동 실행·전달 없음"
-      : "예약 등록(수동 실행)"
+      : campaignDraft.scheduleMode === "AUTO" ? "예약 등록·자동 실행" : "예약 등록·수동 실행"
     : simulateDraft
       ? "모의 발송(전달 없음)"
       : "실제 발송 시도";
 
   function revealComposer() {
-    setComposerOpen(true);
+    if (messagesLocked && !composeDirty && !uncertainCreate) return;
+    if (messagesLocked) {
+      setComposeStep(2); setShowSelectedOnly(true); setRecipientListOpen(true);
+      window.requestAnimationFrame(() => {
+        const heading = document.getElementById("campaign-heading");
+        heading?.setAttribute("tabindex", "-1"); heading?.focus({ preventScroll: true });
+      });
+    }
     setHistoryOpen(false);
-    window.setTimeout(() => {
+    if (composerOpen) {
       document.getElementById("campaign-heading")?.scrollIntoView({ block: "start" });
-      document.getElementById("campaign-title")?.focus({ preventScroll: true });
-    }, 0);
+      document.getElementById(composeStep === 1 ? "recipient-status-filter" : composeStep === 2 ? "campaign-title" : "campaign-review-heading")?.focus({ preventScroll: true });
+      return;
+    }
+    focusComposerOnOpenRef.current = true;
+    setRecipientListOpen(true);
+    setComposerOpen(true);
   }
 
   return (
@@ -1778,7 +2853,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       closeSnapshot={state.closeSnapshot}
       closeNoticeStatus={closeNoticeStatus}
       closeArchiveOpen={archiveConfirm}
-      closeArchiveControl={state.canManage && state.canArchive && state.stage === "ENDED" && !state.closeSnapshot.registrationOpen && state.closeSnapshot.openModules.length === 0 ? (
+      closeArchiveControl={state.canManage && state.canArchive && state.stage === "ENDED" && state.closeSnapshot.archiveAvailable && !state.closeSnapshot.registrationOpen && state.closeSnapshot.openModules.length === 0 ? (
         <div className={styles.closeArchive}>
           {archiveConfirm ? <StageTransitionConfirmation label="보관" busy={busyAction === "archive"} disabled={busyAction !== null} cancelDisabled={busyAction !== null} retry={archiveUnresolved}
             onConfirm={() => void archiveFromCloseFlow()}
@@ -1811,15 +2886,15 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       feedback={(
         <>
           {archiveError ? <ConsoleFeedback kind="error">{archiveError}</ConsoleFeedback> : null}
-          {archiveNotice ? <ConsoleFeedback kind="success">{archiveNotice}</ConsoleFeedback> : null}
+          {archiveNotice && !archived ? <ConsoleFeedback kind="success">{archiveNotice}</ConsoleFeedback> : null}
           {archived ? (
-            <ConsoleFeedback kind="warning">
-              보관된 행사는 읽기 전용입니다. 발송 기록은 볼 수 있지만 새로 발송·예약·취소할 수 없습니다.
+            <ConsoleFeedback kind={archiveNotice ? "success" : "info"}>
+              {archiveNotice ? `${archiveNotice} ` : ""}보관된 행사는 읽기 전용입니다. 발송 기록은 볼 수 있지만 새로 발송·예약·취소할 수 없습니다.
             </ConsoleFeedback>
           ) : null}
           {state.canManage && !state.canWriteMessages && !archived ? (
             <ConsoleFeedback kind="warning">
-              이 행사에 대한 메시지 쓰기 권한이 없습니다. 작성·발송·취소는 할 수 없지만 기록 확인과 수신자 조회는 그대로 볼 수 있습니다.
+              이 행사에 대한 메시지 쓰기 권한이 없습니다. 새로 작성·발송·취소할 수 없습니다. 발송 기록과 템플릿 내용은 확인할 수 있습니다.
             </ConsoleFeedback>
           ) : null}
           {state.canManage && !state.canArchive && !archived && state.stage === "ENDED" ? (
@@ -1828,17 +2903,71 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
             </ConsoleFeedback>
           ) : null}
           {handoffNotice ? <ConsoleFeedback kind="info" id="handoff-notice">{handoffNotice}</ConsoleFeedback> : null}
-          {campaignNotice ? <ConsoleFeedback kind="success">{campaignNotice}</ConsoleFeedback> : null}
-          {campaignError && !composerOpen ? <ConsoleFeedback kind="error">{campaignError}</ConsoleFeedback> : null}
+          {campaignNotice && !archived ? <ConsoleFeedback kind={campaignNotice.kind}>{campaignNotice.message}</ConsoleFeedback> : null}
+          {campaignError && !composerOpen && !uncertainCreate ? <ConsoleFeedback kind="error">{campaignError}</ConsoleFeedback> : null}
         </>
       )}
     >
+          {uncertainCreate ? (
+            <section className={styles.sendRecovery} aria-labelledby="message-recovery-heading">
+              <h2 id="message-recovery-heading" tabIndex={-1}>발송 요청 확인 필요</h2>
+              <p>이미 요청이 기록됐을 수 있습니다. 서버 확인은 메시지를 다시 보내지 않습니다. 같은 요청 재시도는 아직 처리되지 않은 경우 발송을 진행할 수 있습니다.</p>
+              {campaignError ? <p className={styles.fieldError} role="alert">{campaignError}</p> : null}
+              <div className={styles.sendRecoveryActions}>
+                <button type="button" className="button button-secondary" disabled={busyAction !== null || checkingCreate || abandonCreateConfirm} onClick={() => void checkCampaignCreate()}>{checkingCreate ? "확인 중…" : "서버 처리 확인"}</button>
+                <button type="button" className="button button-secondary" disabled={busyAction !== null || checkingCreate || abandonCreateConfirm || messagesLocked} onClick={() => void executeCampaignCreate(uncertainCreate)}>같은 요청 다시 시도</button>
+                <button type="button" className="button button-secondary" disabled={busyAction !== null || checkingCreate || abandonCreateConfirm} onClick={() => setAbandonCreateConfirm(true)}>확인 전 그만두기</button>
+              </div>
+              {abandonCreateConfirm ? <ConsoleConfirm
+                summary="이전 요청이 이미 발송됐을 수 있습니다. 확인을 그만둬도 요청은 취소되지 않습니다. 발송 기록을 확인하기 전 같은 안내를 다시 보내지 마세요."
+                confirmLabel="확인 그만두기"
+                onConfirm={() => {
+                  const attempt = uncertainCreateRef.current;
+                  if (!attempt) return;
+                  abandonOperatorAttempt(attempt.id);
+                  forgetOperatorReceipt(attempt.id);
+                  campaignCreateRef.current = null;
+                  uncertainCreateRef.current = null;
+                  setUncertainCreate(null);
+                  setAbandonCreateConfirm(false);
+                  setCampaignError("이전 요청이 발송됐을 수 있습니다. 발송 기록을 확인한 뒤 다시 진행하세요.");
+                }}
+                onCancel={() => setAbandonCreateConfirm(false)}
+              /> : null}
+            </section>
+          ) : otherCreateReceipt ? (
+            <ConsoleFeedback kind="warning">이전에 요청한 발송의 처리 결과를 먼저 확인하세요. 화면 위의 처리 결과 확인에서 서버에 다시 보내지 않고 조회할 수 있습니다.</ConsoleFeedback>
+          ) : null}
+          {otherHistoryReceipt ? <ConsoleFeedback kind="warning">이전 발송 기록 작업의 처리 결과를 먼저 확인하세요. 화면 위의 처리 결과 확인에서 서버에 다시 보내지 않고 조회할 수 있습니다.</ConsoleFeedback> : null}
+
+      {uncertainMmsUpload ? <section className={styles.sendRecovery} aria-labelledby="mms-upload-recovery-heading">
+        <h2 id="mms-upload-recovery-heading" tabIndex={-1}>MMS 사진 확인 필요</h2>
+        <p>사진이 이미 올라갔을 수 있습니다. 같은 사진 요청을 다시 시도해 확인하세요. 이 동작은 메시지를 발송하지 않습니다. 선택한 사진은 이 화면에만 유지됩니다.</p>
+        {mmsUploadError ? <p className={styles.fieldError} role="alert">{mmsUploadError}</p> : null}
+        <div className={styles.sendRecoveryActions}>
+          <button type="button" className="button button-secondary" disabled={uploadingImage || busyAction !== null || messagesLocked || abandonMmsUploadConfirm} onClick={() => { const attempt = mmsUploadRef.current; if (attempt) void uploadMmsImage(attempt.file); }}>같은 사진 요청 다시 시도</button>
+          <button type="button" className="button button-secondary" disabled={uploadingImage || busyAction !== null || abandonMmsUploadConfirm} onClick={() => setAbandonMmsUploadConfirm(true)}>확인 전 그만두기</button>
+        </div>
+        {abandonMmsUploadConfirm ? <ConsoleConfirm
+          summary="확인을 그만둬도 이미 업로드된 사진이 서버에 남을 수 있습니다. 발송할 사진을 다시 선택해야 합니다. 그만둘까요?"
+          confirmLabel="확인 그만두기"
+          onConfirm={() => {
+            mmsUploadRef.current = null;
+            setUncertainMmsUpload(false);
+            setMmsUploadError(null);
+            setAbandonMmsUploadConfirm(false);
+            setCampaignDraft((current) => ({ ...current, imageFileId: "", imageName: "" }));
+            setCampaignFieldError({ field: "imageFileId", message: "발송할 사진을 다시 선택하세요." });
+          }}
+          onCancel={() => setAbandonMmsUploadConfirm(false)}
+        /> : null}
+      </section> : null}
       {!state.canManage ? (
         <ConsoleFeedback kind="error">메시지 발송을 관리할 운영 권한이 없습니다.</ConsoleFeedback>
       ) : (
         <>
           <details className={`${styles.templateDetails} ${styles.connectionDetails} ${state.integrations.connected ? styles.connectionOk : newOrgSimOnly ? styles.connectionSim : styles.connectionOff}`}>
-            <summary>발송 연결 · {state.integrations.connected ? "연결됨" : "미연동 · 실제 전달 안 됨"}</summary>
+            <summary data-disclosure-indicator="">발송 연결 · {state.integrations.connected ? "연결됨" : "미연동 · 실제 전달 안 됨"}</summary>
             <p className={styles.help}>
               발송 상태는 공급사 응답을 기준으로 표시합니다.{" "}
               {state.integrations.connected
@@ -1847,38 +2976,57 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   ? "현재 조직 발송 연결: 새 운영사에는 발송 수단이 없으므로 모의 기록만 남습니다. 실제 발송으로 자동 전환되지 않습니다."
                   : "현재 조직 발송 연결: 공급사가 연결되지 않았습니다. 요청은 연결 필요 상태로 기록됩니다(모의 기록이 아닙니다). 실제로 전달되지 않습니다."}
             </p>
+            <p className={styles.help}>{scheduleServerStatus(state.messageSchedule)} 현재 서버 기준이며 점검 완료가 실제 발송이나 수신을 뜻하지 않습니다.</p>
           </details>
 
-          <MessageWorkbench composer={(
+
+          <MessageWorkbench composerOpen={composerOpen} templateAttention={Boolean(pendingTemplate)} composer={(
           <div id="message-composer" hidden={!composerOpen}>
           <ConsoleSection
             headingId="campaign-heading"
-              title="메시지 작성"
+              title={messagesLocked ? "작성 내용 확인" : "메시지 작성"}
               surface="panel"
               className={styles.composeSection}
               action={<div className={styles.composeReturn}><button id="message-compose-close" type="button" className="button button-secondary" aria-describedby="compose-return-help" disabled={busyAction !== null || uploadingImage} onClick={() => {
+                focusHistoryOnCloseRef.current = true;
                 setComposerOpen(false);
                 setHistoryOpen(true);
-                window.requestAnimationFrame(() => document.getElementById("message-compose-open")?.focus());
+                requestConsoleTask("history-heading");
+                window.history.replaceState(window.history.state, "", "#history-heading");
               }}>발송 기록 보기</button><small id="compose-return-help">입력·선택 유지</small></div>}
             >
-              <form className={uiStyles.formStack} onSubmit={requestCampaignCreate}>
+              <ValidatedForm className={uiStyles.formStack} onSubmit={(event) => {
+                if (composeStep !== 3) { event.preventDefault(); goComposeStep(composeStep === 1 ? 2 : 3); }
+                else requestCampaignCreate(event);
+              }}>
+                <nav className={styles.composeSteps} aria-label="메시지 작성 단계">
+                  {(["수신자", "내용", "검토·발송"] as const).map((label, index) => <button key={label} type="button" aria-current={composeStep === index + 1 ? "step" : undefined} disabled={compositionPending || (!messagesLocked && index + 1 > composeStep)} onClick={() => goComposeStep((index + 1) as 1 | 2 | 3)}><span>{index + 1}</span>{label}</button>)}
+                </nav>
+                <fieldset className={styles.composeLock} disabled={messagesLocked || compositionPending}>
+                <legend className="sr-only">발송 내용과 수신자</legend>
+
+                {composeStep !== 1 ? <div className={styles.stepRecipientSummary} role="group" aria-label="선택한 수신자 요약">
+                  <div><p><span className={styles.recipientCountLabel}>수신자</span> <strong>{selectedIds.length}명</strong><span>{recipientIdentity}</span></p><p className={styles.recipientSummaryMeta}>{recipientStatusSummary}</p></div>
+                  <button type="button" className="button button-secondary" onClick={jumpToRecipientFilter}>수신자 변경</button>
+                </div> : null}
+
                 <a
                   className="skip-link"
                   href="#campaign-title"
                   data-skip-to="campaign-title"
                   onClick={(event) => {
                     event.preventDefault();
-                    const target = document.getElementById("campaign-title");
-                    target?.scrollIntoView({ block: "start", behavior: "instant" });
-                    target?.focus({ preventScroll: true });
+                    goComposeStep(2);
                   }}
                 >
                   메시지 작성으로 건너뛰기
                 </a>
-                <div className={styles.composeGrid}>
+                <div className={styles.composeGrid} data-step={composeStep}>
                   <fieldset id="campaign-recipients" className={styles.recipientFieldset} aria-describedby={campaignFieldError?.field === "ids" ? "campaign-recipients-error" : "recipient-summary"}>
                     <legend>수신자 선택</legend>
+                    {composeStep === 1 && reloadSummary ? (
+                      <ConsoleFeedback kind="info" id="campaign-reload-summary">{reloadSummary}</ConsoleFeedback>
+                    ) : null}
                     <p className={styles.selectionSummary} id="recipient-summary" role="status">
                       선택 {selectedCount}명
                       {selectedApproved > 0 ? <> · 확정 {selectedApproved}명</> : null}
@@ -1887,6 +3035,18 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                       {selectedMissing > 0 ? ` · 목록 제외 ${selectedMissing}명` : ""}
                       {outsideVisibleCount > 0 ? ` · 화면 밖 선택 ${outsideVisibleCount}명 유지 중` : ""}
                     </p>
+                    {conflictingRecipients > 0 ? <p className={styles.help} role="note">
+                      신청 상태와 취소 기록이 일치하지 않는 {conflictingRecipients}명은 수신 대상에서 제외했습니다. {" "}
+                      <Link href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>참가자 명단에서 확인</Link>
+                    </p> : null}
+                    {recipientReviewRequired ? (
+                      <div className={uiStyles.formStack}>
+                        <ConsoleFeedback kind="warning" id="campaign-recipients-error">{campaignFieldError?.message ?? "최신 목록을 불러와 발송 대상을 다시 확인하세요."}</ConsoleFeedback>
+                        <div><button id="recipient-review-refresh" type="button" className="button button-secondary" onClick={() => void reloadReviewedRecipients()}>
+                          {busyAction === "recipient-review" ? "수신자 불러오는 중" : "최신 수신자 불러오기"}
+                        </button></div>
+                      </div>
+                    ) : null}
                     {pendingRiskCount > 0 ? (
                       <p className={styles.riskWarning} id="recipient-risk-warning" role="alert">
                         선택 대상 중 승인 대기·대기 명단이 {pendingRiskCount}명 있습니다. 발송 전에 대상을 다시 확인하세요.
@@ -1896,13 +3056,14 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                     <button
                       type="button"
                       className={styles.textButton}
+                      disabled={recipientReviewRequired}
                       data-skip-to="campaign-title"
                       onClick={jumpToCampaignTitle}
                     >
                       <PencilIcon />
                       내용 작성으로 계속
                     </button>
-                    <button type="button" id="campaign-send-skip" data-skip-to="campaign-submit" className={styles.textButton} aria-describedby="campaign-submit-warning" onClick={jumpToCampaignSubmit}>
+                    <button type="button" id="campaign-send-skip" data-skip-to="campaign-submit" className={styles.textButton} aria-describedby="campaign-submit-warning" disabled={recipientReviewRequired} onClick={jumpToCampaignSubmit}>
                       <ArrowDownIcon />발송 검토로 이동
                     </button>
                     </div>
@@ -1929,7 +3090,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                       <summary id="recipient-list-summary" className={styles.recipientSummaryButton} aria-describedby={recipientListOpen ? "recipient-list-keyboard-help" : undefined}>
                         <span className={styles.recipientSummaryLabel}>{recipientListOpen ? "수신자 목록 닫기" : "수신자 목록 열기"}</span>
                         <span className={styles.recipientSummaryCount}>
-                          {recipientSearch || showSelectedOnly || recipientStatus !== "ALL"
+                          {recipientSearch || showSelectedOnly || recipientStatus !== "ALL" || recipientGroup
                             ? `표시 ${visibleRecipients.length}명`
                             : `발송 가능 ${activeParticipants.length}명`}
                         </span>
@@ -1946,6 +3107,13 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                             {RECIPIENT_STATUS_OPTIONS.map((option) => (
                               <option value={option.value} key={option.value}>{option.label}</option>
                             ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label htmlFor="recipient-group-filter">수신자 그룹</label>
+                          <select id="recipient-group-filter" value={recipientGroup} onChange={event => setRecipientGroup(event.target.value)}>
+                            <option value="">전체 그룹</option>
+                            {recipientGroups.map(group => <option key={group} value={group}>{group}</option>)}
                           </select>
                         </div>
                         <div className={styles.recipientSearch}>
@@ -1979,10 +3147,13 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                         id="recipient-selected-only"
                         type="checkbox"
                         checked={showSelectedOnly}
-                        onChange={(event) => setShowSelectedOnly(event.target.checked)}
+                        aria-describedby={showSelectedOnly ? "recipient-selected-help" : undefined}
+                        onChange={(event) => { setShowSelectedOnly(event.target.checked); if (event.target.checked) setCharsetCandidatesOnly(false); }}
                       />
                       선택 대상만 보기
                     </label>
+                    {showSelectedOnly ? <p className={styles.help} id="recipient-selected-help">상태·그룹·검색 조건에 관계없이 선택한 {selectedCount}명 전체를 표시합니다. 조건으로 찾으려면 선택 대상만 보기를 끄세요.</p> : null}
+                    {charsetCandidatesOnly ? <p className={styles.help} role="status">현재 선택한 참가자 중 이름에 확인이 필요한 {charsetCandidateIds.size}명을 표시합니다. <button id="recipient-charset-reset" type="button" className={styles.textButton} onClick={() => setCharsetCandidatesOnly(false)}>전체 명단으로</button></p> : null}
                     {visibleRecipients.length ? (
                       <ul className={styles.recipientList} aria-label="참가자 선택">
                         {visibleRecipients.map((person) => (
@@ -1990,12 +3161,12 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                             <label className={styles.recipientRow}>
                               <input
                                 type="checkbox"
-                                checked={selectedIds.includes(person.id)}
+                                checked={selectedSet.has(person.id)}
                                 onChange={() => toggleRecipient(person.id)}
                               />
                               <span className={styles.recipientName}>{person.name}</span>
                               <span className={styles.recipientMeta} data-recipient-meta>
-                                {person.company ? `${person.company} · ` : ""}{maskPhone(person.phone)} · {participantStatusLabel(person.status)}
+                                {person.company ? `${person.company} · ` : ""}{person.group} · {maskPhone(person.phone)} · {participantStatusLabel(person.status)}
                               </span>
                             </label>
                           </li>
@@ -2009,31 +3180,32 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                       <p className={styles.empty}>등록된 참가자가 없습니다.</p>
                     )}
                     </details>
-                    {campaignFieldError?.field === "ids" ? <p className={styles.fieldError} id="campaign-recipients-error" role="alert">{campaignFieldError.message}</p> : null}
+                    {campaignFieldError?.field === "ids" && !recipientReviewRequired ? <p className={styles.fieldError} id="campaign-recipients-error" role="alert">{campaignFieldError.message}</p> : null}
                   </fieldset>
 
                   <div className={`${uiStyles.formStack} ${styles.composeDraft}`}>
                     <div className={styles.contentFields}>
                     <div>
-                      {reloadSummary ? (
+                      {composeStep !== 1 && reloadSummary ? (
                         <ConsoleFeedback kind="info" id="campaign-reload-summary">{reloadSummary}</ConsoleFeedback>
                       ) : null}
                       <label htmlFor="campaign-title">발송 제목</label>
                   <input
                     id="campaign-title"
                     maxLength={100}
-                    required
+                    required={composeStep === 2}
                     value={campaignDraft.title}
                     aria-invalid={campaignFieldError?.field === "title"}
-                    aria-describedby={campaignFieldError?.field === "title" ? (reloadSummary ? "campaign-reload-summary campaign-title-error" : "campaign-title-error") : (reloadSummary ? "campaign-reload-summary" : undefined)}
+                    aria-describedby={campaignFieldError?.field === "title" ? (reloadSummary && composeStep !== 1 ? "campaign-reload-summary campaign-title-error" : "campaign-title-error") : (reloadSummary && composeStep !== 1 ? "campaign-reload-summary" : undefined)}
                     onChange={(event) => setCampaignDraft({ ...campaignDraft, title: event.target.value })}
                   />
+                  <p className={styles.help}>기록을 구분하는 제목입니다. 장문·사진 문자에는 앞부분이 제목으로 표시됩니다.</p>
                   {campaignFieldError?.field === "title" ? <p className={styles.fieldError} id="campaign-title-error" role="alert">{campaignFieldError.message}</p> : null}
                 </div>
 
-                <div className={uiStyles.formGrid}>
+                <div className={uiStyles.formStack}>
                   <div>
-                    <label htmlFor="campaign-template">메시지 템플릿</label>
+                    <div className={styles.templatePickerLabel}><label htmlFor="campaign-template">메시지 템플릿</label><button type="button" className={styles.textButton} disabled={busyAction !== null || uploadingImage} onClick={openTemplateManager}>템플릿 관리</button></div>
                     <select
                       id="campaign-template"
                       value={selectedTemplateId}
@@ -2042,74 +3214,114 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                       onChange={(event) => {
                         const template = state.templates.find((item) => item.id === event.target.value);
                         if (template) useTemplate(template);
-                        else setSelectedTemplateId("");
+                        else { setSelectedTemplateId(""); setPendingTemplateUse(null); }
                       }}
                     >
-                      <option value="">직접 작성</option>
-                      {state.templates.map((template) => (
+                      <option value="">{campaignDraft.channel === "ALIMTALK" ? "승인 템플릿 선택" : "직접 작성"}</option>
+                      {state.templates.filter(template => !template.archived || template.id === selectedTemplateId).map((template) => (
                         <option value={template.id} key={template.id}>
-                          {template.name} · {channelLabel(template.channel)}
+                          {template.name} · {template.archived ? "보관됨 · 다시 선택하세요" : familyLabel(template.channel)}
                         </option>
                       ))}
                     </select>
                     {campaignFieldError?.field === "templateId" ? <p className={styles.fieldError} id="campaign-template-error" role="alert">{campaignFieldError.message}</p> : null}
+                    {pendingTemplateUse ? <ConsoleConfirm
+                      summary={confirmLines(`〈${pendingTemplateUse.name}〉 문구로 작성 내용을 바꿀까요?\n\n현재 문구가 교체됩니다. 수신자·제목·사진은 유지되며 발송되지는 않습니다.`)}
+                      confirmLabel="템플릿 적용" cancelLabel="현재 내용 유지"
+                      busy={busyAction !== null || uncertainMmsUpload || Boolean(uncertainCreate)}
+                      onConfirm={() => {
+                        const latest = state.templates.find(item => item.id === pendingTemplateUse.id);
+                        if (!latest || latest.archived || latest.body !== pendingTemplateUse.body || latest.channel !== pendingTemplateUse.channel || latest.solapiTemplateId !== pendingTemplateUse.solapiTemplateId) {
+                          setPendingTemplateUse(null); setCampaignError("템플릿이 변경됐습니다. 최신 템플릿을 다시 선택하세요."); return;
+                        }
+                        applyTemplate(pendingTemplateUse);
+                      }} onCancel={() => setPendingTemplateUse(null)} /> : null}
                   </div>
                   <div>
-                    <label htmlFor="campaign-channel">발송 채널</label>
-                    <select
-                      id="campaign-channel"
-                      value={campaignDraft.channel}
-                      aria-invalid={campaignFieldError?.field === "channel"}
-                      aria-describedby={campaignFieldError?.field === "channel" ? "campaign-channel-error" : undefined}
-                      onChange={(event) => {
-                        setCampaignDraft({ ...campaignDraft, channel: event.target.value });
+                    <ConsoleChoiceGroup layout="compare" id="campaign-channel" label="보내는 방법" value={campaignDraft.channel === "ALIMTALK" ? "ALIMTALK" : "SMS"}
+                      options={MESSAGE_CHANNEL_CHOICES} invalid={campaignFieldError?.field === "channel"}
+                      describedBy={campaignFieldError?.field === "channel" ? "campaign-channel-error" : undefined}
+                      onChange={(channel) => {
+                        const nextChannel = textFamilyChannel(channel, campaignDraft.imageFileId);
+                        setCampaignDraft({ ...campaignDraft, channel: nextChannel });
                         const template = state.templates.find((item) => item.id === selectedTemplateId);
-                        if (template && template.channel !== event.target.value) setSelectedTemplateId("");
-                      }}
-                    >
-                      <option value="SMS">SMS · 단문</option>
-                      <option value="LMS">LMS · 장문</option>
-                      <option value="MMS">MMS · 사진</option>
-                      <option value="ALIMTALK">알림톡</option>
-                    </select>
+                        if (template && (template.channel === "ALIMTALK") !== (channel === "ALIMTALK")) setSelectedTemplateId("");
+                      }} />
                     {campaignFieldError?.field === "channel" ? <p className={styles.fieldError} id="campaign-channel-error" role="alert">{campaignFieldError.message}</p> : null}
                   </div>
+                  {campaignDraft.channel === "ALIMTALK" ? <div>
+                    <ConsoleChoiceGroup id="campaign-sms-fallback" label="알림톡 미전달 시" value={campaignDraft.smsFallback ? "on" : "off"} disabled={messagesLocked}
+                      options={[
+                        { value: "on", label: "문자로 대체", description: ALIMTALK_FALLBACK_NOTICE },
+                        { value: "off", label: "대체하지 않음", description: ALIMTALK_NO_FALLBACK_NOTICE },
+                      ]}
+                      invalid={campaignFieldError?.field === "smsFallback"}
+                      describedBy={campaignFieldError?.field === "smsFallback" ? "campaign-sms-fallback-error" : undefined}
+                      onChange={(value) => { setCampaignDraft({ ...campaignDraft, smsFallback: value === "on" }); setCampaignFieldError(current => current?.field === "smsFallback" ? null : current); }} />
+                    {campaignFieldError?.field === "smsFallback" ? <p id="campaign-sms-fallback-error" className={styles.fieldError} role="alert">{campaignFieldError.message}</p> : null}
+                  </div> : null}
                 </div>
 
                 <div>
                   <label htmlFor="campaign-body">메시지 내용</label>
-                  <textarea
+                  <textarea data-resize-none="true"
                     id="campaign-body"
+                    ref={campaignBodyRef}
                     maxLength={2000}
-                    required
+                    required={composeStep === 2}
                     rows={4}
                     value={campaignDraft.body}
+                    readOnly={campaignDraft.channel === "ALIMTALK"}
                     aria-invalid={campaignFieldError?.field === "body"}
-                    aria-describedby={campaignFieldError?.field === "body" ? "campaign-body-error campaign-variables" : "campaign-variables"}
-                    onChange={(event) => setCampaignDraft({ ...campaignDraft, body: event.target.value })}
+                    aria-describedby={campaignFieldError?.field === "body" ? "campaign-body-error campaign-variables campaign-body-length" : "campaign-variables campaign-body-length"}
+                    onChange={(event) => {
+                      setCampaignDraft({ ...campaignDraft, body: event.target.value });
+                      setCampaignFieldError(current => current?.field === "body" ? null : current);
+                    }}
                   />
-                  <p className={styles.help} id="campaign-variables">
-                    사용 가능 변수: &#123;&#123;이름&#125;&#125;, &#123;&#123;행사명&#125;&#125;, &#123;&#123;행사일&#125;&#125;, &#123;&#123;티켓링크&#125;&#125;, &#123;&#123;럭키번호&#125;&#125;.
-                    럭키번호는 <Link href={`/console/events/${encodeURIComponent(eventId)}/draws`}>추첨·투표에서 먼저 발급</Link>하세요.
-                  </p>
                   {campaignFieldError?.field === "body" ? <p className={styles.fieldError} id="campaign-body-error" role="alert">{campaignFieldError.message}</p> : null}
+                  <p id="campaign-body-length" className={contentIssue?.field === "body" ? styles.fieldError : styles.help}>
+                    {campaignDraft.channel === "ALIMTALK" ? `원문 ${bodyMeasure.characters.toLocaleString("ko-KR")}자 · 알림톡 최대 1,000자` : `원문 ${bodyMeasure.bytes.toLocaleString("ko-KR")}byte · 문자 최대 2,000byte`}
+                    {bodyMeasure.personalized ? " · 개인화 후 길이와 문자 유형은 수신자별로 확인합니다." : campaignDraft.channel === "SMS" ? ` · ${bodyMeasure.bytes <= 90 ? "단문 SMS" : "장문 LMS"}로 자동 결정` : ""}
+                  </p>
+                  {state.integrations.provider === "solapi" && !campaignDraft.simulate && (campaignDraft.channel !== "ALIMTALK" || campaignDraft.smsFallback) ? <p className={styles.help}>문자로 보낼 수 없는 일부 이모지·제어문자를 확인합니다. 개인화 후 내용과 예약 시점의 수신자 정보도 발송 전에 다시 확인합니다. 다른 문자까지 모두 전달된다는 보장은 아닙니다.</p> : null}
+                  {charsetIssue && !campaignFieldError ? <p className={styles.fieldError} role="status">{charsetIssue.message}</p> : null}
+                  {eventNameCharsetIssue ? <p className={styles.fieldError} role="note">현재 행사명에 문자로 보낼 수 없는 글자가 있습니다. 행사 설정에서 이름을 확인하거나 행사명 삽입을 지워 주세요. 최종 내용은 발송 전에 다시 확인합니다.</p> : null}
+                  {charsetCandidateIds.size ? <p className={styles.fieldError} role="note">현재 화면 기준으로 선택한 참가자 {charsetCandidateIds.size}명의 이름에 문자로 보낼 수 없는 글자가 있습니다. 발송 전 서버에서 다시 확인합니다. {" "}<button type="button" className={styles.textButton} onClick={() => { setShowSelectedOnly(false); setCharsetCandidatesOnly(true); jumpToRecipientFilter(); window.setTimeout(() => document.getElementById("recipient-charset-reset")?.focus(), 0); }}>이름 확인이 필요한 참가자 보기</button></p> : null}
+                  {campaignDraft.channel !== "ALIMTALK" ? <div className={styles.personalizationTools} role="group" aria-label="개인화 정보 넣기">
+                    <span>개인화 정보</span>
+                    {["이름", "행사명", "행사일", "티켓링크", "럭키번호"].map(name => {
+                      const label = name === "티켓링크" ? "티켓 링크" : name === "럭키번호" ? "럭키 번호" : name;
+                      return <button key={name} type="button" className="button button-quiet" aria-label={`${label} 넣기`} disabled={messagesLocked} onClick={() => insertPersonalization(name)}>{label}</button>;
+                    })}
+                  </div> : null}
+                  <p className={styles.help} id="campaign-variables">
+                    {campaignDraft.channel === "ALIMTALK" ? "선택한 템플릿 문구를 그대로 사용하고 개인화 정보만 자동으로 바꿉니다. 문구를 바꾸려면 템플릿 관리에서 승인 내용과 맞추거나 문자로 전환하세요." : "받는 사람의 정보로 자동 바뀝니다."} 럭키 번호는 <Link href={`/console/events/${encodeURIComponent(eventId)}/draws`}>추첨·투표에서 먼저 발급</Link>하세요.
+                  </p>
                 </div>
                     </div>
 
                 <section className={styles.draftPreview} aria-labelledby="message-preview-heading">
                   <div className={styles.draftPreviewHead}>
-                    <h3 id="message-preview-heading">내용 미리보기</h3>
-                    <span>{channelLabel(campaignDraft.channel)} · 받는 화면 기준</span>
+                    <h3 id="message-preview-heading">받는 화면 예시</h3>
+                    <span>{authoringTypeLabel(campaignDraft.channel)}</span>
                   </div>
-                  <p className={styles.draftPreviewBody} id="message-draft-preview">
-                    {campaignDraft.body || "메시지 내용을 입력하면 여기에 표시됩니다."}
-                  </p>
-                  <p className={styles.help}>개인별 변수는 발송 시 적용됩니다. 처리 결과는 요청 안내와 발송 기록에서 확인하세요.</p>
+                  <div className={campaignDraft.channel === "ALIMTALK" ? styles.kakaoExample : styles.textExample}>
+                    {campaignDraft.channel === "ALIMTALK" ? <div className={styles.kakaoExampleHeader}>알림톡 도착 예시</div> : null}
+                    {campaignDraft.channel === "MMS" && campaignDraft.imageFileId ? <div className={styles.attachmentPreview}>
+                      <img key={`${campaignDraft.imageFileId}-${imagePreviewRevision}`} hidden={imagePreviewFailed} src={`/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(campaignDraft.imageFileId)}?preview=${imagePreviewRevision}`} alt={`첨부 사진: ${campaignDraft.imageName || "사진 1장"}`} onError={() => setImagePreviewFailed(true)} onLoad={() => setImagePreviewFailed(false)} />
+                      {imagePreviewFailed ? <p className={styles.help}>첨부 사진 미리보기를 불러오지 못했습니다. <button type="button" className={styles.textButton} onClick={() => { setImagePreviewFailed(false); setImagePreviewRevision(value => value + 1); }}>사진 다시 보기</button></p> : null}
+                    </div> : null}
+                    <p className={`${styles.draftPreviewBody} ${campaignDraft.channel === "ALIMTALK" ? styles.kakaoExampleBody : ""}`} id="message-draft-preview">
+                      {campaignDraft.body ? previewMessageExample(campaignDraft.body, state.eventName, state.eventDate) : "메시지 내용을 입력하면 여기에 표시됩니다."}
+                    </p>
+                  </div>
+                  <p className={styles.help}>{campaignDraft.channel === "ALIMTALK" ? "문구와 개인화 예시입니다. 채널명·버튼·이미지는 실제 승인 템플릿에 따릅니다." : "이름·티켓 링크·번호는 예시입니다. 실제 내용과 길이, 문자 유형은 수신자별로 달라질 수 있습니다."}</p>
                 </section>
 
-                {campaignDraft.channel === "MMS" ? (
-                  <div className={styles.sendBlock}>
-                    <label htmlFor="campaign-image">MMS 사진 · JPG 200KB 이하</label>
+                {campaignDraft.channel !== "ALIMTALK" ? (
+                  <div className={styles.sendBlock} data-message-attachment>
+                    <label htmlFor="campaign-image">사진 첨부 · 선택 · JPG 200KB 이하</label>
                     <input
                       id="campaign-image"
                       type="file"
@@ -2132,36 +3344,75 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                         ? "이미지를 올리는 중입니다."
                         : campaignDraft.imageFileId
                           ? `첨부됨: ${campaignDraft.imageName || "사진 1장"} · MMS는 별도 요금이 발생합니다.`
-                          : "사진을 첨부해야 발송을 등록할 수 있습니다."}
+                          : "사진 없이 보내면 SMS/LMS가 자동 결정됩니다. 첨부하면 MMS로 전환됩니다."}
                     </p>
+                    {campaignDraft.imageFileId ? <button type="button" className={styles.textButton} disabled={uploadingImage || messagesLocked || uncertainMmsUpload} onClick={() => {
+                      if (inFlightRef.current || mmsUploadGateRef.current) return;
+                      setAttachmentRevision(revision => revision + 1);
+                      setCampaignDraft(current => ({ ...current, channel: current.channel === "ALIMTALK" ? "ALIMTALK" : "SMS", imageFileId: "", imageName: "" }));
+                      setCampaignFieldError(current => current?.field === "imageFileId" ? null : current);
+                    }}>사진 첨부 해제</button> : null}
                     {campaignFieldError?.field === "imageFileId" ? <p className={styles.fieldError} id="campaign-image-error" role="alert">{campaignFieldError.message}</p> : null}
                   </div>
                 ) : null}
 
                 <div className={styles.sendCard}>
                 <div className={uiStyles.formGrid}>
-                  <div>
-                    <label htmlFor="campaign-scheduled">예약 등록(수동 실행) · 선택</label>
+                  <details className={styles.scheduleDetails} ref={scheduleDetailsRef}>
+                    <summary>
+                      예약 등록 · 선택
+                      {campaignDraft.scheduled ? <span>{formatScheduledInput(campaignDraft.scheduled)} · {campaignDraft.simulate || campaignDraft.scheduleMode === "MANUAL" ? "수동 실행" : "자동 실행"}</span> : null}
+                      {campaignFieldError?.field === "scheduled" ? <span>시간 확인 필요</span> : null}
+                    </summary>
+                    <div className={styles.scheduleFields}>
+                    <label htmlFor="campaign-scheduled">예약 시각 (한국 시간)</label>
                     <input
                       id="campaign-scheduled"
+                      ref={scheduleInputRef}
                       type="datetime-local"
+                      step={60}
                       value={campaignDraft.scheduled}
                       aria-invalid={campaignFieldError?.field === "scheduled"}
                       aria-describedby={campaignFieldError?.field === "scheduled" ? "campaign-scheduled-error campaign-scheduled-help" : "campaign-scheduled-help"}
-                      onChange={(event) => setCampaignDraft({ ...campaignDraft, scheduled: event.target.value })}
+                      onChange={(event) => {
+                        setScheduleBadInput(event.target.validity.badInput);
+                        setCampaignDraft({ ...campaignDraft, scheduled: event.target.value, scheduleMode: event.target.value ? campaignDraft.scheduleMode : "MANUAL" });
+                        setCampaignFieldError((current) => current?.field === "scheduled" ? null : current);
+                      }}
+                      onInput={(event) => {
+                        if (!event.currentTarget.validity.badInput) {
+                          setScheduleBadInput(false);
+                          setCampaignFieldError((current) => current?.field === "scheduled" ? null : current);
+                        }
+                      }}
+                      onKeyUp={(event) => setScheduleBadInput(event.currentTarget.validity.badInput)}
+                      onBlur={(event) => {
+                        if (event.target.validity.badInput) {
+                          setScheduleBadInput(true);
+                          setCampaignFieldError({ field: "scheduled", message: "예약 날짜와 시간을 모두 입력하거나 지워 주세요." });
+                        }
+                      }}
                     />
                     <p className={styles.help} id="campaign-scheduled-help">
-                      예약 시각 이후 이 화면에서 발송 실행을 눌러야 합니다. 자동 발송은 지원하지 않습니다.
+                      {!campaignDraft.scheduled
+                        ? "한국 시간 기준입니다. 시각을 입력하지 않으면 즉시 처리합니다."
+                        : campaignDraft.simulate
+                        ? "한국 시간 기준입니다. 모의 예약은 시각 이후 직접 실행하며, 실행해도 수신자에게 전달되지 않습니다."
+                        : "한국 시간 기준입니다. 선택한 실행 방식과 서버 상태는 아래 발송 전 확인에서 볼 수 있습니다."}
                     </p>
+                    {campaignDraft.scheduled && !campaignDraft.simulate ? <ConsoleChoiceGroup id="campaign-schedule-mode" label="예약 실행 방식"
+                      value={campaignDraft.scheduleMode} onChange={(value) => setCampaignDraft({ ...campaignDraft, scheduleMode: value === "AUTO" ? "AUTO" : "MANUAL" })}
+                      options={[{ value: "MANUAL", label: "수동 실행" }, { value: "AUTO", label: "자동 실행" }]} /> : null}
                     {campaignFieldError?.field === "scheduled" ? <p className={styles.fieldError} id="campaign-scheduled-error" role="alert">{campaignFieldError.message}</p> : null}
-                  </div>
+                    </div>
+                  </details>
                   <label className={styles.simulateOption}>
                     <input
                       type="checkbox"
                       checked={campaignDraft.simulate}
                       disabled={newOrgSimOnly}
                       title={newOrgSimOnly ? "새 운영사에는 발송 수단이 없으므로 모의 기록만 가능합니다. 연결돼도 자동으로 바뀌지 않습니다." : undefined}
-                      onChange={(event) => setCampaignDraft({ ...campaignDraft, simulate: event.target.checked })}
+                      onChange={(event) => setCampaignDraft({ ...campaignDraft, simulate: event.target.checked, scheduleMode: event.target.checked ? "MANUAL" : campaignDraft.scheduleMode })}
                     />
                     <span><strong>모의 발송으로 기록</strong><small>{newOrgSimOnly ? "새 운영사는 미연동이라 모의 기록만 가능합니다. 연결돼도 자동으로 실제 발송으로 바뀌지 않습니다." : "실제 수신자에게 전달되지 않습니다."}</small></span>
                   </label>
@@ -2170,10 +3421,15 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   </div>
                 </div>
 
-                {campaignError ? <p className={styles.fieldError} id="campaign-request-error" role="alert">{campaignError}</p> : null}
-                <section className={styles.reviewCard} aria-labelledby="campaign-review-heading">
+                {composeStep !== 3 ? <div className={styles.stepActions}>
+                  {composeStep === 2 ? <button type="button" className="button button-secondary" onClick={() => goComposeStep(1)}>이전</button> : null}
+                  <button type="button" className="button button-primary" disabled={busyAction !== null || uploadingImage || Boolean(uncertainCreate) || recipientReviewRequired} onClick={() => goComposeStep(composeStep === 1 ? 2 : 3)}>{composeStep === 1 ? "내용 작성" : "발송 검토로"}</button>
+                </div> : null}
+                {campaignError && !uncertainCreate ? <p className={styles.fieldError} id="campaign-request-error" role="alert">{campaignError}</p> : null}
+                <section className={styles.reviewCard} hidden={composeStep !== 3} aria-labelledby="campaign-review-heading">
                   <div className={styles.reviewHeading}>
-                    <h3 id="campaign-review-heading">발송 전 검토</h3>
+                    <h3 id="campaign-review-heading" tabIndex={-1}>발송 전 검토</h3>
+                    <p className={styles.finalBody}>{campaignDraft.body}</p>
                     <p>대상과 내용을 확인한 뒤 발송 확인을 진행합니다.</p>
                   </div>
                   <ul className={styles.draftSummary} aria-label="작성 요약">
@@ -2192,16 +3448,24 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                             : "메시지 내용을 입력하세요"}
                     </li>
                     <li>
-                      {scheduledDraft
+                      {scheduleBadInput ? "예약 날짜와 시간을 확인하세요" : scheduledDraft
                         ? simulateDraft
-                          ? "모의 예약 · 시각이 되면 이 화면에서 수동 실행 · 전달 없음"
-                          : "예약 등록 · 시각이 되면 이 화면에서 수동 실행"
+                          ? `모의 예약 · ${formatScheduledInput(campaignDraft.scheduled)} · 수동 실행 · 전달 없음`
+                          : `예약 ${formatScheduledInput(campaignDraft.scheduled)} · ${campaignDraft.scheduleMode === "AUTO" ? "자동 실행" : "수동 실행"}`
                         : simulateDraft
                           ? "모의 발송 · 실제 전달 없음"
-                          : "즉시 발송 시도 · 되돌릴 수 없음"}
+                          : "즉시 발송 시도"}
                     </li>
                   </ul>
+                  {ticketLinkInvalidCount > 0 ? <p className={styles.help} role="note">
+                    티켓을 사용할 수 없거나 상태를 확인할 수 없는 수신자 {ticketLinkInvalidCount}명 · {simulateDraft ? "모의 기록은 가능하지만 실제 발송 전 확인이 필요합니다." : "실제 발송 전에 티켓을 확인해 주세요."}{" "}
+                    <Link href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</Link>
+                  </p> : null}
+                  {scheduledDraft && !simulateDraft ? <p className={styles.help} role="note">{scheduleModeNotice(campaignDraft.scheduleMode)}</p> : null}
+                  {campaignDraft.channel === "ALIMTALK" && !simulateDraft ? <p className={styles.help} role="note">{campaignDraft.smsFallback ? ALIMTALK_FALLBACK_NOTICE : ALIMTALK_NO_FALLBACK_NOTICE}</p> : null}
+                  {scheduledDraft && !simulateDraft ? <p className={styles.help}>{scheduleServerStatus(state.messageSchedule)} 현재 서버 기준이며 실제 발송 성공을 보장하지 않습니다.</p> : null}
                 <div className={styles.reviewBar}>
+                  <button type="button" className="button button-secondary" onClick={() => goComposeStep(2)}>내용 수정</button>
                   <p className={styles.reviewSummary} id="campaign-submit-warning" tabIndex={-1}>
                     선택 {selectedCount}명 · {channelLabel(campaignDraft.channel)} · {submitModeLabel}{simulateDraft ? "" : " · 발송은 되돌릴 수 없습니다."}
                     {campaignDraft.channel === "MMS" && !simulateDraft ? " 별도 요금이 발생합니다." : ""}
@@ -2220,13 +3484,12 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                     id="campaign-submit"
                     className="button button-primary"
                     type="submit"
-                    disabled={selectedCount === 0 || busyAction !== null || uploadingImage || messagesLocked}
-                    aria-describedby={campaignError ? "campaign-submit-warning campaign-request-error" : "campaign-submit-warning"}
+                    disabled={selectedCount === 0 || busyAction !== null || uploadingImage || messagesLocked || otherCreateReceipt || uncertainMmsUpload}
+                    aria-describedby={campaignError && !uncertainCreate ? "campaign-submit-warning campaign-request-error" : "campaign-submit-warning"}
                     title={messagesLocked ? messagesLockReason : selectedCount === 0 ? "수신자를 먼저 고르세요." : undefined}
                   >
                     {busyAction === "campaign" ? "요청 중…" : "발송 검토"}
                   </button>
-                  <span className={styles.help}>선택·채널·모의를 확인하고 누르면 발송 확인이 열립니다.</span>
                 </div>
 
                 <p className={styles.reviewInvalidated} id="campaign-review-status" role="status" aria-atomic="true">
@@ -2247,52 +3510,82 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   />
                 ) : null}
                 </section>
-              </form>
+                </fieldset>
+              </ValidatedForm>
             </ConsoleSection>
             </div>
             )} templates={(
             <ConsoleSection
               headingId="templates-heading"
               title="메시지 템플릿"
-              description="필요할 때 펼쳐서 관리"
+              description="자주 쓰는 문자 문구와 승인된 알림톡 정보를 관리합니다."
+              action={<ConsoleRefreshButton label="목록 새로고침" disabled={busyAction !== null || refreshingOtherTemplate} onRefresh={() => refresh(true)} />}
               divider
               className={styles.templateSection}
             >
               {templateNotice ? <ConsoleFeedback kind="success">{templateNotice}</ConsoleFeedback> : null}
-              {templateError ? <ConsoleFeedback kind="error">{templateError}</ConsoleFeedback> : null}
-              <details className={styles.templateDetails} id="template-details">
-                <summary>템플릿 관리 열기{state.templates.length > 0 ? ` · ${state.templates.length}개` : ""}</summary>
-                {state.templates.length ? (
-                  <ul className={styles.templateList}>
-                    {state.templates.map((template) => (
-                      <li key={template.id} className={styles.templateRow}>
-                        <div className={styles.templateSummary}>
-                          <strong>{template.name}</strong>
-                          <span>{channelLabel(template.channel)}</span>
-                          {template.channel === "ALIMTALK" ? <small>승인 ID {template.solapiTemplateId ? "등록됨" : "미등록"}</small> : null}
-                        </div>
-                        <div className={styles.templateActions}>
-                          <button type="button" className="button button-secondary" onClick={() => useTemplate(template)}>사용</button>
-                          <button
-                            type="button"
-                            className="button button-secondary"
-                            onClick={() => {
-                              setTemplateDraft({ ...template });
-                              setTemplateError(null);
-                              setTemplateFieldError(null);
-                              setTemplateNotice(null);
-                            }}
-                          ><PencilIcon />편집</button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className={styles.empty}>저장된 템플릿이 없습니다. 자주 쓰는 안내 문구를 등록하세요.</p>
-                )}
+              {templateError && !pendingTemplate ? <ConsoleFeedback kind="error">{templateError}</ConsoleFeedback> : null}
+              {pendingTemplate ? <section className={styles.sendRecovery} aria-labelledby="template-recovery-heading">
+                <h2 id="template-recovery-heading" tabIndex={-1}>{pendingTemplate.command === "template.save" ? "템플릿 저장 확인 필요" : pendingTemplate.payload.archived ? "템플릿 보관 확인 필요" : "템플릿 복원 확인 필요"}</h2>
+                <p>변경이 이미 반영됐을 수 있습니다. 서버 처리 확인은 변경 요청을 다시 보내지 않습니다.</p>
+                {templateError ? <p role="alert">{templateError}</p> : null}
+                <div className={styles.sendRecoveryActions}>
+                  <button type="button" className="button button-secondary" disabled={busyAction !== null || checkingTemplate || abandonTemplateConfirm} onClick={() => void checkTemplateSave()}>{checkingTemplate ? "확인 중…" : "서버 처리 확인"}</button>
+                  <button type="button" className="button button-secondary" disabled={busyAction !== null || checkingTemplate || abandonTemplateConfirm || messagesLocked} onClick={() => void executeTemplateSave(pendingTemplate, true)}>같은 요청 다시 시도</button>
+                  <button type="button" className="button button-secondary" disabled={busyAction !== null || checkingTemplate || abandonTemplateConfirm} onClick={() => setAbandonTemplateConfirm(true)}>확인 전 그만두기</button>
+                </div>
+                {abandonTemplateConfirm ? <ConsoleConfirm summary="이미 반영된 변경은 취소되지 않습니다. 확인을 그만두고 목록을 확인할까요?" confirmLabel="확인 그만두기" onConfirm={() => {
+                  const attempt = pendingTemplateRef.current;
+                  if (!attempt) return;
+                  abandonOperatorAttempt(attempt.id); forgetOperatorReceipt(attempt.id);
+                  templateSaveRef.current = null; pendingTemplateRef.current = null; setPendingTemplate(null);
+                  setAbandonTemplateConfirm(false); setTemplateError("이전 변경이 반영됐을 수 있습니다. 목록을 확인한 뒤 다시 진행하세요.");
+                  setRefreshingOtherTemplate(true);
+                  void refresh(true).finally(() => { if (activeMessageEventRef.current === attempt.eventId) setRefreshingOtherTemplate(false); });
+                }} onCancel={() => setAbandonTemplateConfirm(false)} /> : null}
+              </section> : otherTemplateReceipt ? <ConsoleFeedback kind="warning">이전 템플릿 변경 결과를 화면 위의 ‘처리 결과 확인’에서 먼저 확인하세요.</ConsoleFeedback> : null}
+              {refreshingOtherTemplate ? <ConsoleFeedback kind="info">최신 템플릿 목록을 불러오고 있습니다.</ConsoleFeedback> : null}
+              <div className={styles.templateManager} id="template-details" data-empty={state.templates.length === 0 ? true : undefined}>
+                <div className={styles.templateLibraryTools}>
+                  <label><span className="sr-only">템플릿 이름·내용 검색</span><input id="template-search" type="search" maxLength={120} placeholder="이름·내용으로 템플릿 찾기" value={templateQuery} onChange={event => setTemplateQuery(event.target.value)} /></label>
+                  <label><span className="sr-only">템플릿 상태</span><select id="template-scope" value={templateScope} onChange={event => setTemplateScope(event.target.value)}>
+                    <option value="ACTIVE">사용 중 ({activeTemplates.length})</option><option value="ARCHIVED">보관됨 ({state.templates.length - activeTemplates.length})</option><option value="ALL">전체 ({state.templates.length})</option>
+                  </select></label>
+                  <span role="status" aria-live="polite">{visibleTemplates.length}개</span>
+                </div>
+                {templateArchiveConfirm ? <div className={styles.templateArchiveReview}>
+                  <ConsoleConfirm summary={confirmLines(`〈${templateArchiveConfirm.name}〉 템플릿을 보관할까요?\n\n새 메시지의 선택 목록에서 숨깁니다. 기존 발송 기록과 등록된 예약은 바뀌지 않으며 보관 목록에서 복원할 수 있습니다. 작성 중인 내용은 이 화면에 유지합니다.`)} confirmLabel="템플릿 보관" busy={busyAction !== null || templateRecoveryLocked || messagesLocked} onConfirm={() => { void changeTemplateArchive(templateArchiveConfirm, true); }} onCancel={() => setTemplateArchiveConfirm(null)} />
+                </div> : null}
+                <div className={styles.templateListPanel}>
+                  {visibleTemplates.length ? <ul className={styles.templateList} tabIndex={0} aria-label="메시지 템플릿 목록">
+                    {visibleTemplates.map(template => <li key={template.id} className={styles.templateRow} data-template-id={template.id}>
+                      <div className={styles.templateSummary}>
+                        <strong>{template.name}</strong><span>{familyLabel(template.channel)}</span>
+                        {template.archived ? <small>보관됨</small> : null}
+                        {template.channel === "ALIMTALK" ? <small>승인 ID {template.solapiTemplateId ? "등록됨" : "미등록"}</small> : null}
+                      </div>
+                      <div className={styles.templateActions}>
+                        {!template.archived ? <button type="button" className="button button-secondary" disabled={messagesLocked || templateRecoveryLocked || busyAction !== null} onClick={() => useTemplate(template)}>사용</button> : null}
+                        <button type="button" className="button button-secondary" disabled={template.archived || templateRecoveryLocked || busyAction !== null} onClick={() => requestTemplateEdit(template)}><PencilIcon />{messagesLocked ? "내용 보기" : "편집"}</button>
+                        <button type="button" className="button button-secondary" disabled={messagesLocked || templateRecoveryLocked || busyAction !== null} onClick={() => { if (template.archived) void changeTemplateArchive(template, false); else { setTemplateEditConfirm(null); setTemplateResetConfirm(false); setTemplateArchiveConfirm({ ...template }); } }}>{template.archived ? "복원" : "보관"}</button>
+                      </div>
+                    </li>)}
+                  </ul> : <div className={styles.templateLibraryEmpty}>
+                    <p className={styles.help}>{state.templates.length === 0 ? "자주 쓰는 안내를 저장해 두면 다음 발송에 다시 사용할 수 있습니다." : templateScope === "ARCHIVED" && !templateSearch ? "보관된 템플릿이 없습니다. 사용하지 않는 문구를 보관하면 여기에 표시됩니다." : "조건에 맞는 템플릿이 없습니다."}</p>
+                    {state.templates.length > 0 ? <button type="button" className={styles.textButton} onClick={() => { setTemplateQuery(""); setTemplateScope("ACTIVE"); }}>검색·필터 초기화</button> : null}
+                  </div>}
+                </div>
 
-                <form className={uiStyles.formStack} onSubmit={saveTemplate}>
-                  <h3>{templateDraft.id ? "템플릿 수정" : "새 템플릿"}</h3>
+                <ValidatedForm className={uiStyles.formStack} onSubmit={saveTemplate}>
+                  {templateEditConfirm ? <ConsoleConfirm summary={`작성 중인 내용을 비우고 〈${templateEditConfirm.name}〉 템플릿을 편집할까요?`} confirmLabel="선택한 템플릿 편집" onConfirm={() => {
+                    const latest = state.templates.find(item => item.id === templateEditConfirm.id);
+                    if (!latest || latest.archived || latest.version !== templateEditConfirm.version) { setTemplateEditConfirm(null); setTemplateError("템플릿이 변경됐습니다. 목록을 새로고침한 뒤 다시 선택하세요."); return; }
+                    openTemplateEditor(latest);
+                  }} onCancel={() => setTemplateEditConfirm(null)} /> : null}
+                  {templateResetConfirm ? <ConsoleConfirm summary="작성 중인 템플릿 내용을 비우고 새로 작성할까요? 저장된 템플릿은 바뀌지 않습니다." confirmLabel="내용 비우고 새로 작성" onConfirm={clearTemplateDraft} onCancel={() => setTemplateResetConfirm(false)} /> : null}
+                  {editingTemplate?.archived ? <div className={styles.templateLibraryEmpty}><p className={styles.help}>보관된 템플릿입니다. 입력은 유지하며 복원한 뒤 수정할 수 있습니다.</p><button type="button" className="button button-secondary" disabled={messagesLocked || templateRecoveryLocked || busyAction !== null} onClick={requestNewTemplate}>새 템플릿 작성</button></div> : null}
+                  <fieldset className={styles.composeLock} disabled={messagesLocked || templateRecoveryLocked || busyAction === "template" || editingTemplate?.archived}>
+                  <h3>{messagesLocked ? "템플릿 내용" : templateDraft.id ? "템플릿 수정" : "새 템플릿"}</h3>
                   <div>
                     <label htmlFor="template-name">템플릿 이름</label>
                     <input
@@ -2307,22 +3600,10 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                     {templateFieldError?.field === "name" ? <p className={styles.fieldError} id="template-name-error" role="alert">{templateFieldError.message}</p> : null}
                   </div>
                   <div>
-                    <label htmlFor="template-channel">채널</label>
-                    <select
-                      id="template-channel"
-                      value={templateDraft.channel}
-                      aria-invalid={templateFieldError?.field === "channel"}
-                      aria-describedby={templateFieldError?.field === "channel" ? "template-channel-error" : undefined}
-                      onChange={(event) => setTemplateDraft({ ...templateDraft, channel: event.target.value })}
-                    >
-                      <option value="SMS">SMS · 단문</option>
-                      <option value="LMS">LMS · 장문</option>
-                      <option value="MMS">MMS · 이미지</option>
-                      <option value="ALIMTALK">알림톡</option>
-                    </select>
-                    {templateDraft.channel === "MMS" ? (
-                      <p className={styles.help}>MMS 이미지는 발송할 때 첨부합니다. 템플릿에는 문구만 저장됩니다.</p>
-                    ) : null}
+                    <ConsoleChoiceGroup layout="compare" id="template-channel" label="보내는 방법" value={templateDraft.channel === "ALIMTALK" ? "ALIMTALK" : "SMS"}
+                      options={TEMPLATE_CHANNEL_CHOICES} invalid={templateFieldError?.field === "channel"}
+                      describedBy={templateFieldError?.field === "channel" ? "template-channel-error" : undefined}
+                      onChange={(channel) => setTemplateDraft({ ...templateDraft, channel })} />
                     {templateFieldError?.field === "channel" ? <p className={styles.fieldError} id="template-channel-error" role="alert">{templateFieldError.message}</p> : null}
                   </div>
                   {templateDraft.channel === "ALIMTALK" ? (
@@ -2342,7 +3623,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   ) : null}
                   <div>
                     <label htmlFor="template-body">메시지 내용</label>
-                    <textarea
+                    <textarea data-resize-none="true"
                       id="template-body"
                       maxLength={2000}
                       required
@@ -2352,7 +3633,8 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                       aria-describedby={templateFieldError?.field === "body" ? "template-body-error template-variables" : "template-variables"}
                       onChange={(event) => setTemplateDraft({ ...templateDraft, body: event.target.value })}
                     />
-                    <p className={styles.help} id="template-variables">사용 가능 변수: &#123;&#123;이름&#125;&#125;, &#123;&#123;행사명&#125;&#125;, &#123;&#123;행사일&#125;&#125;, &#123;&#123;티켓링크&#125;&#125;, &#123;&#123;럭키번호&#125;&#125;(미발급 시 빈칸)</p>
+                    <p className={styles.help} id="template-variables">사용 가능 변수: &#123;&#123;이름&#125;&#125;, &#123;&#123;행사명&#125;&#125;, &#123;&#123;행사일&#125;&#125;, &#123;&#123;티켓링크&#125;&#125;, &#123;&#123;럭키번호&#125;&#125; · 럭키번호는 추첨·투표에서 먼저 발급하세요.</p>
+                    {templateDraft.channel === "ALIMTALK" ? <p className={styles.help}>Solapi에서 승인받은 ID와 문구를 확인해 등록하세요. 승인 문구의 {"#{이름}"} 같은 변수는 위의 {"{{이름}}"} 형식으로 입력하며, 변수명은 제공된 개인화 정보와 같아야 합니다.</p> : null}
                     {templateFieldError?.field === "body" ? <p className={styles.fieldError} id="template-body-error" role="alert">{templateFieldError.message}</p> : null}
                   </div>
                   {templateFieldError && !FIELD_LABELS[templateFieldError.field] ? <p className={styles.fieldError} role="alert">{templateFieldError.message}</p> : null}
@@ -2361,11 +3643,12 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                       {busyAction === "template" ? "저장 중…" : templateDraft.id ? "템플릿 저장" : "템플릿 추가"}
                     </button>
                     {templateDraft.id ? (
-                      <button type="button" className={styles.textButton} onClick={() => { setTemplateDraft(EMPTY_TEMPLATE); setTemplateFieldError(null); setTemplateError(null); setTemplateNotice(null); }}><PlusIcon />새로 작성</button>
+                      <button type="button" className={styles.textButton} onClick={requestNewTemplate}><PlusIcon />새로 작성</button>
                     ) : null}
                   </ConsoleFormActions>
-                </form>
-              </details>
+                  </fieldset>
+                </ValidatedForm>
+              </div>
             </ConsoleSection>
             )} history={(
           <ConsoleSection
@@ -2374,23 +3657,22 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
             className={styles.historySection}
             action={(
               <div className={styles.historyTools}>
-              <button className="button button-quiet" type="button" disabled={busyAction !== null} onClick={() => void refresh(true)}>
-                상태 새로고침
-              </button>
-              <button id="message-compose-open" type="button" className={`button ${composerOpen ? "button-secondary" : "button-primary"}`} aria-expanded={composerOpen} aria-controls="message-composer" onClick={revealComposer}>
-                {composerOpen ? "작성 화면으로" : campaignDraft.title || campaignDraft.body || selectedCount ? "작성 이어가기" : "메시지 작성"}
+              <ConsoleRefreshButton label="상태 새로고침" disabled={busyAction !== null} onRefresh={() => refresh(true)} />
+              <button id="message-compose-open" type="button" className={`button ${composerOpen || messagesLocked ? "button-secondary" : "button-primary"}`} disabled={messagesLocked && !composeDirty && !uncertainCreate} title={messagesLocked ? messagesLockReason : undefined} aria-expanded={composerOpen} aria-controls="message-composer" onClick={revealComposer}>
+                {messagesLocked && composeDirty ? "작성 내용 보기" : composerOpen ? "작성 화면으로" : composeDirty ? "작성 이어가기" : "메시지 작성"}
               </button>
               </div>
             )}
             divider
           >
+            {archived && campaignNotice ? <p className={styles.help} role="status">{campaignNotice.message}</p> : null}
             {state.campaigns.length === 0 && !attentionOnly ? (
               <div className={styles.firstMessage}>
                 <strong>아직 발송 기록이 없습니다</strong>
-                <p>메시지를 작성하고 수신자를 선택하면 발송 전에 내용을 확인할 수 있습니다.</p>
+                <p>{messagesLocked ? "등록된 발송 기록은 이곳에서 확인합니다." : "메시지를 작성하고 수신자를 선택하면 발송 전에 내용을 확인할 수 있습니다."}</p>
               </div>
             ) : (<>
-            {(attentionCampaigns.length > 0 || state.campaigns.some((campaign) => campaign.status === "SCHEDULED") || attentionOnly || historyStatus === "SCHEDULED") ? <div className={styles.historyOverview} aria-label="발송 업무 바로가기">
+            {(attentionCampaigns.length > 0 || state.campaigns.some((campaign) => campaign.status === "SCHEDULED") || attentionOnly || historyStatus === "SCHEDULED") ? <div className={styles.historyOverview} role="group" aria-label="발송 빠른 필터">
               {(attentionCampaigns.length > 0 || attentionOnly) ? (
               <button type="button" className={styles.historyOverviewItem} aria-pressed={attentionOnly} onClick={() => {
                 setAttentionOnly((current) => !current);
@@ -2411,7 +3693,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
               <label><span className="sr-only">발송 제목 검색</span><input id="message-history-search" type="search" placeholder="발송 제목 검색" value={historyQuery} onChange={(event) => { setHistoryQuery(event.target.value); setHistoryLimit(10); }} /></label>
               <label><span className="sr-only">발송 상태</span><select id="message-history-status" value={historyStatus} onChange={(event) => { setHistoryStatus(event.target.value); setHistoryLimit(10); }}>
                 <option value="ALL">모든 상태</option>
-                {["SCHEDULED", "NEEDS_CONNECTION", "SENDING", "PARTIAL", "FAILED", "SENT", "SIMULATED", "CANCELLED"].map((status) => <option key={status} value={status}>{messageStatusLabel(status)}</option>)}
+                {["SCHEDULED", "NEEDS_CONNECTION", "SENDING", "ACCEPTED", "PARTIAL", "FAILED", "SENT", "SIMULATED", "CANCELLED"].map((status) => <option key={status} value={status}>{messageStatusLabel(status)}</option>)}
               </select></label>
               <span role="status">{historyQuery || historyStatus !== "ALL" ? `검색 결과 ${visibleCampaigns.length}건 · 전체 ${historyScope.length}건` : `총 ${historyScope.length}건`}</span>
             </div>
@@ -2435,13 +3717,19 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                 <thead><tr><th scope="col">발송 제목</th><th scope="col">채널</th><th scope="col">대상</th><th scope="col">요청·예약</th><th scope="col">상태</th><th scope="col">작업</th></tr></thead>
                 <tbody ref={historyListRef}>
                 {shownCampaigns.map((campaign) => {
-                  const due = !campaign.scheduled || Date.parse(campaign.scheduled) <= nowMs;
+                  const due = hasValidScheduledInstant(campaign.scheduled) && Date.parse(campaign.scheduled) <= nowMs;
                   const overdue = campaign.status === "SCHEDULED" && isOverdue(campaign, nowMs);
-                  const canExecute = campaign.status === "SCHEDULED" && due;
-                  const canRetry = campaign.status === "NEEDS_CONNECTION";
-                  const canSync = campaign.status === "SENDING" || campaign.status === "PARTIAL";
+                  const blocked = blockedById.get(campaign.id);
+                  const recipientChanged = blocked?.reason === "RECIPIENT_CHANGED";
+                  const charsetBlocked = blocked?.reason === "SMS_CHARSET_UNSUPPORTED" || blocked?.reason === "SMS_CHARSET_REVIEW_UNAVAILABLE" || campaign.smsTextProblemCount > 0 || campaign.smsTextProblemUnknown;
+                  const resultMatchUnconfirmed = campaign.deliveries.some(delivery => delivery.resultMatchUnconfirmed);
+                  const reloadable = canReloadCampaign(campaign);
+                  const invalidSchedule = (campaign.status === "SCHEDULED" || Boolean(campaign.scheduled)) && !hasValidScheduledInstant(campaign.scheduled);
+                  const canSync = !campaign.genericTransport && (campaign.status === "SENDING" || campaign.status === "PARTIAL");
                   const canCancel = campaign.status === "SCHEDULED" || campaign.status === "NEEDS_CONNECTION";
                   const retryAmbiguous = ambiguousRetryIds.includes(campaign.id);
+                  const canRetry = retryAmbiguous ? campaign.status !== "SCHEDULED" : campaign.status === "NEEDS_CONNECTION" && !invalidSchedule;
+                  const canExecute = campaign.status === "SCHEDULED" && (due || retryAmbiguous);
                   const syncAmbiguous = ambiguousSyncIds.includes(campaign.id);
                   const cancelAmbiguous = ambiguousCancelIds.includes(campaign.id);
                   const detailOpen = expandedCampaignId === campaign.id || historyPending?.id === campaign.id || reloadPending?.id === campaign.id;
@@ -2454,39 +3742,48 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                           <td className={styles.historyChannel} data-history-channel><span className={styles.mobileCellLabel}>채널 </span>{channelLabel(campaign.channel)}</td>
                           <td className={styles.historyCount} data-history-count><span className={styles.mobileCellLabel}>대상 </span>{campaign.recipientIds.length}명</td>
                           <td className={styles.historyTime} data-history-time><span><span className={styles.mobileCellLabel}>요청 </span><time dateTime={campaign.at || undefined}>{formatDate(campaign.at)}</time></span>
-                            {campaign.scheduled ? <small>예약 {formatDate(campaign.scheduled)}</small> : null}
+                            {campaign.scheduled || campaign.status === "SCHEDULED" ? <small>예약 {formatSavedSchedule(campaign.scheduled)}</small> : null}
                           </td>
                           <td className={styles.historyStatus} data-history-status>
-                            <span className={`${styles.status} ${statusTone(campaign.status)}`}>{messageStatusLabel(campaign.status)}</span>
+                            <span className={`${styles.status} ${resultMatchUnconfirmed ? styles.statusWarning : statusTone(campaign.status)}`}>
+                              {campaign.submissionUnconfirmed ? "공급사 접수 미확인" : resultMatchUnconfirmed ? "수신자 결과 확인 필요" : campaign.status === "SENT" && campaign.providerKind !== "solapi" ? "발송 기록 · 전달 근거 미확인" : messageStatusLabel(campaign.status)}
+                            </span>
                             {overdue ? (
-                              <span className={`${styles.status} ${styles.statusWarning}`}>실행 시점 지남·수동 실행 필요</span>
+                              <span className={`${styles.status} ${styles.statusWarning}`}>{campaign.simulate ? "실행 시점 지남·수동 실행 필요" : "실행 시점 지남·상태 확인"}</span>
                             ) : null}
                             {campaign.status === "SCHEDULED" && campaign.simulate ? (
                               <span className={`${styles.status} ${styles.statusNeutral}`}>모의 예약·전달 없음</span>
                             ) : null}
+                            {["SCHEDULED", "NEEDS_CONNECTION"].includes(campaign.status) && invalidSchedule ? (
+                              <span className={`${styles.status} ${styles.statusWarning}`}>예약 시각 확인 필요</span>
+                            ) : null}
+                            {blocked ? <span id={`campaign-blocked-${campaign.id}`} className={`${styles.status} ${styles.statusWarning}`}>{recipientChanged ? "수신자 변경 · 발송 보류" : "실행 전 확인 필요"}</span> : null}
+                            {!campaign.simulate && ["SCHEDULED", "NEEDS_CONNECTION"].includes(campaign.status) && !campaign.recipientRoutingReviewed && !blocked ? <span className={`${styles.status} ${styles.statusWarning}`}>참가 상태·그룹 직접 확인</span> : null}
+                            {campaign.status === "SENDING" && campaign.recipientChangeCount > 0 ? <span className={`${styles.status} ${styles.statusWarning}`}>수신자 변경 · 재제출 중단</span> : null}
+                            {retryAmbiguous || syncAmbiguous || cancelAmbiguous ? <span className={`${styles.status} ${styles.statusWarning}`}>이전 작업 처리 확인 필요</span> : null}
                           </td>
                           <td className={styles.historyActionCell}><div className={styles.campaignActions}>
                             {canExecute ? (
-                              <button type="button" className="button button-secondary" disabled={busyAction !== null || messagesLocked} title={messagesLocked ? messagesLockReason : undefined} onClick={() => { setReloadPending(null); setHistoryPending({ id: campaign.id, kind: "execute" }); }}>
+                              <button type="button" className="button button-secondary" disabled={busyAction !== null || messagesLocked || otherHistoryReceipt || syncAmbiguous || cancelAmbiguous || (Boolean(blocked) && !retryAmbiguous)} aria-describedby={blocked ? `campaign-blocked-${campaign.id}` : undefined} title={messagesLocked ? messagesLockReason : blocked && !retryAmbiguous ? "상세에서 사유를 확인하고 해결한 뒤 상태를 새로고침하세요." : undefined} onClick={() => { setReloadPending(null); setHistoryPending({ id: campaign.id, kind: "execute" }); }}>
                                 {busyAction === `retry:${campaign.id}` ? "실행 중…" : retryAmbiguous ? "같은 요청 다시 시도" : "발송 실행"}
                               </button>
                             ) : null}
                             {canRetry ? (
-                              <button type="button" className="button button-secondary" disabled={busyAction !== null || messagesLocked} title={messagesLocked ? messagesLockReason : undefined} onClick={() => { setReloadPending(null); setHistoryPending({ id: campaign.id, kind: "retry" }); }}>
+                              <button type="button" className="button button-secondary" disabled={busyAction !== null || messagesLocked || otherHistoryReceipt || syncAmbiguous || cancelAmbiguous || ((Boolean(blocked) || charsetBlocked) && !retryAmbiguous)} aria-describedby={blocked ? `campaign-blocked-${campaign.id}` : undefined} title={messagesLocked ? messagesLockReason : blocked && !retryAmbiguous ? "상세에서 사유를 확인하고 해결한 뒤 상태를 새로고침하세요." : undefined} onClick={() => { setReloadPending(null); setHistoryPending({ id: campaign.id, kind: "retry" }); }}>
                                 {busyAction === `retry:${campaign.id}` ? "재시도 중…" : retryAmbiguous ? "같은 요청 다시 시도" : "재시도"}
                               </button>
                             ) : null}
                             {canSync ? (
-                              <button type="button" className="button button-quiet" disabled={busyAction !== null || messagesLocked} title={messagesLocked ? messagesLockReason : undefined} onClick={() => void syncCampaign(campaign)}>
+                              <button type="button" className="button button-quiet" disabled={busyAction !== null || messagesLocked || otherHistoryReceipt || retryAmbiguous || cancelAmbiguous} title={messagesLocked ? messagesLockReason : undefined} onClick={() => void syncCampaign(campaign)}>
                                 {busyAction === `sync:${campaign.id}` ? "확인 중…" : syncAmbiguous ? "같은 요청 다시 확인" : "발송 결과 확인"}
                               </button>
                             ) : null}
                             {canCancel ? (
-                              <button type="button" className="button button-danger" disabled={busyAction !== null || messagesLocked} title={messagesLocked ? messagesLockReason : undefined} onClick={() => { setReloadPending(null); setHistoryPending({ id: campaign.id, kind: "cancel" }); }}>
+                              <button type="button" className="button button-danger" disabled={busyAction !== null || messagesLocked || otherHistoryReceipt || retryAmbiguous || syncAmbiguous || (blocked?.reason === "AUDIT_UNAVAILABLE" && !cancelAmbiguous)} title={messagesLocked ? messagesLockReason : blocked?.reason === "AUDIT_UNAVAILABLE" && !cancelAmbiguous ? "행사 활동 기록을 확인한 뒤 취소할 수 있습니다." : undefined} aria-describedby={blocked?.reason === "AUDIT_UNAVAILABLE" ? `campaign-blocked-${campaign.id}` : undefined} onClick={() => { setReloadPending(null); setHistoryPending({ id: campaign.id, kind: "cancel" }); }}>
                                 {busyAction === `cancel:${campaign.id}` ? "취소 중…" : cancelAmbiguous ? "같은 요청 다시 시도" : campaign.status === "SCHEDULED" ? "예약 취소" : "발송 취소"}
                               </button>
                             ) : null}
-                            {campaign.status === "FAILED" ? <button type="button" className="button button-secondary" disabled={busyAction !== null || uploadingImage || messagesLocked || !state.canManage} title={messagesLocked ? messagesLockReason : undefined} onClick={() => requestFailedReload(campaign)}>내용·대상 불러오기</button> : null}
+                            {reloadable ? <button type="button" className="button button-secondary" disabled={busyAction !== null || uploadingImage || messagesLocked || !state.canManage || otherHistoryReceipt || otherCreateReceipt || uncertainMmsUpload} title={messagesLocked ? messagesLockReason : undefined} onClick={() => requestFailedReload(campaign)}>내용·대상 불러오기</button> : null}
                             <button type="button" className="button button-secondary" aria-label={`${campaign.title} ${detailOpen ? "상세 닫기" : "상세"}`} aria-expanded={detailOpen} aria-controls={`campaign-detail-${campaign.id}`} onClick={() => {
                               setHistoryPending(null); setReloadPending(null);
                               setExpandedCampaignId(expandedCampaignId === campaign.id ? null : campaign.id);
@@ -2501,7 +3798,8 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                             summary={confirmLines(
                               historyPending.kind === "cancel"
                                 ? cancelSummary(campaign)
-                                : retrySummary(campaign, historyPending.kind)
+                                : retryAmbiguous ? "이전과 같은 요청을 다시 확인할까요?\n\n원래 요청이 처리되지 않았다면 발송이 시작될 수 있습니다. 이전 요청의 식별자와 대상을 그대로 사용합니다."
+                                  : retrySummary(campaign, historyPending.kind)
                             )}
                             confirmLabel={
                               historyPending.kind === "cancel"
@@ -2525,15 +3823,45 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                           {campaign.imageName ? <div><dt>첨부 이미지</dt><dd>{campaign.imageName}</dd></div> : null}
                           <div><dt>대상</dt><dd>{campaign.recipientIds.length}명</dd></div>
                           <div><dt>요청 시각</dt><dd>{formatDate(campaign.at)}</dd></div>
-                          {campaign.scheduled ? <div><dt>예약 시각</dt><dd>{formatDate(campaign.scheduled)}</dd></div> : null}
+                          {campaign.scheduled || campaign.status === "SCHEDULED" ? <div><dt>예약 시각</dt><dd>{formatSavedSchedule(campaign.scheduled)}</dd></div> : null}
+                          {campaign.scheduled ? <div><dt>예약 실행</dt><dd>{campaign.scheduleMode === "AUTO" && !campaign.simulate ? "자동 실행" : "수동 실행"}</dd></div> : null}
                           <div><dt>시도</dt><dd>{campaign.attempts}회</dd></div>
                         </dl>
-                        {campaign.status === "NEEDS_CONNECTION" ? (
+                        {!campaign.simulate && ["SCHEDULED", "NEEDS_CONNECTION"].includes(campaign.status) && !campaign.recipientRoutingReviewed && !blocked ? <p className={styles.campaignHint} role="note">이전 발송 요청은 예약 당시의 참가 상태와 그룹을 확인할 수 없어 변경 여부를 자동으로 비교하지 않습니다. {campaign.status === "SCHEDULED" && campaign.scheduleMode === "AUTO" ? "자동 실행 시에도 이 비교 없이 발송될 수 있으므로 참가자 명단을 확인하세요." : "발송 실행 전에 참가자 명단을 직접 확인하세요."} <Link href={`/console/events/${encodeURIComponent(eventId)}/participants`}>참가자 명단 보기</Link></p> : null}
+                        {campaign.genericTransport && campaign.genericSubmissionUnconfirmed && campaign.genericAttemptActive !== false ? <p className={styles.campaignHint} role="note">이전 발송 작업이 끝났는지 확인할 수 없어 수동 기록을 잠갔습니다. 공급사 내역과 서버 운영 상태를 확인하세요.</p> : null}
+                        {!campaign.genericTransport && campaign.providerKind !== "solapi" && campaign.deliveries.some(delivery => delivery.status === "SENT") ? <p className={styles.campaignHint} role="note">이전 기록의 발송 연결과 전달 근거를 확인할 수 없습니다. 공급사 내역을 확인하세요.</p> : null}
+                        {["SENDING", "ACCEPTED", "SENT", "PARTIAL", "FAILED"].includes(campaign.status) && campaign.deliveries.length ? (
+                          <p className={styles.campaignHint}>
+                            {!campaign.genericTransport && campaign.acceptedCount !== null ? `공급사 접수 ${campaign.acceptedCount}명 · ` : ""}
+                            {campaign.genericTransport ? `공급사 접수 ${campaign.deliveries.filter(delivery => delivery.status === "ACCEPTED").length}명 · 미접수 ${campaign.deliveries.filter(delivery => delivery.status === "FAILED").length}명 · 접수 미확인 ${campaign.deliveries.filter(delivery => delivery.status === "SENDING").length}명.` : `${campaign.providerKind === "solapi" ? "전달 확인" : "전달 근거 미확인"} ${campaign.deliveries.filter(delivery => delivery.status === "SENT").length}명 · 실패 ${campaign.deliveries.filter(delivery => delivery.status === "FAILED").length}명 · 확인 중 ${campaign.deliveries.filter(delivery => delivery.status !== "SENT" && delivery.status !== "FAILED").length}명.`}
+                            {campaign.genericTransport ? " 이 연결에서는 실제 단말 전달을 조회하지 않습니다." : ""}
+                            {campaign.submissionUnconfirmed
+                              ? campaign.genericTransport ? " 공급사 접수 여부는 직접 확인해야 합니다. 중복 발송하지 마세요." : " 공급사 응답을 확인하지 못했습니다. 발송 결과 확인은 접수 내역만 다시 조회합니다."
+                              : resultMatchUnconfirmed ? " 공급사 내역과 명단의 연락처를 확인하세요."
+                              : campaign.status === "SENDING" ? " 공급사 접수는 최종 전달과 다릅니다. 발송 결과 확인으로 다시 조회하세요." : null}
+                          </p>
+                        ) : null}
+                        {campaign.status === "NEEDS_CONNECTION" && !invalidSchedule ? (
                           <p className={styles.campaignHint}>공급사 연결 전입니다. 재시도해도 연결되지 않으면 실제로 전송되지 않습니다.</p>
                         ) : null}
-                        {campaign.status === "FAILED" ? (
+                        {campaign.status === "SENDING" && campaign.recipientChangeCount > 0 ? (
+                          <p className={styles.campaignHint}>수신자 변경으로 재제출을 중단했습니다. 이전 요청의 접수 여부는 발송 공급사에서 확인하세요.</p>
+                        ) : null}
+                        {(campaign.ticketLinkProblemCount > 0 || campaign.ticketLinkProblemUnknown) && ["SENDING", "FAILED"].includes(campaign.status) ? <p className={styles.campaignHint} role="note">
+                          {campaign.ticketLinkProblemUnknown ? "수신자와 티켓 상태를 확인할 수 없어" : `사용할 수 없는 티켓이 ${campaign.ticketLinkProblemCount}명 있어`}
+                          {campaign.status === "SENDING" ? " 추가 재제출을 중단했습니다. 이전 요청은 접수됐을 수 있으므로 발송 공급사에서 확인하세요." : " 발송하지 않았습니다. 티켓을 확인한 뒤 새 발송을 검토하세요."}{" "}
+                          <Link href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</Link>
+                        </p> : null}
+                        {campaign.alimtalkUnsupported ? <p className={styles.campaignHint} role="note">현재 발송 연결은 승인된 알림톡 템플릿을 지원하지 않아 발송하지 않았습니다. 알림톡을 지원하는 발송 연결을 확인하세요.</p> : null}
+                        {campaign.mmsUnsupported ? <p className={styles.campaignHint} role="note">현재 발송 연결은 사진 문자를 지원하지 않아 발송하지 않았습니다. 사진 문자 발송이 가능한 연결을 확인하세요.</p> : null}
+                        {campaign.personalizedTextTooLongCount > 0 ? <p className={styles.campaignHint} role="note">수신자 {campaign.personalizedTextTooLongCount}명의 개인화된 문자 내용이 발송 한도를 넘어 전송하지 않았습니다. 내용을 줄인 뒤 다시 검토하세요.</p> : null}
+                        {campaign.smsTextProblemCount > 0 || campaign.smsTextProblemUnknown ? <p className={styles.campaignHint} role="note">{campaign.smsTextProblemUnknown ? "수신자별 문자 내용을 확인할 수 없어 발송을 보류했습니다." : `수신자 ${campaign.smsTextProblemCount}명의 문자에 지원하지 않는 문자 또는 제어문자가 있어 발송을 보류했습니다.`} {reloadable ? "기존 발송의 내용과 대상을 불러와 수정한 뒤 새 요청으로 검토하세요." : "기존 내용을 확인하고, 접수 여부가 불확실하면 공급사에서 먼저 확인하세요."}</p> : null}
+                        {(charsetBlocked || campaign.submissionUnconfirmed || campaign.deliveryUnconfirmed || campaign.status === "CANCELLED") && campaign.body ? <details className={styles.deliveries}><summary>기존 내용 보기</summary><p className={styles.finalBody}>{campaign.body}</p>{!reloadable ? <p className={styles.campaignHint}>접수 여부를 확인할 수 없으면 공급사에서 먼저 확인하세요. 이 내용 보기는 발송하지 않습니다.</p> : null}</details> : null}
+                        {reloadable ? (
                           <>
-                            <p className={styles.campaignHint}>발송이 실패했습니다. 행의 내용·대상 불러오기로 새 발송을 준비하세요. 바로 발송되지 않습니다.</p>
+                            {!campaign.genericTransport && !campaign.alimtalkUnsupported && !campaign.mmsUnsupported && !campaign.ticketLinkProblemCount && !campaign.ticketLinkProblemUnknown && !campaign.personalizedTextTooLongCount ? <p className={styles.campaignHint}>{campaign.recipientChangeCount > 0
+                              ? "내용·대상 불러오기를 선택하면 기존 본문과 최신 명단을 새 작성 화면에서 검토할 수 있습니다."
+                              : "발송이 실패했습니다. 행의 내용·대상 불러오기로 새 발송을 준비하세요. 바로 발송되지 않습니다."}</p> : null}
                             {reloadPending?.id === campaign.id ? (
                               <ConsoleConfirm
                                 summary={confirmLines(`〈${campaign.title}〉 내용을 작성 중인 화면에 불러올까요?\n\n작성 중인 발송 내용·선택이 교체됩니다. 예약 시각은 다시 지정해야 하며, 바로 발송되지 않습니다.`)}
@@ -2550,14 +3878,38 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                             ) : null}
                           </>
                         ) : null}
-                        {campaign.status === "SCHEDULED" && overdue ? (
+                        {campaign.status === "SCHEDULED" && overdue && !blocked ? (
                           <p className={styles.campaignHint}>
-                            예약 시각이 지났습니다. 자동 발송되지 않으므로 지금 발송 실행을 눌러 수동으로 실행하세요.{campaign.simulate ? " 실행해도 수신자에게 전달되지 않습니다." : ""}
+                            {campaign.simulate
+                              ? "예약 시각이 지났습니다. 발송 실행을 눌러 모의 기록을 남기세요. 실행해도 수신자에게 전달되지 않습니다."
+                              : campaign.scheduleMode === "AUTO" ? "예약 시각이 지났습니다. 발송 상태와 자동 실행 설정을 확인하세요." : "예약 시각이 지났습니다. 발송 실행을 눌러 주세요."}
                           </p>
                         ) : null}
-                        {campaign.status === "SCHEDULED" && !due ? (
+                        {blocked ? <p className={styles.campaignHint} role="note">
+                          {recipientChanged
+                            ? "수신자의 이름·참가 상태·그룹·연락처가 달라졌거나 확인할 수 없습니다. 기존 요청을 취소한 뒤 내용·대상을 불러와 다시 검토하세요."
+                            : blocked.reason === "LUCKY_NUMBER_MISSING"
+                            ? `수신자 ${blocked.missing}명의 럭키번호가 배정되지 않았습니다. 번호를 배정한 뒤 다시 확인하세요.`
+                            : blocked.reason === "TICKET_UNAVAILABLE"
+                            ? `티켓을 사용할 수 없는 수신자가 ${blocked.missing}명입니다. 티켓을 확인한 뒤 다시 실행하세요.`
+                            : blocked.reason === "TICKET_RECIPIENTS_UNAVAILABLE" ? "수신자와 티켓 상태를 확인할 수 없습니다. 기존 요청을 취소하고 대상을 다시 선택하세요."
+                            : blocked.reason === "SMS_CHARSET_UNSUPPORTED" ? `수신자 ${blocked.missing}명의 문자에 지원하지 않는 문자 또는 제어문자가 있습니다. ${campaign.status === "SCHEDULED" ? "예약을 취소한 뒤 안전하게 확인된 경우에만 내용·대상을 불러올 수 있습니다." : "기존 발송 요청의 내용을 확인하고, 접수 여부가 불확실하면 공급사에서 먼저 확인하세요."}`
+                            : blocked.reason === "SMS_CHARSET_REVIEW_UNAVAILABLE" ? "수신자별 문자 내용을 확인할 수 없습니다. 기존 내용을 확인하고 운영 담당자와 대상을 다시 확인하세요. 접수 여부가 불확실하면 공급사에서 먼저 확인하세요."
+                            : blocked.reason === "AUDIT_UNAVAILABLE" ? "행사 활동 기록을 확인할 수 없어 예약 발송과 취소를 할 수 없습니다. 시스템 관리자에게 문의하세요."
+                            : blocked.reason === "INVALID_SCHEDULE" ? "예약 시각을 확인할 수 없습니다. 예약을 취소하고 다시 등록하세요."
+                            : blocked.reason === "NO_PUBLIC_ORIGIN" ? "티켓 링크의 공개 주소가 설정되지 않았습니다. 운영 담당자에게 공개 주소 설정을 요청하세요."
+                            : "발송을 실행하기 전 확인이 필요합니다. 발송 상태를 확인하고 운영 담당자에게 문의하세요."}
+                          {blocked.reason === "TICKET_UNAVAILABLE" || blocked.reason === "TICKET_RECIPIENTS_UNAVAILABLE" ? <> <Link href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</Link></> : null}
+                        </p> : null}
+                        {recipientChanged && detailOpen ? <RecipientChangeReview key={`${eventId}:${campaign.id}`} eventId={eventId} campaignId={campaign.id} observedAt={state.messageSchedule?.observedAt ?? ""} onRefresh={() => void refresh(true)} /> : null}
+                        {["SCHEDULED", "NEEDS_CONNECTION"].includes(campaign.status) && invalidSchedule ? (
+                          <p className={styles.campaignHint} role="note">예약 날짜 또는 시간대를 확인할 수 없습니다. {campaign.status === "SCHEDULED" ? "예약" : "발송 요청"}을 취소한 뒤 시각을 확인하여 다시 등록하세요.</p>
+                        ) : null}
+                        {campaign.status === "SCHEDULED" && !due && !blocked && hasValidScheduledInstant(campaign.scheduled) ? (
                           <p className={styles.campaignHint}>
-                            예약 시각 이후에 발송 실행을 눌러야 {campaign.simulate ? "기록됩니다. 실행해도 수신자에게 전달되지 않습니다." : "발송됩니다."} 자동 발송은 지원하지 않습니다.
+                            {campaign.simulate
+                              ? "예약 시각 이후 발송 실행을 눌러야 기록됩니다. 실행해도 수신자에게 전달되지 않습니다."
+                              : scheduleModeNotice(campaign.scheduleMode)}
                           </p>
                         ) : null}
                         <details className={styles.deliveries}>
@@ -2567,8 +3919,14 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                               {campaign.deliveries.map((delivery, index) => (
                                 <li key={`${delivery.participantId}-${index}`}>
                                   <span className={styles.deliveryName}>{delivery.name || "이름 미등록"}</span>
-                                  <span className={`${styles.status} ${statusTone(delivery.status)}`}>{deliveryStatusLabel(delivery.status)}</span>
+                                  <span className={`${styles.status} ${statusTone(delivery.status)}`}>{delivery.manualProviderReview ? `운영자 기록 · ${delivery.manualProviderReview === "ACCEPTED" ? "공급사 접수" : "공급사 미접수"}` : delivery.status === "SENT" && campaign.providerKind !== "solapi" ? "전달 근거 미확인" : delivery.resultMatchUnconfirmed ? "결과 연결 미확인" : deliveryStatusLabel(delivery.status)}</span>
                                   <time dateTime={delivery.at || undefined}>{formatDate(delivery.at)}</time>
+                                  {campaign.genericTransport && campaign.genericSubmissionUnconfirmed && campaign.genericAttemptActive !== false && delivery.status === "SENDING" ? <LockedProviderReference name={delivery.name} phone={delivery.snapshotPhone} reference={delivery.reference} /> : null}
+                                  {campaign.genericTransport && campaign.genericAttemptActive === false && delivery.status === "SENDING" && !delivery.manualProviderReview && !messagesLocked && !(providerCheck?.payload.id === campaign.id && providerCheck.payload.participantId === delivery.participantId) ? <button id={`provider-check-trigger-${campaign.id}-${delivery.participantId}`} type="button" className="button button-secondary" disabled={Boolean(providerCheck) || otherHistoryReceipt || busyAction !== null} onClick={() => {
+                                    setProviderCheck({ eventId, id: commandId(), name: delivery.name, uncertain: false, payload: { id: campaign.id, participantId: delivery.participantId, outcome: "ACCEPTED", expectedSubmissionId: campaign.submissionId } });
+                                    setProviderCheckChoice(""); setProviderCheckError(null); setProviderCheckConfirm(false);
+                                    window.requestAnimationFrame(() => document.getElementById("provider-check-heading")?.focus());
+                                  }}>{`${delivery.name} 공급사 확인 기록`}</button> : null}
                                 </li>
                               ))}
                             </ul>
@@ -2576,6 +3934,27 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                             <p className={styles.empty}>표시할 수신 처리 내역이 없습니다.</p>
                           )}
                         </details>
+                        {providerCheck?.payload.id === campaign.id ? <section aria-label="공급사 확인 결과 기록" className={styles.providerCheck}>
+                          <h4 id="provider-check-heading" tabIndex={-1}>공급사 확인 결과 기록</h4>
+                          <p><strong>{providerCheck.name}</strong> · 공급사 참조 ID <code>{`${providerCheck.payload.id}:${providerCheck.payload.participantId}`}</code></p>
+                          <p>공급사에서 최종 접수 또는 미접수를 직접 확인한 결과만 기록하세요. 목록에 보이지 않는 것만으로 미접수를 확정할 수 없습니다. 실제 단말 전달을 확인하는 기능은 아닙니다.</p>
+                          <ConsoleChoiceGroup id="provider-check-outcome" label="공급사에서 확인한 결과" value={providerCheckChoice} disabled={Boolean(providerCheck.uncertain) || busyAction !== null} options={[
+                            { value: "ACCEPTED", label: "공급사 접수 확인" }, { value: "NOT_ACCEPTED", label: "공급사 미접수 확인" },
+                          ]} onChange={(value) => setProviderCheckChoice(value === "ACCEPTED" || value === "NOT_ACCEPTED" ? value : "")} />
+                          {providerCheckError ? <p role="alert">{providerCheckError}</p> : null}
+                          {providerCheck.uncertain ? <button type="button" className="button button-secondary" disabled={busyAction !== null} onClick={() => void submitProviderCheck(providerCheck)}>같은 요청 다시 확인</button> : <>
+                            <button type="button" className="button button-secondary" disabled={!providerCheckChoice || busyAction !== null} onClick={() => setProviderCheckConfirm(true)}>기록 내용 확인</button>{" "}
+                            <button type="button" className="button button-quiet" disabled={busyAction !== null} onClick={() => {
+                              const triggerId = `provider-check-trigger-${providerCheck.payload.id}-${providerCheck.payload.participantId}`;
+                              setProviderCheck(null); setProviderCheckConfirm(false);
+                              window.requestAnimationFrame(() => document.getElementById(triggerId)?.focus());
+                            }}>나중에 확인</button>
+                            {providerCheckConfirm && providerCheckChoice ? <ConsoleConfirm summary={confirmLines(`${providerCheck.name}님의 공급사 ${providerCheckChoice === "ACCEPTED" ? "접수" : "미접수"}를 직접 확인했나요?\n\n이 결과는 운영자 확인 기록이며 실제 단말 전달을 뜻하지 않습니다. 이 동작은 메시지를 다시 보내지 않습니다.`)} confirmLabel="확인 결과 기록" busy={busyAction !== null} onCancel={() => setProviderCheckConfirm(false)} onConfirm={() => {
+                              const attempt = { ...providerCheck, payload: { ...providerCheck.payload, outcome: providerCheckChoice } };
+                              setProviderCheck(attempt); void submitProviderCheck(attempt);
+                            }} /> : null}
+                          </>}
+                        </section> : null}
                       </div></td>
                     </tr>
                     </Fragment>

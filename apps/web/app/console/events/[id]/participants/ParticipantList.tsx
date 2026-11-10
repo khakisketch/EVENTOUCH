@@ -1,11 +1,19 @@
 "use client";
 
+import ValidatedForm from "../../../../ui/ValidatedForm";
+
+
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { loginHrefForLocation } from "../../../../auth-redirect";
 import { consoleFetch, subscribeConsoleFreshness } from "../../../../../lib/console-api";
+import { abandonOperatorAttempt } from "../../../../../lib/operator-context";
+import { forgetOperatorReceipt } from "../../../../../lib/operator-receipts";
 import { canWriteEvent } from "../../../../../lib/event-capabilities";
+import { exportAnswers, exportFields, exportFieldsComplete, exportParticipantComplete, participantCsv, participantExportRows, type ExportField } from "../../../../../lib/participant-export";
+import { attendanceNeedsReview } from "../../../../../lib/attendance-state.cjs";
+import { useEventReceipts } from "../../../../../lib/use-event-receipts";
 import ConsolePage from "../../../console-ui/ConsolePage";
 import ConsoleToolbar from "../../../console-ui/ConsoleToolbar";
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
@@ -16,14 +24,24 @@ import {
   type ConsoleEventMeta,
 } from "../../../console-ui/ConsolePageHeader";
 import ConsoleSection from "../../../console-ui/ConsoleSection";
+import ConsoleRefreshButton from "../../../console-ui/ConsoleRefreshButton";
+import NameTagPrint, { type NameTagIdentity } from "../../../../ui/NameTagPrint";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
-import { CopyIcon, DownloadIcon, PlusIcon, RefreshIcon, UploadIcon } from "../../../console-ui/ConsoleIcons";
+import ConsoleChoiceGroup from "../../../console-ui/ConsoleChoiceGroup";
+import uiStyles from "../../../console-ui/console-ui.module.css";
+import { CheckIcon, CopyIcon, DownloadIcon, PlusIcon, UploadIcon } from "../../../console-ui/ConsoleIcons";
 import { UNCONFIRMED_WRITE_CLOSE_MESSAGE, useConsoleDraftGuard } from "../../../console-draft-guard";
 import { buildApprovedMessageHandoffHref } from "../../../console-handoff";
 import { useEventCloseHandoff } from "../../../use-event-close-handoff";
 import { readCloseSnapshot, type CloseSnapshot } from "../../../console-event-close";
 import styles from "./participants.module.css";
+import ParticipantEditor from "./ParticipantEditor";
+import ImportWizard from "./import/ImportWizard";
+import BulkCancelDialog from "./BulkCancelDialog";
+import TicketReissue from "./TicketReissue";
+import ReviewedExit from "./ReviewedExit";
+import CancellationConflictReview from "./CancellationConflictReview";
 
 // Shared dirty-dismiss copy for the roster dialogs: the guard asks on
 // navigation, canClose asks on Escape/backdrop/Cancel.
@@ -32,6 +50,10 @@ const DIRTY_CLOSE_MESSAGE = "작성 중인 내용이 사라집니다. 닫을까�
 type Person = {
   id: string;
   name: string;
+  ticketRevision: number;
+  ticketReview: TicketReview;
+  cancellationConflictReview: string | null;
+  ticketNeedsExplicitReissue: boolean;
   status: string;
   paymentStatus: string;
   phone: string;
@@ -40,10 +62,34 @@ type Person = {
   group: string;
   inside: boolean;
   everIn: boolean;
+  presenceUnknown: boolean;
+  attendanceReview: boolean;
+  answers: Record<string, string | boolean>;
+  consent: { version: number | null; at: string; noticeText: string | null } | null;
 };
-type BulkApprovalAttempt = { commandId: string; ids: string[]; names: string[] };
+type TicketReview = "valid" | "cancelled" | "expired" | "revoked" | "unavailable" | "unknown";
+
+function ticketReviewValue(value: unknown): TicketReview {
+  return value === "valid" || value === "cancelled" || value === "expired" || value === "revoked" || value === "unavailable"
+    ? value : "unknown";
+}
+
+function ticketReviewLabel(value: TicketReview): string {
+  switch (value) {
+    case "expired": return "티켓 만료";
+    case "revoked": return "티켓 철회";
+    case "unavailable": return "티켓 정보 확인 필요";
+    case "unknown": return "상태 확인 안 됨";
+    case "cancelled": return "취소 상태 확인 필요";
+    default: return "티켓 유효";
+  }
+}
+type BulkApprovalAttempt = { commandId: string; ids: string[]; names: string[]; reissueNames: string[]; sourceStatus: "PENDING" | "WAITLIST" };
 type BulkApprovalRetry = { attempt: BulkApprovalAttempt; message: string };
 type Membership = { accountId: string; eventId: string; write?: unknown };
+type GroupPerson = { id: string; name: string; group: string; company: string; phone: string };
+type GroupAttempt = { eventId: string; fingerprint: string; commandId: string; group: string; ids: string[]; names: string[]; people: GroupPerson[]; expectedGroups: Array<{ id: string; group: string }>; uncertain: boolean };
+type GroupConflict = { before: GroupPerson[]; latest: GroupPerson[] | null; groups: string[]; loading: boolean; error: string | null };
 
 type ListState =
   | { kind: "loading" }
@@ -56,6 +102,8 @@ type ListState =
       eventStage: string;
       eventSlug: string;
       people: Person[];
+      publishedFields: ExportField[];
+      exportIssue: "fields" | "roster" | "answers" | null;
       groups: string[];
       role: string;
       userId: string;
@@ -65,30 +113,115 @@ type ListState =
 
 const STATUSES = ["PENDING", "APPROVED", "WAITLIST", "CANCELLED"] as const;
 
+// Match the staff preview's fail-closed verification, using this event's
+// scoped roster and the same permission gate as the inspector. Never print
+// the inspector's potentially old copy after a failed or incomplete read.
+async function readRosterNameTagIdentity(eventId: string, participantId: string, signal: AbortSignal): Promise<NameTagIdentity> {
+  const unavailable = "최신 참가자 정보를 확인하지 못했습니다. 연결과 업무 권한을 확인한 뒤 다시 시도하세요.";
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (signal.aborted) abort();
+  else signal.addEventListener("abort", abort, { once: true });
+  const timeout = window.setTimeout(abort, 8000);
+  try {
+    const meResponse = await consoleFetch("/api/auth/me", { cache: "no-store", signal: controller.signal });
+    if (!meResponse.ok) throw new Error(unavailable);
+    const me = await meResponse.json() as { user?: { id?: unknown; role?: unknown } };
+    if (typeof me?.user?.id !== "string" || typeof me.user.role !== "string") throw new Error(unavailable);
+    const response = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store", signal: controller.signal });
+    if (!response.ok) throw new Error(unavailable);
+    const body = await response.json() as { state?: { events?: unknown; workspaces?: Record<string, Record<string, unknown>>; memberships?: unknown } };
+    const state = body?.state;
+    if (controller.signal.aborted || !state || !Array.isArray(state.events) || !Array.isArray(state.memberships)) throw new Error(unavailable);
+    const events = state.events.filter((item): item is Record<string, unknown> =>
+      typeof item === "object" && item !== null && !Array.isArray(item) && (item as Record<string, unknown>).id === eventId);
+    const event = events[0];
+    const workspace = state.workspaces?.[eventId];
+    if (events.length !== 1 || typeof event.name !== "string" || !event.name.trim() || typeof event.stage !== "string" ||
+        !workspace || !Array.isArray(workspace.participants)) throw new Error(unavailable);
+    const capabilities = { role: me.user.role, userId: me.user.id, eventId, memberships: state.memberships };
+    const stage = event.stage.toUpperCase();
+    if (!["DRAFT", "READY", "LIVE", "ENDED", "ARCHIVED"].includes(stage)) throw new Error(unavailable);
+    if (!["DRAFT", "READY", "LIVE"].includes(stage) ||
+        !(canWriteEvent(capabilities, "participant.status") || canWriteEvent(capabilities, "participant.update"))) {
+      throw new Error("행사 상태나 업무 권한이 바뀌었습니다. 명단을 새로고침해 확인해 주세요.");
+    }
+    const matches = workspace.participants.filter((item): item is Record<string, unknown> =>
+      typeof item === "object" && item !== null && !Array.isArray(item) && (item as Record<string, unknown>).id === participantId);
+    const person = matches[0];
+    if (matches.length !== 1 || typeof person.name !== "string" || !person.name.trim() ||
+        typeof person.company !== "string" || typeof person.status !== "string") throw new Error(unavailable);
+    if (person.status !== "APPROVED") throw new Error("참가 확정 상태가 바뀌었습니다. 명단을 새로고침해 확인해 주세요.");
+    return { name: person.name, company: person.company, eventName: event.name };
+  } catch (failure) {
+    if (signal.aborted) throw failure;
+    if (failure instanceof Error && (failure.message === unavailable || failure.message.startsWith("행사 상태나") || failure.message.startsWith("참가 확정"))) throw failure;
+    throw new Error(unavailable);
+  } finally {
+    window.clearTimeout(timeout);
+    signal.removeEventListener("abort", abort);
+  }
+}
+
+function RosterNameTag({ eventId, person, eventName }: { eventId: string; person: Person; eventName: string }) {
+  const [open, setOpen] = useState(false);
+  const [identityChanged, setIdentityChanged] = useState(false);
+  return <details className={styles.nametagDisclosure} onToggle={(event) => {
+    const next = event.currentTarget.open;
+    setOpen(next);
+    if (!next) setIdentityChanged(false);
+  }}>
+    <summary data-disclosure-indicator="">네임택 인쇄</summary>
+    {open ? <>
+      {identityChanged ? <p role="status">상세 창을 연 뒤 이름, 소속 또는 행사명이 변경됐습니다. 아래 최신 정보를 확인해 주세요.</p> : null}
+      <NameTagPrint identity={{ name: person.name, company: person.company, eventName }} resolveIdentity={async (signal) => {
+        try {
+          const latest = await readRosterNameTagIdentity(eventId, person.id, signal);
+          if (!signal.aborted) setIdentityChanged(latest.name !== person.name || latest.company !== person.company || latest.eventName !== eventName);
+          return latest;
+        } catch (error) {
+          if (!signal.aborted) setIdentityChanged(false);
+          throw error;
+        }
+      }} />
+    </> : null}
+  </details>;
+}
+
+function consentTime(value: string): string {
+  const date = new Date(value);
+  if (!value || Number.isNaN(date.getTime())) return "시각 확인 불가";
+  return new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
 // Display-only attendance filter over existing check-in data: inside is the
 // live presence flag, everIn records any entry so far. No new API, no new
 // business rules — the overview links here with
 // ?status=APPROVED&attendance=NOT_ENTERED to show confirmed non-entered
 // people, a normal working state rather than an urgent error.
-const ATTENDANCE = ["NOT_ENTERED", "INSIDE", "LEFT"] as const;
+const ATTENDANCE = ["NOT_ENTERED", "INSIDE", "LEFT", "REVIEW"] as const;
 
 function attendanceLabel(attendance: string): string {
   switch (attendance) {
     case "NOT_ENTERED":
-      return "미입장";
+      return "입장 기록 없음";
     case "INSIDE":
       return "입장 중";
     case "LEFT":
       return "퇴장";
+    case "REVIEW":
+      return "출입 기록 확인 필요 (취소 제외)";
     default:
       return "전체 출입";
   }
 }
 
 function matchesAttendance(person: Person, attendance: string): boolean {
+  if (attendance === "REVIEW") return person.status !== "CANCELLED" && person.attendanceReview;
+  if (attendance && person.presenceUnknown) return false;
   switch (attendance) {
     case "NOT_ENTERED":
-      return person.everIn !== true;
+      return !person.attendanceReview && person.inside !== true && person.everIn !== true;
     case "INSIDE":
       return person.inside === true;
     case "LEFT":
@@ -150,10 +283,11 @@ function identityOrg(person: { company: string; group: string }): string {
 
 // Screen-only presence wording for the row details: the CSV export keeps its
 // own "미도착" copy and the server contract is untouched.
-function presenceLabel(person: { inside: boolean; everIn: boolean }): string {
+function presenceLabel(person: { inside: boolean; everIn: boolean; status: string; presenceUnknown: boolean }): string {
+  if (person.presenceUnknown) return "확인 필요";
   if (person.inside === true) return "입장 중";
   if (person.everIn === true) return "퇴장";
-  return "미입장";
+  return person.status === "APPROVED" ? "미입장" : "입장 기록 없음";
 }
 
 // One compact page of rows: search, filters, counts, selection, group
@@ -161,28 +295,20 @@ function presenceLabel(person: { inside: boolean; everIn: boolean }): string {
 // the rendered slice and the prev/next position change here.
 const PAGE_SIZE = 25;
 
-// Spreadsheet formula injection guard: a cell starting with = + - @ (or
-// tab/CR) would execute on open in Excel/Sheets. The leading single quote is
-// the standard text marker — hidden by spreadsheets, data preserved.
-function csvCell(cell: string): string {
-  const guarded = /^[=+\-@\t\r]/.test(cell) ? `'${cell}` : cell;
-  return /[",\n]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
-}
-
 function randomCommandId(): string {
   if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
   return `web-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
 }
 
 function isDefinitiveClientError(status: number): boolean {
-  // 4xx (except 408 timeout) proves the server saw and rejected this exact
-  // request, so retrying the same command id cannot help. 5xx, 408, network
+  // 4xx (except 408/425/429) proves the server saw and rejected this exact
+  // request, so retrying the same command id cannot help. 5xx, 408/425/429, network
   // failures and malformed success bodies stay ambiguous: the write may have
   // landed, so the retry must replay the SAME command id.
-  return status >= 400 && status < 500 && status !== 408;
+  return status >= 400 && status < 500 && ![408, 425, 429].includes(status);
 }
 
-function readRosterFilters(search: string): { status: string; group: string; query: string; attendance: string } {
+function readRosterFilters(search: string): { status: string; group: string; query: string; attendance: string; ticket: string } {
   try {
     const params = new URLSearchParams(search);
     const rawStatus = params.get("status") ?? "";
@@ -192,9 +318,10 @@ function readRosterFilters(search: string): { status: string; group: string; que
       group: params.get("group") ?? "",
       query: params.get("query") ?? params.get("q") ?? "",
       attendance: (ATTENDANCE as readonly string[]).includes(rawAttendance) ? rawAttendance : "",
+      ticket: params.get("ticket") === "review" ? "review" : "",
     };
   } catch {
-    return { status: "", group: "", query: "", attendance: "" };
+    return { status: "", group: "", query: "", attendance: "", ticket: "" };
   }
 }
 
@@ -214,16 +341,31 @@ function participantRecordMatches(value: unknown, id: string, status?: string): 
 }
 
 export default function ParticipantList({ eventId }: { eventId: string }) {
+  const [importOpen, setImportOpen] = useState(false);
   const closeHref = useEventCloseHandoff(eventId);
   const router = useRouter();
+  const activeEventRef = useRef(eventId);
+  activeEventRef.current = eventId;
   const [state, setState] = useState<ListState>({ kind: "loading" });
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  const [reviewedExitTarget, setReviewedExitTarget] = useState<string | null>(null);
+  const [reconcileTarget, setReconcileTarget] = useState<string | null>(null);
+  const [cancellationConflictTarget, setCancellationConflictTarget] = useState<string | null>(null);
+  const [statusFeedbackId, setStatusFeedbackId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [rosterUnavailable, setRosterUnavailable] = useState(false);
+  const rosterUnavailableRef = useRef(false);
+  const rosterUtilitiesRef = useRef<HTMLDetailsElement | null>(null);
+  const rosterGenerationRef = useRef(0);
+  const rosterReadIdRef = useRef(0);
+  const exportGateRef = useRef(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [groupFilter, setGroupFilter] = useState("");
   const [attendanceFilter, setAttendanceFilter] = useState("");
+  const [ticketFilter, setTicketFilter] = useState("");
   // Mobile disclosure for the three advanced selects: the search stays a
   // full-width row on every viewport, while status/group/attendance collapse
   // behind a compact filter toggle at <=768px (desktop keeps them inline via
@@ -239,7 +381,14 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   // only an actual change versus these values (or unsettled/pending work).
   const groupBaselineRef = useRef<string | null>(null);
   const [groupBusy, setGroupBusy] = useState(false);
+  const [groupUncertain, setGroupUncertain] = useState(false);
   const [groupError, setGroupError] = useState<string | null>(null);
+  // Group assignment acts on the selection reviewed when the dialog opened.
+  // A background refresh must not silently update that selection or baseline.
+  const groupPeopleRef = useRef<GroupPerson[] | null>(null);
+  const [groupConflict, setGroupConflict] = useState<GroupConflict | null>(null);
+  const groupConflictRef = useRef<GroupConflict | null>(null);
+  const groupReadRef = useRef<AbortController | null>(null);
   const [rewardTarget, setRewardTarget] = useState<Person | null>(null);
   const [rewardDraft, setRewardDraft] = useState({ name: "", method: "ONSITE" });
   // Which participant a preserved reward draft belongs to: reopening the same
@@ -247,6 +396,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   // opening another row or a proven success starts fresh.
   const rewardDraftOwnerRef = useRef<string | null>(null);
   const [rewardBusy, setRewardBusy] = useState(false);
+  const [rewardUncertain, setRewardUncertain] = useState(false);
   const [rewardError, setRewardError] = useState<{ message: string; field: string | null } | null>(null);
   // Cancelling a registration voids the ticket, so it is confirmed in place
   // like every other irreversible command in the console.
@@ -254,7 +404,11 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   // Row details open on demand on every viewport; the one-tap approval
   // stays directly visible on PENDING rows.
   const [toolsOpenId, setToolsOpenId] = useState<string | null>(null);
+  const [editTargetId, setEditTargetId] = useState<string | null>(null);
+  const [ticketTarget, setTicketTarget] = useState<Pick<Person, "id" | "name" | "ticketRevision"> | null>(null);
+  const [bulkCancelTargets, setBulkCancelTargets] = useState<Array<{ id: string; name: string; status: string; inside: boolean; company: string; phone: string }> | null>(null);
   const inspectorHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const inspectorStatusRef = useRef<HTMLSelectElement | null>(null);
   const inspectorReturnFocusRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
     if (toolsOpenId && inspectorHeadingRef.current) {
@@ -317,11 +471,12 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     window.setTimeout(() => document.getElementById("participant-add-phone")?.focus(), 0);
   }
   const [addBusy, setAddBusy] = useState(false);
+  const [addUnconfirmed, setAddUnconfirmed] = useState(false);
   const [addError, setAddError] = useState<{ message: string; field: string | null } | null>(null);
   // One command id per distinct registration: a lost response replays the
   // same receipt instead of adding the person twice.
   const pendingAddRef = useRef<{ fingerprint: string; commandId: string } | null>(null);
-  // Same-request retry state: an ambiguous write (network loss, 5xx, 408, or
+  // Same-request retry state: an ambiguous write (network loss, 5xx, 408/425/429, or
   // an unparseable success body) keeps its command id so the retry replays
   // the original request instead of duplicating it. A definitive 4xx clears
   // the id. Failed inputs and selections stay on screen for the retry.
@@ -340,9 +495,36 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   // must never overlap. The fingerprint receipt ids are untouched by this.
   const writeBusyRef = useRef(false);
   const bulkBusyRef = useRef(false);
-  const pendingStatusRef = useRef<{ fingerprint: string; commandId: string } | null>(null);
-  const pendingGroupRef = useRef<{ fingerprint: string; commandId: string } | null>(null);
-  const pendingRewardRef = useRef<{ fingerprint: string; commandId: string } | null>(null);
+  const pendingStatusRef = useRef<{ fingerprint: string; commandId: string; uncertain: boolean } | null>(null);
+  const pendingGroupRef = useRef<GroupAttempt | null>(null);
+  const groupExecutionRef = useRef<{ eventId: string; commandId: string } | null>(null);
+  const pendingRewardRef = useRef<{ fingerprint: string; commandId: string; target: Person; name: string; method: string; uncertain: boolean } | null>(null);
+  const eventReceipts = useEventReceipts(eventId);
+  const externalReceipt = (command: string, ownIds: Array<string | undefined>) => eventReceipts.some((item) => item.command === command && !ownIds.includes(item.commandId));
+  const unconfirmedAdd = externalReceipt("participant.create", [pendingAddRef.current?.commandId]);
+  const unconfirmedStatus = externalReceipt("participant.status", [pendingStatusRef.current?.commandId, pendingBulkRef.current?.commandId]) ||
+    externalReceipt("participant.bulk-cancel", []);
+  const unconfirmedGroup = externalReceipt("group.assign", [pendingGroupRef.current?.commandId]);
+  const unconfirmedReward = externalReceipt("reward.create", [pendingRewardRef.current?.commandId]);
+  const unconfirmedUpdate = externalReceipt("participant.update", []);
+  const unconfirmedTicket = externalReceipt("ticket.reissue", []) || externalReceipt("ticket.reissue-reviewed", []);
+  const unconfirmedExit = externalReceipt("check.reviewed-exit", []);
+  const unconfirmedReconciliation = externalReceipt("check.reconcile", []);
+  const unconfirmedCancellationConflict = externalReceipt("participant.resolve-cancellation-conflict", []);
+  const unresolvedRosterReceipt = unconfirmedAdd || unconfirmedStatus || unconfirmedGroup || unconfirmedReward || unconfirmedUpdate || unconfirmedTicket || unconfirmedExit || unconfirmedReconciliation || unconfirmedCancellationConflict;
+  const previousReceiptScope = useRef({ eventId, pending: false });
+  const [receiptNeedsRefresh, setReceiptNeedsRefresh] = useState(false);
+  const [receiptRefreshing, setReceiptRefreshing] = useState(false);
+  const receiptRefreshLock = receiptNeedsRefresh || (previousReceiptScope.current.eventId === eventId && previousReceiptScope.current.pending && !unresolvedRosterReceipt);
+  useEffect(() => {
+    if (previousReceiptScope.current.eventId === eventId && previousReceiptScope.current.pending && !unresolvedRosterReceipt) {
+      setReceiptNeedsRefresh(true); setReceiptRefreshing(true);
+      void load(true).then((ok) => { if (activeEventRef.current === eventId && ok) setReceiptNeedsRefresh(false); }).finally(() => { if (activeEventRef.current === eventId) setReceiptRefreshing(false); });
+    }
+    previousReceiptScope.current = { eventId, pending: unresolvedRosterReceipt };
+    // Reload only when a scoped pointer leaves the shared recovery panel.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId, unresolvedRosterReceipt]);
 
   // Unsaved dialog work guards navigation (not filters, query or selection):
   // true field diffs versus opening snapshots, plus unsettled or pending
@@ -351,7 +533,10 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   const groupDiffers = groupDialogOpen && groupDraft !== groupBaseline;
   const rewardDiffers = rewardDraft.name.trim() !== "" || rewardDraft.method !== "ONSITE";
   useConsoleDraftGuard(
-    groupDiffers ||
+    addDirty ||
+      addUnconfirmed ||
+      groupDiffers ||
+      groupConflict !== null ||
       rewardDiffers ||
       bulkRetry !== null ||
       bulkBusy ||
@@ -359,7 +544,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       pendingGroupRef.current !== null ||
       pendingRewardRef.current !== null ||
       writeBusyRef.current,
-    bulkRetry ? "승인 결과가 아직 확인되지 않았습니다. 화면을 벗어나면 같은 요청으로 다시 확인할 수 없습니다." : "작성 중인 그룹·경품 내용이 사라질 수 있습니다."
+    addUnconfirmed ? "참가자 등록 결과가 아직 확인되지 않았습니다. 화면을 벗어나면 같은 요청으로 다시 확인할 수 없습니다." : bulkRetry ? "승인 결과가 아직 확인되지 않았습니다. 화면을 벗어나면 같은 요청으로 다시 확인할 수 없습니다." : "작성 중인 참가자·그룹·경품 내용이 사라질 수 있습니다."
   );
 
   // Filters init from the URL (status allowlisted; group/query raw) and sync
@@ -368,16 +553,18 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   // refresh or refetch. Unrelated params are preserved; back/forward restores
   // the view through popstate without touching the selection.
   useEffect(() => {
+    activeEventRef.current = eventId;
     try {
       const initial = readRosterFilters(window.location.search);
       setStatusFilter(initial.status);
       setGroupFilter(initial.group);
       setQuery(initial.query);
       setAttendanceFilter(initial.attendance);
+      setTicketFilter(initial.ticket);
       // A shared link that arrives pre-filtered (e.g. the overview approval
       // CTA with ?status=PENDING) opens the disclosure so the operator sees
       // why the list is narrow instead of an unexplained short roster.
-      if (initial.status || initial.group || initial.attendance) {
+      if (initial.status || initial.group || initial.attendance || initial.ticket) {
         setFiltersOpen(true);
       }
     } catch {
@@ -387,19 +574,37 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     // remount on metadata): stale dialogs, retries and banners from the
     // previous event must not leak into this one. Filters come from the URL.
     setSelectedIds([]);
+    setEditTargetId(null);
+    setTicketTarget(null);
+    setCancellationConflictTarget(null);
+    setBulkCancelTargets(null);
+    setReceiptNeedsRefresh(false);
+    setReceiptRefreshing(false);
     setGroupDialogOpen(false);
     setGroupDraft("");
     groupBaselineRef.current = null;
+    groupPeopleRef.current = null;
+    groupReadRef.current?.abort(); groupReadRef.current = null;
+    groupConflictRef.current = null; setGroupConflict(null);
     setGroupError(null);
     setRewardTarget(null);
     setRewardError(null);
     setStatusRetry(null);
     setBulkRetry(null);
     pendingBulkRef.current = null;
+    pendingStatusRef.current = null;
+    if (groupExecutionRef.current) { groupExecutionRef.current = null; writeBusyRef.current = false; setGroupBusy(false); }
+    pendingGroupRef.current = null;
+    pendingRewardRef.current = null;
+    setGroupUncertain(false);
+    setRewardUncertain(false);
     setNotice(null);
     setFailure(null);
     setFetchedAt(null);
     setRefreshError(null);
+    setRosterUnavailable(false);
+    rosterUnavailableRef.current = false;
+    rosterGenerationRef.current += 1;
     setRefreshing(false);
     setApprovedHandoffIds(null);
     setPage(1);
@@ -435,10 +640,11 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         setGroupFilter(next.group);
         setQuery(next.query);
         setAttendanceFilter(next.attendance);
+        setTicketFilter(next.ticket);
         // Back/forward into a filtered URL opens the disclosure for the same
         // reason as the initial load; an unfiltered URL never force-closes an
         // explicitly opened panel.
-        if (next.status || next.group || next.attendance) {
+        if (next.status || next.group || next.attendance || next.ticket) {
           setFiltersOpen(true);
         }
       } catch {
@@ -449,6 +655,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     filtersReadyRef.current = true;
     return () => {
       window.removeEventListener("popstate", onPopState);
+      if (activeEventRef.current === eventId) activeEventRef.current = "";
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
@@ -469,6 +676,8 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       else params.delete("group");
       if (attendanceFilter) params.set("attendance", attendanceFilter);
       else params.delete("attendance");
+      if (ticketFilter) params.set("ticket", ticketFilter);
+      else params.delete("ticket");
       if (query.trim()) params.set("query", query.trim());
       else {
         params.delete("query");
@@ -486,28 +695,38 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     } catch {
       // Filtering still works; only shareable URLs lose the sync.
     }
-  }, [statusFilter, groupFilter, attendanceFilter, query]);
+  }, [statusFilter, groupFilter, attendanceFilter, ticketFilter, query]);
 
   // Any filter or search change restarts at the first page; the checkbox
   // selection (including hidden and other-page rows) is untouched.
   useEffect(() => {
     setPage(1);
-  }, [query, statusFilter, groupFilter, attendanceFilter]);
+  }, [query, statusFilter, groupFilter, attendanceFilter, ticketFilter]);
 
-  async function load(silent = false) {
+  async function load(silent = false): Promise<boolean> {
+    const selectedEvent = eventId;
+    const readId = ++rosterReadIdRef.current;
+    const isCurrent = () => activeEventRef.current === selectedEvent && rosterReadIdRef.current === readId;
     const keepReady = silent && state.kind === "ready";
-    if (!silent) setState({ kind: "loading" });
-    if (keepReady) setRefreshing(true);
+    if (!silent) { setState({ kind: "loading" }); setRefreshing(false); }
+    if (keepReady) {
+      setRefreshing(true);
+      // An export started during a refresh must not use the previous read.
+      rosterGenerationRef.current += 1;
+      rosterUnavailableRef.current = true;
+      setRosterUnavailable(true);
+    }
     try {
       const [meRes, bootRes] = await Promise.all([
         consoleFetch("/api/auth/me", { cache: "no-store" }),
         consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store" }),
       ]);
+      if (!isCurrent()) return false;
       if (meRes.status === 401 || bootRes.status === 401) {
         router.push(
           loginHrefForLocation(window.location.pathname, window.location.search)
         );
-        return;
+        return false;
       }
       const me = (await meRes.json().catch(() => null)) as {
         user?: { id?: unknown; role?: unknown } | null;
@@ -520,11 +739,12 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           memberships?: unknown;
         } | null;
       } | null;
+      if (!isCurrent()) return false;
       const bootstrap = boot?.state;
       if (!meRes.ok || !bootRes.ok || !me?.user || !bootstrap) {
         if (keepReady) {
-          setRefreshError("최신 목록을 불러오지 못했습니다. 연결을 확인하고 새로고침하세요.");
-          return;
+          setRefreshError("최신 목록을 불러오지 못했습니다. 내려받기는 최신 목록 확인 후 이용할 수 있습니다. 연결을 확인하고 새로고침하세요.");
+          return false;
         }
         // A scoped 403/404 means the event is outside this identity's
         // readable scope (revoked assignment, wrong org), not a transient
@@ -534,7 +754,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         setState({ kind: "failed", message: bootRes.status === 404 || bootRes.status === 403
           ? "행사를 찾을 수 없거나 접근 권한이 없습니다."
           : "참가자 목록을 불러오지 못했습니다." });
-        return;
+        return false;
       }
       const role = typeof me.user.role === "string" ? me.user.role : "";
       const myId = typeof me.user.id === "string" ? me.user.id : "";
@@ -561,11 +781,36 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         : undefined;
       if (!event || !bootstrap.workspaces?.[eventId]) {
         setState({ kind: "failed", message: "행사를 찾을 수 없거나 접근 권한이 없습니다." });
-        return;
+        return false;
       }
       const eventSlug = typeof event.slug === "string" ? event.slug : "";
       const workspace = (bootstrap.workspaces?.[eventId] ?? {}) as Record<string, unknown>;
       const participants = workspace.participants;
+      const availability = typeof workspace.reportSourceAvailability === "object" && workspace.reportSourceAvailability !== null && !Array.isArray(workspace.reportSourceAvailability)
+        ? workspace.reportSourceAvailability as Record<string, unknown> : {};
+      const participantCount = workspace.rosterExportParticipantCount;
+      const participantCountKnown = typeof participantCount === "number" && Number.isSafeInteger(participantCount) && participantCount >= 0;
+      const ids = new Set<string>();
+      const rosterAvailable = (role === "STAFF" ? workspace.participantsAvailable === true : availability.participants === true) &&
+        Array.isArray(participants) && (!participantCountKnown || participantCount === participants.length) && participants.every((person) => {
+          if (typeof person !== "object" || person === null || Array.isArray(person)) return false;
+          const id = (person as Record<string, unknown>).id;
+          if (typeof id !== "string" || !id.trim() || id !== id.trim() || ids.has(id)) return false;
+          ids.add(id);
+          return true;
+        });
+      if (!rosterAvailable) {
+        rosterGenerationRef.current += 1;
+        rosterUnavailableRef.current = true;
+        setRosterUnavailable(true);
+        if (keepReady) {
+          setRefreshError("참가자 명단을 확인할 수 없어 이전에 확인한 목록을 표시합니다. 내려받기는 최신 명단 확인 후 이용할 수 있습니다. 다시 시도해도 계속되면 시스템 관리자에게 문의하세요.");
+          return false;
+        }
+        setState({ kind: "failed", message: "참가자 명단을 완전히 확인할 수 없습니다. 다시 시도해도 계속되면 시스템 관리자에게 문의하세요." });
+        setRefreshError(null);
+        return false;
+      }
       const client = Array.isArray(bootstrap.clients)
         ? bootstrap.clients.find(
             (item): item is Record<string, unknown> =>
@@ -581,26 +826,54 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       const features = Array.isArray(event && (event as Record<string, unknown>).features)
         ? ((event as Record<string, unknown>).features as unknown[])
         : [];
+      const consentNotices = Array.isArray(workspace.consentNotices) ? workspace.consentNotices : [];
       const people: Person[] = Array.isArray(participants)
         ? participants.flatMap((item) => {
             if (typeof item !== "object" || item === null) return [];
             const person = item as Record<string, unknown>;
             if (typeof person.id !== "string" || !person.id) return [];
+            const consent = typeof person.consent === "object" && person.consent !== null && !Array.isArray(person.consent)
+              ? person.consent as Record<string, unknown> : null;
+            const consentVersion = typeof consent?.version === "number" && Number.isSafeInteger(consent.version) && consent.version > 0
+              ? consent.version : null;
+            const matchingNotices = typeof consent?.noticeId === "string" && consent.noticeId && consentVersion !== null
+              ? consentNotices.filter((entry) => typeof entry === "object" && entry !== null && !Array.isArray(entry) &&
+                  (entry as Record<string, unknown>).id === consent.noticeId && (entry as Record<string, unknown>).version === consentVersion)
+              : [];
+            const notice = matchingNotices.length === 1 ? matchingNotices[0] as Record<string, unknown> : null;
             return [{
               id: person.id,
               name: typeof person.name === "string" ? person.name : "",
-              status: typeof person.status === "string" ? person.status : "PENDING",
+              ticketRevision: typeof person.ticketRevision === "number" && Number.isSafeInteger(person.ticketRevision) && person.ticketRevision >= 0
+                ? person.ticketRevision : 0,
+              ticketReview: ticketReviewValue(person.ticketReview),
+              cancellationConflictReview: typeof person.cancellationConflictReview === "string" && /^[a-f0-9]{64}$/.test(person.cancellationConflictReview) ? person.cancellationConflictReview : null,
+              ticketNeedsExplicitReissue: person.ticketNeedsExplicitReissue === true,
+              status: typeof person.status === "string" ? person.status : "",
               paymentStatus:
                 typeof person.paymentStatus === "string" ? person.paymentStatus : "",
               phone: typeof person.phone === "string" ? person.phone : "",
               company: typeof person.company === "string" ? person.company : "",
               email: typeof person.email === "string" ? person.email : "",
-              group: typeof person.group === "string" ? person.group : "",
+              group: typeof person.group === "string" && person.group.trim() ? person.group : "일반",
               inside: person.inside === true,
               everIn: person.everIn === true,
+              presenceUnknown: (person.attendanceReview === true && person.inside !== true) || typeof person.inside !== "boolean" ||
+                (person.inside !== true && Object.hasOwn(person, "everIn") && typeof person.everIn !== "boolean"),
+              attendanceReview: attendanceNeedsReview(person),
+              answers: exportAnswers(person.answers),
+              consent: consent ? {
+                version: consentVersion,
+                at: typeof consent.at === "string" ? consent.at : "",
+                noticeText: typeof notice?.text === "string" && notice.text ? notice.text : null,
+              } : null,
             }];
           })
         : [];
+      const fieldsComplete = workspace.rosterExportFieldsAvailable === true && exportFieldsComplete(workspace.publishedFields) &&
+        Array.isArray(workspace.publishedFields) && workspace.rosterExportFieldCount === workspace.publishedFields.length;
+      const publishedFields = fieldsComplete ? exportFields(workspace.publishedFields) : [];
+      const exportIssue = !fieldsComplete ? "fields" : !participantCountKnown ? "roster" : participants.every((person) => exportParticipantComplete(person, publishedFields)) ? null : "answers";
       setState({
         kind: "ready",
         closeSnapshot: readCloseSnapshot(event, workspace),
@@ -620,6 +893,8 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         eventStage: typeof event?.stage === "string" ? event.stage : "",
         eventSlug,
         people,
+        publishedFields,
+        exportIssue,
         groups,
         role,
         userId: myId,
@@ -627,19 +902,25 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         rewardFeature: features.includes("reward"),
       });
       setFetchedAt(Date.now());
+      rosterGenerationRef.current += 1;
+      rosterUnavailableRef.current = false;
+      setRosterUnavailable(false);
       setRefreshError(null);
       // Drop selections for people who no longer exist; selections for
       // filtered-out people stay so they survive filter changes.
       const known = new Set(people.map((person) => person.id));
       setSelectedIds((current) => current.filter((id) => known.has(id)));
+      return true;
     } catch {
+      if (!isCurrent()) return false;
       if (keepReady) {
-        setRefreshError("최신 목록을 불러오지 못했습니다. 연결을 확인하고 새로고침하세요.");
-        return;
+        setRefreshError("최신 목록을 불러오지 못했습니다. 내려받기는 최신 목록 확인 후 이용할 수 있습니다. 연결을 확인하고 새로고침하세요.");
+        return false;
       }
       setState({ kind: "failed", message: "연결하지 못했습니다. 다시 시도하세요." });
+      return false;
     } finally {
-      if (keepReady) setRefreshing(false);
+      if (isCurrent()) setRefreshing(false);
     }
   }
 
@@ -659,7 +940,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       if (writeBusyRef.current || pendingStatusRef.current || pendingBulkRef.current) return;
       if (groupBusy || addBusy || rewardBusy || bulkBusy) return;
       if (statusRetry) return;
-      if (groupDialogOpen || addOpen || rewardTarget) return;
+      if (groupDialogOpen || addOpen || rewardTarget || editTargetId || bulkCancelTargets || ticketTarget || cancellationConflictTarget) return;
       void load(true);
     })
   );
@@ -675,8 +956,23 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     await load(true);
   }
 
-  async function approveSelected(retry = false) {
+  // A popover left open during a failed refresh can cover the recovery
+  // action below it. Close it when the failure becomes known, restoring
+  // focus only if it was inside the popover.
+  useEffect(() => {
+    if (state.kind !== "ready" || refreshing || (!state.exportIssue && !rosterUnavailable)) return;
+    const menu = rosterUtilitiesRef.current;
+    if (!menu?.open) return;
+    const restoreFocus = menu.contains(document.activeElement);
+    menu.open = false;
+    if (restoreFocus) menu.querySelector("summary")?.focus();
+  }, [state, refreshing, rosterUnavailable]);
+
+  async function approveSelected(retry = false, sourceStatus: "PENDING" | "WAITLIST" = "PENDING") {
     if (bulkBusyRef.current || writeBusyRef.current) return;
+    if (unconfirmedStatus) { setFailure("이전 참가자 상태 변경을 먼저 서버에서 확인하세요."); return; }
+    if (!retry && pendingStatusRef.current?.uncertain) { setFailure("이전 참가자 상태 변경을 먼저 확인하세요."); return; }
+    const hadUncertainAttempt = retry && pendingBulkRef.current !== null && bulkRetry !== null;
     let attempt = retry ? pendingBulkRef.current : null;
     if (!retry) {
       // Never replace an unresolved receipt with a new selection. Its retry
@@ -684,14 +980,18 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       if (pendingBulkRef.current) return;
       const ids = effectiveSelection.filter((id) => {
         const person = state.kind === "ready" ? state.people.find((item) => item.id === id) : undefined;
-        return person && person.status === "PENDING";
+        return person && person.status === sourceStatus && person.ticketReview !== "cancelled";
       });
       if (!ids.length) {
-        setNotice("선택한 참가자 중 승인 대기 중인 사람이 없습니다.");
+        setNotice(sourceStatus === "WAITLIST" ? "선택한 참가자 중 대기 명단에 있는 사람이 없습니다." : "선택한 참가자 중 승인 대기 중인 사람이 없습니다.");
         return;
       }
       const names = ids.map((id) => state.kind === "ready" ? state.people.find((person) => person.id === id)?.name ?? "" : "");
-      attempt = { commandId: randomCommandId(), ids, names };
+      const reissueNames = ids.flatMap((id) => {
+        const person = state.kind === "ready" ? state.people.find((item) => item.id === id) : undefined;
+        return person?.ticketNeedsExplicitReissue ? [person.name] : [];
+      });
+      attempt = { commandId: randomCommandId(), ids, names, reissueNames, sourceStatus };
       pendingBulkRef.current = attempt;
     }
     if (!attempt) return;
@@ -711,14 +1011,21 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           body: JSON.stringify({
             commandId: attempt.commandId,
             command: "participant.status",
-            payload: { ids, status: "APPROVED" },
+            payload: { ids, status: "APPROVED", expectedStatus: attempt.sourceStatus },
           }),
         }
       );
-      const data = await res.json().catch(() => null) as { error?: unknown; participants?: unknown[] } | null;
+      const data = await res.json().catch(() => null) as { error?: unknown; code?: unknown; participants?: unknown[] } | null;
       if (!res.ok) {
         const message = typeof data?.error === "string" ? data.error : "승인 결과를 확인하지 못했습니다.";
-        if (isDefinitiveClientError(res.status)) {
+        if (res.status === 409 && ["PARTICIPANT_STATUS_CHANGED", "TICKET_STATUS_CONFLICT"].includes(String(data?.code))) {
+          pendingBulkRef.current = null;
+          setBulkRetry(null);
+          abandonOperatorAttempt(attempt.commandId);
+          forgetOperatorReceipt(attempt.commandId);
+          setFailure(message);
+          await load(true);
+        } else if (isDefinitiveClientError(res.status) && !hadUncertainAttempt) {
           pendingBulkRef.current = null;
           setBulkRetry(null);
           setFailure(message);
@@ -746,12 +1053,15 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         : "";
       // A pending-only filter would hide the people just approved, so the
       // result must be visible in the list the operator is looking at.
-      const filteredToPending = statusFilter === "PENDING";
-      if (filteredToPending) setStatusFilter("");
+      const filteredToSource = statusFilter === attempt.sourceStatus;
+      if (filteredToSource) setStatusFilter("");
+      const reissueNotice = attempt.reissueNames.length ? ` ${attempt.reissueNames.length}명의 기존 티켓은 무효 상태입니다. 참가자 상세에서 새 티켓을 발급해 전달하세요.` : "";
+      const resultMessage = attempt.sourceStatus === "WAITLIST" ? `대기자 ${applied}명을 참가 확정했습니다.` : `${applied}명을 승인했습니다.`;
+      const filterMessage = attempt.sourceStatus === "WAITLIST" ? "대기 명단 필터를 전체로 되돌려 확정된 사람을 보여 줍니다." : "승인 대기 필터를 전체로 되돌려 승인한 사람을 보여 줍니다.";
       setNotice(
-        filteredToPending
-          ? `${applied}명을 승인했습니다.${nameSummary} 승인 대기 필터를 전체로 되돌려 승인한 사람을 보여 줍니다.`
-          : `${applied}명을 승인했습니다.${nameSummary}`
+        (filteredToSource
+          ? `${resultMessage}${nameSummary} ${filterMessage}`
+          : `${resultMessage}${nameSummary}`) + reissueNotice
       );
       // A selection made after the uncertain request belongs to the next
       // task and must not disappear when the earlier receipt is resolved.
@@ -767,7 +1077,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   }
 
   async function createParticipant() {
-    if (addBusy || writeBusyRef.current) return;
+    if (addBusy || writeBusyRef.current || unconfirmedAdd) return;
     const name = addDraft.name.trim();
     const phone = addDraft.phone.trim();
     if (!name || !phone) {
@@ -783,6 +1093,11 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       addDraft.email.trim(),
       addDraft.registrationType,
     ]);
+    if (pendingAddRef.current && pendingAddRef.current.fingerprint !== fingerprint) {
+      setAddUnconfirmed(true);
+      setAddError({ message: "등록 결과를 먼저 같은 요청으로 다시 확인하세요.", field: null });
+      return;
+    }
     const attempt = pendingAddRef.current?.fingerprint === fingerprint
       ? pendingAddRef.current
       : { fingerprint, commandId: randomCommandId() };
@@ -812,24 +1127,36 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       const data = await res.json().catch(() => null) as {
         error?: unknown;
         field?: unknown;
-        participant?: { name?: unknown };
+        participant?: { id?: unknown; name?: unknown; phone?: unknown };
       } | null;
       if (!res.ok) {
         // Ambiguous outcomes (the server may have applied the create before
         // the response was lost) keep the frozen id so the retry replays the
-        // same receipt instead of duplicating the person; definitive
-        // rejections clear it. Either way the same submit button retries.
-        const ambiguous = res.status >= 500 || res.status === 408;
-        if (!ambiguous) pendingAddRef.current = null;
+        // same receipt instead of duplicating the person. A definitive
+        // rejection clears a first attempt only; it cannot settle an older
+        // ambiguous one. The same submit button retries either way.
+        const ambiguous = res.status >= 500 || [408, 425, 429].includes(res.status);
+        // Once an earlier attempt may have committed, a later 4xx (for
+        // example throttling) says nothing about that earlier outcome.
+        const stillUnconfirmed = addUnconfirmed || ambiguous;
+        if (!stillUnconfirmed) pendingAddRef.current = null;
+        setAddUnconfirmed(stillUnconfirmed);
         setAddError({
-          message: ambiguous
+          message: stillUnconfirmed
             ? "응답을 확인하지 못했습니다. 같은 내용으로 다시 시도하세요."
             : typeof data?.error === "string" ? data.error : "참가자를 추가하지 못했습니다.",
           field: typeof data?.field === "string" ? data.field : null,
         });
         return;
       }
+      if (!data || typeof data.participant?.id !== "string" || !data.participant.id ||
+          data.participant.name !== name || data.participant.phone !== phone.replace(/\D/g, "")) {
+        setAddUnconfirmed(true);
+        setAddError({ message: "응답을 확인하지 못했습니다. 같은 내용으로 다시 시도하세요.", field: null });
+        return;
+      }
       pendingAddRef.current = null;
+      setAddUnconfirmed(false);
       const added = typeof data?.participant?.name === "string" ? data.participant.name : name;
       setAddDraft({ name: "", phone: "", company: "", email: "", registrationType: "ONSITE" });
       setReuseFrom(null);
@@ -838,7 +1165,12 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       setNotice(`${added}님을 등록했습니다.`);
       await load(true);
     } catch {
-      setAddError({ message: "연결하지 못했습니다. 같은 내용으로 다시 시도하세요.", field: null });
+      if (pendingAddRef.current) {
+        setAddUnconfirmed(true);
+        setAddError({ message: "연결하지 못했습니다. 같은 내용으로 다시 시도하세요.", field: null });
+      } else {
+        setFailure("참가자는 등록됐지만 목록을 갱신하지 못했습니다. 새로고침해 확인하세요.");
+      }
     } finally {
       writeBusyRef.current = false;
       setAddBusy(false);
@@ -867,6 +1199,14 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
 
   async function applyStatus(person: Person, status: string) {
     if (writeBusyRef.current || savingId) return;
+    setStatusFeedbackId(person.id);
+    if (unconfirmedStatus) { setFailure("이전 참가자 상태 변경을 먼저 서버에서 확인하세요."); return; }
+    if (pendingBulkRef.current) { setFailure("이전 일괄 승인 결과를 먼저 확인하세요."); return; }
+    const fingerprint = JSON.stringify(["participant.status", eventId, person.id, person.status, status]);
+    if (pendingStatusRef.current?.uncertain && pendingStatusRef.current.fingerprint !== fingerprint) {
+      setFailure("이전 참가자 상태 변경 결과를 먼저 확인하세요.");
+      return;
+    }
     writeBusyRef.current = true;
     setSavingId(person.id);
     setNotice(null);
@@ -874,10 +1214,9 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     // One command id per distinct status change: an ambiguous failure keeps
     // the id so the retry below replays the same request (the server receipt
     // replays the original result instead of applying twice).
-    const fingerprint = JSON.stringify(["participant.status", eventId, person.id, status]);
     const attempt = pendingStatusRef.current?.fingerprint === fingerprint
       ? pendingStatusRef.current
-      : { fingerprint, commandId: randomCommandId() };
+      : { fingerprint, commandId: randomCommandId(), uncertain: false };
     pendingStatusRef.current = attempt;
     try {
       const res = await consoleFetch(
@@ -888,21 +1227,30 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           body: JSON.stringify({
             commandId: attempt.commandId,
             command: "participant.status",
-            payload: { id: person.id, status },
+            payload: { id: person.id, status, expectedStatus: person.status },
           }),
         }
       );
       const data = (await res.json().catch(() => null)) as {
         error?: unknown;
+        code?: unknown;
         participants?: unknown;
       } | null;
       if (!res.ok) {
         const serverMessage = typeof data?.error === "string" ? data.error : "변경하지 못했습니다.";
-        if (isDefinitiveClientError(res.status)) {
+        if (res.status === 409 && ["PARTICIPANT_STATUS_CHANGED", "PARTICIPANT_INSIDE", "PARTICIPANT_PRESENCE_UNKNOWN", "TICKET_STATUS_CONFLICT"].includes(String(data?.code))) {
+          pendingStatusRef.current = null;
+          setStatusRetry(null);
+          abandonOperatorAttempt(attempt.commandId);
+          forgetOperatorReceipt(attempt.commandId);
+          setFailure(serverMessage);
+          await load(true);
+        } else if (isDefinitiveClientError(res.status) && !attempt.uncertain) {
           pendingStatusRef.current = null;
           setStatusRetry(null);
           setFailure(serverMessage);
         } else {
+          attempt.uncertain = true;
           setStatusRetry({ person, status });
           setFailure(`${serverMessage} 같은 요청으로 다시 시도하세요.`);
         }
@@ -911,16 +1259,19 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       if (!Array.isArray(data?.participants) || !data.participants.some((entry) => participantRecordMatches(entry, person.id, status))) {
         // 2xx without this person's updated record: the write may have
         // landed. Keep the id so the retry replays instead of duplicating.
+        attempt.uncertain = true;
         setStatusRetry({ person, status });
         setFailure("응답을 확인하지 못했습니다. 같은 요청으로 다시 시도하세요.");
         return;
       }
       pendingStatusRef.current = null;
       setStatusRetry(null);
+      setStatusFeedbackId(null);
       setApprovedHandoffIds(null);
-      setNotice(`${person.name} 상태를 ${statusLabel(status)}(으)로 바꿨습니다.`);
+      setNotice(`${person.name} 상태를 ${statusLabel(status)}(으)로 바꿨습니다.${status === "APPROVED" && person.ticketNeedsExplicitReissue ? " 기존 티켓은 무효 상태입니다. 새 티켓을 발급해 전달하세요." : ""}`);
       await load(true);
     } catch {
+      attempt.uncertain = true;
       setStatusRetry({ person, status });
       setFailure("연결하지 못했습니다. 같은 요청으로 다시 시도하세요.");
     } finally {
@@ -936,12 +1287,15 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   // pure closers directly.
   function canCloseGroupDialog(): boolean {
     if (writeBusyRef.current || groupBusy) return false;
-    return (groupDraft === (groupBaselineRef.current ?? "") && !pendingGroupRef.current) || window.confirm(pendingGroupRef.current ? UNCONFIRMED_WRITE_CLOSE_MESSAGE : DIRTY_CLOSE_MESSAGE);
+    return (groupDraft === (groupBaselineRef.current ?? "") && !pendingGroupRef.current && !groupConflict) || window.confirm(pendingGroupRef.current ? UNCONFIRMED_WRITE_CLOSE_MESSAGE : DIRTY_CLOSE_MESSAGE);
   }
 
   function closeGroupDialog(): void {
     setGroupDialogOpen(false);
     groupBaselineRef.current = null;
+    groupPeopleRef.current = null;
+    groupReadRef.current?.abort(); groupReadRef.current = null;
+    groupConflictRef.current = null; setGroupConflict(null);
   }
 
   function canCloseRewardDialog(): boolean {
@@ -984,7 +1338,8 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     const haystack = `${person.name} ${person.company} ${person.phone}`.toLocaleLowerCase("ko-KR");
     const matchesQuery = !search || haystack.includes(search);
     const matchesGroup = !groupFilter || person.group === groupFilter;
-    return matchesQuery && matchesGroup && matchesAttendance(person, attendanceFilter) && (!statusFilter || person.status === statusFilter);
+    return matchesQuery && matchesGroup && matchesAttendance(person, attendanceFilter) && (!statusFilter || person.status === statusFilter) &&
+      (!ticketFilter || (person.status.toUpperCase() !== "CANCELLED" && ["expired", "revoked", "unavailable", "unknown", "cancelled"].includes(person.ticketReview)));
   });
 
   // Selection is scoped to what is visible: group assignment only ever
@@ -994,6 +1349,12 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   const visibleIds = new Set(visiblePeople.map((person) => person.id));
   const knownIds = new Set(state.people.map((person) => person.id));
   const effectiveSelection = selectedIds.filter((id) => visibleIds.has(id));
+  const effectiveIds = new Set(effectiveSelection);
+  const approvalCandidates = state.people.filter((person) => effectiveIds.has(person.id) && person.status === "PENDING" && person.ticketReview !== "cancelled");
+  const waitlistCandidates = state.people.filter((person) => effectiveIds.has(person.id) && person.status === "WAITLIST" && person.ticketReview !== "cancelled");
+  const approvalConflicts = state.people.filter((person) => effectiveIds.has(person.id) && ["PENDING", "WAITLIST"].includes(person.status) && person.ticketReview === "cancelled");
+  const approvalReissues = [...approvalCandidates, ...waitlistCandidates].filter((person) => person.ticketNeedsExplicitReissue);
+  const cancelCandidates = state.people.filter((person) => effectiveIds.has(person.id) && person.status !== "CANCELLED");
   const hiddenSelectedCount = selectedIds.filter(
     (id) => knownIds.has(id) && !visibleIds.has(id)
   ).length;
@@ -1037,11 +1398,12 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     { key: "all", label: "전체", status: "", attendance: "", count: presetCounts.all },
     { key: "pending", label: "승인 대기", status: "PENDING", attendance: "", count: presetCounts.pending },
     { key: "approved", label: "참가 확정", status: "APPROVED", attendance: "", count: presetCounts.approved },
-    { key: "not-entered", label: "미입장", status: "APPROVED", attendance: "NOT_ENTERED", count: presetCounts.notEntered },
+    { key: "not-entered", label: "확정자 중 미입장", status: "APPROVED", attendance: "NOT_ENTERED", count: presetCounts.notEntered },
   ];
   function applyRosterPreset(preset: RosterPreset) {
     setStatusFilter(preset.status);
     setAttendanceFilter(preset.attendance);
+    setTicketFilter("");
   }
   const pageIds = new Set(pagePeople.map((person) => person.id));
   const pageSelectedCount = selectedIds.filter((id) => pageIds.has(id)).length;
@@ -1053,16 +1415,18 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   // Disclosure badge: how many of the three advanced selects narrow the list,
   // and under which readable labels. The search box stays visible, so the
   // query is summarized only by the reset label, not the count.
-  const advancedActiveCount = [statusFilter, groupFilter, attendanceFilter].filter(Boolean).length;
+  const advancedActiveCount = [statusFilter, groupFilter, attendanceFilter, ticketFilter].filter(Boolean).length;
   const advancedSummary = [
     statusFilter ? statusLabel(statusFilter) : "",
     groupFilter || "",
     attendanceFilter ? attendanceLabel(attendanceFilter) : "",
+    ticketFilter ? "티켓 확인 필요" : "",
   ]
     .map((part) => part.trim())
     .filter(Boolean)
     .join(" · ");
   const hasAnyFilter = Boolean(query.trim()) || advancedActiveCount > 0;
+  const isAttendanceReviewOnly = attendanceFilter === "REVIEW" && !query.trim() && !statusFilter && !groupFilter && !ticketFilter;
   // Roster→message handoff: the full known selection, including filtered-out
   // hidden rows, travels as ?to=<comma-separated ids>. Visible-only group
   // assignment above is untouched.
@@ -1095,6 +1459,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     setStatusFilter("");
     setGroupFilter("");
     setAttendanceFilter("");
+    setTicketFilter("");
   }
 
   function togglePerson(id: string) {
@@ -1103,40 +1468,108 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     );
   }
 
+  async function readLatestGroupPeople() {
+    const conflict = groupConflictRef.current;
+    if (!conflict || groupReadRef.current) return;
+    const controller = new AbortController();
+    groupReadRef.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 12000);
+    const loading = { ...conflict, latest: null, groups: [], loading: true, error: null };
+    groupConflictRef.current = loading; setGroupConflict(loading);
+    try {
+      const response = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store", signal: controller.signal });
+      const body = await response.json() as { state?: { events?: unknown; workspaces?: Record<string, Record<string, unknown>> } };
+      const bootstrap = body?.state;
+      const eventExists = Array.isArray(bootstrap?.events) && bootstrap.events.some((event) => event && typeof event === "object" && (event as Record<string, unknown>).id === eventId);
+      const workspace = bootstrap?.workspaces?.[eventId];
+      if (!response.ok || !eventExists || !workspace || !Array.isArray(workspace.participants) ||
+          !Array.isArray(workspace.groups) || workspace.groups.some((group) => typeof group !== "string")) throw new Error("incomplete roster");
+      const latest = conflict.before.map((person) => {
+        const matches = (workspace.participants as unknown[]).filter((value) => value && typeof value === "object" && (value as Record<string, unknown>).id === person.id);
+        if (matches.length !== 1) throw new Error("participant unavailable");
+        const item = matches[0] as Record<string, unknown>;
+        if (typeof item.name !== "string" || typeof item.group !== "string") throw new Error("incomplete participant");
+        return { id: person.id, name: item.name, group: item.group,
+          company: typeof item.company === "string" ? item.company : "", phone: typeof item.phone === "string" ? item.phone : "" };
+      });
+      if (controller.signal.aborted || activeEventRef.current !== eventId || groupReadRef.current !== controller) return;
+      const resolved = { ...conflict, latest, groups: workspace.groups as string[], loading: false, error: null };
+      groupConflictRef.current = resolved; setGroupConflict(resolved);
+    } catch {
+      if (activeEventRef.current !== eventId || groupReadRef.current !== controller) return;
+      const failed = { ...conflict, latest: null, groups: [], loading: false, error: "최신 명단을 확인하지 못했습니다. 선택과 그룹은 그대로 있습니다. 연결과 참가자 상태를 확인하고 다시 시도하세요." };
+      groupConflictRef.current = failed; setGroupConflict(failed);
+    } finally {
+      window.clearTimeout(timeout);
+      if (groupReadRef.current === controller) groupReadRef.current = null;
+    }
+  }
+
+  function acceptLatestGroups() {
+    const conflict = groupConflictRef.current;
+    if (!conflict?.latest || activeEventRef.current !== eventId) return;
+    const latest = conflict.latest;
+    const currentById = new Map(latest.map((person) => [person.id, person]));
+    groupPeopleRef.current = latest;
+    setState((current) => current.kind === "ready" ? { ...current, groups: conflict.groups,
+      people: current.people.map((person) => currentById.has(person.id) ? { ...person, name: currentById.get(person.id)!.name, group: currentById.get(person.id)!.group } : person) } : current);
+    if (!conflict.groups.includes(groupDraft)) setGroupDraft("");
+    groupConflictRef.current = null; setGroupConflict(null);
+    setGroupError(null);
+    window.requestAnimationFrame(() => document.getElementById("group-pick")?.focus());
+  }
+
   async function assignGroup(event: React.FormEvent) {
     event.preventDefault();
-    if (writeBusyRef.current || groupBusy || !groupDraft || !effectiveSelection.length) return;
+    if (writeBusyRef.current || groupBusy || unconfirmedGroup || groupConflictRef.current || (!pendingGroupRef.current && (!groupDraft || !groupPeopleRef.current?.length))) return;
     writeBusyRef.current = true;
     setGroupBusy(true);
     setGroupError(null);
-    // Same fingerprint (group + visible ids) reuses the command id across
-    // ambiguous failures; editing the group or the selection mints a new one.
-    // The selection is preserved on failure so the retry is the same request.
-    const fingerprint = JSON.stringify(["group.assign", eventId, groupDraft, [...effectiveSelection].sort()]);
-    const attempt = pendingGroupRef.current?.fingerprint === fingerprint
+    setNotice(null);
+    // Preserve the exact group and participants, even if a closed dialog is
+    // reopened after filters or selection have changed.
+    const people = groupPeopleRef.current ?? [];
+    const fingerprint = JSON.stringify(["group.assign", eventId, groupDraft, people.map(({ id, group }) => ({ id, group }))]);
+    const attempt = pendingGroupRef.current?.uncertain
       ? pendingGroupRef.current
-      : { fingerprint, commandId: randomCommandId() };
+      : { eventId, fingerprint, commandId: randomCommandId(), group: groupDraft, ids: people.map((person) => person.id), people,
+          names: people.map((person) => person.name), expectedGroups: people.map(({ id, group }) => ({ id, group })), uncertain: false };
     pendingGroupRef.current = attempt;
+    groupExecutionRef.current = { eventId: attempt.eventId, commandId: attempt.commandId };
+    const currentExecution = () => activeEventRef.current === attempt.eventId &&
+      groupExecutionRef.current?.eventId === attempt.eventId && groupExecutionRef.current.commandId === attempt.commandId;
     try {
       const res = await consoleFetch(
-        `/api/events/${encodeURIComponent(eventId)}/commands`,
+        `/api/events/${encodeURIComponent(attempt.eventId)}/commands`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             commandId: attempt.commandId,
             command: "group.assign",
-            payload: { group: groupDraft, ids: effectiveSelection },
+            payload: { group: attempt.group, ids: attempt.ids, expectedGroups: attempt.expectedGroups },
           }),
         }
       );
-      const data = (await res.json().catch(() => null)) as { error?: unknown; participantIds?: unknown; group?: unknown } | null;
+      const data = (await res.json().catch(() => null)) as { error?: unknown; code?: unknown; participantIds?: unknown; group?: unknown } | null;
+      if (!currentExecution()) return;
       if (!res.ok) {
         const serverMessage = typeof data?.error === "string" ? data.error : "그룹을 지정하지 못했습니다.";
-        if (isDefinitiveClientError(res.status)) {
+        if (res.status === 409 && data?.code === "PARTICIPANT_GROUP_CHANGED") {
+          // This specific guard is evaluated after receipt lookup, even on a
+          // retry, so the original request is definitively not applied.
+          abandonOperatorAttempt(attempt.commandId); forgetOperatorReceipt(attempt.commandId);
+          pendingGroupRef.current = null; setGroupUncertain(false); setGroupError(null);
+          const conflict: GroupConflict = { before: attempt.people, latest: null, groups: [], loading: false, error: null };
+          groupConflictRef.current = conflict; setGroupConflict(conflict);
+          window.requestAnimationFrame(() => document.getElementById("group-conflict-heading")?.focus());
+        } else if (isDefinitiveClientError(res.status) && !attempt.uncertain) {
           pendingGroupRef.current = null;
+          setGroupUncertain(false);
           setGroupError(serverMessage);
         } else {
+          attempt.uncertain = true;
+          setGroupUncertain(true);
           setGroupError(`${serverMessage} 같은 요청으로 다시 시도하세요.`);
         }
         return;
@@ -1145,40 +1578,49 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       const returnedIds = Array.isArray(data?.participantIds)
         ? data.participantIds.map((id) => String(id)).sort().join(",")
         : null;
-      const expectedIds = [...effectiveSelection].map((id) => String(id)).sort().join(",");
-      if (data?.group !== groupDraft || returnedIds === null || returnedIds !== expectedIds) {
+      const expectedIds = [...attempt.ids].map((id) => String(id)).sort().join(",");
+      if (data?.group !== attempt.group || returnedIds === null || returnedIds !== expectedIds) {
+        attempt.uncertain = true;
+        setGroupUncertain(true);
         setGroupError("응답을 확인하지 못했습니다. 같은 요청으로 다시 시도하세요.");
         return;
       }
       pendingGroupRef.current = null;
+      setGroupUncertain(false);
       setApprovedHandoffIds(null);
-      setNotice(`${effectiveSelection.length}명을 ${groupDraft}(으)로 지정했습니다.`);
-      setSelectedIds([]);
+      setNotice(`${attempt.ids.length}명을 ${attempt.group}(으)로 지정했습니다.`);
+      setSelectedIds((current) => current.filter((id) => !attempt.ids.includes(id)));
       setGroupDialogOpen(false);
       groupBaselineRef.current = null;
       await load(true);
     } catch {
+      if (!currentExecution()) return;
+      attempt.uncertain = true;
+      setGroupUncertain(true);
       setGroupError("연결하지 못했습니다. 같은 요청으로 다시 시도하세요.");
     } finally {
-      writeBusyRef.current = false;
-      setGroupBusy(false);
+      if (currentExecution()) {
+        groupExecutionRef.current = null;
+        writeBusyRef.current = false;
+        setGroupBusy(false);
+      }
     }
   }
 
   async function createReward(event: React.FormEvent) {
     event.preventDefault();
-    if (writeBusyRef.current || rewardBusy || !rewardTarget || !rewardDraft.name.trim()) return;
+    if (writeBusyRef.current || rewardBusy || unconfirmedReward || !rewardTarget || !rewardDraft.name.trim()) return;
     writeBusyRef.current = true;
     setRewardBusy(true);
     setRewardError(null);
+    setNotice(null);
     const rewardName = rewardDraft.name.trim();
-    // Reward ids are the command ids: replaying the same id after an
-    // ambiguous failure returns the original reward instead of minting a
-    // second one. Editing name/method/target mints a new id.
+    // Reward ids are command ids. Keep target and input with an uncertain
+    // result so reopening another row cannot accidentally create a duplicate.
     const fingerprint = JSON.stringify(["reward.create", eventId, rewardTarget.id, rewardName, rewardDraft.method]);
-    const attempt = pendingRewardRef.current?.fingerprint === fingerprint
+    const attempt = pendingRewardRef.current?.uncertain
       ? pendingRewardRef.current
-      : { fingerprint, commandId: randomCommandId() };
+      : { fingerprint, commandId: randomCommandId(), target: rewardTarget, name: rewardName, method: rewardDraft.method, uncertain: false };
     pendingRewardRef.current = attempt;
     try {
       const res = await consoleFetch(
@@ -1190,9 +1632,9 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
             commandId: attempt.commandId,
             command: "reward.create",
             payload: {
-              participantId: rewardTarget.id,
-              name: rewardName,
-              method: rewardDraft.method,
+              participantId: attempt.target.id,
+              name: attempt.name,
+              method: attempt.method,
             },
           }),
         }
@@ -1203,34 +1645,43 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         reward?: unknown;
       } | null;
       if (!res.ok) {
-        if (isDefinitiveClientError(res.status)) pendingRewardRef.current = null;
+        const definitive = isDefinitiveClientError(res.status) && !attempt.uncertain;
+        if (definitive) { pendingRewardRef.current = null; setRewardUncertain(false); }
+        else { attempt.uncertain = true; setRewardUncertain(true); }
         setRewardError({
-          field: typeof data?.field === "string" ? data.field : null,
+          field: definitive && typeof data?.field === "string" ? data.field : null,
           message: (() => {
             const base = typeof data?.error === "string" ? data.error : "경품을 등록하지 못했습니다.";
-            return isDefinitiveClientError(res.status) ? base : `${base} 같은 요청으로 다시 시도하세요.`;
+            return definitive ? base : `${base} 같은 요청으로 다시 시도하세요.`;
           })(),
         });
         return;
       }
       if (typeof data?.reward !== "object" || data?.reward === null) {
+        attempt.uncertain = true;
+        setRewardUncertain(true);
         setRewardError({ field: null, message: "응답을 확인하지 못했습니다. 같은 요청으로 다시 시도하세요." });
         return;
       }
       // Proven success echoes this recipient on the created reward (the
       // reward id itself is the command id), not just any reward object.
       const created = data.reward as Record<string, unknown>;
-      if (typeof created.id !== "string" || !created.id || created.participantId !== rewardTarget.id) {
+      if (created.id !== attempt.commandId || created.participantId !== attempt.target.id || created.name !== attempt.name || created.method !== attempt.method) {
+        attempt.uncertain = true;
+        setRewardUncertain(true);
         setRewardError({ field: null, message: "응답을 확인하지 못했습니다. 같은 요청으로 다시 시도하세요." });
         return;
       }
       pendingRewardRef.current = null;
+      setRewardUncertain(false);
       setApprovedHandoffIds(null);
-      setNotice(`${rewardTarget.name}님의 경품을 등록했습니다. 경품 화면에서 지급 처리하세요.`);
+      setNotice(`${attempt.target.name}님의 경품을 등록했습니다. 경품 화면에서 지급 처리하세요.`);
       setRewardTarget(null);
       setRewardDraft({ name: "", method: "ONSITE" });
       rewardDraftOwnerRef.current = null;
     } catch {
+      attempt.uncertain = true;
+      setRewardUncertain(true);
       setRewardError({ field: null, message: "연결하지 못했습니다. 같은 요청으로 다시 시도하세요." });
     } finally {
       writeBusyRef.current = false;
@@ -1238,28 +1689,46 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     }
   }
 
-  function exportCsv() {
-    const rows = orderedPeople.map((person) => [
-      person.name,
-      person.company,
-      person.phone,
-      person.email,
-      person.group,
-      statusLabel(person.status),
-      person.inside ? "입장 중" : person.everIn ? "퇴장" : "미도착",
-    ]);
-    const escaped = [["이름", "소속", "연락처", "이메일", "그룹", "등록 상태", "현장 상태"], ...rows]
-      .map((row) => row.map((cell) => csvCell(cell)).join(","))
-      .join("\r\n");
-    const blob = new Blob(["﻿" + escaped], { type: "text/csv;charset=utf-8" });
+  function downloadExport(blob: Blob, filename: string) {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "EVENTOUCH_participants.csv";
+    anchor.download = filename;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(url);
+  }
+  function exportCsv() {
+    if (state.kind !== "ready" || rosterUnavailableRef.current || state.exportIssue) return;
+    const rows = participantExportRows(orderedPeople, state.publishedFields, statusLabel);
+    downloadExport(new Blob([participantCsv(rows)], { type: "text/csv;charset=utf-8" }), "EVENTOUCH_participants.csv");
+  }
+  async function exportXlsx() {
+    if (exportGateRef.current || exporting || state.kind !== "ready" || rosterUnavailableRef.current || state.exportIssue) return;
+    exportGateRef.current = true;
+    const exportGeneration = rosterGenerationRef.current;
+    const exportEventId = eventId;
+    setExporting(true);
+    setFailure(null);
+    try {
+      const rows = participantExportRows(orderedPeople, state.publishedFields, statusLabel);
+      const XLSX = await import("xlsx");
+      if (rosterUnavailableRef.current || rosterGenerationRef.current !== exportGeneration || activeEventRef.current !== exportEventId) {
+        if (activeEventRef.current === exportEventId) setFailure("명단이 바뀌거나 확인되지 않아 내려받기를 취소했습니다. 최신 목록에서 다시 시도하세요.");
+        return;
+      }
+      // Every cell is a string, including numbers, phone numbers and text
+      // beginning with '=': no cell receives a formula property.
+      const sheet = XLSX.utils.aoa_to_sheet(rows);
+      sheet["!cols"] = rows[0].map((header) => ({ wch: Math.max(14, Math.min(28, header.length * 2 + 4)) }));
+      const book = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(book, sheet, "참가자");
+      const bytes: ArrayBuffer = XLSX.write(book, { bookType: "xlsx", type: "array" });
+      downloadExport(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), "EVENTOUCH_participants.xlsx");
+    } catch {
+      setFailure("엑셀 파일을 만들지 못했습니다. 다시 시도하거나 CSV로 내려받으세요.");
+    } finally { exportGateRef.current = false; setExporting(false); }
   }
   // Write gates mirror the server's single event-permissions map (role +
   // membership + per-command scope, re-checked server-side): the 명단 probe
@@ -1275,15 +1744,19 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     eventId,
   };
   const canWriteRoster = canWriteEvent(capabilities, "participant.status");
+  const canEditParticipant = canWriteEvent(capabilities, "participant.update");
+  const canReissueTicket = canWriteEvent(capabilities, "ticket.reissue-reviewed");
+  const canResolveCancellationConflict = canWriteEvent(capabilities, "participant.resolve-cancellation-conflict");
   const canWriteGroup = canWriteEvent(capabilities, "group.assign");
   const canWriteReward = canWriteEvent(capabilities, "reward.create");
+  const canReviewExit = canWriteEvent(capabilities, "check.reviewed-exit") && state.eventStage.toUpperCase() === "LIVE";
   const stageKey = state.eventStage.toUpperCase();
   const participantsLocked = stageKey === "ENDED" || stageKey === "ARCHIVED";
   const archived = stageKey === "ARCHIVED";
   const canMutateStatus = canWriteRoster && !participantsLocked;
   const canAssignGroup = canWriteGroup && !archived;
   const canRewardHere = canWriteReward && state.rewardFeature && !archived;
-  const showRowActions = canMutateStatus || canRewardHere;
+  const showRowActions = canMutateStatus || (canEditParticipant && !participantsLocked) || canRewardHere || canReviewExit;
   const readOnlyRows = !canAssignGroup;
   const rowClass = readOnlyRows
     ? `${styles.participantRow} ${styles.viewerRow}`
@@ -1340,6 +1813,12 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       disclosure.open = false;
       disclosure.querySelector("summary")?.focus({ preventScroll: true });
     }
+  }
+  function closeSelectionMenu(trigger: HTMLElement) {
+    const disclosure = trigger.closest("details");
+    if (!disclosure) return;
+    disclosure.open = false;
+    disclosure.querySelector("summary")?.focus({ preventScroll: true });
   }
   // Bottom-of-list return: the sticky page bar sits below the toolbar, so
   // this moves scroll and keyboard focus back to the actual search input.
@@ -1428,6 +1907,13 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                   ))}
                 </select>
               </label>
+              <label>
+                <span className="sr-only" id="roster-ticket-label">티켓 상태별 보기</span>
+                <select aria-labelledby="roster-ticket-label" value={ticketFilter} onChange={(event) => setTicketFilter(event.target.value)}>
+                  <option value="">전체 티켓</option>
+                  <option value="review">티켓 확인 필요</option>
+                </select>
+              </label>
               {hasAnyFilter ? (
                 <button
                   type="button"
@@ -1443,25 +1929,32 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           }
           actions={
             <span data-toolbar-inline className={styles.utilityPair}>
-              <details className={styles.rosterUtilities}>
-                <summary>명단 도구</summary>
+              <label className={styles.mobilePresetPicker}>
+                <span className="sr-only">빠른 상태 보기</span>
+                <select value={ticketFilter ? "custom" : rosterPresets.find((preset) => statusFilter === preset.status && attendanceFilter === preset.attendance)?.key ?? "custom"}
+                  onChange={(event) => { const preset = rosterPresets.find((item) => item.key === event.target.value); if (preset) applyRosterPreset(preset); }}>
+                  <option value="custom" disabled>직접 설정한 보기</option>
+                  {rosterPresets.map((preset) => <option key={preset.key} value={preset.key}>{preset.label} · {preset.count}명</option>)}
+                </select>
+              </label>
+              <details className={styles.rosterUtilities} ref={rosterUtilitiesRef}>
+                <summary aria-label="명단 도구"><span className={styles.longAction}>명단 도구</span><span className={styles.shortAction} aria-hidden="true">도구</span></summary>
                 <div className={styles.utilityMenu}>
-              <button type="button" className="button button-secondary" aria-label={`CSV 내보내기 · 검색·필터 결과 ${visiblePeople.length}명`} title={`검색·필터 결과 ${visiblePeople.length}명을 현재 정렬 순서로 내보냅니다.`} onClick={exportCsv}>
+              <button type="button" className="button button-secondary" aria-label={`엑셀 내보내기 · 검색·필터 결과 ${visiblePeople.length}명`} aria-describedby={state.exportIssue ? "roster-export-unavailable" : undefined} title={`검색·필터 결과 ${visiblePeople.length}명을 현재 정렬 순서로 내보냅니다.`} disabled={exporting || rosterUnavailable || Boolean(state.exportIssue)} onClick={() => void exportXlsx()}>
+                <DownloadIcon />
+                {exporting ? "엑셀 준비 중…" : "엑셀 내보내기"}
+              </button>
+              <button type="button" className="button button-secondary" aria-label={`CSV 내보내기 · 검색·필터 결과 ${visiblePeople.length}명`} aria-describedby={state.exportIssue ? "roster-export-unavailable" : undefined} title={`검색·필터 결과 ${visiblePeople.length}명을 현재 정렬 순서로 내보냅니다.`} disabled={rosterUnavailable || Boolean(state.exportIssue)} onClick={exportCsv}>
                 <DownloadIcon />
                 CSV 내보내기
               </button>
-              {canMutateStatus ? (
-                <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants/import`}>
-                  <UploadIcon />
-                  명단 가져오기
-                </Link>
-              ) : null}
               </div>
               </details>
+              {canMutateStatus ? <button type="button" className="button button-secondary" onClick={() => setImportOpen(true)}><UploadIcon />명단 가져오기</button> : null}
               {canMutateStatus ? (
-                <button type="button" className="button button-primary" onClick={() => { setAddError(null); setAddOpen(true); }}>
+                <button type="button" className="button button-primary" aria-label="참가자 추가" disabled={unconfirmedAdd} onClick={() => { setAddError(addUnconfirmed ? { message: "등록 결과가 확인되지 않았습니다. 같은 요청으로 다시 확인하세요.", field: null } : null); setAddOpen(true); }}>
                   <PlusIcon />
-                  참가자 추가
+                  <span className={styles.longAction}>참가자 추가</span><span className={styles.shortAction} aria-hidden="true">추가</span>
                 </button>
               ) : null}
             </span>
@@ -1472,6 +1965,12 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       }
       feedback={
         <>
+          {state.exportIssue ? <ConsoleFeedback kind="warning" id="roster-export-unavailable">
+            {state.exportIssue === "fields" ? "게시된 신청 항목을 확인할 수 없어" : state.exportIssue === "roster" ? "참가자 명단의 전체 범위를 확인할 수 없어" : "일부 참가자의 신청 정보를 확인할 수 없어"} 명단을 내려받을 수 없습니다. 다시 확인해도 계속되면 시스템 관리자에게 문의하세요.{" "}
+            <button type="button" className="button button-secondary" disabled={refreshing} onClick={() => void refreshQuietly()}>{refreshing ? "확인 중…" : "다시 확인"}</button>
+          </ConsoleFeedback> : null}
+          {unresolvedRosterReceipt ? <ConsoleFeedback kind="warning">이전 참가자 작업의 결과를 위의 처리 결과 확인에서 확인한 뒤 같은 종류의 새 작업을 할 수 있습니다.</ConsoleFeedback> : null}
+          {receiptRefreshLock ? <ConsoleFeedback kind="warning">최신 참가자 목록을 불러온 뒤 수정할 수 있습니다. {!receiptRefreshing ? <button type="button" className="button button-secondary" onClick={() => { setReceiptRefreshing(true); void load(true).then((ok) => { if (ok) setReceiptNeedsRefresh(false); }).finally(() => setReceiptRefreshing(false)); }}>다시 불러오기</button> : null}</ConsoleFeedback> : null}
           {notice ? (
             <ConsoleFeedback kind="success">
               {notice}
@@ -1491,7 +1990,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           ) : null}
           {bulkRetry ? (
             <ConsoleFeedback kind="error" id="roster-bulk-retry-message">
-              {bulkRetry.message} 이전 승인 요청 {bulkRetry.attempt.ids.length}명
+              {bulkRetry.message} 이전 {bulkRetry.attempt.sourceStatus === "WAITLIST" ? "대기자 확정" : "승인"} 요청 {bulkRetry.attempt.ids.length}명
               {bulkRetry.attempt.names.length ? ` (${bulkRetry.attempt.names.slice(0, 3).join(", ")}${bulkRetry.attempt.names.length > 3 ? ` 외 ${bulkRetry.attempt.names.length - 3}명` : ""})` : ""}의 결과가 미확인입니다.
               선택을 바꿔도 이 버튼은 이전 요청을 그대로 확인합니다.{" "}
               <button type="button" className="button button-secondary" disabled={bulkBusy} onClick={() => void approveSelected(true)}>
@@ -1499,7 +1998,15 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
               </button>
             </ConsoleFeedback>
           ) : null}
-          {failure ? (
+          {groupUncertain && pendingGroupRef.current && !groupDialogOpen ? <ConsoleFeedback kind="warning">
+            이전 그룹 지정 {pendingGroupRef.current.ids.length}명의 결과가 미확인입니다.{" "}
+            <button type="button" className="button button-secondary" onClick={() => { if (pendingGroupRef.current) setGroupDraft(pendingGroupRef.current.group); setGroupDialogOpen(true); }}>그룹 지정 다시 확인</button>
+          </ConsoleFeedback> : null}
+          {rewardUncertain && pendingRewardRef.current && !rewardTarget ? <ConsoleFeedback kind="warning">
+            {pendingRewardRef.current.target.name}님의 경품 등록 결과가 미확인입니다.{" "}
+            <button type="button" className="button button-secondary" onClick={() => { if (pendingRewardRef.current) setRewardTarget(pendingRewardRef.current.target); }}>경품 등록 다시 확인</button>
+          </ConsoleFeedback> : null}
+          {failure && !(toolsOpenId && selectedPerson?.id === statusFeedbackId && !rewardTarget && !addOpen && !groupDialogOpen && !editTargetId && !ticketTarget && !reviewedExitTarget) ? (
             <ConsoleFeedback kind="error">
               {failure}{" "}
               {statusRetry ? (
@@ -1547,7 +2054,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       <div className={styles.rosterTabs}>
       <div className={styles.quickPresets} role="group" aria-label="빠른 상태 보기">
         {rosterPresets.map((preset) => {
-          const presetActive = statusFilter === preset.status && attendanceFilter === preset.attendance;
+          const presetActive = !ticketFilter && statusFilter === preset.status && attendanceFilter === preset.attendance;
           return (
             <button
               key={preset.key}
@@ -1561,33 +2068,26 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           );
         })}
       </div>
-      <label className={styles.mobilePresetPicker}>
-        <span className="sr-only">빠른 상태 보기</span>
-        <select value={rosterPresets.find((preset) => statusFilter === preset.status && attendanceFilter === preset.attendance)?.key ?? "custom"}
-          onChange={(event) => { const preset = rosterPresets.find((item) => item.key === event.target.value); if (preset) applyRosterPreset(preset); }}>
-          <option value="custom" disabled>직접 설정한 보기</option>
-          {rosterPresets.map((preset) => <option key={preset.key} value={preset.key}>{preset.label} · {preset.count}명</option>)}
-        </select>
-      </label>
+      {ticketFilter && visiblePeople.some((person) => person.ticketReview === "unknown") ? <ConsoleFeedback kind="warning">일부 티켓의 상태를 불러오지 못해 확인 목록에 함께 표시했습니다. 최신 서버 연결을 확인한 뒤 명단을 새로고침하세요.</ConsoleFeedback> : null}
       <div className={styles.rosterMeta}>
       <p className="participant-count" role="status">
-        {statusFilter || groupFilter || attendanceFilter || search
+        <span className={styles.metaLong}>
+        {statusFilter || groupFilter || attendanceFilter || ticketFilter || search
           ? `${visiblePeople.length}명 / 전체 ${state.people.length}명(취소 포함)`
           : `전체 ${state.people.length}명(취소 포함)`}
         {fetchedAt ? ` · 조회 ${formatClock(fetchedAt)}` : ""}
         {refreshing ? " · 새로고침 중…" : ""}
+        </span>
+        <span className={styles.metaShort} aria-hidden="true">
+          {statusFilter || groupFilter || attendanceFilter || ticketFilter || search
+            ? `${visiblePeople.length} / ${state.people.length}명`
+            : `전체 ${state.people.length}명`}
+          {fetchedAt && !refreshing ? ` · ${formatClock(fetchedAt)}` : ""}
+          {refreshing ? " · 갱신 중" : ""}
+        </span>
       </p>
-      <button
-        type="button"
-        className="button button-quiet"
-        onClick={() => void refreshQuietly()}
-        disabled={refreshing}
-        title={fetchedAt ? `조회 ${formatClock(fetchedAt)}` : "목록 새로고침"}
-      >
-        <RefreshIcon />
-        {refreshing ? "새로고침 중…" : "새로고침"}
-      </button>
-      {canAssignGroup ? (
+      <ConsoleRefreshButton label="새로고침" busy={refreshing} onRefresh={refreshQuietly} />
+      {canAssignGroup && visiblePeople.length ? (
         <span className={styles.scopeGroup}>
           <span className={styles.scopeLabel}>선택 범위</span>
           <button
@@ -1600,8 +2100,8 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           </button>
         </span>
       ) : null}
-      {canAssignGroup && visiblePeople.length ? <button type="button" className={`button button-quiet ${styles.desktopPageSelect}`} onClick={selectPage}>이 페이지 {pagePeople.length}명 선택</button> : null}
-      {canAssignGroup && visiblePeople.length ? (
+      {canAssignGroup && visiblePeople.length > pagePeople.length ? <button type="button" className={`button button-quiet ${styles.desktopPageSelect}`} onClick={selectPage}>이 페이지 {pagePeople.length}명 선택</button> : null}
+      {canAssignGroup && visiblePeople.length > pagePeople.length ? (
         <details className={styles.mobileScope}>
           <summary>여러 명 선택</summary>
           <div className={styles.mobileScopeOptions}>
@@ -1610,52 +2110,76 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
             <p>필터 결과 전체에는 다른 페이지도 포함됩니다. 기존 선택은 유지됩니다.</p>
           </div>
         </details>
+      ) : canAssignGroup && visiblePeople.length ? (
+        <button type="button" className={`button button-quiet ${styles.mobileScopeSingle}`} onClick={selectVisible} aria-describedby="roster-select-all-help">전체 {visiblePeople.length}명 선택</button>
       ) : null}
-      <span id="roster-select-all-help" className="sr-only">검색·필터에 맞는 전체를 선택합니다. 다른 페이지의 결과도 포함됩니다.</span>
+      <span id="roster-select-all-help" className="sr-only">검색·필터에 맞는 전체를 선택합니다. 기존 선택은 유지됩니다.{visiblePeople.length > pagePeople.length ? " 다른 페이지의 결과도 포함됩니다." : ""}</span>
       </div>
       </div>
       <div className={styles.selectionWorkbench} aria-label="선택한 참가자 작업">
 {            anySelected && canAssignGroup ? (
               <>
                 <span role="status" id="roster-selection-count">
-                  <span className={styles.selectionHeadline}>선택한 참가자 {handoffIds.length}명</span>
-                  <span className={styles.selectionScope}>
-                  {hiddenSelectedCount ? ` · 숨김 ${hiddenSelectedCount}명(그룹 지정 제외)` : ""}
-                  {otherPageSelectedCount > 0 ? ` · 다른 페이지 ${otherPageSelectedCount}명 포함` : ""}
-                  {` · 현재 필터 ${effectiveSelection.length}명 · 이 페이지 ${pageSelectedCount}명`}<br />{" "}승인·그룹 지정은 현재 필터의 선택만, 메시지는 숨김 선택까지 포함합니다.
+                  <span className={styles.selectionHeadline}>선택 {handoffIds.length}명</span>{" "}
+                  <span className={hiddenSelectedCount || otherPageSelectedCount ? styles.selectionScope : "sr-only"}>
+                  {`현재 필터 ${effectiveSelection.length}명 · 이 페이지 ${pageSelectedCount}명`}
+                  {otherPageSelectedCount > 0 ? ` · 다른 페이지 ${otherPageSelectedCount}명` : ""}
+                  {hiddenSelectedCount ? ` · 필터 밖 ${hiddenSelectedCount}명` : ""}
+                  <span className={hiddenSelectedCount ? styles.selectionPolicy : "sr-only"}>
+                    {" · 승인·그룹은 현재 필터만, 메시지는 전체 선택"}
+                  </span>
                   </span>
                 </span>
                 <div className={styles.selectionActions} data-over-limit={handoffOverLimit ? "true" : undefined}>
-                {canMutateStatus ? (
+                {handoffOverLimit ? <span role="status" id="roster-handoff-limit">
+                  선택 {handoffIds.length}명 · 최대 200명까지 전송 가능 · 필터로 대상을 좁히거나 숨김 선택을 제외하세요
+                </span> : null}
+                {canMutateStatus && (approvalCandidates.length > 0 || waitlistCandidates.length === 0) ? (
                   <button
                     type="button"
                     id="roster-approve-selected"
                     className="button button-secondary"
-                    disabled={bulkBusy || Boolean(bulkRetry) || !effectiveSelection.length}
+                    disabled={bulkBusy || Boolean(bulkRetry) || Boolean(statusRetry) || unconfirmedStatus || !approvalCandidates.length}
                     aria-describedby={bulkRetry ? "roster-bulk-retry-message" : undefined}
                     onClick={() => void approveSelected()}
                   >
-                    {bulkBusy ? "승인 중입니다" : `승인 대기 ${effectiveSelection.filter((id) => state.people.some((person) => person.id === id && person.status === "PENDING")).length}명 승인`}
+                    {bulkBusy && pendingBulkRef.current?.sourceStatus === "PENDING" ? "승인 중입니다" : `신청 승인 ${approvalCandidates.length}`}
+                  </button>
+                ) : null}
+                {canMutateStatus && waitlistCandidates.length > 0 ? (
+                  <button type="button" id="roster-approve-waitlist" className="button button-secondary"
+                    disabled={bulkBusy || Boolean(bulkRetry) || Boolean(statusRetry) || unconfirmedStatus}
+                    aria-describedby={bulkRetry ? "roster-bulk-retry-message" : undefined}
+                    onClick={() => void approveSelected(false, "WAITLIST")}>
+                    {bulkBusy && pendingBulkRef.current?.sourceStatus === "WAITLIST" ? "확정 중입니다" : `대기자 확정 ${waitlistCandidates.length}`}
                   </button>
                 ) : null}
                 <button
                   type="button"
                   className="button button-secondary"
-                  disabled={!effectiveSelection.length}
-                  onClick={() => {
-                    setGroupError(null);
-                    setGroupDraft(state.groups[0] ?? "");
-                    groupBaselineRef.current = state.groups[0] ?? "";
+                  aria-describedby="roster-group-scope"
+                  disabled={unconfirmedGroup || (!effectiveSelection.length && !pendingGroupRef.current)}
+                  onClick={(event) => {
+                    closeSelectionMenu(event.currentTarget);
+                    if (pendingGroupRef.current?.uncertain) {
+                      setGroupDraft(pendingGroupRef.current.group);
+                    } else {
+                      setGroupError(null);
+                      setGroupDraft(state.groups[0] ?? "");
+                      groupBaselineRef.current = state.groups[0] ?? "";
+                      groupPeopleRef.current = effectiveSelection.flatMap((id) => {
+                        const person = state.people.find((item) => item.id === id);
+                        return person ? [{ id: person.id, name: person.name, group: person.group, company: person.company, phone: person.phone }] : [];
+                      });
+                    }
                     setGroupDialogOpen(true);
                   }}
                 >
-                  그룹 지정
+                  그룹 변경 <span aria-hidden="true">{hiddenSelectedCount ? `· 현재 필터 ${effectiveSelection.length}명` : ""}</span>
                 </button>
+                <p className="sr-only" id="roster-group-scope">현재 필터에서 선택한 {effectiveSelection.length}명 대상</p>
                 {handoffOverLimit ? (
                   <>
-                    <span role="status" id="roster-handoff-limit">
-                      선택 {handoffIds.length}명 · 최대 200명까지 전송 가능 · 필터로 대상을 좁히거나 숨김 선택을 제외하세요
-                    </span>
                     <button
                       type="button"
                       id="roster-exclude-hidden"
@@ -1669,27 +2193,46 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                       id="roster-send-message"
                       className={`button button-secondary ${styles.selectionButton}`}
                       disabled
+                      aria-describedby="roster-message-scope"
                       title="대상이 너무 많습니다. 필터로 대상을 좁혀 주세요"
                     >
-                      메시지 작성
+                      메시지 작성 <span aria-hidden="true">{hiddenSelectedCount ? `· 전체 ${handoffIds.length}명` : ""}</span>
                     </button>
                   </>
                 ) : (
                   <Link
                     id="roster-send-message"
                     className={`button button-secondary ${styles.selectionButton}`}
+                    aria-describedby="roster-message-scope"
                     href={closeHref(handoffHref)}
                   >
-                    메시지 작성
+                    메시지 작성 <span aria-hidden="true">{hiddenSelectedCount ? `· 전체 ${handoffIds.length}명` : ""}</span>
                   </Link>
                 )}
-                <button type="button" className={`button button-secondary ${styles.selectionButton}`} onClick={() => setSelectedIds([])}>
+                <p className="sr-only" id="roster-message-scope">필터 밖을 포함한 선택 {handoffIds.length}명 대상{hiddenSelectedCount ? ` · 필터 밖 ${hiddenSelectedCount}명` : ""}</p>
+                {canMutateStatus ? <>
+                  <button type="button" className="button button-secondary" aria-describedby="roster-cancel-scope" disabled={unconfirmedStatus || receiptRefreshLock || bulkBusy || Boolean(bulkRetry) || Boolean(statusRetry) || !cancelCandidates.length || cancelCandidates.length > 1000}
+                    onClick={(event) => {
+                      closeSelectionMenu(event.currentTarget);
+                      setBulkCancelTargets(cancelCandidates.map(({ id, name, status, inside, company, phone }) => ({ id, name, status, inside, company, phone: maskPhone(phone) })));
+                    }}>신청 취소 <span aria-hidden="true">{hiddenSelectedCount ? `· 현재 필터 ${cancelCandidates.length}명` : ""}</span></button>
+                  <p className={cancelCandidates.length > 1000 ? styles.selectionActionHint : "sr-only"} id="roster-cancel-scope">{cancelCandidates.length > 1000 ? "한 번에 1,000명까지 취소할 수 있습니다. 필터로 대상을 나눠 주세요." : `현재 필터에서 선택한 미취소 참가자 ${cancelCandidates.length}명 대상`}</p>
+                </> : null}
+                <button type="button" className={`button button-quiet ${styles.selectionButton}`} onClick={() => {
+                  setSelectedIds([]);
+                  const heading = document.getElementById("participants-list-heading");
+                  heading?.setAttribute("tabindex", "-1");
+                  heading?.focus({ preventScroll: true });
+                }}>
                   {hiddenSelectedCount ? `선택 해제 (숨김 ${hiddenSelectedCount}명 포함)` : "선택 해제"}
                 </button>
                 </div>
+                {canMutateStatus && approvalConflicts.length ? <p className={styles.selectionNotice} role="status">취소 기록 확인이 필요한 {approvalConflicts.length}명은 승인·확정에서 제외됩니다. 참가자 상세에서 확인하세요.</p> : null}
+                {canMutateStatus && approvalReissues.length ? <p className={styles.selectionNotice}>선택한 승인·확정 대상 중 {approvalReissues.length}명은 처리 후에도 새 티켓을 별도로 발급해야 합니다.</p> : null}
               </>
             ) : null}
       </div>
+      {importOpen ? <ImportWizard eventId={eventId} onDismiss={() => setImportOpen(false)} onCommitted={() => void load(true)} /> : null}
       {visiblePeople.length ? (
         <>
           <div className={styles.rosterWorkbench}>
@@ -1714,7 +2257,8 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                     <span className="sr-only">이름순 정렬</span>
                   </button>
                 </th>
-                <th scope="col">연락처</th><th scope="col">그룹</th><th scope="col">신청 상태</th><th scope="col">출입</th>
+                <th scope="col">연락처</th><th scope="col" className={styles.rosterGroup}>그룹</th><th scope="col">신청 상태</th><th scope="col">출입</th>
+                {ticketFilter ? <th scope="col">티켓 확인 사유</th> : null}
                 {showRowActions ? <th scope="col" className={styles.actionColumn}>작업</th> : null}
               </tr>
             </thead>
@@ -1727,12 +2271,13 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                     <input type="checkbox" className={styles.participantSelect} aria-label={`${person.name} 선택`} checked={effectiveSelection.includes(person.id)} onChange={() => togglePerson(person.id)} />
                   </label></td> : null}
                   <td><span className={styles.tableIdentity}><strong id={`roster-name-desktop-${person.id}`}>{person.name}</strong><small>{person.company || "소속 미입력"}</small></span></td>
-                  <td className={styles.rosterContact}>{maskPhone(person.phone)}</td><td>{person.group || "미지정"}</td>
-                  <td><span className={`status-chip ${tone} ${styles.participantStatus}`}>{statusLabel(person.status)}</span></td>
+                  <td className={styles.rosterContact}>{maskPhone(person.phone)}</td><td className={styles.rosterGroup}>{person.group || "미지정"}</td>
+                  <td><span className={`status-chip ${tone} ${styles.participantStatus}`}>{statusLabel(person.status)}</span>{["PENDING", "WAITLIST"].includes(person.status) && person.ticketReview === "cancelled" ? <small className={styles.ticketReviewLabel}>취소 상태 확인 필요</small> : null}{["PENDING", "WAITLIST"].includes(person.status) && person.ticketNeedsExplicitReissue ? <small className={styles.ticketReviewLabel}>승인 후 티켓 재발급 필요</small> : null}</td>
                   <td><span className={person.inside ? styles.presenceInside : styles.presence}>{presenceLabel(person)}</span></td>
+                  {ticketFilter ? <td><span className={styles.ticketReviewLabel}>{ticketReviewLabel(person.ticketReview)}</span></td> : null}
                   {showRowActions ? <td className={styles.actionColumn}><div className={styles.participantActions}>
-                    {person.status === "PENDING" && canMutateStatus ? <button type="button" className="button button-secondary" aria-describedby={`roster-name-desktop-${person.id}`} disabled={savingId === person.id} onClick={() => changeStatus(person, "APPROVED")}>
-                      {savingId === person.id ? "승인 중…" : "승인"}
+                    {["PENDING", "WAITLIST"].includes(person.status) && person.ticketReview !== "cancelled" && canMutateStatus ? <button type="button" className="button button-secondary" aria-describedby={`roster-name-desktop-${person.id}`} disabled={savingId === person.id} onClick={() => changeStatus(person, "APPROVED")}>
+                      {savingId === person.id ? (person.status === "WAITLIST" ? "확정 중…" : "승인 중…") : (person.status === "WAITLIST" ? "확정" : "승인")}
                     </button> : null}
                     <button type="button" className={`button button-quiet ${styles.rowToolsToggle}`} aria-expanded={detailsOpen} aria-haspopup="dialog"
                       aria-label={`${person.name} 참가자 상세`} onClick={(event) => { inspectorReturnFocusRef.current = event.currentTarget; setToolsOpenId(person.id); }}>상세</button>
@@ -1768,17 +2313,20 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                     <strong className={styles.participantName} id={`roster-name-mobile-${person.id}`}>{person.name}</strong>
                     <small className={styles.participantIdentity}>{[identityOrg(person), presenceLabel(person)].filter(Boolean).join(" · ")}</small>
                     <small className={styles.mobileContact}>{maskPhone(person.phone)}</small>
+                    {ticketFilter || (["PENDING", "WAITLIST"].includes(person.status) && person.ticketReview === "cancelled") ? <small className={styles.ticketReviewLabel}>{ticketReviewLabel(person.ticketReview)}</small> : null}
+                    {["PENDING", "WAITLIST"].includes(person.status) && person.ticketNeedsExplicitReissue ? <small className={styles.ticketReviewLabel}>승인 후 티켓 재발급 필요</small> : null}
                   </span>
                   <span className={styles.rosterContact}>{maskPhone(person.phone)}</span>
                   <span className={`status-chip ${tone} ${styles.participantStatus}`}>{statusLabel(person.status)}</span>
                   {showRowActions ? (
                     <div className={styles.participantActions}>
-                      {/* One always-visible primary per row: PENDING approves
-                          directly, everything else opens the details below,
+                      {/* One always-visible primary per row: PENDING and
+                          WAITLIST can be confirmed directly; other changes
+                          use the details below,
                           which keep the full participant.status change
                           (including cancel with its confirm) under the same
                           ENDED/ARCHIVED gates. */}
-                      {person.status === "PENDING" && canMutateStatus ? (
+                      {["PENDING", "WAITLIST"].includes(person.status) && person.ticketReview !== "cancelled" && canMutateStatus ? (
                         <button
                           type="button"
                           className="button button-secondary"
@@ -1786,7 +2334,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                           disabled={savingId === person.id}
                           onClick={() => changeStatus(person, "APPROVED")}
                         >
-                          {savingId === person.id ? "승인 중…" : "승인"}
+                          {savingId === person.id ? (person.status === "WAITLIST" ? "확정 중…" : "승인 중…") : (person.status === "WAITLIST" ? "확정" : "승인")}
                         </button>
                       ) : null}
                       <button
@@ -1814,8 +2362,8 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
             })}
           </ul>
           </div>
-          {showRowActions && selectedPerson && !rewardTarget && !addOpen && !groupDialogOpen ? (
-            <ConsoleDialog title={selectedPerson.name} titleId={`participant-details-${selectedPerson.id}`}
+          {showRowActions && selectedPerson && !rewardTarget && !addOpen && !groupDialogOpen && !editTargetId && !ticketTarget && !reviewedExitTarget && !reconcileTarget && !cancellationConflictTarget ? (
+            <ConsoleDialog presentation="inspector" title={selectedPerson.name} titleId={`participant-details-${selectedPerson.id}`}
               description={[identityOrg(selectedPerson), maskPhone(selectedPerson.phone)].filter(Boolean).join(" · ")}
               initialFocusRef={inspectorHeadingRef} busy={savingId === selectedPerson.id} onClose={closeInspector}
               footer={<button type="button" className="button button-secondary" disabled={savingId === selectedPerson.id} onClick={closeInspector}>닫기</button>}>
@@ -1828,7 +2376,41 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                   </div>
                   <div className={styles.participantDetails}>
                     <p className={styles.detailFacts}>{selectedDetailFacts}</p>
+                    {selectedPerson.ticketReview !== "valid" && (selectedPerson.ticketReview !== "cancelled" || selectedPerson.status.toUpperCase() !== "CANCELLED") ? <p role="note" id={`ticket-state-note-${selectedPerson.id}`}>
+                      {selectedPerson.ticketReview === "expired" ? "티켓이 만료됐습니다." : selectedPerson.ticketReview === "revoked" ? "티켓이 철회됐습니다." : selectedPerson.ticketReview === "cancelled" ? "신청 상태와 취소 기록이 일치하지 않습니다." : "티켓 상태를 확인할 수 없습니다."}
+                      {selectedPerson.ticketReview === "unknown" ? " 최신 목록을 새로고침한 뒤 다시 확인하세요." : selectedPerson.ticketReview === "cancelled" ? selectedPerson.cancellationConflictReview && canResolveCancellationConflict && !participantsLocked ? " 참가자의 의사를 확인한 뒤 아래에서 기록을 검토하세요." : " 행사 담당자나 시스템 관리자에게 확인하세요." : canReissueTicket && !participantsLocked ? " 필요하면 아래 티켓 재발급을 이용하세요." : " 행사 담당자에게 확인하세요."}
+                    </p> : null}
+                    <section className={styles.consentRecord} aria-label="정보 수집 동의 기록">
+                      <h4>정보 수집 동의</h4>
+                      {selectedPerson.consent ? <>
+                        <p>{selectedPerson.consent.version !== null ? `버전 ${selectedPerson.consent.version}` : "버전 확인 불가"} · {consentTime(selectedPerson.consent.at)}</p>
+                        {selectedPerson.consent.noticeText !== null ? (
+                          <details className={styles.nametagDisclosure}>
+                            <summary>동의한 안내 보기</summary>
+                            <p className={styles.consentNotice}>{selectedPerson.consent.noticeText}</p>
+                          </details>
+                        ) : <p>당시 동의 안내 원문은 확인할 수 없습니다.</p>}
+                      </> : <p>동의 기록이 없습니다.</p>}
+                    </section>
+                    {selectedPerson.status === "APPROVED" && (canMutateStatus || (canEditParticipant && !participantsLocked)) ? (
+                      <RosterNameTag key={selectedPerson.id} eventId={eventId} person={selectedPerson} eventName={state.eventName} />
+                    ) : null}
                     <div className={styles.detailActions}>
+                      {canReviewExit && selectedPerson.attendanceReview ? <button type="button" className="button button-secondary" disabled={unconfirmedExit || unconfirmedReconciliation || receiptRefreshLock}
+                        onClick={() => setReconcileTarget(selectedPerson.id)}>출입 상태 확인</button> : null}
+                      {canReviewExit && selectedPerson.inside ? <button type="button" className="button button-secondary" disabled={unconfirmedExit || unconfirmedReconciliation || receiptRefreshLock}
+                        onClick={() => setReviewedExitTarget(selectedPerson.id)}>확인 후 퇴장 기록</button> : null}
+                      {canEditParticipant && !participantsLocked ? <button type="button" className="button button-secondary" disabled={unconfirmedUpdate || receiptRefreshLock} onClick={() => setEditTargetId(selectedPerson.id)}>신청 정보 수정</button> : null}
+                      {canResolveCancellationConflict && !participantsLocked && selectedPerson.cancellationConflictReview && selectedPerson.ticketReview === "cancelled" && selectedPerson.status !== "CANCELLED" ? <button type="button" className="button button-secondary" disabled={unconfirmedCancellationConflict || receiptRefreshLock} onClick={() => setCancellationConflictTarget(selectedPerson.id)}>참가 취소 기록 확인</button> : null}
+                      {canReissueTicket && !participantsLocked && selectedPerson.status !== "CANCELLED" && state.eventSlug ? (
+                        <button type="button" className="button button-secondary" disabled={unconfirmedTicket || receiptRefreshLock || selectedPerson.ticketReview === "unknown" || selectedPerson.ticketReview === "cancelled"} aria-describedby={selectedPerson.ticketReview === "unknown" || selectedPerson.ticketReview === "cancelled" ? `ticket-state-note-${selectedPerson.id}` : undefined} onClick={() => {
+                          if (!writeBusyRef.current) setTicketTarget({
+                            id: selectedPerson.id,
+                            name: selectedPerson.name,
+                            ticketRevision: selectedPerson.ticketRevision,
+                          });
+                        }}>티켓 재발급</button>
+                      ) : null}
                       {canMutateStatus ? (
                         <button
                           type="button"
@@ -1842,7 +2424,14 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                         <button
                           type="button"
                           className="button button-secondary"
+                          disabled={unconfirmedReward}
                           onClick={() => {
+                            if (pendingRewardRef.current?.uncertain) {
+                              const pending = pendingRewardRef.current;
+                              setRewardTarget(pending.target);
+                              setRewardError({ field: null, message: "이전 경품 등록 결과를 먼저 확인하세요." });
+                              return;
+                            }
                             setRewardError(null);
                             if (rewardDraftOwnerRef.current !== selectedPerson.id) {
                               setRewardDraft({ name: "", method: "ONSITE" });
@@ -1856,8 +2445,10 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                       ) : null}
                       {canMutateStatus ? (
                         <select
+                          ref={inspectorStatusRef}
                           key={`${selectedPerson.id}-${cancelConfirm?.id === selectedPerson.id ? "pending" : "idle"}`}
                           aria-label={`${selectedPerson.name} 상태 변경`}
+                          aria-describedby={failure && selectedPerson.id === statusFeedbackId ? "roster-inspector-status-error" : undefined}
                           value={isKnownStatus(selectedPerson.status) ? selectedPerson.status : ""}
                           disabled={savingId === selectedPerson.id}
                           onChange={(event) => void changeStatus(selectedPerson, event.target.value)}
@@ -1866,18 +2457,36 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                             <option value="" disabled>상태 확인 필요</option>
                           ) : null}
                           {STATUSES.map((status) => (
-                            <option key={status} value={status}>
+                            <option key={status} value={status} disabled={selectedPerson.ticketReview === "cancelled" && selectedPerson.status !== "CANCELLED" && status !== "CANCELLED" && status !== selectedPerson.status}>
                               {statusLabel(status)}
                             </option>
                           ))}
                         </select>
                       ) : null}
                     </div>
+                    {failure && selectedPerson.id === statusFeedbackId ? (
+                      <ConsoleFeedback kind="error" id="roster-inspector-status-error">
+                        {failure}{" "}
+                        {statusRetry ? (
+                          <button type="button" className="button button-secondary" disabled={savingId === statusRetry.person.id}
+                            onClick={() => void changeStatus(statusRetry.person, statusRetry.status)}>
+                            {savingId === statusRetry.person.id ? "다시 시도 중…" : "같은 요청으로 다시 시도"}
+                          </button>
+                        ) : null}
+                      </ConsoleFeedback>
+                    ) : selectedPerson.presenceUnknown && canMutateStatus ? (
+                      <p role="note">출입 기록을 확인할 수 없습니다. 현장 기록을 확인해 주세요.</p>
+                    ) : selectedPerson.inside && canMutateStatus ? (
+                      <p role="note">입장 중에는 승인 대기·대기 명단 변경이나 신청 취소 전에 퇴장 처리해 주세요.</p>
+                    ) : null}
+                    {selectedPerson.attendanceReview && !selectedPerson.presenceUnknown ? (
+                      <p role="note">현재 입장 상태와 누적 입장 기록을 함께 확인해 주세요.</p>
+                    ) : null}
                   </div>
                   {cancelConfirm?.id === selectedPerson.id ? (
                     <div className={styles.rowConfirm}>
                       <ConsoleConfirm
-                        summary={`${cancelConfirm.name}님의 신청을 취소하면 발급된 티켓은 무효화됩니다. 되돌리려면 다시 승인해야 합니다.`}
+                        summary={`${cancelConfirm.name}님의 신청을 취소하면 발급된 티켓은 무효화됩니다. ${selectedPerson.ticketReview === "cancelled" ? "취소 기록을 확인하기 전에는 다시 승인할 수 없습니다." : "되돌리려면 다시 승인해야 합니다."}`}
                         confirmLabel="신청 취소"
                         busy={savingId === selectedPerson.id}
                         onConfirm={() => {
@@ -1885,7 +2494,14 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                           setCancelConfirm(null);
                           void applyStatus(target, "CANCELLED");
                         }}
-                        onCancel={() => setCancelConfirm(null)}
+                        onCancel={() => {
+                          setCancelConfirm(null);
+                          window.requestAnimationFrame(() => {
+                            const status = inspectorStatusRef.current;
+                            if (status?.isConnected && !status.disabled) status.focus({ preventScroll: true });
+                            else inspectorHeadingRef.current?.focus({ preventScroll: true });
+                          });
+                        }}
                       />
                     </div>
                   ) : null}
@@ -1939,13 +2555,14 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
             </nav>
         </>
       ) : state.people.length ? (
-        <div className={styles.emptyState}>
-          <h3>조건에 맞는 참가자가 없습니다.</h3>
-          <p>검색어·상태·그룹·출입 조건에 맞는 사람이 없습니다. 조건을 하나씩 지워보세요.</p>
+        <div className={`${styles.emptyState} ${isAttendanceReviewOnly ? styles.reviewComplete : ""}`}>
+          {isAttendanceReviewOnly ? <CheckIcon className={styles.reviewCompleteIcon} /> : null}
+          <h3>{isAttendanceReviewOnly ? "확인이 필요한 출입 기록이 없습니다." : "조건에 맞는 참가자가 없습니다."}</h3>
+          <p>{isAttendanceReviewOnly ? "취소된 신청을 제외한 참가자에게 확인할 출입 기록이 없습니다." : "검색어·상태·그룹·출입 조건에 맞는 사람이 없습니다. 조건을 하나씩 지워보세요."}</p>
           {hasAnyFilter ? (
             <p>
-              <button type="button" className="button button-secondary" onClick={clearRosterFilters}>
-                검색·필터 초기화
+              <button type="button" className="button button-secondary" onClick={() => { clearRosterFilters(); window.requestAnimationFrame(() => document.getElementById("roster-search")?.focus({ preventScroll: true })); }}>
+                {isAttendanceReviewOnly ? "전체 참가자 보기" : "검색·필터 초기화"}
               </button>
             </p>
           ) : null}
@@ -1968,6 +2585,26 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           </p>
         </div>
       )}
+      {editTargetId ? <ParticipantEditor key={`${eventId}-${editTargetId}`} eventId={eventId} participantId={editTargetId} onClose={() => { setEditTargetId(null); window.requestAnimationFrame(() => inspectorHeadingRef.current?.focus({ preventScroll: true })); }} onRefresh={() => load(true)} /> : null}
+      {reviewedExitTarget ? <ReviewedExit key={`${eventId}-${reviewedExitTarget}`} eventId={eventId} participantId={reviewedExitTarget}
+        onRefresh={() => load(true)} onClose={() => { setReviewedExitTarget(null); window.requestAnimationFrame(() => inspectorHeadingRef.current?.focus({ preventScroll: true })); }}
+        onDone={() => { setReviewedExitTarget(null); setFailure(null); setNotice("퇴장 기록을 저장했습니다. 최신 출입 상태를 확인하세요."); window.requestAnimationFrame(() => inspectorHeadingRef.current?.focus({ preventScroll: true })); }} /> : null}
+      {reconcileTarget ? <ReviewedExit key={`${eventId}-reconcile-${reconcileTarget}`} eventId={eventId} participantId={reconcileTarget} mode="reconcile"
+        onRefresh={() => load(true)} onClose={() => { setReconcileTarget(null); window.requestAnimationFrame(() => inspectorHeadingRef.current?.focus({ preventScroll: true })); }}
+        onDone={() => { setReconcileTarget(null); setFailure(null); setNotice(`${selectedPerson?.name ? `${selectedPerson.name}님` : "참가자"}의 출입 상태를 복구했습니다. 최신 명단을 확인하세요.`); closeInspector(); }} /> : null}
+      {cancellationConflictTarget ? <CancellationConflictReview key={`${eventId}-cancellation-${cancellationConflictTarget}`} eventId={eventId} participantId={cancellationConflictTarget}
+        onRefresh={() => load(true)} onClose={() => { setCancellationConflictTarget(null); window.requestAnimationFrame(() => inspectorHeadingRef.current?.focus({ preventScroll: true })); }}
+        onDone={() => { setCancellationConflictTarget(null); setFailure(null); setNotice("참가 취소 기록 확인을 저장했습니다. 기존 티켓은 무효 상태입니다. 필요하면 새 티켓을 발급해 전달하세요."); }} /> : null}
+      {ticketTarget ? <TicketReissue key={`${eventId}-${ticketTarget.id}`} eventId={eventId} slug={state.eventSlug} person={ticketTarget}
+        onRefresh={() => load(true)} onClose={() => setTicketTarget(null)}
+        onIssued={(ticketRevision) => setState((current) => current.kind === "ready" ? {
+          ...current,
+          people: current.people.map((person) => person.id === ticketTarget.id && person.ticketRevision < ticketRevision
+            ? { ...person, ticketRevision } : person),
+        } : current)} /> : null}
+      {bulkCancelTargets ? <BulkCancelDialog key={`${eventId}-cancel`} eventId={eventId} targets={bulkCancelTargets} onClose={() => setBulkCancelTargets(null)} onRefresh={() => load(true)} onResolved={(ids) => {
+        setSelectedIds((current) => current.filter((id) => !ids.includes(id))); setBulkCancelTargets(null); setNotice(`${ids.length}명의 신청 취소를 확인했습니다.`);
+      }} /> : null}
       {addOpen ? (
         <ConsoleDialog
           title="참가자 추가"
@@ -1977,16 +2614,18 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           canClose={() => !addBusy}
           footer={
             <ConsoleFormActions>
-              <button type="submit" form="participant-add-form" className="button button-primary" disabled={addBusy || !addDraft.name.trim() || !addDraft.phone.trim()}>
-                {addBusy ? "등록 중입니다" : "등록"}
-              </button>
               <button type="button" className="button button-secondary" disabled={addBusy} onClick={() => { setAddOpen(false); setAddError(null); setReuseFrom(null); }}>
-                취소
+                {addUnconfirmed ? "닫기" : "취소"}
+              </button>
+              <button type="submit" form="participant-add-form" className="button button-primary" disabled={addBusy || !addDraft.name.trim() || !addDraft.phone.trim()}>
+                {addBusy ? "등록 중입니다" : addUnconfirmed ? "등록 결과 다시 확인" : "등록"}
               </button>
             </ConsoleFormActions>
           }
         >
-          <form id="participant-add-form" onSubmit={(event) => { event.preventDefault(); void createParticipant(); }}>
+          <ValidatedForm id="participant-add-form" className={uiStyles.formStack} onSubmit={(event) => { event.preventDefault(); void createParticipant(); }}>
+            <fieldset className={`${uiStyles.formStack} ${styles.addFields}`} disabled={addBusy || addUnconfirmed}>
+            <legend className="sr-only">참가자 정보</legend>
             <div>
               <label htmlFor="participant-add-name">이름</label>
               <input
@@ -2032,26 +2671,21 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                 onChange={(event) => setAddDraft({ ...addDraft, email: event.target.value })}
               />
             </div>
-            <div>
-              <label htmlFor="participant-add-type">등록 방식</label>
-              <select
-                id="participant-add-type"
-                value={addDraft.registrationType}
-                onChange={(event) => setAddDraft({ ...addDraft, registrationType: event.target.value })}
-              >
-                <option value="ONSITE">현장 등록</option>
-                <option value="PRE">사전 등록</option>
-              </select>
-              <p className={styles.help}>사전 등록은 이름이 이미 정해진 명단, 현장 등록은 당일 현장에서 추가하는 참가자입니다.</p>
-            </div>
+            <ConsoleChoiceGroup id="participant-add-type" label="등록 방식" value={addDraft.registrationType}
+              onChange={(value) => setAddDraft({ ...addDraft, registrationType: value })}
+              options={[{ value: "ONSITE", label: "현장 등록" }, { value: "PRE", label: "사전 등록" }]}
+              hint="사전 등록은 이름이 이미 정해진 명단, 현장 등록은 당일 현장에서 추가하는 참가자입니다." />
+            </fieldset>
             {addError ? <ConsoleFeedback kind="error">{addError.message}</ConsoleFeedback> : null}
-          </form>
+          </ValidatedForm>
         </ConsoleDialog>
       ) : null}
       {groupDialogOpen ? (
         <ConsoleDialog
           title="그룹 지정"
-          description={`필터 범위에서 선택한 ${effectiveSelection.length}명의 그룹을 바꿉니다.${
+          description={groupUncertain && pendingGroupRef.current
+            ? `이전 요청의 ${pendingGroupRef.current.ids.length}명${pendingGroupRef.current.names.filter(Boolean).length ? ` (${pendingGroupRef.current.names.filter(Boolean).slice(0, 3).join(", ")}${pendingGroupRef.current.ids.length > 3 ? " 외" : ""})` : ""}을 ${pendingGroupRef.current.group} 그룹으로 지정한 결과를 확인합니다. 현재 선택과는 별개입니다.`
+            : `필터 범위에서 선택한 ${groupPeopleRef.current?.length ?? effectiveSelection.length}명의 그룹을 바꿉니다.${
             otherPageSelectedCount > 0 ? ` 다른 페이지에서 선택한 ${otherPageSelectedCount}명을 포함합니다.` : ""
           }${
             hiddenSelectedCount ? ` 화면 밖에서 선택한 ${hiddenSelectedCount}명은 이번 지정에 포함되지 않습니다.` : ""
@@ -2061,22 +2695,37 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           canClose={canCloseGroupDialog}
           footer={
             <ConsoleFormActions>
-              <button type="submit" form="group-assign-form" className="button button-primary" disabled={groupBusy || !groupDraft}>
-                {groupBusy ? "지정 중…" : "지정"}
-              </button>
               <button type="button" className="button button-secondary" disabled={groupBusy} onClick={() => { if (canCloseGroupDialog()) closeGroupDialog(); }}>
-                취소
+                {groupUncertain ? "닫기" : "취소"}
+              </button>
+              <button type="submit" form="group-assign-form" className="button button-primary" disabled={groupBusy || Boolean(groupConflict) || !groupDraft}>
+                {groupBusy ? "지정 중…" : groupUncertain ? "같은 요청 다시 시도" : "지정"}
               </button>
             </ConsoleFormActions>
           }
         >
-          <form id="group-assign-form" onSubmit={(event) => void assignGroup(event)}>
+          <ValidatedForm id="group-assign-form" className={uiStyles.formStack} onSubmit={(event) => void assignGroup(event)}>
+            {groupConflict ? <section className={styles.groupConflict} aria-labelledby="group-conflict-heading">
+              <h3 id="group-conflict-heading" tabIndex={-1}>선택한 참가자의 그룹이 변경됐습니다</h3>
+              <p>이번 지정은 반영되지 않았습니다. 선택한 참가자와 지정할 그룹은 그대로 있습니다. 최신 명단을 확인해 주세요.</p>
+              {groupConflict.error ? <p role="alert">{groupConflict.error}</p> : null}
+              {groupConflict.latest ? <>
+                <p>변경된 참가자 {groupConflict.latest.filter((person, index) => person.group !== groupConflict.before[index].group).length}명</p>
+                <ul className={styles.groupConflictList}>
+                  {groupConflict.latest.map((person, index) => person.group !== groupConflict.before[index].group
+                    ? <li key={person.id}><strong>{person.name || "이름 확인 필요"}</strong> · {person.company || "소속 없음"} · {maskPhone(person.phone)}<br />{groupConflict.before[index].group} → {person.group}</li> : null)}
+                </ul>
+                <p>기존에 선택한 {groupConflict.latest.length}명을 유지합니다. 확인만으로 지정되지 않습니다.</p>
+                <button type="button" className="button button-secondary" onClick={acceptLatestGroups}>최신 명단으로 다시 검토</button>
+              </> : <button type="button" className="button button-secondary" disabled={groupConflict.loading || groupBusy} onClick={() => void readLatestGroupPeople()}>{groupConflict.loading ? "최신 명단 확인 중…" : "최신 명단 확인"}</button>}
+            </section> : null}
             <div>
               <label htmlFor="group-pick">그룹</label>
               <select
                 id="group-pick"
                 required
                 value={groupDraft}
+                disabled={groupBusy || groupUncertain || Boolean(groupConflict)}
                 onChange={(event) => {
                   setGroupDraft(event.target.value);
                 }}
@@ -2088,7 +2737,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
               </select>
             </div>
             {groupError ? <ConsoleFeedback kind="error">{groupError}</ConsoleFeedback> : null}
-          </form>
+          </ValidatedForm>
         </ConsoleDialog>
       ) : null}
       {rewardTarget ? (
@@ -2099,16 +2748,16 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           canClose={canCloseRewardDialog}
           footer={
             <ConsoleFormActions>
-              <button type="submit" form="reward-create-form" className="button button-primary" disabled={rewardBusy || !rewardDraft.name.trim()}>
-                {rewardBusy ? "등록 중…" : "등록"}
-              </button>
               <button type="button" className="button button-secondary" disabled={rewardBusy} onClick={() => { if (canCloseRewardDialog()) closeRewardDialog(); }}>
-                취소
+                {rewardUncertain ? "닫기" : "취소"}
+              </button>
+              <button type="submit" form="reward-create-form" className="button button-primary" disabled={rewardBusy || !rewardDraft.name.trim()}>
+                {rewardBusy ? "등록 중…" : rewardUncertain ? "같은 요청 다시 시도" : "등록"}
               </button>
             </ConsoleFormActions>
           }
         >
-          <form id="reward-create-form" onSubmit={(event) => void createReward(event)}>
+          <ValidatedForm id="reward-create-form" className={uiStyles.formStack} onSubmit={(event) => void createReward(event)}>
             <div>
               <label htmlFor="reward-name">경품명 (필수)</label>
               <input
@@ -2117,6 +2766,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                 maxLength={80}
                 required
                 value={rewardDraft.name}
+                readOnly={rewardBusy || rewardUncertain}
                 aria-invalid={rewardError?.field === "name"}
                 onChange={(event) => setRewardDraft({ ...rewardDraft, name: event.target.value })}
               />
@@ -2127,6 +2777,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
               <select
                 id="reward-method"
                 value={rewardDraft.method}
+              disabled={rewardBusy || rewardUncertain}
                 onChange={(event) => setRewardDraft({ ...rewardDraft, method: event.target.value })}
               >
                 <option value="ONSITE">현장 수령</option>
@@ -2135,7 +2786,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
               <p className="landing-note">기프티콘은 v1 제외 항목이라 모의 코드만 발급됩니다.</p>
             </div>
             {rewardError && !rewardError.field ? <ConsoleFeedback kind="error">{rewardError.message}</ConsoleFeedback> : null}
-          </form>
+          </ValidatedForm>
         </ConsoleDialog>
       ) : null}
       </ConsoleSection>

@@ -13,6 +13,8 @@ import {
 type Props = {
   onDetected: (code: string) => void;
   onClose: () => void;
+  focusOrigin?: HTMLButtonElement | null;
+  onUseManual?: () => void;
   // Fallback copy differs per desk: staff scan tickets, participants scan
   // booth codes. Both keep the same decode-only rule.
   manualHint?: string;
@@ -29,7 +31,8 @@ type Props = {
 // starts (never in the route bundle), the camera is capped at 640x480, and
 // decoding runs at most ~5 times a second on a downscaled frame
 // (see scan-frame.ts, executed by the contract test).
-export default function CameraScan({ onDetected, onClose, manualHint = "티켓 코드를 직접 입력하세요." }: Props) {
+export default function CameraScan({ onDetected, onClose, focusOrigin, onUseManual, manualHint = "티켓 코드를 직접 입력하세요." }: Props) {
+  const panelRef = useRef<HTMLElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const doneRef = useRef(false);
@@ -37,7 +40,16 @@ export default function CameraScan({ onDetected, onClose, manualHint = "티켓 �
   onDetectedRef.current = onDetected;
   const [failure, setFailure] = useState<string | null>(null);
   const [hint, setHint] = useState(false);
+  const [starting, setStarting] = useState(true);
+  const [startupSlow, setStartupSlow] = useState(false);
   const [paused, setPaused] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    if (!focusOrigin || document.hidden || document.activeElement !== focusOrigin) return;
+    panelRef.current?.focus({ preventScroll: true });
+    panelRef.current?.scrollIntoView({ block: "start", behavior: "instant" });
+  }, [focusOrigin]);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -46,6 +58,10 @@ export default function CameraScan({ onDetected, onClose, manualHint = "티켓 �
     let hidden = false;
     let hintTimer = 0;
     let lastDecode = 0;
+    const startupTimer = window.setTimeout(() => {
+      if (!stopped && !hidden && !doneRef.current) setStartupSlow(true);
+    }, 6000);
+    const stopStartupTimer = () => window.clearTimeout(startupTimer);
     const stopStream = () => {
       if (stream) {
         stream.getTracks().forEach((track) => track.stop());
@@ -60,6 +76,8 @@ export default function CameraScan({ onDetected, onClose, manualHint = "티켓 �
     async function start() {
       const media = typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
       if (!isCameraApiAvailable(media)) {
+        stopStartupTimer();
+        setStarting(false);
         setFailure(`이 기기에서 카메라를 사용할 수 없습니다. ${manualHint}`);
         return;
       }
@@ -85,6 +103,9 @@ export default function CameraScan({ onDetected, onClose, manualHint = "티켓 �
           throw new Error("decoder unavailable");
         }
       } catch {
+        stopStartupTimer();
+        if (stopped || hidden) return;
+        setStarting(false);
         setFailure(`스캐너를 불러오지 못했습니다. ${manualHint}`);
         return;
       }
@@ -97,9 +118,28 @@ export default function CameraScan({ onDetected, onClose, manualHint = "티켓 �
           },
           audio: false,
         });
-      } catch {
-        setFailure(`카메라 권한이 없습니다. ${manualHint}`);
+      } catch (error) {
+        stopStartupTimer();
+        if (stopped || hidden) return;
+        setStarting(false);
+        const name = error && typeof error === "object" && "name" in error ? String(error.name) : "";
+        const reason = name === "NotAllowedError" || name === "SecurityError"
+          ? "카메라 권한이 없습니다. 브라우저 설정에서 카메라를 허용하세요."
+          : name === "NotFoundError" || name === "DevicesNotFoundError"
+            ? "사용할 수 있는 카메라를 찾지 못했습니다."
+            : name === "NotReadableError" || name === "TrackStartError"
+              ? "카메라를 열 수 없습니다. 다른 앱이 사용 중인지 확인하세요."
+              : "카메라를 시작하지 못했습니다.";
+        setFailure(`${reason} ${manualHint}`);
         return;
+      }
+      for (const track of stream.getVideoTracks()) {
+        track.addEventListener("ended", () => {
+          if (stopped || hidden || doneRef.current) return;
+          stopLoop();
+          stopStream();
+          setFailure(`카메라 연결이 중단됐습니다. 다시 시도하거나 ${manualHint}`);
+        }, { once: true });
       }
       const video = videoRef.current;
       const canvas = canvasRef.current;
@@ -113,7 +153,10 @@ export default function CameraScan({ onDetected, onClose, manualHint = "티켓 �
       try {
         await videoNode.play();
       } catch {
+        stopStartupTimer();
         stopStream();
+        if (stopped || hidden) return;
+        setStarting(false);
         setFailure(`카메라를 시작하지 못했습니다. ${manualHint}`);
         return;
       }
@@ -122,14 +165,19 @@ export default function CameraScan({ onDetected, onClose, manualHint = "티켓 �
       // surface — release the tracks and leave quietly.
       if (stopped || hidden || doneRef.current) {
         stopStream();
+        stopStartupTimer();
         return;
       }
       const rendering = canvasNode.getContext("2d", { willReadFrequently: true });
       if (!rendering) {
+        stopStartupTimer();
         stopStream();
+        setStarting(false);
         setFailure(`카메라를 시작하지 못했습니다. ${manualHint}`);
         return;
       }
+      stopStartupTimer();
+      setStarting(false);
       const context: CanvasRenderingContext2D = rendering;
       // A camera that sees nothing for a while is a real situation (dirty
       // lens, wrong code): point at the manual path instead of waiting.
@@ -170,28 +218,31 @@ export default function CameraScan({ onDetected, onClose, manualHint = "티켓 �
       frame = requestAnimationFrame(tick);
     }
     // A hidden tab keeps no camera: stop tracks and the decode loop instead
-    // of burning battery on a preview nobody sees. Reopening the scanner
-    // (not the tab) restarts it.
+    // of burning battery on a preview nobody sees. An explicit retry starts
+    // a new stream after the user returns.
     function onVisibility() {
       if (document.hidden) {
         hidden = true;
+        stopStartupTimer();
         stopLoop();
         stopStream();
         setPaused(true);
       }
     }
     document.addEventListener("visibilitychange", onVisibility);
-    start();
+    if (document.hidden) onVisibility();
+    else void start();
     return () => {
       stopLoop();
       stopStream();
+      stopStartupTimer();
       window.clearTimeout(hintTimer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [manualHint]);
+  }, [manualHint, attempt]);
 
   return (
-    <section className="camera-panel" aria-label="카메라 스캔">
+    <section ref={panelRef} className="camera-panel" aria-label="카메라 스캔" tabIndex={-1}>
       <h2>QR 스캔</h2>
       {failure ? (
         <p role="alert">{failure}</p>
@@ -199,9 +250,26 @@ export default function CameraScan({ onDetected, onClose, manualHint = "티켓 �
         <video ref={videoRef} playsInline muted aria-label="카메라 미리보기" />
       )}
       <canvas ref={canvasRef} hidden aria-hidden="true" />
-      {hint && !paused ? <p className="auth-help" role="status">코드를 찾지 못했습니다. 아래에 코드를 직접 입력하세요.</p> : null}
-      {paused ? <p className="auth-help" role="status">화면이 가려져 카메라를 멈췄습니다. 다시 스캔하려면 닫았다가 여세요.</p> : null}
-      <button type="button" className="button button-secondary" onClick={onClose}>
+      {!failure && !paused && starting ? <p className="auth-help" role="status">{startupSlow ? `카메라 시작이 늦어지고 있습니다. 브라우저 권한 요청을 확인하거나 ${manualHint}` : "카메라를 준비하고 있습니다. 브라우저에 권한 요청이 표시되면 허용해 주세요."}</p> : null}
+      {hint && !paused && !failure ? <p className="auth-help" role="status">QR 코드를 찾지 못했습니다. {manualHint}</p> : null}
+      {paused ? <p className="auth-help" role="status">화면이 가려져 카메라를 멈췄습니다. 다시 시도해 스캔을 계속하세요.</p> : null}
+      {failure || paused ? <button type="button" className="button button-primary" onClick={() => {
+        doneRef.current = false;
+        setFailure(null);
+        setPaused(false);
+        setHint(false);
+        setStarting(true);
+        setStartupSlow(false);
+        setAttempt((value) => value + 1);
+        panelRef.current?.focus({ preventScroll: true });
+      }}>다시 시도</button> : null}
+      {onUseManual ? <button type="button" className="button button-secondary" onClick={onUseManual}>명단에서 참가자 찾기</button> : null}
+      <button type="button" className="button button-secondary" onClick={() => {
+        onClose();
+        window.requestAnimationFrame(() => {
+          if (focusOrigin?.isConnected && !focusOrigin.disabled && document.activeElement === document.body) focusOrigin.focus();
+        });
+      }}>
         닫기
       </button>
     </section>

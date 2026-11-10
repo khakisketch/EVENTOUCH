@@ -151,7 +151,7 @@
   color: var(--on-brand);
   font-weight: 750;
   text-decoration: none;
-  transition: background var(--enter) ease-out, border-color var(--enter) ease-out;
+  transition: border-color var(--enter) ease-out;
 }
 
 .primaryAction:hover {

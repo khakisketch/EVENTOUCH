@@ -1,4 +1,7 @@
 "use client";
+
+import ValidatedForm from "./ui/ValidatedForm";
+
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { ensureOperatorContext, getOperatorContextSnapshot, isOrganizationContextBlock, listUncertainAttempts, operatorFetch, refreshOperatorContext, replayUncertainAttempt } from "../lib/operator-context";
 import { useOperatorContextSnapshot } from "../lib/use-operator-context";
@@ -175,40 +178,54 @@ export default function OrganizationSwitcher({ confirmLeave, suggestedOrganizati
     {state.kind !== "loading" ? <button type="button" className="button button-secondary" disabled={pending} onClick={() => { setTick((value) => value + 1); void refreshOperatorContext(); }}>소속 다시 확인</button> : null}
     {createNotice ? <p className={styles.help} role="status">{createNotice}</p> : null}
     {context.context?.role === "AGENCY" && !context.changed ? <div className={styles.create}>
-      {!createOpen ? <button type="button" className="button button-secondary" disabled={pending || blockedWrites} onClick={() => setCreateOpen(true)}>운영사 추가</button> : <form onSubmit={(event) => void createOrganization(event)}>
+      {!createOpen ? <button type="button" className="button button-secondary" disabled={pending || blockedWrites} onClick={() => setCreateOpen(true)}>운영사 추가</button> : <ValidatedForm onSubmit={(event) => void createOrganization(event)}>
         <label htmlFor={`${id}-org-name`}>새 운영사 이름</label>
         <input id={`${id}-org-name`} value={name} onChange={(event) => setName(event.target.value)} disabled={createBusy || createUnknown} maxLength={80} autoComplete="organization" required />
         <p className={styles.help}>다른 운영사의 자료·발송 설정을 가져오지 않습니다. 새 운영사는 발송 미연동 상태로 시작합니다.</p>
         {createError ? <p className={styles.error} role="alert">{createError}</p> : null}
         <div className={styles.actions}><button type="submit" className="button button-primary" disabled={createBusy || !name.trim()}>{createBusy ? "등록 중…" : createUnknown ? "같은 등록 요청 다시 확인" : "운영사 등록"}</button>
           <button type="button" className="button button-secondary" disabled={createBusy || createUnknown} onClick={() => { if (formDirty && !window.confirm("작성한 운영사 이름을 버릴까요?")) return; setCreateOpen(false); setName(""); createAttempt.current = null; }}>취소</button></div>
-      </form>}
+      </ValidatedForm>}
     </div> : null}
   </section>;
 }
 
-type UncertainReceiptView = { key: string; organizationName: string; organizationId: string; commandLabel: string; replayable: boolean };
+type UncertainReceiptView = { key: string; organizationName: string; organizationId: string; commandLabel: string; command: string | null; replayable: boolean };
 function uncertainCommandLabel(command: string | null, path: string): string {
   switch (command) {
+    case "notice.publish":
+    case "notice.publish-reviewed": return "공지 게시";
     case "notice.save": return "공지 저장";
     case "notice.delete": return "공지 삭제";
+    case "venue.publish":
+    case "venue.publish-reviewed": return "장소 안내 게시";
     case "venue.save": return "장소 저장";
+    case "program.publish":
+    case "program.publish-reviewed": return "일정 게시";
     case "program.save": return "프로그램 저장";
     case "program.delete": return "프로그램 삭제";
     case "draw.run": return "추첨 실행";
     case "draw.publish": return "추첨 게시";
-    case "message.create": return "메시지 발송";
+    case "message.create":
+    case "message.create-reviewed": return "메시지 발송";
+    case "message.create-charset-reviewed": return "메시지 발송";
+    case "message.retry-charset-reviewed": return "메시지 다시 보내기";
+    case "message.record-provider-check": return "공급사 확인 기록";
     case "message.retry": return "메시지 재시도";
     case "message.cancel": return "메시지 취소";
     case "message.sync": return "메시지 동기화";
     case "template.save": return "템플릿 저장";
+    case "template.archive": return "템플릿 보관·복원";
     case "participant.import": return "명단 가져오기";
     case "participant.status": return "참가자 상태 변경";
+    case "participant.bulk-cancel": return "신청 일괄 취소";
+    case "participant.resolve-cancellation-conflict": return "참가 취소 기록 확인";
     case "participant.create": return "참가자 등록";
     case "participant.update": return "참가자 수정";
     case "group.assign": return "그룹 지정";
     case "group.save": return "그룹 저장";
-    case "event.update": return "행사 정보 변경";
+    case "event.update":
+    case "event.basics.save": return "행사 정보 변경";
     case "event.features": return "행사 기능 변경";
     case "event.stage": return "진행 단계 변경";
     case "form.publish": return "접수 게시";
@@ -218,6 +235,8 @@ function uncertainCommandLabel(command: string | null, path: string): string {
     case "report.create": return "보고서 만들기";
     case "report.publish": return "보고서 게시";
     case "reward.create": return "경품 등록";
+    case "reward.lookup": return "경품 조회";
+    case "reward.collect": return "경품 수령";
     case "reward.assign": return "경품 지정";
     case "reward.fulfill": return "경품 지급";
     case "reward.cancel": return "경품 취소";
@@ -226,6 +245,8 @@ function uncertainCommandLabel(command: string | null, path: string): string {
     case "staff.unassign": return "스태프 배정 해제";
     case "check.scan": return "체크인 스캔";
     case "check.correct": return "체크인 정정";
+    case "check.reviewed-exit": return "확인 후 퇴장 기록";
+    case "check.reconcile": return "출입 상태 복구";
     case "booth.save": return "부스 저장";
     case "booth.map.save": return "부스 지도 저장";
     case "booth.map.publish": return "부스 지도 게시";
@@ -264,6 +285,7 @@ export function OrganizationContextNotice({ confirmLeave }: { confirmLeave?: () 
         key: item.key,
         organizationName: item.organizationName || context.context?.organizationId || item.organizationId,
         commandLabel: uncertainCommandLabel(item.command, item.path),
+        command: item.command,
         replayable: item.replayable,
       }))
     : [];
@@ -342,7 +364,13 @@ export function OrganizationContextNotice({ confirmLeave }: { confirmLeave?: () 
         });
         setResolvedSummaries((prev) => ({ ...prev, [key]: { label, text } }));
       } else {
-        setCheckResults((prev) => ({ ...prev, [key]: "응답을 확인하지 못했습니다. 나중에 같은 요청으로 다시 확인하세요." }));
+        setCheckResults((prev) => ({ ...prev, [key]: target?.command === "participant.bulk-cancel"
+          ? "취소 대상을 확인하려면 원래 참가자 화면에서 같은 요청을 확인하고 명단을 새로 불러오세요."
+          : target?.command === "event.basics.save"
+          ? "행사 정보와 티켓 영향을 확인하려면 원래 행사 설정 화면에서 같은 요청을 다시 확인하세요."
+          : target?.command === "message.create-reviewed" || target?.command === "message.create-charset-reviewed" || target?.command === "message.retry-charset-reviewed" || target?.command === "message.record-provider-check"
+          ? "발송 대상과 내용을 확인하려면 원래 메시지 화면에서 같은 요청을 다시 확인하세요."
+          : "응답을 확인하지 못했습니다. 나중에 같은 요청으로 다시 확인하세요." }));
       }
     } catch (error) {
       setCheckResults((prev) => ({

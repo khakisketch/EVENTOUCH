@@ -1,5 +1,8 @@
 "use client";
 
+import ValidatedForm from "../ui/ValidatedForm";
+
+
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { safeNextPath, chooseOrganizationHref } from "../auth-redirect";
@@ -17,6 +20,7 @@ export default function LoginForm() {
   const safeRequested = safeNextPath(requestedNext);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const failureRef = useRef<HTMLParagraphElement>(null);
   const [submitting, setSubmitting] = useState(false);  const [checkingSession, setCheckingSession] = useState(true);
@@ -275,7 +279,7 @@ export default function LoginForm() {
           </button>
         </p>
       ) : null}
-      <form className="auth-form" onSubmit={onSubmit}>
+      <ValidatedForm className="auth-form" onSubmit={onSubmit}>
       <div className="form-field">
         <label htmlFor="login-email">이메일</label>
         <input
@@ -288,13 +292,13 @@ export default function LoginForm() {
       </div>
       <div className="form-field">
         <label htmlFor="login-password">비밀번호</label>
-        <input
+        <div className="auth-password"><input
           id="login-password"
-          type="password"
+          type={showPassword ? "text" : "password"}
           autoComplete="current-password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-        />
+        /><button type="button" aria-controls="login-password" aria-pressed={showPassword} onClick={() => setShowPassword((value) => !value)}>{showPassword ? "숨기기" : "보기"}</button></div>
       </div>
       {failure ? <p role="alert" ref={failureRef} tabIndex={-1}>{failure}</p> : null}
       <button type="submit" disabled={submitting}>
@@ -336,7 +340,7 @@ export default function LoginForm() {
           </p>
         </div>
       ) : null}
-    </form>
+    </ValidatedForm>
     </>
   );
 }

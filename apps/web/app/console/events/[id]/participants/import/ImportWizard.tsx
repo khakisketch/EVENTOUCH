@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ComponentProps } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { loginHrefForLocation } from "../../../../../auth-redirect";
+import ConsoleDialog from "../../../../console-ui/ConsoleDialog";
 import ConsolePage from "../../../../console-ui/ConsolePage";
 import ConsoleToolbar from "../../../../console-ui/ConsoleToolbar";
 import ConsoleFeedback from "../../../../console-ui/ConsoleFeedback";
 import ConsoleFormActions from "../../../../console-ui/ConsoleFormActions";
+import ConsoleConfirm from "../../../../console-ui/ConsoleConfirm";
 import {
   formatConsoleEventMeta,
   type ConsoleEventMeta,
@@ -19,10 +21,16 @@ import consoleUiStyles from "../../../../console-ui/console-ui.module.css";
 import styles from "./import.module.css";
 import { consoleFetch } from "../../../../../../lib/console-api";
 import { canWriteEvent } from "../../../../../../lib/event-capabilities";
+import { acknowledgeOperatorReceipt, confirmsParticipantImport, isOrganizationContextBlock } from "../../../../../../lib/operator-context";
+import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../../lib/operator-receipts";
+import { useEventReceipts } from "../../../../../../lib/use-event-receipts";
 
 type ImportMap = { name: string; phone: string; email: string; company: string };
 type ValidRow = { name: string; phone: string; email: string; company: string };
+type ImportRow = { cells: string[]; line: number };
 type RowError = { row: number; reason: string };
+type PhoneReview = { row: number; name: string; phone: string };
+type ImportPreview = { valid: ValidRow[]; errors: RowError[]; phoneReview: PhoneReview[] };
 
 type GateState =
   | { kind: "loading" }
@@ -55,11 +63,13 @@ function stripBom(text: string): string {
 }
 
 // Same grammar as the legacy app: quoted cells, doubled quotes, CRLF.
-function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
+function parseCsv(text: string): ImportRow[] {
+  const rows: ImportRow[] = [];
   let row: string[] = [];
   let cell = "";
   let quoted = false;
+  let line = 1;
+  let rowLine = 1;
   for (let i = 0; i < text.length; i++) {
     const c = text[i];
     if (c === '"') {
@@ -75,16 +85,19 @@ function parseCsv(text: string): string[][] {
     } else if ((c === "\n" || c === "\r") && !quoted) {
       if (c === "\r" && text[i + 1] === "\n") i++;
       row.push(cell);
-      if (row.some((x) => x.trim())) rows.push(row);
+      if (row.some((x) => x.trim())) rows.push({ cells: row, line: rowLine });
       row = [];
       cell = "";
+      line++;
+      rowLine = line;
     } else {
       cell += c;
+      if (c === "\n" || (c === "\r" && text[i + 1] !== "\n")) line++;
     }
   }
   if (quoted) throw new Error("따옴표가 닫히지 않은 CSV입니다.");
   row.push(cell);
-  if (row.some((x) => x.trim())) rows.push(row);
+  if (row.some((x) => x.trim())) rows.push({ cells: row, line: rowLine });
   return rows;
 }
 
@@ -94,7 +107,7 @@ function parseCsv(text: string): string[][] {
 // lazily — only an actual Excel file downloads it; CSV·TXT·template flows
 // never pay for it. No new dependency: the declared xlsx build is split
 // into its own chunk by the dynamic import below.
-async function parseWorkbook(buffer: ArrayBuffer): Promise<{ headers: string[]; rows: string[][] }> {
+async function parseWorkbook(buffer: ArrayBuffer): Promise<{ headers: string[]; rows: ImportRow[] }> {
   const XLSX = await import("xlsx");
   const workbook = XLSX.read(buffer, {
     type: "array",
@@ -119,33 +132,32 @@ async function parseWorkbook(buffer: ArrayBuffer): Promise<{ headers: string[]; 
   }
   const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: false, defval: "" });
   const rows = grid
-    .map((line) =>
+    .map((line, index) => ({ line: bounds.s.r + index + 1, cells:
       (Array.isArray(line) ? line : []).map((cell) =>
         typeof cell === "string" ? cell.trim().slice(0, 4000)
         : typeof cell === "number" && Number.isFinite(cell) ? String(cell).slice(0, 4000)
         : ""
-      )
-    )
-    .filter((line) => line.some((cell) => cell.trim()));
+      ) }))
+    .filter((row) => row.cells.some((cell) => cell.trim()));
   if (rows.length < 2 || rows.length > MAX_ROWS + 1) {
     throw new Error("헤더와 1~1,000개 데이터 행이 필요합니다.");
   }
-  const head = rows.shift() ?? [];
+  const head = rows.shift()?.cells ?? [];
   return { headers: head, rows };
 }
 
 // TXT: one participant per line — 이름, 연락처, 이메일(선택), 소속(선택).
 // Comma/semicolon/tab preferred; bare whitespace splits name/phone/company.
-function parseTxt(text: string): { headers: string[]; rows: string[][] } {
+function parseTxt(text: string): { headers: string[]; rows: ImportRow[] } {
   const headers = ["이름", "연락처", "이메일", "소속"];
-  const rows: string[][] = [];
-  for (const line of text.split(/\r?\n/)) {
+  const rows: ImportRow[] = [];
+  for (const [index, line] of text.split(/\r\n|\r|\n/).entries()) {
     if (!line.trim()) continue;
     const cells = /[,;\t]/.test(line)
       ? line.split(/[,;\t]/).map((x) => x.trim())
       : line.trim().split(/\s+/);
     while (cells.length < 4) cells.push("");
-    rows.push(cells.slice(0, 4));
+    rows.push({ cells: cells.slice(0, 4), line: index + 1 });
   }
   return { headers, rows };
 }
@@ -155,13 +167,14 @@ function normalizePhone(value: string): string {
 }
 
 function validateRows(
-  dataRows: string[][],
+  dataRows: ImportRow[],
   map: ImportMap
-): { valid: ValidRow[]; errors: RowError[] } {
+): ImportPreview {
   const valid: ValidRow[] = [];
   const errors: RowError[] = [];
+  const phoneReview: PhoneReview[] = [];
   const seen = new Set<string>();
-  dataRows.forEach((cols, index) => {
+  dataRows.forEach(({ cells: cols, line }) => {
     const get = (key: keyof ImportMap) =>
       map[key] === "" ? "" : (cols[Number(map[key])] ?? "").trim();
     // Server limits stay as-is (60/120/200), but over-limit values are
@@ -170,7 +183,6 @@ function validateRows(
     const phone = normalizePhone(get("phone"));
     const email = get("email");
     const company = get("company");
-    const line = index + 2;
     if (!name) {
       errors.push({ row: line, reason: "이름을 입력하세요" });
       return;
@@ -201,8 +213,12 @@ function validateRows(
     }
     seen.add(phone);
     valid.push({ name, phone, email, company });
+    // A Korean 010 mobile number entered into a numeric spreadsheet cell
+    // often loses its first zero. Do not invent a number: it may also be an
+    // intentional international number and needs the operator's review.
+    if (/^10\d{8}$/.test(phone)) phoneReview.push({ row: line, name, phone });
   });
-  return { valid, errors };
+  return { valid, errors, phoneReview };
 }
 
 function downloadCsv(filename: string, rows: string[][]) {
@@ -226,45 +242,92 @@ function downloadCsv(filename: string, rows: string[][]) {
   URL.revokeObjectURL(url);
 }
 
-export default function ImportWizard({ eventId }: { eventId: string }) {
+type ImportFrameProps = ComponentProps<typeof ConsolePage> & { onDismiss?: () => void; busy?: boolean; canClose?: () => boolean };
+function ImportFrame({ onDismiss, busy, canClose, ...page }: ImportFrameProps) {
+  if (!onDismiss) return <ConsolePage {...page} />;
+  return <ConsoleDialog title="명단 가져오기" wide stickyChrome busy={busy} canClose={canClose} onClose={onDismiss}>
+    <div className={styles.modalContent}>{page.feedback}{page.children}</div>
+  </ConsoleDialog>;
+}
+
+export default function ImportWizard({ eventId, onDismiss, onCommitted }: { eventId: string; onDismiss?: () => void; onCommitted?: () => void }) {
   const router = useRouter();
+  const [dragging, setDragging] = useState(false);
+  const [dismissConfirm, setDismissConfirm] = useState(false);
+  const committedCallback = useRef(onCommitted);
+  committedCallback.current = onCommitted;
   const [gate, setGate] = useState<GateState>({ kind: "loading" });
   const [retryTick, setRetryTick] = useState(0);
   const [headers, setHeaders] = useState<string[] | null>(null);
-  const [dataRows, setDataRows] = useState<string[][]>([]);
+  const [dataRows, setDataRows] = useState<ImportRow[]>([]);
   const [fileKind, setFileKind] = useState<"csv" | "txt" | null>(null);
   const [map, setMap] = useState<ImportMap>({ name: "", phone: "", email: "", company: "" });
-  const [preview, setPreview] = useState<{ valid: ValidRow[]; errors: RowError[] } | null>(null);
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [phoneReviewed, setPhoneReviewed] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [readingFile, setReadingFile] = useState(false);
+  const fileReadingRef = useRef(false);
+  const fileReadIdRef = useRef(0);
   const [commitError, setCommitError] = useState<string | null>(null);
   const [committed, setCommitted] = useState<number | null>(null);
   const [committing, setCommitting] = useState(false);
+  const [importUncertain, setImportUncertain] = useState(false);
+  const [checkingImport, setCheckingImport] = useState(false);
+  const [closeConfirm, setCloseConfirm] = useState(false);
+  useEffect(() => { if (committed !== null) committedCallback.current?.(); }, [committed]);
+  function canDismiss() {
+    if (submittingRef.current || committing || checkingImport) return false;
+    if (importUncertain || headers || preview) { setDismissConfirm(true); return false; }
+    return true;
+  }
   // The wizard runs in three steps; the first screen shows where the
   // operator is and what is still ahead instead of only the current box.
-  const importStep = preview ? 3 : headers ? 2 : 1;
+  const [modalStep, setModalStep] = useState<1 | 2 | 3>(1);
+  const importStep = onDismiss ? modalStep : preview ? 3 : headers ? 2 : 1;
+  useEffect(() => { setModalStep(headers ? 2 : 1); }, [headers]);
   const submittingRef = useRef(false);
-  const pendingImportRef = useRef<{ fingerprint: string; commandId: string } | null>(null);
+  const pendingImportRef = useRef<{ fingerprint: string; commandId: string; rows: ValidRow[]; uncertain: boolean } | null>(null);
+  const otherImportReceipt = useEventReceipts(eventId).some((item) => item.command === "participant.import" && item.commandId !== pendingImportRef.current?.commandId);
+  const importLocked = committing || checkingImport || importUncertain || otherImportReceipt || readingFile;
 
   // Unsaved import work guards navigation: loaded rows, column mapping and
   // an uncommitted preview would be lost on leave. Filters are none here;
   // a committed import clears the draft and the page is clean again.
-  useConsoleDraftGuard(headers !== null || preview !== null, "가져오기 위해 정리한 명단이 사라질 수 있습니다.");
+  useConsoleDraftGuard(headers !== null || preview !== null || importUncertain || committing || checkingImport || readingFile,
+    importUncertain ? "명단이 이미 반영되었을 수 있습니다. 화면을 떠나면 같은 입력으로 다시 확인하기 어렵습니다." : "가져오기 위해 정리한 명단이 사라질 수 있습니다.");
+
+  // The inline recovery offers both read-only status and the frozen retry.
+  // After leaving this screen its cleanup reveals the shared status panel.
+  useEffect(() => {
+    const attempt = pendingImportRef.current;
+    if (!importUncertain || !attempt) return;
+    return manageOperatorReceipt(attempt.commandId);
+  }, [eventId, importUncertain]);
 
   // Event switch resets explicit local file state (never a key remount):
   // rows mapped for another event must not commit into this one.
   useEffect(() => {
+    fileReadIdRef.current += 1;
+    fileReadingRef.current = false;
+    setReadingFile(false);
     setHeaders(null);
     setDataRows([]);
     setFileKind(null);
     setFileName(null);
     setMap({ name: "", phone: "", email: "", company: "" });
     setPreview(null);
+    setPhoneReviewed(false);
     setFileError(null);
     setCommitError(null);
     setCommitted(null);
+    pendingImportRef.current = null;
+    setImportUncertain(false);
+    setCloseConfirm(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
+
+  useEffect(() => () => { fileReadIdRef.current += 1; fileReadingRef.current = false; }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -364,19 +427,26 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
   }, [eventId, retryTick, router]);
 
   async function readFile(file: File) {
-    if (submittingRef.current) return;
+    if (submittingRef.current || importLocked || fileReadingRef.current) return;
+    const readId = ++fileReadIdRef.current;
+    fileReadingRef.current = true;
+    setReadingFile(true);
     setFileError(null);
-    setFileName(null);
+    setFileName(file.name);
+    setHeaders(null);
+    setDataRows([]);
     setPreview(null);
+    setPhoneReviewed(false);
     setCommitted(null);
     try {
-      if (file.size > MAX_BYTES) throw new Error("1MB 이하 CSV·TXT·XLSX 파일을 선택하세요.");
+      if (file.size > MAX_BYTES) throw new Error("1MB 이하 CSV·TXT·XLS·XLSX 파일을 선택하세요.");
       const looksWorkbook =
         /\.xlsx?$/i.test(file.name) ||
         file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
         file.type === "application/vnd.ms-excel";
       if (looksWorkbook) {
         const parsed = await parseWorkbook(await file.arrayBuffer());
+        if (fileReadIdRef.current !== readId) return;
         if (!parsed.rows.length || parsed.rows.length > MAX_ROWS) {
           throw new Error("1~1,000개 데이터 행이 필요합니다.");
         }
@@ -396,6 +466,7 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
         return;
       }
       const text = stripBom(await file.text());
+      if (fileReadIdRef.current !== readId) return;
       const looksTxt =
         /\.txt$/i.test(file.name) ||
         file.type.startsWith("text/plain");
@@ -416,7 +487,7 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
         if (rows.length < 2 || rows.length > MAX_ROWS + 1) {
           throw new Error("헤더와 1~1,000개 데이터 행이 필요합니다.");
         }
-        const head = rows.shift() ?? [];
+        const head = rows.shift()?.cells ?? [];
         const next: ImportMap = { name: "", phone: "", email: "", company: "" };
         (Object.keys(ALIASES) as Array<keyof ImportMap>).forEach((key) => {
           const at = head.findIndex((h) =>
@@ -432,14 +503,22 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
         setFileName(file.name);
       }
     } catch (error) {
+      if (fileReadIdRef.current !== readId) return;
       setHeaders(null);
       setDataRows([]);
       setFileKind(null);
+      setFileName(null);
       setFileError(error instanceof Error ? error.message : "파일을 읽지 못했습니다.");
+    } finally {
+      if (fileReadIdRef.current === readId) {
+        fileReadingRef.current = false;
+        setReadingFile(false);
+      }
     }
   }
 
-  function previewFor(rows: string[][], nextMap: ImportMap) {
+  function previewFor(rows: ImportRow[], nextMap: ImportMap) {
+    setPhoneReviewed(false);
     if (nextMap.name === nextMap.phone && nextMap.name !== "") {
       setPreview(null);
       setFileError("이름과 연락처는 서로 다른 열을 선택하세요.");
@@ -450,18 +529,26 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
   }
 
   function buildPreview(nextMap: ImportMap) {
+    if (importLocked || fileReadingRef.current) return;
     previewFor(dataRows, nextMap);
   }
 
   async function commit() {
-    if (!preview || !preview.valid.length || submittingRef.current) return;
+    if (!preview || !preview.valid.length || submittingRef.current || checkingImport || otherImportReceipt || fileReadingRef.current) return;
+    if (preview.phoneReview.length && !phoneReviewed && !importUncertain) return;
     submittingRef.current = true;
     setCommitting(true);
     setCommitError(null);
     const fingerprint = JSON.stringify([eventId, preview.valid]);
+    if (pendingImportRef.current?.uncertain && pendingImportRef.current.fingerprint !== fingerprint) {
+      submittingRef.current = false;
+      setCommitting(false);
+      setCommitError("이전 명단 반영 결과를 먼저 확인하세요.");
+      return;
+    }
     const attempt = pendingImportRef.current?.fingerprint === fingerprint
       ? pendingImportRef.current
-      : { fingerprint, commandId: randomCommandId() };
+      : { fingerprint, commandId: randomCommandId(), rows: preview.valid.map((row) => ({ ...row })), uncertain: false };
     pendingImportRef.current = attempt;
     const commandId = attempt.commandId;
     try {
@@ -473,7 +560,7 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
           body: JSON.stringify({
             commandId,
             command: "participant.import",
-            payload: { rows: preview.valid },
+            payload: { rows: attempt.rows },
           }),
         }
       );
@@ -482,46 +569,90 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
         participants?: unknown[];
       } | null;
       if (!res.ok) {
-        if (res.status < 500) pendingImportRef.current = null;
-        setCommitError(
-          typeof data?.error === "string" ? data.error : "반영하지 못했습니다."
-        );
+        const definitive = res.status >= 400 && res.status < 500 && ![408, 425, 429].includes(res.status) && !attempt.uncertain;
+        if (definitive) { pendingImportRef.current = null; setImportUncertain(false); }
+        else { attempt.uncertain = true; setImportUncertain(true); }
+        setCommitError(definitive ? (typeof data?.error === "string" ? data.error : "반영하지 못했습니다.")
+          : "명단 반영 결과를 확인하지 못했습니다. 서버 처리 확인 또는 같은 요청 다시 시도를 선택하세요.");
         return;
       }
-      if (!Array.isArray(data?.participants)) {
+      if (!confirmsParticipantImport({ rows: attempt.rows }, data)) {
+        attempt.uncertain = true;
+        setImportUncertain(true);
         setCommitError("반영 결과를 확인하지 못했습니다. 같은 명단으로 다시 시도하세요.");
         return;
       }
-      const count = data.participants.length;
+      const count = attempt.rows.length;
       pendingImportRef.current = null;
+      setImportUncertain(false);
       setCommitted(count);
       setHeaders(null);
       setDataRows([]);
       setPreview(null);
       setFileKind(null);
       setFileName(null);
-    } catch {
-      setCommitError("연결하지 못했습니다. 다시 시도하세요.");
+    } catch (error) {
+      if (!attempt.uncertain && isOrganizationContextBlock(error)) {
+        pendingImportRef.current = null;
+        setCommitError("현재 조직을 확인한 뒤 다시 시도하세요.");
+      } else {
+        attempt.uncertain = true;
+        setImportUncertain(true);
+        setCommitError("연결하지 못했습니다. 서버 처리 확인 또는 같은 요청 다시 시도를 선택하세요.");
+      }
     } finally {
       submittingRef.current = false;
       setCommitting(false);
     }
   }
 
+  function closeReview() {
+    pendingImportRef.current = null;
+    setImportUncertain(false);
+    setCloseConfirm(false);
+    setHeaders(null);
+    setDataRows([]);
+    setPreview(null);
+    setFileKind(null);
+    setFileName(null);
+  }
+
+  async function checkImportResult() {
+    const attempt = pendingImportRef.current;
+    if (!attempt?.uncertain || committing || checkingImport) return;
+    setCheckingImport(true);
+    setCommitError(null);
+    try {
+      const res = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/command-receipts/${encodeURIComponent(attempt.commandId)}`, { cache: "no-store" });
+      const data = await res.json().catch(() => null) as { status?: unknown; command?: unknown } | null;
+      if (res.ok && data?.status === "APPLIED" && data.command === "participant.import") {
+        acknowledgeOperatorReceipt(attempt.commandId);
+        forgetOperatorReceipt(attempt.commandId);
+        pendingImportRef.current = null;
+        setImportUncertain(false);
+        setCommitted(attempt.rows.length);
+        setHeaders(null); setDataRows([]); setPreview(null); setFileKind(null); setFileName(null);
+      } else if (res.ok && data?.status === "UNCONFIRMED") setCommitError("아직 반영 여부를 확인할 수 없습니다. 잠시 후 다시 확인하거나 같은 요청을 다시 시도하세요.");
+      else if (res.status >= 500 || [425, 429].includes(res.status)) setCommitError("일시적으로 처리 결과를 확인하지 못했습니다. 잠시 후 다시 확인하세요.");
+      else setCommitError("결과를 확인하지 못했습니다. 현재 계정과 행사 접근 권한을 확인하세요.");
+    } catch { setCommitError("서버에 연결하지 못했습니다. 명단을 다시 보내지 않았습니다."); }
+    finally { setCheckingImport(false); }
+  }
+
   if (gate.kind === "loading") {
     return (
-      <ConsolePage pageId="participantImport" eventId={eventId}>
+      <ImportFrame pageId="participantImport" eventId={eventId} onDismiss={onDismiss} busy={committing || checkingImport} canClose={canDismiss}>
         <ConsoleStatePanel
           kind="loading"
           message="가져오기 화면을 불러오고 있습니다."
           onRetry={() => setRetryTick((tick) => tick + 1)}
         />
-      </ConsolePage>
+      </ImportFrame>
     );
   }
   if (gate.kind === "failed") {
     return (
-      <ConsolePage pageId="participantImport" eventId={eventId}>
+      <ImportFrame pageId="participantImport" eventId={eventId} onDismiss={onDismiss} busy={committing || checkingImport} canClose={canDismiss}>
         <ConsoleStatePanel
           kind="failed"
           message={gate.message}
@@ -538,7 +669,7 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
             </Link>
           )}
         />
-      </ConsolePage>
+      </ImportFrame>
     );
   }
 
@@ -555,7 +686,7 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
     "participant.import"
   );
   return (
-    <ConsolePage
+    <ImportFrame onDismiss={onDismiss} busy={committing || checkingImport} canClose={canDismiss}
       pageId="participantImport"
       eventId={eventId}
       eventName={gate.eventName}
@@ -565,6 +696,8 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
           {committed !== null ? (
             <ConsoleFeedback kind="success">{committed}명을 반영했습니다.</ConsoleFeedback>
           ) : null}
+          {otherImportReceipt ? <ConsoleFeedback kind="warning">이전 명단 반영 결과를 위의 처리 결과 확인에서 확인한 뒤 새 명단을 가져올 수 있습니다.</ConsoleFeedback> : null}
+          {importUncertain ? <ConsoleFeedback kind="warning">명단 반영 결과 확인이 필요합니다. <a href="#participant-import-review-heading">결과 확인으로 이동</a></ConsoleFeedback> : null}
           {!canWriteImport ? (
             <ConsoleFeedback kind="warning">가져오기 권한이 없습니다. 변경이 필요하면 담당 행사 운영자에게 요청하세요.</ConsoleFeedback>
           ) : null}
@@ -589,31 +722,42 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
                 className={`${styles.importStep} ${styles[`importStep${state === "done" ? "Done" : state === "current" ? "Current" : "Todo"}`]}`}
                 aria-current={state === "current" ? "step" : undefined}
               >
-                <span className={styles.importStepNumber}>{number}</span>
-                <span className={styles.importStepLabel}>{label}</span>
+                {onDismiss ? <button type="button" disabled={importLocked || number > importStep} onClick={() => setModalStep(number as 1 | 2 | 3)}><span className={styles.importStepNumber}>{number}</span><span className={styles.importStepLabel}>{label}</span></button> : <><span className={styles.importStepNumber}>{number}</span><span className={styles.importStepLabel}>{label}</span></>}
               </li>
             );
           })}
         </ol>
+        {fileError ? <ConsoleFeedback kind="error">{fileError}</ConsoleFeedback> : null}
+        {readingFile ? <ConsoleFeedback kind="info">{fileName} 파일을 읽고 있습니다. 읽기가 끝나면 내용을 확인할 수 있습니다.</ConsoleFeedback> : null}
+        <div className={styles.importStage} hidden={Boolean(onDismiss && importStep !== 1)}>
         <ConsoleSection
           headingId="participant-import-file-heading"
           title="1. 파일 선택"
           surface="panel"
         >
           <p className={styles.help}>
-            가져오기는 선택적인 도구입니다. 참가자가 스스로 신청하도록 <b>참가 접수</b>를 열어 모으는 경로가
-            기본이며, 여기서는 이미 확보한 명단을 한 번에 등록할 때 사용합니다.
+            파일을 끌어 놓거나 선택하세요. 내용을 확인한 뒤 명단에 반영합니다.
           </p>
           <ConsoleToolbar
             filters={
-              <label className={committing ? `${styles.filePicker} ${styles.filePickerDisabled}` : styles.filePicker}>
-                <span className="sr-only">CSV·TXT·XLSX 파일 선택</span>
+              <label data-import-dropzone data-dragging={dragging || undefined}
+                onDragOver={(event) => { event.preventDefault(); if (!importLocked) setDragging(true); }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(event) => {
+                  event.preventDefault(); setDragging(false);
+                  if (importLocked) return;
+                  if (event.dataTransfer.files.length !== 1) { setFileError("파일을 한 개씩 넣어 주세요."); return; }
+                  const file = event.dataTransfer.files[0];
+                  if (file) void readFile(file);
+                }}
+                className={importLocked ? `${styles.filePicker} ${styles.filePickerDisabled}` : styles.filePicker}>
+                <span className="sr-only">CSV·TXT·XLS·XLSX 파일 선택</span>
                 <span className={styles.fileButton} aria-hidden="true">파일 선택</span>
                 <span className={styles.fileName}>{fileName ?? "선택된 파일 없음"}</span>
                 <input
                   className={styles.fileInput}
                   type="file"
-                  disabled={committing}
+                  disabled={importLocked}
                   accept=".csv,text/csv,.txt,text/plain,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                   onChange={(event) => {
                     const file = event.target.files?.[0];
@@ -638,10 +782,12 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
               </button>
             }
           />
-          <p className={`landing-note ${styles.fileMeta}`}>CSV·TXT·XLSX · 최대 1MB, 1,000행. 엑셀은 첫 시트의 첫 행을 헤더로 읽으며 256열까지 연결할 수 있습니다. TXT는 한 줄에 한 명: 이름, 연락처, 이메일(선택), 소속(선택).</p>
-          {fileError ? <ConsoleFeedback kind="error">{fileError}</ConsoleFeedback> : null}
+          <p className={`landing-note ${styles.fileMeta}`}>CSV·TXT·XLS·XLSX · 최대 1MB, 1,000행. 엑셀은 첫 시트의 첫 행을 헤더로 읽으며 256열까지 연결할 수 있습니다. TXT는 한 줄에 한 명: 이름, 연락처, 이메일(선택), 소속(선택).</p>
         </ConsoleSection>
+        </div>
           {headers ? (
+            <div className={styles.importStage} hidden={Boolean(onDismiss && importStep !== 2)}>
+            {onDismiss ? <p className={styles.help}>{fileName} · 항목을 확인하세요.</p> : null}
             <ConsoleSection
               headingId="participant-import-map-heading"
               title={`2. 열 연결 ${fileKind === "txt" ? "(TXT 고정 순서)" : ""}`}
@@ -655,7 +801,7 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
                         <span>{field.label}{field.required ? " *" : ""}</span>
                         <select
                           value={map[field.id]}
-                          disabled={committing || fileKind === "txt"}
+                          disabled={importLocked || fileKind === "txt"}
                           onChange={(event) => {
                             const next = { ...map, [field.id]: event.target.value };
                             setMap(next);
@@ -674,14 +820,24 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
                   </div>
                 }
                 actions={
-                  <button type="button" className="button button-secondary" disabled={committing} onClick={() => buildPreview(map)}>
+                  <button type="button" className="button button-secondary" disabled={importLocked} onClick={() => {
+                    buildPreview(map);
+                    if (onDismiss) {
+                      if (!map.name || !map.phone) { setFileError("이름과 연락처 열을 연결하세요."); return; }
+                      if (map.name === map.phone) return;
+                      setModalStep(3);
+                    }
+                  }}>
                     검토 결과 만들기
                   </button>
                 }
               />
             </ConsoleSection>
+            {onDismiss ? <button type="button" className="button button-secondary" disabled={importLocked} onClick={() => setModalStep(1)}>파일 바꾸기</button> : null}
+            </div>
           ) : null}
           {preview ? (
+            <div className={styles.importStage} hidden={Boolean(onDismiss && importStep !== 3)}>
             <ConsoleSection
               headingId="participant-import-review-heading"
               title="3. 검토 후 반영"
@@ -692,6 +848,22 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
                 <span className={styles.reviewCount} data-tone={preview.errors.length ? "bad" : undefined}>오류 {preview.errors.length}행</span>
                 <span className="landing-note">오류 행은 제외되며 원본 파일에서 수정 후 다시 가져올 수 있습니다.</span>
               </div>
+              {preview.phoneReview.length ? <>
+                <ConsoleFeedback kind="warning">확인이 필요한 연락처 {preview.phoneReview.length}건이 있습니다. 010으로 시작하는 번호의 앞자리 0이 빠졌을 수 있습니다. 해외 번호 등은 그대로 맞을 수도 있으니 원본과 비교하세요. 잘못된 값은 원본 파일에서 수정한 뒤 다시 가져오세요.</ConsoleFeedback>
+                <details className={styles.phoneReview} open={preview.phoneReview.length <= 5 ? true : undefined}>
+                  <summary>확인할 연락처 {preview.phoneReview.length}건 보기</summary>
+                  <ul className={consoleUiStyles.collection} aria-label="확인할 연락처 목록">
+                    {preview.phoneReview.map((item) => <li className={consoleUiStyles.recordRow} key={item.row}>
+                      <span className={consoleUiStyles.recordMain}>파일 {item.row}행 · {item.name}</span>
+                      <span className={consoleUiStyles.recordMeta}>{item.phone}</span>
+                    </li>)}
+                  </ul>
+                </details>
+                <div className="checkbox-field"><label className={styles.phoneConfirm}>
+                  <input type="checkbox" checked={phoneReviewed} onChange={(event) => setPhoneReviewed(event.target.checked)} disabled={importLocked} />
+                  <span>확인할 연락처를 원본과 비교했고, 표시된 번호로 등록합니다.</span>
+                </label></div>
+              </> : null}
               {preview.valid.length ? (
                 <>
                   <p className="landing-note">
@@ -724,37 +896,47 @@ export default function ImportWizard({ eventId }: { eventId: string }) {
                 </ul>
               ) : null}
               {commitError ? <ConsoleFeedback kind="error">{commitError}</ConsoleFeedback> : null}
+              {importUncertain ? <p role="status">결과를 확인할 때까지 원래 파일과 열 연결을 유지합니다.</p> : null}
               <ConsoleFormActions note="가져온 유효 행은 승인 검토 없이 참가 확정으로 등록됩니다. 동의 기록은 가져오기만으로 생성하지 않습니다.">
+                {onDismiss ? <button type="button" className="button button-secondary" disabled={importLocked} onClick={() => setModalStep(2)}>열 연결 수정</button> : null}
+                {importUncertain ? <button type="button" className="button button-secondary" disabled={committing || checkingImport || closeConfirm} onClick={() => void checkImportResult()}>{checkingImport ? "확인 중입니다" : "서버 처리 확인"}</button> : null}
                 <button
                   type="button"
                   className="button button-primary"
-                  disabled={committing || !preview.valid.length || stageBlocked}
+                  disabled={committing || checkingImport || closeConfirm || otherImportReceipt || !preview.valid.length || stageBlocked || (preview.phoneReview.length > 0 && !phoneReviewed && !importUncertain)}
                   onClick={() => void commit()}
                 >
-                  {committing ? "반영 중입니다" : `유효 ${preview.valid.length}행 반영`}
+                  {committing ? "반영 중입니다" : importUncertain ? "같은 요청 다시 시도" : `유효 ${preview.valid.length}행 반영`}
                 </button>
                 <button
                   type="button"
                   className="button button-secondary"
-                  disabled={committing}
-                  onClick={() => {
-                    setHeaders(null);
-                    setDataRows([]);
-                    setPreview(null);
-                    setFileKind(null);
-                    setFileName(null);
-                  }}
+                  disabled={committing || checkingImport || closeConfirm}
+                  onClick={() => { if (importUncertain) setCloseConfirm(true); else closeReview(); }}
                 >
-                  검토 취소
+                  {importUncertain ? "확인 전 닫기" : "검토 취소"}
                 </button>
               </ConsoleFormActions>
+              {closeConfirm ? <ConsoleConfirm
+                summary="명단이 이미 반영되었을 수 있습니다. 검토를 닫아도 서버 처리는 취소되지 않습니다."
+                confirmLabel="검토 닫기"
+                cancelLabel="계속 확인하기"
+                onConfirm={closeReview}
+                onCancel={() => setCloseConfirm(false)}
+              /> : null}
             </ConsoleSection>
+            </div>
           ) : null}
         </>
       ) : null}
+      {onDismiss && dismissConfirm ? <ConsoleConfirm
+        summary={importUncertain ? "명단이 이미 반영되었을 수 있습니다. 닫아도 서버 처리는 취소되지 않습니다. 처리 결과 확인에서 이어갈 수 있습니다." : "가져오기 위해 정리한 명단이 사라집니다. 닫을까요?"}
+        confirmLabel="가져오기 닫기" cancelLabel="계속 작성하기"
+        onConfirm={onDismiss} onCancel={() => setDismissConfirm(false)}
+      /> : null}
       <p>
-        <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants`}>참가자 목록으로</Link>
+        {onDismiss ? <button type="button" className="button button-secondary" disabled={committing || checkingImport} onClick={() => { if (canDismiss()) onDismiss(); }}>참가자 목록으로</button> : <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants`}>참가자 목록으로</Link>}
       </p>
-    </ConsolePage>
+    </ImportFrame>
   );
 }

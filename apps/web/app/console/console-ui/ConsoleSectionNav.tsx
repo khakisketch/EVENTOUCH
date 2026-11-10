@@ -1,13 +1,26 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
 import styles from "./console-ui.module.css";
+
+/** Client navigation can change a fragment without firing the browser hashchange event. */
+export function requestConsoleTask(id: string, focus = false) {
+  window.dispatchEvent(new CustomEvent("eventouch:workspace-navigate", { detail: { id, focus } }));
+}
 
 export type ConsoleSectionNavItem = {
   /** Must match an existing section heading id on the page. */
   id: string;
   label: string;
+  /** Encoded URL fragment for a tab with a separately addressable record. */
+  fragment?: string;
 };
 
 type ConsoleSectionNavProps = {
   items: readonly ConsoleSectionNavItem[];
+  /** Persistent panels: switching never unmounts a form or pending request. */
+  mode?: "anchors" | "tabs";
+  initialId?: string;
   label?: string;
   /**
    * Id of the section currently in view. The matching link alone carries
@@ -36,11 +49,117 @@ type ConsoleSectionNavProps = {
  * next Tab continues inside it instead of back at the top of the page. The
  * fragment still changes, so a section can be copied and reopened.
  */
-export default function ConsoleSectionNav({ items, label, activeId, onNavigate }: ConsoleSectionNavProps) {
+export default function ConsoleSectionNav({ items, label, activeId, onNavigate, mode = "anchors", initialId }: ConsoleSectionNavProps) {
+  const navRef = useRef<HTMLElement>(null);
+  const [selected, setSelected] = useState(initialId ?? items[0]?.id);
+  const navigateRef = useRef(onNavigate);
+  navigateRef.current = onNavigate;
+  const ids = items.map((item) => item.id).join("|");
+  const activateRef = useRef<(id: string) => void>(() => {});
+
+  useEffect(() => {
+    if (mode !== "tabs") return;
+    const root = navRef.current?.closest("[data-console-page]");
+    if (!root) return;
+    const panels = new Map<string, HTMLElement>();
+    let active = initialId ?? ids.split("|")[0];
+    let knownHash: string | undefined;
+    function activate(id: string) {
+      if (!panels.has(id)) return;
+      active = id;
+      for (const [key, panel] of panels) {
+        panel.hidden = key !== id;
+        panel.setAttribute("role", "tabpanel");
+        panel.id = `${key}-panel`;
+
+      }
+      setSelected(id);
+    }
+    activateRef.current = activate;
+    function fromHash() {
+      knownHash = location.hash;
+      let hash = "";
+      try { hash = decodeURIComponent(location.hash.slice(1)); } catch { return; }
+      const repeated = hash.split("#");
+      if (repeated.length > 1 && repeated.every((part) => part === repeated[0]) && panels.has(repeated[0])) hash = repeated[0];
+      const target = hash ? document.getElementById(hash) : null;
+      const section = target?.closest<HTMLElement>("[data-workspace-section]");
+      const id = section?.dataset.workspaceSection ?? (/^report-/.test(hash) && panels.has("report-detail") ? "report-detail" : undefined);
+      if (id && panels.has(id)) activate(id);
+    }
+    function register() {
+      let newPanel = false;
+      for (const id of ids.split("|")) {
+        const section = document.getElementById(id)?.closest<HTMLElement>("[data-workspace-section]");
+        if (section && root?.contains(section)) {
+          if (panels.get(id) !== section) newPanel = true;
+          panels.set(id, section);
+        }
+      }
+      activate(panels.has(active) ? active : [...panels.keys()][0]);
+      if (newPanel || knownHash !== location.hash) fromHash();
+    }
+    register();
+    // Conditional detail panels can appear after a report is selected.
+    const observer = new MutationObserver(register);
+    observer.observe(root, { childList: true, subtree: true });
+    window.addEventListener("hashchange", fromHash);
+    window.addEventListener("popstate", fromHash);
+    const onTaskNavigate = (event: Event) => {
+      const request = (event as CustomEvent<{ id?: unknown; focus?: boolean }>).detail;
+      if (typeof request?.id !== "string" || !panels.has(request.id)) return;
+      activate(request.id);
+      if (request.focus) {
+        const heading = document.getElementById(request.id);
+        heading?.setAttribute("tabindex", "-1");
+        heading?.focus({ preventScroll: true });
+        heading?.scrollIntoView({ block: "start" });
+      }
+    };
+    window.addEventListener("eventouch:workspace-navigate", onTaskNavigate);
+    const onInvalid = (event: Event) => {
+      const section = (event.target as HTMLElement)?.closest<HTMLElement>("[data-workspace-section]");
+      if (section?.dataset.workspaceSection) activate(section.dataset.workspaceSection);
+    };
+    root.addEventListener("invalid", onInvalid, true);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("hashchange", fromHash);
+      window.removeEventListener("popstate", fromHash);
+      window.removeEventListener("eventouch:workspace-navigate", onTaskNavigate);
+      root.removeEventListener("invalid", onInvalid, true);
+      for (const panel of panels.values()) {
+        panel.hidden = false;
+        panel.removeAttribute("role");
+
+        panel.removeAttribute("id");
+      }
+    };
+  }, [mode, ids, initialId]);
+
   if (!items.length) return null;
+  if (mode === "tabs") return <nav ref={navRef} className={styles.sectionNav} aria-label={label ?? "작업 선택"}>
+    <div className={styles.sectionNavList} role="tablist" aria-label={label ?? "작업 선택"}>
+      {items.map((item, index) => <button type="button" key={item.id} role="tab" id={`${item.id}-tab`}
+        className={styles.sectionNavLink} aria-controls={`${item.id}-panel`} aria-selected={selected === item.id}
+        tabIndex={selected === item.id ? 0 : -1}
+        onKeyDown={(event) => {
+          const next = event.key === "ArrowRight" ? (index + 1) % items.length : event.key === "ArrowLeft" ? (index + items.length - 1) % items.length : event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : -1;
+          if (next < 0) return;
+          event.preventDefault();
+          document.getElementById(`${items[next].id}-tab`)?.focus();
+          document.getElementById(`${items[next].id}-tab`)?.click();
+        }}
+        onClick={() => {
+          activateRef.current(item.id);
+          navigateRef.current?.(item.id);
+          history.replaceState(history.state, "", `#${item.fragment ?? item.id}`);
+        }}>{item.label}</button>)}
+    </div>
+  </nav>;
 
   return (
-    <nav className={styles.sectionNav} aria-label={label ?? "섹션 바로가기"}>
+    <nav className={`${styles.sectionNav} ${styles.anchorNav}`} aria-label={label ?? "섹션 바로가기"}>
       <ul className={styles.sectionNavList}>
         {items.map((item) => {
           const isActive = activeId !== undefined && item.id === activeId;

@@ -251,6 +251,7 @@ export default function ConsoleHome() {
   const [createOpen, setCreateOpen] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [receiptNotice, setReceiptNotice] = useState<string | null>(null);
   useEffect(() => subscribeConsoleFreshness(() => {
     if (!createOpen) setReloadTick((tick) => tick + 1);
   }), [createOpen]);
@@ -642,7 +643,10 @@ export default function ConsoleHome() {
           }
         />
       }
-      feedback={refreshError ? <ConsoleFeedback kind="error">{refreshError} 이전 목록은 유지됩니다. <button className="button button-secondary" type="button" onClick={() => setReloadTick((tick) => tick + 1)}>다시 불러오기</button></ConsoleFeedback> : undefined}
+      feedback={refreshError || receiptNotice ? <>
+        {refreshError ? <ConsoleFeedback kind="error">{refreshError} 이전 목록은 유지됩니다. <button className="button button-secondary" type="button" onClick={() => setReloadTick((tick) => tick + 1)}>다시 불러오기</button></ConsoleFeedback> : null}
+        {receiptNotice ? <ConsoleFeedback kind="success">{receiptNotice}</ConsoleFeedback> : null}
+      </> : undefined}
     >
 
       {createOpen ? (
@@ -660,6 +664,11 @@ export default function ConsoleHome() {
             stage: event.stage,
           }))}
           onClose={() => { setCreateOpen(false); setReloadTick((tick) => tick + 1); }}
+          onConfirmedWithoutDetails={() => {
+            setCreateOpen(false);
+            setReloadTick((tick) => tick + 1);
+            setReceiptNotice("행사 생성이 서버에 반영된 것을 확인했습니다. 목록에서 행사를 확인하세요.");
+          }}
           onClientRegistered={(client) => setState((current) => current.kind === "ready"
             ? { ...current, clients: new Map(current.clients).set(client.id, client.name) }
             : current)}

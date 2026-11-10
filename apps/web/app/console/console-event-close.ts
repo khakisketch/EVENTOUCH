@@ -40,20 +40,34 @@ export type CloseInputs = {
 
 export type CloseSnapshot = CloseInputs & {
   reports: Array<{ id: string; status: string }>;
+  participantsAvailable: boolean;
+  modulesAvailable: boolean;
+  registrationAvailable: boolean;
+  archiveAvailable: boolean;
 };
 
 // The workspace that already owns the page's bootstrap owns this read too.
 // No second fetch, polling, local completion journal, or inferred delivery.
 export function readCloseSnapshot(eventValue: unknown, workspaceValue: unknown): CloseSnapshot {
-  const record = (value: unknown): Record<string, unknown> => typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
+  const record = (value: unknown): Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
   const list = (value: unknown) => Array.isArray(value) ? value.map(record) : [];
   const event = record(eventValue);
   const workspace = record(workspaceValue);
+  const proof = record(workspace.archivePreconditions);
+  const source = record(workspace.reportSourceAvailability);
+  const validRecords = (value: unknown) => Array.isArray(value) && value.every(item => typeof item === "object" && item !== null && !Array.isArray(item));
+  const participantsAvailable = proof.version === 1 && proof.participantsAvailable === true && source.participants === true && validRecords(workspace.participants);
+  const modules = list(workspace.modules);
+  const moduleStatusesValid = validRecords(workspace.modules) && modules.every(module => typeof module.status === "string" && ["DRAFT", "OPEN", "CLOSED"].includes(module.status.toUpperCase()));
+  const openModules = modules.filter(module => typeof module.status === "string" && module.status.toUpperCase() === "OPEN");
+  const modulesAvailable = proof.version === 1 && proof.modulesAvailable === true && moduleStatusesValid && proof.openModules === openModules.length;
+  const registrationAvailable = proof.version === 1 && proof.registrationAvailable === true && typeof workspace.registrationOpen === "boolean" && proof.registrationOpen === workspace.registrationOpen;
   return {
     stage: typeof event.stage === "string" ? event.stage.toUpperCase() : "",
     pending: list(workspace.participants).filter(person => person.status === "PENDING").length,
     registrationOpen: workspace.registrationOpen === true,
-    openModules: list(workspace.modules).filter(module => module.status === "OPEN").map(module => ({ name: typeof module.title === "string" ? module.title : "이름 없는 프로그램", type: typeof module.type === "string" ? module.type : "" })),
+    openModules: openModules.map(module => ({ name: typeof module.title === "string" ? module.title : "이름 없는 프로그램", type: typeof module.type === "string" ? module.type : "" })),
+    participantsAvailable, modulesAvailable, registrationAvailable, archiveAvailable: participantsAvailable && modulesAvailable && registrationAvailable,
     features: Array.isArray(event.features) ? event.features.filter((value): value is string => typeof value === "string") : [],
     reports: list(workspace.reports).flatMap(report => typeof report.id === "string" && typeof report.status === "string" ? [{ id: report.id, status: report.status }] : []),
   };
@@ -89,21 +103,24 @@ export function linearCloseProgress(eventId: string, page: CloseLinearPage, snap
       : (!ended || snapshot.registrationOpen) && (intent === "intake" || !intent && hash === "#settings-intake") && hash !== "#settings-stage" ? 3 : 4;
   if (snapshot.stage === "ARCHIVED") position = 7;
   const labels = ['', '승인 대기 처리', '진행 프로그램 닫기', '참가 접수 닫기', '행사 종료', '보고서 검토·동결', '결과 안내', '보관'];
-  const complete = position === 1 ? snapshot.pending === 0 : position === 2 ? snapshot.openModules.length === 0
-    : position === 3 ? !snapshot.registrationOpen : position === 4 ? ended : position === 6 ? Boolean(noticeStatus) : snapshot.stage === "ARCHIVED";
+  const complete = position === 1 ? snapshot.participantsAvailable && snapshot.pending === 0 : position === 2 ? snapshot.modulesAvailable && snapshot.openModules.length === 0
+    : position === 3 ? snapshot.registrationAvailable && !snapshot.registrationOpen : position === 4 ? ended : position === 6 ? Boolean(noticeStatus) : snapshot.stage === "ARCHIVED";
   const warnings: string[] = [];
+  if (!snapshot.participantsAvailable) warnings.push('참가자 정보를 확인할 수 없음');
+  if (!snapshot.modulesAvailable) warnings.push('참여 콘텐츠 상태를 확인할 수 없음');
+  if (!snapshot.registrationAvailable) warnings.push('참가 접수 상태를 확인할 수 없음');
   if (position > 1 && snapshot.pending) warnings.push(`승인 대기 ${snapshot.pending}명 미처리${ended ? ' · 종료 이후 참가자 변경 불가' : ''}`);
   if (position > 2 && snapshot.openModules.length) warnings.push(`진행 프로그램 ${snapshot.openModules.length}개 남음`);
   if (position > 3 && snapshot.registrationOpen) warnings.push('참가 접수 열림');
   if (position > 4 && !ended) warnings.push('행사 종료 미확인');
   if (position > 5 && !published) warnings.push('선택한 마감 보고서 동결 미확인');
-  const next = snapshot.stage === "ARCHIVED" ? null : page === "settings" && intent === "programs" && snapshot.openModules.length
+  const next = snapshot.stage === "ARCHIVED" || !snapshot.participantsAvailable || !snapshot.archiveAvailable ? null : page === "settings" && intent === "programs" && snapshot.openModules.length
     ? link('/programs', '진행 중 프로그램 닫기')
     : position === 2 && disabledOpen ? link('/settings?closeStep=programs#settings-features', '프로그램 기능 설정 확인')
       : after(position);
-  const detail = position === 1 ? (complete ? '승인 대기 없음' : ended ? `승인 대기 ${snapshot.pending}명 · 종료 이후에는 참가자를 변경할 수 없습니다. 상태를 확인하고 다음 단계로 이어갈 수 있습니다.` : `승인 대기 ${snapshot.pending}명 · 종료 전 필요한 처리를 마치세요.`)
-    : position === 2 ? (complete ? '진행 중 프로그램 없음' : page === 'settings' && intent === 'programs' ? `진행 프로그램 ${snapshot.openModules.length}개 · 필요한 기능을 켜서 저장한 뒤 참여 프로그램에서 닫으세요.` : disabledOpen ? `진행 프로그램 ${snapshot.openModules.length}개 · 사용 중인 기능이 꺼져 있습니다. 기능 설정을 확인한 뒤 닫으세요.` : `진행 프로그램 ${snapshot.openModules.length}개 · 이 화면에서 닫으세요.`)
-      : position === 3 ? (complete ? '참가 접수 닫힘 · 진행 단계도 같은 화면에서 처리할 수 있습니다.' : '기존 접수 닫기 동작으로 새 신청을 중단하세요.')
+  const detail = position === 1 ? (!snapshot.participantsAvailable ? '참가자 정보를 확인할 수 없어 승인 대기를 판단할 수 없습니다.' : complete ? '승인 대기 없음' : ended ? `승인 대기 ${snapshot.pending}명 · 종료 이후에는 참가자를 변경할 수 없습니다. 상태를 확인하고 다음 단계로 이어갈 수 있습니다.` : `승인 대기 ${snapshot.pending}명 · 종료 전 필요한 처리를 마치세요.`)
+    : position === 2 ? (!snapshot.modulesAvailable ? '참여 콘텐츠 상태를 확인할 수 없어 진행 여부를 판단할 수 없습니다.' : complete ? '진행 중 프로그램 없음' : page === 'settings' && intent === 'programs' ? `진행 프로그램 ${snapshot.openModules.length}개 · 필요한 기능을 켜서 저장한 뒤 참여 콘텐츠에서 닫으세요.` : disabledOpen ? `진행 프로그램 ${snapshot.openModules.length}개 · 사용 중인 기능이 꺼져 있습니다. 기능 설정을 확인한 뒤 닫으세요.` : `진행 프로그램 ${snapshot.openModules.length}개 · 이 화면에서 닫으세요.`)
+      : position === 3 ? (!snapshot.registrationAvailable ? '참가 접수 상태를 확인할 수 없습니다.' : complete ? '참가 접수 닫힘 · 진행 단계도 같은 화면에서 처리할 수 있습니다.' : '기존 접수 닫기 동작으로 새 신청을 중단하세요.')
         : position === 4 ? (complete ? '행사 종료 확인 · 다음은 보고서입니다.' : '기존 진행 단계 확인을 거쳐 종료로 전환하세요. 자동 전환하지 않습니다.')
           : position === 6 ? (noticeStatus === 'SIMULATED' ? '모의 안내 기록 확인 · 실제로 전달되지 않았습니다.' : noticeStatus === 'SCHEDULED' ? '예약 안내 등록됨 · 자동 발송되지 않습니다. 이 화면에서 실행을 확인한 뒤 보관하세요.' : noticeStatus ? '안내 기록 생성 확인 · 실제 발송 결과는 이 화면에서 확인하세요.' : '새 안내를 작성하거나 기존 안내의 대상·내용·발송 상태를 확인하세요.')
             : snapshot.stage === "ARCHIVED" ? '보관 완료 · 읽기 전용입니다.' : '보관 확인을 거쳐 확정하세요. 보관 후에는 메시지를 포함한 모든 쓰기가 잠깁니다.';

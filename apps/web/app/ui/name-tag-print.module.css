@@ -1,0 +1,68 @@
+.preview {
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
+  padding-block: var(--s3);
+  color: var(--ink);
+}
+
+.preview:focus-visible { outline: 2px solid var(--focus); outline-offset: var(--s1); }
+.title { margin: 0; font-size: var(--body); }
+.paperChoice { display: grid; gap: var(--s1); font-weight: 650; }
+.paperChoice select { width: 100%; min-width: 0; min-height: 44px; }
+.help, .warning { margin: 0; font-size: var(--small); word-break: keep-all; }
+.help { color: var(--muted); }
+.warning { color: var(--warning); }
+.actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+
+.artworkFrame {
+  --label-width: 90mm;
+  --label-ratio: .6666667;
+  width: min(100%, var(--label-width));
+  margin-inline: auto;
+  container-type: inline-size;
+}
+
+[data-paper="label100"] .artworkFrame { --label-width: 100mm; --label-ratio: .7; }
+.artwork {
+  display: grid;
+  align-content: safe center;
+  min-height: calc(100cqi * var(--label-ratio));
+  padding: 5cqi;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  color: var(--ink);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+[data-paper="label90"] .artwork,
+[data-paper="label100"] .artwork {
+  height: calc(100cqi * var(--label-ratio));
+  overflow: hidden;
+}
+
+.artworkText { display: grid; gap: 2cqi; min-width: 0; }
+.artworkText p { margin: 0; line-height: 1.25; }
+.event, .context { font-size: 4cqi; }
+.name { font-size: 9cqi; font-weight: 800; }
+.name[data-long] { font-size: 6cqi; }
+.company { font-size: 5cqi; font-weight: 650; }
+.company[data-long] { font-size: 3.6cqi; }
+.printRoot { display: none; }
+
+@page eventouch-a4 { size: A4 portrait; margin: 12mm; }
+@page eventouch-label90 { size: 90mm 60mm; margin: 0; }
+@page eventouch-label100 { size: 100mm 70mm; margin: 0; }
+
+@media print {
+  :global(body.nametag-printing) { overflow: visible !important; }
+  :global(body.nametag-printing) > :not(.printRoot) { display: none !important; }
+  :global(body.nametag-printing) > .printRoot { display: block; }
+  .printRoot[data-paper="a4"] { page: eventouch-a4; }
+  .printRoot[data-paper="label90"] { page: eventouch-label90; }
+  .printRoot[data-paper="label100"] { page: eventouch-label100; }
+  .printRoot .artworkFrame { width: var(--label-width); }
+  .printRoot .artwork { break-inside: avoid; }
+  .printRoot:not([data-paper="a4"]) .artwork { border: 0; }
+}

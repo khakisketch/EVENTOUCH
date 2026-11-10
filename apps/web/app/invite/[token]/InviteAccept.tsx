@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import ValidatedForm from "../../ui/ValidatedForm";
+
+
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import OrganizationSwitcher from "../../OrganizationSwitcher";
 import { loginHref } from "../../auth-redirect";
+import { useUnsavedNavigationGuard } from "../../../lib/use-unsaved-navigation-guard";
 
 type Invitation = {
   name: string;
@@ -46,6 +50,21 @@ function sameEmail(left: string, right: string): boolean {
   return left.trim().toLowerCase() === right.trim().toLowerCase();
 }
 
+// A successful HTTP status alone is not proof that this invitation was
+// accepted. Match the returned identity and role before showing success.
+function acceptedAccount(value: unknown, invitation: Invitation): { organizationId: string; organizationName: string } | null {
+  if (!value || typeof value !== "object") return null;
+  const account = value as { id?: unknown; email?: unknown; role?: unknown; organizationId?: unknown; organizationName?: unknown };
+  if (typeof account.id !== "string" || !account.id.trim() ||
+      typeof account.email !== "string" || !sameEmail(account.email, invitation.email) ||
+      account.role !== invitation.role ||
+      typeof account.organizationId !== "string" || !account.organizationId.trim()) return null;
+  return {
+    organizationId: account.organizationId,
+    organizationName: typeof account.organizationName === "string" ? account.organizationName : "",
+  };
+}
+
 export default function InviteAccept({ token, invitation }: { token: string; invitation: Invitation }) {
   // New-account flow (requiresSignIn === false): the password form below is
   // the only writer, byte-identical to the existing contract.
@@ -54,6 +73,12 @@ export default function InviteAccept({ token, invitation }: { token: string; inv
   const [failure, setFailure] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [accepted, setAccepted] = useState(false);
+  const [uncertain, setUncertain] = useState(false);
+  const [offerLogin, setOfferLogin] = useState(false);
+  const [offerOrgCheck, setOfferOrgCheck] = useState(false);
+  const gateRef = useRef(false);
+  const failureRef = useRef<HTMLParagraphElement>(null);
+  const acceptFailureRef = useRef<HTMLParagraphElement>(null);
   // Existing-account flow (requiresSignIn === true): no password is ever
   // asked for or overwritten. undefined = session still checking,
   // null = not signed in, string = signed-in email. noMembership marks the
@@ -67,6 +92,16 @@ export default function InviteAccept({ token, invitation }: { token: string; inv
   const [acceptFailure, setAcceptFailure] = useState<string | null>(null);
   const [loginRequired, setLoginRequired] = useState(false);
   const [acceptedOrg, setAcceptedOrg] = useState<{ organizationId: string; organizationName: string } | null>(null);
+
+  useUnsavedNavigationGuard(
+    (!accepted && !invitation.requiresSignIn && Boolean(password || confirm || submitting)) || accepting,
+    invitation.requiresSignIn
+      ? "초대 수락을 처리하고 있습니다. 이동하면 결과를 확인하기 어려울 수 있습니다."
+      : "입력한 비밀번호는 이 화면에만 보관됩니다. 이동하면 다시 입력해야 합니다."
+  );
+
+  useEffect(() => { if (failure) failureRef.current?.focus(); }, [failure]);
+  useEffect(() => { if (acceptFailure) acceptFailureRef.current?.focus(); }, [acceptFailure]);
 
   useEffect(() => {
     if (!invitation.requiresSignIn) return;
@@ -128,22 +163,31 @@ export default function InviteAccept({ token, invitation }: { token: string; inv
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (submitting) return;
+    if (gateRef.current || submitting) return;
     if (password !== confirm) {
       setFailure("비밀번호가 일치하지 않습니다.");
       return;
     }
+    gateRef.current = true;
     setSubmitting(true);
     setFailure(null);
+    setOfferLogin(false);
     try {
       const res = await fetch(`/api/auth/invitations/${encodeURIComponent(token)}/accept`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ password }),
       });
+      const data = (await res.json().catch(() => null)) as { account?: unknown } | null;
       if (!res.ok) {
         // Server wording is never rendered: the status decides a fixed,
         // actionable message instead of leaking internal reasons.
+        if (uncertain || res.status >= 500 || res.status === 408 || res.status === 425) {
+          setUncertain(true);
+          setFailure("초대 수락 결과를 확인하지 못했습니다. 수락되었을 수 있으니 입력한 비밀번호로 로그인해 확인하세요.");
+          return;
+        }
+        if (res.status === 409) setOfferLogin(true);
         setFailure(
           res.status === 410
             ? "이 초대 링크가 만료되었습니다. 운영자에게 새 초대를 요청하세요."
@@ -155,18 +199,29 @@ export default function InviteAccept({ token, invitation }: { token: string; inv
         );
         return;
       }
+      if (!acceptedAccount(data?.account, invitation)) {
+        setUncertain(true);
+        setFailure("초대 수락 결과를 확인하지 못했습니다. 수락되었을 수 있으니 입력한 비밀번호로 로그인해 확인하세요.");
+        return;
+      }
+      setPassword("");
+      setConfirm("");
       setAccepted(true);
     } catch {
-      setFailure("연결하지 못했습니다. 다시 시도하세요.");
+      setUncertain(true);
+      setFailure("초대 수락 결과를 확인하지 못했습니다. 수락되었을 수 있으니 입력한 비밀번호로 로그인해 확인하세요.");
     } finally {
+      gateRef.current = false;
       setSubmitting(false);
     }
   }
 
   async function acceptExistingAccount() {
-    if (accepting) return;
+    if (gateRef.current || accepting) return;
+    gateRef.current = true;
     setAccepting(true);
     setAcceptFailure(null);
+    setOfferOrgCheck(false);
     setLoginRequired(false);
     try {
       // Existing global accounts join with their own login: the stored
@@ -181,6 +236,11 @@ export default function InviteAccept({ token, invitation }: { token: string; inv
         account?: { organizationId?: unknown; organizationName?: unknown } | null;
       } | null;
       if (!res.ok) {
+        if (uncertain || res.status >= 500 || res.status === 408 || res.status === 425) {
+          setUncertain(true);
+          setAcceptFailure("초대 수락 결과를 확인하지 못했습니다. 수락되었을 수 있으니 아래에서 소속을 확인하세요.");
+          return;
+        }
         // Server wording is never rendered: the machine code and the
         // status decide a fixed message instead of leaking internals.
         if (res.status === 409 && data?.code === "INVITATION_LOGIN_REQUIRED") {
@@ -190,6 +250,7 @@ export default function InviteAccept({ token, invitation }: { token: string; inv
           setAcceptFailure("로그인이 필요합니다. 초대받은 이메일로 로그인한 뒤 같은 링크에서 다시 수락하세요.");
           return;
         }
+        if (res.status === 409) setOfferOrgCheck(true);
         setAcceptFailure(
           res.status === 410
             ? "이 초대 링크가 만료되었습니다. 운영자에게 새 초대를 요청하세요."
@@ -201,14 +262,18 @@ export default function InviteAccept({ token, invitation }: { token: string; inv
         );
         return;
       }
-      const account = data?.account;
-      setAcceptedOrg({
-        organizationId: typeof account?.organizationId === "string" ? account.organizationId : "",
-        organizationName: typeof account?.organizationName === "string" ? account.organizationName : "",
-      });
+      const account = acceptedAccount(data?.account, invitation);
+      if (!account) {
+        setUncertain(true);
+        setAcceptFailure("초대 수락 결과를 확인하지 못했습니다. 수락되었을 수 있으니 아래에서 소속을 확인하세요.");
+        return;
+      }
+      setAcceptedOrg(account);
     } catch {
-      setAcceptFailure("연결하지 못했습니다. 다시 시도하세요.");
+      setUncertain(true);
+      setAcceptFailure("초대 수락 결과를 확인하지 못했습니다. 수락되었을 수 있으니 아래에서 소속을 확인하세요.");
     } finally {
+      gateRef.current = false;
       setAccepting(false);
     }
   }
@@ -256,14 +321,20 @@ export default function InviteAccept({ token, invitation }: { token: string; inv
     const unknownIdentity = noMembership && sessionEmail === null;
     const acceptControls = (
       <>
-        {acceptFailure ? <p role="alert">{acceptFailure}</p> : null}
+        {acceptFailure ? <p role="alert" ref={acceptFailureRef} tabIndex={-1}>{acceptFailure}</p> : null}
+        {uncertain || offerOrgCheck ? (
+          <>
+            <p>아래에서 현재 계정의 운영사 소속을 확인하세요. 이동할 운영사는 직접 선택합니다.</p>
+            <OrganizationSwitcher />
+          </>
+        ) : null}
         {loginRequired ? (
           <p>
             <Link className="button button-primary" href={loginHref(`/invite/${token}`)}>로그인으로</Link>
           </p>
         ) : (
-          <button type="button" className="button button-primary" disabled={accepting} onClick={() => void acceptExistingAccount()}>
-            {accepting ? "수락 중입니다" : "초대 수락"}
+          <button type="button" className={`button ${uncertain || offerOrgCheck ? "button-secondary" : "button-primary"}`} disabled={accepting} onClick={() => void acceptExistingAccount()}>
+            {accepting ? "수락 중입니다" : uncertain ? "같은 초대 다시 수락" : "초대 수락"}
           </button>
         )}
       </>
@@ -327,7 +398,7 @@ export default function InviteAccept({ token, invitation }: { token: string; inv
         {invitation.email} · {roleLabel(invitation.role)}
       </p>
       <p>{nextStepHint(invitation.role, invitation.eventId)}</p>
-      <form className="registration-form" onSubmit={onSubmit}>
+      <ValidatedForm className="registration-form" onSubmit={onSubmit}>
         <div className="form-field">
           <label htmlFor="invite-password">비밀번호 (8자 이상)</label>
           <input
@@ -338,6 +409,7 @@ export default function InviteAccept({ token, invitation }: { token: string; inv
             maxLength={200}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
+            readOnly={uncertain || submitting}
             required
           />
         </div>
@@ -349,14 +421,25 @@ export default function InviteAccept({ token, invitation }: { token: string; inv
             autoComplete="new-password"
             value={confirm}
             onChange={(event) => setConfirm(event.target.value)}
+            readOnly={uncertain || submitting}
             required
           />
         </div>
-        {failure ? <p role="alert">{failure}</p> : null}
-        <button type="submit" className="button button-primary" disabled={submitting}>
-          {submitting ? "수락 중입니다" : "초대 수락"}
+        {failure ? <p role="alert" ref={failureRef} tabIndex={-1}>{failure}</p> : null}
+        {uncertain || offerLogin ? (
+          <p className="auth-help">
+            {uncertain ? "처음 입력한 비밀번호를 보존하고 있습니다. " : "계정이 이미 만들어졌다면 로그인해 확인하세요. "}
+          </p>
+        ) : null}
+        {uncertain || offerLogin ? (
+          <Link className="button button-primary" href={loginHref(loginNextForRole(invitation.role, invitation.eventId))} target="_blank" rel="noopener noreferrer">
+            로그인해 확인 (새 탭)
+          </Link>
+        ) : null}
+        <button type="submit" className={`button ${uncertain || offerLogin ? "button-secondary" : "button-primary"}`} disabled={submitting}>
+          {submitting ? "수락 중입니다" : uncertain ? "같은 정보로 다시 수락" : "초대 수락"}
         </button>
-      </form>
+      </ValidatedForm>
     </section>
   );
 }

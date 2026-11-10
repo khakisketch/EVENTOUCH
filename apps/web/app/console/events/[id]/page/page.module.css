@@ -74,6 +74,8 @@
   font-size: var(--h3);
 }
 
+.conflictPanel > div { min-width: 0; max-width: 100%; }
+.conflictPanel h2, .conflictPanel p { word-break: keep-all; overflow-wrap: break-word; }
 .conflictPanel p { margin: 0; font-size: var(--small); line-height: 1.45; }
 .conflictDetails { margin-top: var(--s2) !important; font-weight: 700; }
 .conflictActions { flex: none; justify-content: flex-end; }
@@ -675,14 +677,12 @@
 
 /* On narrow screens the real preview and editor share a workspace. Neither
    is unmounted, so inputs, upload state and disclosures survive switching. */
-.mobileSwitcher, .inlinePreview { display: none; }
+.inlinePreview { display: none; }
 .editStatusLine { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--s2); color: var(--muted); font-size: var(--small); }
 .editStatusLine a { display: inline-flex; align-items: center; min-height: 44px; color: var(--brand-text); font-weight: 700; text-underline-offset: 4px; }
-.editStatusLine a:focus-visible, .inlinePreview:focus-visible, .mobileSwitcher button:focus-visible, .backToEdit:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.editStatusLine a:focus-visible, .inlinePreview:focus-visible, .backToEdit:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 @media (max-width: 1080px) {
-  .mobileSwitcher { display: flex; gap: var(--s2); margin-bottom: var(--s3); }
-  .mobileSwitcher button, .inlinePreview, .backToEdit { min-height: 44px; padding: 8px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-small); background: var(--paper); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; }
-  .mobileSwitcher button[aria-pressed="true"] { background: var(--soft); color: var(--brand-text); border-color: var(--brand); }
+  .inlinePreview, .backToEdit { min-height: 44px; padding: 8px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-small); background: var(--paper); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; }
   .inlinePreview { display: inline-flex; justify-self: start; align-items: center; }
   .backToEdit { display: inline-flex; justify-self: start; align-items: center; }
   .editorLayout[data-mobile-view="edit"] .previewPanel, .editorLayout[data-mobile-view="preview"] .controls { display: none; }
@@ -695,3 +695,11 @@
 @media (max-width: 768px) {
   .previewHeader h2, .inlinePreview, .controls, .saveAnchor { scroll-margin-top: 72px; }
 }
+.menuGroup { display: grid; gap: var(--s2); }
+.menuGroup h3 { margin: 0; font-size: var(--body); }
+.menuRows { list-style: none; display: grid; gap: var(--s1); margin: 0; padding: 0; }
+.menuRow { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-width: 0; }
+.menuRow label { min-width: 0; flex-wrap: wrap; overflow-wrap: anywhere; }
+.menuMove { display: flex; gap: var(--s1); flex: none; }
+.menuMove :global(.button) { min-width: 44px; min-height: 44px; padding: 0; }
+.menuNote { color: var(--muted); font-size: var(--small); }

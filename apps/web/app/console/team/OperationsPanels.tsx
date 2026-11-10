@@ -257,13 +257,18 @@ export default function OperationsPanels() {
             for (const item of workspace.audit) {
               if (typeof item !== "object" || item === null) continue;
               const entry = item as Record<string, unknown>;
+              const reconciliation = entry.type === "check.reconcile" && entry.reconciliation && typeof entry.reconciliation === "object" && !Array.isArray(entry.reconciliation)
+                ? entry.reconciliation as Record<string, unknown> : null;
+              const after = reconciliation?.after && typeof reconciliation.after === "object" && !Array.isArray(reconciliation.after)
+                ? reconciliation.after as Record<string, unknown> : null;
+              const reconciliationDetails = reconciliation ? [text(reconciliation.participantName), typeof after?.inside === "boolean" ? after.inside ? "입장 중" : "퇴장" : ""] : [];
               entries.push({
                 id: text(entry.id),
                 eventId,
                 eventName: eventNames.get(eventId) ?? eventId,
                 type: text(entry.type),
                 actor: names.get(text(entry.actor)) ?? "확인 필요",
-                detail: text(entry.detail),
+                detail: [...reconciliationDetails, text(entry.detail)].filter(Boolean).join(" · "),
                 at: text(entry.at),
               });
             }

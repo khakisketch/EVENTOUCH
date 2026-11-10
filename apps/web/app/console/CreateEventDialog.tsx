@@ -1,5 +1,13 @@
 "use client";
+
+import ConsoleChoiceGroup, { EVENT_FORMAT_CHOICES } from "./console-ui/ConsoleChoiceGroup";
+import ValidatedForm from "../ui/ValidatedForm";
+import { revealDetailsFor } from "../ui/reveal-details";
+
 import { consoleFetch as fetch } from "../../lib/console-api";
+import { acknowledgeOperatorReceipt, confirmsClientSave, confirmsEventCreation, isOrganizationContextBlock, operatorFetch } from "../../lib/operator-context";
+import { forgetOperatorReceipt } from "../../lib/operator-receipts";
+import { useOrganizationReceipts } from "../../lib/use-organization-receipts";
 
 import { useEffect, useRef, useState } from "react";
 import styles from "./console-home.module.css";
@@ -67,6 +75,7 @@ export default function CreateEventDialog({
   onClose,
   onCreated,
   onClientRegistered,
+  onConfirmedWithoutDetails,
 }: {
   clients: Client[];
   duplicateOf?: DuplicateSource | null;
@@ -74,6 +83,7 @@ export default function CreateEventDialog({
   onClose: () => void;
   onCreated: (eventId: string) => void;
   onClientRegistered?: (client: Client) => void;
+  onConfirmedWithoutDetails?: () => void;
 }) {
   const [name, setName] = useState(() =>
     duplicateOf ? `${duplicateOf.name.slice(0, 95)} 복사본`.trim() : ""
@@ -94,8 +104,13 @@ export default function CreateEventDialog({
   // (never an invented default), '' clears on update. Copy mode hides this:
   // the duplicate endpoint copies the source setting automatically.
   const [format, setFormat] = useState("");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [failure, setFailure] = useState<{ message: string; field?: string; retryable?: boolean } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [eventUncertain, setEventUncertain] = useState(false);
+  const [clientUncertain, setClientUncertain] = useState(false);
+  const [checkingResult, setCheckingResult] = useState(false);
+  const organizationReceipts = useOrganizationReceipts();
   const [slugTouched, setSlugTouched] = useState(() => Boolean(duplicateOf));
   // Duplication lives inside this dialog now (per-card duplicate removed):
   // "새 행사" is the fastest default path with fields immediate; "기존 행사
@@ -110,13 +125,11 @@ export default function CreateEventDialog({
   // replacing the fields would orphan the pending idempotency receipt and
   // desync the draft from the same-request retry the failure note points
   // at. These synchronous ref gates are authoritative; the disabled
-  // attributes below are only their visual voice. Field edits keep the old
-  // semantics (a changed payload mints a new command id via the
-  // fingerprint); only control transitions are locked.
+  // attributes below are only their visual voice.
   const [modeNotice, setModeNotice] = useState<string | null>(null);
 
   function transitionBlocked(): "inflight" | "receipt-event" | "receipt-client" | null {
-    if (submitGateRef.current || submitting || clientWriteRef.current || clientSaving) return "inflight";
+    if (submitGateRef.current || submitting || clientWriteRef.current || clientSaving || checkingResult) return "inflight";
     if (commandIdRef.current) return "receipt-event";
     if (pendingClientRef.current) return "receipt-client";
     return null;
@@ -150,12 +163,8 @@ export default function CreateEventDialog({
   const [clientFailure, setClientFailure] = useState<{ message: string; field?: string; retryable?: boolean } | null>(null);
   const [clientSaving, setClientSaving] = useState(false);
   const [clientNotice, setClientNotice] = useState<string | null>(null);
-  // Separate receipt from the event one: one command id per distinct
-  // customer record, mirroring the customer directory save. An ambiguous
-  // outcome keeps the id so the retry replays the same record instead of
-  // adding a second one; editing the customer form after a failure mints a
-  // new id via the fingerprint.
-  const pendingClientRef = useRef<{ fingerprint: string; commandId: string } | null>(null);
+  // An uncertain customer request keeps its original inputs and identifier.
+  const pendingClientRef = useRef<{ fingerprint: string; commandId: string; uncertain: boolean } | null>(null);
   // Synchronous same-turn gate for the customer write, independent of the
   // event submit gate above.
   const clientWriteRef = useRef(false);
@@ -166,9 +175,10 @@ export default function CreateEventDialog({
   // network loss, unparseable success body) keep the id so the retry replays
   // the same request and the server receipt replays the original event
   // instead of creating a second one. Proven success and definitive 4xx
-  // clear it; editing the payload after a failure mints a new id via the
-  // fingerprint. Never cleared on a bare HTTP response alone.
-  const commandIdRef = useRef<{ fingerprint: string; commandId: string } | null>(null);
+  // clear it. Never cleared on a bare HTTP response alone.
+  const commandIdRef = useRef<{ fingerprint: string; commandId: string; uncertain: boolean } | null>(null);
+  const otherClientReceipt = organizationReceipts.some((item) => item.command === "client.save" && item.commandId !== pendingClientRef.current?.commandId);
+  const otherEventReceipt = organizationReceipts.some((item) => (item.command === "event.create" || item.command === "event.duplicate") && item.commandId !== commandIdRef.current?.commandId);
   // Auto-generated slug fallback is random for Korean names: freeze it for
   // the current inputs so a same-request retry sends the identical slug.
   const generatedSlugRef = useRef("");
@@ -311,7 +321,7 @@ export default function CreateEventDialog({
   }, [clientMode]);
 
   function canClose() {
-    if (submitGateRef.current) return false;
+    if (submitGateRef.current || checkingResult) return false;
     // The in-dialog customer write has its own same-turn gate: an in-flight
     // registration blocks dismissal exactly like an in-flight event write,
     // and the pending receipt below warns instead of fake-cancelling.
@@ -327,12 +337,16 @@ export default function CreateEventDialog({
   }
 
   function isDefinitiveClientError(status: number): boolean {
-    return status >= 400 && status < 500 && status !== 408;
+    return status >= 400 && status < 500 && ![408, 425, 429].includes(status);
   }
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (submitGateRef.current || submitting) return;
+    if (submitGateRef.current || submitting || checkingResult) return;
+    if (pendingClientRef.current || otherClientReceipt || otherEventReceipt) {
+      setFailure({ message: "미확인 요청을 먼저 확인하세요. 창을 닫으면 상단에서 서버 처리 여부를 확인할 수 있습니다." });
+      return;
+    }
     // A new submit attempt supersedes any transition-block note: the failure
     // message below (or the created event) is the current guidance.
     setModeNotice(null);
@@ -362,9 +376,13 @@ export default function CreateEventDialog({
         ...(effectiveDuplicate || !format ? {} : { format }),
       };
       const fingerprint = JSON.stringify([effectiveDuplicate?.id ?? null, payload]);
+      if (commandIdRef.current?.uncertain && commandIdRef.current.fingerprint !== fingerprint) {
+        setFailure({ message: "이전 행사 생성 결과를 확인한 뒤 내용을 바꾸세요.", retryable: true });
+        return;
+      }
       const attempt = commandIdRef.current?.fingerprint === fingerprint
         ? commandIdRef.current
-        : { fingerprint, commandId: randomCommandId() };
+        : { fingerprint, commandId: randomCommandId(), uncertain: false };
       commandIdRef.current = attempt;
       const commandId = attempt.commandId;
       const res = await fetch(
@@ -389,24 +407,28 @@ export default function CreateEventDialog({
             : effectiveDuplicate
               ? "행사를 복제하지 못했습니다."
               : "행사를 만들지 못했습니다.";
-        if (isDefinitiveClientError(res.status)) {
+        if (isDefinitiveClientError(res.status) && !attempt.uncertain) {
           commandIdRef.current = null;
+          setEventUncertain(false);
           setFailure({
             message: serverMessage,
             field: typeof data?.field === "string" ? data.field : undefined,
           });
         } else {
+          attempt.uncertain = true;
+          setEventUncertain(true);
           setFailure({
-            message: `${serverMessage} 같은 요청으로 다시 시도하세요.`,
-            field: typeof data?.field === "string" ? data.field : undefined,
+            message: "행사 생성 결과를 확인하지 못했습니다. 서버 처리 확인 또는 같은 요청 다시 시도를 선택하세요.",
             retryable: true,
           });
         }
         return;
       }
-      if (!data?.event || typeof data.event.id !== "string") {
+      if (!data?.event || typeof data.event.id !== "string" || !data.event.id || !confirmsEventCreation(payload, data)) {
         // 2xx without the expected event body: the write may have landed, so
         // keep the id and retry the same request instead of minting a new one.
+        attempt.uncertain = true;
+        setEventUncertain(true);
         setFailure({
           message: "응답을 확인하지 못했습니다. 같은 요청으로 다시 시도하세요.",
           retryable: true,
@@ -414,15 +436,35 @@ export default function CreateEventDialog({
         return;
       }
       commandIdRef.current = null;
+      setEventUncertain(false);
       generatedSlugRef.current = "";
       onCreated(data.event.id);
-    } catch {
-      setFailure({ message: "연결하지 못했습니다. 같은 요청으로 다시 시도하세요.", retryable: true });
+    } catch (error) {
+      const attempt = commandIdRef.current;
+      if (attempt && !attempt.uncertain && isOrganizationContextBlock(error)) {
+        commandIdRef.current = null;
+        setFailure({ message: "현재 조직을 확인한 뒤 다시 시도하세요." });
+      } else {
+        if (attempt) attempt.uncertain = true;
+        setEventUncertain(true);
+        setFailure({ message: "연결하지 못했습니다. 서버 처리 확인 또는 같은 요청 다시 시도를 선택하세요.", retryable: true });
+      }
     } finally {
       submitGateRef.current = false;
       setSubmitting(false);
     }
   }
+
+  useEffect(() => {
+    if (!failure?.field) return;
+    const field = failure.field === "clientId" ? "client" : failure.field;
+    if (["slug", "client", "start", "end", "capacity", "format"].includes(field)) setAdvancedOpen(true);
+    const frame = requestAnimationFrame(() => {
+      const input = document.getElementById(`create-${field}`);
+      if (input) { revealDetailsFor(input); input.focus(); }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [failure]);
 
   const invalid = (field: string) => failure?.field === field;
   const invalidClient = (field: string) => clientFailure?.field === field;
@@ -432,7 +474,7 @@ export default function CreateEventDialog({
   // never touched here; only the customer options and the selection change.
   async function saveNewClient(formEvent: React.FormEvent) {
     formEvent.preventDefault();
-    if (clientWriteRef.current || clientSaving) return;
+    if (clientWriteRef.current || clientSaving || checkingResult || otherClientReceipt) return;
     setModeNotice(null);
     clientWriteRef.current = true;
     setClientSaving(true);
@@ -443,9 +485,15 @@ export default function CreateEventDialog({
       email: newClientEmail.trim(),
     };
     const fingerprint = JSON.stringify(payload);
+    if (pendingClientRef.current?.uncertain && pendingClientRef.current.fingerprint !== fingerprint) {
+      clientWriteRef.current = false;
+      setClientSaving(false);
+      setClientFailure({ message: "이전 고객사 등록 결과를 확인한 뒤 내용을 바꾸세요.", retryable: true });
+      return;
+    }
     const attempt = pendingClientRef.current?.fingerprint === fingerprint
       ? pendingClientRef.current
-      : { fingerprint, commandId: randomCommandId() };
+      : { fingerprint, commandId: randomCommandId(), uncertain: false };
     pendingClientRef.current = attempt;
     try {
       const res = await fetch("/api/clients", {
@@ -464,25 +512,29 @@ export default function CreateEventDialog({
         // message names the gate; the event draft stays as typed.
         const serverMessage =
           typeof data?.error === "string" ? data.error : "고객사를 등록하지 못했습니다.";
-        if (isDefinitiveClientError(res.status)) {
+        if (isDefinitiveClientError(res.status) && !attempt.uncertain) {
           pendingClientRef.current = null;
+          setClientUncertain(false);
           setClientFailure({
             message: serverMessage,
             field: typeof data?.field === "string" ? data.field : undefined,
           });
         } else {
+          attempt.uncertain = true;
+          setClientUncertain(true);
           setClientFailure({
-            message: `${serverMessage} 같은 요청으로 다시 시도하세요.`,
-            field: typeof data?.field === "string" ? data.field : undefined,
+            message: "고객사 등록 결과를 확인하지 못했습니다. 서버 처리 확인 또는 같은 요청 다시 시도를 선택하세요.",
             retryable: true,
           });
         }
         return;
       }
       const record = typeof data?.client === "object" && data?.client !== null ? data.client : null;
-      if (!record || typeof record.id !== "string" || !record.id || record.name !== payload.name) {
+      if (!record || typeof record.id !== "string" || !record.id || !confirmsClientSave(payload, data)) {
         // 2xx without the echoed record: the write may have landed, so keep
         // the id and retry the same request instead of minting a new one.
+        attempt.uncertain = true;
+        setClientUncertain(true);
         setClientFailure({
           message: "응답을 확인하지 못했습니다. 같은 요청으로 다시 시도하세요.",
           retryable: true,
@@ -490,6 +542,7 @@ export default function CreateEventDialog({
         return;
       }
       pendingClientRef.current = null;
+      setClientUncertain(false);
       // Narrowing on `record.id` does not survive the updater closure below,
       // so capture the validated id in a local const first.
       const clientRecordId: string = record.id;
@@ -509,16 +562,76 @@ export default function CreateEventDialog({
       setClientFailure(null);
       returnFocusToSelectRef.current = true;
       setClientMode("select");
-    } catch {
-      setClientFailure({ message: "연결하지 못했습니다. 같은 요청으로 다시 시도하세요.", retryable: true });
+    } catch (error) {
+      if (!attempt.uncertain && isOrganizationContextBlock(error)) {
+        pendingClientRef.current = null;
+        setClientFailure({ message: "현재 조직을 확인한 뒤 다시 시도하세요." });
+      } else {
+        attempt.uncertain = true;
+        setClientUncertain(true);
+        setClientFailure({ message: "연결하지 못했습니다. 서버 처리 확인 또는 같은 요청 다시 시도를 선택하세요.", retryable: true });
+      }
     } finally {
       clientWriteRef.current = false;
       setClientSaving(false);
     }
   }
 
+  async function checkResult(kind: "event" | "client") {
+    const attempt = kind === "event" ? commandIdRef.current : pendingClientRef.current;
+    if (!attempt?.uncertain || checkingResult || submitting || clientSaving) return;
+    setCheckingResult(true);
+    const report = (message: string) => kind === "event"
+      ? setFailure({ message, retryable: true })
+      : setClientFailure({ message, retryable: true });
+    try {
+      const response = await operatorFetch(`/api/command-receipts/${encodeURIComponent(attempt.commandId)}`, { cache: "no-store" });
+      const result = await response.json().catch(() => null) as { status?: unknown; command?: unknown } | null;
+      const expected = kind === "client" ? "client.save" : effectiveDuplicate ? "event.duplicate" : "event.create";
+      if (response.ok && result?.status === "APPLIED" && result.command === expected) {
+        if (kind === "client") {
+          // The receipt intentionally contains no customer details. Reload
+          // the authorized directory and let the operator choose a record;
+          // names need not be unique and are never used as an identity.
+          const directoryRes = await operatorFetch("/api/console/directory", { cache: "no-store" });
+          const directory = await directoryRes.json().catch(() => null) as { directory?: { clients?: unknown } } | null;
+          if (!directoryRes.ok || !Array.isArray(directory?.directory?.clients)) {
+            report("등록은 확인했지만 고객사 목록을 불러오지 못했습니다. 다시 확인하세요.");
+            return;
+          }
+          const refreshed: Client[] = directory.directory.clients.flatMap((value: unknown) => {
+            if (!value || typeof value !== "object") return [];
+            const item = value as Record<string, unknown>;
+            return typeof item.id === "string" && typeof item.name === "string" ? [{ id: item.id, name: item.name }] : [];
+          });
+          setExtraClients(refreshed);
+          refreshed.forEach((client) => onClientRegistered?.(client));
+          setClientId("");
+          setClientNotice("고객사 등록이 반영되었습니다. 목록에서 해당 고객사를 선택하세요.");
+          setNewClientName(""); setNewClientContact(""); setNewClientEmail("");
+          pendingClientRef.current = null;
+          setClientUncertain(false);
+          setClientFailure(null);
+          returnFocusToSelectRef.current = true;
+          setClientMode("select");
+        } else {
+          commandIdRef.current = null;
+          setEventUncertain(false);
+        }
+        acknowledgeOperatorReceipt(attempt.commandId);
+        forgetOperatorReceipt(attempt.commandId);
+        if (kind === "event") (onConfirmedWithoutDetails ?? onClose)();
+      } else if (response.ok && result?.status === "UNCONFIRMED") {
+        report("아직 처리 여부를 확인할 수 없습니다. 잠시 후 다시 확인하거나 같은 요청을 다시 시도하세요.");
+      } else if (response.status >= 500 || [425, 429].includes(response.status)) report("일시적으로 처리 결과를 확인하지 못했습니다. 잠시 후 다시 확인하세요.");
+      else report("처리 결과를 확인하지 못했습니다. 현재 계정과 조직 권한을 확인하세요.");
+    } catch {
+      report("서버에 연결하지 못했습니다. 요청은 다시 보내지 않았습니다.");
+    } finally { setCheckingResult(false); }
+  }
+
   function cancelClientCreate() {
-    if (clientWriteRef.current || clientSaving) return;
+    if (clientWriteRef.current || clientSaving || checkingResult) return;
     if (pendingClientRef.current) {
       if (!window.confirm("고객사 등록 결과를 아직 확인하지 못했습니다. 이미 등록되었을 수 있습니다. 결과를 확인하지 않고 닫을까요?")) return;
     } else if (clientDraftDirty) {
@@ -548,17 +661,18 @@ export default function CreateEventDialog({
       titleId="create-event-title"
       onClose={onClose}
       canClose={canClose}
-      busy={submitting}
+      busy={submitting || clientSaving || checkingResult}
       initialFocusRef={nameRef}
       stickyChrome
       footer={
         isClientCreate ? (
           <div className={styles.createFooter}>
           <ConsoleFormActions>
-            <button type="button" className="button button-secondary" onClick={cancelClientCreate} disabled={clientSaving}>
+            <button type="button" className="button button-secondary" onClick={cancelClientCreate} disabled={clientSaving || checkingResult}>
               행사 입력으로 돌아가기
             </button>
-            <button type="submit" form={clientFormId} className="button button-primary" disabled={clientSaving}>
+            {clientUncertain ? <button type="button" className="button button-secondary" disabled={clientSaving || checkingResult} onClick={() => void checkResult("client")}>{checkingResult ? "확인 중…" : "서버 처리 확인"}</button> : null}
+            <button type="submit" form={clientFormId} className="button button-primary" disabled={clientSaving || checkingResult || otherClientReceipt}>
               {clientSaving ? "등록 중입니다" : clientFailure?.retryable ? "같은 요청 다시 시도" : "고객사 등록"}
             </button>
           </ConsoleFormActions>
@@ -566,13 +680,14 @@ export default function CreateEventDialog({
         ) : (
           <div className={styles.createFooter}>
           <ConsoleFormActions>
-            <button type="button" className="button button-secondary" onClick={close} disabled={submitting}>
+            <button type="button" className="button button-secondary" onClick={close} disabled={submitting || checkingResult}>
               취소
             </button>
-            <button type="submit" form={eventFormId} className="button button-primary" disabled={submitting}>
+            {eventUncertain ? <button type="button" className="button button-secondary" disabled={submitting || checkingResult} onClick={() => void checkResult("event")}>{checkingResult ? "확인 중…" : "서버 처리 확인"}</button> : null}
+            <button type="submit" form={eventFormId} className="button button-primary" disabled={submitting || checkingResult || Boolean(pendingClientRef.current) || otherClientReceipt || otherEventReceipt}>
               {submitting
                 ? isCopyView ? "복제하는 중입니다" : "만드는 중입니다"
-                : isCopyView ? "행사 복제" : "행사 만들기"}
+                : eventUncertain ? "같은 요청 다시 시도" : isCopyView ? "행사 복제" : "행사 만들기"}
             </button>
           </ConsoleFormActions>
           </div>
@@ -587,7 +702,7 @@ export default function CreateEventDialog({
             <dl className={styles.copyScope}>
               <div>
                 <dt>복사</dt>
-                <dd>행사 설정·참여 프로그램 정의</dd>
+                <dd>행사 설정·참여 콘텐츠 정의</dd>
               </div>
               <div>
                 <dt>복사 안 함</dt>
@@ -600,7 +715,9 @@ export default function CreateEventDialog({
         ) : undefined}
     >
       {clientMode === "create" && !effectiveDuplicate ? (
-        <form id={clientFormId} onSubmit={saveNewClient} className={`${ui.formStack} ${styles.createForm}`}>
+        <ValidatedForm id={clientFormId} onSubmit={saveNewClient} className={`${ui.formStack} ${styles.createForm}`}>
+          {otherClientReceipt ? <p role="alert">이전 고객사 저장을 먼저 확인하세요. 창을 닫으면 상단에서 서버 처리 여부를 확인할 수 있습니다.</p> : null}
+          {clientUncertain ? <p role="status">결과를 확인할 때까지 원래 입력 내용을 유지합니다.</p> : null}
           <div>
             <label htmlFor="create-new-client-name">고객사명 (필수)</label>
             <input
@@ -609,6 +726,7 @@ export default function CreateEventDialog({
               type="text"
               maxLength={80}
               value={newClientName}
+              readOnly={clientSaving || checkingResult || clientUncertain}
               onChange={(event) => setNewClientName(event.target.value)}
               aria-invalid={invalidClient("name") || undefined}
               required
@@ -622,6 +740,7 @@ export default function CreateEventDialog({
               type="text"
               maxLength={60}
               value={newClientContact}
+              readOnly={clientSaving || checkingResult || clientUncertain}
               onChange={(event) => setNewClientContact(event.target.value)}
               aria-invalid={invalidClient("contact") || undefined}
             />
@@ -634,18 +753,22 @@ export default function CreateEventDialog({
               type="email"
               maxLength={120}
               value={newClientEmail}
+              readOnly={clientSaving || checkingResult || clientUncertain}
               onChange={(event) => setNewClientEmail(event.target.value)}
               aria-invalid={invalidClient("email") || undefined}
             />
             {invalidClient("email") ? <p role="alert">{clientFailure?.message}</p> : null}
           </div>
           {clientFailure && !clientFailure.field ? <p role="alert">{clientFailure.message}</p> : null}
-        </form>
+        </ValidatedForm>
       ) : (
-        <form id={eventFormId} onSubmit={onSubmit} className={`${ui.formStack} ${styles.createForm}`}>
+        <ValidatedForm id={eventFormId} onSubmit={onSubmit} className={`${ui.formStack} ${styles.createForm}`}>
+          {otherClientReceipt || otherEventReceipt ? <p role="alert">이전 생성·저장 요청을 먼저 확인하세요. 창을 닫으면 상단에서 서버 처리 여부를 확인할 수 있습니다.</p> : null}
+          {pendingClientRef.current ? <p role="alert">고객사 등록 결과를 먼저 확인하세요. 추가 설정에서 고객사 등록 화면으로 돌아갈 수 있습니다.</p> : null}
+          {eventUncertain ? <p role="status">결과를 확인할 때까지 원래 입력 내용을 유지합니다.</p> : null}
           {canOfferCopy ? (
-            <fieldset className={styles.modeGroup} disabled={submitting || clientSaving}>
-              <legend>만들기 방식</legend>
+            <fieldset className={styles.modeGroup} disabled={submitting || clientSaving || eventUncertain || checkingResult}>
+              <legend className="sr-only">만들기 방식</legend>
               <label>
                 <input
                   type="radio"
@@ -674,7 +797,7 @@ export default function CreateEventDialog({
                 ref={sourceSelectRef}
                 value={sourceId}
                 onChange={(event) => requestSource(event.target.value)}
-                disabled={submitting || clientSaving}
+                disabled={submitting || clientSaving || eventUncertain || checkingResult}
                 aria-invalid={invalid("source") || undefined}
                 aria-describedby="create-source-help"
               >
@@ -697,15 +820,14 @@ export default function CreateEventDialog({
               ref={nameRef}
               type="text"
               value={name}
+              readOnly={submitting || checkingResult || eventUncertain}
               onChange={(event) => {
                 setName(event.target.value);
-                // A payload edit after a failure must mint a new command id
-                // (fingerprint); drop the frozen auto-slug so the next submit
-                // derives from the edited name.
+                // Unsent edits can refresh the generated slug.
                 if (!slugTouched) generatedSlugRef.current = "";
               }}
               onBlur={() => {
-                if (!slug && !slugTouched && name.trim()) setSlug(suggestedSlug(name));
+                if (!submitting && !eventUncertain && !slug && !slugTouched && name.trim()) setSlug(suggestedSlug(name));
               }}
               aria-invalid={invalid("name") || undefined}
               required
@@ -713,130 +835,138 @@ export default function CreateEventDialog({
             {invalid("name") ? <p role="alert">{failure?.message}</p> : null}
           </div>
           <div>
-            <label htmlFor="create-slug">주소 코드</label>
-            <input
-              id="create-slug"
-              type="text"
-              value={slug}
-              placeholder="예: partner-conf-2026"
-              pattern="[a-z0-9][a-z0-9\-]{0,49}"
-              title="영소문자·숫자·하이픈 50자 이내"
-              onChange={(event) => {
-                setSlug(event.target.value);
-                setSlugTouched(true);
-                generatedSlugRef.current = "";
-              }}
-              aria-invalid={invalid("slug") || undefined}
-            />
-            <p className={`${styles.slugHint} ${styles.createWrap}`}>참가자 주소에 쓰입니다. 영소문자·숫자·하이픈.</p>
-            {invalid("slug") ? <p role="alert">{failure?.message}</p> : null}
-          </div>
-          {effectiveDuplicate ? (
-            <>
-              <p className={styles.slugHint}>고객사: {effectiveDuplicate.clientName || "선택하지 않음"}</p>
-              <p className={styles.slugHint} role="note">복제 중에는 고객사를 새로 등록할 수 없습니다. 다른 고객사로 복제하려면 복제를 마친 뒤 행사 설정에서 바꾸거나, 고객사 화면에서 먼저 등록한 뒤 이 화면을 다시 여세요.</p>
-            </>
-          ) : clientMode === "create" ? null : (
-            <div>
-              <label htmlFor="create-client">고객사</label>
-              <select
-                id="create-client"
-                ref={clientSelectRef}
-                value={clientId}
-                onChange={(event) => setClientId(event.target.value)}
-                aria-invalid={invalid("clientId") || undefined}
-                aria-describedby={clientNotice ? "create-client-notice" : undefined}
-              >
-                <option value="">선택하지 않음</option>
-                {allClients.map((client) => (
-                  <option key={client.id} value={client.id}>{client.name}</option>
-                ))}
-              </select>
-              {clientNotice ? (
-                <p className={styles.slugHint} role="status" id="create-client-notice">{clientNotice}</p>
-              ) : null}
-              <p className={styles.slugHint}>
-                <button
-                  type="button"
-                  className="button button-secondary"
-                  onClick={() => { setClientFailure(null); setClientMode("create"); }}
-                >
-                  새 고객사 등록
-                </button>
-              </p>
-              {invalid("clientId") ? <p role="alert">{failure?.message}</p> : null}
-            </div>
-          )}
-          <div>
             <label htmlFor="create-date">행사 날짜</label>
             <input
               id="create-date"
               type="date"
               value={date}
+              readOnly={submitting || checkingResult || eventUncertain}
               onChange={(event) => setDate(event.target.value)}
               aria-invalid={invalid("date") || undefined}
+              aria-describedby={invalid("date") ? "create-date-help create-date-error" : "create-date-help"}
               required
             />
-            {invalid("date") ? <p role="alert">{failure?.message}</p> : null}
+            <p className={styles.slugHint} id="create-date-help" aria-live="polite">
+              {date ? `선택한 날짜: ${displayDate(date)}` : "달력에서 연도·월·일을 선택하세요."}
+            </p>
+            {invalid("date") ? <p id="create-date-error" role="alert">{failure?.message}</p> : null}
           </div>
-          <div className={ui.formGrid}>
-            <div>
-              <label htmlFor="create-start">시작</label>
-              <input
-                id="create-start"
-                type="time"
-                value={start}
-                onChange={(event) => setStart(event.target.value)}
-                aria-invalid={invalid("start") || invalid("end") || undefined}
-              />
+          <p className={styles.slugHint}>나머지는 만든 뒤 행사 설정에서 바꿀 수 있습니다.</p>
+          <details data-create-settings className={styles.createAdvanced} open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}>
+            <summary>추가 설정 <span className={styles.slugHint}>{start || "시작 미정"}–{end || "종료 미정"}</span></summary>
+            <div className={ui.formStack}>
+              {effectiveDuplicate ? (
+                <>
+                  <p className={styles.slugHint}>고객사: {effectiveDuplicate.clientName || "선택하지 않음"}</p>
+                  <p className={styles.slugHint} role="note">복제 중에는 고객사를 새로 등록할 수 없습니다. 다른 고객사로 복제하려면 복제를 마친 뒤 행사 설정에서 바꾸거나, 고객사 화면에서 먼저 등록한 뒤 이 화면을 다시 여세요.</p>
+                </>
+              ) : clientMode === "create" ? null : (
+                <div>
+                  <label htmlFor="create-client">고객사</label>
+                  <select
+                    id="create-client"
+                    ref={clientSelectRef}
+                    value={clientId}
+                    disabled={submitting || checkingResult || eventUncertain}
+                    onChange={(event) => setClientId(event.target.value)}
+                    aria-invalid={invalid("clientId") || undefined}
+                    aria-describedby={clientNotice ? "create-client-notice" : undefined}
+                  >
+                    <option value="">선택하지 않음</option>
+                    {allClients.map((client) => (
+                      <option key={client.id} value={client.id}>{client.name}</option>
+                    ))}
+                  </select>
+                  {clientNotice ? (
+                    <p className={styles.slugHint} role="status" id="create-client-notice">{clientNotice}</p>
+                  ) : null}
+                  <p className={styles.slugHint}>
+                    <button
+                      type="button"
+                      className="button button-secondary"
+                      disabled={submitting || checkingResult || eventUncertain}
+                      onClick={() => { if (!clientUncertain) setClientFailure(null); setClientMode("create"); }}
+                    >
+                      새 고객사 등록
+                    </button>
+                  </p>
+                  {invalid("clientId") ? <p role="alert">{failure?.message}</p> : null}
+                </div>
+              )}
+              <div className={ui.formGrid}>
+                <div>
+                  <label htmlFor="create-start">시작</label>
+                  <input
+                    id="create-start"
+                    type="time"
+                    value={start}
+                    readOnly={submitting || checkingResult || eventUncertain}
+                    onChange={(event) => setStart(event.target.value)}
+                    aria-invalid={invalid("start") || invalid("end") || undefined}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="create-end">종료</label>
+                  <input
+                    id="create-end"
+                    type="time"
+                    value={end}
+                    readOnly={submitting || checkingResult || eventUncertain}
+                    onChange={(event) => setEnd(event.target.value)}
+                    aria-invalid={invalid("start") || invalid("end") || undefined}
+                  />
+                </div>
+              </div>
+              {start && end ? <p className={styles.slugHint}>24시간 기준: {start}–{end}</p> : null}
+              {invalid("start") || invalid("end") ? <p role="alert">{failure?.message}</p> : null}
+              <div>
+                <label htmlFor="create-capacity">정원 (선택)</label>
+                <input
+                  id="create-capacity"
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  value={capacity}
+                  readOnly={submitting || checkingResult || eventUncertain}
+                  onChange={(event) => setCapacity(event.target.value)}
+                  aria-invalid={invalid("capacity") || undefined}
+                />
+                {invalid("capacity") ? <p role="alert">{failure?.message}</p> : null}
+              </div>
+              {effectiveDuplicate ? (
+                <p className={styles.slugHint} role="note">복제 시 원본의 진행 형태가 함께 복사됩니다.</p>
+              ) : (
+                <div>
+                  <ConsoleChoiceGroup id="create-format" label="진행 형태 (선택)" value={format}
+              options={EVENT_FORMAT_CHOICES} onChange={setFormat} invalid={invalid("format")} describedBy={undefined} disabled={submitting || checkingResult || eventUncertain} />
+                  <p className={styles.slugHint}>표시용 구분입니다. 기능·장소·URL이 자동으로 바뀌지 않습니다.</p>
+                  {invalid("format") ? <p role="alert">{failure?.message}</p> : null}
+                </div>
+              )}
+              <div>
+                <label htmlFor="create-slug">주소 코드</label>
+                <input
+                  id="create-slug"
+                  type="text"
+                  value={slug}
+                  readOnly={submitting || checkingResult || eventUncertain}
+                  placeholder="예: partner-conf-2026"
+                  pattern="[a-z0-9][a-z0-9\-]{0,49}"
+                  title="영소문자·숫자·하이픈 50자 이내"
+                  onChange={(event) => {
+                    setSlug(event.target.value);
+                    setSlugTouched(true);
+                    generatedSlugRef.current = "";
+                  }}
+                  aria-invalid={invalid("slug") || undefined}
+                />
+                <p className={`${styles.slugHint} ${styles.createWrap}`}>참가자 주소에 쓰입니다. 영소문자·숫자·하이픈.</p>
+                {invalid("slug") ? <p role="alert">{failure?.message}</p> : null}
+              </div>
             </div>
-            <div>
-              <label htmlFor="create-end">종료</label>
-              <input
-                id="create-end"
-                type="time"
-                value={end}
-                onChange={(event) => setEnd(event.target.value)}
-                aria-invalid={invalid("start") || invalid("end") || undefined}
-              />
-            </div>
-          </div>
-          {invalid("start") || invalid("end") ? <p role="alert">{failure?.message}</p> : null}
-          <div>
-            <label htmlFor="create-capacity">정원 (선택)</label>
-            <input
-              id="create-capacity"
-              type="number"
-              min={0}
-              inputMode="numeric"
-              value={capacity}
-              onChange={(event) => setCapacity(event.target.value)}
-              aria-invalid={invalid("capacity") || undefined}
-            />
-            {invalid("capacity") ? <p role="alert">{failure?.message}</p> : null}
-          </div>
-          {effectiveDuplicate ? (
-            <p className={styles.slugHint} role="note">복제 시 원본의 진행 형태가 함께 복사됩니다.</p>
-          ) : (
-            <div>
-              <label htmlFor="create-format">진행 형태 (선택)</label>
-              <select
-                id="create-format"
-                value={format}
-                onChange={(event) => setFormat(event.target.value)}
-                aria-invalid={invalid("format") || undefined}
-              >
-                <option value="">미지정</option>
-                <option value="offline">현장</option>
-                <option value="online">온라인</option>
-                <option value="hybrid">혼합</option>
-              </select>
-              <p className={styles.slugHint}>표시용 구분입니다. 기능·장소·URL이 자동으로 바뀌지 않습니다.</p>
-              {invalid("format") ? <p role="alert">{failure?.message}</p> : null}
-            </div>
-          )}
+          </details>
           {failure && !failure.field ? <p role="alert">{failure.message}</p> : null}
-        </form>
+        </ValidatedForm>
       )}
     </ConsoleDialog>
   );

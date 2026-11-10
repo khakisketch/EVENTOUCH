@@ -11,10 +11,15 @@ import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
 import ConsoleToolbar from "../../../console-ui/ConsoleToolbar";
 import ConsoleSection from "../../../console-ui/ConsoleSection";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
+import { UNCONFIRMED_WRITE_CLOSE_MESSAGE, useConsoleDraftGuard } from "../../../console-draft-guard";
 import { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
 import consoleUiStyles from "../../../console-ui/console-ui.module.css";
 import { consoleFetch } from "../../../../../lib/console-api";
 import { canWriteEvent } from "../../../../../lib/event-capabilities";
+import { abandonOperatorAttempt, acknowledgeOperatorReceipt, isOrganizationContextBlock } from "../../../../../lib/operator-context";
+import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../lib/operator-receipts";
+import { useEventReceipts } from "../../../../../lib/use-event-receipts";
+import styles from "./rewards.module.css";
 
 // Reward handout desk: registration happens on the participant row
 // (경품 등록), and this screen is where staff/operators mark handout or
@@ -35,6 +40,7 @@ type Reward = {
   programTitle: string;
   drawProgramId: string;
   pendingAssignee: boolean;
+  participantIssue: "" | "missing" | "cancelled" | "conflict" | "unapproved";
 };
 
 type State =
@@ -42,15 +48,15 @@ type State =
   | { kind: "failed"; message: string }
   | { kind: "ready"; eventName: string; eventMeta?: string; eventStage: string; featureOn: boolean; role: string; userId: string; memberships: Array<{ accountId: string; eventId: string; write?: unknown }>; rewards: Reward[] };
 
+type RewardCommand = "reward.fulfill" | "reward.cancel";
+type RewardAttempt = { eventId: string; id: string; command: RewardCommand; commandId: string; label: string; method: string; uncertain: boolean; applied: boolean };
+
 function text(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
 }
 
-function isDefinitiveClientError(status: number): boolean {
-  // 4xx (except 408) proves the server saw and rejected this exact request;
-  // 5xx, 408 and network loss stay ambiguous, so the retry replays the SAME
-  // command id and the receipt replays the original result.
-  return status >= 400 && status < 500 && status !== 408;
+function participantIdentifier(value: unknown): string {
+  return typeof value === "string" || (typeof value === "number" && Number.isSafeInteger(value)) ? String(value) : "";
 }
 
 function rewardRecordMatches(value: unknown, id: string, statuses: readonly string[]): boolean {
@@ -142,31 +148,74 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
   const [rewardStatusFilter, setRewardStatusFilter] = useState("");
   // Same-turn in-flight gate: `busy` state flips only on re-render.
   const busyGateRef = useRef(false);
-  const pendingRewardActionRef = useRef<{ fingerprint: string; commandId: string } | null>(null);
-  // No dirty forms on this desk (reads + one-tap writes only): no draft guard.
+  const pendingRewardActionRef = useRef<RewardAttempt | null>(null);
+  const [pendingAction, setPendingAction] = useState<RewardAttempt | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [needsRefresh, setNeedsRefresh] = useState(false);
+  const [abandonConfirm, setAbandonConfirm] = useState(false);
+  const [loadedEventId, setLoadedEventId] = useState<string | null>(null);
+  const activeEventRef = useRef(eventId);
+  const loadSequenceRef = useRef(0);
+  const actionRef = useRef<symbol | null>(null);
+  const hadOtherReceiptRef = useRef(false);
+  const recoveryFocusOriginRef = useRef<Element | null>(null);
+  activeEventRef.current = eventId;
+  const receipts = useEventReceipts(eventId);
+  const otherReceipt = receipts.some((item) => ["reward.fulfill", "reward.cancel"].includes(item.command) && item.commandId !== pendingAction?.commandId);
+  const writeLocked = Boolean(loadedEventId !== eventId || busy || pendingAction || otherReceipt || needsRefresh || (hadOtherReceiptRef.current && !otherReceipt));
+  useConsoleDraftGuard(Boolean(busy || pendingAction || otherReceipt || needsRefresh), UNCONFIRMED_WRITE_CLOSE_MESSAGE);
+  useEffect(() => pendingAction && state.kind === "ready" ? manageOperatorReceipt(pendingAction.commandId) : undefined, [pendingAction?.commandId, state.kind]);
+  useEffect(() => {
+    if (!pendingAction || busy) return;
+    const frame = window.requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (active && active !== document.body && active !== recoveryFocusOriginRef.current && active.isConnected) return;
+      document.getElementById("reward-recovery-heading")?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [pendingAction?.commandId, busy]);
 
   // Event switch resets explicit local banners (never a key remount).
   useEffect(() => {
     setBusy(null);
     setFailure(null);
     setNotice(null);
+    setRewardPending(null);
+    setPendingAction(null);
+    pendingRewardActionRef.current = null;
+    actionRef.current = null;
+    busyGateRef.current = false;
+    hadOtherReceiptRef.current = false;
+    setChecking(false);
+    setNeedsRefresh(false);
+    setAbandonConfirm(false);
+    setLoadedEventId(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
+  async function load(silent = false): Promise<boolean> {
+      const requestEventId = eventId;
+      const sequence = ++loadSequenceRef.current;
+      const current = () => activeEventRef.current === requestEventId && loadSequenceRef.current === sequence;
+      const fail = (message: string) => {
+        if (current()) {
+          if (silent && state.kind === "ready" && loadedEventId === requestEventId) setFailure(message);
+          else setState({ kind: "failed", message });
+        }
+        return false;
+      };
       try {
         const [meRes, bootRes] = await Promise.all([
           consoleFetch("/api/auth/me", { cache: "no-store" }),
           consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store" }),
         ]);
-        if (cancelled) return;
+        if (!current()) return false;
         if (meRes.status === 401 || bootRes.status === 401) {
+          if (silent) return fail("최신 경품 목록을 불러오지 못했습니다. 현재 계정과 행사 접근 권한을 확인하세요.");
           router.push(
             loginHrefForLocation(window.location.pathname, window.location.search)
           );
-          return;
+          return false;
         }
         const me = (await meRes.json().catch(() => null)) as {
           user?: { id?: unknown; role?: unknown } | null;
@@ -174,10 +223,11 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
         const data = (await bootRes.json().catch(() => null)) as {
           state?: { events?: unknown; clients?: unknown; workspaces?: unknown; memberships?: unknown } | null;
         } | null;
+        if (!current()) return false;
         const bootstrap = data?.state;
-        if (!meRes.ok || !bootRes.ok || !me?.user || !bootstrap) {
-          setState({ kind: "failed", message: "경품 정보를 불러오지 못했습니다." });
-          return;
+        if (!meRes.ok || !bootRes.ok || !me?.user || typeof me.user.id !== "string" || !me.user.id ||
+            typeof me.user.role !== "string" || !me.user.role || !bootstrap) {
+          return fail(silent ? "최신 경품 목록을 불러오지 못했습니다. 다시 확인하세요." : "경품 정보를 불러오지 못했습니다.");
         }
         const role = typeof me.user.role === "string" ? me.user.role : "";
         const myId = typeof me.user.id === "string" ? me.user.id : "";
@@ -199,17 +249,24 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
           .find((item) => item?.id === eventId);
         const workspace = record((bootstrap.workspaces ?? {})[eventId as keyof object]);
         if (!event || !workspace) {
-          setState({ kind: "failed", message: "행사를 찾을 수 없습니다." });
-          return;
+          return fail(silent ? "최신 경품 목록을 확인하지 못했습니다. 현재 행사 접근 권한을 확인하세요." : "행사를 찾을 수 없습니다.");
+        }
+        if (!Array.isArray(workspace.rewards)) {
+          return fail(silent ? "최신 경품 목록을 불러오지 못했습니다. 다시 확인하세요." : "경품 정보를 불러오지 못했습니다.");
         }
         const clients = Array.isArray(bootstrap.clients) ? bootstrap.clients.map(record) : [];
         const clientName = clients.find((client) => client?.id === event.clientId)?.name;
         const venue = record(workspace.venue);
         const names = new Map<string, string>();
+        const people = new Map<string, Array<Record<string, unknown>>>();
         if (Array.isArray(workspace.participants)) {
           for (const item of workspace.participants) {
             const person = record(item);
-            if (person && typeof person.id === "string") names.set(person.id, text(person.name, "이름 미등록"));
+            const id = participantIdentifier(person?.id);
+            if (person && id) {
+              names.set(id, text(person.name, "이름 미등록"));
+              people.set(id, [...(people.get(id) ?? []), person]);
+            }
           }
         }
         // A draw reward points at a draw program (source.programId), not at a
@@ -231,24 +288,34 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
               const source = record(reward.source);
               const programId = text(source?.programId);
               const company = text(reward.company);
+              const recipientId = participantIdentifier(reward.participantId);
+              const matches = people.get(recipientId) ?? [];
+              const person = matches.length === 1 ? matches[0] : null;
+              const participantStatus = text(person?.status).toUpperCase();
+              const participantIssue: Reward["participantIssue"] = !person ? "missing"
+                : participantStatus === "CANCELLED" ? "cancelled"
+                : person.cancelled === true || person.ticketReview === "cancelled" ? "conflict"
+                : participantStatus !== "APPROVED" ? "unapproved" : "";
               return [{
                 id: reward.id,
-                participantId: text(reward.participantId),
+                participantId: recipientId,
                 name: text(reward.name, "경품명 미등록"),
                 method: text(reward.method, "ONSITE"),
                 status: text(reward.status),
                 at: text(reward.at),
                 code: text(reward.code),
-                participantName: names.get(text(reward.participantId)) ?? (company || "참가자 확인 필요"),
+                participantName: names.get(recipientId) ?? (company || "참가자 확인 필요"),
                 company,
                 programTitle: programId ? drawTitles.get(programId) ?? "연결 추첨 확인 필요" : "",
                 drawProgramId: programId,
                 pendingAssignee: reward.status === "PENDING"
-                  && text(reward.participantId) === ""
+                  && recipientId === ""
                   && source?.kind === "draw",
+                participantIssue,
               }];
             })
           : [];
+        if (!current()) return false;
         setState({
           kind: "ready",
           eventName: text(event.name, eventId),
@@ -268,70 +335,180 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
           memberships,
           rewards,
         });
+        setLoadedEventId(requestEventId);
+        return true;
       } catch {
-        if (!cancelled) setState({ kind: "failed", message: "연결하지 못했습니다. 다시 시도하세요." });
+        return fail(silent ? "최신 경품 목록을 불러오지 못했습니다. 연결을 확인하고 다시 시도하세요." : "연결하지 못했습니다. 다시 시도하세요.");
       }
-    }
-    load();
+  }
+
+  useEffect(() => {
+    void load();
     return () => {
-      cancelled = true;
+      loadSequenceRef.current += 1;
     };
+    // The request is restarted only when the event or explicit retry changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId, reloadTick, router]);
 
-  async function runCommand(id: string, command: "reward.fulfill" | "reward.cancel") {
-    if (busyGateRef.current || busy) return;
+  function keepAttempt(attempt: RewardAttempt | null) {
+    pendingRewardActionRef.current = attempt;
+    setPendingAction(attempt);
+  }
+
+  async function refreshAndSettle(attempt: RewardAttempt): Promise<boolean> {
+    if (!await load(true)) return false;
+    if (activeEventRef.current !== attempt.eventId || pendingRewardActionRef.current?.commandId !== attempt.commandId) return false;
+    acknowledgeOperatorReceipt(attempt.commandId);
+    forgetOperatorReceipt(attempt.commandId);
+    keepAttempt(null);
+    setFailure(null);
+    setNotice(attempt.command === "reward.fulfill" ? "경품 처리를 확인하고 최신 목록을 불러왔습니다." : "경품 취소를 확인하고 최신 목록을 불러왔습니다.");
+    return true;
+  }
+
+  async function sendAttempt(attempt: RewardAttempt) {
+    if (busyGateRef.current || activeEventRef.current !== attempt.eventId) return;
     busyGateRef.current = true;
-    setBusy(id);
+    const running = Symbol("reward-action");
+    actionRef.current = running;
+    setBusy(attempt.id);
     setFailure(null);
     setNotice(null);
-    // One command id per distinct action: an ambiguous failure keeps the id
-    // so repeating the same tap replays the original write instead of
-    // applying twice. A definitive 4xx clears it.
-    const fingerprint = JSON.stringify([command, eventId, id]);
-    const attempt = pendingRewardActionRef.current?.fingerprint === fingerprint
-      ? pendingRewardActionRef.current
-      : { fingerprint, commandId: randomCommandId() };
-    pendingRewardActionRef.current = attempt;
+    keepAttempt(attempt);
+    const stillCurrent = () => activeEventRef.current === attempt.eventId && actionRef.current === running;
     try {
-      const res = await consoleFetch(
-        `/api/events/${encodeURIComponent(eventId)}/commands`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ commandId: attempt.commandId, command, payload: { id } }),
-        }
-      );
-      const data = (await res.json().catch(() => null)) as { error?: unknown; reward?: unknown } | null;
+      const res = await consoleFetch(`/api/events/${encodeURIComponent(attempt.eventId)}/commands`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ commandId: attempt.commandId, command: attempt.command, payload: { id: attempt.id } }),
+      });
+      const data = (await res.json().catch(() => null)) as { error?: unknown; code?: unknown; reward?: unknown } | null;
+      if (!stillCurrent()) return;
       if (!res.ok) {
-        const serverMessage = typeof data?.error === "string" ? data.error : "처리하지 못했습니다.";
-        if (isDefinitiveClientError(res.status)) {
-          pendingRewardActionRef.current = null;
-          setFailure(serverMessage);
+        const participantChanged = res.status === 409 && data?.code === "REWARD_PARTICIPANT_CHANGED";
+        if ((!attempt.uncertain || participantChanged) && res.status >= 400 && res.status < 500 && ![408, 425, 429].includes(res.status)) {
+          acknowledgeOperatorReceipt(attempt.commandId);
+          forgetOperatorReceipt(attempt.commandId);
+          keepAttempt(null);
+          setFailure(typeof data?.error === "string" ? data.error : "경품을 처리하지 못했습니다.");
+          if (participantChanged) setNeedsRefresh(true);
         } else {
-          setFailure(`${serverMessage} 같은 동작으로 다시 시도하세요.`);
+          keepAttempt({ ...attempt, uncertain: true });
+          setFailure("경품 처리 결과를 확인하지 못했습니다. 원래 요청의 서버 처리 여부를 확인하세요.");
         }
         return;
       }
-      // Proven success echoes this reward in its new state, not just any
-      // reward object: fulfill lands RECEIVED (ONSITE) or NEEDS_CONNECTION
-      // (GIFT 모의), cancel lands CANCELLED.
-      const expected = command === "reward.fulfill" ? ["RECEIVED", "NEEDS_CONNECTION"] : ["CANCELLED"];
-      if (!rewardRecordMatches(data?.reward, id, expected)) {
-        setFailure("응답을 확인하지 못했습니다. 같은 동작으로 다시 시도하세요.");
+      const expected = attempt.command === "reward.fulfill" ? [attempt.method === "GIFT" ? "NEEDS_CONNECTION" : "RECEIVED"] : ["CANCELLED"];
+      if (!rewardRecordMatches(data?.reward, attempt.id, expected)) {
+        keepAttempt({ ...attempt, uncertain: true });
+        setFailure("경품 처리 결과를 확인하지 못했습니다. 원래 요청의 서버 처리 여부를 확인하세요.");
         return;
       }
-      pendingRewardActionRef.current = null;
-      setNotice(command === "reward.fulfill" ? "지급 처리했습니다." : "경품을 취소했습니다.");
-      setReloadTick((tick) => tick + 1);
-    } catch {
-      setFailure("연결하지 못했습니다. 같은 동작으로 다시 시도하세요.");
+      const applied = { ...attempt, applied: true, uncertain: false };
+      keepAttempt(applied);
+      await refreshAndSettle(applied);
+    } catch (error) {
+      if (!stillCurrent()) return;
+      if (isOrganizationContextBlock(error) && !attempt.uncertain) {
+        acknowledgeOperatorReceipt(attempt.commandId);
+        forgetOperatorReceipt(attempt.commandId);
+        keepAttempt(null);
+        setFailure("현재 운영사와 행사 권한을 확인한 뒤 다시 시도하세요.");
+      } else {
+        keepAttempt({ ...attempt, uncertain: true });
+        setFailure("경품 처리 결과를 확인하지 못했습니다. 원래 요청의 서버 처리 여부를 확인하세요.");
+      }
     } finally {
-      busyGateRef.current = false;
-      setBusy(null);
+      if (stillCurrent()) { actionRef.current = null; busyGateRef.current = false; setBusy(null); }
     }
   }
 
-  if (state.kind === "loading") {
+  function runCommand(id: string, command: RewardCommand) {
+    if (writeLocked || busyGateRef.current || state.kind !== "ready") return;
+    const reward = state.rewards.find((item) => item.id === id);
+    if (!reward) return;
+    recoveryFocusOriginRef.current = document.activeElement;
+    void sendAttempt({ eventId, id, command, commandId: randomCommandId(), label: reward.name, method: reward.method, uncertain: false, applied: false });
+  }
+
+  async function recoverAttempt(mode: "status" | "retry" | "refresh") {
+    const attempt = pendingRewardActionRef.current;
+    if (!attempt || busyGateRef.current || checking || activeEventRef.current !== attempt.eventId) return;
+    if (mode === "retry" && (state.kind !== "ready" || !state.featureOn || state.eventStage.toUpperCase() === "ARCHIVED" ||
+        !canWriteEvent({ role: state.role, userId: state.userId, memberships: state.memberships, eventId }, "reward.create"))) {
+      setFailure("현재 행사 상태나 권한에서는 다시 처리할 수 없습니다. 서버 처리 확인을 이용하세요.");
+      return;
+    }
+    if (mode === "retry") { await sendAttempt(attempt); return; }
+    busyGateRef.current = true;
+    const running = Symbol("reward-recovery");
+    actionRef.current = running;
+    setChecking(true);
+    setFailure(null);
+    const stillCurrent = () => activeEventRef.current === attempt.eventId && actionRef.current === running;
+    try {
+      let applied = attempt;
+      if (mode === "status" && !attempt.applied) {
+        const res = await consoleFetch(`/api/events/${encodeURIComponent(attempt.eventId)}/command-receipts/${encodeURIComponent(attempt.commandId)}`, { cache: "no-store" });
+        const body = (await res.json().catch(() => null)) as { status?: unknown; command?: unknown } | null;
+        if (!stillCurrent()) return;
+        if (!(res.ok && body?.status === "APPLIED" && body.command === attempt.command)) {
+          setFailure(res.ok && body?.status === "UNCONFIRMED"
+            ? "아직 경품 처리 여부를 확인할 수 없습니다. 잠시 후 다시 확인하세요."
+            : "서버 처리 결과를 확인하지 못했습니다. 연결과 현재 행사 접근 권한을 확인하세요.");
+          return;
+        }
+        applied = { ...attempt, applied: true, uncertain: false };
+        keepAttempt(applied);
+      }
+      if (stillCurrent()) await refreshAndSettle(applied);
+    } catch {
+      if (stillCurrent()) setFailure("서버 처리 결과를 확인하지 못했습니다. 요청은 다시 보내지 않았습니다.");
+    } finally {
+      if (stillCurrent()) { actionRef.current = null; busyGateRef.current = false; setChecking(false); }
+    }
+  }
+
+  async function refreshAfterReceipt() {
+    if (checking || busyGateRef.current) return;
+    const requestEventId = eventId;
+    busyGateRef.current = true;
+    setChecking(true);
+    try {
+      if (await load(true) && activeEventRef.current === requestEventId) {
+        setNeedsRefresh(false);
+        setFailure(null);
+        setNotice("최신 경품 목록을 확인했습니다.");
+      }
+    } finally {
+      if (activeEventRef.current === requestEventId) { busyGateRef.current = false; setChecking(false); }
+    }
+  }
+
+  function abandonAttempt() {
+    const attempt = pendingRewardActionRef.current;
+    if (!attempt || busyGateRef.current || checking) return;
+    abandonOperatorAttempt(attempt.commandId);
+    forgetOperatorReceipt(attempt.commandId);
+    keepAttempt(null);
+    setAbandonConfirm(false);
+    setNeedsRefresh(true);
+    setFailure(null);
+    void refreshAfterReceipt();
+  }
+
+  useEffect(() => {
+    if (hadOtherReceiptRef.current && !otherReceipt && !pendingRewardActionRef.current) {
+      setNeedsRefresh(true);
+      void refreshAfterReceipt();
+    }
+    hadOtherReceiptRef.current = otherReceipt;
+    // A scoped shared status check or explicit discard requires a fresh list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otherReceipt]);
+
+  if (state.kind === "loading" || (state.kind === "ready" && loadedEventId !== eventId)) {
     return (
       <ConsolePage pageId="rewards" eventId={eventId}>
         <ConsoleStatePanel kind="loading" message="경품 정보를 불러오고 있습니다." onRetry={() => {}} />
@@ -414,8 +591,38 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
       }
       feedback={
         <>
-          {failure ? <ConsoleFeedback kind="error">{failure}</ConsoleFeedback> : null}
+          {failure && !pendingAction ? <ConsoleFeedback kind="error">{failure}</ConsoleFeedback> : null}
           {notice ? <ConsoleFeedback kind="success">{notice}</ConsoleFeedback> : null}
+          {pendingAction ? (
+            <section className={styles.recovery} aria-labelledby="reward-recovery-heading">
+              <h2 id="reward-recovery-heading" tabIndex={-1}>경품 처리 확인 필요</h2>
+              <p><strong>{pendingAction.label}</strong> · {pendingAction.command === "reward.fulfill" ? "수령 처리" : "경품 취소"}</p>
+              {failure ? <p className={styles.recoveryError} role="alert">{failure}</p> : null}
+              <p>{busy ? "요청을 확인하고 있습니다." : pendingAction.applied
+                ? "서버 처리는 확인됐습니다. 최신 경품 목록을 불러온 뒤 계속할 수 있습니다."
+                : "처리됐을 수 있습니다. 서버 처리 확인은 요청을 다시 보내지 않습니다."}</p>
+              <div className={styles.recoveryActions}>
+                {pendingAction.applied ? (
+                  <button type="button" className="button button-primary" disabled={Boolean(busy) || checking || abandonConfirm} onClick={() => void recoverAttempt("refresh")}>최신 목록 다시 확인</button>
+                ) : <>
+                  <button type="button" className="button button-primary" disabled={Boolean(busy) || checking || abandonConfirm} onClick={() => void recoverAttempt("status")}>서버 처리 확인</button>
+                  <button type="button" className="button button-secondary" disabled={Boolean(busy) || checking || abandonConfirm || !canAct || !state.featureOn} onClick={() => void recoverAttempt("retry")}>같은 요청 다시 시도</button>
+                </>}
+                <button type="button" className="button button-secondary" disabled={Boolean(busy) || checking || abandonConfirm} onClick={() => setAbandonConfirm(true)}>확인 전 그만두기</button>
+              </div>
+              {abandonConfirm ? <ConsoleConfirm
+                summary="이미 처리된 경품은 되돌아가지 않습니다. 확인을 그만두고 최신 목록을 볼까요?"
+                confirmLabel="확인 그만두기"
+                onConfirm={abandonAttempt}
+                onCancel={() => setAbandonConfirm(false)}
+              /> : null}
+            </section>
+          ) : null}
+          {otherReceipt && !pendingAction ? <ConsoleFeedback kind="warning">이전 경품 처리 결과를 화면 위의 ‘처리 결과 확인’에서 먼저 확인하세요.</ConsoleFeedback> : null}
+          {needsRefresh && !pendingAction ? <ConsoleFeedback kind="warning">
+            최신 경품 목록을 확인한 뒤 다시 처리할 수 있습니다.{" "}
+            <button type="button" className="button button-secondary" disabled={checking} onClick={() => void refreshAfterReceipt()}>경품 목록 다시 확인</button>
+          </ConsoleFeedback> : null}
           {!canAct && !archived ? (
             <ConsoleFeedback kind="warning">지급 처리 권한이 없습니다. 처리가 필요하면 담당 행사 운영자에게 요청하세요.</ConsoleFeedback>
           ) : null}
@@ -475,6 +682,13 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
                   <p className={consoleUiStyles.recordMeta}>
                     {reward.participantName} · {methodLabel(reward.method)} · {statusLabel(reward.status)}
                   </p>
+                  {(reward.status === "READY" || reward.status === "FAILED") && reward.participantIssue ? <p id={`reward-participant-${reward.id}`} className={consoleUiStyles.recordMeta} role="note">
+                    {reward.participantIssue === "conflict" ? "신청 상태와 취소 기록이 일치하지 않습니다."
+                      : reward.participantIssue === "cancelled" ? "참가가 취소되어 수령을 처리할 수 없습니다."
+                      : reward.participantIssue === "unapproved" ? "참가 확정 후 수령을 처리할 수 있습니다."
+                      : "수령자의 참가자 정보를 확인할 수 없습니다."}{" "}
+                    <Link href={`/console/events/${encodeURIComponent(eventId)}/participants${reward.participantIssue === "conflict" ? "?ticket=review" : ""}`}>참가자 명단에서 확인</Link>
+                  </p> : null}
                   {reward.pendingAssignee ? (
                     <p className={consoleUiStyles.recordMeta}>
                       {reward.company ? `${reward.company} 업체 당첨` : "업체 당첨"}
@@ -503,12 +717,13 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
                     <button
                       type="button"
                       className="button button-secondary"
-                      disabled={busy !== null}
+                      disabled={writeLocked || Boolean(reward.participantIssue)}
+                      aria-describedby={reward.participantIssue ? `reward-participant-${reward.id}` : undefined}
                       onClick={() => {
                         // The server refuses a cancel once the prize is
                         // received, so the one irreversible step asks first —
                         // in place, with the same summary as before.
-                        setRewardPending({ id: reward.id, command: "reward.fulfill" });
+                        if (!writeLocked) setRewardPending({ id: reward.id, command: "reward.fulfill" });
                       }}
                     >
                       {busy === reward.id ? "처리 중…" : reward.method === "GIFT" ? "기프티콘 지급(모의)" : "수령 처리"}
@@ -518,9 +733,9 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
                     <button
                       type="button"
                       className="button button-danger"
-                      disabled={busy !== null}
+                      disabled={writeLocked}
                       onClick={() => {
-                        setRewardPending({ id: reward.id, command: "reward.cancel" });
+                        if (!writeLocked) setRewardPending({ id: reward.id, command: "reward.cancel" });
                       }}
                     >
                       취소

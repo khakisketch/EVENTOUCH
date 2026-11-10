@@ -20,6 +20,7 @@ type ConsoleConfirmProps = {
   // primary; a workspace may pass its own tokenized outline (e.g. a danger
   // outline for deletes) without changing copy, order, handlers or focus.
   confirmClassName?: string;
+  initialFocus?: "confirm" | "cancel";
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -30,16 +31,35 @@ export default function ConsoleConfirm({
   cancelLabel = "취소",
   busy = false,
   confirmClassName = "button button-primary",
+  initialFocus = "confirm",
   onConfirm,
   onCancel,
 }: ConsoleConfirmProps) {
   const confirmRef = useRef<HTMLButtonElement | null>(null);
+  const cancelRef = useRef<HTMLButtonElement | null>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    // The confirmation replaces the action that opened it, so focus moves to
-    // the confirming button instead of leaving it on the trigger.
-    confirmRef.current?.focus();
-  }, []);
+    const active = document.activeElement;
+    returnFocusRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
+    // Most reviews focus the confirming action. Discard prompts can instead
+    // start on the safe choice while retaining the same return-focus behavior.
+    if (initialFocus === "cancel") cancelRef.current?.focus();
+    else confirmRef.current?.focus();
+  }, [initialFocus]);
+
+  function cancel() {
+    const trigger = returnFocusRef.current;
+    onCancel();
+    // An inline confirmation may disappear along with its focused cancel
+    // button. Restore the initiating control only when nothing else has
+    // deliberately received focus and the original control still exists.
+    window.requestAnimationFrame(() => {
+      if (document.activeElement === document.body && trigger?.isConnected && trigger.getClientRects().length && !trigger.matches(":disabled")) {
+        trigger.focus({ preventScroll: true });
+      }
+    });
+  }
 
   return (
     <div className={styles.confirmRegion} role="group" aria-label="실행 확인">
@@ -62,7 +82,7 @@ export default function ConsoleConfirm({
         >
           {busy ? "처리 중…" : confirmLabel}
         </button>
-        <button type="button" className="button button-secondary" onClick={onCancel} disabled={busy}>
+        <button ref={cancelRef} type="button" className="button button-secondary" onClick={cancel} disabled={busy}>
           {cancelLabel}
         </button>
       </div>

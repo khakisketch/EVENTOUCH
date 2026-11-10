@@ -93,7 +93,7 @@ export function subscribeConsoleFreshness(listener: (event: ConsoleFreshness) =>
 
 function isSharedRead(input: string): boolean {
   return input === "/api/bootstrap" || input === "/api/auth/me" ||
-    input === "/api/console/directory" || /^\/api\/events\/[^/]+\/bootstrap$/.test(input);
+    input === "/api/console/directory" || /^\/api\/events\/[^/]+\/bootstrap(?:\?messageRecipientReview=1)?$/.test(input);
 }
 
 // The shared /auth/me delivers selected authority ONLY when the parsed

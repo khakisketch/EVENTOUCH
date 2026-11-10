@@ -10,5 +10,5 @@ export default async function EngagePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  return <EngageClient slug={slug} />;
+  return <EngageClient key={slug} slug={slug} />;
 }

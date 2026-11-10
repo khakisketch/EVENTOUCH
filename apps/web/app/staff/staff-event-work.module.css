@@ -1,10 +1,30 @@
+.directionReview {
+  display: grid;
+  justify-items: start;
+  gap: var(--s2);
+  margin-top: var(--s3);
+  padding: var(--s3);
+  background: var(--warning-soft);
+  color: var(--ink);
+}
+
+.directionReview p {
+  margin: var(--s1) 0 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.directionReview button {
+  min-height: 44px;
+}
+
 .prizeWorkspace {
   display: grid;
   gap: var(--s3);
-  padding: var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface-muted);
+  padding: var(--s4) 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
 }
 
 .prizeHeader {
@@ -28,7 +48,7 @@
   line-height: 1.5;
 }
 
-.prizeHeader button,
+.prizeTargetHead button,
 .lookupForm button,
 .rewardItem button {
   min-height: 44px;
@@ -47,10 +67,16 @@
   display: grid;
   gap: var(--s3);
   min-width: 0;
-  padding: var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-small);
-  background: var(--paper);
+  padding: var(--s3) 0;
+  border-top: 1px solid var(--line);
+}
+
+.prizeTargetHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2) var(--s3);
 }
 
 .targetIdentity {
@@ -85,10 +111,8 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--s3);
-  padding: var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-small);
-  background: var(--surface-muted);
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--line);
 }
 
 .rewardInfo {
@@ -129,6 +153,8 @@
   color: var(--success);
   font-size: var(--small);
   font-weight: 700;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 .prizeError {
@@ -145,13 +171,93 @@
   cursor: pointer;
 }
 
+.manualSearch {
+  margin-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+.manualSearch > summary {
+  min-height: 44px;
+  padding: var(--s3) 0;
+  color: var(--brand-text);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.manualSearchBody {
+  display: grid;
+  gap: var(--s2);
+  padding-bottom: var(--s4);
+}
+
+.manualSearchBody p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  line-height: 1.5;
+}
+
+.manualSearchBody input[type="search"] { width: 100%; }
+
+.manualSearchHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.manualRefresh {
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: var(--s2);
+}
+
+.manualRefresh svg { width: 20px; height: 20px; }
+
+.manualResults {
+  display: grid;
+  margin: var(--s2) 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.manualResults li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.manualResults li > div { display: grid; min-width: 0; gap: var(--s1); }
+.manualResults li span { color: var(--muted); font-size: var(--small); overflow-wrap: anywhere; }
+.manualResults li .manualPresence { color: var(--muted); font-weight: 500; }
+.manualResults li .manualPresence[data-state="inside"] { color: var(--success); font-weight: 700; }
+.manualResults li .manualPresence[data-state="review"] { color: var(--warning); font-weight: 700; }
+.manualResults button { flex: none; min-height: 44px; }
+
+.manualConfirm {
+  display: grid;
+  flex: 0 0 100%;
+  gap: var(--s3);
+  scroll-margin-block: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-small);
+}
+
+.manualConfirm label { display: flex; align-items: center; gap: var(--s2); min-height: 44px; }
+.manualConfirm button { min-height: 44px; }
+
 .resultBlock {
   display: grid;
   gap: var(--s3);
-  padding: var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .resultBlock .scan-result {
@@ -403,7 +509,8 @@
 .nextActions button:focus-visible,
 .recentRow button:focus-visible,
 .ticketCopy:focus-visible,
-.resultBlock:focus-visible {
+.resultBlock:focus-visible,
+.resultBlock [tabindex="-1"]:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 3px;
 }
@@ -436,7 +543,6 @@
 
   .lookupForm button,
   .rewardItem button,
-  .prizeHeader button,
   .nextActions button,
   .recentRow button {
     width: 100%;
@@ -549,4 +655,16 @@
     padding-top: var(--s2);
     scroll-margin-top: var(--s3);
   }
+}
+
+.accountContext { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; justify-content: space-between; gap: var(--s2); min-width: 0; }
+.accountContext .orgLine { margin: 0; padding: 0; flex: 1; }
+.accountContext > div { margin: 0; min-width: 0; max-width: 180px; }
+.accountContext > section { grid-column: 1 / -1; min-width: 0; }
+.eventWorkPage :global(.staff-workspace) { gap: var(--s3); }
+@media (max-width: 560px) {
+  .eventContext { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: var(--s2); }
+  .eventContext :global(.kiosk-toggle) { width: auto; min-width: 44px; padding-inline: var(--s2); font-size: var(--label); }
+  .eventContext > span { font-size: var(--small); }
+  .accountContext .orgLine { font-size: var(--label); }
 }

@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import ValidatedForm from "../../ui/ValidatedForm";
+
+
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { buildStaffAssignHandoffHref, sortTeamEventsForAssign, teamEventOptionLabel } from "../console-handoff";
@@ -19,7 +22,9 @@ import consoleUiStyles from "../console-ui/console-ui.module.css";
 import teamStyles from "./team.module.css";
 import OperationsPanels from "./OperationsPanels";
 import { consoleFetch, invalidateConsoleReads } from "../../../lib/console-api";
-import { getOperatorContextSnapshot, isOrganizationContextBlock, noteCommittedOperatorRoleChange, refreshOperatorContext } from "../../../lib/operator-context";
+import { acknowledgeOperatorReceipt, confirmsInvitation, getOperatorContextSnapshot, isOrganizationContextBlock, noteCommittedOperatorRoleChange, operatorFetch, refreshOperatorContext } from "../../../lib/operator-context";
+import { forgetOperatorReceipt } from "../../../lib/operator-receipts";
+import { useOrganizationReceipts } from "../../../lib/use-organization-receipts";
 import { EVENT_WRITE_SCOPES, getEventWriteGrants } from "../../../lib/event-capabilities";
 
 type Account = {
@@ -61,6 +66,7 @@ type TeamMembership = { accountId: string; eventId: string; write?: unknown };
 // per-org membership write below, the version is its optimistic guard.
 // Both stay display/transport facts; the server rechecks everything.
 type TeamOrgContext = { orgId: string; orgName: string; contextVersion: number | null };
+type RoleEditorHandle = { requestSwitch: (nextId: string | null) => void };
 
 type TeamState =
   | { kind: "loading" }
@@ -143,10 +149,10 @@ function text(value: unknown): string {
 }
 
 function isDefinitiveClientError(status: number): boolean {
-  // 4xx (except 408) proves the server saw and rejected this exact request;
-  // 5xx, 408 and network loss stay ambiguous, so the retry replays the SAME
+  // 4xx (except 408/425/429) proves the server saw and rejected this exact request;
+  // 5xx, 408/425/429 and network loss stay ambiguous, so the retry replays the SAME
   // command id and the receipt replays the original result.
-  return status >= 400 && status < 500 && status !== 408;
+  return status >= 400 && status < 500 && ![408, 425, 429].includes(status);
 }
 
 const DIRTY_CLOSE_MESSAGE = "작성 중인 내용이 사라집니다. 닫을까요?";
@@ -154,10 +160,23 @@ const DIRTY_CLOSE_MESSAGE = "작성 중인 내용이 사라집니다. 닫을까�
 export default function TeamWorkspace() {
   const [state, setState] = useState<TeamState>({ kind: "loading" });
   const [reloadTick, setReloadTick] = useState(0);
+  const [refreshState, setRefreshState] = useState<"idle" | "loading" | "failed">("idle");
+  function reloadDirectory(): void {
+    setRefreshState("loading");
+    setReloadTick((tick) => tick + 1);
+  }
   const [resetTarget, setResetTarget] = useState<Account | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [issuedInvite, setIssuedInvite] = useState<{ name: string; link: string } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const organizationReceipts = useOrganizationReceipts();
+  const hasUnconfirmedInvite = organizationReceipts.some((item) => item.command === "invitation.create");
+  const hasUnconfirmedReset = organizationReceipts.some((item) => item.command === "account.password-reset");
+  const hadUnconfirmedInvite = useRef(false);
+  useEffect(() => {
+    if (hadUnconfirmedInvite.current && !hasUnconfirmedInvite) reloadDirectory();
+    hadUnconfirmedInvite.current = hasUnconfirmedInvite;
+  }, [hasUnconfirmedInvite]);
   // One in-place confirm for dropping the once-shown bearer link: opening a
   // new invite ("replace") or closing the issued block ("close") while it is
   // unresolved first states the loss where the link lives. The dialog
@@ -171,6 +190,7 @@ export default function TeamWorkspace() {
   // Which accepted member's org-role editor is expanded (account id, one at
   // a time). The panel below owns its draft/confirm/retry lifecycle.
   const [roleEditId, setRoleEditId] = useState<string | null>(null);
+  const roleEditorRef = useRef<RoleEditorHandle>(null);
 
   // Only the issued once-shown bearer link guards navigation at the parent
   // level: losing it loses the link. Open reset/invite forms register their
@@ -185,6 +205,7 @@ export default function TeamWorkspace() {
   // or closing the block while it is unresolved asks first. The toolbar and
   // the block close below both consult these predicates.
   function requestInviteOpen(): void {
+    if (hasUnconfirmedInvite) return;
     setNotice(null);
     if (issuedInvite !== null) {
       setInviteLossPending("replace");
@@ -229,6 +250,7 @@ export default function TeamWorkspace() {
         const directoryPayload = (await bootstrapResponse.json().catch(() => null)) as {
           directory?: { accounts?: unknown; invitations?: unknown; events?: unknown; memberships?: unknown; viewer?: { organizationId?: unknown; organizationName?: unknown; contextVersion?: unknown } | null } | null;
         } | null;
+        if (cancelled) return;
         const bootstrapPayload = { state: directoryPayload?.directory };
         const user = record(mePayload?.user);
         const userId = text(user?.id);
@@ -304,8 +326,16 @@ export default function TeamWorkspace() {
               return [{ accountId: membership.accountId, eventId: membership.eventId, write: membership.write }];
             })
           : [];
-        if (!meResponse.ok || !userId || !bootstrapResponse.ok || !bootstrapPayload?.state) {
-          setState({ kind: "failed", message: "팀 정보를 불러오지 못했습니다." });
+        const directory = bootstrapPayload?.state;
+        const validIds = (value: unknown, keys: string[]) => Array.isArray(value) && value.every((item) => {
+          const row = record(item);
+          return row !== null && keys.every((key) => typeof row[key] === "string" && (row[key] as string).trim().length > 0);
+        });
+        if (!meResponse.ok || !userId || !bootstrapResponse.ok || !directory ||
+            !validIds(directory.accounts, ["id"]) || !validIds(directory.invitations, ["id"]) ||
+            !validIds(directory.events, ["id"]) || !validIds(directory.memberships, ["accountId", "eventId"])) {
+          setState((current) => current.kind === "ready" ? current : { kind: "failed", message: "팀 정보를 불러오지 못했습니다." });
+          setRefreshState("failed");
           return;
         }
         // Current-org viewer context for the per-org membership write below.
@@ -320,9 +350,11 @@ export default function TeamWorkspace() {
               ? Number(rawVersion.trim())
               : null;
         setState({ kind: "ready", accounts, invitations, events, memberships, canManageTeam, isOwner, userId, org: { orgId: text(viewer?.organizationId), orgName: text(viewer?.organizationName), contextVersion } });
+        setRefreshState("idle");
       } catch {
         if (!cancelled) {
-          setState({ kind: "failed", message: "연결하지 못했습니다. 다시 시도하세요." });
+          setState((current) => current.kind === "ready" ? current : { kind: "failed", message: "연결하지 못했습니다. 다시 시도하세요." });
+          setRefreshState("failed");
         }
       }
     }
@@ -342,7 +374,7 @@ export default function TeamWorkspace() {
   if (state.kind === "failed") {
     return (
       <ConsolePage pageId="team">
-        <ConsoleStatePanel kind="failed" message={state.message} onRetry={() => setReloadTick((tick) => tick + 1)} />
+        <ConsoleStatePanel kind="failed" message={state.message} onRetry={reloadDirectory} />
       </ConsolePage>
     );
   }
@@ -358,6 +390,7 @@ export default function TeamWorkspace() {
               <button
                 type="button"
                 className="button button-primary"
+                disabled={hasUnconfirmedInvite || refreshState !== "idle"}
                 onClick={requestInviteOpen}
               >
                 구성원 초대
@@ -369,6 +402,18 @@ export default function TeamWorkspace() {
       feedback={
         <>
           {notice ? <ConsoleFeedback kind="success">{notice}</ConsoleFeedback> : null}
+          {refreshState === "loading" ? <ConsoleFeedback kind="info">팀 정보를 다시 확인하고 있습니다. 확인이 끝나면 팀 관리를 계속할 수 있습니다.</ConsoleFeedback> : null}
+          {refreshState === "failed" ? (
+            <ConsoleFeedback kind="warning">
+              팀 정보를 다시 불러오지 못했습니다. 표시된 목록은 이전 정보이며, 최신 정보를 확인할 때까지 팀 관리를 잠급니다.{" "}
+              <button type="button" className="button button-secondary" onClick={() => {
+                window.dispatchEvent(new CustomEvent("eventouch:shell-reload"));
+                reloadDirectory();
+              }}>팀 정보 다시 불러오기</button>
+            </ConsoleFeedback>
+          ) : null}
+          {hasUnconfirmedInvite && !inviteOpen ? <ConsoleFeedback kind="warning">이전 초대 발급 결과를 위의 처리 결과 확인에서 확인한 뒤 새 초대를 발급할 수 있습니다.</ConsoleFeedback> : null}
+          {hasUnconfirmedReset && !resetTarget ? <ConsoleFeedback kind="warning">이전 비밀번호 재설정 결과를 위의 처리 결과 확인에서 확인한 뒤 새로 재설정할 수 있습니다.</ConsoleFeedback> : null}
           {!state.canManageTeam ? (
             <ConsoleFeedback kind="warning">팀 관리 권한이 없습니다. 비밀번호 재설정은 조직 소유자에게 요청하세요.</ConsoleFeedback>
           ) : null}
@@ -416,6 +461,8 @@ export default function TeamWorkspace() {
           ) : null}
         </ConsoleSection>
       ) : null}
+      <fieldset className={teamStyles.teamFields} disabled={refreshState !== "idle"}>
+      <div className={teamStyles.teamFieldsContent}>
       {state.isOwner && state.invitations.length ? (
         <ConsoleSection headingId="pending-invites" title="대기 중인 초대" surface="plain" width="full">
           <ul className={consoleUiStyles.collection} aria-label="대기 중인 초대 목록">
@@ -443,7 +490,7 @@ export default function TeamWorkspace() {
                     invitationId={invitation.id}
                     onDone={() => {
                       setNotice(`${invitation.name}님의 초대를 철회했습니다.`);
-                      setReloadTick((tick) => tick + 1);
+                      reloadDirectory();
                     }}
                   />
                 </div>
@@ -455,8 +502,8 @@ export default function TeamWorkspace() {
       ) : state.isOwner ? (
         <ConsoleSection headingId="pending-invites" title="대기 중인 초대" surface="plain" width="full">
           <div className={`${consoleUiStyles.empty} ${teamStyles.teamEmpty}`}>
-            <h3>대기 중인 초대가 없습니다.</h3>
-            <p>구성원 초대 버튼으로 새 초대를 보낼 수 있습니다.</p>
+            <h3>{refreshState === "idle" ? "대기 중인 초대가 없습니다." : "대기 중인 초대를 확인할 수 없습니다."}</h3>
+            <p>{refreshState === "idle" ? "구성원 초대 버튼으로 새 초대를 보낼 수 있습니다." : "팀 정보를 다시 불러오면 최신 초대 목록을 확인할 수 있습니다."}</p>
           </div>
         </ConsoleSection>
       ) : null}
@@ -491,7 +538,12 @@ export default function TeamWorkspace() {
                       aria-controls={`org-role-panel-${account.id}`}
                       onClick={() => {
                         setNotice(null);
-                        setRoleEditId((current) => (current === account.id ? null : account.id));
+                        const nextId = roleEditId === account.id ? null : account.id;
+                        if (roleEditId !== null) {
+                          roleEditorRef.current?.requestSwitch(nextId);
+                        } else {
+                          setRoleEditId(nextId);
+                        }
                       }}
                     >
                       역할 변경
@@ -520,6 +572,7 @@ export default function TeamWorkspace() {
                       <button
                         type="button"
                         className="button button-danger"
+                        disabled={hasUnconfirmedReset}
                         onClick={() => { setNotice(null); setResetTarget(account); }}
                       >
                         비밀번호 재설정
@@ -531,7 +584,7 @@ export default function TeamWorkspace() {
                         account={account}
                         onDone={(message) => {
                           setNotice(message);
-                          setReloadTick((tick) => tick + 1);
+                          reloadDirectory();
                         }}
                       />
                     ) : null}
@@ -541,7 +594,7 @@ export default function TeamWorkspace() {
                         account={account}
                         onDone={(message) => {
                           setNotice(message);
-                          setReloadTick((tick) => tick + 1);
+                          reloadDirectory();
                         }}
                       />
                     ) : null}
@@ -563,10 +616,12 @@ export default function TeamWorkspace() {
                     ) : null}
                     {roleEditId === account.id ? (
                       <OrgRoleEditorPanel
+                        ref={roleEditorRef}
                         orgId={state.org.orgId}
                         orgName={state.org.orgName}
                         account={account}
                         isSelf={account.id === state.userId}
+                        onSwitch={setRoleEditId}
                         onClose={() => {
                           setRoleEditId(null);
                           document.getElementById(`org-role-toggle-${account.id}`)?.focus();
@@ -574,7 +629,7 @@ export default function TeamWorkspace() {
                         onDone={(message) => {
                           setRoleEditId(null);
                           setNotice(message);
-                          setReloadTick((tick) => tick + 1);
+                          reloadDirectory();
                         }}
                       />
                     ) : null}
@@ -599,7 +654,7 @@ export default function TeamWorkspace() {
             memberships={state.memberships}
             onChanged={(message) => {
               setNotice(message);
-              setReloadTick((tick) => tick + 1);
+              reloadDirectory();
             }}
           />
         </aside>
@@ -626,14 +681,21 @@ export default function TeamWorkspace() {
         <InviteDialog
           events={state.events}
           onClose={() => setInviteOpen(false)}
+          onPreviouslyIssued={() => {
+            setInviteOpen(false);
+            setNotice("초대 발급이 반영되었습니다. 링크는 다시 볼 수 없으므로 대기 초대를 확인하고 필요하면 철회 후 다시 발급하세요.");
+            reloadDirectory();
+          }}
           onDone={(issued) => {
             setInviteOpen(false);
             setIssuedInvite(issued);
             setNotice(`${issued.name}님을 초대했습니다. 아래 링크를 전달하세요.`);
-            setReloadTick((tick) => tick + 1);
+            reloadDirectory();
           }}
         />
       ) : null}
+      </div>
+      </fieldset>
     </ConsolePage>
   );
 }
@@ -832,6 +894,7 @@ function EventPermissionEditor({
 
   async function save(account: Account): Promise<void> {
     if (submitGateRef.current || busy || !chosen) return;
+    const hadUncertainAttempt = retryable && pendingRef.current !== null;
     const stored = pendingRef.current;
     const resumed =
       stored !== null && stored.eventId === chosen.id && stored.accountId === account.id;
@@ -857,7 +920,7 @@ function EventPermissionEditor({
       const data = (await res.json().catch(() => null)) as { error?: unknown; membership?: unknown } | null;
       if (!res.ok) {
         const serverMessage = typeof data?.error === "string" ? data.error : "행사 권한을 저장하지 못했습니다.";
-        if (isDefinitiveClientError(res.status)) {
+        if (isDefinitiveClientError(res.status) && !hadUncertainAttempt) {
           pendingRef.current = null;
           setFailure(serverMessage);
         } else {
@@ -869,6 +932,13 @@ function EventPermissionEditor({
         }
         return;
       }
+      const membership = record(data?.membership);
+      if (!membership || membership.accountId !== attempt.accountId || membership.eventId !== attempt.eventId ||
+          !Array.isArray(membership.write) || JSON.stringify([...membership.write].sort()) !== JSON.stringify([...attempt.write].sort())) {
+        setFailure("권한 저장 응답을 확인하지 못했습니다. 같은 요청으로 다시 시도하세요.");
+        setRetryable(true);
+        return;
+      }
       pendingRef.current = null;
       setEditingId(null);
       onChanged(
@@ -878,9 +948,14 @@ function EventPermissionEditor({
             ? `${account.name}님을 ${chosen.name} 읽기 전용으로 바꾸었습니다. 보기는 그대로 되지만 바꿀 수는 없습니다.`
             : `${account.name}님에게 ${chosen.name} ${grantSummary(attempt.write)} 쓰기 권한을 주었습니다.`
       );
-    } catch {
-      setFailure("연결하지 못했습니다. 같은 요청으로 다시 시도하세요.");
-      setRetryable(true);
+    } catch (error) {
+      if (isOrganizationContextBlock(error) && !hadUncertainAttempt) {
+        pendingRef.current = null;
+        setFailure("현재 조직을 확인한 뒤 다시 시도하세요.");
+      } else {
+        setFailure("연결하지 못했습니다. 같은 요청으로 다시 시도하세요.");
+        setRetryable(true);
+      }
     } finally {
       submitGateRef.current = false;
       setBusy(false);
@@ -1096,7 +1171,7 @@ function OrgMembershipDisableButton({
           }
           return;
         }
-        if (isDefinitiveClientError(res.status)) {
+        if (isDefinitiveClientError(res.status) && !hadUncertainAttempt) {
           pendingRef.current = null;
           setRetryable(false);
           setFailure(serverMessage);
@@ -1265,7 +1340,7 @@ function OrgMembershipReactivateButton({
           }
           return;
         }
-        if (isDefinitiveClientError(res.status)) {
+        if (isDefinitiveClientError(res.status) && !hadUncertainAttempt) {
           pendingRef.current = null;
           setRetryable(false);
           setFailure(serverMessage);
@@ -1351,26 +1426,29 @@ function OrgMembershipReactivateButton({
 // to MANAGER grants no event access here — the separate 행사별 쓰기 권한
 // editor below owns that. A move to STAFF grants no desk/booth work — the
 // per-row 행사 배정 flow owns that.
-function OrgRoleEditorPanel({
-  orgId,
-  orgName,
-  account,
-  isSelf,
-  onClose,
-  onDone,
-}: {
+const OrgRoleEditorPanel = forwardRef<RoleEditorHandle, {
   orgId: string;
   orgName: string;
   account: Account;
   isSelf: boolean;
   onClose: () => void;
   onDone: (message: string) => void;
-}) {
+  onSwitch: (nextId: string | null) => void;
+}>(function OrgRoleEditorPanel({
+  orgId,
+  orgName,
+  account,
+  isSelf,
+  onClose,
+  onDone,
+  onSwitch,
+}, ref) {
   const [roleDraft, setRoleDraft] = useState(account.role);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [retryable, setRetryable] = useState(false);
+  const [switchTarget, setSwitchTarget] = useState<{ id: string | null } | null>(null);
   // After a self change commits, the panel waits for the central fresh-me
   // recheck instead of navigating on its own. Revalidation starts
   // immediately so the drift lock engages without waiting for focus or
@@ -1386,6 +1464,20 @@ function OrgRoleEditorPanel({
   const confirmForeignRef = useRef(0);
   const frozen = busy || retryable;
   const roleChanged = roleDraft !== account.role;
+  useImperativeHandle(ref, () => ({
+    requestSwitch(nextId) {
+      if (submitGateRef.current || frozen || pendingRef.current !== null) {
+        setFailure("진행 중이거나 결과를 확인하지 못한 역할 변경을 먼저 확인하세요.");
+        return;
+      }
+      if (roleChanged) {
+        setConfirming(false);
+        setSwitchTarget({ id: nextId });
+        return;
+      }
+      onSwitch(nextId);
+    },
+  }), [frozen, roleChanged, onSwitch]);
   // Foreign pending work at this instant, from a fresh shared-transport
   // snapshot. Callers hold (run) or clear (pre-confirm) our own submit gate
   // before reading, so the count is always interpreted with our own
@@ -1414,7 +1506,7 @@ function OrgRoleEditorPanel({
   }
 
   function requestConfirm(): void {
-    if (submitGateRef.current || busy || !roleChanged) return;
+    if (submitGateRef.current || busy || (!roleChanged && !retryable)) return;
     setFailure(null);
     // Fresh snapshot for the review below: the count shown in the self
     // warning is this instant's, and enforcement re-reads at submit.
@@ -1432,6 +1524,7 @@ function OrgRoleEditorPanel({
 
   async function run(): Promise<void> {
     if (submitGateRef.current || busy || !orgId) return;
+    setSwitchTarget(null);
     const hadUncertainAttempt = retryable && pendingRef.current !== null;
     submitGateRef.current = true;
     setBusy(true);
@@ -1495,7 +1588,7 @@ function OrgRoleEditorPanel({
           }
           return;
         }
-        if (isDefinitiveClientError(res.status)) {
+        if (isDefinitiveClientError(res.status) && !hadUncertainAttempt) {
           pendingRef.current = null;
           setRetryable(false);
           setFailure(serverMessage);
@@ -1630,7 +1723,7 @@ function OrgRoleEditorPanel({
         <button
           type="button"
           className="button button-primary"
-          disabled={busy || !roleChanged}
+          disabled={busy || (!roleChanged && !retryable)}
           onClick={requestConfirm}
         >
           {retryable ? "같은 요청으로 다시 시도" : "변경 확인"}
@@ -1646,9 +1739,23 @@ function OrgRoleEditorPanel({
         />
       ) : null}
       {failure && confirming ? <ConsoleFeedback kind="error">{failure}</ConsoleFeedback> : null}
+      {switchTarget ? (
+        <ConsoleConfirm
+          summary={confirmLines(`${account.name}님의 저장하지 않은 역할 선택이 사라집니다. 계속할까요?`)}
+          confirmLabel={switchTarget.id === null ? "선택을 버리고 닫기" : "선택을 버리고 이동"}
+          cancelLabel="계속 편집"
+          confirmClassName="button button-secondary"
+          initialFocus="cancel"
+          onConfirm={() => {
+            if (submitGateRef.current || frozen || pendingRef.current !== null) return;
+            onSwitch(switchTarget.id);
+          }}
+          onCancel={() => setSwitchTarget(null)}
+        />
+      ) : null}
     </div>
   );
-}
+});
 
 function ResetDialog({
   account,
@@ -1664,15 +1771,18 @@ function ResetDialog({
   const [failure, setFailure] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [sharedEffectBlocked, setSharedEffectBlocked] = useState(false);
+  const [resetUncertain, setResetUncertain] = useState(false);
+  const [checkingReset, setCheckingReset] = useState(false);
+  const organizationReceipts = useOrganizationReceipts();
   // Definitive shared-account refusal (403 SHARED_ACCOUNT_GLOBAL_EFFECT):
   // the password can never change from here, so the task UI itself closes
   // off — typed values are cleared, fields and submit disappear, and only
   // 닫기 remains. This also stops impossible retries that would mint a new
   // id per attempt after the pending id was cleared.
-  // One command id per distinct password: the server only replays a
-  // byte-identical retry, so the fingerprint includes the password and any
-  // edit after a failure mints a new id. An ambiguous failure keeps the id.
-  const pendingResetRef = useRef<{ fingerprint: string; commandId: string } | null>(null);
+  // A potentially applied reset keeps its exact request in memory. Neither
+  // the password nor its fingerprint enters browser storage.
+  const pendingResetRef = useRef<{ fingerprint: string; commandId: string; uncertain: boolean } | null>(null);
+  const otherResetReceipt = organizationReceipts.some((item) => item.command === "account.password-reset" && item.commandId !== pendingResetRef.current?.commandId);
   const submitGateRef = useRef(false);
 
   // True field diff versus empty defaults, plus unsettled/pending work.
@@ -1681,20 +1791,20 @@ function ResetDialog({
   const resetDirty = password !== "" || confirm !== "";
   useConsoleDraftGuard(
     resetDirty || pendingResetRef.current !== null || submitGateRef.current,
-    "작성 중인 비밀번호가 사라질 수 있습니다."
+    pendingResetRef.current ? UNCONFIRMED_WRITE_CLOSE_MESSAGE : "작성 중인 비밀번호가 사라질 수 있습니다."
   );
 
   // Single dismissal predicate: the shared dialog calls canClose ONCE on
   // Escape/backdrop and then the pure onClose prop below — never two
   // confirms. Cancel consults the same predicate once.
   function canCloseResetDialog(): boolean {
-    if (submitGateRef.current || submitting) return false;
+    if (submitGateRef.current || submitting || checkingReset) return false;
     return (!resetDirty && !pendingResetRef.current) || window.confirm(pendingResetRef.current ? UNCONFIRMED_WRITE_CLOSE_MESSAGE : DIRTY_CLOSE_MESSAGE);
   }
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (submitGateRef.current || submitting || sharedEffectBlocked) return;
+    if (submitGateRef.current || submitting || checkingReset || sharedEffectBlocked || otherResetReceipt) return;
     if (password !== confirm) {
       setFailure("비밀번호가 일치하지 않습니다.");
       return;
@@ -1704,9 +1814,13 @@ function ResetDialog({
     setFailure(null);
     try {
       const fingerprint = JSON.stringify([account.id, password]);
+      if (pendingResetRef.current?.uncertain && pendingResetRef.current.fingerprint !== fingerprint) {
+        setFailure("이전 재설정 결과를 확인한 뒤 비밀번호를 바꾸세요.");
+        return;
+      }
       const attempt = pendingResetRef.current?.fingerprint === fingerprint
         ? pendingResetRef.current
-        : { fingerprint, commandId: randomCommandId() };
+        : { fingerprint, commandId: randomCommandId(), uncertain: false };
       pendingResetRef.current = attempt;
       const commandId = attempt.commandId;
       const res = await consoleFetch(`/api/auth/accounts/${encodeURIComponent(account.id)}/password`, {
@@ -1722,7 +1836,7 @@ function ResetDialog({
       } | null;
       if (!res.ok) {
         const serverMessage = typeof data?.error === "string" ? data.error : "재설정하지 못했습니다.";
-        if (data?.code === "SHARED_ACCOUNT_GLOBAL_EFFECT") {
+        if (data?.code === "SHARED_ACCOUNT_GLOBAL_EFFECT" && !attempt.uncertain) {
           // Fail closed with an honest boundary: an owner reset here would
           // log the account out everywhere, so no reset runs from this task.
           // The holder's own path is the verified-email self-service on the
@@ -1743,11 +1857,13 @@ function ResetDialog({
           );
           return;
         }
-        if (isDefinitiveClientError(res.status)) {
+        if (isDefinitiveClientError(res.status) && !attempt.uncertain) {
           pendingResetRef.current = null;
           setFailure(serverMessage);
         } else {
-          setFailure(`${serverMessage} 같은 요청으로 다시 시도하세요.`);
+          attempt.uncertain = true;
+          setResetUncertain(true);
+          setFailure("재설정 결과를 확인하지 못했습니다. 서버 처리 확인 또는 같은 요청 다시 시도를 선택하세요.");
         }
         return;
       }
@@ -1757,17 +1873,50 @@ function ResetDialog({
         ? data.account as Record<string, unknown>
         : null;
       if (!resetAccount || resetAccount.id !== account.id) {
+        attempt.uncertain = true;
+        setResetUncertain(true);
         setFailure("응답을 확인하지 못했습니다. 같은 요청으로 다시 시도하세요.");
         return;
       }
       pendingResetRef.current = null;
+      setResetUncertain(false);
       onDone(typeof data?.sessionsRevoked === "number" ? data.sessionsRevoked : 0);
-    } catch {
-      setFailure("연결하지 못했습니다. 같은 요청으로 다시 시도하세요.");
+    } catch (error) {
+      const attempt = pendingResetRef.current;
+      if (attempt && !attempt.uncertain && isOrganizationContextBlock(error)) {
+        pendingResetRef.current = null;
+        setFailure("현재 조직을 확인한 뒤 다시 시도하세요.");
+      } else {
+        if (attempt) attempt.uncertain = true;
+        setResetUncertain(true);
+        setFailure("연결하지 못했습니다. 서버 처리 확인 또는 같은 요청 다시 시도를 선택하세요.");
+      }
     } finally {
       submitGateRef.current = false;
       setSubmitting(false);
     }
+  }
+
+  async function checkResetResult() {
+    const attempt = pendingResetRef.current;
+    if (!attempt?.uncertain || submitting || checkingReset) return;
+    setCheckingReset(true);
+    setFailure(null);
+    try {
+      const response = await operatorFetch(`/api/command-receipts/${encodeURIComponent(attempt.commandId)}`, { cache: "no-store" });
+      const data = await response.json().catch(() => null) as { status?: unknown; command?: unknown } | null;
+      if (response.ok && data?.status === "APPLIED" && data.command === "account.password-reset") {
+        acknowledgeOperatorReceipt(attempt.commandId);
+        forgetOperatorReceipt(attempt.commandId);
+        pendingResetRef.current = null;
+        setResetUncertain(false);
+        onDone(0);
+      } else if (response.ok && data?.status === "UNCONFIRMED") {
+        setFailure("아직 재설정 여부를 확인할 수 없습니다. 잠시 후 다시 확인하거나 같은 요청을 다시 시도하세요.");
+      } else if (response.status >= 500 || [425, 429].includes(response.status)) setFailure("일시적으로 처리 결과를 확인하지 못했습니다. 잠시 후 다시 확인하세요.");
+      else setFailure("결과를 확인하지 못했습니다. 현재 계정과 조직 권한을 확인하세요.");
+    } catch { setFailure("서버에 연결하지 못했습니다. 재설정 요청은 다시 보내지 않았습니다."); }
+    finally { setCheckingReset(false); }
   }
 
   return (
@@ -1780,7 +1929,7 @@ function ResetDialog({
           : `${account.email} · 재설정이 허용되는 계정은 성공하면 다른 기기에서 로그아웃됩니다.`
       }
       onClose={onClose}
-      busy={submitting}
+      busy={submitting || checkingReset}
       canClose={canCloseResetDialog}
       footer={
         <ConsoleFormActions>
@@ -1790,11 +1939,12 @@ function ResetDialog({
             </button>
           ) : (
             <>
-              <button type="button" className="button button-secondary" onClick={() => { if (canCloseResetDialog()) onClose(); }} disabled={submitting}>
+              <button type="button" className="button button-secondary" onClick={() => { if (canCloseResetDialog()) onClose(); }} disabled={submitting || checkingReset}>
                 취소
               </button>
-              <button type="submit" form="reset-form" className="button button-primary" disabled={submitting}>
-                {submitting ? "재설정 중입니다" : "재설정"}
+              {resetUncertain ? <button type="button" className="button button-secondary" disabled={submitting || checkingReset} onClick={() => void checkResetResult()}>{checkingReset ? "확인 중…" : "서버 처리 확인"}</button> : null}
+              <button type="submit" form="reset-form" className="button button-primary" disabled={submitting || checkingReset || otherResetReceipt}>
+                {submitting ? "재설정 중입니다" : resetUncertain ? "같은 요청 다시 시도" : "재설정"}
               </button>
             </>
           )}
@@ -1804,7 +1954,9 @@ function ResetDialog({
       {sharedEffectBlocked ? (
         failure ? <ConsoleFeedback kind="error">{failure}</ConsoleFeedback> : null
       ) : (
-        <form id="reset-form" className={consoleUiStyles.formStack} onSubmit={onSubmit}>
+        <ValidatedForm id="reset-form" className={consoleUiStyles.formStack} onSubmit={onSubmit}>
+          {resetUncertain ? <p role="status">결과를 확인할 때까지 입력한 비밀번호를 유지합니다.</p> : null}
+          {otherResetReceipt ? <p role="alert">이전 재설정을 먼저 확인하세요. 창을 닫으면 상단에서 서버 처리 여부를 확인할 수 있습니다.</p> : null}
           <div className={consoleUiStyles.field}>
             <label htmlFor="reset-password">새 비밀번호 (8자 이상)</label>
             <input
@@ -1814,6 +1966,7 @@ function ResetDialog({
               minLength={8}
               maxLength={200}
               value={password}
+              readOnly={submitting || checkingReset || resetUncertain}
               onChange={(event) => setPassword(event.target.value)}
               required
             />
@@ -1825,12 +1978,13 @@ function ResetDialog({
               type="password"
               autoComplete="new-password"
               value={confirm}
+              readOnly={submitting || checkingReset || resetUncertain}
               onChange={(event) => setConfirm(event.target.value)}
               required
             />
           </div>
           {failure ? <ConsoleFeedback kind="error">{failure}</ConsoleFeedback> : null}
-        </form>
+        </ValidatedForm>
       )}
     </ConsoleDialog>
   );
@@ -1839,10 +1993,12 @@ function InviteDialog({
   events,
   onClose,
   onDone,
+  onPreviouslyIssued,
 }: {
   events: TeamEvent[];
   onClose: () => void;
   onDone: (issued: { name: string; link: string }) => void;
+  onPreviouslyIssued: () => void;
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -1850,16 +2006,19 @@ function InviteDialog({
   const [eventId, setEventId] = useState("");
   const [failure, setFailure] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [inviteUncertain, setInviteUncertain] = useState(false);
+  const [checkingInvite, setCheckingInvite] = useState(false);
+  const organizationReceipts = useOrganizationReceipts();
   // Org-wide AGENCY grants confirm in place before anything is sent: the
   // staged snapshot is what the confirm sends, and inputs stay frozen while
   // staged so the summary cannot go stale.
   const [agencyStaged, setAgencyStaged] = useState<{ name: string; email: string; role: string } | null>(null);
   // One command id per distinct invitation: a lost response must replay the
   // same request (the server dedupes by id and never double-invites).
-  // Replays return 409 INVITATION_LINK_UNAVAILABLE without reissuing the
-  // once-shown bearer — that definitive 4xx clears the id. Edits mint a new
-  // one via the fingerprint.
-  const pendingInviteRef = useRef<{ fingerprint: string; commandId: string } | null>(null);
+  // Only the server's specific LINK_UNAVAILABLE code proves a replay was
+  // applied. Other errors after response loss cannot erase the first attempt.
+  const pendingInviteRef = useRef<{ fingerprint: string; commandId: string; uncertain: boolean } | null>(null);
+  const otherInviteReceipt = organizationReceipts.some((item) => item.command === "invitation.create" && item.commandId !== pendingInviteRef.current?.commandId);
   const submitGateRef = useRef(false);
 
   // True field diff versus opening defaults (role/eventId count, not just
@@ -1868,27 +2027,27 @@ function InviteDialog({
     name.trim() !== "" || email.trim() !== "" || role !== "MANAGER" || eventId !== "";
   useConsoleDraftGuard(
     inviteDirty || pendingInviteRef.current !== null || submitGateRef.current || agencyStaged !== null,
-    "작성 중인 초대 내용이 사라질 수 있습니다."
+    pendingInviteRef.current ? UNCONFIRMED_WRITE_CLOSE_MESSAGE : "작성 중인 초대 내용이 사라질 수 있습니다."
   );
 
   // Single dismissal predicate: the shared dialog calls canClose ONCE on
   // Escape/backdrop and then the pure onClose prop below — never two
   // confirms. Cancel consults the same predicate once.
   function canCloseInviteDialog(): boolean {
-    if (submitGateRef.current || submitting) return false;
+    if (submitGateRef.current || submitting || checkingInvite) return false;
     return (!inviteDirty && !pendingInviteRef.current && !agencyStaged) || window.confirm(pendingInviteRef.current ? UNCONFIRMED_WRITE_CLOSE_MESSAGE : DIRTY_CLOSE_MESSAGE);
   }
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (submitGateRef.current || submitting) return;
+    if (submitGateRef.current || submitting || checkingInvite || otherInviteReceipt) return;
     const payload = {
       name: name.trim(),
       email: email.trim(),
       role,
       ...(role === "MANAGER" && eventId ? { eventId } : {}),
     };
-    if (role === "AGENCY") {
+    if (role === "AGENCY" && !inviteUncertain) {
       // Org-wide grant with no event scope: confirm the target and the
       // whole-org scope in place before sending anything.
       setFailure(null);
@@ -1899,15 +2058,19 @@ function InviteDialog({
   }
 
   async function sendInvite(payload: { name: string; email: string; role: string; eventId?: string }): Promise<void> {
-    if (submitGateRef.current || submitting) return;
+    if (submitGateRef.current || submitting || checkingInvite || otherInviteReceipt) return;
     submitGateRef.current = true;
     setSubmitting(true);
     setFailure(null);
     try {
       const fingerprint = JSON.stringify(payload);
+      if (pendingInviteRef.current?.uncertain && pendingInviteRef.current.fingerprint !== fingerprint) {
+        setFailure("이전 초대 결과를 확인한 뒤 내용을 바꾸세요.");
+        return;
+      }
       const attempt = pendingInviteRef.current?.fingerprint === fingerprint
         ? pendingInviteRef.current
-        : { fingerprint, commandId: randomCommandId() };
+        : { fingerprint, commandId: randomCommandId(), uncertain: false };
       pendingInviteRef.current = attempt;
       const commandId = attempt.commandId;
       const res = await consoleFetch("/api/auth/invitations", {
@@ -1917,71 +2080,108 @@ function InviteDialog({
       });
       const data = (await res.json().catch(() => null)) as {
         error?: unknown;
+        code?: unknown;
         field?: unknown;
         invitation?: { name?: unknown } | null;
         token?: unknown;
       } | null;
-      if (!res.ok || typeof data?.token !== "string") {
-        if (!res.ok && isDefinitiveClientError(res.status)) {
+      if (!res.ok || typeof data?.token !== "string" || !confirmsInvitation(payload, data)) {
+        if (res.status === 409 && data?.code === "INVITATION_LINK_UNAVAILABLE") {
+          acknowledgeOperatorReceipt(commandId);
+          forgetOperatorReceipt(commandId);
+          pendingInviteRef.current = null;
+          setInviteUncertain(false);
+          onPreviouslyIssued();
+        } else if (!res.ok && isDefinitiveClientError(res.status) && !attempt.uncertain) {
           pendingInviteRef.current = null;
           // Server wording is never rendered: definitive denials get a
           // fixed, actionable message while the field pin stays server-set.
           const definitiveMessage =
-            res.status === 409
-              ? "이미 처리된 초대입니다. 대기 목록을 확인하세요."
-              : res.status === 403
+            res.status === 403
                 ? "초대할 권한이 없습니다. 조직 소유자에게 요청하세요."
                 : "입력 내용을 확인하세요.";
           setFailure(definitiveMessage);
-        } else if (!res.ok) {
-          setFailure("초대 결과를 확인하지 못했습니다. 같은 요청으로 다시 시도하세요.");
         } else {
-          // 2xx without the once-shown bearer: the invite may exist unseen.
-          // Keep the id so the retry replays instead of double-inviting.
-          setFailure("응답을 확인하지 못했습니다. 같은 요청으로 다시 시도하세요.");
+          attempt.uncertain = true;
+          setInviteUncertain(true);
+          setFailure("초대 결과를 확인하지 못했습니다. 서버 처리 확인 또는 같은 요청 다시 시도를 선택하세요.");
         }
         return;
       }
       pendingInviteRef.current = null;
+      setInviteUncertain(false);
       const inviteName = typeof data?.invitation?.name === "string" && data.invitation.name
         ? data.invitation.name
         : name.trim();
+      const issuedToken = data.token;
       onDone({
         name: inviteName,
-        link: `${window.location.origin}/invite/${encodeURIComponent(data.token)}`,
+        link: `${window.location.origin}/invite/${encodeURIComponent(issuedToken)}`,
       });
-    } catch {
-      setFailure("연결하지 못했습니다. 같은 요청으로 다시 시도하세요.");
+    } catch (error) {
+      const attempt = pendingInviteRef.current;
+      if (attempt && !attempt.uncertain && isOrganizationContextBlock(error)) {
+        pendingInviteRef.current = null;
+        setFailure("현재 조직을 확인한 뒤 다시 시도하세요.");
+      } else {
+        if (attempt) attempt.uncertain = true;
+        setInviteUncertain(true);
+        setFailure("연결하지 못했습니다. 서버 처리 확인 또는 같은 요청 다시 시도를 선택하세요.");
+      }
     } finally {
       submitGateRef.current = false;
       setSubmitting(false);
     }
   }
 
+  async function checkInviteResult() {
+    const attempt = pendingInviteRef.current;
+    if (!attempt?.uncertain || submitting || checkingInvite) return;
+    setCheckingInvite(true);
+    setFailure(null);
+    try {
+      const response = await operatorFetch(`/api/command-receipts/${encodeURIComponent(attempt.commandId)}`, { cache: "no-store" });
+      const data = await response.json().catch(() => null) as { status?: unknown; command?: unknown } | null;
+      if (response.ok && data?.status === "APPLIED" && data.command === "invitation.create") {
+        acknowledgeOperatorReceipt(attempt.commandId);
+        forgetOperatorReceipt(attempt.commandId);
+        pendingInviteRef.current = null;
+        setInviteUncertain(false);
+        onPreviouslyIssued();
+      } else if (response.ok && data?.status === "UNCONFIRMED") {
+        setFailure("아직 초대 발급 여부를 확인할 수 없습니다. 잠시 후 다시 확인하거나 같은 요청을 다시 시도하세요.");
+      } else if (response.status >= 500 || [425, 429].includes(response.status)) setFailure("일시적으로 처리 결과를 확인하지 못했습니다. 잠시 후 다시 확인하세요.");
+      else setFailure("결과를 확인하지 못했습니다. 현재 계정과 조직 권한을 확인하세요.");
+    } catch { setFailure("서버에 연결하지 못했습니다. 초대 요청은 다시 보내지 않았습니다."); }
+    finally { setCheckingInvite(false); }
+  }
+
   return (
     <ConsoleDialog
       title="구성원 초대"
       titleId="invite-title"
-      description="초대 링크는 발급 시 한 번만 표시됩니다. 역할과 적용 범위를 확인한 뒤 초대하세요."
+      description={inviteUncertain ? "결과 확인 전까지 초대 정보를 유지합니다. 초대 링크는 한 번만 표시됩니다." : "초대 링크는 발급 시 한 번만 표시됩니다. 역할과 적용 범위를 확인한 뒤 초대하세요."}
       onClose={onClose}
-      busy={submitting}
+      busy={submitting || checkingInvite}
       canClose={canCloseInviteDialog}
       footer={
         <ConsoleFormActions>
           {agencyStaged ? null : (
             <>
-              <button type="button" className="button button-secondary" onClick={() => { if (canCloseInviteDialog()) onClose(); }} disabled={submitting}>
+              <button type="button" className="button button-secondary" onClick={() => { if (canCloseInviteDialog()) onClose(); }} disabled={submitting || checkingInvite}>
                 취소
               </button>
-              <button type="submit" form="invite-form" className="button button-primary" disabled={submitting}>
-                {submitting ? "초대 중입니다" : "초대 링크 발급"}
+              {inviteUncertain ? <button type="button" className="button button-secondary" disabled={submitting || checkingInvite} onClick={() => void checkInviteResult()}>{checkingInvite ? "확인 중…" : "서버 처리 확인"}</button> : null}
+              <button type="submit" form="invite-form" className="button button-primary" disabled={submitting || checkingInvite || otherInviteReceipt}>
+                {submitting ? "초대 중입니다" : inviteUncertain ? "같은 요청 다시 시도" : "초대 링크 발급"}
               </button>
             </>
           )}
         </ConsoleFormActions>
       }
     >
-      <form id="invite-form" className={consoleUiStyles.formStack} onSubmit={onSubmit}>
+      <ValidatedForm id="invite-form" className={consoleUiStyles.formStack} onSubmit={onSubmit}>
+        {otherInviteReceipt ? <p role="alert">이전 초대를 먼저 확인하세요. 창을 닫으면 상단에서 서버 처리 여부를 확인할 수 있습니다.</p> : null}
         <div className={consoleUiStyles.field}>
           <label htmlFor="invite-name">이름</label>
           <input
@@ -1991,7 +2191,7 @@ function InviteDialog({
             value={name}
             onChange={(event) => setName(event.target.value)}
             required
-            disabled={submitting || agencyStaged !== null}
+            disabled={submitting || checkingInvite || inviteUncertain || agencyStaged !== null}
           />
         </div>
         <div className={consoleUiStyles.field}>
@@ -2003,7 +2203,7 @@ function InviteDialog({
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             required
-            disabled={submitting || agencyStaged !== null}
+            disabled={submitting || checkingInvite || inviteUncertain || agencyStaged !== null}
           />
         </div>
         <div className={consoleUiStyles.field}>
@@ -2012,7 +2212,7 @@ function InviteDialog({
             id="invite-role"
             value={role}
             onChange={(event) => { setRole(event.target.value); setEventId(""); }}
-            disabled={submitting || agencyStaged !== null}
+            disabled={submitting || checkingInvite || inviteUncertain || agencyStaged !== null}
           >
             <option value="AGENCY">조직 소유자</option>
             <option value="MANAGER">조직 구성원</option>
@@ -2031,7 +2231,7 @@ function InviteDialog({
               id="invite-event"
               value={eventId}
               onChange={(event) => setEventId(event.target.value)}
-              disabled={submitting || agencyStaged !== null}
+              disabled={submitting || checkingInvite || inviteUncertain || agencyStaged !== null}
             >
               <option value="">지정하지 않음</option>
               {events.map((item) => (
@@ -2041,7 +2241,7 @@ function InviteDialog({
           </div>
         ) : null}
         {failure ? <ConsoleFeedback kind="error">{failure}</ConsoleFeedback> : null}
-      </form>
+      </ValidatedForm>
       {agencyStaged ? (
         <ConsoleConfirm
           summary={confirmLines(`${agencyStaged.name}(${agencyStaged.email})님을 조직 소유자로 초대합니다.\n\n조직 소유자는 이 운영사의 모든 행사·팀·설정을 관리할 수 있으며, 이 초대에는 행사를 지정하지 않았습니다.`)}
@@ -2125,7 +2325,7 @@ function RevokeInviteButton({
           }
           return;
         }
-        if (isDefinitiveClientError(res.status)) {
+        if (isDefinitiveClientError(res.status) && !hadUncertainAttempt) {
           pendingRef.current = null;
           setRetryable(false);
           setFailure(serverMessage);

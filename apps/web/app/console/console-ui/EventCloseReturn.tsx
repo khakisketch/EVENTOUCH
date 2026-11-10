@@ -46,7 +46,7 @@ export default function EventCloseReturn({ eventId, pageId, snapshot, noticeStat
           <p>{progress?.detail || "현재 화면의 상태가 준비되면 다음 단계를 표시합니다."}</p>
           {progress?.warnings.length ? <p role="note">미충족 전제: {progress.warnings.join(" · ")}. 이동은 막지 않습니다.</p> : null}
         </div>
-        {archiveControl && progress && [6, 7].includes(progress.position) && snapshot?.stage !== "ARCHIVED" ? archiveControl : progress?.next ? progress.next.localStage ? (
+        {archiveControl && progress && snapshot?.archiveAvailable && [6, 7].includes(progress.position) && snapshot.stage !== "ARCHIVED" ? archiveControl : progress?.next ? progress.next.localStage ? (
           <a ref={nextRef} className="button button-secondary" href={progress.next.href} data-close-linear-next onClick={() => {
             const details = document.querySelector<HTMLDetailsElement>('details[data-settings-collapse="stage"]');
             if (details) details.open = true;
@@ -57,7 +57,7 @@ export default function EventCloseReturn({ eventId, pageId, snapshot, noticeStat
             setHash("#settings-stage");
           }}>다음: {progress.next.label}</a>
         ) : <Link ref={nextRef} className="button button-secondary" href={progress.next.href} data-close-linear-next onNavigate={refreshShell}>다음: {progress.next.label}</Link> : null}
-        <p className={styles.closeOptional}>허브 복귀는 상태 확인용 선택입니다. 다음 단계로 바로 이어갈 수 있습니다.</p>
+        <p className={styles.closeOptional}>{progress && snapshot && !snapshot.archiveAvailable && snapshot.stage !== "ARCHIVED" ? "자료를 다시 확인한 뒤 다음 단계를 볼 수 있습니다." : "허브 복귀는 상태 확인용 선택입니다. 다음 단계로 바로 이어갈 수 있습니다."}</p>
         <Link className="button button-secondary" href={href} prefetch={false} data-close-back
           onNavigate={() => window.dispatchEvent(new Event("eventouch:shell-reload"))}>마감으로 돌아가기</Link>
       </div>

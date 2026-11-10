@@ -44,6 +44,8 @@
   --info: #315B82;
   --info-soft: #EAF0F7;
   --info-line: #BDCEDF;
+  /* Channel identity inside the illustrative Alimtalk message only. */
+  --message-kakao-header: #FEE500;
 
   --focus: #AA3A10;
   --report-color: var(--brand);

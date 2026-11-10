@@ -113,6 +113,15 @@
   overflow-wrap: anywhere;
 }
 
+.refreshTool[aria-busy="true"] { color: var(--brand-text); cursor: progress; }
+.refreshTool[aria-busy="true"] svg { animation: refresh-turn .9s linear infinite; }
+
+@keyframes refresh-turn { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .refreshTool[aria-busy="true"] svg { animation: none; }
+}
+
 .sectionAction {
   display: flex;
   grid-area: action;
@@ -383,6 +392,12 @@
   flex-basis: 100%;
 }
 
+/* A short, named filter may share a row with search when the viewport has
+   enough room. It still wraps naturally when the labels would be crowded. */
+.toolbarFilters > [data-toolbar-span="compact"] {
+  flex: 0 1 140px;
+}
+
 .toolbarActions {
   display: flex;
   flex-wrap: wrap;
@@ -436,6 +451,20 @@
     flex-basis: auto;
   }
 
+  /* The compact variant uses an explicit grid on phones. A wrapping flex
+     container can otherwise retain the old two-row height after its two
+     controls fit on one row, leaving an empty band above and below them. */
+  .toolbarFilters:has(> [data-toolbar-span="compact"]) {
+    display: grid;
+    flex: 0 0 auto;
+    grid-template-columns: minmax(0, 1fr) minmax(120px, 140px);
+    align-items: start;
+  }
+
+  .toolbarFilters:has(> [data-toolbar-span="compact"]) > label {
+    margin-bottom: 0;
+  }
+
   .toolbarActions {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -453,6 +482,12 @@
     display: flex;
     flex-wrap: wrap;
     width: 100%;
+  }
+}
+
+@media (max-width: 360px) {
+  .toolbarFilters:has(> [data-toolbar-span="compact"]) {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -493,6 +528,12 @@
   justify-content: flex-end;
   gap: var(--s2) var(--s3);
   min-width: 0;
+}
+
+/* A dialog footer is itself a flex row. Let the shared action row use the
+   available width so its mobile button layout can actually fill the dialog. */
+:global(.dialog-actions) > .formActions {
+  width: 100%;
 }
 
 .formActionsBetween {
@@ -919,4 +960,39 @@
   flex-basis: 100%;
   color: var(--muted);
   font-size: var(--small);
+}
+
+/* Persistent task panels retain drafts and command receipts while hidden. */
+.section[hidden] { display: none; }
+.sectionNavLink[role="tab"] { font: inherit; cursor: pointer; background: transparent; }
+.anchorNav .sectionNavLink:not([aria-current="location"]) {
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 4px;
+}
+.sectionNavLink[aria-selected="true"] {
+  border-bottom-color: var(--brand-text); color: var(--brand-text); font-weight: 700;
+}
+.inspectorHost { min-width: 0; align-self: start; position: sticky; top: var(--s4); }
+.inspectorPanel {
+  min-width: 0; max-height: calc(100svh - 100px); overflow: auto;
+  padding: var(--s5); border-left: 1px solid var(--line); background: var(--paper);
+}
+.inspectorPanel > h2 { margin: 0 0 var(--s2); font-size: var(--h3); }
+.pageHeader { border-bottom: 1px solid var(--line); padding-bottom: var(--s4); }
+.page { gap: var(--s4); }
+.pageFlow { gap: var(--s5); align-content: start; }
+.pageContext { margin: 0; }
+.contextLink { font-weight: 500; color: var(--muted); }
+@media (min-width: 769px) {
+  .pageIdentity:has(.pageContext) { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .contextLink { min-height: 44px; }
+}
+@media (max-width: 768px) {
+  .pageIdentity { display: flex; flex-direction: column; gap: 0; }
+  .pageHeader { display: flex; flex-wrap: wrap; gap: var(--s2); }
+  .pageIdentity { flex: 1 1 240px; }
+  .pageActions { justify-content: flex-start; }
+  .pageContext { order: -1; }
+  .pageSubline { margin: var(--s1) 0 0; }
 }

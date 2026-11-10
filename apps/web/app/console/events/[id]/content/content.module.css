@@ -3,6 +3,26 @@
    against short titles; an in-place ConsoleConfirm ([role="group"])
    always spans the full row below instead of squeezing in as a third
    flex column. Mobile stacks to one column like the shared row behavior. */
+.draftFields {
+  display: grid;
+  gap: var(--s4);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.recovery {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-small);
+}
+
+.recovery h2, .recovery p { margin: 0; }
+.recoveryActions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+
 li.recordRow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -260,3 +280,6 @@ li.stackedRow {
   width: auto;
   min-height: auto;
 }
+.venueMapPreview { margin: 0; }
+.venueMapPreview img { display: block; width: auto; max-width: 100%; max-height: 280px; object-fit: contain; }
+.venueMapRemove { justify-self: start; }

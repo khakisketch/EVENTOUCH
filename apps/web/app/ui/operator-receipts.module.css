@@ -1,0 +1,15 @@
+.panel {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--paper);
+  overflow-wrap: anywhere;
+}
+.panel h2 { margin: 0; font-size: var(--body); }
+.panel p { margin: 0; }
+.row { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; justify-content: space-between; }
+.actions { display: flex; gap: var(--s2); flex-wrap: wrap; }
+.ticketRecovery { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2) var(--s3); }
+.ticketRecovery p { margin: 0; min-width: 0; overflow-wrap: anywhere; }

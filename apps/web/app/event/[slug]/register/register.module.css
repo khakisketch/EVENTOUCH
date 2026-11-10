@@ -62,6 +62,10 @@
   gap: var(--s2);
 }
 
+.phoneHint {
+  margin: var(--s2) 0 0;
+}
+
 .submitBlock {
   display: grid;
   gap: var(--s3);

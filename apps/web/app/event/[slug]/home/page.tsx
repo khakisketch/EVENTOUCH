@@ -1,14 +1,12 @@
 import HomeShell from "./HomeShell";
 
-// Attendee landing shell for the mobile event experience. Five tabs share one
-// route: personal QR check-in, event notices, personal lucky number, mobile
-// roulette, and ranked voting. The ticket bearer stays tab-scoped in
-// sessionStorage exactly as on the ticket screen; no new persistent keys.
+// A new event gets a new shell instance: its state, pending loads and in-tab
+// bearer never carry over from a previously rendered slug.
 export default async function HomePage({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  return <HomeShell slug={slug} />;
+  return <HomeShell key={slug} slug={slug} />;
 }

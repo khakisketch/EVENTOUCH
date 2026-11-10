@@ -1,0 +1,29 @@
+.recovery {
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--warning-line);
+  border-radius: var(--radius);
+  background: var(--warning-soft);
+}
+
+.recovery h2 {
+  margin: 0;
+  font-size: var(--h3);
+}
+
+.recovery p {
+  margin: 0;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.recoveryActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.recoveryError {
+  color: var(--danger);
+}

@@ -38,8 +38,10 @@ type DisplaySelection = {
   type: string;
   moduleId: string | null;
   noticeId: string | null;
+  drawId: string;
 };
 type BoardData = {
+  enabled: boolean;
   name: string;
   date: string;
   venueName: string;
@@ -55,10 +57,13 @@ type BoardState =
   | { kind: "loading" }
   | { kind: "missing" }
   | { kind: "failed"; message: string }
-  | { kind: "ready"; data: BoardData; frame: number; stale: boolean };
+  | { kind: "disabled"; stale: boolean }
+  | { kind: "ready"; data: BoardData; frame: number; frameSince: number; stale: boolean };
 
 const POLL_MS = 5000;
 const ACTIVE_DRAW_POLL_MS = 1000;
+const POLL_TIMEOUT_MS = 8000;
+const ROTATION_MS = 5000;
 
 function text(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -75,7 +80,7 @@ function prefersReducedMotion(): boolean {
 function toBoard(
   slug: string,
   data: {
-    event?: { name?: unknown; date?: unknown } | null;
+    event?: { name?: unknown; date?: unknown; features?: unknown } | null;
     workspace?: {
       venue?: { name?: unknown } | null;
       notices?: unknown;
@@ -201,15 +206,19 @@ function toBoard(
     type: text(selection.type) || "idle",
     moduleId: typeof selection.moduleId === "string" ? selection.moduleId : null,
     noticeId: typeof selection.noticeId === "string" ? selection.noticeId : null,
+    drawId: text(selection.drawId),
   };
   const venue =
     typeof workspace.venue === "object" && workspace.venue !== null
       ? (workspace.venue as Record<string, unknown>)
       : {};
   return {
+    enabled: Array.isArray(data.event.features) && data.event.features.includes("screen"),
     name: text(data.event.name),
     date: text(data.event.date),
-    venueName: text(venue.name),
+    // Older API responses may still carry venue text after the feature was
+    // switched off. The public venue screen must honour the current toggle.
+    venueName: Array.isArray(data.event.features) && data.event.features.includes("venue") ? text(venue.name) : "",
     notices,
     program,
     modules,
@@ -217,6 +226,13 @@ function toBoard(
     photos,
     display,
   };
+}
+
+function displayedDraw(board: BoardData): DrawOutcome | null {
+  if (board.display.type !== "draw") return null;
+  const history = board.modules.find((module) => module.id === board.display.moduleId && module.type === "draw")?.drawHistory;
+  // Old selections without a result ID still follow the latest published draw.
+  return (board.display.drawId ? history?.find((result) => result.id === board.display.drawId) : history?.[0]) ?? null;
 }
 
 function DrawReveal({
@@ -403,7 +419,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
   function refreshNow() {
     setRetryTick((tick) => tick + 1);
   }
-  const seenDrawIdsRef = useRef<Map<string, string> | null>(null);
+  const displayedDrawIdRef = useRef<string | null | undefined>(undefined);
   const visibleDrawReady = state.kind === "ready" && (
     state.data.display.type === "draw" || state.data.modules.some((module) => module.type === "draw")
   );
@@ -415,14 +431,20 @@ export default function DisplayBoard({ slug }: { slug: string }) {
   }, []);
 
   useEffect(() => {
-    seenDrawIdsRef.current = null;
+    displayedDrawIdRef.current = undefined;
     setRevealId(null);
   }, [slug]);
 
   useEffect(() => {
     let stopped = false;
     let timer: number | null = null;
+    let inFlight: AbortController | null = null;
     let backoff = false;
+    function markUnavailable(message: string) {
+      setState((prev) => prev.kind === "ready" || prev.kind === "disabled"
+        ? { ...prev, stale: true }
+        : { kind: "failed", message });
+    }
     function scheduleNext() {
       if (stopped) return;
       const visible = document.visibilityState === "visible";
@@ -439,10 +461,14 @@ export default function DisplayBoard({ slug }: { slug: string }) {
         return;
       }
       let failed = false;
+      const controller = new AbortController();
+      inFlight = controller;
+      // The deadline covers the response body as well as the headers.
+      const timeout = window.setTimeout(() => controller.abort(), POLL_TIMEOUT_MS);
       try {
         const res = await fetch(
           `/api/public/events/${encodeURIComponent(slug)}`,
-          { cache: "no-store" }
+          { cache: "no-store", signal: controller.signal }
         );
         if (stopped) return;
         if (res.status === 404) {
@@ -452,57 +478,54 @@ export default function DisplayBoard({ slug }: { slug: string }) {
         }
         if (!res.ok) {
           failed = true;
-          setState((prev) =>
-            prev.kind === "ready"
-              ? { ...prev, stale: true }
-              : { kind: "failed", message: "화면 정보를 불러오지 못했습니다." }
-          );
+          markUnavailable("화면 정보를 불러오지 못했습니다.");
           return;
         }
-        const board = toBoard(slug, (await res.json()) as object);
+        const payload = (await res.json()) as object;
+        if (stopped) return;
+        const board = toBoard(slug, payload);
         if (!board) {
           failed = true;
           setState({ kind: "missing" });
           return;
         }
-        const seen = seenDrawIdsRef.current;
-        const currentIds = new Map<string, string>();
-        const newlyArrived: string[] = [];
-        for (const drawModule of board.modules) {
-          if (drawModule.type !== "draw") continue;
-          const latest = drawModule.drawHistory[0];
-          if (!latest?.id) continue;
-          currentIds.set(drawModule.id, latest.id);
-          if (seen && seen.has(drawModule.id) && seen.get(drawModule.id) !== latest.id) {
-            newlyArrived.push(latest.id);
-          } else if (seen && !seen.has(drawModule.id)) {
-            newlyArrived.push(latest.id);
-          }
+        if (!board.enabled) {
+          displayedDrawIdRef.current = undefined;
+          setRevealId(null);
+          setState({ kind: "disabled", stale: false });
+          return;
         }
-        if (seen === null) {
-          seenDrawIdsRef.current = currentIds;
-        } else {
-          for (const [moduleId, id] of currentIds) seen.set(moduleId, id);
-          if (newlyArrived.length) setRevealId(newlyArrived[newlyArrived.length - 1]);
+        const nextDrawId = displayedDraw(board)?.id ?? null;
+        if (displayedDrawIdRef.current !== undefined && displayedDrawIdRef.current !== nextDrawId) {
+          setRevealId(nextDrawId);
         }
-        setState((prev) => ({
-          kind: "ready",
-          data: board,
-          frame: prev.kind === "ready" ? prev.frame + 1 : 0,
-          stale: false,
-        }));
+        displayedDrawIdRef.current = nextDrawId;
+        const receivedAt = performance.now();
+        setState((prev) => {
+          // Fast draw reads update the projection without cutting short the
+          // ordinary rotation. After a failure, give the current frame a full turn.
+          const previous = prev.kind === "ready" && prev.data.display.type === board.display.type ? prev : null;
+          const advance = previous !== null && !previous.stale && receivedAt - previous.frameSince >= ROTATION_MS;
+          return {
+            kind: "ready", data: board, stale: false,
+            frame: (previous?.frame ?? 0) + (advance ? 1 : 0),
+            frameSince: !previous || previous.stale || advance ? receivedAt : previous.frameSince,
+          };
+        });
       } catch {
         failed = true;
         if (!stopped) {
           // A failed poll keeps the last good frame: a venue screen must
           // never go blank on a transient network drop.
-          setState((prev) =>
-            prev.kind === "ready"
-              ? { ...prev, stale: true }
-              : { kind: "failed", message: "연결하지 못했습니다. 다시 시도하세요." }
-          );
+          const message = controller.signal.aborted
+            ? "화면 응답이 지연되고 있습니다. 다시 시도하세요."
+            : "연결하지 못했습니다. 다시 시도하세요.";
+          markUnavailable(message);
         }
       } finally {
+        window.clearTimeout(timeout);
+        controller.abort();
+        inFlight = null;
         if (!stopped) {
           backoff = failed;
           scheduleNext();
@@ -519,6 +542,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
     void refresh();
     return () => {
       stopped = true;
+      inFlight?.abort();
       document.removeEventListener("visibilitychange", onVisibilityChange);
       if (timer !== null) window.clearTimeout(timer);
     };
@@ -548,6 +572,18 @@ export default function DisplayBoard({ slug }: { slug: string }) {
             다시 시도
           </button>
         </p>
+      </section>
+    );
+  }
+  if (state.kind === "disabled") {
+    return (
+      <section className="display-state display-paused" aria-labelledby="display-disabled-heading">
+        <h1 id="display-disabled-heading">행사장 출력이 꺼져 있습니다</h1>
+        <p>운영자가 행사 설정에서 출력을 켜면 화면이 자동으로 표시됩니다.</p>
+        {state.stale ? <>
+          <p className="display-stale" role="status">연결 확인 중 · 마지막으로 확인한 상태입니다</p>
+          <p><button type="button" className="button button-secondary" onClick={refreshNow}>새로고침</button></p>
+        </> : null}
       </section>
     );
   }
@@ -605,7 +641,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
       body: <p className="display-answer">정답 · {module.answer}</p>,
     };
   } else if (data.display.type === "draw" && module && module.type === "draw") {
-    const outcome = module.drawHistory[0] ?? null;
+    const outcome = displayedDraw(data);
     selected = {
       key: `draw-${module.id}`,
       title: outcome?.programName || module.title || "추첨",

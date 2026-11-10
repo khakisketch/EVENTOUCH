@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
+import Link from "next/link";
 import type { HomeStyle } from "../../../../lib/attendee-home";
+import { normalizeHomeMenus, type HomeMenus, type HomeProgram } from "../../../../lib/attendee-home-menus";
 import styles from "./home.module.css";
 
-export type HomeMenuKey = "qr" | "notice" | "lucky" | "roulette" | "vote" | "stamp";
+export type HomeMenuKey = "qr" | "application" | "notice" | "lucky" | "roulette" | "vote" | "stamp";
 type Menu = {
   key: HomeMenuKey;
   label: string;
@@ -23,13 +25,6 @@ export const HOME_MENUS: Menu[] = [
 /** Tiles that need a ticket before they do anything useful. */
 const NEEDS_TICKET: ReadonlySet<HomeMenuKey> = new Set(["lucky", "roulette", "vote", "stamp"]);
 
-// Participant-facing Korean labels; the internal keys stay for styling.
-const CATEGORY_LABEL: Record<Menu["category"], string> = {
-  Utility: "필수",
-  info: "안내",
-  Engagement: "참여",
-};
-
 type AttendeeHomeLandingProps = {
   eventName: string;
   // Whether this browser actually holds a ticket. Tiles that need one say
@@ -39,30 +34,44 @@ type AttendeeHomeLandingProps = {
   // participant, so the home never assumes one; the ticket opens from the
   // first entry when the attendee has it.
   keyvisual: string | null;
+  defaultHomeBanner?: "legacy" | "neutral";
   homeStyle: HomeStyle;
   onOpen?: (key: HomeMenuKey) => void;
   menuButtonRef?: (key: HomeMenuKey, node: HTMLButtonElement | null) => void;
   preview?: boolean;
   shortViewport?: boolean;
+  slug?: string;
+  hasPrograms?: boolean;
+  unavailable?: HomeMenuKey[];
+  homeMenus?: HomeMenus;
+  programs?: HomeProgram[];
 };
 
 export default function AttendeeHomeLanding({
   eventName,
   hasTicket,
   keyvisual,
+  defaultHomeBanner = "legacy",
   homeStyle,
   onOpen,
   menuButtonRef,
   preview = false,
   shortViewport = false,
+  slug,
+  hasPrograms = false,
+  unavailable = [],
+  homeMenus,
+  programs = [],
 }: AttendeeHomeLandingProps) {
   const [imageFailed, setImageFailed] = useState(false);
+  const neutralBanner = imageFailed || (!keyvisual && defaultHomeBanner === "neutral");
   const title = homeStyle.heroTitle?.trim() || eventName;
   const extended = homeStyle.heroLayout !== "image-only" && (
     homeStyle.titleScale === "large" || Boolean(homeStyle.heroSubtitle.trim()) || [...title].length > 30
   );
   const bannerClasses = [
     styles.eventBanner,
+    neutralBanner ? styles.bannerNeutral : "",
     homeStyle.heroLayout === "bottom-overlay" ? styles.bannerBottomOverlay : "",
     homeStyle.heroLayout === "image-only" ? styles.bannerImageOnly : "",
     homeStyle.titleScale === "large" ? styles.bannerTitleLarge : "",
@@ -74,11 +83,7 @@ export default function AttendeeHomeLanding({
     homeStyle.overlay !== "none" ? styles[`bannerOverlay${capitalize(homeStyle.overlay)}${capitalize(homeStyle.textTone)}`] : "",
     extended ? styles.bannerExtended : "",
   ].filter(Boolean).join(" ");
-  const imageSource = imageFailed && preview
-    ? null
-    : imageFailed
-      ? "/attendee-home-banner.png"
-      : keyvisual || "/attendee-home-banner.png";
+  const imageSource = imageFailed ? null : keyvisual || (defaultHomeBanner === "neutral" ? null : "/attendee-home-banner.png");
 
   useEffect(() => setImageFailed(false), [keyvisual]);
 
@@ -86,6 +91,16 @@ export default function AttendeeHomeLanding({
   // (under the preview h2): there it renders an h3 with identical styling so
   // the builder page keeps a single h1. The public page keeps the h1.
   const Title = preview ? "h3" : "h1";
+  const menuSettings = normalizeHomeMenus(homeMenus);
+  const ordered = ["qr", ...menuSettings.order].flatMap((key) => HOME_MENUS.filter((menu) => menu.key === key));
+  // Preserve the two existing groups while allowing order changes inside each.
+  const visibleMenus = [
+    ...ordered.filter((menu) => menu.category === "Utility"),
+    ...ordered.filter((menu) => menu.category === "info"),
+    ...ordered.filter((menu) => menu.category === "Engagement"),
+  ].filter((menu) => !unavailable.includes(menu.key) && (menu.key === "qr" || !menuSettings.hidden.includes(menu.key as typeof menuSettings.hidden[number])));
+  const programById = new Map(programs.map((program) => [program.id, program]));
+  const selectedPrograms = menuSettings.programs.flatMap((id) => programById.has(id) ? [programById.get(id)!] : []);
 
   return (
     <>
@@ -97,12 +112,12 @@ export default function AttendeeHomeLanding({
             alt=""
             onError={() => setImageFailed(true)}
           />
-        ) : (
+        ) : imageFailed ? (
           <div className={styles.bannerImageFailure} role="status">
             배너 이미지를 불러오지 못했습니다.
           </div>
-        )}
-        <div className={`${styles.bannerText}${homeStyle.heroLayout === "image-only" ? ` ${styles.visuallyHidden}` : ""}`}>
+        ) : null}
+        <div className={`${styles.bannerText}${homeStyle.heroLayout === "image-only" && !neutralBanner ? ` ${styles.visuallyHidden}` : ""}`}>
           <Title className={styles.eventTitle}>{title}</Title>
           {homeStyle.heroLayout !== "image-only" && homeStyle.heroSubtitle.trim() ? (
             <p className={styles.heroSubtitle}>{homeStyle.heroSubtitle}</p>
@@ -110,7 +125,9 @@ export default function AttendeeHomeLanding({
         </div>
       </section>
       <nav className={`${styles.menuBoard}${preview && shortViewport ? ` ${styles.previewShortMenu}` : ""}`} aria-label="참가 메뉴">
-        {HOME_MENUS.map((menu) => (
+        {visibleMenus.map((menu, index) => (
+          <Fragment key={menu.key}>
+          {menu.category !== "Utility" && visibleMenus[index - 1]?.category !== menu.category ? <p className={styles.menuGroupLabel}>{menu.category === "info" ? "행사 안내" : "행사 참여"}</p> : null}
           <MenuButton
             key={menu.key}
             menu={menu}
@@ -119,8 +136,21 @@ export default function AttendeeHomeLanding({
             buttonRef={menuButtonRef ? (node) => menuButtonRef(menu.key, node) : undefined}
             preview={preview}
           />
+          </Fragment>
         ))}
       </nav>
+      {slug || preview ? (
+        <nav className={styles.moreLinks} aria-label="행사 안내와 참여">
+          <button type="button" disabled={preview} ref={menuButtonRef ? (node) => menuButtonRef("application", node) : undefined} onClick={() => onOpen?.("application")}>내 신청 정보 <span aria-hidden="true">→</span></button>
+          {preview ? <button type="button" disabled>행사 안내 보기 <span aria-hidden="true">→</span></button>
+            : <Link href={`/event/${encodeURIComponent(slug!)}`}>행사 안내 보기 <span aria-hidden="true">→</span></Link>}
+          {hasPrograms ? preview ? <button type="button" disabled>참여 콘텐츠 보기 <span aria-hidden="true">→</span></button>
+            : <Link href={`/event/${encodeURIComponent(slug!)}/engage`}>참여 콘텐츠 보기 <span aria-hidden="true">→</span></Link> : null}
+          {selectedPrograms.map((program) => preview
+            ? <button type="button" disabled key={program.id}>{program.title} <span aria-hidden="true">→</span></button>
+            : <Link key={program.id} href={`/event/${encodeURIComponent(slug!)}/engage?program=${encodeURIComponent(program.id)}`}>{program.title} <span aria-hidden="true">→</span></Link>)}
+        </nav>
+      ) : null}
     </>
   );
 }
@@ -142,11 +172,6 @@ function MenuButton({
   buttonRef?: (node: HTMLButtonElement | null) => void;
   preview: boolean;
 }) {
-  const categoryClass = menu.category === "Utility"
-    ? styles.categoryUtility
-    : menu.category === "info"
-      ? styles.categoryInfo
-      : styles.categoryEngagement;
   return (
     <button
       ref={buttonRef}
@@ -156,7 +181,6 @@ function MenuButton({
       disabled={preview || !onOpen}
       aria-disabled={preview || undefined}
     >
-      <span className={`${styles.menuBadge} ${categoryClass}`} aria-hidden="true">{CATEGORY_LABEL[menu.category]}</span>
       <MenuIcon type={menu.key} />
       <span className={styles.menuLabel}>{menu.label}</span>
       {/* Visual cue only: the detail screen announces the ticket need in
@@ -192,5 +216,7 @@ function MenuIcon({ type }: { type: HomeMenuKey }) {
       return <svg {...common}><circle cx="24" cy="23" r="16" /><circle cx="24" cy="23" r="4" /><path d="m24 7 2.8 8.1M38 15l-8.2 3.4M37 32l-8-4M11 31l8-4M10 14l8.2 4.2M18 39h12m-6-5v5" /></svg>;
     case "vote":
       return <svg {...common}><path d="M10 9h28v30H10zM16 15h3m5 0h10M16 23l2.5 2.5L22 21m3 2h9M16 32h18" /></svg>;
+    case "application":
+      return <svg {...common}><path d="M12 7h24v34H12zM17 16h14M17 23h14M17 30h10" /></svg>;
   }
 }

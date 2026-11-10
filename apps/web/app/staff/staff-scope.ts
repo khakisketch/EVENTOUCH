@@ -4,8 +4,11 @@
 // decides admission.
 
 export type StaffAssignment = { id: string; type: string; targetId: string };
-export type StaffDesk = { id: string; name: string; action: string };
-export type StaffBooth = { id: string; name: string; zone: string; status: string };
+export type StaffDesk = { id: string; name: string; action: string; open?: boolean };
+export type StaffBooth = {
+  id: string; name: string; zone: string; status: string;
+  startsAt?: string | null; endsAt?: string | null; capacity?: number; used?: number;
+};
 export type StaffCheckRow = {
   id: string;
   participantId: string;
@@ -15,6 +18,7 @@ export type StaffCheckRow = {
   at: string;
   corrected: boolean;
 };
+type StaffBoothVisit = { id: string; boothId: string; at: string };
 export type StaffScope = {
   eventId: string;
   eventName: string;
@@ -23,7 +27,11 @@ export type StaffScope = {
   booths: StaffBooth[];
   boothAssignments: StaffAssignment[];
   stampMode: string;
+  stampAvailable: boolean;
   checks: StaffCheckRow[];
+  checksAvailable: boolean;
+  participantsAvailable: boolean;
+  boothVisits: StaffBoothVisit[];
 };
 
 type BootstrapWorkspace = {
@@ -31,6 +39,10 @@ type BootstrapWorkspace = {
   booths?: unknown;
   assignments?: unknown;
   checks?: unknown;
+  checksAvailable?: unknown;
+  participants?: unknown;
+  participantsAvailable?: unknown;
+  visits?: unknown;
   stampMode?: unknown;
 };
 
@@ -39,7 +51,7 @@ function text(value: unknown): string {
 }
 
 export function buildStaffScopes(
-  events: Array<{ id?: unknown; name?: unknown }>,
+  events: Array<{ id?: unknown; name?: unknown; stage?: unknown; features?: unknown }>,
   workspaces: Record<string, BootstrapWorkspace>
 ): StaffScope[] {
   const next: StaffScope[] = [];
@@ -59,8 +71,14 @@ export function buildStaffScopes(
     const booths = Array.isArray(workspace.booths)
       ? (workspace.booths as StaffBooth[])
       : [];
-    const checks = Array.isArray(workspace.checks)
-      ? (workspace.checks as StaffCheckRow[])
+    const checksAvailable = workspace.checksAvailable === true && Array.isArray(workspace.checks) &&
+      workspace.checks.every((item) => typeof item === "object" && item !== null && !Array.isArray(item));
+    const participantsAvailable = workspace.participantsAvailable === true && Array.isArray(workspace.participants) &&
+      workspace.participants.every((item) => typeof item === "object" && item !== null && !Array.isArray(item));
+    const checks = checksAvailable ? (workspace.checks as StaffCheckRow[]) : [];
+    const boothVisits = Array.isArray(workspace.visits)
+      ? (workspace.visits as StaffBoothVisit[]).filter((visit) =>
+          visit && boothAssignments.some((assignment) => assignment.targetId === visit.boothId))
       : [];
     next.push({
       eventId: id,
@@ -74,7 +92,12 @@ export function buildStaffScopes(
       ),
       boothAssignments,
       stampMode: workspace.stampMode === "SELF" ? "SELF" : "STAFF",
+      stampAvailable: (event.stage === undefined || event.stage === "LIVE") &&
+        (!Array.isArray(event.features) || event.features.includes("stamp")),
       checks,
+      checksAvailable,
+      participantsAvailable,
+      boothVisits,
     });
   }
   return next;

@@ -1,0 +1,14 @@
+.list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.row { display: flex; justify-content: space-between; align-items: center; gap: var(--s3); padding: var(--s3) 0; border-bottom: 1px solid var(--line); }
+.rowInfo { display: grid; gap: var(--s1); min-width: 0; overflow-wrap: anywhere; }
+.rowMeta, .help { color: var(--muted); font-size: var(--small); line-height: 1.5; }
+.actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.actions :global(.button) { min-height: 44px; }
+.editor { display: grid; gap: var(--s3); padding: var(--s4) 0; border-block: 1px solid var(--line); }
+.editor h3, .editor p, .recovery h3, .recovery p { margin: 0; }
+.field { display: grid; gap: var(--s1); }
+.field input, .field select, .field textarea { width: 100%; }
+.check { display: flex; gap: var(--s2); align-items: center; min-height: 44px; }
+.check input { width: 20px; height: 20px; }
+.recovery { display: grid; gap: var(--s2); padding: var(--s3); border: 1px solid var(--warning-line); border-radius: var(--radius-small); background: var(--warning-soft); }
+@media (max-width: 700px) { .row { align-items: flex-start; flex-direction: column; } }

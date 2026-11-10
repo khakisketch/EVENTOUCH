@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import styles from "../../auth-entry.module.css";
 import EmailVerification from "./EmailVerification";
+import LoginHistory from "./LoginHistory";
 
 // The holder's own mailbox proof: signed-in only, global identity scope, no
 // organization settings surface. The auth shell matches /login so keyboard,
@@ -17,6 +18,7 @@ export default function AccountEmailPage() {
         <Suspense fallback={<p className="loading-state" role="status">인증 상태를 확인하고 있습니다.</p>}>
           <EmailVerification />
         </Suspense>
+        <LoginHistory />
       </section>
     </main>
   );

@@ -1,0 +1,51 @@
+/* A few comparable saved values stay visible. Lists and navigation keep
+   their own select/tab semantics rather than sharing this treatment. */
+.choiceGroup {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.choiceGroup > legend {
+  margin-bottom: var(--s1);
+  padding: 0;
+  font-weight: 650;
+}
+.choiceOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s3);
+}
+.choiceGroup .choiceOption {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  max-width: 100%;
+  margin: 0;
+  gap: var(--s2);
+  padding-block: var(--s1);
+  cursor: pointer;
+}
+.choiceGroup .choiceOption > input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  accent-color: var(--brand-text);
+  cursor: inherit;
+}
+.choiceLabel { word-break: keep-all; overflow-wrap: anywhere; }
+.choiceOption:hover .choiceLabel,
+.choiceOption:has(:checked) .choiceLabel { color: var(--brand-text); }
+.choiceGroup:disabled .choiceOption,
+.choiceOption:has(:disabled) { cursor: not-allowed; opacity: 0.65; }
+.choiceHint { margin: var(--s1) 0 0; color: var(--muted); font-size: var(--small); word-break: keep-all; }
+
+.choiceCompare {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 28rem;
+}

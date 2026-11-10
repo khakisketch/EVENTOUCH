@@ -45,7 +45,7 @@ export default function ConsoleSection({
   ].filter(Boolean).join(" ");
 
   return (
-    <section className={classNames} aria-labelledby={headingId}>
+    <section className={classNames} aria-labelledby={headingId} data-workspace-section={headingId}>
       <div className={styles.sectionHead}>
         <div className={styles.sectionCopy}>
           <h2 className={styles.sectionTitle} id={headingId}>{title}</h2>

@@ -45,7 +45,7 @@
 .regionRecent { grid-area: recent; }
 .primaryColumn { grid-area: primary; min-width: 0; }
 .contextColumn { grid-area: context; min-width: 0; }
-.refreshAlert { grid-area: alert; margin: 0 0 var(--s4); }
+.refreshAlert { grid-area: alert; margin: 0 0 var(--s4); word-break: keep-all; overflow-wrap: break-word; }
 .overviewSingle > .refreshAlert { grid-area: auto; }
 
 /* The work queue and its evidence form the first decision surface. */
@@ -1398,3 +1398,245 @@
   .regionMetrics .metricDetail { grid-column: 1 / -1; }
   .regionMetrics .entryFoot { align-items: flex-start; flex-direction: column; }
 }
+
+/* Status precedes work where present; LIVE has no status band. */
+.overviewCanvas {
+  grid-template-areas: "alert alert" "status status" "queue metrics" "runbook runbook" "readiness readiness" "secondary secondary" "recent recent";
+}
+.overviewArchived { grid-template-areas: "alert alert" "status status" "metrics metrics" "runbook runbook" "secondary secondary" "recent recent"; }
+.overviewArchived .regionMetrics { padding-left: 0; border-left: 0; }
+.regionQueue { background: var(--brand-soft); border-color: var(--line); }
+.nowTile { display: flex; flex-wrap: wrap; justify-content: flex-start; }
+.nowTileCopy { flex: 0 1 auto; max-width: 100%; }
+.queueLink {
+  display: inline-flex; align-items: center; min-height: 44px;
+  color: var(--brand-text); font-weight: 700; text-decoration: none;
+}
+.queueLink:hover { text-decoration: underline; text-underline-offset: 3px; }
+.regionMetrics { padding-top: 0; }
+.rail { position: static; }
+.pageLinkShort { display: none; }
+@media (max-width: 1024px) {
+  .overviewCanvas { grid-template-areas: "alert" "status" "queue" "metrics" "runbook" "readiness" "secondary" "recent"; }
+  .overviewArchived { grid-template-areas: "alert" "status" "metrics" "runbook" "secondary" "recent"; }
+}
+@media (max-width: 768px) {
+  .pageLinkFull { display: none; }
+  .pageLinkShort { display: inline; }
+  .regionQueue .nowTile { display: flex; }
+  .nowTile { gap: 0 var(--s3); padding-block: var(--s1); }
+}
+
+/* The metrics strip explains the queue; queue and schedule share the work row. */
+.overviewCanvas {
+  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
+  grid-template-areas: "alert alert" "status status" "metrics metrics" "queue runbook" "readiness readiness" "secondary secondary" "recent recent";
+  gap: 0 var(--s6);
+}
+.overviewArchived { grid-template-areas: "alert alert" "status status" "metrics metrics" "runbook runbook" "secondary secondary" "recent recent"; }
+.regionMetrics { padding: 0 0 var(--s4); border: 0; border-bottom: 1px solid var(--line); }
+.regionMetrics .metricGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); border: 0; }
+.regionMetrics .metricCard { display: grid; grid-template-columns: 1fr; padding: var(--s2) var(--s4); }
+.regionMetrics .metricCard:first-child { padding-left: 0; }
+.regionMetrics .metricCard + .metricCard { border-top: 0; border-left: 1px solid var(--line); }
+.regionMetrics .metricDetail { grid-column: auto; }
+.regionMetrics .entryFoot { flex-direction: row; align-items: center; }
+.regionMetrics .analysisDetails { margin-top: var(--s3); }
+.regionQueue { padding: 0; background: transparent; border: 0; border-radius: 0; }
+.regionQueue .nowTile { display: grid; grid-template-columns: minmax(0, 1fr) auto; padding: var(--s3) 0; }
+.nowTileTitle { font-weight: 650; }
+.nowTileHint { max-width: 58ch; }
+.nowTileAction { justify-content: flex-end; }
+.runbookCue.done .runbookDot { background: var(--surface-muted); border-color: var(--line-strong); }
+.runbookCue.done .runbookStatus { color: var(--muted); }
+@media (max-width: 1024px) {
+  .overviewCanvas { grid-template-columns: minmax(0, 1fr); grid-template-areas: "alert" "status" "metrics" "queue" "runbook" "readiness" "secondary" "recent"; }
+  .overviewArchived { grid-template-areas: "alert" "status" "metrics" "runbook" "secondary" "recent"; }
+}
+@media (max-width: 560px) {
+  .regionMetrics .metricCard { padding: var(--s2); }
+  .regionMetrics .metricValue { font-size: 28px; }
+  .regionQueue .nowTile { grid-template-columns: minmax(0, 1fr); gap: var(--s1); }
+  .nowTileAction { justify-content: flex-start; }
+}
+
+.mobilePriority { display: none; }
+@media (max-width: 1024px) {
+  .mobilePriority { display: inline-flex; min-height: 44px; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); border: 1px solid var(--brand); border-radius: var(--radius-small); background: var(--soft); color: var(--brand-text); font-size: var(--small); font-weight: 700; text-decoration: none; }
+}
+
+@media (min-width: 1025px) {
+  .entryMetricsLayout { display: grid; grid-template-columns: minmax(220px, .7fr) minmax(180px, 1.6fr) auto; align-items: center; gap: var(--s2) var(--s5); }
+  .entryMetricsLayout .entryProgress { display: contents; }
+  .entryMetricsLayout .entrySummary { grid-column: 1; grid-row: 1; }
+  .entryMetricsLayout .entryTrack { grid-column: 2; grid-row: 1; height: 8px; }
+  .entryMetricsLayout .entryFoot { grid-column: 1 / -1; grid-row: 2; }
+  .entryMetricsLayout .summaryFacts { grid-column: 1 / -1; }
+  .entryMetricsLayout .analysisDetails { grid-column: 3; grid-row: 1; margin: 0; padding: 0; border: 0; }
+  .entryMetricsLayout .analysisDetails[open] { grid-column: 1 / -1; grid-row: auto; }
+}
+
+/* Operation first: compare the entry state with the queue; analysis comes last. */
+.overviewCanvas { grid-template-columns: minmax(0, 1.35fr) minmax(280px,1fr); grid-template-areas: "alert alert" "status status" "metrics queue" "runbook runbook" "readiness readiness" "secondary secondary" "recent recent" "analysis analysis"; gap: var(--s5); }
+.overviewArchived { grid-template-areas: "alert alert" "status status" "metrics metrics" "runbook runbook" "secondary secondary" "recent recent" "analysis analysis"; }
+.regionAnalysis { grid-area: analysis; min-width: 0; border-top: 1px solid var(--line); }
+.overviewCanvas .entryMetricsLayout { display: block; }
+.overviewCanvas .entryMetricsLayout .entryProgress { display: grid; gap: var(--s3); }
+.overviewCanvas .entryFoot { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); }
+.overviewCanvas .entryFoot > span { flex-basis: 100%; font-size: var(--small); }
+.overviewCanvas .entryFoot a { color: var(--ink); font-weight: 500; }
+.overviewCanvas .notEntered { background: transparent; border: 0; padding-inline: 0; }
+.overviewCanvas .regionQueue { border-bottom: 1px solid var(--line); }
+.overviewCanvas .runbookIdle { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s3); padding-block: var(--s3); border-bottom: 1px solid var(--line); }
+.overviewCanvas .runbookIdle > :first-child { flex: 1 1 240px; }
+.overviewUpdated { display: flex; align-items: center; gap: var(--s2); color: var(--muted); font-size: var(--small); }
+.mobilePriority { display: none; }
+@media(max-width: 900px) { .overviewCanvas, .overviewArchived { grid-template-columns: minmax(0,1fr); grid-template-areas: "alert" "status" "metrics" "queue" "runbook" "readiness" "secondary" "recent" "analysis"; } }
+
+.overviewCanvas .entryMetricsLayout .entryProgress { grid-template-columns: minmax(0,1fr); }
+.overviewCanvas .entryMetricsLayout .entrySummary, .overviewCanvas .entryMetricsLayout .entryTrack, .overviewCanvas .entryMetricsLayout .entryFoot { grid-column: auto; grid-row: auto; }
+.overviewCanvas .recentActions, .overviewCanvas .recentCompact > .refreshButton { display: none; }
+
+.overviewSectionLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  min-height: 44px;
+  color: var(--brand-text);
+  font-size: var(--small);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.overviewSectionLink:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* Align the section headers. The entry panel and the task list each size to
+   their own content, so a single task keeps the same density as a long queue. */
+.liveOverview { grid-template-areas: none; }
+.liveOverview > * { grid-area: auto; grid-column: 1 / -1; margin-block-end: 0; }
+
+@media (min-width: 901px) {
+  .liveOverview {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: var(--s6);
+  }
+
+  .liveOverview > .regionMetrics { grid-column: 1; }
+  .liveOverview > .regionQueue { grid-column: 2; }
+}
+
+.liveOverview .regionMetrics > :first-child,
+.liveOverview .regionQueue > :first-child { min-height: 44px; }
+
+.liveOverview .regionMetrics,
+.liveOverview .regionQueue { border-bottom: 0; padding-bottom: 0; }
+
+.liveOverview .regionMetrics .overviewSectionLink { color: var(--ink); }
+
+.queueCount {
+  color: var(--muted);
+  font-size: var(--small);
+  font-variant-numeric: tabular-nums;
+}
+
+.liveEntryPanel {
+  min-width: 0;
+  padding-inline: var(--s4);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.liveReadout {
+  display: grid;
+  gap: var(--s2);
+  padding-block: var(--s3);
+}
+
+.liveEntryFigures {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--s3);
+}
+
+.liveEntryLabel {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  line-height: 1.25;
+}
+
+.liveEntryValues {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--s2);
+  margin: 0;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.liveEntryCount {
+  font-size: clamp(36px, 4vw, 40px);
+  letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
+}
+.liveEntryCount span { margin-inline-start: 2px; font-size: var(--h2); letter-spacing: normal; }
+.liveEntryTotal { color: var(--muted); font-weight: 650; overflow-wrap: anywhere; }
+.liveEntryRate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 0 var(--s2);
+  font-size: var(--h2);
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+.liveEntryRate strong { color: var(--brand-text); }
+.liveReadout .entryTrack {
+  height: var(--s2);
+  border: 0;
+  background: var(--line);
+}
+
+.entryBasis {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  line-height: 1.35;
+}
+
+.liveRosterLinks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 172px), 1fr));
+  column-gap: var(--s4);
+  border-block-start: 1px solid var(--line);
+}
+
+.liveRosterLinks > a {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  min-block-size: var(--s7);
+  padding-block: var(--s1);
+  color: var(--ink);
+  font-size: var(--body-work);
+  font-weight: 650;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+  text-underline-offset: 3px;
+}
+
+.liveRosterLinks > a:hover span { text-decoration: underline; }
+
+.liveRosterLinks > a svg {
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+}
+
+.liveRosterLinks > a strong { font-variant-numeric: tabular-nums; }

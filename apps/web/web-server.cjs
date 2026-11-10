@@ -5,17 +5,22 @@
 // The API trusts this container as a reverse proxy and reads the browser
 // address from X-Forwarded-For. `next start` preserves a client-supplied
 // X-Forwarded-For, so a caller could rotate fake addresses and evade the
-// login address throttle. This wrapper replaces the header with the actual
-// socket peer before Next handles the request; Next then forwards the
-// sanitized value to the API. Everything else stays with Next's own server
+// login address throttle. This wrapper uses the socket peer for direct
+// requests and accepts forwarding only from configured ingress peers. Next
+// forwards the sanitized address to the API. Everything else stays with Next's own server
 // implementation (routing, rewrites, caching).
 
 const { createServer } = require('node:http');
 const next = require('next');
+const { createForwardedClientAddressResolver } = require('./lib/client-address.mts');
 
 const port = Number(process.env.PORT || 8777);
 // Docker sets HOSTNAME to the container id, not a bind address.
 const hostname = process.env.EVENTOUCH_WEB_BIND || '0.0.0.0';
+const ingress = process.env.EVENTOUCH_WEB_TRUSTED_PROXIES;
+const clientAddress = ingress?.trim()
+  ? createForwardedClientAddressResolver(ingress, 'EVENTOUCH_WEB_TRUSTED_PROXIES')
+  : req => req.socket.remoteAddress || '';
 
 const app = next({ dev: false, dir: __dirname });
 const handle = app.getRequestHandler();
@@ -24,7 +29,7 @@ app
   .prepare()
   .then(() => {
     const server = createServer(async (req, res) => {
-      req.headers['x-forwarded-for'] = req.socket.remoteAddress || '';
+      req.headers['x-forwarded-for'] = clientAddress(req);
       try {
         await handle(req, res);
       } catch {

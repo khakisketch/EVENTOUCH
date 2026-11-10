@@ -9,8 +9,8 @@
 
 .moduleCard {
   display: grid;
-  gap: var(--s4);
-  padding: var(--s4) 0 var(--s5);
+  gap: var(--s1);
+  padding: var(--s3) 0;
   border: 0;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
@@ -87,6 +87,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--s2);
+}
+
+.toolbarActions > :global(.button-primary) {
+  flex: 1 1 auto;
 }
 
 .moduleActions .button,
@@ -202,6 +206,30 @@
   min-height: 44px;
 }
 
+.rejectDisclosure > summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--brand-text);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.rejectDisclosure > summary::-webkit-details-marker { display: none; }
+
+.rejectDisclosure > summary:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.rejectDisclosure form {
+  display: grid;
+  gap: var(--s2);
+  max-width: var(--web-form-max);
+}
+
+.rejectDisclosure form :global(.button) { justify-self: start; }
+
 .itemActions {
   display: flex;
   flex-wrap: wrap;
@@ -279,6 +307,8 @@
   min-height: 44px;
 }
 
+.reviewShortcuts { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 0 0 var(--s2); }
+
 .resultCount .button {
   min-height: 44px;
 }
@@ -341,6 +371,26 @@
   gap: var(--s3);
 }
 
+.draftFields {
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.recovery {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-small);
+}
+
+.recovery h2, .recovery p { margin: 0; }
+.recoveryActions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+
 .form label {
   display: block;
   margin-bottom: var(--s1);
@@ -399,3 +449,12 @@
 .form label {
   word-break: keep-all;
 }
+
+.moduleDetails > summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; color: var(--brand-text); font-size: var(--small); font-weight: 650; }
+.moduleDetails[open] > summary { margin-bottom: var(--s3); }
+.moduleDetails > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.moduleDetails[open] { display: grid; gap: var(--s3); }
+
+.workspacePurpose { margin: 0 0 var(--s3); color: var(--muted); max-width: 76ch; }
+.workspacePurpose a { color: var(--brand-text); display: inline-flex; align-items: center; min-height: 44px; font-weight: 600; }
+.returnLink { margin-top: var(--s3); }

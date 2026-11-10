@@ -68,3 +68,15 @@
     flex: 0 1 auto;
   }
 }
+
+.attachmentTools { position: relative; }
+.attachmentTools > summary { display: flex; align-items: center; min-height: 44px; padding-inline: var(--s3); border: 1px solid var(--line-strong); border-radius: var(--radius); font-size: var(--small); font-weight: 600; cursor: pointer; }
+.attachmentPanel { display: grid; gap: var(--s3); padding-block: var(--s3); }
+.attachmentPanel label:has(input:disabled) { opacity: 0.55; cursor: not-allowed; }
+.attachmentPanel .clientFileGroup { border-left: 0; padding-left: 0; }
+.attachmentTools > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+@media (max-width: 768px) {
+  .clientActions .clientInfoGroup { flex: 0 1 auto; }
+  .clientActions .attachmentTools { flex: 0 1 auto; }
+  .clientActions:has(.attachmentTools[open]) { align-items: flex-start; }
+}

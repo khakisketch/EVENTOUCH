@@ -8,6 +8,9 @@ import type { CloseSnapshot } from "../console-event-close";
 
 type ConsolePageProps = {
   pageId: ConsolePageId;
+  /** A nested task may keep its parent menu active while naming its own page. */
+  title?: string;
+  parentContext?: { href: string; label: string };
   eventId?: string;
   eventName?: string;
   meta?: ReactNode;
@@ -39,6 +42,8 @@ type ConsolePageProps = {
  */
 export default function ConsolePage({
   pageId,
+  title,
+  parentContext,
   eventId,
   eventName,
   meta,
@@ -61,17 +66,20 @@ export default function ConsolePage({
       : undefined;
   const trimmedName = eventName?.trim();
   const context = overviewHref ? (
-    <Link className={styles.contextLink} href={overviewHref}>
-      {trimmedName ? `행사 / ${trimmedName}` : "행사"}
-    </Link>
+    <>
+      <Link className={styles.contextLink} href={overviewHref}>
+        {trimmedName ? `행사 / ${trimmedName}` : "행사"}
+      </Link>
+      {parentContext ? <> <span aria-hidden="true"> / </span> <Link className={styles.contextLink} href={parentContext.href}>{parentContext.label}</Link></> : null}
+    </>
   ) : null;
 
   const classNames = [styles.page, className].filter(Boolean).join(" ");
 
   return (
-    <div className={classNames}>
+    <div className={classNames} data-console-page={pageId}>
       <ConsolePageHeader
-        title={page.title}
+        title={title ?? page.title}
         context={context}
         meta={meta}
         badges={badges}

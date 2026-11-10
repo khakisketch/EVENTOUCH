@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useSyncExternalStore } from "react";
 import type { ReactNode, RefObject } from "react";
 import styles from "./console-ui.module.css";
 
 type ConsoleDialogProps = {
   title: string;
+  /** A nonmodal side panel on wide screens; the same content is modal on phones. */
+  presentation?: "modal" | "inspector";
   titleId?: string;
   description?: ReactNode;
   /** Stable id for the description wrapper; defaults to `${headingId}-description`. */
@@ -39,11 +41,27 @@ type ConsoleDialogProps = {
 };
 
 const FOCUSABLE_SELECTOR =
-  'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])';
+  'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], details > summary:first-of-type, [tabindex]:not([tabindex="-1"])';
 
 function isVisible(element: HTMLElement): boolean {
+  // A closed disclosure can still report client rects for its hidden fields.
+  for (let closed = element.closest("details:not([open])"); closed; closed = closed.parentElement?.closest("details:not([open])") ?? null) {
+    if (!closed.querySelector(":scope > summary:first-of-type")?.contains(element)) return false;
+  }
   return element.getClientRects().length > 0;
 }
+
+function tabStops(dialog: HTMLElement): HTMLElement[] {
+  return Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+    .filter((item) => item.tabIndex >= 0 && isVisible(item));
+}
+
+function subscribeWideViewport(onChange: () => void) {
+  const media = window.matchMedia("(min-width: 1200px)");
+  media.addEventListener("change", onChange);
+  return () => media.removeEventListener("change", onChange);
+}
+function wideViewportSnapshot() { return window.matchMedia("(min-width: 1200px)").matches; }
 
 /**
  * Shared modal shell for console management dialogs. The caller mounts it
@@ -57,6 +75,7 @@ function isVisible(element: HTMLElement): boolean {
  */
 export default function ConsoleDialog({
   title,
+  presentation = "modal",
   titleId,
   description,
   descriptionId,
@@ -70,6 +89,8 @@ export default function ConsoleDialog({
   stickyChrome = false,
   closeLabel = "닫기",
 }: ConsoleDialogProps) {
+  const wideViewport = useSyncExternalStore(subscribeWideViewport, wideViewportSnapshot, () => false);
+  const docked = presentation === "inspector" && wideViewport;
   const fallbackId = useId();
   const headingId = titleId ?? `console-dialog-${fallbackId}`;
   const descriptionElementId = descriptionId ?? `${headingId}-description`;
@@ -94,7 +115,7 @@ export default function ConsoleDialog({
   useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    if (!docked) document.body.style.overflow = "hidden";
 
     const dialog = dialogRef.current;
     const requested = initialFocusRefHolder.current?.current;
@@ -105,8 +126,7 @@ export default function ConsoleDialog({
       !requested.matches(":disabled")
         ? requested
         : null;
-    const initialTarget =
-      usableRequested ?? dialog?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ?? dialog;
+    const initialTarget = usableRequested ?? (dialog ? tabStops(dialog)[0] ?? dialog : null);
     if (initialTarget && isVisible(initialTarget)) {
       initialTarget.focus();
     } else {
@@ -114,17 +134,16 @@ export default function ConsoleDialog({
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (docked && !dialogRef.current?.contains(document.activeElement)) return;
       if (event.key === "Escape") {
         event.preventDefault();
         requestCloseRef.current();
         return;
       }
-      if (event.key !== "Tab") return;
+      if (docked || event.key !== "Tab") return;
       const dialog = dialogRef.current;
       if (!dialog) return;
-      const items = Array.from(
-        dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
-      ).filter((item) => item.tabIndex >= 0 && isVisible(item));
+      const items = tabStops(dialog);
       if (!items.length) {
         // No tabbable controls: hold focus on the container so Tab can
         // never reach the page behind the dialog.
@@ -151,25 +170,25 @@ export default function ConsoleDialog({
       document.removeEventListener("keydown", onKeyDown);
       // Each mount saves and restores its own previous value, so nested
       // dialogs unwind in order without unlocking the outer lock early.
-      document.body.style.overflow = previousOverflow;
-      if (previouslyFocused && previouslyFocused.isConnected) {
+      if (!docked) document.body.style.overflow = previousOverflow;
+      if (previouslyFocused && previouslyFocused.isConnected && (!docked || dialog?.contains(document.activeElement) || document.activeElement === document.body)) {
         previouslyFocused.focus();
       }
     };
-  }, []);
+  }, [docked, headingId]);
 
   return (
     <div
-      className="dialog-backdrop"
+      className={docked ? styles.inspectorHost : "dialog-backdrop"}
       onClick={(event) => {
-        if (event.target === event.currentTarget) requestClose();
+        if (!docked && event.target === event.currentTarget) requestClose();
       }}
     >
       <div
         ref={dialogRef}
-        className={wide ? `dialog ${styles.dialogWide}` : "dialog"}
+        className={docked ? styles.inspectorPanel : wide ? `dialog ${styles.dialogWide}` : "dialog"}
         role="dialog"
-        aria-modal="true"
+        aria-modal={docked ? undefined : true}
         aria-labelledby={headingId}
         aria-describedby={description ? descriptionElementId : undefined}
         tabIndex={-1}

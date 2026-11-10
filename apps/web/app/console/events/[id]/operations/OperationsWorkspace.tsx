@@ -1,6 +1,11 @@
 "use client";
 
+import ConsoleChoiceGroup from "../../../console-ui/ConsoleChoiceGroup";
+import ValidatedForm from "../../../../ui/ValidatedForm";
+
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
@@ -14,13 +19,20 @@ import ConsolePage from "../../../console-ui/ConsolePage";
 import ConsoleSectionNav from "../../../console-ui/ConsoleSectionNav";
 import { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
 import ConsoleSection from "../../../console-ui/ConsoleSection";
+import ConsoleTaskQueue from "../../../console-ui/ConsoleTaskQueue";
+import { PARTICIPATION_TYPES, participationSnapshot, participationTypeLabel, type ParticipationSnapshot } from "../../../../../lib/participation-work";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import uiStyles from "../../../console-ui/console-ui.module.css";
 import styles from "./operations.module.css";
 import { consoleFetch } from "../../../../../lib/console-api";
 import { canWriteEvent } from "../../../../../lib/event-capabilities";
+import { abandonOperatorAttempt, acknowledgeOperatorReceipt, confirmsOperationsCommand, isOrganizationContextBlock } from "../../../../../lib/operator-context";
+import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../lib/operator-receipts";
+import { useEventReceipts } from "../../../../../lib/use-event-receipts";
+import { boothScheduleTime } from "../../../../../lib/booth-availability";
 
-type Desk = { id: string; name: string; action: string; mode: string; open: boolean };
+type Desk = { id: string; name: string | null; action: string | null; mode: string; open: boolean };
+type DeskConflict = { kind: "edit" | "toggle"; id: string; latest: Desk | null; loading: boolean; error: string | null; incomplete?: boolean };
 type Booth = {
   id: string;
   name: string;
@@ -29,7 +41,10 @@ type Booth = {
   capacity: number;
   limit: number;
   used: number;
+  startsAt: string;
+  endsAt: string;
 };
+type BoothConflict = { id: string; latest: Booth | null; loading: boolean; error: string | null };
 type Assignment = { id: string; accountId: string; type: string; targetId: string };
 type Account = { id: string; name: string; role: string; active: boolean };
 
@@ -72,15 +87,17 @@ type State =
       memberships: Array<{ accountId: string; eventId: string; write?: unknown }>;
       eventMeta?: string;
       eventId: string;
+      participation: ParticipationSnapshot;
+      participationEnabled: boolean;
       stampEnabled: boolean;
-      stampMode: string;
-      visitsCount: number;
+      stampMode: "STAFF" | "SELF" | null;
+      visitsCount: number | null;
       boothMap: BoothMapState;
       screenEnabled: boolean;
-      display: { type: string; moduleId: string; noticeId: string };
+      display: DisplayOutput;
       displayOptions: {
         notices: Array<{ id: string; title: string; published: boolean }>;
-        modules: Array<{ id: string; title: string; type: string; published: boolean; revealed: boolean; hasPublishedDraw: boolean }>;
+        modules: Array<{ id: string; title: string; type: string; published: boolean; revealed: boolean; draws: DisplayDraw[] }>;
         approvedPhotos: number;
         approvedQuestions: number;
       };
@@ -90,7 +107,11 @@ type State =
       accounts: Account[];
     };
 
+type DisplayOutput = { type: string; moduleId: string; noticeId: string; drawId: string };
+type DisplayDraw = { id: string; name: string; at: string };
 type Failure = { message: string; field?: string };
+type OperationAttempt = { eventId: string; command: string; payload: Record<string, unknown>; successMessage: string; fingerprint: string; commandId: string };
+const OPERATION_COMMANDS = new Set(["desk.save", "desk.set-open", "booth.save", "booth.mode", "booth.map.save", "booth.map.publish", "booth.map.unpublish", "staff.assign", "staff.unassign", "display.set"]);
 
 function randomCommandId(): string {
   if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
@@ -101,12 +122,92 @@ function text(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+function displayKey(display: DisplayOutput): string {
+  const target = display.type === "notice" ? display.noticeId : display.moduleId;
+  return display.drawId ? `${display.type}|${target}|${display.drawId}` : `${display.type}|${target}`;
+}
+
+const DRAW_TIME_FORMAT = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+});
+
+function drawDisplayLabel(draw: DisplayDraw, moduleTitle: string): string {
+  const at = Date.parse(draw.at);
+  return `추첨 결과 · ${draw.name || moduleTitle}${Number.isFinite(at) ? ` · ${DRAW_TIME_FORMAT.format(at)}` : ""}`;
+}
+
 const DESK_ACTION_LABEL: Record<string, string> = { IN: "입장", OUT: "퇴장" };
 const BOOTH_STATUS_LABEL: Record<string, string> = {
   WAITING: "대기",
   OPEN: "진행",
   CLOSED: "종료",
 };
+const BOOTH_TIME_FORMAT = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul", year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+});
+const BOOTH_TIME_FORMAT_SECONDS = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul", year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+});
+const BOOTH_TIME_FORMAT_MILLISECONDS = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul", year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", fractionalSecondDigits: 3, hourCycle: "h23",
+});
+function boothTimeLabel(value: string): string {
+  if (!value) return "미지정";
+  if (/^__invalid_booth_(?:time|text)__:/.test(value)) return "시간 형식 확인 필요";
+  // A timezone-less legacy value is interpreted differently by each device.
+  // Show the stored value instead of presenting an inferred time as Korean.
+  if (!/(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)) {
+    return Number.isFinite(boothScheduleTime(`${value}+09:00`))
+      ? `시간대 확인 필요 (${value})` : `시간 형식 확인 필요 (${value})`;
+  }
+  const parsed = boothScheduleTime(value);
+  if (parsed === null || !Number.isFinite(parsed)) return `시간 형식 확인 필요 (${value})`;
+  const formatter = parsed % 1000 !== 0 ? BOOTH_TIME_FORMAT_MILLISECONDS : parsed % 60000 !== 0 ? BOOTH_TIME_FORMAT_SECONDS : BOOTH_TIME_FORMAT;
+  return `${formatter.format(parsed)} (한국 시간)`;
+}
+
+type BoothTimeEdit = { action: "keep" | "set" | "clear"; value: string };
+// Only an explicitly zoned timestamp has a known instant. Unzoned or broken
+// legacy values are shown as stored and are never guessed into the editor.
+function boothTimeInput(value: string): string {
+  const parsed = boothScheduleTime(value);
+  if (parsed === null || !Number.isFinite(parsed)) return "";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(new Date(parsed));
+  const part = (name: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === name)?.value || "";
+  return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`;
+}
+
+function boothTimeFromInput(value: string): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+  const [, y, m, d, h, min] = match;
+  const year = Number(y), month = Number(m), day = Number(d), hour = Number(h), minute = Number(min);
+  const check = new Date(0);
+  check.setUTCFullYear(year, month - 1, day);
+  check.setUTCHours(hour, minute, 0, 0);
+  if (check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day ||
+      check.getUTCHours() !== hour || check.getUTCMinutes() !== minute) return null;
+  return `${value}:00+09:00`;
+}
+
+function boothTimeInputDescription(value: string): string {
+  if (!boothTimeFromInput(value)) return "";
+  const [date, time] = value.split("T");
+  const [year, month, day] = date.split("-");
+  return `${Number(year)}년 ${Number(month)}월 ${Number(day)}일 ${time} (한국 시간)`;
+}
+
+function boothTimeNeedsReview(value: string): boolean {
+  return Boolean(value) && !Number.isFinite(boothScheduleTime(value));
+}
+
+function boothScheduleNeedsReview(start: string, end: string): boolean {
+  const startValue = boothScheduleTime(start), endValue = boothScheduleTime(end);
+  return boothTimeNeedsReview(start) || boothTimeNeedsReview(end) ||
+    (startValue !== null && endValue !== null && Number.isFinite(startValue) && Number.isFinite(endValue) && startValue >= endValue);
+}
 
 // Keys that scroll the document when the focus is not inside an editable
 // field. Releasing the explicit-jump pin on exactly these (plus wheel and
@@ -125,8 +226,16 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
 
   const [deskOpen, setDeskOpen] = useState(false);
   const [editingDesk, setEditingDesk] = useState<Desk | null>(null);
+  const [deskConflict, setDeskConflict] = useState<DeskConflict | null>(null);
+  const deskConflictRef = useRef<DeskConflict | null>(null);
+  const deskReadRef = useRef<AbortController | null>(null);
+  useEffect(() => () => { deskReadRef.current?.abort(); deskReadRef.current = null; }, []);
   const [boothOpen, setBoothOpen] = useState(false);
   const [editingBooth, setEditingBooth] = useState<Booth | null>(null);
+  const [boothConflict, setBoothConflict] = useState<BoothConflict | null>(null);
+  const boothConflictRef = useRef<BoothConflict | null>(null);
+  const boothReadRef = useRef<AbortController | null>(null);
+  useEffect(() => () => { boothReadRef.current?.abort(); boothReadRef.current = null; }, []);
   const [assignOpen, setAssignOpen] = useState(false);
   // Row-level assignment preset (UI only): a desk/booth row opens the same
   // AssignDialog with its type+target already chosen, so the operator only
@@ -142,11 +251,17 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   // The handoff applies once per event, after the workspace loads.
   const assignHandoffAppliedRef = useRef<string | null>(null);
   const [mapUploading, setMapUploading] = useState(false);
+  const [mapUploadUncertain, setMapUploadUncertain] = useState(false);
+  const [mapUploadError, setMapUploadError] = useState<string | null>(null);
+  const [mapUploadAbandonConfirm, setMapUploadAbandonConfirm] = useState(false);
+  const [mapWarning, setMapWarning] = useState<string | null>(null);
+  const mapUploadRef = useRef<{ eventId: string; file: File; commandId: string; uncertain: boolean } | null>(null);
+  const mapUploadGateRef = useRef(false);
   const [mapPlacing, setMapPlacing] = useState<string>("");
   const [mapDraftPoints, setMapDraftPoints] = useState<BoothMapPoint[] | null>(null);
   const [mapImageOverride, setMapImageOverride] = useState<BoothMapDraft["image"] | null>(null);
   const [displayChoice, setDisplayChoice] = useState("");
-  const [stampModePending, setStampModePending] = useState<"SELF" | "STAFF" | null>(null);
+  const [stampModePending, setStampModePending] = useState<{ mode: "SELF" | "STAFF"; expectedMode: "SELF" | "STAFF" } | null>(null);
   const [mapUnpublishPending, setMapUnpublishPending] = useState(false);
   const [deskDirty, setDeskDirty] = useState(false);
   const [boothDirty, setBoothDirty] = useState(false);
@@ -188,11 +303,53 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   }, []);
   const [presetOpen, setPresetOpen] = useState({ mode: false, map: false });
 
-  // One idempotency id per command+payload fingerprint (same discipline as
-  // the settings command cache): the same logical write reuses its id, any
-  // edit fingerprints differently. Entries clear only on success. Toggles
-  // and version-guarded map writes converge on replay instead of doubling.
+  // An unconfirmed write keeps its exact payload and id. New writes stay
+  // blocked until status is checked, the same request is retried, or the
+  // operator explicitly stops checking it.
   const commandIdCache = useRef(new Map<string, string>());
+  const [pendingOperation, setPendingOperation] = useState<OperationAttempt | null>(null);
+  const pendingOperationRef = useRef<OperationAttempt | null>(null);
+  const [checkingOperation, setCheckingOperation] = useState(false);
+  const [operationRecoveryError, setOperationRecoveryError] = useState<string | null>(null);
+  const [abandonOperationConfirm, setAbandonOperationConfirm] = useState(false);
+  const eventReceipts = useEventReceipts(eventId);
+  const otherOperationReceipt = eventReceipts.some((entry) => OPERATION_COMMANDS.has(entry.command) && entry.commandId !== pendingOperation?.commandId && ![...commandIdCache.current.values()].includes(entry.commandId));
+  const activeOperationsEventRef = useRef(eventId);
+  activeOperationsEventRef.current = eventId;
+  useEffect(() => pendingOperation && state.kind === "ready" ? manageOperatorReceipt(pendingOperation.commandId) : undefined, [pendingOperation, state.kind]);
+  const previousOperationsEventRef = useRef(eventId);
+  useEffect(() => {
+    if (previousOperationsEventRef.current === eventId) return;
+    previousOperationsEventRef.current = eventId;
+    pendingOperationRef.current = null;
+    setPendingOperation(null);
+    setOperationRecoveryError(null);
+    setAbandonOperationConfirm(false);
+    commandIdCache.current.clear();
+    mapUploadRef.current = null;
+    mapUploadGateRef.current = false;
+    setMapUploading(false);
+    setMapUploadUncertain(false);
+    setMapUploadError(null);
+    setMapUploadAbandonConfirm(false);
+    setMapWarning(null);
+    deskReadRef.current?.abort();
+    deskReadRef.current = null;
+    deskConflictRef.current = null;
+    setDeskConflict(null);
+    boothReadRef.current?.abort();
+    boothReadRef.current = null;
+    boothConflictRef.current = null;
+    setBoothConflict(null);
+  }, [eventId]);
+  const hadOtherOperationReceiptRef = useRef(false);
+  useEffect(() => {
+    if (hadOtherOperationReceiptRef.current && !otherOperationReceipt && !pendingOperation) {
+      setNotice("최신 현장 운영 내용을 다시 불러옵니다.");
+      reload();
+    }
+    hadOtherOperationReceiptRef.current = otherOperationReceipt;
+  }, [otherOperationReceipt, pendingOperation]);
   // Synchronous in-flight gate: `busy` flips only after rerender, so
   // same-turn double submits (including dialog saves) would overlap.
   const commandBusyRef = useRef(false);
@@ -240,6 +397,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
               assignments?: unknown;
               checks?: unknown;
               visits?: unknown;
+              boothVisitsAvailable?: unknown;
               stampMode?: unknown;
               boothMap?: unknown;
               display?: unknown;
@@ -247,6 +405,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
               modules?: unknown;
               photos?: unknown;
               questions?: unknown;
+              posts?: unknown;
             }>;
           } | null;
         } | null;
@@ -275,8 +434,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
               if (typeof desk.id !== "string" || !desk.id) return [];
               return [{
                 id: desk.id,
-                name: text(desk.name),
-                action: text(desk.action) || "IN",
+                name: typeof desk.name === "string" ? desk.name : null,
+                action: typeof desk.action === "string" ? desk.action : null,
                 mode: text(desk.mode) || "desk",
                 open: desk.open !== false,
               }];
@@ -295,6 +454,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                 capacity: Number(booth.capacity) || 0,
                 limit: Number(booth.limit) || 1,
                 used: Number(booth.used) || 0,
+                startsAt: text(booth.startsAt),
+                endsAt: text(booth.endsAt),
               }];
             })
           : [];
@@ -386,6 +547,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         const venue = workspace.venue && typeof workspace.venue === "object"
           ? workspace.venue as Record<string, unknown>
           : {};
+        const display = workspace.display as Record<string, unknown> | undefined;
         setState({
           kind: "ready",
           eventName: text(event.name),
@@ -402,17 +564,18 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             venue: text(venue.name),
           }),
           eventId,
+          participation: participationSnapshot(workspace, features),
+          participationEnabled: PARTICIPATION_TYPES.some(type => features.includes(type.id)),
           stampEnabled: features.includes("stamp"),
-          stampMode: workspace.stampMode === "SELF" ? "SELF" : "STAFF",
-          visitsCount: Array.isArray(workspace.visits) ? workspace.visits.length : 0,
+          stampMode: workspace.stampMode === "SELF" || workspace.stampMode === "STAFF" ? workspace.stampMode : null,
+          visitsCount: workspace.boothVisitsAvailable === true && Array.isArray(workspace.visits) ? workspace.visits.length : null,
           boothMap: parseBoothMap(workspace.boothMap),
           screenEnabled: features.includes("screen"),
           display: {
-            type: typeof (workspace.display as Record<string, unknown> | undefined)?.type === "string"
-              ? String((workspace.display as Record<string, unknown>).type)
-              : "idle",
-            moduleId: text((workspace.display as Record<string, unknown> | undefined)?.moduleId),
-            noticeId: text((workspace.display as Record<string, unknown> | undefined)?.noticeId),
+            type: text(display?.type) || "idle",
+            moduleId: text(display?.moduleId),
+            noticeId: text(display?.noticeId),
+            drawId: display?.type === "draw" ? text(display.drawId) : "",
           },
           displayOptions: {
             notices: Array.isArray(workspace.notices)
@@ -434,8 +597,12 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                     type: module.type,
                     published: module.published === true,
                     revealed: module.revealed === true,
-                    hasPublishedDraw: Array.isArray(module.drawHistory)
-                      && module.drawHistory.some((row) => (row as Record<string, unknown>)?.published === true),
+                    draws: module.type === "draw" && features.includes("draw") && module.status !== "DRAFT" && Array.isArray(module.drawHistory)
+                      ? module.drawHistory.flatMap((item) => {
+                          const draw = item as Record<string, unknown> | null;
+                          return draw?.published === true && typeof draw.id === "string" && draw.id
+                            ? [{ id: draw.id, name: text(draw.programName), at: text(draw.at) }] : [];
+                        }) : [],
                   }];
                 })
               : [],
@@ -472,6 +639,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const trackedIds: string[] = useMemo(() => (state.kind === "ready"
     ? [
         "ops-desks",
+        ...(state.participationEnabled ? ["ops-participation"] : []),
         "ops-booths",
         ...(state.stampEnabled ? ["ops-booth-mode", "ops-booth-map"] : []),
         ...(state.screenEnabled ? ["ops-display"] : []),
@@ -607,18 +775,23 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const guardDisplayDirty =
     state.kind === "ready" &&
     displayChoice !== "" &&
-    displayChoice !== `${state.display.type}|${state.display.type === "notice" ? state.display.noticeId : state.display.moduleId}`;
+    displayChoice !== displayKey(state.display);
   useConsoleDraftGuard(
     deskDirty ||
+      Boolean(deskConflict) ||
+      Boolean(boothConflict) ||
       boothDirty ||
       assignDirty ||
       mapDraftPoints !== null ||
       mapImageOverride !== null ||
       guardDisplayDirty ||
       mapUploading ||
+      mapUploadUncertain ||
       commandBusyRef.current ||
       commandIdCache.current.size > 0,
-    "작성 중인 현장 운영 내용이나 저장하지 않은 지도·출력이 있습니다. 페이지를 떠나면 사라집니다."
+    mapUploadUncertain
+      ? "지도 파일이 이미 올라갔을 수 있습니다. 화면을 떠나면 같은 파일 요청을 다시 시도할 수 없습니다."
+      : "작성 중인 현장 운영 내용이나 저장하지 않은 지도·출력이 있습니다. 페이지를 떠나면 사라집니다."
   );
 
   const staffAccounts = useMemo(
@@ -636,9 +809,15 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   async function runCommand(
     command: string,
     payload: Record<string, unknown>,
-    successMessage: string
+    successMessage: string,
+    retry?: OperationAttempt
   ) {
     if (busy || commandBusyRef.current) return false;
+    const held = pendingOperationRef.current;
+    if ((held && (!retry || retry.commandId !== held.commandId)) || otherOperationReceipt) {
+      setFailure({ message: "이전 현장 운영 요청의 처리 결과를 먼저 확인하세요." });
+      return false;
+    }
     // Archived and unauthorized writes never reach the server from here;
     // the server stays authoritative either way.
     if (commandBlocked(command)) return false;
@@ -646,41 +825,119 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
     setBusy(true);
     setFailure(null);
     setNotice(null);
-    const fingerprint = `${command}:${JSON.stringify(payload)}`;
-    let commandId = commandIdCache.current.get(fingerprint);
-    if (!commandId) {
-      commandId = randomCommandId();
-      commandIdCache.current.set(fingerprint, commandId);
-    }
+    const frozenPayload = retry?.payload ?? JSON.parse(JSON.stringify(payload)) as Record<string, unknown>;
+    const fingerprint = retry?.fingerprint ?? `${command}:${JSON.stringify(frozenPayload)}`;
+    const commandId = retry?.commandId ?? commandIdCache.current.get(fingerprint) ?? randomCommandId();
+    commandIdCache.current.set(fingerprint, commandId);
+    const attempt: OperationAttempt = retry ?? { eventId, command, payload: frozenPayload, successMessage, fingerprint, commandId };
+    const markUnconfirmed = () => {
+      pendingOperationRef.current = attempt;
+      setPendingOperation(attempt);
+      setOperationRecoveryError("처리 결과를 확인하지 못했습니다. 서버 처리 확인 또는 같은 요청 다시 시도를 선택하세요.");
+    };
     try {
-      const res = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
+      const res = await consoleFetch(`/api/events/${encodeURIComponent(attempt.eventId)}/commands`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ commandId, command, payload }),
+        body: JSON.stringify({ commandId, command: attempt.command, payload: attempt.payload }),
       });
       const data = (await res.json().catch(() => null)) as {
         error?: unknown;
         field?: unknown;
+        code?: unknown;
       } | null;
+      if (activeOperationsEventRef.current !== attempt.eventId) return false;
       if (!res.ok) {
-        if (res.status !== 408 && res.status < 500) {
-          // Definitive rejection: nothing applied, so the id carries no
-          // replayable receipt. Clearing also keeps the draft guard truthful:
-          // only ambiguous responses leave pending intent behind.
+        if (res.status === 409 && attempt.command === "booth.mode-reviewed" &&
+            ["BOOTH_MODE_CHANGED", "BOOTH_VISITS_UNAVAILABLE", "BOOTH_VISITS_EXIST", "BOOTH_MODE_UNAVAILABLE"].includes(String(data?.code))) {
+          // These guards run only after receipt replay, so the attempt was not committed.
           commandIdCache.current.delete(fingerprint);
+          abandonOperatorAttempt(commandId);
+          forgetOperatorReceipt(commandId);
+          pendingOperationRef.current = null;
+          setPendingOperation(null);
+          setOperationRecoveryError(null);
+          setAbandonOperationConfirm(false);
+          setFailure({ message: typeof data?.error === "string" ? data.error : "부스 인증 상태를 다시 확인하세요." });
+          reload();
+          return false;
         }
-        setFailure({
-          message: typeof data?.error === "string" ? data.error : "처리하지 못했습니다.",
-          field: typeof data?.field === "string" ? data.field : undefined,
-        });
+        if (res.status === 409 && attempt.command === "booth.save" &&
+            typeof attempt.payload.id === "string" && data?.code === "BOOTH_CHANGED") {
+          // Only this locked guard proves that even a retried request did not
+          // commit. Generic denials after a lost response remain uncertain.
+          commandIdCache.current.delete(fingerprint);
+          abandonOperatorAttempt(commandId);
+          forgetOperatorReceipt(commandId);
+          pendingOperationRef.current = null;
+          setPendingOperation(null);
+          setOperationRecoveryError(null);
+          setAbandonOperationConfirm(false);
+          setFailure(null);
+          const conflict: BoothConflict = { id: attempt.payload.id, latest: null, loading: false, error: null };
+          boothConflictRef.current = conflict;
+          setBoothConflict(conflict);
+          window.requestAnimationFrame(() => document.getElementById("booth-conflict-heading")?.focus());
+          return false;
+        }
+        const deskConflictKind = res.status === 409 && typeof attempt.payload.id === "string" &&
+          ((attempt.command === "desk.save" && data?.code === "DESK_CHANGED") ? "edit" :
+            (attempt.command === "desk.set-open" && (data?.code === "DESK_OPEN_CHANGED" || data?.code === "DESK_CHANGED" || data?.code === "DESK_INCOMPLETE")) ? "toggle" : null);
+        if (deskConflictKind) {
+          // These codes are returned only after locked receipt replay. They
+          // settle even a lost-response retry; generic denials do not.
+          commandIdCache.current.delete(fingerprint);
+          abandonOperatorAttempt(commandId);
+          forgetOperatorReceipt(commandId);
+          pendingOperationRef.current = null;
+          setPendingOperation(null);
+          setOperationRecoveryError(null);
+          setAbandonOperationConfirm(false);
+          setFailure(null);
+          const conflict: DeskConflict = { kind: deskConflictKind, id: String(attempt.payload.id), latest: null, loading: false, error: null, incomplete: data?.code === "DESK_INCOMPLETE" };
+          deskConflictRef.current = conflict;
+          setDeskConflict(conflict);
+          window.requestAnimationFrame(() => document.getElementById("desk-conflict-heading")?.focus());
+          return false;
+        }
+        const uncertain = Boolean(retry) || res.status >= 500 || [408, 425, 429].includes(res.status);
+        if (!uncertain) {
+          commandIdCache.current.delete(fingerprint);
+          setFailure({
+            message: typeof data?.error === "string" ? data.error : "처리하지 못했습니다.",
+            field: typeof data?.field === "string" ? data.field : undefined,
+          });
+          if (attempt.command === "display.set" && res.status === 409 && typeof attempt.payload.drawId === "string") {
+            setDisplayChoice("");
+            reload();
+          }
+        } else {
+          markUnconfirmed();
+        }
+        return false;
+      }
+      if (!confirmsOperationsCommand(attempt.command, attempt.payload, data)) {
+        markUnconfirmed();
         return false;
       }
       commandIdCache.current.delete(fingerprint);
+      acknowledgeOperatorReceipt(commandId);
+      forgetOperatorReceipt(commandId);
+      pendingOperationRef.current = null;
+      setPendingOperation(null);
+      setOperationRecoveryError(null);
+      setAbandonOperationConfirm(false);
       setNotice(successMessage);
       reload();
       return true;
-    } catch {
-      setFailure({ message: "연결하지 못했습니다. 다시 시도하세요." });
+    } catch (error) {
+      if (activeOperationsEventRef.current !== attempt.eventId) return false;
+      if (!retry && isOrganizationContextBlock(error)) {
+        commandIdCache.current.delete(fingerprint);
+        setFailure({ message: "현재 조직을 확인한 뒤 다시 시도하세요." });
+      } else {
+        markUnconfirmed();
+      }
       return false;
     } finally {
       commandBusyRef.current = false;
@@ -688,7 +945,155 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
     }
   }
 
+  function finishRecoveredOperation(attempt: OperationAttempt) {
+    if (attempt.command === "desk.save") { setDeskDirty(false); setDeskOpen(false); setEditingDesk(null); }
+    if (attempt.command === "booth.save") { setBoothDirty(false); setBoothOpen(false); setEditingBooth(null); }
+    if (attempt.command === "staff.assign") { setAssignDirty(false); setAssignOpen(false); setAssignPreset(null); }
+    if (attempt.command === "booth.map.save") { setMapDraftPoints(null); setMapImageOverride(null); setMapPlacing(""); setMapWarning(null); }
+    if (attempt.command === "booth.map.publish") setMapDraftPoints(null);
+    if (attempt.command === "display.set") setDisplayChoice("");
+  }
+
+  async function checkOperation() {
+    const attempt = pendingOperationRef.current;
+    if (!attempt || attempt.eventId !== activeOperationsEventRef.current || busy || commandBusyRef.current) return;
+    commandBusyRef.current = true;
+    setCheckingOperation(true);
+    setOperationRecoveryError(null);
+    try {
+      const response = await consoleFetch(`/api/events/${encodeURIComponent(attempt.eventId)}/command-receipts/${encodeURIComponent(attempt.commandId)}`, { cache: "no-store" });
+      const data = await response.json().catch(() => null) as { status?: unknown; command?: unknown } | null;
+      if (activeOperationsEventRef.current !== attempt.eventId) return;
+      if (response.ok && data?.status === "APPLIED" && data.command === attempt.command) {
+        commandIdCache.current.delete(attempt.fingerprint);
+        acknowledgeOperatorReceipt(attempt.commandId);
+        forgetOperatorReceipt(attempt.commandId);
+        pendingOperationRef.current = null;
+        setPendingOperation(null);
+        setAbandonOperationConfirm(false);
+        finishRecoveredOperation(attempt);
+        setFailure(null);
+        setNotice("현장 운영 처리가 서버에 반영된 것을 확인했습니다. 최신 내용을 확인하세요.");
+        reload();
+      } else {
+        setOperationRecoveryError(response.ok && data?.status === "UNCONFIRMED"
+          ? "아직 처리 여부를 확인할 수 없습니다. 잠시 후 다시 확인하세요."
+          : "처리 결과를 확인하지 못했습니다. 현재 계정과 행사 접근 권한을 확인한 뒤 다시 확인하세요.");
+      }
+    } catch {
+      if (activeOperationsEventRef.current === attempt.eventId) setOperationRecoveryError("서버에 연결하지 못했습니다. 요청은 다시 보내지 않았습니다.");
+    } finally {
+      commandBusyRef.current = false;
+      setCheckingOperation(false);
+    }
+  }
+
+  async function retryOperation() {
+    const attempt = pendingOperationRef.current;
+    if (!attempt || checkingOperation || attempt.eventId !== activeOperationsEventRef.current) return;
+    if (otherOperationReceipt) { setOperationRecoveryError("다른 현장 운영 요청도 미확인 상태입니다. 공통 처리 결과에서 먼저 확인하세요."); return; }
+    setOperationRecoveryError(null);
+    if (await runCommand(attempt.command, attempt.payload, attempt.successMessage, attempt)) finishRecoveredOperation(attempt);
+  }
+
+  async function readLatestDesk() {
+    const conflict = deskConflictRef.current;
+    if (!conflict || deskReadRef.current) return;
+    const controller = new AbortController();
+    deskReadRef.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 12000);
+    const loading = { ...conflict, latest: null, loading: true, error: null };
+    deskConflictRef.current = loading;
+    setDeskConflict(loading);
+    try {
+      const response = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store", signal: controller.signal });
+      const data = await response.json() as { state?: { events?: unknown; workspaces?: Record<string, { desks?: unknown }> } };
+      const bootstrap = data?.state;
+      const event = Array.isArray(bootstrap?.events) && bootstrap.events.some((item) => item && typeof item === "object" && item.id === eventId);
+      const desks = bootstrap?.workspaces?.[eventId]?.desks;
+      if (!response.ok || !event || !Array.isArray(desks)) throw new Error("invalid response");
+      const raw = desks.find((item) => item && typeof item === "object" && item.id === conflict.id) as Record<string, unknown> | undefined;
+      if (!raw || !(typeof raw.name === "string" || raw.name === null) ||
+          !(typeof raw.action === "string" || raw.action === null) ||
+          typeof raw.mode !== "string" || !raw.mode || typeof raw.open !== "boolean") throw new Error("invalid desk");
+      if (controller.signal.aborted || activeOperationsEventRef.current !== eventId || deskReadRef.current !== controller) return;
+      const latest: Desk = { id: conflict.id, name: raw.name as string | null, action: raw.action as string | null, mode: text(raw.mode), open: raw.open === true };
+      const resolved = { ...conflict, latest, loading: false, error: null };
+      deskConflictRef.current = resolved;
+      setDeskConflict(resolved);
+    } catch {
+      if (activeOperationsEventRef.current !== eventId || deskReadRef.current !== controller) return;
+      const failed = { ...conflict, latest: null, loading: false, error: "최신 데스크를 불러오지 못했습니다. 작성 중인 내용은 그대로 있습니다. 다시 시도하세요." };
+      deskConflictRef.current = failed;
+      setDeskConflict(failed);
+    } finally {
+      window.clearTimeout(timeout);
+      if (deskReadRef.current === controller) deskReadRef.current = null;
+    }
+  }
+
+  function resolveDeskConflict() {
+    const conflict = deskConflictRef.current;
+    if (!conflict?.latest || activeOperationsEventRef.current !== eventId) return;
+    const latest = conflict.latest;
+    setState((current) => current.kind === "ready" ? { ...current, desks: current.desks.map((desk) => desk.id === latest.id ? latest : desk) } : current);
+    if (conflict.kind === "edit") setEditingDesk(latest);
+    deskConflictRef.current = null;
+    setDeskConflict(null);
+    setNotice(conflict.kind === "toggle" ? (conflict.incomplete
+      ? "최신 데스크를 확인했습니다. 편집에서 이름·작업 방향·화면 방식을 확인해 주세요."
+      : "최신 데스크 상태를 확인했습니다. 가동 상태는 직접 변경해 주세요.") : null);
+    window.requestAnimationFrame(() => document.getElementById(conflict.kind === "edit" ? "desk-name" : "ops-desks")?.focus());
+  }
+
+  async function readLatestBooth() {
+    const conflict = boothConflictRef.current;
+    if (!conflict || boothReadRef.current) return;
+    const controller = new AbortController();
+    boothReadRef.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 12000);
+    const loading = { ...conflict, latest: null, loading: true, error: null };
+    boothConflictRef.current = loading;
+    setBoothConflict(loading);
+    try {
+      const response = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store", signal: controller.signal });
+      const data = await response.json() as { state?: { events?: unknown; workspaces?: Record<string, { booths?: unknown }> } };
+      const bootstrap = data?.state;
+      const event = Array.isArray(bootstrap?.events) && bootstrap.events.some((item) => item && typeof item === "object" && item.id === eventId);
+      const booths = bootstrap?.workspaces?.[eventId]?.booths;
+      if (!response.ok || !event || !Array.isArray(booths)) throw new Error("invalid response");
+      const raw = booths.find((item) => item && typeof item === "object" && item.id === conflict.id) as Record<string, unknown> | undefined;
+      if (!raw || [raw.name, raw.zone, raw.status, raw.startsAt, raw.endsAt].some((value) => typeof value !== "string") ||
+          ![raw.capacity, raw.limit, raw.used].every((value) => typeof value === "number" && Number.isFinite(value))) throw new Error("invalid booth");
+      if (controller.signal.aborted || activeOperationsEventRef.current !== eventId || boothReadRef.current !== controller) return;
+      const latest: Booth = { id: conflict.id, name: text(raw.name), zone: text(raw.zone), status: text(raw.status),
+        capacity: Number(raw.capacity), limit: Number(raw.limit), used: Number(raw.used), startsAt: text(raw.startsAt), endsAt: text(raw.endsAt) };
+      const resolved = { ...conflict, latest, loading: false, error: null };
+      boothConflictRef.current = resolved;
+      setBoothConflict(resolved);
+    } catch {
+      if (activeOperationsEventRef.current !== eventId || boothReadRef.current !== controller) return;
+      const failed = { ...conflict, latest: null, loading: false, error: "최신 부스를 불러오지 못했습니다. 작성 중인 내용은 그대로 있습니다. 다시 시도하세요." };
+      boothConflictRef.current = failed;
+      setBoothConflict(failed);
+    } finally {
+      window.clearTimeout(timeout);
+      if (boothReadRef.current === controller) boothReadRef.current = null;
+    }
+  }
+
+  function resolveBoothConflict() {
+    const latest = boothConflictRef.current?.latest;
+    if (!latest || activeOperationsEventRef.current !== eventId) return;
+    setState((current) => current.kind === "ready" ? { ...current, booths: current.booths.map((booth) => booth.id === latest.id ? latest : booth) } : current);
+    setEditingBooth(latest);
+    boothConflictRef.current = null;
+    setBoothConflict(null);
+    window.requestAnimationFrame(() => document.getElementById("booth-name")?.focus());
+  }
+
   async function saveBoothMapDraft() {
+    if (mapUploadUncertain || mapUploading) return;
     const image = mapImageOverride ?? boothMap.draft?.image ?? null;
     if (!image) {
       setFailure({ message: "배치도 이미지를 먼저 올리세요." });
@@ -707,10 +1112,12 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       setMapDraftPoints(null);
       setMapImageOverride(null);
       setMapPlacing("");
+      setMapWarning(null);
     }
   }
 
   async function publishBoothMap() {
+    if (mapUploadUncertain || mapUploading) return;
     const ok = await runCommand(
       "booth.map.publish",
       { expectedDraftVersion: boothMap.draft?.version ?? 0 },
@@ -724,7 +1131,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   }
 
   async function confirmUnpublishBoothMap() {
-    if (!mapUnpublishPending) return;
+    if (!mapUnpublishPending || mapUploadUncertain || mapUploading) return;
     await runCommand(
       "booth.map.unpublish",
       { expectedPublishedVersion: boothMap.published?.version ?? 0 },
@@ -734,18 +1141,14 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   }
 
   function requestStampMode(mode: "SELF" | "STAFF") {
-    if (mode === stampMode) return;
-    setStampModePending(mode);
+    if (!stampMode || visitsCount === null || mode === stampMode) return;
+    setStampModePending({ mode, expectedMode: stampMode });
   }
 
   async function confirmStampMode() {
-    const mode = stampModePending;
-    if (mode === null) return;
-    if (mode === stampMode) {
-      setStampModePending(null);
-      return;
-    }
-    await runCommand("booth.mode", { mode, acknowledge: true }, "부스 인증 방식을 바꿨습니다.");
+    const review = stampModePending;
+    if (review === null) return;
+    await runCommand("booth.mode-reviewed", { ...review, acknowledge: true }, "부스 인증 방식을 바꿨습니다.");
     setStampModePending(null);
   }
 
@@ -778,16 +1181,19 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const canWriteOnsite = canWriteEvent(capabilities, "desk.save");
   const canWriteBooth = canWriteEvent(capabilities, "booth.save");
   const canWriteDisplay = canWriteEvent(capabilities, "display.set");
-  const onsiteBlocked = archived || !canWriteOnsite;
-  const onsiteNoWriteReason = archived
+  const operationLocked = Boolean(pendingOperation) || otherOperationReceipt || busy || checkingOperation;
+  const operationLockReason = pendingOperation || otherOperationReceipt ? "이전 현장 운영 요청의 처리 결과를 먼저 확인하세요" : "현장 운영 요청을 처리 중입니다";
+  const onsiteBlocked = archived || !canWriteOnsite || operationLocked;
+  const onsiteNoWriteReason = operationLocked ? operationLockReason : archived
     ? archivedReason
     : "현장 운영을 변경할 운영 권한이 없습니다";
-  const boothBlocked = archived || !canWriteBooth;
-  const boothNoWriteReason = archived
+  const boothBlocked = archived || !canWriteBooth || operationLocked;
+  const boothNoWriteReason = operationLocked ? operationLockReason : archived
     ? archivedReason
     : "부스·스탬프 지도를 변경할 부스 권한이 없습니다. 필요하면 담당 행사 운영자에게 요청하세요.";
-  const displayBlocked = archived || !canWriteDisplay;
-  const displayNoWriteReason = archived
+  const mapControlsBlocked = boothBlocked || mapUploadUncertain || mapUploading;
+  const displayBlocked = archived || !canWriteDisplay || operationLocked;
+  const displayNoWriteReason = operationLocked ? operationLockReason : archived
     ? archivedReason
     : "전광판 출력을 변경할 프로그램 권한이 필요합니다. 필요하면 담당 행사 운영자에게 요청하세요.";
   // Per-command guard for the shared writer: the button gates above already
@@ -796,6 +1202,38 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   function commandBlocked(command: string): boolean {
     if (archived) return true;
     return !canWriteEvent(capabilities, command);
+  }
+
+  function operationRecovery(): ReactNode {
+    if (!pendingOperation) return null;
+    return <section className={styles.recovery} aria-labelledby="operations-recovery-heading">
+      <h2 id="operations-recovery-heading">현장 운영 처리 확인 필요</h2>
+      <p>이전 요청이 반영됐을 수 있습니다. 서버 확인은 요청을 다시 보내지 않습니다.</p>
+      {commandBlocked(pendingOperation.command) ? <p>현재 권한으로 같은 요청을 다시 보낼 수 없습니다. 서버 처리 확인이나 담당자 확인을 이용하세요.</p> : null}
+      {operationRecoveryError ? <p role="alert">{operationRecoveryError}</p> : null}
+      <div className={styles.recoveryActions}>
+        <button type="button" className="button button-secondary" disabled={busy || checkingOperation || abandonOperationConfirm} onClick={() => void checkOperation()}>{checkingOperation ? "확인 중…" : "서버 처리 확인"}</button>
+        <button type="button" className="button button-secondary" disabled={busy || checkingOperation || abandonOperationConfirm || commandBlocked(pendingOperation.command)} onClick={() => void retryOperation()}>같은 요청 다시 시도</button>
+        <button type="button" className="button button-secondary" disabled={busy || checkingOperation || abandonOperationConfirm} onClick={() => setAbandonOperationConfirm(true)}>확인 전 그만두기</button>
+      </div>
+      {abandonOperationConfirm ? <ConsoleConfirm
+        summary="이미 반영된 처리는 취소되지 않습니다. 확인을 그만두고 최신 현장 운영 내용을 확인할까요?"
+        confirmLabel="확인 그만두기"
+        onConfirm={() => {
+          const attempt = pendingOperationRef.current;
+          if (!attempt) return;
+          commandIdCache.current.delete(attempt.fingerprint);
+          abandonOperatorAttempt(attempt.commandId);
+          forgetOperatorReceipt(attempt.commandId);
+          pendingOperationRef.current = null;
+          setPendingOperation(null);
+          setOperationRecoveryError(null);
+          setAbandonOperationConfirm(false);
+          setFailure({ message: "이전 처리가 반영됐을 수 있습니다. 최신 현장 운영 내용을 확인한 뒤 다시 진행하세요." });
+        }}
+        onCancel={() => setAbandonOperationConfirm(false)}
+      /> : null}
+    </section>;
   }
   const accountName = new Map(accounts.map((account) => [account.id, account.name]));
   const deskName = new Map(desks.map((desk) => [desk.id, desk.name]));
@@ -820,7 +1258,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   // section's existing guidance speak instead.
   const deskOpenCount = desks.filter((desk) => desk.open).length;
   const boothOpenCount = booths.filter((booth) => booth.status === "OPEN").length;
-  const modeValueLabel = stampMode === "SELF" ? "참가자 셀프 스캔" : "스태프 확인";
+  const modeValueLabel = stampMode === "SELF" ? "참가자 셀프 스캔" : stampMode === "STAFF" ? "스태프 확인" : "확인 필요";
   const boothMapHasUnpublishedDraft = Boolean(boothMap.draft) && !mapMatchesPublished(boothMap);
   const mapStatusText = boothMap.published
     ? (boothMapHasUnpublishedDraft
@@ -841,7 +1279,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   // A preset holding unsaved work or a pending confirmation stays open even
   // when folded: the folded summary already names the state, but the
   // recovery action lives in the body.
-  const modeNeedsAttention = stampModePending !== null;
+  const modeNeedsAttention = stampModePending !== null || stampMode === null || visitsCount === null;
   const mapNeedsAttention =
     mapDraftPoints !== null || mapImageOverride !== null || mapUploading || mapUnpublishPending;
 
@@ -858,29 +1296,38 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       if (!module.published) continue;
       if (module.type === "poll") options.push({ value: `poll|${module.id}`, label: `투표 · ${module.title}` });
       if (module.type === "quiz" && module.revealed) options.push({ value: `quiz|${module.id}`, label: `퀴즈 정답 · ${module.title}` });
-      if (module.type === "draw" && module.hasPublishedDraw) options.push({ value: `draw|${module.id}`, label: `추첨 결과 · ${module.title}` });
+      if (module.type === "draw" && module.draws[0]) {
+        const draw = module.draws[0];
+        options.push({ value: `draw|${module.id}|${draw.id}`, label: drawDisplayLabel(draw, module.title) });
+      }
       if (module.type === "qa" && displayOptions.approvedQuestions > 0) options.push({ value: `qa|${module.id}`, label: `Q&A · ${module.title}` });
     }
     if (displayOptions.approvedPhotos > 0) options.push({ value: "photo|", label: `사진 · 승인 ${displayOptions.approvedPhotos}장` });
     return options;
   })();
-  const currentDisplayValue = `${display.type}|${display.type === "notice" ? display.noticeId : display.moduleId}`;
-  // The applied output names itself in the section description; the hint
-  // below the controls keeps the selection guidance. No new copy: both
-  // read the same server-derived choice list.
-  const currentDisplayLabel = currentDisplayValue.startsWith("idle")
+  const currentDisplayValue = displayKey(display);
+  const activeDrawModule = display.type === "draw"
+    ? displayOptions.modules.find((module) => module.id === display.moduleId && module.type === "draw" && module.published)
+    : undefined;
+  const activeDraw = display.drawId
+    ? activeDrawModule?.draws.find((draw) => draw.id === display.drawId)
+    : activeDrawModule?.draws[0];
+  const currentDisplayLabel = display.type === "idle"
     ? "유휴 화면"
+    : activeDraw && activeDrawModule ? drawDisplayLabel(activeDraw, activeDrawModule.title)
+    : display.type === "draw" && display.drawId ? "기본 화면 · 선택한 추첨 결과 출력 불가"
     : displayChoices.find((choice) => choice.value === currentDisplayValue)?.label ?? "출력 확인 필요";
   const displaySummary = `현재 ${currentDisplayLabel}`;
   const mapPoints = mapDraftPoints ?? boothMap.draft?.points ?? [];
   const pointFor = (boothId: string) => mapPoints.find((point) => point.boothId === boothId) ?? null;
 
   async function applyDisplayChoice() {
-    const [type, target] = displayChoice.split("|");
+    const [type, target, drawId] = displayChoice.split("|");
     if (!type) return;
     const payload: Record<string, unknown> = { type };
     if (type === "notice") payload.noticeId = target;
     else if (type !== "idle" && type !== "photo") payload.moduleId = target;
+    if (type === "draw") payload.drawId = drawId;
     const ok = await runCommand(
       "display.set",
       payload,
@@ -893,7 +1340,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   // working set, and each placement is normalized to 0..1 so the published
   // map scales to any board size.
   async function uploadMapImage(file: File) {
-    if (boothBlocked) return;
+    if (boothBlocked || mapUploadGateRef.current) return;
+    if (mapUploadRef.current && mapUploadRef.current.file !== file) return;
     if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
       setFailure({ message: "배치도는 PNG·JPG·WebP 이미지를 사용하세요." });
       return;
@@ -902,45 +1350,75 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       setFailure({ message: "600KB 이하 배치도 이미지를 올려주세요." });
       return;
     }
+    const attempt = mapUploadRef.current ?? { eventId, file, commandId: randomCommandId(), uncertain: false };
+    mapUploadRef.current = attempt;
+    mapUploadGateRef.current = true;
     setMapUploading(true);
     setFailure(null);
+    setMapUploadError(null);
     try {
       const res = await consoleFetch(
-        `/api/events/${encodeURIComponent(eventId)}/files?name=${encodeURIComponent(file.name)}&commandId=${encodeURIComponent(randomCommandId())}`,
-        { method: "POST", headers: { "content-type": file.type }, body: file }
+        `/api/events/${encodeURIComponent(attempt.eventId)}/files?name=${encodeURIComponent(attempt.file.name)}&commandId=${encodeURIComponent(attempt.commandId)}`,
+        { method: "POST", headers: { "content-type": attempt.file.type }, body: attempt.file }
       );
       const data = (await res.json().catch(() => null)) as {
-        file?: { fileId?: unknown; name?: unknown; width?: unknown; height?: unknown };
+        file?: { fileId?: unknown; name?: unknown; type?: unknown; size?: unknown; width?: unknown; height?: unknown };
         error?: unknown;
       } | null;
+      if (activeOperationsEventRef.current !== attempt.eventId) return;
       const fileId = typeof data?.file?.fileId === "string" ? data.file.fileId : "";
-      if (!res.ok || !fileId) {
-        setFailure({ message: typeof data?.error === "string" ? data.error : "배치도를 올리지 못했습니다." });
+      const width = Number(data?.file?.width);
+      const height = Number(data?.file?.height);
+      if (!res.ok || !/^[A-Za-z0-9_-]{1,160}$/.test(fileId) || data?.file?.name !== attempt.file.name ||
+          data?.file?.type !== attempt.file.type || data?.file?.size !== attempt.file.size ||
+          !Number.isInteger(width) || width < 1 || !Number.isInteger(height) || height < 1) {
+        const definitive = !attempt.uncertain && !res.ok && res.status >= 400 && res.status < 500 && ![408, 425, 429].includes(res.status);
+        if (definitive) {
+          mapUploadRef.current = null;
+          setFailure({ message: typeof data?.error === "string" ? data.error : "배치도를 올리지 못했습니다." });
+        } else {
+          attempt.uncertain = true;
+          setMapUploadUncertain(true);
+          setMapUploadError("업로드 결과를 확인하지 못했습니다. 같은 파일 요청을 다시 시도하세요.");
+        }
         return;
       }
-      if (boothMap.draft && boothMap.draft.image.fileId !== fileId && mapPoints.length) {
+      mapUploadRef.current = null;
+      setMapUploadUncertain(false);
+      setMapUploadAbandonConfirm(false);
+      const previousImage = mapImageOverride ?? boothMap.draft?.image ?? null;
+      if (previousImage && previousImage.fileId !== fileId && mapPoints.length) {
         // The server refuses an image swap with leftover points; clear them
         // here so the operator learns before the save round-trip.
         setMapDraftPoints([]);
-        setFailure({ message: "배치도를 교체했습니다. 부스 위치를 다시 지정한 뒤 저장하세요." });
+        setMapWarning("배치도를 교체했습니다. 부스 위치를 다시 지정한 뒤 저장하세요.");
         setMapImageOverride({
           fileId,
-          name: typeof data?.file?.name === "string" ? data.file.name : file.name,
-          width: Number(data?.file?.width) || 0,
-          height: Number(data?.file?.height) || 0,
+          name: typeof data?.file?.name === "string" ? data.file.name : attempt.file.name,
+          width,
+          height,
         });
         return;
       }
       setMapImageOverride({
         fileId,
-        name: typeof data?.file?.name === "string" ? data.file.name : file.name,
-        width: Number(data?.file?.width) || 0,
-        height: Number(data?.file?.height) || 0,
+        name: typeof data?.file?.name === "string" ? data.file.name : attempt.file.name,
+        width,
+        height,
       });
-    } catch {
-      setFailure({ message: "연결하지 못했습니다. 다시 시도하세요." });
+    } catch (error) {
+      if (activeOperationsEventRef.current !== attempt.eventId) return;
+      if (!attempt.uncertain && isOrganizationContextBlock(error)) {
+        mapUploadRef.current = null;
+        setFailure({ message: "현재 조직을 확인한 뒤 다시 시도하세요." });
+      } else {
+        attempt.uncertain = true;
+        setMapUploadUncertain(true);
+        setMapUploadError("업로드 결과를 확인하지 못했습니다. 같은 파일 요청을 다시 시도하세요.");
+      }
     } finally {
-      setMapUploading(false);
+      mapUploadGateRef.current = false;
+      if (activeOperationsEventRef.current === attempt.eventId) setMapUploading(false);
     }
   }
 
@@ -950,15 +1428,17 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       eventId={eventId}
       eventName={state.eventName || undefined}
       meta={state.eventMeta}
+      headerActions={state.participationEnabled ? <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/programs`}>참여 콘텐츠 관리</Link> : undefined}
       sectionNav={(
         <div className={styles.navSticky}>
-          <p className={styles.navHelp}>이 페이지에서 이동</p>
-          <ConsoleSectionNav
+          <p className={styles.navHelp}>작업 선택</p>
+          <ConsoleSectionNav mode="tabs"
             label="현장 운영 구역"
             activeId={activeSection}
             onNavigate={followJumpedSection}
             items={[
               { id: "ops-desks", label: "데스크" },
+              ...(state.participationEnabled ? [{ id: "ops-participation", label: "참여 진행" }] : []),
               ...(state.screenEnabled ? [{ id: "ops-display", label: "전광판 출력" }] : []),
               { id: "ops-booths", label: "부스" },
               { id: "ops-staff", label: "스태프 배정" },
@@ -1007,6 +1487,9 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       )}
     >
 
+      {pendingOperation && !((deskOpen && pendingOperation.command === "desk.save") || (boothOpen && pendingOperation.command === "booth.save") || (assignOpen && pendingOperation.command === "staff.assign")) ? operationRecovery() : null}
+      {otherOperationReceipt ? <ConsoleFeedback kind="warning">이전 현장 운영 요청의 처리 결과를 화면 위에서 먼저 확인하세요. 서버 확인은 요청을 다시 보내지 않습니다.</ConsoleFeedback> : null}
+
       <ConsoleSection
         headingId="ops-desks"
         title="데스크"
@@ -1015,8 +1498,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         action={(
           <button
             type="button"
-            className="button button-secondary"
-            disabled={onsiteBlocked}
+            className={`button ${desks.length ? "button-secondary" : "button-primary"}`}
+            disabled={onsiteBlocked || Boolean(deskConflict)}
             title={onsiteBlocked ? onsiteNoWriteReason : undefined}
             onClick={() => { setEditingDesk(null); setDeskOpen(true); setFailure(null); }}
           >
@@ -1024,9 +1507,19 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           </button>
         )}
       >
+        {deskConflict?.kind === "toggle" ? <section className={styles.deskConflict} aria-labelledby="desk-conflict-heading">
+          <h3 id="desk-conflict-heading" tabIndex={-1}>{deskConflict.incomplete ? "데스크 정보를 확인해야 합니다" : "다른 작업에서 데스크 상태가 변경됐습니다"}</h3>
+          <p>{deskConflict.incomplete ? "가동 요청은 반영되지 않았습니다. 최신 데스크를 확인하고 편집에서 이름·작업 방향·화면 방식을 확인해 주세요." : "이번 요청은 반영되지 않았습니다. 최신 상태를 확인한 뒤 직접 가동하거나 중지해 주세요."}</p>
+          {deskConflict.error ? <p role="alert">{deskConflict.error}</p> : null}
+          {deskConflict.latest ? <>
+            <p>최신 상태: <strong>{deskConflict.latest.name || "이름 확인 필요"} · {DESK_ACTION_LABEL[deskConflict.latest.action || ""] || "방향 확인 필요"} · {deskConflict.latest.mode === "tablet" ? "태블릿" : deskConflict.latest.mode === "desk" ? "데스크" : "화면 방식 확인 필요"} · {deskConflict.latest.open ? "가동 설정" : "중지됨"}</strong></p>
+            <button type="button" className="button button-secondary" onClick={resolveDeskConflict} disabled={operationLocked}>최신 상태 적용</button>
+          </> : <button type="button" className="button button-secondary" onClick={() => void readLatestDesk()} disabled={deskConflict.loading || operationLocked}>{deskConflict.loading ? "최신 상태 확인 중…" : "최신 데스크 확인"}</button>}
+        </section> : null}
         {desks.length ? (
           <ul className={uiStyles.collection}>
             {desks.map((desk) => {
+              const deskIncomplete = !desk.name?.trim() || !["IN", "OUT"].includes(desk.action || "") || !["desk", "tablet"].includes(desk.mode);
               const deskStaffNames = assignments
                 .filter((assignment) => assignment.type === "DESK" && assignment.targetId === desk.id)
                 .map((assignment) => accountName.get(assignment.accountId) ?? "알 수 없는 계정");
@@ -1034,25 +1527,26 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
               <li key={desk.id} className={`${uiStyles.recordRow} ${styles.rowStart}`}>
                 <div className={uiStyles.recordMain}>
                   <div className={styles.resourceHead}>
-                    <strong>{desk.name}</strong>
-                    <span className={styles.resourceStatus} data-tone={desk.open ? "good" : "muted"}>
-                      {desk.open ? "가동 중" : "중지됨"}
+                    <strong>{desk.name || "이름 확인 필요"}</strong>
+                    <span className={styles.resourceStatus} data-tone={desk.open && !deskIncomplete ? "good" : "muted"}>
+                      {desk.open ? (deskIncomplete ? "가동 설정 · 정보 확인 필요" : "가동 중") : "중지됨"}
                     </span>
                   </div>
                   <p className={uiStyles.recordMeta}>
-                    {DESK_ACTION_LABEL[desk.action] ?? "작업 미정"}
+                    {DESK_ACTION_LABEL[desk.action || ""] ?? "방향 확인 필요"}
                     {" · "}
-                    {desk.mode === "tablet" ? "태블릿" : "데스크"}
+                    {desk.mode === "tablet" ? "태블릿" : desk.mode === "desk" ? "데스크" : "화면 방식 확인 필요"}
                   </p>
                   <p className={uiStyles.recordMeta}>
                     {deskStaffNames.length ? `배정: ${deskStaffNames.join(", ")}` : "배정된 스태프 없음"}
                   </p>
+                  {deskIncomplete ? <p className={uiStyles.recordMeta}>데스크 편집에서 이름과 작업 방향·화면 방식을 확인해 주세요.</p> : null}
                 </div>
                 <div className={`${uiStyles.recordActions} ${styles.compactActions}`}>
                   <button
                     type="button"
-                    className="button button-secondary"
-                    disabled={busy || onsiteBlocked}
+                    className="button button-quiet"
+                    disabled={busy || onsiteBlocked || Boolean(deskConflict)}
                     title={onsiteBlocked ? onsiteNoWriteReason : undefined}
                     onClick={() => { setEditingDesk(desk); setDeskOpen(true); setFailure(null); }}
                   >
@@ -1061,9 +1555,9 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                   <button
                     type="button"
                     className="button button-secondary"
-                    disabled={busy || onsiteBlocked}
+                    disabled={busy || onsiteBlocked || Boolean(deskConflict)}
                     title={onsiteBlocked ? onsiteNoWriteReason : undefined}
-                    aria-label={`${desk.name}에 스태프 배정`}
+                    aria-label={`${desk.name || "이름 확인이 필요한 데스크"}에 스태프 배정`}
                     onClick={() => { setAssignPreset({ type: "DESK", targetId: desk.id }); setAssignOpen(true); setFailure(null); }}
                   >
                     스태프 배정
@@ -1072,12 +1566,13 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                   <button
                     type="button"
                     className={`button ${desk.open ? styles.stateStop : styles.stateStart}`}
-                    disabled={busy || onsiteBlocked}
-                    title={onsiteBlocked ? onsiteNoWriteReason : undefined}
+                    disabled={busy || onsiteBlocked || Boolean(deskConflict) || (!desk.open && deskIncomplete)}
+                    title={onsiteBlocked ? onsiteNoWriteReason : !desk.open && deskIncomplete ? "이름과 방향·화면 방식을 먼저 확인하세요" : undefined}
                     onClick={() => void runCommand(
                       "desk.set-open",
-                      { id: desk.id, open: !desk.open },
-                      `${desk.name} 데스크를 ${desk.open ? "중지" : "가동"}했습니다.`
+                      { id: desk.id, open: !desk.open, expectedOpen: desk.open,
+                        expectedDesk: { name: desk.name, action: desk.action, mode: desk.mode, open: desk.open } },
+                      `${desk.name || "데스크"}를 ${desk.open ? "중지" : "가동"}했습니다.`
                     )}
                   >
                     {desk.open ? "가동 중지" : "가동 시작"}
@@ -1096,6 +1591,26 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           one desktop row (stacked in DOM order on phones). Desks stay the
           full-width primary roster above, staff below. Section anchors,
           order, jump-nav and write gates are unchanged. */}
+      {state.participationEnabled ? <ConsoleSection headingId="ops-participation" title="참여 진행" className={styles.anchorSection}
+        description="질문과 참여 응답을 확인하고, 진행 중인 콘텐츠의 관리 화면으로 이동합니다.">
+        <div className={styles.participationGrid}>
+          <div className={styles.participationColumn}>
+            <h3>검토할 응답</h3>
+            <ConsoleTaskQueue label="참여 응답 확인" items={state.participation.tasks.map(task => ({ ...task, href: `/console/events/${encodeURIComponent(eventId)}/programs?review=${task.review}&from=operations` }))} empty="확인할 질문이나 참여 응답이 없습니다." />
+          </div>
+          <div className={styles.participationColumn}>
+            <h3>진행 중 콘텐츠 <span className={styles.participationCount}>{state.participation.open.length}개</span></h3>
+            {state.participation.open.length ? <ul className={styles.liveContents}>
+              {state.participation.open.slice(0, 6).map(module => <li key={module.id}>
+                <div><strong>{module.title}</strong><p>{participationTypeLabel(module.type)}</p></div>
+                <Link href={`/console/events/${encodeURIComponent(eventId)}/programs?module=${encodeURIComponent(module.id)}&from=operations`}>진행 관리<span className="sr-only"> · {module.title}</span></Link>
+              </li>)}
+            </ul> : <p className={styles.help}>진행 중인 참여 콘텐츠가 없습니다.</p>}
+            <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/programs${state.participation.open.length ? "?status=OPEN" : ""}`}>{state.participation.open.length > 6 ? "진행 중 콘텐츠 모두 보기" : "참여 콘텐츠 보기"}</Link>
+          </div>
+        </div>
+      </ConsoleSection> : null}
+
       <div className={styles.floorGrid}>
       {screenEnabled ? (
         <ConsoleSection headingId="ops-display" title="전광판 출력" description={displaySummary} className={styles.anchorSection}>
@@ -1104,6 +1619,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             <select
               id="ops-display-pick"
               value={displayChoice}
+              disabled={operationLocked}
               onChange={(event) => setDisplayChoice(event.target.value)}
             >
               <option value="">출력 고르기</option>
@@ -1129,8 +1645,11 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
               {busy ? "적용 중입니다" : displayChoice && displayChoice !== currentDisplayValue ? (displayChoice.startsWith("idle") ? "유휴로 내리기" : "출력 적용") : "출력 적용"}
             </button>
           </div>
+          {displayChoice && displayChoice !== currentDisplayValue ? (
+            <p className="notice" role="status">선택한 출력은 아직 적용되지 않았습니다. ‘출력 적용’을 누르면 행사장 화면에 나옵니다.</p>
+          ) : null}
           <p className={styles.hint}>
-            게시한 공지·공개된 프로그램만 고를 수 있습니다. 참가자 화면과 같은 내용이 행사장 화면에 나옵니다.
+            추첨은 무대별 최근 공개 결과를 고를 수 있습니다. 공개 중인 결과는 다른 출력을 적용할 때까지 유지됩니다.
           </p>
           {state.eventSlug ? (
             <p className={styles.hint}>
@@ -1143,9 +1662,6 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                 행사장 화면 열기
               </Link>
             </p>
-          ) : null}
-          {displayChoice && displayChoice !== currentDisplayValue ? (
-            <p className="notice" role="status">선택한 출력은 아직 적용되지 않았습니다. ‘출력 적용’을 눌러야 행사장 화면에 나옵니다.</p>
           ) : null}
         </ConsoleSection>
       ) : null}
@@ -1206,6 +1722,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                     {" · "}
                     참가자 {booth.limit}회
                   </p>
+                  {boothScheduleNeedsReview(booth.startsAt, booth.endsAt) ? <p className={uiStyles.recordMeta} role="note">운영 시간 확인 필요 · 확인 전에는 부스 인증을 받을 수 없습니다.</p> : null}
                   <p className={uiStyles.recordMeta}>
                     {boothStaffNames.length ? `배정: ${boothStaffNames.join(", ")}` : "배정된 스태프 없음"}
                   </p>
@@ -1213,7 +1730,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                 <div className={`${uiStyles.recordActions} ${styles.compactActions}`}>
                   <button
                     type="button"
-                    className="button button-secondary"
+                    className="button button-quiet"
                     disabled={busy || boothBlocked}
                     title={boothBlocked ? boothNoWriteReason : undefined}
                     onClick={() => { setEditingBooth(booth); setBoothOpen(true); setFailure(null); }}
@@ -1305,19 +1822,20 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           {/* Before-the-day preset: starts folded with the current value
               in the folded summary; the draws setup-details same grammar. */}
           <details className={styles.presetFold} open={presetOpen.mode || modeNeedsAttention} onToggle={(event) => setPresetOpen((prev) => ({ ...prev, mode: (event.target as HTMLDetailsElement).open }))}>
-            <summary className={styles.presetSummary}>인증 방식 · {modeValueLabel}</summary>
+            <summary className={styles.presetSummary} data-disclosure-indicator="">인증 방식 · {modeValueLabel}</summary>
             <div className={styles.presetBody}>
           <p className={styles.hint}>
             {stampMode === "SELF"
               ? "참가자가 부스 QR을 직접 스캔합니다. 부스마다 QR을 붙여 주세요."
-              : "스태프가 참가자 티켓을 확인해 처리합니다. 부스 배정이 필요합니다."}
+              : stampMode === "STAFF" ? "스태프가 참가자 티켓을 확인해 처리합니다. 부스 배정이 필요합니다." : "현재 인증 방식을 확인할 수 없습니다. 시스템 관리자에게 문의하세요."}
             {visitsCount ? ` · 이미 인증 ${visitsCount}건이라 방식을 바꿀 수 없습니다.` : ""}
           </p>
+          {visitsCount === null ? <ConsoleFeedback kind="warning">부스 인증 기록을 확인할 수 없습니다. 인증 방식을 변경하기 전에 시스템 관리자에게 문의하세요.</ConsoleFeedback> : null}
           <div className={styles.buttonRow}>
             <button
               type="button"
               className={`button ${stampMode === "STAFF" ? "button-primary" : "button-secondary"}`}
-              disabled={busy || visitsCount > 0 || stampMode === "STAFF" || boothBlocked}
+              disabled={busy || visitsCount === null || visitsCount > 0 || stampMode === null || stampMode === "STAFF" || boothBlocked}
               title={boothBlocked ? boothNoWriteReason : undefined}
               aria-pressed={stampMode === "STAFF"}
               onClick={() => requestStampMode("STAFF")}
@@ -1327,7 +1845,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             <button
               type="button"
               className={`button ${stampMode === "SELF" ? "button-primary" : "button-secondary"}`}
-              disabled={busy || visitsCount > 0 || stampMode === "SELF" || boothBlocked}
+              disabled={busy || visitsCount === null || visitsCount > 0 || stampMode === null || stampMode === "SELF" || boothBlocked}
               title={boothBlocked ? boothNoWriteReason : undefined}
               aria-pressed={stampMode === "SELF"}
               onClick={() => requestStampMode("SELF")}
@@ -1339,7 +1857,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             <ConsoleConfirm
               summary={(
                 <>
-                  인증 방식을 &lsquo;{stampModePending === "SELF" ? "참가자가 부스 QR을 직접 스캔" : "스태프가 참가자 티켓을 확인"}&rsquo;(으)로 바꿀까요?
+                  인증 방식을 &lsquo;{stampModePending.mode === "SELF" ? "참가자가 부스 QR을 직접 스캔" : "스태프가 참가자 티켓을 확인"}&rsquo;(으)로 바꿀까요?
                   <br />
                   인증 기록이 있으면 바꿀 수 없습니다.
                 </>
@@ -1359,43 +1877,59 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         <ConsoleSection headingId="ops-booth-map" title="부스 지도" className={styles.anchorSection}>
           {/* Before-the-day preset: starts folded with the publish state
               in the folded summary so an unposted draft is never missed. */}
-          <details className={styles.presetFold} open={presetOpen.map || mapNeedsAttention} onToggle={(event) => setPresetOpen((prev) => ({ ...prev, map: (event.target as HTMLDetailsElement).open }))}>
-            <summary className={styles.presetSummary}>부스 지도 · {mapStatusText}</summary>
+          <details className={styles.presetFold} open={presetOpen.map || mapNeedsAttention || mapUploadUncertain} onToggle={(event) => setPresetOpen((prev) => ({ ...prev, map: (event.target as HTMLDetailsElement).open }))}>
+            <summary className={styles.presetSummary} data-disclosure-indicator="">부스 지도 · {mapStatusText}</summary>
             <div className={styles.presetBody}>
           <p className={styles.hint}>
             배치도를 올리고, 부스를 골라 이미지를 눌러 위치를 찍습니다. 게시해야 참가자 화면에 보입니다.
           </p>
+          {mapWarning ? <ConsoleFeedback kind="warning">{mapWarning}</ConsoleFeedback> : null}
           <div className={styles.buttonRow}>
-            <label className="button button-secondary" title={boothBlocked ? boothNoWriteReason : undefined}>
+            <label className={`button button-secondary ${mapControlsBlocked ? styles.uploadDisabled : ""}`} aria-disabled={mapControlsBlocked} title={mapUploadUncertain ? "먼저 파일 업로드 결과를 확인하세요" : boothBlocked ? boothNoWriteReason : undefined}>
               {mapUploading ? "올리는 중…" : boothMap.draft ? "배치도 교체" : "배치도 올리기"}
               <input
                 type="file"
                 className="sr-only"
                 accept="image/png,image/jpeg,image/webp"
-                disabled={mapUploading || busy || boothBlocked}
+                disabled={mapUploading || busy || mapControlsBlocked}
                 onChange={(event) => {
                   const file = event.target.files?.[0];
-                  if (file) void uploadMapImage(file);
+                  if (file) { setMapUnpublishPending(false); setMapPlacing(""); void uploadMapImage(file); }
                   event.target.value = "";
                 }}
               />
             </label>
             {mapImageOverride || boothMap.draft ? (
               <>
-                <button type="button" className="button button-primary" disabled={busy || mapUploading || boothBlocked} title={boothBlocked ? boothNoWriteReason : undefined} onClick={() => void saveBoothMapDraft()}>
+                <button type="button" className="button button-primary" disabled={busy || mapUploading || mapControlsBlocked} title={mapUploadUncertain ? "먼저 파일 업로드 결과를 확인하세요" : boothBlocked ? boothNoWriteReason : undefined} onClick={() => void saveBoothMapDraft()}>
                   초안 저장
                 </button>
-                <button type="button" className="button button-secondary" disabled={busy || !boothMap.draft || boothBlocked} title={boothBlocked ? boothNoWriteReason : !boothMap.draft ? "초안을 먼저 저장하세요" : undefined} onClick={() => void publishBoothMap()}>
+                <button type="button" className="button button-secondary" disabled={busy || !boothMap.draft || mapControlsBlocked} title={mapUploadUncertain ? "먼저 파일 업로드 결과를 확인하세요" : boothBlocked ? boothNoWriteReason : !boothMap.draft ? "초안을 먼저 저장하세요" : undefined} onClick={() => void publishBoothMap()}>
                   게시
                 </button>
               </>
             ) : null}
             {boothMap.published ? (
-              <button type="button" className="button button-secondary" disabled={busy || boothBlocked} title={boothBlocked ? boothNoWriteReason : undefined} onClick={() => requestUnpublishBoothMap()}>
+              <button type="button" className="button button-secondary" disabled={busy || mapControlsBlocked} title={mapUploadUncertain ? "먼저 파일 업로드 결과를 확인하세요" : boothBlocked ? boothNoWriteReason : undefined} onClick={() => requestUnpublishBoothMap()}>
                 게시 내리기
               </button>
             ) : null}
           </div>
+          {mapUploadUncertain ? <section className={styles.recovery} aria-labelledby="operations-map-upload-heading">
+            <h3 id="operations-map-upload-heading">지도 파일 확인 필요</h3>
+            <p>파일이 이미 올라갔을 수 있습니다. 같은 파일 요청을 다시 시도해 결과를 확인하세요. 선택한 파일은 이 화면에만 유지되므로 새로고침하거나 떠나면 같은 요청을 다시 시도할 수 없습니다.</p>
+            {mapUploadError ? <p role="alert">{mapUploadError}</p> : null}
+            <div className={styles.recoveryActions}>
+              <button type="button" className="button button-secondary" disabled={mapUploading || boothBlocked || mapUploadAbandonConfirm} onClick={() => { const attempt = mapUploadRef.current; if (attempt) void uploadMapImage(attempt.file); }}>같은 파일 요청 다시 시도</button>
+              <button type="button" className="button button-secondary" disabled={mapUploading || mapUploadAbandonConfirm} onClick={() => setMapUploadAbandonConfirm(true)}>확인 전 그만두기</button>
+            </div>
+            {mapUploadAbandonConfirm ? <ConsoleConfirm
+              summary="확인을 그만둬도 이미 업로드된 파일이 서버에 남을 수 있습니다. 지도에는 자동으로 적용되지 않습니다. 그만둘까요?"
+              confirmLabel="확인 그만두기"
+              onConfirm={() => { mapUploadRef.current = null; setMapUploadUncertain(false); setMapUploadError(null); setMapUploadAbandonConfirm(false); }}
+              onCancel={() => setMapUploadAbandonConfirm(false)}
+            /> : null}
+          </section> : null}
           {mapUnpublishPending ? (
             <ConsoleConfirm
               summary={(
@@ -1424,7 +1958,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                   src={`/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(image.fileId)}`}
                   alt="부스 배치도"
                   onClick={(event) => {
-                    if (!mapPlacing || boothBlocked) return;
+                    if (!mapPlacing || mapControlsBlocked) return;
                     const rect = event.currentTarget.getBoundingClientRect();
                     const x = (event.clientX - rect.left) / rect.width;
                     const y = (event.clientY - rect.top) / rect.height;
@@ -1467,7 +2001,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                       <button
                         type="button"
                         className="button button-secondary"
-                        disabled={busy || boothBlocked}
+                        disabled={busy || mapControlsBlocked}
                         title={boothBlocked ? boothNoWriteReason : undefined}
                         onClick={() => setMapPlacing(mapPlacing === booth.id ? "" : booth.id)}
                       >
@@ -1504,9 +2038,18 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       {deskOpen ? (
         <DeskDialog
           busy={busy}
+          blocked={operationLocked}
+          recovery={pendingOperation?.command === "desk.save" ? operationRecovery() : null}
           failure={failure}
           initial={editingDesk}
-          onClose={() => { setDeskDirty(false); setDeskOpen(false); setEditingDesk(null); }}
+          conflict={deskConflict?.kind === "edit" ? deskConflict : null}
+          onReadLatest={() => void readLatestDesk()}
+          onResolveConflict={resolveDeskConflict}
+          onClose={() => {
+            deskReadRef.current?.abort(); deskReadRef.current = null;
+            deskConflictRef.current = null; setDeskConflict(null);
+            setDeskDirty(false); setDeskOpen(false); setEditingDesk(null);
+          }}
           onDirtyChange={setDeskDirty}
           onSubmit={async (payload) => {
             const ok = await runCommand("desk.save", payload, "데스크를 저장했습니다.");
@@ -1517,9 +2060,18 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       {boothOpen ? (
         <BoothDialog
           busy={busy}
+          blocked={operationLocked}
+          recovery={pendingOperation?.command === "booth.save" ? operationRecovery() : null}
           failure={failure}
           initial={editingBooth}
-          onClose={() => { setBoothDirty(false); setBoothOpen(false); setEditingBooth(null); }}
+          conflict={boothConflict}
+          onReadLatest={() => void readLatestBooth()}
+          onResolveConflict={resolveBoothConflict}
+          onClose={() => {
+            boothReadRef.current?.abort(); boothReadRef.current = null;
+            boothConflictRef.current = null; setBoothConflict(null);
+            setBoothDirty(false); setBoothOpen(false); setEditingBooth(null);
+          }}
           onDirtyChange={setBoothDirty}
           onSubmit={async (payload) => {
             const ok = await runCommand("booth.save", payload, "부스를 저장했습니다.");
@@ -1530,6 +2082,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       {assignOpen ? (
         <AssignDialog
           busy={busy}
+          blocked={operationLocked}
+          recovery={pendingOperation?.command === "staff.assign" ? operationRecovery() : null}
           failure={failure}
           staffAccounts={staffAccounts}
           desks={desks}
@@ -1556,27 +2110,37 @@ function DialogError({ failure, id }: { failure: Failure | null; id: string }) {
 
 function DeskDialog({
   busy,
+  blocked,
+  recovery,
   failure,
   initial,
+  conflict,
+  onReadLatest,
+  onResolveConflict,
   onClose,
   onSubmit,
   onDirtyChange,
 }: {
   busy: boolean;
+  blocked: boolean;
+  recovery: ReactNode;
   failure: Failure | null;
   initial?: Desk | null;
+  conflict: DeskConflict | null;
+  onReadLatest: () => void;
+  onResolveConflict: () => void;
   onClose: () => void;
   onSubmit: (payload: Record<string, unknown>) => void;
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [name, setName] = useState(initial?.name ?? "");
-  const [action, setAction] = useState(initial?.action === "OUT" ? "OUT" : "IN");
-  const [mode, setMode] = useState(initial?.mode === "tablet" ? "tablet" : "desk");
+  const [action, setAction] = useState(initial ? initial.action || "" : "IN");
+  const [mode, setMode] = useState(initial ? initial.mode : "desk");
   const [confirmDirection, setConfirmDirection] = useState(false);
-  const directionChanged = Boolean(initial) && initial?.action !== action;
+  const directionChanged = Boolean(initial) && ["IN", "OUT"].includes(action) && initial?.action !== action;
   const dirty =
     name !== (initial?.name ?? "") ||
-    action !== (initial?.action ?? "IN") ||
+    action !== (initial ? initial.action ?? "" : "IN") ||
     mode !== (initial?.mode ?? "desk") ||
     confirmDirection;
   useEffect(() => {
@@ -1585,25 +2149,54 @@ function DeskDialog({
   // Dismissal gate for Escape/backdrop/Cancel: dirty input asks once instead
   // of silently discarding. In-flight submits stay locked by `busy`.
   const canClose = () => {
-    if (!dirty) return true;
-    return window.confirm("작성 중인 내용이 사라집니다. 닫을까요?");
+    if (!dirty && !blocked && !conflict) return true;
+    return window.confirm(blocked ? "처리 결과를 아직 확인하지 못했습니다. 닫아도 서버 처리는 취소되지 않으며 원래 요청은 유지됩니다. 닫을까요?" : "작성 중인 내용이 사라집니다. 닫을까요?");
   };
   return (
     <ConsoleDialog title={initial ? "데스크 편집" : "데스크 추가"} onClose={onClose} busy={busy} canClose={canClose}>
-      <form
+      <ValidatedForm
         className={uiStyles.formStack}
         onSubmit={(event) => {
           event.preventDefault();
+          if (conflict) return;
           // The server derives open from the payload; an edit that omits it
           // would silently reopen a stopped desk, so the current state rides
           // along. A direction change forces the desk closed server-side.
           const payload: Record<string, unknown> = initial
-            ? { id: initial.id, name, action, mode, open: initial.open }
+            ? { id: initial.id, name, action, mode, open: initial.open,
+                expectedDesk: { name: initial.name, action: initial.action, mode: initial.mode, open: initial.open } }
             : { name, action, mode, open: true };
           if (directionChanged && confirmDirection) payload.confirmDirectionChange = true;
           onSubmit(payload);
         }}
       >
+        {conflict ? <section className={styles.deskConflict} aria-labelledby="desk-conflict-heading">
+          <h3 id="desk-conflict-heading" tabIndex={-1}>다른 작업에서 데스크 정보가 변경됐습니다</h3>
+          <p>이번 저장은 반영되지 않았습니다. 작성 중인 내용은 그대로 있습니다. 최신 데스크를 확인해 주세요.</p>
+          {conflict.error ? <p role="alert">{conflict.error}</p> : null}
+          {conflict.latest ? <>
+            <table className={styles.deskComparison}>
+              <caption>최신 데스크와 내 작성 내용 비교</caption>
+              <thead><tr><th scope="col">항목</th><th scope="col">최신 데스크</th><th scope="col">내 작성 내용</th></tr></thead>
+              <tbody>
+                <tr><th scope="row">이름</th><td>{conflict.latest.name || "이름 확인 필요"}</td><td>{name || "입력 필요"}</td></tr>
+                <tr><th scope="row">작업</th><td>{DESK_ACTION_LABEL[conflict.latest.action || ""] || "방향 확인 필요"}</td><td>{DESK_ACTION_LABEL[action] || "방향 선택 필요"}</td></tr>
+                <tr><th scope="row">화면</th><td>{conflict.latest.mode === "tablet" ? "태블릿" : conflict.latest.mode === "desk" ? "데스크" : "화면 방식 확인 필요"}</td><td>{mode === "tablet" ? "태블릿" : mode === "desk" ? "데스크" : "화면 방식 선택 필요"}</td></tr>
+              </tbody>
+            </table>
+            <p>가동 상태는 최신 상태({conflict.latest.open ? "가동 중" : "중지됨"})를 따릅니다. 작업 방향을 바꾸면 데스크가 중지됩니다.</p>
+            <div className={styles.buttonRow}>
+              <button type="button" className="button button-secondary" onClick={() => { setConfirmDirection(false); onResolveConflict(); }}>내 작성 내용으로 계속</button>
+              <button type="button" className="button button-secondary" onClick={() => {
+                setName(conflict.latest!.name || ""); setAction(conflict.latest!.action || ""); setMode(conflict.latest!.mode);
+                setConfirmDirection(false); onResolveConflict();
+              }}>최신 정보 사용</button>
+            </div>
+            <p>선택만으로 저장되지 않습니다. 내용을 확인한 뒤 직접 저장해 주세요.</p>
+          </> : <button type="button" className="button button-secondary" onClick={onReadLatest} disabled={conflict.loading || blocked || busy}>{conflict.loading ? "최신 정보 확인 중…" : "최신 데스크 확인"}</button>}
+        </section> : null}
+        <fieldset className={styles.dialogFields} disabled={blocked || busy || Boolean(conflict)}>
+        <legend className="sr-only">데스크 정보</legend>
         <div>
           <label htmlFor="desk-name">데스크 이름</label>
           <input
@@ -1617,18 +2210,14 @@ function DeskDialog({
           />
         </div>
         <div>
-          <label htmlFor="desk-action">작업</label>
-          <select id="desk-action" value={action} onChange={(event) => setAction(event.target.value)}>
-            <option value="IN">입장</option>
-            <option value="OUT">퇴장</option>
-          </select>
+          <ConsoleChoiceGroup id="desk-action" label="작업" value={action} onChange={setAction}
+            hint={!['IN', 'OUT'].includes(action) ? "입장 또는 퇴장 방향을 직접 선택해 주세요." : undefined}
+            options={[{ value: "IN", label: "입장" }, { value: "OUT", label: "퇴장" }]} />
         </div>
         <div>
-          <label htmlFor="desk-mode">화면</label>
-          <select id="desk-mode" value={mode} onChange={(event) => setMode(event.target.value)}>
-            <option value="desk">데스크</option>
-            <option value="tablet">태블릿</option>
-          </select>
+          <ConsoleChoiceGroup id="desk-mode" label="화면" value={mode} onChange={setMode}
+            hint={!['desk', 'tablet'].includes(mode) ? "사용할 화면 방식을 직접 선택해 주세요." : undefined}
+            options={[{ value: "desk", label: "데스크" }, { value: "tablet", label: "태블릿" }]} />
         </div>
         {directionChanged ? (
           <div className={uiStyles.checkRow}>
@@ -1643,31 +2232,43 @@ function DeskDialog({
             </label>
           </div>
         ) : null}
+        </fieldset>
         <DialogError failure={failure} id="desk-dialog-error" />
+        {recovery}
         <ConsoleFormActions>
           <button type="button" className="button button-secondary" onClick={() => { if (canClose()) onClose(); }} disabled={busy}>
             취소
           </button>
-          <button type="submit" className="button button-primary" disabled={busy || !name.trim() || (directionChanged && !confirmDirection)}>
+          <button type="submit" className="button button-primary" disabled={busy || blocked || Boolean(conflict) || !name.trim() || !["IN", "OUT"].includes(action) || !["desk", "tablet"].includes(mode) || (directionChanged && !confirmDirection)}>
             {busy ? "저장 중입니다" : "데스크 저장"}
           </button>
         </ConsoleFormActions>
-      </form>
+      </ValidatedForm>
     </ConsoleDialog>
   );
 }
 
 function BoothDialog({
   busy,
+  blocked,
+  recovery,
   failure,
   initial,
+  conflict,
+  onReadLatest,
+  onResolveConflict,
   onClose,
   onSubmit,
   onDirtyChange,
 }: {
   busy: boolean;
+  blocked: boolean;
+  recovery: ReactNode;
   failure: Failure | null;
   initial?: Booth | null;
+  conflict: BoothConflict | null;
+  onReadLatest: () => void;
+  onResolveConflict: () => void;
   onClose: () => void;
   onSubmit: (payload: Record<string, unknown>) => void;
   onDirtyChange?: (dirty: boolean) => void;
@@ -1677,25 +2278,56 @@ function BoothDialog({
   const [status, setStatus] = useState(initial?.status ?? "WAITING");
   const [capacity, setCapacity] = useState(String(initial?.capacity ?? 0));
   const [limit, setLimit] = useState(String(initial?.limit ?? 1));
+  const [startTime, setStartTime] = useState<BoothTimeEdit>(() => ({ action: "keep", value: boothTimeInput(initial?.startsAt ?? "") }));
+  const [endTime, setEndTime] = useState<BoothTimeEdit>(() => ({ action: "keep", value: boothTimeInput(initial?.endsAt ?? "") }));
+  const [timeError, setTimeError] = useState("");
+  const startDescription = boothTimeInputDescription(startTime.value);
+  const endDescription = boothTimeInputDescription(endTime.value);
+  const storedStart = boothScheduleTime(initial?.startsAt);
+  const storedEnd = boothScheduleTime(initial?.endsAt);
+  const storedOrderInvalid = storedStart !== null && storedEnd !== null && Number.isFinite(storedStart) &&
+    Number.isFinite(storedEnd) && storedStart >= storedEnd;
   const dirty =
     name !== (initial?.name ?? "") ||
     zone !== (initial?.zone ?? "") ||
     status !== (initial?.status ?? "WAITING") ||
     capacity !== String(initial?.capacity ?? 0) ||
-    limit !== String(initial?.limit ?? 1);
+    limit !== String(initial?.limit ?? 1) ||
+    startTime.action !== "keep" || endTime.action !== "keep";
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
   const canClose = () => {
-    if (!dirty) return true;
-    return window.confirm("작성 중인 내용이 사라집니다. 닫을까요?");
+    if (!dirty && !blocked && !conflict) return true;
+    return window.confirm(blocked ? "처리 결과를 아직 확인하지 못했습니다. 닫아도 서버 처리는 취소되지 않으며 원래 요청은 유지됩니다. 닫을까요?" : "작성 중인 내용이 사라집니다. 닫을까요?");
   };
   return (
     <ConsoleDialog title={initial ? "부스 편집" : "부스 추가"} onClose={onClose} busy={busy} canClose={canClose}>
-      <form
+      <ValidatedForm
         className={uiStyles.formStack}
         onSubmit={(event) => {
           event.preventDefault();
+          if (conflict) return;
+          const changedTime = startTime.action !== "keep" || endTime.action !== "keep";
+          const startValue = startTime.action === "set" ? boothTimeFromInput(startTime.value) : startTime.action === "clear" ? "" : initial?.startsAt ?? "";
+          const endValue = endTime.action === "set" ? boothTimeFromInput(endTime.value) : endTime.action === "clear" ? "" : initial?.endsAt ?? "";
+          if (startValue === null || endValue === null) {
+            setTimeError("날짜와 시간을 모두 입력하거나 해당 시간 지우기를 선택하세요.");
+            window.requestAnimationFrame(() => document.getElementById(startValue === null ? "booth-starts" : "booth-ends")?.focus());
+            return;
+          }
+          if (changedTime && ((startTime.action === "keep" && boothTimeNeedsReview(startValue)) ||
+              (endTime.action === "keep" && boothTimeNeedsReview(endValue)))) {
+            setTimeError("기존 시간의 시간대나 형식을 확인할 수 없습니다. 시작과 종료를 각각 입력하거나 지워 주세요.");
+            window.requestAnimationFrame(() => document.getElementById(startTime.action === "keep" && boothTimeNeedsReview(startValue) ? "booth-starts" : "booth-ends")?.focus());
+            return;
+          }
+          if (changedTime && startValue && endValue && Date.parse(startValue) >= Date.parse(endValue)) {
+            setTimeError("종료 시간은 시작 시간보다 늦어야 합니다.");
+            window.requestAnimationFrame(() => document.getElementById("booth-ends")?.focus());
+            return;
+          }
+          setTimeError("");
           onSubmit({
             ...(initial ? { id: initial.id } : null),
             name,
@@ -1703,9 +2335,59 @@ function BoothDialog({
             status,
             capacity: Number(capacity) || 0,
             limit: Number(limit) || 1,
+            ...(startTime.action !== "keep" ? { startsAt: startValue } : null),
+            ...(endTime.action !== "keep" ? { endsAt: endValue } : null),
+            ...(initial ? { expectedBooth: { name: initial.name, zone: initial.zone, status: initial.status,
+              capacity: initial.capacity, limit: initial.limit, startsAt: initial.startsAt, endsAt: initial.endsAt } } : null),
           });
         }}
       >
+        {conflict ? <section className={styles.deskConflict} aria-labelledby="booth-conflict-heading">
+          <h3 id="booth-conflict-heading" tabIndex={-1}>다른 작업에서 부스 정보가 변경됐습니다</h3>
+          <p>이번 저장은 반영되지 않았습니다. 작성 중인 내용은 그대로 있습니다. 최신 정보와 비교해 주세요.</p>
+          {conflict.error ? <p role="alert">{conflict.error}</p> : null}
+          {conflict.latest ? <>
+            <table className={styles.deskComparison}>
+              <caption>최신 부스와 내 작성 내용 비교</caption>
+              <thead><tr><th scope="col">항목</th><th scope="col">최신 부스</th><th scope="col">내 작성 내용</th></tr></thead>
+              <tbody>
+                {[
+                  { label: "이름", latest: conflict.latest.name, draft: name, changed: conflict.latest.name !== name },
+                  { label: "구역", latest: conflict.latest.zone || "미지정", draft: zone || "미지정", changed: conflict.latest.zone !== zone },
+                  { label: "상태", latest: BOOTH_STATUS_LABEL[conflict.latest.status] || conflict.latest.status, draft: BOOTH_STATUS_LABEL[status] || status, changed: conflict.latest.status !== status },
+                  { label: "수량", latest: conflict.latest.capacity || "제한 없음", draft: Number(capacity) || "제한 없음", changed: conflict.latest.capacity !== Number(capacity) },
+                  { label: "1인 횟수", latest: conflict.latest.limit, draft: limit, changed: conflict.latest.limit !== Number(limit) },
+                  { label: "시작 시간", latest: boothTimeLabel(conflict.latest.startsAt),
+                    draft: startTime.action === "keep" ? `${boothTimeLabel(conflict.latest.startsAt)} (최신값 유지)` : startTime.action === "clear" ? "지움" : (boothTimeFromInput(startTime.value) ? boothTimeLabel(boothTimeFromInput(startTime.value)!) : "입력 확인 필요"),
+                    changed: startTime.action !== "keep" },
+                  { label: "종료 시간", latest: boothTimeLabel(conflict.latest.endsAt),
+                    draft: endTime.action === "keep" ? `${boothTimeLabel(conflict.latest.endsAt)} (최신값 유지)` : endTime.action === "clear" ? "지움" : (boothTimeFromInput(endTime.value) ? boothTimeLabel(boothTimeFromInput(endTime.value)!) : "입력 확인 필요"),
+                    changed: endTime.action !== "keep" },
+                ].map(({ label, latest, draft, changed }) => <tr key={label} className={changed ? styles.comparisonChanged : undefined}>
+                  <th scope="row">{label}{changed ? <span className={styles.comparisonDifference}>다름</span> : null}</th><td>{latest}</td><td>{draft}</td>
+                </tr>)}
+              </tbody>
+            </table>
+            <p>내 작성 내용으로 계속한 뒤 저장하면 위의 내 작성 내용이 적용됩니다. 직접 바꾸지 않은 시간은 최신 설정을 유지합니다.</p>
+            <div className={styles.buttonRow}>
+              <button type="button" className="button button-secondary" disabled={blocked || busy} onClick={() => {
+                if (startTime.action === "keep") setStartTime({ action: "keep", value: boothTimeInput(conflict.latest!.startsAt) });
+                if (endTime.action === "keep") setEndTime({ action: "keep", value: boothTimeInput(conflict.latest!.endsAt) });
+                setTimeError(""); onResolveConflict();
+              }}>내 작성 내용으로 계속</button>
+              <button type="button" className="button button-secondary" disabled={blocked || busy} onClick={() => {
+                setName(conflict.latest!.name); setZone(conflict.latest!.zone); setStatus(conflict.latest!.status);
+                setCapacity(String(conflict.latest!.capacity)); setLimit(String(conflict.latest!.limit));
+                setStartTime({ action: "keep", value: boothTimeInput(conflict.latest!.startsAt) });
+                setEndTime({ action: "keep", value: boothTimeInput(conflict.latest!.endsAt) });
+                setTimeError(""); onResolveConflict();
+              }}>최신 정보 사용</button>
+            </div>
+            <p>선택만으로 저장되지 않습니다. 내용을 확인한 뒤 직접 저장해 주세요.</p>
+          </> : <button type="button" className="button button-secondary" onClick={onReadLatest} disabled={conflict.loading || blocked || busy}>{conflict.loading ? "최신 정보 확인 중…" : "최신 부스 확인"}</button>}
+        </section> : null}
+        <fieldset className={styles.dialogFields} disabled={blocked || busy || Boolean(conflict)}>
+        <legend className="sr-only">부스 정보</legend>
         <div>
           <label htmlFor="booth-name">부스 이름</label>
           <input
@@ -1754,22 +2436,51 @@ function BoothDialog({
             />
           </div>
         </div>
+        <div>
+          <p id="booth-time-help">운영 시간은 한국 시간입니다. 설정하지 않은 시작·종료에는 해당 시간 제한이 없습니다. 직접 변경한 시간만 저장됩니다.</p>
+          {initial && (boothTimeNeedsReview(initial.startsAt) || boothTimeNeedsReview(initial.endsAt) || storedOrderInvalid) ? <p role="note">
+            기존 운영 시간을 확인하기 전에는 부스 인증을 받을 수 없습니다. {storedOrderInvalid ? "저장된 종료가 시작보다 늦지 않습니다. " : ""}새 값을 입력하거나 지우고 저장해 주세요. 기존 값은 자동으로 바뀌지 않습니다.
+          </p> : null}
+          <label htmlFor="booth-starts">시작 시간 (선택)</label>
+          {initial?.startsAt && boothTimeNeedsReview(initial.startsAt) ? <p>저장된 시작: {boothTimeLabel(initial.startsAt)}. 새 값을 입력하거나 지우기 전에는 그대로 유지됩니다.</p> : null}
+          {storedStart !== null && Number.isFinite(storedStart) && storedStart % 60000 !== 0 ? <p>저장된 시작에는 초 단위가 있습니다. 수정하지 않으면 그대로 유지하고, 수정하면 입력한 분부터 적용합니다.</p> : null}
+          <input id="booth-starts" type="datetime-local" value={startTime.value} aria-describedby={["booth-time-help", startDescription ? "booth-starts-confirm" : "", timeError ? "booth-time-error" : ""].filter(Boolean).join(" ")}
+            aria-invalid={Boolean(timeError) || undefined} onChange={(event) => { setStartTime({ action: "set", value: event.target.value }); setTimeError(""); }} />
+          {startDescription ? <p id="booth-starts-confirm">{startTime.action === "set" ? "변경할 시간" : "화면에 표시된 시간"}: {startDescription}</p> : null}
+          {initial?.startsAt || startTime.value || startTime.action !== "keep" ? <button type="button" className="button button-quiet" onClick={() => { setStartTime({ action: "clear", value: "" }); setTimeError(""); }}>시작 시간 지우기</button> : null}
+          {startTime.action === "clear" ? <p role="status">저장하면 시작 시간 제한을 지웁니다.</p> : null}
+        </div>
+        <div>
+          <label htmlFor="booth-ends">종료 시간 (선택)</label>
+          {initial?.endsAt && boothTimeNeedsReview(initial.endsAt) ? <p>저장된 종료: {boothTimeLabel(initial.endsAt)}. 새 값을 입력하거나 지우기 전에는 그대로 유지됩니다.</p> : null}
+          {storedEnd !== null && Number.isFinite(storedEnd) && storedEnd % 60000 !== 0 ? <p>저장된 종료에는 초 단위가 있습니다. 수정하지 않으면 그대로 유지하고, 수정하면 입력한 분부터 적용합니다.</p> : null}
+          <input id="booth-ends" type="datetime-local" value={endTime.value} aria-describedby={["booth-time-help", endDescription ? "booth-ends-confirm" : "", timeError ? "booth-time-error" : ""].filter(Boolean).join(" ")}
+            aria-invalid={Boolean(timeError) || undefined} onChange={(event) => { setEndTime({ action: "set", value: event.target.value }); setTimeError(""); }} />
+          {endDescription ? <p id="booth-ends-confirm">{endTime.action === "set" ? "변경할 시간" : "화면에 표시된 시간"}: {endDescription}</p> : null}
+          {initial?.endsAt || endTime.value || endTime.action !== "keep" ? <button type="button" className="button button-quiet" onClick={() => { setEndTime({ action: "clear", value: "" }); setTimeError(""); }}>종료 시간 지우기</button> : null}
+          {endTime.action === "clear" ? <p role="status">저장하면 종료 시간 제한을 지웁니다.</p> : null}
+        </div>
+        {timeError ? <p id="booth-time-error" role="alert">{timeError}</p> : null}
+        </fieldset>
         <DialogError failure={failure} id="booth-dialog-error" />
+        {recovery}
         <ConsoleFormActions>
           <button type="button" className="button button-secondary" onClick={() => { if (canClose()) onClose(); }} disabled={busy}>
             취소
           </button>
-          <button type="submit" className="button button-primary" disabled={busy || !name.trim()}>
+          <button type="submit" className="button button-primary" disabled={busy || blocked || Boolean(conflict) || !name.trim()}>
             {busy ? "저장 중입니다" : "부스 저장"}
           </button>
         </ConsoleFormActions>
-      </form>
+      </ValidatedForm>
     </ConsoleDialog>
   );
 }
 
 function AssignDialog({
   busy,
+  blocked,
+  recovery,
   failure,
   staffAccounts,
   desks,
@@ -1782,6 +2493,8 @@ function AssignDialog({
   onDirtyChange,
 }: {
   busy: boolean;
+  blocked: boolean;
+  recovery: ReactNode;
   failure: Failure | null;
   staffAccounts: Account[];
   desks: Desk[];
@@ -1805,8 +2518,8 @@ function AssignDialog({
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
   const canClose = () => {
-    if (!dirty) return true;
-    return window.confirm("작성 중인 내용이 사라집니다. 닫을까요?");
+    if (!dirty && !blocked) return true;
+    return window.confirm(blocked ? "처리 결과를 아직 확인하지 못했습니다. 닫아도 서버 처리는 취소되지 않으며 원래 요청은 유지됩니다. 닫을까요?" : "작성 중인 내용이 사라집니다. 닫을까요?");
   };
   const targets = type === "DESK" ? desks : booths;
   const currentTarget = targets.some((target) => target.id === targetId) ? targetId : "";
@@ -1816,13 +2529,15 @@ function AssignDialog({
   const targetStale = targetId !== "" && currentTarget === "";
   return (
     <ConsoleDialog title="스태프 배정" onClose={onClose} busy={busy} canClose={canClose}>
-      <form
+      <ValidatedForm
         className={uiStyles.formStack}
         onSubmit={(event) => {
           event.preventDefault();
           onSubmit({ accountId, type, targetId: currentTarget });
         }}
       >
+        <fieldset className={styles.dialogFields} disabled={blocked || busy}>
+        <legend className="sr-only">스태프 배정 정보</legend>
         <div>
           <label htmlFor="assign-account">현장 스태프</label>
           <select
@@ -1876,7 +2591,7 @@ function AssignDialog({
               <option key={target.id} value={target.id}>
                 {target.name}
                 {"mode" in target && target.mode === "tablet" ? " (태블릿)" : ""}
-                {"action" in target ? ` · ${DESK_ACTION_LABEL[target.action] ?? "작업 미정"}` : ""}
+                {"action" in target ? ` · ${DESK_ACTION_LABEL[target.action || ""] ?? "방향 확인 필요"}` : ""}
               </option>
             ))}
           </select>
@@ -1887,7 +2602,9 @@ function AssignDialog({
             </p>
           ) : null}
         </div>
+        </fieldset>
         <DialogError failure={failure} id="assign-dialog-error" />
+        {recovery}
         <ConsoleFormActions>
           <button type="button" className="button button-secondary" onClick={() => { if (canClose()) onClose(); }} disabled={busy}>
             취소
@@ -1895,12 +2612,12 @@ function AssignDialog({
           <button
             type="submit"
             className="button button-primary"
-            disabled={busy || !accountId || !currentTarget}
+            disabled={busy || blocked || !accountId || !currentTarget}
           >
             {busy ? "배정 중입니다" : "배정 저장"}
           </button>
         </ConsoleFormActions>
-      </form>
+      </ValidatedForm>
     </ConsoleDialog>
   );
 }

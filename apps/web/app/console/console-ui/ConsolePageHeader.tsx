@@ -64,9 +64,9 @@ export default function ConsolePageHeader({
             {back.label}
           </Link>
         ) : null}
+        {context ? <div className={styles.pageContext}>{context}</div> : null}
         <h1>{title}</h1>
-        {context || meta ? <div className={styles.pageSubline}>
-          {context ? <div className={styles.pageContext}>{context}</div> : null}
+        {meta ? <div className={styles.pageSubline}>
           {meta ? <p className={styles.pageMeta}>{meta}</p> : null}
         </div> : null}
         {badges ? <div className={styles.pageBadges}>{badges}</div> : null}

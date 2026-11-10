@@ -1,0 +1,39 @@
+.workspace { display: grid; grid-template-columns: 140px minmax(0, 1fr); min-width: 0; color: var(--ink); font-size: var(--small); }
+.rail { display: flex; flex-direction: column; gap: var(--s3); padding: var(--s5) var(--s3); border-right: 1px solid var(--line); background: var(--nav); }
+.rail strong { margin-bottom: var(--s3); font-size: var(--body); }
+.rail span { color: var(--muted); }
+.rail span:first-of-type { color: var(--brand-text); font-weight: 700; }
+.canvas, .report { padding: var(--s5); min-width: 0; background: var(--paper); }
+.context { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s2); margin: 0 0 var(--s2); color: var(--muted); font-size: var(--label); }
+.title { margin: 0 0 var(--s4); font-size: var(--h2); font-weight: 700; letter-spacing: -0.025em; }
+.metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding-block: var(--s4); margin-bottom: var(--s5); border-block: 1px solid var(--line); }
+.metrics > div { display: grid; gap: var(--s2); min-width: 0; padding-inline: var(--s3); border-left: 1px solid var(--line); }
+.metrics > div:first-child { border: 0; padding-left: 0; }
+.metrics span { color: var(--muted); font-size: var(--label); }
+.metrics strong { font-size: var(--h2); font-variant-numeric: tabular-nums; }
+.metrics small { font-size: var(--label); margin-left: var(--s1); color: var(--muted); font-weight: 500; }
+.workColumns { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: var(--s5); }
+.sectionTitle { margin: var(--s3) 0; font-size: var(--body); font-weight: 650; }
+.workRow { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding-block: var(--s3); border-bottom: 1px solid var(--line); }
+.workRow b { color: var(--brand-text); font-size: var(--label); white-space: nowrap; }
+.schedule { margin: 0; padding-block: var(--s3); border-bottom: 1px solid var(--line); }
+.schedule time { color: var(--muted); margin-right: var(--s2); font-size: var(--label); }
+.caption { margin: var(--s4) 0 0; color: var(--muted); font-size: var(--label); }
+.phone { display: flex; flex-direction: column; gap: var(--s3); min-height: 560px; padding: var(--s4); background: var(--paper); color: var(--ink); font-size: var(--small); }
+.phone .title { margin: var(--s2) 0; }
+.phone .context { font-size: var(--label); }
+.home { background: var(--surface-muted); }
+.banner { display: flex; align-items: center; min-height: 150px; padding: var(--s4); background: var(--soft); border-bottom: 1px solid var(--line); }
+.banner p { margin: 0; font-weight: 700; font-size: var(--h2); line-height: 1.4; }
+.ticketAction { display: flex; justify-content: space-between; margin: 0; padding: var(--s4); border: 1px solid var(--brand); border-radius: var(--radius); color: var(--brand-text); background: var(--soft); font-weight: 650; }
+.groupLabel { margin: var(--s1) 0 0; color: var(--muted); font-size: var(--label); font-weight: 650; }
+.menuPair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); }
+.menuPair span { display: flex; align-items: center; min-height: 56px; padding: var(--s2); background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-small); font-size: var(--label); font-weight: 600; }
+.qr { display: grid; place-items: center; padding: var(--s4); margin-top: var(--s3); border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); }
+.sample { margin: var(--s2) 0; font-size: var(--label); color: var(--muted); }
+.tag { padding: var(--s1) var(--s2); border: 1px solid var(--success-line); border-radius: var(--s5); background: var(--success-soft); color: var(--success); font-size: var(--label); white-space: nowrap; }
+.tabRow { display: flex; flex-wrap: wrap; gap: var(--s3); padding-block: var(--s3); border-bottom: 1px solid var(--line); color: var(--muted); font-size: var(--label); }
+.tabRow b { color: var(--brand-text); }
+.input { padding: var(--s3); border: 1px solid var(--line-strong); border-radius: var(--radius-small); }
+.scan { display: grid; place-items: center; padding: var(--s4); border-radius: var(--radius); background: var(--brand); color: var(--on-brand); font-weight: 650; }
+@media (max-width: 768px) { .workspace { grid-template-columns: minmax(0, 1fr); } .rail { display: none; } .canvas, .report { padding: var(--s4); } .workColumns { grid-template-columns: minmax(0, 1fr); gap: var(--s3); } .metrics strong { font-size: var(--h3); } }

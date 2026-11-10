@@ -79,6 +79,40 @@
   color: var(--ink);
 }
 
+.phoneReview {
+  margin: var(--s3) 0;
+  min-width: 0;
+}
+
+.phoneReview summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.phoneReview summary::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  margin: 0 var(--s3) 0 var(--s1);
+}
+
+.phoneReview[open] summary::before { transform: rotate(45deg); }
+
+.phoneConfirm {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  min-height: 44px;
+  padding: var(--s2) 0;
+  line-height: 1.5;
+}
+
 /* File task: one honest native control, not a drop region. The label reads
    as a single row — a Korean-named button plus the real selected file name
    as plain status text. The actual <input type="file"> stays a real,
@@ -224,3 +258,11 @@
   background: var(--danger-soft);
   color: var(--danger);
 }
+
+.modalContent { display: grid; gap: var(--s4); min-width: 0; }
+.filePicker { min-height: 120px; justify-content: center; border-style: dashed; }
+.filePicker[data-dragging] { background: var(--brand-soft); border-color: var(--brand-text); }
+
+.importStage[hidden] { display: none; }
+.importStep button { display: flex; align-items: center; gap: var(--s2); min-height: 44px; border: 0; background: transparent; color: inherit; font: inherit; }
+.modalContent .filePicker { display: flex; flex-direction: column; align-items: center; gap: var(--s3); min-height: 180px; border-width: 1px; padding: var(--s4); }

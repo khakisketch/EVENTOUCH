@@ -1,5 +1,9 @@
 "use client";
 
+import ConsoleChoiceGroup, { EVENT_FORMAT_CHOICES } from "../../../console-ui/ConsoleChoiceGroup";
+import ValidatedForm from "../../../../ui/ValidatedForm";
+
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -7,6 +11,7 @@ import { loginHrefForLocation } from "../../../../auth-redirect";
 import { eventStageClassName, eventStageLabel } from "../../../../event-stage";
 import { useConsoleDraftGuard } from "../../../console-draft-guard";
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
+import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
 import ConsoleFormActions from "../../../console-ui/ConsoleFormActions";
 import ConsolePage from "../../../console-ui/ConsolePage";
 import uiStyles from "../../../console-ui/console-ui.module.css";
@@ -17,8 +22,13 @@ import StageTransitionConfirmation from "../../../console-ui/StageTransitionConf
 import styles from "./settings.module.css";
 import { consoleFetch } from "../../../../../lib/console-api";
 import { canWriteEvent } from "../../../../../lib/event-capabilities";
+import { abandonOperatorAttempt, acknowledgeOperatorReceipt, confirmsSettingsCommand, isOrganizationContextBlock } from "../../../../../lib/operator-context";
+import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../lib/operator-receipts";
+import { useEventReceipts } from "../../../../../lib/use-event-receipts";
 import { readCloseReturn, readCloseSnapshot, type CloseSnapshot } from "../../../console-event-close";
 import { useEventCloseHandoff } from "../../../use-event-close-handoff";
+import { isRecoveryBlocked, useVerificationMode } from "../../../../../lib/use-verification-mode";
+import { publicRecoveryContact } from "../../../../../lib/public-recovery-contact";
 
 // Mirrors server/commands/preparation.js FEATURES. A toggle that the server
 // does not accept would fail on save, so the list is deliberate.
@@ -40,7 +50,7 @@ const FEATURES: Array<{ id: string; label: string }> = [
 // never collects money (user decision 2026-10-19). The server keeps the
 // feature id for API compatibility, but the screen offers no way to enable it.
 const FEATURE_GROUPS: Array<{ label: string; ids: string[] }> = [
-  { label: "참여 프로그램", ids: ["poll", "quiz", "qa", "draw", "survey", "stamp"] },
+  { label: "참여 콘텐츠", ids: ["poll", "quiz", "qa", "draw", "survey", "stamp"] },
   { label: "안내·기록", ids: ["photo", "board", "venue", "screen"] },
   { label: "경품", ids: ["reward"] },
 ];
@@ -74,6 +84,7 @@ type Ready = {
   eventMeta?: string;
   clientName: string;
   venueName: string;
+  recoveryContact: string;
   clients: Array<{ id: string; name: string }>;
   role: string;
   userId: string;
@@ -84,13 +95,56 @@ type Ready = {
   basics: Basics;
   features: string[];
   registrationOpen: boolean;
+  formVersion: number;
   publishedVersion: number;
   consentText: string;
+  consentVersion: number;
   pageDraftVersion: number;
   pagePublishedVersion: number;
   pagePublishedAt: string;
 };
 type State = { kind: "loading" } | { kind: "failed"; message: string } | Ready;
+type LatestIntake = {
+  formVersion: number;
+  publishedVersion: number;
+  consentVersion: number;
+  consentText: string;
+  registrationOpen: boolean;
+  fields: Array<{ label: string; required: boolean; type: string; options: string[] }>;
+};
+type IntakeConflict = { latest: LatestIntake | null; loading: boolean; error: string | null };
+type BasicsConflict = { latest: Basics | null; loading: boolean; error: string | null };
+type FeaturesConflict = { latest: string[] | null; loading: boolean; error: string | null };
+
+const BASIC_COMPARISON_FIELDS: Array<{ key: keyof Basics; label: string }> = [
+  { key: "name", label: "행사명" }, { key: "slug", label: "주소" }, { key: "clientId", label: "고객사" },
+  { key: "date", label: "날짜" }, { key: "start", label: "시작" }, { key: "end", label: "종료" },
+  { key: "capacity", label: "정원" }, { key: "price", label: "참가비" }, { key: "format", label: "진행 방식" },
+  { key: "approvalRequired", label: "참가 승인" }, { key: "allowReentry", label: "재입장" },
+  { key: "verificationRequired", label: "본인 확인" },
+];
+
+function basicComparisonValue(key: keyof Basics, values: Basics, clients: Ready["clients"]): string {
+  switch (key) {
+    case "clientId": return clients.find((client) => client.id === values.clientId)?.name || values.clientId || "미지정";
+    case "capacity": return values.capacity === "0" ? "제한 없음" : values.capacity || "미지정";
+    case "format": return ({ offline: "오프라인", online: "온라인", hybrid: "온·오프라인" } as Record<string, string>)[values.format] || "미지정";
+    case "approvalRequired": return values.approvalRequired ? "필요" : "불필요";
+    case "allowReentry": return values.allowReentry ? "허용" : "불허";
+    case "verificationRequired": return values.verificationRequired ? "필요" : "불필요";
+    default: return String(values[key] || "미지정");
+  }
+}
+
+function sameFeatures(left: string[], right: string[]): boolean {
+  const a = new Set(left);
+  const b = new Set(right);
+  return a.size === b.size && [...a].every((item) => b.has(item));
+}
+
+function basicsPayload(basics: Basics) {
+  return { ...basics, capacity: Number(basics.capacity) || 0, price: Number(basics.price) || 0 };
+}
 
 function randomCommandId(): string {
   if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
@@ -109,12 +163,12 @@ function stableStringify(value: unknown): string {
     .join(",")}}`;
 }
 
-// 408 and 5xx leave the outcome unknown: the server may have applied the
+// Timeouts, temporary limits and 5xx leave the outcome unknown: the server may have applied the
 // command before the response was lost. A missing or unparsable body is
 // equally ambiguous. Definitive 4xx responses (validation, conflicts, auth)
 // mean the command did not apply, so a corrected retry needs a fresh id.
 function isAmbiguousFailure(status: number, body: unknown): boolean {
-  return status === 408 || status >= 500 || body === null;
+  return [408, 425, 429].includes(status) || status >= 500 || body === null;
 }
 
 function text(value: unknown): string {
@@ -125,6 +179,10 @@ function record(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
     : null;
+}
+
+function finiteNumber(value: unknown): boolean {
+  return (typeof value === "number" || (typeof value === "string" && value.trim() !== "")) && Number.isFinite(Number(value));
 }
 
 function formatPublishedAt(value: string): string {
@@ -146,6 +204,40 @@ function formatClockNow(): string {
 }
 
 type SettingsSectionId = "basics" | "intake" | "features";
+const SETTINGS_COMMANDS = new Set(["event.update", "event.basics.save", "event.features", "form.publish", "form.close", "event.stage", "field.save", "field.move", "field.delete"]);
+const SETTINGS_COMMAND_LABEL: Record<string, string> = {
+  "event.update": "기본 정보 저장", "event.basics.save": "기본 정보 저장", "event.features": "운영 기능 저장", "form.publish": "양식 게시",
+  "form.close": "접수 닫기", "event.stage": "행사 단계 전환",
+};
+type SettingsAttempt = {
+  eventId: string;
+  command: string;
+  payload: Record<string, unknown>;
+  successMessage: string;
+  section: SettingsSectionId | "stage";
+  commandId: string;
+  fingerprint: string;
+};
+
+function isBasicsCommand(command: string): boolean { return command === "event.update" || command === "event.basics.save"; }
+
+function postponesEvent(attempt: SettingsAttempt): boolean {
+  if (!isBasicsCommand(attempt.command)) return false;
+  const baseline = attempt.payload.expectedBasics;
+  const oldDate = baseline && typeof baseline === "object" && !Array.isArray(baseline)
+    ? (baseline as Record<string, unknown>).date : null;
+  const date = attempt.payload.date;
+  return typeof date === "string" && typeof oldDate === "string" && date > oldDate;
+}
+
+function changesEventSchedule(attempt: SettingsAttempt): boolean {
+  if (!isBasicsCommand(attempt.command)) return false;
+  const baseline = attempt.payload.expectedBasics;
+  if (!baseline || typeof baseline !== "object" || Array.isArray(baseline)) return false;
+  const previous = baseline as Record<string, unknown>;
+  return ["date", "start", "end"].some((key) =>
+    typeof previous[key] === "string" && typeof attempt.payload[key] === "string" && previous[key] !== attempt.payload[key]);
+}
 
 type SectionStatus = {
   kind: "success" | "error";
@@ -196,15 +288,19 @@ function buildEventMeta(clientName: string, basics: Basics, venueName: string): 
 
 export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   const router = useRouter();
+  const verificationMode = useVerificationMode();
   const closeHref = useEventCloseHandoff(eventId);
   const closeLandingRef = useRef<string | null>(null);
   // 선형 마감 "다음" 인계로 예약된 제목 포커스. 렌더 뒤 효과에서 소비한다.
   const pendingHeadingFocusRef = useRef<SettingsTabId | null>(null);
   const [state, setState] = useState<State>({ kind: "loading" });
   const [reloadTick, setReloadTick] = useState(0);
+  const [refreshingAfterWrite, setRefreshingAfterWrite] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<{ message: string; field?: string } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [showTicketReview, setShowTicketReview] = useState(false);
+  const [showScheduleReview, setShowScheduleReview] = useState(false);
   // Per-section save state shown in place ("기본 정보를 저장했습니다 · HH:MM").
   // The page-top ConsoleFeedback strip is kept for the latest page-level
   // result; these lines persist per section with a timestamp instead of
@@ -216,6 +312,8 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   const [activeTab, setActiveTab] = useState<SettingsTabId>(
     () => tabFromHash(typeof window === "undefined" ? "" : window.location.hash) ?? "basics"
   );
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
   const tabButtonRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const tabsRef = useRef<HTMLDivElement | null>(null);
 
@@ -248,6 +346,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   }, [keepActiveTabVisible]);
   const [stageBusy, setStageBusy] = useState(false);
   const [stageConfirm, setStageConfirm] = useState(false);
+  const [archiveRecheckRequired, setArchiveRecheckRequired] = useState(false);
   const [stageError, setStageError] = useState<string | null>(null);
   const [stageNotice, setStageNotice] = useState<string | null>(null);
   const stageCommandIdRef = useRef<string | null>(null);
@@ -259,6 +358,91 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   // keep the id so a retry replays the server receipt instead of applying
   // the command twice; success and definitive 4xx responses clear it.
   const commandIdCache = useRef(new Map<string, string>());
+  const [pendingSettings, setPendingSettings] = useState<SettingsAttempt | null>(null);
+  const [intakeConflict, setIntakeConflict] = useState<IntakeConflict | null>(null);
+  const intakeConflictRef = useRef<IntakeConflict | null>(null);
+  const intakeReadRef = useRef<AbortController | null>(null);
+  const [basicsConflict, setBasicsConflict] = useState<BasicsConflict | null>(null);
+  const basicsConflictRef = useRef<BasicsConflict | null>(null);
+  const basicsReadRef = useRef<AbortController | null>(null);
+  const [featuresConflict, setFeaturesConflict] = useState<FeaturesConflict | null>(null);
+  const featuresConflictRef = useRef<FeaturesConflict | null>(null);
+  const featuresReadRef = useRef<AbortController | null>(null);
+  const pendingSettingsRef = useRef<SettingsAttempt | null>(null);
+  const [checkingSettings, setCheckingSettings] = useState(false);
+  const [settingsRecoveryError, setSettingsRecoveryError] = useState<string | null>(null);
+  const [abandonSettingsConfirm, setAbandonSettingsConfirm] = useState(false);
+  const eventReceipts = useEventReceipts(eventId);
+  const otherSettingsReceipt = eventReceipts.some((entry) => SETTINGS_COMMANDS.has(entry.command) &&
+    entry.commandId !== pendingSettings?.commandId && ![...commandIdCache.current.values()].includes(entry.commandId));
+  const activeSettingsEventRef = useRef(eventId);
+  const loadedSettingsEventRef = useRef<string | null>(null);
+  const settledSectionRef = useRef<SettingsSectionId | null>(null);
+  activeSettingsEventRef.current = eventId;
+  useEffect(() => pendingSettings && state.kind === "ready" ? manageOperatorReceipt(pendingSettings.commandId) : undefined, [pendingSettings, state.kind]);
+  const previousSettingsEventRef = useRef(eventId);
+  useEffect(() => {
+    if (previousSettingsEventRef.current === eventId) return;
+    previousSettingsEventRef.current = eventId;
+    loadedSettingsEventRef.current = null;
+    settledSectionRef.current = null;
+    liveRef.current = { state: { kind: "loading" }, basics: null, features: null, consentText: "" };
+    setState({ kind: "loading" });
+    setBasics(null);
+    setFeatures(null);
+    setConsentText("");
+    setFailure(null);
+    setNotice(null);
+    setShowTicketReview(false);
+    setShowScheduleReview(false);
+    setBasicsStatus(null);
+    setIntakeStatus(null);
+    setFeaturesStatus(null);
+    setStageConfirm(false);
+    setArchiveRecheckRequired(false);
+    setStageError(null);
+    setStageNotice(null);
+    hadOtherSettingsReceiptRef.current = false;
+    pendingSettingsRef.current = null;
+    setPendingSettings(null);
+    intakeReadRef.current?.abort();
+    intakeConflictRef.current = null;
+    setIntakeConflict(null);
+    basicsReadRef.current?.abort();
+    basicsConflictRef.current = null;
+    setBasicsConflict(null);
+    featuresReadRef.current?.abort();
+    featuresConflictRef.current = null;
+    setFeaturesConflict(null);
+    setSettingsRecoveryError(null);
+    setAbandonSettingsConfirm(false);
+    commandIdCache.current.clear();
+    stageCommandIdRef.current = null;
+    operationsBusyRef.current = false;
+    setBusy(false);
+    setStageBusy(false);
+    setCheckingSettings(false);
+    setRefreshingAfterWrite(false);
+  }, [eventId]);
+  useEffect(() => () => { intakeReadRef.current?.abort(); basicsReadRef.current?.abort(); featuresReadRef.current?.abort(); }, []);
+  const hadOtherSettingsReceiptRef = useRef(false);
+  useEffect(() => {
+    if (hadOtherSettingsReceiptRef.current && !otherSettingsReceipt && !pendingSettings) {
+      setRefreshingAfterWrite(true);
+      setReloadTick((tick) => tick + 1);
+      window.dispatchEvent(new CustomEvent("eventouch:shell-reload"));
+    }
+    hadOtherSettingsReceiptRef.current = otherSettingsReceipt;
+  }, [otherSettingsReceipt, pendingSettings]);
+  useEffect(() => {
+    if (!pendingSettings) return;
+    const frame = window.requestAnimationFrame(() => {
+      const heading = document.getElementById("settings-recovery-heading");
+      heading?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "center" });
+      heading?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [pendingSettings]);
   // Live mirrors of the independently dirty sections and their server
   // baselines. A reload after saving one section (or after a stage
   // transition) only overwrites the sections the operator has not edited,
@@ -275,12 +459,17 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   const [consentText, setConsentText] = useState("");
 
   useEffect(() => {
-    liveRef.current = { state, basics, features, consentText };
+    if (loadedSettingsEventRef.current === eventId) liveRef.current = { state, basics, features, consentText };
   });
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
+      const loadFailed = (message: string) => {
+        if (loadedSettingsEventRef.current === eventId && liveRef.current.state.kind === "ready") {
+          setFailure({ message: `${message} 작성 중인 내용은 유지됩니다.` });
+        } else setState({ kind: "failed", message });
+      };
       try {
         // The actor comes from the session (/api/auth/me), not from the
         // account directory: gating on "any manager exists" projected the
@@ -291,8 +480,12 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store" }),
           consoleFetch("/api/console/directory", { cache: "no-store" }),
         ]);
-        if (cancelled) return;
+        if (cancelled || activeSettingsEventRef.current !== eventId) return;
         if (meRes.status === 401 || bootRes.status === 401) {
+          if (loadedSettingsEventRef.current === eventId && liveRef.current.state.kind === "ready") {
+            loadFailed("최신 설정을 불러오지 못했습니다. 로그인과 접근 권한을 확인하세요.");
+            return;
+          }
           router.push(
             loginHrefForLocation(window.location.pathname, window.location.search)
           );
@@ -313,8 +506,10 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               allowReentry?: unknown;
               verificationRequired?: unknown;
               registrationOpen?: unknown;
+              formVersion?: unknown;
               publishedVersion?: unknown;
               consentText?: unknown;
+              consentVersion?: unknown;
               pageExperience?: unknown;
               desks?: unknown;
               assignments?: unknown;
@@ -330,13 +525,14 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         const dirData = (await dirRes.json().catch(() => null)) as {
           directory?: { clients?: unknown } | null;
         } | null;
+        if (cancelled || activeSettingsEventRef.current !== eventId) return;
         const dirClients = Array.isArray(dirData?.directory?.clients)
           ? (dirData as { directory: { clients: unknown[] } }).directory.clients
               .map(record)
               .filter((item): item is Record<string, unknown> => item !== null)
           : [];
         if (!meRes.ok || !bootRes.ok || !user || !bootstrap) {
-          setState({ kind: "failed", message: "행사 설정을 불러오지 못했습니다." });
+          loadFailed("행사 설정을 불러오지 못했습니다.");
           return;
         }
         const event = Array.isArray(bootstrap.events)
@@ -349,7 +545,11 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           : undefined;
         const workspace = bootstrap.workspaces?.[eventId];
         if (!event || !workspace) {
-          setState({ kind: "failed", message: "행사를 찾을 수 없습니다." });
+          loadFailed("행사를 찾을 수 없습니다.");
+          return;
+        }
+        if (!Array.isArray(event.features) || event.features.some((feature) => typeof feature !== "string")) {
+          loadFailed("운영 기능을 확인하지 못했습니다. 연결을 확인한 뒤 다시 시도하세요.");
           return;
         }
         const clients = (dirClients.length ? dirClients : Array.isArray(bootstrap.clients)
@@ -374,7 +574,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         const assignments = Array.isArray(workspace.assignments) ? workspace.assignments : [];
         const modules = Array.isArray(workspace.modules) ? workspace.modules : [];
         const deskAssignmentCount = assignments.filter((item) => record(item)?.type === "DESK").length;
-        const openModules = modules.filter((item) => record(item)?.status === "OPEN").length;
+        const openModules = modules.filter((item) => text(record(item)?.status).toUpperCase() === "OPEN").length;
         const pageExperience = typeof workspace.pageExperience === "object" && workspace.pageExperience !== null
           ? (workspace.pageExperience as Record<string, unknown>)
           : {};
@@ -402,6 +602,18 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         const pagePublishedVersion = Number.isSafeInteger(pageExperience.publishedVersion)
           ? Number(pageExperience.publishedVersion)
           : 0;
+        const live = liveRef.current;
+        const previous = live.state.kind === "ready" ? live.state : null;
+        const settledSection = settledSectionRef.current;
+        const preserveBasics = Boolean(previous && live.basics && (basicsConflictRef.current ||
+          (settledSection !== "basics" && JSON.stringify(live.basics) !== JSON.stringify(previous.basics))));
+        const preserveFeatures = Boolean(previous && live.features && (featuresConflictRef.current ||
+          (settledSection !== "features" && !sameFeatures(live.features, previous.features))));
+        // Unrelated refreshes must not silently mark changed application
+        // fields as reviewed, even if the consent editor itself was clean.
+        const preserveIntake = Boolean(previous && (intakeConflictRef.current || settledSection !== "intake"));
+        loadedSettingsEventRef.current = eventId;
+        setArchiveRecheckRequired(false);
         setState({
           kind: "ready",
           closeSnapshot: readCloseSnapshot(event, workspace),
@@ -409,6 +621,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           eventMeta: buildEventMeta(clientName, newBasics, venueName),
           clientName,
           venueName,
+          recoveryContact: publicRecoveryContact(workspace, newFeatures),
           clients: clients
             .map((client) => ({ id: text(client.id), name: text(client.name) }))
             .filter((client) => client.id !== ""),
@@ -418,11 +631,16 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           deskCount: desks.length,
           deskAssignmentCount,
           openModules,
-          basics: newBasics,
-          features: newFeatures,
+          // A dirty editor and its concurrency baseline are inseparable. A
+          // refresh caused by another section must not make stale edits look
+          // as if they were authored against a newer server value.
+          basics: preserveBasics && previous ? previous.basics : newBasics,
+          features: preserveFeatures && previous ? previous.features : newFeatures,
           registrationOpen: workspace.registrationOpen === true,
+          formVersion: preserveIntake && previous ? previous.formVersion : Number(workspace.formVersion) || 0,
           publishedVersion: Number(workspace.publishedVersion) || 0,
-          consentText: newConsentText,
+          consentText: preserveIntake && previous ? previous.consentText : newConsentText,
+          consentVersion: preserveIntake && previous ? previous.consentVersion : Number(workspace.consentVersion) || 1,
           pageDraftVersion,
           pagePublishedVersion,
           pagePublishedAt: text(pageExperience.publishedAt),
@@ -430,27 +648,47 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         // Preserve independent dirty sections: a local form that differs from
         // its previous server baseline keeps the operator's edits; a clean
         // form takes the fresh server values.
-        const live = liveRef.current;
-        const previous = live.state.kind === "ready"
-          ? { basics: live.state.basics, features: live.state.features, consentText: live.state.consentText }
-          : null;
+        settledSectionRef.current = null;
         setBasics(
-          previous && live.basics && JSON.stringify(live.basics) !== JSON.stringify(previous.basics)
+          preserveBasics && live.basics
             ? live.basics
             : newBasics
         );
         setFeatures(
-          previous && live.features && JSON.stringify(live.features) !== JSON.stringify(previous.features)
+          preserveFeatures && live.features
             ? live.features
             : newFeatures
         );
         setConsentText(
-          previous && live.consentText !== previous.consentText ? live.consentText : newConsentText
+          preserveIntake ? live.consentText : newConsentText
         );
-      } catch {
-        if (!cancelled) {
-          setState({ kind: "failed", message: "연결하지 못했습니다. 다시 시도하세요." });
+        if (intakeConflictRef.current) {
+          const conflict = { latest: null, loading: false, error: null };
+          intakeReadRef.current?.abort();
+          intakeReadRef.current = null;
+          intakeConflictRef.current = conflict;
+          setIntakeConflict(conflict);
         }
+        if (basicsConflictRef.current) {
+          const conflict = { latest: null, loading: false, error: null };
+          basicsReadRef.current?.abort();
+          basicsReadRef.current = null;
+          basicsConflictRef.current = conflict;
+          setBasicsConflict(conflict);
+        }
+        if (featuresConflictRef.current) {
+          const conflict = { latest: null, loading: false, error: null };
+          featuresReadRef.current?.abort();
+          featuresReadRef.current = null;
+          featuresConflictRef.current = conflict;
+          setFeaturesConflict(conflict);
+        }
+      } catch {
+        if (!cancelled && activeSettingsEventRef.current === eventId) {
+          loadFailed("연결하지 못했습니다. 다시 시도하세요.");
+        }
+      } finally {
+        if (!cancelled && activeSettingsEventRef.current === eventId) setRefreshingAfterWrite(false);
       }
     }
     load();
@@ -472,7 +710,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   const featuresDirty =
     state.kind === "ready" &&
     features !== null &&
-    JSON.stringify(features) !== JSON.stringify(state.features);
+    !sameFeatures(features, state.features);
   const sectionsDirty = Boolean(basicsDirty || intakeDirty || featuresDirty);
   // 탭별 미저장 표시. stage 탭은 확인 대기 중인 전환이 있을 때만 표시한다.
   const tabDirty: Record<SettingsTabId, boolean> = {
@@ -482,7 +720,8 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     stage: stageConfirm,
   };
   const pendingIntent =
-    stageCommandIdRef.current !== null || commandIdCache.current.size > 0;
+    pendingSettings !== null || otherSettingsReceipt || stageCommandIdRef.current !== null || commandIdCache.current.size > 0;
+  const unresolvedConflict = Boolean(intakeConflict || basicsConflict || featuresConflict);
   // The existing draft-guard passage, improved to name the sections that
   // still hold unsaved edits so the operator knows where to go back to.
   const dirtySectionNames: string[] = [
@@ -494,9 +733,11 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     ? `저장하지 않은 행사 설정 변경(${dirtySectionNames.join(" · ")})이 있습니다. 페이지를 떠나면 사라집니다.${
         pendingIntent ? " 응답을 확인하지 못한 요청도 있습니다." : ""
       }`
-    : "저장하지 않은 행사 설정 변경이나 응답을 확인하지 못한 요청이 있습니다. 페이지를 떠나면 사라집니다.";
+    : pendingIntent
+      ? "응답을 확인하지 못한 요청이 있습니다. 페이지를 떠나기 전에 처리 결과를 확인하세요."
+      : "변경된 최신 설정을 아직 확인하지 않았습니다. 페이지를 떠나면 현재 화면의 작성 내용이 사라질 수 있습니다.";
   useConsoleDraftGuard(
-    sectionsDirty || pendingIntent,
+    sectionsDirty || pendingIntent || unresolvedConflict,
     guardReason
   );
 
@@ -589,126 +830,392 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     return () => document.removeEventListener("click", onCaptureClick, true);
   }, [eventId, activeTab]);
 
-  // A 2xx with a missing or misshapen body proves nothing: {} and [] are not
-  // success. Known command shapes come from server/commands/preparation.js
-  // via server/commands/domain.js (flat result.body, replayed identically
-  // from command_receipts); anything else stays ambiguous and keeps the
-  // idempotency id for a safe retry.
-  function isProvenResponse(command: string, data: Record<string, unknown>, expectedStage?: string): boolean {
-    switch (command) {
-      case "event.update": {
-        const event = record(data.event);
-        return event !== null && text(event.id) === eventId;
-      }
-      case "event.features":
-        return Array.isArray(data.features) && data.features.every((feature) => typeof feature === "string");
-      case "form.publish": {
-        const publishedVersion = Number(data.publishedVersion);
-        return Number.isSafeInteger(publishedVersion) && publishedVersion > 0;
-      }
-      case "form.close":
-        return data.registrationOpen === false;
-      case "event.stage": {
-        const event = record(data.event);
-        return (
-          event !== null &&
-          text(event.id) === eventId &&
-          (expectedStage === undefined || text(event.stage).toUpperCase() === expectedStage)
-        );
-      }
-      default:
-        return true;
-    }
+  // A success status alone is not enough: compare the returned entity to the
+  // original request before accepting it or removing its recovery pointer.
+  function isProvenResponse(command: string, data: Record<string, unknown>, payload: Record<string, unknown>): boolean {
+    return confirmsSettingsCommand(command, eventId, payload, data);
   }
 
-  async function runCommand(
-    command: string,
-    payload: Record<string, unknown>,
-    successMessage: string,
-    section: SettingsSectionId
-  ): Promise<boolean> {
-    if (busy || operationsBusyRef.current) return false;
-    // Archived events reject every command server-side; the disabled buttons
-    // already prevent this path, and the server stays authoritative either way.
-    if (archived) return false;
-    // The disabled buttons already prevent this path; the per-command probe
-    // mirrors the server scope map so a granted screen cannot send a command
-    // its membership does not cover.
-    if (state.kind !== "ready") return false;
-    if (!canWriteEvent({ role: state.role, userId: state.userId, memberships: state.memberships, eventId }, command)) return false;
+  function sectionStatusSetter(section: SettingsSectionId) {
+    return section === "basics" ? setBasicsStatus : section === "intake" ? setIntakeStatus : setFeaturesStatus;
+  }
+
+  function finishSettings(attempt: SettingsAttempt, checked: boolean, response?: Record<string, unknown>) {
+    commandIdCache.current.delete(attempt.fingerprint);
+    acknowledgeOperatorReceipt(attempt.commandId);
+    forgetOperatorReceipt(attempt.commandId);
+    pendingSettingsRef.current = null;
+    setPendingSettings(null);
+    setSettingsRecoveryError(null);
+    setAbandonSettingsConfirm(false);
+    setFailure(null);
+    const impact = response?.ticketImpact && typeof response.ticketImpact === "object" && !Array.isArray(response.ticketImpact)
+      ? response.ticketImpact as Record<string, unknown> : null;
+    const count = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+    const ticketSummary = isBasicsCommand(attempt.command) && impact && count(impact.extended) && count(impact.review)
+      ? ` 유효한 티켓 ${impact.extended}건을 연장했습니다.${impact.review ? ` 만료·철회됐거나 확인이 필요한 티켓 ${impact.review}건은 연장하지 않았습니다.` : ""}` : "";
+    setShowTicketReview(Boolean(impact && count(impact.review) && impact.review > 0));
+    if (changesEventSchedule(attempt)) setShowScheduleReview(true);
+    const message = checked ? "서버에 설정이 반영된 것을 확인했습니다. 최신 내용을 확인하세요." : attempt.successMessage + ticketSummary;
+    if (attempt.section === "stage") {
+      stageCommandIdRef.current = null;
+      setStageError(null);
+      setStageConfirm(false);
+      setStageNotice(message);
+      if (activeTabRef.current !== "stage") setNotice(message);
+      window.dispatchEvent(new CustomEvent("eventouch:shell-reload"));
+    } else {
+      setNotice(message);
+      sectionStatusSetter(attempt.section)({ kind: "success", message, at: formatClockNow() });
+    }
+    // The loader keeps unrelated dirty sections; bootstrap is authoritative
+    // for workspace fields the write response does not include.
+    settledSectionRef.current = isBasicsCommand(attempt.command) ? "basics" :
+      attempt.command === "event.features" ? "features" : attempt.command === "form.publish" ? "intake" : null;
+    setRefreshingAfterWrite(true);
+    setReloadTick((tick) => tick + 1);
+  }
+
+  async function executeSettingsAttempt(attempt: SettingsAttempt, retry = false): Promise<boolean> {
+    if (operationsBusyRef.current || busy || stageBusy) return false;
+    const held = pendingSettingsRef.current;
+    if ((held && (!retry || held.commandId !== attempt.commandId)) || otherSettingsReceipt) {
+      setSettingsRecoveryError("이전 설정 요청의 처리 결과를 먼저 확인하세요.");
+      return false;
+    }
+    if (state.kind !== "ready" || archived || attempt.eventId !== eventId ||
+        !canWriteEvent({ role: state.role, userId: state.userId, memberships: state.memberships, eventId }, attempt.command)) return false;
     operationsBusyRef.current = true;
-    setBusy(true);
+    if (attempt.section === "stage") setStageBusy(true); else setBusy(true);
     setFailure(null);
     setNotice(null);
-    const setSectionStatus =
-      section === "basics" ? setBasicsStatus : section === "intake" ? setIntakeStatus : setFeaturesStatus;
-    const fingerprint = `${command}:${stableStringify(payload)}`;
-    let commandId = commandIdCache.current.get(fingerprint);
-    if (!commandId) {
-      commandId = randomCommandId();
-      commandIdCache.current.set(fingerprint, commandId);
-    }
+    setStageError(null);
+    setSettingsRecoveryError(null);
+    commandIdCache.current.set(attempt.fingerprint, attempt.commandId);
+    const unconfirmed = () => {
+      pendingSettingsRef.current = attempt;
+      setPendingSettings(attempt);
+      setStageConfirm(false);
+      setSettingsRecoveryError("처리 결과를 확인하지 못했습니다. 서버 처리 확인 또는 같은 요청 다시 시도를 선택하세요.");
+    };
     try {
-      const res = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
+      const res = await consoleFetch(`/api/events/${encodeURIComponent(attempt.eventId)}/commands`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ commandId, command, payload }),
+        body: JSON.stringify({ commandId: attempt.commandId, command: attempt.command, payload: attempt.payload }),
       });
       const data = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+      if (activeSettingsEventRef.current !== attempt.eventId) return false;
       if (!res.ok || data === null) {
-        const status = res.status;
-        if (!res.ok && !isAmbiguousFailure(status, data)) {
-          // Definitive rejection: the command did not apply, so a corrected
-          // retry needs a fresh id. Editing is preserved for the fix.
-          commandIdCache.current.delete(fingerprint);
-          const message = typeof data?.error === "string" ? data.error : "처리하지 못했습니다.";
-          setFailure({
-            message,
-            field: typeof data?.field === "string" ? data.field : undefined,
-          });
-          setSectionStatus({ kind: "error", message, at: formatClockNow() });
+        // These guards run inside the locked publish command, after receipt
+        // replay. Even a retry following a lost response is therefore a
+        // definitive rejection; a generic 409/403 is not.
+        if (attempt.command === "form.publish" && res.status === 409 &&
+            ["expectedFormVersion", "expectedConsentVersion", "expectedConsentText"].includes(String(data?.field))) {
+          commandIdCache.current.delete(attempt.fingerprint);
+          abandonOperatorAttempt(attempt.commandId);
+          forgetOperatorReceipt(attempt.commandId);
+          pendingSettingsRef.current = null;
+          setPendingSettings(null);
+          setSettingsRecoveryError(null);
+          setAbandonSettingsConfirm(false);
+          const conflict = { latest: null, loading: false, error: null };
+          intakeConflictRef.current = conflict;
+          setIntakeConflict(conflict);
+          setFailure(null);
+          setIntakeStatus(null);
+          window.requestAnimationFrame(() => document.getElementById("intake-conflict-heading")?.focus());
+        } else if (isBasicsCommand(attempt.command) && res.status === 409 && data?.code === "EVENT_BASICS_CHANGED") {
+          commandIdCache.current.delete(attempt.fingerprint);
+          abandonOperatorAttempt(attempt.commandId);
+          forgetOperatorReceipt(attempt.commandId);
+          pendingSettingsRef.current = null;
+          setPendingSettings(null);
+          setSettingsRecoveryError(null);
+          setAbandonSettingsConfirm(false);
+          const conflict = { latest: null, loading: false, error: null };
+          basicsConflictRef.current = conflict;
+          setBasicsConflict(conflict);
+          setFailure(null);
+          setBasicsStatus(null);
+          window.requestAnimationFrame(() => document.getElementById("basics-conflict-heading")?.focus());
+        } else if (attempt.command === "event.features" && res.status === 409 && data?.code === "EVENT_FEATURES_CHANGED") {
+          commandIdCache.current.delete(attempt.fingerprint);
+          abandonOperatorAttempt(attempt.commandId);
+          forgetOperatorReceipt(attempt.commandId);
+          pendingSettingsRef.current = null;
+          setPendingSettings(null);
+          setSettingsRecoveryError(null);
+          setAbandonSettingsConfirm(false);
+          const conflict = { latest: null, loading: false, error: null };
+          featuresConflictRef.current = conflict;
+          setFeaturesConflict(conflict);
+          setFailure(null);
+          setFeaturesStatus(null);
+          window.requestAnimationFrame(() => document.getElementById("features-conflict-heading")?.focus());
+        } else if (!retry && !res.ok && !isAmbiguousFailure(res.status, data)) {
+          commandIdCache.current.delete(attempt.fingerprint);
+          const unsupportedServer = attempt.command === "event.basics.save" && res.status === 400 && data?.field === "command";
+          const message = unsupportedServer
+            ? "현재 서버에서는 행사 정보를 안전하게 저장할 수 없습니다. 관리자에게 서버 업데이트를 요청하세요. 입력한 내용은 유지됩니다."
+            : typeof data?.error === "string" ? data.error : "처리하지 못했습니다.";
+          if (attempt.section === "stage") {
+            stageCommandIdRef.current = null;
+            setStageConfirm(false);
+            setStageError(message);
+            if (data?.code === "ARCHIVE_PRECONDITIONS_UNAVAILABLE") setArchiveRecheckRequired(true);
+            if (activeTabRef.current !== "stage") setFailure({ message });
+          } else {
+            setFailure({ message, field: unsupportedServer ? "serverUnsupported" : typeof data?.field === "string" ? data.field : undefined });
+            sectionStatusSetter(attempt.section)({ kind: "error", message, at: formatClockNow() });
+            if (unsupportedServer && activeTabRef.current === "basics") {
+              window.requestAnimationFrame(() => document.getElementById("settings-basics-save")?.focus());
+            }
+            if (data?.field === "consentText" && activeTabRef.current === "intake") {
+              window.requestAnimationFrame(() => document.getElementById("set-consent")?.focus());
+            }
+          }
         } else {
-          // Ambiguous network/5xx/malformed response: keep the id so a retry
-          // replays the same request instead of applying it twice.
-          const message = "응답을 확인하지 못했습니다. 입력한 내용을 유지한 채 같은 요청으로 다시 시도하세요.";
-          setFailure({
-            message,
-            field: data !== null && typeof data.field === "string" ? data.field : undefined,
-          });
-          setSectionStatus({ kind: "error", message, at: formatClockNow() });
+          // A later rejection cannot settle an earlier lost response.
+          unconfirmed();
         }
-        setNotice(null);
         return false;
       }
-      if (!isProvenResponse(command, data)) {
-        // Success status but unusable body: stay ambiguous and keep the id.
-        const message = "처리 결과를 확인하지 못했습니다. 같은 요청으로 다시 시도하세요.";
-        setFailure({ message });
-        setSectionStatus({ kind: "error", message, at: formatClockNow() });
-        setNotice(null);
+      if (!isProvenResponse(attempt.command, data, attempt.payload)) {
+        unconfirmed();
         return false;
       }
-      commandIdCache.current.delete(fingerprint);
-      setNotice(successMessage);
-      setSectionStatus({ kind: "success", message: successMessage, at: formatClockNow() });
-      // Reload through the shared loader; liveRef keeps the sections the
-      // operator edited elsewhere from being overwritten.
-      setReloadTick((tick) => tick + 1);
+      if (postponesEvent(attempt)) {
+        const impact = data.ticketImpact;
+        const counts = impact && typeof impact === "object" && !Array.isArray(impact) ? impact as Record<string, unknown> : null;
+        if (!counts || typeof counts.extended !== "number" || !Number.isSafeInteger(counts.extended) || counts.extended < 0 ||
+            typeof counts.review !== "number" || !Number.isSafeInteger(counts.review) || counts.review < 0) {
+          unconfirmed();
+          setSettingsRecoveryError("행사 날짜는 변경됐을 수 있지만 티켓 연장 결과를 확인하지 못했습니다. 같은 요청으로 다시 확인하고 참가자 명단을 살펴보세요.");
+          return false;
+        }
+      }
+      finishSettings(attempt, false, data);
       return true;
-    } catch {
-      // Transport failure: the server may still have applied the command.
-      const message = "연결하지 못했습니다. 같은 요청으로 다시 시도하세요.";
-      setFailure({ message });
-      setSectionStatus({ kind: "error", message, at: formatClockNow() });
-      setNotice(null);
+    } catch (error) {
+      if (activeSettingsEventRef.current !== attempt.eventId) return false;
+      if (!retry && isOrganizationContextBlock(error)) {
+        commandIdCache.current.delete(attempt.fingerprint);
+        stageCommandIdRef.current = null;
+        setStageConfirm(false);
+        setFailure({ message: "현재 조직을 확인한 뒤 다시 시도하세요." });
+      } else {
+        unconfirmed();
+      }
       return false;
     } finally {
-      operationsBusyRef.current = false;
-      setBusy(false);
+      if (activeSettingsEventRef.current === attempt.eventId) {
+        operationsBusyRef.current = false;
+        setBusy(false);
+        setStageBusy(false);
+      }
     }
   }
 
-  if (state.kind === "loading") {
+  async function runCommand(command: string, payload: Record<string, unknown>, successMessage: string, section: SettingsSectionId): Promise<boolean> {
+    if (operationsBusyRef.current || pendingSettingsRef.current || otherSettingsReceipt) return false;
+    const frozen = JSON.parse(JSON.stringify(payload)) as Record<string, unknown>;
+    const fingerprint = `${command}:${stableStringify(frozen)}`;
+    const commandId = randomCommandId();
+    return executeSettingsAttempt({ eventId, command, payload: frozen, successMessage, section, commandId, fingerprint });
+  }
+
+  async function checkSettings() {
+    const attempt = pendingSettingsRef.current;
+    if (!attempt || attempt.eventId !== activeSettingsEventRef.current || operationsBusyRef.current) return;
+    operationsBusyRef.current = true;
+    setCheckingSettings(true);
+    setSettingsRecoveryError(null);
+    try {
+      const response = await consoleFetch(`/api/events/${encodeURIComponent(attempt.eventId)}/command-receipts/${encodeURIComponent(attempt.commandId)}`, { cache: "no-store" });
+      const data = await response.json().catch(() => null) as { status?: unknown; command?: unknown } | null;
+      if (activeSettingsEventRef.current !== attempt.eventId) return;
+      if (response.ok && data?.status === "APPLIED" && data.command === attempt.command) {
+        if (attempt.command === "event.basics.save" || postponesEvent(attempt)) setSettingsRecoveryError("행사 정보 저장은 기록됐습니다. 저장 내용과 티켓 영향을 확인하려면 같은 요청을 다시 시도하세요.");
+        else finishSettings(attempt, true);
+      } else {
+        setSettingsRecoveryError(response.ok && data?.status === "UNCONFIRMED"
+          ? "아직 처리 여부를 확인할 수 없습니다. 잠시 후 다시 확인하세요."
+          : "처리 결과를 확인하지 못했습니다. 현재 계정과 행사 접근 권한을 확인한 뒤 다시 확인하세요.");
+      }
+    } catch {
+      if (activeSettingsEventRef.current === attempt.eventId) setSettingsRecoveryError("서버에 연결하지 못했습니다. 요청은 다시 보내지 않았습니다.");
+    } finally {
+      if (activeSettingsEventRef.current === attempt.eventId) {
+        operationsBusyRef.current = false;
+        setCheckingSettings(false);
+      }
+    }
+  }
+
+  async function retrySettings() {
+    const attempt = pendingSettingsRef.current;
+    if (!attempt || checkingSettings || attempt.eventId !== activeSettingsEventRef.current) return;
+    await executeSettingsAttempt(attempt, true);
+  }
+
+  async function readLatestIntake() {
+    if (!intakeConflictRef.current || intakeReadRef.current) return;
+    const controller = new AbortController();
+    intakeReadRef.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 12000);
+    const loading = { latest: null, loading: true, error: null };
+    intakeConflictRef.current = loading;
+    setIntakeConflict(loading);
+    try {
+      const response = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store", signal: controller.signal });
+      const body = record(await response.json());
+      const bootstrap = record(body?.state);
+      const workspaces = record(bootstrap?.workspaces);
+      const workspace = record(workspaces?.[eventId]);
+      const events = bootstrap?.events;
+      const event = Array.isArray(events) ? events.map(record).find((item) => item?.id === eventId) : null;
+      if (!response.ok || !workspace || !event || !Array.isArray(workspace.fields)) throw new Error("invalid response");
+      if (![workspace.formVersion, workspace.publishedVersion, workspace.consentVersion].every(finiteNumber) ||
+          typeof workspace.consentText !== "string" || typeof workspace.registrationOpen !== "boolean") throw new Error("incomplete response");
+      const formVersion = Number(workspace.formVersion);
+      const publishedVersion = Number(workspace.publishedVersion);
+      const consentVersion = Number(workspace.consentVersion) || 1;
+      if (![formVersion, publishedVersion, consentVersion].every((version) => Number.isSafeInteger(version) && version >= 0) ||
+          (workspace.consentText != null && typeof workspace.consentText !== "string")) throw new Error("invalid version");
+      const fields = workspace.fields.map(record);
+      if (fields.some((field) => !field || typeof field.id !== "string" || typeof field.label !== "string" ||
+          typeof field.type !== "string" || (field.required !== undefined && typeof field.required !== "boolean") ||
+          (field.options !== undefined && (!Array.isArray(field.options) || field.options.some((value) => typeof value !== "string"))))) throw new Error("invalid fields");
+      if (controller.signal.aborted || activeSettingsEventRef.current !== eventId || intakeReadRef.current !== controller) return;
+      const latest: LatestIntake = { formVersion, publishedVersion, consentVersion, consentText: text(workspace.consentText),
+        registrationOpen: workspace.registrationOpen === true, fields: fields.map((field) => ({ label: text(field?.label),
+          required: field?.required === true, type: text(field?.type),
+          options: Array.isArray(field?.options) ? field.options.filter((value): value is string => typeof value === "string") : [] })) };
+      const resolved = { latest, loading: false, error: null };
+      intakeConflictRef.current = resolved;
+      setIntakeConflict(resolved);
+    } catch {
+      if (activeSettingsEventRef.current !== eventId || intakeReadRef.current !== controller) return;
+      const failed = { latest: null, loading: false, error: "최신 설정을 불러오지 못했습니다. 작성 중인 내용은 그대로 있습니다. 연결과 접근 권한을 확인한 뒤 다시 시도하세요." };
+      intakeConflictRef.current = failed;
+      setIntakeConflict(failed);
+    } finally {
+      window.clearTimeout(timeout);
+      if (intakeReadRef.current === controller) intakeReadRef.current = null;
+    }
+  }
+
+  function resolveIntakeConflict(useLatest: boolean) {
+    const latest = intakeConflictRef.current?.latest;
+    if (!latest || activeSettingsEventRef.current !== eventId) return;
+    setState((previous) => previous.kind === "ready" ? { ...previous, formVersion: latest.formVersion,
+      publishedVersion: latest.publishedVersion, consentVersion: latest.consentVersion,
+      consentText: latest.consentText, registrationOpen: latest.registrationOpen } : previous);
+    if (useLatest) setConsentText(latest.consentText);
+    intakeConflictRef.current = null;
+    setIntakeConflict(null);
+    setIntakeStatus({ kind: "success", message: "선택한 안내를 확인했습니다. 게시하려면 아래 버튼을 직접 눌러 주세요.", at: formatClockNow() });
+    window.requestAnimationFrame(() => document.getElementById("set-consent")?.focus());
+  }
+
+  async function readLatestBasics() {
+    if (!basicsConflictRef.current || basicsReadRef.current) return;
+    const controller = new AbortController();
+    basicsReadRef.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 12000);
+    const loading = { latest: null, loading: true, error: null };
+    basicsConflictRef.current = loading;
+    setBasicsConflict(loading);
+    try {
+      const response = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store", signal: controller.signal });
+      const bootstrap = record(record(await response.json())?.state);
+      const workspace = record(record(bootstrap?.workspaces)?.[eventId]);
+      const event = Array.isArray(bootstrap?.events) ? bootstrap.events.map(record).find((item) => item?.id === eventId) : null;
+      if (!response.ok || !workspace || !event ||
+          [event.name, event.slug, event.date, event.start, event.end].some((value) => typeof value !== "string") ||
+          !(event.clientId === null || typeof event.clientId === "string") ||
+          !finiteNumber(event.capacity) || !finiteNumber(workspace.price) ||
+          typeof workspace.approvalRequired !== "boolean" || typeof workspace.allowReentry !== "boolean" ||
+          (workspace.verificationRequired !== undefined && typeof workspace.verificationRequired !== "boolean") ||
+          (event.format !== undefined && event.format !== null && typeof event.format !== "string")) throw new Error("invalid response");
+      const latest: Basics = { name: text(event.name), slug: text(event.slug), clientId: text(event.clientId),
+        date: text(event.date), start: text(event.start) || "09:00", end: text(event.end) || "18:00",
+        capacity: String(Number(event.capacity) || 0), price: String(Number(workspace.price) || 0),
+        format: ["offline", "online", "hybrid"].includes(text(event.format)) ? text(event.format) : "",
+        approvalRequired: workspace.approvalRequired === true, allowReentry: workspace.allowReentry !== false,
+        verificationRequired: workspace.verificationRequired === true };
+      if (controller.signal.aborted || activeSettingsEventRef.current !== eventId || basicsReadRef.current !== controller) return;
+      const resolved = { latest, loading: false, error: null };
+      basicsConflictRef.current = resolved;
+      setBasicsConflict(resolved);
+    } catch {
+      if (activeSettingsEventRef.current !== eventId || basicsReadRef.current !== controller) return;
+      const failed = { latest: null, loading: false, error: "최신 설정을 불러오지 못했습니다. 작성 중인 내용은 그대로 있습니다. 연결과 접근 권한을 확인한 뒤 다시 시도하세요." };
+      basicsConflictRef.current = failed;
+      setBasicsConflict(failed);
+    } finally {
+      window.clearTimeout(timeout);
+      if (basicsReadRef.current === controller) basicsReadRef.current = null;
+    }
+  }
+
+  function resolveBasicsConflict(useLatest: boolean) {
+    const latest = basicsConflictRef.current?.latest;
+    if (!latest || activeSettingsEventRef.current !== eventId) return;
+    setState((previous) => previous.kind === "ready" ? { ...previous, basics: latest } : previous);
+    if (useLatest) setBasics(latest);
+    basicsConflictRef.current = null;
+    setBasicsConflict(null);
+    setBasicsStatus({ kind: "success", message: "선택한 내용을 확인했습니다. 저장하려면 아래 버튼을 직접 눌러 주세요.", at: formatClockNow() });
+    window.requestAnimationFrame(() => document.getElementById("set-name")?.focus());
+  }
+
+  async function readLatestFeatures() {
+    if (!featuresConflictRef.current || featuresReadRef.current) return;
+    const controller = new AbortController();
+    featuresReadRef.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 12000);
+    const loading = { latest: null, loading: true, error: null };
+    featuresConflictRef.current = loading;
+    setFeaturesConflict(loading);
+    try {
+      const response = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store", signal: controller.signal });
+      const bootstrap = record(record(await response.json())?.state);
+      const event = Array.isArray(bootstrap?.events) ? bootstrap.events.map(record).find((item) => item?.id === eventId) : null;
+      if (!response.ok || !event || !Array.isArray(event.features) || event.features.some((item) => typeof item !== "string")) throw new Error("invalid response");
+      if (controller.signal.aborted || activeSettingsEventRef.current !== eventId || featuresReadRef.current !== controller) return;
+      const resolved = { latest: event.features as string[], loading: false, error: null };
+      featuresConflictRef.current = resolved;
+      setFeaturesConflict(resolved);
+    } catch {
+      if (activeSettingsEventRef.current !== eventId || featuresReadRef.current !== controller) return;
+      const failed = { latest: null, loading: false, error: "최신 설정을 불러오지 못했습니다. 선택 중인 기능은 그대로 있습니다. 연결과 접근 권한을 확인한 뒤 다시 시도하세요." };
+      featuresConflictRef.current = failed;
+      setFeaturesConflict(failed);
+    } finally {
+      window.clearTimeout(timeout);
+      if (featuresReadRef.current === controller) featuresReadRef.current = null;
+    }
+  }
+
+  function resolveFeaturesConflict(useLatest: boolean) {
+    const latest = featuresConflictRef.current?.latest;
+    if (!latest || !features || activeSettingsEventRef.current !== eventId) return;
+    const visible = new Set(FEATURES.map((feature) => feature.id));
+    // Hidden/legacy features have no switch here: neither the old draft nor
+    // the selection action may overwrite their newer server values.
+    const chosen = useLatest ? latest : [ ...features.filter((feature) => visible.has(feature)),
+      ...latest.filter((feature) => !visible.has(feature)) ];
+    setState((previous) => previous.kind === "ready" ? { ...previous, features: latest } : previous);
+    setFeatures(chosen);
+    featuresConflictRef.current = null;
+    setFeaturesConflict(null);
+    setFeaturesStatus({ kind: "success", message: "선택한 기능을 확인했습니다. 저장하려면 아래 버튼을 직접 눌러 주세요.", at: formatClockNow() });
+    window.requestAnimationFrame(() => document.getElementById("settings-features-legend")?.focus());
+  }
+
+  if (state.kind === "loading" || (state.kind === "ready" && loadedSettingsEventRef.current !== eventId)) {
     return (
       <ConsolePage pageId="settings" eventId={eventId}>
         <ConsoleStatePanel kind="loading" message="행사 설정을 불러오고 있습니다." onRetry={() => {}} />
@@ -749,10 +1256,14 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       : stageKnown
         ? "마지막 진행 단계입니다."
         : "단계 정보가 확인되지 않아 전환할 수 없습니다.";
+  const archiveDataUnavailable = nextStage === "ARCHIVED" && (!state.closeSnapshot.archiveAvailable || archiveRecheckRequired);
+  const archiveUnavailableNames = [!state.closeSnapshot.participantsAvailable ? "참가자" : "", !state.closeSnapshot.registrationAvailable ? "접수" : "", !state.closeSnapshot.modulesAvailable ? "참여 콘텐츠" : ""].filter(Boolean).join(" · ") || "보관 전제";
   const stagePrecondition = nextStage === "LIVE" && (state.deskCount === 0 || state.deskAssignmentCount === 0)
     ? "진행 중 전환에는 등록 데스크와 데스크 배정이 필요합니다. 배정은 출근 확인이 아닙니다."
+    : archiveDataUnavailable
+      ? `${archiveUnavailableNames} 상태를 확인할 수 없어 보관할 수 없습니다. 다시 확인해도 계속되면 시스템 관리자에게 문의하세요.`
     : nextStage === "ARCHIVED" && (state.registrationOpen || state.openModules > 0)
-      ? "보관하려면 접수를 닫고 진행 중인 참여 프로그램을 모두 닫아야 합니다."
+      ? "보관하려면 접수를 닫고 진행 중인 참여 콘텐츠를 모두 닫아야 합니다."
       : null;
   // A known-failing transition is blocked before confirmation instead of
   // sent to the server for a predictable rejection. Server rules stay
@@ -766,8 +1277,9 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   // settings (event.* probe), 접수 게시·마감은 participants (form.* probe).
   // Neither gate invents access; the server re-checks every command.
   const capabilities = { role: state.role, userId: state.userId, memberships: state.memberships, eventId };
-  const canWriteSettings = canWriteEvent(capabilities, "event.update");
+    const canWriteSettings = canWriteEvent(capabilities, "event.basics.save");
   const canWriteIntake = canWriteEvent(capabilities, "form.publish");
+  const settingsLocked = Boolean(pendingSettings) || otherSettingsReceipt || busy || stageBusy || checkingSettings || refreshingAfterWrite;
   // form.publish is rejected server-side once the event ends (preparation.js
   // publishForm): the button stays visible for layout stability but cannot
   // be pressed, with the reason inline. form.close stays available so the
@@ -781,7 +1293,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     if (!status) return null;
     return (
       <p
-        role="status"
+        role={status.kind === "error" && failure?.field === "serverUnsupported" ? "alert" : "status"}
         data-settings-section-status={section}
         className={`${styles.sectionStatus} ${status.kind === "error" ? styles.sectionStatusError : styles.sectionStatusSuccess}`}
       >
@@ -790,60 +1302,38 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     );
   }
 
-  async function submitStageTransition() {
-    if (state.kind !== "ready" || !canWriteSettings || !nextStage || stageBusy || operationsBusyRef.current || !stageConfirm || stageBlocked) return;
-    const label = eventStageLabel(nextStage);
-    if (!stageCommandIdRef.current) stageCommandIdRef.current = randomCommandId();
-    operationsBusyRef.current = true;
-    setStageBusy(true);
-    setStageError(null);
-    setStageNotice(null);
-    try {
-      const res = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          commandId: stageCommandIdRef.current,
-          command: "event.stage",
-          payload: { stage: nextStage },
-        }),
-      });
-      const data = (await res.json().catch(() => null)) as Record<string, unknown> | null;
-      if (!res.ok || data === null) {
-        if (!res.ok && !isAmbiguousFailure(res.status, data)) {
-          setStageError(typeof data?.error === "string" ? data.error : "단계를 전환하지 못했습니다.");
-          setStageConfirm(false);
-          stageCommandIdRef.current = null;
-          return;
-        }
-        // Preserve the id and the confirmation so a retry can replay the
-        // server receipt after a lost response.
-        setStageError(
-          data !== null && typeof data.error === "string"
-            ? data.error
-            : "응답을 확인하지 못했습니다. 같은 요청으로 다시 시도하세요."
-        );
-        return;
-      }
-      if (!isProvenResponse("event.stage", data, nextStage)) {
-        // Success status but unusable body: stay ambiguous and keep the id.
-        setStageError("처리 결과를 확인하지 못했습니다. 같은 요청으로 다시 시도하세요.");
-        return;
-      }
-      stageCommandIdRef.current = null;
-      setStageNotice(`행사를 ${label}(으)로 전환했습니다.`);
-      setStageConfirm(false);
-      setReloadTick((tick) => tick + 1);
-      // 셸의 행사 하위 메뉴와 단계 표시가 새 단계를 따라오도록 깨운다.
-      // 개요 화면은 복귀 시 다시 bootstrap을 읽으므로 별도 처리가 필요 없다.
-      window.dispatchEvent(new CustomEvent("eventouch:shell-reload"));
-    } catch {
-      // Preserve the id so a retry can replay the server receipt after a lost response.
-      setStageError("연결하지 못했습니다. 같은 요청을 다시 시도하세요.");
-    } finally {
-      operationsBusyRef.current = false;
-      setStageBusy(false);
+  function requestFormPublish() {
+    if (state.kind !== "ready" || settingsLocked || intakeConflict) return;
+    // Omitted consent leaves the server's previous text unchanged. Do not
+    // make an emptied editor look as if it will remove that stored text.
+    if (!consentText.trim() && consentText !== state.consentText) {
+      const message = "빈 동의 안내는 저장되지 않습니다. 기존 안내를 유지하거나 내용을 입력하세요.";
+      setFailure({ message, field: "consentText" });
+      setNotice(null);
+      setIntakeStatus(null);
+      window.requestAnimationFrame(() => document.getElementById("set-consent")?.focus());
+      return;
     }
+    void runCommand(
+      "form.publish",
+      { ...(consentText.trim() ? { consentText } : {}), expectedFormVersion: state.formVersion,
+        expectedConsentVersion: state.consentVersion, expectedConsentText: state.consentText },
+      currentStage === "DRAFT"
+        ? "양식을 게시했습니다. 진행 단계에서 운영 준비(으)로 전환하면 접수가 열립니다."
+        : "양식을 게시하고 접수를 열었습니다.",
+      "intake"
+    );
+  }
+
+  async function submitStageTransition() {
+    if (state.kind !== "ready" || !canWriteSettings || !nextStage || stageBusy || operationsBusyRef.current ||
+        pendingSettingsRef.current || otherSettingsReceipt || !stageConfirm || stageBlocked) return;
+    const payload = { stage: nextStage };
+    if (!stageCommandIdRef.current) stageCommandIdRef.current = randomCommandId();
+    const commandId = stageCommandIdRef.current;
+    await executeSettingsAttempt({ eventId, command: "event.stage", payload,
+      successMessage: `행사를 ${eventStageLabel(nextStage)}(으)로 전환했습니다.`, section: "stage",
+      commandId, fingerprint: `event.stage:${stableStringify(payload)}` });
   }
 
   // 탭 키보드 이동: 화살표·Home·End는 포커스와 선택을 함께 옮긴다(자동 활성화).
@@ -886,7 +1376,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     null
   );
   const lastResult = failure
-    ? { kind: "error" as const, message: failure.message }
+    ? failure.field === "consentText" || failure.field === "serverUnsupported" ? null : { kind: "error" as const, message: failure.message }
     : notice
       ? { kind: "success" as const, message: notice }
       : latestSectionStatus;
@@ -940,14 +1430,53 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               보관된 행사는 읽기 전용입니다. 설정은 볼 수 있지만 저장·게시·전환할 수 없습니다.
             </ConsoleFeedback>
           ) : null}
-          {failure ? <ConsoleFeedback kind="error" id="settings-error">{failure.message}</ConsoleFeedback> : null}
+          {failure && failure.field !== "serverUnsupported" && (failure.field !== "consentText" || activeTab !== "intake") ? <ConsoleFeedback kind="error" id="settings-error">{failure.message}</ConsoleFeedback> : null}
           {notice ? <ConsoleFeedback kind="success">{notice}</ConsoleFeedback> : null}
+          {showTicketReview ? <p><Link href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</Link></p> : null}
+          {intakeConflict && activeTab !== "intake" ? <ConsoleFeedback kind="warning">참가 접수 설정이 변경되어 최신 내용을 확인해야 합니다. 참가 접수 탭에서 작성 중인 안내를 확인하세요.</ConsoleFeedback> : null}
+          {basicsConflict && activeTab !== "basics" ? <ConsoleFeedback kind="warning">기본 정보가 변경되어 최신 내용을 확인해야 합니다. 기본 정보 탭에서 작성 중인 내용을 확인하세요.</ConsoleFeedback> : null}
+          {featuresConflict && activeTab !== "features" ? <ConsoleFeedback kind="warning">운영 기능이 변경되어 최신 내용을 확인해야 합니다. 운영 기능 탭에서 선택 중인 기능을 확인하세요.</ConsoleFeedback> : null}
+          {refreshingAfterWrite ? <ConsoleFeedback kind="info">최신 행사 설정을 불러오고 있습니다.</ConsoleFeedback> : null}
         </>
       )}
     >
       <p className={styles.scopeNote} data-settings-scope-note>
         각 구역의 저장·게시·전환은 그 구역에만 적용됩니다.
       </p>
+      {pendingSettings ? <section className={styles.recovery} aria-labelledby="settings-recovery-heading">
+        <h2 id="settings-recovery-heading" tabIndex={-1}>행사 설정 처리 확인 필요</h2>
+        <p>{SETTINGS_COMMAND_LABEL[pendingSettings.command] ?? "이전 설정"} 요청이 반영됐을 수 있습니다. 서버 확인은 요청을 다시 보내지 않습니다.</p>
+        {archived || !canWriteEvent(capabilities, pendingSettings.command) ? <p>현재 권한이나 행사 상태에서는 같은 요청을 다시 보낼 수 없습니다. 서버 처리 확인이나 담당자 확인을 이용하세요.</p> : null}
+        {settingsRecoveryError ? <p role="alert">{settingsRecoveryError}</p> : null}
+        {postponesEvent(pendingSettings) ? <p><Link href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</Link></p> : null}
+        <div className={styles.recoveryActions}>
+          <button type="button" className="button button-secondary" disabled={busy || stageBusy || checkingSettings || abandonSettingsConfirm} onClick={() => void checkSettings()}>{checkingSettings ? "확인 중…" : "서버 처리 확인"}</button>
+          <button type="button" className="button button-secondary" disabled={busy || stageBusy || checkingSettings || abandonSettingsConfirm || archived || !canWriteEvent(capabilities, pendingSettings.command)} onClick={() => void retrySettings()}>같은 요청 다시 시도</button>
+          <button type="button" className="button button-secondary" disabled={busy || stageBusy || checkingSettings || abandonSettingsConfirm} onClick={() => setAbandonSettingsConfirm(true)}>확인 전 그만두기</button>
+        </div>
+        {abandonSettingsConfirm ? <ConsoleConfirm
+          summary="이미 반영된 설정은 취소되지 않습니다. 확인을 그만두고 최신 내용을 확인할까요?"
+          confirmLabel="확인 그만두기"
+          onConfirm={() => {
+            const attempt = pendingSettingsRef.current;
+            if (!attempt) return;
+            commandIdCache.current.delete(attempt.fingerprint);
+            abandonOperatorAttempt(attempt.commandId);
+            forgetOperatorReceipt(attempt.commandId);
+            stageCommandIdRef.current = null;
+            pendingSettingsRef.current = null;
+            setPendingSettings(null);
+            setSettingsRecoveryError(null);
+            setAbandonSettingsConfirm(false);
+            setStageConfirm(false);
+            setFailure({ message: "이전 설정이 반영됐을 수 있습니다. 최신 내용을 확인한 뒤 다시 진행하세요." });
+            setRefreshingAfterWrite(true);
+            setReloadTick((tick) => tick + 1);
+          }}
+          onCancel={() => setAbandonSettingsConfirm(false)}
+        /> : null}
+      </section> : null}
+      {otherSettingsReceipt ? <ConsoleFeedback kind="warning">이전 행사 설정의 처리 결과를 화면 위에서 먼저 확인하세요. 서버 확인은 요청을 다시 보내지 않습니다.</ConsoleFeedback> : null}
       <div
         role="tabpanel"
         id="panel-settings-basics"
@@ -959,11 +1488,37 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         {!canWriteSettings ? (
           <p className={styles.help} role="note">{settingsNoWriteReason}</p>
         ) : null}
-        <form
+        {basicsConflict ? <section className={styles.conflict} aria-labelledby="basics-conflict-heading">
+          <h3 id="basics-conflict-heading" tabIndex={-1}>다른 작업에서 기본 정보가 변경됐습니다</h3>
+          <p>이번 저장 요청은 반영되지 않았습니다. 작성 중인 내용은 그대로 있습니다. 최신 정보와 비교해 사용할 내용을 선택해 주세요.</p>
+          {basicsConflict.error ? <p role="alert">{basicsConflict.error}</p> : null}
+          {basicsConflict.latest ? <>
+            <table className={styles.settingsComparison}>
+              <caption>최신 정보와 내가 작성 중인 기본 정보 비교</caption>
+              <thead><tr><th scope="col">항목</th><th scope="col">최신 기본 정보</th><th scope="col">내 작성 내용</th></tr></thead>
+              <tbody>{BASIC_COMPARISON_FIELDS.map(({ key, label }) => {
+                const latest = basicsConflict.latest!;
+                const changed = latest[key] !== basics[key];
+                return <tr key={key} className={changed ? styles.comparisonChanged : undefined}>
+                  <th scope="row">{label}{changed ? <span className={styles.comparisonDifference}>다름</span> : null}</th>
+                  <td>{basicComparisonValue(key, latest, state.clients)}</td>
+                  <td>{basicComparisonValue(key, basics, state.clients)}</td>
+                </tr>;
+              })}</tbody>
+            </table>
+            <div className={styles.recoveryActions}>
+              <button type="button" className="button button-secondary" disabled={settingsLocked} onClick={() => resolveBasicsConflict(false)}>내 작성 내용으로 계속</button>
+              <button type="button" className="button button-secondary" disabled={settingsLocked} onClick={() => resolveBasicsConflict(true)}>최신 정보 사용</button>
+            </div>
+            <p className={styles.help}>내 작성 내용으로 계속한 뒤 저장하면, 다른 운영자가 바꾼 항목을 포함해 현재 입력된 기본 정보 전체가 적용됩니다. 필요한 값을 먼저 수정할 수 있습니다. 선택만으로 저장되지는 않습니다.</p>
+          </> : <button type="button" className="button button-secondary" disabled={basicsConflict.loading || settingsLocked} onClick={() => void readLatestBasics()}>{basicsConflict.loading ? "최신 설정 확인 중…" : "최신 설정 확인"}</button>}
+        </section> : null}
+        <ValidatedForm
           className={`${uiStyles.formStack} ${styles.basicsForm}`}
           onSubmit={(event) => {
             event.preventDefault();
-            void runCommand("event.update", {
+            if (basicsConflict) return;
+            void runCommand("event.basics.save", {
               name: basics.name,
               slug: basics.slug,
               clientId: basics.clientId,
@@ -978,10 +1533,11 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               approvalRequired: basics.approvalRequired,
               allowReentry: basics.allowReentry,
               verificationRequired: basics.verificationRequired,
+              expectedBasics: basicsPayload(state.basics),
             }, "기본 정보를 저장했습니다.", "basics");
           }}
         >
-          <fieldset disabled={!canWriteSettings} className={styles.bareFieldset}>
+          <fieldset disabled={!canWriteSettings || archived || settingsLocked} className={styles.bareFieldset}>
           {/* 기본 정보 안의 과제 묶음: 식별 → 일시·규모 → 접수 정책.
               그룹 래퍼와 소제목만 추가하며 입력 id·순서·검증은 그대로. */}
           <div className={styles.fieldGroup}>
@@ -1047,9 +1603,12 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
                 value={basics.date}
                 onChange={(event) => setBasics({ ...basics, date: event.target.value })}
                 aria-invalid={invalid("date") || undefined}
-                aria-describedby={describedBy("date") || undefined}
+                aria-describedby={[describedBy("date"), basics.date && basics.date > state.basics.date ? "ticket-expiry-help" : null].filter(Boolean).join(" ") || undefined}
                 required
               />
+              {basics.date && basics.date > state.basics.date ? (
+                <p id="ticket-expiry-help" className={`${styles.help} ${styles.ticketExpiryHelp}`} role="note">저장하면 현재 유효한 티켓은 새 행사 날짜에 맞춰 연장됩니다. 이미 만료·취소·철회된 티켓은 연장하지 않습니다. 참가자 로그인은 별도로 다시 인증해야 할 수 있습니다.</p>
+              ) : null}
             </div>
             <div className={styles.twoCols}>
               <div>
@@ -1111,19 +1670,8 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             </p>
           ) : null}
           <div>
-            <label htmlFor="set-format">진행 형태 (선택)</label>
-            <select
-              id="set-format"
-              value={basics.format}
-              onChange={(event) => setBasics({ ...basics, format: event.target.value })}
-              aria-invalid={invalid("format") || undefined}
-              aria-describedby={describedBy("format") || undefined}
-            >
-              <option value="">미지정</option>
-              <option value="offline">현장</option>
-              <option value="online">온라인</option>
-              <option value="hybrid">혼합</option>
-            </select>
+            <ConsoleChoiceGroup id="set-format" label="진행 형태 (선택)" value={basics.format}
+              options={EVENT_FORMAT_CHOICES} onChange={(value) => setBasics({ ...basics, format: value })} invalid={invalid("format")} describedBy={describedBy("format") || undefined} />
             <p className={styles.help}>표시용 구분입니다. 기능·장소·URL이 자동으로 바뀌지 않습니다.</p>
             {invalid("format") ? <p role="alert" id="settings-error">{failure?.message}</p> : null}
           </div>
@@ -1160,9 +1708,10 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           </div>
           <ConsoleFormActions>
             <button
+              id="settings-basics-save"
               type="submit"
               className="button button-primary"
-              disabled={busy || archived || !canWriteSettings}
+              disabled={settingsLocked || Boolean(basicsConflict) || archived || !canWriteSettings}
               title={archived ? archivedReason : !canWriteSettings ? settingsNoWriteReason : undefined}
             >
               {busy ? "저장 중입니다" : "기본 정보 저장"}
@@ -1175,7 +1724,22 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           </ConsoleFormActions>
           {sectionStatusLine(basicsStatus, "basics")}
           </fieldset>
-        </form>
+        </ValidatedForm>
+        <div className="sr-only" aria-live="polite" aria-atomic="true">
+          {showScheduleReview ? "행사 일시가 저장되었습니다. 게시된 안내도 확인해 주세요." : ""}
+        </div>
+        {showScheduleReview ? (
+          <section className={styles.scheduleReview} aria-labelledby="schedule-review-title">
+            <h3 id="schedule-review-title">참가자에게 보이는 안내도 확인해 주세요</h3>
+            <p>행사 일시는 저장됐지만, 기존에 게시한 프로그램 일정과 공지·장소 안내는 그대로입니다. 여러 날짜에 진행하는 일정일 수 있으니 내용을 확인하고 필요한 경우에만 수정·게시하세요.</p>
+            <div className={styles.scheduleReviewLinks}>
+              {canWriteEvent(capabilities, "program.save") ? <Link href={`/console/events/${encodeURIComponent(eventId)}/content#content-program`}>프로그램 일정 확인</Link> : null}
+              {canWriteEvent(capabilities, "notice.save") ? <Link href={`/console/events/${encodeURIComponent(eventId)}/content#content-notices`}>공지 확인</Link> : null}
+              {canWriteEvent(capabilities, "venue.save") ? <Link href={`/console/events/${encodeURIComponent(eventId)}/content#content-venue`}>장소 안내 확인</Link> : null}
+            </div>
+            {!canWriteEvent(capabilities, "program.save") || !canWriteEvent(capabilities, "notice.save") ? <p>확인할 권한이 없는 안내는 담당 운영자에게 검토를 요청하세요.</p> : null}
+          </section>
+        ) : null}
       </ConsoleSection>
       </div>
 
@@ -1200,6 +1764,12 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             <>현재 {state.registrationOpen ? "접수 중" : "접수 닫힘"} (설정) · 게시된 양식 버전 {state.publishedVersion}</>
           )}
         </p>
+        {isRecoveryBlocked(verificationMode) && !state.recoveryContact ? (
+          <ConsoleFeedback kind="warning">
+            문자로 티켓을 다시 연결할 수 없고 참가자에게 표시되는 문의처도 없습니다. 탭을 잃은 참가자가 도움을 받을 수 있도록{" "}
+            <Link href={`/console/events/${encodeURIComponent(eventId)}/content#content-venue`}>장소 안내의 문의 정보</Link>와 참가자 페이지의 공개 설정을 확인하세요.
+          </ConsoleFeedback>
+        ) : null}
         {currentStage === "DRAFT" && !state.registrationOpen ? (
           <p className={styles.help} role="note">
             공개 접수: 닫힘 — 기획 단계에서는 공개 페이지가 열리지 않습니다. 접수를 열려면 양식을 게시하고,{" "}
@@ -1217,36 +1787,63 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             공개 접수: 닫힘 — 종료된 행사에서는 신청을 받을 수 없습니다. 공개 신청 화면은 닫혀 있습니다. 보관하려면 접수를 닫으세요.
           </p>
         ) : null}
+        <p className={styles.help}>신청 항목을 편집한 뒤 양식을 게시하면 참가자에게 변경 사항이 적용됩니다. <Link href={`/console/events/${encodeURIComponent(eventId)}/settings/fields`}>신청 항목 편집</Link></p>
+        {intakeConflict ? <section className={styles.conflict} aria-labelledby="intake-conflict-heading">
+          <h3 id="intake-conflict-heading" tabIndex={-1}>다른 작업에서 참가 접수 설정이 변경됐습니다</h3>
+          <p>이번 게시 요청은 반영되지 않았습니다. 작성 중인 안내는 그대로 있습니다. 최신 설정을 확인하고 사용할 안내를 선택해 주세요.</p>
+          {intakeConflict.error ? <p role="alert">{intakeConflict.error}</p> : null}
+          {intakeConflict.latest ? <>
+            <div className={styles.conflictComparison}>
+              <div><strong>최신 동의 안내</strong><p>{intakeConflict.latest.consentText || "등록된 안내 없음"}</p></div>
+              <div><strong>내가 작성 중인 안내</strong><p>{consentText || "입력된 안내 없음"}</p></div>
+            </div>
+            <div>
+              <strong>게시될 신청 항목 {intakeConflict.latest.fields.length}개</strong>
+              <ul className={styles.conflictFields}>{intakeConflict.latest.fields.map((field, index) => <li key={index}>
+                {field.label} · {field.required ? "필수" : "선택"} · {({ text: "텍스트", email: "이메일", select: "선택형", checkbox: "체크" } as Record<string, string>)[field.type] || field.type}
+                {field.options.length ? ` (${field.options.join(", ")})` : ""}
+              </li>)}</ul>
+            </div>
+            <p className={styles.help}>게시하면 최신 신청 항목과 선택한 안내가 적용됩니다.</p>
+            <div className={styles.recoveryActions}>
+              <button type="button" className="button button-secondary" disabled={settingsLocked} onClick={() => resolveIntakeConflict(false)}>내 작성 내용으로 계속</button>
+              <button type="button" className="button button-secondary" disabled={settingsLocked} onClick={() => resolveIntakeConflict(true)}>최신 안내 사용</button>
+            </div>
+            <p className={styles.help}>선택만으로 게시되지 않습니다.</p>
+          </> : <button type="button" className="button button-secondary" disabled={intakeConflict.loading || settingsLocked} onClick={() => void readLatestIntake()}>{intakeConflict.loading ? "최신 설정 확인 중…" : "최신 설정 확인"}</button>}
+        </section> : null}
         <div className={uiStyles.formStack}>
           <div>
             <label htmlFor="set-consent">정보 수집 동의 안내</label>
-            <textarea
+            <textarea data-resize-none="true"
               id="set-consent"
               rows={3}
               value={consentText}
-              onChange={(event) => setConsentText(event.target.value)}
+              onChange={(event) => {
+                setConsentText(event.target.value);
+                if (failure?.field === "consentText") { setFailure(null); setIntakeStatus(null); }
+              }}
               aria-invalid={invalid("consentText") || undefined}
-              aria-describedby={describedBy("consentText") || undefined}
-              disabled={!canWriteIntake}
+              aria-describedby={failure?.field === "consentText" ? "settings-consent-error" : undefined}
+              disabled={!canWriteIntake || archived || settingsLocked}
             />
+            {failure?.field === "consentText" ? <>
+              <p className={styles.fieldError} id="settings-consent-error">{failure.message}</p>
+              {state.consentText && !consentText.trim() ? <button type="button" className={`button button-secondary ${styles.fieldRecovery}`} disabled={settingsLocked || !canWriteIntake || archived} onClick={() => {
+                setConsentText(state.consentText);
+                setFailure(null);
+                setIntakeStatus(null);
+                window.requestAnimationFrame(() => document.getElementById("set-consent")?.focus());
+              }}>기존 안내 되돌리기</button> : null}
+            </> : null}
           </div>
           <ConsoleFormActions>
             <button
               type="button"
               className="button button-primary"
-              disabled={busy || archived || !canWriteIntake || endedPublishBlocked}
+              disabled={settingsLocked || Boolean(intakeConflict) || archived || !canWriteIntake || endedPublishBlocked}
               title={archived ? archivedReason : !canWriteIntake ? intakeNoWriteReason : endedPublishBlocked ? endedPublishReason : undefined}
-              onClick={() => void runCommand(
-                "form.publish",
-                consentText ? { consentText } : {},
-                // DRAFT has no public route: the success note must not claim
-                // real intake opened. READY/LIVE keep the established wording
-                // other flows assert on.
-                currentStage === "DRAFT"
-                  ? "양식을 게시했습니다. 진행 단계에서 운영 준비(으)로 전환하면 접수가 열립니다."
-                  : "양식을 게시하고 접수를 열었습니다.",
-                "intake"
-              )}
+              onClick={requestFormPublish}
             >
               {busy ? "처리 중입니다" : "양식 게시·접수 열기"}
             </button>
@@ -1254,7 +1851,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               <button
                 type="button"
                 className="button button-secondary"
-                disabled={busy || archived || !canWriteIntake}
+                disabled={settingsLocked || Boolean(intakeConflict) || archived || !canWriteIntake}
                 title={archived ? archivedReason : !canWriteIntake ? intakeNoWriteReason : undefined}
                 onClick={() => void runCommand("form.close", {}, "접수를 닫았습니다.", "intake")}
               >
@@ -1293,8 +1890,31 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           <p className={styles.help} role="note">{settingsNoWriteReason}</p>
         ) : null}
         <p className={styles.help}>끈 기능은 콘솔 메뉴와 참가자 화면에서 함께 사라집니다. 기존 응답과 기록은 삭제되지 않습니다.</p>
-        <fieldset className={styles.featureGroups} disabled={!canWriteSettings}>
-          <legend>사용할 기능</legend>
+        <p className={styles.help}>행사장 출력을 끄면 열린 전광판도 다음 확인 때 멈춥니다. 다시 켜면 저장된 출력을 표시합니다.</p>
+        {featuresConflict ? <section className={styles.conflict} aria-labelledby="features-conflict-heading">
+          <h3 id="features-conflict-heading" tabIndex={-1}>다른 작업에서 운영 기능이 변경됐습니다</h3>
+          <p>이번 저장 요청은 반영되지 않았습니다. 선택 중인 기능은 그대로 있습니다. 최신 설정과 비교해 사용할 선택을 정해 주세요.</p>
+          {featuresConflict.error ? <p role="alert">{featuresConflict.error}</p> : null}
+          {featuresConflict.latest ? <>
+            <table className={styles.settingsComparison}>
+              <caption>최신 설정과 내가 선택한 운영 기능 비교</caption>
+              <thead><tr><th scope="col">기능</th><th scope="col">최신 설정</th><th scope="col">내 선택</th></tr></thead>
+              <tbody>{FEATURES.map((feature) => <tr key={feature.id} className={featuresConflict.latest?.includes(feature.id) !== features.includes(feature.id) ? styles.comparisonChanged : undefined}>
+                <th scope="row">{feature.label}{featuresConflict.latest?.includes(feature.id) !== features.includes(feature.id) ? <span className={styles.comparisonDifference}>다름</span> : null}</th>
+                <td>{featuresConflict.latest?.includes(feature.id) ? "켜짐" : "꺼짐"}</td>
+                <td>{features.includes(feature.id) ? "켜짐" : "꺼짐"}</td>
+              </tr>)}</tbody>
+            </table>
+            <p className={styles.help}>내 선택으로 계속한 뒤 저장하면 다른 운영자가 바꾼 기능도 포함해, 위의 내 선택 전체가 적용됩니다. 화면에서 변경할 수 없는 기존 기능은 최신 설정을 유지합니다.</p>
+            <div className={styles.recoveryActions}>
+              <button type="button" className="button button-secondary" disabled={settingsLocked} onClick={() => resolveFeaturesConflict(false)}>내 선택으로 계속</button>
+              <button type="button" className="button button-secondary" disabled={settingsLocked} onClick={() => resolveFeaturesConflict(true)}>최신 설정 사용</button>
+            </div>
+            <p className={styles.help}>선택만으로 저장되지 않습니다. 필요한 기능을 수정한 뒤 직접 저장해 주세요.</p>
+          </> : <button type="button" className="button button-secondary" disabled={featuresConflict.loading || settingsLocked} onClick={() => void readLatestFeatures()}>{featuresConflict.loading ? "최신 설정 확인 중…" : "최신 설정 확인"}</button>}
+        </section> : null}
+        <fieldset className={styles.featureGroups} disabled={!canWriteSettings || archived || settingsLocked}>
+          <legend id="settings-features-legend" tabIndex={-1}>사용할 기능</legend>
           {FEATURE_GROUPS.map((group) => (
             <div key={group.label} className={styles.featureGroup}>
               <p className={styles.featureGroupLabel}>{group.label}</p>
@@ -1328,9 +1948,9 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           <button
             type="button"
             className="button button-primary"
-            disabled={busy || archived || !canWriteSettings}
+            disabled={settingsLocked || Boolean(featuresConflict) || archived || !canWriteSettings}
             title={archived ? archivedReason : !canWriteSettings ? settingsNoWriteReason : undefined}
-            onClick={() => void runCommand("event.features", { features }, "운영 기능 설정을 저장했습니다.", "features")}
+            onClick={() => { if (!featuresConflict) void runCommand("event.features", { features, expectedFeatures: state.features }, "운영 기능 설정을 저장했습니다.", "features"); }}
           >
             {busy ? "저장 중입니다" : "운영 기능 저장"}
           </button>
@@ -1378,9 +1998,12 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             <span className={eventStageClassName(currentStage)}>{stageText}</span>
           </div>
           {stagePrecondition ? (
-            <p id="settings-stage-precondition" className={styles.stagePrecondition} role="note">
-              {stagePrecondition}{" "}
-              {nextStage === "LIVE" ? (
+            <div id="settings-stage-precondition" className={styles.stagePrecondition} role="note">
+              <span>{stagePrecondition}</span>
+              <span>
+              {archiveDataUnavailable ? (
+                <button type="button" className="button button-secondary" disabled={refreshingAfterWrite} onClick={() => { setStageError(null); setRefreshingAfterWrite(true); setReloadTick((tick) => tick + 1); }}>{refreshingAfterWrite ? "상태 확인 중" : "상태 다시 확인"}</button>
+              ) : nextStage === "LIVE" ? (
                 <Link href={`/console/events/${encodeURIComponent(eventId)}/operations`}>운영에서 데스크 배정하기</Link>
               ) : (
                 <>
@@ -1389,7 +2012,8 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
                   <Link href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>프로그램 닫기</Link>
                 </>
               )}
-            </p>
+              </span>
+            </div>
           ) : null}
           {stageError ? <ConsoleFeedback kind="error">{stageError}</ConsoleFeedback> : null}
           {stageNotice ? <ConsoleFeedback kind="success">{stageNotice}</ConsoleFeedback> : null}
@@ -1405,14 +2029,14 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
                   setStageNotice(null);
                   setStageConfirm(true);
                 }}
-                disabled={stageBusy || busy || stageBlocked}
+                disabled={settingsLocked || stageBlocked}
                 aria-describedby={stageBlocked ? "settings-stage-precondition" : undefined}
               >
                 {eventStageLabel(nextStage)}(으)로 전환
               </button>
             ) : nextStage ? (
               <StageTransitionConfirmation className={styles.stageConfirmation} label={eventStageLabel(nextStage)}
-                busy={stageBusy} disabled={busy || stageBlocked} cancelDisabled={busy}
+                busy={stageBusy} disabled={settingsLocked || stageBlocked} cancelDisabled={settingsLocked}
                 retry={Boolean(stageCommandIdRef.current && stageError)}
                 describedBy={stageBlocked ? "settings-stage-precondition" : undefined}
                 onConfirm={() => void submitStageTransition()}
@@ -1453,7 +2077,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       {/* 꾸미기는 선택 사항이므로 탭 과업과 복귀 흐름 사이에 별도 섹션을 두지 않고
           푸터 뒤의 종속 안내로 둔다. 두 번째 primary를 두지 않는다. */}
       <details className={styles.pageDisclosure} id="settings-page">
-        <summary>
+        <summary data-disclosure-indicator="">
           참가자 페이지 · 선택 사항 · {state.pagePublishedAt
             ? `게시 버전 ${state.pagePublishedVersion}${state.pageDraftVersion > state.pagePublishedVersion ? " · 새 초안" : ""}`
             : `초안 ${state.pageDraftVersion} · 미게시`}

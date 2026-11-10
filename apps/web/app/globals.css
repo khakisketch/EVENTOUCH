@@ -132,6 +132,22 @@ label {
   font-weight: 650;
 }
 
+/* Opt-in for task disclosures whose flex/grid layout hides the browser's
+   native marker. The native details element still owns its open state. */
+summary[data-disclosure-indicator]::after {
+  content: "+";
+  flex: none;
+  margin-inline-start: auto;
+  padding-inline-start: var(--s2);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+details[open] > summary[data-disclosure-indicator]::after {
+  content: "−";
+}
+
 input[aria-invalid="true"],
 select[aria-invalid="true"] {
   border-color: var(--danger);
@@ -246,6 +262,8 @@ select[aria-invalid="true"] {
 }
 
 .button-primary {
+  /* Foreground and background switch together to keep contrast in every frame. */
+  transition: border-color 160ms ease-out, transform 160ms ease-out;
   border-color: var(--brand);
   background: var(--brand);
   color: var(--on-brand);
@@ -978,6 +996,11 @@ a.pill:hover {
   color: var(--ink);
 }
 
+.registration-retry:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
 .registration-retry h2 {
   margin: 0 0 var(--s2);
   font-size: 1rem;
@@ -1359,6 +1382,10 @@ a.pill:hover {
 
 .camera-action {
   margin-top: calc(var(--s2) * -1);
+}
+
+.camera-action .camera-panel {
+  margin-top: var(--s3);
 }
 
 /* 320px-class staff scan: the form carries a solid hairline above the
@@ -1777,6 +1804,24 @@ a.pill:hover {
   font-size: var(--display-large);
 }
 
+.display-paused {
+  width: min(100%, var(--web-reading-max));
+}
+
+.display-paused h1 {
+  margin: 0;
+  font-size: clamp(var(--h2), 4vw, var(--display-large));
+  line-height: 1.2;
+  word-break: keep-all;
+}
+
+.display-paused > p:first-of-type {
+  margin-block: var(--s3) 0;
+  color: var(--muted);
+  font-size: clamp(var(--body), 1.6vw, var(--h2));
+  word-break: keep-all;
+}
+
 /* Operator console: quiet navigation and an open white work surface. */
 .console-shell {
   display: grid;
@@ -2104,13 +2149,6 @@ a.pill:hover {
   line-height: 22px;
   text-align: center;
 }
-
-.nav-badge-manual {
-  background: var(--info-soft);
-  color: var(--info);
-}
-
-.nav-badge + .nav-badge-manual { margin-left: var(--s1); }
 
 .sidebar-bottom {
   flex: none;
@@ -3397,18 +3435,6 @@ a.pill:hover {
     break-inside: avoid;
   }
 
-  /* Nametag: only the tag sheet prints. Buttons are already hidden above. */
-  .nametag-printing .staff-workspace > :not(.nametag-sheet) {
-    display: none !important;
-  }
-
-  .nametag-sheet {
-    max-width: 90mm;
-    margin: 0 auto;
-    padding: 12mm 8mm;
-    border: 2px solid var(--ink);
-    text-align: center;
-  }
 }
 
 /* Staff kiosk display mode for shared tablets: same assignment, same login,
@@ -3437,41 +3463,6 @@ a.pill:hover {
   font-size: var(--small);
   word-break: keep-all;
   overflow-wrap: break-word;
-}
-
-.nametag-sheet {
-  display: grid;
-  gap: var(--s2);
-  margin-top: var(--s4);
-  padding: var(--s5);
-  border: 2px solid var(--ink);
-  border-radius: var(--radius);
-  background: var(--paper);
-  text-align: center;
-}
-
-.nametag-event {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--small);
-}
-
-.nametag-name {
-  margin: 0;
-  font-size: var(--display);
-  font-weight: 800;
-  word-break: keep-all;
-}
-
-.nametag-company {
-  margin: 0;
-  font-size: var(--h3);
-  font-weight: 700;
-}
-
-.nametag-meta {
-  margin: 0;
-  color: var(--muted);
 }
 
 /* Attendee registration: the form states what happens after submitting, and a
@@ -3829,3 +3820,42 @@ a.pill:hover {
     font-size: var(--h1);
   }
 }
+
+/* Operational workspace: all permitted destinations remain discoverable. */
+[hidden] { display: none !important; }
+@media (min-width: 769px) {
+  .console-shell { grid-template-columns: 208px minmax(0, 1fr); }
+  .console-sidebar { padding-inline: var(--s3); }
+  .console-main { padding: var(--s5) clamp(var(--s4), 2.6vw, var(--s6)) var(--s7); }
+  .nav-event-branch { margin-left: 0; padding-left: 0; border-left: 0; }
+  .nav-event-card { padding: var(--s3) var(--s2); margin-bottom: var(--s2); border-bottom: 1px solid var(--line); }
+  .console-nav-group { display: grid; gap: 0; margin-bottom: var(--s3); }
+  .console-nav-group .nav-section-label { margin: 0; padding: var(--s1) var(--s3); font-size: var(--label); font-weight: 500; }
+  .console-workspace-link { min-height: 44px; padding: var(--s2) var(--s3); font-size: var(--small); }
+  .console-workspace-link > span:first-child { flex: 1; }
+  .console-hub-list { gap: 0; }
+}
+.auth-password { position: relative; }
+.auth-password input { width: 100%; padding-right: calc(var(--s8) + var(--s2)); }
+.auth-password button { position: absolute; top: 0; right: 0; min-width: 64px; min-height: 44px; padding: var(--s2); background: transparent; border: 0; color: var(--muted); font-size: var(--small); }
+.staff-assignment-row { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: var(--s4) 0; background: transparent; }
+@media (max-width: 560px) {
+  .staff-assignment-summary { flex: 0 1 auto; }
+  .staff-page { padding-top: var(--s3); }
+  .staff-header { margin-bottom: var(--s2); padding-bottom: var(--s2); }
+}
+
+.display-content h1 { font-size: clamp(24px, 2.6vw, 44px); color: var(--muted); font-weight: 550; }
+.display-frame h2 { font-size: clamp(40px, 4.5vw, 80px); word-break: keep-all; overflow-wrap: anywhere; }
+.display-frame p { word-break: keep-all; overflow-wrap: anywhere; }
+
+.public-return-link { display: inline-flex; align-items: center; min-height: 44px; color: var(--muted); font-size: var(--small); text-decoration: none; }
+
+.form-validation { border-left: 3px solid var(--danger); padding: var(--s2) var(--s3); color: var(--danger); background: var(--danger-soft); }
+.form-validation p { margin: 0; font-weight: 650; }
+.form-validation ul { margin: var(--s1) 0 0; padding: 0; list-style: none; }
+.form-validation button { border: 0; background: transparent; color: inherit; text-align: left; min-height: 44px; padding: var(--s1) 0; font-size: var(--small); cursor: pointer; }
+textarea[data-resize-none] { resize: none; min-height: 96px; max-width: 100%; }
+
+.account-history > summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; color: var(--brand-text); font-weight: 650; }
+.account-history > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import TicketView from "./TicketView";
 
 // Slice 3 of the frontend migration: the issued ticket. The bearer arrives
@@ -14,9 +15,9 @@ export default async function TicketPage({
       <main id="main-content" tabIndex={-1} className="site-page ticket-page">
         <header className="public-page-header">
           <span className="compact-wordmark">EVENTOUCH</span>
-          <p className="eyebrow">내 티켓</p>
+          <Link href={`/event/${encodeURIComponent(slug)}/home`} className="public-return-link">← 참가 메뉴로</Link>
         </header>
-        <TicketView slug={slug} />
+        <TicketView key={slug} slug={slug} />
       </main>
   );
 }

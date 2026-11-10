@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import styles from "./landing.module.css";
+import ProductPreview from "./ProductPreview";
 
 // Service entry: signed-in operators return to their work surface, everyone
 // else sees the public landing. Attendees enter through their event link.
@@ -97,7 +98,7 @@ export default function Home() {
                   <path d="M4 10h11M10 4l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </a>
-              <a className={styles.secondaryAction} href="#product-screens">실제 화면 먼저 보기 ↓</a>
+              <a className={styles.secondaryAction} href="#product-screens">화면 구성 살펴보기 ↓</a>
             </div>
             <p className={styles.heroNote}>
               행사 종류·일정·규모를 적을 수 있게 준비합니다.
@@ -105,23 +106,16 @@ export default function Home() {
           </div>
 
           <figure className={styles.consoleEvidence}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/evidence/ev-console.png"
-              alt="파트너 컨퍼런스 데모의 운영 현황 화면. 승인 대기, 현재·누적 입장과 입장률을 확인합니다."
-              width="1016"
-              height="470"
-              fetchPriority="high"
-            />
+            <ProductPreview variant="console" />
             <figcaption>
               <strong>운영 현황 · 파트너 컨퍼런스 데모</strong>
-              <span>실제 제품 화면 · 데모 행사 데이터</span>
+              <span>화면 구성 예시 · 합성 데이터</span>
             </figcaption>
           </figure>
 
           <ul className={styles.factStrip} aria-label="도입 전 핵심 사실">
             <li><a href="#faq-install">참가자 앱 설치 없음</a></li>
-            <li><a href="#faq-sms">문자 발송은 현재 모의 발송</a></li>
+            <li><a href="#faq-sms">문자 발송 연결 확인</a></li>
             <li><a href="#faq-portal">고객사 포털 없음</a></li>
           </ul>
         </section>
@@ -168,24 +162,17 @@ export default function Home() {
               <h2 id="field-title">운영자는 콘솔에서, 현장은 모바일에서.</h2>
               <p>운영사는 데스크톱 콘솔에서 흐름을 관리하고, 참가자와 스태프는 각자의 역할에 맞는 모바일 웹 화면을 사용합니다.</p>
               <p>참가자는 행사 링크에서 앱 설치 없이 신청하고, 스태프는 배정 데스크에서 QR·검색으로 입장 처리합니다.</p>
-              <p className={styles.fieldNote}>아래는 같은 데모의 실제 제품 화면입니다. 티켓은 샘플이며 실제 입장에는 사용할 수 없습니다.</p>
+              <p className={styles.fieldNote}>아래는 역할별 화면 구성 예시입니다. 티켓은 샘플이며 실제 입장에는 사용할 수 없습니다.</p>
             </div>
             <div
               className={styles.mobileEvidence}
               tabIndex={0}
               role="region"
-              aria-label="역할별 실제 화면. 좌우로 밀어 세 화면을 봅니다."
+              aria-label="역할별 화면 구성 예시. 좌우로 밀어 세 화면을 봅니다."
             >
               <figure className={styles.phoneFigure}>
                 <div className={styles.phoneFrame}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src="/evidence/ev-attendee-event.png"
-                    alt="파트너 컨퍼런스 데모의 참가자 홈. 모바일 티켓, 공지사항과 참여 프로그램으로 이동하는 메뉴를 보여줍니다."
-                    width="390"
-                    height="844"
-                    loading="lazy"
-                  />
+            <ProductPreview variant="home" />
                 </div>
                 <figcaption>
                   <strong>참가자 행사 안내</strong>
@@ -194,14 +181,7 @@ export default function Home() {
               </figure>
               <figure className={styles.phoneFigure}>
                 <div className={styles.phoneFrame}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src="/evidence/ev-ticket.png"
-                    alt="EVENTOUCH 데모 행사의 모바일 티켓. 참가 확정 상태와 입장 QR 안내, 참여 프로그램 보기를 보여줍니다. 샘플 QR이며 실제 입장에는 사용할 수 없습니다."
-                    width="390"
-                    height="844"
-                    loading="lazy"
-                  />
+            <ProductPreview variant="ticket" />
                 </div>
                 <figcaption>
                   <strong>참가자 모바일 티켓</strong>
@@ -210,14 +190,7 @@ export default function Home() {
               </figure>
               <figure className={styles.phoneFigure}>
                 <div className={styles.phoneFrame}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src="/evidence/ev-staff.png"
-                    alt="파트너 컨퍼런스 데모 현장 스태프 화면. 데스크를 선택하고 티켓 코드를 입력하거나 카메라로 스캔해 체크인합니다."
-                    width="390"
-                    height="844"
-                    loading="lazy"
-                  />
+            <ProductPreview variant="staff" />
                 </div>
                 <figcaption>
                   <strong>현장 스태프</strong>
@@ -236,19 +209,9 @@ export default function Home() {
               <p className={styles.reportProof}>결과 분석 · 파트너 컨퍼런스 데모 데이터</p>
             </div>
             <figure className={styles.reportEvidence}>
-              <picture>
-                <source media="(max-width: 768px)" srcSet="/landing/ev-report-mobile.png" />
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/evidence/ev-report.png"
-                  alt="파트너 컨퍼런스 데모의 결과 보고서 화면. 행사 마감 상태, 저장된 보고서와 등록·입장 지표를 보여줍니다."
-                  width="1280"
-                  height="1108"
-                  loading="lazy"
-                />
-              </picture>
+              <ProductPreview variant="report" />
               <figcaption>결과 보고서 · 등록·입장 집계 · 데모 데이터</figcaption>
-              <p className={styles.reportCropNote}>작은 화면에서는 보고서 목록과 등록·입장 지표를 발췌해 보여줍니다.</p>
+              <p className={styles.reportCropNote}>보고서는 생성 시점의 기록을 고정해 보관합니다.</p>
             </figure>
           </div>
         </section>
@@ -261,7 +224,7 @@ export default function Home() {
           </details>
           <details className={styles.faqItem} id="faq-sms">
             <summary>문자·알림톡을 실제로 발송할 수 있나요?</summary>
-            <p>현재는 모의 발송으로 동작합니다. 실발송 자격증명·발신번호·승인 템플릿이 준비되기 전에는 실제 발송되지 않습니다.</p>
+            <p>실제 발송은 발송 연결과 발신번호가 준비된 경우에만 시도합니다. 알림톡에는 승인된 템플릿이 필요합니다. 모의 발송이나 미연동 상태에서는 실제로 전달되지 않으며, 처리 결과는 운영 화면에서 확인할 수 있습니다.</p>
           </details>
           <details className={styles.faqItem} id="faq-portal">
             <summary>고객사 담당자도 로그인해 사용할 수 있나요?</summary>

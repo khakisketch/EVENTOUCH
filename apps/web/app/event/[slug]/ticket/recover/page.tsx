@@ -1,6 +1,7 @@
 import RecoverForm from "./RecoverForm";
 import VerificationUnavailable from "../../VerificationUnavailable";
 import { loadVerificationMode } from "../../../../../lib/verification-mode";
+import { loadPublicRecoveryContact } from "../../../../../lib/public-recovery-contact";
 
 // Verified recovery entry: a code sent to the registered number reconnects
 // this browser to the participant's ticket. No account, no password; the
@@ -11,6 +12,8 @@ export default async function TicketRecoverPage({
   params: Promise<{ slug: string }>;
 }) {
   const [{ slug }, verificationMode] = await Promise.all([params, loadVerificationMode()]);
+  const contact = verificationMode === "mock" || verificationMode === "none"
+    ? await loadPublicRecoveryContact(slug) : "";
   return (
     <main id="main-content" tabIndex={-1} className="site-page registration-page">
       <header className="public-page-header">
@@ -20,7 +23,7 @@ export default async function TicketRecoverPage({
       <h1 className="registration-title">참가 정보 다시 연결</h1>
       <p>신청할 때 입력한 연락처를 확인하면 티켓을 다시 연결할 수 있습니다.</p>
       {verificationMode === "mock" || verificationMode === "none" ? (
-        <VerificationUnavailable slug={slug} mode={verificationMode} />
+        <VerificationUnavailable slug={slug} mode={verificationMode} contact={contact} />
       ) : (
         <RecoverForm slug={slug} />
       )}

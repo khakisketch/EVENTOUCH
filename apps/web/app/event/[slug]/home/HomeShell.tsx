@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import ValidatedForm from "../../../ui/ValidatedForm";
+
+
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -8,7 +11,13 @@ import TicketView from "../ticket/TicketView";
 import styles from "./home.module.css";
 import AttendeeHomeLanding, { HOME_MENUS, type HomeMenuKey } from "./AttendeeHomeLanding";
 import { DEFAULT_HOME_STYLE, normalizeHomeStyle, type HomeStyle } from "../../../../lib/attendee-home";
+import { normalizeHomeMenus, type HomeMenus, type HomeProgram } from "../../../../lib/attendee-home-menus";
 import { isRecoveryBlocked, useVerificationMode } from "../../../../lib/use-verification-mode";
+import { useUnsavedNavigationGuard } from "../../../../lib/use-unsaved-navigation-guard";
+import { readGuestReceipts, writeGuestReceipts, type GuestReceiptPointer } from "../../../../lib/receipt-recovery";
+import { boothCanAttempt, boothOperatingStatus, formatBoothScheduleTime, isBoothContextChanged } from "../../../../lib/booth-availability";
+import { captureServerClock, readServerClock, type ServerClock } from "../../../../lib/server-clock";
+import { allowSessionForTab, clearSessionForTab, clearTicketRejected, getAllowedTicketForTab, isTicketRejected, markTicketRejected, REJECTED_TICKET_BEARER, ticketStorageAvailable } from "../../../../lib/attendee-ticket-identity";
 
 // The scanner (and its decoder) loads only when the attendee opens it: the
 // home shell never pays for jsQR until the first booth scan.
@@ -16,8 +25,8 @@ const CameraScan = dynamic(() => import("../../../CameraScan"), {
   ssr: false,
 });
 
-// Attendee home shell: five tabs (QR / notices / lucky number / roulette /
-// vote) on one route. The ticket bearer lives in tab memory only
+// Attendee home shell: ticket, application information, notices, lucky number,
+// roulette, ranked vote and booth stamping share one route. The ticket bearer lives in tab memory only
 // (sessionStorage, same key as the ticket screen) and travels in the
 // Authorization header; it is never rendered or written to persistent
 // storage. Guest writes go through the event command path with the resolved
@@ -35,6 +44,9 @@ type PublicEvent = {
   features: string[];
 };
 
+const HOME_READ_TIMEOUT_MS = 8000;
+const HOME_REFRESH_INTERVAL_MS = 4500;
+
 type Notice = { id: string; title: string; body: string; pinned?: boolean };
 
 type Team = { id: string; name: string; order: number };
@@ -47,6 +59,7 @@ type RouletteConfig = {
   open: boolean;
   startsAt: string | null;
   endsAt: string | null;
+  scheduleNeedsReview: boolean;
   prizes: RoulettePrize[];
 };
 type RewardEntitlement = { id: string; name: string; status: string; at: string };
@@ -80,7 +93,42 @@ type TicketWorkspace = {
   rewards?: unknown;
   voteConfig?: unknown;
   drawPrograms?: unknown;
+  booths?: unknown;
+  visits?: unknown;
+  stampMode?: unknown;
 };
+
+type HomeBooth = {
+  id: string;
+  name: string;
+  limit: number;
+  status: string;
+  startsAt: string | null;
+  endsAt: string | null;
+  capacity: number;
+  used: number;
+};
+type StampMode = "SELF" | "STAFF";
+type PendingGuestCommand = {
+  key: string;
+  formKey: string;
+  eventId: string;
+  slug: string;
+  ticketToken: string;
+  commandId: string;
+  command: string;
+  payload: Record<string, unknown>;
+  teamNames: Record<string, string>;
+  message: string;
+};
+type CompletedGuestCommand = {
+  eventId: string;
+  slug: string;
+  ticketToken: string;
+  message: string;
+};
+
+type LoadedTicketContext = { slug: string; eventId: string; ticketToken: string };
 
 type LoadState =
   | { kind: "loading" }
@@ -100,7 +148,10 @@ type LoadState =
       eventId: string;
       eventName: string;
       keyvisual: string | null;
+      defaultHomeBanner: "legacy" | "neutral";
       homeStyle: HomeStyle;
+      homeMenus: HomeMenus;
+      programs: HomeProgram[];
       eventDate: string;
       eventTime: string;
       ticketStatus: string;
@@ -118,6 +169,14 @@ type LoadState =
       rouletteConfig: RouletteConfig | null;
       rewards: RewardEntitlement[];
       drawPrograms: DrawProgram[];
+      stampMode: StampMode;
+      serverClock: ServerClock | null;
+      stampStatus?: "checking" | "stale";
+      refreshFailed?: boolean;
+      booths: HomeBooth[];
+      ownVisits: Record<string, number>;
+      hasPrograms: boolean;
+      unavailable: HomeMenuKey[];
     };
 
 type Tab = HomeMenuKey;
@@ -132,11 +191,13 @@ function readStoredTicket(slug: string): string {
   }
 }
 
-function storeTicket(slug: string, ticket: string): void {
+function storeTicket(slug: string, ticket: string): boolean {
   try {
     window.sessionStorage.setItem(STORAGE_PREFIX + slug, ticket);
+    return true;
   } catch {
     // Private mode: the in-memory bearer still works for this load.
+    return false;
   }
 }
 
@@ -148,6 +209,44 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+function guestCommandName(command: string): string {
+  if (command === "lucky.assign") return "럭키번호 발급";
+  if (command === "roulette.spin") return "룰렛 추첨";
+  if (command === "vote.ranked") return "순위 투표";
+  if (command === "booth.visit") return "부스 인증";
+  return "참가 요청";
+}
+
+function recoveredCommandMessage(pending: PendingGuestCommand, data: Record<string, unknown>): string {
+  if (pending.command === "lucky.assign") {
+    const lucky = asRecord(data.lucky);
+    return typeof lucky?.number === "number" ? `럭키번호 ${lucky.number}번이 발급되었습니다.` : "럭키번호 발급을 확인했습니다.";
+  }
+  if (pending.command === "roulette.spin") {
+    const roulette = asRecord(data.roulette);
+    return roulette
+      ? `룰렛 결과: ${text(roulette.label) || `제${String(roulette.tier)} 경품`}`
+      : "룰렛 추첨 결과를 확인했습니다.";
+  }
+  if (pending.command === "vote.ranked") {
+    const vote = asRecord(data.vote);
+    const names = Array.isArray(vote?.picks)
+      ? vote.picks.flatMap((item) => {
+          const pick = asRecord(item);
+          return typeof pick?.teamId === "string" && pending.teamNames[pick.teamId]
+            ? [{ rank: Number(pick.rank) || 99, name: pending.teamNames[pick.teamId] }]
+            : [];
+        }).sort((a, b) => a.rank - b.rank).map((pick) => pick.name)
+      : [];
+    return names.length ? `투표가 접수되었습니다. 내 선택 · ${names.join(" · ")}` : "투표가 접수되었습니다.";
+  }
+  if (pending.command === "booth.visit") {
+    const booth = text(data.booth, "부스");
+    return `${booth} 인증을 기록했습니다.`;
+  }
+  return "요청 처리를 확인했습니다.";
 }
 
 function randomCommandId(): string {
@@ -164,19 +263,145 @@ function publicKeyvisualSource(slug: string, value: unknown): string | null {
   return `/api/public/events/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}`;
 }
 
-// The five attendee destinations appear as an ungrouped two-column tile grid,
-// matching the published participant-home reference. The circled numerals in
-// the source PDF are annotation overlays, not UI labels.
+function PendingGuestCommandRecovery({
+  commands,
+  receipts,
+  storageAvailable,
+  receiptMessage,
+  recoveringCommandKey,
+  isCurrentContext,
+  onRetry,
+  onCheck,
+  onForget,
+  onAbandon,
+}: {
+  commands: PendingGuestCommand[];
+  receipts: GuestReceiptPointer[];
+  storageAvailable: boolean;
+  receiptMessage: string | null;
+  recoveringCommandKey: string | null;
+  isCurrentContext: (snapshot: PendingGuestCommand) => boolean;
+  onRetry: (key: string) => void;
+  onCheck: (pointer: GuestReceiptPointer) => void;
+  onForget: (pointer: GuestReceiptPointer) => void;
+  onAbandon: (key: string) => void;
+}) {
+  const savedOnly = receipts.filter((pointer) => !commands.some((command) => command.commandId === pointer.commandId));
+  if (!commands.length && !savedOnly.length && !receiptMessage) return null;
+  return (
+    <section className={styles.commandRecovery} aria-labelledby="pending-command-recovery-title">
+      <h2 id="pending-command-recovery-title" className={styles.commandRecoveryTitle}>처리 여부를 확인하지 못한 요청</h2>
+      <p className={styles.commandRecoveryMemory}>
+        원래 입력은 이 화면에서만 유지됩니다. {storageAvailable ? "새로고침 후에는 처리 여부만 확인할 수 있습니다." : "화면을 떠나기 전에 원래 요청을 확인하세요."}
+      </p>
+      {!storageAvailable ? <p role="alert">이 브라우저에서 결과 확인 정보를 저장할 수 없습니다.</p> : null}
+      {receiptMessage ? <p role="status">{receiptMessage}</p> : null}
+      {commands.map((command) => {
+        const recoveryId = `${command.key}:${command.commandId}`;
+        const recovering = recoveringCommandKey === recoveryId;
+        const sameContext = isCurrentContext(command);
+        const pointer = receipts.find((item) => item.commandId === command.commandId);
+        return (
+          <article className={styles.commandRecoveryItem} key={command.commandId}>
+            <h3 className={styles.commandRecoveryItemTitle}>{guestCommandName(command.command)}</h3>
+            <p className={styles.commandRecoveryMessage} role="alert">
+              {command.message} 처음 보낸 행사·티켓·내용은 바뀌지 않습니다.
+            </p>
+            {!sameContext ? (
+              <p className={styles.commandRecoveryNote} role="note">
+                이전 티켓으로 보낸 요청입니다. 현재 티켓과 섞지 않고 원래 티켓으로만 다시 확인합니다.
+              </p>
+            ) : null}
+            <p className={styles.commandRecoveryNote}>
+              확인 중단은 서버 요청을 취소하거나 이미 기록된 결과를 되돌리지 않습니다. 진행 중인 확인의 늦은 응답은 이후 요청의 결과로 표시하지 않습니다.
+            </p>
+            {recovering ? <p className={styles.commandRecoveryProgress} role="status">같은 요청을 확인하고 있습니다.</p> : null}
+            <div className={styles.commandRecoveryActions}>
+              {pointer ? <button type="button" className={styles.recoveryRetryButton} disabled={recoveringCommandKey !== null} onClick={() => onCheck(pointer)}>서버 처리 확인</button> : null}
+              <button
+                type="button"
+                className={pointer ? styles.recoveryAbandonButton : styles.recoveryRetryButton}
+                disabled={recoveringCommandKey !== null}
+                onClick={() => onRetry(command.key)}
+              >
+                {recovering ? "원래 요청 전송 중…" : "원래 요청 다시 보내기"}
+              </button>
+              <button
+                type="button"
+                className={styles.recoveryAbandonButton}
+                onClick={() => onAbandon(command.key)}
+              >
+                확인 중단
+              </button>
+            </div>
+          </article>
+        );
+      })}
+      {savedOnly.map((pointer) => <article className={styles.commandRecoveryItem} key={pointer.commandId}>
+        <h3 className={styles.commandRecoveryItemTitle}>{guestCommandName(pointer.command)}</h3>
+        <p className={styles.commandRecoveryNote}>서버 처리 여부만 확인하며 요청을 다시 보내지 않습니다.</p>
+        <div className={styles.commandRecoveryActions}>
+          <button type="button" className={styles.recoveryRetryButton} disabled={recoveringCommandKey !== null} onClick={() => onCheck(pointer)}>서버 처리 확인</button>
+          <button type="button" className={styles.recoveryAbandonButton} disabled={recoveringCommandKey !== null} onClick={() => onForget(pointer)}>목록에서 지우기</button>
+        </div>
+      </article>)}
+    </section>
+  );
+}
+
+function CompletedGuestCommandNotices({
+  commands,
+  isCurrentContext,
+}: {
+  commands: Array<[string, CompletedGuestCommand]>;
+  isCurrentContext: (command: CompletedGuestCommand) => boolean;
+}) {
+  if (!commands.length) return null;
+  return (
+    <div className={styles.commandCompletedList}>
+      {commands.map(([key, command]) => (
+        <p className={styles.commandCompleted} role="status" key={key}>
+          {isCurrentContext(command)
+            ? command.message
+            : "이전 티켓 요청은 확인되었지만 현재 티켓과 달라 결과를 표시하지 않습니다."}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+// The landing retains the six established entries and adds paths to the
+// attendee's application, published event information and participation.
 export default function HomeShell({ slug }: { slug: string }) {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [activeTab, setActiveTab] = useState<Tab | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
   const recoveryBlocked = isRecoveryBlocked(useVerificationMode());
   const ticketRef = useRef<string>("");
+  const ticketSlugRef = useRef(slug);
+  const currentContextRef = useRef<LoadedTicketContext | null>(null);
   const commandIdsRef = useRef<Record<string, string>>({});
+  const currentCommandIdsRef = useRef<Record<string, string>>({});
+  const pendingCommandsRef = useRef<Record<string, PendingGuestCommand>>({});
+  const [pendingCommands, setPendingCommands] = useState<Record<string, PendingGuestCommand>>({});
+  const [completedCommands, setCompletedCommands] = useState<Record<string, CompletedGuestCommand>>({});
+  const [recoveringCommandKey, setRecoveringCommandKey] = useState<string | null>(null);
+  const [detailDirty, setDetailDirty] = useState(false);
+  const [activeWrites, setActiveWrites] = useState(0);
+  const [receipts, setReceipts] = useState<GuestReceiptPointer[]>([]);
+  const receiptsRef = useRef<GuestReceiptPointer[]>([]);
+  const [receiptStorageAvailable, setReceiptStorageAvailable] = useState(true);
+  const [receiptMessage, setReceiptMessage] = useState<string | null>(null);
+  const onDetailDirtyChange = useCallback((dirty: boolean) => setDetailDirty(dirty), []);
+  const hasPendingWork = Object.keys(pendingCommands).length > 0 || activeWrites > 0;
+  useUnsavedNavigationGuard(detailDirty || hasPendingWork,
+    hasPendingWork
+      ? "처리 결과를 확인 중입니다. 이동해도 서버 처리는 취소되지 않으며 원래 요청을 다시 보낼 수 없을 수 있습니다."
+      : "선택하거나 입력한 내용이 있습니다. 이동하면 저장하지 않은 내용이 사라집니다.");
   const detailBackRef = useRef<HTMLButtonElement>(null);
   const menuButtonRefs = useRef<Record<Tab, HTMLButtonElement | null>>({
     qr: null,
+    application: null,
     notice: null,
     lucky: null,
     roulette: null,
@@ -185,9 +410,30 @@ export default function HomeShell({ slug }: { slug: string }) {
   });
   const previousTabRef = useRef<Tab | null>(null);
 
+  useEffect(() => {
+    const saved = readGuestReceipts(slug);
+    receiptsRef.current = saved.items;
+    setReceipts(saved.items);
+    setReceiptStorageAvailable(saved.available);
+  }, [slug]);
+
+  function saveReceipts(items: GuestReceiptPointer[]) {
+    receiptsRef.current = items;
+    setReceipts(items);
+    if (!writeGuestReceipts(slug, items)) setReceiptStorageAvailable(false);
+  }
+  function rememberReceipt(snapshot: PendingGuestCommand) {
+    if (!receiptsRef.current.some((item) => item.commandId === snapshot.commandId)) {
+      saveReceipts([...receiptsRef.current, { eventId: snapshot.eventId, commandId: snapshot.commandId, command: snapshot.command }]);
+    }
+  }
+  function forgetReceipt(id: string) {
+    saveReceipts(receiptsRef.current.filter((item) => item.commandId !== id));
+  }
+
   function tabFromLocation(): Tab | null {
     const value = new URLSearchParams(window.location.search).get("view");
-    return HOME_MENUS.some((menu) => menu.key === value) ? (value as Tab) : null;
+    return value === "application" || HOME_MENUS.some((menu) => menu.key === value) ? (value as Tab) : null;
   }
 
   useEffect(() => {
@@ -198,61 +444,156 @@ export default function HomeShell({ slug }: { slug: string }) {
   }, []);
 
   useEffect(() => {
-    if (activeTab) detailBackRef.current?.focus();
-    else if (previousTabRef.current) menuButtonRefs.current[previousTabRef.current]?.focus();
+    if (activeTab && state.kind === "ready") detailBackRef.current?.focus();
+    else if (!activeTab && previousTabRef.current) (menuButtonRefs.current[previousTabRef.current] ?? menuButtonRefs.current.qr)?.focus();
     previousTabRef.current = activeTab;
-  }, [activeTab]);
+  }, [activeTab, state.kind]);
 
   function commandIdFor(key: string): string {
     if (!commandIdsRef.current[key]) commandIdsRef.current[key] = randomCommandId();
     return commandIdsRef.current[key];
   }
 
+  function updatePendingCommand(key: string, pending: PendingGuestCommand | null) {
+    const next = { ...pendingCommandsRef.current };
+    if (pending) next[key] = pending;
+    else delete next[key];
+    pendingCommandsRef.current = next;
+    setPendingCommands(next);
+  }
+
+  async function sendGuestCommand(snapshot: PendingGuestCommand): Promise<Record<string, unknown>> {
+    let response: Response;
+    try {
+      response = await fetch(`/api/events/${encodeURIComponent(snapshot.eventId)}/commands`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${snapshot.ticketToken}`,
+        },
+        body: JSON.stringify({
+          commandId: snapshot.commandId,
+          command: snapshot.command,
+          payload: snapshot.payload,
+        }),
+      });
+    } catch {
+      throw { message: "서버 응답을 확인하지 못했습니다.", status: 0 };
+    }
+    const data = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!response.ok) {
+      throw {
+        message: typeof data?.error === "string" ? data.error : "요청을 처리하지 못했습니다.",
+        status: response.status,
+        code: data?.code,
+      };
+    }
+    const result = asRecord(data);
+    const valid = snapshot.command === "lucky.assign"
+      ? typeof asRecord(result?.lucky)?.number === "number"
+      : snapshot.command === "roulette.spin"
+        ? typeof asRecord(result?.roulette)?.tier === "number"
+        : snapshot.command === "vote.ranked"
+          ? Array.isArray(asRecord(result?.vote)?.picks)
+          : snapshot.command === "booth.visit"
+            ? typeof result?.name === "string" && typeof result?.booth === "string" &&
+              result.visitId === snapshot.commandId && typeof result.participantId === "string" && Boolean(result.participantId) &&
+              typeof snapshot.payload.code === "string" &&
+              snapshot.payload.code.trim().slice(0, 512).startsWith(`ET:BOOTH:${snapshot.eventId}:`) &&
+              result.boothId === snapshot.payload.code.trim().slice(0, 512).slice(`ET:BOOTH:${snapshot.eventId}:`.length) &&
+              typeof result.boothId === "string" && Boolean(result.boothId)
+            : false;
+    if (!valid) throw { message: "성공 응답을 확인하지 못했습니다.", status: 0 };
+    return result ?? {};
+  }
+
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    let refreshTimer: number | undefined;
+    const readTimeout = window.setTimeout(() => controller.abort(), HOME_READ_TIMEOUT_MS);
     async function load() {
+      if (ticketSlugRef.current !== slug) {
+        ticketRef.current = "";
+        ticketSlugRef.current = slug;
+        currentContextRef.current = null;
+      }
       const query = new URLSearchParams(window.location.search);
       const fromLink = query.get("ticket") || "";
+      const explicitSession = !fromLink && query.get("session") === "1";
+      const rejected = !fromLink && !explicitSession && (query.get("ticket-error") === "1" || isTicketRejected(slug));
       // Consume a linked bearer once, exactly like the ticket screen.
-      if (fromLink) storeTicket(slug, fromLink);
+      if (fromLink) { clearSessionForTab(slug); clearTicketRejected(slug); storeTicket(slug, fromLink); }
       if (fromLink) {
         query.delete("ticket");
+        query.delete("ticket-error");
+        query.delete("session");
         const cleaned = `${window.location.pathname}${query.toString() ? `?${query.toString()}` : ""}${window.location.hash}`;
         window.history.replaceState(null, "", cleaned);
       }
-      const ticket = fromLink || readStoredTicket(slug);
+      const storageUsable = ticketStorageAvailable(slug);
+      const ticket = rejected ? REJECTED_TICKET_BEARER : explicitSession ? "" : fromLink || getAllowedTicketForTab(slug) || ticketRef.current || (storageUsable ? readStoredTicket(slug) : "");
+      const allowSession = !rejected && explicitSession;
       ticketRef.current = ticket;
+      if (currentContextRef.current &&
+        (currentContextRef.current.slug !== slug || currentContextRef.current.ticketToken !== ticket)) {
+        currentContextRef.current = null;
+      }
+      function failLoad(reason: "event-missing" | "ticket-invalid" | "transient", message: string, eventName: string, hasTicket: boolean) {
+        const context = currentContextRef.current;
+        setState((current) => {
+          const sameContext = reason === "transient" && current.kind === "ready" && current.hasTicket &&
+            context?.slug === slug && context.eventId === current.eventId && current.ticketToken === ticket;
+          if (sameContext && activeTab === "stamp") return { ...current, stampStatus: "stale" };
+          if (sameContext && (activeTab === "vote" || activeTab === "roulette")) return { ...current, refreshFailed: true };
+          return { kind: "failed", reason, message, eventName, hasTicket };
+        });
+      }
       try {
         const publicRes = await fetch(`/api/public/events/${encodeURIComponent(slug)}`, {
           cache: "no-store",
+          signal: controller.signal,
         });
         const publicData = (await publicRes.json().catch(() => null)) as {
           event?: PublicEvent | null;
             workspace?: {
               notices?: unknown;
-              pageExperience?: { published?: { keyvisual?: unknown; homeStyle?: unknown } } | null;
+              modules?: unknown;
+              pageExperience?: { published?: { keyvisual?: unknown; defaultHomeBanner?: unknown; homeStyle?: unknown; homeMenus?: unknown; showAnnouncements?: unknown } } | null;
           } | null;
         } | null;
         const eventName = text(publicData?.event?.name);
         if (!publicRes.ok || !publicData?.event) {
           if (!cancelled) {
-            setState({
-              kind: "failed",
-              reason: publicRes.status === 404 ? "event-missing" : "transient",
-              message:
-                publicRes.status === 404
-                  ? "요청한 행사 주소를 확인하세요."
-                  : "행사 정보를 불러오지 못했습니다.",
+            if (publicRes.status === 404) currentContextRef.current = null;
+            failLoad(
+              publicRes.status === 404 ? "event-missing" : "transient",
+              publicRes.status === 404 ? "요청한 행사 주소를 확인하세요." : "행사 정보를 불러오지 못했습니다.",
               eventName,
-              hasTicket: Boolean(ticket),
-            });
+              Boolean(ticket),
+            );
           }
           return;
         }
         const event = publicData.event;
+        // The public projection already excludes drafts and disabled types.
+        const programs: HomeProgram[] = Array.isArray(publicData.workspace?.modules) ? publicData.workspace.modules.flatMap((value) => {
+          const item = asRecord(value);
+          return typeof item?.id === "string" && typeof item.title === "string" ? [{ id: item.id, title: item.title }] : [];
+        }) : [];
+        const hasPrograms = programs.length > 0;
         const publishedPage = publicData.workspace?.pageExperience?.published;
+        const enabled = new Set(Array.isArray(event.features) ? event.features : []);
+        const unavailable: HomeMenuKey[] = [
+          ...(publishedPage?.showAnnouncements === false ? ["notice" as const] : []),
+          ...(!enabled.has("draw") ? ["lucky" as const, "roulette" as const] : []),
+          ...(!enabled.has("poll") ? ["vote" as const] : []),
+          ...(!enabled.has("stamp") ? ["stamp" as const] : []),
+        ];
         const keyvisual = publicKeyvisualSource(slug, publishedPage?.keyvisual);
+        const defaultHomeBanner = publishedPage?.defaultHomeBanner === "neutral" ? "neutral" : "legacy";
         const homeStyle = normalizeHomeStyle(publishedPage?.homeStyle);
+        const homeMenus = normalizeHomeMenus(publishedPage?.homeMenus);
         const notices: Notice[] = Array.isArray(publicData.workspace?.notices)
           ? (publicData.workspace.notices as unknown[]).flatMap((item) => {
               const notice = asRecord(item);
@@ -265,14 +606,33 @@ export default function HomeShell({ slug }: { slug: string }) {
               }];
             })
           : [];
-        if (!ticket) {
+        const ticketReadStarted = performance.now();
+        const ticketRes = await fetch(`/api/public/events/${encodeURIComponent(slug)}/ticket`, {
+          ...(ticket ? { headers: { authorization: `Bearer ${ticket}` } } : {}),
+          credentials: ticket || storageUsable || allowSession ? "same-origin" : "omit",
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const ticketData = (await ticketRes.json().catch(() => null)) as {
+          serverTimeMs?: unknown;
+          error?: unknown;
+          event?: { id?: unknown; name?: unknown } | null;
+          participant?: Record<string, unknown> | null;
+          workspace?: TicketWorkspace | null;
+        } | null;
+        const serverClock = captureServerClock(ticketData?.serverTimeMs, ticketReadStarted, performance.now(), Date.now());
+        if (!ticket && ticketRes.status === 404) {
           if (!cancelled) {
+            currentContextRef.current = { slug, eventId: text((event as { id?: unknown }).id), ticketToken: "" };
             setState({
               kind: "ready",
               eventId: text((event as { id?: unknown }).id),
               eventName: event.name,
               keyvisual,
+              defaultHomeBanner,
               homeStyle,
+              homeMenus,
+              programs,
               eventDate: event.date,
               eventTime: `${event.start} ~ ${event.end}`,
               ticketStatus: "",
@@ -290,48 +650,58 @@ export default function HomeShell({ slug }: { slug: string }) {
               rouletteConfig: null,
               rewards: [],
               drawPrograms: [],
+              stampMode: "STAFF",
+              serverClock: null,
+              booths: [],
+              ownVisits: {},
+              hasPrograms,
+              unavailable,
             });
           }
           return;
         }
-        const ticketRes = await fetch(`/api/public/events/${encodeURIComponent(slug)}/ticket`, {
-          headers: { authorization: `Bearer ${ticket}` },
-          cache: "no-store",
-        });
-        const ticketData = (await ticketRes.json().catch(() => null)) as {
-          error?: unknown;
-          event?: { id?: unknown; name?: unknown } | null;
-          participant?: Record<string, unknown> | null;
-          workspace?: TicketWorkspace | null;
-        } | null;
         if (!ticketRes.ok || !ticketData?.participant || !ticketData.workspace) {
           if (!cancelled) {
             const invalid = ticketRes.status === 404 || ticketRes.status === 401;
+            if (invalid) currentContextRef.current = null;
             // The server says this link is not usable: stop replaying it on
             // the next load, exactly like the ticket screen. A dropped
             // connection keeps the stored bearer for the retry instead.
             if (ticketRes.status === 404) {
+              markTicketRejected(slug);
+              ticketRef.current = "";
               try {
                 window.sessionStorage.removeItem(STORAGE_PREFIX + slug);
               } catch {
                 // Private mode: nothing persisted to clear.
               }
             }
-            setState({
-              kind: "failed",
-              reason: invalid ? "ticket-invalid" : "transient",
-              message:
-                typeof ticketData?.error === "string"
-                  ? ticketData.error
-                  : invalid
-                    ? "티켓을 확인할 수 없습니다."
-                    : "티켓 응답을 확인하지 못했습니다. 같은 화면에서 다시 시도하세요.",
+            failLoad(
+              invalid ? "ticket-invalid" : "transient",
+              typeof ticketData?.error === "string" ? ticketData.error : invalid
+                ? "티켓을 확인할 수 없습니다."
+                : "티켓 응답을 확인하지 못했습니다. 같은 화면에서 다시 시도하세요.",
               eventName,
-              hasTicket: true,
-            });
+              true,
+            );
           }
           return;
         }
+        const resolvedTicket = ticket || text(ticketData.participant.ticket);
+        if (!cancelled && !ticket && allowSession) {
+          const current = new URLSearchParams(window.location.search);
+          current.delete("ticket-error"); current.delete("session");
+          window.history.replaceState(null, "", `${window.location.pathname}${current.toString() ? `?${current.toString()}` : ""}${window.location.hash}`);
+        }
+        if (!cancelled && resolvedTicket) {
+          clearTicketRejected(slug);
+          ticketRef.current = resolvedTicket;
+          currentContextRef.current = { slug, eventId: text(ticketData.event?.id), ticketToken: resolvedTicket };
+          const stored = storeTicket(slug, resolvedTicket);
+          if (stored && storageUsable) clearSessionForTab(slug);
+          else allowSessionForTab(slug, resolvedTicket);
+        }
+        if (!cancelled && !resolvedTicket && !ticket) markTicketRejected(slug);
         const workspace = ticketData.workspace;
         const teams: Team[] = Array.isArray(workspace.teams)
           ? (workspace.teams as unknown[]).flatMap((item) => {
@@ -393,6 +763,7 @@ export default function HomeShell({ slug }: { slug: string }) {
               open: rouletteConfigRaw.open === true,
               startsAt: typeof rouletteConfigRaw.startsAt === "string" ? rouletteConfigRaw.startsAt : null,
               endsAt: typeof rouletteConfigRaw.endsAt === "string" ? rouletteConfigRaw.endsAt : null,
+              scheduleNeedsReview: rouletteConfigRaw.scheduleNeedsReview === true,
               prizes: Array.isArray(rouletteConfigRaw.prizes)
                 ? rouletteConfigRaw.prizes.flatMap((item) => {
                     const prize = asRecord(item);
@@ -450,19 +821,45 @@ export default function HomeShell({ slug }: { slug: string }) {
               }];
             })
           : [];
+        const booths: HomeBooth[] = Array.isArray(workspace.booths)
+          ? workspace.booths.flatMap((item) => {
+              const booth = asRecord(item);
+              if (!booth || typeof booth.id !== "string") return [];
+              return [{
+                id: booth.id,
+                name: text(booth.name, "부스"),
+                limit: Math.max(1, Number(booth.limit) || 1),
+                status: text(booth.status, "UNKNOWN").toUpperCase(),
+                startsAt: typeof booth.startsAt === "string" ? booth.startsAt || null : booth.startsAt == null ? null : "invalid",
+                endsAt: typeof booth.endsAt === "string" ? booth.endsAt || null : booth.endsAt == null ? null : "invalid",
+                capacity: Math.max(0, Number(booth.capacity) || 0),
+                used: Math.max(0, Number(booth.used) || 0),
+              }];
+            })
+          : [];
+        const ownVisits: Record<string, number> = {};
+        if (Array.isArray(workspace.visits)) {
+          for (const item of workspace.visits) {
+            const visit = asRecord(item);
+            if (typeof visit?.boothId === "string") ownVisits[visit.boothId] = (ownVisits[visit.boothId] || 0) + 1;
+          }
+        }
         if (!cancelled) {
           setState({
             kind: "ready",
             eventId: text(ticketData.event?.id),
             eventName: text(ticketData.event?.name, event.name),
             keyvisual,
+            defaultHomeBanner,
             homeStyle,
+            homeMenus,
+            programs,
             eventDate: event.date,
             eventTime: `${event.start} ~ ${event.end}`,
             ticketStatus: text(ticketData.participant.status) || "APPROVED",
             ticketName: text(ticketData.participant.name),
             hasTicket: true,
-            ticketToken: ticket,
+            ticketToken: resolvedTicket,
             notices,
             teams,
             voteCounts,
@@ -474,36 +871,33 @@ export default function HomeShell({ slug }: { slug: string }) {
             rouletteConfig,
             rewards,
             drawPrograms,
+            stampMode: workspace.stampMode === "SELF" ? "SELF" : "STAFF",
+            serverClock,
+            booths,
+            ownVisits,
+            hasPrograms,
+            unavailable,
           });
         }
       } catch {
-        if (!cancelled) {
-          setState({
-            kind: "failed",
-            reason: "transient",
-            message: "연결하지 못했습니다. 다시 시도하세요.",
-            eventName: "",
-            hasTicket: Boolean(ticketRef.current),
-          });
+        if (!cancelled) failLoad("transient", "연결하지 못했습니다. 다시 시도하세요.", "", Boolean(ticketRef.current));
+      } finally {
+        window.clearTimeout(readTimeout);
+        // Schedule after the read settles: a fixed interval can continually
+        // discard valid responses on a connection slower than the interval.
+        if (!cancelled && (activeTab === "vote" || activeTab === "roulette" || activeTab === "stamp")) {
+          refreshTimer = window.setTimeout(() => setReloadTick((tick) => tick + 1), HOME_REFRESH_INTERVAL_MS);
         }
       }
     }
     void load();
     return () => {
       cancelled = true;
+      controller.abort();
+      window.clearTimeout(readTimeout);
+      window.clearTimeout(refreshTimer);
     };
   }, [slug, reloadTick, activeTab]);
-
-  // Voting and roulette can be opened or closed while an attendee waits on
-  // the detail screen. Refresh only these live control states; selection
-  // state remains local to VoteTab and is never reset by the poll.
-  useEffect(() => {
-    if (activeTab !== "vote" && activeTab !== "roulette") return;
-    const timer = window.setInterval(() => {
-      setReloadTick((tick) => tick + 1);
-    }, 4500);
-    return () => window.clearInterval(timer);
-  }, [activeTab]);
 
   async function postGuestCommand(
     eventId: string,
@@ -511,25 +905,196 @@ export default function HomeShell({ slug }: { slug: string }) {
     command: string,
     payload: Record<string, unknown>
   ): Promise<Record<string, unknown>> {
-    const response = await fetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${ticketRef.current}`,
-      },
-      body: JSON.stringify({ commandId: commandIdFor(formKey), command, payload }),
+    const key = `${slug}:${formKey}`;
+    const pending = pendingCommandsRef.current[key];
+    if (pending) throw { kind: "uncertain", message: "먼저 이전 요청의 처리 여부를 확인하세요." };
+    if (currentCommandIdsRef.current[key]) throw { kind: "in-flight", message: "요청을 처리하고 있습니다." };
+    setCompletedCommands((current) => {
+      const next = { ...current };
+      delete next[key];
+      return next;
     });
-    const data = (await response.json().catch(() => null)) as {
-      error?: unknown;
-      field?: unknown;
-    } & Record<string, unknown> | null;
-    if (!response.ok) {
-      const message = typeof data?.error === "string" ? data.error : "요청을 처리하지 못했습니다.";
-      const field = typeof data?.field === "string" ? data.field : null;
-      throw { message, field };
+    const snapshot: PendingGuestCommand = {
+      key,
+      formKey,
+      eventId,
+      slug,
+      ticketToken: ticketRef.current,
+      commandId: commandIdFor(key),
+      command,
+      payload: JSON.parse(JSON.stringify(payload)) as Record<string, unknown>,
+      teamNames: state.kind === "ready" ? Object.fromEntries(state.teams.map((team) => [team.id, team.name])) : {},
+      message: "처리 여부를 확인하지 못했습니다. 원래 요청 그대로 다시 확인하거나 확인을 중단하세요.",
+    };
+    currentCommandIdsRef.current[key] = snapshot.commandId;
+    rememberReceipt(snapshot);
+    setActiveWrites((count) => count + 1);
+    try {
+      const data = await sendGuestCommand(snapshot);
+      if (currentCommandIdsRef.current[key] !== snapshot.commandId) throw { kind: "context-changed" };
+      forgetReceipt(snapshot.commandId);
+      if (commandIdsRef.current[key] === snapshot.commandId) delete commandIdsRef.current[key];
+      if (!isCurrentRequestContext(snapshot)) {
+        setCompletedCommands((current) => ({
+          ...current,
+          [key]: {
+            eventId: snapshot.eventId,
+            slug: snapshot.slug,
+            ticketToken: snapshot.ticketToken,
+            message: "이전 티켓의 요청 처리는 확인했지만, 현재 티켓의 결과로 표시하지 않습니다.",
+          },
+        }));
+        throw { kind: "context-changed" };
+      }
+      return data;
+    } catch (failure) {
+      if ((failure as { kind?: unknown }).kind === "context-changed") throw failure;
+      if (currentCommandIdsRef.current[key] !== snapshot.commandId) throw { kind: "context-changed" };
+      const details = failure as { message?: unknown; status?: unknown; code?: unknown };
+      const message = typeof details.message === "string" ? details.message : "요청을 처리하지 못했습니다.";
+      const status = typeof details.status === "number" ? details.status : 0;
+      if (status >= 400 && status < 500 && ![408, 425, 429].includes(status)) {
+        forgetReceipt(snapshot.commandId);
+        if (commandIdsRef.current[key] === snapshot.commandId) delete commandIdsRef.current[key];
+        if (command === "booth.visit" && (isBoothContextChanged(details.code) || details.code === "BOOTH_LIMIT_REACHED") && isCurrentRequestContext(snapshot)) {
+          setState((current) => current.kind === "ready" ? { ...current, stampStatus: "checking" } : current);
+          refresh();
+        }
+        throw { kind: "definite", message, code: details.code };
+      }
+      updatePendingCommand(key, { ...snapshot, message: "응답을 확인하지 못했습니다. 같은 요청을 다시 확인하거나 확인을 중단하세요." });
+      throw { kind: "uncertain", message: "응답을 확인하지 못했습니다. 아래에서 같은 요청을 다시 확인하세요." };
+    } finally {
+      if (currentCommandIdsRef.current[key] === snapshot.commandId) delete currentCommandIdsRef.current[key];
+      setActiveWrites((count) => Math.max(0, count - 1));
     }
-    delete commandIdsRef.current[formKey];
-    return data ?? {};
+  }
+
+  async function retryPendingCommand(key: string) {
+    const pending = pendingCommandsRef.current[key];
+    if (!pending || currentCommandIdsRef.current[key]) return;
+    const recoveryId = `${key}:${pending.commandId}`;
+    currentCommandIdsRef.current[key] = pending.commandId;
+    setActiveWrites((count) => count + 1);
+    setRecoveringCommandKey(recoveryId);
+    try {
+      const data = await sendGuestCommand(pending);
+      const isStillPending = pendingCommandsRef.current[key]?.commandId === pending.commandId &&
+        currentCommandIdsRef.current[key] === pending.commandId;
+      if (!isStillPending) return;
+      const isCurrentTicket = isCurrentRequestContext(pending);
+      const resultMessage = recoveredCommandMessage(pending, data);
+      if (isCurrentTicket) {
+        setState((current) => {
+          if (current.kind !== "ready" || current.eventId !== pending.eventId || current.ticketToken !== pending.ticketToken) return current;
+          if (pending.command === "lucky.assign") {
+            const lucky = asRecord(data.lucky);
+            return typeof lucky?.number === "number"
+              ? { ...current, lucky: { number: lucky.number, at: text(lucky.at) } }
+              : current;
+          }
+          if (pending.command === "roulette.spin") {
+            const roulette = asRecord(data.roulette);
+            return typeof roulette?.tier === "number"
+              ? { ...current, roulette: { tier: roulette.tier, label: text(roulette.label), at: text(roulette.at) } }
+              : current;
+          }
+          if (pending.command === "vote.ranked") {
+            const vote = asRecord(data.vote);
+            const ownPicks = Array.isArray(vote?.picks)
+              ? vote.picks.flatMap((item) => {
+                  const pick = asRecord(item);
+                  if (typeof pick?.teamId !== "string") return [];
+                  const rank = Number(pick.rank);
+                  return [{ teamId: pick.teamId, rank: [1, 2, 3].includes(rank) ? rank : null }];
+                })
+              : [];
+            return { ...current, voteSubmitted: true, ownPicks };
+          }
+          return current;
+        });
+        refresh();
+      }
+      setCompletedCommands((current) => ({
+        ...current,
+        [key]: {
+          eventId: pending.eventId,
+          slug: pending.slug,
+          ticketToken: pending.ticketToken,
+          message: isCurrentTicket ? resultMessage : "이전 티켓의 요청 처리는 확인했지만, 현재 티켓의 결과로 표시하지 않습니다.",
+        },
+      }));
+      forgetReceipt(pending.commandId);
+      updatePendingCommand(key, null);
+      if (commandIdsRef.current[key] === pending.commandId) delete commandIdsRef.current[key];
+    } catch {
+      if (pendingCommandsRef.current[key]?.commandId === pending.commandId &&
+        currentCommandIdsRef.current[key] === pending.commandId) {
+        updatePendingCommand(key, {
+          ...pending,
+          message: "아직 처리 여부를 확인하지 못했습니다. 원래 요청 그대로 다시 확인하거나 확인을 중단하세요.",
+        });
+      }
+    } finally {
+      if (currentCommandIdsRef.current[key] === pending.commandId) delete currentCommandIdsRef.current[key];
+      setRecoveringCommandKey((current) => current === recoveryId ? null : current);
+      setActiveWrites((count) => Math.max(0, count - 1));
+    }
+  }
+
+  function abandonPendingCommand(key: string) {
+    const pending = pendingCommandsRef.current[key];
+    if (pending) forgetReceipt(pending.commandId);
+    updatePendingCommand(key, null);
+    if (pending && commandIdsRef.current[key] === pending.commandId) delete commandIdsRef.current[key];
+    if (pending && currentCommandIdsRef.current[key] === pending.commandId) delete currentCommandIdsRef.current[key];
+  }
+
+  async function checkReceipt(pointer: GuestReceiptPointer) {
+    if (recoveringCommandKey !== null) return;
+    const entry = Object.entries(pendingCommandsRef.current).find(([, pending]) => pending.commandId === pointer.commandId);
+    const pending = entry?.[1];
+    const token = pending?.ticketToken || ticketRef.current;
+    if (!token) { setReceiptMessage("원래 참가자의 티켓을 연결한 뒤 확인하세요."); return; }
+    setRecoveringCommandKey(`receipt:${pointer.commandId}`);
+    setReceiptMessage(null);
+    try {
+      const response = await fetch(`/api/events/${encodeURIComponent(pointer.eventId)}/command-receipts/${encodeURIComponent(pointer.commandId)}`, {
+        cache: "no-store", headers: { authorization: `Bearer ${token}` },
+      });
+      const body = await response.json().catch(() => null) as { status?: unknown; command?: unknown } | null;
+      if (!receiptsRef.current.some((item) => item.commandId === pointer.commandId) ||
+          (pending && pendingCommandsRef.current[entry![0]]?.commandId !== pointer.commandId) ||
+          (!pending && ticketRef.current !== token)) return;
+      if (response.ok && body?.status === "APPLIED" && body.command === pointer.command) {
+        // This lookup only confirms that a command exists, not its booth.
+        // Keep an in-memory request until an exact replay validates its target.
+        if (pending && pointer.command === "booth.visit") {
+          setReceiptMessage("서버에 부스 인증 기록이 있습니다. 어느 부스인지 확인하려면 같은 요청을 다시 확인하세요.");
+          return;
+        }
+        if (entry && pendingCommandsRef.current[entry[0]]?.commandId === pointer.commandId) {
+          updatePendingCommand(entry[0], null);
+          if (commandIdsRef.current[entry[0]] === pointer.commandId) delete commandIdsRef.current[entry[0]];
+        }
+        forgetReceipt(pointer.commandId);
+        const currentTicket = pending ? isCurrentRequestContext(pending) : ticketRef.current === token;
+        setReceiptMessage(currentTicket
+          ? pointer.command === "booth.visit" ? "서버에 부스 인증 기록이 있습니다. 인증 내역에서 대상 부스를 확인하세요." : "서버에 반영된 것을 확인했습니다. 최신 내용을 다시 불러옵니다."
+          : "이전 티켓의 처리는 확인했지만 현재 티켓의 결과로 표시하지 않습니다.");
+        if (currentTicket) refresh();
+      } else if (response.ok && body?.status === "UNCONFIRMED") {
+        setReceiptMessage("아직 처리 여부를 확인할 수 없습니다. 잠시 후 다시 확인하세요.");
+      } else setReceiptMessage("현재 티켓과 연결 상태를 확인하지 못했습니다. 원래 참가자의 티켓을 확인하세요.");
+    } catch { setReceiptMessage("연결하지 못했습니다. 요청은 다시 보내지 않았습니다."); }
+    finally { setRecoveringCommandKey(null); }
+  }
+
+  function isCurrentRequestContext(snapshot: Pick<PendingGuestCommand, "slug" | "eventId" | "ticketToken">): boolean {
+    const context = currentContextRef.current;
+    return context?.slug === snapshot.slug && context.eventId === snapshot.eventId &&
+      context.ticketToken === snapshot.ticketToken && slug === snapshot.slug &&
+      ticketRef.current === snapshot.ticketToken;
   }
 
   function refresh() {
@@ -544,6 +1109,9 @@ export default function HomeShell({ slug }: { slug: string }) {
   }
 
   function returnToMenu() {
+    if ((detailDirty || activeWrites > 0) && !window.confirm(activeWrites > 0
+      ? "요청을 처리 중입니다. 이동해도 서버 처리는 취소되지 않습니다. 참가 메뉴로 이동할까요?"
+      : "선택하거나 입력한 내용이 사라집니다. 참가 메뉴로 이동할까요?")) return;
     const historyState = asRecord(window.history.state);
     if (historyState?.eventouchAttendeeDetail === true) {
       window.history.back();
@@ -555,10 +1123,33 @@ export default function HomeShell({ slug }: { slug: string }) {
     setActiveTab(null);
   }
 
+  const pendingForSlug = Object.values(pendingCommands).filter((command) => command.slug === slug);
+  const completedForSlug = Object.entries(completedCommands).filter(([, command]) => command.slug === slug);
+  const recovery = <>
+    <PendingGuestCommandRecovery
+      commands={pendingForSlug}
+      receipts={receipts}
+      storageAvailable={receiptStorageAvailable}
+      receiptMessage={receiptMessage}
+      recoveringCommandKey={recoveringCommandKey}
+      isCurrentContext={isCurrentRequestContext}
+      onRetry={(key) => void retryPendingCommand(key)}
+      onCheck={(pointer) => void checkReceipt(pointer)}
+      onForget={(pointer) => {
+        if (!window.confirm("목록에서 지워도 서버 처리는 취소되지 않습니다. 이미 반영됐을 수 있습니다. 지울까요?")) return;
+        forgetReceipt(pointer.commandId);
+        setReceiptMessage("목록에서 지웠습니다. 서버 처리는 취소되지 않았습니다.");
+      }}
+      onAbandon={abandonPendingCommand}
+    />
+    <CompletedGuestCommandNotices commands={completedForSlug} isCurrentContext={isCurrentRequestContext} />
+  </>;
+
   if (state.kind === "loading") {
     return (
       <main id="main-content" tabIndex={-1} className={styles.homePage}>
         <p className={styles.loading} role="status">행사를 불러오는 중입니다.</p>
+        {recovery}
       </main>
     );
   }
@@ -585,8 +1176,8 @@ export default function HomeShell({ slug }: { slug: string }) {
           <p className={styles.stateMessage} role={state.reason === "transient" ? "alert" : undefined}>{state.message}</p>
           {state.reason === "ticket-invalid" && recoveryBlocked ? (
             <p className={styles.stateMessage} role="note">
-              이 행사에서는 문자로 티켓을 다시 연결할 수 없어 신청한 기기에서만 열 수 있습니다.
-              티켓을 잃었다면 행사 안내의 문의처로 운영자에게 연락하세요.
+              이 행사는 문자로 티켓을 다시 연결할 수 없습니다. 신청을 완료한 브라우저 탭을 확인하고,
+              확인되지 않으면 행사 주최 측에 문의하세요.
             </p>
           ) : null}
           <p className={styles.stateAction}>
@@ -616,20 +1207,28 @@ export default function HomeShell({ slug }: { slug: string }) {
             </Link>
           </p>
         </section>
+        {recovery}
       </main>
     );
   }
 
-  const activeMenu = activeTab ? HOME_MENUS.find((menu) => menu.key === activeTab) ?? null : null;
+  const activeMenu = activeTab === "application" ? { label: "내 신청 정보" } : activeTab ? HOME_MENUS.find((menu) => menu.key === activeTab) ?? null : null;
 
   return (
     <main id="main-content" tabIndex={-1} className={styles.homePage} style={homeSurfaceStyle(state.homeStyle)}>
+      {recovery}
       {activeTab === null ? (
         <AttendeeHomeLanding
           eventName={state.eventName}
           hasTicket={state.hasTicket && Boolean(state.ticketToken)}
           keyvisual={state.keyvisual}
+          defaultHomeBanner={state.defaultHomeBanner}
           homeStyle={state.homeStyle}
+          homeMenus={state.homeMenus}
+          programs={state.programs}
+          slug={slug}
+          hasPrograms={state.hasPrograms}
+          unavailable={state.unavailable}
           onOpen={openTab}
           menuButtonRef={(key, node) => { menuButtonRefs.current[key] = node; }}
         />
@@ -651,15 +1250,24 @@ export default function HomeShell({ slug }: { slug: string }) {
           </header>
 
           <section className={styles.tabPanel} id={`menu-${activeTab}`} aria-label={activeMenu?.label}>
-        {activeTab === "qr" && <TicketView slug={slug} />}
-        {activeTab === "notice" && <NoticeTab slug={slug} notices={state.notices} />}
-        {activeTab === "lucky" && (
+        {state.refreshFailed && (activeTab === "vote" || activeTab === "roulette") && (
+          <div className={styles.refreshNotice} role="status">
+            <span>최신 상태를 확인하지 못했습니다. 연결을 확인하고 다시 시도하세요.</span>
+            <button type="button" onClick={refresh}>다시 시도</button>
+          </div>
+        )}
+        {activeTab === "qr" && <TicketView slug={slug} initialTicket={state.ticketToken} />}
+        {activeTab === "application" && <TicketView slug={slug} initialTicket={state.ticketToken} mode="application" />}
+        {state.unavailable.includes(activeTab) && <div className={styles.statePanel}><h1 className={styles.stateTitle}>{activeMenu?.label}</h1><p className={styles.stateMessage}>현재 이 행사에서 제공하지 않습니다. 참가 메뉴에서 다른 안내를 확인하세요.</p></div>}
+        {activeTab === "notice" && !state.unavailable.includes(activeTab) && <NoticeTab slug={slug} notices={state.notices} />}
+        {activeTab === "lucky" && !state.unavailable.includes(activeTab) && (
           <LuckyTab
             slug={slug}
             hasTicket={state.hasTicket}
             lucky={state.lucky}
             rewards={state.rewards}
             drawPrograms={state.drawPrograms}
+            pending={Boolean(pendingCommands[`${slug}:lucky`])}
             onAssign={async () => {
               const data = await postGuestCommand(state.eventId, "lucky", "lucky.assign", {});
               const entry = asRecord(data.lucky);
@@ -670,12 +1278,14 @@ export default function HomeShell({ slug }: { slug: string }) {
             }}
           />
         )}
-        {activeTab === "roulette" && (
+        {activeTab === "roulette" && !state.unavailable.includes(activeTab) && (
           <RouletteTab
             slug={slug}
             hasTicket={state.hasTicket}
             roulette={state.roulette}
             config={state.rouletteConfig}
+            serverClock={state.serverClock}
+            pending={Boolean(pendingCommands[`${slug}:roulette`])}
             onSpin={async () => {
               const data = await postGuestCommand(state.eventId, "roulette", "roulette.spin", {});
               const entry = asRecord(data.roulette);
@@ -687,10 +1297,17 @@ export default function HomeShell({ slug }: { slug: string }) {
             }}
           />
         )}
-        {activeTab === "stamp" && (
+        {activeTab === "stamp" && !state.unavailable.includes(activeTab) && (
           <StampTab
             slug={slug}
             hasTicket={state.hasTicket}
+            mode={state.stampMode}
+            serverClock={state.serverClock}
+            booths={state.booths}
+            ownVisits={state.ownVisits}
+            stampStatus={state.stampStatus}
+            pending={Boolean(pendingCommands[`${slug}:stamp`])}
+            onDirtyChange={onDetailDirtyChange}
             onVisit={async (code) => {
               const data = await postGuestCommand(state.eventId, "stamp", "booth.visit", { code });
               refresh();
@@ -698,7 +1315,7 @@ export default function HomeShell({ slug }: { slug: string }) {
             }}
           />
         )}
-        {activeTab === "vote" && (
+        {activeTab === "vote" && !state.unavailable.includes(activeTab) && (
           <VoteTab
             slug={slug}
             hasTicket={state.hasTicket}
@@ -707,6 +1324,8 @@ export default function HomeShell({ slug }: { slug: string }) {
             voteConfig={state.voteConfig}
             voteSubmitted={state.voteSubmitted}
             ownPicks={state.ownPicks}
+            pending={Boolean(pendingCommands[`${slug}:vote`])}
+            onDirtyChange={onDetailDirtyChange}
             onSubmit={async (picks) => {
               await postGuestCommand(state.eventId, "vote", "vote.ranked", { picks });
               refresh();
@@ -795,11 +1414,11 @@ function NeedTicket({ slug }: { slug: string }) {
   const recoveryBlocked = isRecoveryBlocked(useVerificationMode());
   return (
     <section className={styles.needTicket}>
-      <p className={styles.needTicketText}>티켓이 확인되지 않습니다. 신청 후 이용하세요.</p>
+      <p className={styles.needTicketText}>이 탭에서 티켓이 확인되지 않습니다.</p>
       {recoveryBlocked ? (
         <p className={styles.needTicketText} role="note">
-          이 행사에서는 문자로 티켓을 다시 연결할 수 없어 신청한 기기에서만 열 수 있습니다.
-          티켓을 잃었다면 행사 안내의 문의처로 운영자에게 연락하세요.
+          이 행사는 문자로 티켓을 다시 연결할 수 없습니다. 신청을 완료한 브라우저 탭을 확인하고,
+          탭을 찾을 수 없다면 행사 주최 측에 문의하세요.
         </p>
       ) : null}
       <p className={styles.needTicketAction}>
@@ -810,8 +1429,11 @@ function NeedTicket({ slug }: { slug: string }) {
             </Link>{" "}
           </>
         )}
+        {recoveryBlocked ? <><Link className={styles.needTicketButton} href={`/event/${encodeURIComponent(slug)}`}>
+          행사 안내 확인
+        </Link>{" "}</> : null}
         <Link className={styles.needTicketButton} href={`/event/${encodeURIComponent(slug)}/register`}>
-          참가 신청하기
+          처음 신청하기
         </Link>
       </p>
     </section>
@@ -824,6 +1446,7 @@ function LuckyTab({
   lucky,
   rewards,
   drawPrograms,
+  pending,
   onAssign,
 }: {
   slug: string;
@@ -831,6 +1454,7 @@ function LuckyTab({
   lucky: { number: number; at: string } | null;
   rewards: RewardEntitlement[];
   drawPrograms: DrawProgram[];
+  pending: boolean;
   onAssign: () => Promise<void>;
 }) {
   const [loading, setLoading] = useState(false);
@@ -843,6 +1467,7 @@ function LuckyTab({
     try {
       await onAssign();
     } catch (failure) {
+      if ((failure as { kind?: unknown }).kind === "uncertain") return;
       const message = (failure as { message?: unknown }).message;
       setError(typeof message === "string" ? message : "번호 발급에 실패했습니다.");
     } finally {
@@ -867,7 +1492,7 @@ function LuckyTab({
             <button
               type="button"
               className={styles.assignButton}
-              disabled={loading}
+              disabled={loading || pending}
               onClick={assign}
             >
               {loading ? "발급 중입니다" : "럭키번호 발급"}
@@ -914,12 +1539,16 @@ function RouletteTab({
   hasTicket,
   roulette,
   config,
+  serverClock,
+  pending,
   onSpin,
 }: {
   slug: string;
   hasTicket: boolean;
   roulette: RouletteResult | null;
   config: RouletteConfig | null;
+  serverClock: ServerClock | null;
+  pending: boolean;
   onSpin: () => Promise<RouletteResult>;
 }) {
   const [spinning, setSpinning] = useState(false);
@@ -984,6 +1613,11 @@ function RouletteTab({
         spinInFlightRef.current = false;
         return;
       }
+      if ((failure as { kind?: unknown }).kind === "uncertain") {
+        setSpinning(false);
+        spinInFlightRef.current = false;
+        return;
+      }
       const message = (failure as { message?: unknown }).message;
       setError(typeof message === "string" ? message : "룰렛 돌리기에 실패했습니다.");
       setSettlingResult(null);
@@ -1012,7 +1646,7 @@ function RouletteTab({
                 result={result}
                 settlingResult={settlingResult}
                 spinning={spinning}
-                showStart={!result && open}
+                showStart={!result && open && !pending}
                 onSpin={spin}
                 onSettled={() => {
                   if (settlingResult) finishSpin(settlingResult);
@@ -1055,7 +1689,7 @@ function RouletteTab({
           <p className={styles.eticketNote}>START를 누르면 서버가 경품을 추첨합니다. 기회는 한 번입니다.</p>
         ) : (
           <p className={styles.rouletteWaiting} role="status">
-            {rouletteWaitingMessage(config)}
+            {rouletteWaitingMessage(config, serverClock)}
           </p>
         )}
         {error && !result ? <p className={styles.rouletteError} role="alert">{error}</p> : null}
@@ -1226,14 +1860,16 @@ function RouletteWheel({
   );
 }
 
-function rouletteWaitingMessage(config: RouletteConfig | null): string {
+function rouletteWaitingMessage(config: RouletteConfig | null, serverClock: ServerClock | null): string {
   if (!config || config.status === "DRAFT") return "룰렛은 아직 준비 중입니다. 운영자가 경품과 시간을 설정하면 이 화면에서 확인할 수 있습니다.";
   if (config.status === "CLOSED") return "룰렛 운영이 종료되었습니다. 이미 참여했다면 당첨 결과는 계속 확인할 수 있습니다.";
-  const now = Date.now();
-  if (config.startsAt && Number.isFinite(Date.parse(config.startsAt)) && now < Date.parse(config.startsAt)) {
+  if (config.scheduleNeedsReview) return "룰렛 운영 시간을 확인하고 있습니다. 현장 운영자에게 문의하세요.";
+  const reading = readServerClock(serverClock);
+  if (!reading) return "룰렛 운영 상태를 확인하고 있습니다. 잠시 후 다시 확인하세요.";
+  if (reading && config.startsAt && Number.isFinite(Date.parse(config.startsAt)) && reading.now + reading.uncertaintyMs < Date.parse(config.startsAt)) {
     return `룰렛 운영 예정 · ${formatKoreanDateTime(config.startsAt)}`;
   }
-  if (config.endsAt && Number.isFinite(Date.parse(config.endsAt)) && now > Date.parse(config.endsAt)) {
+  if (reading && config.endsAt && Number.isFinite(Date.parse(config.endsAt)) && reading.now - reading.uncertaintyMs > Date.parse(config.endsAt)) {
     return "룰렛 운영 시간이 종료되었습니다.";
   }
   return "경품 재고를 모두 사용했거나 운영 상태가 바뀌었습니다. 잠시 후 다시 확인하세요.";
@@ -1243,28 +1879,56 @@ function formatKoreanDateTime(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
     month: "long",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(date);
+  }).format(date) + " (한국 시간)";
 }
 
 function StampTab({
   slug,
   hasTicket,
+  mode,
+  serverClock,
+  booths,
+  ownVisits,
+  stampStatus,
+  pending,
+  onDirtyChange,
   onVisit,
 }: {
   slug: string;
   hasTicket: boolean;
+  mode: StampMode;
+  serverClock: ServerClock | null;
+  booths: HomeBooth[];
+  ownVisits: Record<string, number>;
+  stampStatus?: "checking" | "stale";
+  pending: boolean;
+  onDirtyChange: (dirty: boolean) => void;
   onVisit: (code: string) => Promise<{ name: string; booth: string }>;
 }) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
+  const [failure, setFailure] = useState<{ message: string; limitReached: boolean } | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const busyRef = useRef(false);
+  const clock = readServerClock(serverClock);
+  const availableBooths = stampStatus ? [] : booths.filter((booth) => boothCanAttempt(boothOperatingStatus(booth, clock?.now ?? null, clock?.uncertaintyMs)) && (ownVisits[booth.id] ?? 0) < booth.limit);
+  const nextBooth = availableBooths[0];
+  const canVisit = Boolean(nextBooth);
+
+  useEffect(() => {
+    if (!canVisit || mode !== "SELF") setCameraOpen(false);
+  }, [canVisit, mode]);
+
+  useEffect(() => {
+    onDirtyChange(canVisit && mode === "SELF" && code.trim() !== "");
+    return () => onDirtyChange(false);
+  }, [canVisit, code, mode, onDirtyChange]);
 
   if (!hasTicket) return <NeedTicket slug={slug} />;
 
@@ -1277,7 +1941,7 @@ function StampTab({
   }
 
   async function submit(value: string) {
-    if (busyRef.current) return;
+    if (busyRef.current || !canVisit) return;
     busyRef.current = true;
     setBusy(true);
     setFailure(null);
@@ -1287,8 +1951,15 @@ function StampTab({
       setDone(`${visit.name || "참가자"}님 · ${visit.booth || "부스"} 인증을 기록했습니다.`);
       setCode("");
     } catch (error) {
-      const message = (error as { message?: unknown }).message;
-      setFailure(typeof message === "string" ? message : "인증하지 못했습니다. 다시 시도하세요.");
+      const details = error as { kind?: unknown; message?: unknown; code?: unknown };
+      if (details.kind === "uncertain") return;
+      const limitReached = details.code === "BOOTH_LIMIT_REACHED";
+      if (limitReached) setCode((current) => normalize(current) === normalize(value) ? "" : current);
+      setFailure({
+        limitReached,
+        message: limitReached ? "이 부스의 인증 횟수를 모두 사용했습니다." :
+          typeof details.message === "string" ? details.message : "인증하지 못했습니다. 다시 시도하세요.",
+      });
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -1296,54 +1967,124 @@ function StampTab({
   }
 
   return (
-    <section className={styles.stampPanel}>
-      <p className={styles.stampHint}>
-        부스에 붙은 QR을 이 화면에서 바로 찍거나, 코드를 복사해 아래에 붙여넣으세요.
-      </p>
-      {cameraOpen ? (
-        <CameraScan
-          manualHint="부스 코드를 직접 입력하세요."
-          onDetected={(scanned) => {
-            setCameraOpen(false);
-            void submit(scanned);
-          }}
-          onClose={() => setCameraOpen(false)}
-        />
-      ) : (
-        <button type="button" className={styles.submitButton} onClick={() => setCameraOpen(true)} disabled={busy}>
-          카메라로 스캔
-        </button>
-      )}
-      <form
-        className={styles.stampPanel}
-        onSubmit={(event) => {
-          event.preventDefault();
-          void submit(code);
-        }}
-      >
-        <div className={styles.stampField}>
-          <label htmlFor="booth-code">부스 코드</label>
-          <input
-            id="booth-code"
-            type="text"
-            value={code}
-            onChange={(event) => setCode(event.target.value)}
-            placeholder="ET:BOOTH:..."
-            autoComplete="off"
-            spellCheck={false}
-            required
-          />
+    <div className={`${styles.stampPanel} ${styles.stampWorkspace}`}>
+      <section className={styles.stampProgress} aria-labelledby="stamp-progress-title">
+        <div className={styles.stampProgressHeading}>
+          <h1 id="stamp-progress-title" className={styles.stampProgressTitle}>내 부스 인증</h1>
+          <span className={styles.stampModeBadge}>{mode === "SELF" ? "직접 인증" : "직원 인증"}</span>
         </div>
-        <button type="submit" className={styles.submitButton} disabled={busy || !code.trim()}>
-          {busy ? "확인 중…" : "인증하기"}
-        </button>
-      </form>
-      {failure ? <p className={styles.stampError} role="alert">{failure}</p> : null}
+        {booths.length ? (
+          <ul className={styles.stampBoothList}>
+            {booths.map((booth) => {
+              const count = ownVisits[booth.id] ?? 0;
+              const operatingStatus = stampStatus ? "상태 확인 필요" : boothOperatingStatus(booth, clock?.now ?? null, clock?.uncertaintyMs);
+              const limitReached = boothCanAttempt(operatingStatus) && count >= booth.limit;
+              const next = failure?.limitReached && booth === nextBooth;
+              return (
+                <li className={styles.stampBooth} key={booth.id} id={next ? "stamp-next-booth" : undefined} tabIndex={next ? -1 : undefined}>
+                  <div className={styles.stampBoothMain}>
+                    <div className={styles.stampBoothTitleRow}>
+                      <span className={styles.stampBoothName}>{booth.name}</span>
+                      <span className={`${styles.stampBoothStatus} ${
+                        operatingStatus === "운영 중" && !limitReached
+                          ? styles.stampStatusOpen
+                          : limitReached || operatingStatus === "운영 종료" || operatingStatus === "수량 소진"
+                            ? styles.stampStatusClosed
+                            : operatingStatus === "상태 확인 필요" || operatingStatus === "운영 시간 확인 필요"
+                              ? styles.stampStatusUnknown
+                              : styles.stampStatusWaiting
+                      }`}>{limitReached ? "한도 도달" : operatingStatus}</span>
+                    </div>
+                    <p className={styles.stampBoothSchedule}>
+                      {[booth.startsAt ? `시작 ${formatBoothScheduleTime(booth.startsAt)}` : null,
+                        booth.endsAt ? `종료 ${formatBoothScheduleTime(booth.endsAt)}` : null]
+                        .filter(Boolean).join(" · ") || "운영 시간 미설정"}
+                    </p>
+                    {operatingStatus === "운영 시간 확인 필요" ? <p className={styles.stampBoothSchedule}>운영 시간은 현장 스태프에게 문의하세요.</p> : null}
+                    {operatingStatus === "인증 시 시간 확인" ? <p className={styles.stampBoothSchedule}>운영 시각을 확인할 수 없어 인증할 때 서버에서 확인합니다.</p> : null}
+                    <p className={styles.stampBoothInventory}>
+                      {booth.capacity > 0
+                        ? `재고 잔여 ${Math.max(0, booth.capacity - booth.used)} / ${booth.capacity}`
+                        : "재고 제한 없음"}
+                    </p>
+                  </div>
+                  <div className={styles.stampBoothProgress}>
+                    <span className={styles.stampBoothCount}>
+                      내 인증 {count} / {booth.limit}
+                    </span>
+                    <progress
+                      className={styles.stampBoothMeter}
+                      value={Math.min(count, booth.limit)}
+                      max={booth.limit}
+                      aria-label={`${booth.name}: 내 인증 ${count}회, 부스당 한도 ${booth.limit}회`}
+                    />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        ) : <p className={styles.stampHint}>아직 등록된 부스가 없습니다.</p>}
+      </section>
+      {failure ? <p className={styles.stampError} role="alert">{failure.message}</p> : null}
+      {failure?.limitReached && nextBooth ? (
+        <a href="#stamp-next-booth" className={styles.stampNextLink}>인증 가능한 부스 {availableBooths.length}곳 보기</a>
+      ) : null}
       {done ? <p className={styles.stampDone} role="status">{done}</p> : null}
+      {stampStatus ? <p className={styles.stampHint} role="status">{stampStatus === "checking"
+        ? "최신 부스 상태를 확인하고 있습니다."
+        : "최신 부스 상태를 확인하지 못했습니다. 위 목록은 마지막으로 확인한 정보입니다. 연결되면 다시 확인합니다."}</p> : null}
+      {!canVisit && !pending && !busy ? (
+        stampStatus ? null : <p className={styles.stampHint} role="status">지금 인증할 수 있는 부스가 없습니다. 위 목록에서 부스 상태를 확인하세요.</p>
+      ) : mode === "SELF" ? (
+        <>
+          <p className={styles.stampHint}>부스 QR을 이 화면에서 찍거나 코드를 복사해 입력하세요.</p>
+          {cameraOpen ? (
+            <CameraScan
+              manualHint="부스 코드를 직접 입력하세요."
+              onDetected={(scanned) => {
+                setCameraOpen(false);
+                void submit(scanned);
+              }}
+              onClose={() => setCameraOpen(false)}
+            />
+          ) : (
+            <button type="button" className={styles.submitButton} onClick={() => setCameraOpen(true)} disabled={busy || pending}>
+              카메라로 스캔
+            </button>
+          )}
+          <ValidatedForm
+            className={styles.stampPanel}
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submit(code);
+            }}
+          >
+            <div className={styles.stampField}>
+              <label htmlFor="booth-code">부스 코드</label>
+              <input
+                id="booth-code"
+                type="text"
+                value={code}
+                onChange={(event) => setCode(event.target.value)}
+                placeholder="ET:BOOTH:..."
+                autoComplete="off"
+                spellCheck={false}
+                required
+                disabled={busy || pending}
+              />
+            </div>
+            <button type="submit" className={styles.submitButton} disabled={busy || pending || !code.trim()}>
+              {busy ? "확인 중…" : "인증하기"}
+            </button>
+          </ValidatedForm>
+        </>
+      ) : (
+        <p className={styles.stampHint} role="note">직원이 티켓을 확인하는 방식입니다. 부스 직원에게 티켓을 제시하세요.</p>
+      )}
       <p className={styles.stampHint}>
         행사장 입장(체크인) 후 인증할 수 있고, 부스마다 정해진 횟수까지 인증됩니다.
       </p>
-    </section>
+    </div>
   );
 }
 
@@ -1355,6 +2096,8 @@ function VoteTab({
   voteConfig,
   voteSubmitted,
   ownPicks,
+  pending,
+  onDirtyChange,
   onSubmit,
 }: {
   slug: string;
@@ -1364,11 +2107,17 @@ function VoteTab({
   voteConfig: VoteConfig | null;
   voteSubmitted: boolean;
   ownPicks: Array<{ teamId: string; rank: number | null }>;
+  pending: boolean;
+  onDirtyChange: (dirty: boolean) => void;
   onSubmit: (picks: Array<{ teamId: string }>) => Promise<void>;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    onDirtyChange(selected.length > 0 && !voteSubmitted);
+    return () => onDirtyChange(false);
+  }, [selected.length, voteSubmitted, onDirtyChange]);
   const exactCount = voteConfig?.pickCount ?? null;
   const maxCount = exactCount ?? 5;
   const requiredCount = exactCount ?? Math.min(teams.length, 5);
@@ -1407,7 +2156,9 @@ function VoteTab({
     setError(null);
     try {
       await onSubmit(selected.map((teamId) => ({ teamId })));
+      setSelected([]);
     } catch (failure) {
+      if ((failure as { kind?: unknown }).kind === "uncertain") return;
       const message = (failure as { message?: unknown }).message;
       setError(typeof message === "string" ? message : "투표 제출에 실패했습니다.");
     } finally {
@@ -1481,6 +2232,7 @@ function VoteTab({
                 aria-pressed={active}
                 aria-label={`${team.name} 선택`}
                 onClick={() => toggle(team.id)}
+                disabled={loading || pending}
               >
                 <span className={styles.candidateAvatar} aria-hidden="true">
                   {team.name.charAt(0)}
@@ -1499,7 +2251,7 @@ function VoteTab({
       <button
         type="button"
         className={styles.submitButton}
-        disabled={loading || (exactCount !== null ? selected.length !== exactCount : !selected.length)}
+        disabled={loading || pending || (exactCount !== null ? selected.length !== exactCount : !selected.length)}
         onClick={submit}
       >
         {loading ? "제출 중입니다" : "투표 제출"}

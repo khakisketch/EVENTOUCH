@@ -100,8 +100,15 @@ export function ListIcon({ className }: IconProps) {
 export function RefreshIcon({ className }: IconProps) {
   return (
     <svg className={baseClass(className)} aria-hidden="true" focusable="false" viewBox="0 0 24 24">
-      <path d="M20 7v5h-5" />
-      <path d="M19.1 12a7.1 7.1 0 1 1-2.08-5.02L20 9" />
+      <path d="M20 5v5h-5M20 10a8 8 0 1 0 .2 4" />
+    </svg>
+  );
+}
+
+export function ArrowRightIcon({ className }: IconProps) {
+  return (
+    <svg className={baseClass(className)} aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+      <path d="M5 12h14m-6-6 6 6-6 6" />
     </svg>
   );
 }

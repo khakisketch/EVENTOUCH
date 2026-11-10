@@ -202,6 +202,13 @@
   font-size: var(--small);
 }
 
+.inlineButton[aria-pressed="true"] {
+  border-color: var(--brand-text);
+  background: var(--soft);
+  color: var(--brand-text);
+  font-weight: 700;
+}
+
 .submitted {
   margin: 0;
   padding: var(--s2) var(--s3);
@@ -249,6 +256,32 @@
   margin: 0;
   color: var(--muted);
   font-size: var(--small);
+  overflow-wrap: break-word;
+}
+
+.previousResponse {
+  display: grid;
+  gap: var(--s2);
+  padding-block: var(--s3);
+}
+.previousResponse label { display: grid; gap: var(--s2); }
+.previousResponse p { margin: 0; }
+
+.editDisclosure > summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--brand-text);
+  font-size: var(--small);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.editDisclosure > summary::-webkit-details-marker { display: none; }
+
+.editDisclosure > summary:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
 }
 
 .state {
@@ -312,3 +345,20 @@
     padding: var(--s4);
   }
 }
+
+.programDisclosure > summary {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--s2);
+  min-height: 56px; align-items: center; cursor: pointer; list-style: none;
+}
+.programDisclosure > summary::-webkit-details-marker { display: none; }
+.programDisclosure > summary h2 { font-size: var(--h3); font-weight: 650; word-break: keep-all; overflow-wrap: anywhere; }
+.programDisclosure > summary span { color: var(--brand-text); font-size: var(--small); }
+.programDisclosure[open] > summary { padding-bottom: var(--s3); margin-bottom: var(--s4); border-bottom: 1px solid var(--line); }
+.programDisclosure > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.returnLink { display: inline-flex; align-items: center; min-height: 44px; color: var(--muted); font-size: var(--small); }
+.scoreRow { display: grid; grid-template-columns: repeat(5, minmax(44px, 1fr)); gap: var(--s1); }
+.moduleCard .scoreChoice { display: flex; justify-content: center; gap: var(--s1); padding: var(--s1); margin: 0; min-width: 44px; }
+.scoreChoice input { width: 16px; height: 16px; }
+.scoreChoice:has(input:checked) { border-color: var(--brand-text); background: var(--soft); }
+.moduleCard { padding-block: var(--s3); border-width: 0 0 1px; border-radius: 0; }
+.moduleList { gap: var(--s2); }

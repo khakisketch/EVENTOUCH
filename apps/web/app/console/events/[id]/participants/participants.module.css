@@ -65,13 +65,23 @@
 .rosterTable tbody tr:hover { background: var(--surface-muted); }
 .rosterTable tbody tr[data-selected="true"] { background: var(--soft); }
 .rosterTable .selectColumn { width: 52px; padding-inline: var(--s1); }
+.rosterGroup { min-width: 76px; word-break: keep-all; overflow-wrap: anywhere; }
 .rosterTable .actionColumn { width: 160px; text-align: right; }
 .tableIdentity { display: grid; gap: var(--s1); min-width: 140px; }
 .tableIdentity strong { font-weight: 750; font-size: var(--body-work); overflow-wrap: anywhere; }
 .tableIdentity small { color: var(--muted); font-size: var(--label); overflow-wrap: anywhere; }
 .rosterContact { font-size: var(--small); color: var(--ink); font-weight: 650; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .participantStatus { display: inline-flex; width: max-content; white-space: nowrap; }
+.ticketReviewLabel { color: var(--warning); font-size: var(--label); font-weight: 650; overflow-wrap: anywhere; word-break: keep-all; }
 .presence, .presenceInside { white-space: nowrap; font-size: var(--small); }
+.reviewedExitFact { white-space: nowrap; }
+.reviewBody p, .reviewBody textarea { word-break: keep-all; overflow-wrap: anywhere; }
+.reconciliationFacts { margin: var(--s3) 0; padding: var(--s2) 0; border-block: 1px solid var(--line); }
+.reconciliationFacts > div { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: var(--s2); padding: var(--s1) 0; }
+.reconciliationFacts dt { color: var(--muted); }
+.reconciliationFacts dd { min-width: 0; margin: 0; word-break: keep-all; overflow-wrap: anywhere; }
+:global(.dialog) .reviewConfirmation { display: flex; align-items: center; min-height: 44px; gap: var(--s2); }
+.reviewConfirmationText { min-width: 0; word-break: keep-all; overflow-wrap: anywhere; }
 .presence::before, .presenceInside::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: var(--s2); border-radius: 999px; vertical-align: baseline; }
 .presence { color: var(--muted); }
 .presence::before { border: 1.5px solid var(--line-strong); background: transparent; }
@@ -92,19 +102,31 @@
 .emptyState { display: grid; justify-items: center; gap: var(--s2); padding: var(--s7) var(--s4); background: var(--paper); border: 1px solid var(--line); color: var(--muted); text-align: center; }
 .emptyState h3 { margin: 0; font-size: var(--h3); color: var(--ink); }
 .emptyState p { max-width: 65ch; margin: 0; }
+.reviewComplete { border: 0; border-top: 1px solid var(--line); padding-block: var(--s6); }
+.reviewCompleteIcon { width: 24px; height: 24px; color: var(--success); }
 
 /* One participant, requested explicitly. The existing console dialog owns
    focus/dismissal, while all permissions, confirmations and receipts stay
    with the roster's command handlers. */
 .rosterInspector { display: grid; gap: var(--s4); min-width: 0; }
+.editRecovery { display: grid; gap: var(--s2); padding: var(--s3); border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface-muted); overflow-wrap: anywhere; }
+.editRecovery h3, .editRecovery p { margin: 0; }
+.editActions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.editActions :global(.button) { min-height: 44px; }
 .inspectorHead { padding-bottom: var(--s2); border-bottom: 1px solid var(--line); }
 .inspectorIdentity h3 { margin: 0; font-size: var(--body); }
 .participantDetails { display: grid; gap: var(--s3); min-width: 0; }
 .detailFacts { margin: 0; color: var(--muted); font-size: var(--small); overflow-wrap: anywhere; }
+.consentRecord { display: grid; gap: var(--s2); padding-top: var(--s3); border-top: 1px solid var(--line); min-width: 0; }
+.consentRecord h4, .consentRecord p { margin: 0; }
+.consentRecord h4 { font-size: var(--body); }
+.consentRecord p { color: var(--muted); font-size: var(--small); overflow-wrap: anywhere; }
+.consentNotice { white-space: pre-wrap; }
 .detailActions { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; }
 .detailActions :global(.button) { min-height: 44px; font-size: var(--small); }
 .detailActions select { flex: 1 1 220px; min-height: 44px; }
 .rowConfirm { grid-column: 1 / -1; }
+.ticketReissueCopy { word-break: keep-all; overflow-wrap: break-word; }
 
 @media (max-width: 768px) {
   .workbenchPage > header h1 { font-size: var(--h1); }
@@ -165,9 +187,19 @@
 .quickPresets :global(.pill) { min-width: 0; min-height: 60px; padding: var(--s2) var(--s3); text-align: left; border-right: 1px solid var(--line); }
 .quickPresets :global(.pill:last-child) { border-right: 0; }
 .rosterMeta { flex-wrap: wrap; background: var(--paper); padding-inline: 0; }
+.nametagDisclosure { border-top: 1px solid var(--line); }
+.nametagDisclosure > summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--brand-text);
+  font-weight: 650;
+  cursor: pointer;
+}
 .scopeGroup { margin-left: auto; }
-.selectionWorkbench:not(:empty) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); padding: var(--s3); background: var(--soft); border-block: 1px solid var(--brand); }
-.selectionWorkbench > [role="status"] { flex: 1 1 100%; }
+.selectionWorkbench:not(:empty) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s3); padding: var(--s2) var(--s3); background: var(--surface-muted); border-block: 1px solid var(--line); }
+.selectionWorkbench > [role="status"] { flex: 1 1 260px; min-width: 0; }
+.selectionWorkbench > .selectionNotice { flex: 1 0 100%; margin: 0; color: var(--muted); font-size: var(--small); line-height: 1.5; word-break: keep-all; }
 .selectionWorkbench :global(.button) { min-height: 44px; }
 .selectionWorkbench:empty { display: none; }
 @media (max-width: 768px) {
@@ -177,7 +209,7 @@
   .rosterMeta { display: flex; gap: var(--s1) var(--s2); }
   .rosterMeta p { flex: 1 1 auto; }
   .scopeGroup { margin-left: 0; }
-  .selectionWorkbench:not(:empty) { padding: var(--s3) var(--s2); }
+  .selectionWorkbench:not(:empty) { padding: var(--s2); }
 }
 .utilityPair { align-items: flex-start; gap: var(--s2); }
 .rosterUtilities { position: relative; }
@@ -189,14 +221,27 @@
 @media (max-width: 768px) {
   .workbenchControls span[data-toolbar-inline].utilityPair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .workbenchControls .utilityPair > :global(.button-primary) { grid-column: auto; }
+  .utilityPair { position: relative; }
+  .rosterUtilities { position: static; }
   .rosterUtilities summary { justify-content: center; }
-  .utilityMenu { right: auto; left: 0; }
+  .utilityMenu { right: 0; left: auto; min-width: 0; width: min(190px, 100%); max-width: 100%; }
 }
 
 /* On a phone, keep the records close: choose a view with the native picker,
    and disclose the two deliberately different multi-select scopes on demand. */
-.mobileScope { display: none; }
+.mobileScope, .mobileScopeSingle { display: none; }
+.addFields { margin: 0; padding: 0; border: 0; min-width: 0; }
 .selectionActions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); }
+.selectionMore { position: relative; }
+.selectionMore > summary { display: flex; align-items: center; justify-content: center; gap: var(--s2); min-height: 44px; padding: var(--s2) var(--s3); border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--paper); font-weight: 650; cursor: pointer; list-style: none; }
+.selectionMore > summary::-webkit-details-marker { display: none; }
+.selectionMore > summary::after { content: '⌄'; }
+.selectionMore > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.selectionMore[open] > summary { background: var(--nav-hover); }
+.selectionMenu { position: absolute; z-index: 4; top: calc(100% + var(--s1)); right: 0; display: grid; gap: var(--s1); width: 260px; max-width: calc(100vw - 48px); padding: var(--s2); background: var(--paper); border: 1px solid var(--line-strong); border-radius: var(--radius); }
+.selectionMenu :global(.button) { justify-content: flex-start; width: 100%; text-align: left; white-space: normal; }
+.selectionActionHint { margin: 0; padding: 0 var(--s2) var(--s2); color: var(--muted); font-size: var(--label); word-break: keep-all; }
+.selectionPolicy { display: block; margin-top: var(--s1); }
 @media (max-width: 768px) {
   .quickPresets { display: none; }
   .rosterTabs .mobilePresetPicker { display: block; flex: 1 1 100%; }
@@ -204,6 +249,7 @@
   .rosterMeta p { grid-column: 1 / -1; }
   .rosterMeta > .scopeGroup, .rosterMeta > .desktopPageSelect { display: none; }
   .mobileScope { display: block; justify-self: start; position: relative; }
+  .mobileScopeSingle { display: inline-flex; justify-self: start; }
   .mobileScope summary { display: flex; align-items: center; min-height: 44px; padding: 0 var(--s3); color: var(--brand-text); font-size: var(--small); font-weight: 700; cursor: pointer; list-style: none; }
   .mobileScope summary::-webkit-details-marker { display: none; }
   .mobileScope summary::after { content: '⌄'; margin-left: var(--s2); }
@@ -211,7 +257,60 @@
   .mobileScopeOptions :global(.button) { min-height: 44px; text-align: left; }
   .mobileScopeOptions p { margin: 0; color: var(--muted); font-size: var(--small); }
   .selectionWorkbench:not(:empty) { gap: var(--s1); }
-  .selectionActions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; gap: var(--s2); }
+  .selectionActions { display: flex; flex-wrap: wrap; width: 100%; gap: var(--s2); }
   .selectionActions :global(.button) { min-width: 0; padding-inline: var(--s2); word-break: keep-all; overflow-wrap: break-word; }
-  .selectionActions > [role="status"] { grid-column: 1 / -1; }
+  .selectionActions > [role="status"] { flex-basis: 100%; }
+  .selectionMore { margin-left: auto; }
 }
+
+@media (min-width: 1200px) {
+  .rosterWorkbench:has([role="dialog"][aria-modal]:not([aria-modal="true"])) { grid-template-columns: minmax(0, 1fr) 320px; }
+  .rosterWorkbench:has([role="dialog"]:not([aria-modal="true"])) {
+    display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--s4); align-items: start;
+  }
+  .rosterWorkbench:has([role="dialog"]:not([aria-modal="true"])) .tableScroll { max-height: 70svh; }
+}
+.rosterTable tr[data-inspected="true"] { background: var(--soft); }
+
+/* Dense desktop rows retain the full 44px controls without adding 24px around them. */
+.rosterTable th, .rosterTable td { padding-block: var(--s1); }
+
+/* Mobile lookup keeps status, list tools and add on one row. The full
+   count and action names remain available to assistive technology. */
+.shortAction, .metaShort { display: none; }
+@media (max-width: 768px) {
+  .workbenchControls span[data-toolbar-inline].utilityPair {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: start;
+  }
+  .utilityPair .mobilePresetPicker { display: block; min-width: 0; margin: 0; }
+  .mobilePresetPicker select { width: 100%; min-width: 0; min-height: 44px; padding-inline: var(--s2); font-size: var(--small); }
+  .rosterUtilities summary { min-width: 64px; padding-inline: var(--s2); font-size: var(--small); }
+  .utilityPair > :global(.button-primary) { min-width: 72px; padding-inline: var(--s2); }
+  .longAction { display: none; }
+  .shortAction, .metaShort { display: inline; }
+  .rosterMeta { grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; }
+  .rosterMeta p { grid-column: auto; }
+  .metaLong { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .rosterMeta > :global(.button) { min-width: 44px; padding-inline: var(--s2); }
+  .mobileScopeSingle { padding-inline: var(--s2); }
+}
+
+/* At narrow phone widths the preset names its complete attendance scope.
+   Give it room beside the compact tools control instead of clipping the
+   meaningful part of the selected value to make space for three columns. */
+@media (max-width: 360px) {
+  .workbenchControls span[data-toolbar-inline].utilityPair {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
+
+.groupConflict {
+  border-block: 1px solid var(--warning-line);
+  padding-block: var(--s3);
+  overflow-wrap: anywhere;
+}
+.groupConflict h3 { margin: 0 0 var(--s2); font-size: var(--body); }
+.groupConflict p { margin: var(--s2) 0; }
+.groupConflictList { margin: var(--s2) 0; padding-left: var(--s4); }
+.groupConflictList li + li { margin-top: var(--s1); }

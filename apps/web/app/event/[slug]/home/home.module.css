@@ -32,6 +32,14 @@
   object-fit: cover;
 }
 
+/* New events use a neutral built-in when no image was selected. Existing
+   events keep their historical asset; a failed image uses this legible
+   fallback without changing the saved customer design. */
+.bannerNeutral { background: var(--ink); }
+.bannerNeutral.bannerToneDark { background: var(--surface-muted); }
+.bannerNeutral .bannerText { inset: 0 8%; display: flex; flex-direction: column; justify-content: center; }
+.bannerNeutral .eventTitle, .bannerNeutral .heroSubtitle { text-shadow: none; }
+
 .eventBanner::after {
   position: absolute;
   z-index: 1;
@@ -98,6 +106,7 @@
 }
 
 .bannerImageOnly .bannerText { inset: auto auto 0 0; }
+.bannerNeutral.bannerImageOnly .bannerText { inset: 0 8%; }
 
 .bannerExtended {
   display: flex;
@@ -126,10 +135,10 @@
 .bannerImageFailure {
   position: absolute;
   z-index: 3;
-  inset: 0;
+  inset: auto 0 0;
   display: grid;
   place-items: center;
-  padding: 16px;
+  padding: 8px 16px;
   background: #e8f2f5;
   color: #243943;
   font-size: 13px;
@@ -158,6 +167,34 @@
   margin: 0 auto;
   padding: 12px 24px 24px;
 }
+
+.moreLinks {
+  display: grid;
+  gap: 8px;
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 0 24px 28px;
+}
+.moreLinks a,
+.moreLinks button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #fff;
+  color: #252a34;
+  font-weight: 700;
+  text-decoration: none;
+  border: 0;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.moreLinks button:disabled { opacity: 1; cursor: default; }
 
 .menuButton {
   position: relative;
@@ -764,6 +801,63 @@
    and pastes it here in the tab that holds their ticket. */
 .stampPanel { display: flex; flex-direction: column; gap: var(--s3); }
 .stampHint { margin: 0; color: var(--muted); font-size: var(--small); }
+.stampWorkspace {
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+.stampProgress { display: grid; gap: var(--s3); }
+.stampProgressHeading { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
+.stampProgressTitle { margin: 0; color: var(--ink); font-size: var(--h2); }
+.stampModeBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--ink);
+  font-size: var(--label);
+  font-weight: 750;
+  white-space: nowrap;
+}
+.stampBoothList { display: grid; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
+.stampBooth {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s3);
+  min-width: 0;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--radius-small);
+  background: var(--surface-muted);
+}
+.stampBoothMain { display: grid; flex: 1; gap: var(--s1); min-width: 0; }
+.stampBoothTitleRow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); min-width: 0; }
+.stampBoothName { min-width: 0; color: var(--ink); font-weight: 750; overflow-wrap: anywhere; }
+.stampBoothStatus {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: 26px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--label);
+  font-weight: 750;
+  line-height: 1.4;
+}
+.stampStatusOpen { background: var(--success-soft); color: var(--success); }
+.stampStatusClosed { background: var(--surface-muted); color: var(--muted); }
+.stampStatusWaiting { background: var(--warning-soft); color: var(--warning); }
+.stampStatusUnknown { background: var(--info-soft); color: var(--info); }
+.stampBoothSchedule,
+.stampBoothInventory { margin: 0; font-size: var(--label); line-height: 1.45; word-break: keep-all; overflow-wrap: break-word; }
+.stampBoothSchedule { color: var(--ink); }
+.stampBoothInventory { color: var(--muted); }
+.stampBoothProgress { display: grid; flex: none; justify-items: end; gap: 3px; width: clamp(84px, 26vw, 104px); }
+.stampBoothMeter { display: block; width: 100%; height: 7px; accent-color: var(--brand); }
+.stampBoothCount { flex: none; color: var(--brand-text); font-size: var(--small); font-weight: 800; font-variant-numeric: tabular-nums; }
 .stampField { display: grid; gap: var(--s1); }
 .stampField input {
   min-height: 44px;
@@ -776,7 +870,69 @@
 }
 .stampField input:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .stampError { margin: 0; color: var(--danger); font-size: var(--small); }
+.stampNextLink {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  min-height: 44px;
+  color: var(--brand-text);
+  font-size: var(--small);
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .stampDone { margin: 0; color: var(--brand-text); font-weight: 700; }
+
+.commandRecovery {
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--warning-line);
+  border-radius: var(--radius);
+  background: var(--warning-soft);
+}
+.commandRecoveryTitle { margin: 0; color: var(--ink); font-size: var(--h3); }
+.commandRecoveryMemory { margin: 0; color: var(--muted); font-size: var(--label); line-height: 1.5; overflow-wrap: anywhere; }
+.commandRecoveryItem { display: grid; gap: var(--s2); padding-top: var(--s3); border-top: 1px solid var(--warning-line); min-width: 0; }
+.commandRecoveryItemTitle { margin: 0; color: var(--ink); font-size: var(--small); font-weight: 800; }
+.commandRecoveryMessage { margin: 0; color: var(--warning); font-size: var(--small); font-weight: 700; line-height: 1.5; overflow-wrap: anywhere; }
+.commandRecoveryNote { margin: 0; color: var(--muted); font-size: var(--label); line-height: 1.5; }
+.commandRecoveryProgress { margin: 0; color: var(--info); font-size: var(--small); font-weight: 700; }
+.commandRecoveryActions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s2); }
+.recoveryRetryButton,
+.recoveryAbandonButton {
+  min-height: 44px;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--radius-small);
+  font: inherit;
+  font-size: var(--small);
+  font-weight: 750;
+  cursor: pointer;
+}
+.recoveryRetryButton { border: 1px solid var(--brand); background: var(--brand); color: var(--on-brand); }
+.recoveryAbandonButton { border: 1px solid var(--line-strong); background: var(--paper); color: var(--ink); }
+.recoveryRetryButton:disabled,
+.recoveryAbandonButton:disabled { opacity: 0.6; cursor: wait; }
+.recoveryRetryButton:focus-visible,
+.recoveryAbandonButton:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.commandCompletedList { display: grid; gap: var(--s2); }
+.commandCompleted {
+  margin: 0;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--success-line);
+  border-radius: var(--radius);
+  background: var(--success-soft);
+  color: var(--success);
+  font-size: var(--small);
+  font-weight: 750;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 360px) {
+  .commandRecoveryActions { grid-template-columns: minmax(0, 1fr); }
+  .stampBooth { gap: var(--s2); padding-inline: var(--s2); }
+  .stampBoothProgress { width: 82px; }
+}
 
 .votePanel { display: flex; flex-direction: column; gap: var(--s4); }
 .voteTitle {
@@ -1032,6 +1188,27 @@
   color: var(--ink);
 }
 .stateMessage { margin: 0; color: var(--muted); font-size: var(--small); }
+.refreshNotice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  margin-bottom: var(--s4);
+  color: var(--ink);
+  font-size: var(--small);
+}
+.refreshNotice button {
+  min-height: 44px;
+  padding: 0 var(--s2);
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
 .stateAction { margin: 0; }
 .stateButton {
   display: inline-flex;
@@ -1165,3 +1342,63 @@
 /* The home stays the simple entry list: a QR is not handed to every
    participant, so the landing never printed one. The ticket QR lives on the
    ticket screen, where the desk scans it. */
+
+/* Compact task entries leave the customer's banner and its styling alone. */
+.menuBoard,
+.previewShortMenu {
+  gap: 8px;
+  max-width: 520px;
+  padding: 16px 16px max(24px, env(safe-area-inset-bottom, 0px));
+}
+.menuButton,
+.previewShortMenu .menuButton {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-content: center;
+  column-gap: 10px;
+  row-gap: 2px;
+  aspect-ratio: auto;
+  min-height: 68px;
+  padding: 12px;
+  border: 1px solid #d9e1e5;
+  border-radius: 8px;
+  text-align: left;
+}
+.menuButton:hover { transform: none; box-shadow: none; background: #f7f8fa; }
+.menuButton:first-child {
+  grid-column: 1 / -1;
+  min-height: 56px;
+  border-color: #f1b99f;
+  background: #fff3eb;
+}
+.menuButton:first-child:hover { background: #ffe8d9; }
+.menuIcon { width: 24px; height: 24px; grid-row: 1 / 3; }
+.menuLabel,
+.previewShortMenu .menuLabel {
+  justify-content: flex-start;
+  min-height: 0;
+  font-size: 14px;
+  text-align: left;
+}
+.menuNeedTicket {
+  position: static;
+  grid-column: 2;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  font-size: 11px;
+  min-height: 0;
+  white-space: nowrap;
+  text-align: left;
+}
+@media (max-width: 360px) {
+  .menuButton, .previewShortMenu .menuButton { grid-template-columns: 20px minmax(0, 1fr); column-gap: 6px; padding: 10px 8px; }
+  .menuIcon { width: 20px; height: 20px; }
+  .menuLabel { font-size: 13px; }
+}
+
+.menuGroupLabel { grid-column: 1 / -1; margin: var(--s2) 0 0; padding-inline: var(--s1); color: var(--home-background-ink, #254c60); font-size: var(--small); font-weight: 650; }
+.menuButton:first-child { grid-column: 1 / -1; min-height: 64px; }
+.detailHeader { border-bottom: 1px solid var(--line); background: var(--paper); }
+
+.detailHeader .detailEventName { color: var(--ink); }

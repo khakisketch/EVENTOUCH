@@ -4,6 +4,28 @@
   font-weight: 650;
 }
 
+.drawRecovery {
+  display: grid;
+  gap: var(--s2);
+  margin-block: var(--s4);
+  padding: var(--s4);
+  border: 1px solid var(--warning-line);
+  border-radius: var(--radius-small);
+  background: var(--warning-soft);
+  color: var(--ink);
+}
+.drawRecovery h2, .drawRecovery p { margin: 0; }
+.drawRecovery h2 { font-size: var(--body-work); }
+.drawRecovery p { font-size: var(--small); line-height: 1.5; word-break: keep-all; }
+.drawRecoveryActions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.drawRecoveryActions :global(.button) { min-height: 44px; }
+.luckyProgress { display: grid; gap: var(--s2); margin-block: var(--s4); padding-block: var(--s3); border-bottom: 1px solid var(--line); }
+.luckyProgress h2, .luckyProgress p { margin: 0; }
+.luckyProgress h2 { font-size: var(--body-work); }
+.luckyProgress p { font-size: var(--small); line-height: 1.5; word-break: keep-all; }
+.luckyProgress progress { width: 100%; height: 8px; accent-color: var(--brand-text); }
+.luckyProgress :global(.button) { justify-self: start; min-height: 44px; }
+
 .statusOpen {
   background: var(--success-soft);
   color: var(--success);
@@ -91,6 +113,24 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--s3);
+}
+.rouletteScheduleGrid { align-items: start; }
+.rouletteTimeAction { justify-self: start; }
+.rouletteFields { display: grid; gap: var(--s3); min-width: 0; margin: 0; padding: 0; border: 0; }
+.rouletteConflict { display: grid; gap: var(--s3); min-width: 0; padding: var(--s4); background: var(--surface-muted); }
+.rouletteConflict h3, .rouletteConflict h4, .rouletteConflict p { margin: 0; }
+.rouletteConflict h3 { font-size: var(--body-work); }
+.rouletteConflict h4, .rouletteConflict p { font-size: var(--small); line-height: 1.5; }
+.rouletteComparison { display: grid; margin: 0; }
+.rouletteComparisonRow { display: grid; grid-template-columns: minmax(90px, .55fr) repeat(2, minmax(0, 1fr)); gap: var(--s3); padding: var(--s3) 0; border-top: 1px solid var(--line); font-size: var(--small); }
+.rouletteComparisonRow dt { font-weight: 700; }
+.rouletteComparisonRow dd { min-width: 0; margin: 0; word-break: keep-all; overflow-wrap: break-word; }
+.rouletteComparisonRow dd span { display: block; margin-bottom: var(--s1); color: var(--muted); font-size: var(--small); }
+.rouletteDifference { display: block; color: var(--brand-text); font-weight: 650; }
+@media (max-width: 600px) {
+  .rouletteComparisonRow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rouletteComparisonRow dt { grid-column: 1 / -1; }
+  .rouletteDifference { display: inline; margin-left: var(--s2); }
 }
 .checkLine {
   display: flex;

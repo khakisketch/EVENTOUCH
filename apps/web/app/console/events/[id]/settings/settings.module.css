@@ -61,6 +61,8 @@
   overflow-wrap: break-word;
 }
 
+.ticketExpiryHelp { margin-block-start: var(--s2); }
+
 /* 기본 정보 탭 안의 과제 묶음(식별 → 일시·규모 → 접수 정책): 위에는
    여백을 넉넉히, 안은 촘촘히. 래퍼·소제목만 추가하며 입력 id·순서·
    검증·포커스·44px 규칙은 그대로. */
@@ -244,6 +246,14 @@
   color: var(--danger);
 }
 
+.fieldError {
+  margin: var(--s2) 0 0;
+  color: var(--danger);
+  font-size: var(--small);
+  font-weight: 650;
+}
+.fieldRecovery { margin-top: var(--s2); }
+
 .pageFold {
   display: grid;
   gap: var(--s3);
@@ -353,6 +363,8 @@
 }
 
 .stagePrecondition {
+  display: grid;
+  gap: var(--s2);
   margin: 0;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--warning-line);
@@ -402,4 +414,61 @@
   margin: 0;
   padding: 0;
   border: 0;
+}
+
+.recovery {
+  display: grid;
+  gap: var(--s2);
+  margin: var(--s3) 0;
+  padding: var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+.recovery h2, .recovery p { margin: 0; }
+.recoveryActions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+
+.scheduleReview {
+  display: grid;
+  gap: var(--s2);
+  margin-top: var(--s4);
+  padding: var(--s4);
+  border-left: 3px solid var(--brand);
+  background: var(--surface-muted);
+}
+.scheduleReview h3, .scheduleReview p { margin: 0; }
+.scheduleReview h3 { font-size: var(--body); }
+.scheduleReview p { color: var(--muted); line-height: 1.6; }
+.scheduleReviewLinks { display: flex; flex-wrap: wrap; gap: 0 var(--s4); }
+.scheduleReviewLinks a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 650; }
+
+.conflict {
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
+  padding: var(--s4) 0;
+  border-block: 1px solid var(--warning-line);
+}
+.conflict h3, .conflict p { margin: 0; }
+.conflict h3 { font-size: var(--body); }
+.conflict > button { justify-self: start; }
+.conflictComparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s3);
+}
+.conflictComparison > div { min-width: 0; }
+.conflictComparison strong { font-size: var(--small); }
+.conflictComparison p { margin-top: var(--s1); white-space: pre-wrap; overflow-wrap: anywhere; }
+.conflictFields { margin: var(--s2) 0 0; padding-left: var(--s4); overflow-wrap: anywhere; }
+.settingsComparison { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: var(--small); text-align: left; }
+.settingsComparison caption { margin-bottom: var(--s2); text-align: left; font-weight: 700; }
+.settingsComparison th, .settingsComparison td { padding: var(--s2); border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+.settingsComparison th:first-child { width: 26%; }
+.settingsComparison thead th { color: var(--muted); font-weight: 650; }
+.settingsComparison tbody th { font-weight: 550; }
+.settingsComparison .comparisonChanged { background: var(--surface-muted); }
+.comparisonDifference { display: block; color: var(--brand-text); font-size: var(--xsmall, 12px); font-weight: 700; }
+@media (max-width: 640px) {
+  .conflictComparison { grid-template-columns: minmax(0, 1fr); }
 }

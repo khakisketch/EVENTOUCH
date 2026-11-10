@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { loginHrefForLocation } from "../../../auth-redirect";
@@ -9,12 +9,17 @@ import { formatConsoleEventMeta } from "../../console-ui/ConsolePageHeader";
 import ConsolePage from "../../console-ui/ConsolePage";
 import ConsoleFeedback from "../../console-ui/ConsoleFeedback";
 import ConsoleSection from "../../console-ui/ConsoleSection";
+import ConsoleRefreshButton from "../../console-ui/ConsoleRefreshButton";
+import ConsoleTaskQueue, { type ConsoleTask } from "../../console-ui/ConsoleTaskQueue";
+import { participationSnapshot, type ParticipationSnapshot } from "../../../../lib/participation-work";
 import ConsoleStatePanel from "../../console-ui/ConsoleStatePanel";
-import { CopyIcon, CheckIcon } from "../../console-ui/ConsoleIcons";
-import { eventCloseHref } from "../../console-event-close";
+import { ArrowRightIcon, CopyIcon, CheckIcon, RefreshIcon } from "../../console-ui/ConsoleIcons";
+import { eventCloseHref, readCloseSnapshot } from "../../console-event-close";
 import styles from "./event-overview.module.css";
 import { consoleFetch, subscribeConsoleFreshness } from "../../../../lib/console-api";
-import { isOverdueManualMessage } from "../../../../lib/message-attention";
+import { hasValidScheduledInstant, messageNeedsAttention } from "../../../../lib/message-attention";
+import { attendanceNeedsReview, attendanceNotEntered } from "../../../../lib/attendance-state.cjs";
+import { cancellationNeedsReview } from "../../../../lib/cancellation-state.cjs";
 
 type CheckRow = {
   id: string;
@@ -52,12 +57,19 @@ type Overview = {
   venue: string;
   stage: string;
   capacity: number;
+  capacityKnown: boolean;
   registered: number;
   approved: number;
   pendingApproval: number;
   waitlist: number;
+  waitlistOpportunity: { count: number; remaining: number | null; uncertain: boolean; excluded: number } | null;
   everIn: number;
   confirmedNotEntered: number;
+  attendanceReview: number;
+  cancellationReview: number;
+  participantsAvailable: boolean;
+  checksAvailable: boolean;
+  modulesAvailable: boolean;
   entryRate: number;
   periods: PeriodCounts;
   // Arbitrary-range analysis reuses the exact same definitions: cancelled
@@ -78,9 +90,16 @@ type Overview = {
   publishedReportCount: number;
   draftReportCount: number;
   programs: ScheduledProgram[];
+  participation: ParticipationSnapshot;
   updatedAt: string;
   canManageEvent: boolean;
-  overdueMessages: number;
+  messageAttention: number;
+  messageAttentionBase: number;
+  messageDueAt: number[];
+  allMessageDueAt: number[];
+  messageClockAt: number;
+  messageReviewIncomplete: boolean;
+  messageConnection: "connected" | "disconnected" | "unknown";
 };
 
 type OverviewState =
@@ -108,6 +127,12 @@ const UPDATED_TIME_FORMAT = new Intl.DateTimeFormat("ko-KR", {
   minute: "2-digit",
   hour12: false,
 });
+const LIVE_CHECK_TIME_FORMAT = new Intl.DateTimeFormat("ko-KR", {
+  hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+});
+const LIVE_CHECK_INTERVAL_MS = 15000;
+const LIVE_FULL_READ_INTERVAL_MS = 60000;
+const OVERVIEW_READ_TIMEOUT_MS = 8000;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -276,8 +301,8 @@ function metricsForStage(overview: Overview, stage: string, base: string): Metri
     case "READY":
       // Exactly three counts in a row. 정원/대기는 별도 설정 메타 행으로 둔다.
       return [
-        { label: "신청", value: overview.registered, detail: "취소 제외 등록", href: participantsHref },
-        { label: "참가 확정", value: overview.approved, detail: "승인된 참가자", href: `${participantsHref}?status=APPROVED` },
+        { label: "신청", value: overview.registered, detail: overview.cancellationReview ? "신청 상태 기준" : "취소 제외 등록", href: participantsHref },
+        { label: overview.cancellationReview ? "승인 상태" : "참가 확정", value: overview.approved, detail: overview.cancellationReview ? "취소 확인 필요 인원 포함" : "승인된 참가자", href: `${participantsHref}?status=APPROVED` },
         { label: "승인 대기", value: overview.pendingApproval, detail: "검토가 필요한 신청", href: `${participantsHref}?status=PENDING` },
       ];
     default:
@@ -287,9 +312,10 @@ function metricsForStage(overview: Overview, stage: string, base: string): Metri
 
 // 기간별 통계의 실제 집계와 정의를 한 곳에 둔다. DRAFT/READY에서는 준비
 // 섹션과 나란한 독립 섹션에, LIVE/ENDED/ARCHIVED에서는 지표 섹션 안에 둔다.
-function PeriodDetails({ rows, applications, entries }: {
+function PeriodDetails({ rows, applications, entries, cancellationReview }: {
   rows: Array<[string, PeriodCounts["today"]]>;
   applications: string[];
+  cancellationReview: number;
   entries: Array<{ at: string; key: string }>;
 }) {
   return (
@@ -314,9 +340,9 @@ function PeriodDetails({ rows, applications, entries }: {
       </table>
       <details className={styles.periodDefinitions}>
         <summary>집계 기준</summary>
-        <p>신청은 취소된 신청을 제외합니다. 입장은 정정된 기록을 제외하며 같은 기간의 재입장은 중복 집계하지 않습니다.</p>
+        <p>신청은 신청 상태가 취소인 기록을 제외합니다.{cancellationReview ? " 취소 기록과 신청 상태가 다른 인원은 확인 전까지 포함합니다." : ""} 입장은 정정된 기록을 제외하며 같은 기간의 재입장은 중복 집계하지 않습니다.</p>
       </details>
-      <CustomRangeAnalysis applications={applications} entries={entries} />
+      <CustomRangeAnalysis applications={applications} entries={entries} cancellationReview={cancellationReview} />
     </>
   );
 }
@@ -344,7 +370,7 @@ function toLocalKey(value: string): string | null {
   return localDateKey(new Date(time));
 }
 
-function CustomRangeAnalysis({ applications, entries }: { applications: string[]; entries: Array<{ at: string; key: string }> }) {
+function CustomRangeAnalysis({ applications, entries, cancellationReview }: { applications: string[]; entries: Array<{ at: string; key: string }>; cancellationReview: number }) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const weekAgo = new Date(today);
@@ -534,7 +560,7 @@ function CustomRangeAnalysis({ applications, entries }: { applications: string[]
               </button>
             </p>
           ) : null}
-          <p className={styles.rangeNote}>일별 입장은 그 날의 고유 입장자 수이며, 기간 고유 입장은 선택한 전체 기간의 중복 제거 수라서 일별 합의 합과 다를 수 있습니다. 취소 제외·정정 제외 기준은 위 고정 집계와 같습니다.</p>
+          <p className={styles.rangeNote}>일별 입장은 그 날의 고유 입장자 수이며, 기간 고유 입장은 선택한 전체 기간의 중복 제거 수라서 일별 합의 합과 다를 수 있습니다. {cancellationReview ? "신청 상태·정정 제외 기준은 위 고정 집계와 같습니다." : "취소 제외·정정 제외 기준은 위 고정 집계와 같습니다."}</p>
         </>
       ) : null}
     </div>
@@ -544,7 +570,8 @@ function CustomRangeAnalysis({ applications, entries }: { applications: string[]
 export default function EventOverview({ eventId }: { eventId: string }) {
   const router = useRouter();
   const [state, setState] = useState<OverviewState>({ kind: "loading" });
-  const [reloadTick, setReloadTick] = useState(0);
+  const [reloadRequest, setReloadRequest] = useState({ sequence: 0, automatic: false });
+  const lastFullRead = useRef<{ eventId: string; version: string | null; at: number } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [linkNotice, setLinkNotice] = useState<string | null>(null);
@@ -552,15 +579,64 @@ export default function EventOverview({ eventId }: { eventId: string }) {
   // the link lands on the clipboard, so the boxed button itself confirms the
   // outcome next to the action (the header feedback still announces it).
   const [linkCopied, setLinkCopied] = useState(false);
+  const lastShellAttention = useRef<{ eventId: string; count: number; due: number } | null>(null);
 
-  useEffect(() => subscribeConsoleFreshness(() => setReloadTick((tick) => tick + 1)), []);
+  const monitoring = state.kind === "ready" && state.overview.stage === "LIVE" && state.overview.canManageEvent;
+  const attentionCount = state.kind === "ready" ? state.overview.messageAttention : null;
+  const dueCount = state.kind === "ready" ? state.overview.allMessageDueAt.filter((at) => at <= state.overview.messageClockAt).length : null;
+
+  useEffect(() => {
+    if (attentionCount === null || dueCount === null) return;
+    const previous = lastShellAttention.current;
+    lastShellAttention.current = { eventId, count: attentionCount, due: dueCount };
+    if (previous && previous.eventId === eventId && (previous.count !== attentionCount || previous.due !== dueCount)) {
+      window.dispatchEvent(new CustomEvent("eventouch:shell-reload"));
+    }
+  }, [eventId, attentionCount, dueCount]);
+
+  useEffect(() => subscribeConsoleFreshness(() => {
+    setReloadRequest(({ sequence }) => ({ sequence: sequence + 1, automatic: false }));
+  }), []);
+
+  useEffect(() => {
+    if (!monitoring || refreshing) return;
+    let timer: number | undefined;
+    function schedule() {
+      window.clearTimeout(timer);
+      if (document.visibilityState !== "visible") return;
+      const delay = !lastFullRead.current?.version ? LIVE_FULL_READ_INTERVAL_MS
+        : refreshError ? LIVE_CHECK_INTERVAL_MS * 2 : LIVE_CHECK_INTERVAL_MS;
+      timer = window.setTimeout(() => {
+        if (document.visibilityState === "visible") {
+          setReloadRequest((current) => current.sequence === reloadRequest.sequence
+            ? { sequence: current.sequence + 1, automatic: true } : current);
+        }
+      }, delay);
+    }
+    schedule();
+    document.addEventListener("visibilitychange", schedule);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", schedule);
+    };
+  }, [monitoring, refreshing, refreshError, reloadRequest]);
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), OVERVIEW_READ_TIMEOUT_MS);
     async function load() {
       setRefreshing(true);
       try {
-        const res = await consoleFetch(`/api/events/${encodeURIComponent(eventId)}/bootstrap`, { cache: "no-store" });
+        const previous = lastFullRead.current;
+        // Regular full reads also refresh time-based items such as overdue
+        // messages, whose display can change without an event write.
+        const version = reloadRequest.automatic && previous?.eventId === eventId
+          && performance.now() - previous.at < LIVE_FULL_READ_INTERVAL_MS ? previous.version : null;
+        const endpoint = `/api/events/${encodeURIComponent(eventId)}/bootstrap`;
+        const res = await consoleFetch(version ? `${endpoint}?ifVersion=${encodeURIComponent(version)}&messageRecipientReview=1` : `${endpoint}?messageRecipientReview=1`, {
+          cache: "no-store", signal: controller.signal,
+        });
         if (cancelled) return;
         if (res.status === 401) {
           router.push(
@@ -568,19 +644,45 @@ export default function EventOverview({ eventId }: { eventId: string }) {
           );
           return;
         }
+        if (res.status === 403 || res.status === 404) {
+          lastFullRead.current = null;
+          setState({ kind: "failed", message: res.status === 404 ? "행사를 찾을 수 없습니다." : "행사에 대한 접근 권한을 확인하세요." });
+          return;
+        }
         const data = (await res.json().catch(() => null)) as {
           state?: {
+            unchanged?: unknown;
+            refreshVersion?: unknown;
             events?: unknown;
             clients?: unknown;
             accounts?: unknown;
+            integrations?: unknown;
+            messageSchedule?: unknown;
+            messageReadObservedAt?: unknown;
+            recipientReviewVersions?: unknown;
             workspaces?: Record<string, Record<string, unknown> | undefined>;
           } | null;
         } | null;
+        if (cancelled) return;
+        if (controller.signal.aborted) throw controller.signal.reason;
         const bootstrap = data?.state;
         if (!res.ok || !bootstrap) {
           const message = "운영 현황을 불러오지 못했습니다.";
           setRefreshError(message);
           setState((current) => current.kind === "ready" ? current : { kind: "failed", message });
+          return;
+        }
+        if (version && bootstrap.unchanged === true && bootstrap.refreshVersion === version) {
+          const updatedAt = new Date().toISOString();
+          const observed = Date.parse(text(bootstrap.messageReadObservedAt));
+          const messageClockAt = Number.isFinite(observed) ? observed : Date.now();
+          setState((current) => current.kind === "ready" ? { kind: "ready", overview: {
+            ...current.overview,
+            messageAttention: current.overview.messageAttentionBase + current.overview.messageDueAt.filter((at) => at <= messageClockAt).length,
+            messageClockAt,
+            updatedAt,
+          } } : current);
+          setRefreshError(null);
           return;
         }
         const event = records(bootstrap.events).find((item) => item.id === eventId);
@@ -601,10 +703,35 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         );
         const clients = records(bootstrap.clients);
         const client = clients.find((item) => item.id === event.clientId);
+        const sourceAvailability = asRecord(workspace.reportSourceAvailability);
+        const completeRecords = (value: unknown) => Array.isArray(value) && records(value).length === value.length;
+        const participantsAvailable = (canManageEvent ? sourceAvailability?.participants === true : workspace.participantsAvailable === true) && completeRecords(workspace.participants);
+        const checksAvailable = (canManageEvent ? sourceAvailability?.checks === true : workspace.checksAvailable === true) && completeRecords(workspace.checks);
+        const modulesAvailable = readCloseSnapshot(event, workspace).modulesAvailable;
         const participantRows = records(workspace.participants).filter(
-          (person) => person.status !== "CANCELLED"
+          (person) => String(person.status || "").toUpperCase() !== "CANCELLED"
         );
         const approved = participantRows.filter((person) => person.status === "APPROVED");
+        const waitlistRows = participantRows.filter((person) => person.status === "WAITLIST");
+        const waiting = waitlistRows.filter((person) => typeof person.id === "string" && person.id.trim() !== "" &&
+          (person.cancelled === undefined || person.cancelled === false));
+        const waitlistUncertain = waitlistRows.some((person) => typeof person.id !== "string" || person.id.trim() === "" ||
+          (person.cancelled !== undefined && typeof person.cancelled !== "boolean"));
+        const capacityValue = event.capacity;
+        const capacityKnown = (typeof capacityValue === "number" && Number.isSafeInteger(capacityValue) && capacityValue >= 0) ||
+          (typeof capacityValue === "string" && /^\d+$/.test(capacityValue) && Number.isSafeInteger(Number(capacityValue)));
+        const statusesKnown = participantsAvailable && records(workspace.participants).every((person) =>
+          typeof person.id === "string" && person.id.trim() !== "" &&
+          ["APPROVED", "PENDING", "WAITLIST", "CANCELLED"].includes(text(person.status)) &&
+          (person.cancelled === undefined || typeof person.cancelled === "boolean")
+        );
+        const capacityCount = capacityKnown ? Number(capacityValue) : 0;
+        const availableSeats = capacityCount > 0 ? Math.max(0, capacityCount - approved.length) : null;
+        const waitlistOpportunity = (waiting.length || waitlistUncertain) && participantsAvailable &&
+          (!capacityKnown || !statusesKnown || waitlistUncertain || capacityCount === 0 || (availableSeats !== null && availableSeats > 0))
+          ? { count: waiting.length, remaining: availableSeats, uncertain: !capacityKnown || !statusesKnown || waitlistUncertain,
+              excluded: participantRows.filter((person) => person.status === "WAITLIST" && cancellationNeedsReview(person)).length }
+          : null;
         const everIn = participantRows.filter((person) => person.everIn === true).length;
         const registered = participantRows.length;
         const modules = records(workspace.modules);
@@ -645,7 +772,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             name: text(check.name),
             action: text(check.action),
             at: text(check.at),
-            deskName: deskMap.get(text(check.deskId)) ?? "",
+            deskName: check.source === "REVIEWED_EXIT" ? "운영자 확인" : deskMap.get(text(check.deskId)) ?? "",
             participantId: text(check.participantId),
           }))
           .sort((left, right) => {
@@ -657,6 +784,30 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         const workspaceVenue = asRecord(workspace.venue);
         const pageExperience = asRecord(workspace.pageExperience);
         const now = new Date();
+        const messageRows = records(workspace.messages).filter((message) => typeof message.id === "string");
+        const schedule = asRecord(bootstrap.messageSchedule);
+        const blocked = new Set(records(schedule?.blocked).filter((item) => typeof item.id === "string").map((item) => String(item.id)));
+        const hasRealReservations = messageRows.some((message) => message.status === "SCHEDULED" && message.simulate !== true);
+        const messageReviewIncomplete = hasRealReservations && (!Array.isArray(schedule?.blocked) || !asRecord(bootstrap.recipientReviewVersions));
+        // A reservation can become due even when the server revision is
+        // unchanged. Keep only validated timestamps, not message contents,
+        // so the next lightweight refresh can update the count locally.
+        let messageAttentionBase = 0;
+        const messageDueAt: number[] = [];
+        const allMessageDueAt: number[] = [];
+        for (const message of messageRows) {
+          if (message.status === "SCHEDULED" && typeof message.scheduled === "string" && hasValidScheduledInstant(message.scheduled)) {
+            allMessageDueAt.push(Date.parse(message.scheduled));
+          }
+          if (messageNeedsAttention(message, Number.NEGATIVE_INFINITY, blocked.has(text(message.id)))) {
+            messageAttentionBase += 1;
+          } else if (message.status === "SCHEDULED" && typeof message.scheduled === "string") {
+            messageDueAt.push(Date.parse(message.scheduled));
+          }
+        }
+        const observed = Date.parse(text(schedule?.observedAt));
+        const messageClockAt = Number.isFinite(observed) ? observed : Date.now();
+        const messageAttention = messageAttentionBase + messageDueAt.filter((at) => at <= messageClockAt).length;
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const tomorrowStart = new Date(todayStart);
         tomorrowStart.setDate(todayStart.getDate() + 1);
@@ -691,6 +842,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
           },
         };
 
+        lastFullRead.current = { eventId, version: text(bootstrap.refreshVersion) || null, at: performance.now() };
         setState({
           kind: "ready",
           overview: {
@@ -703,12 +855,19 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             venue: text(workspaceVenue?.name) || text(event.venue),
             stage: text(event.stage),
             capacity: number(event.capacity),
+            capacityKnown,
             registered,
             approved: approved.length,
             pendingApproval: participantRows.filter((person) => person.status === "PENDING").length,
             waitlist: participantRows.filter((person) => person.status === "WAITLIST").length,
+            waitlistOpportunity,
             everIn,
-            confirmedNotEntered: approved.filter((person) => person.everIn !== true).length,
+            confirmedNotEntered: approved.filter(attendanceNotEntered).length,
+            attendanceReview: participantRows.filter((person) => attendanceNeedsReview(person)).length,
+            cancellationReview: participantRows.filter(cancellationNeedsReview).length,
+            participantsAvailable,
+            checksAvailable,
+            modulesAvailable,
             entryRate: registered ? Math.round((everIn / registered) * 100) : 0,
             periods,
             trendApplications: participantRows.map((person) => text(person.createdAt)).filter((value) => value !== ""),
@@ -727,29 +886,42 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             publishedReportCount,
             draftReportCount,
             programs: programRows,
+            participation: participationSnapshot(workspace, Array.isArray(event.features) ? event.features.filter((feature): feature is string => typeof feature === "string") : []),
             updatedAt: now.toISOString(),
             canManageEvent,
-            overdueMessages: records(workspace.messages).filter((message) => isOverdueManualMessage(message)).length,
+            messageAttention,
+            messageAttentionBase,
+            messageDueAt,
+            allMessageDueAt,
+            messageClockAt,
+            messageReviewIncomplete,
+            messageConnection: asRecord(bootstrap.integrations)?.connected === true ? "connected"
+              : asRecord(bootstrap.integrations)?.connected === false ? "disconnected" : "unknown",
           },
         });
         setRefreshError(null);
-        setLinkNotice(null);
-        setLinkCopied(false);
+        if (!reloadRequest.automatic) {
+          setLinkNotice(null);
+          setLinkCopied(false);
+        }
       } catch {
         if (!cancelled) {
-          const message = "연결하지 못했습니다. 다시 시도하세요.";
+          const message = controller.signal.aborted ? "운영 현황 확인이 지연되고 있습니다." : "연결하지 못했습니다. 다시 시도하세요.";
           setRefreshError(message);
           setState((current) => current.kind === "ready" ? current : { kind: "failed", message });
         }
       } finally {
+        window.clearTimeout(timeout);
         if (!cancelled) setRefreshing(false);
       }
     }
     void load();
     return () => {
       cancelled = true;
+      controller.abort();
+      window.clearTimeout(timeout);
     };
-  }, [eventId, router, reloadTick]);
+  }, [eventId, router, reloadRequest]);
 
   function reloadOverview() {
     requestOverviewReload();
@@ -757,8 +929,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
   }
 
   function requestOverviewReload() {
-    setRefreshError(null);
-    setReloadTick((tick) => tick + 1);
+    setReloadRequest(({ sequence }) => ({ sequence: sequence + 1, automatic: false }));
   }
 
   async function copyParticipantLink(slug: string) {
@@ -814,24 +985,34 @@ export default function EventOverview({ eventId }: { eventId: string }) {
   const overview = state.overview;
   const stageKnown = STAGE_ORDER.includes(currentStage);
   const stageText = stageKnown ? eventStageLabel(currentStage) : "단계 미정";
-  const showApprovalAlert = overview.pendingApproval > 0 && !["ENDED", "ARCHIVED"].includes(currentStage);
+  const showApprovalAlert = overview.participantsAvailable && overview.pendingApproval > 0 && !["ENDED", "ARCHIVED"].includes(currentStage);
+  const live = currentStage === "LIVE";
   const preparing = ["DRAFT", "READY"].includes(currentStage);
   const finished = ["ENDED", "ARCHIVED"].includes(currentStage);
   const base = `/console/events/${encodeURIComponent(eventId)}`;
   const metrics = metricsForStage(overview, currentStage, base);
   const entryProgress = Math.max(0, Math.min(100, overview.entryRate));
+  const entryTrack = (
+    <div className={styles.entryTrack} role="progressbar"
+      aria-label={`입장 진행 ${overview.everIn}/${overview.registered}명, ${overview.cancellationReview ? "신청 상태 기준" : "취소 제외"} 등록 대비 ${overview.entryRate}%`}
+      aria-valuemin={0} aria-valuemax={100} aria-valuenow={entryProgress}>
+      <span className={styles.entryFill} style={{ width: `${entryProgress}%` }} />
+    </div>
+  );
+  const approvedRosterHref = `${base}/participants?status=APPROVED`;
+  const notEnteredRosterHref = `${approvedRosterHref}&attendance=NOT_ENTERED`;
   const periodRows: Array<[string, PeriodCounts["today"]]> = [
     ["오늘", overview.periods.today],
     ["어제", overview.periods.yesterday],
     ["최근 7일", overview.periods.last7],
   ];
-  const schedule = overview.canManageEvent
-    ? upcomingPrograms(overview.programs, new Date())
-    : [];
   const now = new Date();
   const runbookDate = /^\d{4}-\d{2}-\d{2}$/.test(overview.date)
     ? overview.date
     : localDateKey(now);
+  const schedule = overview.canManageEvent
+    ? upcomingPrograms(overview.programs.filter((program) => program.date !== runbookDate), now)
+    : [];
   const runbookIsToday = runbookDate === localDateKey(now);
   const runbook = overview.canManageEvent
     ? runbookCues(overview.programs, runbookDate, now)
@@ -857,40 +1038,64 @@ export default function EventOverview({ eventId }: { eventId: string }) {
     : null;
   const nextStageText = nextStage ? eventStageLabel(nextStage) : "없음";
   const liveBlocked = overview.deskCount === 0 || overview.deskAssignmentCount === 0;
-  const intakeShort = overview.registrationOpen
-    ? `접수 중 · 양식 버전 ${overview.formVersion}`
-    : "접수 마감";
+  // A published form alone cannot receive applications while the event is
+  // still private, and an ended event cannot receive them either. Distinguish
+  // the saved intake setting from what an attendee can actually do.
+  const publicIntakeOpen = ["READY", "LIVE"].includes(currentStage) && overview.registrationOpen;
+  const intakeBadgeText = publicIntakeOpen
+    ? "접수 중"
+    : currentStage === "DRAFT"
+      ? "접수 공개 전"
+      : finished
+        ? "접수 종료"
+        : stageKnown ? "접수 닫힘" : "접수 상태 확인 필요";
+  const intakeShort = currentStage === "DRAFT"
+    ? overview.registrationOpen ? "접수 설정됨 · 공개 전" : "접수 닫힘 · 공개 전"
+    : publicIntakeOpen ? `접수 중 · 양식 버전 ${overview.formVersion}` : "접수 닫힘";
 
   const stageBadges = (
         <>
           <span className={`${eventStageClassName(currentStage)} ${styles.stagePill}`}>{stageText}</span>
-          <span className={`${styles.intakeBadge} ${overview.registrationOpen ? styles.intakeOpen : styles.intakeClosed}`}>
-            {overview.registrationOpen ? "접수 중" : "접수 마감"}
+          <span className={`${styles.intakeBadge} ${publicIntakeOpen ? styles.intakeOpen : styles.intakeClosed}`}>
+            {intakeBadgeText}
           </span>
-          {dDay ? (
+          {dDay && dDay !== "D-day" ? (
             <span className={styles.dDay} title="일정 표시이며 단계는 자동 변경되지 않습니다.">
               {dDay}
             </span>
+          ) : null}
+          {overview.canManageEvent && showApprovalAlert ? (
+            <Link className={styles.mobilePriority} data-overview-priority href={`${base}/participants?status=PENDING`}>
+              승인 대기 {overview.pendingApproval}명 <span aria-hidden="true">→</span>
+            </Link>
           ) : null}
         </>
   );
   const headerActions = overview.canManageEvent && participantPageHref ? (
         <>
+          <span className={styles.overviewUpdated}>
+            <time dateTime={overview.updatedAt}>
+              {monitoring ? `${refreshError ? "마지막 확인" : "자동 확인"} ${LIVE_CHECK_TIME_FORMAT.format(new Date(overview.updatedAt))}`
+                : `갱신 ${UPDATED_TIME_FORMAT.format(new Date(overview.updatedAt))}`}
+            </time>
+            <ConsoleRefreshButton label="새로고침" busy={refreshing && !reloadRequest.automatic} onRefresh={reloadOverview} />
+          </span>
           {currentStage === "LIVE" ? (
-            <Link className="button button-secondary" href={eventCloseHref(eventId)}>
+            <Link className="button button-quiet" href={eventCloseHref(eventId)}>
               행사 마감
             </Link>
           ) : null}
           {/* DRAFT는 비공개(공개 화면 404)이므로 여는 링크를 두지 않는다. READY부터 기본 디자인으로 열린다. */}
           {stageKnown && currentStage !== "DRAFT" ? (
             <span className="console-header-group">
-              <Link className="button button-secondary" href={participantPageHref} target="_blank" rel="noreferrer">
-                참가자 페이지 열기
+              <Link className="button button-secondary" href={participantPageHref} target="_blank" rel="noreferrer" aria-label="참가자 페이지 열기">
+                <span className={styles.pageLinkFull}>참가자 페이지 열기</span><span className={styles.pageLinkShort}>참가자 페이지</span>
               </Link>
               <button
                 type="button"
-                className="button button-secondary console-icon-button"
+                className="button button-quiet console-icon-button"
                 aria-label="참가자 페이지 링크 복사"
+                title="참가자 페이지 링크 복사"
                 onClick={() => void copyParticipantLink(overview.slug)}
               >
                 {linkCopied ? <CheckIcon /> : <CopyIcon />}
@@ -904,27 +1109,46 @@ export default function EventOverview({ eventId }: { eventId: string }) {
   // The overview keeps zero primary actions by contract: navigation and
   // work queues stay secondary links so the single-primary rule applies to
   // committing workspaces, not this status surface.
-  type NowItem = { key: string; title: string; count: string | null; hint: string; action: string; href: string };
+  type NowItem = ConsoleTask;
   const nowItems: NowItem[] = [];
   if (overview.canManageEvent && currentStage !== "ARCHIVED") {
+    if (overview.participantsAvailable && overview.cancellationReview > 0 && !finished) {
+      nowItems.push({ key: "cancellation-review", title: "취소 기록 확인", count: `${overview.cancellationReview}명`, hint: "신청 상태와 다른 취소 기록을 확인하세요.", action: "티켓 확인 필요 명단", href: `${base}/participants?ticket=review` });
+    }
     if (showApprovalAlert) {
       nowItems.push({
         key: "approval",
         title: "승인 대기",
         count: `${overview.pendingApproval}명`,
-        hint: "검토가 필요한 신청입니다.",
+        hint: live ? "신청 내역을 확인하고 참가를 확정하세요." : "",
         action: "승인 대기 처리",
         href: `${base}/participants?status=PENDING`,
       });
     }
-    if (overview.overdueMessages > 0) {
+    if ((preparing || live) && overview.waitlistOpportunity) {
+      const opportunity = overview.waitlistOpportunity;
       nowItems.push({
-        key: "manual",
-        title: "수동 예약",
-        count: `${overview.overdueMessages}건`,
-        hint: "예약 시각이 지났습니다. 자동 발송되지 않으므로 내용을 확인한 뒤 직접 실행하세요.",
-        action: "예약 확인",
-        href: `${base}/messages?attention=1`,
+        key: "waitlist-review",
+        title: "대기자 확인",
+        count: opportunity.count ? `${opportunity.count}명${opportunity.uncertain ? " 이상" : ""}` : null,
+        hint: (opportunity.uncertain
+          ? "정원 또는 참가 상태를 확인한 뒤 대기자를 검토하세요."
+          : opportunity.remaining === null
+            ? "정원 제한 없음 · 운영자가 직접 확정합니다."
+            : `${overview.cancellationReview ? "승인 상태" : "확정"} ${overview.approved}명 기준 ${opportunity.remaining}자리 · 자동 확정되지 않습니다.${overview.pendingApproval ? " 승인 대기는 별도입니다." : ""}`) +
+          (opportunity.excluded ? ` 취소 기록 확인 ${opportunity.excluded}명은 제외했습니다.` : ""),
+        action: "대기 명단 보기",
+        href: `${base}/participants?status=WAITLIST`,
+      });
+    }
+    if (overview.messageAttention > 0 || overview.messageReviewIncomplete) {
+      nowItems.push({
+        key: "message-attention",
+        title: "발송 확인 필요",
+        count: overview.messageAttention > 0 ? `${overview.messageAttention}건${overview.messageReviewIncomplete ? " 이상" : ""}` : null,
+        hint: overview.messageReviewIncomplete ? "일부 예약 상태를 확인하지 못했습니다. 발송 기록 전체를 확인하세요." : "발송 결과와 예약 상태를 확인하세요.",
+        action: "발송 확인",
+        href: overview.messageReviewIncomplete ? `${base}/messages` : `${base}/messages?attention=1`,
       });
     }
     if (currentStage === "READY" && liveBlocked) {
@@ -940,14 +1164,16 @@ export default function EventOverview({ eventId }: { eventId: string }) {
     if (currentStage === "DRAFT") {
       nowItems.push({
         key: "intake",
-        title: "참가 접수",
+        title: overview.registrationOpen ? "참가 접수 공개" : "참가 접수",
         count: null,
-        hint: intakeShort,
-        action: "접수 설정",
-        href: `${base}/settings#settings-intake`,
+        hint: overview.registrationOpen
+          ? "접수 설정이 켜져 있습니다. 운영 준비로 전환하면 공개 접수가 열립니다."
+          : "접수를 받으려면 양식을 게시하고 운영 준비로 전환하세요.",
+        action: overview.registrationOpen ? "운영 준비 단계 확인" : "접수 설정",
+        href: overview.registrationOpen ? `${base}/settings#settings-stage` : `${base}/settings#settings-intake`,
       });
     }
-    if (currentStage === "READY" && !liveBlocked && !showApprovalAlert && overview.overdueMessages === 0) {
+    if (currentStage === "READY" && overview.participantsAvailable && !liveBlocked && !showApprovalAlert && !overview.allMessageDueAt.some((at) => at <= overview.messageClockAt)) {
       nowItems.push({
         key: "golive",
         title: "진행 중 전환",
@@ -957,15 +1183,8 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         href: `${base}/settings#settings-stage`,
       });
     }
-    if (currentStage === "LIVE" && !showApprovalAlert && overview.overdueMessages === 0) {
-      nowItems.push({
-        key: "operations",
-        title: "현장 운영",
-        count: null,
-        hint: `등록 데스크 ${overview.deskCount}개 · 데스크 배정 ${overview.deskAssignmentCount}건.`,
-        action: "현장 운영 열기",
-        href: `${base}/operations`,
-      });
+    for (const task of overview.modulesAvailable ? overview.participation.tasks : []) {
+      nowItems.push({ ...task, href: `${base}/programs?review=${task.review}&from=overview` });
     }
     if (currentStage === "ENDED") {
       nowItems.push({
@@ -979,50 +1198,30 @@ export default function EventOverview({ eventId }: { eventId: string }) {
     }
   }
 
-  // Lead with actionable work; the adjacent metrics explain its context.
-  const nowSection = nowItems.length ? (
-    <ConsoleSection
-      headingId="event-now-heading"
-      title="지금 할 일"
-      className={styles.regionQueue}
-    >
-      <ul className={styles.nowList}>
-        {nowItems.map((item) => (
-          <li className={styles.nowTile} key={item.key}>
-            <div className={styles.nowTileCopy}>
-              <div className={styles.nowTileHead}>
-                <p className={styles.nowTileTitle}>{item.title}</p>
-                {item.count ? <span className={styles.nowTileCount}>{item.count}</span> : null}
-              </div>
-              <p className={styles.nowTileHint}>{item.hint}</p>
-            </div>
-            {/* Every tile carries the same boxed affordance: the first
-                tile is not more committal than the rest, so rank must
-                not masquerade as hierarchy. Navigation stays a link. */}
-            <div className={styles.nowTileAction}>
-              <Link className="button button-secondary" href={item.href}>
-                {item.action}
-              </Link>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </ConsoleSection>
-  ) : (
-    <ConsoleSection
-      headingId="event-now-heading"
-      title="지금 할 일"
-      className={styles.regionQueue}
-    >
-      <p className={styles.nowEmpty} role="status">현재 표시할 운영 항목이 없습니다.</p>
+  const fieldOperationsLink = (
+    <Link className={styles.overviewSectionLink} href={`${base}/operations`}>
+      현장 운영 열기 <ArrowRightIcon />
+    </Link>
+  );
+
+  const nowSection = (
+    <ConsoleSection headingId="event-now-heading" title="지금 할 일" className={styles.regionQueue}
+      action={currentStage === "LIVE" ? (
+        nowItems.length ? <span className={styles.queueCount}>{nowItems.length}가지</span> : undefined
+      ) : currentStage !== "ARCHIVED" ? fieldOperationsLink : undefined}>
+      <ConsoleTaskQueue items={nowItems} label="지금 할 일" empty={overview.participantsAvailable && overview.modulesAvailable ? "지금 확인할 운영 항목이 없습니다." : "일부 업무 자료를 확인할 수 없어 할 일을 모두 판단할 수 없습니다."} variant={live ? "live-overview" : undefined} />
     </ConsoleSection>
   );
 
   return (
     <ConsolePage pageId="overview" eventId={eventId} eventName={overview.name || "이름 없는 행사"}
       meta={eventMeta} badges={stageBadges} headerActions={headerActions}
-      feedback={linkNotice ? <ConsoleFeedback kind="info">{linkNotice}</ConsoleFeedback> : undefined}>
-      <div className={overview.canManageEvent ? styles.overviewCanvas : styles.overviewSingle}>
+      feedback={linkNotice || (overview.participantsAvailable && overview.cancellationReview > 0) || !overview.participantsAvailable || !overview.checksAvailable || !overview.modulesAvailable ? <>
+        {linkNotice ? <ConsoleFeedback kind="info">{linkNotice}</ConsoleFeedback> : null}
+        {overview.canManageEvent && (!overview.participantsAvailable || !overview.checksAvailable || !overview.modulesAvailable) ? <ConsoleFeedback kind="warning">{[!overview.participantsAvailable ? "참가자" : "", !overview.checksAvailable ? "출입 기록" : "", !overview.modulesAvailable ? "참여 콘텐츠" : ""].filter(Boolean).join(" · ")} 자료를 확인할 수 없어 일부 현황을 표시할 수 없습니다. 새로고침해도 계속되면 시스템 관리자에게 문의하세요.</ConsoleFeedback> : null}
+        {overview.participantsAvailable && overview.cancellationReview > 0 ? <ConsoleFeedback kind="warning">취소 기록과 신청 상태가 다른 {overview.cancellationReview}명이 등록 집계에 포함돼 있습니다. 참가 여부를 확인해야 하며 승인 상태·입장 집계에도 반영될 수 있습니다. {finished ? "종료 이후에는 참가자 상태를 변경할 수 없습니다. " : ""}<Link href={`${base}/participants?ticket=review`}>티켓 확인 필요 명단 보기</Link></ConsoleFeedback> : null}
+      </> : undefined}>
+      <div className={overview.canManageEvent ? [styles.overviewCanvas, currentStage === "LIVE" ? styles.liveOverview : "", currentStage === "ARCHIVED" ? styles.overviewArchived : ""].filter(Boolean).join(" ") : styles.overviewSingle}>
       {refreshError ? <p className={`${styles.refreshAlert} state-error`} role="alert">{refreshError} 이전에 불러온 내용은 유지됩니다.</p> : null}
       {overview.canManageEvent ? (
         <>
@@ -1043,18 +1242,146 @@ export default function EventOverview({ eventId }: { eventId: string }) {
           {finished ? (
             <ConsoleSection headingId="event-close-status-heading" title={currentStage === "ARCHIVED" ? "보관된 행사 마감 확인" : "행사 마감"} description="자동으로 단계를 바꾸지 않습니다." className={styles.regionStatus}>
               <div className={styles.closeStatus}>
-                <p>{overview.registrationOpen ? "접수 중" : "접수 마감"} · 보고서 {getReportStatus(overview)} · {stageText}</p>
+                <p>공개 접수 종료{overview.registrationOpen ? " · 접수 설정 열림" : ""} · 보고서 {getReportStatus(overview)} · {stageText}</p>
                 <Link className="button button-secondary" href={eventCloseHref(eventId)}>{currentStage === "ARCHIVED" ? "행사 마감 확인" : "행사 마감 시작"}</Link>
               </div>
             </ConsoleSection>
           ) : null}
-          <div className={styles.primaryColumn}>
-            {nowSection}
+          <ConsoleSection
+            headingId="event-metrics-heading"
+            title={currentStage === "LIVE" ? "입장 진행" : currentStage === "ENDED" || currentStage === "ARCHIVED" ? "최종 요약" : "주요 지표"}
+            className={styles.regionMetrics}
+            action={currentStage === "LIVE" ? fieldOperationsLink : undefined}
+          >
+            <div className={finished ? styles.entryMetricsLayout : undefined}>
+            {!overview.participantsAvailable || ((live || finished) && !overview.checksAvailable) ? (
+              <p className={styles.restrictedNote}>집계를 표시할 수 없습니다.</p>
+            ) : live ? (
+              <div className={styles.liveEntryPanel}>
+                <div className={styles.liveReadout}>
+                  <div className={styles.liveEntryFigures}>
+                    <div>
+                      <p className={styles.liveEntryLabel}>누적 입장</p>
+                      <p className={styles.liveEntryValues}>
+                        <strong className={styles.liveEntryCount}>{overview.everIn}<span>명</span></strong>{" "}
+                        <span className={styles.liveEntryTotal}>/ {overview.registered}명</span>
+                      </p>
+                    </div>
+                    <div className={styles.liveEntryRate}>
+                      <p className={styles.liveEntryLabel}>입장률</p>
+                      <strong>{overview.entryRate}%</strong>
+                    </div>
+                  </div>
+                  {entryTrack}
+                  <p className={styles.entryBasis}>{overview.cancellationReview ? "신청 상태 기준 · 취소 기록 확인 필요 인원 포함" : "등록 인원 기준 · 취소 제외"}</p>
+                </div>
+                <div className={styles.liveRosterLinks}>
+                  <Link href={notEnteredRosterHref}>
+                    <span>{overview.cancellationReview ? "승인 상태 중 미입장" : "확정자 중 미입장"}</span>{" "}<strong>{overview.confirmedNotEntered}명</strong><ArrowRightIcon />
+                  </Link>
+                  <Link href={approvedRosterHref}>
+                    <span>{overview.cancellationReview ? "승인 상태" : "참가 확정"}</span>{" "}<strong>{overview.approved}명</strong><ArrowRightIcon />
+                  </Link>
+                </div>
+              </div>
+            ) : finished ? (
+              <div className={styles.entryProgress}>
+              <div className={styles.entrySummary}>
+                <div className={styles.entryMain}>
+                  <span className={styles.metricLabel}>최종 누적 입장</span>
+                  <div className={styles.entryValues}>
+                    <strong className={styles.entryCount}>
+                      {overview.everIn}<span> / {overview.registered}명</span>
+                    </strong>
+                    <span className={styles.entrySeparator} aria-hidden="true">·</span>
+                    <strong className={styles.entryRate}>{overview.entryRate}%</strong>
+                  </div>
+                </div>
+                {currentStage === "ARCHIVED" ? (
+                  <span className={styles.readOnlyNote}>보관된 행사는 읽기 전용입니다.</span>
+                ) : null}
+              </div>
+              {entryTrack}
+              <div className={styles.entryFoot}>
+                <span>{overview.cancellationReview ? "신청 상태 기준 · 취소 기록 확인 필요 인원 포함" : "등록 인원 기준 · 취소 제외"}</span>
+                <Link href={approvedRosterHref}>
+                  <span>{overview.cancellationReview ? "승인 상태" : "참가 확정"}</span>{" "}<strong>{overview.approved}명</strong>
+                </Link>
+                {currentStage === "ARCHIVED" ? null : (
+                  <Link
+                    className={styles.notEntered}
+                    href={notEnteredRosterHref}
+                  >
+                    <span>{overview.cancellationReview ? "승인 상태 중 미입장" : "확정자 중 미입장"}</span>
+                    <strong>{overview.confirmedNotEntered}명</strong>
+                  </Link>
+                )}
+              </div>
+                <div className={styles.summaryFacts}>
+                  {currentStage === "ARCHIVED" ? (
+                    <Link className={styles.summaryFact} href={`${base}/participants`}>
+                      <span>{overview.cancellationReview ? "신청 상태 기준 등록" : "취소 제외 등록"}</span>
+                      <strong>{overview.registered}명</strong>
+                    </Link>
+                  ) : null}
+                  {overview.surveyResponseCount !== null ? (
+                    <Link className={styles.summaryFact} href={`${base}/reports`}>
+                      <span>설문 응답</span>
+                      <strong>{overview.surveyResponseCount}건</strong>
+                    </Link>
+                  ) : null}
+                  <Link className={styles.summaryFact} href={`${base}/reports`}>
+                    <span>보고서 상태</span>
+                    <strong>{getReportStatus(overview)}</strong>
+                  </Link>
+                </div>
+            </div>
+          ) : metrics.length ? (
+            <>
+            <div className={styles.metricGrid}>
+              {metrics.map((metric) => (
+                <Link className={styles.metricCard} href={metric.href} key={metric.label}>
+                  <span className={styles.metricLabel}>{metric.label}</span>
+                  <strong className={styles.metricValue}>{metric.value}</strong>
+                  <span className={styles.metricDetail}>{metric.detail}</span>
+                </Link>
+              ))}
+            </div>
+            {overview.checksAvailable ? <p className={styles.metricConfig}>
+              누적 입장 <strong>{overview.everIn}명</strong> · {" "}
+              <Link href={`${base}/participants?status=APPROVED&attendance=NOT_ENTERED`}>{overview.cancellationReview ? "승인 상태 중 미입장" : "확정자 중 미입장"} {overview.confirmedNotEntered}명</Link>
+            </p> : null}
+            <p className={styles.metricConfig}>
+              {!overview.capacityKnown ? (
+                <span>정원을 확인할 수 없습니다. <Link href={`${base}/settings`}>행사 설정 확인</Link></span>
+              ) : overview.capacity > 0 ? (
+                <span>
+                  정원 <strong>{overview.capacity}명</strong> · 대기 <strong>{overview.waitlist}명</strong>
+                  {" "}<Link href={`${base}/participants?status=WAITLIST`}>대기 명단</Link>
+                </span>
+              ) : (
+                <span>정원 제한 없음 · 대기 <strong>{overview.waitlist}명</strong>{overview.waitlist ? <>{" "}<Link href={`${base}/participants?status=WAITLIST`}>대기 명단</Link></> : null}</span>
+              )}
+            </p>
+            </>
+          ) : (
+            <p className={styles.restrictedNote}>확인 가능한 단계 지표가 없습니다.</p>
+          )}
+
+            {overview.checksAvailable && overview.attendanceReview > 0 ? (
+              <p className={styles.metricConfig}>
+                일부 출입 기록이 명확하지 않아 입장 수와 입장률이 실제와 다를 수 있습니다.
+                {" "}<Link href={`${base}/participants?attendance=REVIEW`}>출입 기록 확인 필요 {overview.attendanceReview}명</Link>
+              </p>
+            ) : null}
+            </div>
+        </ConsoleSection>
+          {currentStage !== "ARCHIVED" ? nowSection : null}
           <ConsoleSection
             headingId="event-runbook-heading"
             title={runbookIsToday ? "오늘의 일정" : "행사 일정"}
-            description={<span className={styles.runbookMeta}>{runbookIsToday ? `${UPDATED_TIME_FORMAT.format(now)} 기준` : formatEventDate(runbookDate)}</span>}
-            action={<Link className="button button-secondary" href={`${base}/content`}>프로그램 일정</Link>}
+            description={runbook.length ? <span className={styles.runbookMeta}>{runbookIsToday ? `${UPDATED_TIME_FORMAT.format(now)} 기준` : formatEventDate(runbookDate)}</span> : undefined}
+            action={<Link className="button button-secondary" href={`${base}/content`}>{runbook.length ? "프로그램 일정" : "일정 추가"}</Link>}
             className={[styles.regionRunbook, runbook.length ? undefined : styles.runbookIdle].filter(Boolean).join(" ")}
           >
             {runbook.length ? (
@@ -1072,7 +1399,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
                       <span>{cue.place || "장소 미정"} · {formatProgramTime(cue)}</span>
                     </div>
                     <span className={styles.runbookStatus}>
-                      {cue.status === "current" ? "현재" : cue.status === "done" ? "완료" : "예정"}
+                      {cue.status === "current" ? "현재 시간" : cue.status === "done" ? "지난 일정" : "예정"}
                     </span>
                   </li>
                 ))}
@@ -1101,119 +1428,21 @@ export default function EventOverview({ eventId }: { eventId: string }) {
                   <span className={styles.readinessStatus}>{overview.pagePublished ? (overview.pageDraftDiffers ? "게시됨 · 새 초안 있음" : "게시됨") : "기본 디자인 사용 중 · 꾸미기는 선택 사항입니다"}</span>
                   <Link className={styles.readinessLink} href={`${base}/page`}>디자인 편집</Link>
                 </li>
+                {overview.canManageEvent ? <li>
+                  <span className={styles.readinessLabel}>안내 발송 · 선택 사항</span>
+                  <span className={styles.readinessStatus}>{overview.messageConnection === "connected" ? "발송 연결됨 · 도달은 별도 확인" : overview.messageConnection === "disconnected" ? "미연결 · 실제 발송 불가" : "발송 연결 상태 확인 필요"}</span>
+                  <Link className={styles.readinessLink} href={`${base}/messages`}>발송 확인</Link>
+                </li> : null}
               </ul>
             </ConsoleSection>
           ) : null}
-          </div>
-          <div className={styles.contextColumn}>
-          <ConsoleSection
-            headingId="event-metrics-heading"
-            title={currentStage === "LIVE" ? "입장 진행" : currentStage === "ENDED" || currentStage === "ARCHIVED" ? "최종 요약" : "주요 지표"}
-            className={styles.regionMetrics}
-          >
-            {["LIVE", "ENDED", "ARCHIVED"].includes(currentStage) ? (
-              <div className={styles.entryProgress}>
-              <div className={styles.entrySummary}>
-                <div className={styles.entryMain}>
-                  <span className={styles.metricLabel}>{currentStage === "LIVE" ? "누적 입장" : "최종 누적 입장"}</span>
-                  <div className={styles.entryValues}>
-                    <strong className={styles.entryCount}>
-                      {overview.everIn}<span>/{overview.registered}명</span>
-                    </strong>
-                    <span className={styles.entrySeparator} aria-hidden="true">·</span>
-                    <strong className={styles.entryRate}>{overview.entryRate}%</strong>
-                  </div>
-                </div>
-                {currentStage === "ARCHIVED" ? (
-                  <span className={styles.readOnlyNote}>보관된 행사는 읽기 전용입니다.</span>
-                ) : null}
-              </div>
-              <div
-                className={styles.entryTrack}
-                role="progressbar"
-                aria-label={`입장 진행 ${overview.everIn}/${overview.registered}명, 취소 제외 등록 대비 ${overview.entryRate}%`}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={entryProgress}
-              >
-                <span className={styles.entryFill} style={{ width: `${entryProgress}%` }} />
-              </div>
-              <div className={styles.entryFoot}>
-                <span>취소 제외 등록 대비 입장률 · 결과 보고서와 같은 정의</span>
-                {currentStage === "ARCHIVED" ? null : (
-                  <Link
-                    className={styles.notEntered}
-                    href={`${base}/participants?status=APPROVED&attendance=NOT_ENTERED`}
-                  >
-                    <span>확정자 중 미입장</span>
-                    <strong>{overview.confirmedNotEntered}명</strong>
-                  </Link>
-                )}
-                <Link href={`${base}/reports`}>결과 보고서 보기</Link>
-              </div>
-              {currentStage !== "LIVE" ? (
-                <div className={styles.summaryFacts}>
-                  {currentStage === "ARCHIVED" ? (
-                    <Link className={styles.summaryFact} href={`${base}/participants`}>
-                      <span>취소 제외 등록</span>
-                      <strong>{overview.registered}명</strong>
-                    </Link>
-                  ) : null}
-                  {overview.surveyResponseCount !== null ? (
-                    <Link className={styles.summaryFact} href={`${base}/reports`}>
-                      <span>설문 응답</span>
-                      <strong>{overview.surveyResponseCount}건</strong>
-                    </Link>
-                  ) : null}
-                  <Link className={styles.summaryFact} href={`${base}/reports`}>
-                    <span>보고서 상태</span>
-                    <strong>{getReportStatus(overview)}</strong>
-                  </Link>
-                </div>
-              ) : null}
-            </div>
-          ) : metrics.length ? (
-            <>
-            <div className={styles.metricGrid}>
-              {metrics.map((metric) => (
-                <Link className={styles.metricCard} href={metric.href} key={metric.label}>
-                  <span className={styles.metricLabel}>{metric.label}</span>
-                  <strong className={styles.metricValue}>{metric.value}</strong>
-                  <span className={styles.metricDetail}>{metric.detail}</span>
-                </Link>
-              ))}
-            </div>
-            <p className={styles.metricConfig}>
-              {overview.capacity > 0 ? (
-                <span>
-                  정원 <strong>{overview.capacity}명</strong> · 대기 <strong>{overview.waitlist}명</strong>
-                  {" "}<Link href={`${base}/participants?status=WAITLIST`}>대기 명단</Link>
-                </span>
-              ) : (
-                <span>정원 제한 없음 · 대기 <strong>{overview.waitlist}명</strong></span>
-              )}
-            </p>
-            </>
-          ) : (
-            <p className={styles.restrictedNote}>확인 가능한 단계 지표가 없습니다.</p>
-          )}
-            <details className={styles.analysisDetails}>
-              <summary>기간 분석</summary>
-              <div className={styles.periodBlock}>
-                <PeriodDetails rows={periodRows} applications={overview.trendApplications} entries={overview.trendEntries} />
-              </div>
-            </details>
-        </ConsoleSection>
+          {schedule.length > 0 ? (
           <aside className={`${styles.rail} ${styles.regionSecondary}`}>
-          <div className={styles.monitorHead}>
-            <span className={styles.monitorLive} data-live={currentStage === "LIVE"}><i aria-hidden="true" /> {stageText}</span>
-            <time dateTime={overview.updatedAt}>조회 {UPDATED_TIME_FORMAT.format(new Date(overview.updatedAt))}</time>
-          </div>
-
           {schedule.length > 0 ? (
             <ConsoleSection
               headingId="event-schedule-heading"
               title="현재·다음 일정"
+              description="다른 행사일의 예정된 일정입니다."
               className={styles.scheduleRail}
             >
               <ol className={styles.programList}>
@@ -1234,13 +1463,13 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             </ConsoleSection>
           ) : null}
           </aside>
-          </div>
+          ) : null}
       </>
       ) : (
         <p className={styles.restrictedNote}>행사 지표는 행사 운영자에게 표시됩니다.</p>
       )}
 
-      {preparing && overview.recent.length === 0 ? (
+      {preparing && overview.checksAvailable && overview.recent.length === 0 ? (
         <div className={`${styles.recentCompact} ${styles.regionRecent}`}>
           <h2 id="event-recent-heading" className={styles.recentCompactTitle}>
             {overview.canManageEvent ? "최근 입퇴장" : "배정 데스크 최근 입퇴장"}
@@ -1255,13 +1484,10 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             onClick={reloadOverview}
             disabled={refreshing}
             aria-busy={refreshing}
-            aria-label="새로고침"
-            title="새로고침"
+            aria-label="입퇴장 기록 새로고침"
+            title="입퇴장 기록 새로고침"
           >
-            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
-              <path d="M20 7v5h-5" />
-              <path d="M19.1 12a7.1 7.1 0 1 1-2.08-5.02L20 9" />
-            </svg>
+            <RefreshIcon />
           </button>
           {refreshing ? <p className={styles.refreshStatus} role="status">최신 운영 현황을 불러오고 있습니다.</p> : null}
           <p className={styles.recentCompactEmpty}>
@@ -1275,29 +1501,26 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         headingId="event-recent-heading"
         title={overview.canManageEvent ? "최근 입퇴장" : "배정 데스크 최근 입퇴장"}
         className={styles.regionRecent}
-        description={<time dateTime={overview.updatedAt}>마지막 갱신 {UPDATED_TIME_FORMAT.format(new Date(overview.updatedAt))}</time>}
+        description={!overview.canManageEvent ? <time dateTime={overview.updatedAt}>마지막 갱신 {UPDATED_TIME_FORMAT.format(new Date(overview.updatedAt))}</time> : undefined}
         action={(
           <div className={styles.recentActions}>
-            <span className={styles.recentCount}>{overview.recent.length}건</span>
+            <span className={styles.recentCount}>{overview.checksAvailable ? `${overview.recent.length}건` : "확인 불가"}</span>
             <button
               type="button"
               className={`button button-secondary ${styles.refreshButton}`}
               onClick={reloadOverview}
               disabled={refreshing}
               aria-busy={refreshing}
-              aria-label="새로고침"
-              title="새로고침"
+              aria-label="입퇴장 기록 새로고침"
+              title="입퇴장 기록 새로고침"
             >
-              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
-                <path d="M20 7v5h-5" />
-                <path d="M19.1 12a7.1 7.1 0 1 1-2.08-5.02L20 9" />
-              </svg>
+              <RefreshIcon />
             </button>
           </div>
         )}
       >
         {refreshing ? <p className={styles.refreshStatus} role="status">최신 운영 현황을 불러오고 있습니다.</p> : null}
-        {overview.recent.length ? (
+        {!overview.checksAvailable ? <p className="empty-state">출입 기록을 확인할 수 없습니다. 새로고침해도 계속되면 시스템 관리자에게 문의하세요.</p> : overview.recent.length ? (
           <ul className={styles.activityList}>
             {overview.recent.map((check) => (
               <li key={check.id}>
@@ -1323,6 +1546,10 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         )}
       </ConsoleSection>
       )}
+      {overview.canManageEvent ? <details className={`${styles.analysisDetails} ${styles.regionAnalysis}`}>
+        <summary>기간 분석</summary>
+        <div className={styles.periodBlock}>{overview.participantsAvailable && overview.checksAvailable ? <PeriodDetails rows={periodRows} applications={overview.trendApplications} entries={overview.trendEntries} cancellationReview={overview.cancellationReview} /> : <p>참가자 또는 출입 기록을 확인할 수 없어 기간 분석을 표시할 수 없습니다.</p>}</div>
+      </details> : null}
       </div>
     </ConsolePage>
   );

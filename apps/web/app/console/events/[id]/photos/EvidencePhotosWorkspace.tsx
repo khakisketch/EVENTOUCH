@@ -1,5 +1,8 @@
 "use client";
 
+import ValidatedForm from "../../../../ui/ValidatedForm";
+
+
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -14,6 +17,9 @@ import { useConsoleDraftGuard } from "../../../console-draft-guard";
 import styles from "./evidence-photos.module.css";
 import { consoleFetch } from "../../../../../lib/console-api";
 import { canWriteEvent } from "../../../../../lib/event-capabilities";
+import { acknowledgeOperatorReceipt, confirmsEvidenceCommand } from "../../../../../lib/operator-context";
+import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../lib/operator-receipts";
+import { useEventReceipts } from "../../../../../lib/use-event-receipts";
 
 const EVIDENCE_SECTIONS = [
   { key: "SPACE", label: "공간구성" },
@@ -176,7 +182,7 @@ function uploadStatusLabel(status: UploadStatus): string {
     case "recording": return "파일 업로드 완료 · 보관 기록 등록 중";
     case "recorded": return "보관함에 등록됨";
     case "failed-upload": return "파일 업로드 확인 필요";
-    case "failed-record": return "파일 업로드 완료 · 보관 기록 등록 실패";
+    case "failed-record": return "파일 업로드 완료 · 보관 기록 확인 필요";
     case "invalid": return "선택할 수 없는 파일";
   }
 }
@@ -202,8 +208,39 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
   const fileInputRef = useRef<HTMLInputElement>(null);
   const jobsRef = useRef<UploadJob[]>([]);
   const queueRunningRef = useRef(false);
+  const activeEventRef = useRef(eventId);
+  const jobEventRef = useRef(eventId);
+  activeEventRef.current = eventId;
   const loadSequenceRef = useRef(0);
   const actionCommandIdsRef = useRef(new Map<string, string>());
+  useEffect(() => {
+    if (jobEventRef.current === eventId) return;
+    for (const job of jobsRef.current) if (job.previewUrl) URL.revokeObjectURL(job.previewUrl);
+    jobsRef.current = [];
+    setJobs([]);
+    queueRunningRef.current = false;
+    setQueueBusy(false);
+    actionCommandIdsRef.current.clear();
+    setMovePending(null); setRemovePending(null); setMoveTargets({});
+    setBusyPhotoId(null);
+    setSelectedSection("SPACE");
+    jobEventRef.current = eventId;
+  }, [eventId]);
+  const otherEvidenceIds = useEventReceipts(eventId).filter((item) => item.command.startsWith("evidence.photo.") && !jobs.some((job) => job.recordCommandId === item.commandId)).map((item) => item.commandId).sort();
+  const otherEvidenceReceipt = otherEvidenceIds.length > 0;
+  const evidenceIdsKey = JSON.stringify(otherEvidenceIds);
+  const priorEvidenceIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const next = new Set<string>(JSON.parse(evidenceIdsKey) as string[]);
+    for (const [key, id] of actionCommandIdsRef.current) {
+      if (priorEvidenceIds.current.has(id) && !next.has(id)) actionCommandIdsRef.current.delete(key);
+    }
+    priorEvidenceIds.current = next;
+  }, [eventId, evidenceIdsKey]);
+  useEffect(() => {
+    const releases = jobs.filter((job) => job.status === "failed-record").map((job) => manageOperatorReceipt(job.recordCommandId));
+    return () => { releases.forEach((release) => release()); };
+  }, [jobs]);
 
   // 보관된 행사는 서버가 모든 쓰기를 거부하므로(409) 쓰기 affordance를
   // 잠그고 보기·내보내기만 둡니다. 증빙 사진 쓰기(evidence.photo.*)는 결과
@@ -215,7 +252,12 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
   const canWritePhotos = photosCapability
     ? canWriteEvent(photosCapability, "evidence.photo.add")
     : false;
-  const writeLocked = state.kind === "ready" && (state.archived || !canWritePhotos);
+  const writeLocked = state.kind === "ready" && (state.archived || !canWritePhotos || otherEvidenceReceipt);
+  const hadOtherEvidenceReceipt = useRef(false);
+  useEffect(() => {
+    if (hadOtherEvidenceReceipt.current && !otherEvidenceReceipt) setReloadTick((tick) => tick + 1);
+    hadOtherEvidenceReceipt.current = otherEvidenceReceipt && !queueRunningRef.current && busyPhotoId === null;
+  }, [otherEvidenceReceipt, busyPhotoId, eventId]);
 
   // Cross-route guard predicate: any upload job that is not settled in the
   // archive (staged drafts, queued/in-flight work, failed retries). Settled
@@ -393,8 +435,10 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
   }, []);
 
   async function uploadAndRecordJob(jobId: string) {
+    const requestEventId = eventId;
     let job = jobsRef.current.find((item) => item.id === jobId);
     if (!job || job.status === "invalid" || job.status === "recorded") return;
+    const hadUnconfirmedRecord = job.status === "failed-record";
 
     try {
       if (!job.uploadedFile) {
@@ -405,6 +449,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
           { method: "POST", headers: { "content-type": job.contentType }, body: job.file }
         );
         const uploadData = await uploadResponse.json().catch(() => null) as unknown;
+        if (activeEventRef.current !== requestEventId) return;
         const fileRef = parseImageFileRef(asRecord(uploadData)?.file, job.file, job.contentType);
         if (!uploadResponse.ok || !fileRef) {
           throw new Error(commandErrorMessage(uploadData, "파일 업로드 응답을 확인하지 못했습니다."));
@@ -428,15 +473,22 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
         }),
       });
       const recordData = await recordResponse.json().catch(() => null) as unknown;
-      if (!recordResponse.ok) {
+      if (activeEventRef.current !== requestEventId) return;
+      if (!recordResponse.ok && !hadUnconfirmedRecord && recordResponse.status >= 400 && recordResponse.status < 500 && ![408, 425, 429].includes(recordResponse.status)) {
         throw new Error(commandErrorMessage(recordData, "보관 기록에 등록하지 못했습니다."));
       }
+      if (!recordResponse.ok || !confirmsEvidenceCommand("evidence.photo.add", job.recordCommandId, { section: job.section, image: job.uploadedFile }, recordData)) {
+        throw new Error("보관 기록 결과를 확인하지 못했습니다. 같은 요청을 다시 확인하세요.");
+      }
+      acknowledgeOperatorReceipt(job.recordCommandId);
+      forgetOperatorReceipt(job.recordCommandId);
       if (job.previewUrl) URL.revokeObjectURL(job.previewUrl);
       updateJob(job.id, { previewUrl: null, status: "recorded", error: null });
       setNotice(`${sectionLabel(job.section)}에 사진을 등록했습니다.`);
       setFailure(null);
       await load(true);
     } catch (error) {
+      if (activeEventRef.current !== requestEventId) return;
       const latestJob = jobsRef.current.find((item) => item.id === jobId);
       const bytesUploaded = Boolean(latestJob?.uploadedFile);
       updateJob(jobId, {
@@ -449,16 +501,20 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
 
   async function processJobs(jobIds: string[]) {
     if (queueRunningRef.current || writeLocked) return;
+    const requestEventId = eventId;
     queueRunningRef.current = true;
     setQueueBusy(true);
     setFailure(null);
     try {
       for (const jobId of jobIds) {
+        if (activeEventRef.current !== requestEventId) break;
         await uploadAndRecordJob(jobId);
       }
     } finally {
-      queueRunningRef.current = false;
-      setQueueBusy(false);
+      if (activeEventRef.current === requestEventId) {
+        queueRunningRef.current = false;
+        setQueueBusy(false);
+      }
     }
   }
 
@@ -534,6 +590,9 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
     });
     const data = await response.json().catch(() => null) as unknown;
     if (!response.ok) throw new Error(commandErrorMessage(data, fallback));
+    if (!confirmsEvidenceCommand(command, commandId, payload, data)) throw new Error("사진 처리 결과를 확인하지 못했습니다. 서버 처리 여부를 확인하세요.");
+    acknowledgeOperatorReceipt(commandId);
+    forgetOperatorReceipt(commandId);
   }
 
   function requestMovePhoto(photo: EvidencePhoto, nextSection: EvidenceSection) {
@@ -553,20 +612,22 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
       return;
     }
     const destination = sectionLabel(pending.nextSection);
+    const requestEventId = eventId;
     const commandKey = `move:${current.id}:${pending.nextSection}`;
     setBusyPhotoId(current.id);
     setFailure(null);
     setNotice(null);
     try {
       await postEvidenceCommand("evidence.photo.move", { id: current.id, section: pending.nextSection }, commandIdFor(commandKey), "사진 구간을 변경하지 못했습니다.");
+      if (activeEventRef.current !== requestEventId) return;
       actionCommandIdsRef.current.delete(commandKey);
       setNotice(`사진을 ${destination}${directionParticle(destination)} 옮겼습니다.`);
       await load(true);
     } catch (error) {
+      if (activeEventRef.current !== requestEventId) return;
       setFailure(error instanceof Error ? error.message : "사진 구간을 변경하지 못했습니다.");
     } finally {
-      setBusyPhotoId(null);
-      setMovePending(null);
+      if (activeEventRef.current === requestEventId) { setBusyPhotoId(null); setMovePending(null); }
     }
   }
 
@@ -587,19 +648,21 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
       return;
     }
     const commandKey = `remove:${current.id}`;
+    const requestEventId = eventId;
     setBusyPhotoId(current.id);
     setFailure(null);
     setNotice(null);
     try {
       await postEvidenceCommand("evidence.photo.remove", { id: current.id }, commandIdFor(commandKey), "보관함에서 제외하지 못했습니다.");
+      if (activeEventRef.current !== requestEventId) return;
       actionCommandIdsRef.current.delete(commandKey);
       setNotice("사진을 보관함에서 제외했습니다. 원본 파일과 기존 행사 파일 권한은 유지됩니다.");
       await load(true);
     } catch (error) {
+      if (activeEventRef.current !== requestEventId) return;
       setFailure(error instanceof Error ? error.message : "보관함에서 제외하지 못했습니다.");
     } finally {
-      setBusyPhotoId(null);
-      setRemovePending(null);
+      if (activeEventRef.current === requestEventId) { setBusyPhotoId(null); setRemovePending(null); }
     }
   }
 
@@ -664,6 +727,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
       feedback={
         <>
           {notice ? <ConsoleFeedback kind="success">{notice}</ConsoleFeedback> : null}
+          {otherEvidenceReceipt ? <ConsoleFeedback kind="warning">이전 사진 처리 결과를 위에서 확인한 뒤 사진을 변경할 수 있습니다.</ConsoleFeedback> : null}
           {failure ? <ConsoleFeedback kind="error">{failure}</ConsoleFeedback> : null}
           {state.archived ? (
             <ConsoleFeedback kind="warning">보관된 행사는 읽기 전용입니다. 사진을 보고 내려받을 수 있지만 올리거나 옮길 수 없습니다.</ConsoleFeedback>
@@ -877,7 +941,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
                         {job.error ? <p className={styles.jobError} role="alert">{job.error}</p> : null}
                         {orphanRisk ? (
                           <p className={styles.orphanWarning}>
-                            파일은 업로드됐지만 보관 기록에 연결되지 않았습니다. 비공개 보관소에 연결되지 않은 파일이 남아 있을 수 있습니다. 다시 시도하면 파일을 재업로드하지 않고 같은 보관 기록 요청만 재시도합니다.
+                            파일은 업로드됐지만 보관 기록이 반영됐는지 확인하지 못했습니다. 이미 등록됐거나 파일만 남아 있을 수 있습니다. 다시 시도하면 파일을 재업로드하지 않고 같은 보관 기록 요청만 확인합니다.
                           </p>
                         ) : null}
                         {job.status === "failed-upload" ? (
@@ -888,7 +952,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
                         <button
                           type="button"
                           className="button button-secondary"
-                          disabled={queueBusy}
+                          disabled={queueBusy || writeLocked}
                           onClick={() => void processJobs([job.id])}
                         >
                           {queueBusy ? "처리 중…" : job.status === "failed-record" ? "기록 등록 재시도" : "업로드 재시도"}
@@ -930,7 +994,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
                   </div>
                   <details className={styles.photoManage}>
                     <summary>사진 관리</summary>
-                    <form
+                    <ValidatedForm
                       className={styles.photoControls}
                       onSubmit={(event) => {
                         event.preventDefault();
@@ -962,7 +1026,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
                           {photoBusy ? "처리 중…" : "구간 변경"}
                         </button>
                       </div>
-                    </form>
+                    </ValidatedForm>
                     <button
                       type="button"
                       className={styles.removeButton}

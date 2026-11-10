@@ -1,7 +1,11 @@
 "use client";
 
+import ValidatedForm from "../../ui/ValidatedForm";
+
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useUnsavedNavigationGuard } from "../../../lib/use-unsaved-navigation-guard";
 
 // The holder's own mailbox proof ("이메일+수동 예외"의 자동 복구 절반).
 //
@@ -39,33 +43,45 @@ export default function EmailVerification() {
   const [outcome, setOutcome] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
+  const [requestUncertain, setRequestUncertain] = useState(false);
+  const [confirmUncertain, setConfirmUncertain] = useState(false);
   const gateRef = useRef(false);
   const failureRef = useRef<HTMLParagraphElement>(null);
+  const tokenDraftRef = useRef({ token: "", working: false });
+
+  useUnsavedNavigationGuard(
+    !(status.kind === "ready" && status.verified) && Boolean(currentPassword || confirmToken || working),
+    "입력한 정보와 인증 링크는 이 화면에만 보관됩니다."
+  );
 
   useEffect(() => {
     if (failure) failureRef.current?.focus();
   }, [failure]);
 
-  const refresh = useCallback(async () => {
+  useEffect(() => {
+    tokenDraftRef.current = { token: confirmToken, working };
+  }, [confirmToken, working]);
+
+  const refresh = useCallback(async (): Promise<boolean | null> => {
     setStatus({ kind: "checking" });
     setFailure(null);
     try {
       const me = await fetch("/api/auth/me", { cache: "no-store" });
       if (me.status === 401) {
         setStatus({ kind: "signin" });
-        return;
+        return null;
       }
       // Only a definitive auth denial signs out: a 500, gateway failure, or
       // any other transport problem is a retryable failure, never proof that
       // a healthy session is unauthenticated.
       if (!me.ok) {
         setStatus({ kind: "failed", message: "인증 상태를 확인하지 못했습니다. 연결을 확인하고 다시 시도하세요." });
-        return;
+        return null;
       }
       const res = await fetch("/api/auth/email/status", { cache: "no-store" });
       if (res.status === 401) {
         setStatus({ kind: "signin" });
-        return;
+        return null;
       }
       const data = (await res.json().catch(() => null)) as {
         verified?: unknown;
@@ -73,11 +89,13 @@ export default function EmailVerification() {
         emailMasked?: unknown;
         delivery?: { connected?: unknown; mode?: unknown };
       } | null;
-      if (!res.ok || !data) {
+      if (!res.ok || !data || typeof data.verified !== "boolean" ||
+          (data.verified && (typeof data.verifiedAt !== "string" || !Number.isFinite(Date.parse(data.verifiedAt)))) ||
+          typeof data.emailMasked !== "string" || typeof data.delivery?.connected !== "boolean") {
         // Transport/server failure is a retryable failure, not a signed-out
         // session: never present a healthy session as unauthenticated.
         setStatus({ kind: "failed", message: "인증 상태를 확인하지 못했습니다. 연결을 확인하고 다시 시도하세요." });
-        return;
+        return null;
       }
       setStatus({
         kind: "ready",
@@ -87,10 +105,26 @@ export default function EmailVerification() {
         deliveryConnected: data.delivery?.connected === true,
         deliveryMock: data.delivery?.mode === "mock",
       });
+      if (data.verified) {
+        setCurrentPassword("");
+        setConfirmToken("");
+        setHasConfirmLink(false);
+        setConfirmUncertain(false);
+        setRequestUncertain(false);
+      }
+      return data.verified;
     } catch {
       setStatus({ kind: "failed", message: "연결하지 못했습니다. 다시 시도하세요." });
+      return null;
     }
   }, []);
+
+  async function checkCurrentVerification() {
+    const verified = await refresh();
+    if (verified === false) {
+      setFailure("현재 인증되지 않았습니다. 요청이 계속 처리 중일 수 있으니 잠시 후 다시 확인하거나 인증을 다시 시도하세요.");
+    }
+  }
 
   useEffect(() => {
     void refresh();
@@ -109,6 +143,20 @@ export default function EmailVerification() {
         if (window.location.hash) {
           window.history.replaceState(null, "", "/account/email");
         }
+        return;
+      }
+      const previous = tokenDraftRef.current;
+      if (previous.working) {
+        window.history.replaceState(null, "", "/account/email");
+        setFailure("요청을 처리하고 있습니다. 결과를 확인한 뒤 새 링크를 다시 여세요.");
+        return;
+      }
+      if (previous.token === match[1]) {
+        window.history.replaceState(null, "", "/account/email");
+        return;
+      }
+      if (previous.token && !window.confirm("새 인증 링크를 열면 입력한 토큰이 바뀝니다. 계속할까요?")) {
+        window.history.replaceState(null, "", "/account/email");
         return;
       }
       setConfirmToken(match[1]);
@@ -133,17 +181,25 @@ export default function EmailVerification() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ currentPassword }),
       });
-      const data = (await res.json().catch(() => null)) as { ok?: unknown; already?: unknown; error?: unknown; code?: unknown } | null;
+      const data = (await res.json().catch(() => null)) as { ok?: unknown; already?: unknown; expiresAt?: unknown; error?: unknown; code?: unknown } | null;
       if (!res.ok) {
+        if (requestUncertain || res.status >= 500 || res.status === 408 || res.status === 425) {
+          setRequestUncertain(true);
+          setFailure("인증 메일 요청 결과를 확인하지 못했습니다. 메일이 도착했을 수 있으니 받은 편지함을 확인하세요.");
+          return;
+        }
         setFailure(
           typeof data?.error === "string" ? data.error : "인증 메일을 보내지 못했습니다."
         );
         return;
       }
-      if (data?.ok !== true) {
-        setFailure("인증 메일 요청 결과를 확인하지 못했습니다. 잠시 후 다시 확인하세요.");
+      if (data?.ok !== true || (data.already !== true &&
+          (typeof data.expiresAt !== "string" || !Number.isFinite(Date.parse(data.expiresAt))))) {
+        setRequestUncertain(true);
+        setFailure("인증 메일 요청 결과를 확인하지 못했습니다. 메일이 도착했을 수 있으니 받은 편지함을 확인하세요.");
         return;
       }
+      setRequestUncertain(false);
       setCurrentPassword("");
       if (data.already === true) {
         setOutcome("이미 인증된 이메일입니다.");
@@ -155,7 +211,8 @@ export default function EmailVerification() {
         ? "모의 인증 요청을 기록했습니다. 실제 메일은 발송되지 않습니다."
         : "인증 메일을 보냈습니다. 메일의 링크는 60분 안에 이 로그인 상태에서 열어주세요.");
     } catch {
-      setFailure("연결하지 못했습니다. 다시 시도하세요.");
+      setRequestUncertain(true);
+      setFailure("인증 메일 요청 결과를 확인하지 못했습니다. 메일이 도착했을 수 있으니 받은 편지함을 확인하세요.");
     } finally {
       gateRef.current = false;
       setWorking(false);
@@ -177,22 +234,30 @@ export default function EmailVerification() {
       });
       const data = (await res.json().catch(() => null)) as { ok?: unknown; verified?: unknown; error?: unknown } | null;
       if (!res.ok) {
+        if (confirmUncertain || res.status >= 500 || res.status === 408 || res.status === 425) {
+          setConfirmUncertain(true);
+          setFailure("이메일 인증 결과를 확인하지 못했습니다. 링크가 이미 사용되었을 수 있으니 인증 상태를 확인하세요.");
+          return;
+        }
         setFailure(
           typeof data?.error === "string" ? data.error : "인증 링크를 확인하세요."
         );
         return;
       }
       if (data?.ok !== true || data.verified !== true) {
-        setFailure("이메일 인증 결과를 확인하지 못했습니다. 이 페이지를 다시 열어 인증 상태를 확인하세요.");
+        setConfirmUncertain(true);
+        setFailure("이메일 인증 결과를 확인하지 못했습니다. 링크가 이미 사용되었을 수 있으니 인증 상태를 확인하세요.");
         return;
       }
+      setConfirmUncertain(false);
       setConfirmToken("");
       setHasConfirmLink(false);
       setMailed(false);
       setOutcome("이메일 인증을 마쳤습니다.");
       await refresh();
     } catch {
-      setFailure("연결하지 못했습니다. 다시 시도하세요.");
+      setConfirmUncertain(true);
+      setFailure("이메일 인증 결과를 확인하지 못했습니다. 링크가 이미 사용되었을 수 있으니 인증 상태를 확인하세요.");
     } finally {
       gateRef.current = false;
       setWorking(false);
@@ -273,7 +338,7 @@ export default function EmailVerification() {
     <>
       {outcome ? <p role="status">{outcome}</p> : null}
       {!showConfirm ? (
-        <form className="auth-form" onSubmit={onRequest}>
+        <ValidatedForm className="auth-form" onSubmit={onRequest}>
           <p className="auth-help" role="status">
             {status.emailMasked} 주소가 본인의 것인지 확인합니다. 현재 비밀번호를
             입력하면 이 주소로만 인증 메일이 갑니다. 초대를 수락한 것만으로는
@@ -287,12 +352,21 @@ export default function EmailVerification() {
               autoComplete="current-password"
               value={currentPassword}
               onChange={(event) => setCurrentPassword(event.target.value)}
+              readOnly={working}
               aria-describedby={failure ? "verify-request-error" : undefined}
               required
             />
           </div>
           {failure ? <p role="alert" id="verify-request-error" ref={failureRef} tabIndex={-1}>{failure}</p> : null}
-          <button type="submit" disabled={working}>
+          {requestUncertain ? (
+            <>
+              <button type="button" className="button button-primary" disabled={working} onClick={() => { setMailed(true); setFailure(null); }}>
+                받은 인증 링크 사용
+              </button>
+              <p className="auth-help">다시 요청하면 인증 메일이 추가로 발송될 수 있습니다.</p>
+            </>
+          ) : null}
+          <button type="submit" className={requestUncertain ? "button button-secondary" : undefined} disabled={working}>
             {working ? "보내는 중입니다" : "인증 메일 보내기"}
           </button>
           {status.deliveryMock ? (
@@ -304,9 +378,9 @@ export default function EmailVerification() {
             사전에 인증하지 않은 채 잠긴 계정은 별도 본인확인 절차가 정해질 때까지
             조직 관리자에게 문의하세요.
           </p>
-        </form>
+        </ValidatedForm>
       ) : (
-        <form className="auth-form" onSubmit={onConfirm}>
+        <ValidatedForm className="auth-form" onSubmit={onConfirm}>
           <p className="auth-help" role="status">
             메일의 링크로 이 화면이 열렸다면 아래 버튼을 눌러 인증을 마치세요.
             토큰만 복사했다면 아래에 직접 입력해도 됩니다. 링크는 60분 동안
@@ -321,12 +395,18 @@ export default function EmailVerification() {
               inputMode="text"
               value={confirmToken}
               onChange={(event) => setConfirmToken(event.target.value)}
+              readOnly={working}
               aria-describedby={failure ? "verify-confirm-error" : undefined}
               required
             />
           </div>
           {failure ? <p role="alert" id="verify-confirm-error" ref={failureRef} tabIndex={-1}>{failure}</p> : null}
-          <button type="submit" disabled={working}>
+          {confirmUncertain ? (
+            <button type="button" className="button button-primary" disabled={working} onClick={() => { void checkCurrentVerification(); }}>
+              인증 상태 확인
+            </button>
+          ) : null}
+          <button type="submit" className={confirmUncertain ? "button button-secondary" : undefined} disabled={working}>
             {working ? "확인 중입니다" : "이메일 인증하기"}
           </button>
           {status.deliveryConnected ? (
@@ -335,10 +415,14 @@ export default function EmailVerification() {
               <button
                 type="button"
                 className="auth-help-link"
+                disabled={working}
                 onClick={() => {
+                  if (working || gateRef.current) return;
+                  if (confirmToken && !window.confirm("입력한 인증 토큰을 지우고 새 메일을 요청할까요? 인증 상태는 먼저 확인할 수 있습니다.")) return;
                   setMailed(false);
                   setConfirmToken("");
                   setHasConfirmLink(false);
+                  setConfirmUncertain(false);
                   setFailure(null);
                   setOutcome(null);
                 }}
@@ -349,7 +433,7 @@ export default function EmailVerification() {
           ) : (
             <p className="auth-help">현재 이메일 발송을 사용할 수 없어 새 메일을 요청할 수 없습니다.</p>
           )}
-        </form>
+        </ValidatedForm>
       )}
     </>
   );

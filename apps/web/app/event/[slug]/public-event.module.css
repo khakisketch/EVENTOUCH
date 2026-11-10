@@ -136,6 +136,10 @@
   font-size: var(--small);
 }
 
+.venueText {
+  white-space: pre-wrap;
+}
+
 /* The global .event-facts grid holds two columns at every width; on a phone
    each fact squeezes to ~165px and the date wraps mid-phrase. One column on
    narrow screens keeps 일정·장소 readable. Globals stay untouched. */
@@ -204,3 +208,6 @@
   white-space: nowrap;
   pointer-events: none;
 }
+.venueMap { margin: var(--s4) 0 0; }
+.venueMap img { display: block; width: auto; max-width: 100%; height: auto; }
+.venueMap figcaption { margin-top: var(--s2); }

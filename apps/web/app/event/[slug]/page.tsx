@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eventStageClassName, eventStageLabel } from "../../event-stage";
 import { loadVerificationMode } from "../../../lib/verification-mode";
+import { publicRecoveryContact } from "../../../lib/public-recovery-contact";
 import styles from "./public-event.module.css";
 
 type PublicEvent = {
@@ -31,7 +32,7 @@ type ProgramItem = {
 type PublicWorkspace = {
   notices?: unknown;
   program?: unknown;
-  venue?: { name?: unknown; address?: unknown; directions?: unknown; contact?: unknown } | null;
+  venue?: { name?: unknown; address?: unknown; directions?: unknown; contact?: unknown; description?: unknown; map?: unknown } | null;
   registrationOpen?: unknown;
   pageExperience?: { published?: {
     intro?: unknown;
@@ -106,7 +107,7 @@ export default async function EventPage({
   // hidden section never renders here, it only stays editable in console.
   const showAnnouncements = published.showAnnouncements !== false;
   const showSchedule = published.showSchedule !== false;
-  const showVenue = published.showVenue !== false;
+  const showVenue = published.showVenue !== false && Array.isArray(event.features) && event.features.includes("venue");
   const showPrograms = published.showPrograms !== false;
   const keyvisual = keyvisualSource(slug, published.keyvisual);
   const registrationOpen = workspace.registrationOpen === true;
@@ -154,7 +155,17 @@ export default async function EventPage({
   const venueAddress = text(venue.address);
   const venueDirections = text(venue.directions);
   const venueContact = text(venue.contact);
-  const hasVenue = Boolean(venueName || venueAddress || venueDirections || venueContact);
+  const recoveryContact = publicRecoveryContact(workspace, event.features);
+  const venueDescription = text(venue.description);
+  const venueMap = (() => {
+    const map = venue.map && typeof venue.map === "object" ? venue.map as Record<string, unknown> : null;
+    const image = map?.image && typeof map.image === "object" ? map.image as Record<string, unknown> : null;
+    const fileId = text(image?.fileId);
+    const alt = text(map?.alt).trim();
+    if (!/^[A-Za-z0-9_-]{1,160}$/.test(fileId) || !alt) return null;
+    return { alt, src: `/api/public/events/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}` };
+  })();
+  const hasVenue = Boolean(venueName || venueAddress || venueDirections || venueContact || venueDescription || venueMap);
   // Published booth map only: draft placements never surface here.
   const boothMap = (() => {
     const source = workspace.boothMap as { published?: unknown } | undefined;
@@ -239,7 +250,7 @@ export default async function EventPage({
             <p className={styles.registrationClosed} role="status">현재 신청을 받지 않습니다.</p>
           )}
           {recoveryBlocked ? (
-            <p className={styles.recoveryNote} role="note">이미 신청했다면 신청한 기기에서 티켓을 여세요. 문자로 다시 연결할 수 없는 행사입니다. 티켓을 잃었다면 {venueContact ? `${venueContact}(으)로` : "행사 안내의 문의처로"} 운영자에게 연락하세요.</p>
+            <p className={styles.recoveryNote} role="note">이미 신청했다면 신청을 완료한 브라우저 탭에서 티켓을 여세요. 이 행사는 문자로 다시 연결할 수 없습니다. {recoveryContact ? `문의: ${recoveryContact}` : "탭을 찾을 수 없다면 행사 초대 안내를 확인하거나 행사 주최 측에 문의하세요."}</p>
           ) : (
             <Link
               className={`button button-secondary ${styles.recoveryLink}`}
@@ -348,8 +359,14 @@ export default async function EventPage({
             ) : null}
             {venueDirections ? (
               <div className="event-fact">
-                <dt>안내</dt>
-                <dd className="preserve-lines">{venueDirections}</dd>
+                <dt>오시는 길</dt>
+                <dd className={styles.venueText}>{venueDirections}</dd>
+              </div>
+            ) : null}
+            {venueDescription ? (
+              <div className="event-fact">
+                <dt>행사장 안내</dt>
+                <dd className={styles.venueText}>{venueDescription}</dd>
               </div>
             ) : null}
             {venueContact ? (
@@ -359,6 +376,12 @@ export default async function EventPage({
               </div>
             ) : null}
           </dl>
+          {venueMap ? <figure className={styles.venueMap}>
+            {/* A normal image/link preserves zoom and the browser's download controls. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={venueMap.src} alt={venueMap.alt} />
+            <figcaption><a href={venueMap.src} target="_blank" rel="noopener noreferrer">안내도 크게 보기 (새 탭)</a></figcaption>
+          </figure> : null}
         </section>
       ) : null}
 

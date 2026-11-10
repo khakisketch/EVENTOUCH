@@ -1,5 +1,9 @@
 "use client";
 
+import { beginOperatorReceipt, endOperatorReceipt, type OperatorReceiptPointer } from "./operator-receipts";
+import { boothScheduleTime } from "./booth-availability";
+import { cancellationProofMatches } from "./bulk-cancel-proof";
+
 // Operator organization context: multi-org membership transport for the
 // console (and staff) operator surfaces.
 //
@@ -48,7 +52,7 @@
 //     body, headers including the org/version stamp) bound to the original
 //     org. The frozen copy — never a rebuilt request — is what an explicit
 //     on-demand "미확인 요청 확인" replays, byte for byte.
-//   - Ambiguous outcomes (network loss, 5xx, 408, unreadable success bodies)
+//   - Ambiguous outcomes (network loss, 5xx, 408/425/429, unreadable success bodies)
 //     keep an uncertain receipt mapping keyed by commandId (or a local key
 //     when the call carries no id). The adapter never auto-replays: only an
 //     explicit per-receipt check does. Any RECEIVED non-context 409 is an
@@ -379,6 +383,902 @@ function extractCommandId(url: string, body: BodyInit | null | undefined): strin
     }
   }
   return null;
+}
+
+function receiptPointer(path: string, body: BodyInit | null | undefined, commandId: string | null, context: OperatorContext | null): OperatorReceiptPointer | null {
+  if (!commandId || !context || typeof body !== "string") return null;
+  let command = "";
+  let eventId: string | null = null;
+  const event = /^\/api\/events\/([^/]+)\/commands$/.exec(path);
+  if (event) {
+    try {
+      eventId = decodeURIComponent(event[1]);
+      const parsed = asRecord(JSON.parse(body));
+      command = typeof parsed?.command === "string" ? parsed.command : typeof parsed?.name === "string" ? parsed.name : "";
+    } catch { return null; }
+  } else if (path === "/api/events") command = "event.create";
+  else if (/^\/api\/events\/[^/]+\/duplicate$/.test(path)) command = "event.duplicate";
+  else if (path === "/api/clients") command = "client.save";
+  else if (path === "/api/auth/invitations") command = "invitation.create";
+  else if (/^\/api\/auth\/accounts\/[^/]+\/password$/.test(path)) command = "account.password-reset";
+  else if (/^\/api\/accounts\/[^/]+\/org-permissions$/.test(path)) command = "org.permissions.save";
+  else if (/^\/api\/events\/[^/]+\/members$/.test(path)) command = "member.assign";
+  else return null;
+  return { userId: context.userId, organizationId: context.organizationId, eventId, commandId, command };
+}
+
+// A create response must belong to the original request and preserve the
+// scheduled/simulated distinction; a 2xx alone does not establish this.
+export function confirmsMessageCreate(commandId: string, payload: unknown, value: unknown): boolean {
+  const input = asRecord(payload);
+  const message = asRecord(asRecord(value)?.message);
+  if (!input || !message || message.id !== commandId || typeof message.status !== "string") return false;
+  if (typeof input.scheduled === "string" && input.scheduled) return message.status === "SCHEDULED";
+  if (input.simulate === true) return message.status === "SIMULATED";
+  return ["NEEDS_CONNECTION", "SENDING", "ACCEPTED", "SENT", "PARTIAL", "FAILED"].includes(message.status);
+}
+
+// The reviewed command must prove the exact selected audience and content;
+// an ID and a status alone can describe a different request with a reused ID.
+export function confirmsReviewedMessageCreate(commandId: string, payload: unknown, value: unknown): boolean {
+  const input = asRecord(payload), result = asRecord(value), message = asRecord(result?.message);
+  if (!input || !result || result.messageRequestVersion !== 1 || !message ||
+      !confirmsMessageCreate(commandId, input, result) || !Array.isArray(input.ids) || !input.ids.length ||
+      !input.ids.every((id) => typeof id === "string" && Boolean(id.trim())) ||
+      !Array.isArray(input.expectedRecipientVersions) || input.expectedRecipientVersions.length !== input.ids.length ||
+      !input.expectedRecipientVersions.every((version) => typeof version === "string" && /^[a-f0-9]{64}$/.test(version)) ||
+      !Array.isArray(message.recipientIds) || JSON.stringify(message.recipientIds) !== JSON.stringify(input.ids.map((id: string) => id.trim().slice(0, 120))) ||
+      typeof input.title !== "string" || message.title !== input.title.trim().slice(0, 100) ||
+      typeof input.body !== "string" || message.body !== input.body.trim().slice(0, 2000) ||
+      typeof input.channel !== "string" || message.channel !== input.channel.trim().toUpperCase() ||
+      message.simulate !== (input.simulate === true)) return false;
+  const scheduled = typeof input.scheduled === "string" ? input.scheduled.trim().slice(0, 64) : "";
+  if (message.scheduled !== scheduled ||
+      (scheduled && message.scheduleMode !== (typeof input.scheduleMode === "string" ? input.scheduleMode.trim().toUpperCase() : "MANUAL"))) return false;
+  const templateId = typeof input.templateId === "string" ? input.templateId.trim().slice(0, 120) || null : null;
+  if (message.templateId !== templateId) return false;
+  if (message.channel === "MMS" && (typeof input.imageFileId !== "string" || asRecord(message.image)?.fileId !== input.imageFileId.trim().slice(0, 160))) return false;
+  return true;
+}
+
+export function confirmsCharsetReviewedMessageCreate(commandId: string, payload: unknown, value: unknown): boolean {
+  const input = asRecord(payload), result = asRecord(value), message = asRecord(result?.message);
+  if (!input || !result || result.messageCharsetPolicyVersion !== 1 || !message ||
+      !confirmsReviewedMessageCreate(commandId, input, result)) return false;
+  return message.channel !== "ALIMTALK" ||
+    (typeof input.smsFallback === "boolean" && message.smsFallback === input.smsFallback);
+}
+
+export function confirmsProviderCheck(payload: unknown, value: unknown): boolean {
+  const input = asRecord(payload), result = asRecord(value), proof = asRecord(result?.providerCheck), message = asRecord(result?.message);
+  if (!input || !proof || !message || typeof input.id !== "string" || !input.id || message.id !== input.id || proof.id !== input.id ||
+      typeof input.participantId !== "string" || !input.participantId || proof.participantId !== input.participantId ||
+      !["ACCEPTED", "NOT_ACCEPTED"].includes(String(input.outcome)) || proof.outcome !== input.outcome ||
+      !(input.expectedSubmissionId === null || (typeof input.expectedSubmissionId === "string" && input.expectedSubmissionId.length > 0)) ||
+      proof.expectedSubmissionId !== input.expectedSubmissionId || !Array.isArray(message.deliveries)) return false;
+  const matching = message.deliveries.map(asRecord).filter((delivery: Record<string, unknown> | null) => delivery?.participantId === input.participantId);
+  if (matching.length !== 1) return false;
+  const delivery = matching[0], reviewed = asRecord(delivery?.manualProviderReview);
+  return delivery?.status === (input.outcome === "ACCEPTED" ? "ACCEPTED" : "FAILED") &&
+    delivery?.genericProviderResult === input.outcome && reviewed?.outcome === input.outcome &&
+    typeof reviewed?.actorId === "string" && Boolean(reviewed.actorId) && typeof reviewed?.at === "string" && Boolean(reviewed.at);
+}
+
+export function confirmsTemplateSave(payload: unknown, value: unknown): boolean {
+  const input = asRecord(payload);
+  const template = asRecord(asRecord(value)?.template);
+  if (!input || !template || template.archived === true || typeof template.id !== "string" || !template.id ||
+      typeof input.name !== "string" || template.name !== input.name.trim() ||
+      typeof input.body !== "string" || template.body !== input.body.trim() ||
+      typeof input.channel !== "string" || template.channel !== input.channel.trim().toUpperCase() ||
+      !Object.hasOwn(template, "solapiTemplateId") || !(template.solapiTemplateId === null || typeof template.solapiTemplateId === "string") ||
+      (typeof input.id === "string" && input.id && template.id !== input.id)) return false;
+  if (input.expectedVersion !== undefined && (!Number.isSafeInteger(input.expectedVersion) || template.version !== Number(input.expectedVersion) + 1)) return false;
+  if (typeof input.solapiTemplateId === "string" && input.solapiTemplateId.trim()) return template.solapiTemplateId === input.solapiTemplateId.trim();
+  // The existing API retains an old approval ID when an update submits an
+  // empty value. A new template has no such prior value.
+  return typeof input.id === "string" && Boolean(input.id) || template.solapiTemplateId === null;
+}
+
+export function confirmsTemplateArchive(payload: unknown, value: unknown, expected: unknown): boolean {
+  const input = asRecord(payload);
+  const template = asRecord(asRecord(value)?.template);
+  const source = asRecord(expected);
+  return Boolean(input && template && source && typeof input.archived === "boolean" &&
+    Number.isSafeInteger(input.expectedVersion) && template.id === input.id && template.id === source.id &&
+    template.archived === input.archived && template.version === Number(input.expectedVersion) + 1 &&
+    template.name === source.name && template.body === source.body && (typeof template.channel === "string" ? template.channel : "SMS") === source.channel &&
+    (template.solapiTemplateId || "") === (source.solapiTemplateId || ""));
+}
+
+// A successful HTTP status alone cannot identify a completed draw. Verify
+// against the original request before forgetting the status-only pointer.
+// No participant data or request body is added to browser storage.
+export function confirmsDrawRun(payload: unknown, value: unknown, commandId?: string): boolean {
+  const input = asRecord(payload);
+  const result = asRecord(value);
+  const program = asRecord(result?.program);
+  const count = input?.count;
+  if (!input || !result || !program || typeof input.id !== "string" || program.id !== input.id ||
+      typeof count !== "number" || !Number.isInteger(count) || count < 1 || count > 20 ||
+      !Array.isArray(result.winners) || result.winners.length !== count ||
+      !result.winners.every((winner: unknown) => {
+        const item = asRecord(winner);
+        return item && typeof item.name === "string" && (item.kind === "PERSON" || item.kind === "COMPANY");
+      }) || !Array.isArray(program.winners) || program.winners.length < count ||
+      typeof result.remaining !== "number" || !Number.isSafeInteger(result.remaining) || result.remaining < 0) return false;
+  if (input.expectedRevision !== undefined && (!Number.isSafeInteger(input.expectedRevision) ||
+      program.revision !== Number(input.expectedRevision) + 1)) return false;
+  if (input.showOnScreen !== true) return true;
+  const display = asRecord(result.display);
+  return display?.type === "draw" && (!commandId || (
+    display.drawId === commandId && typeof program.moduleId === "string" && display.moduleId === program.moduleId
+  ));
+}
+
+// Do not retire a draw/vote operation's receipt merely because its response
+// has a 2xx status. Compare the returned entity with the submitted operation.
+export function confirmsDrawOperation(command: string, payload: unknown, value: unknown): boolean {
+  const input = asRecord(payload);
+  const result = asRecord(value);
+  if (!input || !result) return false;
+  if (command === "team.save") {
+    const team = asRecord(result.team);
+    return Boolean(team && typeof team.id === "string" && team.id && typeof input.name === "string" &&
+      team.name === input.name.trim() && (typeof input.id !== "string" || team.id === input.id) &&
+      Number.isSafeInteger(team.order));
+  }
+  if (command === "draw.program.save") {
+    const program = asRecord(result.program);
+    if (!program || typeof program.id !== "string" || !program.id ||
+        (typeof input.id === "string" && input.id !== program.id)) return false;
+    return ["name", "quota", "moduleId", "status", "published", "eligibility", "eligibleGroups", "eligibleCompanies", "overlap", "prizeTiers"]
+      .every((field) => !(field in input) || JSON.stringify(program[field]) === JSON.stringify(input[field]));
+  }
+  if (command === "vote.config.save" || command === "lucky.config.save" || command === "lucky.config.save-reviewed") {
+    const target = asRecord(result[command === "vote.config.save" ? "voteConfig" : "luckyConfig"]);
+    const fields = command === "vote.config.save" ? ["pickCount", "status", "resultsPublished"] : ["min", "max"];
+    return Boolean(target && fields.every((field) => !(field in input) || target[field] === input[field]));
+  }
+  if (command === "roulette.config.save" || command === "roulette.config.save-reviewed") {
+    const config = asRecord(result.rouletteConfig);
+    if (command === "roulette.config.save-reviewed" && (!Number.isSafeInteger(input.expectedVersion) || result.rouletteConfigVersion !== Number(input.expectedVersion) + 1)) return false;
+    if (!config || !Array.isArray(input.prizes) || !Array.isArray(config.prizes) ||
+        config.status !== input.status || config.startsAt !== (input.startsAt || null) ||
+        config.endsAt !== (input.endsAt || null) || config.prizes.length !== input.prizes.length) return false;
+    return input.prizes.every((raw, index) => {
+      const expected = asRecord(raw);
+      const actual = asRecord((config.prizes as unknown[])[index]);
+      return Boolean(expected && actual && actual.id === expected.id && actual.label === expected.label &&
+        actual.quantity === expected.quantity && actual.weight === (expected.weight ?? null));
+    });
+  }
+  if (command === "lucky.preassign" || command === "lucky.preassign-reviewed" || command === "lucky.preassign-range-reviewed") {
+    const ids = Array.isArray(input.participantIds) ? input.participantIds : null;
+    const range = asRecord(result.range);
+    if (!ids || !ids.every((id) => typeof id === "string") || !Array.isArray(result.assigned) ||
+        !Number.isSafeInteger(result.skipped) || Number(result.skipped) < 0 ||
+        result.assigned.length + Number(result.skipped) !== new Set(ids).size ||
+        !range || !Number.isSafeInteger(range.min) || !Number.isSafeInteger(range.max)) return false;
+    if (command === "lucky.preassign-range-reviewed") {
+      const expected = asRecord(input.expectedRange);
+      if (!expected || range.min !== expected.min || range.max !== expected.max) return false;
+    }
+    const assigned = new Set<string>();
+    const numbers = new Set<number>();
+    return result.assigned.every((entry: unknown) => {
+      const item = asRecord(entry);
+      if (!item || typeof item.participantId !== "string" || !ids.includes(item.participantId) ||
+          assigned.has(item.participantId) || !Number.isSafeInteger(item.number) ||
+          Number(item.number) < Number(range.min) || Number(item.number) > Number(range.max) || numbers.has(Number(item.number))) return false;
+      assigned.add(item.participantId); numbers.add(Number(item.number)); return true;
+    });
+  }
+  if (command === "reward.assign") {
+    const reward = asRecord(result.reward);
+    return Boolean(reward && reward.id === input.id && reward.participantId === input.participantId && reward.status === "READY");
+  }
+  if (command === "vote.tally") {
+    return Array.isArray(result.results) && Number.isSafeInteger(result.totalVotes) && Number(result.totalVotes) >= 0 &&
+      typeof result.published === "boolean" && result.results.every((entry: unknown) => {
+        const row = asRecord(entry);
+        return Boolean(row && typeof row.teamId === "string" && row.teamId && typeof row.name === "string" &&
+          Number.isSafeInteger(row.selections) && Number(row.selections) >= 0 && Number.isSafeInteger(row.rank) &&
+          Number(row.rank) >= 1 && typeof row.tied === "boolean");
+      });
+  }
+  return false;
+}
+
+export function confirmsProgramOperation(command: string, commandId: string, payload: unknown, value: unknown, expectedDrawId?: string): boolean {
+  const input = asRecord(payload);
+  const result = asRecord(value);
+  if (!input || !result || typeof input.id !== "string" || !input.id) return false;
+  if (command === "module.status") {
+    const module = asRecord(result.module);
+    return Boolean(module && module.id === input.id && module.status === input.status && module.published === (input.status !== "DRAFT"));
+  }
+  if (command === "module.reveal") return result.moduleId === input.id && result.revealed === true;
+  if (command === "photo.moderate" || command === "post.moderate") {
+    const item = asRecord(result[command === "photo.moderate" ? "photo" : "post"]);
+    return Boolean(item && item.id === input.id && item.status === input.status);
+  }
+  if (command === "draw.run") {
+    const draw = asRecord(result.draw);
+    const count = input.count;
+    return Boolean(draw && draw.id === commandId && draw.published === false && Number.isSafeInteger(count) && Number(count) > 0 &&
+      Array.isArray(result.winners) && result.winners.length === count && Array.isArray(draw.winners) &&
+      JSON.stringify(result.winners) === JSON.stringify(draw.winners) &&
+      result.winners.every((value: unknown) => { const winner = asRecord(value); return Boolean(winner && typeof winner.id === "string" && winner.id && typeof winner.name === "string"); }) &&
+      Number.isSafeInteger(result.poolCount) && Number(result.poolCount) >= Number(count) && draw.poolCount === result.poolCount);
+  }
+  if (command === "draw.publish") {
+    const draw = asRecord(result.draw);
+    const reviewedId = typeof input.expectedDrawId === "string" ? input.expectedDrawId : expectedDrawId;
+    return Boolean(reviewedId && draw && draw.id === reviewedId && draw.published === true);
+  }
+  return false;
+}
+
+export function confirmsClientSave(payload: unknown, value: unknown): boolean {
+  const input = asRecord(payload);
+  const client = asRecord(asRecord(value)?.client);
+  if (!input || !client || typeof client.id !== "string" || !client.id ||
+      typeof input.name !== "string" || client.name !== input.name.trim()) return false;
+  if (typeof input.id === "string" && input.id && client.id !== input.id.trim()) return false;
+  return ["contact", "email", "logoFileId", "docFileId"].every((field) =>
+    !Object.prototype.hasOwnProperty.call(input, field) ||
+    (typeof input[field] === "string" && client[field] === input[field].trim()));
+}
+
+export function confirmsEventCreation(payload: unknown, value: unknown): boolean {
+  const input = asRecord(payload);
+  const event = asRecord(asRecord(value)?.event);
+  if (!input || !event || typeof event.id !== "string" || !event.id ||
+      typeof input.name !== "string" || event.name !== input.name.trim() ||
+      typeof input.slug !== "string" || event.slug !== input.slug.trim()) return false;
+  if (!["date", "start", "end"].every((field) => typeof input[field] !== "string" || event[field] === input[field].trim())) return false;
+  if (typeof input.capacity === "number" && event.capacity !== input.capacity) return false;
+  if (Object.prototype.hasOwnProperty.call(input, "clientId") && event.clientId !== input.clientId) return false;
+  return typeof input.format !== "string" || event.format === input.format;
+}
+
+export function confirmsInvitation(payload: unknown, value: unknown): boolean {
+  const input = asRecord(payload);
+  const result = asRecord(value);
+  const invite = asRecord(result?.invitation);
+  return Boolean(input && result && invite && typeof result.token === "string" && result.token &&
+    typeof invite.id === "string" && invite.id && typeof input.email === "string" &&
+    invite.email === input.email.trim().toLowerCase() && typeof input.name === "string" &&
+    invite.name === input.name.trim() && invite.role === input.role && (invite.eventId ?? null) === (input.eventId ?? null));
+}
+
+export function confirmsParticipantImport(payload: unknown, value: unknown): boolean {
+  const rows = asRecord(payload)?.rows;
+  const people = asRecord(value)?.participants;
+  if (!Array.isArray(rows) || !rows.length || !Array.isArray(people) || people.length !== rows.length) return false;
+  const byPhone = new Map<string, Record<string, unknown>>();
+  const ids = new Set<string>();
+  for (const value of people) {
+    const person = asRecord(value);
+    if (!person || typeof person.id !== "string" || !person.id || typeof person.phone !== "string" ||
+        ids.has(person.id) || byPhone.has(person.phone)) return false;
+    ids.add(person.id);
+    byPhone.set(person.phone, person);
+  }
+  const seen = new Set<string>();
+  return rows.every((value) => {
+    const row = asRecord(value);
+    if (!row || typeof row.name !== "string" || typeof row.phone !== "string") return false;
+    const phone = row.phone.replace(/\D/g, "");
+    const person = byPhone.get(phone);
+    if (!person || seen.has(phone) || person.name !== row.name.trim() ||
+        (typeof row.email === "string" && person.email !== row.email.trim()) ||
+        (typeof row.company === "string" && person.company !== row.company.trim())) return false;
+    seen.add(phone);
+    return true;
+  });
+}
+
+// Content authoring must not turn a partial success body into a new write.
+// The response is checked against the actual submitted values, in memory.
+export function confirmsContentCommand(command: string, payload: unknown, value: unknown): boolean {
+  const input = asRecord(payload);
+  const result = asRecord(value);
+  if (!input || !result) return false;
+  if (command === "notice.save") {
+    const root = asRecord(result.notice);
+    const notice = input.mode === "draft" ? asRecord(root?.draft) : root;
+    if (input.mode === "draft" && (!root || root.version !== Number(input.expectedVersion) + 1 || typeof root.published !== "boolean")) return false;
+    return Boolean(notice && root && typeof root.id === "string" && root.id &&
+      (typeof input.id !== "string" || root.id === input.id) &&
+      typeof input.title === "string" && notice.title === input.title.trim() &&
+      typeof input.body === "string" && notice.body === input.body.trim() &&
+      (input.mode === "draft" || notice.published === (input.published === true)) && notice.pinned === (input.pinned === true));
+  }
+  if (command === "program.save") {
+    const root = asRecord(result.program);
+    const program = input.mode === "draft" ? asRecord(root?.draft) : root;
+    if (input.mode === "draft" && (!root || root.version !== Number(input.expectedVersion) + 1 || typeof root.published !== "boolean")) return false;
+    if (!program || !root || typeof root.id !== "string" || !root.id ||
+        (typeof input.id === "string" && root.id !== input.id) ||
+        typeof input.title !== "string" || program.title !== input.title.trim() ||
+        (typeof input.date === "string" && input.date && program.date !== input.date.trim()) ||
+        typeof input.start !== "string" || program.start !== input.start.trim() ||
+        typeof input.end !== "string" || program.end !== input.end.trim() ||
+        program.place !== (typeof input.place === "string" ? input.place.trim() : "") ||
+        program.description !== (typeof input.description === "string" ? input.description.trim() : "") ||
+        (input.mode !== "draft" && program.published !== (input.published === true))) return false;
+    if (Object.hasOwn(input, "attachment")) {
+      if (input.attachment === null) return program.attachment == null;
+      return asRecord(program.attachment)?.fileId === asRecord(input.attachment)?.fileId &&
+        typeof asRecord(input.attachment)?.fileId === "string";
+    }
+    return true;
+  }
+  if (["notice.publish", "program.publish", "venue.publish", "notice.publish-reviewed", "program.publish-reviewed", "venue.publish-reviewed"].includes(command)) {
+    const kind = command.split(".")[0];
+    if (command.endsWith("-reviewed")) {
+      const expected = asRecord(input.expectedDestinations);
+      const actual = asRecord(result.reviewedDestinations);
+      const keys = kind === "notice" ? ["slug", "public", "home", "screen"] : ["slug", "public"];
+      if (!expected || !actual || Object.keys(expected).length !== keys.length || Object.keys(actual).length !== keys.length ||
+          keys.some(key => !Object.hasOwn(expected, key) || !Object.hasOwn(actual, key) || expected[key] !== actual[key]) ||
+          typeof expected.slug !== "string" || !expected.slug || expected.slug.length > 120 ||
+          typeof expected.public !== "boolean" || (kind === "notice" &&
+            (typeof expected.home !== "boolean" || !["off", "available", "selected"].includes(String(expected.screen))))) return false;
+    }
+    const saved = asRecord(result[kind]);
+    if (!saved || !Number.isSafeInteger(input.expectedVersion) || saved.version !== Number(input.expectedVersion) + 1 ||
+        (kind !== "venue" && (saved.id !== input.id || typeof input.published !== "boolean" || saved.published !== input.published))) return false;
+    const stringKeys = kind === "notice" ? ["title", "body"] : kind === "program" ? ["title", "date", "start", "end", "place", "description"] : ["name", "address", "directions", "contact", "description"];
+    if (stringKeys.some(key => typeof saved[key] !== "string")) return false;
+    if (kind === "notice" && typeof saved.pinned !== "boolean") return false;
+    if (input.published === false) return true;
+    const draft = asRecord(saved.draft);
+    if (!draft || stringKeys.some(key => saved[key] !== draft[key])) return false;
+    if (kind === "notice") return draft.pinned === saved.pinned;
+    const asset = kind === "program" ? "attachment" : "map";
+    if (draft[asset] == null) return saved[asset] == null;
+    const before = asRecord(draft[asset]), after = asRecord(saved[asset]);
+    if (!before || !after) return false;
+    if (kind === "program") return typeof before.fileId === "string" && before.fileId === after.fileId;
+    return typeof before.alt === "string" && before.alt === after.alt &&
+      typeof asRecord(before.image)?.fileId === "string" && asRecord(before.image)?.fileId === asRecord(after.image)?.fileId;
+  }
+  if (command === "notice.delete" || command === "program.delete") return result.ok === true;
+  if (command === "display.set") {
+    const display = asRecord(result.display);
+    return Boolean(display && display.type === input.type &&
+      (typeof input.noticeId !== "string" || display.noticeId === input.noticeId) &&
+      (typeof input.moduleId !== "string" || display.moduleId === input.moduleId) &&
+      (typeof input.drawId !== "string" || display.drawId === input.drawId));
+  }
+  if (command === "venue.save") {
+    const root = asRecord(result.venue);
+    const venue = input.mode === "draft" ? asRecord(root?.draft) : root;
+    if (input.mode === "draft" && (!root || root.version !== Number(input.expectedVersion) + 1)) return false;
+    if (!venue || ["name", "address", "directions", "contact", "description"].some((key) =>
+      typeof input[key] !== "string" || venue[key] !== (input[key] as string).trim())) return false;
+    if (!Object.hasOwn(input, "map")) return true;
+    if (input.map === null) return venue.map == null;
+    const inputMap = asRecord(input.map);
+    const savedMap = asRecord(venue.map);
+    return Boolean(inputMap && savedMap && typeof inputMap.alt === "string" && savedMap.alt === inputMap.alt.trim() &&
+      typeof asRecord(inputMap.image)?.fileId === "string" && asRecord(savedMap.image)?.fileId === asRecord(inputMap.image)?.fileId);
+  }
+  return false;
+}
+
+export function confirmsReportCommand(command: string, commandId: string, payload: unknown, value: unknown): boolean {
+  const input = asRecord(payload);
+  const report = asRecord(asRecord(value)?.report);
+  if (!input || !report || typeof report.id !== "string" || !report.id) return false;
+  if (input.expectedAttendance !== undefined && (command === "report.create" || command === "report.successor" && input.source === "current")) {
+    const expected = asRecord(input.expectedAttendance);
+    const metrics = asRecord(asRecord(report.snapshot)?.metrics);
+    if (!expected || !metrics || ["total", "approved", "checked", "inside"].some(key =>
+      !Number.isSafeInteger(expected[key]) || expected[key] !== metrics[key])) return false;
+  }
+  if (command === "report.publish") return report.id === input.id && report.status === "PUBLISHED" &&
+    (input.expectedVersion === undefined || Number(report.version) === input.expectedVersion);
+  if (command === "report.successor") return report.id === commandId && report.parentId === input.id && report.status === "DRAFT" && Boolean(asRecord(report.snapshot));
+  if (command !== "report.create" && command !== "report.update") return false;
+  if (command === "report.update" && typeof input.expectedVersion === "number" &&
+      Number(report.version) !== input.expectedVersion + 1) return false;
+  if (report.id !== (command === "report.create" ? commandId : input.id) || report.status !== "DRAFT" ||
+      typeof input.title !== "string" || report.title !== input.title.trim() ||
+      typeof input.subtitle !== "string" || report.subtitle !== input.subtitle.trim() ||
+      typeof input.coverNote !== "string" || report.coverNote !== input.coverNote.trim() ||
+      typeof input.summary !== "string" || report.summary !== input.summary.trim() ||
+      typeof input.color !== "string" || report.color !== input.color.toUpperCase() ||
+      !Array.isArray(input.sections) || !Array.isArray(report.sections) ||
+      JSON.stringify(input.sections) !== JSON.stringify(report.sections)) return false;
+  return command !== "report.create" || Boolean(asRecord(report.snapshot));
+}
+
+export function confirmsAttendeePageCommand(command: string, payload: unknown, value: unknown): boolean {
+  const input = asRecord(payload);
+  const result = asRecord(value);
+  if (!input || !result || !Number.isSafeInteger(input.expectedDraftVersion) || Number(input.expectedDraftVersion) < 0) return false;
+  const expected = Number(input.expectedDraftVersion);
+  if (command === "attendee.page.publish" || command === "attendee.page.publish-reviewed") {
+    if (command === "attendee.page.publish-reviewed") {
+      const reviewed = asRecord(input.expectedDestinations), confirmed = asRecord(result.reviewedDestinations);
+      const published = asRecord(result.published);
+      const style = asRecord(published?.homeStyle), menus = asRecord(published?.homeMenus);
+      if (!reviewed || !confirmed || typeof reviewed.slug !== "string" || !reviewed.slug || typeof reviewed.public !== "boolean" ||
+          confirmed.slug !== reviewed.slug || confirmed.public !== reviewed.public || !published ||
+          typeof published.intro !== "string" || typeof published.accent !== "string" || !/^#[0-9a-f]{6}$/i.test(published.accent) ||
+          !["showAnnouncements", "showSchedule", "showVenue", "showPrograms"].every(key => typeof published[key] === "boolean") ||
+          !style || typeof style.backgroundColor !== "string" || !/^#[0-9a-f]{6}$/i.test(style.backgroundColor) ||
+          !(style.heroTitle === null || typeof style.heroTitle === "string") || typeof style.heroSubtitle !== "string" ||
+          !["centered", "bottom-overlay", "image-only"].includes(String(style.heroLayout)) ||
+          !["standard", "large"].includes(String(style.titleScale)) || !["center", "top", "bottom"].includes(String(style.imageFocus)) ||
+          !["left", "center", "right"].includes(String(style.textAlign)) || !["light", "dark"].includes(String(style.textTone)) ||
+          !["none", "soft", "strong"].includes(String(style.overlay)) || !menus ||
+          !["order", "hidden", "programs"].every(key => Array.isArray(menus[key]) && (menus[key] as unknown[]).every(value => typeof value === "string")) ||
+          !Object.hasOwn(published, "keyvisual") || !(published.keyvisual === null || asRecord(published.keyvisual))) return false;
+    }
+    return result.publishedVersion === expected && result.draftVersion === expected && Boolean(asRecord(result.published));
+  }
+  if (command !== "attendee.page.save" || result.draftVersion !== expected + 1) return false;
+  const draft = asRecord(result.draft);
+  if (!draft || typeof input.intro !== "string" || draft.intro !== input.intro.trim().slice(0, 160) ||
+      typeof input.accent !== "string" || draft.accent !== input.accent.toUpperCase()) return false;
+  for (const key of ["showAnnouncements", "showSchedule", "showVenue", "showPrograms"]) {
+    if (draft[key] !== (input[key] === true)) return false;
+  }
+  if (Object.hasOwn(input, "homeStyle")) {
+    const supplied = asRecord(input.homeStyle), saved = asRecord(draft.homeStyle);
+    if (!supplied || !saved) return false;
+    for (const [key, value] of Object.entries(supplied)) {
+      if (saved[key] !== (key === "backgroundColor" && typeof value === "string" ? value.trim().toUpperCase() : value)) return false;
+    }
+  }
+  if (Object.hasOwn(input, "homeMenus")) {
+    const supplied = asRecord(input.homeMenus), saved = asRecord(draft.homeMenus);
+    if (!supplied || !saved || !["order", "hidden", "programs"].every((key) =>
+      Array.isArray(supplied[key]) && Array.isArray(saved[key]) && JSON.stringify(supplied[key]) === JSON.stringify(saved[key]))) return false;
+  }
+  for (const [key, clear] of [["keyvisual", "clearKeyvisual"], ["logo", "clearLogo"]]) {
+    if (input[clear] === true && draft[key] !== null) return false;
+    if (Object.hasOwn(input, key) && input[key] !== null && asRecord(input[key])?.fileId !== asRecord(draft[key])?.fileId) return false;
+    if (Object.hasOwn(input, key) && input[key] === null && draft[key] !== null) return false;
+  }
+  return true;
+}
+
+export function confirmsSettingsCommand(command: string, eventId: string, payload: unknown, value: unknown): boolean {
+  const input = asRecord(payload);
+  const result = asRecord(value);
+  if (!input || !result) return false;
+  if (command === "event.update" || command === "event.basics.save") {
+    const event = asRecord(result.event);
+    if (!event || event.id !== eventId) return false;
+    const fields: Array<[string, number]> = [["name", 100], ["slug", 50], ["date", 10], ["start", 5], ["end", 5]];
+    if (!fields.every(([key, max]) => typeof input[key] === "string" && event[key] === (input[key] as string).trim().slice(0, max))) return false;
+    if (typeof input.capacity !== "number" || event.capacity !== input.capacity) return false;
+    if (typeof input.clientId === "string" && input.clientId && event.clientId !== input.clientId) return false;
+    if (typeof input.format === "string" && (input.format ? event.format !== input.format : event.format != null)) return false;
+    if (command === "event.basics.save") {
+      const expected = asRecord(input.expectedBasics);
+      if (!expected || typeof expected.date !== "string" || result.ticketPolicyVersion !== 1 ||
+          !Object.hasOwn(result, "ticketImpact")) return false;
+      const impact = result.ticketImpact;
+      if (impact === null) {
+        if (typeof input.date !== "string" || input.date > expected.date || !/^\d{4}-\d{2}-\d{2}$/.test(expected.date)) return false;
+      } else {
+        const counts = asRecord(impact);
+        if (!counts || !Number.isSafeInteger(counts.extended) || Number(counts.extended) < 0 ||
+            !Number.isSafeInteger(counts.review) || Number(counts.review) < 0) return false;
+      }
+    }
+    // Workspace price and policy flags are not in this response. The receipt
+    // proves the transaction; the caller reloads those values from bootstrap.
+    return true;
+  }
+  if (command === "event.features") return Array.isArray(input.features) && Array.isArray(result.features) &&
+    input.features.every((item) => typeof item === "string") && JSON.stringify([...new Set(input.features)]) === JSON.stringify(result.features);
+  if (command === "form.publish") {
+    if (!Number.isSafeInteger(result.publishedVersion) || Number(result.publishedVersion) <= 0) return false;
+    // Old retained requests predate consent review metadata; preserve their
+    // original proof rule for replaying their existing receipts.
+    if (input.expectedConsentVersion === undefined && input.expectedConsentText === undefined) {
+      return input.expectedFormVersion === undefined || result.publishedVersion === (Number(input.expectedFormVersion) || 1);
+    }
+    if (!Number.isSafeInteger(input.expectedFormVersion) || Number(input.expectedFormVersion) < 0 ||
+        !Number.isSafeInteger(input.expectedConsentVersion) || Number(input.expectedConsentVersion) < 1 ||
+        typeof input.expectedConsentText !== "string" ||
+        result.reviewedFormVersion !== input.expectedFormVersion || result.reviewedConsentVersion !== input.expectedConsentVersion ||
+        !Number.isSafeInteger(result.reviewedPublishedVersion) || Number(result.reviewedPublishedVersion) < 0 ||
+        typeof result.reviewedConsentText !== "string" || typeof result.consentText !== "string" ||
+        typeof result.consentChanged !== "boolean") return false;
+    const priorText = input.expectedConsentText.trim().slice(0, 3000);
+    if (result.reviewedConsentText !== priorText) return false;
+    const targetText = input.consentText === undefined ? priorText :
+      typeof input.consentText === "string" ? input.consentText.trim().slice(0, 3000) : null;
+    if (targetText === null || result.consentText !== targetText) return false;
+    const changed = targetText !== priorText;
+    const expectedVersion = changed
+      ? Math.max(Number(input.expectedFormVersion), Number(result.reviewedPublishedVersion)) + 1
+      : Number(input.expectedFormVersion) || 1;
+    return result.consentChanged === changed && result.publishedVersion === expectedVersion &&
+      result.consentVersion === Number(input.expectedConsentVersion) + (changed ? 1 : 0);
+  }
+  if (command === "form.close") return result.registrationOpen === false;
+  if (command === "event.stage") {
+    const event = asRecord(result.event);
+    return Boolean(event && event.id === eventId && typeof input.stage === "string" && event.stage === input.stage.trim().toUpperCase());
+  }
+  return false;
+}
+
+export function confirmsFieldCommand(command: string, payload: unknown, value: unknown): boolean {
+  const input = asRecord(payload);
+  const result = asRecord(value);
+  if (!input || !result || typeof input.id !== "string" || !input.id) return false;
+  if (command === "field.save") {
+    const field = asRecord(result.field);
+    return Boolean(field && field.id === input.id && typeof input.label === "string" && field.label === input.label.trim() &&
+      field.type === input.type && field.required === input.required && Array.isArray(input.options) && Array.isArray(field.options) &&
+      JSON.stringify(field.options) === JSON.stringify(input.type === "select" ? input.options : []));
+  }
+  if (command === "field.move" || command === "field.delete") {
+    return Array.isArray(input.expectedOrder) && Array.isArray(result.fields) &&
+      JSON.stringify(result.fields.map((value: unknown) => asRecord(value)?.id)) === JSON.stringify(input.expectedOrder);
+  }
+  return false;
+}
+
+export function confirmsOperationsCommand(command: string, payload: unknown, value: unknown): boolean {
+  const input = asRecord(payload);
+  const result = asRecord(value);
+  if (!input || !result) return false;
+  if (command === "display.set") return confirmsContentCommand(command, input, result);
+  if (command === "desk.save" || command === "desk.set-open") {
+    const desk = asRecord(result.desk);
+    if (!desk || typeof desk.id !== "string" || !desk.id ||
+        (typeof input.id === "string" && desk.id !== input.id)) return false;
+    if (command === "desk.set-open") {
+      if (typeof input.open !== "boolean" || desk.open !== input.open) return false;
+      if (input.expectedDesk === undefined) return true;
+      const expected = asRecord(input.expectedDesk);
+      if (!expected || !(typeof expected.name === "string" || expected.name === null) ||
+          !(typeof expected.action === "string" || expected.action === null) || typeof expected.mode !== "string" ||
+          typeof expected.open !== "boolean") return false;
+      return Object.hasOwn(desk, "name") && Object.hasOwn(desk, "action") && Object.hasOwn(desk, "mode") &&
+        desk.name === expected.name && desk.action === expected.action && desk.mode === expected.mode;
+    }
+    const expectedDesk = asRecord(input.expectedDesk);
+    if (input.expectedDesk !== undefined) {
+      if (!expectedDesk || !(typeof expectedDesk.action === "string" || expectedDesk.action === null) || typeof expectedDesk.open !== "boolean" ||
+          typeof input.action !== "string") return false;
+      const targetOpen = expectedDesk.action !== input.action.trim().toUpperCase() ? false : expectedDesk.open;
+      if (desk.open !== targetOpen) return false;
+    }
+    return typeof input.name === "string" && desk.name === input.name.trim().slice(0, 60) &&
+      typeof input.action === "string" && desk.action === input.action.trim().toUpperCase() &&
+      typeof input.mode === "string" && desk.mode === input.mode.trim().toLowerCase();
+  }
+  if (command === "booth.save") {
+    const booth = asRecord(result.booth);
+    if (input.expectedBooth !== undefined) {
+      const expected = asRecord(input.expectedBooth);
+      if (!booth || !expected || typeof expected.startsAt !== "string" || typeof expected.endsAt !== "string" ||
+          !Object.hasOwn(booth, "startsAt") || !Object.hasOwn(booth, "endsAt") ||
+          !(typeof booth.startsAt === "string" || booth.startsAt === null) ||
+          !(typeof booth.endsAt === "string" || booth.endsAt === null)) return false;
+      const sameTime = (a: string, b: string) => {
+        if (a === b) return true;
+        const first = boothScheduleTime(a), second = boothScheduleTime(b);
+        return first !== null && second !== null && Number.isFinite(first) && Number.isFinite(second) && first === second;
+      };
+      // Omitted times preserve the reviewed value; explicitly supplied
+      // times, including an empty string, are changes to verify instead.
+      const targetTime = (key: "startsAt" | "endsAt") => Object.hasOwn(input, key)
+        ? String(input[key] ?? "").trim().slice(0, 64) : expected[key] as string;
+      if (!sameTime(targetTime("startsAt"), booth.startsAt ?? "") || !sameTime(targetTime("endsAt"), booth.endsAt ?? "")) return false;
+    }
+    return Boolean(booth && typeof booth.id === "string" && booth.id &&
+      (typeof input.id !== "string" || booth.id === input.id) &&
+      typeof input.name === "string" && booth.name === input.name.trim().slice(0, 60) &&
+      typeof input.zone === "string" && booth.zone === input.zone.trim().slice(0, 120) &&
+      typeof input.status === "string" && booth.status === input.status.trim().toUpperCase() &&
+      Number.isInteger(input.capacity) && booth.capacity === input.capacity &&
+      Number.isInteger(input.limit) && booth.limit === input.limit);
+  }
+  if (command === "staff.assign") {
+    const assignment = asRecord(result.assignment);
+    return Boolean(assignment && typeof assignment.id === "string" && assignment.id &&
+      assignment.accountId === input.accountId && assignment.type === input.type && assignment.targetId === input.targetId);
+  }
+  if (command === "staff.unassign") return result.ok === true && typeof input.id === "string";
+  if (command === "booth.mode") return result.stampMode === input.mode && input.acknowledge === true;
+  if (command === "booth.mode-reviewed") return result.stampMode === input.mode && result.previousMode === input.expectedMode && input.acknowledge === true;
+  if (["booth.map.save", "booth.map.publish", "booth.map.unpublish"].includes(command)) {
+    const map = asRecord(result.boothMap);
+    if (!map) return false;
+    if (command === "booth.map.unpublish") return map.published === null;
+    const saved = asRecord(command === "booth.map.save" ? map.draft : map.published);
+    if (!saved || !Number.isSafeInteger(input.expectedDraftVersion) ||
+        saved.version !== Number(input.expectedDraftVersion) + (command === "booth.map.save" ? 1 : 0) ||
+        typeof asRecord(saved.image)?.fileId !== "string" || !Array.isArray(saved.points)) return false;
+    if (command === "booth.map.publish") return true;
+    return asRecord(saved.image)?.fileId === input.fileId && Array.isArray(input.points) &&
+      saved.points.length === input.points.length && input.points.every((value: unknown, index: number) => {
+        const requested = asRecord(value), actual = asRecord((saved.points as unknown[])[index]);
+        return requested && actual && requested.boothId === actual.boothId && requested.x === actual.x && requested.y === actual.y;
+      });
+  }
+  return false;
+}
+
+export function confirmsQuestionManagement(payload: unknown, value: unknown): boolean {
+  const input = asRecord(payload);
+  const question = asRecord(asRecord(value)?.question);
+  return Boolean(input && question && typeof input.id === "string" && question.id === input.id &&
+    typeof input.answer === "string" && question.answer === input.answer.trim() &&
+    typeof input.expectedText === "string" && question.text === input.expectedText &&
+    question.approved === (input.approved === true));
+}
+
+export function confirmsModuleSave(payload: unknown, value: unknown): boolean {
+  const input = asRecord(payload);
+  const module = asRecord(asRecord(value)?.module);
+  if (!input || !module || typeof module.id !== "string" || !module.id ||
+      (typeof input.id === "string" && module.id !== input.id) ||
+      typeof input.title !== "string" || module.title !== input.title.trim() ||
+      typeof input.type !== "string" || module.type !== input.type.trim().toLowerCase()) return false;
+  for (const key of ["options", "questions"]) {
+    if (!Object.hasOwn(input, key)) continue;
+    if (!Array.isArray(input[key]) || !Array.isArray(module[key])) return false;
+    const expected = (input[key] as unknown[]).map((item) => typeof item === "string" ? item.trim().slice(0, 200) : "").filter(Boolean);
+    if (JSON.stringify(module[key]) !== JSON.stringify(expected)) return false;
+  }
+  return !Object.hasOwn(input, "answer") || (typeof input.answer === "string" && module.answer === input.answer.trim());
+}
+
+export function confirmsEvidenceCommand(command: string, commandId: string, payload: unknown, value: unknown): boolean {
+  const input = asRecord(payload);
+  const result = asRecord(value);
+  if (!input || !result) return false;
+  if (command === "evidence.photo.remove") return result.ok === true && result.id === input.id;
+  const photo = asRecord(result.photo);
+  if (!photo || typeof photo.id !== "string" || photo.section !== input.section) return false;
+  if (command === "evidence.photo.move") return photo.id === input.id;
+  if (command === "evidence.photo.add") return photo.id === commandId &&
+    typeof asRecord(input.image)?.fileId === "string" && asRecord(photo.image)?.fileId === asRecord(input.image)?.fileId;
+  return false;
+}
+
+function confirmsReceiptBody(pointer: OperatorReceiptPointer, body: BodyInit | null | undefined, value: unknown, path: string): boolean {
+  const result = asRecord(value);
+  if (!result || !Object.keys(result).length) return false;
+  if (pointer.command === "invitation.create") {
+    if (typeof body !== "string") return false;
+    try { return confirmsInvitation(JSON.parse(body), result); } catch { return false; }
+  }
+  if (pointer.command === "account.password-reset") {
+    const match = /^\/api\/auth\/accounts\/([^/]+)\/password$/.exec(path);
+    if (!match) return false;
+    try { return asRecord(result.account)?.id === decodeURIComponent(match[1]); } catch { return false; }
+  }
+  if (pointer.command === "member.assign") {
+    if (typeof body !== "string") return false;
+    try {
+      const input = asRecord(JSON.parse(body));
+      if (input?.enabled === false) return result.membership === null;
+      const membership = asRecord(result.membership);
+      const event = /^\/api\/events\/([^/]+)\/members$/.exec(path);
+      return Boolean(input && membership && typeof input.accountId === "string" && membership.accountId === input.accountId &&
+        event && membership.eventId === decodeURIComponent(event[1]) && Array.isArray(input.write) && Array.isArray(membership.write) &&
+        JSON.stringify([...input.write].sort()) === JSON.stringify([...membership.write].sort()));
+    } catch { return false; }
+  }
+  if (pointer.command === "client.save" || pointer.command === "event.create" || pointer.command === "event.duplicate") {
+    if (typeof body !== "string") return false;
+    try {
+      const payload = JSON.parse(body);
+      return pointer.command === "client.save" ? confirmsClientSave(payload, result) : confirmsEventCreation(payload, result);
+    } catch { return false; }
+  }
+  if (["notice.save", "notice.publish", "notice.publish-reviewed", "notice.delete", "program.save", "program.publish", "program.publish-reviewed", "program.delete", "venue.save", "venue.publish", "venue.publish-reviewed", "display.set"].includes(pointer.command)) {
+    if (typeof body !== "string") return false;
+    try { return confirmsContentCommand(pointer.command, asRecord(JSON.parse(body))?.payload, result); } catch { return false; }
+  }
+  if (["report.create", "report.update", "report.publish", "report.successor"].includes(pointer.command)) {
+    if (typeof body !== "string") return false;
+    try { return confirmsReportCommand(pointer.command, pointer.commandId, asRecord(JSON.parse(body))?.payload, result); } catch { return false; }
+  }
+  if (["question.manage", "question.edit.approve", "question.edit.reject", "response.grade"].includes(pointer.command)) {
+    if (typeof body !== "string") return false;
+    try {
+      const input = asRecord(asRecord(JSON.parse(body))?.payload);
+      if (!input) return false;
+      if (pointer.command === "question.manage") return confirmsQuestionManagement(input, result);
+      if (pointer.command === "response.grade") return result.responseId === input.responseId && Number.isSafeInteger(result.gradeVersion) && Number(result.gradeVersion) > Number(input.expectedGradeVersion);
+      const question = asRecord(result.question);
+      if (!question || question.id !== input.id || question.approved !== true || question.pendingEdit) return false;
+      if (pointer.command === "question.edit.approve") return question.text === input.expectedNewText;
+      const rejection = asRecord(question.editRejection);
+      return Boolean(question.text === input.expectedText && question.answer === input.expectedAnswer && rejection &&
+        rejection.id === input.expectedEditId && rejection.text === input.expectedNewText && rejection.reason === input.reason);
+    } catch { return false; }
+  }
+  if (pointer.command === "module.save") {
+    if (typeof body !== "string") return false;
+    try { return confirmsModuleSave(asRecord(JSON.parse(body))?.payload, result); } catch { return false; }
+  }
+  if (["evidence.photo.add", "evidence.photo.move", "evidence.photo.remove"].includes(pointer.command)) {
+    if (typeof body !== "string") return false;
+    try { return confirmsEvidenceCommand(pointer.command, pointer.commandId, asRecord(JSON.parse(body))?.payload, result); } catch { return false; }
+  }
+  if (["desk.save", "desk.set-open", "booth.save", "booth.mode", "booth.mode-reviewed", "booth.map.save", "booth.map.publish", "booth.map.unpublish", "staff.assign", "staff.unassign"].includes(pointer.command)) {
+    if (typeof body !== "string") return false;
+    try { return confirmsOperationsCommand(pointer.command, asRecord(JSON.parse(body))?.payload, result); } catch { return false; }
+  }
+  if (["event.update", "event.basics.save", "event.features", "form.publish", "form.close", "event.stage"].includes(pointer.command)) {
+    if (typeof body !== "string") return false;
+    const match = /^\/api\/events\/([^/]+)\/commands$/.exec(path);
+    if (!match) return false;
+    try { return confirmsSettingsCommand(pointer.command, decodeURIComponent(match[1]), asRecord(JSON.parse(body))?.payload, result); } catch { return false; }
+  }
+  if (["field.save", "field.move", "field.delete"].includes(pointer.command)) {
+    // The field editor validates the command response and then refreshes the
+    // draft before releasing this pointer. A failed refresh must survive reload.
+    return false;
+  }
+  // The participant projection intentionally contains only published answer
+  // fields. The editing screen confirms draft-only answers in a fresh scoped
+  // bootstrap before acknowledging its receipt.
+  if (pointer.command === "participant.update") return false;
+  // The reward desk keeps its pointer until it has refreshed the current
+  // list. A plausible or incomplete response alone must not release a lock.
+  if (["reward.fulfill", "reward.cancel"].includes(pointer.command)) return false;
+  if (["attendee.page.save", "attendee.page.publish", "attendee.page.publish-reviewed"].includes(pointer.command)) {
+    if (typeof body !== "string") return false;
+    // Publishing carries only a version; the editor owns the submitted
+    // draft snapshot and must compare the returned content before it can
+    // explicitly acknowledge the receipt.
+    if (pointer.command === "attendee.page.publish" || pointer.command === "attendee.page.publish-reviewed") return false;
+    try { return confirmsAttendeePageCommand(pointer.command, asRecord(JSON.parse(body))?.payload, result); } catch { return false; }
+  }
+  if (pointer.command === "template.save") {
+    if (typeof body !== "string") return false;
+    try { return confirmsTemplateSave(asRecord(JSON.parse(body))?.payload, result); } catch { return false; }
+  }
+  // The library owns archive/restore recovery until its list is refreshed.
+  if (pointer.command === "template.archive") return false;
+  if (pointer.command === "ticket.reissue-reviewed") {
+    if (typeof body !== "string" || !pointer.eventId) return false;
+    try {
+      const input = asRecord(asRecord(JSON.parse(body))?.payload);
+      const participant = asRecord(result.participant);
+      const prefix = `ET:${pointer.eventId}:T-`;
+      const ticket = participant?.ticket;
+      if (!input || !participant || typeof input.id !== "string" || participant.id !== input.id ||
+          !Number.isSafeInteger(input.expectedTicketRevision) || Number(input.expectedTicketRevision) < 0 ||
+          result.ticketRevision !== Number(input.expectedTicketRevision) + 1 || typeof ticket !== "string" ||
+          !ticket.startsWith(prefix) || !/^[A-Za-z0-9_-]{43}$/.test(ticket.slice(prefix.length))) return false;
+      if (typeof result.ticketPublicBase === "string") {
+        const base = new URL(result.ticketPublicBase);
+        if (!/^https?:$/.test(base.protocol) || base.username || base.password || base.search || base.hash) return false;
+      }
+      return true;
+    } catch { return false; }
+  }
+  if (["message.create", "message.create-reviewed", "message.create-charset-reviewed", "message.record-provider-check", "message.retry", "message.retry-charset-reviewed", "message.cancel", "message.sync"].includes(pointer.command)) {
+    if (typeof body !== "string") return false;
+    try {
+      const input = asRecord(asRecord(JSON.parse(body))?.payload);
+      const message = asRecord(result.message);
+      if (!input || !message || typeof message.id !== "string" || !message.id ||
+          typeof message.status !== "string" || !message.status) return false;
+      if (pointer.command === "message.create") return confirmsMessageCreate(pointer.commandId, input, result);
+      if (pointer.command === "message.create-reviewed") return confirmsReviewedMessageCreate(pointer.commandId, input, result);
+      if (pointer.command === "message.create-charset-reviewed") return confirmsCharsetReviewedMessageCreate(pointer.commandId, input, result);
+      if (pointer.command === "message.retry-charset-reviewed") return result.messageCharsetPolicyVersion === 1 && message.id === input.id;
+      if (pointer.command === "message.record-provider-check") return confirmsProviderCheck(input, result);
+      if (pointer.command === "message.sync" && !Object.hasOwn(input, "id")) return true;
+      return message.id === input.id && (pointer.command !== "message.cancel" || message.status === "CANCELLED");
+    } catch { return false; }
+  }
+  // Cancellation is acknowledged by the roster only after its authoritative
+  // refresh; even a successful command body cannot prove the displayed list.
+  if (["participant.bulk-cancel", "participant.resolve-cancellation-conflict", "check.reviewed-exit", "check.reconcile"].includes(pointer.command)) return false;
+  if (["participant.create", "participant.import", "participant.status", "group.assign", "reward.create"].includes(pointer.command)) {
+    if (typeof body !== "string") return false;
+    try {
+      const input = asRecord(asRecord(JSON.parse(body))?.payload);
+      if (!input) return false;
+      if (pointer.command === "participant.create") {
+        const person = asRecord(result.participant);
+        return Boolean(person && typeof person.id === "string" && person.id && typeof input.name === "string" &&
+          person.name === input.name.trim() && typeof input.phone === "string" && person.phone === input.phone.replace(/\D/g, ""));
+      }
+      if (pointer.command === "participant.import") {
+        return confirmsParticipantImport(input, result);
+      }
+      if (pointer.command === "participant.status") {
+        // Bulk cancellation keeps its pointer until the roster itself has
+        // refreshed; the command response alone does not prove that display.
+        if (input.requireRosterRefresh === true) return false;
+        const ids = Array.isArray(input.ids) ? input.ids : [input.id];
+        const participants = result.participants;
+        return typeof input.status === "string" && ids.length > 0 && ids.every((id) => typeof id === "string") &&
+          Array.isArray(participants) && participants.length === ids.length && ids.every((id) =>
+            participants.some((entry: unknown) => { const person = asRecord(entry); return person?.id === id && person.status === (input.status as string).trim().toUpperCase(); }));
+      }
+      if (pointer.command === "group.assign") {
+        return typeof input.group === "string" && result.group === input.group.trim() && Array.isArray(input.ids) &&
+          Array.isArray(result.participantIds) && JSON.stringify([...input.ids].sort()) === JSON.stringify([...result.participantIds].sort());
+      }
+      const reward = asRecord(result.reward);
+      return Boolean(reward && reward.id === pointer.commandId && reward.participantId === input.participantId &&
+        typeof input.name === "string" && reward.name === input.name.trim() && reward.method === input.method);
+    } catch { return false; }
+  }
+  if (pointer.command === "check.scan") {
+    if (typeof body !== "string") return false;
+    try {
+      const input = asRecord(asRecord(JSON.parse(body))?.payload);
+      // A manual roster selection must also match the selected person and
+      // desk direction. Only the staff screen holds that direction snapshot,
+      // so it acknowledges this pointer after validating and refreshing.
+      if (typeof input?.participantId === "string" && input.participantId) return false;
+      if (!input || (Object.hasOwn(input, "expectedAction") && result.action !== input.expectedAction)) return false;
+    } catch { return false; }
+    return result.checkId === pointer.commandId && typeof result.name === "string" &&
+      typeof result.id === "string" && Boolean(result.id) && (result.action === "IN" || result.action === "OUT");
+  }
+  if (pointer.command === "booth.visit") {
+    if (typeof body !== "string") return false;
+    try {
+      const input = asRecord(asRecord(JSON.parse(body))?.payload);
+      const boothId = input?.boothId || input?.targetId;
+      return typeof boothId === "string" && Boolean(boothId) && result.boothId === boothId.trim().slice(0, 120) &&
+        result.visitId === pointer.commandId && typeof result.participantId === "string" && Boolean(result.participantId) &&
+        typeof result.name === "string" && typeof result.booth === "string";
+    } catch { return false; }
+  }
+  if (pointer.command === "check.correct") {
+    if (typeof body !== "string") return false;
+    try {
+      const input = asRecord(asRecord(JSON.parse(body))?.payload);
+      const check = asRecord(result.check);
+      return typeof input?.id === "string" && check?.id === input.id && check.corrected === true && asRecord(check.correction)?.id === pointer.commandId;
+    } catch { return false; }
+  }
+  if (pointer.command === "reward.collect" || pointer.command === "reward.lookup") {
+    if (typeof body !== "string") return false;
+    try {
+      const input = asRecord(asRecord(JSON.parse(body))?.payload);
+      if (!input) return false;
+      if (pointer.command === "reward.collect") {
+        const reward = asRecord(result.reward);
+        return result.rewardRequestVersion === 1 && typeof input.id === "string" && reward?.id === input.id && reward.status === "RECEIVED" &&
+          typeof input.expectedParticipantId === "string" && Boolean(input.expectedParticipantId) && reward.participantId === input.expectedParticipantId;
+      }
+      const participant = asRecord(result.participant);
+      const seen = new Set<string>();
+      return result.rewardRequestVersion === 1 && result.rewardVerificationId === pointer.commandId &&
+        typeof participant?.id === "string" && Boolean(participant.id) && typeof participant.name === "string" && Boolean(participant.name) && Array.isArray(result.rewards) &&
+        result.rewards.every((value: unknown) => { const row = asRecord(value); if (typeof row?.id !== "string" || !row.id || seen.has(row.id) || typeof row.name !== "string" || !row.name || typeof row.status !== "string" || typeof row.method !== "string") return false; seen.add(row.id); return true; }) &&
+        (typeof input.participantId !== "string" || participant.id === input.participantId);
+    } catch { return false; }
+  }
+  if (["team.save", "draw.program.save", "vote.config.save", "vote.tally", "lucky.config.save", "lucky.config.save-reviewed", "lucky.preassign", "lucky.preassign-reviewed", "lucky.preassign-range-reviewed", "roulette.config.save", "roulette.config.save-reviewed", "reward.assign"].includes(pointer.command)) {
+    if (typeof body !== "string") return false;
+    try { return confirmsDrawOperation(pointer.command, asRecord(JSON.parse(body))?.payload, result); } catch { return false; }
+  }
+  if (["module.status", "module.reveal", "draw.run", "draw.publish", "photo.moderate", "post.moderate"].includes(pointer.command)) {
+    if (typeof body !== "string") return false;
+    try { return confirmsProgramOperation(pointer.command, pointer.commandId, asRecord(JSON.parse(body))?.payload, result); } catch { return false; }
+  }
+  if (pointer.command !== "draw.program.run") return true;
+  if (typeof body !== "string") return false;
+  try { return confirmsDrawRun(asRecord(JSON.parse(body))?.payload, result, pointer.commandId); } catch { return false; }
 }
 
 // --- module state (one tab, no persistence: reloads re-pin from /auth/me) ---
@@ -886,7 +1786,7 @@ export type UncertainReplayResult = {
 // silently when there is nothing pending, and never auto-retried.
 // - 2xx with a parseable JSON object body: settled, mapping cleared. Only
 //   then may the UI show the generic HTTP-200 confirmation.
-// - 5xx/408/network failure: kept as uncertain (may retry explicitly).
+// - 5xx/408/425/429/network failure: kept as uncertain (may retry explicitly).
 // - definitive 4xx (incl. non-context 409s): settled, mapping cleared.
 // - context-coded 409: kept, drift marked, shared reads invalidated.
 // - Membership revocation: kept? No — revoked means definitively not
@@ -894,6 +1794,7 @@ export type UncertainReplayResult = {
 export async function replayUncertainAttempt(key: string): Promise<UncertainReplayResult> {
   const entry = uncertain.get(key);
   if (!entry || !entry.attempt) return { status: null, settled: true };
+  const targetSensitive = ["participant.bulk-cancel", "participant.resolve-cancellation-conflict", "check.reviewed-exit", "check.reconcile", "event.basics.save", "attendee.page.publish-reviewed", "message.create-reviewed", "message.create-charset-reviewed", "message.retry-charset-reviewed", "message.record-provider-check", "reward.lookup", "reward.collect"].includes(entry.command ?? "");
   const current = pinned;
   if (!current || current.organizationId !== entry.organizationId) {
     throw contextError(
@@ -928,6 +1829,21 @@ export async function replayUncertainAttempt(key: string): Promise<UncertainRepl
       return { status: response.status, settled: false };
     }
     if (!response.ok) {
+      if (targetSensitive) {
+        // A later rejection cannot disprove a prior committed request.
+        // Only named locked guards checked after receipt lookup prove that
+        // this particular request did not commit.
+        const body = await response.clone().json().catch(() => null) as { code?: unknown; field?: unknown } | null;
+        if (!(response.status === 409 && ((entry.command === "participant.bulk-cancel" && body?.code === "CANCELLATION_REVIEW_CHANGED") ||
+            (entry.command === "participant.resolve-cancellation-conflict" && ["CANCELLATION_CONFLICT_REVIEW_CHANGED", "CANCELLATION_CONFLICT_REVIEW_UNAVAILABLE"].includes(String(body?.code ?? ""))) ||
+            (entry.command === "check.reconcile" && body?.code === "ATTENDANCE_RECONCILIATION_CHANGED") ||
+            (entry.command === "event.basics.save" && body?.code === "EVENT_BASICS_CHANGED") ||
+            (entry.command === "attendee.page.publish-reviewed" && (body?.code === "PAGE_PUBLICATION_CONTEXT_CHANGED" || body?.field === "expectedDraftVersion")) ||
+            (["message.create-reviewed", "message.create-charset-reviewed"].includes(entry.command ?? "") && body?.field === "expectedRecipientVersions") ||
+            (entry.command === "message.record-provider-check" && body?.code === "PROVIDER_CHECK_CHANGED")))) {
+          return { status: response.status, settled: false };
+        }
+      }
       if (
         (response.status === 403 || response.status === 409) &&
         (await peekMembershipCode(response))
@@ -946,6 +1862,47 @@ export async function replayUncertainAttempt(key: string): Promise<UncertainRepl
     try {
       const data: unknown = await response.clone().json();
       if (data && typeof data === "object") {
+        if (entry.command === "check.reviewed-exit") {
+          try {
+            const submitted = typeof entry.attempt.body === "string" ? asRecord(JSON.parse(entry.attempt.body)) : null;
+            const payload = asRecord(submitted?.payload), result = asRecord(asRecord(data)?.exitReview);
+            if (!payload || !result || result.participantId !== payload.participantId || result.entryId !== payload.entryId ||
+                result.exitId !== key || result.action !== "OUT") return { status: response.status, settled: false };
+          } catch { return { status: response.status, settled: false }; }
+        }
+        if (entry.command === "check.reconcile") {
+          try {
+            const submitted = typeof entry.attempt.body === "string" ? asRecord(JSON.parse(entry.attempt.body)) : null;
+            const payload = asRecord(submitted?.payload), result = asRecord(asRecord(data)?.reconciliation);
+            if (!payload || !result || result.participantId !== payload.participantId || result.checkId !== payload.checkId ||
+                result.id !== key || result.action !== payload.action || result.inside !== (payload.action === "IN") || result.everIn !== true) return { status: response.status, settled: false };
+          } catch { return { status: response.status, settled: false }; }
+        }
+        if (entry.command === "participant.bulk-cancel") {
+          try {
+            const submitted = typeof entry.attempt.body === "string" ? asRecord(JSON.parse(entry.attempt.body)) : null;
+            if (!cancellationProofMatches(submitted?.payload, data)) return { status: response.status, settled: false };
+          } catch { return { status: response.status, settled: false }; }
+          // The persisted pointer is intentionally separate; the roster must
+          // still perform its authoritative refresh before acknowledging it.
+        }
+        if (entry.command === "participant.resolve-cancellation-conflict") {
+          try {
+            const submitted = typeof entry.attempt.body === "string" ? asRecord(JSON.parse(entry.attempt.body)) : null;
+            const payload = asRecord(submitted?.payload), result = asRecord(asRecord(data)?.review);
+            if (!payload || !result || result.participantId !== payload.id || result.resolutionId !== key || result.ticketRevoked !== true) return { status: response.status, settled: false };
+          } catch { return { status: response.status, settled: false }; }
+        }
+        if (entry.command === "attendee.page.publish-reviewed") {
+          try {
+            const submitted = typeof entry.attempt.body === "string" ? asRecord(JSON.parse(entry.attempt.body)) : null;
+            if (!confirmsAttendeePageCommand(entry.command, submitted?.payload, data)) return { status: response.status, settled: false };
+          } catch { return { status: response.status, settled: false }; }
+        }
+        if (entry.command && ["reward.lookup", "reward.collect", "event.basics.save", "message.create-reviewed", "message.create-charset-reviewed", "message.retry-charset-reviewed", "message.record-provider-check"].includes(entry.command)) {
+          const pointer: OperatorReceiptPointer = { userId: current.userId, organizationId: entry.organizationId, eventId: null, commandId: key, command: entry.command };
+          if (!confirmsReceiptBody(pointer, entry.attempt.body, data, entry.path)) return { status: response.status, settled: false };
+        }
         if (uncertain.delete(key)) emit();
         return { status: response.status, settled: true };
       }
@@ -1083,14 +2040,25 @@ function rememberUncertain(
 }
 
 function isDefinitiveRejection(status: number): boolean {
-  // 4xx (except 408 timeout and 409 conflict) proves the server saw and
+  // 4xx (except 408/425/429 and 409 conflict) proves the server saw and
   // rejected this exact request: nothing was committed, so nothing stays
   // uncertain. 409-without-code is handled separately (sibling attempt).
-  return status >= 400 && status < 500 && status !== 408 && status !== 409;
+  return status >= 400 && status < 500 && ![408, 409, 425, 429].includes(status);
 }
 
 function resolveUncertain(commandId: string | null): void {
   if (commandId && uncertain.delete(commandId)) emit();
+}
+
+// Called only after a scope-checked status GET confirms the same command.
+export function acknowledgeOperatorReceipt(commandId: string): void {
+  resolveUncertain(commandId);
+}
+
+// Explicitly abandoning a request drops only the local frozen attempt; it
+// does not cancel a file or other server-side write that may already exist.
+export function abandonOperatorAttempt(commandId: string): void {
+  resolveUncertain(commandId);
 }
 
 async function peekContextCode(response: Response): Promise<boolean> {
@@ -1409,6 +2377,14 @@ export async function operatorFetch(input: string, init?: RequestInit): Promise<
     frozenOrgId && frozenVersion !== undefined
       ? { organizationId: frozenOrgId, organizationName: pinned?.organizationName ?? "", contextVersion: frozenVersion }
       : null;
+  const receipt = typeof window !== "undefined" ? receiptPointer(path, init?.body, commandId, pinned) : null;
+  const receiptPrior = receipt ? beginOperatorReceipt(receipt) : null;
+  // Storage can be denied while the in-memory original request survives.
+  // A retry is still uncertain even if no persistent pointer could be made.
+  const targetSensitiveRetry = (receiptPrior === true || Boolean(commandId && uncertain.has(commandId))) &&
+    ["participant.bulk-cancel", "participant.resolve-cancellation-conflict", "check.reviewed-exit", "check.reconcile", "event.basics.save", "attendee.page.publish-reviewed", "message.create-reviewed", "message.create-charset-reviewed", "message.retry-charset-reviewed", "message.record-provider-check", "reward.lookup", "reward.collect", "ticket.reissue-reviewed"].includes(receipt?.command ?? "");
+  let forgetReceipt = false;
+  let receiptDeferred = false;
   try {
     const response = await fetch(url, { ...init, headers });
     if (response.status === 409 && (await peekContextCode(response))) {
@@ -1420,6 +2396,20 @@ export async function operatorFetch(input: string, init?: RequestInit): Promise<
       return response;
     }
     if (!response.ok) {
+      if (targetSensitiveRetry) {
+        const body = await response.clone().json().catch(() => null) as { code?: unknown; field?: unknown } | null;
+        if (!(response.status === 409 && ((receipt?.command === "participant.bulk-cancel" && body?.code === "CANCELLATION_REVIEW_CHANGED") ||
+            (receipt?.command === "participant.resolve-cancellation-conflict" && ["CANCELLATION_CONFLICT_REVIEW_CHANGED", "CANCELLATION_CONFLICT_REVIEW_UNAVAILABLE"].includes(String(body?.code ?? ""))) ||
+            (receipt?.command === "check.reconcile" && body?.code === "ATTENDANCE_RECONCILIATION_CHANGED") ||
+            (receipt?.command === "event.basics.save" && body?.code === "EVENT_BASICS_CHANGED") ||
+            (receipt?.command === "attendee.page.publish-reviewed" && (body?.code === "PAGE_PUBLICATION_CONTEXT_CHANGED" || body?.field === "expectedDraftVersion")) ||
+            (receipt?.command === "ticket.reissue-reviewed" && ["TICKET_RESULT_SUPERSEDED", "TICKET_REVISION_CHANGED", "TICKET_STATUS_CONFLICT"].includes(String(body?.code ?? ""))) ||
+            (["message.create-reviewed", "message.create-charset-reviewed"].includes(receipt?.command ?? "") && body?.field === "expectedRecipientVersions") ||
+            (receipt?.command === "message.record-provider-check" && body?.code === "PROVIDER_CHECK_CHANGED")))) {
+          if (frozenSnapshot) rememberUncertain(commandId, frozenSnapshot, frozenAttempt);
+          return response;
+        }
+      }
       if (
         (response.status === 403 || response.status === 409) &&
         (await peekMembershipCode(response))
@@ -1431,6 +2421,7 @@ export async function operatorFetch(input: string, init?: RequestInit): Promise<
         // proves nothing was committed, so no uncertain mapping is kept.
         kickRevalidation();
         resolveUncertain(commandId);
+        if (receiptPrior === false) forgetReceipt = true;
         return response;
       }
       // A received non-context 409 is an AUTHORITATIVE outcome: the server
@@ -1438,9 +2429,10 @@ export async function operatorFetch(input: string, init?: RequestInit): Promise<
       // payload cannot still be an ambiguous network outcome. Clear the
       // mapping, never auto-retry. Theme version conflicts and the invite
       // link-unavailable receipt behave the same — the UI already cleared
-      // its own pending slot honestly. Only 5xx/408/network stay uncertain.
+      // its own pending slot honestly. Only 5xx/408/425/429/network stay uncertain.
       if (response.status === 409 || isDefinitiveRejection(response.status)) {
         resolveUncertain(commandId);
+        if (receiptPrior === false) forgetReceipt = true;
         return response;
       }
       if (frozenSnapshot) {
@@ -1448,7 +2440,32 @@ export async function operatorFetch(input: string, init?: RequestInit): Promise<
       }
       return response;
     }
-    resolveUncertain(commandId);
+    // An empty or unreadable 2xx body does not prove that the application
+    // received a usable result. Retain its pointer for a read-only lookup.
+    // A ticket response contains a bearer link that can disappear on reload.
+    // The ticket dialog owns its pointer until the operator finishes with
+    // the link, including after a successful response or receipt replay.
+    if (receipt && receiptPrior !== null && receipt.command !== "ticket.reissue-reviewed") {
+      // Never hold the caller's Response hostage to an incomplete clone:
+      // publish the pointer after a bounded wait if the body stalls.
+      try {
+        const clone = response.clone();
+        let finished = false;
+        const finishReceipt = (forget: boolean) => {
+          if (finished) return;
+          finished = true;
+          window.clearTimeout(timer);
+          if (forget && targetSensitiveRetry) resolveUncertain(commandId);
+          endOperatorReceipt(receipt.commandId, forget);
+        };
+        const timer = window.setTimeout(() => finishReceipt(false), 5000);
+        receiptDeferred = true;
+        void clone.json().then((result: unknown) => {
+          finishReceipt(confirmsReceiptBody(receipt, init?.body, result, path));
+        }).catch(() => finishReceipt(false));
+      } catch { /* The finalizer exposes an unreadable result. */ }
+    }
+    if (!targetSensitiveRetry) resolveUncertain(commandId);
     return response;
   } catch (error) {
     // Transport failure: outcome unknown, keep the receipt mapping.
@@ -1457,6 +2474,7 @@ export async function operatorFetch(input: string, init?: RequestInit): Promise<
     }
     throw error;
   } finally {
+    if (receipt && receiptPrior !== null && !receiptDeferred) endOperatorReceipt(receipt.commandId, forgetReceipt);
     inFlightWrites = Math.max(0, inFlightWrites - 1);
     emit();
   }

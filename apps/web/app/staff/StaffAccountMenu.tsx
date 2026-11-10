@@ -6,6 +6,7 @@ import { refreshOperatorContext } from "../../lib/operator-context";
 import { useOperatorContextSnapshot } from "./use-operator-context";
 import { isSelectionRequiredError, staffRoleLabel } from "./staff-org-guard";
 import styles from "./staff-account-menu.module.css";
+import OperatorReceiptRecovery from "../ui/OperatorReceiptRecovery";
 
 // Staff account access: who is signed in, which organization is operating,
 // and with what role — plus the holder's own email-verification entry and
@@ -26,7 +27,11 @@ import styles from "./staff-account-menu.module.css";
 export default function StaffAccountMenu({
   confirmLeave,
   confirmLeaveAccount,
+  compact = false,
+  excludeReceiptCommandId,
 }: {
+  compact?: boolean;
+  excludeReceiptCommandId?: string | null;
   confirmLeave?: () => boolean;
   confirmLeaveAccount?: () => boolean;
 }) {
@@ -54,6 +59,7 @@ export default function StaffAccountMenu({
     if (gate && !gate()) {
       event.preventDefault();
       setAccountNotice("이 화면을 떠나지 않았습니다. 진행 중인 작업이 있다면 결과를 확인한 뒤 다시 이동하세요.");
+      requestClose("explicit");
     } else {
       setAccountNotice("");
     }
@@ -102,11 +108,13 @@ export default function StaffAccountMenu({
         : "계정 정보를 불러오지 못했습니다.";
 
   return (
+    <>
     <div className={styles.accountMenu}>
       <button
         ref={triggerRef}
         type="button"
         className={styles.menuButton}
+        aria-label={summary}
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={() => {
@@ -114,7 +122,7 @@ export default function StaffAccountMenu({
           setOpen((value) => !value);
         }}
       >
-        <span className={styles.menuLabel}>{summary}</span>
+        <span className={styles.menuLabel}>{compact && context ? context.userName : summary}</span>
         <span className={styles.menuCaret} aria-hidden="true" />
       </button>
       <div ref={panelRef} className={styles.menuPanel} role="dialog" aria-label="계정 및 조직 전환" hidden={!open}>
@@ -160,7 +168,6 @@ export default function StaffAccountMenu({
         <a className={styles.menuLink} href="/account/email" onClick={handleAccountNavigate}>
           내 계정 이메일 인증
         </a>
-        {accountNotice ? <p className={styles.menuNote} role="status">{accountNotice}</p> : null}
         <button
           type="button"
           className={styles.menuClose}
@@ -170,5 +177,8 @@ export default function StaffAccountMenu({
         </button>
       </div>
     </div>
+    {accountNotice ? <p className={styles.blockedNotice} role="status">{accountNotice}</p> : null}
+    <OperatorReceiptRecovery excludeCommandId={excludeReceiptCommandId} />
+    </>
   );
 }

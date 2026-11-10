@@ -4,10 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { OrganizationContextNotice } from "../OrganizationSwitcher";
-import {
-  ensureOperatorContext,
-  operatorFetch,
-} from "../../lib/operator-context";
+import { ensureOperatorContext } from "../../lib/operator-context";
 import StaffAccountMenu from "./StaffAccountMenu";
 import { useOperatorContextSnapshot } from "./use-operator-context";
 import {
@@ -18,6 +15,7 @@ import {
 import workStyles from "./staff-event-work.module.css";
 import { loginHrefForLocation } from "../auth-redirect";
 import { buildStaffScopes, staffScopeSummary, type StaffScope } from "./staff-scope";
+import { readStaffBootstrap, staffReadErrorMessage } from "./staff-bootstrap";
 
 type HubState =
   | { kind: "loading" }
@@ -58,51 +56,41 @@ export default function StaffHub() {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     async function load() {
+      setState({ kind: "loading" });
       // Seed the shared context; the bootstrap below stays the scope source.
       // The adapter publishes loading/selection failures to its snapshot;
       // background initialization must not create an unhandled page error.
       void ensureOperatorContext().catch(() => {});
       try {
-        const res = await operatorFetch("/api/bootstrap", { cache: "no-store" });
+        const { status, state: bootstrap } = await readStaffBootstrap(controller);
         if (cancelled) return;
-        if (res.status === 401) {
+        if (status === 401) {
           router.push(
             loginHrefForLocation(window.location.pathname, window.location.search)
           );
           return;
         }
-        const data = (await res.json().catch(() => null)) as {
-          state?: {
-            events?: Array<{ id?: unknown; name?: unknown }>;
-            workspaces?: Record<string, {
-              desks?: unknown;
-              booths?: unknown;
-              assignments?: unknown;
-              checks?: unknown;
-              stampMode?: unknown;
-            }>;
-          } | null;
-        } | null;
-        if (cancelled) return;
-        if (!res.ok || !data?.state) {
+        if (!bootstrap) {
           setState({ kind: "failed", message: "업무 정보를 불러오지 못했습니다." });
           return;
         }
         const scopes = buildStaffScopes(
-          Array.isArray(data.state.events) ? data.state.events : [],
-          data.state.workspaces ?? {}
+          Array.isArray(bootstrap.events) ? bootstrap.events : [],
+          bootstrap.workspaces ?? {}
         );
         setState({ kind: "ready", scopes });
-      } catch {
+      } catch (error) {
         if (!cancelled) {
-          setState({ kind: "failed", message: "연결하지 못했습니다. 다시 시도하세요." });
+          setState({ kind: "failed", message: staffReadErrorMessage(error) });
         }
       }
     }
     load();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [router, reloadTick]);
 
