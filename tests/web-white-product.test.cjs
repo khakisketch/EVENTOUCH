@@ -1,16 +1,16 @@
 'use strict';
 
-// Presentation contracts for the user-selected white system. These may evolve
-// with an approved redesign; permission/receipt tests remain independent.
+// Current visual-token smoke checks, not a mandate for every future screen.
+// Permission/receipt tests remain independent from presentation choices.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const read = file => fs.readFileSync(path.join(__dirname, '../apps/web/app', file), 'utf8');
 
-test('the approved product world is white, sans-serif and still orange', () => {
+test('current design tokens preserve the product white/orange reference', () => {
   const css = read('tokens.css');
-  for (const token of ['--paper: #FFFFFF;', '--ground: #FFFFFF;', '--nav: #FAFBFC;', '--brand: #F05A24;', '--h1: 28px;', '--body-work: 15px;']) {
+  for (const token of ['--paper: #FFFFFF;', '--ground: #FFFFFF;', '--workspace-ground: #FFFFFF;', '--nav: #FAFBFC;', '--brand: #EA552E;', '--brand-hover: #C7441C;', '--on-brand: #19191C;', '--brand-text: #8E351F;', '--ink: #1E2026;', '--muted: #61656C;', '--line: #E5E5E7;', '--focus: #2453A6;', '--radius-medium: 12px;', '--radius-large: 16px;', '--radius-card: 18px;', '--h1: 28px;', '--body-work: 15px;']) {
     assert.ok(css.includes(token), token);
   }
   assert.match(css, /--display-font: var\(--body-font\);/u);

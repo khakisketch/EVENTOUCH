@@ -1,73 +1,95 @@
 .pageHeader {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: var(--s2) var(--s5);
+  grid-template-areas: "back back" "context context" "title actions" "meta meta" "badges badges";
+  align-items: center;
+  column-gap: var(--s5);
+  row-gap: 0;
   min-width: 0;
-  padding-bottom: var(--s2);
+  padding-bottom: var(--s5);
+  border-bottom: 1px solid var(--line);
 }
+.pageHeader:not(:has(.pageActions)) {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "back" "context" "title" "meta" "badges";
+}
+.pageIdentity {
+  min-width: 0;
+  display: contents; }
+.pageTitleRow {
+  display: contents;
+}
+.pageIdentity h1 {
+  grid-area: title;
+  min-width: 0;
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+.pageContext { grid-area: context; min-width: 0; margin: 0 0 var(--s1); }
+.backLink {
+  grid-area: back;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-self: start;
+  margin-bottom: var(--s1);
+  color: var(--brand-text);
+  font-size: var(--small);
+  font-weight: 600;
+  text-decoration: none;
+  text-underline-offset: 3px;
+}
+.pageSubline {
+  grid-area: meta;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s3);
+  min-width: 0;
+  margin-top: var(--s2);
+}
+.pageMeta {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.pageBadges {
+  grid-area: badges;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  margin-top: var(--s3);
+}
+.pageActions {
+  grid-area: actions;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+}
+.pageActions > * { flex: 0 1 auto; max-width: 100%; }
 
 .pageFlow {
   display: grid;
   gap: var(--s5);
   min-width: 0;
-}
-
-.pageIdentity {
-  min-width: 0;
-}
-
-.pageIdentity h1 {
-  margin: 0;
-  font-size: var(--h1);
-  line-height: 1.3;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  word-break: keep-all;
-  overflow-wrap: break-word;
-}
-
-.backLink {
-  display: inline-flex;
-  min-height: 44px;
-  align-items: center;
-  margin-bottom: var(--s1);
-  color: var(--brand-text);
-  font-size: var(--small);
-  font-weight: 700;
-  text-decoration: none;
-  text-underline-offset: 3px;
+  align-content: start;
 }
 
 .backLink:hover {
   text-decoration: underline;
-}
-
-.pageMeta {
-  margin: var(--s1) 0 0;
-  color: var(--muted);
-  font-size: var(--small);
-  line-height: 1.4;
-  font-variant-numeric: tabular-nums;
-  word-break: keep-all;
-  overflow-wrap: anywhere;
-}
-
-.pageBadges {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2);
-  margin-top: var(--s1);
-}
-
-.pageActions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--s2);
-  min-width: 0;
-  align-self: start;
 }
 
 .section {
@@ -96,9 +118,9 @@
   grid-area: title;
   min-width: 0;
   margin: 0;
-  font-size: var(--h3);
+  font-size: 17px;
   font-weight: 650;
-  line-height: 1.35;
+  line-height: 1.4;
   word-break: keep-all;
   overflow-wrap: break-word;
 }
@@ -170,8 +192,9 @@
   min-width: 0;
   padding: var(--s5);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-card);
   background: var(--paper);
+  box-shadow: 0 1px 3px var(--shadow-soft);
 }
 
 .stateMessage {
@@ -194,97 +217,6 @@
   gap: var(--s2);
 }
 
-@media (max-width: 768px) {
-  /* The header action rides beside the H1 instead of owning a blank row
-     below the date: identity copy keeps full width, the title shares its
-     row with one intrinsic action, and empty rows cost zero (row-gap: 0,
-     rhythm from the existing context/meta margins). */
-  .pageHeader {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "back back"
-      "title actions"
-      "subline subline"
-      "badges badges";
-    row-gap: 0;
-    column-gap: var(--s2);
-    align-items: center;
-  }
-
-  /* Two or more header actions would cramp the H1 (overview's
-     참가자 페이지 열기 + 링크 복사 ≈ 260px): they keep a full-width pair
-     row below the identity copy, where the pair fits 328px. */
-  .pageHeader:has(.pageActions > :nth-child(2)) {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      "back"
-      "title"
-      "subline"
-      "badges"
-      "actions";
-  }
-
-  /* A paired group (open + icon-only copy) counts as one item but always
-     takes its own row, so the H1 keeps full width and the pair never
-     splits across rows on a phone. */
-  .pageHeader:has(.pageActions > .console-header-group) {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      "back"
-      "title"
-      "subline"
-      "badges"
-      "actions";
-  }
-
-  .pageIdentity {
-    display: contents;
-  }
-
-  .pageSubline { grid-area: subline; }
-
-  .pageContext {
-    grid-area: context;
-  }
-
-  .backLink {
-    grid-area: back;
-  }
-
-  .pageIdentity h1 {
-    grid-area: title;
-    min-width: 0;
-  }
-
-  .pageMeta {
-    grid-area: meta;
-    min-width: 0;
-  }
-
-  .pageBadges {
-    grid-area: badges;
-  }
-
-  .pageActions {
-    grid-area: actions;
-    justify-content: flex-end;
-    align-self: center;
-  }
-
-  .pageActions > * {
-    flex: 0 1 auto;
-    max-width: 100%;
-  }
-
-  .pageHeader:has(.pageActions > :nth-child(2)) .pageActions {
-    justify-content: flex-start;
-  }
-
-  .pageHeader:has(.pageActions > .console-header-group) .pageActions {
-    justify-content: flex-start;
-  }
-}
-
 @media (max-width: 420px) {
   .sectionAction :global(.button) {
     max-width: 100%;
@@ -305,22 +237,10 @@
   width: 100%;
   max-width: var(--web-content-max);
   min-width: 0;
-  margin-inline: auto;
-}
-
-.pageContext {
-  margin-bottom: var(--s1);
+  margin-inline: 0;
 }
 
 /* Name the task first; the event link and schedule share its context line. */
-.pageSubline {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s1) var(--s3);
-  min-width: 0;
-  margin-top: var(--s1);
-}
 
 .pageSubline .pageContext,
 .pageSubline .pageMeta {
@@ -334,9 +254,9 @@
   display: inline-flex;
   min-height: 44px;
   align-items: center;
-  color: var(--brand-text);
-  font-size: var(--small);
-  font-weight: 700;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
   text-decoration: none;
   text-underline-offset: 3px;
   overflow-wrap: anywhere;
@@ -426,7 +346,7 @@
   min-width: 0;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--soft);
   font-size: var(--small);
 }
@@ -508,12 +428,20 @@
 }
 
 .sectionPanel {
-  padding-block: var(--s4);
-  border-top: 1px solid var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: var(--s5);
+  background: var(--paper);
+  box-shadow: 0 1px 3px var(--shadow-soft);
+}
+
+.sectionForm {
+  width: 100%;
+  max-width: var(--web-reading-max);
 }
 
 .sectionForm > .sectionBody {
-  max-width: var(--web-reading-max);
+  max-width: none;
 }
 
 /* ------------------------------------------------------------------
@@ -586,7 +514,7 @@
   margin: 0;
   padding: var(--s3) var(--s4);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   font-size: var(--small);
   line-height: 1.5;
   word-break: keep-all;
@@ -678,7 +606,7 @@
   border-bottom-color: var(--brand);
   background: transparent;
   color: var(--brand-text);
-  font-weight: 800;
+  font-weight: 650;
   text-decoration: none;
 }
 
@@ -855,8 +783,8 @@
   gap: var(--s2);
   min-width: 0;
   padding: var(--s5) var(--s4);
-  border: 0;
-  border-radius: var(--radius);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-large);
   background: var(--surface-muted);
   color: var(--muted);
   text-align: center;
@@ -925,6 +853,23 @@
    stays with the report workspace.
    ------------------------------------------------------------------ */
 
+@media (max-width: 768px) {
+ .page { gap: var(--s4); }
+ .pageHeader { column-gap: var(--s3); padding-bottom: var(--s4); }
+ .pageIdentity h1 { font-size: 26px; }
+ .pageHeader:has(.pageActions > :nth-child(2)),
+ .pageHeader:has(.pageActions > :global(.console-header-group)) {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "back" "context" "title" "meta" "badges" "actions";
+ }
+ .pageHeader:has(.pageActions > :nth-child(2)) .pageActions,
+ .pageHeader:has(.pageActions > :global(.console-header-group)) .pageActions {
+  justify-content: flex-start;
+  margin-top: var(--s3);
+ }
+ .sectionPanel { padding: var(--s4); }
+}
+
 @media print {
   .toolbar,
   .sectionNav,
@@ -964,14 +909,18 @@
 
 /* Persistent task panels retain drafts and command receipts while hidden. */
 .section[hidden] { display: none; }
-.sectionNavLink[role="tab"] { font: inherit; cursor: pointer; background: transparent; }
+.sectionNavLink[role="tab"] {
+  cursor: pointer;
+  background: transparent; }
 .anchorNav .sectionNavLink:not([aria-current="location"]) {
   text-decoration: underline;
   text-decoration-color: var(--line-strong);
   text-underline-offset: 4px;
 }
 .sectionNavLink[aria-selected="true"] {
-  border-bottom-color: var(--brand-text); color: var(--brand-text); font-weight: 700;
+  border-bottom-color: var(--brand-text);
+  color: var(--brand-text);
+  font-weight: 650;
 }
 .inspectorHost { min-width: 0; align-self: start; position: sticky; top: var(--s4); }
 .inspectorPanel {
@@ -979,20 +928,6 @@
   padding: var(--s5); border-left: 1px solid var(--line); background: var(--paper);
 }
 .inspectorPanel > h2 { margin: 0 0 var(--s2); font-size: var(--h3); }
-.pageHeader { border-bottom: 1px solid var(--line); padding-bottom: var(--s4); }
-.page { gap: var(--s4); }
-.pageFlow { gap: var(--s5); align-content: start; }
-.pageContext { margin: 0; }
-.contextLink { font-weight: 500; color: var(--muted); }
 @media (min-width: 769px) {
-  .pageIdentity:has(.pageContext) { display: grid; grid-template-columns: minmax(0, 1fr); }
   .contextLink { min-height: 44px; }
-}
-@media (max-width: 768px) {
-  .pageIdentity { display: flex; flex-direction: column; gap: 0; }
-  .pageHeader { display: flex; flex-wrap: wrap; gap: var(--s2); }
-  .pageIdentity { flex: 1 1 240px; }
-  .pageActions { justify-content: flex-start; }
-  .pageContext { order: -1; }
-  .pageSubline { margin: var(--s1) 0 0; }
 }

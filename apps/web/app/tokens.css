@@ -11,20 +11,23 @@
   --stage: #101114;
   --stage-2: #1B1D21;
   --stage-line: #34363B;
-  --brand: #F05A24;
-  --brand-hover: #B83C10;
-  --brand-text: #AA3A10;
-  --on-brand: #171A1F;
+  --brand: #EA552E;
+  --brand-hover: #C7441C;
+  --brand-text: #8E351F;
+  --on-brand: #19191C;
   --on-brand-hover: #FFFFFF;
-  --soft: #FFF3EB;
+  --soft: #FFF1E8;
+  --brand-tint: #FDEEE4;
 
-  --ink: #252A34;
-  --muted: #626B78;
-  --line: #E6E8EC;
+  --ink: #1E2026;
+  --muted: #61656C;
+  --line: #E5E5E7;
   --line-strong: #8A939F;
   --paper: #FFFFFF;
   --ground: #FFFFFF;
-  --surface-muted: #F7F8FA;
+  --workspace-ground: #FFFFFF;
+  --workspace-max: 1360px;
+  --surface-muted: #FAFAFB;
 
   --nav: #FAFBFC;
   --nav-hover: #EFF1F4;
@@ -47,10 +50,11 @@
   /* Channel identity inside the illustrative Alimtalk message only. */
   --message-kakao-header: #FEE500;
 
-  --focus: #AA3A10;
+  --focus: #2453A6;
   --report-color: var(--brand);
   --scrim: #10111480;
   --shadow-color: #252A3412;
+  --shadow-soft: #252A3406;
   --chart: var(--brand);
   --chart-track: #E6E8EC;
 
@@ -60,6 +64,9 @@
 
   --radius: 8px;
   --radius-small: 6px;
+  --radius-medium: 12px;
+  --radius-large: 16px;
+  --radius-card: 18px;
   --s1: 4px;
   --s2: 8px;
   --s3: 12px;

@@ -10,6 +10,9 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { createRequire } = require('node:module');
+const webRequire = createRequire(path.join(__dirname, '../apps/web/package.json'));
+const postcss = webRequire('postcss');
 
 const ROOT = path.join(__dirname, '..');
 const WEB = path.join(ROOT, 'apps/web');
@@ -21,6 +24,21 @@ function readWeb(rel) {
 
 function readUi(name) {
   return fs.readFileSync(path.join(UI, name), 'utf8');
+}
+
+// Match exact selectors in their actual media scope, never the first media block.
+function cssDeclarations(css, selector, media = null) {
+  const matches = [];
+  postcss.parse(css).walkRules((rule) => {
+    if (!rule.selectors.includes(selector)) return;
+    const scopes = [];
+    for (let parent = rule.parent; parent; parent = parent.parent) {
+      if (parent.type === 'atrule') scopes.unshift(parent.name + ' ' + parent.params);
+    }
+    if (JSON.stringify(scopes) === JSON.stringify(media ? ['media ' + media] : [])) matches.push(rule);
+  });
+  assert.equal(matches.length, 1, selector + ' has one rule in ' + (media ?? 'the base scope'));
+  return Object.fromEntries(matches[0].nodes.filter((node) => node.type === 'decl').map((node) => [node.prop, node.value]));
 }
 
 function quotedList(block) {
@@ -127,7 +145,12 @@ test('console frame shares one title, context link and body rhythm', () => {
   assert.match(page, /import Link from "next\/link";/u);
 
   const css = readUi('console-ui.module.css');
-  assert.match(css, /\.page\s*\{[^}]*width:\s*100%;[^}]*max-width:\s*var\(--web-content-max\)[^}]*margin-inline:\s*auto;/su);
+  const frame = cssDeclarations(css, '.page');
+  assert.equal(frame.width, '100%');
+  assert.equal(frame['max-width'], 'var(--web-content-max)');
+  assert.equal(frame['min-width'], '0');
+  assert.equal(frame['margin-inline'], '0', 'bounded workspace aligns with its rail-side content edge, not the viewport center');
+  assert.equal(cssDeclarations(readWeb('app/globals.css'), '.console-main').background, 'var(--workspace-ground)');
 });
 
 test('toolbar, section nav and form actions render only what they are given', () => {
@@ -181,10 +204,18 @@ test('feedback and section surfaces reuse tokens with stable semantics', () => {
   assert.match(section, /width = "full"/u);
   assert.match(section, /<div className=\{styles\.sectionBody\}>\{children\}<\/div>/u);
   assert.doesNotMatch(section, HOOK_CALL);
-  // Open section treatment replaces the old enclosing paper card; the
-  // surface prop, heading, body and behavior stay intact.
-  assert.match(css, /\.sectionPanel\s*\{[^}]*padding-block:\s*var\(--s4\)[^}]*border-top:\s*1px solid var\(--line\)/su);
-  assert.match(css, /\.sectionForm\s*>\s*\.sectionBody\s*\{[^}]*max-width:\s*var\(--web-reading-max\)/su);
+  // Self-contained panels lift onto paper; a form caps the whole editing
+  // unit, so its heading and controls share the same bounded workspace.
+  const panel = cssDeclarations(css, '.sectionPanel');
+  assert.equal(panel.padding, 'var(--s5)');
+  assert.equal(panel.border, '1px solid var(--line)');
+  assert.equal(panel['border-radius'], 'var(--radius-card)');
+  assert.equal(panel.background, 'var(--paper)');
+  const form = cssDeclarations(css, '.sectionForm');
+  assert.equal(form.width, '100%');
+  assert.equal(form['max-width'], 'var(--web-reading-max)');
+  assert.equal(cssDeclarations(css, '.sectionForm > .sectionBody')['max-width'], 'none');
+  assert.equal(cssDeclarations(css, '.sectionPanel', '(max-width: 768px)').padding, 'var(--s4)');
 
   const header = readUi('ConsolePageHeader.tsx');
   assert.match(header, /context\?: ReactNode;/u);
@@ -260,7 +291,14 @@ test('shared body patterns export stable classes without duplicating controls', 
 
   assert.match(css, /@media \(max-width: 768px\)/u);
   assert.match(css, /@media \(max-width: 1024px\)/u);
-  assert.match(css, /@media \(max-width: 768px\)\s*\{[^}]*\.pageHeader/su, 'header stacks with toolbar/forms/records at 768');
+  const mobileHeader = cssDeclarations(css, '.pageHeader', '(max-width: 768px)');
+  assert.equal(mobileHeader['column-gap'], 'var(--s3)');
+  assert.equal(mobileHeader['padding-bottom'], 'var(--s4)');
+  for (const selector of ['.pageHeader:has(.pageActions > :nth-child(2))', '.pageHeader:has(.pageActions > :global(.console-header-group))']) {
+    const rule = cssDeclarations(css, selector, '(max-width: 768px)');
+    assert.equal(rule['grid-template-columns'], 'minmax(0, 1fr)');
+    assert.equal(rule['grid-template-areas'], '"back" "context" "title" "meta" "badges" "actions"');
+  }
   assert.doesNotMatch(css, /max-width:\s*680px/u, 'no orphan 680px header breakpoint');
 
   for (const name of [

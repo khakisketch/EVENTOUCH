@@ -1,67 +1,59 @@
+/* The directory is one workspace: controls above aligned operational rows. */
 .createTrigger {
   flex: none;
   align-self: center;
+}
+
+.directorySection.directorySection {
+  --directory-columns: minmax(0, 1.5fr) minmax(0, 1.1fr) minmax(128px, 0.75fr) 176px;
+  gap: var(--s4);
+  padding: var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--paper);
+  box-shadow: 0 1px 3px var(--shadow-soft);
+}
+
+.directorySection > :has(:global(#console-event-directory)) {
+  align-items: center;
+}
+
+.directorySection > :last-child {
+  display: grid;
+  gap: var(--s4);
 }
 
 .directory {
   min-width: 0;
 }
 
-.directorySection.directorySection {
-  gap: var(--s2);
-}
-
-/* The directory count is a short heading summary, not a full-width prose
-   description. Pair it tightly with the title; center the view switch
-   against that two-line group instead of reserving a 46px title row. */
-.directorySection > :has(:global(#console-event-directory)) {
-  grid-template-areas:
-    "title action"
-    "desc action";
-}
-
-.directorySection .calendarPanel,
-.directorySection .resultsMeta,
-.directorySection .eventGrid {
-  margin-top: 0;
-}
-
-/* Search owns its row. Supporting filters are a quiet, compact row rather
-   than full-width form boxes competing with the event cards. */
 .homeFilters {
   display: grid;
   grid-template-areas: "search stage work";
-  grid-template-columns: minmax(180px, 320px) max-content max-content;
-  gap: var(--s2);
+  grid-template-columns: minmax(180px, 360px) max-content max-content;
+  align-items: center;
+  gap: var(--s3);
   flex: 1 1 640px;
   min-width: 0;
 }
 
-.homeSearch {
-  grid-area: search;
-}
-
-.homeStage {
-  grid-area: stage;
-}
-
-.homeWork {
-  grid-area: work;
-}
+.homeSearch { grid-area: search; }
+.homeStage { grid-area: stage; }
+.homeWork { grid-area: work; }
 
 .stageFilter {
   display: grid;
   grid-template-columns: auto auto;
   justify-self: start;
-  width: fit-content;
-  max-width: 100%;
   align-items: center;
   gap: var(--s2);
+  width: fit-content;
+  max-width: 100%;
   min-width: 0;
+  margin: 0;
   color: var(--muted);
   font-size: var(--small);
   font-weight: 650;
-  margin: 0;
 }
 
 .stageFilter select {
@@ -80,18 +72,9 @@
   font-weight: 700;
 }
 
-.stageFilter select:hover {
-  color: var(--brand-text);
-}
+.stageFilter select:hover { color: var(--ink); text-decoration: underline; }
+.stageFilter option { background: var(--paper); color: var(--ink); }
 
-/* Keep the native option picker legible independently of the flat trigger. */
-.stageFilter option {
-  background: var(--paper);
-  color: var(--ink);
-}
-
-/* Triage toggle: same row voice as the stage filter. The label wraps
-   instead of clipping, so the full count stays readable at 360px. */
 .workFilter {
   display: inline-flex;
   min-height: 44px;
@@ -109,33 +92,26 @@
   width: 20px;
   height: 20px;
   margin: 0;
-  accent-color: var(--brand);
+  accent-color: var(--ink);
 }
 
-.searchField {
-  display: block;
-  min-width: 0;
-  width: 100%;
-  margin: 0;
-}
-
-.searchField input {
-  width: 100%;
-  margin: 0;
-}
+.searchField { display: block; min-width: 0; width: 100%; margin: 0; }
+.searchField input { width: 100%; margin: 0; }
 
 .viewSwitch {
   display: inline-flex;
   flex: none;
-  border: 1px solid var(--line-strong);
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
   border-radius: var(--radius-small);
-  background: var(--paper);
+  background: var(--surface-muted);
 }
 
 .viewButton {
   min-height: 44px;
   padding-inline: var(--s3);
-  border: 0;
+  border: 1px solid transparent;
   border-radius: var(--radius-small);
   background: transparent;
   color: var(--muted);
@@ -145,249 +121,134 @@
   cursor: pointer;
 }
 
-.viewButton + .viewButton {
-  border-left: 1px solid var(--line);
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-}
-
-.viewButton:first-child {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
-.viewActive {
-  background: var(--soft);
-  color: var(--brand-text);
-  font-weight: 800;
-}
+.viewButton:hover { color: var(--ink); }
+.viewActive { border-color: var(--line); background: var(--paper); color: var(--ink); font-weight: 750; }
 
 .viewButton:focus-visible,
-.dayCell:focus-visible {
+.dayCell:focus-visible,
+.eventCardLink:focus-visible,
+.approvalLink:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
 
-.resultsMeta {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--s2);
-  min-width: 0;
-}
+.resultsMeta { display: flex; justify-content: flex-end; margin-bottom: var(--s3); }
+.sectionTitle { margin: var(--s5) 0 var(--s3); font-size: var(--h3); }
 
-.resultsMeta p {
-  margin: 0;
+.directoryColumns {
+  display: grid;
+  grid-template-columns: var(--directory-columns);
+  column-gap: var(--s4);
+  padding: var(--s3) var(--s4);
+  border-block: 1px solid var(--line);
+  background: var(--surface-muted);
   color: var(--muted);
-  font-size: var(--small);
+  font-size: var(--label);
   font-weight: 650;
-}
-
-.sectionTitle {
-  margin: var(--s4) 0 var(--s2);
-  font-size: var(--h3);
 }
 
 .eventGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--s4);
-  margin: var(--s3) 0 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.eventGrid > li {
+.eventGrid > li { min-width: 0; }
+
+.eventCard {
+  display: grid;
+  grid-template-columns: var(--directory-columns);
+  column-gap: var(--s4);
+  align-items: center;
   min-width: 0;
+  padding-inline: var(--s4);
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
 }
 
-.eventCardActions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--s1) var(--s3);
-  margin: 0;
-  padding: var(--s2) var(--s4);
-  border-top: 1px solid var(--line);
-}
+.eventCard:hover { background: var(--surface-muted); }
 
 .eventCardLink {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  border-radius: var(--radius);
+  display: grid;
+  grid-column: 1 / span 3;
+  grid-template-columns: subgrid;
+  align-items: center;
+  min-height: 104px;
+  min-width: 0;
+  padding-block: var(--s4);
+  border-radius: var(--radius-small);
   color: inherit;
   text-decoration: none;
 }
 
-.eventCard:hover {
-  border-color: var(--line-strong);
-}
-
-.eventCardLink:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 3px;
-}
-
-.eventCard {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 220px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
-  overflow: hidden;
-}
-
-/* A2 soft-tinted header: title + grouped date·time. The surface defaults to
-   the brand-soft token; a published participant-home background arrives via
-   `--card-zone`/`--card-zone-ink` (pale 15% tint, 4.5:1-safe ink) and only
-   ever comes from `pageExperience.published` — drafts never tint cards. */
-.eventCardZone {
-  display: grid;
-  gap: var(--s1);
-  padding: var(--s4) var(--s4) var(--s3);
-  background: var(--card-zone, var(--soft));
-}
-
-.eventDateTime {
-  margin: 0;
-  color: var(--card-zone-ink, var(--brand-text));
-  font-family: var(--body-font);
-  font-size: var(--label);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.eventCardBody {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: var(--s1);
-  padding: var(--s3) var(--s4) var(--s2);
-  background: var(--paper);
-}
-
-.eventCardFoot {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  margin-top: var(--s2);
-}
-
-.eventCardFoot > .eventRecency:empty {
-  visibility: hidden;
-}
-
-/* Stage keeps its semantic token colors; only the pill shape and the
-   leading dot live here. Never tinted by the event theme. */
-.eventCardFoot :global(.stage-badge) {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s2);
-  padding: 4px 12px;
-  border-radius: 999px;
-  font-size: var(--small);
-  font-weight: 800;
-}
-
-.eventCardFoot :global(.stage-badge)::before {
+/* The published participant color identifies the event without tinting facts. */
+.eventCardZone { display: grid; gap: var(--s2); min-width: 0; }
+.eventCardZone .eventName::before {
   display: inline-block;
   width: 8px;
   height: 8px;
-  flex: none;
+  margin-right: var(--s2);
+  border: 1px solid var(--line-strong);
   border-radius: 50%;
-  background: currentColor;
+  background: var(--card-zone, var(--soft));
   content: "";
-}
-
-.eventRecency {
-  display: inline-flex;
-  min-width: var(--s8);
-  min-height: var(--s5);
-  align-items: center;
-  justify-content: center;
-  padding: 2px var(--s2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-small);
-  background: var(--surface-muted);
-  color: var(--muted);
-  font-size: var(--small);
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-  white-space: nowrap;
-}
-
-/* Purposeful attention only for sessions at hand: today and tomorrow keep
-   the filled brand countdown. Far-future, past and undated-adjacent counts
-   stay quiet so the event name and stage lead the card. */
-.eventRecencySoon {
-  border-color: var(--brand);
-  background: var(--brand);
-  color: var(--on-brand);
-}
-
-.cardArrow {
-  width: 22px;
-  height: 22px;
-  margin-left: auto;
-  flex: none;
-  color: var(--brand-text);
 }
 
 .eventName {
   margin: 0;
   color: var(--ink);
-  font-size: var(--h3);
-  line-height: 1.35;
+  font-size: var(--body);
+  font-weight: 750;
+  line-height: 1.45;
+  letter-spacing: -0.015em;
   word-break: keep-all;
-  overflow-wrap: break-word;
-  font-family: var(--display-font);
-  font-weight: 650;
-  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
 }
 
-.eventClient {
+.eventDateTime {
   margin: 0;
   color: var(--muted);
   font-size: var(--small);
-  font-weight: 600;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 
-/* A follow-up only when a queue exists, not a permanent third KPI.
-   It is an action chip, not body copy: no persistent underline. */
+.eventCardBody { display: contents; }
+.eventClientGroup { display: grid; gap: var(--s1); min-width: 0; }
+.eventClient { margin: 0; color: var(--ink); font-size: var(--small); font-weight: 600; word-break: keep-all; overflow-wrap: anywhere; }
+.eventInventory { margin: 0; color: var(--muted); font-size: var(--label); font-variant-numeric: tabular-nums; }
+
+.eventCardFoot { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); min-width: 0; }
+.eventCardFoot :global(.stage-badge) { font-size: var(--label); font-weight: 650; }
+.eventRecency { color: var(--muted); font-size: var(--small); font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.eventRecencySoon { color: var(--ink); font-weight: 800; }
+.cardArrow { width: 18px; height: 18px; margin-left: auto; flex: none; color: var(--muted); }
+.eventCardLink:hover .eventName { text-decoration: underline; text-underline-offset: 3px; }
+.eventCardLink:hover .cardArrow { color: var(--ink); }
+
+.eventCardActions { display: flex; grid-column: 4; align-items: center; justify-content: flex-start; min-width: 0; }
 .approvalLink {
   display: inline-flex;
   align-items: center;
-  min-width: 0;
+  justify-content: center;
   min-height: 44px;
-  min-inline-size: var(--s7);
-  padding-inline: var(--s2);
+  min-width: 0;
+  padding: var(--s2) var(--s3);
   border: 1px solid var(--line);
   border-radius: var(--radius-small);
-  background: var(--surface-muted);
-  color: var(--brand-text);
+  background: var(--paper);
+  color: var(--ink);
   font-size: var(--small);
-  font-weight: 700;
+  font-weight: 650;
+  word-break: keep-all;
   overflow-wrap: anywhere;
   text-decoration: none;
 }
-
-.approvalLink:hover {
-  border-color: var(--line-strong);
-  background: var(--paper);
-  color: var(--brand-hover);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.approvalLink:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 2px;
-}
+.approvalLink:hover { border-color: var(--line-strong); background: var(--surface-muted); }
 
 .calendarPanel {
   margin-top: var(--s3);
@@ -464,8 +325,8 @@
 }
 
 .daySelected {
-  border-color: var(--brand-text);
-  background: var(--soft);
+  border-color: var(--ink);
+  background: var(--surface-muted);
 }
 
 .emptyState {
@@ -489,6 +350,33 @@
 
 .emptyState p {
   color: var(--muted);
+}
+
+
+@media (max-width: 1100px) {
+  .directorySection.directorySection { --directory-columns: minmax(0, 1.35fr) minmax(0, 1fr) 120px 158px; padding: var(--s4); }
+  .homeFilters { grid-template-areas: "search search" "stage work"; grid-template-columns: max-content minmax(0, 1fr); }
+  .eventCard, .directoryColumns { column-gap: var(--s3); padding-inline: var(--s2); }
+}
+
+@media (max-width: 768px) {
+  .directoryColumns { display: none; }
+  .eventGrid { border-top: 1px solid var(--line); }
+  .eventCard { grid-template-columns: minmax(0, 1fr); padding: var(--s4) 0; row-gap: var(--s3); }
+  .eventCardLink { grid-column: 1; grid-template-columns: minmax(0, 1fr); min-height: 44px; gap: var(--s3); padding: 0; }
+  .eventCardFoot { justify-content: flex-start; }
+  .eventCardActions { grid-column: 1; }
+  .calendarPanel { padding: var(--s3); }
+  .dayCell { min-height: 44px; }
+}
+
+@media (max-width: 480px) {
+  .homeFilters { grid-template-areas: "search search" "stage work"; grid-template-columns: max-content minmax(0, 1fr); gap: var(--s2) var(--s3); }
+  .homeStage > span { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .stageFilter { grid-template-columns: minmax(0, 1fr); }
+  .createTrigger { width: 100%; }
+  .monthGrid { gap: 2px; }
+  .viewButton { padding-inline: var(--s2); }
 }
 
 .slugHint {
@@ -591,217 +479,6 @@
   word-break: keep-all;
 }
 
-@media (max-width: 680px) {
-  .eventGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .calendarPanel {
-    padding: var(--s3);
-  }
-
-  .dayCell {
-    min-height: 44px;
-  }
-}
-
-/* Keep the same 12px relationship at every phone width. Fractional tracks
-   would leave a growing empty band after the content-sized dropdown. */
-@media (max-width: 480px) {
-  .homeFilters {
-    grid-template-areas:
-      "search search"
-      "stage work";
-    grid-template-columns: max-content minmax(0, 1fr);
-  }
-
-  .homeStage > span {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    padding: 0;
-    border: 0;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-  }
-
-  .stageFilter {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .createTrigger {
-    width: 100%;
-  }
-
-  .monthGrid {
-    gap: 2px;
-  }
-}
-
-/* Ledger rows: one identity column and one facts column, no cards. The
-   published participant-home tint stays as the left identity dot; the
-   operator reads name → date, then client · inventory · stage · recency
-   as one line of work. A pending queue continues the same row as a quiet
-   follow-up link instead of a detached boxed action. */
-.eventGrid {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0;
-  margin-top: var(--s2);
-  border-top: 1px solid var(--line);
-}
-
-.eventCard {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  min-height: 0;
-  height: auto;
-  align-items: stretch;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  background: transparent;
-  overflow: visible;
-}
-
-.eventCard:hover {
-  border-color: var(--line);
-  background: var(--surface-muted);
-}
-
-.eventCardLink {
-  display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-  align-items: center;
-  column-gap: var(--s4);
-}
-
-.eventCardZone {
-  align-content: center;
-  padding: var(--s3) 0 var(--s3) var(--s4);
-  border-radius: 0;
-}
-
-.eventCardBody {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas:
-    "client foot"
-    "inventory foot";
-  align-items: center;
-  gap: var(--s1) var(--s3);
-  padding: var(--s3) var(--s4) var(--s3) 0;
-  background: transparent;
-}
-
-.eventCardBody .eventClient {
-  grid-area: client;
-  margin: 0;
-}
-
-.eventInventory {
-  grid-area: inventory;
-  margin: 0;
-  color: var(--muted);
-  font-family: var(--body-font);
-  font-size: var(--label);
-  font-variant-numeric: tabular-nums;
-}
-
-.eventCardFoot {
-  grid-area: foot;
-}
-
-.eventCardFoot {
-  margin: 0;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  row-gap: var(--s1);
-}
-
-.eventCardActions {
-  align-items: center;
-  justify-content: flex-start;
-  padding: 0 var(--s4) var(--s2);
-  border-top: 0;
-  border-left: 0;
-}
-
-/* The queue follow-up reads as the row's next line with the waiting tone,
-   not a detached box or a quiet text link that is easy to miss. */
-.eventCardActions .approvalLink {
-  min-inline-size: 0;
-  padding: var(--s1) var(--s3);
-  border: 1px solid var(--warning-line);
-  border-radius: var(--radius-small);
-  background: var(--warning-soft);
-  color: var(--warning);
-  font-weight: 800;
-}
-
-.eventCardActions .approvalLink:hover {
-  border-color: var(--warning);
-  background: var(--warning-soft);
-  color: var(--warning);
-}
-
-@media (max-width: 768px) {
-  .eventCard {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .eventCardLink {
-    grid-template-columns: minmax(0, 1fr);
-    row-gap: 0;
-  }
-
-  .eventCardZone {
-    padding: var(--s3) var(--s4) var(--s1);
-  }
-
-  .eventCardBody {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      "client"
-      "inventory"
-      "foot";
-    gap: var(--s1);
-    padding: var(--s1) var(--s4) var(--s2);
-  }
-
-  .eventCardFoot {
-    justify-content: flex-start;
-  }
-
-  .eventCardActions {
-    padding: 0 var(--s4) var(--s3);
-    border-top: 0;
-    border-left: 0;
-    justify-content: flex-start;
-  }
-}
-
-/* Published event color is an identity dot, not a colored box around a row. */
-.eventCardZone {
-  background: var(--paper);
-}
-
-.eventCardZone .eventName::before {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  margin-right: var(--s2);
-  border: 1px solid var(--line-strong);
-  border-radius: 50%;
-  background: var(--card-zone, var(--soft));
-  content: "";
-}
-
-.eventCard:hover .eventCardZone {
-  background: var(--surface-muted);
-}
-
 /* Create/duplicate long form inside the sticky dialog chrome: the footer and
    header stick, so focused fields and inline errors keep a scroll margin and
    never slide under the fixed bars. Tokens only, no new hues. */
@@ -857,57 +534,6 @@
   word-break: keep-all;
   overflow-wrap: break-word;
 }
-
-@media (max-width: 1200px) {
-  .homeFilters {
-    grid-template-areas: "search search" "stage work";
-    grid-template-columns: max-content minmax(0, 1fr);
-  }
-}
-
-/* Readability pass: every pinned selector and declaration above stays
-   untouched. Only the row reading tone changes here: the date line rests
-   quiet by default and only sessions at hand take the brand voice, the
-   event name carries a firmer weight, and the row arrow answers hover. */
-.eventCardZone .eventDateTime {
-  color: var(--muted);
-  font-weight: 650;
-}
-
-.eventCardZone .eventDateTime[data-soon="true"] {
-  color: var(--brand-text);
-  font-weight: 800;
-}
-
-.eventName {
-  font-weight: 700;
-  letter-spacing: -0.015em;
-}
-
-.eventCardBody .eventClient {
-  color: var(--ink);
-}
-
-.cardArrow {
-  color: var(--muted);
-  transition: transform 160ms ease-out, color 160ms ease-out;
-}
-
-.eventCard:hover .cardArrow {
-  color: var(--brand-text);
-  transform: translateX(2px);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .cardArrow {
-    transition: none;
-  }
-
-  .eventCard:hover .cardArrow {
-    transform: none;
-  }
-}
-
 
 /* Start with the required event identity; optional metadata stays available
    without turning routine event creation into a setup wizard. */

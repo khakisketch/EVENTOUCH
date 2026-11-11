@@ -1,17 +1,50 @@
-/* Independent columns keep the schedule directly after the work queue even
-   when analysis or a long metric makes the context column taller. */
+
+/* Actual entry state and actionable work share the first decision row.
+   Row gaps come from real regions, not empty named grid tracks. */
 .overviewCanvas {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
-  grid-template-areas:
-    "alert alert"
-    "status status"
-    "primary context"
-    "recent recent";
+  grid-template-columns: minmax(0, 1.12fr) minmax(300px, 1fr);
+  grid-template-areas: "alert alert" "status status" "metrics queue" "runbook runbook" "readiness readiness" "secondary secondary" "recent recent" "analysis analysis";
   column-gap: var(--s5);
   row-gap: 0;
   align-items: start;
   min-width: 0;
+}
+.overviewArchived {
+  grid-template-areas: "alert alert" "status status" "metrics metrics" "runbook runbook" "secondary secondary" "recent recent" "analysis analysis";
+}
+.regionMetrics {
+  grid-area: metrics;
+  padding: var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-large);
+  background: var(--paper);
+  box-shadow: 0 1px 3px var(--shadow-soft);
+}
+.regionQueue {
+  grid-area: queue;
+  padding: var(--s5) 0 var(--s5) var(--s3);
+  border: 0;
+  background: transparent;
+}
+.regionRunbook {
+  grid-area: runbook;
+  padding-block: var(--s5);
+  border-top: 1px solid var(--line);
+}
+.runbookIdle { gap: var(--s3); }
+.runbookIdle .runbookEmpty { padding-block: var(--s3); }
+.liveOverview .regionMetrics > :first-child,
+.liveOverview .regionQueue > :first-child { min-height: 44px; }
+.queueActions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
+@media (max-width: 900px) {
+  .overviewCanvas {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "alert" "status" "metrics" "queue" "runbook" "readiness" "secondary" "recent" "analysis";
+  }
+  .overviewArchived { grid-template-areas: "alert" "status" "metrics" "runbook" "secondary" "recent" "analysis"; }
+  .regionMetrics { padding: var(--s4); }
+  .regionQueue { padding: var(--s3) 0; }
 }
 
 /* Read-only staff view: no region areas, one honest stack. */
@@ -23,9 +56,6 @@
 }
 
 .regionStatus,
-.regionMetrics,
-.regionQueue,
-.regionRunbook,
 .regionSecondary,
 .regionReadiness {
   min-width: 0;
@@ -37,9 +67,6 @@
 }
 
 .regionStatus { grid-area: status; }
-.regionMetrics { grid-area: metrics; }
-.regionQueue { grid-area: queue; }
-.regionRunbook { grid-area: runbook; }
 .regionSecondary { grid-area: secondary; }
 .regionReadiness { grid-area: readiness; }
 .regionRecent { grid-area: recent; }
@@ -47,18 +74,6 @@
 .contextColumn { grid-area: context; min-width: 0; }
 .refreshAlert { grid-area: alert; margin: 0 0 var(--s4); word-break: keep-all; overflow-wrap: break-word; }
 .overviewSingle > .refreshAlert { grid-area: auto; }
-
-/* The work queue and its evidence form the first decision surface. */
-.regionQueue {
-  padding: var(--s4) var(--s5);
-  background: var(--surface-muted);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-}
-.regionMetrics {
-  padding: var(--s4) 0 var(--s4) var(--s4);
-  border-left: 1px solid var(--line);
-}
 .runbookCopy strong, .runbookCopy span, .programInfo strong, .deskName {
   overflow-wrap: anywhere;
 }
@@ -101,9 +116,9 @@
 }
 
 .intakeOpen {
-  border-color: var(--success-line);
-  background: var(--success-soft);
-  color: var(--success);
+  border-color: transparent;
+  background: var(--brand-tint);
+  color: var(--brand-text);
 }
 
 .intakeClosed {
@@ -112,9 +127,9 @@
 }
 
 .dDay {
-  border-color: var(--info-line);
-  background: var(--info-soft);
-  color: var(--info);
+  border-color: transparent;
+  background: var(--ink);
+  color: var(--paper);
   font-variant-numeric: tabular-nums;
 }
 
@@ -131,15 +146,13 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   min-width: 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
 }
 
 .metricCard {
   display: grid;
-  gap: var(--s1);
+  gap: var(--s2);
   min-width: 0;
-  padding: var(--s4) var(--s2);
+  padding: var(--s3) var(--s2);
   color: var(--ink);
   text-decoration: none;
 }
@@ -258,7 +271,7 @@
   gap: var(--s2);
   padding: var(--s1) var(--s3);
   border: 1px solid var(--warning-line);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--warning-soft);
   color: var(--warning);
   text-decoration: none;
@@ -726,7 +739,7 @@
   width: 100%;
   height: auto;
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--paper);
 }
 
@@ -826,10 +839,10 @@
 .stageBand {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--s1) var(--s3);
   margin: 0;
-  padding: var(--s1) 0;
   font-size: var(--small);
 }
 
@@ -843,7 +856,7 @@
 }
 
 .stageNext {
-  color: var(--brand-text);
+  color: var(--ink);
   font-weight: 700;
 }
 
@@ -908,6 +921,11 @@
   display: grid;
   gap: var(--s2);
   min-width: 0;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-large);
+  background: var(--paper);
+  box-shadow: 0 1px 3px var(--shadow-soft);
 }
 
 /* "지금 할 일"은 ConsoleTaskQueue가 소유한다. 이 파일에 타일·피어 비교 잔재를 두지 않는다. */
@@ -1088,7 +1106,7 @@
   margin: 0 calc(-1 * var(--s4));
   padding-inline: var(--s4);
   border-bottom-color: var(--line-strong);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--soft);
 }
 
@@ -1146,26 +1164,7 @@
   font-size: var(--small);
 }
 
-/* An event with no cues yet keeps its heading (and its place in the flow)
-   but costs one line instead of an empty panel: metrics stay in view. */
-.runbookIdle {
-  gap: var(--s1);
-}
-
-.runbookIdle .runbookEmpty {
-  padding-bottom: var(--s1);
-}
-
 @media (max-width: 1024px) {
-  .overviewCanvas {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      "alert"
-      "status"
-      "primary"
-      "context"
-      "recent";
-  }
 
   .rail {
     position: static;
@@ -1173,15 +1172,12 @@
     border: 0;
     border-top: 1px solid var(--line);
   }
-  .regionMetrics { padding: 0; border-left: 0; }
 }
 
 @media (max-width: 768px) {
   .rail {
     padding: var(--s4) 0;
   }
-
-  .regionQueue { padding: var(--s4); }
 
   .runbookList::before {
     left: 57px;
@@ -1265,45 +1261,16 @@
 .programInfo strong,
 .deskName { overflow-wrap: anywhere; }
 .runbookCopy span { overflow: visible; white-space: normal; }
-
-@media (min-width: 1025px) {
-  .regionMetrics .metricGrid { grid-template-columns: minmax(0, 1fr); }
-  .regionMetrics .metricCard {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: baseline;
-    padding: var(--s2) 0;
-  }
-  .regionMetrics .metricCard + .metricCard { border-left: 0; border-top: 1px solid var(--line); }
-  .regionMetrics .metricDetail { grid-column: 1 / -1; }
-  .regionMetrics .entryFoot { align-items: flex-start; flex-direction: column; }
-}
-
-/* Status precedes work where present; LIVE has no status band. Canvas grid의 정본은 아래 Operation first 블록이다. */
 .rail { position: static; }
 .pageLinkShort { display: none; }
 @media (max-width: 768px) {
   .pageLinkFull { display: none; }
   .pageLinkShort { display: inline; }
 }
-
-/* The metrics strip explains the queue; queue and schedule share the work row. */
-.regionMetrics { padding: 0 0 var(--s4); border: 0; border-bottom: 1px solid var(--line); }
-.regionMetrics .metricGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); border: 0; }
-.regionMetrics .metricCard { display: grid; grid-template-columns: 1fr; padding: var(--s2) var(--s4); }
-.regionMetrics .metricCard:first-child { padding-left: 0; }
-.regionMetrics .metricCard + .metricCard { border-top: 0; border-left: 1px solid var(--line); }
-.regionMetrics .metricDetail { grid-column: auto; }
-.regionMetrics .entryFoot { flex-direction: row; align-items: center; }
 .regionMetrics .analysisDetails { margin-top: var(--s3); }
-.regionQueue { padding: 0; background: transparent; border: 0; border-radius: 0; }
 .runbookCue.done .runbookDot { background: var(--surface-muted); border-color: var(--line-strong); }
 .runbookCue.done .runbookStatus { color: var(--muted); }
-@media (max-width: 1024px) {
-  .overviewCanvas { grid-template-columns: minmax(0, 1fr); grid-template-areas: "alert" "status" "metrics" "queue" "runbook" "readiness" "secondary" "recent"; }
-  .overviewArchived { grid-template-areas: "alert" "status" "metrics" "runbook" "secondary" "recent"; }
-}
 @media (max-width: 560px) {
-  .regionMetrics .metricCard { padding: var(--s2); }
   .regionMetrics .metricValue { font-size: 28px; }
 }
 
@@ -1311,14 +1278,8 @@
 .mobilePriority { display: none; }
 
 @media (min-width: 1025px) {
-  /* entryMetricsLayout은 block으로 평탄화된다(아래 Operation first 블록).
-     analysisDetails만 같은 행에 붙을 때 기본 여백·선을 지운다. */
   .entryMetricsLayout .analysisDetails { margin: 0; padding: 0; border: 0; }
 }
-
-/* Operation first: compare the entry state with the queue; analysis comes last. */
-.overviewCanvas { grid-template-columns: minmax(0, 1.35fr) minmax(280px,1fr); grid-template-areas: "alert alert" "status status" "metrics queue" "runbook runbook" "readiness readiness" "secondary secondary" "recent recent" "analysis analysis"; gap: var(--s5); }
-.overviewArchived { grid-template-areas: "alert alert" "status status" "metrics metrics" "runbook runbook" "secondary secondary" "recent recent" "analysis analysis"; }
 .regionAnalysis { grid-area: analysis; min-width: 0; border-top: 1px solid var(--line); }
 .overviewCanvas .entryMetricsLayout { display: block; }
 .overviewCanvas .entryMetricsLayout .entryProgress { display: grid; gap: var(--s3); }
@@ -1326,11 +1287,7 @@
 .overviewCanvas .entryFoot > span { flex-basis: 100%; font-size: var(--small); }
 .overviewCanvas .entryFoot a { color: var(--ink); font-weight: 650; }
 .overviewCanvas .notEntered { background: transparent; border: 0; padding-inline: 0; }
-.overviewCanvas .regionQueue { border-bottom: 1px solid var(--line); }
-.overviewCanvas .runbookIdle { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s3); padding-block: var(--s3); border-bottom: 1px solid var(--line); }
-.overviewCanvas .runbookIdle > :first-child { flex: 1 1 240px; }
 .overviewUpdated { display: flex; align-items: center; gap: var(--s2); color: var(--muted); font-size: var(--small); }
-@media(max-width: 900px) { .overviewCanvas, .overviewArchived { grid-template-columns: minmax(0,1fr); grid-template-areas: "alert" "status" "metrics" "queue" "runbook" "readiness" "secondary" "recent" "analysis"; } }
 
 .overviewCanvas .entryMetricsLayout .entryProgress { grid-template-columns: minmax(0,1fr); }
 .overviewCanvas .entryMetricsLayout .entrySummary, .overviewCanvas .entryMetricsLayout .entryTrack, .overviewCanvas .entryMetricsLayout .entryFoot { grid-column: auto; grid-row: auto; }
@@ -1349,44 +1306,23 @@
 
 .overviewSectionLink:hover { text-decoration: underline; text-underline-offset: 3px; }
 
-/* Align the section headers. The entry panel and the task list each size to
-   their own content, so a single task keeps the same density as a long queue. */
-.liveOverview { grid-template-areas: none; }
-.liveOverview > * { grid-area: auto; grid-column: 1 / -1; margin-block-end: 0; }
-
-@media (min-width: 901px) {
-  .liveOverview {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    column-gap: var(--s6);
-  }
-
-  .liveOverview > .regionMetrics { grid-column: 1; }
-  .liveOverview > .regionQueue { grid-column: 2; }
-}
-
-.liveOverview .regionMetrics > :first-child,
-.liveOverview .regionQueue > :first-child { min-height: 44px; }
-
-.liveOverview .regionMetrics,
-.liveOverview .regionQueue { border-bottom: 0; padding-bottom: 0; }
-
 .queueCount {
-  color: var(--muted);
+  color: var(--ink);
   font-size: var(--small);
+  font-weight: 750;
   font-variant-numeric: tabular-nums;
 }
 
 .liveEntryPanel {
   min-width: 0;
-  padding-inline: var(--s4);
-  border-radius: var(--radius);
-  background: var(--surface-muted);
+  padding: 0;
+  background: transparent;
 }
 
 .liveReadout {
   display: grid;
-  gap: var(--s2);
-  padding-block: var(--s3);
+  gap: var(--s3);
+  padding-block: var(--s2) var(--s5);
 }
 
 .liveEntryFigures {
@@ -1414,7 +1350,8 @@
 }
 
 .liveEntryCount {
-  font-size: clamp(36px, 4vw, 40px);
+  font-size: 36px;
+  font-weight: 750;
   letter-spacing: -0.03em;
   overflow-wrap: anywhere;
 }
@@ -1430,7 +1367,8 @@
   line-height: 1.35;
   font-variant-numeric: tabular-nums;
 }
-.liveEntryRate strong { color: var(--brand-text); }
+.liveEntryRate strong {
+  color: var(--ink); }
 .liveReadout .entryTrack {
   height: var(--s2);
   border: 0;

@@ -1,0 +1,17 @@
+{
+  "reviewer": "",
+  "observedAt": "",
+  "policyReviewer": "",
+  "policyApprovedAt": "",
+  "kakaoTemplateCodes": [],
+  "checks": {
+    "operatorJourney": "unverified",
+    "iosSafariCamera": "unverified",
+    "androidCamera": "unverified",
+    "screenReader": "unverified",
+    "printerAndReader": "unverified",
+    "smsDelivery": "unverified",
+    "emailDelivery": "unverified",
+    "customerAcceptance": "unverified"
+  }
+}
