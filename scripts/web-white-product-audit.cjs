@@ -164,7 +164,7 @@ async function main() {
               headings: document.querySelectorAll('main h1').length,
             }));
             const expectedTitle = width <= 768 ? '26px' : '30px';
-            check(`${name}@${width}: white shared frame`, visual.body === 'rgb(255, 255, 255)' && visual.nav === 'rgb(250, 251, 252)' && visual.workspace === 'rgb(244, 245, 247)' && visual.shell === 'rgb(244, 245, 247)' && visual.title === expectedTitle && visual.font.includes('Pretendard') && visual.headings === 1, visual);
+            check(`${name}@${width}: white shared frame`, visual.body === 'rgb(255, 255, 255)' && visual.nav === 'rgb(250, 251, 252)' && visual.workspace === 'rgb(255, 255, 255)' && visual.shell === 'rgb(255, 255, 255)' && visual.title === expectedTitle && visual.font.includes('Pretendard') && visual.headings === 1, visual);
           }
           if (name === 'attendee') check(`attendee@${width}: customer sky theme preserved`, await page.locator('[class*="homePage"]').first().evaluate(el => getComputedStyle(el).backgroundColor === 'rgb(185, 222, 240)'));
           await render(page, name, width);
