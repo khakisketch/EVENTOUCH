@@ -508,7 +508,7 @@ a.pill:hover {
 }
 
 .status-chip.good { background: var(--success-soft); color: var(--success); }
-.status-chip.wait { background: var(--warning-soft); color: var(--warning); }
+.status-chip.wait { background: var(--brand-tint); color: var(--brand-text); }
 .status-chip.bad  { background: var(--danger-soft); color: var(--danger); }
 .status-chip.info { background: var(--info-soft); color: var(--info); }
 
@@ -518,7 +518,7 @@ a.pill:hover {
   gap: var(--s3);
   padding: var(--s3) var(--s4);
   border: 1px solid var(--warning-line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--warning-soft);
   margin-bottom: var(--s5);
 }

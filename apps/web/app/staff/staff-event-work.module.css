@@ -5,7 +5,7 @@
   margin-top: var(--s3);
   padding: var(--s3);
   border: 1px solid var(--warning-line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--warning-soft);
   color: var(--ink);
 }
@@ -141,7 +141,7 @@
   margin: 0;
   padding: var(--s3);
   border: 1px dashed var(--line-strong);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   color: var(--muted);
   font-size: var(--small);
 }
@@ -175,16 +175,51 @@
 }
 
 .manualSearch {
-  margin-top: var(--s3);
-  border-top: 1px solid var(--line);
+  margin: 0;
+  padding-top: var(--s2);
 }
 
-.manualSearch > summary {
+/* Mode selection stays neutral; orange is reserved for the current execution. */
+.entryModeSwitch,
+.taskSwitch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s1);
+  margin: 0;
+  padding: var(--s1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-medium);
+  background: var(--surface-muted);
+}
+
+.entryModeSwitch button,
+.taskSwitch button {
+  min-width: 0;
   min-height: 44px;
-  padding: var(--s3) 0;
-  color: var(--brand-text);
-  font-weight: 700;
-  cursor: pointer;
+  padding: var(--s2);
+  border-color: transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 600;
+}
+
+.entryModeSwitch button[aria-pressed="true"],
+.taskSwitch button[aria-pressed="true"] {
+  border-color: var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 750;
+}
+
+@media (hover: hover) {
+  .entryModeSwitch button:not(:disabled):hover,
+  .taskSwitch button:not(:disabled):hover {
+    border-color: var(--line);
+    background: var(--paper);
+    color: var(--ink);
+  }
 }
 
 .manualSearchBody {
@@ -203,6 +238,8 @@
 .manualSearchBody input[type="search"] { width: 100%; }
 
 .manualSearchHeading {
+  font-size: var(--small);
+  font-weight: 650;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -241,8 +278,11 @@
   outline-offset: 3px;
 }
 
-.manualResults li > div { display: grid; min-width: 0; gap: var(--s1); }
-.manualResults li span { color: var(--muted); font-size: var(--small); overflow-wrap: anywhere; }
+.manualResults li > div { display: grid; flex: 1 1 180px; min-width: 0; gap: var(--s1); }
+.manualResults li strong { font-size: var(--h3); font-weight: 750; line-height: 1.4; overflow-wrap: anywhere; }
+.manualResults li span { color: var(--muted); font-size: var(--small); line-height: 1.5; overflow-wrap: anywhere; }
+.manualResults li .manualCompany { color: var(--ink); }
+.manualResults li .manualWarning { color: var(--warning); font-weight: 650; }
 .manualResults li .manualPresence { color: var(--muted); font-weight: 500; }
 .manualResults li .manualPresence[data-state="inside"] { color: var(--success); font-weight: 700; }
 .manualResults li .manualPresence[data-state="review"] { color: var(--warning); font-weight: 700; }
@@ -255,7 +295,7 @@
   scroll-margin-block: var(--s2);
   padding: var(--s3);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
 }
 
 .manualConfirm label { display: flex; align-items: center; gap: var(--s2); min-height: 44px; }
@@ -269,7 +309,7 @@
 }
 
 .resultBlock .scan-result {
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   word-break: keep-all;
   overflow-wrap: break-word;
 }
@@ -283,14 +323,12 @@
   overflow-wrap: break-word;
 }
 
-/* Fixed current-organization line: always present near the risk work so the
-   operator never scans, corrects, or collects under the wrong organization
-   by mistake. Token text only; the account menu next to it owns switching. */
+/* Organization identity remains readable beside the account switcher. */
 .orgLine {
-  margin: 0 0 var(--s3);
-  padding-block: var(--s2);
+  margin: 0;
+  padding: 0;
   color: var(--muted);
-  font-size: var(--label);
+  font-size: 13px;
   line-height: 1.55;
   overflow-wrap: anywhere;
 }
@@ -317,7 +355,7 @@
   margin: 0;
   padding: var(--s3);
   border: 1px solid var(--line);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--paper);
   font-size: var(--small);
 }
@@ -341,6 +379,8 @@
 .scanInput {
   display: grid;
   gap: var(--s3);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line);
 }
 
 /* Booth QR: the QR standard asks for four clear modules around the code.
@@ -357,7 +397,7 @@
   display: inline-block;
   padding: var(--s5);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-large);
   background: var(--paper);
   line-height: 0;
 }
@@ -543,6 +583,9 @@
 
   .scanInput {
     gap: var(--s2);
+    padding: var(--s3) 0;
+    border-top: 1px solid var(--line);
+    background: var(--paper);
   }
 
   .fallbackBlock {
@@ -558,12 +601,6 @@
 
   .auxAction {
     justify-self: stretch;
-  }
-
-  .scanInput {
-    padding: var(--s3) 0;
-    border-top: 1px solid var(--line);
-    background: var(--paper);
   }
 
   .recentRow {
@@ -582,30 +619,104 @@
   }
 }
 
-/* Page-local scope marker for the event field-work screen: lets the rules
-   below tighten shared chrome for this small-phone scanner only. Globals
-   and every other page keep their own spacing. */
+/* Local scope preserves the shared staff shell and its other routes. */
 .eventWorkPage {
   min-width: 0;
 }
 
-/* Header context companion (global .staff-event-context stays untouched): the
-   back link and the event name share the first row while the kiosk toggle —
-   a mode switch, not a peer of the breadcrumb — takes its own full-width row
-   on phones. Without this the toggle squeezes beside a truncating event name
-   at 390px and wraps to a ragged half-row at 320px. */
-.eventContext > span {
-  min-width: 0;
-  overflow-wrap: anywhere;
+.eventWorkPage :global(.staff-workspace) {
+  gap: var(--s3);
 }
 
-@media (max-width: 560px) {
-  .eventContext {
-    row-gap: var(--s2);
-  }
+/* Event/account context ends before the selected location and execution. */
+.eventContext {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s2);
+  padding: 0;
+  border: 0;
+}
+.eventContext > span {
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: keep-all;
+}
 
-  .eventContext :global(.kiosk-toggle) {
-    flex: 1 1 100%;
+.eventWorkTitle {
+  min-width: 0;
+  font-size: var(--body);
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: break-word;
+  word-break: keep-all;
+}
+
+/* Kiosk mode switch: track + thumb read as device state, not as one more
+   action button. The label never flips; the track shows on/off. */
+.kioskSwitch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 44px;
+  padding: var(--s1) var(--s3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-small);
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.kioskSwitch:hover:not(:disabled) {
+  border-color: var(--line);
+  background: var(--surface-muted);
+}
+
+.kioskSwitch:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.kioskSwitchTrack {
+  position: relative;
+  flex: none;
+  width: 32px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  transition: background-color 160ms ease-out;
+}
+
+.kioskSwitchThumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--paper);
+  box-shadow: 0 1px 3px var(--shadow-color);
+  transition: left 160ms ease-out;
+}
+
+.kioskSwitchOn {
+  color: var(--ink);
+}
+
+.kioskSwitchOn .kioskSwitchTrack {
+  background: var(--ink);
+}
+
+.kioskSwitchOn .kioskSwitchThumb {
+  left: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kioskSwitchTrack,
+  .kioskSwitchThumb {
+    transition: none;
   }
 }
 
@@ -665,14 +776,15 @@
   }
 }
 
-.accountContext { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; justify-content: space-between; gap: var(--s2); min-width: 0; }
-.accountContext .orgLine { margin: 0; padding: 0; flex: 1; }
+.accountContext {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--line);
+}
+
 .accountContext > div { margin: 0; min-width: 0; max-width: 180px; }
 .accountContext > section { grid-column: 1 / -1; min-width: 0; }
-.eventWorkPage :global(.staff-workspace) { gap: var(--s3); }
-@media (max-width: 560px) {
-  .eventContext { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: var(--s2); }
-  .eventContext :global(.kiosk-toggle) { width: auto; min-width: 44px; padding-inline: var(--s2); font-size: var(--label); }
-  .eventContext > span { font-size: var(--small); }
-  .accountContext .orgLine { font-size: var(--label); }
-}
