@@ -66,10 +66,10 @@
 .recoveryNote {
   margin: 0;
   padding: var(--s3) var(--s4);
-  border: 1px solid var(--info-line);
-  border-radius: var(--radius-small);
-  background: var(--info-soft);
-  color: var(--info);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
+  color: var(--ink);
   font-size: var(--small);
   font-weight: 700;
   line-height: 1.6;
@@ -102,7 +102,7 @@
 .programList li {
   padding: var(--s4);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--paper);
 }
 
