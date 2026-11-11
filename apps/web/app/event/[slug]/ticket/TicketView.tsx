@@ -439,7 +439,12 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
     return <div className="ticket-state">
       <p className={styles.ticketLoadingStatus} role="status">티켓을 확인하고 있습니다.</p>
       <p className={styles.ticketLoadingHelp}>확인이 오래 걸리면 인터넷 연결을 확인해 주세요.</p>
-      <button className={styles.ticketLoadingRetry} type="button" onClick={() => setReloadTick((value) => value + 1)}>다시 불러오기</button>
+      {/* Native reload still works if hydration fails; once hydrated, retry
+          in place so a memory-only bearer survives without entering markup. */}
+      <a className={styles.ticketLoadingRetry} href="" onClick={(event) => {
+        event.preventDefault();
+        setReloadTick((value) => value + 1);
+      }}>다시 불러오기</a>
     </div>;
   }
   if (state.kind === "missing") {
@@ -571,14 +576,12 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
         <h2 className={styles.ticketAttendeeName}>{state.name}</h2>
         {state.company ? <p>{state.company}</p> : null}
         <p className={styles.ticketEntryState} aria-live="polite" data-tone={usable && !statusUnconfirmed ? "good" : state.status === "CANCELLED" ? "bad" : "wait"}>
-          <span className={styles.statusDot} aria-hidden="true" />
           {statusUnconfirmed ? rechecking ? "상태 확인 중" : "상태 확인 필요" : entryLabel(state)}
         </p>
       </div>
       {usable ? (
         <>
           <div className={styles.ticketQrWrapper}>
-            <div className={styles.ticketPassDivider} aria-hidden="true" />
             {recheckFeedback}
             <div className={styles.ticketQr} role="img" aria-label={`${state.name}님의 행사 입장 및 퇴장용 QR`}>
               <QRCode value={state.ticket} size={220} />
@@ -587,7 +590,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
               ? "입장 가능 여부는 현장 데스크에서 확인할 수 있습니다."
               : "입장할 때 이 QR을 보여 주세요. 퇴장할 때도 같은 QR을 사용합니다."}</p>
           </div>
-          <div className={`${styles.ticketActions} ${styles.ticketActionsStack}`}>
+          <div className={styles.ticketActions}>
             {/* Secondary on purpose: the QR above is what the attendee
                 shows at the desk, not this link. */}
             <Link className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/engage`}>참여 콘텐츠 보기</Link>
@@ -616,7 +619,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
       ) : (
         <p className={styles.ticketRecovery}>
           이 탭에서 티켓을 확인할 수 있습니다. 다른 기기에서 열 때는{" "}
-          <Link href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>연락처 인증으로 다시 연결</Link>
+          <Link className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>연락처 인증으로 다시 연결</Link>
           하세요.
         </p>
       ) : null}

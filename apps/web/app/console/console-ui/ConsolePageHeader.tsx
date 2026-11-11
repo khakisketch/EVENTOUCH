@@ -22,7 +22,7 @@ type ConsolePageHeaderProps = {
   context?: ReactNode;
   meta?: ReactNode;
   badges?: ReactNode;
-  /** Header actions are supplementary and must use the secondary button style. */
+  /** Page-level actions; reviewed submissions remain beside their task form. */
   actions?: ReactNode;
   className?: string;
 };
@@ -65,13 +65,15 @@ export default function ConsolePageHeader({
           </Link>
         ) : null}
         {context ? <div className={styles.pageContext}>{context}</div> : null}
-        <h1>{title}</h1>
+        <div className={styles.pageTitleRow}>
+          <h1>{title}</h1>
+          {actions ? <div className={styles.pageActions}>{actions}</div> : null}
+        </div>
         {meta ? <div className={styles.pageSubline}>
           {meta ? <p className={styles.pageMeta}>{meta}</p> : null}
         </div> : null}
         {badges ? <div className={styles.pageBadges}>{badges}</div> : null}
       </div>
-      {actions ? <div className={styles.pageActions}>{actions}</div> : null}
     </header>
   );
 }

@@ -113,6 +113,14 @@ export function ArrowRightIcon({ className }: IconProps) {
   );
 }
 
+export function BackIcon({ className }: IconProps) {
+  return (
+    <svg className={baseClass(className)} aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+      <path d="M14.5 5.5L8 12l6.5 6.5" />
+    </svg>
+  );
+}
+
 export function DownloadIcon({ className }: IconProps) {
   return (
     <svg className={baseClass(className)} aria-hidden="true" focusable="false" viewBox="0 0 24 24">

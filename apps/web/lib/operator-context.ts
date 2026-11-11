@@ -2,6 +2,7 @@
 
 import { beginOperatorReceipt, endOperatorReceipt, type OperatorReceiptPointer } from "./operator-receipts";
 import { boothScheduleTime } from "./booth-availability";
+import { fetchWithDeadline } from "./request-deadline";
 import { cancellationProofMatches } from "./bulk-cancel-proof";
 
 // Operator organization context: multi-org membership transport for the
@@ -163,6 +164,8 @@ const WAKE_VALIDATE_MIN_INTERVAL_MS = 10000;
 const UNCERTAIN_ENTRY_CAP = 50;
 
 type FrozenAttempt = {
+  authGeneration: number;
+  userId: string | null;
   method: string;
   url: string;
   path: string;
@@ -223,6 +226,8 @@ function freezeAttempt(
     // Keep the raw url when it cannot be parsed.
   }
   return {
+    authGeneration,
+    userId: authUserId,
     method: (init?.method ?? "GET").toUpperCase(),
     url,
     path,
@@ -297,6 +302,7 @@ function contextFromUser(user: unknown): OperatorContext | null {
 
 function sameContext(left: OperatorContext, right: OperatorContext): boolean {
   return (
+    left.userId === right.userId &&
     left.organizationId === right.organizationId &&
     left.contextVersion === right.contextVersion &&
     left.role === right.role
@@ -1290,6 +1296,10 @@ let loading = false;
 let lastError: string | null = null;
 let inFlightWrites = 0;
 const uncertain = new Map<string, UncertainEntry>();
+// Authentication lifetime is separate from contextGen: a same-user org/version
+// recovery may renew attempts, but logout or another user must retire them.
+let authGeneration = 0;
+let authUserId: string | null = null;
 let meSeq = 0;
 let lastCompletedMeSeq = 0;
 let lastValidateAt = 0;
@@ -1424,6 +1434,7 @@ async function observeMeOnce(response: Response | null, seq: number): Promise<bo
     if (seq < meSeq || seq <= lastCompletedMeSeq) return true;
     lastCompletedMeSeq = seq;
     const user = asRecord(data)?.user;
+    observeAuthUser(text(asRecord(user)?.id));
     const candidate = contextFromUser(user);
     if (!candidate) {
       lastMeUnselected = true;
@@ -1685,6 +1696,7 @@ export function acceptOperatorContext(user: unknown): void {
   if (!candidate) return;
   if (pinned && candidate.organizationId !== pinned.organizationId) return;
   if (pinned && !changed && sameContext(pinned, candidate)) return;
+  observeAuthUser(candidate.userId);
   // Explicit user action retires every older initiated me read: a delayed
   // B/v2 response must never re-mark a freshly restored A/v3 as changed.
   lastCompletedMeSeq = meSeq;
@@ -1758,7 +1770,11 @@ export function listUncertainAttempts(): UncertainAttemptInfo[] {
 export function renewPinnedOrganizationVersion(user: unknown): boolean {
   const candidate = contextFromUser(user);
   if (!candidate || !pinned) return false;
-  if (candidate.organizationId !== pinned.organizationId) return false;
+  if (
+    candidate.organizationId !== pinned.organizationId ||
+    candidate.userId !== pinned.userId ||
+    candidate.userId !== authUserId
+  ) return false;
   pinned = { ...pinned, contextVersion: candidate.contextVersion };
   // The generation moves before the renewal below so the renewed entries
   // record the post-bump generation: a stale same-org observed snapshot
@@ -1796,7 +1812,10 @@ export async function replayUncertainAttempt(key: string): Promise<UncertainRepl
   if (!entry || !entry.attempt) return { status: null, settled: true };
   const targetSensitive = ["participant.bulk-cancel", "participant.resolve-cancellation-conflict", "check.reviewed-exit", "check.reconcile", "event.basics.save", "attendee.page.publish-reviewed", "message.create-reviewed", "message.create-charset-reviewed", "message.retry-charset-reviewed", "message.record-provider-check", "reward.lookup", "reward.collect"].includes(entry.command ?? "");
   const current = pinned;
-  if (!current || current.organizationId !== entry.organizationId) {
+  if (
+    !current || current.organizationId !== entry.organizationId ||
+    current.userId !== entry.attempt.userId || !isCurrentAttempt(entry.attempt)
+  ) {
     throw contextError(
       "이전 조직에서 결과가 확인되지 않은 요청입니다. 조직을 확인하고 같은 요청으로 다시 시도하세요."
     );
@@ -1818,12 +1837,15 @@ export async function replayUncertainAttempt(key: string): Promise<UncertainRepl
   inFlightWrites += 1;
   emit();
   try {
-    const response = await fetch(entry.attempt.url, {
+    const response = await fetchWithDeadline(entry.attempt.url, {
       method: entry.attempt.method,
       headers: entry.attempt.headers,
       body: entry.attempt.body ?? undefined,
     });
-    if (response.status === 409 && (await peekContextCode(response))) {
+    requireCurrentAttempt(entry.attempt);
+    const contextDenied = response.status === 409 && (await peekContextCode(response));
+    requireCurrentAttempt(entry.attempt);
+    if (contextDenied) {
       markContextChanged();
       kickRevalidation();
       return { status: response.status, settled: false };
@@ -1834,6 +1856,7 @@ export async function replayUncertainAttempt(key: string): Promise<UncertainRepl
         // Only named locked guards checked after receipt lookup prove that
         // this particular request did not commit.
         const body = await response.clone().json().catch(() => null) as { code?: unknown; field?: unknown } | null;
+        requireCurrentAttempt(entry.attempt);
         if (!(response.status === 409 && ((entry.command === "participant.bulk-cancel" && body?.code === "CANCELLATION_REVIEW_CHANGED") ||
             (entry.command === "participant.resolve-cancellation-conflict" && ["CANCELLATION_CONFLICT_REVIEW_CHANGED", "CANCELLATION_CONFLICT_REVIEW_UNAVAILABLE"].includes(String(body?.code ?? ""))) ||
             (entry.command === "check.reconcile" && body?.code === "ATTENDANCE_RECONCILIATION_CHANGED") ||
@@ -1844,10 +1867,10 @@ export async function replayUncertainAttempt(key: string): Promise<UncertainRepl
           return { status: response.status, settled: false };
         }
       }
-      if (
-        (response.status === 403 || response.status === 409) &&
-        (await peekMembershipCode(response))
-      ) {
+      const membershipDenied = (response.status === 403 || response.status === 409) &&
+        (await peekMembershipCode(response));
+      requireCurrentAttempt(entry.attempt);
+      if (membershipDenied) {
         kickRevalidation();
         uncertain.delete(key);
         emit();
@@ -1861,6 +1884,7 @@ export async function replayUncertainAttempt(key: string): Promise<UncertainRepl
     }
     try {
       const data: unknown = await response.clone().json();
+      requireCurrentAttempt(entry.attempt);
       if (data && typeof data === "object") {
         if (entry.command === "check.reviewed-exit") {
           try {
@@ -1914,8 +1938,10 @@ export async function replayUncertainAttempt(key: string): Promise<UncertainRepl
     if (isOrganizationContextBlock(error)) throw error;
     return { status: null, settled: false };
   } finally {
-    inFlightWrites = Math.max(0, inFlightWrites - 1);
-    emit();
+    if (isCurrentAttempt(entry.attempt)) {
+      inFlightWrites = Math.max(0, inFlightWrites - 1);
+      emit();
+    }
   }
 }
 
@@ -1929,6 +1955,7 @@ export async function replayUncertainAttempt(key: string): Promise<UncertainRepl
 export function observeSelectedOrganization(user: unknown): void {
   const candidate = contextFromUser(user);
   if (!candidate) return;
+  observeAuthUser(candidate.userId);
   if (pinned && sameContext(pinned, candidate)) {
     // Identical view: refresh the observed slot silently, no drift, no
     // broadcast, no generation — stable values stay stable.
@@ -1975,6 +2002,9 @@ export function noteCommittedOperatorRoleChange(): void {
 }
 
 export function resetOperatorContext(): void {
+  // Even a visually clean reset retires callbacks from an earlier login.
+  authGeneration += 1;
+  authUserId = null;
   // Logout/teardown path: drop the pinned view and flags, clear ambiguous
   // mappings, and tell other tabs to revalidate (they keep their forms and
   // surface the dead session through their existing failures). Already
@@ -1996,6 +2026,7 @@ export function resetOperatorContext(): void {
   loading = false;
   lastError = null;
   uncertain.clear();
+  inFlightWrites = 0;
   // Retire every older initiated me read: nothing initiated before this
   // teardown may pin or mark afterwards.
   lastCompletedMeSeq = meSeq;
@@ -2015,11 +2046,30 @@ function markContextChanged(): void {
   }
 }
 
+function observeAuthUser(userId: string): void {
+  if (!userId || userId === authUserId) return;
+  authGeneration += 1;
+  authUserId = userId;
+  uncertain.clear();
+  inFlightWrites = 0;
+}
+
+function isCurrentAttempt(attempt: FrozenAttempt): boolean {
+  return attempt.authGeneration === authGeneration && attempt.userId === authUserId;
+}
+
+function requireCurrentAttempt(attempt: FrozenAttempt): void {
+  if (!isCurrentAttempt(attempt)) {
+    throw contextError("로그인 정보가 바뀐 뒤라 이전 요청을 멈췄습니다. 현재 작업자 정보를 확인하세요.");
+  }
+}
+
 function rememberUncertain(
   commandId: string | null,
   snapshot: { organizationId: string; organizationName: string; contextVersion: number },
   attempt: FrozenAttempt
 ): void {
+  if (!isCurrentAttempt(attempt)) return;
   const key = commandId ?? `noid-${Date.now().toString(36)}-${uncertain.size}`;
   uncertain.set(key, {
     organizationId: snapshot.organizationId,
@@ -2046,7 +2096,8 @@ function isDefinitiveRejection(status: number): boolean {
   return status >= 400 && status < 500 && ![408, 409, 425, 429].includes(status);
 }
 
-function resolveUncertain(commandId: string | null): void {
+function resolveUncertain(commandId: string | null, attempt?: FrozenAttempt): void {
+  if (attempt && !isCurrentAttempt(attempt)) return;
   if (commandId && uncertain.delete(commandId)) emit();
 }
 
@@ -2062,35 +2113,29 @@ export function abandonOperatorAttempt(commandId: string): void {
 }
 
 async function peekContextCode(response: Response): Promise<boolean> {
-  try {
-    const data: unknown = await response.clone().json();
-    const record = asRecord(data);
-    if (!record) return false;
-    if (record.code === ORGANIZATION_CONTEXT_CHANGED) return true;
-    if (record.errorCode === ORGANIZATION_CONTEXT_CHANGED) return true;
-    const nested = asRecord(record.error);
-    if (nested && nested.code === ORGANIZATION_CONTEXT_CHANGED) return true;
-    return false;
-  } catch {
-    return false;
-  }
+  // No readable verdict means no authoritative rejection; let all parse/read failures escape.
+  const data: unknown = await response.clone().json();
+  const record = asRecord(data);
+  if (!record) return false;
+  if (record.code === ORGANIZATION_CONTEXT_CHANGED) return true;
+  if (record.errorCode === ORGANIZATION_CONTEXT_CHANGED) return true;
+  const nested = asRecord(record.error);
+  if (nested && nested.code === ORGANIZATION_CONTEXT_CHANGED) return true;
+  return false;
 }
 
 async function peekMembershipCode(response: Response): Promise<boolean> {
   // Known server contract only: 403 NO_ORGANIZATION_MEMBERSHIP, identity
   // user body. No other code is inferred here.
-  try {
-    const data: unknown = await response.clone().json();
-    const record = asRecord(data);
-    if (!record) return false;
-    if (record.code === "NO_ORGANIZATION_MEMBERSHIP") return true;
-    if (record.errorCode === "NO_ORGANIZATION_MEMBERSHIP") return true;
-    const nested = asRecord(record.error);
-    if (nested && nested.code === "NO_ORGANIZATION_MEMBERSHIP") return true;
-    return false;
-  } catch {
-    return false;
-  }
+  // No readable verdict means no authoritative rejection; let all parse/read failures escape.
+  const data: unknown = await response.clone().json();
+  const record = asRecord(data);
+  if (!record) return false;
+  if (record.code === "NO_ORGANIZATION_MEMBERSHIP") return true;
+  if (record.errorCode === "NO_ORGANIZATION_MEMBERSHIP") return true;
+  const nested = asRecord(record.error);
+  if (nested && nested.code === "NO_ORGANIZATION_MEMBERSHIP") return true;
+  return false;
 }
 
 // Guarded private GETs carry proof-of-transaction response headers. The
@@ -2321,8 +2366,9 @@ export async function operatorFetch(input: string, init?: RequestInit): Promise<
   }
 
   if (exempt) {
-    // Own-validation endpoints and guest traffic transmit untouched.
-    return fetch(url, init);
+    // Keep own-validation endpoints and guest payloads untouched, but bound
+    // their complete response just like guarded operator writes.
+    return fetchWithDeadline(url, init);
   }
 
   if (changed) {
@@ -2353,7 +2399,8 @@ export async function operatorFetch(input: string, init?: RequestInit): Promise<
     const prior = uncertain.get(commandId);
     if (
       prior &&
-      (prior.organizationId !== pinned.organizationId || prior.contextVersion !== pinned.contextVersion)
+      (!isCurrentAttempt(prior.attempt) || prior.attempt.userId !== pinned.userId ||
+        prior.organizationId !== pinned.organizationId || prior.contextVersion !== pinned.contextVersion)
     ) {
       throw contextError(
         "이전 조직에서 결과가 확인되지 않은 요청입니다. 조직을 확인하고 같은 요청으로 다시 시도하세요."
@@ -2386,8 +2433,13 @@ export async function operatorFetch(input: string, init?: RequestInit): Promise<
   let forgetReceipt = false;
   let receiptDeferred = false;
   try {
-    const response = await fetch(url, { ...init, headers });
-    if (response.status === 409 && (await peekContextCode(response))) {
+    const response = await fetchWithDeadline(url, { ...init, headers }, () => {
+      if (frozenSnapshot) rememberUncertain(commandId, frozenSnapshot, frozenAttempt);
+    });
+    requireCurrentAttempt(frozenAttempt);
+    const contextDenied = response.status === 409 && (await peekContextCode(response));
+    requireCurrentAttempt(frozenAttempt);
+    if (contextDenied) {
       if (commandId && frozenSnapshot) {
         rememberUncertain(commandId, frozenSnapshot, frozenAttempt);
       }
@@ -2398,6 +2450,7 @@ export async function operatorFetch(input: string, init?: RequestInit): Promise<
     if (!response.ok) {
       if (targetSensitiveRetry) {
         const body = await response.clone().json().catch(() => null) as { code?: unknown; field?: unknown } | null;
+        requireCurrentAttempt(frozenAttempt);
         if (!(response.status === 409 && ((receipt?.command === "participant.bulk-cancel" && body?.code === "CANCELLATION_REVIEW_CHANGED") ||
             (receipt?.command === "participant.resolve-cancellation-conflict" && ["CANCELLATION_CONFLICT_REVIEW_CHANGED", "CANCELLATION_CONFLICT_REVIEW_UNAVAILABLE"].includes(String(body?.code ?? ""))) ||
             (receipt?.command === "check.reconcile" && body?.code === "ATTENDANCE_RECONCILIATION_CHANGED") ||
@@ -2410,17 +2463,17 @@ export async function operatorFetch(input: string, init?: RequestInit): Promise<
           return response;
         }
       }
-      if (
-        (response.status === 403 || response.status === 409) &&
-        (await peekMembershipCode(response))
-      ) {
+      const membershipDenied = (response.status === 403 || response.status === 409) &&
+        (await peekMembershipCode(response));
+      requireCurrentAttempt(frozenAttempt);
+      if (membershipDenied) {
         // Revoked membership with identity body: keep the pinned view and
         // the original status/body intact — revalidate and let authoritative
         // /auth/me decide (observed null + drift + selection banner on
         // no-org). Never a login redirect from here. The rejection itself
         // proves nothing was committed, so no uncertain mapping is kept.
         kickRevalidation();
-        resolveUncertain(commandId);
+        resolveUncertain(commandId, frozenAttempt);
         if (receiptPrior === false) forgetReceipt = true;
         return response;
       }
@@ -2431,7 +2484,7 @@ export async function operatorFetch(input: string, init?: RequestInit): Promise<
       // link-unavailable receipt behave the same — the UI already cleared
       // its own pending slot honestly. Only 5xx/408/425/429/network stay uncertain.
       if (response.status === 409 || isDefinitiveRejection(response.status)) {
-        resolveUncertain(commandId);
+        resolveUncertain(commandId, frozenAttempt);
         if (receiptPrior === false) forgetReceipt = true;
         return response;
       }
@@ -2455,7 +2508,7 @@ export async function operatorFetch(input: string, init?: RequestInit): Promise<
           if (finished) return;
           finished = true;
           window.clearTimeout(timer);
-          if (forget && targetSensitiveRetry) resolveUncertain(commandId);
+          if (forget && targetSensitiveRetry) resolveUncertain(commandId, frozenAttempt);
           endOperatorReceipt(receipt.commandId, forget);
         };
         const timer = window.setTimeout(() => finishReceipt(false), 5000);
@@ -2465,7 +2518,7 @@ export async function operatorFetch(input: string, init?: RequestInit): Promise<
         }).catch(() => finishReceipt(false));
       } catch { /* The finalizer exposes an unreadable result. */ }
     }
-    if (!targetSensitiveRetry) resolveUncertain(commandId);
+    if (!targetSensitiveRetry) resolveUncertain(commandId, frozenAttempt);
     return response;
   } catch (error) {
     // Transport failure: outcome unknown, keep the receipt mapping.
@@ -2475,7 +2528,9 @@ export async function operatorFetch(input: string, init?: RequestInit): Promise<
     throw error;
   } finally {
     if (receipt && receiptPrior !== null && !receiptDeferred) endOperatorReceipt(receipt.commandId, forgetReceipt);
-    inFlightWrites = Math.max(0, inFlightWrites - 1);
-    emit();
+    if (isCurrentAttempt(frozenAttempt)) {
+      inFlightWrites = Math.max(0, inFlightWrites - 1);
+      emit();
+    }
   }
 }

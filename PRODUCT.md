@@ -1,75 +1,14 @@
-# Product
+# EVENTOUCH product boundaries
 
-<!-- impeccable:product-schema 1 -->
+EVENTOUCH is a Korean-language event operations service for event agencies. The product serves agency owners and managers, assigned field staff, attendees without an app install, and public venue displays.
 
-## Platform
+## Agreed scope
 
-web
+- The agency's workspace is the operator interface. A client-company login portal and unattended attendee self-check-in are excluded from v1; client companies are managed by the agency.
+- A single account may belong to several agencies. Roles and access are agency-scoped; an agency owner cannot change a person's global identity or another agency's role. The last active owner cannot be removed.
+- Account recovery is performed by the account holder through an email address they verified in advance. An agency owner cannot reset a shared account globally. Manual identity proof for an account without a verified address needs an approved owner and procedure before use.
+- There is no offline login or check-in queue. The server must confirm a write before the interface presents it as complete.
+- Payment collection, refunds, gift purchases, and agency billing are outside v1. The agency pays its messaging provider; live sends and recipient charges require configured credentials and deliberate operational verification.
+- Customer-approved banners and published attendee styles are event data and must survive redesigns and migrations.
 
-## Users
-
-외주 SaaS로 여러 행사대행 조직에 제공한다. 조직당 사용자:
-
-- 조직 소유자(AGENCY): 조직·팀·권한·행사를 총괄한다. 데스크톱 운영 콘솔이 주 작업면.
-- 운영사 구성원(MANAGER): 배정된 행사에서 모집·승인·안내·현장 준비를 수행한다. 데스크톱 우선.
-- 현장 스태프(STAFF): 배정된 데스크·부스에서 체크인·부스 인증을 수행한다. 모바일 우선, 카메라 스캔 사용.
-- 참가자(무로그인 웹): 신청 → 티켓 QR → 현장 체크인을 앱 설치 없이 수행한다. 모바일 우선.
-- 행사장 출력 운영: 전광판·무대 화면을 투영한다. 인증 없음(공개).
-
-고객사 담당자(CLIENT 역할) 포털·로그인은 제공하지 않는다. 고객사는 운영사의 내부 기록이다(의도적 제외).
-
-## Product Purpose
-
-하나의 API + Next.js 새 앱(`apps/web`, 유일한 제품 UI)이 운영 콘솔·참가자 웹·스태프·전광판을 함께 서빙하는 행사 운영 SaaS다.
-행사 생성 → 접수 설정·게시 → 참가 신청 → 승인·안내 → 스태프 배정 → 현장 체크인 → 결과·보고서 흐름을 끊김 없이 완주하는 것이 성공이다.
-
-## Positioning
-
-모든 쓰기는 서버 권위다: 단일 이벤트 커맨드 경로(멱등 키 → 행 잠금 → 영수증 → 권한 → 적용 → 감사)로 처리하고, 재시도는 저장된 영수증 응답으로 답한다. QR은 무작위 티켓 토큰 bearer이며 판정은 매 스캔마다 서버가 내린다. 브라우저는 같은 오리진에만 닿고 `/api/*`로 API를 쓴다.
-
-## Operating Context
-
-- 현재는 **납품 전 개발·검수·검토 단계**다. 사용자 우선순위는 고객 컴플레인을
-  줄일 시각 완성도·직관성·UX 구성이다. 배포/상용 운영 준비보다 핵심 업무의
-  화면 구성과 흐름을 먼저 다듬는다. 기능·보안·접근성 검사는 유지할 기본선이지
-  디자인 품질이나 고객 수용을 입증하는 대체 지표가 아니다.
-- 핵심 흐름(v1 필수): 모집·승인·안내 / 현장 운영(배정·체크인·부스·전광판) / 결과·보고서.
-- 팀·권한·초대·비밀번호 복구는 SaaS 운영의 전제 조건으로 최소 범위에 포함한다.
-- 운영 콘솔은 데스크톱 우선, 참가자·현장 스태프는 모바일 우선, 전광판은 대화면 투영.
-- 오프라인 지원 없음. 연결이 끊기면 오류 안내와 재시도만 제공한다. 오프라인 로그인 세션·체크인 큐는 의도적 미지원이며, 서버 확인 전 기록을 확정으로 표시하지 않는다.
-- 문자·알림톡은 Solapi 직결이나 자격증명·발신번호·승인 템플릿이 없어 모의 발송만 된다.
-- 결제·환불·기프티콘은 v1 제외. 요금은 운영사 부담 전제.
-
-## Capabilities and Constraints
-
-확인된 기능: 일정 중심 행사 홈, 운영 현황, 참가자 상태 변경, 현장 운영(데스크·부스·배정), 메시지 템플릿·캠페인·재시도, 행사 설정(접수 게시·참가자 페이지), 참가자 홈 꾸미기(콘솔 편집기 `/console/events/:id/page`·초안/게시·휴대폰 미리보기), 공개 신청·티켓 QR, 스태프 수동·카메라 체크인, 전광판 순환 출력, 초대 생성·수락, 조직 소유자 전용 비밀번호 재설정.
-기술 제약: PostgreSQL 권위 저장(`event_workspaces.payload` jsonb + write-through 투영), API 전용 Node 서버 + Next.js 새 앱(`apps/web`, 유일한 제품 UI). 구 바닐라 앱과 그 UI 계약 검사(화면·액션 수·로드 순서 고정)는 2026-10-17 은퇴로 제거됐다. 이는 의도된 구 UI 계약 은퇴이며 API·권한·멱등 커버리지의 손실이 아니다.
-조직 정책(사용자 확정): 공유형 SaaS에서 운영사별 자료를 격리하고 계정의 복수 운영사 소속을 허용한다. 기존 자료는 기존 운영사 하나에 귀속시키며 식별자·토큰·기록·파일은 보존한다. 운영사 전환은 기존 계정 메뉴를 사용하고 새 조직 설정 영역은 만들지 않는다. 구현·검증 상태는 `docs/STATUS.md`, 경계는 `docs/MULTI-TENANCY.md`를 따른다.
-소유권 정책(사용자 확정): 표준적인 SaaS처럼 운영사 내부에서 현재 소유자가 소유자 초대와 역할 변경을 관리한다. 다른 운영사의 소속·역할과 전역 계정 신원은 바꾸지 않으며 마지막 활성 소유자의 강등·비활성화는 차단한다. 이 작업도 기존 팀 화면 안에 둔다.
-계정 복구 정책(사용자 확정): 로그인한 본인이 사전에 소유를 확인한 이메일로 직접 비밀번호를 복구한다. 기존 이메일·초대 수락은 소유 증명이 아니며, 사전 인증 없이 잠긴 계정은 별도 수동 본인 확인이 필요하다. 조직 소유자에게 여러 조직에 영향을 미치는 전역 재설정 권한을 주지 않는다.
-명시적 미결정: 개인정보·감사·백업 보존과 운영 정책, 운영 배포 위치(NAS·공개 도메인)·TLS, Solapi 실발송 자격증명과 새 운영사의 발신·과금 설정, 계정 복구 이메일 공급사와 수동 본인 확인 담당자·절차.
-
-## Brand Commitments
-
-제품명 EVENTOUCH·한국어 UI·오렌지 브랜드색은 유지한다. 사용자는 2026-10-27 기존 디자인 기준을 제거하고 A/B/C 및 실제 SaaS 참고 시안을 비교했다. CUE SHEET의 검정/chalk·명조·2px 반경·카드/괘선과 기존 B안의 외형은 더 이상 설계 제약이 아니다. 기능·권한·데이터와 고객사 확정 콘텐츠는 보존하며, 새 기능이나 운영 배포 승인을 디자인 적용과 섞지 않는다.
-
-확정 방향: 고대비 C는 제외한다. Attio·Linear·Mailchimp의 실제 업무 화면을 참고한 **화이트 업무용 SaaS 시안**을 사용자가 선택했고, **실제 `apps/web` 제품 전체 적용**을 승인했다. 흰 업무면·가벼운 중성 내비게이션·Pretendard·절제된 오렌지를 콘솔·준비/설정·명단/메시지·현장·보고서·참가자/스태프·지원 화면에 일관되게 적용한다. 중첩 카드보다 열린 작업면과 명확한 목록·작성·검토 위계를 우선한다. 고객 확정 콘텐츠·배너·게시된 참가자 스타일은 보존한다. 제품 코드 개발 승인이며 운영 배포·기존 DB/파일/볼륨 변경 승인이 아니다. 시각 체계는 `DESIGN.md`, 적용·검증 상태는 `docs/STATUS.md`에 둔다.
-
-## Evidence on Hand
-
-- 구현 기준: 현재 저장소 코드와 테스트(`docs/STATUS.md`, `docs/ARCHITECTURE.md`).
-- 서버 계약: `server/commands/`, `server/migrations/`, 이벤트 커맨드 60여 종 + 조직 범위 REST.
-- 제품 경로(`apps/web/app/**/page.tsx`): 랜딩·로그인·console·event·staff·screen·invite.
-- 검증 현황: `npm test`(DB 주입 시, 직렬·스킵 실패), `npm run web:audit` 통과. 실기기 카메라·소프트 키보드·실제 터치·iOS Safari·스크린리더 실청취·문자 실발송·최종 사용자 수용은 미검증이며 완료라 말하지 않는다. 현재 수치는 `docs/STATUS.md` 정본을 따른다.
-
-## Product Principles
-
-1. 업무 완주 우선: 단일 화면 예쁨보다 행사 하나를 끝까지 운영하는 흐름이 끊기지 않는다.
-2. 서버가 진실: 권한·중복·동시성은 화면이 아닌 트랜잭션에서 판정하고, 화면은 그 결과를 정확히 전달한다.
-3. 실패를 설계: 취소·거부·재시도·복구 경로가 정상 경로와 같은 완성도로 존재한다.
-4. 역할의 화면만: 권한 없는 목적지·끄진 기능은 렌더하지 않고, 읽기와 쓰기의 경계를 속이지 않는다.
-5. 계약 위의 재설계: 데이터·API·권한·멱등 계약을 깨지 않고 시각·구조를 바꾼다.
-
-## Accessibility & Inclusion
-
-터치 타깃 44px 이상, 포커스 링·모달·라이브리전 규칙을 따른다. 제품 전용 접근성 표준은 미확정이며, 스크린리더 실제 청취 검증은 미완료다.
+Customer proposal differences and acceptance questions belong in [CONTRACT-SCOPE.md](docs/CONTRACT-SCOPE.md). Data, authorization, tenant, and transaction boundaries belong in [ARCHITECTURE.md](docs/ARCHITECTURE.md). Current visual references are in [DESIGN.md](DESIGN.md).

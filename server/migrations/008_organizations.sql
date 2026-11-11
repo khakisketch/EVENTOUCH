@@ -3,7 +3,7 @@
 -- These tables exist so later steps have somewhere to go, but nothing reads
 -- or writes them yet: every existing query, permission check, and API
 -- response is unchanged. Data mapping (which org owns existing rows),
--- scoping, and constraints are later steps in docs/MULTI-TENANCY.md and need
+-- scoping, and constraints are later steps in docs/ARCHITECTURE.md and need
 -- their own approval. In particular this migration backfills nothing and
 -- adds no column to any existing table.
 

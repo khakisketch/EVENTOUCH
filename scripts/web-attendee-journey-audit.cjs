@@ -109,8 +109,8 @@ async function main() {
       { id: 'draft-poll', type: 'poll', title: '초안 표식', status: 'DRAFT', published: false },
       { id: 'disabled-quiz', type: 'quiz', title: '꺼진 기능 표식', status: 'OPEN', published: true },
     ];
-    for (const kind of ['failure', 'success']) for (const step of ['one', 'two', 'three']) {
-      w.modules.push({ id: `race-${kind}-${step}`, type: 'poll', title: `지연 ${kind} ${step}`, status: 'OPEN', published: true, options: ['예', '아니요'] });
+    for (const delivery of ['aborted', 'uncancellable']) for (const kind of ['failure', 'success']) for (const step of ['one', 'two', 'three']) {
+      w.modules.push({ id: `race-${delivery}-${kind}-${step}`, type: 'poll', title: `지연 ${delivery} ${kind} ${step}`, status: 'OPEN', published: true, options: ['예', '아니요'] });
     }
     await db.query('UPDATE event_workspaces SET payload=$2::jsonb WHERE event_id=$1', [f.eventId, JSON.stringify(w)]);
     browser = await launchBrowser();
@@ -142,57 +142,94 @@ async function main() {
       assert.equal(current.responses.filter(item => item.moduleId === 'published-poll' && item.participantId === approved.id).length, 1);
       await context.close();
     }
-    // A committed submission triggers refresh A. Hold its real ticket
-    // response, submit another form while changing to ticket B, then release
-    // A after refresh B. A late failure must not clear B's storage; a late
-    // success must not replace B's in-memory bearer. Verify by submitting a
-    // third real command and examining the isolated workspace, not logs.
-    for (const kind of ['failure', 'success']) {
+    // Refresh A may correctly abort when refresh B supersedes it. Observe
+    // that settlement before triggering B, then separately force a genuinely
+    // uncancellable old response to exercise the stale success/failure guards.
+    for (const delivery of ['aborted', 'uncancellable']) for (const kind of ['failure', 'success']) {
       const context = await browser.newContext();
       const page = await context.newPage();
-      await page.goto(`${f.baseUrl}/event/${f.slug}/engage?ticket=${encodeURIComponent(approved.ticket)}`, { waitUntil: 'networkidle' });
-      await page.getByRole('heading', { name: `지연 ${kind} one` }).waitFor();
+      const title = step => `지연 ${delivery} ${kind} ${step}`;
+      const moduleId = step => `race-${delivery}-${kind}-${step}`;
       let releaseOld;
       const oldGate = new Promise(resolve => { releaseOld = resolve; });
-      let oldStarted;
-      const started = new Promise(resolve => { oldStarted = resolve; });
-      let intercepted = 0;
-      await page.route('**/api/public/events/*/ticket', async route => {
-        intercepted += 1;
-        if (intercepted !== 1) return route.continue();
-        const response = await route.fetch();
-        oldStarted();
-        await oldGate;
-        if (kind === 'failure') await route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
-        else await route.fulfill({ response });
-      });
-      const form = step => page.locator('section').filter({ has: page.getByRole('heading', { name: `지연 ${kind} ${step}` }) });
-      await openProgram(page, `지연 ${kind} one`);
-      await form('one').getByRole('radio', { name: /^예/ }).check();
-      await form('one').getByRole('button', { name: '투표하기' }).click();
-      await started;
-      await openProgram(page, `지연 ${kind} two`);
-      await form('two').getByRole('radio', { name: /^예/ }).check();
-      // Emulates opening an existing direct link without putting it in logs.
-      await page.evaluate(ticket => { const url = new URL(location.href); url.searchParams.set('ticket', ticket); history.replaceState(null, '', url); }, raceParticipant.ticket);
-      const newResponse = page.waitForResponse(response => response.url().endsWith('/ticket') && response.status() === 200);
-      await form('two').getByRole('button', { name: '투표하기' }).click();
-      await newResponse;
-      assert.equal(new URL(page.url()).searchParams.has('ticket'), false);
-      const oldResponse = page.waitForResponse(response => response.url().endsWith('/ticket') && response.status() === (kind === 'failure' ? 404 : 200));
-      releaseOld();
-      await oldResponse;
-      await page.waitForLoadState('networkidle');
-      assert.equal(await page.evaluate(({ slug, ticket }) => sessionStorage.getItem(`eventouch.ticket.${slug}`) === ticket, { slug: f.slug, ticket: raceParticipant.ticket }), true);
-      await openProgram(page, `지연 ${kind} three`);
-      await form('three').getByRole('radio', { name: /^예/ }).check();
-      await form('three').getByRole('button', { name: '투표하기' }).click();
-      await form('three').getByText('이미 제출했습니다.', { exact: false }).waitFor();
-      const current = (await db.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [f.eventId])).rows[0].payload;
-      const final = current.responses.filter(item => item.moduleId === `race-${kind}-three`);
-      assert.equal(final.length, 1);
-      assert.equal(final[0].participantId, raceParticipant.id);
-      await context.close();
+      try {
+        await page.goto(`${f.baseUrl}/event/${f.slug}/engage?ticket=${encodeURIComponent(approved.ticket)}`, { waitUntil: 'networkidle' });
+        await page.getByRole('heading', { name: title('one'), exact: true }).waitFor();
+        if (delivery === 'uncancellable') {
+          // Model an adapter that ignores cancellation for exactly the next
+          // ticket read. Its real HTTP response must reach the old effect.
+          await page.evaluate(() => {
+            const nativeFetch = window.fetch;
+            let nextTicket = true;
+            window.fetch = (input, init) => {
+              if (nextTicket && typeof input === 'string' && new URL(input, location.href).pathname.endsWith('/ticket')) {
+                nextTicket = false;
+                const { signal, ...uncancellable } = init || {};
+                return nativeFetch.call(window, input, uncancellable);
+              }
+              return nativeFetch.call(window, input, init);
+            };
+          });
+        }
+        let oldStarted, finishRoute;
+        const started = new Promise(resolve => { oldStarted = resolve; });
+        const routeFinished = new Promise(resolve => { finishRoute = resolve; });
+        let intercepted = 0, oldRequest, oldSettlement;
+        await page.route('**/api/public/events/*/ticket', async route => {
+          intercepted += 1;
+          if (intercepted !== 1) return route.continue();
+          oldRequest = route.request();
+          const response = await route.fetch();
+          // A cancelled fetch emits requestfailed, not response. Both waits
+          // are request-specific and armed before the superseding submit.
+          oldSettlement = delivery === 'aborted'
+            ? page.waitForEvent('requestfailed', { predicate: request => request === oldRequest }).then(request => ({ error: request.failure()?.errorText }))
+            : page.waitForResponse(response => response.request() === oldRequest).then(async response => ({ status: response.status(), finished: await response.finished() }));
+          oldSettlement.catch(() => {});
+          oldStarted();
+          try {
+            await oldGate;
+            if (kind === 'failure') await route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
+            else await route.fulfill({ response });
+          } finally { finishRoute(); }
+        });
+        const form = step => page.locator('section[aria-labelledby^="engage-"]').filter({ has: page.getByRole('heading', { name: title(step), exact: true }) });
+        await openProgram(page, title('one'));
+        await form('one').getByRole('radio', { name: /^예/ }).check();
+        await form('one').getByRole('button', { name: '투표하기' }).click();
+        await started;
+        await openProgram(page, title('two'));
+        await form('two').getByRole('radio', { name: /^예/ }).check();
+        await page.evaluate(ticket => { const url = new URL(location.href); url.searchParams.set('ticket', ticket); history.replaceState(null, '', url); }, raceParticipant.ticket);
+        const newResponse = page.waitForResponse(response => response.request() !== oldRequest && response.url().endsWith('/ticket') && response.status() === 200);
+        await form('two').getByRole('button', { name: '투표하기' }).click();
+        await newResponse;
+        assert.equal(new URL(page.url()).searchParams.has('ticket'), false);
+        releaseOld();
+        const oldResult = await oldSettlement;
+        await routeFinished;
+        if (delivery === 'aborted') assert.match(oldResult.error, /ERR_ABORTED/, 'the superseded read actually aborted');
+        else {
+          assert.equal(oldResult.status, kind === 'failure' ? 404 : 200, 'the uncancellable stale response actually arrived');
+          assert.equal(oldResult.finished, null, 'the stale body finished, not merely its headers');
+        }
+        await page.waitForLoadState('networkidle');
+        assert.equal(await page.evaluate(({ slug, ticket }) => sessionStorage.getItem(`eventouch.ticket.${slug}`) === ticket, { slug: f.slug, ticket: raceParticipant.ticket }), true);
+        await openProgram(page, title('three'));
+        await form('three').getByRole('radio', { name: /^예/ }).check();
+        await form('three').getByRole('button', { name: '투표하기' }).click();
+        await form('three').getByText('이미 제출했습니다.', { exact: false }).waitFor();
+        const current = (await db.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [f.eventId])).rows[0].payload;
+        for (const step of ['one', 'two', 'three']) {
+          const saved = current.responses.filter(item => item.moduleId === moduleId(step));
+          assert.equal(saved.length, 1, 'each real submit commits exactly once');
+          assert.equal(saved[0].participantId, step === 'three' ? raceParticipant.id : approved.id);
+        }
+        console.log(`[attendee-journey] ${delivery} stale ${kind} preserves the new bearer and exactly-once submissions`);
+      } finally {
+        releaseOld();
+        await context.close();
+      }
     }
     // A new event in the same browser tab must not inherit the previous
     // event's memory bearer when both storage and session are unavailable.

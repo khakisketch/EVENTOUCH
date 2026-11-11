@@ -16,7 +16,7 @@ type ConsolePageProps = {
   meta?: ReactNode;
   /** Shared header state (stage/intake/D-day); pass-through to the header badges slot. */
   badges?: ReactNode;
-  /** Supplementary secondary actions only; primary actions live in the toolbar or form area. */
+  /** Page-level actions such as creation; contextual writes stay with their task. */
   headerActions?: ReactNode;
   toolbar?: ReactNode;
   feedback?: ReactNode;

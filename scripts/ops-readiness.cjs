@@ -38,6 +38,7 @@ const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
+const { readManifest, verifyChecksums } = require('./backup-lib.cjs');
 
 const execFileAsync = promisify(execFile);
 
@@ -86,24 +87,23 @@ function parseArgs(argv) {
   return options;
 }
 
-function fetchJson(url, timeoutMs) {
-  return new Promise((resolve) => {
-    // AbortController (not just a resolve race): a stalled server that
-    // accepts and never answers must not hold the probe process open on a
-    // half-open socket. `Connection: close` likewise releases keep-alive
-    // sockets after each answer so the CLI always exits on its exit code.
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    fetch(url, { redirect: 'manual', signal: controller.signal, headers: { connection: 'close' } }).then(async (response) => {
-      clearTimeout(timer);
-      let body = null;
-      try { body = await response.json(); } catch { body = null; }
-      resolve({ ok: true, status: response.status, body });
-    }).catch((error) => {
-      clearTimeout(timer);
-      resolve({ ok: false, error: error && error.name === 'AbortError' ? `timeout after ${timeoutMs}ms` : error.message });
-    });
-  });
+async function fetchJson(url, timeoutMs) {
+  // Keep the deadline active through body consumption, not just headers.
+  // AbortController also releases stalled sockets; a resolve race alone cannot.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { redirect: 'manual', signal: controller.signal, headers: { connection: 'close' } });
+    let body = null;
+    try { body = await response.json(); } catch (error) {
+      if (controller.signal.aborted) throw error;
+    }
+    return { ok: true, status: response.status, body };
+  } catch (error) {
+    return { ok: false, error: controller.signal.aborted ? `timeout after ${timeoutMs}ms` : error.message };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function numberOrNull(value) {
@@ -128,27 +128,14 @@ async function checkBackup(root, project, maxAgeHours) {
   const directory = path.join(root, latest);
   let manifest;
   try {
-    manifest = JSON.parse(await fsp.readFile(path.join(directory, 'manifest.json'), 'utf8'));
+    manifest = await readManifest(directory);
+    await verifyChecksums(directory, manifest);
   } catch (error) {
-    return { name: 'backup', state: 'fail', detail: `${latest}/manifest.json unreadable (${error.message})` };
+    return { name: 'backup', state: 'fail', detail: `${latest} invalid backup (${error.message})` };
   }
   const createdAt = Date.parse(manifest.createdAt || '');
   if (!Number.isFinite(createdAt)) {
     return { name: 'backup', state: 'fail', detail: `${latest}/manifest.json has no valid createdAt` };
-  }
-  for (const key of ['database', 'storage']) {
-    const entry = manifest[key];
-    if (!entry || typeof entry.file !== 'string' || typeof entry.sha256 !== 'string') {
-      return { name: 'backup', state: 'fail', detail: `${latest}/manifest.json missing ${key} entry` };
-    }
-    if (entry.file) {
-      const file = path.join(directory, entry.file);
-      try {
-        await fsp.access(file);
-      } catch {
-        return { name: 'backup', state: 'fail', detail: `${latest}/${entry.file} missing` };
-      }
-    }
   }
   const ageHours = (Date.now() - createdAt) / 3_600_000;
   const detail = {

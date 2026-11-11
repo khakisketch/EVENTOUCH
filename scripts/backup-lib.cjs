@@ -274,6 +274,19 @@ async function statSize(file) {
   return Number(stat.size);
 }
 
+function isSkippedStorage(entry) {
+  return Boolean(entry && entry.file === null && entry.bytes === 0 && entry.sha256 === null &&
+    Array.isArray(entry.files) && entry.files.length === 0);
+}
+
+function validateBackupEntry(key, entry) {
+  if (key === 'storage' && isSkippedStorage(entry)) return;
+  if (!entry || !entry.file || !entry.sha256) fail(`매니페스트에 ${key} 항목이 없습니다`);
+  if (typeof entry.file !== 'string' || path.isAbsolute(entry.file) || path.basename(entry.file) !== entry.file ||
+      entry.file === '..' || entry.file === '.' || !/^[a-f0-9]{64}$/.test(entry.sha256) ||
+      !Number.isSafeInteger(entry.bytes) || entry.bytes < 0) fail(`매니페스트 ${key} 파일 정보가 올바르지 않습니다`);
+}
+
 async function readManifest(directory) {
   const file = path.join(directory, MANIFEST);
   let manifest;
@@ -292,22 +305,25 @@ async function readManifest(directory) {
       !manifest.source.migrations.every(version => typeof version === 'string' && version.length > 0)) {
     fail('매니페스트에 마이그레이션 목록이 없습니다');
   }
-  identifier(manifest.source.database, '원본 DB');
+  // Source names are metadata, not SQL. Host databases can use quoted names,
+  // and legacy host backups used '(database-url)'. The restore destination
+  // still passes identifier() before any database command is issued.
+  if (typeof manifest.source.database !== 'string' || !manifest.source.database.trim() || manifest.source.database.includes('\0')) {
+    fail('원본 DB 값이 올바르지 않습니다');
+  }
   if (!manifest.counts || typeof manifest.counts !== 'object' || Array.isArray(manifest.counts)) fail('매니페스트에 테이블 행 수가 없습니다');
   countsQuery(Object.keys(manifest.counts));
   if (!Object.values(manifest.counts).every(value => Number.isSafeInteger(value) && value >= 0)) fail('매니페스트 행 수가 올바르지 않습니다');
   for (const key of ['database', 'storage']) {
-    const entry = manifest[key];
-    if (!entry || !entry.file || !entry.sha256) fail(`매니페스트에 ${key} 항목이 없습니다`);
-    if (typeof entry.file !== 'string' || path.isAbsolute(entry.file) || path.basename(entry.file) !== entry.file ||
-        entry.file === '..' || entry.file === '.' || !/^[a-f0-9]{64}$/.test(entry.sha256) ||
-        !Number.isSafeInteger(entry.bytes) || entry.bytes < 0) fail(`매니페스트 ${key} 파일 정보가 올바르지 않습니다`);
+    validateBackupEntry(key, manifest[key]);
   }
   return manifest;
 }
 
 async function verifyChecksums(directory, manifest) {
   for (const [label, entry] of [['database', manifest.database], ['storage', manifest.storage]]) {
+    validateBackupEntry(label, entry);
+    if (label === 'storage' && isSkippedStorage(entry)) continue;
     const file = path.join(directory, entry.file);
     let stat;
     try {
@@ -402,6 +418,8 @@ module.exports = {
   archiveStorage,
   sha256File,
   statSize,
+  isSkippedStorage,
+  validateBackupEntry,
   readManifest,
   verifyChecksums,
   hashTree,

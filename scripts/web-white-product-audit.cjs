@@ -157,11 +157,14 @@ async function main() {
             const visual = await page.evaluate(() => ({
               body: getComputedStyle(document.body).backgroundColor,
               nav: getComputedStyle(document.querySelector('.console-sidebar')).backgroundColor,
+              workspace: getComputedStyle(document.querySelector('main')).backgroundColor,
+              shell: getComputedStyle(document.querySelector('.console-shell')).backgroundColor,
               title: getComputedStyle(document.querySelector('main h1')).fontSize,
               font: getComputedStyle(document.querySelector('main h1')).fontFamily,
               headings: document.querySelectorAll('main h1').length,
             }));
-            check(`${name}@${width}: white shared frame`, visual.body === 'rgb(255, 255, 255)' && visual.nav === 'rgb(250, 251, 252)' && visual.title === '28px' && visual.font.includes('Pretendard') && visual.headings === 1, visual);
+            const expectedTitle = width <= 768 ? '26px' : '30px';
+            check(`${name}@${width}: white shared frame`, visual.body === 'rgb(255, 255, 255)' && visual.nav === 'rgb(250, 251, 252)' && visual.workspace === 'rgb(244, 245, 247)' && visual.shell === 'rgb(244, 245, 247)' && visual.title === expectedTitle && visual.font.includes('Pretendard') && visual.headings === 1, visual);
           }
           if (name === 'attendee') check(`attendee@${width}: customer sky theme preserved`, await page.locator('[class*="homePage"]').first().evaluate(el => getComputedStyle(el).backgroundColor === 'rgb(185, 222, 240)'));
           await render(page, name, width);
@@ -240,11 +243,13 @@ async function main() {
     const uncertainContext = await contextFor('owner', 390);
     const uncertainPage = await uncertainContext.newPage(); observe(uncertainPage);
     const attempts = [];
+    const attemptBytes = [];
     let committedStatus;
     await uncertainPage.route(`**/api/events/${f.eventId}/commands`, async route => {
       const body = route.request().postDataJSON();
-      if (!['message.create', 'message.create-reviewed'].includes(body.command)) return route.continue();
+      if (body.command !== 'message.create-charset-reviewed') return route.continue();
       attempts.push(body);
+      attemptBytes.push(route.request().postData());
       if (attempts.length === 1) {
         const actual = await route.fetch();
         committedStatus = actual.status();
@@ -266,15 +271,33 @@ async function main() {
       await uncertainPage.locator('#campaign-submit').click();
       await uncertainPage.getByRole('button', { name: '모의 발송을 기록한다', exact: true }).click();
     };
+    const lostResponse = uncertainPage.waitForResponse(response => response.url().endsWith(`/api/events/${f.eventId}/commands`) &&
+      response.request().method() === 'POST' && response.request().postDataJSON().command === 'message.create-charset-reviewed');
     await confirmMessage();
-    await uncertainPage.getByText('응답을 확인하지 못했습니다. 내용을 바꾸지 않고 같은 요청으로 다시 시도하세요.', { exact: true }).waitFor();
+    assert.equal((await lostResponse).status(), 502, 'the browser must actually lose the committed create result');
+    assert.equal(attempts.length, 1, 'loss injection must intercept the current reviewed create command');
+    const recovery = uncertainPage.locator('section[aria-labelledby="message-recovery-heading"]');
+    await recovery.getByRole('heading', { name: '발송 요청 확인 필요', exact: true }).waitFor();
     check('unknown message response follows a real commit', committedStatus >= 200 && committedStatus < 300, committedStatus);
+    const recoveryCopy = await recovery.innerText();
+    check('unknown message recovery warns about a possible commit', recoveryCopy.includes('이미 요청이 기록됐을 수 있습니다.') && recoveryCopy.includes('서버 확인은 메시지를 다시 보내지 않습니다.'), recoveryCopy);
+    check('unknown message retains its original simulated draft', attempts[0].payload.title === uncertainTitle && attempts[0].payload.simulate === true &&
+      await uncertainPage.locator('#campaign-title').inputValue() === uncertainTitle &&
+      await uncertainPage.locator('#campaign-body').inputValue() === attempts[0].payload.body);
     const previewCopy = await uncertainPage.locator('section[aria-labelledby="message-preview-heading"]').innerText();
-    check('unknown message preview never claims non-delivery', !previewCopy.includes('아직 저장·발송하지 않았습니다') && previewCopy.includes('처리 결과는 아래 요청 안내와 발송 기록'), previewCopy);
+    check('unknown message preview never claims non-delivery', !previewCopy.includes('아직 저장·발송하지 않았습니다') && previewCopy.includes('이름·티켓 링크·번호는 예시입니다'), previewCopy);
     await render(uncertainPage, 'compose-response-unknown', 390);
-    await confirmMessage();
+    const receiptResponse = uncertainPage.waitForResponse(response => response.url().endsWith(`/api/events/${f.eventId}/command-receipts/${attempts[0].commandId}`));
+    await recovery.getByRole('button', { name: '서버 처리 확인', exact: true }).click();
+    const receipt = await receiptResponse;
+    const receiptState = await receipt.json();
+    check('unknown message read-only lookup confirms the original receipt', receipt.ok() && receiptState.status === 'APPLIED' && receiptState.command === attempts[0].command, receiptState);
+    await recovery.getByRole('alert').getByText(/서버에 발송 요청 기록이 있습니다/).waitFor();
+    check('message receipt lookup never resubmits the create', attempts.length === 1);
+    await recovery.getByRole('button', { name: '같은 요청 다시 시도', exact: true }).click();
     await uncertainPage.getByText('모의 발송을 기록했습니다. 수신자에게 전달되지 않았습니다.', { exact: true }).waitFor();
-    check('message retry uses identical command bytes', attempts.length === 2 && JSON.stringify(attempts[0]) === JSON.stringify(attempts[1]));
+    check('message retry uses identical command bytes', attempts.length === 2 && attemptBytes[0] === attemptBytes[1]);
+    check('message retry settles the recovery panel', await recovery.count() === 0);
     check('message retry records once', (await workspace()).messages.filter(message => message.title === uncertainTitle).length === 1);
     await uncertainContext.close();
 

@@ -1379,29 +1379,23 @@ function createDatabaseAuth(database, options = {}) {
           }
         }
         const previous = { role: String(target.role), active: target.active === true };
-        if (nextActive === (target.active === true) && nextRole === String(target.role)) {
-          // No-op: identical state, no revision bump, no receipt.
-          return {
-            membership: {
-              orgId, accountId: targetId, role: String(target.role), active: target.active === true,
-              contextVersion: Number(target.revision) || 0,
-            },
-            previous,
-            replayed: false,
-          };
+        let contextVersion = Number(target.revision) || 0;
+        if (nextActive !== (target.active === true) || nextRole !== String(target.role)) {
+          await client.query(
+            'UPDATE organization_memberships SET active = $3, role = $4, revision = revision + 1 WHERE org_id = $1 AND account_id = $2',
+            [orgId, targetId, nextActive, nextRole]
+          );
+          await bumpOrgContext(client, orgId);
+          const versionResult = await client.query(
+            'SELECT revision FROM organization_memberships WHERE org_id = $1 AND account_id = $2 LIMIT 1',
+            [orgId, targetId]
+          );
+          contextVersion = Number(versionResult.rows[0].revision) || 0;
         }
-        await client.query(
-          'UPDATE organization_memberships SET active = $3, role = $4, revision = revision + 1 WHERE org_id = $1 AND account_id = $2',
-          [orgId, targetId, nextActive, nextRole]
-        );
-        await bumpOrgContext(client, orgId);
-        const versionResult = await client.query(
-          'SELECT revision FROM organization_memberships WHERE org_id = $1 AND account_id = $2 LIMIT 1',
-          [orgId, targetId]
-        );
+        // Successful no-ops need the same receipt, but advance neither clock.
         const membership = {
           orgId, accountId: targetId, role: nextRole, active: nextActive,
-          contextVersion: Number(versionResult.rows[0].revision) || 0,
+          contextVersion,
         };
         await client.query(
           `INSERT INTO command_receipts (command_id, event_id, actor_id, org_id, result)

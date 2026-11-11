@@ -15,7 +15,7 @@ const LIB = path.resolve(__dirname, "..", "apps", "web", "lib");
 // logic below executes against that output, never against source text.
 const ts = require(path.join(LIB, "..", "node_modules", "typescript"));
 const compiled = {};
-for (const file of ["operator-receipts.ts", "booth-availability.ts", "bulk-cancel-proof.ts", "operator-context.ts", "console-api.ts"]) {
+for (const file of ["request-deadline.ts", "operator-receipts.ts", "booth-availability.ts", "bulk-cancel-proof.ts", "operator-context.ts", "console-api.ts"]) {
   const source = fs.readFileSync(path.join(LIB, file), "utf8");
   compiled[file] = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -56,6 +56,8 @@ function loadWorld() {
     Response,
     Request,
     AbortController,
+    ReadableStream,
+    TransformStream,
     JSON,
     Math,
     Object,
@@ -115,6 +117,7 @@ function loadWorld() {
     const module = { exports: {} };
     const localRequire = (spec) => {
       if (spec === "./operator-context") return registry["operator-context"].exports;
+      if (spec === "./request-deadline") return registry["request-deadline"].exports;
       if (spec === "./operator-receipts") return registry["operator-receipts"].exports;
       if (spec === "./booth-availability") return registry["booth-availability"].exports;
       if (spec === "./bulk-cancel-proof") return registry["bulk-cancel-proof"].exports;
@@ -125,6 +128,7 @@ function loadWorld() {
     registry[name] = module;
     return module.exports;
   }
+  load("request-deadline", compiled["request-deadline.ts"]);
   const receipts = load("operator-receipts", compiled["operator-receipts.ts"]);
   load("booth-availability", compiled["booth-availability.ts"]);
   load("bulk-cancel-proof", compiled["bulk-cancel-proof.ts"]);

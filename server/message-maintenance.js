@@ -154,8 +154,9 @@ async function enqueueDueScheduled(database, { now, limit, eventIds, cursor, pro
         // (EVENTOUCH_PUBLIC_URL is the shared front origin for all orgs;
         // only the provider credentials are legacy-bound.)
         const event = typeof locked.rows[0].event_payload === 'string' ? JSON.parse(locked.rows[0].event_payload) : locked.rows[0].event_payload;
-        const guard = dueScheduleGuards(message, workspace, { now: Date.parse(now), event, providerKind });
+        let guard = dueScheduleGuards(message, workspace, { now: Date.parse(now), event, providerKind });
         if (guard && guard.reason === 'NOT_DUE') continue;
+        if (String(event?.stage || '').toUpperCase() === 'ARCHIVED') guard = { reason: 'EVENT_ARCHIVED' };
         pending += 1;
         if (message.simulate === true) {
           skipped.push({ messageId: message.id, reason: 'SIMULATED' });

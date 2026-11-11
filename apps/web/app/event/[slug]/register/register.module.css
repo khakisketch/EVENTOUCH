@@ -1,17 +1,63 @@
-/* Participant registration rhythm (white work SaaS, open sections).
-   The form reads as grouped sections — 본인 확인, 신청 결과 안내, 신청 정보,
-   동의 — so the outcome promise, field groups, and consent never collapse
-   into one undifferentiated stack on a 390px phone. Hairlines and section
-   titles group the work; inputs, validation, and guards stay global. */
-.form {
-  gap: var(--s4);
+/* One application document: event, outcome, fields, verification and consent. */
+.page:global(.registration-page) {
+  max-width: var(--web-form-max);
+}
+
+.pageContext {
+  margin: 0 0 0 auto;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 600;
+}
+
+.page .pageTitle {
+  margin: 0 0 var(--s5);
+  font-size: var(--h1);
+  font-weight: 750;
+  line-height: 1.3;
+  letter-spacing: -0.025em;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.backLink {
+  margin: var(--s2) 0;
+}
+
+.backLink a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.backLink a:hover {
+  color: var(--ink);
+  background: var(--surface-muted);
+  text-decoration: none;
+}
+
+.form:global(.registration-form) {
+  gap: var(--s5);
+  padding: 0;
+}
+
+.form :global(.registration-fields) {
+  gap: var(--s5);
 }
 
 .stepSection {
   display: grid;
-  gap: var(--s3);
+  gap: var(--s4);
   margin: 0;
-  padding: var(--s4) 0 0;
+  padding: var(--s5) 0 0;
   border-top: 1px solid var(--line);
 }
 
@@ -20,56 +66,88 @@
   border-top: 0;
 }
 
-.stepLabel {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--label);
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  line-height: 1.5;
-}
-
 .stepTitle {
   margin: 0;
   font-size: var(--h3);
-  font-weight: 800;
-  line-height: 1.35;
+  font-weight: 700;
+  line-height: 1.4;
   letter-spacing: -0.01em;
   overflow-wrap: anywhere;
   word-break: keep-all;
 }
 
-/* The outcome promise (receipt vs immediate ticket) is the attendee's event
-   context: an info strip with the same weight as verification, never a
-   quiet footnote that long forms bury. Device-binding, when it applies,
-   joins the same strip instead of repeating underneath it. */
+.stepSection :global(.form-field) {
+  display: grid;
+  gap: var(--s2);
+}
+
+.stepSection :global(.form-field) > label {
+  margin: 0;
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+/* Ordinary outcome guidance is not an alert; actual failure states retain
+   their warning/danger treatment from the form. */
+.outcomeTitle {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--body);
+  font-weight: 650;
+  line-height: 1.4;
+}
+
 .outcomeNote {
   margin: 0;
-  padding: var(--s3) var(--s4);
-  border: 1px solid var(--info-line);
-  border-radius: var(--radius-small);
-  background: var(--info-soft);
-  color: var(--info);
+  color: var(--muted);
   font-size: var(--small);
-  font-weight: 700;
-  line-height: 1.6;
+  line-height: 1.7;
   overflow-wrap: anywhere;
   word-break: keep-all;
 }
 
 .consentPanel {
   display: grid;
-  gap: var(--s2);
+  gap: var(--s3);
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.consentPanel label {
+  min-height: 48px;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-medium);
+  background: var(--surface-muted);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.consentPanel :global(.preserve-lines) {
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.7;
+}
+
+.consentPanel :global(.consent-meta) {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .phoneHint {
-  margin: var(--s2) 0 0;
+  margin: 0;
 }
 
 .submitBlock {
   display: grid;
   gap: var(--s3);
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+.submitBlock button[type="submit"] {
+  border-radius: var(--radius-medium);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -3,20 +3,49 @@
 // Mobile composition: deliberate control rows on narrow screens. The old
 // layout passed its overflow checks while still shipping a squeezed search
 // beside an unrelated checkbox and a view switch competing with the primary
-// create action, so these tests pin the structure itself: search-first full
-// rows, a section-header view switch, a full-width primary, and shared
-// primitives with no position-based heuristics.
+// create action, so these tests pin the structure itself: search-first phone
+// rows, a section-header view switch, one title-level create action, and
+// shared primitives with no position-based heuristics.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { createRequire } = require('node:module');
+const webRequire = createRequire(path.join(__dirname, '../apps/web/package.json'));
+const ts = webRequire('typescript');
+const postcss = webRequire('postcss');
 
 const ROOT = path.join(__dirname, '..');
 const WEB = path.join(ROOT, 'apps/web');
 
 function read(rel) {
   return fs.readFileSync(path.join(WEB, rel), 'utf8');
+}
+
+// Match exact selectors in their actual media scope, never the first media block.
+function cssDeclarations(css, selector, media = null) {
+  const matches = [];
+  postcss.parse(css).walkRules((rule) => {
+    if (!rule.selectors.includes(selector)) return;
+    const scopes = [];
+    for (let parent = rule.parent; parent; parent = parent.parent) {
+      if (parent.type === 'atrule') scopes.unshift(parent.name + ' ' + parent.params);
+    }
+    if (JSON.stringify(scopes) === JSON.stringify(media ? ['media ' + media] : [])) matches.push(rule);
+  });
+  assert.equal(matches.length, 1, selector + ' has one rule in ' + (media ?? 'the base scope'));
+  return Object.fromEntries(matches[0].nodes.filter((node) => node.type === 'decl').map((node) => [node.prop, node.value]));
+}
+
+function findNodes(node, predicate, found = []) {
+  if (predicate(node)) found.push(node);
+  ts.forEachChild(node, (child) => { findNodes(child, predicate, found); });
+  return found;
+}
+
+function jsxAttribute(opening, name) {
+  return opening.attributes.properties.find((attribute) => ts.isJsxAttribute(attribute) && attribute.name.text === name);
 }
 
 test('shared toolbar has no first-child-is-search heuristic', () => {
@@ -56,17 +85,30 @@ test('home filters read search first, then stage, then approval', () => {
   assert.match(home, /승인 대기만 \(\{[^{}]*pendingQueueCount[^{}]*\}\)/u);
 });
 
-test('home view switch is a section supplement, create is the lone toolbar action', () => {
+test('home view switch supplements the directory and create is its lone page-level action', () => {
   const home = read('app/console/ConsoleHome.tsx');
   assert.match(home, /action=\{viewSwitch\}/u);
   assert.match(home, /description=\{directoryDescription\}/u);
-  const actionsStart = home.indexOf('actions={', home.indexOf('<ConsoleToolbar'));
-  const toolbarEnd = home.indexOf('/>', actionsStart);
-  assert.ok(actionsStart >= 0 && toolbarEnd > actionsStart, 'toolbar actions block is found');
-  const toolbarActions = home.slice(actionsStart, toolbarEnd);
-  assert.doesNotMatch(toolbarActions, /viewSwitch|viewButton/u);
-  assert.match(toolbarActions, /button-primary/u);
-  assert.match(toolbarActions, /새 행사 만들기/u);
+  const tree = ts.createSourceFile('ConsoleHome.tsx', home, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const openings = findNodes(tree, (node) => ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node));
+  const pagesWithActions = openings.filter((node) => node.tagName.getText(tree) === 'ConsolePage' && jsxAttribute(node, 'headerActions'));
+  assert.equal(pagesWithActions.length, 1, 'only the ready page owns the create action');
+  assert.equal(jsxAttribute(pagesWithActions[0], 'pageId').initializer.text, 'events');
+  const create = jsxAttribute(pagesWithActions[0], 'headerActions').initializer.expression;
+  assert.ok(ts.isJsxElement(create));
+  assert.equal(create.openingElement.tagName.getText(tree), 'button');
+  assert.equal(jsxAttribute(create.openingElement, 'type').initializer.text, 'button');
+  assert.equal(jsxAttribute(create.openingElement, 'onClick').initializer.expression.getText(tree), '() => setCreateOpen(true)');
+  assert.match(create.getText(tree), /button-primary/u);
+  assert.match(create.getText(tree), /새 행사 만들기/u);
+  assert.doesNotMatch(create.getText(tree), /viewSwitch|viewButton/u);
+  assert.equal(openings.filter((node) => jsxAttribute(node, 'className')?.getText(tree).includes('styles.createTrigger')).length, 1);
+  const toolbars = openings.filter((node) => node.tagName.getText(tree) === 'ConsoleToolbar');
+  assert.equal(toolbars.length, 1);
+  assert.ok(jsxAttribute(toolbars[0], 'filters'));
+  assert.equal(jsxAttribute(toolbars[0], 'actions'), undefined, 'creation does not compete with directory filters');
+  const page = read('app/console/console-ui/ConsolePage.tsx');
+  assert.match(page, /actions=\{headerActions\}/u, 'the existing slot forwards creation to the shared title row');
   const homeCss = read('app/console/console-home.module.css');
   assert.doesNotMatch(homeCss, /\.createTrigger\s*\{[^}]*align-self:\s*end/su);
 });
@@ -85,7 +127,7 @@ test('home keeps its heading contract while the count row only appears when narr
   }
 });
 
-test('event directory cards show identity, not permanent participant KPIs', () => {
+test('event directory ledger preserves identity and separate follow-up links, not permanent KPIs', () => {
   const home = read('app/console/ConsoleHome.tsx');
   const card = home.slice(home.indexOf('function EventCard('), home.indexOf('export default function ConsoleHome'));
   assert.doesNotMatch(card, /등록 인원|현재 입장|<dl|eventMetrics|metricNumber/u);
@@ -94,17 +136,34 @@ test('event directory cards show identity, not permanent participant KPIs', () =
   assert.match(card, /승인 대기 \{event\.pending\}명 처리/u);
   assert.match(card, /participants\?status=PENDING/u);
   assert.ok(card.indexOf('</Link>') < card.indexOf('className={styles.approvalLink}'), 'queue is not nested in overview link');
+  const tree = ts.createSourceFile('EventCard.tsx', card, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const links = findNodes(tree, (node) => ts.isJsxElement(node) && node.openingElement.tagName.getText(tree) === 'Link');
+  assert.equal(links.length, 2, 'one overview entry and one optional approval entry, never duplicate controls');
+  const linkFor = (name) => links.find((node) => jsxAttribute(node.openingElement, 'className')?.initializer?.expression?.getText(tree) === 'styles.' + name);
+  const overview = linkFor('eventCardLink');
+  const approval = linkFor('approvalLink');
+  assert.ok(overview && approval);
+  assert.equal(findNodes(overview, (node) => node === approval).length, 0, 'approval remains a sibling action, not a nested link');
+  assert.equal(jsxAttribute(overview.openingElement, 'aria-label'), undefined, 'the overview name includes its visible identity and facts');
+  for (const name of ['eventName', 'eventDateTime', 'eventClient', 'eventInventory', 'eventCardFoot']) {
+    assert.equal(findNodes(overview, (node) => ts.isJsxOpeningElement(node) && jsxAttribute(node, 'className')?.initializer?.expression?.getText(tree) === 'styles.' + name).length, 1, name + ' remains inside the overview entry');
+  }
+  for (const [name, value] of [['eventName', 'event.name'], ['eventDateTime', 'dateTime'], ['eventClient', 'clientAndVenue || "고객사·장소 미지정"']]) {
+    const field = findNodes(overview, (node) => ts.isJsxElement(node) && jsxAttribute(node.openingElement, 'className')?.initializer?.expression?.getText(tree) === 'styles.' + name)[0];
+    assert.deepEqual(field.children.filter(ts.isJsxExpression).map((node) => node.expression.getText(tree)), [value], name + ' still renders its factual value');
+  }
+  assert.equal(jsxAttribute(approval.parent.openingElement, 'className').initializer.expression.getText(tree), 'styles.eventCardActions');
+  assert.equal(jsxAttribute(overview.openingElement, 'href').initializer.expression.getText(tree), '`/console/events/${encodeURIComponent(event.id)}`');
+  assert.equal(jsxAttribute(approval.openingElement, 'href').initializer.expression.getText(tree), '`/console/events/${encodeURIComponent(event.id)}/participants?status=PENDING`');
   // A2: no per-card duplicate and no always-empty footer. Duplication lives
   // in the create dialog's source select; the actions row only renders for
   // a real pending queue.
   assert.doesNotMatch(card, /onDuplicate|복제/u, 'no per-card duplicate control');
   assert.doesNotMatch(card, /styles\.eventCardAction[^s]/u, 'duplicate styling does not linger');
   assert.match(card, /\{event\.pending > 0 \? \(\s*<div className=\{styles\.eventCardActions\}>/su);
-  // A2 structure: title + grouped date·time in the tinted zone, client/venue
-  // + stage + recency + decorative arrow in the paper body. Whole card is one
-  // entry link whose name comes from its contents; the pending link stays
-  // outside it.
-  // (The entry affordance is pinned in console-event-card-a2.test.cjs.)
+  // Ledger columns retain title/date, client/venue/capacity, stage/recency
+  // and a separate pending follow-up. The published color is an identity
+  // dot, not a tint behind dates or operational facts.
   assert.match(card, /styles\.eventCardZone/u);
   assert.match(card, /styles\.eventDateTime/u);
   assert.match(card, /styles\.eventCardBody/u);
@@ -114,26 +173,56 @@ test('event directory cards show identity, not permanent participant KPIs', () =
   const css = read('app/console/console-home.module.css');
   assert.doesNotMatch(css, /\.eventMetrics|\.metricAttention|\.metricNumber|\.eventCardAction[^s]/u, 'removed metric/duplicate styling does not linger');
   assert.match(css, /\.approvalLink\s*\{[^}]*min-height:\s*44px/su);
-  assert.match(css, /\.eventCardZone\s*\{[^}]*background:\s*var\(--card-zone,\s*var\(--soft\)\)/su);
-  assert.match(css, /\.eventDateTime\s*\{[^}]*color:\s*var\(--card-zone-ink,\s*var\(--brand-text\)\)/su);
+  assert.match(css, /\.eventCardZone \.eventName::before\s*\{[^}]*background:\s*var\(--card-zone,\s*var\(--soft\)\)/su);
+  assert.equal(cssDeclarations(css, '.eventDateTime').color, 'var(--muted)');
+  assert.equal(cssDeclarations(css, '.eventCardZone').background, undefined, 'published theme cannot tint ledger facts');
+  assert.match(card, /\[clientName, event\.venue\]\.filter\(Boolean\)\.join\(" · "\)/u);
+  assert.match(card, /event\.capacity > 0 \? `정원 \$\{event\.capacity\}명` : "정원 제한 없음"/u);
+  assert.match(card, /고객사·장소 미지정/u);
+  assert.match(card, /단계 미정/u);
+  const columns = cssDeclarations(css, '.directorySection.directorySection')['--directory-columns'];
+  assert.equal(columns, 'minmax(0, 1.5fr) minmax(0, 1.1fr) minmax(128px, 0.75fr) 176px');
+  for (const selector of ['.directoryColumns', '.eventCard']) {
+    assert.equal(cssDeclarations(css, selector)['grid-template-columns'], 'var(--directory-columns)', selector + ' aligns with the same four-column ledger');
+  }
+  assert.equal(cssDeclarations(css, '.eventCardLink')['grid-column'], '1 / span 3');
+  assert.equal(cssDeclarations(css, '.eventCardLink')['grid-template-columns'], 'subgrid');
+  assert.equal(cssDeclarations(css, '.eventCardBody').display, 'contents');
+  assert.equal(cssDeclarations(css, '.eventCardActions')['grid-column'], '4');
+  assert.match(home, /className=\{styles\.directoryColumns\} aria-hidden="true">\s*<span>행사·일정<\/span><span>고객사·장소<\/span><span>진행 상태<\/span><span>후속 작업<\/span>/su);
 });
 
 test('home filter lattice shares one stage-plus-approval row at phone widths', () => {
   const css = read('app/console/console-home.module.css');
-  assert.match(css, /\.homeFilters\s*\{[^}]*grid-template-areas:[^}]*"search search"[^}]*"stage work"/su);
-  assert.match(css, /@media\s*\(max-width:\s*480px\)\s*\{[^}]*\.homeFilters\s*\{[^}]*grid-template-columns:\s*max-content minmax\(0,\s*1fr\)/su);
+  const phoneFilters = cssDeclarations(css, '.homeFilters', '(max-width: 480px)');
+  assert.deepEqual(phoneFilters['grid-template-areas'].match(/"[^"]+"/gu), ['"search search"', '"stage work"']);
+  assert.equal(phoneFilters['grid-template-columns'], 'max-content minmax(0, 1fr)');
   // The stage caption hides visually but stays positioned in the label, so
   // the select keeps its accessible name on the shared row.
   assert.match(css, /\.homeStage\s*>\s*span\s*\{[^}]*position:\s*absolute[^}]*clip:\s*rect\(0 0 0 0\)/su);
   assert.doesNotMatch(css, /\.homeStage\s*>\s*span\s*\{[^}]*display:\s*none/su);
   assert.doesNotMatch(css, /\.workFilter\s*\{[^}]*white-space:\s*nowrap/su);
   assert.doesNotMatch(css, /^\.toolbar\s*\{/mu, 'dead local toolbar grid is gone');
-  // A2 cards size from their zone/body padding, not an oversized floor: the
-  // tinted zone and the paper body own the rhythm, with a 220px minimum.
-  assert.doesNotMatch(css, /\.eventCard\s*\{[^}]*min-height:\s*280px/su);
-  assert.match(css, /\.eventCard\s*\{[^}]*min-height:\s*220px/su);
-  assert.match(css, /\.eventCardZone\s*\{[^}]*padding:\s*var\(--s4\) var\(--s4\) var\(--s3\)/su);
-  assert.match(css, /\.eventCardBody\s*\{[^}]*padding:\s*var\(--s3\) var\(--s4\) var\(--s2\)/su);
+  // The desktop ledger is one continuous list; phone rows stack all facts
+  // and the independent queue action without a 220px card floor.
+  assert.equal(cssDeclarations(css, '.eventGrid')['grid-template-columns'], 'minmax(0, 1fr)');
+  assert.equal(cssDeclarations(css, '.eventGrid').gap, '0');
+  assert.equal(cssDeclarations(css, '.eventCard')['min-height'], undefined);
+  assert.equal(cssDeclarations(css, '.eventCardLink')['min-height'], '104px');
+  const phone = '(max-width: 768px)';
+  assert.equal(cssDeclarations(css, '.directoryColumns', phone).display, 'none');
+  assert.equal(cssDeclarations(css, '.eventCard', phone)['grid-template-columns'], 'minmax(0, 1fr)');
+  assert.equal(cssDeclarations(css, '.eventCardLink', phone)['grid-template-columns'], 'minmax(0, 1fr)');
+  assert.equal(cssDeclarations(css, '.eventCardLink', phone)['min-height'], '44px');
+  assert.equal(cssDeclarations(css, '.eventCardActions', phone)['grid-column'], '1');
+  for (const selector of ['.eventName', '.eventClient', '.approvalLink']) {
+    const rule = cssDeclarations(css, selector);
+    assert.equal(rule['word-break'], 'keep-all');
+    assert.equal(rule['overflow-wrap'], 'anywhere');
+  }
+  for (const selector of ['.eventCardLink:focus-visible', '.approvalLink:focus-visible']) {
+    assert.equal(cssDeclarations(css, selector).outline, '3px solid var(--focus)');
+  }
 });
 
 test('home stage filtering is a compact flat control, not a card-like form box', () => {
@@ -152,13 +241,19 @@ test('home stage filtering is a compact flat control, not a card-like form box',
 
 test('home supporting filters stay together without stretching the stage selector', () => {
   const css = read('app/console/console-home.module.css');
-  assert.match(css, /\.homeFilters\s*\{[^}]*grid-template-columns:\s*max-content minmax\(0,\s*1fr\)/su);
+  assert.equal(cssDeclarations(css, '.homeFilters')['grid-template-columns'], 'minmax(180px, 360px) max-content max-content');
+  assert.equal(cssDeclarations(css, '.homeFilters', '(max-width: 1100px)')['grid-template-columns'], 'max-content minmax(0, 1fr)');
   assert.match(css, /\.stageFilter\s*\{[^}]*justify-self:\s*start[^}]*width:\s*fit-content/su);
 });
 
 test('home directory title and count form one summary beside the view switch', () => {
   const css = read('app/console/console-home.module.css');
-  assert.match(css, /\.directorySection\s*>\s*:has\(:global\(#console-event-directory\)\)\s*\{[^}]*"title action"[^}]*"desc action"/su);
+  const shared = read('app/console/console-ui/console-ui.module.css');
+  assert.deepEqual(cssDeclarations(shared, '.sectionHead')['grid-template-areas'].match(/"[^"]+"/gu), ['"title action"', '"desc desc"']);
+  assert.equal(cssDeclarations(shared, '.sectionDescription')['grid-area'], 'desc');
+  const local = cssDeclarations(css, '.directorySection > :has(:global(#console-event-directory))');
+  assert.equal(local['align-items'], 'center');
+  assert.equal(local['grid-template-areas'], undefined, 'directory inherits the shared full-width count row instead of reserving action-column space beside it');
 });
 
 test('shared section header pairs title and action on one grid row', () => {
@@ -174,17 +269,29 @@ test('shared section header pairs title and action on one grid row', () => {
   assert.doesNotMatch(css, /@media\s*\(max-width:\s*420px\)\s*\{\s*\.sectionHead/su);
 });
 
-test('shared page header inlines one action, drops pairs below the copy', () => {
+test('shared page header aligns title and action while retaining context, metadata and mobile wrapping', () => {
   const css = read('app/console/console-ui/console-ui.module.css');
-  assert.match(css, /\.pageIdentity h1\s*\{[^}]*font-size:\s*var\(--h1\)/su);
+  assert.equal(cssDeclarations(css, '.pageIdentity h1')['font-size'], '30px');
+  assert.equal(cssDeclarations(css, '.pageIdentity h1', '(max-width: 768px)')['font-size'], '26px');
+  assert.equal(cssDeclarations(css, '.pageTitleRow').display, 'contents');
+  assert.equal(cssDeclarations(css, '.pageHeader')['grid-template-areas'], '"back back" "context context" "title actions" "meta meta" "badges badges"');
+  assert.equal(cssDeclarations(css, '.pageContext')['grid-area'], 'context');
+  assert.equal(cssDeclarations(css, '.pageSubline')['grid-area'], 'meta');
+  assert.equal(cssDeclarations(css, '.pageBadges')['grid-area'], 'badges');
+  assert.equal(cssDeclarations(css, '.pageMeta')['overflow-wrap'], 'anywhere');
+  assert.equal(cssDeclarations(css, '.pageBadges')['flex-wrap'], 'wrap');
+  assert.equal(cssDeclarations(css, '.pageActions')['flex-wrap'], 'wrap');
   assert.match(css, /\.pageIdentity\s*\{[^}]*display:\s*contents/su);
   assert.match(css, /\.pageIdentity h1\s*\{[^}]*grid-area:\s*title/su);
   assert.match(css, /\.pageActions\s*\{[^}]*grid-area:\s*actions/su);
   assert.match(css, /\.pageActions\s*>\s*\*\s*\{[^}]*flex:\s*0\s+1\s+auto/su);
   assert.doesNotMatch(css, /\.pageActions\s*>\s*\*\s*\{[^}]*flex:\s*1\s+1\s+140px/su);
   // Two or more actions keep the full-width pair row instead of cramping H1.
-  assert.match(css, /\.pageHeader:has\(\.pageActions > :nth-child\(2\)\)\s*\{[^}]*grid-template-areas:[^}]*"actions"/su);
-  // Header source is untouched: CSS only, no markup or API change.
+  for (const selector of ['.pageHeader:has(.pageActions > :nth-child(2))', '.pageHeader:has(.pageActions > :global(.console-header-group))']) {
+    assert.equal(cssDeclarations(css, selector, '(max-width: 768px)')['grid-template-areas'], '"back" "context" "title" "meta" "badges" "actions"');
+    assert.equal(cssDeclarations(css, selector + ' .pageActions', '(max-width: 768px)')['justify-content'], 'flex-start');
+  }
+  // The new title-row wrapper preserves the existing shared actions API.
   const header = read('app/console/console-ui/ConsolePageHeader.tsx');
   assert.match(header, /actions\?: ReactNode/u);
 });
@@ -218,7 +325,9 @@ test('shared section nav wraps to fully reachable rows on mobile', () => {
   assert.match(css, /\.sectionNavLink\s*\{[^}]*color:\s*var\(--ink\)/su);
   assert.match(css, /\.sectionNavLink\[aria-current="location"\]\s*\{[^}]*color:\s*var\(--brand-text\)/su);
   assert.match(css, /\.sectionNavLink\[aria-current="location"\]\s*\{[^}]*border-bottom-color:\s*var\(--brand\)/su);
-  assert.match(css, /\.sectionNavLink\[aria-current="location"\]\s*\{[^}]*font-weight:\s*800/su);
+  const current = cssDeclarations(css, '.sectionNavLink[aria-current="location"]');
+  assert.equal(current['font-weight'], '650', 'current marker uses the shared medium emphasis, not an oversized 800 weight');
+  assert.ok(Number(current['font-weight']) > Number(cssDeclarations(css, '.sectionNavLink')['font-weight']), 'current state retains a non-color weight difference');
   assert.match(css, /@media\s*\(max-width:\s*768px\)[\s\S]*?\.sectionNavLink\s*\{[^}]*text-align:\s*left/su);
   assert.match(css, /@media\s*\(max-width:\s*768px\)[\s\S]*?\.sectionNavLink\s*\{[^}]*width:\s*auto/su);
   assert.match(css, /\.sectionNavLink\s*\{[^}]*white-space:\s*normal/su);

@@ -54,8 +54,8 @@ test('all four audits honor the caller capture root', () => {
 
 test('card audit tests the current white row, not the retired A2 tint', () => {
   const card = read('scripts/web-event-card-a2-audit.cjs');
-  // The approved white contract: flat white zone, published color only in
-  // the 8px identity dot, drafts never leak into any card paint.
+  // Current directory-row example: published color stays in the 8px identity
+  // dot, while drafts never leak into card paint.
   assert.match(card, /::before/, 'card audit reads the identity dot pseudo-element');
   assert.match(card, /identity dot/, 'card audit names the current visual contract');
   assert.match(card, /FLAT_WHITE/, 'card audit pins the flat white zone');

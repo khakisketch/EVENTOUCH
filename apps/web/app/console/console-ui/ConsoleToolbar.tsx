@@ -4,7 +4,7 @@ import styles from "./console-ui.module.css";
 type ConsoleToolbarProps = {
   /** Search/filter controls. Stretches left; wraps on narrow screens. */
   filters?: ReactNode;
-  /** Task actions. Pins right; primary buttons live here, not the header. */
+  /** Contextual task actions. Page-level creation may live beside the title. */
   actions?: ReactNode;
   /** Selection summary. Renders a second row only while provided. */
   selection?: ReactNode;

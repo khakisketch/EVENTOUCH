@@ -160,15 +160,14 @@ function EventCard({
   const time = event.start && event.end
     ? `${event.start}–${event.end}`
     : event.start || event.end;
-  // One grouped date·time line in the tinted header: full date with time,
+  // One grouped date/time line: full date with time,
   // time-only when the date is unknown, and an explicit unknown label —
   // never an empty or inferred date.
   const dateTime = event.date
     ? time ? `${formatEventDate(event.date)} · ${time}` : formatEventDate(event.date)
     : time ? `시간 ${time}` : "일정 미정";
   const clientAndVenue = [clientName, event.venue].filter(Boolean).join(" · ");
-  // Published theme tints the header only; status badges keep semantic
-  // tokens. Null falls back to the existing `--soft` + brand-text CSS.
+  // Published color remains an identity marker; status keeps semantic tokens.
   const theme = cardHeaderTheme(event.themeColor);
   const zoneStyle = theme
     ? ({ "--card-zone": theme.background, "--card-zone-ink": theme.color } as CSSProperties)
@@ -191,13 +190,14 @@ function EventCard({
           <p className={styles.eventDateTime} data-soon={recencySoon || undefined}>{dateTime}</p>
         </div>
         <div className={styles.eventCardBody}>
-          <p className={styles.eventClient}>
-            {clientAndVenue || "고객사·장소 미지정"}
-          </p>
-          <p className={styles.eventInventory}>
-            {event.capacity > 0 ? `정원 ${event.capacity}명` : "정원 제한 없음"}
-            {event.pending > 0 ? ` · 승인 대기 ${event.pending}명` : ""}
-          </p>
+          <div className={styles.eventClientGroup}>
+            <p className={styles.eventClient}>
+              {clientAndVenue || "고객사·장소 미지정"}
+            </p>
+            <p className={styles.eventInventory}>
+              {event.capacity > 0 ? `정원 ${event.capacity}명` : "정원 제한 없음"}
+            </p>
+          </div>
           <div className={styles.eventCardFoot}>
             {stageKnown ? (
               <span className={eventStageClassName(event.stage)}>{stageLabel}</span>
@@ -594,54 +594,14 @@ export default function ConsoleHome() {
   return (
     <ConsolePage
       pageId="events"
-      toolbar={
-        <ConsoleToolbar
-          filters={
-            <div className={styles.homeFilters} data-toolbar-span="full">
-              <label className={`${styles.searchField} ${styles.homeSearch}`}>
-                <span className="sr-only">행사명·고객사·장소 검색</span>
-                <input
-                  type="search"
-                  placeholder="행사 검색"
-                  aria-label="행사명·고객사·장소 검색"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                />
-              </label>
-              <label className={`${styles.stageFilter} ${styles.homeStage}`}>
-                <span>진행 단계</span>
-                <select
-                  value={filter}
-                  onChange={(event) => setFilter(event.target.value as EventFilter)}
-                >
-                  {FILTERS.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.label} ({counts[item.id]})
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={`${styles.workFilter} ${styles.homeWork}`}>
-                <input
-                  type="checkbox"
-                  checked={needsWork}
-                  onChange={(event) => setNeedsWork(event.target.checked)}
-                  aria-label={`승인 대기 있는 행사만 보기 (${pendingQueueCount}건)`}
-                />
-                <span aria-hidden="true">승인 대기만 ({pendingQueueCount})</span>
-              </label>
-            </div>
-          }
-          actions={
-            <button
-              type="button"
-              className={`button button-primary ${styles.createTrigger}`}
-              onClick={() => setCreateOpen(true)}
-            >
-              새 행사 만들기
-            </button>
-          }
-        />
+      headerActions={
+        <button
+          type="button"
+          className={`button button-primary ${styles.createTrigger}`}
+          onClick={() => setCreateOpen(true)}
+        >
+          새 행사 만들기
+        </button>
       }
       feedback={refreshError || receiptNotice ? <>
         {refreshError ? <ConsoleFeedback kind="error">{refreshError} 이전 목록은 유지됩니다. <button className="button button-secondary" type="button" onClick={() => setReloadTick((tick) => tick + 1)}>다시 불러오기</button></ConsoleFeedback> : null}
@@ -680,6 +640,44 @@ export default function ConsoleHome() {
       ) : null}
 
       <ConsoleSection headingId="console-event-directory" title="행사 목록" description={directoryDescription} action={viewSwitch} surface="plain" width="full" className={styles.directorySection}>
+        <ConsoleToolbar
+          filters={
+            <div className={styles.homeFilters} data-toolbar-span="full">
+              <label className={`${styles.searchField} ${styles.homeSearch}`}>
+                <span className="sr-only">행사명·고객사·장소 검색</span>
+                <input
+                  type="search"
+                  placeholder="행사 검색"
+                  aria-label="행사명·고객사·장소 검색"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+              </label>
+              <label className={`${styles.stageFilter} ${styles.homeStage}`}>
+                <span>진행 단계</span>
+                <select
+                  value={filter}
+                  onChange={(event) => setFilter(event.target.value as EventFilter)}
+                >
+                  {FILTERS.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label} ({counts[item.id]})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={`${styles.workFilter} ${styles.homeWork}`}>
+                <input
+                  type="checkbox"
+                  checked={needsWork}
+                  onChange={(event) => setNeedsWork(event.target.checked)}
+                  aria-label={`승인 대기 있는 행사만 보기 (${pendingQueueCount}건)`}
+                />
+                <span aria-hidden="true">승인 대기만 ({pendingQueueCount})</span>
+              </label>
+            </div>
+          }
+        />
         <div className={styles.directory}>
         <p className="sr-only" role="status">
           {filter === "all" && !needsWork && !query.trim() && !dateFilterActive
@@ -777,6 +775,9 @@ export default function ConsoleHome() {
             {view === "calendar" && selectedDate ? (
               <h3 className={styles.sectionTitle}>{describeDate(selectedDate)} 행사</h3>
             ) : null}
+            <div className={styles.directoryColumns} aria-hidden="true">
+              <span>행사·일정</span><span>고객사·장소</span><span>진행 상태</span><span>후속 작업</span>
+            </div>
             <ul className={styles.eventGrid}>
               {(view === "calendar" && selectedDate ? datedVisible : visibleEvents.filter((event) => view === "cards" || event.date)).map((event) => (
                 <li key={event.id}>

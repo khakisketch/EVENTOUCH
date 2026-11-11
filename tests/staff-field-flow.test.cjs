@@ -199,7 +199,9 @@ test('self-booth-qr-names-its-booth-above-the-code', () => {
 test('field-flow-keeps-touch-size-unobscured-scan-and-kiosk-distinction', () => {
   assert.match(work, /prizeStyles\.scanInput/);
   assert.match(work, /kiosk-mode/);
-  assert.match(work, /키오스크 모드/);
+  // 2026-11-10: 토글이 버튼 문구 전환식이 아닌 role=switch 트랙형으로 바뀌었다. 라벨은 고정 '키오스크'.
+  assert.match(work, /role="switch"/);
+  assert.match(work, /키오스크/);
   assert.match(styles, /\.nextActions button\s*\{[^}]*min-height:\s*44px/s);
   assert.match(styles, /\.recentRow button\s*\{[^}]*min-height:\s*44px/s);
   assert.match(styles, /\.scanPrimary\s*\{[^}]*min-height:\s*56px/s);
@@ -227,10 +229,13 @@ test('scan-320-fallback-peeks-without-a-fixed-overlay', () => {
   assert.match(globals, /\.staff-workspace\s+\.scan-form/);
   assert.match(globals, /@media\s*\(max-width:\s*360px\)[\s\S]*?\.staff-workspace\s+\.scan-form[\s\S]*?border-top:\s*0/);
   // Scan-first order stays: context + camera first, typed code below the hairline.
+  // 2026-11-10: 접힌 details 대신 스캔/명단 전환 버튼을 쓴다. 명단 경로는 숨기지 않는다.
+  // 순서는 모드 선택 → 안내 → 카메라 → 코드 입력이다.
+  const modeOrder = work.indexOf('entryModeSwitch');
   const scanOrder = work.indexOf('prizeStyles.scanContext');
   const cameraOrder = work.indexOf('카메라로 스캔');
-  const fallbackOrder = work.indexOf('카메라가 안 될 때');
-  assert.ok(scanOrder !== -1 && cameraOrder !== -1 && fallbackOrder !== -1 && scanOrder < cameraOrder && cameraOrder < fallbackOrder);
+  const codeOrder = work.indexOf('코드로 직접 처리');
+  assert.ok(modeOrder !== -1 && scanOrder !== -1 && cameraOrder !== -1 && codeOrder !== -1 && modeOrder < scanOrder && scanOrder < cameraOrder && cameraOrder < codeOrder);
 });
 
 test('scan-result-binds-request-location-not-current-selection', () => {

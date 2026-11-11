@@ -1,7 +1,7 @@
 # 조직 격리(멀티테넌시) 설계
 
-Status: 공유형 SaaS·복수 운영사 소속·기존 자료의 단일 기존 운영사 귀속을 사용자 승인했다. 후속 격리 구현·검증을 진행하며 기존 운영 DB에는 적용하지 않았다. 현재 결과의 정본은 `docs/STATUS.md`다.
-Related: `docs/ARCHITECTURE.md` 1절 목표, `docs/STATUS.md` 블로커.
+Scope: 공유형 SaaS·복수 운영사 소속·기존 자료의 단일 기존 운영사 귀속 정책과 경계를 정리한다. 구현 상태와 검증 완료 여부는 코드·테스트·현재 배포 설정을 확인한다.
+Related: `docs/ARCHITECTURE.md` 조직 격리 절.
 
 ## 구현 경계
 

@@ -562,7 +562,7 @@ a.pill:hover {
   gap: var(--s2);
   padding: var(--s2) var(--s4);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--paper);
   color: var(--ink);
   font-size: var(--small);
@@ -597,7 +597,7 @@ a.pill:hover {
   gap: var(--s3);
   padding: var(--s4) var(--s5);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-card);
   background: var(--paper);
 }
 
@@ -1337,7 +1337,7 @@ a.pill:hover {
   margin-right: 0;
   padding-inline: var(--s2);
   border: 1px solid transparent;
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   color: var(--ink);
   font-weight: 600;
   text-decoration: none;
@@ -1363,8 +1363,8 @@ a.pill:hover {
   gap: var(--s3);
   padding: var(--s4);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface-muted);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
 }
 
 .staff-assignment-summary {
@@ -2764,21 +2764,21 @@ a.pill:hover {
   display: inline-flex;
   min-height: 44px;
   align-items: center;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--brand-text);
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
+  color: var(--ink);
   font: inherit;
   font-weight: 700;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration: none;
   cursor: pointer;
 }
 
 .auth-form .auth-reset-help {
   margin: 0;
   padding: var(--s2) var(--s3);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--surface-muted);
   color: var(--ink);
   font-size: var(--small);
@@ -2804,7 +2804,7 @@ a.pill:hover {
 .auth-session-stale {
   margin: 0 0 var(--s4);
   padding: var(--s2) var(--s3);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--surface-muted);
   color: var(--ink);
   font-size: var(--small);
@@ -2814,14 +2814,14 @@ a.pill:hover {
   display: inline-flex;
   min-height: 44px;
   align-items: center;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--brand-text);
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
+  color: var(--ink);
   font: inherit;
   font-weight: 700;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration: none;
   cursor: pointer;
 }
 
@@ -3789,7 +3789,7 @@ a.pill:hover {
 }
 .auth-password { position: relative; }
 .auth-password input { width: 100%; padding-right: calc(var(--s8) + var(--s2)); }
-.auth-password button { position: absolute; top: 0; right: 0; min-width: 64px; min-height: 44px; padding: var(--s2); background: transparent; border: 0; color: var(--muted); font-size: var(--small); }
+.auth-password button { position: absolute; top: 0; right: 0; min-width: 64px; min-height: 44px; padding: var(--s2); background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-medium); color: var(--ink); font-size: var(--small); }
 .staff-assignment-row { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: var(--s4) 0; background: transparent; }
 @media (max-width: 560px) {
   .staff-assignment-summary { flex: 0 1 auto; }

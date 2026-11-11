@@ -24,7 +24,7 @@ async function main() {
     const scriptFailure = route => blockScripts && route.request().resourceType() === 'script' ? route.abort('failed') : route.continue();
     await page.route('**/_next/static/**', scriptFailure); await page.goto(ticketUrl, { waitUntil: 'domcontentloaded' });
     await page.getByText('티켓을 확인하고 있습니다.').waitFor(); const retry = page.getByRole('link', { name: '다시 불러오기', exact: true });
-    assert.equal(await retry.getAttribute('href'), '', 'the fallback does not copy the bearer into a link');
+    assert.equal(await retry.getAttribute('href') === '', true, 'the fallback does not copy the bearer into a link');
     await page.evaluate(axeSource);
     for (const width of [320, 390, 1280]) {
       await page.setViewportSize({ width, height: 844 });
@@ -43,24 +43,45 @@ async function main() {
     const blocked = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'ko-KR' });
     await blocked.addInitScript(() => { Object.defineProperty(window, 'sessionStorage', { get() { throw new DOMException('Unavailable', 'SecurityError'); } }); });
     const p = await blocked.newPage(); page = p;
-    let calls = 0, releaseFirst, started;
+    let calls = 0, documentLoads = 0, commandRequests = 0, firstRequest, releaseFirst, started;
     const firstStarted = new Promise(resolve => { started = resolve; });
     const held = new Promise(resolve => { releaseFirst = resolve; });
     const auth = [];
+    p.on('request', request => {
+      if (request.resourceType() === 'document') documentLoads += 1;
+      if (request.method() === 'POST' && request.url().endsWith('/commands')) commandRequests += 1;
+    });
     await p.route('**/api/public/events/*/ticket', async route => {
       calls += 1; auth.push(route.request().headers().authorization || '');
-      if (calls === 1) { started(); await held; return route.abort('failed').catch(() => {}); }
+      if (calls === 1) { firstRequest = route.request(); started(); await held; return route.abort('failed').catch(() => {}); }
       return route.continue();
     });
     await p.goto(ticketUrl, { waitUntil: 'domcontentloaded' }); await firstStarted;
     await p.waitForFunction(() => !new URL(location.href).searchParams.has('ticket'));
     const retryInTab = p.getByRole('link', { name: '다시 불러오기', exact: true });
+    const firstAborted = p.waitForEvent('requestfailed', { predicate: request => request === firstRequest });
+    firstAborted.catch(() => {});
     await retryInTab.click(); await qr(p).waitFor(); releaseFirst();
-    assert.equal(calls, 2); assert.equal(auth[0], `Bearer ${person.ticket}`); assert.equal(auth[1], auth[0]);
+    assert.match((await firstAborted).failure()?.errorText, /ERR_ABORTED/);
+    assert.equal(documentLoads, 1, 'hydrated retry retains the current document and memory-only bearer');
+    assert.equal(commandRequests, 0, 'ticket recovery is read-only');
+    assert.equal(calls, 2);
+    assert.equal(auth[0] === `Bearer ${person.ticket}`, true, 'initial read uses the linked bearer');
+    assert.equal(auth[1] === auth[0], true, 'retry retains exactly the same private bearer');
     assert.equal(await p.getByRole('heading', { name: person.name, exact: true }).count(), 1);
     assert.equal(new URL(p.url()).searchParams.has('ticket'), false);
+    const cleanUrl = p.url();
+    assert.ok((await p.locator('a[href]').evaluateAll(links => links.map(link => link.getAttribute('href')))).every(href => !href.includes('ticket=')), 'retry and copied links never expose the bearer');
     await blocked.close();
-    fs.writeFileSync(path.join(out, 'verification.json'), JSON.stringify({ synthetic: true, blockedScriptNativeReload: true, keyboard: true, memoryOnlyRetry: true, samePerson: true, widths: [320, 390, 1280], physicalDevices: false }, null, 2), { mode: 0o600 });
+    // A copied, cleaned address does not confer the private tab identity.
+    const separate = await browser.newContext();
+    const copied = await separate.newPage(); page = copied;
+    await copied.goto(cleanUrl, { waitUntil: 'networkidle' });
+    await copied.getByRole('heading', { name: '티켓이 확인되지 않습니다', exact: true }).waitFor();
+    assert.equal(await qr(copied).count(), 0);
+    assert.equal(new URL(copied.url()).searchParams.has('ticket'), false);
+    await separate.close();
+    fs.writeFileSync(path.join(out, 'verification.json'), JSON.stringify({ synthetic: true, blockedScriptNativeReload: true, keyboard: true, memoryOnlyRetry: true, sameDocument: true, supersededReadAborted: true, noCommands: true, copiedLinkIsolation: true, samePerson: true, widths: [320, 390, 1280], physicalDevices: false }, null, 2), { mode: 0o600 });
     console.log('PASS: unhydrated native reload and in-tab retry preserve the synthetic ticket');
   } catch (error) { if (page) await page.screenshot({ path: path.join(out, 'failure.png'), fullPage: true }).catch(() => {}); throw error; }
   finally { await browser?.close(); await f.close(); }

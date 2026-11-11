@@ -8,6 +8,7 @@ import type { CSSProperties } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import TicketView from "../ticket/TicketView";
+import { fetchWithDeadline } from "../../../../lib/request-deadline";
 import styles from "./home.module.css";
 import AttendeeHomeLanding, { HOME_MENUS, type HomeMenuKey } from "./AttendeeHomeLanding";
 import { DEFAULT_HOME_STYLE, normalizeHomeStyle, type HomeStyle } from "../../../../lib/attendee-home";
@@ -465,7 +466,7 @@ export default function HomeShell({ slug }: { slug: string }) {
   async function sendGuestCommand(snapshot: PendingGuestCommand): Promise<Record<string, unknown>> {
     let response: Response;
     try {
-      response = await fetch(`/api/events/${encodeURIComponent(snapshot.eventId)}/commands`, {
+      response = await fetchWithDeadline(`/api/events/${encodeURIComponent(snapshot.eventId)}/commands`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -480,7 +481,7 @@ export default function HomeShell({ slug }: { slug: string }) {
     } catch {
       throw { message: "서버 응답을 확인하지 못했습니다.", status: 0 };
     }
-    const data = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    const data = (await response.json()) as Record<string, unknown> | null;
     if (!response.ok) {
       throw {
         message: typeof data?.error === "string" ? data.error : "요청을 처리하지 못했습니다.",
@@ -1202,7 +1203,7 @@ export default function HomeShell({ slug }: { slug: string }) {
                 </Link>{" "}
               </>
             ) : null}
-            <Link className={styles.stateButton} href={`/event/${encodeURIComponent(slug)}`}>
+            <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>
               행사 안내로
             </Link>
           </p>
@@ -1432,7 +1433,7 @@ function NeedTicket({ slug }: { slug: string }) {
         {recoveryBlocked ? <><Link className={styles.needTicketButton} href={`/event/${encodeURIComponent(slug)}`}>
           행사 안내 확인
         </Link>{" "}</> : null}
-        <Link className={styles.needTicketButton} href={`/event/${encodeURIComponent(slug)}/register`}>
+        <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/register`}>
           처음 신청하기
         </Link>
       </p>
@@ -2048,7 +2049,7 @@ function StampTab({
               onClose={() => setCameraOpen(false)}
             />
           ) : (
-            <button type="button" className={styles.submitButton} onClick={() => setCameraOpen(true)} disabled={busy || pending}>
+            <button type="button" className="button button-secondary" onClick={() => setCameraOpen(true)} disabled={busy || pending}>
               카메라로 스캔
             </button>
           )}

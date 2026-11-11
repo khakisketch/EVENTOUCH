@@ -32,8 +32,8 @@
   --nav: #FAFBFC;
   --nav-hover: #EFF1F4;
   --nav-active: #FFF0E6;
-  --nav-text: #252A34;
-  --nav-muted: #626B78;
+  --nav-text: #1E2026;
+  --nav-muted: #61656C;
 
   --danger: #B21E35;
   --danger-soft: #F7E4E7;
@@ -53,10 +53,10 @@
   --focus: #2453A6;
   --report-color: var(--brand);
   --scrim: #10111480;
-  --shadow-color: #252A3412;
-  --shadow-soft: #252A3406;
+  --shadow-color: #1E202612;
+  --shadow-soft: #1E202606;
   --chart: var(--brand);
-  --chart-track: #E6E8EC;
+  --chart-track: #E5E5E7;
 
   --body-font: 'Pretendard Variable', Pretendard, 'Noto Sans KR', 'Segoe UI', 'Malgun Gothic', system-ui, sans-serif;
   --display-font: var(--body-font);

@@ -205,17 +205,19 @@ function phoneForRecipient(message, participantId) {
   return digitsOnly(match && match.phone);
 }
 
-async function dispatchCampaign(database, provider, dispatch, { now = new Date().toISOString() } = {}) {
+async function dispatchCampaign(database, provider, dispatch, { now = new Date().toISOString(), clock = Date.now, previousAcceptanceUnknown = false } = {}) {
   if (!provider || !dispatch || !dispatch.messageId) return { skipped: true };
   // A batch-capable provider (Solapi) takes a whole campaign in one request
   // and answers with what it accepted. Acceptance is not delivery, so the
   // campaign stays unresolved until polling confirms the real outcome.
   if (typeof provider.sendBatch === 'function') {
-    return dispatchCampaignBatch(database, provider, dispatch, { now });
+    return dispatchCampaignBatch(database, provider, dispatch, { now, clock, previousAcceptanceUnknown });
   }
 
   let finalMessage = null;
   const results = [];
+  const attemptedRecipients = new Set();
+  let stoppedByGuard = false;
   const { renderText, typedFor } = require('./messaging-solapi');
   // The generic HTTP contract has no approved Kakao template ID. It must
   // not claim to have sent an Alimtalk without carrying that approval.
@@ -225,18 +227,23 @@ async function dispatchCampaign(database, provider, dispatch, { now = new Date()
   // A crash after an individual HTTP request can leave the provider's
   // outcome unknown. Reserve before the first network call so recovery
   // never resubmits the whole campaign merely because the response vanished.
-  const reserved = await reserveBatchSubmission(database, dispatch, now, { kind: 'HTTP' });
+  const reserved = await reserveBatchSubmission(database, dispatch, now, { clock, kind: 'HTTP', providerKind: provider?.state?.provider, previousAcceptanceUnknown });
   if (!reserved.submission) return { attempted: false, message: reserved.message };
   for (const recipient of dispatch.recipients) {
     // The sender may have been stopped while an earlier recipient was in
     // flight. Check ownership before beginning each new provider call.
     const maySend = await database.transaction(async (client) => {
-      const row = await client.query('SELECT payload FROM event_workspaces WHERE event_id=$1 FOR UPDATE', [dispatch.eventId]);
-      const raw = row.rows[0]?.payload;
-      const ws = typeof raw === 'string' ? JSON.parse(raw) : raw;
-      const message = Array.isArray(ws?.messages) ? ws.messages.find(item => item?.id === dispatch.messageId) : null;
-      if (!(message && message.status === 'SENDING' && message.providerSubmission?.id === reserved.submission.id &&
-        message.genericAttemptActive === true && message.genericStopRequested !== true)) return false;
+      const { lockCampaignSnapshot } = require('./message-outbox');
+      const current = await lockCampaignSnapshot(client, dispatch.eventId, dispatch.messageId, {
+        now, clock, providerKind: provider?.state?.provider, submissionId: reserved.submission.id,
+        expectedGroupId: null, expectedDispatch: { ...dispatch, providerGroupId: null },
+        // Earlier HTTP calls may already be accepted. Never fail or erase
+        // their correlation merely because a later recipient is now blocked.
+        previousAcceptanceUnknown: previousAcceptanceUnknown || attemptedRecipients.size > 0,
+      });
+      const message = current?.message;
+      if (current?.blocked) stoppedByGuard = true;
+      if (!current || current.blocked || message.genericAttemptActive !== true || message.genericStopRequested === true) return false;
       // Renew while a live sender advances. The provider call itself has a
       // bounded timeout; a crashed sender stops renewing and recovery can
       // conservatively stop the remaining recipients after the lease expires.
@@ -249,15 +256,23 @@ async function dispatchCampaign(database, provider, dispatch, { now = new Date()
     const rendered = renderText(dispatch.text, recipient.variables);
     const planned = typedFor(dispatch.channel, rendered);
     let outcome;
-    try { outcome = alimtalkUnsupported ? { delivered: false, reason: 'ALIMTALK_UNSUPPORTED', error: '이 발송 연결은 승인된 알림톡 템플릿을 지원하지 않습니다.' }
-      : mmsUnsupported ? { delivered: false, reason: 'MMS_UNSUPPORTED', error: '이 발송 연결은 사진 문자를 지원하지 않습니다.' }
-      : planned.reason ? { delivered: false, reason: planned.reason, error: planned.reason === 'TOO_LONG' ? '개인화된 문자 내용이 발송 한도를 넘었습니다.' : '이 발송 채널을 지원하지 않습니다.' }
-      : await provider.send({
-      channel: planned.type,
-      to: recipient.phone,
-      text: rendered,
-      reference: `${dispatch.messageId}:${recipient.participantId}`,
-    }); } catch { outcome = { delivered: false, reason: 'TRANSPORT', error: '공급사의 접수 여부를 확인하지 못했습니다' }; }
+    try {
+      outcome = alimtalkUnsupported ? { delivered: false, reason: 'ALIMTALK_UNSUPPORTED', error: '이 발송 연결은 승인된 알림톡 템플릿을 지원하지 않습니다.' }
+        : mmsUnsupported ? { delivered: false, reason: 'MMS_UNSUPPORTED', error: '이 발송 연결은 사진 문자를 지원하지 않습니다.' }
+        : planned.reason ? { delivered: false, reason: planned.reason, error: planned.reason === 'TOO_LONG' ? '개인화된 문자 내용이 발송 한도를 넘었습니다.' : '이 발송 채널을 지원하지 않습니다.' }
+        : null;
+      if (!outcome) {
+        // A thrown/timeout response may still have reached the provider,
+        // unlike local validation or an unsent remainder.
+        attemptedRecipients.add(recipient.participantId);
+        outcome = await provider.send({
+          channel: planned.type,
+          to: recipient.phone,
+          text: rendered,
+          reference: `${dispatch.messageId}:${recipient.participantId}`,
+        });
+      }
+    } catch { outcome = { delivered: false, reason: 'TRANSPORT', error: '공급사의 접수 여부를 확인하지 못했습니다' }; }
     results.push({ ...recipient, ...outcome });
   }
 
@@ -308,8 +323,19 @@ async function dispatchCampaign(database, provider, dispatch, { now = new Date()
       }
       delivery.at = now;
     }
-    // Recipients not reached after a stop/crash boundary are left
-    // unconfirmed; the provider contract offers no authoritative lookup.
+    // A live sender knows which recipients a guard prevented it from
+    // attempting. Do not turn those into unknown supplier acceptances.
+    // Recovery/stop boundaries and earlier attempts remain conservative.
+    if (stoppedByGuard && !previousAcceptanceUnknown) {
+      const completed = new Set(results.map(result => result.participantId));
+      for (const delivery of deliveries) {
+        if (completed.has(delivery.participantId) || attemptedRecipients.has(delivery.participantId)) continue;
+        delivery.status = 'FAILED';
+        delivery.genericProviderResult = 'NOT_ACCEPTED';
+        delivery.error = '발송 조건이 변경되어 공급사에 제출하지 않았습니다';
+        delivery.at = now;
+      }
+    }
     unknown = deliveries.filter(delivery => delivery?.status === 'SENDING').length;
 
     // A partial send is neither a success nor a failure; say so rather than
@@ -332,20 +358,20 @@ async function dispatchCampaign(database, provider, dispatch, { now = new Date()
     );
   });
 
-  return { results, accepted: results.filter((item) => item.delivered).length, delivered: 0, message: finalMessage };
+  return { attempted: attemptedRecipients.size > 0, results, accepted: results.filter((item) => item.delivered).length, delivered: 0, message: finalMessage };
 }
 
 // Commit a correlation token before submitting. A crash after this point
 // leaves an unresolved submission that can be looked up without resending.
-async function reserveBatchSubmission(database, dispatch, now, { kind } = {}) {
+async function reserveBatchSubmission(database, dispatch, now, { clock = Date.now, kind, providerKind, previousAcceptanceUnknown = false } = {}) {
   return database.transaction(async (client) => {
-    const row = await client.query('SELECT payload FROM event_workspaces WHERE event_id = $1 FOR UPDATE', [dispatch.eventId]);
-    const raw = row.rows[0]?.payload;
-    const workspace = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    if (!Array.isArray(workspace?.messages)) return {};
-    const message = workspace.messages.find(item => item?.id === dispatch.messageId);
-    if (!message || message.status !== 'SENDING' || message.providerSubmission ||
-      (message.providerGroupId || null) !== (dispatch.providerGroupId || null)) return { message };
+    const { lockCampaignSnapshot } = require('./message-outbox');
+    const locked = await lockCampaignSnapshot(client, dispatch.eventId, dispatch.messageId, {
+      now, clock, providerKind, previousAcceptanceUnknown,
+      expectedGroupId: dispatch.providerGroupId || null, expectedDispatch: dispatch,
+    });
+    if (!locked || locked.blocked) return { message: locked?.message };
+    const { message, storedWorkspace: workspace } = locked;
     const submission = { id: randomUUID(), at: now, ...(kind ? { kind } : {}) };
     message.providerSubmission = submission;
     message.deliveryUnconfirmed = true;
@@ -368,7 +394,7 @@ async function reserveBatchSubmission(database, dispatch, now, { kind } = {}) {
 // Batch dispatch: one provider call for the whole campaign, then a write-back
 // that records acceptance per recipient. Delivery is deliberately left
 // unresolved — resolveDelivery() decides it from a later poll.
-async function dispatchCampaignBatch(database, provider, dispatch, { now = new Date().toISOString() } = {}) {
+async function dispatchCampaignBatch(database, provider, dispatch, { now = new Date().toISOString(), clock = Date.now, previousAcceptanceUnknown = false } = {}) {
   let finalMessage = null;
   let batchResult = null;
   let imageId = null;
@@ -394,7 +420,7 @@ async function dispatchCampaignBatch(database, provider, dispatch, { now = new D
     }
   }
   if (!batchResult) {
-    const reserved = await reserveBatchSubmission(database, dispatch, now);
+    const reserved = await reserveBatchSubmission(database, dispatch, now, { clock, providerKind: provider?.state?.provider, previousAcceptanceUnknown });
     if (!reserved.submission) return { attempted: false, message: reserved.message };
     submission = reserved.submission;
     try {

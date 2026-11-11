@@ -16,7 +16,7 @@
   min-height: 44px;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--line);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--paper);
   color: var(--muted);
   font-size: var(--small);
@@ -137,7 +137,7 @@
   min-height: 44px;
   padding: 8px 16px;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--paper);
   color: var(--ink);
   font-weight: 700;

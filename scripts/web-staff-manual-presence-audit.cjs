@@ -40,7 +40,7 @@ async function main() {
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(`${f.baseUrl}/staff/events/${f.eventId}`);
     await confirmInitialStaffDesk(page);
-    await page.getByText('카메라가 안 될 때 · 참가자 명단 확인').click();
+    await page.getByRole('button', { name: '명단 찾기', exact: true }).click();
     const search = page.locator('#staff-manual-search');
     await search.fill('감사 참가자');
     const row = (person) => page.getByRole('list', { name: '참가자 검색 결과' }).getByRole('listitem').filter({ hasText: person.name });
@@ -55,7 +55,7 @@ async function main() {
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `overflow ${width}`);
       assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter((item) => ['serious', 'critical'].includes(item.impact)).map((item) => item.id)), []);
       if (width !== 320) await page.screenshot({ path: path.join(out, `presence-${width}.png`), fullPage: true });
-      if (width === 390) await page.locator('details').filter({ hasText: '카메라가 안 될 때 · 참가자 명단 확인' }).screenshot({ path: path.join(out, 'manual-list-390.png') });
+      if (width === 390) await page.locator('#staff-manual-search').screenshot({ path: path.join(out, 'manual-list-390.png') });
     }
     await scan(people[1]);
     await row(people[1]).getByText('입장 중 아님', { exact: true }).waitFor();

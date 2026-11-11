@@ -13,6 +13,9 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { createRequire } = require('node:module');
+const webRequire = createRequire(path.join(__dirname, '../apps/web/package.json'));
+const ts = webRequire('typescript');
 
 const WEB = path.join(__dirname, '..', 'apps', 'web');
 
@@ -37,6 +40,16 @@ const PAGE_IDS = {
   participantImport: 'participantImport',
   rewards: 'rewards',
 };
+
+function findNodes(node, predicate, found = []) {
+  if (predicate(node)) found.push(node);
+  ts.forEachChild(node, (child) => { findNodes(child, predicate, found); });
+  return found;
+}
+
+function jsxAttribute(opening, name) {
+  return opening.attributes.properties.find((attribute) => ts.isJsxAttribute(attribute) && attribute.name.text === name);
+}
 
 test('records pages share the ConsolePage frame with registry menu ids', () => {
   for (const [key, rel] of Object.entries(PAGES)) {
@@ -77,7 +90,16 @@ test('toolbars separate filters, actions and conditional selection', () => {
   assert.match(participants, /전체 \{visiblePeople\.length\}명 선택/u);
   const home = read(PAGES.home);
   assert.match(home, /filters=\{/u);
-  assert.match(home, /actions=\{/u);
+  const tree = ts.createSourceFile('ConsoleHome.tsx', home, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const openings = findNodes(tree, (node) => ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node));
+  const headerOwners = openings.filter((node) => node.tagName.getText(tree) === 'ConsolePage' && jsxAttribute(node, 'headerActions'));
+  assert.equal(headerOwners.length, 1, 'directory creation belongs to one page header, not its filter toolbar');
+  assert.equal(jsxAttribute(headerOwners[0], 'pageId').initializer.text, 'events');
+  assert.match(jsxAttribute(headerOwners[0], 'headerActions').getText(tree), /setCreateOpen\(true\)/u);
+  const toolbar = openings.filter((node) => node.tagName.getText(tree) === 'ConsoleToolbar');
+  assert.equal(toolbar.length, 1);
+  assert.ok(jsxAttribute(toolbar[0], 'filters'));
+  assert.equal(jsxAttribute(toolbar[0], 'actions'), undefined);
   assert.doesNotMatch(home, /selection=\{/u, 'home has no selection row');
   const clients = read(PAGES.clients);
   assert.match(clients, /filters=\{/u, 'clients filters by name/contact/email');

@@ -219,8 +219,12 @@ async function main() {
 
   const restoredCounts = await lib.readCounts(options.project, user, database, { tables: Object.keys(manifest.counts) });
   const restoredMigrations = await lib.readMigrations(options.project, user, database);
-  const countDifferences = lib.sameCounts(manifest.counts, restoredCounts);
-  if (countDifferences.length) lib.fail(`복원 후 행 수가 다릅니다:\n${countDifferences.join('\n')}`);
+  if (manifest.countsStable === false) {
+    log('백업 중 쓰기가 있어 행 수 비교를 건너뜁니다 (복원·마이그레이션·파일 검사는 계속)');
+  } else {
+    const countDifferences = lib.sameCounts(manifest.counts, restoredCounts);
+    if (countDifferences.length) lib.fail(`복원 후 행 수가 다릅니다:\n${countDifferences.join('\n')}`);
+  }
   if (restoredMigrations.join('\n') !== manifest.source.migrations.join('\n')) {
     lib.fail('복원 후 마이그레이션 버전이 다릅니다');
   }

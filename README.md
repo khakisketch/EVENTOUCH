@@ -1,158 +1,29 @@
 # EVENTOUCH
 
-행사대행 운영사를 위한 행사 운영 웹 제품. 제품 UI는 Next.js 새 앱 하나이며,
-Node API 서버와 PostgreSQL이 뒤에서 행사 데이터를 권위로 들고 있다.
-운영사 콘솔, 현장 스태프 화면, 참가자 웹(신청·티켓 QR), 행사장 전광판을 같은 오리진에서 제공한다.
+행사대행사를 위한 한국어 행사 운영 SaaS입니다. 운영 콘솔, 현장 스태프, 참가자 웹과 공개 전광판을 하나의 Next.js 앱과 API로 제공합니다.
 
-- 지금 상태·검증 수치·블로커: **[docs/STATUS.md](docs/STATUS.md)** (현황 정본)
-- 구조: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · 디자인: [화이트 업무용 SaaS](DESIGN.md) · [적용·검증 상태](docs/STATUS.md)
-- 배포: [docs/DEPLOY.md](docs/DEPLOY.md) · 연동: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)
-- 참가자 사용 흐름 설계: [로컬 HTML 흐름도](journey-eventouch-attendee.html) (제품 화면이나 구현 완료 판정은 아님)
+## 시작
 
-## 스택
-
-- 프론트: `apps/web`(Next.js + TypeScript App Router). 유일한 제품 UI다.
-  브라우저는 이 앱의 오리진에만 닿고, `/api/*`는 같은 오리진 rewrite로 API에 전달된다.
-- 서버: Node 24 + `pg`의 API 전용 서버. `server/server.js`가 `/api/*`와 은퇴 워커
-  `/sw.js`만 답하고 저장소 정적 파일은 서빙하지 않는다.
-- DB: PostgreSQL. 앱 시작 시 번호순 마이그레이션을 적용한다.
-- 테스트: `node:test` + Playwright(감사·브라우저 계약).
-
-## 시작하기
+Node.js 24와 프로젝트 전용 PostgreSQL을 준비한 뒤:
 
 ```bash
 npm run setup
 npm run build
-npm start            # 감독 실행: API 8776 + 빌드된 Next 8777
+npm start
 ```
 
-개발 중에는:
-
-```bash
-npm run dev          # 감독 실행: API 8776 + Next dev 8777
-npm run api:start    # API만 직접 실행(Next 없이 API를 볼 때)
-```
-
-포트 기본값은 API 8776·웹 8777이며 `API_PORT`·`WEB_PORT`로 바꾼다.
-Next의 `/api/*` rewrite 목적지는 빌드 시 baked되므로, 다른 API를 바라보게 하려면
-같은 `EVENTOUCH_API_URL`로 빌드하고 실행한다(기본 `http://127.0.0.1:8776`).
-
-최초 관리자는 환경변수로만 만든다. 셋 다 있어야 생성된다.
-
-```bash
-PORT=8776 \
-DATABASE_URL='postgres://user:pass@host:5432/eventouch' \
-ADMIN_EMAIL='admin@example.com' \
-ADMIN_PASSWORD='8자 이상' \
-npm run api:start
-```
-
-컨테이너로 띄우려면:
-
-```bash
-POSTGRES_PASSWORD=... ADMIN_EMAIL=... ADMIN_PASSWORD=... docker compose up -d --build
-```
-
-`HOST_PORT`로 호스트에 게시되는 Next 포트를 바꾼다(내부 API는 공개 포트가 없다).
-
-### 다른 컴퓨터에서 이어서 개발
-
-Node.js 24와 npm을 준비하고, 이 프로젝트 전용 PostgreSQL을 별도로 마련한다.
-공개 GitHub 저장소에는 DB·업로드 파일·비밀번호·검증 캡처가 포함되지 않는다.
-
-```bash
-git clone --branch main https://github.com/khakisketch/EVENTOUCH.git
-cd EVENTOUCH
-npm run setup
-```
-
-개발용 DB 연결과 최초 관리자 정보를 **실행 환경**에 설정한 뒤 `npm run dev`를 실행한다.
-`DATABASE_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` 등의 설정과 Docker 실행 방법은
-[배포 안내](docs/DEPLOY.md)를 따른다. 실제 운영 자격증명이나 사용자 데이터를 Git에 넣지 않는다.
-문자 검증에는 실발송 자격증명 대신 `EVENTOUCH_SMS_MOCK=1`을 사용한다.
-
-전체 회귀에는 개발 DB와 분리된 loopback 테스트 DB와 Chromium이 필요하다. 아래 URL은 예시이며,
-별도로 만든 테스트 DB의 접속 정보를 사용한다.
-
-```bash
-npx playwright install --with-deps chromium
-EVENTOUCH_TEST_DATABASE_URL='postgres://<user>:<password>@127.0.0.1:5432/eventouch_test' npm run verify:system
-```
-
-기존 컴퓨터의 DB·파일을 옮겨야 한다면 [백업·복구 절차](docs/DEPLOY.md#백업과-복구)를
-별도로 검토한다. Git 복제만으로 기존 사용자 데이터가 이전되지는 않는다.
+개발 서버는 `npm run dev`입니다. DB·최초 관리자 설정과 컨테이너 실행은 [배포 안내](docs/DEPLOY.md)를 따릅니다. 운영 비밀번호·고객 데이터·검증 증거를 저장소에 두지 마세요.
 
 ## 검증
 
-DB가 있어야 백엔드 테스트와 감사가 실제로 돈다. 없이 돌리면 스킵되고, 러너가 그것을 실패로 처리한다.
-전체 테스트와 브라우저 감사에는 Chromium도 필요하다. 콘솔 감사의 모의 카메라 영상에는
-`ffmpeg` 실행 파일이 필요하다(Ubuntu: `sudo apt-get install ffmpeg`). 의존성 설치 후
-`npx playwright install --with-deps chromium`을 실행하거나 `CHROMIUM_EXECUTABLE`로 호환 브라우저를 지정한다.
+직렬 DB 통합 테스트에는 별도의 loopback 테스트 데이터베이스를 `EVENTOUCH_TEST_DATABASE_URL`로 지정합니다. 누락된 DB 설정은 통과로 보지 않습니다. 브라우저 감사에는 빌드와 Chromium이 필요합니다. `npm run`으로 현재 제공하는 검증 명령을 확인하고, 결과는 해당 테스트·CI 실행 기록에서 확인하세요.
 
-```bash
-EVENTOUCH_TEST_DATABASE_URL='postgres://...' npm test    # 스킵 0이어야 통과(최신 수치는 docs/STATUS.md)
-EVENTOUCH_A11Y_DATABASE_URL='postgres://...' npm run a11y # 기존 Next 빌드로 격리 접근성 감사
-EVENTOUCH_MOBILE_DATABASE_URL='postgres://...' npm run mobile # 6기기×2방향×6실경로=72 레이아웃 검사(넘침·44px)
-npm run web:audit                                       # 격리 접근성·넘침·참가자 홈 기하 감사
-EVENTOUCH_TEST_DATABASE_URL='postgres://.../eventouch_test' npm run verify:system # 빌드부터 전체 직렬 검증·로그 보존
-EVENTOUCH_TEST_DATABASE_URL='postgres://...' npm run web:console:audit # 콘솔 공통 구조·입력 보호·재시도·보고서 출력
-```
+자동 검증은 실기기·Safari·스크린리더 실청취·실발송·고객 수용·운영 배포를 입증하지 않습니다. 실기기 확인에는 [확인 목록](scripts/device-checklist.md)을 사용하고, 운영 수용 기록은 `ops/acceptance.example.json`을 기준으로 저장소 밖에 작성합니다.
 
-`npm run test:raw`는 러너 없이 `node --test`를 직접 돌린다(스킵 허용).
-`a11y`·`mobile`·`web:audit`·`web:console:audit`는 `npm run build`로 만든 `.next`를 임시 Next에서 실행한다.
-서버 렌더도 같은 격리 API를 사용하며 종료 때 자기 서버와 픽스처만 정리한다.
-이 명령들의 `WEB_BASE`는 대체되며, 외부 실행 서버·배포본을 검사한 증거가 아니다.
-참가자 가져오기·한울·테마 브라우저 감사는 `npm run web:import:audit`·
-`npm run web:hanwool:audit`·`npm run web:theme:audit`이며, 격리 DB와 먼저 만든
-빌드가 필요하다. 각 감사가 자체 Next·API를 실행하므로 외부 `WEB_BASE`를 검사하지 않는다.
-참가자 신청 정보·티켓·행사 참여 여정과 행사별 메뉴 노출은
-`web:attendee:audit`·`web:attendee-visibility:audit`로 검사하며 `verify:system`과
-CI 웹 감사에 포함된다. 독립 실행에는 격리 DB와 새
-`EVENTOUCH_CAPTURE_ROOT`가 필요하다.
+## 정본
 
-## 백업·복구
-
-compose 배포본의 DB와 파일 볼륨을 한 번에 백업하고, 체크섬·행 수·파일 해시까지 검증하는
-리허설을 지원한다.
-
-```bash
-npm run backup -- --project eventouch --out /var/backups/eventouch/2026-10-17
-npm run backup:verify -- --project eventouch --out /tmp/eventouch-backup-check
-node scripts/restore.cjs <백업 디렉터리> --project eventouch-restore \
-  --storage-volume eventouch-restore_etko-storage
-```
-
-출력에는 개인정보가 있으므로 저장소 밖에 두고 접근을 제한한다. 세부 절차·복구 순서·
-현재 한계(PITR 없음)는 [docs/DEPLOY.md](docs/DEPLOY.md)를 따른다.
-
-## 디렉터리
-
-```
-apps/web/               유일한 제품 UI(Next.js+TS App Router, CSS 모듈, /api rewrite)
-apps/web/app/           라우트: /(랜딩) · /login · /console/** · /event/[slug]/** ·
-                        /staff/** · /screen/[slug] · /invite/[token]
-apps/web/app/console/console-ui/  콘솔 공용 프레임·도구막대·섹션·입력/작업·피드백·대화상자
-apps/web/app/console/console-navigation.ts  메뉴 이름·경로 정본(권한 판정과 분리)
-apps/web/app/tokens.css 제품 디자인 토큰 정본
-apps/web/proxy.ts       문서 응답 보안 헤더 경계(API rewrite 제외)
-server/                 API·인증·권한·커맨드·발송·파일(정적 서빙 없음)
-server/commands/        이벤트 커맨드 묶음 + 실행기(domain·participants·operations)
-server/fastify/         TypeScript 경계 모듈(health·공개 읽기·조직 REST·커맨드 경로)
-server/migrations/      번호순 SQL 마이그레이션
-server/sw.js            은퇴 워커(구 셸 캐시 eventouch-shell-*만 정리 후 등록 해제)
-server/legacy-events.js 과도기 JSON 저장소 폴백(운영에서 410 반환)
-tests/                  node:test 스위트(+ helpers/postgres-api-server.cjs)
-scripts/                감독 실행, 테스트 러너, 접근성·모바일·웹 감사, 격리 감사 픽스처
-docs/                   정본 문서(+ archive/ = 지난 계획 기록, 현재 지침 아님)
-tests/fixtures/         테스트가 읽는 고정 자산(부스 지도 예시 이미지 등)
-scripts/serve-demo.sh   이 환경의 데모 서버 시작(API+웹 감독 실행, 기존 데이터 보존)
-```
-
-## 이 저장소에서 지켜지는 규율
-
-- **서버 권위**: 운영 모드에서 행사 데이터의 유일한 권위는 PostgreSQL이다.
-  JSON 저장소(`DATA_DIR`)는 데이터베이스 없이 띄운 과도기 모드에서만 동작한다.
-- **단일 쓰기 경로**: 행사 쓰기는 멱등 커맨드 경로 하나로만 처리하고, 발송은 커밋 이후에 실행한다.
-- **문서**: 현황·수치는 `docs/STATUS.md` 한 곳에만 쓴다. 지난 서술은 `docs/archive/`로 내린다.
-
-에이전트로 작업할 때의 프로젝트 규칙은 [AGENTS.md](AGENTS.md)에 있다.
+- [제품 경계](PRODUCT.md) · [고객 요구·미확정 범위](docs/CONTRACT-SCOPE.md)
+- [인증·권한·데이터 계약](docs/ARCHITECTURE.md)
+- [배포·백업·복구](docs/DEPLOY.md) · [외부 연동·실발송](docs/INTEGRATIONS.md)
+- [UX 계약](UX-CONTRACT.md) · [디자인 입력](DESIGN.md)
+- 프로젝트 작업 원칙: [AGENTS.md](AGENTS.md)

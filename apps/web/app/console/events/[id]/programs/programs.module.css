@@ -56,7 +56,7 @@
 .typeBadge {
   padding: 2px var(--s2);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-small);
+  border-radius: 999px;
   background: var(--surface-muted);
   color: var(--ink);
   font-weight: 650;
@@ -64,7 +64,7 @@
 
 .status {
   padding: 2px var(--s2);
-  border-radius: var(--radius-small);
+  border-radius: 999px;
   font-weight: 650;
 }
 
@@ -103,7 +103,7 @@
   margin: 0;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--warning-line);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--warning-soft);
   color: var(--warning);
   font-size: var(--small);
@@ -113,7 +113,7 @@
   margin: 0;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--info-line);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--info-soft);
   color: var(--info);
   font-size: var(--small);
@@ -253,14 +253,14 @@
   width: 100%;
   max-width: 320px;
   height: auto;
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
 }
 
 .empty {
   margin: 0;
   padding: var(--s5);
   border: 1px dashed var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   color: var(--muted);
   text-align: center;
 }
@@ -289,7 +289,7 @@
   margin: 0 0 var(--s2);
   padding: var(--s2) var(--s3);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--paper);
   font-size: var(--small);
 }
@@ -385,7 +385,7 @@
   gap: var(--s2);
   padding: var(--s3);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
 }
 
 .recovery h2, .recovery p { margin: 0; }
@@ -429,7 +429,7 @@
   }
 }
 
-/* Korean prose wraps at 어절 boundaries (keep-all, DESIGN.md typography),
+/* Korean prose wraps at 어절 boundaries (keep-all),
    never mid-syllable at 320–390px. .detail/.itemText/.itemMeta/.resultList
    already carry break-word for unbroken tokens; this only changes where
    normal Korean may break. */
@@ -456,5 +456,5 @@
 .moduleDetails[open] { display: grid; gap: var(--s3); }
 
 .workspacePurpose { margin: 0 0 var(--s3); color: var(--muted); max-width: 76ch; }
-.workspacePurpose a { color: var(--brand-text); display: inline-flex; align-items: center; min-height: 44px; font-weight: 600; }
+.workspacePurpose a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--s3); border: 1px solid var(--line-strong); border-radius: var(--radius-medium); background: var(--paper); color: var(--ink); font-weight: 600; text-decoration: none; }
 .returnLink { margin-top: var(--s3); }

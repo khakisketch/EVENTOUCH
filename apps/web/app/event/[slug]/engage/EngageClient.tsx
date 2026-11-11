@@ -5,6 +5,7 @@ import ValidatedForm from "../../../ui/ValidatedForm";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { fetchWithDeadline, withRequestDeadline } from "../../../../lib/request-deadline";
 import styles from "./engage.module.css";
 import { isRecoveryBlocked, useVerificationMode } from "../../../../lib/use-verification-mode";
 import { readGuestReceipts, writeGuestReceipts, type GuestReceiptPointer } from "../../../../lib/receipt-recovery";
@@ -470,7 +471,8 @@ export default function EngageClient({ slug }: { slug: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    const live = () => !cancelled && liveSlugRef.current === slug;
+    const controller = new AbortController();
+    const live = () => !cancelled && !controller.signal.aborted && liveSlugRef.current === slug;
     async function load() {
       if (ticketSlugRef.current !== slug) {
         ticketSlugRef.current = slug;
@@ -497,6 +499,7 @@ export default function EngageClient({ slug }: { slug: string }) {
       try {
         const publicRes = await fetch(`/api/public/events/${encodeURIComponent(slug)}`, {
           cache: "no-store",
+          signal: controller.signal,
         });
         const publicData = (await publicRes.json().catch(() => null)) as {
           event?: { id?: unknown; name?: unknown } | null;
@@ -512,6 +515,7 @@ export default function EngageClient({ slug }: { slug: string }) {
           ...(ticket ? { headers: { authorization: `Bearer ${ticket}` } } : {}),
           credentials: ticket || storageUsable || allowSession ? "same-origin" : "omit",
           cache: "no-store",
+          signal: controller.signal,
         });
         const ticketData = (await ticketRes.json().catch(() => null)) as {
           error?: unknown;
@@ -650,9 +654,14 @@ export default function EngageClient({ slug }: { slug: string }) {
         if (live()) setState({ kind: "failed", message: "연결하지 못했습니다. 다시 시도하세요.", eventName: "", hasTicket: Boolean(ticketRef.current) });
       }
     }
-    void load();
+    void withRequestDeadline(() => load(), controller).catch(() => {
+      if (!cancelled && liveSlugRef.current === slug) {
+        setState({ kind: "failed", message: "연결하지 못했습니다. 다시 시도하세요.", eventName: "", hasTicket: Boolean(ticketRef.current) });
+      }
+    });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [slug, reloadTick]);
 
@@ -664,7 +673,7 @@ export default function EngageClient({ slug }: { slug: string }) {
     commandId = commandIdFor(formKey),
     ticket = ticketRef.current
   ): Promise<Record<string, unknown>> {
-    const response = await fetch(`/api/events/${encodeURIComponent(eventId)}/commands`, {
+    const response = await fetchWithDeadline(`/api/events/${encodeURIComponent(eventId)}/commands`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -672,7 +681,7 @@ export default function EngageClient({ slug }: { slug: string }) {
       },
       body: JSON.stringify({ commandId, command, payload }),
     });
-    const data = (await response.json().catch(() => null)) as {
+    const data = (await response.json()) as {
       error?: unknown;
       field?: unknown;
       code?: unknown;

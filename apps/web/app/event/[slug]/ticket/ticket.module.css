@@ -1,5 +1,4 @@
-/* EVENTOUCH Next.js — Participant Ticket UI improvements.
-   Reuses tokens from app/tokens.css. Imported by TicketView.tsx. */
+/* Event identity and person precede the QR; only recovery states need panels. */
 .ticketLoadingStatus {
   margin: 0;
 }
@@ -14,45 +13,27 @@
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--brand-text);
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
+  color: var(--ink);
   font: inherit;
   font-weight: 650;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration: none;
   cursor: pointer;
 }
 
 .ticketCard {
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
-  padding: var(--s5);
   max-width: var(--web-ticket-max);
   margin: 0 auto;
+  padding: var(--s5) 0;
+  background: var(--paper);
 }
 
 .ticketCard.ticketMessage {
-  border-color: var(--line-strong);
-  text-align: center;
-  padding: var(--s6) var(--s5);
-}
-
-/* Fresh-registration receipt: one status line above the ticket heading. It
-   reads as a completion first and a pass second, then never replays. */
-.ticketSuccess {
-  margin: 0 0 var(--s4);
-  padding: var(--s3) var(--s4);
-  border: 1px solid var(--success-line);
-  border-radius: var(--radius-small);
-  background: var(--success-soft);
-  color: var(--success);
-  font-size: var(--small);
-  font-weight: 700;
-  line-height: 1.55;
-  text-align: center;
+  padding-block: var(--s6);
+  text-align: left;
 }
 
 .ticketMessage h1 {
@@ -66,68 +47,90 @@
   overflow-wrap: anywhere;
 }
 
-.ticketHeading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--s2);
-  margin-bottom: var(--s4);
+.ticketSuccess {
+  margin: 0 0 var(--s5);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--success-line);
+  border-radius: var(--radius-medium);
+  background: var(--success-soft);
+  color: var(--success);
+  font-size: var(--small);
+  font-weight: 650;
+  line-height: 1.6;
 }
 
-.ticketLabel {
-  display: inline-block;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: var(--brand-text);
-  font-weight: 800;
+.ticketHeading {
+  display: grid;
+  justify-items: start;
+  gap: var(--s2);
+  margin-bottom: var(--s5);
 }
 
 .ticketHeading h1 {
-  font-family: var(--display-font);
-  font-size: 22px;
-  font-weight: 800;
+  margin: 0;
+  font-size: var(--h2);
+  font-weight: 750;
   line-height: 1.3;
-  margin: var(--s2) 0 var(--s1);
   letter-spacing: -0.02em;
 }
 
-.ticketHeading p {
-  font-size: var(--small);
-  color: var(--muted);
+.ticketHeading p,
+.ticketAttendee p {
   margin: 0;
-  max-width: none;
+  color: var(--muted);
+  font-size: var(--small);
+  overflow-wrap: anywhere;
+}
+
+.ticketHeading .ticketEventName {
+  color: var(--ink);
+  font-size: var(--h3);
+  font-weight: 650;
+  line-height: 1.45;
+  word-break: keep-all;
 }
 
 .ticketAttendee {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--s2);
+  gap: var(--s1) var(--s3);
   margin-bottom: var(--s4);
 }
 
-.ticketAttendee h2 {
-  font-size: 24px;
-  font-weight: 800;
+.ticketAttendeeName {
+  grid-column: 1;
   margin: 0;
+  font-size: var(--h2);
+  font-weight: 750;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
-.ticketAttendee p {
-  font-size: var(--small);
-  color: var(--muted);
-  margin: 0;
+.ticketAttendee > p:not(.ticketEntryState) {
+  grid-column: 1;
 }
 
 .ticketEntryState {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
+  min-height: 36px;
+  max-width: 100%;
+  padding: var(--s2) var(--s3);
   border-radius: 999px;
   font-size: var(--small);
-  font-weight: 700;
-  white-space: nowrap;
+  font-weight: 650;
+  line-height: 1.4;
+  text-align: center;
+  word-break: keep-all;
+}
+
+.ticketAttendee .ticketEntryState {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  margin: 0;
 }
 
 .ticketEntryState[data-tone="good"] {
@@ -136,8 +139,8 @@
 }
 
 .ticketEntryState[data-tone="wait"] {
-  background: var(--warning-soft);
-  color: var(--warning);
+  background: var(--brand-tint);
+  color: var(--brand-text);
 }
 
 .ticketEntryState[data-tone="bad"] {
@@ -145,26 +148,19 @@
   color: var(--danger);
 }
 
-.statusDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
 .ticketQrWrapper {
+  margin-bottom: var(--s5);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line);
   text-align: center;
-  margin-bottom: var(--s3);
 }
 
-/* Staff scan this code at the desk: the QR standard asks for four clear
-   modules around the symbol, and a phone camera needs that margin to lock
-   on. */
+/* Preserve the pure-white four-module quiet zone and existing code size. */
 .ticketQr {
   display: inline-block;
+  max-width: 100%;
   padding: var(--s5);
   background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 12px;
   user-select: none;
   line-height: 0;
 }
@@ -175,57 +171,75 @@
 }
 
 .ticketInstruction {
-  font-size: var(--label);
-  color: var(--muted);
-  margin-top: var(--s2);
-  margin-bottom: 0;
   max-width: none;
+  margin: var(--s2) 0 0;
+  color: var(--muted);
+  font-size: var(--small);
+  line-height: 1.6;
 }
 
 .ticketActions {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--s2);
-  justify-content: center;
-  margin-bottom: var(--s4);
+  margin-bottom: var(--s5);
+}
+
+.ticketActions .buttonSecondary {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 48px;
+  padding-inline: var(--s2);
+  text-align: center;
 }
 
 .ticketRecovery {
   max-width: none;
   margin: 0;
-  padding: var(--s3) var(--s4);
-  border: 1px solid var(--info-line);
-  border-radius: var(--radius);
-  background: var(--info-soft);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: var(--small);
-  line-height: 1.55;
-  text-align: center;
+  line-height: 1.65;
 }
 
 .ticketRecovery a {
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
+  font-weight: 650;
+  text-decoration: none;
 }
 
-/* Manual re-check failure: the info strip above already owns the neutral
-   recovery guidance, so a failed re-check reads as an error (danger voice)
-   instead of a second identical blue panel. The QR stays mounted; only the
-   verdict wording changes. */
+/* A pending verdict is not ordinary tab guidance: it stays an info panel. */
+.ticketQrWrapper .ticketRecovery {
+  margin: 0 0 var(--s3);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
+  color: var(--ink);
+  text-align: left;
+}
+
 .ticketRecheckError {
   margin: var(--s2) 0 0;
   padding: var(--s3) var(--s4);
   border: 1px solid var(--danger-line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--danger-soft);
   color: var(--danger);
   font-size: var(--small);
-  font-weight: 700;
-  line-height: 1.55;
-  text-align: center;
+  font-weight: 650;
+  line-height: 1.6;
   overflow-wrap: anywhere;
   word-break: keep-all;
 }
 
-.ticketQrWrapper .ticketRecovery,
 .ticketQrWrapper .ticketRecheckError {
   margin: 0 0 var(--s3);
 }
@@ -233,16 +247,16 @@
 .buttonPrimary,
 .buttonSecondary {
   display: inline-flex;
-  min-height: 44px;
   align-items: center;
   justify-content: center;
   gap: var(--s2);
+  min-height: 44px;
   padding: var(--s2) var(--s4);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  text-decoration: none;
+  border-radius: var(--radius-medium);
   font-size: var(--small);
   font-weight: 650;
+  text-decoration: none;
 }
 
 .buttonPrimary {
@@ -254,28 +268,39 @@
 .buttonSecondary {
   background: var(--paper);
   color: var(--ink);
-  border-color: var(--line-strong);
 }
 
-.buttonPrimary:hover {
+.buttonPrimary:hover:not(:disabled) {
   background: var(--brand-hover);
   border-color: var(--brand-hover);
   color: var(--on-brand-hover);
 }
 
-.buttonSecondary:hover {
+.buttonSecondary:hover:not(:disabled) {
   background: var(--surface-muted);
 }
 
-.ticketUnusable {
-  font-size: var(--small);
-  color: var(--muted);
-  margin-bottom: var(--s4);
-  max-width: none;
+.buttonPrimary:disabled,
+.buttonSecondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
-/* Receipt, entry and recovery instructions remain readable by word on
-   phones; a genuinely unbroken long token may still wrap rather than spill. */
+.buttonPrimary:focus-visible,
+.buttonSecondary:focus-visible,
+.ticketLoadingRetry:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.ticketUnusable {
+  max-width: none;
+  margin-bottom: var(--s4);
+  color: var(--muted);
+  font-size: var(--small);
+  line-height: 1.65;
+}
+
 .ticketSuccess,
 .ticketInstruction,
 .ticketRecovery,
@@ -285,80 +310,10 @@
   overflow-wrap: break-word;
 }
 
-@media (max-width: 480px) {
-  .ticketCard {
-    padding: var(--s4);
-  }
-
-  .ticketPassDivider {
-    margin-inline: calc(var(--s4) * -1);
-  }
-
-  .ticketQr svg {
-    width: 180px !important;
-    height: 180px !important;
-  }
-}
-
-/* Ticket reading order (white work SaaS, open pass): receipt → event → who →
-   entry state → code → what to do. Eyebrow labels separate the groups so a
-   first-time attendee never mistakes the receipt for the pass; the QR keeps
-   its quiet zone and gains a functional perforation cut above the stub. */
-.ticketEventName {
-  font-family: var(--display-font);
-  font-size: 22px;
-  font-weight: 800;
-  line-height: 1.3;
-  margin: var(--s2) 0 var(--s1);
-  letter-spacing: -0.02em;
-  word-break: keep-all;
-  overflow-wrap: anywhere;
-}
-
-.ticketAttendeeName {
-  font-size: 24px;
-  font-weight: 800;
-  margin: 0;
-  word-break: keep-all;
-  overflow-wrap: anywhere;
-}
-
-.ticketEntryState {
-  min-height: 44px;
-  padding: 6px 18px;
-  font-size: var(--small);
-}
-
-.ticketPassDivider {
-  margin: var(--s4) calc(var(--s5) * -1) 0;
-  border-top: 2px dashed var(--line-strong);
-}
-
-.ticketQrFrame {
-  display: grid;
-  justify-items: center;
-  gap: var(--s2);
-  padding-top: var(--s4);
-}
-
-.ticketActionsStack {
-  display: grid;
-  gap: var(--s2);
-  justify-items: center;
-  margin-bottom: var(--s4);
-}
-
-.ticketActionsStack .buttonPrimary,
-.ticketActionsStack .buttonSecondary {
-  min-height: 48px;
-  min-width: min(100%, 320px);
-  font-weight: 750;
-}
-
 .ticketMessageActions {
   display: grid;
+  justify-items: stretch;
   gap: var(--s2);
-  justify-items: center;
   margin: var(--s3) 0 0;
 }
 
@@ -369,15 +324,20 @@
 .ticketMessageActions .buttonPrimary,
 .ticketMessageActions .buttonSecondary {
   min-height: 48px;
-  min-width: min(100%, 320px);
+  max-width: 100%;
 }
 
-.ticketMessageActions .recoverPrimary { width: 100%; min-height: 48px; }
+.ticketMessageActions .recoverPrimary {
+  width: 100%;
+  min-height: 48px;
+}
+
 .ticketMessageActions button.recoverSecondary[type="submit"] {
   background: var(--paper);
   border-color: var(--line-strong);
   color: var(--ink);
 }
+
 @media (hover: hover) {
   .ticketMessageActions button.recoverSecondary[type="submit"]:hover {
     background: var(--soft);
@@ -386,34 +346,59 @@
   }
 }
 
+.application {
+  text-align: left;
+}
+
+.applicationList {
+  margin: var(--s5) 0;
+  border-top: 1px solid var(--line);
+}
+
+.applicationList > div {
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) 2fr;
+  gap: var(--s3);
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.applicationList dt {
+  font-weight: 650;
+}
+
+.applicationList dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 480px) {
+  .ticketCard {
+    padding-block: var(--s4);
+  }
+
+  .ticketQr svg {
+    width: 180px !important;
+    height: 180px !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .ticketAttendee {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s2);
+  }
+
+  .ticketAttendee .ticketEntryState {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ticketCard {
     scroll-behavior: auto;
   }
 }
-
-/* The pass remains the real server-backed ticket; the title and event
-   context make its purpose clear before the status and scannable code. */
-.ticketHeading h1 { margin: 0; font-size: 24px; }
-.ticketHeading .ticketEventName {
-  margin: 0;
-  color: var(--ink);
-  font-size: 18px;
-  font-weight: 700;
-  text-align: center;
-}
-.ticketHeading p, .ticketAttendee p { overflow-wrap: anywhere; }
-.ticketQr { max-width: 100%; }
-.ticketActionsStack .buttonSecondary { max-width: 100%; text-align: center; }
-.application { text-align: left; }
-.applicationList { margin: 20px 0; border-top: 1px solid var(--line); }
-.applicationList > div { display: grid; grid-template-columns: minmax(80px, 1fr) 2fr; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
-.applicationList dt { font-weight: 700; }
-.applicationList dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
-
-.ticketHeading { gap: var(--s1); margin-bottom: var(--s3); }
-.ticketHeading h1 { margin: 0; }
-.ticketAttendee { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--s1) var(--s3); margin-bottom: var(--s3); }
-.ticketAttendee h2 { grid-column: 1; font-size: var(--h2); }
-.ticketAttendee > p:not(.ticketEntryState) { grid-column: 1; }
-.ticketAttendee .ticketEntryState { grid-column: 2; grid-row: 1 / 3; margin: 0; }

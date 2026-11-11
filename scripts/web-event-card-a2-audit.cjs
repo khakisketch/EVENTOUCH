@@ -1,16 +1,15 @@
 'use strict';
 const { openCreateSettings } = require('./ui-journey-helpers.cjs');
 
-// Event-card product audit: the approved white directory row (flat white
-// zone + 8px published-color identity dot), published-only theme link, and
+// Event-card product audit: the current directory-row implementation,
+// published-only theme link, and
 // in-dialog duplication against a real production build with an isolated
 // API/PostgreSQL fixture. Nothing here touches a deployed, review, or shared
 // database: all writes land in the harness's dropped schema.
 //
-// The retired A2 full-header tint is NOT the authority here: the 2026-10-27
-// approved white contract (DESIGN.md "화이트 업무용 SaaS", Cards/Tiles/Rows;
-// console-home.module.css identity dot) keeps every row zone flat white and
-// represents the published participant-home background only in the dot.
+// The retired A2 full-header tint is historical. This audit checks the
+// current directory-row implementation and published-color treatment; it does
+// not make those choices mandatory for other screens.
 // The customer published attendee home itself is untouched by this audit.
 // Captures honor EVENTOUCH_CAPTURE_ROOT when set, else
 // /tmp/eventouch-private-<uid>/eventouch-captures/event-card-a2/. (per-run leaf; fresh per run).
@@ -52,21 +51,44 @@ function contrast(fg, bg) {
   return (light + 0.05) / (dark + 0.05);
 }
 
+// Browser-serializable: transparent children expose their ancestor paint.
+// Unsupported paint fails closed rather than inventing a contrast result.
+function effectiveBackground(element) {
+  const rgb = [0, 0, 0];
+  let coverage = 0;
+  for (let node = element; node; node = node.parentElement) {
+    const style = getComputedStyle(node);
+    if (Number(style.opacity) !== 1) throw new Error('group opacity requires pixel-based background measurement');
+    if (coverage === 1) continue;
+    if (style.backgroundImage !== 'none') throw new Error('background image requires pixel-based background measurement');
+    const match = /^rgba?\(\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\s*\)$/.exec(style.backgroundColor);
+    if (!match) throw new Error(`expected an rgb color, got ${style.backgroundColor}`);
+    const color = match.slice(1, 4).map(Number);
+    const alpha = match[4] === undefined ? 1 : Number(match[4]);
+    if (color.some(channel => !Number.isFinite(channel) || channel < 0 || channel > 255) || !Number.isFinite(alpha) || alpha < 0 || alpha > 1) {
+      throw new Error(`invalid rgb color: ${style.backgroundColor}`);
+    }
+    const contribution = (1 - coverage) * alpha;
+    for (let i = 0; i < 3; i++) rgb[i] += color[i] * contribution;
+    coverage += contribution;
+  }
+  if (coverage !== 1) throw new Error('no explicit opaque background behind the audited content');
+  return rgb.map(Math.round);
+}
+
 async function main() {
   prepareCaptureDir(OUT);
   process.env.TMPDIR = ensureRunTmpDir(OUT);
   const buildId = fs.readFileSync(path.join(__dirname, '..', 'apps', 'web', '.next', 'BUILD_ID'), 'utf8').trim();
   assert.ok(buildId, 'event-card-a2 audit requires a production Next build');
-  // Historical baseline pointer: the A2 mock below is the RETIRED design
-  // reference, not the current authority. The current authority is the
-  // approved white row (DESIGN.md "화이트 업무용 SaaS"; Cards/Tiles/Rows;
-  // console-home.module.css identity dot). No fake product "before" render
-  // is manufactured here; the new renders under OUT are the evidence.
+  // Historical baseline pointer: the A2 mock below is retired. This audit
+  // checks the current directory-row example only; it does not define a global
+  // design authority. No fake product "before" render is manufactured here.
   ensureCaptureDir(path.join(OUT, '..', 'before'));
   fs.writeFileSync(
     path.join(OUT, '..', 'before', 'source.json'),
     JSON.stringify({
-      note: 'RETIRED A2 reference (historical only). Current authority is the approved white row: flat white zone + 8px identity dot carrying the published color; see DESIGN.md Cards/Tiles/Rows and console-home.module.css.',
+      note: 'RETIRED A2 reference (historical only). Current implementation uses a flat directory row with an 8px identity dot; this audit checks that example, not a required pattern for other screens.',
       retiredMock: '/tmp/opencode/eventouch-captures/event-card-abc/visual.html?view=A2',
       retiredCaptures: [
         '/tmp/opencode/eventouch-captures/event-card-a-visual/a2-1139.png',
@@ -111,6 +133,8 @@ async function main() {
     // the other published/draft fixtures remain useful even on a future date.
     const localDate = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     const today = localDate(new Date());
+    const tomorrowDate = new Date(); tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    const pastDate = new Date(); pastDate.setDate(pastDate.getDate() - 2);
     const seed = [
       // [idSuffix, name, date, stage, pageFlow]
       ['navy', '남색 게시 행사', '2027-02-10', 'READY', { save: '#17252B', publish: true }],
@@ -119,6 +143,8 @@ async function main() {
       ['draftonly', '초안만 있는 행사', '2027-02-13', 'DRAFT', { save: '#E76D26', publish: false }],
       ['undated', longName, '', 'DRAFT', null],
       ['today', '오늘 진행 검증 행사', today, 'READY', { save: '#17252B', publish: true }],
+      ['tomorrow', '내일 진행 검증 행사', localDate(tomorrowDate), 'READY', null],
+      ['ended', '종료 검증 행사', localDate(pastDate), 'ENDED', null],
     ];
     for (const [suffix, name, date, stage, flow] of seed) {
       const id = `cards-${suffix}-${f.suffix}`;
@@ -149,18 +175,25 @@ async function main() {
     page.on('pageerror', (error) => pageerrors.push(String(error && error.message || error)));
 
     const zoneOf = (card) => card.locator('[class*="eventCardZone"]').first();
-    // White-row paint: the zone itself is always flat white; the published
+    // White-row paint: the zone exposes its white ledger ancestor; the published
     // participant-home background tints only the 8px identity dot rendered
-    // on the card name (::before). The date is muted by default, and today or
-    // tomorrow uses brand text independently of the published customer color.
+    // on the card name (::before). Dates stay quiet; today/tomorrow receive
+    // stronger recency ink and weight independently of the customer color.
     const readCard = async (card) => {
       const zone = zoneOf(card);
-      const bg = parseRgb(await zone.evaluate((el) => getComputedStyle(el).backgroundColor));
+      const bg = await zone.evaluate(effectiveBackground);
       const dot = parseRgb(await card.locator('h3').first().evaluate((el) => getComputedStyle(el, '::before').backgroundColor));
       const date = zone.locator('p').first();
       const ink = parseRgb(await date.evaluate((el) => getComputedStyle(el).color));
       const soon = await date.getAttribute('data-soon') === 'true';
-      return { bg, dot, ink, soon, ratio: contrast(ink, bg) };
+      const recencyElement = card.locator('[class*="eventRecency"]').first();
+      const recency = await recencyElement.count() ? {
+        text: await recencyElement.innerText(),
+        ink: parseRgb(await recencyElement.evaluate(el => getComputedStyle(el).color)),
+        weight: Number(await recencyElement.evaluate(el => getComputedStyle(el).fontWeight)),
+        bg: await recencyElement.evaluate(effectiveBackground),
+      } : null;
+      return { bg, dot, ink, soon, recency, ratio: contrast(ink, bg) };
     };
     const cardByName = (name) => page.locator('article', { has: page.getByRole('heading', { name, exact: true }) }).first();
 
@@ -171,14 +204,16 @@ async function main() {
     const REPUBLISHED_DOT = '221,235,228'; // 15% tint of published #1A7A4C over white
     const SOFT_DOT = '255,243,235'; // var(--soft): unpublished fallback dot
     const MUTED_INK = '98,107,120'; // quiet date ink (var(--muted))
-    const BRAND_INK = '170,58,16'; // today/tomorrow (var(--brand-text))
-    const expectedDateInk = (card) => card.soon ? BRAND_INK : MUTED_INK;
+    const STRONG_INK = '37,42,52'; // today/tomorrow recency (var(--ink))
+    const expectedDateInk = () => MUTED_INK;
 
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
       await page.goto(`${f.baseUrl}/console`, { waitUntil: 'networkidle' });
       await page.locator('#console-event-directory').waitFor();
       check(`console directory ready at ${width}px`, true);
+      const workspaceBg = await page.locator('.console-main').evaluate(effectiveBackground);
+      check(`white ledger is inset against a neutral workspace at ${width}px`, workspaceBg.join(',') === '244,245,247', workspaceBg.join(','));
       await page.screenshot({ path: path.join(OUT, `console-initial-${width}.png`), fullPage: true });
 
       // -- No per-card duplicate, no always-empty footer ---------------------
@@ -232,10 +267,24 @@ async function main() {
       check('draft-only date meets 4.5:1 on the white row', draftOnly.ratio >= 4.5, draftOnly.ratio.toFixed(2));
       const todayCard = await readCard(cardByName('오늘 진행 검증 행사'));
       check('today date is explicitly marked near-term', todayCard.soon);
-      check('today date uses the brand-text emphasis', todayCard.ink.join(',') === BRAND_INK, todayCard.ink.join(','));
+      check('today date remains quiet beside the stronger recency', todayCard.ink.join(',') === MUTED_INK, todayCard.ink.join(','));
       check('today date meets 4.5:1 on the white row', todayCard.ratio >= 4.5, todayCard.ratio.toFixed(2));
+      const tomorrowCard = await readCard(cardByName('내일 진행 검증 행사'));
+      for (const [label, near] of [['오늘', todayCard], ['내일', tomorrowCard]]) {
+        check(`${label} date is explicitly marked near-term`, near.soon);
+        check(`${label} date stays quiet and meets 4.5:1`, near.ink.join(',') === MUTED_INK && near.ratio >= 4.5, JSON.stringify(near));
+        check(`${label} recency uses stronger neutral emphasis`, near.recency?.text === label && near.recency.ink.join(',') === STRONG_INK && near.recency.weight >= 750, JSON.stringify(near.recency));
+        check(`${label} recency meets 4.5:1`, near.recency && contrast(near.recency.ink, near.recency.bg) >= 4.5, JSON.stringify(near.recency));
+      }
+      check('distant recency remains quiet', navy.recency && !navy.soon && navy.recency.ink.join(',') === MUTED_INK && navy.recency.weight < todayCard.recency.weight, JSON.stringify(navy.recency));
+      check('distant recency meets 4.5:1', navy.recency && contrast(navy.recency.ink, navy.recency.bg) >= 4.5, JSON.stringify(navy.recency));
+      const endedCard = cardByName('종료 검증 행사');
+      const ended = await readCard(endedCard);
+      check('ended stage remains explicit beside a quiet past date', await endedCard.locator('.stage-badge').innerText() === '종료' && !ended.soon && ended.recency?.text === 'D+2' && ended.recency.ink.join(',') === MUTED_INK, JSON.stringify(ended));
+      check('ended date and recency meet 4.5:1', ended.ratio >= 4.5 && contrast(ended.recency.ink, ended.recency.bg) >= 4.5, JSON.stringify(ended));
       const undatedInk = await readCard(cardByName(longName));
       check('an unknown date remains quiet', !undatedInk.soon && undatedInk.ink.join(',') === MUTED_INK, undatedInk.ink.join(','));
+      check('an unknown date never invents recency', undatedInk.recency === null, JSON.stringify(undatedInk.recency));
       check('unknown date meets 4.5:1 on the white row', undatedInk.ratio >= 4.5, undatedInk.ratio.toFixed(2));
 
       // -- Status badges keep semantic colors on the flat white row -----------
@@ -247,6 +296,7 @@ async function main() {
       // -- Long names wrap; unknown dates stay explicit ------------------------
       const undated = page.locator('article', { has: page.getByRole('heading', { name: longName.slice(0, 20) }) }).first();
       check('long undated event renders', (await undated.count()) === 1);
+      check(`long event name remains fully readable at ${width}px`, await undated.locator('h3').evaluate(el => el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1));
       check('unknown date reads 일정 미정, never blank', ((await zoneOf(undated).innerText()) || '').includes('일정 미정'));
       const undatedCard = await readCard(undated);
       check('never-published row keeps the flat white zone', undatedCard.bg.join(',') === FLAT_WHITE, undatedCard.bg.join(','));

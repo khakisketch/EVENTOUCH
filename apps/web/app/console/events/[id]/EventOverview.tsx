@@ -1197,9 +1197,12 @@ export default function EventOverview({ eventId }: { eventId: string }) {
 
   const nowSection = (
     <ConsoleSection headingId="event-now-heading" title="지금 할 일" className={styles.regionQueue}
-      action={currentStage === "LIVE" ? (
-        nowItems.length ? <span className={styles.queueCount}>{nowItems.length}가지</span> : undefined
-      ) : currentStage !== "ARCHIVED" ? fieldOperationsLink : undefined}>
+      action={nowItems.length || currentStage !== "LIVE" ? (
+        <div className={styles.queueActions}>
+          {nowItems.length ? <span className={styles.queueCount}>{nowItems.length}가지</span> : null}
+          {currentStage !== "LIVE" && currentStage !== "ARCHIVED" ? fieldOperationsLink : null}
+        </div>
+      ) : undefined}>
       <ConsoleTaskQueue items={nowItems} label="지금 할 일" empty={overview.participantsAvailable && overview.modulesAvailable ? "지금 확인할 운영 항목이 없습니다." : "일부 업무 자료를 확인할 수 없어 할 일을 모두 판단할 수 없습니다."} variant={live ? "live-overview" : undefined} />
     </ConsoleSection>
   );

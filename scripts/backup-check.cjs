@@ -22,6 +22,7 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { isSkippedStorage, validateBackupEntry } = require('./backup-lib.cjs');
 
 const HELP = `
 사용법:
@@ -134,12 +135,15 @@ async function main() {
 
   for (const key of ['database', 'storage']) {
     const entry = manifest[key];
+    if (key === 'storage' && isSkippedStorage(entry)) {
+      report.checks.push({ name: `file:${key}`, state: 'report', detail: 'no file recorded (skipped at backup time)' });
+      continue;
+    }
     if (!entry || typeof entry.file !== 'string' || typeof entry.sha256 !== 'string') {
       return fail('manifest-entries', `${latest}/manifest.json missing ${key} entry`);
     }
     if (!entry.file) {
-      report.checks.push({ name: `file:${key}`, state: 'report', detail: 'no file recorded (skipped at backup time)' });
-      continue;
+      return fail('manifest-entries', `${latest}/manifest.json missing ${key} file`);
     }
     // Manifest entries are data, not trust: an absolute path or a `..`
     // segment must never resolve outside the backup directory.
@@ -147,6 +151,11 @@ async function main() {
       return fail(`file:${key}`, `${entry.file} escapes the backup directory (refused)`);
     }
     if (path.basename(entry.file) !== entry.file) return fail(`file:${key}`, 'backup entries must be files directly inside the backup directory');
+    try {
+      validateBackupEntry(key, entry);
+    } catch (error) {
+      return fail('manifest-entries', error.message);
+    }
     const file = path.join(directory, entry.file);
     // A symlink inside the backup directory can still point outside it
     // (e.g. at a credential file): lstat sees the link itself, stat would

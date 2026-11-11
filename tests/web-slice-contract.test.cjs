@@ -988,7 +988,9 @@ test('web-staff-desk-shows-direction-and-prints-nametags-in-kiosk-mode', () => {
   assert.match(staff, /이 데스크는/);
   // Kiosk is a display mode on the same assignment and login, never an
   // unattended self check-in.
-  assert.match(staff, /키오스크 모드/);
+  // 2026-11-10: 모드 전환 버튼 문구 대신 role=switch와 고정 라벨로 표시한다.
+  assert.match(staff, /role="switch"/);
+  assert.match(staff, /키오스크/);
   assert.match(staff, /kiosk-mode/);
   assert.match(staff, /무인 셀프 체크인은 지원하지 않습니다/);
   // Nametags preserve the confirmed scan name and resolve the current

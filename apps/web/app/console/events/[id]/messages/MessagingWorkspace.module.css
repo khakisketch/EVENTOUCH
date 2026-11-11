@@ -149,14 +149,13 @@
   min-height: 44px;
   align-items: center;
   gap: var(--s2);
-  padding: var(--s2);
-  border: 0;
-  border-radius: var(--radius-small);
-  background: transparent;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
   color: var(--brand-text);
   font-weight: 700;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration: none;
 }
 
 .textButton:hover {
@@ -233,7 +232,7 @@
   margin: 0 !important;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--surface-muted);
   cursor: pointer;
 }
@@ -275,7 +274,7 @@
   margin: var(--s4) 0;
   padding: var(--s4);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-large);
   background: var(--paper);
 }
 
@@ -334,9 +333,9 @@
   display: grid;
   gap: var(--s3);
   padding: var(--s4);
-  border: 0;
-  border-radius: 0;
-  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-large);
+  background: var(--paper);
 }
 
 .campaignActions {
@@ -352,7 +351,7 @@
   align-items: center;
   padding: var(--s1) var(--s2);
   border: 1px solid var(--line);
-  border-radius: var(--radius-small);
+  border-radius: 999px;
   font-size: var(--small);
   font-weight: 700;
   line-height: 1.2;
@@ -485,7 +484,7 @@
   margin-block: var(--s3);
   padding: var(--s3) var(--s4);
   border: 1px solid var(--warning-line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--warning-soft);
 }
 
@@ -576,7 +575,7 @@
   margin: 0;
   padding: var(--s4);
   border: 1px dashed var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   color: var(--muted);
   font-size: var(--small);
 }
@@ -675,7 +674,7 @@
   gap: var(--s2) var(--s3);
   padding: var(--s2) var(--s3);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--surface-muted);
   font-size: var(--small);
   font-weight: 650;
@@ -721,7 +720,7 @@
   gap: var(--s3);
   min-width: 0;
   padding: var(--s4);
-  border-radius: var(--radius);
+  border-radius: var(--radius-large);
   background: var(--surface-muted);
 }
 
@@ -830,9 +829,8 @@
 /* Approved B: history ledger first; the same mounted draft is revealed on
    request. Returning to history never clears input, recipients or receipts. */
 .workbenchPage { gap: var(--s3); }
-.workbenchPage > header h1 { font-size: var(--h1); }
 .historySection { min-width: 0; gap: var(--s2); }
-.connectionDetails { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-muted); padding: var(--s3) var(--s4); }
+.connectionDetails { border: 1px solid var(--line); border-radius: var(--radius-medium); background: var(--surface-muted); padding: var(--s3) var(--s4); }
 .connectionDetails > summary { color: var(--ink); font-size: var(--body-work); font-weight: 700; }
 .connectionDetails > summary::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: var(--s2); border-radius: 999px; background: currentColor; vertical-align: baseline; }
 .connectionDetails .help { margin-top: var(--s2); }
@@ -941,7 +939,7 @@
 .historyScroll {
   overflow-x: auto;
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-large);
   background: var(--paper);
 }
 
@@ -973,7 +971,7 @@
 .selectionSummary {
   padding: var(--s2) var(--s3);
   border: 1px solid var(--line);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--paper);
   font-size: var(--body-work);
   font-weight: 800;
@@ -981,7 +979,7 @@
 
 .recipientList {
   border: 1px solid var(--line);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--paper);
 }
 
@@ -1016,7 +1014,7 @@
   min-height: 120px;
   padding: var(--s3) var(--s4);
   border: 1px solid var(--line);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--paper);
   font-size: var(--body-work);
   line-height: 1.7;
@@ -1049,7 +1047,7 @@
 .sendBlock {
   padding: var(--s3) var(--s4);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--surface-muted);
 }
 
@@ -1064,7 +1062,7 @@
   margin-top: var(--s4);
   padding: var(--s4);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-large);
   background: var(--paper);
 }
 
@@ -1074,7 +1072,7 @@
   margin: 0;
   padding: var(--s3) var(--s4);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--surface-muted);
   list-style: none;
 }
@@ -1172,10 +1170,9 @@
   min-height: 44px;
   min-width: 0;
   padding: var(--s2) var(--s3);
-  border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--paper);
   color: var(--ink);
   font-size: var(--small);
   font-weight: 650;
@@ -1183,7 +1180,7 @@
   cursor: pointer;
 }
 .historyOverviewItem:hover { background: var(--surface-muted); }
-.historyOverviewItem[aria-pressed="true"] { border-bottom-color: currentColor; color: var(--brand-text); }
+.historyOverviewItem[aria-pressed="true"] { border-color: var(--brand-text); background: var(--brand-tint); color: var(--brand-text); }
 .historyOverviewItem strong { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .historyOverviewItem:focus-visible, .composeNavigator button:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 
@@ -1192,7 +1189,8 @@
 .composeNavigator {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  border-block: 1px solid var(--line);
+  gap: var(--s2);
+  border-block: 0;
 }
 .composeNavigator button {
   display: flex;
@@ -1202,15 +1200,13 @@
   min-width: 0;
   min-height: 72px;
   padding: var(--s3) var(--s4);
-  border: 0;
-  border-right: 1px solid var(--line);
-  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
   color: var(--ink);
   text-align: left;
   cursor: pointer;
 }
-.composeNavigator button:first-child { padding-left: 0; }
-.composeNavigator button:last-child { border-right: 0; }
 .composeNavigator button:hover { background: var(--surface-muted); }
 .composeNavigator span { color: var(--muted); font-size: var(--small); word-break: keep-all; }
 .recipientTopBar[hidden] { display: none; }
@@ -1220,8 +1216,8 @@
 /* Give the work areas their own hierarchy instead of three nested panels. */
 .composeGrid > fieldset { background: transparent; border: 0; border-radius: 0; padding: 0; }
 .selectionSummary { background: var(--surface-muted); border: 0; }
-.reviewCard { border: 0; border-top: 1px solid var(--line-strong); border-radius: 0; padding: var(--s5) 0 0; }
-.draftSummary { border: 0; border-radius: 0; }
+.reviewCard { border: 1px solid var(--line-strong); border-radius: var(--radius-large); padding: var(--s5) var(--s4) var(--s4); }
+.draftSummary { border: 1px solid var(--line); border-radius: var(--radius-medium); }
 
 @media (max-width: 768px) {
   .composeNavigator button { padding: var(--s2); }
@@ -1249,8 +1245,8 @@
 
 /* One task per step; all controllers remain mounted so drafts and receipts survive. */
 .composeSteps { display: flex; gap: var(--s2); border-bottom: 1px solid var(--line); padding-bottom: var(--s3); }
-.composeSteps button { display: inline-flex; align-items: center; gap: var(--s2); min-height: 44px; padding: var(--s2) var(--s3); border: 0; background: transparent; color: var(--muted); font: inherit; }
-.composeSteps button[aria-current="step"] { color: var(--brand-text); font-weight: 700; box-shadow: inset 0 -2px var(--brand); }
+.composeSteps button { display: inline-flex; align-items: center; gap: var(--s2); min-height: 44px; padding: var(--s2) var(--s3); border: 1px solid var(--line-strong); border-radius: var(--radius-medium); background: var(--paper); color: var(--muted); font: inherit; }
+.composeSteps button[aria-current="step"] { border-color: var(--brand-text); color: var(--brand-text); font-weight: 700; box-shadow: inset 0 -2px var(--brand); }
 .composeSteps button span { font-variant-numeric: tabular-nums; }
 .composeGrid[data-step] { display: block; }
 .composeGrid[data-step="1"] .composeDraft,
@@ -1307,11 +1303,11 @@
   font-weight: 700;
   padding: var(--s2) var(--s3);
   margin-top: var(--s3);
-  border-radius: var(--radius) var(--radius) 0 0;
+  border-radius: var(--radius-medium) var(--radius-medium) 0 0;
 }
 .kakaoExampleBody {
   margin-top: 0;
-  border-radius: 0 0 var(--radius) var(--radius);
+  border-radius: 0 0 var(--radius-medium) var(--radius-medium);
   background: var(--paper);
 }
 @media (max-width: 800px) {
@@ -1324,7 +1320,7 @@
 .personalizationTools { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s1); margin-top: var(--s1); }
 .personalizationTools > span { color: var(--muted); font-size: var(--small); margin-right: var(--s1); }
 .personalizationTools > button { min-height: 44px; padding: var(--s2); font-size: var(--small); color: var(--brand-text); }
-.kakaoExample { overflow: hidden; border-radius: var(--radius); }
+.kakaoExample { overflow: hidden; border-radius: var(--radius-medium); }
 .kakaoExample .kakaoExampleHeader { margin: 0; }
 .kakaoExample .kakaoExampleBody { padding: var(--s3); }
 
@@ -1343,7 +1339,7 @@
 }
 
 /* Keep the actual selected set visible while writing, independently of filters. */
-.stepRecipientSummary { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: var(--s3); padding: var(--s3) var(--s4); border: 1px solid var(--line); border-radius: var(--radius); color: var(--ink); }
+.stepRecipientSummary { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: var(--s3); padding: var(--s3) var(--s4); border: 1px solid var(--line); border-radius: var(--radius-medium); color: var(--ink); }
 .stepRecipientSummary > div { min-width: 0; }
 .stepRecipientSummary p { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s2); margin: 0; overflow-wrap: anywhere; }
 .stepRecipientSummary strong { font-size: var(--h3); font-variant-numeric: tabular-nums; }

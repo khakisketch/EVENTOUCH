@@ -121,9 +121,9 @@ export default function LoginForm() {
           // idling on the login form, where another sign-in cannot help.
           if (!cancelled && loginEpochRef.current === epochAtStart && res.status === 403) {
             const denied = (await res.json().catch(() => null)) as { code?: unknown } | null;
+            if (cancelled || loginEpochRef.current !== epochAtStart) return;
             if (denied?.code === "NO_ORGANIZATION_MEMBERSHIP") {
-              // Epoch guard above already ran: a late stale read cannot
-              // reach here to clear a fresh sign-in. Drop the pinned
+              // Parsing can outlive a fresh sign-in. Drop the pinned
               // tab context first — it survives AppRouter navigation, and
               // the previous org/role/user must not seed the picker route.
               // The reset broadcasts; other tabs revalidate with forms intact.

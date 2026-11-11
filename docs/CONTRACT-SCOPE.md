@@ -1,78 +1,42 @@
-# 계약 범위 대응표 (제안서 → 현재 빌드)
+# Customer proposal and acceptance boundaries
 
-원본: `docs/행사운영플랫폼_개발기획안.pdf`(고객 제공 개발기획안, 122쪽)과
-`docs/EVENTOUCH_서비스 기획 및 제안.html`(별도의 시연용 제안 프로토타입 v7).
-고객 기획안은 업무 목적과 요구사항의 근거로 읽되 화면·사용 흐름·기술 구현은 별도로 설계한다.
-두 자료의 문구나 프로토타입의 모의 동작을 실제 구현·고객의 최종 합의로 자동 간주하지 않는다.
-이 표는 요구·제안과 빌드의 차이를 대조하며, 구현 수치·검증 현황은 `docs/STATUS.md`를 따른다.
-보고서 공개 권한과 고객사 담당자의 편집 범위 등 미확정 항목은 임의로 정하지 않는다.
+The customer proposal PDF and demo prototype were removed from the repository. This mapping preserves their requirements, not their proposed screen or implementation. It is not evidence that the customer has accepted the differences below. Code and tests define implementation; written customer agreement and real-world observations define acceptance.
 
-## 약속 → 상태
+## Requirements and decisions
 
-| 제안 약속 | 현재 빌드 | 판정 |
+| Proposal requirement | Agreed scope or constraint | Customer acceptance still needed |
 |---|---|---|
-| 행사 생성·관리(PRE/LIVE/END·정원), 대시보드 | 콘솔 홈·운영 현황과 행사 기본 정보·기능·접수·단계 설정. 설정 요청이 미확인이면 원래 입력을 보호하고 서버 반영 여부 조회 또는 같은 요청 재시도를 제공한다. | 구현: 고객 수용 검수 별도 |
-| 참가자 관리(명단·등록·수정·선택삭제) | 명단·등록·기본 정보와 추가 답변 수정, 단건 상태 변경, 현재 필터에서 선택한 승인 대기자 승인·대기 명단 참가 확정 및 일괄 신청 취소를 제공한다. 승인과 확정은 상태별로 실행하며 정원·검토한 상태를 서버에서 확인한다. 취소는 티켓을 무효화하고, 입장 중인 대상이 있으면 전체 요청을 거부한다. 결제 완료 건은 환불 요청 상태로 바뀐다. | 부분: 일괄 취소가 요청된 선택삭제를 대체하는지, 영구 삭제가 필요한지는 고객 확인 필요 |
-| 참가자 모바일 기본 메뉴와 행사별 참여 메뉴(PDF 107–122쪽) | 티켓과 신청 정보는 항상 두고 안내·참여 메뉴는 각 그룹 안에서 표시와 순서를 정한다. 게시된 개별 참여 프로그램 링크를 선택·정렬해 홈에 추가하고, 비게시·꺼진 기능은 공개하지 않는다. 초안 미리보기와 저장·게시를 구분하고 미확인 저장·게시·배너 업로드는 같은 요청으로 확인한다. | 구현: 메뉴 구성 방식은 개발 제안이며 고객 수용 검수는 별도. 실제 검증 범위는 `docs/STATUS.md` 참조 |
-| 엑셀 업로드·다운로드, 로그인링크 엑셀, TXT 일괄등록 | 명단 가져오기(XLSX·XLS 첫 시트, CSV·TXT→열 매핑→검토→반영, 미확인 반영의 동일 요청·서버 처리 확인), 필터·정렬된 기본 항목과 현재 게시된 추가 신청 항목의 XLSX/CSV 내보내기, 양식 CSV. XLSX의 연락처·사번은 텍스트로 보존한다. 로그인링크 엑셀은 bearer 파일 유출 위험으로 제외 | 부분: 양식과 로그인링크 파일 제외에 대해 고객 확인 필요. CSV를 엑셀에서 직접 열 때의 자동 형식 변환은 앱이 제어하지 못한다 |
-| 체크 In/Out, 데스크 3모드, QR 스캔, 네임택 출력 | 스태프 데스크 체크인(입장·퇴장 방향 표시·카메라·코드 입력). 카메라를 쓰지 못하면 배정된 데스크에서 이름·소속을 확인해 기존 명단의 참가자를 선택할 수 있다. 같은 이름·소속이 있거나 소속이 없으면 책임자 확인으로 안내한다. 정정·네임택 인쇄도 제공한다. 데스크 표시 모드(desk/tablet)는 운영 설정, 공용 태블릿용 키오스크 표시 모드는 스태프 화면 | 구현: 수동 확인의 현장 신원 확인 정책과 실기기 검수는 별도 |
-| 키오스크·태블릿 모드 | 스태프 화면의 공용 태블릿용 키오스크 표시 모드(큰 글자·단순 화면, 같은 배정·세션·권한). 무인 셀프 체크인(로그인 없는 처리)은 의도적 미지원 | 완료(표시 모드) |
-| 럭키드로우·투표·설문·퀴즈·Q&A·만족도 (기본 OFF 토글) | 콘솔 프로그램 운영(개설·시작·종료·정답 공개·추첨 실행·공개·승인) + 참가자 참여 화면(투표·퀴즈·만족도·질문·좋아요·사진·게시글). 진행 중인 Q&A에서 본인 질문은 승인 전 직접 수정하고, 승인 후 수정안은 원문과 답변을 유지하면서 운영자가 승인하거나 사유와 함께 반려한다. 반려 사유는 작성자가 참여 화면에서 확인하고 다시 제출할 수 있다. 추첨·프로그램 운영과 질문 처리는 미확인 시 원래 요청을 유지하고 처리 여부를 조회할 수 있다. 콘솔 경품 지급·취소도 미확인 결과 확인과 최신 목록 갱신 전 다른 처리를 잠근다. 참가자 질문·설문·게시글·사진 응답도 제출 내용과 대조한다. | 구현. 수정안·복구 방식은 개발 개선이며 고객 수용 검수는 별도 |
-| 안내 문자·알림톡 템플릿, 일괄/개별·즉시/예약 발송, 발송 대기목록 | 템플릿 생성·수정·이름/내용 검색·보관/복원, 캠페인·재시도·예약과 공급사 접수·전달·실패·미확인 결과 구분. 보관은 새 선택 목록에서 숨기며 기존 발송·예약을 보존한다. 버전이 바뀐 문구의 수정·보관은 다시 검토한다. 응답이 유실된 변경과 발송은 원래 내용을 유지하고 서버 반영 여부를 재전송 없이 확인하거나 같은 요청을 재시도한다. 템플릿 변경 확인은 메시지를 발송하지 않는다. 기존 예약과 새 예약 기본값은 수동이며 새 실제 예약에서만 자동 실행을 명시 선택한다. 자동 실행은 배포 설정에 따라 작동한다. | 부분: 보관은 개발 개선이며 영구 삭제 정책을 정한 것이 아니다. 실제 공급사 연동·도달과 고객 수용 검증 필요 |
-| MMS | 사진 문자. JPG 200KB 이하 1장 첨부, 본문 2000바이트. 사진을 선택할 때 저장소에 올리고 `imageId`로 참조한다. 업로드 응답이 미확인이면 같은 파일과 요청으로 확인하며 메시지는 발송하지 않는다. | 구현: 실제 공급사 사진 전달 검증 필요 |
-| 부스 인증 택1(부스이용/스탬프), 포토(zip 다운로드·갤러리) | 부스 인증·스탬프 모드(콘솔 전환·지도 편집·게시), 참가자 사진 승인·공개·승인 사진 ZIP(운영자 전용). 새 배치도로 교체하면 기존 위치를 다시 지정한다. | 완료 |
-| 공지·타임테이블·행사장·게시판 | 공지·구조화된 일정·장소 정보와 게시판(개설·승인·참가자 작성). 공지·일정·장소는 초안 저장 후 현재 게시본·반영 위치를 검토해 게시하며, 미확인 저장·게시 요청은 같은 내용으로 다시 확인하거나 서버 반영 여부를 조회한다. 장소 안내 문구와 선택적 JPG/PNG 안내도는 공개 조건에 따라 행사 안내에 표시된다. 안내도는 대체 설명과 크게 보기 제공; 부스 지도는 별도 기능이다. | 부분: 시간표 이미지 대신 구조화 일정으로 대체 수용 여부를 고객에게 확인 |
-| 결과 보고서(슬라이드 템플릿·표지·PDF) | 스냅샷 보고서(표지 부제목·문구·작성·공유 기록·새 버전·JSON)와 선택 동결본의 A4/16:9 보기·브라우저 인쇄/PDF. 미확인 저장·공유 기록은 원래 버전의 처리 여부를 확인한다. 고객사 자동 전송, PPT 생성·서식 편집기는 포함하지 않는다 | 구현(보기·브라우저 인쇄; 고객 수용과 실제 출력은 별도) |
-| 현장 사진 관리(섹션별 업로드) | 참가자 공유·전광판용 포토월과 분리된 행사 증빙 보관함(고정 8개 섹션, 업로드·이동·보관함 제외·섹션 ZIP, 운영자 전용). 파일 업로드와 보관 기록의 결과를 구분하며 미확인 기록은 같은 요청으로 재확인한다. | 구현(고객 수용은 별도) |
-| 고객사 관리(등록/조회/수정·로고·사업자등록증·ID/PW 발급) | 새 앱 등록·수정·로고·사업자등록증(행사 밖 고객사 파일 저장), 입력·파일 처리 결과 재확인, 포털·ID/PW 발급 없음 | 구현(포털 제외; 고객 수용 검수 별도) |
-| 관리자 관리·접속 로그, 도메인·카카오·문자 연동 설정 | 팀·초대·재설정과 미확인 초대/재설정의 범위 제한 처리 확인 + 팀 화면의 연동 상태·최근 활동·로그인 보호 상태. 초대받은 사람은 수락 결과가 불확실하면 로그인·소속을 확인하고, 이메일 인증은 본인 상태를 확인한다. 일회용 초대 링크는 재표시하지 않는다. 본인 성공 로그인 시각은 보존일을 설정한 경우에만 기록한다. 자격증명은 서버 환경 관리(화면 입력 없음). 도메인·채널 연결 자체는 운영 결정 사항 | 부분: 전체 관리자 접속 로그의 범위와 실제 연동 확인 필요 |
-| eventouch.co.kr 원페이지 + 도입문의, 약관·개인정보 푸터 | `/` SaaS 랜딩(핵심 흐름 3종·이용 대상·이메일 도입 문의·약관/개인정보 준비 중 푸터), 문의 폼 없음 | 완료(약관 본문은 법리 확정 후) |
-| 초기 마스터 계정 하드코딩(`maiptns/mai0103`) | 사용하지 않음(환경 주입 초대 기반) | 의도적 미적용(보안) |
+| Event creation, phases, capacity, and operations overview | Event lifecycle is operated by agency staff. | End-to-end operator acceptance. |
+| Attendee list, registration, editing, and selected deletion | Cancellation invalidates the ticket; cancellation of an attendee already checked in is blocked. A paid registration becomes a refund request; the service does not issue a refund. | Confirm whether cancellation satisfies “selected deletion” or whether permanent deletion is required. Do not enable permanent deletion before retention policy approval. |
+| Attendee mobile home and event-specific menus (proposal pp. 107–122) | Keep application and ticket access available; event information and published participation programs may be configured for the attendee home. | Confirm menu configuration as the accepted proposal scope. |
+| Excel/TXT import and exports, including login-link files | Import and roster export are in scope. Login-link spreadsheets are excluded because each link is a bearer credential. CSV can preserve text in the exported file, but spreadsheet software may auto-convert values when opened. | Confirm the login-link file exclusion and form/template export scope. |
+| Check-in/out, QR, manual lookup, desk and name-tag printing | Staff authorization and server confirmation remain required. Ambiguous manual attendee matches require field-lead identity confirmation. | Approve the现场 identity-check policy; validate cameras, label stock and printers on actual devices. |
+| Kiosk/tablet mode | Shared tablets use an assigned staff account. Unattended, unauthenticated self-check-in is excluded. | Accept the display-only mode and exclusion. |
+| Draw, polls, surveys, quiz, Q&A and attendee participation | Participation and operator moderation are in scope; feature availability and publish state remain explicit. | Accept the shipped flows with real users. Quiz similarity scoring and rankings have no agreed rule. |
+| Templates, SMS/AlimTalk, bulk/individual, immediate/scheduled sends | Keep existing schedules and send history. Provider acceptance, delivery, failure and unknown outcome are distinct. Existing and new schedules are manual by default; automatic execution requires explicit deployment and per-schedule opt-in. | Verify real provider setup, approved templates, charges, recipients and delivery. Permanent message/template deletion policy is undecided. |
+| MMS | Photo messaging is in scope. | Verify actual image handoff and delivery with the provider. |
+| Booth use or stamp mode; attendee photo gallery and ZIP | Booth modes are event operations. Attendee photo-wall content is separate from private event-evidence photos. | Accept real event flows; see the separately approved evidence-photo scope below. |
+| Notices, timetable, venue and board | Notices, structured schedules, venue information and participant board are in scope. | Confirm structured schedules in place of timetable images. |
+| Results report, cover and PDF | Snapshot report and browser print/PDF are in scope. Customer-company automatic delivery and PPT editing are excluded. | Accept report contents and verify actual printers/output. |
+| Event photo management | Use the separately approved evidence-photo scope below. | Confirm the operational workflow. |
+| Customer-company management and client credentials | Agency staff manage customer-company records; client portal and client logins are excluded. | Written confirmation of the portal/login exclusion. |
+| Administrator access log, domains and messaging setup | Only a person's own successful-login timestamp may be collected when an explicit retention period is configured. IP/device tracking and cross-agency account logs are not included. Provider credentials stay in runtime secrets. | Define the scope and retention of any broader administrator audit log; confirm provider and domain setup. |
+| Public landing page, inquiry, terms and privacy policy | Landing page and contact information are provided; legal terms and privacy text are not final product acceptance. | Legal review and approval of terms/privacy text. |
+| Hard-coded master credentials | Fixed credentials from the proposal are intentionally excluded for security. | No change; initial access remains a separately provisioned agency account. |
 
-## 제안과 다르게 가기로 한 것 (의도적, 고객 확정 필요)
+## Data and privacy constraints
 
-1. **고객사 로그인**: 제안서는 고객사 ID/PW 발급·콘솔 로그인을 명시한다. 현재 빌드는 포털·로그인 미제공을 의도적 제외로 정했다. → 계약에서 제외 확인이 필요(최우선).
-2. **사전 결제·기프티콘·모바일 초대장/RSVP**: 제안서 요약도에만 있고 상세 화면이 없다. v1 제외로 정했다. → v2 분리로 계약 명기가 필요.
-3. **참가자 인증**: 제안서는 QR 난수+로그인 링크(무입력). 빌드는 연락처 1회 인증+세션+복구다. 문자 복구가 불가능할 때는 신청을 마친 브라우저 탭을 보존하도록 안내하고 공개된 문의처가 있을 때만 표시한다. 발송·인증 응답이 끊기면 결과를 단정하지 않고 번호 입력과 확인·재요청 경로를 구분한다. 제안서 문제(링크 유출 시 그대로 입장)를 막는 강화이며, 인증번호 SMS 과금 주체와 현장 복구 절차는 고객 확인이 필요하다.
-4. **스태프 계정**: 제안서는 스태프 계정 없이 URL 전달. 빌드는 STAFF 계정+배정제다. 현장 책임 추적에 유리한 강화다.
-5. **오프라인**: 제안서는 실시간 전제(무언급). 빌드는 오프라인 셸·큐를 의도적으로 지원하지 않고 오류·재시도만 제공한다. 이 저장소의 기존 문구 중 "셸까지만 지원"은 구 앱 은퇴 전 서술이며 현재 기준이 아니다.
+- Event duplication copies event configuration and definitions, not attendee records, tickets, check-in, sends, draws, audit history or file references.
+- “Register another attendee with these details” reuses name and affiliation only. It never copies contact details, consent, ticket, check-in, outcome, reward or file data.
+- Existing form answers are retained when a field is hidden. Do not change the type of a field with answers or remove a choice that an existing answer uses. Hiding a field does not mean erasing its stored answers.
+- Login history records only the account holder's successful-login timestamp when a retention period has been explicitly set. The retention period and any broader audit-log scope remain unresolved.
 
-## 제안 세부 항목과 납품 범위 확인
+## Approved event-evidence photo scope
 
-구현된 범위와 아직 없는 항목을 함께 명시한다. 미구현 항목의 착수 여부는 고객과 범위를 확인한 뒤 정한다.
+- Keep the private event-evidence archive separate from the attendee photo wall; they have different purposes, access and publication rules.
+- Evidence uses the eight fixed proposal categories: venue setup, stage, participant booths, event styling, pre-event setup, arrival/registration, program, and awards. Agency owners and managers assigned to that event may manage them.
+- An event-evidence ZIP rechecks event access and contains only the selected category. An attendee photo-wall ZIP contains approved photos only; hidden and pending photos are excluded.
+- Removing an item from the evidence archive removes its metadata reference only. It does not delete original file bytes or revoke ordinary event-file access.
+- Free-form categories, categorizing attendee photos into evidence sections, and report-layout integration are outside this approved scope.
 
-| 항목 | 현재 상태 | 비고 |
-|---|---|---|
-| 행사 복제 | 있음 (2026-10-17) | 행사 설정·참가 양식·공지·일정·참여 프로그램 정의를 복사. 참가자·티켓·입장·발송·당첨·감사 기록과 행사 파일 참조는 복사하지 않는다. 새 행사는 기획 단계·접수 닫힘·부스 닫힘으로 시작 |
-| 행사 삭제 | 없음 | 운영 종료는 보관(ARCHIVED) 단계로 한다. 영구 삭제는 데이터·파일 보존 정책을 확정하기 전 착수하지 않는다 |
-| 행사 타입(오프라인/온라인/혼합) | 선택 메타데이터 구현 | 기존 미지정을 보존한다. 생성·수정·복제·경량/상세 읽기에 연결하며 스트리밍·외부 URL·기능 자동 변경은 포함하지 않는다 |
-| 참가자 복제 | 이름·소속 입력 재사용 구현 | “이 정보로 새 참가자 등록”에서 이름·소속만 재사용한다. 연락처·동의·티켓·입장·결과·경품·파일은 복사하지 않는다 |
-| 대시보드 기간 필터·시계열 차트 | 임의 기간 분석·차트 구현 | 신청은 취소 제외, 입장은 정정 제외 IN 기준이다. 브라우저 현지 날짜를 쓰며 일별 합계와 기간 고유 입장을 구분한다. 취소 필터는 없다 |
-| 성공 로그인 접속 로그 | 본인 성공 로그인 시각 구현 | 보존일을 명시한 경우만 수집한다. IP·기기 정보는 기록하지 않으며 운영 보존일은 미확정이다. 전체 관리자 접속 로그와 동일한 범위인지는 고객 확인 필요 |
-| 주관식 퀴즈 | 자유 입력·정확 일치 자동 비교·운영자 수동 채점 구현 | 유사 답안 자동 판정과 순위는 별도 규칙 미정 |
-| 네임택 출력 | 구현 · 실물 검수 필요 | 기획안 25·27쪽의 승인 참가자 명단 상세와 36·37쪽의 스태프 입장 결과에서 같은 미리보기를 사용한다. 용지 선택 후 브라우저에서 인쇄한다. 용지 치수는 기획안에 없어 실제 라벨지·프린터 확인이 필요하다. |
-| 현장 등록 | 있음 | 참가자 등록 유형(PRE/ONSITE)으로 구분 |
-| 참가자 양식 설정 | 텍스트·이메일·단일 선택·체크 항목의 추가·수정·순서·초안 제외와 별도 게시 구현 | 이름·연락처는 필수로 유지하며 기존 답변이 있는 항목은 형식 변경이나 사용 중 선택지 제외를 막는다. 항목 제외는 기존 답변의 물리 삭제가 아니며 게시 후 내보내기 범위는 달라질 수 있다 |
-
-
-## 제안에 없는 빌드 결정 (유지)
-
-- 문자·알림톡 Solapi 직결, 요금 운영사 부담 전제, 모의 발송 명시.
-- 제안서 "공급사 비용은 0원이 아니라 미산정"과 정합. 과금 주체만 고객 확정 필요.
-
-## 승인된 포토 후속 범위 (2026-10-16)
-
-- 참가자 포토월 게시물과 행사 증빙 사진 보관함은 목적·권한이 다르므로 별도 데이터와 화면으로 둔다.
-- 행사 증빙 사진은 제안서의 8개 고정 섹션(공간구성, 무대연출, 참가자부스, 현장연출, 사전세팅,
-  도착/등록, 프로그램, 시상식)으로 분류한다. AGENCY와 해당 행사의 멤버인 MANAGER만 업로드·관리한다.
-- 행사 사진 ZIP은 행사별로 권한을 다시 확인하고 해당 분류의 사진만 포함한다. 참가자 포토월 ZIP은 승인된
-  사진만 포함하며 숨김·검토 대기 사진은 제외한다. 기존 이벤트 파일 업로드/읽기 권한을 재사용하고,
-  바이너리 업로드와 사진 메타데이터 쓰기는 각각 기존 파일 경로와 이벤트 커맨드 규율을 따른다. 보관함 제외는
-  메타데이터 참조만 제거하고 원본 삭제나 기존 행사 파일 읽기 권한 회수로 보지 않는다.
-- 범위에는 자유형 섹션명, 참가자 사진의 섹션 분류, 결과보고서 편집/레이아웃 연동은 포함하지 않는다.
-
-## 에이전트 작업 규칙
-
-- 위 미구현·부분 항목을 새로 만들 때 이 표의 행을 먼저 갱신하고, 수치·검증은 `docs/STATUS.md`에만 기록한다.
-- 1·2번(고객 로그인·결제/기프티콘/초대장)은 고객 서면 확인 전까지 착수하지 않는다.
-- 제안서 원문 인용이 필요하면 `/tmp/opencode/proposal.txt`(PDF 추출)와 `/tmp/opencode/html-proposal.txt`를 쓴다. 두 파일은 재생성 가능 임시본이다.
+Anything listed above as requiring customer confirmation remains out of scope until the customer approves the change in writing.

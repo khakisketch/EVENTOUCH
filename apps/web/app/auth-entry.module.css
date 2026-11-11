@@ -2,7 +2,7 @@
  * Account entry shared frame: /login, /recover, /account/email, /invite/[token].
  *
  * The approved white SaaS world is a 380px centered open single column with a
- * 28px headline (DESIGN.md: "초대·로그인은 380px 중앙 단일 열"). /login already
+ * 28px headline. /login already
  * renders exactly that; /recover and /account/email still render the generic
  * 640px bordered card with a fluid clamp() headline, and /invite mixes an
  * open frame with a bare brand and one bordered ticket outlier. This module is
@@ -121,7 +121,7 @@
 .entry:global(.site-page):global(.auth-page) :global(.auth-form) :global(button[type="submit"]) {
   min-height: var(--s7);
   border: 1px solid var(--brand);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--brand);
   color: var(--on-brand);
   font-weight: 750;
@@ -147,7 +147,7 @@
   width: 100%;
   min-height: var(--s7);
   border: 1px solid var(--brand);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--brand);
   color: var(--on-brand);
   font-weight: 750;

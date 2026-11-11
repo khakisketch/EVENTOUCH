@@ -2,7 +2,7 @@
 
 // Organization tenancy step 1: the 008 tables exist and enforce their own
 // keys, but no existing path reads or writes them — behavior is unchanged.
-// (Mapping, scoping, and constraints are later MULTI-TENANCY.md steps.)
+// (Cross-agency data and authorization boundaries belong to docs/ARCHITECTURE.md.)
 
 const { test: nodeTest, before, after } = require('node:test');
 const assert = require('node:assert/strict');

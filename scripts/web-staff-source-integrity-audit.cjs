@@ -25,7 +25,7 @@ async function main() {
     await page.goto(`${f.baseUrl}/staff/events/${f.eventId}`);
     await confirmInitialStaffDesk(page);
     if (process.argv.includes('--baseline')) {
-      await page.getByText('카메라가 안 될 때 · 참가자 명단 확인').click();
+      await page.getByRole('button', { name: '명단 찾기', exact: true }).click();
       await page.locator('#staff-manual-search').fill('합성');
       assert.match(await page.innerText('body'), /일치하는 참가자가 없습니다/);
       assert.match(await page.innerText('body'), /아직 처리 기록이 없습니다/);
@@ -37,6 +37,7 @@ async function main() {
     await warning.waitFor();
     assert.match(await warning.innerText(), /참가자 명단 · 출입 기록/);
     assert.equal(await page.getByRole('button', { name: '카메라로 스캔' }).isDisabled(), true);
+    await page.getByRole('button', { name: '명단 찾기', exact: true }).click();
     assert.equal(await page.locator('#staff-manual-search').isDisabled(), true);
     assert.match(await page.innerText('body'), /출입 기록을 확인할 수 없습니다/);
     assert.doesNotMatch(await page.innerText('body'), /아직 처리 기록이 없습니다/);
@@ -51,6 +52,7 @@ async function main() {
     await save(original);
     await warning.getByRole('button', { name: '업무 정보 다시 확인' }).click();
     await warning.waitFor({ state: 'hidden' });
+    await page.getByRole('button', { name: '스캔', exact: true }).click();
     assert.equal(await page.getByRole('button', { name: '카메라로 스캔' }).isEnabled(), true);
     const bootstrapRoute = '**/api/bootstrap';
     await page.route(bootstrapRoute, async route => {
@@ -65,7 +67,7 @@ async function main() {
     await page.unroute(bootstrapRoute);
     await warning.getByRole('button', { name: '업무 정보 다시 확인' }).click();
     await warning.waitFor({ state: 'hidden' });
-    await page.getByText('카메라가 안 될 때 · 참가자 명단 확인').click();
+    await page.getByRole('button', { name: '명단 찾기', exact: true }).click();
     const person = original.participants.find(item => item.name.startsWith('감사 참가자') && item.status === 'APPROVED' && item.company);
     assert.ok(person, 'fixture has a uniquely identifiable participant');
     await page.locator('#staff-manual-search').fill(person.name);
@@ -83,12 +85,16 @@ async function main() {
     await failure.getByRole('button', { name: '업무 정보 다시 확인' }).click();
     await warning.waitFor();
     assert.match(await warning.innerText(), /출입 기록/);
+    await page.getByRole('button', { name: '스캔', exact: true }).click();
     assert.equal(await page.getByRole('button', { name: '카메라로 스캔' }).isDisabled(), true);
+    await page.getByRole('button', { name: '명단 찾기', exact: true }).click();
     assert.equal(await page.locator('#staff-manual-search').inputValue(), person.name);
     await page.route('**/api/bootstrap', route => route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }), { times: 1 });
     await warning.getByRole('button', { name: '업무 정보 다시 확인' }).click();
     await page.getByText(/업무 정보를 불러오지 못했습니다/).first().waitFor();
+    await page.getByRole('button', { name: '스캔', exact: true }).click();
     assert.equal(await page.getByRole('button', { name: '카메라로 스캔' }).isDisabled(), true);
+    await page.getByRole('button', { name: '명단 찾기', exact: true }).click();
     const repaired = await read(); repaired.checks = original.checks; await save(repaired);
     await warning.getByRole('button', { name: '업무 정보 다시 확인' }).click();
     await warning.waitFor({ state: 'hidden' });

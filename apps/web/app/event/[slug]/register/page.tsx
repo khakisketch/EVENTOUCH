@@ -1,4 +1,5 @@
 import RegisterForm from "./RegisterForm";
+import styles from "./register.module.css";
 import Link from "next/link";
 import VerificationUnavailable from "../VerificationUnavailable";
 import { loadVerificationMode } from "../../../../lib/verification-mode";
@@ -38,7 +39,7 @@ export default async function RegisterPage({
   }
   if (!data) {
     return (
-      <main id="main-content" tabIndex={-1} className="site-page registration-page registration-state">
+      <main id="main-content" tabIndex={-1} className={`site-page registration-page registration-state ${styles.page}`}>
         <h1>신청할 수 없는 행사입니다</h1>
         <p>행사 주소를 확인하세요.</p>
       </main>
@@ -47,10 +48,10 @@ export default async function RegisterPage({
   if (!data.registrationOpen || data.stage === "ENDED") {
     const recoveryUnavailable = verificationMode === "mock" || verificationMode === "none";
     return (
-      <main id="main-content" tabIndex={-1} className="site-page registration-page registration-state">
+      <main id="main-content" tabIndex={-1} className={`site-page registration-page registration-state ${styles.page}`}>
         <header className="public-page-header">
           <span className="compact-wordmark">EVENTOUCH</span>
-          <p className="eyebrow">참가 신청</p>
+          <p className={styles.pageContext}>참가 신청</p>
         </header>
         <h1>{data.name}</h1>
         <p>현재 신청을 받지 않습니다.</p>
@@ -73,24 +74,24 @@ export default async function RegisterPage({
   }
   if (data.verificationRequired && (verificationMode === "mock" || verificationMode === "none")) {
     return (
-      <main id="main-content" tabIndex={-1} className="site-page registration-page registration-state">
+      <main id="main-content" tabIndex={-1} className={`site-page registration-page registration-state ${styles.page}`}>
         <header className="public-page-header">
           <span className="compact-wordmark">EVENTOUCH</span>
-          <p className="eyebrow">참가 신청</p>
+          <p className={styles.pageContext}>참가 신청</p>
         </header>
-        <h1 className="registration-title">{data.name}</h1>
+        <h1 className={`registration-title ${styles.pageTitle}`}>{data.name}</h1>
         <VerificationUnavailable slug={slug} mode={verificationMode} contact={data.recoveryContact} />
       </main>
     );
   }
   return (
-    <main id="main-content" tabIndex={-1} className="site-page registration-page">
+    <main id="main-content" tabIndex={-1} className={`site-page registration-page ${styles.page}`}>
       <header className="public-page-header">
         <span className="compact-wordmark">EVENTOUCH</span>
-        <p className="eyebrow">참가 신청</p>
+        <p className={styles.pageContext}>참가 신청</p>
       </header>
-      <p><Link href={`/event/${encodeURIComponent(slug)}`}>← 행사 안내로</Link></p>
-      <h1 className="registration-title">{data.name}</h1>
+      <p className={styles.backLink}><Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>← 행사 안내로</Link></p>
+      <h1 className={`registration-title ${styles.pageTitle}`}>{data.name}</h1>
       <RegisterForm
         slug={slug}
         fields={[...BUILT_IN_FIELDS, ...data.fields]}

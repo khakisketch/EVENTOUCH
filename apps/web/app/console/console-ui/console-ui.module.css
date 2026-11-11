@@ -38,6 +38,10 @@
   align-items: center;
   justify-self: start;
   margin-bottom: var(--s1);
+  padding-inline: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
   color: var(--brand-text);
   font-size: var(--small);
   font-weight: 600;
@@ -89,7 +93,9 @@
 }
 
 .backLink:hover {
-  text-decoration: underline;
+  border-color: var(--line-strong);
+  background: var(--surface-muted);
+  text-decoration: none;
 }
 
 .section {
@@ -254,6 +260,10 @@
   display: inline-flex;
   min-height: 44px;
   align-items: center;
+  padding-inline: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
   color: var(--muted);
   font-size: 13px;
   font-weight: 500;
@@ -263,7 +273,9 @@
 }
 
 .contextLink:hover {
-  text-decoration: underline;
+  border-color: var(--line-strong);
+  background: var(--surface-muted);
+  text-decoration: none;
 }
 
 /* ------------------------------------------------------------------
@@ -827,7 +839,7 @@
   margin: var(--s2) 0;
   padding: var(--s3);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--surface-muted);
 }
 
@@ -913,8 +925,7 @@
   cursor: pointer;
   background: transparent; }
 .anchorNav .sectionNavLink:not([aria-current="location"]) {
-  text-decoration: underline;
-  text-decoration-color: var(--line-strong);
+  text-decoration: none;
   text-underline-offset: 4px;
 }
 .sectionNavLink[aria-selected="true"] {

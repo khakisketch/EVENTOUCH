@@ -7,6 +7,9 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { createRequire } = require('node:module');
+const webRequire = createRequire(path.join(__dirname, '../apps/web/package.json'));
+const ts = webRequire('typescript');
 
 const ROOT = path.join(__dirname, '..');
 const WEB = path.join(ROOT, 'apps/web');
@@ -58,6 +61,30 @@ const menuPages = [
   ['app/console/events/[id]/reports/ReportsWorkspace.tsx', 'reports'],
 ];
 
+function findNodes(node, predicate, found = []) {
+  if (predicate(node)) found.push(node);
+  ts.forEachChild(node, (child) => { findNodes(child, predicate, found); });
+  return found;
+}
+
+function jsxAttribute(opening, name) {
+  return opening.attributes.properties.find((attribute) => ts.isJsxAttribute(attribute) && attribute.name.text === name);
+}
+
+function renderedChildren(element) {
+  return element.children.filter((child) => !ts.isJsxText(child)).map((child) => {
+    let node = ts.isJsxExpression(child) ? child.expression : child;
+    if (ts.isConditionalExpression(node)) node = node.whenTrue;
+    while (ts.isParenthesizedExpression(node)) node = node.expression;
+    assert.ok(ts.isJsxElement(node), 'header regions are real JSX elements');
+    return node;
+  });
+}
+
+function classExpression(element, source) {
+  return jsxAttribute(element.openingElement, 'className')?.initializer?.expression?.getText(source);
+}
+
 test('console layout primitives expose stable, hook-free composition', () => {
   const header = read('app/console/console-ui/ConsolePageHeader.tsx');
   const section = read('app/console/console-ui/ConsoleSection.tsx');
@@ -67,15 +94,31 @@ test('console layout primitives expose stable, hook-free composition', () => {
     assert.doesNotMatch(source, /\buse(?:State|Effect|Memo|Callback|Ref|Id)\s*\(/);
   }
 
-  const headerOrder = [
-    header.indexOf('className={styles.backLink}'),
-    header.indexOf('<h1>{title}</h1>'),
-    header.indexOf('className={styles.pageMeta}'),
-    header.indexOf('className={styles.pageBadges}'),
-    header.indexOf('className={styles.pageActions}'),
-  ];
-  assert.ok(headerOrder.every((position) => position >= 0));
-  assert.deepEqual(headerOrder, [...headerOrder].sort((a, b) => a - b));
+  const tree = ts.createSourceFile('ConsolePageHeader.tsx', header, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const region = (name) => {
+    const matches = findNodes(tree, (node) => ts.isJsxElement(node) && classExpression(node, tree) === 'styles.' + name);
+    assert.equal(matches.length, 1, name + ' is rendered exactly once');
+    return matches[0];
+  };
+  // Actions now belong beside the title, not after metadata in source order.
+  assert.deepEqual(renderedChildren(region('pageIdentity')).map((node) => classExpression(node, tree)), [
+    'styles.backLink', 'styles.pageContext', 'styles.pageTitleRow', 'styles.pageSubline', 'styles.pageBadges',
+  ]);
+  const titleRow = renderedChildren(region('pageTitleRow'));
+  assert.equal(titleRow[0].openingElement.tagName.getText(tree), 'h1');
+  assert.equal(titleRow[0].getText(tree), '<h1>{title}</h1>');
+  assert.equal(classExpression(titleRow[1], tree), 'styles.pageActions');
+  assert.equal(titleRow.length, 2, 'only the title and its optional actions share the alignment row');
+  assert.deepEqual(renderedChildren(region('pageSubline')).map((node) => classExpression(node, tree)), ['styles.pageMeta']);
+  for (const [prop, name] of [['context', 'pageContext'], ['meta', 'pageSubline'], ['badges', 'pageBadges'], ['actions', 'pageActions']]) {
+    const conditional = region(name).parent;
+    assert.ok(ts.isConditionalExpression(conditional), name + ' stays optional');
+    assert.equal(conditional.condition.getText(tree), prop, name + ' renders when its own slot is populated');
+    assert.equal(conditional.whenFalse.kind, ts.SyntaxKind.NullKeyword, name + ' leaves no empty region');
+    const content = region(prop === 'meta' ? 'pageMeta' : name);
+    const expressions = content.children.filter(ts.isJsxExpression).map((child) => child.expression.getText(tree));
+    assert.deepEqual(expressions, [prop], name + ' renders the actual supplied slot content');
+  }
 
   assert.match(section, /<section className=\{classNames\} aria-labelledby=\{headingId\} data-workspace-section=\{headingId\}>/);
   assert.match(section, /<h2 className=\{styles\.sectionTitle\} id=\{headingId\}>\{title\}<\/h2>/);

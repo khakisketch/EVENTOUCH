@@ -1450,7 +1450,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           ) : null}
           {failure && failure.field !== "serverUnsupported" && (failure.field !== "consentText" || activeTab !== "intake") ? <ConsoleFeedback kind="error" id="settings-error">{failure.message}</ConsoleFeedback> : null}
           {notice ? <ConsoleFeedback kind="success">{notice}</ConsoleFeedback> : null}
-          {showTicketReview ? <p><Link href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</Link></p> : null}
+          {showTicketReview ? <p><Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</Link></p> : null}
           {intakeConflict && activeTab !== "intake" ? <ConsoleFeedback kind="warning">참가 접수 설정이 변경되어 최신 내용을 확인해야 합니다. 참가 접수 탭에서 작성 중인 안내를 확인하세요.</ConsoleFeedback> : null}
           {basicsConflict && activeTab !== "basics" ? <ConsoleFeedback kind="warning">기본 정보가 변경되어 최신 내용을 확인해야 합니다. 기본 정보 탭에서 작성 중인 내용을 확인하세요.</ConsoleFeedback> : null}
           {featuresConflict && activeTab !== "features" ? <ConsoleFeedback kind="warning">운영 기능이 변경되어 최신 내용을 확인해야 합니다. 운영 기능 탭에서 선택 중인 기능을 확인하세요.</ConsoleFeedback> : null}
@@ -1466,7 +1466,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         <p>{SETTINGS_COMMAND_LABEL[pendingSettings.command] ?? "이전 설정"} 요청이 반영됐을 수 있습니다. 서버 확인은 요청을 다시 보내지 않습니다.</p>
         {archived || !canWriteEvent(capabilities, pendingSettings.command) ? <p>현재 권한이나 행사 상태에서는 같은 요청을 다시 보낼 수 없습니다. 서버 처리 확인이나 담당자 확인을 이용하세요.</p> : null}
         {settingsRecoveryError ? <p role="alert">{settingsRecoveryError}</p> : null}
-        {postponesEvent(pendingSettings) ? <p><Link href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</Link></p> : null}
+        {postponesEvent(pendingSettings) ? <p><Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</Link></p> : null}
         <div className={styles.recoveryActions}>
           <button type="button" className="button button-secondary" disabled={busy || stageBusy || checkingSettings || abandonSettingsConfirm} onClick={() => void checkSettings()}>{checkingSettings ? "확인 중…" : "서버 처리 확인"}</button>
           <button type="button" className="button button-secondary" disabled={busy || stageBusy || checkingSettings || abandonSettingsConfirm || archived || !canWriteEvent(capabilities, pendingSettings.command)} onClick={() => void retrySettings()}>같은 요청 다시 시도</button>
@@ -1502,7 +1502,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         hidden={activeTab !== "basics"}
         className={styles.tabPanel}
       >
-      <ConsoleSection headingId="settings-basics" title="기본 정보" width="form">
+      <ConsoleSection headingId="settings-basics" title="기본 정보" width="form" surface="panel">
         {!canWriteSettings ? (
           <p className={styles.help} role="note">{settingsNoWriteReason}</p>
         ) : null}
@@ -1751,9 +1751,9 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             <h3 id="schedule-review-title">참가자에게 보이는 안내도 확인해 주세요</h3>
             <p>행사 일시는 저장됐지만, 기존에 게시한 프로그램 일정과 공지·장소 안내는 그대로입니다. 여러 날짜에 진행하는 일정일 수 있으니 내용을 확인하고 필요한 경우에만 수정·게시하세요.</p>
             <div className={styles.scheduleReviewLinks}>
-              {canWriteEvent(capabilities, "program.save") ? <Link href={`/console/events/${encodeURIComponent(eventId)}/content#content-program`}>프로그램 일정 확인</Link> : null}
-              {canWriteEvent(capabilities, "notice.save") ? <Link href={`/console/events/${encodeURIComponent(eventId)}/content#content-notices`}>공지 확인</Link> : null}
-              {canWriteEvent(capabilities, "venue.save") ? <Link href={`/console/events/${encodeURIComponent(eventId)}/content#content-venue`}>장소 안내 확인</Link> : null}
+              {canWriteEvent(capabilities, "program.save") ? <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-program`}>프로그램 일정 확인</Link> : null}
+              {canWriteEvent(capabilities, "notice.save") ? <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-notices`}>공지 확인</Link> : null}
+              {canWriteEvent(capabilities, "venue.save") ? <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-venue`}>장소 안내 확인</Link> : null}
             </div>
             {!canWriteEvent(capabilities, "program.save") || !canWriteEvent(capabilities, "notice.save") ? <p>확인할 권한이 없는 안내는 담당 운영자에게 검토를 요청하세요.</p> : null}
           </section>
@@ -1768,7 +1768,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         hidden={activeTab !== "intake"}
         className={styles.tabPanel}
       >
-      <ConsoleSection headingId="settings-intake" title="참가 접수" width="form">
+      <ConsoleSection headingId="settings-intake" title="참가 접수" width="form" surface="panel">
         {!canWriteIntake ? (
           <p className={styles.help} role="note">{intakeNoWriteReason}</p>
         ) : null}
@@ -1785,7 +1785,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         {isRecoveryBlocked(verificationMode) && !state.recoveryContact ? (
           <ConsoleFeedback kind="warning">
             문자로 티켓을 다시 연결할 수 없고 참가자에게 표시되는 문의처도 없습니다. 탭을 잃은 참가자가 도움을 받을 수 있도록{" "}
-            <Link href={`/console/events/${encodeURIComponent(eventId)}/content#content-venue`}>장소 안내의 문의 정보</Link>와 참가자 페이지의 공개 설정을 확인하세요.
+            <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-venue`}>장소 안내의 문의 정보</Link>와 참가자 페이지의 공개 설정을 확인하세요.
           </ConsoleFeedback>
         ) : null}
         {currentStage === "DRAFT" && !state.registrationOpen ? (
@@ -1805,7 +1805,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             공개 접수: 닫힘 — 종료된 행사에서는 신청을 받을 수 없습니다. 공개 신청 화면은 닫혀 있습니다. 보관하려면 접수를 닫으세요.
           </p>
         ) : null}
-        <p className={styles.help}>신청 항목을 편집한 뒤 양식을 게시하면 참가자에게 변경 사항이 적용됩니다. <Link href={`/console/events/${encodeURIComponent(eventId)}/settings/fields`}>신청 항목 편집</Link></p>
+        <p className={styles.help}>신청 항목을 편집한 뒤 양식을 게시하면 참가자에게 변경 사항이 적용됩니다. <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/settings/fields`}>신청 항목 편집</Link></p>
         {intakeConflict ? <section className={styles.conflict} aria-labelledby="intake-conflict-heading">
           <h3 id="intake-conflict-heading" tabIndex={-1}>다른 작업에서 참가 접수 설정이 변경됐습니다</h3>
           <p>이번 게시 요청은 반영되지 않았습니다. 작성 중인 안내는 그대로 있습니다. 최신 설정을 확인하고 사용할 안내를 선택해 주세요.</p>
@@ -1911,7 +1911,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         hidden={activeTab !== "features"}
         className={styles.tabPanel}
       >
-      <ConsoleSection headingId="settings-features" title="운영 기능" width="form">
+      <ConsoleSection headingId="settings-features" title="운영 기능" width="form" surface="panel">
         {!canWriteSettings ? (
           <p className={styles.help} role="note">{settingsNoWriteReason}</p>
         ) : null}
@@ -1997,7 +1997,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         hidden={activeTab !== "stage"}
         className={styles.tabPanel}
       >
-      <ConsoleSection headingId="settings-stage" title="진행 단계" width="form" description={stagePrompt}>
+      <ConsoleSection headingId="settings-stage" title="진행 단계" width="form" surface="panel" description={stagePrompt}>
           <div className={styles.stagePanel}>
           <ol className={styles.stageTimeline} aria-label="전체 진행 단계">
             {STAGE_ORDER.map((stage) => {
@@ -2030,12 +2030,12 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               {archiveDataUnavailable ? (
                 <button type="button" className="button button-secondary" disabled={refreshingAfterWrite} onClick={() => { setStageError(null); setRefreshingAfterWrite(true); setReloadTick((tick) => tick + 1); }}>{refreshingAfterWrite ? "상태 확인 중" : "상태 다시 확인"}</button>
               ) : nextStage === "LIVE" ? (
-                <Link href={`/console/events/${encodeURIComponent(eventId)}/operations`}>운영에서 데스크 배정하기</Link>
+                <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/operations`}>운영에서 데스크 배정하기</Link>
               ) : (
                 <>
-                  <a href="#settings-intake">접수 닫기</a>
+                  <a className="button button-secondary" href="#settings-intake">접수 닫기</a>
                   {" · "}
-                  <Link href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>프로그램 닫기</Link>
+                  <Link className="button button-secondary" href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>프로그램 닫기</Link>
                 </>
               )}
               </span>

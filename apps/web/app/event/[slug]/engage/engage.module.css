@@ -44,7 +44,7 @@
   gap: var(--s3);
   padding: var(--s4);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--paper);
 }
 
@@ -102,7 +102,7 @@
   min-height: 44px;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--line);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
 }
 
 .choiceRow input {
@@ -125,7 +125,7 @@
   min-width: 44px;
   padding: var(--s1) var(--s2);
   border: 1px solid var(--line);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
 }
 
 .scoreChoice input {
@@ -146,8 +146,8 @@
   gap: var(--s1);
   padding: var(--s3);
   border: 1px solid var(--line);
-  border-radius: var(--radius-small);
-  background: var(--surface-muted);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
 }
 
 .entryList p {
@@ -182,7 +182,7 @@
 .photoGrid img {
   width: 100%;
   height: auto;
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
 }
 
 .photoGrid p {
@@ -196,7 +196,7 @@
   margin-left: var(--s2);
   padding: 0 var(--s3);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--paper);
   color: var(--ink);
   font-size: var(--small);
@@ -213,7 +213,7 @@
   margin: 0;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--success-line);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--success-soft);
   color: var(--success);
 }
@@ -222,7 +222,7 @@
   margin: 0;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--info-line);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--info-soft);
   color: var(--info);
   overflow-wrap: break-word;
@@ -232,7 +232,7 @@
   margin: 0;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--success-line);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--success-soft);
   color: var(--success);
 }
@@ -241,7 +241,7 @@
   margin: 0;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--warning-line);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--warning-soft);
   color: var(--warning);
 }
@@ -296,7 +296,7 @@
   gap: var(--s3);
   padding: var(--s5);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--paper);
 }
 
@@ -355,10 +355,10 @@
 .programDisclosure > summary span { color: var(--brand-text); font-size: var(--small); }
 .programDisclosure[open] > summary { padding-bottom: var(--s3); margin-bottom: var(--s4); border-bottom: 1px solid var(--line); }
 .programDisclosure > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
-.returnLink { display: inline-flex; align-items: center; min-height: 44px; color: var(--muted); font-size: var(--small); }
+.returnLink { display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--s3); border: 1px solid var(--line-strong); border-radius: var(--radius-medium); background: var(--paper); color: var(--ink); font-size: var(--small); text-decoration: none; }
 .scoreRow { display: grid; grid-template-columns: repeat(5, minmax(44px, 1fr)); gap: var(--s1); }
 .moduleCard .scoreChoice { display: flex; justify-content: center; gap: var(--s1); padding: var(--s1); margin: 0; min-width: 44px; }
 .scoreChoice input { width: 16px; height: 16px; }
 .scoreChoice:has(input:checked) { border-color: var(--brand-text); background: var(--soft); }
-.moduleCard { padding-block: var(--s3); border-width: 0 0 1px; border-radius: 0; }
+.moduleCard { padding-block: var(--s3); border: 1px solid var(--line); border-radius: var(--radius-medium); }
 .moduleList { gap: var(--s2); }

@@ -92,8 +92,10 @@ async function readHostCounts(connectionString) {
     for (const row of result.rows) counts[row.name] = Number(row.value);
     const migrations = await pool.query('SELECT version FROM schema_migrations ORDER BY version');
     const version = await pool.query('SHOW server_version');
+    const database = await pool.query('SELECT current_database() AS database');
     return {
       counts,
+      database: database.rows[0].database,
       migrations: migrations.rows.map((row) => row.version),
       serverVersion: String(version.rows[0].server_version || '').trim(),
     };
@@ -248,7 +250,7 @@ async function hostBackup(options) {
   const after = await readHostCounts(options.databaseUrl);
   const countsStable = lib.sameCounts(before.counts, after.counts).length === 0;
   if (!countsStable) lib.log('백업 중 데이터 변경 감지: 행 수는 백업 종료 시점 참고값으로 기록합니다');
-  const { counts, migrations, serverVersion } = after;
+  const { counts, migrations, serverVersion, database } = after;
 
   let storage = { file: null, bytes: 0, sha256: null, files: [] };
   if (!options.skipStorage) {
@@ -267,7 +269,7 @@ async function hostBackup(options) {
   const manifest = {
     format: lib.FORMAT,
     createdAt: new Date().toISOString(),
-    source: { project: null, database: '(database-url)', postgres: serverVersion, migrations },
+    source: { project: null, database, postgres: serverVersion, migrations },
     counts,
     countsStable,
     database: {

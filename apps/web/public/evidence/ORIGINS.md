@@ -17,4 +17,4 @@ screenshots are used as product assets. The customer attendee banner is unchange
 - `ev-staff.png`: staff-work viewport.
 - `../landing/ev-report-mobile.png`: report list and registration/entry metrics crop.
 
-Current product verification and its limits belong to `docs/STATUS.md` only.
+Check source, tests, and the corresponding CI or audit output for current verification.

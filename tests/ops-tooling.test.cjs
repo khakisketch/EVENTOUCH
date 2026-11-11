@@ -88,7 +88,7 @@ function makeBackup(root, files, overrides = {}) {
     format: 1,
     createdAt: new Date().toISOString(),
     source: { project: 'synth', database: 'synth', postgres: '16', migrations: ['001'] },
-    counts: {},
+    counts: Object.fromEntries(require('../scripts/backup-lib.cjs').COUNT_TABLES.map(table => [table, 0])),
     countsStable: true,
     database: { file: 'database.dump', ...(entries['database.dump'] || {}) },
     storage: { file: 'storage.tar.gz', ...(entries['storage.tar.gz'] || {}) },

@@ -29,3 +29,5 @@ design-previews/
 # The operator's own files at the repository root (archives, plans) are not
 # project assets: keep them out of every commit without touching them.
 /*.zip
+
+.playwright-mcp/

@@ -17,8 +17,8 @@ type ConsoleSectionProps = {
    */
   surface?: "plain" | "panel";
   /**
-   * Body width. `full` spans the page; `form` caps the body at the shared
-   * reading width while the section header keeps page alignment.
+   * Editing width. `full` spans the page; `form` keeps the complete editing
+   * unit, including its heading and actions, at the shared reading width.
    */
   width?: "full" | "form";
 };

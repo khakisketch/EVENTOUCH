@@ -832,8 +832,8 @@ async function main() {
       });
     }
     await check('frame/common-header-geometry', async () => {
-      // Shared alignment remains fixed. The approved B participant workbench
-      // uses the compact 28px title; other pages retain their current scale.
+      // Shared alignment and the responsive title scale apply to every menu,
+      // including the first entry in each scope.
       const groups = new Map();
       for (const entry of geometries) {
         const key = `${entry.viewport}|${entry.scope}`;
@@ -843,14 +843,14 @@ async function main() {
       for (const [key, entries] of groups) {
         if (entries.length < 2) continue;
         const first = entries[0];
-        for (const entry of entries.slice(1)) {
+        const expectedSize = Number(first.viewport.split('x')[0]) <= 768 ? '26px' : '30px';
+        for (const entry of entries) {
           for (const field of ['x', 'width']) {
             if (Math.abs(entry[field] - first[field]) > 2) {
               throw new Error(`${key}: header ${field} ${entry[field]} vs ${first[field]}`);
             }
           }
-          const expectedSize = ['participants', 'messages'].includes(entry.screen) ? '28px' : first.fontSize;
-          if (entry.fontSize !== expectedSize) throw new Error(`${key}: H1 font-size ${entry.fontSize} vs ${expectedSize}`);
+          if (entry.fontSize !== expectedSize) throw new Error(`${key}/${entry.screen}: H1 font-size ${entry.fontSize} vs ${expectedSize}`);
         }
       }
     });
@@ -870,9 +870,28 @@ async function main() {
       try {
         await check(`phone/home-composition@${width}`, async () => {
           await go('events');
-          const search = await page.getByRole('searchbox', { name: '행사명·고객사·장소 검색', exact: true }).boundingBox();
+          const search = await page.getByRole('searchbox', { name: '행사명·고객사·장소 검색', exact: true }).evaluate(input => {
+            const bounds = element => {
+              const box = element.getBoundingClientRect();
+              const css = getComputedStyle(element);
+              return { left: box.left, right: box.right, width: box.width,
+                contentLeft: box.left + parseFloat(css.borderLeftWidth) + parseFloat(css.paddingLeft),
+                contentRight: box.right - parseFloat(css.borderRightWidth) - parseFloat(css.paddingRight) };
+            };
+            return { input: bounds(input), filters: bounds(input.closest('[data-toolbar-span="full"]')),
+              workspace: bounds(input.closest('section')), main: bounds(document.querySelector('main')), viewport: innerWidth };
+          });
           const first = await page.locator('main article').first().boundingBox();
-          if (!search || search.width < width - 40) throw new Error(`search squeezed to ${search?.width}px`);
+          // The white ledger is inset inside the neutral workspace. Search
+          // fills its filter row, not the viewport or the ledger's padding.
+          const aligned = (a, b) => Math.abs(a - b) <= 1;
+          if (search.workspace.left < 16 || search.workspace.left > 24 ||
+              search.workspace.right > search.viewport - 16 || search.workspace.right < search.viewport - 24 ||
+              !aligned(search.workspace.left, search.main.contentLeft) || !aligned(search.workspace.right, search.main.contentRight) ||
+              !aligned(search.filters.left, search.workspace.contentLeft) || !aligned(search.filters.right, search.workspace.contentRight) ||
+              !aligned(search.input.left, search.filters.left) || !aligned(search.input.right, search.filters.right) || search.input.width <= 0) {
+            throw new Error(`search does not fill the inset workspace safely: ${JSON.stringify(search)}`);
+          }
           if (!first || first.y > 440) throw new Error(`first event starts too late: ${first?.y}px`);
           const stage = await page.locator('main select').first().evaluate((e) => {
             const css = getComputedStyle(e);
@@ -880,14 +899,18 @@ async function main() {
             const approval = document.querySelector('main label:has(input[type="checkbox"])').getBoundingClientRect();
             const title = document.getElementById('console-event-directory');
             const count = title.closest('section').querySelector('p').getBoundingClientRect();
+            const titleBox = title.getBoundingClientRect();
+            const viewBox = title.closest('section').querySelector('[role="group"][aria-label="목록 보기 방식"]').getBoundingClientRect();
             return { background: css.backgroundColor, border: css.borderTopWidth, radius: css.borderRadius, height: e.getBoundingClientRect().height,
-              filterGap: approval.x - label.right, countGap: count.top - title.getBoundingClientRect().bottom };
+              filterGap: approval.x - label.right,
+              countGap: count.top - Math.max(titleBox.bottom, viewBox.bottom),
+              titleActionCenterDelta: Math.abs(titleBox.y + titleBox.height / 2 - viewBox.y - viewBox.height / 2) };
           });
           if (stage.background !== 'rgba(0, 0, 0, 0)' || stage.border !== '0px' || stage.radius !== '0px' || stage.height < 44) throw new Error('stage filter regained card styling or lost its touch height');
-          // The compact directory intentionally uses the 8px spacing token
-          // between the stage and pending filters (previous layout used 12px).
-          // Keep the relationship and title-summary bound measurable.
-          if (Math.abs(stage.filterGap - 8) > 1 || stage.countGap > 4.5) throw new Error(`home filter or title-summary spacing drifted: ${JSON.stringify(stage)}`);
+          // Filters keep a 12px column gap. The title is centered beside
+          // the 44px view controls; description spacing starts at that row's
+          // bottom, not at the shorter H2 glyph box.
+          if (Math.abs(stage.filterGap - 12) > 1 || Math.abs(stage.countGap - 4) > 1 || stage.titleActionCenterDelta > 1) throw new Error(`home filter or title-summary spacing drifted: ${JSON.stringify(stage)}`);
           const heading = page.locator('section[aria-labelledby="console-event-directory"]');
           if (!await heading.getByRole('button', { name: '달력', exact: true }).isVisible()) throw new Error('view switch detached from list');
           await shot('events');
@@ -2086,7 +2109,7 @@ async function main() {
         await assertConsoleScreen(page, SCREENS.find((screen) => screen.key === 'settings'), eventId, eventName);
         await page.getByRole('tab', { name: '진행 단계', exact: true }).click();
         await page.getByRole('tabpanel').filter({ hasText: '진행 단계' }).first().waitFor({ state: 'visible', timeout: 15000 });
-        await page.getByRole('button', { name: /종료\(으\)로 전환/ }).click();
+        await page.getByRole('button', { name: '종료 단계로 전환', exact: true }).click();
         await page.getByText(/결과 보고서는 생성 시점 값으로 고정됩니다/).first().waitFor({ timeout: 10000 });
         await page.getByText(/승인 대기 등 필요한 참가자 처리는 종료 전에 마치세요/).first().waitFor({ timeout: 10000 });
         await saveShot(page, 'operator/ended-report-reminder.png');

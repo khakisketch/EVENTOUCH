@@ -435,7 +435,7 @@ export default function RegisterForm(initial: Props) {
     ) : (
       <p className="registration-duplicate" role="status">
         이미 신청하신 연락처로 등록되어 있습니다.{" "}
-        <Link href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</Link>
+        <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</Link>
       </p>
     )
   ) : null;
@@ -532,7 +532,7 @@ export default function RegisterForm(initial: Props) {
       <fieldset className="registration-fields" disabled={submitting || retryPending || signupSuperseded}>
       <legend className="sr-only">참가 신청 정보</legend>
       <section className={styles.stepSection} aria-label="신청 결과 안내">
-        <p className={styles.stepLabel}>신청하면 어떻게 되나요</p>
+        <h2 className={styles.outcomeTitle}>신청하면 어떻게 되나요</h2>
         <p className={styles.outcomeNote} role="note">
           {approvalRequired && paymentPending
             ? "신청 접수 후 운영자 승인과 결제 확인이 모두 끝나면 입장 QR이 표시됩니다."
@@ -597,7 +597,7 @@ export default function RegisterForm(initial: Props) {
               {verifyFailure ? <p role="alert">{verifyFailure}</p> : null}
               <p className="verification-help">
                 문자가 오지 않거나 인증이 계속되지 않으면{" "}
-                <Link href={`/event/${encodeURIComponent(slug)}`}>행사 안내에서 운영 정보를 확인하세요.</Link>
+                <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내에서 운영 정보를 확인하세요.</Link>
               </p>
             </>
           )}
@@ -648,7 +648,7 @@ export default function RegisterForm(initial: Props) {
           <h2>신청 결과를 확인하지 못했습니다</h2>
           <p>이미 신청되었을 수 있습니다. 입력한 정보는 결과를 확인할 때까지 변경할 수 없습니다.</p>
           <p>아래 버튼으로 같은 신청을 다시 확인하세요. 확인하기 전에는 이 페이지를 새로고침하거나 닫지 마세요.</p>
-          <p>계속 확인되지 않으면 <Link href={`/event/${encodeURIComponent(slug)}`} target="_blank" rel="noopener noreferrer">행사 안내 (새 탭)</Link>에서 주최 측의 안내를 확인하세요.</p>
+          <p>계속 확인되지 않으면 <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`} target="_blank" rel="noopener noreferrer">행사 안내 (새 탭)</Link>에서 주최 측의 안내를 확인하세요.</p>
         </section>
       ) : null}
       {signupSuperseded ? (
@@ -657,7 +657,7 @@ export default function RegisterForm(initial: Props) {
           <p>신청이 처리된 뒤 참가 정보가 변경되었습니다.</p>
           {recoveryBlocked ? (
             <p>{recoveryContact ? `문의: ${recoveryContact}` : "행사 주최 측에 문의하세요."}</p>
-          ) : <Link href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</Link>}
+          ) : <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</Link>}
         </section>
       ) : null}
       <div className={styles.submitBlock}>

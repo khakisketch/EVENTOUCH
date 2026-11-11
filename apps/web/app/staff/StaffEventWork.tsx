@@ -30,7 +30,7 @@ import {
 } from "../../lib/operator-context";
 import { OrganizationContextNotice } from "../OrganizationSwitcher";
 import StaffAccountMenu from "./StaffAccountMenu";
-import { CopyIcon, RefreshIcon } from "../console/console-ui/ConsoleIcons";
+import { BackIcon, CopyIcon, RefreshIcon } from "../console/console-ui/ConsoleIcons";
 import { useOperatorContextSnapshot } from "./use-operator-context";
 import { useEventReceipts } from "../../lib/use-event-receipts";
 import { forgetOperatorReceipt } from "../../lib/operator-receipts";
@@ -235,7 +235,6 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   const [ticket, setTicket] = useState("");
   const [cameraOpen, setCameraOpen] = useState(false);
   const cameraButtonRef = useRef<HTMLButtonElement | null>(null);
-  const manualSearchRef = useRef<HTMLDetailsElement | null>(null);
   const [kiosk, setKiosk] = useState(false);
   const [nametagResult, setNametagResult] = useState<ScanResult | null>(null);
   const [result, setResult] = useState<ScanResult>({ kind: "idle" });
@@ -263,6 +262,17 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   const [manualVisibleLimit, setManualVisibleLimit] = useState(10);
   const [manualTarget, setManualTarget] = useState<DeskParticipant | null>(null);
   const [manualIdentityConfirmed, setManualIdentityConfirmed] = useState(false);
+  // 입력 방식: 스캔(카메라+코드)과 명단 찾기를 같은 위계의 전환으로 둔다.
+  // 접힌 details 뒤에 숨기지 않는다: 카메라 고장 순간에 발견 비용이 가장 크기 때문이다.
+  // 카메라 API 자체가 없으면 처음부터 명단 모드로 시작한다.
+  const [entryMode, setEntryMode] = useState<"scan" | "roster">("scan");
+  useEffect(() => {
+    if (typeof navigator !== "undefined" && !navigator.mediaDevices?.getUserMedia) setEntryMode("roster");
+  }, []);
+  function chooseEntryMode(next: "scan" | "roster") {
+    setEntryMode(next);
+    if (next === "roster") window.requestAnimationFrame(() => document.getElementById("staff-manual-search")?.focus({ preventScroll: false }));
+  }
   const [rewardEnabled, setRewardEnabled] = useState(false);
   const [rewardTarget, setRewardTarget] = useState<RewardParticipant | null>(null);
   const [targetRewards, setTargetRewards] = useState<DeskReward[]>([]);
@@ -1455,7 +1465,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           payload: { id: pending.checkId, reason: pending.reason },
         }),
       });
-      const data = (await res.json().catch(() => null)) as { error?: unknown; code?: unknown; check?: { id?: unknown; corrected?: unknown; correction?: { id?: unknown } } } | null;
+      const data = (await res.json()) as { error?: unknown; code?: unknown; check?: { id?: unknown; corrected?: unknown; correction?: { id?: unknown } } } | null;
       if (!res.ok) {
         if (res.status === 409 && data?.code === "CHECK_CORRECTION_STALE") {
           pendingCorrectRef.current = null;
@@ -1541,13 +1551,15 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                 !window.confirm("입력 중인 내용이 있습니다. 떠나면 사라집니다. 이동할까요?")) event.preventDefault();
           }}
         >
-          ← 내 업무
+          <BackIcon />
+          <span>내 업무</span>
         </Link>
-        <span>{activeScope.eventName}</span>
+        <span className={prizeStyles.eventWorkTitle}>{activeScope.eventName}</span>
         <button
           type="button"
-          className="button button-secondary kiosk-toggle"
-          aria-pressed={kiosk}
+          role="switch"
+          aria-checked={kiosk}
+          className={`${prizeStyles.kioskSwitch} ${kiosk ? prizeStyles.kioskSwitchOn : ""}`}
           disabled={scanControlsLocked || submitting}
           onClick={() => {
             if (!allowContextChange()) return;
@@ -1556,7 +1568,10 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             clearRewardPanel();
           }}
         >
-          {kiosk ? "일반 화면" : "키오스크 모드"}
+          <span className={prizeStyles.kioskSwitchTrack} aria-hidden="true">
+            <span className={prizeStyles.kioskSwitchThumb} />
+          </span>
+          <span>키오스크</span>
         </button>
       </p>
       <div className={prizeStyles.accountContext}>
@@ -1593,10 +1608,10 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         </p>
       ) : null}
       {hasDeskWork && hasBoothWork ? (
-        <div className="staff-task-switch" role="group" aria-label="업무 종류">
+        <div className={`staff-task-switch ${prizeStyles.taskSwitch}`} role="group" aria-label="업무 종류">
           <button
             type="button"
-            className={`button ${activeTask === "desk" ? "button-primary" : "button-secondary"}`}
+            className="button button-secondary"
             aria-pressed={activeTask === "desk"}
             disabled={scanControlsLocked || submitting}
             onClick={() => {
@@ -1610,7 +1625,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           </button>
           <button
             type="button"
-            className={`button ${activeTask === "booth" ? "button-primary" : "button-secondary"}`}
+            className="button button-secondary"
             aria-pressed={activeTask === "booth"}
             disabled={scanControlsLocked || submitting}
             onClick={() => {
@@ -1793,6 +1808,28 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       {scanInputHasWork && result.kind !== "ok" && !scanUnknown ? (
        <div className={prizeStyles.scanInput} ref={scanInputRef}>
       <h2 className={prizeStyles.sectionTitle}>참가자 티켓 확인</h2>
+      {activeTask === "desk" ? (
+        <div className={prizeStyles.entryModeSwitch} role="group" aria-label="입력 방식">
+          <button
+            type="button"
+            className="button button-secondary"
+            aria-pressed={entryMode === "scan"}
+            disabled={scanControlsLocked || submitting}
+            onClick={() => { setEntryMode("scan"); setCameraOpen(false); }}
+          >
+            스캔
+          </button>
+          <button
+            type="button"
+            className="button button-secondary"
+            aria-pressed={entryMode === "roster"}
+            disabled={scanControlsLocked || submitting}
+            onClick={() => chooseEntryMode("roster")}
+          >
+            명단 찾기
+          </button>
+        </div>
+      ) : null}
       {/* Field order is scan-first: a moving line points the camera, and the
           manual input stays as the fallback for unreadable codes. The bar
           stays in normal flow (never a fixed overlay), so the selector, the
@@ -1801,7 +1838,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           used to sit above this block is gone. */}
       {scanLine ? <p id="staff-scan-hint" className={scanContext ? prizeStyles.scanContext : "staff-direction-hint"} role="status">{scanLine}</p> : null}
       {submitting ? <p id="staff-scan-wait" className="notice" role="status">처리 결과를 확인하고 있습니다. 확인이 끝나면 티켓과 업무를 다시 바꿀 수 있습니다.</p> : null}
-      <div className="camera-action">
+      {(entryMode === "scan" || activeTask !== "desk") ? <div className="camera-action">
         {activeTask === "booth" && activeScope.stampMode === "SELF" ? null : (
           <button
             ref={cameraButtonRef}
@@ -1823,13 +1860,12 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             manualHint={activeTask === "desk" ? "참가자 명단에서 확인하거나 현장 책임자에게 도움을 요청하세요." : "티켓 코드가 없다면 현장 책임자에게 도움을 요청하세요."}
             onUseManual={activeTask === "desk" ? () => {
               const previousFocus = document.activeElement;
-              const details = manualSearchRef.current;
               setCameraOpen(false);
-              if (details) details.open = true;
+              setEntryMode("roster");
               window.requestAnimationFrame(() => {
                 const focused = document.activeElement;
                 if (focused && focused !== document.body && focused !== previousFocus && focused.isConnected) return;
-                if (details?.isConnected) document.getElementById("staff-manual-search")?.focus();
+                document.getElementById("staff-manual-search")?.focus();
               });
             } : undefined}
             onDetected={(code) => {
@@ -1841,7 +1877,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             onClose={() => setCameraOpen(false)}
           />
         ) : null}
-      </div>
+      </div> : null}
       {activeTask === "booth" && activeScope.stampMode !== "SELF" ? (
         <ValidatedForm className="scan-form" onSubmit={onScan}>
           <div className={prizeStyles.fallbackBlock}>
@@ -1882,10 +1918,10 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           </div>
         </ValidatedForm>
       ) : null}
-      {activeTask === "desk" ? (
+      {activeTask === "desk" && entryMode === "scan" ? (
         <ValidatedForm className="scan-form" onSubmit={onScan}>
           <div className={prizeStyles.fallbackBlock}>
-            <p className={prizeStyles.fallbackLabel}>카메라가 안 될 때 · 코드로 처리</p>
+            <p className={prizeStyles.fallbackLabel}>코드로 직접 처리</p>
           <div className="form-field">
             <label htmlFor="staff-ticket">티켓 코드</label>
             <input
@@ -1906,9 +1942,8 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           </div>
         </ValidatedForm>
       ) : null}
-      {activeTask === "desk" ? (
-        <details ref={manualSearchRef} className={prizeStyles.manualSearch}>
-          <summary>카메라가 안 될 때 · 참가자 명단 확인</summary>
+      {activeTask === "desk" && entryMode === "roster" ? (
+        <section className={prizeStyles.manualSearch} aria-label="참가자 명단 찾기">
           <div className={prizeStyles.manualSearchBody}>
             <p>참가자의 이름과 소속을 확인한 뒤 처리하세요. 같은 이름과 소속이 여럿이면 현장 책임자에게 확인을 요청하세요.</p>
             <div className={prizeStyles.manualSearchHeading}>
@@ -1933,7 +1968,13 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                     const presenceTone = person.attendanceReview !== false || person.inside === null ? "review" : person.inside ? "inside" : "outside";
                     const presenceLabel = person.attendanceReview === true ? "출입 기록 확인 필요" : presenceTone === "review" ? "출입 상태 확인 불가" : presenceTone === "inside" ? "입장 중" : "입장 중 아님";
                     return <li key={person.id} id={`staff-manual-result-${index}`} tabIndex={-1}>
-                      <div><strong>{person.name}</strong><span>{person.company || "소속 미입력"}{person.group ? ` · ${person.group}` : ""} · {person.status === "APPROVED" ? "참가 확정" : person.status === "PENDING" ? "승인 대기" : person.status === "WAITLIST" ? "대기 명단" : person.status === "CANCELLED" ? "신청 취소" : "상태 확인 필요"}</span><span className={prizeStyles.manualPresence} data-state={presenceTone}>{presenceLabel}</span>{needsAssistance ? <span>{ambiguous ? "같은 이름·소속이 있습니다." : "소속 정보가 없습니다."} 책임자에게 확인하세요.</span> : null}</div>
+                      <div>
+                        <strong>{person.name}</strong>
+                        <span className={prizeStyles.manualCompany}>{person.company || "소속 미입력"}{person.group ? ` · ${person.group}` : ""}</span>
+                        <span>{person.status === "APPROVED" ? "참가 확정" : person.status === "PENDING" ? "승인 대기" : person.status === "WAITLIST" ? "대기 명단" : person.status === "CANCELLED" ? "신청 취소" : "상태 확인 필요"}</span>
+                        <span className={prizeStyles.manualPresence} data-state={presenceTone}>{presenceLabel}</span>
+                        {needsAssistance ? <span className={prizeStyles.manualWarning}>{ambiguous ? "같은 이름·소속이 있습니다." : "소속 정보가 없습니다."} 책임자에게 확인하세요.</span> : null}
+                      </div>
                       <button type="button" className="button button-secondary" disabled={!ready || writeLocked || submitting || manualRefreshRequired || needsAssistance || person.status !== "APPROVED"}
                         aria-label={`${person.name} ${person.company || "소속 미입력"} 선택`}
                         aria-expanded={selected} aria-controls={selected ? "staff-manual-confirm" : undefined}
@@ -1965,7 +2006,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
               </div>
             ) : null}
           </div>
-        </details>
+        </section>
       ) : null}
       </div>
       ) : null}

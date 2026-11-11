@@ -440,10 +440,12 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
     setCommitted(null);
     try {
       if (file.size > MAX_BYTES) throw new Error("1MB 이하 CSV·TXT·XLS·XLSX 파일을 선택하세요.");
-      const looksWorkbook =
-        /\.xlsx?$/i.test(file.name) ||
+      const extension = /\.(csv|txt|xlsx?)$/i.exec(file.name)?.[1].toLowerCase();
+      // A recognized filename is authoritative; browser MIME is advisory.
+      const looksWorkbook = /\.xlsx?$/i.test(file.name) || (!extension && (
         file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-        file.type === "application/vnd.ms-excel";
+        file.type === "application/vnd.ms-excel"
+      ));
       if (looksWorkbook) {
         const parsed = await parseWorkbook(await file.arrayBuffer());
         if (fileReadIdRef.current !== readId) return;
@@ -467,9 +469,7 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
       }
       const text = stripBom(await file.text());
       if (fileReadIdRef.current !== readId) return;
-      const looksTxt =
-        /\.txt$/i.test(file.name) ||
-        file.type.startsWith("text/plain");
+      const looksTxt = extension ? extension === "txt" : file.type.startsWith("text/plain");
       if (looksTxt) {
         const parsed = parseTxt(text);
         if (!parsed.rows.length || parsed.rows.length > MAX_ROWS) {
@@ -564,7 +564,7 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
           }),
         }
       );
-      const data = (await res.json().catch(() => null)) as {
+      const data = (await res.json()) as {
         error?: unknown;
         participants?: unknown[];
       } | null;
@@ -697,7 +697,7 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
             <ConsoleFeedback kind="success">{committed}명을 반영했습니다.</ConsoleFeedback>
           ) : null}
           {otherImportReceipt ? <ConsoleFeedback kind="warning">이전 명단 반영 결과를 위의 처리 결과 확인에서 확인한 뒤 새 명단을 가져올 수 있습니다.</ConsoleFeedback> : null}
-          {importUncertain ? <ConsoleFeedback kind="warning">명단 반영 결과 확인이 필요합니다. <a href="#participant-import-review-heading">결과 확인으로 이동</a></ConsoleFeedback> : null}
+          {importUncertain ? <ConsoleFeedback kind="warning">명단 반영 결과 확인이 필요합니다. <a className="button button-secondary" href="#participant-import-review-heading">결과 확인으로 이동</a></ConsoleFeedback> : null}
           {!canWriteImport ? (
             <ConsoleFeedback kind="warning">가져오기 권한이 없습니다. 변경이 필요하면 담당 행사 운영자에게 요청하세요.</ConsoleFeedback>
           ) : null}

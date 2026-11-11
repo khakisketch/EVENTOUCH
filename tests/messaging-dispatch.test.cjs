@@ -1,6 +1,10 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { dispatchCampaign, resolveDelivery } = require('../server/messaging');
+const { buildMessageDispatch } = require('../server/commands/content-results');
+
+const dispatchEvent = { id: 'e-1', slug: 'e-1' };
+const dispatchFor = workspace => buildMessageDispatch(dispatchEvent, workspace, workspace.messages[0]);
 
 // Minimal stand-in for the database handle these functions use: one locked
 // read and one write per transaction. It keeps the workspace object live so
@@ -18,9 +22,13 @@ function fakeDatabase(workspace) {
     async transaction(fn) {
       return fn({
         async query(sql, params) {
+          if (/FROM events e JOIN event_workspaces/.test(sql)) return { rows: [{
+            id: 'e-1', slug: 'e-1', payload: dispatchEvent, workspace_payload: workspace,
+          }] };
           if (/SELECT payload FROM event_workspaces/.test(sql)) return { rows: [{ payload: workspace }] };
           if (/UPDATE event_workspaces/.test(sql)) {
             writes.push({ sql, params });
+            Object.assign(workspace, JSON.parse(params[1]));
             return { rowCount: 1 };
           }
           return { rows: [] };
@@ -52,6 +60,8 @@ function batchProvider({ registered, rejected = [], groupId = 'G4V-1', poll = {}
 }
 
 const workspaceWith = (deliveries) => ({
+  participants: deliveries.map((delivery, index) => ({ id: delivery.participantId, name: delivery.name || `참가자${index}`,
+    phone: delivery.phone || (index ? '01022222222' : '01011111111') })),
   messages: [{
     id: 'msg-1',
     title: '안내',
@@ -60,21 +70,10 @@ const workspaceWith = (deliveries) => ({
     status: 'SENDING',
     deliveries,
     recipientSnapshot: deliveries.map((delivery, index) => ({
-      id: delivery.participantId, name: delivery.name || `참가자${index}`, phone: delivery.phone,
+      id: delivery.participantId, name: delivery.name || `참가자${index}`, phone: delivery.phone || (index ? '01022222222' : '01011111111'),
     })),
   }],
 });
-
-const baseDispatch = {
-  eventId: 'e-1',
-  messageId: 'msg-1',
-  channel: 'SMS',
-  text: '본문',
-  recipients: [
-    { participantId: 'p1', name: '가', phone: '01011111111', variables: { 이름: '가' } },
-    { participantId: 'p2', name: '나', phone: '01022222222', variables: { 이름: '나' } },
-  ],
-};
 
 // --- batch dispatch --------------------------------------------------------
 
@@ -88,7 +87,7 @@ test('a-batch-provider-result-is-not-recorded-as-sent', async () => {
   const db = fakeDatabase(workspace);
   const provider = batchProvider({ registered: [{ participantId: 'p1', accepted: true }, { participantId: 'p2', accepted: true }] });
 
-  const result = await dispatchCampaign(db, provider, baseDispatch);
+  const result = await dispatchCampaign(db, provider, dispatchFor(workspace));
 
   assert.equal(result.message.status, 'SENDING');
   assert.equal(result.deliveryUnconfirmed, true);
@@ -110,7 +109,7 @@ test('accepted-deliveries-carry-the-provider-message-id-needed-to-poll', async (
     ],
   });
 
-  const result = await dispatchCampaign(db, provider, baseDispatch);
+  const result = await dispatchCampaign(db, provider, dispatchFor(workspace));
   assert.equal(result.message.deliveries[0].solapiMessageId, 'M1');
   assert.equal(result.message.deliveries[1].solapiMessageId, 'M2');
 });
@@ -126,7 +125,7 @@ test('a-rejected-recipient-is-recorded-as-failed-while-the-rest-proceed', async 
     rejected: [{ participantId: 'p2', reason: 'PROVIDER_REJECTED', error: '수신번호 오류' }],
   });
 
-  const result = await dispatchCampaign(db, provider, baseDispatch);
+  const result = await dispatchCampaign(db, provider, dispatchFor(workspace));
   const failed = result.message.deliveries.find((delivery) => delivery.participantId === 'p2');
   assert.equal(failed.status, 'FAILED');
   assert.match(failed.error, /수신번호 오류/);
@@ -141,10 +140,7 @@ test('a-campaign-where-nothing-was-accepted-is-failed', async () => {
     async sendBatch() { return { accepted: false, reason: 'NOT_CONFIGURED' }; },
   };
 
-  const result = await dispatchCampaign(db, { ...provider, groupMessages: undefined }, {
-    ...baseDispatch,
-    recipients: [{ participantId: 'p1', name: '가', phone: '01011111111' }],
-  });
+  const result = await dispatchCampaign(db, { ...provider, groupMessages: undefined }, dispatchFor(workspace));
 
   assert.equal(result.message.status, 'FAILED');
   assert.equal(result.message.acceptedCount, 0);
@@ -156,10 +152,7 @@ test('an-unresolvable-recipient-in-the-provider-response-is-failed-not-ignored',
   const db = fakeDatabase(workspace);
   const provider = batchProvider({ registered: [] });
 
-  const result = await dispatchCampaign(db, provider, {
-    ...baseDispatch,
-    recipients: [{ participantId: 'p1', name: '가', phone: '01011111111' }],
-  });
+  const result = await dispatchCampaign(db, provider, dispatchFor(workspace));
 
   assert.equal(result.message.deliveries[0].status, 'FAILED');
   assert.match(result.message.deliveries[0].error, /확인하지 못했습니다/);
@@ -353,7 +346,7 @@ test('ids-are-matched-when-the-delivery-has-no-phone-of-its-own', async () => {
     ],
   });
 
-  const result = await dispatchCampaign(db, provider, baseDispatch);
+  const result = await dispatchCampaign(db, provider, dispatchFor(workspace));
   assert.equal(result.message.deliveries[0].solapiMessageId, 'M1', 'matched through the dispatch recipients');
   assert.equal(result.message.deliveries[1].solapiMessageId, 'M2');
 });
@@ -394,16 +387,15 @@ test('a-phone-formatted-differently-than-the-provider-still-matches', async () =
   const provider = batchProvider({
     registered: [{ participantId: 'p1', accepted: true, phone: '010-1111-1111' }],
   });
-  const result = await dispatchCampaign(db, provider, {
-    ...baseDispatch,
-    recipients: [{ participantId: 'p1', name: '가', phone: '010-1111-1111' }],
-  });
+  workspace.messages[0].recipientSnapshot[0].phone = '010-1111-1111';
+  const result = await dispatchCampaign(db, provider, dispatchFor(workspace));
   assert.equal(result.message.deliveries[0].solapiMessageId, 'M1');
 });
 
 // --- MMS dispatch ----------------------------------------------------------
 
 const mmsWorkspaceWith = (deliveries) => ({
+  participants: deliveries.map((delivery, index) => ({ id: delivery.participantId, name: delivery.name || `참가자${index}`, phone: delivery.phone })),
   messages: [{
     id: 'msg-mms',
     title: '사진 안내',
@@ -420,11 +412,15 @@ const mmsWorkspaceWith = (deliveries) => ({
 
 function mmsDatabase(workspace, fileRow) {
   const writes = [];
-  const answer = async (sql) => {
+  const answer = async (sql, params) => {
+    if (/FROM events e JOIN event_workspaces/.test(sql)) return { rows: [{
+      id: 'e-mms', slug: 'e-mms', payload: { id: 'e-mms', slug: 'e-mms' }, workspace_payload: workspace,
+    }] };
     if (/SELECT payload FROM event_workspaces/.test(sql)) return { rows: [{ payload: workspace }] };
     if (/FROM stored_files/.test(sql)) return { rows: fileRow ? [fileRow] : [] };
     if (/UPDATE event_workspaces/.test(sql)) {
       writes.push({ sql });
+      Object.assign(workspace, JSON.parse(params[1]));
       return { rowCount: 1 };
     }
     return { rows: [] };
@@ -499,7 +495,7 @@ test('an-mms-provider-without-upload-support-fails-honestly', async () => {
     const db = mmsDatabase(workspace, mmsImageFile(dir));
     const provider = { async sendBatch() { throw new Error('must not send without an upload'); } };
 
-    const result = await dispatchCampaign(db, provider, mmsDispatch);
+    const result = await dispatchCampaign(db, provider, buildMessageDispatch({ id: 'e-mms', slug: 'e-mms' }, workspace, workspace.messages[0]));
 
     assert.equal(result.accepted, false);
     assert.equal(result.message.status, 'FAILED');
@@ -541,7 +537,7 @@ test('an-mms-uploads-once-and-sends-with-the-image-id', async () => {
       async groupMessages() { return { ok: true, messages: {} }; },
     };
 
-    const result = await dispatchCampaign(db, provider, mmsDispatch);
+    const result = await dispatchCampaign(db, provider, buildMessageDispatch({ id: 'e-mms', slug: 'e-mms' }, workspace, workspace.messages[0]));
 
     assert.equal(seen.length, 1, 'one upload serves the whole campaign');
     assert.equal(seen[0].bytes, 1024);
@@ -764,7 +760,7 @@ test('a rejected recipient does not keep a partly accepted campaign pending fore
     rejected: [{ participantId: 'p2', error: '수신번호 오류' }],
     poll: { M1: { state: 'DELIVERED', type: 'SMS' } },
   });
-  await dispatchCampaign(db, provider, baseDispatch);
+  await dispatchCampaign(db, provider, dispatchFor(workspace));
   const result = await resolveDelivery(db, provider, 'e-1');
   assert.equal(result.resolved, 1);
   assert.equal(workspace.messages[0].status, 'PARTIAL');

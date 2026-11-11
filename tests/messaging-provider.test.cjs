@@ -1,6 +1,9 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
+const { buildMessageDispatch } = require('../server/commands/content-results');
+const event = { id: 'e-1', slug: 'e-1' };
+const dispatchFor = workspace => buildMessageDispatch(event, workspace, workspace.messages[0]);
 const { createMessagingProvider, providerConfig, messagingState, dispatchCampaign } = require('../server/messaging');
 
 // A stand-in for a real provider. It records every request so the tests can
@@ -208,6 +211,10 @@ function fakeDatabase(workspace, options = {}) {
       if (options.failWrite) throw new Error('write failed');
       return fn({
         async query(sql, params) {
+          if (/FROM events e JOIN event_workspaces/.test(sql)) {
+            if (options.missingWorkspace) return { rows: [] };
+            return { rows: [{ id: 'e-1', slug: 'e-1', payload: event, workspace_payload: JSON.stringify(workspace) }] };
+          }
           if (/SELECT payload FROM event_workspaces/.test(sql)) {
             if (options.missingWorkspace) return { rows: [] };
             return { rows: [{ payload: JSON.stringify(workspace) }] };
@@ -226,6 +233,7 @@ function fakeDatabase(workspace, options = {}) {
 }
 
 const sampleWorkspace = () => ({
+  participants: [{ id: 'p-1', name: '가', phone: '010-1111-1111' }, { id: 'p-2', name: '나', phone: '010-2222-2222' }],
   messages: [{
     id: 'msg-1',
     title: '안내',
@@ -253,16 +261,7 @@ test('a-fully-accepted-generic-campaign-does-not-claim-delivery', async () => {
     EVENTOUCH_MESSAGING_TOKEN: 't',
   }));
 
-  const result = await dispatchCampaign(db, provider, {
-    eventId: 'e-1',
-    messageId: 'msg-1',
-    channel: 'SMS',
-    text: '본문',
-    recipients: [
-      { participantId: 'p-1', name: '가', phone: '010-1111-1111' },
-      { participantId: 'p-2', name: '나', phone: '010-2222-2222' },
-    ],
-  });
+  const result = await dispatchCampaign(db, provider, dispatchFor(workspace));
 
   assert.equal(result.accepted, 2);
   assert.equal(result.delivered, 0);
@@ -277,22 +276,14 @@ test('a-partial-send-is-recorded-as-partial-not-sent', async () => {
   resetMock();
   mock.setBehaviour('per-recipient');
   const workspace = sampleWorkspace();
+  workspace.participants[0].phone = workspace.messages[0].recipientSnapshot[0].phone = '010-0000-0000';
   const db = fakeDatabase(workspace);
   const provider = createMessagingProvider(providerConfig({
     EVENTOUCH_MESSAGING_ENDPOINT: endpoint,
     EVENTOUCH_MESSAGING_TOKEN: 't',
   }));
 
-  const result = await dispatchCampaign(db, provider, {
-    eventId: 'e-1',
-    messageId: 'msg-1',
-    channel: 'SMS',
-    text: '본문',
-    recipients: [
-      { participantId: 'p-1', name: '가', phone: '010-0000-0000' },
-      { participantId: 'p-2', name: '나', phone: '010-2222-2222' },
-    ],
-  });
+  const result = await dispatchCampaign(db, provider, dispatchFor(workspace));
 
   assert.equal(result.accepted, 1);
   assert.equal(result.delivered, 0);
@@ -306,19 +297,14 @@ test('a-campaign-where-nothing-sent-is-recorded-as-failed', async () => {
   mock.setBehaviour('reject');
   const workspace = sampleWorkspace();
   workspace.messages[0].deliveries = workspace.messages[0].deliveries.slice(0, 1);
+  workspace.messages[0].recipientSnapshot = workspace.messages[0].recipientSnapshot.slice(0, 1);
   const db = fakeDatabase(workspace);
   const provider = createMessagingProvider(providerConfig({
     EVENTOUCH_MESSAGING_ENDPOINT: endpoint,
     EVENTOUCH_MESSAGING_TOKEN: 't',
   }));
 
-  const result = await dispatchCampaign(db, provider, {
-    eventId: 'e-1',
-    messageId: 'msg-1',
-    channel: 'SMS',
-    text: '본문',
-    recipients: [{ participantId: 'p-1', name: '가', phone: '010-1111-1111' }],
-  });
+  const result = await dispatchCampaign(db, provider, dispatchFor(workspace));
 
   assert.equal(result.accepted, 0);
   assert.equal(result.delivered, 0);
@@ -329,22 +315,14 @@ test('each-delivery-records-whether-it-went-and-what-went-wrong', async () => {
   resetMock();
   mock.setBehaviour('per-recipient');
   const workspace = sampleWorkspace();
+  workspace.participants[0].phone = workspace.messages[0].recipientSnapshot[0].phone = '010-0000-0000';
   const db = fakeDatabase(workspace);
   const provider = createMessagingProvider(providerConfig({
     EVENTOUCH_MESSAGING_ENDPOINT: endpoint,
     EVENTOUCH_MESSAGING_TOKEN: 't',
   }));
 
-  const result = await dispatchCampaign(db, provider, {
-    eventId: 'e-1',
-    messageId: 'msg-1',
-    channel: 'SMS',
-    text: '본문',
-    recipients: [
-      { participantId: 'p-1', name: '가', phone: '010-0000-0000' },
-      { participantId: 'p-2', name: '나', phone: '010-2222-2222' },
-    ],
-  });
+  const result = await dispatchCampaign(db, provider, dispatchFor(workspace));
 
   const failed = result.message.deliveries.find((d) => d.status === 'FAILED');
   const sent = result.message.deliveries.find((d) => d.status === 'ACCEPTED');

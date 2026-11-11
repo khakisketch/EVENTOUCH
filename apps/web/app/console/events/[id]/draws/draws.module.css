@@ -1,6 +1,6 @@
 .status {
   padding: 2px var(--s2);
-  border-radius: var(--radius-small);
+  border-radius: 999px;
   font-weight: 650;
 }
 
@@ -10,7 +10,7 @@
   margin-block: var(--s4);
   padding: var(--s4);
   border: 1px solid var(--warning-line);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--warning-soft);
   color: var(--ink);
 }
@@ -45,7 +45,7 @@
   margin: 0;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--warning-line);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--warning-soft);
   color: var(--warning);
   font-size: var(--small);
@@ -55,7 +55,7 @@
   margin: 0;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--info-line);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--info-soft);
   color: var(--info);
   font-size: var(--small);
@@ -65,7 +65,7 @@
   margin: 0;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--info-line);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--info-soft);
   color: var(--info);
   font-size: var(--small);
@@ -74,10 +74,16 @@
 }
 
 .stagePrerequisite a {
-  color: var(--info);
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
+  color: var(--ink);
   font-weight: 750;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.15em;
+  text-decoration: none;
 }
 
 .hint {
@@ -117,7 +123,7 @@
 .rouletteScheduleGrid { align-items: start; }
 .rouletteTimeAction { justify-self: start; }
 .rouletteFields { display: grid; gap: var(--s3); min-width: 0; margin: 0; padding: 0; border: 0; }
-.rouletteConflict { display: grid; gap: var(--s3); min-width: 0; padding: var(--s4); background: var(--surface-muted); }
+.rouletteConflict { display: grid; gap: var(--s3); min-width: 0; padding: var(--s4); border: 1px solid var(--line); border-radius: var(--radius-medium); background: var(--paper); }
 .rouletteConflict h3, .rouletteConflict h4, .rouletteConflict p { margin: 0; }
 .rouletteConflict h3 { font-size: var(--body-work); }
 .rouletteConflict h4, .rouletteConflict p { font-size: var(--small); line-height: 1.5; }
@@ -312,7 +318,7 @@
 .roulettePrizeRow { display: grid; gap: var(--s3); padding: var(--s4) 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
 .prizeRowHeading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--s1) var(--s3); }
 .prizeRowHeading span { color: var(--muted); font-size: var(--small); }
-.preassignBox { display: grid; gap: var(--s2); padding: var(--s4); border: 1px solid var(--info-line); border-radius: var(--radius); background: var(--info-soft); }
+.preassignBox { display: grid; gap: var(--s2); padding: var(--s4); border: 1px solid var(--info-line); border-radius: var(--radius-medium); background: var(--info-soft); }
 .preassignBox .checkLine { margin: 0; }
 /* The batch action keeps its own frame (irreversible), but the button sizes
    to its label on desktop instead of stretching into a full-width banner. */
@@ -349,7 +355,7 @@
   flex-basis: 100%;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--surface-muted);
   color: var(--ink);
   font-size: var(--small);
@@ -365,11 +371,19 @@
   font-weight: 700;
 }
 
+.setupSummary:focus-visible,
+.runActions .button:focus-visible,
+.stageButton:focus-visible,
+.filterChips button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
 .empty {
   margin: 0;
   padding: var(--s5);
   border: 1px dashed var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   color: var(--muted);
   text-align: center;
 }
@@ -457,7 +471,7 @@
   font-weight: 650;
 }
 
-/* Korean prose wraps at 어절 boundaries (keep-all, DESIGN.md typography),
+/* Korean prose wraps at 어절 boundaries (keep-all),
    never mid-syllable at 320–390px. Unbroken tokens (long names, URLs,
    numbers) still fall back to anywhere/break-word instead of overflowing. */
 .hint,

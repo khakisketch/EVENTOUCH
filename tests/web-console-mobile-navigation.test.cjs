@@ -13,6 +13,9 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { createRequire } = require('node:module');
+const webRequire = createRequire(path.join(__dirname, '../apps/web/package.json'));
+const postcss = webRequire('postcss');
 
 const ROOT = path.join(__dirname, '..');
 const WEB = path.join(ROOT, 'apps/web');
@@ -23,6 +26,21 @@ function read(rel) {
 
 const shell = () => read('app/console/ConsoleShell.tsx');
 const globalStyles = () => read('app/globals.css');
+
+// Match exact selectors in their actual media scope, never the first media block.
+function cssDeclarations(css, selector, media = null) {
+  const matches = [];
+  postcss.parse(css).walkRules((rule) => {
+    if (!rule.selectors.includes(selector)) return;
+    const scopes = [];
+    for (let parent = rule.parent; parent; parent = parent.parent) {
+      if (parent.type === 'atrule') scopes.unshift(parent.name + ' ' + parent.params);
+    }
+    if (JSON.stringify(scopes) === JSON.stringify(media ? ['media ' + media] : [])) matches.push(rule);
+  });
+  assert.equal(matches.length, 1, selector + ' has one rule in ' + (media ?? 'the base scope'));
+  return Object.fromEntries(matches[0].nodes.filter((node) => node.type === 'decl').map((node) => [node.prop, node.value]));
+}
 
 test('bottom bar markup is gone from the shell', () => {
   const source = shell();
@@ -184,10 +202,9 @@ test('bottom-bar styles are gone; ordinary bottom spacing stays', () => {
   assert.doesNotMatch(css, /\.mobile-primary-nav/u);
   assert.doesNotMatch(css, /side-nav-single-root/u);
   assert.doesNotMatch(css, /72px/u);
-  assert.match(
-    css,
-    /\.console-main\s*\{\s*padding:\s*var\(--s5\) var\(--s4\) calc\(var\(--s6\) \+ env\(safe-area-inset-bottom, 0px\)\);/u
-  );
+  const phone = cssDeclarations(css, '.console-main', '(max-width: 768px)');
+  assert.equal(phone.padding, 'var(--s5) var(--s4) calc(var(--s7) + env(safe-area-inset-bottom, 0px))', 'the roomier workspace retains bottom safe-area spacing without a fixed bottom bar');
+  assert.equal(cssDeclarations(css, '.console-main').background, 'var(--workspace-ground)');
   assert.match(
     css,
     /scroll-padding-bottom:\s*calc\(var\(--s4\) \+ env\(safe-area-inset-bottom, 0px\)\)/u

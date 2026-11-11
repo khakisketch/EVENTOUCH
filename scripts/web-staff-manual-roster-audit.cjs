@@ -39,7 +39,7 @@ async function main() {
       const page = await context.newPage(); page.setDefaultTimeout(12000);
       await page.goto(`${fixture.baseUrl}/staff/events/${fixture.eventId}`);
       await confirmInitialStaffDesk(page);
-      await page.getByText('카메라가 안 될 때 · 참가자 명단 확인').click();
+      await page.getByRole('button', { name: '명단 찾기', exact: true }).click();
       await page.locator('#staff-manual-search').fill('동명이인검증');
       return page;
     };
@@ -113,7 +113,7 @@ async function main() {
       });
       await retryPage.goto(`${fixture.baseUrl}/staff/events/${fixture.eventId}`);
       await confirmInitialStaffDesk(retryPage);
-      await retryPage.getByText('카메라가 안 될 때 · 참가자 명단 확인').click();
+      await retryPage.getByRole('button', { name: '명단 찾기', exact: true }).click();
       await retryPage.locator('#staff-manual-search').fill(person.name);
       await retryPage.getByRole('button', { name: `${person.name} ${person.company} 선택`, exact: true }).click();
       await retryPage.getByLabel('이름·소속을 직접 확인했습니다').check();

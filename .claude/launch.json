@@ -1,0 +1,13 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "delivery-synthetic",
+      "runtimeExecutable": "/opt/homebrew/opt/node@24/bin/node",
+      "runtimeArgs": [
+        "/private/tmp/eventouch-delivery-SOGm9T/manual-preview.cjs"
+      ],
+      "port": 4187
+    }
+  ]
+}
