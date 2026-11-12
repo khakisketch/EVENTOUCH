@@ -81,7 +81,7 @@
   justify-content: center;
   padding-inline: var(--s4);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   color: var(--ink);
   font-size: var(--small);
   font-weight: 700;
@@ -146,12 +146,12 @@
   gap: var(--s2);
   padding: var(--s3) var(--s5);
   border: 1px solid var(--brand);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--brand);
   color: var(--on-brand);
   font-weight: 750;
   text-decoration: none;
-  transition: border-color var(--enter) ease-out;
+  transition: background-color var(--enter) ease-out, border-color var(--enter) ease-out, color var(--enter) ease-out;
 }
 
 .primaryAction:hover {
@@ -170,9 +170,18 @@
   display: inline-flex;
   min-height: 44px;
   align-items: center;
+  padding-inline: var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
   color: var(--ink);
   font-weight: 700;
-  text-underline-offset: 4px;
+  text-decoration: none;
+}
+
+.secondaryAction:hover {
+  border-color: var(--ink);
+  background: var(--surface-muted);
 }
 
 .heroNote {
@@ -187,7 +196,7 @@
   margin: 0;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-large);
   background: var(--paper);
   box-shadow: 0 10px 30px var(--shadow-color);
 }
@@ -244,13 +253,14 @@
   color: var(--ink);
   font-size: var(--small);
   font-weight: 700;
-  text-decoration: underline;
-  text-decoration-color: var(--line-strong);
+  text-decoration: none;
   text-underline-offset: 4px;
 }
 
 .factStrip a:hover {
   color: var(--brand-text);
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
 }
 
 /* Journey as a ledger: numbered rows, each naming who acts and where. */
@@ -473,7 +483,7 @@
   margin: 0;
   overflow: hidden;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-large);
   background: var(--paper);
   box-shadow: 0 12px 32px var(--shadow-color);
 }
@@ -576,7 +586,7 @@
   gap: var(--s4) var(--s6);
   padding: var(--s6);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-large);
   background: var(--soft);
   scroll-margin-top: var(--s5);
 }
@@ -612,7 +622,7 @@
   min-height: 44px;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--paper);
   color: var(--ink);
   font-size: var(--small);
