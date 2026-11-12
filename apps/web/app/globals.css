@@ -107,7 +107,7 @@ textarea {
   min-height: 44px;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--paper);
   color: var(--ink);
   caret-color: var(--brand-text);
@@ -263,7 +263,7 @@ select[aria-invalid="true"] {
 
 .button-primary {
   /* Foreground and background switch together to keep contrast in every frame. */
-  transition: border-color 160ms ease-out, transform 160ms ease-out;
+  transition: background-color 160ms ease-out, border-color 160ms ease-out, color 160ms ease-out, transform 160ms ease-out;
   border-color: var(--brand);
   background: var(--brand);
   color: var(--on-brand);
