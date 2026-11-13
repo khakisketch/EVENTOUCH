@@ -67,6 +67,8 @@
   --scrim: #10111480;
   --shadow-color: #1E202612;
   --shadow-soft: #1E202606;
+  /* The one card that anchors a screen; everything else stays on hairlines. */
+  --shadow-raised: 0 1px 2px #1E20260D, 0 12px 32px -8px #1E20261F;
   --chart: var(--brand);
   --chart-track: #E5E5E7;
 

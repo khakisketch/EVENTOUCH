@@ -1081,7 +1081,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
           {/* DRAFT는 비공개(공개 화면 404)이므로 여는 링크를 두지 않는다. READY부터 기본 디자인으로 열린다. */}
           {stageKnown && currentStage !== "DRAFT" ? (
             <span className="console-header-group">
-              <Link className="button button-secondary" href={participantPageHref} target="_blank" rel="noreferrer" aria-label="참가자 페이지 열기">
+              <Link variant="ghost" href={participantPageHref} target="_blank" rel="noreferrer" aria-label="참가자 페이지 열기">
                 <span className={styles.pageLinkFull}>참가자 페이지 열기</span><span className={styles.pageLinkShort}>참가자 페이지</span>
               </Link>
               <ProductButton
@@ -1192,13 +1192,13 @@ export default function EventOverview({ eventId }: { eventId: string }) {
   }
 
   const fieldOperationsLink = (
-    <Link className={styles.overviewSectionLink} href={`${base}/operations`}>
+    <Link variant={live ? "primary" : "ghost"} href={`${base}/operations`}>
       현장 운영 열기 <ArrowRightIcon />
     </Link>
   );
 
   const nowSection = (
-    <ConsoleSection headingId="event-now-heading" title="지금 할 일" className={styles.regionQueue}
+    <ConsoleSection headingId="event-now-heading" title="지금 할 일" className={`${styles.regionQueue} ${live && !nowItems.length ? styles.queueIdle : ""}`}
       action={nowItems.length || currentStage !== "LIVE" ? (
         <div className={styles.queueActions}>
           {nowItems.length ? <span className={styles.queueCount}>{nowItems.length}가지</span> : null}
@@ -1377,7 +1377,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             headingId="event-runbook-heading"
             title={runbookIsToday ? "오늘의 일정" : "행사 일정"}
             description={runbook.length ? <span className={styles.runbookMeta}>{runbookIsToday ? `${UPDATED_TIME_FORMAT.format(now)} 기준` : formatEventDate(runbookDate)}</span> : undefined}
-            action={<Link className="button button-secondary" href={`${base}/content`}>{runbook.length ? "프로그램 일정" : "일정 추가"}</Link>}
+            action={<Link variant="ghost" href={`${base}/content`}>{runbook.length ? "프로그램 일정" : "일정 추가"}</Link>}
             className={[styles.regionRunbook, runbook.length ? undefined : styles.runbookIdle].filter(Boolean).join(" ")}
           >
             {runbook.length ? (
