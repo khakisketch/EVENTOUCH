@@ -31,7 +31,7 @@ import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
 import ConsoleChoiceGroup from "../../../console-ui/ConsoleChoiceGroup";
 import uiStyles from "../../../console-ui/console-ui.module.css";
-import { CheckIcon, CopyIcon, DownloadIcon, PlusIcon, UploadIcon } from "../../../console-ui/ConsoleIcons";
+import { CheckIcon, ChevronRightIcon, CopyIcon, DownloadIcon, PlusIcon, UploadIcon } from "../../../console-ui/ConsoleIcons";
 import { UNCONFIRMED_WRITE_CLOSE_MESSAGE, useConsoleDraftGuard } from "../../../console-draft-guard";
 import { buildApprovedMessageHandoffHref } from "../../../console-handoff";
 import { useEventCloseHandoff } from "../../../use-event-close-handoff";
@@ -1821,6 +1821,15 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     disclosure.open = false;
     disclosure.querySelector("summary")?.focus({ preventScroll: true });
   }
+  // The whole row opens the details for pointer users; keyboard and assistive
+  // users keep the row's named detail button. Controls inside the row keep
+  // their own meaning.
+  function openDetailsFromRow(event: React.MouseEvent<HTMLElement>, personId: string) {
+    if ((event.target as HTMLElement).closest("input, button, a, label, select, textarea, summary")) return;
+    if (window.getSelection()?.toString()) return;
+    inspectorReturnFocusRef.current = event.currentTarget.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]');
+    setToolsOpenId(personId);
+  }
   // Bottom-of-list return: the sticky page bar sits below the toolbar, so
   // this moves scroll and keyboard focus back to the actual search input.
   function focusRosterSearch() {
@@ -1951,7 +1960,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
               </ProductButton>
               </div>
               </details>
-              {canMutateStatus ? <ProductButton type="button" className="button button-secondary" onClick={() => setImportOpen(true)} icon={<UploadIcon />}>명단 가져오기</ProductButton> : null}
+              {canMutateStatus ? <ProductButton type="button" variant="ghost" onClick={() => setImportOpen(true)} icon={<UploadIcon />}>명단 가져오기</ProductButton> : null}
               {canMutateStatus ? (
                 <ProductButton type="button" className="button button-primary" aria-label="참가자 추가" disabled={unconfirmedAdd} onClick={() => { setAddError(addUnconfirmed ? { message: "등록 결과가 확인되지 않았습니다. 같은 요청으로 다시 확인하세요.", field: null } : null); setAddOpen(true); }} icon={<PlusIcon />}>
 
@@ -2088,25 +2097,11 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         </span>
       </p>
       <ConsoleRefreshButton label="새로고침" busy={refreshing} onRefresh={refreshQuietly} />
-      {canAssignGroup && visiblePeople.length ? (
-        <span className={styles.scopeGroup}>
-          <span className={styles.scopeLabel}>선택 범위</span>
-          <ProductButton
-            type="button"
-            className="button button-quiet"
-            onClick={selectVisible}
-            aria-describedby="roster-select-all-help"
-          >
-            필터 결과 전체 {visiblePeople.length}명 선택
-          </ProductButton>
-        </span>
-      ) : null}
-      {canAssignGroup && visiblePeople.length > pagePeople.length ? <ProductButton type="button" className={`button button-quiet ${styles.desktopPageSelect}`} onClick={selectPage}>이 페이지 {pagePeople.length}명 선택</ProductButton> : null}
       {canAssignGroup && visiblePeople.length > pagePeople.length ? (
         <details className={styles.mobileScope}>
           <summary>여러 명 선택</summary>
           <div className={styles.mobileScopeOptions}>
-            <ProductButton type="button" className="button button-secondary" onClick={(event) => selectMobileScope("page", event.currentTarget)}>이 페이지 {pagePeople.length}명 선택</ProductButton>
+            <ProductButton type="button" className="button button-secondary" onClick={(event) => selectMobileScope("page", event.currentTarget)} aria-describedby="roster-page-position">이 페이지 {pagePeople.length}명 선택</ProductButton>
             <ProductButton type="button" className="button button-secondary" onClick={(event) => selectMobileScope("filter", event.currentTarget)} aria-describedby="roster-select-all-help">필터 결과 전체 {visiblePeople.length}명 선택</ProductButton>
             <p>필터 결과 전체에는 다른 페이지도 포함됩니다. 기존 선택은 유지됩니다.</p>
           </div>
@@ -2131,6 +2126,11 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                   </span>
                   </span>
                 </span>
+                {visiblePeople.length > effectiveSelection.length ? (
+                  <ProductButton type="button" variant="ghost" className={styles.selectionScopeAction} onClick={selectVisible} aria-describedby="roster-select-all-help">
+                    필터 결과 전체 {visiblePeople.length}명 선택
+                  </ProductButton>
+                ) : null}
                 <div className={styles.selectionActions} data-over-limit={handoffOverLimit ? "true" : undefined}>
                 {handoffOverLimit ? <span role="status" id="roster-handoff-limit">
                   선택 {handoffIds.length}명 · 최대 200명까지 전송 가능 · 필터로 대상을 좁히거나 숨김 선택을 제외하세요
@@ -2267,7 +2267,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
               {pagePeople.map((person) => {
                 const detailsOpen = toolsOpenId === person.id;
                 const tone = person.status === "APPROVED" ? "good" : person.status === "WAITLIST" ? "wait" : person.status === "CANCELLED" ? "bad" : "info";
-                return <tr key={person.id} data-selected={effectiveSelection.includes(person.id) ? "true" : undefined} data-inspected={detailsOpen ? "true" : undefined}>
+                return <tr key={person.id} className={styles.rosterRow} data-selected={effectiveSelection.includes(person.id) ? "true" : undefined} data-inspected={detailsOpen ? "true" : undefined} onClick={(event) => openDetailsFromRow(event, person.id)}>
                   {canAssignGroup ? <td className={styles.selectColumn}><label className={styles.participantSelectTarget}>
                     <input type="checkbox" className={styles.participantSelect} aria-label={`${person.name} 선택`} checked={effectiveSelection.includes(person.id)} onChange={() => togglePerson(person.id)} />
                   </label></td> : null}
@@ -2281,7 +2281,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                       {savingId === person.id ? (person.status === "WAITLIST" ? "확정 중…" : "승인 중…") : (person.status === "WAITLIST" ? "확정" : "승인")}
                     </ProductButton> : null}
                     <ProductButton type="button" className={`button button-quiet ${styles.rowToolsToggle}`} aria-expanded={detailsOpen} aria-haspopup="dialog"
-                      aria-label={`${person.name} 참가자 상세`} onClick={(event) => { inspectorReturnFocusRef.current = event.currentTarget; setToolsOpenId(person.id); }}>상세</ProductButton>
+                      aria-label={`${person.name} 참가자 상세`} onClick={(event) => { inspectorReturnFocusRef.current = event.currentTarget; setToolsOpenId(person.id); }}><ChevronRightIcon /></ProductButton>
                   </div></td> : null}
                 </tr>;
               })}
@@ -2299,6 +2299,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                   data-selected={effectiveSelection.includes(person.id) ? "true" : undefined}
                   data-inspected={detailsOpen ? "true" : undefined}
                   key={person.id}
+                  onClick={(event) => openDetailsFromRow(event, person.id)}
                 >
                   {canAssignGroup ? (
                     <label className={styles.participantSelectTarget}>
@@ -2314,7 +2315,6 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                   <span className={styles.participantSummary}>
                     <strong className={styles.participantName} id={`roster-name-mobile-${person.id}`}>{person.name}</strong>
                     <small className={styles.participantIdentity}>{[identityOrg(person), presenceLabel(person)].filter(Boolean).join(" · ")}</small>
-                    <small className={styles.mobileContact}>{maskPhone(person.phone)}</small>
                     {ticketFilter || (["PENDING", "WAITLIST"].includes(person.status) && person.ticketReview === "cancelled") ? <small className={styles.ticketReviewLabel}>{ticketReviewLabel(person.ticketReview)}</small> : null}
                     {["PENDING", "WAITLIST"].includes(person.status) && person.ticketNeedsExplicitReissue ? <small className={styles.ticketReviewLabel}>승인 후 티켓 재발급 필요</small> : null}
                   </span>
@@ -2355,7 +2355,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                           setToolsOpenId(person.id);
                         }}
                       >
-                        상세
+                        <ChevronRightIcon />
                       </ProductButton>
                     </div>
                   ) : null}
@@ -2513,42 +2513,35 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           ) : null}
           </div>
           <nav aria-label="참가자 목록 페이지" className={styles.paginationBar}>
-              <ProductButton
-                type="button"
-                id="roster-previous-page"
-                className={`button button-secondary ${styles.selectionButton}`}
-                disabled={safePage <= 1}
-                onClick={() => showRosterPage(safePage - 1)}
-              >
-                이전
-              </ProductButton>
-              <ProductButton
-                type="button"
-                id="roster-next-page"
-                className={`button button-secondary ${styles.selectionButton}`}
-                disabled={safePage >= totalPages}
-                onClick={() => showRosterPage(safePage + 1)}
-              >
-                다음
-              </ProductButton>
               <span role="status" id="roster-page-position" className={styles.paginationPosition}>
-                {safePage} / {totalPages} 페이지 · {pageStart}–{pageEnd} / {visiblePeople.length}명
+                {pageStart}–{pageEnd} / {visiblePeople.length}명 · {safePage} / {totalPages} 페이지
                 {pageSelectedCount > 0 ? ` · 이 페이지 ${pageSelectedCount}명 선택` : ""}
               </span>
               <span className={styles.paginationActions}>
-                {canAssignGroup ? (
                 <ProductButton
                   type="button"
-                  className={`button button-secondary ${styles.selectionButton}`}
-                  onClick={selectPage}
-                  aria-describedby="roster-page-position"
+                  id="roster-previous-page"
+                  variant="ghost"
+                  className={styles.selectionButton}
+                  disabled={safePage <= 1}
+                  onClick={() => showRosterPage(safePage - 1)}
                 >
-                  이 페이지 {pagePeople.length}명 선택
+                  이전
                 </ProductButton>
-                ) : null}
                 <ProductButton
                   type="button"
-                  className={`button button-secondary ${styles.selectionButton}`}
+                  id="roster-next-page"
+                  variant="ghost"
+                  className={styles.selectionButton}
+                  disabled={safePage >= totalPages}
+                  onClick={() => showRosterPage(safePage + 1)}
+                >
+                  다음
+                </ProductButton>
+                <ProductButton
+                  type="button"
+                  variant="ghost"
+                  className={styles.selectionButton}
                   onClick={focusRosterSearch}
                 >
                   검색으로 이동

@@ -2,7 +2,8 @@
    surface. Details do not reserve an empty column; they open on request. */
 .workbenchPage { gap: var(--s4); }
 .workbenchPage > header { padding-bottom: var(--s3); }
-.workbenchControls { min-width: 0; padding: var(--s4); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-card); box-shadow: 0 1px 3px var(--shadow-soft); }
+/* One quiet ledger: controls, tabs and rows share the page surface; hairlines divide, boxes do not. */
+.workbenchControls { min-width: 0; padding: 0; color: var(--ink); background: transparent; }
 .workbenchControls :global([data-variant="secondary"]) { background: var(--paper); }
 .workbenchControls :global(input),
 .workbenchControls :global(select) { background: var(--paper); color: var(--ink); border-color: var(--line-strong); }
@@ -18,10 +19,10 @@
 /* View tabs live with the records they filter, not in the query toolbar:
    one tab bar directly above the table joins counts, position and selection. */
 .rosterTabs { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s2) var(--s4); min-width: 0; border-bottom: 1px solid var(--line); }
-.quickPresets { display: grid; flex-wrap: wrap; gap: 0; min-width: 0; grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; border-block: 0; border-bottom: 1px solid var(--line); }
-.quickPresets :global(.pill) { min-height: 52px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: var(--small); font-weight: 500; font-variant-numeric: tabular-nums; min-width: 0; padding: var(--s2) var(--s3); text-align: left; border-right: 1px solid var(--line); }
-.quickPresets :global(.pill:hover) { background: var(--surface-muted); color: var(--ink); }
-.quickPresets :global(.pill[aria-pressed="true"]) { border-bottom-color: var(--brand); border-bottom-width: 2px; background: var(--soft); color: var(--brand-text); font-weight: 650; }
+.quickPresets { display: flex; flex-wrap: wrap; gap: 0 var(--s6); min-width: 0; width: 100%; border-bottom: 1px solid var(--line); }
+.quickPresets :global(.pill) { min-height: 48px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: var(--small); font-weight: 550; font-variant-numeric: tabular-nums; min-width: 0; padding: var(--s2) 0; text-align: left; white-space: nowrap; }
+.quickPresets :global(.pill:hover) { background: transparent; color: var(--ink); }
+.quickPresets :global(.pill[aria-pressed="true"]) { border-bottom-color: var(--ink); background: transparent; color: var(--ink); font-weight: 700; }
 .filterToggle { display: inline-flex; align-items: center; gap: var(--s2); min-height: 44px; border-radius: var(--radius-medium); background: var(--paper); color: var(--ink); border-color: var(--line-strong); }
 .filterToggleSummary { min-width: 0; color: var(--muted); font-weight: 450; }
 .advancedFilters { display: contents; }
@@ -35,38 +36,29 @@
 .selectionHeadline { display: block; font-weight: 700; }
 .selectionScope { display: block; margin-top: var(--s1); font-size: var(--small); color: var(--muted); word-break: keep-all; overflow-wrap: break-word; }
 
-.rosterSection { gap: 0; padding: 0; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-card); box-shadow: 0 1px 3px var(--shadow-soft); }
+.rosterSection { gap: 0; padding: 0; background: transparent; border: 0; box-shadow: none; }
 /* The section name remains a heading/skip destination, not a second title
    between the query and data. All record actions are in the workbench. */
 .rosterSection [data-console-section-head] { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
-.rosterMeta { display: flex; align-items: center; gap: var(--s2) var(--s3); min-width: 0; min-height: 52px; flex: 1 1 100%; margin: 0; padding: var(--s2) var(--s4); background: var(--paper); flex-wrap: wrap; }
+.rosterMeta { display: flex; align-items: center; gap: var(--s2) var(--s3); min-width: 0; min-height: 52px; flex: 1 1 100%; margin: 0; padding: var(--s2) 0; background: transparent; flex-wrap: wrap; }
 .rosterMeta p { margin: 0; color: var(--muted); font-size: var(--small); font-weight: 500; font-variant-numeric: tabular-nums; }
 .rosterMeta :global(.astryx-button) { min-height: 44px; font-size: var(--small); }
-/* Scope caption: the meta-row select covers the whole filter result
-   (other pages included); the pagination-bar select covers only the
-   current page. Both labels stay short for the 390px row; the full
-   scope rides the visible caption plus the describedby help/position. */
-.scopeLabel { color: var(--ink); font-size: var(--label); font-weight: 550; letter-spacing: .02em; white-space: nowrap; }
-/* Caption and its select stay one wrapping unit: the pair drops to the next
-   line together instead of stranding the label on the previous row. The
-   group adds no overlay and changes no touch target. */
-.scopeGroup { display: inline-flex; align-items: center; gap: var(--s2); min-width: 0; }
-.scopeGroup :global(.astryx-button) { min-height: 44px; font-size: var(--small); }
 .rosterWorkbench, .rosterMain { min-width: 0; }
 /* Internal scroll container: a cropped next row at the bottom edge is the
    expected overflow affordance (header stays sticky, pagination stays
    below outside the scroll region), not an overlay. */
-.tableScroll { max-height: min(65svh, 720px); overflow: auto; scrollbar-width: thin; scrollbar-color: var(--line-strong) var(--paper); border-block: 1px solid var(--line); background: var(--paper); }
+.tableScroll { max-height: min(65svh, 720px); overflow: auto; scrollbar-width: thin; scrollbar-color: var(--line-strong) var(--paper); background: transparent; }
 .rosterTable { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--small); font-variant-numeric: tabular-nums; }
 .rosterTable th, .rosterTable td { padding: var(--s3) var(--s2); text-align: left; vertical-align: middle; border-bottom: 1px solid var(--line); padding-block: var(--s1); }
-.rosterHead th { position: sticky; top: 0; z-index: 1; height: 44px; background: var(--surface-muted); color: var(--muted); font-weight: 550; font-size: var(--label); letter-spacing: .06em; white-space: nowrap; }
+.rosterHead th { position: sticky; top: 0; z-index: 1; height: 44px; background: var(--paper); color: var(--muted); font-weight: 550; font-size: var(--label); letter-spacing: .06em; white-space: nowrap; }
 .rosterTable tbody tr:last-child td { border-bottom: 0; }
 .rosterTable tbody tr:hover { background: var(--surface-muted); }
+.rosterRow { cursor: pointer; }
 .rosterTable tbody tr[data-selected="true"] { background: var(--soft); }
 .rosterTable tbody tr[data-inspected="true"] > :first-child { box-shadow: inset 3px 0 var(--line-strong); }
 .rosterTable .selectColumn { width: 52px; padding-inline: var(--s1); }
 .rosterGroup { min-width: 76px; word-break: keep-all; overflow-wrap: anywhere; }
-.rosterTable .actionColumn { width: 160px; text-align: right; }
+.rosterTable .actionColumn { width: 132px; text-align: right; }
 .tableIdentity { display: grid; gap: var(--s1); min-width: 140px; }
 .tableIdentity strong { font-weight: 650; font-size: var(--body-work); overflow-wrap: anywhere; }
 .tableIdentity small { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; line-height: 1.5; }
@@ -90,12 +82,14 @@
 .sortButton { display: flex; align-items: center; gap: var(--s2); min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
 .participantActions { display: flex; align-items: center; justify-content: flex-end; gap: var(--s1); }
 .participantActions :global(.astryx-button) { min-height: 44px; padding: var(--s2) var(--s3); font-size: var(--small); white-space: nowrap; }
-.participantActions .rowToolsToggle { display: inline-flex; min-height: 44px; width: auto; }
+.participantActions .rowToolsToggle { display: inline-flex; min-height: 44px; min-width: 44px; width: auto; padding-inline: var(--s2); color: var(--muted); }
+.participantActions .rowToolsToggle svg { width: 20px; height: 20px; }
+.rosterRow:hover .rowToolsToggle, .participantRow:hover .rowToolsToggle { color: var(--ink); }
 .participantSelectTarget { display: grid; place-items: center; width: 44px; min-height: 44px; margin: 0; padding: 0; cursor: pointer; }
 .participantSelect { width: 20px; height: 20px; accent-color: var(--brand-text); }
 .participantList { display: none; }
 .participantRow { min-height: 44px; }
-.paginationBar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2) var(--s3); background: var(--paper); border-bottom: 0; padding: var(--s3) var(--s4); }
+.paginationBar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2) var(--s3); background: transparent; border-top: 1px solid var(--line); padding: var(--s2) 0; }
 .paginationBar :global(.astryx-button) { min-height: 44px; min-width: 44px; font-size: var(--small); }
 .paginationPosition { color: var(--muted); font-size: var(--small); font-variant-numeric: tabular-nums; }
 .paginationActions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); margin-left: auto; }
@@ -129,12 +123,11 @@
 .ticketReissueCopy { word-break: keep-all; overflow-wrap: break-word; }
 
 @media (max-width: 768px) {
-  .workbenchControls { padding: var(--s3); }
   .workbenchControls .searchField[data-toolbar-span="full"] { flex: 1 1 150px; }
-  .quickPresets { display: none; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .quickPresets { display: none; }
   .rosterTabs { align-items: center; gap: var(--s2); border-bottom: 0; }
   .rosterTabs .mobilePresetPicker { display: none; flex: 1 1 100%; }
-  .rosterMeta { flex: 1 1 100%; margin-left: 0; min-height: 44px; padding-inline: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; padding: var(--s2) var(--s3); background: var(--paper); gap: 0 var(--s2); }
+  .rosterMeta { flex: 1 1 100%; margin-left: 0; min-height: 44px; padding-inline: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; padding: var(--s2) 0; background: transparent; gap: 0 var(--s2); }
   .filterToggle { flex-wrap: wrap; justify-content: space-between; }
   .filterToggleSummary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .advancedFilters[data-open="true"] { display: grid; grid-template-columns: minmax(0, 1fr); }
@@ -155,27 +148,25 @@
      collapses into a syllable-wide column beside nowrap controls. */
   .rosterMeta p { min-width: 0; font-size: 13px; flex: 1 1 auto; grid-column: auto; }
   .rosterMeta :global(.astryx-button) { flex: none; }
-  .scopeGroup { grid-column: 1 / -1; justify-self: start; }
   .tableScroll { display: none; }
-  .participantList { display: block; margin: 0; padding: 0; list-style: none; background: var(--paper); border-block: 1px solid var(--line); }
-  .participantRow { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: var(--s1) var(--s2); align-items: start; padding: var(--s4) var(--s3); border-bottom: 1px solid var(--line); }
+  .participantList { display: block; margin: 0; padding: 0; list-style: none; background: transparent; border-top: 1px solid var(--line); }
+  .participantRow { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto; gap: 0 var(--s1); align-items: center; padding: var(--s2) 0; border-bottom: 1px solid var(--line); cursor: pointer; }
   .participantRow:last-child { border-bottom: 0; }
   .participantRow[data-selected="true"] { background: var(--soft); }
   .participantRow[data-inspected="true"] { box-shadow: inset 3px 0 var(--line-strong); }
-  .participantSummary { display: grid; grid-column: 2; grid-row: 1 / span 2; gap: var(--s1); min-width: 0; }
-  .participantRow > .participantSelectTarget { grid-row: 1 / span 2; }
+  .participantSummary { display: grid; grid-column: 2; grid-row: 1; gap: 2px; min-width: 0; }
+  .participantRow > .participantSelectTarget { grid-row: 1; }
   .participantName { font-size: 16px; font-weight: 650; overflow-wrap: anywhere; line-height: 1.4; }
-  .participantIdentity, .mobileContact, .mobilePresence { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; line-height: 1.5; }
-  .mobileContact { font-variant-numeric: tabular-nums; }
+  .participantIdentity, .mobilePresence { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; line-height: 1.5; }
   .participantRow > .rosterContact { display: none; }
-  .participantStatus { grid-column: 3; grid-row: 1; align-self: start; font-size: var(--label); }
-  .participantActions { grid-column: 3; grid-row: 2; justify-content: flex-end; }
-  .viewerRow { grid-template-columns: minmax(0, 1fr) auto; }
+  .participantStatus { grid-column: 3; grid-row: 1; align-self: center; font-size: var(--label); }
+  .participantActions { grid-column: 4; grid-row: 1; justify-content: flex-end; }
+  .viewerRow { grid-template-columns: minmax(0, 1fr) auto; cursor: default; }
   .viewerRow .participantStatus { grid-column: 2; }
   .viewerRow .participantSummary { grid-column: 1; }
   .viewerRow .participantActions { grid-column: 2; }
   .participantRowNoActions { grid-template-columns: 44px minmax(0, 1fr) auto; }
-  .paginationBar { padding: var(--s3); }
+  .paginationBar { padding: var(--s2) 0; }
   .paginationActions { margin-left: 0; width: 100%; }
   .paginationPosition { font-size: var(--label); }
   .workbenchControls .utilityPair .mobilePresetPicker { grid-column: 1; grid-row: 1; width: 100%; min-width: 0; }
@@ -186,7 +177,6 @@
 
 /* A working queue: choose a view, choose its scope, then act on the selection
    beside the records. Utilities remain separate from those contextual actions. */
-.quickPresets :global(.pill:last-child) { border-right: 0; }
 .nametagDisclosure { border-top: 1px solid var(--line); }
 .nametagDisclosure > summary {
   display: flex;
@@ -196,7 +186,6 @@
   font-weight: 650;
   cursor: pointer;
 }
-.scopeGroup { margin-left: auto; }
 .selectionWorkbench:not(:empty) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s3); padding: var(--s2) var(--s3); background: var(--ink); border: 1px solid transparent; border-radius: var(--radius-medium); }
 .selectionWorkbench > [role="status"] { flex: 1 1 260px; min-width: 0; color: var(--paper); }
 .selectionWorkbench > .selectionNotice { flex: 1 0 100%; margin: 0; color: var(--paper); font-size: var(--small); line-height: 1.5; word-break: keep-all; }
@@ -208,16 +197,18 @@
 .selectionWorkbench .selectionActions > :global([data-variant="ghost"]) { color: var(--paper); }
 .selectionWorkbench .selectionActions > :global([data-variant="ghost"]:hover) { color: var(--ink); }
 .selectionWorkbench .selectionActions > :global([data-variant="ghost"]:focus-visible) { outline-color: var(--paper); }
+.selectionWorkbench > .selectionScopeAction { color: var(--paper); text-decoration: underline; text-underline-offset: 3px; }
+.selectionWorkbench > .selectionScopeAction:hover { color: var(--ink); }
 .selectionWorkbench :global(.astryx-button) { min-height: 44px; }
 .selectionWorkbench:empty { display: none; }
 @media (max-width: 768px) {
   .quickPresets :global(.pill) { min-height: 48px; border-bottom: 1px solid var(--line); }
-  .scopeGroup { margin-left: 0; }
   .selectionWorkbench:not(:empty) { padding: var(--s2); }
 }
 .utilityPair { align-items: flex-start; gap: var(--s2); }
 .rosterUtilities { position: relative; }
-.rosterUtilities summary { display: flex; align-items: center; min-height: 44px; padding: 0 var(--s4); border: 1px solid var(--line-strong); border-radius: var(--radius-medium); cursor: pointer; list-style: none; font-weight: 650; }
+.rosterUtilities summary { display: flex; align-items: center; min-height: 44px; padding: 0 var(--s3); border: 1px solid transparent; border-radius: var(--radius-medium); cursor: pointer; list-style: none; font-weight: 650; }
+.rosterUtilities summary:hover, .rosterUtilities[open] > summary { background: var(--surface-muted); }
 .rosterUtilities summary::-webkit-details-marker { display: none; }
 .rosterUtilities summary::after { content: ""; margin-left: var(--s2); display: inline-block; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-2px) rotate(45deg); flex: none; }
 .utilityMenu { position: absolute; z-index: 3; right: 0; top: calc(100% + 4px); display: grid; gap: var(--s1); min-width: 190px; padding: var(--s2); background: var(--paper); border: 1px solid var(--line-strong); border-radius: var(--radius-medium); box-shadow: 0 8px 24px var(--shadow-color); }
@@ -245,7 +236,6 @@
 .selectionActionHint { margin: 0; padding: 0 var(--s2) var(--s2); color: var(--muted); font-size: var(--label); word-break: keep-all; }
 .selectionPolicy { display: block; margin-top: var(--s1); }
 @media (max-width: 768px) {
-  .rosterMeta > .scopeGroup, .rosterMeta > .desktopPageSelect { display: none; }
   .mobileScope { display: block; justify-self: start; position: relative; }
   .mobileScopeSingle { display: inline-flex; justify-self: start; }
   .mobileScope summary { display: flex; align-items: center; min-height: 44px; padding: 0 var(--s3); color: var(--brand-text); font-size: var(--small); font-weight: 700; cursor: pointer; list-style: none; }

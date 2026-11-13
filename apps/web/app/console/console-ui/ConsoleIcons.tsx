@@ -113,6 +113,14 @@ export function ArrowRightIcon({ className }: IconProps) {
   );
 }
 
+export function ChevronRightIcon({ className }: IconProps) {
+  return (
+    <svg className={baseClass(className)} aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+      <path d="m9 6 6 6-6 6" />
+    </svg>
+  );
+}
+
 export function BackIcon({ className }: IconProps) {
   return (
     <svg className={baseClass(className)} aria-hidden="true" focusable="false" viewBox="0 0 24 24">

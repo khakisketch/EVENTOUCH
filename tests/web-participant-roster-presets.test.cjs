@@ -26,3 +26,26 @@ test('roster presets reuse the select setters and stay discoverable', () => {
   // Counts ignore status/attendance so chips show distribution, not their own filter.
   assert.match(list, /presetBase\.filter\(\(person\) => person\.status === "PENDING"\)/u, 'pending count is scope-based');
 });
+
+// Approved roster design (2026-11-13). See DESIGN.md "참가자 명단 확정 구성"; change only with a new user decision.
+test('approved roster design stays locked', () => {
+  const list = fs.readFileSync(path.join(ROOT, 'apps/web/app/console/events/[id]/participants/ParticipantList.tsx'), 'utf8');
+  const css = fs.readFileSync(path.join(ROOT, 'apps/web/app/console/events/[id]/participants/participants.module.css'), 'utf8');
+  // One flat ledger: no card box around controls or list.
+  assert.match(css, /\.workbenchControls \{[^}]*background: transparent/su, 'controls are not a card');
+  assert.match(css, /\.rosterSection \{[^}]*border: 0;[^}]*box-shadow: none/su, 'list is not a card');
+  // Ink-underline tabs, not orange.
+  assert.match(css, /\.quickPresets :global\(\.pill\[aria-pressed="true"\]\) \{[^}]*border-bottom-color: var\(--ink\)/su, 'active tab is ink');
+  assert.doesNotMatch(css, /\.quickPresets[^{]*\{[^}]*var\(--brand/su, 'tabs carry no orange');
+  // Whole row opens the detail dialog; a chevron replaces the 상세 text.
+  assert.ok(list.includes('onClick={(event) => openDetailsFromRow(event, person.id)}'), 'row click opens details');
+  assert.match(list, /<ChevronRightIcon \/>/u);
+  assert.match(css, /\.rosterRow \{ cursor: pointer; \}/u);
+  // Mobile rows are two lines: no phone line.
+  assert.doesNotMatch(list, /styles\.mobileContact/u, 'phone stays in the detail dialog');
+  // Utilities and pagination are ghost; the scope action sits in the selection bar.
+  assert.match(list, /<ProductButton type="button" variant="ghost" onClick=\{\(\) => setImportOpen\(true\)\}/u);
+  assert.match(list, /id="roster-previous-page"\s*variant="ghost"/u);
+  assert.match(list, /id="roster-next-page"\s*variant="ghost"/u);
+  assert.match(list, /variant="ghost" className=\{styles\.selectionScopeAction\}/u);
+});

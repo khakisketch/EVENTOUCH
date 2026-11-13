@@ -219,6 +219,17 @@ The owner approved this composition on 2026-11-13 (`apps/web/app/console/events/
 - An empty schedule slot keeps the height of its sibling card.
 - 최근 입퇴장 is a timeline: time, then a rail dot (in = green, out = ink outline, other = muted), then details.
 
+## 참가자 명단 확정 구성
+
+The owner approved this composition on 2026-11-13 (`apps/web/app/console/events/[id]/participants/ParticipantList.tsx`, option A "조용한 명단"). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-participant-roster-presets.test.cjs` guards it.
+
+- One flat ledger: no card box around the controls or the list. Hairlines divide; the header row and pagination share the page surface.
+- Status views are ink-underline tabs. The active tab is ink, not orange.
+- "참가자 추가" is the only orange action. 명단 가져오기, 명단 도구 and pagination are ghost.
+- The scope action "필터 결과 전체 N명 선택" lives only inside the ink selection bar, so no caption row sits above the list.
+- A whole row opens the detail dialog; a chevron replaces the "상세" text. Checkbox, "승인" and other inline buttons never trigger it. "승인" appears only on PENDING and WAITLIST rows.
+- Mobile rows are two lines: name, then company, group and presence. The phone number stays in the detail dialog.
+
 ## Product component boundary
 
 Astryx supplies the production theme, actions, icon actions, links, labeled text fields, headings, sections and feedback. `app/ui/ProductButton`, `ProductLink`, `ProductInput` and `ProductNotice` keep the product-facing contract small. The production theme in `apps/web/src/themes/eventouch/` aliases `tokens.css`; generated theme files are rebuilt, not edited. The product explicitly uses light mode and Pretendard. The isolated design-review pilot is not a runtime dependency.

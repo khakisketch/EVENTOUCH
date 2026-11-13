@@ -176,20 +176,19 @@ test('web-participant-scope-selects-keep-visible-labels-as-accessible-names', ()
   // text: the accessible name must equal the visible label (label-in-name),
   // with each scope riding aria-describedby instead of a diverging label.
   assert.doesNotMatch(list, /aria-label=\{`[^`]*명 선택`\}/u, 'no select button renames itself apart from its visible label');
-  assert.match(list, /전체 \{visiblePeople\.length\}명 선택/u, 'filter scope keeps its short visible label');
+  assert.match(list, /필터 결과 전체 \{visiblePeople\.length\}명 선택/u, 'filter scope keeps its short visible label');
   assert.match(list, /이 페이지 \{pagePeople\.length\}명 선택/u, 'page scope keeps its short visible label');
   assert.match(list, /aria-describedby="roster-select-all-help"/u, 'filter scope stays described');
   assert.match(list, /aria-describedby="roster-page-position"/u, 'page scope stays described');
-  // Caption and filter-wide select travel as one wrapping unit so narrow
-  // rows never strand the label apart from its button.
-  assert.match(list, /<span className=\{styles\.scopeGroup\}>\s*<span className=\{styles\.scopeLabel\}>선택 범위<\/span>/u, 'caption and select stay grouped');
+  // The quiet ledger keeps the scope action inside the selection bar, so it
+  // only exists while rows are selected and no caption row sits above the list.
+  assert.match(list, /className=\{styles\.selectionScopeAction\}/u, 'filter-wide select lives in the selection bar');
+  assert.doesNotMatch(list, /styles\.scopeGroup|styles\.scopeLabel|desktopPageSelect/u, 'no always-visible scope caption row');
   const css = read('app/console/events/[id]/participants/participants.module.css');
-  assert.match(css, /\.scopeGroup\s*\{[^}]*display:\s*inline-flex/su, 'scope pair wraps as one unit without overlay');
-  // Narrow rows stack deterministically (count + refresh, then the scope
-  // pair) instead of squeezing the count beside nowrap controls.
+  // Narrow rows stack deterministically (count + refresh) instead of
+  // squeezing the count beside nowrap controls.
   const mobile = css.slice(css.indexOf('@media (max-width: 768px)'));
   assert.match(mobile, /\.rosterMeta\s*\{[^}]*display:\s*grid/su, 'narrow meta rows stack instead of squeezing');
-  assert.match(mobile, /\.scopeGroup\s*\{[^}]*grid-column:\s*1 \/ -1/su, 'scope pair owns the second narrow row');
 });
 
 test('web-create-dialog-retries-with-the-same-command-id', () => {
