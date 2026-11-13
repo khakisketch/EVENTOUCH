@@ -119,3 +119,21 @@ test('user-facing copy reads 발송 while command and anchor names stay internal
   assert.match(SOURCE, /attentionParam === "1"/u);
   assert.match(SOURCE, /id=\{`campaign-\$\{campaign\.id\}`\}/u);
 });
+
+test('approved messages design stays locked', () => {
+  // DESIGN.md "메시지 확정 구성": flat one-sheet composer, ink step row,
+  // wide writing column with a narrow preview, one orange action per step.
+  assert.match(SOURCE, /surface="plain"/u, 'compose is one flat sheet, not a card panel');
+  assert.match(CSS, /\.composeSteps button\[aria-current="step"\]\s*\{[^}]*border-bottom-color:\s*var\(--ink\)/u, 'active step is an ink underline');
+  assert.match(CSS, /\.composeGrid\[data-step="2"\] \.composeDraft\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(260px,\s*300px\)/u, 'writing column plus one narrow preview');
+  assert.match(CSS, /\.inkTabs :global\(\[role="tab"\]\[aria-selected="true"\]\)\s*\{[^}]*var\(--ink\)/u, 'history/template tabs use the ink underline');
+  assert.match(CSS, /\.inkLink\s*\{\s*color:\s*var\(--ink\)/u, 'utility links are ink, not orange');
+  const personalization = CSS.match(/\.personalizationTools > button\s*\{[^}]*\}/u);
+  assert.ok(personalization, 'variable chips keep one neutral rule');
+  assert.doesNotMatch(personalization[0], /--brand|--soft/u, 'variable chips are never orange');
+  for (const id of ['message-compose-close']) {
+    assert.match(SOURCE, new RegExp(`id="${id}"[^>]*variant="ghost"`, 'u'), `${id} stays ghost`);
+  }
+  assert.match(SOURCE, /<ProductButton[^>]*variant="ghost"[^>]*>\s*수신자 변경/u, '수신자 변경 stays ghost');
+  assert.match(SOURCE, /<ProductLink className=\{styles\.inkLink\} variant="ghost"[^>]*>참가자 명단에서 확인/u, '참가자 명단에서 확인 stays an ink ghost link');
+});

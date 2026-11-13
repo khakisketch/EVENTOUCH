@@ -85,8 +85,8 @@
 .selectionSummary {
   margin: 0 0 var(--s2);
   color: var(--ink);
-  font-size: var(--small);
-  font-weight: 650;
+  font-size: var(--body-work);
+  font-weight: 800;
 }
 
 .selectedOnlyOption {
@@ -158,10 +158,10 @@
   align-items: center;
   gap: var(--s2);
   padding: var(--s2) var(--s3);
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   border-radius: var(--radius-medium);
-  background: var(--paper);
-  color: var(--brand-text);
+  background: transparent;
+  color: var(--ink);
   font-weight: 700;
   text-decoration: none;
 }
@@ -239,10 +239,9 @@
   align-items: center;
   gap: var(--s2);
   margin: 0 !important;
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-medium);
-  background: var(--paper);
+  padding: var(--s2) 0;
+  border: 0;
+  background: transparent;
   cursor: pointer;
 }
 
@@ -854,7 +853,7 @@
 .connectionSim > summary { color: var(--info); }
 .connectionOk { border-color: var(--success-line); background: var(--success-soft); }
 .connectionOk > summary { color: var(--success); }
-.composeReturn { display: grid; justify-items: end; gap: var(--s1); }
+.composeReturn { display: grid; justify-items: end; gap: 0; }
 .composeReturn small { color: var(--muted); font-size: var(--label); }
 .historyFootnote { padding-top: var(--s2); font-size: var(--label); }
 .historyTools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
@@ -890,6 +889,7 @@
 .historyDetailRow > td { padding: 0; background: var(--surface-muted); }
 .mobileCellLabel { display: none; }
 .composeSection { scroll-margin-top: 120px; }
+.composeSection .help { margin-top: var(--s1); }
 :global(#campaign-heading) { scroll-margin-top: 120px; }
 .composeSection .recipientTopBar { padding: 0; border: 0; background: transparent; }
 .composeSection .recipientTopBar .textButton { margin-left: 0; }
@@ -979,15 +979,6 @@
   background: var(--surface-muted);
 }
 
-.selectionSummary {
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-medium);
-  background: var(--paper);
-  font-size: var(--body-work);
-  font-weight: 800;
-}
-
 .recipientList {
   border: 1px solid var(--line);
   border-radius: var(--radius-medium);
@@ -1024,8 +1015,8 @@
 .draftPreviewBody {
   min-height: 120px;
   padding: var(--s3) var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-medium);
+  border: 0;
+  border-radius: var(--radius-card);
   background: var(--paper);
   font-size: var(--body-work);
   line-height: 1.7;
@@ -1056,10 +1047,10 @@
 .scheduleFields { padding-top: var(--s2); }
 
 .sendBlock {
-  padding: var(--s3) var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-medium);
-  background: var(--paper);
+  padding: var(--s4) 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
 }
 
 /* Review is the closing gate: a neutral draft summary first, then the guarded submit.
@@ -1071,20 +1062,22 @@
   display: grid;
   gap: var(--s2);
   margin-top: var(--s4);
-  padding: var(--s4);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-large);
-  background: var(--paper);
+  padding: var(--s4) 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
 
 .draftSummary {
   display: grid;
   gap: var(--s1);
   margin: 0;
-  padding: var(--s3) var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-medium);
-  background: var(--paper);
+  padding: var(--s3) 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: transparent;
   list-style: none;
 }
 
@@ -1226,9 +1219,6 @@
 
 /* Give the work areas their own hierarchy instead of three nested panels. */
 .composeGrid > fieldset { background: transparent; border: 0; border-radius: 0; padding: 0; }
-.selectionSummary { background: var(--paper); border: 1px solid var(--line); }
-.reviewCard { border: 1px solid var(--line-strong); border-radius: var(--radius-large); padding: var(--s5) var(--s4) var(--s4); }
-.draftSummary { border: 1px solid var(--line); border-radius: var(--radius-medium); }
 
 @media (max-width: 768px) {
   .composeNavigator button { padding: var(--s2); }
@@ -1255,11 +1245,14 @@
 }
 
 /* One task per step; all controllers remain mounted so drafts and receipts survive. */
-.composeSteps { display: flex; gap: var(--s2); border-bottom: 1px solid var(--line); padding-bottom: var(--s3); }
-.composeSteps button { display: inline-flex; align-items: center; gap: var(--s2); min-height: 44px; padding: var(--s2) var(--s3); border: 1px solid var(--line-strong); border-radius: var(--radius-medium); background: var(--paper); color: var(--muted); font: inherit; }
-.composeSteps button[aria-current="step"] { border-color: var(--brand-text); color: var(--brand-text); font-weight: 700; box-shadow: inset 0 -2px var(--brand); }
-.composeSteps button span { font-variant-numeric: tabular-nums; }
+.composeSteps { display: flex; gap: var(--s5); border-bottom: 1px solid var(--line); }
+.composeSteps button { display: inline-flex; align-items: center; gap: var(--s2); min-height: 44px; margin-bottom: -1px; padding: var(--s2) 0; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font: inherit; }
+.composeSteps button:enabled:hover { color: var(--ink); }
+.composeSteps button[aria-current="step"] { border-bottom-color: var(--ink); color: var(--ink); font-weight: 700; }
+.composeSteps button span span > span { display: inline-grid; margin-right: var(--s2); place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--line); font-size: var(--label); font-variant-numeric: tabular-nums; }
+.composeSteps button[aria-current="step"] span span > span { background: var(--ink); color: var(--paper); }
 .composeGrid[data-step] { display: block; }
+.composeGrid[data-step] .composeDraft { padding: 0; border: 0; }
 .composeGrid[data-step="1"] .composeDraft,
 .composeGrid[data-step="2"] .recipientFieldset,
 .composeGrid[data-step="2"] .sendCard,
@@ -1270,20 +1263,25 @@
 .reviewCard[hidden] { display: none; }
 .composeGrid[data-step="1"] .recipientFieldset { border: 0; padding: 0; max-width: 900px; }
 .composeGrid[data-step="1"] .recipientTopBar { display: none; }
-.composeGrid[data-step="2"] .composeDraft { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(240px, 1fr); gap: var(--s5); }
-.stepActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--s2); padding-top: var(--s3); }
+.composeGrid[data-step="2"] .composeDraft { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 300px); gap: var(--s6); align-items: start; }
+.stepActions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: var(--s2) var(--s3); padding-top: var(--s3); }
 .stepActions > :global(.product-action) { flex: 0 0 auto; white-space: nowrap; }
-.stepActions > .help { flex: 1 0 100%; margin: 0; text-align: right; }
-.guideAction { justify-content: flex-start; margin-top: var(--s1); padding-inline: var(--s2); color: var(--brand-text); }
+.stepActions > .help { flex: 1 1 240px; margin: 0; }
+.guideAction { justify-content: flex-start; margin-top: var(--s1); padding-inline: var(--s2); color: var(--ink); }
+.inkLink { color: var(--ink); }
+.inkTabs :global([role="tab"]:hover),
+.inkTabs :global([role="tab"][aria-selected="true"]) { color: var(--ink); }
+.inkTabs :global([role="tab"][aria-selected="true"]) { border-bottom-color: var(--ink); }
 .guideAction svg { width: 16px; height: 16px; flex: none; }
 .finalBody { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; color: var(--ink); }
-@media(max-width: 768px) { .composeGrid[data-step="2"] .composeDraft { grid-template-columns: minmax(0,1fr); } .composeSteps { gap: 0; } .composeSteps button { flex: 1; padding-inline: var(--s1); } .stepActions > .help { text-align: left; } }
+@media(max-width: 768px) { .composeGrid[data-step="2"] .composeDraft { grid-template-columns: minmax(0,1fr); gap: var(--s5); } .composeSteps { gap: 0; } .composeSteps button { flex: 1; justify-content: center; padding-inline: var(--s1); } }
 @media(min-width: 769px) {
   .composeGrid[data-step="2"] .contentFields { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: var(--s3); align-content: start; }
   .composeGrid[data-step="2"] .contentFields > :nth-child(2) { display: contents; }
   .composeGrid[data-step="2"] .contentFields > :nth-child(2) > :nth-child(2),
   .composeGrid[data-step="2"] .contentFields > :nth-child(3) { grid-column: 1 / -1; }
   .composeGrid[data-step="2"] .contentFields textarea { min-height: 144px; height: 160px; }
+  .composeGrid[data-step="2"] .contentFields select { min-height: 52px; }
 }
 
 /* Message authoring uses the product's persistent task tabs. */
@@ -1294,6 +1292,7 @@
   flex-wrap: wrap;
   gap: var(--s2);
 }
+.templatePickerLabel { margin-block: -10px; }
 .templatePickerLabel label { margin: 0; }
 .templatePickerLabel .textButton { min-height: 44px; }
 .templateManager {
@@ -1332,9 +1331,9 @@
 
 .attachmentPreview img { display: block; max-width: 100%; max-height: 220px; object-fit: contain; margin-bottom: var(--s3); }
 .attachmentPreview img[hidden] { display: none; }
-.personalizationTools { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s1); margin-top: var(--s1); }
+.personalizationTools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); margin-top: var(--s1); }
 .personalizationTools > span { color: var(--muted); font-size: var(--small); margin-right: var(--s1); }
-.personalizationTools > button { min-height: 44px; padding: var(--s2); font-size: var(--small); color: var(--brand-text); }
+.personalizationTools > button { min-height: 44px; padding: var(--s2) var(--s3); border: 1px solid var(--line); border-radius: 999px; background: var(--paper); font-size: var(--small); color: var(--ink); }
 .kakaoExample { overflow: hidden; border-radius: var(--radius-medium); }
 .kakaoExample .kakaoExampleHeader { margin: 0; }
 .kakaoExample .kakaoExampleBody { padding: var(--s3); }
@@ -1354,11 +1353,11 @@
 }
 
 /* Keep the actual selected set visible while writing, independently of filters. */
-.stepRecipientSummary { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: var(--s3); padding: var(--s3) var(--s4); border: 1px solid var(--line); border-radius: var(--radius-medium); color: var(--ink); }
+.stepRecipientSummary { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: var(--s3); padding: var(--s1) 0 var(--s3); border-bottom: 1px solid var(--line); color: var(--ink); }
 .stepRecipientSummary > div { min-width: 0; }
 .stepRecipientSummary p { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s2); margin: 0; overflow-wrap: anywhere; }
-.stepRecipientSummary strong { font-size: var(--h3); font-variant-numeric: tabular-nums; }
+.stepRecipientSummary strong { font-size: var(--body-work); font-variant-numeric: tabular-nums; }
 .recipientCountLabel { color: var(--muted); font-size: var(--small); }
 .stepRecipientSummary .recipientSummaryMeta { margin-top: var(--s1); color: var(--muted); font-size: var(--small); }
 .recipientFilters { grid-template-columns: minmax(120px, .7fr) minmax(120px, .7fr) minmax(0,1.6fr); }
-@media(max-width:768px) { .recipientFilters { grid-template-columns: repeat(2,minmax(0,1fr)); } .recipientSearch { grid-column: 1 / -1; } .stepRecipientSummary { padding: var(--s3); } }
+@media(max-width:768px) { .recipientFilters { grid-template-columns: repeat(2,minmax(0,1fr)); } .recipientSearch { grid-column: 1 / -1; } .stepRecipientSummary { padding-inline: 0; } }

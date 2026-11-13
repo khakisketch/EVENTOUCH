@@ -70,7 +70,7 @@ test('preparation tabs keep stable anchors and form reading width', () => {
   const composeStart = PAGES.messages.indexOf('headingId="campaign-heading"');
   const composeHeader = PAGES.messages.slice(composeStart, PAGES.messages.indexOf('<form', composeStart));
   assert.ok(composeStart > 0);
-  assert.match(composeHeader, /surface="panel"/u, 'compose stays a panel');
+  assert.match(composeHeader, /surface="plain"/u, 'compose is one flat sheet, not a card panel');
   assert.doesNotMatch(composeHeader, /width="form"/u, 'two-column workbench uses the shared full workspace width');
   assert.match(PAGES.messages, /className=\{styles\.composeGrid\}/u, 'composition and recipients share one workbench');
   for (const id of ['settings-basics', 'settings-intake', 'settings-features', 'settings-stage']) {

@@ -753,7 +753,7 @@ class CommandFailure extends Error {
 function MessageWorkbench({ history, composer, templates, composerOpen, templateAttention }: { history: ReactNode; composer: ReactNode; templates: ReactNode; composerOpen: boolean; templateAttention: boolean }) {
   useEffect(() => { if (composerOpen) requestConsoleTask("history-heading"); }, [composerOpen]);
   return <>
-    <div hidden={composerOpen}><ConsoleSectionNav mode="tabs" label="메시지 업무" initialId="history-heading" items={[
+    <div className={styles.inkTabs} hidden={composerOpen}><ConsoleSectionNav mode="tabs" label="메시지 업무" initialId="history-heading" items={[
       { id: "history-heading", label: "발송 기록" },
       { id: "templates-heading", label: templateAttention ? "템플릿 관리 · 확인 필요" : "템플릿 관리" },
     ]} /></div>
@@ -2882,7 +2882,8 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       meta={formatConsoleEventMeta(state.eventMeta)}
       headerActions={(
         <ProductLink
-          variant="secondary"
+          className={styles.inkLink}
+          variant="ghost"
           href={`/console/events/${encodeURIComponent(eventId)}/participants`}
         >
           참가자 명단
@@ -2990,9 +2991,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
           <ConsoleSection
             headingId="campaign-heading"
               title={messagesLocked ? "작성 내용 확인" : "메시지 작성"}
-              surface="panel"
+              surface="plain"
               className={styles.composeSection}
-              action={<div className={styles.composeReturn}><ProductButton id="message-compose-close" type="button" variant="secondary" aria-describedby="compose-return-help" disabled={busyAction !== null || uploadingImage} onClick={() => {
+              action={<div className={styles.composeReturn}><ProductButton id="message-compose-close" type="button" variant="ghost" aria-describedby="compose-return-help" disabled={busyAction !== null || uploadingImage} onClick={() => {
                 focusHistoryOnCloseRef.current = true;
                 setComposerOpen(false);
                 setHistoryOpen(true);
@@ -3012,7 +3013,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
 
                 {composeStep !== 1 ? <div className={styles.stepRecipientSummary} role="group" aria-label="선택한 수신자 요약">
                   <div><p><span className={styles.recipientCountLabel}>수신자</span> <strong>{selectedIds.length}명</strong><span>{recipientIdentity}</span></p>{recipientStatusSummary ? <p className={styles.recipientSummaryMeta}>{recipientStatusSummary}</p> : null}</div>
-                  <ProductButton type="button" variant="secondary" onClick={jumpToRecipientFilter}>수신자 변경</ProductButton>
+                  <ProductButton type="button" variant="ghost" onClick={jumpToRecipientFilter}>수신자 변경</ProductButton>
                 </div> : null}
 
                 <a
@@ -3042,7 +3043,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                     </p>
                     {conflictingRecipients > 0 ? <p className={styles.help} role="note">
                       신청 상태와 취소 기록이 일치하지 않는 {conflictingRecipients}명은 수신 대상에서 제외했습니다. {" "}
-                      <ProductLink variant="secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>참가자 명단에서 확인</ProductLink>
+                      <ProductLink className={styles.inkLink} variant="ghost" href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>참가자 명단에서 확인</ProductLink>
                     </p> : null}
                     {recipientReviewRequired ? (
                       <div className={uiStyles.formStack}>
@@ -3428,7 +3429,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                 </div>
 
                 {composeStep !== 3 ? <div className={styles.stepActions}>
-                  {composeStep === 2 ? <ProductButton type="button" variant="secondary" onClick={() => goComposeStep(1)}>이전</ProductButton> : null}
+                  {composeStep === 2 ? <ProductButton type="button" variant="ghost" onClick={() => goComposeStep(1)}>이전</ProductButton> : null}
                   <ProductButton type="button" variant="primary" disabled={busyAction !== null || uploadingImage || Boolean(uncertainCreate) || recipientReviewRequired} onClick={() => goComposeStep(composeStep === 1 ? 2 : 3)}>{composeStep === 1 ? "내용 작성" : "발송 검토로"}</ProductButton>
                   {composeStep === 2 ? <p className={styles.help}>예약 발송과 모의 발송 설정은 다음 검토 단계에서 입력합니다.</p> : null}
                 </div> : null}
@@ -3471,13 +3472,13 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   </ul>
                   {ticketLinkInvalidCount > 0 ? <p className={styles.help} role="note">
                     티켓을 사용할 수 없거나 상태를 확인할 수 없는 수신자 {ticketLinkInvalidCount}명 · {simulateDraft ? "모의 기록은 가능하지만 실제 발송 전 확인이 필요합니다." : "실제 발송 전에 티켓을 확인해 주세요."}{" "}
-                    <ProductLink variant="secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</ProductLink>
+                    <ProductLink variant="ghost" href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</ProductLink>
                   </p> : null}
                   {scheduledDraft && !simulateDraft ? <p className={styles.help} role="note">{scheduleModeNotice(campaignDraft.scheduleMode)}</p> : null}
                   {campaignDraft.channel === "ALIMTALK" && !simulateDraft ? <p className={styles.help} role="note">{campaignDraft.smsFallback ? ALIMTALK_FALLBACK_NOTICE : ALIMTALK_NO_FALLBACK_NOTICE}</p> : null}
                   {scheduledDraft && !simulateDraft ? <p className={styles.help}>{scheduleServerStatus(state.messageSchedule)} 현재 서버 기준이며 실제 발송 성공을 보장하지 않습니다.</p> : null}
                 <div className={styles.reviewBar}>
-                  <ProductButton type="button" variant="secondary" onClick={() => goComposeStep(2)}>내용 수정</ProductButton>
+                  <ProductButton type="button" variant="ghost" onClick={() => goComposeStep(2)}>내용 수정</ProductButton>
                   <p className={styles.reviewSummary} id="campaign-submit-warning" tabIndex={-1}>
                     선택 {selectedCount}명 · {channelLabel(campaignDraft.channel)} · {submitModeLabel}{simulateDraft ? "" : " · 발송은 되돌릴 수 없습니다."}
                     {campaignDraft.channel === "MMS" && !simulateDraft ? " 별도 요금이 발생합니다." : ""}
@@ -3651,7 +3652,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   </div>
                   {templateFieldError && !FIELD_LABELS[templateFieldError.field] ? <p className={styles.fieldError} role="alert">{templateFieldError.message}</p> : null}
                   <ConsoleFormActions>
-                    <ProductButton variant="secondary" type="submit" disabled={busyAction !== null || messagesLocked} title={messagesLocked ? messagesLockReason : undefined}>
+                    <ProductButton variant="primary" type="submit" disabled={busyAction !== null || messagesLocked} title={messagesLocked ? messagesLockReason : undefined}>
                       {busyAction === "template" ? "저장 중…" : templateDraft.id ? "템플릿 저장" : "템플릿 추가"}
                     </ProductButton>
                     {templateDraft.id ? (
@@ -3716,7 +3717,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
             {attentionOnly ? (
               <div className={styles.attentionFilter}>
                 <p role="status">발송 확인이 필요한 발송만 보고 있습니다 · {visibleCampaigns.length}건{overdueCampaigns.length ? ` · 실행 시점 지난 예약 ${overdueCampaigns.length}건 포함` : ""}</p>
-                <ProductButton type="button" variant="secondary" onClick={() => { setAttentionOnly(false); setHistoryStatus("ALL"); setHistoryQuery(""); }}>
+                <ProductButton type="button" variant="ghost" onClick={() => { setAttentionOnly(false); setHistoryStatus("ALL"); setHistoryQuery(""); }}>
                   전체 발송 기록 보기
                 </ProductButton>
               </div>

@@ -230,6 +230,17 @@ The owner approved this composition on 2026-11-13 (`apps/web/app/console/events/
 - A whole row opens the detail dialog; a chevron replaces the "상세" text. Checkbox, "승인" and other inline buttons never trigger it. "승인" appears only on PENDING and WAITLIST rows.
 - Mobile rows are two lines: name, then company, group and presence. The phone number stays in the detail dialog.
 
+## 메시지 확정 구성
+
+The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/messages/MessagingWorkspace.tsx`, option B with a widened writing column). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-messages-composer-contract.test.cjs` guards it.
+
+- The composer is one flat sheet: no card panel around it, and no boxed recipient summary, preview-of-selection, attachment, simulate option or review list. Hairlines divide.
+- Steps are a horizontal ink-underline row with numbered dots. The active step is ink, not orange. Once past step 1 the chosen recipients stay as one hairline row with a ghost "수신자 변경".
+- The writing column keeps the width. Step 2 is the writing column plus one narrow preview column (about 300px) on the right; the preview is a quiet bubble on the neutral surface. Do not put a step rail or any other column back beside the writing column.
+- "발송 검토로" (and "내용 작성" on step 1) is the only orange action in the composer, left-aligned with the hint beside it. 이전, 수신자 변경, 발송 기록 보기, 내용 수정 and the header 참가자 명단 are ghost. Variable chips are neutral pills, never orange text.
+- 발송 기록 / 템플릿 관리 tabs use the same ink underline. On the template tab the save button is the one orange action.
+- Review stays a separate step. Scheduling, mock send and the send confirmation live there and keep the existing request gates and receipts.
+
 ## Product component boundary
 
 Astryx supplies the production theme, actions, icon actions, links, labeled text fields, headings, sections and feedback. `app/ui/ProductButton`, `ProductLink`, `ProductInput` and `ProductNotice` keep the product-facing contract small. The production theme in `apps/web/src/themes/eventouch/` aliases `tokens.css`; generated theme files are rebuilt, not edited. The product explicitly uses light mode and Pretendard. The isolated design-review pilot is not a runtime dependency.
