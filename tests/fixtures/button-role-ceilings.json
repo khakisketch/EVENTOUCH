@@ -42,7 +42,7 @@
   "event/[slug]/register/RegisterForm.tsx": 5,
   "event/[slug]/ticket/TicketView.tsx": 2,
   "event/[slug]/ticket/recover/RecoverForm.tsx": 3,
-  "login/LoginForm.tsx": 4,
+  "login/LoginForm.tsx": 1,
   "recover/RecoverForm.tsx": 2,
   "screen/[slug]/DisplayBoard.tsx": 5,
   "staff/StaffAccountMenu.tsx": 3,

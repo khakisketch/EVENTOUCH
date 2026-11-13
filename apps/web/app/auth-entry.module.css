@@ -172,20 +172,17 @@
   display: inline-flex;
   min-height: 44px;
   align-items: center;
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-medium);
-  background: var(--paper);
-  color: var(--ink);
+  padding: var(--s2) var(--s1);
+  border: 0;
+  background: transparent;
+  color: var(--brand-text);
   font-weight: 700;
   text-decoration: none;
 }
 
 @media (hover: hover) {
   :global(.auth-form) .loginReset:global(.auth-reset-help) :global(a):hover {
-    border-color: var(--ink);
-    background: var(--surface-muted);
-    color: var(--ink);
+    background: var(--brand-soft);
   }
 }
 

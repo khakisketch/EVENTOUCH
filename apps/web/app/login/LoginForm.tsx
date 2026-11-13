@@ -261,7 +261,7 @@ export default function LoginForm() {
       <section className="auth-form" aria-label="초기 운영자 설정 안내">
         <p role="alert">운영자 계정이 아직 설정되지 않았습니다.</p>
         <p className="auth-help">서버 관리자에게 초기 운영자 계정 설정을 요청하세요. 설정 후 다시 확인하면 로그인할 수 있습니다.</p>
-        <ProductButton type="button" onClick={() => setSetupCheck((value) => value + 1)}>설정 상태 다시 확인</ProductButton>
+        <ProductButton variant="secondary" type="button" onClick={() => setSetupCheck((value) => value + 1)}>설정 상태 다시 확인</ProductButton>
       </section>
     );
   }
@@ -275,6 +275,7 @@ export default function LoginForm() {
         <p className="auth-session-stale" role="status">
           세션 확인이 끝나지 않았습니다. 로그인은 계속할 수 있습니다.{" "}
           <ProductButton
+            variant="ghost"
             type="button"
             className="auth-help-link"
             onClick={() => setSessionCheck((value) => value + 1)}
@@ -285,7 +286,8 @@ export default function LoginForm() {
       ) : null}
       <ValidatedForm className="auth-form" onSubmit={onSubmit}>
       <div className="form-field">
-        <ProductInput labelMode="astryx" label="이메일"
+        <label htmlFor="login-email">이메일</label>
+        <ProductInput
           id="login-email"
           type="email"
           autoComplete="username"
@@ -301,7 +303,7 @@ export default function LoginForm() {
           autoComplete="current-password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-        /><ProductButton type="button" aria-controls="login-password" aria-pressed={showPassword} onClick={() => setShowPassword((value) => !value)}>{showPassword ? "숨기기" : "보기"}</ProductButton></div>
+        /><ProductButton variant="ghost" type="button" aria-controls="login-password" aria-pressed={showPassword} onClick={() => setShowPassword((value) => !value)}>{showPassword ? "숨기기" : "보기"}</ProductButton></div>
       </div>
       {failure ? <p role="alert" ref={failureRef} tabIndex={-1}>{failure}</p> : null}
       <ProductButton variant="primary" type="submit" disabled={submitting}>
@@ -310,6 +312,7 @@ export default function LoginForm() {
       <p className="auth-help">
         비밀번호를 잊으셨나요?{" "}
         <ProductButton
+          variant="ghost"
           type="button"
           className="auth-help-link"
           aria-expanded={resetOpen}

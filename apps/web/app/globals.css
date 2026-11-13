@@ -2790,22 +2790,24 @@ a.pill:hover {
   font-size: var(--small);
 }
 
-/* Disclosure trigger: underlined text, but a full 44px target and a visible
-   focus ring. Details stay collapsed until the operator asks for them. */
+/* Disclosure trigger: a quiet ghost action, not a boxed button. It keeps a
+   full 44px target and a visible focus ring; details stay collapsed until
+   the operator asks for them. */
 .auth-form .auth-help-link {
   display: inline-flex;
   min-height: 44px;
   align-items: center;
-  padding: var(--s2) var(--s4);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-medium);
-  background: var(--paper);
-  color: var(--ink);
+  padding: var(--s2) var(--s2);
+  border: 0;
+  background: transparent;
+  color: var(--brand-text);
   font: inherit;
   font-weight: 700;
   text-decoration: none;
   cursor: pointer;
 }
+
+.auth-form .auth-help-link:hover { background: var(--brand-soft); }
 
 .auth-form .auth-reset-help {
   margin: 0;
@@ -3839,7 +3841,8 @@ a.pill:hover {
 }
 .auth-password { position: relative; }
 .auth-password input { width: 100%; padding-right: calc(var(--s8) + var(--s2)); }
-.auth-password button { position: absolute; top: 0; right: 0; min-width: 64px; min-height: 44px; padding: var(--s2); background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-medium); color: var(--ink); font-size: var(--small); }
+.auth-password button { position: absolute; top: 2px; right: 2px; bottom: 2px; min-width: 56px; min-height: 0; padding: 0 var(--s3); background: transparent; border: 0; border-radius: calc(var(--radius-medium) - 2px); color: var(--muted); font-size: var(--small); font-weight: 650; }
+.auth-password button:hover { background: var(--surface-muted); color: var(--ink); }
 .staff-assignment-row { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: var(--s4) 0; background: transparent; }
 @media (max-width: 560px) {
   .staff-assignment-summary { flex: 0 1 auto; }
