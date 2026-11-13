@@ -914,3 +914,97 @@
 .eventWorkPage .recentRow .recentName strong { font-weight: 750; }
 .eventWorkPage .recentRow .recentName span { flex: none; color: var(--muted); font-size: var(--small); }
 .eventWorkPage .recentRow time { flex: none; color: var(--muted); font-size: var(--small); font-variant-numeric: tabular-nums; }
+
+/* ── Staff field screen, stage 2: the result is a colored face ──────────────
+   The verdict fills its own face (green done, amber needs a look, red failed)
+   with a round mark, the name large, and one wide next action. The camera is
+   a dark viewfinder with corner marks. Normal flow throughout. */
+.eventWorkPage .resultStage {
+  justify-items: center;
+  gap: var(--s3);
+  padding: var(--s5) var(--s4);
+  border: 0;
+  border-radius: var(--radius-card);
+  text-align: center;
+}
+.eventWorkPage .resultStage[data-tone="ok"] { background: var(--success-soft); }
+.eventWorkPage .resultStage[data-tone="warn"] { background: var(--warning-soft); }
+.eventWorkPage .resultStage[data-tone="bad"] { background: var(--danger-soft); }
+.eventWorkPage .resultStage > .sectionTitle { font-size: var(--small); font-weight: 800; letter-spacing: 0.02em; }
+.eventWorkPage .resultStage[data-tone="ok"] > .sectionTitle { color: var(--success); }
+.eventWorkPage .resultStage[data-tone="warn"] > .sectionTitle { color: var(--warning); }
+.eventWorkPage .resultStage[data-tone="bad"] > .sectionTitle { color: var(--danger); }
+.eventWorkPage .resultStage .resultBlock { justify-items: center; width: 100%; }
+.eventWorkPage .resultStage .resultBlock::before {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  color: var(--paper);
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1;
+}
+.eventWorkPage .resultStage[data-tone="ok"] .resultBlock::before { content: "✓" / ""; background: var(--success); }
+.eventWorkPage .resultStage[data-tone="warn"] .resultBlock::before { content: "!" / ""; background: var(--warning); }
+.eventWorkPage .resultStage[data-tone="bad"] .resultBlock::before { content: "!" / ""; background: var(--danger); }
+.eventWorkPage .resultStage :global(.scan-result) {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+.eventWorkPage .resultStage[data-tone="warn"] :global(.scan-result), .eventWorkPage .resultStage[data-tone="bad"] :global(.scan-result) { font-size: 22px; letter-spacing: -0.02em; }
+.eventWorkPage .resultStage .nextStep { color: var(--muted); }
+.eventWorkPage .resultStage .nextActions { width: 100%; justify-items: stretch; }
+.eventWorkPage .resultStage .nextActions :global(.astryx-button) { min-height: 60px; border-radius: 16px; font-size: 18px; }
+.eventWorkPage .resultStage .nextActions :global(.button-quiet) { min-height: 48px; font-size: var(--body); }
+
+/* Viewfinder (staff only; the attendee camera keeps the shared look). */
+.eventWorkPage :global(.camera-panel) {
+  position: relative;
+  gap: var(--s3);
+  padding: 0 0 var(--s4);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--side);
+  color: var(--paper);
+}
+.eventWorkPage :global(.camera-panel) > h2 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.eventWorkPage :global(.camera-panel) video { aspect-ratio: 1 / 1; border-radius: 0; background: var(--side); }
+.eventWorkPage :global(.camera-panel):not(:has(video)) { padding-top: var(--s4); }
+.eventWorkPage :global(.camera-panel):has(video)::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  aspect-ratio: 1 / 1;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--paper), var(--paper)) left 20% top 20% / 40px 4px no-repeat,
+    linear-gradient(var(--paper), var(--paper)) left 20% top 20% / 4px 40px no-repeat,
+    linear-gradient(var(--paper), var(--paper)) right 20% top 20% / 40px 4px no-repeat,
+    linear-gradient(var(--paper), var(--paper)) right 20% top 20% / 4px 40px no-repeat,
+    linear-gradient(var(--paper), var(--paper)) left 20% bottom 20% / 40px 4px no-repeat,
+    linear-gradient(var(--paper), var(--paper)) left 20% bottom 20% / 4px 40px no-repeat,
+    linear-gradient(var(--paper), var(--paper)) right 20% bottom 20% / 40px 4px no-repeat,
+    linear-gradient(var(--paper), var(--paper)) right 20% bottom 20% / 4px 40px no-repeat;
+}
+.eventWorkPage :global(.camera-panel) > p, .eventWorkPage :global(.camera-panel) > :global(.astryx-button) { margin-inline: var(--s4); width: auto; }
+.eventWorkPage :global(.camera-panel) > p { margin-block: 0; color: var(--line-strong); }
+.eventWorkPage :global(.camera-panel) > button[data-variant="secondary"] { border-color: transparent; background: var(--paper); color: var(--ink); }
+.eventWorkPage .resultStage .nextActions :global(.button-quiet) { background: transparent; }

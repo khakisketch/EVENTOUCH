@@ -25,11 +25,11 @@ test('scan-success-groups-summary-and-next-action-before-auxiliary-acts', () => 
   assert.match(work, /다음 참가자를 스캔하세요/);
   assert.match(work, /className="button button-primary" disabled=\{writeLocked\} onClick=\{prepareNextParticipant\}>\s*다음 참가자/);
   assert.match(work, /const writeLocked = correctionLocked \|\| orgChanged/);
-  // Auxiliary nametag stays available but secondary and after the next action.
+  // Auxiliary nametag stays available but quiet (ghost) and after the next action.
   const nextIndex = work.indexOf('다음 참가자');
   const nametagIndex = work.indexOf('네임택 인쇄');
   assert.ok(nextIndex !== -1 && nametagIndex !== -1 && nextIndex < nametagIndex);
-  assert.match(work, /button-secondary \$\{prizeStyles\.auxAction\}/);
+  assert.match(work, /button-quiet \$\{prizeStyles\.auxAction\}/);
   // No existing copy is dropped: identity, verdict, booth, and reentry stay.
   assert.match(work, /result\.name\}/);
   assert.match(work, /부스 인증/);

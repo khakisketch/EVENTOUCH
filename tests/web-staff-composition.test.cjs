@@ -33,3 +33,21 @@ test("recent rows are plain: name, detail and time, no per-row button", () => {
   assert.doesNotMatch(work, /기록 확인 · 다음 참가자 입력 준비/u);
   assert.match(work, /className=\{prizeStyles\.recentName\}/u);
 });
+
+test("stage 2: the verdict is a colored face with one wide next action", () => {
+  assert.match(work, /\$\{prizeStyles\.workSection\} \$\{prizeStyles\.resultStage\}`\} data-tone=\{correctionLocked \|\| result\.correctionChanged \|\| historicalScan \? "warn" : "ok"\}/u, "a done scan is green, a corrected or historical one amber");
+  assert.match(work, /data-tone=\{result\.uncertain \|\| boothLimitReached \|\| result\.attendanceReviewRequired[^}]*\? "warn" : "bad"\}/u, "needs-a-look is amber, a plain failure red");
+  assert.match(css, /\.resultStage\[data-tone="ok"\]\s*\{[^}]*var\(--success-soft\)/su);
+  assert.match(css, /\.resultStage\[data-tone="warn"\]\s*\{[^}]*var\(--warning-soft\)/su);
+  assert.match(css, /\.resultStage\[data-tone="bad"\]\s*\{[^}]*var\(--danger-soft\)/su);
+  assert.match(css, /\.resultStage :global\(\.scan-result\)\s*\{[^}]*font-size:\s*30px/su, "the name reads large");
+  assert.match(css, /\.resultStage \.nextActions :global\(\.astryx-button\)\s*\{[^}]*min-height:\s*60px/su, "the next action is wide and tall");
+  assert.match(work, /button button-quiet \$\{prizeStyles\.auxAction\}/u, "the nametag is a quiet action, not a second button");
+});
+
+test("stage 2: the staff viewfinder is scoped and never touches the attendee camera", () => {
+  assert.match(css, /\.eventWorkPage :global\(\.camera-panel\):has\(video\)::before/u, "corner marks only over a live video");
+  assert.match(css, /\.eventWorkPage :global\(\.camera-panel\) > button\[data-variant="secondary"\]/u, "buttons stay readable on the dark panel");
+  assert.doesNotMatch(css, /(^|\n)\.camera-panel\b/u, "no unscoped camera rule in the staff module");
+  assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b|rgb\(/u, "tokens only");
+});

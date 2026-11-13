@@ -2026,7 +2026,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         </p>
       ) : null}
       {result.kind === "ok" ? (
-        <section className={prizeStyles.workSection} aria-label="스캔 결과">
+        <section className={`${prizeStyles.workSection} ${prizeStyles.resultStage}`} data-tone={correctionLocked || result.correctionChanged || historicalScan ? "warn" : "ok"} aria-label="스캔 결과">
           <h2 className={prizeStyles.sectionTitle}>{historicalScan ? "이전 출입 기록" : "방금 처리한 참가자"}</h2>
         <section className={prizeStyles.resultBlock} aria-label="스캔 결과 상세">
           <p className={correctionLocked || result.correctionChanged || historicalScan ? "scan-result notice" : "scan-result scan-success"} role="status">
@@ -2057,7 +2057,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             {result.action === "IN" && !result.correctionChanged && !historicalScan ? (
               <ProductButton
                 type="button"
-                className={`button button-secondary ${prizeStyles.auxAction}`}
+                className={`button button-quiet ${prizeStyles.auxAction}`}
                 disabled={writeLocked}
                 aria-expanded={nametagOpen}
                 onClick={() => setNametagResult(result)}
@@ -2085,7 +2085,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         </section>
       ) : null}
       {result.kind === "failed" ? (
-        <section ref={scanFailureRef} className={prizeStyles.workSection} aria-label={result.uncertain ? "스캔 결과 미확인과 복구" : "스캔 실패와 복구"}>
+        <section ref={scanFailureRef} className={`${prizeStyles.workSection} ${prizeStyles.resultStage}`} data-tone={result.uncertain || boothLimitReached || result.attendanceReviewRequired || result.eligibilityReviewRequired || result.manualRefreshRequired || result.deskRefreshRequired || result.sourceRefreshRequired ? "warn" : "bad"} aria-label={result.uncertain ? "스캔 결과 미확인과 복구" : "스캔 실패와 복구"}>
           <h2 className={prizeStyles.sectionTitle}>{boothLimitReached ? "인증 한도 도달" : result.uncertain ? "처리 결과를 확인하지 못했습니다" : result.attendanceReviewRequired ? "출입 기록 확인이 필요합니다" : result.eligibilityReviewRequired ? "참가 상태 확인이 필요합니다" : "처리에 실패했습니다"}</h2>
         <section className={prizeStyles.resultBlock} aria-label={result.uncertain ? "스캔 결과 미확인" : "스캔 실패"}>
           <p className={boothLimitReached ? "scan-result notice" : "scan-result scan-failure"} role={boothLimitReached ? "status" : "alert"}>{result.message}</p>
