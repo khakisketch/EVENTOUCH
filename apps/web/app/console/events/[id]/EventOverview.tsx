@@ -15,7 +15,7 @@ import ConsoleRefreshButton from "../../console-ui/ConsoleRefreshButton";
 import ConsoleTaskQueue, { type ConsoleTask } from "../../console-ui/ConsoleTaskQueue";
 import { participationSnapshot, type ParticipationSnapshot } from "../../../../lib/participation-work";
 import ConsoleStatePanel from "../../console-ui/ConsoleStatePanel";
-import { ArrowRightIcon, CopyIcon, CheckIcon, RefreshIcon } from "../../console-ui/ConsoleIcons";
+import { ArrowRightIcon, CopyIcon, CheckIcon, PlusIcon, RefreshIcon } from "../../console-ui/ConsoleIcons";
 import { eventCloseHref, readCloseSnapshot } from "../../console-event-close";
 import styles from "./event-overview.module.css";
 import { consoleFetch, subscribeConsoleFreshness } from "../../../../lib/console-api";
@@ -1377,7 +1377,13 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             headingId="event-runbook-heading"
             title={runbookIsToday ? "오늘의 일정" : "행사 일정"}
             description={runbook.length ? <span className={styles.runbookMeta}>{runbookIsToday ? `${UPDATED_TIME_FORMAT.format(now)} 기준` : formatEventDate(runbookDate)}</span> : undefined}
-            action={<Link variant="ghost" href={`${base}/content`}>{runbook.length ? "프로그램 일정" : "일정 추가"}</Link>}
+            action={runbook.length ? (
+              <Link variant="ghost" href={`${base}/content`}>프로그램 일정</Link>
+            ) : (
+              <Link variant="ghost" className={styles.addIconLink} href={`${base}/content`} aria-label="일정 추가" title="일정 추가">
+                <PlusIcon />
+              </Link>
+            )}
             className={[styles.regionRunbook, runbook.length ? undefined : styles.runbookIdle].filter(Boolean).join(" ")}
           >
             {runbook.length ? (
@@ -1518,11 +1524,11 @@ export default function EventOverview({ eventId }: { eventId: string }) {
           <ul className={styles.activityList}>
             {overview.recent.map((check) => (
               <li key={check.id}>
+                <span className={`${styles.checkAction} ${check.action === "IN" ? styles.checkIn : check.action === "OUT" ? styles.checkOut : styles.checkOther}`}>
+                  {check.action === "IN" ? "입장" : check.action === "OUT" ? "퇴장" : "기록"}
+                </span>
                 <div className={styles.checkDetails}>
                   <strong>{check.name || "이름 없음"}</strong>
-                  <span className={`${styles.checkAction} ${check.action === "IN" ? styles.checkIn : check.action === "OUT" ? styles.checkOut : styles.checkOther}`}>
-                    {check.action === "IN" ? "입장" : check.action === "OUT" ? "퇴장" : "기록"}
-                  </span>
                   {check.deskName ? <span className={styles.deskName}>{check.deskName}</span> : null}
                 </div>
                 <time className={styles.timestamp} dateTime={check.at || undefined}>

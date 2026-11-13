@@ -505,7 +505,7 @@
 
 .activityList li {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   min-width: 0;
   align-items: center;
   gap: var(--s3);
@@ -1492,4 +1492,49 @@
     grid-template-areas: "alert" "status" "metrics" "queue" "runbook" "readiness" "secondary" "recent" "analysis";
   }
   .liveOverview .regionMetrics { margin-bottom: var(--s4); box-shadow: var(--shadow-raised); }
+}
+
+/* Live: queue, schedule and recent activity share one supporting surface so the
+   column reads as one set; the raised entry card stays the only white focal unit. */
+.liveOverview .regionQueue,
+.liveOverview .regionRunbook,
+.liveOverview .regionRecent {
+  padding: var(--s5);
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--surface-muted);
+}
+.liveOverview .regionRunbook > :first-child,
+.liveOverview .regionRecent > :first-child { min-height: 44px; }
+.liveOverview .runbookEmpty { padding-block: var(--s2); }
+.liveOverview .regionRecent { margin-top: var(--s2); }
+.liveOverview .activityList { border-top: 1px solid var(--line); }
+.liveOverview .activityList li { padding-block: var(--s3); }
+.liveOverview .checkAction { min-width: 56px; justify-content: center; }
+.liveOverview .recentCount { padding: 2px var(--s3); border-radius: 999px; background: var(--paper); font-weight: 600; }
+
+/* Add-schedule is an icon action: ink glyph in a quiet round target, 44px. */
+.addIconLink {
+  display: inline-grid;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--ink);
+}
+.addIconLink svg { width: 18px; height: 18px; }
+.addIconLink:hover { background: var(--paper); }
+
+@media (min-width: 1101px) {
+  /* Same-height supporting panels, one rhythm apart. */
+  .liveOverview .regionRunbook { margin-top: var(--s4); align-self: start; }
+}
+@media (max-width: 1100px) {
+  .liveOverview .regionQueue,
+  .liveOverview .regionRunbook,
+  .liveOverview .regionRecent { padding: var(--s4); }
+  .liveOverview .regionRunbook,
+  .liveOverview .regionRecent { margin-top: var(--s4); }
 }
