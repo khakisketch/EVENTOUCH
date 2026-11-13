@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/operations-overview-proposal.html"
+        ],
+        "createdAt": "2026-11-13T12:10:53.212Z",
+        "reason": "agent triage 2026-11-13: flagged .notice(12px/5px) and .chip(12px/3px+28px min-height) are intentional compact badge patterns matching product chip styling; 8px+ would bloat small labels; file is a review-only static proposal mock, not shipped UI"
+      }
+    ]
+  }
+}
