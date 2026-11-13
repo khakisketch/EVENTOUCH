@@ -1,5 +1,7 @@
 "use client";
 
+import ProductButton from "./ProductButton";
+
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import styles from "./name-tag-print.module.css";
@@ -183,9 +185,9 @@ export default function NameTagPrint({ identity, onClose, resolveIdentity }: {
       {!fits ? <p className={styles.warning} role="status">문구가 라벨에 모두 들어가지 않습니다. 큰 라벨이나 A4를 선택하세요.</p> : null}
       {error ? <p className={styles.warning} role="alert">{error}</p> : null}
       <div className={styles.actions}>
-        {resolveIdentity && !verified && !checking ? <button type="button" className="button button-secondary" onClick={() => void verify(false)}>최신 정보 다시 확인</button> : null}
-        <button type="button" className="button button-primary" disabled={!verified || !fits || printing || checking} onClick={print}>인쇄하기</button>
-        {onClose ? <button type="button" className="button button-secondary" onClick={onClose}>닫기</button> : null}
+        {resolveIdentity && !verified && !checking ? <ProductButton type="button" className="button button-secondary" onClick={() => void verify(false)}>최신 정보 다시 확인</ProductButton> : null}
+        <ProductButton type="button" className="button button-primary" disabled={!verified || !fits || printing || checking} onClick={print}>인쇄하기</ProductButton>
+        {onClose ? <ProductButton type="button" className="button button-secondary" onClick={onClose}>닫기</ProductButton> : null}
       </div>
       {printing ? createPortal(
         <div className={styles.printRoot} data-paper={paper} data-nametag-output="">

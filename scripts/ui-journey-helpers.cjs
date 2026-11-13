@@ -2,7 +2,7 @@
 
 // User-visible transitions for the persistent task and program panels.
 async function openProgram(page, title) {
-  const section = page.locator('section[aria-labelledby^="engage-"]').filter({ has: page.getByRole('heading', { name: title, exact: true }) });
+  const section = page.locator(':is(section,[role=region])[aria-labelledby^="engage-"]').filter({ has: page.getByRole('heading', { name: title, exact: true }) });
   await section.waitFor();
   const details = section.locator(':scope > details');
   if (!await details.evaluate(el => el.open)) await details.locator(':scope > summary').click();
@@ -30,12 +30,17 @@ async function chooseRadio(root, id, value) {
 // recipients or bypass validation; a blocked transition fails the audit.
 async function messageStep(page, step) {
   const nav = page.getByRole('navigation', { name: '메시지 작성 단계', exact: true });
-  const current = Number(await nav.locator('[aria-current="step"] span').innerText());
-  if (step < current) await nav.getByRole('button', { name: new RegExp(`^${step} `) }).click();
+  const current = Number.parseInt(await nav.locator('[aria-current="step"]').innerText(), 10);
+  if (step < current) await nav.getByRole('button', { name: new RegExp(`^${step}\\s*`) }).click();
   else {
     if (current === 1 && step > 1) await page.getByRole('button', { name: '내용 작성', exact: true }).click();
     if (current < 3 && step === 3) await page.getByRole('button', { name: '발송 검토로', exact: true }).click();
   }
-  await nav.getByRole('button', { name: new RegExp(`^${step} `) }).and(nav.locator('[aria-current="step"]')).waitFor();
+  await nav.getByRole('button', { name: new RegExp(`^${step}\\s*`) }).and(nav.locator('[aria-current="step"]')).waitFor();
 }
-module.exports = { openProgram, selectTask, openCreateSettings, chooseRadio, messageStep };
+// Dismissal and exact trigger focus are separate asynchronous transitions.
+async function waitForDialogExitFocus(page, trigger, timeout = 5000) {
+  await page.getByRole('dialog').waitFor({ state: 'hidden', timeout });
+  await page.waitForFunction(element => element === document.activeElement, await trigger.elementHandle(), { polling: 'raf', timeout });
+}
+module.exports = { openProgram, selectTask, openCreateSettings, chooseRadio, messageStep, waitForDialogExitFocus };

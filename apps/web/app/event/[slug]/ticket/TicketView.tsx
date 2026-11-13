@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import ProductLink from "../../../ui/ProductLink";
+import ProductButton from "../../../ui/ProductButton";
 import QRCode from "react-qr-code";
 import styles from "./ticket.module.css";
 import { isRecoveryBlocked, useVerificationMode } from "../../../../lib/use-verification-mode";
@@ -462,14 +463,14 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
         {!storageAvailable ? <p className={styles.ticketMessageActions}><a className={styles.buttonPrimary} href={`/event/${encodeURIComponent(slug)}/ticket?session=1`}>이 브라우저에서 인증된 티켓 확인</a></p> : null}
         {!recoveryBlocked ? (
           <p className={styles.ticketMessageActions}>
-            <Link className={storageAvailable ? styles.buttonPrimary : styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>연락처 인증으로 티켓 다시 찾기</Link>
+            <ProductLink className={storageAvailable ? styles.buttonPrimary : styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>연락처 인증으로 티켓 다시 찾기</ProductLink>
           </p>
         ) : null}
         {recoveryBlocked ? <p className={styles.ticketMessageActions}>
-          <Link className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}`}>행사 안내 확인</Link>
+          <ProductLink className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}`}>행사 안내 확인</ProductLink>
         </p> : null}
         <p className={styles.ticketMessageActions}>
-          <Link className={recoveryBlocked ? styles.buttonPrimary : styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/register`}>처음 신청하기</Link>
+          <ProductLink className={recoveryBlocked ? styles.buttonPrimary : styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/register`}>처음 신청하기</ProductLink>
         </p>
       </section>
     );
@@ -490,12 +491,12 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
         ) : null}
         {showRecover ? (
           <p className={styles.ticketMessageActions}>
-            <Link className={styles.buttonPrimary} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>연락처 인증으로 티켓 다시 찾기</Link>
+            <ProductLink className={styles.buttonPrimary} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>연락처 인증으로 티켓 다시 찾기</ProductLink>
           </p>
         ) : null}
         {!state.canRecover ? (
           <p className={styles.ticketMessageActions}>
-            <button
+            <ProductButton
               type="button"
               className={styles.buttonPrimary}
               onClick={() => {
@@ -504,24 +505,24 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
               }}
             >
               다시 시도
-            </button>
+            </ProductButton>
           </p>
         ) : null}
         <p className={styles.ticketMessageActions}>
-          <Link className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</Link>
+          <ProductLink className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</ProductLink>
         </p>
       </section>
     );
   }
   const recheckButton = (
-    <button
+    <ProductButton
       type="button"
       className={mode === "ticket" && !usable ? styles.buttonPrimary : styles.buttonSecondary}
       disabled={rechecking}
       onClick={() => void recheckTicket()}
     >
       {rechecking ? "확인 중입니다" : "상태 다시 확인"}
-    </button>
+    </ProductButton>
   );
   const recheckFeedback = (
     <>
@@ -593,7 +594,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
           <div className={styles.ticketActions}>
             {/* Secondary on purpose: the QR above is what the attendee
                 shows at the desk, not this link. */}
-            <Link className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/engage`}>참여 콘텐츠 보기</Link>
+            <ProductLink className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/engage`}>참여 콘텐츠 보기</ProductLink>
             {recheckButton}
           </div>
         </>
@@ -604,7 +605,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
           {recheckFeedback}
           {unusableCopy(state).showRegister ? (
             <p className={styles.ticketMessageActions}>
-              <Link className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/register`}>다시 신청하기</Link>
+              <ProductLink className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/register`}>다시 신청하기</ProductLink>
             </p>
           ) : null}
         </>
@@ -619,7 +620,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
       ) : (
         <p className={styles.ticketRecovery}>
           이 탭에서 티켓을 확인할 수 있습니다. 다른 기기에서 열 때는{" "}
-          <Link className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>연락처 인증으로 다시 연결</Link>
+          <ProductLink className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>연락처 인증으로 다시 연결</ProductLink>
           하세요.
         </p>
       ) : null}

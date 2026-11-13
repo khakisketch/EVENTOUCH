@@ -1,11 +1,12 @@
 "use client";
+import ProductButton from "../../ui/ProductButton";
 
 import ValidatedForm from "../../ui/ValidatedForm";
 
 
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import Link from "next/link";
+import ProductLink from "../../ui/ProductLink";
 import { buildStaffAssignHandoffHref, sortTeamEventsForAssign, teamEventOptionLabel } from "../console-handoff";
 import { loginHrefForLocation } from "../../auth-redirect";
 import ConsoleConfirm from "../console-ui/ConsoleConfirm";
@@ -387,14 +388,14 @@ export default function TeamWorkspace() {
           <ConsoleToolbar
             filters={<p className={teamStyles.toolbarLabel}>팀 관리</p>}
             actions={
-              <button
+              <ProductButton
                 type="button"
                 className="button button-primary"
                 disabled={hasUnconfirmedInvite || refreshState !== "idle"}
                 onClick={requestInviteOpen}
               >
                 구성원 초대
-              </button>
+              </ProductButton>
             }
           />
         ) : undefined
@@ -406,10 +407,10 @@ export default function TeamWorkspace() {
           {refreshState === "failed" ? (
             <ConsoleFeedback kind="warning">
               팀 정보를 다시 불러오지 못했습니다. 표시된 목록은 이전 정보이며, 최신 정보를 확인할 때까지 팀 관리를 잠급니다.{" "}
-              <button type="button" className="button button-secondary" onClick={() => {
+              <ProductButton type="button" className="button button-secondary" onClick={() => {
                 window.dispatchEvent(new CustomEvent("eventouch:shell-reload"));
                 reloadDirectory();
-              }}>팀 정보 다시 불러오기</button>
+              }}>팀 정보 다시 불러오기</ProductButton>
             </ConsoleFeedback>
           ) : null}
           {hasUnconfirmedInvite && !inviteOpen ? <ConsoleFeedback kind="warning">이전 초대 발급 결과를 위의 처리 결과 확인에서 확인한 뒤 새 초대를 발급할 수 있습니다.</ConsoleFeedback> : null}
@@ -432,7 +433,7 @@ export default function TeamWorkspace() {
           <p role="status">초대 링크는 지금 한 번만 표시됩니다. 복사해서 전달하세요.</p>
           <p><code>{issuedInvite.link}</code></p>
           <ConsoleFormActions>
-            <button
+            <ProductButton
               type="button"
               className="button button-secondary"
               onClick={async () => {
@@ -442,14 +443,14 @@ export default function TeamWorkspace() {
                 } catch {
                   setNotice("복사에 실패했습니다. 링크를 직접 선택해 복사하세요.");
                 }
-              }}
+              }} icon={<CopyIcon />}
             >
-              <CopyIcon />
+
               링크 복사
-            </button>
-            <button type="button" className="button button-secondary" onClick={requestCloseIssued}>
+            </ProductButton>
+            <ProductButton type="button" className="button button-secondary" onClick={requestCloseIssued}>
               닫기
-            </button>
+            </ProductButton>
           </ConsoleFormActions>
           {inviteLossPending ? (
             <ConsoleConfirm
@@ -530,7 +531,7 @@ export default function TeamWorkspace() {
                 {state.canManageTeam ? (
                   <div className={`${consoleUiStyles.recordActions} ${teamStyles.memberActions}`}>
                     <div className={teamStyles.actionPrimary} role="group" aria-label="조직 역할과 행사 배정">
-                    <button
+                    <ProductButton
                       type="button"
                       id={`org-role-toggle-${account.id}`}
                       className="button button-secondary"
@@ -547,9 +548,9 @@ export default function TeamWorkspace() {
                       }}
                     >
                       역할 변경
-                    </button>
+                    </ProductButton>
                     {account.role === "STAFF" && account.active ? (
-                      <button
+                      <ProductButton
                         type="button"
                         id={`staff-assign-toggle-${account.id}`}                        className="button button-quiet"
                         aria-expanded={assignOpenId === account.id}
@@ -560,7 +561,7 @@ export default function TeamWorkspace() {
                         }}
                       >
                         행사 배정
-                      </button>
+                      </ProductButton>
                     ) : null}
                     </div>
                     <div className={teamStyles.actionDanger} role="group" aria-label="비밀번호 재설정과 소속 변경(주의 필요)">
@@ -569,14 +570,14 @@ export default function TeamWorkspace() {
                         instead of repeating the same sentence. Disable /
                         reactivate below are unaffected. */}
                     {account.sharedAccount ? null : (
-                      <button
+                      <ProductButton
                         type="button"
                         className="button button-danger"
                         disabled={hasUnconfirmedReset}
                         onClick={() => { setNotice(null); setResetTarget(account); }}
                       >
                         비밀번호 재설정
-                      </button>
+                      </ProductButton>
                     )}
                     {account.id !== state.userId && account.active ? (
                       <OrgMembershipDisableButton
@@ -755,20 +756,20 @@ function StaffAssignmentPanel({
       )}
       {chosen ? (
         <p className={teamStyles.assignLead}>
-          <Link
+          <ProductLink
             className={teamStyles.assignLink}
             href={buildStaffAssignHandoffHref(chosen.id, accountId)}
           >
             {chosen.name} 현장 운영 · 스태프 배정으로 이동
-          </Link>
+          </ProductLink>
         </p>
       ) : events.length ? (
         <p className={teamStyles.assignLead} role="status">배정할 행사를 선택하면 이동 링크가 나타납니다.</p>
       ) : null}
       <p className={teamStyles.assignLead}>
-        <button type="button" className="button button-secondary" onClick={onClose}>
+        <ProductButton type="button" className="button button-secondary" onClick={onClose}>
           닫기
-        </button>
+        </ProductButton>
       </p>
     </div>
   );
@@ -1036,36 +1037,36 @@ function EventPermissionEditor({
                         ) : null}
                         {failure && editing ? <ConsoleFeedback kind="error">{failure}</ConsoleFeedback> : null}
                         <ConsoleFormActions>
-                          <button
+                          <ProductButton
                             type="button"
                             className="button button-primary"
                             disabled={busy}
                             onClick={() => void save(account)}
                           >
                             {busy ? "저장 중입니다" : retryable ? "같은 요청으로 다시 시도" : "권한 저장"}
-                          </button>
-                          <button
+                          </ProductButton>
+                          <ProductButton
                             type="button"
                             className="button button-secondary"
                             disabled={frozen}
                             onClick={cancelEdit}
                           >
                             취소
-                          </button>
+                          </ProductButton>
                         </ConsoleFormActions>
                       </div>
                     ) : null}
                   </div>
                   <div className={`${consoleUiStyles.recordActions} ${teamStyles.memberActions}`}>
                     {!editing ? (
-                      <button
+                      <ProductButton
                         type="button"
                         className="button button-secondary"
                         disabled={frozen}
                         onClick={() => openEditor(account.id)}
                       >
                         권한 편집
-                      </button>
+                      </ProductButton>
                     ) : null}
                   </div>
                 </li>
@@ -1220,22 +1221,22 @@ function OrgMembershipDisableButton({
   // the reason instead of a working button.
   if (!orgId) {
     return (
-      <button
+      <ProductButton
         type="button"
         className="button button-secondary"
         disabled
         title="현재 조직 정보를 확인할 수 없어 소속을 바꿀 수 없습니다."
       >
         이 운영사 소속 사용 중지
-      </button>
+      </ProductButton>
     );
   }
   return (
     <>
       {!confirming ? (
-        <button type="button" className="button button-danger" disabled={frozen} onClick={open}>
+        <ProductButton type="button" className="button button-danger" disabled={frozen} onClick={open}>
           {retryable ? "같은 요청으로 다시 시도" : "이 운영사 소속 사용 중지"}
-        </button>
+        </ProductButton>
       ) : null}
       {confirming ? (
         <ConsoleConfirm
@@ -1389,22 +1390,22 @@ function OrgMembershipReactivateButton({
   // the reason instead of a working button.
   if (!orgId) {
     return (
-      <button
+      <ProductButton
         type="button"
         className="button button-secondary"
         disabled
         title="현재 조직 정보를 확인할 수 없어 소속을 바꿀 수 없습니다."
       >
         이 운영사 소속 다시 활성화
-      </button>
+      </ProductButton>
     );
   }
   return (
     <>
       {!confirming ? (
-        <button type="button" className="button button-danger" disabled={frozen} onClick={open}>
+        <ProductButton type="button" className="button button-danger" disabled={frozen} onClick={open}>
           {retryable ? "같은 요청으로 다시 시도" : "이 운영사 소속 다시 활성화"}
-        </button>
+        </ProductButton>
       ) : null}
       {confirming ? (
         <ConsoleConfirm
@@ -1712,22 +1713,22 @@ const OrgRoleEditorPanel = forwardRef<RoleEditorHandle, {
       ) : null}
       {failure && !confirming ? <ConsoleFeedback kind="error">{failure}</ConsoleFeedback> : null}
       <ConsoleFormActions>
-        <button
+        <ProductButton
           type="button"
           className="button button-secondary"
           disabled={frozen}
           onClick={cancel}
         >
           취소
-        </button>
-        <button
+        </ProductButton>
+        <ProductButton
           type="button"
           className="button button-primary"
           disabled={busy || (!roleChanged && !retryable)}
           onClick={requestConfirm}
         >
           {retryable ? "같은 요청으로 다시 시도" : "변경 확인"}
-        </button>
+        </ProductButton>
       </ConsoleFormActions>
       {confirming ? (
         <ConsoleConfirm
@@ -1934,18 +1935,18 @@ function ResetDialog({
       footer={
         <ConsoleFormActions>
           {sharedEffectBlocked ? (
-            <button type="button" className="button button-secondary" onClick={onClose}>
+            <ProductButton type="button" className="button button-secondary" onClick={onClose}>
               닫기
-            </button>
+            </ProductButton>
           ) : (
             <>
-              <button type="button" className="button button-secondary" onClick={() => { if (canCloseResetDialog()) onClose(); }} disabled={submitting || checkingReset}>
+              <ProductButton type="button" className="button button-secondary" onClick={() => { if (canCloseResetDialog()) onClose(); }} disabled={submitting || checkingReset}>
                 취소
-              </button>
-              {resetUncertain ? <button type="button" className="button button-secondary" disabled={submitting || checkingReset} onClick={() => void checkResetResult()}>{checkingReset ? "확인 중…" : "서버 처리 확인"}</button> : null}
-              <button type="submit" form="reset-form" className="button button-primary" disabled={submitting || checkingReset || otherResetReceipt}>
+              </ProductButton>
+              {resetUncertain ? <ProductButton type="button" className="button button-secondary" disabled={submitting || checkingReset} onClick={() => void checkResetResult()}>{checkingReset ? "확인 중…" : "서버 처리 확인"}</ProductButton> : null}
+              <ProductButton type="submit" form="reset-form" className="button button-primary" disabled={submitting || checkingReset || otherResetReceipt}>
                 {submitting ? "재설정 중입니다" : resetUncertain ? "같은 요청 다시 시도" : "재설정"}
-              </button>
+              </ProductButton>
             </>
           )}
         </ConsoleFormActions>
@@ -2168,13 +2169,13 @@ function InviteDialog({
         <ConsoleFormActions>
           {agencyStaged ? null : (
             <>
-              <button type="button" className="button button-secondary" onClick={() => { if (canCloseInviteDialog()) onClose(); }} disabled={submitting || checkingInvite}>
+              <ProductButton type="button" className="button button-secondary" onClick={() => { if (canCloseInviteDialog()) onClose(); }} disabled={submitting || checkingInvite}>
                 취소
-              </button>
-              {inviteUncertain ? <button type="button" className="button button-secondary" disabled={submitting || checkingInvite} onClick={() => void checkInviteResult()}>{checkingInvite ? "확인 중…" : "서버 처리 확인"}</button> : null}
-              <button type="submit" form="invite-form" className="button button-primary" disabled={submitting || checkingInvite || otherInviteReceipt}>
+              </ProductButton>
+              {inviteUncertain ? <ProductButton type="button" className="button button-secondary" disabled={submitting || checkingInvite} onClick={() => void checkInviteResult()}>{checkingInvite ? "확인 중…" : "서버 처리 확인"}</ProductButton> : null}
+              <ProductButton type="submit" form="invite-form" className="button button-primary" disabled={submitting || checkingInvite || otherInviteReceipt}>
                 {submitting ? "초대 중입니다" : inviteUncertain ? "같은 요청 다시 시도" : "초대 링크 발급"}
-              </button>
+              </ProductButton>
             </>
           )}
         </ConsoleFormActions>
@@ -2371,14 +2372,14 @@ function RevokeInviteButton({
 
   return (
     <span>
-      <button
+      <ProductButton
         type="button"
         className="button button-danger"
         disabled={revoking}
         onClick={() => void run()}
       >
         {revoking ? "철회 중입니다" : retryable ? "같은 요청으로 다시 시도" : "초대 철회"}
-      </button>
+      </ProductButton>
       {failure ? <small role="alert" className={teamStyles.inlineAlert}> {failure}</small> : null}
     </span>
   );

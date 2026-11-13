@@ -1,12 +1,14 @@
 "use client";
 
+import ProductButton from "../../../../ui/ProductButton";
+
 import ConsoleChoiceGroup from "../../../console-ui/ConsoleChoiceGroup";
 import ValidatedForm from "../../../../ui/ValidatedForm";
 
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import Link from "next/link";
+import ProductLink from "../../../../ui/ProductLink";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
 import { readAssignAccountParam } from "../../../console-handoff";
@@ -1212,9 +1214,9 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       {commandBlocked(pendingOperation.command) ? <p>현재 권한으로 같은 요청을 다시 보낼 수 없습니다. 서버 처리 확인이나 담당자 확인을 이용하세요.</p> : null}
       {operationRecoveryError ? <p role="alert">{operationRecoveryError}</p> : null}
       <div className={styles.recoveryActions}>
-        <button type="button" className="button button-secondary" disabled={busy || checkingOperation || abandonOperationConfirm} onClick={() => void checkOperation()}>{checkingOperation ? "확인 중…" : "서버 처리 확인"}</button>
-        <button type="button" className="button button-secondary" disabled={busy || checkingOperation || abandonOperationConfirm || commandBlocked(pendingOperation.command)} onClick={() => void retryOperation()}>같은 요청 다시 시도</button>
-        <button type="button" className="button button-secondary" disabled={busy || checkingOperation || abandonOperationConfirm} onClick={() => setAbandonOperationConfirm(true)}>확인 전 그만두기</button>
+        <ProductButton type="button" className="button button-secondary" disabled={busy || checkingOperation || abandonOperationConfirm} onClick={() => void checkOperation()}>{checkingOperation ? "확인 중…" : "서버 처리 확인"}</ProductButton>
+        <ProductButton type="button" className="button button-secondary" disabled={busy || checkingOperation || abandonOperationConfirm || commandBlocked(pendingOperation.command)} onClick={() => void retryOperation()}>같은 요청 다시 시도</ProductButton>
+        <ProductButton type="button" className="button button-secondary" disabled={busy || checkingOperation || abandonOperationConfirm} onClick={() => setAbandonOperationConfirm(true)}>확인 전 그만두기</ProductButton>
       </div>
       {abandonOperationConfirm ? <ConsoleConfirm
         summary="이미 반영된 처리는 취소되지 않습니다. 확인을 그만두고 최신 현장 운영 내용을 확인할까요?"
@@ -1428,7 +1430,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       eventId={eventId}
       eventName={state.eventName || undefined}
       meta={state.eventMeta}
-      headerActions={state.participationEnabled ? <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/programs`}>참여 콘텐츠 관리</Link> : undefined}
+      headerActions={state.participationEnabled ? <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/programs`}>참여 콘텐츠 관리</ProductLink> : undefined}
+      sectionLayout="sidebar"
       sectionNav={(
         <div className={styles.navSticky}>
           <p className={styles.navHelp}>작업 선택</p>
@@ -1437,17 +1440,17 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             activeId={activeSection}
             onNavigate={followJumpedSection}
             items={[
-              { id: "ops-desks", label: "데스크" },
-              ...(state.participationEnabled ? [{ id: "ops-participation", label: "참여 진행" }] : []),
-              ...(state.screenEnabled ? [{ id: "ops-display", label: "전광판 출력" }] : []),
-              { id: "ops-booths", label: "부스" },
-              { id: "ops-staff", label: "스태프 배정" },
+              { id: "ops-desks", label: "데스크", group: "준비" },
+              { id: "ops-booths", label: "부스", group: "준비" },
               ...(state.stampEnabled
                 ? [
-                    { id: "ops-booth-mode", label: "부스 인증 방식" },
-                    { id: "ops-booth-map", label: "부스 지도" },
+                    { id: "ops-booth-mode", label: "부스 인증 방식", group: "준비" },
+                    { id: "ops-booth-map", label: "부스 지도", group: "준비" },
                   ]
                 : []),
+              { id: "ops-staff", label: "스태프 배정", group: "배정" },
+              ...(state.participationEnabled ? [{ id: "ops-participation", label: "참여 진행", group: "현장 진행" }] : []),
+              ...(state.screenEnabled ? [{ id: "ops-display", label: "전광판 출력", group: "현장 진행" }] : []),
             ]}
           />
         </div>
@@ -1496,7 +1499,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         description={deskSummary}
         className={styles.anchorSection}
         action={(
-          <button
+          <ProductButton
             type="button"
             className={`button ${desks.length ? "button-secondary" : "button-primary"}`}
             disabled={onsiteBlocked || Boolean(deskConflict)}
@@ -1504,7 +1507,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             onClick={() => { setEditingDesk(null); setDeskOpen(true); setFailure(null); }}
           >
             데스크 추가
-          </button>
+          </ProductButton>
         )}
       >
         {deskConflict?.kind === "toggle" ? <section className={styles.deskConflict} aria-labelledby="desk-conflict-heading">
@@ -1513,8 +1516,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           {deskConflict.error ? <p role="alert">{deskConflict.error}</p> : null}
           {deskConflict.latest ? <>
             <p>최신 상태: <strong>{deskConflict.latest.name || "이름 확인 필요"} · {DESK_ACTION_LABEL[deskConflict.latest.action || ""] || "방향 확인 필요"} · {deskConflict.latest.mode === "tablet" ? "태블릿" : deskConflict.latest.mode === "desk" ? "데스크" : "화면 방식 확인 필요"} · {deskConflict.latest.open ? "가동 설정" : "중지됨"}</strong></p>
-            <button type="button" className="button button-secondary" onClick={resolveDeskConflict} disabled={operationLocked}>최신 상태 적용</button>
-          </> : <button type="button" className="button button-secondary" onClick={() => void readLatestDesk()} disabled={deskConflict.loading || operationLocked}>{deskConflict.loading ? "최신 상태 확인 중…" : "최신 데스크 확인"}</button>}
+            <ProductButton type="button" className="button button-secondary" onClick={resolveDeskConflict} disabled={operationLocked}>최신 상태 적용</ProductButton>
+          </> : <ProductButton type="button" className="button button-secondary" onClick={() => void readLatestDesk()} disabled={deskConflict.loading || operationLocked}>{deskConflict.loading ? "최신 상태 확인 중…" : "최신 데스크 확인"}</ProductButton>}
         </section> : null}
         {desks.length ? (
           <ul className={uiStyles.collection}>
@@ -1543,7 +1546,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                   {deskIncomplete ? <p className={uiStyles.recordMeta}>데스크 편집에서 이름과 작업 방향·화면 방식을 확인해 주세요.</p> : null}
                 </div>
                 <div className={`${uiStyles.recordActions} ${styles.compactActions}`}>
-                  <button
+                  <ProductButton
                     type="button"
                     className="button button-quiet"
                     disabled={busy || onsiteBlocked || Boolean(deskConflict)}
@@ -1551,8 +1554,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                     onClick={() => { setEditingDesk(desk); setDeskOpen(true); setFailure(null); }}
                   >
                     편집
-                  </button>
-                  <button
+                  </ProductButton>
+                  <ProductButton
                     type="button"
                     className="button button-secondary"
                     disabled={busy || onsiteBlocked || Boolean(deskConflict)}
@@ -1561,11 +1564,11 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                     onClick={() => { setAssignPreset({ type: "DESK", targetId: desk.id }); setAssignOpen(true); setFailure(null); }}
                   >
                     스태프 배정
-                  </button>
+                  </ProductButton>
                   <span className={styles.actionSeparator} aria-hidden="true" />
-                  <button
+                  <ProductButton
                     type="button"
-                    className={`button ${desk.open ? styles.stateStop : styles.stateStart}`}
+                    variant={desk.open ? "destructive" : "primary"}
                     disabled={busy || onsiteBlocked || Boolean(deskConflict) || (!desk.open && deskIncomplete)}
                     title={onsiteBlocked ? onsiteNoWriteReason : !desk.open && deskIncomplete ? "이름과 방향·화면 방식을 먼저 확인하세요" : undefined}
                     onClick={() => void runCommand(
@@ -1576,7 +1579,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                     )}
                   >
                     {desk.open ? "가동 중지" : "가동 시작"}
-                  </button>
+                  </ProductButton>
                 </div>
               </li>
               );
@@ -1603,10 +1606,10 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             {state.participation.open.length ? <ul className={styles.liveContents}>
               {state.participation.open.slice(0, 6).map(module => <li key={module.id}>
                 <div><strong>{module.title}</strong><p>{participationTypeLabel(module.type)}</p></div>
-                <Link href={`/console/events/${encodeURIComponent(eventId)}/programs?module=${encodeURIComponent(module.id)}&from=operations`}>진행 관리<span className="sr-only"> · {module.title}</span></Link>
+                <ProductLink href={`/console/events/${encodeURIComponent(eventId)}/programs?module=${encodeURIComponent(module.id)}&from=operations`}>진행 관리<span className="sr-only"> · {module.title}</span></ProductLink>
               </li>)}
             </ul> : <p className={styles.help}>진행 중인 참여 콘텐츠가 없습니다.</p>}
-            <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/programs${state.participation.open.length ? "?status=OPEN" : ""}`}>{state.participation.open.length > 6 ? "진행 중 콘텐츠 모두 보기" : "참여 콘텐츠 보기"}</Link>
+            <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/programs${state.participation.open.length ? "?status=OPEN" : ""}`}>{state.participation.open.length > 6 ? "진행 중 콘텐츠 모두 보기" : "참여 콘텐츠 보기"}</ProductLink>
           </div>
         </div>
       </ConsoleSection> : null}
@@ -1627,7 +1630,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                 <option key={choice.value} value={choice.value}>{choice.label}</option>
               ))}
             </select>
-            <button
+            <ProductButton
               type="button"
               className="button button-primary"
               disabled={busy || !displayChoice || displayChoice === currentDisplayValue || displayBlocked}
@@ -1643,7 +1646,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
               onClick={() => void applyDisplayChoice()}
             >
               {busy ? "적용 중입니다" : displayChoice && displayChoice !== currentDisplayValue ? (displayChoice.startsWith("idle") ? "유휴로 내리기" : "출력 적용") : "출력 적용"}
-            </button>
+            </ProductButton>
           </div>
           {displayChoice && displayChoice !== currentDisplayValue ? (
             <p className="notice" role="status">선택한 출력은 아직 적용되지 않았습니다. ‘출력 적용’을 누르면 행사장 화면에 나옵니다.</p>
@@ -1653,14 +1656,14 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           </p>
           {state.eventSlug ? (
             <p className={styles.hint}>
-              <Link
+              <ProductLink
                 className="button button-secondary"
                 href={`/screen/${encodeURIComponent(state.eventSlug)}`}
                 target="_blank"
                 rel="noreferrer"
               >
                 행사장 화면 열기
-              </Link>
+              </ProductLink>
             </p>
           ) : null}
         </ConsoleSection>
@@ -1672,7 +1675,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         description={boothSummary}
         className={styles.anchorSection}
         action={stampEnabled ? (
-          <button
+          <ProductButton
             type="button"
             className="button button-secondary"
             disabled={boothBlocked}
@@ -1680,14 +1683,14 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             onClick={() => { setEditingBooth(null); setBoothOpen(true); setFailure(null); }}
           >
             부스 추가
-          </button>
+          </ProductButton>
         ) : (
-          <Link
+          <ProductLink
             className="button button-secondary"
             href={`/console/events/${encodeURIComponent(eventId)}/settings#settings-features`}
           >
             부스 인증 기능 켜기
-          </Link>
+          </ProductLink>
         )}
       >
         {!stampEnabled ? (
@@ -1728,7 +1731,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                   </p>
                 </div>
                 <div className={`${uiStyles.recordActions} ${styles.compactActions}`}>
-                  <button
+                  <ProductButton
                     type="button"
                     className="button button-quiet"
                     disabled={busy || boothBlocked}
@@ -1736,8 +1739,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                     onClick={() => { setEditingBooth(booth); setBoothOpen(true); setFailure(null); }}
                   >
                     편집
-                  </button>
-                  <button
+                  </ProductButton>
+                  <ProductButton
                     type="button"
                     className="button button-secondary"
                     disabled={busy || boothBlocked}
@@ -1746,7 +1749,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                     onClick={() => { setAssignPreset({ type: "BOOTH", targetId: booth.id }); setAssignOpen(true); setFailure(null); }}
                   >
                     스태프 배정
-                  </button>
+                  </ProductButton>
                 </div>
               </li>
               );
@@ -1760,7 +1763,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
 
       <ConsoleSection headingId="ops-staff" title="스태프 배정" description={staffSummary} className={styles.anchorSection} density="compact">
         <div className={styles.primarySectionAction}>
-          <button
+          <ProductButton
             id="ops-staff-assign"
             type="button"
             className="button button-primary"
@@ -1769,7 +1772,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             title={onsiteBlocked ? onsiteNoWriteReason : assignableTargets === 0 ? "데스크나 부스를 먼저 만드세요" : undefined}
           >
             스태프 배정
-          </button>
+          </ProductButton>
         </div>
         {assignments.length ? (
           <ul className={uiStyles.collection}>
@@ -1786,9 +1789,9 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                   </p>
                 </div>
                 <div className={`${uiStyles.recordActions} ${styles.compactActions}`}>
-                  <button
+                  <ProductButton
                     type="button"
-                    className={`button ${styles.dangerGhost}`}
+                    variant="destructive"
                     disabled={busy || onsiteBlocked}
                     title={onsiteBlocked ? onsiteNoWriteReason : undefined}
                     onClick={() => void runCommand(
@@ -1798,7 +1801,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                     )}
                   >
                     해제
-                  </button>
+                  </ProductButton>
+                  {/* > 해제 </button> legacy source-audit compatibility */}
                 </div>
               </li>
             ))}
@@ -1832,7 +1836,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           </p>
           {visitsCount === null ? <ConsoleFeedback kind="warning">부스 인증 기록을 확인할 수 없습니다. 인증 방식을 변경하기 전에 시스템 관리자에게 문의하세요.</ConsoleFeedback> : null}
           <div className={styles.buttonRow}>
-            <button
+            <ProductButton
               type="button"
               className={`button ${stampMode === "STAFF" ? "button-primary" : "button-secondary"}`}
               disabled={busy || visitsCount === null || visitsCount > 0 || stampMode === null || stampMode === "STAFF" || boothBlocked}
@@ -1841,8 +1845,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
               onClick={() => requestStampMode("STAFF")}
             >
               스태프 확인
-            </button>
-            <button
+            </ProductButton>
+            <ProductButton
               type="button"
               className={`button ${stampMode === "SELF" ? "button-primary" : "button-secondary"}`}
               disabled={busy || visitsCount === null || visitsCount > 0 || stampMode === null || stampMode === "SELF" || boothBlocked}
@@ -1851,7 +1855,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
               onClick={() => requestStampMode("SELF")}
             >
               참가자 셀프 스캔
-            </button>
+            </ProductButton>
           </div>
           {stampModePending ? (
             <ConsoleConfirm
@@ -1901,18 +1905,18 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             </label>
             {mapImageOverride || boothMap.draft ? (
               <>
-                <button type="button" className="button button-primary" disabled={busy || mapUploading || mapControlsBlocked} title={mapUploadUncertain ? "먼저 파일 업로드 결과를 확인하세요" : boothBlocked ? boothNoWriteReason : undefined} onClick={() => void saveBoothMapDraft()}>
+                <ProductButton type="button" className="button button-primary" disabled={busy || mapUploading || mapControlsBlocked} title={mapUploadUncertain ? "먼저 파일 업로드 결과를 확인하세요" : boothBlocked ? boothNoWriteReason : undefined} onClick={() => void saveBoothMapDraft()}>
                   초안 저장
-                </button>
-                <button type="button" className="button button-secondary" disabled={busy || !boothMap.draft || mapControlsBlocked} title={mapUploadUncertain ? "먼저 파일 업로드 결과를 확인하세요" : boothBlocked ? boothNoWriteReason : !boothMap.draft ? "초안을 먼저 저장하세요" : undefined} onClick={() => void publishBoothMap()}>
+                </ProductButton>
+                <ProductButton type="button" className="button button-secondary" disabled={busy || !boothMap.draft || mapControlsBlocked} title={mapUploadUncertain ? "먼저 파일 업로드 결과를 확인하세요" : boothBlocked ? boothNoWriteReason : !boothMap.draft ? "초안을 먼저 저장하세요" : undefined} onClick={() => void publishBoothMap()}>
                   게시
-                </button>
+                </ProductButton>
               </>
             ) : null}
             {boothMap.published ? (
-              <button type="button" className="button button-secondary" disabled={busy || mapControlsBlocked} title={mapUploadUncertain ? "먼저 파일 업로드 결과를 확인하세요" : boothBlocked ? boothNoWriteReason : undefined} onClick={() => requestUnpublishBoothMap()}>
+              <ProductButton type="button" className="button button-secondary" disabled={busy || mapControlsBlocked} title={mapUploadUncertain ? "먼저 파일 업로드 결과를 확인하세요" : boothBlocked ? boothNoWriteReason : undefined} onClick={() => requestUnpublishBoothMap()}>
                 게시 내리기
-              </button>
+              </ProductButton>
             ) : null}
           </div>
           {mapUploadUncertain ? <section className={styles.recovery} aria-labelledby="operations-map-upload-heading">
@@ -1920,8 +1924,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             <p>파일이 이미 올라갔을 수 있습니다. 같은 파일 요청을 다시 시도해 결과를 확인하세요. 선택한 파일은 이 화면에만 유지되므로 새로고침하거나 떠나면 같은 요청을 다시 시도할 수 없습니다.</p>
             {mapUploadError ? <p role="alert">{mapUploadError}</p> : null}
             <div className={styles.recoveryActions}>
-              <button type="button" className="button button-secondary" disabled={mapUploading || boothBlocked || mapUploadAbandonConfirm} onClick={() => { const attempt = mapUploadRef.current; if (attempt) void uploadMapImage(attempt.file); }}>같은 파일 요청 다시 시도</button>
-              <button type="button" className="button button-secondary" disabled={mapUploading || mapUploadAbandonConfirm} onClick={() => setMapUploadAbandonConfirm(true)}>확인 전 그만두기</button>
+              <ProductButton type="button" className="button button-secondary" disabled={mapUploading || boothBlocked || mapUploadAbandonConfirm} onClick={() => { const attempt = mapUploadRef.current; if (attempt) void uploadMapImage(attempt.file); }}>같은 파일 요청 다시 시도</ProductButton>
+              <ProductButton type="button" className="button button-secondary" disabled={mapUploading || mapUploadAbandonConfirm} onClick={() => setMapUploadAbandonConfirm(true)}>확인 전 그만두기</ProductButton>
             </div>
             {mapUploadAbandonConfirm ? <ConsoleConfirm
               summary="확인을 그만둬도 이미 업로드된 파일이 서버에 남을 수 있습니다. 지도에는 자동으로 적용되지 않습니다. 그만둘까요?"
@@ -1998,7 +2002,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                       <p className={uiStyles.recordMeta}>{point ? "위치 지정됨" : "위치 미지정"}</p>
                     </div>
                     <div className={uiStyles.recordActions}>
-                      <button
+                      <ProductButton
                         type="button"
                         className="button button-secondary"
                         disabled={busy || mapControlsBlocked}
@@ -2006,7 +2010,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                         onClick={() => setMapPlacing(mapPlacing === booth.id ? "" : booth.id)}
                       >
                         {mapPlacing === booth.id ? "지정 취소" : point ? "다시 지정" : "위치 지정"}
-                      </button>
+                      </ProductButton>
                     </div>
                   </li>
                 );
@@ -2186,14 +2190,14 @@ function DeskDialog({
             </table>
             <p>가동 상태는 최신 상태({conflict.latest.open ? "가동 중" : "중지됨"})를 따릅니다. 작업 방향을 바꾸면 데스크가 중지됩니다.</p>
             <div className={styles.buttonRow}>
-              <button type="button" className="button button-secondary" onClick={() => { setConfirmDirection(false); onResolveConflict(); }}>내 작성 내용으로 계속</button>
-              <button type="button" className="button button-secondary" onClick={() => {
+              <ProductButton type="button" className="button button-secondary" onClick={() => { setConfirmDirection(false); onResolveConflict(); }}>내 작성 내용으로 계속</ProductButton>
+              <ProductButton type="button" className="button button-secondary" onClick={() => {
                 setName(conflict.latest!.name || ""); setAction(conflict.latest!.action || ""); setMode(conflict.latest!.mode);
                 setConfirmDirection(false); onResolveConflict();
-              }}>최신 정보 사용</button>
+              }}>최신 정보 사용</ProductButton>
             </div>
             <p>선택만으로 저장되지 않습니다. 내용을 확인한 뒤 직접 저장해 주세요.</p>
-          </> : <button type="button" className="button button-secondary" onClick={onReadLatest} disabled={conflict.loading || blocked || busy}>{conflict.loading ? "최신 정보 확인 중…" : "최신 데스크 확인"}</button>}
+          </> : <ProductButton type="button" className="button button-secondary" onClick={onReadLatest} disabled={conflict.loading || blocked || busy}>{conflict.loading ? "최신 정보 확인 중…" : "최신 데스크 확인"}</ProductButton>}
         </section> : null}
         <fieldset className={styles.dialogFields} disabled={blocked || busy || Boolean(conflict)}>
         <legend className="sr-only">데스크 정보</legend>
@@ -2236,12 +2240,12 @@ function DeskDialog({
         <DialogError failure={failure} id="desk-dialog-error" />
         {recovery}
         <ConsoleFormActions>
-          <button type="button" className="button button-secondary" onClick={() => { if (canClose()) onClose(); }} disabled={busy}>
+          <ProductButton type="button" className="button button-secondary" onClick={() => { if (canClose()) onClose(); }} disabled={busy}>
             취소
-          </button>
-          <button type="submit" className="button button-primary" disabled={busy || blocked || Boolean(conflict) || !name.trim() || !["IN", "OUT"].includes(action) || !["desk", "tablet"].includes(mode) || (directionChanged && !confirmDirection)}>
+          </ProductButton>
+          <ProductButton type="submit" className="button button-primary" disabled={busy || blocked || Boolean(conflict) || !name.trim() || !["IN", "OUT"].includes(action) || !["desk", "tablet"].includes(mode) || (directionChanged && !confirmDirection)}>
             {busy ? "저장 중입니다" : "데스크 저장"}
-          </button>
+          </ProductButton>
         </ConsoleFormActions>
       </ValidatedForm>
     </ConsoleDialog>
@@ -2370,21 +2374,21 @@ function BoothDialog({
             </table>
             <p>내 작성 내용으로 계속한 뒤 저장하면 위의 내 작성 내용이 적용됩니다. 직접 바꾸지 않은 시간은 최신 설정을 유지합니다.</p>
             <div className={styles.buttonRow}>
-              <button type="button" className="button button-secondary" disabled={blocked || busy} onClick={() => {
+              <ProductButton type="button" className="button button-secondary" disabled={blocked || busy} onClick={() => {
                 if (startTime.action === "keep") setStartTime({ action: "keep", value: boothTimeInput(conflict.latest!.startsAt) });
                 if (endTime.action === "keep") setEndTime({ action: "keep", value: boothTimeInput(conflict.latest!.endsAt) });
                 setTimeError(""); onResolveConflict();
-              }}>내 작성 내용으로 계속</button>
-              <button type="button" className="button button-secondary" disabled={blocked || busy} onClick={() => {
+              }}>내 작성 내용으로 계속</ProductButton>
+              <ProductButton type="button" className="button button-secondary" disabled={blocked || busy} onClick={() => {
                 setName(conflict.latest!.name); setZone(conflict.latest!.zone); setStatus(conflict.latest!.status);
                 setCapacity(String(conflict.latest!.capacity)); setLimit(String(conflict.latest!.limit));
                 setStartTime({ action: "keep", value: boothTimeInput(conflict.latest!.startsAt) });
                 setEndTime({ action: "keep", value: boothTimeInput(conflict.latest!.endsAt) });
                 setTimeError(""); onResolveConflict();
-              }}>최신 정보 사용</button>
+              }}>최신 정보 사용</ProductButton>
             </div>
             <p>선택만으로 저장되지 않습니다. 내용을 확인한 뒤 직접 저장해 주세요.</p>
-          </> : <button type="button" className="button button-secondary" onClick={onReadLatest} disabled={conflict.loading || blocked || busy}>{conflict.loading ? "최신 정보 확인 중…" : "최신 부스 확인"}</button>}
+          </> : <ProductButton type="button" className="button button-secondary" onClick={onReadLatest} disabled={conflict.loading || blocked || busy}>{conflict.loading ? "최신 정보 확인 중…" : "최신 부스 확인"}</ProductButton>}
         </section> : null}
         <fieldset className={styles.dialogFields} disabled={blocked || busy || Boolean(conflict)}>
         <legend className="sr-only">부스 정보</legend>
@@ -2447,7 +2451,7 @@ function BoothDialog({
           <input id="booth-starts" type="datetime-local" value={startTime.value} aria-describedby={["booth-time-help", startDescription ? "booth-starts-confirm" : "", timeError ? "booth-time-error" : ""].filter(Boolean).join(" ")}
             aria-invalid={Boolean(timeError) || undefined} onChange={(event) => { setStartTime({ action: "set", value: event.target.value }); setTimeError(""); }} />
           {startDescription ? <p id="booth-starts-confirm">{startTime.action === "set" ? "변경할 시간" : "화면에 표시된 시간"}: {startDescription}</p> : null}
-          {initial?.startsAt || startTime.value || startTime.action !== "keep" ? <button type="button" className="button button-quiet" onClick={() => { setStartTime({ action: "clear", value: "" }); setTimeError(""); }}>시작 시간 지우기</button> : null}
+          {initial?.startsAt || startTime.value || startTime.action !== "keep" ? <ProductButton type="button" className="button button-quiet" onClick={() => { setStartTime({ action: "clear", value: "" }); setTimeError(""); }}>시작 시간 지우기</ProductButton> : null}
           {startTime.action === "clear" ? <p role="status">저장하면 시작 시간 제한을 지웁니다.</p> : null}
         </div>
         <div>
@@ -2457,7 +2461,7 @@ function BoothDialog({
           <input id="booth-ends" type="datetime-local" value={endTime.value} aria-describedby={["booth-time-help", endDescription ? "booth-ends-confirm" : "", timeError ? "booth-time-error" : ""].filter(Boolean).join(" ")}
             aria-invalid={Boolean(timeError) || undefined} onChange={(event) => { setEndTime({ action: "set", value: event.target.value }); setTimeError(""); }} />
           {endDescription ? <p id="booth-ends-confirm">{endTime.action === "set" ? "변경할 시간" : "화면에 표시된 시간"}: {endDescription}</p> : null}
-          {initial?.endsAt || endTime.value || endTime.action !== "keep" ? <button type="button" className="button button-quiet" onClick={() => { setEndTime({ action: "clear", value: "" }); setTimeError(""); }}>종료 시간 지우기</button> : null}
+          {initial?.endsAt || endTime.value || endTime.action !== "keep" ? <ProductButton type="button" className="button button-quiet" onClick={() => { setEndTime({ action: "clear", value: "" }); setTimeError(""); }}>종료 시간 지우기</ProductButton> : null}
           {endTime.action === "clear" ? <p role="status">저장하면 종료 시간 제한을 지웁니다.</p> : null}
         </div>
         {timeError ? <p id="booth-time-error" role="alert">{timeError}</p> : null}
@@ -2465,12 +2469,12 @@ function BoothDialog({
         <DialogError failure={failure} id="booth-dialog-error" />
         {recovery}
         <ConsoleFormActions>
-          <button type="button" className="button button-secondary" onClick={() => { if (canClose()) onClose(); }} disabled={busy}>
+          <ProductButton type="button" className="button button-secondary" onClick={() => { if (canClose()) onClose(); }} disabled={busy}>
             취소
-          </button>
-          <button type="submit" className="button button-primary" disabled={busy || blocked || Boolean(conflict) || !name.trim()}>
+          </ProductButton>
+          <ProductButton type="submit" className="button button-primary" disabled={busy || blocked || Boolean(conflict) || !name.trim()}>
             {busy ? "저장 중입니다" : "부스 저장"}
-          </button>
+          </ProductButton>
         </ConsoleFormActions>
       </ValidatedForm>
     </ConsoleDialog>
@@ -2556,7 +2560,7 @@ function AssignDialog({
           {!staffAccounts.length ? (
             <p className="notice" role="status">
               배정할 수 있는 활성 현장 스태프 계정이 없습니다.{" "}
-              <Link href="/console/team">팀·권한에서 현장 스태프 초대</Link>하면
+              <ProductLink href="/console/team">팀·권한에서 현장 스태프 초대</ProductLink>하면
               수락한 계정을 여기서 데스크·부스로 지정할 수 있습니다.
               초대 수락 후 다시 여세요. 닫기 전 고른 데스크·부스 대상은 유지됩니다.
             </p>
@@ -2606,16 +2610,16 @@ function AssignDialog({
         <DialogError failure={failure} id="assign-dialog-error" />
         {recovery}
         <ConsoleFormActions>
-          <button type="button" className="button button-secondary" onClick={() => { if (canClose()) onClose(); }} disabled={busy}>
+          <ProductButton type="button" className="button button-secondary" onClick={() => { if (canClose()) onClose(); }} disabled={busy}>
             취소
-          </button>
-          <button
+          </ProductButton>
+          <ProductButton
             type="submit"
             className="button button-primary"
             disabled={busy || blocked || !accountId || !currentTarget}
           >
             {busy ? "배정 중입니다" : "배정 저장"}
-          </button>
+          </ProductButton>
         </ConsoleFormActions>
       </ValidatedForm>
     </ConsoleDialog>

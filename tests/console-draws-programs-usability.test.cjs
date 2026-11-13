@@ -45,7 +45,7 @@ test("draw run buttons keep the premise line next to the buttons with a next act
 });
 
 test("disabled run buttons stay readable while clearly disabled, tokens only", () => {
-  assert.match(drawsCss, /\.programActions \.button-primary:disabled/u);
+  assert.match(drawsCss, /\.programActions \.product-action\[data-variant="primary"\]:disabled/u);
   assert.match(drawsCss, /background: var\(--surface-muted\)/u);
   assert.match(drawsCss, /border-color: var\(--line-strong\)/u);
   assert.match(drawsCss, /color: var\(--ink\)/u);

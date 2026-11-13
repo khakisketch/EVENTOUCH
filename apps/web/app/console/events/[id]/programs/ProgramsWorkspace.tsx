@@ -1,11 +1,11 @@
 "use client";
 
 import { revealDetailsFor } from "../../../../ui/reveal-details";
+import ProductButton from "../../../../ui/ProductButton";
 import ValidatedForm from "../../../../ui/ValidatedForm";
 
-
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import Link from "next/link";
+import ProductLink from "../../../../ui/ProductLink";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
 import ConsolePage from "../../../console-ui/ConsolePage";
@@ -1153,9 +1153,9 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       <p>서버 확인은 콘텐츠를 다시 만들지 않습니다.</p>
       {!dialogOpen && dialogFailure ? <p role="alert">{dialogFailure.message}</p> : null}
       <div className={styles.recoveryActions}>
-        <button type="button" className="button button-secondary" disabled={dialogBusy || checkingModuleSave || abandonModuleConfirm} onClick={() => void checkModuleSave()}>서버 처리 확인</button>
-        <button type="button" className="button button-secondary" disabled={dialogBusy || checkingModuleSave || abandonModuleConfirm || writeLocked} onClick={() => void submitModuleSave(moduleSaveRetry)}>같은 요청 다시 시도</button>
-        <button type="button" className="button button-secondary" disabled={dialogBusy || checkingModuleSave || abandonModuleConfirm} onClick={() => setAbandonModuleConfirm(true)}>확인 전 그만두기</button>
+        <ProductButton type="button" variant="secondary" disabled={dialogBusy || checkingModuleSave || abandonModuleConfirm} onClick={() => void checkModuleSave()}>서버 처리 확인</ProductButton>
+        <ProductButton type="button" variant="secondary" disabled={dialogBusy || checkingModuleSave || abandonModuleConfirm || writeLocked} onClick={() => void submitModuleSave(moduleSaveRetry)}>같은 요청 다시 시도</ProductButton>
+        <ProductButton type="button" variant="secondary" disabled={dialogBusy || checkingModuleSave || abandonModuleConfirm} onClick={() => setAbandonModuleConfirm(true)}>확인 전 그만두기</ProductButton>
       </div>
       {abandonModuleConfirm ? <ConsoleConfirm
         summary="이미 저장된 콘텐츠는 취소되지 않습니다. 입력 화면을 닫고 최신 목록을 확인할까요?"
@@ -1625,7 +1625,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
           kind="failed"
           message={state.message}
           onRetry={() => { void load(); }}
-          actions={<Link className="button button-secondary" href="/console">행사 목록으로</Link>}
+          actions={<ProductLink variant="secondary" href="/console">행사 목록으로</ProductLink>}
         />
       </ConsolePage>
     );
@@ -1678,10 +1678,13 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       eventId={eventId}
       eventName={state.eventName}
       meta={state.eventMeta}
-      headerActions={<Link className="button button-secondary" href={handoffReturn?.href ?? `/console/events/${encodeURIComponent(eventId)}/operations#ops-participation`}>{handoffReturn?.label ?? "현장 운영"}</Link>}
+      headerActions={<ProductLink variant="secondary" href={handoffReturn?.href ?? `/console/events/${encodeURIComponent(eventId)}/operations#ops-participation`}>{handoffReturn?.label ?? "현장 운영"}</ProductLink>}
       toolbar={state.canManage ? (
         <>
-          <p className={styles.workspacePurpose}>투표·퀴즈·Q&A 등 참가자가 참여할 내용을 만들고 응답을 관리합니다. <Link href={`/console/events/${encodeURIComponent(eventId)}/draws`}>무대 추첨·순위 투표·룰렛 관리</Link></p>
+          <div className={styles.workspacePurpose}>
+            <p>투표·퀴즈·Q&A 등 참가자가 참여할 내용을 만들고 응답을 관리합니다.</p>
+            <ProductLink variant="ghost" href={`/console/events/${encodeURIComponent(eventId)}/draws`}>무대 추첨·순위 투표·룰렛 관리</ProductLink>
+          </div>
           <ReviewStrip
             unanswered={backlogUnanswered}
             qaPending={backlogQaPending}
@@ -1694,14 +1697,14 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
           {otherModuleReceipt && !moduleSaveRetry && !dialogBusy ? <p role="status">이전 콘텐츠 저장 결과를 위에서 확인한 뒤 변경할 수 있습니다.</p> : null}
           {questionConflict ? <div className={styles.reviewStrip} role="region" aria-label="질문 변경 확인">
             <span>변경된 질문을 확인한 뒤 답변을 다시 저장할 수 있습니다.</span>
-            <button type="button" className="button button-secondary" onClick={returnToQuestionConflict}>변경 내용 확인</button>
+            <ProductButton type="button" variant="secondary" onClick={returnToQuestionConflict}>변경 내용 확인</ProductButton>
           </div> : null}
           {questionManageRetry ? (
             <div className={styles.reviewStrip} role="region" aria-label="질문 처리 확인">
               <span>질문 처리가 반영됐을 수 있습니다. 서버 확인은 요청을 다시 보내지 않습니다.</span>
-              <button type="button" className="button button-secondary" disabled={busy !== null || checkingQuestion || abandonQuestionConfirm} onClick={() => void checkQuestionManagement()}>서버 처리 확인</button>
-              <button type="button" className="button button-secondary" disabled={busy !== null || checkingQuestion || abandonQuestionConfirm || writeLocked} onClick={() => void submitQuestionManagement(questionManageRetry)}>원래 질문 처리 다시 확인</button>
-              <button type="button" className="button button-secondary" disabled={busy !== null || checkingQuestion || abandonQuestionConfirm} onClick={() => setAbandonQuestionConfirm(true)}>확인 전 그만두기</button>
+              <ProductButton type="button" variant="secondary" disabled={busy !== null || checkingQuestion || abandonQuestionConfirm} onClick={() => void checkQuestionManagement()}>서버 처리 확인</ProductButton>
+              <ProductButton type="button" variant="secondary" disabled={busy !== null || checkingQuestion || abandonQuestionConfirm || writeLocked} onClick={() => void submitQuestionManagement(questionManageRetry)}>원래 질문 처리 다시 확인</ProductButton>
+              <ProductButton type="button" variant="secondary" disabled={busy !== null || checkingQuestion || abandonQuestionConfirm} onClick={() => setAbandonQuestionConfirm(true)}>확인 전 그만두기</ProductButton>
               {abandonQuestionConfirm ? <ConsoleConfirm
                 summary="이미 반영된 질문 처리는 취소되지 않습니다. 확인을 그만둔 뒤 최신 공개 상태를 살펴보세요."
                 confirmLabel="확인 그만두기"
@@ -1725,17 +1728,17 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
           {questionEditRetry ? (
             <div className={styles.reviewStrip} role="alert">
               <span>수정안 승인 결과를 확인하지 못했습니다. 원래 질문과 수정안으로 다시 확인하세요.</span>
-              <button type="button" className="button button-secondary" disabled={busy !== null || checkingQuestionEdit} onClick={() => void checkQuestionEdit("approve")}>서버 처리 확인</button>
-              <button type="button" className="button button-secondary" disabled={busy !== null || checkingQuestionEdit}
-                onClick={() => void approveQuestionEdit(questionEditRetry, true)}>원래 승인 재확인</button>
+              <ProductButton type="button" variant="secondary" disabled={busy !== null || checkingQuestionEdit} onClick={() => void checkQuestionEdit("approve")}>서버 처리 확인</ProductButton>
+              <ProductButton type="button" variant="secondary" disabled={busy !== null || checkingQuestionEdit}
+                onClick={() => void approveQuestionEdit(questionEditRetry, true)}>원래 승인 재확인</ProductButton>
             </div>
           ) : null}
           {questionRejectRetry ? (
             <div className={styles.reviewStrip} role="alert">
               <span>수정안 반려 결과를 확인하지 못했습니다. 입력한 사유와 원래 요청으로 다시 확인하세요.</span>
-              <button type="button" className="button button-secondary" disabled={busy !== null || checkingQuestionEdit} onClick={() => void checkQuestionEdit("reject")}>서버 처리 확인</button>
-              <button type="button" className="button button-secondary" disabled={busy !== null || checkingQuestionEdit}
-                onClick={() => void rejectQuestionEdit(questionRejectRetry, true)}>원래 반려 재확인</button>
+              <ProductButton type="button" variant="secondary" disabled={busy !== null || checkingQuestionEdit} onClick={() => void checkQuestionEdit("reject")}>서버 처리 확인</ProductButton>
+              <ProductButton type="button" variant="secondary" disabled={busy !== null || checkingQuestionEdit}
+                onClick={() => void rejectQuestionEdit(questionRejectRetry, true)}>원래 반려 재확인</ProductButton>
             </div>
           ) : null}
           <ConsoleToolbar
@@ -1764,9 +1767,9 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
           }
           actions={
             <div data-toolbar-inline className={styles.toolbarActions}>
-              <button type="button" className="button button-primary" onClick={openCreate} disabled={writeLocked || Boolean(moduleSaveRetry) || otherModuleReceipt}>
+              <ProductButton type="button" variant="primary" onClick={openCreate} disabled={writeLocked || Boolean(moduleSaveRetry) || otherModuleReceipt}>
                 콘텐츠 만들기
-              </button>
+              </ProductButton>
               <ConsoleRefreshButton label="새로고침" disabled={busy !== null} onRefresh={() => load(true)} />
             </div>
           }
@@ -1778,7 +1781,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
           {handoffNotice ? <ConsoleFeedback kind="info">{handoffNotice}</ConsoleFeedback> : null}
           {notice ? <ConsoleFeedback kind="success">{notice}</ConsoleFeedback> : null}
           {failure && !pendingOperation ? <ConsoleFeedback kind="error">{failure}</ConsoleFeedback> : null}
-          {gradeRetry ? <ConsoleFeedback kind="warning"><p>채점 결과가 아직 확인되지 않았습니다. 다른 채점을 하기 전에 같은 요청을 확인하세요.</p><button type="button" className="button button-secondary" disabled={busy !== null || writeLocked} onClick={() => void submitGrade(gradeRetry, true)}>같은 채점 다시 확인</button></ConsoleFeedback> : null}
+          {gradeRetry ? <ConsoleFeedback kind="warning"><p>채점 결과가 아직 확인되지 않았습니다. 다른 채점을 하기 전에 같은 요청을 확인하세요.</p><ProductButton type="button" variant="secondary" disabled={busy !== null || writeLocked} onClick={() => void submitGrade(gradeRetry, true)}>같은 채점 다시 확인</ProductButton></ConsoleFeedback> : null}
           {!state.canManage ? (
             <ConsoleFeedback kind="error">참여 콘텐츠를 관리할 운영 권한이 없습니다.</ConsoleFeedback>
           ) : null}
@@ -1799,9 +1802,9 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
         {state.archived || !state.canWritePrograms ? <p>현재 권한이나 행사 상태에서는 같은 요청을 다시 보낼 수 없습니다. 서버 처리 확인을 이용하세요.</p> : null}
         {operationError ? <p role="alert">{operationError}</p> : null}
         <div className={styles.recoveryActions}>
-          <button type="button" className="button button-secondary" disabled={busy !== null || checkingOperation || abandonOperation || operatorContext.changed} onClick={() => void recoverProgramOperation(false)}>{checkingOperation ? "확인 중…" : "서버 처리 확인"}</button>
-          <button type="button" className="button button-secondary" disabled={busy !== null || checkingOperation || abandonOperation || operatorContext.changed || state.archived || !state.canWritePrograms} onClick={() => void recoverProgramOperation(true)}>같은 요청 다시 시도</button>
-          <button type="button" className="button button-secondary" disabled={busy !== null || checkingOperation || abandonOperation} onClick={() => setAbandonOperation(true)}>확인 전 그만두기</button>
+          <ProductButton type="button" variant="secondary" disabled={busy !== null || checkingOperation || abandonOperation || operatorContext.changed} onClick={() => void recoverProgramOperation(false)}>{checkingOperation ? "확인 중…" : "서버 처리 확인"}</ProductButton>
+          <ProductButton type="button" variant="secondary" disabled={busy !== null || checkingOperation || abandonOperation || operatorContext.changed || state.archived || !state.canWritePrograms} onClick={() => void recoverProgramOperation(true)}>같은 요청 다시 시도</ProductButton>
+          <ProductButton type="button" variant="secondary" disabled={busy !== null || checkingOperation || abandonOperation} onClick={() => setAbandonOperation(true)}>확인 전 그만두기</ProductButton>
         </div>
         {abandonOperation ? <ConsoleConfirm summary="이미 처리된 콘텐츠 작업은 취소되지 않습니다. 확인을 그만두고 최신 결과를 확인할까요?" confirmLabel="확인 그만두기" onConfirm={() => {
           const attempt = pendingOperationRef.current;
@@ -1822,9 +1825,9 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
             {hasProgramFilter ? (
               <>
                 {" "}
-                <button type="button" className="button button-secondary" onClick={clearProgramFilters}>
+                <ProductButton type="button" variant="secondary" onClick={clearProgramFilters}>
                   검색·필터 지우기
-                </button>
+                </ProductButton>
               </>
             ) : null}
           </p>
@@ -1923,13 +1926,13 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
           </ul>
           {visibleModules.length > moduleLimit ? (
             <p className={styles.moreRow}>
-              <button
+              <ProductButton
                 type="button"
-                className="button button-secondary"
+                variant="secondary"
                 onClick={revealMoreModules}
               >
                 더 보기 ({visibleModules.length - moduleLimit})
-              </button>
+              </ProductButton>
             </p>
           ) : null}
           </>
@@ -1938,9 +1941,9 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
               <p>조건에 맞는 콘텐츠가 없습니다.</p>
               <p>검색어·상태 조건을 바꾸거나 지우고 다시 찾아보세요.</p>
               <p>
-                <button type="button" className="button button-secondary" onClick={clearProgramFilters}>
+                <ProductButton type="button" variant="secondary" onClick={clearProgramFilters}>
                   검색·필터 지우기
-                </button>
+                </ProductButton>
               </p>
             </div>
           )}
@@ -2111,29 +2114,29 @@ function ModuleCard(props: {
           {!props.featureOn ? (
             <p className={styles.featureOff} role="note">
               이 유형이 꺼져 있습니다.{" "}
-              <Link href={props.closeHref(`/console/events/${encodeURIComponent(props.eventId)}/settings#settings-features`)}>행사 설정</Link>에서
+              <ProductLink href={props.closeHref(`/console/events/${encodeURIComponent(props.eventId)}/settings#settings-features`)}>행사 설정</ProductLink>에서
               기능을 먼저 켜세요.
             </p>
           ) : null}
         </div>
         <div className={styles.moduleActions}>
-          <button
+          <ProductButton
             type="button"
-            className="button button-quiet"
+            variant="ghost"
             disabled={lockReason !== null || props.locked || !props.featureOn}
             title={lockReason ?? undefined}
             onClick={props.onEdit}
           >
             편집
-          </button>
+          </ProductButton>
           {module.status === "DRAFT" ? (
-            <button type="button" className="button button-secondary" disabled={props.busy !== null || props.locked || !props.featureOn} onClick={() => props.onRequestStatus("OPEN")}>시작</button>
+            <ProductButton type="button" variant="secondary" disabled={props.busy !== null || props.locked || !props.featureOn} onClick={() => props.onRequestStatus("OPEN")}>시작</ProductButton>
           ) : null}
           {module.status === "OPEN" ? (
-            <button type="button" className="button button-secondary" disabled={props.busy !== null || props.locked || !props.featureOn} onClick={() => props.onRequestStatus("CLOSED")}>종료</button>
+            <ProductButton type="button" variant="secondary" disabled={props.busy !== null || props.locked || !props.featureOn} onClick={() => props.onRequestStatus("CLOSED")}>종료</ProductButton>
           ) : null}
           {module.status === "CLOSED" ? (
-            <button type="button" className="button button-secondary" disabled={props.busy !== null || props.locked || !props.featureOn} onClick={() => props.onRequestStatus("OPEN")}>다시 열기</button>
+            <ProductButton type="button" variant="secondary" disabled={props.busy !== null || props.locked || !props.featureOn} onClick={() => props.onRequestStatus("OPEN")}>다시 열기</ProductButton>
           ) : null}
         </div>
       </div>
@@ -2158,14 +2161,14 @@ function ModuleCard(props: {
       {module.type === "quiz" && module.published && !module.revealed && (module.status === "OPEN" || module.status === "CLOSED") ? (
         <>
           <p>
-            <button
+            <ProductButton
               type="button"
-              className="button button-secondary"
+              variant="secondary"
               disabled={props.busy !== null || props.locked || !props.featureOn}
               onClick={props.onRequestReveal}
             >
               {props.busy === `reveal:${module.id}` ? "공개 중…" : "퀴즈 정답 공개"}
-            </button>
+            </ProductButton>
           </p>
           {props.revealPending ? (
             <ConsoleConfirm
@@ -2195,23 +2198,23 @@ function ModuleCard(props: {
                 props.setDrawCounts((current) => ({ ...current, [module.id]: event.target.value }))
               }
             />
-            <button
+            <ProductButton
               type="button"
-              className="button button-secondary"
+              variant="secondary"
               disabled={props.busy !== null || props.locked || !props.featureOn || module.status !== "OPEN"}
               onClick={props.onRequestDraw}
             >
               {props.busy === `draw:${module.id}` ? "실행 중…" : "추첨 실행"}
-            </button>
+            </ProductButton>
             {latestDraw && !latestDraw.published ? (
-              <button
+              <ProductButton
                 type="button"
-                className="button button-secondary"
+                variant="secondary"
                 disabled={props.busy !== null || props.locked || !props.featureOn}
                 onClick={props.onRequestPublishDraw}
               >
                 {props.busy === `publish:${module.id}` ? "공개 중…" : "최신 결과 공개"}
-              </button>
+              </ProductButton>
             ) : null}
           </div>
           {props.drawPending ? (
@@ -2250,7 +2253,7 @@ function ModuleCard(props: {
           )}
           <p className={styles.help}>
             쿼터·등급·업체 대상 추첨과 경품 연동은{" "}
-            <Link href={props.closeHref(`/console/events/${encodeURIComponent(props.eventId)}/draws`)}>추첨</Link> 화면에서 관리합니다.
+            <ProductLink href={props.closeHref(`/console/events/${encodeURIComponent(props.eventId)}/draws`)}>추첨</ProductLink> 화면에서 관리합니다.
           </p>
         </div>
       ) : null}
@@ -2293,7 +2296,7 @@ function ModuleCard(props: {
         posts={props.posts}
       />
       </details>
-      {props.returnLink ? <Link className={`button button-secondary ${styles.returnLink}`} href={props.returnLink.href}>{props.returnLink.label}</Link> : null}
+      {props.returnLink ? <ProductLink variant="secondary" className={styles.returnLink} href={props.returnLink.href}>{props.returnLink.label}</ProductLink> : null}
     </li>
   );
 }
@@ -2414,14 +2417,14 @@ function ReviewStrip(props: {
       <span className={styles.reviewStripLabel}>검토</span>
       {shortcuts.length ? (
         shortcuts.map((shortcut) => (
-          <button
+          <ProductButton
             key={shortcut.target}
             type="button"
-            className="button button-quiet"
+            variant="ghost"
             onClick={() => props.onShortcut(shortcut.target)}
           >
             {shortcut.label}
-          </button>
+          </ProductButton>
         ))
       ) : (
         <span className={styles.itemMeta}>검토할 항목이 없습니다.</span>
@@ -2510,14 +2513,14 @@ function QuestionList(props: {
                   <p><strong>현재 공개 상태</strong> · {conflict.latest.approved ? "공개됨" : "비공개"}</p>
                   <p>선택만으로는 저장하거나 공개하지 않습니다.</p>
                   <div className={styles.itemActions}>
-                    <button type="button" className="button button-secondary" disabled={props.busy !== null || props.locked || !props.featureOn} onClick={() => props.onResolveQuestionConflict("mine")}>내 답변으로 계속</button>
-                    <button type="button" className="button button-secondary" disabled={props.busy !== null || props.locked || !props.featureOn} onClick={() => props.onResolveQuestionConflict("latest")}>최신 답변으로 계속</button>
+                    <ProductButton type="button" variant="secondary" disabled={props.busy !== null || props.locked || !props.featureOn} onClick={() => props.onResolveQuestionConflict("mine")}>내 답변으로 계속</ProductButton>
+                    <ProductButton type="button" variant="secondary" disabled={props.busy !== null || props.locked || !props.featureOn} onClick={() => props.onResolveQuestionConflict("latest")}>최신 답변으로 계속</ProductButton>
                   </div>
                 </> : null}
                 {conflict.error ? <p role="alert">{conflict.error}</p> : null}
-                <button type="button" className="button button-secondary" disabled={conflict.loading || props.busy !== null} onClick={props.onRefreshQuestionConflict}>
+                <ProductButton type="button" variant="secondary" disabled={conflict.loading || props.busy !== null} onClick={props.onRefreshQuestionConflict}>
                   {conflict.loading ? "최신 내용 확인 중…" : conflict.latest ? "최신 내용 다시 확인" : "최신 내용 불러오기"}
-                </button>
+                </ProductButton>
               </section> : null}
               {question.pendingEdit ? (
                 <div className={styles.detail}>
@@ -2526,9 +2529,9 @@ function QuestionList(props: {
                   <p>승인하면 질문이 바뀌며 기존 답변과 좋아요는 유지됩니다.</p>
                   {(props.answerDrafts[question.id] ?? question.answer) !== question.answer
                     ? <p>작성 중인 답변을 먼저 저장하거나 되돌린 뒤 수정안을 승인하세요.</p> : null}
-                  <button type="button" className="button button-secondary"
+                  <ProductButton type="button" variant="secondary"
                     disabled={props.busy !== null || props.locked || !props.featureOn || Boolean(props.questionConflict) || (props.answerDrafts[question.id] ?? question.answer) !== question.answer}
-                    onClick={() => props.onApproveEdit(question)}>수정안 승인</button>
+                    onClick={() => props.onApproveEdit(question)}>수정안 승인</ProductButton>
                   <details className={styles.rejectDisclosure}>
                     <summary data-disclosure-indicator="">수정안 반려</summary>
                     <p>기존 질문과 답변은 유지됩니다. 사유는 작성자의 참여 화면에만 표시됩니다.</p>
@@ -2543,9 +2546,9 @@ function QuestionList(props: {
                         aria-invalid={Boolean(rejectionFailure)} aria-describedby={rejectionFailure ? `reject-reason-${question.id}-error` : undefined}
                         onChange={(event) => props.setRejectDrafts((current) => ({ ...current, [question.pendingEdit!.id]: event.target.value }))} />
                       {rejectionFailure ? <p className={styles.fieldError} id={`reject-reason-${question.id}-error`} role="alert">{rejectionFailure.message}</p> : null}
-                      <button type="submit" className="button button-secondary" disabled={props.busy !== null || props.locked || !props.featureOn || Boolean(props.questionConflict)}>
+                      <ProductButton type="submit" variant="secondary" disabled={props.busy !== null || props.locked || !props.featureOn || Boolean(props.questionConflict)}>
                         사유를 전달하고 반려
-                      </button>
+                      </ProductButton>
                     </ValidatedForm>
                   </details>
                 </div>
@@ -2563,32 +2566,32 @@ function QuestionList(props: {
               />
               {failure ? <p className={styles.fieldError} id={`answer-${question.id}-error`} role="alert">{failure.message}</p> : null}
               <div className={styles.itemActions}>
-                <button
+                <ProductButton
                   type="button"
-                  className="button button-secondary"
+                  variant="secondary"
                   disabled={props.busy !== null || props.locked || !props.featureOn || Boolean(props.questionConflict)}
                   onClick={() => props.onManage(question, question.approved)}
                 >
                   {question.approved ? "답변 저장·공개 유지" : "답변 저장"}
-                </button>
+                </ProductButton>
                 {question.approved ? (
-                  <button
+                  <ProductButton
                     type="button"
-                    className="button button-secondary"
+                    variant="secondary"
                     disabled={props.busy !== null || props.locked || !props.featureOn || Boolean(props.questionConflict)}
                     onClick={() => props.onManage(question, false)}
                   >
                     공개 취소
-                  </button>
+                  </ProductButton>
                 ) : (
-                  <button
+                  <ProductButton
                     type="button"
-                    className="button button-secondary"
+                    variant="secondary"
                     disabled={props.busy !== null || props.locked || !props.featureOn || Boolean(props.questionConflict)}
                     onClick={() => props.onManage(question, true)}
                   >
                     승인·공개
-                  </button>
+                  </ProductButton>
                 )}
               </div>
             </li>
@@ -2598,9 +2601,9 @@ function QuestionList(props: {
       {filtered.length === 0 ? <p className={styles.help}>조건에 맞는 질문이 없습니다.</p> : null}
       {remaining > 0 ? (
         <p className={styles.moreRow}>
-          <button
+          <ProductButton
             type="button"
-            className="button button-secondary"
+            variant="secondary"
             onClick={() => {
               const nextIndex = limit;
               setLimit((current) => current + MODERATION_PAGE_SIZE);
@@ -2611,7 +2614,7 @@ function QuestionList(props: {
             }}
           >
             더 보기 ({remaining})
-          </button>
+          </ProductButton>
         </p>
       ) : null}
     </>
@@ -2658,7 +2661,7 @@ function PhotoList(props: {
         <p className={styles.help}>승인된 참가자 사진만 ZIP에 담습니다. 검토 대기·반려 사진은 제외되며, 1,000장·512MB를 넘으면 개별 원본을 저장하세요.</p>
         {approvedPhotos.length ? (
           <a
-            className="button button-secondary"
+            className="product-action product-link" data-action-variant="secondary" data-native-control="download"
             href={`/api/events/${encodeURIComponent(props.eventId)}/attendee-photos.zip`}
           >
             승인 사진 ZIP 다운로드 ({approvedPhotos.length}장)
@@ -2701,29 +2704,29 @@ function PhotoList(props: {
             <div className={styles.itemActions}>
               {photo.status === "APPROVED" && photo.fileId ? (
                 <a
-                  className="button button-secondary"
+                  className="product-action product-link" data-action-variant="secondary" data-native-control="download"
                   href={`/api/events/${encodeURIComponent(props.eventId)}/files/${encodeURIComponent(photo.fileId)}`}
                   download={photo.fileName || "photo"}
                 >
                   원본 저장
                 </a>
               ) : null}
-              <button
+              <ProductButton
                 type="button"
-                className="button button-secondary"
+                variant="secondary"
                 disabled={props.busy !== null || props.locked || !props.featureOn || photo.status === "APPROVED"}
                 onClick={() => props.onRequestModerate(photo, "APPROVED")}
               >
                 승인
-              </button>
-              <button
+              </ProductButton>
+              <ProductButton
                 type="button"
-                className="button button-secondary"
+                variant="secondary"
                 disabled={props.busy !== null || props.locked || !props.featureOn || photo.status === "HIDDEN"}
                 onClick={() => props.onRequestModerate(photo, "HIDDEN")}
               >
                 반려
-              </button>
+              </ProductButton>
             </div>
             {props.pending?.id === photo.id ? (
               <ConsoleConfirm
@@ -2740,9 +2743,9 @@ function PhotoList(props: {
       {filtered.length === 0 ? <p className={styles.help}>조건에 맞는 사진이 없습니다.</p> : null}
       {remaining > 0 ? (
         <p className={styles.moreRow}>
-          <button
+          <ProductButton
             type="button"
-            className="button button-secondary"
+            variant="secondary"
             onClick={() => {
               const nextIndex = limit;
               setLimit((current) => current + MODERATION_PAGE_SIZE);
@@ -2753,7 +2756,7 @@ function PhotoList(props: {
             }}
           >
             더 보기 ({remaining})
-          </button>
+          </ProductButton>
         </p>
       ) : null}
     </>
@@ -2804,22 +2807,22 @@ function PostList(props: {
           <p className={styles.itemText}><strong>{post.name}</strong> · {post.body}</p>
           <p className={styles.itemMeta}>{post.status === "APPROVED" ? "승인됨" : post.status === "HIDDEN" ? "반려됨" : "대기 중"}</p>
           <div className={styles.itemActions}>
-            <button
+            <ProductButton
               type="button"
-              className="button button-secondary"
+              variant="secondary"
               disabled={props.busy !== null || props.locked || !props.featureOn || post.status === "APPROVED"}
               onClick={() => props.onRequestModerate(post, "APPROVED")}
             >
               승인
-            </button>
-            <button
+            </ProductButton>
+            <ProductButton
               type="button"
-              className="button button-secondary"
+              variant="secondary"
               disabled={props.busy !== null || props.locked || !props.featureOn || post.status === "HIDDEN"}
               onClick={() => props.onRequestModerate(post, "HIDDEN")}
             >
               반려
-            </button>
+            </ProductButton>
           </div>
           {props.pending?.id === post.id ? (
             <ConsoleConfirm
@@ -2836,9 +2839,9 @@ function PostList(props: {
       {filtered.length === 0 ? <p className={styles.help}>조건에 맞는 게시글이 없습니다.</p> : null}
       {remaining > 0 ? (
         <p className={styles.moreRow}>
-          <button
+          <ProductButton
             type="button"
-            className="button button-secondary"
+            variant="secondary"
             onClick={() => {
               const nextIndex = limit;
               setLimit((current) => current + MODERATION_PAGE_SIZE);
@@ -2849,7 +2852,7 @@ function PostList(props: {
             }}
           >
             더 보기 ({remaining})
-          </button>
+          </ProductButton>
         </p>
       ) : null}
     </>
@@ -2918,7 +2921,7 @@ function ModuleDialog(props: {
           {fieldMessage("type") ? <p className={styles.fieldError} id="program-type-error" role="alert">{fieldMessage("type")}</p> : null}
           {!typeEnabled ? (
             <p className={styles.fieldError} role="note">
-              이 유형은 꺼져 있습니다. <Link href={settingsHref}>행사 설정</Link>에서 기능을 먼저 켜세요.
+              이 유형은 꺼져 있습니다. <ProductLink href={settingsHref}>행사 설정</ProductLink>에서 기능을 먼저 켜세요.
             </p>
           ) : null}
         </div>
@@ -2970,17 +2973,17 @@ function ModuleDialog(props: {
         {failure ? <p className={styles.fieldError} role="alert">{failure.message}</p> : null}
         {recovery}
         <ConsoleFormActions>
-          <button
+          <ProductButton
             type="button"
-            className="button button-secondary"
+            variant="secondary"
             disabled={busy}
             onClick={() => { if (!busy && canClose()) onClose(); }}
           >
             취소
-          </button>
-          <button type="submit" className="button button-primary" disabled={busy || locked || !typeEnabled}>
+          </ProductButton>
+          <ProductButton type="submit" variant="primary" disabled={busy || locked || !typeEnabled}>
             {busy ? "저장 중…" : draft.id ? "저장" : "만들기"}
-          </button>
+          </ProductButton>
         </ConsoleFormActions>
       </ValidatedForm>
     </ConsoleDialog>

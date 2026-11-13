@@ -89,7 +89,7 @@ test('mobile-workspaces: CSV and import ride one compact secondary pair', () => 
   assert.match(list, /<ImportWizard eventId=\{eventId\}/u, 'import route stays');
   assert.match(list, /명단 가져오기/u, 'import action stays and matches its destination');
   assert.doesNotMatch(list, /button-primary" href=\{`\/console\/events\/\$\{encodeURIComponent\(eventId\)\}\/participants\/import`\}/u, 'import is no longer a full-width primary');
-  assert.match(list, /canMutateStatus \? <button type="button" className="button button-secondary" onClick=\{\(\) => setImportOpen\(true\)\}/u, 'import stays gated and opens a secondary modal action');
+  assert.match(list, /canMutateStatus \? <ProductButton type="button" className="button button-secondary" onClick=\{\(\) => setImportOpen\(true\)\}/u, 'import stays gated and opens a secondary modal action');
 });
 
 test('mobile-workspaces: editor preview header wraps without squishing Korean', () => {

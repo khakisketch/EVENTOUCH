@@ -1,8 +1,9 @@
 "use client";
+import ProductButton from "../ui/ProductButton";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import ProductLink from "../ui/ProductLink";
 import { loginHrefForLocation } from "../auth-redirect";
 import { eventStageClassName, eventStageLabel } from "../event-stage";
 import ConsolePage from "./console-ui/ConsolePage";
@@ -181,7 +182,7 @@ function EventCard({
           The accessible name comes from the card contents (plus a visually
           hidden "열기" affordance) so visible text always stays inside the
           name instead of an aria-label that would orphan it. */}
-      <Link
+      <ProductLink
         className={styles.eventCardLink}
         href={`/console/events/${encodeURIComponent(event.id)}`}
       >
@@ -218,18 +219,18 @@ function EventCard({
             <span className="sr-only"> 열기</span>
           </div>
         </div>
-      </Link>
+      </ProductLink>
       {/* Follow-up only when a queue exists: no permanent footer, no `0명`
           indicator, no per-card duplicate. */}
       {event.pending > 0 ? (
         <div className={styles.eventCardActions}>
-          <Link
+          <ProductLink
             className={styles.approvalLink}
             href={`/console/events/${encodeURIComponent(event.id)}/participants?status=PENDING`}
             aria-label={`${event.name} 승인 대기 ${event.pending}명 처리`}
           >
             승인 대기 {event.pending}명 처리
-          </Link>
+          </ProductLink>
         </div>
       ) : null}
     </article>
@@ -595,16 +596,16 @@ export default function ConsoleHome() {
     <ConsolePage
       pageId="events"
       headerActions={
-        <button
+        <ProductButton
           type="button"
           className={`button button-primary ${styles.createTrigger}`}
           onClick={() => setCreateOpen(true)}
         >
           새 행사 만들기
-        </button>
+        </ProductButton>
       }
       feedback={refreshError || receiptNotice ? <>
-        {refreshError ? <ConsoleFeedback kind="error">{refreshError} 이전 목록은 유지됩니다. <button className="button button-secondary" type="button" onClick={() => setReloadTick((tick) => tick + 1)}>다시 불러오기</button></ConsoleFeedback> : null}
+        {refreshError ? <ConsoleFeedback kind="error">{refreshError} 이전 목록은 유지됩니다. <ProductButton className="button button-secondary" type="button" onClick={() => setReloadTick((tick) => tick + 1)}>다시 불러오기</ProductButton></ConsoleFeedback> : null}
         {receiptNotice ? <ConsoleFeedback kind="success">{receiptNotice}</ConsoleFeedback> : null}
       </> : undefined}
     >
@@ -688,7 +689,7 @@ export default function ConsoleHome() {
         {view === "calendar" ? (
           <div className={styles.calendarPanel}>
             <div className={styles.monthBar}>
-              <button
+              <ProductButton
                 type="button"
                 className="button button-secondary"
                 onClick={() => setMonthCursor((cursor) => cursor.month === 0
@@ -697,9 +698,9 @@ export default function ConsoleHome() {
                 aria-label="이전 달"
               >
                 ‹
-              </button>
+              </ProductButton>
               <strong>{monthCursor.year}년 {monthCursor.month + 1}월</strong>
-              <button
+              <ProductButton
                 type="button"
                 className="button button-secondary"
                 onClick={() => setMonthCursor((cursor) => cursor.month === 11
@@ -708,15 +709,15 @@ export default function ConsoleHome() {
                 aria-label="다음 달"
               >
                 ›
-              </button>
+              </ProductButton>
               {selectedDate ? (
-                <button
+                <ProductButton
                   type="button"
                   className="button button-secondary"
                   onClick={() => setSelectedDate(null)}
                 >
                   {describeDate(selectedDate)} 해제
-                </button>
+                </ProductButton>
               ) : null}
             </div>
             <div className={styles.monthGrid} role="group" aria-label="날짜 선택">
@@ -747,9 +748,9 @@ export default function ConsoleHome() {
 
         {hasNarrowing && visibleEvents.length > 0 ? (
           <div className={styles.resultsMeta}>
-            <button type="button" className="button button-secondary" onClick={clearAll}>
+            <ProductButton type="button" className="button button-secondary" onClick={clearAll}>
               필터 초기화
-            </button>
+            </ProductButton>
           </div>
         ) : null}
 
@@ -762,13 +763,13 @@ export default function ConsoleHome() {
           <div className={styles.emptyState}>
             <h3>조건에 맞는 행사가 없습니다</h3>
             <p>검색어를 바꾸거나 다른 진행 단계·날짜에서 찾아보세요.</p>
-            <button
+            <ProductButton
               type="button"
               className="button button-secondary"
               onClick={clearAll}
             >
               필터 초기화
-            </button>
+            </ProductButton>
           </div>
         ) : (
           <>

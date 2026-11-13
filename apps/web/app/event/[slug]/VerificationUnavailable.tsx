@@ -1,4 +1,4 @@
-import Link from "next/link";
+import ProductLink from "../../ui/ProductLink";
 
 export default function VerificationUnavailable({
   slug,
@@ -23,9 +23,9 @@ export default function VerificationUnavailable({
         이 화면에서는 티켓을 다시 연결할 수 없습니다. 이미 신청했다면 신청을 완료한 브라우저 탭을 확인하세요.
         {contact ? ` 문의: ${contact}` : " 탭을 찾을 수 없다면 행사 초대 안내를 확인하거나 행사 주최 측에 문의하세요."}
       </p>
-      <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>
+      <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>
         행사 안내 보기
-      </Link>
+      </ProductLink>
     </section>
   );
 }

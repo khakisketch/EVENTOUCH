@@ -61,6 +61,25 @@
   overflow-wrap: break-word;
 }
 
+.intakeFields {
+  display: grid;
+  gap: var(--s1);
+  justify-items: start;
+  min-width: 0;
+}
+.intakeFieldsLink:global([data-variant="ghost"]) {
+  padding-inline: var(--s2);
+  color: var(--brand-text);
+}
+.intakeWarningText { margin: 0; }
+.intakeWarningLink:global([data-variant="ghost"]) {
+  display: flex;
+  width: fit-content;
+  margin-top: var(--s1);
+  padding-inline: var(--s2);
+  color: var(--brand-text);
+}
+
 .ticketExpiryHelp { margin-block-start: var(--s2); }
 
 /* 기본 정보 탭 안의 과제 묶음(식별 → 일시·규모 → 접수 정책): 위에는
@@ -115,8 +134,9 @@
   padding: var(--s2) var(--s3);
   border: 1px solid var(--line);
   border-radius: var(--radius-medium);
-  background: var(--surface-muted);
+  background: var(--paper);
   font-size: var(--small);
+  font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
 
@@ -202,7 +222,7 @@
 
 .tabPanel {
   min-width: 0;
-  padding-top: var(--s4);
+  padding-top: var(--s3);
 }
 
 .basicsForm {
@@ -326,6 +346,7 @@
   background: var(--surface-muted);
   color: var(--muted);
   font-size: var(--small);
+  font-variant-numeric: tabular-nums;
 }
 
 .stageStepCurrent {
@@ -343,8 +364,18 @@
 }
 
 .stageStepMark {
-  font-size: var(--small);
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 var(--s1);
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: var(--label);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 .unsavedTag {
@@ -440,13 +471,14 @@
   padding: var(--s4);
   border: 1px solid var(--line);
   border-radius: var(--radius-medium);
-  background: var(--surface-muted);
+  background: var(--paper);
 }
 .scheduleReview h3, .scheduleReview p { margin: 0; }
 .scheduleReview h3 { font-size: var(--body); }
 .scheduleReview p { color: var(--muted); line-height: 1.6; }
 .scheduleReviewLinks { display: flex; flex-wrap: wrap; gap: 0 var(--s4); }
-.scheduleReviewLinks a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 650; }
+.scheduleReviewLinks a { display: inline-flex; align-items: center; min-height: 44px; padding: var(--s2) var(--s3); border: 1px solid var(--line-strong); border-radius: var(--radius-medium); background: var(--paper); color: var(--ink); font-weight: 650; text-decoration: none; }
+.scheduleReviewLinks a:hover { border-color: var(--ink); background: var(--surface-muted); }
 
 .conflict {
   display: grid;
@@ -467,7 +499,7 @@
 .conflictComparison strong { font-size: var(--small); }
 .conflictComparison p { margin-top: var(--s1); white-space: pre-wrap; overflow-wrap: anywhere; }
 .conflictFields { margin: var(--s2) 0 0; padding-left: var(--s4); overflow-wrap: anywhere; }
-.settingsComparison { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: var(--small); text-align: left; }
+.settingsComparison { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: var(--small); font-variant-numeric: tabular-nums; text-align: left; }
 .settingsComparison caption { margin-bottom: var(--s2); text-align: left; font-weight: 700; }
 .settingsComparison th, .settingsComparison td { padding: var(--s2); border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
 .settingsComparison th:first-child { width: 26%; }

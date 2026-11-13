@@ -51,7 +51,7 @@ async function databaseExists(project, user, database) {
 async function tableCount(project, user, database) {
   const output = await lib.compose(project, [
     'exec', '-T', 'db', 'psql', '-U', user, '-d', database, '-XAt',
-    '-c', "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'",
+    '-c', "SELECT count(*) FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog', 'information_schema') AND table_schema NOT LIKE 'pg_%'",
   ]);
   return Number(String(output).trim());
 }
@@ -201,6 +201,7 @@ async function main() {
   if (!options.project) lib.fail('복원 대상 compose 프로젝트를 --project로 지정하세요');
 
   const manifest = await lib.readManifest(directory);
+  if (manifest.source.schema && manifest.source.schema !== 'public') lib.fail('전용 스키마 백업은 Compose public 복원이 아닌 별도 빈 대상의 관리형 DB 복원 절차를 사용하세요');
   await lib.verifyChecksums(directory, manifest);
   log('백업 체크섬 확인 완료');
   await preflightStorage(options, directory, manifest);

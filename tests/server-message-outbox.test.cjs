@@ -948,3 +948,36 @@ test('a conflicting cancellation blocks new messages, automatic reservations and
   assert.equal(blocked.status, 'SCHEDULED'); assert.equal(blocked.attempts, 0);
   assert.equal(output.status, 'FAILED'); assert.equal(output.recipientChangeCount, 1); assert.equal(output.acceptedCount, 0);
 });
+
+test('immediate, boot-drain and maintenance MMS share the injected directory store', async () => {
+  const fs=require('node:fs');const os=require('node:os');const path=require('node:path');
+  const {createFileStorage}=require('../server/file-storage');
+  const {runMessageMaintenance}=require('../server/message-maintenance');
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'eventouch-mms-workers-'));
+  const storage=createFileStorage({storageDir:root,env:{}});
+  let uploads=0;let sends=0;
+  const bytes=Buffer.alloc(1024);Buffer.from('ffd8ffc0000b080001000a01011100ffd9','hex').copy(bytes);
+  const provider={state:{connected:true,provider:'SOLAPI'},
+    async uploadImage(image){assert.deepEqual(image.bytes,bytes);uploads++;return {ok:true,imageId:`synthetic-${uploads}`};},
+    async sendBatch(recipients){sends++;return {accepted:true,registered:recipients.map(person=>({participantId:person.participantId,accepted:true,type:'MMS'})),rejected:[],groupId:`synthetic-group-${sends}`,deliveryUnconfirmed:true};},
+  };
+  try {
+    for(const mode of ['immediate','boot','maintenance']){
+      const person=makeParticipant('unused','합성 MMS');const event=await createFixture({participants:[person]});
+      const fileId=`file-${crypto.randomUUID()}`;await storage.put(fileId,bytes);
+      await harness.database.query("INSERT INTO stored_files (id,event_id,storage_key,original_name,content_type,size_bytes,created_by) VALUES ($1,$2,$1,'synthetic.jpg','image/jpeg',$3,$4)",[fileId,event.id,bytes.length,accountIds.manager]);
+      const commands=createDomainCommands(harness.database,{messaging:mode==='immediate'?provider:{state:{connected:false}},fileStorage:storage});
+      const result=await commands.execute({eventId:event.id,commandId:commandId(),command:'message.create',payload:{ids:[person.id],title:'합성 MMS',channel:'MMS',body:'합성 본문',imageFileId:fileId},account:{id:accountIds.manager,orgId:LEGACY_ORG}});
+      if(mode!=='immediate'){
+        const workspace=await readWorkspace(event.id);const message=workspace.messages.find(item=>item.id===result.body.message.id);
+        message.status='SENDING';message.deliveries.forEach(delivery=>{delivery.status='SENDING';});
+        await harness.database.query('UPDATE event_workspaces SET payload=$2::jsonb WHERE event_id=$1',[event.id,JSON.stringify(workspace)]);
+        await harness.database.query("INSERT INTO message_outbox (message_id,event_id,status) VALUES ($1,$2,'PENDING')",[message.id,event.id]);
+        if(mode==='boot')await drainMessageOutbox(harness.database,provider,{fileStorage:storage});
+        else await runMessageMaintenance(harness.database,provider,{enabled:true,autoSendDue:false,eventIds:[event.id],fileStorage:storage});
+      }
+      assert.equal(uploads,['immediate','boot','maintenance'].indexOf(mode)+1,mode);
+      assert.equal(sends,uploads,mode);
+    }
+  } finally {fs.rmSync(root,{recursive:true,force:true});}
+});

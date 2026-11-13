@@ -14,8 +14,10 @@
 .pageHeader h1 {
   margin: 0;
   font-size: var(--h2);
+  letter-spacing: -0.01em;
   word-break: keep-all;
   overflow-wrap: break-word;
+  font-variant-numeric: tabular-nums;
 }
 
 .wordmark {
@@ -28,7 +30,9 @@
   margin: 0 0 var(--s1);
   color: var(--brand-text);
   font-size: var(--small);
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .moduleList {
@@ -51,6 +55,7 @@
 .moduleCard h2 {
   margin: 0;
   font-size: var(--h3);
+  letter-spacing: -0.01em;
   word-break: keep-all;
   overflow-wrap: break-word;
 }
@@ -303,6 +308,7 @@
 .noticeCard h2 {
   margin: 0;
   font-size: var(--h3);
+  letter-spacing: -0.01em;
   word-break: keep-all;
 }
 

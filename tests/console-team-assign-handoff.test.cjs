@@ -168,16 +168,16 @@ test('handoff opens the dialog once after load, validates, then consumes the par
 
 // --- candidate 5: display moves to second, verbatim ----------------------------
 
-test('jump nav lists same-day work first and presets last', () => {
+test('jump nav groups preparation, assignment, and live work', () => {
   const source = read(OPS);
   const navAt = source.indexOf('label="현장 운영 구역"');
   assert.ok(navAt >= 0, 'expected the operations jump nav');
   const navBlock = source.slice(navAt, navAt + 2000);
-  const order = ['ops-desks', 'ops-display', 'ops-booths', 'ops-staff', 'ops-booth-mode', 'ops-booth-map'];
+  const order = ['ops-desks', 'ops-booths', 'ops-booth-mode', 'ops-booth-map', 'ops-staff', 'ops-participation', 'ops-display'];
   let last = -1;
   for (const id of order) {
     const at = navBlock.indexOf(`"${id}"`);
-    assert.ok(at > last, `${id} follows the same-day-first nav order`);
+    assert.ok(at > last, `${id} follows the grouped task order`);
     last = at;
   }
 });

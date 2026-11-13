@@ -1,5 +1,7 @@
 "use client";
 
+import ProductButton from "../../ui/ProductButton";
+
 import { useEffect, useRef, type ReactNode } from "react";
 import ConsoleFormActions from "./ConsoleFormActions";
 
@@ -25,12 +27,12 @@ export default function StageTransitionConfirmation({ label, busy, disabled = fa
       <p>정말 {label} 단계로 전환합니다?</p>
       {children}
       <ConsoleFormActions>
-        <button ref={confirmRef} type="button" className="button button-secondary" onClick={onConfirm}
+        <ProductButton ref={confirmRef} type="button" className="button button-secondary" onClick={onConfirm}
           onKeyDown={event => { if (event.repeat && (event.key === "Enter" || event.key === " ")) event.preventDefault(); }}
           disabled={busy || disabled} aria-describedby={describedBy} aria-label={`${actionText} · ${label} 단계로`}>
           {actionText}
-        </button>
-        <button type="button" className="button button-secondary" onClick={onCancel} disabled={busy || cancelDisabled}>취소</button>
+        </ProductButton>
+        <ProductButton type="button" className="button button-secondary" onClick={onCancel} disabled={busy || cancelDisabled}>취소</ProductButton>
       </ConsoleFormActions>
     </div>
   );

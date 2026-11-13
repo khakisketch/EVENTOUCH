@@ -13,6 +13,8 @@
   --stage-line: #34363B;
   --brand: #EA552E;
   --brand-hover: #C7441C;
+  --brand-pressed: #A93917;
+  --control-min-size: 44px;
   --brand-text: #8E351F;
   --on-brand: #19191C;
   --on-brand-hover: #FFFFFF;
@@ -34,6 +36,16 @@
   --nav-active: #FFF0E6;
   --nav-text: #1E2026;
   --nav-muted: #61656C;
+
+  /* Ink command rail (console sidebar, renewal direction A). Scoped
+     overrides in globals.css point the --nav tokens at these. */
+  --side: #101114;
+  --side-line: #34363B;
+  --side-text: #FFFFFF;
+  --side-muted: #A9AEB6;
+  --side-hover: #FFFFFF14;
+  --side-active: #FFFFFF1F;
+  --side-scroll: #FFFFFF33;
 
   --danger: #B21E35;
   --danger-soft: #F7E4E7;

@@ -1,4 +1,5 @@
 "use client";
+import ProductButton from "../ui/ProductButton";
 
 import ConsoleChoiceGroup, { EVENT_FORMAT_CHOICES } from "./console-ui/ConsoleChoiceGroup";
 import ValidatedForm from "../ui/ValidatedForm";
@@ -668,27 +669,27 @@ export default function CreateEventDialog({
         isClientCreate ? (
           <div className={styles.createFooter}>
           <ConsoleFormActions>
-            <button type="button" className="button button-secondary" onClick={cancelClientCreate} disabled={clientSaving || checkingResult}>
+            <ProductButton type="button" className="button button-secondary" onClick={cancelClientCreate} disabled={clientSaving || checkingResult}>
               행사 입력으로 돌아가기
-            </button>
-            {clientUncertain ? <button type="button" className="button button-secondary" disabled={clientSaving || checkingResult} onClick={() => void checkResult("client")}>{checkingResult ? "확인 중…" : "서버 처리 확인"}</button> : null}
-            <button type="submit" form={clientFormId} className="button button-primary" disabled={clientSaving || checkingResult || otherClientReceipt}>
+            </ProductButton>
+            {clientUncertain ? <ProductButton type="button" className="button button-secondary" disabled={clientSaving || checkingResult} onClick={() => void checkResult("client")}>{checkingResult ? "확인 중…" : "서버 처리 확인"}</ProductButton> : null}
+            <ProductButton type="submit" form={clientFormId} className="button button-primary" disabled={clientSaving || checkingResult || otherClientReceipt}>
               {clientSaving ? "등록 중입니다" : clientFailure?.retryable ? "같은 요청 다시 시도" : "고객사 등록"}
-            </button>
+            </ProductButton>
           </ConsoleFormActions>
           </div>
         ) : (
           <div className={styles.createFooter}>
           <ConsoleFormActions>
-            <button type="button" className="button button-secondary" onClick={close} disabled={submitting || checkingResult}>
+            <ProductButton type="button" className="button button-secondary" onClick={close} disabled={submitting || checkingResult}>
               취소
-            </button>
-            {eventUncertain ? <button type="button" className="button button-secondary" disabled={submitting || checkingResult} onClick={() => void checkResult("event")}>{checkingResult ? "확인 중…" : "서버 처리 확인"}</button> : null}
-            <button type="submit" form={eventFormId} className="button button-primary" disabled={submitting || checkingResult || Boolean(pendingClientRef.current) || otherClientReceipt || otherEventReceipt}>
+            </ProductButton>
+            {eventUncertain ? <ProductButton type="button" className="button button-secondary" disabled={submitting || checkingResult} onClick={() => void checkResult("event")}>{checkingResult ? "확인 중…" : "서버 처리 확인"}</ProductButton> : null}
+            <ProductButton type="submit" form={eventFormId} className="button button-primary" disabled={submitting || checkingResult || Boolean(pendingClientRef.current) || otherClientReceipt || otherEventReceipt}>
               {submitting
                 ? isCopyView ? "복제하는 중입니다" : "만드는 중입니다"
                 : eventUncertain ? "같은 요청 다시 시도" : isCopyView ? "행사 복제" : "행사 만들기"}
-            </button>
+            </ProductButton>
           </ConsoleFormActions>
           </div>
         )
@@ -881,14 +882,14 @@ export default function CreateEventDialog({
                     <p className={styles.slugHint} role="status" id="create-client-notice">{clientNotice}</p>
                   ) : null}
                   <p className={styles.slugHint}>
-                    <button
+                    <ProductButton
                       type="button"
                       className="button button-secondary"
                       disabled={submitting || checkingResult || eventUncertain}
                       onClick={() => { if (!clientUncertain) setClientFailure(null); setClientMode("create"); }}
                     >
                       새 고객사 등록
-                    </button>
+                    </ProductButton>
                   </p>
                   {invalid("clientId") ? <p role="alert">{failure?.message}</p> : null}
                 </div>

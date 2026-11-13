@@ -1,5 +1,7 @@
 "use client";
 
+import ProductButton from "../../ui/ProductButton";
+
 import { useEffect, useRef, useState } from "react";
 import styles from "./console-ui.module.css";
 
@@ -14,6 +16,8 @@ export type ConsoleSectionNavItem = {
   label: string;
   /** Encoded URL fragment for a tab with a separately addressable record. */
   fragment?: string;
+  /** Optional visible grouping within a single persistent task list. */
+  group?: string;
 };
 
 type ConsoleSectionNavProps = {
@@ -56,6 +60,17 @@ export default function ConsoleSectionNav({ items, label, activeId, onNavigate, 
   navigateRef.current = onNavigate;
   const ids = items.map((item) => item.id).join("|");
   const activateRef = useRef<(id: string) => void>(() => {});
+  const grouped = mode === "tabs" && items.length > 0 && items.every((item) => item.group);
+  const [verticalTabs, setVerticalTabs] = useState(false);
+
+  useEffect(() => {
+    if (!grouped) return;
+    const query = window.matchMedia("(min-width: 1024px)");
+    const update = () => setVerticalTabs(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, [grouped]);
 
   useEffect(() => {
     if (mode !== "tabs") return;
@@ -138,13 +153,21 @@ export default function ConsoleSectionNav({ items, label, activeId, onNavigate, 
   }, [mode, ids, initialId]);
 
   if (!items.length) return null;
-  if (mode === "tabs") return <nav ref={navRef} className={styles.sectionNav} aria-label={label ?? "작업 선택"}>
-    <div className={styles.sectionNavList} role="tablist" aria-label={label ?? "작업 선택"}>
-      {items.map((item, index) => <button type="button" key={item.id} role="tab" id={`${item.id}-tab`}
-        className={styles.sectionNavLink} aria-controls={`${item.id}-panel`} aria-selected={selected === item.id}
+  if (mode === "tabs") {
+    const groups = grouped ? items.reduce<{ label: string; items: ConsoleSectionNavItem[] }[]>((result, item) => {
+      const current = result[result.length - 1];
+      if (current?.label === item.group) current.items.push(item);
+      else result.push({ label: item.group!, items: [item] });
+      return result;
+    }, []) : [];
+    const renderTab = (item: ConsoleSectionNavItem, index: number, groupId?: string) => (
+      <ProductButton type="button" key={item.id} role="tab" id={`${item.id}-tab`}
+        className={styles.sectionNavLink} aria-controls={`${item.id}-panel`} aria-selected={selected === item.id} aria-describedby={groupId}
         tabIndex={selected === item.id ? 0 : -1}
         onKeyDown={(event) => {
-          const next = event.key === "ArrowRight" ? (index + 1) % items.length : event.key === "ArrowLeft" ? (index + items.length - 1) % items.length : event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : -1;
+          const forward = event.key === "ArrowRight" || (grouped && verticalTabs && event.key === "ArrowDown");
+          const backward = event.key === "ArrowLeft" || (grouped && verticalTabs && event.key === "ArrowUp");
+          const next = forward ? (index + 1) % items.length : backward ? (index + items.length - 1) % items.length : event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : -1;
           if (next < 0) return;
           event.preventDefault();
           document.getElementById(`${items[next].id}-tab`)?.focus();
@@ -154,9 +177,20 @@ export default function ConsoleSectionNav({ items, label, activeId, onNavigate, 
           activateRef.current(item.id);
           navigateRef.current?.(item.id);
           history.replaceState(history.state, "", `#${item.fragment ?? item.id}`);
-        }}>{item.label}</button>)}
-    </div>
-  </nav>;
+        }}>{item.label}</ProductButton>
+    );
+    return <nav ref={navRef} className={styles.sectionNav} aria-label={label ?? "작업 선택"}>
+      <div className={`${styles.sectionNavList}${grouped ? ` ${styles.groupedTaskList}` : ""}`} role="tablist" aria-label={label ?? "작업 선택"} aria-orientation={grouped ? (verticalTabs ? "vertical" : "horizontal") : undefined}>
+        {grouped ? groups.map((group) => {
+          const groupId = `${group.items[0].id}-group`;
+          return <div key={group.label} className={styles.taskGroup} role="presentation" data-task-group={group.label}>
+            <span id={groupId} className={styles.taskGroupLabel}>{group.label}</span>
+            <div className={styles.taskGroupItems} role="presentation">{group.items.map((item) => renderTab(item, items.indexOf(item), groupId))}</div>
+          </div>;
+        }) : items.map((item, index) => renderTab(item, index))}
+      </div>
+    </nav>;
+  }
 
   return (
     <nav className={`${styles.sectionNav} ${styles.anchorNav}`} aria-label={label ?? "섹션 바로가기"}>

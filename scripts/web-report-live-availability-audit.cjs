@@ -33,7 +33,30 @@ async function main() {
     page.on('pageerror', error => errors.push(error.message));
     const url = `${f.baseUrl}/console/events/${f.eventId}/reports`;
     await page.goto(url, { waitUntil: 'networkidle' });
-    await page.getByRole('tab', { name: '결과 분석', exact: true }).click();
+    if (!process.argv.includes('--baseline')) {
+      const reportList = page.locator('[data-workspace-section="reports-list"]');
+      const inspect = reportList.getByRole('button', { name: '조회된 집계 보기', exact: true });
+      assert.equal(await inspect.count(), 1, 'saved reports link directly to the latest completed analysis');
+      assert.match(await reportList.innerText(), /집계 자료 확인 필요/);
+      await page.evaluate(axe);
+      for (const width of [320, 390, 1280]) {
+        await page.setViewportSize({ width, height: 900 });
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
+        assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter(v => ['serious','critical'].includes(v.impact)).map(v => v.id)), []);
+        if (width !== 320) await page.screenshot({ path: path.join(out, `report-list-${width}.png`) });
+      }
+      const writes = [];
+      page.on('request', request => { if (request.method() === 'POST' && request.url().includes('/commands')) writes.push(request.url()); });
+      await inspect.click();
+      assert.equal(await page.getByRole('tab', { name: '결과 분석', exact: true }).getAttribute('aria-selected'), 'true');
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'reports-analysis');
+      assert.equal(new URL(page.url()).hash, '#reports-analysis', 'analysis handoff updates the shareable task address');
+      await page.reload({ waitUntil: 'networkidle' });
+      assert.equal(await page.getByRole('tab', { name: '결과 분석', exact: true }).getAttribute('aria-selected'), 'true', 'analysis remains selected after reload');
+      assert.equal(writes.length, 0, 'opening analysis never writes or changes a frozen report');
+    } else {
+      await page.getByRole('tab', { name: '결과 분석', exact: true }).click();
+    }
     const analysis = page.locator('[data-workspace-section="reports-analysis"]');
     await analysis.waitFor();
     if (process.argv.includes('--baseline')) {
@@ -103,6 +126,13 @@ async function main() {
     await page.screenshot({ path: path.join(out, 'after-partial-1280.png'), fullPage: true });
     await page.getByRole('tab', { name: '보고서', exact: true }).click();
     assert.equal(await page.getByRole('button', { name: '보고서 만들기', exact: true }).first().isDisabled(), true);
+    const reportList = page.locator('[data-workspace-section="reports-list"]');
+    assert.match(await reportList.innerText(), /일부 집계 자료 확인 필요/, 'available attendance is not described as wholly unavailable');
+    const bootstrapUrl = `**/api/events/${f.eventId}/bootstrap`;
+    await page.route(bootstrapUrl, route => route.fulfill({ status: 503, body: 'unavailable' }));
+    await page.getByRole('button', { name: '보고서 자료 다시 확인', exact: true }).click();
+    await reportList.getByText('새로고침 실패 · 이전 조회 표시', { exact: false }).waitFor();
+    await page.unroute(bootstrapUrl);
     const restored = await read(); restored.photos = original.photos; await save(restored);
     await page.getByRole('button', { name: '보고서 자료 다시 확인', exact: true }).click();
     await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button => button.textContent.trim() === '보고서 만들기' && !button.disabled));
@@ -111,6 +141,8 @@ async function main() {
     assert.match(await analysis.innerText(), /취소 제외 등록 \(명\)/);
     await page.getByRole('tab', { name: '보고서', exact: true }).click();
     assert.equal(await page.getByRole('button', { name: '보고서 만들기', exact: true }).first().isEnabled(), true);
+    assert.match(await page.locator('[data-workspace-section="reports-list"]').innerText(), /마지막으로 확인한 집계 · 조회/);
+    assert.doesNotMatch(await page.locator('[data-workspace-section="reports-list"]').innerText(), /집계 자료 확인 필요/);
     for (const missing of ['participants', 'reportSourceAvailability']) {
       const bootstrap = `**/api/events/${f.eventId}/bootstrap`;
       await page.route(bootstrap, async route => {

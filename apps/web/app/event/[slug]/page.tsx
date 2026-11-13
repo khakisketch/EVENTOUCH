@@ -380,7 +380,7 @@ export default async function EventPage({
             {/* A normal image/link preserves zoom and the browser's download controls. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={venueMap.src} alt={venueMap.alt} />
-            <figcaption><a href={venueMap.src} target="_blank" rel="noopener noreferrer">안내도 크게 보기 (새 탭)</a></figcaption>
+            <figcaption><Link className="button button-secondary" href={venueMap.src} target="_blank" rel="noopener noreferrer">안내도 크게 보기 (새 탭)</Link></figcaption>
           </figure> : null}
         </section>
       ) : null}

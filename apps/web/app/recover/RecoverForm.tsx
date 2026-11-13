@@ -1,10 +1,13 @@
 "use client";
 
+import ProductInput from "../ui/ProductInput";
+
 import ValidatedForm from "../ui/ValidatedForm";
 
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import ProductLink from "../ui/ProductLink";
+import ProductButton from "../ui/ProductButton";
 import { useUnsavedNavigationGuard } from "../../lib/use-unsaved-navigation-guard";
 
 // Logged-out password reset by verified email ("이메일+수동 예외").
@@ -239,7 +242,7 @@ export default function RecoverForm() {
       <div className="auth-form">
         <p role="status">비밀번호를 바꿨습니다. 모든 기기에서 로그아웃되었으니 새 비밀번호로 로그인하세요.</p>
         <p className="auth-help">
-          <Link href="/login">로그인으로 이동</Link>
+          <ProductLink href="/login">로그인으로 이동</ProductLink>
         </p>
       </div>
     );
@@ -281,20 +284,20 @@ export default function RecoverForm() {
           />
         </div>
         {failure ? <p role="alert" id="recover-confirm-error" ref={failureRef} tabIndex={-1}>{failure}</p> : null}
-        <button type="submit" disabled={working}>
+        <ProductButton variant="primary" type="submit" disabled={working}>
           {working ? "바꾸는 중입니다" : "비밀번호 바꾸기"}
-        </button>
+        </ProductButton>
         <p className="auth-help">
           링크가 동작하지 않나요?{" "}
-          <button type="button" className="auth-help-link" disabled={working} onClick={requestAgain}>
+          <ProductButton type="button" className="auth-help-link" disabled={working} onClick={requestAgain}>
             새 복구 메일 요청
-          </button>
+          </ProductButton>
         </p>
         {offerLogin && failure ? (
           <p className="auth-help">
-            <Link href="/login" target="_blank" rel="noopener noreferrer">
+            <ProductLink href="/login" target="_blank" rel="noopener noreferrer">
               새 비밀번호로 로그인 확인 (새 탭)
-            </Link>
+            </ProductLink>
           </p>
         ) : null}
       </ValidatedForm>
@@ -313,7 +316,7 @@ export default function RecoverForm() {
             조직 관리자에게 문의하세요.
           </p>
           <p className="auth-help">
-            <Link href="/login">로그인으로 돌아가기</Link>
+            <ProductLink href="/login">로그인으로 돌아가기</ProductLink>
           </p>
         </div>
       );
@@ -335,17 +338,17 @@ export default function RecoverForm() {
           관리자에게 문의하세요.
         </p>
         <p className="auth-help">
-          <button
+          <ProductButton
             type="button"
             className="auth-help-link"
             disabled={working}
             onClick={() => { void postRequest(); }}
           >
             {working ? "요청 중입니다" : "복구 메일 다시 요청"}
-          </button>
+          </ProductButton>
         </p>
         <p className="auth-help">
-          <Link href="/login">로그인으로 돌아가기</Link>
+          <ProductLink href="/login">로그인으로 돌아가기</ProductLink>
         </p>
       </div>
     );
@@ -358,8 +361,7 @@ export default function RecoverForm() {
         계정은 복구 메일이 가지 않습니다.
       </p>
       <div className="form-field">
-        <label htmlFor="recover-email">계정 이메일</label>
-        <input
+        <ProductInput labelMode="astryx" label="계정 이메일"
           id="recover-email"
           type="email"
           autoComplete="username"
@@ -371,11 +373,11 @@ export default function RecoverForm() {
         />
       </div>
       {failure ? <p role="alert" id="recover-request-error" ref={failureRef} tabIndex={-1}>{failure}</p> : null}
-      <button type="submit" disabled={working}>
+      <ProductButton variant="primary" type="submit" disabled={working}>
         {working ? "요청 중입니다" : "복구 메일 요청"}
-      </button>
+      </ProductButton>
       <p className="auth-help">
-        <Link href="/login">로그인으로 돌아가기</Link>
+        <ProductLink href="/login">로그인으로 돌아가기</ProductLink>
       </p>
     </ValidatedForm>
   );

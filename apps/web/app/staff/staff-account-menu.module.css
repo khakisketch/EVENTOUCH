@@ -53,9 +53,9 @@
   top: calc(100% + var(--s1));
   right: 0;
   display: grid;
-  gap: var(--s3);
+  gap: var(--s2);
   width: min(22rem, calc(100vw - var(--s5)));
-  padding: var(--s4);
+  padding: var(--s3);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-large);
   background: var(--paper);
@@ -68,31 +68,42 @@
 
 .accountFacts {
   display: grid;
-  gap: var(--s2);
+  gap: var(--s1);
   margin: 0;
 }
 
 .accountFacts > div {
   display: grid;
   grid-template-columns: 7rem minmax(0, 1fr);
-  gap: var(--s2);
+  gap: var(--s1) var(--s2);
   align-items: baseline;
+  padding-block: var(--s1);
+  border-bottom: 1px solid var(--line);
+}
+
+.accountFacts > div:last-child {
+  border-bottom: 0;
 }
 
 .accountFacts dt {
   color: var(--muted);
-  font-size: var(--small);
+  font-size: var(--label);
+  font-weight: 650;
+  letter-spacing: 0.04em;
 }
 
 .accountFacts dd {
   margin: 0;
   font-size: var(--small);
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
 
 .menuNote {
   margin: 0;
+  padding-top: var(--s2);
+  border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: var(--small);
   line-height: 1.55;

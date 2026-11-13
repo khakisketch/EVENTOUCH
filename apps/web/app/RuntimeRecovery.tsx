@@ -1,5 +1,7 @@
 "use client";
 
+import ProductButton from "./ui/ProductButton";
+
 import { useEffect, useRef, useState } from "react";
 import { isChunkLoadingError } from "../lib/runtime-recovery";
 import styles from "./runtime-recovery.module.css";
@@ -62,13 +64,13 @@ export default function RuntimeRecovery({ error, retry, standalone = false, titl
       {retryFailed ? <p className={styles.message} role="alert">다시 시도하지 못했습니다. 화면을 새로 불러오세요.</p> : null}
       <div className={styles.actions} aria-busy={pending}>
         {!nativeRecovery ? (
-          <button type="button" className={`${styles.action} ${styles.primary}`} disabled={pending} onClick={retrySegment}>
+          <ProductButton type="button" className={`${styles.action} ${styles.primary}`} disabled={pending} onClick={retrySegment}>
             {pending ? "다시 불러오는 중…" : "다시 시도"}
-          </button>
+          </ProductButton>
         ) : null}
-        <button type="button" className={`${styles.action}${nativeRecovery ? ` ${styles.primary}` : ""}`} disabled={pending} onClick={reloadDocument}>
+        <ProductButton type="button" className={`${styles.action}${nativeRecovery ? ` ${styles.primary}` : ""}`} disabled={pending} onClick={reloadDocument}>
           {pending && nativeRecovery ? "다시 불러오는 중…" : "화면 새로 불러오기"}
-        </button>
+        </ProductButton>
         <a className={styles.returnLink} href={back?.href ?? "/"}>{back?.label ?? "처음으로"}</a>
       </div>
     </main>

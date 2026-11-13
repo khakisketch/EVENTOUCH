@@ -52,7 +52,8 @@ test('event-home-leads-with-action-and-keeps-stage-metrics-and-optional-design-c
   const readinessAt = overview.indexOf('headingId="event-readiness-heading"');
   assert.ok(metricsAt >= 0 && scheduleAt >= 0 && readinessAt >= 0);
   const queueAt = overview.indexOf('currentStage !== "ARCHIVED" ? nowSection : null', overview.indexOf('return (\n    <ConsolePage'));
-  assert.ok(queueAt >= 0 && metricsAt < queueAt && queueAt < scheduleAt && scheduleAt < readinessAt, 'actions and metrics precede the schedule in reading order');
+  assert.ok(queueAt >= 0 && queueAt < metricsAt && metricsAt < scheduleAt && scheduleAt < readinessAt, 'active work queue, metrics, schedule and preparation follow the approved reading order');
+  assert.match(overview, /currentStage !== "ARCHIVED" \? nowSection : null/u, 'archived events omit the queue while retaining metrics and close status');
   // Preparation still opens with the stage band above the counts; archived
   // events use their close status instead of an empty work queue.
   const bandAt = overview.indexOf('stageBand');

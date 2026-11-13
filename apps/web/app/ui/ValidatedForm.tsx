@@ -1,5 +1,7 @@
 "use client";
 
+import ProductButton from "./ProductButton";
+
 import { revealDetailsFor } from "./reveal-details";
 import { useEffect, useId, useState, type ComponentProps } from "react";
 
@@ -66,7 +68,7 @@ function ValidatedFormBody({ children, onSubmit, onInputCapture, ref: externalRe
     const control = event.target;
     if (control instanceof Element && isControl(control) && control.validity.valid && errors.some((error) => error.control === control)) setErrors((current) => current.filter((error) => error.control !== control));
   }}>
-    {errors.length ? <div className="form-validation" role="alert"><p>입력 내용을 확인해 주세요.</p><ul>{errors.map((error, index) => <li key={index} id={`${id}-error-${index}`}><button type="button" onClick={() => error.control.focus()}>{error.message}</button></li>)}</ul></div> : null}
+    {errors.length ? <div className="form-validation" role="alert"><p>입력 내용을 확인해 주세요.</p><ul>{errors.map((error, index) => <li key={index} id={`${id}-error-${index}`}><ProductButton variant="ghost" type="button" onClick={() => error.control.focus()}>{error.message}</ProductButton></li>)}</ul></div> : null}
     {children}
   </form>;
 }

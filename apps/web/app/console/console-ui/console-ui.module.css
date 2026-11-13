@@ -92,6 +92,20 @@
   align-content: start;
 }
 
+.pageWithIndex {
+  display: grid;
+  gap: var(--s5);
+  min-width: 0;
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .pageWithIndex {
+    grid-template-columns: 200px minmax(0, 1fr);
+    gap: var(--s6);
+  }
+}
+
 .backLink:hover {
   border-color: var(--line-strong);
   background: var(--surface-muted);
@@ -101,6 +115,13 @@
 .section {
   display: grid;
   gap: var(--s3);
+  min-width: 0;
+}
+
+/* Section owns an inner painted container; keep the established content rhythm. */
+.section > :global(.astryx-section) {
+  display: grid;
+  gap: inherit;
   min-width: 0;
 }
 
@@ -186,7 +207,7 @@
   line-height: 1.4;
 }
 
-.sectionDivider > .sectionHead {
+.sectionDivider > :global(.astryx-section) > .sectionHead {
   padding-bottom: var(--s3);
   border-bottom: 1px solid var(--line);
 }
@@ -435,7 +456,7 @@
   min-width: 0;
 }
 
-.sectionCompact > .sectionBody {
+.sectionCompact > :global(.astryx-section) > .sectionBody {
   gap: var(--s2);
 }
 
@@ -452,7 +473,7 @@
   max-width: var(--web-reading-max);
 }
 
-.sectionForm > .sectionBody {
+.sectionForm > :global(.astryx-section) > .sectionBody {
   max-width: none;
 }
 
@@ -932,6 +953,35 @@
   border-bottom-color: var(--brand-text);
   color: var(--brand-text);
   font-weight: 650;
+}
+.groupedTaskList {
+  display: grid;
+  gap: var(--s3);
+  border: 0;
+}
+.taskGroup { min-width: 0; }
+.taskGroupLabel {
+  display: block;
+  margin-bottom: var(--s1);
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 650;
+}
+.taskGroupItems { display: flex; flex-wrap: wrap; gap: 0 var(--s2); }
+.groupedTaskList .sectionNavLink { justify-content: flex-start; }
+@media (min-width: 1024px) {
+  .taskGroupItems { display: grid; gap: 0; }
+  .groupedTaskList .sectionNavLink {
+    width: 100%;
+    padding-inline: var(--s3);
+    border-bottom: 0;
+    border-left: 3px solid transparent;
+    text-align: left;
+  }
+  .groupedTaskList .sectionNavLink[aria-selected="true"] {
+    border-left-color: var(--brand);
+    background: var(--brand-tint);
+  }
 }
 .inspectorHost { min-width: 0; align-self: start; position: sticky; top: var(--s4); }
 .inspectorPanel {

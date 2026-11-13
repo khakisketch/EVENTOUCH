@@ -64,6 +64,7 @@
 .categoryMeta {
   color: var(--muted);
   font-size: var(--small);
+  letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
 }
 
@@ -84,7 +85,7 @@
   padding: var(--s3);
   border: 1px dashed var(--line-strong);
   border-radius: var(--radius);
-  background: var(--surface-muted);
+  background: var(--paper);
   transition: border-color var(--enter) ease-out, background-color var(--enter) ease-out;
 }
 
@@ -98,7 +99,7 @@
   width: 44px;
   height: 44px;
   place-items: center;
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--soft);
   color: var(--brand-text);
 }
@@ -186,11 +187,15 @@
 }
 
 .textButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 44px;
-  padding: var(--s1) var(--s2);
-  border: 0;
-  background: transparent;
-  color: var(--brand-text);
+  padding: var(--s1) var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
+  color: var(--ink);
   font: inherit;
   font-size: var(--small);
   font-weight: 700;
@@ -200,8 +205,6 @@
 
 .textButton:hover {
   background: var(--surface-muted);
-  text-decoration: underline;
-  text-underline-offset: 3px;
 }
 
 .textButton:disabled {
@@ -241,8 +244,8 @@
   overflow: hidden;
   aspect-ratio: 4 / 3;
   border: 1px solid var(--line);
-  border-radius: var(--radius-small);
-  background: var(--surface-muted);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
 }
 
 .previewImage {
@@ -370,15 +373,16 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
-  gap: var(--s3);
+  gap: var(--s2) var(--s3);
   min-width: 0;
-  padding: var(--s3);
+  padding: var(--s2) var(--s3);
   border: 1px solid var(--line);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--paper);
+  font-variant-numeric: tabular-nums;
 }
 
-.jobItem :global(.button) {
+.jobItem :global(.product-action) {
   min-height: 44px;
 }
 
@@ -404,6 +408,7 @@
 .jobDone {
   color: var(--muted);
   font-size: var(--small);
+  font-variant-numeric: tabular-nums;
 }
 
 .jobDone {
@@ -414,7 +419,7 @@
 .orphanWarning {
   padding: var(--s2) var(--s3);
   border: 1px solid var(--warning-line);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--warning-soft);
   color: var(--warning);
   font-size: var(--small);
@@ -446,16 +451,16 @@
   width: 100%;
   aspect-ratio: 4 / 3;
   border: 1px solid var(--line);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   object-fit: contain;
-  background: var(--surface-muted);
+  background: var(--paper);
 }
 
 .photoInfo {
   display: grid;
   gap: var(--s1);
   min-width: 0;
-  padding: var(--s2) 0;
+  padding: var(--s1) 0;
 }
 
 .fileName {
@@ -477,15 +482,19 @@
   width: fit-content;
   min-height: 44px;
   align-items: center;
-  color: var(--brand-text);
+  justify-content: center;
+  padding: var(--s1) var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--small);
   font-weight: 700;
   text-decoration: none;
-  text-underline-offset: 3px;
 }
 
 .originalLink:hover {
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
+  background: var(--surface-muted);
 }
 
 .photoManage {
@@ -523,7 +532,7 @@
   min-height: 44px;
 }
 
-.moveRow :global(.button) {
+.moveRow :global(.product-action) {
   min-height: 44px;
   white-space: nowrap;
 }
@@ -532,7 +541,7 @@
   min-height: 44px;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--danger-line);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--paper);
   color: var(--danger);
   font: inherit;
@@ -560,7 +569,7 @@
   text-align: center;
 }
 
-.moreRow :global(.button) {
+.moreRow :global(.product-action) {
   min-height: 44px;
 }
 
@@ -619,7 +628,7 @@
     grid-column: 1;
   }
 
-  .uploadArea > :global(.button) {
+  .uploadArea > :global(.product-action) {
     grid-column: 1;
     grid-row: auto;
     justify-self: stretch;
@@ -681,7 +690,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .jobItem :global(.button) {
+  .jobItem :global(.product-action) {
     width: 100%;
   }
 
@@ -689,7 +698,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .moveRow :global(.button) {
+  .moveRow :global(.product-action) {
     width: 100%;
   }
 
@@ -697,7 +706,7 @@
     align-items: stretch;
   }
 
-  .previewActions :global(.button) {
+  .previewActions :global(.product-action) {
     width: 100%;
   }
 }

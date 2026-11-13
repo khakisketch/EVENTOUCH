@@ -103,7 +103,7 @@ async function main() {
           // data before the schedule at every viewport, in DOM as well as
           // painted order. Compare section bounds, not just heading positions.
           const order = await page.evaluate(() => {
-            const get = id => document.querySelector(`section[aria-labelledby="${id}"]`);
+            const get = id => document.querySelector(`:is(section,[role=region])[aria-labelledby="${id}"]`);
             const queue = get('event-now-heading'), metric = get('event-metrics-heading'), schedule = get('event-runbook-heading');
             if (!queue || !metric || !schedule) return null;
             const q = queue.getBoundingClientRect(), m = metric.getBoundingClientRect(), s = schedule.getBoundingClientRect();
@@ -167,8 +167,8 @@ async function main() {
       await page.goto(base);
       await page.locator('#event-metrics-heading').waitFor();
       const firstOverview = await page.evaluate(() => {
-        const queue = document.querySelector('section[aria-labelledby="event-now-heading"]');
-        const metric = document.querySelector('section[aria-labelledby="event-metrics-heading"]');
+        const queue = document.querySelector(':is(section,[role=region])[aria-labelledby="event-now-heading"]');
+        const metric = document.querySelector(':is(section,[role=region])[aria-labelledby="event-metrics-heading"]');
         const action = queue?.querySelector('[data-task="approval"] a');
         const count = metric?.querySelector('strong');
         const probe = element => {
@@ -180,11 +180,11 @@ async function main() {
         return { action: probe(action), count: probe(count) };
       });
       check('short-phone overview exposes the entry count', Boolean(firstOverview.count && firstOverview.count.top >= 0 && firstOverview.count.bottom <= 568), firstOverview);
-      const priority = page.locator('section[aria-labelledby="event-now-heading"] [data-task="approval"] a').first();
+      const priority = page.locator(':is(section,[role=region])[aria-labelledby="event-now-heading"] [data-task="approval"] a').first();
       await priority.scrollIntoViewIfNeeded();
       const actionSize = await priority.boundingBox();
       check('short-phone approval is reachable and meets the touch target', Boolean(await priority.isVisible() && actionSize && actionSize.width >= 44 && actionSize.height >= 44), actionSize);
-      check('short-phone approval still points to pending participants', (await page.locator('section[aria-labelledby="event-now-heading"] [data-task="approval"] a').first().getAttribute('href')).endsWith('/participants?status=PENDING'));
+      check('short-phone approval still points to pending participants', (await page.locator(':is(section,[role=region])[aria-labelledby="event-now-heading"] [data-task="approval"] a').first().getAttribute('href')).endsWith('/participants?status=PENDING'));
       await page.screenshot({ path: `${OUT}/overview-live-320-short.png` });
       for (const width of [320, 390]) {
         await page.setViewportSize({ width, height: 844 });
@@ -706,8 +706,8 @@ async function main() {
     await page.screenshot({ path: `${OUT}/state-empty-roster-390.png`, fullPage: true });
     await page.goto(base + '/operations#ops-booth-mode');
     await page.locator('#ops-booth-mode').waitFor();
-    await page.waitForFunction(() => document.querySelector('section[aria-labelledby="ops-booth-mode"] details')?.open === true);
-    check('preset anchor opens its controls', await page.locator('section[aria-labelledby="ops-booth-mode"] details').evaluate(e => e.open));
+    await page.waitForFunction(() => document.querySelector(':is(section,[role=region])[aria-labelledby="ops-booth-mode"] details')?.open === true);
+    check('preset anchor opens its controls', await page.locator(':is(section,[role=region])[aria-labelledby="ops-booth-mode"] details').evaluate(e => e.open));
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto(base + '/operations');
     await page.locator('#ops-desks').waitFor();
@@ -757,11 +757,11 @@ async function main() {
     for (const width of [320, 390]) {
       await page.setViewportSize({ width, height: 844 });
       await page.goto(base);
-      const upcoming = page.locator('section[aria-labelledby="event-schedule-heading"]');
+      const upcoming = page.locator(':is(section,[role=region])[aria-labelledby="event-schedule-heading"]');
       await upcoming.waitFor({ state: 'visible' });
       check(`overview@${width} retains upcoming schedules from other dates`,
         (await upcoming.innerText()).includes(upcomingTitle)
-          && !(await page.locator('section[aria-labelledby="event-runbook-heading"]').innerText()).includes(upcomingTitle));
+          && !(await page.locator(':is(section,[role=region])[aria-labelledby="event-runbook-heading"]').innerText()).includes(upcomingTitle));
       await page.screenshot({ path: `${OUT}/state-overview-upcoming-${width}.png`, fullPage: true });
     }
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -781,7 +781,7 @@ async function main() {
         // Work and metrics share the first work row; the schedule follows
         // both, matching the actual DOM and the approved priority.
         const geometry = await page.evaluate(() => {
-          const rect = id => document.querySelector(`section[aria-labelledby="${id}"]`)?.getBoundingClientRect();
+          const rect = id => document.querySelector(`:is(section,[role=region])[aria-labelledby="${id}"]`)?.getBoundingClientRect();
           const queue = rect('event-now-heading'), metric = rect('event-metrics-heading'), schedule = rect('event-runbook-heading');
           return { queueTop: queue?.top, queueBottom: queue?.bottom, metricTop: metric?.top, metricBottom: metric?.bottom, queueLeft: queue?.left, metricLeft: metric?.left, scheduleTop: schedule?.top };
         });
@@ -796,7 +796,7 @@ async function main() {
         // same-named link must keep the exact deep anchor, not just one.
         const intakeHrefs = await page.getByRole('link', { name: '접수 설정', exact: true }).evaluateAll(nodes => nodes.map(e => e.getAttribute('href')));
         check('preparation links preserve exact settings anchors', intakeHrefs.length >= 1 && intakeHrefs.every(href => href === `/console/events/${id}/settings#settings-intake`), intakeHrefs);
-        check('unpublished page reads as the basic design in use', (await page.locator('section[aria-labelledby="event-readiness-heading"]').textContent()).includes('기본 디자인 사용 중'));
+        check('unpublished page reads as the basic design in use', (await page.locator(':is(section,[role=region])[aria-labelledby="event-readiness-heading"]').textContent()).includes('기본 디자인 사용 중'));
       }
       await page.screenshot({ path: `${OUT}/state-overview-${stage.toLowerCase()}-1280.png`, fullPage: true });
       if (['ENDED', 'ARCHIVED'].includes(stage)) {

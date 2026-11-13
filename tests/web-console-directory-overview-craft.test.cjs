@@ -51,7 +51,7 @@ test('approval has one visible summary and a separate real follow-up destination
   assert.doesNotMatch(card, /` · 승인 대기/u);
   assert.match(card, /participants\?status=PENDING/u);
   assert.match(card, /aria-label=\{`\$\{event\.name\} 승인 대기 \$\{event\.pending\}명 처리`\}/u);
-  assert.ok(card.indexOf('</Link>') < card.indexOf('className={styles.approvalLink}'));
+  assert.ok(card.indexOf('</ProductLink>') < card.indexOf('className={styles.approvalLink}'));
   assert.match(card, /cardHeaderTheme\(event\.themeColor\)/u);
   assert.match(homeCss.toString(), /background: var\(--card-zone, var\(--soft\)\)/u);
 });
@@ -79,7 +79,9 @@ test('overview has one current region layout and a structural schedule, not a on
   for (const selector of ['.overviewCanvas', '.overviewArchived', '.regionMetrics', '.regionQueue', '.regionRunbook', '.runbookIdle']) {
     baseRule(overviewCss, selector);
   }
-  assert.match(declaration(baseRule(overviewCss, '.overviewCanvas'), 'grid-template-areas'), /"metrics queue" "runbook runbook"/u);
+  assert.match(declaration(baseRule(overviewCss, '.overviewCanvas'), 'grid-template-areas'), /"queue metrics" "runbook runbook"/u);
+  assert.match(declaration(baseRule(overviewCss, '.overviewArchived'), 'grid-template-areas'), /"metrics metrics"/u);
+  assert.doesNotMatch(declaration(baseRule(overviewCss, '.overviewArchived'), 'grid-template-areas'), /queue/u, 'archived layout omits the active queue');
   assert.equal(declaration(baseRule(overviewCss, '.overviewCanvas'), 'row-gap'), '0');
   assert.equal(declaration(baseRule(overviewCss, '.regionMetrics'), 'background'), 'var(--paper)');
   assert.equal(declaration(baseRule(overviewCss, '.runbookIdle'), 'display'), undefined);

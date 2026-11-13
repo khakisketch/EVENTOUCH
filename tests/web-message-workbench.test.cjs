@@ -41,7 +41,7 @@ test('history row actions keep the full 44px touch target', () => {
   // The narrowest row action (상세, two syllables) measured 41.98px wide in
   // isolated Chromium at 320px. Height alone is not the floor: the campaign
   // action buttons carry an explicit minimum width as well.
-  const actionsAt = css.indexOf('.campaignActions :global(.button)');
+  const actionsAt = css.indexOf('.campaignActions :global(.product-action)');
   assert.ok(actionsAt !== -1, 'expected the campaign action button rule');
   const actionsWindow = css.slice(actionsAt, css.indexOf('}', actionsAt) + 1);
   assert.match(actionsWindow, /min-width:\s*44px/u, 'width floor holds the shortest label');

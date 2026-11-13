@@ -179,8 +179,8 @@
   border-top: 0;
 }
 
-.actionPrimary > :global(.button),
-.actionDanger > :global(.button) {
+.actionPrimary > :global(.astryx-button),
+.actionDanger > :global(.astryx-button) {
   white-space: nowrap;
 }
 
@@ -258,7 +258,7 @@
     row-gap: var(--s2);
   }
 
-  .memberActions > :global(.button) {
+  .memberActions > :global(.astryx-button) {
     flex: 0 0 auto;
     white-space: nowrap;
   }

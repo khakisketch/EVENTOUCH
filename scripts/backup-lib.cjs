@@ -305,6 +305,7 @@ async function readManifest(directory) {
       !manifest.source.migrations.every(version => typeof version === 'string' && version.length > 0)) {
     fail('매니페스트에 마이그레이션 목록이 없습니다');
   }
+  if (manifest.source.schema !== undefined && !/^[a-z_][a-z0-9_]{0,62}$/.test(manifest.source.schema)) fail('백업 스키마 값이 올바르지 않습니다');
   // Source names are metadata, not SQL. Host databases can use quoted names,
   // and legacy host backups used '(database-url)'. The restore destination
   // still passes identifier() before any database command is issued.

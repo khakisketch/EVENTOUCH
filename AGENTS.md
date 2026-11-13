@@ -13,3 +13,17 @@
 - 외부 연동·실발송 수용: [연동 계약](docs/INTEGRATIONS.md)
 - 화면 계약·디자인 입력: [UX-CONTRACT.md](UX-CONTRACT.md), [DESIGN.md](DESIGN.md)
 - 실제 기기 확인 입력: [scripts/device-checklist.md](scripts/device-checklist.md)
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout (one `GLOSSARY.md` + `docs/adr/` at the repo root). See `docs/agents/domain.md`.

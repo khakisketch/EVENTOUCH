@@ -3,12 +3,13 @@
 import { measureMessage, messageContentIssue } from "../../../../../lib/message-composition";
 import { findSmsTextIssue } from "../../../../../lib/sms-text-validation.cjs";
 import ValidatedForm from "../../../../ui/ValidatedForm";
+import ProductButton from "../../../../ui/ProductButton";
 
 import { readCloseSnapshot, type CloseSnapshot } from "../../../console-event-close";
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import Link from "next/link";
+import ProductLink from "../../../../ui/ProductLink";
 import { useRouter, useSearchParams } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
 import { readRecipientStatusHandoff } from "../../../console-handoff";
@@ -34,7 +35,7 @@ import { abandonOperatorAttempt, acknowledgeOperatorReceipt, confirmsCharsetRevi
 import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../lib/operator-receipts";
 import { useEventReceipts } from "../../../../../lib/use-event-receipts";
 import uiStyles from "../../../console-ui/console-ui.module.css";
-import { ArrowDownIcon, ArrowUpIcon, PencilIcon, PlusIcon, XIcon } from "../../../console-ui/ConsoleIcons";
+import { ArrowDownIcon, ArrowRightIcon, ArrowUpIcon, PencilIcon, PlusIcon, XIcon } from "../../../console-ui/ConsoleIcons";
 import styles from "./MessagingWorkspace.module.css";
 
 type Template = {
@@ -464,8 +465,8 @@ function RecipientChangeReview({ eventId, campaignId, observedAt, onRefresh }: {
     return () => { active = false; window.clearTimeout(timeout); controller.abort(); };
   }, [eventId, campaignId, observedAt, attempt]);
   if (result.kind === "loading") return <p className={styles.comparisonNote} role="status">변경된 수신자를 확인하고 있습니다.</p>;
-  if (result.kind === "failed") return <div className={styles.changedRecipients}><p className={styles.campaignHint} role="status">변경 내역을 확인하지 못했습니다. 발송은 계속 보류됩니다.</p><button type="button" className="button button-quiet" onClick={() => setAttempt((value) => value + 1)}>변경 내역 다시 확인</button></div>;
-  if (result.kind === "unchanged") return <div className={styles.changedRecipients}><p className={styles.campaignHint} role="status">최신 명단에서는 변경된 수신자가 없습니다. 발송 기록을 새로고침해 상태를 다시 확인하세요.</p><button type="button" className="button button-quiet" onClick={onRefresh}>발송 기록 새로고침</button></div>;
+  if (result.kind === "failed") return <div className={styles.changedRecipients}><p className={styles.campaignHint} role="status">변경 내역을 확인하지 못했습니다. 발송은 계속 보류됩니다.</p><ProductButton type="button" variant="ghost" onClick={() => setAttempt((value) => value + 1)}>변경 내역 다시 확인</ProductButton></div>;
+  if (result.kind === "unchanged") return <div className={styles.changedRecipients}><p className={styles.campaignHint} role="status">최신 명단에서는 변경된 수신자가 없습니다. 발송 기록을 새로고침해 상태를 다시 확인하세요.</p><ProductButton type="button" variant="ghost" onClick={onRefresh}>발송 기록 새로고침</ProductButton></div>;
   const { details } = result;
   if (!details.available) return <p className={styles.campaignHint}>변경된 수신자 상세를 확인할 수 없습니다. 참가자 명단을 다시 확인하세요.</p>;
   return <div className={styles.changedRecipients}>
@@ -486,7 +487,7 @@ function RecipientChangeReview({ eventId, campaignId, observedAt, onRefresh }: {
         {entry.reasons.includes("unavailable") ? <p>예약 당시 수신자 검토 정보를 확인할 수 없습니다.</p> : null}
       </li>)}
     </ul>
-    {limit < details.changes.length ? <button type="button" className="button button-quiet" onClick={() => setLimit((current) => current + 10)}>수신자 더 보기 · {details.changes.length - limit}명 남음</button> : null}
+    {limit < details.changes.length ? <ProductButton type="button" variant="ghost" onClick={() => setLimit((current) => current + 10)}>수신자 더 보기 · {details.changes.length - limit}명 남음</ProductButton> : null}
     <p className={styles.comparisonNote}>{formatDate(result.observedAt)} 확인한 명단 기준입니다. 이후 변경은 다시 확인해야 합니다.</p>
   </div>;
 }
@@ -512,7 +513,7 @@ function LockedProviderReference({ name, phone, reference }: { name: string; pho
       {reference ? <>
         <p>공급사 요청에 사용되는 대조 ID</p>
         <textarea aria-label={`${name} ${phone || "연락처 확인 불가"} 대조 ID`} readOnly rows={2} value={reference} onFocus={(event) => event.currentTarget.select()} />
-        <button type="button" className="button button-secondary" aria-label={`${name} ${phone || "연락처 확인 불가"} 대조 ID 복사`} onClick={() => void copyReference()}>대조 ID 복사</button>
+        <ProductButton type="button" variant="secondary" aria-label={`${name} ${phone || "연락처 확인 불가"} 대조 ID 복사`} onClick={() => void copyReference()}>대조 ID 복사</ProductButton>
         <p role="status">{copied === "success" ? "대조 ID를 복사했습니다." : copied === "failed" ? "복사하지 못했습니다. 위 대조 ID를 직접 선택해 복사하세요." : ""}</p>
         <p>이 값은 요청에 사용되는 대조 ID이며, 전송이나 접수의 증거가 아닙니다. 발송 종료와 접수 여부를 각각 확인하세요.</p>
       </> : <p>이전 발송의 참조 정보를 확인할 수 없습니다. 운영 담당자에게 문의하세요.</p>}
@@ -2867,25 +2868,25 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
               requestAnimationFrame(() => document.querySelector<HTMLButtonElement>("[data-close-inline-archive]")?.focus());
             }}>
             <p>보관 후에는 메시지를 포함한 모든 쓰기가 잠깁니다. 작성 중이거나 예약·연결 대기인 안내도 더 실행할 수 없으므로 대상·내용·발송 결과를 먼저 확인하세요.</p>
-          </StageTransitionConfirmation> : <button type="button" className="button button-secondary" data-close-inline-archive data-close-linear-next
+          </StageTransitionConfirmation> : <ProductButton type="button" variant="secondary" data-close-inline-archive data-close-linear-next
             disabled={busyAction !== null}
             onClick={() => {
               if (inFlightRef.current || !confirmLeaveForArchive()) return;
               setArchiveError(null);
               setArchiveConfirm(true);
-            }}>다음: 보관</button>}
+            }}>다음: 보관</ProductButton>}
         </div>
       ) : undefined}
       eventId={eventId}
       eventName={state.eventName}
       meta={formatConsoleEventMeta(state.eventMeta)}
       headerActions={(
-        <Link
-          className="button button-secondary"
+        <ProductLink
+          variant="secondary"
           href={`/console/events/${encodeURIComponent(eventId)}/participants`}
         >
           참가자 명단
-        </Link>
+        </ProductLink>
       )}
       feedback={(
         <>
@@ -2918,9 +2919,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
               <p>이미 요청이 기록됐을 수 있습니다. 서버 확인은 메시지를 다시 보내지 않습니다. 같은 요청 재시도는 아직 처리되지 않은 경우 발송을 진행할 수 있습니다.</p>
               {campaignError ? <p className={styles.fieldError} role="alert">{campaignError}</p> : null}
               <div className={styles.sendRecoveryActions}>
-                <button type="button" className="button button-secondary" disabled={busyAction !== null || checkingCreate || abandonCreateConfirm} onClick={() => void checkCampaignCreate()}>{checkingCreate ? "확인 중…" : "서버 처리 확인"}</button>
-                <button type="button" className="button button-secondary" disabled={busyAction !== null || checkingCreate || abandonCreateConfirm || messagesLocked} onClick={() => void executeCampaignCreate(uncertainCreate)}>같은 요청 다시 시도</button>
-                <button type="button" className="button button-secondary" disabled={busyAction !== null || checkingCreate || abandonCreateConfirm} onClick={() => setAbandonCreateConfirm(true)}>확인 전 그만두기</button>
+                <ProductButton type="button" variant="secondary" disabled={busyAction !== null || checkingCreate || abandonCreateConfirm} onClick={() => void checkCampaignCreate()}>{checkingCreate ? "확인 중…" : "서버 처리 확인"}</ProductButton>
+                <ProductButton type="button" variant="secondary" disabled={busyAction !== null || checkingCreate || abandonCreateConfirm || messagesLocked} onClick={() => void executeCampaignCreate(uncertainCreate)}>같은 요청 다시 시도</ProductButton>
+                <ProductButton type="button" variant="secondary" disabled={busyAction !== null || checkingCreate || abandonCreateConfirm} onClick={() => setAbandonCreateConfirm(true)}>확인 전 그만두기</ProductButton>
               </div>
               {abandonCreateConfirm ? <ConsoleConfirm
                 summary="이전 요청이 이미 발송됐을 수 있습니다. 확인을 그만둬도 요청은 취소되지 않습니다. 발송 기록을 확인하기 전 같은 안내를 다시 보내지 마세요."
@@ -2949,8 +2950,8 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
         <p>사진이 이미 올라갔을 수 있습니다. 같은 사진 요청을 다시 시도해 확인하세요. 이 동작은 메시지를 발송하지 않습니다. 선택한 사진은 이 화면에만 유지됩니다.</p>
         {mmsUploadError ? <p className={styles.fieldError} role="alert">{mmsUploadError}</p> : null}
         <div className={styles.sendRecoveryActions}>
-          <button type="button" className="button button-secondary" disabled={uploadingImage || busyAction !== null || messagesLocked || abandonMmsUploadConfirm} onClick={() => { const attempt = mmsUploadRef.current; if (attempt) void uploadMmsImage(attempt.file); }}>같은 사진 요청 다시 시도</button>
-          <button type="button" className="button button-secondary" disabled={uploadingImage || busyAction !== null || abandonMmsUploadConfirm} onClick={() => setAbandonMmsUploadConfirm(true)}>확인 전 그만두기</button>
+          <ProductButton type="button" variant="secondary" disabled={uploadingImage || busyAction !== null || messagesLocked || abandonMmsUploadConfirm} onClick={() => { const attempt = mmsUploadRef.current; if (attempt) void uploadMmsImage(attempt.file); }}>같은 사진 요청 다시 시도</ProductButton>
+          <ProductButton type="button" variant="secondary" disabled={uploadingImage || busyAction !== null || abandonMmsUploadConfirm} onClick={() => setAbandonMmsUploadConfirm(true)}>확인 전 그만두기</ProductButton>
         </div>
         {abandonMmsUploadConfirm ? <ConsoleConfirm
           summary="확인을 그만둬도 이미 업로드된 사진이 서버에 남을 수 있습니다. 발송할 사진을 다시 선택해야 합니다. 그만둘까요?"
@@ -2991,27 +2992,27 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
               title={messagesLocked ? "작성 내용 확인" : "메시지 작성"}
               surface="panel"
               className={styles.composeSection}
-              action={<div className={styles.composeReturn}><button id="message-compose-close" type="button" className="button button-secondary" aria-describedby="compose-return-help" disabled={busyAction !== null || uploadingImage} onClick={() => {
+              action={<div className={styles.composeReturn}><ProductButton id="message-compose-close" type="button" variant="secondary" aria-describedby="compose-return-help" disabled={busyAction !== null || uploadingImage} onClick={() => {
                 focusHistoryOnCloseRef.current = true;
                 setComposerOpen(false);
                 setHistoryOpen(true);
                 requestConsoleTask("history-heading");
                 window.history.replaceState(window.history.state, "", "#history-heading");
-              }}>발송 기록 보기</button><small id="compose-return-help">입력·선택 유지</small></div>}
+              }}>발송 기록 보기</ProductButton><small id="compose-return-help">입력·선택 유지</small></div>}
             >
               <ValidatedForm className={uiStyles.formStack} onSubmit={(event) => {
                 if (composeStep !== 3) { event.preventDefault(); goComposeStep(composeStep === 1 ? 2 : 3); }
                 else requestCampaignCreate(event);
               }}>
                 <nav className={styles.composeSteps} aria-label="메시지 작성 단계">
-                  {(["수신자", "내용", "검토·발송"] as const).map((label, index) => <button key={label} type="button" aria-current={composeStep === index + 1 ? "step" : undefined} disabled={compositionPending || (!messagesLocked && index + 1 > composeStep)} title={index === 1 && selectedIds.length === 0 ? "수신자를 먼저 선택하세요" : index === 2 && (!campaignDraft.title.trim() || !campaignDraft.body.trim()) ? "제목과 내용을 먼저 입력하세요" : undefined} onClick={() => goComposeStep((index + 1) as 1 | 2 | 3)}><span>{index + 1}</span>{label}</button>)}
+                  {(["수신자", "내용", "검토·발송"] as const).map((label, index) => <ProductButton key={label} type="button" aria-current={composeStep === index + 1 ? "step" : undefined} disabled={compositionPending || (!messagesLocked && index + 1 > composeStep)} title={index === 1 && selectedIds.length === 0 ? "수신자를 먼저 선택하세요" : index === 2 && (!campaignDraft.title.trim() || !campaignDraft.body.trim()) ? "제목과 내용을 먼저 입력하세요" : undefined} onClick={() => goComposeStep((index + 1) as 1 | 2 | 3)}><span>{index + 1}</span>{label}</ProductButton>)}
                 </nav>
                 <fieldset className={styles.composeLock} disabled={messagesLocked || compositionPending}>
                 <legend className="sr-only">발송 내용과 수신자</legend>
 
                 {composeStep !== 1 ? <div className={styles.stepRecipientSummary} role="group" aria-label="선택한 수신자 요약">
                   <div><p><span className={styles.recipientCountLabel}>수신자</span> <strong>{selectedIds.length}명</strong><span>{recipientIdentity}</span></p>{recipientStatusSummary ? <p className={styles.recipientSummaryMeta}>{recipientStatusSummary}</p> : null}</div>
-                  <button type="button" className="button button-secondary" onClick={jumpToRecipientFilter}>수신자 변경</button>
+                  <ProductButton type="button" variant="secondary" onClick={jumpToRecipientFilter}>수신자 변경</ProductButton>
                 </div> : null}
 
                 <a
@@ -3041,14 +3042,14 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                     </p>
                     {conflictingRecipients > 0 ? <p className={styles.help} role="note">
                       신청 상태와 취소 기록이 일치하지 않는 {conflictingRecipients}명은 수신 대상에서 제외했습니다. {" "}
-                      <Link href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>참가자 명단에서 확인</Link>
+                      <ProductLink variant="secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>참가자 명단에서 확인</ProductLink>
                     </p> : null}
                     {recipientReviewRequired ? (
                       <div className={uiStyles.formStack}>
                         <ConsoleFeedback kind="warning" id="campaign-recipients-error">{campaignFieldError?.message ?? "최신 목록을 불러와 발송 대상을 다시 확인하세요."}</ConsoleFeedback>
-                        <div><button id="recipient-review-refresh" type="button" className="button button-secondary" onClick={() => void reloadReviewedRecipients()}>
+                        <div><ProductButton id="recipient-review-refresh" type="button" variant="secondary" onClick={() => void reloadReviewedRecipients()}>
                           {busyAction === "recipient-review" ? "수신자 불러오는 중" : "최신 수신자 불러오기"}
-                        </button></div>
+                        </ProductButton></div>
                       </div>
                     ) : null}
                     {pendingRiskCount > 0 ? (
@@ -3057,19 +3058,19 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                       </p>
                     ) : null}
                     <div className={styles.recipientTopBar}>
-                    <button
+                    <ProductButton
                       type="button"
-                      className={styles.textButton}
+                      className={styles.textButton} variant="ghost"
                       disabled={recipientReviewRequired}
                       data-skip-to="campaign-title"
-                      onClick={jumpToCampaignTitle}
+                      onClick={jumpToCampaignTitle} icon={<PencilIcon />}
                     >
-                      <PencilIcon />
+
                       내용 작성으로 계속
-                    </button>
-                    <button type="button" id="campaign-send-skip" data-skip-to="campaign-submit" className={styles.textButton} aria-describedby="campaign-submit-warning" disabled={recipientReviewRequired} onClick={jumpToCampaignSubmit}>
-                      <ArrowDownIcon />발송 검토로 이동
-                    </button>
+                    </ProductButton>
+                    <ProductButton type="button" id="campaign-send-skip" data-skip-to="campaign-submit" className={styles.textButton} variant="ghost" aria-describedby="campaign-submit-warning" disabled={recipientReviewRequired} onClick={jumpToCampaignSubmit} icon={<ArrowDownIcon />}>
+                      발송 검토로 이동
+                    </ProductButton>
                     </div>
                     <details
                       className={styles.recipientDetails}
@@ -3144,7 +3145,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                           />
                           표시 {visibleRecipients.length}명 모두 선택
                         </label>
-                        <button type="button" className={styles.textButton} id="recipient-clear-all" onClick={clearAllRecipients}><XIcon />전체 선택 해제</button>
+                        <ProductButton type="button" className={styles.textButton} variant="ghost" id="recipient-clear-all" onClick={clearAllRecipients} icon={<XIcon />}>전체 선택 해제</ProductButton>
                       </div>
                     <label className={styles.selectedOnlyOption}>
                       <input
@@ -3157,7 +3158,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                       선택 대상만 보기
                     </label>
                     {showSelectedOnly ? <p className={styles.help} id="recipient-selected-help">상태·그룹·검색 조건에 관계없이 선택한 {selectedCount}명 전체를 표시합니다. 조건으로 찾으려면 선택 대상만 보기를 끄세요.</p> : null}
-                    {charsetCandidatesOnly ? <p className={styles.help} role="status">현재 선택한 참가자 중 이름에 확인이 필요한 {charsetCandidateIds.size}명을 표시합니다. <button id="recipient-charset-reset" type="button" className={styles.textButton} onClick={() => setCharsetCandidatesOnly(false)}>전체 명단으로</button></p> : null}
+                    {charsetCandidatesOnly ? <p className={styles.help} role="status">현재 선택한 참가자 중 이름에 확인이 필요한 {charsetCandidateIds.size}명을 표시합니다. <ProductButton id="recipient-charset-reset" type="button" className={styles.textButton} variant="ghost" onClick={() => setCharsetCandidatesOnly(false)}>전체 명단으로</ProductButton></p> : null}
                     {visibleRecipients.length ? (
                       <ul className={styles.recipientList} aria-label="참가자 선택">
                         {visibleRecipients.map((person) => (
@@ -3209,7 +3210,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
 
                 <div className={uiStyles.formStack}>
                   <div>
-                    <div className={styles.templatePickerLabel}><label htmlFor="campaign-template">메시지 템플릿</label><button type="button" className={styles.textButton} disabled={busyAction !== null || uploadingImage} onClick={openTemplateManager}>템플릿 관리</button></div>
+                    <div className={styles.templatePickerLabel}><label htmlFor="campaign-template">메시지 템플릿</label><ProductButton type="button" className={styles.textButton} variant="ghost" disabled={busyAction !== null || uploadingImage} onClick={openTemplateManager}>템플릿 관리</ProductButton></div>
                     <select
                       id="campaign-template"
                       value={selectedTemplateId}
@@ -3291,17 +3292,18 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   {state.integrations.provider === "solapi" && !campaignDraft.simulate && (campaignDraft.channel !== "ALIMTALK" || campaignDraft.smsFallback) ? <p className={styles.help}>문자로 보낼 수 없는 일부 이모지·제어문자를 확인합니다. 개인화 후 내용과 예약 시점의 수신자 정보도 발송 전에 다시 확인합니다. 다른 문자까지 모두 전달된다는 보장은 아닙니다.</p> : null}
                   {charsetIssue && !campaignFieldError ? <p className={styles.fieldError} role="status">{charsetIssue.message}</p> : null}
                   {eventNameCharsetIssue ? <p className={styles.fieldError} role="note">현재 행사명에 문자로 보낼 수 없는 글자가 있습니다. 행사 설정에서 이름을 확인하거나 행사명 삽입을 지워 주세요. 최종 내용은 발송 전에 다시 확인합니다.</p> : null}
-                  {charsetCandidateIds.size ? <p className={styles.fieldError} role="note">현재 화면 기준으로 선택한 참가자 {charsetCandidateIds.size}명의 이름에 문자로 보낼 수 없는 글자가 있습니다. 발송 전 서버에서 다시 확인합니다. {" "}<button type="button" className={styles.textButton} onClick={() => { setShowSelectedOnly(false); setCharsetCandidatesOnly(true); jumpToRecipientFilter(); window.setTimeout(() => document.getElementById("recipient-charset-reset")?.focus(), 0); }}>이름 확인이 필요한 참가자 보기</button></p> : null}
+                  {charsetCandidateIds.size ? <p className={styles.fieldError} role="note">현재 화면 기준으로 선택한 참가자 {charsetCandidateIds.size}명의 이름에 문자로 보낼 수 없는 글자가 있습니다. 발송 전 서버에서 다시 확인합니다. {" "}<ProductButton type="button" className={styles.textButton} variant="ghost" onClick={() => { setShowSelectedOnly(false); setCharsetCandidatesOnly(true); jumpToRecipientFilter(); window.setTimeout(() => document.getElementById("recipient-charset-reset")?.focus(), 0); }}>이름 확인이 필요한 참가자 보기</ProductButton></p> : null}
                   {campaignDraft.channel !== "ALIMTALK" ? <div className={styles.personalizationTools} role="group" aria-label="개인화 정보 넣기">
                     <span>개인화 정보</span>
                     {["이름", "행사명", "행사일", "티켓링크", "럭키번호"].map(name => {
                       const label = name === "티켓링크" ? "티켓 링크" : name === "럭키번호" ? "럭키 번호" : name;
-                      return <button key={name} type="button" className="button button-quiet" aria-label={`${label} 넣기`} disabled={messagesLocked} onClick={() => insertPersonalization(name)}>{label}</button>;
+                      return <ProductButton key={name} type="button" variant="ghost" aria-label={`${label} 넣기`} disabled={messagesLocked} onClick={() => insertPersonalization(name)}>{label}</ProductButton>;
                     })}
                   </div> : null}
                   <p className={styles.help} id="campaign-variables">
-                    {campaignDraft.channel === "ALIMTALK" ? "선택한 템플릿 문구를 그대로 사용하고 개인화 정보만 자동으로 바꿉니다. 문구를 바꾸려면 템플릿 관리에서 승인 내용과 맞추거나 문자로 전환하세요." : "받는 사람의 정보로 자동 바뀝니다."} 럭키 번호는 <Link href={`/console/events/${encodeURIComponent(eventId)}/draws`}>추첨·투표에서 먼저 발급</Link>하세요.
+                    {campaignDraft.channel === "ALIMTALK" ? "선택한 템플릿 문구를 그대로 사용하고 개인화 정보만 자동으로 바꿉니다. 문구를 바꾸려면 템플릿 관리에서 승인 내용과 맞추거나 문자로 전환하세요." : "받는 사람의 정보로 자동 바뀝니다."} 럭키 번호는 추첨·투표에서 먼저 발급하세요.
                   </p>
+                  <ProductLink className={styles.guideAction} variant="ghost" href={`/console/events/${encodeURIComponent(eventId)}/draws`}>추첨·투표 열기 <ArrowRightIcon /></ProductLink>
                 </div>
                     </div>
 
@@ -3314,7 +3316,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                     {campaignDraft.channel === "ALIMTALK" ? <div className={styles.kakaoExampleHeader}>알림톡 도착 예시</div> : null}
                     {campaignDraft.channel === "MMS" && campaignDraft.imageFileId ? <div className={styles.attachmentPreview}>
                       <img key={`${campaignDraft.imageFileId}-${imagePreviewRevision}`} hidden={imagePreviewFailed} src={`/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(campaignDraft.imageFileId)}?preview=${imagePreviewRevision}`} alt={`첨부 사진: ${campaignDraft.imageName || "사진 1장"}`} onError={() => setImagePreviewFailed(true)} onLoad={() => setImagePreviewFailed(false)} />
-                      {imagePreviewFailed ? <p className={styles.help}>첨부 사진 미리보기를 불러오지 못했습니다. <button type="button" className={styles.textButton} onClick={() => { setImagePreviewFailed(false); setImagePreviewRevision(value => value + 1); }}>사진 다시 보기</button></p> : null}
+                      {imagePreviewFailed ? <p className={styles.help}>첨부 사진 미리보기를 불러오지 못했습니다. <ProductButton type="button" className={styles.textButton} variant="ghost" onClick={() => { setImagePreviewFailed(false); setImagePreviewRevision(value => value + 1); }}>사진 다시 보기</ProductButton></p> : null}
                     </div> : null}
                     <p className={`${styles.draftPreviewBody} ${campaignDraft.channel === "ALIMTALK" ? styles.kakaoExampleBody : ""}`} id="message-draft-preview">
                       {campaignDraft.body ? previewMessageExample(campaignDraft.body, state.eventName, state.eventDate) : "메시지 내용을 입력하면 여기에 표시됩니다."}
@@ -3350,12 +3352,12 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                           ? `첨부됨: ${campaignDraft.imageName || "사진 1장"} · MMS는 별도 요금이 발생합니다.`
                           : "사진 없이 보내면 SMS/LMS가 자동 결정됩니다. 첨부하면 MMS로 전환됩니다."}
                     </p>
-                    {campaignDraft.imageFileId ? <button type="button" className={styles.textButton} disabled={uploadingImage || messagesLocked || uncertainMmsUpload} onClick={() => {
+                    {campaignDraft.imageFileId ? <ProductButton type="button" className={styles.textButton} variant="ghost" disabled={uploadingImage || messagesLocked || uncertainMmsUpload} onClick={() => {
                       if (inFlightRef.current || mmsUploadGateRef.current) return;
                       setAttachmentRevision(revision => revision + 1);
                       setCampaignDraft(current => ({ ...current, channel: current.channel === "ALIMTALK" ? "ALIMTALK" : "SMS", imageFileId: "", imageName: "" }));
                       setCampaignFieldError(current => current?.field === "imageFileId" ? null : current);
-                    }}>사진 첨부 해제</button> : null}
+                    }}>사진 첨부 해제</ProductButton> : null}
                     {campaignFieldError?.field === "imageFileId" ? <p className={styles.fieldError} id="campaign-image-error" role="alert">{campaignFieldError.message}</p> : null}
                   </div>
                 ) : null}
@@ -3426,8 +3428,8 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                 </div>
 
                 {composeStep !== 3 ? <div className={styles.stepActions}>
-                  {composeStep === 2 ? <button type="button" className="button button-secondary" onClick={() => goComposeStep(1)}>이전</button> : null}
-                  <button type="button" className="button button-primary" disabled={busyAction !== null || uploadingImage || Boolean(uncertainCreate) || recipientReviewRequired} onClick={() => goComposeStep(composeStep === 1 ? 2 : 3)}>{composeStep === 1 ? "내용 작성" : "발송 검토로"}</button>
+                  {composeStep === 2 ? <ProductButton type="button" variant="secondary" onClick={() => goComposeStep(1)}>이전</ProductButton> : null}
+                  <ProductButton type="button" variant="primary" disabled={busyAction !== null || uploadingImage || Boolean(uncertainCreate) || recipientReviewRequired} onClick={() => goComposeStep(composeStep === 1 ? 2 : 3)}>{composeStep === 1 ? "내용 작성" : "발송 검토로"}</ProductButton>
                   {composeStep === 2 ? <p className={styles.help}>예약 발송과 모의 발송 설정은 다음 검토 단계에서 입력합니다.</p> : null}
                 </div> : null}
                 {campaignError && !uncertainCreate ? <p className={styles.fieldError} id="campaign-request-error" role="alert">{campaignError}</p> : null}
@@ -3469,37 +3471,37 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   </ul>
                   {ticketLinkInvalidCount > 0 ? <p className={styles.help} role="note">
                     티켓을 사용할 수 없거나 상태를 확인할 수 없는 수신자 {ticketLinkInvalidCount}명 · {simulateDraft ? "모의 기록은 가능하지만 실제 발송 전 확인이 필요합니다." : "실제 발송 전에 티켓을 확인해 주세요."}{" "}
-                    <Link href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</Link>
+                    <ProductLink variant="secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</ProductLink>
                   </p> : null}
                   {scheduledDraft && !simulateDraft ? <p className={styles.help} role="note">{scheduleModeNotice(campaignDraft.scheduleMode)}</p> : null}
                   {campaignDraft.channel === "ALIMTALK" && !simulateDraft ? <p className={styles.help} role="note">{campaignDraft.smsFallback ? ALIMTALK_FALLBACK_NOTICE : ALIMTALK_NO_FALLBACK_NOTICE}</p> : null}
                   {scheduledDraft && !simulateDraft ? <p className={styles.help}>{scheduleServerStatus(state.messageSchedule)} 현재 서버 기준이며 실제 발송 성공을 보장하지 않습니다.</p> : null}
                 <div className={styles.reviewBar}>
-                  <button type="button" className="button button-secondary" onClick={() => goComposeStep(2)}>내용 수정</button>
+                  <ProductButton type="button" variant="secondary" onClick={() => goComposeStep(2)}>내용 수정</ProductButton>
                   <p className={styles.reviewSummary} id="campaign-submit-warning" tabIndex={-1}>
                     선택 {selectedCount}명 · {channelLabel(campaignDraft.channel)} · {submitModeLabel}{simulateDraft ? "" : " · 발송은 되돌릴 수 없습니다."}
                     {campaignDraft.channel === "MMS" && !simulateDraft ? " 별도 요금이 발생합니다." : ""}
                     {selectedCount === 0 ? " 수신자를 먼저 고르세요." : ""}
                     {messagesLocked ? ` ${messagesLockReason}` : ""}
                   </p>
-                  <button
+                  <ProductButton
                     type="button"
-                    className={styles.textButton}
-                    onClick={jumpToRecipientFilter}
+                    className={styles.textButton} variant="ghost"
+                    onClick={jumpToRecipientFilter} icon={<ArrowUpIcon />}
                   >
-                    <ArrowUpIcon />
+
                     수신자 다시 확인
-                  </button>
-                  <button
+                  </ProductButton>
+                  <ProductButton
                     id="campaign-submit"
-                    className="button button-primary"
+                    variant="primary"
                     type="submit"
                     disabled={selectedCount === 0 || busyAction !== null || uploadingImage || messagesLocked || otherCreateReceipt || uncertainMmsUpload}
                     aria-describedby={campaignError && !uncertainCreate ? "campaign-submit-warning campaign-request-error" : "campaign-submit-warning"}
                     title={messagesLocked ? messagesLockReason : selectedCount === 0 ? "수신자를 먼저 고르세요." : undefined}
                   >
                     {busyAction === "campaign" ? "요청 중…" : "발송 검토"}
-                  </button>
+                  </ProductButton>
                 </div>
 
                 <p className={styles.reviewInvalidated} id="campaign-review-status" role="status" aria-atomic="true">
@@ -3540,9 +3542,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                 <p>변경이 이미 반영됐을 수 있습니다. 서버 처리 확인은 변경 요청을 다시 보내지 않습니다.</p>
                 {templateError ? <p role="alert">{templateError}</p> : null}
                 <div className={styles.sendRecoveryActions}>
-                  <button type="button" className="button button-secondary" disabled={busyAction !== null || checkingTemplate || abandonTemplateConfirm} onClick={() => void checkTemplateSave()}>{checkingTemplate ? "확인 중…" : "서버 처리 확인"}</button>
-                  <button type="button" className="button button-secondary" disabled={busyAction !== null || checkingTemplate || abandonTemplateConfirm || messagesLocked} onClick={() => void executeTemplateSave(pendingTemplate, true)}>같은 요청 다시 시도</button>
-                  <button type="button" className="button button-secondary" disabled={busyAction !== null || checkingTemplate || abandonTemplateConfirm} onClick={() => setAbandonTemplateConfirm(true)}>확인 전 그만두기</button>
+                  <ProductButton type="button" variant="secondary" disabled={busyAction !== null || checkingTemplate || abandonTemplateConfirm} onClick={() => void checkTemplateSave()}>{checkingTemplate ? "확인 중…" : "서버 처리 확인"}</ProductButton>
+                  <ProductButton type="button" variant="secondary" disabled={busyAction !== null || checkingTemplate || abandonTemplateConfirm || messagesLocked} onClick={() => void executeTemplateSave(pendingTemplate, true)}>같은 요청 다시 시도</ProductButton>
+                  <ProductButton type="button" variant="secondary" disabled={busyAction !== null || checkingTemplate || abandonTemplateConfirm} onClick={() => setAbandonTemplateConfirm(true)}>확인 전 그만두기</ProductButton>
                 </div>
                 {abandonTemplateConfirm ? <ConsoleConfirm summary="이미 반영된 변경은 취소되지 않습니다. 확인을 그만두고 목록을 확인할까요?" confirmLabel="확인 그만두기" onConfirm={() => {
                   const attempt = pendingTemplateRef.current;
@@ -3575,14 +3577,14 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                         {template.channel === "ALIMTALK" ? <small>승인 ID {template.solapiTemplateId ? "등록됨" : "미등록"}</small> : null}
                       </div>
                       <div className={styles.templateActions}>
-                        {!template.archived ? <button type="button" className="button button-secondary" disabled={messagesLocked || templateRecoveryLocked || busyAction !== null} onClick={() => useTemplate(template)}>사용</button> : null}
-                        <button type="button" className="button button-secondary" disabled={template.archived || templateRecoveryLocked || busyAction !== null} onClick={() => requestTemplateEdit(template)}><PencilIcon />{messagesLocked ? "내용 보기" : "편집"}</button>
-                        <button type="button" className="button button-secondary" disabled={messagesLocked || templateRecoveryLocked || busyAction !== null} onClick={() => { if (template.archived) void changeTemplateArchive(template, false); else { setTemplateEditConfirm(null); setTemplateResetConfirm(false); setTemplateArchiveConfirm({ ...template }); } }}>{template.archived ? "복원" : "보관"}</button>
+                        {!template.archived ? <ProductButton type="button" variant="secondary" disabled={messagesLocked || templateRecoveryLocked || busyAction !== null} onClick={() => useTemplate(template)}>사용</ProductButton> : null}
+                        <ProductButton type="button" variant="secondary" disabled={template.archived || templateRecoveryLocked || busyAction !== null} onClick={() => requestTemplateEdit(template)} icon={<PencilIcon />}>{messagesLocked ? "내용 보기" : "편집"}</ProductButton>
+                        <ProductButton type="button" variant="secondary" disabled={messagesLocked || templateRecoveryLocked || busyAction !== null} onClick={() => { if (template.archived) void changeTemplateArchive(template, false); else { setTemplateEditConfirm(null); setTemplateResetConfirm(false); setTemplateArchiveConfirm({ ...template }); } }}>{template.archived ? "복원" : "보관"}</ProductButton>
                       </div>
                     </li>)}
                   </ul> : <div className={styles.templateLibraryEmpty}>
                     <p className={styles.help}>{state.templates.length === 0 ? "자주 쓰는 안내를 저장해 두면 다음 발송에 다시 사용할 수 있습니다." : templateScope === "ARCHIVED" && !templateSearch ? "보관된 템플릿이 없습니다. 사용하지 않는 문구를 보관하면 여기에 표시됩니다." : "조건에 맞는 템플릿이 없습니다."}</p>
-                    {state.templates.length > 0 ? <button type="button" className={styles.textButton} onClick={() => { setTemplateQuery(""); setTemplateScope("ACTIVE"); }}>검색·필터 초기화</button> : null}
+                    {state.templates.length > 0 ? <ProductButton type="button" className={styles.textButton} variant="ghost" onClick={() => { setTemplateQuery(""); setTemplateScope("ACTIVE"); }}>검색·필터 초기화</ProductButton> : null}
                   </div>}
                 </div>
 
@@ -3593,7 +3595,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                     openTemplateEditor(latest);
                   }} onCancel={() => setTemplateEditConfirm(null)} /> : null}
                   {templateResetConfirm ? <ConsoleConfirm summary="작성 중인 템플릿 내용을 비우고 새로 작성할까요? 저장된 템플릿은 바뀌지 않습니다." confirmLabel="내용 비우고 새로 작성" onConfirm={clearTemplateDraft} onCancel={() => setTemplateResetConfirm(false)} /> : null}
-                  {editingTemplate?.archived ? <div className={styles.templateLibraryEmpty}><p className={styles.help}>보관된 템플릿입니다. 입력은 유지하며 복원한 뒤 수정할 수 있습니다.</p><button type="button" className="button button-secondary" disabled={messagesLocked || templateRecoveryLocked || busyAction !== null} onClick={requestNewTemplate}>새 템플릿 작성</button></div> : null}
+                  {editingTemplate?.archived ? <div className={styles.templateLibraryEmpty}><p className={styles.help}>보관된 템플릿입니다. 입력은 유지하며 복원한 뒤 수정할 수 있습니다.</p><ProductButton type="button" variant="secondary" disabled={messagesLocked || templateRecoveryLocked || busyAction !== null} onClick={requestNewTemplate}>새 템플릿 작성</ProductButton></div> : null}
                   <fieldset className={styles.composeLock} disabled={messagesLocked || templateRecoveryLocked || busyAction === "template" || editingTemplate?.archived}>
                   <h3>{messagesLocked ? "템플릿 내용" : templateDraft.id ? "템플릿 수정" : "새 템플릿"}</h3>
                   <div>
@@ -3649,11 +3651,11 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   </div>
                   {templateFieldError && !FIELD_LABELS[templateFieldError.field] ? <p className={styles.fieldError} role="alert">{templateFieldError.message}</p> : null}
                   <ConsoleFormActions>
-                    <button className="button button-secondary" type="submit" disabled={busyAction !== null || messagesLocked} title={messagesLocked ? messagesLockReason : undefined}>
+                    <ProductButton variant="secondary" type="submit" disabled={busyAction !== null || messagesLocked} title={messagesLocked ? messagesLockReason : undefined}>
                       {busyAction === "template" ? "저장 중…" : templateDraft.id ? "템플릿 저장" : "템플릿 추가"}
-                    </button>
+                    </ProductButton>
                     {templateDraft.id ? (
-                      <button type="button" className={styles.textButton} onClick={requestNewTemplate}><PlusIcon />새로 작성</button>
+                      <ProductButton type="button" className={styles.textButton} variant="ghost" onClick={requestNewTemplate} icon={<PlusIcon />}>새로 작성</ProductButton>
                     ) : null}
                   </ConsoleFormActions>
                   </fieldset>
@@ -3668,9 +3670,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
             action={(
               <div className={styles.historyTools}>
               <ConsoleRefreshButton label="상태 새로고침" disabled={busyAction !== null} onRefresh={() => refresh(true)} />
-              <button id="message-compose-open" type="button" className={`button ${composerOpen || messagesLocked ? "button-secondary" : "button-primary"}`} disabled={messagesLocked && !composeDirty && !uncertainCreate} title={messagesLocked ? messagesLockReason : undefined} aria-expanded={composerOpen} aria-controls="message-composer" onClick={revealComposer}>
+              <ProductButton id="message-compose-open" type="button" variant={composerOpen || messagesLocked ? "secondary" : "primary"} disabled={messagesLocked && !composeDirty && !uncertainCreate} title={messagesLocked ? messagesLockReason : undefined} aria-expanded={composerOpen} aria-controls="message-composer" onClick={revealComposer}>
                 {messagesLocked && composeDirty ? "작성 내용 보기" : composerOpen ? "작성 화면으로" : composeDirty ? "작성 이어가기" : "메시지 작성"}
-              </button>
+              </ProductButton>
               </div>
             )}
             divider
@@ -3684,20 +3686,20 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
             ) : (<>
             {(attentionCampaigns.length > 0 || state.campaigns.some((campaign) => campaign.status === "SCHEDULED") || attentionOnly || historyStatus === "SCHEDULED") ? <div className={styles.historyOverview} role="group" aria-label="발송 빠른 필터">
               {(attentionCampaigns.length > 0 || attentionOnly) ? (
-              <button type="button" className={styles.historyOverviewItem} aria-pressed={attentionOnly} onClick={() => {
+              <ProductButton type="button" className={styles.historyOverviewItem} variant="secondary" aria-pressed={attentionOnly} onClick={() => {
                 setAttentionOnly((current) => !current);
                 setHistoryStatus("ALL"); setHistoryQuery(""); setHistoryLimit(10); setHistoryOpen(true);
               }}>
                 확인 필요한 발송 <strong>{attentionCampaigns.length}건</strong>
-              </button>) : null}
+              </ProductButton>) : null}
               {(state.campaigns.some((campaign) => campaign.status === "SCHEDULED") || historyStatus === "SCHEDULED") ? (
-              <button type="button" className={styles.historyOverviewItem} aria-pressed={!attentionOnly && historyStatus === "SCHEDULED"} onClick={() => {
+              <ProductButton type="button" className={styles.historyOverviewItem} variant="secondary" aria-pressed={!attentionOnly && historyStatus === "SCHEDULED"} onClick={() => {
                 setAttentionOnly(false);
                 setHistoryStatus((current) => !attentionOnly && current === "SCHEDULED" ? "ALL" : "SCHEDULED");
                 setHistoryQuery(""); setHistoryLimit(10); setHistoryOpen(true);
               }}>
                 예약된 발송 <strong>{state.campaigns.filter((campaign) => campaign.status === "SCHEDULED").length}건</strong>
-              </button>) : null}
+              </ProductButton>) : null}
             </div> : null}
             <div className={styles.historyFilters}>
               <label><span className="sr-only">발송 제목 검색</span><input id="message-history-search" type="search" placeholder="발송 제목 검색" value={historyQuery} onChange={(event) => { setHistoryQuery(event.target.value); setHistoryLimit(10); }} /></label>
@@ -3714,9 +3716,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
             {attentionOnly ? (
               <div className={styles.attentionFilter}>
                 <p role="status">발송 확인이 필요한 발송만 보고 있습니다 · {visibleCampaigns.length}건{overdueCampaigns.length ? ` · 실행 시점 지난 예약 ${overdueCampaigns.length}건 포함` : ""}</p>
-                <button type="button" className="button button-secondary" onClick={() => { setAttentionOnly(false); setHistoryStatus("ALL"); setHistoryQuery(""); }}>
+                <ProductButton type="button" variant="secondary" onClick={() => { setAttentionOnly(false); setHistoryStatus("ALL"); setHistoryQuery(""); }}>
                   전체 발송 기록 보기
-                </button>
+                </ProductButton>
               </div>
             ) : null}
             {visibleCampaigns.length ? (
@@ -3774,30 +3776,30 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                           </td>
                           <td className={styles.historyActionCell}><div className={styles.campaignActions}>
                             {canExecute ? (
-                              <button type="button" className="button button-secondary" disabled={busyAction !== null || messagesLocked || otherHistoryReceipt || syncAmbiguous || cancelAmbiguous || (Boolean(blocked) && !retryAmbiguous)} aria-describedby={blocked ? `campaign-blocked-${campaign.id}` : undefined} title={messagesLocked ? messagesLockReason : blocked && !retryAmbiguous ? "상세에서 사유를 확인하고 해결한 뒤 상태를 새로고침하세요." : undefined} onClick={() => { setReloadPending(null); setHistoryPending({ id: campaign.id, kind: "execute" }); }}>
+                              <ProductButton type="button" variant="secondary" disabled={busyAction !== null || messagesLocked || otherHistoryReceipt || syncAmbiguous || cancelAmbiguous || (Boolean(blocked) && !retryAmbiguous)} aria-describedby={blocked ? `campaign-blocked-${campaign.id}` : undefined} title={messagesLocked ? messagesLockReason : blocked && !retryAmbiguous ? "상세에서 사유를 확인하고 해결한 뒤 상태를 새로고침하세요." : undefined} onClick={() => { setReloadPending(null); setHistoryPending({ id: campaign.id, kind: "execute" }); }}>
                                 {busyAction === `retry:${campaign.id}` ? "실행 중…" : retryAmbiguous ? "같은 요청 다시 시도" : "발송 실행"}
-                              </button>
+                              </ProductButton>
                             ) : null}
                             {canRetry ? (
-                              <button type="button" className="button button-secondary" disabled={busyAction !== null || messagesLocked || otherHistoryReceipt || syncAmbiguous || cancelAmbiguous || ((Boolean(blocked) || charsetBlocked) && !retryAmbiguous)} aria-describedby={blocked ? `campaign-blocked-${campaign.id}` : undefined} title={messagesLocked ? messagesLockReason : blocked && !retryAmbiguous ? "상세에서 사유를 확인하고 해결한 뒤 상태를 새로고침하세요." : undefined} onClick={() => { setReloadPending(null); setHistoryPending({ id: campaign.id, kind: "retry" }); }}>
+                              <ProductButton type="button" variant="secondary" disabled={busyAction !== null || messagesLocked || otherHistoryReceipt || syncAmbiguous || cancelAmbiguous || ((Boolean(blocked) || charsetBlocked) && !retryAmbiguous)} aria-describedby={blocked ? `campaign-blocked-${campaign.id}` : undefined} title={messagesLocked ? messagesLockReason : blocked && !retryAmbiguous ? "상세에서 사유를 확인하고 해결한 뒤 상태를 새로고침하세요." : undefined} onClick={() => { setReloadPending(null); setHistoryPending({ id: campaign.id, kind: "retry" }); }}>
                                 {busyAction === `retry:${campaign.id}` ? "재시도 중…" : retryAmbiguous ? "같은 요청 다시 시도" : "재시도"}
-                              </button>
+                              </ProductButton>
                             ) : null}
                             {canSync ? (
-                              <button type="button" className="button button-quiet" disabled={busyAction !== null || messagesLocked || otherHistoryReceipt || retryAmbiguous || cancelAmbiguous} title={messagesLocked ? messagesLockReason : undefined} onClick={() => void syncCampaign(campaign)}>
+                              <ProductButton type="button" variant="ghost" disabled={busyAction !== null || messagesLocked || otherHistoryReceipt || retryAmbiguous || cancelAmbiguous} title={messagesLocked ? messagesLockReason : undefined} onClick={() => void syncCampaign(campaign)}>
                                 {busyAction === `sync:${campaign.id}` ? "확인 중…" : syncAmbiguous ? "같은 요청 다시 확인" : "발송 결과 확인"}
-                              </button>
+                              </ProductButton>
                             ) : null}
                             {canCancel ? (
-                              <button type="button" className="button button-danger" disabled={busyAction !== null || messagesLocked || otherHistoryReceipt || retryAmbiguous || syncAmbiguous || (blocked?.reason === "AUDIT_UNAVAILABLE" && !cancelAmbiguous)} title={messagesLocked ? messagesLockReason : blocked?.reason === "AUDIT_UNAVAILABLE" && !cancelAmbiguous ? "행사 활동 기록을 확인한 뒤 취소할 수 있습니다." : undefined} aria-describedby={blocked?.reason === "AUDIT_UNAVAILABLE" ? `campaign-blocked-${campaign.id}` : undefined} onClick={() => { setReloadPending(null); setHistoryPending({ id: campaign.id, kind: "cancel" }); }}>
+                              <ProductButton type="button" variant="destructive" disabled={busyAction !== null || messagesLocked || otherHistoryReceipt || retryAmbiguous || syncAmbiguous || (blocked?.reason === "AUDIT_UNAVAILABLE" && !cancelAmbiguous)} title={messagesLocked ? messagesLockReason : blocked?.reason === "AUDIT_UNAVAILABLE" && !cancelAmbiguous ? "행사 활동 기록을 확인한 뒤 취소할 수 있습니다." : undefined} aria-describedby={blocked?.reason === "AUDIT_UNAVAILABLE" ? `campaign-blocked-${campaign.id}` : undefined} onClick={() => { setReloadPending(null); setHistoryPending({ id: campaign.id, kind: "cancel" }); }}>
                                 {busyAction === `cancel:${campaign.id}` ? "취소 중…" : cancelAmbiguous ? "같은 요청 다시 시도" : campaign.status === "SCHEDULED" ? "예약 취소" : "발송 취소"}
-                              </button>
+                              </ProductButton>
                             ) : null}
-                            {reloadable ? <button type="button" className="button button-secondary" disabled={busyAction !== null || uploadingImage || messagesLocked || !state.canManage || otherHistoryReceipt || otherCreateReceipt || uncertainMmsUpload} title={messagesLocked ? messagesLockReason : undefined} onClick={() => requestFailedReload(campaign)}>내용·대상 불러오기</button> : null}
-                            <button type="button" className="button button-secondary" aria-label={`${campaign.title} ${detailOpen ? "상세 닫기" : "상세"}`} aria-expanded={detailOpen} aria-controls={`campaign-detail-${campaign.id}`} onClick={() => {
+                            {reloadable ? <ProductButton type="button" variant="secondary" disabled={busyAction !== null || uploadingImage || messagesLocked || !state.canManage || otherHistoryReceipt || otherCreateReceipt || uncertainMmsUpload} title={messagesLocked ? messagesLockReason : undefined} onClick={() => requestFailedReload(campaign)}>내용·대상 불러오기</ProductButton> : null}
+                            <ProductButton type="button" variant="secondary" aria-label={`${campaign.title} ${detailOpen ? "상세 닫기" : "상세"}`} aria-expanded={detailOpen} aria-controls={`campaign-detail-${campaign.id}`} onClick={() => {
                               setHistoryPending(null); setReloadPending(null);
                               setExpandedCampaignId(expandedCampaignId === campaign.id ? null : campaign.id);
-                            }}>{detailOpen ? "상세 닫기" : "상세"}</button>
+                            }}>{detailOpen ? "상세 닫기" : "상세"}</ProductButton>
                           </div>
                           </td>
                     </tr>
@@ -3837,7 +3839,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                           {campaign.scheduled ? <div><dt>예약 실행</dt><dd>{campaign.scheduleMode === "AUTO" && !campaign.simulate ? "자동 실행" : "수동 실행"}</dd></div> : null}
                           <div><dt>시도</dt><dd>{campaign.attempts}회</dd></div>
                         </dl>
-                        {!campaign.simulate && ["SCHEDULED", "NEEDS_CONNECTION"].includes(campaign.status) && !campaign.recipientRoutingReviewed && !blocked ? <p className={styles.campaignHint} role="note">이전 발송 요청은 예약 당시의 참가 상태와 그룹을 확인할 수 없어 변경 여부를 자동으로 비교하지 않습니다. {campaign.status === "SCHEDULED" && campaign.scheduleMode === "AUTO" ? "자동 실행 시에도 이 비교 없이 발송될 수 있으므로 참가자 명단을 확인하세요." : "발송 실행 전에 참가자 명단을 직접 확인하세요."} <Link href={`/console/events/${encodeURIComponent(eventId)}/participants`}>참가자 명단 보기</Link></p> : null}
+                        {!campaign.simulate && ["SCHEDULED", "NEEDS_CONNECTION"].includes(campaign.status) && !campaign.recipientRoutingReviewed && !blocked ? <p className={styles.campaignHint} role="note">이전 발송 요청은 예약 당시의 참가 상태와 그룹을 확인할 수 없어 변경 여부를 자동으로 비교하지 않습니다. {campaign.status === "SCHEDULED" && campaign.scheduleMode === "AUTO" ? "자동 실행 시에도 이 비교 없이 발송될 수 있으므로 참가자 명단을 확인하세요." : "발송 실행 전에 참가자 명단을 직접 확인하세요."} <ProductLink variant="secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants`}>참가자 명단 보기</ProductLink></p> : null}
                         {campaign.genericTransport && campaign.genericSubmissionUnconfirmed && campaign.genericAttemptActive !== false ? <p className={styles.campaignHint} role="note">이전 발송 작업이 끝났는지 확인할 수 없어 수동 기록을 잠갔습니다. 공급사 내역과 서버 운영 상태를 확인하세요.</p> : null}
                         {!campaign.genericTransport && campaign.providerKind !== "solapi" && campaign.deliveries.some(delivery => delivery.status === "SENT") ? <p className={styles.campaignHint} role="note">이전 기록의 발송 연결과 전달 근거를 확인할 수 없습니다. 공급사 내역을 확인하세요.</p> : null}
                         {["SENDING", "ACCEPTED", "SENT", "PARTIAL", "FAILED"].includes(campaign.status) && campaign.deliveries.length ? (
@@ -3860,7 +3862,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                         {(campaign.ticketLinkProblemCount > 0 || campaign.ticketLinkProblemUnknown) && ["SENDING", "FAILED"].includes(campaign.status) ? <p className={styles.campaignHint} role="note">
                           {campaign.ticketLinkProblemUnknown ? "수신자와 티켓 상태를 확인할 수 없어" : `사용할 수 없는 티켓이 ${campaign.ticketLinkProblemCount}명 있어`}
                           {campaign.status === "SENDING" ? " 추가 재제출을 중단했습니다. 이전 요청은 접수됐을 수 있으므로 발송 공급사에서 확인하세요." : " 발송하지 않았습니다. 티켓을 확인한 뒤 새 발송을 검토하세요."}{" "}
-                          <Link href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</Link>
+                          <ProductLink variant="secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</ProductLink>
                         </p> : null}
                         {campaign.alimtalkUnsupported ? <p className={styles.campaignHint} role="note">현재 발송 연결은 승인된 알림톡 템플릿을 지원하지 않아 발송하지 않았습니다. 알림톡을 지원하는 발송 연결을 확인하세요.</p> : null}
                         {campaign.mmsUnsupported ? <p className={styles.campaignHint} role="note">현재 발송 연결은 사진 문자를 지원하지 않아 발송하지 않았습니다. 사진 문자 발송이 가능한 연결을 확인하세요.</p> : null}
@@ -3909,7 +3911,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                             : blocked.reason === "INVALID_SCHEDULE" ? "예약 시각을 확인할 수 없습니다. 예약을 취소하고 다시 등록하세요."
                             : blocked.reason === "NO_PUBLIC_ORIGIN" ? "티켓 링크의 공개 주소가 설정되지 않았습니다. 운영 담당자에게 공개 주소 설정을 요청하세요."
                             : "발송을 실행하기 전 확인이 필요합니다. 발송 상태를 확인하고 운영 담당자에게 문의하세요."}
-                          {blocked.reason === "TICKET_UNAVAILABLE" || blocked.reason === "TICKET_RECIPIENTS_UNAVAILABLE" ? <> <Link href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</Link></> : null}
+                          {blocked.reason === "TICKET_UNAVAILABLE" || blocked.reason === "TICKET_RECIPIENTS_UNAVAILABLE" ? <> <ProductLink variant="secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</ProductLink></> : null}
                         </p> : null}
                         {recipientChanged && detailOpen ? <RecipientChangeReview key={`${eventId}:${campaign.id}`} eventId={eventId} campaignId={campaign.id} observedAt={state.messageSchedule?.observedAt ?? ""} onRefresh={() => void refresh(true)} /> : null}
                         {["SCHEDULED", "NEEDS_CONNECTION"].includes(campaign.status) && invalidSchedule ? (
@@ -3932,11 +3934,11 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                                   <span className={`${styles.status} ${statusTone(delivery.status)}`}>{delivery.manualProviderReview ? `운영자 기록 · ${delivery.manualProviderReview === "ACCEPTED" ? "공급사 접수" : "공급사 미접수"}` : delivery.status === "SENT" && campaign.providerKind !== "solapi" ? "전달 근거 미확인" : delivery.resultMatchUnconfirmed ? "결과 연결 미확인" : deliveryStatusLabel(delivery.status)}</span>
                                   <time dateTime={delivery.at || undefined}>{formatDate(delivery.at)}</time>
                                   {campaign.genericTransport && campaign.genericSubmissionUnconfirmed && campaign.genericAttemptActive !== false && delivery.status === "SENDING" ? <LockedProviderReference name={delivery.name} phone={delivery.snapshotPhone} reference={delivery.reference} /> : null}
-                                  {campaign.genericTransport && campaign.genericAttemptActive === false && delivery.status === "SENDING" && !delivery.manualProviderReview && !messagesLocked && !(providerCheck?.payload.id === campaign.id && providerCheck.payload.participantId === delivery.participantId) ? <button id={`provider-check-trigger-${campaign.id}-${delivery.participantId}`} type="button" className="button button-secondary" disabled={Boolean(providerCheck) || otherHistoryReceipt || busyAction !== null} onClick={() => {
+                                  {campaign.genericTransport && campaign.genericAttemptActive === false && delivery.status === "SENDING" && !delivery.manualProviderReview && !messagesLocked && !(providerCheck?.payload.id === campaign.id && providerCheck.payload.participantId === delivery.participantId) ? <ProductButton id={`provider-check-trigger-${campaign.id}-${delivery.participantId}`} type="button" variant="secondary" disabled={Boolean(providerCheck) || otherHistoryReceipt || busyAction !== null} onClick={() => {
                                     setProviderCheck({ eventId, id: commandId(), name: delivery.name, uncertain: false, payload: { id: campaign.id, participantId: delivery.participantId, outcome: "ACCEPTED", expectedSubmissionId: campaign.submissionId } });
                                     setProviderCheckChoice(""); setProviderCheckError(null); setProviderCheckConfirm(false);
                                     window.requestAnimationFrame(() => document.getElementById("provider-check-heading")?.focus());
-                                  }}>{`${delivery.name} 공급사 확인 기록`}</button> : null}
+                                  }}>{`${delivery.name} 공급사 확인 기록`}</ProductButton> : null}
                                 </li>
                               ))}
                             </ul>
@@ -3952,13 +3954,13 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                             { value: "ACCEPTED", label: "공급사 접수 확인" }, { value: "NOT_ACCEPTED", label: "공급사 미접수 확인" },
                           ]} onChange={(value) => setProviderCheckChoice(value === "ACCEPTED" || value === "NOT_ACCEPTED" ? value : "")} />
                           {providerCheckError ? <p role="alert">{providerCheckError}</p> : null}
-                          {providerCheck.uncertain ? <button type="button" className="button button-secondary" disabled={busyAction !== null} onClick={() => void submitProviderCheck(providerCheck)}>같은 요청 다시 확인</button> : <>
-                            <button type="button" className="button button-secondary" disabled={!providerCheckChoice || busyAction !== null} onClick={() => setProviderCheckConfirm(true)}>기록 내용 확인</button>{" "}
-                            <button type="button" className="button button-quiet" disabled={busyAction !== null} onClick={() => {
+                          {providerCheck.uncertain ? <ProductButton type="button" variant="secondary" disabled={busyAction !== null} onClick={() => void submitProviderCheck(providerCheck)}>같은 요청 다시 확인</ProductButton> : <>
+                            <ProductButton type="button" variant="secondary" disabled={!providerCheckChoice || busyAction !== null} onClick={() => setProviderCheckConfirm(true)}>기록 내용 확인</ProductButton>{" "}
+                            <ProductButton type="button" variant="ghost" disabled={busyAction !== null} onClick={() => {
                               const triggerId = `provider-check-trigger-${providerCheck.payload.id}-${providerCheck.payload.participantId}`;
                               setProviderCheck(null); setProviderCheckConfirm(false);
                               window.requestAnimationFrame(() => document.getElementById(triggerId)?.focus());
-                            }}>나중에 확인</button>
+                            }}>나중에 확인</ProductButton>
                             {providerCheckConfirm && providerCheckChoice ? <ConsoleConfirm summary={confirmLines(`${providerCheck.name}님의 공급사 ${providerCheckChoice === "ACCEPTED" ? "접수" : "미접수"}를 직접 확인했나요?\n\n이 결과는 운영자 확인 기록이며 실제 단말 전달을 뜻하지 않습니다. 이 동작은 메시지를 다시 보내지 않습니다.`)} confirmLabel="확인 결과 기록" busy={busyAction !== null} onCancel={() => setProviderCheckConfirm(false)} onConfirm={() => {
                               const attempt = { ...providerCheck, payload: { ...providerCheck.payload, outcome: providerCheckChoice } };
                               setProviderCheck(attempt); void submitProviderCheck(attempt);
@@ -3974,17 +3976,17 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
               </table>
               </div>
               {remainingCampaigns > 0 ? (
-                <button
+                <ProductButton
                   id="campaign-history-more"
                   type="button"
-                  className="button button-secondary"
+                  variant="secondary"
                   onClick={() => {
                     pendingHistoryFocusRef.current = shownCampaigns.length;
                     setHistoryLimit((current) => current + 10);
                   }}
                 >
                   {`이전 발송 더 보기 (${remainingCampaigns})`}
-                </button>
+                </ProductButton>
               ) : null}
               </>
             ) : (
@@ -3994,7 +3996,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   : "아직 발송 기록이 없습니다. 메시지 작성에서 첫 안내를 준비하세요."}
               </p>
             )}
-            {historyQuery || historyStatus !== "ALL" ? <button type="button" className="button button-quiet" onClick={() => { setHistoryQuery(""); setHistoryStatus("ALL"); setHistoryLimit(10); }}>기록 검색·필터 초기화</button> : null}
+            {historyQuery || historyStatus !== "ALL" ? <ProductButton type="button" variant="ghost" onClick={() => { setHistoryQuery(""); setHistoryStatus("ALL"); setHistoryLimit(10); }}>기록 검색·필터 초기화</ProductButton> : null}
             </details>
             <p className={`${styles.help} ${styles.historyFootnote}`}>발송 기록에는 참가자 티켓 링크가 표시되지 않습니다.</p>
             </>)}

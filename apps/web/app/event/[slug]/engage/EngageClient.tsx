@@ -4,7 +4,8 @@ import ValidatedForm from "../../../ui/ValidatedForm";
 
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import ProductLink from "../../../ui/ProductLink";
+import ProductButton from "../../../ui/ProductButton";
 import { fetchWithDeadline, withRequestDeadline } from "../../../../lib/request-deadline";
 import styles from "./engage.module.css";
 import { isRecoveryBlocked, useVerificationMode } from "../../../../lib/use-verification-mode";
@@ -964,14 +965,14 @@ export default function EngageClient({ slug }: { slug: string }) {
         <div key={pointer.commandId}>
           <p>{({ "response.submit": "참여 응답", "question.submit": "질문 등록", "question.edit": "질문 수정", "question.like": "좋아요", "photo.submit": "사진 등록", "post.submit": "게시글 등록" } as Record<string, string>)[pointer.command] ?? "참여 요청"}</p>
           <p className={styles.actions}>
-            <button type="button" className="button button-primary" disabled={submitting !== null || !ticketRef.current} onClick={() => void checkReceipt(pointer)}>서버 처리 확인</button>
-            <button type="button" className="button button-secondary" disabled={submitting !== null} onClick={() => {
+            <ProductButton type="button" className="button button-primary" disabled={submitting !== null || !ticketRef.current} onClick={() => void checkReceipt(pointer)}>서버 처리 확인</ProductButton>
+            <ProductButton type="button" className="button button-secondary" disabled={submitting !== null} onClick={() => {
               if (!window.confirm("확인 목록에서 지워도 서버 처리는 취소되지 않습니다. 이미 반영됐을 수 있습니다. 목록에서 지울까요?")) return;
               const entry = Object.entries(pendingCommandsRef.current).find(([, pending]) => pending.commandId === pointer.commandId);
               if (entry) abandonPending(entry[0]);
               else forgetReceipt(pointer.commandId);
               setReceiptMessage("확인 목록에서 지웠습니다. 서버 처리는 취소되지 않았습니다.");
-            }}>목록에서 지우기</button>
+            }}>목록에서 지우기</ProductButton>
           </p>
         </div>
       ))}
@@ -995,8 +996,8 @@ export default function EngageClient({ slug }: { slug: string }) {
             <p>행사 <strong>{pending.eventName || "행사"}</strong> · 참가자 <strong>{pending.participantName || "참가자"}</strong>의 요청입니다.</p>
             {!visibleInCurrentList && formError?.form === formKey ? <p role="alert">{formError.message}</p> : null}
             <p className={styles.actions}>
-              {pointer ? <button type="button" className="button button-primary" disabled={submitting !== null} onClick={() => void checkReceipt(pointer)}>서버 처리 확인</button> : null}
-              <button
+              {pointer ? <ProductButton type="button" className="button button-primary" disabled={submitting !== null} onClick={() => void checkReceipt(pointer)}>서버 처리 확인</ProductButton> : null}
+              <ProductButton
                 type="button"
                 className={pointer ? "button button-secondary" : "button button-primary"}
                 disabled={submitting !== null}
@@ -1007,10 +1008,10 @@ export default function EngageClient({ slug }: { slug: string }) {
                 }}
               >
                 원래 요청 다시 보내기
-              </button>
-              <button type="button" className="button button-secondary" disabled={submitting !== null} onClick={() => abandonPending(formKey)}>
+              </ProductButton>
+              <ProductButton type="button" className="button button-secondary" disabled={submitting !== null} onClick={() => abandonPending(formKey)}>
                 원래 요청 포기
-              </button>
+              </ProductButton>
             </p>
             <p>포기해도 서버 처리는 취소되지 않습니다. 이미 반영됐을 수 있습니다.</p>
           </div>
@@ -1159,11 +1160,11 @@ export default function EngageClient({ slug }: { slug: string }) {
             <p>참여 콘텐츠에는 본인 티켓이 필요합니다. 브라우저의 탭 보관이 차단되었거나 인증 세션이 없을 수 있습니다. 신청할 때 쓴 연락처를 인증해 티켓을 다시 연결하세요.</p>
           )}
           <p className={styles.actions}>
-            <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/home`}>참가 메뉴로</Link>
+            <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/home`}>참가 메뉴로</ProductLink>
             {recoveryBlocked ? null : (
-              <Link className="button button-primary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</Link>
+              <ProductLink className="button button-primary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</ProductLink>
             )}
-            <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</Link>
+            <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</ProductLink>
           </p>
         </section>
       </main>
@@ -1183,8 +1184,8 @@ export default function EngageClient({ slug }: { slug: string }) {
           <h2>참여 콘텐츠를 열 수 없습니다</h2>
           <p role="alert">{state.message}</p>
           <p className={styles.actions}>
-            <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/home`}>참가 메뉴로</Link>
-            <button
+            <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/home`}>참가 메뉴로</ProductLink>
+            <ProductButton
               type="button"
               className="button button-primary"
               onClick={() => {
@@ -1193,11 +1194,11 @@ export default function EngageClient({ slug }: { slug: string }) {
               }}
             >
               다시 시도
-            </button>
+            </ProductButton>
             {state.hasTicket ? null : recoveryBlocked ? null : (
-              <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</Link>
+              <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</ProductLink>
             )}
-            <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</Link>
+            <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</ProductLink>
           </p>
         </section>
       </main>
@@ -1209,7 +1210,7 @@ export default function EngageClient({ slug }: { slug: string }) {
       <header className={styles.pageHeader}>
         <span className={styles.wordmark}>EVENTOUCH</span>
         <span className="eyebrow">참여 콘텐츠</span>
-        <Link className={styles.returnLink} href={`/event/${encodeURIComponent(slug)}/home`}>← 참가 메뉴로</Link>
+        <ProductLink className={styles.returnLink} href={`/event/${encodeURIComponent(slug)}/home`}>← 참가 메뉴로</ProductLink>
         <h1>{state.eventName}</h1>
       </header>
       {receiptRecovery}{pendingRecovery}
@@ -1267,9 +1268,9 @@ export default function EngageClient({ slug }: { slug: string }) {
                     {conflict.latest.type === "survey" ? <><p>최신 설문 항목</p><ul>{conflict.latest.questions.map((question, index) => <li key={`${question}-${index}`}>{question}</li>)}</ul></> : null}
                     {conflict.latest.status !== "OPEN" ? <p>{isQuestionDraft ? "현재 참여가 종료되어 질문을 제출할 수 없습니다." : "현재 참여가 종료되어 답변을 제출할 수 없습니다."}</p> : null}
                     {conflict.latestSubmitted ? <p>이 참가자는 이미 답변을 제출했습니다.</p> : null}
-                    <button type="button" className="button button-secondary" disabled={submitting !== null} onClick={() => acceptLatestContent(formKey, conflict.latest ?? undefined)}>{baseline && baseline.type !== conflict.latest.type ? "최신 콘텐츠 보기" : isQuestionDraft ? "최신 내용으로 질문 검토" : "최신 내용으로 답변 검토"}</button>
+                    <ProductButton type="button" className="button button-secondary" disabled={submitting !== null} onClick={() => acceptLatestContent(formKey, conflict.latest ?? undefined)}>{baseline && baseline.type !== conflict.latest.type ? "최신 콘텐츠 보기" : isQuestionDraft ? "최신 내용으로 질문 검토" : "최신 내용으로 답변 검토"}</ProductButton>
                     <p>확인만으로 제출되지 않습니다.</p>
-                  </> : <button type="button" className="button button-secondary" disabled={conflict.loading || submitting !== null} onClick={() => void readLatestContent(formKey)}>{conflict.loading ? "최신 내용 확인 중…" : "최신 내용 확인"}</button>}
+                  </> : <ProductButton type="button" className="button button-secondary" disabled={conflict.loading || submitting !== null} onClick={() => void readLatestContent(formKey)}>{conflict.loading ? "최신 내용 확인 중…" : "최신 내용 확인"}</ProductButton>}
                 </section> : null}
                 <ModuleSection
                   formKey={formKey}
@@ -1349,9 +1350,9 @@ export default function EngageClient({ slug }: { slug: string }) {
       )}
 
       <footer className={styles.pageFooter}>
-        <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/home`}>참가 메뉴로</Link>
-        <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket`}>내 티켓으로 이동</Link>
-        <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</Link>
+        {state.modules.length || pendingKeys.length || savedReceipts.length ? <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/home`}>참가 메뉴로</ProductLink> : null}
+        <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket`}>내 티켓으로 이동</ProductLink>
+        <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</ProductLink>
       </footer>
     </main>
   );
@@ -1378,14 +1379,14 @@ function PreviousResponseDraft({ value, onDiscard, question = false }: { value: 
     </label>
     <p>{question ? "이 질문은 새 콘텐츠에 자동으로 제출되지 않습니다." : "이 답변은 새 콘텐츠에 자동으로 제출되지 않습니다."}</p>
     <div className={styles.actions}>
-      <button type="button" className="button button-secondary" onClick={() => void copy()}>{question ? "이전 질문 복사" : "이전 답변 복사"}</button>
-      {onDiscard && !confirmDiscard ? <button type="button" className="button button-secondary" onClick={() => setConfirmDiscard(true)}>{question ? "이전 질문 지우기" : "이전 답변 지우기"}</button> : null}
+      <ProductButton type="button" className="button button-secondary" onClick={() => void copy()}>{question ? "이전 질문 복사" : "이전 답변 복사"}</ProductButton>
+      {onDiscard && !confirmDiscard ? <ProductButton type="button" className="button button-secondary" onClick={() => setConfirmDiscard(true)}>{question ? "이전 질문 지우기" : "이전 답변 지우기"}</ProductButton> : null}
     </div>
     {message ? <p role="status">{message}</p> : null}
     {onDiscard && confirmDiscard ? <div role="group" aria-label={question ? "이전 질문 삭제 확인" : "이전 답변 삭제 확인"}>
       <p>{question ? "이전 질문을 지울까요? 이 화면에서 다시 볼 수 없습니다." : "이전 답변을 지울까요? 이 화면에서 다시 볼 수 없습니다."}</p>
-      <button type="button" className="button button-secondary" onClick={() => { setConfirmDiscard(false); onDiscard(); }}>{question ? "질문 지우기" : "답변 지우기"}</button>{" "}
-      <button type="button" className="button button-secondary" onClick={() => setConfirmDiscard(false)}>계속 보관</button>
+      <ProductButton type="button" className="button button-secondary" onClick={() => { setConfirmDiscard(false); onDiscard(); }}>{question ? "질문 지우기" : "답변 지우기"}</ProductButton>{" "}
+      <ProductButton type="button" className="button button-secondary" onClick={() => setConfirmDiscard(false)}>계속 보관</ProductButton>
     </div> : null}
   </div>;
 }
@@ -1453,8 +1454,8 @@ function QuestionEdit({ question, busy, pending, error, onSubmit, onDirtyChange 
       {dirty && stale ? (
         <div className={styles.warning} role="status">
           <p>질문 상태가 바뀌었습니다. 최신 내용을 확인하고 계속 작성하세요. 입력한 내용은 유지됩니다.</p>
-          <button type="button" className="button button-secondary" disabled={busy || pending}
-            onClick={() => setBaseline(question)}>현재 질문에 맞춰 계속 작성</button>
+          <ProductButton type="button" className="button button-secondary" disabled={busy || pending}
+            onClick={() => setBaseline(question)}>현재 질문에 맞춰 계속 작성</ProductButton>
         </div>
       ) : null}
       <ValidatedForm onSubmit={(event) => {
@@ -1469,9 +1470,9 @@ function QuestionEdit({ question, busy, pending, error, onSubmit, onDirtyChange 
             setDirty(event.target.value !== (baseline.pendingEdit?.text ?? baseline.editRejection?.text ?? baseline.text));
           }} />
         {error ? <p className={styles.fieldError} id={`${inputId}-error`} role="alert">{error}</p> : null}
-        <button type="submit" className="button button-secondary" disabled={!value.trim() || busy || pending || (dirty && stale)}>
+        <ProductButton type="submit" className="button button-secondary" disabled={!value.trim() || busy || pending || (dirty && stale)}>
           {question.approved ? "수정안 제출" : "질문 저장"}
-        </button>
+        </ProductButton>
       </ValidatedForm>
     </details>
   );
@@ -1553,9 +1554,9 @@ function ModuleSection(props: {
             {props.formMessage("answer") ? <p className={styles.fieldError} role="alert">{props.formMessage("answer")}</p> : null}
             {props.pollChoice && !module.options.includes(props.pollChoice) ? <p className={styles.help} role="status">이전에 고른 ‘{props.pollChoice}’ 선택지가 없습니다. 최신 선택지에서 다시 골라 주세요.</p> : null}
             {props.generalMessage ? <p className={styles.fieldError} role="alert">{props.generalMessage}</p> : null}
-            <button type="submit" className="button button-primary" disabled={!props.pollChoice || !module.options.includes(props.pollChoice) || !props.canSubmit || busy || props.hasPending}>
+            <ProductButton type="submit" className="button button-primary" disabled={!props.pollChoice || !module.options.includes(props.pollChoice) || !props.canSubmit || busy || props.hasPending}>
               {props.submitting === props.formKey ? "제출 중…" : "투표하기"}
-            </button>
+            </ProductButton>
           </ValidatedForm>
         )
       ) : null}
@@ -1587,9 +1588,9 @@ function ModuleSection(props: {
                 {props.formMessage("answer") ? <p className={styles.fieldError} id={`quiz-${module.id}-error`} role="alert">{props.formMessage("answer")}</p> : null}
               </div>
               {props.generalMessage ? <p className={styles.fieldError} role="alert">{props.generalMessage}</p> : null}
-              <button type="submit" className="button button-primary" disabled={!props.quizAnswer.trim() || !props.canSubmit || busy || props.hasPending}>
+              <ProductButton type="submit" className="button button-primary" disabled={!props.quizAnswer.trim() || !props.canSubmit || busy || props.hasPending}>
                 {props.submitting === props.formKey ? "제출 중…" : "답안 제출"}
-              </button>
+              </ProductButton>
             </ValidatedForm>
           )}
         </>
@@ -1647,9 +1648,9 @@ function ModuleSection(props: {
             </div>
             {props.formMessage("ratings") ? <p className={styles.fieldError} role="alert">{props.formMessage("ratings")}</p> : null}
             {props.generalMessage ? <p className={styles.fieldError} role="alert">{props.generalMessage}</p> : null}
-            <button type="submit" className="button button-primary" disabled={!props.canSubmit || busy || props.hasPending}>
+            <ProductButton type="submit" className="button button-primary" disabled={!props.canSubmit || busy || props.hasPending}>
               {props.submitting === props.formKey ? "제출 중…" : "만족도 제출"}
-            </button>
+            </ProductButton>
           </ValidatedForm>
         )
       ) : null}
@@ -1678,9 +1679,9 @@ function ModuleSection(props: {
               {props.formMessage("text") ? <p className={styles.fieldError} id={`question-${module.id}-error`} role="alert">{props.formMessage("text")}</p> : null}
             </div>
             {props.generalMessage ? <p className={styles.fieldError} role="alert">{props.generalMessage}</p> : null}
-            <button type="submit" className="button button-primary" disabled={!props.questionText.trim() || !props.canSubmit || busy || props.hasPending}>
+            <ProductButton type="submit" className="button button-primary" disabled={!props.questionText.trim() || !props.canSubmit || busy || props.hasPending}>
               {props.submitting === props.formKey ? "제출 중…" : "질문 등록"}
-            </button>
+            </ProductButton>
           </ValidatedForm>
           {props.questions.length ? (
             <ul className={styles.entryList}>
@@ -1699,7 +1700,7 @@ function ModuleSection(props: {
                   <p className={styles.entryMeta}>
                     {question.approved ? "공개됨" : "승인 대기 중"} · {props.likeConflict(question.id) || props.likePending(question.id) ? "좋아요 상태 확인 필요" : `좋아요 ${question.likes}개`}
                     {question.approved && props.canInteractWithQuestions ? (
-                      <button
+                      <ProductButton
                         type="button"
                         id={`like-${question.id}`}
                         className={styles.inlineButton}
@@ -1708,7 +1709,7 @@ function ModuleSection(props: {
                         onClick={() => props.onLike(question)}
                       >
                         좋아요{question.likedByMe && !props.likeConflict(question.id) && !props.likePending(question.id) ? " · 누름" : ""}
-                      </button>
+                      </ProductButton>
                     ) : null}
                   </p>
                   {question.approved && props.canInteractWithQuestions && question.likedByMe === null ? <p className={styles.help}>좋아요 상태를 확인할 수 없습니다. 화면을 다시 불러오거나 행사 운영자에게 문의하세요.</p> : null}
@@ -1716,8 +1717,8 @@ function ModuleSection(props: {
                   {props.likeConflict(question.id) ? <div className={styles.help}>
                     <p id={`like-conflict-${question.id}`} tabIndex={-1} role="status">질문 또는 좋아요 상태가 바뀌었습니다. 위 질문은 확인 전 내용입니다. 최신 내용을 먼저 확인하세요.</p>
                     {props.likeConflict(question.id)?.error ? <p role="alert">{props.likeConflict(question.id)?.error}</p> : null}
-                    <button type="button" className="button button-secondary" disabled={busy || props.likeConflict(question.id)?.loading}
-                      onClick={() => props.onReadLatestLike(question.id)}>{props.likeConflict(question.id)?.loading ? "확인 중…" : "최신 질문과 좋아요 확인"}</button>
+                    <ProductButton type="button" className="button button-secondary" disabled={busy || props.likeConflict(question.id)?.loading}
+                      onClick={() => props.onReadLatestLike(question.id)}>{props.likeConflict(question.id)?.loading ? "확인 중…" : "최신 질문과 좋아요 확인"}</ProductButton>
                   </div> : null}
                   {question.own && props.canInteractWithQuestions && module.status === "OPEN" ? (
                     <QuestionEdit question={question} busy={busy} pending={props.editPending(question.id)}
@@ -1763,9 +1764,9 @@ function ModuleSection(props: {
               {props.formMessage("caption") ? <p className={styles.fieldError} id={`photo-caption-${module.id}-error`} role="alert">{props.formMessage("caption")}</p> : null}
             </div>
             {props.generalMessage ? <p className={styles.fieldError} role="alert">{props.generalMessage}</p> : null}
-            <button type="submit" className="button button-primary" disabled={!props.canSubmit || busy || props.hasPending}>
+            <ProductButton type="submit" className="button button-primary" disabled={!props.canSubmit || busy || props.hasPending}>
               {props.submitting === props.formKey ? "제출 중…" : "사진 공유"}
-            </button>
+            </ProductButton>
           </ValidatedForm>
           {props.photos.length ? (
             <ul className={styles.photoGrid}>
@@ -1816,9 +1817,9 @@ function ModuleSection(props: {
               {props.formMessage("body") ? <p className={styles.fieldError} id={`post-${module.id}-error`} role="alert">{props.formMessage("body")}</p> : null}
             </div>
             {props.generalMessage ? <p className={styles.fieldError} role="alert">{props.generalMessage}</p> : null}
-            <button type="submit" className="button button-primary" disabled={!props.postBody.trim() || !props.canSubmit || busy || props.hasPending}>
+            <ProductButton type="submit" className="button button-primary" disabled={!props.postBody.trim() || !props.canSubmit || busy || props.hasPending}>
               {props.submitting === props.formKey ? "제출 중…" : "게시글 등록"}
-            </button>
+            </ProductButton>
           </ValidatedForm>
           {props.posts.length ? (
             <ul className={styles.entryList}>

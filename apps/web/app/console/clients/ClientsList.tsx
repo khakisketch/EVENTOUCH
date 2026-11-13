@@ -1,4 +1,5 @@
 "use client";
+import ProductButton from "../../ui/ProductButton";
 
 import ValidatedForm from "../../ui/ValidatedForm";
 
@@ -495,9 +496,9 @@ export default function ClientsList() {
           }
           actions={
             state.canManage ? (
-              <button type="button" className="button button-primary" disabled={otherClientReceipt || Boolean(pendingAttachment)} onClick={() => openDraft({ ...EMPTY_DRAFT })}>
+              <ProductButton type="button" className="button button-primary" disabled={otherClientReceipt || Boolean(pendingAttachment)} onClick={() => openDraft({ ...EMPTY_DRAFT })}>
                 고객사 등록
-              </button>
+              </ProductButton>
             ) : undefined
           }
         />
@@ -510,8 +511,8 @@ export default function ClientsList() {
           {pendingAttachment ? <section aria-label="파일 처리 확인">
             <ConsoleFeedback kind="warning">{pendingAttachment.client.name}의 {pendingAttachment.kind === "logo" ? "로고" : "사업자등록증"} {uploading ? "파일을 처리하고 있습니다." : "처리가 끝나지 않았습니다. 이 화면을 떠나면 파일은 다시 선택해야 합니다."}</ConsoleFeedback>
             <p>
-              <button type="button" className="button button-secondary" disabled={uploading !== null} onClick={() => { if (pendingAttachmentRef.current) void runAttachment(pendingAttachmentRef.current); }}>같은 파일 요청 다시 확인</button>{" "}
-              <button type="button" className="button button-secondary" disabled={uploading !== null} onClick={() => setAbandonAttachment(true)}>파일 확인 그만두기</button>
+              <ProductButton type="button" className="button button-secondary" disabled={uploading !== null} onClick={() => { if (pendingAttachmentRef.current) void runAttachment(pendingAttachmentRef.current); }}>같은 파일 요청 다시 확인</ProductButton>{" "}
+              <ProductButton type="button" className="button button-secondary" disabled={uploading !== null} onClick={() => setAbandonAttachment(true)}>파일 확인 그만두기</ProductButton>
             </p>
             {abandonAttachment ? <ConsoleConfirm
               summary="파일이 이미 서버에 저장되었거나 고객사에 연결되었을 수 있습니다. 확인을 그만둘까요?"
@@ -543,9 +544,9 @@ export default function ClientsList() {
           {clientSearch ? (
             <>
               {" "}
-              <button type="button" className="button button-secondary" onClick={() => setClientQuery("")}>
+              <ProductButton type="button" className="button button-secondary" onClick={() => setClientQuery("")}>
                 검색 지우기
-              </button>
+              </ProductButton>
             </>
           ) : null}
         </p>
@@ -559,9 +560,9 @@ export default function ClientsList() {
             <h3>조건에 맞는 고객사가 없습니다.</h3>
             <p>검색어를 바꾸거나 다른 이름·담당자·이메일로 찾아보세요.</p>
             <p>
-              <button type="button" className="button button-secondary" onClick={() => setClientQuery("")}>
+              <ProductButton type="button" className="button button-secondary" onClick={() => setClientQuery("")}>
                 검색 지우기
-              </button>
+              </ProductButton>
             </p>
           </div>
         ) : (
@@ -611,7 +612,7 @@ export default function ClientsList() {
                 {state.canManage ? (
                   <div className={`${consoleUiStyles.recordActions} ${styles.clientActions}`}>
                     <div className={styles.clientInfoGroup} role="group" aria-label={`${client.name} 정보 관리`}>
-                    <button
+                    <ProductButton
                       type="button"
                       className="button button-secondary"
                       disabled={otherClientReceipt || Boolean(pendingAttachment)}
@@ -620,7 +621,7 @@ export default function ClientsList() {
                       }}
                     >
                       정보 수정
-                    </button>
+                    </ProductButton>
                     </div>
                     <details className={styles.attachmentTools}>
                       <summary>파일 관리</summary>
@@ -641,9 +642,9 @@ export default function ClientsList() {
                       />
                     </label>
                     {client.logoFileId ? (
-                      <button type="button" className="button button-secondary" disabled={Boolean(pendingAttachment) || otherClientReceipt} onClick={() => requestRemoveAttachment(client, "logo")}>
+                      <ProductButton type="button" className="button button-secondary" disabled={Boolean(pendingAttachment) || otherClientReceipt} onClick={() => requestRemoveAttachment(client, "logo")}>
                         로고 제거
-                      </button>
+                      </ProductButton>
                     ) : null}
                     </div>
                     <div className={styles.clientFileGroup} role="group" aria-label={`${client.name} 사업자등록증 관리`}>
@@ -662,9 +663,9 @@ export default function ClientsList() {
                       />
                     </label>
                     {client.docFileId ? (
-                      <button type="button" className="button button-secondary" disabled={Boolean(pendingAttachment) || otherClientReceipt} onClick={() => requestRemoveAttachment(client, "doc")}>
+                      <ProductButton type="button" className="button button-secondary" disabled={Boolean(pendingAttachment) || otherClientReceipt} onClick={() => requestRemoveAttachment(client, "doc")}>
                         서류 제거
-                      </button>
+                      </ProductButton>
                     ) : null}
                     </div>
                       </div>
@@ -696,13 +697,13 @@ export default function ClientsList() {
           canClose={canCloseClientDialog}
           footer={
             <ConsoleFormActions>
-              <button type="button" className="button button-secondary" onClick={() => { if (canCloseClientDialog()) closeDraft(); }} disabled={saving || checkingClient}>
+              <ProductButton type="button" className="button button-secondary" onClick={() => { if (canCloseClientDialog()) closeDraft(); }} disabled={saving || checkingClient}>
                 취소
-              </button>
-              {clientUncertain ? <button type="button" className="button button-secondary" disabled={saving || checkingClient} onClick={() => void checkClientResult()}>{checkingClient ? "확인 중…" : "서버 처리 확인"}</button> : null}
-              <button type="submit" form="client-form" className="button button-primary" disabled={saving || checkingClient || otherClientReceipt}>
+              </ProductButton>
+              {clientUncertain ? <ProductButton type="button" className="button button-secondary" disabled={saving || checkingClient} onClick={() => void checkClientResult()}>{checkingClient ? "확인 중…" : "서버 처리 확인"}</ProductButton> : null}
+              <ProductButton type="submit" form="client-form" className="button button-primary" disabled={saving || checkingClient || otherClientReceipt}>
                 {saving ? "저장 중…" : clientUncertain ? "같은 요청 다시 시도" : "저장"}
-              </button>
+              </ProductButton>
             </ConsoleFormActions>
           }
         >

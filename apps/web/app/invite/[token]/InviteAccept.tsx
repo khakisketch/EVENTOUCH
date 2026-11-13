@@ -4,7 +4,8 @@ import ValidatedForm from "../../ui/ValidatedForm";
 
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import ProductLink from "../../ui/ProductLink";
+import ProductButton from "../../ui/ProductButton";
 import OrganizationSwitcher from "../../OrganizationSwitcher";
 import { loginHref } from "../../auth-redirect";
 import { useUnsavedNavigationGuard } from "../../../lib/use-unsaved-navigation-guard";
@@ -286,7 +287,7 @@ export default function InviteAccept({ token, invitation }: { token: string; inv
         <p>{invitation.name}님, 이 계정으로 로그인하세요.</p>
         <p>{nextStepHint(invitation.role, invitation.eventId)}</p>
         <p>
-          <Link className="button button-primary" href={loginHrefValue}>로그인으로</Link>
+          <ProductLink className="button button-primary" href={loginHrefValue}>로그인으로</ProductLink>
         </p>
       </section>
     );
@@ -307,7 +308,7 @@ export default function InviteAccept({ token, invitation }: { token: string; inv
             <OrganizationSwitcher suggestedOrganizationId={acceptedOrg.organizationId} />
           ) : (
             <p>
-              <Link className="button button-primary" href="/console?chooseOrganization=1">조직 선택으로 이동</Link>
+              <ProductLink className="button button-primary" href="/console?chooseOrganization=1">조직 선택으로 이동</ProductLink>
             </p>
           )}
         </section>
@@ -330,12 +331,12 @@ export default function InviteAccept({ token, invitation }: { token: string; inv
         ) : null}
         {loginRequired ? (
           <p>
-            <Link className="button button-primary" href={loginHref(`/invite/${token}`)}>로그인으로</Link>
+            <ProductLink className="button button-primary" href={loginHref(`/invite/${token}`)}>로그인으로</ProductLink>
           </p>
         ) : (
-          <button type="button" className={`button ${uncertain || offerOrgCheck ? "button-secondary" : "button-primary"}`} disabled={accepting} onClick={() => void acceptExistingAccount()}>
+          <ProductButton type="button" className={`button ${uncertain || offerOrgCheck ? "button-secondary" : "button-primary"}`} disabled={accepting} onClick={() => void acceptExistingAccount()}>
             {accepting ? "수락 중입니다" : uncertain ? "같은 초대 다시 수락" : "초대 수락"}
-          </button>
+          </ProductButton>
         )}
       </>
     );
@@ -362,7 +363,7 @@ export default function InviteAccept({ token, invitation }: { token: string; inv
               해당 계정으로 로그인한 뒤 이 자리에서 수락하세요. 기존 비밀번호는 그대로 유지됩니다.
             </p>
             <p>
-              <Link className="button button-primary" href={loginHref(`/invite/${token}`)}>로그인으로</Link>
+              <ProductLink className="button button-primary" href={loginHref(`/invite/${token}`)}>로그인으로</ProductLink>
             </p>
           </>
         ) : !matched ? (
@@ -372,7 +373,7 @@ export default function InviteAccept({ token, invitation }: { token: string; inv
               같은 계정으로 로그인한 뒤 수락하세요.
             </p>
             <p>
-              <Link className="button button-primary" href={loginHref(`/invite/${token}`)}>다른 계정으로 로그인</Link>
+              <ProductLink className="button button-primary" href={loginHref(`/invite/${token}`)}>다른 계정으로 로그인</ProductLink>
             </p>
           </>
         ) : (
@@ -432,13 +433,13 @@ export default function InviteAccept({ token, invitation }: { token: string; inv
           </p>
         ) : null}
         {uncertain || offerLogin ? (
-          <Link className="button button-primary" href={loginHref(loginNextForRole(invitation.role, invitation.eventId))} target="_blank" rel="noopener noreferrer">
+          <ProductLink className="button button-primary" href={loginHref(loginNextForRole(invitation.role, invitation.eventId))} target="_blank" rel="noopener noreferrer">
             로그인해 확인 (새 탭)
-          </Link>
+          </ProductLink>
         ) : null}
-        <button type="submit" className={`button ${uncertain || offerLogin ? "button-secondary" : "button-primary"}`} disabled={submitting}>
+        <ProductButton type="submit" className={`button ${uncertain || offerLogin ? "button-secondary" : "button-primary"}`} disabled={submitting}>
           {submitting ? "수락 중입니다" : uncertain ? "같은 정보로 다시 수락" : "초대 수락"}
-        </button>
+        </ProductButton>
       </ValidatedForm>
     </section>
   );

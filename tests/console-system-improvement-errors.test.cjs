@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('../apps/web/node_modules/typescript');
+const { productActionImports } = require('./helpers/astryx-source-contracts.cjs');
 const source = fs.readFileSync('apps/web/lib/runtime-recovery.ts', 'utf8');
 const exportsObject = {};
 vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, { exports: exportsObject });
@@ -33,6 +34,7 @@ test('rendered recovery never exposes client messages or digests, including nume
     require(name) {
       if (name === 'react') return React;
       if (name === 'react/jsx-runtime') return require('../apps/web/node_modules/react/jsx-runtime');
+      if (name === './ui/ProductButton') return productActionImports()['./ui/ProductButton'];
       if (name === '../lib/runtime-recovery') return exportsObject;
       if (name.endsWith('.module.css')) return { default: new Proxy({}, { get: (_, key) => String(key) }) };
       throw new Error(`Unexpected recovery dependency ${name}`);

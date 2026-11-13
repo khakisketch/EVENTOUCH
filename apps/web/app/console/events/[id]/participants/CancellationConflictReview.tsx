@@ -1,4 +1,5 @@
 "use client";
+import ProductButton from "../../../../ui/ProductButton";
 
 import { useEffect, useRef, useState } from "react";
 import { consoleFetch } from "../../../../../lib/console-api";
@@ -117,8 +118,8 @@ export default function CancellationConflictReview({ eventId, participantId, onR
   }
 
   return <ConsoleDialog title="참가 취소 기록 확인" description="참가자의 실제 의사를 확인한 뒤 기록을 정리합니다." onClose={onClose} canClose={canClose} busy={busy || loading}
-    footer={<ConsoleFormActions><button type="button" className="button button-secondary" disabled={busy || loading} onClick={() => { if (canClose()) onClose(); }}>닫기</button>
-      {!pending ? <button type="button" className="button button-primary" disabled={!snapshot || snapshot.inside !== false || !confirmed || !reason.trim() || busy || dismiss || operator.changed} onClick={() => void submit()}>{busy ? "저장 중…" : "확인 내용 저장"}</button> : null}</ConsoleFormActions>}>
+    footer={<ConsoleFormActions><ProductButton type="button" className="button button-secondary" disabled={busy || loading} onClick={() => { if (canClose()) onClose(); }}>닫기</ProductButton>
+      {!pending ? <ProductButton type="button" className="button button-primary" disabled={!snapshot || snapshot.inside !== false || !confirmed || !reason.trim() || busy || dismiss || operator.changed} onClick={() => void submit()}>{busy ? "저장 중…" : "확인 내용 저장"}</ProductButton> : null}</ConsoleFormActions>}>
     <div className={`${uiStyles.formStack} ${styles.reviewBody}`}>
       <p>취소하지 않고 참가하기로 확인된 경우에만 진행하세요. 기존 티켓과 QR은 사용할 수 없으며, 필요하면 확인 후 새 티켓을 발급해 전달해야 합니다.</p>
       <p>확인 사유와 담당자는 운영 활동에 기록됩니다.</p>
@@ -126,7 +127,7 @@ export default function CancellationConflictReview({ eventId, participantId, onR
       {loading ? <p role="status">최신 참가자 정보를 확인하고 있습니다.</p> : null}
       {busy ? <p role="status">확인 내용을 저장하고 있습니다.</p> : null}
       {error ? <ConsoleFeedback kind="error">{error}</ConsoleFeedback> : null}
-      {!snapshot && !loading && !pending ? <button type="button" className="button button-secondary" disabled={operator.changed} onClick={() => void readLatest()}>최신 정보 다시 확인</button> : null}
+      {!snapshot && !loading && !pending ? <ProductButton type="button" className="button button-secondary" disabled={operator.changed} onClick={() => void readLatest()}>최신 정보 다시 확인</ProductButton> : null}
       {snapshot ? <>
         <section aria-label="확인할 참가자"><h3>확인할 참가자</h3>
           <p><strong>{snapshot.name}</strong> · {snapshot.company || "소속 없음"} · {maskPhone(snapshot.phone)}</p>
@@ -139,7 +140,7 @@ export default function CancellationConflictReview({ eventId, participantId, onR
           <div className="checkbox-field"><label className={styles.reviewConfirmation} htmlFor="cancellation-conflict-confirm"><input id="cancellation-conflict-confirm" type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} disabled={busy} /><span className={styles.reviewConfirmationText}>참가자가 취소하지 않고 참가하기로 확인했습니다.</span></label></div></> : null}
       </> : null}
       {pending ? <section aria-label="처리 결과 확인"><p>처음 확인한 대상과 사유를 유지해 같은 요청을 확인합니다.</p>
-        <button ref={retryRef} type="button" className="button button-primary" disabled={busy || operator.changed} onClick={() => void submit()}>같은 요청 다시 확인</button></section> : null}
+        <ProductButton ref={retryRef} type="button" className="button button-primary" disabled={busy || operator.changed} onClick={() => void submit()}>같은 요청 다시 확인</ProductButton></section> : null}
       {dismiss ? <ConsoleConfirm summary={pending ? "닫은 뒤 처리 결과 확인에서 요청 기록을 확인할 수 있습니다. 참가자 명단도 다시 확인하세요." : "작성한 확인 사유가 사라집니다. 닫을까요?"} confirmLabel="닫기" onConfirm={onClose} onCancel={() => setDismiss(false)} /> : null}
     </div>
   </ConsoleDialog>;

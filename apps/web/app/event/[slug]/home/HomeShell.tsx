@@ -5,7 +5,7 @@ import ValidatedForm from "../../../ui/ValidatedForm";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import Link from "next/link";
+import ProductLink from "../../../ui/ProductLink";
 import dynamic from "next/dynamic";
 import TicketView from "../ticket/TicketView";
 import { fetchWithDeadline } from "../../../../lib/request-deadline";
@@ -1191,21 +1191,21 @@ export default function HomeShell({ slug }: { slug: string }) {
             ) : null}
             {state.reason === "ticket-invalid" && !recoveryBlocked ? (
               <>
-                <Link className={styles.stateButton} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>
+                <ProductLink className={styles.stateButton} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>
                   내 티켓 찾기
-                </Link>{" "}
+                </ProductLink>{" "}
               </>
             ) : null}
             {state.reason === "event-missing" ? (
               <>
-                <Link className={styles.stateButton} href="/">
+                <ProductLink className={styles.stateButton} href="/">
                   처음으로
-                </Link>{" "}
+                </ProductLink>{" "}
               </>
             ) : null}
-            <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>
+            <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>
               행사 안내로
-            </Link>
+            </ProductLink>
           </p>
         </section>
         {recovery}
@@ -1383,7 +1383,7 @@ function NoticeTab({ slug, notices }: { slug: string; notices: Notice[] }) {
       <section className={styles.emptyState}>
         <p className={styles.emptyText}>등록된 공지사항이 없습니다.</p>
         <p className={styles.emptyText}>
-          <Link className={styles.needTicketButton} href={`/event/${encodeURIComponent(slug)}`}>행사 안내 보기</Link>
+          <ProductLink className={styles.needTicketButton} href={`/event/${encodeURIComponent(slug)}`}>행사 안내 보기</ProductLink>
         </p>
       </section>
     );
@@ -1402,7 +1402,7 @@ function NoticeTab({ slug, notices }: { slug: string; notices: Notice[] }) {
         ))}
       </div>
       <p className={styles.noticeVenueLink}>
-        <Link className={styles.needTicketButton} href={`/event/${encodeURIComponent(slug)}`}>행사 안내 보기</Link>
+        <ProductLink className={styles.needTicketButton} href={`/event/${encodeURIComponent(slug)}`}>행사 안내 보기</ProductLink>
       </p>
     </section>
   );
@@ -1425,17 +1425,17 @@ function NeedTicket({ slug }: { slug: string }) {
       <p className={styles.needTicketAction}>
         {recoveryBlocked ? null : (
           <>
-            <Link className={styles.needTicketButton} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>
+            <ProductLink className={styles.needTicketButton} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>
               내 티켓 찾기
-            </Link>{" "}
+            </ProductLink>{" "}
           </>
         )}
-        {recoveryBlocked ? <><Link className={styles.needTicketButton} href={`/event/${encodeURIComponent(slug)}`}>
+        {recoveryBlocked ? <><ProductLink className={styles.needTicketButton} href={`/event/${encodeURIComponent(slug)}`}>
           행사 안내 확인
-        </Link>{" "}</> : null}
-        <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/register`}>
+        </ProductLink>{" "}</> : null}
+        <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/register`}>
           처음 신청하기
-        </Link>
+        </ProductLink>
       </p>
     </section>
   );

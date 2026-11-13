@@ -167,7 +167,11 @@ async function main() {
     await retryRead.click();
     const conflictNotice = concurrentSlot.getByRole('alert').filter({ hasText: '추첨 내용이 다른 곳에서 바뀌었습니다' });
     await conflictNotice.waitFor();
-    await page.waitForFunction(() => document.activeElement?.firstElementChild?.getAttribute('role') === 'alert');
+    await page.waitForFunction(id => {
+      const slot = document.getElementById(id);
+      const active = document.activeElement;
+      return slot?.contains(active) && active?.querySelector('[role="alert"]')?.textContent.includes('추첨 내용이 다른 곳에서 바뀌었습니다');
+    }, `draw-program-${concurrent.id}`);
     assert.equal(ids.length, beforeConflict + 1, 'refresh never resends the rejected draw');
     assert.match(await concurrentSlot.innerText(), /당첨 1명 · 남은 2명/);
     assert.equal(await recovery.count(), 0, 'a definitive conflict is not a lost response');

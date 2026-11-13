@@ -35,7 +35,10 @@ function cssDeclarations(css, selector, media = null) {
     for (let parent = rule.parent; parent; parent = parent.parent) {
       if (parent.type === 'atrule') scopes.unshift(parent.name + ' ' + parent.params);
     }
-    if (JSON.stringify(scopes) === JSON.stringify(media ? ['media ' + media] : [])) matches.push(rule);
+    const expected = selector === '.console-main'
+      ? media ? ['layer eventouch-legacy', 'media ' + media] : ['layer eventouch-legacy']
+      : media ? ['media ' + media] : [];
+    if (JSON.stringify(scopes) === JSON.stringify(expected)) matches.push(rule);
   });
   assert.equal(matches.length, 1, selector + ' has one rule in ' + (media ?? 'the base scope'));
   return Object.fromEntries(matches[0].nodes.filter((node) => node.type === 'decl').map((node) => [node.prop, node.value]));
@@ -142,7 +145,7 @@ test('console frame shares one title, context link and body rhythm', () => {
   assert.match(page, /`행사 \/ \$\{trimmedName\}`/u);
   assert.match(page, /className=\{styles\.contextLink\}/u);
   assert.match(page, /<div className=\{styles\.pageFlow\}>\{children\}<\/div>/u, 'body shares one gap');
-  assert.match(page, /import Link from "next\/link";/u);
+  assert.match(page, /import Link from "\.\.\/\.\.\/ui\/ProductLink";/u);
 
   const css = readUi('console-ui.module.css');
   const frame = cssDeclarations(css, '.page');
@@ -185,7 +188,7 @@ test('toolbar, section nav and form actions render only what they are given', ()
 test('feedback and section surfaces reuse tokens with stable semantics', () => {
   const feedback = readUi('ConsoleFeedback.tsx');
   assert.match(feedback, /"success" \| "error" \| "warning" \| "info"/u);
-  assert.match(feedback, /role=\{kind === "error" \? "alert" : "status"\}/u);
+  assert.match(feedback, /<ProductNotice kind=\{kind\} id=\{id\}>\{children\}<\/ProductNotice>/u);
   assert.match(feedback, /id\?: string;/u);
   assert.doesNotMatch(feedback, HOOK_CALL);
 
@@ -214,7 +217,7 @@ test('feedback and section surfaces reuse tokens with stable semantics', () => {
   const form = cssDeclarations(css, '.sectionForm');
   assert.equal(form.width, '100%');
   assert.equal(form['max-width'], 'var(--web-reading-max)');
-  assert.equal(cssDeclarations(css, '.sectionForm > .sectionBody')['max-width'], 'none');
+  assert.equal(cssDeclarations(css, '.sectionForm > :global(.astryx-section) > .sectionBody')['max-width'], 'none');
   assert.equal(cssDeclarations(css, '.sectionPanel', '(max-width: 768px)').padding, 'var(--s4)');
 
   const header = readUi('ConsolePageHeader.tsx');
@@ -222,7 +225,7 @@ test('feedback and section surfaces reuse tokens with stable semantics', () => {
   const order = [
     header.indexOf('className={styles.backLink}'),
     header.indexOf('styles.pageContext'),
-    header.indexOf('<h1>{title}</h1>'),
+    header.indexOf('<Heading level={1}>{title}</Heading>'),
   ];
   assert.ok(order.every((position) => position >= 0));
   assert.deepEqual(order, [...order].sort((a, b) => a - b), 'optional back stays first; event context precedes its task title');

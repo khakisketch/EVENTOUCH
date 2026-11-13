@@ -1,0 +1,2 @@
+/* Loaded before every vendor and product stylesheet, including split chunks. */
+@layer reset, eventouch-base, astryx-base, astryx-theme, eventouch-legacy, eventouch-product;

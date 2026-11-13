@@ -1,5 +1,7 @@
 "use client";
 
+import ProductButton from "../../ui/ProductButton";
+
 import { useState } from "react";
 import { RefreshIcon } from "./ConsoleIcons";
 import styles from "./console-ui.module.css";
@@ -29,18 +31,18 @@ export default function ConsoleRefreshButton({
 
   return (
     <>
-      <button
+      <ProductButton
         type="button"
         className={`button button-quiet console-icon-button ${styles.refreshTool}`}
         aria-label={label}
         title={label}
-        aria-busy={refreshing}
+        busy={refreshing}
         aria-disabled={refreshing || undefined}
         disabled={disabled}
         onClick={() => void activate()}
       >
         <RefreshIcon />
-      </button>
+      </ProductButton>
       <span className="sr-only" role="status">{refreshing ? "새로고침 중" : ""}</span>
     </>
   );

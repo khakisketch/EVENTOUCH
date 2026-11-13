@@ -172,7 +172,8 @@
     "web:message-authoring:audit": "node scripts/web-message-authoring-ux-audit.cjs",
     "web:message-focus:audit": "node scripts/web-message-focus-audit.cjs",
     "web:message-charset:audit": "node scripts/web-message-charset-audit.cjs",
-    "web:message-targeting:audit": "node scripts/web-message-targeting-audit.cjs"
+    "web:message-targeting:audit": "node scripts/web-message-targeting-audit.cjs",
+    "web:astryx:audit": "node scripts/web-astryx-controls-audit.cjs"
   },
   "dependencies": {
     "fastify": "^5.12.7",

@@ -19,7 +19,7 @@
 // (Node 24 type stripping) and is verified by `npm run server:typecheck`.
 
 import fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
-import { createReadStream } from "node:fs";
+import type { Readable } from "node:stream";
 import { bearerToken, decodedSegment, errorStatus } from "./legacy-http.ts";
 
 export type PublicEventReader = {
@@ -29,7 +29,7 @@ export type PublicEventReader = {
 };
 
 export type PublicFile = {
-  absolutePath: string;
+  openReadStream: () => Promise<Readable>;
   type: string;
   size: number;
 };
@@ -97,12 +97,13 @@ async function publicRead(deps: PublicReadsDeps, request: FastifyRequest, reply:
         slug: decodedSegment(parts[3]),
         fileId: decodedSegment(parts[5]),
       });
+      const stream = await file.openReadStream();
       reply
         .code(200)
         .header("content-type", file.type)
         .header("content-length", file.size)
         .header("x-content-type-options", "nosniff");
-      return reply.send(createReadStream(file.absolutePath).on("error", () => reply.raw.destroy()));
+      return reply.send(stream.on("error", () => reply.raw.destroy()));
     } catch (error) {
       const status = errorStatus(error);
       return reply.code(status).send({ error: status === 500 ? FILE_READ_FAILURE : errorMessage(error, NOT_FOUND_FILE) });

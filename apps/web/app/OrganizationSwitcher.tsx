@@ -1,5 +1,7 @@
 "use client";
 
+import ProductButton from "./ui/ProductButton";
+
 import ValidatedForm from "./ui/ValidatedForm";
 
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
@@ -23,7 +25,7 @@ function SelectionStatus({ allowRetry = true }: { allowRetry?: boolean }) {
   return <>
     {selection.attempt ? <p className={styles.help} role="status">전환 대상: <strong>{selection.attempt.organizationName}</strong>{selection.busy ? " · 확인 중…" : " · 결과 미확인"}</p> : null}
     {selection.error ? <p className={styles.error} role="alert">{selection.error}</p> : null}
-    {selection.uncertain && allowRetry ? <button className="button button-secondary" type="button" disabled={selection.busy} onClick={() => void selectOrganization()}>같은 전환 요청 다시 확인</button> : null}
+    {selection.uncertain && allowRetry ? <ProductButton className="button button-secondary" type="button" disabled={selection.busy} onClick={() => void selectOrganization()}>같은 전환 요청 다시 확인</ProductButton> : null}
     {selection.notice ? <p className={styles.help} role="status">{selection.notice}</p> : null}
   </>;
 }
@@ -171,20 +173,20 @@ export default function OrganizationSwitcher({ confirmLeave, suggestedOrganizati
       <select id={`${id}-organization`} value={selected} disabled={pending || blockedWrites} onChange={(event) => setSelected(event.target.value)}>
         <option value="">선택하세요</option>{state.organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name} · {roleLabel(organization.role)}</option>)}
       </select>
-      <button type="button" className="button button-secondary" disabled={pending || blockedWrites || !selected || (selected === context.context?.organizationId && !context.changed)} onClick={() => void switchNow()}>이 운영사로 이동</button>
+      <ProductButton type="button" className="button button-secondary" disabled={pending || blockedWrites || !selected || (selected === context.context?.organizationId && !context.changed)} onClick={() => void switchNow()}>이 운영사로 이동</ProductButton>
       {blockedWrites ? <p className={styles.help}>진행 중이거나 결과를 확인하지 못한 작업이 있습니다. 원래 운영사에서 결과를 확인한 뒤 전환하세요.</p> : <p className={styles.help}>운영사마다 역할과 자료가 다릅니다. 이동하면 현재 선택과 화면은 초기화됩니다.</p>}
     </div> : null}
     {!context.changed ? <SelectionStatus /> : <p className={styles.help}>운영사 문맥이 바뀌었습니다. 본문의 문맥 안내 또는 소속 목록에서 계속할 운영사를 명시적으로 선택하세요.</p>}
-    {state.kind !== "loading" ? <button type="button" className="button button-secondary" disabled={pending} onClick={() => { setTick((value) => value + 1); void refreshOperatorContext(); }}>소속 다시 확인</button> : null}
+    {state.kind !== "loading" ? <ProductButton type="button" className="button button-secondary" disabled={pending} onClick={() => { setTick((value) => value + 1); void refreshOperatorContext(); }}>소속 다시 확인</ProductButton> : null}
     {createNotice ? <p className={styles.help} role="status">{createNotice}</p> : null}
     {context.context?.role === "AGENCY" && !context.changed ? <div className={styles.create}>
-      {!createOpen ? <button type="button" className="button button-secondary" disabled={pending || blockedWrites} onClick={() => setCreateOpen(true)}>운영사 추가</button> : <ValidatedForm onSubmit={(event) => void createOrganization(event)}>
+      {!createOpen ? <ProductButton type="button" className="button button-secondary" disabled={pending || blockedWrites} onClick={() => setCreateOpen(true)}>운영사 추가</ProductButton> : <ValidatedForm onSubmit={(event) => void createOrganization(event)}>
         <label htmlFor={`${id}-org-name`}>새 운영사 이름</label>
         <input id={`${id}-org-name`} value={name} onChange={(event) => setName(event.target.value)} disabled={createBusy || createUnknown} maxLength={80} autoComplete="organization" required />
         <p className={styles.help}>다른 운영사의 자료·발송 설정을 가져오지 않습니다. 새 운영사는 발송 미연동 상태로 시작합니다.</p>
         {createError ? <p className={styles.error} role="alert">{createError}</p> : null}
-        <div className={styles.actions}><button type="submit" className="button button-primary" disabled={createBusy || !name.trim()}>{createBusy ? "등록 중…" : createUnknown ? "같은 등록 요청 다시 확인" : "운영사 등록"}</button>
-          <button type="button" className="button button-secondary" disabled={createBusy || createUnknown} onClick={() => { if (formDirty && !window.confirm("작성한 운영사 이름을 버릴까요?")) return; setCreateOpen(false); setName(""); createAttempt.current = null; }}>취소</button></div>
+        <div className={styles.actions}><ProductButton type="submit" className="button button-primary" disabled={createBusy || !name.trim()}>{createBusy ? "등록 중…" : createUnknown ? "같은 등록 요청 다시 확인" : "운영사 등록"}</ProductButton>
+          <ProductButton type="button" className="button button-secondary" disabled={createBusy || createUnknown} onClick={() => { if (formDirty && !window.confirm("작성한 운영사 이름을 버릴까요?")) return; setCreateOpen(false); setName(""); createAttempt.current = null; }}>취소</ProductButton></div>
       </ValidatedForm>}
     </div> : null}
   </section>;
@@ -504,10 +506,10 @@ export function OrganizationContextNotice({ confirmLeave }: { confirmLeave?: () 
     <p>이 화면의 작업 운영사: <strong>{original?.organizationName || "확인 필요"}</strong>. 입력과 미확인 요청은 그대로 두고 쓰기를 잠갔습니다.</p>
     <p>{roleChanged ? `이 운영사의 역할이 ${roleLabel(observed!.role)}로 바뀌었습니다. 변경된 역할의 홈에서 계속해야 합니다.` : observed && observed.organizationId !== original?.organizationId ? `다른 탭에서 선택한 운영사: ${observed.organizationName}.` : "현재 소속과 접속 상태를 다시 확인하세요."} 원래 운영사의 요청을 다른 운영사로 보내지 않습니다.</p>
     <div className={styles.actions}>
-      {original && !selection.attempt ? <button type="button" className="button button-secondary" disabled={busy} onClick={() => void restore()}>{checkingRestore ? "소속 확인 중…" : roleChanged ? (hasPendingSameOrg ? "미확인 요청 복구 연결" : "변경된 역할의 홈으로 이동") : `${original.organizationName}에 다시 연결`}</button> : null}
-      {canGoNew ? <button type="button" className="button button-secondary" disabled={busy || selection.uncertain || context.uncertainWrites > 0} onClick={goToObserved}>{observed?.organizationName}의 홈으로 이동</button> : null}
-      <button type="button" className="button button-secondary" disabled={busy || selection.uncertain || context.inFlightWrites > 0 || context.uncertainWrites > 0 || !original} onClick={() => void recheckRole()}>{checkingRole ? "현재 역할 확인 중…" : "현재 역할 다시 확인"}</button>
-      <button type="button" className="button button-secondary" disabled={busy} onClick={() => void refreshOperatorContext()}>문맥 다시 확인</button>
+      {original && !selection.attempt ? <ProductButton type="button" className="button button-secondary" disabled={busy} onClick={() => void restore()}>{checkingRestore ? "소속 확인 중…" : roleChanged ? (hasPendingSameOrg ? "미확인 요청 복구 연결" : "변경된 역할의 홈으로 이동") : `${original.organizationName}에 다시 연결`}</ProductButton> : null}
+      {canGoNew ? <ProductButton type="button" className="button button-secondary" disabled={busy || selection.uncertain || context.uncertainWrites > 0} onClick={goToObserved}>{observed?.organizationName}의 홈으로 이동</ProductButton> : null}
+      <ProductButton type="button" className="button button-secondary" disabled={busy || selection.uncertain || context.inFlightWrites > 0 || context.uncertainWrites > 0 || !original} onClick={() => void recheckRole()}>{checkingRole ? "현재 역할 확인 중…" : "현재 역할 다시 확인"}</ProductButton>
+      <ProductButton type="button" className="button button-secondary" disabled={busy} onClick={() => void refreshOperatorContext()}>문맥 다시 확인</ProductButton>
     </div>
     {roleError ? <p className={styles.error} role="alert">{roleError}</p> : null}
     {context.uncertainWrites > 0 ? <p className={styles.help}>결과 미확인 작업이 있습니다. 위의 복구 버튼으로 같은 요청으로 결과를 확인하세요. 복구해도 현재 화면은 유지되며 이동하지 않습니다.</p> : null}
@@ -518,7 +520,7 @@ export function OrganizationContextNotice({ confirmLeave }: { confirmLeave?: () 
         return <div key={item.key} className={styles.actions}>
           <span className={styles.help}>{item.organizationName} · {item.commandLabel}</span>
           {item.replayable ? (
-            <button type="button" className="button button-secondary" disabled={busy || checking} onClick={() => void checkUncertain(item.key)}>{checking ? "결과 확인 중…" : "같은 요청으로 결과 확인"}</button>
+            <ProductButton type="button" className="button button-secondary" disabled={busy || checking} onClick={() => void checkUncertain(item.key)}>{checking ? "결과 확인 중…" : "같은 요청으로 결과 확인"}</ProductButton>
           ) : (
             <span className={styles.help} role="note">재전송할 요청 본문이 없어 같은 요청으로 확인할 수 없습니다. 원래 화면의 입력과 영수증을 확인하세요.</span>
           )}

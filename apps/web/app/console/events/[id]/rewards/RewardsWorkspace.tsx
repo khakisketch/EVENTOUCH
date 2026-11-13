@@ -1,8 +1,10 @@
 "use client";
 
+import ProductButton from "../../../../ui/ProductButton";
+
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import Link from "next/link";
+import ProductLink from "../../../../ui/ProductLink";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
 import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
@@ -559,7 +561,7 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
       eventName={state.eventName}
       meta={state.eventMeta}
       headerActions={(
-        <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants`}>참가자로</Link>
+        <ProductLink variant="secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants`}>참가자로</ProductLink>
       )}
       toolbar={
         <ConsoleToolbar
@@ -603,12 +605,12 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
                 : "처리됐을 수 있습니다. 서버 처리 확인은 요청을 다시 보내지 않습니다."}</p>
               <div className={styles.recoveryActions}>
                 {pendingAction.applied ? (
-                  <button type="button" className="button button-primary" disabled={Boolean(busy) || checking || abandonConfirm} onClick={() => void recoverAttempt("refresh")}>최신 목록 다시 확인</button>
+                  <ProductButton type="button" variant="primary" disabled={Boolean(busy) || checking || abandonConfirm} onClick={() => void recoverAttempt("refresh")}>최신 목록 다시 확인</ProductButton>
                 ) : <>
-                  <button type="button" className="button button-primary" disabled={Boolean(busy) || checking || abandonConfirm} onClick={() => void recoverAttempt("status")}>서버 처리 확인</button>
-                  <button type="button" className="button button-secondary" disabled={Boolean(busy) || checking || abandonConfirm || !canAct || !state.featureOn} onClick={() => void recoverAttempt("retry")}>같은 요청 다시 시도</button>
+                  <ProductButton type="button" variant="primary" disabled={Boolean(busy) || checking || abandonConfirm} onClick={() => void recoverAttempt("status")}>서버 처리 확인</ProductButton>
+                  <ProductButton type="button" variant="secondary" disabled={Boolean(busy) || checking || abandonConfirm || !canAct || !state.featureOn} onClick={() => void recoverAttempt("retry")}>같은 요청 다시 시도</ProductButton>
                 </>}
-                <button type="button" className="button button-secondary" disabled={Boolean(busy) || checking || abandonConfirm} onClick={() => setAbandonConfirm(true)}>확인 전 그만두기</button>
+                <ProductButton type="button" variant="secondary" disabled={Boolean(busy) || checking || abandonConfirm} onClick={() => setAbandonConfirm(true)}>확인 전 그만두기</ProductButton>
               </div>
               {abandonConfirm ? <ConsoleConfirm
                 summary="이미 처리된 경품은 되돌아가지 않습니다. 확인을 그만두고 최신 목록을 볼까요?"
@@ -621,7 +623,7 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
           {otherReceipt && !pendingAction ? <ConsoleFeedback kind="warning">이전 경품 처리 결과를 화면 위의 ‘처리 결과 확인’에서 먼저 확인하세요.</ConsoleFeedback> : null}
           {needsRefresh && !pendingAction ? <ConsoleFeedback kind="warning">
             최신 경품 목록을 확인한 뒤 다시 처리할 수 있습니다.{" "}
-            <button type="button" className="button button-secondary" disabled={checking} onClick={() => void refreshAfterReceipt()}>경품 목록 다시 확인</button>
+            <ProductButton type="button" variant="secondary" disabled={checking} onClick={() => void refreshAfterReceipt()}>경품 목록 다시 확인</ProductButton>
           </ConsoleFeedback> : null}
           {!canAct && !archived ? (
             <ConsoleFeedback kind="warning">지급 처리 권한이 없습니다. 처리가 필요하면 담당 행사 운영자에게 요청하세요.</ConsoleFeedback>
@@ -632,7 +634,7 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
           {!state.featureOn ? (
             <ConsoleFeedback kind="warning">
               경품 기능이 꺼져 있습니다.{" "}
-              <Link href={`/console/events/${encodeURIComponent(eventId)}/settings`}>행사 설정</Link>에서 먼저 켜세요.
+              <ProductLink href={`/console/events/${encodeURIComponent(eventId)}/settings`}>행사 설정</ProductLink>에서 먼저 켜세요.
             </ConsoleFeedback>
           ) : null}
         </>
@@ -652,9 +654,9 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
           {hasRewardFilter ? (
             <>
               {" "}
-              <button type="button" className="button button-secondary" onClick={clearRewardFilters}>
+              <ProductButton type="button" variant="secondary" onClick={clearRewardFilters}>
                 검색·필터 지우기
-              </button>
+              </ProductButton>
             </>
           ) : null}
         </p>
@@ -668,9 +670,9 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
             <h3>조건에 맞는 경품이 없습니다.</h3>
             <p>검색어·상태 조건을 바꾸거나 지우고 다시 찾아보세요.</p>
             <p>
-              <button type="button" className="button button-secondary" onClick={clearRewardFilters}>
+              <ProductButton type="button" variant="secondary" onClick={clearRewardFilters}>
                 검색·필터 지우기
-              </button>
+              </ProductButton>
             </p>
           </div>
         ) : (
@@ -687,7 +689,7 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
                       : reward.participantIssue === "cancelled" ? "참가가 취소되어 수령을 처리할 수 없습니다."
                       : reward.participantIssue === "unapproved" ? "참가 확정 후 수령을 처리할 수 있습니다."
                       : "수령자의 참가자 정보를 확인할 수 없습니다."}{" "}
-                    <Link href={`/console/events/${encodeURIComponent(eventId)}/participants${reward.participantIssue === "conflict" ? "?ticket=review" : ""}`}>참가자 명단에서 확인</Link>
+                    <ProductLink href={`/console/events/${encodeURIComponent(eventId)}/participants${reward.participantIssue === "conflict" ? "?ticket=review" : ""}`}>참가자 명단에서 확인</ProductLink>
                   </p> : null}
                   {reward.pendingAssignee ? (
                     <p className={consoleUiStyles.recordMeta}>
@@ -696,13 +698,13 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
                       {canAct && state.featureOn ? (
                         <>
                           {" "}
-                          <Link
+                          <ProductLink
                             href={reward.drawProgramId
                               ? `/console/events/${encodeURIComponent(eventId)}/draws#draw-program-${encodeURIComponent(reward.drawProgramId)}`
                               : `/console/events/${encodeURIComponent(eventId)}/draws#draws-programs`}
                           >
                             추첨에서 수령자 지정
-                          </Link>
+                          </ProductLink>
                         </>
                       ) : null}
                     </p>
@@ -714,9 +716,9 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
                 </div>
                 <div className={consoleUiStyles.recordActions}>
                   {state.featureOn && canAct && (reward.status === "READY" || reward.status === "FAILED") ? (
-                    <button
+                    <ProductButton
                       type="button"
-                      className="button button-secondary"
+                      variant="secondary"
                       disabled={writeLocked || Boolean(reward.participantIssue)}
                       aria-describedby={reward.participantIssue ? `reward-participant-${reward.id}` : undefined}
                       onClick={() => {
@@ -727,19 +729,19 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
                       }}
                     >
                       {busy === reward.id ? "처리 중…" : reward.method === "GIFT" ? "기프티콘 지급(모의)" : "수령 처리"}
-                    </button>
+                    </ProductButton>
                   ) : null}
                   {state.featureOn && canAct && reward.status !== "RECEIVED" && reward.status !== "CANCELLED" ? (
-                    <button
+                    <ProductButton
                       type="button"
-                      className="button button-danger"
+                      variant="destructive"
                       disabled={writeLocked}
                       onClick={() => {
                         if (!writeLocked) setRewardPending({ id: reward.id, command: "reward.cancel" });
                       }}
                     >
                       취소
-                    </button>
+                    </ProductButton>
                   ) : null}
                 </div>
                 {rewardPending?.id === reward.id ? (

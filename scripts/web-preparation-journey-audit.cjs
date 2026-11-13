@@ -105,7 +105,7 @@ async function main() {
       await capture('01-draft-overview');
       if (!BEFORE) {
         check(`${width} draft does not offer broken public link`, await page.getByRole('link', { name: '참가자 페이지 열기', exact: true }).count() === 0);
-        check(`${width} counts form exactly three peers`, await page.locator('section[aria-labelledby="event-metrics-heading"] [class*="metricCard"]').count() === 3);
+        check(`${width} counts form exactly three peers`, await page.locator(':is(section,[role="region"])[aria-labelledby="event-metrics-heading"] [class*="metricCard"]').count() === 3);
       }
       await phase('DRAFT → READY → 현황 재확인', async act => {
         await toStage(act);
@@ -114,7 +114,7 @@ async function main() {
         check(`${width} transition review does not write`, (await snapshot('ready-confirm')).stage === 'DRAFT');
         await act(() => page.getByRole('button', { name: '정말 전환합니다 · 운영 준비 단계로', exact: true }).click());
         await page.getByText('행사를 운영 준비 단계로 전환했습니다.', { exact: true }).waitFor();
-        await page.getByRole('button', { name: '진행 중(으)로 전환', exact: true }).waitFor();
+        await page.getByRole('button', { name: '진행 중 단계로 전환', exact: true }).waitFor();
         s = await snapshot('ready-settings');
         check(`${width} READY default home public without design`, s.stage === 'READY' && s.publicStatus === 200 && !s.registrationOpen && !s.homeDesignPublished, s);
         await capture('03-ready-result');
@@ -158,7 +158,16 @@ async function main() {
       await phase('접수 게시 → 현황 재확인', async act => {
         await act(() => page.getByRole('link', { name: '접수 설정', exact: true }).click());
         await page.locator('#set-consent').waitFor();
-        if (!BEFORE) check(`${width} intake deeplink selects real tab`, await page.getByRole('tab', { name: '참가 접수', exact: false }).getAttribute('aria-selected') === 'true');
+        if (!BEFORE) {
+          check(`${width} intake deeplink selects real tab`, await page.getByRole('tab', { name: '참가 접수', exact: false }).getAttribute('aria-selected') === 'true');
+          const fieldLink = page.getByRole('link', { name: '신청 항목 편집', exact: true });
+          check(`${width} field editing is a separate action`, await fieldLink.isVisible() && await fieldLink.evaluate(node => !node.closest('p')) && (await fieldLink.getAttribute('href')) === `${base}/settings/fields`);
+          const contactLink = page.getByRole('link', { name: '장소 안내의 문의 정보', exact: true });
+          check(`${width} recovery guidance keeps its action outside the sentence`, await contactLink.isVisible() && await contactLink.evaluate(node => {
+            const paragraph = node.previousElementSibling;
+            return paragraph?.tagName === 'P' && node.getBoundingClientRect().top >= paragraph.getBoundingClientRect().bottom;
+          }));
+        }
         const beforePublish = (await bootstrap()).workspaces[id];
         await act(() => page.locator('#set-consent').fill('행사 신청과 입장 확인을 위해 이름과 연락처를 사용합니다.'));
         await act(() => page.getByRole('button', { name: '양식 게시·접수 열기', exact: true }).click());
@@ -179,7 +188,7 @@ async function main() {
       await anon.close();
       await phase('다음 LIVE 전제 확인', async act => {
         await toStage(act);
-        check(`${width} LIVE blocked without desks or assignment`, await page.getByRole('button', { name: '진행 중(으)로 전환', exact: true }).isDisabled());
+        check(`${width} LIVE blocked without desks or assignment`, await page.getByRole('button', { name: '진행 중 단계로 전환', exact: true }).isDisabled());
         const reason = await page.locator('#settings-stage-precondition').textContent();
         check(`${width} blocker is desk and assignment, not custom design`, reason.includes('등록 데스크') && reason.includes('데스크 배정') && !reason.includes('미게시'), reason);
         s = await snapshot('next-live-blocked');
@@ -273,9 +282,9 @@ async function main() {
         for (const size of [320, 390, 768, 1024, 1280]) {
           await page.setViewportSize({ width: size, height: 900 });
           await page.reload(); await overview();
-          const values = await page.locator('section[aria-labelledby="event-metrics-heading"] [class*="metricValue"]').allTextContents();
+          const values = await page.locator(':is(section,[role="region"])[aria-labelledby="event-metrics-heading"] [class*="metricValue"]').allTextContents();
           check(`${size} four-digit counts and full long capacity retained`, values.some(v => v.replaceAll(',', '').includes('1000')) && (await page.locator('main').textContent()).replaceAll(',', '').includes('1234567890'), values);
-          const numbers = await page.locator('section[aria-labelledby="event-metrics-heading"] [class*="metricValue"]').evaluateAll(nodes => nodes.map(e => {
+          const numbers = await page.locator(':is(section,[role="region"])[aria-labelledby="event-metrics-heading"] [class*="metricValue"]').evaluateAll(nodes => nodes.map(e => {
             const range = document.createRange(); range.selectNodeContents(e);
             return { value: e.textContent, lines: range.getClientRects().length, textWidth: range.getBoundingClientRect().width, available: e.clientWidth };
           }));

@@ -1,8 +1,7 @@
 'use strict';
 
-const fs = require('node:fs/promises');
+const { createFileStorage } = require('./file-storage');
 const { randomUUID } = require('node:crypto');
-const path = require('node:path');
 
 // Outbound messaging provider.
 //
@@ -205,13 +204,13 @@ function phoneForRecipient(message, participantId) {
   return digitsOnly(match && match.phone);
 }
 
-async function dispatchCampaign(database, provider, dispatch, { now = new Date().toISOString(), clock = Date.now, previousAcceptanceUnknown = false } = {}) {
+async function dispatchCampaign(database, provider, dispatch, { now = new Date().toISOString(), clock = Date.now, previousAcceptanceUnknown = false, fileStorage } = {}) {
   if (!provider || !dispatch || !dispatch.messageId) return { skipped: true };
   // A batch-capable provider (Solapi) takes a whole campaign in one request
   // and answers with what it accepted. Acceptance is not delivery, so the
   // campaign stays unresolved until polling confirms the real outcome.
   if (typeof provider.sendBatch === 'function') {
-    return dispatchCampaignBatch(database, provider, dispatch, { now, clock, previousAcceptanceUnknown });
+    return dispatchCampaignBatch(database, provider, dispatch, { now, clock, previousAcceptanceUnknown, fileStorage });
   }
 
   let finalMessage = null;
@@ -394,13 +393,13 @@ async function reserveBatchSubmission(database, dispatch, now, { clock = Date.no
 // Batch dispatch: one provider call for the whole campaign, then a write-back
 // that records acceptance per recipient. Delivery is deliberately left
 // unresolved — resolveDelivery() decides it from a later poll.
-async function dispatchCampaignBatch(database, provider, dispatch, { now = new Date().toISOString(), clock = Date.now, previousAcceptanceUnknown = false } = {}) {
+async function dispatchCampaignBatch(database, provider, dispatch, { now = new Date().toISOString(), clock = Date.now, previousAcceptanceUnknown = false, fileStorage } = {}) {
   let finalMessage = null;
   let batchResult = null;
   let imageId = null;
   let submission = null;
   if (String(dispatch && dispatch.channel).toUpperCase() === 'MMS') {
-    const image = await loadMmsImage(database, dispatch);
+    const image = await loadMmsImage(database, dispatch, fileStorage);
     if (!image.ok) {
       batchResult = failAllRecipients(dispatch, image.reason, image.error);
     } else if (!provider || typeof provider.uploadImage !== 'function') {
@@ -523,7 +522,7 @@ async function dispatchCampaignBatch(database, provider, dispatch, { now = new D
 // Loads the MMS campaign photo from our own file storage for the single
 // provider upload. The bytes never enter the workspace payload or the
 // recipient snapshots — only the stored file id does.
-async function loadMmsImage(database, dispatch) {
+async function loadMmsImage(database, dispatch, fileStorage) {
   const fileId = String((dispatch && dispatch.imageFileId) || '');
   if (!fileId) {
     return { ok: false, reason: 'MMS_IMAGE_REQUIRED', error: 'MMS 캠페인의 이미지를 확인하세요' };
@@ -548,13 +547,9 @@ async function loadMmsImage(database, dispatch) {
   if (Number(row.size_bytes) > 200 * 1024) {
     return { ok: false, reason: 'IMAGE_TOO_LARGE', error: 'MMS 이미지는 JPG 200KB 이하만 가능합니다' };
   }
-  const root = path.resolve(process.env.STORAGE_DIR || path.join(__dirname, '../data/storage'));
-  const absolute = path.resolve(root, String(row.storage_key || ''));
-  if (absolute !== root && !absolute.startsWith(root + path.sep)) {
-    return { ok: false, reason: 'IMAGE_UNREADABLE', error: 'MMS 이미지 파일을 읽지 못했습니다' };
-  }
   try {
-    const bytes = await fs.readFile(absolute);
+    const storage = fileStorage || createFileStorage();
+    const bytes = await storage.readBytes(String(row.storage_key || ''),Number(row.size_bytes));
     return { ok: true, bytes, name: String(row.original_name || 'mms.jpg') };
   } catch (error) {
     return { ok: false, reason: 'IMAGE_UNREADABLE', error: 'MMS 이미지 파일을 읽지 못했습니다' };

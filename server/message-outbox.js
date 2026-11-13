@@ -189,13 +189,13 @@ async function lockCampaignSnapshot(client, eventId, messageId, dispatch = null)
 }
 
 async function sendQueuedCampaign(database, provider, { eventId, messageId }, {
-  now = new Date().toISOString(), clock = Date.now, previousAcceptanceUnknown = false, expectedGroupId,
+  now = new Date().toISOString(), clock = Date.now, previousAcceptanceUnknown = false, expectedGroupId, fileStorage,
 } = {}) {
   const fresh = await snapshotClaimedRow(database, eventId, messageId, { now, clock, previousAcceptanceUnknown, expectedGroupId, providerKind: provider?.state?.provider });
   if (!fresh || fresh.blocked) return { attempted: false, message: fresh?.message };
   const { buildMessageDispatch } = require('./commands/content-results');
   const dispatch = buildMessageDispatch(fresh.event, fresh.workspace, fresh.message);
-  const result = await dispatchCampaign(database, provider, dispatch, { now, clock, previousAcceptanceUnknown });
+  const result = await dispatchCampaign(database, provider, dispatch, { now, clock, previousAcceptanceUnknown, fileStorage });
   return { attempted: result.attempted !== false, message: result.message };
 }
 // Replays queued dispatch intents. Safe to run at boot and after restarts:
@@ -219,7 +219,7 @@ async function sendQueuedCampaign(database, provider, { eventId, messageId }, {
 // lock held, and the decision re-checks the campaign under a fresh lock, so
 // a concurrent retry, cancel, or second worker cannot slip a duplicate or a
 // lost send between the consult and the write.
-async function drainMessageOutbox(database, provider, { now = new Date().toISOString(), clock = Date.now, limit = DRAIN_LIMIT } = {}) {
+async function drainMessageOutbox(database, provider, { now = new Date().toISOString(), clock = Date.now, limit = DRAIN_LIMIT, fileStorage } = {}) {
   if (!providerConnected(provider)) return { skipped: true, reason: 'NOT_CONNECTED' };
   const claimed = await database.transaction(async (client) => {
     const rows = await client.query(
@@ -302,7 +302,7 @@ async function drainMessageOutbox(database, provider, { now = new Date().toISOSt
       // campaign meanwhile. Dispatching from a stale snapshot could resend
       // a campaign the operator just cancelled.
       const result = await sendQueuedCampaign(database, provider, { eventId: row.event_id, messageId: row.message_id }, {
-        now, clock,
+        now, clock, fileStorage,
         expectedGroupId: message.providerGroupId || null,
         // A previous worker may have submitted before losing the response.
         // Keep this uncertainty visible if a recipient change stops the retry.

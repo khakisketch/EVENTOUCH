@@ -1,7 +1,11 @@
 .status {
   padding: 2px var(--s2);
   border-radius: 999px;
+  font-size: var(--label);
   font-weight: 650;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .drawRecovery {
@@ -18,13 +22,13 @@
 .drawRecovery h2 { font-size: var(--body-work); }
 .drawRecovery p { font-size: var(--small); line-height: 1.5; word-break: keep-all; }
 .drawRecoveryActions { display: flex; flex-wrap: wrap; gap: var(--s2); }
-.drawRecoveryActions :global(.button) { min-height: 44px; }
+.drawRecoveryActions :global(.product-action) { min-height: 44px; }
 .luckyProgress { display: grid; gap: var(--s2); margin-block: var(--s4); padding-block: var(--s3); border-bottom: 1px solid var(--line); }
 .luckyProgress h2, .luckyProgress p { margin: 0; }
 .luckyProgress h2 { font-size: var(--body-work); }
 .luckyProgress p { font-size: var(--small); line-height: 1.5; word-break: keep-all; }
 .luckyProgress progress { width: 100%; height: 8px; accent-color: var(--brand-text); }
-.luckyProgress :global(.button) { justify-self: start; min-height: 44px; }
+.luckyProgress :global(.product-action) { justify-self: start; min-height: 44px; }
 
 .statusOpen {
   background: var(--success-soft);
@@ -72,6 +76,14 @@
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
+
+.stagePrerequisiteActions {
+  display: grid;
+  justify-items: start;
+  gap: var(--s1);
+}
+
+.stagePrerequisiteActions p { margin: 0; }
 
 .stagePrerequisite a {
   display: inline-flex;
@@ -214,7 +226,7 @@
   grid-template-columns: minmax(0, 1fr) minmax(110px, 0.45fr) auto;
   align-items: end;
   gap: var(--s3);
-  padding: var(--s3) 0;
+  padding: var(--s2) 0;
   border: 0;
   border-top: 1px solid var(--line);
   border-radius: 0;
@@ -234,7 +246,7 @@
   align-items: baseline;
   justify-content: space-between;
   gap: var(--s1) var(--s3);
-  padding: var(--s3) 0;
+  padding: var(--s2) 0;
   border: 0;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
@@ -269,7 +281,7 @@
 .programItem {
   display: grid;
   gap: var(--s2);
-  padding: var(--s4) 0;
+  padding: var(--s3) 0;
   border: 0;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
@@ -295,6 +307,7 @@
 .programTop > span {
   color: var(--muted);
   font-size: var(--small);
+  font-variant-numeric: tabular-nums;
   word-break: keep-all;
 }
 .programWinners {
@@ -305,7 +318,7 @@
 .programMeta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s3); color: var(--muted); font-size: var(--small); }
 .programMetaText { margin: 0; color: var(--muted); font-size: var(--small); overflow-wrap: anywhere; }
 .winnerList { display: grid; gap: 0; margin: var(--s1) 0 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
-.winnerItem { display: grid; gap: var(--s2); padding: var(--s3) 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
+.winnerItem { display: grid; gap: var(--s2); padding: var(--s2) 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
 .winnerSummary { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--s1) var(--s3); }
 .winnerSummary span { color: var(--muted); font-size: var(--small); }
 .recipientAssign { display: grid; gap: var(--s2); }
@@ -322,7 +335,7 @@
 .preassignBox .checkLine { margin: 0; }
 /* The batch action keeps its own frame (irreversible), but the button sizes
    to its label on desktop instead of stretching into a full-width banner. */
-.preassignBox > .button { justify-self: start; max-width: 480px; }
+.preassignBox > :global(.product-action) { justify-self: start; max-width: 480px; }
 .programActions {
   display: flex;
   flex-wrap: wrap;
@@ -343,7 +356,7 @@
 }
 /* Disabled run buttons stay readable (ink on muted, full opacity) while
    staying clearly disabled (gray instead of the brand orange, no pointer). */
-.programActions .button-primary:disabled {
+.programActions .product-action[data-variant="primary"]:disabled {
   border-color: var(--line-strong);
   background: var(--surface-muted);
   color: var(--ink);
@@ -356,7 +369,7 @@
   padding: var(--s2) var(--s3);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-medium);
-  background: var(--surface-muted);
+  background: var(--paper);
   color: var(--ink);
   font-size: var(--small);
   font-weight: 650;
@@ -372,7 +385,7 @@
 }
 
 .setupSummary:focus-visible,
-.runActions .button:focus-visible,
+.runActions .product-action:focus-visible,
 .stageButton:focus-visible,
 .filterChips button:focus-visible {
   outline: 3px solid var(--focus);
@@ -409,10 +422,10 @@
     width: 100%;
   }
 
-  .programActions > .button,
-  .runActions > .button,
-  .configForm > .button,
-  .preassignBox > .button {
+  .programActions > .product-action,
+  .runActions > .product-action,
+  .configForm > .product-action,
+  .preassignBox > .product-action {
     width: 100%;
   }
 

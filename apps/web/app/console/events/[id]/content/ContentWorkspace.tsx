@@ -1,10 +1,10 @@
 "use client";
 
 import ValidatedForm from "../../../../ui/ValidatedForm";
-
+import ProductButton from "../../../../ui/ProductButton";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import ProductLink from "../../../../ui/ProductLink";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
 import { useConsoleDraftGuard } from "../../../console-draft-guard";
@@ -1195,9 +1195,9 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
         <p>이전 저장이 반영됐을 수 있습니다. 서버 확인은 내용을 다시 보내지 않습니다.</p>
         {contentRecoveryError ? <p role="alert">{contentRecoveryError}</p> : null}
         <div className={styles.recoveryActions}>
-          <button type="button" className="button button-secondary" disabled={checkingContent || abandonContentConfirm} onClick={() => void resolveContentAttempt("status")}>서버 처리 확인</button>
-          <button type="button" className="button button-secondary" disabled={checkingContent || abandonContentConfirm} onClick={() => void resolveContentAttempt("retry")}>같은 요청 다시 시도</button>
-          <button type="button" className="button button-secondary" disabled={checkingContent || abandonContentConfirm} onClick={() => setAbandonContentConfirm(true)}>확인 전 그만두기</button>
+          <ProductButton type="button" variant="secondary" disabled={checkingContent || abandonContentConfirm} onClick={() => void resolveContentAttempt("status")}>서버 처리 확인</ProductButton>
+          <ProductButton type="button" variant="secondary" disabled={checkingContent || abandonContentConfirm} onClick={() => void resolveContentAttempt("retry")}>같은 요청 다시 시도</ProductButton>
+          <ProductButton type="button" variant="secondary" disabled={checkingContent || abandonContentConfirm} onClick={() => setAbandonContentConfirm(true)}>확인 전 그만두기</ProductButton>
         </div>
         {abandonContentConfirm ? <ConsoleConfirm
           summary="이미 저장된 내용은 취소되지 않습니다. 입력 화면을 닫고 최신 목록을 확인할까요?"
@@ -1341,9 +1341,9 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
       eventName={state.eventName}
       meta={formatConsoleEventMeta(state.eventMeta)}
       headerActions={(
-        <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/settings`}>
+        <ProductLink variant="secondary" href={`/console/events/${encodeURIComponent(eventId)}/settings`}>
           행사 설정
-        </Link>
+        </ProductLink>
       )}
       sectionNav={(
         <div className={styles.navIndex}>
@@ -1389,15 +1389,15 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
             title="공지"
             description="초안을 저장하고 게시 검토를 거쳐 반영합니다. 게시 전까지 현재 내용이 유지됩니다."
             action={canWritePage ? (
-              <button
+              <ProductButton
                 type="button"
-                className={`button ${state.notices.length ? "button-secondary" : "button-primary"}`}
+                variant={state.notices.length ? "secondary" : "primary"}
                 disabled={archived || Boolean(pendingContent) || otherContentReceipt}
                 title={archived ? archivedReason : undefined}
                 onClick={openNoticeCreate}
               >
                 공지 작성
-              </button>
+              </ProductButton>
             ) : undefined}
           >
             {state.notices.length ? (
@@ -1440,49 +1440,49 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                     </div>
                     {canWritePage ? (
                     <div className={`${uiStyles.recordActions} ${styles.compactActions}`}>
-                      <button
+                      <ProductButton
                         type="button"
-                        className="button button-secondary"
+                        variant="secondary"
                         disabled={busy !== null || archived || Boolean(pendingContent) || otherContentReceipt}
                         title={archived ? archivedReason : undefined}
                         onClick={() => openNoticeEdit(item)}
                       >
                         편집
-                      </button>
-                      <button
+                      </ProductButton>
+                      <ProductButton
                         type="button"
-                        className="button button-secondary"
+                        variant="secondary"
                         disabled={busy !== null || archived || Boolean(pendingContent) || otherContentReceipt}
                         title={archived ? archivedReason : undefined}
                         onClick={() => openPublication("notice", item.id, item.version, true)}
                       >
                         게시 검토
-                      </button>
-                      {item.published ? <button type="button" className="button button-secondary" disabled={busy !== null || archived || Boolean(pendingContent) || otherContentReceipt} onClick={() => openPublication("notice", item.id, item.version, false)}>게시 내리기</button> : null}
+                      </ProductButton>
+                      {item.published ? <ProductButton type="button" variant="secondary" disabled={busy !== null || archived || Boolean(pendingContent) || otherContentReceipt} onClick={() => openPublication("notice", item.id, item.version, false)}>게시 내리기</ProductButton> : null}
                       {canOutput ? (
                         <>
                         <span className={styles.actionSeparator} aria-hidden="true" />
-                        <button
+                        <ProductButton
                           type="button"
-                          className="button button-secondary"
+                          variant="secondary"
                           disabled={busy !== null || archived || Boolean(pendingContent) || otherContentReceipt}
                           title={archived ? archivedReason : undefined}
                           onClick={() => requestNoticeDisplay(item)}
                         >
                           {busy === `notice-display:${item.id}` ? "처리 중…" : "전광판 출력"}
-                        </button>
+                        </ProductButton>
                         </>
                       ) : null}
                       <span className={styles.actionSeparator} aria-hidden="true" />
-                      <button
+                      <ProductButton
                         type="button"
-                        className={`button button-secondary ${styles.dangerGhost}`}
+                        className={styles.dangerGhost} variant="destructive"
                         disabled={busy !== null || archived || Boolean(pendingContent) || otherContentReceipt}
                         title={archived ? archivedReason : undefined}
                         onClick={() => requestNoticeDelete(item)}
                       >
                         삭제
-                      </button>
+                      </ProductButton>
                     </div>
                     ) : null}
                     {noticeDisplayPendingId === item.id && canOutput && noticeDeletePendingId !== item.id ? (
@@ -1498,7 +1498,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                       <ConsoleConfirm
                         summary={`“${item.title}” 공지를 삭제할까요?`}
                         confirmLabel="삭제한다"
-                        confirmClassName={`button button-secondary ${styles.dangerGhost}`}
+                        confirmClassName="button button-danger"
                         busy={busy !== null}
                         onConfirm={() => void deleteNotice(item)}
                         onCancel={() => setNoticeDeletePendingId(null)}
@@ -1522,15 +1522,15 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
             title="프로그램 일정"
             description="초안을 저장한 뒤 게시하세요. 게시된 일정은 날짜·시작 시간 순으로 보입니다."
             action={canWritePrograms ? (
-              <button
+              <ProductButton
                 type="button"
-                className="button button-secondary"
+                variant="secondary"
                 disabled={archived || Boolean(pendingContent) || otherContentReceipt}
                 title={archived ? archivedReason : undefined}
                 onClick={() => openProgramCreate()}
               >
                 일정 추가
-              </button>
+              </ProductButton>
             ) : undefined}
           >
             {state.program.length ? (
@@ -1554,50 +1554,50 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                       {item.draft.attachment ? (
                         <p className={styles.attachment}>
                           첨부:{" "}
-                          <Link href={`/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(item.draft.attachment.fileId)}`}>
+                          <ProductLink href={`/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(item.draft.attachment.fileId)}`}>
                             {item.draft.attachment.name || "일정 자료(PDF)"}
-                          </Link>
+                          </ProductLink>
                         </p>
                       ) : null}
                     </div>
                     {canWritePrograms ? (
                     <div className={`${uiStyles.recordActions} ${styles.compactActions}`}>
-                      <button
+                      <ProductButton
                         type="button"
-                        className="button button-secondary"
+                        variant="secondary"
                         disabled={busy !== null || archived || Boolean(pendingContent) || otherContentReceipt}
                         title={archived ? archivedReason : undefined}
                         onClick={() => openProgramEdit(item)}
                       >
                         편집
-                      </button>
-                      <button
+                      </ProductButton>
+                      <ProductButton
                         type="button"
-                        className="button button-secondary"
+                        variant="secondary"
                         disabled={busy !== null || archived || Boolean(pendingContent) || otherContentReceipt}
                         title={archived ? archivedReason : undefined}
                         onClick={() => openPublication("program", item.id, item.version, true)}
                       >
                         게시 검토
-                      </button>
-                      {item.published ? <button type="button" className="button button-secondary" disabled={busy !== null || archived || Boolean(pendingContent) || otherContentReceipt} onClick={() => openPublication("program", item.id, item.version, false)}>게시 내리기</button> : null}
+                      </ProductButton>
+                      {item.published ? <ProductButton type="button" variant="secondary" disabled={busy !== null || archived || Boolean(pendingContent) || otherContentReceipt} onClick={() => openPublication("program", item.id, item.version, false)}>게시 내리기</ProductButton> : null}
                       <span className={styles.actionSeparator} aria-hidden="true" />
-                      <button
+                      <ProductButton
                         type="button"
-                        className={`button button-secondary ${styles.dangerGhost}`}
+                        className={styles.dangerGhost} variant="destructive"
                         disabled={busy !== null || archived || Boolean(pendingContent) || otherContentReceipt}
                         title={archived ? archivedReason : undefined}
                         onClick={() => requestProgramDelete(item)}
                       >
                         삭제
-                      </button>
+                      </ProductButton>
                     </div>
                     ) : null}
                     {programDeletePendingId === item.id ? (
                       <ConsoleConfirm
                         summary={`“${item.title}” 일정을 삭제할까요?`}
                         confirmLabel="삭제한다"
-                        confirmClassName={`button button-secondary ${styles.dangerGhost}`}
+                        confirmClassName="button button-danger"
                         busy={busy !== null}
                         onConfirm={() => void deleteProgram(item)}
                         onCancel={() => setProgramDeletePendingId(null)}
@@ -1615,7 +1615,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
             {!venueFeatureOn ? (
               <p className={styles.featureOff} role="note">
                 장소 안내 기능이 꺼져 있습니다.{" "}
-                <Link href={`/console/events/${encodeURIComponent(eventId)}/settings`}>행사 설정</Link>에서
+                <ProductLink href={`/console/events/${encodeURIComponent(eventId)}/settings`}>행사 설정</ProductLink>에서
                 기능을 먼저 켜세요. 켜기 전에는 저장이 반영되지 않습니다.
               </p>
             ) : null}
@@ -1697,8 +1697,8 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                         }} />
                       <p className={styles.help}>이미지가 보이지 않아도 알 수 있도록 주요 동선을 적어주세요.</p>
                     </div>
-                    <button type="button" className={`button button-secondary ${styles.venueMapRemove}`} disabled={busy !== null || venueUploadUncertain}
-                      onClick={() => { touchVenueMap(); setVenueFile(null); setVenueDraft({ ...venueDraft, map: null }); }}>안내도 제거</button>
+                    <ProductButton type="button" className={styles.venueMapRemove} variant="secondary" disabled={busy !== null || venueUploadUncertain}
+                      onClick={() => { touchVenueMap(); setVenueFile(null); setVenueDraft({ ...venueDraft, map: null }); }}>안내도 제거</ProductButton>
                   </> : null}
                   <div>
                     <label htmlFor="content-venue-map-file">{venueDraft.map ? "안내도 바꾸기" : "안내도 선택"}</label>
@@ -1724,25 +1724,25 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                     {venueUploadAbandonConfirm ? <ConsoleConfirm
                       summary="업로드는 이미 완료됐을 수 있습니다. 선택한 파일과 설명을 되돌립니다."
                       confirmLabel="파일 확인 중단" onConfirm={abandonVenueUpload} onCancel={() => setVenueUploadAbandonConfirm(false)} />
-                      : <button type="button" className="button button-secondary" disabled={busy !== null} onClick={() => setVenueUploadAbandonConfirm(true)}>파일 확인 중단</button>}
+                      : <ProductButton type="button" variant="secondary" disabled={busy !== null} onClick={() => setVenueUploadAbandonConfirm(true)}>파일 확인 중단</ProductButton>}
                   </div> : null}
                   {failure?.field === "map" && failure.message.includes("다른 운영자") ? venueRestoreConfirm
                     ? <ConsoleConfirm summary="작성한 안내도와 설명을 버리고 최신 안내도를 불러옵니다. 다른 장소 문구는 유지됩니다."
                         confirmLabel="최신 안내도 불러오기" onConfirm={() => void restoreLatestVenueMap()} onCancel={() => setVenueRestoreConfirm(false)} />
-                    : <button type="button" className={`button button-secondary ${styles.venueMapRemove}`}
-                        disabled={busy !== null} onClick={() => setVenueRestoreConfirm(true)}>최신 안내도 불러오기</button> : null}
+                    : <ProductButton type="button" className={styles.venueMapRemove} variant="secondary"
+                        disabled={busy !== null} onClick={() => setVenueRestoreConfirm(true)}>최신 안내도 불러오기</ProductButton> : null}
                 </div>
-                {failure?.field === "expectedVersion" && !pendingContent ? <button type="button" className="button button-secondary" disabled={busy !== null} onClick={() => void reloadEditorDraft("venue")}>최신 장소 초안 불러오기</button> : null}
+                {failure?.field === "expectedVersion" && !pendingContent ? <ProductButton type="button" variant="secondary" disabled={busy !== null} onClick={() => void reloadEditorDraft("venue")}>최신 장소 초안 불러오기</ProductButton> : null}
                 <ConsoleFormActions>
-                  <button
+                  <ProductButton
                     type="submit"
-                    className="button button-primary"
+                    variant="primary"
                     disabled={busy !== null || !venueFeatureOn || archived || Boolean(pendingContent) || otherContentReceipt}
                     title={archived ? archivedReason : venueFeatureOn ? undefined : "행사 설정에서 장소 안내 기능을 먼저 켜세요"}
                   >
                     {busy === "venue:save" ? "저장 중…" : "초안 저장"}
-                  </button>
-                  <button type="button" className="button button-secondary" disabled={busy !== null || !venueFeatureOn || archived || venueDirty || Boolean(venueFile) || venueUploadUncertain || Boolean(pendingContent) || otherContentReceipt || !hasChanges(venueChanges(state.venue))} onClick={() => openPublication("venue", "", state.venue.version, true)}>게시 검토</button>
+                  </ProductButton>
+                  <ProductButton type="button" variant="secondary" disabled={busy !== null || !venueFeatureOn || archived || venueDirty || Boolean(venueFile) || venueUploadUncertain || Boolean(pendingContent) || otherContentReceipt || !hasChanges(venueChanges(state.venue))} onClick={() => openPublication("venue", "", state.venue.version, true)}>게시 검토</ProductButton>
                 </ConsoleFormActions>
                 </fieldset>
               </ValidatedForm>
@@ -1819,20 +1819,20 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
             {noticeDialogFailure && !["title", "body"].includes(noticeDialogFailure.field ?? "") && !(pendingContent?.origin === "notice" && contentRecoveryError) ? (
               <p className={styles.fieldError} role="alert">{noticeDialogFailure.message}</p>
             ) : null}
-            {noticeDialogFailure?.field === "expectedVersion" && !pendingContent ? <button type="button" className="button button-secondary" disabled={busy !== null} onClick={() => void reloadEditorDraft("notice")}>최신 초안 불러오기</button> : null}
+            {noticeDialogFailure?.field === "expectedVersion" && !pendingContent ? <ProductButton type="button" variant="secondary" disabled={busy !== null} onClick={() => void reloadEditorDraft("notice")}>최신 초안 불러오기</ProductButton> : null}
             {pendingContent?.origin === "notice" ? contentRecovery() : null}
             <ConsoleFormActions>
-              <button
+              <ProductButton
                 type="button"
-                className="button button-secondary"
+                variant="secondary"
                 disabled={noticeDialogBusy}
                 onClick={() => { if (canCloseNoticeDialog()) setNoticeDialogOpen(false); }}
               >
                 취소
-              </button>
-              <button type="submit" className="button button-primary" disabled={noticeDialogBusy || archived || Boolean(pendingContent) || checkingContent || otherContentReceipt} title={archived ? archivedReason : undefined}>
+              </ProductButton>
+              <ProductButton type="submit" variant="primary" disabled={noticeDialogBusy || archived || Boolean(pendingContent) || checkingContent || otherContentReceipt} title={archived ? archivedReason : undefined}>
                 {noticeDialogBusy ? "저장 중…" : "초안 저장"}
-              </button>
+              </ProductButton>
             </ConsoleFormActions>
           </ValidatedForm>
         </ConsoleDialog>
@@ -1921,14 +1921,14 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
               {programDraft.attachment ? (
                 <p className={styles.attachmentRow}>
                   <span>{programDraft.attachment.name || "일정 자료(PDF)"}</span>
-                  <button
+                  <ProductButton
                     type="button"
-                    className="button button-secondary"
+                    variant="secondary"
                     disabled={programDialogBusy || uploadingAttachment}
                     onClick={() => setProgramDraft({ ...programDraft, attachment: null, attachmentDirty: true })}
                   >
                     첨부 제거
-                  </button>
+                  </ProductButton>
                 </p>
               ) : (
                 <input
@@ -1951,8 +1951,8 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                 <div className={styles.recovery}>
                   <p>결과를 확인할 때까지 원래 파일을 유지합니다. 화면을 떠나면 파일을 다시 선택해야 합니다.</p>
                   <div className={styles.recoveryActions}>
-                    <button type="button" className="button button-secondary" disabled={uploadingAttachment || programUploadAbandonConfirm} onClick={() => { if (programUploadRef.current) void uploadProgramAttachment(programUploadRef.current.file); }}>같은 파일 요청 다시 확인</button>
-                    <button type="button" className="button button-secondary" disabled={uploadingAttachment || programUploadAbandonConfirm} onClick={() => setProgramUploadAbandonConfirm(true)}>파일 확인 그만두기</button>
+                    <ProductButton type="button" variant="secondary" disabled={uploadingAttachment || programUploadAbandonConfirm} onClick={() => { if (programUploadRef.current) void uploadProgramAttachment(programUploadRef.current.file); }}>같은 파일 요청 다시 확인</ProductButton>
+                    <ProductButton type="button" variant="secondary" disabled={uploadingAttachment || programUploadAbandonConfirm} onClick={() => setProgramUploadAbandonConfirm(true)}>파일 확인 그만두기</ProductButton>
                   </div>
                   {programUploadAbandonConfirm ? <ConsoleConfirm
                     summary="파일이 이미 서버에 저장됐을 수 있습니다. 확인을 그만둬도 서버 파일은 삭제되지 않습니다."
@@ -1977,20 +1977,20 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
             {programDialogFailure && !["title", "attachment"].includes(programDialogFailure.field ?? "") && !(pendingContent?.origin === "program" && contentRecoveryError) ? (
               <p className={styles.fieldError} role="alert">{programDialogFailure.message}</p>
             ) : null}
-            {programDialogFailure?.field === "expectedVersion" && !pendingContent ? <button type="button" className="button button-secondary" disabled={busy !== null} onClick={() => void reloadEditorDraft("program")}>최신 초안 불러오기</button> : null}
+            {programDialogFailure?.field === "expectedVersion" && !pendingContent ? <ProductButton type="button" variant="secondary" disabled={busy !== null} onClick={() => void reloadEditorDraft("program")}>최신 초안 불러오기</ProductButton> : null}
             {pendingContent?.origin === "program" ? contentRecovery() : null}
             <ConsoleFormActions>
-              <button
+              <ProductButton
                 type="button"
-                className="button button-secondary"
+                variant="secondary"
                 disabled={programDialogBusy || uploadingAttachment}
                 onClick={() => { if (canCloseProgramDialog()) setProgramDialogOpen(false); }}
               >
                 취소
-              </button>
-              <button type="submit" className="button button-primary" disabled={programDialogBusy || uploadingAttachment || programUploadUncertain || archived || Boolean(pendingContent) || checkingContent || otherContentReceipt} title={archived ? archivedReason : undefined}>
+              </ProductButton>
+              <ProductButton type="submit" variant="primary" disabled={programDialogBusy || uploadingAttachment || programUploadUncertain || archived || Boolean(pendingContent) || checkingContent || otherContentReceipt} title={archived ? archivedReason : undefined}>
                 {programDialogBusy ? "저장 중…" : "초안 저장"}
-              </button>
+              </ProductButton>
             </ConsoleFormActions>
           </ValidatedForm>
         </ConsoleDialog>
@@ -2003,10 +2003,10 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
         confirmLabel={publication.published ? "게시하기" : "게시 내리기"}
         onConfirm={() => void applyPublication()} onClose={() => setPublication(null)}>
         {publication.published && !hasChanges(review.changes) ? <p className={styles.help}>게시본과 같은 내용입니다. 먼저 초안을 편집해 저장하세요.</p> : null}
-        {publicationConflict && !review.stale ? <button type="button" className="button button-secondary" disabled={busy !== null} onClick={() => {
+        {publicationConflict && !review.stale ? <ProductButton type="button" variant="secondary" disabled={busy !== null} onClick={() => {
           setBusy("publication:reload");
           void load(true).finally(() => setBusy(null));
-        }}>최신 내용 다시 불러오기</button> : null}
+        }}>최신 내용 다시 불러오기</ProductButton> : null}
         {pendingContent ? contentRecovery() : null}
       </PublicationReview> : null}
     </ConsolePage>

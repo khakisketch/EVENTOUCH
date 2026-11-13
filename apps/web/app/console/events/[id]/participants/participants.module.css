@@ -3,14 +3,14 @@
 .workbenchPage { gap: var(--s4); }
 .workbenchPage > header { padding-bottom: var(--s3); }
 .workbenchControls { min-width: 0; padding: var(--s4); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-card); box-shadow: 0 1px 3px var(--shadow-soft); }
-.workbenchControls :global(.button-secondary) { background: var(--paper); }
+.workbenchControls :global([data-variant="secondary"]) { background: var(--paper); }
 .workbenchControls :global(input),
 .workbenchControls :global(select) { background: var(--paper); color: var(--ink); border-color: var(--line-strong); }
 .workbenchControls :global(input::placeholder) { color: var(--muted); opacity: 1; }
 .workbenchControls :global(:focus-visible) { outline-color: var(--focus); }
 .workbenchControls :global([role="status"]) { color: var(--ink); }
-.workbenchControls :global([role="status"]) ~ :global(.button) { color: var(--ink); background: var(--paper); border-color: var(--line-strong); }
-.workbenchControls :global([role="status"]) ~ :global(.button:hover) { background: var(--surface-muted); }
+.workbenchControls :global([role="status"]) ~ :global(.astryx-button) { color: var(--ink); background: var(--paper); border-color: var(--line-strong); }
+.workbenchControls :global([role="status"]) ~ :global(.astryx-button:hover) { background: var(--surface-muted); }
 .searchField { min-width: 0; }
 .mobilePresetPicker { display: none; }
 .workbenchControls .searchField[data-toolbar-span="full"] { flex: 0 1 360px; }
@@ -38,31 +38,32 @@
 .rosterSection { gap: 0; padding: 0; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-card); box-shadow: 0 1px 3px var(--shadow-soft); }
 /* The section name remains a heading/skip destination, not a second title
    between the query and data. All record actions are in the workbench. */
-.rosterSection > div:first-child { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
+.rosterSection [data-console-section-head] { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
 .rosterMeta { display: flex; align-items: center; gap: var(--s2) var(--s3); min-width: 0; min-height: 52px; flex: 1 1 100%; margin: 0; padding: var(--s2) var(--s4); background: var(--paper); flex-wrap: wrap; }
 .rosterMeta p { margin: 0; color: var(--muted); font-size: var(--small); font-weight: 500; font-variant-numeric: tabular-nums; }
-.rosterMeta :global(.button) { min-height: 44px; font-size: var(--small); }
+.rosterMeta :global(.astryx-button) { min-height: 44px; font-size: var(--small); }
 /* Scope caption: the meta-row select covers the whole filter result
    (other pages included); the pagination-bar select covers only the
    current page. Both labels stay short for the 390px row; the full
    scope rides the visible caption plus the describedby help/position. */
-.scopeLabel { color: var(--ink); font-size: var(--label); font-weight: 550; letter-spacing: 0; white-space: nowrap; }
+.scopeLabel { color: var(--ink); font-size: var(--label); font-weight: 550; letter-spacing: .02em; white-space: nowrap; }
 /* Caption and its select stay one wrapping unit: the pair drops to the next
    line together instead of stranding the label on the previous row. The
    group adds no overlay and changes no touch target. */
 .scopeGroup { display: inline-flex; align-items: center; gap: var(--s2); min-width: 0; }
-.scopeGroup :global(.button) { min-height: 44px; font-size: var(--small); }
+.scopeGroup :global(.astryx-button) { min-height: 44px; font-size: var(--small); }
 .rosterWorkbench, .rosterMain { min-width: 0; }
 /* Internal scroll container: a cropped next row at the bottom edge is the
    expected overflow affordance (header stays sticky, pagination stays
    below outside the scroll region), not an overlay. */
 .tableScroll { max-height: min(65svh, 720px); overflow: auto; scrollbar-width: thin; scrollbar-color: var(--line-strong) var(--paper); border-block: 1px solid var(--line); background: var(--paper); }
-.rosterTable { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--small); }
-.rosterTable th, .rosterTable td { padding: var(--s3) var(--s3); text-align: left; vertical-align: middle; border-bottom: 1px solid var(--line); padding-block: var(--s1); }
-.rosterHead th { position: sticky; top: 0; z-index: 1; height: 44px; background: var(--surface-muted); color: var(--muted); font-weight: 550; font-size: var(--label); letter-spacing: 0; white-space: nowrap; }
+.rosterTable { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--small); font-variant-numeric: tabular-nums; }
+.rosterTable th, .rosterTable td { padding: var(--s3) var(--s2); text-align: left; vertical-align: middle; border-bottom: 1px solid var(--line); padding-block: var(--s1); }
+.rosterHead th { position: sticky; top: 0; z-index: 1; height: 44px; background: var(--surface-muted); color: var(--muted); font-weight: 550; font-size: var(--label); letter-spacing: .06em; white-space: nowrap; }
 .rosterTable tbody tr:last-child td { border-bottom: 0; }
 .rosterTable tbody tr:hover { background: var(--surface-muted); }
 .rosterTable tbody tr[data-selected="true"] { background: var(--soft); }
+.rosterTable tbody tr[data-inspected="true"] > :first-child { box-shadow: inset 3px 0 var(--line-strong); }
 .rosterTable .selectColumn { width: 52px; padding-inline: var(--s1); }
 .rosterGroup { min-width: 76px; word-break: keep-all; overflow-wrap: anywhere; }
 .rosterTable .actionColumn { width: 160px; text-align: right; }
@@ -88,14 +89,14 @@
 .presenceInside::before { border: 1.5px solid var(--success); background: var(--success); }
 .sortButton { display: flex; align-items: center; gap: var(--s2); min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
 .participantActions { display: flex; align-items: center; justify-content: flex-end; gap: var(--s1); }
-.participantActions :global(.button) { min-height: 44px; padding: var(--s2) var(--s3); font-size: var(--small); white-space: nowrap; }
+.participantActions :global(.astryx-button) { min-height: 44px; padding: var(--s2) var(--s3); font-size: var(--small); white-space: nowrap; }
 .participantActions .rowToolsToggle { display: inline-flex; min-height: 44px; width: auto; }
 .participantSelectTarget { display: grid; place-items: center; width: 44px; min-height: 44px; margin: 0; padding: 0; cursor: pointer; }
 .participantSelect { width: 20px; height: 20px; accent-color: var(--brand-text); }
 .participantList { display: none; }
 .participantRow { min-height: 44px; }
 .paginationBar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2) var(--s3); background: var(--paper); border-bottom: 0; padding: var(--s3) var(--s4); }
-.paginationBar :global(.button) { min-height: 44px; min-width: 44px; font-size: var(--small); }
+.paginationBar :global(.astryx-button) { min-height: 44px; min-width: 44px; font-size: var(--small); }
 .paginationPosition { color: var(--muted); font-size: var(--small); font-variant-numeric: tabular-nums; }
 .paginationActions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); margin-left: auto; }
 .emptyState { display: grid; justify-items: center; gap: var(--s2); padding: var(--s7) var(--s4); background: transparent; border: 0; color: var(--muted); text-align: center; }
@@ -111,7 +112,7 @@
 .editRecovery { display: grid; gap: var(--s2); padding: var(--s3); border: 1px solid var(--line-strong); border-radius: var(--radius-medium); background: var(--surface-muted); overflow-wrap: anywhere; }
 .editRecovery h3, .editRecovery p { margin: 0; }
 .editActions { display: flex; flex-wrap: wrap; gap: var(--s2); }
-.editActions :global(.button) { min-height: 44px; }
+.editActions :global(.astryx-button) { min-height: 44px; }
 .inspectorHead { padding-bottom: var(--s2); border-bottom: 1px solid var(--line); }
 .inspectorIdentity h3 { margin: 0; font-size: var(--body); }
 .participantDetails { display: grid; gap: var(--s3); min-width: 0; }
@@ -122,7 +123,7 @@
 .consentRecord p { color: var(--muted); font-size: var(--small); overflow-wrap: anywhere; }
 .consentNotice { white-space: pre-wrap; }
 .detailActions { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; }
-.detailActions :global(.button) { min-height: 44px; font-size: var(--small); }
+.detailActions :global(.astryx-button) { min-height: 44px; font-size: var(--small); }
 .detailActions select { flex: 1 1 220px; min-height: 44px; }
 .rowConfirm { grid-column: 1 / -1; }
 .ticketReissueCopy { word-break: keep-all; overflow-wrap: break-word; }
@@ -140,26 +141,27 @@
   .advancedFilters[data-open="false"] { display: none; }
   .filterReset { width: 100%; }
   span[data-toolbar-inline].utilityPair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; max-width: 100%; }
-  .utilityPair > :global(.button) { flex: none; padding-inline: var(--s2); font-size: var(--small); }
+  .utilityPair > :global(.astryx-button) { flex: none; padding-inline: var(--s2); font-size: var(--small); }
   /* Pair the four utilities 2×2 so the first row of people stays in view:
      the shared 2-col rule misses CSS-module hashing, so the workbench owns
      its own pairing. Every target keeps its 44px floor. */
   .workbenchControls span[data-toolbar-inline].utilityPair { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s2); width: 100%; align-items: stretch; }
-  .workbenchControls .utilityPair > :global(.button) { width: 100%; min-width: 0; }
+  .workbenchControls .utilityPair > :global(.astryx-button) { width: 100%; min-width: 0; }
   /* Three utilities left: the primary owns the second row full-width so the
      first row of people stays in view on phones. */
-  .workbenchControls .utilityPair > :global(.button-primary) { grid-column: 2; grid-row: 2; width: 100%; min-width: 76px; }
+  .workbenchControls .utilityPair > :global([data-variant="primary"]) { grid-column: 2; grid-row: 2; width: 100%; min-width: 76px; }
   /* Narrow meta reads in two deterministic rows — count + refresh share
      the first, the scope pair owns the second — so the count never
      collapses into a syllable-wide column beside nowrap controls. */
   .rosterMeta p { min-width: 0; font-size: 13px; flex: 1 1 auto; grid-column: auto; }
-  .rosterMeta :global(.button) { flex: none; }
+  .rosterMeta :global(.astryx-button) { flex: none; }
   .scopeGroup { grid-column: 1 / -1; justify-self: start; }
   .tableScroll { display: none; }
   .participantList { display: block; margin: 0; padding: 0; list-style: none; background: var(--paper); border-block: 1px solid var(--line); }
   .participantRow { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: var(--s1) var(--s2); align-items: start; padding: var(--s4) var(--s3); border-bottom: 1px solid var(--line); }
   .participantRow:last-child { border-bottom: 0; }
   .participantRow[data-selected="true"] { background: var(--soft); }
+  .participantRow[data-inspected="true"] { box-shadow: inset 3px 0 var(--line-strong); }
   .participantSummary { display: grid; grid-column: 2; grid-row: 1 / span 2; gap: var(--s1); min-width: 0; }
   .participantRow > .participantSelectTarget { grid-row: 1 / span 2; }
   .participantName { font-size: 16px; font-weight: 650; overflow-wrap: anywhere; line-height: 1.4; }
@@ -179,7 +181,7 @@
   .workbenchControls .utilityPair .mobilePresetPicker { grid-column: 1; grid-row: 1; width: 100%; min-width: 0; }
   .workbenchControls .rosterUtilities { grid-column: 2; grid-row: 1; justify-self: stretch; }
   .workbenchControls .rosterUtilities > summary { width: 100%; }
-  .workbenchControls .utilityPair > :global(.button-secondary) { grid-column: 1; grid-row: 2; width: 100%; min-width: 0; justify-content: center; }
+  .workbenchControls .utilityPair > :global([data-variant="secondary"]) { grid-column: 1; grid-row: 2; width: 100%; min-width: 0; justify-content: center; }
 }
 
 /* A working queue: choose a view, choose its scope, then act on the selection
@@ -198,7 +200,15 @@
 .selectionWorkbench:not(:empty) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s3); padding: var(--s2) var(--s3); background: var(--ink); border: 1px solid transparent; border-radius: var(--radius-medium); }
 .selectionWorkbench > [role="status"] { flex: 1 1 260px; min-width: 0; color: var(--paper); }
 .selectionWorkbench > .selectionNotice { flex: 1 0 100%; margin: 0; color: var(--paper); font-size: var(--small); line-height: 1.5; word-break: keep-all; }
-.selectionWorkbench :global(.button) { min-height: 44px; }
+.selectionWorkbench .selectionScope { color: var(--side-muted); }
+.selectionWorkbench .selectionActions > [role="status"],
+.selectionWorkbench .selectionActions > .selectionActionHint { color: var(--paper); }
+.selectionWorkbench .selectionActions > :global([data-variant="secondary"]) { background: var(--paper); color: var(--ink); }
+.selectionWorkbench .selectionActions > :global([data-variant="secondary"]:hover:not(:disabled)) { background: var(--surface-muted); }
+.selectionWorkbench .selectionActions > :global([data-variant="ghost"]) { color: var(--paper); }
+.selectionWorkbench .selectionActions > :global([data-variant="ghost"]:hover) { color: var(--ink); }
+.selectionWorkbench .selectionActions > :global([data-variant="ghost"]:focus-visible) { outline-color: var(--paper); }
+.selectionWorkbench :global(.astryx-button) { min-height: 44px; }
 .selectionWorkbench:empty { display: none; }
 @media (max-width: 768px) {
   .quickPresets :global(.pill) { min-height: 48px; border-bottom: 1px solid var(--line); }
@@ -211,7 +221,7 @@
 .rosterUtilities summary::-webkit-details-marker { display: none; }
 .rosterUtilities summary::after { content: ""; margin-left: var(--s2); display: inline-block; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-2px) rotate(45deg); flex: none; }
 .utilityMenu { position: absolute; z-index: 3; right: 0; top: calc(100% + 4px); display: grid; gap: var(--s1); min-width: 190px; padding: var(--s2); background: var(--paper); border: 1px solid var(--line-strong); border-radius: var(--radius-medium); box-shadow: 0 8px 24px var(--shadow-color); }
-.utilityMenu :global(.button) { justify-content: flex-start; min-height: 44px; }
+.utilityMenu :global(.astryx-button) { justify-content: flex-start; min-height: 44px; }
 @media (max-width: 768px) {
   .utilityPair { position: relative; }
   .rosterUtilities { position: static; }
@@ -231,7 +241,7 @@
 .selectionMore > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .selectionMore[open] > summary { background: var(--nav-hover); }
 .selectionMenu { position: absolute; z-index: 4; top: calc(100% + var(--s1)); right: 0; display: grid; gap: var(--s1); width: 260px; max-width: calc(100vw - 48px); padding: var(--s2); background: var(--paper); border: 1px solid var(--line-strong); border-radius: var(--radius-medium); box-shadow: 0 8px 24px var(--shadow-color); }
-.selectionMenu :global(.button) { justify-content: flex-start; width: 100%; text-align: left; white-space: normal; }
+.selectionMenu :global(.astryx-button) { justify-content: flex-start; width: 100%; text-align: left; white-space: normal; }
 .selectionActionHint { margin: 0; padding: 0 var(--s2) var(--s2); color: var(--muted); font-size: var(--label); word-break: keep-all; }
 .selectionPolicy { display: block; margin-top: var(--s1); }
 @media (max-width: 768px) {
@@ -242,11 +252,11 @@
   .mobileScope summary::-webkit-details-marker { display: none; }
   .mobileScope summary::after { content: ""; margin-left: var(--s2); display: inline-block; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-2px) rotate(45deg); }
   .mobileScopeOptions { position: absolute; z-index: 3; top: 100%; left: 0; display: grid; gap: var(--s2); width: min(270px, calc(100vw - 32px)); padding: var(--s3); background: var(--paper); border: 1px solid var(--line-strong); border-radius: var(--radius-medium); }
-  .mobileScopeOptions :global(.button) { min-height: 44px; text-align: left; }
+  .mobileScopeOptions :global(.astryx-button) { min-height: 44px; text-align: left; }
   .mobileScopeOptions p { margin: 0; color: var(--muted); font-size: var(--small); }
   .selectionWorkbench:not(:empty) { gap: var(--s1); }
   .selectionActions { display: flex; flex-wrap: wrap; width: 100%; gap: var(--s2); }
-  .selectionActions :global(.button) { min-width: 0; padding-inline: var(--s2); word-break: keep-all; overflow-wrap: break-word; }
+  .selectionActions :global(.astryx-button) { min-width: 0; padding-inline: var(--s2); word-break: keep-all; overflow-wrap: break-word; }
   .selectionActions > [role="status"] { flex-basis: 100%; }
   .selectionMore { margin-left: auto; }
 }
@@ -258,8 +268,6 @@
   }
   .rosterWorkbench:has([role="dialog"]:not([aria-modal="true"])) .tableScroll { max-height: 70svh; }
 }
-.rosterTable tr[data-inspected="true"] { background: var(--soft); }
-
 /* Dense desktop rows retain the full 44px controls without adding 24px around them. */
 
 /* Mobile lookup keeps status, list tools and add on one row. The full
@@ -269,11 +277,11 @@
   .utilityPair .mobilePresetPicker { display: block; min-width: 0; margin: 0; }
   .mobilePresetPicker select { width: 100%; min-width: 0; min-height: 44px; padding-inline: var(--s2); font-size: var(--small); }
   .rosterUtilities summary { min-width: 64px; padding-inline: var(--s2); font-size: var(--small); }
-  .utilityPair > :global(.button-primary) { min-width: 72px; padding-inline: var(--s2); }
+  .utilityPair > :global([data-variant="primary"]) { min-width: 72px; padding-inline: var(--s2); }
   .longAction { display: none; }
   .shortAction, .metaShort { display: inline; }
   .metaLong { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .rosterMeta > :global(.button) { min-width: 44px; padding-inline: var(--s2); }
+  .rosterMeta > :global(.astryx-button) { min-width: 44px; padding-inline: var(--s2); }
   .mobileScopeSingle { padding-inline: var(--s2); }
 }
 

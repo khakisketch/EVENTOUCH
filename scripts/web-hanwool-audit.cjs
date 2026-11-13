@@ -210,7 +210,7 @@ async function main() {
     await operator.locator('input[type=file]').setInputFiles({ name: '검증참가자.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: participantWorkbook() });
     // Counts are now separate status pills; still require both the exact
     // accepted and rejected counts before committing the same real import.
-    const review = operator.locator('section[aria-labelledby="participant-import-review-heading"]');
+    const review = operator.locator(':is(section,[role=region])[aria-labelledby="participant-import-review-heading"]');
     await review.getByText('유효 8행', { exact: true }).waitFor();
     await review.getByText('오류 0행', { exact: true }).waitFor();
     await clickCommand(operator, operator.getByRole('button', { name: /유효 8행 반영/ }), 'participant.import');

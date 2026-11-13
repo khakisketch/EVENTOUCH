@@ -183,8 +183,9 @@
   gap: 12px;
   min-height: 48px;
   padding: 10px 14px;
+  border: 1px solid var(--line);
   border-radius: var(--radius-medium);
-  background: #fff;
+  background: var(--paper);
   color: var(--ink);
   font-weight: 700;
   text-decoration: none;
@@ -209,7 +210,7 @@
   padding: 40px 10px 12px;
   border: 0;
   border-radius: 18px;
-  background: #fff;
+  background: var(--paper);
   color: #111;
   text-align: center;
   cursor: pointer;
@@ -273,7 +274,7 @@
 
 /* Tile-level ticket notice: absolute like the category badge, so the tile
    box and the pinned first-screen fit never move. The detail screen
-   announces the need in full sentences, so the badge stays aria-hidden. */
+   announces the need in full sentences; the visible cue also stays in the action name. */
 .menuNeedTicket {
   position: absolute;
   top: 9px;
@@ -342,6 +343,7 @@
 .tabPanel h2 {
   margin: 0 0 var(--s3);
   font-size: var(--h2);
+  letter-spacing: -0.01em;
   color: var(--ink);
 }
 
@@ -1188,6 +1190,7 @@
 .stateTitle {
   margin: 0;
   font-size: var(--h2);
+  letter-spacing: -0.01em;
   color: var(--ink);
 }
 .stateMessage { margin: 0; color: var(--muted); font-size: var(--small); }
@@ -1356,15 +1359,16 @@
 }
 .menuButton,
 .previewShortMenu .menuButton {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
   align-content: center;
   column-gap: 10px;
   row-gap: 2px;
   aspect-ratio: auto;
   min-height: 68px;
   padding: 12px;
-  border: 1px solid #d9e1e5;
+  border: 1px solid var(--line);
   border-radius: var(--radius-medium);
   text-align: left;
 }
@@ -1401,7 +1405,7 @@
   .menuLabel { font-size: 13px; }
 }
 
-.menuGroupLabel { grid-column: 1 / -1; margin: var(--s2) 0 0; padding-inline: var(--s1); color: var(--home-background-ink, #254c60); font-size: var(--small); font-weight: 650; }
+.menuGroupLabel { grid-column: 1 / -1; margin: var(--s2) 0 0; padding-inline: var(--s1); color: var(--home-background-ink, #254c60); font-size: var(--small); font-weight: 800; letter-spacing: 0.08em; }
 .menuButton:first-child { grid-column: 1 / -1; min-height: 64px; }
 .detailHeader { border-bottom: 1px solid var(--line); background: var(--paper); }
 

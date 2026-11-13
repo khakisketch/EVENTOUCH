@@ -41,7 +41,6 @@ const rootTargets = [
   'app/console/team/TeamWorkspace.tsx',
 ];
 
-const allPageTargets = [...targets, ...eventPhaseTwoTargets, ...rootTargets];
 const menuPages = [
   ['app/console/ConsoleHome.tsx', 'events'],
   ['app/console/clients/ClientsList.tsx', 'clients'],
@@ -105,8 +104,9 @@ test('console layout primitives expose stable, hook-free composition', () => {
     'styles.backLink', 'styles.pageContext', 'styles.pageTitleRow', 'styles.pageSubline', 'styles.pageBadges',
   ]);
   const titleRow = renderedChildren(region('pageTitleRow'));
-  assert.equal(titleRow[0].openingElement.tagName.getText(tree), 'h1');
-  assert.equal(titleRow[0].getText(tree), '<h1>{title}</h1>');
+  assert.equal(titleRow[0].openingElement.tagName.getText(tree), 'Heading');
+  assert.equal(jsxAttribute(titleRow[0].openingElement, 'level')?.initializer?.getText(tree), '{1}');
+  assert.equal(titleRow[0].getText(tree), '<Heading level={1}>{title}</Heading>');
   assert.equal(classExpression(titleRow[1], tree), 'styles.pageActions');
   assert.equal(titleRow.length, 2, 'only the title and its optional actions share the alignment row');
   assert.deepEqual(renderedChildren(region('pageSubline')).map((node) => classExpression(node, tree)), ['styles.pageMeta']);
@@ -120,8 +120,8 @@ test('console layout primitives expose stable, hook-free composition', () => {
     assert.deepEqual(expressions, [prop], name + ' renders the actual supplied slot content');
   }
 
-  assert.match(section, /<section className=\{classNames\} aria-labelledby=\{headingId\} data-workspace-section=\{headingId\}>/);
-  assert.match(section, /<h2 className=\{styles\.sectionTitle\} id=\{headingId\}>\{title\}<\/h2>/);
+  assert.match(section, /<Section variant="transparent" padding=\{0\} className=\{classNames\} role="region" aria-labelledby=\{headingId\} data-workspace-section=\{headingId\}>/);
+  assert.match(section, /<Heading level=\{2\} className=\{styles\.sectionTitle\} id=\{headingId\}>\{title\}<\/Heading>/);
   assert.match(header, /formatConsoleEventMeta/);
   assert.match(header, /actions\?: ReactNode/);
   assert.match(section, /action\?: ReactNode/);
@@ -166,15 +166,15 @@ test('event context is centralized while domain actions retain their meaning and
   const content = read(targets[3]);
   // Write affordances gate on the page/programs grants. The first notice is
   // primary; subsequent notices remain secondary. Reads never gate.
-  assert.match(content, /action=\{canWritePage \? \(\s*<button\b[^>]*className=\{`button \$\{state\.notices\.length \? "button-secondary" : "button-primary"\}`\}[^>]*onClick=\{openNoticeCreate\}[^>]*>\s*공지 작성/su);
-  assert.match(content, /title="프로그램 일정"[\s\S]*?action=\{canWritePrograms \? \([\s\S]*?className="button button-secondary"[\s\S]*?일정 추가/u);
+  assert.match(content, /action=\{canWritePage \? \(\s*<ProductButton\b[^>]*variant=\{state\.notices\.length \? "secondary" : "primary"\}[^>]*onClick=\{openNoticeCreate\}[^>]*>\s*공지 작성/su);
+  assert.match(content, /title="프로그램 일정"[\s\S]*?action=\{canWritePrograms \? \([\s\S]*?variant="secondary"[\s\S]*?일정 추가/u);
   assert.match(content, /canWritePage = canWriteEvent\(capabilities, "notice\.save"\)/u);
   assert.match(content, /canWritePrograms = canWriteEvent\(capabilities, "program\.save"\)/u);
 
   const participants = read(targets[1]);
   assert.match(participants, /className="button button-secondary"[\s\S]*?changeStatus\(person, "APPROVED"\)/u);
-  assert.doesNotMatch(participants, /changeStatus\(person, "APPROVED"\)[\s\S]{0,100}button-primary/u);
-  assert.doesNotMatch(read(targets[0]), /button-primary/u, 'operations overview keeps zero primary actions');
+  assert.doesNotMatch(participants, /changeStatus\(person, "APPROVED"\)[\s\S]{0,100}variant="primary"/u);
+  assert.doesNotMatch(read(targets[0]), /variant="primary"/u, 'operations overview keeps zero primary actions');
 
   const messages = read(targets[4]);
   assert.equal((messages.match(/id="campaign-submit"/gu) ?? []).length, 1, 'one final submit remains');
@@ -206,7 +206,7 @@ test('event workspaces keep factual meta and action-specific sections inside the
   const operations = read(eventPhaseTwoTargets[0]);
   // The section may carry a description (its own status line); the contract
   // is that the primary action stays inside the section.
-  assert.match(operations, /<ConsoleSection headingId="ops-staff" title="스태프 배정"[^>]*>\s*<div className=\{styles\.primarySectionAction\}>\s*<button[\s\S]*?className="button button-primary"/u);
+  assert.match(operations, /<ConsoleSection headingId="ops-staff" title="스태프 배정"[^>]*>\s*<div className=\{styles\.primarySectionAction\}>\s*<ProductButton[\s\S]*?className="button button-primary"/u);
   assert.match(operations, /className="button button-primary"[^>]*>[\s\S]*?초안 저장/u, 'map draft save remains a primary body action');
 });
 

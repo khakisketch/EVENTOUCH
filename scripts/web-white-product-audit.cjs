@@ -1,5 +1,5 @@
 'use strict';
-const { messageStep } = require('./ui-journey-helpers.cjs');
+const { messageStep, waitForDialogExitFocus } = require('./ui-journey-helpers.cjs');
 
 
 // Approved white product system: real routes and real API, synthetic data in
@@ -7,6 +7,9 @@ const { messageStep } = require('./ui-journey-helpers.cjs');
 // operational database or customer file is used. Run serially with other audits.
 for (const key of ['SOLAPI_API_KEY', 'SOLAPI_API_SECRET', 'SOLAPI_SENDER', 'SOLAPI_KAKAO_PFID']) delete process.env[key];
 process.env.EVENTOUCH_SMS_MOCK = '1';
+// Account-form display only. No provider is selected and the origin is never fetched.
+process.env.EVENTOUCH_MAIL_MOCK = '1';
+process.env.EVENTOUCH_PUBLIC_URL = 'http://127.0.0.1:1';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { prepareCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = require('./capture-dir.cjs');
@@ -15,10 +18,21 @@ const crypto = require('node:crypto');
 const axe = require('axe-core').source;
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
+const { mockOutbox } = require('../server/email-transport');
 
 const OUT = process.env.EVENTOUCH_CAPTURE_ROOT
   ? path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'white-product')
   : defaultCaptureDir(`white-product-${runStamp()}`);
+function contrastRatio(foreground, background) {
+  const luminance = color => {
+    const channels = color.match(/[\d.]+/g).slice(0, 3).map(value => Number(value) / 255);
+    const linear = channels.map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+  };
+  const a = luminance(foreground), b = luminance(background);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
 const CONSOLE = [
   ['events', '/console', '#console-event-directory'],
   ['clients', '/console/clients', '#client-list-heading'],
@@ -35,6 +49,7 @@ const CONSOLE = [
   ['page', '/console/events/:id/page', '#home-intro'],
   ['rewards', '/console/events/:id/rewards', '#rewards-list'],
   ['settings', '/console/events/:id/settings', '#set-name'],
+  ['application-fields', '/console/events/:id/settings/fields', '#application-fields-heading'],
   ['reports', '/console/events/:id/reports', '#reports-list'],
 ];
 
@@ -94,6 +109,7 @@ async function main() {
     const ticket = (await workspace()).participants.find(person => person.id === people[0].id).ticket;
     const publics = [
       ['landing', '/', '#home-title'], ['login', '/login', '#login-email'],
+      ['recover', '/recover', '#recover-email'],
       ['event', `/event/${f.slug}`, 'main h1'], ['attendee', `/event/${f.slug}/home`, 'nav[aria-label="참가 메뉴"]'],
       ['register', `/event/${f.slug}/register`, '#field-name'],
       ['recover-unavailable', `/event/${f.slug}/ticket/recover`, '.verification-unavailable'],
@@ -102,6 +118,7 @@ async function main() {
       ['screen', `/screen/${f.slug}`, '.display-board'],
       ['invite', `/invite/${invitation.json.token}`, 'input[type="password"]'],
     ];
+    const initialMailCount = mockOutbox.length;
     browser = await launchBrowser();
     const contextFor = async (role, width) => {
       const context = await browser.newContext({ viewport: { width, height: width > 768 ? 1000 : 844 }, reducedMotion: 'reduce', timezoneId: 'Asia/Seoul' });
@@ -137,6 +154,29 @@ async function main() {
       await page.screenshot({ path: path.join(OUT, `${name}-${width}-viewport.png`) });
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
       check(`${name}@${width}: document fits`, overflow <= 1, overflow);
+      if (name === 'participants') {
+        const geometry = await page.getByRole('button', { name: /^(명단 가져오기|참가자 추가)$/ }).evaluateAll(buttons => buttons.map(button => {
+          const icon = button.querySelector('svg')?.getBoundingClientRect();
+          const walker = document.createTreeWalker(button, NodeFilter.SHOW_TEXT);
+          let label;
+          while (walker.nextNode()) {
+            if (!walker.currentNode.textContent.trim()) continue;
+            const range = document.createRange(); range.selectNodeContents(walker.currentNode);
+            label = [...range.getClientRects()].find(rect => rect.width && rect.height);
+            if (label) break;
+          }
+          return { iconRight: icon?.right, labelLeft: label?.left, labelWidth: label?.width };
+        }));
+        check(`${name}@${width}: toolbar icons share the label row`, geometry.length === 2 && geometry.every(item => item.iconRight <= item.labelLeft + 1 && item.labelWidth >= 20), geometry);
+      }
+      if (name === 'attendee') {
+        const geometry = await page.locator('nav[aria-label="참가 메뉴"] button').evaluateAll(buttons => buttons.map(button => {
+          const icon = button.querySelector('svg')?.getBoundingClientRect();
+          const label = button.querySelector('[class*="menuLabel"]')?.getBoundingClientRect();
+          return { iconRight: icon?.right, labelLeft: label?.left, labelWidth: label?.width };
+        }));
+        check(`${name}@${width}: menu icons precede readable labels`, geometry.length > 0 && geometry.every(item => item.iconRight <= item.labelLeft + 1 && item.labelWidth >= 40), geometry);
+      }
       await page.evaluate(axe);
       const violations = await page.evaluate(async () => (await window.axe.run()).violations.map(item => ({ id: item.id, impact: item.impact, targets: item.nodes.map(node => node.target) })));
       check(`${name}@${width}: axe`, violations.length === 0, violations);
@@ -145,7 +185,7 @@ async function main() {
       for (const role of ['owner', 'public', 'staff']) {
         const context = await contextFor(role, width);
         const page = await context.newPage(); observe(page);
-        const routes = role === 'owner' ? CONSOLE : role === 'public' ? publics : [
+        const routes = role === 'owner' ? [...CONSOLE, ['account-email', '/account/email', '.account-email-page h1']] : role === 'public' ? publics : [
           ['staff', '/staff', '.staff-assignment-list'], ['staff-work', `/staff/events/${f.eventId}`, '#staff-desk'],
         ];
         for (const [name, route, marker] of routes) {
@@ -153,7 +193,23 @@ async function main() {
           await page.goto(f.baseUrl + target, { waitUntil: 'networkidle' });
           await page.locator(marker).first().waitFor({ state: 'visible' });
           check(`${name}@${width}: actual destination`, new URL(page.url()).pathname === target.split('?')[0]);
-          if (role === 'owner') {
+          if (role === 'public' && name === 'engage' && await page.getByText('게시된 프로그램이 없습니다.', { exact: true }).isVisible()) {
+            check(`engage@${width}: empty state has one return to the menu`, await page.getByRole('link', { name: /참가 메뉴로/ }).count() === 1);
+            check(`engage@${width}: empty state retains ticket and event guidance`, await page.getByRole('link', { name: '내 티켓으로 이동', exact: true }).isVisible() && await page.getByRole('link', { name: '행사 안내로', exact: true }).isVisible());
+          }
+          if (name === 'account-email') {
+            const account = page.locator('.account-email-page');
+            await account.locator('#verify-current-password').waitFor({ state: 'visible' });
+            check(`account-email@${width}: signed-in account surface`, await account.getByRole('link', { name: '로그인으로 이동', exact: true }).count() === 0 && await account.getByRole('alert').count() === 0 && await account.locator('#verify-current-password').isVisible());
+          }
+          if (role === 'owner' && name !== 'account-email') {
+            if (name === 'draws') {
+              const prerequisite = page.getByRole('link', { name: '참여 콘텐츠에서 추첨 무대를 만들고 공개하세요.', exact: true });
+              check(`draws@${width}: prerequisite action is separate from its explanation`,
+                await prerequisite.isVisible() && await prerequisite.evaluate(link => !link.closest('p')));
+              check(`draws@${width}: prerequisite retains its destination`,
+                new URL(await prerequisite.getAttribute('href'), f.baseUrl).pathname === `/console/events/${f.eventId}/programs`);
+            }
             const visual = await page.evaluate(() => ({
               body: getComputedStyle(document.body).backgroundColor,
               nav: getComputedStyle(document.querySelector('.console-sidebar')).backgroundColor,
@@ -164,10 +220,75 @@ async function main() {
               headings: document.querySelectorAll('main h1').length,
             }));
             const expectedTitle = width <= 768 ? '26px' : '30px';
-            check(`${name}@${width}: white shared frame`, visual.body === 'rgb(255, 255, 255)' && visual.nav === 'rgb(250, 251, 252)' && visual.workspace === 'rgb(255, 255, 255)' && visual.shell === 'rgb(255, 255, 255)' && visual.title === expectedTitle && visual.font.includes('Pretendard') && visual.headings === 1, visual);
+            check(`${name}@${width}: white workspace and ink rail`, visual.body === 'rgb(255, 255, 255)' && visual.nav === 'rgb(16, 17, 20)' && visual.workspace === 'rgb(255, 255, 255)' && visual.shell === 'rgb(255, 255, 255)' && visual.title === expectedTitle && visual.font.includes('Pretendard') && visual.headings === 1, visual);
+            if (name === 'overview') {
+              const priorityAction = await page.locator('[data-task="approval"] a').first().evaluate(element => ({ background: getComputedStyle(element).backgroundColor, color: getComputedStyle(element).color }));
+              check(`overview@${width}: priority action has a distinct fill`, priorityAction.background === 'rgb(199, 68, 28)' && priorityAction.color === 'rgb(255, 255, 255)' && contrastRatio(priorityAction.color, priorityAction.background) >= 4.5, priorityAction);
+              const contrast = await page.evaluate(() => {
+                const rgb = value => value.match(/[\d.]+/g).map(Number);
+                const blend = (foreground, background) => {
+                  const alpha = foreground[3] ?? 1;
+                  return foreground.slice(0, 3).map((channel, index) => channel * alpha + background[index] * (1 - alpha));
+                };
+                const luminance = channels => {
+                  const linear = channels.map(value => {
+                    const channel = value / 255;
+                    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+                  });
+                  return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+                };
+                const ratio = (foreground, background) => {
+                  const a = luminance(foreground), b = luminance(background);
+                  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+                };
+                const rail = rgb(getComputedStyle(document.querySelector('.console-sidebar')).backgroundColor);
+                const wordmark = document.querySelector('.console-wordmark');
+                const avatar = document.querySelector(innerWidth <= 768 ? '.operator-mobile-trigger .operator-avatar' : '.sidebar-bottom .operator-avatar');
+                const avatarStyle = getComputedStyle(avatar);
+                const avatarBackground = blend(rgb(avatarStyle.backgroundColor), rail);
+                return {
+                  wordmark: ratio(rgb(getComputedStyle(wordmark, '::first-letter').color), rail),
+                  avatar: ratio(rgb(avatarStyle.color), avatarBackground),
+                };
+              });
+              check(`overview@${width}: rail wordmark and account avatar contrast`, contrast.wordmark >= 4.5 && contrast.avatar >= 4.5, contrast);
+              if (width <= 768) {
+                const trigger = page.getByRole('button', { name: '메뉴', exact: true });
+                await trigger.click();
+                await page.locator('#console-global-menu').waitFor({ state: 'visible' });
+                await page.evaluate(axe);
+                const violations = await page.evaluate(async () => (await window.axe.run(document.querySelector('#console-global-menu'), { runOnly: ['color-contrast'] })).violations.map(item => ({ id: item.id, targets: item.nodes.map(node => node.target) })));
+                check(`overview@${width}: expanded mobile navigation contrast`, violations.length === 0, violations);
+                if (width === 390) await page.screenshot({ path: path.join(OUT, 'overview-mobile-menu-390.png') });
+                await trigger.click();
+              }
+            }
           }
           if (name === 'attendee') check(`attendee@${width}: customer sky theme preserved`, await page.locator('[class*="homePage"]').first().evaluate(el => getComputedStyle(el).backgroundColor === 'rgb(185, 222, 240)'));
           await render(page, name, width);
+          if (role === 'owner' && name === 'participants') {
+            const rows = page.locator(width <= 768 ? 'ul[class*="participantList"] > li' : 'table[class*="rosterTable"] tbody > tr');
+            await rows.first().getByRole('checkbox').check();
+            await page.locator('#roster-selection-count').waitFor({ state: 'visible' });
+            await page.mouse.move(width - 2, 2);
+            const backgrounds = await Promise.all([rows.nth(0), rows.nth(1)].map(row => row.evaluate(element => getComputedStyle(element).backgroundColor)));
+            check(`participants@${width}: selected row is visually distinct`, backgrounds[0] !== backgrounds[1], backgrounds);
+            if (width > 768) {
+              await rows.nth(1).getByRole('button', { name: /참가자 상세/ }).click();
+              await page.getByRole('dialog').waitFor();
+              await page.mouse.move(width - 2, 2);
+              const selectedAndInspected = await Promise.all([rows.nth(0), rows.nth(1)].map(row => row.evaluate(element => getComputedStyle(element).backgroundColor)));
+              check(`participants@${width}: inspected row does not look selected`, selectedAndInspected[0] !== selectedAndInspected[1], selectedAndInspected);
+              await page.keyboard.press('Escape');
+              await page.getByRole('dialog').waitFor({ state: 'hidden' });
+            }
+            const clearColors = await page.locator('[aria-label="선택한 참가자 작업"]').getByRole('button', { name: /^선택 해제/ }).evaluate(element => ({ foreground: getComputedStyle(element).color, background: getComputedStyle(element.closest('[aria-label="선택한 참가자 작업"]')).backgroundColor }));
+            check(`participants@${width}: clear selection text contrast`, contrastRatio(clearColors.foreground, clearColors.background) >= 4.5, clearColors);
+            if (width === 390) await page.screenshot({ path: path.join(OUT, 'participants-selected-390.png') });
+            await page.evaluate(axe);
+            const violations = await page.evaluate(async () => (await window.axe.run(document.querySelector('[aria-label="선택한 참가자 작업"]'), { runOnly: ['color-contrast'] })).violations.map(item => ({ id: item.id, targets: item.nodes.map(node => node.target), details: item.nodes.map(node => ({ html: node.html, checks: node.any.map(check => ({ id: check.id, data: check.data })) })) })));
+            check(`participants@${width}: selection actions contrast`, violations.length === 0, violations);
+          }
         }
         if (role === 'owner') {
           await page.goto(`${f.baseUrl}/console/events/${f.eventId}/messages`, { waitUntil: 'networkidle' });
@@ -178,6 +299,21 @@ async function main() {
           const body = '{{이름}}님, 반갑습니다.\n행사장 입구에서 모바일 티켓을 준비해 주세요.';
           await page.locator('#campaign-body').fill(body);
           check(`compose@${width}: preview substitutes an anonymous example without changing the draft`, (await page.locator('#message-draft-preview').innerText()).includes('홍길동님') && await page.locator('#campaign-body').inputValue() === body);
+          if (width <= 390) {
+            const actionLines = await page.locator('[class*="stepActions"] > button').evaluateAll(buttons => buttons.map(button => {
+              const walker = document.createTreeWalker(button, NodeFilter.SHOW_TEXT);
+              const lines = new Set();
+              while (walker.nextNode()) {
+                if (!walker.currentNode.textContent.trim()) continue;
+                const range = document.createRange();
+                range.selectNodeContents(walker.currentNode);
+                for (const rect of range.getClientRects()) if (rect.width && rect.height) lines.add(Math.round(rect.y));
+              }
+              return { text: button.textContent.trim(), lines: lines.size, width: button.getBoundingClientRect().width };
+            }));
+            check(`compose@${width}: step buttons remain readable`, actionLines.length === 2 && actionLines.every(action => action.lines === 1 && action.width >= 44), actionLines);
+            check(`compose@${width}: guidance does not contain an inline button`, await page.locator('#campaign-variables a').count() === 0 && await page.locator('#campaign-variables + a[href*="/draws"]').isVisible());
+          }
           await render(page, 'compose', width);
           await messageStep(page, 3);
           await page.getByLabel('모의 발송으로 기록', { exact: false }).check();
@@ -226,6 +362,7 @@ async function main() {
       await page.getByRole('dialog').waitFor();
       await render(page, 'participant-detail', width);
       await page.keyboard.press('Escape');
+      await waitForDialogExitFocus(page, page.getByRole('button', { name: '김서연 참가자 상세', exact: true }));
       check(`detail@${width}: keyboard exit returns focus`, await page.getByRole('button', { name: '김서연 참가자 상세', exact: true }).evaluate(el => el === document.activeElement));
       await page.goto(`${f.baseUrl}/console/events/${secondId}/participants`, { waitUntil: 'networkidle' });
       await page.getByRole('heading', { name: '아직 등록된 참가자가 없습니다.', exact: true }).waitFor();
@@ -276,7 +413,7 @@ async function main() {
     await confirmMessage();
     assert.equal((await lostResponse).status(), 502, 'the browser must actually lose the committed create result');
     assert.equal(attempts.length, 1, 'loss injection must intercept the current reviewed create command');
-    const recovery = uncertainPage.locator('section[aria-labelledby="message-recovery-heading"]');
+    const recovery = uncertainPage.locator(':is(section,[role="region"])[aria-labelledby="message-recovery-heading"]');
     await recovery.getByRole('heading', { name: '발송 요청 확인 필요', exact: true }).waitFor();
     check('unknown message response follows a real commit', committedStatus >= 200 && committedStatus < 300, committedStatus);
     const recoveryCopy = await recovery.innerText();
@@ -284,7 +421,7 @@ async function main() {
     check('unknown message retains its original simulated draft', attempts[0].payload.title === uncertainTitle && attempts[0].payload.simulate === true &&
       await uncertainPage.locator('#campaign-title').inputValue() === uncertainTitle &&
       await uncertainPage.locator('#campaign-body').inputValue() === attempts[0].payload.body);
-    const previewCopy = await uncertainPage.locator('section[aria-labelledby="message-preview-heading"]').innerText();
+    const previewCopy = await uncertainPage.locator(':is(section,[role="region"])[aria-labelledby="message-preview-heading"]').innerText();
     check('unknown message preview never claims non-delivery', !previewCopy.includes('아직 저장·발송하지 않았습니다') && previewCopy.includes('이름·티켓 링크·번호는 예시입니다'), previewCopy);
     await render(uncertainPage, 'compose-response-unknown', 390);
     const receiptResponse = uncertainPage.waitForResponse(response => response.url().endsWith(`/api/events/${f.eventId}/command-receipts/${attempts[0].commandId}`));
@@ -324,12 +461,13 @@ async function main() {
     check('published customer style survives the white shell', await attendee.locator('[class*="homePage"]').first().evaluate(el => getComputedStyle(el).backgroundColor === 'rgb(221, 235, 212)'));
     await render(attendee, 'attendee-custom-published', 390);
     await publicContext.close();
+    check('account screenshots do not request or send mail', mockOutbox.length === initialMailCount);
     check('runtime page errors', errors.length === 0, errors);
     check('same build throughout', fs.readFileSync(path.join(__dirname, '../apps/web/.next/BUILD_ID'), 'utf8').trim() === buildId);
     assert.equal(checks.filter(item => !item.ok).length, 0, 'all collected checks must pass');
     completed = true;
   } finally {
-    fs.writeFileSync(path.join(OUT, 'verification.json'), JSON.stringify({ buildId, completed, checks, errors, disclosures: ['Synthetic isolated PostgreSQL/API/Next fixture', 'SMS simulation only; no delivery', 'Browser transport loading/error simulation, real recovery', 'Chromium, not real devices or screen-reader listening'] }, null, 2), { mode: 0o600 });
+    fs.writeFileSync(path.join(OUT, 'verification.json'), JSON.stringify({ buildId, completed, checks, errors, disclosures: ['Synthetic isolated PostgreSQL/API/Next fixture', 'SMS simulation only; no delivery', 'Mock-only email for account form display; no mail requested or delivered', 'Browser transport loading/error simulation, real recovery', 'Chromium, not real devices or screen-reader listening'] }, null, 2), { mode: 0o600 });
     if (browser) await browser.close();
     if (f) await f.close();
   }

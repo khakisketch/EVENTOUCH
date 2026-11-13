@@ -1,8 +1,14 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import SkipLink from "./SkipLink";
+import "./layers.css";
+import "@astryxdesign/core/reset.css";
+import "@astryxdesign/core/astryx.css";
+import { Theme } from "@astryxdesign/core/theme";
+import { themes, defaultThemeSlug } from "../astryx-themes";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "./globals.css";
+import "./product-ui.css";
 
 export const metadata: Metadata = {
   title: "EVENTOUCH",
@@ -23,8 +29,10 @@ export default async function RootLayout({
   return (
     <html lang="ko">
       <body className="app-body">
-        <SkipLink />
-        {children}
+        <Theme theme={themes[defaultThemeSlug]} mode="light">
+          <SkipLink />
+          {children}
+        </Theme>
       </body>
     </html>
   );

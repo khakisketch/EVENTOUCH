@@ -1,11 +1,12 @@
 "use client";
+import ProductButton from "../../../../ui/ProductButton";
 
 import ValidatedForm from "../../../../ui/ValidatedForm";
 
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import ProductLink from "../../../../ui/ProductLink";
 import { loginHrefForLocation } from "../../../../auth-redirect";
 import { consoleFetch, subscribeConsoleFreshness } from "../../../../../lib/console-api";
 import { abandonOperatorAttempt } from "../../../../../lib/operator-context";
@@ -1915,14 +1916,14 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                 </select>
               </label>
               {hasAnyFilter ? (
-                <button
+                <ProductButton
                   type="button"
                   id="roster-filter-reset"
                   className={`button button-quiet ${styles.filterReset}`}
                   onClick={clearRosterFilters}
                 >
                   검색·필터 초기화
-                </button>
+                </ProductButton>
               ) : null}
               </div>
             </>
@@ -1940,22 +1941,22 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
               <details className={styles.rosterUtilities} ref={rosterUtilitiesRef}>
                 <summary aria-label="명단 도구"><span className={styles.longAction}>명단 도구</span><span className={styles.shortAction} aria-hidden="true">도구</span></summary>
                 <div className={styles.utilityMenu}>
-              <button type="button" className="button button-secondary" aria-label={`엑셀 내보내기 · 검색·필터 결과 ${visiblePeople.length}명`} aria-describedby={state.exportIssue ? "roster-export-unavailable" : undefined} title={`검색·필터 결과 ${visiblePeople.length}명을 현재 정렬 순서로 내보냅니다.`} disabled={exporting || rosterUnavailable || Boolean(state.exportIssue)} onClick={() => void exportXlsx()}>
-                <DownloadIcon />
+              <ProductButton type="button" className="button button-secondary" aria-label={`엑셀 내보내기 · 검색·필터 결과 ${visiblePeople.length}명`} aria-describedby={state.exportIssue ? "roster-export-unavailable" : undefined} title={`검색·필터 결과 ${visiblePeople.length}명을 현재 정렬 순서로 내보냅니다.`} disabled={exporting || rosterUnavailable || Boolean(state.exportIssue)} onClick={() => void exportXlsx()} icon={<DownloadIcon />}>
+
                 {exporting ? "엑셀 준비 중…" : "엑셀 내보내기"}
-              </button>
-              <button type="button" className="button button-secondary" aria-label={`CSV 내보내기 · 검색·필터 결과 ${visiblePeople.length}명`} aria-describedby={state.exportIssue ? "roster-export-unavailable" : undefined} title={`검색·필터 결과 ${visiblePeople.length}명을 현재 정렬 순서로 내보냅니다.`} disabled={rosterUnavailable || Boolean(state.exportIssue)} onClick={exportCsv}>
-                <DownloadIcon />
+              </ProductButton>
+              <ProductButton type="button" className="button button-secondary" aria-label={`CSV 내보내기 · 검색·필터 결과 ${visiblePeople.length}명`} aria-describedby={state.exportIssue ? "roster-export-unavailable" : undefined} title={`검색·필터 결과 ${visiblePeople.length}명을 현재 정렬 순서로 내보냅니다.`} disabled={rosterUnavailable || Boolean(state.exportIssue)} onClick={exportCsv} icon={<DownloadIcon />}>
+
                 CSV 내보내기
-              </button>
+              </ProductButton>
               </div>
               </details>
-              {canMutateStatus ? <button type="button" className="button button-secondary" onClick={() => setImportOpen(true)}><UploadIcon />명단 가져오기</button> : null}
+              {canMutateStatus ? <ProductButton type="button" className="button button-secondary" onClick={() => setImportOpen(true)} icon={<UploadIcon />}>명단 가져오기</ProductButton> : null}
               {canMutateStatus ? (
-                <button type="button" className="button button-primary" aria-label="참가자 추가" disabled={unconfirmedAdd} onClick={() => { setAddError(addUnconfirmed ? { message: "등록 결과가 확인되지 않았습니다. 같은 요청으로 다시 확인하세요.", field: null } : null); setAddOpen(true); }}>
-                  <PlusIcon />
+                <ProductButton type="button" className="button button-primary" aria-label="참가자 추가" disabled={unconfirmedAdd} onClick={() => { setAddError(addUnconfirmed ? { message: "등록 결과가 확인되지 않았습니다. 같은 요청으로 다시 확인하세요.", field: null } : null); setAddOpen(true); }} icon={<PlusIcon />}>
+
                   <span className={styles.longAction}>참가자 추가</span><span className={styles.shortAction} aria-hidden="true">추가</span>
-                </button>
+                </ProductButton>
               ) : null}
             </span>
           }
@@ -1967,23 +1968,23 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         <>
           {state.exportIssue ? <ConsoleFeedback kind="warning" id="roster-export-unavailable">
             {state.exportIssue === "fields" ? "게시된 신청 항목을 확인할 수 없어" : state.exportIssue === "roster" ? "참가자 명단의 전체 범위를 확인할 수 없어" : "일부 참가자의 신청 정보를 확인할 수 없어"} 명단을 내려받을 수 없습니다. 다시 확인해도 계속되면 시스템 관리자에게 문의하세요.{" "}
-            <button type="button" className="button button-secondary" disabled={refreshing} onClick={() => void refreshQuietly()}>{refreshing ? "확인 중…" : "다시 확인"}</button>
+            <ProductButton type="button" className="button button-secondary" disabled={refreshing} onClick={() => void refreshQuietly()}>{refreshing ? "확인 중…" : "다시 확인"}</ProductButton>
           </ConsoleFeedback> : null}
           {unresolvedRosterReceipt ? <ConsoleFeedback kind="warning">이전 참가자 작업의 결과를 위의 처리 결과 확인에서 확인한 뒤 같은 종류의 새 작업을 할 수 있습니다.</ConsoleFeedback> : null}
-          {receiptRefreshLock ? <ConsoleFeedback kind="warning">최신 참가자 목록을 불러온 뒤 수정할 수 있습니다. {!receiptRefreshing ? <button type="button" className="button button-secondary" onClick={() => { setReceiptRefreshing(true); void load(true).then((ok) => { if (ok) setReceiptNeedsRefresh(false); }).finally(() => setReceiptRefreshing(false)); }}>다시 불러오기</button> : null}</ConsoleFeedback> : null}
+          {receiptRefreshLock ? <ConsoleFeedback kind="warning">최신 참가자 목록을 불러온 뒤 수정할 수 있습니다. {!receiptRefreshing ? <ProductButton type="button" className="button button-secondary" onClick={() => { setReceiptRefreshing(true); void load(true).then((ok) => { if (ok) setReceiptNeedsRefresh(false); }).finally(() => setReceiptRefreshing(false)); }}>다시 불러오기</ProductButton> : null}</ConsoleFeedback> : null}
           {notice ? (
             <ConsoleFeedback kind="success">
               {notice}
               {approvedHandoffIds && approvedHandoffIds.length ? (
                 <>
                   {" "}
-                  <Link
+                  <ProductLink
                     id="roster-approved-message"
                     className="button button-secondary"
                     href={closeHref(buildApprovedMessageHandoffHref(eventId, approvedHandoffIds))}
                   >
                     승인자 메시지 작성
-                  </Link>
+                  </ProductLink>
                 </>
               ) : null}
             </ConsoleFeedback>
@@ -1993,40 +1994,40 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
               {bulkRetry.message} 이전 {bulkRetry.attempt.sourceStatus === "WAITLIST" ? "대기자 확정" : "승인"} 요청 {bulkRetry.attempt.ids.length}명
               {bulkRetry.attempt.names.length ? ` (${bulkRetry.attempt.names.slice(0, 3).join(", ")}${bulkRetry.attempt.names.length > 3 ? ` 외 ${bulkRetry.attempt.names.length - 3}명` : ""})` : ""}의 결과가 미확인입니다.
               선택을 바꿔도 이 버튼은 이전 요청을 그대로 확인합니다.{" "}
-              <button type="button" className="button button-secondary" disabled={bulkBusy} onClick={() => void approveSelected(true)}>
+              <ProductButton type="button" className="button button-secondary" disabled={bulkBusy} onClick={() => void approveSelected(true)}>
                 {bulkBusy ? "다시 시도 중…" : "같은 요청으로 다시 시도"}
-              </button>
+              </ProductButton>
             </ConsoleFeedback>
           ) : null}
           {groupUncertain && pendingGroupRef.current && !groupDialogOpen ? <ConsoleFeedback kind="warning">
             이전 그룹 지정 {pendingGroupRef.current.ids.length}명의 결과가 미확인입니다.{" "}
-            <button type="button" className="button button-secondary" onClick={() => { if (pendingGroupRef.current) setGroupDraft(pendingGroupRef.current.group); setGroupDialogOpen(true); }}>그룹 지정 다시 확인</button>
+            <ProductButton type="button" className="button button-secondary" onClick={() => { if (pendingGroupRef.current) setGroupDraft(pendingGroupRef.current.group); setGroupDialogOpen(true); }}>그룹 지정 다시 확인</ProductButton>
           </ConsoleFeedback> : null}
           {rewardUncertain && pendingRewardRef.current && !rewardTarget ? <ConsoleFeedback kind="warning">
             {pendingRewardRef.current.target.name}님의 경품 등록 결과가 미확인입니다.{" "}
-            <button type="button" className="button button-secondary" onClick={() => { if (pendingRewardRef.current) setRewardTarget(pendingRewardRef.current.target); }}>경품 등록 다시 확인</button>
+            <ProductButton type="button" className="button button-secondary" onClick={() => { if (pendingRewardRef.current) setRewardTarget(pendingRewardRef.current.target); }}>경품 등록 다시 확인</ProductButton>
           </ConsoleFeedback> : null}
           {failure && !(toolsOpenId && selectedPerson?.id === statusFeedbackId && !rewardTarget && !addOpen && !groupDialogOpen && !editTargetId && !ticketTarget && !reviewedExitTarget) ? (
             <ConsoleFeedback kind="error">
               {failure}{" "}
               {statusRetry ? (
-                <button
+                <ProductButton
                   type="button"
                   className="button button-secondary"
                   disabled={savingId === statusRetry.person.id}
                   onClick={() => void changeStatus(statusRetry.person, statusRetry.status)}
                 >
                   {savingId === statusRetry.person.id ? "다시 시도 중…" : "같은 요청으로 다시 시도"}
-                </button>
+                </ProductButton>
               ) : null}
             </ConsoleFeedback>
           ) : null}
           {refreshError ? (
             <ConsoleFeedback kind="error">
               {refreshError}{" "}
-              <button type="button" className="button button-secondary" onClick={() => void refreshQuietly()}>
+              <ProductButton type="button" className="button button-secondary" onClick={() => void refreshQuietly()}>
                 다시 시도
-              </button>
+              </ProductButton>
             </ConsoleFeedback>
           ) : null}
           {!canWriteRoster ? (
@@ -2090,28 +2091,28 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       {canAssignGroup && visiblePeople.length ? (
         <span className={styles.scopeGroup}>
           <span className={styles.scopeLabel}>선택 범위</span>
-          <button
+          <ProductButton
             type="button"
             className="button button-quiet"
             onClick={selectVisible}
             aria-describedby="roster-select-all-help"
           >
             필터 결과 전체 {visiblePeople.length}명 선택
-          </button>
+          </ProductButton>
         </span>
       ) : null}
-      {canAssignGroup && visiblePeople.length > pagePeople.length ? <button type="button" className={`button button-quiet ${styles.desktopPageSelect}`} onClick={selectPage}>이 페이지 {pagePeople.length}명 선택</button> : null}
+      {canAssignGroup && visiblePeople.length > pagePeople.length ? <ProductButton type="button" className={`button button-quiet ${styles.desktopPageSelect}`} onClick={selectPage}>이 페이지 {pagePeople.length}명 선택</ProductButton> : null}
       {canAssignGroup && visiblePeople.length > pagePeople.length ? (
         <details className={styles.mobileScope}>
           <summary>여러 명 선택</summary>
           <div className={styles.mobileScopeOptions}>
-            <button type="button" className="button button-secondary" onClick={(event) => selectMobileScope("page", event.currentTarget)}>이 페이지 {pagePeople.length}명 선택</button>
-            <button type="button" className="button button-secondary" onClick={(event) => selectMobileScope("filter", event.currentTarget)} aria-describedby="roster-select-all-help">필터 결과 전체 {visiblePeople.length}명 선택</button>
+            <ProductButton type="button" className="button button-secondary" onClick={(event) => selectMobileScope("page", event.currentTarget)}>이 페이지 {pagePeople.length}명 선택</ProductButton>
+            <ProductButton type="button" className="button button-secondary" onClick={(event) => selectMobileScope("filter", event.currentTarget)} aria-describedby="roster-select-all-help">필터 결과 전체 {visiblePeople.length}명 선택</ProductButton>
             <p>필터 결과 전체에는 다른 페이지도 포함됩니다. 기존 선택은 유지됩니다.</p>
           </div>
         </details>
       ) : canAssignGroup && visiblePeople.length ? (
-        <button type="button" className={`button button-quiet ${styles.mobileScopeSingle}`} onClick={selectVisible} aria-describedby="roster-select-all-help">전체 {visiblePeople.length}명 선택</button>
+        <ProductButton type="button" className={`button button-quiet ${styles.mobileScopeSingle}`} onClick={selectVisible} aria-describedby="roster-select-all-help">전체 {visiblePeople.length}명 선택</ProductButton>
       ) : null}
       <span id="roster-select-all-help" className="sr-only">검색·필터에 맞는 전체를 선택합니다. 기존 선택은 유지됩니다.{visiblePeople.length > pagePeople.length ? " 다른 페이지의 결과도 포함됩니다." : ""}</span>
       </div>
@@ -2135,7 +2136,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                   선택 {handoffIds.length}명 · 최대 200명까지 전송 가능 · 필터로 대상을 좁히거나 숨김 선택을 제외하세요
                 </span> : null}
                 {canMutateStatus && (approvalCandidates.length > 0 || waitlistCandidates.length === 0) ? (
-                  <button
+                  <ProductButton
                     type="button"
                     id="roster-approve-selected"
                     className="button button-secondary"
@@ -2144,17 +2145,17 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                     onClick={() => void approveSelected()}
                   >
                     {bulkBusy && pendingBulkRef.current?.sourceStatus === "PENDING" ? "승인 중입니다" : `신청 승인 ${approvalCandidates.length}`}
-                  </button>
+                  </ProductButton>
                 ) : null}
                 {canMutateStatus && waitlistCandidates.length > 0 ? (
-                  <button type="button" id="roster-approve-waitlist" className="button button-secondary"
+                  <ProductButton type="button" id="roster-approve-waitlist" className="button button-secondary"
                     disabled={bulkBusy || Boolean(bulkRetry) || Boolean(statusRetry) || unconfirmedStatus}
                     aria-describedby={bulkRetry ? "roster-bulk-retry-message" : undefined}
                     onClick={() => void approveSelected(false, "WAITLIST")}>
                     {bulkBusy && pendingBulkRef.current?.sourceStatus === "WAITLIST" ? "확정 중입니다" : `대기자 확정 ${waitlistCandidates.length}`}
-                  </button>
+                  </ProductButton>
                 ) : null}
-                <button
+                <ProductButton
                   type="button"
                   className="button button-secondary"
                   aria-describedby="roster-group-scope"
@@ -2176,19 +2177,19 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                   }}
                 >
                   그룹 변경 <span aria-hidden="true">{hiddenSelectedCount ? `· 현재 필터 ${effectiveSelection.length}명` : ""}</span>
-                </button>
+                </ProductButton>
                 <p className="sr-only" id="roster-group-scope">현재 필터에서 선택한 {effectiveSelection.length}명 대상</p>
                 {handoffOverLimit ? (
                   <>
-                    <button
+                    <ProductButton
                       type="button"
                       id="roster-exclude-hidden"
                       className={`button button-secondary ${styles.selectionButton}`}
                       onClick={() => setSelectedIds((current) => current.filter((id) => visibleIds.has(id)))}
                     >
                       숨김 제외
-                    </button>
-                    <button
+                    </ProductButton>
+                    <ProductButton
                       type="button"
                       id="roster-send-message"
                       className={`button button-secondary ${styles.selectionButton}`}
@@ -2197,35 +2198,35 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                       title="대상이 너무 많습니다. 필터로 대상을 좁혀 주세요"
                     >
                       메시지 작성 <span aria-hidden="true">{hiddenSelectedCount ? `· 전체 ${handoffIds.length}명` : ""}</span>
-                    </button>
+                    </ProductButton>
                   </>
                 ) : (
-                  <Link
+                  <ProductLink
                     id="roster-send-message"
                     className={`button button-secondary ${styles.selectionButton}`}
                     aria-describedby="roster-message-scope"
                     href={closeHref(handoffHref)}
                   >
                     메시지 작성 <span aria-hidden="true">{hiddenSelectedCount ? `· 전체 ${handoffIds.length}명` : ""}</span>
-                  </Link>
+                  </ProductLink>
                 )}
                 <p className="sr-only" id="roster-message-scope">필터 밖을 포함한 선택 {handoffIds.length}명 대상{hiddenSelectedCount ? ` · 필터 밖 ${hiddenSelectedCount}명` : ""}</p>
                 {canMutateStatus ? <>
-                  <button type="button" className="button button-secondary" aria-describedby="roster-cancel-scope" disabled={unconfirmedStatus || receiptRefreshLock || bulkBusy || Boolean(bulkRetry) || Boolean(statusRetry) || !cancelCandidates.length || cancelCandidates.length > 1000}
+                  <ProductButton type="button" className="button button-secondary" aria-describedby="roster-cancel-scope" disabled={unconfirmedStatus || receiptRefreshLock || bulkBusy || Boolean(bulkRetry) || Boolean(statusRetry) || !cancelCandidates.length || cancelCandidates.length > 1000}
                     onClick={(event) => {
                       closeSelectionMenu(event.currentTarget);
                       setBulkCancelTargets(cancelCandidates.map(({ id, name, status, inside, company, phone }) => ({ id, name, status, inside, company, phone: maskPhone(phone) })));
-                    }}>신청 취소 <span aria-hidden="true">{hiddenSelectedCount ? `· 현재 필터 ${cancelCandidates.length}명` : ""}</span></button>
+                    }}>신청 취소 <span aria-hidden="true">{hiddenSelectedCount ? `· 현재 필터 ${cancelCandidates.length}명` : ""}</span></ProductButton>
                   <p className={cancelCandidates.length > 1000 ? styles.selectionActionHint : "sr-only"} id="roster-cancel-scope">{cancelCandidates.length > 1000 ? "한 번에 1,000명까지 취소할 수 있습니다. 필터로 대상을 나눠 주세요." : `현재 필터에서 선택한 미취소 참가자 ${cancelCandidates.length}명 대상`}</p>
                 </> : null}
-                <button type="button" className={`button button-quiet ${styles.selectionButton}`} onClick={() => {
+                <ProductButton type="button" className={`button button-quiet ${styles.selectionButton}`} onClick={() => {
                   setSelectedIds([]);
                   const heading = document.getElementById("participants-list-heading");
                   heading?.setAttribute("tabindex", "-1");
                   heading?.focus({ preventScroll: true });
                 }}>
                   {hiddenSelectedCount ? `선택 해제 (숨김 ${hiddenSelectedCount}명 포함)` : "선택 해제"}
-                </button>
+                </ProductButton>
                 </div>
                 {canMutateStatus && approvalConflicts.length ? <p className={styles.selectionNotice} role="status">취소 기록 확인이 필요한 {approvalConflicts.length}명은 승인·확정에서 제외됩니다. 참가자 상세에서 확인하세요.</p> : null}
                 {canMutateStatus && approvalReissues.length ? <p className={styles.selectionNotice}>선택한 승인·확정 대상 중 {approvalReissues.length}명은 처리 후에도 새 티켓을 별도로 발급해야 합니다.</p> : null}
@@ -2266,7 +2267,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
               {pagePeople.map((person) => {
                 const detailsOpen = toolsOpenId === person.id;
                 const tone = person.status === "APPROVED" ? "good" : person.status === "WAITLIST" ? "wait" : person.status === "CANCELLED" ? "bad" : "info";
-                return <tr key={person.id} data-selected={detailsOpen ? "true" : undefined}>
+                return <tr key={person.id} data-selected={effectiveSelection.includes(person.id) ? "true" : undefined} data-inspected={detailsOpen ? "true" : undefined}>
                   {canAssignGroup ? <td className={styles.selectColumn}><label className={styles.participantSelectTarget}>
                     <input type="checkbox" className={styles.participantSelect} aria-label={`${person.name} 선택`} checked={effectiveSelection.includes(person.id)} onChange={() => togglePerson(person.id)} />
                   </label></td> : null}
@@ -2276,11 +2277,11 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                   <td><span className={person.inside ? styles.presenceInside : styles.presence}>{presenceLabel(person)}</span></td>
                   {ticketFilter ? <td><span className={styles.ticketReviewLabel}>{ticketReviewLabel(person.ticketReview)}</span></td> : null}
                   {showRowActions ? <td className={styles.actionColumn}><div className={styles.participantActions}>
-                    {["PENDING", "WAITLIST"].includes(person.status) && person.ticketReview !== "cancelled" && canMutateStatus ? <button type="button" className="button button-secondary" aria-describedby={`roster-name-desktop-${person.id}`} disabled={savingId === person.id} onClick={() => changeStatus(person, "APPROVED")}>
+                    {["PENDING", "WAITLIST"].includes(person.status) && person.ticketReview !== "cancelled" && canMutateStatus ? <ProductButton type="button" className="button button-secondary" aria-describedby={`roster-name-desktop-${person.id}`} disabled={savingId === person.id} onClick={() => changeStatus(person, "APPROVED")}>
                       {savingId === person.id ? (person.status === "WAITLIST" ? "확정 중…" : "승인 중…") : (person.status === "WAITLIST" ? "확정" : "승인")}
-                    </button> : null}
-                    <button type="button" className={`button button-quiet ${styles.rowToolsToggle}`} aria-expanded={detailsOpen} aria-haspopup="dialog"
-                      aria-label={`${person.name} 참가자 상세`} onClick={(event) => { inspectorReturnFocusRef.current = event.currentTarget; setToolsOpenId(person.id); }}>상세</button>
+                    </ProductButton> : null}
+                    <ProductButton type="button" className={`button button-quiet ${styles.rowToolsToggle}`} aria-expanded={detailsOpen} aria-haspopup="dialog"
+                      aria-label={`${person.name} 참가자 상세`} onClick={(event) => { inspectorReturnFocusRef.current = event.currentTarget; setToolsOpenId(person.id); }}>상세</ProductButton>
                   </div></td> : null}
                 </tr>;
               })}
@@ -2295,7 +2296,8 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
               return (
                 <li
                   className={rowClass}
-                  data-selected={detailsOpen ? "true" : undefined}
+                  data-selected={effectiveSelection.includes(person.id) ? "true" : undefined}
+                  data-inspected={detailsOpen ? "true" : undefined}
                   key={person.id}
                 >
                   {canAssignGroup ? (
@@ -2327,7 +2329,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                           (including cancel with its confirm) under the same
                           ENDED/ARCHIVED gates. */}
                       {["PENDING", "WAITLIST"].includes(person.status) && person.ticketReview !== "cancelled" && canMutateStatus ? (
-                        <button
+                        <ProductButton
                           type="button"
                           className="button button-secondary"
                           aria-describedby={`roster-name-mobile-${person.id}`}
@@ -2335,9 +2337,9 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                           onClick={() => changeStatus(person, "APPROVED")}
                         >
                           {savingId === person.id ? (person.status === "WAITLIST" ? "확정 중…" : "승인 중…") : (person.status === "WAITLIST" ? "확정" : "승인")}
-                        </button>
+                        </ProductButton>
                       ) : null}
-                      <button
+                      <ProductButton
                         type="button"
                         className={`button button-quiet ${styles.rowToolsToggle}`}
                         aria-expanded={detailsOpen}
@@ -2354,7 +2356,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                         }}
                       >
                         상세
-                      </button>
+                      </ProductButton>
                     </div>
                   ) : null}
                 </li>
@@ -2366,7 +2368,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
             <ConsoleDialog presentation="inspector" title={selectedPerson.name} titleId={`participant-details-${selectedPerson.id}`}
               description={[identityOrg(selectedPerson), maskPhone(selectedPerson.phone)].filter(Boolean).join(" · ")}
               initialFocusRef={inspectorHeadingRef} busy={savingId === selectedPerson.id} onClose={closeInspector}
-              footer={<button type="button" className="button button-secondary" disabled={savingId === selectedPerson.id} onClick={closeInspector}>닫기</button>}>
+              footer={<ProductButton type="button" className="button button-secondary" disabled={savingId === selectedPerson.id} onClick={closeInspector}>닫기</ProductButton>}>
               <div className={styles.rosterInspector}>
                 <>
                   <div className={styles.inspectorHead}>
@@ -2396,32 +2398,32 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                       <RosterNameTag key={selectedPerson.id} eventId={eventId} person={selectedPerson} eventName={state.eventName} />
                     ) : null}
                     <div className={styles.detailActions}>
-                      {canReviewExit && selectedPerson.attendanceReview ? <button type="button" className="button button-secondary" disabled={unconfirmedExit || unconfirmedReconciliation || receiptRefreshLock}
-                        onClick={() => setReconcileTarget(selectedPerson.id)}>출입 상태 확인</button> : null}
-                      {canReviewExit && selectedPerson.inside ? <button type="button" className="button button-secondary" disabled={unconfirmedExit || unconfirmedReconciliation || receiptRefreshLock}
-                        onClick={() => setReviewedExitTarget(selectedPerson.id)}>확인 후 퇴장 기록</button> : null}
-                      {canEditParticipant && !participantsLocked ? <button type="button" className="button button-secondary" disabled={unconfirmedUpdate || receiptRefreshLock} onClick={() => setEditTargetId(selectedPerson.id)}>신청 정보 수정</button> : null}
-                      {canResolveCancellationConflict && !participantsLocked && selectedPerson.cancellationConflictReview && selectedPerson.ticketReview === "cancelled" && selectedPerson.status !== "CANCELLED" ? <button type="button" className="button button-secondary" disabled={unconfirmedCancellationConflict || receiptRefreshLock} onClick={() => setCancellationConflictTarget(selectedPerson.id)}>참가 취소 기록 확인</button> : null}
+                      {canReviewExit && selectedPerson.attendanceReview ? <ProductButton type="button" className="button button-secondary" disabled={unconfirmedExit || unconfirmedReconciliation || receiptRefreshLock}
+                        onClick={() => setReconcileTarget(selectedPerson.id)}>출입 상태 확인</ProductButton> : null}
+                      {canReviewExit && selectedPerson.inside ? <ProductButton type="button" className="button button-secondary" disabled={unconfirmedExit || unconfirmedReconciliation || receiptRefreshLock}
+                        onClick={() => setReviewedExitTarget(selectedPerson.id)}>확인 후 퇴장 기록</ProductButton> : null}
+                      {canEditParticipant && !participantsLocked ? <ProductButton type="button" className="button button-secondary" disabled={unconfirmedUpdate || receiptRefreshLock} onClick={() => setEditTargetId(selectedPerson.id)}>신청 정보 수정</ProductButton> : null}
+                      {canResolveCancellationConflict && !participantsLocked && selectedPerson.cancellationConflictReview && selectedPerson.ticketReview === "cancelled" && selectedPerson.status !== "CANCELLED" ? <ProductButton type="button" className="button button-secondary" disabled={unconfirmedCancellationConflict || receiptRefreshLock} onClick={() => setCancellationConflictTarget(selectedPerson.id)}>참가 취소 기록 확인</ProductButton> : null}
                       {canReissueTicket && !participantsLocked && selectedPerson.status !== "CANCELLED" && state.eventSlug ? (
-                        <button type="button" className="button button-secondary" disabled={unconfirmedTicket || receiptRefreshLock || selectedPerson.ticketReview === "unknown" || selectedPerson.ticketReview === "cancelled"} aria-describedby={selectedPerson.ticketReview === "unknown" || selectedPerson.ticketReview === "cancelled" ? `ticket-state-note-${selectedPerson.id}` : undefined} onClick={() => {
+                        <ProductButton type="button" className="button button-secondary" disabled={unconfirmedTicket || receiptRefreshLock || selectedPerson.ticketReview === "unknown" || selectedPerson.ticketReview === "cancelled"} aria-describedby={selectedPerson.ticketReview === "unknown" || selectedPerson.ticketReview === "cancelled" ? `ticket-state-note-${selectedPerson.id}` : undefined} onClick={() => {
                           if (!writeBusyRef.current) setTicketTarget({
                             id: selectedPerson.id,
                             name: selectedPerson.name,
                             ticketRevision: selectedPerson.ticketRevision,
                           });
-                        }}>티켓 재발급</button>
+                        }}>티켓 재발급</ProductButton>
                       ) : null}
                       {canMutateStatus ? (
-                        <button
+                        <ProductButton
                           type="button"
                           className="button button-secondary"
                           onClick={() => reuseForNewRegistration(selectedPerson)}
                         >
                           이 정보로 새 참가자 등록
-                        </button>
+                        </ProductButton>
                       ) : null}
                       {selectedPerson.status === "APPROVED" && state.rewardFeature && canRewardHere ? (
-                        <button
+                        <ProductButton
                           type="button"
                           className="button button-secondary"
                           disabled={unconfirmedReward}
@@ -2441,7 +2443,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                           }}
                         >
                           경품 등록
-                        </button>
+                        </ProductButton>
                       ) : null}
                       {canMutateStatus ? (
                         <select
@@ -2468,10 +2470,10 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                       <ConsoleFeedback kind="error" id="roster-inspector-status-error">
                         {failure}{" "}
                         {statusRetry ? (
-                          <button type="button" className="button button-secondary" disabled={savingId === statusRetry.person.id}
+                          <ProductButton type="button" className="button button-secondary" disabled={savingId === statusRetry.person.id}
                             onClick={() => void changeStatus(statusRetry.person, statusRetry.status)}>
                             {savingId === statusRetry.person.id ? "다시 시도 중…" : "같은 요청으로 다시 시도"}
-                          </button>
+                          </ProductButton>
                         ) : null}
                       </ConsoleFeedback>
                     ) : selectedPerson.presenceUnknown && canMutateStatus ? (
@@ -2511,7 +2513,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           ) : null}
           </div>
           <nav aria-label="참가자 목록 페이지" className={styles.paginationBar}>
-              <button
+              <ProductButton
                 type="button"
                 id="roster-previous-page"
                 className={`button button-secondary ${styles.selectionButton}`}
@@ -2519,8 +2521,8 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                 onClick={() => showRosterPage(safePage - 1)}
               >
                 이전
-              </button>
-              <button
+              </ProductButton>
+              <ProductButton
                 type="button"
                 id="roster-next-page"
                 className={`button button-secondary ${styles.selectionButton}`}
@@ -2528,29 +2530,29 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                 onClick={() => showRosterPage(safePage + 1)}
               >
                 다음
-              </button>
+              </ProductButton>
               <span role="status" id="roster-page-position" className={styles.paginationPosition}>
                 {safePage} / {totalPages} 페이지 · {pageStart}–{pageEnd} / {visiblePeople.length}명
                 {pageSelectedCount > 0 ? ` · 이 페이지 ${pageSelectedCount}명 선택` : ""}
               </span>
               <span className={styles.paginationActions}>
                 {canAssignGroup ? (
-                <button
+                <ProductButton
                   type="button"
                   className={`button button-secondary ${styles.selectionButton}`}
                   onClick={selectPage}
                   aria-describedby="roster-page-position"
                 >
                   이 페이지 {pagePeople.length}명 선택
-                </button>
+                </ProductButton>
                 ) : null}
-                <button
+                <ProductButton
                   type="button"
                   className={`button button-secondary ${styles.selectionButton}`}
                   onClick={focusRosterSearch}
                 >
                   검색으로 이동
-                </button>
+                </ProductButton>
               </span>
             </nav>
         </>
@@ -2561,9 +2563,9 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           <p>{isAttendanceReviewOnly ? "취소된 신청을 제외한 참가자에게 확인할 출입 기록이 없습니다." : "검색어·상태·그룹·출입 조건에 맞는 사람이 없습니다. 조건을 하나씩 지워보세요."}</p>
           {hasAnyFilter ? (
             <p>
-              <button type="button" className="button button-secondary" onClick={() => { clearRosterFilters(); window.requestAnimationFrame(() => document.getElementById("roster-search")?.focus({ preventScroll: true })); }}>
+              <ProductButton type="button" className="button button-secondary" onClick={() => { clearRosterFilters(); window.requestAnimationFrame(() => document.getElementById("roster-search")?.focus({ preventScroll: true })); }}>
                 {isAttendanceReviewOnly ? "전체 참가자 보기" : "검색·필터 초기화"}
-              </button>
+              </ProductButton>
             </p>
           ) : null}
         </div>
@@ -2576,10 +2578,10 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
             {canMutateStatus ? (
               <>
                 {" "}
-                <button type="button" className="button button-secondary" onClick={copyRegistrationLink}>
-                  <CopyIcon />
+                <ProductButton type="button" className="button button-secondary" onClick={copyRegistrationLink} icon={<CopyIcon />}>
+
                   참가 신청 링크 복사
-                </button>
+                </ProductButton>
               </>
             ) : null}
           </p>
@@ -2614,12 +2616,12 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           canClose={() => !addBusy}
           footer={
             <ConsoleFormActions>
-              <button type="button" className="button button-secondary" disabled={addBusy} onClick={() => { setAddOpen(false); setAddError(null); setReuseFrom(null); }}>
+              <ProductButton type="button" className="button button-secondary" disabled={addBusy} onClick={() => { setAddOpen(false); setAddError(null); setReuseFrom(null); }}>
                 {addUnconfirmed ? "닫기" : "취소"}
-              </button>
-              <button type="submit" form="participant-add-form" className="button button-primary" disabled={addBusy || !addDraft.name.trim() || !addDraft.phone.trim()}>
+              </ProductButton>
+              <ProductButton type="submit" form="participant-add-form" className="button button-primary" disabled={addBusy || !addDraft.name.trim() || !addDraft.phone.trim()}>
                 {addBusy ? "등록 중입니다" : addUnconfirmed ? "등록 결과 다시 확인" : "등록"}
-              </button>
+              </ProductButton>
             </ConsoleFormActions>
           }
         >
@@ -2695,12 +2697,12 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           canClose={canCloseGroupDialog}
           footer={
             <ConsoleFormActions>
-              <button type="button" className="button button-secondary" disabled={groupBusy} onClick={() => { if (canCloseGroupDialog()) closeGroupDialog(); }}>
+              <ProductButton type="button" className="button button-secondary" disabled={groupBusy} onClick={() => { if (canCloseGroupDialog()) closeGroupDialog(); }}>
                 {groupUncertain ? "닫기" : "취소"}
-              </button>
-              <button type="submit" form="group-assign-form" className="button button-primary" disabled={groupBusy || Boolean(groupConflict) || !groupDraft}>
+              </ProductButton>
+              <ProductButton type="submit" form="group-assign-form" className="button button-primary" disabled={groupBusy || Boolean(groupConflict) || !groupDraft}>
                 {groupBusy ? "지정 중…" : groupUncertain ? "같은 요청 다시 시도" : "지정"}
-              </button>
+              </ProductButton>
             </ConsoleFormActions>
           }
         >
@@ -2716,8 +2718,8 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                     ? <li key={person.id}><strong>{person.name || "이름 확인 필요"}</strong> · {person.company || "소속 없음"} · {maskPhone(person.phone)}<br />{groupConflict.before[index].group} → {person.group}</li> : null)}
                 </ul>
                 <p>기존에 선택한 {groupConflict.latest.length}명을 유지합니다. 확인만으로 지정되지 않습니다.</p>
-                <button type="button" className="button button-secondary" onClick={acceptLatestGroups}>최신 명단으로 다시 검토</button>
-              </> : <button type="button" className="button button-secondary" disabled={groupConflict.loading || groupBusy} onClick={() => void readLatestGroupPeople()}>{groupConflict.loading ? "최신 명단 확인 중…" : "최신 명단 확인"}</button>}
+                <ProductButton type="button" className="button button-secondary" onClick={acceptLatestGroups}>최신 명단으로 다시 검토</ProductButton>
+              </> : <ProductButton type="button" className="button button-secondary" disabled={groupConflict.loading || groupBusy} onClick={() => void readLatestGroupPeople()}>{groupConflict.loading ? "최신 명단 확인 중…" : "최신 명단 확인"}</ProductButton>}
             </section> : null}
             <div>
               <label htmlFor="group-pick">그룹</label>
@@ -2748,12 +2750,12 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           canClose={canCloseRewardDialog}
           footer={
             <ConsoleFormActions>
-              <button type="button" className="button button-secondary" disabled={rewardBusy} onClick={() => { if (canCloseRewardDialog()) closeRewardDialog(); }}>
+              <ProductButton type="button" className="button button-secondary" disabled={rewardBusy} onClick={() => { if (canCloseRewardDialog()) closeRewardDialog(); }}>
                 {rewardUncertain ? "닫기" : "취소"}
-              </button>
-              <button type="submit" form="reward-create-form" className="button button-primary" disabled={rewardBusy || !rewardDraft.name.trim()}>
+              </ProductButton>
+              <ProductButton type="submit" form="reward-create-form" className="button button-primary" disabled={rewardBusy || !rewardDraft.name.trim()}>
                 {rewardBusy ? "등록 중…" : rewardUncertain ? "같은 요청 다시 시도" : "등록"}
-              </button>
+              </ProductButton>
             </ConsoleFormActions>
           }
         >

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import Link from "next/link";
+import Link from "../../ui/ProductLink";
 import { linearCloseProgress, readCloseReturn, type CloseLinearPage, type CloseSnapshot } from "../console-event-close";
 import ConsoleFeedback from "./ConsoleFeedback";
 import styles from "./console-ui.module.css";

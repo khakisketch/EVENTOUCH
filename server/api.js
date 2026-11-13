@@ -4,7 +4,6 @@
 // forward-only status, scan classification, one-vote/answer rules).
 // All mutations require an authenticated session + write grant.
 
-const fs = require('node:fs');
 const { sendJson, readJsonBody, failureMessage } = require('./http');
 const { stampOrgHeaders } = require('./tenancy');
 function stampOrg(res, account) {
@@ -129,7 +128,7 @@ async function streamPhotoArchive(req, res, security, { account, eventId, refs, 
     }
     if (!ARCHIVE_IMAGE_TYPES.has(file.type)) continue;
     totalBytes += Number(file.size) || 0;
-    resolved.push({ name: archiveEntryName(prefix, resolved.length, file.type), absolutePath: file.absolutePath });
+    resolved.push({ name: archiveEntryName(prefix, resolved.length, file.type), openReadStream: file.openReadStream });
   }
   if (resolved.length > MAX_ARCHIVE_FILES || totalBytes > MAX_ARCHIVE_BYTES) {
     return err(res, 413, '사진 묶음이 1000장 또는 512MB 한도를 초과했습니다. 사진을 나누거나 개별 원본을 내려받으세요');
@@ -171,8 +170,10 @@ async function streamPhotoArchive(req, res, security, { account, eventId, refs, 
       if (aborted || res.destroyed) break;
       const pass = new ZipPassThrough(entry.name);
       zip.add(pass);
+      currentStream = await entry.openReadStream();
+      if (aborted || res.destroyed) { currentStream.destroy(); break; }
       await new Promise((passResolve, passReject) => {
-        currentStream = fs.createReadStream(entry.absolutePath);
+        currentStream.on('close', () => { if (aborted) passResolve(); });
         currentStream.on('data', (data) => pass.push(data));
         currentStream.on('end', () => {
           pass.push(new Uint8Array(0), true);
@@ -277,8 +278,9 @@ async function handleApi(req, res, store, urlPath, security = {}) {
     if (req.method === 'GET' && parts[2] === 'events' && parts[4] === 'files' && parts.length === 6 && files) {
       try {
         const file = await files.readPublic({slug:decodedSegment(parts[3]),fileId:decodedSegment(parts[5])});
+        const stream = await file.openReadStream();
         res.writeHead(200, {'content-type':file.type,'content-length':file.size,'x-content-type-options':'nosniff'});
-        fs.createReadStream(file.absolutePath).on('error', () => res.destroy()).pipe(res);
+        stream.on('error', () => res.destroy()).pipe(res);
         return;
       } catch (error) { return err(res,error.status || 500,error.status ? error.message : '파일을 읽지 못했습니다'); }
     }
@@ -345,9 +347,10 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       await access.authorize({account,eventId,command:req.method === 'POST' ? 'file.upload' : 'file.read',forWrite:req.method !== 'GET'});
       if (req.method === 'GET') {
         const file = await files.readOperator({account,eventId,fileId:decodedSegment(parts[4])});
+        const stream = await file.openReadStream();
         stampOrg(res, account);
         res.writeHead(200,{'content-type':file.type,'content-length':file.size,'x-content-type-options':'nosniff'});
-        fs.createReadStream(file.absolutePath).on('error', () => res.destroy()).pipe(res);
+        stream.on('error', () => res.destroy()).pipe(res);
         return;
       }
       const params = new URL(req.url,'http://localhost').searchParams;
@@ -417,9 +420,10 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       const clientId = decodedSegment(parts[2]);
       if (req.method === 'GET') {
         const file = await files.readClientFile({account,clientId,fileId:decodedSegment(parts[4])});
+        const stream = await file.openReadStream();
         stampOrg(res, account);
         res.writeHead(200,{'content-type':file.type,'content-length':file.size,'x-content-type-options':'nosniff'});
-        fs.createReadStream(file.absolutePath).on('error', () => res.destroy()).pipe(res);
+        stream.on('error', () => res.destroy()).pipe(res);
         return;
       }
       const params = new URL(req.url,'http://localhost').searchParams;

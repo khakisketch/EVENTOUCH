@@ -1,5 +1,7 @@
 "use client";
 
+import ProductButton from "../../ui/ProductButton";
+
 import type { ReactNode } from "react";
 import styles from "./console-ui.module.css";
 
@@ -28,7 +30,7 @@ export default function ConsoleStatePanel({
       </p>
       {!loading ? (
         <div className={styles.stateActions}>
-          <button
+          <ProductButton
             type="button"
             className="button button-secondary"
             onClick={() => {
@@ -37,7 +39,7 @@ export default function ConsoleStatePanel({
             }}
           >
             다시 불러오기
-          </button>
+          </ProductButton>
           {actions}
         </div>
       ) : null}

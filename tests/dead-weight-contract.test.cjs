@@ -74,7 +74,7 @@ test('draws-drops-foreign-module-copies-programs-drops-dead-selector', () => {
   assert.match(programsView, /styles\.photoArchiveTools/u, 'ProgramsWorkspace still renders photoArchiveTools');
   const programs = read('apps/web/app/console/events/[id]/programs/programs.module.css');
   assert.doesNotMatch(programs, /\.actions\s+\.button/u, 'programs .actions selector stays removed');
-  assert.match(programs, /\.moduleActions\s+\.button/u, 'programs keeps the live .moduleActions selector');
+  assert.match(programs, /\.moduleActions\s+\.product-action/u, 'programs keeps the live .moduleActions selector for migrated actions');
 });
 
 test('home-drops-unused-hint-title-console-drops-unused-primary', () => {

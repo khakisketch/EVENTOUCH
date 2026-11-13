@@ -107,7 +107,7 @@ li.recordRow > [role="group"] {
   overflow-wrap: break-word;
 }
 
-.attachmentRow .button {
+.attachmentRow :global(.product-action) {
   min-height: 44px;
 }
 
@@ -115,18 +115,6 @@ li.recordRow > [role="group"] {
    danger text and line on the shared paper button. Focus, 44px height and
    disabled dimming ride the global .button rules. Scoped to this workspace
    only — other cancel/stop buttons keep their existing tone. */
-button.dangerGhost {
-  border-color: var(--danger-line);
-  background: var(--paper);
-  color: var(--danger);
-}
-
-button.dangerGhost:hover {
-  border-color: var(--danger-line);
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
 .empty {
   margin: 0;
   padding: var(--s5);
@@ -220,7 +208,7 @@ li.stackedRow {
     gap: var(--s2);
   }
 
-  .compactActions > :global(.button) {
+  .compactActions > :global(.product-action) {
     flex: 0 1 auto;
     width: auto;
     max-width: 100%;
@@ -283,3 +271,15 @@ li.stackedRow {
 .venueMapPreview { margin: 0; }
 .venueMapPreview img { display: block; width: auto; max-width: 100%; max-height: 280px; object-fit: contain; }
 .venueMapRemove { justify-self: start; }
+
+/* Contextual removals stay outlined; the destructive variant still owns intent. */
+.dangerGhost {
+  border: 1px solid var(--danger-line);
+  background: transparent;
+  color: var(--danger);
+}
+.dangerGhost:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+}

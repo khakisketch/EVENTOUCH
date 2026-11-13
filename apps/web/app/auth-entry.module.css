@@ -72,7 +72,7 @@
   font-family: var(--body-font);
   font-size: var(--small);
   font-weight: 400;
-  letter-spacing: 0;
+  letter-spacing: 0.06em;
 }
 
 .entry:global(.site-page):global(.auth-page) :global(.auth-brand) :global(.auth-promise) {
@@ -85,7 +85,9 @@
   line-height: 1.6;
 }
 
-/* Card: match .login-page .auth-card — open, no nested box. */
+/* Card: match .login-page .auth-card — open, no nested box. A single
+   hairline rule under the brand block gives the entry column its ledger
+   rhythm; the frame itself stays borderless. */
 .entry:global(.site-page):global(.auth-page) :global(.auth-card) {
   display: flex;
   width: min(100%, 380px);
@@ -93,8 +95,9 @@
   justify-content: center;
   min-width: 0;
   margin: 0;
-  padding: 0;
+  padding: var(--s5) 0 0;
   border: 0;
+  border-top: 1px solid var(--line);
   border-radius: 0;
   background: var(--paper);
   color: var(--ink);
@@ -134,6 +137,56 @@
 .loginReset :global(a) {
   word-break: keep-all;
   overflow-wrap: break-word;
+}
+
+/*
+ * Bare in-card links read as boxed secondary actions at the 44px floor.
+ * Links that already carry .button keep their own rank; the wordmark lives
+ * in the brand block, outside this scope. The login-page reset help uses
+ * .loginReset without the .entry opt-in, so it is covered by its own
+ * higher-specificity rule below (outranking the global reset-help link
+ * color regardless of stylesheet order).
+ */
+.entry:global(.site-page):global(.auth-page) :global(.auth-card) :global(a:not(.button)) {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+@media (hover: hover) {
+  .entry:global(.site-page):global(.auth-page) :global(.auth-card) :global(a:not(.button)):hover {
+    border-color: var(--ink);
+    background: var(--surface-muted);
+    color: var(--ink);
+  }
+}
+
+:global(.auth-form) .loginReset:global(.auth-reset-help) :global(a) {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+@media (hover: hover) {
+  :global(.auth-form) .loginReset:global(.auth-reset-help) :global(a):hover {
+    border-color: var(--ink);
+    background: var(--surface-muted);
+    color: var(--ink);
+  }
 }
 
 /* Invite new-account form keeps its own grid at the same rhythm. */
@@ -229,7 +282,7 @@
 
   .entry:global(.site-page):global(.auth-page) :global(.auth-card) {
     margin: 0;
-    padding: 0;
+    padding: var(--s4) 0 0;
   }
 
   .entry:global(.site-page):global(.auth-page) :global(.auth-card) :global(h1) {

@@ -37,7 +37,7 @@
   border-left: 1px solid var(--line);
 }
 
-.clientFileGroup > :global(.button) {
+.clientFileGroup > :global(.astryx-button) {
   white-space: nowrap;
 }
 
@@ -64,7 +64,7 @@
      compact cluster so 로고/서류 등록 never reads as a primary CTA. The
      extra ancestor keeps this above the shared rule whatever the chunk
      order. */
-  .clientActions .clientFileGroup > :global(.button) {
+  .clientActions .clientFileGroup > :global(.astryx-button) {
     flex: 0 1 auto;
   }
 }

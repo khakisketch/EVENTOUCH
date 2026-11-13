@@ -1,5 +1,6 @@
+import { VStack } from "@astryxdesign/core/VStack";
 import { Suspense, type ReactNode } from "react";
-import Link from "next/link";
+import Link from "../../ui/ProductLink";
 import { CONSOLE_PAGES, consolePageHref, type ConsolePageId } from "../console-navigation";
 import ConsolePageHeader from "./ConsolePageHeader";
 import styles from "./console-ui.module.css";
@@ -21,6 +22,8 @@ type ConsolePageProps = {
   toolbar?: ReactNode;
   feedback?: ReactNode;
   sectionNav?: ReactNode;
+  /** Optional local task index beside the page body on wide screens. */
+  sectionLayout?: "stack" | "sidebar";
   children: ReactNode;
   className?: string;
   closeSnapshot?: CloseSnapshot;
@@ -52,6 +55,7 @@ export default function ConsolePage({
   toolbar,
   feedback,
   sectionNav,
+  sectionLayout = "stack",
   children,
   className,
   closeSnapshot,
@@ -77,7 +81,7 @@ export default function ConsolePage({
   const classNames = [styles.page, className].filter(Boolean).join(" ");
 
   return (
-    <div className={classNames} data-console-page={pageId}>
+    <VStack gap={5} className={classNames} data-console-page={pageId}>
       <ConsolePageHeader
         title={title ?? page.title}
         context={context}
@@ -90,8 +94,17 @@ export default function ConsolePage({
       ) : null}
       {toolbar ?? null}
       {feedback ?? null}
-      {sectionNav ?? null}
-      <div className={styles.pageFlow}>{children}</div>
-    </div>
+      {sectionLayout === "sidebar" ? (
+        <div className={styles.pageWithIndex}>
+          {sectionNav ?? null}
+          <div className={styles.pageFlow}>{children}</div>
+        </div>
+      ) : (
+        <>
+          {sectionNav ?? null}
+          <div className={styles.pageFlow}>{children}</div>
+        </>
+      )}
+    </VStack>
   );
 }

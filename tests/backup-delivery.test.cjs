@@ -193,6 +193,7 @@ test('readiness bounds a headers-first stalled body and reports timeout rather t
 
 function hostWriter(out, { skipStorage = false, storageDir = '' } = {}) {
   const queries = [];
+  const toolCalls = [];
   const command = cli('backup.cjs', ['--database-url', 'postgres://synthetic:secret@synthetic.test/url_hint', '--out', out,
     ...(skipStorage ? ['--skip-storage'] : ['--storage-dir', storageDir])], {
     pg: { Pool: class {
@@ -201,6 +202,7 @@ function hostWriter(out, { skipStorage = false, storageDir = '' } = {}) {
         if (sql.includes('FROM pg_tables')) return { rows: lib.COUNT_TABLES.map(tablename => ({ tablename })) };
         if (sql.includes('count(*)')) return { rows: lib.COUNT_TABLES.map(name => ({ name, value: '0' })) };
         if (sql.includes('FROM schema_migrations')) return { rows: [{ version: '001' }] };
+        if (/current_schema\(\)/i.test(sql)) return { rows: [{ schema: 'public' }] };
         if (sql === 'SHOW server_version') return { rows: [{ server_version: '16' }] };
         if (/current_database\(\)/i.test(sql)) return { rows: [{ database: 'actual-host-db', current_database: 'actual-host-db' }] };
         throw new Error(`Unexpected synthetic query: ${sql}`);
@@ -213,6 +215,7 @@ function hostWriter(out, { skipStorage = false, storageDir = '' } = {}) {
         try {
           if (name === 'pg_dump' && args.includes('--version')) callback(null, 'pg_dump 16', '');
           else if (name === 'pg_dump' && args.includes('--file')) {
+            toolCalls.push({args,options});
             fs.writeFileSync(args[args.indexOf('--file') + 1], 'synthetic host dump');
             callback(null, '', '');
           } else if (name === 'tar') {
@@ -223,7 +226,7 @@ function hostWriter(out, { skipStorage = false, storageDir = '' } = {}) {
       },
     },
   });
-  return { ...command, queries };
+  return { ...command, queries, toolCalls };
 }
 
 test('host backup records the connected database and roundtrips into strict readers and explicit target restore', async t => {
@@ -310,4 +313,24 @@ test('only the explicit skipped-storage representation can omit an archive and t
   backup.write();
   await assert.rejects(lib.readManifest(backup.directory));
   assert.equal((await cli('backup-check.cjs', ['--backup-root', root, '--json']).run()).ok, false);
+});
+
+test('private-schema backups cannot enter the public-only Compose restore mutation path', async t => {
+  const root=temporary(t);
+  const {directory}=fixture(root,{source:{project:null,database:'managed',schema:'eventouch',migrations:['001']}});
+  const target=path.join(root,'must-not-touch');
+  const command=restoreHarness(directory,target);
+  await assert.rejects(command.run(),/schema|스키마/);
+  assert.equal(command.state.replacements,0);
+  assert.equal(command.state.restored,false);
+  assert.equal(fs.existsSync(target),false);
+});
+
+test('host dump scopes the app schema and keeps credentials out of process arguments', async t => {
+  const root=temporary(t); const command=hostWriter(path.join(root,'host'),{skipStorage:true});
+  await command.run(); const {args,options}=command.toolCalls[0];
+  assert.equal(args[args.indexOf('--schema')+1],'public');
+  assert.doesNotMatch(args.join(' '),/secret|postgres:\/\//);
+  assert.equal(options.env.PGPASSWORD,'secret');
+  assert.equal(options.env.PGHOST,'synthetic.test');
 });

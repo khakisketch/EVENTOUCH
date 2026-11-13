@@ -1,7 +1,9 @@
 "use client";
 
+import ProductButton from "../ui/ProductButton";
+
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import ProductLink from "../ui/ProductLink";
 import { useRouter } from "next/navigation";
 import { OrganizationContextNotice } from "../OrganizationSwitcher";
 import { ensureOperatorContext } from "../../lib/operator-context";
@@ -139,9 +141,9 @@ export default function StaffHub() {
         {chrome}
         <section className="staff-workspace state-panel">
           <p role="alert" className={workStyles.hubNote}>{state.message}</p>
-          <button type="button" className="button button-secondary" onClick={() => setReloadTick((tick) => tick + 1)}>
+          <ProductButton type="button" className="button button-secondary" onClick={() => setReloadTick((tick) => tick + 1)}>
             다시 불러오기
-          </button>
+          </ProductButton>
         </section>
       </>
     );
@@ -154,9 +156,9 @@ export default function StaffHub() {
           <p role="status" className={workStyles.hubNote}>배정된 업무가 없습니다. 운영자에게 문의하세요.</p>
           <p className={workStyles.hubNote}>업무 배정은 운영 콘솔 &gt; 현장 운영 &gt; 스태프 배정에서 지정됩니다. 아직 배정 전이라면 대기 상태이며, 배정이 올라오면 다시 불러오기 후 목록에 표시됩니다.</p>
           <p className={workStyles.hubNote}>이 화면을 안내한 담당자(초대 메일·행사 안내의 문의처)에게 배정 여부를 확인해 주세요.</p>
-          <button type="button" className="button button-secondary" onClick={() => setReloadTick((tick) => tick + 1)}>
+          <ProductButton type="button" className="button button-secondary" onClick={() => setReloadTick((tick) => tick + 1)}>
             다시 불러오기
-          </button>
+          </ProductButton>
         </section>
       </>
     );
@@ -185,21 +187,21 @@ export default function StaffHub() {
                 <span className={workStyles.hubScope}>{staffScopeSummary(scope)}</span>
               </div>
               {orgChanged ? (
-                <button
+                <ProductButton
                   type="button"
                   className="button button-primary"
                   disabled
                   title="다른 탭에서 조직이 전환됐습니다. 위 안내에서 전환을 먼저 확인하세요."
                 >
                   업무 열기
-                </button>
+                </ProductButton>
               ) : (
-                <Link
+                <ProductLink
                   className="button button-primary"
                   href={`/staff/events/${encodeURIComponent(scope.eventId)}`}
                 >
                   업무 열기
-                </Link>
+                </ProductLink>
               )}
             </li>
           ))}

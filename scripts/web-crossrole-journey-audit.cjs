@@ -540,7 +540,7 @@ async function main() {
       await work320.keyboard.press('Control+A');
       await work320.keyboard.type('ET-NEXT-WHILE-SUCCESS-WAITS');
       check('delayed successful scan protects the submitted ticket', await field.inputValue() === ticketB && await field.getAttribute('readonly') !== null);
-      check('delayed successful scan protects the desk, camera and kiosk', await work320.locator('#staff-desk').isDisabled() && await work320.getByRole('button', { name: '카메라로 스캔', exact: true }).isDisabled() && await work320.getByRole('button', { name: '키오스크 모드', exact: true }).isDisabled());
+      check('delayed successful scan protects the desk, camera and kiosk', await work320.locator('#staff-desk').isDisabled() && await work320.getByRole('button', { name: '카메라로 스캔', exact: true }).isDisabled() && await work320.getByRole('switch', { name: '키오스크', exact: true }).isDisabled());
       await work320Back.focus();
     } finally {
       releaseSuccess();

@@ -71,7 +71,7 @@ test("staff success folds the input and hands off to the next participant", () =
   assert.match(staff, /aria-label="스캔 결과"/u);
   assert.match(
     staff,
-    /<button type="button" ref=\{nextParticipantRef\} className="button button-primary" disabled=\{writeLocked \|\| Boolean\(directionReview\) \|\| confirmingDirection\} onClick=\{prepareNextParticipant\}>\s*다음 참가자/u
+    /<ProductButton type="button" ref=\{nextParticipantRef\} className="button button-primary" disabled=\{writeLocked \|\| Boolean\(directionReview\) \|\| confirmingDirection\} onClick=\{prepareNextParticipant\}>\s*다음 참가자/u
   );
   assert.match(staff, /ref=\{nextParticipantRef\}/u);
   assert.match(staff, /const writeLocked = correctionLocked \|\| orgChanged/u);

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import ProductLink from "../../ui/ProductLink";
 
 export default function EventNotFound() {
   return (
@@ -6,7 +6,7 @@ export default function EventNotFound() {
       <h1>행사를 찾을 수 없습니다</h1>
       <p>주소를 확인하세요.</p>
       <p>
-        <Link href="/">처음으로</Link>
+        <ProductLink href="/">처음으로</ProductLink>
       </p>
     </main>
   );

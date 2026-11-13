@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('../apps/web/node_modules/typescript');
+const { productActionImports } = require('./helpers/astryx-source-contracts.cjs');
 const compile = (file) => ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
 const redirects = {};
 vm.runInNewContext(compile('apps/web/app/auth-redirect.ts'), { exports: redirects, URLSearchParams });
@@ -167,6 +168,7 @@ function renderNotice({ contextSnapshot, selectionSnapshot, uncertain = [] }) {
     exports: module.exports, module,
     require(name) {
       if (name === 'react') return { ...RealReact, useSyncExternalStore: () => selectionSnapshot };
+      if (name === './ui/ProductButton') return productActionImports()['./ui/ProductButton'];
       if (name === './ui/ValidatedForm') return { default: ({ children, ...props }) => RealReact.createElement('form', props, children) };
       if (name === 'react/jsx-runtime') return require('../apps/web/node_modules/react/jsx-runtime');
       if (name === '../lib/use-operator-context') return { useOperatorContextSnapshot: () => contextSnapshot };

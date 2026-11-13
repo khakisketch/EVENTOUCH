@@ -1,4 +1,5 @@
 "use client";
+import ProductButton from "../../../../ui/ProductButton";
 
 import { useEffect, useRef, useState } from "react";
 import { consoleFetch } from "../../../../../lib/console-api";
@@ -187,15 +188,15 @@ export default function ReviewedExit({ eventId, participantId, mode = "exit", on
   }
 
   return <ConsoleDialog title={isReconcile ? "출입 상태 확인 및 복구" : "확인 후 퇴장 기록"} description={isReconcile ? "최근 출입 기록과 실제 현장 상태가 일치할 때 복구합니다." : "일반 퇴장 처리가 어려운 경우 현장 책임자가 실제 퇴장을 확인합니다."} onClose={onClose} canClose={canClose} busy={busy || (isReconcile && loading)} stickyChrome={isReconcile}
-    footer={isReconcile && pending ? undefined : <ConsoleFormActions>{!isReconcile ? <button type="button" className="button button-secondary" disabled={busy || loading} onClick={() => { if (canClose()) onClose(); }}>닫기</button> : null}
-      {!pending ? <button type="button" className="button button-primary" disabled={!snapshot || !confirmed || !reason.trim() || busy || dismiss || operator.changed} onClick={() => void execute()}>{busy ? "확인 중…" : isReconcile ? "출입 상태 복구" : "퇴장 기록"}</button> : null}</ConsoleFormActions>}>
+    footer={isReconcile && pending ? undefined : <ConsoleFormActions>{!isReconcile ? <ProductButton type="button" className="button button-secondary" disabled={busy || loading} onClick={() => { if (canClose()) onClose(); }}>닫기</ProductButton> : null}
+      {!pending ? <ProductButton type="button" className="button button-primary" disabled={!snapshot || !confirmed || !reason.trim() || busy || dismiss || operator.changed} onClick={() => void execute()}>{busy ? "확인 중…" : isReconcile ? "출입 상태 복구" : "퇴장 기록"}</ProductButton> : null}</ConsoleFormActions>}>
     <div className={`${uiStyles.formStack} ${styles.reviewBody}`}>
       <p>{isReconcile ? "새로운 입·퇴장 기록은 만들지 않으며 참가 승인, 티켓, 결제와 경품은 변경하지 않습니다." : "참가 승인, 티켓, 결제와 경품 상태는 변경하지 않습니다. 실제 퇴장한 경우에만 기록하세요."}</p>
       {operator.changed ? <ConsoleFeedback kind="warning">운영 조직을 확인한 뒤 계속하세요.</ConsoleFeedback> : null}
       {loading ? <p role="status">{isReconcile ? "최신 참가자와 출입 기록을 확인하고 있습니다." : "최신 참가자와 입장 기록을 확인하고 있습니다."}</p> : null}
       {busy ? <p role="status">{isReconcile ? "출입 확인의 처리 결과를 확인하고 있습니다." : "퇴장 기록의 처리 결과를 확인하고 있습니다."}</p> : null}
       {error ? <ConsoleFeedback kind="error">{error}</ConsoleFeedback> : null}
-      {!snapshot && !loading && !pending ? <button ref={reloadRef} type="button" className="button button-secondary" disabled={operator.changed} onClick={() => void readLatest()}>최신 기록 다시 확인</button> : null}
+      {!snapshot && !loading && !pending ? <ProductButton ref={reloadRef} type="button" className="button button-secondary" disabled={operator.changed} onClick={() => void readLatest()}>최신 기록 다시 확인</ProductButton> : null}
       {snapshot ? <>
         <section aria-label={isReconcile ? "확인할 참가자와 출입 기록" : "확인할 참가자와 입장 기록"}>
           <h3>확인할 참가자</h3>
@@ -214,8 +215,8 @@ export default function ReviewedExit({ eventId, participantId, mode = "exit", on
         <div className="checkbox-field"><label className={styles.reviewConfirmation} htmlFor="reviewed-exit-confirm"><input id="reviewed-exit-confirm" type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} disabled={busy || dismiss || Boolean(pending)} /><span className={styles.reviewConfirmationText}>{isReconcile ? snapshot.action === "IN" ? "이 참가자가 현재 행사장 안에 있음을 확인했습니다." : "이 참가자가 현재 행사장 밖에 있음을 확인했습니다." : "이 참가자가 실제로 퇴장한 것을 확인했습니다."}</span></label></div>
       </> : null}
       {pending ? <section aria-label={isReconcile ? "출입 상태 복구 처리 확인" : "퇴장 기록 처리 확인"}><p>원래 대상과 사유를 유지합니다. 서버 확인은 새 기록을 만들지 않습니다.</p>
-        <button ref={recoveryRef} type="button" className="button button-secondary" disabled={busy || dismiss || operator.changed} onClick={() => void execute(true)}>서버 처리 확인</button>{" "}
-        <button type="button" className="button button-secondary" disabled={busy || dismiss || operator.changed} onClick={() => void execute()}>같은 요청 다시 시도</button>
+        <ProductButton ref={recoveryRef} type="button" className="button button-secondary" disabled={busy || dismiss || operator.changed} onClick={() => void execute(true)}>서버 처리 확인</ProductButton>{" "}
+        <ProductButton type="button" className="button button-secondary" disabled={busy || dismiss || operator.changed} onClick={() => void execute()}>같은 요청 다시 시도</ProductButton>
       </section> : null}
       {dismiss ? <ConsoleConfirm summary={pending ? (isReconcile ? "출입 확인 결과를 아직 확인하지 못했습니다. 닫은 뒤 처리 결과 확인에서 확인해야 합니다." : "퇴장 기록 결과를 아직 확인하지 못했습니다. 닫은 뒤 처리 결과 확인에서 확인해야 합니다.") : (isReconcile ? "작성한 출입 확인 사유가 사라집니다." : "작성한 퇴장 확인 사유가 사라집니다.")}
         confirmLabel="내용 확인 후 닫기" cancelLabel="계속 작업" onConfirm={onClose} onCancel={() => setDismiss(false)} /> : null}

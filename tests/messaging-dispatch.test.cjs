@@ -826,3 +826,40 @@ test('unknown supplier states remain pending and transport failures are counted 
   assert.equal(result.pending, 1);
   assert.equal(workspace.messages[0].status, 'SENDING');
 });
+
+test('MMS uses the injected storage port instead of rediscovering a process-global root', async () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const {createFileStorage} = require('../server/file-storage');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(),'eventouch-mms-port-'));
+  try {
+    const workspace = mmsWorkspaceWith([{participantId:'p1',name:'가',phone:'01011111111',status:'SENDING'}]);
+    const db = mmsDatabase(workspace,mmsImageFile(dir));
+    let uploaded = 0;
+    const provider = {
+      async uploadImage({bytes}) { assert.equal(bytes.length,1024); uploaded++; return {ok:true,imageId:'injected-image'}; },
+      async sendBatch(batch) { return {accepted:true,registered:batch.map(item=>({participantId:item.participantId,accepted:true,type:'MMS'})),rejected:[],groupId:'injected-group',deliveryUnconfirmed:true}; },
+    };
+    const result = await dispatchCampaign(db,provider,buildMessageDispatch({id:'e-mms',slug:'e-mms'},workspace,workspace.messages[0]),{fileStorage:createFileStorage({storageDir:dir,env:{}})});
+    assert.equal(uploaded,1);
+    assert.equal(result.accepted,true);
+  } finally { fs.rmSync(dir,{recursive:true,force:true}); }
+});
+
+test('MMS refuses physical bytes whose size differs from committed metadata', async () => {
+  const fs = require('node:fs'); const os = require('node:os'); const path = require('node:path');
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'eventouch-mms-size-'));
+  const previous=process.env.STORAGE_DIR; process.env.STORAGE_DIR=dir;
+  try {
+    const row=mmsImageFile(dir); row.size_bytes=512;
+    const workspace=mmsWorkspaceWith([{participantId:'p1',name:'가',phone:'01011111111',status:'SENDING'}]);
+    let uploads=0;
+    const result=await dispatchCampaign(mmsDatabase(workspace,row),{
+      async uploadImage(){uploads++;return {ok:true,imageId:'wrong'};},
+      async sendBatch(){return {accepted:true,registered:[],rejected:[]};},
+    },buildMessageDispatch({id:'e-mms',slug:'e-mms'},workspace,workspace.messages[0]));
+    assert.equal(uploads,0);
+    assert.equal(result.accepted,false);
+  } finally { if(previous===undefined)delete process.env.STORAGE_DIR;else process.env.STORAGE_DIR=previous;fs.rmSync(dir,{recursive:true,force:true}); }
+});

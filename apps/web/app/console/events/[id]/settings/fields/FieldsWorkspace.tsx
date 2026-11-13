@@ -1,4 +1,5 @@
 "use client";
+import ProductButton from "../../../../../ui/ProductButton";
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -209,7 +210,7 @@ export default function FieldsWorkspace({ eventId }: { eventId: string }) {
     {!writable ? <ConsoleFeedback kind="warning">{state.archived ? "보관된 행사는 읽기 전용입니다." : "신청 항목을 바꾸려면 참가자 쓰기 권한이 필요합니다."}</ConsoleFeedback> : null}
     {otherReceipt && !pending ? <ConsoleFeedback kind="warning">이전 신청 항목 또는 양식 게시의 처리 결과를 화면 위에서 먼저 확인하세요.</ConsoleFeedback> : null}
     {refreshingOther ? <ConsoleFeedback kind="info">최신 신청 항목을 불러오고 있습니다.</ConsoleFeedback> : null}
-    {needsRefresh && !refreshingOther ? <ConsoleFeedback kind="warning">최신 신청 항목을 불러온 뒤 변경할 수 있습니다. <button type="button" className="button button-secondary" onClick={() => { setRefreshingOther(true); void load(true).then((ok) => { if (ok) setNeedsRefresh(false); }).finally(() => setRefreshingOther(false)); }}>다시 불러오기</button></ConsoleFeedback> : null}
+    {needsRefresh && !refreshingOther ? <ConsoleFeedback kind="warning">최신 신청 항목을 불러온 뒤 변경할 수 있습니다. <ProductButton type="button" className="button button-secondary" onClick={() => { setRefreshingOther(true); void load(true).then((ok) => { if (ok) setNeedsRefresh(false); }).finally(() => setRefreshingOther(false)); }}>다시 불러오기</ProductButton></ConsoleFeedback> : null}
   </>}>
     <ConsoleSection headingId="application-fields-heading" title="항목 관리">
       <p className={styles.help}>항목 변경은 초안에 저장됩니다. 참가 신청 화면에는 참가 접수에서 양식을 게시한 뒤 적용됩니다. 초안 {state.formVersion} · 게시 {state.publishedVersion || "없음"}</p>
@@ -218,16 +219,16 @@ export default function FieldsWorkspace({ eventId }: { eventId: string }) {
         <h3 id="field-conflict-heading">신청 항목이 변경됐습니다</h3>
         <p>다른 작업에서 양식이 바뀌었습니다. 입력한 내용은 유지했습니다. 최신 목록을 확인한 뒤 다시 저장하세요.</p>
         {draft?.existing ? <p>{latestField ? `현재 서버 항목: ${latestField.label} · ${TYPE_LABELS[latestField.type] || latestField.type} · ${latestField.required ? "필수" : "선택"}${latestField.type === "select" ? ` · ${latestField.options.join(", ")}` : ""}` : "이 항목이 최신 양식에서 제외됐습니다. 입력을 확인한 뒤 취소하고 새 항목으로 추가하세요."}</p> : null}
-        <div className={styles.actions}><button type="button" className="button button-secondary" disabled={locked} onClick={() => { setConflict(false); setError(null); }}>최신 변경 확인</button></div>
+        <div className={styles.actions}><ProductButton type="button" className="button button-secondary" disabled={locked} onClick={() => { setConflict(false); setError(null); }}>최신 변경 확인</ProductButton></div>
       </section> : null}
       {pending ? <section className={styles.recovery} aria-labelledby="field-recovery-heading">
         <h3 id="field-recovery-heading" tabIndex={-1}>신청 항목 처리 확인 필요</h3>
         <p>{LABELS[pending.command]} 요청이 반영됐을 수 있습니다. 서버 확인은 요청을 다시 보내지 않습니다.</p>
         {error ? <p role="alert">{error}</p> : null}
         <div className={styles.actions}>
-          <button type="button" className="button button-secondary" disabled={busy || operator.changed || abandon} onClick={() => void check()}>서버 처리 확인</button>
-          <button type="button" className="button button-secondary" disabled={busy || operator.changed || abandon || !writable} onClick={() => void execute(pending, true)}>같은 요청 다시 시도</button>
-          <button type="button" className="button button-secondary" disabled={busy || abandon} onClick={() => setAbandon(true)}>확인 전 그만두기</button>
+          <ProductButton type="button" className="button button-secondary" disabled={busy || operator.changed || abandon} onClick={() => void check()}>서버 처리 확인</ProductButton>
+          <ProductButton type="button" className="button button-secondary" disabled={busy || operator.changed || abandon || !writable} onClick={() => void execute(pending, true)}>같은 요청 다시 시도</ProductButton>
+          <ProductButton type="button" className="button button-secondary" disabled={busy || abandon} onClick={() => setAbandon(true)}>확인 전 그만두기</ProductButton>
         </div>
         {abandon ? <ConsoleConfirm summary="이미 반영된 항목 변경은 취소되지 않습니다. 확인을 그만두고 최신 항목을 확인할까요?" confirmLabel="확인 그만두기" onConfirm={() => {
           const attempt = pendingRef.current; if (!attempt) return;
@@ -236,7 +237,7 @@ export default function FieldsWorkspace({ eventId }: { eventId: string }) {
           void load(true).then((ok) => { if (activeIdRef.current === attempt.eventId && ok) setNeedsRefresh(false); }).finally(() => { if (activeIdRef.current === attempt.eventId) setRefreshingOther(false); });
         }} onCancel={() => setAbandon(false)} /> : null}
       </section> : null}
-      <div className={styles.actions}><button type="button" className="button button-primary" disabled={!writable || writeLocked || Boolean(draft)} onClick={() => start({ id: newId(), label: "", type: "text", required: false, optionsText: "", existing: false })}>항목 추가</button></div>
+      <div className={styles.actions}><ProductButton type="button" className="button button-primary" disabled={!writable || writeLocked || Boolean(draft)} onClick={() => start({ id: newId(), label: "", type: "text", required: false, optionsText: "", existing: false })}>항목 추가</ProductButton></div>
       {draft ? <ValidatedForm className={styles.editor} onSubmit={submit}>
         <h3>{draft.existing ? "항목 수정" : "새 항목"}</h3>
         <div className={styles.field}><label htmlFor="field-label">항목 이름</label><input id="field-label" maxLength={60} required value={draft.label} disabled={locked || !writable} onChange={(event) => setDraft({ ...draft, label: event.target.value })} /></div>
@@ -246,17 +247,17 @@ export default function FieldsWorkspace({ eventId }: { eventId: string }) {
         {draft.type === "select" ? <div className={styles.field}><label htmlFor="field-options">선택지 · 한 줄에 하나씩</label><textarea id="field-options" rows={4} value={draft.optionsText} disabled={locked || !writable} onChange={(event) => setDraft({ ...draft, optionsText: event.target.value })} /><p className={styles.help}>기존 답변에 사용된 선택지는 삭제할 수 없습니다.</p></div> : null}
         <label className={styles.check}><input type="checkbox" checked={["name", "phone"].includes(draft.id) || draft.required} disabled={locked || !writable || ["name", "phone"].includes(draft.id)} onChange={(event) => setDraft({ ...draft, required: event.target.checked })} />필수 입력</label>
         <p className={styles.help}>기존 답변이 있는 항목의 입력 방식은 바꿀 수 없습니다. 필수로 바꾸면 이전 참가자의 정보 수정에도 영향을 줄 수 있습니다.</p>
-        <div className={styles.actions}><button type="submit" className="button button-primary" disabled={writeLocked || !writable}>항목 저장</button><button type="button" className="button button-secondary" disabled={locked} onClick={() => { if (dirty) setCancelDraft(true); else { setDraft(null); setConflict(false); } }}>취소</button></div>
+        <div className={styles.actions}><ProductButton type="submit" className="button button-primary" disabled={writeLocked || !writable}>항목 저장</ProductButton><ProductButton type="button" className="button button-secondary" disabled={locked} onClick={() => { if (dirty) setCancelDraft(true); else { setDraft(null); setConflict(false); } }}>취소</ProductButton></div>
         {cancelDraft ? <ConsoleConfirm summary="작성 중인 항목 내용이 사라집니다. 취소할까요?" confirmLabel="작성 취소" onConfirm={() => { setDraft(null); setCancelDraft(false); setError(null); setConflict(false); }} onCancel={() => setCancelDraft(false)} /> : null}
       </ValidatedForm> : null}
       <ul className={styles.list}>
         {state.fields.map((field, index) => <li className={styles.row} key={field.id}>
           <div className={styles.rowInfo}><strong>{field.label || "이름 없는 항목"}</strong><span className={styles.rowMeta}>{TYPE_LABELS[field.type] || "지원하지 않는 형식"} · {field.required ? "필수" : "선택"}{field.type === "select" ? ` · ${field.options.join(", ")}` : ""}</span></div>
           <div className={styles.actions}>
-            <button type="button" className="button button-secondary" aria-label={`${field.label} 위로 이동`} disabled={!writable || writeLocked || Boolean(draft) || index === 0} onClick={() => reorder(field.id, -1)}>위로</button>
-            <button type="button" className="button button-secondary" aria-label={`${field.label} 아래로 이동`} disabled={!writable || writeLocked || Boolean(draft) || index === state.fields.length - 1} onClick={() => reorder(field.id, 1)}>아래로</button>
-            <button type="button" className="button button-secondary" aria-label={`${field.label} 수정`} disabled={!writable || writeLocked || Boolean(draft) || !Object.hasOwn(TYPE_LABELS, field.type)} onClick={() => start(toDraft(field))}>수정</button>
-            <button type="button" className="button button-secondary" aria-label={`${field.label} 제외`} disabled={!writable || writeLocked || Boolean(draft) || ["name", "phone"].includes(field.id)} onClick={() => setDeleteId(field.id)}>제외</button>
+            <ProductButton type="button" className="button button-secondary" aria-label={`${field.label} 위로 이동`} disabled={!writable || writeLocked || Boolean(draft) || index === 0} onClick={() => reorder(field.id, -1)}>위로</ProductButton>
+            <ProductButton type="button" className="button button-secondary" aria-label={`${field.label} 아래로 이동`} disabled={!writable || writeLocked || Boolean(draft) || index === state.fields.length - 1} onClick={() => reorder(field.id, 1)}>아래로</ProductButton>
+            <ProductButton type="button" className="button button-secondary" aria-label={`${field.label} 수정`} disabled={!writable || writeLocked || Boolean(draft) || !Object.hasOwn(TYPE_LABELS, field.type)} onClick={() => start(toDraft(field))}>수정</ProductButton>
+            <ProductButton type="button" className="button button-secondary" aria-label={`${field.label} 제외`} disabled={!writable || writeLocked || Boolean(draft) || ["name", "phone"].includes(field.id)} onClick={() => setDeleteId(field.id)}>제외</ProductButton>
           </div>
         </li>)}
       </ul>

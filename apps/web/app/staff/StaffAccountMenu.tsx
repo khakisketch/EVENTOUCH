@@ -1,5 +1,7 @@
 "use client";
 
+import ProductButton from "../ui/ProductButton";
+
 import { useEffect, useRef, useState } from "react";
 import OrganizationSwitcher from "../OrganizationSwitcher";
 import { refreshOperatorContext } from "../../lib/operator-context";
@@ -110,7 +112,7 @@ export default function StaffAccountMenu({
   return (
     <>
     <div className={styles.accountMenu}>
-      <button
+      <ProductButton
         ref={triggerRef}
         type="button"
         className={styles.menuButton}
@@ -124,7 +126,7 @@ export default function StaffAccountMenu({
       >
         <span className={styles.menuLabel}>{compact && context ? context.userName : summary}</span>
         <span className={styles.menuCaret} aria-hidden="true" />
-      </button>
+      </ProductButton>
       <div ref={panelRef} className={styles.menuPanel} role="dialog" aria-label="계정 및 조직 전환" hidden={!open}>
         {context ? (
           <dl className={styles.accountFacts}>
@@ -153,7 +155,7 @@ export default function StaffAccountMenu({
         {snapshot.error && !snapshot.loading && !selectionRequired ? (
           <p className={styles.menuNote}>
             <span role="alert">{snapshot.error}</span>{" "}
-            <button
+            <ProductButton
               type="button"
               className={styles.menuRetry}
               onClick={() => {
@@ -161,20 +163,20 @@ export default function StaffAccountMenu({
               }}
             >
               다시 확인
-            </button>
+            </ProductButton>
           </p>
         ) : null}
         <OrganizationSwitcher confirmLeave={confirmLeave} />
         <a className={styles.menuLink} href="/account/email" onClick={handleAccountNavigate}>
           내 계정 이메일 인증
         </a>
-        <button
+        <ProductButton
           type="button"
           className={styles.menuClose}
           onClick={() => requestClose("explicit")}
         >
           닫기
-        </button>
+        </ProductButton>
       </div>
     </div>
     {accountNotice ? <p className={styles.blockedNotice} role="status">{accountNotice}</p> : null}

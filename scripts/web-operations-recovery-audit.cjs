@@ -71,6 +71,81 @@ async function main() {
       return route.continue();
     });
     await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/operations`, { waitUntil: 'networkidle' });
+    if (!before && !beforeMap) {
+      phase = 'grouped task navigation';
+      const taskList = page.getByRole('tablist', { name: '현장 운영 구역' });
+      const groups = [
+        ['준비', ['데스크', '부스', '부스 인증 방식', '부스 지도']],
+        ['배정', ['스태프 배정']],
+        ['현장 진행', ['참여 진행', '전광판 출력']],
+      ];
+      for (const [name, labels] of groups) {
+        const group = taskList.locator('[data-task-group]').filter({ hasText: name });
+        assert.equal(await group.count(), 1, `${name} group exists`);
+        assert.deepEqual(await group.getByRole('tab').allTextContents(), labels);
+        for (const tab of await group.getByRole('tab').all()) {
+          const description = await tab.getAttribute('aria-describedby');
+          assert.ok(description, `${name} is available to assistive technology`);
+          assert.equal(await page.locator(`[id="${description}"]`).textContent(), name);
+        }
+      }
+      let navigationWrites = 0;
+      const countWrite = (request) => {
+        if (request.method() !== 'GET' && /\/api\//.test(request.url())) navigationWrites++;
+      };
+      page.on('request', countWrite);
+      const deskTab = taskList.getByRole('tab', { name: '데스크', exact: true });
+      await deskTab.focus();
+      await page.keyboard.press('End');
+      const displayTab = taskList.getByRole('tab', { name: '전광판 출력', exact: true });
+      assert.equal(await displayTab.getAttribute('aria-selected'), 'true');
+      assert.equal(await displayTab.evaluate((node) => document.activeElement === node), true);
+      await page.keyboard.press('ArrowRight');
+      assert.equal(await deskTab.getAttribute('aria-selected'), 'true');
+      assert.equal(await page.locator('[role="tabpanel"]:visible').count(), 1);
+      assert.equal(navigationWrites, 0, 'navigation must not submit commands');
+      page.off('request', countWrite);
+      await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/operations#ops-staff`, { waitUntil: 'networkidle' });
+      assert.equal(await taskList.getByRole('tab', { name: '스태프 배정', exact: true }).getAttribute('aria-selected'), 'true');
+      await page.evaluate(() => window.dispatchEvent(new CustomEvent('eventouch:workspace-navigate', { detail: { id: 'ops-booths', focus: true } })));
+      assert.equal(await taskList.getByRole('tab', { name: '부스', exact: true }).getAttribute('aria-selected'), 'true');
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'ops-booths');
+      await deskTab.click();
+      for (const width of [1440, 1280, 390, 320]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.waitForFunction((expected) => document.querySelector('[role="tablist"][aria-label="현장 운영 구역"]')?.getAttribute('aria-orientation') === expected, width >= 1024 ? 'vertical' : 'horizontal', { timeout: 3000 });
+        await deskTab.focus();
+        await page.keyboard.press('ArrowDown');
+        assert.equal(await taskList.getByRole('tab', { name: width >= 1024 ? '부스' : '데스크', exact: true }).getAttribute('aria-selected'), 'true');
+        await page.keyboard.press('Home');
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `no overflow at ${width}`);
+        if (width <= 390) {
+          await page.evaluate(() => window.dispatchEvent(new CustomEvent('eventouch:workspace-navigate', { detail: { id: 'ops-staff', focus: true } })));
+          const visible = await page.evaluate(() => ({ heading: document.getElementById('ops-staff').getBoundingClientRect().top, rail: document.querySelector('.console-sidebar').getBoundingClientRect().bottom }));
+          assert.ok(visible.heading >= visible.rail, 'focused task heading remains below the mobile rail');
+          await deskTab.click();
+        }
+        await page.screenshot({ path: path.join(out, `navigation-${width}.png`) });
+      }
+      await page.setViewportSize({ width: 1280, height: 900 });
+      const featureCases = [
+        { features: [], labels: ['데스크', '부스', '스태프 배정'] },
+        { features: ['poll'], labels: ['데스크', '부스', '스태프 배정', '참여 진행'] },
+        { features: ['screen'], labels: ['데스크', '부스', '스태프 배정', '전광판 출력'] },
+        { features: ['stamp'], labels: ['데스크', '부스', '부스 인증 방식', '부스 지도', '스태프 배정'] },
+        { features: ['draw', 'poll', 'reward', 'screen', 'venue', 'stamp'], labels: groups.flatMap(([, labels]) => labels) },
+      ];
+      for (const [index, scenario] of featureCases.entries()) {
+        const changed = await fixture.helpers.requestJson(fixture.harness.baseUrl, `/api/events/${fixture.eventId}/commands`, {
+          method: 'POST', cookie: fixture.manager.cookie,
+          body: { commandId: `audit-ops-navigation-features-${index}`, command: 'event.features', payload: { features: scenario.features } },
+        });
+        assert.ok(changed.status >= 200 && changed.status < 300, `feature case ${index} is accepted`);
+        await page.reload({ waitUntil: 'networkidle' });
+        assert.deepEqual(await taskList.getByRole('tab').allTextContents(), scenario.labels);
+        assert.equal(await taskList.locator('[data-task-group]').count(), scenario.features.some((item) => ['poll', 'screen'].includes(item)) ? 3 : 2);
+      }
+    }
     if (beforeMap) {
       await page.getByRole('tab', { name: '부스 지도', exact: true }).click();
       const mapSection = page.locator('#ops-booth-map-panel');
@@ -125,6 +200,11 @@ async function main() {
     assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter((v) => ['serious', 'critical'].includes(v.impact)).map((v) => v.id)), []);
     await dialog.getByRole('button', { name: '취소', exact: true }).click();
     await dialog.waitFor({ state: 'hidden' });
+    await panel.waitFor();
+    await page.getByRole('tab', { name: '부스', exact: true }).click();
+    await panel.waitFor();
+    assert.equal(await page.getByRole('tab', { name: '부스', exact: true }).getAttribute('aria-selected'), 'true');
+    await page.getByRole('tab', { name: '데스크', exact: true }).click();
     await panel.waitFor();
     const beforeStatus = requests.get(first).length;
     await panel.getByRole('button', { name: '서버 처리 확인' }).click();

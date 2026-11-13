@@ -57,7 +57,7 @@ test('the move reveals review and focuses its heading without sending', () => {
 test('submit button id and labelling are preserved', () => {
   assert.match(SOURCE, /id="campaign-submit"/u);
   const submitAt = SOURCE.indexOf('id="campaign-submit"');
-  const submitEnd = SOURCE.indexOf('</button>', submitAt);
+  const submitEnd = SOURCE.indexOf('</ProductButton>', submitAt);
   assert.ok(submitEnd > submitAt, 'submit button must close');
   const submitWindow = SOURCE.slice(submitAt, submitEnd);
   assert.match(submitWindow, /type="submit"/u);

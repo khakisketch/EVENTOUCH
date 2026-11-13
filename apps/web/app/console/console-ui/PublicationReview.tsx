@@ -1,5 +1,7 @@
 "use client";
 
+import ProductButton from "../../ui/ProductButton";
+
 import type { ReactNode } from "react";
 import ConsoleDialog from "./ConsoleDialog";
 import styles from "./publication-review.module.css";
@@ -32,8 +34,8 @@ export default function PublicationReview({ title, description, changes, destina
     <ConsoleDialog title={title} description={description ? <span className={styles.description}>{description}</span> : undefined} onClose={onClose} busy={busy} wide stickyChrome
       footer={<div className={styles.actions}>
         {error ? <p role="alert" className={styles.actionError}>{error}</p> : null}
-        <button type="button" className="button button-secondary" disabled={busy} onClick={onClose}>돌아가기</button>
-        <button type="button" className="button button-primary" disabled={busy || disabled} onClick={onConfirm}>{busy ? "반영 중…" : confirmLabel}</button>
+        <ProductButton type="button" className="button button-secondary" disabled={busy} onClick={onClose}>돌아가기</ProductButton>
+        <ProductButton type="button" className="button button-primary" disabled={busy || disabled} onClick={onConfirm}>{busy ? "반영 중…" : confirmLabel}</ProductButton>
       </div>}>
       <section aria-labelledby="publication-destinations" className={styles.destinations}>
         <h3 id="publication-destinations">반영 위치</h3>

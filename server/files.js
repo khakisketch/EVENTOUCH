@@ -1,6 +1,5 @@
 'use strict';
-const fs = require('node:fs/promises');
-const path = require('node:path');
+const { createFileStorage } = require('./file-storage');
 const crypto = require('node:crypto');
 const { createAccess } = require('./access');
 const { createPublicEvents } = require('./public-events');
@@ -13,8 +12,8 @@ function fileRef(row) {
   return {fileId:row.id, name:row.original_name, type:row.content_type, size:Number(row.size_bytes),
     ...(row.width_px && row.height_px ? {width:row.width_px,height:row.height_px} : {})};
 }
-function createFileService(database, { storageDir = process.env.STORAGE_DIR || path.join(__dirname,'../data/storage') } = {}) {
-  const root = path.resolve(storageDir);
+function createFileService(database, { storageDir, fileStorage, env = process.env } = {}) {
+  const storage = fileStorage || createFileStorage({ storageDir, env });
   // Scope boundary pre-receipt (identity/org/event). Grant verdicts
   // (access.authorize) run post-receipt in upload paths so a committed upload
   // retried after a permission change still replays its receipt.
@@ -46,7 +45,7 @@ function createFileService(database, { storageDir = process.env.STORAGE_DIR || p
     const dimensions = contentType.startsWith('image/') ? inspectImage(bytes,contentType) : null;
     if (contentType === 'application/pdf' && bytes.subarray(0,5).toString('ascii') !== '%PDF-') throw failure(400,'PDF 형식을 확인하세요');
     const fingerprint = crypto.createHash('sha256').update(JSON.stringify([eventId,account && account.id,name,contentType])).update(bytes).digest('hex');
-    let ownedPath;
+    let ownedObject;
     try {
       return await database.transaction(async client => {
         const org = await authorizeScope(client,account,eventId);
@@ -65,9 +64,7 @@ function createFileService(database, { storageDir = process.env.STORAGE_DIR || p
         }
         await authorizeGrants(client,account,eventId,'file.upload');
         const id = `file-${crypto.randomUUID()}`;
-        await fs.mkdir(root,{recursive:true});
-        ownedPath = path.join(root,id);
-        await fs.writeFile(ownedPath,bytes,{flag:'wx',mode:0o600});
+        ownedObject = await storage.put(id,bytes);
         const row = await client.query(`INSERT INTO stored_files (id,event_id,storage_key,original_name,content_type,size_bytes,created_by,width_px,height_px)
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
           [id,eventId,id,name,contentType,bytes.length,account.id,dimensions && dimensions.width,dimensions && dimensions.height]);
@@ -77,7 +74,7 @@ function createFileService(database, { storageDir = process.env.STORAGE_DIR || p
         return {file,replayed:false};
       });
     } catch (error) {
-      if (ownedPath) await fs.unlink(ownedPath).catch(() => {});
+      if (ownedObject && error.transactionOutcome !== 'unknown') await ownedObject.rollback().catch(() => {});
       throw error;
     }
   }
@@ -100,7 +97,7 @@ function createFileService(database, { storageDir = process.env.STORAGE_DIR || p
     const dimensions = inspectImage(bytes,contentType);
     const actorId = String(participant.id);
     const fingerprint = crypto.createHash('sha256').update(JSON.stringify([eventId,`participant:${actorId}`,name,contentType])).update(bytes).digest('hex');
-    let ownedPath;
+    let ownedObject;
     try {
       return await database.transaction(async client => {
         await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',[commandId]);
@@ -119,9 +116,7 @@ function createFileService(database, { storageDir = process.env.STORAGE_DIR || p
           return {file:r.result.file,replayed:true};
         }
         const id = `file-${crypto.randomUUID()}`;
-        await fs.mkdir(root,{recursive:true});
-        ownedPath = path.join(root,id);
-        await fs.writeFile(ownedPath,bytes,{flag:'wx',mode:0o600});
+        ownedObject = await storage.put(id,bytes);
         const row = await client.query(`INSERT INTO stored_files (id,event_id,storage_key,original_name,content_type,size_bytes,created_by,width_px,height_px)
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
           [id,eventId,id,name,contentType,bytes.length,null,dimensions && dimensions.width,dimensions && dimensions.height]);
@@ -131,7 +126,7 @@ function createFileService(database, { storageDir = process.env.STORAGE_DIR || p
         return {file,replayed:false};
       });
     } catch (error) {
-      if (ownedPath) await fs.unlink(ownedPath).catch(() => {});
+      if (ownedObject && error.transactionOutcome !== 'unknown') await ownedObject.rollback().catch(() => {});
       throw error;
     }
   }
@@ -139,11 +134,8 @@ function createFileService(database, { storageDir = process.env.STORAGE_DIR || p
     if (!ID.test(String(fileId || ''))) throw failure(404,'파일을 찾을 수 없습니다');
     const row = (await database.query('SELECT * FROM stored_files WHERE id=$1 AND event_id=$2',[fileId,eventId])).rows[0];
     if (!row) throw failure(404,'파일을 찾을 수 없습니다');
-    const absolutePath = path.resolve(root,row.storage_key);
-    if (!absolutePath.startsWith(root+path.sep)) throw failure(404,'파일을 찾을 수 없습니다');
-    try { const stat = await fs.stat(absolutePath); if (!stat.isFile() || stat.size !== Number(row.size_bytes)) throw new Error(); }
-    catch { throw failure(404,'파일을 찾을 수 없습니다'); }
-    return {...fileRef(row),absolutePath};
+    await storage.inspect(row.storage_key,Number(row.size_bytes));
+    return {...fileRef(row),openReadStream:() => storage.openReadStream(row.storage_key,Number(row.size_bytes))};
   }
   async function readOperator({account,eventId,fileId}) {
     const org = await authorizeScope(database,account,eventId,false);
@@ -179,7 +171,7 @@ function createFileService(database, { storageDir = process.env.STORAGE_DIR || p
     const dimensions = contentType.startsWith('image/') ? inspectImage(bytes,contentType) : null;
     if (contentType === 'application/pdf' && bytes.subarray(0,5).toString('ascii') !== '%PDF-') throw failure(400,'PDF 형식을 확인하세요');
     const fingerprint = crypto.createHash('sha256').update(JSON.stringify([`client:${clientId}`,account && account.id,name,contentType])).update(bytes).digest('hex');
-    let ownedPath;
+    let ownedObject;
     try {
       return await database.transaction(async client => {
         const org = await authorizeScope(client,account,null);
@@ -200,9 +192,7 @@ function createFileService(database, { storageDir = process.env.STORAGE_DIR || p
         const target = await client.query('SELECT id FROM clients WHERE id=$1 AND org_id=$2 LIMIT 1 FOR SHARE',[String(clientId || ''), org.orgId]);
         if (!target.rowCount) throw failure(404,'고객사를 찾을 수 없습니다');
         const id = `file-${crypto.randomUUID()}`;
-        await fs.mkdir(root,{recursive:true});
-        ownedPath = path.join(root,id);
-        await fs.writeFile(ownedPath,bytes,{flag:'wx',mode:0o600});
+        ownedObject = await storage.put(id,bytes);
         const row = await client.query(`INSERT INTO stored_files (id,event_id,client_id,storage_key,original_name,content_type,size_bytes,created_by,width_px,height_px)
           VALUES ($1,NULL,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
           [id,String(clientId),id,name,contentType,bytes.length,account.id,dimensions && dimensions.width,dimensions && dimensions.height]);
@@ -212,7 +202,7 @@ function createFileService(database, { storageDir = process.env.STORAGE_DIR || p
         return {file,replayed:false};
       });
     } catch (error) {
-      if (ownedPath) await fs.unlink(ownedPath).catch(() => {});
+      if (ownedObject && error.transactionOutcome !== 'unknown') await ownedObject.rollback().catch(() => {});
       throw error;
     }
   }
@@ -227,11 +217,8 @@ function createFileService(database, { storageDir = process.env.STORAGE_DIR || p
     if (!owner.rowCount || String(owner.rows[0].org_id || '') !== String(org.orgId)) {
       throw failure(404,'파일을 찾을 수 없습니다');
     }
-    const absolutePath = path.resolve(root,row.storage_key);
-    if (!absolutePath.startsWith(root+path.sep)) throw failure(404,'파일을 찾을 수 없습니다');
-    try { const stat = await fs.stat(absolutePath); if (!stat.isFile() || stat.size !== Number(row.size_bytes)) throw new Error(); }
-    catch { throw failure(404,'파일을 찾을 수 없습니다'); }
-    return {...fileRef(row),absolutePath};
+    await storage.inspect(row.storage_key,Number(row.size_bytes));
+    return {...fileRef(row),openReadStream:() => storage.openReadStream(row.storage_key,Number(row.size_bytes))};
   }
   async function readPublic({slug,fileId}) {
     const projection = await createPublicEvents(database).loadPublicEvent(slug);

@@ -1,5 +1,7 @@
 "use client";
 
+import ProductButton from "./ProductButton";
+
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { acknowledgeOperatorReceipt, getOperatorContextSnapshot, operatorFetch } from "../../lib/operator-context";
@@ -224,7 +226,7 @@ export default function OperatorReceiptRecovery({ currentEventId, currentEventNa
   }
 
   if (inline) return <div role="group" aria-label="현재 요청 서버 확인">
-    {mine.map((pointer) => <button key={pointer.commandId} type="button" className="button button-secondary" disabled={Boolean(checking) || snapshot.changed || disabled} onClick={() => void check(pointer)}>{checking === pointer.commandId ? "확인 중…" : "서버 처리 확인"}</button>)}
+    {mine.map((pointer) => <ProductButton key={pointer.commandId} type="button" className="button button-secondary" disabled={Boolean(checking) || snapshot.changed || disabled} onClick={() => void check(pointer)}>{checking === pointer.commandId ? "확인 중…" : "서버 처리 확인"}</ProductButton>)}
     {visibleMessage ? <p role="status">{visibleMessage.text}</p> : null}
   </div>;
 
@@ -241,22 +243,22 @@ export default function OperatorReceiptRecovery({ currentEventId, currentEventNa
           ? pointer.eventId === currentEventId ? ` · ${currentEventName || "현재 행사"}` : ` · 행사 (${pointer.eventId.slice(-6)})`
           : " · 운영사"}</span>
         <span className={styles.actions}>
-          <button type="button" className="button button-secondary" disabled={Boolean(checking) || snapshot.changed} onClick={() => void check(pointer)}>{checking === pointer.commandId ? "확인 중…" : "서버 처리 확인"}</button>
-          <button type="button" className="button button-secondary" disabled={Boolean(checking)} onClick={() => setRemoveCandidate(pointer)}>목록에서 지우기</button>
+          <ProductButton type="button" className="button button-secondary" disabled={Boolean(checking) || snapshot.changed} onClick={() => void check(pointer)}>{checking === pointer.commandId ? "확인 중…" : "서버 처리 확인"}</ProductButton>
+          <ProductButton type="button" className="button button-secondary" disabled={Boolean(checking)} onClick={() => setRemoveCandidate(pointer)}>목록에서 지우기</ProductButton>
         </span>
       </div>)}
     </> : null}
     {visibleMessage ? <p role="status">{visibleMessage.text}{visibleMessage.href ? <> <a href={visibleMessage.href}>티켓 확인 필요 명단 보기</a></> : null}</p> : null}
     {visibleTicketRecovery ? <div className={styles.ticketRecovery}>
       <p><strong>{visibleTicketRecovery.name}</strong>{visibleTicketRecovery.company ? ` · ${visibleTicketRecovery.company}` : ""}{visibleTicketRecovery.maskedPhone ? ` · ${visibleTicketRecovery.maskedPhone}` : ""}</p>
-      <button type="button" className="button button-secondary" onClick={() => setOpenTicketRecovery(visibleTicketRecovery)}>발급된 링크 확인</button>
+      <ProductButton type="button" className="button button-secondary" onClick={() => setOpenTicketRecovery(visibleTicketRecovery)}>발급된 링크 확인</ProductButton>
     </div> : null}
     {visibleCancellationReview ? <div className={styles.ticketRecovery}>
       <p>확인 당시 <strong>{visibleCancellationReview.reviewedName}</strong>{visibleCancellationReview.reviewedCompany ? ` · ${visibleCancellationReview.reviewedCompany}` : ""} · {visibleCancellationReview.reviewedMaskedPhone}</p>
       {visibleCancellationReview.name !== visibleCancellationReview.reviewedName || visibleCancellationReview.company !== visibleCancellationReview.reviewedCompany || visibleCancellationReview.maskedPhone !== visibleCancellationReview.reviewedMaskedPhone ? <p>현재 {visibleCancellationReview.name}{visibleCancellationReview.company ? ` · ${visibleCancellationReview.company}` : ""}{visibleCancellationReview.maskedPhone ? ` · ${visibleCancellationReview.maskedPhone}` : ""}</p> : null}
       <p>조회 시 신청 상태 {({ APPROVED: "참가 확정", PENDING: "승인 대기", WAITLIST: "대기 명단", CANCELLED: "신청 취소" } as Record<string, string>)[visibleCancellationReview.currentStatus] || "확인 필요"} · 티켓 {({ valid: "유효", revoked: "무효", expired: "만료", cancelled: "취소" } as Record<string, string>)[visibleCancellationReview.currentTicketReview] || "확인 필요"}</p>
       <span className={styles.actions}><a href={`/console/events/${encodeURIComponent(visibleCancellationReview.pointer.eventId!)}/participants`}>참가자 명단 보기</a>
-        <button type="button" className="button button-secondary" onClick={() => {
+        <ProductButton type="button" className="button button-secondary" onClick={() => {
           const pointer = visibleCancellationReview.pointer;
           if (!forgetOperatorReceipt(pointer.commandId, pointer)) {
             setMessage({ userId: pointer.userId, organizationId: pointer.organizationId, text: "확인 목록을 정리하지 못했습니다. 브라우저 저장 상태를 확인하세요." }); return;
@@ -264,7 +266,7 @@ export default function OperatorReceiptRecovery({ currentEventId, currentEventNa
           acknowledgeOperatorReceipt(pointer.commandId);
           setCancellationReviewRecovery(null);
           setMessage({ userId: pointer.userId, organizationId: pointer.organizationId, text: "확인 내용을 정리했습니다. 필요한 경우 참가자 명단에서 새 티켓을 발급해 전달하세요." });
-        }}>확인 완료</button></span>
+        }}>확인 완료</ProductButton></span>
     </div> : null}
     {activeTicketRecovery ? <TicketReissue
       key={activeTicketRecovery.pointer.commandId}
@@ -297,13 +299,13 @@ export default function OperatorReceiptRecovery({ currentEventId, currentEventNa
       title="처리 결과 확인에서 지우기"
       description={`${label(removeCandidate.command)} 요청은 다른 창에서 처리 중이거나 이미 반영됐을 수 있습니다. 목록에서 지워도 서버 처리는 취소되지 않습니다. 원래 업무의 내역을 확인했나요?`}
       onClose={() => setRemoveCandidate(null)}
-      footer={<><button type="button" className="button button-secondary" onClick={() => setRemoveCandidate(null)}>계속 확인</button><button type="button" className="button button-primary" onClick={() => {
+      footer={<><ProductButton type="button" className="button button-secondary" onClick={() => setRemoveCandidate(null)}>계속 확인</ProductButton><ProductButton type="button" className="button button-primary" onClick={() => {
         const removed = forgetOperatorReceipt(removeCandidate.commandId, removeCandidate);
         setMessage({ userId: removeCandidate.userId, organizationId: removeCandidate.organizationId, text: removed
           ? operatorReceiptSharingAvailable() ? "목록에서 지웠습니다. 서버 처리는 취소되지 않았습니다." : "현재 창의 목록에서만 지웠습니다. 다른 창의 내역은 확인해 주세요. 서버 처리는 취소되지 않았습니다."
           : "목록에서 지우지 못했습니다. 브라우저 저장 상태와 현재 계정, 처리 내역을 다시 확인하세요." });
         setRemoveCandidate(null);
-      }}>목록에서 지우기</button></>}
+      }}>목록에서 지우기</ProductButton></>}
     ><p>다른 창에서 아직 요청을 처리 중이라면, 결과가 확인되지 않았을 때 이 항목이 다시 나타날 수 있습니다.</p></ConsoleDialog> : null}
   </section>;
 }

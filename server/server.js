@@ -17,6 +17,7 @@ const { createParticipantCommands } = require('./commands/participants');
 const { createOperationsCommands } = require('./commands/operations');
 const { createDomainCommands } = require('./commands/domain');
 const { createFileService } = require('./files');
+const { createFileStorage } = require('./file-storage');
 const { handleApi } = require('./api');
 const { applySecurityHeaders, failureMessage } = require('./http');
 const genericMessaging = require('./messaging');
@@ -77,7 +78,7 @@ function stampSessionOrg(target, account) {
   return stampOrgHeaders(set, account);
 }
 
-function createHttpServer(store, auth, access, database, { storageDir, env = process.env, logWriter, messageMaintenance } = {}) {
+function createHttpServer(store, auth, access, database, { storageDir, fileStorage, env = process.env, logWriter, messageMaintenance } = {}) {
   const observations = createRequestObservability({ env, write: logWriter });
   const state = database ? createState(database, { env }) : null;
   const publicEvents = database ? createPublicEvents(database) : null;
@@ -94,8 +95,9 @@ function createHttpServer(store, auth, access, database, { storageDir, env = pro
   const maintenance = messageMaintenance || {
     config: maintenanceConfig(env), workerStarted: false, lastAttemptAt: null, lastResult: 'never',
   };
-  const domainCommands = database ? createDomainCommands(database, { messaging }) : null;
-  const files = database ? createFileService(database, { storageDir }) : null;
+  const storage = database ? (fileStorage || createFileStorage({ storageDir, env })) : null;
+  const domainCommands = database ? createDomainCommands(database, { messaging, fileStorage: storage }) : null;
+  const files = database ? createFileService(database, { fileStorage: storage }) : null;
   // Attendee verification transport: Solapi when credentials exist, explicit
   // mock (EVENTOUCH_SMS_MOCK=1) for development/tests/demo, honest 503
   // otherwise. Verification codes are never returned to HTTP clients.
@@ -334,7 +336,9 @@ function createHttpServer(store, auth, access, database, { storageDir, env = pro
         return;
       }
       database.query('SELECT 1').then(
-        () => {
+        async () => {
+          try { await storage.ready(); }
+          catch { return sendJson(res, 503, { ok: false, db: true, storage: false }); }
           res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
           res.end(JSON.stringify({ ok: true, db: true }));
         },
@@ -437,6 +441,8 @@ async function startServer() {
   // Reject an unsafe/malformed runtime before opening or migrating a database.
   developmentLoginEmail();
   createClientAddressResolver();
+  const fileStorage = createFileStorage();
+  await fileStorage.ready();
   const database = createDatabase();
   try {
     await database.migrate();
@@ -453,7 +459,7 @@ async function startServer() {
     const store = openStore(process.env.DATA_DIR || path.join(ROOT, 'data', 'server'));
     const messageConfig = maintenanceConfig();
     const messageMaintenance = { config: messageConfig, workerStarted: false, lastAttemptAt: null, lastResult: 'never', cursor: { afterId: '' }, resolutionCursor: { afterId: '' } };
-    const server = createHttpServer(store, auth, access, database, { messageMaintenance });
+    const server = createHttpServer(store, auth, access, database, { messageMaintenance, fileStorage });
     await new Promise((resolve, reject) => {
       server.once('error', reject);
       // A supervised local web/API pair pins the API to loopback. Standalone
@@ -469,7 +475,7 @@ async function startServer() {
     // Replay dispatch intents queued before a previous shutdown (crash
     // between commit and provider call). Fire-and-forget by design: a drain
     // failure must not take down boot, and leftovers are retried next boot.
-    const bootDrain = drainMessageOutbox(database, genericMessaging.activeProvider()).then(
+    const bootDrain = drainMessageOutbox(database, genericMessaging.activeProvider(), { fileStorage }).then(
       (result) => {
         if (result && (result.dispatched || result.settled)) {
           process.stdout.write(
@@ -487,7 +493,7 @@ async function startServer() {
       if (maintenanceRun) return;
       messageMaintenance.lastAttemptAt = new Date().toISOString();
       messageMaintenance.lastResult = 'running';
-      maintenanceRun = runMessageMaintenance(database, genericMessaging.activeProvider(), { ...messageConfig, cursor: messageMaintenance.cursor, resolutionCursor: messageMaintenance.resolutionCursor })
+      maintenanceRun = runMessageMaintenance(database, genericMessaging.activeProvider(), { ...messageConfig, fileStorage, cursor: messageMaintenance.cursor, resolutionCursor: messageMaintenance.resolutionCursor })
         .then((result) => { messageMaintenance.lastResult = result.skipped ? 'skipped' : 'ok'; })
         .catch(() => { messageMaintenance.lastResult = 'failed'; process.stderr.write('[eventouch] message maintenance failed; queued work is retained\n'); })
         .finally(() => { maintenanceRun = null; });

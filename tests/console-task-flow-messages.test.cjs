@@ -146,7 +146,7 @@ test('reload requires no acceptance trace and a proven safe charset cancellation
   // Existing FAILED explanation stays verbatim; only a next-action sentence is added.
   assert.match(SOURCE, /발송이 실패했습니다\. 행의 내용·대상 불러오기로 새 발송을 준비하세요\./u);
   // No reload affordance leaks onto other terminal/transient rows.
-  assert.match(SOURCE, /\{reloadable \? <button[^\n]+내용·대상 불러오기/u);
+  assert.match(SOURCE, /\{reloadable \? <ProductButton[^\n]+내용·대상 불러오기/u);
 });
 
 test('reload preloads content, reveals any retained selection, and focuses the active step', () => {
