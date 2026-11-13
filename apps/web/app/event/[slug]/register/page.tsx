@@ -1,6 +1,6 @@
 import RegisterForm from "./RegisterForm";
 import styles from "./register.module.css";
-import Link from "next/link";
+import ProductLink from "../../../ui/ProductLink";
 import VerificationUnavailable from "../VerificationUnavailable";
 import { loadVerificationMode } from "../../../../lib/verification-mode";
 import type { VerificationMode } from "../../../../lib/verification-mode";
@@ -59,15 +59,15 @@ export default async function RegisterPage({
           <p role="note">이 행사는 문자로 티켓을 다시 연결할 수 없습니다. 신청을 완료한 브라우저 탭을 확인하세요. {data.recoveryContact ? `문의: ${data.recoveryContact}` : "탭을 찾을 수 없다면 행사 초대 안내를 확인하거나 행사 주최 측에 문의하세요."}</p>
         ) : (
           <p>
-            <Link className="button button-primary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>
+            <ProductLink className="button button-primary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>
               이미 신청했다면 내 티켓 찾기
-            </Link>
+            </ProductLink>
           </p>
         )}
         <p>
-          <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>
+          <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>
             행사 안내로
-          </Link>
+          </ProductLink>
         </p>
       </main>
     );
@@ -90,7 +90,7 @@ export default async function RegisterPage({
         <span className="compact-wordmark">EVENTOUCH</span>
         <p className={styles.pageContext}>참가 신청</p>
       </header>
-      <p className={styles.backLink}><Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>← 행사 안내로</Link></p>
+      <p className={styles.backLink}><ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>← 행사 안내로</ProductLink></p>
       <h1 className={`registration-title ${styles.pageTitle}`}>{data.name}</h1>
       <RegisterForm
         slug={slug}

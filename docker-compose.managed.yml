@@ -1,0 +1,121 @@
+{
+  "services": {
+    "eventouch": {
+      "build": {
+        "context": ".",
+        "args": {
+          "EVENTOUCH_BUILD_REVISION": "${EVENTOUCH_BUILD_REVISION:-unknown}"
+        }
+      },
+      "expose": [
+        "8776"
+      ],
+      "environment": {
+        "PORT": 8776,
+        "EVENTOUCH_BUILD_REVISION": "${EVENTOUCH_BUILD_REVISION:-unknown}",
+        "DATABASE_URL": "${DATABASE_URL:?DATABASE_URL을 설정하세요}",
+        "DATABASE_SSL_MODE": "verify-full",
+        "DATABASE_SSL_CA_FILE": "/run/secrets/database-ca.pem",
+        "DATABASE_SCHEMA": "${DATABASE_SCHEMA:-eventouch}",
+        "PGPOOL_MAX": "${PGPOOL_MAX:-5}",
+        "EVENTOUCH_STORAGE_MODE": "mounted",
+        "EVENTOUCH_STORAGE_ID": "${EVENTOUCH_STORAGE_ID:?NAS 저장소 식별값을 설정하세요}",
+        "DATA_DIR": "/data/db",
+        "STORAGE_DIR": "/data/storage",
+        "SESSION_TTL_HOURS": "${SESSION_TTL_HOURS:-12}",
+        "COOKIE_SECURE": "${COOKIE_SECURE:-0}",
+        "EVENTOUCH_PUBLIC_URL": "${EVENTOUCH_PUBLIC_URL:-}",
+        "EVENTOUCH_MAIL_TRANSPORT": "${EVENTOUCH_MAIL_TRANSPORT:-}",
+        "EVENTOUCH_MAIL_MOCK": "${EVENTOUCH_MAIL_MOCK:-0}",
+        "EVENTOUCH_SMTP_HOST": "${EVENTOUCH_SMTP_HOST:-}",
+        "EVENTOUCH_SMTP_PORT": "${EVENTOUCH_SMTP_PORT:-587}",
+        "EVENTOUCH_SMTP_FROM": "${EVENTOUCH_SMTP_FROM:-}",
+        "EVENTOUCH_SMTP_USER": "${EVENTOUCH_SMTP_USER:-}",
+        "EVENTOUCH_SMTP_PASSWORD": "${EVENTOUCH_SMTP_PASSWORD:-}",
+        "EVENTOUCH_LOGIN_HISTORY_DAYS": "${EVENTOUCH_LOGIN_HISTORY_DAYS:-}",
+        "EVENTOUCH_SMS_MOCK": "${EVENTOUCH_SMS_MOCK:-0}",
+        "EVENTOUCH_TRUSTED_PROXIES": "${EVENTOUCH_TRUSTED_PROXIES:-${EVENTOUCH_WEB_PROXY_IP:-10.89.0.10}}",
+        "EVENTOUCH_REQUEST_LOGS": "${EVENTOUCH_REQUEST_LOGS:-1}",
+        "EVENTOUCH_SIGNUP_ADDRESS_LIMIT": "${EVENTOUCH_SIGNUP_ADDRESS_LIMIT:-600}",
+        "EVENTOUCH_SIGNUP_EVENT_LIMIT": "${EVENTOUCH_SIGNUP_EVENT_LIMIT:-3000}",
+        "EVENTOUCH_SIGNUP_WINDOW_SECONDS": "${EVENTOUCH_SIGNUP_WINDOW_SECONDS:-60}",
+        "EVENTOUCH_MESSAGE_MAINTENANCE": "${EVENTOUCH_MESSAGE_MAINTENANCE:-0}",
+        "EVENTOUCH_MESSAGE_AUTO_SEND_DUE": "${EVENTOUCH_MESSAGE_AUTO_SEND_DUE:-0}",
+        "EVENTOUCH_MESSAGE_MAINTENANCE_INTERVAL_MS": "${EVENTOUCH_MESSAGE_MAINTENANCE_INTERVAL_MS:-60000}",
+        "SOLAPI_API_KEY": "${SOLAPI_API_KEY:-}",
+        "SOLAPI_API_SECRET": "${SOLAPI_API_SECRET:-}",
+        "SOLAPI_SENDER": "${SOLAPI_SENDER:-}",
+        "SOLAPI_KAKAO_PFID": "${SOLAPI_KAKAO_PFID:-}",
+        "ADMIN_EMAIL": "${ADMIN_EMAIL:?ADMIN_EMAIL을 설정하세요}",
+        "ADMIN_NAME": "${ADMIN_NAME:-관리자}",
+        "ADMIN_PASSWORD": "${ADMIN_PASSWORD:?ADMIN_PASSWORD을 설정하세요}"
+      },
+      "volumes": [
+        "etko-db:/data/db",
+        {
+          "type": "bind",
+          "source": "${EVENTOUCH_STORAGE_PATH:?미리 마운트한 NAS 경로를 설정하세요}",
+          "target": "/data/storage",
+          "bind": {
+            "create_host_path": false
+          }
+        },
+        {
+          "type": "bind",
+          "source": "${EVENTOUCH_DB_CA_PATH:?공급사 CA 파일 경로를 설정하세요}",
+          "target": "/run/secrets/database-ca.pem",
+          "read_only": true,
+          "bind": {
+            "create_host_path": false
+          }
+        }
+      ],
+      "restart": "unless-stopped"
+    },
+    "web": {
+      "build": {
+        "context": ".",
+        "dockerfile": "apps/web/Dockerfile",
+        "args": {
+          "EVENTOUCH_API_URL": "http://eventouch:8776",
+          "EVENTOUCH_BUILD_REVISION": "${EVENTOUCH_BUILD_REVISION:-unknown}"
+        }
+      },
+      "depends_on": {
+        "eventouch": {
+          "condition": "service_healthy"
+        }
+      },
+      "ports": [
+        "${HOST_PORT:-8777}:8777"
+      ],
+      "environment": {
+        "PORT": 8777,
+        "EVENTOUCH_API_URL": "http://eventouch:8776",
+        "EVENTOUCH_BUILD_REVISION": "${EVENTOUCH_BUILD_REVISION:-unknown}",
+        "COOKIE_SECURE": "${COOKIE_SECURE:-0}",
+        "EVENTOUCH_WEB_TRUSTED_PROXIES": "${EVENTOUCH_WEB_TRUSTED_PROXIES:-}"
+      },
+      "networks": {
+        "default": {
+          "ipv4_address": "${EVENTOUCH_WEB_PROXY_IP:-10.89.0.10}"
+        }
+      },
+      "restart": "unless-stopped"
+    }
+  },
+  "networks": {
+    "default": {
+      "ipam": {
+        "config": [
+          {
+            "subnet": "${EVENTOUCH_PROXY_SUBNET:-10.89.0.0/24}"
+          }
+        ]
+      }
+    }
+  },
+  "volumes": {
+    "etko-db": null
+  }
+}

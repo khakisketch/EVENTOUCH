@@ -25,9 +25,9 @@ function propertyAt(selector, property, width) {
 for (const width of [320, 390]) {
   test(`mobile roster uses an intentional two-row action grid at ${width}px`, () => {
     assert.equal(propertyAt('.workbenchControls span[data-toolbar-inline].utilityPair', 'grid-template-columns', width), 'minmax(0, 1fr) auto');
-    assert.equal(propertyAt('.workbenchControls .utilityPair > :global(.button-secondary)', 'grid-row', width), '2', 'import stays visible beside creation, not as a third cramped filter');
-    assert.equal(propertyAt('.workbenchControls .utilityPair > :global(.button-secondary)', 'grid-column', width), '1');
-    assert.equal(propertyAt('.workbenchControls .utilityPair > :global(.button-primary)', 'grid-row', width), '2');
-    assert.equal(propertyAt('.workbenchControls .utilityPair > :global(.button-primary)', 'grid-column', width), '2');
+    assert.equal(propertyAt('.workbenchControls .utilityPair > :global([data-variant="secondary"])', 'grid-row', width), '2', 'import stays visible beside creation, not as a third cramped filter');
+    assert.equal(propertyAt('.workbenchControls .utilityPair > :global([data-variant="secondary"])', 'grid-column', width), '1');
+    assert.equal(propertyAt('.workbenchControls .utilityPair > :global([data-variant="primary"])', 'grid-row', width), '2');
+    assert.equal(propertyAt('.workbenchControls .utilityPair > :global([data-variant="primary"])', 'grid-column', width), '2');
   });
 }

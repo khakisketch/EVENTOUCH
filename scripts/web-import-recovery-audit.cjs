@@ -28,7 +28,7 @@ async function main() {
     page.on('dialog', (dialog) => dialog.accept());
     await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/participants/import`, { waitUntil: 'networkidle' });
     const file = page.locator('input[type="file"]');
-    const review = page.locator('section[aria-labelledby="participant-import-review-heading"]');
+    const review = page.locator(':is(section,[role=region])[aria-labelledby="participant-import-review-heading"]');
     const load = async (n) => {
       await file.setInputFiles({ name: `합성명단${n}.csv`, mimeType: 'text/csv', buffer: Buffer.from(`이름,연락처,이메일,소속\n합성 가져오기 ${n},0108888000${n},import${n}@example.test,합성 조직\n`) });
       await review.getByText('유효 1행', { exact: true }).waitFor();

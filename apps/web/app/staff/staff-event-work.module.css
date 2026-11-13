@@ -113,9 +113,10 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--s3);
-  padding: var(--s3) 0;
+  gap: var(--s2) var(--s3);
+  padding: var(--s2) 0;
   border-bottom: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
 }
 
 .rewardInfo {
@@ -129,13 +130,23 @@
 }
 
 .rewardStatus {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  min-height: 28px;
+  padding: 2px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--paper);
   color: var(--muted);
   font-size: var(--small);
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  word-break: keep-all;
 }
 
-.rewardReady { color: var(--warning); }
-.rewardReceived { color: var(--success); }
+.rewardReady { border-color: var(--warning-line); background: var(--warning-soft); color: var(--warning); }
+.rewardReceived { border-color: var(--success-line); background: var(--success-soft); color: var(--success); }
 
 .prizeEmpty {
   margin: 0;
@@ -149,9 +160,9 @@
 .prizeNotice,
 .prizeError {
   margin: 0;
-  padding: var(--s3);
+  padding: var(--s2) var(--s3);
   border: 1px solid var(--success-line);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: var(--success-soft);
   color: var(--success);
   font-size: var(--small);
@@ -192,8 +203,8 @@
   background: var(--surface-muted);
 }
 
-.entryModeSwitch button,
-.taskSwitch button {
+.entryModeSwitch :global(.astryx-button),
+.taskSwitch :global(.astryx-button) {
   min-width: 0;
   min-height: 44px;
   padding: var(--s2);
@@ -205,8 +216,8 @@
   font-weight: 600;
 }
 
-.entryModeSwitch button[aria-pressed="true"],
-.taskSwitch button[aria-pressed="true"] {
+.entryModeSwitch :global(.astryx-button[aria-pressed="true"]),
+.taskSwitch :global(.astryx-button[aria-pressed="true"]) {
   border-color: var(--line);
   background: var(--paper);
   color: var(--ink);
@@ -214,8 +225,8 @@
 }
 
 @media (hover: hover) {
-  .entryModeSwitch button:not(:disabled):hover,
-  .taskSwitch button:not(:disabled):hover {
+  .entryModeSwitch :global(.astryx-button:not(:disabled):hover),
+  .taskSwitch :global(.astryx-button:not(:disabled):hover) {
     border-color: var(--line);
     background: var(--paper);
     color: var(--ink);
@@ -268,9 +279,10 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--s3);
-  padding: var(--s3) 0;
+  gap: var(--s2) var(--s3);
+  padding: var(--s2) 0;
   border-bottom: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
 }
 
 .manualResults li:focus-visible {
@@ -328,8 +340,10 @@
   margin: 0;
   padding: 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--small);
+  font-weight: 650;
   line-height: 1.55;
+  font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
 
@@ -343,6 +357,10 @@
 }
 
 .nextActions button {
+  min-height: 44px;
+}
+
+.nextActions :global(.astryx-button) {
   min-height: 44px;
 }
 
@@ -461,7 +479,9 @@
   color: var(--ink);
   font-size: var(--small);
   font-weight: 700;
+  letter-spacing: 0.01em;
   line-height: 1.55;
+  font-variant-numeric: tabular-nums;
   word-break: keep-all;
   overflow-wrap: break-word;
 }
@@ -506,6 +526,7 @@
 
 .hubCount {
   color: var(--brand-text);
+  font-variant-numeric: tabular-nums;
 }
 
 .hubRow {
@@ -523,6 +544,7 @@
   color: var(--muted);
   font-size: var(--small);
   line-height: 1.55;
+  font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
 
@@ -532,7 +554,7 @@
     align-items: stretch;
   }
 
-  .hubRow :global(.button) {
+  .hubRow :global(.astryx-button) {
     width: 100%;
   }
 }
@@ -546,16 +568,21 @@
 .recentRow span {
   flex: 1 1 200px;
   min-width: 0;
+  font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
 
 .recentRow button {
   min-height: 44px;
+}
+
+.recentRow :global(.astryx-button) {
+  min-height: 44px;
   flex: 0 0 auto;
 }
 
-.nextActions button:focus-visible,
-.recentRow button:focus-visible,
+.nextActions :global(.astryx-button):focus-visible,
+.recentRow :global(.astryx-button):focus-visible,
 .ticketCopy:focus-visible,
 .resultBlock:focus-visible,
 .resultBlock [tabindex="-1"]:focus-visible {
@@ -595,7 +622,9 @@
   .lookupForm button,
   .rewardItem button,
   .nextActions button,
-  .recentRow button {
+  .nextActions :global(.astryx-button),
+  .recentRow button,
+  .recentRow :global(.astryx-button) {
     width: 100%;
   }
 
@@ -661,7 +690,7 @@
   min-height: 44px;
   padding: var(--s1) var(--s3);
   border: 1px solid transparent;
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   background: transparent;
   color: var(--muted);
   font-size: 13px;

@@ -36,7 +36,10 @@ function cssDeclarations(css, selector, media = null) {
     for (let parent = rule.parent; parent; parent = parent.parent) {
       if (parent.type === 'atrule') scopes.unshift(parent.name + ' ' + parent.params);
     }
-    if (JSON.stringify(scopes) === JSON.stringify(media ? ['media ' + media] : [])) matches.push(rule);
+    const expected = selector === '.console-main'
+      ? media ? ['layer eventouch-legacy', 'media ' + media] : ['layer eventouch-legacy']
+      : media ? ['media ' + media] : [];
+    if (JSON.stringify(scopes) === JSON.stringify(expected)) matches.push(rule);
   });
   assert.equal(matches.length, 1, selector + ' has one rule in ' + (media ?? 'the base scope'));
   return Object.fromEntries(matches[0].nodes.filter((node) => node.type === 'decl').map((node) => [node.prop, node.value]));

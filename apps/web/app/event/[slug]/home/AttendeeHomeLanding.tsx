@@ -1,7 +1,8 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
-import Link from "next/link";
+import ProductLink from "../../../ui/ProductLink";
+import ProductButton from "../../../ui/ProductButton";
 import type { HomeStyle } from "../../../../lib/attendee-home";
 import { normalizeHomeMenus, type HomeMenus, type HomeProgram } from "../../../../lib/attendee-home-menus";
 import styles from "./home.module.css";
@@ -141,14 +142,14 @@ export default function AttendeeHomeLanding({
       </nav>
       {slug || preview ? (
         <nav className={styles.moreLinks} aria-label="행사 안내와 참여">
-          <button type="button" disabled={preview} ref={menuButtonRef ? (node) => menuButtonRef("application", node) : undefined} onClick={() => onOpen?.("application")}>내 신청 정보 <span aria-hidden="true">→</span></button>
-          {preview ? <button type="button" disabled>행사 안내 보기 <span aria-hidden="true">→</span></button>
-            : <Link href={`/event/${encodeURIComponent(slug!)}`}>행사 안내 보기 <span aria-hidden="true">→</span></Link>}
-          {hasPrograms ? preview ? <button type="button" disabled>참여 콘텐츠 보기 <span aria-hidden="true">→</span></button>
-            : <Link href={`/event/${encodeURIComponent(slug!)}/engage`}>참여 콘텐츠 보기 <span aria-hidden="true">→</span></Link> : null}
+          <ProductButton type="button" disabled={preview} ref={menuButtonRef ? (node) => menuButtonRef("application", node) : undefined} onClick={() => onOpen?.("application")}>내 신청 정보 <span aria-hidden="true">→</span></ProductButton>
+          {preview ? <ProductButton type="button" disabled>행사 안내 보기 <span aria-hidden="true">→</span></ProductButton>
+            : <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug!)}`}>행사 안내 보기 <span aria-hidden="true">→</span></ProductLink>}
+          {hasPrograms ? preview ? <ProductButton type="button" disabled>참여 콘텐츠 보기 <span aria-hidden="true">→</span></ProductButton>
+            : <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug!)}/engage`}>참여 콘텐츠 보기 <span aria-hidden="true">→</span></ProductLink> : null}
           {selectedPrograms.map((program) => preview
-            ? <button type="button" disabled key={program.id}>{program.title} <span aria-hidden="true">→</span></button>
-            : <Link key={program.id} href={`/event/${encodeURIComponent(slug!)}/engage?program=${encodeURIComponent(program.id)}`}>{program.title} <span aria-hidden="true">→</span></Link>)}
+            ? <ProductButton type="button" disabled key={program.id}>{program.title} <span aria-hidden="true">→</span></ProductButton>
+            : <ProductLink key={program.id} className="button button-secondary" href={`/event/${encodeURIComponent(slug!)}/engage?program=${encodeURIComponent(program.id)}`}>{program.title} <span aria-hidden="true">→</span></ProductLink>)}
         </nav>
       ) : null}
     </>
@@ -173,21 +174,19 @@ function MenuButton({
   preview: boolean;
 }) {
   return (
-    <button
+    <ProductButton
       ref={buttonRef}
       type="button"
       className={styles.menuButton}
+      icon={<MenuIcon type={menu.key} />}
       onClick={onOpen}
       disabled={preview || !onOpen}
       aria-disabled={preview || undefined}
     >
-      <MenuIcon type={menu.key} />
       <span className={styles.menuLabel}>{menu.label}</span>
-      {/* Visual cue only: the detail screen announces the ticket need in
-          full sentences, so the badge stays out of the accessible name and
-          exact-name activation keeps working. */}
-      {needsTicket ? <span className={styles.menuNeedTicket} aria-hidden="true">티켓 필요</span> : null}
-    </button>
+      {needsTicket ? " " : null}
+      {needsTicket ? <span className={styles.menuNeedTicket}>티켓 필요</span> : null}
+    </ProductButton>
   );
 }
 

@@ -466,13 +466,13 @@ test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   assert.match(overview, /overview\.registered/);
   assert.match(overview, /overview\.everIn/);
   const eventCard = home.slice(home.indexOf('function EventCard('), home.indexOf('export default function ConsoleHome()'));
-  assert.match(eventCard, /<Link[\s\S]*className=\{styles\.eventCardLink\}/);
+  assert.match(eventCard, /<ProductLink[\s\S]*className=\{styles\.eventCardLink\}/);
   assert.match(eventCard, /href=\{`\/console\/events\/\$\{encodeURIComponent\(event\.id\)\}`\}/);
   assert.match(eventCard, /participants\?status=PENDING/);
   // The pending queue is its own link outside the overview link; no nested
   // anchors, no per-card duplicate, and no always-empty footer on the card.
   assert.doesNotMatch(eventCard, /<a\b/);
-  assert.match(eventCard, /<\/Link>[\s\S]*styles\.eventCardActions[\s\S]*?승인 대기/);
+  assert.match(eventCard, /<\/ProductLink>[\s\S]*styles\.eventCardActions[\s\S]*?승인 대기/);
   assert.doesNotMatch(eventCard, /복제/);
   assert.doesNotMatch(home, /localStorage/);
   assert.doesNotMatch(home, /sessionStorage/);

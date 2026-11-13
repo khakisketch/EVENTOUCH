@@ -1,5 +1,6 @@
+import { Heading } from "@astryxdesign/core/Heading";
 import type { ReactNode } from "react";
-import Link from "next/link";
+import Link from "../../ui/ProductLink";
 import styles from "./console-ui.module.css";
 
 export type ConsoleEventMeta = {
@@ -66,7 +67,7 @@ export default function ConsolePageHeader({
         ) : null}
         {context ? <div className={styles.pageContext}>{context}</div> : null}
         <div className={styles.pageTitleRow}>
-          <h1>{title}</h1>
+          <Heading level={1}>{title}</Heading>
           {actions ? <div className={styles.pageActions}>{actions}</div> : null}
         </div>
         {meta ? <div className={styles.pageSubline}>

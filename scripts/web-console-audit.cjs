@@ -648,7 +648,7 @@ async function main() {
             // A full-width queue should not separate a short task from its
             // corresponding action by hundreds of blank pixels. Measure the
             // painted task and count, not the potentially stretched row.
-            const queue = page.locator('section[aria-labelledby="event-now-heading"]');
+            const queue = page.locator(':is(section,[role="region"])[aria-labelledby="event-now-heading"]');
             const task = queue.locator('[data-task="approval"] > div > div');
             const action = queue.getByRole('link', { name: '승인 대기 처리', exact: true });
             const taskRight = await task.evaluate((element) => {
@@ -691,8 +691,13 @@ async function main() {
           await context.addCookies([{ name: 'etko_session', value: ownerSession, httpOnly: true, sameSite: 'Lax', url: baseUrl }]);
           const page = await context.newPage();
           await page.goto(`${baseUrl}${screenPath(SCREENS.find((screen) => screen.key === 'content'), eventId)}`, { waitUntil: 'networkidle' });
-          await page.getByRole('tab', { name: '프로그램 일정', exact: true }).click();
-          const empty = page.locator('section[aria-labelledby="content-program"]').getByText('등록된 일정이 없습니다.', { exact: false });
+          const programTab = page.getByRole('tab', { name: '프로그램 일정', exact: true });
+          await programTab.click();
+          const programPanelId = await programTab.getAttribute('aria-controls');
+          if (!programPanelId) throw new Error('program tab does not name its controlled panel');
+          const programPanel = page.locator(`#${programPanelId}`);
+          await programPanel.waitFor({ state: 'visible' });
+          const empty = programPanel.getByText('등록된 일정이 없습니다.', { exact: false });
           await empty.waitFor();
           const broken = await empty.evaluate((node) => {
             const range = document.createRange(), chars = [];
@@ -878,14 +883,22 @@ async function main() {
                 contentLeft: box.left + parseFloat(css.borderLeftWidth) + parseFloat(css.paddingLeft),
                 contentRight: box.right - parseFloat(css.borderRightWidth) - parseFloat(css.paddingRight) };
             };
+            const frames = document.querySelectorAll('[data-workspace-section="console-event-directory"]');
+            if (frames.length !== 1) throw new Error('directory frame must be unique');
+            const frame = frames[0], frameStyle = getComputedStyle(frame);
             return { input: bounds(input), filters: bounds(input.closest('[data-toolbar-span="full"]')),
-              workspace: bounds(input.closest('section')), main: bounds(document.querySelector('main')), viewport: innerWidth };
+              workspace: bounds(frame), main: bounds(document.querySelector('main')), viewport: innerWidth,
+              inset: parseFloat(frameStyle.getPropertyValue('--s4')),
+              padding: [parseFloat(frameStyle.paddingLeft), parseFloat(frameStyle.paddingRight)],
+              borders: [parseFloat(frameStyle.borderLeftWidth), parseFloat(frameStyle.borderRightWidth)] };
           });
           const first = await page.locator('main article').first().boundingBox();
           // The white ledger is inset inside the neutral workspace. Search
           // fills its filter row, not the viewport or the ledger's padding.
           const aligned = (a, b) => Math.abs(a - b) <= 1;
-          if (search.workspace.left < 16 || search.workspace.left > 24 ||
+          if (!Number.isFinite(search.inset) || search.inset <= 0 ||
+              !search.padding.every(value => aligned(value, search.inset)) || !search.borders.every(value => value === 1) ||
+              search.workspace.left < 16 || search.workspace.left > 24 ||
               search.workspace.right > search.viewport - 16 || search.workspace.right < search.viewport - 24 ||
               !aligned(search.workspace.left, search.main.contentLeft) || !aligned(search.workspace.right, search.main.contentRight) ||
               !aligned(search.filters.left, search.workspace.contentLeft) || !aligned(search.filters.right, search.workspace.contentRight) ||
@@ -898,9 +911,9 @@ async function main() {
             const label = e.closest('label').getBoundingClientRect();
             const approval = document.querySelector('main label:has(input[type="checkbox"])').getBoundingClientRect();
             const title = document.getElementById('console-event-directory');
-            const count = title.closest('section').querySelector('p').getBoundingClientRect();
+            const count = title.closest('[data-workspace-section="console-event-directory"]').querySelector('p').getBoundingClientRect();
             const titleBox = title.getBoundingClientRect();
-            const viewBox = title.closest('section').querySelector('[role="group"][aria-label="목록 보기 방식"]').getBoundingClientRect();
+            const viewBox = title.closest('[data-workspace-section="console-event-directory"]').querySelector('[role="group"][aria-label="목록 보기 방식"]').getBoundingClientRect();
             return { background: css.backgroundColor, border: css.borderTopWidth, radius: css.borderRadius, height: e.getBoundingClientRect().height,
               filterGap: approval.x - label.right,
               countGap: count.top - Math.max(titleBox.bottom, viewBox.bottom),
@@ -911,7 +924,7 @@ async function main() {
           // the 44px view controls; description spacing starts at that row's
           // bottom, not at the shorter H2 glyph box.
           if (Math.abs(stage.filterGap - 12) > 1 || Math.abs(stage.countGap - 4) > 1 || stage.titleActionCenterDelta > 1) throw new Error(`home filter or title-summary spacing drifted: ${JSON.stringify(stage)}`);
-          const heading = page.locator('section[aria-labelledby="console-event-directory"]');
+          const heading = page.locator(':is(section,[role="region"])[aria-labelledby="console-event-directory"]');
           if (!await heading.getByRole('button', { name: '달력', exact: true }).isVisible()) throw new Error('view switch detached from list');
           await shot('events');
           await page.getByRole('searchbox', { name: '행사명·고객사·장소 검색', exact: true }).fill('존재하지 않는 검색');
@@ -1098,7 +1111,7 @@ async function main() {
         await check(`phone/preview-status@${width}`, async () => {
           await go('attendeePage');
           await page.getByRole('navigation', { name: '참가자 페이지 구역' }).getByRole('link', { name: '미리보기', exact: true }).click();
-          const status = page.locator('section[aria-labelledby="home-preview-heading"]').getByText('편집 중', { exact: true }).first();
+          const status = page.locator(':is(section,[role="region"])[aria-labelledby="home-preview-heading"]').getByText('편집 중', { exact: true }).first();
           const box = await status.boundingBox();
           if (!box || box.height > 30 || box.width < 40) throw new Error('preview status squeezed into vertical Korean');
           await status.scrollIntoViewIfNeeded();
@@ -1757,10 +1770,10 @@ async function main() {
         await assertConsoleScreen(page, SCREENS.find((screen) => screen.key === 'operations'), eventId, eventName);
         if (!await page.locator('#ops-booth-map').count()) throw new Error('booth map section missing');
         await page.getByRole('tab', { name: '부스 지도', exact: true }).click();
-        await page.locator('section[aria-labelledby="ops-booth-map"] summary').click();
+        await page.locator('[data-workspace-section="ops-booth-map"] summary').click();
         // `headingId` labels the section; the file input lives inside it.
         // A sandboxed browser may not share the host's /tmp namespace.
-        await page.locator('section[aria-labelledby="ops-booth-map"] input[type="file"]').setInputFiles({
+        await page.locator('[data-workspace-section="ops-booth-map"] input[type="file"]').setInputFiles({
           name: 'ops-map-fixture.png', mimeType: 'image/png', buffer: fs.readFileSync(fixture),
         });
         const saveDraft = page.getByRole('button', { name: '초안 저장' });
@@ -1973,7 +1986,7 @@ async function main() {
       page.on('pageerror', (error) => failures.push(`pageerror attendee booth ticket: ${error.message}`));
       try {
         await page.goto(`${baseUrl}/event/${encodeURIComponent(fixture.slug)}/home`, { waitUntil: 'networkidle', timeout: 30000 });
-        await page.getByRole('button', { name: '부스 인증', exact: true }).click();
+        await page.getByRole('button', { name: '부스 인증 티켓 필요', exact: true }).click();
         await page.getByText('티켓이 확인되지 않습니다.').first().waitFor({ timeout: 10000 });
         // The fixture forces SMS mock, so no recovery code can arrive and the
         // recover screen itself refuses: the dead-end link must stay hidden

@@ -2,33 +2,10 @@
 
 const { Pool } = require('pg');
 
-function databaseConnectionString(value) {
-  const connectionString = value || process.env.DATABASE_URL;
-  if (!connectionString) throw new Error('DATABASE_URL을 설정하세요');
-  let url;
-  try {
-    url = new URL(connectionString);
-  } catch (error) {
-    throw new Error('DATABASE_URL 형식을 확인하세요');
-  }
-  if (!['postgres:', 'postgresql:'].includes(url.protocol)) {
-    throw new Error('DATABASE_URL은 PostgreSQL 주소여야 합니다');
-  }
-  return connectionString;
-}
+const { databaseConnectionOptions } = require('./database-config');
 
-function poolSize() {
-  const configured = Number(process.env.PGPOOL_MAX || 10);
-  return Number.isInteger(configured) && configured >= 1 && configured <= 50 ? configured : 10;
-}
-
-function createDatabase({ connectionString, PoolClass = Pool } = {}) {
-  const pool = new PoolClass({
-    connectionString: databaseConnectionString(connectionString),
-    max: poolSize(),
-    connectionTimeoutMillis: 5000,
-    idleTimeoutMillis: 30000,
-  });
+function createDatabase({ connectionString, PoolClass = Pool, env = process.env } = {}) {
+  const pool = new PoolClass(databaseConnectionOptions({ connectionString, env }));
   let closed = false;
 
   if (typeof pool.on === 'function') {
@@ -49,14 +26,19 @@ function createDatabase({ connectionString, PoolClass = Pool } = {}) {
       if (typeof fn !== 'function') throw new TypeError('transaction callback is required');
       const client = await pool.connect();
       let began = false;
+      let committing = false;
       try {
         await client.query('BEGIN');
         began = true;
         const result = await fn(client);
+        committing = true;
         await client.query('COMMIT');
         began = false;
         return result;
       } catch (error) {
+        // A lost COMMIT reply is not proof of rollback. File compensation
+        // must retain bytes until the original receipt can be reconciled.
+        if (committing) Object.defineProperty(error, 'transactionOutcome', { value: 'unknown', configurable: true });
         if (began) {
           try {
             await client.query('ROLLBACK');

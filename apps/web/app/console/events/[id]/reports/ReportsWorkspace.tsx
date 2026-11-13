@@ -1,11 +1,11 @@
 "use client";
 
+import ProductButton from "../../../../ui/ProductButton";
 import ValidatedForm from "../../../../ui/ValidatedForm";
-
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import ProductLink from "../../../../ui/ProductLink";
 import { loginHrefForLocation } from "../../../../auth-redirect";
 import { closeHandoffHref, eventCloseHref, readCloseSnapshot } from "../../../console-event-close";
 import ConsolePage from "../../../console-ui/ConsolePage";
@@ -216,12 +216,12 @@ function ReportAttendanceReview({ reviewed, latest, failure, loadedAt, refreshin
           </div>
         ))}
       </dl>
-      {reviewed.cancellationReview > 0 ? <ConsoleFeedback kind="warning">취소 기록과 신청 상태가 다른 {reviewed.cancellationReview}명이 등록 집계에 포함돼 있습니다. 참가 여부를 확인해야 하며 승인 상태·입장 집계에도 반영될 수 있습니다. {participantChangesLocked ? "종료 이후에는 참가자 상태를 변경할 수 없으며 이 상태가 보고서에 남습니다. " : ""}<Link href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인 필요 명단 보기</Link></ConsoleFeedback> : null}
+      {reviewed.cancellationReview > 0 ? <ConsoleFeedback kind="warning">취소 기록과 신청 상태가 다른 {reviewed.cancellationReview}명이 등록 집계에 포함돼 있습니다. 참가 여부를 확인해야 하며 승인 상태·입장 집계에도 반영될 수 있습니다. {participantChangesLocked ? "종료 이후에는 참가자 상태를 변경할 수 없으며 이 상태가 보고서에 남습니다. " : ""}<ProductLink href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인 필요 명단 보기</ProductLink></ConsoleFeedback> : null}
       {needsReview ? (
         <div>
           {needsRefresh || refreshing
-            ? <button type="button" className="button button-secondary" disabled={busy || refreshing} onClick={onRefresh}>{refreshing ? "최신 집계 확인 중" : "최신 집계 다시 불러오기"}</button>
-            : <button type="button" className="button button-secondary" disabled={busy} onClick={onAccept}>최신 집계 사용</button>}
+            ? <ProductButton type="button" variant="secondary" disabled={busy || refreshing} onClick={onRefresh}>{refreshing ? "최신 집계 확인 중" : "최신 집계 다시 불러오기"}</ProductButton>
+            : <ProductButton type="button" variant="secondary" disabled={busy} onClick={onAccept}>최신 집계 사용</ProductButton>}
         </div>
       ) : null}
     </div>
@@ -815,9 +815,9 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
       <p>서버 확인은 보고서를 다시 만들거나 변경하지 않습니다.</p>
       {recoveryError ? <p role="alert">{recoveryError}</p> : null}
       <div className={styles.recoveryActions}>
-        <button type="button" className="button button-secondary" disabled={checkingReport || busy || abandonReportConfirm} onClick={() => void resolveReportAttempt("status")}>서버 처리 확인</button>
-        <button type="button" className="button button-secondary" disabled={checkingReport || busy || abandonReportConfirm} onClick={() => void resolveReportAttempt("retry")}>같은 요청 다시 시도</button>
-        <button type="button" className="button button-secondary" disabled={checkingReport || busy || abandonReportConfirm} onClick={() => setAbandonReportConfirm(true)}>확인 전 그만두기</button>
+        <ProductButton type="button" variant="secondary" disabled={checkingReport || busy || abandonReportConfirm} onClick={() => void resolveReportAttempt("status")}>서버 처리 확인</ProductButton>
+        <ProductButton type="button" variant="secondary" disabled={checkingReport || busy || abandonReportConfirm} onClick={() => void resolveReportAttempt("retry")}>같은 요청 다시 시도</ProductButton>
+        <ProductButton type="button" variant="secondary" disabled={checkingReport || busy || abandonReportConfirm} onClick={() => setAbandonReportConfirm(true)}>확인 전 그만두기</ProductButton>
       </div>
       {abandonReportConfirm ? <ConsoleConfirm
         summary="이미 반영된 보고서 처리는 취소되지 않습니다. 입력 화면을 닫고 최신 목록을 확인할까요?"
@@ -1086,14 +1086,24 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
         action={(
           <div className={ui.recordActions}>
           {!reportSourcesAvailable ? <ConsoleRefreshButton label="보고서 자료 다시 확인" busy={refreshing} onRefresh={() => setReloadTick((tick) => tick + 1)} /> : null}
-          <button type="button" className={`button ${state.reports.length ? "button-secondary" : "button-primary"}`} disabled={writeLocked || !reportSourcesAvailable}
+          <ProductButton type="button" variant={state.reports.length ? "secondary" : "primary"} disabled={writeLocked || !reportSourcesAvailable}
             onClick={openReportCreate}>
             보고서 만들기
-          </button>
+          </ProductButton>
           </div>
         )}
       >
         {!reportSourcesAvailable ? <ConsoleFeedback kind="warning">{missingSourceText} 자료를 확인할 수 없어 현재 집계로 보고서를 만들 수 없습니다. 새로고침해도 계속되면 시스템 관리자에게 문의하세요. 기존 보고서는 확인할 수 있습니다.</ConsoleFeedback> : null}
+        <div className={styles.analysisHandoff}>
+          <div>
+            <strong>조회된 집계</strong>
+            <p>{!reportSourcesAvailable ? (attendanceAvailable ? "일부 집계 자료 확인 필요" : "집계 자료 확인 필요") : "마지막으로 확인한 집계"}{loadedAt ? ` · 조회 ${capturedLabel(loadedAt)}` : " · 조회 시각 확인 중"}{refreshFailure ? " · 새로고침 실패 · 이전 조회 표시" : ""}</p>
+          </div>
+          <ProductButton type="button" variant="ghost" className={styles.analysisHandoffAction} onClick={() => {
+            window.history.replaceState(window.history.state, "", "#reports-analysis");
+            requestConsoleTask("reports-analysis", true);
+          }}>조회된 집계 보기</ProductButton>
+        </div>
         {state.reports.length ? (
           <ul className={ui.collection}>
             {state.reports.map((report) => (
@@ -1109,9 +1119,9 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                   <span className={`${styles.badge} ${report.status === "PUBLISHED" ? styles.badgePublished : styles.badgeDraft}`}>
                     {report.status === "PUBLISHED" ? "공유 완료 기록" : "초안"}
                   </span>
-                  <button type="button" className="button button-secondary" onClick={() => openReport(report.id)}>
+                  <ProductButton type="button" variant="secondary" onClick={() => openReport(report.id)}>
                     내용 보기
-                  </button>
+                  </ProductButton>
                 </div>
               </li>
             ))}
@@ -1150,11 +1160,11 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
         {attendanceAvailable && state.metrics.attendanceReview > 0 ? (
           <ConsoleFeedback kind="warning">
             일부 출입 기록이 명확하지 않아 입장 수와 입장률이 실제와 다를 수 있습니다.{" "}
-            <Link href={`/console/events/${encodeURIComponent(eventId)}/participants?attendance=REVIEW`}>출입 기록 확인 필요 {state.metrics.attendanceReview}명</Link>
+            <ProductLink href={`/console/events/${encodeURIComponent(eventId)}/participants?attendance=REVIEW`}>출입 기록 확인 필요 {state.metrics.attendanceReview}명</ProductLink>
           </ConsoleFeedback>
         ) : null}
         {attendanceAvailable && state.metrics.cancellationReview > 0 ? (
-          <ConsoleFeedback kind="warning">취소 기록과 신청 상태가 다른 {state.metrics.cancellationReview}명이 등록 집계에 포함돼 있습니다. 참가 여부를 확인해야 하며 승인 상태·입장 집계에도 반영될 수 있습니다. <Link href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인 필요 명단 보기</Link></ConsoleFeedback>
+          <ConsoleFeedback kind="warning">취소 기록과 신청 상태가 다른 {state.metrics.cancellationReview}명이 등록 집계에 포함돼 있습니다. 참가 여부를 확인해야 하며 승인 상태·입장 집계에도 반영될 수 있습니다. <ProductLink href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인 필요 명단 보기</ProductLink></ConsoleFeedback>
         ) : null}
         <details className={styles.analysisNote}>
           <summary>집계 기준</summary>
@@ -1407,19 +1417,19 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
             </p>
             {closeReportId === detail.id ? <>
               {detail.status !== "PUBLISHED" ? <p className={styles.help}>이 버전의 공유 완료·잠금은 아직 기록하지 않았습니다. 내용 검토·동결 전에도 이동은 가능하며 자동으로 완료 처리하지 않습니다.</p> : null}
-              <Link className="button button-secondary" data-close-report-next
+              <ProductLink variant="secondary" data-close-report-next
                 href={closeHandoffHref(`/console/events/${encodeURIComponent(eventId)}/messages`, eventId, detail.id)}
-                onNavigate={() => window.dispatchEvent(new Event("eventouch:shell-reload"))}>다음: 결과 안내</Link>
+                onNavigate={() => window.dispatchEvent(new Event("eventouch:shell-reload"))}>다음: 결과 안내</ProductLink>
             </> : null}
-            <Link className="button button-secondary" href={eventCloseHref(eventId, detail.id)}
+            <ProductLink variant="secondary" href={eventCloseHref(eventId, detail.id)}
               onClick={() => setCloseReportId(detail.id)} onNavigate={() => requestConsoleTask("event-close", true)} data-report-close-return>
               {closeReportId === detail.id ? "마감으로 돌아가기" : "이 보고서로 마감 이어가기"}
-            </Link>
+            </ProductLink>
           </div>
           {failure?.field === "expectedVersion" && !createOpen ? (
             <>
               <ConsoleFeedback kind="error">{failure.message}</ConsoleFeedback>
-              {refreshFailure ? <button type="button" className="button button-secondary" disabled={refreshing} onClick={() => setReloadTick((tick) => tick + 1)}>보고서 내용 다시 확인</button> : null}
+              {refreshFailure ? <ProductButton type="button" variant="secondary" disabled={refreshing} onClick={() => setReloadTick((tick) => tick + 1)}>보고서 내용 다시 확인</ProductButton> : null}
             </>
           ) : null}
           {printStatus === "preparing" ? (
@@ -1434,29 +1444,29 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
             선택한 항목만 전달하려면 인쇄에서 PDF로 저장할 수 있습니다.
           </p>
           <ConsoleFormActions>
-            <button type="button" className="button button-secondary" aria-describedby="report-export-scope-help" onClick={() => exportJson(detail)}>
+            <ProductButton type="button" variant="secondary" aria-describedby="report-export-scope-help" onClick={() => exportJson(detail)}>
               원본 파일 저장 (JSON)
-            </button>
-            <button type="button" className="button button-secondary" aria-disabled={printStatus === "preparing" || undefined}
+            </ProductButton>
+            <ProductButton type="button" variant="secondary" aria-disabled={printStatus === "preparing" || undefined}
               aria-describedby={printStatus ? "report-print-status" : undefined} onClick={() => void printReport(detail)}>
               {printStatus === "preparing" ? "인쇄 준비 중" : "인쇄하기"}
-            </button>
+            </ProductButton>
             {printStatus === "failed" ? (
-              <button type="button" className="button button-secondary" onClick={() => void printReport(detail, true)}>
+              <ProductButton type="button" variant="secondary" onClick={() => void printReport(detail, true)}>
                 사진 제외하고 인쇄
-              </button>
+              </ProductButton>
             ) : null}
             {detail.status === "DRAFT" ? (
               <>
-                <button type="button" className="button button-secondary" disabled={writeLocked} onClick={() => { setEditReport(detail); setFailure(null); dialogUnresolvedRef.current = false; setCreateOpen(true); }}>
+                <ProductButton type="button" variant="secondary" disabled={writeLocked} onClick={() => { setEditReport(detail); setFailure(null); dialogUnresolvedRef.current = false; setCreateOpen(true); }}>
                   내용 편집
-                </button>
+                </ProductButton>
                 {publishIntent?.id === detail.id && publishIntent.version === detail.version ? (
                   <>
                     <span className={styles.help}>완료로 표시하면 이 버전은 편집할 수 없습니다. 고객사에 자동 전송되지는 않습니다.</span>
-                    <button
+                    <ProductButton
                       type="button"
-                      className="button button-primary"
+                      variant="primary"
                       disabled={busy || writeLocked}
                       onClick={async () => {
                         const ok = await runCommand("report.publish", { id: publishIntent.id, expectedVersion: publishIntent.version }, "공유 완료를 기록하고 이 버전을 잠갔습니다. 고객사에 자동 전송되지는 않습니다.");
@@ -1464,17 +1474,17 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                       }}
                     >
                       {busy ? "기록 중입니다" : "공유 완료·잠금"}
-                    </button>
-                    <button type="button" className="button button-secondary" onClick={() => setPublishIntent(null)}>
+                    </ProductButton>
+                    <ProductButton type="button" variant="secondary" onClick={() => setPublishIntent(null)}>
                       취소
-                    </button>
+                    </ProductButton>
                   </>
                 ) : (
                   <>
                     {publishIntent?.id === detail.id ? <span className={styles.help} role="status">보고서가 변경됐습니다. 최신 내용을 검토한 뒤 공유 완료를 다시 확인하세요.</span> : null}
-                    <button type="button" className="button button-primary" disabled={writeLocked || refreshing || (failure?.field === "expectedVersion" && Boolean(refreshFailure))} onClick={() => { setFailure(null); setPublishIntent({ id: detail.id, version: detail.version }); }}>
+                    <ProductButton type="button" variant="primary" disabled={writeLocked || refreshing || (failure?.field === "expectedVersion" && Boolean(refreshFailure))} onClick={() => { setFailure(null); setPublishIntent({ id: detail.id, version: detail.version }); }}>
                       공유 완료로 표시
-                    </button>
+                    </ProductButton>
                   </>
                 )}
               </>
@@ -1499,7 +1509,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                     </label>
                     {!reportSourcesAvailable || failure?.code === "REPORT_SOURCE_UNAVAILABLE" ? <div>
                       <p className={styles.help}>{reportSourcesAvailable ? "보고서 자료가 변경됐을 수 있습니다." : `${missingSourceText} 자료를 확인할 수 없어 현재 집계는 사용할 수 없습니다.`} 기존 보고서의 집계는 유지할 수 있습니다.</p>
-                      <button type="button" className="button button-secondary" disabled={refreshing || busy} onClick={() => { setFailure(null); setReloadTick((tick) => tick + 1); }}>{refreshing ? "자료 확인 중" : "자료 다시 확인"}</button>
+                      <ProductButton type="button" variant="secondary" disabled={refreshing || busy} onClick={() => { setFailure(null); setReloadTick((tick) => tick + 1); }}>{refreshing ? "자료 확인 중" : "자료 다시 확인"}</ProductButton>
                     </div> : null}
                     <label className={styles.check}>
                       <input
@@ -1517,9 +1527,9 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                         busy={busy || writeLocked} eventId={eventId} participantChangesLocked={["ENDED", "ARCHIVED"].includes(state.stage)} onRefresh={() => setReloadTick((tick) => tick + 1)}
                         onAccept={() => { setSuccessorAttendance(reportAttendance(state.metrics)); setFailure(null); }} />
                     ) : null}
-                    <button
+                    <ProductButton
                       type="button"
-                      className="button button-primary"
+                      variant="primary"
                       disabled={busy || writeLocked || (successorSource === "current" &&
                         (!reportSourcesAvailable || !successorAttendance || needsAttendanceReview(successorAttendance, state.metrics, failure)))}
                       onClick={async () => {
@@ -1533,26 +1543,26 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                       }}
                     >
                       {busy ? "만드는 중입니다" : "새 버전 만들기"}
-                    </button>
-                    <button type="button" className="button button-secondary" onClick={() => setSuccessorId(null)}>
+                    </ProductButton>
+                    <ProductButton type="button" variant="secondary" onClick={() => setSuccessorId(null)}>
                       취소
-                    </button>
+                    </ProductButton>
                   </>
                 ) : (
-                  <button type="button" className="button button-primary" disabled={writeLocked} onClick={() => {
+                  <ProductButton type="button" variant="primary" disabled={writeLocked} onClick={() => {
                     setSuccessorId(detail.id);
                     setSuccessorSource(reportSourcesAvailable ? "current" : "snapshot");
                     setSuccessorAttendance(reportAttendance(state.metrics));
                     setFailure(null);
                   }}>
                     새 버전 만들기
-                  </button>
+                  </ProductButton>
                 )}
               </>
             )}
-            <button type="button" className="button button-secondary" onClick={() => { setDetailId(null); setPublishIntent(null); setSuccessorId(null); }}>
+            <ProductButton type="button" variant="secondary" onClick={() => { setDetailId(null); setPublishIntent(null); setSuccessorId(null); }}>
               닫기
-            </button>
+            </ProductButton>
           </ConsoleFormActions>
         </ConsoleSection>
       ) : null}
@@ -1751,7 +1761,7 @@ function CreateDialog({
       >
           {!initial && !sourcesAvailable ? <div>
             <ConsoleFeedback kind="warning">{missingSourceText} 자료를 확인할 수 없어 현재 집계로 보고서를 만들 수 없습니다. 다시 확인해도 계속되면 시스템 관리자에게 문의하세요.</ConsoleFeedback>
-            <button type="button" className="button button-secondary" disabled={refreshing || busy} onClick={onRefresh}>{refreshing ? "자료 확인 중" : "자료 다시 확인"}</button>
+            <ProductButton type="button" variant="secondary" disabled={refreshing || busy} onClick={onRefresh}>{refreshing ? "자료 확인 중" : "자료 다시 확인"}</ProductButton>
           </div> : null}
           {!initial && sourcesAvailable ? (
             <ReportAttendanceReview reviewed={reviewedAttendance} latest={attendance} failure={failure} loadedAt={loadedAt}
@@ -1768,9 +1778,9 @@ function CreateDialog({
               {participantChangesLocked ? (
                 <span>종료 이후에는 참가자 승인 상태를 변경할 수 없습니다. 현재 상태 그대로 취소 제외 등록 집계에 포함됩니다.</span>
               ) : (
-                <Link href={closeHandoffHref(`/console/events/${encodeURIComponent(eventId)}/participants?status=PENDING`, eventId)}>
+                <ProductLink href={closeHandoffHref(`/console/events/${encodeURIComponent(eventId)}/participants?status=PENDING`, eventId)}>
                   참가자에서 승인 처리하기
-                </Link>
+                </ProductLink>
               )}
             </div>
           ) : null}
@@ -1855,37 +1865,37 @@ function CreateDialog({
                       </div>)}
                     </dl> : null}
                     <div className={styles.recoveryActions}>
-                      <button type="button" className="button button-secondary" disabled={busy || locked || refreshing} onClick={() => applyLatest(false)}>
+                      <ProductButton type="button" variant="secondary" disabled={busy || locked || refreshing} onClick={() => applyLatest(false)}>
                         {overlaps.length ? "겹친 항목은 최근 저장 사용" : "최근 변경 반영"}
-                      </button>
-                      {overlaps.length ? <button type="button" className="button button-secondary" disabled={busy || locked || refreshing} onClick={() => applyLatest(true)}>겹친 항목은 내 입력 유지</button> : null}
+                      </ProductButton>
+                      {overlaps.length ? <ProductButton type="button" variant="secondary" disabled={busy || locked || refreshing} onClick={() => applyLatest(true)}>겹친 항목은 내 입력 유지</ProductButton> : null}
                     </div>
                   </>
                 ) : (
                   <>
                     <p role="status">보고서가 변경됐습니다. 최신 내용을 확인한 뒤 계속 편집할 수 있습니다.</p>
                     {refreshFailure ? <p role="status">{refreshFailure} 작성한 입력은 유지됩니다.</p> : null}
-                    <button type="button" className="button button-secondary" disabled={refreshing || busy} onClick={onRefresh}>{refreshing ? "최신 내용 확인 중" : "최신 내용 다시 확인"}</button>
+                    <ProductButton type="button" variant="secondary" disabled={refreshing || busy} onClick={onRefresh}>{refreshing ? "최신 내용 확인 중" : "최신 내용 다시 확인"}</ProductButton>
                   </>
                 )}
             </div>
           ) : null}
           {formError ? <p role="alert" className={styles.alert}>{formError}</p> : null}
           {failure && failure.field !== "expectedAttendance" && !(needsReview && failure.field === "expectedVersion") ? <p id="report-dialog-error" role="alert" className={styles.alert}>{failure.message}</p> : null}
-          {!initial && sourcesAvailable && failure?.code === "REPORT_SOURCE_UNAVAILABLE" ? <button type="button" className="button button-secondary" disabled={refreshing || busy} onClick={() => { onAcceptAttendance(); onRefresh(); }}>{refreshing ? "자료 확인 중" : "자료 다시 확인"}</button> : null}
+          {!initial && sourcesAvailable && failure?.code === "REPORT_SOURCE_UNAVAILABLE" ? <ProductButton type="button" variant="secondary" disabled={refreshing || busy} onClick={() => { onAcceptAttendance(); onRefresh(); }}>{refreshing ? "자료 확인 중" : "자료 다시 확인"}</ProductButton> : null}
           {recovery}
           <ConsoleFormActions>
-            <button
+            <ProductButton
               type="button"
-              className="button button-secondary"
+              variant="secondary"
               onClick={() => { if (!busy && confirmDialogClose()) onClose(); }}
               disabled={busy}
             >
               취소
-            </button>
-            <button type="submit" ref={saveRef} className="button button-primary" disabled={busy || locked || needsReview || attendanceNeedsReview || (!initial && !sourcesAvailable)}>
+            </ProductButton>
+            <ProductButton type="submit" ref={saveRef} variant="primary" disabled={busy || locked || needsReview || attendanceNeedsReview || (!initial && !sourcesAvailable)}>
               {busy ? "저장 중입니다" : initial ? "수정 저장" : "보고서 만들기"}
-            </button>
+            </ProductButton>
           </ConsoleFormActions>
         </ValidatedForm>
     </ConsoleDialog>

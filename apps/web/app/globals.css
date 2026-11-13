@@ -2,6 +2,8 @@
    the established visual system onto the new App Router's semantic markup. */
 @import "./tokens.css";
 
+@layer eventouch-base {
+
 * {
   box-sizing: border-box;
 }
@@ -158,6 +160,9 @@ select[aria-invalid="true"] {
   color: var(--ink);
 }
 
+}
+
+@layer eventouch-legacy {
 .skip-link {
   position: fixed;
   z-index: 10;
@@ -262,8 +267,8 @@ select[aria-invalid="true"] {
 }
 
 .button-primary {
-  /* Foreground and background switch together to keep contrast in every frame. */
-  transition: background-color 160ms ease-out, border-color 160ms ease-out, color 160ms ease-out, transform 160ms ease-out;
+  /* Switch both colors immediately; interpolating them can reduce contrast. */
+  transition: transform 160ms ease-out;
   border-color: var(--brand);
   background: var(--brand);
   color: var(--on-brand);
@@ -1050,7 +1055,7 @@ a.pill:hover {
   white-space: pre-wrap;
 }
 
-.registration-form button[type="submit"] {
+.registration-form button[type="submit"]:not([data-product-action]) {
   width: 100%;
   min-height: var(--s7);
   scroll-margin-block-end: var(--s4);
@@ -1853,9 +1858,16 @@ a.pill:hover {
   gap: var(--s2);
   overflow: hidden;
   padding: var(--s5) var(--s3) var(--s3);
+  /* Renewal direction A: the sidebar is the ink command rail. Scoped
+     overrides only — the --nav tokens keep their light values elsewhere. */
+  --nav: var(--side);
+  --nav-hover: var(--side-hover);
+  --nav-active: var(--side-active);
+  --nav-text: var(--side-text);
+  --nav-muted: var(--side-muted);
   background: var(--nav);
   color: var(--nav-text);
-  border-right: 1px solid var(--line);
+  border-right: 1px solid var(--stage-line);
 }
 
 .console-brand {
@@ -1941,8 +1953,23 @@ a.pill:hover {
 
 .console-nav-item.active{
   background: var(--nav-active);
-  color: var(--brand-text);
+  color: var(--side-text);
   font-weight: 650;
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+
+.console-sidebar .side-nav {
+  scrollbar-color: var(--side-scroll) transparent;
+}
+
+/* Hairlines on the ink rail use the stage line, not the paper line. */
+.console-sidebar .nav-event-branch,
+.console-sidebar .nav-event-card {
+  border-color: var(--stage-line);
+}
+
+.console-sidebar .console-hub-subnav {
+  border-left-color: var(--stage-line);
 }
 
 .console-nav-item.active-path{
@@ -1953,7 +1980,7 @@ a.pill:hover {
 
 .console-nav-item.active:hover{
   background: var(--nav-active);
-  color: var(--brand-text);
+  color: var(--side-text);
 }
 
 .console-nav-item:focus-visible {
@@ -2187,12 +2214,17 @@ a.pill:hover {
   flex: none;
   place-items: center;
   border: 1px solid var(--nav-active);
-  border-radius: 50%;
   background: var(--nav-hover);
   color: var(--nav-text);
   font-size: var(--small);
   font-weight: 750;
 }
+
+.operator-avatar .astryx-avatar-fallback {
+  background: var(--nav-hover);
+  color: var(--nav-text);
+}
+
 
 .operator-identity {
   display: grid;
@@ -2734,7 +2766,7 @@ a.pill:hover {
   gap: var(--s4);
 }
 
-.auth-form button[type="submit"] {
+.auth-form button[type="submit"]:not([data-product-action]) {
   min-height: var(--s8);
   border: 1px solid var(--brand);
   border-radius: var(--radius);
@@ -2832,8 +2864,8 @@ a.pill:hover {
   }
 
   .button-primary:hover,
-  .registration-form button[type="submit"]:hover,
-  .auth-form button[type="submit"]:hover {
+  .registration-form button[type="submit"]:not([data-product-action]):hover,
+  .auth-form button[type="submit"]:not([data-product-action]):hover {
     border-color: var(--brand-hover);
     background: var(--brand-hover);
     color: var(--on-brand-hover);
@@ -3513,7 +3545,7 @@ a.pill:hover {
 /* White workspace chrome. Permission-aware navigation and account/organization
    switching retain the same markup and interaction owners. */
 
-.console-wordmark::first-letter { color: var(--brand-text); }
+.console-wordmark::first-letter { color: var(--brand); }
 
 .console-brand:hover {
   color: var(--nav-text);
@@ -3552,6 +3584,15 @@ a.pill:hover {
   border-radius: 50%;
   background: var(--nav-hover);
   color: var(--ink);
+}
+
+.console-sidebar .operator-avatar {
+  border-color: var(--side-muted);
+  color: var(--side-text);
+}
+
+.console-sidebar .sidebar-bottom {
+  border-color: var(--side-line);
 }
 
 .operator-menu {
@@ -3611,9 +3652,18 @@ a.pill:hover {
   }
 
   .console-global-menu {
+    /* The menu is paper even when its parent is the ink command rail. */
+    --nav-text: var(--ink);
+    --nav-muted: var(--muted);
+    --nav-hover: var(--surface-muted);
+    --nav-active: var(--brand-tint);
     border: 1px solid var(--line);
     border-radius: var(--radius);
     background: var(--paper);
+  }
+
+  .console-global-menu .console-nav-item.active {
+    color: var(--brand-text);
   }
 }
 
@@ -3732,7 +3782,7 @@ a.pill:hover {
   letter-spacing: -0.025em;
 }
 
-.login-page .auth-form button[type="submit"] {
+.login-page .auth-form button[type="submit"]:not([data-product-action]) {
   min-height: 48px;
   border-radius: var(--radius);
   font-weight: 650;
@@ -3816,3 +3866,5 @@ textarea[data-resize-none] { resize: none; min-height: 96px; max-width: 100%; }
 
 .account-history > summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; color: var(--brand-text); font-weight: 650; }
 .account-history > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+
+}

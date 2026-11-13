@@ -16,7 +16,7 @@ const rootRead = (relative) => fs.readFileSync(path.join(__dirname, "..", relati
 
 test("report-to-settings standalone action keeps the shared 44px button target", () => {
   const flow = read("console/events/[id]/reports/EventCloseFlow.tsx");
-  assert.match(flow, /<Link className="button button-secondary" href=\{href\(`\$\{base\}\/settings#settings-stage`\)\}/);
+  assert.match(flow, /<ProductLink variant="secondary" href=\{href\(`\$\{base\}\/settings\?closeStep=archive#settings-stage`\)\}/u);
   assert.match(flow, /closeHandoffHref\(target, eventId, report\?\.id\)/, 'the same target now carries the explicit close return');
 });
 

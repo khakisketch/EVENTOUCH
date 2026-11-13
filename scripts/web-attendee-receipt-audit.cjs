@@ -75,6 +75,14 @@ async function main() {
     await page.reload({ waitUntil: 'networkidle' });
     const saved = page.locator('section').filter({ has: page.getByRole('heading', { name: '서버 처리 결과 확인', exact: true }) });
     await saved.getByRole('button', { name: '서버 처리 확인' }).waitFor();
+    const withoutModules = (await database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [fixture.eventId])).rows[0].payload;
+    const savedModules = withoutModules.modules;
+    withoutModules.modules = [];
+    await database.query('UPDATE event_workspaces SET payload=$2::jsonb WHERE event_id=$1', [fixture.eventId, JSON.stringify(withoutModules)]);
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.getByText('게시된 프로그램이 없습니다.', { exact: true }).waitFor();
+    await saved.getByRole('button', { name: '서버 처리 확인' }).waitFor();
+    assert.equal(await page.getByRole('link', { name: '참가 메뉴로', exact: true }).count(), 1, 'a long recovery state retains its footer return');
     let lookups = 0;
     const routePattern = '**/command-receipts/*';
     await page.route(routePattern, route => { lookups += 1; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'UNCONFIRMED' }) }); });
@@ -90,6 +98,10 @@ async function main() {
     const after = (await database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [fixture.eventId])).rows[0].payload;
     assert.equal(after.responses.filter(row => row.moduleId === 'receipt-poll' && row.participantId === person.id).length, 1);
     assert.equal(await page.evaluate(() => Object.keys(sessionStorage).some(key => key.startsWith('eventouch.receipts.guest.'))), false);
+    const restored = (await database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [fixture.eventId])).rows[0].payload;
+    restored.modules = savedModules;
+    await database.query('UPDATE event_workspaces SET payload=$2::jsonb WHERE event_id=$1', [fixture.eventId, JSON.stringify(restored)]);
+    await page.reload({ waitUntil: 'networkidle' });
 
     stage = 'storage unavailable';
     await page.evaluate(() => {

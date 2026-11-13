@@ -214,7 +214,7 @@ test('public file reads stream bytes with the stored metadata', async () => {
   fs.writeFileSync(absolutePath, 'stream-bytes');
   try {
     const app = buildPublicReadsApp(publicDeps({
-      readPublicFile: async () => ({ absolutePath, type: 'image/png', size: 12 }),
+      readPublicFile: async () => ({ openReadStream: async () => fs.createReadStream(absolutePath), type: 'image/png', size: 12 }),
     }));
     const response = await app.inject({ method: 'GET', url: '/api/public/events/live/files/file-1' });
     assert.equal(response.statusCode, 200);

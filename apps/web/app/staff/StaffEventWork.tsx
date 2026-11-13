@@ -1,11 +1,13 @@
 "use client";
 
+import ProductButton from "../ui/ProductButton";
+
 import ValidatedForm from "../ui/ValidatedForm";
 import NameTagPrint, { type NameTagIdentity } from "../ui/NameTagPrint";
 
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import ProductLink from "../ui/ProductLink";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import QRCode from "react-qr-code";
@@ -881,12 +883,12 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         <section className="staff-workspace state-panel">
           <p role="alert">{loadError ?? "이 행사에 대한 업무 배정이 없습니다. 운영자에게 문의하세요."}</p>
           <p>
-            <button type="button" className="button button-secondary" onClick={() => load()}>
+            <ProductButton type="button" className="button button-secondary" onClick={() => load()}>
               다시 불러오기
-            </button>{" "}
-            <Link className="button button-secondary" href="/staff">
+            </ProductButton>{" "}
+            <ProductLink className="button button-secondary" href="/staff">
               내 업무로
-            </Link>
+            </ProductLink>
           </p>
         </section>
       </>
@@ -897,7 +899,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       <>
         <StaffAccountMenu confirmLeave={confirmLeaveStaff} confirmLeaveAccount={confirmLeaveAccountPage} />
         <p className="loading-state">배정된 업무가 없습니다. 내 업무 목록에서 배정을 확인하거나, 현장 책임자에게 배정을 요청하세요.</p>
-        <p><Link className="button button-secondary" href="/staff">내 업무 보기</Link></p>
+        <p><ProductLink className="button button-secondary" href="/staff">내 업무 보기</ProductLink></p>
       </>
     );
   }
@@ -1514,7 +1516,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   return (
     <section className={`staff-workspace${kiosk ? " kiosk-mode" : ""}`} aria-label={`${activeScope.eventName} 현장 업무`}>
       <p className={`staff-event-context ${prizeStyles.eventContext}`}>
-        <Link
+        <ProductLink
           className="staff-back-link"
           href="/staff"
           onClick={(event) => {
@@ -1553,9 +1555,9 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         >
           <BackIcon />
           <span>내 업무</span>
-        </Link>
+        </ProductLink>
         <span className={prizeStyles.eventWorkTitle}>{activeScope.eventName}</span>
-        <button
+        <ProductButton
           type="button"
           role="switch"
           aria-checked={kiosk}
@@ -1572,7 +1574,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             <span className={prizeStyles.kioskSwitchThumb} />
           </span>
           <span>키오스크</span>
-        </button>
+        </ProductButton>
       </p>
       <div className={prizeStyles.accountContext}>
         <p className={prizeStyles.orgLine}>{orgLineText()}</p>
@@ -1580,17 +1582,17 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       </div>
       {orgChanged ? <OrganizationContextNotice confirmLeave={confirmLeaveStaff} /> : null}
       {otherReceipt ? <p className="notice" role="alert">이전 현장 처리의 결과를 위의 처리 결과 확인에서 확인한 뒤 새 업무를 진행하세요.</p> : null}
-      {receiptRefreshNeeded ? <p className="notice" role="alert">최신 업무 정보를 불러온 뒤 다시 진행할 수 있습니다. <button type="button" className="button button-secondary" disabled={receiptRefreshing} onClick={() => {
+      {receiptRefreshNeeded ? <p className="notice" role="alert">최신 업무 정보를 불러온 뒤 다시 진행할 수 있습니다. <ProductButton type="button" className="button button-secondary" disabled={receiptRefreshing} onClick={() => {
         if (receiptRefreshRef.current) return; const selectedEvent = targetEventId;
         receiptRefreshRef.current = true; setReceiptRefreshing(true);
         let refreshed = false;
         void load(true).then((ok) => { refreshed = ok; if (currentEventRef.current === selectedEvent && ok) { setReceiptRefreshNeeded(false); setReceiptNotice("최신 업무 정보를 불러왔습니다. 미확인 요청이 남았다면 같은 요청을 확인하세요."); } })
           .finally(() => { if (currentEventRef.current === selectedEvent) { receiptRefreshRef.current = false; setReceiptRefreshing(false); if (refreshed) drainAppliedReceipts(); } });
-      }}>업무 정보 다시 확인</button></p> : null}
+      }}>업무 정보 다시 확인</ProductButton></p> : null}
       {receiptNotice ? <p className="notice" role="status">{receiptNotice}</p> : null}
       {rewardCollectUncertain ? <div className="notice" role="alert">
         <p>경품 수령 결과를 확인할 때까지 다른 현장 업무를 잠급니다. 아래에서 같은 요청을 다시 확인하세요. 서버 처리 확인만으로는 대상을 확인할 수 없습니다.</p>
-        <button type="button" className="button button-secondary" disabled={rewardCollectingId !== null || receiptRefreshing} onClick={() => {
+        <ProductButton type="button" className="button button-secondary" disabled={rewardCollectingId !== null || receiptRefreshing} onClick={() => {
           const entry = [...pendingRewardCommandsRef.current.entries()].find(([, item]) => item.command === "reward.collect" && item.uncertain);
           if (!entry || !window.confirm("확인을 중단해도 이미 처리된 경품 수령은 취소되지 않습니다. 운영자에게 경품 내역을 확인한 뒤 계속하세요. 확인을 중단할까요?")) return;
           abandonOperatorAttempt(entry[1].id);
@@ -1599,9 +1601,9 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           setRewardDataLoaded(false);
           setRewardNotice(null);
           setRewardError("확인을 중단했습니다. 이미 처리됐을 수 있으니 운영자에게 경품 내역을 확인하세요.");
-        }}>확인 중단하고 내역 확인</button>
+        }}>확인 중단하고 내역 확인</ProductButton>
       </div> : null}
-      {assignmentStale ? <p className="notice" role="alert">{loadError || "현재 업무 배정을 확인할 수 없습니다."} 새 현장 처리는 잠겼으며 입력과 마지막 결과는 유지됩니다. {!receiptRefreshNeeded ? <button type="button" className="button button-secondary" disabled={refreshing} onClick={() => void load(true)}>{refreshing ? "배정 확인 중" : "배정 다시 확인"}</button> : null}</p> : null}
+      {assignmentStale ? <p className="notice" role="alert">{loadError || "현재 업무 배정을 확인할 수 없습니다."} 새 현장 처리는 잠겼으며 입력과 마지막 결과는 유지됩니다. {!receiptRefreshNeeded ? <ProductButton type="button" className="button button-secondary" disabled={refreshing} onClick={() => void load(true)}>{refreshing ? "배정 확인 중" : "배정 다시 확인"}</ProductButton> : null}</p> : null}
       {kiosk ? (
         <p className="notice" role="status">
           공용 태블릿용 큰 화면입니다. 무인 셀프 체크인은 지원하지 않습니다.
@@ -1609,7 +1611,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       ) : null}
       {hasDeskWork && hasBoothWork ? (
         <div className={`staff-task-switch ${prizeStyles.taskSwitch}`} role="group" aria-label="업무 종류">
-          <button
+          <ProductButton
             type="button"
             className="button button-secondary"
             aria-pressed={activeTask === "desk"}
@@ -1622,8 +1624,8 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             }}
           >
             데스크 체크인
-          </button>
-          <button
+          </ProductButton>
+          <ProductButton
             type="button"
             className="button button-secondary"
             aria-pressed={activeTask === "booth"}
@@ -1636,7 +1638,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             }}
           >
             부스 인증
-          </button>
+          </ProductButton>
         </div>
       ) : null}
       {activeTask === "desk" ? (
@@ -1674,31 +1676,31 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                 {loadError ? <p>{loadError}</p> : null}
               </div>
               {directionReview.to && selectedDesk && !deskClosed ? (
-                <button type="button" ref={directionReviewControlRef} className="button button-secondary" disabled={confirmingDirection || refreshing || submitting || writeLocked || scanUnknown} onClick={() => void confirmChangedDeskDirection()}>
+                <ProductButton type="button" ref={directionReviewControlRef} className="button button-secondary" disabled={confirmingDirection || refreshing || submitting || writeLocked || scanUnknown} onClick={() => void confirmChangedDeskDirection()}>
                   {confirmingDirection ? "최신 방향 확인 중" : `${directionReview.to === "IN" ? "입장" : "퇴장"} 업무 확인`}
-                </button>
+                </ProductButton>
               ) : (
-                <button type="button" ref={directionReviewControlRef} className="button button-secondary" disabled={refreshing || submitting || writeLocked || scanUnknown} onClick={() => void load(true)}>
+                <ProductButton type="button" ref={directionReviewControlRef} className="button button-secondary" disabled={refreshing || submitting || writeLocked || scanUnknown} onClick={() => void load(true)}>
                   {refreshing ? "데스크 상태 확인 중" : "데스크 상태 다시 확인"}
-                </button>
+                </ProductButton>
               )}
             </section>
           ) : null}
           {rewardDeskError ? (
             <>
               <p className="staff-direction-hint" role="alert">{loadError || rewardDeskError}</p>
-              <button id="staff-reward-desk-recheck" type="button" className="button button-secondary" disabled={refreshing || writeLocked} onClick={() => void refreshDeskStatus()}>
+              <ProductButton id="staff-reward-desk-recheck" type="button" className="button button-secondary" disabled={refreshing || writeLocked} onClick={() => void refreshDeskStatus()}>
                 {refreshing ? "데스크 상태 확인 중" : "데스크 상태 다시 확인"}
-              </button>
+              </ProductButton>
             </>
           ) : deskClosed && !deskRefreshRequired && !directionReview ? (
             <>
               <p className="staff-direction-hint" role="status">
                 {loadError || "가동 중지된 데스크입니다. 운영자가 다시 가동한 뒤 상태를 확인하세요."}
               </p>
-              <button type="button" className="button button-secondary" disabled={refreshing || writeLocked || scanUnknown || submitting} onClick={() => void refreshDeskStatus()}>
+              <ProductButton type="button" className="button button-secondary" disabled={refreshing || writeLocked || scanUnknown || submitting} onClick={() => void refreshDeskStatus()}>
                 {refreshing ? "데스크 상태 확인 중" : "데스크 상태 다시 확인"}
-              </button>
+              </ProductButton>
             </>
           ) : deskId && !deskRefreshRequired && !directionReview ? (
             <p className="staff-direction-hint" role="status">
@@ -1741,9 +1743,9 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             <>
               {loadError && !receiptRefreshNeeded ? <p className="staff-direction-hint" role="alert">{loadError}</p> : null}
               {boothStatusStale && !loadError ? <p className="staff-direction-hint" role="status">부스 상태가 바뀌었습니다. 상태를 다시 확인하세요.</p> : null}
-              <button type="button" className="button button-secondary" disabled={refreshing || scanControlsLocked || submitting} onClick={() => void refreshBoothStatus()}>
+              <ProductButton type="button" className="button button-secondary" disabled={refreshing || scanControlsLocked || submitting} onClick={() => void refreshBoothStatus()}>
                 {refreshing ? "부스 상태 확인 중" : "부스 상태 다시 확인"}
-              </button>
+              </ProductButton>
             </>
           ) : null}
         </div>
@@ -1768,7 +1770,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             <QRCode value={`ET:BOOTH:${activeScope.eventId}:${boothId}`} size={220} />
           </div>
           <p>
-            <button
+            <ProductButton
               type="button"
               className="button button-secondary"
               onClick={async () => {
@@ -1778,11 +1780,11 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                 } catch {
                   setBoothCopyNotice("복사에 실패했습니다. 아래 코드를 선택해 복사하세요.");
                 }
-              }}
+              }} icon={<CopyIcon />}
             >
-              <CopyIcon />
+
               코드 복사
-            </button>
+            </ProductButton>
           </p>
           {boothCopyNotice ? <p role="status">{boothCopyNotice}</p> : null}
           <details className={prizeStyles.codeFallback}>
@@ -1800,9 +1802,9 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       {activeTask === "desk" && !deskSourcesAvailable ? (
         <div className={prizeStyles.directionReview} role="alert">
           <p>{[!activeScope.participantsAvailable ? "참가자 명단" : "", !activeScope.checksAvailable ? "출입 기록" : ""].filter(Boolean).join(" · ")}을 확인할 수 없어 입퇴장을 잠시 멈췄습니다. 다시 확인해도 계속되면 현장 책임자에게 문의하세요.</p>
-          <button type="button" className="button button-secondary" disabled={refreshing || submitting || writeLocked || scanUnknown} onClick={() => void load(true)}>
+          <ProductButton type="button" className="button button-secondary" disabled={refreshing || submitting || writeLocked || scanUnknown} onClick={() => void load(true)}>
             {refreshing ? "확인 중" : "업무 정보 다시 확인"}
-          </button>
+          </ProductButton>
         </div>
       ) : null}
       {scanInputHasWork && result.kind !== "ok" && !scanUnknown ? (
@@ -1810,7 +1812,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       <h2 className={prizeStyles.sectionTitle}>참가자 티켓 확인</h2>
       {activeTask === "desk" ? (
         <div className={prizeStyles.entryModeSwitch} role="group" aria-label="입력 방식">
-          <button
+          <ProductButton
             type="button"
             className="button button-secondary"
             aria-pressed={entryMode === "scan"}
@@ -1818,8 +1820,8 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             onClick={() => { setEntryMode("scan"); setCameraOpen(false); }}
           >
             스캔
-          </button>
-          <button
+          </ProductButton>
+          <ProductButton
             type="button"
             className="button button-secondary"
             aria-pressed={entryMode === "roster"}
@@ -1827,7 +1829,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             onClick={() => chooseEntryMode("roster")}
           >
             명단 찾기
-          </button>
+          </ProductButton>
         </div>
       ) : null}
       {/* Field order is scan-first: a moving line points the camera, and the
@@ -1840,7 +1842,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       {submitting ? <p id="staff-scan-wait" className="notice" role="status">처리 결과를 확인하고 있습니다. 확인이 끝나면 티켓과 업무를 다시 바꿀 수 있습니다.</p> : null}
       {(entryMode === "scan" || activeTask !== "desk") ? <div className="camera-action">
         {activeTask === "booth" && activeScope.stampMode === "SELF" ? null : (
-          <button
+          <ProductButton
             ref={cameraButtonRef}
             type="button"
             disabled={!ready || writeLocked || submitting}
@@ -1852,7 +1854,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             }}
           >
             카메라로 스캔
-          </button>
+          </ProductButton>
         )}
         {cameraOpen && ready && !orgChanged && !scanUnknown ? (
           <CameraScan
@@ -1902,19 +1904,19 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
               <code>{ticket}</code>
             </p>
           ) : null}
-          <button
+          <ProductButton
             type="button"
             className={`button button-secondary ${prizeStyles.ticketCopy}`}
             disabled={!ticket.trim() || submitting}
-            onClick={copyTicketCode}
+            onClick={copyTicketCode} icon={<CopyIcon />}
           >
-            <CopyIcon />
+
             코드 복사
-          </button>
+          </ProductButton>
           {ticketCopyNotice ? <p role="status" className={prizeStyles.nextStep}>{ticketCopyNotice}</p> : null}
-          <button className="button button-secondary" type="submit" disabled={submitting || writeLocked || !ready || !ticket.trim()}>
+          <ProductButton className="button button-secondary" type="submit" disabled={submitting || writeLocked || !ready || !ticket.trim()}>
             {submitting ? "처리 중입니다" : "부스 인증"}
-          </button>
+          </ProductButton>
           </div>
         </ValidatedForm>
       ) : null}
@@ -1936,9 +1938,9 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
               onChange={(event) => { if (!scanBusyRef.current) { scanEditRevisionRef.current += 1; setTicket(event.target.value); } }}
             />
           </div>
-          <button className="button button-secondary" type="submit" disabled={submitting || writeLocked || !ready || !ticket.trim()}>
+          <ProductButton className="button button-secondary" type="submit" disabled={submitting || writeLocked || !ready || !ticket.trim()}>
             {submitting ? "처리 중입니다" : isExitDesk ? "퇴장 처리" : "입장 처리"}
-          </button>
+          </ProductButton>
           </div>
         </ValidatedForm>
       ) : null}
@@ -1948,9 +1950,9 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             <p>참가자의 이름과 소속을 확인한 뒤 처리하세요. 같은 이름과 소속이 여럿이면 현장 책임자에게 확인을 요청하세요.</p>
             <div className={prizeStyles.manualSearchHeading}>
               <label htmlFor="staff-manual-search">참가자 이름</label>
-              <button type="button" className={`button button-quiet ${prizeStyles.manualRefresh}`} aria-label="참가자 명단 새로고침" title="참가자 명단 새로고침"
+              <ProductButton type="button" className={`button button-quiet ${prizeStyles.manualRefresh}`} aria-label="참가자 명단 새로고침" title="참가자 명단 새로고침"
                 disabled={!ready || scanControlsLocked || submitting || refreshing || manualRefreshRequired}
-                onClick={() => void load(true)}><RefreshIcon /></button>
+                onClick={() => void load(true)}><RefreshIcon /></ProductButton>
             </div>
             <input id="staff-manual-search" type="search" autoComplete="off" value={manualQuery} disabled={!ready || writeLocked || submitting || manualRefreshRequired}
               onChange={(event) => { setManualQuery(event.target.value); setManualVisibleLimit(10); setManualTarget(null); setManualIdentityConfirmed(false); }}
@@ -1975,7 +1977,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                         <span className={prizeStyles.manualPresence} data-state={presenceTone}>{presenceLabel}</span>
                         {needsAssistance ? <span className={prizeStyles.manualWarning}>{ambiguous ? "같은 이름·소속이 있습니다." : "소속 정보가 없습니다."} 책임자에게 확인하세요.</span> : null}
                       </div>
-                      <button type="button" className="button button-secondary" disabled={!ready || writeLocked || submitting || manualRefreshRequired || needsAssistance || person.status !== "APPROVED"}
+                      <ProductButton type="button" className="button button-secondary" disabled={!ready || writeLocked || submitting || manualRefreshRequired || needsAssistance || person.status !== "APPROVED"}
                         aria-label={`${person.name} ${person.company || "소속 미입력"} 선택`}
                         aria-expanded={selected} aria-controls={selected ? "staff-manual-confirm" : undefined}
                         onClick={() => {
@@ -1985,24 +1987,24 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                             document.getElementById("staff-manual-confirm")?.scrollIntoView({ block: "nearest", behavior: "instant" });
                             document.getElementById("staff-manual-identity-confirm")?.focus({ preventScroll: true });
                           });
-                        }}>선택</button>
+                        }}>선택</ProductButton>
                       {selected ? <section id="staff-manual-confirm" className={prizeStyles.manualConfirm} aria-label="선택한 참가자 확인">
                         <strong>{person.name} · {person.company || "소속 미입력"}</strong>
                         {!manualTargetCurrent || !manualTargetDistinct ? <p role="alert">참가자 정보가 변경됐거나 같은 이름과 소속이 있습니다. 명단을 다시 확인하거나 책임자에게 문의하세요.</p> : null}
                         {manualTargetCurrent && manualTargetCurrent.status !== "APPROVED" ? <p role="alert">참가 상태가 바뀌어 처리할 수 없습니다. 현장 책임자에게 확인하세요.</p> : null}
                         <label><input id="staff-manual-identity-confirm" type="checkbox" checked={manualIdentityConfirmed} disabled={writeLocked || submitting || manualRefreshRequired || !manualTargetCurrent || manualTargetCurrent.status !== "APPROVED" || !manualTargetDistinct}
                           onChange={(event) => setManualIdentityConfirmed(event.target.checked)} /> 이름·소속을 직접 확인했습니다</label>
-                        <button type="button" className="button button-primary" disabled={!ready || writeLocked || submitting || manualRefreshRequired || !manualIdentityConfirmed || !manualTargetCurrent || manualTargetCurrent.status !== "APPROVED" || !manualTargetDistinct}
-                          onClick={() => void submitTicket("", false, person)}>{isExitDesk ? "확인한 참가자 퇴장 처리" : "확인한 참가자 입장 처리"}</button>
+                        <ProductButton type="button" className="button button-primary" disabled={!ready || writeLocked || submitting || manualRefreshRequired || !manualIdentityConfirmed || !manualTargetCurrent || manualTargetCurrent.status !== "APPROVED" || !manualTargetDistinct}
+                          onClick={() => void submitTicket("", false, person)}>{isExitDesk ? "확인한 참가자 퇴장 처리" : "확인한 참가자 입장 처리"}</ProductButton>
                       </section> : null}
                     </li>;
                   })}
                 </ul>
-                {manualMatches.length > manualVisibleLimit ? <button type="button" className="button button-secondary" disabled={writeLocked || submitting || manualRefreshRequired} onClick={() => {
+                {manualMatches.length > manualVisibleLimit ? <ProductButton type="button" className="button button-secondary" disabled={writeLocked || submitting || manualRefreshRequired} onClick={() => {
                   const nextIndex = manualVisibleLimit;
                   setManualVisibleLimit((current) => current + 10);
                   window.requestAnimationFrame(() => document.getElementById(`staff-manual-result-${nextIndex}`)?.focus());
-                }}>{Math.min(10, manualMatches.length - manualVisibleLimit)}명 더 보기</button> : null}
+                }}>{Math.min(10, manualMatches.length - manualVisibleLimit)}명 더 보기</ProductButton> : null}
               </div>
             ) : null}
           </div>
@@ -2013,9 +2015,9 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       {loadError && activeTask === "desk" && !assignmentStale && !receiptRefreshNeeded && !deskClosed && !deskRefreshRequired ? (
         <p className="notice" role="status">
           {loadError}{" "}
-          <button type="button" className="button button-secondary" disabled={refreshing} onClick={() => void load(true)}>
+          <ProductButton type="button" className="button button-secondary" disabled={refreshing} onClick={() => void load(true)}>
             {refreshing ? "불러오는 중" : "다시 불러오기"}
-          </button>
+          </ProductButton>
         </p>
       ) : null}
       {result.kind === "ok" ? (
@@ -2044,11 +2046,11 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           ) : null}
           <p className={prizeStyles.nextStep}>{correctionLocked ? "정정 결과를 먼저 확인하세요. 위 기록은 정정 전 마지막으로 확인한 스캔입니다." : rewardCollectUncertain ? "경품 수령 결과를 확인한 뒤 다음 참가자를 처리하세요." : directionReview ? "바뀐 데스크 업무를 확인한 뒤 다음 참가자를 처리하세요." : result.recordStatus === "UNAVAILABLE" || (activeTask === "desk" && !deskSourcesAvailable) ? "현장 책임자에게 참가자와 최근 출입 기록 확인을 요청한 뒤 다음 참가자를 처리하세요." : "다음 참가자를 스캔하세요."}</p>
           <div className={prizeStyles.nextActions}>
-            <button type="button" ref={nextParticipantRef} className="button button-primary" disabled={writeLocked || Boolean(directionReview) || confirmingDirection} onClick={prepareNextParticipant}>
+            <ProductButton type="button" ref={nextParticipantRef} className="button button-primary" disabled={writeLocked || Boolean(directionReview) || confirmingDirection} onClick={prepareNextParticipant}>
               다음 참가자
-            </button>
+            </ProductButton>
             {result.action === "IN" && !result.correctionChanged && !historicalScan ? (
-              <button
+              <ProductButton
                 type="button"
                 className={`button button-secondary ${prizeStyles.auxAction}`}
                 disabled={writeLocked}
@@ -2056,7 +2058,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                 onClick={() => setNametagResult(result)}
               >
                 네임택 인쇄
-              </button>
+              </ProductButton>
             ) : null}
           </div>
           {nametagOpen ? (
@@ -2123,35 +2125,35 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           </p>
           <div className={prizeStyles.nextActions}>
             {result.uncertain ? (
-              <button type="button" ref={retryFailedRef} className="button button-primary" disabled={writeLocked || submitting || scanStatusChecking} onClick={() => { void submitTicket(result.requestTicket, true); }}>
+              <ProductButton type="button" ref={retryFailedRef} className="button button-primary" disabled={writeLocked || submitting || scanStatusChecking} onClick={() => { void submitTicket(result.requestTicket, true); }}>
                 같은 요청 재확인
-              </button>
+              </ProductButton>
             ) : null}
             {result.uncertain && inlineScanReceiptId ? <OperatorReceiptRecovery inline currentEventId={targetEventId} onlyCommandId={inlineScanReceiptId} disabled={writeLocked || submitting || receiptRefreshing} onCheckingChange={setScanStatusChecking} /> : null}
             {result.manualRefreshRequired ? (
-              <button type="button" ref={retryFailedRef} className="button button-primary" disabled={refreshing || writeLocked || submitting} onClick={() => void refreshManualRoster()}>
+              <ProductButton type="button" ref={retryFailedRef} className="button button-primary" disabled={refreshing || writeLocked || submitting} onClick={() => void refreshManualRoster()}>
                 {refreshing ? "명단 확인 중" : "참가자 명단 다시 확인"}
-              </button>
+              </ProductButton>
             ) : result.sourceRefreshRequired ? (
-              <button type="button" ref={retryFailedRef} className="button button-primary" disabled={refreshing || writeLocked || submitting} onClick={() => void refreshDeskStatus()}>
+              <ProductButton type="button" ref={retryFailedRef} className="button button-primary" disabled={refreshing || writeLocked || submitting} onClick={() => void refreshDeskStatus()}>
                 {refreshing ? "업무 정보 확인 중" : "업무 정보 다시 확인"}
-              </button>
+              </ProductButton>
             ) : result.deskRefreshRequired ? (
-              <button type="button" ref={retryFailedRef} className="button button-primary" disabled={refreshing || writeLocked || submitting} onClick={() => void refreshDeskStatus()}>
+              <ProductButton type="button" ref={retryFailedRef} className="button button-primary" disabled={refreshing || writeLocked || submitting} onClick={() => void refreshDeskStatus()}>
                 {refreshing ? "데스크 상태 확인 중" : "데스크 상태 다시 확인"}
-              </button>
+              </ProductButton>
             ) : boothRefreshRequired ? (
-              <button type="button" ref={retryFailedRef} className="button button-primary" disabled={refreshing || writeLocked || submitting} onClick={() => void refreshBoothStatus()}>
+              <ProductButton type="button" ref={retryFailedRef} className="button button-primary" disabled={refreshing || writeLocked || submitting} onClick={() => void refreshBoothStatus()}>
                 {refreshing ? "부스 상태 확인 중" : "부스 상태 다시 확인"}
-              </button>
+              </ProductButton>
             ) : boothLimitReached || result.attendanceReviewRequired || result.eligibilityReviewRequired ? (
-              <button type="button" ref={retryFailedRef} className="button button-primary" disabled={writeLocked} onClick={prepareNextParticipant}>
+              <ProductButton type="button" ref={retryFailedRef} className="button button-primary" disabled={writeLocked} onClick={prepareNextParticipant}>
                 다음 참가자
-              </button>
-            ) : !result.uncertain ? <button type="button" ref={retryFailedRef} className="button button-primary" disabled={writeLocked} onClick={retryFailedScan}>
+              </ProductButton>
+            ) : !result.uncertain ? <ProductButton type="button" ref={retryFailedRef} className="button button-primary" disabled={writeLocked} onClick={retryFailedScan}>
               다시 시도
-            </button> : (
-              <button type="button" className="button button-secondary" disabled={submitting || scanStatusChecking} onClick={() => {
+            </ProductButton> : (
+              <ProductButton type="button" className="button button-secondary" disabled={submitting || scanStatusChecking} onClick={() => {
                 if (!window.confirm("처리됐을 수 있는 요청의 결과를 아직 확인하지 못했습니다. 확인을 중단하면 이 화면에서 요청을 다시 확인할 수 없을 수 있습니다. 운영자에게 기록을 확인한 뒤 계속하세요. 확인을 중단하시겠습니까?")) return;
                 if (pendingScanRef.current) {
                   pendingScanIdRef.current.delete(pendingScanRef.current.attempt);
@@ -2161,7 +2163,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                 setManualTarget(null);
                 setManualIdentityConfirmed(false);
                 setResult({ kind: "idle" });
-              }}>확인 중단하고 다른 업무</button>
+              }}>확인 중단하고 다른 업무</ProductButton>
             )}
           </div>
         </section>
@@ -2195,23 +2197,23 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                 }}
               />
             </div>
-            <button type="submit" className="button button-secondary" disabled={scanUnknown || rewardLookupLoading || assignmentStale || rewardCollectUncertain || receiptLock || receiptRefreshing || rewardCollectingId !== null || !ready || !rewardLookupTicket.trim()}>
+            <ProductButton type="submit" className="button button-secondary" disabled={scanUnknown || rewardLookupLoading || assignmentStale || rewardCollectUncertain || receiptLock || receiptRefreshing || rewardCollectingId !== null || !ready || !rewardLookupTicket.trim()}>
               {rewardLookupLoading ? "조회 중입니다" : "경품 조회"}
-            </button>
+            </ProductButton>
             {lastScannedTicket ? (
-              <button
+              <ProductButton
                 type="button"
                 className="button button-secondary"
                 disabled={scanUnknown || rewardLookupLoading || assignmentStale || rewardCollectUncertain || receiptLock || receiptRefreshing || rewardCollectingId !== null || !ready}
                 onClick={(event) => lookupRewardsByTicket(event, lastScannedTicket)}
               >
                 마지막 스캔 티켓으로 조회
-              </button>
+              </ProductButton>
             ) : null}
           </ValidatedForm>
           {pendingLookup ? <div className={prizeStyles.prizeNote} role="status">
             <p>이전 경품 조회의 결과를 확인하지 못했습니다. 같은 요청으로 다시 확인하거나 조회 확인을 중단할 수 있습니다.</p>
-            <button type="button" className="button button-secondary" disabled={rewardLookupLoading || rewardCollectingId !== null} onClick={() => {
+            <ProductButton type="button" className="button button-secondary" disabled={rewardLookupLoading || rewardCollectingId !== null} onClick={() => {
               const entry = [...pendingRewardCommandsRef.current.entries()].find(([, item]) => item.command === "reward.lookup" && item.uncertain);
               if (!entry) return;
               abandonOperatorAttempt(entry[1].id);
@@ -2220,7 +2222,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
               setRewardDataLoaded(false);
               setRewardError(null);
               setRewardNotice("이전 조회 확인을 중단했습니다. 티켓으로 다시 조회하세요. 조회 중단은 경품 지급을 기록하지 않습니다.");
-            }}>이전 조회 확인 중단</button>
+            }}>이전 조회 확인 중단</ProductButton>
           </div> : null}
           {rewardError && !rewardTarget ? <p className={prizeStyles.prizeError} role="alert">{rewardError}</p> : null}
           {rewardTarget ? (
@@ -2230,9 +2232,9 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                   <strong>{rewardTarget.name}</strong>
                   {rewardTarget.company ? <span>{rewardTarget.company}</span> : null}
                 </div>
-                <button type="button" className="button button-secondary" disabled={!ready || rewardLookupLoading || scanUnknown || assignmentStale || rewardCollectUncertain || receiptLock || receiptRefreshing || rewardCollectingId !== null} onClick={refreshTargetRewards}>
+                <ProductButton type="button" className="button button-secondary" disabled={!ready || rewardLookupLoading || scanUnknown || assignmentStale || rewardCollectUncertain || receiptLock || receiptRefreshing || rewardCollectingId !== null} onClick={refreshTargetRewards}>
                   {rewardLookupLoading ? "다시 확인 중" : "경품 다시 확인"}
-                </button>
+                </ProductButton>
               </div>
               {!rewardDataLoaded && !rewardLookupLoading ? (
                 rewardError ? <p className={prizeStyles.prizeError} role="alert">{rewardError}</p>
@@ -2268,9 +2270,9 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                           {reward.issue && rewardSnapshotCurrent ? <p className={prizeStyles.prizeError} role="alert">{reward.issue}</p> : null}
                         </div>
                         {readyReward ? (
-                          <button type="button" className="button button-primary" disabled={!ready || !rewardSnapshotCurrent || scanUnknown || orgChanged || assignmentStale || receiptLock || receiptRefreshing || (rewardCollectUncertain && pendingCollection?.payload.id !== reward.id) || rewardCollectingId !== null} onClick={() => collectReward(reward)}>
+                          <ProductButton type="button" className="button button-primary" disabled={!ready || !rewardSnapshotCurrent || scanUnknown || orgChanged || assignmentStale || receiptLock || receiptRefreshing || (rewardCollectUncertain && pendingCollection?.payload.id !== reward.id) || rewardCollectingId !== null} onClick={() => collectReward(reward)}>
                             {rewardCollectingId === reward.id ? "수령 확인 중" : retrying ? "같은 요청으로 다시 확인" : "수령 확인"}
-                          </button>
+                          </ProductButton>
                         ) : null}
                       </li>
                     );
@@ -2312,18 +2314,18 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             <p className={prizeStyles.nextStep} role="alert">응답을 확인하기 전까지 정정 대상·사유를 바꾸지 마세요. 같은 정정 요청으로 다시 시도하면 중복 정정 없이 확인할 수 있습니다.</p>
           ) : null}
           {correctUnknown ? (
-            <button
+            <ProductButton
               className="button button-primary"
               type="button"
               disabled={correcting}
               onClick={(event) => { void correctLatest(event, true); }}
             >
               {correcting ? "확인 중입니다" : "같은 요청으로 다시 시도"}
-            </button>
+            </ProductButton>
           ) : (
-            <button className={`button button-secondary ${prizeStyles.correctSubmit}`} type="submit" disabled={scanUnknown || correcting || orgChanged || assignmentStale || rewardCollectUncertain || receiptLock || receiptRefreshing || rewardLookupLoading || rewardCollectingId !== null || !correctReason.trim()}>
+            <ProductButton className={`button button-secondary ${prizeStyles.correctSubmit}`} type="submit" disabled={scanUnknown || correcting || orgChanged || assignmentStale || rewardCollectUncertain || receiptLock || receiptRefreshing || rewardLookupLoading || rewardCollectingId !== null || !correctReason.trim()}>
               {correcting ? "정정 중입니다" : "최신 기록 정정"}
-            </button>
+            </ProductButton>
           )}
         </ValidatedForm>
         </section>
@@ -2358,7 +2360,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                   {check.at ? ` · ${formatCheckTime(check.at)}` : ""}
                   {check.corrected ? " (정정됨)" : ""}
                 </span>
-                <button
+                <ProductButton
                   type="button"
                   className="button button-secondary"
                   aria-label={`${check.name} 기록 확인 · 다음 참가자 입력 준비`}
@@ -2366,7 +2368,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                   onClick={prepareNextParticipant}
                 >
                   다음 참가자
-                </button>
+                </ProductButton>
               </li>
             );
           })}

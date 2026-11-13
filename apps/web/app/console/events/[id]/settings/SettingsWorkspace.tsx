@@ -1,11 +1,12 @@
 "use client";
+import ProductButton from "../../../../ui/ProductButton";
 
 import ConsoleChoiceGroup, { EVENT_FORMAT_CHOICES } from "../../../console-ui/ConsoleChoiceGroup";
 import ValidatedForm from "../../../../ui/ValidatedForm";
 
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import ProductLink from "../../../../ui/ProductLink";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
 import { eventStageClassName, eventStageLabel } from "../../../../event-stage";
@@ -1450,7 +1451,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           ) : null}
           {failure && failure.field !== "serverUnsupported" && (failure.field !== "consentText" || activeTab !== "intake") ? <ConsoleFeedback kind="error" id="settings-error">{failure.message}</ConsoleFeedback> : null}
           {notice ? <ConsoleFeedback kind="success">{notice}</ConsoleFeedback> : null}
-          {showTicketReview ? <p><Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</Link></p> : null}
+          {showTicketReview ? <p><ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</ProductLink></p> : null}
           {intakeConflict && activeTab !== "intake" ? <ConsoleFeedback kind="warning">참가 접수 설정이 변경되어 최신 내용을 확인해야 합니다. 참가 접수 탭에서 작성 중인 안내를 확인하세요.</ConsoleFeedback> : null}
           {basicsConflict && activeTab !== "basics" ? <ConsoleFeedback kind="warning">기본 정보가 변경되어 최신 내용을 확인해야 합니다. 기본 정보 탭에서 작성 중인 내용을 확인하세요.</ConsoleFeedback> : null}
           {featuresConflict && activeTab !== "features" ? <ConsoleFeedback kind="warning">운영 기능이 변경되어 최신 내용을 확인해야 합니다. 운영 기능 탭에서 선택 중인 기능을 확인하세요.</ConsoleFeedback> : null}
@@ -1466,11 +1467,11 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         <p>{SETTINGS_COMMAND_LABEL[pendingSettings.command] ?? "이전 설정"} 요청이 반영됐을 수 있습니다. 서버 확인은 요청을 다시 보내지 않습니다.</p>
         {archived || !canWriteEvent(capabilities, pendingSettings.command) ? <p>현재 권한이나 행사 상태에서는 같은 요청을 다시 보낼 수 없습니다. 서버 처리 확인이나 담당자 확인을 이용하세요.</p> : null}
         {settingsRecoveryError ? <p role="alert">{settingsRecoveryError}</p> : null}
-        {postponesEvent(pendingSettings) ? <p><Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</Link></p> : null}
+        {postponesEvent(pendingSettings) ? <p><ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</ProductLink></p> : null}
         <div className={styles.recoveryActions}>
-          <button type="button" className="button button-secondary" disabled={busy || stageBusy || checkingSettings || abandonSettingsConfirm} onClick={() => void checkSettings()}>{checkingSettings ? "확인 중…" : "서버 처리 확인"}</button>
-          <button type="button" className="button button-secondary" disabled={busy || stageBusy || checkingSettings || abandonSettingsConfirm || archived || !canWriteEvent(capabilities, pendingSettings.command)} onClick={() => void retrySettings()}>같은 요청 다시 시도</button>
-          <button type="button" className="button button-secondary" disabled={busy || stageBusy || checkingSettings || abandonSettingsConfirm} onClick={() => setAbandonSettingsConfirm(true)}>확인 전 그만두기</button>
+          <ProductButton type="button" className="button button-secondary" disabled={busy || stageBusy || checkingSettings || abandonSettingsConfirm} onClick={() => void checkSettings()}>{checkingSettings ? "확인 중…" : "서버 처리 확인"}</ProductButton>
+          <ProductButton type="button" className="button button-secondary" disabled={busy || stageBusy || checkingSettings || abandonSettingsConfirm || archived || !canWriteEvent(capabilities, pendingSettings.command)} onClick={() => void retrySettings()}>같은 요청 다시 시도</ProductButton>
+          <ProductButton type="button" className="button button-secondary" disabled={busy || stageBusy || checkingSettings || abandonSettingsConfirm} onClick={() => setAbandonSettingsConfirm(true)}>확인 전 그만두기</ProductButton>
         </div>
         {abandonSettingsConfirm ? <ConsoleConfirm
           summary="이미 반영된 설정은 취소되지 않습니다. 확인을 그만두고 최신 내용을 확인할까요?"
@@ -1525,11 +1526,11 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               })}</tbody>
             </table>
             <div className={styles.recoveryActions}>
-              <button type="button" className="button button-secondary" disabled={settingsLocked} onClick={() => resolveBasicsConflict(false)}>내 작성 내용으로 계속</button>
-              <button type="button" className="button button-secondary" disabled={settingsLocked} onClick={() => resolveBasicsConflict(true)}>최신 정보 사용</button>
+              <ProductButton type="button" className="button button-secondary" disabled={settingsLocked} onClick={() => resolveBasicsConflict(false)}>내 작성 내용으로 계속</ProductButton>
+              <ProductButton type="button" className="button button-secondary" disabled={settingsLocked} onClick={() => resolveBasicsConflict(true)}>최신 정보 사용</ProductButton>
             </div>
             <p className={styles.help}>내 작성 내용으로 계속한 뒤 저장하면, 다른 운영자가 바꾼 항목을 포함해 현재 입력된 기본 정보 전체가 적용됩니다. 필요한 값을 먼저 수정할 수 있습니다. 선택만으로 저장되지는 않습니다.</p>
-          </> : <button type="button" className="button button-secondary" disabled={basicsConflict.loading || settingsLocked} onClick={() => void readLatestBasics()}>{basicsConflict.loading ? "최신 설정 확인 중…" : "최신 설정 확인"}</button>}
+          </> : <ProductButton type="button" className="button button-secondary" disabled={basicsConflict.loading || settingsLocked} onClick={() => void readLatestBasics()}>{basicsConflict.loading ? "최신 설정 확인 중…" : "최신 설정 확인"}</ProductButton>}
         </section> : null}
         <ValidatedForm
           className={`${uiStyles.formStack} ${styles.basicsForm}`}
@@ -1725,7 +1726,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           <p className={styles.help}>인증번호는 신청자의 휴대전화로 발송됩니다. 발송 준비가 안 된 상태에서는 신청이 막히므로, 먼저 인증번호 1건을 테스트하세요.</p>
           </div>
           <ConsoleFormActions>
-            <button
+            <ProductButton
               id="settings-basics-save"
               type="submit"
               className="button button-primary"
@@ -1733,7 +1734,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               title={archived ? archivedReason : !canWriteSettings ? settingsNoWriteReason : undefined}
             >
               {busy ? "저장 중입니다" : "기본 정보 저장"}
-            </button>
+            </ProductButton>
             {basicsDirty ? (
               <span role="status" className={styles.unsavedTag}>
                 <span aria-hidden="true">● </span>저장 안 됨
@@ -1751,9 +1752,9 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             <h3 id="schedule-review-title">참가자에게 보이는 안내도 확인해 주세요</h3>
             <p>행사 일시는 저장됐지만, 기존에 게시한 프로그램 일정과 공지·장소 안내는 그대로입니다. 여러 날짜에 진행하는 일정일 수 있으니 내용을 확인하고 필요한 경우에만 수정·게시하세요.</p>
             <div className={styles.scheduleReviewLinks}>
-              {canWriteEvent(capabilities, "program.save") ? <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-program`}>프로그램 일정 확인</Link> : null}
-              {canWriteEvent(capabilities, "notice.save") ? <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-notices`}>공지 확인</Link> : null}
-              {canWriteEvent(capabilities, "venue.save") ? <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-venue`}>장소 안내 확인</Link> : null}
+              {canWriteEvent(capabilities, "program.save") ? <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-program`}>프로그램 일정 확인</ProductLink> : null}
+              {canWriteEvent(capabilities, "notice.save") ? <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-notices`}>공지 확인</ProductLink> : null}
+              {canWriteEvent(capabilities, "venue.save") ? <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-venue`}>장소 안내 확인</ProductLink> : null}
             </div>
             {!canWriteEvent(capabilities, "program.save") || !canWriteEvent(capabilities, "notice.save") ? <p>확인할 권한이 없는 안내는 담당 운영자에게 검토를 요청하세요.</p> : null}
           </section>
@@ -1784,8 +1785,8 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         </p>
         {isRecoveryBlocked(verificationMode) && !state.recoveryContact ? (
           <ConsoleFeedback kind="warning">
-            문자로 티켓을 다시 연결할 수 없고 참가자에게 표시되는 문의처도 없습니다. 탭을 잃은 참가자가 도움을 받을 수 있도록{" "}
-            <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-venue`}>장소 안내의 문의 정보</Link>와 참가자 페이지의 공개 설정을 확인하세요.
+            <p className={styles.intakeWarningText}>문자로 티켓을 다시 연결할 수 없고 참가자에게 표시되는 문의처도 없습니다. 탭을 잃은 참가자가 도움을 받을 수 있도록 장소 안내의 문의 정보와 참가자 페이지의 공개 설정을 확인하세요.</p>
+            <ProductLink className={`button button-quiet ${styles.intakeWarningLink}`} href={`/console/events/${encodeURIComponent(eventId)}/content#content-venue`}>장소 안내의 문의 정보</ProductLink>
           </ConsoleFeedback>
         ) : null}
         {currentStage === "DRAFT" && !state.registrationOpen ? (
@@ -1805,7 +1806,10 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             공개 접수: 닫힘 — 종료된 행사에서는 신청을 받을 수 없습니다. 공개 신청 화면은 닫혀 있습니다. 보관하려면 접수를 닫으세요.
           </p>
         ) : null}
-        <p className={styles.help}>신청 항목을 편집한 뒤 양식을 게시하면 참가자에게 변경 사항이 적용됩니다. <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/settings/fields`}>신청 항목 편집</Link></p>
+        <div className={styles.intakeFields}>
+          <p className={styles.help}>신청 항목을 편집한 뒤 양식을 게시하면 참가자에게 변경 사항이 적용됩니다.</p>
+          <ProductLink className={`button button-quiet ${styles.intakeFieldsLink}`} href={`/console/events/${encodeURIComponent(eventId)}/settings/fields`}>신청 항목 편집</ProductLink>
+        </div>
         {intakeConflict ? <section className={styles.conflict} aria-labelledby="intake-conflict-heading">
           <h3 id="intake-conflict-heading" tabIndex={-1}>다른 작업에서 참가 접수 설정이 변경됐습니다</h3>
           <p>이번 게시 요청은 반영되지 않았습니다. 작성 중인 안내는 그대로 있습니다. 최신 설정을 확인하고 사용할 안내를 선택해 주세요.</p>
@@ -1824,11 +1828,11 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             </div>
             <p className={styles.help}>게시하면 최신 신청 항목과 선택한 안내가 적용됩니다.</p>
             <div className={styles.recoveryActions}>
-              <button type="button" className="button button-secondary" disabled={settingsLocked} onClick={() => resolveIntakeConflict(false)}>내 작성 내용으로 계속</button>
-              <button type="button" className="button button-secondary" disabled={settingsLocked} onClick={() => resolveIntakeConflict(true)}>최신 안내 사용</button>
+              <ProductButton type="button" className="button button-secondary" disabled={settingsLocked} onClick={() => resolveIntakeConflict(false)}>내 작성 내용으로 계속</ProductButton>
+              <ProductButton type="button" className="button button-secondary" disabled={settingsLocked} onClick={() => resolveIntakeConflict(true)}>최신 안내 사용</ProductButton>
             </div>
             <p className={styles.help}>선택만으로 게시되지 않습니다.</p>
-          </> : <button type="button" className="button button-secondary" disabled={intakeConflict.loading || settingsLocked} onClick={() => void readLatestIntake()}>{intakeConflict.loading ? "최신 설정 확인 중…" : "최신 설정 확인"}</button>}
+          </> : <ProductButton type="button" className="button button-secondary" disabled={intakeConflict.loading || settingsLocked} onClick={() => void readLatestIntake()}>{intakeConflict.loading ? "최신 설정 확인 중…" : "최신 설정 확인"}</ProductButton>}
         </section> : null}
         <div className={uiStyles.formStack}>
           <div>
@@ -1847,16 +1851,16 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             />
             {failure?.field === "consentText" ? <>
               <p className={styles.fieldError} id="settings-consent-error">{failure.message}</p>
-              {state.consentText && !consentText.trim() ? <button type="button" className={`button button-secondary ${styles.fieldRecovery}`} disabled={settingsLocked || !canWriteIntake || archived} onClick={() => {
+              {state.consentText && !consentText.trim() ? <ProductButton type="button" className={`button button-secondary ${styles.fieldRecovery}`} disabled={settingsLocked || !canWriteIntake || archived} onClick={() => {
                 setConsentText(state.consentText);
                 setFailure(null);
                 setIntakeStatus(null);
                 window.requestAnimationFrame(() => document.getElementById("set-consent")?.focus());
-              }}>기존 안내 되돌리기</button> : null}
+              }}>기존 안내 되돌리기</ProductButton> : null}
             </> : null}
           </div>
           <ConsoleFormActions>
-            <button
+            <ProductButton
               type="button"
               className="button button-primary"
               disabled={settingsLocked || Boolean(intakeConflict) || archived || !canWriteIntake || endedPublishBlocked}
@@ -1864,10 +1868,10 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               onClick={requestFormPublish}
             >
               {busy ? "처리 중입니다" : "양식 게시·접수 열기"}
-            </button>
+            </ProductButton>
             {state.registrationOpen ? (
               <>
-              <button
+              <ProductButton
                 type="button"
                 className="button button-secondary"
                 disabled={settingsLocked || Boolean(intakeConflict) || archived || !canWriteIntake}
@@ -1875,7 +1879,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
                 onClick={() => setCloseIntakeConfirm(true)}
               >
                 접수 닫기
-              </button>
+              </ProductButton>
               {closeIntakeConfirm ? <ConsoleConfirm
                 summary="접수를 닫으면 새 신청을 받지 않습니다. 이미 접수된 참가자와 티켓은 유지됩니다. 접수를 닫을까요?"
                 confirmLabel="접수 닫기"
@@ -1933,11 +1937,11 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             </table>
             <p className={styles.help}>내 선택으로 계속한 뒤 저장하면 다른 운영자가 바꾼 기능도 포함해, 위의 내 선택 전체가 적용됩니다. 화면에서 변경할 수 없는 기존 기능은 최신 설정을 유지합니다.</p>
             <div className={styles.recoveryActions}>
-              <button type="button" className="button button-secondary" disabled={settingsLocked} onClick={() => resolveFeaturesConflict(false)}>내 선택으로 계속</button>
-              <button type="button" className="button button-secondary" disabled={settingsLocked} onClick={() => resolveFeaturesConflict(true)}>최신 설정 사용</button>
+              <ProductButton type="button" className="button button-secondary" disabled={settingsLocked} onClick={() => resolveFeaturesConflict(false)}>내 선택으로 계속</ProductButton>
+              <ProductButton type="button" className="button button-secondary" disabled={settingsLocked} onClick={() => resolveFeaturesConflict(true)}>최신 설정 사용</ProductButton>
             </div>
             <p className={styles.help}>선택만으로 저장되지 않습니다. 필요한 기능을 수정한 뒤 직접 저장해 주세요.</p>
-          </> : <button type="button" className="button button-secondary" disabled={featuresConflict.loading || settingsLocked} onClick={() => void readLatestFeatures()}>{featuresConflict.loading ? "최신 설정 확인 중…" : "최신 설정 확인"}</button>}
+          </> : <ProductButton type="button" className="button button-secondary" disabled={featuresConflict.loading || settingsLocked} onClick={() => void readLatestFeatures()}>{featuresConflict.loading ? "최신 설정 확인 중…" : "최신 설정 확인"}</ProductButton>}
         </section> : null}
         <fieldset className={styles.featureGroups} disabled={!canWriteSettings || archived || settingsLocked}>
           <legend id="settings-features-legend" tabIndex={-1}>사용할 기능</legend>
@@ -1971,7 +1975,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           ))}
         </fieldset>
         <ConsoleFormActions>
-          <button
+          <ProductButton
             type="button"
             className="button button-primary"
             disabled={settingsLocked || Boolean(featuresConflict) || archived || !canWriteSettings}
@@ -1979,7 +1983,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             onClick={() => { if (!featuresConflict) void runCommand("event.features", { features, expectedFeatures: state.features }, "운영 기능 설정을 저장했습니다.", "features"); }}
           >
             {busy ? "저장 중입니다" : "운영 기능 저장"}
-          </button>
+          </ProductButton>
           {featuresDirty ? (
             <span role="status" className={styles.unsavedTag}>
               <span aria-hidden="true">● </span>저장 안 됨
@@ -2028,14 +2032,14 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               <span>{stagePrecondition}</span>
               <span>
               {archiveDataUnavailable ? (
-                <button type="button" className="button button-secondary" disabled={refreshingAfterWrite} onClick={() => { setStageError(null); setRefreshingAfterWrite(true); setReloadTick((tick) => tick + 1); }}>{refreshingAfterWrite ? "상태 확인 중" : "상태 다시 확인"}</button>
+                <ProductButton type="button" className="button button-secondary" disabled={refreshingAfterWrite} onClick={() => { setStageError(null); setRefreshingAfterWrite(true); setReloadTick((tick) => tick + 1); }}>{refreshingAfterWrite ? "상태 확인 중" : "상태 다시 확인"}</ProductButton>
               ) : nextStage === "LIVE" ? (
-                <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/operations`}>운영에서 데스크 배정하기</Link>
+                <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/operations`}>운영에서 데스크 배정하기</ProductLink>
               ) : (
                 <>
                   <a className="button button-secondary" href="#settings-intake">접수 닫기</a>
                   {" · "}
-                  <Link className="button button-secondary" href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>프로그램 닫기</Link>
+                  <ProductLink className="button button-secondary" href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>프로그램 닫기</ProductLink>
                 </>
               )}
               </span>
@@ -2047,7 +2051,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             {!canWriteSettings ? (
               <p className={styles.help}>행사 단계 변경 권한이 없습니다.</p>
             ) : nextStage && !stageConfirm ? (
-              <button
+              <ProductButton
                 type="button"
                 className="button button-secondary"
                 onClick={() => {
@@ -2059,7 +2063,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
                 aria-describedby={stageBlocked ? "settings-stage-precondition" : undefined}
               >
                 {eventStageLabel(nextStage)} 단계로 전환
-              </button>
+              </ProductButton>
             ) : nextStage ? (
               <StageTransitionConfirmation className={styles.stageConfirmation} label={eventStageLabel(nextStage)}
                 busy={stageBusy} disabled={settingsLocked || stageBlocked} cancelDisabled={settingsLocked}
@@ -2081,12 +2085,12 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       </div>
 
       <div className={styles.settingsFooter}>
-        <Link
+        <ProductLink
           className="button button-secondary"
           href={`/console/events/${encodeURIComponent(eventId)}`}
         >
           현황으로 돌아가기
-        </Link>
+        </ProductLink>
         {lastResult ? (
           <p
             role="status"
@@ -2119,12 +2123,12 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             게시하지 않아도 공개·접수·진행에 영향이 없습니다.
           </p>
           <p>
-            <Link
+            <ProductLink
               className="button button-secondary"
               href={`/console/events/${encodeURIComponent(eventId)}/page`}
             >
               참가자 페이지 편집으로 이동
-            </Link>
+            </ProductLink>
           </p>
         </div>
       </details>

@@ -1,0 +1,242 @@
+{
+  "kind": "eventouch-astryx-verification",
+  "buildId": "X9WIirNFA3vSUWXKiTfrZ",
+  "sourceHash": "06dd13366ceaf8cb8c559332231717d74f523f290609340c5bad6a4f2ab914f6",
+  "runtime": {
+    "node": "v24.22.2",
+    "platform": "darwin",
+    "architecture": "arm64"
+  },
+  "completedAt": "2026-11-13T10:21:21.233Z",
+  "verificationContext": [
+    "Synthetic isolated PostgreSQL/API/Next fixture",
+    "SMS simulation only; no delivery",
+    "Mock-only email for account form display; no mail requested or delivered",
+    "Browser transport loading/error simulation, real recovery",
+    "Chromium, not real devices or screen-reader listening"
+  ],
+  "tests": {
+    "tests": 1898,
+    "pass": 1898,
+    "fail": 0,
+    "skipped": 0
+  },
+  "gates": [
+    {
+      "script": "build",
+      "passed": true
+    },
+    {
+      "script": "web:astryx:audit",
+      "passed": true
+    },
+    {
+      "script": "web:white:audit",
+      "passed": true
+    },
+    {
+      "script": "web:preparation:audit",
+      "passed": true
+    },
+    {
+      "script": "web:settings-recovery:audit",
+      "passed": true
+    },
+    {
+      "script": "web:import-contact-review:audit",
+      "passed": true
+    },
+    {
+      "script": "web:team-refresh-recovery:audit",
+      "passed": true
+    },
+    {
+      "script": "web:operations-recovery:audit",
+      "passed": true
+    },
+    {
+      "script": "web:staff-recovery:audit",
+      "passed": true
+    },
+    {
+      "script": "web:message-recovery:audit",
+      "passed": true
+    },
+    {
+      "script": "web:page-publication-context:audit",
+      "passed": true
+    },
+    {
+      "script": "web:theme-recovery:audit",
+      "passed": true
+    },
+    {
+      "script": "web:report-recovery:audit",
+      "passed": true
+    },
+    {
+      "script": "web:draw-recovery:audit",
+      "passed": true
+    },
+    {
+      "script": "web:reward-recovery:audit",
+      "passed": true
+    },
+    {
+      "script": "web:evidence-recovery:audit",
+      "passed": true
+    },
+    {
+      "script": "web:attendee:audit",
+      "passed": true
+    },
+    {
+      "script": "web:attendee-retry:audit",
+      "passed": true
+    },
+    {
+      "script": "web:ticket-loading-recovery:audit",
+      "passed": true
+    },
+    {
+      "script": "web:workspace-preservation:audit",
+      "passed": true
+    },
+    {
+      "script": "web:reviewed-exit:audit",
+      "passed": true
+    },
+    {
+      "script": "web:operator-receipt:audit",
+      "passed": true
+    },
+    {
+      "script": "web:attendee-receipt:audit",
+      "passed": true
+    },
+    {
+      "script": "web:console:audit",
+      "passed": true
+    },
+    {
+      "script": "web:crossrole:audit",
+      "passed": true
+    },
+    {
+      "script": "a11y",
+      "passed": true
+    },
+    {
+      "script": "mobile",
+      "passed": true
+    },
+    {
+      "script": "security:audit",
+      "passed": true
+    },
+    {
+      "script": "test",
+      "passed": true
+    }
+  ],
+  "visualChecks": 579,
+  "screenFamilies": 45,
+  "captures": 78,
+  "doctor": {
+    "build": "X9WIirNFA3vSUWXKiTfrZ",
+    "built": {
+      "failures": 0,
+      "warnings": 1
+    },
+    "source": {
+      "failures": 0,
+      "warnings": 0
+    }
+  },
+  "image": {
+    "ok": true,
+    "sourceFiles": 184,
+    "sourceHash": "06dd13366ceaf8cb8c559332231717d74f523f290609340c5bad6a4f2ab914f6",
+    "pilotExcluded": true
+  },
+  "imageIdentity": {
+    "id": "sha256:cb93dc69327b40c2fbb004a91fed379ea9bced2bf348e553655ead46e1acbc9c",
+    "tags": [
+      "eventouch-astryx-review:final-20261113"
+    ],
+    "user": "node",
+    "architecture": "arm64",
+    "os": "linux"
+  },
+  "smoke": {
+    "ok": true,
+    "uid": 1000,
+    "landing": 200,
+    "login": 200,
+    "stylesheets": 7,
+    "scripts": 17,
+    "network": "none",
+    "productionData": false
+  },
+  "focusWait": {
+    "deferredRestoration": true,
+    "nonDismissalRejected": true,
+    "missingFocusRejected": true,
+    "wrongFocusRejected": true
+  },
+  "artifactReview": {
+    "build": "X9WIirNFA3vSUWXKiTfrZ",
+    "galleryHash": "6e4bbe011593e4abe58fc7dd16fa08ff0e3436ffa1f93d2be6e5e6f0196c7155",
+    "reviews": [
+      {
+        "build": "X9WIirNFA3vSUWXKiTfrZ",
+        "coverage": "Judged only these 4 new PNGs: application-fields-1280, application-fields-390, account-email-390, recover-390. Other representative product views were independently inspected before this capture-only extension; production source hash unchanged.",
+        "galleryHash": "6e4bbe011593e4abe58fc7dd16fa08ff0e3436ffa1f93d2be6e5e6f0196c7155",
+        "issues": [],
+        "limitations": "Static screenshots only: cannot prove behavior, measured contrast ratios, or real-device rendering. Sample limited to 4 listed views.",
+        "ok": true
+      },
+      {
+        "build": "X9WIirNFA3vSUWXKiTfrZ",
+        "coverage": "Gallery /Users/ksi/Desktop/SI-Projects/EVENTOUCH/design-review/astryx-product-review.html: 45 sections, 78 embedded PNGs, nav links 45/45 bijective with sections. All 78 embeddings byte-identical (SHA256) to white-product full-page {slug}-{width}.png sources and PNG IHDR dimensions match width/height attrs; 78 distinct hashes. Required slugs present: application-fields, account-email, recover (+recover-unavailable). All 45 h2 titles and 78 alts are useful Korean ({title} {w}px 실제 화면), zero empty/placeholder, zero visible unknown/undefined. No script/link/iframe/http-src/http-href/css-http/external resources. Build note and limits note in header; white-product verification.json buildId matches. Former compose-response-unknown caption resolved: h2 메시지 요청 결과 미확인, slug occurs only in section id + nav href (2 structural occurrences).",
+        "galleryHash": "6e4bbe011593e4abe58fc7dd16fa08ff0e3436ffa1f93d2be6e5e6f0196c7155",
+        "issues": [],
+        "limitations": "Static read-only check only: no browser render, no mobile/desktop visual audit, no live-delivery/device/print verification. Source dir holds 299 files (1440/320/viewport variants); gallery embeds 1280+390 full-page captures only. Header note states synthetic data, mock-mail, no send requests, not real-customer/live/print validation. Audits not re-run.",
+        "ok": true
+      }
+    ]
+  },
+  "sourceReview": {
+    "ok": true,
+    "sourceHash": "06dd13366ceaf8cb8c559332231717d74f523f290609340c5bad6a4f2ab914f6",
+    "reviews": [
+      {
+        "findings": [],
+        "coverage": "No material, reproducible accessibility or UI-correctness defect confirmed. Inventoried 155 tracked changes and 45 untracked items. Reviewed production JSX migration deltas across authentication/account/invitations, organization switching, every console workspace, staff, public event/home/registration/ticket/engagement, display, recovery and printing. Inspected the adapters under /Users/ksi/Desktop/SI-Projects/EVENTOUCH/apps/web/app/ui/, CSS layers and product overrides under /Users/ksi/Desktop/SI-Projects/EVENTOUCH/apps/web/app/, generated theme and root integration, dialog/tab focus controllers, disabled/loading semantics, named regions, wrapper-sensitive selectors and responsive rules. Read relevant new adapter tests and changed journey/audit assertions under /Users/ksi/Desktop/SI-Projects/EVENTOUCH/tests/ and /Users/ksi/Desktop/SI-Projects/EVENTOUCH/scripts/. Performed read-only, in-memory server rendering of real ProductButton, ProductInput, ProductNotice and Theme to inspect their emitted markup. Checked the new action transition override and corresponding disabled-to-enabled regression source; did not repeat the removed opacity-fade finding.",
+        "limitations": "No files edited, builds or test suites run, browser audits executed, servers started, fixtures used, dependencies installed, commits created or publications made. Previous gate/test results were not treated as verification of the inspected source. Server-rendered markup cannot establish hydrated focus behavior, computed CSS contrast, responsive geometry or assistive-technology behavior; those still require the main agent's serial browser verification. Recovery-focus defects were not inferred from static scheduling alone. The isolated design-review pilot and customer/device/real-delivery acceptance were outside production runtime verification."
+      },
+      {
+        "findings": [],
+        "coverage": "No material, reproducible correctness or security regression confirmed. Reviewed the uncommitted migration inventory and compared native payload attributes, event callbacks, disabled gates, destinations, and non-JSX controller expressions across 67 changed TSX files using TypeScript AST inspection. Focused source review covered /Users/ksi/Desktop/SI-Projects/EVENTOUCH/apps/web/app/ui/, console tab/dialog controllers, operator receipt recovery, staff and attendee controllers, published customer styling, CSS layers, generated theme aliases, and dependency/configuration changes. Read the Astryx regression tests and relevant architecture, design, and UX contracts. Isolated server-render probes against installed Astryx 0.7.15 verified native button/form attributes, labeled input associations and constraints, busy icon semantics, actual Section wrappers, router-prop forwarding, and the absence of injected inline theme scripts. Checked wrapper-sensitive selectors and rejected suspected section/link-color defects after tracing their actual DOM and cascade boundaries.",
+        "limitations": "Read-only review; no repository files edited. No builds, browser audits, test suites, serial fixtures, servers, installs, commits, or publication performed. Existing build CSS was inspected only to resolve generated link-class inheritance, not treated as validation of the current working tree. Server rendering does not verify hydration, keyboard/focus recovery timing, computed responsive layouts or contrast, real devices, provider delivery, or production behavior. Previously reported 28/29 gates and 1893 passing unit tests were not treated as proof for the reviewed source."
+      }
+    ]
+  },
+  "finalizerNegative": {
+    "incompleteRejected": true,
+    "diagnosticRejected": true
+  },
+  "fixtureCleanup": {
+    "postgresStopped": true,
+    "activeFixtureClientsBeforeStop": 0,
+    "dataRemoved": false,
+    "productionData": false
+  },
+  "limitations": [
+    "Synthetic data and isolated services only",
+    "Account forms use mock-only email; the capture audit asserts that no mail was requested or delivered",
+    "Existing native markup and CSS remain at documented compatibility boundaries",
+    "Real devices, camera/printer hardware, provider delivery, legal review and customer acceptance remain separate",
+    "No commit, push, deployment or real send was performed"
+  ]
+}

@@ -4,6 +4,7 @@ description: 밝은 작업면에서 행사를 끝까지 운영하는 행사 운�
 colors:
   brand: "#EA552E"
   brand-hover: "#C7441C"
+  brand-pressed: "#A93917"
   brand-text: "#8E351F"
   on-brand: "#19191C"
   on-brand-hover: "#FFFFFF"
@@ -20,8 +21,15 @@ colors:
   nav: "#FAFBFC"
   nav-hover: "#EFF1F4"
   nav-active: "#FFF0E6"
-  nav-text: "#252A34"
-  nav-muted: "#626B78"
+  nav-text: "#1E2026"
+  nav-muted: "#61656C"
+  side: "#101114"
+  side-line: "#34363B"
+  side-text: "#FFFFFF"
+  side-muted: "#A9AEB6"
+  side-hover: "#FFFFFF14"
+  side-active: "#FFFFFF1F"
+  side-scroll: "#FFFFFF33"
   danger: "#B21E35"
   danger-soft: "#F7E4E7"
   danger-line: "#E0B4BA"
@@ -104,12 +112,12 @@ spacing:
   s8: "64px"
 components:
   button-primary:
-    backgroundColor: "{colors.brand}"
-    textColor: "{colors.on-brand}"
+    backgroundColor: "{colors.brand-hover}"
+    textColor: "{colors.on-brand-hover}"
     rounded: "{rounded.lg}"
     padding: "8px 16px"
   button-primary-hover:
-    backgroundColor: "{colors.brand-hover}"
+    backgroundColor: "{colors.brand-pressed}"
     textColor: "{colors.on-brand-hover}"
     rounded: "{rounded.lg}"
     padding: "8px 16px"
@@ -141,17 +149,17 @@ components:
   input:
     backgroundColor: "{colors.paper}"
     textColor: "{colors.ink}"
-    rounded: "{rounded.md}"
+    rounded: "{rounded.lg}"
     padding: "8px 12px"
   nav-item:
     backgroundColor: "transparent"
-    textColor: "{colors.nav-muted}"
-    rounded: "{rounded.sm}"
+    textColor: "{colors.side-muted}"
+    rounded: "{rounded.md}"
     padding: "8px 12px"
   nav-item-active:
-    backgroundColor: "{colors.nav-active}"
-    textColor: "{colors.brand-text}"
-    rounded: "{rounded.sm}"
+    backgroundColor: "{colors.side-active}"
+    textColor: "{colors.side-text}"
+    rounded: "{rounded.md}"
     padding: "8px 12px"
   ledger-row:
     backgroundColor: "transparent"
@@ -179,8 +187,22 @@ components:
 
 The YAML frontmatter is the design-tool input; `apps/web/app/tokens.css` is the runtime token source. Keep those inputs aligned when token values change.
 
-Use a light, calm operations-service vocabulary with restrained orange accents as a reference. A screen's task, role, current user request, and feedback determine its structure and density; this reference does not prescribe a shared layout for every screen.
+Use a light, calm operations-service vocabulary with restrained orange accents as a reference. The console's ink command rail contrasts with the white workspace; mobile navigation and account popovers use legible dark text on white. A screen's task, role, current user request, and feedback determine its structure and density; this reference does not prescribe a shared layout for every screen. A pattern proven on one screen is a reference, not a rollout mandate — do not propagate one screen's accent, density, or card treatment to all surfaces.
 
 Preserve EVENTOUCH's Korean-language identity and customer-approved banners and published attendee styles. Do not flatten event-specific content into shared defaults. Keep keyboard access, focus, readable status, and recovery visible. Check real device behavior with [the device checklist](scripts/device-checklist.md).
 
 Stable interaction and data-safety behavior belongs in [UX-CONTRACT.md](UX-CONTRACT.md); proposal-specific acceptance belongs in [docs/CONTRACT-SCOPE.md](docs/CONTRACT-SCOPE.md).
+
+## Product component boundary
+
+Astryx supplies the production theme, actions, icon actions, links, labeled text fields, headings, sections and feedback. `app/ui/ProductButton`, `ProductLink`, `ProductInput` and `ProductNotice` keep the product-facing contract small. The production theme in `apps/web/src/themes/eventouch/` aliases `tokens.css`; generated theme files are rebuilt, not edited. The product explicitly uses light mode and Pretendard. The isolated design-review pilot is not a runtime dependency.
+
+Primary actions use the contrast-safe orange fill with white text. Secondary actions remain neutral; ghost actions handle quiet utilities and contextual navigation. Destructive intent uses the Astryx destructive variant. Refresh is an icon action with an accessible name, a persistent touch target and loading feedback that retains focus. State foreground/background pairs switch together rather than interpolate through low contrast.
+
+Native disabled and ARIA-only disabled are different contracts. A native disabled control retains its HTML semantics; a busy action stays focusable and rejects repeat activation. Keep original request gates, form payloads, receipts and unknown-outcome recovery in the existing domain owner. Shared components do not add automatic writes or a second async controller.
+
+Native controls remain where browser semantics matter: file/date/number inputs, select/checkbox/custom submitted values, compound password controls, camera/canvas/QR, file downloads and print output. Explicitly labeled controlled text inputs use Astryx where compatible. External labels and native form associations are not replaced with hidden synthetic submissions. Customer-published attendee colors and menus remain a separate theme boundary.
+
+The console uses task-specific workspaces, not a uniform card grid. The overview places actionable work before supporting metrics; roster controls stay beside selection; reviewed sends and publication remain separate from composition. Tab and dialog controllers preserve mounted state, keyboard behavior and guarded exits.
+
+CSS layer order is declared before vendor imports. Native document/form base rules precede Astryx; legacy layout rules and product adapters have explicit later layers. CSS Modules own domain layout. Do not revive global button paint rules for migrated components or load an unused default theme font.

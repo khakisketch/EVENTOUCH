@@ -19,7 +19,7 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
   const full = await fixture.helpers.requestJson(fixture.harness.baseUrl, endpoint, { cookie: fixture.manager.cookie });
   assert.equal(full.status, 200);
   const version = full.json.state.refreshVersion;
-  const conditional = endpoint + '?ifVersion=' + version;
+  const conditional = endpoint + '?ifVersion=' + encodeURIComponent(version) + '&messageRecipientReview=1';
   const proxy = await startStalledResponseProxy(fixture.baseUrl, conditional);
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' });
   const staffContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -50,7 +50,9 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
     const headers = () => page.waitForResponse(response => response.url() === proxy.origin + conditional && response.status() === 200);
     const [probe] = await Promise.all([headers(), page.clock.fastForward(15000)]);
     const unchanged = await probe.json();
-    check('an unchanged live check has no event workspace payload', unchanged.state.unchanged === true && Buffer.byteLength(JSON.stringify(unchanged)) < 100);
+    check('an unchanged live check has no event workspace payload', unchanged.state.unchanged === true &&
+      Object.keys(unchanged.state).sort().join(',') === 'messageReadObservedAt,refreshVersion,unchanged' &&
+      Number.isFinite(Date.parse(unchanged.state.messageReadObservedAt)));
     await page.waitForFunction(previous => Array.from(document.querySelectorAll('time')).some(element =>
       element.textContent.trim().startsWith('자동 확인 ') && element.dateTime !== previous), initialTime);
     const lastTime = await time.getAttribute('datetime');
@@ -167,7 +169,20 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
         check(name + ': no horizontal overflow', await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
       };
       await page.setViewportSize({ width: 1280, height: 960 });
-      check('participation has a distinct purpose and specialized draw link', await page.getByRole('link', { name: '무대 추첨·순위 투표·룰렛 관리' }).isVisible());
+      const drawLink = page.getByRole('link', { name: '무대 추첨·순위 투표·룰렛 관리' });
+      check('participation has a distinct purpose and specialized draw link', await drawLink.isVisible());
+      check('draw management is a separate action with its existing destination',
+        await drawLink.getAttribute('href') === `/console/events/${f.eventId}/draws` &&
+        await drawLink.evaluate(link => !link.closest('p')));
+      for (const width of [1280, 390, 320]) {
+        await page.setViewportSize({ width, height: 960 });
+        const purpose = page.getByText('투표·퀴즈·Q&A 등 참가자가 참여할 내용을 만들고 응답을 관리합니다.', { exact: true });
+        const [purposeBox, actionBox] = await Promise.all([purpose.boundingBox(), drawLink.boundingBox()]);
+        check(`draw action follows the description without overlap at ${width}`,
+          purposeBox && actionBox && actionBox.y >= purposeBox.y + purposeBox.height && actionBox.height >= 44);
+        check(`participation has no horizontal overflow at ${width}`, await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+      }
+      await page.setViewportSize({ width: 1280, height: 960 });
       check('actual initial page count is 12 of 15', (await page.getByRole('status').allTextContents()).some(text => /전체 15개 중 12개 표시/.test(text)));
       const preparation = page.getByRole('group', { name: '행사 준비', exact: true });
       check('preparation distinguishes guidance from participation content', await preparation.getByRole('link', { name: '공지·안내', exact: true }).count() === 1 && await preparation.getByRole('link', { name: '참여 콘텐츠', exact: true }).count() === 1);
@@ -209,7 +224,7 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
       check('refresh is a named SVG with a 44px target', toolSize && toolSize.width >= 44 && toolSize.height >= 44 &&
         await refreshTool.locator('svg[aria-hidden="true"]').count() === 1 && !(await refreshTool.innerText()).trim());
       await Promise.all([
-        page.waitForResponse(response => response.request().method() === 'GET' && response.url().endsWith(`/api/events/${f.eventId}/bootstrap`) && response.ok()),
+        page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === `/api/events/${f.eventId}/bootstrap` && response.ok()),
         refreshTool.press('Enter'),
       ]);
       await page.waitForFunction(() => document.activeElement?.getAttribute('aria-busy') === 'false');

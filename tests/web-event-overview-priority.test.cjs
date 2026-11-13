@@ -11,25 +11,28 @@ const css = fs.readFileSync(path.join(root, 'event-overview.module.css'), 'utf8'
 
 test('operator reading order puts work and actual metrics before the schedule', () => {
   const render = source.slice(source.indexOf('<div className={overview.canManageEvent ?'));
-  assert.ok(render.indexOf('headingId="event-metrics-heading"') < render.indexOf('? nowSection : null}'));
-  assert.ok(render.indexOf('headingId="event-metrics-heading"') < render.indexOf('headingId="event-runbook-heading"'));
-  // 2026-11-10 비평 반영 CSS 정리: 섀도잉되던 구 grid 세대를 제거하고 현행 세대를 고정한다.
-  // 읽기 순서(지표 → 작업 → 일정)는 DOM 순서와 현행 grid로 그대로 보장된다.
-  assert.match(css, /"metrics queue" "runbook runbook"/);
-  assert.match(css, /"metrics" "queue" "runbook"/);
+  const queue = render.indexOf('{currentStage !== "ARCHIVED" ? nowSection : null}');
+  const metrics = render.indexOf('headingId="event-metrics-heading"');
+  const schedule = render.indexOf('headingId="event-runbook-heading"');
+  assert.ok(queue >= 0 && queue < metrics && metrics < schedule, 'active queue precedes metrics and schedule');
+  assert.match(render, /currentStage !== "ARCHIVED" \? nowSection : null/u, 'archived stage suppresses only the queue section');
+  assert.match(css, /"queue metrics" "runbook runbook"/);
+  assert.match(css, /"queue" "metrics" "runbook"/);
 });
 
 test('finished and preparation priorities precede the schedule without an archived empty queue', () => {
   const render = source.slice(source.indexOf('<div className={overview.canManageEvent ?'));
   const status = render.indexOf('headingId="event-close-status-heading"');
-  const queue = render.indexOf('currentStage !== "ARCHIVED" ? nowSection : null');
+  const queue = render.indexOf('{currentStage !== "ARCHIVED" ? nowSection : null}');
   const metrics = render.indexOf('headingId="event-metrics-heading"');
   const schedule = render.indexOf('headingId="event-runbook-heading"');
-  assert.ok(status >= 0 && status < metrics && metrics < queue && queue < schedule);
-  assert.ok(render.indexOf('다음 진행 중 조건') < queue);
+  assert.ok(status >= 0 && status < queue && queue < metrics && metrics < schedule);
+  assert.match(render, /currentStage !== "ARCHIVED" \? nowSection : null/u, 'archived events omit the active queue');
+  assert.ok(schedule > metrics, 'schedule follows the metrics in JSX');
+  assert.match(source, /preparing \? \(/u, 'preparation branch remains explicit');
+  assert.match(source, /headingId="event-readiness-heading"/u, 'preparation keeps its readiness section');
   assert.match(render, /href=\{eventCloseHref\(eventId\)\}/);
   assert.match(render, /href=\{`\$\{base\}\/reports`\}/);
-  // 2026-11-10 비평 반영 CSS 정리: 종료·보관 grid 정본(아래 2식)으로 고정한다.
   assert.match(css, /"status status" "metrics metrics" "runbook runbook"/);
   assert.match(css, /"status" "metrics" "runbook"/);
 });
@@ -55,6 +58,8 @@ test('compact work rows and mobile page action retain readable names and control
   assert.match(source, /참가자 페이지 링크 복사/);
   assert.match(source, /href=\{eventCloseHref\(eventId\)\}/);
   assert.match(queueCss, /\.queue > li \{ display: grid; grid-template-columns: minmax\(0, 1fr\) auto;/);
-  assert.match(queueCss, /\.action\s*\{[^}]*min-height: 44px/s);
+  assert.match(queueCss, /\.action\s*\{[^}]*min-height: var\(--control-min-size\)/s);
+  const tokens = fs.readFileSync(path.join(__dirname, '..', 'apps/web/app/tokens.css'), 'utf8');
+  assert.match(tokens, /--control-min-size:\s*44px/u, 'shared control token retains the 44px floor');
   assert.match(css, /\.pageLinkShort \{ display: inline; \}/);
 });

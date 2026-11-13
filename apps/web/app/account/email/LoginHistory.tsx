@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-import Link from "next/link";
+import ProductLink from "../../ui/ProductLink";
+import ProductButton from "../../ui/ProductButton";
 
 type History = { enabled: boolean; retentionDays: number | null; entries: Array<{ at: string }> };
 export default function LoginHistory() {
@@ -30,8 +31,8 @@ export default function LoginHistory() {
       <div className="auth-form">
         <p className="auth-help">본인 계정의 비밀번호 로그인 시각만 표시합니다. 시각은 한국 표준시입니다.</p>
         <p role="status" className={busy ? undefined : "sr-only"}>{busy ? "기록을 불러오고 있습니다." : ""}</p>
-        {failure ? <><p role="alert">{failure}</p><button type="button" className="button button-secondary" onClick={() => void load()} disabled={busy}>다시 불러오기</button></> : null}
-        {signin ? <Link href="/login">로그인 후 확인</Link> : null}
+        {failure ? <><p role="alert">{failure}</p><ProductButton type="button" className="button button-secondary" onClick={() => void load()} disabled={busy}>다시 불러오기</ProductButton></> : null}
+        {signin ? <ProductLink href="/login">로그인 후 확인</ProductLink> : null}
         {history?.enabled === false ? <p className="auth-help">이 환경에서는 로그인 기록 수집이 꺼져 있습니다.</p> : null}
         {history?.enabled ? <>
           <p className="auth-help">최근 {history.retentionDays}일 이내의 로그인 중 최신 20건입니다.</p>

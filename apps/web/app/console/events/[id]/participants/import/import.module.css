@@ -20,6 +20,7 @@
   background: var(--paper);
   color: var(--muted);
   font-size: var(--small);
+  font-variant-numeric: tabular-nums;
 }
 
 .importStepNumber {
@@ -38,6 +39,7 @@
 
 .importStepLabel {
   font-weight: 700;
+  letter-spacing: .02em;
 }
 
 .importStepCurrent {
@@ -241,9 +243,10 @@
   padding: 3px 10px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: var(--surface-muted);
+  background: var(--paper);
   color: var(--ink);
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 

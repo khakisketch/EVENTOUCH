@@ -18,6 +18,7 @@ import { normalizeHomeMenus, type ConfigurableHomeMenu, type HomeMenus, type Hom
 import AttendeeHomeLanding from "../../../../event/[slug]/home/AttendeeHomeLanding";
 import attendeeHomeStyles from "../../../../event/[slug]/home/home.module.css";
 import ConsolePage from "../../../console-ui/ConsolePage";
+import ProductButton from "../../../../ui/ProductButton";
 import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
 import PublicationReview from "../../../console-ui/PublicationReview";
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
@@ -1544,14 +1545,14 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
           </div>
           <div className={styles.conflictActions}>
             {!conflict.latest ? (
-              <button className="button button-secondary" type="button" onClick={() => void reloadLatestDraft()} disabled={conflict.loading}>
+              <ProductButton variant="secondary" type="button" onClick={() => void reloadLatestDraft()} disabled={conflict.loading}>
                 {conflict.loading ? "최신 상태 확인 중…" : conflict.contextChanged ? "최신 상태 확인" : "최신 초안 확인"}
-              </button>
+              </ProductButton>
             ) : (
               <>
-                <button className="button button-secondary" type="button" onClick={requestUseLatestDraft}>{conflict.contextChanged ? "최신 상태 불러오기" : "최신 초안 불러오기"}</button>
+                <ProductButton variant="secondary" type="button" onClick={requestUseLatestDraft}>{conflict.contextChanged ? "최신 상태 불러오기" : "최신 초안 불러오기"}</ProductButton>
                 {!conflict.afterWrite || currentScreenChanges.length ? (
-                  <button className="button button-secondary" type="button" onClick={requestKeepMyDesign}>{conflict.afterWrite ? "현재 화면 내용 적용" : "내 변경을 최신 초안에 적용"}</button>
+                  <ProductButton variant="secondary" type="button" onClick={requestKeepMyDesign}>{conflict.afterWrite ? "현재 화면 내용 적용" : "내 변경을 최신 초안에 적용"}</ProductButton>
                 ) : null}
               </>
             )}
@@ -1620,7 +1621,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
             </div>
           </fieldset>
 
-          <button className={styles.inlinePreview} type="button" onClick={(event) => switchMobileView("preview", event.currentTarget)}>배경 미리보기</button>
+          <ProductButton className={styles.inlinePreview} variant="secondary" type="button" onClick={(event) => switchMobileView("preview", event.currentTarget)}>배경 미리보기</ProductButton>
           <fieldset className={styles.controlGroup} disabled={Boolean(commandBusy || conflict || state.archived)}>
             <legend>배너 이미지{imageDirty ? <span className={styles.groupFlag}>미저장 변경</span> : null}</legend>
             <p className={styles.help}>PNG, JPEG, WEBP · 최대 600KB. 업로드 후 저장하고 게시해야 참가자에게 적용됩니다.</p>
@@ -1634,8 +1635,8 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
               <div className={styles.uploadError} role="alert">
                 <p>{upload.error}</p>
                 <div className={styles.smallActions}>
-                  <button className="button button-secondary" type="button" onClick={() => void uploadFile(upload)}>같은 요청으로 다시 시도</button>
-                  <button className="button button-secondary" type="button" onClick={requestCancelUpload}>선택 취소</button>
+                  <ProductButton variant="secondary" type="button" onClick={() => void uploadFile(upload)}>같은 요청으로 다시 시도</ProductButton>
+                  <ProductButton variant="secondary" type="button" onClick={requestCancelUpload}>선택 취소</ProductButton>
                 </div>
               </div>
             ) : null}
@@ -1650,9 +1651,9 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
                   aria-label="배너 이미지 선택"
                 />
               </label>
-              <button className="button button-secondary" type="button" onClick={requestClearImage} disabled={!canEditImage || (!state.form.keyvisual && !upload)}>
+              <ProductButton variant="secondary" type="button" onClick={requestClearImage} disabled={!canEditImage || (!state.form.keyvisual && !upload)}>
                 {upload?.status === "uploaded" || upload?.status === "failed" ? "선택 취소" : state.form.keyvisual ? "배너 이미지 제거" : state.defaultHomeBanner === "neutral" ? "기본 배너 사용 중" : "기본 이미지 사용 중"}
-              </button>
+              </ProductButton>
             </div>
             {cancelImagePending ? (
               <ConsoleConfirm
@@ -1685,7 +1686,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
             </details>
           </fieldset>
 
-          <button className={styles.inlinePreview} type="button" onClick={(event) => switchMobileView("preview", event.currentTarget)}>배너 미리보기</button>
+          <ProductButton className={styles.inlinePreview} variant="secondary" type="button" onClick={(event) => switchMobileView("preview", event.currentTarget)}>배너 미리보기</ProductButton>
           <fieldset className={styles.controlGroup} disabled={Boolean(commandBusy || conflict || state.archived)}>
             <legend>문구와 배치{copyDirty ? <span className={styles.groupFlag}>미저장 변경</span> : null}</legend>
             <p className={styles.help}>행사명은 기본 제목입니다. 보조 문구는 기존 행사 소개와 별개로 배너에 표시됩니다.</p>
@@ -1758,7 +1759,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
             </details>
           </fieldset>
 
-          <button className={styles.inlinePreview} type="button" onClick={(event) => switchMobileView("preview", event.currentTarget)}>문구 미리보기</button>
+          <ProductButton className={styles.inlinePreview} variant="secondary" type="button" onClick={(event) => switchMobileView("preview", event.currentTarget)}>문구 미리보기</ProductButton>
           <fieldset className={styles.controlGroup} disabled={Boolean(commandBusy || conflict || state.archived)}>
             <legend>소개와 노출{exposureDirty ? <span className={styles.groupFlag}>미저장 변경</span> : null}</legend>
             <p className={styles.help}>공지 설정은 참가자 홈에도 적용됩니다. 행사 일시·장소를 숨겨도 티켓의 행사일, 프로그램 일정의 일시·장소, 부스 지도와 전광판은 별도로 표시될 수 있습니다.</p>
@@ -1838,8 +1839,8 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
                     {MENU_LABELS[key]}{state.unavailableMenus.includes(key) || (key === "notice" && !state.pageFields.showAnnouncements) ? <span className={styles.menuNote}>공개 조건 꺼짐</span> : null}
                   </label>
                   <span className={styles.menuMove}>
-                    <button type="button" className="button button-secondary" aria-label={`${MENU_LABELS[key]} 위로 이동`} disabled={index === 0} onClick={() => moveHomeMenu(key, -1)}>↑</button>
-                    <button type="button" className="button button-secondary" aria-label={`${MENU_LABELS[key]} 아래로 이동`} disabled={index === ordered.length - 1} onClick={() => moveHomeMenu(key, 1)}>↓</button>
+                    <ProductButton type="button" variant="secondary" aria-label={`${MENU_LABELS[key]} 위로 이동`} disabled={index === 0} onClick={() => moveHomeMenu(key, -1)}>↑</ProductButton>
+                    <ProductButton type="button" variant="secondary" aria-label={`${MENU_LABELS[key]} 아래로 이동`} disabled={index === ordered.length - 1} onClick={() => moveHomeMenu(key, 1)}>↓</ProductButton>
                   </span>
                 </li>)}</ol>
               </div>;
@@ -1860,8 +1861,8 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
                     {program.title}{!program.available ? <span className={styles.menuNote}>미게시 또는 기능 꺼짐</span> : null}
                   </label>
                   {selected ? <span className={styles.menuMove}>
-                    <button type="button" className="button button-secondary" aria-label={`${program.title} 위로 이동`} disabled={position === 0} onClick={() => moveHomeProgram(program.id, -1)}>↑</button>
-                    <button type="button" className="button button-secondary" aria-label={`${program.title} 아래로 이동`} disabled={position === state.form.homeMenus.programs.length - 1} onClick={() => moveHomeProgram(program.id, 1)}>↓</button>
+                    <ProductButton type="button" variant="secondary" aria-label={`${program.title} 위로 이동`} disabled={position === 0} onClick={() => moveHomeProgram(program.id, -1)}>↑</ProductButton>
+                    <ProductButton type="button" variant="secondary" aria-label={`${program.title} 아래로 이동`} disabled={position === state.form.homeMenus.programs.length - 1} onClick={() => moveHomeProgram(program.id, 1)}>↓</ProductButton>
                   </span> : null}
                 </li>;
               })}</ol> : <p className={styles.help}>게시된 참여 콘텐츠가 없습니다.</p>}
@@ -1898,7 +1899,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
             {dirty && !uploadBlocked ? <p className={styles.inlineHelp}>게시 버튼은 저장된 초안에만 작동합니다. 먼저 초안을 저장하세요.</p> : null}
             {stageUnknown ? <div className={styles.inlineHelp}>
               <p>행사 공개 상태나 주소를 확인하지 못했습니다. 최신 행사 정보를 확인한 뒤 게시하세요.</p>
-              <button className="button button-secondary" type="button" disabled={Boolean(commandBusy || conflict)} onClick={() => void reloadLatestDraft(true)}>최신 상태 확인</button>
+              <ProductButton variant="secondary" type="button" disabled={Boolean(commandBusy || conflict)} onClick={() => void reloadLatestDraft(true)}>최신 상태 확인</ProductButton>
             </div> : null}
             {uploadBlocked ? (
               <p className={styles.inlineHelp}>
@@ -1907,12 +1908,12 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
             ) : null}
             <div className={styles.saveButtons}>
             <ConsoleFormActions>
-              <button id="theme-save-draft" className="button button-primary" type="button" onClick={() => void saveDraft()} disabled={!canSave}>
+              <ProductButton id="theme-save-draft" variant="primary" type="button" onClick={() => void saveDraft()} disabled={!canSave}>
                 {commandBusy === "save" ? "초안 저장 중…" : "초안 저장"}
-              </button>
-              <button className="button button-secondary" type="button" onClick={() => void requestPublishDraft()} disabled={!canPublish}>
+              </ProductButton>
+              <ProductButton variant="secondary" type="button" onClick={() => void requestPublishDraft()} disabled={!canPublish}>
                 {commandBusy === "publish" ? "게시 중…" : "게시 검토"}
-              </button>
+              </ProductButton>
             </ConsoleFormActions>
             </div>
             {publishPending ? (
@@ -1940,9 +1941,9 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
             <h2 id="page-recovery-heading">되돌리기</h2>
             <p className={styles.help}>아래 동작은 편집기에만 적용됩니다. 저장과 게시를 따로 해야 참가자 화면이 바뀝니다.</p>
             <div className={styles.smallActions}>
-              <button className="button button-secondary" type="button" onClick={requestLoadPublishedDesign} disabled={Boolean(commandBusy || conflict || state.archived || upload?.status === "uploading")}>게시된 디자인 불러오기</button>
-              <button className="button button-secondary" type="button" onClick={requestResetDesignDefaults} disabled={Boolean(commandBusy || conflict || state.archived || upload?.status === "uploading")}>기본 디자인으로</button>
-              {dirty ? <button className="button button-secondary" type="button" onClick={requestDiscardChanges} disabled={Boolean(commandBusy || state.archived || upload?.status === "uploading")}>저장 전 변경 취소</button> : null}
+              <ProductButton variant="secondary" type="button" onClick={requestLoadPublishedDesign} disabled={Boolean(commandBusy || conflict || state.archived || upload?.status === "uploading")}>게시된 디자인 불러오기</ProductButton>
+              <ProductButton variant="secondary" type="button" onClick={requestResetDesignDefaults} disabled={Boolean(commandBusy || conflict || state.archived || upload?.status === "uploading")}>기본 디자인으로</ProductButton>
+              {dirty ? <ProductButton variant="secondary" type="button" onClick={requestDiscardChanges} disabled={Boolean(commandBusy || state.archived || upload?.status === "uploading")}>저장 전 변경 취소</ProductButton> : null}
             </div>
             {loadPublishedPending ? (
               <ConsoleConfirm
@@ -1983,34 +1984,34 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
             </div>
             <span className={styles.liveMark}><span aria-hidden="true" />{showingPublished ? "게시본" : "편집 중"}</span>
           </div>
-          <button className={styles.backToEdit} type="button" onClick={() => switchMobileView("edit")}>편집하던 곳으로 돌아가기</button>
+          <ProductButton className={styles.backToEdit} variant="secondary" type="button" onClick={() => switchMobileView("edit")}>편집하던 곳으로 돌아가기</ProductButton>
           <div className={styles.switchBlock}>
             <p className={styles.previewNote}>{publicAvailable ? "현재 기능과 게시된 참여 콘텐츠를 반영합니다. 미리보기 메뉴는 작동하지 않습니다. 실제 참가자 화면에서 이용하세요." : state.eventStage === "DRAFT" ? "현재 기능과 게시된 참여 콘텐츠를 반영합니다. 미리보기 메뉴는 작동하지 않습니다. 행사가 공개되면 참가자 화면에서 이용할 수 있습니다." : "현재 기능과 게시된 참여 콘텐츠를 반영합니다. 미리보기 메뉴는 작동하지 않습니다. 행사 공개 상태를 확인하세요."}</p>
             <p className={styles.switchLabel} id="preview-source-label">미리보기 기준</p>
             <div className={styles.sourceSwitch} role="group" aria-labelledby="preview-source-label">
-            <button
-              className={styles.viewportChoice}
+            <ProductButton
+              className={styles.viewportChoice} variant="secondary"
               type="button"
               aria-pressed={previewSource === "draft"}
               onClick={() => setPreviewSource("draft")}
             >
               편집 중
-            </button>
-            <button
-              className={styles.viewportChoice}
+            </ProductButton>
+            <ProductButton
+              className={styles.viewportChoice} variant="secondary"
               type="button"
               aria-pressed={previewSource === "published"}
               onClick={() => setPreviewSource("published")}
             >
               게시본
-            </button>
+            </ProductButton>
           </div>
           </div>
           <div className={styles.switchBlock}>
             <p className={styles.switchLabel} id="preview-ticket-label">참가자 티켓</p>
             <div className={styles.sourceSwitch} role="group" aria-labelledby="preview-ticket-label">
-              <button className={styles.viewportChoice} type="button" aria-pressed={previewHasTicket} onClick={() => setPreviewHasTicket(true)}>티켓 있음</button>
-              <button className={styles.viewportChoice} type="button" aria-pressed={!previewHasTicket} onClick={() => setPreviewHasTicket(false)}>티켓 없음</button>
+              <ProductButton className={styles.viewportChoice} variant="secondary" type="button" aria-pressed={previewHasTicket} onClick={() => setPreviewHasTicket(true)}>티켓 있음</ProductButton>
+              <ProductButton className={styles.viewportChoice} variant="secondary" type="button" aria-pressed={!previewHasTicket} onClick={() => setPreviewHasTicket(false)}>티켓 없음</ProductButton>
             </div>
           </div>
           <div className={styles.switchBlock}>
@@ -2021,15 +2022,15 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
               { width: 390, height: 700, label: "390×700" },
               { width: 390, height: 844, label: "390×844" },
             ].map((size) => (
-              <button
+              <ProductButton
                 key={`${size.width}-${size.height}`}
-                className={styles.viewportChoice}
+                className={styles.viewportChoice} variant="secondary"
                 type="button"
                 aria-pressed={previewSize.width === size.width && previewSize.height === size.height}
                 onClick={() => setPreviewSize({ width: size.width, height: size.height })}
               >
                 {size.label}
-              </button>
+              </ProductButton>
             ))}
             </div>
           </div>

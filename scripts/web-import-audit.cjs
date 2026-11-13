@@ -102,7 +102,7 @@ async function main() {
     const fileChooser = page.waitForEvent('filechooser');
     await page.keyboard.press('Space');
     await (await fileChooser).setFiles({ name: '참가자.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: workbookBuffer(8, 0, 'xlsx') });
-    const review = page.locator('section[aria-labelledby="participant-import-review-heading"]');
+    const review = page.locator(':is(section,[role=region])[aria-labelledby="participant-import-review-heading"]');
     await review.getByText('유효 8행', { exact: true }).waitFor();
     await review.getByText('오류 0행', { exact: true }).waitFor();
     assert.equal(await picker.getByText('참가자.xlsx', { exact: true }).isVisible(), true, 'selected filename is visible');

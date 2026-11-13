@@ -97,3 +97,56 @@ test('the full-product renderer owns isolated fixtures and checks actual loaded 
   assert.match(audit, /published customer style survives the white shell/u);
   assert.doesNotMatch(audit, /process\.env\.WEB_BASE|127\.0\.0\.1:8891/u);
 });
+
+for (const [name, route] of [
+  ['application-fields', '/console/events/:id/settings/fields'],
+  ['account-email', '/account/email'],
+  ['recover', '/recover'],
+]) {
+  test(`the review captures the standalone ${name} screen`, () => {
+    const audit = fs.readFileSync(path.join(__dirname, '../scripts/web-white-product-audit.cjs'), 'utf8');
+    assert.ok(audit.includes(`['${name}', '${route}',`), `${route} must be an actual captured destination, not implied by its parent`);
+  });
+}
+
+test('every non-redirect application page has an actual capture destination', () => {
+  const ts = require('../apps/web/node_modules/typescript');
+  const source = fs.readFileSync(path.join(__dirname, '../scripts/web-white-product-audit.cjs'), 'utf8');
+  const file = ts.createSourceFile('audit.cjs', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+  const normalized = value => value.split('?')[0].replace(/\[[^\]]+\]|:[a-zA-Z]\w*/g, ':parameter');
+  const destinations = new Set();
+  const visit = node => {
+    if (ts.isArrayLiteralExpression(node) && node.elements.length >= 3 && ts.isStringLiteral(node.elements[0])) {
+      const route = node.elements[1];
+      const value = ts.isStringLiteral(route) || ts.isNoSubstitutionTemplateLiteral(route) ? route.text
+        : ts.isTemplateExpression(route) ? route.head.text + route.templateSpans.map(span => ':parameter' + span.literal.text).join('') : '';
+      if (value.startsWith('/')) destinations.add(normalized(value));
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  const pages = [];
+  const walk = dir => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const filename = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(filename);
+      else if (entry.name === 'page.tsx') pages.push(filename);
+    }
+  };
+  const app = path.join(__dirname, '../apps/web/app');
+  walk(app);
+  const routes = pages.map(filename => normalized('/' + path.relative(app, path.dirname(filename)).split(path.sep).join('/')));
+  const missing = covered => routes.filter(route => route !== '/staff/login' && !covered.has(route));
+  assert.deepEqual(missing(destinations), [], 'a parent screen is not coverage for a standalone page');
+  const withoutRecovery = new Set(destinations); withoutRecovery.delete('/recover');
+  assert.ok(missing(withoutRecovery).includes('/recover'), 'the coverage gate detects a missing real destination');
+  assert.match(read('staff/login/page.tsx'), /redirect\(safe \? `\/login\?next=/);
+});
+
+test('account-form captures explicitly use mock-only mail and never request delivery', () => {
+  const audit = fs.readFileSync(path.join(__dirname, '../scripts/web-white-product-audit.cjs'), 'utf8');
+  assert.match(audit, /process\.env\.EVENTOUCH_MAIL_MOCK = '1'/);
+  assert.match(audit, /process\.env\.EVENTOUCH_PUBLIC_URL = 'http:\/\/127\.0\.0\.1:1'/);
+  assert.match(audit, /mockOutbox\.length === initialMailCount/);
+  assert.ok(audit.includes("account.getByRole('alert')"), 'framework route announcements are outside account-form error checks');
+});

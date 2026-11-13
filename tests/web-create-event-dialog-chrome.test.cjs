@@ -58,8 +58,8 @@ test('CreateEventDialog moves long-form actions to the sticky footer with exact 
   assert.match(dialog, /const clientFormId = "create-client-form"/u);
   assert.match(dialog, /<ValidatedForm id=\{clientFormId\} onSubmit=\{saveNewClient\}/u);
   assert.match(dialog, /<ValidatedForm id=\{eventFormId\} onSubmit=\{onSubmit\}/u);
-  assert.match(dialog, /<button type="submit" form=\{clientFormId\}/u, 'footer submit stays wired to its form');
-  assert.match(dialog, /<button type="submit" form=\{eventFormId\}/u);
+  assert.match(dialog, /<ProductButton type="submit" form=\{clientFormId\}/u, 'footer submit stays wired to its form');
+  assert.match(dialog, /<ProductButton type="submit" form=\{eventFormId\}/u);
   assert.match(dialog, /onClick=\{cancelClientCreate\}/u);
   assert.match(dialog, /onClick=\{close\}/u, 'footer cancel keeps the canClose gate');
   // No in-form action rows remain: the footer owns the only actions.
@@ -99,7 +99,7 @@ test('create form keeps scroll margin under the fixed bars with tokens only', ()
   assert.match(css, /\.createFooter > div\s*\{[^}]*width:\s*100%/su, 'narrow buttons container fills the footer');
   assert.match(css, /\.createFooter > div > div\s*\{[^}]*flex:\s*1 1 auto/su);
   assert.match(css, /\.createFooter > div > div\s*\{[^}]*width:\s*100%/su);
-  assert.match(css, /\.createFooter\.createFooter :global\(\.button\)/u, 'narrow override wins without touching shared CSS');
+  assert.match(css, /\.createFooter\.createFooter :global\(\.astryx-button\)/u, 'narrow override wins without touching shared CSS');
   assert.match(css, /flex:\s*1 1 0/u);
   assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/u, 'chrome helper uses tokens only');
   assert.doesNotMatch(css, /!important/u, 'no important; specificity wins');

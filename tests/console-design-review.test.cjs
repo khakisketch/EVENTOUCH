@@ -39,14 +39,15 @@ test("content badges read inline with token padding", () => {
 
 test("notice and schedule deletes share a local danger outline, nothing else", () => {
   const css = read("console/events/[id]/content/content.module.css");
-  assert.match(css, /button\.dangerGhost\s*\{[^}]*border-color:\s*var\(--danger-line\)/s);
-  assert.match(css, /button\.dangerGhost\s*\{[^}]*color:\s*var\(--danger\)/s);
+  assert.match(css, /\.dangerGhost\s*\{[^}]*border:\s*1px solid var\(--danger-line\)/s);
+  assert.match(css, /\.dangerGhost\s*\{[^}]*color:\s*var\(--danger\)/s);
   assert.doesNotMatch(css, /\.dangerGhost[^}]*outline:/s);
   const workspace = read("console/events/[id]/content/ContentWorkspace.tsx");
   const usages = workspace.match(/styles\.dangerGhost/g) || [];
-  assert.equal(usages.length, 4, `two row deletes + two delete confirms, found ${usages.length}`);
+  assert.equal(usages.length, 2, `two row deletes retain the local outline, found ${usages.length}`);
+  assert.equal((workspace.match(/confirmClassName="button button-danger"/g) || []).length, 2, 'both inline delete confirmations stay destructive');
   assert.match(workspace, /requestNoticeDelete\(item\)[\s\S]*?dangerGhost/s);
-  assert.match(workspace, /requestProgramDelete\(item\)[\s\S]*?dangerGhost/s);
+  assert.match(workspace, /className=\{styles\.dangerGhost\} variant="destructive"[\s\S]*?requestProgramDelete\(item\)/s);
 });
 
 test("in-place confirms span the full row, never a third column", () => {
@@ -65,7 +66,7 @@ test("content keeps its copy, handlers and in-place confirms", () => {
   const workspace = read("console/events/[id]/content/ContentWorkspace.tsx");
   assert.match(workspace, /공지를 삭제할까요/);
   assert.match(workspace, /일정을 삭제할까요/);
-  assert.match(workspace, /confirmClassName=\{`button button-secondary \$\{styles\.dangerGhost\}`\}/);
+  assert.match(workspace, /confirmClassName="button button-danger"/);
   assert.match(workspace, /<ConsoleConfirm/);
   assert.match(workspace, /onConfirm=\{\(\) => void deleteNotice\(item\)\}/);
   assert.match(workspace, /onConfirm=\{\(\) => void deleteProgram\(item\)\}/);

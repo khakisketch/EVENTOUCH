@@ -1,0 +1,61 @@
+@layer eventouch-product {
+  .product-action {
+    min-block-size: var(--control-min-size);
+    min-inline-size: var(--control-min-size);
+    max-inline-size: 100%;
+    font-family: var(--body-font);
+    /* Enabled controls regain their authored contrast without a translucent fade. */
+    transition-property: transform;
+  }
+  /* Link's typography slot must not replace the caller's flex/grid child boxes. */
+  .product-link > .astryx-text { display: contents; }
+  .product-action[aria-disabled="true"] { cursor: not-allowed; }
+  .product-action[aria-busy="true"] { cursor: progress; }
+  .product-action:focus-visible, .product-link:focus-visible {
+    outline: var(--s1) solid var(--focus);
+    outline-offset: var(--s1);
+  }
+  /* Navigation retains Astryx Link's anchor API, even when styled as an action. */
+  .product-link.product-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--s2);
+    padding: var(--s2) var(--s4);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-medium);
+    background: var(--paper);
+    color: var(--ink);
+    font-size: var(--body-work);
+    font-weight: 650;
+    line-height: 1.4;
+    text-align: center;
+    text-decoration: none;
+    white-space: normal;
+  }
+  .product-link[data-action-variant="primary"] {
+    border-color: var(--color-accent);
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+  }
+  .product-link[data-action-variant="destructive"] {
+    border-color: var(--danger);
+    background: var(--danger);
+    color: var(--paper);
+  }
+  .product-link[data-action-variant="ghost"] {
+    border-color: transparent;
+    background: transparent;
+    color: var(--color-text-accent);
+  }
+  .product-link.product-action:hover { background: var(--surface-muted); color: var(--ink); }
+  .product-link[data-action-variant="primary"]:hover { background: var(--brand-pressed); border-color: var(--brand-pressed); color: var(--paper); }
+  .product-link[data-action-variant="destructive"]:hover { background: var(--danger); color: var(--paper); }
+  .product-native-field {
+    accent-color: var(--brand-text);
+    caret-color: var(--brand-text);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .product-action { transition: none; }
+  }
+}

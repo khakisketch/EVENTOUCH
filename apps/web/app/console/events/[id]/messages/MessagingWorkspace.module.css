@@ -15,6 +15,14 @@
   overflow-wrap: break-word;
 }
 
+.help :global(a.product-link),
+.campaignHint :global(a.product-link) {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: var(--s2);
+}
+
 .recipientFieldset legend {
   margin-bottom: var(--s2);
   font-size: var(--small);
@@ -216,6 +224,7 @@
   min-width: 0;
   color: var(--muted);
   font-size: var(--small);
+  font-variant-numeric: tabular-nums;
   text-align: left;
   /* Korean status wraps at phrase boundaries; genuinely long tokens
      (emails, masked numbers) break only when they would overflow. anywhere
@@ -233,7 +242,7 @@
   padding: var(--s2) var(--s3);
   border: 1px solid var(--line);
   border-radius: var(--radius-medium);
-  background: var(--surface-muted);
+  background: var(--paper);
   cursor: pointer;
 }
 
@@ -404,6 +413,7 @@
   margin: 0;
   font-size: var(--small);
   font-weight: 650;
+  font-variant-numeric: tabular-nums;
 }
 
 .campaignHint {
@@ -539,6 +549,7 @@
 .deliveries time {
   color: var(--muted);
   font-size: var(--small);
+  font-variant-numeric: tabular-nums;
   text-align: right;
 }
 
@@ -675,7 +686,7 @@
   padding: var(--s2) var(--s3);
   border: 1px solid var(--line);
   border-radius: var(--radius-medium);
-  background: var(--surface-muted);
+  background: var(--paper);
   font-size: var(--small);
   font-weight: 650;
 }
@@ -721,7 +732,7 @@
   min-width: 0;
   padding: var(--s4);
   border-radius: var(--radius-large);
-  background: var(--surface-muted);
+  background: var(--paper);
 }
 
 .draftPreviewHead {
@@ -766,8 +777,8 @@
   gap: var(--s2) var(--s3);
   padding: var(--s3) var(--s4);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface-muted);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
   position: static;
   margin-top: var(--s3);
 }
@@ -830,7 +841,7 @@
    request. Returning to history never clears input, recipients or receipts. */
 .workbenchPage { gap: var(--s3); }
 .historySection { min-width: 0; gap: var(--s2); }
-.connectionDetails { border: 1px solid var(--line); border-radius: var(--radius-medium); background: var(--surface-muted); padding: var(--s3) var(--s4); }
+.connectionDetails { border: 1px solid var(--line); border-radius: var(--radius-medium); background: var(--paper); padding: var(--s3) var(--s4); }
 .connectionDetails > summary { color: var(--ink); font-size: var(--body-work); font-weight: 700; }
 .connectionDetails > summary::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: var(--s2); border-radius: 999px; background: currentColor; vertical-align: baseline; }
 .connectionDetails .help { margin-top: var(--s2); }
@@ -855,9 +866,9 @@
 .historyDetails { border: 0; }
 .historyDetails > summary { font-size: var(--small); }
 .historyScroll { min-width: 0; border-block: 1px solid var(--line); background: var(--paper); }
-.historyTable { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--small); }
-.historyTable th, .historyTable td { text-align: left; vertical-align: middle; padding: var(--s3); border-bottom: 1px solid var(--line); }
-.historyTable th { background: var(--surface-muted); color: var(--muted); font-size: var(--label); font-weight: 550; white-space: nowrap; }
+.historyTable { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--small); font-variant-numeric: tabular-nums; }
+.historyTable th, .historyTable td { text-align: left; vertical-align: middle; padding: var(--s2) var(--s3); border-bottom: 1px solid var(--line); }
+.historyTable th { background: var(--surface-muted); color: var(--muted); font-size: var(--label); font-weight: 550; letter-spacing: .06em; white-space: nowrap; }
 .historyTable th:first-child { width: 24%; }
 .historyIdentity { min-width: 0; }
 .historyIdentity h3 { margin: 0; font-family: var(--body-font); font-size: var(--body-work); font-weight: 750; overflow-wrap: anywhere; }
@@ -875,7 +886,7 @@
    keep Korean phrases whole so 모의/실제 wording never splits mid-syllable. */
 .reviewSummary, .draftSummary li, .historyIdentity h3 { word-break: keep-all; }
 .historyActionCell { max-width: 224px; }
-.campaignActions :global(.button) { min-width: 44px; min-height: 44px; font-size: var(--small); padding-inline: var(--s2); }
+.campaignActions :global(.product-action) { min-width: 44px; min-height: 44px; font-size: var(--small); padding-inline: var(--s2); }
 .historyDetailRow > td { padding: 0; background: var(--surface-muted); }
 .mobileCellLabel { display: none; }
 .composeSection { scroll-margin-top: 120px; }
@@ -888,7 +899,7 @@
 @media (max-width: 768px) {
   .historySection > div:first-child { display: flex; flex-direction: column; align-items: stretch; gap: var(--s2); }
   .historyTools { width: 100%; }
-  .historyTools > :global(.button):not(:global(.console-icon-button)) { flex: 1 1 120px; white-space: normal; word-break: keep-all; }
+  .historyTools > :global(.product-action):not(:global(.console-icon-button)) { flex: 1 1 120px; white-space: normal; word-break: keep-all; }
   .historyFilters { padding: var(--s2) 0; }
   .historyFilters label { flex-basis: 120px; }
   .historyFilters > span { flex-basis: 100%; font-size: var(--label); }
@@ -1048,7 +1059,7 @@
   padding: var(--s3) var(--s4);
   border: 1px solid var(--line);
   border-radius: var(--radius-medium);
-  background: var(--surface-muted);
+  background: var(--paper);
 }
 
 /* Review is the closing gate: a neutral draft summary first, then the guarded submit.
@@ -1073,7 +1084,7 @@
   padding: var(--s3) var(--s4);
   border: 1px solid var(--line);
   border-radius: var(--radius-medium);
-  background: var(--surface-muted);
+  background: var(--paper);
   list-style: none;
 }
 
@@ -1215,7 +1226,7 @@
 
 /* Give the work areas their own hierarchy instead of three nested panels. */
 .composeGrid > fieldset { background: transparent; border: 0; border-radius: 0; padding: 0; }
-.selectionSummary { background: var(--surface-muted); border: 0; }
+.selectionSummary { background: var(--paper); border: 1px solid var(--line); }
 .reviewCard { border: 1px solid var(--line-strong); border-radius: var(--radius-large); padding: var(--s5) var(--s4) var(--s4); }
 .draftSummary { border: 1px solid var(--line); border-radius: var(--radius-medium); }
 
@@ -1260,9 +1271,13 @@
 .composeGrid[data-step="1"] .recipientFieldset { border: 0; padding: 0; max-width: 900px; }
 .composeGrid[data-step="1"] .recipientTopBar { display: none; }
 .composeGrid[data-step="2"] .composeDraft { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(240px, 1fr); gap: var(--s5); }
-.stepActions { display: flex; justify-content: flex-end; gap: var(--s2); padding-top: var(--s3); }
+.stepActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--s2); padding-top: var(--s3); }
+.stepActions > :global(.product-action) { flex: 0 0 auto; white-space: nowrap; }
+.stepActions > .help { flex: 1 0 100%; margin: 0; text-align: right; }
+.guideAction { justify-content: flex-start; margin-top: var(--s1); padding-inline: var(--s2); color: var(--brand-text); }
+.guideAction svg { width: 16px; height: 16px; flex: none; }
 .finalBody { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; color: var(--ink); }
-@media(max-width: 768px) { .composeGrid[data-step="2"] .composeDraft { grid-template-columns: minmax(0,1fr); } .composeSteps { gap: 0; } .composeSteps button { flex: 1; padding-inline: var(--s1); } }
+@media(max-width: 768px) { .composeGrid[data-step="2"] .composeDraft { grid-template-columns: minmax(0,1fr); } .composeSteps { gap: 0; } .composeSteps button { flex: 1; padding-inline: var(--s1); } .stepActions > .help { text-align: left; } }
 @media(min-width: 769px) {
   .composeGrid[data-step="2"] .contentFields { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: var(--s3); align-content: start; }
   .composeGrid[data-step="2"] .contentFields > :nth-child(2) { display: contents; }

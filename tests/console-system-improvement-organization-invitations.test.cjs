@@ -173,7 +173,7 @@ test('shared-account resets fail closed and point at verified-email self-service
   assert.match(dialog, /이 계정은 여기서 재설정할 수 없습니다/, 'blocked description promises no reset');
   assert.match(dialog, /재설정이 허용되는 계정은 성공하면 다른 기기에서 로그아웃됩니다/, 'pre-block wording scopes the logout promise to allowed accounts');
   assert.match(dialog, /sharedEffectBlocked \? \(/, 'blocked branch replaces fields and footer');
-  assert.match(dialog, /<button type="button" className="button button-secondary" onClick=\{onClose\}>\s*닫기\s*<\/button>/, 'blocked footer is 닫기 only');
+  assert.match(dialog, /<ProductButton type="button" className="button button-secondary" onClick=\{onClose\}>\s*닫기\s*<\/ProductButton>/, 'blocked footer is 닫기 only');
   assert.match(dialog, /\{sharedEffectBlocked \? \(\s*failure \? <ConsoleFeedback kind="error">\{failure\}<\/ConsoleFeedback> : null\s*\) : \(/, 'blocked body shows only the failure note — no fields, no submit');
   assert.doesNotMatch(dialog, /OrgMembershipDisableButton|setCampaignDraft|members\//, 'blocking never auto-disables a membership');
   const reset = bodyBetween(team, 'SHARED_ACCOUNT_GLOBAL_EFFECT', 'if (isDefinitiveClientError(res.status) && !attempt.uncertain) {');

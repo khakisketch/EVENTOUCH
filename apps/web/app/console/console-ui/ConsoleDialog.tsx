@@ -1,5 +1,7 @@
 "use client";
 
+import ProductButton from "../../ui/ProductButton";
+
 import { useEffect, useId, useRef, useSyncExternalStore } from "react";
 import type { ReactNode, RefObject } from "react";
 import styles from "./console-ui.module.css";
@@ -210,7 +212,7 @@ export default function ConsoleDialog({
             }}
           >
             <h2 id={headingId} style={{ margin: 0 }}>{title}</h2>
-            <button
+            <ProductButton
               type="button"
               className="button button-secondary"
               style={{ flex: "none" }}
@@ -218,7 +220,7 @@ export default function ConsoleDialog({
               disabled={busy}
             >
               {closeLabel}
-            </button>
+            </ProductButton>
           </div>
         ) : (
           <h2 id={headingId}>{title}</h2>

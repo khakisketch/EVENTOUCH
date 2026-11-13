@@ -4,7 +4,8 @@ import ValidatedForm from "../../../ui/ValidatedForm";
 
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import ProductLink from "../../../ui/ProductLink";
+import ProductButton from "../../../ui/ProductButton";
 import { useRouter } from "next/navigation";
 import { BUILT_IN_FIELDS, parseRegisterData } from "./register-data";
 import type { PublishedField } from "./register-data";
@@ -435,7 +436,7 @@ export default function RegisterForm(initial: Props) {
     ) : (
       <p className="registration-duplicate" role="status">
         이미 신청하신 연락처로 등록되어 있습니다.{" "}
-        <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</Link>
+        <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</ProductLink>
       </p>
     )
   ) : null;
@@ -561,14 +562,14 @@ export default function RegisterForm(initial: Props) {
             <>
               <p>신청 연락처가 본인 것인지 문자 인증번호로 확인합니다. 인증을 마쳐야 신청할 수 있습니다.</p>
               {!codeSent ? (<>
-                <button type="button" className="button button-secondary" onClick={requestCode} disabled={verifying}>
+                <ProductButton type="button" className="button button-secondary" onClick={requestCode} disabled={verifying}>
                   {verifying ? "보내는 중입니다" : "인증번호 받기"}
-                </button>
-                <button type="button" className="button button-secondary" disabled={verifying} onClick={() => {
+                </ProductButton>
+                <ProductButton type="button" className="button button-secondary" disabled={verifying} onClick={() => {
                   const phone = typeof values.phone === "string" ? values.phone.trim() : "";
                   if (!phone) { setFailure({ field: "phone", message: "연락처를 먼저 입력하세요." }); document.getElementById("field-phone")?.focus(); return; }
                   setCodeSent(true); setRequestUncertain(true); setVerifyFailure(null);
-                }}>이미 받은 인증번호 입력</button>
+                }}>이미 받은 인증번호 입력</ProductButton>
               </>) : (
                 <>
                   <p className={requestUncertain ? "notice" : "state-success"} role="status">{requestUncertain ? "발송 여부는 미확인입니다. 문자가 오면 가장 최근 번호를 입력하세요." : "인증번호 요청을 접수했습니다. 10분 안에 입력하세요. 문자가 오지 않으면 다시 받으세요."}</p>
@@ -586,18 +587,18 @@ export default function RegisterForm(initial: Props) {
                       onChange={(event) => setCode(event.target.value)}
                     />
                   </div>
-                  <button type="button" className="button button-secondary" onClick={confirmCode} disabled={verifying}>
+                  <ProductButton type="button" className="button button-secondary" onClick={confirmCode} disabled={verifying}>
                     {verifying ? "확인 중입니다" : "인증 확인"}
-                  </button>{" "}
-                  <button type="button" className="button button-secondary" onClick={requestCode} disabled={verifying}>
+                  </ProductButton>{" "}
+                  <ProductButton type="button" className="button button-secondary" onClick={requestCode} disabled={verifying}>
                     {verifying ? "보내는 중입니다" : "인증번호 다시 받기"}
-                  </button>
+                  </ProductButton>
                 </>
               )}
               {verifyFailure ? <p role="alert">{verifyFailure}</p> : null}
               <p className="verification-help">
                 문자가 오지 않거나 인증이 계속되지 않으면{" "}
-                <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내에서 운영 정보를 확인하세요.</Link>
+                <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내에서 운영 정보를 확인하세요.</ProductLink>
               </p>
             </>
           )}
@@ -631,7 +632,7 @@ export default function RegisterForm(initial: Props) {
         <section className="registration-retry" role="alert" tabIndex={-1} id="signup-form-changed">
           <p>{failure.message}</p>
           <p>입력한 내용은 유지됩니다. 최신 안내를 확인하고 다시 동의해 주세요.</p>
-          <button type="button" className="button button-secondary" onClick={() => void refreshForm()}>최신 신청 양식 불러오기</button>
+          <ProductButton type="button" className="button button-secondary" onClick={() => void refreshForm()}>최신 신청 양식 불러오기</ProductButton>
           {formRefreshRequested ? <p role="status">최신 내용을 확인하고 있습니다. 연결이 늦으면 다시 눌러 주세요.</p> : null}
           {formRefreshError ? <p role="alert">{formRefreshError}</p> : null}
         </section>
@@ -648,7 +649,7 @@ export default function RegisterForm(initial: Props) {
           <h2>신청 결과를 확인하지 못했습니다</h2>
           <p>이미 신청되었을 수 있습니다. 입력한 정보는 결과를 확인할 때까지 변경할 수 없습니다.</p>
           <p>아래 버튼으로 같은 신청을 다시 확인하세요. 확인하기 전에는 이 페이지를 새로고침하거나 닫지 마세요.</p>
-          <p>계속 확인되지 않으면 <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`} target="_blank" rel="noopener noreferrer">행사 안내 (새 탭)</Link>에서 주최 측의 안내를 확인하세요.</p>
+          <p>계속 확인되지 않으면 <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`} target="_blank" rel="noopener noreferrer">행사 안내 (새 탭)</ProductLink>에서 주최 측의 안내를 확인하세요.</p>
         </section>
       ) : null}
       {signupSuperseded ? (
@@ -657,13 +658,13 @@ export default function RegisterForm(initial: Props) {
           <p>신청이 처리된 뒤 참가 정보가 변경되었습니다.</p>
           {recoveryBlocked ? (
             <p>{recoveryContact ? `문의: ${recoveryContact}` : "행사 주최 측에 문의하세요."}</p>
-          ) : <Link className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</Link>}
+          ) : <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</ProductLink>}
         </section>
       ) : null}
       <div className={styles.submitBlock}>
-        <button ref={submitButtonRef} type="submit" disabled={submitting || signupSuperseded || formClosed || (verificationRequired && recoveryBlocked) || failure?.field === "formVersion"}>
+        <ProductButton ref={submitButtonRef} variant="primary" type="submit" disabled={submitting || signupSuperseded || formClosed || (verificationRequired && recoveryBlocked) || failure?.field === "formVersion"}>
           {submitting ? (retryPending ? "신청 결과 확인 중입니다" : "신청 중입니다") : (retryPending ? "신청 결과 다시 확인" : "신청하기")}
-        </button>
+        </ProductButton>
       </div>
     </ValidatedForm>
   );

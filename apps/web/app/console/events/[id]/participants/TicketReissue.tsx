@@ -1,4 +1,5 @@
 "use client";
+import ProductButton from "../../../../ui/ProductButton";
 
 import { useEffect, useRef, useState } from "react";
 import { consoleFetch } from "../../../../../lib/console-api";
@@ -175,11 +176,11 @@ export default function TicketReissue({ eventId, slug, person, resumeCommandId, 
   return (
     <ConsoleDialog title="티켓 재발급" description={person.name} busy={busy} onClose={onClose} canClose={canClose}
       footer={phase !== "confirm" ? <>
-        <button type="button" className="button button-secondary" disabled={busy} onClick={() => { if (canClose()) onClose(); }}>{phase === "issued" && recoverable ? "나중에 확인" : "닫기"}</button>
-        {phase === "issued" && recoverable ? <button type="button" className="button button-secondary" disabled={operator.changed} onClick={finish}>링크 확인 완료</button> : null}
-        {reviewRequired ? <button ref={recoveryAction} type="button" className="button button-primary" disabled={busy || operator.changed} onClick={() => void showLatest()}>
+        <ProductButton type="button" className="button button-secondary" disabled={busy} onClick={() => { if (canClose()) onClose(); }}>{phase === "issued" && recoverable ? "나중에 확인" : "닫기"}</ProductButton>
+        {phase === "issued" && recoverable ? <ProductButton type="button" className="button button-secondary" disabled={operator.changed} onClick={finish}>링크 확인 완료</ProductButton> : null}
+        {reviewRequired ? <ProductButton ref={recoveryAction} type="button" className="button button-primary" disabled={busy || operator.changed} onClick={() => void showLatest()}>
           {busy ? "참가자 정보 불러오는 중" : "최신 참가자 정보 보기"}
-        </button> : null}
+        </ProductButton> : null}
       </> : null}>
       {error ? <ConsoleFeedback kind="error">{error}</ConsoleFeedback> : null}
       {phase === "confirm" ? <ConsoleConfirm summary={<span className={styles.ticketReissueCopy}>새 티켓을 발급하면 기존 링크와 QR은 사용할 수 없게 됩니다. 발급 후 새 링크를 복사해 참가자에게 전달하세요.</span>}
@@ -187,8 +188,8 @@ export default function TicketReissue({ eventId, slug, person, resumeCommandId, 
       {unresolved ? <div className={styles.editRecovery}>
         {phase === "applied" ? <ConsoleFeedback kind="success">재발급이 확인됐습니다. 같은 요청으로 발급된 링크를 가져오세요.</ConsoleFeedback> : null}
         <div className={styles.editActions}>
-          <button type="button" className="button button-secondary" disabled={busy || operator.changed} onClick={() => void run(true)}>서버 처리 확인</button>
-          <button ref={recoveryAction} type="button" className="button button-primary" disabled={busy || operator.changed} onClick={() => void run()}>같은 요청으로 링크 받기</button>
+          <ProductButton type="button" className="button button-secondary" disabled={busy || operator.changed} onClick={() => void run(true)}>서버 처리 확인</ProductButton>
+          <ProductButton ref={recoveryAction} type="button" className="button button-primary" disabled={busy || operator.changed} onClick={() => void run()}>같은 요청으로 링크 받기</ProductButton>
         </div>
       </div> : null}
       {reviewRequired && !error ? <ConsoleFeedback kind="warning">{phase === "changed"
@@ -197,7 +198,7 @@ export default function TicketReissue({ eventId, slug, person, resumeCommandId, 
       {phase === "issued" && !operator.changed ? <div className={styles.editRecovery}>
         <ConsoleFeedback kind="success">새 티켓을 발급했습니다. 링크를 복사해 해당 참가자에게 전달하세요.</ConsoleFeedback>
         {recoverable ? <p>닫은 뒤에도 처리 결과 확인에서 링크를 다시 확인할 수 있습니다.</p> : <ConsoleFeedback kind="warning">복구 기록을 확인할 수 없습니다. 창을 닫거나 새로고침하기 전에 링크를 복사하세요.</ConsoleFeedback>}
-        <button ref={copyButton} type="button" className="button button-primary" onClick={() => void copy()}>새 티켓 링크 복사</button>
+        <ProductButton ref={copyButton} type="button" className="button button-primary" onClick={() => void copy()}>새 티켓 링크 복사</ProductButton>
         {copied ? <p role="status">새 티켓 링크를 복사했습니다.</p> : null}
         <details ref={manualCopy}>
           <summary>링크 직접 복사</summary>

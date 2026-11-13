@@ -230,7 +230,7 @@ test("photos upload stacks full-width on phones; import file aligns left", () =>
   const photos = read("console/events/[id]/photos/evidence-photos.module.css");
   const mobile = photos.slice(photos.indexOf("@media (max-width: 768px)"));
   assert.match(mobile, /\.uploadArea\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/su, "explanation keeps full width");
-  assert.match(mobile, /\.uploadArea > :global\(\.button\)\s*\{[^}]*width:\s*100%/su, "upload action goes full-width");
+  assert.match(mobile, /\.uploadArea > :global\(\.product-action\)\s*\{[^}]*width:\s*100%/su, "upload action goes full-width");
   const wizard = read("console/events/[id]/participants/import/ImportWizard.tsx");
   const fileSlot = wizard.slice(wizard.indexOf('filters={'), wizard.indexOf('actions={', wizard.indexOf('filters={')));
   assert.match(fileSlot, /<label data-import-dropzone/u, "file picker rides the left filter slot on desktop");
@@ -238,6 +238,6 @@ test("photos upload stacks full-width on phones; import file aligns left", () =>
   assert.match(fileSlot, /type="file"/u, "the picker remains a native file input");
   const importCss = read("console/events/[id]/participants/import/import.module.css");
   assert.match(importCss, /\.filePicker:focus-within\s+\.fileButton\s*\{[^}]*outline:\s*3px/su, "keyboard focus is visible without :has");
-  assert.match(wizard, /actions=\{\s*<button/u, "template stays a right-side action");
+  assert.match(wizard, /actions=\{\s*<ProductButton\b/u, "template stays a right-side action");
   assert.match(wizard, /양식 CSV/u, "template download survives the move");
 });

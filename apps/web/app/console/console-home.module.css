@@ -105,7 +105,7 @@
   padding: 2px;
   border: 1px solid var(--line);
   border-radius: var(--radius-small);
-  background: var(--surface-muted);
+  background: var(--paper);
 }
 
 .viewButton {
@@ -141,10 +141,11 @@
   column-gap: var(--s4);
   padding: var(--s3) var(--s4);
   border-block: 1px solid var(--line);
-  background: var(--surface-muted);
+  background: var(--paper);
   color: var(--muted);
   font-size: var(--label);
   font-weight: 650;
+  letter-spacing: 0.06em;
 }
 
 .eventGrid {
@@ -220,11 +221,11 @@
 .eventCardBody { display: contents; }
 .eventClientGroup { display: grid; gap: var(--s1); min-width: 0; }
 .eventClient { margin: 0; color: var(--ink); font-size: var(--small); font-weight: 600; word-break: keep-all; overflow-wrap: anywhere; }
-.eventInventory { margin: 0; color: var(--muted); font-size: var(--label); font-variant-numeric: tabular-nums; }
+.eventInventory { margin: 0; color: var(--muted); font-size: var(--label); letter-spacing: 0.02em; font-variant-numeric: tabular-nums; }
 
 .eventCardFoot { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); min-width: 0; }
 .eventCardFoot :global(.stage-badge) { font-size: var(--label); font-weight: 650; }
-.eventRecency { color: var(--muted); font-size: var(--small); font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.eventRecency { color: var(--muted); font-size: var(--small); font-weight: 650; letter-spacing: 0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .eventRecencySoon { color: var(--ink); font-weight: 800; }
 .cardArrow { width: 18px; height: 18px; margin-left: auto; flex: none; color: var(--muted); }
 .eventCardLink:hover .eventName { text-decoration: underline; text-underline-offset: 3px; }
@@ -283,8 +284,9 @@
 .weekday {
   padding-block: var(--s1);
   color: var(--muted);
-  font-size: var(--small);
+  font-size: var(--label);
   font-weight: 650;
+  letter-spacing: 0.06em;
   text-align: center;
 }
 
@@ -516,7 +518,7 @@
     flex-wrap: nowrap;
   }
 
-  .createFooter.createFooter :global(.button) {
+  .createFooter.createFooter :global(.astryx-button) {
     flex: 1 1 0;
     min-width: 0;
     padding-inline: var(--s2);

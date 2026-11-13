@@ -270,7 +270,7 @@ async function runMessageMaintenance(database, provider, options = {}) {
     duePending = await countDueScheduled(database, { now, limit, eventIds: options.eventIds });
   }
 
-  const drain = await drainMessageOutbox(database, provider, { now, limit });
+  const drain = await drainMessageOutbox(database, provider, { now, limit, fileStorage: options.fileStorage });
   const resolved = await resolvePendingDeliveries(database, provider, { now, limit, eventIds: options.eventIds, cursor: options.resolutionCursor });
 
   return { at: now, enabled: true, autoSendDue, enqueued, duePending, skippedDue, drain, resolved };

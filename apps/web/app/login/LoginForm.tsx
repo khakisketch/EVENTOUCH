@@ -1,6 +1,10 @@
 "use client";
 
+import ProductInput from "../ui/ProductInput";
+
 import ValidatedForm from "../ui/ValidatedForm";
+import ProductButton from "../ui/ProductButton";
+import ProductLink from "../ui/ProductLink";
 
 
 import { useEffect, useRef, useState } from "react";
@@ -257,7 +261,7 @@ export default function LoginForm() {
       <section className="auth-form" aria-label="초기 운영자 설정 안내">
         <p role="alert">운영자 계정이 아직 설정되지 않았습니다.</p>
         <p className="auth-help">서버 관리자에게 초기 운영자 계정 설정을 요청하세요. 설정 후 다시 확인하면 로그인할 수 있습니다.</p>
-        <button type="button" onClick={() => setSetupCheck((value) => value + 1)}>설정 상태 다시 확인</button>
+        <ProductButton type="button" onClick={() => setSetupCheck((value) => value + 1)}>설정 상태 다시 확인</ProductButton>
       </section>
     );
   }
@@ -270,19 +274,18 @@ export default function LoginForm() {
       {sessionStale && !checkingSession ? (
         <p className="auth-session-stale" role="status">
           세션 확인이 끝나지 않았습니다. 로그인은 계속할 수 있습니다.{" "}
-          <button
+          <ProductButton
             type="button"
             className="auth-help-link"
             onClick={() => setSessionCheck((value) => value + 1)}
           >
             세션 다시 확인
-          </button>
+          </ProductButton>
         </p>
       ) : null}
       <ValidatedForm className="auth-form" onSubmit={onSubmit}>
       <div className="form-field">
-        <label htmlFor="login-email">이메일</label>
-        <input
+        <ProductInput labelMode="astryx" label="이메일"
           id="login-email"
           type="email"
           autoComplete="username"
@@ -298,15 +301,15 @@ export default function LoginForm() {
           autoComplete="current-password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-        /><button type="button" aria-controls="login-password" aria-pressed={showPassword} onClick={() => setShowPassword((value) => !value)}>{showPassword ? "숨기기" : "보기"}</button></div>
+        /><ProductButton type="button" aria-controls="login-password" aria-pressed={showPassword} onClick={() => setShowPassword((value) => !value)}>{showPassword ? "숨기기" : "보기"}</ProductButton></div>
       </div>
       {failure ? <p role="alert" ref={failureRef} tabIndex={-1}>{failure}</p> : null}
-      <button type="submit" disabled={submitting}>
+      <ProductButton variant="primary" type="submit" disabled={submitting}>
         {submitting ? "로그인 중입니다" : "로그인"}
-      </button>
+      </ProductButton>
       <p className="auth-help">
         비밀번호를 잊으셨나요?{" "}
-        <button
+        <ProductButton
           type="button"
           className="auth-help-link"
           aria-expanded={resetOpen}
@@ -314,13 +317,13 @@ export default function LoginForm() {
           onClick={() => setResetOpen((open) => !open)}
         >
           재설정 요청
-        </button>
+        </ProductButton>
       </p>
       {resetOpen ? (
         <div className={`auth-reset-help ${styles.loginReset}`} id="login-reset-help" role="region" aria-label="비밀번호 재설정 안내">
           <p>
             이메일을 미리 인증했다면 발송 연결 후{" "}
-            <a href="/recover">이메일로 직접 재설정</a>할 수 있습니다.
+            <ProductLink href="/recover">이메일로 직접 재설정</ProductLink>할 수 있습니다.
           </p>
           <p>
             한 조직에만 속한 계정은 조직 관리자에게 재설정을 요청할 수 있습니다.

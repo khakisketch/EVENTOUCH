@@ -1,8 +1,9 @@
 "use client";
+import ProductButton from "../../../../../ui/ProductButton";
 
 import { useEffect, useRef, useState, type ComponentProps } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import ProductLink from "../../../../../ui/ProductLink";
 import { loginHrefForLocation } from "../../../../../auth-redirect";
 import ConsoleDialog from "../../../../console-ui/ConsoleDialog";
 import ConsolePage from "../../../../console-ui/ConsolePage";
@@ -661,12 +662,12 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
             setRetryTick((tick) => tick + 1);
           }}
           actions={(
-            <Link
+            <ProductLink
               className="button button-secondary"
               href={`/console/events/${encodeURIComponent(eventId)}/participants`}
             >
               참가자 목록으로
-            </Link>
+            </ProductLink>
           )}
         />
       </ImportFrame>
@@ -768,7 +769,7 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
               </label>
             }
             actions={
-              <button
+              <ProductButton
                 type="button"
                 className="button button-secondary"
                 onClick={() =>
@@ -779,7 +780,7 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
                 }
               >
                 양식 CSV
-              </button>
+              </ProductButton>
             }
           />
           <p className={`landing-note ${styles.fileMeta}`}>CSV·TXT·XLS·XLSX · 최대 1MB, 1,000행. 엑셀은 첫 시트의 첫 행을 헤더로 읽으며 256열까지 연결할 수 있습니다. TXT는 한 줄에 한 명: 이름, 연락처, 이메일(선택), 소속(선택).</p>
@@ -820,7 +821,7 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
                   </div>
                 }
                 actions={
-                  <button type="button" className="button button-secondary" disabled={importLocked} onClick={() => {
+                  <ProductButton type="button" className="button button-secondary" disabled={importLocked} onClick={() => {
                     buildPreview(map);
                     if (onDismiss) {
                       if (!map.name || !map.phone) { setFileError("이름과 연락처 열을 연결하세요."); return; }
@@ -829,11 +830,11 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
                     }
                   }}>
                     검토 결과 만들기
-                  </button>
+                  </ProductButton>
                 }
               />
             </ConsoleSection>
-            {onDismiss ? <button type="button" className="button button-secondary" disabled={importLocked} onClick={() => setModalStep(1)}>파일 바꾸기</button> : null}
+            {onDismiss ? <ProductButton type="button" className="button button-secondary" disabled={importLocked} onClick={() => setModalStep(1)}>파일 바꾸기</ProductButton> : null}
             </div>
           ) : null}
           {preview ? (
@@ -898,24 +899,24 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
               {commitError ? <ConsoleFeedback kind="error">{commitError}</ConsoleFeedback> : null}
               {importUncertain ? <p role="status">결과를 확인할 때까지 원래 파일과 열 연결을 유지합니다.</p> : null}
               <ConsoleFormActions note="가져온 유효 행은 승인 검토 없이 참가 확정으로 등록됩니다. 동의 기록은 가져오기만으로 생성하지 않습니다.">
-                {onDismiss ? <button type="button" className="button button-secondary" disabled={importLocked} onClick={() => setModalStep(2)}>열 연결 수정</button> : null}
-                {importUncertain ? <button type="button" className="button button-secondary" disabled={committing || checkingImport || closeConfirm} onClick={() => void checkImportResult()}>{checkingImport ? "확인 중입니다" : "서버 처리 확인"}</button> : null}
-                <button
+                {onDismiss ? <ProductButton type="button" className="button button-secondary" disabled={importLocked} onClick={() => setModalStep(2)}>열 연결 수정</ProductButton> : null}
+                {importUncertain ? <ProductButton type="button" className="button button-secondary" disabled={committing || checkingImport || closeConfirm} onClick={() => void checkImportResult()}>{checkingImport ? "확인 중입니다" : "서버 처리 확인"}</ProductButton> : null}
+                <ProductButton
                   type="button"
                   className="button button-primary"
                   disabled={committing || checkingImport || closeConfirm || otherImportReceipt || !preview.valid.length || stageBlocked || (preview.phoneReview.length > 0 && !phoneReviewed && !importUncertain)}
                   onClick={() => void commit()}
                 >
                   {committing ? "반영 중입니다" : importUncertain ? "같은 요청 다시 시도" : `유효 ${preview.valid.length}행 반영`}
-                </button>
-                <button
+                </ProductButton>
+                <ProductButton
                   type="button"
                   className="button button-secondary"
                   disabled={committing || checkingImport || closeConfirm}
                   onClick={() => { if (importUncertain) setCloseConfirm(true); else closeReview(); }}
                 >
                   {importUncertain ? "확인 전 닫기" : "검토 취소"}
-                </button>
+                </ProductButton>
               </ConsoleFormActions>
               {closeConfirm ? <ConsoleConfirm
                 summary="명단이 이미 반영되었을 수 있습니다. 검토를 닫아도 서버 처리는 취소되지 않습니다."
@@ -935,7 +936,7 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
         onConfirm={onDismiss} onCancel={() => setDismissConfirm(false)}
       /> : null}
       <p>
-        {onDismiss ? <button type="button" className="button button-secondary" disabled={committing || checkingImport} onClick={() => { if (canDismiss()) onDismiss(); }}>참가자 목록으로</button> : <Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants`}>참가자 목록으로</Link>}
+        {onDismiss ? <ProductButton type="button" className="button button-secondary" disabled={committing || checkingImport} onClick={() => { if (canDismiss()) onDismiss(); }}>참가자 목록으로</ProductButton> : <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants`}>참가자 목록으로</ProductLink>}
       </p>
     </ImportFrame>
   );

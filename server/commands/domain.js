@@ -375,7 +375,7 @@ function createDomainCommands(database, options = {}) {
 
     if (outcome.dispatch && provider) {
       try {
-        const sent = await sendQueuedCampaign(database, provider, outcome.dispatch);
+        const sent = await sendQueuedCampaign(database, provider, outcome.dispatch, { fileStorage: options.fileStorage });
         // Answer with the outcome the operator actually cares about rather
         // than the intermediate SENDING state.
         if (sent && sent.message && outcome.body && outcome.body.message) {

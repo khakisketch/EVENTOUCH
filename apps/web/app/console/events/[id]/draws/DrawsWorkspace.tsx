@@ -1,11 +1,11 @@
 "use client";
 
 import ConsoleChoiceGroup from "../../../console-ui/ConsoleChoiceGroup";
+import ProductButton from "../../../../ui/ProductButton";
 import ValidatedForm from "../../../../ui/ValidatedForm";
 
-
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import ProductLink from "../../../../ui/ProductLink";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
 import ConsolePage from "../../../console-ui/ConsolePage";
@@ -1658,9 +1658,9 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
         {state.archived || !canWriteEvent(capabilities, pendingOperation.command) ? <p>현재 권한이나 행사 상태에서는 같은 요청을 다시 보낼 수 없습니다. 서버 처리 확인을 이용하세요.</p> : null}
         {operationRecoveryError ? <p role="alert">{operationRecoveryError}</p> : null}
         <div className={styles.drawRecoveryActions}>
-          <button type="button" className="button button-secondary" disabled={checkingOperation || busy !== null || operatorContext.changed || abandonOperation} onClick={() => void recoverDrawOperation(false)}>{checkingOperation ? "확인 중…" : "서버 처리 확인"}</button>
-          <button type="button" className="button button-secondary" disabled={checkingOperation || busy !== null || operatorContext.changed || abandonOperation || state.archived || !canWriteEvent(capabilities, pendingOperation.command)} onClick={() => void recoverDrawOperation(true)}>같은 요청 다시 시도</button>
-          <button type="button" className="button button-secondary" disabled={checkingOperation || busy !== null || abandonOperation} onClick={() => setAbandonOperation(true)}>확인 전 그만두기</button>
+          <ProductButton type="button" variant="secondary" disabled={checkingOperation || busy !== null || operatorContext.changed || abandonOperation} onClick={() => void recoverDrawOperation(false)}>{checkingOperation ? "확인 중…" : "서버 처리 확인"}</ProductButton>
+          <ProductButton type="button" variant="secondary" disabled={checkingOperation || busy !== null || operatorContext.changed || abandonOperation || state.archived || !canWriteEvent(capabilities, pendingOperation.command)} onClick={() => void recoverDrawOperation(true)}>같은 요청 다시 시도</ProductButton>
+          <ProductButton type="button" variant="secondary" disabled={checkingOperation || busy !== null || abandonOperation} onClick={() => setAbandonOperation(true)}>확인 전 그만두기</ProductButton>
         </div>
         {abandonOperation ? <ConsoleConfirm summary="이미 반영된 작업은 취소되지 않습니다. 확인을 그만두고 최신 내용을 확인할까요?" confirmLabel="확인 그만두기" onConfirm={() => {
           const attempt = pendingOperationRef.current;
@@ -1679,12 +1679,12 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
         <p role="status" aria-live="polite">확인된 대상 {luckyProgress.processed} / {luckyProgress.total}명 · {luckyProgress.phase === "uncertain" ? "현재 요청 확인 필요" : luckyProgress.phase === "stopping" ? "현재 요청 확인 후 중단" : "순차 처리 중"}</p>
         <progress max={luckyProgress.total} value={luckyProgress.processed} aria-label="번호 배정 확인 진행률" />
         <p>이미 확인된 배정은 유지됩니다. 화면을 떠나면 현재 요청을 확인한 뒤 남은 참가자를 다시 선택하세요.</p>
-        <button type="button" className="button button-secondary" disabled={luckyProgress.phase === "stopping"} onClick={() => {
+        <ProductButton type="button" variant="secondary" disabled={luckyProgress.phase === "stopping"} onClick={() => {
           const plan = luckyPlanRef.current;
           if (!plan) return;
           plan.stopRequested = true;
           setLuckyProgress({ total: plan.ids.length, processed: plan.processed, phase: "stopping" });
-        }}>남은 배정 중단</button>
+        }}>남은 배정 중단</ProductButton>
       </section> : null}
 
       {pendingDraw || drawReceipt || rememberedDrawReceipt ? (
@@ -1693,8 +1693,8 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
           <p>이전 추첨이 처리됐을 수 있어 새 작업을 잠시 잠갔습니다. 서버 처리 확인은 추첨을 다시 실행하지 않습니다.</p>
           {operationRecoveryError ? <p role="alert">{operationRecoveryError}</p> : null}
           <div className={styles.drawRecoveryActions}>
-            <button type="button" className="button button-primary" disabled={checkingDraw || busy !== null || operatorContext.changed} onClick={() => void checkUncertainDraw()}>{checkingDraw ? "확인 중…" : "추첨 처리 확인"}</button>
-            {pendingDraw ? <button type="button" className="button button-secondary" disabled={checkingDraw || busy !== null || operatorContext.changed} onClick={() => void runProgramConfirmed(pendingDraw.program, pendingDraw.count, pendingDraw.toStage)}>원래 추첨 요청 다시 확인</button> : null}
+            <ProductButton type="button" variant="primary" disabled={checkingDraw || busy !== null || operatorContext.changed} onClick={() => void checkUncertainDraw()}>{checkingDraw ? "확인 중…" : "추첨 처리 확인"}</ProductButton>
+            {pendingDraw ? <ProductButton type="button" variant="secondary" disabled={checkingDraw || busy !== null || operatorContext.changed} onClick={() => void runProgramConfirmed(pendingDraw.program, pendingDraw.count, pendingDraw.toStage)}>원래 추첨 요청 다시 확인</ProductButton> : null}
           </div>
           {!pendingDraw ? <p>새로고침 후에는 원래 입력을 보관하지 않습니다. 서버 처리 여부를 확인해 주세요.</p> : null}
         </section>
@@ -1739,15 +1739,23 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
             <p className={styles.hint}>실행 인원은 매번 1~20명으로 지정합니다(기본 1명). 프로그램 대상·쿼터·등급은 첫 당첨 뒤 잠기고, 공개 여부는 별도로 관리합니다.</p>
             {!screenEnabled && canWriteDraws ? (
               <p className={styles.stagePrerequisite} id="stage-screen-prerequisite">
-                무대 터치 실행은 당첨 결과와 경품을 저장하고 이번 결과를 전광판에 올립니다. 사용 전 <Link href={closeHref(`/console/events/${encodeURIComponent(eventId)}/settings#settings-features`)}>행사 설정에서 행사장 출력을 켜세요.</Link>
+                무대 터치 실행은 당첨 결과와 경품을 저장하고 이번 결과를 전광판에 올립니다. 사용 전 <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/settings#settings-features`)}>행사 설정에서 행사장 출력을 켜세요.</ProductLink>
               </p>
             ) : null}
             {!state.drawModules.some((module) => module.published) && !state.drawPrograms.length && canWriteDraws ? (
-              <p className={styles.stagePrerequisite}>
-                {state.drawModules.length
-                  ? <>무대 터치 실행에는 공개된 추첨 무대가 필요합니다. 기존 비공개 결과는 자동 공개하지 않습니다. <Link href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 콘텐츠에서 무대 운영을 시작해 공개하세요.</Link></>
-                  : <>추첨 프로그램을 만들려면 먼저 <Link href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 콘텐츠에서 추첨 무대를 만들고 공개하세요.</Link> 공개 상태로 전환한 무대만 여기에 연결할 수 있습니다.</>}
-              </p>
+              <div className={`${styles.stagePrerequisite} ${styles.stagePrerequisiteActions}`}>
+                {state.drawModules.length ? (
+                  <>
+                    <p>무대 터치 실행에는 공개된 추첨 무대가 필요합니다. 기존 비공개 결과는 자동 공개하지 않습니다.</p>
+                    <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 콘텐츠에서 무대 운영을 시작해 공개하세요.</ProductLink>
+                  </>
+                ) : (
+                  <>
+                    <p>공개 상태로 전환한 무대만 여기에 연결할 수 있습니다.</p>
+                    <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 콘텐츠에서 추첨 무대를 만들고 공개하세요.</ProductLink>
+                  </>
+                )}
+              </div>
             ) : null}
             {state.drawPrograms.length ? (
               <ul className={styles.programList}>
@@ -1829,7 +1837,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                                           <option value="">같은 업체 승인 참가자 선택</option>
                                           {eligibleRecipients.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
                                         </select>
-                                        <button type="button" className="button button-secondary" disabled={!rewardRecipient[reward.id] || writeLocked || busy === `reward:${reward.id}`} onClick={() => assignCompanyRecipient(reward)}>{busy === `reward:${reward.id}` ? "지정 중입니다" : "수령자 지정"}</button>
+                                        <ProductButton type="button" variant="secondary" disabled={!rewardRecipient[reward.id] || writeLocked || busy === `reward:${reward.id}`} onClick={() => assignCompanyRecipient(reward)}>{busy === `reward:${reward.id}` ? "지정 중입니다" : "수령자 지정"}</ProductButton>
                                       </div>
                                       <p className={styles.hint}>수령자는 자동으로 정하지 않습니다. 지정 후 현장 DESK에서 수령 처리할 수 있습니다.</p>
                                     </div>
@@ -1847,7 +1855,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                       ) : <p className={styles.programWinners}>아직 추첨 결과가 없습니다.</p>}
                       {canWriteDraws ? (
                         <div className={styles.programActions}>
-                          {!program.winners.length ? <button type="button" className="button button-secondary" disabled={busy !== null || writeLocked} onClick={() => {
+                          {!program.winners.length ? <ProductButton type="button" variant="secondary" disabled={busy !== null || writeLocked} onClick={() => {
                             setProgramFormOpen(true);
                             setEditingProgramId(program.id); setProgramName(program.name); setProgramQuota(String(program.quota)); setProgramModuleId(program.moduleId);
                             setProgramEligibility(program.eligibility); setProgramGroups(program.eligibleGroups); setProgramCompanies(program.eligibleCompanies); setProgramOverlap(program.overlap);
@@ -1855,17 +1863,17 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                             requestAnimationFrame(() => {
                               programFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
                             });
-                          }}>설정 수정</button> : null}
-                          {program.status === "DRAFT" || program.status === "CLOSED" && remaining > 0 ? <button type="button" className="button button-secondary" disabled={busy !== null || writeLocked || !program.published && program.winners.length > 0} onClick={() => requestProgramStatus(program, "OPEN")}>{program.status === "DRAFT" ? "운영 시작" : "다시 열기"}</button> : null}
-                          {program.status === "OPEN" ? <button type="button" className="button button-secondary" disabled={busy !== null || writeLocked} onClick={() => requestProgramStatus(program, "CLOSED")}>운영 종료</button> : null}
+                          }}>설정 수정</ProductButton> : null}
+                          {program.status === "DRAFT" || program.status === "CLOSED" && remaining > 0 ? <ProductButton type="button" variant="secondary" disabled={busy !== null || writeLocked || !program.published && program.winners.length > 0} onClick={() => requestProgramStatus(program, "OPEN")}>{program.status === "DRAFT" ? "운영 시작" : "다시 열기"}</ProductButton> : null}
+                          {program.status === "OPEN" ? <ProductButton type="button" variant="secondary" disabled={busy !== null || writeLocked} onClick={() => requestProgramStatus(program, "CLOSED")}>운영 종료</ProductButton> : null}
                           {program.winners.length || (program.status === "OPEN" && !program.published) ? (
-                            <button type="button" className="button button-secondary" disabled={busy !== null || writeLocked} onClick={() => {
+                            <ProductButton type="button" variant="secondary" disabled={busy !== null || writeLocked} onClick={() => {
                               if (!program.winners.length && !program.published) {
                                 setPendingConfirm({ kind: "publishEmptyProgram", program, summary: `“${program.name}”의 결과 공개를 허용할까요? 추첨을 실행하면 당첨 결과가 참가자에게 공개될 수 있습니다. 지금 추첨이 실행되지는 않습니다.` });
                               } else {
                                 void setProgramPublished(program, !program.published);
                               }
-                            }}>{!program.winners.length ? "결과 공개 허용" : program.published ? "결과 비공개" : "결과 공개"}</button>
+                            }}>{!program.winners.length ? "결과 공개 허용" : program.published ? "결과 비공개" : "결과 공개"}</ProductButton>
                           ) : null}
                           {program.status === "OPEN" && remaining > 0 ? (
                             <>
@@ -1874,8 +1882,8 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                                 <input id={`run-count-${program.id}`} type="number" min={1} max={countLimit} value={runCounts[program.id] ?? "1"} disabled={writeLocked} onChange={(event) => setRunCounts((values) => ({ ...values, [program.id]: event.target.value }))} />
                               </div>
                               <div className={styles.runActions} role="group" aria-label={`${program.name} 추첨 실행`}>
-                                <button type="button" className="button button-primary" aria-describedby={runBlockers.length ? runBlockerId : undefined} disabled={!canRun || busy !== null || writeLocked} onClick={() => runProgram(program)}>{busy === `run:${program.id}` ? "추첨 중입니다" : `${runCount}명 추첨 실행`}</button>
-                                <button type="button" className={`button button-secondary ${styles.stageButton}`} aria-describedby={[...stagePrerequisites, runBlockers.length ? runBlockerId : null, stageOnlyBlockers.length ? stageBlockerId : null].filter(Boolean).join(" ") || undefined} disabled={!canRun || !screenEnabled || moduleNeedsPublishing || busy !== null || writeLocked} onClick={() => runProgram(program, true)}>{busy === `stage:${program.id}` ? "무대 결과 준비 중" : "무대 터치 실행"}</button>
+                                <ProductButton type="button" variant="primary" aria-describedby={runBlockers.length ? runBlockerId : undefined} disabled={!canRun || busy !== null || writeLocked} onClick={() => runProgram(program)}>{busy === `run:${program.id}` ? "추첨 중입니다" : `${runCount}명 추첨 실행`}</ProductButton>
+                                <ProductButton type="button" variant="secondary" className={styles.stageButton} aria-describedby={[...stagePrerequisites, runBlockers.length ? runBlockerId : null, stageOnlyBlockers.length ? stageBlockerId : null].filter(Boolean).join(" ") || undefined} disabled={!canRun || !screenEnabled || moduleNeedsPublishing || busy !== null || writeLocked} onClick={() => runProgram(program, true)}>{busy === `stage:${program.id}` ? "무대 결과 준비 중" : "무대 터치 실행"}</ProductButton>
                                 {runBlockers.length ? (
                                   <p className={styles.runBlocker} id={runBlockerId}>실행 전제: {runBlockers.join(" · ")} · {runNextAction} 실행할 수 있습니다</p>
                                 ) : null}
@@ -1886,8 +1894,8 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                               {moduleNeedsPublishing ? (
                                 <p className={styles.stagePrerequisite} id={`stage-module-prerequisite-${program.id}`}>
                                   {!linkedModule
-                                    ? <>연결된 추첨용 무대 프로그램이 없습니다. <Link href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 콘텐츠에서 추첨 무대를 만들고 연결하세요.</Link></>
-                                    : <>연결된 무대 프로그램이 비공개입니다. 기존 결과는 자동 공개되지 않습니다. <Link href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 콘텐츠에서 해당 무대의 운영을 시작해 공개하세요.</Link></>}
+                                    ? <>연결된 추첨용 무대 프로그램이 없습니다. <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 콘텐츠에서 추첨 무대를 만들고 연결하세요.</ProductLink></>
+                                    : <>연결된 무대 프로그램이 비공개입니다. 기존 결과는 자동 공개되지 않습니다. <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 콘텐츠에서 해당 무대의 운영을 시작해 공개하세요.</ProductLink></>}
                                 </p>
                               ) : null}
                             </>
@@ -1960,7 +1968,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                       <h4>경품 등급 (선택)</h4>
                       <p className={styles.hint}>등급을 쓰면 인원 합계가 총 당첨 인원과 같아야 합니다. 비워두면 등급 없는 추첨입니다.</p>
                     </div>
-                    <button type="button" className="button button-secondary" disabled={programTiers.length >= 20} onClick={() => setProgramTiers((tiers) => [...tiers, { key: randomId("tier"), name: "", count: "" }])}>등급 추가</button>
+                    <ProductButton type="button" variant="secondary" disabled={programTiers.length >= 20} onClick={() => setProgramTiers((tiers) => [...tiers, { key: randomId("tier"), name: "", count: "" }])}>등급 추가</ProductButton>
                   </div>
                   {programTiers.map((tier, index) => (
                     <div className={styles.tierRow} key={tier.key}>
@@ -1972,19 +1980,19 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                         <label htmlFor={`draw-tier-count-${tier.key}`}>당첨 인원</label>
                         <input id={`draw-tier-count-${tier.key}`} type="number" min={1} max={10000} value={tier.count} onChange={(event) => setProgramTiers((items) => items.map((item) => item.key === tier.key ? { ...item, count: event.target.value } : item))} />
                       </div>
-                      <button type="button" className="button button-secondary" aria-label={`${tier.name || `등급 ${index + 1}`} 제거`} onClick={() => setProgramTiers((items) => items.filter((item) => item.key !== tier.key))}>제거</button>
+                      <ProductButton type="button" variant="secondary" aria-label={`${tier.name || `등급 ${index + 1}`} 제거`} onClick={() => setProgramTiers((items) => items.filter((item) => item.key !== tier.key))}>제거</ProductButton>
                     </div>
                   ))}
                   {programTiers.length ? <p className={configuredTierTotal === Number(programQuota) ? styles.successHint : styles.fieldError}>등급 인원 합계 {configuredTierTotal}명 · 전체 {Number(programQuota) || 0}명</p> : null}
                 </div>
                 <ConsoleFormActions>
-                  <button type="submit" className="button button-secondary" disabled={busy === "program:save" || writeLocked || !state.drawModules.length}>
+                  <ProductButton type="submit" variant="secondary" disabled={busy === "program:save" || writeLocked || !state.drawModules.length}>
                     {busy === "program:save" ? "저장 중입니다" : editingProgramId ? "설정 저장" : "추첨 만들기"}
-                  </button>
-                  {editingProgramId ? <button type="button" className="button button-secondary" onClick={() => {
+                  </ProductButton>
+                  {editingProgramId ? <ProductButton type="button" variant="secondary" onClick={() => {
                     setEditingProgramId(null); setProgramName(""); setProgramQuota(""); setProgramModuleId("");
                     setProgramEligibility("PERSON"); setProgramGroups([]); setProgramCompanies([]); setProgramOverlap("EVENT"); setProgramTiers([]);
-                  }}>취소</button> : null}
+                  }}>취소</ProductButton> : null}
                 </ConsoleFormActions>
               </ValidatedForm>
       </details>
@@ -2018,9 +2026,9 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                 </label>
                 <p className={styles.hint}>공개를 끄면 집계 수치는 운영자 화면에만 표시됩니다. 결과 순위의 동률은 동률 그대로 공개합니다.</p>
                 <ConsoleFormActions>
-                  <button type="submit" className="button button-secondary" disabled={busy === "vote:save" || writeLocked}>
+                  <ProductButton type="submit" variant="secondary" disabled={busy === "vote:save" || writeLocked}>
                     {busy === "vote:save" ? "저장 중입니다" : "투표 설정 저장"}
-                  </button>
+                  </ProductButton>
                 </ConsoleFormActions>
               </ValidatedForm>
             ) : null}
@@ -2040,9 +2048,9 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                     onChange={(event) => setTeamName(event.target.value)}
                     disabled={state.voteTotal > 0}
                   />
-                  <button type="submit" className="button button-secondary" disabled={busy === "team:add" || writeLocked || !teamName.trim() || state.voteTotal > 0}>
+                  <ProductButton type="submit" variant="secondary" disabled={busy === "team:add" || writeLocked || !teamName.trim() || state.voteTotal > 0}>
                     {busy === "team:add" ? "등록 중입니다" : "팀 등록"}
-                  </button>
+                  </ProductButton>
                 </ValidatedForm>
               </details>
             ) : null}
@@ -2062,9 +2070,9 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
             ) : <p className={styles.empty}>등록된 투표 팀이 없습니다.</p>}
             {canWriteDraws ? (
               <div className={styles.tallyActions}>
-                <button type="button" className="button button-secondary" onClick={refreshVoteTally} disabled={tallyLoading || writeLocked || state.teams.length === 0}>
+                <ProductButton type="button" variant="secondary" onClick={refreshVoteTally} disabled={tallyLoading || writeLocked || state.teams.length === 0}>
                   {tallyLoading ? "집계 중입니다" : "서버 집계 새로고침"}
-                </button>
+                </ProductButton>
                 {state.voteTally ? (
                   <span className={styles.hint}>
                     {state.voteTally.totalVotes}표 집계 · 참가자 결과 {state.voteTally.published ? "공개" : "비공개"}
@@ -2105,11 +2113,11 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                     </dl>
                     <p>내 작성 내용으로 계속하면 저장할 때 운영 상태·시간·경품 전체가 내 작성 내용으로 적용됩니다. 최신 설정을 사용하면 내 작성 내용은 사라집니다.</p>
                     <div className={styles.drawRecoveryActions}>
-                      <button type="button" className="button button-secondary" onClick={() => resolveRouletteConflict(false)}>내 작성 내용으로 계속</button>
-                      <button type="button" className="button button-secondary" onClick={() => resolveRouletteConflict(true)}>최신 설정 사용</button>
+                      <ProductButton type="button" variant="secondary" onClick={() => resolveRouletteConflict(false)}>내 작성 내용으로 계속</ProductButton>
+                      <ProductButton type="button" variant="secondary" onClick={() => resolveRouletteConflict(true)}>최신 설정 사용</ProductButton>
                     </div>
                     <p>선택만으로 저장되지 않습니다. 확인 후 직접 저장하세요.</p>
-                  </> : <button type="button" className="button button-secondary" disabled={rouletteConflict.loading} onClick={() => void readLatestRoulette()}>{rouletteConflict.loading ? "최신 설정 확인 중…" : "최신 설정 확인"}</button>}
+                  </> : <ProductButton type="button" variant="secondary" disabled={rouletteConflict.loading} onClick={() => void readLatestRoulette()}>{rouletteConflict.loading ? "최신 설정 확인 중…" : "최신 설정 확인"}</ProductButton>}
                 </section> : null}
                 {!rouletteBaseRef.current || rouletteVersionRef.current === null ? <p role="note">룰렛 설정을 안전하게 확인할 수 없습니다. 화면을 다시 불러오거나 운영자에게 문의하세요.</p> : null}
                 <fieldset className={styles.rouletteFields} disabled={Boolean(rouletteConflict) || busy === "roulette:save" || writeLocked}>
@@ -2125,14 +2133,14 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                     <label htmlFor="roulette-starts">시작 시간 (한국 시간, 선택)</label>
                     <input id="roulette-starts" type="datetime-local" value={rouletteStartsAt} disabled={busy === "roulette:save" || writeLocked} aria-describedby="roulette-time-help" onChange={(event) => { setRouletteStartsAt(event.target.value); setRouletteStartChanged(true); setRouletteStartCleared(false); }} />
                     {rouletteTimeNeedsReview(shownRouletteBase.startsAt) && !rouletteStartChanged ? <p role="note">저장된 시작 시간 확인 필요{shownRouletteBase.startsAt !== "__invalid_roulette_time__" ? `: ${shownRouletteBase.startsAt}` : ""}. 새 시간을 입력하거나 제한을 해제하세요.</p> : null}
-                    {(shownRouletteBase.startsAt || rouletteStartsAt || rouletteStartChanged) && !rouletteStartCleared ? <button type="button" className={`button button-quiet ${styles.rouletteTimeAction}`} disabled={busy === "roulette:save" || writeLocked} onClick={() => { setRouletteStartsAt(""); setRouletteStartChanged(true); setRouletteStartCleared(true); }}>시작 시간 제한 해제</button> : null}
+                    {(shownRouletteBase.startsAt || rouletteStartsAt || rouletteStartChanged) && !rouletteStartCleared ? <ProductButton type="button" variant="ghost" className={styles.rouletteTimeAction} disabled={busy === "roulette:save" || writeLocked} onClick={() => { setRouletteStartsAt(""); setRouletteStartChanged(true); setRouletteStartCleared(true); }}>시작 시간 제한 해제</ProductButton> : null}
                     {rouletteStartCleared ? <p role="status">저장하면 시작 시간 제한을 해제합니다.</p> : null}
                   </div>
                   <div className={styles.programField}>
                     <label htmlFor="roulette-ends">종료 시간 (한국 시간, 선택)</label>
                     <input id="roulette-ends" type="datetime-local" value={rouletteEndsAt} disabled={busy === "roulette:save" || writeLocked} aria-describedby="roulette-time-help" onChange={(event) => { setRouletteEndsAt(event.target.value); setRouletteEndChanged(true); setRouletteEndCleared(false); }} />
                     {rouletteTimeNeedsReview(shownRouletteBase.endsAt) && !rouletteEndChanged ? <p role="note">저장된 종료 시간 확인 필요{shownRouletteBase.endsAt !== "__invalid_roulette_time__" ? `: ${shownRouletteBase.endsAt}` : ""}. 새 시간을 입력하거나 제한을 해제하세요.</p> : null}
-                    {(shownRouletteBase.endsAt || rouletteEndsAt || rouletteEndChanged) && !rouletteEndCleared ? <button type="button" className={`button button-quiet ${styles.rouletteTimeAction}`} disabled={busy === "roulette:save" || writeLocked} onClick={() => { setRouletteEndsAt(""); setRouletteEndChanged(true); setRouletteEndCleared(true); }}>종료 시간 제한 해제</button> : null}
+                    {(shownRouletteBase.endsAt || rouletteEndsAt || rouletteEndChanged) && !rouletteEndCleared ? <ProductButton type="button" variant="ghost" className={styles.rouletteTimeAction} disabled={busy === "roulette:save" || writeLocked} onClick={() => { setRouletteEndsAt(""); setRouletteEndChanged(true); setRouletteEndCleared(true); }}>종료 시간 제한 해제</ProductButton> : null}
                     {rouletteEndCleared ? <p role="status">저장하면 종료 시간 제한을 해제합니다.</p> : null}
                   </div>
                 </div>
@@ -2175,14 +2183,14 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                         <input id={`roulette-weight-${prize.id}`} type="number" min={1} max={1000000} value={prize.weight} onChange={(event) => setRoulettePrizes((items) => items.map((item) => item.id === prize.id ? { ...item, weight: event.target.value } : item))} />
                         <p className={styles.hint}>가중치는 추첨 비중입니다. 한정 재고와 같은 수치 척도에서 운영자가 직접 정합니다.</p>
                       </div> : null}
-                      <button type="button" className="button button-secondary" disabled={rouletteFrozen || roulettePrizes.length <= 1} onClick={() => setRoulettePrizes((items) => items.filter((item) => item.id !== prize.id))}>이 경품 제거</button>
+                      <ProductButton type="button" variant="secondary" disabled={rouletteFrozen || roulettePrizes.length <= 1} onClick={() => setRoulettePrizes((items) => items.filter((item) => item.id !== prize.id))}>이 경품 제거</ProductButton>
                     </div>
                   );
                 })}
                 {rouletteFrozen ? <p className={styles.lockNote}>결과가 발생해 경품 이름·목록 순서는 고정되었습니다. 재고 수량, 운영 시간·상태, 가중치는 계속 조정할 수 있습니다.</p> : null}
                 <ConsoleFormActions>
-                  <button type="button" className="button button-secondary" disabled={rouletteFrozen || roulettePrizes.length >= 20} onClick={() => setRoulettePrizes((items) => [...items, { id: randomId("prize"), label: "", quantity: "", unlimited: false, weight: "" }])}>경품 추가</button>
-                  <button type="submit" className="button button-primary" disabled={busy === "roulette:save" || writeLocked}>{busy === "roulette:save" ? "저장 중입니다" : "룰렛 설정 저장"}</button>
+                  <ProductButton type="button" variant="secondary" disabled={rouletteFrozen || roulettePrizes.length >= 20} onClick={() => setRoulettePrizes((items) => [...items, { id: randomId("prize"), label: "", quantity: "", unlimited: false, weight: "" }])}>경품 추가</ProductButton>
+                  <ProductButton type="submit" variant="primary" disabled={busy === "roulette:save" || writeLocked}>{busy === "roulette:save" ? "저장 중입니다" : "룰렛 설정 저장"}</ProductButton>
                 </ConsoleFormActions>
                 <p className={styles.hint}>운영 중에는 설정한 시간에 참가할 수 있습니다. 각 티켓의 결과는 한 번만 저장되며, 수량은 이미 나온 결과보다 줄일 수 없습니다.</p>
                 </fieldset>
@@ -2209,18 +2217,18 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                 {!luckyRangeConflict && (luckyMin !== String(state.luckyMin) || luckyMax !== String(state.luckyMax)) && <p className={styles.hint}>입력한 범위는 아직 저장되지 않았습니다. 현재 저장된 범위는 {state.luckyMin}–{state.luckyMax}입니다.</p>}
                 {luckyRangeConflict ? <section className={styles.drawRecovery} aria-labelledby="lucky-range-conflict-heading">
                   <h3 id="lucky-range-conflict-heading">번호 범위가 변경됐습니다</h3>
-                  {luckyRangeConflict.loading ? <p role="status">최신 범위를 확인하고 있습니다.</p> : !luckyRangeConflict.ready ? <><p role="alert">최신 범위를 불러오지 못했습니다. 입력한 값은 유지됩니다.</p><button type="button" className="button button-secondary" onClick={() => void refreshLuckyRangeConflict()}>최신 범위 다시 확인</button></> : <>
+                  {luckyRangeConflict.loading ? <p role="status">최신 범위를 확인하고 있습니다.</p> : !luckyRangeConflict.ready ? <><p role="alert">최신 범위를 불러오지 못했습니다. 입력한 값은 유지됩니다.</p><ProductButton type="button" variant="secondary" onClick={() => void refreshLuckyRangeConflict()}>최신 범위 다시 확인</ProductButton></> : <>
                     <p role="alert">현재 저장된 범위는 {state.luckyMin}–{state.luckyMax}, 입력한 범위는 {luckyMin || "미입력"}–{luckyMax || "미입력"}입니다. 입력을 유지하면 다음 저장에서 현재 범위를 덮어씁니다.</p>
                     <div className={styles.drawRecoveryActions}>
-                      <button type="button" className="button button-secondary" onClick={() => { const latest = { min: String(state.luckyMin), max: String(state.luckyMax) }; luckyRangeDraftRef.current = latest; luckyRangeEditBaseRef.current = null; setLuckyMin(latest.min); setLuckyMax(latest.max); setLuckyRangeConflict(null); }}>최신 범위 사용</button>
-                      <button type="button" className="button button-secondary" onClick={() => { luckyRangeEditBaseRef.current = { min: state.luckyMin, max: state.luckyMax }; setLuckyRangeConflict(null); }}>입력 유지하고 다시 검토</button>
+                      <ProductButton type="button" variant="secondary" onClick={() => { const latest = { min: String(state.luckyMin), max: String(state.luckyMax) }; luckyRangeDraftRef.current = latest; luckyRangeEditBaseRef.current = null; setLuckyMin(latest.min); setLuckyMax(latest.max); setLuckyRangeConflict(null); }}>최신 범위 사용</ProductButton>
+                      <ProductButton type="button" variant="secondary" onClick={() => { luckyRangeEditBaseRef.current = { min: state.luckyMin, max: state.luckyMax }; setLuckyRangeConflict(null); }}>입력 유지하고 다시 검토</ProductButton>
                     </div>
                   </>}
                 </section> : null}
                 <p className={styles.hint}>{luckyProgress ? "배정 현황은 현재 요청을 확인한 뒤 새로 표시됩니다." : <>범위 {state.luckyMin}–{state.luckyMax} · 발급 {state.luckyIssued}명 · 미발급 승인 참가자 {missingLuckyCount}명 · 남은 고유 번호 {luckyAvailable}개</>}</p>
                 {luckyOutsideRange > 0 ? <p role="note" className={styles.hint}>현재 범위 밖에 발급된 번호 {luckyOutsideRange}건은 유지되며 남은 번호를 차지하지 않습니다. 번호 범위를 확인하세요.</p> : null}
                 <ConsoleFormActions>
-                  <button type="submit" className="button button-secondary" disabled={busy === "lucky:save" || writeLocked || Boolean(luckyRangeConflict)}>{busy === "lucky:save" ? "저장 중입니다" : "번호 범위 저장"}</button>
+                  <ProductButton type="submit" variant="secondary" disabled={busy === "lucky:save" || writeLocked || Boolean(luckyRangeConflict)}>{busy === "lucky:save" ? "저장 중입니다" : "번호 범위 저장"}</ProductButton>
                 </ConsoleFormActions>
               </ValidatedForm>
       </details>
@@ -2235,9 +2243,9 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                 {selectedLucky.eligible.length > 0 && missingLuckyCount === 0 ? <p role="status">승인 참가자에게 번호가 모두 배정되었습니다.</p> : null}
                 {missingLuckyCount > LUCKY_BATCH_SIZE ? <p className={styles.hint}>최대 5,000명씩 순차 처리합니다. 중간에 멈춰도 이미 처리된 배정은 유지됩니다.</p> : null}
                 {missingLuckyCount > luckyAvailable ? <p className={styles.fieldError}>전체 배정에 번호가 {missingLuckyCount - luckyAvailable}개 부족합니다. 범위를 먼저 넓히세요.</p> : null}
-                <button type="button" className="button button-primary" disabled={!preassignAllApproved || writeLocked || Boolean(luckyRangeConflict) || busy === "lucky:preassign" || selectedLucky.eligible.length === 0 || missingLuckyCount === 0 || missingLuckyCount > luckyAvailable} onClick={preassignLuckyNumbers}>
+                <ProductButton type="button" variant="primary" disabled={!preassignAllApproved || writeLocked || Boolean(luckyRangeConflict) || busy === "lucky:preassign" || selectedLucky.eligible.length === 0 || missingLuckyCount === 0 || missingLuckyCount > luckyAvailable} onClick={preassignLuckyNumbers}>
                   {busy === "lucky:preassign" ? "번호 배정 중입니다" : selectedLucky.eligible.length === 0 ? "배정할 참가자 없음" : missingLuckyCount === 0 ? "번호 배정 완료" : `${missingLuckyCount}명 번호 일괄 배정`}
-                </button>
+                </ProductButton>
               </div>
             ) : null}
           </>
@@ -2279,7 +2287,7 @@ function NameFilter({
           if (event.key === "Enter") { event.preventDefault(); addValue(); }
         }} placeholder="이름을 입력하거나 목록에서 선택" />
         <datalist id={`${id}-options`}>{options.map((option) => <option value={option} key={option} />)}</datalist>
-        <button type="button" className="button button-secondary" disabled={!value.trim()} onClick={addValue}>추가</button>
+        <ProductButton type="button" variant="secondary" disabled={!value.trim()} onClick={addValue}>추가</ProductButton>
       </div>
       {selected.length ? <ul className={styles.filterChips}>{selected.map((item) => <li key={item}><span>{item}</span><button type="button" aria-label={`${item} 제외`} onClick={() => onChange(selected.filter((entry) => entry !== item))}>×</button></li>)}</ul> : <p className={styles.hint}>비워두면 전체 대상입니다.</p>}
     </div>

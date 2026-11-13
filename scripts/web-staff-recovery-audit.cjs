@@ -287,7 +287,7 @@ async function checkCorrectionConflict(browser, fixture, participant, readWorksp
     for (const width of [320, 390, 1280]) {
       await entry.setViewportSize({ width, height: 844 });
       assert.ok(await entry.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
-      assert.deepEqual(await entry.evaluate(async () => (await window.axe.run()).violations.filter(item => ['serious', 'critical'].includes(item.impact)).map(item => item.id)), []);
+      assert.deepEqual(await entry.evaluate(async () => (await window.axe.run()).violations.filter(item => ['serious', 'critical'].includes(item.impact)).map(item => ({ id: item.id, nodes: item.nodes.map(node => ({ target: node.target, html: node.html, checks: node.any.map(check => ({ id: check.id, data: check.data })) })) }))), []);
       if (width === 390) {
         await verdict.scrollIntoViewIfNeeded();
         await entry.screenshot({ path: path.join(out, 'correction-conflict-390.png'), mask: [entry.locator('[data-ticket-full-code]')] });
@@ -363,7 +363,7 @@ async function checkUncertainDeskConflict(browser, fixture, people, readWorkspac
       for (const width of [320, 390, 768, 1280]) {
         await page.setViewportSize({ width, height: 844 });
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
-        assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter(item => ['serious', 'critical'].includes(item.impact)).map(item => item.id)), []);
+        assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter(item => ['serious', 'critical'].includes(item.impact)).map(item => ({ id: item.id, nodes: item.nodes.map(node => ({ target: node.target, html: node.html, checks: node.any.map(check => ({ id: check.id, data: check.data })) })) }))), []);
       }
       await page.setViewportSize({ width: 390, height: 844 });
       await page.screenshot({ path: path.join(out, `uncertain-${verdict.toLowerCase()}-390.png`), mask: [ticket, page.locator('[data-ticket-full-code]')], fullPage: true });
@@ -477,7 +477,7 @@ async function main() {
     stage = 'correction response validation';
     await page.locator('#correct-reason').fill('합성 검증 정정');
     acceptDialogs = false;
-    await page.getByRole('link', { name: '← 내 업무' }).click();
+    await page.getByRole('link', { name: '내 업무', exact: true }).click();
     assert.ok(dialogMessages.some((message) => message.includes('입력 중인 내용이 있습니다')));
     assert.equal(await page.locator('#correct-reason').inputValue(), '합성 검증 정정');
     acceptDialogs = true;
@@ -532,7 +532,25 @@ async function main() {
     const rewardSection = page.getByRole('region', { name: '경품 확인 및 수령', exact: true });
     await page.locator('#correct-reason').fill('유지할 합성 정정 사유');
     const firstReward = rewardSection.locator('li').filter({ has: page.getByText('합성 경품', { exact: true }) });
-    await firstReward.getByRole('button', { name: '수령 확인', exact: true }).click();
+    const collectButton = firstReward.getByRole('button', { name: '수령 확인', exact: true });
+    await collectButton.hover();
+    const hoverContrast = await collectButton.evaluate((button) => {
+      for (const animation of button.getAnimations()) {
+        if (['color', 'background-color'].includes(animation.transitionProperty)) {
+          animation.pause(); animation.currentTime = 80;
+        }
+      }
+      const style = getComputedStyle(button);
+      const luminance = (color) => {
+        const channels = color.match(/[\d.]+/g).slice(0, 3).map(value => Number(value) / 255);
+        const linear = channels.map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+      };
+      const a = luminance(style.color), b = luminance(style.backgroundColor);
+      return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    });
+    assert.ok(hoverContrast >= 4.5, `primary action hover contrast is ${hoverContrast.toFixed(2)}:1`);
+    await collectButton.click();
     await rewardSection.getByRole('alert').filter({ hasText: '수령 결과를 확인하지 못했습니다' }).waitFor();
     assert.equal(await page.locator('#staff-desk').isDisabled(), true);
     assert.equal(await page.getByRole('button', { name: '다음 참가자', exact: true }).isDisabled(), true);
@@ -553,7 +571,7 @@ async function main() {
     await rewardSection.getByText('같은 요청을 다시 확인하거나 위에서 서버 처리를 확인하세요.', { exact: false }).waitFor();
     await page.screenshot({ path: path.join(out, 'reward-uncertain-390.png'), fullPage: true });
     await page.addScriptTag({ content: axeSource });
-    assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter((v) => ['serious', 'critical'].includes(v.impact)).map((v) => v.id)), []);
+    assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter((v) => ['serious', 'critical'].includes(v.impact)).map((v) => ({ id: v.id, nodes: v.nodes.map(node => ({ target: node.target, html: node.html, checks: node.any.map(check => ({ id: check.id, data: check.data })) })) }))), []);
     const beforeStatus = rewards.length;
     let receiptPanel = page.getByRole('region', { name: '처리 결과 확인' });
     await receiptPanel.getByRole('button', { name: '서버 처리 확인', exact: true }).click();
@@ -565,7 +583,7 @@ async function main() {
     for (const width of [320, 390, 1280]) {
       await page.setViewportSize({ width, height: 844 });
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
-      assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter((v) => ['serious', 'critical'].includes(v.impact)).map((v) => v.id)), []);
+      assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter((v) => ['serious', 'critical'].includes(v.impact)).map((v) => ({ id: v.id, nodes: v.nodes.map((node) => ({ target: node.target, summary: node.failureSummary })) }))), [], `accessibility at ${width}px`);
       if (width === 390) await page.screenshot({ path: path.join(out, 'reward-status-recovery-390.png'), fullPage: true, mask: [page.locator('#reward-lookup-ticket')], maskColor: '#E6E8EC' });
     }
     await page.setViewportSize({ width: 390, height: 844 });
@@ -636,7 +654,7 @@ async function main() {
     const dimensions = await refreshRewards.boundingBox();
     assert.ok(dimensions && dimensions.height >= 44);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
-    assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter((v) => ['serious', 'critical'].includes(v.impact)).map((v) => v.id)), []);
+    assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter((v) => ['serious', 'critical'].includes(v.impact)).map((v) => ({ id: v.id, nodes: v.nodes.map(node => ({ target: node.target, html: node.html, checks: node.any.map(check => ({ id: check.id, data: check.data })) })) }))), []);
     await refreshRow.scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(out, 'reward-refresh-locked-390.png'), mask: [page.locator('#reward-lookup-ticket')], maskColor: '#E6E8EC' });
     await refreshRewards.click();
@@ -735,15 +753,75 @@ async function main() {
     const rewardTicket = page.locator('#reward-lookup-ticket');
     const lookupTicket = () => rewardSection.getByRole('button', { name: '경품 조회', exact: true }).click();
     const currentTicket = (await managerCommand('ticket.reissue', { id: persons[1].id })).participant.ticket;
+    if (process.env.EVENTOUCH_AUDIT_FOCUS_TRACE === '1') await page.evaluate(() => {
+      const input = document.getElementById('reward-lookup-ticket');
+      const trace = window.__auditRewardFocusTrace = [];
+      const snapshot = kind => ({ kind, activeId: document.activeElement?.id, disabled: input.matches(':disabled'), connected: input.isConnected, rects: input.getClientRects().length });
+      const original = HTMLElement.prototype.focus;
+      HTMLElement.prototype.focus = function (...args) {
+        if (this !== input) return original.apply(this, args);
+        const event = snapshot('focus-call'); trace.push(event);
+        const result = original.apply(this, args); event.afterId = document.activeElement?.id;
+        return result;
+      };
+      input.addEventListener('focus', () => trace.push(snapshot('focused')));
+      input.addEventListener('blur', () => trace.push(snapshot('blurred')));
+      new MutationObserver(() => trace.push(snapshot('state'))).observe(input.closest('fieldset') || input.parentElement, { attributes: true, childList: true, subtree: true, attributeFilter: ['disabled', 'aria-disabled'] });
+      trace.push(snapshot('initial'));
+    });
     await identityCollect.click();
     const ticketChanged = rewardSection.getByRole('alert').filter({ hasText: '현재 티켓으로 경품을 다시 확인하세요' });
     await ticketChanged.waitFor();
-    await page.waitForFunction(() => document.activeElement?.id === 'reward-lookup-ticket');
+    try {
+      await page.waitForFunction(() => document.activeElement?.id === 'reward-lookup-ticket');
+    } catch (error) {
+      console.error('REWARD_FOCUS_DIAGNOSTIC', JSON.stringify(await page.evaluate(() => {
+        const input = document.getElementById('reward-lookup-ticket');
+        return { active: { tag: document.activeElement?.tagName, id: document.activeElement?.id }, input: input ? { disabled: input.matches(':disabled'), connected: input.isConnected, rects: input.getClientRects().length, empty: input.value === '' } : null, trace: window.__auditRewardFocusTrace || [] };
+      })));
+      await page.screenshot({ path: path.join(out, 'reward-ticket-focus-failure-390.png'), mask: [page.locator('#reward-lookup-ticket, #staff-ticket')], maskColor: '#E6E8EC' });
+      throw error;
+    }
     assert.equal(await rewardTicket.inputValue(), '');
     assert.equal(await identityCollect.count(), 0);
     await ticketChanged.scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(out, 'reward-ticket-changed-390.png'), mask: [rewardTicket], maskColor: '#E6E8EC' });
     await rewardTicket.fill(currentTicket);
+    await lookupTicket();
+    await identityCollect.waitFor();
+    const latestTicket = (await managerCommand('ticket.reissue', { id: persons[1].id })).participant.ticket;
+    let releaseIdentity, markIdentityHeld;
+    const identityHeld = new Promise(resolve => { markIdentityHeld = resolve; });
+    const identityReleased = new Promise(resolve => { releaseIdentity = resolve; });
+    const holdIdentityRejection = async route => {
+      const body = route.request().postDataJSON();
+      if (body.command !== 'reward.collect') return route.fallback();
+      const response = await route.fetch();
+      assert.equal(response.status(), 409);
+      markIdentityHeld();
+      await identityReleased;
+      return route.fulfill({ response });
+    };
+    await page.route('**/api/events/*/commands', holdIdentityRejection);
+    const otherTask = page.getByRole('link', { name: '내 업무', exact: true });
+    try {
+      await identityCollect.click();
+      await identityHeld;
+      assert.equal(await rewardTicket.isDisabled(), true, 'identity rejection remains locked until the real response arrives');
+      assert.equal(await identityRow.getByRole('button', { name: '수령 확인 중', exact: true }).isDisabled(), true);
+      await otherTask.focus();
+      releaseIdentity();
+      await ticketChanged.waitFor();
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      assert.equal(await otherTask.evaluate(element => element === document.activeElement), true, 'late reward rejection must not steal deliberate navigation focus');
+      assert.equal(await rewardTicket.inputValue(), '');
+      assert.equal(await identityCollect.count(), 0);
+      assert.equal((await readWorkspace()).rewards.find(item => item.id === identityReward.id).status, 'READY');
+    } finally {
+      releaseIdentity();
+      await page.unroute('**/api/events/*/commands', holdIdentityRejection);
+    }
+    await rewardTicket.fill(latestTicket);
     await lookupTicket();
     await identityCollect.waitFor();
     await managerCommand('desk.set-open', { id: fixture.deskId, open: false });

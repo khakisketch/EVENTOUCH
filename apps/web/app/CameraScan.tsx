@@ -1,5 +1,7 @@
 "use client";
 
+import ProductButton from "./ui/ProductButton";
+
 import { useEffect, useRef, useState } from "react";
 import {
   DECODE_INTERVAL_MS,
@@ -253,7 +255,7 @@ export default function CameraScan({ onDetected, onClose, focusOrigin, onUseManu
       {!failure && !paused && starting ? <p className="auth-help" role="status">{startupSlow ? `카메라 시작이 늦어지고 있습니다. 브라우저 권한 요청을 확인하거나 ${manualHint}` : "카메라를 준비하고 있습니다. 브라우저에 권한 요청이 표시되면 허용해 주세요."}</p> : null}
       {hint && !paused && !failure ? <p className="auth-help" role="status">QR 코드를 찾지 못했습니다. {manualHint}</p> : null}
       {paused ? <p className="auth-help" role="status">화면이 가려져 카메라를 멈췄습니다. 다시 시도해 스캔을 계속하세요.</p> : null}
-      {failure || paused ? <button type="button" className="button button-primary" onClick={() => {
+      {failure || paused ? <ProductButton type="button" className="button button-primary" onClick={() => {
         doneRef.current = false;
         setFailure(null);
         setPaused(false);
@@ -262,16 +264,16 @@ export default function CameraScan({ onDetected, onClose, focusOrigin, onUseManu
         setStartupSlow(false);
         setAttempt((value) => value + 1);
         panelRef.current?.focus({ preventScroll: true });
-      }}>다시 시도</button> : null}
-      {onUseManual ? <button type="button" className="button button-secondary" onClick={onUseManual}>명단에서 참가자 찾기</button> : null}
-      <button type="button" className="button button-secondary" onClick={() => {
+      }}>다시 시도</ProductButton> : null}
+      {onUseManual ? <ProductButton type="button" className="button button-secondary" onClick={onUseManual}>명단에서 참가자 찾기</ProductButton> : null}
+      <ProductButton type="button" className="button button-secondary" onClick={() => {
         onClose();
         window.requestAnimationFrame(() => {
           if (focusOrigin?.isConnected && !focusOrigin.disabled && document.activeElement === document.body) focusOrigin.focus();
         });
       }}>
         닫기
-      </button>
+      </ProductButton>
     </section>
   );
 }

@@ -52,7 +52,9 @@ function verificationEnvironment(source, captureRoot) {
   // those files; each browser fixture binds SSR to its own API at runtime.
   env.EVENTOUCH_API_URL = 'http://127.0.0.1:0';
   env.NODE_ENV = 'production';
-  delete env.DATABASE_URL;
+  for (const key of Object.keys(env)) {
+    if (/^(?:DATABASE_|PGSSL|PGOPTIONS|PGSERVICE|PGHOST|PGPORT|PGUSER|PGPASSWORD|PGDATABASE)/.test(key) || /^EVENTOUCH_STORAGE_/.test(key)) delete env[key];
+  }
   delete env.API_PORT;
   delete env.COOKIE_SECURE;
   delete env.WEB_BASE;

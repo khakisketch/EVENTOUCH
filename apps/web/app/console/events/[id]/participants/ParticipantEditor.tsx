@@ -1,4 +1,5 @@
 "use client";
+import ProductButton from "../../../../ui/ProductButton";
 
 import { useEffect, useRef, useState } from "react";
 import ValidatedForm from "../../../../ui/ValidatedForm";
@@ -180,17 +181,17 @@ export default function ParticipantEditor({ eventId, participantId, onClose, onR
       .map((field) => ({ name: field.label, value: String(latest.values.answers[field.id]) })),
   ] : [];
   return <ConsoleDialog title="참가자 정보 수정" description="기존 신청 정보와 추가 답변을 수정합니다." onClose={onClose} busy={busy} canClose={closeAllowed} wide footer={<ConsoleFormActions>
-    <button type="button" className="button button-secondary" disabled={busy} onClick={() => { if (closeAllowed()) onClose(); }}>닫기</button>
-    {!pending ? <button type="submit" form="participant-edit-form" className="button button-primary" disabled={!draft || busy || operator.changed}>저장</button> : null}
+    <ProductButton type="button" className="button button-secondary" disabled={busy} onClick={() => { if (closeAllowed()) onClose(); }}>닫기</ProductButton>
+    {!pending ? <ProductButton type="submit" form="participant-edit-form" className="button button-primary" disabled={!draft || busy || operator.changed}>저장</ProductButton> : null}
   </ConsoleFormActions>}>
     {error && !pending ? <ConsoleFeedback kind="error">{error}</ConsoleFeedback> : null}
     {!base && !error ? <p role="status">참가자 정보를 불러오고 있습니다.</p> : null}
-    {!base && error ? <button type="button" className="button button-secondary" onClick={() => { setError(""); void read().then((value) => { if (active.current) { setBase(value); setDraft(value.values); } }).catch((failure) => { if (active.current) setError(failure.message); }); }}>다시 불러오기</button> : null}
+    {!base && error ? <ProductButton type="button" className="button button-secondary" onClick={() => { setError(""); void read().then((value) => { if (active.current) { setBase(value); setDraft(value.values); } }).catch((failure) => { if (active.current) setError(failure.message); }); }}>다시 불러오기</ProductButton> : null}
     {pending ? <section aria-labelledby="participant-edit-recovery" className={styles.editRecovery}>
       <h3 id="participant-edit-recovery">참가자 수정 처리 확인 필요</h3><p>요청이 반영됐을 수 있습니다. 서버 확인은 요청을 다시 보내지 않습니다.</p>
       {error ? <p role="alert">{error}</p> : null}
-      <div className={styles.editActions}><button type="button" className="button button-secondary" disabled={busy || operator.changed} onClick={() => void check()}>서버 처리 확인</button>
-      <button type="button" className="button button-secondary" disabled={busy || operator.changed} onClick={() => void execute(pending, true)}>같은 요청 다시 시도</button></div>
+      <div className={styles.editActions}><ProductButton type="button" className="button button-secondary" disabled={busy || operator.changed} onClick={() => void check()}>서버 처리 확인</ProductButton>
+      <ProductButton type="button" className="button button-secondary" disabled={busy || operator.changed} onClick={() => void execute(pending, true)}>같은 요청 다시 시도</ProductButton></div>
     </section> : null}
     {base && draft ? <ValidatedForm id="participant-edit-form" className={uiStyles.formStack} onSubmit={submit}>
       <fieldset className={`${uiStyles.formStack} ${styles.addFields}`} disabled={busy || Boolean(pending)}><legend className="sr-only">참가자 정보</legend>
@@ -212,10 +213,10 @@ export default function ParticipantEditor({ eventId, participantId, onClose, onR
         </div>;
       })}</fieldset>
     </ValidatedForm> : null}
-    {base && draft && error && !pending ? <button type="button" className="button button-secondary" disabled={busy} onClick={() => void compareLatest()}>최신 정보와 비교</button> : null}
+    {base && draft && error && !pending ? <ProductButton type="button" className="button button-secondary" disabled={busy} onClick={() => void compareLatest()}>최신 정보와 비교</ProductButton> : null}
     {latest ? <section className={styles.editRecovery} aria-labelledby="participant-edit-compare"><h3 id="participant-edit-compare">최신 정보 확인</h3>
       {conflicts.length ? <><p>다른 작업에서도 바뀐 항목입니다. 아래는 현재 서버 값이며, 입력 유지 시 작성한 값으로 덮어쓸 수 있습니다.</p><ul>{conflicts.map((item, index) => <li key={index}>{item.name}: {item.value || "비어 있음"}</li>)}</ul></> : <p>같은 항목을 수정한 다른 변경은 없습니다. 입력한 내용은 유지됩니다.</p>}
-      {removedEdits.length ? <p role="alert">작성 중인 항목이 최신 양식에서 제외되었거나 입력 방식이 바뀌어 자동으로 합칠 수 없습니다: {removedEdits.map((field) => field.label).join(", ")}. 입력을 확인한 뒤 닫고 다시 열어 주세요.</p> : <button type="button" className="button button-secondary" onClick={() => setConfirmMerge(true)}>최신 기준으로 내 입력 유지</button>}
+      {removedEdits.length ? <p role="alert">작성 중인 항목이 최신 양식에서 제외되었거나 입력 방식이 바뀌어 자동으로 합칠 수 없습니다: {removedEdits.map((field) => field.label).join(", ")}. 입력을 확인한 뒤 닫고 다시 열어 주세요.</p> : <ProductButton type="button" className="button button-secondary" onClick={() => setConfirmMerge(true)}>최신 기준으로 내 입력 유지</ProductButton>}
       {confirmMerge ? <ConsoleConfirm summary="최신 값을 기준으로 입력을 유지합니다. 같은 항목의 다른 변경은 다음 저장 시 덮어쓸 수 있습니다." confirmLabel="입력 유지" onConfirm={merge} onCancel={() => setConfirmMerge(false)} /> : null}
     </section> : null}
     {dismiss ? <ConsoleConfirm summary={pending ? "요청이 이미 반영됐을 수 있습니다. 닫은 뒤 화면의 처리 결과 확인에서 확인하세요. 입력 내용은 복원되지 않습니다." : "저장하지 않은 수정 내용이 사라집니다. 닫을까요?"} confirmLabel="닫기" onConfirm={onClose} onCancel={() => setDismiss(false)} /> : null}

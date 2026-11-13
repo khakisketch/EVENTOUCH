@@ -132,11 +132,11 @@ test('recent activity refresh stays icon-only, accessible and reduced-motion awa
 
   assert.match(overview, /<ConsoleRefreshButton label="새로고침"/);
   assert.match(overview, /title="입퇴장 기록 새로고침"/);
-  assert.match(overview, /aria-busy=\{refreshing\}/);
+  assert.match(overview, /busy=\{refreshing\}/);
   assert.match(overview, /<time dateTime=\{overview\.updatedAt\}>마지막 갱신/);
   assert.match(overview, /<time className=\{styles\.timestamp\} dateTime=\{check\.at \|\| undefined\}>/);
   assert.match(overview, /formatCheckTime\(check\.at\)/);
-  assert.match(css, /\.refreshButton:global\(\.button-secondary\)[\s\S]*?width: 44px/);
+  assert.match(css, /\.refreshButton\s*\{[\s\S]*?width: 44px/);
   assert.match(css, /\.refreshButton svg[\s\S]*?width: 20px/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(css, /\.checkAction::before/);

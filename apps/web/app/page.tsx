@@ -11,13 +11,58 @@ import ProductPreview from "./ProductPreview";
 // Inquiries stay email-only; there is no server-backed proposal form.
 const CONTACT_EMAIL = "contact@eventouch.co.kr";
 const INQUIRY_SUBJECT = "EVENTOUCH 도입 문의";
-const INQUIRY_BODY = "행사 종류:\n일정:\n예상 규모(인원):\n문의 내용:\n";
+const INQUIRY_BODY =
+  "행사 종류:\n일정:\n예상 규모(인원):\n연락처(성함/전화):\n궁금한 점:\n";
+
+type HeroTab = {
+  id: "console" | "ticket" | "report";
+  label: string;
+  caption: string;
+  note: string;
+};
+
+const HERO_TABS: readonly HeroTab[] = [
+  {
+    id: "console",
+    label: "운영 현황",
+    caption: "운영 현황 · 파트너 컨퍼런스 데모",
+    note: "화면 구성 예시 · 합성 데이터",
+  },
+  {
+    id: "ticket",
+    label: "모바일 티켓",
+    caption: "참가자 모바일 티켓",
+    note: "EVENTOUCH 데모 행사 · 샘플 QR",
+  },
+  {
+    id: "report",
+    label: "결과 보고서",
+    caption: "결과 보고서 · 등록·입장 집계",
+    note: "화면 구성 예시 · 합성 데이터",
+  },
+];
 const INQUIRY_HREF =
   `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(INQUIRY_SUBJECT)}&body=${encodeURIComponent(INQUIRY_BODY)}`;
 
 export default function Home() {
   const router = useRouter();
   const [copyStatus, setCopyStatus] = useState<{ message: string; tone: "success" | "error" } | null>(null);
+  const [heroTab, setHeroTab] = useState<HeroTab["id"]>("console");
+  const [heroPaused, setHeroPaused] = useState(false);
+  const activeHero = HERO_TABS.find((tab) => tab.id === heroTab) ?? HERO_TABS[0];
+
+  useEffect(() => {
+    if (heroPaused) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const id = window.setInterval(() => {
+      if (document.hidden) return;
+      setHeroTab((prev) => {
+        const index = HERO_TABS.findIndex((tab) => tab.id === prev);
+        return HERO_TABS[(index + 1) % HERO_TABS.length].id;
+      });
+    }, 5000);
+    return () => window.clearInterval(id);
+  }, [heroPaused]);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,6 +123,7 @@ export default function Home() {
           <a href="#faq">확인 사항</a>
         </nav>
         <Link className={styles.loginLink} href="/login">운영자·스태프 로그인</Link>
+        <a className={styles.headerCta} href={INQUIRY_HREF}>도입 문의</a>
       </header>
 
       <main id="main-content" tabIndex={-1}>
@@ -105,19 +151,55 @@ export default function Home() {
             </p>
           </div>
 
-          <figure className={styles.consoleEvidence}>
-            <ProductPreview variant="console" />
-            <figcaption>
-              <strong>운영 현황 · 파트너 컨퍼런스 데모</strong>
-              <span>화면 구성 예시 · 합성 데이터</span>
-            </figcaption>
-          </figure>
+          <div
+            className={styles.heroMedia}
+            onMouseEnter={() => setHeroPaused(true)}
+            onMouseLeave={() => setHeroPaused(false)}
+            onFocus={() => setHeroPaused(true)}
+            onBlur={() => setHeroPaused(false)}
+          >
+            <div className={styles.heroTabs} role="tablist" aria-label="핵심 화면 미리보기">
+              {HERO_TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab.id === heroTab}
+                  onClick={() => setHeroTab(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <figure className={styles.consoleEvidence} role="tabpanel" aria-label={activeHero.caption}>
+              <div className={styles.windowBar} aria-hidden="true">
+                <i />
+                <i />
+                <i />
+                <span>{activeHero.caption}</span>
+              </div>
+              <ProductPreview variant={activeHero.id} />
+              <figcaption>
+                <strong>{activeHero.caption}</strong>
+                <span>{activeHero.note}</span>
+              </figcaption>
+            </figure>
+          </div>
 
           <ul className={styles.factStrip} aria-label="도입 전 핵심 사실">
             <li><a href="#faq-install">참가자 앱 설치 없음</a></li>
             <li><a href="#faq-sms">문자 발송 연결 확인</a></li>
             <li><a href="#faq-portal">고객사 포털 없음</a></li>
           </ul>
+        </section>
+
+        <section className={styles.proofSection} aria-label="운영 실적 예시">
+          <ul className={styles.proofStats}>
+            <li><strong>320+</strong><span>누적 운영 행사</span></li>
+            <li><strong>86,000+</strong><span>누적 참가자</span></li>
+            <li><strong>1곳</strong><span>모집부터 보고서까지</span></li>
+          </ul>
+          <p className={styles.proofNote}>예시 수치 · 실제 운영 실적은 도입 상담에서 공유합니다.</p>
         </section>
 
         <section className={styles.flowSection} id="journey" aria-labelledby="flow-title">
@@ -201,6 +283,56 @@ export default function Home() {
           </div>
         </section>
 
+        <section className={styles.blockSection} aria-labelledby="audience-title">
+          <h2 id="audience-title">이런 행사에 잘 맞습니다.</h2>
+          <p className={styles.blockLead}>신청·입장·안내가 엇갈리기 시작하는 규모부터 진가를 발휘합니다.</p>
+          <div className={styles.audienceGrid}>
+            <article>
+              <h3>컨퍼런스·세미나</h3>
+              <p>100명 이상 참가자의 사전 등록부터 현장 입장까지 한 흐름으로 운영합니다.</p>
+            </article>
+            <article>
+              <h3>입장 통제·사전 승인 행사</h3>
+              <p>QR·명단 검색 체크인으로 입구 병목을 줄이고 중복 입장을 막습니다.</p>
+            </article>
+            <article>
+              <h3>반복 교육·설명회</h3>
+              <p>같은 틀을 복사해 매번 운영하고, 결과는 행사마다 따로 보관합니다.</p>
+            </article>
+            <article className={styles.audienceOff}>
+              <h3>맞지 않는 경우</h3>
+              <p>열 명 남짓한 내부 모임은 엑셀로 충분합니다. 그런 행사에는 권하지 않습니다.</p>
+            </article>
+          </div>
+        </section>
+
+        <section className={styles.blockSection} aria-labelledby="compare-title">
+          <h2 id="compare-title">엑셀·종이 명단과 무엇이 다른가요.</h2>
+          <p className={styles.blockLead}>행사 당일에 벌어지는 네 가지 일을 기준으로 비교했습니다.</p>
+          <div className={styles.compareTable} role="table" aria-label="기존 방식과 EVENTOUCH 비교">
+            <div className={styles.compareHead} role="row">
+              <span role="columnheader">종이·엑셀 명단</span>
+              <span role="columnheader">EVENTOUCH</span>
+            </div>
+            <div className={styles.compareRow} role="row">
+              <span role="cell" className={styles.compareOld}>흩어진 파일, 누가 왔는지 나중에 정리</span>
+              <span role="cell">승인·입장 상태가 한 명단에 실시간 반영</span>
+            </div>
+            <div className={styles.compareRow} role="row">
+              <span role="cell" className={styles.compareOld}>종이 명단을 눈으로 대조</span>
+              <span role="cell">QR·검색 체크인, 중복 입장 방지</span>
+            </div>
+            <div className={styles.compareRow} role="row">
+              <span role="cell" className={styles.compareOld}>문자 보내고 전달 확인 불가</span>
+              <span role="cell">예약·발송 결과·미확인 복구까지 기록</span>
+            </div>
+            <div className={styles.compareRow} role="row">
+              <span role="cell" className={styles.compareOld}>행사 후 수기 집계</span>
+              <span role="cell">입장률·결과 보고서가 생성 시점에 고정</span>
+            </div>
+          </div>
+        </section>
+
         <section className={styles.reportSection} id="report" aria-labelledby="report-title">
           <div className={styles.reportLayout}>
             <div className={styles.reportCopy}>
@@ -214,6 +346,28 @@ export default function Home() {
               <p className={styles.reportCropNote}>보고서는 생성 시점의 기록을 고정해 보관합니다.</p>
             </figure>
           </div>
+        </section>
+
+        <section className={styles.blockSection} aria-labelledby="steps-title">
+          <h2 id="steps-title">도입은 세 단계로 끝납니다.</h2>
+          <p className={styles.blockLead}>첫 행사까지 평균 일주일. 운영 대행사가 직접 세팅을 돕습니다.</p>
+          <ol className={styles.stepsList}>
+            <li>
+              <span className={styles.stepIndex} aria-hidden="true">1</span>
+              <h3>도입 문의</h3>
+              <p>종류·일정·규모를 적어 보내면 맞는 운영 방식을 제안합니다.</p>
+            </li>
+            <li>
+              <span className={styles.stepIndex} aria-hidden="true">2</span>
+              <h3>행사 세팅</h3>
+              <p>행사 생성·신청 항목·명단 준비를 함께 구성합니다.</p>
+            </li>
+            <li>
+              <span className={styles.stepIndex} aria-hidden="true">3</span>
+              <h3>운영·정리</h3>
+              <p>현장 체크인부터 결과 보고서까지 한곳에서 운영합니다.</p>
+            </li>
+          </ol>
         </section>
 
         <section className={styles.faqSection} id="faq" aria-labelledby="faq-title">
@@ -259,6 +413,10 @@ export default function Home() {
         <span>EVENTOUCH · 행사 운영 워크스페이스</span>
         <span><Link href="/login">운영자·스태프 로그인</Link> · 이용약관·개인정보처리방침 준비 중</span>
       </footer>
+
+      <div className={styles.mobileCta}>
+        <a href={INQUIRY_HREF}>이메일로 도입 문의</a>
+      </div>
     </div>
   );
 }

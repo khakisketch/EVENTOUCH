@@ -177,7 +177,7 @@ async function main() {
 
     phase = 'stage loss followed by denial';
     await tab('진행 단계');
-    await page.getByRole('button', { name: '종료(으)로 전환', exact: true }).click();
+    await page.getByRole('button', { name: '종료 단계로 전환', exact: true }).click();
     await page.getByRole('group', { name: '단계 전환 확인' }).getByRole('button', { name: /정말 전환합니다/ }).click();
     await panel.waitFor();
     const deniedStage = page.waitForResponse((item) => item.status() === 403 && item.url().includes('/commands'));

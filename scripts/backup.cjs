@@ -25,6 +25,9 @@ const path = require('node:path');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const lib = require('./backup-lib.cjs');
+const { databaseConnectionOptions } = require('../server/database-config');
+const { postgresToolEnvironment } = require('./postgres-tools.cjs');
+const { createFileStorage } = require('../server/file-storage');
 
 const execFileAsync = promisify(execFile);
 const ROOT = path.join(__dirname, '..');
@@ -40,7 +43,8 @@ const HELP = `
   --skip-storage            DB만 백업
   --verify                  임시 DB·임시 디렉터리로 복원 리허설
   --force                   기존 출력 디렉터리를 덮어씀
-  --database-url <주소>     compose 없이 호스트 pg_dump 사용 (--verify 불가)
+  --database-env <이름>     DATABASE_DIRECT_URL 또는 DATABASE_URL에서 호스트 접속 (--verify 불가)
+  --database-url <주소>     기존 호스트 접속 옵션 (비밀번호가 명령행에 남으므로 env 권장)
   --storage-dir <경로>      compose 없이 호스트 디렉터리 사용
   --help
 `;
@@ -84,7 +88,7 @@ async function hostArchiveStorage(directory, outDirectory) {
 
 async function readHostCounts(connectionString) {
   const { Pool } = require('pg');
-  const pool = new Pool({ connectionString });
+  const pool = new Pool(databaseConnectionOptions({ connectionString }));
   try {
     const counts = {};
     const inventory = await pool.query("SELECT tablename FROM pg_tables WHERE schemaname = current_schema() ORDER BY tablename");
@@ -93,9 +97,12 @@ async function readHostCounts(connectionString) {
     const migrations = await pool.query('SELECT version FROM schema_migrations ORDER BY version');
     const version = await pool.query('SHOW server_version');
     const database = await pool.query('SELECT current_database() AS database');
+    const schema = await pool.query('SELECT current_schema() AS schema');
+    if (!schema.rows[0]?.schema) lib.fail('백업 스키마를 확인하세요');
     return {
       counts,
       database: database.rows[0].database,
+      schema: schema.rows[0].schema,
       migrations: migrations.rows.map((row) => row.version),
       serverVersion: String(version.rows[0].server_version || '').trim(),
     };
@@ -222,6 +229,9 @@ async function verifyComposeBackup(project, user, database, outDirectory, manife
 async function hostBackup(options) {
   if (!options.databaseUrl) lib.fail('--database-url 또는 --project가 필요합니다');
   if (options.verify) lib.fail('--verify는 compose 모드에서만 지원합니다');
+  if (!options.skipStorage && !options.storageDir) lib.fail('--storage-dir가 필요합니다 (또는 --skip-storage)');
+  const mounted = process.env.EVENTOUCH_STORAGE_MODE === 'mounted' ? createFileStorage({ storageDir: options.storageDir }) : null;
+  if (mounted && !options.skipStorage) await mounted.ready();
   const pgDump = await hostTool('pg_dump');
   const before = await readHostCounts(options.databaseUrl);
   const outDirectory = await prepareOutDirectory(
@@ -230,17 +240,12 @@ async function hostBackup(options) {
   );
 
   const databaseFile = path.join(outDirectory, lib.BACKUP_DB);
-  // libpq does not interpret '+' as a space in URI query parameters, unlike
-  // node-postgres. Normalize the query only; never rewrite a password's '+'.
-  // Child-process exception command strings can contain credentials; do not
-  // propagate them into operator logs on failure.
-  const dumpUrl = new URL(options.databaseUrl);
-  dumpUrl.search = dumpUrl.search.replace(/\+/g, '%20');
+  const dumpEnv = postgresToolEnvironment({ connectionString: options.databaseUrl });
   try {
     await execFileAsync('pg_dump', [
-      '--dbname', dumpUrl.toString(), '--format=custom', '--no-owner', '--no-privileges',
+      '--schema', before.schema, '--format=custom', '--no-owner', '--no-privileges',
       '--file', databaseFile,
-    ], { maxBuffer: 1024 * 1024 });
+    ], { maxBuffer: 1024 * 1024, env: dumpEnv });
   } catch {
     lib.fail('pg_dump 실패: 접속 설정·권한·PostgreSQL 클라이언트 버전을 확인하세요 (자격증명과 원문 오류는 기록하지 않습니다)');
   }
@@ -250,13 +255,15 @@ async function hostBackup(options) {
   const after = await readHostCounts(options.databaseUrl);
   const countsStable = lib.sameCounts(before.counts, after.counts).length === 0;
   if (!countsStable) lib.log('백업 중 데이터 변경 감지: 행 수는 백업 종료 시점 참고값으로 기록합니다');
-  const { counts, migrations, serverVersion, database } = after;
+  const { counts, migrations, serverVersion, database, schema } = after;
 
   let storage = { file: null, bytes: 0, sha256: null, files: [] };
   if (!options.skipStorage) {
     if (!options.storageDir) lib.fail('--storage-dir가 필요합니다 (또는 --skip-storage)');
+    if (mounted) await mounted.ready();
     const files = await hostStorageHashes(options.storageDir);
     const storageFile = await hostArchiveStorage(options.storageDir, outDirectory);
+    if (mounted) await mounted.ready();
     storage = {
       file: path.basename(storageFile),
       bytes: await lib.statSize(storageFile),
@@ -269,7 +276,7 @@ async function hostBackup(options) {
   const manifest = {
     format: lib.FORMAT,
     createdAt: new Date().toISOString(),
-    source: { project: null, database, postgres: serverVersion, migrations },
+    source: { project: null, database, schema, postgres: serverVersion, migrations },
     counts,
     countsStable,
     database: {
@@ -293,6 +300,7 @@ async function main() {
     out: '',
     storageVolume: '',
     databaseUrl: '',
+    databaseEnv: '',
     storageDir: '',
     verify: false,
     force: false,
@@ -302,6 +310,11 @@ async function main() {
   if (options.help) {
     process.stdout.write(HELP.trimStart());
     return;
+  }
+  if (options.databaseEnv) {
+    if (options.databaseUrl || !['DATABASE_URL','DATABASE_DIRECT_URL'].includes(options.databaseEnv)) lib.fail('--database-env 설정을 확인하세요');
+    options.databaseUrl = process.env[options.databaseEnv];
+    if (!options.databaseUrl) lib.fail('선택한 데이터베이스 환경변수를 설정하세요');
   }
   if (options.databaseUrl) await hostBackup(options);
   else await composeBackup(options);

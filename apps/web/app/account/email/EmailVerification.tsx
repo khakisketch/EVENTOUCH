@@ -4,7 +4,8 @@ import ValidatedForm from "../../ui/ValidatedForm";
 
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import ProductLink from "../../ui/ProductLink";
+import ProductButton from "../../ui/ProductButton";
 import { useUnsavedNavigationGuard } from "../../../lib/use-unsaved-navigation-guard";
 
 // The holder's own mailbox proof ("이메일+수동 예외"의 자동 복구 절반).
@@ -277,7 +278,7 @@ export default function EmailVerification() {
           링크를 다시 열어주세요.
         </p>
         <p className="auth-help">
-          <Link href="/login">로그인으로 이동</Link>
+          <ProductLink href="/login">로그인으로 이동</ProductLink>
         </p>
       </div>
     );
@@ -290,9 +291,9 @@ export default function EmailVerification() {
         <p className="auth-help">
           로그인 상태는 그대로입니다. 네트워크 문제일 수 있으니 다시 확인하세요.
         </p>
-        <button type="button" className="button button-secondary" onClick={() => { void refresh(); }}>
+        <ProductButton type="button" className="button button-secondary" onClick={() => { void refresh(); }}>
           인증 상태 다시 확인
-        </button>
+        </ProductButton>
       </div>
     );
   }
@@ -360,15 +361,15 @@ export default function EmailVerification() {
           {failure ? <p role="alert" id="verify-request-error" ref={failureRef} tabIndex={-1}>{failure}</p> : null}
           {requestUncertain ? (
             <>
-              <button type="button" className="button button-primary" disabled={working} onClick={() => { setMailed(true); setFailure(null); }}>
+              <ProductButton type="button" className="button button-primary" disabled={working} onClick={() => { setMailed(true); setFailure(null); }}>
                 받은 인증 링크 사용
-              </button>
+              </ProductButton>
               <p className="auth-help">다시 요청하면 인증 메일이 추가로 발송될 수 있습니다.</p>
             </>
           ) : null}
-          <button type="submit" className={requestUncertain ? "button button-secondary" : undefined} disabled={working}>
+          <ProductButton type="submit" className={requestUncertain ? "button button-secondary" : undefined} disabled={working}>
             {working ? "보내는 중입니다" : "인증 메일 보내기"}
-          </button>
+          </ProductButton>
           {status.deliveryMock ? (
             <p className="auth-help" role="note">
               모의 발송 모드: 실제 메일이 발송되지 않습니다. 개발·검증용 화면입니다.
@@ -402,17 +403,17 @@ export default function EmailVerification() {
           </div>
           {failure ? <p role="alert" id="verify-confirm-error" ref={failureRef} tabIndex={-1}>{failure}</p> : null}
           {confirmUncertain ? (
-            <button type="button" className="button button-primary" disabled={working} onClick={() => { void checkCurrentVerification(); }}>
+            <ProductButton type="button" className="button button-primary" disabled={working} onClick={() => { void checkCurrentVerification(); }}>
               인증 상태 확인
-            </button>
+            </ProductButton>
           ) : null}
-          <button type="submit" className={confirmUncertain ? "button button-secondary" : undefined} disabled={working}>
+          <ProductButton type="submit" className={confirmUncertain ? "button button-secondary" : undefined} disabled={working}>
             {working ? "확인 중입니다" : "이메일 인증하기"}
-          </button>
+          </ProductButton>
           {status.deliveryConnected ? (
             <p className="auth-help">
               메일이 오지 않으면 스팸함을 확인한 뒤 잠시 후 다시 요청하세요.{" "}
-              <button
+              <ProductButton
                 type="button"
                 className="auth-help-link"
                 disabled={working}
@@ -428,7 +429,7 @@ export default function EmailVerification() {
                 }}
               >
                 다시 보내기
-              </button>
+              </ProductButton>
             </p>
           ) : (
             <p className="auth-help">현재 이메일 발송을 사용할 수 없어 새 메일을 요청할 수 없습니다.</p>

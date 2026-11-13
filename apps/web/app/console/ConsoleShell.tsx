@@ -1,9 +1,13 @@
 "use client";
 
+import { Avatar } from "@astryxdesign/core/Avatar";
+
+import ProductButton from "../ui/ProductButton";
+
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import Link from "next/link";
+import Link from "../ui/ProductLink";
 import { usePathname, useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../auth-redirect";
 import { CONSOLE_PAGES, EVENT_HUBS, consoleHubForPage, consolePageHref, resolveConsolePage, type ConsoleHub, type ConsolePageId } from "./console-navigation";
@@ -1018,35 +1022,34 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
             </Link>
           ) : null}
           {canManageIntegrations ? (
-            <button type="button" className="operator-menu-item" disabled>
+            <ProductButton type="button" className="operator-menu-item" disabled>
               <span>서비스 연동</span><span className="operator-menu-status">준비 중</span>
-            </button>
+            </ProductButton>
           ) : null}
           {(canManageTeam || canManageIntegrations) ? (
             <div className="operator-menu-divider" aria-hidden="true" />
           ) : null}
-          <button
+          <ProductButton
             type="button"
             className="operator-menu-item operator-menu-logout"
             onClick={logout}
             disabled={logoutPending}
           >
             <span>{logoutPending ? "로그아웃 중…" : "로그아웃"}</span>
-          </button>
+          </ProductButton>
           {logoutError ? <p className="operator-menu-error" role="alert">{logoutError}</p> : null}
         </div>,
         document.body
       )
     : null;
 
-  const avatar = Array.from(userName.trim())[0] || "운";
 
   return (
     <div className="console-shell">
       <aside className="console-sidebar" aria-label="운영 콘솔">
         {showGlobalTrigger ? (
           <div className="console-global-nav">
-            <button
+            <ProductButton
               ref={globalTriggerRef}
               type="button"
               className="console-global-trigger"
@@ -1056,7 +1059,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
               onClick={handleGlobalMenuTrigger}
             >
               <BarsIcon className="console-global-trigger-bars" />
-            </button>
+            </ProductButton>
             <nav
               ref={globalMenuRef}
               id="console-global-menu"
@@ -1075,7 +1078,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           <span className="console-wordmark">EVENTOUCH</span>
         </Link>
 
-        <button
+        <ProductButton
           ref={mobileOperatorTriggerRef}
           type="button"
           className="operator-block operator-menu-trigger operator-mobile-trigger"
@@ -1085,8 +1088,8 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           aria-controls="operator-menu"
           onClick={handleOperatorMenuTrigger}
         >
-          <span className="operator-avatar" aria-hidden="true">{avatar}</span>
-        </button>
+          <Avatar className="operator-avatar" name={userName} size={32} shape="circle" tooltip={false} aria-hidden="true" />
+        </ProductButton>
 
         <nav className="side-nav desktop-side-nav" aria-label="주요 메뉴">
           {renderEventsLink("workspace-events-link")}
@@ -1096,22 +1099,22 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
         </nav>
 
         <div className="sidebar-bottom">
-          <button
+          <ProductButton
             ref={operatorTriggerRef}
             type="button"
             className="operator-block operator-menu-trigger"
+            icon={<Avatar className="operator-avatar" name={userName} size={32} shape="circle" tooltip={false} aria-hidden="true" />}
+            endContent={<span className="operator-menu-caret" aria-hidden="true" />}
             aria-haspopup="dialog"
             aria-expanded={operatorMenuOpen}
             aria-controls="operator-menu"
             onClick={handleOperatorMenuTrigger}
           >
-            <span className="operator-avatar" aria-hidden="true">{avatar}</span>
             <span className="operator-identity">
-              <strong>{userName}</strong>
+              <strong>{userName}</strong>{" "}
               <small>{organization.context?.organizationName ?? "운영사"} · {shellData?.roleLabel ?? "역할 확인 중"}</small>
             </span>
-            <span className="operator-menu-caret" aria-hidden="true" />
-          </button>
+          </ProductButton>
         </div>
       </aside>
 
@@ -1129,20 +1132,20 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           {shellError ? (
             <div className="console-shell-error" role="alert">
               <span>내비게이션 정보를 불러오지 못했습니다. 화면 일부가 제한되어 보일 수 있습니다.</span>
-              <button type="button" className="button button-secondary" onClick={() => setShellTick((tick) => tick + 1)}>
+              <ProductButton type="button" className="button button-secondary" onClick={() => setShellTick((tick) => tick + 1)}>
                 다시 시도
-              </button>
+              </ProductButton>
             </div>
           ) : null}
           {updateAvailable && !organization.changed && !["participants", "overview", "events"].includes(currentPage?.pageId ?? "") ? (
             <div className={freshnessStyles.notice} role="status">
               <span>다른 작업의 변경이 있을 수 있습니다. 작성 중인 입력은 그대로 유지했습니다.</span>
-              <button type="button" className="button button-secondary" onClick={() => {
+              <ProductButton type="button" className="button button-secondary" onClick={() => {
                 if (!confirmLeave()) return;
                 invalidateConsoleReads();
                 setPageRevision((value) => value + 1);
                 setUpdateAvailable(false);
-              }}>최신 내용 불러오기</button>
+              }}>최신 내용 불러오기</ProductButton>
             </div>
           ) : null}
           <fieldset disabled={organization.changed} className={freshnessStyles.contextLock}>

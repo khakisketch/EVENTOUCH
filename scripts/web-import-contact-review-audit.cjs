@@ -43,7 +43,7 @@ async function main() {
     const page = await context.newPage(); page.setDefaultTimeout(12000);
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}/participants/import`);
     const file = page.locator('input[type=file]');
-    const review = page.locator('section[aria-labelledby="participant-import-review-heading"]');
+    const review = page.locator(':is(section,[role="region"])[aria-labelledby="participant-import-review-heading"]');
     const workbook = (rows, formatPhone = false) => {
       const sheet = XLSX.utils.aoa_to_sheet(rows);
       if (formatPhone) sheet.B2.z = '00000000000';
@@ -65,7 +65,7 @@ async function main() {
     for (const width of [320, 390, 1280]) {
       await page.setViewportSize({ width, height: 900 });
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
-      assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter(v => ['serious', 'critical'].includes(v.impact)).map(v => v.id)), []);
+      assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter(v => ['serious', 'critical'].includes(v.impact)).map(v => ({ id: v.id, targets: v.nodes.map(node => node.target), summary: v.nodes.map(node => node.failureSummary) }))), []);
       await page.screenshot({ path: path.join(out, `review-${width}.png`), fullPage: true });
     }
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -123,7 +123,7 @@ async function main() {
     await dialog.getByRole('checkbox', { name: /확인할 연락처를 원본과 비교했고/ }).check();
     assert.equal(await modalSubmit.isEnabled(), true);
     await roster.evaluate(axe);
-    assert.deepEqual(await roster.evaluate(async () => (await window.axe.run()).violations.filter(v => ['serious', 'critical'].includes(v.impact)).map(v => v.id)), []);
+    assert.deepEqual(await roster.evaluate(async () => (await window.axe.run()).violations.filter(v => ['serious', 'critical'].includes(v.impact)).map(v => ({ id: v.id, targets: v.nodes.map(node => node.target), summary: v.nodes.map(node => node.failureSummary) }))), []);
     assert.ok(await roster.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
     await dialog.screenshot({ path: path.join(out, 'modal-review-390.png') });
     fs.writeFileSync(path.join(out, 'verification.json'), JSON.stringify({ synthetic: true, hiddenSixthPhoneReviewed: true, explicitConfirmation: true, responseLossSameRequest: true, noAutomaticCorrection: true, formattedZeroPreserved: true, csvMultilineAndBlankRows: true, txtAndWorkbookRowNumbers: true, pendingFileCannotImportPrevious: true, modalReviewed: true, keyboard: true, widths: [320, 390, 1280], physicalDevices: false }, null, 2));

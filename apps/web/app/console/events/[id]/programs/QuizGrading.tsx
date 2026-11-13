@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import ProductButton from "../../../../ui/ProductButton";
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
 import ConsoleFormActions from "../../../console-ui/ConsoleFormActions";
 import styles from "./programs.module.css";
@@ -38,16 +39,16 @@ export default function QuizGrading({ moduleId, responses, locked, pending, subm
           <p>응답 {index + 1} · {response.answer || "무응답"}</p>
           <p>{response.manualGrade === "CORRECT" ? "수동 채점: 정답" : response.manualGrade === "INCORRECT" ? "수동 채점: 오답" : "자동 비교 사용 중"}</p>
           <ConsoleFormActions>
-            {([ ["CORRECT", "정답 처리"], ["INCORRECT", "오답 처리"], ["AUTO", "자동 비교로 복원"] ] as const).map(([grade, label]) => <button
-              key={grade} type="button" className="button button-secondary"
+            {([ ["CORRECT", "정답 처리"], ["INCORRECT", "오답 처리"], ["AUTO", "자동 비교로 복원"] ] as const).map(([grade, label]) => <ProductButton
+              key={grade} type="button" variant="secondary"
               aria-label={`응답 ${index + 1} ${label}`}
               disabled={locked || working || pending || (grade === "AUTO" ? !response.manualGrade : response.manualGrade === grade)}
               onClick={() => void save({ moduleId, responseId: response.id, grade, expectedGradeVersion: response.gradeVersion || 0 })}
-            >{label}</button>)}
+            >{label}</ProductButton>)}
           </ConsoleFormActions>
         </li>)}
       </ol>
-      {responses.length > limit ? <button type="button" className="button button-secondary" onClick={() => setLimit(value => value + 10)}>응답 더 보기</button> : null}
+      {responses.length > limit ? <ProductButton type="button" variant="secondary" onClick={() => setLimit(value => value + 10)}>응답 더 보기</ProductButton> : null}
       {!responses.length ? <p>채점할 응답이 없습니다.</p> : null}
     </details>
   );

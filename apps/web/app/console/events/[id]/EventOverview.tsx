@@ -1,8 +1,10 @@
 "use client";
 
+import ProductButton from "../../../ui/ProductButton";
+
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import Link from "../../../ui/ProductLink";
 import { loginHrefForLocation } from "../../../auth-redirect";
 import { eventStageClassName, eventStageLabel } from "../../../event-stage";
 import { formatConsoleEventMeta } from "../../console-ui/ConsolePageHeader";
@@ -299,7 +301,7 @@ function metricsForStage(overview: Overview, stage: string, base: string): Metri
   switch (stage) {
     case "DRAFT":
     case "READY":
-      // Exactly three counts in a row. 정원/대기는 별도 설정 메타 행으로 둔다.
+      // Exactly three peer counts. 정원/대기는 별도 설정 메타 행으로 둔다.
       return [
         { label: "신청", value: overview.registered, detail: overview.cancellationReview ? "신청 상태 기준" : "취소 제외 등록", href: participantsHref },
         { label: overview.cancellationReview ? "승인 상태" : "참가 확정", value: overview.approved, detail: overview.cancellationReview ? "취소 확인 필요 인원 포함" : "승인된 참가자", href: `${participantsHref}?status=APPROVED` },
@@ -550,14 +552,14 @@ function CustomRangeAnalysis({ applications, entries, cancellationReview }: { ap
           </table>
           {zeroPoints.length > 0 ? (
             <p>
-              <button
+              <ProductButton
                 type="button"
                 className="button button-quiet"
                 aria-expanded={showZeroDays}
                 onClick={() => setShowZeroDays((current) => !current)}
               >
                 {showZeroDays ? `0명 ${zeroPoints.length}일 접기` : `0명 ${zeroPoints.length}일 보기`}
-              </button>
+              </ProductButton>
             </p>
           ) : null}
           <p className={styles.rangeNote}>일별 입장은 그 날의 고유 입장자 수이며, 기간 고유 입장은 선택한 전체 기간의 중복 제거 수라서 일별 합의 합과 다를 수 있습니다. {cancellationReview ? "신청 상태·정정 제외 기준은 위 고정 집계와 같습니다." : "취소 제외·정정 제외 기준은 위 고정 집계와 같습니다."}</p>
@@ -1082,7 +1084,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
               <Link className="button button-secondary" href={participantPageHref} target="_blank" rel="noreferrer" aria-label="참가자 페이지 열기">
                 <span className={styles.pageLinkFull}>참가자 페이지 열기</span><span className={styles.pageLinkShort}>참가자 페이지</span>
               </Link>
-              <button
+              <ProductButton
                 type="button"
                 className="button button-quiet console-icon-button"
                 aria-label="참가자 페이지 링크 복사"
@@ -1090,7 +1092,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
                 onClick={() => void copyParticipantLink(overview.slug)}
               >
                 {linkCopied ? <CheckIcon /> : <CopyIcon />}
-              </button>
+              </ProductButton>
             </span>
           ) : null}
         </>
@@ -1241,6 +1243,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
               </div>
             </ConsoleSection>
           ) : null}
+          {currentStage !== "ARCHIVED" ? nowSection : null}
           <ConsoleSection
             headingId="event-metrics-heading"
             title={currentStage === "LIVE" ? "입장 진행" : currentStage === "ENDED" || currentStage === "ARCHIVED" ? "최종 요약" : "주요 지표"}
@@ -1370,7 +1373,6 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             ) : null}
             </div>
         </ConsoleSection>
-          {currentStage !== "ARCHIVED" ? nowSection : null}
           <ConsoleSection
             headingId="event-runbook-heading"
             title={runbookIsToday ? "오늘의 일정" : "행사 일정"}
@@ -1472,17 +1474,16 @@ export default function EventOverview({ eventId }: { eventId: string }) {
           <span className={styles.recentCompactMeta}>
             다른 화면에서 돌아오면 갱신 · <time dateTime={overview.updatedAt}>마지막 갱신 {UPDATED_TIME_FORMAT.format(new Date(overview.updatedAt))}</time>
           </span>
-          <button
+          <ProductButton
             type="button"
             className={`button button-secondary ${styles.refreshButton}`}
             onClick={reloadOverview}
-            disabled={refreshing}
-            aria-busy={refreshing}
+            busy={refreshing}
             aria-label="입퇴장 기록 새로고침"
             title="입퇴장 기록 새로고침"
           >
             <RefreshIcon />
-          </button>
+          </ProductButton>
           {refreshing ? <p className={styles.refreshStatus} role="status">최신 운영 현황을 불러오고 있습니다.</p> : null}
           <p className={styles.recentCompactEmpty}>
             {overview.canManageEvent
@@ -1499,17 +1500,16 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         action={(
           <div className={styles.recentActions}>
             <span className={styles.recentCount}>{overview.checksAvailable ? `${overview.recent.length}건` : "확인 불가"}</span>
-            <button
+            <ProductButton
               type="button"
               className={`button button-secondary ${styles.refreshButton}`}
               onClick={reloadOverview}
-              disabled={refreshing}
-              aria-busy={refreshing}
+              busy={refreshing}
               aria-label="입퇴장 기록 새로고침"
               title="입퇴장 기록 새로고침"
             >
               <RefreshIcon />
-            </button>
+            </ProductButton>
           </div>
         )}
       >

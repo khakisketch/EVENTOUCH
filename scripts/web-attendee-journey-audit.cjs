@@ -193,7 +193,7 @@ async function main() {
             else await route.fulfill({ response });
           } finally { finishRoute(); }
         });
-        const form = step => page.locator('section[aria-labelledby^="engage-"]').filter({ has: page.getByRole('heading', { name: title(step), exact: true }) });
+        const form = step => page.locator(':is(section,[role=region])[aria-labelledby^="engage-"]').filter({ has: page.getByRole('heading', { name: title(step), exact: true }) });
         await openProgram(page, title('one'));
         await form('one').getByRole('radio', { name: /^예/ }).check();
         await form('one').getByRole('button', { name: '투표하기' }).click();

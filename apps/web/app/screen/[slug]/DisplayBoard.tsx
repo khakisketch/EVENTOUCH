@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import ProductLink from "../../ui/ProductLink";
+import ProductButton from "../../ui/ProductButton";
 import drawStyles from "./draw-stage.module.css";
 
 type Notice = { id: string; title: string; body: string };
@@ -555,7 +556,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
         <h1>행사를 찾을 수 없습니다</h1>
         <p>출력 주소를 확인하세요.</p>
         <p>
-          <Link className="button button-secondary" href="/">처음으로</Link>
+          <ProductLink className="button button-secondary" href="/">처음으로</ProductLink>
         </p>
       </section>
     );
@@ -568,9 +569,9 @@ export default function DisplayBoard({ slug }: { slug: string }) {
       <section className="display-state" aria-label="화면 오류">
         <p role="alert">{state.message}</p>
         <p>
-          <button type="button" className="button button-secondary" onClick={refreshNow}>
+          <ProductButton type="button" className="button button-secondary" onClick={refreshNow}>
             다시 시도
-          </button>
+          </ProductButton>
         </p>
       </section>
     );
@@ -582,7 +583,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
         <p>운영자가 행사 설정에서 출력을 켜면 화면이 자동으로 표시됩니다.</p>
         {state.stale ? <>
           <p className="display-stale" role="status">연결 확인 중 · 마지막으로 확인한 상태입니다</p>
-          <p><button type="button" className="button button-secondary" onClick={refreshNow}>새로고침</button></p>
+          <p><ProductButton type="button" className="button button-secondary" onClick={refreshNow}>새로고침</ProductButton></p>
         </> : null}
       </section>
     );
@@ -695,9 +696,9 @@ export default function DisplayBoard({ slug }: { slug: string }) {
           {!drawSelected ? <span className="display-brand">EVENTOUCH</span> : null}
           {stale ? <p className="display-stale" role="status">연결 확인 중 · 마지막 화면입니다</p> : null}
           {stale ? (
-            <button type="button" className="button button-secondary" onClick={refreshNow}>
+            <ProductButton type="button" className="button button-secondary" onClick={refreshNow}>
               새로고침
-            </button>
+            </ProductButton>
           ) : null}
           <p className="display-date">{data.date}</p>
         </header>
@@ -772,9 +773,9 @@ export default function DisplayBoard({ slug }: { slug: string }) {
         {stale ? <p className="display-stale" role="status">연결 확인 중 · 마지막 화면입니다</p> : null}
         {stale ? (
           <p>
-            <button type="button" className="button button-secondary" onClick={refreshNow}>
+            <ProductButton type="button" className="button button-secondary" onClick={refreshNow}>
               새로고침
-            </button>
+            </ProductButton>
           </p>
         ) : null}
         <p>화면 준비 중</p>
@@ -789,9 +790,9 @@ export default function DisplayBoard({ slug }: { slug: string }) {
         <span className="display-brand">EVENTOUCH</span>
         {stale ? <p className="display-stale" role="status">연결 확인 중 · 마지막 화면입니다</p> : null}
         {stale ? (
-          <button type="button" className="button button-secondary" onClick={refreshNow}>
+          <ProductButton type="button" className="button button-secondary" onClick={refreshNow}>
             새로고침
-          </button>
+          </ProductButton>
         ) : null}
         <p className="display-date">{data.date}</p>
       </header>

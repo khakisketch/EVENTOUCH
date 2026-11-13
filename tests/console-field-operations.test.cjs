@@ -1,7 +1,7 @@
 // Field-day operations console: the same-day sections state their status in
 // the description slot (가동 n / 전체, 현재 출력, 배정 n건), the before-the-day
 // presets stay folded on phones with their current value in the folded summary,
-// and the jump nav sticks on phones with a readable position. The staff
+// and the grouped task nav remains readable on phones. The staff
 // summary counts assignments (건), not people. UI-only: commands, copy
 // volume and confirm grammar stay pinned.
 // Source-only assertions; rendering rides the isolated console audit.
@@ -18,26 +18,19 @@ const read = (relative) => fs.readFileSync(path.join(WEB, relative), "utf8");
 const ops = () => read("app/console/events/[id]/operations/OperationsWorkspace.tsx");
 const css = () => read("app/console/events/[id]/operations/operations.module.css");
 
-test("the jump nav stays shared, sticks on phones, and marks the position on its own link", () => {
+test("the shared task nav groups work without covering the phone workspace", () => {
   const source = ops();
-  assert.match(source, /<ConsoleSectionNav/u, "the existing section jump UI stays");
-  assert.match(source, /\{ id: "ops-desks", label: "데스크" \}/u);
-  assert.match(source, /\{ id: "ops-booths", label: "부스" \}/u);
-  assert.match(source, /\{ id: "ops-staff", label: "스태프 배정" \}/u);
-  assert.match(source, /className=\{styles\.navSticky\}/u, "the nav gains a sticky wrapper");
-  assert.match(source, /activeId=\{activeSection\}/u, "the tracked section marks the current link");
+  assert.match(source, /<ConsoleSectionNav/u, "the shared task UI stays");
+  assert.match(source, /\{ id: "ops-desks", label: "데스크", group: "준비" \}/u);
+  assert.match(source, /\{ id: "ops-booths", label: "부스", group: "준비" \}/u);
+  assert.match(source, /\{ id: "ops-staff", label: "스태프 배정", group: "배정" \}/u);
+  assert.match(source, /activeId=\{activeSection\}/u);
   assert.doesNotMatch(source, /현재 위치:/u, "no separate readout duplicates the links");
-  assert.match(source, /IntersectionObserver/u, "the active link follows the section in view");
-  assert.match(source, /getElementById\(id\)/u, "observation targets the existing anchors");
+  assert.match(source, /IntersectionObserver/u);
+  assert.match(source, /getElementById\(id\)/u);
   const style = css();
-  assert.match(style, /\.navSticky \{/u);
-  assert.match(
-    style,
-    /@media \(max-width: 768px\) [\s\S]*?\.navSticky \{\s*position: sticky;/u,
-    "stickiness applies on phones only; desktop renders the shared nav as before"
-  );
-  assert.match(style, /background: var\(--ground\)/u, "the pinned bar uses the page ground token");
-  assert.doesNotMatch(style, /\.navNow \{/u, "the readout style is gone; the links mark the position");
+  assert.doesNotMatch(style, /\.navSticky\s*\{[^}]*position:\s*sticky/su, "the index must not cover the task on phones");
+  assert.doesNotMatch(style, /\.navNow \{/u);
   const added = style.slice(style.indexOf(".navSticky"));
   assert.doesNotMatch(added, /#[0-9a-fA-F]{3,8}/u, "no new color literals");
 });

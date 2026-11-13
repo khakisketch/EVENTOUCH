@@ -143,3 +143,32 @@ test('attendee photo submission stores the uploaded reference and publishes on a
   const read = await fetch(`${h.baseUrl}/api/public/events/photo-event/files/${ref.fileId}`);
   assert.equal(read.status,200); assert.deepEqual(Buffer.from(await read.arrayBuffer()),png);
 });
+
+test('exclusive upload collision preserves the existing original', async () => {
+  const uuid=crypto.randomUUID;
+  const suffix=uuid(); const key=`file-${suffix}`; const commandId=uuid();
+  const target=path.join(storageDir,key); fs.writeFileSync(target,png);
+  crypto.randomUUID=()=>suffix;
+  try {
+    const result=await upload({commandId}); assert.equal(result.status,500);
+    assert.equal(fs.existsSync(target),true,'a failed exclusive create must not compensate somebody else\'s bytes');
+    assert.deepEqual(fs.readFileSync(target),png);
+  } finally { crypto.randomUUID=uuid; }
+});
+
+test('lost commit response retains the original bytes for same-command receipt reconciliation', async () => {
+  const transaction=h.database.transaction;
+  const commandId=crypto.randomUUID();
+  let first=true;
+  h.database.transaction=async fn=>{
+    const value=await transaction(fn);
+    if(first && value?.file){first=false;throw Object.assign(new Error('lost commit reply'),{transactionOutcome:'unknown'});}
+    return value;
+  };
+  try {
+    assert.equal((await upload({commandId})).status,500);
+    const replay=await upload({commandId}); assert.equal(replay.status,200);
+    const read=await fetch(`${h.baseUrl}/api/events/event-a/files/${replay.json.file.fileId}`,{headers:{cookie}});
+    assert.equal(read.status,200); assert.deepEqual(Buffer.from(await read.arrayBuffer()),png);
+  } finally { h.database.transaction=transaction; }
+});

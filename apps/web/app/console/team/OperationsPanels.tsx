@@ -1,4 +1,5 @@
 "use client";
+import ProductButton from "../../ui/ProductButton";
 
 import { useEffect, useRef, useState } from "react";
 import ConsoleSection from "../console-ui/ConsoleSection";
@@ -381,7 +382,7 @@ export default function OperationsPanels() {
           </ul>
           {audit.length > visibleActivityCount ? (
             <p>
-              <button
+              <ProductButton
                 type="button"
                 id="team-activity-more"
                 className="button button-secondary"
@@ -391,7 +392,7 @@ export default function OperationsPanels() {
                 }}
               >
                 더 보기 ({audit.length - visibleActivityCount})
-              </button>
+              </ProductButton>
             </p>
           ) : null}
           </>

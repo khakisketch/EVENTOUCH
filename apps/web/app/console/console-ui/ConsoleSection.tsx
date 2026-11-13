@@ -1,3 +1,5 @@
+import { Section } from "@astryxdesign/core/Section";
+import { Heading } from "@astryxdesign/core/Heading";
 import type { ReactNode } from "react";
 import styles from "./console-ui.module.css";
 
@@ -45,15 +47,15 @@ export default function ConsoleSection({
   ].filter(Boolean).join(" ");
 
   return (
-    <section className={classNames} aria-labelledby={headingId} data-workspace-section={headingId}>
-      <div className={styles.sectionHead}>
+    <Section variant="transparent" padding={0} className={classNames} role="region" aria-labelledby={headingId} data-workspace-section={headingId}>
+      <div className={styles.sectionHead} data-console-section-head>
         <div className={styles.sectionCopy}>
-          <h2 className={styles.sectionTitle} id={headingId}>{title}</h2>
+          <Heading level={2} className={styles.sectionTitle} id={headingId}>{title}</Heading>
           {description ? <p className={styles.sectionDescription}>{description}</p> : null}
         </div>
         {action ? <div className={styles.sectionAction}>{action}</div> : null}
       </div>
       <div className={styles.sectionBody}>{children}</div>
-    </section>
+    </Section>
   );
 }

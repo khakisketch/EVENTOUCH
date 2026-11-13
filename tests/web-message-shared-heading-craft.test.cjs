@@ -17,7 +17,7 @@ const messageCss = postcss.parse(read('app/console/events/[id]/messages/Messagin
 test('messages use the shared page heading with its desktop and mobile scale', () => {
   assert.match(workspace, /<ConsolePage\s+pageId="messages"\s+className=\{styles\.workbenchPage\}/u);
   assert.match(page, /<ConsolePageHeader\s+title=\{title \?\? page\.title\}/u);
-  assert.match(header, /className=\{styles\.pageTitleRow\}>\s*<h1>\{title\}<\/h1>/u);
+  assert.match(header, /className=\{styles\.pageTitleRow\}>\s*<Heading level=\{1\}>\{title\}<\/Heading>/u);
 
   const scales = [];
   sharedCss.walkRules('.pageIdentity h1', (rule) => {

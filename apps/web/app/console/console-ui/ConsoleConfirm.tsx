@@ -1,5 +1,7 @@
 "use client";
 
+import ProductButton from "../../ui/ProductButton";
+
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import styles from "./console-ui.module.css";
@@ -65,7 +67,7 @@ export default function ConsoleConfirm({
     <div className={styles.confirmRegion} role="group" aria-label="실행 확인">
       <p className={styles.confirmSummary}>{summary}</p>
       <div className={styles.confirmActions}>
-        <button
+        <ProductButton
           ref={confirmRef}
           type="button"
           className={confirmClassName}
@@ -81,10 +83,10 @@ export default function ConsoleConfirm({
           disabled={busy}
         >
           {busy ? "처리 중…" : confirmLabel}
-        </button>
-        <button ref={cancelRef} type="button" className="button button-secondary" onClick={cancel} disabled={busy}>
+        </ProductButton>
+        <ProductButton ref={cancelRef} type="button" className="button button-secondary" onClick={cancel} disabled={busy}>
           {cancelLabel}
-        </button>
+        </ProductButton>
       </div>
     </div>
   );

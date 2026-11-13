@@ -59,13 +59,20 @@
   border-radius: 999px;
   background: var(--surface-muted);
   color: var(--ink);
+  font-size: var(--label);
   font-weight: 650;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
 }
 
 .status {
   padding: 2px var(--s2);
   border-radius: 999px;
+  font-size: var(--label);
   font-weight: 650;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .statusOpen {
@@ -89,13 +96,13 @@
   gap: var(--s2);
 }
 
-.toolbarActions > :global(.button-primary) {
+.toolbarActions > :global(.product-action[data-variant="primary"]) {
   flex: 1 1 auto;
 }
 
-.moduleActions .button,
-.itemActions .button,
-.drawControls .button {
+.moduleActions .product-action,
+.itemActions .product-action,
+.drawControls .product-action {
   min-height: 44px;
 }
 
@@ -172,7 +179,7 @@
 .itemRow {
   display: grid;
   gap: var(--s2);
-  padding: var(--s4) 0;
+  padding: var(--s3) 0;
   border: 0;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
@@ -193,6 +200,7 @@
   margin: 0;
   color: var(--muted);
   font-size: var(--small);
+  font-variant-numeric: tabular-nums;
   overflow-wrap: break-word;
 }
 
@@ -228,7 +236,7 @@
   max-width: var(--web-form-max);
 }
 
-.rejectDisclosure form :global(.button) { justify-self: start; }
+.rejectDisclosure form :global(.product-action) { justify-self: start; }
 
 .itemActions {
   display: flex;
@@ -279,6 +287,7 @@
   margin: 0 0 var(--s3);
   color: var(--muted);
   font-size: var(--small);
+  font-variant-numeric: tabular-nums;
 }
 
 .reviewStrip {
@@ -292,6 +301,7 @@
   border-radius: var(--radius-medium);
   background: var(--paper);
   font-size: var(--small);
+  font-variant-numeric: tabular-nums;
 }
 
 .reviewStrip:focus-visible {
@@ -303,13 +313,13 @@
   font-weight: 700;
 }
 
-.reviewStrip .button {
+.reviewStrip .product-action {
   min-height: 44px;
 }
 
 .reviewShortcuts { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 0 0 var(--s2); }
 
-.resultCount .button {
+.resultCount .product-action {
   min-height: 44px;
 }
 
@@ -321,11 +331,11 @@
   margin-bottom: 0;
 }
 
-.empty .button {
+.empty .product-action {
   min-height: 44px;
 }
 
-.moreRow :global(.button) {
+.moreRow :global(.product-action) {
   min-height: 44px;
 }
 
@@ -415,7 +425,7 @@
     display: flex;
   }
 
-  .moduleActions .button {
+  .moduleActions .product-action {
     flex: 1 1 140px;
   }
 
@@ -424,7 +434,7 @@
     flex-direction: column;
   }
 
-  .photoArchiveTools :global(.button) {
+  .photoArchiveTools :global(.product-action) {
     width: 100%;
   }
 }
@@ -455,6 +465,6 @@
 .moduleDetails > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .moduleDetails[open] { display: grid; gap: var(--s3); }
 
-.workspacePurpose { margin: 0 0 var(--s3); color: var(--muted); max-width: 76ch; }
-.workspacePurpose a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--s3); border: 1px solid var(--line-strong); border-radius: var(--radius-medium); background: var(--paper); color: var(--ink); font-weight: 600; text-decoration: none; }
+.workspacePurpose { display: grid; justify-items: start; gap: var(--s1); margin: 0 0 var(--s3); color: var(--muted); max-width: 76ch; }
+.workspacePurpose p { margin: 0; }
 .returnLink { margin-top: var(--s3); }

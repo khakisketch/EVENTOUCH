@@ -96,7 +96,7 @@ test('home view switch supplements the directory and create is its lone page-lev
   assert.equal(jsxAttribute(pagesWithActions[0], 'pageId').initializer.text, 'events');
   const create = jsxAttribute(pagesWithActions[0], 'headerActions').initializer.expression;
   assert.ok(ts.isJsxElement(create));
-  assert.equal(create.openingElement.tagName.getText(tree), 'button');
+  assert.equal(create.openingElement.tagName.getText(tree), 'ProductButton');
   assert.equal(jsxAttribute(create.openingElement, 'type').initializer.text, 'button');
   assert.equal(jsxAttribute(create.openingElement, 'onClick').initializer.expression.getText(tree), '() => setCreateOpen(true)');
   assert.match(create.getText(tree), /button-primary/u);
@@ -132,12 +132,12 @@ test('event directory ledger preserves identity and separate follow-up links, no
   const card = home.slice(home.indexOf('function EventCard('), home.indexOf('export default function ConsoleHome'));
   assert.doesNotMatch(card, /등록 인원|현재 입장|<dl|eventMetrics|metricNumber/u);
   assert.match(card, /\{event\.pending > 0 \? \(\s*<div className=\{styles\.eventCardActions\}>/su);
-  assert.match(card, /<Link\s*className=\{styles\.approvalLink\}/su);
+  assert.match(card, /<ProductLink\s*className=\{styles\.approvalLink\}/su);
   assert.match(card, /승인 대기 \{event\.pending\}명 처리/u);
   assert.match(card, /participants\?status=PENDING/u);
-  assert.ok(card.indexOf('</Link>') < card.indexOf('className={styles.approvalLink}'), 'queue is not nested in overview link');
+  assert.ok(card.indexOf('</ProductLink>') < card.indexOf('className={styles.approvalLink}'), 'queue is not nested in overview link');
   const tree = ts.createSourceFile('EventCard.tsx', card, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const links = findNodes(tree, (node) => ts.isJsxElement(node) && node.openingElement.tagName.getText(tree) === 'Link');
+  const links = findNodes(tree, (node) => ts.isJsxElement(node) && node.openingElement.tagName.getText(tree) === 'ProductLink');
   assert.equal(links.length, 2, 'one overview entry and one optional approval entry, never duplicate controls');
   const linkFor = (name) => links.find((node) => jsxAttribute(node.openingElement, 'className')?.initializer?.expression?.getText(tree) === 'styles.' + name);
   const overview = linkFor('eventCardLink');

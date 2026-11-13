@@ -1,10 +1,10 @@
 "use client";
 
+import ProductButton from "../../../../ui/ProductButton";
 import ValidatedForm from "../../../../ui/ValidatedForm";
 
-
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import ProductLink from "../../../../ui/ProductLink";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
 import ConsolePage from "../../../console-ui/ConsolePage";
@@ -681,7 +681,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
           kind="failed"
           message={state.message}
           onRetry={() => setReloadTick((tick) => tick + 1)}
-          actions={<Link className="button button-secondary" href="/console">행사 목록으로</Link>}
+          actions={<ProductLink variant="secondary" href="/console">행사 목록으로</ProductLink>}
         />
       </ConsolePage>
     );
@@ -697,7 +697,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
           kind="failed"
           message="현장 사진은 조직 소유자 또는 이 행사의 운영사 구성원만 관리할 수 있습니다."
           onRetry={() => setReloadTick((tick) => tick + 1)}
-          actions={<Link className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}`}>운영 현황으로</Link>}
+          actions={<ProductLink variant="secondary" href={`/console/events/${encodeURIComponent(eventId)}`}>운영 현황으로</ProductLink>}
         />
       </ConsolePage>
     );
@@ -785,7 +785,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
         description="ZIP 한도: 최대 1,000장 · 512MB"
         action={selectedPhotos.length ? (
           <a
-            className="button button-secondary"
+            className="product-action product-link" data-action-variant="secondary" data-native-control="download"
             href={evidenceZipHref(eventId, selectedSection)}
           >
             <span className={styles.zipLong}>이 구간 ZIP 다운로드 ({selectedPhotos.length}장)</span>
@@ -820,15 +820,15 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
               현재 구간 <strong>{selectedLabel}</strong>에 저장 · PNG, JPG, WebP · 장당 8MB 이하
             </p>
           </div>
-          <button
+          <ProductButton
             type="button"
-            className="button button-secondary"
+            variant="secondary"
             disabled={queueBusy || writeLocked}
             aria-describedby="evidence-photo-file-guidance"
             onClick={() => fileInputRef.current?.click()}
           >
             {stagedJobs.length ? "사진 더 선택" : "파일 찾아보기"}
-          </button>
+          </ProductButton>
           <input
             id="evidence-photo-files"
             ref={fileInputRef}
@@ -903,14 +903,14 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
 
             <div className={styles.previewActions}>
               <p className={styles.guidance}>업로드 버튼을 누르기 전까지 파일은 행사에 저장되지 않습니다.</p>
-              <button
+              <ProductButton
                 type="button"
-                className="button button-primary"
+                variant="primary"
                 disabled={queueBusy || selectedJobs.length === 0}
                 onClick={uploadSelectedJobs}
               >
                 {queueBusy ? "사진 올리는 중…" : `선택한 사진 올리기 (${selectedJobs.length}장)`}
-              </button>
+              </ProductButton>
             </div>
           </section>
         ) : null}
@@ -949,14 +949,14 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
                         ) : null}
                       </div>
                       {job.status === "failed-upload" || job.status === "failed-record" ? (
-                        <button
+                        <ProductButton
                           type="button"
-                          className="button button-secondary"
+                          variant="secondary"
                           disabled={queueBusy || writeLocked}
                           onClick={() => void processJobs([job.id])}
                         >
                           {queueBusy ? "처리 중…" : job.status === "failed-record" ? "기록 등록 재시도" : "업로드 재시도"}
-                        </button>
+                        </ProductButton>
                       ) : null}
                     </li>
                   );
@@ -1018,13 +1018,13 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
                             <option key={section.key} value={section.key}>{section.label}</option>
                           ))}
                         </select>
-                        <button
+                        <ProductButton
                           type="submit"
-                          className="button button-secondary"
+                          variant="secondary"
                           disabled={photoBusy || busyPhotoId !== null || writeLocked || selectedTarget === photo.section}
                         >
                           {photoBusy ? "처리 중…" : "구간 변경"}
-                        </button>
+                        </ProductButton>
                       </div>
                     </ValidatedForm>
                     <button
@@ -1060,13 +1060,13 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
           </ul>
           {selectedPhotos.length > photoLimit ? (
             <p className={styles.moreRow}>
-              <button
+              <ProductButton
                 type="button"
-                className="button button-secondary"
+                variant="secondary"
                 onClick={revealMorePhotos}
               >
                 더 보기 ({selectedPhotos.length - photoLimit})
-              </button>
+              </ProductButton>
             </p>
           ) : null}
           </>

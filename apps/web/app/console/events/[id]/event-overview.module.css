@@ -3,8 +3,8 @@
    Row gaps come from real regions, not empty named grid tracks. */
 .overviewCanvas {
   display: grid;
-  grid-template-columns: minmax(0, 1.12fr) minmax(300px, 1fr);
-  grid-template-areas: "alert alert" "status status" "metrics queue" "runbook runbook" "readiness readiness" "secondary secondary" "recent recent" "analysis analysis";
+  grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.85fr);
+  grid-template-areas: "alert alert" "status status" "queue metrics" "runbook runbook" "readiness readiness" "secondary secondary" "recent recent" "analysis analysis";
   column-gap: var(--s5);
   row-gap: 0;
   align-items: start;
@@ -19,13 +19,14 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-large);
   background: var(--paper);
-  box-shadow: 0 1px 3px var(--shadow-soft);
+  box-shadow: none;
 }
 .regionQueue {
   grid-area: queue;
-  padding: var(--s5) 0 var(--s5) var(--s3);
+  padding: var(--s5);
   border: 0;
-  background: transparent;
+  border-radius: var(--radius-card);
+  background: var(--surface-muted);
 }
 .regionRunbook {
   grid-area: runbook;
@@ -37,14 +38,15 @@
 .liveOverview .regionMetrics > :first-child,
 .liveOverview .regionQueue > :first-child { min-height: 44px; }
 .queueActions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
-@media (max-width: 900px) {
+/* Stack before the metrics rail becomes too narrow for four-digit counts. */
+@media (max-width: 1100px) {
   .overviewCanvas {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "alert" "status" "metrics" "queue" "runbook" "readiness" "secondary" "recent" "analysis";
+    grid-template-areas: "alert" "status" "queue" "metrics" "runbook" "readiness" "secondary" "recent" "analysis";
   }
   .overviewArchived { grid-template-areas: "alert" "status" "metrics" "runbook" "secondary" "recent" "analysis"; }
   .regionMetrics { padding: var(--s4); }
-  .regionQueue { padding: var(--s3) 0; }
+  .regionQueue { padding: var(--s4); }
 }
 
 /* Read-only staff view: no region areas, one honest stack. */
@@ -104,7 +106,7 @@
   min-height: 32px;
   align-items: center;
   padding: 0 var(--s3);
-  border-radius: var(--s6);
+  border-radius: 999px;
   white-space: nowrap;
 }
 
@@ -172,9 +174,9 @@
 
 .metricLabel {
   margin: 0;
-  font-size: var(--small);
+  font-size: var(--label);
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.06em;
   word-break: keep-all;
   color: var(--muted);
 }
@@ -196,6 +198,7 @@
   margin: 0;
   color: var(--muted);
   font-size: var(--small);
+  font-variant-numeric: tabular-nums;
 }
 
 @media (max-width: 420px) {
@@ -326,14 +329,18 @@
   min-height: 44px;
   align-items: center;
   gap: var(--s1);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
   color: var(--ink);
   font-weight: 650;
   text-decoration: none;
 }
 
 .entryFoot a:hover {
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  border-color: var(--ink);
+  background: var(--surface-muted);
 }
 
 .summaryFacts {
@@ -425,7 +432,7 @@
   justify-self: end;
   padding: 2px var(--s2);
   border: 1px solid var(--info-line);
-  border-radius: var(--s6);
+  border-radius: 999px;
   background: var(--info-soft);
   color: var(--info);
   font-size: var(--small);
@@ -447,7 +454,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-.refreshButton:global(.button-secondary) {
+.refreshButton {
   display: grid;
   width: 44px;
   min-width: 44px;
@@ -502,7 +509,7 @@
   min-width: 0;
   align-items: center;
   gap: var(--s3);
-  padding-block: var(--s3);
+  padding-block: var(--s2);
   border-bottom: 1px solid var(--line);
 }
 
@@ -524,10 +531,11 @@
   flex: none;
   align-items: center;
   gap: var(--s1);
-  padding-inline: var(--s1);
-  border-radius: var(--s6);
-  font-size: var(--small);
+  padding-inline: var(--s2);
+  border-radius: 999px;
+  font-size: var(--label);
   font-weight: 700;
+  letter-spacing: 0.02em;
   white-space: nowrap;
 }
 
@@ -825,6 +833,10 @@
   display: inline-flex;
   align-items: center;
   min-height: 44px;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
   color: var(--brand-text);
   font-weight: 700;
   text-decoration: none;
@@ -832,8 +844,8 @@
 }
 
 .readinessLink:hover {
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  border-color: var(--brand-text);
+  background: var(--surface-muted);
 }
 
 .stageBand {
@@ -864,6 +876,18 @@
   display: inline-flex;
   align-items: center;
   min-height: 44px;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.stageBand > a:hover {
+  border-color: var(--ink);
+  background: var(--surface-muted);
 }
 
 .nextCondition {
@@ -1105,9 +1129,9 @@
 .runbookCue.current {
   margin: 0 calc(-1 * var(--s4));
   padding-inline: var(--s4);
-  border-bottom-color: var(--line-strong);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-medium);
-  background: var(--soft);
+  background: var(--paper);
 }
 
 .runbookCue.current .runbookDot {
@@ -1207,6 +1231,7 @@
   color: var(--nav-muted);
   font-family: var(--body-font);
   font-size: var(--label);
+  letter-spacing: 0.06em;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1273,6 +1298,14 @@
 @media (max-width: 560px) {
   .regionMetrics .metricValue { font-size: 28px; }
 }
+@media (max-width: 360px) {
+  .regionMetrics .metricGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .regionMetrics .metricCard:nth-child(3) {
+    grid-column: 1 / -1;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}
 
 /* 승인 대기 진입은 사이드 내비 뱃지와 지금 할 일에 둔다. 개요 뱃지행 링크는 렌더하지 않는다. */
 .mobilePriority { display: none; }
@@ -1298,13 +1331,17 @@
   align-items: center;
   gap: var(--s1);
   min-height: 44px;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
   color: var(--ink);
   font-size: var(--small);
   font-weight: 650;
   text-decoration: none;
 }
 
-.overviewSectionLink:hover { text-decoration: underline; text-underline-offset: 3px; }
+.overviewSectionLink:hover { border-color: var(--ink); background: var(--surface-muted); }
 
 .queueCount {
   color: var(--ink);

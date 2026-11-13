@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EVENTOUCH 운영 현황 구조 시안</title>
+  <style>
+    :root { --ink:#19191c; --muted:#656b75; --line:#e5e5e7; --orange:#ea552e; --orange-soft:#fff1e8; --red:#a3321b; --soft:#f7f7f8; --green:#21664d; --green-soft:#e6f2ea; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#f4f4f4; color:var(--ink); font-family:Pretendard,"Apple SD Gothic Neo","Noto Sans KR",sans-serif; line-height:1.55; }
+    .intro { max-width:1420px; margin:auto; padding:40px 32px 20px; }
+    .intro p { margin:6px 0; color:var(--muted); }
+    .intro h1 { font-size:27px; margin:0 0 8px; letter-spacing:-.04em; }
+    .notice { display:inline-block; background:var(--orange-soft); color:var(--red); padding:5px 10px; border-radius:5px; font-weight:700; font-size:12px; }
+    .board { max-width:1420px; margin:auto; padding:0 32px 48px; }
+    .board-title { display:flex; flex-wrap:wrap; gap:10px; align-items:baseline; margin:28px 0 12px; }
+    .board-title h2 { font-size:20px; margin:0; }
+    .board-title p { color:var(--muted); margin:0; font-size:14px; }
+    .frame { background:white; display:grid; grid-template-columns:212px minmax(0,1fr); border:1px solid #dedee1; border-radius:14px; overflow:hidden; box-shadow:0 12px 32px #0000000b; }
+    .sidebar { background:#101114; color:#fff; padding:22px 12px; min-height:760px; }
+    .brand { font-size:18px; font-weight:900; padding:0 10px 26px; letter-spacing:-.04em; }
+    .brand b { color:var(--orange); }
+    .event { padding:17px 10px; border-block:1px solid #ffffff20; font-size:13px; font-weight:700; }
+    .event small { color:#a5a7ae; display:block; font-weight:400; margin-top:3px; }
+    .nav-label { color:#93959e; font-size:11px; margin:22px 10px 7px; }
+    .nav-item { display:block; padding:10px 12px; color:#c1c2c8; font-size:13px; }
+    .nav-item.active { color:white; background:#2b2c30; border-left:3px solid var(--orange); border-radius:7px; font-weight:700; padding-left:9px; }
+    .work { padding:30px 40px 42px; min-width:0; }
+    .mobile-bar { display:none; }
+    .crumb { color:var(--muted); font-size:13px; }
+    .head { display:flex; justify-content:space-between; gap:20px; align-items:start; padding:15px 0 22px; border-bottom:1px solid var(--line); }
+    .head h3 { font-size:29px; letter-spacing:-.05em; margin:0 0 5px; line-height:1.2; }
+    .meta { color:var(--muted); font-size:13px; }
+    .header-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .muted { color:var(--muted); }
+    .chip { display:inline-flex; align-items:center; min-height:28px; padding:3px 10px; border-radius:999px; background:#f1f1f2; color:#545961; font-size:12px; font-weight:700; white-space:nowrap; }
+    .chip.warm { color:#884a0d; background:#fff1df; }
+    .chip.good { color:var(--green); background:var(--green-soft); }
+    .button { display:inline-flex; min-height:42px; align-items:center; justify-content:center; padding:8px 14px; border:1px solid #aeb4bf; border-radius:9px; font-size:13px; font-weight:700; white-space:nowrap; background:white; }
+    .button.primary { background:var(--orange); color:var(--ink); border-color:var(--orange); }
+    .link { color:var(--red); font-weight:700; font-size:13px; }
+    .context { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding-top:12px; }
+    .stage-link { color:var(--muted); font-size:12px; margin-left:4px; }
+    .content { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(260px,.9fr); gap:30px; padding-top:28px; }
+    .main-col,.side-col { min-width:0; }
+    .section { margin-bottom:28px; }
+    .section-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
+    .section-head h4 { font-size:17px; letter-spacing:-.03em; margin:0; }
+    .section-head small { color:var(--muted); }
+    .lead { border:1px solid #f0c4b3; background:#fffaf7; border-radius:12px; padding:20px; }
+    .lead-top { display:flex; justify-content:space-between; align-items:start; gap:14px; }
+    .lead-label { color:var(--red); font-size:12px; font-weight:800; }
+    .lead h5 { font-size:17px; margin:5px 0; letter-spacing:-.03em; }
+    .lead p { color:#555b64; font-size:13px; margin:0; }
+    .lead .button { margin-top:15px; }
+    .readiness { margin-top:10px; border-top:1px solid var(--line); }
+    .row { display:flex; align-items:center; gap:14px; justify-content:space-between; padding:13px 0; border-bottom:1px solid var(--line); }
+    .row strong { font-size:14px; }
+    .row p { color:var(--muted); margin:2px 0 0; font-size:12px; }
+    .row .link { flex-shrink:0; }
+    .optional { color:var(--muted); font-size:11px; font-weight:500; }
+    .metrics { border-top:1px solid var(--line); border-bottom:1px solid var(--line); display:grid; grid-template-columns:repeat(3,1fr); padding:18px 0; }
+    .metric { padding:0 16px; border-left:1px solid var(--line); }
+    .metric:first-child { padding-left:0; border:0; }
+    .metric:last-child { padding-right:0; }
+    .metric span { display:block; color:var(--muted); font-size:12px; }
+    .metric strong { display:block; font-size:28px; letter-spacing:-.04em; line-height:1.2; margin-top:7px; }
+    .basis { color:var(--muted); font-size:12px; margin-top:8px; }
+    .schedule { border-top:1px solid var(--line); }
+    .empty { padding:20px 0; color:var(--muted); font-size:13px; }
+    .time-row { display:grid; grid-template-columns:54px 1fr auto; gap:12px; padding:14px 0; border-bottom:1px solid var(--line); font-size:13px; }
+    .time-row time { color:var(--muted); font-variant-numeric:tabular-nums; }
+    .time-row small { display:block; color:var(--muted); margin-top:3px; }
+    .side-col { border-left:1px solid var(--line); padding-left:26px; }
+    .side-col .section-head { margin-bottom:4px; }
+    .task { padding:14px 0; border-bottom:1px solid var(--line); }
+    .task strong { font-size:14px; }
+    .task p { color:var(--muted); font-size:12px; margin:5px 0 10px; }
+    .entry { border:1px solid var(--line); border-radius:12px; padding:20px; }
+    .entry-head { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+    .entry-head h4 { margin:0; font-size:17px; }
+    .entry-value { display:flex; justify-content:space-between; align-items:end; gap:16px; margin:22px 0 12px; }
+    .entry-value span { color:var(--muted); display:block; font-size:12px; }
+    .entry-value strong { font-size:32px; letter-spacing:-.04em; }
+    .entry-value small { color:var(--muted); font-size:13px; font-weight:600; }
+    .track { height:8px; border-radius:999px; background:#e7e7e9; overflow:hidden; }
+    .track i { display:block; height:100%; width:0; background:var(--orange); }
+    .entry-links { display:flex; flex-wrap:wrap; gap:10px 24px; border-top:1px solid var(--line); padding-top:15px; margin-top:17px; }
+    .entry-links span { font-size:13px; font-weight:700; }
+    .entry-links b { margin-left:8px; }
+    .footnote { margin:16px 2px 0; color:var(--muted); font-size:13px; }
+    .footnote strong { color:var(--ink); }
+    @media(max-width:850px) {
+      .intro { padding:24px 16px 12px; }
+      .board { padding:0 12px 30px; }
+      .frame { display:block; border-radius:10px; }
+      .sidebar { display:none; }
+      .mobile-bar { display:flex; align-items:center; justify-content:space-between; height:52px; padding:0 17px; background:#101114; color:white; font-weight:800; }
+      .mobile-bar b { color:var(--orange); }
+      .work { padding:22px 18px 30px; }
+      .head { display:block; }
+      .head h3 { font-size:25px; }
+      .header-actions { margin-top:14px; }
+      .content { display:flex; flex-direction:column; gap:0; padding-top:23px; }
+      .main-col, .side-col { display:contents; }
+      .flow-lead { order:1; }
+      .flow-metrics { order:2; }
+      .flow-schedule { order:3; }
+      .flow-recent { order:4; }
+      .flow-period { order:5; }
+      .lead-top { display:block; }
+      .metric { padding:0 10px; }
+      .metric strong { font-size:25px; }
+    }
+    @media(max-width:360px) { .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); gap:15px 0; } .metric:nth-child(3) { padding-left:0; border-left:0; grid-column:1/-1; } .row { align-items:start; } }
+  </style>
+</head>
+<body>
+  <header class="intro">
+    <span class="notice">검토용 정적 시안 · 실제 기능 아님</span>
+    <h1>운영 현황을 업무 중심으로 다시 구성하면</h1>
+    <p>합성 데이터로 구성한 방향 제안입니다. 행사 단계에 따라 같은 화면의 정보 우선순위가 달라집니다.</p>
+  </header>
+  <main class="board">
+    <div class="board-title"><h2>행사 준비 중</h2><p>할 일과 준비 상태를 한 영역에 모으고, 지표는 그다음에 둡니다.</p></div>
+    <section class="frame" aria-label="행사 준비 중 운영 현황 시안">
+      <aside class="sidebar" aria-hidden="true"><div class="brand"><b>E</b>VENTOUCH</div><div class="event">파트너 서밋<small>2027.01.16</small></div><div class="nav-label">운영</div><span class="nav-item active">운영 현황</span><span class="nav-item">참가자 명단</span><span class="nav-item">메시지</span><div class="nav-label">현장·참여</div><span class="nav-item">현장 운영</span><span class="nav-item">추첨·투표</span><span class="nav-item">경품 수령</span><span class="nav-item">현장 사진</span><div class="nav-label">행사 준비</div><span class="nav-item">참가자 페이지</span><span class="nav-item">공지·안내</span><span class="nav-item">참여 콘텐츠</span><span class="nav-item">행사 설정</span><div class="nav-label">결과</div><span class="nav-item">결과 보고서</span></aside>
+      <div class="mobile-bar" aria-hidden="true"><span>☰</span><span><b>E</b>VENTOUCH</span><span>●</span></div>
+      <div class="work">
+        <div class="crumb">행사 / 파트너 서밋</div>
+        <div class="head"><div><h3>운영 현황</h3><div class="meta">2027.01.16 · 09:00–17:00</div><div class="context"><span class="chip warm">기획</span><span class="chip">접수 공개 전</span><span class="stage-link">진행 단계 설정</span></div></div><div class="header-actions"><span class="meta">갱신 00:03</span><span class="button">새로고침</span></div></div>
+        <div class="content">
+          <div class="main-col">
+            <section class="section flow-lead"><div class="section-head"><h4>지금 준비할 일</h4><small>확인이 필요한 항목 1가지</small></div>
+              <div class="lead"><div class="lead-top"><div><span class="lead-label">접수 공개 전</span><h5>참가 접수를 준비하세요</h5><p>접수를 받으려면 양식을 게시하고 운영 준비 단계로 전환하세요.</p></div></div><span class="button primary">접수 설정</span></div>
+              <div class="readiness"><div class="row"><div><strong>현장 준비</strong><p>데스크 0개 · 배정 0건</p></div><span class="link">현장 운영 확인</span></div><div class="row"><div><strong>참가자 디자인 <span class="optional">선택 사항</span></strong><p>기본 디자인 사용 중</p></div><span class="link">디자인 편집</span></div><div class="row"><div><strong>안내 발송 <span class="optional">선택 사항</span></strong><p>미연결 · 실제 발송 불가</p></div><span class="link">발송 확인</span></div></div>
+            </section>
+            <section class="section flow-schedule"><div class="section-head"><h4>행사 일정</h4><span class="link">일정 추가</span></div><div class="schedule"><p class="empty">행사일에 등록된 프로그램이 없습니다.</p></div></section>
+          </div>
+          <div class="side-col"><section class="section flow-metrics"><div class="section-head"><h4>참가 현황</h4><span class="link">참가자 명단</span></div><div class="metrics"><div class="metric"><span>신청</span><strong>0</strong></div><div class="metric"><span>참가 확정</span><strong>0</strong></div><div class="metric"><span>승인 대기</span><strong>0</strong></div></div><p class="basis">취소 제외 등록 · 정원 100명</p></section><section class="section flow-recent"><div class="section-head"><h4>최근 입퇴장</h4></div><p class="empty">아직 입퇴장 기록이 없습니다. 현장 운영의 데스크에서 입장을 기록하면 여기에 표시됩니다.</p></section><span class="link flow-period">기간 분석 보기</span></div>
+        </div>
+      </div>
+    </section>
+    <p class="footnote"><strong>변경점:</strong> ‘지금 할 일’과 ‘행사 준비 확인’에 중복된 접수 설정을 하나로 모읍니다. 선택 사항과 필수 확인을 구분합니다.</p>
+
+    <div class="board-title"><h2>행사 진행 중</h2><p>입장 진행과 즉시 처리할 일을 위에 나란히 둡니다.</p></div>
+    <section class="frame" aria-label="행사 진행 중 운영 현황 시안">
+      <aside class="sidebar" aria-hidden="true"><div class="brand"><b>E</b>VENTOUCH</div><div class="event">파트너 서밋<small>2027.01.16</small></div><div class="nav-label">운영</div><span class="nav-item active">운영 현황</span><span class="nav-item">참가자 명단</span><span class="nav-item">메시지</span><div class="nav-label">현장·참여</div><span class="nav-item">현장 운영</span><span class="nav-item">추첨·투표</span><span class="nav-item">경품 수령</span><span class="nav-item">현장 사진</span><div class="nav-label">행사 준비</div><span class="nav-item">참가자 페이지</span><span class="nav-item">공지·안내</span><span class="nav-item">참여 콘텐츠</span><span class="nav-item">행사 설정</span><div class="nav-label">결과</div><span class="nav-item">결과 보고서</span></aside>
+      <div class="mobile-bar" aria-hidden="true"><span>☰</span><span><b>E</b>VENTOUCH</span><span>●</span></div>
+      <div class="work"><div class="crumb">행사 / 파트너 서밋</div><div class="head"><div><h3>운영 현황</h3><div class="meta">2027.01.16 · 09:00–17:00</div><div class="context"><span class="chip good">진행 중</span><span class="chip warm">접수 중</span></div></div><div class="header-actions"><span class="meta">자동 확인 09:40</span><span class="button">새로고침</span><span class="button">참가자 페이지</span></div></div>
+        <div class="content"><div class="main-col"><section class="section entry flow-lead"><div class="entry-head"><h4>입장 진행</h4><span class="link">현장 운영 열기</span></div><div class="entry-value"><div><span>누적 입장</span><strong>0<small>명 / 8명</small></strong></div><div><span>입장률</span><strong>0<small>%</small></strong></div></div><div class="track"><i></i></div><p class="basis">등록 인원 기준 · 취소 제외</p><div class="entry-links"><span>확정자 중 미입장 <b>6명</b></span><span>참가 확정 <b>6명</b></span></div></section><section class="section flow-schedule"><div class="section-head"><h4>행사 일정</h4><span class="link">프로그램 일정</span></div><div class="schedule"><div class="time-row"><time>09:00</time><div><strong>등록 및 네트워킹</strong><small>그랜드홀 · 09:00–10:00</small></div><span class="muted">예정</span></div><div class="time-row"><time>14:00</time><div><strong>파트너 라운드테이블</strong><small>그랜드홀 · 14:00–15:30</small></div><span class="muted">예정</span></div></div></section></div>
+          <div class="side-col"><section class="section flow-metrics"><div class="section-head"><h4>지금 할 일</h4><small>1가지</small></div><div class="task"><strong>승인 대기 2명</strong><p>신청 내역을 확인하고 참가를 확정하세요.</p><span class="button primary">승인 대기 처리</span></div></section><section class="section flow-recent"><div class="section-head"><h4>최근 입퇴장</h4></div><p class="empty">아직 입퇴장 기록이 없습니다. 현장 운영의 데스크에서 입장을 기록하면 여기에 표시됩니다.</p></section><span class="link flow-period">기간 분석 보기</span></div>
+        </div>
+      </div>
+    </section>
+    <p class="footnote"><strong>유지할 점:</strong> 실제 데이터 조회 시각, 권한별 정보, 단계 조건, 오류와 미확인 상태, 기존 이동 경로를 그대로 보존합니다. 시안의 숫자와 일정은 예시입니다.</p>
+  </main>
+</body>
+</html>

@@ -1,4 +1,5 @@
 "use client";
+import ProductButton from "../../../../ui/ProductButton";
 
 import { useEffect, useRef, useState } from "react";
 import ConsoleDialog from "../../../console-ui/ConsoleDialog";
@@ -179,8 +180,8 @@ export default function BulkCancelDialog({ eventId, targets, onClose, onRefresh,
   const paidPeople = show?.filter((target) => target.paidPaymentIds.length > 0).length ?? 0;
   const entries = (list: ReviewedTarget[]) => list.map((target) => <li key={target.id}><strong>{target.name}</strong>{target.company ? ` · ${target.company}` : ""} · {target.phone} · {statusLabel(target.status)}{target.inside ? " · 입장 중" : ""}{target.paidPaymentIds.length ? ` · 환불 요청 ${target.paidPaymentIds.length}건` : ""}</li>);
   return <ConsoleDialog title="선택한 신청 취소" description={`현재 필터에서 선택한 ${targets.length}명의 신청을 취소합니다.`} onClose={onClose} busy={busy} canClose={canClose} footer={<ConsoleFormActions>
-    <button type="button" className="button button-secondary" disabled={busy} onClick={() => { if (canClose()) onClose(); }}>닫기</button>
-    {!pending ? <button type="button" className="button button-primary" disabled={busy || operator.changed || !canProceed} onClick={() => void execute(false)}>신청 취소</button> : null}
+    <ProductButton type="button" className="button button-secondary" disabled={busy} onClick={() => { if (canClose()) onClose(); }}>닫기</ProductButton>
+    {!pending ? <ProductButton type="button" className="button button-primary" disabled={busy || operator.changed || !canProceed} onClick={() => void execute(false)}>신청 취소</ProductButton> : null}
   </ConsoleFormActions>}>
     {reading ? <p role="status">선택한 참가자와 결제 내역을 확인하고 있습니다.</p> : null}
     {conflict ? <section className={styles.editRecovery} aria-labelledby="cancel-conflict-heading"><h3 id="cancel-conflict-heading" tabIndex={-1}>선택한 참가자 정보가 변경됐습니다</h3>
@@ -192,24 +193,24 @@ export default function BulkCancelDialog({ eventId, targets, onClose, onRefresh,
         }).map((target) => { const before = conflict.before.find((item) => item.id === target.id)!; return <li key={target.id}><strong>{target.name}</strong> · {statusLabel(before.status)} → {statusLabel(target.status)}{before.inside !== target.inside ? ` · ${before.inside ? "입장 중" : "입장 중 아님"} → ${target.inside ? "입장 중" : "입장 중 아님"}` : ""}{before.paidPaymentIds !== null && JSON.stringify([...before.paidPaymentIds].sort()) !== JSON.stringify(target.paidPaymentIds) ? ` · 환불 요청 대상 ${before.paidPaymentIds.length}건 → ${target.paidPaymentIds.length}건` : ""}</li>; })}</ul>
         <p>확인만으로 취소하지 않습니다.</p>
         {conflict.latest.some((target) => target.status === "CANCELLED") ? <p>이미 취소된 참가자가 있습니다. 명단으로 돌아가 대상을 다시 선택하세요.</p> :
-          <button type="button" className="button button-secondary" disabled={busy || reading} onClick={() => { setReviewed(conflict.latest); setConflict(null); setError(""); }}>최신 상태로 다시 검토</button>}
-      </> : <button type="button" className="button button-secondary" disabled={reading || busy} onClick={() => void readReview()}>{reading ? "최신 명단 확인 중…" : "최신 명단 확인"}</button>}
+          <ProductButton type="button" className="button button-secondary" disabled={busy || reading} onClick={() => { setReviewed(conflict.latest); setConflict(null); setError(""); }}>최신 상태로 다시 검토</ProductButton>}
+      </> : <ProductButton type="button" className="button button-secondary" disabled={reading || busy} onClick={() => void readReview()}>{reading ? "최신 명단 확인 중…" : "최신 명단 확인"}</ProductButton>}
     </section> : null}
     {show ? <>
       <p><strong>취소 대상 {show.length}명</strong> · 환불 요청으로 바뀔 결제 {paidCount}건 ({paidPeople}명)</p>
       <ul>{entries(show.slice(0, 5))}</ul>
       {show.length > 5 ? <details><summary>나머지 {show.length - 5}명 보기</summary><ul>{entries(show.slice(5))}</ul></details> : null}
-      {show.some((target) => target.inside) ? <div role="note"><p>입장 중인 참가자가 있습니다. 먼저 퇴장 처리한 뒤 최신 명단을 다시 확인하세요.</p>{!conflict ? <button type="button" className="button button-secondary" disabled={busy || reading} onClick={() => void readReview()}>최신 명단 확인</button> : null}</div> : null}
+      {show.some((target) => target.inside) ? <div role="note"><p>입장 중인 참가자가 있습니다. 먼저 퇴장 처리한 뒤 최신 명단을 다시 확인하세요.</p>{!conflict ? <ProductButton type="button" className="button button-secondary" disabled={busy || reading} onClick={() => void readReview()}>최신 명단 확인</ProductButton> : null}</div> : null}
     </> : null}
     <p>발급된 티켓은 무효화되며 결제 완료 건은 환불 요청 상태로 바뀝니다.</p>
     {error && !pending ? <ConsoleFeedback kind="error">{error}</ConsoleFeedback> : null}
-    {error && !pending && !conflict && !reading ? <button type="button" className="button button-secondary" onClick={() => void readReview(true)}>대상 다시 확인</button> : null}
-    {conflict?.latest?.some((target) => target.status === "CANCELLED") ? <button type="button" className="button button-secondary" disabled={busy} onClick={() => { void onRefresh().then((ok) => { if (ok && active.current) onClose(); else if (active.current) setError("최신 명단을 불러오지 못했습니다. 다시 시도하세요."); }); }}>명단에서 다시 선택</button> : null}
+    {error && !pending && !conflict && !reading ? <ProductButton type="button" className="button button-secondary" onClick={() => void readReview(true)}>대상 다시 확인</ProductButton> : null}
+    {conflict?.latest?.some((target) => target.status === "CANCELLED") ? <ProductButton type="button" className="button button-secondary" disabled={busy} onClick={() => { void onRefresh().then((ok) => { if (ok && active.current) onClose(); else if (active.current) setError("최신 명단을 불러오지 못했습니다. 다시 시도하세요."); }); }}>명단에서 다시 선택</ProductButton> : null}
     {pending ? <section className={styles.editRecovery} aria-labelledby="bulk-cancel-recovery"><h3 id="bulk-cancel-recovery">신청 취소 처리 확인 필요</h3>
       <p>원래 선택한 {pending.targets.length}명의 요청이 반영됐을 수 있습니다. 서버 확인은 요청을 다시 보내지 않습니다.</p>
       {error ? <p role="alert">{error}</p> : null}
-      <div className={styles.editActions}><button type="button" className="button button-secondary" disabled={busy || operator.changed} onClick={() => void check()}>서버 처리 확인</button>
-      <button type="button" className="button button-secondary" disabled={busy || operator.changed} onClick={() => void execute(true)}>같은 요청 다시 시도</button></div>
+      <div className={styles.editActions}><ProductButton type="button" className="button button-secondary" disabled={busy || operator.changed} onClick={() => void check()}>서버 처리 확인</ProductButton>
+      <ProductButton type="button" className="button button-secondary" disabled={busy || operator.changed} onClick={() => void execute(true)}>같은 요청 다시 시도</ProductButton></div>
     </section> : null}
     {dismiss ? <ConsoleConfirm summary="신청 취소가 이미 반영됐을 수 있습니다. 닫은 뒤 화면의 처리 결과 확인에서 확인하세요." confirmLabel="닫기" onConfirm={onClose} onCancel={() => setDismiss(false)} /> : null}
   </ConsoleDialog>;

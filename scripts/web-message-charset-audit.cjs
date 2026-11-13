@@ -110,7 +110,7 @@ let phase = 'setup';
     await page.screenshot({ path: path.join(out, 'alimtalk-fallback-off-390.png'), fullPage: true });
     await page.locator('#campaign-sms-fallback').scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(out, 'alimtalk-fallback-viewport-390.png') });
-    await messageStep(page, 3); await page.locator('section[aria-labelledby="campaign-review-heading"]').getByText('알림톡을 전달하지 못해도 문자로 대체 발송하지 않습니다.', { exact: false }).waitFor();
+    await messageStep(page, 3); await page.locator(':is(section,[role=region])[aria-labelledby="campaign-review-heading"]').getByText('알림톡을 전달하지 못해도 문자로 대체 발송하지 않습니다.', { exact: false }).waitFor();
     await page.locator('#campaign-submit').click();
     await page.getByRole('button', { name: '발송 요청한다', exact: true }).click();
     try { await page.getByRole('button', { name: '메시지 작성', exact: true }).waitFor(); }

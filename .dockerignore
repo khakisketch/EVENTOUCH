@@ -14,3 +14,5 @@ node_modules/
 # shadow it, and the API image does not need it at all.
 apps/web/node_modules/
 apps/web/.next/
+# The Astryx pilot is an isolated review app, not part of the web image.
+apps/web/design-review/astryx-pilot/

@@ -97,7 +97,7 @@ test('web-participant-roster-is-compact-with-coherent-columns', () => {
   assert.match(css, /\.detailActions select\s*\{[^}]*flex:\s*1 1 220px/s);
   // Rows stay compact but never below the 44px touch target.
   assert.match(css, /\.participantRow\s*\{[^}]*min-height:\s*44px/s);
-  assert.match(css, /\.participantActions :global\(\.button\)\s*\{[^}]*min-height:\s*44px/s);
+  assert.match(css, /\.participantActions :global\(.astryx-button\)\s*\{[^}]*min-height:\s*44px/s);
   assert.match(css, /\.detailActions select\s*\{[^}]*min-height:\s*44px/s);
   assert.doesNotMatch(css, /min-height:\s*40px/);
   // Identity stays on the row: name + company/masked contact, full digits
