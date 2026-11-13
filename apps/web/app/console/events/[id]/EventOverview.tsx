@@ -1274,10 +1274,10 @@ export default function EventOverview({ eventId }: { eventId: string }) {
                 </div>
                 <div className={styles.liveRosterLinks}>
                   <Link href={notEnteredRosterHref}>
-                    <span>{overview.cancellationReview ? "승인 상태 중 미입장" : "확정자 중 미입장"}</span>{" "}<strong>{overview.confirmedNotEntered}명</strong><ArrowRightIcon />
+                    <span>{overview.cancellationReview ? "승인 상태 중 미입장" : "확정자 중 미입장"}</span>{" "}<strong>{overview.confirmedNotEntered}명</strong><em className={styles.rosterGo}>명단 보기 <ArrowRightIcon /></em>
                   </Link>
                   <Link href={approvedRosterHref}>
-                    <span>{overview.cancellationReview ? "승인 상태" : "참가 확정"}</span>{" "}<strong>{overview.approved}명</strong><ArrowRightIcon />
+                    <span>{overview.cancellationReview ? "승인 상태" : "참가 확정"}</span>{" "}<strong>{overview.approved}명</strong><em className={styles.rosterGo}>명단 보기 <ArrowRightIcon /></em>
                   </Link>
                 </div>
               </div>
@@ -1302,7 +1302,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
               <div className={styles.entryFoot}>
                 <span>{overview.cancellationReview ? "신청 상태 기준 · 취소 기록 확인 필요 인원 포함" : "등록 인원 기준 · 취소 제외"}</span>
                 <Link href={approvedRosterHref}>
-                  <span>{overview.cancellationReview ? "승인 상태" : "참가 확정"}</span>{" "}<strong>{overview.approved}명</strong><ArrowRightIcon />
+                  <span>{overview.cancellationReview ? "승인 상태" : "참가 확정"}</span>{" "}<strong>{overview.approved}명</strong><em className={styles.rosterGo}>명단 보기 <ArrowRightIcon /></em>
                 </Link>
                 {currentStage === "ARCHIVED" ? null : (
                   <Link
@@ -1310,7 +1310,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
                     href={notEnteredRosterHref}
                   >
                     <span>{overview.cancellationReview ? "승인 상태 중 미입장" : "확정자 중 미입장"}</span>
-                    <strong>{overview.confirmedNotEntered}명</strong><ArrowRightIcon />
+                    <strong>{overview.confirmedNotEntered}명</strong><em className={styles.rosterGo}>명단 보기 <ArrowRightIcon /></em>
                   </Link>
                 )}
               </div>

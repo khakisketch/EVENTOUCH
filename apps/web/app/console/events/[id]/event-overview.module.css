@@ -1444,7 +1444,7 @@
 .liveRosterLinks > a {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "label arrow" "count arrow";
+  grid-template-areas: "label label" "count arrow";
   align-items: center;
   column-gap: var(--s2);
   row-gap: 2px;
@@ -1468,8 +1468,8 @@
   color: var(--muted);
 }
 
-.liveRosterLinks > a > span { grid-area: label; color: var(--muted); font-size: 13px; font-weight: 600; }
-.liveRosterLinks > a > svg { grid-area: arrow; }
+.liveRosterLinks > a > span > span { grid-area: label; color: var(--muted); font-size: 13px; font-weight: 600; }
+.liveRosterLinks > a .rosterGo { grid-area: arrow; align-self: end; }
 .liveRosterLinks > a strong { grid-area: count; font-size: var(--h2); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .liveRosterLinks > a + a { padding-inline-start: var(--s4); border-inline-start: 1px solid var(--line); }
 
@@ -1541,7 +1541,8 @@
 
 @media (min-width: 1101px) {
   .liveOverview .regionRunbook { margin-top: var(--s4); align-self: start; }
-  .liveOverview .regionRecent { margin-top: var(--s2); }
+  .liveOverview .regionMetrics { align-self: start; }
+  .liveOverview .regionRecent { margin-top: var(--s5); }
 }
 @media (max-width: 1100px) {
   .liveOverview .regionRunbook,
@@ -1550,3 +1551,36 @@
 /* On the green all-clear strip the check sits on white so it stays visible. */
 .liveOverview .queueIdle p[role="status"]::before { background: var(--paper); }
 .liveOverview .queueIdle p[role="status"] { color: var(--ink); }
+
+/* Roster link affordance: say what the tile does instead of a bare arrow. */
+.rosterGo {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--brand-text);
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.liveRosterLinks > a .rosterGo svg { width: 14px; height: 14px; color: currentColor; }
+.liveRosterLinks > a:hover .rosterGo { text-decoration: underline; text-underline-offset: 3px; }
+
+/* Live recent activity: a compact feed in the side column, time-first scan. */
+.liveOverview .activityList li {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s3);
+  min-block-size: 56px;
+}
+.liveOverview .checkDetails { display: grid; gap: 0; }
+.liveOverview .checkDetails strong { line-height: 1.35; }
+.liveOverview .checkDetails .deskName { font-size: 13px; line-height: 1.35; }
+.liveOverview .timestamp { font-size: 13px; }
+
+/* Wide screens: the feed reads as a ledger, one column per fact. */
+@media (min-width: 1101px) {
+  .liveOverview .activityList li { grid-template-columns: 72px 168px minmax(0, 1fr) auto; }
+  .liveOverview .checkDetails { display: contents; }
+  .liveOverview .checkDetails .deskName { font-size: var(--small); }
+}
