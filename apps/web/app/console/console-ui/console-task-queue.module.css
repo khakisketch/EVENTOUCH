@@ -7,7 +7,20 @@
 .head span { color: var(--ink); font-size: var(--body-work); font-variant-numeric: tabular-nums; font-weight: 650; }
 .hint { margin: 0; color: var(--muted); font-size: var(--small); max-width: 58ch; overflow-wrap: anywhere; line-height: 1.55; }
 .action { display: inline-flex; align-items: center; min-height: var(--control-min-size); gap: var(--s2); font-size: var(--small); font-weight: 650; text-decoration: none; }
-.empty { margin: 0; padding-block: var(--s3); color: var(--muted); }
+.empty { display: flex; align-items: center; gap: var(--s2); margin: 0; padding-block: var(--s2); color: var(--muted); font-size: var(--small); }
+.empty::before {
+  content: "✓";
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--success-soft);
+  color: var(--success);
+  font-size: var(--label);
+  font-weight: 800;
+}
 @media (max-width: 600px) {
   .queue > li { grid-template-columns: minmax(0, 1fr); gap: var(--s1); }
   .action { justify-self: start; }

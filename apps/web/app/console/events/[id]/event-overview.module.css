@@ -118,9 +118,9 @@
 }
 
 .intakeOpen {
-  border-color: transparent;
-  background: var(--brand-tint);
-  color: var(--brand-text);
+  border-color: var(--success-line);
+  background: var(--paper);
+  color: var(--success);
 }
 
 .intakeClosed {
@@ -129,9 +129,9 @@
 }
 
 .dDay {
-  border-color: transparent;
-  background: var(--ink);
-  color: var(--paper);
+  border-color: var(--line-strong);
+  background: var(--paper);
+  color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1324,7 +1324,9 @@
 
 .overviewCanvas .entryMetricsLayout .entryProgress { grid-template-columns: minmax(0,1fr); }
 .overviewCanvas .entryMetricsLayout .entrySummary, .overviewCanvas .entryMetricsLayout .entryTrack, .overviewCanvas .entryMetricsLayout .entryFoot { grid-column: auto; grid-row: auto; }
-.overviewCanvas .recentActions, .overviewCanvas .recentCompact > .refreshButton { display: none; }
+.overviewCanvas .recentActions .refreshButton, .overviewCanvas .recentCompact > .refreshButton { display: none; }
+.overviewCanvas .activityList li:last-child { border-bottom: 0; }
+.overviewCanvas .activityList li { padding-block: var(--s3); }
 
 .overviewSectionLink {
   display: inline-flex;
@@ -1434,22 +1436,24 @@
 
 .liveRosterLinks {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 172px), 1fr));
-  column-gap: var(--s4);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 0;
   border-block-start: 1px solid var(--line);
 }
 
 .liveRosterLinks > a {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "label arrow" "count arrow";
   align-items: center;
-  gap: var(--s2);
+  column-gap: var(--s2);
+  row-gap: 2px;
   min-width: 0;
   min-block-size: var(--s7);
-  padding-block: var(--s1);
+  padding-block: var(--s3);
   color: var(--ink);
-  font-size: var(--body-work);
-  font-weight: 650;
+  font-size: var(--small);
+  font-weight: 600;
   word-break: keep-all;
   overflow-wrap: anywhere;
   text-decoration: none;
@@ -1464,14 +1468,24 @@
   color: var(--muted);
 }
 
-.liveRosterLinks > a strong { font-variant-numeric: tabular-nums; }
+.liveRosterLinks > a > span { grid-area: label; color: var(--muted); font-size: 13px; font-weight: 600; }
+.liveRosterLinks > a > svg { grid-area: arrow; }
+.liveRosterLinks > a strong { grid-area: count; font-size: var(--h2); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.liveRosterLinks > a + a { padding-inline-start: var(--s4); border-inline-start: 1px solid var(--line); }
 
 /* Live: the entry state leads on every width; the queue follows it and shrinks when empty. */
 .liveOverview {
   grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.85fr);
-  grid-template-areas: "alert alert" "status status" "metrics queue" "runbook runbook" "readiness readiness" "secondary secondary" "recent recent" "analysis analysis";
+  grid-template-areas: "alert alert" "status status" "metrics queue" "metrics runbook" "readiness readiness" "secondary secondary" "recent recent" "analysis analysis";
 }
 .queueIdle { padding-block: var(--s4); }
+@media (min-width: 1101px) {
+  /* The tall entry card spans queue + schedule; the schedule row absorbs the extra height so the right column stays packed. */
+  .liveOverview { grid-template-rows: auto auto auto 1fr auto auto auto auto; }
+  .liveOverview .regionMetrics { margin-bottom: var(--s5); }
+  .liveOverview .regionRunbook { margin-top: var(--s5); padding: 0; border-top: 0; align-self: start; }
+  .liveOverview .runbookIdle { gap: var(--s2); }
+}
 @media (max-width: 1100px) {
   .liveOverview {
     grid-template-columns: minmax(0, 1fr);

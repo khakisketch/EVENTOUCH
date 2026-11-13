@@ -281,10 +281,11 @@
   display: inline-flex;
   min-height: 44px;
   align-items: center;
-  padding-inline: var(--s3);
-  border: 1px solid var(--line);
+  margin-inline: calc(var(--s2) * -1);
+  padding-inline: var(--s2);
+  border: 0;
   border-radius: var(--radius-medium);
-  background: var(--paper);
+  background: transparent;
   color: var(--muted);
   font-size: 13px;
   font-weight: 500;
@@ -294,8 +295,8 @@
 }
 
 .contextLink:hover {
-  border-color: var(--line-strong);
   background: var(--surface-muted);
+  color: var(--ink);
   text-decoration: none;
 }
 
