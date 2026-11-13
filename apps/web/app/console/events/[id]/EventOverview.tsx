@@ -172,6 +172,26 @@ function formatCheckTime(value: string): string {
   return Number.isNaN(date.getTime()) ? value : CHECK_TIME_FORMAT.format(date);
 }
 
+const CHECK_CLOCK_FORMAT = new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
+const CHECK_DAY_FORMAT = new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric" });
+
+// Today's records show only the clock; older ones add a small date line.
+function checkClock(value: string, now: Date): { clock: string; day: string | null } | null {
+  const date = new Date(value);
+  if (!value || Number.isNaN(date.getTime())) return null;
+  return {
+    clock: CHECK_CLOCK_FORMAT.format(date),
+    day: localDateKey(date) === localDateKey(now) ? null : CHECK_DAY_FORMAT.format(date),
+  };
+}
+
+function relativeAgo(value: string, now: Date): string | null {
+  const minutes = Math.floor((now.getTime() - new Date(value).getTime()) / 60_000);
+  if (!Number.isFinite(minutes) || minutes < 0 || minutes >= 24 * 60) return null;
+  if (minutes < 1) return "방금 전";
+  return minutes < 60 ? `${minutes}분 전` : `${Math.floor(minutes / 60)}시간 전`;
+}
+
 function localDateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
@@ -1523,20 +1543,31 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         {refreshing ? <p className={styles.refreshStatus} role="status">최신 운영 현황을 불러오고 있습니다.</p> : null}
         {!overview.checksAvailable ? <p className="empty-state">출입 기록을 확인할 수 없습니다. 새로고침해도 계속되면 시스템 관리자에게 문의하세요.</p> : overview.recent.length ? (
           <ul className={styles.activityList}>
-            {overview.recent.map((check) => (
-              <li key={check.id}>
-                <span className={`${styles.checkAction} ${check.action === "IN" ? styles.checkIn : check.action === "OUT" ? styles.checkOut : styles.checkOther}`}>
-                  {check.action === "IN" ? "입장" : check.action === "OUT" ? "퇴장" : "기록"}
-                </span>
-                <div className={styles.checkDetails}>
-                  <strong>{check.name || "이름 없음"}</strong>
-                  {check.deskName ? <span className={styles.deskName}>{check.deskName}</span> : null}
-                </div>
-                <time className={styles.timestamp} dateTime={check.at || undefined}>
-                  {formatCheckTime(check.at)}
-                </time>
-              </li>
-            ))}
+            {overview.recent.map((check) => {
+              const when = checkClock(check.at, now);
+              const ago = relativeAgo(check.at, now);
+              const where = [check.deskName, ago].filter(Boolean).join(" · ");
+              const tone = check.action === "IN" ? "In" : check.action === "OUT" ? "Out" : "Other";
+              return (
+                <li key={check.id}>
+                  <time className={styles.checkTime} dateTime={check.at || undefined}>
+                    {when ? <><span>{when.clock}</span>{when.day ? <small>{when.day}</small> : null}</> : formatCheckTime(check.at)}
+                  </time>
+                  <span className={styles.checkRail} aria-hidden="true">
+                    <i className={`${styles.checkDot} ${styles[`checkDot${tone}`]}`} />
+                  </span>
+                  <div className={styles.checkDetails}>
+                    <p className={styles.checkLine}>
+                      <strong>{check.name || "이름 없음"}</strong>
+                      <span className={`${styles.checkAction} ${styles[`check${tone}`]}`}>
+                        {check.action === "IN" ? "입장" : check.action === "OUT" ? "퇴장" : "기록"}
+                      </span>
+                    </p>
+                    {where ? <span className={styles.deskName}>{where}</span> : null}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <p className="empty-state">

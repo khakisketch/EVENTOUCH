@@ -499,85 +499,98 @@
   font-size: var(--small);
 }
 
+/* Recent activity reads as a timeline: clock on the left, a dot on the rail, who/what/where on the right. */
 .activityList {
   display: grid;
   margin: 0;
   padding: 0;
-  border-top: 1px solid var(--line);
   list-style: none;
 }
 
 .activityList li {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: 64px 16px minmax(0, 1fr);
   min-width: 0;
-  align-items: center;
-  gap: var(--s3);
-  padding-block: var(--s2);
-  border-bottom: 1px solid var(--line);
+  align-items: start;
+  column-gap: var(--s3);
+  min-block-size: 64px;
 }
+
+.checkTime {
+  display: grid;
+  justify-items: end;
+  padding-block-start: 1px;
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.checkTime small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.checkRail {
+  position: relative;
+  display: flex;
+  align-self: stretch;
+  justify-content: center;
+}
+
+.activityList li:not(:last-child) .checkRail::before {
+  position: absolute;
+  inset-block: 12px -12px;
+  inline-size: 2px;
+  background: var(--line);
+  content: "";
+}
+
+.checkDot {
+  position: relative;
+  z-index: 1;
+  inline-size: 12px;
+  block-size: 12px;
+  margin-block-start: 5px;
+  border-radius: 50%;
+}
+
+.checkDotIn { background: var(--success); box-shadow: 0 0 0 4px var(--success-soft); }
+.checkDotOut { border: 2px solid var(--ink); background: var(--paper); box-shadow: 0 0 0 4px var(--surface-muted); }
+.checkDotOther { background: var(--muted); box-shadow: 0 0 0 4px var(--surface-muted); }
 
 .checkDetails {
-  display: flex;
+  display: grid;
   min-width: 0;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--s1) var(--s2);
+  gap: 0;
+  padding-block-end: var(--s3);
 }
 
+.checkLine { margin: 0; }
+
 .checkDetails strong {
+  font-weight: 700;
+  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 
 .checkAction {
-  display: inline-flex;
-  min-height: 24px;
-  flex: none;
-  align-items: center;
-  gap: var(--s1);
-  padding-inline: var(--s2);
-  border-radius: 999px;
-  font-size: var(--label);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
+  margin-inline-start: var(--s2);
+  font-size: var(--small);
+  font-weight: 600;
 }
 
-.checkAction::before {
-  width: 6px;
-  height: 6px;
-  flex: none;
-  border-radius: 50%;
-  background: currentColor;
-  content: "";
-}
-
-.checkIn {
-  color: var(--success);
-  background: var(--success-soft);
-}
-
-.checkOut {
-  color: var(--info);
-  background: var(--info-soft);
-}
-
-.checkOther {
-  color: var(--muted);
-  background: var(--surface-muted);
-}
+.checkIn { color: var(--success); }
+.checkOut { color: var(--ink); }
+.checkOther { color: var(--muted); }
 
 .deskName {
   color: var(--muted);
-  font-size: var(--small);
-}
-
-.timestamp {
-  justify-self: end;
-  color: var(--muted);
-  font-size: var(--small);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 @media (max-width: 680px) {
@@ -1329,8 +1342,6 @@
 .overviewCanvas .entryMetricsLayout .entryProgress { grid-template-columns: minmax(0,1fr); }
 .overviewCanvas .entryMetricsLayout .entrySummary, .overviewCanvas .entryMetricsLayout .entryTrack, .overviewCanvas .entryMetricsLayout .entryFoot { grid-column: auto; grid-row: auto; }
 .overviewCanvas .recentActions .refreshButton, .overviewCanvas .recentCompact > .refreshButton { display: none; }
-.overviewCanvas .activityList li:last-child { border-bottom: 0; }
-.overviewCanvas .activityList li { padding-block: var(--s3); }
 
 .overviewSectionLink {
   display: inline-flex;
@@ -1527,9 +1538,6 @@
   border: 0;
   background: transparent;
 }
-.liveOverview .activityList { border-top: 1px solid var(--line); }
-.liveOverview .activityList li { padding-block: var(--s3); }
-.liveOverview .checkAction { min-width: 56px; justify-content: center; }
 
 /* Add-schedule is an icon action: ink glyph in a round 44px target. */
 .addIconLink {
@@ -1572,25 +1580,6 @@
 .rosterGo svg { width: 14px; height: 14px; color: currentColor; }
 .liveRosterLinks > a:hover .rosterGo { text-decoration: underline; text-underline-offset: 3px; }
 
-/* Live recent activity: a compact feed in the side column, time-first scan. */
-.liveOverview .activityList li {
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--s3);
-  min-block-size: 56px;
-}
-.liveOverview .checkDetails { display: grid; gap: 0; }
-.liveOverview .checkDetails strong { line-height: 1.35; }
-.liveOverview .checkDetails .deskName { font-size: 13px; line-height: 1.35; }
-.liveOverview .timestamp { font-size: 13px; }
-
-/* Wide screens: the feed reads as a ledger, one column per fact. */
-@media (min-width: 1101px) {
-  .liveOverview .activityList li { grid-template-columns: 72px 168px minmax(0, 1fr) auto; }
-  .liveOverview .checkDetails { display: contents; }
-  .liveOverview .checkDetails .deskName { font-size: var(--small); }
-}
-
 /* Recent activity is the second white unit beside the entry card: same border,
    radius and inner padding, so the page has two anchors instead of one plus a bare list. */
 .liveOverview .regionRecent {
@@ -1605,16 +1594,7 @@
   background: var(--surface-muted);
   font-weight: 600;
 }
-.liveOverview .regionRecent .activityList { margin-top: var(--s2); border-top: 1px solid var(--line); }
-.liveOverview .regionRecent .activityList li {
-  margin-inline: calc(var(--s3) * -1);
-  padding-inline: var(--s3);
-  border-radius: var(--radius-md, 8px);
-  min-block-size: 60px;
-  border-bottom: 1px solid var(--line);
-}
-.liveOverview .regionRecent .activityList li:last-child { border-bottom-color: transparent; }
-.liveOverview .regionRecent .activityList li:hover { background: var(--surface-muted); }
+.liveOverview .regionRecent .activityList { margin-top: var(--s3); }
 @media (max-width: 1100px) {
   .liveOverview .regionRecent { padding: var(--s4); }
 }
