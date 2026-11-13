@@ -193,6 +193,21 @@ Preserve EVENTOUCH's Korean-language identity and customer-approved banners and 
 
 Stable interaction and data-safety behavior belongs in [UX-CONTRACT.md](UX-CONTRACT.md); proposal-specific acceptance belongs in [docs/CONTRACT-SCOPE.md](docs/CONTRACT-SCOPE.md).
 
+## Action role rules (read before any UI work)
+
+The owner's recurring complaint is a screen full of identical white bordered buttons and boxes. Astryx templates and the "Badge = counts only" rule in `apps/web/AGENTS.md` describe structure and token use; they do not decide visual role. Visual role follows this table, which wins on conflict.
+
+| Role | Variant | Use | Limit |
+|---|---|---|---|
+| Main action | `primary` (orange) | The one thing the operator must do on this screen or step | One per screen or dialog section |
+| Supporting action | `secondary` (white, bordered) | Real alternatives of similar weight | Never the default for everything |
+| Utility / disclosure | `ghost` (text, no box) | Show/hide, reset, filters, "more", contextual navigation | Keep a 44px touch target |
+| Destructive | `destructive` | Cancel, delete, withdraw | Always behind a confirm |
+| Status | chip with color plus shape | Stage, readiness, counts with context | Not a button |
+| Row data | ledger row | Lists of records | Not card-wrapped lists |
+
+Every `ProductButton` states its role with `variant`; the `button-*` legacy classes are not a role. When a screen has more than a few secondary buttons, ask which are really utilities and move them to `ghost`. `tests/web-button-roles.test.cjs` holds the per-file secondary ceiling.
+
 ## Product component boundary
 
 Astryx supplies the production theme, actions, icon actions, links, labeled text fields, headings, sections and feedback. `app/ui/ProductButton`, `ProductLink`, `ProductInput` and `ProductNotice` keep the product-facing contract small. The production theme in `apps/web/src/themes/eventouch/` aliases `tokens.css`; generated theme files are rebuilt, not edited. The product explicitly uses light mode and Pretendard. The isolated design-review pilot is not a runtime dependency.

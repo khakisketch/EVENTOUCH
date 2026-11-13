@@ -11,7 +11,7 @@
 - 시작·검증: [README.md](README.md), [배포·백업](docs/DEPLOY.md)
 - 고객 요구와 미확정 수용 범위: [계약 범위](docs/CONTRACT-SCOPE.md)
 - 외부 연동·실발송 수용: [연동 계약](docs/INTEGRATIONS.md)
-- 화면 계약·디자인 입력: [UX-CONTRACT.md](UX-CONTRACT.md), [DESIGN.md](DESIGN.md)
+- 화면 계약·디자인 입력: [UX-CONTRACT.md](UX-CONTRACT.md), [DESIGN.md](DESIGN.md). UI 작업 전 DESIGN.md의 "Action role rules"를 먼저 읽는다(`apps/web/AGENTS.md`의 Astryx 규칙보다 시각 역할 판단이 우선).
 - 실제 기기 확인 입력: [scripts/device-checklist.md](scripts/device-checklist.md)
 
 ## Agent skills
