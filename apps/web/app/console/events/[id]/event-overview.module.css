@@ -1434,44 +1434,45 @@
   line-height: 1.35;
 }
 
+/* One legend ties the figures to the bar; a single link opens the roster. */
 .liveRosterLinks {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 var(--s4);
   border-block-start: 1px solid var(--line);
+  padding-block-start: var(--s2);
 }
 
-.liveRosterLinks > a {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "label label" "count arrow";
-  align-items: center;
-  column-gap: var(--s2);
-  row-gap: 2px;
-  min-width: 0;
-  min-block-size: var(--s7);
-  padding-block: var(--s3);
-  color: var(--ink);
+.liveLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s5);
+  margin: 0;
+  color: var(--muted);
   font-size: var(--small);
-  font-weight: 600;
-  word-break: keep-all;
-  overflow-wrap: anywhere;
+}
+
+.liveLegend > span { display: inline-flex; align-items: center; gap: var(--s2); }
+.liveLegend strong { color: var(--ink); font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+.legendDot {
+  inline-size: 10px;
+  block-size: 10px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+.legendDotOpen { border: 1px solid #C9CDD2; background: #EDEFF1; }
+
+.liveRosterLinks > a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--s7);
+  margin-inline-start: auto;
   text-decoration: none;
   text-underline-offset: 3px;
 }
-
-.liveRosterLinks > a:hover span { text-decoration: underline; }
-
-.liveRosterLinks > a svg {
-  width: 14px;
-  height: 14px;
-  color: var(--muted);
-}
-
-.liveRosterLinks > a > span > span { grid-area: label; color: var(--muted); font-size: 13px; font-weight: 600; }
-.liveRosterLinks > a .rosterGo { grid-area: arrow; align-self: end; }
-.liveRosterLinks > a strong { grid-area: count; font-size: var(--h2); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.liveRosterLinks > a + a { padding-inline-start: var(--s4); border-inline-start: 1px solid var(--line); }
 
 /* Live: the entry state leads on every width; the queue follows it and shrinks when empty. */
 .liveOverview {
@@ -1563,7 +1564,7 @@
   font-weight: 700;
   white-space: nowrap;
 }
-.liveRosterLinks > a .rosterGo svg { width: 14px; height: 14px; color: currentColor; }
+.rosterGo svg { width: 14px; height: 14px; color: currentColor; }
 .liveRosterLinks > a:hover .rosterGo { text-decoration: underline; text-underline-offset: 3px; }
 
 /* Live recent activity: a compact feed in the side column, time-first scan. */

@@ -1270,14 +1270,15 @@ export default function EventOverview({ eventId }: { eventId: string }) {
                     </div>
                   </div>
                   {entryTrack}
-                  <p className={styles.entryBasis}>{overview.cancellationReview ? "신청 상태 기준 · 취소 기록 확인 필요 인원 포함" : "등록 인원 기준 · 취소 제외"}</p>
+                  {overview.cancellationReview ? <p className={styles.entryBasis}>신청 상태 기준 · 취소 기록 확인 필요 인원 포함</p> : null}
                 </div>
                 <div className={styles.liveRosterLinks}>
-                  <Link href={notEnteredRosterHref}>
-                    <span>{overview.cancellationReview ? "승인 상태 중 미입장" : "확정자 중 미입장"}</span>{" "}<strong>{overview.confirmedNotEntered}명</strong><em className={styles.rosterGo}>명단 보기 <ArrowRightIcon /></em>
-                  </Link>
-                  <Link href={approvedRosterHref}>
-                    <span>{overview.cancellationReview ? "승인 상태" : "참가 확정"}</span>{" "}<strong>{overview.approved}명</strong><em className={styles.rosterGo}>명단 보기 <ArrowRightIcon /></em>
+                  <p className={styles.liveLegend}>
+                    <span><i className={styles.legendDot} aria-hidden="true" />입장 <strong>{overview.everIn}명</strong></span>
+                    <span><i className={`${styles.legendDot} ${styles.legendDotOpen}`} aria-hidden="true" />{overview.cancellationReview ? "승인 상태 중 미입장" : "확정자 중 미입장"} <strong>{overview.confirmedNotEntered}명</strong></span>
+                  </p>
+                  <Link href={notEnteredRosterHref} aria-label="미입장 명단 보기">
+                    <span className={styles.rosterGo}>명단 보기 <ArrowRightIcon /></span>
                   </Link>
                 </div>
               </div>
