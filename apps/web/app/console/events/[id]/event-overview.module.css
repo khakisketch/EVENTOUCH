@@ -1494,26 +1494,38 @@
   .liveOverview .regionMetrics { margin-bottom: var(--s4); box-shadow: var(--shadow-raised); }
 }
 
-/* Live: queue, schedule and recent activity share one supporting surface so the
-   column reads as one set; the raised entry card stays the only white focal unit. */
-.liveOverview .regionQueue,
-.liveOverview .regionRunbook,
-.liveOverview .regionRecent {
-  padding: var(--s5);
-  border: 0;
-  border-radius: var(--radius-card);
-  background: var(--surface-muted);
+/* Live: each region takes the form of its role instead of sharing one panel.
+   Queue = status strip (green when clear), schedule = add slot when empty,
+   recent = flat ledger. Only the entry card is a raised white unit. */
+.liveOverview .queueIdle {
+  padding: var(--s3) var(--s4);
+  border-radius: var(--radius-large);
+  background: var(--success-soft);
 }
-.liveOverview .regionRunbook > :first-child,
-.liveOverview .regionRecent > :first-child { min-height: 44px; }
-.liveOverview .runbookEmpty { padding-block: var(--s2); }
-.liveOverview .regionRecent { margin-top: var(--s2); }
+.liveOverview .queueIdle > :global(.astryx-section) { display: flex; align-items: center; gap: var(--s3); }
+.liveOverview .queueIdle > :global(.astryx-section) > :first-child { min-height: 0; flex: none; }
+.liveOverview .queueIdle [data-console-section-head] h2 { font-size: var(--small); font-weight: 700; color: var(--success); }
+.liveOverview .queueIdle > :global(.astryx-section) > :last-child { min-width: 0; }
+
+.liveOverview .runbookIdle {
+  padding: var(--s4) var(--s4) var(--s4) var(--s5);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-card);
+  background: transparent;
+}
+.liveOverview .runbookIdle > :first-child { min-height: 0; }
+.liveOverview .runbookEmpty { padding-block: 0; }
+
+.liveOverview .regionRecent {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
 .liveOverview .activityList { border-top: 1px solid var(--line); }
 .liveOverview .activityList li { padding-block: var(--s3); }
 .liveOverview .checkAction { min-width: 56px; justify-content: center; }
-.liveOverview .recentCount { padding: 2px var(--s3); border-radius: 999px; background: var(--paper); font-weight: 600; }
 
-/* Add-schedule is an icon action: ink glyph in a quiet round target, 44px. */
+/* Add-schedule is an icon action: ink glyph in a round 44px target. */
 .addIconLink {
   display: inline-grid;
   width: 44px;
@@ -1524,17 +1536,17 @@
   border-radius: 50%;
   color: var(--ink);
 }
-.addIconLink svg { width: 18px; height: 18px; }
-.addIconLink:hover { background: var(--paper); }
+.addIconLink svg { width: 20px; height: 20px; stroke-width: 2.4; }
+.addIconLink:hover { background: var(--surface-muted); }
 
 @media (min-width: 1101px) {
-  /* Same-height supporting panels, one rhythm apart. */
   .liveOverview .regionRunbook { margin-top: var(--s4); align-self: start; }
+  .liveOverview .regionRecent { margin-top: var(--s2); }
 }
 @media (max-width: 1100px) {
-  .liveOverview .regionQueue,
-  .liveOverview .regionRunbook,
-  .liveOverview .regionRecent { padding: var(--s4); }
   .liveOverview .regionRunbook,
   .liveOverview .regionRecent { margin-top: var(--s4); }
 }
+/* On the green all-clear strip the check sits on white so it stays visible. */
+.liveOverview .queueIdle p[role="status"]::before { background: var(--paper); }
+.liveOverview .queueIdle p[role="status"] { color: var(--ink); }
