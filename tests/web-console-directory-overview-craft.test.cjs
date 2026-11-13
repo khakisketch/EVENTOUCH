@@ -95,5 +95,7 @@ test('overview queue summary remains actual work and preserves filtered destinat
   for (const token of ['status=PENDING', 'status=APPROVED', 'attendance=NOT_ENTERED', 'attendance=REVIEW', 'ticket=review']) {
     assert.ok(overview.includes(token), token);
   }
-  assert.match(overview, /overview\.cancellationReview \? "신청 상태 기준 · 취소 기록 확인 필요 인원 포함" : "등록 인원 기준 · 취소 제외"/u);
+  // The default basis lives in the progress bar's accessible name; visible copy appears only when it differs.
+  assert.match(overview, /overview\.cancellationReview \? "신청 상태 기준" : "취소 제외"\} 등록 대비/u);
+  assert.match(overview, /const entryBasis = overview\.cancellationReview \? <p className=\{styles\.entryBasis\}>신청 상태 기준 · 취소 기록 확인 필요 인원 포함<\/p> : null;/u);
 });

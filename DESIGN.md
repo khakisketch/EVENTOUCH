@@ -208,6 +208,17 @@ The owner's recurring complaint is a screen full of identical white bordered but
 
 Every `ProductButton` states its role with `variant`; the `button-*` legacy classes are not a role. When a screen has more than a few secondary buttons, ask which are really utilities and move them to `ghost`. `tests/web-button-roles.test.cjs` holds the per-file secondary ceiling.
 
+## 운영 현황 확정 구성
+
+The owner approved this composition on 2026-11-13 (`apps/web/app/console/events/[id]/EventOverview.tsx`). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-event-overview-priority.test.cjs` ("approved overview design stays locked") guards it.
+
+- Header: one stage pill. Intake state and D-day read as plain text, not chips.
+- Entry progress: the bar and the rate are ink, not orange. Below the bar sit one legend (입장 / 확정자 중 미입장) and one "명단 보기" link. The live and finished summaries share this block. The default basis lives in the bar's accessible name; visible basis copy appears only during cancellation review. Archived events link to the confirmed roster.
+- One primary per page. During live, "현장 운영 열기" owns it and the task queue adds none. Archived pages have none.
+- Utilities are ghost links: the stage band's "진행 단계 설정" and the four readiness links. The stage band and readiness rows are not white boxes.
+- An empty schedule slot keeps the height of its sibling card.
+- 최근 입퇴장 is a timeline: time, then a rail dot (in = green, out = ink outline, other = muted), then details.
+
 ## Product component boundary
 
 Astryx supplies the production theme, actions, icon actions, links, labeled text fields, headings, sections and feedback. `app/ui/ProductButton`, `ProductLink`, `ProductInput` and `ProductNotice` keep the product-facing contract small. The production theme in `apps/web/src/themes/eventouch/` aliases `tokens.css`; generated theme files are rebuilt, not edited. The product explicitly uses light mode and Pretendard. The isolated design-review pilot is not a runtime dependency.

@@ -48,6 +48,28 @@ test('overview retains accurate filters, counts and recovery surfaces', () => {
   }
 });
 
+// Approved overview design (2026-11-13). See DESIGN.md "운영 현황 확정 구성"; change only with a new user decision.
+test('approved overview design stays locked', () => {
+  const queue = fs.readFileSync(path.join(__dirname, '..', 'apps/web/app/console/console-ui/ConsoleTaskQueue.tsx'), 'utf8');
+  // Entry: ink bar, one legend, one roster link, shared by live and finished summaries.
+  assert.equal((source.match(/\{entryLegend\((true|currentStage !== "ARCHIVED")\)\}/g) || []).length, 2, 'live and finished share the legend');
+  assert.equal((source.match(/className=\{styles\.liveRosterLinks\}/g) || []).length, 1, 'one legend block');
+  assert.doesNotMatch(source, /styles\.(entryFoot|notEntered)\b/u, 'no roster tiles');
+  assert.match(css, /\.entryFill \{[^}]*background: var\(--ink\)/su, 'progress reads in ink');
+  assert.match(css, /\.entryRate \{\s*color: var\(--ink\)/u);
+  // Header: one stage pill; intake and D-day are text.
+  assert.match(css, /\.intakeBadge,\s*\.dDay \{[^}]*border: 0;[^}]*background: none/su);
+  // Recent activity: time, rail dot, details timeline.
+  for (const marker of ['styles.checkTime', 'styles.checkRail', 'styles.checkDot', 'styles.checkDetails']) assert.ok(source.includes(marker), marker);
+  // Exactly one primary on live: the hero owns it, so the queue never adds another.
+  assert.match(source, /<Link variant=\{live \? "primary" : "ghost"\} href=\{`\$\{base\}\/operations`\}>/u);
+  assert.match(queue, /variant=\{index === 0 && !liveOverview \? "primary" : "ghost"\}/u);
+  // Utilities are ghost links, not white boxes.
+  assert.match(source, /<Link variant="ghost" href=\{`\$\{base\}\/settings#settings-stage`\}>진행 단계 설정<\/Link>/u);
+  assert.equal((source.match(/<Link variant="ghost" className=\{styles\.readinessLink\}/g) || []).length, 4);
+  assert.match(css, /\.stageBand \{\s*max-width: none;/u);
+});
+
 test('compact work rows and mobile page action retain readable names and controls', () => {
   const queue = fs.readFileSync(path.join(__dirname, "..", "apps/web/app/console/console-ui/ConsoleTaskQueue.tsx"), "utf8");
   const queueCss = fs.readFileSync(path.join(__dirname, "..", "apps/web/app/console/console-ui/console-task-queue.module.css"), "utf8");

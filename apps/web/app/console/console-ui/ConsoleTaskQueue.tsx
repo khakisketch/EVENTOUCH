@@ -15,7 +15,8 @@ export default function ConsoleTaskQueue({ items, label, empty = "확인할 항�
         <div className={styles.head}><p>{item.title}</p>{item.count ? <span>{item.count}</span> : null}</div>
         {item.hint ? <p className={styles.hint}>{item.hint}</p> : null}
       </div>
-      <Link variant={index === 0 ? "primary" : "ghost"} className={styles.action} href={item.href}>{item.action}{liveOverview ? <ArrowRightIcon /> : null}</Link>
+      {/* Live overview already spends its one primary on the field-operations hero action. */}
+      <Link variant={index === 0 && !liveOverview ? "primary" : "ghost"} className={styles.action} href={item.href}>{item.action}{liveOverview ? <ArrowRightIcon /> : null}</Link>
     </li>)}
   </ul>;
 }

@@ -1023,6 +1023,20 @@ export default function EventOverview({ eventId }: { eventId: string }) {
   );
   const approvedRosterHref = `${base}/participants?status=APPROVED`;
   const notEnteredRosterHref = `${approvedRosterHref}&attendance=NOT_ENTERED`;
+  const entryBasis = overview.cancellationReview ? <p className={styles.entryBasis}>신청 상태 기준 · 취소 기록 확인 필요 인원 포함</p> : null;
+  // One legend ties the figures to the bar; a single link opens the roster that matters now.
+  // Archived events are read-only, so they point at the confirmed roster instead of the no-shows.
+  const entryLegend = (showNotEntered: boolean) => (
+    <div className={styles.liveRosterLinks}>
+      <p className={styles.liveLegend}>
+        <span><i className={styles.legendDot} aria-hidden="true" />입장 <strong>{overview.everIn}명</strong></span>
+        {showNotEntered ? <span><i className={`${styles.legendDot} ${styles.legendDotOpen}`} aria-hidden="true" />{overview.cancellationReview ? "승인 상태 중 미입장" : "확정자 중 미입장"} <strong>{overview.confirmedNotEntered}명</strong></span> : null}
+      </p>
+      <Link href={showNotEntered ? notEnteredRosterHref : approvedRosterHref} aria-label={showNotEntered ? "미입장 명단 보기" : "참가 확정 명단 보기"}>
+        <span className={styles.rosterGo}>명단 보기 <ArrowRightIcon /></span>
+      </Link>
+    </div>
+  );
   const periodRows: Array<[string, PeriodCounts["today"]]> = [
     ["오늘", overview.periods.today],
     ["어제", overview.periods.yesterday],
@@ -1245,7 +1259,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             <div className={`${styles.topReadiness} ${styles.regionStatus}`}>
               <p className={styles.stageBand}>
                 <span>현재 <strong>{stageText}</strong><span aria-hidden="true"> → </span><span className={styles.stageNext}>다음 {nextStageText}</span></span>
-                <Link href={`${base}/settings#settings-stage`}>진행 단계 설정</Link>
+                <Link variant="ghost" href={`${base}/settings#settings-stage`}>진행 단계 설정</Link>
               </p>
               {currentStage === "READY" ? (
                 <p className={`${styles.nextCondition} ${liveBlocked ? styles.nextConditionBlocked : ""}`}>
@@ -1290,17 +1304,9 @@ export default function EventOverview({ eventId }: { eventId: string }) {
                     </div>
                   </div>
                   {entryTrack}
-                  {overview.cancellationReview ? <p className={styles.entryBasis}>신청 상태 기준 · 취소 기록 확인 필요 인원 포함</p> : null}
+                  {entryBasis}
                 </div>
-                <div className={styles.liveRosterLinks}>
-                  <p className={styles.liveLegend}>
-                    <span><i className={styles.legendDot} aria-hidden="true" />입장 <strong>{overview.everIn}명</strong></span>
-                    <span><i className={`${styles.legendDot} ${styles.legendDotOpen}`} aria-hidden="true" />{overview.cancellationReview ? "승인 상태 중 미입장" : "확정자 중 미입장"} <strong>{overview.confirmedNotEntered}명</strong></span>
-                  </p>
-                  <Link href={notEnteredRosterHref} aria-label="미입장 명단 보기">
-                    <span className={styles.rosterGo}>명단 보기 <ArrowRightIcon /></span>
-                  </Link>
-                </div>
+                {entryLegend(true)}
               </div>
             ) : finished ? (
               <div className={styles.entryProgress}>
@@ -1320,21 +1326,8 @@ export default function EventOverview({ eventId }: { eventId: string }) {
                 ) : null}
               </div>
               {entryTrack}
-              <div className={styles.entryFoot}>
-                <span>{overview.cancellationReview ? "신청 상태 기준 · 취소 기록 확인 필요 인원 포함" : "등록 인원 기준 · 취소 제외"}</span>
-                <Link href={approvedRosterHref}>
-                  <span>{overview.cancellationReview ? "승인 상태" : "참가 확정"}</span>{" "}<strong>{overview.approved}명</strong><em className={styles.rosterGo}>명단 보기 <ArrowRightIcon /></em>
-                </Link>
-                {currentStage === "ARCHIVED" ? null : (
-                  <Link
-                    className={styles.notEntered}
-                    href={notEnteredRosterHref}
-                  >
-                    <span>{overview.cancellationReview ? "승인 상태 중 미입장" : "확정자 중 미입장"}</span>
-                    <strong>{overview.confirmedNotEntered}명</strong><em className={styles.rosterGo}>명단 보기 <ArrowRightIcon /></em>
-                  </Link>
-                )}
-              </div>
+              {entryBasis}
+              {entryLegend(currentStage !== "ARCHIVED")}
                 <div className={styles.summaryFacts}>
                   {currentStage === "ARCHIVED" ? (
                     <Link className={styles.summaryFact} href={`${base}/participants`}>
@@ -1439,22 +1432,22 @@ export default function EventOverview({ eventId }: { eventId: string }) {
                 <li>
                   <span className={styles.readinessLabel}>참가 접수</span>
                   <span className={styles.readinessStatus}>{intakeShort}</span>
-                  <Link className={styles.readinessLink} href={`${base}/settings#settings-intake`}>접수 설정</Link>
+                  <Link variant="ghost" className={styles.readinessLink} href={`${base}/settings#settings-intake`}>접수 설정</Link>
                 </li>
                 <li>
                   <span className={styles.readinessLabel}>현장 준비</span>
                   <span className={styles.readinessStatus}>데스크 {overview.deskCount} · 배정 {overview.deskAssignmentCount}{liveBlocked ? " — 부족" : ""}</span>
-                  <Link className={styles.readinessLink} href={`${base}/operations`}>현장 운영 확인</Link>
+                  <Link variant="ghost" className={styles.readinessLink} href={`${base}/operations`}>현장 운영 확인</Link>
                 </li>
                 <li>
                   <span className={styles.readinessLabel}>참가자 디자인 · 선택 사항</span>
                   <span className={styles.readinessStatus}>{overview.pagePublished ? (overview.pageDraftDiffers ? "게시됨 · 새 초안 있음" : "게시됨") : "기본 디자인 사용 중 · 꾸미기는 선택 사항입니다"}</span>
-                  <Link className={styles.readinessLink} href={`${base}/page`}>디자인 편집</Link>
+                  <Link variant="ghost" className={styles.readinessLink} href={`${base}/page`}>디자인 편집</Link>
                 </li>
                 {overview.canManageEvent ? <li>
                   <span className={styles.readinessLabel}>안내 발송 · 선택 사항</span>
                   <span className={styles.readinessStatus}>{overview.messageConnection === "connected" ? "발송 연결됨 · 도달은 별도 확인" : overview.messageConnection === "disconnected" ? "미연결 · 실제 발송 불가" : "발송 연결 상태 확인 필요"}</span>
-                  <Link className={styles.readinessLink} href={`${base}/messages`}>발송 확인</Link>
+                  <Link variant="ghost" className={styles.readinessLink} href={`${base}/messages`}>발송 확인</Link>
                 </li> : null}
               </ul>
             </ConsoleSection>

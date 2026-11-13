@@ -110,7 +110,7 @@ test('overview uses a labeled entry progress visualization and removes action/pr
 
   assert.match(overview, /role="progressbar"/);
   assert.match(overview, /aria-label=\{`입장 진행/);
-  assert.match(overview, /등록 인원 기준 · 취소 제외/);
+  assert.match(overview, /"취소 제외"\} 등록 대비/);
   assert.match(overview, /확정자 중 미입장/);
   assert.match(overview, /surveyResponseCount !== null/);
   assert.match(overview, /getReportStatus\(overview\)/);
@@ -134,10 +134,10 @@ test('recent activity refresh stays icon-only, accessible and reduced-motion awa
   assert.match(overview, /title="입퇴장 기록 새로고침"/);
   assert.match(overview, /busy=\{refreshing\}/);
   assert.match(overview, /<time dateTime=\{overview\.updatedAt\}>마지막 갱신/);
-  assert.match(overview, /<time className=\{styles\.timestamp\} dateTime=\{check\.at \|\| undefined\}>/);
+  assert.match(overview, /<time className=\{styles\.checkTime\} dateTime=\{check\.at \|\| undefined\}>/);
   assert.match(overview, /formatCheckTime\(check\.at\)/);
   assert.match(css, /\.refreshButton\s*\{[\s\S]*?width: 44px/);
   assert.match(css, /\.refreshButton svg[\s\S]*?width: 20px/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
-  assert.match(css, /\.checkAction::before/);
+  assert.match(css, /\.checkDot \{/);
 });

@@ -259,7 +259,7 @@
 }
 
 .entryRate {
-  color: var(--brand-text);
+  color: var(--ink);
   font-size: var(--h3);
   font-weight: 750;
   font-variant-numeric: tabular-nums;
@@ -271,80 +271,20 @@
   font-size: var(--h3);
 }
 
-.notEntered {
-  display: inline-flex;
-  min-height: 44px;
-  align-items: center;
-  gap: var(--s2);
-  padding: var(--s1) var(--s3);
-  border: 1px solid var(--warning-line);
-  border-radius: var(--radius-medium);
-  background: var(--warning-soft);
-  color: var(--warning);
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.notEntered:hover {
-  border-color: var(--warning);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.notEntered span {
-  font-size: var(--small);
-  font-weight: 700;
-}
-
-.notEntered strong {
-  font-size: var(--body);
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-
+/* Orange is reserved for the action; progress reads in ink. */
 .entryTrack {
-  height: var(--s4);
+  height: 10px;
   overflow: hidden;
-  border: 1px solid var(--line);
   border-radius: var(--s6);
-  background: var(--surface-muted);
+  background: #EDEFF1;
 }
 
 .entryFill {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: var(--brand);
+  background: var(--ink);
   transition: width 180ms ease-out;
-}
-
-.entryFoot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s1) var(--s3);
-  color: var(--muted);
-  font-size: var(--small);
-}
-
-.entryFoot a {
-  display: inline-flex;
-  min-height: 44px;
-  align-items: center;
-  gap: var(--s1);
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-medium);
-  background: var(--paper);
-  color: var(--ink);
-  font-weight: 650;
-  text-decoration: none;
-}
-
-.entryFoot a:hover {
-  border-color: var(--ink);
-  background: var(--surface-muted);
 }
 
 .summaryFacts {
@@ -600,10 +540,6 @@
     gap: var(--s3);
   }
 
-  .entryFoot {
-    align-items: flex-start;
-    flex-direction: column;
-  }
 
   .programList li {
     grid-template-columns: minmax(86px, 0.65fr) minmax(0, 1.4fr);
@@ -847,25 +783,11 @@
 
 .readinessLink {
   grid-area: link;
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-medium);
-  background: var(--paper);
-  color: var(--brand-text);
-  font-weight: 700;
-  text-decoration: none;
   white-space: nowrap;
 }
 
-.readinessLink:hover {
-  border-color: var(--brand-text);
-  background: var(--surface-muted);
-}
-
 .stageBand {
+  max-width: none;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -889,23 +811,6 @@
   font-weight: 700;
 }
 
-.stageBand > a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-medium);
-  background: var(--paper);
-  color: var(--ink);
-  font-weight: 650;
-  text-decoration: none;
-}
-
-.stageBand > a:hover {
-  border-color: var(--ink);
-  background: var(--surface-muted);
-}
 
 .nextCondition {
   display: flex;
@@ -962,11 +867,8 @@
   display: grid;
   gap: var(--s2);
   min-width: 0;
-  padding: var(--s3) var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-large);
-  background: var(--paper);
-  box-shadow: 0 1px 3px var(--shadow-soft);
+  padding-block-end: var(--s3);
+  border-block-end: 1px solid var(--line);
 }
 
 /* "지금 할 일"은 ConsoleTaskQueue가 소유한다. 이 파일에 타일·피어 비교 잔재를 두지 않는다. */
@@ -981,8 +883,11 @@
     gap: var(--s1);
   }
 
+  /* Stacked under its label, the ghost link's text aligns with the row text, not its padding box. */
   .readinessLink {
+    justify-self: start;
     justify-content: flex-start;
+    margin-inline-start: calc(-1 * var(--s4) - 1px);
   }
 }
 
@@ -1333,14 +1238,10 @@
 .regionAnalysis { grid-area: analysis; min-width: 0; border-top: 1px solid var(--line); }
 .overviewCanvas .entryMetricsLayout { display: block; }
 .overviewCanvas .entryMetricsLayout .entryProgress { display: grid; gap: var(--s3); }
-.overviewCanvas .entryFoot { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); }
-.overviewCanvas .entryFoot > span { flex-basis: 100%; font-size: var(--small); }
-.overviewCanvas .entryFoot a { color: var(--ink); font-weight: 650; }
-.overviewCanvas .notEntered { background: transparent; border: 0; padding-inline: 0; }
 .overviewUpdated { display: flex; align-items: center; gap: var(--s2); color: var(--muted); font-size: var(--small); }
 
 .overviewCanvas .entryMetricsLayout .entryProgress { grid-template-columns: minmax(0,1fr); }
-.overviewCanvas .entryMetricsLayout .entrySummary, .overviewCanvas .entryMetricsLayout .entryTrack, .overviewCanvas .entryMetricsLayout .entryFoot { grid-column: auto; grid-row: auto; }
+.overviewCanvas .entryMetricsLayout .entrySummary, .overviewCanvas .entryMetricsLayout .entryTrack { grid-column: auto; grid-row: auto; }
 .overviewCanvas .recentActions .refreshButton, .overviewCanvas .recentCompact > .refreshButton { display: none; }
 
 .overviewSectionLink {
@@ -1427,13 +1328,6 @@
   font-weight: 800;
   letter-spacing: -0.03em;
 }
-/* Orange is reserved for the action; progress reads in ink. */
-.liveReadout .entryTrack {
-  height: 10px;
-  border: 0;
-  background: #EDEFF1;
-}
-.liveReadout .entryFill { background: var(--ink); }
 .liveEntryLabel { font-weight: 600; }
 
 /* The entry card anchors the live screen: raised, roomier, hairline-free surroundings. */

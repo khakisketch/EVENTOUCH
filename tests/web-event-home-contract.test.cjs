@@ -70,7 +70,7 @@ test('event-home-entry-rate-matches-the-report-definition', () => {
   assert.match(overview, /records\(workspace\.participants\)\.filter\(\s*\(person\) => String\(person\.status \|\| ""\)\.toUpperCase\(\) !== "CANCELLED"\s*\)/);
   assert.match(overview, /const everIn = participantRows\.filter\(\(person\) => person\.everIn === true\)\.length/);
   assert.match(overview, /entryRate: registered \? Math\.round\(\(everIn \/ registered\) \* 100\) : 0/);
-  assert.match(overview, /등록 인원 기준 · 취소 제외/);
+  assert.match(overview, /"취소 제외"\} 등록 대비/);
   assert.doesNotMatch(overview, /승인된 참가자[^\n]*입장률/);
 });
 
@@ -86,7 +86,7 @@ test('event-home-refresh-stamps-a-successful-read-and-wakes-the-shell', () => {
   assert.match(overview, /setReloadRequest\(\(\{ sequence \}\) => \(\{ sequence: sequence \+ 1, automatic: false \}\)\)/);
   assert.match(overview, /eventouch:shell-reload/);
   assert.match(overview, /formatCheckTime\(check\.at\)/);
-  assert.match(overview, /<time className=\{styles\.timestamp\} dateTime=\{check\.at \|\| undefined\}>/);
+  assert.match(overview, /<time className=\{styles\.checkTime\} dateTime=\{check\.at \|\| undefined\}>/);
 });
 
 test('event-home-keeps-permission-and-stage-transition-contracts', () => {
