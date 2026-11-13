@@ -18,7 +18,7 @@
   "console/events/[id]/content/ContentWorkspace.tsx": 24,
   "console/events/[id]/draws/DrawsWorkspace.tsx": 28,
   "console/events/[id]/messages/MessagingWorkspace.tsx": 26,
-  "console/events/[id]/operations/OperationsWorkspace.tsx": 22,
+  "console/events/[id]/operations/OperationsWorkspace.tsx": 20,
   "console/events/[id]/page/ThemeWorkspace.tsx": 24,
   "console/events/[id]/participants/BulkCancelDialog.tsx": 8,
   "console/events/[id]/participants/CancellationConflictReview.tsx": 2,

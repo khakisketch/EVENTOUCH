@@ -204,9 +204,10 @@ test('event workspaces keep factual meta and action-specific sections inside the
   assert.doesNotMatch(settings, /headingId="settings-page"/u);
 
   const operations = read(eventPhaseTwoTargets[0]);
-  // The section may carry a description (its own status line); the contract
-  // is that the primary action stays inside the section.
-  assert.match(operations, /<ConsoleSection headingId="ops-staff" title="스태프 배정"[^>]*>\s*<div className=\{styles\.primarySectionAction\}>\s*<ProductButton[\s\S]*?className="button button-primary"/u);
+  // Field operations owns one page-level assignment action in the header: it is
+  // the page's only primary while some place has no one on duty, a ghost after.
+  assert.match(operations, /headerActions=\{\(\s*<ProductButton\s+id="ops-staff-assign"[\s\S]*?variant=\{gapTargets\.length && !archived \? "primary" : "ghost"\}/u);
+  assert.match(operations, /<ConsoleSection headingId="ops-staff" title="스태프 배정"/u, 'the staff anchor section stays');
   assert.match(operations, /className="button button-primary"[^>]*>[\s\S]*?초안 저장/u, 'map draft save remains a primary body action');
 });
 

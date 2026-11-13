@@ -57,9 +57,10 @@ test('preparation pages expose tab navigation where the task flows span zones', 
   for (const id of ['content-notices', 'content-program', 'content-venue']) {
     assert.match(PAGES.content, new RegExp(`\\{ id: "${id}"`), `content nav reaches ${id}`);
   }
-  assert.match(PAGES.operations, /<ConsoleSectionNav/u);
+  // Field operations reads as one page; its anchors stay for deep links.
+  assert.doesNotMatch(PAGES.operations, /<ConsoleSectionNav/u);
   for (const id of ['ops-desks', 'ops-booths', 'ops-staff']) {
-    assert.match(PAGES.operations, new RegExp(`\\{ id: "${id}"`), `operations nav reaches ${id}`);
+    assert.match(PAGES.operations, new RegExp(`headingId="${id}"`), `operations keeps the ${id} anchor`);
   }
 });
 

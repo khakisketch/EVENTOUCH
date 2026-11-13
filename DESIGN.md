@@ -241,6 +241,23 @@ The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/
 - 발송 기록 / 템플릿 관리 tabs use the same ink underline. On the template tab the save button is the one orange action.
 - Review stays a separate step. Scheduling, mock send and the send confirmation live there and keep the existing request gates and receipts.
 
+## 현장 운영 확정 구성
+
+The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/operations/OperationsWorkspace.tsx`, mockup scene A3). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-operations-composition.test.cjs` ("approved operations design stays locked") guards it.
+
+- One page, no sidebar nav. Section anchors (`ops-desks`, `ops-booths`, `ops-staff`, `ops-display`, `ops-participation`, `ops-booth-mode`, `ops-booth-map`) stay for deep links and the team handoff.
+- Desks are the only bordered card: the running count as the figure ("2 / 3 가동") with an ink bar. Booths, display and participation are plain; the staff gap list is a soft surface, like the overview's queue.
+- A location row is a name, one quiet line, who is on duty as initials (an empty place is a dashed plus), and one control. The whole row opens its detail dialog. Desks carry a switch; stopping one asks first. Booths follow their schedule and show a dot plus word, never a switch. A stopped row dims by muted text, never by opacity.
+- No secondary buttons inside rows. Edit, add and release (`staff.unassign`) live in the detail dialog.
+- The page owns one assignment entry in the header. It is the only primary while some place has no one on duty and a ghost otherwise; gap rows name the place with a ghost "배정".
+- Text budget: a row says its name, one line of facts and its state in words. No panel subtitles, no repeated links, no standing explanations.
+
+### 화면 구성 규칙 (every screen)
+- One bordered card per page, the figure that matters most; other regions take the form of their role (soft surface, plain list, flat line).
+- A state is shown by its control or one word, not by a chip beside a button that says the same thing.
+- A link or action appears once per page unless two entry points do different jobs.
+- Rows are not wrapped in cards, and dimming never lowers text contrast.
+
 ## Product component boundary
 
 Astryx supplies the production theme, actions, icon actions, links, labeled text fields, headings, sections and feedback. `app/ui/ProductButton`, `ProductLink`, `ProductInput` and `ProductNotice` keep the product-facing contract small. The production theme in `apps/web/src/themes/eventouch/` aliases `tokens.css`; generated theme files are rebuilt, not edited. The product explicitly uses light mode and Pretendard. The isolated design-review pilot is not a runtime dependency.

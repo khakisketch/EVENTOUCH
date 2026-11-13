@@ -183,20 +183,19 @@ test("owned modules stay token-clean", () => {
   assert.match(imp, /\.importStepNumber\s*\{[^}]*font-size:\s*var\(--small\)/su);
 });
 
-test("operations resources promote an explicit textual state badge", () => {
+test("operations resources keep an explicit textual state, not color or a switch alone", () => {
   const source = read("console/events/[id]/operations/OperationsWorkspace.tsx");
   const css = read("console/events/[id]/operations/operations.module.css");
-  assert.match(source, /styles\.resourceStatus/u, "desk and booth rows render a state badge");
-  assert.match(source, /data-tone=\{desk\.open && !deskIncomplete \? "good" : "muted"\}/u);
-  assert.match(source, /deskIncomplete \? "가동 설정 · 정보 확인 필요" : "가동 중"/u);
-  assert.match(source, /data-tone=\{booth\.status === "OPEN" \? "good" : booth\.status === "WAITING" \? "wait" : "muted"\}/u);
+  assert.match(source, /\$\{desk\.open \? "가동 중" : "중지됨"\}/u, "a desk row says its state in words beside the switch");
+  assert.match(source, /warning=\{deskIncomplete \? "정보 확인 필요" : null\}/u, "an incomplete desk says so on its row");
+  assert.match(source, /<StatusDot tone=\{booth\.status === "OPEN" \? "good" : booth\.status === "WAITING" \? "wait" : "muted"\}>/u, "a booth row shows its schedule state as a dot plus word");
   for (const copy of ["가동 중", "중지됨", "대기", "진행", "종료"]) {
     assert.match(source, new RegExp(copy, "u"), `${copy} copy survives`);
   }
-  assert.match(css, /\.resourceStatus\[data-tone="good"\]\s*\{[^}]*var\(--success-soft\)/su);
-  assert.match(css, /\.resourceStatus\[data-tone="good"\]\s*\{[^}]*color:\s*var\(--success\)/su);
-  assert.match(css, /\.resourceStatus\[data-tone="wait"\]\s*\{[^}]*var\(--warning-soft\)/su);
-  assert.match(css, /\.resourceHead\s*\{[^}]*gap:\s*var\(--s2\)/su, "name and badge share one identity row");
+  assert.match(css, /\.statusDot\[data-tone="good"\]\s*\{[^}]*color:\s*var\(--success\)/su);
+  assert.match(css, /\.statusDot\[data-tone="wait"\]\s*\{[^}]*color:\s*var\(--info\)/su);
+  assert.match(css, /\.locationDim \.locationText strong\s*\{[^}]*color:\s*var\(--muted\)/su, "a stopped row dims by muted text, never by opacity");
+  assert.doesNotMatch(css, /\.location[A-Za-z]*\s*\{[^}]*opacity/su, "no row hides its words behind reduced opacity");
 });
 
 test("team domain reads as one atomic group", () => {

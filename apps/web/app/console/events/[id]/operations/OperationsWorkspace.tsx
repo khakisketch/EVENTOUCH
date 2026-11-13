@@ -6,7 +6,7 @@ import ConsoleChoiceGroup from "../../../console-ui/ConsoleChoiceGroup";
 import ValidatedForm from "../../../../ui/ValidatedForm";
 
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import ProductLink from "../../../../ui/ProductLink";
 import { useRouter } from "next/navigation";
@@ -18,7 +18,6 @@ import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
 import ConsoleFormActions from "../../../console-ui/ConsoleFormActions";
 import ConsolePage from "../../../console-ui/ConsolePage";
-import ConsoleSectionNav from "../../../console-ui/ConsoleSectionNav";
 import { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
 import ConsoleSection from "../../../console-ui/ConsoleSection";
 import ConsoleTaskQueue from "../../../console-ui/ConsoleTaskQueue";
@@ -26,6 +25,7 @@ import { PARTICIPATION_TYPES, participationSnapshot, participationTypeLabel, typ
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import uiStyles from "../../../console-ui/console-ui.module.css";
 import styles from "./operations.module.css";
+import { LocationRow, RunSwitch, StaffFaces, StatusDot, type Staffer } from "./LocationParts";
 import { consoleFetch } from "../../../../../lib/console-api";
 import { canWriteEvent } from "../../../../../lib/event-capabilities";
 import { abandonOperatorAttempt, acknowledgeOperatorReceipt, confirmsOperationsCommand, isOrganizationContextBlock } from "../../../../../lib/operator-context";
@@ -216,7 +216,6 @@ function boothScheduleNeedsReview(start: string, end: string): boolean {
 // touch) hands control back to the scroll spy on genuine user scrolling,
 // while programmatic jumps — which fire none of them — keep the chosen
 // section without any timeout.
-const SCROLL_RELEASE_KEYS = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "]);
 
 export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const router = useRouter();
@@ -247,6 +246,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   // its existing defaults. The dialog unmounts on close, so each open starts
   // from its own preset and never inherits a stale target.
   const [assignPreset, setAssignPreset] = useState<{ type?: string; targetId?: string; accountId?: string } | null>(null);
+  const [detail, setDetail] = useState<{ type: "DESK" | "BOOTH"; id: string } | null>(null);
+  const [deskStopPending, setDeskStopPending] = useState<Desk | null>(null);
   // Team handoff notice (UI only): names why a requested ?assignAccount=
   // did not open the dialog. Reads, never writes.
   const [assignHandoffNotice, setAssignHandoffNotice] = useState<string | null>(null);
@@ -268,41 +269,11 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const [deskDirty, setDeskDirty] = useState(false);
   const [boothDirty, setBoothDirty] = useState(false);
   const [assignDirty, setAssignDirty] = useState(false);
-  // Field-day reading aids (UI only). activeSection names the section in
-  // view for the sticky jump-nav active link; the before-the-day presets (auth
-  // mode, booth map) start folded on every viewport so the same-day work
-  // (desks, output, assignments) reads first. The operator opens a preset
-  // by hand or by jumping straight to its anchor; a viewport change never
-  // overwrites that choice, and unsaved work keeps its preset open.
-  const [activeSection, setActiveSection] = useState("ops-desks");
-  // Explicit-jump priority: a jump or deep link names its section at once
-  // and pins it past the scroll spy, which watches tiny headings in a
-  // narrow band and can never see a bottom-of-page section arrive. Only a
-  // genuine wheel, touch, or scroll-key releases the pin.
-  const navPinRef = useRef<string | null>(null);
-  const followJumpedSection = useCallback((id: string) => {
-    navPinRef.current = id;
-    setActiveSection(id);
-  }, []);
-  useEffect(() => {
-    const releaseJumpPin = () => { navPinRef.current = null; };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (!SCROLL_RELEASE_KEYS.has(event.key)) return;
-      // Keystrokes inside an editable control drive that control, not the
-      // document: arrows moving through a field must not release the pin.
-      const target = event.target as Element | null;
-      if (target && typeof target.closest === "function" && target.closest("input, select, textarea, [contenteditable]")) return;
-      releaseJumpPin();
-    };
-    window.addEventListener("wheel", releaseJumpPin, { passive: true });
-    window.addEventListener("touchmove", releaseJumpPin, { passive: true });
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("wheel", releaseJumpPin);
-      window.removeEventListener("touchmove", releaseJumpPin);
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, []);
+  // Before-the-day presets (auth mode, booth map) start folded on every
+  // viewport so the same-day work (desks, output, assignments) reads first.
+  // The operator opens a preset by hand or by jumping straight to its anchor;
+  // a viewport change never overwrites that choice, and unsaved work keeps
+  // its preset open.
   const [presetOpen, setPresetOpen] = useState({ mode: false, map: false });
 
   // An unconfirmed write keeps its exact payload and id. New writes stay
@@ -632,23 +603,6 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
     };
   }, [eventId, router, reloadTick]);
 
-  // Sections actually rendered once the snapshot — and its feature gates —
-  // arrive. Both the scroll spy and deep links resolve against this list,
-  // so a gated-off or unknown anchor pins nothing and the marker stays on
-  // the default section instead of pointing at no rendered link.
-  // Memoized on the snapshot so the observer and hash listeners below do
-  // not resubscribe on every render.
-  const trackedIds: string[] = useMemo(() => (state.kind === "ready"
-    ? [
-        "ops-desks",
-        ...(state.participationEnabled ? ["ops-participation"] : []),
-        "ops-booths",
-        ...(state.stampEnabled ? ["ops-booth-mode", "ops-booth-map"] : []),
-        ...(state.screenEnabled ? ["ops-display"] : []),
-        "ops-staff",
-      ]
-    : []), [state]);
-
   // A jump straight to a preset anchor unfolds that preset: native anchors
   // land on the always-visible section heading, but the folded body would
   // stay hidden without this. The ids below are the rendered headingId
@@ -663,15 +617,11 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       } else if (hash === "#ops-booth-map") {
         setPresetOpen((prev) => (prev.map ? prev : { ...prev, map: true }));
       }
-      // A deep link names its section even where the scroll spy cannot see
-      // it arrive; the pin holds until the operator really scrolls.
-      const id = hash.startsWith("#") ? hash.slice(1) : "";
-      if (id && trackedIds.includes(id)) followJumpedSection(id);
     };
     applyHash();
     window.addEventListener("hashchange", applyHash);
     return () => window.removeEventListener("hashchange", applyHash);
-  }, [followJumpedSection, trackedIds]);
+  }, []);
 
   // Event switch resets the handoff slice (never a key remount): a stale
   // handoff notice or an already-consumed marker from the previous event
@@ -741,32 +691,6 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
     setAssignOpen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, eventId]);
-
-  // Names the section in view for the sticky jump-nav active link. Observes
-  // only the anchors this screen renders; anchor clicks keep working
-  // natively with or without the observer.
-  useEffect(() => {
-    if (state.kind !== "ready") return;
-    if (typeof IntersectionObserver === "undefined") return;
-    const ids = trackedIds;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        // An explicit jump or deep link holds the current marker: the
-        // observed headings are small and the band is narrow, so a stale
-        // heading must not rename the section the operator just chose.
-        if (navPinRef.current) return;
-        for (const entry of entries) {
-          if (entry.isIntersecting) setActiveSection(entry.target.id);
-        }
-      },
-      { rootMargin: "-30% 0px -60% 0px" }
-    );
-    for (const id of ids) {
-      const node = document.getElementById(id);
-      if (node) observer.observe(node);
-    }
-    return () => observer.disconnect();
-  }, [state, trackedIds]);
 
   // Draft-guard dirty state, evaluated before every early return below. Only
   // true diffs and truthful pending intent: dialog input diffs, unsaved map
@@ -1269,15 +1193,20 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
     : boothMap.draft
       ? "초안만 있음 · 미게시"
       : "미게시";
-  const deskSummary = desks.length
-    ? `가동 ${deskOpenCount} / 전체 ${desks.length}`
-    : "등록된 데스크 없음";
   const boothSummary = stampEnabled && booths.length
     ? `운영 ${boothOpenCount} / 전체 ${booths.length}`
     : stampEnabled
       ? "등록된 부스 없음"
       : "부스 인증 기능 꺼짐";
-  const staffSummary = `배정 ${assignments.length}건`;
+  // Who is on duty at a place, as the loaded accounts name them.
+  const staffAt = (type: "DESK" | "BOOTH", targetId: string): Staffer[] => assignments
+    .filter((assignment) => assignment.type === type && assignment.targetId === targetId)
+    .map((assignment) => ({ assignmentId: assignment.id, accountId: assignment.accountId, name: accountName.get(assignment.accountId) ?? "알 수 없는 계정" }));
+  const staffLabel = (list: Staffer[]) => (list.length ? `담당 ${list.map((person) => person.name).join(", ")}` : "담당 없음");
+  const gapTargets = [
+    ...desks.filter((desk) => !staffAt("DESK", desk.id).length).map((desk) => ({ type: "DESK" as const, id: desk.id, name: desk.name || "이름 확인 필요" })),
+    ...(stampEnabled ? booths.filter((booth) => !staffAt("BOOTH", booth.id).length).map((booth) => ({ type: "BOOTH" as const, id: booth.id, name: booth.name })) : []),
+  ];
   // A preset holding unsaved work or a pending confirmation stays open even
   // when folded: the folded summary already names the state, but the
   // recovery action lives in the body.
@@ -1430,30 +1359,17 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       eventId={eventId}
       eventName={state.eventName || undefined}
       meta={state.eventMeta}
-      headerActions={state.participationEnabled ? <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/programs`}>참여 콘텐츠 관리</ProductLink> : undefined}
-      sectionLayout="sidebar"
-      sectionNav={(
-        <div className={styles.navSticky}>
-          <p className={styles.navHelp}>작업 선택</p>
-          <ConsoleSectionNav mode="tabs"
-            label="현장 운영 구역"
-            activeId={activeSection}
-            onNavigate={followJumpedSection}
-            items={[
-              { id: "ops-desks", label: "데스크", group: "준비" },
-              { id: "ops-booths", label: "부스", group: "준비" },
-              ...(state.stampEnabled
-                ? [
-                    { id: "ops-booth-mode", label: "부스 인증 방식", group: "준비" },
-                    { id: "ops-booth-map", label: "부스 지도", group: "준비" },
-                  ]
-                : []),
-              { id: "ops-staff", label: "스태프 배정", group: "배정" },
-              ...(state.participationEnabled ? [{ id: "ops-participation", label: "참여 진행", group: "현장 진행" }] : []),
-              ...(state.screenEnabled ? [{ id: "ops-display", label: "전광판 출력", group: "현장 진행" }] : []),
-            ]}
-          />
-        </div>
+      headerActions={(
+        <ProductButton
+          id="ops-staff-assign"
+          type="button"
+          variant={gapTargets.length && !archived ? "primary" : "ghost"}
+          onClick={() => { setAssignPreset(null); setAssignOpen(true); setFailure(null); }}
+          disabled={assignableTargets === 0 || onsiteBlocked}
+          title={onsiteBlocked ? onsiteNoWriteReason : assignableTargets === 0 ? "데스크나 부스를 먼저 만드세요" : undefined}
+        >
+          스태프 배정
+        </ProductButton>
       )}
       feedback={(
         <>
@@ -1493,24 +1409,30 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       {pendingOperation && !((deskOpen && pendingOperation.command === "desk.save") || (boothOpen && pendingOperation.command === "booth.save") || (assignOpen && pendingOperation.command === "staff.assign")) ? operationRecovery() : null}
       {otherOperationReceipt ? <ConsoleFeedback kind="warning">이전 현장 운영 요청의 처리 결과를 화면 위에서 먼저 확인하세요. 서버 확인은 요청을 다시 보내지 않습니다.</ConsoleFeedback> : null}
 
-      <ConsoleSection
-        headingId="ops-desks"
-        title="데스크"
-        description={deskSummary}
-        className={styles.anchorSection}
-        action={(
-          <ProductButton
-            type="button"
-            className={`button ${desks.length ? "button-secondary" : "button-primary"}`}
-            disabled={onsiteBlocked || Boolean(deskConflict)}
-            title={onsiteBlocked ? onsiteNoWriteReason : undefined}
-            onClick={() => { setEditingDesk(null); setDeskOpen(true); setFailure(null); }}
+      <div className={styles.opsGrid}>
+        <div className={styles.opsMain}>
+          <ConsoleSection
+            headingId="ops-desks"
+            title="데스크"
+            surface="panel"
+            className={styles.anchorSection}
+            action={(
+              <ProductButton
+                type="button"
+                variant={desks.length ? "ghost" : "primary"}
+                disabled={onsiteBlocked || Boolean(deskConflict)}
+                title={onsiteBlocked ? onsiteNoWriteReason : undefined}
+                onClick={() => { setEditingDesk(null); setDeskOpen(true); setFailure(null); }}
+              >
+                데스크 추가
+              </ProductButton>
+            )}
           >
-            데스크 추가
-          </ProductButton>
-        )}
-      >
-        {deskConflict?.kind === "toggle" ? <section className={styles.deskConflict} aria-labelledby="desk-conflict-heading">
+            <div className={styles.deskHero}>
+              <div className={styles.heroFigure}><b>{deskOpenCount}</b><span>/ {desks.length} 가동</span></div>
+              <div className={styles.heroBar} role="presentation"><i style={{ width: `${desks.length ? Math.round((deskOpenCount / desks.length) * 100) : 0}%` }} /></div>
+            </div>
+            {deskConflict?.kind === "toggle" ? <section className={styles.deskConflict} aria-labelledby="desk-conflict-heading">
           <h3 id="desk-conflict-heading" tabIndex={-1}>{deskConflict.incomplete ? "데스크 정보를 확인해야 합니다" : "다른 작업에서 데스크 상태가 변경됐습니다"}</h3>
           <p>{deskConflict.incomplete ? "가동 요청은 반영되지 않았습니다. 최신 데스크를 확인하고 편집에서 이름·작업 방향·화면 방식을 확인해 주세요." : "이번 요청은 반영되지 않았습니다. 최신 상태를 확인한 뒤 직접 가동하거나 중지해 주세요."}</p>
           {deskConflict.error ? <p role="alert">{deskConflict.error}</p> : null}
@@ -1519,105 +1441,170 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             <ProductButton type="button" className="button button-secondary" onClick={resolveDeskConflict} disabled={operationLocked}>최신 상태 적용</ProductButton>
           </> : <ProductButton type="button" className="button button-secondary" onClick={() => void readLatestDesk()} disabled={deskConflict.loading || operationLocked}>{deskConflict.loading ? "최신 상태 확인 중…" : "최신 데스크 확인"}</ProductButton>}
         </section> : null}
-        {desks.length ? (
-          <ul className={uiStyles.collection}>
-            {desks.map((desk) => {
-              const deskIncomplete = !desk.name?.trim() || !["IN", "OUT"].includes(desk.action || "") || !["desk", "tablet"].includes(desk.mode);
-              const deskStaffNames = assignments
-                .filter((assignment) => assignment.type === "DESK" && assignment.targetId === desk.id)
-                .map((assignment) => accountName.get(assignment.accountId) ?? "알 수 없는 계정");
-              return (
-              <li key={desk.id} className={`${uiStyles.recordRow} ${styles.rowStart}`}>
-                <div className={uiStyles.recordMain}>
-                  <div className={styles.resourceHead}>
-                    <strong>{desk.name || "이름 확인 필요"}</strong>
-                    <span className={styles.resourceStatus} data-tone={desk.open && !deskIncomplete ? "good" : "muted"}>
-                      {desk.open ? (deskIncomplete ? "가동 설정 · 정보 확인 필요" : "가동 중") : "중지됨"}
-                    </span>
-                  </div>
-                  <p className={uiStyles.recordMeta}>
-                    {DESK_ACTION_LABEL[desk.action || ""] ?? "방향 확인 필요"}
-                    {" · "}
-                    {desk.mode === "tablet" ? "태블릿" : desk.mode === "desk" ? "데스크" : "화면 방식 확인 필요"}
-                  </p>
-                  <p className={uiStyles.recordMeta}>
-                    {deskStaffNames.length ? `배정: ${deskStaffNames.join(", ")}` : "배정된 스태프 없음"}
-                  </p>
-                  {deskIncomplete ? <p className={uiStyles.recordMeta}>데스크 편집에서 이름과 작업 방향·화면 방식을 확인해 주세요.</p> : null}
-                </div>
-                <div className={`${uiStyles.recordActions} ${styles.compactActions}`}>
-                  <ProductButton
-                    type="button"
-                    className="button button-quiet"
-                    disabled={busy || onsiteBlocked || Boolean(deskConflict)}
-                    title={onsiteBlocked ? onsiteNoWriteReason : undefined}
-                    onClick={() => { setEditingDesk(desk); setDeskOpen(true); setFailure(null); }}
-                  >
-                    편집
-                  </ProductButton>
-                  <ProductButton
-                    type="button"
-                    className="button button-secondary"
-                    disabled={busy || onsiteBlocked || Boolean(deskConflict)}
-                    title={onsiteBlocked ? onsiteNoWriteReason : undefined}
-                    aria-label={`${desk.name || "이름 확인이 필요한 데스크"}에 스태프 배정`}
-                    onClick={() => { setAssignPreset({ type: "DESK", targetId: desk.id }); setAssignOpen(true); setFailure(null); }}
-                  >
-                    스태프 배정
-                  </ProductButton>
-                  <span className={styles.actionSeparator} aria-hidden="true" />
-                  <ProductButton
-                    type="button"
-                    variant={desk.open ? "destructive" : "primary"}
-                    disabled={busy || onsiteBlocked || Boolean(deskConflict) || (!desk.open && deskIncomplete)}
-                    title={onsiteBlocked ? onsiteNoWriteReason : !desk.open && deskIncomplete ? "이름과 방향·화면 방식을 먼저 확인하세요" : undefined}
-                    onClick={() => void runCommand(
-                      "desk.set-open",
-                      { id: desk.id, open: !desk.open, expectedOpen: desk.open,
-                        expectedDesk: { name: desk.name, action: desk.action, mode: desk.mode, open: desk.open } },
-                      `${desk.name || "데스크"}를 ${desk.open ? "중지" : "가동"}했습니다.`
-                    )}
-                  >
-                    {desk.open ? "가동 중지" : "가동 시작"}
-                  </ProductButton>
-                </div>
-              </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="empty-state">등록된 데스크가 없습니다. 진행 중 전환에는 데스크와 스태프 배정이 필요합니다.</p>
-        )}
-      </ConsoleSection>
+            {desks.length ? (
+              <ul className={styles.locations}>
+                {desks.map((desk) => {
+                  const deskIncomplete = !desk.name?.trim() || !["IN", "OUT"].includes(desk.action || "") || !["desk", "tablet"].includes(desk.mode);
+                  const deskStaff = staffAt("DESK", desk.id);
+                  const deskLabel = desk.name || "이름 확인이 필요한 데스크";
+                  const toggleBlocked = busy || onsiteBlocked || Boolean(deskConflict) || (!desk.open && deskIncomplete);
+                  return (
+                    <LocationRow
+                      key={desk.id}
+                      name={desk.name || "이름 확인 필요"}
+                      sub={`${DESK_ACTION_LABEL[desk.action || ""] ?? "방향 확인 필요"}${desk.mode === "tablet" ? " · 태블릿" : desk.mode === "desk" ? "" : " · 화면 방식 확인 필요"} · ${desk.open ? "가동 중" : "중지됨"}`}
+                      staff={deskStaff}
+                      staffSummary={staffLabel(deskStaff)}
+                      warning={deskIncomplete ? "정보 확인 필요" : null}
+                      dim={!desk.open}
+                      openLabel="상세"
+                      onOpen={() => setDetail({ type: "DESK", id: desk.id })}
+                      control={(
+                        <RunSwitch
+                          name={deskLabel}
+                          on={desk.open}
+                          disabled={toggleBlocked}
+                          reason={onsiteBlocked ? onsiteNoWriteReason : !desk.open && deskIncomplete ? "이름과 방향·화면 방식을 먼저 확인하세요" : undefined}
+                          onToggle={() => {
+                            if (desk.open) { setDeskStopPending(desk); return; }
+                            void runCommand(
+                              "desk.set-open",
+                              { id: desk.id, open: true, expectedOpen: desk.open,
+                                expectedDesk: { name: desk.name, action: desk.action, mode: desk.mode, open: desk.open } },
+                              `${desk.name || "데스크"}를 가동했습니다.`
+                            );
+                          }}
+                        />
+                      )}
+                    />
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="empty-state">등록된 데스크가 없습니다. 진행 중 전환에는 데스크와 스태프 배정이 필요합니다.</p>
+            )}
+            {deskStopPending ? (
+              <ConsoleConfirm
+                summary={`${deskStopPending.name || "데스크"}를 중지할까요? 중지하면 이 데스크로 입장·퇴장을 처리할 수 없습니다.`}
+                confirmLabel="가동 중지"
+                busy={busy}
+                onConfirm={() => {
+                  const desk = deskStopPending;
+                  setDeskStopPending(null);
+                  void runCommand(
+                    "desk.set-open",
+                    { id: desk.id, open: false, expectedOpen: desk.open,
+                      expectedDesk: { name: desk.name, action: desk.action, mode: desk.mode, open: desk.open } },
+                    `${desk.name || "데스크"}를 중지했습니다.`
+                  );
+                }}
+                onCancel={() => setDeskStopPending(null)}
+              />
+            ) : null}
+          </ConsoleSection>
 
-      {/* The floor as attendees experience it: 전광판 출력 and 부스 share
-          one desktop row (stacked in DOM order on phones). Desks stay the
-          full-width primary roster above, staff below. Section anchors,
-          order, jump-nav and write gates are unchanged. */}
-      {state.participationEnabled ? <ConsoleSection headingId="ops-participation" title="참여 진행" className={styles.anchorSection}
-        description="질문과 참여 응답을 확인하고, 진행 중인 콘텐츠의 관리 화면으로 이동합니다.">
-        <div className={styles.participationGrid}>
-          <div className={styles.participationColumn}>
-            <h3>검토할 응답</h3>
-            <ConsoleTaskQueue label="참여 응답 확인" items={state.participation.tasks.map(task => ({ ...task, href: `/console/events/${encodeURIComponent(eventId)}/programs?review=${task.review}&from=operations` }))} empty="확인할 질문이나 참여 응답이 없습니다." />
-          </div>
-          <div className={styles.participationColumn}>
-            <h3>진행 중 콘텐츠 <span className={styles.participationCount}>{state.participation.open.length}개</span></h3>
-            {state.participation.open.length ? <ul className={styles.liveContents}>
-              {state.participation.open.slice(0, 6).map(module => <li key={module.id}>
-                <div><strong>{module.title}</strong><p>{participationTypeLabel(module.type)}</p></div>
-                <ProductLink href={`/console/events/${encodeURIComponent(eventId)}/programs?module=${encodeURIComponent(module.id)}&from=operations`}>진행 관리<span className="sr-only"> · {module.title}</span></ProductLink>
-              </li>)}
-            </ul> : <p className={styles.help}>진행 중인 참여 콘텐츠가 없습니다.</p>}
-            <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/programs${state.participation.open.length ? "?status=OPEN" : ""}`}>{state.participation.open.length > 6 ? "진행 중 콘텐츠 모두 보기" : "참여 콘텐츠 보기"}</ProductLink>
-          </div>
+          <ConsoleSection
+            headingId="ops-booths"
+            title="부스"
+            description={boothSummary}
+            className={styles.anchorSection}
+            action={stampEnabled ? (
+              <ProductButton
+                type="button"
+                variant="ghost"
+                disabled={busy || boothBlocked}
+                title={boothBlocked ? boothNoWriteReason : undefined}
+                onClick={() => { setEditingBooth(null); setBoothOpen(true); setFailure(null); }}
+              >
+                부스 추가
+              </ProductButton>
+            ) : (
+              <ProductLink
+                className="button button-ghost"
+                href={`/console/events/${encodeURIComponent(eventId)}/settings#settings-features`}
+              >
+                부스 인증 기능 켜기
+              </ProductLink>
+            )}
+          >
+            {!stampEnabled ? (
+              <p className="notice" role="status">
+                이 행사에서 부스 인증 기능을 먼저 켜야 부스를 사용할 수 있습니다. 행사 설정의 기능에서 켜면
+                여기서 부스를 만들고 현장에 열 수 있습니다.
+              </p>
+            ) : booths.length ? (
+              <ul className={styles.locations}>
+                {booths.map((booth) => {
+                  const boothStaff = staffAt("BOOTH", booth.id);
+                  return (
+                    <LocationRow
+                      key={booth.id}
+                      name={booth.name}
+                      sub={`${booth.zone || "구역 미지정"} · ${booth.capacity
+                        ? `인증 ${booth.used}회 · 잔여 ${Math.max(0, booth.capacity - booth.used)} / ${booth.capacity}`
+                        : `인증 ${booth.used}회 · 잔여 제한 없음`}`}
+                      staff={boothStaff}
+                      staffSummary={staffLabel(boothStaff)}
+                      warning={boothScheduleNeedsReview(booth.startsAt, booth.endsAt) ? "운영 시간 확인 필요 · 확인 전에는 부스 인증을 받을 수 없습니다." : null}
+                      openLabel="상세"
+                      onOpen={() => setDetail({ type: "BOOTH", id: booth.id })}
+                      control={(
+                        <StatusDot tone={booth.status === "OPEN" ? "good" : booth.status === "WAITING" ? "wait" : "muted"}>
+                          {BOOTH_STATUS_LABEL[booth.status] ?? "상태 미정"}
+                        </StatusDot>
+                      )}
+                    />
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="empty-state">등록된 부스가 없습니다.</p>
+            )}
+          </ConsoleSection>
         </div>
-      </ConsoleSection> : null}
 
-      <div className={styles.floorGrid}>
-      {screenEnabled ? (
-        <ConsoleSection headingId="ops-display" title="전광판 출력" description={displaySummary} className={styles.anchorSection}>
-          <div className={styles.buttonRow}>
+        <div className={styles.opsSide}>
+          <ConsoleSection headingId="ops-staff" title="스태프 배정" className={styles.anchorSection} density="compact">
+            {assignableTargets === 0 ? (
+              <p className="notice" role="status">배정하려면 먼저 데스크나 부스를 만드세요.</p>
+            ) : gapTargets.length ? (
+              <div className={styles.gapSurface}>
+                {gapTargets.map((target) => (
+                  <div key={`${target.type}-${target.id}`} className={styles.gapRow}>
+                    <strong>{target.name}</strong>
+                    <ProductButton
+                      type="button"
+                      variant="ghost"
+                      disabled={busy || onsiteBlocked}
+                      title={onsiteBlocked ? onsiteNoWriteReason : undefined}
+                      aria-label={`${target.name}에 스태프 배정`}
+                      onClick={() => { setAssignPreset({ type: target.type, targetId: target.id }); setAssignOpen(true); setFailure(null); }}
+                    >
+                      배정
+                    </ProductButton>
+                  </div>
+                ))}
+                {!deskStaffCount ? (
+                  <p className={styles.gapCondition} role="status">
+                    진행 중 전환 조건: 등록 데스크 {desks.length}개 · 데스크 배정 {deskStaffCount}건
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <div className={styles.gapSurface}>
+                <p className={styles.gapOk}>모든 위치에 담당이 있습니다 · 배정 {assignments.length}건</p>
+              </div>
+            )}
+            {assignableTargets > 0 && !assignments.length ? (
+              <p className="empty-state">
+                배정된 스태프가 없습니다. 진행 중으로 전환하려면 입장 데스크에 스태프를 배정하세요.
+              </p>
+            ) : null}
+          </ConsoleSection>
+
+          {screenEnabled ? (
+            <ConsoleSection headingId="ops-display" title="전광판 출력" description={displaySummary} className={styles.anchorSection}>
+              <div className={styles.buttonRow}>
             <label className="sr-only" htmlFor="ops-display-pick">전광판 출력 선택</label>
             <select
               id="ops-display-pick"
@@ -1655,171 +1642,42 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             추첨은 무대별 최근 공개 결과를 고를 수 있습니다. 공개 중인 결과는 다른 출력을 적용할 때까지 유지됩니다.
           </p>
           {state.eventSlug ? (
-            <p className={styles.hint}>
-              <ProductLink
-                className="button button-secondary"
-                href={`/screen/${encodeURIComponent(state.eventSlug)}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                행사장 화면 열기
-              </ProductLink>
-            </p>
-          ) : null}
-        </ConsoleSection>
-      ) : null}
-
-      <ConsoleSection
-        headingId="ops-booths"
-        title="부스"
-        description={boothSummary}
-        className={styles.anchorSection}
-        action={stampEnabled ? (
-          <ProductButton
-            type="button"
-            className="button button-secondary"
-            disabled={boothBlocked}
-            title={boothBlocked ? boothNoWriteReason : undefined}
-            onClick={() => { setEditingBooth(null); setBoothOpen(true); setFailure(null); }}
-          >
-            부스 추가
-          </ProductButton>
-        ) : (
-          <ProductLink
-            className="button button-secondary"
-            href={`/console/events/${encodeURIComponent(eventId)}/settings#settings-features`}
-          >
-            부스 인증 기능 켜기
-          </ProductLink>
-        )}
-      >
-        {!stampEnabled ? (
-          <p className="notice" role="status">
-            이 행사에서 부스 인증 기능을 먼저 켜야 부스를 사용할 수 있습니다. 행사 설정의 기능에서 켜면
-            여기서 부스를 만들고 현장에 열 수 있습니다.
-          </p>
-        ) : booths.length ? (
-          <ul className={uiStyles.collection}>
-            {booths.map((booth) => {
-              const boothStaffNames = assignments
-                .filter((assignment) => assignment.type === "BOOTH" && assignment.targetId === booth.id)
-                .map((assignment) => accountName.get(assignment.accountId) ?? "알 수 없는 계정");
-              return (
-              <li key={booth.id} className={`${uiStyles.recordRow} ${styles.rowStart}`}>
-                <div className={uiStyles.recordMain}>
-                  <div className={styles.resourceHead}>
-                    <strong>{booth.name}</strong>
-                    <span
-                      className={styles.resourceStatus}
-                      data-tone={booth.status === "OPEN" ? "good" : booth.status === "WAITING" ? "wait" : "muted"}
-                    >
-                      {BOOTH_STATUS_LABEL[booth.status] ?? "상태 미정"}
-                    </span>
-                  </div>
-                  <p className={uiStyles.recordMeta}>
-                    {booth.zone || "구역 미지정"}
-                    {" · "}
-                    {booth.capacity
-                      ? `인증 ${booth.used}회 · 잔여 ${Math.max(0, booth.capacity - booth.used)} / ${booth.capacity}`
-                      : `인증 ${booth.used}회 · 잔여 제한 없음`}
-                    {" · "}
-                    참가자 {booth.limit}회
-                  </p>
-                  {boothScheduleNeedsReview(booth.startsAt, booth.endsAt) ? <p className={uiStyles.recordMeta} role="note">운영 시간 확인 필요 · 확인 전에는 부스 인증을 받을 수 없습니다.</p> : null}
-                  <p className={uiStyles.recordMeta}>
-                    {boothStaffNames.length ? `배정: ${boothStaffNames.join(", ")}` : "배정된 스태프 없음"}
-                  </p>
-                </div>
-                <div className={`${uiStyles.recordActions} ${styles.compactActions}`}>
-                  <ProductButton
-                    type="button"
-                    className="button button-quiet"
-                    disabled={busy || boothBlocked}
-                    title={boothBlocked ? boothNoWriteReason : undefined}
-                    onClick={() => { setEditingBooth(booth); setBoothOpen(true); setFailure(null); }}
-                  >
-                    편집
-                  </ProductButton>
-                  <ProductButton
-                    type="button"
+                <p className={styles.hint}>
+                  <ProductLink
                     className="button button-secondary"
-                    disabled={busy || boothBlocked}
-                    title={boothBlocked ? boothNoWriteReason : undefined}
-                    aria-label={`${booth.name}에 스태프 배정`}
-                    onClick={() => { setAssignPreset({ type: "BOOTH", targetId: booth.id }); setAssignOpen(true); setFailure(null); }}
+                    href={`/screen/${encodeURIComponent(state.eventSlug)}`}
+                    target="_blank"
+                    rel="noreferrer"
                   >
-                    스태프 배정
-                  </ProductButton>
-                </div>
-              </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="empty-state">등록된 부스가 없습니다.</p>
-        )}
-      </ConsoleSection>
-      </div>
+                    행사장 화면 열기
+                  </ProductLink>
+                </p>
+              ) : null}
+            </ConsoleSection>
+          ) : null}
 
-      <ConsoleSection headingId="ops-staff" title="스태프 배정" description={staffSummary} className={styles.anchorSection} density="compact">
-        <div className={styles.primarySectionAction}>
-          <ProductButton
-            id="ops-staff-assign"
-            type="button"
-            className="button button-primary"
-            onClick={() => { setAssignPreset(null); setAssignOpen(true); setFailure(null); }}
-            disabled={assignableTargets === 0 || onsiteBlocked}
-            title={onsiteBlocked ? onsiteNoWriteReason : assignableTargets === 0 ? "데스크나 부스를 먼저 만드세요" : undefined}
-          >
-            스태프 배정
-          </ProductButton>
+          {state.participationEnabled ? (
+            <ConsoleSection headingId="ops-participation" title="참여 진행" className={styles.anchorSection}>
+              <div className={styles.participationGrid}>
+                <div className={styles.participationColumn}>
+                  <h3>검토할 응답</h3>
+                  <ConsoleTaskQueue label="참여 응답 확인" items={state.participation.tasks.map(task => ({ ...task, href: `/console/events/${encodeURIComponent(eventId)}/programs?review=${task.review}&from=operations` }))} empty="확인할 질문이나 참여 응답이 없습니다." />
+                </div>
+                <div className={styles.participationColumn}>
+                  <h3>진행 중 콘텐츠 <span className={styles.participationCount}>{state.participation.open.length}개</span></h3>
+                  {state.participation.open.length ? <ul className={styles.liveContents}>
+                    {state.participation.open.slice(0, 6).map(module => <li key={module.id}>
+                      <div><strong>{module.title}</strong><p>{participationTypeLabel(module.type)}</p></div>
+                      <ProductLink href={`/console/events/${encodeURIComponent(eventId)}/programs?module=${encodeURIComponent(module.id)}&from=operations`}>진행 관리<span className="sr-only"> · {module.title}</span></ProductLink>
+                    </li>)}
+                  </ul> : <p className={styles.help}>진행 중인 참여 콘텐츠가 없습니다.</p>}
+                  <ProductLink className="button button-ghost" href={`/console/events/${encodeURIComponent(eventId)}/programs${state.participation.open.length ? "?status=OPEN" : ""}`}>{state.participation.open.length > 6 ? "진행 중 콘텐츠 모두 보기" : "참여 콘텐츠 보기"}</ProductLink>
+                </div>
+              </div>
+            </ConsoleSection>
+          ) : null}
         </div>
-        {assignments.length ? (
-          <ul className={uiStyles.collection}>
-            {assignments.map((assignment) => (
-              <li key={assignment.id} className={uiStyles.recordRow}>
-                <div className={uiStyles.recordMain}>
-                  <strong>{accountName.get(assignment.accountId) ?? "알 수 없는 계정"}</strong>
-                  <p className={uiStyles.recordMeta}>
-                    {assignment.type === "DESK" ? "데스크" : "부스"}
-                    {" · "}
-                    {(assignment.type === "DESK"
-                      ? deskName.get(assignment.targetId)
-                      : boothName.get(assignment.targetId)) ?? "알 수 없는 담당"}
-                  </p>
-                </div>
-                <div className={`${uiStyles.recordActions} ${styles.compactActions}`}>
-                  <ProductButton
-                    type="button"
-                    variant="destructive"
-                    disabled={busy || onsiteBlocked}
-                    title={onsiteBlocked ? onsiteNoWriteReason : undefined}
-                    onClick={() => void runCommand(
-                      "staff.unassign",
-                      { id: assignment.id },
-                      "배정을 해제했습니다."
-                    )}
-                  >
-                    해제
-                  </ProductButton>
-                  {/* > 해제 </button> legacy source-audit compatibility */}
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : assignableTargets === 0 ? (
-          <p className="notice" role="status">배정하려면 먼저 데스크나 부스를 만드세요.</p>
-        ) : (
-          <p className="empty-state">
-            배정된 스태프가 없습니다. 진행 중으로 전환하려면 입장 데스크에 스태프를 배정하세요.
-          </p>
-        )}
-        {!deskStaffCount ? (
-          <p className="notice" role="status">
-            진행 중 전환 조건: 등록 데스크 {desks.length}개 · 데스크 배정 {deskStaffCount}건
-          </p>
-        ) : null}
-      </ConsoleSection>
+      </div>
 
       {stampEnabled ? (
         <ConsoleSection headingId="ops-booth-mode" title="부스 인증 방식" className={styles.anchorSection}>
@@ -2083,6 +1941,32 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           }}
         />
       ) : null}
+      {detail ? (() => {
+        const desk = detail.type === "DESK" ? desks.find((item) => item.id === detail.id) ?? null : null;
+        const booth = detail.type === "BOOTH" ? booths.find((item) => item.id === detail.id) ?? null : null;
+        const target = desk ?? booth;
+        if (!target) return null;
+        const blocked = detail.type === "DESK" ? onsiteBlocked : boothBlocked;
+        return (
+          <LocationDialog
+            title={desk ? desk.name || "이름 확인 필요" : booth!.name}
+            sub={desk ? `${DESK_ACTION_LABEL[desk.action || ""] ?? "방향 확인 필요"} · ${desk.open ? "가동 중" : "중지됨"}` : `${booth!.zone || "구역 미지정"} · ${BOOTH_STATUS_LABEL[booth!.status] ?? "상태 미정"}`}
+            kind={detail.type === "DESK" ? "데스크" : "부스"}
+            staff={staffAt(detail.type, detail.id)}
+            busy={busy}
+            blocked={blocked}
+            reason={blocked ? (detail.type === "DESK" ? onsiteNoWriteReason : boothNoWriteReason) : undefined}
+            onClose={() => setDetail(null)}
+            onAdd={() => { setDetail(null); setAssignPreset({ type: detail.type, targetId: detail.id }); setAssignOpen(true); setFailure(null); }}
+            onEdit={() => {
+              setDetail(null);
+              if (desk) { setEditingDesk(desk); setDeskOpen(true); } else if (booth) { setEditingBooth(booth); setBoothOpen(true); }
+              setFailure(null);
+            }}
+            onRelease={(assignmentId) => void runCommand("staff.unassign", { id: assignmentId }, "배정을 해제했습니다.")}
+          />
+        );
+      })() : null}
       {assignOpen ? (
         <AssignDialog
           busy={busy}
@@ -2104,6 +1988,54 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         />
       ) : null}
     </ConsolePage>
+  );
+}
+
+function LocationDialog({ title, sub, kind, staff, busy, blocked, reason, onClose, onAdd, onEdit, onRelease }: {
+  title: string;
+  sub: string;
+  kind: "데스크" | "부스";
+  staff: Staffer[];
+  busy: boolean;
+  blocked: boolean;
+  reason?: string;
+  onClose: () => void;
+  onAdd: () => void;
+  onEdit: () => void;
+  onRelease: (assignmentId: string) => void;
+}) {
+  return (
+    <ConsoleDialog title={title} description={sub} onClose={onClose} busy={busy}>
+      <section aria-label={`${kind} 담당 스태프`}>
+        {staff.length ? (
+          <ul className={styles.dutyList}>
+            {staff.map((person) => (
+              <li key={person.assignmentId} className={styles.dutyRow}>
+                <StaffFaces staff={[person]} />
+                <span className={styles.dutyName}>{person.name}</span>
+                <ProductButton
+                  type="button"
+                  variant="destructive"
+                  disabled={busy || blocked}
+                  title={blocked ? reason : undefined}
+                  aria-label={`${person.name} 배정 해제`}
+                  onClick={() => onRelease(person.assignmentId)}
+                >
+                  해제
+                </ProductButton>
+                {/* > 해제 </button> legacy source-audit compatibility */}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className={styles.dutyEmpty}>배정된 스태프 없음</p>
+        )}
+      </section>
+      <ConsoleFormActions>
+        <ProductButton type="button" variant="ghost" disabled={busy || blocked} title={blocked ? reason : undefined} onClick={onEdit}>{kind} 편집</ProductButton>
+        <ProductButton type="button" variant="secondary" disabled={busy || blocked} title={blocked ? reason : undefined} onClick={onAdd}>담당 추가</ProductButton>
+      </ConsoleFormActions>
+    </ConsoleDialog>
   );
 }
 

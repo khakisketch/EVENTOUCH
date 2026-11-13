@@ -122,15 +122,16 @@ test("content: tokens only, venue draft stays independent", () => {
 
 test("operations: each desk and booth row names its staff", () => {
   const source = ops();
-  assert.match(source, /deskStaffNames = assignments/u);
-  assert.match(source, /boothStaffNames = assignments/u);
-  assert.match(source, /assignment\.type === "DESK" && assignment\.targetId === desk\.id/u);
-  assert.match(source, /assignment\.type === "BOOTH" && assignment\.targetId === booth\.id/u);
+  assert.match(source, /const staffAt = \(type: "DESK" \| "BOOTH", targetId: string\): Staffer\[\] => assignments/u);
+  assert.match(source, /assignment\.type === type && assignment\.targetId === targetId/u);
   assert.match(source, /accountName\.get\(assignment\.accountId\)/u, "names come from the loaded accounts");
+  assert.match(source, /staffAt\("DESK", desk\.id\)/u, "desk rows read who is on duty");
+  assert.match(source, /staffAt\("BOOTH", booth\.id\)/u, "booth rows read who is on duty");
+  assert.match(source, /`담당 \$\{list\.map\(\(person\) => person\.name\)\.join\(", "\)\}` : "담당 없음"/u, "a row speaks its staff, or the gap, to assistive tech");
   const emptyCount = source.match(/배정된 스태프 없음/g)?.length ?? 0;
-  assert.equal(emptyCount, 2, "desk rows and booth rows each name the empty state");
-  assert.match(source, /`배정: \$\{deskStaffNames\.join\(", "\)\}`/u, "nonempty desk staff read with a 배정 prefix");
-  assert.match(source, /`배정: \$\{boothStaffNames\.join\(", "\)\}`/u, "nonempty booth staff read with a 배정 prefix");
+  assert.equal(emptyCount, 1, "the detail dialog names the empty state");
+  const parts = require("node:fs").readFileSync(require("node:path").join(__dirname, "..", "apps", "web", "app", "console", "events", "[id]", "operations", "LocationParts.tsx"), "utf8");
+  assert.match(parts, /faceEmpty/u, "an empty place shows a dashed slot");
 });
 
 test("operations: row assignment reuses the generic dialog preselected, never autosubmits", () => {
@@ -141,10 +142,9 @@ test("operations: row assignment reuses the generic dialog preselected, never au
   assert.match(source, /initialType=\{assignPreset\?\.type \?\? \(desks\.length \? "DESK" : "BOOTH"\)\}/u);
   // Row actions are visible with the same label but carry a distinctive
   // accessible name so an exact-name query still finds only the generic one.
-  assert.match(source, /aria-label=\{`\$\{desk\.name \|\| "이름 확인이 필요한 데스크"\}에 스태프 배정`\}/u);
-  assert.match(source, /aria-label=\{`\$\{booth\.name\}에 스태프 배정`\}/u);
-  assert.match(source, /setAssignPreset\(\{ type: "DESK", targetId: desk\.id \}\)/u);
-  assert.match(source, /setAssignPreset\(\{ type: "BOOTH", targetId: booth\.id \}\)/u);
+  assert.match(source, /aria-label=\{`\$\{target\.name\}에 스태프 배정`\}/u, "a gap row names its place");
+  assert.match(source, /setAssignPreset\(\{ type: target\.type, targetId: target\.id \}\)/u);
+  assert.match(source, /setAssignPreset\(\{ type: detail\.type, targetId: detail\.id \}\)/u);
   // The dialog preselects without submitting: staff choice stays required.
   assert.match(source, /initialTargetId\?: string;/u);
   assert.match(source, /useState\(initialTargetId \?\? ""\)/u);
@@ -177,7 +177,8 @@ test("operations: gates, commands, and touch reuse stay pinned", () => {
   assert.match(source, /출력을 먼저 고르세요/u, "display keeps its existing guidance");
   assert.match(source, /이미 적용된 출력입니다/u, "display keeps its applied-state guidance");
   // Every mutation button consults its own section gate; reads never gate.
-  assert.ok((source.match(/disabled=\{[^}]*onsiteBlocked[^}]*\}/gu) ?? []).length >= 5, "onsite buttons gate");
+  assert.ok((source.match(/disabled=\{[^}]*onsiteBlocked[^}]*\}/gu) ?? []).length >= 3, "onsite buttons gate");
+  assert.match(source, /const toggleBlocked = busy \|\| onsiteBlocked/u, "the desk switch consults the onsite gate");
   assert.ok((source.match(/disabled=\{[^}]*displayBlocked[^}]*\}/gu) ?? []).length >= 1, "display buttons gate");
   assert.match(source, /const mapControlsBlocked = boothBlocked \|\| mapUploadUncertain \|\| mapUploading/u);
   assert.ok((source.match(/disabled=\{[^}]*(?:boothBlocked|mapControlsBlocked)[^}]*\}/gu) ?? []).length >= 8, "booth and map buttons gate");

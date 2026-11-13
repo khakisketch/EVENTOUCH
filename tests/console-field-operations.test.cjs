@@ -1,9 +1,8 @@
-// Field-day operations console: the same-day sections state their status in
-// the description slot (가동 n / 전체, 현재 출력, 배정 n건), the before-the-day
-// presets stay folded on phones with their current value in the folded summary,
-// and the grouped task nav remains readable on phones. The staff
-// summary counts assignments (건), not people. UI-only: commands, copy
-// volume and confirm grammar stay pinned.
+// Field-day operations console: desks lead with the running count as the one
+// card, booths and the display state their status in the description slot, the
+// before-the-day presets stay folded with their current value in the folded
+// summary, and the screen reads as one page without a sidebar nav. UI-only:
+// commands, copy volume and confirm grammar stay pinned.
 // Source-only assertions; rendering rides the isolated console audit.
 "use strict";
 
@@ -18,49 +17,23 @@ const read = (relative) => fs.readFileSync(path.join(WEB, relative), "utf8");
 const ops = () => read("app/console/events/[id]/operations/OperationsWorkspace.tsx");
 const css = () => read("app/console/events/[id]/operations/operations.module.css");
 
-test("the shared task nav groups work without covering the phone workspace", () => {
+test("the operations screen reads as one page: no sidebar nav, one primary entry to assignment", () => {
   const source = ops();
-  assert.match(source, /<ConsoleSectionNav/u, "the shared task UI stays");
-  assert.match(source, /\{ id: "ops-desks", label: "데스크", group: "준비" \}/u);
-  assert.match(source, /\{ id: "ops-booths", label: "부스", group: "준비" \}/u);
-  assert.match(source, /\{ id: "ops-staff", label: "스태프 배정", group: "배정" \}/u);
-  assert.match(source, /activeId=\{activeSection\}/u);
-  assert.doesNotMatch(source, /현재 위치:/u, "no separate readout duplicates the links");
-  assert.match(source, /IntersectionObserver/u);
-  assert.match(source, /getElementById\(id\)/u);
-  const style = css();
-  assert.doesNotMatch(style, /\.navSticky\s*\{[^}]*position:\s*sticky/su, "the index must not cover the task on phones");
-  assert.doesNotMatch(style, /\.navNow \{/u);
-  const added = style.slice(style.indexOf(".navSticky"));
-  assert.doesNotMatch(added, /#[0-9a-fA-F]{3,8}/u, "no new color literals");
-});
-
-test("an explicit jump pins the current link past the scroll spy until a real scroll", () => {
-  // Real-browser finding: after focus+Enter on the 스태프 배정 link, focus
-  // sat on ops-staff while aria-current stayed on ops-booths — the spy
-  // watches tiny h2s in a narrow band the bottom section never reaches.
-  const source = ops();
-  assert.match(source, /onNavigate=\{followJumpedSection\}/u, "jumps report to the pin");
-  assert.match(source, /navPinRef\.current = id;/u, "the jumped-to section is named at once");
-  assert.match(source, /if \(navPinRef\.current\) return;/u, "a stale heading cannot steal the marker");
-  assert.match(source, /followJumpedSection\(id\)/u, "a deep link pins its section too");
-  assert.match(source, /const trackedIds: string\[\] = useMemo\(\(\) => \(state\.kind === "ready"/u, "only rendered sections resolve");
-  assert.match(source, /if \(id && trackedIds\.includes\(id\)\) followJumpedSection\(id\)/u, "a gated-off hash pins nothing; the default section keeps the marker");
-  assert.match(source, /window\.addEventListener\("hashchange", applyHash\)/u, "later fragments keep working");
+  assert.doesNotMatch(source, /ConsoleSectionNav|sectionLayout="sidebar"|activeSection|navPinRef/u, "the sidebar nav and its scroll spy are gone");
+  assert.match(source, /id="ops-staff-assign"/u, "the handoff focus target survives");
+  assert.match(source, /variant=\{gapTargets\.length && !archived \? "primary" : "ghost"\}/u, "the page owns one primary only while some place has no one on duty");
+  assert.match(source, /window\.addEventListener\("hashchange", applyHash\)/u, "later fragments still unfold their preset");
 });
 
 test("same-day and before-the-day sections split through one summary slot", () => {
   const source = ops();
-  assert.match(source, /description=\{deskSummary\}/u);
+  assert.match(source, /<b>\{deskOpenCount\}<\/b><span>\/ \{desks\.length\} 가동<\/span>/u, "desks lead with the running count");
   assert.match(source, /description=\{boothSummary\}/u);
   assert.match(source, /<summary[^>]*>인증 방식 · \{modeValueLabel\}<\/summary>/u);
   assert.match(source, /<summary[^>]*>부스 지도 · \{mapStatusText\}<\/summary>/u);
-  assert.match(source, /description=\{staffSummary\}/u);
   assert.match(source, /description=\{displaySummary\}/u, "display names the current same-day output");
   assert.match(source, /`현재 \$\{currentDisplayLabel\}`/u);
-  assert.match(source, /`가동 \$\{deskOpenCount\} \/ 전체 \$\{desks\.length\}`/u);
   assert.match(source, /`운영 \$\{boothOpenCount\} \/ 전체 \$\{booths\.length\}`/u);
-  assert.match(source, /`배정 \$\{assignments\.length\}건`/u);
   assert.doesNotMatch(source, /modeSummary|mapSummary/u, "the folded summaries alone carry preset state");
   for (const id of ["ops-desks", "ops-participation", "ops-booths", "ops-booth-mode", "ops-booth-map", "ops-display", "ops-staff"]) {
     assert.match(source, new RegExp(`headingId="${id}"`), `the ${id} section keeps its anchor`);

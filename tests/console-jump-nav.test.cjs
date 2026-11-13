@@ -1,10 +1,11 @@
 'use strict';
 
-// The long console screens mix several kinds of work in one page: the field
-// operations screen carries desks, booths, map, display and staffing, and the
-// draw/vote screen carries stage draws, ranking votes, roulette and lucky
-// numbers. All three keep the shared jump nav and mark the section in view
-// once, on the matching link itself (aria-current + visual emphasis) — the
+// The long console screens mix several kinds of work in one page: the draw/
+// vote screen carries stage draws, ranking votes, roulette and lucky numbers,
+// and the attendee page editor carries its own groups. Both keep the shared
+// jump nav and mark the section in view once. Field operations left the jump
+// nav: it reads as one screen (desks, side column), and only its preset
+// anchors still unfold on a deep link, on the matching link itself (aria-current + visual emphasis) — the
 // old separate "현재 위치:" readout is gone, so the position reads exactly
 // once instead of twice.
 const { test } = require('node:test');
@@ -16,7 +17,6 @@ const root = path.join(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
 const operations = read('apps/web/app/console/events/[id]/operations/OperationsWorkspace.tsx');
-const operationsCss = read('apps/web/app/console/events/[id]/operations/operations.module.css');
 const draws = read('apps/web/app/console/events/[id]/draws/DrawsWorkspace.tsx');
 const drawsCss = read('apps/web/app/console/events/[id]/draws/draws.module.css');
 const theme = read('apps/web/app/console/events/[id]/page/ThemeWorkspace.tsx');
@@ -26,7 +26,6 @@ const navCss = read('apps/web/app/console/console-ui/console-ui.module.css');
 
 test('the long console screens mark the section in view on the nav link itself', () => {
   for (const [name, source, css] of [
-    ['field operations', operations, operationsCss],
     ['draws and votes', draws, drawsCss],
     ['attendee page editor', theme, themeCss],
   ]) {
@@ -79,7 +78,7 @@ test('an explicit jump names its section at once and pins it past the scroll spy
   const guardAt = nav.indexOf('if (!target) return;');
   const focusAt = nav.indexOf('target.focus({ preventScroll: true })');
   assert.ok(clickAt >= 0 && guardAt > clickAt && reportAt > guardAt && focusAt > reportAt, 'guard, then report, then focus handoff');
-  for (const [name, source] of [['field operations', operations], ['draws and votes', draws]]) {
+  for (const [name, source] of [['draws and votes', draws]]) {
     assert.match(source, /onNavigate=\{followJumpedSection\}/u, `${name} follows explicit jumps`);
     assert.match(source, /navPinRef\.current = id;/u, `${name} pins the jumped-to section`);
     assert.match(source, /if \(navPinRef\.current\) return;/u, `${name} spy stands down while pinned`);
@@ -90,7 +89,7 @@ test('the jump pin releases only on genuine user scrolling, never on a timer', (
   // The shared nav stays hook-free (foundation contract): each long screen
   // owns its tiny pin next to the spy it guards.
   assert.doesNotMatch(nav, /useJumpNavPin/u, 'no hook leaks into the shared nav');
-  for (const [name, source] of [['field operations', operations], ['draws and votes', draws]]) {
+  for (const [name, source] of [['draws and votes', draws]]) {
     assert.match(source, /const navPinRef = useRef<string \| null>\(null\);/u, `${name} owns its pin`);
     assert.match(source, /addEventListener\("wheel", releaseJumpPin, \{ passive: true \}\)/u, `${name} wheel scrolling releases`);
     assert.match(source, /addEventListener\("touchmove", releaseJumpPin, \{ passive: true \}\)/u, `${name} touch scrolling releases`);
@@ -122,13 +121,8 @@ test('deep links name their section where the scroll spy cannot see it arrive', 
   // Operations validates against the actually rendered (gated) list: a
   // gated-off or unknown anchor pins nothing and the marker keeps the
   // default section instead of pointing at no rendered link.
-  assert.match(operations, /const trackedIds: string\[\] = useMemo\(\(\) => \(state\.kind === "ready"/u, 'operations tracks only rendered sections');
-  assert.match(operations, /\.\.\.\(state\.stampEnabled \? \["ops-booth-mode", "ops-booth-map"\] : \[\]\)/u, 'stamp-gated sections join only when on');
-  assert.match(operations, /\.\.\.\(state\.screenEnabled \? \["ops-display"\] : \[\]\)/u, 'the display section joins only when on');
-  assert.match(operations, /if \(id && trackedIds\.includes\(id\)\) followJumpedSection\(id\)/u, 'unrendered hashes pin nothing');
-  assert.match(operations, /useState\("ops-desks"\)/u, 'the default section stays desks');
   assert.match(draws, /const DRAW_SECTION_IDS = Object\.keys\(DRAW_SECTION_LABELS\)/u, 'draws resolve the same list the spy iterates');
-  for (const [name, source] of [['field operations', operations], ['draws and votes', draws]]) {
+  for (const [name, source] of [['draws and votes', draws]]) {
     assert.match(source, /hash\.slice\(1\)/u, `${name} reads the fragment`);
     assert.match(source, /followJumpedSection\(id\)/u, `${name} pins the deep-linked section`);
     assert.match(source, /window\.addEventListener\("hashchange", applyHash\)/u, `${name} follows later fragment changes`);

@@ -139,8 +139,9 @@ test('operations reuses its dialog for the handed-off person, never autosubmits'
   assert.match(source, /accountId !== \(initialAccountId \?\? ""\)/u, 'initial values are not dirty');
   // Generic entry still resets; row entries still carry their target.
   assert.match(source, /setAssignPreset\(null\); setAssignOpen\(true\)/u);
-  assert.match(source, /setAssignPreset\(\{ type: "DESK", targetId: desk\.id \}\)/u);
-  assert.match(source, /setAssignPreset\(\{ type: "BOOTH", targetId: booth\.id \}\)/u);
+  // Row entries carry their target: the gap list names the place, the detail dialog adds to it.
+  assert.match(source, /setAssignPreset\(\{ type: target\.type, targetId: target\.id \}\)/u);
+  assert.match(source, /setAssignPreset\(\{ type: detail\.type, targetId: detail\.id \}\)/u);
   assert.match(source, /disabled=\{busy \|\| blocked \|\| !accountId \|\| !currentTarget\}/u, 'staff choice and unresolved requests gate submit');
   assert.equal(source.match(/runCommand\("staff\.assign"/g)?.length ?? 0, 1, 'the existing assign call stays the only one');
 });
@@ -168,29 +169,20 @@ test('handoff opens the dialog once after load, validates, then consumes the par
 
 // --- candidate 5: display moves to second, verbatim ----------------------------
 
-test('jump nav groups preparation, assignment, and live work', () => {
+test('the operations screen has no jump nav; sections keep their anchors in one reading order', () => {
   const source = read(OPS);
-  const navAt = source.indexOf('label="현장 운영 구역"');
-  assert.ok(navAt >= 0, 'expected the operations jump nav');
-  const navBlock = source.slice(navAt, navAt + 2000);
-  const order = ['ops-desks', 'ops-booths', 'ops-booth-mode', 'ops-booth-map', 'ops-staff', 'ops-participation', 'ops-display'];
+  assert.doesNotMatch(source, /ConsoleSectionNav|label="현장 운영 구역"/u, 'the sidebar nav is gone');
+  const order = ['ops-desks', 'ops-booths', 'ops-staff', 'ops-display', 'ops-participation', 'ops-booth-mode', 'ops-booth-map'];
   let last = -1;
   for (const id of order) {
-    const at = navBlock.indexOf(`"${id}"`);
-    assert.ok(at > last, `${id} follows the grouped task order`);
+    const at = source.indexOf(`headingId="${id}"`);
+    assert.ok(at > last, `${id} keeps its anchor in the reading order`);
     last = at;
   }
 });
 
-test('display section sits second in the DOM with its copy and handlers intact', () => {
+test('display section keeps its anchor, copy and handlers in the side column', () => {
   const source = read(OPS);
-  const order = ['ops-desks', 'ops-display', 'ops-booths', 'ops-staff', 'ops-booth-mode', 'ops-booth-map'];
-  let last = -1;
-  for (const id of order) {
-    const at = source.indexOf(`headingId="${id}"`);
-    assert.ok(at > last, `${id} follows the DOM order`);
-    last = at;
-  }
   assert.equal(source.match(/headingId="ops-display"/g)?.length ?? 0, 1, 'one display section, moved not copied');
   // Section title, selection guidance, controls and handler wiring.
   assert.match(source, /title="전광판 출력" description=\{displaySummary\}/u);

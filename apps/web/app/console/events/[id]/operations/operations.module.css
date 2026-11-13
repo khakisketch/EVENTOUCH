@@ -1,8 +1,3 @@
-.primarySectionAction {
-  display: flex;
-  justify-content: flex-start;
-}
-
 .hint {
   margin: 0;
   color: var(--muted);
@@ -41,16 +36,6 @@
 .comparisonChanged { background: var(--warning-soft); }
 .comparisonDifference { display: block; color: var(--warning); font-size: var(--small); font-weight: 600; }
 
-/* Keep a visible separator between resource tools and live state changes. */
-.compactActions { column-gap: var(--s3); }
-.actionSeparator {
-  flex: none;
-  align-self: stretch;
-  width: 1px;
-  margin-inline: var(--s1);
-  background: var(--line);
-}
-
 /* Booth map editor: image with normalized marker overlays. */
 .mapWrap {
   position: relative;
@@ -81,87 +66,8 @@
   white-space: nowrap;
   pointer-events: none;
 }
-
-/* Resource identity + state: the name reads first, the running state as an
-   explicit text badge beside it — never buried in the meta sentence alone.
-   Copy stays identical (가동 중/중지됨/대기/진행/종료); only the emphasis is
-   new. Tones reuse the product feedback tokens. */
-.resourceHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2);
-  min-width: 0;
-}
-
-.resourceHead strong {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.resourceStatus {
-  display: inline-flex;
-  flex: none;
-  min-height: 28px;
-  align-items: center;
-  padding: 0 var(--s2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-small);
-  background: var(--surface-muted);
-  color: var(--muted);
-  font-size: var(--small);
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.resourceStatus[data-tone="good"] {
-  border-color: var(--success-line);
-  background: var(--success-soft);
-  color: var(--success);
-}
-
-.resourceStatus[data-tone="wait"] {
-  border-color: var(--warning-line);
-  background: var(--warning-soft);
-  color: var(--warning);
-}
-
-/* The local index stays in normal flow so it never covers task controls. */
-.navSticky {
-  min-width: 0;
-}
-
-/* Visible in-page move guide above the shared jump nav. The label stays
-   on the wrapper (not the shared nav) so audits keep their aria-label. */
-.navHelp {
-  margin: 0 0 var(--s1);
-  color: var(--muted);
-  font-size: var(--small);
-  font-weight: 650;
-}
-
 .anchorSection {
   scroll-margin-top: 0;
-}
-
-/* Display and booth panels share a container but only one is visible. */
-.floorGrid {
-  display: grid;
-  min-width: 0;
-  gap: var(--s5);
-}
-
-/* Only one persistent task panel is visible at a time. */
-
-/* Tall ledger rows (this workspace only): name + two meta lines read
-   top-down, so actions dock to the title row instead of center-floating
-   against the whole block. Shared record paddings, ids and copy stay.
-   li-qualified to outrank the shared row without depending on import order;
-   desktop only, phones keep the shared stacked stretch. */
-@media (min-width: 769px) {
-  li.rowStart {
-    align-items: flex-start;
-  }
 }
 
 /* Before-the-day presets start folded (draws setup-details same
@@ -202,29 +108,6 @@
   .buttonRow > select {
     flex-basis: 100%;
   }
-
-  .actionSeparator {
-    display: none;
-  }
-
-  /* Phone row actions (this workspace only): intrinsic-width wrapping
-     list, not forced 2-col equal boxes. Ordinary, state and 해제 actions
-     keep order and tone; 가동 중지·해제는 마지막에 danger·경고 톤으로
-     남되 절반 규격으로 키우지 않는다. 44px와 포커스는 전역 규칙. */
-  .compactActions {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-start;
-    align-items: center;
-    gap: var(--s2);
-  }
-
-  .compactActions > :global(.astryx-button) {
-    flex: 0 1 auto;
-    width: auto;
-    max-width: 100%;
-  }
-
 }
 .dialogFields {
   display: grid;
@@ -264,4 +147,83 @@
 @media (max-width: 800px) {
   .participationGrid { grid-template-columns: minmax(0, 1fr); gap: var(--s5); }
   .participationColumn + .participationColumn { border-left: 0; border-top: 1px solid var(--line); padding: var(--s5) 0 0; }
+}
+
+/* Locations (desks and booths): one row is a name, one quiet line, who is on
+   duty as faces, and the run control. The row opens its detail; the switch
+   sits outside the opening button. Dim rows stay readable (muted text, not
+   reduced opacity). */
+.locations { display: grid; margin: 0; padding: 0; list-style: none; }
+.location { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--s3); }
+.locationOpen {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 64px;
+  padding: var(--s3) 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.locationOpen:hover .locationChevron { color: var(--ink); }
+.locationText { display: grid; gap: 2px; min-width: 0; }
+.locationText strong { font-size: var(--body); font-weight: 750; overflow-wrap: anywhere; }
+.locationSub { color: var(--muted); font-size: var(--small); }
+.locationWarn { color: var(--warning); font-size: var(--small); font-weight: 700; }
+.locationChevron { color: var(--muted); font-size: 20px; line-height: 1; }
+.locationControl { display: inline-flex; align-items: center; min-width: 44px; justify-content: flex-end; }
+.locationDim .locationText strong { color: var(--muted); }
+.faces { display: inline-flex; align-items: center; }
+.faces > * + * { margin-left: -8px; }
+.facesMore { margin-left: var(--s1); color: var(--muted); font-size: var(--small); font-weight: 700; }
+.faceEmpty {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: 50%;
+  color: var(--brand-text);
+  font-weight: 700;
+}
+.statusDot { display: inline-flex; align-items: center; gap: var(--s1); color: var(--muted); font-size: var(--small); font-weight: 700; white-space: nowrap; }
+.statusDot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); }
+.statusDot[data-tone="good"] { color: var(--success); }
+.statusDot[data-tone="good"]::before { background: var(--success); }
+.statusDot[data-tone="wait"] { color: var(--info); }
+.statusDot[data-tone="wait"]::before { background: var(--info); }
+
+/* The one bordered card: desks, with the running count as the figure. */
+.deskHero { display: grid; gap: var(--s2); }
+.heroFigure { display: flex; align-items: baseline; gap: var(--s2); }
+.heroFigure b { font-size: 40px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.heroFigure span { color: var(--muted); font-weight: 650; }
+.heroBar { height: 8px; overflow: hidden; border-radius: 8px; background: var(--line); }
+.heroBar i { display: block; height: 100%; border-radius: 8px; background: var(--ink); }
+
+/* Missing coverage reads as a soft surface, like the overview's queue. */
+.gapSurface { padding: var(--s5); border-radius: var(--radius-card); background: var(--surface-muted); }
+.gapRow { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); min-height: 44px; }
+.gapRow strong { font-weight: 700; }
+.gapCondition { margin: var(--s2) 0 0; color: var(--muted); font-size: var(--small); }
+.gapOk { display: flex; align-items: center; gap: var(--s2); color: var(--muted); }
+/* Detail dialog: who is on duty, with their release. */
+.dutyList { display: grid; margin: 0; padding: 0; list-style: none; }
+.dutyRow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--s3); min-height: 52px; }
+.dutyName { font-weight: 700; overflow-wrap: anywhere; }
+.dutyEmpty { margin: 0; color: var(--muted); }
+
+@media (min-width: 1101px) {
+  .opsGrid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--s6); align-items: start; }
+}
+.opsSide .participationGrid { grid-template-columns: minmax(0, 1fr); gap: var(--s5); }
+.opsSide .participationColumn + .participationColumn { border-left: 0; padding-left: 0; }
+.opsMain, .opsSide { display: grid; gap: var(--s6); min-width: 0; align-content: start; }
+@media (max-width: 1100px) {
+  .opsGrid { display: grid; gap: var(--s6); }
+  .opsSide { order: -1; }
 }
