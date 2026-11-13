@@ -32,7 +32,7 @@ import {
 } from "../../lib/operator-context";
 import { OrganizationContextNotice } from "../OrganizationSwitcher";
 import StaffAccountMenu from "./StaffAccountMenu";
-import { BackIcon, CopyIcon, RefreshIcon } from "../console/console-ui/ConsoleIcons";
+import { BackIcon, CopyIcon, MoreIcon, RefreshIcon } from "../console/console-ui/ConsoleIcons";
 import { useOperatorContextSnapshot } from "./use-operator-context";
 import { useEventReceipts } from "../../lib/use-event-receipts";
 import { forgetOperatorReceipt } from "../../lib/operator-receipts";
@@ -1515,7 +1515,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
 
   return (
     <section className={`staff-workspace${kiosk ? " kiosk-mode" : ""}`} aria-label={`${activeScope.eventName} 현장 업무`}>
-      <p className={`staff-event-context ${prizeStyles.eventContext}`}>
+      <div className={`staff-event-context ${prizeStyles.eventContext}`}>
         <ProductLink
           className="staff-back-link"
           href="/staff"
@@ -1554,31 +1554,36 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           }}
         >
           <BackIcon />
-          <span>내 업무</span>
+          <span className={prizeStyles.backLabel}>내 업무</span>
         </ProductLink>
         <span className={prizeStyles.eventWorkTitle}>{activeScope.eventName}</span>
-        <ProductButton
-          type="button"
-          role="switch"
-          aria-checked={kiosk}
-          className={`${prizeStyles.kioskSwitch} ${kiosk ? prizeStyles.kioskSwitchOn : ""}`}
-          disabled={scanControlsLocked || submitting}
-          onClick={() => {
-            if (!allowContextChange()) return;
-            setKiosk((current) => !current);
-            setResult({ kind: "idle" });
-            clearRewardPanel();
-          }}
-        >
-          <span className={prizeStyles.kioskSwitchTrack} aria-hidden="true">
-            <span className={prizeStyles.kioskSwitchThumb} />
-          </span>
-          <span>키오스크</span>
-        </ProductButton>
-      </p>
-      <div className={prizeStyles.accountContext}>
-        <p className={prizeStyles.orgLine}>{orgLineText()}</p>
-        <StaffAccountMenu compact confirmLeave={confirmLeaveStaff} confirmLeaveAccount={confirmLeaveAccountPage} excludeReceiptCommandId={inlineScanReceiptId} />
+        <details className={prizeStyles.moreMenu}>
+          <summary className={prizeStyles.moreSummary} aria-label="계정·조직·키오스크">
+            <MoreIcon />
+          </summary>
+          <div className={prizeStyles.moreBody}>
+            <p className={prizeStyles.orgLine}>{orgLineText()}</p>
+            <ProductButton
+              type="button"
+              role="switch"
+              aria-checked={kiosk}
+              className={`${prizeStyles.kioskSwitch} ${kiosk ? prizeStyles.kioskSwitchOn : ""}`}
+              disabled={scanControlsLocked || submitting}
+              onClick={() => {
+                if (!allowContextChange()) return;
+                setKiosk((current) => !current);
+                setResult({ kind: "idle" });
+                clearRewardPanel();
+              }}
+            >
+              <span className={prizeStyles.kioskSwitchTrack} aria-hidden="true">
+                <span className={prizeStyles.kioskSwitchThumb} />
+              </span>
+              <span>키오스크</span>
+            </ProductButton>
+            <StaffAccountMenu compact confirmLeave={confirmLeaveStaff} confirmLeaveAccount={confirmLeaveAccountPage} excludeReceiptCommandId={inlineScanReceiptId} />
+          </div>
+        </details>
       </div>
       {orgChanged ? <OrganizationContextNotice confirmLeave={confirmLeaveStaff} /> : null}
       {otherReceipt ? <p className="notice" role="alert">이전 현장 처리의 결과를 위의 처리 결과 확인에서 확인한 뒤 새 업무를 진행하세요.</p> : null}
@@ -2354,21 +2359,11 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
               ?? "";
             return (
               <li key={check.id} className={prizeStyles.recentRow}>
-                <span>
-                  {check.name} · {actionLabel}
-                  {placeName ? ` · ${placeName}` : ""}
-                  {check.at ? ` · ${formatCheckTime(check.at)}` : ""}
-                  {check.corrected ? " (정정됨)" : ""}
+                <span className={prizeStyles.recentName}>
+                  <strong>{check.name}</strong>
+                  <span>{actionLabel}{placeName ? ` · ${placeName}` : ""}{check.corrected ? " (정정됨)" : ""}</span>
                 </span>
-                <ProductButton
-                  type="button"
-                  className="button button-secondary"
-                  aria-label={`${check.name} 기록 확인 · 다음 참가자 입력 준비`}
-                  disabled={submitting || scanUnknown || writeLocked}
-                  onClick={prepareNextParticipant}
-                >
-                  다음 참가자
-                </ProductButton>
+                {check.at ? <time dateTime={check.at}>{formatCheckTime(check.at)}</time> : null}
               </li>
             );
           })}

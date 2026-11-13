@@ -46,7 +46,7 @@
   "recover/RecoverForm.tsx": 2,
   "screen/[slug]/DisplayBoard.tsx": 5,
   "staff/StaffAccountMenu.tsx": 3,
-  "staff/StaffEventWork.tsx": 30,
+  "staff/StaffEventWork.tsx": 29,
   "staff/StaffHub.tsx": 2,
   "ui/NameTagPrint.tsx": 2,
   "ui/OperatorReceiptRecovery.tsx": 6

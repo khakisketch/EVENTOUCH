@@ -24,7 +24,8 @@ test('single desk shortcut keeps explicit scan, direction, server permission and
 
 test('mobile recent activity text uses its content height, not the desktop width basis', () => {
   const css = fs.readFileSync('apps/web/app/staff/staff-event-work.module.css', 'utf8');
-  const mobile = css.slice(css.indexOf('@media (max-width: 560px)'));
-  assert.match(mobile, /\.recentRow\s*\{[^}]*flex-direction: column/s);
-  assert.match(mobile, /\.recentRow span\s*\{[^}]*flex: none/s);
+  // Recent rows are one line: name and detail grow, the time keeps its own width.
+  assert.match(css, /\.eventWorkPage \.recentRow\s*\{[^}]*flex-direction: row/s);
+  assert.match(css, /\.eventWorkPage \.recentRow \.recentName span\s*\{[^}]*flex: none/s);
+  assert.match(css, /\.eventWorkPage \.recentRow time\s*\{[^}]*flex: none/s);
 });

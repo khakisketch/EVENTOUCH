@@ -565,24 +565,7 @@
   }
 }
 
-.recentRow span {
-  flex: 1 1 200px;
-  min-width: 0;
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
-}
-
-.recentRow button {
-  min-height: 44px;
-}
-
-.recentRow :global(.astryx-button) {
-  min-height: 44px;
-  flex: 0 0 auto;
-}
-
 .nextActions :global(.astryx-button):focus-visible,
-.recentRow :global(.astryx-button):focus-visible,
 .ticketCopy:focus-visible,
 .resultBlock:focus-visible,
 .resultBlock [tabindex="-1"]:focus-visible {
@@ -622,24 +605,12 @@
   .lookupForm button,
   .rewardItem button,
   .nextActions button,
-  .nextActions :global(.astryx-button),
-  .recentRow button,
-  .recentRow :global(.astryx-button) {
+  .nextActions :global(.astryx-button) {
     width: 100%;
   }
 
   .auxAction {
     justify-self: stretch;
-  }
-
-  .recentRow {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .recentRow span {
-    /* The desktop width basis would become a 200px height in a column. */
-    flex: none;
   }
 
   .rewardItem {
@@ -710,6 +681,9 @@
 
 .kioskSwitchTrack {
   position: relative;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: var(--s2);
   flex: none;
   width: 32px;
   height: 20px;
@@ -817,3 +791,126 @@
 
 .accountContext > div { margin: 0; min-width: 0; max-width: 180px; }
 .accountContext > section { grid-column: 1 / -1; min-width: 0; }
+
+/* ── Staff field screen, stage 1 ────────────────────────────────────────────
+   One header line (back · event · menu) instead of four, the station name as
+   the page's title line (the native select reads as text, so the OS picker
+   is the sheet), underline tabs, one wide primary, a plain recent list.
+   Everything stays in normal flow; nothing is fixed or sticky. */
+.eventWorkPage :global(.staff-header) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.backLabel {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.eventContext :global(.staff-back-link) { padding-inline: 0; min-width: 44px; justify-content: center; }
+.eventContext .eventWorkTitle { text-align: center; color: var(--muted); font-size: var(--small); font-weight: 650; }
+
+.moreMenu { position: relative; }
+.moreSummary {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-medium);
+  color: var(--muted);
+  cursor: pointer;
+  list-style: none;
+}
+.moreSummary::-webkit-details-marker { display: none; }
+.moreSummary:hover, .moreMenu[open] > .moreSummary { background: var(--surface-muted); color: var(--ink); }
+.moreSummary :global(.action-icon) { width: 24px; height: 24px; fill: currentColor; stroke: none; }
+.moreBody {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 5;
+  display: grid;
+  gap: var(--s2);
+  width: min(320px, calc(100vw - var(--s5)));
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-large);
+  background: var(--paper);
+  box-shadow: 0 12px 32px var(--shadow-color);
+}
+.moreBody > div { max-width: none; }
+.moreBody .kioskSwitch { width: 100%; justify-content: flex-start; padding-inline: 0; }
+
+/* Station: the selected desk/booth reads as the title line. */
+.eventWorkPage :global(.staff-select-field) > label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.eventWorkPage :global(.staff-select-field) > select {
+  width: 100%;
+  min-height: 52px;
+  padding: var(--s2) var(--s6) var(--s2) 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2361656C' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0 center;
+  background-size: 20px;
+  -webkit-appearance: none;
+  appearance: none;
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+/* Task and entry tabs: ink underline, not boxed buttons. */
+.eventWorkPage .taskSwitch, .eventWorkPage .entryModeSwitch { display: flex; gap: var(--s5); margin: 0; padding: 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
+.eventWorkPage .taskSwitch :global(.astryx-button), .eventWorkPage .entryModeSwitch :global(.astryx-button) {
+  flex: 0 0 auto;
+  min-height: 48px;
+  padding: 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-weight: 700;
+}
+.eventWorkPage .taskSwitch :global(.astryx-button)[aria-pressed="true"], .eventWorkPage .entryModeSwitch :global(.astryx-button)[aria-pressed="true"] {
+  border-bottom-color: var(--ink);
+  background: transparent;
+  color: var(--ink);
+}
+.scanInput > .sectionTitle {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.scanPrimary { min-height: 60px; border-radius: 16px; font-size: 18px; }
+
+/* Recent: time, name, detail. Plain rows, no per-row button. */
+.eventWorkPage .recentRow { flex-direction: row; flex-wrap: nowrap; align-items: center; min-height: 56px; padding: var(--s2) 0; border-bottom: 1px solid var(--line); background: transparent; }
+.eventWorkPage .recentRow .recentName { display: grid; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.eventWorkPage .recentRow .recentName strong { font-weight: 750; }
+.eventWorkPage .recentRow .recentName span { flex: none; color: var(--muted); font-size: var(--small); }
+.eventWorkPage .recentRow time { flex: none; color: var(--muted); font-size: var(--small); font-variant-numeric: tabular-nums; }

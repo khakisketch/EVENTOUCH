@@ -121,6 +121,16 @@ export function ChevronRightIcon({ className }: IconProps) {
   );
 }
 
+export function MoreIcon({ className }: IconProps) {
+  return (
+    <svg className={baseClass(className)} aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+      <circle cx="5" cy="12" r="1.4" />
+      <circle cx="12" cy="12" r="1.4" />
+      <circle cx="19" cy="12" r="1.4" />
+    </svg>
+  );
+}
+
 export function BackIcon({ className }: IconProps) {
   return (
     <svg className={baseClass(className)} aria-hidden="true" focusable="false" viewBox="0 0 24 24">

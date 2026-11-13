@@ -53,11 +53,12 @@ test('recent-checks-read-as-one-line-and-offer-next-scan-flow', () => {
   assert.match(work, /부스 인증/);
   assert.match(work, /정정됨/);
   assert.match(work, /slice\(0, 10\)/);
-  // 2026-11-10: 버튼이 실제 동작(다음 참가자 입력 준비)과 다른 '다시 스캔'을
-  // 약속하던 문제를 고쳤다. 동작은 그대로 두고 라벨만 정직하게 바꿨다.
-  assert.match(work, /aria-label=\{\`\$\{check\.name\} 기록 확인 · 다음 참가자 입력 준비\`\}/);
-  assert.match(work, />\s*다음 참가자\s*</);
-  assert.match(work, /onClick=\{prepareNextParticipant\}/);
+  // 2026-11-14: 최근 처리 행의 행별 "다음 참가자" 버튼은 결과 면의 주 버튼과 같은
+  // 일을 해서 없앴다. 행은 이름·내용·시각만 읽히는 평면 목록이다.
+  assert.doesNotMatch(work, /기록 확인 · 다음 참가자 입력 준비/);
+  assert.match(work, /prizeStyles\.recentName/);
+  assert.match(work, /<time dateTime=\{check\.at\}>\{formatCheckTime\(check\.at\)\}<\/time>/);
+  assert.match(work, /onClick=\{prepareNextParticipant\}>\s*다음 참가자\s*</);
 });
 
 test('failure-retry-keeps-the-typed-ticket-and-refocuses', () => {
@@ -203,7 +204,7 @@ test('field-flow-keeps-touch-size-unobscured-scan-and-kiosk-distinction', () => 
   assert.match(work, /role="switch"/);
   assert.match(work, /키오스크/);
   assert.match(styles, /\.nextActions button\s*\{[^}]*min-height:\s*44px/s);
-  assert.match(styles, /\.recentRow button\s*\{[^}]*min-height:\s*44px/s);
+  assert.doesNotMatch(styles, /\.recentRow button/, 'recent rows carry no buttons');
   assert.match(styles, /\.scanPrimary\s*\{[^}]*min-height:\s*56px/s);
   // The former sticky dock covered the desk on a 320×568 screen. Keep the
   // scan area in normal flow and retain the rendered hit-test regression.
