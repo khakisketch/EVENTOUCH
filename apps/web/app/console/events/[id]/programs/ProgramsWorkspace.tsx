@@ -10,7 +10,6 @@ import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
 import ConsolePage from "../../../console-ui/ConsolePage";
 import ConsoleRefreshButton from "../../../console-ui/ConsoleRefreshButton";
-import ConsoleToolbar from "../../../console-ui/ConsoleToolbar";
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
 import ConsoleDialog from "../../../console-ui/ConsoleDialog";
 import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
@@ -26,6 +25,8 @@ import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../lib
 import { useEventReceipts } from "../../../../../lib/use-event-receipts";
 import { useOperatorContextSnapshot } from "../../../../../lib/use-operator-context";
 import styles from "./programs.module.css";
+import ProgramTypeIcon from "./ProgramIcons";
+import ReviewDrawer, { questionNeedsReview, type ReviewTab } from "./ReviewDrawer";
 import QuizGrading, { type GradePayload, type GradeResult } from "./QuizGrading";
 import { useEventCloseHandoff } from "../../../use-event-close-handoff";
 import { readCloseSnapshot, type CloseSnapshot } from "../../../console-event-close";
@@ -44,7 +45,7 @@ type DrawResult = {
   published: boolean;
 };
 
-type Module = {
+export type Module = {
   id: string;
   type: string;
   title: string;
@@ -58,7 +59,7 @@ type Module = {
 };
 
 type Response = { id: string; moduleId: string; answer: string; ratings: Record<string, unknown>; manualGrade?: "CORRECT" | "INCORRECT" | null; gradeVersion?: number };
-type Question = {
+export type Question = {
   id: string;
   moduleId: string;
   name: string;
@@ -82,8 +83,8 @@ const PROGRAM_OPERATION_LABELS: Record<string, string> = {
   "module.status": "콘텐츠 상태 변경", "module.reveal": "퀴즈 정답 공개", "draw.run": "간단 추첨",
   "draw.publish": "추첨 결과 공개", "photo.moderate": "참여 사진 검토", "post.moderate": "게시글 검토",
 };
-type Photo = { id: string; caption: string; status: string; at: string; name: string; fileId: string; fileName: string };
-type Post = { id: string; body: string; status: string; at: string; name: string };
+export type Photo = { id: string; caption: string; status: string; at: string; name: string; fileId: string; fileName: string };
+export type Post = { id: string; body: string; status: string; at: string; name: string };
 
 type WorkspaceState =
   | { kind: "loading" }
@@ -156,9 +157,9 @@ export function nextVisibleModerationId(visibleIds: string[], currentId: string)
 // Visible row ids of the single rendered list that contains the processed
 // row, in DOM order. Scoped to the row's own <ul> so a next target can never
 // come from another module or a filtered-out page.
-function visibleModerationRowIds(kind: "question" | "photo" | "post", currentId: string): string[] {
+function visibleModerationRowIds(kind: "question" | "photo" | "post", currentId: string, scope: "list" | "drawer" = "list"): string[] {
   if (typeof document === "undefined") return [];
-  const prefix = `moderation-${kind}-`;
+  const prefix = scope === "drawer" ? `review-${kind}-` : `moderation-${kind}-`;
   const current = document.getElementById(`${prefix}${currentId}`);
   const list = current?.closest("ul");
   if (!list) return [];
@@ -183,7 +184,7 @@ function averageLabel(values: number[]): string | null {
 // everything is 미채점. The distribution groups identical trimmed answers
 // with counts; blank answers collapse to 무응답. Aggregate-only: no new API,
 // no identities.
-function quizGradeSummary(correctAnswer: string, answers: string[], manualGrades: Array<string | null | undefined> = []): string {
+function quizGradeCounts(correctAnswer: string, answers: string[], manualGrades: Array<string | null | undefined> = []): { right: number; wrong: number } {
   const correct = correctAnswer.trim();
   let right = 0, wrong = 0;
   for (const [index, answer] of answers.entries()) {
@@ -194,6 +195,11 @@ function quizGradeSummary(correctAnswer: string, answers: string[], manualGrades
       else wrong += 1;
     }
   }
+  return { right, wrong };
+}
+
+function quizGradeSummary(correctAnswer: string, answers: string[], manualGrades: Array<string | null | undefined> = []): string {
+  const { right, wrong } = quizGradeCounts(correctAnswer, answers, manualGrades);
   return `정답 ${right} · 오답 ${wrong} · 미채점 ${answers.length - right - wrong}`;
 }
 
@@ -474,7 +480,13 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
   // operators stay in flow. The request is scheduled only after a confirmed
   // success, never before the write and never on failure, so a pending
   // request can never steal focus later.
-  const moderationFocusRef = useRef<{ kind: "question" | "photo" | "post"; id: string | null } | null>(null);
+  const moderationFocusRef = useRef<{ kind: "question" | "photo" | "post"; id: string | null; scope: "list" | "drawer" } | null>(null);
+  // The review drawer is modal, so an action taken while it is open always
+  // came from it; follow-through focus then stays inside the drawer.
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerTab, setDrawerTab] = useState<ReviewTab>("all");
+  const drawerOpenRef = useRef(false);
+  drawerOpenRef.current = drawerOpen;
 
   // 보관된 행사는 서버가 모든 쓰기를 거부하므로(409) 쓰기 affordance를
   // 잠그고 읽기·내보내기만 둡니다. programs 스코프가 없는 멤버십([] 등)은
@@ -501,13 +513,15 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     if (state.kind !== "ready") return;
     setProgramQuery("");
     setProgramStatusFilter("");
+    setDrawerTab(target === "photo" ? "photo" : target === "post" ? "post" : "question");
+    setDrawerOpen(true);
     const targetModuleIds = new Set(state.questions.filter((question) =>
       target === "qa-unanswered" ? !question.answer.trim() : target === "qa-edits" ? Boolean(question.pendingEdit) : !question.approved
     ).map((question) => question.moduleId));
     const targetIndex = state.modules.findIndex((module) =>
       target === "photo" ? module.type === "photo" : target === "post" ? module.type === "board" : targetModuleIds.has(module.id)
     );
-    setModuleLimit((current) => Math.max(current, targetIndex + 1));
+    setModuleLimit(Number.MAX_SAFE_INTEGER);
     if (target === "qa-unanswered") setQaFilter("unanswered");
     else if (target === "qa-pending") setQaFilter("pending");
     else if (target === "qa-edits") setQaFilter("edits");
@@ -518,17 +532,44 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     return targetIndex >= 0 ? state.modules[targetIndex].id : null;
   }
 
+  function onAnswerChange(question: Question, value: string) {
+    setAnswerBaselines((current) => current[question.id] ? current : { ...current, [question.id]: questionBaseline(question) });
+    setAnswerDrafts((current) => ({ ...current, [question.id]: value }));
+  }
+
+  // Recovery banners (unknown outcomes, conflicts) live on the page, behind
+  // the drawer's scrim: close the drawer so they are visible and actionable.
+  const recoveryActive = Boolean(questionConflict || questionManageRetry || questionEditRetry || questionRejectRetry || pendingOperation || moduleSaveRetry);
+  useEffect(() => { if (recoveryActive) setDrawerOpen(false); }, [recoveryActive]);
+
+  // 수정안 확인: the drawer hands a pending question edit to the content's own
+  // list, where approve/reject and the conflict recovery already live.
+  function openQuestionEdit(question: Question) {
+    setDrawerOpen(false);
+    setQaFilter("edits");
+    setModuleLimit(Number.MAX_SAFE_INTEGER);
+    setReviewFocusRequest({ kind: "question", moduleId: question.moduleId || null });
+  }
+
   useEffect(() => {
     if (!reviewFocusRequest || state.kind !== "ready" || state.eventId !== eventId) return;
+    // A shortcut that opened the drawer lands on its first matching item;
+    // otherwise (수정안 확인) it lands on the row inside the content's list.
+    const drawerRow = drawerOpenRef.current
+      ? document.querySelector<HTMLElement>(`li[id^="review-${reviewFocusRequest.kind}-"]`)
+      : null;
     const scope = reviewFocusRequest.moduleId
       ? document.getElementById(`module-title-${reviewFocusRequest.moduleId}`)?.closest("li")
       : null;
-    const row = scope?.querySelector<HTMLElement>(`li[id^="moderation-${reviewFocusRequest.kind}-"]`);
-    const target = row ?? document.getElementById("moderation-status");
+    const row = drawerRow ?? scope?.querySelector<HTMLElement>(`li[id^="moderation-${reviewFocusRequest.kind}-"]`);
+    const target = row ?? document.getElementById(drawerOpenRef.current ? "review-drawer-status" : "moderation-status");
     if (target) {
       revealDetailsFor(target);
       target.scrollIntoView({ block: "nearest" });
-      target.focus({ preventScroll: true });
+      // The drawer shell focuses its own first control as it mounts; landing
+      // on the first matching item waits one frame so that never wins.
+      if (drawerRow) window.requestAnimationFrame(() => target.focus({ preventScroll: true }));
+      else target.focus({ preventScroll: true });
     }
     setReviewFocusRequest(null);
   }, [reviewFocusRequest, state, moduleLimit, eventId]);
@@ -555,7 +596,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       const at = state.modules.findIndex(module => module.id === handoff.id);
       if (at < 0) { setHandoffNotice("요청한 참여 콘텐츠를 찾을 수 없습니다. 최신 목록에서 다시 선택하세요."); return; }
       setProgramQuery(""); setProgramStatusFilter("");
-      setModuleLimit(current => Math.max(current, at + 1));
+      setModuleLimit(Number.MAX_SAFE_INTEGER);
       handoffFocusRef.current = handoff.id;
       setHandoffReturn({ ...returnTo, moduleId: handoff.id });
       setHandoffNotice("선택한 콘텐츠의 진행·응답 관리를 열었습니다.");
@@ -563,7 +604,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       setProgramQuery(""); setProgramStatusFilter(handoff.status);
       setHandoffReturn({ ...returnTo, moduleId: null });
       setHandoffNotice("선택한 진행 상태의 콘텐츠를 표시했습니다.");
-      window.requestAnimationFrame(() => document.querySelector<HTMLSelectElement>('select[aria-labelledby="program-status-label"]')?.focus());
+      window.requestAnimationFrame(() => document.querySelector<HTMLElement>('[aria-label="진행 상태별 보기"] button[aria-pressed="true"]')?.focus());
     }
     // The accepted event snapshot owns this one-time navigation intent.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -868,14 +909,15 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     if (moderationFocusRef.current !== null) {
       const request = moderationFocusRef.current;
       moderationFocusRef.current = null;
-      const row = request.id ? document.getElementById(`moderation-${request.kind}-${request.id}`) : null;
+      const prefix = request.scope === "drawer" ? "review" : "moderation";
+      const row = request.id ? document.getElementById(`${prefix}-${request.kind}-${request.id}`) : null;
       if (row) {
         revealDetailsFor(row);
         row.scrollIntoView({ block: "nearest" });
         row.focus({ preventScroll: true });
         return;
       }
-      const status = document.getElementById("moderation-status");
+      const status = document.getElementById(request.scope === "drawer" ? "review-drawer-status" : "moderation-status");
       status?.scrollIntoView({ block: "nearest" });
       (status as HTMLElement | null)?.focus?.({ preventScroll: true });
     }
@@ -1338,9 +1380,11 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       // rendered list (same module, same filter page), else fall back to
       // the moderation status line. answerDrafts for the other rows are
       // untouched by the refresh below. Never scheduled on failure.
+      const scope = drawerOpenRef.current ? "drawer" : "list";
       moderationFocusRef.current = {
         kind: "question",
-        id: nextVisibleModerationId(visibleModerationRowIds("question", payload.id), payload.id),
+        id: nextVisibleModerationId(visibleModerationRowIds("question", payload.id, scope), payload.id),
+        scope,
       };
       await load(true);
     } catch (error) {
@@ -1507,6 +1551,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       moderationFocusRef.current = {
         kind: "question",
         id: nextVisibleModerationId(visibleModerationRowIds("question", payload.id), payload.id),
+        scope: "list",
       };
       await load(true);
     } catch (error) {
@@ -1567,9 +1612,11 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       setNotice(`사진을 ${action}했습니다.`);
       // Confirmed success only: next visible row of this same rendered
       // list, else the moderation status line. Never on failure.
+      const scope = drawerOpenRef.current ? "drawer" : "list";
       moderationFocusRef.current = {
         kind: "photo",
-        id: nextVisibleModerationId(visibleModerationRowIds("photo", photo.id), photo.id),
+        id: nextVisibleModerationId(visibleModerationRowIds("photo", photo.id, scope), photo.id),
+        scope,
       };
       await load(true);
     } catch (error) {
@@ -1597,9 +1644,11 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       setNotice(`게시글을 ${action}했습니다.`);
       // Confirmed success only: next visible row of this same rendered
       // list, else the moderation status line. Never on failure.
+      const scope = drawerOpenRef.current ? "drawer" : "list";
       moderationFocusRef.current = {
         kind: "post",
-        id: nextVisibleModerationId(visibleModerationRowIds("post", post.id), post.id),
+        id: nextVisibleModerationId(visibleModerationRowIds("post", post.id, scope), post.id),
+        scope,
       };
       await load(true);
     } catch (error) {
@@ -1643,7 +1692,6 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     if (!programQueryText) return true;
     return `${module.title} ${typeLabel(module.type)}`.toLocaleLowerCase("ko-KR").includes(programQueryText);
   });
-  visibleModulesRef.current = visibleModules;
   const hasProgramFilter = programQuery.trim() !== "" || programStatusFilter !== "";
   function clearProgramFilters(): void {
     setProgramQuery("");
@@ -1655,6 +1703,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     clearProgramFilters();
     setQaFilter("all");
     setModuleLimit(Number.MAX_SAFE_INTEGER);
+    setDrawerOpen(false);
     window.requestAnimationFrame(() => {
       const heading = document.getElementById(`question-conflict-${id}`);
       revealDetailsFor(heading);
@@ -1663,13 +1712,36 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     });
   }
 
-  // Backlog classes for the quick-review strip. Q&A 미답변 and 승인 대기는
-  // overlapping classes, so each keeps its own count and no summed total.
-  const backlogUnanswered = state.kind === "ready" ? state.questions.filter((question) => !question.answer.trim()).length : 0;
-  const backlogQaPending = state.kind === "ready" ? state.questions.filter((question) => !question.approved).length : 0;
-  const backlogQaEdits = state.kind === "ready" ? state.questions.filter((question) => question.pendingEdit).length : 0;
-  const backlogPhotoPending = state.kind === "ready" ? state.photos.filter((photo) => photo.status === "PENDING").length : 0;
-  const backlogPostPending = state.kind === "ready" ? state.posts.filter((post) => post.status === "PENDING").length : 0;
+  // Rows read in running order: what is live first, then what is being
+  // prepared, then what ended. Paging slices that same order.
+  const STATUS_GROUPS: Array<{ key: string; label: string }> = [
+    { key: "OPEN", label: "진행 중" },
+    { key: "DRAFT", label: "준비 중" },
+    { key: "CLOSED", label: "종료" },
+  ];
+  const ordered = [
+    ...STATUS_GROUPS.flatMap((group) => visibleModules.filter((module) => module.status === group.key)),
+    ...visibleModules.filter((module) => !STATUS_GROUPS.some((group) => group.key === module.status)),
+  ];
+  const shownModules = ordered.slice(0, moduleLimit);
+  visibleModulesRef.current = ordered;
+  const moduleGroups = [
+    ...STATUS_GROUPS,
+    { key: "OTHER", label: "상태 확인 필요" },
+  ].map((group) => ({
+    ...group,
+    modules: shownModules.filter((module) => group.key === "OTHER" ? !STATUS_GROUPS.some((known) => known.key === module.status) : module.status === group.key),
+  })).filter((group) => group.modules.length);
+
+  // One count for everything attendees sent that still needs a decision.
+  // A question needing both an answer and an approval counts once.
+  const reviewQuestions = state.kind === "ready" ? state.questions.filter(questionNeedsReview).length : 0;
+  const reviewPhotos = state.kind === "ready" ? state.photos.filter((photo) => photo.status === "PENDING").length : 0;
+  const reviewPosts = state.kind === "ready" ? state.posts.filter((post) => post.status === "PENDING").length : 0;
+  const reviewTotal = reviewQuestions + reviewPhotos + reviewPosts;
+  const runningCount = state.modules.filter((module) => module.status === "OPEN").length;
+  const returnBack = handoffReturn?.href ?? `/console/events/${encodeURIComponent(eventId)}/operations#ops-participation`;
+  const returnLabel = handoffReturn?.label ?? "현장 운영";
 
   return (
     <ConsolePage
@@ -1678,29 +1750,27 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       eventId={eventId}
       eventName={state.eventName}
       meta={state.eventMeta}
-      headerActions={<ProductLink variant="secondary" href={handoffReturn?.href ?? `/console/events/${encodeURIComponent(eventId)}/operations#ops-participation`}>{handoffReturn?.label ?? "현장 운영"}</ProductLink>}
+      headerActions={
+        <div className={styles.headerActions}>
+          <ProductLink variant="ghost" href={returnBack}>{returnLabel}</ProductLink>
+          {state.canManage ? <ConsoleRefreshButton label="새로고침" disabled={busy !== null} onRefresh={() => load(true)} /> : null}
+          {state.canManage ? (
+            <ProductButton type="button" variant="primary" onClick={openCreate} disabled={writeLocked || Boolean(moduleSaveRetry) || otherModuleReceipt}>
+              콘텐츠 만들기
+            </ProductButton>
+          ) : null}
+        </div>
+      }
       toolbar={state.canManage ? (
         <>
-          <div className={styles.workspacePurpose}>
-            <p>투표·퀴즈·Q&A 등 참가자가 참여할 내용을 만들고 응답을 관리합니다.</p>
-            <ProductLink variant="ghost" href={`/console/events/${encodeURIComponent(eventId)}/draws`}>무대 추첨·순위 투표·룰렛 관리</ProductLink>
-          </div>
-          <ReviewStrip
-            unanswered={backlogUnanswered}
-            qaPending={backlogQaPending}
-            qaEdits={backlogQaEdits}
-            photoPending={backlogPhotoPending}
-            postPending={backlogPostPending}
-            onShortcut={runReviewShortcut}
-          />
           {moduleSaveRetry && !dialogOpen ? moduleSaveRecovery() : null}
           {otherModuleReceipt && !moduleSaveRetry && !dialogBusy ? <p role="status">이전 콘텐츠 저장 결과를 위에서 확인한 뒤 변경할 수 있습니다.</p> : null}
-          {questionConflict ? <div className={styles.reviewStrip} role="region" aria-label="질문 변경 확인">
+          {questionConflict ? <div className={styles.recoveryStrip} role="region" aria-label="질문 변경 확인">
             <span>변경된 질문을 확인한 뒤 답변을 다시 저장할 수 있습니다.</span>
             <ProductButton type="button" variant="secondary" onClick={returnToQuestionConflict}>변경 내용 확인</ProductButton>
           </div> : null}
           {questionManageRetry ? (
-            <div className={styles.reviewStrip} role="region" aria-label="질문 처리 확인">
+            <div className={styles.recoveryStrip} role="region" aria-label="질문 처리 확인">
               <span>질문 처리가 반영됐을 수 있습니다. 서버 확인은 요청을 다시 보내지 않습니다.</span>
               <ProductButton type="button" variant="secondary" disabled={busy !== null || checkingQuestion || abandonQuestionConfirm} onClick={() => void checkQuestionManagement()}>서버 처리 확인</ProductButton>
               <ProductButton type="button" variant="secondary" disabled={busy !== null || checkingQuestion || abandonQuestionConfirm || writeLocked} onClick={() => void submitQuestionManagement(questionManageRetry)}>원래 질문 처리 다시 확인</ProductButton>
@@ -1726,7 +1796,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
           ) : null}
           {(otherQuestionReceipt || otherEditReceipt) && !questionManageRetry && busy === null ? <p role="status">이전 질문 처리 결과를 위에서 확인한 뒤 질문을 변경할 수 있습니다.</p> : null}
           {questionEditRetry ? (
-            <div className={styles.reviewStrip} role="alert">
+            <div className={styles.recoveryStrip} role="alert">
               <span>수정안 승인 결과를 확인하지 못했습니다. 원래 질문과 수정안으로 다시 확인하세요.</span>
               <ProductButton type="button" variant="secondary" disabled={busy !== null || checkingQuestionEdit} onClick={() => void checkQuestionEdit("approve")}>서버 처리 확인</ProductButton>
               <ProductButton type="button" variant="secondary" disabled={busy !== null || checkingQuestionEdit}
@@ -1734,46 +1804,21 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
             </div>
           ) : null}
           {questionRejectRetry ? (
-            <div className={styles.reviewStrip} role="alert">
+            <div className={styles.recoveryStrip} role="alert">
               <span>수정안 반려 결과를 확인하지 못했습니다. 입력한 사유와 원래 요청으로 다시 확인하세요.</span>
               <ProductButton type="button" variant="secondary" disabled={busy !== null || checkingQuestionEdit} onClick={() => void checkQuestionEdit("reject")}>서버 처리 확인</ProductButton>
               <ProductButton type="button" variant="secondary" disabled={busy !== null || checkingQuestionEdit}
                 onClick={() => void rejectQuestionEdit(questionRejectRetry, true)}>원래 반려 재확인</ProductButton>
             </div>
           ) : null}
-          <ConsoleToolbar
-          filters={
-            <>
-              <label>
-                <span className="sr-only" id="program-search-label">콘텐츠 검색</span>
-                <input
-                  aria-labelledby="program-search-label"
-                  type="search"
-                  placeholder="콘텐츠 이름·유형 검색"
-                  value={programQuery}
-                  onChange={(event) => setProgramQuery(event.target.value)}
-                />
-              </label>
-              <label data-toolbar-span="compact">
-                <span className="sr-only" id="program-status-label">진행 상태별 보기</span>
-                <select aria-labelledby="program-status-label" value={programStatusFilter} onChange={(event) => setProgramStatusFilter(event.target.value)}>
-                  <option value="">전체 상태</option>
-                  <option value="DRAFT">준비 중</option>
-                  <option value="OPEN">진행 중</option>
-                  <option value="CLOSED">종료</option>
-                </select>
-              </label>
-            </>
-          }
-          actions={
-            <div data-toolbar-inline className={styles.toolbarActions}>
-              <ProductButton type="button" variant="primary" onClick={openCreate} disabled={writeLocked || Boolean(moduleSaveRetry) || otherModuleReceipt}>
-                콘텐츠 만들기
-              </ProductButton>
-              <ConsoleRefreshButton label="새로고침" disabled={busy !== null} onRefresh={() => load(true)} />
-            </div>
-          }
-        />
+          <div className={`${styles.reviewLine} ${reviewTotal ? "" : styles.reviewLineCalm}`} id="moderation-status" tabIndex={-1} role="status">
+            {reviewTotal ? (
+              <button type="button" className={styles.reviewToggle} aria-haspopup="dialog" aria-expanded={drawerOpen} onClick={() => { setDrawerTab("all"); setDrawerOpen(true); }}>
+                <span>검토할 것 {reviewTotal}</span>
+                <span aria-hidden="true">열기 ›</span>
+              </button>
+            ) : <span>검토할 항목이 없습니다.</span>}
+          </div>
         </>
       ) : undefined}
       feedback={
@@ -1819,138 +1864,185 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       </section> : null}
       {state.canManage ? (
         state.modules.length ? (
-          <>
-          <p className={styles.resultCount} role="status">
-            {hasProgramFilter ? `검색·필터 결과 ${visibleModules.length}개 · ` : ""}전체 {state.modules.length}개 중 {Math.min(moduleLimit, visibleModules.length)}개 표시
-            {hasProgramFilter ? (
-              <>
-                {" "}
-                <ProductButton type="button" variant="secondary" onClick={clearProgramFilters}>
-                  검색·필터 지우기
-                </ProductButton>
-              </>
+          <section className={styles.listSection} aria-label="참여 콘텐츠 목록">
+            {state.modules.length > 8 || hasProgramFilter ? (
+              <div className={styles.listTools}>
+                <label>
+                  <span className="sr-only" id="program-search-label">콘텐츠 검색</span>
+                  <input
+                    aria-labelledby="program-search-label"
+                    type="search"
+                    placeholder="콘텐츠 이름·유형 검색"
+                    value={programQuery}
+                    onChange={(event) => setProgramQuery(event.target.value)}
+                  />
+                </label>
+                <div className={styles.statusTabs} role="group" aria-label="진행 상태별 보기">
+                  <span className="sr-only" id="program-status-label">진행 상태별 보기</span>
+                  {([["", "전체"], ["OPEN", "진행 중"], ["DRAFT", "준비 중"], ["CLOSED", "종료"]] as const).map(([value, label]) => (
+                    <button key={value || "all"} type="button" aria-pressed={programStatusFilter === value} onClick={() => setProgramStatusFilter(value)}>
+                      {label}<small>{value ? state.modules.filter((module) => module.status === value).length : state.modules.length}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
             ) : null}
-          </p>
-          {visibleModules.length ? (
-          <>
-          <ul className={styles.moduleList}>
-            {visibleModules.slice(0, moduleLimit).map((module) => (
-              <ModuleCard
-                key={module.id}
-                module={module}
-                featureOn={state.features.includes(module.type)}
-                eventId={eventId}
-                busy={busy}
-                locked={writeLocked || questionEditRetry !== null || questionRejectRetry !== null || questionManageRetry !== null || otherQuestionReceipt || otherEditReceipt || moduleSaveRetry !== null || otherModuleReceipt}
-                responses={state.responses.filter((response) => response.moduleId === module.id).length}
-                moduleResponses={state.responses.filter((response) => response.moduleId === module.id)}
-                submitGrade={submitGrade}
-                gradePending={gradeRetry !== null}
-                questions={state.questions.filter((question) => question.moduleId === module.id)}
-                photos={state.photos}
-                posts={state.posts}
-                drawCounts={drawCounts}
-                setDrawCounts={setDrawCounts}
-                drawFailure={drawFailure?.id === module.id ? drawFailure : null}
-                answerDrafts={answerDrafts}
-                onAnswerChange={(question, value) => {
-                  setAnswerBaselines((current) => current[question.id] ? current : { ...current, [question.id]: questionBaseline(question) });
-                  setAnswerDrafts((current) => ({ ...current, [question.id]: value }));
-                }}
-                questionConflict={questionConflict}
-                onRefreshQuestionConflict={() => void refreshQuestionConflict()}
-                onResolveQuestionConflict={resolveQuestionConflict}
-                answerFailure={answerFailure}
-                rejectDrafts={rejectDrafts}
-                setRejectDrafts={(updater) => { setRejectDrafts(updater); setRejectFailure(null); }}
-                rejectFailure={rejectFailure}
-                qaFilter={qaFilter}
-                onQaFilter={setQaFilter}
-                photoFilter={photoFilter}
-                onPhotoFilter={setPhotoFilter}
-                postFilter={postFilter}
-                onPostFilter={setPostFilter}
-                onEdit={() => openEdit(module)}
-                closeHref={closeHref}
-                returnLink={handoffReturn?.moduleId === module.id ? handoffReturn : undefined}
-                statusPending={statusPending?.id === module.id ? statusPending : null}
-                onRequestStatus={(status) => requestStatusChange(module, status)}
-                onConfirmStatus={() => {
-                  const pending = statusPending;
-                  if (pending && pending.id === module.id) void changeStatus(module, pending.status);
-                }}
-                onCancelStatus={() => setStatusPending(null)}
-                revealPending={revealPendingId === module.id}
-                onRequestReveal={() => requestQuizReveal(module)}
-                onConfirmReveal={() => void revealQuiz(module)}
-                onCancelReveal={() => setRevealPendingId(null)}
-                drawPending={drawPending?.id === module.id ? drawPending : null}
-                onRequestDraw={() => requestDraw(module)}
-                onConfirmDraw={() => {
-                  const pending = drawPending;
-                  if (pending && pending.id === module.id) void runDraw(module, pending.count);
-                }}
-                onCancelDraw={() => setDrawPending(null)}
-                publishPending={publishPending?.moduleId === module.id ? publishPending.draw : null}
-                onRequestPublishDraw={() => requestDrawPublish(module)}
-                onConfirmPublishDraw={() => {
-                  if (publishPending?.moduleId === module.id) void publishDraw(module, publishPending.draw);
-                }}
-                onCancelPublishDraw={() => setPublishPending(null)}
-                photoPending={photoPending}
-                onRequestModeratePhoto={(photo, status) => requestPhotoModeration(photo, status)}
-                onConfirmModeratePhoto={(photo, status) => void moderatePhoto(photo, status)}
-                onCancelModeratePhoto={() => setPhotoPending(null)}
-                postPending={postPending}
-                onRequestModeratePost={(post, status) => requestPostModeration(post, status)}
-                onConfirmModeratePost={(post, status) => void moderatePost(post, status)}
-                onCancelModeratePost={() => setPostPending(null)}
-                onManageQuestion={(question, approved) => void manageQuestion(question, approved)}
-                onApproveQuestionEdit={(question) => {
-                  if (!question.pendingEdit) return;
-                  void approveQuestionEdit({ id: question.id, expectedEditId: question.pendingEdit.id,
-                    expectedText: question.text, expectedAnswer: question.answer, expectedNewText: question.pendingEdit.text });
-                }}
-                onRejectQuestionEdit={(question, reason) => {
-                  if (!question.pendingEdit) return;
-                  if (!reason.trim()) {
-                    setRejectFailure({ id: question.id, editId: question.pendingEdit.id, field: "reason", message: "반려 사유를 입력하세요." });
-                    document.getElementById(`reject-reason-${question.id}`)?.focus();
-                    return;
-                  }
-                  void rejectQuestionEdit({ id: question.id, expectedEditId: question.pendingEdit.id,
-                    expectedText: question.text, expectedAnswer: question.answer, expectedNewText: question.pendingEdit.text, reason: reason.trim() });
-                }}
-              />
-            ))}
-          </ul>
-          {visibleModules.length > moduleLimit ? (
-            <p className={styles.moreRow}>
-              <ProductButton
-                type="button"
-                variant="secondary"
-                onClick={revealMoreModules}
-              >
-                더 보기 ({visibleModules.length - moduleLimit})
-              </ProductButton>
-            </p>
-          ) : null}
-          </>
-          ) : (
-            <div className={styles.empty}>
-              <p>조건에 맞는 콘텐츠가 없습니다.</p>
-              <p>검색어·상태 조건을 바꾸거나 지우고 다시 찾아보세요.</p>
-              <p>
-                <ProductButton type="button" variant="secondary" onClick={clearProgramFilters}>
-                  검색·필터 지우기
-                </ProductButton>
+            {hasProgramFilter ? (
+              <p className={styles.resultCount} role="status">
+                검색·필터 결과 {visibleModules.length}개 · 전체 {state.modules.length}개 중 {Math.min(moduleLimit, visibleModules.length)}개 표시{" "}
+                <ProductButton type="button" variant="ghost" onClick={clearProgramFilters}>검색·필터 지우기</ProductButton>
               </p>
-            </div>
-          )}
-          </>
+            ) : null}
+            {visibleModules.length ? (
+              <>
+                {moduleGroups.map((group) => (
+                  <div key={group.key} className={styles.moduleGroup}>
+                    <h2 className={styles.groupTitle}>{group.label}</h2>
+                    <ul className={styles.moduleList}>
+                      {group.modules.map((module) => (
+                        <ModuleCard
+                          key={module.id}
+                          module={module}
+                          featureOn={state.features.includes(module.type)}
+                          eventId={eventId}
+                          busy={busy}
+                          locked={writeLocked || questionEditRetry !== null || questionRejectRetry !== null || questionManageRetry !== null || otherQuestionReceipt || otherEditReceipt || moduleSaveRetry !== null || otherModuleReceipt}
+                          responses={state.responses.filter((response) => response.moduleId === module.id).length}
+                          moduleResponses={state.responses.filter((response) => response.moduleId === module.id)}
+                          submitGrade={submitGrade}
+                          gradePending={gradeRetry !== null}
+                          questions={state.questions.filter((question) => question.moduleId === module.id)}
+                          photos={state.photos}
+                          posts={state.posts}
+                          drawCounts={drawCounts}
+                          setDrawCounts={setDrawCounts}
+                          drawFailure={drawFailure?.id === module.id ? drawFailure : null}
+                          answerDrafts={answerDrafts}
+                          onAnswerChange={onAnswerChange}
+                          questionConflict={questionConflict}
+                          onRefreshQuestionConflict={() => void refreshQuestionConflict()}
+                          onResolveQuestionConflict={resolveQuestionConflict}
+                          answerFailure={answerFailure}
+                          rejectDrafts={rejectDrafts}
+                          setRejectDrafts={(updater) => { setRejectDrafts(updater); setRejectFailure(null); }}
+                          rejectFailure={rejectFailure}
+                          qaFilter={qaFilter}
+                          onQaFilter={setQaFilter}
+                          photoFilter={photoFilter}
+                          onPhotoFilter={setPhotoFilter}
+                          postFilter={postFilter}
+                          onPostFilter={setPostFilter}
+                          onEdit={() => openEdit(module)}
+                          closeHref={closeHref}
+                          returnLink={handoffReturn?.moduleId === module.id ? handoffReturn : undefined}
+                          statusPending={statusPending?.id === module.id ? statusPending : null}
+                          onRequestStatus={(status) => requestStatusChange(module, status)}
+                          onConfirmStatus={() => {
+                            const pending = statusPending;
+                            if (pending && pending.id === module.id) void changeStatus(module, pending.status);
+                          }}
+                          onCancelStatus={() => setStatusPending(null)}
+                          revealPending={revealPendingId === module.id}
+                          onRequestReveal={() => requestQuizReveal(module)}
+                          onConfirmReveal={() => void revealQuiz(module)}
+                          onCancelReveal={() => setRevealPendingId(null)}
+                          drawPending={drawPending?.id === module.id ? drawPending : null}
+                          onRequestDraw={() => requestDraw(module)}
+                          onConfirmDraw={() => {
+                            const pending = drawPending;
+                            if (pending && pending.id === module.id) void runDraw(module, pending.count);
+                          }}
+                          onCancelDraw={() => setDrawPending(null)}
+                          publishPending={publishPending?.moduleId === module.id ? publishPending.draw : null}
+                          onRequestPublishDraw={() => requestDrawPublish(module)}
+                          onConfirmPublishDraw={() => {
+                            if (publishPending?.moduleId === module.id) void publishDraw(module, publishPending.draw);
+                          }}
+                          onCancelPublishDraw={() => setPublishPending(null)}
+                          photoPending={photoPending}
+                          onRequestModeratePhoto={(photo, status) => requestPhotoModeration(photo, status)}
+                          onConfirmModeratePhoto={(photo, status) => void moderatePhoto(photo, status)}
+                          onCancelModeratePhoto={() => setPhotoPending(null)}
+                          postPending={postPending}
+                          onRequestModeratePost={(post, status) => requestPostModeration(post, status)}
+                          onConfirmModeratePost={(post, status) => void moderatePost(post, status)}
+                          onCancelModeratePost={() => setPostPending(null)}
+                          onManageQuestion={(question, approved) => void manageQuestion(question, approved)}
+                          onApproveQuestionEdit={(question) => {
+                            if (!question.pendingEdit) return;
+                            void approveQuestionEdit({ id: question.id, expectedEditId: question.pendingEdit.id,
+                              expectedText: question.text, expectedAnswer: question.answer, expectedNewText: question.pendingEdit.text });
+                          }}
+                          onRejectQuestionEdit={(question, reason) => {
+                            if (!question.pendingEdit) return;
+                            if (!reason.trim()) {
+                              setRejectFailure({ id: question.id, editId: question.pendingEdit.id, field: "reason", message: "반려 사유를 입력하세요." });
+                              document.getElementById(`reject-reason-${question.id}`)?.focus();
+                              return;
+                            }
+                            void rejectQuestionEdit({ id: question.id, expectedEditId: question.pendingEdit.id,
+                              expectedText: question.text, expectedAnswer: question.answer, expectedNewText: question.pendingEdit.text, reason: reason.trim() });
+                          }}
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+                {visibleModules.length > moduleLimit ? (
+                  <p className={styles.moreRow}>
+                    <ProductButton type="button" variant="ghost" onClick={revealMoreModules}>
+                      더 보기 ({visibleModules.length - moduleLimit})
+                    </ProductButton>
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <div className={styles.empty}>
+                <p>조건에 맞는 콘텐츠가 없습니다.</p>
+                <p>검색어·상태 조건을 바꾸거나 지우고 다시 찾아보세요.</p>
+                <p>
+                  <ProductButton type="button" variant="secondary" onClick={clearProgramFilters}>
+                    검색·필터 지우기
+                  </ProductButton>
+                </p>
+              </div>
+            )}
+            <p className={styles.drawsLink}>
+              <ProductLink variant="ghost" href={`/console/events/${encodeURIComponent(eventId)}/draws`}>무대 추첨·순위 투표·룰렛 관리</ProductLink>
+            </p>
+          </section>
         ) : (
           <p className={styles.empty}>등록된 콘텐츠가 없습니다. 위에서 첫 콘텐츠를 만드세요.</p>
         )
+      ) : null}
+
+      {drawerOpen && state.canManage ? (
+        <ReviewDrawer
+          eventId={eventId}
+          modules={state.modules}
+          questions={state.questions}
+          photos={state.photos}
+          posts={state.posts}
+          tab={drawerTab}
+          onTab={setDrawerTab}
+          busy={busy}
+          locked={writeLocked || questionEditRetry !== null || questionRejectRetry !== null || questionManageRetry !== null || otherQuestionReceipt || otherEditReceipt}
+          conflict={Boolean(questionConflict)}
+          answerDrafts={answerDrafts}
+          onAnswerChange={onAnswerChange}
+          answerFailure={answerFailure}
+          onManage={(question, approved) => void manageQuestion(question, approved)}
+          onOpenEdit={openQuestionEdit}
+          photoPending={photoPending}
+          onRequestPhoto={(photo, status) => requestPhotoModeration(photo, status)}
+          onConfirmPhoto={(photo, status) => void moderatePhoto(photo, status)}
+          onCancelPhoto={() => setPhotoPending(null)}
+          postPending={postPending}
+          onRequestPost={(post, status) => requestPostModeration(post, status)}
+          onConfirmPost={(post, status) => void moderatePost(post, status)}
+          onCancelPost={() => setPostPending(null)}
+          onClose={() => setDrawerOpen(false)}
+        />
       ) : null}
 
       {dialogOpen && state.kind === "ready" ? (
@@ -1976,31 +2068,57 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
   );
 }
 
-function countSummary(module: Module, responseCount: number, questions: Question[], photos: Photo[], posts: Post[]): string {
+// One quiet line and one number per row, plus an optional thin meter, so the
+// list reads at a glance. Everything is derived from the loaded workspace.
+type RowSummary = { line: string; warn: string | null; count: number | null; unit: string; meter: number[] | null; meterLabel: string | null };
+
+function rowSummary(module: Module, moduleResponses: Response[], questions: Question[], photos: Photo[], posts: Post[]): RowSummary {
+  const type = typeLabel(module.type);
+  const answers = moduleResponses.map((response) => response.answer);
   switch (module.type) {
-    case "poll":
-    case "quiz":
-      return `응답 ${responseCount}건`;
+    case "poll": {
+      const tally = module.options.map((option) => answers.filter((answer) => answer === option).length);
+      const total = moduleResponses.length;
+      const top = tally.length && total ? tally.indexOf(Math.max(...tally)) : -1;
+      return {
+        line: top >= 0 && tally[top] > 0 ? `${type} · 1위 ${module.options[top]} ${Math.round((tally[top] / total) * 100)}%` : `${type} · 선택지 ${module.options.length}개`,
+        warn: null, count: total, unit: "응답",
+        meter: total ? tally.slice(0, 3).map((value) => Math.round((value / total) * 100)) : null,
+        meterLabel: total ? `선택지별 득표 비율 ${tally.map((value) => `${Math.round((value / total) * 100)}%`).join(", ")}` : null,
+      };
+    }
+    case "quiz": {
+      const { right } = quizGradeCounts(module.answer, answers, moduleResponses.map((response) => response.manualGrade));
+      const rate = answers.length ? Math.round((right / answers.length) * 100) : null;
+      return { line: rate === null ? type : `${type} · 정답률 ${rate}%`, warn: null, count: answers.length, unit: "응답", meter: rate === null ? null : [rate], meterLabel: rate === null ? null : `정답률 ${rate}%` };
+    }
     case "survey":
-      return `응답 ${responseCount}건`;
+      return { line: type, warn: null, count: moduleResponses.length, unit: "응답", meter: null, meterLabel: null };
     case "qa": {
       const approved = questions.filter((question) => question.approved).length;
-      return `질문 ${questions.length}건(공개 ${approved}건)`;
+      const rate = questions.length ? Math.round((approved / questions.length) * 100) : null;
+      return { line: `${type} · 공개 ${approved}`, warn: null, count: questions.length, unit: "질문", meter: rate === null ? null : [rate], meterLabel: rate === null ? null : `공개 비율 ${rate}%` };
     }
     case "draw": {
       const winners = module.drawHistory.reduce((total, result) => total + result.winners.length, 0);
-      return `추첨 ${module.drawHistory.length}회(당첨 ${winners}명)`;
+      const latest = module.drawHistory[0] ?? null;
+      return {
+        line: module.drawHistory.length ? `${type} · 당첨 ${winners}명` : type,
+        warn: latest && !latest.published ? "결과 미공개" : null,
+        count: module.drawHistory.length, unit: "회", meter: null, meterLabel: null,
+      };
     }
     case "photo": {
-      const pending = photos.filter((photo) => photo.status === "PENDING").length;
-      return `사진 ${photos.length}장(대기 ${pending}건)`;
+      const approved = photos.filter((photo) => photo.status === "APPROVED").length;
+      const rate = photos.length ? Math.round((approved / photos.length) * 100) : null;
+      return { line: `${type} · 승인 ${approved}`, warn: null, count: photos.length, unit: "장", meter: rate === null ? null : [rate], meterLabel: rate === null ? null : `승인 비율 ${rate}%` };
     }
     case "board": {
-      const pending = posts.filter((post) => post.status === "PENDING").length;
-      return `글 ${posts.length}건(대기 ${pending}건)`;
+      const approved = posts.filter((post) => post.status === "APPROVED").length;
+      return { line: `${type} · 승인 ${approved}`, warn: null, count: posts.length, unit: "글", meter: null, meterLabel: null };
     }
     default:
-      return `응답 ${responseCount}건`;
+      return { line: type, warn: null, count: moduleResponses.length, unit: "응답", meter: null, meterLabel: null };
   }
 }
 
@@ -2099,18 +2217,32 @@ function ModuleCard(props: {
         ? "종료"
         : "준비로 되돌리기"
     : null;
+  const summary = rowSummary(module, props.moduleResponses, props.questions, props.photos, props.posts);
+  const state = module.status === "OPEN" ? "live" : module.status === "CLOSED" ? "done" : "prep";
+  const rowAction = module.status === "DRAFT" ? { label: "시작", to: "OPEN" as const } : module.status === "CLOSED" ? { label: "다시 열기", to: "OPEN" as const } : null;
+  const actionsDisabled = props.busy !== null || props.locked || !props.featureOn;
   return (
-    <li className={styles.moduleCard}>
-      <div className={styles.moduleTop}>
-        <div className={styles.moduleTitle}>
-          <h2 id={`module-title-${module.id}`} tabIndex={-1}>{module.title}</h2>
-          <p className={styles.moduleMeta}>
-            <span className={styles.typeBadge}>{typeLabel(module.type)}</span>
-            <span className={`${styles.status} ${module.status === "OPEN" ? styles.statusOpen : module.status === "CLOSED" ? styles.statusClosed : styles.statusDraft}`}>
-              {statusLabel(module)}
+    <li className={styles.moduleCard} data-status={module.status} data-feature-off={props.featureOn ? undefined : "true"}>
+      <details className={styles.moduleDetails}>
+        <summary className={styles.moduleSummary} data-has-action={rowAction ? "true" : undefined}>
+          <ProgramTypeIcon type={module.type} state={state} />
+          <span className={styles.moduleName}>
+            <h3 id={`module-title-${module.id}`} tabIndex={-1}>{module.title}</h3>
+            <span className={styles.moduleLine}>
+              <span>{summary.line}</span>
+              {summary.warn ? <b className={styles.moduleWarn}>{summary.warn}</b> : null}
+              {!props.featureOn ? <b className={styles.moduleWarn}>이 유형이 꺼져 있습니다</b> : null}
+              <span className="sr-only"> · {statusLabel(module)}</span>
             </span>
-            <span>{countSummary(module, props.responses, props.questions, props.photos, props.posts)}</span>
-          </p>
+          </span>
+          {summary.meter && module.status === "OPEN" ? (
+            <span className={styles.meter} role="img" aria-label={summary.meterLabel ?? undefined}>
+              {summary.meter.map((value, index) => <i key={index} style={{ width: `${value}%` }} />)}
+            </span>
+          ) : <span className={styles.meterSpacer} aria-hidden="true" />}
+          <span className={styles.moduleCount}>{summary.count !== null && module.status !== "DRAFT" ? <><b>{summary.count}</b>{summary.unit}</> : null}</span>
+        </summary>
+        <div className={styles.moduleBody}>
           {!props.featureOn ? (
             <p className={styles.featureOff} role="note">
               이 유형이 꺼져 있습니다.{" "}
@@ -2118,69 +2250,33 @@ function ModuleCard(props: {
               기능을 먼저 켜세요.
             </p>
           ) : null}
-        </div>
-        <div className={styles.moduleActions}>
-          <ProductButton
-            type="button"
-            variant="ghost"
-            disabled={lockReason !== null || props.locked || !props.featureOn}
-            title={lockReason ?? undefined}
-            onClick={props.onEdit}
-          >
-            편집
-          </ProductButton>
-          {module.status === "DRAFT" ? (
-            <ProductButton type="button" variant="secondary" disabled={props.busy !== null || props.locked || !props.featureOn} onClick={() => props.onRequestStatus("OPEN")}>시작</ProductButton>
+          {lockReason ? <p className={styles.lockNote}>{lockReason}</p> : null}
+          {module.type === "quiz" && module.revealed ? (
+            <p className={styles.detail}>공개된 정답: {module.answer || "정답 확인 필요"}</p>
           ) : null}
-          {module.status === "OPEN" ? (
-            <ProductButton type="button" variant="secondary" disabled={props.busy !== null || props.locked || !props.featureOn} onClick={() => props.onRequestStatus("CLOSED")}>종료</ProductButton>
+          {module.type === "quiz" && module.published && !module.revealed && (module.status === "OPEN" || module.status === "CLOSED") ? (
+            <>
+              <p>
+                <ProductButton
+                  type="button"
+                  variant="secondary"
+                  disabled={actionsDisabled}
+                  onClick={props.onRequestReveal}
+                >
+                  {props.busy === `reveal:${module.id}` ? "공개 중…" : "퀴즈 정답 공개"}
+                </ProductButton>
+              </p>
+              {props.revealPending ? (
+                <ConsoleConfirm
+                  summary={`“${module.title}” 퀴즈 정답을 공개할까요? 공개하면 콘텐츠가 종료됩니다.`}
+                  confirmLabel="공개한다"
+                  busy={props.busy !== null}
+                  onConfirm={props.onConfirmReveal}
+                  onCancel={props.onCancelReveal}
+                />
+              ) : null}
+            </>
           ) : null}
-          {module.status === "CLOSED" ? (
-            <ProductButton type="button" variant="secondary" disabled={props.busy !== null || props.locked || !props.featureOn} onClick={() => props.onRequestStatus("OPEN")}>다시 열기</ProductButton>
-          ) : null}
-        </div>
-      </div>
-      {props.statusPending && statusAction ? (
-        <ConsoleConfirm
-          summary={`“${module.title}” 콘텐츠를 ${statusAction}할까요?`}
-          confirmLabel={`${statusAction}한다`}
-          busy={props.busy !== null}
-          onConfirm={props.onConfirmStatus}
-          onCancel={props.onCancelStatus}
-        />
-      ) : null}
-      <details className={styles.moduleDetails}>
-        <summary data-disclosure-indicator="">진행·응답 관리</summary>
-      {lockReason ? <p className={styles.lockNote}>{lockReason}</p> : null}
-      {module.type === "poll" && module.options.length ? (
-        <p className={styles.detail}>선택지: {module.options.join(" · ")}</p>
-      ) : null}
-      {module.type === "quiz" && module.revealed ? (
-        <p className={styles.detail}>공개된 정답: {module.answer || "정답 확인 필요"}</p>
-      ) : null}
-      {module.type === "quiz" && module.published && !module.revealed && (module.status === "OPEN" || module.status === "CLOSED") ? (
-        <>
-          <p>
-            <ProductButton
-              type="button"
-              variant="secondary"
-              disabled={props.busy !== null || props.locked || !props.featureOn}
-              onClick={props.onRequestReveal}
-            >
-              {props.busy === `reveal:${module.id}` ? "공개 중…" : "퀴즈 정답 공개"}
-            </ProductButton>
-          </p>
-          {props.revealPending ? (
-            <ConsoleConfirm
-              summary={`“${module.title}” 퀴즈 정답을 공개할까요? 공개하면 콘텐츠가 종료됩니다.`}
-              confirmLabel="공개한다"
-              busy={props.busy !== null}
-              onConfirm={props.onConfirmReveal}
-              onCancel={props.onCancelReveal}
-            />
-          ) : null}
-        </>
-      ) : null}
       {module.type === "draw" ? (
         <div className={styles.drawBox}>
           <div className={styles.drawControls}>
@@ -2285,7 +2381,7 @@ function ModuleCard(props: {
       {module.type === "board" ? (
         <PostList posts={props.posts} busy={props.busy} locked={props.locked} featureOn={props.featureOn} pending={props.postPending} filter={props.postFilter} onFilterChange={props.onPostFilter} onRequestModerate={props.onRequestModeratePost} onConfirmModerate={props.onConfirmModeratePost} onCancelModerate={props.onCancelModeratePost} />
       ) : null}
-      <ResultDisclosure
+      <ResultSummary
         module={module}
         moduleResponses={props.moduleResponses}
         submitGrade={props.submitGrade}
@@ -2295,7 +2391,34 @@ function ModuleCard(props: {
         photos={props.photos}
         posts={props.posts}
       />
+          <div className={styles.moduleFoot}>
+            <ProductButton
+              type="button"
+              variant="ghost"
+              disabled={lockReason !== null || props.locked || !props.featureOn}
+              title={lockReason ?? undefined}
+              onClick={props.onEdit}
+            >
+              편집
+            </ProductButton>
+            {module.status === "OPEN" ? (
+              <ProductButton type="button" variant="ghost" disabled={actionsDisabled} onClick={() => props.onRequestStatus("CLOSED")}>종료</ProductButton>
+            ) : null}
+          </div>
+        </div>
       </details>
+      {rowAction ? (
+        <ProductButton type="button" variant="ghost" className={styles.rowAction} disabled={actionsDisabled} onClick={() => props.onRequestStatus(rowAction.to)}>{rowAction.label}</ProductButton>
+      ) : null}
+      {props.statusPending && statusAction ? (
+        <ConsoleConfirm
+          summary={`“${module.title}” 콘텐츠를 ${statusAction}할까요?`}
+          confirmLabel={`${statusAction}한다`}
+          busy={props.busy !== null}
+          onConfirm={props.onConfirmStatus}
+          onCancel={props.onCancelStatus}
+        />
+      ) : null}
       {props.returnLink ? <ProductLink variant="secondary" className={styles.returnLink} href={props.returnLink.href}>{props.returnLink.label}</ProductLink> : null}
     </li>
   );
@@ -2308,9 +2431,9 @@ function ModuleCard(props: {
 // (survey),
 // answered/unanswered counts (qa), and approved/pending counts (photo/board).
 // Stamp has no dedicated store in this workspace, so it reports the response
-// total like the default branch. Default collapsed; 진행/편집/잠금 rules live
-// elsewhere and are untouched.
-function ResultDisclosure(props: {
+// total like the default branch. Shown inline in the expanded row (no second
+// fold); 진행/편집/잠금 rules live elsewhere and are untouched.
+function ResultSummary(props: {
   module: Module;
   locked: boolean;
   moduleResponses: Response[];
@@ -2322,21 +2445,26 @@ function ResultDisclosure(props: {
 }) {
   const { module } = props;
   if (module.type === "draw") return null;
+  const total = props.moduleResponses.length;
   return (
-    <details className={styles.resultDisclosure}>
-      <summary data-disclosure-indicator="">결과 보기</summary>
+    <section className={styles.resultSection} aria-label="결과">
       {module.type === "poll" ? (
-        <ul className={styles.resultList}>
+        <ul className={styles.resultBars}>
           {module.options.length ? (
-            module.options.map((option) => (
-              <li key={option}>
-                {option} · {props.moduleResponses.filter((response) => response.answer === option).length}건
-              </li>
-            ))
+            module.options.map((option) => {
+              const count = props.moduleResponses.filter((response) => response.answer === option).length;
+              return (
+                <li key={option}>
+                  <span>{option}</span>
+                  <span className={styles.resultBar} aria-hidden="true"><i style={{ width: `${total ? Math.round((count / total) * 100) : 0}%` }} /></span>
+                  <span>{count}건</span>
+                </li>
+              );
+            })
           ) : (
             <li>선택지가 없습니다.</li>
           )}
-          <li>전체 응답 {props.moduleResponses.length}건</li>
+          <li className={styles.resultTotal}>전체 응답 {total}건</li>
         </ul>
       ) : null}
       {module.type === "quiz" ? (
@@ -2351,7 +2479,7 @@ function ResultDisclosure(props: {
                 {group.label} · {group.count}건
               </li>
             ))}
-            <li>전체 응답 {props.moduleResponses.length}건</li>
+            <li>전체 응답 {total}건</li>
           </ul>
         </>
       ) : null}
@@ -2369,7 +2497,7 @@ function ResultDisclosure(props: {
               </li>
             );
           })}
-          <li>전체 응답 {props.moduleResponses.length}건</li>
+          <li>전체 응답 {total}건</li>
         </ul>
       ) : null}
       {module.type === "qa" ? (
@@ -2388,48 +2516,9 @@ function ResultDisclosure(props: {
         </p>
       ) : null}
       {module.type === "stamp" || (module.type !== "poll" && module.type !== "quiz" && module.type !== "survey" && module.type !== "qa" && module.type !== "photo" && module.type !== "board") ? (
-        <p className={styles.detail}>응답 {props.moduleResponses.length}건</p>
+        <p className={styles.detail}>응답 {total}건</p>
       ) : null}
-    </details>
-  );
-}
-
-// Compact actionable review strip rendered before the toolbar. Each backlog
-// class owns its own button (no summed total; Q&A 미답변/승인 대기는 겹치는
-// 분류). Zero-count classes render no control. With no backlog at all the
-// strip stays a calm one-liner and doubles as the moderation focus anchor.
-function ReviewStrip(props: {
-  unanswered: number;
-  qaPending: number;
-  qaEdits: number;
-  photoPending: number;
-  postPending: number;
-  onShortcut: (target: ReviewTarget) => void;
-}) {
-  const shortcuts: Array<{ target: ReviewTarget; label: string }> = [];
-  if (props.unanswered > 0) shortcuts.push({ target: "qa-unanswered", label: `미답변 ${props.unanswered}건 검토` });
-  if (props.qaPending > 0) shortcuts.push({ target: "qa-pending", label: `승인 대기 질문 ${props.qaPending}건 검토` });
-  if (props.qaEdits > 0) shortcuts.push({ target: "qa-edits", label: `질문 수정안 ${props.qaEdits}건 검토` });
-  if (props.photoPending > 0) shortcuts.push({ target: "photo", label: `사진 대기 ${props.photoPending}건 검토` });
-  if (props.postPending > 0) shortcuts.push({ target: "post", label: `게시글 대기 ${props.postPending}건 검토` });
-  return (
-    <div className={`${styles.reviewStrip} ${styles.reviewShortcuts}`} id="moderation-status" tabIndex={-1} role="status">
-      <span className={styles.reviewStripLabel}>검토</span>
-      {shortcuts.length ? (
-        shortcuts.map((shortcut) => (
-          <ProductButton
-            key={shortcut.target}
-            type="button"
-            variant="ghost"
-            onClick={() => props.onShortcut(shortcut.target)}
-          >
-            {shortcut.label}
-          </ProductButton>
-        ))
-      ) : (
-        <span className={styles.itemMeta}>검토할 항목이 없습니다.</span>
-      )}
-    </div>
+    </section>
   );
 }
 

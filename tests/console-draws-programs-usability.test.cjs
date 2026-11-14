@@ -61,9 +61,11 @@ test("program list filters client-side with a count and a zero-result reset", ()
   // Search + status filter, same grammar as the rewards/clients lists.
   assert.match(programs, /콘텐츠 이름·유형 검색/u);
   assert.match(programs, /type="search"/u);
-  assert.match(programs, /<option value="DRAFT">준비 중<\/option>/u);
-  assert.match(programs, /<option value="OPEN">진행 중<\/option>/u);
-  assert.match(programs, /<option value="CLOSED">종료<\/option>/u);
+  // Status views are ink-underline tabs with counts (no dropdown); the search and
+  // tabs appear once the list is long or a filter is active.
+  assert.match(programs, /\["OPEN", "진행 중"\], \["DRAFT", "준비 중"\], \["CLOSED", "종료"\]/u);
+  assert.match(programs, /className=\{styles\.statusTabs\} role="group" aria-label="진행 상태별 보기"/u);
+  assert.match(programs, /state\.modules\.length > 8 \|\| hasProgramFilter/u);
   // "전체 N개 중 M개" count with a status role.
   assert.match(programs, /전체 \{state\.modules\.length\}개 중 \{Math\.min\(moduleLimit, visibleModules\.length\)\}개 표시/u);
   assert.match(programs, /className=\{styles\.resultCount\} role="status"/u);

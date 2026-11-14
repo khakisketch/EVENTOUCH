@@ -263,7 +263,8 @@ test('dialog owns chrome only, with safe focus handling and busy gating', () => 
   assert.match(dialog, /document\.body\.style\.overflow = "hidden";/u);
   assert.match(dialog, /document\.body\.style\.overflow = previousOverflow;/u);
   assert.match(dialog, /previouslyFocused && previouslyFocused\.isConnected/u, 'focus restores only when connected');
-  assert.match(dialog, /className=\{docked \? styles\.inspectorPanel : wide \? `dialog \$\{styles\.dialogWide\}` : "dialog"\}/u);
+  assert.match(dialog, /className=\{docked \? styles\.inspectorPanel : drawer \? `dialog \$\{styles\.drawerPanel\}` : wide \? `dialog \$\{styles\.dialogWide\}` : "dialog"\}/u);
+  assert.match(dialog, /presentation\?: "modal" \| "inspector" \| "drawer";/u, 'the drawer is a modal presentation: same trap, Escape and scroll lock');
   assert.match(dialog, /<div className="dialog-actions">\{footer\}<\/div>/u);
   assert.match(dialog, /useSyncExternalStore\(subscribeWideViewport/u, 'responsive presentation uses the current viewport snapshot');
   assert.doesNotMatch(dialog, /commandId/i, 'no idempotency ownership');

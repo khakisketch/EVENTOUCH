@@ -80,8 +80,8 @@ test('next focus target is scoped to the visible DOM list, with a status fallbac
   );
   assert.match(
     SOURCE,
-    /document\.getElementById\("moderation-status"\)/,
-    'a missing next row must always fall back to the moderation status line'
+    /"review-drawer-status" : "moderation-status"/,
+    'a missing next row must always fall back to the status line of the surface it came from'
   );
 });
 
@@ -101,32 +101,30 @@ test('no duplicate writeLocked guards remain', () => {
   );
 });
 
-test('review strip sits ahead of the toolbar and drives one backlog class', () => {
+test('review line opens the drawer and the shortcut drives one backlog class', () => {
   const toolbarAt = SOURCE.indexOf('toolbar={state.canManage ? (');
   assert.notEqual(toolbarAt, -1, 'toolbar slot must exist');
   const toolbarEnd = SOURCE.indexOf(') : undefined}', toolbarAt);
   const toolbar = SOURCE.slice(toolbarAt, toolbarEnd);
-  const stripAt = toolbar.indexOf('<ReviewStrip');
-  const consoleToolbarAt = toolbar.indexOf('<ConsoleToolbar');
-  assert.notEqual(stripAt, -1, 'review strip must render in the toolbar slot');
-  assert.notEqual(consoleToolbarAt, -1, 'console toolbar must remain');
-  assert.ok(stripAt < consoleToolbarAt, 'review strip must come before the toolbar');
+  assert.match(toolbar, /id="moderation-status"/, 'the review line stays the moderation status/focus anchor');
+  assert.match(toolbar, /aria-haspopup="dialog"/, 'the review line opens a dialog (the drawer)');
+  assert.ok(!/<ReviewStrip|<ConsoleToolbar/.test(SOURCE), 'the old strip of text buttons and the toolbar row stay gone');
   assert.match(SOURCE, /function runReviewShortcut\(target: ReviewTarget\)/, 'shortcut runner must exist');
   const shortcut = bodyBetween('function runReviewShortcut(target: ReviewTarget)', 'const kind = target');
   assert.match(shortcut, /setProgramQuery\(""\)/, 'shortcut must clear the obstructing program search');
   assert.match(shortcut, /setProgramStatusFilter\(""\)/, 'shortcut must clear the obstructing program status');
-   assert.match(shortcut, /setModuleLimit\(\(current\) => Math\.max\(current, targetIndex \+ 1\)\)/, 'shortcut exposes the relevant module without unbounding every module');
+  assert.match(shortcut, /setDrawerOpen\(true\)/, 'shortcut opens the review drawer');
+  assert.match(shortcut, /setDrawerTab\(/, 'shortcut picks the matching drawer tab');
   assert.match(shortcut, /setQaFilter\("unanswered"\)/, 'unanswered shortcut must set the nested Q&A filter');
   assert.match(shortcut, /setQaFilter\("pending"\)/, 'pending shortcut must set the nested Q&A filter');
   assert.match(shortcut, /setQaFilter\("edits"\)/, 'edit shortcut must set the nested Q&A filter');
   assert.match(shortcut, /setPhotoFilter\("PENDING"\)/, 'photo shortcut must set the nested photo filter');
   assert.match(shortcut, /setPostFilter\("PENDING"\)/, 'post shortcut must set the nested post filter');
   assert.match(SOURCE, /filter: "all" \| "unanswered" \| "pending" \| "edits";\s*\n\s*onFilterChange/, 'nested Q&A filter must be lifted, not list-local');
-  const strip = bodyBetween('function ReviewStrip', 'function QuestionList');
-  assert.ok(!/검토 대기 \d|합계|총 \d+건/.test(strip), 'strip must show no summed total across overlapping classes');
-  for (const gate of ['props.unanswered > 0', 'props.qaPending > 0', 'props.qaEdits > 0', 'props.photoPending > 0', 'props.postPending > 0']) {
-    assert.ok(strip.includes(gate), `zero-count class must render no control (${gate})`);
-  }
+  const drawer = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'apps/web/app/console/events/[id]/programs/ReviewDrawer.tsx'), 'utf8');
+  assert.match(drawer, /questionNeedsReview/, 'a question needing both an answer and an approval counts once');
+  assert.ok(!/합계|총 \d+건/.test(drawer), 'the drawer shows no summed total across overlapping classes');
+  assert.match(drawer, /id=\{`review-question-\$\{question\.id\}`\}/, 'drawer rows carry their own focus ids so list ids never duplicate');
 });
 test('nextVisibleModerationId behaves over the visible order', () => {
   const nextVisibleModerationId = loadNextVisibleModerationId();

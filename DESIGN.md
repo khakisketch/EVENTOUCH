@@ -230,6 +230,17 @@ The owner approved this composition on 2026-11-13 (`apps/web/app/console/events/
 - A whole row opens the detail dialog; a chevron replaces the "상세" text. Checkbox, "승인" and other inline buttons never trigger it. "승인" appears only on PENDING and WAITLIST rows.
 - Mobile rows are two lines: name, then company, group and presence. The phone number stays in the detail dialog.
 
+## 참여 콘텐츠 확정 구성
+
+The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/programs/`, review drawer with the merged answer card). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-programs-composition.test.cjs` guards it.
+
+- One flat ledger grouped 진행 중 / 준비 중 / 종료. A row is a type tile (own glyph and tint, state dot on its corner), the name, one quiet line, an optional thin meter (poll shares, quiz rate, Q&A/photo public ratio) and one number. No type or state pills, no per-row hairlines.
+- "콘텐츠 만들기" is the only orange action. 시작 / 다시 열기 sit at the row end; 종료 and 편집 live in the expanded row, which shows results inline (no second fold).
+- Everything attendees sent that needs a decision (questions without an answer or approval, pending photos and posts) sits behind one amber line, "검토할 것 N", that opens a modal drawer (right edge on wide screens, bottom sheet on phones; `ConsoleDialog presentation="drawer"`). A question needing both counts once. Pending question edits are decided in the content's own list.
+- Answer card: asker, question bubble, one reply field with an ink send circle ("답변하고 공개"), quiet "답변만 저장". Questions have no reject action. No nested bordered boxes beyond bubble and field.
+- Drawer rows use `review-*` ids; list rows keep `moderation-*`. Recovery banners close the drawer so they are never behind the scrim.
+- Search and status tabs appear only for long lists (more than 8) or while a filter is active.
+
 ## 메시지 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/messages/MessagingWorkspace.tsx`, option B with a widened writing column). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-messages-composer-contract.test.cjs` guards it.

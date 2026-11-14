@@ -8,8 +8,12 @@ import styles from "./console-ui.module.css";
 
 type ConsoleDialogProps = {
   title: string;
-  /** A nonmodal side panel on wide screens; the same content is modal on phones. */
-  presentation?: "modal" | "inspector";
+  /**
+   * "inspector": a nonmodal side panel on wide screens; the same content is
+   * modal on phones. "drawer": always modal (focus trap, scrim), a right-edge
+   * panel on wide screens and a bottom sheet on phones.
+   */
+  presentation?: "modal" | "inspector" | "drawer";
   titleId?: string;
   description?: ReactNode;
   /** Stable id for the description wrapper; defaults to `${headingId}-description`. */
@@ -93,6 +97,7 @@ export default function ConsoleDialog({
 }: ConsoleDialogProps) {
   const wideViewport = useSyncExternalStore(subscribeWideViewport, wideViewportSnapshot, () => false);
   const docked = presentation === "inspector" && wideViewport;
+  const drawer = presentation === "drawer";
   const fallbackId = useId();
   const headingId = titleId ?? `console-dialog-${fallbackId}`;
   const descriptionElementId = descriptionId ?? `${headingId}-description`;
@@ -181,14 +186,14 @@ export default function ConsoleDialog({
 
   return (
     <div
-      className={docked ? styles.inspectorHost : "dialog-backdrop"}
+      className={docked ? styles.inspectorHost : drawer ? `dialog-backdrop ${styles.drawerBackdrop}` : "dialog-backdrop"}
       onClick={(event) => {
         if (!docked && event.target === event.currentTarget) requestClose();
       }}
     >
       <div
         ref={dialogRef}
-        className={docked ? styles.inspectorPanel : wide ? `dialog ${styles.dialogWide}` : "dialog"}
+        className={docked ? styles.inspectorPanel : drawer ? `dialog ${styles.drawerPanel}` : wide ? `dialog ${styles.dialogWide}` : "dialog"}
         role="dialog"
         aria-modal={docked ? undefined : true}
         aria-labelledby={headingId}

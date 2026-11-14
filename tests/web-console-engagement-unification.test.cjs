@@ -54,7 +54,8 @@ test('unified-frame: every engagement page renders the shared frame, not a bespo
 
 test('unified-frame: primary actions live in toolbars or editing areas, feedback is shared', () => {
   const programs = read(PROGRAMS);
-  assert.match(programs, /<ConsoleToolbar/, 'programs create/refresh ride the body toolbar');
+  assert.match(programs, /headerActions=\{/, 'programs create/refresh ride the page header actions');
+  assert.match(programs, /variant="primary" onClick=\{openCreate\}/, 'programs create is the single orange action');
   assert.match(programs, />\s*콘텐츠 만들기\s*</, 'programs keeps the standard create action');
   const reports = read(REPORTS);
   // The task-first redesign puts create alongside its report list instead of
@@ -357,8 +358,9 @@ test('unified-frame: engagement writes keep their command contracts', () => {
 
 test('engagement-growth: program cards aggregate results without new APIs or identities', () => {
   const programs = read(PROGRAMS);
-  assert.match(programs, /<details className=\{styles\.resultDisclosure\}>/, 'result disclosure mounts collapsed by default');
-  assert.match(programs, /<summary data-disclosure-indicator="">결과 보기<\/summary>/, 'every card offers the result disclosure');
+  assert.match(programs, /<details className=\{styles\.moduleDetails\}>/, 'each row mounts collapsed by default');
+  assert.match(programs, /<section className=\{styles\.resultSection\} aria-label="결과">/, 'results show inline in the expanded row, with no second fold');
+  assert.doesNotMatch(programs, /resultDisclosure/, 'the nested 결과 보기 fold stays gone');
   assert.match(programs, /response\.answer === option/, 'poll/quiz tallies derive from loaded answers');
   assert.match(programs, /averageLabel\(ratings\)/, 'survey averages reuse the reports snapshot math');
   assert.match(programs, /미답변/, 'qa splits answered/unanswered counts');
@@ -431,9 +433,9 @@ test('engagement-growth: creating a program reveals and focuses the new card', (
   assert.match(programs, /createdFocusRef\.current =/, 'create parks a focus request for the new module');
   assert.match(programs, /__latest__/, 'a receipt without an id still lands on the appended last module');
   assert.match(programs, /id=\{`module-title-\$\{module\.id\}`\}/, 'card headings carry a stable focus target');
-  assert.match(programs, /<h2 id=\{`module-title-/, 'module headings follow the page H1 without skipping a level; focus target stays');
+  assert.match(programs, /<h3 id=\{`module-title-/, 'module headings sit under the group h2 without skipping a level; focus target stays');
   assert.match(programs, /scrollIntoView\(\{ block: "nearest" \}\)/, 'create scrolls the new card into view');
-  assert.match(programs, /slice\(0, moduleLimit\)/, 'server ordering stays windowed, never re-sorted');
+  assert.match(programs, /ordered\.slice\(0, moduleLimit\)/, 'rows read in running order (진행 중, 준비 중, 종료), stable inside each group, then windowed');
   assert.match(programs, /onEdit=\{\(\) => openEdit\(module\)\}/, 'edit behavior stays wired per card');
 });
 

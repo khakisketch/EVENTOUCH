@@ -687,6 +687,57 @@
   width: min(100%, 960px);
 }
 
+/* Drawer: the page dims and the panel owns focus. Right edge on wide
+   screens, bottom sheet with a grab handle on phones. */
+.drawerBackdrop {
+  place-items: stretch end;
+  padding: 0;
+}
+
+:global(.dialog).drawerPanel {
+  position: relative;
+  align-content: start;
+  gap: var(--s2);
+  width: min(100%, 440px);
+  max-height: none;
+  height: 100svh;
+  padding: var(--s5) var(--s4) var(--s4);
+  border: 0;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--ink) 4%, var(--paper));
+  box-shadow: var(--shadow-raised);
+}
+
+:global(.dialog).drawerPanel > h2 {
+  padding: 0 var(--s2);
+  font-size: var(--h3);
+}
+
+@media (max-width: 768px) {
+  .drawerBackdrop {
+    place-items: end stretch;
+  }
+
+  :global(.dialog).drawerPanel {
+    width: 100%;
+    height: auto;
+    max-height: 82svh;
+    padding-top: var(--s5);
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+  }
+
+  :global(.dialog).drawerPanel::before {
+    content: "";
+    position: absolute;
+    top: var(--s2);
+    left: calc(50% - var(--s6) / 2);
+    width: var(--s6);
+    height: var(--s1);
+    border-radius: 2px;
+    background: var(--line-strong);
+  }
+}
+
 .dialogDescription {
   margin: 0;
   color: var(--muted);

@@ -70,11 +70,12 @@ test('draws-drops-foreign-module-copies-programs-drops-dead-selector', () => {
   assert.doesNotMatch(draws, /\.photoArchiveTools/u, 'draws .photoArchiveTools stays removed');
   // Those classes live in programs.module.css and are still rendered there.
   const programsView = read('apps/web/app/console/events/[id]/programs/ProgramsWorkspace.tsx');
-  assert.match(programsView, /styles\.moduleTop/u, 'ProgramsWorkspace still renders moduleTop');
+  assert.doesNotMatch(programsView, /styles\.moduleTop/u, 'the programs ledger row replaced moduleTop');
+  assert.match(programsView, /styles\.moduleSummary/u, 'ProgramsWorkspace renders the ledger summary row');
   assert.match(programsView, /styles\.photoArchiveTools/u, 'ProgramsWorkspace still renders photoArchiveTools');
   const programs = read('apps/web/app/console/events/[id]/programs/programs.module.css');
   assert.doesNotMatch(programs, /\.actions\s+\.button/u, 'programs .actions selector stays removed');
-  assert.match(programs, /\.moduleActions\s+\.product-action/u, 'programs keeps the live .moduleActions selector for migrated actions');
+  assert.match(programs, /\.moduleFoot\s+:global\(\.product-action\)/u, 'programs keeps a 44px target on the expanded row actions');
 });
 
 test('home-drops-unused-hint-title-console-drops-unused-primary', () => {

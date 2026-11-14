@@ -79,8 +79,8 @@ test('web-console-programs-covers-status-reveal-draw-and-moderation', () => {
   assert.match(workspace, /반려/);
   assert.match(workspace, /좋아요/);
   // Type counts: votes/quizzes/surveys by response, Q&A by question.
-  assert.match(workspace, /응답 \$/);
-  assert.match(workspace, /질문 \$/);
+  assert.match(workspace, /unit: "응답"/);
+  assert.match(workspace, /unit: "질문"/);
   // Feature-flagged-off types point at settings instead of failing silently.
   assert.match(workspace, /기능을 먼저 켜세요/);
   assert.match(workspace, /행사 설정/);
