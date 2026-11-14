@@ -150,7 +150,7 @@ export default function AttendeeHomeLanding({
       <span className={L.ticketText}>
         <span className={L.ticketLabel}>{ticket.label}</span>
       </span>
-      <span className={L.ticketGo} aria-hidden="true">열기</span>
+      <span className={L.ticketGo}>열기</span>
     </ProductButton>
   ) : null;
 

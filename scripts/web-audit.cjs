@@ -13,9 +13,11 @@
 // Preserved attendee-home outcomes: the ticket is initially visible and the
 // six entries are reachable on short phones, every label and icon stays inside
 // its touch surface, every tile clears 44px, the event
-// banner stays a separate visible region above the grid, keyboard Enter
+// banner stays a separate visible region above the entry grid (the floating
+// ticket card may ride over the banner's lower edge, per the approved
+// tile/poster compositions), keyboard Enter
 // opens the first destination, each destination has browser navigation
-// state, browser back restores the menu, and details open independently.
+// state, and browser back restores the menu, and details open independently.
 //
 // Serious and critical axe violations fail the run. Horizontal overflow at
 // any viewport fails the run. Moderate axe findings are reported for triage.
@@ -117,8 +119,11 @@ async function attendeeHomeNavigation(page, label, failures, navigate = true) {
     scrollHeight: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight),
   }));
   const banner = await page.getByRole('region', { name: /참가자 홈$/ }).boundingBox();
-  if (!banner || !boxes[0] || banner.y + banner.height > boxes[0].y + 1) {
-    failures.push(`${label}: event banner and menu must remain separate, visible regions`);
+  // The floating ticket card may ride over the banner's lower edge, but the
+  // entry grid below it must clear the banner so both stay visible regions.
+  const entriesTop = boxes.slice(1).every(Boolean) ? Math.min(...boxes.slice(1).map((box) => box.y)) : null;
+  if (!banner || entriesTop === null || banner.y + banner.height > entriesTop + 1) {
+    failures.push(`${label}: event banner and the entry grid below it must remain separate, visible regions`);
   }
   // Additional task links may extend the page vertically. Keep the ticket in
   // the first viewport and all entries inside the horizontal viewport; the

@@ -90,6 +90,15 @@ test('the landing renders one of three compositions with the same entries; the p
   assert.match(css, /\.poster \.hero \{ height: clamp\(300px, 88cqi, 460px\); justify-content: flex-end; \}/u);
   assert.match(css, /\.group_tile \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/u, 'tiles are two square columns');
   assert.match(css, /\.root \.tile \{[^}]*aspect-ratio: 1;/su);
+  // The floating ticket rides over the banner's lower edge (approved tile and
+  // poster mock); the entry grid below it clears the banner by audit.
+  assert.match(css, /\.tile \.ticketWrap, \.poster \.ticketWrap \{ margin-top: -26px; \}/u);
+  // The ticket's "열기" pill sits on the brand color, so its text uses the
+  // on-brand ink token (white fails contrast on the default brand), and the
+  // visible word stays in the accessible name (no aria-hidden on visible text).
+  assert.match(css, /\.ticketGo \{[^}]*background: var\(--brand[^}]*color: var\(--on-brand/su);
+  assert.match(landing, /<span className=\{L\.ticketGo\}>열기<\/span>/u);
+  assert.doesNotMatch(landing, /ticketGo\} aria-hidden/u);
 });
 
 test('the studio is a live phone beside a short list; rows open in place; the reserved layout is locked', () => {

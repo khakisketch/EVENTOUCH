@@ -102,7 +102,7 @@
 .ticket :global(svg) { flex: none; width: 30px; height: 30px; color: var(--brand, #c8441f); }
 .ticketText { display: grid; min-width: 0; flex: 1; }
 .ticketLabel { font-size: 16px; font-weight: 800; }
-.ticketGo { flex: none; padding: 8px 14px; border-radius: 12px; background: var(--brand, #c8441f); color: #fff; font-size: 13px; font-weight: 800; }
+.ticketGo { flex: none; padding: 8px 14px; border-radius: 12px; background: var(--brand, #c8441f); color: var(--on-brand, #19191c); font-size: 13px; font-weight: 800; }
 .typography .ticket { background: var(--lay-ink); color: var(--home-background-color, #1e2026); box-shadow: none; min-height: 72px; }
 .typography .ticket :global(svg) { color: inherit; }
 .typography .ticketGo { background: var(--home-background-color, #1e2026); color: var(--lay-ink); }
