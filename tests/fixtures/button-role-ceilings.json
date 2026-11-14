@@ -16,7 +16,7 @@
   "console/console-ui/StageTransitionConfirmation.tsx": 2,
   "console/events/[id]/EventOverview.tsx": 2,
   "console/events/[id]/content/ContentWorkspace.tsx": 24,
-  "console/events/[id]/draws/DrawsWorkspace.tsx": 28,
+  "console/events/[id]/draws/DrawsWorkspace.tsx": 23,
   "console/events/[id]/messages/MessagingWorkspace.tsx": 26,
   "console/events/[id]/operations/OperationsWorkspace.tsx": 20,
   "console/events/[id]/page/ThemeWorkspace.tsx": 24,

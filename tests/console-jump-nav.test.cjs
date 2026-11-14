@@ -26,7 +26,6 @@ const navCss = read('apps/web/app/console/console-ui/console-ui.module.css');
 
 test('the long console screens mark the section in view on the nav link itself', () => {
   for (const [name, source, css] of [
-    ['draws and votes', draws, drawsCss],
     ['attendee page editor', theme, themeCss],
   ]) {
     assert.match(source, /<ConsoleSectionNav/u, `${name} keeps the shared jump nav`);
@@ -78,41 +77,13 @@ test('an explicit jump names its section at once and pins it past the scroll spy
   const guardAt = nav.indexOf('if (!target) return;');
   const focusAt = nav.indexOf('target.focus({ preventScroll: true })');
   assert.ok(clickAt >= 0 && guardAt > clickAt && reportAt > guardAt && focusAt > reportAt, 'guard, then report, then focus handoff');
-  for (const [name, source] of [['draws and votes', draws]]) {
-    assert.match(source, /onNavigate=\{followJumpedSection\}/u, `${name} follows explicit jumps`);
-    assert.match(source, /navPinRef\.current = id;/u, `${name} pins the jumped-to section`);
-    assert.match(source, /if \(navPinRef\.current\) return;/u, `${name} spy stands down while pinned`);
-  }
 });
 
-test('the jump pin releases only on genuine user scrolling, never on a timer', () => {
-  // The shared nav stays hook-free (foundation contract): each long screen
-  // owns its tiny pin next to the spy it guards.
+test('the shared nav stays hook-free; the draw screen no longer owns a scroll-spy pin', () => {
+  // The shared nav stays hook-free (foundation contract). The draw and vote
+  // screen left the jump nav for a stage picker, so it owns no pin or spy.
   assert.doesNotMatch(nav, /useJumpNavPin/u, 'no hook leaks into the shared nav');
-  for (const [name, source] of [['draws and votes', draws]]) {
-    assert.match(source, /const navPinRef = useRef<string \| null>\(null\);/u, `${name} owns its pin`);
-    assert.match(source, /addEventListener\("wheel", releaseJumpPin, \{ passive: true \}\)/u, `${name} wheel scrolling releases`);
-    assert.match(source, /addEventListener\("touchmove", releaseJumpPin, \{ passive: true \}\)/u, `${name} touch scrolling releases`);
-    // Keystrokes inside a field drive that control, not the document: an
-    // arrow moving through an input/select must not release the pin.
-    assert.match(source, /target\.closest\("input, select, textarea, \[contenteditable\]"\)/u, `${name} ignores editable targets`);
-    for (const key of ['"ArrowUp"', '"ArrowDown"', '"PageUp"', '"PageDown"', '"Home"', '"End"', '" "']) {
-      assert.ok(source.includes(key), `${name} scroll key ${key} releases`);
-    }
-    // Scope the timer check to the jump pin and its release effect. The same
-    // screen may need a timeout for an unrelated network request. Ensure all
-    // assignments to the pin are still only the explicit jump and release.
-    const pinStart = source.indexOf('const navPinRef = useRef<string | null>(null);');
-    const effectStart = source.indexOf('useEffect(() => {', pinStart);
-    const effectEnd = source.indexOf('}, []);', effectStart);
-    assert.ok(pinStart >= 0 && effectStart > pinStart && effectEnd > effectStart, `${name} pin effect is locatable`);
-    const pinScope = source.slice(pinStart, effectEnd + '}, []);'.length);
-    assert.deepEqual([...source.matchAll(/navPinRef\.current\s*=\s*([^;]+);/gu)].map((match) => match[1].trim()), ['id', 'null']);
-    assert.doesNotMatch(pinScope, /setTimeout/u, `${name} jump pin holds nothing on a timer`);
-    assert.doesNotMatch(pinScope, /setInterval/u, `${name} jump pin polls nothing on an interval`);
-    assert.doesNotMatch(pinScope, /addEventListener\("scroll"/u, `${name} programmatic scrolls never release`);
-    assert.doesNotMatch(pinScope, /addEventListener\('scroll'/u, `${name} programmatic scrolls never release`);
-  }
+  assert.doesNotMatch(draws, /navPinRef|IntersectionObserver|ConsoleSectionNav/u, 'no scroll spy on the draw screen');
 });
 
 test('deep links name their section where the scroll spy cannot see it arrive', () => {
@@ -121,12 +92,10 @@ test('deep links name their section where the scroll spy cannot see it arrive', 
   // Operations validates against the actually rendered (gated) list: a
   // gated-off or unknown anchor pins nothing and the marker keeps the
   // default section instead of pointing at no rendered link.
-  assert.match(draws, /const DRAW_SECTION_IDS = Object\.keys\(DRAW_SECTION_LABELS\)/u, 'draws resolve the same list the spy iterates');
-  for (const [name, source] of [['draws and votes', draws]]) {
-    assert.match(source, /hash\.slice\(1\)/u, `${name} reads the fragment`);
-    assert.match(source, /followJumpedSection\(id\)/u, `${name} pins the deep-linked section`);
-    assert.match(source, /window\.addEventListener\("hashchange", applyHash\)/u, `${name} follows later fragment changes`);
-  }
+  // The draw screen resolves the same fragments by selecting that item.
+  assert.match(draws, /draws-vote" \|\| id === "draws-roulette" \|\| id === "draws-lucky"/u, 'draws deep links select the stage item');
+  assert.match(draws, /draw-program-/u, 'a program fragment selects that program');
+  assert.match(draws, /window\.addEventListener\("hashchange", applyHash\)/u, 'later fragment changes keep working');
   // The preset-unfold behavior the hash effect already owned stays intact.
   assert.match(operations, /if \(hash === "#ops-booth-mode"\)/u, 'mode deep links still unfold their preset');
   assert.ok(operations.includes('} else if (hash === "#ops-booth-map")'), 'map deep links still unfold their preset');
@@ -153,10 +122,10 @@ test('a section jump moves focus into the section, not only the viewport', () =>
 });
 
 test('the draw and vote screen keeps its four jobs addressable', () => {
-  for (const id of ['draws-programs', 'draws-vote', 'draws-roulette', 'draws-lucky']) {
-    assert.match(draws, new RegExp(`\\{ id: "${id}", label:`), `${id} stays in the nav`);
+  // The four jobs are items of one stage picker; each keeps its own state line.
+  for (const key of ['"vote"', '"roulette"', '"lucky"']) {
+    assert.ok(draws.includes(`key: ${key}`), `${key} stays selectable`);
   }
-  // Each section still carries its own state, so the nav is a summary too.
-  assert.match(draws, /무대 추첨 · \$\{state\.drawPrograms\.length\}개/u);
-  assert.match(draws, /순위 투표 · \$\{state\.voteTotal\}표/u);
+  assert.match(draws, /key: `program:\$\{item\.id\}`/u, 'every draw program is selectable');
+  assert.match(draws, /id=\{kind === "program" && program \? `draw-program-\$\{program\.id\}` : `draws-\$\{kind\}`\}/u, 'anchors survive on the stage card');
 });

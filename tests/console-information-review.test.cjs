@@ -126,7 +126,8 @@ test("participant home offers self-service booth stamping in the ticket tab", ()
 
 test("the rank vote is named 순위 투표, apart from the poll module", () => {
   const draws = read("console/events/[id]/draws/DrawsWorkspace.tsx");
-  assert.match(draws, /\{ id: "draws-vote", label: "순위 투표" \}/u);
-  assert.match(draws, /title=\{`순위 투표 · \$\{state\.voteTotal\}표`\}/u);
+  assert.match(draws, /key: "vote", type: "vote"[^}]*name: "순위 투표"/u);
+  assert.match(draws, /<h2 className=\{styles\.stageTitle\}>순위 투표<\/h2>/u);
+  assert.match(draws, /unit: "표"/u);
   assert.doesNotMatch(draws, /모바일 투표/u);
 });

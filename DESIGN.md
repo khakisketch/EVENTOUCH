@@ -230,6 +230,15 @@ The owner approved this composition on 2026-11-13 (`apps/web/app/console/events/
 - A whole row opens the detail dialog; a chevron replaces the "상세" text. Checkbox, "승인" and other inline buttons never trigger it. "승인" appears only on PENDING and WAITLIST rows.
 - Mobile rows are two lines: name, then company, group and presence. The phone number stays in the detail dialog.
 
+## 추첨·투표 확정 구성
+
+The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/draws/`, "미리보기 무대"). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-draws-composition.test.cjs` guards it.
+
+- One stage card, then a flat picker ("무대 선택") of the four jobs: each stage draw program, 순위 투표, 모바일 룰렛, 럭키번호. No jump tabs, no stack of section panels. Pressing a row swaps the card; `#draws-vote`, `#draws-roulette`, `#draws-lucky` and `#draw-program-<id>` select that item.
+- The card's top is a preview of what the audience really sees: stage draws show the venue-screen scene (violet and gold, from `screen/[slug]/draw-stage.module.css`); vote, roulette and lucky show the attendee phone card. The preview (`StagePreview.tsx`) is a decorative redraw: it loads nothing, runs nothing and must be updated when the real screens change. The venue screen has no vote, roulette or lucky scene today, so those use the phone.
+- Under the preview: facts (state kicker, name, one meta line, big number and gauge) on the left, actions on the right. The single orange action is the run button ("N명 추첨 실행") beside a large stepper; 무대 터치 실행 is secondary; 결과 공개 is a switch; 설정 수정, 운영 시작·종료·다시 열기 are ghost.
+- Program create/edit settings open in a dialog (`추첨 프로그램 만들기` in the page header); vote, roulette and lucky settings stay as their existing forms folded under the card. Every blocker line, confirmation, recovery notice and permission lock is unchanged.
+
 ## 참여 콘텐츠 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/programs/`, review drawer with the merged answer card). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-programs-composition.test.cjs` guards it.

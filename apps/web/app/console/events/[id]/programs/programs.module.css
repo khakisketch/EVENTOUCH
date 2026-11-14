@@ -311,6 +311,10 @@
 .typeTile[data-type="photo"] { background: color-mix(in srgb, var(--info) 16%, var(--paper)); color: var(--info); }
 .typeTile[data-type="board"] { background: color-mix(in srgb, var(--ink) 7%, var(--paper)); color: var(--ink); }
 
+.typeTile[data-type="vote"] { background: var(--info-soft); color: var(--info); }
+.typeTile[data-type="roulette"] { background: color-mix(in srgb, var(--ref-navy) 10%, var(--paper)); color: var(--ref-navy); }
+.typeTile[data-type="lucky"] { background: var(--warning-soft); color: var(--warning); }
+
 .typeTile i {
   position: absolute;
   right: -3px;

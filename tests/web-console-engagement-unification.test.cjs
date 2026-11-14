@@ -75,9 +75,10 @@ test('unified-frame: primary actions live in toolbars or editing areas, feedback
 
 test('unified-frame: domain sections keep their identities, duplicate menu titles are gone', () => {
   const draws = read(DRAWS);
-  for (const id of ['draws-vote', 'draws-programs', 'draws-roulette', 'draws-lucky']) {
-    assert.match(draws, new RegExp(`headingId="${id}"`), `draws retains ${id}`);
+  for (const key of ['vote', 'roulette', 'lucky']) {
+    assert.match(draws, new RegExp(`\`draws-\\$\\{kind\\}\``), `draws retains the ${key} anchor`);
   }
+  assert.match(draws, /`draw-program-\$\{program\.id\}`/, 'every draw program keeps its anchor');
   const photos = read(PHOTOS);
   for (const id of ['evidence-photo-sections', 'evidence-photo-archive']) {
     assert.match(photos, new RegExp(`headingId="${id}"`), `photos retains ${id}`);
@@ -210,11 +211,11 @@ test('unified-frame: ambiguous draw responses keep their receipts for safe retry
 
 test('unified-frame: draws jumps its four long sections through the shared nav', () => {
   const draws = read(DRAWS);
-  assert.match(draws, /<ConsoleSectionNav/, 'draws use the shared section nav');
-  assert.match(draws, /\{ id: "draws-vote", label: "순위 투표" \}/, 'vote jump target stays');
-  assert.match(draws, /\{ id: "draws-programs", label: "무대 추첨" \}/, 'stage-draw jump target stays');
-  assert.match(draws, /\{ id: "draws-roulette", label: "모바일 룰렛" \}/, 'roulette jump target stays');
-  assert.match(draws, /\{ id: "draws-lucky", label: "럭키번호" \}/, 'lucky-number jump target stays');
+  assert.doesNotMatch(draws, /<ConsoleSectionNav/, 'draws left the jump nav for a stage picker');
+  for (const key of ['"vote"', '"roulette"', '"lucky"']) {
+    assert.ok(draws.includes(`key: ${key}`), `${key} stays selectable in the picker`);
+  }
+  assert.match(draws, /key: `program:\$\{item\.id\}`/, 'every stage draw is selectable');
 });
 
 test('unified-frame: theme status lives in header badges and save closes the editing column', () => {
@@ -268,12 +269,12 @@ test('unified-frame: programs pre-block writes for switched-off types', () => {
 test('unified-frame: draws stay clean on pristine views and explain run readiness', () => {
   const draws = read(DRAWS);
   assert.match(draws, /prize\.label\.trim\(\) !== "" \|\| prize\.quantity/, 'default empty prize rows are not edits');
-  assert.match(draws, /className=\{styles\.programList\}/, 'run list exists');
+  assert.match(draws, /className=\{styles\.picker\}/, 'the stage picker exists');
   assert.ok(
-    draws.indexOf('className={styles.programList}') < draws.indexOf('추첨 프로그램 만들기'),
-    'run affordances precede the long create form'
+    draws.indexOf('className={styles.runRow}') < draws.indexOf('<ConsoleDialog title={editingProgramId'),
+    'run affordances precede the create/edit dialog'
   );
-  assert.match(draws, /programFormRef\.current\?\.scrollIntoView/, 'editing scrolls to the relocated form');
+  assert.match(draws, /titleId="draws-program-dialog-title"/, 'program settings open in a dialog');
   assert.match(draws, /runCountValid/, 'count validity derives once from the server range');
   assert.match(draws, /실행 전제: \{runBlockers\.join\(" · "\)\}/u, 'one line states every missing precondition');
   assert.match(draws, /!program\.published \? "결과 공개 필요"/u, 'unpublished programs name the missing precondition');

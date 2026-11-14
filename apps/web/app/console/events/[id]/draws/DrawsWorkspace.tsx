@@ -4,17 +4,20 @@ import ConsoleChoiceGroup from "../../../console-ui/ConsoleChoiceGroup";
 import ProductButton from "../../../../ui/ProductButton";
 import ValidatedForm from "../../../../ui/ValidatedForm";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ProductLink from "../../../../ui/ProductLink";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
 import ConsolePage from "../../../console-ui/ConsolePage";
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
 import ConsoleFormActions from "../../../console-ui/ConsoleFormActions";
-import ConsoleSectionNav from "../../../console-ui/ConsoleSectionNav";
+import ConsoleDialog from "../../../console-ui/ConsoleDialog";
 import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
 import { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
-import ConsoleSection from "../../../console-ui/ConsoleSection";
+import { MinusIcon, PlusIcon } from "../../../console-ui/ConsoleIcons";
+import { Switch } from "@astryxdesign/core/Switch";
+import ProgramTypeIcon from "../programs/ProgramIcons";
+import StagePreview, { type StageScene } from "./StagePreview";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import { useConsoleDraftGuard } from "../../../console-draft-guard";
 import styles from "./draws.module.css";
@@ -78,27 +81,6 @@ type RewardRecord = {
   sourceProgramId: string;
   winnerIndex: number | null;
 };
-
-// Names the section in view for the jump-nav active link. The observer
-// below iterates these keys, so the map stays the single list of tracked
-// sections.
-const DRAW_SECTION_LABELS: Record<string, string> = {
-  "draws-programs": "무대 추첨",
-  "draws-vote": "순위 투표",
-  "draws-roulette": "모바일 룰렛",
-  "draws-lucky": "럭키번호",
-};
-
-// The single list of tracked sections: the observer iterates it and deep
-// links resolve against it.
-const DRAW_SECTION_IDS = Object.keys(DRAW_SECTION_LABELS);
-
-// Keys that scroll the document when the focus is not inside an editable
-// field. Releasing the explicit-jump pin on exactly these (plus wheel and
-// touch) hands control back to the scroll spy on genuine user scrolling,
-// while programmatic jumps — which fire none of them — keep the chosen
-// section without any timeout.
-const SCROLL_RELEASE_KEYS = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "]);
 
 type WorkspaceState =
   | { kind: "loading" }
@@ -239,35 +221,9 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
   const closeHref = useEventCloseHandoff(eventId);
   const router = useRouter();
   const [state, setState] = useState<WorkspaceState>({ kind: "loading" });
-  const [activeSection, setActiveSection] = useState("draws-programs");
-  // Explicit-jump priority: a jump or deep link names its section at once
-  // and pins it past the scroll spy, which watches tiny headings in a
-  // narrow band and can never see a bottom-of-page section arrive. Only a
-  // genuine wheel, touch, or scroll-key releases the pin.
-  const navPinRef = useRef<string | null>(null);
-  const followJumpedSection = useCallback((id: string) => {
-    navPinRef.current = id;
-    setActiveSection(id);
-  }, []);
-  useEffect(() => {
-    const releaseJumpPin = () => { navPinRef.current = null; };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (!SCROLL_RELEASE_KEYS.has(event.key)) return;
-      // Keystrokes inside an editable control drive that control, not the
-      // document: arrows moving through a field must not release the pin.
-      const target = event.target as Element | null;
-      if (target && typeof target.closest === "function" && target.closest("input, select, textarea, [contenteditable]")) return;
-      releaseJumpPin();
-    };
-    window.addEventListener("wheel", releaseJumpPin, { passive: true });
-    window.addEventListener("touchmove", releaseJumpPin, { passive: true });
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("wheel", releaseJumpPin);
-      window.removeEventListener("touchmove", releaseJumpPin);
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, []);
+  // The stage card shows one item at a time: a draw program, the ranked vote,
+  // the mobile roulette or the lucky numbers. null means "the sensible default".
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -763,42 +719,18 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [otherOperationReceipt, pendingOperation]);
 
-  // Names the section in view for the jump-nav active link. Anchor clicks keep
-  // working natively whether or not the observer is available.
-  useEffect(() => {
-    if (typeof IntersectionObserver === "undefined") return;
-    const ids = DRAW_SECTION_IDS;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        // An explicit jump or deep link holds the current marker: the
-        // observed headings are small and the band is narrow, so a stale
-        // heading must not rename the section the operator just chose.
-        if (navPinRef.current) return;
-        for (const entry of entries) {
-          if (entry.isIntersecting) setActiveSection(entry.target.id);
-        }
-      },
-      { rootMargin: "-30% 0px -60% 0px" }
-    );
-    for (const id of ids) {
-      const node = document.getElementById(id);
-      if (node) observer.observe(node);
-    }
-    return () => observer.disconnect();
-  }, [state]);
-
-  // A deep link names its section even where the scroll spy cannot see it
-  // arrive; the pin holds until the operator really scrolls.
+  // Deep links (#draws-vote, #draw-program-<id>) select that item.
   useEffect(() => {
     const applyHash = () => {
-      const hash = window.location.hash;
-      const id = hash.startsWith("#") ? hash.slice(1) : "";
-      if (id && (DRAW_SECTION_IDS as readonly string[]).includes(id)) followJumpedSection(id);
+      const id = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
+      if (id === "draws-vote" || id === "draws-roulette" || id === "draws-lucky") setSelectedKey(id.replace("draws-", ""));
+      else if (id.startsWith("draw-program-")) setSelectedKey(`program:${decodeURIComponent(id.slice("draw-program-".length))}`);
+      else if (id === "draws-programs") setSelectedKey("programs");
     };
     applyHash();
     window.addEventListener("hashchange", applyHash);
     return () => window.removeEventListener("hashchange", applyHash);
-  }, [followJumpedSection]);
+  }, []);
 
   async function postCommand(command: string, payload: Record<string, unknown>, intent = ""): Promise<Record<string, unknown>> {
     const attempt = JSON.stringify([eventId, command, payload, intent]);
@@ -942,6 +874,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
       setCompanyDraft("");
       setProgramOverlap("EVENT");
       setEditingProgramId(null);
+      setProgramFormOpen(false);
       setNotice(editingProgramId ? "추첨 프로그램을 저장했습니다." : "추첨 프로그램을 만들었습니다.");
       await load(true);
     } catch (error) {
@@ -1565,6 +1498,27 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
     }
   }
 
+  function resetProgramForm() {
+    setEditingProgramId(null); setProgramName(""); setProgramQuota(""); setProgramModuleId("");
+    setProgramEligibility("PERSON"); setProgramGroups([]); setProgramCompanies([]); setProgramOverlap("EVENT"); setProgramTiers([]);
+    setGroupDraft(""); setCompanyDraft("");
+  }
+  function openCreateProgram() {
+    resetProgramForm();
+    setProgramFormOpen(true);
+  }
+  function closeProgramForm() {
+    if (busy === "program:save") return;
+    resetProgramForm();
+    setProgramFormOpen(false);
+  }
+  function openEditProgram(program: DrawProgram) {
+    setProgramFormOpen(true);
+    setEditingProgramId(program.id); setProgramName(program.name); setProgramQuota(String(program.quota)); setProgramModuleId(program.moduleId);
+    setProgramEligibility(program.eligibility); setProgramGroups(program.eligibleGroups); setProgramCompanies(program.eligibleCompanies); setProgramOverlap(program.overlap);
+    setProgramTiers(program.prizeTiers.map((tier) => ({ key: randomId("tier"), name: tier.name, count: String(tier.count) })));
+  }
+
   if (state.kind === "loading" || (state.kind === "ready" && loadedDrawEventRef.current !== eventId)) {
     return (
       <ConsolePage pageId="draws" eventId={eventId}>
@@ -1617,22 +1571,9 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
       eventId={eventId}
       eventName={state.eventName}
       meta={state.eventMeta}
-      sectionNav={
-        <div className={styles.navSticky}>
-          <p className={styles.navIndexLabel} aria-hidden="true">추첨·투표 목차</p>
-          <ConsoleSectionNav mode="tabs"
-            label="추첨·투표 구역"
-            activeId={activeSection}
-            onNavigate={followJumpedSection}
-            items={[
-              { id: "draws-programs", label: "무대 추첨" },
-              { id: "draws-vote", label: "순위 투표" },
-              { id: "draws-roulette", label: "모바일 룰렛" },
-              { id: "draws-lucky", label: "럭키번호" },
-            ]}
-          />
-        </div>
-      }
+      headerActions={canWriteDraws && state.drawEnabled ? (
+        <ProductButton type="button" variant="secondary" disabled={busy !== null || writeLocked} onClick={openCreateProgram}>추첨 프로그램 만들기</ProductButton>
+      ) : undefined}
       feedback={
         <>
           {notice ? <ConsoleFeedback kind="success">{notice}</ConsoleFeedback> : null}
@@ -1733,278 +1674,251 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
         />
       ) : null}
 
-      <ConsoleSection headingId="draws-programs" title={`무대 추첨 · ${state.drawPrograms.length}개`}>
-        {!state.drawEnabled ? <p className={styles.featureOff}>이 행사에서 무대 추첨 기능이 꺼져 있습니다.</p> : (
-          <>
-            <p className={styles.hint}>실행 인원은 매번 1~20명으로 지정합니다(기본 1명). 프로그램 대상·쿼터·등급은 첫 당첨 뒤 잠기고, 공개 여부는 별도로 관리합니다.</p>
-            {!screenEnabled && canWriteDraws ? (
-              <p className={styles.stagePrerequisite} id="stage-screen-prerequisite">
-                무대 터치 실행은 당첨 결과와 경품을 저장하고 이번 결과를 전광판에 올립니다. 사용 전 <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/settings#settings-features`)}>행사 설정에서 행사장 출력을 켜세요.</ProductLink>
-              </p>
-            ) : null}
-            {!state.drawModules.some((module) => module.published) && !state.drawPrograms.length && canWriteDraws ? (
-              <div className={`${styles.stagePrerequisite} ${styles.stagePrerequisiteActions}`}>
-                {state.drawModules.length ? (
-                  <>
-                    <p>무대 터치 실행에는 공개된 추첨 무대가 필요합니다. 기존 비공개 결과는 자동 공개하지 않습니다.</p>
-                    <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 콘텐츠에서 무대 운영을 시작해 공개하세요.</ProductLink>
-                  </>
-                ) : (
-                  <>
-                    <p>공개 상태로 전환한 무대만 여기에 연결할 수 있습니다.</p>
-                    <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 콘텐츠에서 추첨 무대를 만들고 공개하세요.</ProductLink>
-                  </>
-                )}
+      {(() => {
+        const programs = state.drawPrograms;
+        const defaultProgram = programs.find((program) => program.status === "OPEN") ?? programs[0] ?? null;
+        const selectedProgram = selectedKey?.startsWith("program:") ? programs.find((program) => `program:${program.id}` === selectedKey) ?? null : null;
+        const kind: "program" | "vote" | "roulette" | "lucky" =
+          selectedProgram ? "program"
+          : selectedKey === "vote" || selectedKey === "roulette" || selectedKey === "lucky" ? selectedKey
+          : defaultProgram ? "program" : state.pollEnabled ? "vote" : "roulette";
+        const program = kind === "program" ? selectedProgram ?? defaultProgram : null;
+        const eventLabel = state.eventName;
+        const prizeRows = roulettePrizes.map((prize) => {
+          const used = state.rouletteUsedById[prize.id] ?? 0;
+          const left = prize.unlimited ? null : Math.max(0, (Number(prize.quantity) || 0) - used);
+          return { prize, used, left };
+        });
+        const rows: Array<{ key: string; type: string; dot: "live" | "prep" | "done"; name: string; line: string; warn?: string; count: number; unit: string; meter: number | null }> = [
+          ...programs.map((item) => ({
+            key: `program:${item.id}`, type: "draw", dot: item.status === "OPEN" ? "live" as const : item.status === "DRAFT" ? "prep" as const : "done" as const,
+            name: item.name, line: `${item.eligibility === "COMPANY" ? "업체" : "개인"} 추첨 · ${item.quota}명`,
+            warn: item.winners.length && !item.published ? "결과 비공개" : undefined,
+            count: item.winners.length, unit: `/ ${item.quota}명`, meter: item.quota ? Math.round((item.winners.length / item.quota) * 100) : 0,
+          })),
+          { key: "vote", type: "vote", dot: state.voteConfig.status === "OPEN" ? "live" : "done", name: "순위 투표", line: `팀 ${state.teams.length} · 참가자당 ${state.voteConfig.pickCount}명 선택`, count: state.voteTotal, unit: "표", meter: null },
+          { key: "roulette", type: "roulette", dot: state.rouletteConfig.status === "OPEN" ? "live" : state.rouletteConfig.status === "DRAFT" ? "prep" : "done", name: "모바일 룰렛", line: `경품 ${roulettePrizes.length}종`, count: state.rouletteSpun, unit: "회 참여", meter: null },
+          { key: "lucky", type: "lucky", dot: selectedLucky.eligible.length > 0 && missingLuckyCount === 0 ? "done" : "prep", name: "럭키번호 사전 배정", line: `범위 ${state.luckyMin}–${state.luckyMax} · 승인 참가자 ${selectedLucky.eligible.length}명`, count: state.luckyIssued, unit: "명", meter: selectedLucky.eligible.length ? Math.round((state.luckyIssued / selectedLucky.eligible.length) * 100) : 0 },
+        ];
+        const activeKey = kind === "program" && program ? `program:${program.id}` : kind;
+
+        let scene: StageScene;
+        let sceneLabel: string;
+        let stageBody: React.ReactNode = null;
+        if (kind === "program" && program) {
+          const last = program.winners[program.winners.length - 1];
+          scene = {
+            kind: "board", event: eventLabel, program: program.name,
+            winner: last ? { name: last.name, sub: last.kind === "COMPANY" ? "당첨 업체" : last.kind === "PERSON" ? "당첨 참가자" : "당첨", tier: last.tier ?? "" } : null,
+            more: Math.max(0, program.winners.length - 1),
+          };
+          sceneLabel = `전광판 미리보기: ${program.name}${last ? ` · 최근 당첨 ${last.name}` : " · 아직 결과 없음"}`;
+        } else if (kind === "vote") {
+          scene = { kind: "vote", teams: state.teams.map((team) => team.name), pickCount: state.voteConfig.pickCount };
+          sceneLabel = "참가자 폰 미리보기: 순위 투표";
+        } else if (kind === "roulette") {
+          scene = { kind: "roulette", prizes: prizeRows.map(({ prize, left }) => ({ label: prize.label || "경품", left: left === null ? "무제한" : `${left} 남음` })) };
+          sceneLabel = "참가자 폰 미리보기: 모바일 룰렛";
+        } else {
+          scene = { kind: "lucky", digits: String(state.luckyMax).length };
+          sceneLabel = "참가자 폰 미리보기: 럭키번호";
+        }
+
+        if (kind === "program" && program) {
+          const remaining = Math.max(program.quota - program.winners.length, 0);
+          const runCount = Number(runCounts[program.id] ?? "1");
+          const countLimit = Math.min(20, remaining);
+          const runCountValid = Number.isInteger(runCount) && runCount >= 1 && runCount <= countLimit;
+          const canRun = program.status === "OPEN" && program.published && remaining > 0 && runCountValid;
+          const linkedModule = state.drawModules.find((module) => module.id === program.moduleId);
+          const moduleTitle = linkedModule?.title ?? "무대 추첨";
+          const moduleNeedsPublishing = !linkedModule || !linkedModule.published;
+          const stagePrerequisites = [
+            !screenEnabled ? "stage-screen-prerequisite" : null,
+            moduleNeedsPublishing ? `stage-module-prerequisite-${program.id}` : null,
+          ].filter((id): id is string => id !== null);
+          // Ordinary draws do not require the venue screen or a
+          // published stage module. Keep those extra requirements
+          // attached only to the stage action.
+          const runBlockers = [
+            !program.published ? "결과 공개 필요" : "",
+            !runCountValid ? `실행 인원 1~${countLimit}명` : "",
+          ].filter((reason) => reason !== "");
+          const stageOnlyBlockers = [
+            !screenEnabled ? "행사장 출력 꺼짐" : "",
+            moduleNeedsPublishing ? "무대 프로그램 공개 필요" : "",
+          ].filter((reason) => reason !== "");
+          const runBlockerId = `run-blockers-${program.id}`;
+          const stageBlockerId = `stage-blockers-${program.id}`;
+          const runNextAction = !program.published
+            ? "결과를 공개하면"
+            : `실행 인원을 1~${countLimit}명 범위로 입력하면`;
+
+          const togglePublish = () => {
+            if (!program.winners.length && !program.published) {
+              setPendingConfirm({ kind: "publishEmptyProgram", program, summary: `“${program.name}”의 결과 공개를 허용할까요? 추첨을 실행하면 당첨 결과가 참가자에게 공개될 수 있습니다. 지금 추첨이 실행되지는 않습니다.` });
+            } else {
+              void setProgramPublished(program, !program.published);
+            }
+          };
+          const showPublish = program.winners.length > 0 || (program.status === "OPEN" && !program.published);
+          const countStep = (delta: number) => setRunCounts((values) => ({ ...values, [program.id]: String(Math.min(Math.max(1, (Number(values[program.id] ?? "1") || 1) + delta), Math.max(1, countLimit))) }));
+          stageBody = (
+            <>
+              <div className={styles.stageInfo}>
+                <div className={styles.stageMain}>
+                  <span className={styles.stageKicker} data-state={program.status === "OPEN" ? "live" : program.status === "DRAFT" ? "prep" : "done"}>{program.status === "OPEN" ? "지금 무대에서" : program.status === "DRAFT" ? "준비 중" : "종료"}</span>
+                  <h2 className={styles.stageTitle}>{program.name}</h2>
+                  <p className={styles.stageMeta}>{[program.eligibility === "COMPANY" ? "업체 추첨" : "개인 추첨", program.prizeTiers.length ? program.prizeTiers.map((tier) => `${tier.name} ${tier.count}`).join(" · ") : "", program.overlap === "EVENT" ? "행사 중복 제외" : program.overlap === "PROGRAM" ? "프로그램 중복 제외" : "중복 허용", program.published ? "참가자 공개" : "결과 비공개", moduleTitle].filter(Boolean).join(" · ")}</p>
+                  <div className={styles.stageBig}><b>{program.winners.length}</b><span>/ {program.quota}명 당첨 · 남은 {remaining}명</span></div>
+                  <div className={styles.stageGauge} aria-hidden="true"><i style={{ width: `${program.quota ? Math.round((program.winners.length / program.quota) * 100) : 0}%` }} /></div>
+                  {(program.eligibleGroups.length || program.eligibleCompanies.length) ? (
+                    <p className={styles.programMetaText}>대상 {[
+                      program.eligibleGroups.length ? `그룹 ${program.eligibleGroups.join(", ")}` : "",
+                      program.eligibleCompanies.length ? `업체 ${program.eligibleCompanies.join(", ")}` : "",
+                    ].filter(Boolean).join(" · ")}</p>
+                  ) : <p className={styles.programMetaText}>그룹·업체 필터 없음 · 입장(체크인)한 승인 참가자 전체 대상</p>}
+                </div>
+                {canWriteDraws ? (
+                  <div className={styles.stageAct}>
+                    {program.status === "OPEN" && remaining > 0 ? (
+                      <div className={styles.runRow} role="group" aria-label={`${program.name} 추첨 실행`}>
+                        <div className={styles.stepper}>
+                          <ProductButton type="button" variant="ghost" aria-label="실행 인원 줄이기" icon={<MinusIcon />} disabled={writeLocked || runCount <= 1} onClick={() => countStep(-1)} />
+                          <label className="sr-only" htmlFor={`run-count-${program.id}`}>이번 실행 인원</label>
+                          <input id={`run-count-${program.id}`} type="number" inputMode="numeric" min={1} max={countLimit} value={runCounts[program.id] ?? "1"} disabled={writeLocked} onChange={(event) => setRunCounts((values) => ({ ...values, [program.id]: event.target.value }))} />
+                          <ProductButton type="button" variant="ghost" aria-label="실행 인원 늘리기" icon={<PlusIcon />} disabled={writeLocked || runCount >= countLimit} onClick={() => countStep(1)} />
+                        </div>
+                        <ProductButton type="button" variant="primary" className={styles.goButton} aria-describedby={runBlockers.length ? runBlockerId : undefined} disabled={!canRun || busy !== null || writeLocked} onClick={() => runProgram(program)}>{busy === `run:${program.id}` ? "추첨 중입니다" : `${runCount}명 추첨 실행`}</ProductButton>
+                      </div>
+                    ) : null}
+                    <div className={styles.actFoot}>
+                      {program.status === "OPEN" && remaining > 0 ? (
+                        <ProductButton type="button" variant="secondary" className={styles.stageButton} aria-describedby={[...stagePrerequisites, runBlockers.length ? runBlockerId : null, stageOnlyBlockers.length ? stageBlockerId : null].filter(Boolean).join(" ") || undefined} disabled={!canRun || !screenEnabled || moduleNeedsPublishing || busy !== null || writeLocked} onClick={() => runProgram(program, true)}>{busy === `stage:${program.id}` ? "무대 결과 준비 중" : "무대 터치 실행"}</ProductButton>
+                      ) : null}
+                      {showPublish ? (
+                        <Switch label={!program.winners.length ? "결과 공개 허용" : "참가자에게 결과 공개"} value={program.published} isDisabled={busy !== null || writeLocked} onChange={() => togglePublish()} />
+                      ) : null}
+                    </div>
+                    <div className={styles.actFoot}>
+                      {!program.winners.length ? <ProductButton type="button" variant="ghost" disabled={busy !== null || writeLocked} onClick={() => openEditProgram(program)}>설정 수정</ProductButton> : null}
+                      {program.status === "DRAFT" || program.status === "CLOSED" && remaining > 0 ? <ProductButton type="button" variant="ghost" disabled={busy !== null || writeLocked || !program.published && program.winners.length > 0} onClick={() => requestProgramStatus(program, "OPEN")}>{program.status === "DRAFT" ? "운영 시작" : "다시 열기"}</ProductButton> : null}
+                      {program.status === "OPEN" ? <ProductButton type="button" variant="ghost" disabled={busy !== null || writeLocked} onClick={() => requestProgramStatus(program, "CLOSED")}>운영 종료</ProductButton> : null}
+                    </div>
+                  </div>
+                ) : null}
               </div>
-            ) : null}
-            {state.drawPrograms.length ? (
-              <ul className={styles.programList}>
-                {state.drawPrograms.map((program) => {
-                  const remaining = Math.max(program.quota - program.winners.length, 0);
-                  const runCount = Number(runCounts[program.id] ?? "1");
-                  const countLimit = Math.min(20, remaining);
-                  const runCountValid = Number.isInteger(runCount) && runCount >= 1 && runCount <= countLimit;
-                  const canRun = program.status === "OPEN" && program.published && remaining > 0 && runCountValid;
-                  const linkedModule = state.drawModules.find((module) => module.id === program.moduleId);
-                  const moduleTitle = linkedModule?.title ?? "무대 추첨";
-                  const moduleNeedsPublishing = !linkedModule || !linkedModule.published;
-                  const stagePrerequisites = [
-                    !screenEnabled ? "stage-screen-prerequisite" : null,
-                    moduleNeedsPublishing ? `stage-module-prerequisite-${program.id}` : null,
-                  ].filter((id): id is string => id !== null);
-                  // Ordinary draws do not require the venue screen or a
-                  // published stage module. Keep those extra requirements
-                  // attached only to the stage action.
-                  const runBlockers = [
-                    !program.published ? "결과 공개 필요" : "",
-                    !runCountValid ? `실행 인원 1~${countLimit}명` : "",
-                  ].filter((reason) => reason !== "");
-                  const stageOnlyBlockers = [
-                    !screenEnabled ? "행사장 출력 꺼짐" : "",
-                    moduleNeedsPublishing ? "무대 프로그램 공개 필요" : "",
-                  ].filter((reason) => reason !== "");
-                  const runBlockerId = `run-blockers-${program.id}`;
-                  const stageBlockerId = `stage-blockers-${program.id}`;
-                  const runNextAction = !program.published
-                    ? "결과를 공개하면"
-                    : `실행 인원을 1~${countLimit}명 범위로 입력하면`;
-                  return (
-                    <li key={program.id} id={`draw-program-${program.id}`} className={styles.programItem}>
-                      <div className={styles.programTop}>
-                        <strong>{program.name}</strong>
-                        <span>총 {program.quota}명 · 당첨 {program.winners.length}명 · 남은 {remaining}명</span>
-                      </div>
-                      {conflictedProgram?.id === program.id ? (
-                        <div ref={conflictPanelRef} tabIndex={-1}>
-                          <ConsoleFeedback kind="error">추첨 내용이 다른 곳에서 바뀌었습니다. 최신 결과와 남은 인원을 확인한 뒤 다음 작업을 선택하세요.</ConsoleFeedback>
-                        </div>
-                      ) : null}
-                      <div className={styles.programMeta}>
-                        <span className={`${styles.status} ${program.status === "OPEN" ? styles.statusOpen : program.status === "DRAFT" ? styles.statusDraft : styles.statusClosed}`}>{program.status === "OPEN" ? "운영 중" : program.status === "DRAFT" ? "준비" : "종료"}</span>
-                        <span>{program.eligibility === "COMPANY" ? "업체 추첨" : "개인 추첨"}</span>
-                        <span>{program.overlap === "EVENT" ? "행사 중복 제외" : program.overlap === "PROGRAM" ? "프로그램 중복 제외" : "중복 허용"}</span>
-                        <span>{program.published ? "참가자 공개" : "결과 비공개"}</span>
-                        <span>{moduleTitle}</span>
-                      </div>
-                      {(program.eligibleGroups.length || program.eligibleCompanies.length) ? (
-                        <p className={styles.programMetaText}>대상 {[
-                          program.eligibleGroups.length ? `그룹 ${program.eligibleGroups.join(", ")}` : "",
-                          program.eligibleCompanies.length ? `업체 ${program.eligibleCompanies.join(", ")}` : "",
-                        ].filter(Boolean).join(" · ")}</p>
-                      ) : <p className={styles.programMetaText}>그룹·업체 필터 없음 · 입장(체크인)한 승인 참가자 전체 대상</p>}
-                      {program.prizeTiers.length ? <p className={styles.programMetaText}>등급 · {program.prizeTiers.map((tier) => `${tier.name} ${tier.count}명`).join(" · ")}</p> : null}
-                      {program.winners.length ? (
-                        <ul className={styles.winnerList} aria-label={`${program.name} 당첨 결과`}>
-                          {program.winners.map((winner, index) => {
-                            const reward = state.rewards.find((entry) => entry.sourceKind === "draw" && entry.sourceProgramId === program.id && entry.winnerIndex === index);
-                            const recipient = reward?.participantId ? state.participants.find((person) => person.id === reward.participantId) : null;
-                            const eligibleRecipients = winner.kind === "COMPANY"
-                              ? state.participants.filter((person) => person.status === "APPROVED" && !person.revoked && person.company === winner.company)
-                              : [];
-                            return (
-                              <li className={styles.winnerItem} key={`${program.id}-winner-${index}`}>
-                                <div className={styles.winnerSummary}>
-                                  <strong>{winner.name}</strong>
-                                  <span>{winner.kind === "COMPANY" ? "당첨 업체" : winner.kind === "PERSON" ? "당첨 참가자" : "당첨"}{winner.tier ? ` · ${winner.tier}` : ""}{typeof winner.luckyNumber === "number" ? ` · 럭키번호 ${winner.luckyNumber}` : ""}</span>
+              <div className={styles.stageNotes}>
+                {conflictedProgram?.id === program.id ? (
+                  <div ref={conflictPanelRef} tabIndex={-1}>
+                    <ConsoleFeedback kind="error">추첨 내용이 다른 곳에서 바뀌었습니다. 최신 결과와 남은 인원을 확인한 뒤 다음 작업을 선택하세요.</ConsoleFeedback>
+                  </div>
+                ) : null}
+
+                {program.winners.length ? (
+                  <ul className={styles.winnerList} aria-label={`${program.name} 당첨 결과`}>
+                    {program.winners.map((winner, index) => {
+                      const reward = state.rewards.find((entry) => entry.sourceKind === "draw" && entry.sourceProgramId === program.id && entry.winnerIndex === index);
+                      const recipient = reward?.participantId ? state.participants.find((person) => person.id === reward.participantId) : null;
+                      const eligibleRecipients = winner.kind === "COMPANY"
+                        ? state.participants.filter((person) => person.status === "APPROVED" && !person.revoked && person.company === winner.company)
+                        : [];
+                      return (
+                        <li className={styles.winnerItem} key={`${program.id}-winner-${index}`}>
+                          <div className={styles.winnerSummary}>
+                            <strong>{winner.name}</strong>
+                            <span>{winner.kind === "COMPANY" ? "당첨 업체" : winner.kind === "PERSON" ? "당첨 참가자" : "당첨"}{winner.tier ? ` · ${winner.tier}` : ""}{typeof winner.luckyNumber === "number" ? ` · 럭키번호 ${winner.luckyNumber}` : ""}</span>
+                          </div>
+                          {winner.kind === "COMPANY" ? (
+                            reward?.status === "PENDING" ? (
+                              canWriteRewardAssign ? (
+                              <div className={styles.recipientAssign}>
+                                <label htmlFor={`recipient-${reward.id}`}>업체 수령자 지정</label>
+                                <div className={styles.recipientControls}>
+                                  <select id={`recipient-${reward.id}`} value={rewardRecipient[reward.id] ?? ""} onChange={(event) => setRewardRecipient((items) => ({ ...items, [reward.id]: event.target.value }))}>
+                                    <option value="">같은 업체 승인 참가자 선택</option>
+                                    {eligibleRecipients.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
+                                  </select>
+                                  <ProductButton type="button" variant="secondary" disabled={!rewardRecipient[reward.id] || writeLocked || busy === `reward:${reward.id}`} onClick={() => assignCompanyRecipient(reward)}>{busy === `reward:${reward.id}` ? "지정 중입니다" : "수령자 지정"}</ProductButton>
                                 </div>
-                                {winner.kind === "COMPANY" ? (
-                                  reward?.status === "PENDING" ? (
-                                    canWriteRewardAssign ? (
-                                    <div className={styles.recipientAssign}>
-                                      <label htmlFor={`recipient-${reward.id}`}>업체 수령자 지정</label>
-                                      <div className={styles.recipientControls}>
-                                        <select id={`recipient-${reward.id}`} value={rewardRecipient[reward.id] ?? ""} onChange={(event) => setRewardRecipient((items) => ({ ...items, [reward.id]: event.target.value }))}>
-                                          <option value="">같은 업체 승인 참가자 선택</option>
-                                          {eligibleRecipients.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
-                                        </select>
-                                        <ProductButton type="button" variant="secondary" disabled={!rewardRecipient[reward.id] || writeLocked || busy === `reward:${reward.id}`} onClick={() => assignCompanyRecipient(reward)}>{busy === `reward:${reward.id}` ? "지정 중입니다" : "수령자 지정"}</ProductButton>
-                                      </div>
-                                      <p className={styles.hint}>수령자는 자동으로 정하지 않습니다. 지정 후 현장 DESK에서 수령 처리할 수 있습니다.</p>
-                                    </div>
-                                    ) : (
-                                      <p className={styles.programMetaText}>업체 수령자 지정은 경품 쓰기 권한이 필요합니다. 필요하면 담당 행사 운영자에게 요청하세요.</p>
-                                    )
-                                  ) : reward?.participantId ? (
-                                    <p className={styles.programMetaText}>수령자 지정 · {recipient?.name ?? "참가 확정자"} · {reward.status === "RECEIVED" ? "수령 완료" : "수령 대기"}</p>
-                                  ) : <p className={styles.programMetaText}>수령자 정보를 확인할 수 없습니다. 경품 목록에서 해당 업체의 보류 경품을 확인하세요.</p>
-                                ) : null}
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      ) : <p className={styles.programWinners}>아직 추첨 결과가 없습니다.</p>}
-                      {canWriteDraws ? (
-                        <div className={styles.programActions}>
-                          {!program.winners.length ? <ProductButton type="button" variant="secondary" disabled={busy !== null || writeLocked} onClick={() => {
-                            setProgramFormOpen(true);
-                            setEditingProgramId(program.id); setProgramName(program.name); setProgramQuota(String(program.quota)); setProgramModuleId(program.moduleId);
-                            setProgramEligibility(program.eligibility); setProgramGroups(program.eligibleGroups); setProgramCompanies(program.eligibleCompanies); setProgramOverlap(program.overlap);
-                            setProgramTiers(program.prizeTiers.map((tier) => ({ key: randomId("tier"), name: tier.name, count: String(tier.count) })));
-                            requestAnimationFrame(() => {
-                              programFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-                            });
-                          }}>설정 수정</ProductButton> : null}
-                          {program.status === "DRAFT" || program.status === "CLOSED" && remaining > 0 ? <ProductButton type="button" variant="secondary" disabled={busy !== null || writeLocked || !program.published && program.winners.length > 0} onClick={() => requestProgramStatus(program, "OPEN")}>{program.status === "DRAFT" ? "운영 시작" : "다시 열기"}</ProductButton> : null}
-                          {program.status === "OPEN" ? <ProductButton type="button" variant="secondary" disabled={busy !== null || writeLocked} onClick={() => requestProgramStatus(program, "CLOSED")}>운영 종료</ProductButton> : null}
-                          {program.winners.length || (program.status === "OPEN" && !program.published) ? (
-                            <ProductButton type="button" variant="secondary" disabled={busy !== null || writeLocked} onClick={() => {
-                              if (!program.winners.length && !program.published) {
-                                setPendingConfirm({ kind: "publishEmptyProgram", program, summary: `“${program.name}”의 결과 공개를 허용할까요? 추첨을 실행하면 당첨 결과가 참가자에게 공개될 수 있습니다. 지금 추첨이 실행되지는 않습니다.` });
-                              } else {
-                                void setProgramPublished(program, !program.published);
-                              }
-                            }}>{!program.winners.length ? "결과 공개 허용" : program.published ? "결과 비공개" : "결과 공개"}</ProductButton>
-                          ) : null}
-                          {program.status === "OPEN" && remaining > 0 ? (
-                            <>
-                              <div className={styles.runCountField}>
-                                <label htmlFor={`run-count-${program.id}`}>이번 실행 인원</label>
-                                <input id={`run-count-${program.id}`} type="number" min={1} max={countLimit} value={runCounts[program.id] ?? "1"} disabled={writeLocked} onChange={(event) => setRunCounts((values) => ({ ...values, [program.id]: event.target.value }))} />
+                                <p className={styles.hint}>수령자는 자동으로 정하지 않습니다. 지정 후 현장 DESK에서 수령 처리할 수 있습니다.</p>
                               </div>
-                              <div className={styles.runActions} role="group" aria-label={`${program.name} 추첨 실행`}>
-                                <ProductButton type="button" variant="primary" aria-describedby={runBlockers.length ? runBlockerId : undefined} disabled={!canRun || busy !== null || writeLocked} onClick={() => runProgram(program)}>{busy === `run:${program.id}` ? "추첨 중입니다" : `${runCount}명 추첨 실행`}</ProductButton>
-                                <ProductButton type="button" variant="secondary" className={styles.stageButton} aria-describedby={[...stagePrerequisites, runBlockers.length ? runBlockerId : null, stageOnlyBlockers.length ? stageBlockerId : null].filter(Boolean).join(" ") || undefined} disabled={!canRun || !screenEnabled || moduleNeedsPublishing || busy !== null || writeLocked} onClick={() => runProgram(program, true)}>{busy === `stage:${program.id}` ? "무대 결과 준비 중" : "무대 터치 실행"}</ProductButton>
-                                {runBlockers.length ? (
-                                  <p className={styles.runBlocker} id={runBlockerId}>실행 전제: {runBlockers.join(" · ")} · {runNextAction} 실행할 수 있습니다</p>
-                                ) : null}
-                                {stageOnlyBlockers.length ? (
-                                  <p className={styles.runBlocker} id={stageBlockerId}>무대 터치 실행 전제: {stageOnlyBlockers.join(" · ")}</p>
-                                ) : null}
-                              </div>
-                              {moduleNeedsPublishing ? (
-                                <p className={styles.stagePrerequisite} id={`stage-module-prerequisite-${program.id}`}>
-                                  {!linkedModule
-                                    ? <>연결된 추첨용 무대 프로그램이 없습니다. <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 콘텐츠에서 추첨 무대를 만들고 연결하세요.</ProductLink></>
-                                    : <>연결된 무대 프로그램이 비공개입니다. 기존 결과는 자동 공개되지 않습니다. <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 콘텐츠에서 해당 무대의 운영을 시작해 공개하세요.</ProductLink></>}
-                                </p>
-                              ) : null}
-                            </>
+                              ) : (
+                                <p className={styles.programMetaText}>업체 수령자 지정은 경품 쓰기 권한이 필요합니다. 필요하면 담당 행사 운영자에게 요청하세요.</p>
+                              )
+                            ) : reward?.participantId ? (
+                              <p className={styles.programMetaText}>수령자 지정 · {recipient?.name ?? "참가 확정자"} · {reward.status === "RECEIVED" ? "수령 완료" : "수령 대기"}</p>
+                            ) : <p className={styles.programMetaText}>수령자 정보를 확인할 수 없습니다. 경품 목록에서 해당 업체의 보류 경품을 확인하세요.</p>
                           ) : null}
-                        </div>
-                      ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : <p className={styles.programWinners}>아직 추첨 결과가 없습니다.</p>}
+
+                {canWriteDraws && program.status === "OPEN" && remaining > 0 ? (
+                  <>
+                  {runBlockers.length ? (
+                    <p className={styles.runBlocker} id={runBlockerId}>실행 전제: {runBlockers.join(" · ")} · {runNextAction} 실행할 수 있습니다</p>
+                  ) : null}
+                  {stageOnlyBlockers.length ? (
+                    <p className={styles.runBlocker} id={stageBlockerId}>무대 터치 실행 전제: {stageOnlyBlockers.join(" · ")}</p>
+                  ) : null}
+                  {moduleNeedsPublishing ? (
+                  <p className={styles.stagePrerequisite} id={`stage-module-prerequisite-${program.id}`}>
+                    {!linkedModule
+                      ? <>연결된 추첨용 무대 프로그램이 없습니다. <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 콘텐츠에서 추첨 무대를 만들고 연결하세요.</ProductLink></>
+                      : <>연결된 무대 프로그램이 비공개입니다. 기존 결과는 자동 공개되지 않습니다. <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 콘텐츠에서 해당 무대의 운영을 시작해 공개하세요.</ProductLink></>}
+                  </p>
+                  ) : null}
+                  </>
+                ) : null}
+              </div>
+            </>
+          );
+        } else if (kind === "vote") {
+          stageBody = (
+            <>
+              <div className={styles.stageInfo}>
+                <div className={styles.stageMain}>
+                  <span className={styles.stageKicker} data-state={state.voteConfig.status === "OPEN" ? "live" : "done"}>{state.voteConfig.status === "OPEN" ? "투표 받는 중" : "마감"}</span>
+                  <h2 className={styles.stageTitle}>순위 투표</h2>
+                  <p className={styles.stageMeta}>팀 {state.teams.length} · 참가자당 {state.voteConfig.pickCount}명 선택 · 참가자 결과 {state.voteConfig.resultsPublished ? "공개" : "비공개"}</p>
+                  <div className={styles.stageBig}><b>{state.voteTotal}</b><span>표 접수</span></div>
+                </div>
+              </div>
+              <div className={styles.stageNotes}>
+            <p className={styles.hint}>{state.voteTotal > 0 ? "집계는 서버 순위와 동률을 그대로 표시하며 임의 순위를 만들지 않습니다." : "선택 수는 1~20개로 설정합니다. 첫 투표 접수 뒤에는 선택 수와 팀 구성이 잠깁니다. 집계는 서버 순위와 동률을 그대로 표시하며 임의 순위를 만들지 않습니다."}</p>
+            {state.voteTotal > 0 ? <p className={styles.lockNote}>첫 투표가 접수되어 팀 구성과 선택 수는 잠겼습니다.</p> : null}
+            {state.teams.length ? (
+              <ul className={styles.teamList}>
+                {state.teams.map((team) => {
+                  const result = state.voteTally?.results.find((row) => row.teamId === team.id);
+                  return (
+                    <li key={team.id} className={styles.teamItem}>
+                      <strong>{result ? `${result.tied ? `공동 ${result.rank}` : result.rank}위 · ` : ""}{team.name}</strong>
+                      <span>{result ? `${result.selections}표` : state.voteTally ? "0표" : "집계 전"}</span>
                     </li>
                   );
                 })}
               </ul>
-            ) : <p className={styles.empty}>등록된 추첨 프로그램이 없습니다. 쿼터·대상·중복 정책을 정해 첫 프로그램을 만드세요.</p>}
+            ) : <p className={styles.empty}>등록된 투표 팀이 없습니다.</p>}
             {canWriteDraws ? (
-                    <details className={styles.setupDetails} open={programFormOpen} onToggle={(event) => setProgramFormOpen((event.target as HTMLDetailsElement).open)}>
-        <summary className={styles.setupSummary} data-disclosure-indicator="">추첨 프로그램 설정 · {state.drawPrograms.length}개</summary>
-<ValidatedForm ref={programFormRef} className={styles.programForm} onSubmit={saveProgram}>
-                <h3 className={styles.formHeading}>{editingProgramId ? "추첨 설정 수정" : "추첨 프로그램 만들기"}</h3>
-                <div className={styles.configGrid}>
-                  <div className={styles.programField}>
-                    <label htmlFor="draws-program-name">추첨 이름</label>
-                    <input id="draws-program-name" type="text" maxLength={80} placeholder="예: 초빙 업체 추첨" value={programName} onChange={(event) => setProgramName(event.target.value)} />
-                  </div>
-                  <div className={styles.programField}>
-                    <label htmlFor="draws-program-quota">총 당첨 인원</label>
-                    <input id="draws-program-quota" type="number" min={1} max={10000} value={programQuota} onChange={(event) => setProgramQuota(event.target.value)} />
-                  </div>
-                  <div className={styles.programField}>
-                    <label htmlFor="draws-program-module">연결된 무대 추첨</label>
-                    <select id="draws-program-module" value={programModuleId} onChange={(event) => setProgramModuleId(event.target.value)}>
-                      <option value="">선택하세요</option>
-                      {state.drawModules.map((module) => <option key={module.id} value={module.id}>{module.title} · {module.status}</option>)}
-                    </select>
-                  </div>
-                  <div className={styles.programField}>
-                    <ConsoleChoiceGroup id="draws-program-eligibility" label="추첨 단위" value={programEligibility}
-                      onChange={(value) => setProgramEligibility(value as "PERSON" | "COMPANY")}
-                      options={[{ value: "PERSON", label: "개인 참가자" }, { value: "COMPANY", label: "업체 (업체별 1회 추첨)" }]} />
-                  </div>
-                  <div className={styles.programField}>
-                    <ConsoleChoiceGroup id="draws-program-overlap" label="중복 당첨 범위" value={programOverlap}
-                      onChange={(value) => setProgramOverlap(value as "EVENT" | "PROGRAM" | "NONE")}
-                      options={[{ value: "EVENT", label: "행사 전체에서 제외" }, { value: "PROGRAM", label: "이 프로그램에서만 제외" }, { value: "NONE", label: "중복 허용" }]} />
-                  </div>
-                </div>
-                <p className={styles.hint}>
-                  {programOverlap === "EVENT" ? "행사 전체에서 이미 당첨된 개인·업체를 제외합니다." : programOverlap === "PROGRAM" ? "이 프로그램의 이전 당첨만 제외합니다." : "다른 실행·프로그램의 당첨자도 다시 뽑힐 수 있습니다. 경품도 당첨 건마다 별도로 생성됩니다."}
-                </p>
-                <div className={styles.filterGrid}>
-                  <NameFilter
-                    id="draw-groups"
-                    label="대상 그룹"
-                    options={groupOptions}
-                    selected={programGroups}
-                    onChange={setProgramGroups}
-                    value={groupDraft}
-                    onValueChange={setGroupDraft}
-                  />
-                  <NameFilter
-                    id="draw-companies"
-                    label="대상 업체"
-                    options={companyOptions}
-                    selected={programCompanies}
-                    onChange={setProgramCompanies}
-                    value={companyDraft}
-                    onValueChange={setCompanyDraft}
-                  />
-                </div>
-                <div className={styles.tierEditor}>
-                  <div className={styles.tierHeading}>
-                    <div>
-                      <h4>경품 등급 (선택)</h4>
-                      <p className={styles.hint}>등급을 쓰면 인원 합계가 총 당첨 인원과 같아야 합니다. 비워두면 등급 없는 추첨입니다.</p>
-                    </div>
-                    <ProductButton type="button" variant="secondary" disabled={programTiers.length >= 20} onClick={() => setProgramTiers((tiers) => [...tiers, { key: randomId("tier"), name: "", count: "" }])}>등급 추가</ProductButton>
-                  </div>
-                  {programTiers.map((tier, index) => (
-                    <div className={styles.tierRow} key={tier.key}>
-                      <div className={styles.programField}>
-                        <label htmlFor={`draw-tier-name-${tier.key}`}>등급 {index + 1} 이름</label>
-                        <input id={`draw-tier-name-${tier.key}`} type="text" maxLength={80} placeholder="예: 1등" value={tier.name} onChange={(event) => setProgramTiers((items) => items.map((item) => item.key === tier.key ? { ...item, name: event.target.value } : item))} />
-                      </div>
-                      <div className={styles.programField}>
-                        <label htmlFor={`draw-tier-count-${tier.key}`}>당첨 인원</label>
-                        <input id={`draw-tier-count-${tier.key}`} type="number" min={1} max={10000} value={tier.count} onChange={(event) => setProgramTiers((items) => items.map((item) => item.key === tier.key ? { ...item, count: event.target.value } : item))} />
-                      </div>
-                      <ProductButton type="button" variant="secondary" aria-label={`${tier.name || `등급 ${index + 1}`} 제거`} onClick={() => setProgramTiers((items) => items.filter((item) => item.key !== tier.key))}>제거</ProductButton>
-                    </div>
-                  ))}
-                  {programTiers.length ? <p className={configuredTierTotal === Number(programQuota) ? styles.successHint : styles.fieldError}>등급 인원 합계 {configuredTierTotal}명 · 전체 {Number(programQuota) || 0}명</p> : null}
-                </div>
-                <ConsoleFormActions>
-                  <ProductButton type="submit" variant="secondary" disabled={busy === "program:save" || writeLocked || !state.drawModules.length}>
-                    {busy === "program:save" ? "저장 중입니다" : editingProgramId ? "설정 저장" : "추첨 만들기"}
-                  </ProductButton>
-                  {editingProgramId ? <ProductButton type="button" variant="secondary" onClick={() => {
-                    setEditingProgramId(null); setProgramName(""); setProgramQuota(""); setProgramModuleId("");
-                    setProgramEligibility("PERSON"); setProgramGroups([]); setProgramCompanies([]); setProgramOverlap("EVENT"); setProgramTiers([]);
-                  }}>취소</ProductButton> : null}
-                </ConsoleFormActions>
-              </ValidatedForm>
-      </details>
+              <div className={styles.tallyActions}>
+                <ProductButton type="button" variant="secondary" onClick={refreshVoteTally} disabled={tallyLoading || writeLocked || state.teams.length === 0}>
+                  {tallyLoading ? "집계 중입니다" : "서버 집계 새로고침"}
+                </ProductButton>
+                {state.voteTally ? (
+                  <span className={styles.hint}>
+                    {state.voteTally.totalVotes}표 집계 · 참가자 결과 {state.voteTally.published ? "공개" : "비공개"}
+                  </span>
+                ) : null}
+              </div>
             ) : null}
-          </>
-        )}
-      </ConsoleSection>
 
-      <ConsoleSection headingId="draws-vote" title={`순위 투표 · ${state.voteTotal}표`}>
-        {!state.pollEnabled ? <p className={styles.featureOff}>이 행사에서 투표 기능이 꺼져 있습니다.</p> : (
-          <>
-            <p className={styles.hint}>{state.voteTotal > 0 ? "집계는 서버 순위와 동률을 그대로 표시하며 임의 순위를 만들지 않습니다." : "선택 수는 1~20개로 설정합니다. 첫 투표 접수 뒤에는 선택 수와 팀 구성이 잠깁니다. 집계는 서버 순위와 동률을 그대로 표시하며 임의 순위를 만들지 않습니다."}</p>
+                {canWriteDraws ? (
+                  <details className={styles.setupDetails}>
+                    <summary className={styles.setupSummary} data-disclosure-indicator="">투표 설정 · {state.voteConfig.status === "OPEN" ? "운영 중" : "마감"}</summary>
             {canWriteDraws ? (
               <ValidatedForm className={styles.configForm} onSubmit={saveVoteConfig}>
                 <div className={styles.configGrid}>
@@ -2054,41 +1968,35 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                 </ValidatedForm>
               </details>
             ) : null}
-            {state.voteTotal > 0 ? <p className={styles.lockNote}>첫 투표가 접수되어 팀 구성과 선택 수는 잠겼습니다.</p> : null}
-            {state.teams.length ? (
-              <ul className={styles.teamList}>
-                {state.teams.map((team) => {
-                  const result = state.voteTally?.results.find((row) => row.teamId === team.id);
-                  return (
-                    <li key={team.id} className={styles.teamItem}>
-                      <strong>{result ? `${result.tied ? `공동 ${result.rank}` : result.rank}위 · ` : ""}{team.name}</strong>
-                      <span>{result ? `${result.selections}표` : state.voteTally ? "0표" : "집계 전"}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : <p className={styles.empty}>등록된 투표 팀이 없습니다.</p>}
-            {canWriteDraws ? (
-              <div className={styles.tallyActions}>
-                <ProductButton type="button" variant="secondary" onClick={refreshVoteTally} disabled={tallyLoading || writeLocked || state.teams.length === 0}>
-                  {tallyLoading ? "집계 중입니다" : "서버 집계 새로고침"}
-                </ProductButton>
-                {state.voteTally ? (
-                  <span className={styles.hint}>
-                    {state.voteTally.totalVotes}표 집계 · 참가자 결과 {state.voteTally.published ? "공개" : "비공개"}
-                  </span>
+
+                  </details>
                 ) : null}
               </div>
-            ) : null}
-          </>
-        )}
-      </ConsoleSection>
-
-
-
-      <ConsoleSection headingId="draws-roulette" title={`모바일 룰렛 · ${state.rouletteSpun}회 참여`}>
-        {!state.drawEnabled ? <p className={styles.featureOff}>이 행사에서 룰렛 기능이 꺼져 있습니다.</p> : (
-          <>
+            </>
+          );
+        } else if (kind === "roulette") {
+          stageBody = (
+            <>
+              <div className={styles.stageInfo}>
+                <div className={styles.stageMain}>
+                  <span className={styles.stageKicker} data-state={state.rouletteConfig.status === "OPEN" ? "live" : state.rouletteConfig.status === "DRAFT" ? "prep" : "done"}>{state.rouletteConfig.status === "OPEN" ? "운영 중" : state.rouletteConfig.status === "DRAFT" ? "준비" : "마감"}</span>
+                  <h2 className={styles.stageTitle}>모바일 룰렛</h2>
+                  <p className={styles.stageMeta}>경품 {roulettePrizes.length}종 · 무대 추첨과 별도로 운영</p>
+                  <div className={styles.stageBig}><b>{state.rouletteSpun}</b><span>회 참여</span></div>
+                </div>
+                <div className={styles.stageAct}>
+                  <ul className={styles.stageBars} aria-label="경품별 지급 현황">
+                    {prizeRows.map(({ prize, used, left }) => (
+                      <li key={prize.id}>
+                        <span>{prize.label || "경품"}</span>
+                        <span className="bar" aria-hidden="true"><i style={{ width: `${prize.unlimited ? (state.rouletteSpun ? Math.round((used / state.rouletteSpun) * 100) : 0) : Number(prize.quantity) ? Math.round((used / Number(prize.quantity)) * 100) : 0}%` }} /></span>
+                        <span>{prize.unlimited ? `${used}회` : `${used}/${Number(prize.quantity) || 0}`}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              <div className={styles.stageNotes}>
             <p className={styles.hint}>모바일 룰렛은 무대 추첨과 별도로 운영됩니다. 유한 재고는 남은 수량이 기본 가중치이며, 무제한 경품은 명시한 양의 가중치로 반영됩니다.</p>
             {canWriteDraws ? (
                     <details className={styles.setupDetails} >
@@ -2198,13 +2106,23 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
       </details>
             ) : null}
             {!roulettePrizes.length ? <p className={styles.empty}>등록된 경품이 없습니다.</p> : null}
-          </>
-        )}
-      </ConsoleSection>
 
-      <ConsoleSection headingId="draws-lucky" title="럭키번호 사전 배정">
-        {!state.drawEnabled ? <p className={styles.featureOff}>이 행사에서 럭키번호 기능이 꺼져 있습니다.</p> : (
-          <>
+              </div>
+            </>
+          );
+        } else {
+          stageBody = (
+            <>
+              <div className={styles.stageInfo}>
+                <div className={styles.stageMain}>
+                  <span className={styles.stageKicker} data-state={selectedLucky.eligible.length > 0 && missingLuckyCount === 0 ? "done" : "prep"}>사전 배정</span>
+                  <h2 className={styles.stageTitle}>럭키번호 사전 배정</h2>
+                  <p className={styles.stageMeta}>범위 {state.luckyMin}–{state.luckyMax} · 승인 참가자 {selectedLucky.eligible.length}명</p>
+                  <div className={styles.stageBig}><b>{state.luckyIssued}</b><span>명 발급 · 미발급 {missingLuckyCount}명</span></div>
+                  <div className={styles.stageGauge} aria-hidden="true"><i style={{ width: `${selectedLucky.eligible.length ? Math.round((state.luckyIssued / selectedLucky.eligible.length) * 100) : 0}%` }} /></div>
+                </div>
+              </div>
+              <div className={styles.stageNotes}>
             <p className={styles.hint}>알림 캠페인을 보내기 전에 승인 참가자에게 번호를 미리 배정할 수 있습니다. 번호는 범위 내에서 고유하며 기존 발급 번호는 유지됩니다.</p>
             {canWriteDraws ? (
                     <details className={styles.setupDetails} >
@@ -2248,9 +2166,151 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                 </ProductButton>
               </div>
             ) : null}
+
+              </div>
+            </>
+          );
+        }
+
+        const featureOffNote = kind === "vote" && !state.pollEnabled ? "이 행사에서 투표 기능이 꺼져 있습니다."
+          : kind === "program" && !state.drawEnabled ? "이 행사에서 무대 추첨 기능이 꺼져 있습니다."
+          : kind === "roulette" && !state.drawEnabled ? "이 행사에서 룰렛 기능이 꺼져 있습니다."
+          : kind === "lucky" && !state.drawEnabled ? "이 행사에서 럭키번호 기능이 꺼져 있습니다." : null;
+
+        return (
+          <>
+        {!screenEnabled && canWriteDraws ? (
+          <p className={styles.stagePrerequisite} id="stage-screen-prerequisite">
+            무대 터치 실행은 당첨 결과와 경품을 저장하고 이번 결과를 전광판에 올립니다. 사용 전 <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/settings#settings-features`)}>행사 설정에서 행사장 출력을 켜세요.</ProductLink>
+          </p>
+        ) : null}
+        {!state.drawModules.some((module) => module.published) && !state.drawPrograms.length && canWriteDraws ? (
+          <div className={`${styles.stagePrerequisite} ${styles.stagePrerequisiteActions}`}>
+            {state.drawModules.length ? (
+              <>
+                <p>무대 터치 실행에는 공개된 추첨 무대가 필요합니다. 기존 비공개 결과는 자동 공개하지 않습니다.</p>
+                <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 콘텐츠에서 무대 운영을 시작해 공개하세요.</ProductLink>
+              </>
+            ) : (
+              <>
+                <p>공개 상태로 전환한 무대만 여기에 연결할 수 있습니다.</p>
+                <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 콘텐츠에서 추첨 무대를 만들고 공개하세요.</ProductLink>
+              </>
+            )}
+          </div>
+        ) : null}
+
+            <section className={styles.stageCard} id={kind === "program" && program ? `draw-program-${program.id}` : `draws-${kind}`} aria-label="무대">
+              <div className={styles.stagePreview}>
+                <div className={styles.previewCap}><span>청중 화면 · {scene.kind === "board" ? "전광판" : "참가자 폰"}</span></div>
+                <StagePreview scene={scene} label={sceneLabel} event={eventLabel} />
+              </div>
+              {featureOffNote ? <p className={styles.featureOff}>{featureOffNote}</p> : stageBody}
+            </section>
+
+            <h2 className={styles.pickerTitle}>무대 선택</h2>
+            <ul className={styles.picker}>
+              {rows.map((row) => (
+                <li key={row.key}>
+                  <button type="button" className={styles.pickRow} aria-pressed={activeKey === row.key} onClick={() => setSelectedKey(row.key)}>
+                    <ProgramTypeIcon type={row.type} state={row.dot} />
+                    <span className={styles.pickName}><b>{row.name}</b><span>{row.line}{row.warn ? <> · <b className={styles.pickWarn}>{row.warn}</b></> : null}</span></span>
+                    {row.meter !== null ? <span className={styles.pickMeter} aria-hidden="true"><i style={{ width: `${row.meter}%` }} /></span> : <span className={styles.pickSpacer} aria-hidden="true" />}
+                    <span className={styles.pickCount}><b>{row.count}</b>{row.unit}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+
+            {programFormOpen && canWriteDraws ? (
+              <ConsoleDialog title={editingProgramId ? "추첨 설정 수정" : "추첨 프로그램 만들기"} titleId="draws-program-dialog-title" wide busy={busy === "program:save"} onClose={closeProgramForm}>
+                {failure ? <p className={styles.fieldError} role="alert">{failure}</p> : null}
+                <ValidatedForm ref={programFormRef} className={styles.programForm} onSubmit={saveProgram}>
+                <div className={styles.configGrid}>
+                  <div className={styles.programField}>
+                    <label htmlFor="draws-program-name">추첨 이름</label>
+                    <input id="draws-program-name" type="text" maxLength={80} placeholder="예: 초빙 업체 추첨" value={programName} onChange={(event) => setProgramName(event.target.value)} />
+                  </div>
+                  <div className={styles.programField}>
+                    <label htmlFor="draws-program-quota">총 당첨 인원</label>
+                    <input id="draws-program-quota" type="number" min={1} max={10000} value={programQuota} onChange={(event) => setProgramQuota(event.target.value)} />
+                  </div>
+                  <div className={styles.programField}>
+                    <label htmlFor="draws-program-module">연결된 무대 추첨</label>
+                    <select id="draws-program-module" value={programModuleId} onChange={(event) => setProgramModuleId(event.target.value)}>
+                      <option value="">선택하세요</option>
+                      {state.drawModules.map((module) => <option key={module.id} value={module.id}>{module.title} · {module.status}</option>)}
+                    </select>
+                  </div>
+                  <div className={styles.programField}>
+                    <ConsoleChoiceGroup id="draws-program-eligibility" label="추첨 단위" value={programEligibility}
+                      onChange={(value) => setProgramEligibility(value as "PERSON" | "COMPANY")}
+                      options={[{ value: "PERSON", label: "개인 참가자" }, { value: "COMPANY", label: "업체 (업체별 1회 추첨)" }]} />
+                  </div>
+                  <div className={styles.programField}>
+                    <ConsoleChoiceGroup id="draws-program-overlap" label="중복 당첨 범위" value={programOverlap}
+                      onChange={(value) => setProgramOverlap(value as "EVENT" | "PROGRAM" | "NONE")}
+                      options={[{ value: "EVENT", label: "행사 전체에서 제외" }, { value: "PROGRAM", label: "이 프로그램에서만 제외" }, { value: "NONE", label: "중복 허용" }]} />
+                  </div>
+                </div>
+                <p className={styles.hint}>
+                  {programOverlap === "EVENT" ? "행사 전체에서 이미 당첨된 개인·업체를 제외합니다." : programOverlap === "PROGRAM" ? "이 프로그램의 이전 당첨만 제외합니다." : "다른 실행·프로그램의 당첨자도 다시 뽑힐 수 있습니다. 경품도 당첨 건마다 별도로 생성됩니다."}
+                </p>
+                <div className={styles.filterGrid}>
+                  <NameFilter
+                    id="draw-groups"
+                    label="대상 그룹"
+                    options={groupOptions}
+                    selected={programGroups}
+                    onChange={setProgramGroups}
+                    value={groupDraft}
+                    onValueChange={setGroupDraft}
+                  />
+                  <NameFilter
+                    id="draw-companies"
+                    label="대상 업체"
+                    options={companyOptions}
+                    selected={programCompanies}
+                    onChange={setProgramCompanies}
+                    value={companyDraft}
+                    onValueChange={setCompanyDraft}
+                  />
+                </div>
+                <div className={styles.tierEditor}>
+                  <div className={styles.tierHeading}>
+                    <div>
+                      <h4>경품 등급 (선택)</h4>
+                      <p className={styles.hint}>등급을 쓰면 인원 합계가 총 당첨 인원과 같아야 합니다. 비워두면 등급 없는 추첨입니다.</p>
+                    </div>
+                    <ProductButton type="button" variant="secondary" disabled={programTiers.length >= 20} onClick={() => setProgramTiers((tiers) => [...tiers, { key: randomId("tier"), name: "", count: "" }])}>등급 추가</ProductButton>
+                  </div>
+                  {programTiers.map((tier, index) => (
+                    <div className={styles.tierRow} key={tier.key}>
+                      <div className={styles.programField}>
+                        <label htmlFor={`draw-tier-name-${tier.key}`}>등급 {index + 1} 이름</label>
+                        <input id={`draw-tier-name-${tier.key}`} type="text" maxLength={80} placeholder="예: 1등" value={tier.name} onChange={(event) => setProgramTiers((items) => items.map((item) => item.key === tier.key ? { ...item, name: event.target.value } : item))} />
+                      </div>
+                      <div className={styles.programField}>
+                        <label htmlFor={`draw-tier-count-${tier.key}`}>당첨 인원</label>
+                        <input id={`draw-tier-count-${tier.key}`} type="number" min={1} max={10000} value={tier.count} onChange={(event) => setProgramTiers((items) => items.map((item) => item.key === tier.key ? { ...item, count: event.target.value } : item))} />
+                      </div>
+                      <ProductButton type="button" variant="secondary" aria-label={`${tier.name || `등급 ${index + 1}`} 제거`} onClick={() => setProgramTiers((items) => items.filter((item) => item.key !== tier.key))}>제거</ProductButton>
+                    </div>
+                  ))}
+                  {programTiers.length ? <p className={configuredTierTotal === Number(programQuota) ? styles.successHint : styles.fieldError}>등급 인원 합계 {configuredTierTotal}명 · 전체 {Number(programQuota) || 0}명</p> : null}
+                </div>
+                <ConsoleFormActions>
+                  <ProductButton type="submit" variant="primary" disabled={busy === "program:save" || writeLocked || !state.drawModules.length}>
+                    {busy === "program:save" ? "저장 중입니다" : editingProgramId ? "설정 저장" : "추첨 만들기"}
+                  </ProductButton>
+                  <ProductButton type="button" variant="ghost" disabled={busy === "program:save"} onClick={closeProgramForm}>취소</ProductButton>
+                </ConsoleFormActions>
+              </ValidatedForm>
+              </ConsoleDialog>
+            ) : null}
           </>
-        )}
-      </ConsoleSection>
+        );
+      })()}
     </ConsolePage>
   );
 }

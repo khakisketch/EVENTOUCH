@@ -7,7 +7,7 @@ import styles from "./programs.module.css";
 
 type Props = { type: string; state?: "live" | "prep" | "done"; small?: boolean };
 
-const TYPES = ["poll", "quiz", "qa", "survey", "draw", "photo", "board"] as const;
+const TYPES = ["poll", "quiz", "qa", "survey", "draw", "photo", "board", "vote", "roulette", "lucky"] as const;
 type Known = (typeof TYPES)[number];
 
 function known(type: string): Known | null {
@@ -30,6 +30,12 @@ function Glyph({ type }: { type: Known | null }) {
       return (<><rect x="3.5" y="5" width="17" height="14" rx="2.5" /><circle cx="9" cy="10" r="1.6" /><path d="M20.5 16l-4.8-4.6-8.2 7.6" /></>);
     case "board":
       return (<><path d="M5 4.5h14v10l-5 5H5z" /><path d="M14 19.5v-5h5M8.5 9h7M8.5 12h4" /></>);
+    case "vote":
+      return <path d="M4 19.5h16M6 19.5V13h4v6.5M10 19.5V6h4v13.5M14 19.5V10h4v9.5" />;
+    case "roulette":
+      return (<><circle cx="12" cy="12" r="8.5" /><path d="M12 3.5v17M3.5 12h17M6 6l12 12M18 6L6 18" /></>);
+    case "lucky":
+      return (<><path d="M4 8.5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v1.5a2 2 0 0 0 0 4V15.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V14a2 2 0 0 0 0-4z" /><path d="M13.5 6.5v11" strokeDasharray="1.6 2.2" /></>);
     default:
       return <circle cx="12" cy="12" r="7.5" />;
   }

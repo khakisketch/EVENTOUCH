@@ -32,7 +32,7 @@ test("draw run buttons keep the premise line next to the buttons with a next act
   assert.equal(ordinaryPremise, 1, "ordinary draw prerequisites stay together once");
   // Buttons and the blocker live in one group so the blocker reads as
   // attached to the action, and the line names what resolves it.
-  assert.match(draws, /styles\.runActions/u);
+  assert.match(draws, /styles\.runRow/u);
   assert.match(draws, /role="group" aria-label=\{`\$\{program\.name\} 추첨 실행`\}/u);
   assert.match(draws, /실행 전제: \{runBlockers\.join\(" · "\)\} · \{runNextAction\} 실행할 수 있습니다/u);
   assert.match(draws, /결과를 공개하면/u);
@@ -119,14 +119,11 @@ test("draw surface stays stable and programs add response grading and question-e
   assert.match(programs, /추첨을 \$\{props\.drawPending\.count\}명으로 실행할까요/u);
 });
 
-test("an explicit jump pins the current link past the scroll spy until a real scroll", () => {
-  // Same bottom-of-page cause as the operations hall: the spy watches tiny
-  // h2s in a narrow band a trailing section never reaches, so the jump
-  // names its section at once and holds it until genuine scrolling resumes.
-  assert.match(draws, /onNavigate=\{followJumpedSection\}/u, "jumps report to the pin");
-  assert.match(draws, /navPinRef\.current = id;/u, "the jumped-to section is named at once");
-  assert.match(draws, /if \(navPinRef\.current\) return;/u, "a stale heading cannot steal the marker");
-  assert.match(draws, /const DRAW_SECTION_IDS = Object\.keys\(DRAW_SECTION_LABELS\)/u, "spy and deep links share one list");
-  assert.match(draws, /followJumpedSection\(id\)/u, "a deep link pins its section too");
+test("the draw screen picks its item by selection, and deep links select too", () => {
+  // The four jobs are items of one stage picker, not a scroll-spied nav, so
+  // there is no pin to hold: a fragment simply selects its item.
+  assert.match(draws, /const \[selectedKey, setSelectedKey\] = useState<string \| null>\(null\)/u, "one selection drives the stage card");
   assert.match(draws, /window\.addEventListener\("hashchange", applyHash\)/u, "later fragments keep working");
+  assert.match(draws, /draw-program-/u, "program fragments select that program");
+  assert.doesNotMatch(draws, /navPinRef|IntersectionObserver/u, "no scroll spy remains");
 });

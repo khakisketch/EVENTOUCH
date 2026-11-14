@@ -93,14 +93,14 @@ test("every screen that changes something irreversible uses the shared confirmat
 test("the stage-draw work comes first and setup forms fold away", () => {
   const draws = read("console/events/[id]/draws/DrawsWorkspace.tsx");
   assert.ok(
-    draws.indexOf('headingId="draws-programs"') < draws.indexOf('headingId="draws-vote"'),
-    "the live stage draw is the first section"
+    draws.indexOf('<StagePreview') < draws.indexOf('<h2 className={styles.pickerTitle}>'),
+    "the stage card with the live preview comes before the picker"
   );
-  assert.match(draws, /id: "draws-programs", label: "무대 추첨"/u);
   assert.match(draws, /setupDetails/u);
-  assert.match(draws, /추첨 프로그램 설정/u);
+  assert.match(draws, /추첨 프로그램 만들기/u, "program settings open from a dialog");
   assert.match(draws, /룰렛 운영 설정/u);
   assert.match(draws, /럭키번호 범위 설정/u);
+  assert.match(draws, /투표 설정 · /u, "vote settings fold away under the stage card");
 });
 
 test("the roster keeps one-tap approval and folds the rest of the row tools", () => {

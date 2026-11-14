@@ -21,7 +21,7 @@ test("a draw prize names its draw program and links to that program", () => {
   // The link must land on the program row, not the section top.
   assert.match(rewards, /#draw-program-\$\{encodeURIComponent\(reward\.drawProgramId\)\}/u);
   const draws = read("console/events/[id]/draws/DrawsWorkspace.tsx");
-  assert.match(draws, /id=\{`draw-program-\$\{program\.id\}`\}/u);
+  assert.match(draws, /`draw-program-\$\{program\.id\}`/u);
 });
 
 test("group assignment states its visible-only scope when rows are hidden", () => {

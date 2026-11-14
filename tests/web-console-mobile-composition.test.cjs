@@ -175,8 +175,7 @@ test('shared section nav wraps to fully reachable rows on mobile', () => {
   // their own scope words (no new buttons, no behavior change): the shared
   // ink/current-ink grammar already covers all consumers via CSS.
   const draws = read('app/console/events/[id]/draws/DrawsWorkspace.tsx');
-  assert.match(draws, /navIndexLabel[^>]*aria-hidden="true">추첨·투표 목차/u);
-  assert.match(draws, /label="추첨·투표 구역"/u);
+  assert.doesNotMatch(draws, /ConsoleSectionNav|navIndexLabel/u, 'the draw screen left the jump nav for a stage picker');
   const theme = read('app/console/events/[id]/page/ThemeWorkspace.tsx');
   assert.match(theme, /navIndexLabel[^>]*aria-hidden="true">참가자 페이지 목차/u);
   assert.match(theme, /label="참가자 페이지 구역"/u);
