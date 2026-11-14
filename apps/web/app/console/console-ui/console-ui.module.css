@@ -738,6 +738,45 @@
   }
 }
 
+/* Stage: a full-view modal on a dark scrim for previews. The title row is
+   visually hidden by the caller's own header; content fills the viewport. */
+:global(.dialog-backdrop).stageBackdrop {
+  place-items: stretch;
+  padding: 0;
+  background: color-mix(in srgb, var(--ink) 88%, transparent);
+}
+
+:global(.dialog).stagePanel {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  width: 100%;
+  max-width: none;
+  height: 100svh;
+  max-height: none;
+  padding: var(--s3) var(--s4) var(--s4);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--paper);
+  overflow: hidden;
+}
+
+:global(.dialog).stagePanel > h2 {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  :global(.dialog).stagePanel {
+    padding: 0;
+  }
+}
+
 .dialogDescription {
   margin: 0;
   color: var(--muted);

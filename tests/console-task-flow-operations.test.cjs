@@ -33,15 +33,16 @@ test("content: a published notice shows live screen status and a direct output a
   assert.match(source, /전광판 선택됨 · 비공개로 출력되지 않음/u);
   assert.match(source, /전광판 선택됨 · 기능 꺼짐/u);
   assert.doesNotMatch(source, /전광판 출력 중/u, "no label may claim live output from a stale reference");
-  assert.match(source, /onDisplay = state\.display\.type === "notice" && state\.display\.noticeId === item\.id/u);
-  assert.match(source, /const displayBadge = !onDisplay/u);
+  assert.match(source, /function noticeDisplayLabel\(state: ReadyWorkspace, item: Notice\): string/u);
+  assert.match(source, /state\.display\.type === "notice" && state\.display\.noticeId === item\.id/u);
+  assert.match(source, /note=\{noticeDisplayLabel\(state, item\)\}/u, "the ledger row names the selected state");
   assert.match(source, /!state\.screenEnabled/u);
   assert.match(source, /!item\.published/u);
-  // The row action is secondary, labelled, and busy-guarded.
+  // The editor action is labelled and busy-guarded.
   assert.match(source, /requestNoticeDisplay/u);
   assert.match(source, /applyNoticeDisplay/u);
-  assert.match(source, /"전광판 출력"/u, "the row action reads 전광판 출력");
-  assert.match(source, /`notice-display:\$\{item\.id\}`/u);
+  assert.match(source, /전광판 출력<\/ProductButton>|"전광판 출력"/u, "the editor action reads 전광판 출력");
+  assert.match(source, /`notice-display:\$\{editingNotice\.id\}`/u);
   // Explicit external-output confirmation carries the notice title.
   assert.match(source, /<ConsoleConfirm/u);
   assert.match(source, /행사장 전광판에 출력할까요\?/u);
@@ -55,16 +56,16 @@ test("content: a published notice shows live screen status and a direct output a
 
 test("content: no autopublish, hidden when it must be, old buttons intact", () => {
   const source = content();
-  assert.match(source, /const canOutput = canOutputNotice && item\.published;/u);
+  assert.match(source, /canOutputNotice && editingNotice\.published/u);
   // Output is the programs-scoped display.set shortcut; notices/venue stay
   // page-scoped. Neither gate widens the other.
   assert.match(source, /canOutputNotice = state\.screenEnabled && canWritePrograms && !archived/u);
   assert.match(source, /const canWritePage = canWriteEvent\(capabilities, "notice\.save"\)/u);
   assert.match(source, /const canWritePrograms = canWriteEvent\(capabilities, "program\.save"\)/u);
-  assert.match(source, /\{canOutput \? \(/u, "the action hides instead of disabling");
-  assert.match(source, /\{noticeDisplayPendingId === item\.id && canOutput && noticeDeletePendingId !== item\.id \? \(/u);
-  assert.match(source, /\{noticeDeletePendingId === item\.id && noticeDisplayPendingId !== item\.id \? \(/u, "output and delete confirms never share a row");
-  assert.match(source, /\{displayBadge \? \(/u, "the status shows only on the referenced row");
+  assert.match(source, /\{canOutputNotice && editingNotice\.published \? \(/u, "the action hides instead of disabling");
+  assert.match(source, /\{editingNotice && noticeDisplayPendingId === editingNotice\.id && canOutputNotice && editingNotice\.published && noticeDeletePendingId !== editingNotice\.id \? \(/u);
+  assert.match(source, /\{editingNotice && noticeDeletePendingId === editingNotice\.id && noticeDisplayPendingId !== editingNotice\.id \? \(/u, "output and delete confirms never share an editor");
+  assert.match(source, /\{displayNote \? <p className=\{styles\.help\}>\{displayNote\}<\/p> : null\}/u, "the status shows only for the edited notice");
   // Mutual exclusivity: opening one confirm clears the other, and both
   // requests refuse while any command is in flight.
   assert.match(source, /function requestNoticeDisplay\(item: Notice\) \{\s*if \(busy !== null \|\| archived\) return;\s*setNoticeDeletePendingId\(null\);\s*setNoticeDisplayPendingId\(item\.id\);/u);
@@ -78,7 +79,9 @@ test("content: no autopublish, hidden when it must be, old buttons intact", () =
   assert.match(source, /공지를 삭제할까요/u, "the delete confirm copy is untouched");
   assert.match(source, /보관된 행사는 읽기 전용입니다/u);
   assert.match(source, /콘텐츠를 관리할 운영 권한이 없습니다/u);
-  const added = source.slice(source.indexOf("noticeDisplayPendingId"));
+  // The only fragment read is the tab deep link (#content-notices etc.),
+  // never a handoff for the output operation.
+  const added = source.slice(source.indexOf("noticeDisplayPendingId")).replace(/useEffect\(\(\) => \{\s*const fromHash[\s\S]*?\}, \[\]\);/u, "");
   assert.doesNotMatch(added, /localStorage|sessionStorage|location\.hash|useSearchParams/u, "no fragment/query handoff for the direct operation");
 });
 
@@ -113,7 +116,6 @@ test("content: an accepted refresh invalidates pending output intent, failures k
 
 test("content: tokens only, venue draft stays independent", () => {
   const source = content();
-  assert.match(source, /\$\{styles\.badge\} \$\{displayBadge\.live \? styles\.badgeOn : ""\}/u, "the status reuses the badge grammar, success tone only when actually selected for output");
   const style = contentCss();
   assert.doesNotMatch(style, /#[0-9a-fA-F]{3,8}/u, "no new color literals");
   assert.match(source, /venueBaselineRef\.current/u, "the venue baseline still guards silent reloads");

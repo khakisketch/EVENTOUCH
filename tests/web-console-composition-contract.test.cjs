@@ -166,8 +166,10 @@ test('event context is centralized while domain actions retain their meaning and
   const content = read(targets[3]);
   // Write affordances gate on the page/programs grants. The first notice is
   // primary; subsequent notices remain secondary. Reads never gate.
-  assert.match(content, /action=\{canWritePage \? \(\s*<ProductButton\b[^>]*variant=\{state\.notices\.length \? "secondary" : "primary"\}[^>]*onClick=\{openNoticeCreate\}[^>]*>\s*공지 작성/su);
-  assert.match(content, /title="프로그램 일정"[\s\S]*?action=\{canWritePrograms \? \([\s\S]*?variant="secondary"[\s\S]*?일정 추가/u);
+  // The open tab's one orange add action rides the page header and hides
+  // while that tab's editor is open; the editor carries its own primary.
+  assert.match(content, /headerAdd = activeTab === "notice" && canWritePage && !noticeDialogOpen \? \(\s*<ProductButton[^>]*variant="primary"[^>]*onClick=\{openNoticeCreate\}[^>]*>공지 작성/su);
+  assert.match(content, /activeTab === "program" && canWritePrograms && !programDialogOpen \? \(\s*<ProductButton[^>]*variant="primary"[^>]*onClick=\{openProgramCreate\}[^>]*>일정 추가/su);
   assert.match(content, /canWritePage = canWriteEvent\(capabilities, "notice\.save"\)/u);
   assert.match(content, /canWritePrograms = canWriteEvent\(capabilities, "program\.save"\)/u);
 

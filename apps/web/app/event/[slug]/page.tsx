@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { eventStageClassName, eventStageLabel } from "../../event-stage";
 import { loadVerificationMode } from "../../../lib/verification-mode";
 import { publicRecoveryContact } from "../../../lib/public-recovery-contact";
+import RichText from "../../ui/RichText";
 import styles from "./public-event.module.css";
 
 type PublicEvent = {
@@ -278,7 +279,7 @@ export default async function EventPage({
                   {notice.pinned ? <span className={styles.pin}>고정</span> : null}
                   {notice.title}
                 </h3>
-                {notice.body ? <p className="preserve-lines">{notice.body}</p> : null}
+                {notice.body ? <RichText source={notice.body} imageSrc={(fileId) => `/api/public/events/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}`} /> : null}
               </li>
             ))}
           </ul>

@@ -1,8 +1,3 @@
-/* Row layout (this workspace only): main content and actions share the
-   first row, top-aligned so tall action clusters do not center-float
-   against short titles; an in-place ConsoleConfirm ([role="group"])
-   always spans the full row below instead of squeezing in as a third
-   flex column. Mobile stacks to one column like the shared row behavior. */
 .draftFields {
   display: grid;
   gap: var(--s4);
@@ -22,75 +17,6 @@
 
 .recovery h2, .recovery p { margin: 0; }
 .recoveryActions { display: flex; flex-wrap: wrap; gap: var(--s2); }
-
-li.recordRow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-}
-
-li.recordRow > * {
-  min-width: 0;
-}
-
-li.recordRow > [role="group"] {
-  grid-column: 1 / -1;
-}
-
-@media (max-width: 768px) {
-  li.recordRow {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.recordTitle {
-  margin: 0;
-  font-size: var(--h3);
-  word-break: keep-all;
-  overflow-wrap: break-word;
-}
-
-.badgeRow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s1) var(--s2);
-  margin: var(--s1) 0 0;
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: var(--s1) var(--s2);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-small);
-  background: var(--surface-muted);
-  color: var(--ink);
-  font-weight: 650;
-  line-height: 1.3;
-}
-
-.badgeOn {
-  background: var(--success-soft);
-  color: var(--success);
-  border-color: var(--success-line);
-}
-
-.badgeOff {
-  background: var(--surface-muted);
-  color: var(--muted);
-}
-
-.body {
-  margin: var(--s1) 0 0;
-  overflow-wrap: break-word;
-}
-
-.attachment {
-  margin: var(--s1) 0 0;
-  font-size: var(--small);
-  overflow-wrap: break-word;
-}
 
 .attachmentRow {
   display: flex;
@@ -130,89 +56,6 @@ li.recordRow > [role="group"] {
   margin: 0;
   color: var(--muted);
   font-size: var(--small);
-}
-
-/* Visible in-page index context (this workspace only): a quiet scope
-   label above the shared jump nav so the anchor row reads as a contents
-   index, not app tabs. aria-hidden: the nav's own aria-label carries
-   screen-reader naming once. Static wrapper — no sticky, so short phone
-   rows never cover the section they jump to. */
-.navIndex {
-  display: grid;
-  gap: var(--s1);
-  min-width: 0;
-}
-
-.navIndexLabel {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--small);
-  font-weight: 650;
-}
-
-/* Task-per-section stack (this workspace only): 공지 full-width ledger
-   first, then 일정 ledger, then 장소 안내 form — each section owns its
-   natural height in DOM order on every viewport. A side-by-side
-   일정/장소 pairing stranded whitespace under an empty ledger beside the
-   long venue form and blurred which task the eye was on, so the pairing
-   is removed; the shared page section rhythm separates the tasks instead.
-   Wrapper only — anchors, order, ids and commands untouched. */
-.supportGrid {
-  display: grid;
-  min-width: 0;
-  gap: var(--s5);
-}
-
-/* Short-entry rows (notices only): a one-line body cannot fill a side
-   action column, so the 4–5 grouped buttons stretched the row into a
-   left-content/right-buttons chasm. These rows stack instead — entry on
-   top, its lifecycle | exposure | delete toolbar left-aligned beneath —
-   while the richer 일정 rows keep side actions on desktop. Mobile already
-   stacks; the confirm region still spans the full row below. */
-li.stackedRow {
-  grid-template-columns: minmax(0, 1fr);
-  row-gap: var(--s2);
-}
-
-/* Row action clusters (this workspace only): lifecycle (편집·게시) |
-   노출 (고정·전광판 출력) | 삭제. Same buttons, same order, grouped by
-   consequence so the destructive choice never sits beside the daily one.
-   Mirrors the operations separator grammar. Desktop keeps an airier
-   column rhythm so grouped actions do not read as one wall. */
-.compactActions {
-  column-gap: var(--s3);
-}
-
-.actionSeparator {
-  flex: none;
-  align-self: stretch;
-  width: 1px;
-  margin-inline: var(--s1);
-  background: var(--line);
-}
-
-@media (max-width: 768px) {
-  .actionSeparator {
-    display: none;
-  }
-
-  /* Phone row actions (this workspace only): intrinsic-width wrapping
-     list, not forced 2-col equal boxes. Daily and exposure actions keep
-     their order, delete stays last with danger tone but never equal
-     weight or a full-width primary-like bar. 44px and focus ride globals. */
-  .compactActions {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-start;
-    align-items: center;
-    gap: var(--s2);
-  }
-
-  .compactActions > :global(.product-action) {
-    flex: 0 1 auto;
-    width: auto;
-    max-width: 100%;
-  }
 }
 
 /* Form sub-groups (this workspace only): one task per group with its own
@@ -283,3 +126,128 @@ li.stackedRow {
   background: var(--danger-soft);
   color: var(--danger);
 }
+
+/* Authoring layout: ledger or editor on the left, the always-on attendee
+   phone on the right. The phone is the page's one framed object; the ledger
+   stays flat (hairlines, state dots, no row buttons). Below 1081px the phone
+   leaves the page and opens as a sheet from the tab row. */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s6);
+  align-items: start;
+}
+
+.work { display: grid; gap: var(--s3); min-width: 0; }
+
+.railHost {
+  position: sticky;
+  top: var(--s4);
+  min-width: 0;
+}
+
+.tabBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  border-bottom: 1px solid var(--line);
+}
+
+.tabs { display: flex; gap: var(--s5); min-width: 0; }
+
+.tab {
+  min-height: 44px;
+  margin-bottom: -1px;
+  padding: 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.tab[aria-selected="true"] { border-bottom-color: var(--ink); color: var(--ink); }
+.tab:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.tabCount { margin-left: var(--s1); font-weight: 600; }
+
+.phoneToggle { display: none; }
+
+.panel { min-width: 0; }
+
+.ledger { display: grid; margin: 0; padding: 0; list-style: none; }
+.ledgerItem + .ledgerItem { border-top: 1px solid var(--line); }
+
+.ledgerRow {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  gap: var(--s3);
+  align-items: center;
+  width: 100%;
+  min-height: 72px;
+  padding: var(--s2) 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+}
+
+button.ledgerRow { cursor: pointer; }
+button.ledgerRow:hover:not(:disabled) { background: var(--surface-muted); }
+button.ledgerRow:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+button.ledgerRow:disabled { cursor: not-allowed; opacity: 0.6; }
+
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+.dot[data-status="live"] { background: var(--success); }
+.dot[data-status="edit"] { background: var(--warning); }
+.dot[data-status="off"] { background: transparent; box-shadow: inset 0 0 0 2px var(--muted); }
+
+.rowText { display: grid; gap: var(--s1); min-width: 0; }
+.rowTitle { font-size: var(--h3); font-weight: 750; overflow-wrap: anywhere; word-break: keep-all; }
+.rowSummary { color: var(--muted); font-size: var(--small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.rowMeta { display: flex; align-items: center; gap: var(--s3); color: var(--muted); font-size: var(--small); font-weight: 650; white-space: nowrap; }
+.rowFlag { color: var(--ink); }
+.rowStatus[data-status="edit"] { color: var(--warning); }
+
+.editor { display: grid; gap: var(--s3); min-width: 0; }
+.editorHead { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+.crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  min-height: 44px;
+  margin-left: calc(var(--s1) * -1);
+  padding: 0 var(--s2) 0 var(--s1);
+  border: 0;
+  border-radius: var(--radius-small);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.crumb:hover:not(:disabled) { color: var(--ink); background: var(--surface-muted); }
+.crumb:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.crumb:disabled { cursor: not-allowed; opacity: 0.6; }
+.crumbIcon { flex: none; }
+.editorTitle { margin: 0; font-size: var(--h2); letter-spacing: -0.02em; overflow-wrap: anywhere; word-break: keep-all; }
+.editorState { display: inline-flex; align-items: center; gap: var(--s2); color: var(--muted); font-size: var(--small); font-weight: 650; }
+
+.venuePanel { display: grid; gap: var(--s3); max-width: 640px; min-width: 0; }
+
+@media (max-width: 1080px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .railHost { display: none; }
+  .phoneToggle { display: inline-flex; }
+}
+
+@media (max-width: 768px) {
+  .tabs { gap: var(--s4); }
+  .rowMeta { flex-direction: column; align-items: flex-end; gap: var(--s1); }
+}
+
+.fieldNote { margin-top: var(--s1); }

@@ -1,0 +1,165 @@
+/* Notice body editor: one bordered writing surface with a quiet toolbar. The
+   toolbar is hairline-separated icon buttons at 44px touch size; the surface
+   reads like the attendee notice (same rhythm as RichText). */
+.shell {
+  display: grid;
+  min-width: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-small);
+  background: var(--paper);
+}
+
+.shell:focus-within {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.shell[data-invalid] {
+  border-color: var(--danger);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1);
+  padding: var(--s1);
+  border-bottom: 1px solid var(--line);
+}
+
+.tool {
+  display: inline-grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-small);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.tool:hover:not(:disabled) {
+  background: var(--surface-muted);
+  color: var(--ink);
+}
+
+.tool[aria-pressed="true"] {
+  background: var(--surface-muted);
+  color: var(--ink);
+  box-shadow: inset 0 -2px 0 var(--ink);
+}
+
+.tool:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+
+.tool:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.rule {
+  align-self: stretch;
+  width: 1px;
+  margin-block: var(--s2);
+  background: var(--line);
+}
+
+.linkRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-muted);
+}
+
+.linkInput {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.linkAction {
+  min-height: 44px;
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-small);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.surface {
+  min-height: 220px;
+  max-height: 60svh;
+  padding: var(--s3);
+  overflow-y: auto;
+  outline: none;
+  overflow-wrap: anywhere;
+}
+
+.surface > * + * {
+  margin-top: var(--s2);
+}
+
+.surface p,
+.surface ul,
+.surface ol {
+  margin: 0;
+}
+
+.surface ul,
+.surface ol {
+  padding-left: 1.4em;
+}
+
+.surface ul { list-style-type: disc; }
+.surface ol { list-style-type: decimal; }
+
+.surface ul > li,
+.surface ol > li {
+  display: list-item;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.surface li > p {
+  margin: 0;
+}
+
+.surface a {
+  color: var(--brand-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.surface img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-small);
+}
+
+.surface img:global(.ProseMirror-selectednode) {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.status,
+.problem {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border-top: 1px solid var(--line);
+  font-size: var(--small);
+}
+
+.status { color: var(--muted); }
+.problem { color: var(--danger); }
