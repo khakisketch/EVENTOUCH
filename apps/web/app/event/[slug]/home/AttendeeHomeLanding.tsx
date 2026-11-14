@@ -1,11 +1,13 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import ProductLink from "../../../ui/ProductLink";
 import ProductButton from "../../../ui/ProductButton";
-import type { HomeStyle } from "../../../../lib/attendee-home";
+import { bannerFillCss, bannerFillTone, normalizeHomeStyle, readableInk, type HomeStyle } from "../../../../lib/attendee-home";
 import { normalizeHomeMenus, type HomeMenus, type HomeProgram } from "../../../../lib/attendee-home-menus";
 import styles from "./home.module.css";
+import L from "./home-layouts.module.css";
 
 export type HomeMenuKey = "qr" | "application" | "notice" | "lucky" | "roulette" | "vote" | "stamp";
 type Menu = {
@@ -48,16 +50,20 @@ type AttendeeHomeLandingProps = {
   programs?: HomeProgram[];
 };
 
+// One landing, three compositions (homeStyle.layout): tile (compact banner,
+// square tiles), poster (tall banner, circle or list menus) and typography
+// (no banner, large type). Entries, ticket gating, group labels, links and the
+// preview/disabled behavior are the same in every composition; only the
+// arrangement changes. The photo-first layout is reserved and not rendered.
 export default function AttendeeHomeLanding({
   eventName,
   hasTicket,
   keyvisual,
   defaultHomeBanner = "legacy",
-  homeStyle,
+  homeStyle: homeStyleInput,
   onOpen,
   menuButtonRef,
   preview = false,
-  shortViewport = false,
   slug,
   hasPrograms = false,
   unavailable = [],
@@ -65,26 +71,26 @@ export default function AttendeeHomeLanding({
   programs = [],
 }: AttendeeHomeLandingProps) {
   const [imageFailed, setImageFailed] = useState(false);
-  const neutralBanner = imageFailed || (!keyvisual && defaultHomeBanner === "neutral");
+  // Stored or partial styles always read through the same defaults.
+  const homeStyle = normalizeHomeStyle(homeStyleInput);
+  const layout = homeStyle.layout;
+  const fill = bannerFillCss(homeStyle);
+  const imageMode = fill === null;
+  const neutralBanner = imageMode && (imageFailed || (!keyvisual && defaultHomeBanner === "neutral"));
+  const imageSource = imageMode && !imageFailed ? keyvisual || (defaultHomeBanner === "neutral" ? null : "/attendee-home-banner.png") : null;
   const title = homeStyle.heroTitle?.trim() || eventName;
-  const extended = homeStyle.heroLayout !== "image-only" && (
-    homeStyle.titleScale === "large" || Boolean(homeStyle.heroSubtitle.trim()) || [...title].length > 30
-  );
-  const bannerClasses = [
-    styles.eventBanner,
-    neutralBanner ? styles.bannerNeutral : "",
-    homeStyle.heroLayout === "bottom-overlay" ? styles.bannerBottomOverlay : "",
-    homeStyle.heroLayout === "image-only" ? styles.bannerImageOnly : "",
-    homeStyle.titleScale === "large" ? styles.bannerTitleLarge : "",
-    preview && shortViewport ? styles.previewShortBanner : "",
-    homeStyle.imageFocus === "top" ? styles.bannerFocusTop : "",
-    homeStyle.imageFocus === "bottom" ? styles.bannerFocusBottom : "",
-    styles[`bannerAlign${capitalize(homeStyle.textAlign)}`],
-    homeStyle.textTone === "dark" ? styles.bannerToneDark : "",
-    homeStyle.overlay !== "none" ? styles[`bannerOverlay${capitalize(homeStyle.overlay)}${capitalize(homeStyle.textTone)}`] : "",
-    extended ? styles.bannerExtended : "",
+  const textHidden = imageMode && homeStyle.heroLayout === "image-only" && !neutralBanner;
+  // A color banner reads its own tone; a picture follows the chosen tone.
+  const tone = fill ? bannerFillTone(homeStyle) : neutralBanner ? "light" : homeStyle.textTone;
+  const heroClass = [
+    L.hero,
+    tone === "dark" ? L.toneDark : L.toneLight,
+    L[`align${capitalize(homeStyle.textAlign)}`],
+    homeStyle.titleScale === "large" ? L.titleLarge : "",
+    layout === "tile" && homeStyle.heroLayout === "bottom-overlay" ? L.textBottom : "",
+    imageMode && homeStyle.overlay !== "none" ? L[`overlay${capitalize(homeStyle.overlay)}${capitalize(tone)}`] : "",
+    homeStyle.imageFocus === "top" ? L.focusTop : homeStyle.imageFocus === "bottom" ? L.focusBottom : "",
   ].filter(Boolean).join(" ");
-  const imageSource = imageFailed ? null : keyvisual || (defaultHomeBanner === "neutral" ? null : "/attendee-home-banner.png");
 
   useEffect(() => setImageFailed(false), [keyvisual]);
 
@@ -100,49 +106,90 @@ export default function AttendeeHomeLanding({
     ...ordered.filter((menu) => menu.category === "info"),
     ...ordered.filter((menu) => menu.category === "Engagement"),
   ].filter((menu) => !unavailable.includes(menu.key) && (menu.key === "qr" || !menuSettings.hidden.includes(menu.key as typeof menuSettings.hidden[number])));
+  const ticket = visibleMenus.find((menu) => menu.key === "qr");
+  const entries = visibleMenus.filter((menu) => menu.key !== "qr");
   const programById = new Map(programs.map((program) => [program.id, program]));
   const selectedPrograms = menuSettings.programs.flatMap((id) => programById.has(id) ? [programById.get(id)!] : []);
+  const showLinks = Boolean(slug || preview);
+  const shape = layout === "tile" ? "tile" : layout === "poster" && homeStyle.menuShape === "circle" ? "circle" : "row";
+  const rootStyle = { "--lay-ink": readableInk(homeStyle.backgroundColor) } as CSSProperties;
+
+  const heroText = (
+    <div className={`${L.heroText}${textHidden ? ` ${styles.visuallyHidden}` : ""}`}>
+      <Title className={L.title}>{title}</Title>
+      {homeStyle.heroLayout !== "image-only" && homeStyle.heroSubtitle.trim() ? <p className={L.subtitle}>{homeStyle.heroSubtitle}</p> : null}
+    </div>
+  );
+
+  const hero = layout === "typography" ? (
+    <header className={`${L.typoHead} ${homeStyle.titleScale === "large" ? L.titleLarge : ""} ${L[`align${capitalize(homeStyle.textAlign)}`]}`} aria-label={`${eventName} 참가자 홈`}>
+      {heroText}
+    </header>
+  ) : (
+    <section className={heroClass} style={fill ? { background: fill } : undefined} aria-label={`${eventName} 참가자 홈`} data-neutral={neutralBanner || undefined}>
+      {imageSource ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img className={L.artwork} src={imageSource} alt="" onError={() => setImageFailed(true)} />
+      ) : imageMode && imageFailed ? (
+        <div className={styles.bannerImageFailure} role="status">배너 이미지를 불러오지 못했습니다.</div>
+      ) : null}
+      {heroText}
+    </section>
+  );
+
+  const ticketEntry = ticket ? (
+    <ProductButton
+      ref={menuButtonRef ? (node) => menuButtonRef("qr", node) : undefined}
+      type="button"
+      className={L.ticket}
+      icon={<MenuIcon type="qr" />}
+      onClick={() => onOpen?.("qr")}
+      disabled={preview || !onOpen}
+      aria-disabled={preview || undefined}
+    >
+      <span className={L.ticketText}>
+        <span className={L.ticketLabel}>{ticket.label}</span>
+      </span>
+      <span className={L.ticketGo} aria-hidden="true">열기</span>
+    </ProductButton>
+  ) : null;
+
+  const renderEntry = (menu: Menu) => (
+    <MenuEntry
+      key={menu.key}
+      menu={menu}
+      shape={shape}
+      needsTicket={!hasTicket && NEEDS_TICKET.has(menu.key)}
+      onOpen={onOpen ? () => onOpen(menu.key) : undefined}
+      buttonRef={menuButtonRef ? (node) => menuButtonRef(menu.key, node) : undefined}
+      preview={preview}
+    />
+  );
+  const groups = (["info", "Engagement"] as const).map((category) => ({
+    category,
+    items: entries.filter((menu) => menu.category === category),
+  })).filter((group) => group.items.length);
 
   return (
-    <>
-      <section className={bannerClasses} aria-label={`${eventName} 참가자 홈`}>
-        {imageSource ? (
-          <img
-            className={styles.bannerArtwork}
-            src={imageSource}
-            alt=""
-            onError={() => setImageFailed(true)}
-          />
-        ) : imageFailed ? (
-          <div className={styles.bannerImageFailure} role="status">
-            배너 이미지를 불러오지 못했습니다.
-          </div>
-        ) : null}
-        <div className={`${styles.bannerText}${homeStyle.heroLayout === "image-only" && !neutralBanner ? ` ${styles.visuallyHidden}` : ""}`}>
-          <Title className={styles.eventTitle}>{title}</Title>
-          {homeStyle.heroLayout !== "image-only" && homeStyle.heroSubtitle.trim() ? (
-            <p className={styles.heroSubtitle}>{homeStyle.heroSubtitle}</p>
-          ) : null}
-        </div>
-      </section>
-      <nav className={`${styles.menuBoard}${preview && shortViewport ? ` ${styles.previewShortMenu}` : ""}`} aria-label="참가 메뉴">
-        {visibleMenus.map((menu, index) => (
-          <Fragment key={menu.key}>
-          {menu.category !== "Utility" && visibleMenus[index - 1]?.category !== menu.category ? <h2 className={styles.menuGroupLabel}>{menu.category === "info" ? "행사 안내" : "행사 참여"}</h2> : null}
-          <MenuButton
-            key={menu.key}
-            menu={menu}
-            needsTicket={!hasTicket && NEEDS_TICKET.has(menu.key)}
-            onOpen={onOpen ? () => onOpen(menu.key) : undefined}
-            buttonRef={menuButtonRef ? (node) => menuButtonRef(menu.key, node) : undefined}
-            preview={preview}
-          />
+    <div className={`${L.root} ${L[layout]}`} style={rootStyle} data-layout={layout} data-menu-shape={shape}>
+      {hero}
+      {ticketEntry ? <div className={L.ticketWrap}>{ticketEntry}</div> : null}
+      <nav className={L.menus} aria-label="참가 메뉴">
+        {groups.map((group, index) => (
+          <Fragment key={group.category}>
+            <h2 className={L.groupLabel}>{group.category === "info" ? "행사 안내" : "행사 참여"}</h2>
+            <div className={`${L.group} ${L[`group_${shape}`]}`}>
+              {group.items.map(renderEntry)}
+              {shape === "tile" && showLinks && index === groups.length - 1 ? (
+                <ApplicationEntry shape="tile" menuButtonRef={menuButtonRef} onOpen={onOpen} preview={preview} />
+              ) : null}
+            </div>
           </Fragment>
         ))}
       </nav>
-      {slug || preview ? (
-        <nav className={styles.moreLinks} aria-label="행사 안내와 참여">
-          <ProductButton type="button" disabled={preview} ref={menuButtonRef ? (node) => menuButtonRef("application", node) : undefined} onClick={() => onOpen?.("application")}>내 신청 정보 <span aria-hidden="true">→</span></ProductButton>
+      {showLinks ? (
+        <nav className={L.links} aria-label="행사 안내와 참여">
+          {shape !== "tile" ? <ApplicationEntry shape="link" menuButtonRef={menuButtonRef} onOpen={onOpen} preview={preview} /> : null}
           {preview ? <ProductButton type="button" disabled>행사 안내 보기 <span aria-hidden="true">→</span></ProductButton>
             : <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug!)}`}>행사 안내 보기 <span aria-hidden="true">→</span></ProductLink>}
           {hasPrograms ? preview ? <ProductButton type="button" disabled>참여 콘텐츠 보기 <span aria-hidden="true">→</span></ProductButton>
@@ -152,7 +199,7 @@ export default function AttendeeHomeLanding({
             : <ProductLink key={program.id} className="button button-secondary" href={`/event/${encodeURIComponent(slug!)}/engage?program=${encodeURIComponent(program.id)}`}>{program.title} <span aria-hidden="true">→</span></ProductLink>)}
         </nav>
       ) : null}
-    </>
+    </div>
   );
 }
 
@@ -160,32 +207,62 @@ function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function MenuButton({
+function ApplicationEntry({ shape, menuButtonRef, onOpen, preview }: {
+  shape: "tile" | "link";
+  menuButtonRef?: (key: HomeMenuKey, node: HTMLButtonElement | null) => void;
+  onOpen?: (key: HomeMenuKey) => void;
+  preview: boolean;
+}) {
+  if (shape === "tile") {
+    return (
+      <ProductButton
+        ref={menuButtonRef ? (node) => menuButtonRef("application", node) : undefined}
+        type="button"
+        className={L.tile}
+        icon={<MenuIcon type="application" />}
+        disabled={preview}
+        onClick={() => onOpen?.("application")}
+      >
+        <span className={L.tileLabel}>내 신청 정보</span>
+      </ProductButton>
+    );
+  }
+  return (
+    <ProductButton ref={menuButtonRef ? (node) => menuButtonRef("application", node) : undefined} type="button" disabled={preview} onClick={() => onOpen?.("application")}>
+      내 신청 정보 <span aria-hidden="true">→</span>
+    </ProductButton>
+  );
+}
+
+function MenuEntry({
   menu,
+  shape,
   needsTicket,
   onOpen,
   buttonRef,
   preview,
 }: {
   menu: Menu;
+  shape: "tile" | "circle" | "row";
   needsTicket: boolean;
   onOpen?: () => void;
   buttonRef?: (node: HTMLButtonElement | null) => void;
   preview: boolean;
 }) {
+  const className = shape === "tile" ? L.tile : shape === "circle" ? L.circle : L.row;
   return (
     <ProductButton
       ref={buttonRef}
       type="button"
-      className={styles.menuButton}
+      className={className}
       icon={<MenuIcon type={menu.key} />}
       onClick={onOpen}
       disabled={preview || !onOpen}
       aria-disabled={preview || undefined}
     >
-      <span className={styles.menuLabel}>{menu.label}</span>
+      <span className={shape === "tile" ? L.tileLabel : L.entryLabel}>{menu.label}</span>
       {needsTicket ? " " : null}
-      {needsTicket ? <span className={styles.menuNeedTicket}>티켓 필요</span> : null}
+      {needsTicket ? <span className={L.needTicket}>티켓 필요</span> : null}
     </ProductButton>
   );
 }

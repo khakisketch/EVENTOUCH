@@ -1,17 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CSSProperties, ChangeEvent, FocusEvent as ReactFocusEvent, MouseEvent as ReactMouseEvent } from "react";
+import type { CSSProperties, ChangeEvent, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
 import { eventStageLabel } from "../../../../event-stage";
 import {
   DEFAULT_HOME_STYLE,
+  bannerFillCss,
   homeImageLabel,
   normalizeHomeImage,
   normalizeHomeStyle,
   sameHomeImage,
   type HomeImage,
+  type HomeLayout,
   type HomeStyle,
 } from "../../../../../lib/attendee-home";
 import { normalizeHomeMenus, type ConfigurableHomeMenu, type HomeMenus, type HomeProgram } from "../../../../../lib/attendee-home-menus";
@@ -23,7 +25,12 @@ import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
 import PublicationReview from "../../../console-ui/PublicationReview";
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
 import ConsoleFormActions from "../../../console-ui/ConsoleFormActions";
-import ConsoleSectionNav from "../../../console-ui/ConsoleSectionNav";
+import ConsoleDialog from "../../../console-ui/ConsoleDialog";
+import { Switch } from "@astryxdesign/core/Switch";
+import ColorField from "./ColorField";
+import LayoutPicker from "./LayoutPicker";
+import { ChoiceCards, Seg } from "./StudioControls";
+import studio from "./studio.module.css";
 import { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import { useConsoleDraftGuard } from "../../../console-draft-guard";
@@ -72,25 +79,6 @@ type Snapshot = {
   unavailableMenus: ConfigurableHomeMenu[];
 };
 type Ready = Snapshot & { kind: "ready"; savedForm: DesignForm; savedPageFields: PageFields };
-// Names the section in view for the jump-nav active link.
-const THEME_SECTION_LABELS: Record<string, string> = {
-  "theme-edit": "편집",
-  "theme-save": "저장·게시",
-  "home-preview-heading": "미리보기",
-};
-
-// Maps any focused or jumped-to node to the jump-nav section that owns it.
-// The save region lives inside the edit column, so it wins first; the
-// preview panel is a labelled section of its own.
-function sectionForNode(node: Element | null): string | null {
-  if (!node || typeof node.closest !== "function") return null;
-  if (node.closest("#theme-save")) return "theme-save";
-  const section = node.closest("section");
-  if (section?.getAttribute("aria-labelledby") === "home-preview-heading") return "home-preview-heading";
-  if (node.closest("#theme-edit")) return "theme-edit";
-  return null;
-}
-
 type EditorState =
   | { kind: "loading" }
   | { kind: "failed"; message: string }
@@ -319,6 +307,20 @@ function describeChangedPageFields(from: PageFields, to: PageFields): string[] {
   return changed;
 }
 
+const BACKGROUND_SWATCHES = [
+  { color: "#B9DEF0", name: "맑은 하늘" }, { color: "#F3EEE6", name: "크림" }, { color: "#FDE3D5", name: "피치" },
+  { color: "#DCEBDD", name: "세이지" }, { color: "#E6E1F5", name: "라벤더" }, { color: "#1E2026", name: "잉크" },
+];
+const BANNER_SWATCHES = [
+  { color: "#1E2026", name: "잉크" }, { color: "#2E3D5B", name: "남색" }, { color: "#C8441F", name: "주황" },
+  { color: "#2F6B4F", name: "초록" }, { color: "#6D5BD0", name: "보라" }, { color: "#E58A4B", name: "살구" },
+];
+const GRADIENT_PRESETS = [
+  { name: "노을", from: "#2E3D5B", to: "#E58A4B" }, { name: "바다", from: "#0F4C75", to: "#3BA3C7" },
+  { name: "숲", from: "#1F3D2B", to: "#6FA37A" }, { name: "벚꽃", from: "#E8A0BF", to: "#FDE3D5" },
+  { name: "밤", from: "#101114", to: "#4A5A8A" }, { name: "라벤더", from: "#6D5BD0", to: "#C7B8FF" },
+];
+
 const HOME_STYLE_LABELS: Array<[keyof HomeStyle, string]> = [
   ["backgroundColor", "배경색"],
   ["heroTitle", "배너 제목"],
@@ -329,6 +331,12 @@ const HOME_STYLE_LABELS: Array<[keyof HomeStyle, string]> = [
   ["textAlign", "문구 정렬"],
   ["textTone", "문구 색상"],
   ["overlay", "읽기 배경"],
+  ["layout", "레이아웃"],
+  ["menuShape", "메뉴 모양"],
+  ["bannerKind", "배너 종류"],
+  ["bannerColor", "배너 색"],
+  ["bannerColor2", "배너 끝 색"],
+  ["bannerAngle", "그라데이션 방향"],
 ];
 
 const PAGE_FIELD_LABELS: Array<[keyof PageFields, string]> = [
@@ -348,7 +356,7 @@ function describeChangedDesign(from: DesignForm, to: DesignForm): string[] {
 }
 
 function comparisonRows(fromForm: DesignForm, fromFields: PageFields, toForm: DesignForm, toFields: PageFields, programs: Array<HomeProgram>): Array<{ label: string; before: string; after: string }> {
-  const choices: Record<string, string> = { centered: "가운데 제목", "bottom-overlay": "아래쪽 제목", "image-only": "이미지만", standard: "기본", large: "크게", center: "가운데", left: "왼쪽", right: "오른쪽", top: "위쪽", bottom: "아래쪽", light: "흰색", dark: "짙은 색", none: "없음", soft: "부드럽게", strong: "강하게" };
+  const choices: Record<string, string> = { centered: "가운데 제목", "bottom-overlay": "아래쪽 제목", "image-only": "이미지만", standard: "기본", large: "크게", center: "가운데", left: "왼쪽", right: "오른쪽", top: "위쪽", bottom: "아래쪽", light: "흰색", dark: "짙은 색", none: "없음", soft: "부드럽게", strong: "강하게", tile: "타일형", poster: "포스터형", typography: "타이포형", circle: "원형 아이콘", list: "목록", image: "이미지", gradient: "그라데이션", solid: "단색", diagonal: "대각선", vertical: "위에서 아래", horizontal: "왼쪽에서 오른쪽" };
   const display = (value: unknown) => typeof value === "boolean" ? (value ? "보기" : "숨김") : typeof value === "string" ? (choices[value] || value || "기본값") : "기본값";
   const rows = HOME_STYLE_LABELS.flatMap(([key, label]) => fromForm.homeStyle[key] !== toForm.homeStyle[key]
     ? [{ label, before: display(fromForm.homeStyle[key]), after: display(toForm.homeStyle[key]) }] : []);
@@ -411,9 +419,10 @@ async function loadSnapshot(eventId: string, afterWrite = false): Promise<Snapsh
 export default function ThemeWorkspace({ eventId }: { eventId: string }) {
   const router = useRouter();
   const [state, setState] = useState<EditorState>({ kind: "loading" });
-  const [activeSection, setActiveSection] = useState("theme-edit");
-  const [mobileView, setMobileView] = useState<"edit" | "preview">("edit");
-  const lastEditTarget = useRef<HTMLElement | null>(null);
+  // Which sub-panel replaces the settings list (null = the list), and the
+  // full-view phone on narrow screens.
+  const [panel, setPanel] = useState<null | "banner" | "text" | "menus" | "exposure">(null);
+  const [stageOpen, setStageOpen] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
   const [upload, setUpload] = useState<UploadIntent | null>(null);
   const [previewSize, setPreviewSize] = useState({ width: 390, height: 700 });
@@ -478,31 +487,6 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
     });
     return () => window.cancelAnimationFrame(frame);
   }, [failure]);
-  // The edit form stacks every field above the save/publish actions, so a
-  // keyboard-only save means tabbing through all of them. This ref is the
-  // landing target of the "skip the fields" link at the top of the form:
-  // focusing the save region (not just scrolling to it) puts the next Tab
-  // stop on the save button itself.
-  const saveActionsRef = useRef<HTMLDivElement>(null);
-
-  // The active link follows where the operator actually is: explicit jumps and
-  // real focus move it; scrolling only moves it through the genuine
-  // document flow (see the observer below).
-  const syncSectionFromFocus = useCallback((event: ReactFocusEvent<HTMLElement>) => {
-    const target = event.target as Element | null;
-    if (target instanceof HTMLElement && target.matches("input, select, textarea") && target.closest("#theme-edit")) lastEditTarget.current = target;
-    // Preview auxiliaries (source/viewport switches) never rename the
-    // location: only the explicit preview jump, which focuses the heading
-    // itself, may name the preview. Real scroll arrival stays the
-    // observer's job on stacked widths.
-    if (target && typeof target.closest === "function") {
-      const inPreview = target.closest('section[aria-labelledby="home-preview-heading"]');
-      if (inPreview && target.id !== "home-preview-heading") return;
-    }
-    const section = sectionForNode(target);
-    if (section && section in THEME_SECTION_LABELS) setActiveSection(section);
-  }, []);
-
   // Unsaved work the cross-route guard must hold: local edits, an upload
   // context that is not settled, a pending save/publish intent, or an
   // unresolved version conflict. Read-only preview choices stay unguarded.
@@ -542,69 +526,6 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
     void load();
     return () => { cancelled = true; };
   }, [eventId, reloadTick, router]);
-
-  // Desktop lays the editor and the preview side by side, so the sticky
-  // preview and the sticky save bar would always own the in-view link.
-  // There the active link keeps the basic edit context and moves only on
-  // explicit jumps and real focus. On stacked (mobile) widths a single
-  // document flow decides, and the preview takes over only when genuinely
-  // reached. The sticky save bar never joins the observation on either
-  // width: it reports through focus and explicit jumps only, so its stuck
-  // position cannot rename the location on first paint. Matches the 1080px
-  // layout breakpoint in page.module.css.
-  const [stackedNav, setStackedNav] = useState(false);
-  useEffect(() => {
-    if (typeof window.matchMedia !== "function") return;
-    const query = window.matchMedia("(max-width: 1080px)");
-    const sync = () => setStackedNav(query.matches);
-    sync();
-    query.addEventListener("change", sync);
-    return () => query.removeEventListener("change", sync);
-  }, []);
-
-  // Anchor clicks keep working natively whether or not the observer is
-  // available; the focus handoff in ConsoleSectionNav and the skip link
-  // both land focus, which the capture handler above turns into the
-  // active link. This covers fragment changes that move no focus.
-  useEffect(() => {
-    const sync = () => {
-      const id = window.location.hash.slice(1);
-      const target = document.getElementById(id);
-      if (id === "home-preview-heading") setMobileView("preview");
-      else if (id === "theme-edit" || id === "theme-save" || id === "theme-save-draft") setMobileView("edit");
-      const section = sectionForNode(target);
-      if (section && section in THEME_SECTION_LABELS) setActiveSection(section);
-    };
-    sync();
-    window.addEventListener("hashchange", sync);
-    return () => window.removeEventListener("hashchange", sync);
-  }, [state.kind]);
-
-  // Names the section in view for the jump-nav active link. Canonical
-  // document order wins ties, so a sticky panel behind the arrival point
-  // never renames where the operator has arrived.
-  useEffect(() => {
-    if (typeof IntersectionObserver === "undefined") return;
-    const ids = stackedNav
-      ? ["theme-edit", "home-preview-heading"]
-      : ["theme-edit"];
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = new Set(
-          entries.filter((entry) => entry.isIntersecting).map((entry) => entry.target.id)
-        );
-        for (const id of ids) {
-          if (visible.has(id)) setActiveSection(id);
-        }
-      },
-      { rootMargin: "-30% 0px -60% 0px" }
-    );
-    for (const id of ids) {
-      const node = document.getElementById(id);
-      if (node) observer.observe(node);
-    }
-    return () => observer.disconnect();
-  }, [state, stackedNav]);
 
   useEffect(() => () => {
     if (uploadUrlRef.current) URL.revokeObjectURL(uploadUrlRef.current);
@@ -1428,27 +1349,6 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
     : [];
   const canEditImage = !commandBusy && !state.archived && upload?.status !== "uploading" && upload?.status !== "failed";
 
-  function switchMobileView(view: "edit" | "preview", returnTarget?: HTMLElement | null) {
-    if (view === "preview" && returnTarget) lastEditTarget.current = returnTarget;
-    const fragment = view === "preview" ? "#home-preview-heading" : "#theme-edit";
-    if (window.location.hash !== fragment) window.history.pushState(null, "", fragment);
-    setMobileView(view);
-    setActiveSection(view === "preview" ? "home-preview-heading" : "theme-edit");
-    requestAnimationFrame(() => {
-      const target = view === "preview" ? document.getElementById("home-preview-heading") : (lastEditTarget.current || document.getElementById("theme-edit"));
-      if (target instanceof HTMLElement) { target.focus({ preventScroll: true }); target.scrollIntoView({ block: "start", behavior: "instant" }); }
-    });
-  }
-
-  function jumpToSaveActions(event: ReactMouseEvent<HTMLAnchorElement>) {
-    event.preventDefault();
-    const save = document.getElementById("theme-save-draft");
-    const target = save instanceof HTMLButtonElement && !save.disabled ? save : saveActionsRef.current;
-    if (!target) return;
-    target.focus({ preventScroll: true });
-    target.scrollIntoView({ block: "center", behavior: "instant" });
-  }
-
   function changeHomeStyle<K extends keyof HomeStyle>(field: K, value: HomeStyle[K]) {
     updateForm((form) => ({ ...form, homeStyle: { ...form.homeStyle, [field]: value } }));
   }
@@ -1483,6 +1383,45 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
     ...state.programOptions.filter((program) => !state.form.homeMenus.programs.includes(program.id)),
   ];
 
+  const editsLocked = Boolean(commandBusy || conflict || state.archived);
+  const homeStyle = state.form.homeStyle;
+  const bannerDirty = (["bannerKind", "bannerColor", "bannerColor2", "bannerAngle", "heroLayout", "imageFocus", "overlay"] as const).some((key) => homeStyle[key] !== state.savedForm.homeStyle[key]);
+  const menusDirty = JSON.stringify(state.form.homeMenus) !== JSON.stringify(state.savedForm.homeMenus);
+  const bannerSummary = homeStyle.bannerKind === "gradient" ? "그라데이션" : homeStyle.bannerKind === "solid" ? `단색 ${homeStyle.bannerColor}`
+    : upload?.status === "uploading" ? upload.file.name : !state.form.keyvisual && state.defaultHomeBanner === "neutral" ? "기본 색상 배너" : homeImageLabel(state.form.keyvisual);
+  const bannerFill = bannerFillCss(homeStyle);
+  const bannerSwatch = (
+    <span className={studio.swatchArt} style={bannerFill ? { background: bannerFill } : imageUrl ? { backgroundImage: `url(${imageUrl})` } : undefined} aria-hidden="true" />
+  );
+  const menuShown = state.form.homeMenus.order.filter((key) => !state.form.homeMenus.hidden.includes(key)).length;
+  const menuSummary = `${state.form.homeMenus.order.length}개 중 ${menuShown}개 표시${state.form.homeMenus.programs.length ? ` · 프로그램 ${state.form.homeMenus.programs.length}개` : ""}`;
+  const exposureSummary = hiddenEventSections.length ? `숨김: ${hiddenEventSections.join(" · ")}` : "공지 · 일정 · 장소 · 프로그램 모두 표시";
+
+  function selectLayout(next: HomeLayout) {
+    updateForm((form) => ({
+      ...form,
+      homeStyle: {
+        ...form.homeStyle,
+        layout: next,
+        // Large type reads best on a dark page; only move off the untouched default.
+        ...(next === "typography" && form.homeStyle.backgroundColor === DEFAULT_HOME_STYLE.backgroundColor ? { backgroundColor: "#1E2026" } : {}),
+      },
+    }));
+  }
+
+  function studioRow(key: "banner" | "text" | "menus" | "exposure", title: string, summary: string, visual: ReactNode, dirtyRow: boolean) {
+    return (
+      <button type="button" className={studio.row} onClick={() => { setPanel(key); requestAnimationFrame(() => document.getElementById("theme-panel-title")?.focus()); }}>
+        <span className={studio.rowText}>
+          <span className={studio.rowTitle}>{title}{dirtyRow ? <span className={studio.dirtyDot} role="img" aria-label="미저장 변경" /> : null}</span>
+          <span className={studio.rowSummary}>{summary}</span>
+        </span>
+        {visual}
+        <svg className={studio.chevron} viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M9.5 6.5 15 12l-5.5 5.5" /></svg>
+      </button>
+    );
+  }
+
   return (
     <ConsolePage
       pageId="attendeePage"
@@ -1500,32 +1439,6 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
       }
       badges={
         state.publishedAt ? <span>최근 게시 {formatPublishedAt(state.publishedAt)}</span> : null
-      }
-      sectionNav={
-        <div className={styles.navSticky}>
-          <p className={styles.navIndexLabel} aria-hidden="true">참가자 페이지 목차 · 해당 위치로 이동</p>
-          <ConsoleSectionNav
-            label="참가자 페이지 구역"
-            activeId={activeSection}
-            onNavigate={(id) => {
-              const origin = document.activeElement;
-              setMobileView(id === "home-preview-heading" ? "preview" : "edit");
-              setActiveSection(id);
-              requestAnimationFrame(() => {
-                const target = document.getElementById(id);
-                // The shared nav may already have focused a visible target.
-                // Do not steal focus if the operator has since moved on.
-                if (document.activeElement !== origin && document.activeElement !== target) return;
-                if (target) { target.focus({ preventScroll: true }); target.scrollIntoView({ block: "start", behavior: "instant" }); }
-              });
-            }}
-            items={[
-              { id: "theme-edit", label: "편집" },
-              { id: "theme-save", label: "저장·게시" },
-              { id: "home-preview-heading", label: "미리보기" },
-            ]}
-          />
-        </div>
       }
     >
       {conflict ? (
@@ -1600,31 +1513,141 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
         </section>
       ) : null}
 
-      <div className={styles.editorLayout} data-mobile-view={mobileView} onFocusCapture={syncSectionFromFocus}>
-        <div className={styles.controls} id="theme-edit" tabIndex={-1}>
-          <div className={styles.editStatusLine}>
-            <span>{statusNeedsReview ? "최신 상태 확인 필요" : uploadBlocked ? (upload?.status === "uploading" ? "이미지 업로드 중" : "이미지 업로드 확인 필요") : dirty ? "저장되지 않은 변경" : alreadyPublished ? publishedStateLabel : "저장된 초안"}</span>
-            <a href="#theme-save" data-skip-to="theme-save-draft" onClick={jumpToSaveActions}>저장·게시 검토</a>
-          </div>
-          <fieldset className={styles.controlGroup} disabled={Boolean(commandBusy || conflict || state.archived)}>
-            <legend>배경{backgroundDirty ? <span className={styles.groupFlag}>미저장 변경</span> : null}</legend>
-            <p className={styles.help}>행사 홈과 상세 안내의 배경에 적용됩니다. 타일과 티켓은 읽기 쉽도록 밝은 카드로 유지됩니다.</p>
-            <div className={styles.colorRow}>
-              <label className={styles.colorLabel} htmlFor="home-background">배경색</label>
-              <input
-                id="home-background"
-                type="color"
-                value={state.form.homeStyle.backgroundColor}
-                onChange={(event) => changeHomeStyle("backgroundColor", event.target.value.toUpperCase())}
-              />
-              <output htmlFor="home-background">{state.form.homeStyle.backgroundColor}</output>
+      <div className={studio.studio} data-layout={homeStyle.layout}>
+        <div className={studio.stage}>
+          <div className={studio.stageBar}>
+            <div className={styles.sourceSwitch} role="group" aria-label="미리보기 기준">
+              <ProductButton className={styles.viewportChoice} variant="secondary" type="button" aria-pressed={previewSource === "draft"} onClick={() => setPreviewSource("draft")}>편집 중</ProductButton>
+              <ProductButton className={styles.viewportChoice} variant="secondary" type="button" aria-pressed={previewSource === "published"} onClick={() => setPreviewSource("published")}>게시본</ProductButton>
             </div>
-          </fieldset>
+          </div>
+          <div className={studio.phoneSlot}>
+            <h2 id="home-preview-heading" tabIndex={-1} className="sr-only">홈 디자인 미리보기</h2>
+          <div className={styles.phoneStage}>
+            <div
+              className={styles.phoneViewport}
+              role="region"
+              aria-label={`${previewSize.width}×${previewSize.height} 홈 디자인 미리보기`}
+              tabIndex={0}
+              style={{ "--preview-width": `${previewSize.width}px`, "--preview-height": `${previewSize.height}px` } as CSSProperties}
+            >
+              {showingPublished && !hasPublished ? (
+                <p className={styles.previewNote}>아직 게시된 화면이 없습니다</p>
+              ) : (
+              <div className={`${styles.previewHome} ${attendeeHomeStyles.homePage}`} style={showingPublished ? publishedPreviewStyle : previewStyle}>
+                <AttendeeHomeLanding
+                  eventName={state.eventName}
+                  hasTicket={previewHasTicket}
+                  keyvisual={showingPublished ? publishedImageUrl : imageUrl}
+                  defaultHomeBanner={state.defaultHomeBanner}
+                  homeStyle={showingPublished ? state.publishedDesign.homeStyle : state.form.homeStyle}
+                  homeMenus={showingPublished ? state.publishedDesign.homeMenus : state.form.homeMenus}
+                  programs={state.availablePrograms}
+                  hasPrograms={state.availablePrograms.length > 0}
+                  unavailable={[
+                    ...state.unavailableMenus,
+                    ...(!(showingPublished ? state.publishedPageFields.showAnnouncements : state.pageFields.showAnnouncements) ? ["notice" as const] : []),
+                  ]}
+                  preview
+                  shortViewport={previewSize.height <= 820}
+                />
+              </div>
+              )}
+            </div>
+          </div>
+          </div>
+          <div className={studio.phoneOptions}>
+            <label>
+              <span className="sr-only">참가자 티켓</span>
+              <select value={previewHasTicket ? "yes" : "no"} onChange={(event) => setPreviewHasTicket(event.target.value === "yes")}>
+                <option value="yes">티켓 있음</option>
+                <option value="no">티켓 없음</option>
+              </select>
+            </label>
+            <label>
+              <span className="sr-only">미리보기 화면 크기</span>
+              <select value={`${previewSize.width}x${previewSize.height}`} onChange={(event) => { const [width, height] = event.target.value.split("x").map(Number); setPreviewSize({ width, height }); }}>
+                <option value="320x568">짧은 화면 320×568</option>
+                <option value="390x700">390×700</option>
+                <option value="390x844">390×844</option>
+              </select>
+            </label>
+            <button type="button" className={studio.expand} onClick={() => setStageOpen(true)}>크게 보기</button>
+          </div>
+          <p className={styles.previewNote}>미리보기 메뉴는 작동하지 않습니다. 행사 안내의 소개·강조색·일정·장소·프로그램은 안내 화면에서 확인하세요.</p>
+          {/* Home presentation and menu configuration reflect the selected
+              draft or published version; event-page content remains separate. */}
+          {!showingPublished && designDirty && !uploadBlocked ? <p className={styles.previewNote}>미저장 변경이 미리보기에 바로 반영됩니다.</p> : null}
+          {!showingPublished && upload?.status === "failed" ? <p className={styles.previewNote}>업로드가 확인되지 않았습니다. 미리보기에는 선택한 파일을 표시하고 있어요.</p> : null}
+          {!showingPublished && state.form.homeStyle.heroLayout === "image-only" ? <p className={styles.previewNote}>이미지만 배치해도 제목은 스크린리더용으로 유지됩니다.</p> : null}
+          {showingPublished && hasPublished ? (
+            <p className={styles.previewNote}>
+              게시된 소개: {state.publishedPageFields.intro || "소개 없음"} · 강조색 {state.publishedPageFields.accent}
+              {publishedVisibility.length ? ` · 표시 설정: ${publishedVisibility.join(" · ")}` : " · 표시 설정 모두 켜짐"}
+              {" · 실제 표시는 게시된 내용과 행사 기능에 따라 달라질 수 있습니다."}
+            </p>
+          ) : null}
+          {!showingPublished && state.publishedAt && publishedChanges.length ? <p className={styles.publishedNote}>게시본과 다른 저장된 변경: {publishedChanges.join(" · ")}</p> : null}
+        </div>
 
-          <ProductButton className={styles.inlinePreview} variant="secondary" type="button" onClick={(event) => switchMobileView("preview", event.currentTarget)}>배경 미리보기</ProductButton>
-          <fieldset className={styles.controlGroup} disabled={Boolean(commandBusy || conflict || state.archived)}>
-            <legend>배너 이미지{imageDirty ? <span className={styles.groupFlag}>미저장 변경</span> : null}</legend>
-            <p className={styles.help}>PNG, JPEG, WEBP · 최대 600KB. 업로드 후 저장하고 게시해야 참가자에게 적용됩니다.</p>
+        <div className={studio.panel} id="theme-edit" tabIndex={-1}>
+          {panel === null ? (
+            <>
+              <section className={studio.section} aria-labelledby="studio-layout">
+                <h2 id="studio-layout" className={studio.sectionTitle}>레이아웃</h2>
+                <p className={studio.sectionHint}>행사 성격에 맞는 구성을 고르세요. 다른 설정은 그대로 유지됩니다.</p>
+                <fieldset className={studio.bare} disabled={editsLocked}>
+                  <LayoutPicker
+                    value={homeStyle.layout}
+                    menuShape={homeStyle.menuShape}
+                    homeStyle={homeStyle}
+                    eventName={state.eventName}
+                    keyvisual={imageUrl}
+                    defaultHomeBanner={state.defaultHomeBanner}
+                    homeMenus={state.form.homeMenus}
+                    programs={state.availablePrograms}
+                    unavailable={state.unavailableMenus}
+                    disabled={editsLocked}
+                    onLayout={selectLayout}
+                    onMenuShape={(shape) => changeHomeStyle("menuShape", shape)}
+                  />
+                </fieldset>
+              </section>
+              <section className={studio.section} aria-labelledby="studio-background">
+                <h2 id="studio-background" className={studio.sectionTitle}>배경{backgroundDirty ? <span className={studio.dirtyDot} role="img" aria-label="미저장 변경" /> : null}</h2>
+                <fieldset className={studio.bare} disabled={editsLocked}>
+                  <ColorField label="배경색" value={homeStyle.backgroundColor} swatches={BACKGROUND_SWATCHES} disabled={editsLocked} paletteSource={imageUrl} onChange={(color) => changeHomeStyle("backgroundColor", color)} />
+                </fieldset>
+              </section>
+              <ul className={studio.rows}>
+                {homeStyle.layout !== "typography" ? <li>{studioRow("banner", "배너", bannerSummary, bannerSwatch, imageDirty || bannerDirty)}</li> : null}
+                <li>{studioRow("text", "제목과 문구", homeStyle.heroTitle?.trim() || state.eventName, null, copyDirty)}</li>
+                <li>{studioRow("menus", "홈 메뉴", menuSummary, null, menusDirty)}</li>
+                <li>{studioRow("exposure", "소개와 공개 범위", exposureSummary, null, exposureDirty)}</li>
+              </ul>
+            </>
+          ) : (
+            <section className={studio.sub} aria-labelledby="theme-panel-title">
+              <button type="button" className={studio.crumb} onClick={() => setPanel(null)}>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M14.5 6.5 9 12l5.5 5.5" /></svg>
+                설정
+              </button>
+              <h2 id="theme-panel-title" tabIndex={-1} className={studio.subTitle}>{panel === "banner" ? "배너" : panel === "text" ? "제목과 문구" : panel === "menus" ? "홈 메뉴" : "소개와 공개 범위"}</h2>
+              {panel === "banner" ? (
+                <fieldset className={studio.bare} disabled={editsLocked}>
+                  <legend className="sr-only">배너</legend>
+                  <ChoiceCards
+                    label="배너 종류"
+                    value={homeStyle.bannerKind}
+                    onChange={(kind) => changeHomeStyle("bannerKind", kind)}
+                    options={[
+                      { value: "image", name: "이미지", art: <span className={studio.artImage} /> },
+                      { value: "gradient", name: "그라데이션", art: <span className={studio.artFill} style={{ background: `linear-gradient(135deg, ${homeStyle.bannerColor}, ${homeStyle.bannerColor2})` }} /> },
+                      { value: "solid", name: "단색", art: <span className={studio.artFill} style={{ background: homeStyle.bannerColor }} /> },
+                    ]}
+                  />
+                  {homeStyle.bannerKind === "image" ? (
+                    <div className={studio.group}>
             <div className={styles.imageStatus}>
               <span className={styles.imageStatusName}>{upload?.status === "uploading" ? upload.file.name : !state.form.keyvisual && state.defaultHomeBanner === "neutral" ? "기본 색상 배너" : homeImageLabel(state.form.keyvisual)}</span>
               <span className={styles.imageStatusMeta}>
@@ -1671,159 +1694,103 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
                 onCancel={() => setClearImagePending(false)}
               />
             ) : null}
-            <details className={styles.advanced}>
-              <summary className={styles.advancedSummary}>이미지 상세 설정</summary>
-              <div className={styles.advancedBody}>
-                <label className={styles.field} htmlFor="home-image-focus">
-                  이미지 초점
-                  <select id="home-image-focus" value={state.form.homeStyle.imageFocus} onChange={(event) => changeHomeStyle("imageFocus", event.target.value as HomeStyle["imageFocus"])}>
-                    <option value="center">가운데</option>
-                    <option value="top">위쪽</option>
-                    <option value="bottom">아래쪽</option>
-                  </select>
-                </label>
-              </div>
-            </details>
-          </fieldset>
-
-          <ProductButton className={styles.inlinePreview} variant="secondary" type="button" onClick={(event) => switchMobileView("preview", event.currentTarget)}>배너 미리보기</ProductButton>
-          <fieldset className={styles.controlGroup} disabled={Boolean(commandBusy || conflict || state.archived)}>
-            <legend>문구와 배치{copyDirty ? <span className={styles.groupFlag}>미저장 변경</span> : null}</legend>
-            <p className={styles.help}>행사명은 기본 제목입니다. 보조 문구는 기존 행사 소개와 별개로 배너에 표시됩니다.</p>
-            <label className={styles.field} htmlFor="home-hero-title">
-              배너 제목 <span>최대 80자</span>
-              <input
-                id="home-hero-title"
-                type="text"
-                maxLength={80}
-                value={state.form.homeStyle.heroTitle ?? ""}
-                placeholder={state.eventName}
-                onChange={(event) => changeHomeStyle("heroTitle", event.target.value || null)}
-              />
-            </label>
-            <label className={styles.field} htmlFor="home-hero-subtitle">
-              보조 문구 <span>최대 100자</span>
-              <input
-                id="home-hero-subtitle"
-                type="text"
-                maxLength={100}
-                value={state.form.homeStyle.heroSubtitle}
-                placeholder="선택 입력"
-                onChange={(event) => changeHomeStyle("heroSubtitle", event.target.value)}
-              />
-            </label>
-            <details className={styles.advanced}>
-              <summary className={styles.advancedSummary}>배치·색상 상세 설정</summary>
-              <div className={styles.advancedBody}>
-                <div className={styles.fieldGrid}>
-                  <label className={styles.field} htmlFor="home-layout">
-                    배너 배치
-                    <select id="home-layout" value={state.form.homeStyle.heroLayout} onChange={(event) => changeHomeStyle("heroLayout", event.target.value as HomeStyle["heroLayout"])}>
-                      <option value="centered">가운데 제목</option>
-                      <option value="bottom-overlay">아래쪽 제목</option>
-                      <option value="image-only">이미지만</option>
-                    </select>
+                      <p className={studio.groupTitle}>사진 초점</p>
+                      <ChoiceCards
+                        label="사진 초점"
+                        value={homeStyle.imageFocus}
+                        onChange={(focus) => changeHomeStyle("imageFocus", focus)}
+                        options={[
+                          { value: "top", name: "위", art: <span className={studio.artFocus} data-focus="top" /> },
+                          { value: "center", name: "가운데", art: <span className={studio.artFocus} data-focus="center" /> },
+                          { value: "bottom", name: "아래", art: <span className={studio.artFocus} data-focus="bottom" /> },
+                        ]}
+                      />
+                      <p className={studio.groupTitle}>글자 가독성</p>
+                      <Seg label="읽기 배경" value={homeStyle.overlay} onChange={(overlay) => changeHomeStyle("overlay", overlay)} options={[{ value: "none", name: "없음" }, { value: "soft", name: "부드럽게" }, { value: "strong", name: "진하게" }]} />
+                    </div>
+                  ) : null}
+                  {homeStyle.bannerKind === "gradient" ? (
+                    <div className={studio.group}>
+                      <p className={studio.groupTitle}>추천 그라데이션</p>
+                      <div className={studio.presets} role="radiogroup" aria-label="추천 그라데이션">
+                        {GRADIENT_PRESETS.map((preset) => {
+                          const on = homeStyle.bannerColor === preset.from && homeStyle.bannerColor2 === preset.to;
+                          return (
+                            <button key={preset.name} type="button" role="radio" aria-checked={on} className={studio.preset} onClick={() => updateForm((form) => ({ ...form, homeStyle: { ...form.homeStyle, bannerColor: preset.from, bannerColor2: preset.to } }))}>
+                              <span className={studio.presetArt} style={{ background: `linear-gradient(135deg, ${preset.from}, ${preset.to})` }} aria-hidden="true" />
+                              {preset.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className={studio.groupTitle}>시작 색</p>
+                      <ColorField label="시작 색" value={homeStyle.bannerColor} swatches={BANNER_SWATCHES} disabled={editsLocked} compact onChange={(color) => changeHomeStyle("bannerColor", color)} />
+                      <p className={studio.groupTitle}>끝 색</p>
+                      <ColorField label="끝 색" value={homeStyle.bannerColor2} swatches={BANNER_SWATCHES} disabled={editsLocked} compact onChange={(color) => changeHomeStyle("bannerColor2", color)} />
+                      <p className={studio.groupTitle}>방향</p>
+                      <ChoiceCards
+                        label="그라데이션 방향"
+                        value={homeStyle.bannerAngle}
+                        onChange={(angle) => changeHomeStyle("bannerAngle", angle)}
+                        options={(["diagonal", "vertical", "horizontal"] as const).map((angle) => ({
+                          value: angle,
+                          name: angle === "diagonal" ? "대각선" : angle === "vertical" ? "위에서 아래" : "왼쪽에서 오른쪽",
+                          art: <span className={studio.artFill} style={{ background: `linear-gradient(${angle === "diagonal" ? "135deg" : angle === "vertical" ? "180deg" : "90deg"}, ${homeStyle.bannerColor}, ${homeStyle.bannerColor2})` }} />,
+                        }))}
+                      />
+                    </div>
+                  ) : null}
+                  {homeStyle.bannerKind === "solid" ? (
+                    <div className={studio.group}>
+                      <p className={studio.groupTitle}>배너 색</p>
+                      <ColorField label="배너 색" value={homeStyle.bannerColor} swatches={BANNER_SWATCHES} disabled={editsLocked} onChange={(color) => changeHomeStyle("bannerColor", color)} />
+                    </div>
+                  ) : null}
+                  {homeStyle.layout === "tile" ? (
+                    <div className={studio.group}>
+                      <p className={studio.groupTitle}>글 위치</p>
+                      <ChoiceCards
+                        label="글 위치"
+                        value={homeStyle.heroLayout}
+                        onChange={(position) => changeHomeStyle("heroLayout", position)}
+                        options={[
+                          { value: "centered", name: "가운데", art: <span className={studio.artText} data-pos="middle" /> },
+                          { value: "bottom-overlay", name: "아래", art: <span className={studio.artText} data-pos="bottom" /> },
+                          { value: "image-only", name: "글자 숨김", art: <span className={studio.artText} data-pos="none" />, disabled: homeStyle.bannerKind !== "image" },
+                        ]}
+                      />
+                    </div>
+                  ) : null}
+                </fieldset>
+              ) : null}
+              {panel === "text" ? (
+                <fieldset className={studio.bare} disabled={editsLocked}>
+                  <legend className="sr-only">제목과 문구</legend>
+                  <label className={styles.field} htmlFor="home-hero-title">
+                    배너 제목 <span>최대 80자</span>
+                    <input id="home-hero-title" type="text" maxLength={80} value={homeStyle.heroTitle ?? ""} placeholder={state.eventName} onChange={(event) => changeHomeStyle("heroTitle", event.target.value || null)} />
                   </label>
-                  <label className={styles.field} htmlFor="home-title-scale">
-                    제목 크기
-                    <select id="home-title-scale" value={state.form.homeStyle.titleScale} onChange={(event) => changeHomeStyle("titleScale", event.target.value as HomeStyle["titleScale"])}>
-                      <option value="standard">기본</option>
-                      <option value="large">크게</option>
-                    </select>
+                  <label className={styles.field} htmlFor="home-hero-subtitle">
+                    보조 문구 <span>최대 100자</span>
+                    <input id="home-hero-subtitle" type="text" maxLength={100} value={homeStyle.heroSubtitle} placeholder="선택 입력" onChange={(event) => changeHomeStyle("heroSubtitle", event.target.value)} />
                   </label>
-                  <label className={styles.field} htmlFor="home-text-align">
-                    문구 정렬
-                    <select id="home-text-align" value={state.form.homeStyle.textAlign} onChange={(event) => changeHomeStyle("textAlign", event.target.value as HomeStyle["textAlign"])}>
-                      <option value="center">가운데</option>
-                      <option value="left">왼쪽</option>
-                      <option value="right">오른쪽</option>
-                    </select>
-                  </label>
-                  <label className={styles.field} htmlFor="home-text-tone">
-                    문구 색상
-                    <select id="home-text-tone" value={state.form.homeStyle.textTone} onChange={(event) => changeHomeStyle("textTone", event.target.value as HomeStyle["textTone"])}>
-                      <option value="light">흰색</option>
-                      <option value="dark">짙은 색</option>
-                    </select>
-                  </label>
-                  <label className={styles.field} htmlFor="home-overlay">
-                    읽기 배경
-                    <select id="home-overlay" value={state.form.homeStyle.overlay} onChange={(event) => changeHomeStyle("overlay", event.target.value as HomeStyle["overlay"])}>
-                      <option value="none">없음</option>
-                      <option value="soft">부드럽게</option>
-                      <option value="strong">강하게</option>
-                    </select>
-                  </label>
-                </div>
-              </div>
-            </details>
-          </fieldset>
-
-          <ProductButton className={styles.inlinePreview} variant="secondary" type="button" onClick={(event) => switchMobileView("preview", event.currentTarget)}>문구 미리보기</ProductButton>
-          <fieldset className={styles.controlGroup} disabled={Boolean(commandBusy || conflict || state.archived)}>
-            <legend>소개와 노출{exposureDirty ? <span className={styles.groupFlag}>미저장 변경</span> : null}</legend>
-            <p className={styles.help}>공지 설정은 참가자 홈에도 적용됩니다. 행사 일시·장소를 숨겨도 티켓의 행사일, 프로그램 일정의 일시·장소, 부스 지도와 전광판은 별도로 표시될 수 있습니다.</p>
-            <label className={styles.field} htmlFor="home-intro">
-              행사 소개 <span>최대 160자</span>
-              <input
-                id="home-intro"
-                type="text"
-                maxLength={160}
-                value={state.pageFields.intro}
-                onChange={(event) => updatePageField("intro", event.target.value)}
-                aria-invalid={failure?.field === "intro" || undefined}
-              />
-            </label>
-            <div className={styles.colorRow}>
-              <label className={styles.colorLabel} htmlFor="home-accent">강조색</label>
-              <input
-                id="home-accent"
-                type="color"
-                value={state.pageFields.accent}
-                onChange={(event) => updatePageField("accent", event.target.value.toUpperCase())}
-              />
-              <output htmlFor="home-accent">{state.pageFields.accent}</output>
-            </div>
-            <div className={styles.toggleGrid}>
-              <label className={styles.check}>
-                <input
-                  type="checkbox"
-                  checked={state.pageFields.showAnnouncements}
-                  onChange={(event) => updatePageField("showAnnouncements", event.target.checked)}
-                />
-                공지 보기
-              </label>
-              <label className={styles.check}>
-                <input
-                  type="checkbox"
-                  checked={state.pageFields.showSchedule}
-                  onChange={(event) => updatePageField("showSchedule", event.target.checked)}
-                />
-                행사 일시 보기
-              </label>
-              <label className={styles.check}>
-                <input
-                  type="checkbox"
-                  checked={state.pageFields.showVenue}
-                  onChange={(event) => updatePageField("showVenue", event.target.checked)}
-                />
-                장소 보기
-              </label>
-              <label className={styles.check}>
-                <input
-                  type="checkbox"
-                  checked={state.pageFields.showPrograms}
-                  onChange={(event) => updatePageField("showPrograms", event.target.checked)}
-                />
-                프로그램 일정 보기
-              </label>
-            </div>
-          </fieldset>
-
-          <details className={styles.advanced}>
-          <summary className={styles.advancedSummary}>홈 메뉴 구성{JSON.stringify(state.form.homeMenus) !== JSON.stringify(state.savedForm.homeMenus) ? <span className={styles.groupFlag}>미저장 변경</span> : null}</summary>
-          <fieldset className={styles.controlGroup} disabled={Boolean(commandBusy || conflict || state.archived)}>
-            <legend>메뉴 표시와 순서</legend>
+                  <div className={studio.group}>
+                    <p className={studio.groupTitle}>제목 크기</p>
+                    <Seg label="제목 크기" value={homeStyle.titleScale} onChange={(scale) => changeHomeStyle("titleScale", scale)} options={[{ value: "standard", name: "기본" }, { value: "large", name: "크게" }]} />
+                    <p className={studio.groupTitle}>글 정렬</p>
+                    <Seg label="글 정렬" value={homeStyle.textAlign} onChange={(align) => changeHomeStyle("textAlign", align)} options={[{ value: "left", name: "왼쪽" }, { value: "center", name: "가운데" }, { value: "right", name: "오른쪽" }]} />
+                    {homeStyle.layout !== "typography" && homeStyle.bannerKind === "image" ? (
+                      <>
+                        <p className={studio.groupTitle}>글자 색</p>
+                        <Seg label="글자 색" value={homeStyle.textTone} onChange={(tone) => changeHomeStyle("textTone", tone)} options={[{ value: "light", name: "흰색" }, { value: "dark", name: "짙은 색" }]} />
+                      </>
+                    ) : null}
+                  </div>
+                </fieldset>
+              ) : null}
+              {panel === "menus" ? (
+                <fieldset className={studio.bare} disabled={Boolean(commandBusy || conflict || state.archived)}>
+                  <legend className="sr-only">메뉴 표시와 순서</legend>
             <p className={styles.help}>모바일 티켓과 내 신청 정보는 항상 제공됩니다. 꺼진 기능과 미게시 프로그램은 참가자에게 표시되지 않습니다.</p>
             {MENU_GROUPS.map((group) => {
               const ordered = state.form.homeMenus.order.filter((key) => group.keys.includes(key));
@@ -1867,10 +1834,34 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
                 </li>;
               })}</ol> : <p className={styles.help}>게시된 참여 콘텐츠가 없습니다.</p>}
             </div>
-          </fieldset>
-          </details>
-
-          <div id="theme-save" ref={saveActionsRef} tabIndex={-1} className={`${styles.saveAnchor} ${styles.saveBar}`}>
+                </fieldset>
+              ) : null}
+              {panel === "exposure" ? (
+                <fieldset className={studio.bare} disabled={editsLocked}>
+                  <legend className="sr-only">소개와 공개 범위</legend>
+                  <label className={styles.field} htmlFor="home-intro">
+                    행사 소개 <span>최대 160자</span>
+                    <input id="home-intro" type="text" maxLength={160} value={state.pageFields.intro} onChange={(event) => updatePageField("intro", event.target.value)} aria-invalid={failure?.field === "intro" || undefined} />
+                  </label>
+                  <div className={studio.group}>
+                    <p className={studio.groupTitle}>강조색</p>
+                    <ColorField label="강조색" value={state.pageFields.accent} swatches={BANNER_SWATCHES} disabled={editsLocked} compact onChange={(color) => updatePageField("accent", color)} />
+                  </div>
+                  <div className={studio.group}>
+                    <p className={studio.groupTitle}>참가자에게 보여줄 곳</p>
+                    <p className={styles.help}>공지 설정은 참가자 홈에도 적용됩니다. 행사 일시·장소를 숨겨도 티켓의 행사일, 프로그램 일정의 일시·장소, 부스 지도와 전광판은 별도로 표시될 수 있습니다.</p>
+                    <div className={studio.switches}>
+                      <Switch label="공지 보기" value={state.pageFields.showAnnouncements} onChange={(checked) => updatePageField("showAnnouncements", checked)} isDisabled={editsLocked} />
+                      <Switch label="행사 일시 보기" value={state.pageFields.showSchedule} onChange={(checked) => updatePageField("showSchedule", checked)} isDisabled={editsLocked} />
+                      <Switch label="장소 보기" value={state.pageFields.showVenue} onChange={(checked) => updatePageField("showVenue", checked)} isDisabled={editsLocked} />
+                      <Switch label="프로그램 일정 보기" value={state.pageFields.showPrograms} onChange={(checked) => updatePageField("showPrograms", checked)} isDisabled={editsLocked} />
+                    </div>
+                  </div>
+                </fieldset>
+              ) : null}
+            </section>
+          )}
+          <div id="theme-save" tabIndex={-1} className={`${styles.saveAnchor} ${styles.saveBar}`}>
             <div className={styles.versionSummary} aria-live="polite">
               <span className={styles.statePill} data-state={dirty || statusNeedsReview ? "dirty" : alreadyPublished && publicAvailable ? "published" : "draft"}>
                 {statusNeedsReview ? "최신 상태 확인 필요" : dirty ? "저장되지 않은 변경" : alreadyPublished ? publishedStateLabel : "저장된 초안"}
@@ -1908,10 +1899,10 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
             ) : null}
             <div className={styles.saveButtons}>
             <ConsoleFormActions>
-              <ProductButton id="theme-save-draft" variant="primary" type="button" onClick={() => void saveDraft()} disabled={!canSave}>
+              <ProductButton id="theme-save-draft" variant={dirty || !canPublish ? "primary" : "secondary"} type="button" onClick={() => void saveDraft()} disabled={!canSave}>
                 {commandBusy === "save" ? "초안 저장 중…" : "초안 저장"}
               </ProductButton>
-              <ProductButton variant="secondary" type="button" onClick={() => void requestPublishDraft()} disabled={!canPublish}>
+              <ProductButton variant={!dirty && canPublish ? "primary" : "secondary"} type="button" onClick={() => void requestPublishDraft()} disabled={!canPublish}>
                 {commandBusy === "publish" ? "게시 중…" : "게시 검토"}
               </ProductButton>
             </ConsoleFormActions>
@@ -1972,73 +1963,24 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
               />
             ) : null}
           </section>
-
-
         </div>
+      </div>
 
-        <section className={styles.previewPanel} aria-labelledby="home-preview-heading">
-          <div className={styles.previewHeader}>
-            <div>
-              <h2 id="home-preview-heading" tabIndex={-1}>홈 디자인 미리보기</h2>
-              <p>{showingPublished ? (hasPublished ? publicAvailable ? "현재 게시된 홈을 표시합니다." : state.eventStage === "DRAFT" ? "게시된 설정을 미리 봅니다. 행사가 기획 단계라 참가자에게 공개되지 않습니다." : "게시된 설정을 미리 봅니다. 행사 공개 상태를 확인하세요." : "아직 게시된 홈이 없습니다.") : "저장 전 변경을 포함한 편집 중 홈을 표시합니다."} 행사 안내의 소개·강조색·일정·장소·프로그램은 안내 화면에서 확인하세요.</p>
+      {stageOpen ? (
+        <ConsoleDialog titleId="theme-stage-title" title="참가자 홈 미리보기" presentation="stage" onClose={() => setStageOpen(false)}>
+          <div className={studio.stageDialog}>
+            <div className={studio.stageDialogBar}>
+              <div className={styles.sourceSwitch} role="group" aria-label="미리보기 기준">
+                <ProductButton className={styles.viewportChoice} variant="secondary" type="button" aria-pressed={previewSource === "draft"} onClick={() => setPreviewSource("draft")}>편집 중</ProductButton>
+                <ProductButton className={styles.viewportChoice} variant="secondary" type="button" aria-pressed={previewSource === "published"} onClick={() => setPreviewSource("published")}>게시본</ProductButton>
+              </div>
+              <button type="button" className={studio.stageClose} onClick={() => setStageOpen(false)}>닫기</button>
             </div>
-            <span className={styles.liveMark}><span aria-hidden="true" />{showingPublished ? "게시본" : "편집 중"}</span>
-          </div>
-          <ProductButton className={styles.backToEdit} variant="secondary" type="button" onClick={() => switchMobileView("edit")}>편집하던 곳으로 돌아가기</ProductButton>
-          <div className={styles.switchBlock}>
-            <p className={styles.previewNote}>{publicAvailable ? "현재 기능과 게시된 참여 콘텐츠를 반영합니다. 미리보기 메뉴는 작동하지 않습니다. 실제 참가자 화면에서 이용하세요." : state.eventStage === "DRAFT" ? "현재 기능과 게시된 참여 콘텐츠를 반영합니다. 미리보기 메뉴는 작동하지 않습니다. 행사가 공개되면 참가자 화면에서 이용할 수 있습니다." : "현재 기능과 게시된 참여 콘텐츠를 반영합니다. 미리보기 메뉴는 작동하지 않습니다. 행사 공개 상태를 확인하세요."}</p>
-            <p className={styles.switchLabel} id="preview-source-label">미리보기 기준</p>
-            <div className={styles.sourceSwitch} role="group" aria-labelledby="preview-source-label">
-            <ProductButton
-              className={styles.viewportChoice} variant="secondary"
-              type="button"
-              aria-pressed={previewSource === "draft"}
-              onClick={() => setPreviewSource("draft")}
-            >
-              편집 중
-            </ProductButton>
-            <ProductButton
-              className={styles.viewportChoice} variant="secondary"
-              type="button"
-              aria-pressed={previewSource === "published"}
-              onClick={() => setPreviewSource("published")}
-            >
-              게시본
-            </ProductButton>
-          </div>
-          </div>
-          <div className={styles.switchBlock}>
-            <p className={styles.switchLabel} id="preview-ticket-label">참가자 티켓</p>
-            <div className={styles.sourceSwitch} role="group" aria-labelledby="preview-ticket-label">
-              <ProductButton className={styles.viewportChoice} variant="secondary" type="button" aria-pressed={previewHasTicket} onClick={() => setPreviewHasTicket(true)}>티켓 있음</ProductButton>
-              <ProductButton className={styles.viewportChoice} variant="secondary" type="button" aria-pressed={!previewHasTicket} onClick={() => setPreviewHasTicket(false)}>티켓 없음</ProductButton>
-            </div>
-          </div>
-          <div className={styles.switchBlock}>
-            <p className={styles.switchLabel} id="preview-viewport-label">미리보기 화면 크기</p>
-            <div className={styles.viewportChoices} role="group" aria-labelledby="preview-viewport-label">
-            {[
-              { width: 320, height: 568, label: "짧은 화면 320×568" },
-              { width: 390, height: 700, label: "390×700" },
-              { width: 390, height: 844, label: "390×844" },
-            ].map((size) => (
-              <ProductButton
-                key={`${size.width}-${size.height}`}
-                className={styles.viewportChoice} variant="secondary"
-                type="button"
-                aria-pressed={previewSize.width === size.width && previewSize.height === size.height}
-                onClick={() => setPreviewSize({ width: size.width, height: size.height })}
-              >
-                {size.label}
-              </ProductButton>
-            ))}
-            </div>
-          </div>
-          <div className={styles.phoneStage}>
+            <div className={studio.stageDialogBody}>          <div className={styles.phoneStage}>
             <div
               className={styles.phoneViewport}
               role="region"
-              aria-label={`${previewSize.width}×${previewSize.height} 홈 디자인 미리보기`}
+              aria-label={`${previewSize.width}×${previewSize.height} 홈 디자인 큰 미리보기`}
               tabIndex={0}
               style={{ "--preview-width": `${previewSize.width}px`, "--preview-height": `${previewSize.height}px` } as CSSProperties}
             >
@@ -2065,22 +2007,10 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
               </div>
               )}
             </div>
+          </div></div>
           </div>
-          {/* Home presentation and menu configuration reflect the selected
-              draft or published version; event-page content remains separate. */}
-          {!showingPublished && designDirty && !uploadBlocked ? <p className={styles.previewNote}>미저장 변경이 미리보기에 바로 반영됩니다.</p> : null}
-          {!showingPublished && upload?.status === "failed" ? <p className={styles.previewNote}>업로드가 확인되지 않았습니다. 미리보기에는 선택한 파일을 표시하고 있어요.</p> : null}
-          {!showingPublished && state.form.homeStyle.heroLayout === "image-only" ? <p className={styles.previewNote}>이미지만 배치해도 제목은 스크린리더용으로 유지됩니다.</p> : null}
-          {showingPublished && hasPublished ? (
-            <p className={styles.previewNote}>
-              게시된 소개: {state.publishedPageFields.intro || "소개 없음"} · 강조색 {state.publishedPageFields.accent}
-              {publishedVisibility.length ? ` · 표시 설정: ${publishedVisibility.join(" · ")}` : " · 표시 설정 모두 켜짐"}
-              {" · 실제 표시는 게시된 내용과 행사 기능에 따라 달라질 수 있습니다."}
-            </p>
-          ) : null}
-          {!showingPublished && state.publishedAt && publishedChanges.length ? <p className={styles.publishedNote}>게시본과 다른 저장된 변경: {publishedChanges.join(" · ")}</p> : null}
-        </section>
-      </div>
+        </ConsoleDialog>
+      ) : null}
     </ConsolePage>
   );
 }

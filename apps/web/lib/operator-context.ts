@@ -839,7 +839,7 @@ export function confirmsAttendeePageCommand(command: string, payload: unknown, v
     const supplied = asRecord(input.homeStyle), saved = asRecord(draft.homeStyle);
     if (!supplied || !saved) return false;
     for (const [key, value] of Object.entries(supplied)) {
-      if (saved[key] !== (key === "backgroundColor" && typeof value === "string" ? value.trim().toUpperCase() : value)) return false;
+      if (saved[key] !== (/color/i.test(key) && typeof value === "string" ? value.trim().toUpperCase() : value)) return false;
     }
   }
   if (Object.hasOwn(input, "homeMenus")) {

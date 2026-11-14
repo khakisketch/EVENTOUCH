@@ -177,8 +177,7 @@ test('shared section nav wraps to fully reachable rows on mobile', () => {
   const draws = read('app/console/events/[id]/draws/DrawsWorkspace.tsx');
   assert.doesNotMatch(draws, /ConsoleSectionNav|navIndexLabel/u, 'the draw screen left the jump nav for a stage picker');
   const theme = read('app/console/events/[id]/page/ThemeWorkspace.tsx');
-  assert.match(theme, /navIndexLabel[^>]*aria-hidden="true">참가자 페이지 목차/u);
-  assert.match(theme, /label="참가자 페이지 구역"/u);
+  assert.doesNotMatch(theme, /ConsoleSectionNav|navIndexLabel/u, 'the attendee page studio left the jump nav for settings rows');
   // API and semantics are untouched: native anchors, list markup, label.
   const nav = read('app/console/console-ui/ConsoleSectionNav.tsx');
   assert.match(nav, /<nav className=\{`\$\{styles\.sectionNav\} \$\{styles\.anchorNav\}`\} aria-label=\{label \?\? "섹션 바로가기"\}>/u);

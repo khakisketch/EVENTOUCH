@@ -1,0 +1,88 @@
+/* Layout cards: the real home, scaled down. */
+.picker { display: grid; gap: var(--s4); min-width: 0; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: var(--s4) var(--s3); }
+
+.card {
+  display: grid;
+  justify-items: center;
+  gap: var(--s1);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+.card:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; border-radius: var(--radius-small); }
+.card[aria-disabled="true"] { cursor: not-allowed; opacity: 0.6; }
+
+.thumb {
+  position: relative;
+  display: block;
+  width: 104px;
+  height: 226px;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--paper);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 14%);
+}
+.card[aria-checked="true"] .thumb { box-shadow: 0 0 0 3px var(--paper), 0 0 0 5px var(--ink); }
+.card[aria-checked="true"] .name { color: var(--ink); }
+
+/* The home is laid out at a real 390px phone and shrunk as a whole. */
+.scaled {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 390px;
+  min-height: 0;
+  height: 848px;
+  overflow: hidden;
+  transform: scale(0.2667);
+  transform-origin: top left;
+  pointer-events: none;
+}
+
+.name { color: var(--ink); font-weight: 750; }
+.hint { font-size: var(--small); line-height: 1.3; word-break: keep-all; }
+
+.locked { cursor: not-allowed; }
+.lockedThumb { display: grid; place-items: center; background: var(--surface-muted); color: var(--muted); }
+.locked .name { color: var(--muted); }
+
+.shapes { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); }
+.shapesLabel { width: 100%; font-weight: 750; }
+.shape {
+  display: grid;
+  justify-items: center;
+  gap: var(--s2);
+  width: 124px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.shape[aria-checked="true"] { color: var(--ink); }
+.shape:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; border-radius: var(--radius-small); }
+.shapeArt {
+  display: grid;
+  align-content: center;
+  width: 100%;
+  height: 76px;
+  padding: 0 var(--s3);
+  border-radius: 14px;
+  background: var(--surface-muted);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 14%);
+}
+.shape[aria-checked="true"] .shapeArt { box-shadow: 0 0 0 3px var(--paper), 0 0 0 5px var(--ink); }
+.shapeArt[data-shape="circle"] { grid-auto-flow: column; justify-content: space-around; }
+.shapeArt[data-shape="circle"] i { width: 28px; height: 28px; border-radius: 50%; background: var(--paper); box-shadow: 0 2px 6px -3px rgb(0 0 0 / 50%); }
+.shapeArt[data-shape="list"] { gap: 7px; }
+.shapeArt[data-shape="list"] i { height: 10px; border-radius: 5px; background: var(--paper); box-shadow: 0 2px 6px -4px rgb(0 0 0 / 50%); }
+

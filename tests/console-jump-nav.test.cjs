@@ -24,20 +24,9 @@ const themeCss = read('apps/web/app/console/events/[id]/page/page.module.css');
 const nav = read('apps/web/app/console/console-ui/ConsoleSectionNav.tsx');
 const navCss = read('apps/web/app/console/console-ui/console-ui.module.css');
 
-test('the long console screens mark the section in view on the nav link itself', () => {
-  for (const [name, source, css] of [
-    ['attendee page editor', theme, themeCss],
-  ]) {
-    assert.match(source, /<ConsoleSectionNav/u, `${name} keeps the shared jump nav`);
-    assert.match(source, /className=\{styles\.navSticky\}/u, `${name} wraps the nav`);
-    assert.match(source, /activeId=\{activeSection\}/u, `${name} passes the tracked section to the nav`);
-    assert.match(source, /IntersectionObserver/u, `${name} follows the section in view`);
-    assert.match(source, /getElementById\(id\)/u, `${name} observes the existing anchors`);
-    assert.doesNotMatch(source, /현재 위치:/u, `${name} has no separate position readout`);
-    assert.doesNotMatch(source, /navNow/u, `${name} drops the readout hook`);
-    assert.match(css, /\.navSticky \{/u, `${name} styles the nav wrapper`);
-    assert.doesNotMatch(css, /\.navNow \{/u, `${name} drops the readout style`);
-  }
+test('the attendee page studio left the jump nav for a short settings list', () => {
+  assert.doesNotMatch(theme, /ConsoleSectionNav|navSticky|activeSection|IntersectionObserver/u, 'no jump nav, tracked section or observer');
+  assert.match(theme, /<div className=\{studio\.studio\}/u, 'the studio layout replaced the long form');
 });
 
 test('the active nav link carries one accessible current marker with a non-color signal', () => {

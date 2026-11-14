@@ -35,15 +35,11 @@ test('public pages keep the top identity without a duplicate identity-only foote
   assert.match(read('event/[slug]/engage/EngageClient.tsx'), /<footer[\s\S]*?내 티켓으로 이동[\s\S]*?행사 안내로/u, 'task navigation in a real footer is retained');
 });
 
-test('theme draft status is mirrored visually while save owns the single announcement', () => {
+test('theme draft status lives in the save region, the single announcement', () => {
   const source = read('console/events/[id]/page/ThemeWorkspace.tsx');
-  // The editor starts with a compact status; only the save region is live.
-  const start = source.indexOf('<div className={styles.editStatusLine}>');
-  const mirror = source.slice(start, source.indexOf('</div>', start));
-  assert.ok(start >= 0, 'editing-head status exists');
-  assert.doesNotMatch(mirror, /aria-live=/u);
-  assert.match(mirror, /dirty \? "저장되지 않은 변경" : alreadyPublished/u);
-  assert.match(mirror, /저장·게시 검토/u);
+  // The studio dropped the mirrored editing-head status: the settings list stays quiet and
+  // only the save region (right under it) names the state and is live.
+  assert.doesNotMatch(source, /editStatusLine/u);
   assert.equal((source.match(/aria-live="polite"/g) || []).length, 1);
   assert.match(source, /id="theme-save"[\s\S]*?className=\{styles.versionSummary\} aria-live="polite"[\s\S]*?저장되지 않은 변경/u);
   assert.match(source, /id="theme-save"[\s\S]*?게시 버전 \$\{state.publishedVersion\} · 초안 \$\{state.draftVersion\}/u);

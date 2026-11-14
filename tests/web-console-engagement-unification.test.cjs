@@ -91,8 +91,11 @@ test('unified-frame: domain sections keep their identities, duplicate menu title
   assert.doesNotMatch(programs, /headingId="program-module-list"/, 'programs drops the menu-duplicate body title');
   assert.match(programs, /className=\{styles\.moduleList\}/, 'programs keeps the module collection body');
   const theme = read(THEME);
-  for (const legend of ['배경', '배너 이미지', '소개와 노출', '문구와 배치']) {
-    assert.match(theme, new RegExp(`<legend>${legend}(?:\\{[^\\n]*\\})?<\\/legend>`), `theme retains the ${legend} group and optional change marker`);
+  for (const heading of ['레이아웃', '배경']) {
+    assert.match(theme, new RegExp(`<h2 id="studio-[a-z]+" className=\\{studio\\.sectionTitle\\}>${heading}`), `theme names the ${heading} group`);
+  }
+  for (const legend of ['배너', '제목과 문구', '소개와 공개 범위']) {
+    assert.match(theme, new RegExp(`<legend className="sr-only">${legend}</legend>`), `theme retains the ${legend} panel group`);
   }
 });
 
@@ -128,7 +131,7 @@ test('unified-frame: dialogs use the shared shell with dismissal gates, not besp
 test('unified-frame: preview landing keeps one h1 per page', () => {
   const landing = read('app/event/[slug]/home/AttendeeHomeLanding.tsx');
   assert.match(landing, /const Title = preview \? "h3" : "h1";/, 'heading level follows preview semantics');
-  assert.match(landing, /<Title className=\{styles\.eventTitle\}>\{title\}<\/Title>/, 'same title class and visual styles in both modes');
+  assert.match(landing, /<Title className=\{L\.title\}>\{title\}<\/Title>/, 'same title class and visual styles in both modes');
   assert.doesNotMatch(landing, /<h1[\s>]/, 'no literal h1 remains in the shared landing');
   assert.doesNotMatch(landing, /<section[^>]*aria-hidden/, 'preview section stays exposed to assistive technology');
   assert.doesNotMatch(landing, /<Title[^>]*aria-hidden/, 'preview title stays exposed to assistive technology');
@@ -223,10 +226,7 @@ test('unified-frame: theme status lives in header badges and save closes the edi
   assert.match(theme, /badges=\{/, 'version summary rides the shared badges slot');
   assert.match(theme, /className=\{styles\.versionSummary\}/, 'domain pill styles stay');
   assert.match(theme, /className=\{styles\.statePill\}/, 'state pill stays');
-  assert.match(theme, /<ConsoleSectionNav/, 'theme uses the shared section nav');
-  assert.match(theme, /\{ id: "theme-edit", label: "편집" \}/, 'editing jump target stays');
-  assert.match(theme, /\{ id: "theme-save", label: "저장·게시" \}/, 'save jump target closes the editing column');
-  assert.match(theme, /\{ id: "home-preview-heading", label: "미리보기" \}/, 'preview jump target stays');
+  assert.doesNotMatch(theme, /<ConsoleSectionNav/, 'the studio left the section nav for settings rows');
   assert.match(theme, /id="theme-edit"/, 'editing anchor wraps the controls column');
   assert.match(theme, /id="theme-save"/, 'save anchor wraps the relocated actions');
   assert.match(theme, /<ConsoleFormActions>/, 'save/publish close the editing unit uniformly');
