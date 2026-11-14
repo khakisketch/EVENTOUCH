@@ -4,6 +4,12 @@ export type ImageFocus = "center" | "top" | "bottom";
 export type TextAlign = "left" | "center" | "right";
 export type TextTone = "light" | "dark";
 export type HeroOverlay = "none" | "soft" | "strong";
+// "instagram" (photo-first) is reserved: the editor shows it locked and the
+// server does not accept it yet.
+export type HomeLayout = "tile" | "poster" | "typography";
+export type MenuShape = "circle" | "list";
+export type BannerKind = "image" | "gradient" | "solid";
+export type BannerAngle = "diagonal" | "vertical" | "horizontal";
 
 export type HomeStyle = {
   backgroundColor: string;
@@ -15,6 +21,12 @@ export type HomeStyle = {
   textAlign: TextAlign;
   textTone: TextTone;
   overlay: HeroOverlay;
+  layout: HomeLayout;
+  menuShape: MenuShape;
+  bannerKind: BannerKind;
+  bannerColor: string;
+  bannerColor2: string;
+  bannerAngle: BannerAngle;
 };
 
 export type HomeImage = {
@@ -37,6 +49,12 @@ export const DEFAULT_HOME_STYLE: HomeStyle = {
   textAlign: "center",
   textTone: "light",
   overlay: "none",
+  layout: "tile",
+  menuShape: "circle",
+  bannerKind: "image",
+  bannerColor: "#1E2026",
+  bannerColor2: "#C8441F",
+  bannerAngle: "diagonal",
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -65,7 +83,46 @@ export function normalizeHomeStyle(value: unknown): HomeStyle {
     textAlign: value.textAlign === "left" || value.textAlign === "right" ? value.textAlign : "center",
     textTone: value.textTone === "dark" ? "dark" : "light",
     overlay: value.overlay === "soft" || value.overlay === "strong" ? value.overlay : "none",
+    layout: value.layout === "poster" || value.layout === "typography" ? value.layout : "tile",
+    menuShape: value.menuShape === "list" ? "list" : "circle",
+    bannerKind: value.bannerKind === "gradient" || value.bannerKind === "solid" ? value.bannerKind : "image",
+    bannerColor: hexOr(value.bannerColor, DEFAULT_HOME_STYLE.bannerColor),
+    bannerColor2: hexOr(value.bannerColor2, DEFAULT_HOME_STYLE.bannerColor2),
+    bannerAngle: value.bannerAngle === "vertical" || value.bannerAngle === "horizontal" ? value.bannerAngle : "diagonal",
   };
+}
+
+function hexOr(value: unknown, fallback: string): string {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value.toUpperCase() : fallback;
+}
+
+function channelLuminance(color: string): number {
+  const rgb = color.slice(1).match(/.{2}/g)?.map((channel) => parseInt(channel, 16) / 255) ?? [0, 0, 0];
+  const [r, g, b] = rgb.map((channel) => (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** Ink that reads on a color: near-black or white, whichever contrasts more. */
+export function readableInk(color: string): string {
+  const background = channelLuminance(color);
+  const dark = "#17252B";
+  return (background + 0.05) / (channelLuminance(dark) + 0.05) >= 1.05 / (background + 0.05) ? dark : "#FFFFFF";
+}
+
+const ANGLES: Record<BannerAngle, string> = { diagonal: "135deg", vertical: "180deg", horizontal: "90deg" };
+
+/** CSS background for a gradient or solid banner; null for the picture banner. */
+export function bannerFillCss(style: HomeStyle): string | null {
+  if (style.bannerKind === "solid") return style.bannerColor;
+  if (style.bannerKind === "gradient") return `linear-gradient(${ANGLES[style.bannerAngle]}, ${style.bannerColor}, ${style.bannerColor2})`;
+  return null;
+}
+
+/** Text tone for a fill banner: judged on the average of its colors. */
+export function bannerFillTone(style: HomeStyle): "light" | "dark" {
+  const colors = style.bannerKind === "gradient" ? [style.bannerColor, style.bannerColor2] : [style.bannerColor];
+  const average = colors.reduce((sum, color) => sum + channelLuminance(color), 0) / colors.length;
+  return average > 0.4 ? "dark" : "light";
 }
 
 export function normalizeHomeImage(value: unknown): HomeImage | null {

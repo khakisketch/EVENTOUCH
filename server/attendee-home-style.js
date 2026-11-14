@@ -18,6 +18,12 @@
 //     textAlign: 'left' | 'center' | 'right',
 //     textTone: 'light' | 'dark',
 //     overlay: 'none' | 'soft' | 'strong',
+//     layout: 'tile' | 'poster' | 'typography',   // home composition (default 'tile')
+//     menuShape: 'circle' | 'list',                // poster menus only
+//     bannerKind: 'image' | 'gradient' | 'solid',  // banner fill; 'image' uses the uploaded picture
+//     bannerColor: '#1E2026',                      // solid color / gradient start
+//     bannerColor2: '#C8441F',                     // gradient end
+//     bannerAngle: 'diagonal' | 'vertical' | 'horizontal',
 //   }
 //
 // No arbitrary HTML/CSS/fonts/URL-data images: text stays plain (the React
@@ -35,6 +41,12 @@ const DEFAULT_HOME_STYLE = {
   textAlign: 'center',
   textTone: 'light',
   overlay: 'none',
+  layout: 'tile',
+  menuShape: 'circle',
+  bannerKind: 'image',
+  bannerColor: '#1E2026',
+  bannerColor2: '#C8441F',
+  bannerAngle: 'diagonal',
 };
 
 const KNOWN_KEYS = Object.keys(DEFAULT_HOME_STYLE);
@@ -46,7 +58,14 @@ const ENUMS = {
   textAlign: new Set(['left', 'center', 'right']),
   textTone: new Set(['light', 'dark']),
   overlay: new Set(['none', 'soft', 'strong']),
+  // The photo-first 'instagram' layout is reserved and not accepted yet.
+  layout: new Set(['tile', 'poster', 'typography']),
+  menuShape: new Set(['circle', 'list']),
+  bannerKind: new Set(['image', 'gradient', 'solid']),
+  bannerAngle: new Set(['diagonal', 'vertical', 'horizontal']),
 };
+
+const COLOR_KEYS = new Set(['backgroundColor', 'bannerColor', 'bannerColor2']);
 
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 const CONTROL_CHARS = /[\x00-\x1f\x7f]/;
@@ -72,9 +91,9 @@ function fieldError(fail, key, message) {
 // Strict per-field validation for an explicitly supplied value. Returns the
 // normalized value. Throws a 400 field error on any violation.
 function validateField(key, value, fail) {
-  if (key === 'backgroundColor') {
+  if (COLOR_KEYS.has(key)) {
     if (typeof value !== 'string' || !HEX_COLOR.test(value.trim())) {
-      fieldError(fail, key, '홈 배경색을 확인하세요');
+      fieldError(fail, key, key === 'backgroundColor' ? '홈 배경색을 확인하세요' : '배너 색을 확인하세요');
     }
     return value.trim().toUpperCase();
   }
@@ -111,7 +130,7 @@ function normalizeHomeStyle(value) {
     if (!Object.hasOwn(value, key)) continue;
     const raw = value[key];
     try {
-      if (key === 'backgroundColor') {
+      if (COLOR_KEYS.has(key)) {
         if (typeof raw === 'string' && HEX_COLOR.test(raw.trim())) merged[key] = raw.trim().toUpperCase();
       } else if (key === 'heroTitle') {
         if (raw === null) merged[key] = null;

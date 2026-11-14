@@ -88,6 +88,12 @@ const customStyle = {
   textAlign: 'left',
   textTone: 'dark',
   overlay: 'soft',
+  layout: 'poster',
+  menuShape: 'list',
+  bannerKind: 'gradient',
+  bannerColor: '#2E3D5B',
+  bannerColor2: '#E58A4B',
+  bannerAngle: 'vertical',
 };
 
 async function createEvent(ref, { stage = 'READY', participants = [] } = {}) {
@@ -237,6 +243,14 @@ test('invalid homeStyle values reject with field errors and keep the draft versi
     [{ textTone: 'neon' }, 'homeStyle.textTone'],
     [{ overlay: 'blur' }, 'homeStyle.overlay'],
     [{ heroLayout: null }, 'homeStyle.heroLayout'],
+    [{ layout: 'instagram' }, 'homeStyle.layout'],
+    [{ layout: 'grid' }, 'homeStyle.layout'],
+    [{ menuShape: 'square' }, 'homeStyle.menuShape'],
+    [{ menuShape: null }, 'homeStyle.menuShape'],
+    [{ bannerKind: 'video' }, 'homeStyle.bannerKind'],
+    [{ bannerColor: 'blue' }, 'homeStyle.bannerColor'],
+    [{ bannerColor2: '#12345' }, 'homeStyle.bannerColor2'],
+    [{ bannerAngle: 'diag' }, 'homeStyle.bannerAngle'],
   ];
   for (const [style, field] of cases) {
     const res = await managerCommand(eventA.id, 'attendee.page.save', pagePayload({ homeStyle: style }));

@@ -39,11 +39,11 @@ test('settings-attendee-single-entry: page editing lives only in the theme edito
 
 test('settings-attendee-single-entry: theme edits intro, accent and visibility with guarded saves', () => {
   const theme = read(THEME);
-  for (const id of ['home-intro', 'home-accent']) {
-    assert.match(theme, new RegExp(`id="${id}"`), `theme edits ${id}`);
-  }
+  assert.match(theme, /id="home-intro"/, 'theme edits the intro');
+  assert.match(theme, /<ColorField label="강조색" value=\{state\.pageFields\.accent\}/, 'theme edits the accent through the color field');
   for (const field of ['showAnnouncements', 'showSchedule', 'showVenue', 'showPrograms']) {
     assert.match(theme, new RegExp(`pageFields\\.${field}`), `theme edits ${field}`);
+    assert.match(theme, new RegExp(`updatePageField\\("${field}", checked\\)`), `${field} is a switch`);
   }
   assert.match(theme, /savedPageFields/);
   assert.match(theme, /pageFieldsAreDirty/);

@@ -16,13 +16,13 @@ const shell = read("apps/web/app/event/[slug]/home/HomeShell.tsx");
 const ticketView = read("apps/web/app/event/[slug]/ticket/TicketView.tsx");
 
 test("the landing is the simple entry list and prints no QR", () => {
-  assert.match(landing, /styles\.menuBoard/u);
+  assert.match(landing, /<nav className=\{L\.menus\} aria-label="참가 메뉴">/u);
   // Preview and attendee use the same feature guard; legacy default order
   // and the mandatory ticket are exercised by web:home-menus:audit.
   assert.match(landing, /!unavailable\.includes\(menu\.key\)/u);
   assert.match(landing, /const ordered = \["qr", \.\.\.menuSettings\.order\]/u);
   // Ticket need reads on the corresponding entry, not in a detached banner.
-  assert.match(landing, /menuNeedTicket/u);
+  assert.match(landing, /L\.needTicket/u);
   assert.match(landing, /티켓 필요/u);
   // No QR is drawn on the landing itself: an attendee without a ticket must
   // still see a complete home.
@@ -35,6 +35,7 @@ test("the ticket stays one tap away in the first entry", () => {
   assert.match(landing, /\{ key: "qr", label: "모바일 티켓", category: "Utility" \}/u);
   assert.match(landing, /HOME_MENUS: Menu\[\] = \[\s*\{ key: "qr"/u);
   assert.match(landing, /onOpen=\{onOpen \? \(\) => onOpen\(menu\.key\)/u);
+  assert.match(landing, /onClick=\{\(\) => onOpen\?\.\("qr"\)\}/u, "the ticket card opens the ticket");
   assert.match(shell, /onOpen=\{openTab\}/u);
   assert.match(shell, /activeTab === "qr" && <TicketView slug=\{slug\} initialTicket=\{state\.ticketToken\} \/>/u);
   // The ticket itself is unchanged: the desk scans the QR on that screen.
@@ -43,7 +44,7 @@ test("the ticket stays one tap away in the first entry", () => {
 
 test("ticket need reads on the entry itself while additional paths may scroll", () => {
   assert.match(landing, /hasTicket: boolean/u);
-  assert.match(landing, /menuNeedTicket/u);
+  assert.match(landing, /L\.needTicket/u);
   assert.match(landing, /티켓 필요/u);
   assert.doesNotMatch(landing, /styles\.ticketNeeded/u);
   assert.doesNotMatch(landing, /티켓이 있어야 일부 기능/u);

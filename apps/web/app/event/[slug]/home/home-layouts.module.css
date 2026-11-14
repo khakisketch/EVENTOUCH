@@ -1,0 +1,291 @@
+/* Attendee home compositions (homeStyle.layout): tile, poster, typography.
+   The container is .homePage (inline-size container), so sizes follow the
+   phone width, not the operator's window. Colors come from the page background
+   (--home-background-color) and its readable ink (--lay-ink); cards stay white
+   so tiles read on any background. */
+
+.root {
+  --lay-radius: 20px;
+  display: grid;
+  align-content: start;
+  gap: 0;
+  width: 100%;
+  min-width: 0;
+  padding-bottom: max(24px, env(safe-area-inset-bottom, 0px));
+  color: var(--lay-ink, #17252b);
+}
+
+/* ---- hero (tile + poster) ---- */
+.hero {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+  background: #1e2026;
+  color: #fff;
+}
+
+.tile .hero { height: clamp(156px, 44cqi, 230px); }
+.poster .hero { height: clamp(300px, 88cqi, 460px); justify-content: flex-end; }
+.tile .hero.textBottom { justify-content: flex-end; }
+
+.artwork {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.focusTop .artwork { object-position: 50% 0; }
+.focusBottom .artwork { object-position: 50% 100%; }
+
+/* Legibility: the poster always lays a quiet scrim under its bottom text; the
+   overlay choices add an even wash for pictures. */
+.hero::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+}
+.poster .hero.toneLight::after { background: linear-gradient(to top, rgb(16 17 20 / 62%), rgb(16 17 20 / 12%) 62%, transparent); }
+.overlaySoftLight::after { background: rgb(9 34 48 / 24%) !important; }
+.overlayStrongLight::after { background: rgb(9 34 48 / 46%) !important; }
+.overlaySoftDark::after { background: rgb(255 255 255 / 28%) !important; }
+.overlayStrongDark::after { background: rgb(255 255 255 / 54%) !important; }
+
+.heroText { display: grid; gap: 6px; padding: 20px max(20px, 6cqi); }
+.title {
+  margin: 0;
+  font-size: clamp(22px, 6.6cqi, 30px);
+  font-weight: 800;
+  line-height: 1.16;
+  letter-spacing: -0.03em;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+  color: inherit;
+}
+.poster .title { font-size: clamp(28px, 8.6cqi, 40px); }
+.titleLarge .title { font-size: clamp(30px, 9cqi, 44px); }
+.subtitle { margin: 0; font-size: var(--small, 13px); font-weight: 600; color: inherit; overflow-wrap: anywhere; }
+
+.toneLight { color: #fff; }
+.toneDark { color: #142b35; }
+.alignLeft .heroText, .alignLeft.typoHead { text-align: left; }
+.alignCenter .heroText, .alignCenter.typoHead { text-align: center; }
+.alignRight .heroText, .alignRight.typoHead { text-align: right; }
+
+/* ---- ticket ---- */
+.ticketWrap { position: relative; z-index: 1; padding: 0 16px; }
+.tile .ticketWrap, .poster .ticketWrap { margin-top: -26px; }
+.typography .ticketWrap { margin-top: 0; }
+
+.root .ticket {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 12px 10px 14px;
+  border: 0;
+  border-radius: 18px;
+  background: #fff;
+  color: #17252b;
+  text-align: left;
+  box-shadow: 0 10px 26px -14px rgb(16 17 20 / 60%);
+}
+.root .ticket:disabled { opacity: 1; cursor: default; }
+.ticket :global(svg) { flex: none; width: 30px; height: 30px; color: var(--brand, #c8441f); }
+.ticketText { display: grid; min-width: 0; flex: 1; }
+.ticketLabel { font-size: 16px; font-weight: 800; }
+.ticketGo { flex: none; padding: 8px 14px; border-radius: 12px; background: var(--brand, #c8441f); color: var(--on-brand, #19191c); font-size: 13px; font-weight: 800; }
+.typography .ticket { background: var(--lay-ink); color: var(--home-background-color, #1e2026); box-shadow: none; min-height: 72px; }
+.typography .ticket :global(svg) { color: inherit; }
+.typography .ticketGo { background: var(--home-background-color, #1e2026); color: var(--lay-ink); }
+
+/* ---- menus ---- */
+.menus { display: grid; gap: 0; padding: 18px 16px 0; }
+.groupLabel { margin: 14px 4px 10px; font-size: 12px; font-weight: 800; letter-spacing: 0.04em; color: var(--lay-ink); }
+.menus > .groupLabel:first-child { margin-top: 0; }
+
+.group { display: grid; gap: 10px; }
+.group_tile { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.group_circle { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 8px; }
+.group_row { gap: 0; }
+
+.needTicket { font-size: 11px; font-weight: 800; color: var(--brand-text, #8e351f); white-space: nowrap; }
+
+/* tile: square, icon over label */
+.root .tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  aspect-ratio: 1;
+  padding: 14px;
+  border: 0;
+  border-radius: var(--lay-radius);
+  background: #fff;
+  color: #17252b;
+  text-align: left;
+  box-shadow: 0 8px 22px -16px rgb(16 17 20 / 70%);
+}
+.root .tile:disabled { opacity: 1; cursor: default; }
+.tile :global(svg) { flex: none; width: 30px; height: 30px; color: var(--brand, #c8441f); }
+.tileLabel { font-size: 15px; font-weight: 800; line-height: 1.3; word-break: keep-all; overflow-wrap: anywhere; text-align: left; }
+
+/* circle: round icon over a short label */
+.root .circle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--lay-ink);
+  text-align: center;
+}
+.root .circle:disabled { opacity: 1; cursor: default; }
+.circle :global(svg) { width: 24px; height: 24px; color: #17252b; }
+.circle .entryLabel { justify-content: center; text-align: center; font-size: 12.5px; }
+
+/* row: icon tile, label, chevron */
+.root .row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-height: 58px;
+  padding: 8px 2px;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--lay-ink) 16%, transparent);
+  border-radius: 0;
+  background: transparent;
+  color: var(--lay-ink);
+  text-align: left;
+}
+.group_row > .row:first-child { border-top: 0; }
+.root .row:disabled { opacity: 1; cursor: default; }
+.row :global(svg) { width: 20px; height: 20px; color: #17252b; }
+.typography .row :global(svg) { color: var(--lay-ink); }
+.entryLabel { display: flex; align-items: center; min-width: 0; font-size: 15px; font-weight: 800; line-height: 1.3; word-break: keep-all; overflow-wrap: anywhere; text-align: left; }
+
+/* ---- typography ---- */
+.typoHead { padding: max(28px, 8cqi) 0 20px; }
+.typoHead .heroText { padding: 0 max(20px, 6cqi); }
+.typoHead .title { font-size: clamp(36px, 12cqi, 56px); line-height: 1.08; letter-spacing: -0.04em; }
+.typoHead.titleLarge .title { font-size: clamp(42px, 14cqi, 64px); }
+.typoHead .subtitle { margin-top: 6px; color: var(--lay-ink); }
+.typography .menus { padding-top: 22px; }
+
+/* ---- links ---- */
+.links { display: grid; gap: 8px; padding: 18px 16px 0; }
+.links > a, .links > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 78%);
+  color: #17252b;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  text-decoration: none;
+}
+.links > button:disabled { opacity: 1; cursor: default; }
+.typography .links > a, .typography .links > button { background: color-mix(in srgb, var(--lay-ink) 12%, transparent); color: var(--lay-ink); }
+
+/* ---- Astryx button anatomy ----
+   ProductButton renders button > span(content) > span(icon) + span(label).
+   The content span is the real flex container, so each shape lays it out. */
+.root .tile,
+.root .circle,
+.root .row,
+.root .ticket { height: auto; }
+
+.ticket > span:first-child,
+.row > span:first-child {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+.ticket > span:first-child > span:last-child {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.row > span:first-child > span:last-child {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+
+.tile > span:first-child {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+}
+.tile > span:first-child > span { display: block; max-width: 100%; text-align: left; }
+
+.circle > span:first-child {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.circle > span:first-child > span { display: flex; flex-direction: column; align-items: center; }
+
+/* Icon holders: a round chip for circles, a soft square for rows. */
+.circle > span:first-child > span:first-child {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 6px 16px -10px rgb(16 17 20 / 70%);
+}
+.row > span:first-child > span:first-child {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: rgb(255 255 255 / 80%);
+}
+.typography .row > span:first-child > span:first-child { background: color-mix(in srgb, var(--lay-ink) 14%, transparent); }
+
+/* The ticket overlaps the banner's lower edge: the poster's text clears it. */
+.poster .heroText { padding-bottom: 44px; }
+.tile .hero.textBottom .heroText { padding-bottom: 40px; }
