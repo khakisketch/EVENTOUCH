@@ -155,33 +155,4 @@ test("reports keep every column, scroll regions and print isolation", () => {
 
 // --- 4. Event ledger: quiet countdown, attention only when near ------------
 
-test("ledger countdown stays unfilled and emphasizes only today and tomorrow", () => {
-  const css = read("console/console-home.module.css");
-  noNewHex(css, "console-home.module.css");
-  assert.doesNotMatch(css, /\.eventRecency(?:Soon)?\s*\{[^}]*background(?:-color)?:/s, "countdown is ledger text, not a competing filled badge");
-  assert.match(css, /\.eventRecency\s*\{[^}]*color:\s*var\(--muted\)/s);
-  assert.match(css, /\.eventRecencySoon\s*\{[^}]*color:\s*var\(--ink\)[^}]*font-weight:\s*800/s);
-  assert.match(css, /\.eventRecency\s*\{[^}]*font-variant-numeric:\s*tabular-nums/s);
-  assert.doesNotMatch(css, /\.eventCardAction[^s]/s, "per-card duplicate styling is gone with the A2 card");
-  assert.match(css, /\.approvalLink\s*\{[^}]*min-height:\s*44px/s);
-  assert.match(css, /\.approvalLink\s*\{[^}]*word-break:\s*keep-all[^}]*overflow-wrap:\s*anywhere/s);
-  const home = read("console/ConsoleHome.tsx");
-  assert.match(home, /recency === "오늘" \|\| recency === "내일"/);
-  assert.match(home, /styles\.eventRecencySoon/);
-  for (const token of ["오늘", "내일", "어제", "D-${days}", "D+${days}"]) {
-    assert.ok(home.includes(token === "D-${days}" ? "D-${days}" : token), `countdown keeps ${token}`);
-  }
-});
 
-test("directory ledger keeps identity order, content and countdown logic", () => {  const home = read("console/ConsoleHome.tsx");
-  const card = home.slice(home.indexOf("function EventCard("), home.indexOf("export default function ConsoleHome()"));
-  // The aligned ledger replaces tinted cards, but retains title/date,
-  // client/venue, stage and recency in the same reading order.
-  // styles.* markers first occur in the JSX (logic helpers live above).
-  const order = ["styles.eventName", "styles.eventDateTime", "styles.eventClient", "eventStageClassName", "styles.eventRecency"].map((name) => card.indexOf(name));
-  assert.ok(order.every((position) => position >= 0), "ledger keeps every identity token");
-  assert.deepEqual([...order].sort((a, b) => a - b), order, "title, date·time, client, stage and recency keep their reading order");
-  assert.match(home, /event\.date > todayKey/);
-  assert.match(home, /date === todayKey/);
-  assert.match(home, /className=\{styles\.eventCard\}>/);
-});

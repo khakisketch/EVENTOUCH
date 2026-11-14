@@ -1,21 +1,29 @@
-/* The directory is one workspace: controls above aligned operational rows. */
+/* The directory is a flat page: tabs, a quiet search, grouped rows. The only
+   bordered unit is the running event's card. Calendar and dialogs keep their
+   own styles below. */
 .createTrigger {
   flex: none;
   align-self: center;
 }
 
 .directorySection.directorySection {
-  --directory-columns: minmax(0, 1.5fr) minmax(0, 1.1fr) minmax(128px, 0.75fr) 176px;
   gap: var(--s4);
-  padding: var(--s5);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--paper);
-  box-shadow: 0 1px 3px var(--shadow-soft);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
-.directorySection > :has(:global(#console-event-directory)) {
-  align-items: center;
+/* The page title already says "행사"; the section title and count stay for
+   assistive technology only. */
+.directorySection [data-console-section-head] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 .directorySection > :last-child {
@@ -23,130 +31,101 @@
   gap: var(--s4);
 }
 
-.directory {
-  min-width: 0;
-}
+.directory { min-width: 0; }
 
-.homeFilters {
-  display: grid;
-  grid-template-areas: "search stage work";
-  grid-template-columns: minmax(180px, 360px) max-content max-content;
+.tabsRow {
+  display: flex;
   align-items: center;
-  gap: var(--s3);
-  flex: 1 1 640px;
-  min-width: 0;
+  justify-content: space-between;
+  gap: var(--s4);
+  border-bottom: 1px solid var(--line);
 }
 
-.homeSearch { grid-area: search; }
-.homeStage { grid-area: stage; }
-.homeWork { grid-area: work; }
-
-.stageFilter {
-  display: grid;
-  grid-template-columns: auto auto;
-  justify-self: start;
-  align-items: center;
-  gap: var(--s2);
-  width: fit-content;
-  max-width: 100%;
-  min-width: 0;
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--small);
-  font-weight: 650;
-}
-
-.stageFilter select {
-  width: auto;
-  field-sizing: content;
-  max-width: 100%;
-  min-width: 0;
-  min-height: 44px;
-  margin: 0;
-  padding-inline: var(--s1) var(--s2);
+.stageTabs { display: flex; flex-wrap: wrap; gap: var(--s5); min-width: 0; }
+.stageTab {
+  min-height: 48px;
+  padding: 0;
   border: 0;
-  border-radius: 0;
-  background-color: transparent;
-  box-shadow: none;
-  color: var(--ink);
-  font-weight: 700;
-}
-
-.stageFilter select:hover { color: var(--ink); text-decoration: underline; }
-.stageFilter option { background: var(--paper); color: var(--ink); }
-
-.workFilter {
-  display: inline-flex;
-  min-height: 44px;
-  align-items: center;
-  gap: var(--s2);
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--small);
-  font-weight: 650;
-  word-break: keep-all;
-  overflow-wrap: anywhere;
-}
-
-.workFilter input {
-  width: 20px;
-  height: 20px;
-  margin: 0;
-  accent-color: var(--ink);
-}
-
-.searchField { display: block; min-width: 0; width: 100%; margin: 0; }
-.searchField input { width: 100%; margin: 0; }
-
-.viewSwitch {
-  display: inline-flex;
-  flex: none;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-small);
-  background: var(--paper);
-}
-
-.viewButton {
-  min-height: 44px;
-  padding-inline: var(--s3);
-  border: 1px solid transparent;
-  border-radius: var(--radius-small);
+  border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: var(--small);
   font-weight: 650;
   cursor: pointer;
 }
+.stageTab small { margin-left: var(--s1); color: var(--muted); font-size: var(--small); font-weight: 600; }
+.stageTab:hover { color: var(--ink); }
+.stageTabActive { border-bottom-color: var(--ink); color: var(--ink); }
 
+.homeFilters {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  flex: 1 1 640px;
+  min-width: 0;
+}
+.homeSearch { flex: 1 1 280px; max-width: 420px; }
+.homeWork { flex: none; }
+.workFilter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 44px;
+  margin: 0;
+  color: var(--muted);
+  font-weight: 650;
+  cursor: pointer;
+}
+.workFilter b { color: var(--ink); font-weight: 800; }
+.workFilter input { width: 20px; height: 20px; margin: 0; accent-color: var(--ink); }
+.searchField { display: block; min-width: 0; width: 100%; margin: 0; }
+.searchField input { width: 100%; margin: 0; }
+
+.viewSwitch { display: inline-flex; flex: none; gap: var(--s4); }
+.viewButton {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
 .viewButton:hover { color: var(--ink); }
-.viewActive { border-color: var(--line); background: var(--paper); color: var(--ink); font-weight: 750; }
+.viewActive { color: var(--ink); font-weight: 800; }
 
 .viewButton:focus-visible,
+.stageTab:focus-visible,
 .dayCell:focus-visible,
-.eventCardLink:focus-visible,
-.approvalLink:focus-visible {
+.eventRowLink:focus-visible,
+.rowAction:focus-visible,
+.liveLink:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
 
 .resultsMeta { display: flex; justify-content: flex-end; margin-bottom: var(--s3); }
 .sectionTitle { margin: var(--s5) 0 var(--s3); font-size: var(--h3); }
+.groupTitle { margin: var(--s5) 0 0; color: var(--muted); font-size: var(--small); font-weight: 700; letter-spacing: 0.04em; }
 
-.directoryColumns {
+/* The running event: the page's one card. */
+.liveCard {
   display: grid;
-  grid-template-columns: var(--directory-columns);
-  column-gap: var(--s4);
-  padding: var(--s3) var(--s4);
-  border-block: 1px solid var(--line);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s4);
+  padding: var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-large);
   background: var(--paper);
-  color: var(--muted);
-  font-size: var(--label);
-  font-weight: 650;
-  letter-spacing: 0.06em;
 }
+.liveKicker { display: inline-flex; align-items: center; gap: var(--s2); margin: 0; color: var(--success); font-size: var(--small); font-weight: 800; }
+.liveKicker::before { width: 8px; height: 8px; border-radius: 50%; background: var(--success); content: ""; }
+.liveName { margin: var(--s2) 0 var(--s1); font-size: 24px; font-weight: 800; letter-spacing: -0.03em; word-break: keep-all; overflow-wrap: anywhere; }
+.liveMeta { margin: 0; color: var(--muted); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.liveLink { display: inline-flex; align-items: center; min-height: 44px; color: var(--brand-text); font-weight: 800; white-space: nowrap; text-decoration: none; }
+.liveLink:hover { text-decoration: underline; text-underline-offset: 3px; }
 
 .eventGrid {
   display: grid;
@@ -156,49 +135,39 @@
   padding: 0;
   list-style: none;
 }
-
 .eventGrid > li { min-width: 0; }
 
-.eventCard {
+/* A row: name and date line, countdown, arrow, and (only when there is one)
+   the next action at the end. */
+.eventRow {
   display: grid;
-  grid-template-columns: var(--directory-columns);
+  grid-template-columns: minmax(0, 1fr) 156px;
+  align-items: center;
   column-gap: var(--s4);
-  align-items: center;
   min-width: 0;
-  padding-inline: var(--s4);
   border-bottom: 1px solid var(--line);
-  background: var(--paper);
 }
+.eventRow:hover { background: var(--surface-muted); }
 
-.eventCard:hover { background: var(--surface-muted); }
-
-.eventCardLink {
+.eventRowLink {
   display: grid;
-  grid-column: 1 / span 3;
-  grid-template-columns: subgrid;
+  grid-column: 1;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  min-height: 104px;
+  gap: var(--s4);
+  min-height: 68px;
   min-width: 0;
-  padding-block: var(--s4);
+  padding-block: var(--s2);
   border-radius: var(--radius-small);
   color: inherit;
   text-decoration: none;
 }
-
-/* The published participant color identifies the event without tinting facts. */
-.eventCardZone { display: grid; gap: var(--s2); min-width: 0; }
-.eventCardZone .eventName::before {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin-right: var(--s2);
-  border: 1px solid var(--line-strong);
-  border-radius: 50%;
-  background: var(--card-zone, var(--soft));
-  content: "";
-}
+.eventRowMain { display: grid; gap: 2px; min-width: 0; }
 
 .eventName {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
   margin: 0;
   color: var(--ink);
   font-size: var(--body);
@@ -208,48 +177,43 @@
   word-break: keep-all;
   overflow-wrap: anywhere;
 }
+.eventRowLink:hover .eventName { text-decoration: underline; text-underline-offset: 3px; }
+
+.stageDot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); }
+.stageDot[data-tone="live"] { background: var(--success); }
+.stageDot[data-tone="prep"] { background: var(--warning); }
+.stageDot[data-tone="done"] { background: var(--paper); box-shadow: inset 0 0 0 2px var(--line-strong); }
 
 .eventDateTime {
-  margin: 0;
+  margin: 0 0 0 calc(9px + var(--s2));
   color: var(--muted);
   font-size: var(--small);
-  font-weight: 500;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
+.eventDateTime strong { color: var(--ink); font-weight: 700; }
 
-.eventCardBody { display: contents; }
-.eventClientGroup { display: grid; gap: var(--s1); min-width: 0; }
-.eventClient { margin: 0; color: var(--ink); font-size: var(--small); font-weight: 600; word-break: keep-all; overflow-wrap: anywhere; }
-.eventInventory { margin: 0; color: var(--muted); font-size: var(--label); letter-spacing: 0.02em; font-variant-numeric: tabular-nums; }
+.eventRecency { min-width: 52px; color: var(--muted); font-size: var(--small); font-weight: 650; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.eventRecency[data-soon] { color: var(--ink); font-weight: 800; }
+.rowArrow { display: inline-flex; width: 20px; color: var(--muted); }
+.rowArrow svg { width: 20px; height: 20px; }
+.eventRowLink:hover .rowArrow { color: var(--ink); }
 
-.eventCardFoot { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); min-width: 0; }
-.eventCardFoot :global(.stage-badge) { font-size: var(--label); font-weight: 650; }
-.eventRecency { color: var(--muted); font-size: var(--small); font-weight: 650; letter-spacing: 0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.eventRecencySoon { color: var(--ink); font-weight: 800; }
-.cardArrow { width: 18px; height: 18px; margin-left: auto; flex: none; color: var(--muted); }
-.eventCardLink:hover .eventName { text-decoration: underline; text-underline-offset: 3px; }
-.eventCardLink:hover .cardArrow { color: var(--ink); }
-
-.eventCardActions { display: flex; grid-column: 4; align-items: center; justify-content: flex-start; min-width: 0; }
-.approvalLink {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  min-width: 0;
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-small);
-  background: var(--paper);
-  color: var(--ink);
-  font-size: var(--small);
-  font-weight: 650;
+.rowAction {
   word-break: keep-all;
   overflow-wrap: anywhere;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  grid-column: 2;
+  min-height: 44px;
+  color: var(--warning);
+  font-size: var(--small);
+  font-weight: 750;
+  white-space: nowrap;
   text-decoration: none;
 }
-.approvalLink:hover { border-color: var(--line-strong); background: var(--surface-muted); }
+.rowAction:hover { text-decoration: underline; text-underline-offset: 3px; }
 
 .calendarPanel {
   margin-top: var(--s3);
@@ -355,30 +319,26 @@
 }
 
 
-@media (max-width: 1100px) {
-  .directorySection.directorySection { --directory-columns: minmax(0, 1.35fr) minmax(0, 1fr) 120px 158px; padding: var(--s4); }
-  .homeFilters { grid-template-areas: "search search" "stage work"; grid-template-columns: max-content minmax(0, 1fr); }
-  .eventCard, .directoryColumns { column-gap: var(--s3); padding-inline: var(--s2); }
-}
-
 @media (max-width: 768px) {
-  .directoryColumns { display: none; }
-  .eventGrid { border-top: 1px solid var(--line); }
-  .eventCard { grid-template-columns: minmax(0, 1fr); padding: var(--s4) 0; row-gap: var(--s3); }
-  .eventCardLink { grid-column: 1; grid-template-columns: minmax(0, 1fr); min-height: 44px; gap: var(--s3); padding: 0; }
-  .eventCardFoot { justify-content: flex-start; }
-  .eventCardActions { grid-column: 1; }
+  .tabsRow { flex-wrap: wrap; gap: 0 var(--s4); }
+  .stageTabs { gap: var(--s4); }
+  .homeFilters { flex-wrap: wrap; gap: var(--s2) var(--s4); }
+  .homeSearch { flex: 1 1 100%; max-width: none; }
+  .eventRow { grid-template-columns: minmax(0, 1fr); row-gap: 0; padding-bottom: var(--s1); }
+  .eventRowLink, .rowAction { grid-column: 1; }
+  .rowAction { justify-content: flex-start; }
+  .eventRowLink { grid-template-columns: minmax(0, 1fr) auto; }
+  .rowArrow { display: none; }
+  .rowAction { margin-left: calc(9px + var(--s2)); min-height: 36px; }
+  .liveCard { grid-template-columns: minmax(0, 1fr); padding: var(--s4); }
+  .liveName { font-size: 20px; }
   .calendarPanel { padding: var(--s3); }
   .dayCell { min-height: 44px; }
 }
 
 @media (max-width: 480px) {
-  .homeFilters { grid-template-areas: "search search" "stage work"; grid-template-columns: max-content minmax(0, 1fr); gap: var(--s2) var(--s3); }
-  .homeStage > span { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .stageFilter { grid-template-columns: minmax(0, 1fr); }
   .createTrigger { width: 100%; }
   .monthGrid { gap: 2px; }
-  .viewButton { padding-inline: var(--s2); }
 }
 
 .slugHint {

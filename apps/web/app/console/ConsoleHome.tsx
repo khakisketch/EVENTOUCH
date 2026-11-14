@@ -142,7 +142,27 @@ function formatEventDate(date: string): string {
   return year && month && day ? `${year}.${month}.${day}` : date;
 }
 
-function EventCard({
+const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+
+// "11월 25일 (수)", with the year only when it is not the current one.
+function formatEventDay(date: string, todayKey: string): string {
+  if (!date) return "일정 미정";
+  const [year, month, day] = date.split("-").map(Number);
+  if (!year || !month || !day) return date;
+  const weekday = WEEKDAYS[new Date(year, month - 1, day).getDay()];
+  const prefix = String(year) === todayKey.slice(0, 4) ? "" : `${year}년 `;
+  return `${prefix}${month}월 ${day}일 (${weekday})`;
+}
+
+// One dot says the stage; the countdown stays a quiet number on the right.
+function stageDotTone(stage: string): "live" | "prep" | "done" | "unknown" {
+  if (stage === "LIVE") return "live";
+  if (stage === "DRAFT" || stage === "READY") return "prep";
+  if (stage === "ENDED" || stage === "ARCHIVED") return "done";
+  return "unknown";
+}
+
+function EventRow({
   event,
   clientName,
   todayKey,
@@ -152,86 +172,58 @@ function EventCard({
   todayKey: string;
 }) {
   const recency = eventRecency(event.date, todayKey);
-  // Only the countdown at hand earns the filled voice: today and tomorrow.
-  // Far-future (D-86) and past (D+N) counts stay quiet so the
-  // name and stage lead. Same strings, same position — tone only.
-  const recencySoon = recency === "오늘" || recency === "내일";
   const stageKnown = KNOWN_STAGES.includes(event.stage);
   const stageLabel = stageKnown ? eventStageLabel(event.stage) : "단계 미정";
-  const time = event.start && event.end
-    ? `${event.start}–${event.end}`
-    : event.start || event.end;
-  // One grouped date/time line: full date with time,
-  // time-only when the date is unknown, and an explicit unknown label —
-  // never an empty or inferred date.
-  const dateTime = event.date
-    ? time ? `${formatEventDate(event.date)} · ${time}` : formatEventDate(event.date)
+  const tone = stageDotTone(event.stage);
+  const time = event.start || event.end;
+  // The date leads in strong type; time, client and venue follow quietly. The
+  // stage word lives in the accessible name and the dot, not in the line. An
+  // undated event with a time says so instead of showing a bare clock.
+  const lead = event.date
+    ? formatEventDay(event.date, todayKey)
     : time ? `시간 ${time}` : "일정 미정";
-  const clientAndVenue = [clientName, event.venue].filter(Boolean).join(" · ");
-  // Published color remains an identity marker; status keeps semantic tokens.
+  const rest = [event.date ? time : "", clientName, event.venue].filter(Boolean).join(" · ");
   const theme = cardHeaderTheme(event.themeColor);
   const zoneStyle = theme
-    ? ({ "--card-zone": theme.background, "--card-zone-ink": theme.color } as CSSProperties)
+    ? ({ "--card-zone": theme.background } as CSSProperties)
     : undefined;
 
   return (
-    <article className={styles.eventCard}>
-      {/* The whole card body is one entry into the event home. The optional
-          approval follow-up stays outside this link so there are no nested
-          controls; duplication lives in the create dialog, not on cards.
-          The accessible name comes from the card contents (plus a visually
-          hidden "열기" affordance) so visible text always stays inside the
-          name instead of an aria-label that would orphan it. */}
+    <article className={styles.eventRow} data-tone={tone}>
+      {/* The row body is one entry into the event home. The approval
+          follow-up stays outside this link so there are no nested controls. */}
       <ProductLink
-        className={styles.eventCardLink}
+        className={styles.eventRowLink}
         href={`/console/events/${encodeURIComponent(event.id)}`}
       >
-        <div className={styles.eventCardZone} style={zoneStyle}>
-          <h3 className={styles.eventName}>{event.name}</h3>
-          <p className={styles.eventDateTime} data-soon={recencySoon || undefined}>{dateTime}</p>
+        <div className={styles.eventRowMain}>
+          <h3 className={styles.eventName} style={zoneStyle}>
+            <span className={styles.stageDot} data-tone={tone} aria-hidden="true" />
+            {event.name}
+          </h3>
+          <p className={styles.eventDateTime}>
+            <strong>{lead}</strong>
+            {rest ? ` ${rest}` : ""}
+          </p>
         </div>
-        <div className={styles.eventCardBody}>
-          <div className={styles.eventClientGroup}>
-            <p className={styles.eventClient}>
-              {clientAndVenue || "고객사·장소 미지정"}
-            </p>
-            <p className={styles.eventInventory}>
-              {event.capacity > 0 ? `정원 ${event.capacity}명` : "정원 제한 없음"}
-            </p>
-          </div>
-          <div className={styles.eventCardFoot}>
-            {stageKnown ? (
-              <span className={eventStageClassName(event.stage)}>{stageLabel}</span>
-            ) : <span className="stage-badge">{stageLabel}</span>}
-            {recency ? (
-              <span className={recencySoon ? `${styles.eventRecency} ${styles.eventRecencySoon}` : styles.eventRecency}>{recency}</span>
-            ) : null}
-            <svg className={styles.cardArrow} viewBox="0 0 20 20" aria-hidden="true">
-              <path
-                d="M4 10h11m-5-5 5 5-5 5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            <span className="sr-only"> 열기</span>
-          </div>
-        </div>
+        {recency ? <span className={styles.eventRecency} data-soon={recency === "오늘" || recency === "내일" || undefined}>{recency}</span> : <span />}
+        <span className={styles.rowArrow} aria-hidden="true">
+          <svg viewBox="0 0 20 20" focusable="false">
+            <path d="M7 4l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+        <span className="sr-only"> {stageLabel} · 열기</span>
       </ProductLink>
-      {/* Follow-up only when a queue exists: no permanent footer, no `0명`
-          indicator, no per-card duplicate. */}
+      {/* The next action sits at the end of the row only when there is one:
+          no permanent footer, no `0명` indicator. */}
       {event.pending > 0 ? (
-        <div className={styles.eventCardActions}>
-          <ProductLink
-            className={styles.approvalLink}
-            href={`/console/events/${encodeURIComponent(event.id)}/participants?status=PENDING`}
-            aria-label={`${event.name} 승인 대기 ${event.pending}명 처리`}
-          >
-            승인 대기 {event.pending}명 처리
-          </ProductLink>
-        </div>
+        <ProductLink
+          className={styles.rowAction}
+          href={`/console/events/${encodeURIComponent(event.id)}/participants?status=PENDING`}
+          aria-label={`${event.name} 승인 대기 ${event.pending}명 처리`}
+        >
+          승인 대기 {event.pending}명 처리 ›
+        </ProductLink>
       ) : null}
     </article>
   );
@@ -592,6 +584,69 @@ export default function ConsoleHome() {
       </button>
     </div>
   );
+  const stageTabs = (
+    <div className={styles.stageTabs} role="group" aria-label="진행 단계">
+      {FILTERS.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          className={`${styles.stageTab}${filter === item.id ? ` ${styles.stageTabActive}` : ""}`}
+          aria-pressed={filter === item.id}
+          onClick={() => setFilter(item.id)}
+        >
+          {item.label}<small>{counts[item.id]}</small>
+        </button>
+      ))}
+    </div>
+  );
+  // Upcoming and past read as two groups; the nearest running event leads as
+  // the page's one card. Order inside a group is already set by visibleEvents.
+  const renderGroups = (list: ConsoleEvent[]) => {
+    const clientOf = (event: ConsoleEvent) => event.clientId ? state.clients.get(event.clientId) ?? "" : "";
+    const live = list.filter((event) => event.stage === "LIVE")[0] ?? null;
+    const rest = live ? list.filter((event) => event.id !== live.id) : list;
+    const upcoming = rest.filter((event) => !event.date || event.date >= todayKey);
+    const past = rest.filter((event) => event.date && event.date < todayKey);
+    const renderRows = (rows: ConsoleEvent[]) => (
+      <ul className={styles.eventGrid}>
+        {rows.map((event) => (
+          <li key={event.id}>
+            <EventRow event={event} clientName={clientOf(event)} todayKey={todayKey} />
+          </li>
+        ))}
+      </ul>
+    );
+    return (
+      <>
+        {live ? (
+          <section className={styles.liveCard} aria-labelledby="console-live-event">
+            <div>
+              <p className={styles.liveKicker}>진행 중</p>
+              <h3 id="console-live-event" className={styles.liveName}>{live.name}</h3>
+              <p className={styles.liveMeta}>
+                {[eventRecency(live.date, todayKey) === "오늘" ? "오늘" : formatEventDay(live.date, todayKey), [live.start, live.end].filter(Boolean).join("–"), clientOf(live), live.venue].filter(Boolean).join(" · ")}
+              </p>
+            </div>
+            <ProductLink className={styles.liveLink} href={`/console/events/${encodeURIComponent(live.id)}`}>
+              운영 현황 열기 ›
+            </ProductLink>
+          </section>
+        ) : null}
+        {upcoming.length ? (
+          <>
+            <h3 className={styles.groupTitle}>다가오는 행사</h3>
+            {renderRows(upcoming)}
+          </>
+        ) : null}
+        {past.length ? (
+          <>
+            <h3 className={styles.groupTitle}>지난 행사</h3>
+            {renderRows(past)}
+          </>
+        ) : null}
+      </>
+    );
+  };
   return (
     <ConsolePage
       pageId="events"
@@ -640,7 +695,8 @@ export default function ConsoleHome() {
         />
       ) : null}
 
-      <ConsoleSection headingId="console-event-directory" title="행사 목록" description={directoryDescription} action={viewSwitch} surface="plain" width="full" className={styles.directorySection}>
+      <ConsoleSection headingId="console-event-directory" title="행사 목록" description={directoryDescription} surface="plain" width="full" className={styles.directorySection}>
+        <div className={styles.tabsRow}>{stageTabs}{viewSwitch}</div>
         <ConsoleToolbar
           filters={
             <div className={styles.homeFilters} data-toolbar-span="full">
@@ -654,19 +710,6 @@ export default function ConsoleHome() {
                   onChange={(event) => setQuery(event.target.value)}
                 />
               </label>
-              <label className={`${styles.stageFilter} ${styles.homeStage}`}>
-                <span>진행 단계</span>
-                <select
-                  value={filter}
-                  onChange={(event) => setFilter(event.target.value as EventFilter)}
-                >
-                  {FILTERS.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.label} ({counts[item.id]})
-                    </option>
-                  ))}
-                </select>
-              </label>
               <label className={`${styles.workFilter} ${styles.homeWork}`}>
                 <input
                   type="checkbox"
@@ -674,7 +717,7 @@ export default function ConsoleHome() {
                   onChange={(event) => setNeedsWork(event.target.checked)}
                   aria-label={`승인 대기 있는 행사만 보기 (${pendingQueueCount}건)`}
                 />
-                <span aria-hidden="true">승인 대기만 ({pendingQueueCount})</span>
+                <span aria-hidden="true">승인 대기만 <b>{pendingQueueCount}</b></span>
               </label>
             </div>
           }
@@ -776,35 +819,20 @@ export default function ConsoleHome() {
             {view === "calendar" && selectedDate ? (
               <h3 className={styles.sectionTitle}>{describeDate(selectedDate)} 행사</h3>
             ) : null}
-            <div className={styles.directoryColumns} aria-hidden="true">
-              <span>행사·일정</span><span>고객사·장소</span><span>진행 상태</span><span>후속 작업</span>
-            </div>
-            <ul className={styles.eventGrid}>
-              {(view === "calendar" && selectedDate ? datedVisible : visibleEvents.filter((event) => view === "cards" || event.date)).map((event) => (
-                <li key={event.id}>
-                  <EventCard
-                    event={event}
-                    clientName={event.clientId ? state.clients.get(event.clientId) ?? "" : ""}
-                    todayKey={todayKey}
-                  />
-                </li>
-              ))}
-            </ul>
+            {renderGroups(view === "calendar" && selectedDate ? datedVisible : visibleEvents.filter((event) => view === "cards" || event.date))}
             {view === "calendar" && !selectedDate && unscheduled.length ? (
               <>
                 <h3 className={styles.sectionTitle}>일정 미정 {unscheduled.length}건</h3>
                 <ul className={styles.eventGrid}>
-                  {unscheduled.map((event) => {
-                    return (
-                      <li key={event.id}>
-                        <EventCard
-                          event={event}
-                          clientName={event.clientId ? state.clients.get(event.clientId) ?? "" : ""}
-                          todayKey={todayKey}
-                        />
-                      </li>
-                    );
-                  })}
+                  {unscheduled.map((event) => (
+                    <li key={event.id}>
+                      <EventRow
+                        event={event}
+                        clientName={event.clientId ? state.clients.get(event.clientId) ?? "" : ""}
+                        todayKey={todayKey}
+                      />
+                    </li>
+                  ))}
                 </ul>
               </>
             ) : null}

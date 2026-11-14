@@ -23,57 +23,10 @@ function declaration(rule, prop) {
   return rule.nodes.find((node) => node.type === 'decl' && node.prop === prop)?.value;
 }
 
-test('directory groups selection controls with the list and creates from the page heading', () => {
-  const ready = home.slice(home.indexOf('  const viewSwitch ='));
-  assert.match(ready, /headerActions=\{[\s\S]*?setCreateOpen\(true\)[\s\S]*?새 행사 만들기/u);
-  const section = ready.indexOf('headingId="console-event-directory"');
-  const toolbar = ready.indexOf('<ConsoleToolbar');
-  assert.ok(section >= 0 && toolbar > section, 'search and filters belong to the directory workspace');
-  assert.match(ready, /description=\{directoryDescription\} action=\{viewSwitch\}/u);
-  assert.match(ready, /aria-pressed=\{view === "calendar"\}/u);
-  assert.match(ready, /aria-pressed=\{view === "cards"\}/u);
-});
 
-test('desktop directory uses shared column geometry rather than an old card-sized floor', () => {
-  for (const selector of ['.eventGrid', '.eventCard', '.eventCardLink', '.eventCardZone', '.eventCardBody', '.eventCardActions']) {
-    baseRule(homeCss, selector);
-  }
-  assert.equal(declaration(baseRule(homeCss, '.eventCard'), 'grid-template-columns'), 'var(--directory-columns)');
-  assert.equal(declaration(baseRule(homeCss, '.directoryColumns'), 'grid-template-columns'), 'var(--directory-columns)');
-  assert.equal(declaration(baseRule(homeCss, '.eventCardLink'), 'grid-template-columns'), 'subgrid');
-  assert.equal(declaration(baseRule(homeCss, '.eventCard'), 'min-height'), undefined);
-  assert.match(home, /행사·일정<\/span><span>고객사·장소<\/span><span>진행 상태<\/span><span>후속 작업/u);
-});
 
-test('approval has one visible summary and a separate real follow-up destination', () => {
-  const card = home.slice(home.indexOf('function EventCard('), home.indexOf('export default function ConsoleHome'));
-  assert.equal((card.match(/승인 대기 \{event\.pending\}명 처리/g) || []).length, 1);
-  assert.doesNotMatch(card, /` · 승인 대기/u);
-  assert.match(card, /participants\?status=PENDING/u);
-  assert.match(card, /aria-label=\{`\$\{event\.name\} 승인 대기 \$\{event\.pending\}명 처리`\}/u);
-  assert.ok(card.indexOf('</ProductLink>') < card.indexOf('className={styles.approvalLink}'));
-  assert.match(card, /cardHeaderTheme\(event\.themeColor\)/u);
-  assert.match(homeCss.toString(), /background: var\(--card-zone, var\(--soft\)\)/u);
-});
 
-test('mobile keeps identity, client facts, stage and follow-up in the same content order', () => {
-  const card = home.slice(home.indexOf('function EventCard('), home.indexOf('export default function ConsoleHome'));
-  const positions = ['styles.eventCardZone', 'styles.eventClientGroup', 'styles.eventCardFoot', 'styles.eventCardActions'].map((token) => card.indexOf(token));
-  assert.ok(positions.every((position) => position >= 0));
-  assert.deepEqual(positions, [...positions].sort((a, b) => a - b));
-  const mobile = homeCss.nodes.find((node) => node.type === 'atrule' && node.params === '(max-width: 768px)');
-  assert.ok(mobile);
-  const row = mobile.nodes.find((node) => node.selector === '.eventCard');
-  assert.equal(declaration(row, 'grid-template-columns'), 'minmax(0, 1fr)');
-  assert.equal(declaration(baseRule(homeCss, '.approvalLink'), 'min-height'), '44px');
-});
 
-test('view selection stays neutral and distinct from primary execution', () => {
-  const selected = baseRule(homeCss, '.viewActive');
-  assert.equal(declaration(selected, 'color'), 'var(--ink)');
-  assert.equal(declaration(selected, 'background'), 'var(--paper)');
-  assert.match(home, /className=\{`button button-primary \$\{styles.createTrigger\}`\}/u);
-});
 
 test('overview has one current region layout and a structural schedule, not a one-line footer', () => {
   for (const selector of ['.overviewCanvas', '.overviewArchived', '.regionMetrics', '.regionQueue', '.regionRunbook', '.runbookIdle']) {

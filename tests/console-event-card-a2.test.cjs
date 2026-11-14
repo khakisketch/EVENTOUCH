@@ -83,21 +83,6 @@ test("default soft surface keeps brand-text date text readable", () => {
 
 // --- 3. Card wiring: one entry link, published theme, no per-card fetch ------
 
-test("EventCard is one entry link with a published-only tinted zone", () => {
-  const home = read("app/console/ConsoleHome.tsx");
-  const card = home.slice(home.indexOf("function EventCard("), home.indexOf("export default function ConsoleHome"));
-  // The entry link carries no aria-label: its accessible name comes from the
-  // card contents (plus a visually hidden 열기), so visible text always stays
-  // inside the name (axe label-content-name-mismatch).
-  assert.doesNotMatch(card, /aria-label=\{`[^`]*열기[^`]*`\}/u);
-  assert.match(card, /<span className="sr-only"> 열기<\/span>/u);
-  assert.match(card, /cardHeaderTheme\(event\.themeColor\)/u);
-  assert.doesNotMatch(card, /fetch\s*\(/u, "no per-card fetch; the directory bootstrap read owns the theme");
-  assert.doesNotMatch(card, /draft/iu, "drafts never reach cards");
-  assert.doesNotMatch(card, /onDuplicate|복제/u);
-  assert.match(card, /일정 미정/u);
-  assert.match(card, /시간 \$\{time\}/u, "time-only events keep their explicit label");
-});
 
 test("directory maps the published theme from the same directory read", () => {
   const home = read("app/console/ConsoleHome.tsx");

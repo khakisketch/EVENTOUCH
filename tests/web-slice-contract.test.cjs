@@ -411,17 +411,16 @@ test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   // A card with no date but a time says so instead of showing a bare clock
   // under 일정 미정.
   assert.match(home, /시간 \$\{time\}/);
-  // No full-width rows: events render as cards in a capped grid, and the
-  // calendar only filters those same cards by date.
-  assert.doesNotMatch(home, /eventRow/);
+  // B2: events render as flat rows (one card only for the running event), and
+  // the calendar only filters those same rows by date.
   assert.match(home, /className=\{styles\.eventGrid\}/);
-  assert.match(home, /className=\{styles\.eventCard\}>/);
+  assert.match(home, /className=\{styles\.eventRow\}/);
+  assert.match(home, /className=\{styles\.liveCard\}/);
   assert.match(home, /styles\.dayCell/);
   assert.match(home, /selectedDate/);
-  // One native stage selector keeps the four stable filters discoverable
-  // without turning every status into a separate card-like control.
-  assert.match(home, /<label className=\{[^\n]*styles\.stageFilter[^\n]*\}>\s*<span>진행 단계<\/span>\s*<select/);
-  assert.match(home, /value=\{filter\}/);
+  // The four stable filters are ink-underline tabs with their counts.
+  assert.match(home, /role="group" aria-label="진행 단계"/);
+  assert.match(home, /aria-pressed=\{filter === item\.id\}/);
   assert.match(home, /FILTERS\.map\(\(item\) =>/);
   assert.match(home, /counts\[item\.id\]/);
   // Triage: the pending queue outranks the calendar when asked. Counts come
@@ -450,29 +449,27 @@ test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   for (const label of ['전체', '준비 중', '진행 중', '종료·보관']) {
     assert.match(home, new RegExp(label));
   }
-  assert.match(home, /className=\{styles\.eventCardZone\}/);
+  assert.match(home, /className=\{styles\.eventRowMain\}/);
   assert.match(home, /className=\{styles\.eventDateTime\}/);
-  assert.match(home, /className=\{styles\.eventCardBody\}/);
-  assert.match(home, /className=\{styles\.eventCardFoot\}/);
   // The approved directory summary leaves statistics in the event home.
   // Only a nonempty approval queue earns a small follow-up link. The count
   // rides the directory summary (server-counted), never a local scan.
   assert.doesNotMatch(home, /eventMetrics|등록 인원|현재 입장/);
   assert.match(home, /pending: typeof event\.pending === "number" \? event\.pending : 0/);
   assert.doesNotMatch(home, /countPending/);
-  assert.match(home, /event\.pending > 0 \? \(\s*<div className=\{styles\.eventCardActions\}>/);
+  assert.match(home, /event\.pending > 0 \? \(\s*<ProductLink\s+className=\{styles\.rowAction\}/);
   const overview = read('app/console/events/[id]/EventOverview.tsx');
   assert.match(overview, /headingId="event-metrics-heading"/);
   assert.match(overview, /overview\.registered/);
   assert.match(overview, /overview\.everIn/);
-  const eventCard = home.slice(home.indexOf('function EventCard('), home.indexOf('export default function ConsoleHome()'));
-  assert.match(eventCard, /<ProductLink[\s\S]*className=\{styles\.eventCardLink\}/);
+  const eventCard = home.slice(home.indexOf('function EventRow('), home.indexOf('export default function ConsoleHome()'));
+  assert.match(eventCard, /<ProductLink[\s\S]*className=\{styles\.eventRowLink\}/);
   assert.match(eventCard, /href=\{`\/console\/events\/\$\{encodeURIComponent\(event\.id\)\}`\}/);
   assert.match(eventCard, /participants\?status=PENDING/);
   // The pending queue is its own link outside the overview link; no nested
   // anchors, no per-card duplicate, and no always-empty footer on the card.
   assert.doesNotMatch(eventCard, /<a\b/);
-  assert.match(eventCard, /<\/ProductLink>[\s\S]*styles\.eventCardActions[\s\S]*?승인 대기/);
+  assert.match(eventCard, /<\/ProductLink>[\s\S]*styles\.rowAction[\s\S]*?승인 대기/);
   assert.doesNotMatch(eventCard, /복제/);
   assert.doesNotMatch(home, /localStorage/);
   assert.doesNotMatch(home, /sessionStorage/);
@@ -502,20 +499,18 @@ test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   assert.match(dialogCss, /\.dialog-actions/);
   const css = read('app/console/console-home.module.css');
   assert.match(css, /\.eventRecency/);
-  assert.match(css, /\.eventCardZone/);
   assert.match(css, /\.eventDateTime/);
-  assert.match(css, /\.eventCardBody/);
-  assert.match(css, /\.eventCardFoot/);
+  assert.match(css, /\.eventRowMain/);
   assert.doesNotMatch(css, /\.eventCardTop/);
-  assert.match(css, /\.eventCardLink:focus-visible/);
-  assert.match(css, /\.approvalLink:focus-visible/);
-  assert.match(css, /\.approvalLink\s*\{[^}]*min-height:\s*44px/s);
+  assert.match(css, /\.eventRowLink:focus-visible/);
+  assert.match(css, /\.rowAction:focus-visible/);
+  assert.match(css, /\.rowAction\s*\{[^}]*min-height:\s*44px/s);
   assert.match(css, /\.eventGrid/);
   assert.match(css, /\.dayCell/);
   // Korean titles wrap at word boundaries, never mid-syllable; unbreakable
   // strings still break so narrow cards never overflow.
   assert.match(css, /\.eventName\s*\{[^}]*word-break:\s*keep-all/s);
-  assert.doesNotMatch(css, /\.eventRow/);
+  assert.match(css, /\.eventRow\s*\{/, 'B2 rows are flat rows, not cards');
   assert.doesNotMatch(css, /min-height: 40px/);
 });
 

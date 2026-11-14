@@ -258,6 +258,17 @@ The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/
 - A link or action appears once per page unless two entry points do different jobs.
 - Rows are not wrapped in cards, and dimming never lowers text contrast.
 
+## 행사 목록 확정 구성
+
+The owner approved this composition on 2026-11-14 (`apps/web/app/console/ConsoleHome.tsx`, mockup B2). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-console-events-composition.test.cjs` ("approved event list design stays locked") guards it.
+
+- No card around the list and no column header. The page title already says "행사"; the section title and count stay for assistive technology only.
+- The running event is the page's one card: name large, date and place, and a text link "운영 현황 열기". With several running events only the first leads; the rest stay in the list.
+- Stage filters are ink-underline tabs with counts, not a dropdown. The approval-only toggle and the 콜시트/달력 switch are quiet text, selected in ink, never orange. The create button is the page's only orange.
+- Rows are grouped "다가오는 행사" then "지난 행사". A row is a stage dot (running green, preparing amber, done hollow), the name, one date line with the date in strong type ("11월 26일 (목)", the year only when it is not the current one), the countdown and an arrow. The stage word lives in the accessible name, not in the line.
+- The next action sits at the row's end as amber text only when one exists (today: "승인 대기 n명 처리"). It is a sibling link, never nested in the row link.
+- The directory carries no progress numbers; showing live entry counts here needs a server change first.
+
 ## Product component boundary
 
 Astryx supplies the production theme, actions, icon actions, links, labeled text fields, headings, sections and feedback. `app/ui/ProductButton`, `ProductLink`, `ProductInput` and `ProductNotice` keep the product-facing contract small. The production theme in `apps/web/src/themes/eventouch/` aliases `tokens.css`; generated theme files are rebuilt, not edited. The product explicitly uses light mode and Pretendard. The isolated design-review pilot is not a runtime dependency.
