@@ -81,7 +81,7 @@ test('unified-frame: domain sections keep their identities, duplicate menu title
   assert.match(draws, /`draw-program-\$\{program\.id\}`/, 'every draw program keeps its anchor');
   const photos = read(PHOTOS);
   for (const id of ['evidence-photo-sections', 'evidence-photo-archive']) {
-    assert.match(photos, new RegExp(`headingId="${id}"`), `photos retains ${id}`);
+    assert.match(photos, new RegExp(`id="${id}"`), `photos retains ${id}`);
   }
   const reports = read(REPORTS);
   for (const id of ['reports-analysis', 'reports-list', 'report-detail']) {
@@ -450,7 +450,8 @@ test('engagement-growth: reveal buttons move focus to the first newly revealed r
   assert.match(photos, /revealMorePhotos/, 'photos reveal through a named handler');
   assert.match(photos, /photoRevealRef\.current = photoLimit/, 'photos park the first newly revealed index before growing');
   assert.match(photos, /limit \+ PHOTO_PAGE_SIZE/, 'photos keep the 12-row reveal count');
-  assert.match(photos, /id=\{`evidence-photo-\$\{photo\.id\}`\} tabIndex=\{-1\}/, 'photo rows are focusable targets themselves');
+  const gallery = read(PHOTOS.replace('EvidencePhotosWorkspace.tsx', 'EvidenceGallery.tsx'));
+  assert.match(gallery, /id=\{`evidence-photo-\$\{cell\.id\}`\} tabIndex=\{-1\}/, 'photo cells are focusable targets themselves');
   assert.match(photos, /document\.getElementById\(`evidence-photo-\$\{target\.id\}`\)/, 'photos focus the first newly revealed row');
   for (const [file, source] of [[PROGRAMS, programs], [PHOTOS, photos]]) {
     assert.match(source, /\.focus\(\{ preventScroll: true \}\)/, `${file} focuses after scrolling without an extra announcement`);

@@ -27,7 +27,7 @@
   "console/events/[id]/participants/ReviewedExit.tsx": 4,
   "console/events/[id]/participants/TicketReissue.tsx": 3,
   "console/events/[id]/participants/import/ImportWizard.tsx": 7,
-  "console/events/[id]/photos/EvidencePhotosWorkspace.tsx": 4,
+  "console/events/[id]/photos/EvidencePhotosWorkspace.tsx": 2,
   "console/events/[id]/programs/ProgramsWorkspace.tsx": 35,
   "console/events/[id]/programs/QuizGrading.tsx": 2,
   "console/events/[id]/reports/EventCloseFlow.tsx": 2,

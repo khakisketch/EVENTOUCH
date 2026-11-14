@@ -11,7 +11,8 @@ import ConsolePage from "../../../console-ui/ConsolePage";
 import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
 import { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
-import ConsoleSection from "../../../console-ui/ConsoleSection";
+import ConsoleDialog from "../../../console-ui/ConsoleDialog";
+import EvidenceGallery, { type GalleryItem } from "./EvidenceGallery";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import { useConsoleDraftGuard } from "../../../console-draft-guard";
 import styles from "./evidence-photos.module.css";
@@ -168,6 +169,18 @@ function commandErrorMessage(value: unknown, fallback: string): string {
   return typeof item?.error === "string" ? item.error : fallback;
 }
 
+function ImageGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5zM9 11a1.5 1.5 0 1 0 0-.01M20 15l-4.5-4.5L8 18" /></svg>
+  );
+}
+
+function PlusGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14" /></svg>
+  );
+}
+
 function evidenceZipHref(eventId: string, section: EvidenceSection): string {
   const params = new URLSearchParams({ section });
   return `/api/events/${encodeURIComponent(eventId)}/evidence-photos.zip?${params.toString()}`;
@@ -205,6 +218,9 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
   const [movePending, setMovePending] = useState<{ photo: EvidencePhoto; nextSection: EvidenceSection } | null>(null);
   const [removePending, setRemovePending] = useState<EvidencePhoto | null>(null);
   const [moveTargets, setMoveTargets] = useState<Record<string, EvidenceSection>>({});
+  // The photo open in the viewer drawer; its neighbours are the section order.
+  const [viewerId, setViewerId] = useState<string | null>(null);
+  const viewerIndexRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const jobsRef = useRef<UploadJob[]>([]);
   const queueRunningRef = useRef(false);
@@ -221,7 +237,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
     queueRunningRef.current = false;
     setQueueBusy(false);
     actionCommandIdsRef.current.clear();
-    setMovePending(null); setRemovePending(null); setMoveTargets({});
+    setMovePending(null); setRemovePending(null); setMoveTargets({}); setViewerId(null);
     setBusyPhotoId(null);
     setSelectedSection("SPACE");
     jobEventRef.current = eventId;
@@ -272,6 +288,16 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
     setPhotoLimit(PHOTO_PAGE_SIZE);
     photoRevealRef.current = null;
   }
+
+  // After a move or remove the open photo leaves this section: show its
+  // neighbour in the same position, or close the viewer when none is left.
+  useEffect(() => {
+    if (!viewerId || state.kind !== "ready") return;
+    const list = state.photos.filter((photo) => photo.section === selectedSection);
+    if (list.some((photo) => photo.id === viewerId)) return;
+    const next = list[Math.min(viewerIndexRef.current, list.length - 1)];
+    setViewerId(next ? next.id : null);
+  }, [state, viewerId, selectedSection]);
 
   function revealMorePhotos() {
     photoRevealRef.current = photoLimit;
@@ -716,6 +742,25 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
     jobs: stagedJobs.filter((job) => job.section === section.key),
   })).filter((group) => group.jobs.length > 0);
   const selectedLabel = sectionLabel(selectedSection);
+  const fileHref = (photo: EvidencePhoto) => `/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(photo.image.fileId)}`;
+  const filledSections = sectionCounts.filter((section) => section.count > 0).length;
+  const emptySections = sectionCounts.filter((section) => section.count === 0);
+  const galleryItems: GalleryItem[] = selectedPhotos.map((photo, index) => ({
+    id: photo.id,
+    src: fileHref(photo),
+    label: `${sectionLabel(photo.section)} ${index + 1}번 사진 ${photo.image.name}`,
+    time: formatUploadedAt(photo.uploadedAt),
+    width: photo.image.width,
+    height: photo.image.height,
+  }));
+  const viewerIndex = viewerId ? selectedPhotos.findIndex((photo) => photo.id === viewerId) : -1;
+  const viewerPhoto = viewerIndex >= 0 ? selectedPhotos[viewerIndex] : null;
+  if (viewerIndex >= 0) viewerIndexRef.current = viewerIndex;
+  function openViewer(id: string) { setViewerId(id); }
+  function stepViewer(delta: number) {
+    const next = selectedPhotos[Math.min(Math.max(viewerIndex + delta, 0), selectedPhotos.length - 1)];
+    if (next) setViewerId(next.id);
+  }
   const hasUnresolvedJobs = historyJobs.some((job) => job.status !== "recorded");
 
   return (
@@ -724,6 +769,9 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
       eventId={eventId}
       eventName={state.eventName}
       meta={state.eventMeta}
+      headerActions={writeLocked ? undefined : (
+        <ProductButton type="button" variant="primary" disabled={queueBusy} aria-describedby="evidence-photo-file-guidance" onClick={() => fileInputRef.current?.click()}>사진 올리기</ProductButton>
+      )}
       feedback={
         <>
           {notice ? <ConsoleFeedback kind="success">{notice}</ConsoleFeedback> : null}
@@ -742,113 +790,86 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
         참가자 사진과 별도로 보관합니다.
       </p>
 
-      <ConsoleSection
-        headingId="evidence-photo-sections"
-        title="촬영 구간"
-      >
-        <div className={styles.categoryGrid} role="group" aria-label="현장 사진 구간 선택">
-          {sectionCounts.map((section) => {
-            const selected = section.key === selectedSection;
-            return (
-              <button
-                key={section.key}
-                type="button"
-                className={styles.categoryButton}
-                aria-pressed={selected}
-                onClick={() => selectSection(section.key)}
-              >
-                <span className={styles.categoryLabel}>{section.label}</span>
-                <span className={styles.categoryMeta}>{section.count}장</span>
-              </button>
-            );
-          })}
+      <section className={styles.coverage} aria-label="증빙 구간 현황">
+        <div className={styles.coverageNumber}><b>{state.photos.length}</b><span>장 · {EVIDENCE_SECTIONS.length}구간 중 {filledSections}구간</span></div>
+        <div className={styles.coverageBar} role="img" aria-label={`${EVIDENCE_SECTIONS.length}구간 중 ${filledSections}구간에 사진이 있습니다`}>
+          {sectionCounts.map((section) => <i key={section.key} data-filled={section.count > 0 || undefined} />)}
         </div>
-        <div className={styles.mobileCategoryPicker}>
-          <label className="sr-only" htmlFor="evidence-photo-section">현재 구간 선택</label>
-          <select
-            id="evidence-photo-section"
-            value={selectedSection}
-            onChange={(event) => {
-              if (isEvidenceSection(event.target.value)) selectSection(event.target.value);
-            }}
-          >
-            {sectionCounts.map((section) => (
-              <option key={section.key} value={section.key}>{section.label} · {section.count}장</option>
-            ))}
-          </select>
-        </div>
-      </ConsoleSection>
+        {emptySections.length ? <p className={styles.coverageNote}><b>{emptySections.map((section) => section.label).join(" · ")}</b> 구간이 비어 있습니다</p> : <p className={styles.coverageNote}>모든 구간에 사진이 있습니다</p>}
+      </section>
 
-      <ConsoleSection
-        headingId="evidence-photo-archive"
-        title={`${selectedLabel} 사진`}
-        description="ZIP 한도: 최대 1,000장 · 512MB"
-        action={selectedPhotos.length ? (
-          <a
-            className="product-action product-link" data-action-variant="secondary" data-native-control="download"
-            href={evidenceZipHref(eventId, selectedSection)}
-          >
-            <span className={styles.zipLong}>이 구간 ZIP 다운로드 ({selectedPhotos.length}장)</span>
-            <span className={styles.zipShort}>ZIP · {selectedPhotos.length}장</span>
-          </a>
-        ) : undefined}
+      <h2 className="sr-only" id="evidence-photo-sections">촬영 구간</h2>
+      <div className={styles.sectionTiles} role="group" aria-labelledby="evidence-photo-sections">
+        {sectionCounts.map((section) => {
+          const cover = state.photos.find((photo) => photo.section === section.key);
+          return (
+            <button
+              key={section.key}
+              type="button"
+              className={styles.sectionTile}
+              aria-pressed={section.key === selectedSection}
+              onClick={() => selectSection(section.key)}
+            >
+              <span className={styles.tileCover} data-empty={cover ? undefined : "true"}>
+                {cover ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={fileHref(cover)} alt="" loading="lazy" decoding="async" />
+                ) : <ImageGlyph />}
+              </span>
+              <span className={styles.tileName}>{section.label}</span>
+              <span className={styles.tileCount} data-empty={section.count === 0 || undefined}>{section.count === 0 ? "비어 있음" : `${section.count}장`}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div
+        className={styles.galleryArea}
+        role="group"
+        aria-label={`${selectedLabel} 사진 추가`}
+        onDragOver={(event) => {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          selectFiles(event.dataTransfer.files);
+        }}
       >
-        <div
-          className={styles.uploadArea}
-          role="group"
-          aria-label={`${selectedLabel} 사진 추가`}
-          onDragOver={(event) => {
-            event.preventDefault();
-            event.dataTransfer.dropEffect = "copy";
-          }}
-          onDrop={(event) => {
-            event.preventDefault();
-            selectFiles(event.dataTransfer.files);
-          }}
-        >
-          <div className={styles.uploadIcon} aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M4 15.5v3A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5v-3" />
-            </svg>
-          </div>
-          <div className={styles.uploadCopy}>
-            <p className={styles.uploadTitle}>
-              <span className={styles.uploadDesktopPrompt}>사진을 끌어 놓거나 파일을 선택하세요</span>
-              <span className={styles.uploadMobilePrompt}>사진 추가</span>
-            </p>
-            <p id="evidence-photo-file-guidance" className={styles.guidance}>
-              현재 구간 <strong>{selectedLabel}</strong>에 저장 · PNG, JPG, WebP · 장당 8MB 이하
-            </p>
-          </div>
-          <ProductButton
-            type="button"
-            variant="secondary"
-            disabled={queueBusy || writeLocked}
-            aria-describedby="evidence-photo-file-guidance"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            {stagedJobs.length ? "사진 더 선택" : "파일 찾아보기"}
-          </ProductButton>
-          <input
-            id="evidence-photo-files"
-            ref={fileInputRef}
-            className="sr-only"
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            multiple
-            disabled={queueBusy || writeLocked}
-            tabIndex={-1}
-            aria-hidden="true"
-            // The visible "파일 찾아보기" button is the single keyboard entry
-            // point; this input stays programmatic-only by design. The label
-            // below keeps it named for assistive tech instead of labelless.
-            aria-label="증빙 사진 파일 선택 (PNG, JPG, WebP)"
-            onChange={(event) => {
-              selectFiles(event.currentTarget.files);
-              event.currentTarget.value = "";
-            }}
-          />
+        <div className={styles.galleryHead}>
+          <h2 id="evidence-photo-archive">{selectedLabel}<small>{selectedPhotos.length}장</small></h2>
+          {selectedPhotos.length ? (
+            <a
+              className="product-action product-link" data-action-variant="ghost" data-native-control="download"
+              href={evidenceZipHref(eventId, selectedSection)}
+            >
+              <span className={styles.zipLong}>이 구간 ZIP 다운로드 ({selectedPhotos.length}장)</span>
+              <span className={styles.zipShort}>ZIP · {selectedPhotos.length}장</span>
+            </a>
+          ) : null}
         </div>
+        <p id="evidence-photo-file-guidance" className={styles.guidance}>
+          현재 구간 <strong>{selectedLabel}</strong>에 저장 · PNG, JPG, WebP · 장당 8MB 이하 · 사진을 끌어 놓아도 됩니다 · ZIP 한도: 최대 1,000장 · 512MB
+        </p>
+        <input
+          id="evidence-photo-files"
+          ref={fileInputRef}
+          className="sr-only"
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          multiple
+          disabled={queueBusy || writeLocked}
+          tabIndex={-1}
+          aria-hidden="true"
+          // The visible 사진 올리기 / 사진 추가 buttons are the keyboard entry
+          // points; this input stays programmatic-only by design. The label
+          // keeps it named for assistive tech instead of labelless.
+          aria-label="증빙 사진 파일 선택 (PNG, JPG, WebP)"
+          onChange={(event) => {
+            selectFiles(event.currentTarget.files);
+            event.currentTarget.value = "";
+          }}
+        />
 
         {stagedJobs.length ? (
           <section className={styles.previewArea} aria-labelledby="evidence-photo-preview-title">
@@ -968,113 +989,100 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
 
         {selectedPhotos.length ? (
           <>
-          <ul className={styles.photoGrid}>
-            {selectedPhotos.slice(0, photoLimit).map((photo) => {
-              const photoBusy = busyPhotoId === photo.id;
-              const selectedTarget = moveTargets[photo.id] ?? photo.section;
-              const uploadedAt = formatUploadedAt(photo.uploadedAt);
-              const originalHref = `/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(photo.image.fileId)}`;
-              return (
-                <li key={photo.id} id={`evidence-photo-${photo.id}`} tabIndex={-1} className={styles.photoItem}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    className={styles.thumbnail}
-                    src={originalHref}
-                    alt={`${sectionLabel(photo.section)} 현장 사진 파일: ${photo.image.name}`}
-                    loading="lazy"
-                  />
-                  <div className={styles.photoInfo}>
-                    <p className={styles.fileName} title={photo.image.name}>{photo.image.name}</p>
-                    <p className={styles.photoMeta}>
-                      {uploadedAt ? <time dateTime={photo.uploadedAt}>{uploadedAt}</time> : <span>등록 시각 미상</span>}
-                    </p>
-                    <a className={styles.originalLink} href={originalHref} download={photo.image.name || "현장사진"}>
-                      원본 다운로드
-                    </a>
-                  </div>
-                  <details className={styles.photoManage}>
-                    <summary>사진 관리</summary>
-                    <ValidatedForm
-                      className={styles.photoControls}
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        requestMovePhoto(photo, selectedTarget);
-                      }}
-                    >
-                      <label htmlFor={`move-photo-${photo.id}`}>보관 구간 변경</label>
-                      <div className={styles.moveRow}>
-                        <select
-                          id={`move-photo-${photo.id}`}
-                          value={selectedTarget}
-                          disabled={busyPhotoId !== null || writeLocked}
-                          onChange={(event) => {
-                            const value = event.target.value;
-                            if (isEvidenceSection(value)) {
-                              setMoveTargets((current) => ({ ...current, [photo.id]: value }));
-                            }
-                          }}
-                        >
-                          {EVIDENCE_SECTIONS.map((section) => (
-                            <option key={section.key} value={section.key}>{section.label}</option>
-                          ))}
-                        </select>
-                        <ProductButton
-                          type="submit"
-                          variant="secondary"
-                          disabled={photoBusy || busyPhotoId !== null || writeLocked || selectedTarget === photo.section}
-                        >
-                          {photoBusy ? "처리 중…" : "구간 변경"}
-                        </ProductButton>
-                      </div>
-                    </ValidatedForm>
-                    <button
-                      type="button"
-                      className={styles.removeButton}
-                      disabled={photoBusy || busyPhotoId !== null || writeLocked}
-                      onClick={() => requestRemovePhoto(photo)}
-                    >
-                      보관함에서 제외
-                    </button>
-                    {movePending && movePending.photo.id === photo.id ? (
-                      <ConsoleConfirm
-                        summary={`이 사진의 보관함 분류를 ${sectionLabel(movePending.photo.section)}에서 ${sectionLabel(movePending.nextSection)}${directionParticle(sectionLabel(movePending.nextSection))} 변경할까요?`}
-                        confirmLabel="구간 변경하기"
-                        busy={photoBusy}
-                        onConfirm={() => void confirmMovePhoto()}
-                        onCancel={() => setMovePending(null)}
-                      />
-                    ) : null}
-                    {removePending && removePending.id === photo.id ? (
-                      <ConsoleConfirm
-                        summary="이 사진을 보관함에서 제외할까요? 보관함 참조만 제거합니다. 원본 파일은 삭제되지 않고 기존 행사 파일 읽기 권한은 그대로 적용됩니다."
-                        confirmLabel="보관함에서 제외하기"
-                        busy={photoBusy}
-                        onConfirm={() => void confirmRemovePhoto()}
-                        onCancel={() => setRemovePending(null)}
-                      />
-                    ) : null}
-                  </details>
-                </li>
-              );
-            })}
-          </ul>
-          {selectedPhotos.length > photoLimit ? (
-            <p className={styles.moreRow}>
-              <ProductButton
-                type="button"
-                variant="secondary"
-                onClick={revealMorePhotos}
-              >
-                더 보기 ({selectedPhotos.length - photoLimit})
-              </ProductButton>
-            </p>
-          ) : null}
+            <EvidenceGallery
+              items={galleryItems.slice(0, photoLimit)}
+              onOpen={openViewer}
+              addSlot={writeLocked ? undefined : (
+                <button type="button" className={styles.addTile} disabled={queueBusy} aria-describedby="evidence-photo-file-guidance" onClick={() => fileInputRef.current?.click()}>
+                  <PlusGlyph />{stagedJobs.length ? "사진 더 선택" : "사진 추가"}
+                </button>
+              )}
+            />
+            {selectedPhotos.length > photoLimit ? (
+              <p className={styles.moreRow}>
+                <ProductButton type="button" variant="ghost" onClick={revealMorePhotos}>
+                  더 보기 ({selectedPhotos.length - photoLimit})
+                </ProductButton>
+              </p>
+            ) : null}
           </>
         ) : (
-          <p className={styles.empty}>이 구간에는 아직 등록된 사진이 없습니다. 위 업로드 영역에서 파일을 선택해 첫 사진을 올리세요.</p>
+          <p className={styles.empty}>이 구간에는 아직 등록된 사진이 없습니다. {writeLocked ? "" : "‘사진 올리기’로 첫 사진을 올리세요."}</p>
         )}
-      </ConsoleSection>
+      </div>
 
+      {viewerPhoto ? (
+        <ConsoleDialog title={`${sectionLabel(viewerPhoto.section)} · ${viewerIndex + 1} / ${selectedPhotos.length}`} titleId="evidence-photo-viewer-title" presentation="drawer" busy={busyPhotoId !== null} onClose={() => setViewerId(null)}>
+          <div className={styles.viewer} onKeyDown={(event) => {
+            const target = event.target as HTMLElement;
+            if (target.closest("select, input, textarea")) return;
+            if (event.key === "ArrowLeft") { event.preventDefault(); stepViewer(-1); }
+            if (event.key === "ArrowRight") { event.preventDefault(); stepViewer(1); }
+          }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className={styles.viewerImage} src={fileHref(viewerPhoto)} alt={`${sectionLabel(viewerPhoto.section)} 현장 사진 파일: ${viewerPhoto.image.name}`} />
+            <div className={styles.viewerNav}>
+              <ProductButton type="button" variant="ghost" disabled={viewerIndex <= 0} onClick={() => stepViewer(-1)}>이전 사진</ProductButton>
+              <ProductButton type="button" variant="ghost" disabled={viewerIndex >= selectedPhotos.length - 1} onClick={() => stepViewer(1)}>다음 사진</ProductButton>
+            </div>
+            <div className={styles.viewerInfo}>
+              <b title={viewerPhoto.image.name}>{viewerPhoto.image.name}</b>
+              <small>{formatUploadedAt(viewerPhoto.uploadedAt) ?? "등록 시각 미상"}</small>
+            </div>
+            <a className={styles.originalLink} href={fileHref(viewerPhoto)} download={viewerPhoto.image.name || "현장사진"}>원본 다운로드</a>
+            <ValidatedForm
+              className={styles.photoControls}
+              onSubmit={(event) => {
+                event.preventDefault();
+                requestMovePhoto(viewerPhoto, moveTargets[viewerPhoto.id] ?? viewerPhoto.section);
+              }}
+            >
+              <label htmlFor={`move-photo-${viewerPhoto.id}`}>보관 구간 변경</label>
+              <div className={styles.moveRow}>
+                <select
+                  id={`move-photo-${viewerPhoto.id}`}
+                  value={moveTargets[viewerPhoto.id] ?? viewerPhoto.section}
+                  disabled={busyPhotoId !== null || writeLocked}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    if (isEvidenceSection(value)) setMoveTargets((current) => ({ ...current, [viewerPhoto.id]: value }));
+                  }}
+                >
+                  {EVIDENCE_SECTIONS.map((section) => (
+                    <option key={section.key} value={section.key}>{section.label}</option>
+                  ))}
+                </select>
+                <ProductButton
+                  type="submit"
+                  variant="secondary"
+                  disabled={busyPhotoId !== null || writeLocked || (moveTargets[viewerPhoto.id] ?? viewerPhoto.section) === viewerPhoto.section}
+                >
+                  {busyPhotoId === viewerPhoto.id ? "처리 중…" : "구간 변경"}
+                </ProductButton>
+              </div>
+            </ValidatedForm>
+            <ProductButton type="button" variant="destructive" disabled={busyPhotoId !== null || writeLocked} onClick={() => requestRemovePhoto(viewerPhoto)}>보관함에서 제외</ProductButton>
+            {movePending && movePending.photo.id === viewerPhoto.id ? (
+              <ConsoleConfirm
+                summary={`이 사진의 보관함 분류를 ${sectionLabel(movePending.photo.section)}에서 ${sectionLabel(movePending.nextSection)}${directionParticle(sectionLabel(movePending.nextSection))} 변경할까요?`}
+                confirmLabel="구간 변경하기"
+                busy={busyPhotoId === viewerPhoto.id}
+                onConfirm={() => void confirmMovePhoto()}
+                onCancel={() => setMovePending(null)}
+              />
+            ) : null}
+            {removePending && removePending.id === viewerPhoto.id ? (
+              <ConsoleConfirm
+                summary="이 사진을 보관함에서 제외할까요? 보관함 참조만 제거합니다. 원본 파일은 삭제되지 않고 기존 행사 파일 읽기 권한은 그대로 적용됩니다."
+                confirmLabel="보관함에서 제외하기"
+                busy={busyPhotoId === viewerPhoto.id}
+                onConfirm={() => void confirmRemovePhoto()}
+                onCancel={() => setRemovePending(null)}
+              />
+            ) : null}
+          </div>
+        </ConsoleDialog>
+      ) : null}
     </ConsolePage>
   );
 }

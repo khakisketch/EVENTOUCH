@@ -230,6 +230,15 @@ The owner approved this composition on 2026-11-13 (`apps/web/app/console/events/
 - A whole row opens the detail dialog; a chevron replaces the "상세" text. Checkbox, "승인" and other inline buttons never trigger it. "승인" appears only on PENDING and WAITLIST rows.
 - Mobile rows are two lines: name, then company, group and presence. The phone number stays in the detail dialog.
 
+## 현장 사진 확정 구성
+
+The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/photos/`, option A with a Google-Photos-style gallery). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-photos-composition.test.cjs` guards it. This is the agency's own evidence archive (8 shooting sections, per-section ZIP), separate from attendee photos.
+
+- Top: total photos and an 8-segment coverage bar ("8구간 중 N구간") with the empty sections named in amber. Below it the 8 sections are tiles that show a cover photo (dashed with a "비어 있음" note when empty); one pressed tile group picks the section on every width (no mobile-only select).
+- The gallery is justified rows (`EvidenceGallery.tsx`, `planRows`): every row has the same height and every photo keeps its own ratio (no crop, no letterbox); the last row keeps the target height and a lone panorama is capped. Stored `width`/`height` lay the rows out first; phone portrait JPEGs are stored sideways with an EXIF rotation flag, so the ratio the browser really shows replaces the stored one when an image loads (a photo with no stored size holds a 4:3 slot). The server does not read EXIF orientation; fixing that at upload is a separate server change.
+- A photo is a button that opens a viewer drawer (`ConsoleDialog presentation="drawer"`): large photo, 이전/다음 (and arrow keys), file name and time, 원본 다운로드, 보관 구간 변경, 보관함에서 제외, each behind the existing confirmation. After a move or removal the viewer shows the neighbour or closes.
+- "사진 올리기" is the one orange action; "＋ 사진 추가" ends the gallery; dropping files anywhere on the gallery works. Upload preview, upload history and retry notices keep their existing places and rules.
+
 ## 경품 수령 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/rewards/`, option V1). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-rewards-composition.test.cjs` guards it. This is the operator oversight list (blocked prizes, missing recipients, uncertain outcomes); handing a prize to a person at the venue belongs to the staff exit desk.
