@@ -34,10 +34,11 @@ test("draw program target text names the check-in requirement", () => {
   assert.doesNotMatch(draws, /승인 입장 참가자 전체 대상/u);
 });
 
-test("reward list can isolate connection-only gifts", () => {
+test("reward list keeps connection-only gifts in 확인 필요 with their own pill", () => {
   const rewards = read("console/events/[id]/rewards/RewardsWorkspace.tsx");
-  assert.match(rewards, /rewardStatusFilter === "connection"[\s\S]{0,60}reward\.status !== "NEEDS_CONNECTION"/u);
-  assert.match(rewards, /<option value="connection">연결 필요<\/option>/u);
+  assert.match(rewards, /function bucketOf\(reward: Reward\): Bucket/u);
+  assert.match(rewards, /reward\.status === "NEEDS_CONNECTION" \? <span className=\{styles\.pill\} data-tone="info">/u);
+  assert.match(rewards, /연결 필요/u);
 });
 
 test("program draw box points at the quota draw screen and quiz grading names its rule", () => {

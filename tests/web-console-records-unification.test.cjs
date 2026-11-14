@@ -71,14 +71,14 @@ test('records pages share the ConsolePage frame with registry menu ids', () => {
 });
 
 test('toolbars separate filters, actions and conditional selection', () => {
-  for (const key of ['home', 'clients', 'team', 'participants', 'participantImport', 'rewards']) {
+  for (const key of ['home', 'clients', 'team', 'participants', 'participantImport']) {
     assert.match(read(PAGES[key]), /ConsoleToolbar/u, `${key} uses the shared toolbar`);
   }
-  // Rewards filters its loaded list locally (search + status bucket): no
-  // second fetch, no selection row, actions stay per-row.
+  // Rewards left the toolbar for summary tiles + underline tabs (oversight
+  // screen): it still filters its loaded list locally, with no selection row.
   const rewards = read(PAGES.rewards);
-  assert.match(rewards, /filters=\{/u, 'rewards filters the loaded list');
-  assert.doesNotMatch(rewards, /selection=\{/u, 'rewards has no selection row');
+  assert.doesNotMatch(rewards, /ConsoleToolbar|selection=\{/u, 'rewards has no toolbar and no selection row');
+  assert.match(rewards, /className=\{styles\.tabs\} role="group"/u, 'rewards filters through tabs');
   const participants = read(PAGES.participants);
   assert.match(participants, /filters=\{/u);
   assert.match(participants, /actions=\{/u);
@@ -226,9 +226,10 @@ test('draft guards register before early returns with workspace-owned dirty', ()
 });
 
 test('records use shared body patterns and keep domain specifics', () => {
-  for (const rel of [PAGES.clients, PAGES.team, PAGES.rewards, PAGES.participantImport]) {
+  for (const rel of [PAGES.clients, PAGES.team, PAGES.participantImport]) {
     assert.match(read(rel), /recordRow/u, `${rel} renders shared record rows`);
   }
+  assert.match(read(PAGES.rewards), /styles\.rowSummary/u, 'rewards render their own flat ledger rows');
   assert.match(read(PAGES.clients), /<h3>\{client\.name\}<\/h3>/u, 'client names keep their heading level');
   assert.match(read(PAGES.team), /headingId="pending-invites" title="대기 중인 초대"/u);
   assert.match(read(PAGES.team), /headingId="team-members" title="구성원"/u);
@@ -471,11 +472,11 @@ test('rewards desk filters its loaded list with search and status buckets', () =
   assert.match(desk, /참가자·소속·경품명·추첨명 검색/u);
   assert.match(desk, /id="reward-status-label"/u);
   assert.match(desk, /aria-labelledby="reward-status-label"/u);
-  for (const label of ['전체', '지급 대기·실패', '수령자 지정 대기', '수령 완료']) {
+  for (const label of ['전체', '확인 필요', '지급 대기', '수령 완료']) {
     assert.match(desk, new RegExp(label, 'u'), `status bucket: ${label}`);
   }
-  assert.match(desk, /reward\.status !== "READY" && reward\.status !== "FAILED"/u, 'action bucket is READY/FAILED');
-  assert.match(desk, /reward\.status !== "PENDING"/u, 'assignee bucket is PENDING');
+  assert.match(desk, /bucketOf\(reward\) !== "attention"/u, 'attention bucket is every blocked or unclear prize');
+  assert.match(desk, /bucketOf\(reward\) !== "waiting"/u, 'waiting bucket is clean READY prizes');
   assert.match(desk, /reward\.status !== "RECEIVED"/u, 'received bucket is RECEIVED');
   assert.match(desk, /participantName\} \$\{reward\.company\} \$\{reward\.name\} \$\{reward\.programTitle\}/u, 'search spans participant/company/name/draw');
   // Filtering is local: the visible list derives from the loaded rewards,

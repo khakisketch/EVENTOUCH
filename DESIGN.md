@@ -230,6 +230,15 @@ The owner approved this composition on 2026-11-13 (`apps/web/app/console/events/
 - A whole row opens the detail dialog; a chevron replaces the "상세" text. Checkbox, "승인" and other inline buttons never trigger it. "승인" appears only on PENDING and WAITLIST rows.
 - Mobile rows are two lines: name, then company, group and presence. The phone number stays in the detail dialog.
 
+## 경품 수령 확정 구성
+
+The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/rewards/`, option V1). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-rewards-composition.test.cjs` guards it. This is the operator oversight list (blocked prizes, missing recipients, uncertain outcomes); handing a prize to a person at the venue belongs to the staff exit desk.
+
+- One bordered summary card: a progress ring (지급 완료 / 취소 제외 전체) and three tinted status tiles (확인 필요 red, 지급 대기 amber, 수령 완료 green). Tiles filter the list; underline tabs with counts carry the same filter. Search appears only when there are more than 8 prizes or a query.
+- The ledger reads by urgency: 확인 필요 → 지급 대기 → 완료·취소. A row leads with the recipient's initial in a circle (a dashed "?" while a company win has no recipient); a small corner badge carries the state by shape (alert, clock, check, x). Reasons are icon pills (수령자 지정 필요, 참가 취소, 연결 필요, 지급 실패), the method is an icon.
+- 수령 처리 is an ink pill on clean 지급 대기 rows only; a blocked prize shows its reason and a soft link (추첨에서 수령자 지정, 참가자 명단에서 확인) instead. 경품 취소 sits in the expanded row, behind the existing confirmation.
+- The page title and rail label stay "경품 수령"; renaming it (for example 경품 지급 현황) is a separate decision.
+
 ## 추첨·투표 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/draws/`, "미리보기 무대"). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-draws-composition.test.cjs` guards it.
