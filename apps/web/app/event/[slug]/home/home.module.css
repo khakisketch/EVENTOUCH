@@ -387,7 +387,7 @@
   font-size: var(--small);
   font-weight: 800;
 }
-.noticeBody { margin: 0; color: var(--muted); font-size: var(--small); white-space: pre-wrap; }
+.noticeBody { margin: 0; color: var(--muted); font-size: var(--small); }
 
 /* Lucky number + roulette tabs: client reference yellow E-Ticket cards. */
 .luckyPanel { display: flex; flex-direction: column; gap: var(--s4); }

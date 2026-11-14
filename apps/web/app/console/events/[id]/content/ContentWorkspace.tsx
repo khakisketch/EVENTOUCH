@@ -14,12 +14,10 @@ import PublicationReview, { type PublicationChange, type PublicationDestination 
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
 import ConsoleFormActions from "../../../console-ui/ConsoleFormActions";
 import ConsolePage from "../../../console-ui/ConsolePage";
-import ConsoleSectionNav from "../../../console-ui/ConsoleSectionNav";
 import {
   formatConsoleEventMeta,
   type ConsoleEventMeta,
 } from "../../../console-ui/ConsolePageHeader";
-import ConsoleSection from "../../../console-ui/ConsoleSection";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import uiStyles from "../../../console-ui/console-ui.module.css";
 import styles from "./content.module.css";
@@ -28,6 +26,10 @@ import { abandonOperatorAttempt, acknowledgeOperatorReceipt, confirmsContentComm
 import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../lib/operator-receipts";
 import { useEventReceipts } from "../../../../../lib/use-event-receipts";
 import { normalizeHomeMenus } from "../../../../../lib/attendee-home-menus";
+import { normalizeHomeImage, normalizeHomeStyle } from "../../../../../lib/attendee-home";
+import RichEditor from "./RichEditor";
+import { richSummary } from "../../../../../lib/rich-text";
+import ContentPhonePreview, { type PreviewDesign, type PreviewNotice, type PreviewProgram, type PreviewScreen, type PreviewVenue } from "./ContentPhonePreview";
 import { canWriteEvent } from "../../../../../lib/event-capabilities";
 
 // Console authoring for notices, schedule programs, and venue guidance.
@@ -108,8 +110,10 @@ type WorkspaceState =
       venue: Venue & { draft: Venue; version: number };
       screenEnabled: boolean;
       display: { type: string; noticeId: string };
+      design: PreviewDesign;
     };
 
+type ContentTab = "notice" | "program" | "venue";
 type Failure = { message: string; field: string | null };
 type PublicationKind = "notice" | "program" | "venue";
 type PublicationDestinations = { slug: string; public: boolean; home?: boolean; screen?: "off" | "available" | "selected" };
@@ -123,6 +127,17 @@ function publicationDestinations(state: ReadyWorkspace, kind: PublicationKind, i
   }
   return { slug: state.slug, public: kind === "program" ? state.publishedPage.showPrograms !== false
     : state.features.includes("venue") && state.publishedPage.showVenue !== false };
+}
+
+// The display reference survives unpublishing (saveNotice never clears it)
+// and the board only shows published notices, so a bare "출력 중" would
+// falsely claim output. Name the actual state; no live polling — the
+// bootstrap value is the truth for this screen.
+function noticeDisplayLabel(state: ReadyWorkspace, item: Notice): string {
+  if (!(state.display.type === "notice" && state.display.noticeId === item.id)) return "";
+  if (!state.screenEnabled) return "전광판 선택됨 · 기능 꺼짐";
+  if (!item.published) return "전광판 선택됨 · 비공개로 출력되지 않음";
+  return "전광판 출력으로 선택됨";
 }
 
 function samePublicationDestinations(left: PublicationDestinations, right: PublicationDestinations): boolean {
@@ -299,6 +314,51 @@ function sameVenueText(left: Venue, right: Venue): boolean {
   return (["name", "address", "directions", "contact", "description"] as const).every(key => left[key] === right[key]);
 }
 
+function CrumbChevron() {
+  return <svg className={styles.crumbIcon} viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M14.5 6.5 9 12l5.5 5.5" /></svg>;
+}
+
+// One flat ledger row for every content type: a state dot, the title with a
+// one-line summary, and quiet meta on the right. The row itself opens the
+// editor; there are no per-row buttons. Status is spoken as text, the dot is
+// decoration (green published, amber edited draft, hollow private).
+function LedgerRow({ status, statusLabel, title, summary, pinned = false, attachment = false, note = "", onOpen, disabled, disabledReason }: {
+  status: "live" | "edit" | "off";
+  statusLabel: string;
+  title: string;
+  summary: string;
+  pinned?: boolean;
+  attachment?: boolean;
+  note?: string;
+  onOpen?: () => void;
+  disabled: boolean;
+  disabledReason?: string;
+}) {
+  const body = (
+    <>
+      <span className={styles.dot} data-status={status} aria-hidden="true" />
+      <span className={styles.rowText}>
+        <span className={styles.rowTitle}>{title || "제목 없음"}</span>
+        {summary || note ? <span className={styles.rowSummary}>{[note, summary].filter(Boolean).join(" · ")}</span> : null}
+      </span>
+      <span className={styles.rowMeta}>
+        {pinned ? <span className={styles.rowFlag}>★ 고정</span> : null}
+        {attachment ? <span className={styles.rowFlag}>PDF</span> : null}
+        <span className={styles.rowStatus} data-status={status}>{statusLabel}</span>
+      </span>
+    </>
+  );
+  return (
+    <li className={styles.ledgerItem}>
+      {onOpen ? (
+        <button type="button" className={styles.ledgerRow} disabled={disabled} title={disabled ? disabledReason : undefined} onClick={onOpen}>{body}</button>
+      ) : (
+        <div className={styles.ledgerRow}>{body}</div>
+      )}
+    </li>
+  );
+}
+
 class CommandFailure extends Error {
   field: string | null;
 
@@ -314,6 +374,12 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // Which authoring tab is open and which attendee screen the phone shows.
+  // Switching tabs moves the phone to the matching screen; the phone's own
+  // tabs can still look at any other screen without leaving the editor.
+  const [tab, setTab] = useState<ContentTab>("notice");
+  const [previewScreen, setPreviewScreen] = useState<PreviewScreen>("notice");
+  const [previewStageOpen, setPreviewStageOpen] = useState(false);
 
   const [noticeDialogOpen, setNoticeDialogOpen] = useState(false);
   const [noticeDraft, setNoticeDraft] = useState<NoticeDraft>(EMPTY_NOTICE_DRAFT);
@@ -476,6 +542,22 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
         type: typeof displayRecord?.type === "string" ? String(displayRecord.type) : "idle",
         noticeId: typeof displayRecord?.noticeId === "string" ? String(displayRecord.noticeId) : "",
       };
+      const pageExperience = asRecord(workspace.pageExperience);
+      const publishedDesign = asRecord(pageExperience?.published) ?? {};
+      const branding = asRecord(workspace.branding) ?? {};
+      const keyvisual = normalizeHomeImage(Object.hasOwn(publishedDesign, "keyvisual") ? publishedDesign.keyvisual : branding.keyvisual);
+      // The phone previews the published 참가자 페이지 design; the same
+      // normalizers and visibility rules the public pages use.
+      const design: PreviewDesign = {
+        homeStyle: normalizeHomeStyle(publishedDesign.homeStyle),
+        homeMenus: normalizeHomeMenus(publishedDesign.homeMenus),
+        keyvisualUrl: keyvisual?.fileId ? `/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(keyvisual.fileId)}` : keyvisual?.data || null,
+        defaultHomeBanner: workspace.defaultHomeBanner === "neutral" ? "neutral" : "legacy",
+        intro: text(publishedDesign.intro) || text(branding.tagline) || "참가에 필요한 안내를 확인하세요.",
+        showAnnouncements: publishedDesign.showAnnouncements !== false,
+        showPrograms: publishedDesign.showPrograms !== false,
+        showVenue: publishedDesign.showVenue !== false && features.includes("venue"),
+      };
       const client = Array.isArray(bootstrap.clients)
         ? bootstrap.clients.map(asRecord).find((item) => item?.id === event.clientId)
         : undefined;
@@ -501,6 +583,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
         venue,
         screenEnabled: features.includes("screen"),
         display,
+        design,
       });
       // An accepted canonical refresh invalidates a pending output intent: a
       // notice edited or unpublished-then-republished underneath would
@@ -597,6 +680,53 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
       ? "저장 또는 업로드가 이미 처리됐을 수 있습니다. 화면을 떠나면 원래 입력과 파일은 복원되지 않습니다."
       : "작성 중인 콘텐츠나 저장하지 않은 장소 안내가 있습니다. 페이지를 떠나면 사라집니다."
   );
+
+  // A clean open editor follows the saved record: a publish or a refresh
+  // moves the item's version, and the next save must carry the new one. A
+  // dirty editor is never overwritten.
+  useEffect(() => {
+    if (state.kind !== "ready" || !noticeDialogOpen || !noticeDraft.id || noticeDialogDirty) return;
+    const item = state.notices.find((entry) => entry.id === noticeDraft.id);
+    if (!item || (item.version === noticeDraft.version && item.published === noticeDraft.published)) return;
+    const snapshot = { id: item.id, ...item.draft, version: item.version, published: item.published };
+    noticeInitialRef.current = snapshot;
+    setNoticeDraft(snapshot);
+  }, [state, noticeDialogOpen, noticeDraft, noticeDialogDirty]);
+  useEffect(() => {
+    if (state.kind !== "ready" || !programDialogOpen || !programDraft.id || programDialogDirty) return;
+    const item = state.program.find((entry) => entry.id === programDraft.id);
+    if (!item || (item.version === programDraft.version && item.published === programDraft.published)) return;
+    const snapshot = { id: item.id, ...item.draft, version: item.version, published: item.published, attachmentDirty: false };
+    programInitialRef.current = snapshot;
+    setProgramDraft(snapshot);
+  }, [state, programDialogOpen, programDraft, programDialogDirty]);
+
+  // Settings and other screens deep-link to the old section anchors
+  // (#content-notices / #content-program / #content-venue); they now pick the
+  // matching tab, on load and when the hash changes.
+  useEffect(() => {
+    const fromHash = () => {
+      const target = ({ "#content-notices": "notice", "#content-program": "program", "#content-venue": "venue" } as Record<string, ContentTab>)[window.location.hash];
+      if (target) { setTab(target); setPreviewScreen(target); }
+    };
+    fromHash();
+    window.addEventListener("hashchange", fromHash);
+    return () => window.removeEventListener("hashchange", fromHash);
+  }, []);
+
+  // Opening an editor moves focus to its first field; closing hands it back
+  // to the tab it came from, so keyboard users never land on <body>.
+  const editorOpenRef = useRef({ notice: false, program: false });
+  useEffect(() => {
+    const was = editorOpenRef.current;
+    const frame = window.requestAnimationFrame(() => {
+      if (noticeDialogOpen && !was.notice) document.getElementById("content-notice-title")?.focus();
+      if (programDialogOpen && !was.program) document.getElementById("content-program-title")?.focus();
+      if ((was.notice && !noticeDialogOpen) || (was.program && !programDialogOpen)) document.getElementById(was.notice && !noticeDialogOpen ? "content-tab-notice" : "content-tab-program")?.focus();
+      editorOpenRef.current = { notice: noticeDialogOpen, program: programDialogOpen };
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [noticeDialogOpen, programDialogOpen]);
 
   async function postCommand(command: string, payload: Record<string, unknown>, validate?: (data: Record<string, unknown> | null) => boolean, origin: ContentAttempt["origin"] = "row"): Promise<Record<string, unknown>> {
     if (archived) {
@@ -722,9 +852,33 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
     return window.confirm("작성 중인 내용이 사라집니다. 닫을까요?");
   }
 
+  // A picture for the notice body: the same stored-file upload the other
+  // authoring screens use. One command id per picture; a lost response only
+  // leaves an unused file, never a half-saved notice.
+  async function uploadNoticeImage(file: File): Promise<{ fileId: string; name: string }> {
+    let res: Response;
+    try {
+      res = await consoleFetch(
+        `/api/events/${encodeURIComponent(eventId)}/files?name=${encodeURIComponent(file.name)}&commandId=${encodeURIComponent(randomCommandId())}`,
+        { method: "POST", headers: { "content-type": file.type }, body: file },
+      );
+    } catch (error) {
+      throw new Error(isOrganizationContextBlock(error) ? "현재 조직을 확인한 뒤 다시 시도하세요." : "이미지를 올리지 못했습니다. 연결을 확인하세요.");
+    }
+    const data = (await res.json().catch(() => null)) as { file?: { fileId?: unknown; name?: unknown }; error?: unknown } | null;
+    const fileId = typeof data?.file?.fileId === "string" ? data.file.fileId : "";
+    if (!res.ok || !/^[A-Za-z0-9_-]{1,160}$/.test(fileId)) {
+      throw new Error(res.ok || typeof data?.error !== "string" ? "이미지 업로드 결과를 확인하지 못했습니다. 다시 시도하세요." : data.error);
+    }
+    return { fileId, name: typeof data?.file?.name === "string" ? data.file.name : file.name };
+  }
+
   async function saveNotice(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setNoticeDialogFailure(null);
+    // The rich editor is not a native field, so its limits are checked here.
+    if (!noticeDraft.body.trim()) { setNoticeDialogFailure({ message: "공지 내용을 입력하세요", field: "body" }); return; }
+    if (noticeDraft.body.length > NOTICE_BODY_MAX) { setNoticeDialogFailure({ message: `내용은 ${NOTICE_BODY_MAX}자까지 쓸 수 있습니다. 서식과 이미지도 글자 수에 포함됩니다.`, field: "body" }); return; }
     setNoticeDialogBusy(true);
     try {
       const payload: Record<string, unknown> = {
@@ -735,8 +889,18 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
         pinned: noticeDraft.pinned,
       };
       if (noticeDraft.id) payload.id = noticeDraft.id;
-      await postCommand("notice.save", payload, undefined, "notice");
-      setNoticeDialogOpen(false);
+      const data = await postCommand("notice.save", payload, undefined, "notice");
+      // The editor stays open on the saved item so 게시 검토 is one tap away;
+      // its snapshot moves to the server's new version so the next save
+      // carries the right expectedVersion.
+      const saved = parseNotice(data.notice);
+      if (saved) {
+        const snapshot = { id: saved.id, ...saved.draft, version: saved.version, published: saved.published };
+        noticeInitialRef.current = snapshot;
+        setNoticeDraft(snapshot);
+      } else {
+        setNoticeDialogOpen(false);
+      }
       setNotice("공지 초안을 저장했습니다. 게시 검토 후 참가자 화면에 반영할 수 있습니다.");
       setFailure(null);
     } catch (error) {
@@ -760,6 +924,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
     setFailure(null);
     try {
       await postCommand("notice.delete", { id: item.id });
+      if (noticeDraft.id === item.id) setNoticeDialogOpen(false);
       setNotice("공지를 삭제했습니다.");
       await load(true);
     } catch (error) {
@@ -932,8 +1097,15 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
           ? { fileId: programDraft.attachment.fileId }
           : null;
       }
-      await postCommand("program.save", payload, undefined, "program");
-      setProgramDialogOpen(false);
+      const data = await postCommand("program.save", payload, undefined, "program");
+      const saved = parseProgram(data.program);
+      if (saved) {
+        const snapshot = { id: saved.id, ...saved.draft, version: saved.version, published: saved.published, attachmentDirty: false };
+        programInitialRef.current = snapshot;
+        setProgramDraft(snapshot);
+      } else {
+        setProgramDialogOpen(false);
+      }
       setNotice("일정 초안을 저장했습니다. 게시 검토 후 참가자 화면에 반영할 수 있습니다.");
       setFailure(null);
     } catch (error) {
@@ -956,6 +1128,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
     setFailure(null);
     try {
       await postCommand("program.delete", { id: item.id });
+      if (programDraft.id === item.id) setProgramDialogOpen(false);
       setNotice("일정을 삭제했습니다.");
       await load(true);
     } catch (error) {
@@ -1334,30 +1507,96 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
   const canWritePrograms = canWriteEvent(capabilities, "program.save");
   const canOutputNotice = state.screenEnabled && canWritePrograms && !archived;
 
+  const gated = busy !== null || archived || Boolean(pendingContent) || otherContentReceipt;
+  const designHref = `/console/events/${encodeURIComponent(eventId)}/page`;
+  const fileUrl = (file: Attachment | null | undefined) => file ? `/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(file.fileId)}` : null;
+  const programMeta = (value: { date: string; start: string; end: string; place: string }) =>
+    [value.date, value.start && value.end ? `${value.start} ~ ${value.end}` : value.start, value.place].filter(Boolean).join(" · ");
+
+  // Phone content: what attendees see now (published items) plus the one
+  // item being edited, drawn from its live draft and outlined.
+  const editingNotice = noticeDialogOpen && noticeDraft.id ? state.notices.find((item) => item.id === noticeDraft.id) : undefined;
+  const editingProgram = programDialogOpen && programDraft.id ? state.program.find((item) => item.id === programDraft.id) : undefined;
+  const previewNotices: PreviewNotice[] = [
+    ...state.notices.flatMap((item): PreviewNotice[] => {
+      if (noticeDialogOpen && noticeDraft.id === item.id) {
+        return [{ id: item.id, title: noticeDraft.title, body: noticeDraft.body, pinned: noticeDraft.pinned, editing: true, unpublished: !item.published }];
+      }
+      return item.published ? [{ id: item.id, title: item.title, body: item.body, pinned: item.pinned, editing: false, unpublished: false }] : [];
+    }),
+    ...(noticeDialogOpen && !noticeDraft.id ? [{ id: "", title: noticeDraft.title, body: noticeDraft.body, pinned: noticeDraft.pinned, editing: true, unpublished: true }] : []),
+  ].sort((left, right) => Number(right.pinned) - Number(left.pinned));
+  const previewPrograms: PreviewProgram[] = [
+    ...state.program.flatMap((item): PreviewProgram[] => {
+      if (programDialogOpen && programDraft.id === item.id) {
+        return [{ id: item.id, title: programDraft.title, meta: programMeta(programDraft), description: programDraft.description, editing: true, unpublished: !item.published }];
+      }
+      return item.published ? [{ id: item.id, title: item.title, meta: programMeta(item), description: item.description, editing: false, unpublished: false }] : [];
+    }),
+    ...(programDialogOpen && !programDraft.id ? [{ id: "", title: programDraft.title, meta: programMeta(programDraft), description: programDraft.description, editing: true, unpublished: true }] : []),
+  ];
+  const venueEditing = venueDraft !== null && (venueDirty || Boolean(venueFile));
+  const venueShown = venueEditing && venueDraft ? venueDraft : state.venue;
+  const previewVenue: PreviewVenue = {
+    name: venueShown.name, address: venueShown.address, directions: venueShown.directions, contact: venueShown.contact, description: venueShown.description,
+    mapUrl: venueEditing ? (venuePreview || fileUrl(venueShown.map?.image)) : fileUrl(state.venue.map?.image),
+    mapAlt: venueShown.map?.alt ?? "", editing: venueEditing,
+  };
+  const renderPhone = (mode: "rail" | "stage") => (
+    <ContentPhonePreview
+      eventName={state.eventName}
+      screen={previewScreen}
+      onScreen={setPreviewScreen}
+      design={state.design}
+      notices={previewNotices}
+      programs={previewPrograms}
+      venue={previewVenue}
+      designHref={designHref}
+      imageSrc={(fileId) => `/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(fileId)}`}
+      mode={mode}
+      onExpand={mode === "rail" ? () => setPreviewStageOpen(true) : undefined}
+      onClose={mode === "stage" ? () => setPreviewStageOpen(false) : undefined}
+    />
+  );
+
+  const tabs: Array<{ id: ContentTab; label: string; count?: number }> = [
+    { id: "notice", label: "공지", count: state.notices.length },
+    { id: "program", label: "일정", count: state.program.length },
+    { id: "venue", label: "장소 안내" },
+  ];
+  const activeTab = tab;
+  function selectTab(next: ContentTab) {
+    // Pressing the open tab again is the way back from its editor.
+    if (next === activeTab) {
+      if (next === "notice" && noticeDialogOpen) closeNoticeEditor();
+      if (next === "program" && programDialogOpen) closeProgramEditor();
+      return;
+    }
+    setTab(next);
+    setPreviewScreen(next);
+  }
+  function closeNoticeEditor() { if (canCloseNoticeDialog()) setNoticeDialogOpen(false); }
+  function closeProgramEditor() { if (canCloseProgramDialog()) setProgramDialogOpen(false); }
+
+  // Header primary: the one orange action of the open tab, hidden while that
+  // tab's editor is open (the editor carries its own primary).
+  const headerAdd = activeTab === "notice" && canWritePage && !noticeDialogOpen ? (
+    <ProductButton type="button" variant="primary" disabled={archived || Boolean(pendingContent) || otherContentReceipt} title={archived ? archivedReason : undefined} onClick={openNoticeCreate}>공지 작성</ProductButton>
+  ) : activeTab === "program" && canWritePrograms && !programDialogOpen ? (
+    <ProductButton type="button" variant="primary" disabled={archived || Boolean(pendingContent) || otherContentReceipt} title={archived ? archivedReason : undefined} onClick={openProgramCreate}>일정 추가</ProductButton>
+  ) : undefined;
+
+  const noticeDirty = noticeDialogDirty;
+  const programDirty = programDialogDirty;
+  const displayNote = editingNotice ? noticeDisplayLabel(state, editingNotice) : "";
+
   return (
     <ConsolePage
       pageId="content"
       eventId={eventId}
       eventName={state.eventName}
       meta={formatConsoleEventMeta(state.eventMeta)}
-      headerActions={(
-        <ProductLink variant="secondary" href={`/console/events/${encodeURIComponent(eventId)}/settings`}>
-          행사 설정
-        </ProductLink>
-      )}
-      sectionNav={(
-        <div className={styles.navIndex}>
-          <p className={styles.navIndexLabel} aria-hidden="true">콘텐츠 작업</p>
-          <ConsoleSectionNav mode="tabs"
-            label="콘텐츠 구역"
-            items={[
-              ...(canWritePage ? [{ id: "content-notices", label: "공지" }] : []),
-              ...(canWritePrograms ? [{ id: "content-program", label: "프로그램 일정" }] : []),
-              ...(canWritePage ? [{ id: "content-venue", label: "장소 안내" }] : []),
-            ]}
-          />
-        </div>
-      )}
+      headerActions={headerAdd}
       feedback={(
         <>
           {archived ? (
@@ -1384,615 +1623,516 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
           {!canWritePrograms ? (
             <ConsoleFeedback kind="warning">프로그램 일정 변경은 참여 콘텐츠 쓰기 권한이 필요합니다. 일정 목록은 볼 수 있으며, 필요하면 담당 행사 운영자에게 요청하세요.</ConsoleFeedback>
           ) : null}
-          <ConsoleSection
-            headingId="content-notices"
-            title="공지"
-            description="초안을 저장하고 게시 검토를 거쳐 반영합니다. 게시 전까지 현재 내용이 유지됩니다."
-            action={canWritePage ? (
-              <ProductButton
-                type="button"
-                variant={state.notices.length ? "secondary" : "primary"}
-                disabled={archived || Boolean(pendingContent) || otherContentReceipt}
-                title={archived ? archivedReason : undefined}
-                onClick={openNoticeCreate}
-              >
-                공지 작성
-              </ProductButton>
-            ) : undefined}
-          >
-            {state.notices.length ? (
-              <ul className={uiStyles.collection}>
-                {state.notices.map((item) => {
-                  const onDisplay = state.display.type === "notice" && state.display.noticeId === item.id;
-                  // The display reference survives unpublishing (saveNotice
-                  // never clears it) and the board only shows published
-                  // notices, so a bare "출력 중" would falsely claim output.
-                  // Name the actual state: selected + published + screen on
-                  // means chosen for output; a stale selection says why it
-                  // no longer reaches the screen. No live polling — the
-                  // bootstrap value is the truth for this screen.
-                  const displayBadge = !onDisplay
-                    ? null
-                    : !state.screenEnabled
-                      ? { text: "전광판 선택됨 · 기능 꺼짐", live: false }
-                      : !item.published
-                        ? { text: "전광판 선택됨 · 비공개로 출력되지 않음", live: false }
-                        : { text: "전광판 출력으로 선택됨", live: true };
-                  const canOutput = canOutputNotice && item.published;
-                  return (
-                  <li key={item.id} className={`${uiStyles.recordRow} ${styles.recordRow} ${styles.stackedRow}`}>
-                    <div className={uiStyles.recordMain}>
-                      <h3 className={styles.recordTitle}>
-                        {item.draft.title}
-                      </h3>
-                      <p className={`${uiStyles.recordMeta} ${styles.badgeRow}`}>
-                        <span className={`${styles.badge} ${item.published ? styles.badgeOn : styles.badgeOff}`}>
-                          {item.published ? "게시 중" : "비공개"}
-                        </span>
-                        {item.published && hasChanges(noticeChanges(item)) ? <span className={styles.badge}>수정 초안 있음</span> : null}
-                        {item.pinned ? <span className={styles.badge}>고정됨</span> : null}                        {displayBadge ? (
-                          <span className={`${styles.badge} ${displayBadge.live ? styles.badgeOn : ""}`}>
-                            {displayBadge.text}
-                          </span>
-                        ) : null}
-                      </p>
-                      {item.draft.body ? <p className={`${styles.body} preserve-lines`}>{item.draft.body}</p> : null}
-                    </div>
-                    {canWritePage ? (
-                    <div className={`${uiStyles.recordActions} ${styles.compactActions}`}>
-                      <ProductButton
-                        type="button"
-                        variant="secondary"
-                        disabled={busy !== null || archived || Boolean(pendingContent) || otherContentReceipt}
-                        title={archived ? archivedReason : undefined}
-                        onClick={() => openNoticeEdit(item)}
-                      >
-                        편집
-                      </ProductButton>
-                      <ProductButton
-                        type="button"
-                        variant="secondary"
-                        disabled={busy !== null || archived || Boolean(pendingContent) || otherContentReceipt}
-                        title={archived ? archivedReason : undefined}
-                        onClick={() => openPublication("notice", item.id, item.version, true)}
-                      >
-                        게시 검토
-                      </ProductButton>
-                      {item.published ? <ProductButton type="button" variant="secondary" disabled={busy !== null || archived || Boolean(pendingContent) || otherContentReceipt} onClick={() => openPublication("notice", item.id, item.version, false)}>게시 내리기</ProductButton> : null}
-                      {canOutput ? (
-                        <>
-                        <span className={styles.actionSeparator} aria-hidden="true" />
-                        <ProductButton
-                          type="button"
-                          variant="secondary"
-                          disabled={busy !== null || archived || Boolean(pendingContent) || otherContentReceipt}
-                          title={archived ? archivedReason : undefined}
-                          onClick={() => requestNoticeDisplay(item)}
-                        >
-                          {busy === `notice-display:${item.id}` ? "처리 중…" : "전광판 출력"}
-                        </ProductButton>
-                        </>
-                      ) : null}
-                      <span className={styles.actionSeparator} aria-hidden="true" />
-                      <ProductButton
-                        type="button"
-                        className={styles.dangerGhost} variant="destructive"
-                        disabled={busy !== null || archived || Boolean(pendingContent) || otherContentReceipt}
-                        title={archived ? archivedReason : undefined}
-                        onClick={() => requestNoticeDelete(item)}
-                      >
-                        삭제
-                      </ProductButton>
-                    </div>
-                    ) : null}
-                    {noticeDisplayPendingId === item.id && canOutput && noticeDeletePendingId !== item.id ? (
-                      <ConsoleConfirm
-                        summary={`“${item.title}” 공지를 행사장 전광판에 출력할까요? 참가자 화면과 같은 내용이 외부 화면에 나옵니다.`}
-                        confirmLabel="전광판 출력"
-                        busy={busy !== null}
-                        onConfirm={() => void applyNoticeDisplay(item)}
-                        onCancel={() => setNoticeDisplayPendingId(null)}
-                      />
-                    ) : null}
-                    {noticeDeletePendingId === item.id && noticeDisplayPendingId !== item.id ? (
-                      <ConsoleConfirm
-                        summary={`“${item.title}” 공지를 삭제할까요?`}
-                        confirmLabel="삭제한다"
-                        confirmClassName="button button-danger"
-                        busy={busy !== null}
-                        onConfirm={() => void deleteNotice(item)}
-                        onCancel={() => setNoticeDeletePendingId(null)}
-                      />
-                    ) : null}
-                  </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <p className={styles.empty}>등록된 공지가 없습니다.{canWritePage ? " 위 ‘공지 작성’으로 첫 공지를 작성하세요." : ""}</p>
-            )}
-          </ConsoleSection>
-
-          {/* Supporting work shares one row on desktop: 일정 (wider ledger)
-              beside 장소 안내 (narrower form), DOM order stacked on phones.
-              Section anchors, order, gates and commands are unchanged. */}
-          <div className={styles.supportGrid}>
-          <ConsoleSection
-            headingId="content-program"
-            title="프로그램 일정"
-            description="초안을 저장한 뒤 게시하세요. 게시된 일정은 날짜·시작 시간 순으로 보입니다."
-            action={canWritePrograms ? (
-              <ProductButton
-                type="button"
-                variant="secondary"
-                disabled={archived || Boolean(pendingContent) || otherContentReceipt}
-                title={archived ? archivedReason : undefined}
-                onClick={() => openProgramCreate()}
-              >
-                일정 추가
-              </ProductButton>
-            ) : undefined}
-          >
-            {state.program.length ? (
-              <ul className={uiStyles.collection}>
-                {state.program.map((item) => (
-                  <li key={item.id} className={`${uiStyles.recordRow} ${styles.recordRow}`}>
-                    <div className={uiStyles.recordMain}>
-                      <h3 className={styles.recordTitle}>{item.draft.title}</h3>
-                      <p className={`${uiStyles.recordMeta} ${styles.badgeRow}`}>
-                        <span className={`${styles.badge} ${item.published ? styles.badgeOn : styles.badgeOff}`}>
-                          {item.published ? "게시 중" : "비공개"}
-                        </span>
-                        {item.published && hasChanges(programChanges(item)) ? <span className={styles.badge}>수정 초안 있음</span> : null}
-                        <span>
-                          {[item.draft.date, item.draft.start && item.draft.end ? `${item.draft.start} ~ ${item.draft.end}` : item.draft.start, item.draft.place]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </span>
-                      </p>
-                      {item.draft.description ? <p className={styles.body}>{item.draft.description}</p> : null}
-                      {item.draft.attachment ? (
-                        <p className={styles.attachment}>
-                          첨부:{" "}
-                          <ProductLink href={`/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(item.draft.attachment.fileId)}`}>
-                            {item.draft.attachment.name || "일정 자료(PDF)"}
-                          </ProductLink>
-                        </p>
-                      ) : null}
-                    </div>
-                    {canWritePrograms ? (
-                    <div className={`${uiStyles.recordActions} ${styles.compactActions}`}>
-                      <ProductButton
-                        type="button"
-                        variant="secondary"
-                        disabled={busy !== null || archived || Boolean(pendingContent) || otherContentReceipt}
-                        title={archived ? archivedReason : undefined}
-                        onClick={() => openProgramEdit(item)}
-                      >
-                        편집
-                      </ProductButton>
-                      <ProductButton
-                        type="button"
-                        variant="secondary"
-                        disabled={busy !== null || archived || Boolean(pendingContent) || otherContentReceipt}
-                        title={archived ? archivedReason : undefined}
-                        onClick={() => openPublication("program", item.id, item.version, true)}
-                      >
-                        게시 검토
-                      </ProductButton>
-                      {item.published ? <ProductButton type="button" variant="secondary" disabled={busy !== null || archived || Boolean(pendingContent) || otherContentReceipt} onClick={() => openPublication("program", item.id, item.version, false)}>게시 내리기</ProductButton> : null}
-                      <span className={styles.actionSeparator} aria-hidden="true" />
-                      <ProductButton
-                        type="button"
-                        className={styles.dangerGhost} variant="destructive"
-                        disabled={busy !== null || archived || Boolean(pendingContent) || otherContentReceipt}
-                        title={archived ? archivedReason : undefined}
-                        onClick={() => requestProgramDelete(item)}
-                      >
-                        삭제
-                      </ProductButton>
-                    </div>
-                    ) : null}
-                    {programDeletePendingId === item.id ? (
-                      <ConsoleConfirm
-                        summary={`“${item.title}” 일정을 삭제할까요?`}
-                        confirmLabel="삭제한다"
-                        confirmClassName="button button-danger"
-                        busy={busy !== null}
-                        onConfirm={() => void deleteProgram(item)}
-                        onCancel={() => setProgramDeletePendingId(null)}
-                      />
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className={styles.empty}>등록된 일정이 없습니다.{canWritePrograms ? " 위 ‘일정 추가’로 첫 일정을 추가하세요." : ""}</p>
-            )}
-          </ConsoleSection>
-
-          <ConsoleSection headingId="content-venue" title="장소 안내" width="form" description={venueDirty || venueFile ? "작성 중입니다. 초안을 저장하면 게시 검토를 진행할 수 있습니다." : hasChanges(venueChanges(state.venue)) ? "저장한 초안이 있습니다. 게시 전까지 기존 장소 안내가 유지됩니다." : "게시된 장소 안내와 저장한 초안이 같습니다."}>
-            {!venueFeatureOn ? (
-              <p className={styles.featureOff} role="note">
-                장소 안내 기능이 꺼져 있습니다.{" "}
-                <ProductLink href={`/console/events/${encodeURIComponent(eventId)}/settings`}>행사 설정</ProductLink>에서
-                기능을 먼저 켜세요. 켜기 전에는 저장이 반영되지 않습니다.
-              </p>
-            ) : null}
-            {venueDraft && canWritePage ? (
-              <ValidatedForm className={uiStyles.formStack} onSubmit={(event) => void saveVenue(event)}>
-                <fieldset className={styles.draftFields} disabled={Boolean(pendingContent) || checkingContent || busy !== null}><legend className="sr-only">장소 안내 초안</legend>
-                <div className={styles.fieldGroup}>
-                  <h3 className={styles.groupTitle}>장소 기본</h3>
-                <div>
-                  <label htmlFor="content-venue-name">장소 이름</label>
-                  <input
-                    id="content-venue-name"
-                    type="text"
-                    maxLength={VENUE_LIMITS.name}
-                    value={venueDraft.name}
-                    onChange={(event) => setVenueDraft({ ...venueDraft, name: event.target.value })}
-                  />
+          <div className={styles.layout}>
+            <div className={styles.work}>
+              <div className={styles.tabBar}>
+                <div className={styles.tabs} role="tablist" aria-label="콘텐츠 종류">
+                  {tabs.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="tab"
+                      id={`content-tab-${item.id}`}
+                      className={styles.tab}
+                      aria-selected={activeTab === item.id}
+                      aria-controls="content-panel"
+                      tabIndex={activeTab === item.id ? 0 : -1}
+                      onClick={() => selectTab(item.id)}
+                      onKeyDown={(event) => {
+                        const index = tabs.findIndex((entry) => entry.id === item.id);
+                        const next = event.key === "ArrowRight" ? tabs[(index + 1) % tabs.length] : event.key === "ArrowLeft" ? tabs[(index + tabs.length - 1) % tabs.length] : null;
+                        if (!next) return;
+                        event.preventDefault();
+                        selectTab(next.id);
+                        document.getElementById(`content-tab-${next.id}`)?.focus();
+                      }}
+                    >
+                      {item.label}{item.count !== undefined ? <span className={styles.tabCount}>{item.count}</span> : null}
+                    </button>
+                  ))}
                 </div>
-                <div>
-                  <label htmlFor="content-venue-address">주소</label>
-                  <input
-                    id="content-venue-address"
-                    type="text"
-                    maxLength={VENUE_LIMITS.address}
-                    value={venueDraft.address}
-                    onChange={(event) => setVenueDraft({ ...venueDraft, address: event.target.value })}
-                  />
-                </div>
-                </div>
-                <div className={styles.fieldGroup}>
-                  <h3 className={styles.groupTitle}>참가자 안내 문구</h3>
-                <div>
-                  <label htmlFor="content-venue-directions">길찾기</label>
-                  <textarea data-resize-none="true"
-                    id="content-venue-directions"
-                    rows={3}
-                    maxLength={VENUE_LIMITS.directions}
-                    value={venueDraft.directions}
-                    onChange={(event) => setVenueDraft({ ...venueDraft, directions: event.target.value })}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="content-venue-contact">문의</label>
-                  <input
-                    id="content-venue-contact"
-                    type="text"
-                    maxLength={VENUE_LIMITS.contact}
-                    value={venueDraft.contact}
-                    onChange={(event) => setVenueDraft({ ...venueDraft, contact: event.target.value })}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="content-venue-description">안내 문구</label>
-                  <textarea data-resize-none="true"
-                    id="content-venue-description"
-                    rows={3}
-                    maxLength={VENUE_LIMITS.description}
-                    value={venueDraft.description}
-                    onChange={(event) => setVenueDraft({ ...venueDraft, description: event.target.value })}
-                  />
-                </div>
-                </div>
-                <div className={styles.fieldGroup}>
-                  <h3 className={styles.groupTitle}>행사장 안내도 · 선택</h3>
-                  <p className={styles.help} id="content-venue-map-help">JPG 또는 PNG, 500KB 미만. 공개 행사에서 장소 안내가 켜져 있으면 표시됩니다.</p>
-                  {venueDraft.map ? <>
-                    {(venuePreview || venueDraft.map.image?.fileId) ? <figure className={styles.venueMapPreview}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={venuePreview || `/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(venueDraft.map.image!.fileId)}`} alt={venueDraft.map.alt || "선택한 안내도 미리보기"} />
-                    </figure> : null}
-                    <div>
-                      <label htmlFor="content-venue-map-alt">안내도 설명</label>
-                      <textarea id="content-venue-map-alt" data-resize-none="true" rows={2} maxLength={240}
-                        value={venueDraft.map.alt} disabled={busy !== null} aria-invalid={failure?.field === "mapAlt" || undefined}
-                        onChange={(event) => {
-                          touchVenueMap();
-                          setVenueDraft({ ...venueDraft, map: { ...venueDraft.map!, alt: event.target.value } });
-                          setFailure((current) => current?.field === "mapAlt" ? null : current);
-                        }} />
-                      <p className={styles.help}>이미지가 보이지 않아도 알 수 있도록 주요 동선을 적어주세요.</p>
-                    </div>
-                    <ProductButton type="button" className={styles.venueMapRemove} variant="secondary" disabled={busy !== null || venueUploadUncertain}
-                      onClick={() => { touchVenueMap(); setVenueFile(null); setVenueDraft({ ...venueDraft, map: null }); }}>안내도 제거</ProductButton>
-                  </> : null}
-                  <div>
-                    <label htmlFor="content-venue-map-file">{venueDraft.map ? "안내도 바꾸기" : "안내도 선택"}</label>
-                    <input id="content-venue-map-file" type="file" accept="image/jpeg,image/png"
-                      aria-describedby="content-venue-map-help" disabled={busy !== null || venueUploadUncertain || !venueFeatureOn || archived}
-                      onChange={(event) => {
-                        const file = event.currentTarget.files?.[0];
-                        event.currentTarget.value = "";
-                        if (!file) return;
-                        if (!["image/jpeg", "image/png"].includes(file.type) || file.size <= 0 || file.size >= VENUE_MAP_MAX_BYTES) {
-                          setFailure({ message: "JPG 또는 PNG 중 500KB 미만 파일을 선택하세요.", field: "map" });
-                          return;
-                        }
-                        setFailure(null);
-                        touchVenueMap();
-                        setVenueFile(file);
-                        setVenueDraft({ ...venueDraft, map: { image: null, alt: venueDraft.map?.alt ?? "" } });
-                      }} />
-                    {venueFile ? <p className={styles.help}>선택한 파일: {venueFile.name}</p> : null}
-                  </div>
-                  {venueUploadUncertain ? <div className={styles.help} role="alert">
-                    <p>업로드 결과가 확인되지 않았습니다. 같은 파일로 다시 저장할 수 있습니다.</p>
-                    {venueUploadAbandonConfirm ? <ConsoleConfirm
-                      summary="업로드는 이미 완료됐을 수 있습니다. 선택한 파일과 설명을 되돌립니다."
-                      confirmLabel="파일 확인 중단" onConfirm={abandonVenueUpload} onCancel={() => setVenueUploadAbandonConfirm(false)} />
-                      : <ProductButton type="button" variant="secondary" disabled={busy !== null} onClick={() => setVenueUploadAbandonConfirm(true)}>파일 확인 중단</ProductButton>}
-                  </div> : null}
-                  {failure?.field === "map" && failure.message.includes("다른 운영자") ? venueRestoreConfirm
-                    ? <ConsoleConfirm summary="작성한 안내도와 설명을 버리고 최신 안내도를 불러옵니다. 다른 장소 문구는 유지됩니다."
-                        confirmLabel="최신 안내도 불러오기" onConfirm={() => void restoreLatestVenueMap()} onCancel={() => setVenueRestoreConfirm(false)} />
-                    : <ProductButton type="button" className={styles.venueMapRemove} variant="secondary"
-                        disabled={busy !== null} onClick={() => setVenueRestoreConfirm(true)}>최신 안내도 불러오기</ProductButton> : null}
-                </div>
-                {failure?.field === "expectedVersion" && !pendingContent ? <ProductButton type="button" variant="secondary" disabled={busy !== null} onClick={() => void reloadEditorDraft("venue")}>최신 장소 초안 불러오기</ProductButton> : null}
-                <ConsoleFormActions>
-                  <ProductButton
-                    type="submit"
-                    variant="primary"
-                    disabled={busy !== null || !venueFeatureOn || archived || Boolean(pendingContent) || otherContentReceipt}
-                    title={archived ? archivedReason : venueFeatureOn ? undefined : "행사 설정에서 장소 안내 기능을 먼저 켜세요"}
-                  >
-                    {busy === "venue:save" ? "저장 중…" : "초안 저장"}
-                  </ProductButton>
-                  <ProductButton type="button" variant="secondary" disabled={busy !== null || !venueFeatureOn || archived || venueDirty || Boolean(venueFile) || venueUploadUncertain || Boolean(pendingContent) || otherContentReceipt || !hasChanges(venueChanges(state.venue))} onClick={() => openPublication("venue", "", state.venue.version, true)}>게시 검토</ProductButton>
-                </ConsoleFormActions>
-                </fieldset>
-              </ValidatedForm>
-            ) : !canWritePage ? (
-              <div className={uiStyles.recordMain}>
-                <span>장소 이름: {state.venue.name || "미등록"}</span>
-                <p className={uiStyles.recordMeta}>주소: {state.venue.address || "미등록"}</p>
-                <p className={uiStyles.recordMeta}>길찾기: {state.venue.directions || "미등록"}</p>
-                <p className={uiStyles.recordMeta}>문의: {state.venue.contact || "미등록"}</p>
-                <p className={uiStyles.recordMeta}>안내 문구: {state.venue.description || "미등록"}</p>
-                {state.venue.map?.image?.fileId ? <p className={uiStyles.recordMeta}>
-                  안내도: <a href={`/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(state.venue.map.image.fileId)}`} target="_blank" rel="noopener noreferrer">보기 (새 탭)</a> · {state.venue.map.alt}
-                </p> : null}
+                <ProductButton className={styles.phoneToggle} type="button" variant="secondary" onClick={() => setPreviewStageOpen(true)}>폰으로 보기</ProductButton>
               </div>
-            ) : null}
-          </ConsoleSection>
+              <div id="content-panel" role="tabpanel" aria-labelledby={`content-tab-${activeTab}`} className={styles.panel}>
+                {activeTab === "notice" ? (
+                  noticeDialogOpen ? (
+                    <div className={styles.editor}>
+                      <div className={styles.editorHead}>
+                        <button type="button" className={styles.crumb} disabled={noticeDialogBusy} onClick={closeNoticeEditor}><CrumbChevron />공지</button>
+                        {noticeDraft.id ? (() => { const status = !noticeDraft.published ? "off" : editingNotice && hasChanges(noticeChanges(editingNotice)) ? "edit" : "live"; return <span className={styles.editorState}><span className={styles.dot} data-status={status} aria-hidden="true" />{status === "off" ? "비공개" : status === "edit" ? "수정본 있음" : "게시 중"}</span>; })() : null}
+                      </div>
+                      <h2 id="content-notice-dialog-title" className={styles.editorTitle}><span className="sr-only">{noticeDraft.id ? "공지 편집: " : "공지 작성: "}</span>{noticeDraft.title || (noticeDraft.id ? "제목 없음" : "새 공지")}</h2>
+                      <ValidatedForm className={uiStyles.formStack} onSubmit={(event) => void saveNotice(event)}>
+                        <fieldset className={styles.draftFields} disabled={Boolean(pendingContent) || checkingContent || noticeDialogBusy}>
+                        <legend className="sr-only">공지 내용</legend>
+                        <div>
+                          <label htmlFor="content-notice-title">제목</label>
+                          <input
+                            id="content-notice-title"
+                            type="text"
+                            maxLength={NOTICE_TITLE_MAX}
+                            required
+                            value={noticeDraft.title}
+                            aria-invalid={noticeDialogFailure?.field === "title"}
+                            aria-describedby={noticeDialogFailure?.field === "title" ? "content-notice-title-error" : undefined}
+                            onChange={(event) => setNoticeDraft({ ...noticeDraft, title: event.target.value })}
+                          />
+                          {noticeDialogFailure?.field === "title" ? (
+                            <p className={styles.fieldError} id="content-notice-title-error" role="alert">{noticeDialogFailure.message}</p>
+                          ) : null}
+                        </div>
+                        <div>
+                          <label id="content-notice-body-label" htmlFor="content-notice-body">내용</label>
+                          <RichEditor
+                            id="content-notice-body"
+                            labelledBy="content-notice-body-label"
+                            describedBy={noticeDialogFailure?.field === "body" ? "content-notice-body-error" : "content-notice-body-count"}
+                            invalid={noticeDialogFailure?.field === "body"}
+                            value={noticeDraft.body}
+                            onChange={(body) => setNoticeDraft((current) => ({ ...current, body }))}
+                            disabled={Boolean(pendingContent) || checkingContent || noticeDialogBusy || archived}
+                            imageSrc={(fileId) => `/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(fileId)}`}
+                            uploadImage={uploadNoticeImage}
+                          />
+                          <p className={`${styles.help} ${styles.fieldNote}`} id="content-notice-body-count">굵게·목록·링크·이미지를 쓸 수 있습니다. {noticeDraft.body.length} / {NOTICE_BODY_MAX}자</p>
+                          {noticeDialogFailure?.field === "body" ? (
+                            <p className={styles.fieldError} id="content-notice-body-error" role="alert">{noticeDialogFailure.message}</p>
+                          ) : null}
+                        </div>
+                        <label className={styles.check}>
+                          <input
+                            type="checkbox"
+                            checked={noticeDraft.pinned}
+                            onChange={(event) => setNoticeDraft({ ...noticeDraft, pinned: event.target.checked })}
+                          />
+                          상단 고정
+                        </label>
+                        </fieldset>
+                        {displayNote ? <p className={styles.help}>{displayNote}</p> : null}
+                        {noticeDialogFailure && !["title", "body"].includes(noticeDialogFailure.field ?? "") && !(pendingContent?.origin === "notice" && contentRecoveryError) ? (
+                          <p className={styles.fieldError} role="alert">{noticeDialogFailure.message}</p>
+                        ) : null}
+                        {noticeDialogFailure?.field === "expectedVersion" && !pendingContent ? <ProductButton type="button" variant="secondary" disabled={busy !== null} onClick={() => void reloadEditorDraft("notice")}>최신 초안 불러오기</ProductButton> : null}
+                        {pendingContent?.origin === "notice" ? contentRecovery() : null}
+                        <p className={styles.help}>{noticeDirty || !noticeDraft.id ? "초안을 저장하고 게시 검토를 거쳐 반영합니다. 게시 전까지 현재 내용이 유지됩니다." : "저장한 초안과 게시본을 비교한 뒤 게시 검토에서 참가자에게 반영합니다."}</p>
+                        <ConsoleFormActions>
+                          <ProductButton type="submit" variant={noticeDirty || !noticeDraft.id ? "primary" : "secondary"} disabled={noticeDialogBusy || archived || Boolean(pendingContent) || checkingContent || otherContentReceipt} title={archived ? archivedReason : undefined}>
+                            {noticeDialogBusy ? "저장 중…" : "초안 저장"}
+                          </ProductButton>
+                          {editingNotice ? (
+                            <>
+                              <ProductButton type="button" variant={!noticeDirty && hasChanges(noticeChanges(editingNotice)) ? "primary" : "secondary"} disabled={gated || noticeDirty || noticeDialogBusy}
+                                title={archived ? archivedReason : noticeDirty ? "초안을 먼저 저장하세요" : undefined}
+                                onClick={() => openPublication("notice", editingNotice.id, editingNotice.version, true)}>게시 검토</ProductButton>
+                              {editingNotice.published ? <ProductButton type="button" variant="ghost" disabled={gated || noticeDirty || noticeDialogBusy} onClick={() => openPublication("notice", editingNotice.id, editingNotice.version, false)}>게시 내리기</ProductButton> : null}
+                              {canOutputNotice && editingNotice.published ? (
+                                <ProductButton type="button" variant="ghost" disabled={gated || noticeDirty || noticeDialogBusy} title={archived ? archivedReason : undefined} onClick={() => requestNoticeDisplay(editingNotice)}>
+                                  {busy === `notice-display:${editingNotice.id}` ? "처리 중…" : "전광판 출력"}
+                                </ProductButton>
+                              ) : null}
+                              <ProductButton type="button" className={styles.dangerGhost} variant="destructive" disabled={gated || noticeDialogBusy} title={archived ? archivedReason : undefined} onClick={() => requestNoticeDelete(editingNotice)}>삭제</ProductButton>
+                            </>
+                          ) : null}
+                        </ConsoleFormActions>
+                        {editingNotice && noticeDisplayPendingId === editingNotice.id && canOutputNotice && editingNotice.published && noticeDeletePendingId !== editingNotice.id ? (
+                          <ConsoleConfirm
+                            summary={`“${editingNotice.title}” 공지를 행사장 전광판에 출력할까요? 참가자 화면과 같은 내용이 외부 화면에 나옵니다.`}
+                            confirmLabel="전광판 출력"
+                            busy={busy !== null}
+                            onConfirm={() => void applyNoticeDisplay(editingNotice)}
+                            onCancel={() => setNoticeDisplayPendingId(null)}
+                          />
+                        ) : null}
+                        {editingNotice && noticeDeletePendingId === editingNotice.id && noticeDisplayPendingId !== editingNotice.id ? (
+                          <ConsoleConfirm
+                            summary={`“${editingNotice.title}” 공지를 삭제할까요?`}
+                            confirmLabel="삭제한다"
+                            confirmClassName="button button-danger"
+                            busy={busy !== null}
+                            onConfirm={() => void deleteNotice(editingNotice)}
+                            onCancel={() => setNoticeDeletePendingId(null)}
+                          />
+                        ) : null}
+                      </ValidatedForm>
+                    </div>
+                  ) : state.notices.length ? (
+                    <ul className={styles.ledger}>
+                      {state.notices.map((item) => {
+                        const edited = item.published && hasChanges(noticeChanges(item));
+                        return (
+                          <LedgerRow
+                            key={item.id}
+                            status={edited ? "edit" : item.published ? "live" : "off"}
+                            statusLabel={edited ? "수정본 있음" : item.published ? "게시 중" : "비공개"}
+                            title={item.draft.title}
+                            summary={richSummary(item.draft.body)}
+                            pinned={item.pinned}
+                            note={noticeDisplayLabel(state, item)}
+                            onOpen={canWritePage ? () => openNoticeEdit(item) : undefined}
+                            disabled={gated}
+                            disabledReason={archived ? archivedReason : undefined}
+                          />
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p className={styles.empty}>등록된 공지가 없습니다.{canWritePage ? " 위 ‘공지 작성’으로 첫 공지를 작성하세요." : ""}</p>
+                  )
+                ) : null}
+                {activeTab === "program" ? (
+                  programDialogOpen ? (
+                    <div className={styles.editor}>
+                      <div className={styles.editorHead}>
+                        <button type="button" className={styles.crumb} disabled={programDialogBusy || uploadingAttachment} onClick={closeProgramEditor}><CrumbChevron />일정</button>
+                        {programDraft.id ? (() => { const status = !programDraft.published ? "off" : editingProgram && hasChanges(programChanges(editingProgram)) ? "edit" : "live"; return <span className={styles.editorState}><span className={styles.dot} data-status={status} aria-hidden="true" />{status === "off" ? "비공개" : status === "edit" ? "수정본 있음" : "게시 중"}</span>; })() : null}
+                      </div>
+                      <h2 id="content-program-dialog-title" className={styles.editorTitle}><span className="sr-only">{programDraft.id ? "일정 편집: " : "일정 추가: "}</span>{programDraft.title || (programDraft.id ? "제목 없음" : "새 일정")}</h2>
+                      <ValidatedForm className={uiStyles.formStack} onSubmit={(event) => void saveProgram(event)}>
+                        <fieldset className={styles.draftFields} disabled={Boolean(pendingContent) || checkingContent || programDialogBusy}>
+                        <legend className="sr-only">일정 내용</legend>
+                            <div>
+                              <label htmlFor="content-program-title">제목</label>
+                              <input
+                                id="content-program-title"
+                                type="text"
+                                maxLength={PROGRAM_TITLE_MAX}
+                                required
+                                value={programDraft.title}
+                                aria-invalid={programDialogFailure?.field === "title"}
+                                aria-describedby={programDialogFailure?.field === "title" ? "content-program-title-error" : undefined}
+                                onChange={(event) => setProgramDraft({ ...programDraft, title: event.target.value })}
+                              />
+                              {programDialogFailure?.field === "title" ? (
+                                <p className={styles.fieldError} id="content-program-title-error" role="alert">{programDialogFailure.message}</p>
+                              ) : null}
+                            </div>
+                            <div>
+                              <label htmlFor="content-program-date">날짜 (비우면 행사일)</label>
+                              <input
+                                id="content-program-date"
+                                type="date"
+                                value={programDraft.date}
+                                onChange={(event) => setProgramDraft({ ...programDraft, date: event.target.value })}
+                              />
+                            </div>
+                            <div className={uiStyles.formGrid}>
+                              <div>
+                                <label htmlFor="content-program-start">시작</label>
+                                <input
+                                  id="content-program-start"
+                                  type="time"
+                                  required
+                                  value={programDraft.start}
+                                  onChange={(event) => setProgramDraft({ ...programDraft, start: event.target.value })}
+                                />
+                              </div>
+                              <div>
+                                <label htmlFor="content-program-end">종료</label>
+                                <input
+                                  id="content-program-end"
+                                  type="time"
+                                  required
+                                  value={programDraft.end}
+                                  onChange={(event) => setProgramDraft({ ...programDraft, end: event.target.value })}
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <label htmlFor="content-program-place">장소</label>
+                              <input
+                                id="content-program-place"
+                                type="text"
+                                maxLength={PROGRAM_PLACE_MAX}
+                                value={programDraft.place}
+                                onChange={(event) => setProgramDraft({ ...programDraft, place: event.target.value })}
+                              />
+                            </div>
+                            <div>
+                              <label htmlFor="content-program-description">상세 설명</label>
+                              <textarea data-resize-none="true"
+                                id="content-program-description"
+                                rows={4}
+                                maxLength={PROGRAM_DESCRIPTION_MAX}
+                                value={programDraft.description}
+                                onChange={(event) => setProgramDraft({ ...programDraft, description: event.target.value })}
+                              />
+                            </div>
+                            <div>
+                              <label htmlFor="content-program-attachment">일정 자료 (PDF, 600KB 이하)</label>
+                              {programDraft.attachment ? (
+                                <p className={styles.attachmentRow}>
+                                  <ProductLink href={`/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(programDraft.attachment.fileId)}`} target="_blank" rel="noopener noreferrer">{programDraft.attachment.name || "일정 자료(PDF)"}</ProductLink>
+                                  <ProductButton
+                                    type="button"
+                                    variant="secondary"
+                                    disabled={programDialogBusy || uploadingAttachment}
+                                    onClick={() => setProgramDraft({ ...programDraft, attachment: null, attachmentDirty: true })}
+                                  >
+                                    첨부 제거
+                                  </ProductButton>
+                                </p>
+                              ) : (
+                                <input
+                                  id="content-program-attachment"
+                                  type="file"
+                                  accept="application/pdf"
+                                  disabled={programDialogBusy || uploadingAttachment || programUploadUncertain || archived}
+                                  title={archived ? archivedReason : undefined}
+                                  aria-invalid={programDialogFailure?.field === "attachment"}
+                                  aria-describedby={programDialogFailure?.field === "attachment" ? "content-program-attachment-error" : undefined}
+                                  onChange={(event) => {
+                                    const file = event.target.files?.[0];
+                                    if (file && !archived) void uploadProgramAttachment(file);
+                                    event.target.value = "";
+                                  }}
+                                />
+                              )}
+                              {uploadingAttachment ? <p className={styles.help} role="status">파일을 올리고 있습니다.</p> : null}
+                              {programUploadUncertain ? (
+                                <div className={styles.recovery}>
+                                  <p>결과를 확인할 때까지 원래 파일을 유지합니다. 화면을 떠나면 파일을 다시 선택해야 합니다.</p>
+                                  <div className={styles.recoveryActions}>
+                                    <ProductButton type="button" variant="secondary" disabled={uploadingAttachment || programUploadAbandonConfirm} onClick={() => { if (programUploadRef.current) void uploadProgramAttachment(programUploadRef.current.file); }}>같은 파일 요청 다시 확인</ProductButton>
+                                    <ProductButton type="button" variant="secondary" disabled={uploadingAttachment || programUploadAbandonConfirm} onClick={() => setProgramUploadAbandonConfirm(true)}>파일 확인 그만두기</ProductButton>
+                                  </div>
+                                  {programUploadAbandonConfirm ? <ConsoleConfirm
+                                    summary="파일이 이미 서버에 저장됐을 수 있습니다. 확인을 그만둬도 서버 파일은 삭제되지 않습니다."
+                                    confirmLabel="확인 그만두기"
+                                    onConfirm={() => {
+                                      if (programUploadRef.current) abandonOperatorAttempt(programUploadRef.current.commandId);
+                                      programUploadRef.current = null;
+                                      setProgramUploadUncertain(false);
+                                      setProgramUploadAbandonConfirm(false);
+                                      setProgramDialogFailure(null);
+                                    }}
+                                    onCancel={() => setProgramUploadAbandonConfirm(false)}
+                                  /> : null}
+                                </div>
+                              ) : null}
+                              {programDialogFailure?.field === "attachment" ? (
+                                <p className={styles.fieldError} id="content-program-attachment-error" role="alert">{programDialogFailure.message}</p>
+                              ) : null}
+                            </div>
+                        </fieldset>
+                        {programDialogFailure && !["title", "attachment"].includes(programDialogFailure.field ?? "") && !(pendingContent?.origin === "program" && contentRecoveryError) ? (
+                          <p className={styles.fieldError} role="alert">{programDialogFailure.message}</p>
+                        ) : null}
+                        {programDialogFailure?.field === "expectedVersion" && !pendingContent ? <ProductButton type="button" variant="secondary" disabled={busy !== null} onClick={() => void reloadEditorDraft("program")}>최신 초안 불러오기</ProductButton> : null}
+                        {pendingContent?.origin === "program" ? contentRecovery() : null}
+                        <p className={styles.help}>{programDirty || !programDraft.id ? "초안을 저장하고 게시 검토를 거쳐 반영합니다. 게시 전까지 현재 내용이 유지됩니다." : "저장한 초안과 게시본을 비교한 뒤 게시 검토에서 참가자에게 반영합니다."}</p>
+                        <ConsoleFormActions>
+                          <ProductButton type="submit" variant={programDirty || !programDraft.id ? "primary" : "secondary"} disabled={programDialogBusy || uploadingAttachment || programUploadUncertain || archived || Boolean(pendingContent) || checkingContent || otherContentReceipt} title={archived ? archivedReason : undefined}>
+                            {programDialogBusy ? "저장 중…" : "초안 저장"}
+                          </ProductButton>
+                          {editingProgram ? (
+                            <>
+                              <ProductButton type="button" variant={!programDirty && hasChanges(programChanges(editingProgram)) ? "primary" : "secondary"} disabled={gated || programDirty || programDialogBusy || uploadingAttachment}
+                                title={archived ? archivedReason : programDirty ? "초안을 먼저 저장하세요" : undefined}
+                                onClick={() => openPublication("program", editingProgram.id, editingProgram.version, true)}>게시 검토</ProductButton>
+                              {editingProgram.published ? <ProductButton type="button" variant="ghost" disabled={gated || programDirty || programDialogBusy} onClick={() => openPublication("program", editingProgram.id, editingProgram.version, false)}>게시 내리기</ProductButton> : null}
+                              <ProductButton type="button" className={styles.dangerGhost} variant="destructive" disabled={gated || programDialogBusy || uploadingAttachment} title={archived ? archivedReason : undefined} onClick={() => requestProgramDelete(editingProgram)}>삭제</ProductButton>
+                            </>
+                          ) : null}
+                        </ConsoleFormActions>
+                        {editingProgram && programDeletePendingId === editingProgram.id ? (
+                          <ConsoleConfirm
+                            summary={`“${editingProgram.title}” 일정을 삭제할까요?`}
+                            confirmLabel="삭제한다"
+                            confirmClassName="button button-danger"
+                            busy={busy !== null}
+                            onConfirm={() => void deleteProgram(editingProgram)}
+                            onCancel={() => setProgramDeletePendingId(null)}
+                          />
+                        ) : null}
+                      </ValidatedForm>
+                    </div>
+                  ) : state.program.length ? (
+                    <>
+                    <p className={styles.help}>게시된 일정은 날짜·시작 시간 순으로 보입니다.</p>
+                    <ul className={styles.ledger}>
+                      {state.program.map((item) => {
+                        const edited = item.published && hasChanges(programChanges(item));
+                        return (
+                          <LedgerRow
+                            key={item.id}
+                            status={edited ? "edit" : item.published ? "live" : "off"}
+                            statusLabel={edited ? "수정본 있음" : item.published ? "게시 중" : "비공개"}
+                            title={item.draft.title}
+                            summary={programMeta(item.draft)}
+                            attachment={Boolean(item.draft.attachment)}
+                            onOpen={canWritePrograms ? () => openProgramEdit(item) : undefined}
+                            disabled={gated}
+                            disabledReason={archived ? archivedReason : undefined}
+                          />
+                        );
+                      })}
+                    </ul>
+                    </>
+                  ) : (
+                    <p className={styles.empty}>등록된 일정이 없습니다.{canWritePrograms ? " 위 ‘일정 추가’로 첫 일정을 추가하세요." : ""}</p>
+                  )
+                ) : null}
+                {activeTab === "venue" ? (
+                  <div className={styles.venuePanel}>
+                    <p className={styles.help}>{venueDirty || venueFile ? "작성 중입니다. 초안을 저장하면 게시 검토를 진행할 수 있습니다." : hasChanges(venueChanges(state.venue)) ? "저장한 초안이 있습니다. 게시 전까지 기존 장소 안내가 유지됩니다." : "게시된 장소 안내와 저장한 초안이 같습니다."}</p>
+                    {!venueFeatureOn ? (
+                      <p className={styles.featureOff} role="note">
+                        장소 안내 기능이 꺼져 있습니다.{" "}
+                        <ProductLink href={`/console/events/${encodeURIComponent(eventId)}/settings`}>행사 설정</ProductLink>에서
+                        기능을 먼저 켜세요. 켜기 전에는 저장이 반영되지 않습니다.
+                      </p>
+                    ) : null}
+                    {venueDraft && canWritePage ? (
+                      <ValidatedForm className={uiStyles.formStack} onSubmit={(event) => void saveVenue(event)}>
+                        <fieldset className={styles.draftFields} disabled={Boolean(pendingContent) || checkingContent || busy !== null}><legend className="sr-only">장소 안내 초안</legend>
+                        <div className={styles.fieldGroup}>
+                          <h3 className={styles.groupTitle}>장소 기본</h3>
+                        <div>
+                          <label htmlFor="content-venue-name">장소 이름</label>
+                          <input
+                            id="content-venue-name"
+                            type="text"
+                            maxLength={VENUE_LIMITS.name}
+                            value={venueDraft.name}
+                            onChange={(event) => setVenueDraft({ ...venueDraft, name: event.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="content-venue-address">주소</label>
+                          <input
+                            id="content-venue-address"
+                            type="text"
+                            maxLength={VENUE_LIMITS.address}
+                            value={venueDraft.address}
+                            onChange={(event) => setVenueDraft({ ...venueDraft, address: event.target.value })}
+                          />
+                        </div>
+                        </div>
+                        <div className={styles.fieldGroup}>
+                          <h3 className={styles.groupTitle}>참가자 안내 문구</h3>
+                        <div>
+                          <label htmlFor="content-venue-directions">길찾기</label>
+                          <textarea data-resize-none="true"
+                            id="content-venue-directions"
+                            rows={3}
+                            maxLength={VENUE_LIMITS.directions}
+                            value={venueDraft.directions}
+                            onChange={(event) => setVenueDraft({ ...venueDraft, directions: event.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="content-venue-contact">문의</label>
+                          <input
+                            id="content-venue-contact"
+                            type="text"
+                            maxLength={VENUE_LIMITS.contact}
+                            value={venueDraft.contact}
+                            onChange={(event) => setVenueDraft({ ...venueDraft, contact: event.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="content-venue-description">안내 문구</label>
+                          <textarea data-resize-none="true"
+                            id="content-venue-description"
+                            rows={3}
+                            maxLength={VENUE_LIMITS.description}
+                            value={venueDraft.description}
+                            onChange={(event) => setVenueDraft({ ...venueDraft, description: event.target.value })}
+                          />
+                        </div>
+                        </div>
+                        <div className={styles.fieldGroup}>
+                          <h3 className={styles.groupTitle}>행사장 안내도 · 선택</h3>
+                          <p className={styles.help} id="content-venue-map-help">JPG 또는 PNG, 500KB 미만. 공개 행사에서 장소 안내가 켜져 있으면 표시됩니다.</p>
+                          {venueDraft.map ? <>
+                            {(venuePreview || venueDraft.map.image?.fileId) ? <figure className={styles.venueMapPreview}>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={venuePreview || `/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(venueDraft.map.image!.fileId)}`} alt={venueDraft.map.alt || "선택한 안내도 미리보기"} />
+                            </figure> : null}
+                            <div>
+                              <label htmlFor="content-venue-map-alt">안내도 설명</label>
+                              <textarea id="content-venue-map-alt" data-resize-none="true" rows={2} maxLength={240}
+                                value={venueDraft.map.alt} disabled={busy !== null} aria-invalid={failure?.field === "mapAlt" || undefined}
+                                onChange={(event) => {
+                                  touchVenueMap();
+                                  setVenueDraft({ ...venueDraft, map: { ...venueDraft.map!, alt: event.target.value } });
+                                  setFailure((current) => current?.field === "mapAlt" ? null : current);
+                                }} />
+                              <p className={styles.help}>이미지가 보이지 않아도 알 수 있도록 주요 동선을 적어주세요.</p>
+                            </div>
+                            <ProductButton type="button" className={styles.venueMapRemove} variant="secondary" disabled={busy !== null || venueUploadUncertain}
+                              onClick={() => { touchVenueMap(); setVenueFile(null); setVenueDraft({ ...venueDraft, map: null }); }}>안내도 제거</ProductButton>
+                          </> : null}
+                          <div>
+                            <label htmlFor="content-venue-map-file">{venueDraft.map ? "안내도 바꾸기" : "안내도 선택"}</label>
+                            <input id="content-venue-map-file" type="file" accept="image/jpeg,image/png"
+                              aria-describedby="content-venue-map-help" disabled={busy !== null || venueUploadUncertain || !venueFeatureOn || archived}
+                              onChange={(event) => {
+                                const file = event.currentTarget.files?.[0];
+                                event.currentTarget.value = "";
+                                if (!file) return;
+                                if (!["image/jpeg", "image/png"].includes(file.type) || file.size <= 0 || file.size >= VENUE_MAP_MAX_BYTES) {
+                                  setFailure({ message: "JPG 또는 PNG 중 500KB 미만 파일을 선택하세요.", field: "map" });
+                                  return;
+                                }
+                                setFailure(null);
+                                touchVenueMap();
+                                setVenueFile(file);
+                                setVenueDraft({ ...venueDraft, map: { image: null, alt: venueDraft.map?.alt ?? "" } });
+                              }} />
+                            {venueFile ? <p className={styles.help}>선택한 파일: {venueFile.name}</p> : null}
+                          </div>
+                          {venueUploadUncertain ? <div className={styles.help} role="alert">
+                            <p>업로드 결과가 확인되지 않았습니다. 같은 파일로 다시 저장할 수 있습니다.</p>
+                            {venueUploadAbandonConfirm ? <ConsoleConfirm
+                              summary="업로드는 이미 완료됐을 수 있습니다. 선택한 파일과 설명을 되돌립니다."
+                              confirmLabel="파일 확인 중단" onConfirm={abandonVenueUpload} onCancel={() => setVenueUploadAbandonConfirm(false)} />
+                              : <ProductButton type="button" variant="secondary" disabled={busy !== null} onClick={() => setVenueUploadAbandonConfirm(true)}>파일 확인 중단</ProductButton>}
+                          </div> : null}
+                          {failure?.field === "map" && failure.message.includes("다른 운영자") ? venueRestoreConfirm
+                            ? <ConsoleConfirm summary="작성한 안내도와 설명을 버리고 최신 안내도를 불러옵니다. 다른 장소 문구는 유지됩니다."
+                                confirmLabel="최신 안내도 불러오기" onConfirm={() => void restoreLatestVenueMap()} onCancel={() => setVenueRestoreConfirm(false)} />
+                            : <ProductButton type="button" className={styles.venueMapRemove} variant="secondary"
+                                disabled={busy !== null} onClick={() => setVenueRestoreConfirm(true)}>최신 안내도 불러오기</ProductButton> : null}
+                        </div>
+                        {failure?.field === "expectedVersion" && !pendingContent ? <ProductButton type="button" variant="secondary" disabled={busy !== null} onClick={() => void reloadEditorDraft("venue")}>최신 장소 초안 불러오기</ProductButton> : null}
+                        <ConsoleFormActions>
+                          <ProductButton
+                            type="submit"
+                            variant="primary"
+                            disabled={busy !== null || !venueFeatureOn || archived || Boolean(pendingContent) || otherContentReceipt}
+                            title={archived ? archivedReason : venueFeatureOn ? undefined : "행사 설정에서 장소 안내 기능을 먼저 켜세요"}
+                          >
+                            {busy === "venue:save" ? "저장 중…" : "초안 저장"}
+                          </ProductButton>
+                          <ProductButton type="button" variant="secondary" disabled={busy !== null || !venueFeatureOn || archived || venueDirty || Boolean(venueFile) || venueUploadUncertain || Boolean(pendingContent) || otherContentReceipt || !hasChanges(venueChanges(state.venue))} onClick={() => openPublication("venue", "", state.venue.version, true)}>게시 검토</ProductButton>
+                        </ConsoleFormActions>
+                        </fieldset>
+                      </ValidatedForm>
+                    ) : !canWritePage ? (
+                      <div className={uiStyles.recordMain}>
+                        <span>장소 이름: {state.venue.name || "미등록"}</span>
+                        <p className={uiStyles.recordMeta}>주소: {state.venue.address || "미등록"}</p>
+                        <p className={uiStyles.recordMeta}>길찾기: {state.venue.directions || "미등록"}</p>
+                        <p className={uiStyles.recordMeta}>문의: {state.venue.contact || "미등록"}</p>
+                        <p className={uiStyles.recordMeta}>안내 문구: {state.venue.description || "미등록"}</p>
+                        {state.venue.map?.image?.fileId ? <p className={uiStyles.recordMeta}>
+                          안내도: <a href={`/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(state.venue.map.image.fileId)}`} target="_blank" rel="noopener noreferrer">보기 (새 탭)</a> · {state.venue.map.alt}
+                        </p> : null}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+            <div className={styles.railHost}>{renderPhone("rail")}</div>
           </div>
         </>
       )}
 
-      {noticeDialogOpen && state.kind === "ready" ? (
-        <ConsoleDialog
-          titleId="content-notice-dialog-title"
-          title={noticeDraft.id ? "공지 편집" : "공지 작성"}
-          busy={noticeDialogBusy}
-          canClose={canCloseNoticeDialog}
-          onClose={() => setNoticeDialogOpen(false)}
-        >
-          <ValidatedForm className={uiStyles.formStack} onSubmit={(event) => void saveNotice(event)}>
-            <fieldset className={styles.draftFields} disabled={Boolean(pendingContent) || checkingContent || noticeDialogBusy}>
-            <legend className="sr-only">공지 내용</legend>
-            <div>
-              <label htmlFor="content-notice-title">제목</label>
-              <input
-                id="content-notice-title"
-                type="text"
-                maxLength={NOTICE_TITLE_MAX}
-                required
-                value={noticeDraft.title}
-                aria-invalid={noticeDialogFailure?.field === "title"}
-                aria-describedby={noticeDialogFailure?.field === "title" ? "content-notice-title-error" : undefined}
-                onChange={(event) => setNoticeDraft({ ...noticeDraft, title: event.target.value })}
-              />
-              {noticeDialogFailure?.field === "title" ? (
-                <p className={styles.fieldError} id="content-notice-title-error" role="alert">{noticeDialogFailure.message}</p>
-              ) : null}
-            </div>
-            <div>
-              <label htmlFor="content-notice-body">내용</label>
-              <textarea data-resize-none="true"
-                id="content-notice-body"
-                rows={5}
-                maxLength={NOTICE_BODY_MAX}
-                required
-                value={noticeDraft.body}
-                aria-invalid={noticeDialogFailure?.field === "body"}
-                aria-describedby={noticeDialogFailure?.field === "body" ? "content-notice-body-error" : undefined}
-                onChange={(event) => setNoticeDraft({ ...noticeDraft, body: event.target.value })}
-              />
-              {noticeDialogFailure?.field === "body" ? (
-                <p className={styles.fieldError} id="content-notice-body-error" role="alert">{noticeDialogFailure.message}</p>
-              ) : null}
-            </div>
-            <p className={styles.help}>초안 저장 후 게시 검토에서 참가자에게 반영할 내용을 확인하세요. 현재 게시본은 유지됩니다.</p>
-            <label className={styles.check}>
-              <input
-                type="checkbox"
-                checked={noticeDraft.pinned}
-                onChange={(event) => setNoticeDraft({ ...noticeDraft, pinned: event.target.checked })}
-              />
-              상단 고정
-            </label>
-            </fieldset>
-            {noticeDialogFailure && !["title", "body"].includes(noticeDialogFailure.field ?? "") && !(pendingContent?.origin === "notice" && contentRecoveryError) ? (
-              <p className={styles.fieldError} role="alert">{noticeDialogFailure.message}</p>
-            ) : null}
-            {noticeDialogFailure?.field === "expectedVersion" && !pendingContent ? <ProductButton type="button" variant="secondary" disabled={busy !== null} onClick={() => void reloadEditorDraft("notice")}>최신 초안 불러오기</ProductButton> : null}
-            {pendingContent?.origin === "notice" ? contentRecovery() : null}
-            <ConsoleFormActions>
-              <ProductButton
-                type="button"
-                variant="secondary"
-                disabled={noticeDialogBusy}
-                onClick={() => { if (canCloseNoticeDialog()) setNoticeDialogOpen(false); }}
-              >
-                취소
-              </ProductButton>
-              <ProductButton type="submit" variant="primary" disabled={noticeDialogBusy || archived || Boolean(pendingContent) || checkingContent || otherContentReceipt} title={archived ? archivedReason : undefined}>
-                {noticeDialogBusy ? "저장 중…" : "초안 저장"}
-              </ProductButton>
-            </ConsoleFormActions>
-          </ValidatedForm>
-        </ConsoleDialog>
-      ) : null}
-
-      {programDialogOpen && state.kind === "ready" ? (
-        <ConsoleDialog
-          titleId="content-program-dialog-title"
-          title={programDraft.id ? "일정 편집" : "일정 추가"}
-          busy={programDialogBusy || uploadingAttachment}
-          canClose={canCloseProgramDialog}
-          onClose={() => setProgramDialogOpen(false)}
-        >
-          <ValidatedForm className={uiStyles.formStack} onSubmit={(event) => void saveProgram(event)}>
-            <fieldset className={styles.draftFields} disabled={Boolean(pendingContent) || checkingContent || programDialogBusy}>
-            <legend className="sr-only">일정 내용</legend>
-            <div>
-              <label htmlFor="content-program-title">제목</label>
-              <input
-                id="content-program-title"
-                type="text"
-                maxLength={PROGRAM_TITLE_MAX}
-                required
-                value={programDraft.title}
-                aria-invalid={programDialogFailure?.field === "title"}
-                aria-describedby={programDialogFailure?.field === "title" ? "content-program-title-error" : undefined}
-                onChange={(event) => setProgramDraft({ ...programDraft, title: event.target.value })}
-              />
-              {programDialogFailure?.field === "title" ? (
-                <p className={styles.fieldError} id="content-program-title-error" role="alert">{programDialogFailure.message}</p>
-              ) : null}
-            </div>
-            <div>
-              <label htmlFor="content-program-date">날짜 (비우면 행사일)</label>
-              <input
-                id="content-program-date"
-                type="date"
-                value={programDraft.date}
-                onChange={(event) => setProgramDraft({ ...programDraft, date: event.target.value })}
-              />
-            </div>
-            <div className={uiStyles.formGrid}>
-              <div>
-                <label htmlFor="content-program-start">시작</label>
-                <input
-                  id="content-program-start"
-                  type="time"
-                  required
-                  value={programDraft.start}
-                  onChange={(event) => setProgramDraft({ ...programDraft, start: event.target.value })}
-                />
-              </div>
-              <div>
-                <label htmlFor="content-program-end">종료</label>
-                <input
-                  id="content-program-end"
-                  type="time"
-                  required
-                  value={programDraft.end}
-                  onChange={(event) => setProgramDraft({ ...programDraft, end: event.target.value })}
-                />
-              </div>
-            </div>
-            <div>
-              <label htmlFor="content-program-place">장소</label>
-              <input
-                id="content-program-place"
-                type="text"
-                maxLength={PROGRAM_PLACE_MAX}
-                value={programDraft.place}
-                onChange={(event) => setProgramDraft({ ...programDraft, place: event.target.value })}
-              />
-            </div>
-            <div>
-              <label htmlFor="content-program-description">상세 설명</label>
-              <textarea data-resize-none="true"
-                id="content-program-description"
-                rows={4}
-                maxLength={PROGRAM_DESCRIPTION_MAX}
-                value={programDraft.description}
-                onChange={(event) => setProgramDraft({ ...programDraft, description: event.target.value })}
-              />
-            </div>
-            <div>
-              <label htmlFor="content-program-attachment">일정 자료 (PDF, 600KB 이하)</label>
-              {programDraft.attachment ? (
-                <p className={styles.attachmentRow}>
-                  <span>{programDraft.attachment.name || "일정 자료(PDF)"}</span>
-                  <ProductButton
-                    type="button"
-                    variant="secondary"
-                    disabled={programDialogBusy || uploadingAttachment}
-                    onClick={() => setProgramDraft({ ...programDraft, attachment: null, attachmentDirty: true })}
-                  >
-                    첨부 제거
-                  </ProductButton>
-                </p>
-              ) : (
-                <input
-                  id="content-program-attachment"
-                  type="file"
-                  accept="application/pdf"
-                  disabled={programDialogBusy || uploadingAttachment || programUploadUncertain || archived}
-                  title={archived ? archivedReason : undefined}
-                  aria-invalid={programDialogFailure?.field === "attachment"}
-                  aria-describedby={programDialogFailure?.field === "attachment" ? "content-program-attachment-error" : undefined}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file && !archived) void uploadProgramAttachment(file);
-                    event.target.value = "";
-                  }}
-                />
-              )}
-              {uploadingAttachment ? <p className={styles.help} role="status">파일을 올리고 있습니다.</p> : null}
-              {programUploadUncertain ? (
-                <div className={styles.recovery}>
-                  <p>결과를 확인할 때까지 원래 파일을 유지합니다. 화면을 떠나면 파일을 다시 선택해야 합니다.</p>
-                  <div className={styles.recoveryActions}>
-                    <ProductButton type="button" variant="secondary" disabled={uploadingAttachment || programUploadAbandonConfirm} onClick={() => { if (programUploadRef.current) void uploadProgramAttachment(programUploadRef.current.file); }}>같은 파일 요청 다시 확인</ProductButton>
-                    <ProductButton type="button" variant="secondary" disabled={uploadingAttachment || programUploadAbandonConfirm} onClick={() => setProgramUploadAbandonConfirm(true)}>파일 확인 그만두기</ProductButton>
-                  </div>
-                  {programUploadAbandonConfirm ? <ConsoleConfirm
-                    summary="파일이 이미 서버에 저장됐을 수 있습니다. 확인을 그만둬도 서버 파일은 삭제되지 않습니다."
-                    confirmLabel="확인 그만두기"
-                    onConfirm={() => {
-                      if (programUploadRef.current) abandonOperatorAttempt(programUploadRef.current.commandId);
-                      programUploadRef.current = null;
-                      setProgramUploadUncertain(false);
-                      setProgramUploadAbandonConfirm(false);
-                      setProgramDialogFailure(null);
-                    }}
-                    onCancel={() => setProgramUploadAbandonConfirm(false)}
-                  /> : null}
-                </div>
-              ) : null}
-              {programDialogFailure?.field === "attachment" ? (
-                <p className={styles.fieldError} id="content-program-attachment-error" role="alert">{programDialogFailure.message}</p>
-              ) : null}
-            </div>
-            <p className={styles.help}>초안 저장 후 게시 검토에서 참가자에게 반영할 내용을 확인하세요. 현재 게시본은 유지됩니다.</p>
-            </fieldset>
-            {programDialogFailure && !["title", "attachment"].includes(programDialogFailure.field ?? "") && !(pendingContent?.origin === "program" && contentRecoveryError) ? (
-              <p className={styles.fieldError} role="alert">{programDialogFailure.message}</p>
-            ) : null}
-            {programDialogFailure?.field === "expectedVersion" && !pendingContent ? <ProductButton type="button" variant="secondary" disabled={busy !== null} onClick={() => void reloadEditorDraft("program")}>최신 초안 불러오기</ProductButton> : null}
-            {pendingContent?.origin === "program" ? contentRecovery() : null}
-            <ConsoleFormActions>
-              <ProductButton
-                type="button"
-                variant="secondary"
-                disabled={programDialogBusy || uploadingAttachment}
-                onClick={() => { if (canCloseProgramDialog()) setProgramDialogOpen(false); }}
-              >
-                취소
-              </ProductButton>
-              <ProductButton type="submit" variant="primary" disabled={programDialogBusy || uploadingAttachment || programUploadUncertain || archived || Boolean(pendingContent) || checkingContent || otherContentReceipt} title={archived ? archivedReason : undefined}>
-                {programDialogBusy ? "저장 중…" : "초안 저장"}
-              </ProductButton>
-            </ConsoleFormActions>
-          </ValidatedForm>
+      {previewStageOpen ? (
+        <ConsoleDialog titleId="content-phone-title" title="참가자 폰 미리보기" presentation="stage" onClose={() => setPreviewStageOpen(false)}>
+          {renderPhone("stage")}
         </ConsoleDialog>
       ) : null}
       {publication && review ? <PublicationReview title={review.title}
@@ -2012,3 +2152,4 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
     </ConsolePage>
   );
 }
+

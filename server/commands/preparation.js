@@ -16,6 +16,7 @@ const { normalizeHomeMenus, validateHomeMenus } = require('../attendee-home-menu
 const { parseEventFormatInput } = require('../state');
 const { contentDraft, saveContent, publishContent, publishReviewedContent } = require('../content-publication');
 const { ensureConsentNotice } = require('../consent-notices');
+const { bodyImageIds, MAX_BODY_IMAGES } = require('../rich-text');
 
 const COMMANDS = new Set([
   'event.update',
@@ -456,12 +457,20 @@ function assignGroup(ctx, input) {
   return { body: { participantIds: ids, group } };
 }
 
-function saveNotice(ctx, input) {
+async function saveNotice(ctx, input) {
   const id = ctx.clean(input.id || ctx.makeId('notice'), 120);
+  const body = requireText(ctx, input.body, '공지 내용', 3000, 'body');
+  // Images in the body must be this event's uploaded pictures; a bare
+  // reference to anything else never reaches attendees.
+  const imageIds = bodyImageIds(body);
+  if (imageIds.length > MAX_BODY_IMAGES) throw ctx.fail(400, `공지 이미지는 ${MAX_BODY_IMAGES}장까지 넣을 수 있습니다`, 'body');
+  for (const fileId of imageIds) {
+    await ctx.resolveFile({ fileId }, { eventId: ctx.event.id, contentTypes: ['image/png', 'image/jpeg', 'image/webp'], maxBytes: 600000 });
+  }
   const notice = {
     id,
     title: requireText(ctx, input.title, '공지 제목', 100, 'title'),
-    body: requireText(ctx, input.body, '공지 내용', 3000, 'body'),
+    body,
     published: input.published === true,
     pinned: input.pinned === true,
     at: ctx.now,

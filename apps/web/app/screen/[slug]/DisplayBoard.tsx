@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import ProductLink from "../../ui/ProductLink";
 import ProductButton from "../../ui/ProductButton";
 import drawStyles from "./draw-stage.module.css";
+import { richPlainText } from "../../../lib/rich-text";
 
 type Notice = { id: string; title: string; body: string };
 type ProgramItem = {
@@ -604,7 +605,8 @@ export default function DisplayBoard({ slug }: { slug: string }) {
       selected = {
         key: `notice-${notice.id}`,
         title: notice.title,
-        body: <p className="preserve-lines">{notice.body}</p>,
+        // The board shows words only: formatting and pictures stay on phones.
+        body: <p className="preserve-lines">{richPlainText(notice.body)}</p>,
       };
     }
   } else if (data.display.type === "poll" && module && module.type === "poll") {
@@ -721,7 +723,8 @@ export default function DisplayBoard({ slug }: { slug: string }) {
     frames.push({
       key: `notice-${notice.id}`,
       title: notice.title,
-      body: <p className="preserve-lines">{notice.body}</p>,
+      // The board shows words only: formatting and pictures stay on phones.
+        body: <p className="preserve-lines">{richPlainText(notice.body)}</p>,
     });
   }
   if (data.program.length) {

@@ -1,0 +1,293 @@
+/* Always-on attendee phone. The screen is laid out at a real 390px phone
+   width and scaled down as a whole, so attendee type and spacing read the
+   way they will on the device. The frame is the one bordered object beside
+   the flat ledger; everything inside it comes from the attendee pages. */
+.rail {
+  --phone-scale: 0.72;
+  --phone-width: 390px;
+  --phone-height: 780px;
+  display: grid;
+  gap: var(--s2);
+  align-content: start;
+  min-width: 0;
+  width: calc(var(--phone-width) * var(--phone-scale) + var(--s4));
+}
+
+.captionRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.expand {
+  min-height: 44px;
+  margin-block: calc(var(--s3) * -1);
+  padding: 0 var(--s1);
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--small);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.expand:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.caption {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.screenTabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s1);
+  padding: var(--s1);
+  border-radius: 999px;
+  background: var(--surface-muted);
+}
+
+.screenTab {
+  min-height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.screenTab[aria-pressed="true"] {
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgb(30 32 38 / 14%);
+}
+
+.screenTab:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.phone {
+  padding: var(--s2);
+  border-radius: 28px;
+  background: var(--ink);
+}
+
+.viewport {
+  width: calc(var(--phone-width) * var(--phone-scale));
+  height: calc(var(--phone-height) * var(--phone-scale));
+  overflow: hidden;
+  border-radius: 20px;
+  background: var(--paper);
+}
+
+.screen {
+  width: var(--phone-width);
+  height: var(--phone-height);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  transform: scale(var(--phone-scale));
+  transform-origin: top left;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.screen:focus-visible {
+  outline: 3px solid var(--brand);
+  outline-offset: -3px;
+}
+
+.home {
+  min-height: 100%;
+}
+
+.page {
+  min-height: 100%;
+  padding-bottom: var(--s5);
+  background: var(--paper);
+}
+
+.hero {
+  position: relative;
+  display: grid;
+  align-items: end;
+  min-height: 132px;
+  overflow: hidden;
+}
+
+.hero img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hero h3 {
+  position: relative;
+  margin: 0;
+  padding: var(--s4);
+  font-size: var(--h3);
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  word-break: keep-all;
+  text-shadow: 0 1px 6px rgb(0 0 0 / 20%);
+}
+
+.intro {
+  margin: 0;
+  padding: var(--s3) var(--s4) 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.editing {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.draftTag {
+  margin: var(--s2) 0 0;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 700;
+}
+
+.hiddenNote,
+.emptyNote {
+  margin: 0 0 var(--s3);
+  padding: var(--s3);
+  border-radius: var(--radius-small);
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.venue {
+  display: grid;
+  gap: var(--s3);
+  margin: 0;
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
+}
+
+.venue > div {
+  display: grid;
+  gap: var(--s1);
+}
+
+.venue dt {
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 700;
+}
+
+.venue dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.venue figure {
+  margin: 0;
+}
+
+.venue figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.themeLine {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.swatch {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 20%);
+}
+
+.themeLink {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* Stage: the full view. The phone is fitted to the room left under the bar;
+   on a real phone (bare) the screen fills the viewport with no frame. */
+.stage {
+  --phone-width: 390px;
+  --phone-scale: 0.72;
+  --phone-height: 780px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--s3);
+  height: 100%;
+  min-height: 0;
+}
+
+.stageBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.stageBar .screenTabs {
+  flex: 1 1 auto;
+  max-width: 380px;
+  min-width: 0;
+  margin: 0 auto;
+  background: color-mix(in srgb, var(--paper) 14%, transparent);
+}
+
+.stageBar .screenTab { color: color-mix(in srgb, var(--paper) 78%, transparent); }
+.stageBar .screenTab[aria-pressed="true"] { background: var(--paper); color: var(--ink); }
+.stageBar .screenTab:focus-visible { outline-color: var(--paper); }
+
+.stageHost {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.stageBare { gap: 0; }
+.stageBare .stageBar { padding: var(--s2) var(--s3); background: var(--ink); }
+.stageBare .stageBar .screenTabs { margin: 0; }
+.stageBare .stageHost { place-items: stretch; }
+.stageBare .phone { padding: 0; border-radius: 0; background: transparent; }
+.stageBare .viewport { border-radius: 0; }
+
+.stageClose {
+  flex: none;
+  min-height: 44px;
+  padding: 0 var(--s4);
+  border: 1px solid color-mix(in srgb, var(--paper) 45%, transparent);
+  border-radius: var(--radius-small);
+  background: transparent;
+  color: var(--paper);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.stageClose:hover { background: color-mix(in srgb, var(--paper) 14%, transparent); }
+.stageClose:focus-visible { outline: 2px solid var(--paper); outline-offset: 2px; }

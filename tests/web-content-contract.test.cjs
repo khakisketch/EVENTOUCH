@@ -100,15 +100,14 @@ test('web-console-content-gates-on-the-same-management-membership', () => {
   assert.match(workspace, /프로그램 일정 변경은 참여 콘텐츠 쓰기 권한이 필요합니다/);
 });
 
-test('web-console-content-dialogs-are-modal-and-wire-field-errors', () => {
+test('web-console-content-editors-sit-beside-the-phone-and-wire-field-errors', () => {
   const workspace = read('app/console/events/[id]/content/ContentWorkspace.tsx');
-  // Dialogs mount the shared shell: workspace owns usage, title ids and
-  // dismissal gates; the shell owns role/focus/Escape mechanics centrally.
-  assert.match(workspace, /<ConsoleDialog/);
-  assert.match(workspace, /titleId="content-notice-dialog-title"/);
-  assert.match(workspace, /titleId="content-program-dialog-title"/);
-  assert.match(workspace, /canClose=\{canCloseNoticeDialog\}/);
-  assert.match(workspace, /canClose=\{canCloseProgramDialog\}/);
+  // Editors are inline beside the always-on phone; only the phone sheet is a
+  // modal dialog. Workspace owns title ids and dismissal gates.
+  assert.match(workspace, /<ContentPhonePreview/);
+  assert.match(workspace, /<ConsoleDialog titleId="content-phone-title"/);
+  assert.match(workspace, /id="content-notice-dialog-title"/);
+  assert.match(workspace, /id="content-program-dialog-title"/);
   assert.match(workspace, /if \(canCloseNoticeDialog\(\)\) setNoticeDialogOpen\(false\)/);
   assert.match(workspace, /if \(canCloseProgramDialog\(\)\) setProgramDialogOpen\(false\)/);
   const dialog = read('app/console/console-ui/ConsoleDialog.tsx');

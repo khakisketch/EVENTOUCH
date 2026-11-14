@@ -53,9 +53,10 @@ test('preparation pages expose tab navigation where the task flows span zones', 
   }
   // The attendee-page supporting block is content, never a fifth tab label.
   assert.doesNotMatch(PAGES.settings, /label: "참가자 페이지"/u);
-  assert.match(PAGES.content, /<ConsoleSectionNav/u);
-  for (const id of ['content-notices', 'content-program', 'content-venue']) {
-    assert.match(PAGES.content, new RegExp(`\\{ id: "${id}"`), `content nav reaches ${id}`);
+  assert.doesNotMatch(PAGES.content, /<ConsoleSectionNav/u);
+  assert.match(PAGES.content, /role="tablist" aria-label="콘텐츠 종류"/u);
+  for (const id of ['notice', 'program', 'venue']) {
+    assert.match(PAGES.content, new RegExp(`\\{ id: "${id}", label:`), `content tabs reach ${id}`);
   }
   // Field operations reads as one page; its anchors stay for deep links.
   assert.doesNotMatch(PAGES.operations, /<ConsoleSectionNav/u);
@@ -82,13 +83,15 @@ test('preparation tabs keep stable anchors and form reading width', () => {
   // The optional disclosure keeps its own anchor id without a section heading.
   assert.ok(PAGES.settings.includes('id="settings-page"'), 'optional disclosure keeps its deep-link id');
   assert.doesNotMatch(PAGES.settings, /headingId="settings-page"/u);
+  // The old section anchors still deep-link: settings links to them and the
+  // workspace maps each hash to its tab.
   for (const id of ['content-notices', 'content-program', 'content-venue']) {
-    assert.match(PAGES.content, new RegExp(`headingId="${id}"`), `content keeps ${id}`);
+    assert.ok(PAGES.content.includes(`"#${id}"`), `content keeps the ${id} deep link`);
   }
   for (const id of ['ops-desks', 'ops-booths', 'ops-booth-mode', 'ops-booth-map', 'ops-display', 'ops-staff']) {
     assert.match(PAGES.operations, new RegExp(`headingId="${id}"`), `operations keeps ${id}`);
   }
-  assert.match(PAGES.content, /headingId="content-venue" title="장소 안내" width="form"/u);
+  assert.match(PAGES.content, /className=\{styles\.venuePanel\}/u, 'venue keeps its form reading width');
 });
 
 test('preparation feedback and editing-unit actions use the shared components', () => {
@@ -102,11 +105,13 @@ test('preparation feedback and editing-unit actions use the shared components', 
 });
 
 test('preparation dialogs use the shared shell with dismissal gates', () => {
-  assert.match(PAGES.content, /<ConsoleDialog/u);
-  assert.match(PAGES.content, /titleId="content-notice-dialog-title"/u);
-  assert.match(PAGES.content, /titleId="content-program-dialog-title"/u);
-  assert.match(PAGES.content, /canClose=\{canCloseNoticeDialog\}/u);
-  assert.match(PAGES.content, /canClose=\{canCloseProgramDialog\}/u);
+  // Editors are inline beside the phone (not modal); the phone sheet is the
+  // only dialog. Dismissal still asks before dropping a dirty or unconfirmed draft.
+  assert.match(PAGES.content, /<ConsoleDialog titleId="content-phone-title"[^>]*presentation="stage"/u);
+  assert.match(PAGES.content, /id="content-notice-dialog-title"/u);
+  assert.match(PAGES.content, /id="content-program-dialog-title"/u);
+  assert.match(PAGES.content, /function closeNoticeEditor\(\) \{ if \(canCloseNoticeDialog\(\)\)/u);
+  assert.match(PAGES.content, /function closeProgramEditor\(\) \{ if \(canCloseProgramDialog\(\)\)/u);
   assert.doesNotMatch(PAGES.content, /function Modal\(/u, 'content drops its private focus trap');
   assert.match(PAGES.operations, /<ConsoleDialog title=\{initial \? "데스크 편집" : "데스크 추가"\}/u);
   assert.match(PAGES.operations, /<ConsoleDialog title=\{initial \? "부스 편집" : "부스 추가"\}/u);
@@ -116,11 +121,9 @@ test('preparation dialogs use the shared shell with dismissal gates', () => {
 });
 
 test('preparation lists use shared record layout without nested cards', () => {
-  assert.match(PAGES.content, /uiStyles\.collection/u);
-  assert.match(PAGES.content, /uiStyles\.recordRow/u);
-  assert.match(PAGES.content, /uiStyles\.recordMain/u);
-  assert.match(PAGES.content, /uiStyles\.recordMeta/u);
-  assert.match(PAGES.content, /uiStyles\.recordActions/u);
+  assert.match(PAGES.content, /styles\.ledger\b/u, 'content rows are one flat ledger');
+  assert.match(PAGES.content, /<LedgerRow/u);
+  assert.doesNotMatch(PAGES.content, /uiStyles\.recordRow/u, 'no nested record cards');
   assert.match(PAGES.operations, /uiStyles\.collection/u);
   assert.match(PAGES.operations, /uiStyles\.recordRow/u);
 });
@@ -138,7 +141,8 @@ test('archived events read as read-only with the reason on every write control',
   assert.match(PAGES.settings, /disabled=\{!canWriteIntake \|\| archived \|\| settingsLocked\}/u);
   assert.match(PAGES.messages, /const messagesLocked = archived \|\| !state\.canWriteMessages/u);
   assert.match(PAGES.messages, /disabled=\{selectedCount === 0 \|\| busyAction !== null \|\| uploadingImage \|\| messagesLocked \|\| otherCreateReceipt \|\| uncertainMmsUpload\}/u);
-  assert.match(PAGES.content, /disabled=\{busy !== null \|\| archived \|\| Boolean\(pendingContent\) \|\| otherContentReceipt\}/u);
+  assert.match(PAGES.content, /const gated = busy !== null \|\| archived \|\| Boolean\(pendingContent\) \|\| otherContentReceipt;/u);
+  assert.match(PAGES.content, /disabled=\{gated\}/u);
   for (const [section, permission] of [['onsite', 'Onsite'], ['booth', 'Booth'], ['display', 'Display']]) {
     assert.match(PAGES.operations, new RegExp(`const ${section}Blocked = archived \\|\\| !canWrite${permission}`, 'u'));
     if (section === 'display') {

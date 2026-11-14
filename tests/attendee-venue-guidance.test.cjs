@@ -38,6 +38,7 @@ async function renderVenue(venue, published, features = ['venue']) {
       if (id === '../../event-stage') return { eventStageClassName: () => 'stage', eventStageLabel: () => '운영 준비' };
       if (id === '../../../lib/verification-mode') return { loadVerificationMode: async () => 'real' };
       if (id === '../../../lib/public-recovery-contact') return recoveryExports;
+      if (id === '../../ui/RichText') return { __esModule: true, default: ({ source }) => jsx.jsx('div', { children: source }) };
       if (id === './public-event.module.css') return { __esModule: true, default: { venueText: 'venueText' } };
       throw new Error(`Unexpected dependency: ${id}`);
     },

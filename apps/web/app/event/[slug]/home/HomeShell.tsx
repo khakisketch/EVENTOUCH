@@ -6,6 +6,7 @@ import ValidatedForm from "../../../ui/ValidatedForm";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import ProductLink from "../../../ui/ProductLink";
+import RichText from "../../../ui/RichText";
 import dynamic from "next/dynamic";
 import TicketView from "../ticket/TicketView";
 import { fetchWithDeadline } from "../../../../lib/request-deadline";
@@ -1397,7 +1398,7 @@ function NoticeTab({ slug, notices }: { slug: string; notices: Notice[] }) {
               {notice.pinned ? <span className={styles.noticePinned}>고정</span> : null}
               {notice.title}
             </h3>
-            {notice.body ? <p className={styles.noticeBody}>{notice.body}</p> : null}
+            {notice.body ? <RichText className={styles.noticeBody} source={notice.body} imageSrc={(fileId) => `/api/public/events/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}`} /> : null}
           </article>
         ))}
       </div>

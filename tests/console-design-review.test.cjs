@@ -17,24 +17,18 @@ function noNewHex(source, file) {
   assert.deepEqual(found, [], `${file} must use tokens, found literals: ${found.join(", ")}`);
 }
 
-// --- 1. Content notices: token rhythm + local danger outline ----------------
+// --- 1. Content ledger: flat rows with token rhythm + local danger outline ---
 
-test("notice rows separate title, badge row and body with tokens", () => {
+test("content ledger rows are flat, token-spaced and state-dotted", () => {
   const css = read("console/events/[id]/content/content.module.css");
-  // After the rendered hierarchy review, spacing belongs to each following
-  // element rather than accumulating under both the title and badges.
-  assert.match(css, /\.recordTitle\s*\{[^}]*margin:\s*0\s*;/s);
-  assert.match(css, /\.badgeRow\s*\{[^}]*gap:\s*var\(--s1\) var\(--s2\)/s);
-  assert.match(css, /\.badgeRow\s*\{[^}]*margin:\s*var\(--s1\) 0 0/s);
-  assert.match(css, /\.body\s*\{[^}]*margin:\s*var\(--s1\) 0 0/s);
-  assert.match(css, /li\.recordRow\s*\{[^}]*align-items:\s*start/s);
+  assert.match(css, /\.ledgerItem \+ \.ledgerItem\s*\{[^}]*border-top:\s*1px solid var\(--line\)/s);
+  assert.match(css, /\.ledgerRow\s*\{[^}]*grid-template-columns:\s*14px minmax\(0,\s*1fr\) auto/s);
+  assert.match(css, /\.ledgerRow\s*\{[^}]*min-height:\s*72px/s);
+  assert.match(css, /\.rowText\s*\{[^}]*gap:\s*var\(--s1\)/s);
+  assert.match(css, /\.dot\[data-status="live"\]\s*\{[^}]*background:\s*var\(--success\)/s);
+  assert.match(css, /\.dot\[data-status="edit"\]\s*\{[^}]*background:\s*var\(--warning\)/s);
   noNewHex(css, "content.module.css");
-});
-
-test("content badges read inline with token padding", () => {
-  const css = read("console/events/[id]/content/content.module.css");
-  assert.match(css, /\.badge\s*\{[^}]*display:\s*inline-flex/s);
-  assert.match(css, /\.badge\s*\{[^}]*padding:\s*var\(--s1\) var\(--s2\)/s);
+  noNewHex(read("console/events/[id]/content/content-preview.module.css"), "content-preview.module.css");
 });
 
 test("notice and schedule deletes share a local danger outline, nothing else", () => {
@@ -44,23 +38,19 @@ test("notice and schedule deletes share a local danger outline, nothing else", (
   assert.doesNotMatch(css, /\.dangerGhost[^}]*outline:/s);
   const workspace = read("console/events/[id]/content/ContentWorkspace.tsx");
   const usages = workspace.match(/styles\.dangerGhost/g) || [];
-  assert.equal(usages.length, 2, `two row deletes retain the local outline, found ${usages.length}`);
+  assert.equal(usages.length, 2, `two editor deletes retain the local outline, found ${usages.length}`);
   assert.equal((workspace.match(/confirmClassName="button button-danger"/g) || []).length, 2, 'both inline delete confirmations stay destructive');
-  assert.match(workspace, /requestNoticeDelete\(item\)[\s\S]*?dangerGhost/s);
-  assert.match(workspace, /className=\{styles\.dangerGhost\} variant="destructive"[\s\S]*?requestProgramDelete\(item\)/s);
+  assert.match(workspace, /className=\{styles\.dangerGhost\} variant="destructive"[\s\S]{0,260}requestNoticeDelete\(editingNotice\)/s);
+  assert.match(workspace, /className=\{styles\.dangerGhost\} variant="destructive"[\s\S]{0,260}requestProgramDelete\(editingProgram\)/s);
 });
 
-test("in-place confirms span the full row, never a third column", () => {
-  const css = read("console/events/[id]/content/content.module.css");
-  assert.match(css, /li\.recordRow\s*\{[^}]*display:\s*grid/s);
-  assert.match(css, /li\.recordRow\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto/s);
-  assert.match(css, /li\.recordRow > \[role="group"\]\s*\{[^}]*grid-column:\s*1 \/ -1/s);
-  assert.match(css, /@media \(max-width: 768px\)\s*\{[^}]*li\.recordRow\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s);
+test("content rows open their editor and carry no per-row buttons", () => {
   const workspace = read("console/events/[id]/content/ContentWorkspace.tsx");
-  const rows = workspace.match(/uiStyles\.recordRow\} \$\{styles\.recordRow\}/g) || [];
-  assert.equal(rows.length, 2, `notice + schedule rows share the local grid, found ${rows.length}`);
-  assert.match(workspace, /<ConsoleConfirm/);
-  assert.equal(rows.length, 2);});
+  assert.equal((workspace.match(/<LedgerRow/g) || []).length, 2, "notices and schedule share one ledger row");
+  assert.match(workspace, /onOpen=\{canWritePage \? \(\) => openNoticeEdit\(item\) : undefined\}/);
+  assert.match(workspace, /onOpen=\{canWritePrograms \? \(\) => openProgramEdit\(item\) : undefined\}/);
+  assert.doesNotMatch(workspace, /uiStyles\.recordRow/);
+});
 
 test("content keeps its copy, handlers and in-place confirms", () => {
   const workspace = read("console/events/[id]/content/ContentWorkspace.tsx");
@@ -68,8 +58,8 @@ test("content keeps its copy, handlers and in-place confirms", () => {
   assert.match(workspace, /일정을 삭제할까요/);
   assert.match(workspace, /confirmClassName="button button-danger"/);
   assert.match(workspace, /<ConsoleConfirm/);
-  assert.match(workspace, /onConfirm=\{\(\) => void deleteNotice\(item\)\}/);
-  assert.match(workspace, /onConfirm=\{\(\) => void deleteProgram\(item\)\}/);
+  assert.match(workspace, /onConfirm=\{\(\) => void deleteNotice\(editingNotice\)\}/);
+  assert.match(workspace, /onConfirm=\{\(\) => void deleteProgram\(editingProgram\)\}/);
   assert.match(workspace, /<PublicationReview/);
   assert.match(workspace, /onConfirm=\{\(\) => void applyPublication\(\)\}/);
   assert.match(workspace, /전광판 출력/);

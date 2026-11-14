@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const { createAccess } = require('./access');
 const { createPublicEvents } = require('./public-events');
 const { inspectImage } = require('./image-metadata');
+const { bodyImageIds } = require('./rich-text');
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const TYPES = new Set(['image/png','image/jpeg','image/webp','application/pdf']);
 const ID = /^[A-Za-z0-9_-]{1,160}$/;
@@ -226,6 +227,8 @@ function createFileService(database, { storageDir, fileStorage, env = process.en
     const ws = projection.workspace;
     const refs = [ws.branding.logo,ws.branding.keyvisual,
       ...ws.program.map(p => p.attachment), ...ws.photos.map(p => p.image),
+      // Pictures placed in published notice bodies (only published notices are projected).
+      ...ws.notices.flatMap(n => bodyImageIds(n.body).map(fileId => ({ fileId }))),
       ...(ws.venue && ws.venue.map ? [ws.venue.map.image] : []),
       ...(ws.boothMap && ws.boothMap.published ? [ws.boothMap.published.image] : [])];
     if (!refs.some(ref => ref && ref.fileId === fileId)) throw failure(404,'파일을 찾을 수 없습니다');
