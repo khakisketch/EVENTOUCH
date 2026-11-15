@@ -289,7 +289,8 @@
 .cal > span {
   font-size: var(--label);
   font-weight: 700;
-  opacity: 0.85;
+  /* No translucency on the dark block: dimmed paper fails contrast. */
+  color: var(--paper);
 }
 
 .cal > b {

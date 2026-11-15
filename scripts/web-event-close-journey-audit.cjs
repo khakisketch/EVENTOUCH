@@ -474,7 +474,7 @@ async function main() {
           await touchOk(link, '승인 대기 처리');
           await act('click', () => link.click());
         } else {
-          await act('click', () => page.getByRole('link', { name: '행사 마감', exact: true }).click());
+          await act('click', () => page.getByRole('link', { name: '행사 마감 시작', exact: true }).click());
           await page.locator(HUB.nextAction).waitFor({ state: 'visible', timeout: 15000 });
           await shotBoth('paired-hub-start');
           const disclosure = page.locator('details').filter({ has: page.locator('summary').filter({ hasText: '전체 마감 단계와 전제 확인' }) });

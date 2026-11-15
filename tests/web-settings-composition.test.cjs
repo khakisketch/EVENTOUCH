@@ -67,8 +67,9 @@ test('intake reads as a status band plus the participant form', () => {
   assert.match(workspace, /참가 신청서/u);
   assert.match(workspace, /항목 편집/u);
   assert.match(workspace, /state\.fields\.map/u);
-  // The publish button names the state: plain publish when clean or closed,
-  // 변경 게시 when open with unpublished consent edits.
+  // The publish button stays visible because application fields change on
+  // their own page: even a clean consent may need a publish (a version
+  // conflict then surfaces in review). Unpublished edits rename it 변경 게시.
   assert.match(workspace, /!state\.registrationOpen \? "양식 게시·접수 열기" : intakeDirty \? "변경 게시" : "양식 게시·접수 열기"/u);
   assert.match(workspace, /void runCommand\("form\.close"/u);
 });
@@ -93,4 +94,8 @@ test('section and dialog chrome reuse tokens with 44px targets', () => {
   assert.match(css, /min-height: 44px/u);
   assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}/u);
   assert.doesNotMatch(css, /rgb\(/u);
+  // The dark calendar block keeps full-white small text: dimmed paper on
+  // ink fails contrast (caught by the preparation audit, 2026-11-15).
+  const cal = css.slice(css.indexOf('.cal {'), css.indexOf('.eventName {'));
+  assert.doesNotMatch(cal, /opacity/u);
 });

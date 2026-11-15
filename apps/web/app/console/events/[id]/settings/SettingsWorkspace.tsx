@@ -1976,6 +1976,10 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             </> : null}
           </div>
           <ConsoleFormActions>
+            {/* 게시 버튼은 항상 둔다. 신청 항목은 별도 페이지에서 바뀌어
+                동의 문구가 그대로어도 게시할 일이 있다(버전이 바뀌면 게시
+                검토에서 충돌로 알려준다). 바뀐 게 있으면 "변경 게시"라고
+                부른다. */}
             <ProductButton
               type="button"
               className="button button-primary"
