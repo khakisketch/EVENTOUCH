@@ -99,7 +99,10 @@ export default function ConsoleSectionNav({ items, label, activeId, onNavigate, 
       if (repeated.length > 1 && repeated.every((part) => part === repeated[0]) && panels.has(repeated[0])) hash = repeated[0];
       const target = hash ? document.getElementById(hash) : null;
       const section = target?.closest<HTMLElement>("[data-workspace-section]");
-      const id = section?.dataset.workspaceSection ?? (/^report-/.test(hash) && panels.has("report-detail") ? "report-detail" : undefined);
+      // The reports screen addresses one selected report as #report-<id>
+      // (no real element carries that literal id); without a matching
+      // data-workspace-section ancestor, fall back to its one content panel.
+      const id = section?.dataset.workspaceSection ?? (/^report-/.test(hash) && panels.has("reports-list") ? "reports-list" : undefined);
       if (id && panels.has(id)) activate(id);
     }
     function register() {

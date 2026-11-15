@@ -42,13 +42,13 @@ async function main() {
       }
       await page.screenshot({ path: path.join(out, 'overview-1280.png'), fullPage: true });
     }
+    // 2026-11-15 redesign: 결과 분석 is always visible in the rail now — no
+    // tab click reaches it, it is already part of the one 보고서 panel.
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}/reports`, { waitUntil: 'networkidle' });
-    await page.getByRole('tab', { name: '결과 분석', exact: true }).click();
     const analysis = page.locator('[data-workspace-section="reports-analysis"]'); await analysis.waitFor();
     if (process.argv.includes('--baseline')) {
       assert.doesNotMatch(await analysis.innerText(), /취소 기록/);
       await page.screenshot({ path: path.join(out, 'before-analysis.png'), fullPage: true });
-      await page.getByRole('tab', { name: '보고서', exact: true }).click();
       await page.getByRole('button', { name: '보고서 만들기', exact: true }).first().click();
       const dialog = page.getByRole('dialog');
       assert.doesNotMatch(await dialog.innerText(), /취소 기록/);
@@ -81,16 +81,14 @@ async function main() {
     await dialog.waitFor({ state: 'hidden' });
     const final = (await read()).reports.find(report => report.title === '합성 충돌 보고서');
     assert.equal(final.snapshot.metrics.cancellationReview, 1);
-    await page.locator('li').filter({ hasText: '합성 충돌 보고서' }).getByRole('button', { name: '내용 보기' }).click();
+    // Saved reports are picked through the ink-underline switcher now.
+    await page.getByRole('tab', { name: '합성 충돌 보고서' }).click();
     const article = page.locator('article'); assert.match(await article.innerText(), /취소 기록.*1명/);
-    await page.getByRole('tab', { name: '보고서', exact: true }).click();
-    await page.locator('li').filter({ hasText: '합성 이전 집계' }).getByRole('button', { name: '내용 보기' }).click();
+    await page.getByRole('tab', { name: '합성 이전 집계' }).click();
     assert.match(await article.innerText(), /취소 기록.*확인.*저장되지/);
     const clean = await read(); clean.participants.find(item => item.id === person.id).cancelled = false; await save(clean);
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}/reports`, { waitUntil: 'networkidle' });
-    await page.getByRole('tab', { name: '결과 분석', exact: true }).click();
     assert.doesNotMatch(await analysis.innerText(), /취소 기록과 신청 상태가 다른/);
-    await page.getByRole('tab', { name: '보고서', exact: true }).click();
     await page.getByRole('button', { name: '보고서 만들기', exact: true }).first().click();
     await page.locator('#report-title').fill('합성 변경 재검토');
     const changed = await read(); changed.participants.find(item => item.id === person.id).cancelled = true; await save(changed);
@@ -118,7 +116,6 @@ async function main() {
     assert.match(await page.innerText('body'), /취소 기록 검토.*확인할 수 없/);
     await page.unroute(bootstrap);
     await page.reload({ waitUntil: 'networkidle' });
-    await page.getByRole('tab', { name: '결과 분석', exact: true }).click();
     const link = page.getByRole('link', { name: /티켓 확인 필요 명단/ }).first();
     assert.match(await link.getAttribute('href'), /ticket=review/);
     await link.click(); await page.waitForURL(/\/participants\?ticket=review/);
@@ -137,7 +134,6 @@ async function main() {
     assert.equal(resolved.participants.find(item => item.id === person.id).revoked, true, 'old ticket stays revoked');
     assert.equal(resolved.reports.find(report => report.id === final.id).snapshot.metrics.cancellationReview, 1, 'resolving the participant does not rewrite a frozen report');
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}/reports`, { waitUntil: 'networkidle' });
-    await page.getByRole('tab', { name: '결과 분석', exact: true }).click();
     assert.doesNotMatch(await analysis.innerText(), /취소 기록과 신청 상태가 다른/);
     const ended = await read(); ended.participants.find(item => item.id === person.id).cancelled = true; await save(ended);
     const event = (await f.harness.database.query('SELECT payload FROM events WHERE id=$1', [f.eventId])).rows[0].payload;

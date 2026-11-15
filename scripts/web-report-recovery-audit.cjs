@@ -130,7 +130,9 @@ async function verifyPhotoPrint(fixture, browser, out, workspace) {
     await clone.waitFor({ state: 'detached' });
     assert.equal((await calls()).length, 0);
     release();
-    await page.locator('li').filter({ hasText: '인쇄 사진 검증' }).getByRole('button', { name: '내용 보기' }).click();
+    // Saved reports are picked through the ink-underline switcher now, not
+    // a row list.
+    await page.getByRole('tab', { name: '인쇄 사진 검증' }).click();
     await print.press('Enter');
     await page.waitForFunction(() => window.printCalls.length === 1);
     assert.ok((await calls())[0].imageWidths[0] > 0);
@@ -141,43 +143,47 @@ async function verifyPhotoPrint(fixture, browser, out, workspace) {
     await page.reload({ waitUntil: 'domcontentloaded' });
     await print.press('Enter');
     await preparing.waitFor();
-    const analysisTab = page.getByRole('tab', { name: '결과 분석', exact: true });
-    await analysisTab.click();
-    assert.equal(await clone.count(), 0, 'leaving the report tab cancels image preparation');
-    assert.equal(new URL(page.url()).hash, '#reports-analysis');
+    // 2026-11-15 redesign: 결과 분석/보고서 내용 are no longer separate tabs
+    // next to 보고서 — both are inside the one always-visible 보고서 panel.
+    // The only other top-level tab is 행사 마감, so that is what "leaving
+    // the report panel" now means.
+    const closeTab = page.getByRole('tab', { name: '행사 마감', exact: true });
+    await closeTab.click();
+    assert.equal(await clone.count(), 0, 'leaving the 보고서 panel cancels image preparation');
+    assert.equal(new URL(page.url()).hash, '#event-close');
     release();
-    const detailTab = page.getByRole('tab', { name: '보고서 내용', exact: true });
-    await analysisTab.press('ArrowRight');
+    const reportsTab = page.getByRole('tab', { name: '보고서', exact: true });
+    await closeTab.press('ArrowRight');
     await print.waitFor();
-    assert.equal(await detailTab.evaluate(tab => tab === document.activeElement), true);
+    assert.equal(await reportsTab.evaluate(tab => tab === document.activeElement), true);
     assert.equal((await calls()).length, 0);
     const returnedUrl = new URL(page.url());
     await page.reload({ waitUntil: 'domcontentloaded' });
-    const reportDetail = page.getByRole('tabpanel', { name: '보고서 내용', exact: true });
+    const reportsPanel = page.getByRole('tabpanel', { name: '보고서', exact: true });
     try {
-      await reportDetail.getByRole('heading', { name: '인쇄 사진 검증', exact: true }).waitFor({ timeout: 8000 });
+      await reportsPanel.locator('article').getByRole('heading', { name: '인쇄 사진 검증', exact: true }).waitFor({ timeout: 8000 });
     } catch (error) {
       await page.screenshot({ path: path.join(out, 'report-tab-reload-failed.png') });
       throw new Error(`The reopened report was lost after reload from ${returnedUrl.hash}`, { cause: error });
     }
     assert.equal(returnedUrl.hash, `#report-${encodeURIComponent(report.id)}`);
     assert.equal(returnedUrl.searchParams.get('closeReport'), report.id);
-    assert.match(await reportDetail.locator('article').innerText(), /버전 1 · 공유 완료 기록/);
-    assert.equal(await detailTab.getAttribute('aria-selected'), 'true');
+    assert.match(await reportsPanel.locator('article').innerText(), /버전 1 · 공유 완료 기록/);
+    assert.equal(await reportsTab.getAttribute('aria-selected'), 'true');
     for (const width of [390, 1280]) {
       await page.setViewportSize({ width, height: 900 });
-      await reportDetail.getByRole('heading', { name: '보고서 내용', exact: true }).scrollIntoViewIfNeeded();
+      await reportsPanel.locator('article').getByRole('heading', { name: '인쇄 사진 검증', exact: true }).scrollIntoViewIfNeeded();
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
       await page.screenshot({ path: path.join(out, `report-tab-reloaded-${width}.png`) });
     }
     await page.evaluate(id => { window.location.hash = `report-${encodeURIComponent(id)}`; }, otherReport.id);
-    await reportDetail.getByRole('heading', { name: otherReport.title, exact: true }).waitFor({ timeout: 8000 });
-    assert.match(await reportDetail.locator('article').innerText(), new RegExp(`버전 ${otherReport.version} · 공유 완료 기록`));
+    await reportsPanel.locator('article').getByRole('heading', { name: otherReport.title, exact: true }).waitFor({ timeout: 8000 });
+    assert.match(await reportsPanel.locator('article').innerText(), new RegExp(`버전 ${otherReport.version} · 공유 완료 기록`));
     await page.goBack();
-    await reportDetail.getByRole('heading', { name: '인쇄 사진 검증', exact: true }).waitFor();
+    await reportsPanel.locator('article').getByRole('heading', { name: '인쇄 사진 검증', exact: true }).waitFor();
     await page.evaluate(() => { window.location.hash = 'report-%'; });
-    await page.getByRole('tabpanel', { name: '보고서', exact: true }).waitFor();
-    assert.equal(await reportDetail.count(), 0, 'a broken report link does not keep the last report open');
+    await reportsPanel.waitFor();
+    assert.equal(await reportsPanel.locator('article').count(), 0, 'a broken report link does not keep the last report open');
 
     held = new Promise(resolve => { release = resolve; });
     await page.goto('about:blank');
@@ -273,8 +279,7 @@ async function main() {
     assert.equal((await workspace()).reports.filter((item) => item.title === '합성 확인 보고서').length, 1);
 
     phase = 'publish and successor recover without a second write';
-    const reportRow = page.locator('li').filter({ hasText: '합성 확인 보고서' });
-    await reportRow.getByRole('button', { name: '내용 보기' }).click();
+    await page.getByRole('tab', { name: '합성 확인 보고서' }).click();
     await page.getByRole('button', { name: '공유 완료로 표시', exact: true }).click();
     mode = 'lost';
     await page.getByRole('button', { name: '공유 완료·잠금', exact: true }).click();
@@ -297,7 +302,6 @@ async function main() {
     assert.equal((await workspace()).reports.filter((item) => item.parentId === published.id).length, 1);
 
     phase = 'reload does not retain report content';
-    await page.getByRole('tab', { name: '보고서', exact: true }).click();
     mode = 'malformed';
     await create('합성 새로고침 보고서');
     await dialog.getByRole('button', { name: '서버 처리 확인' }).waitFor();
@@ -323,8 +327,7 @@ async function main() {
     legacyWorkspace.reports.find((item) => item.id === legacyId).summary = '가'.repeat(2100);
     await fixture.harness.database.query('UPDATE event_workspaces SET payload=$2::jsonb WHERE event_id=$1', [fixture.eventId, JSON.stringify(legacyWorkspace)]);
     await page.reload({ waitUntil: 'networkidle' });
-    const row = page.locator('li').filter({ hasText: '합성 기존 보고서' });
-    await row.getByRole('button', { name: '내용 보기' }).click();
+    await page.getByRole('tab', { name: '합성 기존 보고서' }).click();
     await page.getByRole('button', { name: '내용 편집' }).click();
     assert.equal((await page.locator('#report-summary').inputValue()).length, 2100);
     const beforeLegacySave = ids['report.update'].length;

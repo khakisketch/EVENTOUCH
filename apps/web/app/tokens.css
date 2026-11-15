@@ -71,6 +71,13 @@
   --shadow-raised: 0 1px 2px #1E20260D, 0 12px 32px -8px #1E20261F;
   --chart: var(--brand);
   --chart-track: #E5E5E7;
+  /* Reserved for distinguishing registration groups by series on the 결과
+     보고서 registration-composition bar only (dataviz skill validate_palette.js:
+     light-mode CVD ΔE 9.2, general ΔE 27.6 — both above threshold). Never
+     used anywhere else; the rest of the product stays ink + brand orange. */
+  --series-blue: #2a78d6;
+  --series-orange: #eb6834;
+  --series-aqua: #1baf7a;
 
   --body-font: 'Pretendard Variable', Pretendard, 'Noto Sans KR', 'Segoe UI', 'Malgun Gothic', system-ui, sans-serif;
   --display-font: var(--body-font);

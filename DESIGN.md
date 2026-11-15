@@ -338,6 +338,20 @@ The owner approved this composition on 2026-11-14 (`apps/web/app/console/Console
 - The next action sits at the row's end as amber text only when one exists (today: "승인 대기 n명 처리"). It is a sibling link, never nested in the row link.
 - The directory carries no progress numbers; showing live entry counts here needs a server change first.
 
+## 결과 보고서 확정 구성
+
+The owner approved this composition on 2026-11-15 (`apps/web/app/console/events/[id]/reports/`, option "최종안": 탭 + 문서 카드 + PPTX 내보내기). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-reports-composition.test.cjs` guards it; `tests/web-reports-presentation.test.cjs` and `tests/web-reports-archive-checklist.test.cjs` keep pinning the A4/16:9 toggle and the print-clone/checklist mechanics those files describe.
+
+- 마감 지도와 결과 분석·보고서 내용의 세 구역은 하나의 항상 보이는 "보고서" 패널로 합쳐졌다. 결과 분석(입장률·집계)과 보고서 내용(선택한 보고서)은 더 이상 따로 클릭해서 열어야 하는 탭이 아니다. 공유 섹션 내비게이션은 "행사 마감"·"보고서" 두 개만 남았다; 선택한 보고서는 그 "보고서" 탭 자체의 `fragment`(`#report-<id>`)로 계속 주소를 갖는다.
+- 마감 지도(`EventCloseFlow.tsx`)는 점 + "마감 N/7 · 다음 할 일" 한 줄과 그 줄 끝의 이어가기 링크/버튼으로 줄었다. 승인 대기·접수·단계 사실 표(`closeFacts`)를 포함한 전체 7단계 체크리스트는 지우지 않고 그 아래 `<details>`("전체 마감 단계와 전제 확인")에 그대로 접어 넣었다.
+- 보고서 선택은 잉크 밑줄 탭 전환기(제목 + 공유 완료/초안 점·글자)로 바뀌었다. "보고서 만들기" 버튼은 기존 접근성 이름과 권한 게이트를 그대로 유지한다.
+- 선택된 보고서는 회색 "책상"(`.pageDesk`) 위에 A4/16:9 측정값을 유지하는 카드(`.reportDoc`, 위쪽 `.cardBand`가 `report.color`를 띠로 표시)로 보인다. 카드 안 참가·입장 섹션에는 등록 그룹 구성비 막대+범례가, 참여 콘텐츠에는 같은 색 막대 리스트가, 만족도에는 평균 미터가 추가됐다 — 모두 저장된 텍스트 설명에 얹힌 시각 레이어일 뿐이며, 숫자가 검증되지 않으면(결측·비정수·음수·합계 0) 차트를 그리지 않고 기존 "확인할 수 없습니다" 문구만 남는다.
+- 보고서-최근 집계 차이는 덤벨(저장값 ↔ 최근값, 선으로 연결)로 먼저 보이고, 정확한 숫자 표는 그 아래 `<details>`("보고서-최근 집계 비교표 보기")에 접혀 있다.
+- 오른쪽 고정폭(300px) 레일: "결과 분석" 박스(항상 보임, 입장률 미터 + 기존 KPI 그리드 + 경고 + 그룹·부스·프로그램 상세 — 부스 표 아래 정원 대비 이용률 막대 추가)와 "실행" 박스(보고서가 열려 있을 때만: A4/16:9 보기 전환, 편집/공유 완료 또는 새 버전 만들기, 내보내기 묶음, 마감 핸드오프 링크). "조회된 집계 보기" 핸드오프 버튼은 분석이 항상 보이므로 제거했다.
+- 등록 그룹 막대만 쓰는 전용 3색(`--series-blue #2a78d6`, `--series-orange #eb6834`, `--series-aqua #1baf7a`, `apps/web/app/tokens.css`)은 dataviz 스킬 `validate_palette.js`로 라이트모드 검증됨(인접 CVD ΔE 9.2, 일반 ΔE 27.6). 이 화면의 다른 곳과 제품의 나머지 전부는 여전히 잉크+브랜드 오렌지.
+- PPTX 내보내기는 `pptxgenjs`를 클라이언트에서 동적 import해 표지(어두운 배경 + 오렌지 킥커 + 큰 제목) + 핵심 숫자 + 참여 콘텐츠 + 만족도 + 사진 슬라이드를 한 번 채워 내려준다(xlsx export와 같은 패턴, 새 서버 커맨드 없음). 사진은 `/api/events/:id/files/:fileId`를 fetch해 base64로 넣고, 한 장이 실패해도 나머지 내보내기는 계속된다. 버튼 옆에 "꾸미기는 파워포인트·키노트·캔바에서" 안내 문구가 있다.
+- 내보내기 묶음(PPTX/JSON/인쇄)은 ghost 역할로 낮췄다(보조 버튼 수를 줄이는 Action role rules 판단); 내용 편집·취소·닫기 같은 실제 대안 행동은 secondary로 남았다.
+
 ## Product component boundary
 
 Astryx supplies the production theme, actions, icon actions, links, labeled text fields, headings, sections and feedback. `app/ui/ProductButton`, `ProductLink`, `ProductInput` and `ProductNotice` keep the product-facing contract small. The production theme in `apps/web/src/themes/eventouch/` aliases `tokens.css`; generated theme files are rebuilt, not edited. The product explicitly uses light mode and Pretendard. The isolated design-review pilot is not a runtime dependency.

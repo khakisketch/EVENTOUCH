@@ -33,11 +33,15 @@ async function main() {
     page.on('pageerror', error => errors.push(error.message));
     const url = `${f.baseUrl}/console/events/${f.eventId}/reports`;
     await page.goto(url, { waitUntil: 'networkidle' });
+    // 2026-11-15 redesign: 결과 분석 is no longer a separate tab reached
+    // through a handoff button — it is always visible in the rail beside
+    // the report desk, inside the one 보고서 panel (reports-list).
     if (!process.argv.includes('--baseline')) {
       const reportList = page.locator('[data-workspace-section="reports-list"]');
-      const inspect = reportList.getByRole('button', { name: '조회된 집계 보기', exact: true });
-      assert.equal(await inspect.count(), 1, 'saved reports link directly to the latest completed analysis');
-      assert.match(await reportList.innerText(), /집계 자료 확인 필요/);
+      assert.equal(await reportList.getByRole('button', { name: '조회된 집계 보기', exact: true }).count(), 0, 'the handoff button is gone now that analysis is always visible');
+      const analysisPre = page.locator('[data-workspace-section="reports-analysis"]');
+      await analysisPre.waitFor();
+      assert.match(await analysisPre.innerText(), /참가·입장 자료를 확인할 수 없어 집계를 표시할 수 없습니다/);
       await page.evaluate(axe);
       for (const width of [320, 390, 1280]) {
         await page.setViewportSize({ width, height: 900 });
@@ -47,15 +51,9 @@ async function main() {
       }
       const writes = [];
       page.on('request', request => { if (request.method() === 'POST' && request.url().includes('/commands')) writes.push(request.url()); });
-      await inspect.click();
-      assert.equal(await page.getByRole('tab', { name: '결과 분석', exact: true }).getAttribute('aria-selected'), 'true');
-      assert.equal(await page.evaluate(() => document.activeElement?.id), 'reports-analysis');
-      assert.equal(new URL(page.url()).hash, '#reports-analysis', 'analysis handoff updates the shareable task address');
       await page.reload({ waitUntil: 'networkidle' });
-      assert.equal(await page.getByRole('tab', { name: '결과 분석', exact: true }).getAttribute('aria-selected'), 'true', 'analysis remains selected after reload');
-      assert.equal(writes.length, 0, 'opening analysis never writes or changes a frozen report');
-    } else {
-      await page.getByRole('tab', { name: '결과 분석', exact: true }).click();
+      assert.match(await page.locator('[data-workspace-section="reports-analysis"]').innerText(), /참가·입장 자료를 확인할 수 없어 집계를 표시할 수 없습니다/, 'analysis stays visible after reload, with no tab selection to lose');
+      assert.equal(writes.length, 0, 'viewing analysis never writes or changes a frozen report');
     }
     const analysis = page.locator('[data-workspace-section="reports-analysis"]');
     await analysis.waitFor();
@@ -94,7 +92,8 @@ async function main() {
     assert.equal(await page.getByRole('button', { name: '보고서 만들기', exact: true }).first().isDisabled(), true);
     assert.match(await page.innerText('body'), /보고서를 만들 수 없/);
     assert.deepEqual(await read(), damaged, 'read and blocked actions preserve source data');
-    await page.locator('li').filter({ hasText: '합성 공유 보고서' }).getByRole('button', { name: '내용 보기' }).click();
+    // Saved reports are picked through the ink-underline switcher now, not a row list.
+    await page.getByRole('tab', { name: '합성 공유 보고서' }).click();
     assert.match(await page.innerText('body'), /최근 참가·입장 집계를 확인할 수 없어 저장된 보고서와 비교할 수 없습니다/);
     await page.getByRole('button', { name: '새 버전 만들기', exact: true }).click();
     assert.equal(await page.getByRole('radio', { name: '현재 집계를 새로 반영' }).isDisabled(), true);
@@ -104,8 +103,7 @@ async function main() {
     let afterCopy = await read();
     const copy = afterCopy.reports.find(report => report.parentId === created.json.report.id);
     assert.deepEqual(copy.snapshot, created.json.report.snapshot, 'the existing frozen report remains reusable');
-    await page.getByRole('tab', { name: '보고서', exact: true }).click();
-    await page.locator('li').filter({ hasText: '합성 공유 보고서' }).filter({ hasText: '초안' }).getByRole('button', { name: '내용 보기' }).click();
+    await page.getByRole('tab', { name: /합성 공유 보고서.*초안/ }).click();
     await page.getByRole('button', { name: '내용 편집', exact: true }).click();
     await page.locator('#report-subtitle').fill('합성 변경');
     await page.getByRole('dialog').getByRole('button', { name: '수정 저장', exact: true }).click();
@@ -118,31 +116,30 @@ async function main() {
     partlyRepaired.booths = original.booths; partlyRepaired.photos = { original: '사진 원본' };
     await save(partlyRepaired);
     await page.reload({ waitUntil: 'networkidle' });
-    await page.getByRole('tab', { name: '결과 분석' }).click();
+    // 결과 분석 is always visible now; no tab click needed to reach it.
     assert.match(await analysis.innerText(), /취소 제외 등록 \(명\)/, 'available attendance remains visible');
     assert.match(await analysis.innerText(), /사진 자료를 확인할 수 없습니다/, 'partial availability is visible without expanding details');
     await analysis.locator('summary').filter({ hasText: '그룹·부스·프로그램별 상세 집계' }).click();
     assert.match(await analysis.innerText(), /사진.*확인할 수 없/);
     await page.screenshot({ path: path.join(out, 'after-partial-1280.png'), fullPage: true });
-    await page.getByRole('tab', { name: '보고서', exact: true }).click();
     assert.equal(await page.getByRole('button', { name: '보고서 만들기', exact: true }).first().isDisabled(), true);
+    // Partial availability is visible in 결과 분석's own warning (attendance
+    // stays shown; only the still-unavailable source says so), distinct from
+    // the full-unavailability warning asserted below once nothing refreshes.
+    assert.match(await analysis.innerText(), /다른 집계는 확인 가능한 자료를 표시합니다/, 'partial unavailability is distinguished from total unavailability');
     const reportList = page.locator('[data-workspace-section="reports-list"]');
-    assert.match(await reportList.innerText(), /일부 집계 자료 확인 필요/, 'available attendance is not described as wholly unavailable');
     const bootstrapUrl = `**/api/events/${f.eventId}/bootstrap`;
     await page.route(bootstrapUrl, route => route.fulfill({ status: 503, body: 'unavailable' }));
     await page.getByRole('button', { name: '보고서 자료 다시 확인', exact: true }).click();
-    await reportList.getByText('새로고침 실패 · 이전 조회 표시', { exact: false }).waitFor();
+    await page.getByText('마지막으로 확인한 내용을 표시합니다', { exact: false }).waitFor();
     await page.unroute(bootstrapUrl);
     const restored = await read(); restored.photos = original.photos; await save(restored);
     await page.getByRole('button', { name: '보고서 자료 다시 확인', exact: true }).click();
     await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button => button.textContent.trim() === '보고서 만들기' && !button.disabled));
-    await page.getByRole('tab', { name: '결과 분석', exact: true }).click();
     await page.waitForFunction(() => !document.body.textContent.includes('사진 자료를 확인할 수 없'));
     assert.match(await analysis.innerText(), /취소 제외 등록 \(명\)/);
-    await page.getByRole('tab', { name: '보고서', exact: true }).click();
     assert.equal(await page.getByRole('button', { name: '보고서 만들기', exact: true }).first().isEnabled(), true);
-    assert.match(await page.locator('[data-workspace-section="reports-list"]').innerText(), /마지막으로 확인한 집계 · 조회/);
-    assert.doesNotMatch(await page.locator('[data-workspace-section="reports-list"]').innerText(), /집계 자료 확인 필요/);
+    assert.doesNotMatch(await reportList.innerText(), /자료를 확인할 수 없어 현재 집계로 보고서를 만들 수 없습니다/);
     for (const missing of ['participants', 'reportSourceAvailability']) {
       const bootstrap = `**/api/events/${f.eventId}/bootstrap`;
       await page.route(bootstrap, async route => {
@@ -151,9 +148,7 @@ async function main() {
         await route.fulfill({ response, json: data });
       });
       await page.reload({ waitUntil: 'networkidle' });
-      await page.getByRole('tab', { name: '결과 분석', exact: true }).click();
       assert.match(await analysis.innerText(), /참가.*확인할 수 없/, `${missing} must not become zero`);
-      await page.getByRole('tab', { name: '보고서', exact: true }).click();
       assert.equal(await page.getByRole('button', { name: '보고서 만들기', exact: true }).first().isDisabled(), true);
       await page.unroute(bootstrap);
     }

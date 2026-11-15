@@ -4,19 +4,78 @@
   font-size: var(--small);
 }
 
-.analysisHandoff {
+/* 2026-11-15 결과 보고서 redesign (DESIGN.md "결과 보고서 확정 구성"):
+   report switcher tabs, desk + card, right rail (분석 + 실행). The analysis
+   handoff button this screen used to need is gone — 결과 분석 is now always
+   visible in the rail, so there is nothing left to hand off to. */
+
+.switchbar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s2) var(--s4);
-  min-width: 0;
-  padding-block: var(--s3);
+  align-items: flex-end;
+  gap: var(--s1);
+  overflow-x: auto;
+  margin-top: var(--s3);
+  padding-bottom: 0;
   border-bottom: 1px solid var(--line);
 }
-.analysisHandoff strong { font-size: var(--body); }
-.analysisHandoff p { margin: var(--s1) 0 0; color: var(--muted); font-size: var(--small); overflow-wrap: anywhere; }
-.analysisHandoffAction { color: var(--brand-text); }
+
+.reportTab {
+  all: unset;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--control-min-size);
+  padding: var(--s2) var(--s1);
+  margin-right: var(--s5);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-size: var(--body-work);
+  transition: color 0.12s, border-color 0.12s;
+}
+.reportTab:hover { color: var(--ink); }
+.reportTab:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+.reportTab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); font-weight: 700; }
+.reportTabTitle { white-space: nowrap; }
+
+/* Desk (left, flexible) and rail (right, fixed 300px). Narrow screens stack. */
+.content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  align-items: start;
+  gap: var(--s5);
+  margin-top: var(--s4);
+}
+
+.deskColumn {
+  display: grid;
+  gap: var(--s4);
+  min-width: 0;
+}
+
+.railSide {
+  position: sticky;
+  top: var(--s4);
+  display: grid;
+  gap: var(--s4);
+  min-width: 0;
+}
+
+@media (max-width: 880px) {
+  .content { grid-template-columns: minmax(0, 1fr); }
+  .railSide { position: static; }
+}
+
+/* The desk: a neutral surface the document sits on, centered at an A4-ish
+   measure so it reads as a printed artifact rather than a screen panel. */
+.pageDesk {
+  background: var(--surface-muted);
+  border-radius: var(--radius-large);
+  padding: clamp(16px, 4vw, 40px) clamp(12px, 3vw, 28px);
+  display: flex;
+  justify-content: center;
+}
 
 .exportScope {
   margin: 0;
@@ -107,6 +166,40 @@
   .metricLead strong {
     font-size: var(--h1);
   }
+}
+
+/* The analysis rail is 300px wide: the shared KPI strip (auto-fit columns,
+   double-width lead, dividers) was built for a full-width row and breaks
+   here. Lead number takes its own row with the meter under it; the counts
+   share one row of three. */
+.analysisBox .metricGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s3) var(--s2);
+  border-block: 0;
+}
+
+.analysisBox .metricCard,
+.analysisBox .metricCard + .metricCard,
+.analysisBox .metricCard:first-child {
+  padding: 0;
+  border-left: 0;
+}
+
+.analysisBox .metricCard strong {
+  font-size: var(--h3);
+}
+
+.analysisBox .metricCard span {
+  font-size: var(--label);
+}
+
+.analysisBox .metricLead {
+  grid-column: 1 / -1;
+  padding-bottom: var(--s2);
+}
+
+.analysisBox .metricLead strong {
+  font-size: var(--h1);
 }
 
 .dataTable {
@@ -295,13 +388,27 @@
   min-height: auto;
 }
 
+/* The document card: the one bordered/shadowed surface on this screen and
+   the exact thing that gets printed. The band carries the report's own
+   theme color (report.color); everything else sits in the padded .cardPad
+   so the band can run edge to edge. */
 .reportDoc {
-  display: grid;
-  gap: var(--s4);
-  padding: var(--s5);
+  width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--paper);
+  box-shadow: var(--shadow-raised);
+  overflow: hidden;
+}
+
+.cardBand {
+  height: 6px;
+}
+
+.cardPad {
+  display: grid;
+  gap: var(--s4);
+  padding: var(--s5);
 }
 
 .reportDoc h3 {
@@ -340,6 +447,19 @@
 .reportComparison .dataTable th { white-space: normal; }
 .reportComparison .dataTable th:first-child { padding-left: 0; }
 
+/* The report-vs-current comparison table stays verbatim; it just moves
+   behind a disclosure once the dumbbell above it already shows the gap. */
+.diff summary {
+  cursor: pointer;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--brand-text);
+  font-size: var(--small);
+  font-weight: 700;
+}
+.diff summary:hover { text-decoration: underline; }
+
 .reportViewBar {
   display: flex;
   flex-wrap: wrap;
@@ -364,7 +484,7 @@
   display: grid;
   gap: var(--s2);
   padding-bottom: var(--s4);
-  border-bottom: 3px solid var(--brand);
+  border-bottom: 1px solid var(--line);
 }
 
 .reportSubtitle {
@@ -373,6 +493,125 @@
   font-weight: 700;
   word-break: keep-all;
 }
+
+/* Registration-group composition: a single bar cut into verified-count
+   segments, the only place --series-* colors are used on this screen. */
+.stack {
+  display: flex;
+  height: 26px;
+  border-radius: var(--radius-small);
+  overflow: hidden;
+  gap: 2px;
+  margin: var(--s1) 0 var(--s3);
+}
+.stack i { display: block; height: 100%; }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s4);
+  margin: 0 0 var(--s4);
+  font-size: var(--small);
+}
+.legend span { display: inline-flex; align-items: center; gap: var(--s1); color: var(--muted); }
+.legend em { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+.legend b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* Saved value (muted) versus the current live value (warning) on one
+   track, joined by a line — the report-vs-current gap, at a glance. */
+.dumbbell {
+  display: grid;
+  gap: var(--s5);
+  margin: var(--s3) 0 var(--s1);
+}
+.dbrow {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s3);
+  font-size: var(--small);
+}
+.dbkey { color: var(--muted); }
+.dbtrack { position: relative; height: 16px; }
+.dbline {
+  position: absolute;
+  left: var(--a);
+  right: calc(100% - var(--b));
+  top: 50%;
+  height: 2px;
+  background: var(--line-strong);
+  transform: translateY(-50%);
+}
+.dbdot {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 2px var(--paper);
+}
+.dbdotBase { left: var(--a); background: var(--line-strong); }
+.dbdotNow { left: var(--b); background: var(--warning); }
+.dblabel {
+  position: absolute;
+  top: -14px;
+  font-size: var(--label);
+  font-weight: 700;
+  color: var(--muted);
+  transform: translateX(-50%);
+}
+.dblabelNow { color: var(--warning); top: 16px; }
+
+/* Participation by program/booth: same-color bars, length is the only
+   comparison. Booth capacity reuses the same visual language. */
+.barlist,
+.boothBarList {
+  display: grid;
+  gap: var(--s3);
+  margin: var(--s1) 0 0;
+}
+.barlistRow,
+.boothBarRow {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) 50px;
+  align-items: center;
+  gap: var(--s3);
+  font-size: var(--small);
+}
+.barlistKey { color: var(--muted); }
+.barlistTrack,
+.boothBarTrack {
+  height: 14px;
+  border-radius: var(--radius-small);
+  background: var(--surface-muted);
+  box-shadow: inset 0 0 0 1px var(--line);
+  overflow: hidden;
+}
+.barlistTrack i,
+.boothBarTrack i { display: block; height: 100%; background: var(--ink); border-radius: var(--radius-small); }
+.barlistValue,
+.boothBarValue { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* One ratio (입장률, 만족도) as a filled track plus its value — reused in
+   the rail's analysis box and inside the frozen article's satisfaction
+   section. */
+.meter { margin: var(--s3) 0 0; }
+.meterTrack {
+  height: 12px;
+  border-radius: 6px;
+  background: var(--brand-tint);
+  overflow: hidden;
+}
+.meterTrack i { display: block; height: 100%; background: var(--brand); border-radius: 6px; }
+.meterValue {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--s1);
+  font-size: var(--label);
+  color: var(--muted);
+}
+.meterValue b { color: var(--ink); font-variant-numeric: tabular-nums; }
 
 .snapshotPhotos {
   display: grid;
@@ -391,9 +630,10 @@
 
 .snapshotPhotos img {
   width: 100%;
-  height: 120px;
+  aspect-ratio: 4 / 3;
   object-fit: cover;
   border-radius: var(--radius-small);
+  box-shadow: inset 0 0 0 1px var(--line);
 }
 
 .snapshotPhotos p {
@@ -459,6 +699,28 @@
   background: transparent;
 }
 
+/* The close map's lead line: a dot, the current step, and the one
+   continue action — the map's fact grid and full checklist move under
+   the existing <details> below instead of standing above the fold. */
+.statusLine {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+}
+
+.statusDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--brand);
+  flex: none;
+}
+
+.statusNext {
+  margin-left: auto;
+}
+
 .closeFacts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -522,4 +784,174 @@
   font-family: var(--mono-font);
   font-size: var(--label);
   letter-spacing: 0.04em;
+}
+
+/* Rail boxes: 결과 분석 (always visible, live data) above 실행 (actions for
+   the selected report). Bordered + tinted so the rail reads as tools next
+   to the document, never as a second card competing with it. */
+.analysisBox {
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-medium);
+  background: var(--surface-muted);
+}
+
+.analysisBoxHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.analysisBoxTitle {
+  margin: 0;
+  font-size: var(--small);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.actionBox {
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-medium);
+}
+
+.exportGroup,
+.closeBack {
+  display: grid;
+  gap: var(--s2);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+.exportNote {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--label);
+}
+
+/* Action rail, top to bottom: the real next steps stacked full-width, then
+   the export group, the view switch, and the way back to 행사 마감. Notes
+   stay small and muted; nothing here wraps beside a button. */
+.primaryActions > div,
+.primaryActions > div > div {
+  display: grid;
+  gap: var(--s2);
+  justify-content: stretch;
+  justify-items: stretch;
+}
+
+.primaryActions button,
+.primaryActions a {
+  width: 100%;
+  justify-content: center;
+}
+
+.primaryActions .check,
+.primaryActions .help {
+  justify-content: flex-start;
+}
+
+.viewGroup {
+  display: grid;
+  gap: var(--s2);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+.viewGroup .reportViewBar {
+  flex-wrap: nowrap;
+  gap: var(--s2);
+}
+
+.viewGroup .reportViewBar > .pill {
+  flex: 1 1 0;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.viewGroup > .help {
+  font-size: var(--label);
+}
+
+.closeBack > a {
+  justify-content: center;
+}
+
+.exportScope {
+  font-size: var(--label);
+  color: var(--muted);
+}
+
+/* Program/booth names are long ("행사 만족도 조사"): give the key column a
+   real width on the A4 desk so it never wraps to a second line. */
+.pageDesk .barlistRow,
+.pageDesk .boothBarRow {
+  grid-template-columns: 132px minmax(0, 1fr) 56px;
+}
+
+/* The report-vs-current comparison belongs under the document but is live
+   data, so it stays outside the frozen article; align it with the card. */
+.deskColumn .reportComparison {
+  width: 100%;
+  max-width: 720px;
+  margin-inline: auto;
+}
+
+.deskColumn .archiveCheck {
+  width: 100%;
+  max-width: 720px;
+  margin-inline: auto;
+}
+
+/* Close status: a plain line with hairlines, not a card or a band. */
+.statusLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  padding-block: var(--s3);
+  border-block: 1px solid var(--line);
+}
+
+.statusLine > a {
+  margin-left: auto;
+}
+
+.statusDot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--brand);
+}
+
+.exportGroup > div,
+.exportGroup > div > div {
+  display: grid;
+  gap: 0;
+  justify-content: stretch;
+  justify-items: start;
+}
+
+.deskColumn .dumbbell {
+  max-width: 520px;
+}
+
+.deskColumn .dbrow {
+  grid-template-columns: 132px minmax(0, 1fr);
+}
+
+.nextAction:empty {
+  display: none;
+}
+
+.nextAction > a {
+  width: 100%;
+  justify-content: center;
 }

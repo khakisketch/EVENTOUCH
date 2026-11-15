@@ -104,9 +104,11 @@ test('mobile-workspaces: editor preview header wraps without squishing Korean', 
 
 test('mobile-workspaces: analysis header folds refresh and stamp beside the KPIs', () => {
   const reports = read(REPORTS);
-  // 새로고침 stays in the section action slot next to the 결과 분석 H2 —
-  // a secondary slot action, never a new stacked 44px body row.
-  assert.match(reports, /headingId="reports-analysis"/u, 'analysis section stays');
+  // 새로고침 stays beside the 결과 분석 h3 inside the rail's analysis box —
+  // a secondary slot action, never a new stacked 44px body row. 2026-11-15:
+  // 결과 분석 is no longer its own ConsoleSection/tab (always visible in the
+  // rail now), so its identity moved from headingId to a plain id.
+  assert.match(reports, /id="reports-analysis" data-workspace-section="reports-analysis"/u, 'analysis section stays');
   // 2026-11-10: 동일한 새로고침 버튼의 접근 이름을 화면에 맞게 구체화했다(시각 변화 없음).
   assert.match(reports, /<ConsoleRefreshButton label="결과 분석 새로고침"/u, 'refresh action stays');
   // The frozen basis stamp moves into the description next to the header

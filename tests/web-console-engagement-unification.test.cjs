@@ -84,9 +84,13 @@ test('unified-frame: domain sections keep their identities, duplicate menu title
     assert.match(photos, new RegExp(`id="${id}"`), `photos retains ${id}`);
   }
   const reports = read(REPORTS);
-  for (const id of ['reports-analysis', 'reports-list', 'report-detail']) {
-    assert.match(reports, new RegExp(`headingId="${id}"`), `reports retains ${id}`);
-  }
+  // 2026-11-15 redesign: 결과 분석·보고서 내용 are no longer their own
+  // ConsoleSection/tab — both render inside the always-visible 보고서 panel
+  // (headingId="reports-list"), so their identity now lives on a plain id
+  // (the rail analysis box, the frozen article) instead of a second heading.
+  assert.match(reports, /headingId="reports-list"/, 'reports retains reports-list');
+  assert.match(reports, /id="reports-analysis" data-workspace-section="reports-analysis"/, 'reports retains reports-analysis');
+  assert.match(reports, /<article ref=\{articleRef\} id="report-detail"/, 'reports retains report-detail');
   const programs = read(PROGRAMS);
   assert.doesNotMatch(programs, /headingId="program-module-list"/, 'programs drops the menu-duplicate body title');
   assert.match(programs, /className=\{styles\.moduleList\}/, 'programs keeps the module collection body');
@@ -99,13 +103,19 @@ test('unified-frame: domain sections keep their identities, duplicate menu title
   }
 });
 
-test('unified-frame: reports navigate analysis and frozen records through the shared nav', () => {
+test('unified-frame: reports navigate through the shared nav, selected report stays addressable', () => {
   const reports = read(REPORTS);
   assert.match(reports, /<ConsoleSectionNav/, 'reports use the shared section nav');
-  assert.match(reports, /\{ id: "reports-analysis", label: "결과 분석" \}/, 'analysis jump target stays');
-  assert.match(reports, /\{ id: "reports-list", label: "보고서" \}/, 'frozen list jump target stays');
-  assert.match(reports, /\{ id: "report-detail", label: "보고서 내용", fragment: reportFragment\(detail\.id\) \}/, 'the detail tab addresses the selected report');
-  assert.match(reports, /recordRow/, 'frozen records use the shared record row');
+  // 2026-11-15 redesign: 결과 분석 and 보고서 내용 are no longer separate
+  // tabs an operator must click through — both render inside the one
+  // always-visible 보고서 panel, so the shared nav keeps only the two real
+  // destinations. The selected report keeps its own address via
+  // reportFragment/#report-<id> (pinned by web-reports-archive-checklist).
+  assert.match(reports, /items=\{\[\s*\{ id: "event-close", label: "행사 마감" \},\s*\{ id: "reports-list", label: "보고서", fragment: detail \? reportFragment\(detail\.id\) : "reports-list" \},\s*\]\}/, 'section nav keeps exactly the two destinations, the open report still addressable through the 보고서 tab fragment');
+  assert.match(reports, /reportFragment\(id\)/, 'a selected report still gets its own fragment');
+  // The saved-report switcher (ink-underline tabs) carries the same shared
+  // published/draft state the old record row did.
+  assert.match(reports, /role="tablist" aria-label="보고서 선택"/, 'reports pick a saved version through a tab switcher');
   assert.match(reports, /badgePublished/, 'shared state stays visible on frozen records');
   assert.match(reports, /badgeDraft/, 'draft state stays visible on frozen records');
 });
@@ -319,7 +329,7 @@ test('unified-frame: dialogs keep dirty and unresolved dismissal gates', () => {
 test('unified-frame: printing emits only the chosen saved snapshot', () => {
   const reports = read(REPORTS);
   assert.match(reports, /articleRef = useRef<HTMLElement>\(null\)/);
-  assert.match(reports, /<article ref=\{articleRef\} className=\{`?\$\{styles\.reportDoc\}/);
+  assert.match(reports, /<article ref=\{articleRef\} id="report-detail"\s*\n\s*className=\{`\$\{styles\.reportDoc\}/);
   assert.match(reports, /data-layout=\{printLayout\}/);
   assert.match(reports, /cloneNode\(true\)/);
   assert.match(reports, /clone\.id = "eventouch-report-print"/);
