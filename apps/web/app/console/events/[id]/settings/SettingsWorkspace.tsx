@@ -1,7 +1,7 @@
 "use client";
 import ProductButton from "../../../../ui/ProductButton";
 
-import ConsoleChoiceGroup, { EVENT_FORMAT_CHOICES } from "../../../console-ui/ConsoleChoiceGroup";
+import ConsoleDialog from "../../../console-ui/ConsoleDialog";
 import ValidatedForm from "../../../../ui/ValidatedForm";
 
 
@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import ProductLink from "../../../../ui/ProductLink";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
-import { eventStageClassName, eventStageLabel } from "../../../../event-stage";
+import { eventStageLabel } from "../../../../event-stage";
 import { useConsoleDraftGuard } from "../../../console-draft-guard";
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
 import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
@@ -100,6 +100,9 @@ type Ready = {
   publishedVersion: number;
   consentText: string;
   consentVersion: number;
+  // 신청 항목 미리보기용. 같은 bootstrap 응답의 workspace.fields에서 읽으며,
+  // 새 API를 쓰지 않는다. 편집은 신청 항목 페이지가 맡는다.
+  fields: Array<{ label: string; required: boolean; type: string }>;
   pageDraftVersion: number;
   pagePublishedVersion: number;
   pagePublishedAt: string;
@@ -120,16 +123,19 @@ type FeaturesConflict = { latest: string[] | null; loading: boolean; error: stri
 const BASIC_COMPARISON_FIELDS: Array<{ key: keyof Basics; label: string }> = [
   { key: "name", label: "행사명" }, { key: "slug", label: "주소" }, { key: "clientId", label: "고객사" },
   { key: "date", label: "날짜" }, { key: "start", label: "시작" }, { key: "end", label: "종료" },
-  { key: "capacity", label: "정원" }, { key: "price", label: "참가비" }, { key: "format", label: "진행 방식" },
+  { key: "capacity", label: "정원" },
   { key: "approvalRequired", label: "참가 승인" }, { key: "allowReentry", label: "재입장" },
   { key: "verificationRequired", label: "본인 확인" },
 ];
+// The screen no longer edits 참가비 or 진행 형태 (2026-11-15): the price only
+// matters with the payment feature this product never offers, and the format
+// is display-only metadata shown nowhere. Stored values are preserved verbatim
+// in saves and conflict baselines; they just have no inputs.
 
 function basicComparisonValue(key: keyof Basics, values: Basics, clients: Ready["clients"]): string {
   switch (key) {
     case "clientId": return clients.find((client) => client.id === values.clientId)?.name || values.clientId || "미지정";
     case "capacity": return values.capacity === "0" ? "제한 없음" : values.capacity || "미지정";
-    case "format": return ({ offline: "오프라인", online: "온라인", hybrid: "온·오프라인" } as Record<string, string>)[values.format] || "미지정";
     case "approvalRequired": return values.approvalRequired ? "필요" : "불필요";
     case "allowReentry": return values.allowReentry ? "허용" : "불허";
     case "verificationRequired": return values.verificationRequired ? "필요" : "불필요";
@@ -252,29 +258,22 @@ const SETTINGS_SECTION_LABEL: Record<SettingsSectionId, string> = {
   features: "운영 기능",
 };
 
-// 네 개의 실제 탭. 다섯 번째였던 참가자 페이지는 탭이 아니라 탭 아래 보조
-// 구역으로 둔다(꾸미기는 선택 사항). 앵커 id(settings-*)는 기존 딥링크와
-// closeStep 복귀 흐름이 그대로 쓰므로 바꾸지 않는다.
-type SettingsTabId = "basics" | "intake" | "features" | "stage";
+// 한 장의 작업 판. 탭은 없애고 네 구역(기본 정보·참가 접수·운영 기능·진행
+// 단계)이 세로로 이어진다. 기본 정보만 드로어에서 고친다. 앵커
+// id(settings-*)는 기존 딥링크와 closeStep 복귀 흐름이 그대로 쓰므로 바꾸지
+// 않는다: #settings-basics는 드로어를 열고, 나머지는 해당 구역으로 스크롤한다.
+type SettingsAnchorId = "basics" | "intake" | "features" | "stage";
 
-const SETTINGS_TABS: Array<{ id: SettingsTabId; anchor: string; label: string }> = [
-  { id: "basics", anchor: "settings-basics", label: "기본 정보" },
-  { id: "intake", anchor: "settings-intake", label: "참가 접수" },
-  { id: "features", anchor: "settings-features", label: "운영 기능" },
-  { id: "stage", anchor: "settings-stage", label: "진행 단계" },
-];
-
-const TAB_ANCHORS: Record<SettingsTabId, string> = {
+const SECTION_ANCHORS: Record<SettingsAnchorId, string> = {
   basics: "settings-basics",
   intake: "settings-intake",
   features: "settings-features",
   stage: "settings-stage",
 };
 
-function tabFromHash(hash: string): SettingsTabId | null {
+function sectionFromHash(hash: string): SettingsAnchorId | null {
   const key = hash.startsWith("#") ? hash.slice(1) : hash;
-  const found = SETTINGS_TABS.find((tab) => tab.anchor === key);
-  return found ? found.id : null;
+  return (Object.keys(SECTION_ANCHORS) as SettingsAnchorId[]).find((id) => SECTION_ANCHORS[id] === key) ?? null;
 }
 
 function buildEventMeta(clientName: string, basics: Basics, venueName: string): string | undefined {
@@ -293,23 +292,39 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   const closeHref = useEventCloseHandoff(eventId);
   const closeLandingRef = useRef<string | null>(null);
   // 선형 마감 "다음" 인계로 예약된 제목 포커스. 렌더 뒤 효과에서 소비한다.
-  const pendingHeadingFocusRef = useRef<SettingsTabId | null>(null);
+  const pendingHeadingFocusRef = useRef<SettingsAnchorId | null>(null);
   const [state, setState] = useState<State>({ kind: "loading" });
   const [reloadTick, setReloadTick] = useState(0);
   const [refreshingAfterWrite, setRefreshingAfterWrite] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<{ message: string; field?: string } | null>(null);
-  // 오류가 다른 탭의 입력에 있으면 해당 탭에 표시한다. 전역 배너만으로는
-  // 오류 탭을 찾을 수 없기 때문이다. 패널은 hidden으로 마운트 유지되므로
-  // DOM 조회로 탭을 특정할 수 있다(SSR 불일치 방지를 위해 effect에서 계산).
-  const [failureTabId, setFailureTabId] = useState<SettingsTabId | null>(null);
+  // 저장 실패가 어느 구역의 입력인지 기억해 두었다가, 배너 다음에 해당
+  // 구역으로 스크롤한다. 기본 정보 필드면 드로어를 연다(SSR 불일치 방지를
+  // 위해 DOM 조회는 effect에서 계산).
+  const [failureSection, setFailureSection] = useState<SettingsAnchorId | null>(null);
   useEffect(() => {
-    if (!failure?.field || failure.field === "serverUnsupported") { setFailureTabId(null); return; }
-    if (failure.field === "consentText") { setFailureTabId("intake"); return; }
-    const panel = document.getElementById(failure.field)?.closest('[role="tabpanel"]');
-    const anchor = panel?.id.replace(/^panel-/, "");
-    setFailureTabId(SETTINGS_TABS.find((tab) => tab.anchor === anchor)?.id ?? null);
+    if (!failure?.field || failure.field === "serverUnsupported") { setFailureSection(null); return; }
+    if (failure.field === "consentText") { setFailureSection("intake"); return; }
+    const section = document.getElementById(failure.field)?.closest("[data-settings-section]");
+    const anchor = section?.id.replace(/^panel-/, "");
+    setFailureSection(
+      (Object.keys(SECTION_ANCHORS) as SettingsAnchorId[]).find((id) => SECTION_ANCHORS[id] === anchor) ?? "basics"
+    );
   }, [failure]);
+  // 기본 정보는 드로어에서 고친다. 접힌 행이 아니라 별도 편집면이므로,
+  // 폼 상태는 컴포넌트에 두고 드로어는 열림만 토글한다.
+  const [basicsOpen, setBasicsOpen] = useState(false);
+  // 공개된 행사의 주소 코드를 바꿔 저장할 때 한 번 더 묻는다.
+  const [slugConfirm, setSlugConfirm] = useState(false);
+  // 딥링크 도착 구역을 잠깐 강조한다.
+  const [highlight, setHighlight] = useState<SettingsAnchorId | null>(null);
+  const highlightTimerRef = useRef<number | null>(null);
+  function flashSection(section: SettingsAnchorId) {
+    setHighlight(section);
+    if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = window.setTimeout(() => setHighlight(null), 1600);
+  }
+  useEffect(() => () => { if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current); }, []);
   const [notice, setNotice] = useState<string | null>(null);
   const [showTicketReview, setShowTicketReview] = useState(false);
   const [showScheduleReview, setShowScheduleReview] = useState(false);
@@ -320,42 +335,24 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   const [basicsStatus, setBasicsStatus] = useState<SectionStatus | null>(null);
   const [intakeStatus, setIntakeStatus] = useState<SectionStatus | null>(null);
   const [featuresStatus, setFeaturesStatus] = useState<SectionStatus | null>(null);
-  // 선택된 탭. 전환해도 패널은 마운트된 채 hidden으로만 가리므로 초안이 유지된다.
-  const [activeTab, setActiveTab] = useState<SettingsTabId>(
-    () => tabFromHash(typeof window === "undefined" ? "" : window.location.hash) ?? "basics"
-  );
-  const activeTabRef = useRef(activeTab);
-  activeTabRef.current = activeTab;
-  const tabButtonRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const tabsRef = useRef<HTMLDivElement | null>(null);
-
-  // 활성 탭 가시성: 탭 목록의 가로 스크롤만 조절한다. 세로 스크롤이나
-  // 포커스 이동은 하지 않으므로 클릭·키보드·해시·뒤로 이동 흐름을 뺏지
-  // 않는다. offsetLeft는 offsetParent 기준이라 바깥 여백만큼 어긋날 수
-  // 있으므로, 리스트·활성 탭의 bounding rect 차이로 scrollLeft 델타만 보정한다.
-  const keepActiveTabVisible = useCallback(() => {
-    const list = tabsRef.current;
-    if (!list) return;
-    const active = list.querySelector('[aria-selected="true"]') as HTMLElement | null;
-    if (!active) return;
-    const listRect = list.getBoundingClientRect();
-    const activeRect = active.getBoundingClientRect();
-    const deltaLeft = activeRect.left - listRect.left;
-    const deltaRight = activeRect.right - listRect.right;
-    if (deltaLeft < 0) {
-      list.scrollLeft += deltaLeft;
-    } else if (deltaRight > 0) {
-      list.scrollLeft += deltaRight;
+  // 구역으로 스크롤하고 잠깐 강조한다. 기본 정보는 드로어가 편집면이므로
+  // 스크롤 대신 드로어를 연다.
+  const scrollToSection = useCallback((section: SettingsAnchorId) => {
+    if (section === "basics") { setBasicsOpen(true); return; }
+    const element = document.getElementById(SECTION_ANCHORS[section]);
+    if (element) {
+      element.scrollIntoView({ block: "start" });
+      flashSection(section);
     }
   }, []);
 
-  // 탭 목록 부착 시(ready 전환 마운트 포함) 한 번 보장하고, 이후 활성 탭
-  // 전환·폭 변화 때마다 다시 적용한다. 마운트 때 activeTab이 바뀌지
-  // 않아도 콜백 ref가 실행되므로 초기 딥링크(#settings-stage)가 잘리지 않는다.
-  const attachTabsRef = useCallback((node: HTMLDivElement | null) => {
-    tabsRef.current = node;
-    if (node) keepActiveTabVisible();
-  }, [keepActiveTabVisible]);
+  // 저장 실패가 가리킨 구역으로 이동한다. consentText는 접수 구역으로,
+  // 기본 정보 필드는 드로어로.
+  useEffect(() => {
+    if (!failureSection) return;
+    if (failureSection === "basics") { setBasicsOpen(true); return; }
+    scrollToSection(failureSection);
+  }, [failureSection, scrollToSection]);
   const [stageBusy, setStageBusy] = useState(false);
   const [stageConfirm, setStageConfirm] = useState(false);
   const [closeIntakeConfirm, setCloseIntakeConfirm] = useState(false);
@@ -399,7 +396,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     previousSettingsEventRef.current = eventId;
     loadedSettingsEventRef.current = null;
     settledSectionRef.current = null;
-    liveRef.current = { state: { kind: "loading" }, basics: null, features: null, consentText: "" };
+    liveRef.current = { state: { kind: "loading" }, basics: null, features: null, consentText: "", fields: null };
     setState({ kind: "loading" });
     setBasics(null);
     setFeatures(null);
@@ -415,6 +412,9 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     setArchiveRecheckRequired(false);
     setStageError(null);
     setStageNotice(null);
+    setBasicsOpen(false);
+    setSlugConfirm(false);
+    setHighlight(null);
     hadOtherSettingsReceiptRef.current = false;
     pendingSettingsRef.current = null;
     setPendingSettings(null);
@@ -465,14 +465,15 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     basics: Basics | null;
     features: string[] | null;
     consentText: string;
-  }>({ state: { kind: "loading" }, basics: null, features: null, consentText: "" });
+    fields: Array<{ label: string; required: boolean; type: string }> | null;
+  }>({ state: { kind: "loading" }, basics: null, features: null, consentText: "", fields: null });
 
   const [basics, setBasics] = useState<Basics | null>(null);
   const [features, setFeatures] = useState<string[] | null>(null);
   const [consentText, setConsentText] = useState("");
 
   useEffect(() => {
-    if (loadedSettingsEventRef.current === eventId) liveRef.current = { state, basics, features, consentText };
+    if (loadedSettingsEventRef.current === eventId) liveRef.current = { state, basics, features, consentText, fields: state.kind === "ready" ? state.fields : null };
   });
 
   useEffect(() => {
@@ -523,6 +524,8 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               publishedVersion?: unknown;
               consentText?: unknown;
               consentVersion?: unknown;
+              // 신청 항목 미리보기용. 편집은 신청 항목 페이지가 맡는다.
+              fields?: unknown;
               pageExperience?: unknown;
               desks?: unknown;
               assignments?: unknown;
@@ -625,6 +628,13 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         // Unrelated refreshes must not silently mark changed application
         // fields as reviewed, even if the consent editor itself was clean.
         const preserveIntake = Boolean(previous && (intakeConflictRef.current || settledSection !== "intake"));
+        // 신청 항목 미리보기. 편집이 아니라 읽기 전용 요약이므로 관대하게
+        // 읽는다(배열이 아니면 빈 목록).
+        const loadedFields = Array.isArray(workspace.fields)
+          ? workspace.fields.map(record).filter((item): item is Record<string, unknown> => item !== null)
+            .filter((item) => typeof item.label === "string")
+            .map((item) => ({ label: text(item.label), required: item.required === true, type: text(item.type) }))
+          : [];
         loadedSettingsEventRef.current = eventId;
         setArchiveRecheckRequired(false);
         setState({
@@ -654,6 +664,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           publishedVersion: Number(workspace.publishedVersion) || 0,
           consentText: preserveIntake && previous ? previous.consentText : newConsentText,
           consentVersion: preserveIntake && previous ? previous.consentVersion : Number(workspace.consentVersion) || 1,
+          fields: preserveIntake && previous ? previous.fields : loadedFields,
           pageDraftVersion,
           pagePublishedVersion,
           pagePublishedAt: text(pageExperience.publishedAt),
@@ -725,13 +736,6 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     features !== null &&
     !sameFeatures(features, state.features);
   const sectionsDirty = Boolean(basicsDirty || intakeDirty || featuresDirty);
-  // 탭별 미저장 표시. stage 탭은 확인 대기 중인 전환이 있을 때만 표시한다.
-  const tabDirty: Record<SettingsTabId, boolean> = {
-    basics: basicsDirty,
-    intake: intakeDirty,
-    features: featuresDirty,
-    stage: stageConfirm,
-  };
   const pendingIntent =
     pendingSettings !== null || otherSettingsReceipt || stageCommandIdRef.current !== null || commandIdCache.current.size > 0;
   const unresolvedConflict = Boolean(intakeConflict || basicsConflict || featuresConflict);
@@ -754,24 +758,26 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     guardReason
   );
 
-  // 해시→탭 동기화. 딥링크·뒤로/앞으로·closeStep 복귀가 같은 앵커를 쓰고,
-  // 탭 전환은 해시를 갱신하므로 back으로 이전 탭에 돌아올 수 있다. 패널은
-  // hidden으로만 가리므로 초안이 유지된다. closeStep 복귀 때만 기존처럼
-  // 구역 제목으로 포커스를 옮기고, 그 외에는 포커스를 빼앗지 않는다.
+  // 해시→구역 동기화. 딥링크·뒤로/앞으로·closeStep 복귀가 같은 앵커를
+  // 쓴다. #settings-basics는 기본 정보 드로어를 열고, 나머지는 해당 구역으로
+  // 스크롤하며 잠깐 강조한다. 포커스는 closeStep 복귀와 선형 마감 "다음"
+  // 인계 때만 구역 제목으로 옮기고, 그 외에는 포커스를 빼앗지 않는다.
   useEffect(() => {
     if (state.kind !== "ready") {
       if (state.kind === "failed") closeLandingRef.current = null;
       return;
     }
-    const syncTab = () => {
-      const next = tabFromHash(window.location.hash);
-      if (next) setActiveTab((current) => (current === next ? current : next));
+    const applyHash = () => {
+      const section = sectionFromHash(window.location.hash);
+      if (!section) return;
+      if (section === "basics") { setBasicsOpen(true); return; }
+      scrollToSection(section);
     };
-    syncTab();
+    applyHash();
     const anchor = window.location.hash;
     const returnHref = readCloseReturn(new URLSearchParams(window.location.search).get("closeReturn"), eventId);
     let frame = 0;
-    if (returnHref && anchor && anchor !== "#settings-basics" && tabFromHash(anchor)) {
+    if (returnHref && anchor && anchor !== "#settings-basics" && sectionFromHash(anchor)) {
       const key = `${eventId}:${returnHref}`;
       if (closeLandingRef.current !== key) {
         closeLandingRef.current = key;
@@ -783,46 +789,34 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         });
       }
     }
-    window.addEventListener("hashchange", syncTab);
+    window.addEventListener("hashchange", applyHash);
     return () => {
       if (frame) cancelAnimationFrame(frame);
-      window.removeEventListener("hashchange", syncTab);
+      window.removeEventListener("hashchange", applyHash);
     };
-  }, [state, eventId]);
+  }, [state, eventId, scrollToSection]);
 
-  // 탭 전환·폭 변화 때 가로 위치만 다시 맞춘다. 마운트 직후 한 번은
-  // 위 콜백 ref가 보장한다.
-  useEffect(() => {
-    keepActiveTabVisible();
-    window.addEventListener("resize", keepActiveTabVisible);
-    return () => window.removeEventListener("resize", keepActiveTabVisible);
-  }, [activeTab, keepActiveTabVisible]);
-
-  // 선형 마감 "다음" 인계의 제목 포커스. 패널이 렌더된 뒤에 실행하므로
-  // 숨은 제목에 대한 no-op이 되지 않는다. 캡처 리스너가 "다음" 활성화
-  // 순간에만 예약하며, 탭 키보드 이동·뒤로/앞으로·일반 딥링크에서는
-  // 예약되지 않으므로 탭 포커스를 유지한다. 예약과 선택이 어긋나면
-  // (이미 같은 탭 등) 포커스를 옮기지 않고 표시만 버린다.
+  // 선형 마감 "다음" 인계의 제목 포커스. 캡처 리스너가 "다음" 활성화
+  // 순간에만 예약하며, 뒤로/앞으로·일반 딥링크에서는 예약되지 않으므로
+  // 포커스를 유지한다.
   useEffect(() => {
     if (state.kind !== "ready") return;
     const pending = pendingHeadingFocusRef.current;
     pendingHeadingFocusRef.current = null;
-    if (!pending || pending !== activeTab) return;
-    const heading = document.getElementById(TAB_ANCHORS[pending]);
-    if (!heading || heading.closest("[hidden]")) return;
+    if (!pending) return;
+    const heading = document.getElementById(SECTION_ANCHORS[pending]);
+    if (!heading) return;
     heading.setAttribute("tabindex", "-1");
     heading.scrollIntoView({ block: "start" });
     heading.focus({ preventScroll: true });
-  }, [state, activeTab]);
+  }, [state]);
 
   // 선형 마감 "다음" 활성화 의도의 캡처. 공유 EventCloseReturn의 핸들러와
   // 네이티브 앵커 기본 동작보다 먼저 실행되므로, 해시 변경 때 이미 body로
   // 돌아간 activeElement를 읽는 방식과 달리 의도를 놓치지 않는다. 키보드
-  // Enter의 네이티브 클릭도 여기로 들어온다. 이미 선택된 탭을 가리키면
-  // 예약하지 않는다(같은 해시는 상태 변경·효과를 일으키지 않아 표시가
-  // 남고, 나중의 무관한 저장 후 재렌더에서 포커스를 훔칠 수 있다. 같은 탭의
-  // 제목 포커스는 공유 핸들러가 보이는 제목에 직접 수행한다). 탭 버튼·
-  // 일반 앵커·히스토리는 이 표시를 세우지 않는다.
+  // Enter의 네이티브 클릭도 여기로 들어온다. 같은 해시는 상태 변경·효과를
+  // 일으키지 않아 표시가 남고, 나중의 무관한 저장 후 재렌더에서 포커스를
+  // 훔칠 수 있으므로 예약하지 않는다.
   useEffect(() => {
     const onCaptureClick = (event: MouseEvent) => {
       const target = event.target instanceof Element ? event.target : null;
@@ -834,14 +828,15 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       } catch {
         return;
       }
-      const tab = tabFromHash(hash);
-      if (!tab || tab === activeTab) return;
+      if (window.location.hash === hash) return;
+      const section = sectionFromHash(hash);
+      if (!section) return;
       if (!readCloseReturn(new URLSearchParams(window.location.search).get("closeReturn"), eventId)) return;
-      pendingHeadingFocusRef.current = tab;
+      pendingHeadingFocusRef.current = section;
     };
     document.addEventListener("click", onCaptureClick, true);
     return () => document.removeEventListener("click", onCaptureClick, true);
-  }, [eventId, activeTab]);
+  }, [eventId]);
 
   // A success status alone is not enough: compare the returned entity to the
   // original request before accepting it or removing its recovery pointer.
@@ -875,8 +870,15 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       setStageError(null);
       setStageConfirm(false);
       setStageNotice(message);
-      if (activeTabRef.current !== "stage") setNotice(message);
       window.dispatchEvent(new CustomEvent("eventouch:shell-reload"));
+    } else if (attempt.section === "basics") {
+      // 저장 결과가 확정되면 드로어를 닫는다. 성공이면 폼이 최신값을
+      // 보여주고, 처리 확인(복구)이 뜨면 그 안내가 보이도록 비킨다. 작성
+      // 중 값은 상태에 그대로 있어 다시 열면 이어서 볼 수 있다.
+      setBasicsOpen(false);
+      setSlugConfirm(false);
+      setFailure(null);
+      sectionStatusSetter(attempt.section)({ kind: "success", message, at: formatClockNow() });
     } else {
       setNotice(message);
       sectionStatusSetter(attempt.section)({ kind: "success", message, at: formatClockNow() });
@@ -909,6 +911,9 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       pendingSettingsRef.current = attempt;
       setPendingSettings(attempt);
       setStageConfirm(false);
+      // 기본 정보 저장이 미확정이면 드로어를 닫아 처리 확인(복구) 안내가
+      // 보이게 한다. 작성 중 값은 그대로 두어 다시 열면 이어서 본다.
+      if (attempt.section === "basics") { setBasicsOpen(false); setSlugConfirm(false); }
       setSettingsRecoveryError("처리 결과를 확인하지 못했습니다. 서버 처리 확인 또는 같은 요청 다시 시도를 선택하세요.");
     };
     try {
@@ -977,14 +982,17 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             setStageConfirm(false);
             setStageError(message);
             if (data?.code === "ARCHIVE_PRECONDITIONS_UNAVAILABLE") setArchiveRecheckRequired(true);
-            if (activeTabRef.current !== "stage") setFailure({ message });
+            setFailure({ message });
           } else {
             setFailure({ message, field: unsupportedServer ? "serverUnsupported" : typeof data?.field === "string" ? data.field : undefined });
             sectionStatusSetter(attempt.section)({ kind: "error", message, at: formatClockNow() });
-            if (unsupportedServer && activeTabRef.current === "basics") {
+            // 한 장에 모든 구역이 보이므로, 실패한 입력으로 직접 포커스를
+            // 옮긴다. 기본 정보는 드로어가 편집면이라 먼저 연다.
+            if (unsupportedServer) {
+              setBasicsOpen(true);
               window.requestAnimationFrame(() => document.getElementById("settings-basics-save")?.focus());
             }
-            if (data?.field === "consentText" && activeTabRef.current === "intake") {
+            if (data?.field === "consentText") {
               window.requestAnimationFrame(() => document.getElementById("set-consent")?.focus());
             }
           }
@@ -1349,35 +1357,49 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       commandId, fingerprint: `event.stage:${stableStringify(payload)}` });
   }
 
-  // 탭 키보드 이동: 화살표·Home·End는 포커스와 선택을 함께 옮긴다(자동 활성화).
-  // 감사와 키보드 조작이 포커스된 탭의 선택을 기대하므로 수동 확정은 두지 않는다.
-  // Enter·Space는 버튼의 기본 클릭으로 같은 탭을 다시 연다.
-  function onTabKeyDown(event: React.KeyboardEvent) {
-    const order = SETTINGS_TABS.map((tab) => tab.id);
-    const buttons = tabButtonRefs.current;
-    const focused = buttons.findIndex((button) => button === document.activeElement);
-    const from = focused >= 0 ? focused : order.indexOf(activeTab);
-    let next: number | null = null;
-    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
-      next = (from + 1) % order.length;
-    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
-      next = (from - 1 + order.length) % order.length;
-    } else if (event.key === "Home") {
-      next = 0;
-    } else if (event.key === "End") {
-      next = order.length - 1;
-    }
-    if (next !== null) {
-      event.preventDefault();
-      activateTab(order[next]);
-      buttons[next]?.focus();
-    }
+  // 행사 카드의 달력 블록. 저장된 날짜(state.basics)를 읽는다.
+  function eventCalendar(): { month: string; day: string; weekday: string } {
+    const parsed = /^(\d{4})-(\d{2})-(\d{2})$/.exec(state.kind === "ready" ? state.basics.date : "");
+    if (!parsed) return { month: "", day: "–", weekday: "" };
+    const date = new Date(Number(parsed[1]), Number(parsed[2]) - 1, Number(parsed[3]));
+    const weekday = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()] ?? "";
+    return { month: `${Number(parsed[2])}월`, day: String(Number(parsed[3])), weekday };
   }
 
-  function activateTab(tab: SettingsTabId) {
-    setActiveTab(tab);
-    const anchor = `#${TAB_ANCHORS[tab]}`;
-    if (window.location.hash !== anchor) window.location.hash = anchor;
+  // 저장된 접수 정책 한 줄. 켜진 것만 적는다(꺼진 항목은 적지 않는다).
+  function savedPolicyFlags(): string[] {
+    if (state.kind !== "ready") return [];
+    const flags: string[] = [];
+    if (state.basics.approvalRequired) flags.push("승인 필요");
+    if (state.basics.allowReentry) flags.push("재입장 허용");
+    if (state.basics.verificationRequired) flags.push("연락처 인증");
+    return flags;
+  }
+
+  // 기본 정보 저장. 공개된 행사(준비 이후 단계)에서 주소 코드가 바뀌면
+  // 먼저 확인 창을 거친다. 기획 단계에서는 바로 저장한다.
+  function submitBasicsForm() {
+    if (state.kind !== "ready" || !basics || basicsConflict) return;
+    if (currentStage !== "DRAFT" && basics.slug !== state.basics.slug) {
+      setSlugConfirm(true);
+      return;
+    }
+    void runCommand("event.basics.save", {
+      name: basics.name,
+      slug: basics.slug,
+      clientId: basics.clientId,
+      date: basics.date,
+      start: basics.start,
+      end: basics.end,
+      capacity: Number(basics.capacity) || 0,
+      // price/format은 화면에서 고치지 않지만 저장값은 그대로 유지한다.
+      price: Number(basics.price) || 0,
+      format: basics.format,
+      approvalRequired: basics.approvalRequired,
+      allowReentry: basics.allowReentry,
+      verificationRequired: basics.verificationRequired,
+      expectedBasics: basicsPayload(state.basics),
+    }, "기본 정보를 저장했습니다.", "basics");
   }
 
   const latestSectionStatus = [basicsStatus, intakeStatus, featuresStatus].reduce<SectionStatus | null>(
@@ -1401,47 +1423,6 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       eventId={eventId}
       eventName={basics?.name || state.basics.name}
       meta={state.eventMeta}
-      sectionNav={(
-        <div className={styles.tabsWrap}>
-          <div ref={attachTabsRef} role="tablist" aria-label="행사 설정 구역" className={styles.tabs} onKeyDown={onTabKeyDown}>
-          {SETTINGS_TABS.map((tab, index) => {
-            const selected = activeTab === tab.id;
-            const dirty = tabDirty[tab.id];
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                id={`tab-${tab.anchor}`}
-                aria-selected={selected}
-                aria-controls={`panel-${tab.anchor}`}
-                tabIndex={selected ? 0 : -1}
-                ref={(node) => {
-                  tabButtonRefs.current[index] = node;
-                }}
-                className={styles.tab}
-                data-settings-tab={tab.id}
-                onClick={() => activateTab(tab.id)}
-              >
-                {tab.label}
-                {dirty ? (
-                  <>
-                    <span className={styles.tabDirtyDot} aria-hidden="true">●</span>
-                    <span className="sr-only"> 저장 안 됨</span>
-                  </>
-                ) : null}
-                {failureTabId === tab.id ? (
-                  <>
-                    <span className={styles.tabErrorDot} aria-hidden="true">●</span>
-                    <span className="sr-only"> 입력 확인 필요</span>
-                  </>
-                ) : null}
-              </button>
-            );
-          })}
-          </div>
-        </div>
-      )}
       feedback={(
         <>
           {archived ? (
@@ -1449,12 +1430,12 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               보관된 행사는 읽기 전용입니다. 설정은 볼 수 있지만 저장·게시·전환할 수 없습니다.
             </ConsoleFeedback>
           ) : null}
-          {failure && failure.field !== "serverUnsupported" && (failure.field !== "consentText" || activeTab !== "intake") ? <ConsoleFeedback kind="error" id="settings-error">{failure.message}</ConsoleFeedback> : null}
+          {failure && failure.field !== "serverUnsupported" && failure.field !== "consentText" ? <ConsoleFeedback kind="error" id="settings-error">{failure.message}</ConsoleFeedback> : null}
           {notice ? <ConsoleFeedback kind="success">{notice}</ConsoleFeedback> : null}
           {showTicketReview ? <p><ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</ProductLink></p> : null}
-          {intakeConflict && activeTab !== "intake" ? <ConsoleFeedback kind="warning">참가 접수 설정이 변경되어 최신 내용을 확인해야 합니다. 참가 접수 탭에서 작성 중인 안내를 확인하세요.</ConsoleFeedback> : null}
-          {basicsConflict && activeTab !== "basics" ? <ConsoleFeedback kind="warning">기본 정보가 변경되어 최신 내용을 확인해야 합니다. 기본 정보 탭에서 작성 중인 내용을 확인하세요.</ConsoleFeedback> : null}
-          {featuresConflict && activeTab !== "features" ? <ConsoleFeedback kind="warning">운영 기능이 변경되어 최신 내용을 확인해야 합니다. 운영 기능 탭에서 선택 중인 기능을 확인하세요.</ConsoleFeedback> : null}
+          {intakeConflict ? <ConsoleFeedback kind="warning">참가 접수 설정이 변경되어 최신 내용을 확인해야 합니다. 아래 참가 접수 구역에서 작성 중인 안내를 확인하세요.</ConsoleFeedback> : null}
+          {basicsConflict ? <ConsoleFeedback kind="warning">기본 정보가 변경되어 최신 내용을 확인해야 합니다. 기본 정보 드로어를 열어 작성 중인 내용을 확인하세요.</ConsoleFeedback> : null}
+          {featuresConflict ? <ConsoleFeedback kind="warning">운영 기능이 변경되어 최신 내용을 확인해야 합니다. 아래 운영 기능 구역에서 선택 중인 기능을 확인하세요.</ConsoleFeedback> : null}
           {refreshingAfterWrite ? <ConsoleFeedback kind="info">최신 행사 설정을 불러오고 있습니다.</ConsoleFeedback> : null}
         </>
       )}
@@ -1496,14 +1477,131 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         /> : null}
       </section> : null}
       {otherSettingsReceipt ? <ConsoleFeedback kind="warning">이전 행사 설정의 처리 결과를 화면 위에서 먼저 확인하세요. 서버 확인은 요청을 다시 보내지 않습니다.</ConsoleFeedback> : null}
-      <div
-        role="tabpanel"
-        id="panel-settings-basics"
-        aria-labelledby="tab-settings-basics"
-        hidden={activeTab !== "basics"}
-        className={styles.tabPanel}
+      <section className={styles.eventCard} aria-label="행사 개요와 진행 단계">
+        <div className={styles.eventTop} id="panel-settings-basics" data-settings-section="basics">
+          <div className={styles.cal} aria-hidden="true">
+            <small>{eventCalendar().month}</small>
+            <b>{eventCalendar().day}</b>
+            <span>{eventCalendar().weekday}</span>
+          </div>
+          <div className={styles.eventName}>
+            <h2 id="settings-basics">{state.basics.name}</h2>
+            <p className={styles.eventMetaLine}>{state.eventMeta}</p>
+            <p className={styles.eventFlags}>
+              정원 {state.basics.capacity === "0" ? "제한 없음" : `${state.basics.capacity}명`}
+              {savedPolicyFlags().length ? ` · ${savedPolicyFlags().join(" · ")}` : ""}
+            </p>
+          </div>
+          <div className={styles.cardEdit}>
+            <ProductButton
+              type="button"
+              className="button button-secondary"
+              disabled={archived || !canWriteSettings}
+              title={archived ? archivedReason : !canWriteSettings ? settingsNoWriteReason : undefined}
+              onClick={() => setBasicsOpen(true)}
+            >
+              수정
+            </ProductButton>
+            {basicsDirty ? (
+              <span role="status" className={styles.unsavedTag}>
+                <span aria-hidden="true">● </span>저장 안 됨
+              </span>
+            ) : null}
+          </div>
+        </div>
+        <div
+          id="panel-settings-stage"
+          data-settings-section="stage"
+          className={`${styles.cardStage} ${highlight === "stage" ? styles.sectionFlash : ""}`}
+        >
+          <h2 id="settings-stage" className={styles.stageName}>
+            <span className={styles.stageDot} aria-hidden="true" />
+            {stageText}
+          </h2>
+          <p className={styles.stagePrompt}>{stagePrompt}</p>
+          <ol className={styles.stageTimeline} aria-label="전체 진행 단계">
+            {STAGE_ORDER.map((stage) => {
+              const isCurrent = stage === currentStage;
+              const isNext = stage === nextStage;
+              return (
+                <li
+                  key={stage}
+                  aria-current={isCurrent ? "step" : undefined}
+                  className={`${styles.stageStep} ${isCurrent ? styles.stageStepCurrent : ""} ${isNext && !isCurrent ? styles.stageStepNext : ""}`}
+                >
+                  <span>{eventStageLabel(stage)}</span>
+                  {isCurrent ? (
+                    <span className={styles.stageStepMark}>현재</span>
+                  ) : isNext ? (
+                    <span className={styles.stageStepMark}>다음</span>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ol>
+          {stagePrecondition ? (
+            <div id="settings-stage-precondition" className={styles.stagePrecondition} role="note">
+              <span>{stagePrecondition}</span>
+              <span>
+              {archiveDataUnavailable ? (
+                <ProductButton type="button" className="button button-secondary" disabled={refreshingAfterWrite} onClick={() => { setStageError(null); setRefreshingAfterWrite(true); setReloadTick((tick) => tick + 1); }}>{refreshingAfterWrite ? "상태 확인 중" : "상태 다시 확인"}</ProductButton>
+              ) : nextStage === "LIVE" ? (
+                <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/operations`}>운영에서 데스크 배정하기</ProductLink>
+              ) : (
+                <>
+                  <a className="button button-secondary" href="#settings-intake">접수 닫기</a>
+                  {" · "}
+                  <ProductLink className="button button-secondary" href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>프로그램 닫기</ProductLink>
+                </>
+              )}
+              </span>
+            </div>
+          ) : null}
+          {stageError ? <ConsoleFeedback kind="error">{stageError}</ConsoleFeedback> : null}
+          {stageNotice ? <ConsoleFeedback kind="success">{stageNotice}</ConsoleFeedback> : null}
+          <div className={styles.stageActions}>
+            {!canWriteSettings ? (
+              <p className={styles.help}>행사 단계 변경 권한이 없습니다.</p>
+            ) : nextStage && !stageConfirm ? (
+              <ProductButton
+                type="button"
+                className="button button-secondary"
+                onClick={() => {
+                  setStageError(null);
+                  setStageNotice(null);
+                  setStageConfirm(true);
+                }}
+                disabled={settingsLocked || stageBlocked}
+                aria-describedby={stageBlocked ? "settings-stage-precondition" : undefined}
+              >
+                {eventStageLabel(nextStage)} 단계로 전환
+              </ProductButton>
+            ) : nextStage ? (
+              <StageTransitionConfirmation className={styles.stageConfirmation} label={eventStageLabel(nextStage)}
+                busy={stageBusy} disabled={settingsLocked || stageBlocked} cancelDisabled={settingsLocked}
+                retry={Boolean(stageCommandIdRef.current && stageError)}
+                describedBy={stageBlocked ? "settings-stage-precondition" : undefined}
+                onConfirm={() => void submitStageTransition()}
+                onCancel={() => { setStageConfirm(false); setStageError(null); }}>
+                {nextStage === "ENDED" ? (
+                  <p className={styles.help}>
+                    종료하면 참가자 변경이 막힙니다. 승인 대기 등 필요한 참가자 처리는 종료 전에 마치세요.
+                    결과 보고서는 생성 시점 값으로 고정됩니다. 종료 뒤 마감 집계를 생성·검토하고 동결할 수 있으며, 편집이나 공유 완료 기록만으로 집계가 갱신되지는 않습니다.
+                  </p>
+                ) : null}
+              </StageTransitionConfirmation>
+            ) : null}
+          </div>
+        </div>
+      </section>
+      {basicsOpen ? (
+      <ConsoleDialog
+        title="기본 정보"
+        titleId="settings-basics-dialog"
+        presentation="drawer"
+        onClose={() => { setSlugConfirm(false); setBasicsOpen(false); }}
+        busy={busy || stageBusy || checkingSettings}
       >
-      <ConsoleSection headingId="settings-basics" title="기본 정보" width="form" surface="panel">
         {!canWriteSettings ? (
           <p className={styles.help} role="note">{settingsNoWriteReason}</p>
         ) : null}
@@ -1536,24 +1634,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           className={`${uiStyles.formStack} ${styles.basicsForm}`}
           onSubmit={(event) => {
             event.preventDefault();
-            if (basicsConflict) return;
-            void runCommand("event.basics.save", {
-              name: basics.name,
-              slug: basics.slug,
-              clientId: basics.clientId,
-              date: basics.date,
-              start: basics.start,
-              end: basics.end,
-              capacity: Number(basics.capacity) || 0,
-              price: Number(basics.price) || 0,
-              // Display-only progress shape: the form always shows a choice
-              // ('' = unspecified), so it travels verbatim; '' clears the key.
-              format: basics.format,
-              approvalRequired: basics.approvalRequired,
-              allowReentry: basics.allowReentry,
-              verificationRequired: basics.verificationRequired,
-              expectedBasics: basicsPayload(state.basics),
-            }, "기본 정보를 저장했습니다.", "basics");
+            submitBasicsForm();
           }}
         >
           <fieldset disabled={!canWriteSettings || archived || settingsLocked} className={styles.bareFieldset}>
@@ -1668,31 +1749,6 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
                 aria-describedby={describedBy("capacity") || undefined}
               />
             </div>
-            <div>
-              <label htmlFor="set-price">참가비 (원)</label>
-              <input
-                id="set-price"
-                type="number"
-                min={0}
-                inputMode="numeric"
-                value={basics.price}
-                onChange={(event) => setBasics({ ...basics, price: event.target.value })}
-                aria-invalid={invalid("price") || undefined}
-                aria-describedby={describedBy("price") || undefined}
-              />
-            </div>
-          </div>
-          {Number(basics.price) > 0 ? (
-            <p className={styles.help}>
-              이 시스템은 결제를 처리하지 않습니다. 참가비는 참가자에게 청구되지 않으며, 수납이 필요하면
-              행사 안내에서 별도 절차로 안내하세요.
-            </p>
-          ) : null}
-          <div>
-            <ConsoleChoiceGroup id="set-format" label="진행 형태 (선택)" value={basics.format}
-              options={EVENT_FORMAT_CHOICES} onChange={(value) => setBasics({ ...basics, format: value })} invalid={invalid("format")} describedBy={describedBy("format") || undefined} />
-            <p className={styles.help}>표시용 구분입니다. 기능·장소·URL이 자동으로 바뀌지 않습니다.</p>
-            {invalid("format") ? <p role="alert" id="settings-error">{failure?.message}</p> : null}
           </div>
           </div>
           <div className={styles.fieldGroup}>
@@ -1725,6 +1781,9 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           </div>
           <p className={styles.help}>인증번호는 신청자의 휴대전화로 발송됩니다. 발송 준비가 안 된 상태에서는 신청이 막히므로, 먼저 인증번호 1건을 테스트하세요.</p>
           </div>
+          {failure && failure.field !== "serverUnsupported" && failure.field !== "consentText" ? (
+            <p role="alert" className={styles.fieldError}>{failure.message}</p>
+          ) : null}
           <ConsoleFormActions>
             <ProductButton
               id="settings-basics-save"
@@ -1759,30 +1818,76 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             {!canWriteEvent(capabilities, "program.save") || !canWriteEvent(capabilities, "notice.save") ? <p>확인할 권한이 없는 안내는 담당 운영자에게 검토를 요청하세요.</p> : null}
           </section>
         ) : null}
-      </ConsoleSection>
-      </div>
-
-      <div
-        role="tabpanel"
+        {slugConfirm ? (
+          <ConsoleConfirm
+            summary={<><strong>주소 코드를 바꿀까요?</strong><br />이미 공개된 행사입니다. 바꾸면 이전 주소({state.basics.slug})로 나간 링크는 열리지 않습니다. 새 주소({basics.slug || "미입력"})로 저장할까요?</>}
+            confirmLabel="주소 바꾸고 저장"
+            onConfirm={() => {
+              setSlugConfirm(false);
+              void runCommand("event.basics.save", {
+                name: basics.name,
+                slug: basics.slug,
+                clientId: basics.clientId,
+                date: basics.date,
+                start: basics.start,
+                end: basics.end,
+                capacity: Number(basics.capacity) || 0,
+                price: Number(basics.price) || 0,
+                format: basics.format,
+                approvalRequired: basics.approvalRequired,
+                allowReentry: basics.allowReentry,
+                verificationRequired: basics.verificationRequired,
+                expectedBasics: basicsPayload(state.basics),
+              }, "기본 정보를 저장했습니다.", "basics");
+            }}
+            onCancel={() => setSlugConfirm(false)}
+          />
+        ) : null}
+      </ConsoleDialog>
+      ) : null}
+      <div className={styles.workPanels}>
+      <section
         id="panel-settings-intake"
-        aria-labelledby="tab-settings-intake"
-        hidden={activeTab !== "intake"}
-        className={styles.tabPanel}
+        data-settings-section="intake"
+        aria-labelledby="settings-intake"
+        className={highlight === "intake" ? styles.sectionFlash : undefined}
       >
       <ConsoleSection headingId="settings-intake" title="참가 접수" width="form" surface="panel">
         {!canWriteIntake ? (
           <p className={styles.help} role="note">{intakeNoWriteReason}</p>
         ) : null}
-        <p className={styles.intakeSummary}>
-          {currentStage === "READY" || currentStage === "LIVE" ? (
-            <>현재 {state.registrationOpen ? "접수 중" : "접수 닫힘"} · 게시된 양식 버전 {state.publishedVersion}</>
-          ) : (
-            // DRAFT/ENDED cannot publicly accept no matter the flag, so the
-            // stored line names itself as a setting; the acceptance line
-            // below carries the honest public state.
-            <>현재 {state.registrationOpen ? "접수 중" : "접수 닫힘"} (설정) · 게시된 양식 버전 {state.publishedVersion}</>
-          )}
-        </p>
+        <div className={`${styles.intakeBand} ${state.registrationOpen ? styles.bandOpen : styles.bandClosed}`}>
+          <span className={styles.bandDot} data-open={state.registrationOpen} aria-hidden="true" />
+          <p className={styles.intakeSummary}>
+            {currentStage === "READY" || currentStage === "LIVE" ? (
+              <>현재 {state.registrationOpen ? "접수 중" : "접수 닫힘"} · 게시된 양식 버전 {state.publishedVersion}</>
+            ) : (
+              // DRAFT/ENDED cannot publicly accept no matter the flag, so the
+              // stored line names itself as a setting; the acceptance line
+              // below carries the honest public state.
+              <>현재 {state.registrationOpen ? "접수 중" : "접수 닫힘"} (설정) · 게시된 양식 버전 {state.publishedVersion}</>
+            )}
+          </p>
+          {state.registrationOpen ? (
+            <>
+            <ProductButton
+              type="button"
+              className="button button-quiet"
+              disabled={settingsLocked || Boolean(intakeConflict) || archived || !canWriteIntake}
+              title={archived ? archivedReason : !canWriteIntake ? intakeNoWriteReason : undefined}
+              onClick={() => setCloseIntakeConfirm(true)}
+            >
+              접수 닫기
+            </ProductButton>
+            {closeIntakeConfirm ? <ConsoleConfirm
+              summary="접수를 닫으면 새 신청을 받지 않습니다. 이미 접수된 참가자와 티켓은 유지됩니다. 접수를 닫을까요?"
+              confirmLabel="접수 닫기"
+              onConfirm={() => { setCloseIntakeConfirm(false); void runCommand("form.close", {}, "접수를 닫았습니다.", "intake"); }}
+              onCancel={() => setCloseIntakeConfirm(false)}
+            /> : null}
+            </>
+          ) : null}
+        </div>
         {isRecoveryBlocked(verificationMode) && !state.recoveryContact ? (
           <ConsoleFeedback kind="warning">
             <p className={styles.intakeWarningText}>문자로 티켓을 다시 연결할 수 없고 참가자에게 표시되는 문의처도 없습니다. 탭을 잃은 참가자가 도움을 받을 수 있도록 장소 안내의 문의 정보와 참가자 페이지의 공개 설정을 확인하세요.</p>
@@ -1806,9 +1911,20 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             공개 접수: 닫힘 — 종료된 행사에서는 신청을 받을 수 없습니다. 공개 신청 화면은 닫혀 있습니다. 보관하려면 접수를 닫으세요.
           </p>
         ) : null}
-        <div className={styles.intakeFields}>
-          <p className={styles.help}>신청 항목을 편집한 뒤 양식을 게시하면 참가자에게 변경 사항이 적용됩니다.</p>
-          <ProductLink className={`button button-quiet ${styles.intakeFieldsLink}`} href={`/console/events/${encodeURIComponent(eventId)}/settings/fields`}>신청 항목 편집</ProductLink>
+        <div className={styles.formPreview}>
+          <div className={styles.previewHead}>
+            <b>참가 신청서</b>
+            <ProductLink className={`button button-quiet ${styles.intakeFieldsLink}`} href={`/console/events/${encodeURIComponent(eventId)}/settings/fields`}>신청 항목 편집</ProductLink>
+          </div>
+          {state.fields.length ? (
+            <ul className={styles.previewFields}>
+              {state.fields.map((field) => (
+                <li key={field.label}>{field.label}{field.required ? " *" : ""}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className={styles.help}>등록된 신청 항목이 없습니다. 항목 편집에서 추가하세요.</p>
+          )}
         </div>
         {intakeConflict ? <section className={styles.conflict} aria-labelledby="intake-conflict-heading">
           <h3 id="intake-conflict-heading" tabIndex={-1}>다른 작업에서 참가 접수 설정이 변경됐습니다</h3>
@@ -1860,6 +1976,10 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             </> : null}
           </div>
           <ConsoleFormActions>
+            {/* 게시 버튼은 항상 둔다. 신청 항목은 별도 페이지에서 바뀌어
+                동의 문구가 그대로어도 게시할 일이 있다(버전이 바뀌면 게시
+                검토에서 충돌로 알려준다). 바뀐 게 있으면 "변경 게시"라고
+                부른다. */}
             <ProductButton
               type="button"
               className="button button-primary"
@@ -1867,33 +1987,15 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               title={archived ? archivedReason : !canWriteIntake ? intakeNoWriteReason : endedPublishBlocked ? endedPublishReason : undefined}
               onClick={requestFormPublish}
             >
-              {busy ? "처리 중입니다" : "양식 게시·접수 열기"}
+              {busy ? "처리 중입니다" : !state.registrationOpen ? "양식 게시·접수 열기" : intakeDirty ? "변경 게시" : "양식 게시·접수 열기"}
             </ProductButton>
-            {state.registrationOpen ? (
-              <>
-              <ProductButton
-                type="button"
-                className="button button-secondary"
-                disabled={settingsLocked || Boolean(intakeConflict) || archived || !canWriteIntake}
-                title={archived ? archivedReason : !canWriteIntake ? intakeNoWriteReason : undefined}
-                onClick={() => setCloseIntakeConfirm(true)}
-              >
-                접수 닫기
-              </ProductButton>
-              {closeIntakeConfirm ? <ConsoleConfirm
-                summary="접수를 닫으면 새 신청을 받지 않습니다. 이미 접수된 참가자와 티켓은 유지됩니다. 접수를 닫을까요?"
-                confirmLabel="접수 닫기"
-                onConfirm={() => { setCloseIntakeConfirm(false); void runCommand("form.close", {}, "접수를 닫았습니다.", "intake"); }}
-                onCancel={() => setCloseIntakeConfirm(false)}
-              /> : null}
-              </>
-            ) : (
+            {!state.registrationOpen ? (
               <p role="status" className={styles.help}>
                 {endedPublishBlocked
                   ? "접수가 닫혀 있습니다."
                   : "접수가 닫혀 있습니다. 다시 열려면 양식을 게시하세요."}
               </p>
-            )}
+            ) : null}
             {endedPublishBlocked ? (
               <p className={styles.help} role="note">{endedPublishReason}</p>
             ) : null}
@@ -1906,14 +2008,13 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           {sectionStatusLine(intakeStatus, "intake")}
         </div>
       </ConsoleSection>
-      </div>
+      </section>
 
-      <div
-        role="tabpanel"
+      <section
         id="panel-settings-features"
-        aria-labelledby="tab-settings-features"
-        hidden={activeTab !== "features"}
-        className={styles.tabPanel}
+        data-settings-section="features"
+        aria-labelledby="settings-features"
+        className={highlight === "features" ? styles.sectionFlash : undefined}
       >
       <ConsoleSection headingId="settings-features" title="운영 기능" width="form" surface="panel">
         {!canWriteSettings ? (
@@ -1975,6 +2076,21 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           ))}
         </fieldset>
         <ConsoleFormActions>
+          {featuresDirty ? (
+            <span role="status" className={styles.unsavedTag}>
+              <span aria-hidden="true">● </span>저장 안 된 변경
+            </span>
+          ) : null}
+          {featuresDirty ? (
+            <ProductButton
+              type="button"
+              className="button button-quiet"
+              disabled={settingsLocked || Boolean(featuresConflict) || archived || !canWriteSettings}
+              onClick={() => { setFeatures(state.features); setFeaturesStatus(null); }}
+            >
+              되돌리기
+            </ProductButton>
+          ) : null}
           <ProductButton
             type="button"
             className="button button-primary"
@@ -1984,104 +2100,10 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           >
             {busy ? "저장 중입니다" : "운영 기능 저장"}
           </ProductButton>
-          {featuresDirty ? (
-            <span role="status" className={styles.unsavedTag}>
-              <span aria-hidden="true">● </span>저장 안 됨
-            </span>
-          ) : null}
         </ConsoleFormActions>
         {sectionStatusLine(featuresStatus, "features")}
       </ConsoleSection>
-      </div>
-
-      <div
-        role="tabpanel"
-        id="panel-settings-stage"
-        aria-labelledby="tab-settings-stage"
-        hidden={activeTab !== "stage"}
-        className={styles.tabPanel}
-      >
-      <ConsoleSection headingId="settings-stage" title="진행 단계" width="form" surface="panel" description={stagePrompt}>
-          <div className={styles.stagePanel}>
-          <ol className={styles.stageTimeline} aria-label="전체 진행 단계">
-            {STAGE_ORDER.map((stage) => {
-              const isCurrent = stage === currentStage;
-              const isNext = stage === nextStage;
-              return (
-                <li
-                  key={stage}
-                  aria-current={isCurrent ? "step" : undefined}
-                  className={`${styles.stageStep} ${isCurrent ? styles.stageStepCurrent : ""} ${isNext && !isCurrent ? styles.stageStepNext : ""}`}
-                >
-                  <span>{eventStageLabel(stage)}</span>
-                  {isCurrent ? (
-                    <span className={styles.stageStepMark}>현재</span>
-                  ) : isNext ? (
-                    <span className={styles.stageStepMark}>다음</span>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ol>
-          <div className={styles.stageIdentity}>
-            <span className={styles.stageLabel}>현재 단계</span>
-            <span className={eventStageClassName(currentStage)}>{stageText}</span>
-          </div>
-          {stagePrecondition ? (
-            <div id="settings-stage-precondition" className={styles.stagePrecondition} role="note">
-              <span>{stagePrecondition}</span>
-              <span>
-              {archiveDataUnavailable ? (
-                <ProductButton type="button" className="button button-secondary" disabled={refreshingAfterWrite} onClick={() => { setStageError(null); setRefreshingAfterWrite(true); setReloadTick((tick) => tick + 1); }}>{refreshingAfterWrite ? "상태 확인 중" : "상태 다시 확인"}</ProductButton>
-              ) : nextStage === "LIVE" ? (
-                <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/operations`}>운영에서 데스크 배정하기</ProductLink>
-              ) : (
-                <>
-                  <a className="button button-secondary" href="#settings-intake">접수 닫기</a>
-                  {" · "}
-                  <ProductLink className="button button-secondary" href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>프로그램 닫기</ProductLink>
-                </>
-              )}
-              </span>
-            </div>
-          ) : null}
-          {stageError ? <ConsoleFeedback kind="error">{stageError}</ConsoleFeedback> : null}
-          {stageNotice ? <ConsoleFeedback kind="success">{stageNotice}</ConsoleFeedback> : null}
-          <div className={styles.stageActions}>
-            {!canWriteSettings ? (
-              <p className={styles.help}>행사 단계 변경 권한이 없습니다.</p>
-            ) : nextStage && !stageConfirm ? (
-              <ProductButton
-                type="button"
-                className="button button-secondary"
-                onClick={() => {
-                  setStageError(null);
-                  setStageNotice(null);
-                  setStageConfirm(true);
-                }}
-                disabled={settingsLocked || stageBlocked}
-                aria-describedby={stageBlocked ? "settings-stage-precondition" : undefined}
-              >
-                {eventStageLabel(nextStage)} 단계로 전환
-              </ProductButton>
-            ) : nextStage ? (
-              <StageTransitionConfirmation className={styles.stageConfirmation} label={eventStageLabel(nextStage)}
-                busy={stageBusy} disabled={settingsLocked || stageBlocked} cancelDisabled={settingsLocked}
-                retry={Boolean(stageCommandIdRef.current && stageError)}
-                describedBy={stageBlocked ? "settings-stage-precondition" : undefined}
-                onConfirm={() => void submitStageTransition()}
-                onCancel={() => { setStageConfirm(false); setStageError(null); }}>
-                {nextStage === "ENDED" ? (
-                  <p className={styles.help}>
-                    종료하면 참가자 변경이 막힙니다. 승인 대기 등 필요한 참가자 처리는 종료 전에 마치세요.
-                    결과 보고서는 생성 시점 값으로 고정됩니다. 종료 뒤 마감 집계를 생성·검토하고 동결할 수 있으며, 편집이나 공유 완료 기록만으로 집계가 갱신되지는 않습니다.
-                  </p>
-                ) : null}
-              </StageTransitionConfirmation>
-            ) : null}
-          </div>
-          </div>
-      </ConsoleSection>
+      </section>
       </div>
 
       <div className={styles.settingsFooter}>

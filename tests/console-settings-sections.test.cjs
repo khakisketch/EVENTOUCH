@@ -1,6 +1,7 @@
-// Settings workspace: 4 real tabs, per-section save state, one-line scope
-// note, and section-named draft-guard reasons. Source-contract test only
-// (no build/server/npm test).
+// Settings workspace: one workbench page (event card plus intake/features
+// panels, basics in a drawer), per-section save state, one-line scope note,
+// and section-named draft-guard reasons. Source-contract test only (no
+// build/server/npm test).
 "use strict";
 
 const assert = require("node:assert/strict");
@@ -43,9 +44,10 @@ test("a one-line scope note states each tab saves only itself", () => {
     .find((line) => line.includes("각 구역의 저장·게시·전환은 그 구역에만 적용됩니다"));
   assert.ok(noteLine, "scope note line must exist");
   assert.doesNotMatch(noteLine, /기본 정보·참가 접수·운영 기능·진행 단계/u, "the note does not repeat the visible tab labels");
-  for (const label of ["기본 정보", "참가 접수", "운영 기능", "진행 단계"]) {
-    assert.ok(source.includes(`label: "${label}"`), `${label} remains discoverable in the tablist`);
+  for (const label of ["기본 정보", "참가 접수", "운영 기능"]) {
+    assert.ok(source.includes(label), `${label} remains discoverable as a section`);
   }
+  assert.ok(source.includes("진행 단계"), "진행 단계 remains discoverable in the event card");
 });
 
 test("each saving tab keeps its own success/failure line with a clock time", () => {
@@ -66,8 +68,10 @@ test("each saving tab keeps its own success/failure line with a clock time", () 
   // Both outcomes land in place, not only in the page-top banner.
   assert.match(source, /sectionStatusSetter\(attempt\.section\)\(\{ kind: "success", message, at: formatClockNow\(\) \}\)/u);
   assert.match(source, /kind: "error", message/u);
-  // The page-top feedback strip is retained (no silent removal).
-  assert.match(source, /\{failure && failure\.field !== "serverUnsupported" && \(failure\.field !== "consentText" \|\| activeTab !== "intake"\) \? <ConsoleFeedback kind="error"/u);
+  // The page-top feedback strip is retained (no silent removal). Every
+  // section is visible on the single page, so the banner no longer hides
+  // per-tab failures; only the inline consent error stays local.
+  assert.match(source, /\{failure && failure\.field !== "serverUnsupported" && failure\.field !== "consentText" \? <ConsoleFeedback kind="error"/u);
   // The old-server error remains actionable by the save button and is
   // announced there once rather than repeated at the top and footer.
   assert.match(source, /role=\{status\.kind === "error" && failure\?\.field === "serverUnsupported" \? "alert" : "status"\}/u);
@@ -79,50 +83,43 @@ test("each saving tab keeps its own success/failure line with a clock time", () 
   assert.match(source, /"운영 기능 설정을 저장했습니다\.", "features"/u);
 });
 
-test("settings uses four real tabs; only the optional page block discloses", () => {
-  // The old ConsoleSectionNav anchor list and the collapsed stage panel are
-  // gone; four accessible tabs own the zones. The single remaining details
-  // is the optional attendee-page disclosure after the return footer.
+test("settings is one workbench page; only the optional page block discloses", () => {
+  // The old ConsoleSectionNav anchor list, the collapsed stage panel and the
+  // tab strip are gone; one page owns the zones (event card, intake and
+  // features panels, basics in a drawer). The single remaining details is
+  // the optional attendee-page disclosure after the return footer.
   assert.doesNotMatch(source, /<ConsoleSectionNav/u);
   assert.doesNotMatch(source, /data-settings-collapse/u);
-  assert.match(source, /role="tablist"/u);
-  assert.match(source, /role="tab"/u);
-  assert.match(source, /role="tabpanel"/u);
-  assert.match(source, /aria-selected/u);
-  assert.match(source, /aria-controls/u);
-  for (const label of ["기본 정보", "참가 접수", "운영 기능", "진행 단계"]) {
-    assert.ok(source.includes(label), `tab label missing: ${label}`);
+  assert.doesNotMatch(source, /role="tablist"/u);
+  assert.doesNotMatch(source, /role="tabpanel"/u);
+  assert.doesNotMatch(source, /hidden=\{activeTab !==/u);
+  for (const label of ["기본 정보", "참가 접수", "운영 기능"]) {
+    assert.ok(source.includes(label), `section label missing: ${label}`);
   }
-  // Four tabs, not five: the attendee-page supporting block is content,
-  // never a tab label in the tab definition.
-  for (const entry of [
-    '{ id: "basics", anchor: "settings-basics", label: "기본 정보" }',
-    '{ id: "intake", anchor: "settings-intake", label: "참가 접수" }',
-    '{ id: "features", anchor: "settings-features", label: "운영 기능" }',
-    '{ id: "stage", anchor: "settings-stage", label: "진행 단계" }',
-  ]) {
-    assert.ok(source.includes(entry), `tab definition missing: ${entry}`);
-  }
+  assert.ok(source.includes("진행 단계"), "stage label missing from the event card");
   assert.doesNotMatch(source, /label: "참가자 페이지"/u);
-  // Deep-link anchors survive for the four tab zones.
+  // Deep-link anchors survive for the four zones.
   for (const id of ["settings-basics", "settings-intake", "settings-features", "settings-stage"]) {
     assert.ok(source.includes(id), `deep-link anchor missing: ${id}`);
   }
-  // Stage keeps its existing behavior inside its tab panel, now with the
-  // full five-stage timeline ahead of the transition control.
+  // Basics editing lives in a drawer; the card opens it.
+  assert.match(source, /<ConsoleDialog/u);
+  assert.match(source, /presentation="drawer"/u);
+  assert.match(source, /title="기본 정보"/u);
+  // Stage keeps its existing behavior inside the event card, with the full
+  // five-stage timeline ahead of the transition control.
   assert.match(source, /submitStageTransition/u);
   assert.match(source, /<StageTransitionConfirmation/u);
   assert.match(source, /stageTimeline/u);
   assert.match(source, /aria-label="전체 진행 단계"/u);
   assert.match(source, /aria-current=\{isCurrent \? "step" : undefined\}/u);
   assert.match(source, /STAGE_ORDER\.map\(\(stage\)/u);
-  // Tab order follows the preparation flow.
-  const tabs = source.slice(source.indexOf('const SETTINGS_TABS:'), source.indexOf('const TAB_ANCHORS:'));
-  const tabOrder = ["기본 정보", "참가 접수", "운영 기능", "진행 단계"].map((label) =>
-    tabs.indexOf(`label: "${label}"`)
-  );
-  assert.ok(tabOrder.every((position) => position >= 0));
-  assert.deepEqual(tabOrder, [...tabOrder].sort((a, b) => a - b));
+  // Page order follows the preparation flow: card, then intake, then features.
+  const intakeAt = source.indexOf('id="panel-settings-intake"');
+  const featuresAt = source.indexOf('id="panel-settings-features"');
+  const stageAt = source.indexOf('id="panel-settings-stage"');
+  assert.ok(intakeAt > 0 && featuresAt > intakeAt, "intake panel precedes features panel");
+  assert.ok(stageAt > 0 && stageAt < intakeAt, "stage lives in the top event card");
 });
 
 test("the optional page disclosure sits after the return footer, not as a section", () => {
@@ -143,7 +140,7 @@ test("the optional page disclosure sits after the return footer, not as a sectio
   assert.match(source, /게시하지 않아도 공개·접수·진행에 영향이 없습니다/u);
 });
 
-test("the existing draft-guard passage names the dirty sections and confirms tab switches", () => {
+test("the existing draft-guard passage names the dirty sections", () => {
   assert.match(source, /useConsoleDraftGuard\(/u);
   assert.match(source, /SETTINGS_SECTION_LABEL/u);
   assert.match(source, /dirtySectionNames/u);
@@ -156,29 +153,29 @@ test("the existing draft-guard passage names the dirty sections and confirms tab
     "draft guard stays on its single existing passage"
   );
   assert.match(source, /페이지를 떠나면 사라집니다/u);
-  // Tab switches never unmount a panel: every panel stays mounted and is
-  // only hidden, so a dirty form survives switching tabs. Dirty tabs carry
-  // a visible dot plus a screen-reader note, and each dirty form names
-  // itself in place next to its own save action.
-  assert.match(source, /hidden=\{activeTab !==/u);
-  assert.match(source, /tabDirty/u);
-  assert.match(source, /tabDirtyDot/u);
-  assert.match(source, /저장 안 됨/u);
+  // No tabs to switch: every section is mounted and visible, so a dirty form
+  // can never hide behind another tab. Dirty sections carry a visible mark
+  // next to their own save action.
+  assert.match(source, /저장 안 됨|저장 안 된 변경/u);
   for (const flag of ["basicsDirty", "intakeDirty", "featuresDirty"]) {
     assert.ok(source.includes(`${flag} ? (`), `${flag} shows its own in-form unsaved label`);
   }
   assert.equal(
     (source.match(/styles\.unsavedTag/g) || []).length,
-    3,
-    "each of the three saving forms labels its own dirty state"
+    4,
+    "each of the three saving forms labels its own dirty state, plus the event card mirrors basics"
   );
 });
 
-test("tab and status styles reuse existing tokens and keep 44px targets", () => {
+test("workbench and status styles reuse existing tokens and keep 44px targets", () => {
   assert.match(css, /\.scopeNote/u);
   assert.match(css, /\.sectionStatus/u);
-  assert.match(css, /\.tabs? \{/u);
-  assert.match(css, /tabDirtyDot|tabPanel/u);
+  assert.match(css, /\.eventCard \{/u);
+  assert.match(css, /\.workPanels \{/u);
+  assert.match(css, /\.intakeBand \{/u);
+  assert.match(css, /\.formPreview \{/u);
+  assert.match(css, /\.featureGrid > \.check \{/u);
+  assert.match(css, /\.sectionFlash \{/u);
   assert.match(css, /\.unsavedTag \{/u);
   assert.match(css, /\.stageTimeline \{/u);
   assert.match(css, /\.pageDisclosure \{/u);

@@ -35,7 +35,6 @@ async function main() {
       damaged.participants = participants; await save(damaged);
     }
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}/settings`, { waitUntil: 'networkidle' });
-    await page.getByRole('tab', { name: '진행 단계', exact: true }).click();
     const stage = page.locator('[data-workspace-section="settings-stage"]');
     await stage.waitFor();
     const archive = stage.getByRole('button', { name: '보관 단계로 전환', exact: true });
@@ -107,11 +106,9 @@ async function main() {
     assert.deepEqual((await read()).modules, source.modules, 'unavailable data is not repaired by viewing');
     const repaired = await read(); repaired.modules = modules; await save(repaired);
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}/settings`, { waitUntil: 'networkidle' });
-    await page.getByRole('tab', { name: '진행 단계', exact: true }).click();
     assert.equal(await archive.isEnabled(), true, 'normal archive is available once sources are verified');
     const noIntake = await read(); noIntake.registrationOpen = null; await save(noIntake);
     await page.reload({ waitUntil: 'networkidle' });
-    await page.getByRole('tab', { name: '진행 단계', exact: true }).click();
     assert.equal(await archive.isDisabled(), true, 'an unknown intake state cannot become closed');
     noIntake.registrationOpen = false; await save(noIntake);
     await stage.getByRole('button', { name: '상태 다시 확인', exact: true }).click();
@@ -123,7 +120,6 @@ async function main() {
       await route.fulfill({ response, json: body });
     });
     await page.reload({ waitUntil: 'networkidle' });
-    await page.getByRole('tab', { name: '진행 단계', exact: true }).click();
     assert.equal(await archive.isDisabled(), true, 'an older server without proof is not assumed safe');
     await page.unroute(bootstrap);
     await stage.getByRole('button', { name: '상태 다시 확인', exact: true }).click();

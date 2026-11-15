@@ -75,10 +75,13 @@ test("operations names booth load, unpublished map drafts, and can edit a desk",
   assert.match(ops, /입장·퇴장 방향을 바꾸면 기존 기록과 섞일 수 있습니다\. 확인했습니다\./u);
 });
 
-test("settings explains that this product does not process payments", () => {
+test("settings offers no payment controls: this product does not process payments", () => {
   const settings = read("console/events/[id]/settings/SettingsWorkspace.tsx");
-  assert.match(settings, /Number\(basics\.price\) > 0 \?/u);
-  assert.match(settings, /이 시스템은 결제를 처리하지 않습니다\. 참가비는 참가자에게 청구되지 않으며/u);
+  // The price field is gone from the screen (the server value stays preserved
+  // in saves); with no price input there is no price explanation either.
+  assert.doesNotMatch(settings, /id="set-price"/u);
+  assert.doesNotMatch(settings, /Number\(basics\.price\) > 0 \?/u);
+  assert.doesNotMatch(settings, /참가비 \(원\)/u);
   // The payment toggle is gone from the feature screen (server id stays for
   // API compatibility); the group no longer advertises a payment feature.
   assert.doesNotMatch(settings, /\{ id: "payment", label: "결제" \}/u);

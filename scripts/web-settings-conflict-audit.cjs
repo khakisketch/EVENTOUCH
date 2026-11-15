@@ -80,8 +80,8 @@ const axeSource = require('axe-core').source;
       }
     }
     await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/settings`);
+    await page.getByRole('button', { name: '수정', exact: true }).click();
     await page.locator('#set-name').fill('합성 운영자 A의 이름');
-    await page.getByRole('tab', { name: /^참가 접수/ }).click();
     await page.locator('#set-consent').fill('합성 운영자 A의 안내');
 
     phase = 'intake conflict and read recovery';
@@ -130,11 +130,9 @@ const axeSource = require('axe-core').source;
       allowReentry: otherWorkspace.allowReentry !== false, verificationRequired: true,
     });
     assert.equal(changed.status, 200);
-    await page.getByRole('tab', { name: /^운영 기능/ }).click();
     await page.getByLabel('퀴즈', { exact: true }).check();
     await page.getByRole('button', { name: '운영 기능 저장' }).click();
     await page.getByText('운영 기능 설정을 저장했습니다.', { exact: false }).first().waitFor();
-    await page.getByRole('tab', { name: /^기본 정보/ }).click();
     assert.equal(await page.locator('#set-name').inputValue(), '합성 운영자 A의 이름');
     const [basicResponse] = await Promise.all([
       page.waitForResponse((r) => r.url().endsWith('/commands') && r.request().postDataJSON()?.command === 'event.basics.save'),
@@ -170,7 +168,6 @@ const axeSource = require('axe-core').source;
     assert.equal((await event()).name, '합성 확인 후 저장');
     assert.equal((await event()).capacity, 350);
     assert.equal((await workspace()).verificationRequired, true);
-    await page.getByRole('tab', { name: /^참가 접수/ }).click();
     assert.equal(await page.locator('#set-consent').inputValue(), '합성 운영자 A의 안내');
     await page.getByRole('button', { name: '양식 게시·접수 열기' }).click();
     await page.getByText('양식을 게시하고 접수를 열었습니다.', { exact: false }).first().waitFor();
@@ -219,7 +216,6 @@ const axeSource = require('axe-core').source;
     phase = 'clean consent still requires review of changed fields';
     const fresh = await context.newPage();
     await fresh.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/settings`);
-    await fresh.getByRole('tab', { name: /^운영 기능/ }).click();
     const fieldBefore = await workspace();
     assert.equal((await command('field.save', { id: 'synthetic-new', label: '합성 새 항목', type: 'select', required: true,
       options: ['선택 하나', '선택 둘'], expectedFormVersion: fieldBefore.formVersion })).status, 200);
@@ -227,7 +223,6 @@ const axeSource = require('axe-core').source;
     await quiz.setChecked(!(await quiz.isChecked()));
     await fresh.getByRole('button', { name: '운영 기능 저장' }).click();
     await fresh.getByText('운영 기능 설정을 저장했습니다.', { exact: false }).first().waitFor();
-    await fresh.getByRole('tab', { name: /^참가 접수/ }).click();
     const [fieldConflict] = await Promise.all([
       fresh.waitForResponse((response) => response.url().endsWith('/commands') && response.request().postDataJSON()?.command === 'form.publish'),
       fresh.getByRole('button', { name: '양식 게시·접수 열기' }).click(),

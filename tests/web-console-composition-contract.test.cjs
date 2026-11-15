@@ -200,7 +200,7 @@ test('event workspaces keep factual meta and action-specific sections inside the
   for (const id of ['settings-basics', 'settings-stage', 'settings-features', 'settings-intake']) {
     assert.ok(settings.includes(id), `settings retains deep-link anchor ${id}`);
   }
-  assert.match(settings, /role="tablist"/u);
+  assert.doesNotMatch(settings, /role="tablist"/u);
   assert.doesNotMatch(settings, /label: "참가자 페이지"/u);
   assert.ok(settings.includes('id="settings-page"'), 'optional disclosure keeps its deep-link id');
   assert.doesNotMatch(settings, /headingId="settings-page"/u);

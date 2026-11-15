@@ -40,18 +40,17 @@ test('preparation pages no longer invent their own header chrome', () => {
   }
 });
 
-test('preparation pages expose tab navigation where the task flows span zones', () => {
-  assert.match(PAGES.settings, /role="tablist"/u);
-  assert.match(PAGES.settings, /role="tab"/u);
-  assert.match(PAGES.settings, /role="tabpanel"/u);
+test('settings exposes its zones on one workbench page', () => {
+  assert.doesNotMatch(PAGES.settings, /role="tablist"/u);
+  assert.doesNotMatch(PAGES.settings, /role="tabpanel"/u);
   assert.doesNotMatch(PAGES.settings, /<ConsoleSectionNav/u);
   for (const label of ['기본 정보', '참가 접수', '운영 기능', '진행 단계']) {
-    assert.ok(PAGES.settings.includes(label), `settings tab reaches ${label}`);
+    assert.ok(PAGES.settings.includes(label), `settings zone reaches ${label}`);
   }
   for (const id of ['settings-basics', 'settings-intake', 'settings-features', 'settings-stage']) {
     assert.ok(PAGES.settings.includes(id), `settings keeps deep-link anchor ${id}`);
   }
-  // The attendee-page supporting block is content, never a fifth tab label.
+  // The attendee-page supporting block is content, never a zone of its own.
   assert.doesNotMatch(PAGES.settings, /label: "참가자 페이지"/u);
   assert.doesNotMatch(PAGES.content, /<ConsoleSectionNav/u);
   assert.match(PAGES.content, /role="tablist" aria-label="콘텐츠 종류"/u);
@@ -84,7 +83,7 @@ test('preparation tabs keep stable anchors and form reading width', () => {
   assert.ok(PAGES.settings.includes('id="settings-page"'), 'optional disclosure keeps its deep-link id');
   assert.doesNotMatch(PAGES.settings, /headingId="settings-page"/u);
   // The old section anchors still deep-link: settings links to them and the
-  // workspace maps each hash to its tab.
+  // workspace maps each hash to its section (basics opens the drawer).
   for (const id of ['content-notices', 'content-program', 'content-venue']) {
     assert.ok(PAGES.content.includes(`"#${id}"`), `content keeps the ${id} deep link`);
   }

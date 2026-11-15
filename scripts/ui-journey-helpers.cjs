@@ -19,6 +19,14 @@ async function openCreateSettings(page) {
   await details.waitFor({ state: 'visible' });
   if (!await details.evaluate(element => element.open)) await details.locator(':scope > summary').click();
 }
+// Settings basics editing lives in a drawer: open it before touching the
+// basics form. Idempotent when the drawer is already open.
+async function openSettingsBasics(page, timeout = 15000) {
+  if (!await page.locator('#set-name:visible').count()) {
+    await page.getByRole('button', { name: '수정', exact: true }).click();
+  }
+  await page.locator('#set-name').waitFor({ state: 'visible', timeout });
+}
 async function chooseRadio(root, id, value) {
   const choices = await root.locator(`#${id} input[type="radio"]`).all();
   for (const choice of choices) {
@@ -43,4 +51,4 @@ async function waitForDialogExitFocus(page, trigger, timeout = 5000) {
   await page.getByRole('dialog').waitFor({ state: 'hidden', timeout });
   await page.waitForFunction(element => element === document.activeElement, await trigger.elementHandle(), { polling: 'raf', timeout });
 }
-module.exports = { openProgram, selectTask, openCreateSettings, chooseRadio, messageStep, waitForDialogExitFocus };
+module.exports = { openProgram, selectTask, openCreateSettings, openSettingsBasics, chooseRadio, messageStep, waitForDialogExitFocus };

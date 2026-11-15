@@ -50,7 +50,19 @@ async function main() {
     });
     const event = async () => (await fixture.harness.database.query('SELECT payload FROM events WHERE id=$1', [fixture.eventId])).rows[0].payload;
     const workspace = async () => (await fixture.harness.database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [fixture.eventId])).rows[0].payload;
-    const tab = async (name) => page.getByRole('tab', { name: new RegExp(`^${name}`) }).click();
+    const tab = async (name) => {
+      // No tab strip: sections are always visible, basics editing opens a drawer.
+      if (name === '기본 정보') {
+        if (!await page.locator('#set-name:visible').count()) {
+          await page.getByRole('button', { name: '수정', exact: true }).click();
+        }
+        await page.locator('#set-name').waitFor({ state: 'visible', timeout: 15000 });
+        return;
+      }
+      const id = { '참가 접수': 'settings-intake', '진행 단계': 'settings-stage', '운영 기능': 'settings-features' }[name];
+      if (!id) throw new Error(`settings: unknown zone ${name}`);
+      await page.locator(`#${id}`).scrollIntoViewIfNeeded();
+    };
     const panel = page.getByRole('region', { name: '행사 설정 처리 확인 필요' });
     const original = '합성 설정 복구 원래 요청';
     await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/settings`, { waitUntil: 'networkidle' });
@@ -73,6 +85,8 @@ async function main() {
     await panel.waitFor();
     await panel.getByText(/기본 정보 저장 요청이 반영됐을 수 있습니다/).waitFor();
     await page.waitForFunction(() => document.activeElement?.id === 'settings-recovery-heading');
+    await page.getByRole('button', { name: '수정', exact: true }).click();
+    await page.locator('#set-name').waitFor({ state: 'visible', timeout: 15000 });
     assert.equal(await page.locator('#set-name').isDisabled(), true);
     const denied = page.waitForResponse((item) => item.status() === 403 && item.url().includes('/commands'));
     await panel.getByRole('button', { name: '같은 요청 다시 시도' }).click();
@@ -163,6 +177,8 @@ async function main() {
     await page.reload({ waitUntil: 'networkidle' });
     const shared = page.getByRole('region', { name: '처리 결과 확인' });
     await shared.waitFor();
+    await page.getByRole('button', { name: '수정', exact: true }).click();
+    await page.locator('#set-name').waitFor({ state: 'visible', timeout: 15000 });
     assert.equal(await page.locator('#set-name').isDisabled(), true);
     const beforeCheck = requests.get(reloaded).length;
     await shared.getByRole('button', { name: '서버 처리 확인' }).click();

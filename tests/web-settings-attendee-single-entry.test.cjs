@@ -54,22 +54,21 @@ test('settings-attendee-single-entry: theme edits intro, accent and visibility w
   assert.match(theme, /아래 소개 입력란을 확인하세요/);
 });
 
-test('settings-attendee-single-entry: tabs stay in preparation order with deep-link anchors', () => {
+test('settings-attendee-single-entry: zones stay in preparation order with deep-link anchors', () => {
   const settings = read(SETTINGS);
-  // Four real tabs own the zones; deep-link anchors survive for each tab.
+  // One workbench page owns the zones; deep-link anchors survive for each zone.
   assert.doesNotMatch(settings, /<ConsoleSectionNav/);
-  assert.match(settings, /role="tablist"/u);
-  assert.match(settings, /role="tab"/u);
-  assert.match(settings, /role="tabpanel"/u);
-  const tabs = settings.slice(settings.indexOf('const SETTINGS_TABS:'), settings.indexOf('const TAB_ANCHORS:'));
-  const order = ['기본 정보', '참가 접수', '운영 기능', '진행 단계']
-    .map((label) => tabs.indexOf(`label: "${label}"`));
-  assert.ok(order.every((position) => position >= 0));
-  assert.deepEqual(order, [...order].sort((a, b) => a - b));
+  assert.doesNotMatch(settings, /role="tablist"/u);
+  assert.doesNotMatch(settings, /role="tabpanel"/u);
+  // Page order follows the preparation flow: event card, intake, features.
+  const cardAt = settings.indexOf('id="panel-settings-basics"');
+  const intakeAt = settings.indexOf('id="panel-settings-intake"');
+  const featuresAt = settings.indexOf('id="panel-settings-features"');
+  assert.ok(cardAt > 0 && intakeAt > cardAt && featuresAt > intakeAt, 'card, intake, features in order');
   for (const id of ['settings-basics', 'settings-intake', 'settings-features', 'settings-stage']) {
     assert.ok(settings.includes(id), `deep-link anchor survives: ${id}`);
   }
-  // The attendee-page supporting block is content, never a fifth tab label.
+  // The attendee-page supporting block is content, never a zone of its own.
   assert.match(settings, /참가자 페이지 편집으로 이동/);
   assert.doesNotMatch(settings, /label: "참가자 페이지"/u);
 });

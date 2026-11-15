@@ -62,17 +62,15 @@ const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
       return route.continue();
     });
     await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/settings`);
+    await page.getByRole('button', { name: '수정', exact: true }).click();
     await page.locator('#set-name').fill('합성 다른 구역 초안');
-    await page.getByRole('tab', { name: /^운영 기능/ }).click();
     await page.getByLabel('퀴즈', { exact: true }).check();
     await page.screenshot({ path: path.join(output, 'features-before-conflict.png'), fullPage: true });
 
     phase = 'other operator and unrelated reload';
     assert.equal((await command('event.features', { features: ['draw', 'poll', 'screen', 'venue', 'reward', 'payment'] })).status, 200);
-    await page.getByRole('tab', { name: /^기본 정보/ }).click();
     await page.getByRole('button', { name: '기본 정보 저장' }).click();
     await page.getByText('기본 정보를 저장했습니다.', { exact: false }).first().waitFor();
-    await page.getByRole('tab', { name: /^운영 기능/ }).click();
     assert.equal(await page.getByLabel('퀴즈', { exact: true }).isChecked(), true);
     assert.equal(await page.getByLabel('경품', { exact: true }).isChecked(), false);
     const [conflict] = await Promise.all([
@@ -128,7 +126,6 @@ const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
     phase = 'hidden latest removal';
     const fresh = await context.newPage();
     await fresh.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/settings`);
-    await fresh.getByRole('tab', { name: /^운영 기능/ }).click();
     await fresh.getByLabel('퀴즈', { exact: true }).uncheck();
     const existing = await current();
     assert.equal((await command('event.features', { features: existing.filter((value) => value !== 'payment') })).status, 200);
@@ -144,7 +141,6 @@ const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 
     phase = 'unconfirmed request and receipt';
     await page.reload();
-    await page.getByRole('tab', { name: /^운영 기능/ }).click();
     await page.getByLabel('Q&A', { exact: true }).check();
     commandFault = 'abort';
     await page.getByRole('button', { name: '운영 기능 저장' }).click();

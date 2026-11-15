@@ -66,7 +66,7 @@ const SCREENS = [
   { key: 'content', path: '/console/events/:id/content', title: '공지·안내', scope: 'event', marker: { css: '#content-notices' } },
   { key: 'attendeePage', path: '/console/events/:id/page', title: '참가자 페이지', scope: 'event', marker: { css: '#home-intro' } },
   { key: 'rewards', path: '/console/events/:id/rewards', title: '경품 수령', scope: 'event', marker: { css: '#rewards-list' } },
-  { key: 'settings', path: '/console/events/:id/settings', title: '행사 설정', scope: 'event', marker: { css: '#set-name' } },
+  { key: 'settings', path: '/console/events/:id/settings', title: '행사 설정', scope: 'event', marker: { css: '#settings-basics' } },
   { key: 'reports', path: '/console/events/:id/reports', title: '결과 보고서', scope: 'event', marker: { css: '#reports-list' } },
 ];
 
@@ -1007,6 +1007,8 @@ async function main() {
           await menu.getByRole('link', { name: '고객사', exact: true }).click();
           await menu.waitFor({ state: 'hidden' });
           await go('settings');
+          await page.getByRole('button', { name: '수정', exact: true }).click();
+          await page.locator('#set-name').waitFor({ state: 'visible', timeout: 15000 });
           const value = await page.locator('#set-name').inputValue();
           await page.locator('#set-name').fill(`${value} 미저장`);
           await trigger.click();
@@ -1084,28 +1086,22 @@ async function main() {
           const rail = await page.locator('.console-sidebar').boundingBox();
           if (!target || !rail || target.y < rail.y + rail.height - 1) throw new Error('anchor heading covered by sticky rail');
           await shot('anchor');
-          // Settings owns four real tabs (not anchor nav): each tab is a
-          // 44px target, scrolls into view on narrow screens per the
-          // design-system horizontal scroll, selects its own panel, and
-          // keeps deep links.
+          // Settings is one workbench page (not tab nav): the event card
+          // and the two work panels are always visible, basics editing opens
+          // a drawer, and the section anchors keep deep links.
           await go('settings');
-          const tabs = page.getByRole('tab');
-          if (await tabs.count() !== 4) throw new Error(`settings: expected 4 tabs, got ${await tabs.count()}`);
-          for (const name of ['기본 정보', '참가 접수', '운영 기능', '진행 단계']) {
-            const tab = page.getByRole('tab', { name, exact: true }).first();
-            if (!await tab.count()) throw new Error(`settings: missing tab ${name}`);
-            await tab.scrollIntoViewIfNeeded();
-            const box = await tab.boundingBox();
-            if (!box || box.x < 0 || box.x + box.width > width + 1 || box.height < 44) throw new Error(`settings: clipped or undersized tab ${name}`);
-            const panelId = await tab.getAttribute('aria-controls');
-            if (!panelId) throw new Error(`settings: tab ${name} names no panel`);
-            // The default tab is already selected on arrival: verify it
-            // without a redundant click, click only a real switch.
-            if ((await tab.getAttribute('aria-selected')) !== 'true') {
-              await tab.click();
-            }
-            await page.locator(`#${panelId}:visible`).waitFor({ state: 'visible', timeout: 15000 });
+          for (const [name, id] of [['기본 정보', 'panel-settings-basics'], ['참가 접수', 'panel-settings-intake'], ['운영 기능', 'panel-settings-features'], ['진행 단계', 'panel-settings-stage']]) {
+            const section = page.locator(`#${id}:visible`).first();
+            if (!await section.count()) throw new Error(`settings: missing zone ${name}`);
+            await section.scrollIntoViewIfNeeded();
+            const box = await section.boundingBox();
+            if (!box || box.x < 0 || box.x + box.width > width + 1) throw new Error(`settings: clipped zone ${name}`);
           }
+          // Basics editing opens a drawer with a 44px form.
+          await page.getByRole('button', { name: '수정', exact: true }).click();
+          await page.locator('#set-name').waitFor({ state: 'visible', timeout: 15000 });
+          const nameBox = await page.locator('#set-name').boundingBox();
+          if (!nameBox || nameBox.height < 44) throw new Error('settings: basics name field undersized');
           await shot('settings');
         });
         await check(`phone/preview-status@${width}`, async () => {
@@ -1275,6 +1271,7 @@ async function main() {
       try {
         const settingsPath = `/console/events/${encodeURIComponent(eventId)}/settings`;
         await page.goto(`${baseUrl}${settingsPath}`, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.getByRole('button', { name: '수정', exact: true }).click();
         await page.locator('#set-name').waitFor({ state: 'visible', timeout: 15000 });
         const original = await page.locator('#set-name').inputValue();
         await assertDraftGuard(page, {
@@ -2120,8 +2117,7 @@ async function main() {
         // Settings: ending a stage reminds the operator to freeze the report.
         await page.goto(`${baseUrl}/console/events/${eventId}/settings`, { waitUntil: 'networkidle', timeout: 30000 });
         await assertConsoleScreen(page, SCREENS.find((screen) => screen.key === 'settings'), eventId, eventName);
-        await page.getByRole('tab', { name: '진행 단계', exact: true }).click();
-        await page.getByRole('tabpanel').filter({ hasText: '진행 단계' }).first().waitFor({ state: 'visible', timeout: 15000 });
+        await page.locator('#settings-stage').waitFor({ state: 'visible', timeout: 15000 });
         await page.getByRole('button', { name: '종료 단계로 전환', exact: true }).click();
         await page.getByText(/결과 보고서는 생성 시점 값으로 고정됩니다/).first().waitFor({ timeout: 10000 });
         await page.getByText(/승인 대기 등 필요한 참가자 처리는 종료 전에 마치세요/).first().waitFor({ timeout: 10000 });
