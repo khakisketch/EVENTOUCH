@@ -1,5 +1,5 @@
 'use strict';
-const { openCreateSettings } = require('./ui-journey-helpers.cjs');
+const { openCreateSettings, openSettingsBasics } = require('./ui-journey-helpers.cjs');
 
 // Missing workflow-stage journeys with exact operator step counts.
 // Boots the same isolated shape as the other web audits: a random
@@ -182,6 +182,8 @@ async function main() {
       if (scrollCounter) scrollCounter.paused = true;
       try {
         await page.goto(baseUrl + target, { waitUntil: 'networkidle', timeout: 30000 });
+        // Basics editing lives in a drawer: open it before waiting for the field.
+        if (marker === '#set-name') await openSettingsBasics(page);
         await page.locator(marker).first().waitFor({ state: 'visible', timeout: 15000 });
       } finally {
         // Re-enable after the target screen is ready; reset the gesture
@@ -335,11 +337,9 @@ async function main() {
     // ---- Task 4: registration consent publish ----
     let publishedBefore = null;
     await measure('intake-publish', '동의 안내 입력·양식 게시·접수 열기', async (act, task) => {
-      task.screens = [`/console/events/${createdEventId}/settings (tab 참가 접수)`];
-      task.fields = ['tab 참가 접수', '#set-consent', 'button 양식 게시·접수 열기'];
+      task.screens = [`/console/events/${createdEventId}/settings (참가 접수 구역)`];
+      task.fields = ['참가 접수 구역', '#set-consent', 'button 양식 게시·접수 열기'];
       await go(`/console/events/${createdEventId}/settings`, '#set-name');
-      await act(() => page.getByRole('tab', { name: '참가 접수', exact: true }).click());
-      await page.locator('[role="tabpanel"]:visible').first().waitFor({ state: 'visible', timeout: 15000 });
       publishedBefore = (await readBootstrap(helpers, harness.baseUrl, ownerCookie))
         .workspaces[createdEventId].publishedVersion;
       await act(() => page.locator('#set-consent').fill(CONSENT_TEXT));
@@ -359,11 +359,9 @@ async function main() {
 
     // ---- Task 5: close registration ----
     await measure('intake-close', '접수 닫기', async (act, task) => {
-      task.screens = [`/console/events/${createdEventId}/settings (tab 참가 접수)`];
-      task.fields = ['tab 참가 접수', 'button 접수 닫기'];
+      task.screens = [`/console/events/${createdEventId}/settings (참가 접수 구역)`];
+      task.fields = ['참가 접수 구역', 'button 접수 닫기'];
       await go(`/console/events/${createdEventId}/settings`, '#set-name');
-      await act(() => page.getByRole('tab', { name: '참가 접수', exact: true }).click());
-      await page.locator('[role="tabpanel"]:visible').first().waitFor({ state: 'visible', timeout: 15000 });
       await act(() => page.getByRole('button', { name: '접수 닫기', exact: true }).click());
       await act(() => page.getByRole('dialog').getByRole('button', { name: '접수 닫기', exact: true }).click());
       await page.getByText('접수 닫힘', { exact: false }).first().waitFor({ timeout: 15000 });
@@ -518,11 +516,9 @@ async function main() {
 
     // ---- Task 6: end the LIVE fixture event ----
     await measure('stage-end', '종료(으)로 전환 (LIVE -> ENDED)', async (act, task) => {
-      task.screens = [`/console/events/${fixture.eventId}/settings (tab 진행 단계)`];
-      task.fields = ['tab 진행 단계', 'button 종료(으)로 전환', 'group 단계 전환 확인 / button aria 정말 전환합니다 · 종료 단계로'];
+      task.screens = [`/console/events/${fixture.eventId}/settings (진행 단계 구역)`];
+      task.fields = ['진행 단계 구역', 'button 종료(으)로 전환', 'group 단계 전환 확인 / button aria 정말 전환합니다 · 종료 단계로'];
       await go(`/console/events/${fixture.eventId}/settings`, '#set-name');
-      await act(() => page.getByRole('tab', { name: '진행 단계', exact: true }).click());
-      await page.locator('[role="tabpanel"]:visible').first().waitFor({ state: 'visible', timeout: 15000 });
       await page.getByRole('button', { name: '종료(으)로 전환', exact: true }).waitFor({ timeout: 10000 });
       await act(() => page.getByRole('button', { name: '종료(으)로 전환', exact: true }).click());
       await page.getByRole('group', { name: '단계 전환 확인' }).waitFor({ timeout: 10000 });
@@ -539,12 +535,10 @@ async function main() {
 
     // ---- Task 7: archive next, registration already closed ----
     await measure('stage-archive', '보관(으)로 전환 (ENDED -> ARCHIVED)', async (act, task) => {
-      task.screens = [`/console/events/${fixture.eventId}/settings (tab 진행 단계)`];
-      task.fields = ['tab 진행 단계', 'button 보관(으)로 전환', 'group 단계 전환 확인 / button aria 정말 보관합니다 · 보관 단계로'];
+      task.screens = [`/console/events/${fixture.eventId}/settings (진행 단계 구역)`];
+      task.fields = ['진행 단계 구역', 'button 보관(으)로 전환', 'group 단계 전환 확인 / button aria 정말 보관합니다 · 보관 단계로'];
       await go(`/console/events/${fixture.eventId}/settings`, '#set-name');
-      await act(() => page.getByRole('tab', { name: '진행 단계', exact: true }).click());
-      await page.locator('[role="tabpanel"]:visible').first().waitFor({ state: 'visible', timeout: 15000 });
-      task.serverNote = 'tab selection counted as 1 step; no collapsed summary remains. ';
+      task.serverNote = 'section scroll counted as 1 step; no collapsed summary remains. ';
       await page.getByRole('button', { name: '보관(으)로 전환', exact: true }).waitFor({ timeout: 10000 });
       await act(() => page.getByRole('button', { name: '보관(으)로 전환', exact: true }).click());
       await page.getByRole('group', { name: '단계 전환 확인' }).waitFor({ timeout: 10000 });

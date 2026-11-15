@@ -23,11 +23,16 @@ async function main() {
       try { if (request.postDataJSON().command === 'event.basics.save') writes += 1; } catch {}
     });
     await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/settings`, { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: '수정', exact: true }).click();
+    await page.locator('#set-name').waitFor({ state: 'visible', timeout: 15000 });
     await page.locator('#set-name').fill('합성 결과 확인 행사');
     await page.getByRole('button', { name: '기본 정보 저장' }).click();
     stage = 'lost response';
     const local = page.getByRole('region', { name: '행사 설정 처리 확인 필요' });
     await local.getByRole('button', { name: '서버 처리 확인' }).waitFor();
+    // The pending save closes the drawer; reopen it to inspect the frozen draft.
+    await page.getByRole('button', { name: '수정', exact: true }).click();
+    await page.locator('#set-name').waitFor({ state: 'visible', timeout: 15000 });
     assert.equal(await page.locator('#set-name').isDisabled(), true, 'the original values stay frozen while the result is unknown');
     assert.equal(writes, 1);
     const raw = await page.evaluate(() => sessionStorage.getItem('eventouch.receipts.operator'));
@@ -41,6 +46,8 @@ async function main() {
     await page.reload({ waitUntil: 'networkidle' });
     const panel = page.getByRole('region', { name: '처리 결과 확인' });
     await panel.getByRole('button', { name: '서버 처리 확인' }).waitFor();
+    await page.getByRole('button', { name: '수정', exact: true }).click();
+    await page.locator('#set-name').waitFor({ state: 'visible', timeout: 15000 });
     assert.equal(await page.locator('#set-name').inputValue(), '합성 결과 확인 행사');
     await panel.getByRole('button', { name: '서버 처리 확인' }).click();
     const status = panel.getByRole('status').filter({ hasText: '서버에 행사 정보 저장 기록이 있습니다' });

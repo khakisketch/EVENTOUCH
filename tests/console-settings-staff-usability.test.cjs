@@ -20,19 +20,15 @@ const staff = read("apps/web/app/staff/StaffEventWork.tsx");
 const staffBootstrap = read("apps/web/app/staff/staff-bootstrap.ts");
 const staffCss = read("apps/web/app/staff/staff-event-work.module.css");
 
-test("settings names the selected tab with four real tabs", () => {
-  // The shared jump nav is replaced by four accessible tabs; the selected
-  // tab and its dirty dot name the state in view, and the same tab grammar
-  // is used by field operations, draws, and the attendee page editor for
-  // their own navs.
+test("settings names its four zones on one workbench page", () => {
+  // The shared jump nav is replaced by one workbench page: an event card
+  // (basics summary plus stage), intake and features panels, and a drawer
+  // for basics editing. Dirty zones name their state in place.
   assert.doesNotMatch(settings, /<ConsoleSectionNav/u);
-  assert.match(settings, /role="tablist"/u);
-  assert.match(settings, /role="tab"/u);
-  assert.match(settings, /role="tabpanel"/u);
-  assert.match(settings, /aria-selected/u);
-  assert.match(settings, /hidden=\{activeTab !==/u);
-  assert.match(settings, /tabDirtyDot/u);
-  assert.match(settings, /저장 안 됨/u);
+  assert.doesNotMatch(settings, /role="tablist"/u);
+  assert.doesNotMatch(settings, /role="tabpanel"/u);
+  assert.doesNotMatch(settings, /hidden=\{activeTab !==/u);
+  assert.match(settings, /저장 안 됨|저장 안 된 변경/u);
   for (const [id, label] of [
     ["settings-basics", "기본 정보"],
     ["settings-intake", "참가 접수"],
@@ -41,18 +37,17 @@ test("settings names the selected tab with four real tabs", () => {
   ]) {
     assert.ok(
       settings.includes(label),
-      `${id} stays as the "${label}" tab`
+      `${id} stays as the "${label}" zone`
     );
     assert.ok(settings.includes(`"${id}"`), `${id} anchor survives for deep links`);
   }
-  // The attendee-page supporting block is content, never a fifth tab label.
+  // The attendee-page supporting block is content, never a zone of its own.
   assert.doesNotMatch(settings, /label: "참가자 페이지"/u);
-  assert.match(settingsCss, /\.tab/u);
-  assert.match(settingsCss, /tabDirtyDot|tabPanel/u);
+  assert.match(settingsCss, /\.eventCard \{/u);
+  assert.match(settingsCss, /\.workPanels \{/u);
 });
 
-test("settings keeps its tabs, save state, and scope note", () => {
-  assert.match(settings, /aria-label="행사 설정 탭"|행사 설정 구역/u);
+test("settings keeps its sections, save state, and scope note", () => {
   assert.match(settings, /sectionStatusLine\(basicsStatus, "basics"\)/u);
   assert.match(settings, /sectionStatusLine\(intakeStatus, "intake"\)/u);
   assert.match(settings, /sectionStatusLine\(featuresStatus, "features"\)/u);
@@ -164,8 +159,9 @@ test("existing event command paths remain fixed; approved organization REST path
   }
   // The staff confirm grammar stays: reward collection still confirms.
   assert.match(staff, /window\.confirm\(`\$\{rewardTarget\.name\}/u);
-  // Settings keeps drafts across tab switches (panels stay mounted hidden)
-  // and guards page leave through the shared draft guard, not a tab confirm.
+  // Settings keeps every section mounted and visible (no tab switches to
+  // strand a draft) and guards page leave through the shared draft guard,
+  // not a tab confirm.
   assert.doesNotMatch(settings, /window\.confirm/u);
-  assert.match(settings, /hidden=\{activeTab !==/u);
+  assert.doesNotMatch(settings, /hidden=\{activeTab !==/u);
 });

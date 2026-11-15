@@ -1,5 +1,5 @@
 'use strict';
-const { messageStep } = require('./ui-journey-helpers.cjs');
+const { messageStep, openSettingsBasics } = require('./ui-journey-helpers.cjs');
 
 
 // Event-close paired journey: one operator closes out a LIVE event end to
@@ -407,19 +407,17 @@ async function main() {
     const stagePanelReady = () => page.getByRole('button', { name: /\(으\)로 전환/, exact: false }).first()
       .waitFor({ state: 'visible', timeout: 15000 });
     const selectSettingsTab = async (act, name) => {
-      const tab = page.getByRole('tab', { name, exact: true });
-      // A deep-link hash may already select the tab: never count a
-      // redundant click, only a real switch. Either way the tab must end
-      // selected with its own panel visible.
-      if ((await tab.getAttribute('aria-selected')) !== 'true') {
-        await act('click', () => tab.click());
+      // Settings is one workbench page: sections are always visible, basics
+      // editing opens a drawer. A deep-link hash may already target the
+      // section: scroll only when it is not already in view.
+      if (name === '기본 정보') {
+        await act('open', () => openSettingsBasics(page));
+        return;
       }
-      if ((await tab.getAttribute('aria-selected')) !== 'true') {
-        throw new Error(`settings: tab ${name} did not select`);
-      }
-      const panelId = await tab.getAttribute('aria-controls');
-      if (!panelId) throw new Error(`settings: tab ${name} names no panel`);
-      await page.locator(`#${panelId}:visible`).waitFor({ state: 'visible', timeout: 15000 });
+      const id = { '참가 접수': 'settings-intake', '진행 단계': 'settings-stage', '운영 기능': 'settings-features' }[name];
+      if (!id) throw new Error(`settings: unknown zone ${name}`);
+      await act('scroll', () => page.locator(`#${id}`).scrollIntoViewIfNeeded());
+      await page.locator(`#${id}:visible`).waitFor({ state: 'visible', timeout: 15000 });
     };
     const confirmTransition = async (act, task, touch, stageLabel) => {
       const first = page.getByRole('button', { name: `${stageLabel} 단계로 전환`, exact: true });
@@ -442,6 +440,8 @@ async function main() {
       const link = page.locator(`a[href="${href}"]:visible`).first();
       await act('click', () => link.click());
       if (marker === '#campaign-title' && await page.locator('#message-compose-open').isVisible()) await act('click', () => page.locator('#message-compose-open').click());
+      // Basics editing lives in a drawer: open it before waiting for the field.
+      if (marker === '#set-name') await act('open', () => openSettingsBasics(page));
       await page.locator(marker === '#campaign-title' ? '#recipient-status-filter' : marker).first().waitFor({ state: 'visible', timeout: 15000 });
     };
 
@@ -544,7 +544,7 @@ async function main() {
       // ---- Phase 3: close registration (form.close) ----
       await measure('intake-close', '참가 접수 닫기 (행사 설정 → 접수 닫기)', async (act, task, { touchOk }) => {
         task.screens = [eventPath('/settings')];
-        task.fields = ['tab 참가 접수', '접수 닫기 button'];
+        task.fields = ['참가 접수 구역', '접수 닫기 button'];
         if (before) await menuTo('/settings', '#set-name', act);
         else { await followLinear(act, '#set-consent', /참가 접수 닫기/); }
         await selectSettingsTab(act, '참가 접수');
@@ -695,7 +695,7 @@ async function main() {
       // ---- Phase 8: archive only after the result notice (writes lock) ----
       await measure('archive', '보관 단계로 전환 (진행 단계 → 보관 단계로 전환 → 확정)', async (act, task, { touchOk }) => {
         task.screens = [eventPath(before ? '/settings' : '/messages')];
-        task.fields = before ? ['tab 진행 단계', '보관 단계로 전환', '단계 전환 확인 / 정말 전환합니다'] : ['다음: 보관', 'shared 단계 전환 확인 / 정말 전환합니다'];
+        task.fields = before ? ['진행 단계 구역', '보관 단계로 전환', '단계 전환 확인 / 정말 전환합니다'] : ['다음: 보관', 'shared 단계 전환 확인 / 정말 전환합니다'];
         if (before) {
           await menuTo('/settings', '#set-name', act);
           await selectSettingsTab(act, '진행 단계');
@@ -1017,8 +1017,8 @@ async function main() {
       stateChecks.push('external closeReturn ignored in actual render');
       // Keyboard-only linear handoff, after the full stale chain so shared
       // state stays intact: start on the intake hash (stage panel hidden),
-      // focus the real linear next and press Enter. The hidden stage panel
-      // must open with its tab selected and focus on its heading.
+      // focus the real linear next and press Enter. The always-visible stage
+      // section must receive focus on its heading.
       // Unmeasured recovery, so the paired click totals do not move; the
       // keyboard op stands on its own. The closeReturn stays the canonical
       // /reports#event-close form; nothing relaxes readCloseReturn.
@@ -1026,18 +1026,16 @@ async function main() {
       await apiCommand(helpers, harness.baseUrl, ownerCookie, focusVariantId, 'form.close', {});
       await go(`/console/events/${focusVariantId}/settings?closeStep=intake&closeReturn=${encodeURIComponent(`/console/events/${focusVariantId}/reports#event-close`)}#settings-intake`, '[data-close-linear-next]');
       // Readiness before activation: the linear next can render before the
-      // initial hash tab sync, so wait for the intake panel's own marker
-      // and the intake tab selected — not just the link visible.
+      // initial hash sync, so wait for the intake section's own marker —
+      // not just the link visible.
       await page.locator('#set-consent').waitFor({ state: 'visible', timeout: 15000 });
-      assert.equal(await page.getByRole('tab', { name: '참가 접수', exact: true }).getAttribute('aria-selected'), 'true', 'intake hash selects the intake tab on arrival');
+      await page.locator('#panel-settings-intake:visible').waitFor({ state: 'visible', timeout: 15000 });
       const linearNext = page.locator('[data-close-linear-next]');
       await linearNext.focus();
       await page.keyboard.press('Enter');
-      await page.waitForFunction(() => document.querySelector('[role="tab"][aria-selected="true"]')?.textContent?.includes('진행 단계'), null, { timeout: 15000 });
       await page.waitForFunction(() => document.activeElement?.id === 'settings-stage', null, { timeout: 15000 });
       await page.locator('#settings-stage').waitFor({ state: 'visible', timeout: 15000 });
-      assert.equal(await page.getByRole('tab', { name: '진행 단계', exact: true }).getAttribute('aria-selected'), 'true', 'Enter on the linear next selects the stage tab');
-      stateChecks.push('keyboard Enter on the linear next selects the stage tab and lands focus on the stage heading');
+      stateChecks.push('keyboard Enter on the linear next lands focus on the stage heading');
       await shotBoth('states-keyboard-linear-stage-focus');
     }
     assert.equal(injectedDenials.size, 0, 'the explicitly injected denial was observed');

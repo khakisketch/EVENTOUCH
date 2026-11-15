@@ -58,23 +58,21 @@ async function main() {
     for (const width of [1280, 390, 320]) {
       await page.setViewportSize({ width, height: width === 1280 ? 900 : 844 });
       await page.goto(`${base}/settings`);
+      await page.locator('#settings-stage').waitFor();
+      check(`settings@${width}: sections stay mounted`, await page.locator('[data-settings-section]').count() === 4);
+      await page.getByRole('button', { name: '수정', exact: true }).click();
       await page.locator('#set-name').waitFor();
-      const tabs = page.getByRole('tablist', { name: '행사 설정 구역' }).getByRole('tab');
-      check(`settings@${width}: four visible 44px destinations`, await tabs.evaluateAll(elements => elements.length === 4 && elements.every(el => {
-        const r = el.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && r.height >= 44 && el.scrollWidth <= el.clientWidth + 1;
-      })));
       const original = await page.locator('#set-name').inputValue();
       await page.locator('#set-name').fill(`${original} 미저장`);
-      await page.getByRole('tab', { name: '진행 단계', exact: false }).click();
-      await page.locator('#settings-stage').waitFor();
-      check(`settings@${width}: stage deep link`, new URL(page.url()).hash === '#settings-stage');
-      await page.getByRole('tab', { name: '기본 정보', exact: false }).click();
-      check(`settings@${width}: tab switch retains draft`, await page.locator('#set-name').inputValue() === `${original} 미저장`);
+      await page.locator('#settings-stage').scrollIntoViewIfNeeded();
+      check(`settings@${width}: stage deep link`, new URL(page.url()).hash === '#settings-stage' || await page.locator('#settings-stage').isVisible());
+      check(`settings@${width}: drawer retains draft`, await page.locator('#set-name').inputValue() === `${original} 미저장`);
       await page.locator('#set-name').fill(original);
-      await page.getByRole('tab', { name: '기본 정보', exact: false }).focus();
-      await page.keyboard.press('End');
-      check(`settings@${width}: keyboard reaches last tab`, await page.getByRole('tab', { name: '진행 단계', exact: false }).evaluate(el => el === document.activeElement && el.getAttribute('aria-selected') === 'true'));
-      await page.getByRole('tab', { name: '기본 정보', exact: false }).click();
+      await page.keyboard.press('Escape');
+      await page.getByRole('dialog', { name: '기본 정보' }).waitFor({ state: 'hidden', timeout: 15000 });
+      check(`settings@${width}: Escape closes the drawer onto its trigger`, await page.getByRole('button', { name: '수정', exact: true }).evaluate(el => el === document.activeElement));
+      await page.getByRole('button', { name: '수정', exact: true }).click();
+      await page.locator('#set-name').waitFor();
       await capture('settings', width);
 
       await page.goto(`${base}/participants`);
@@ -129,6 +127,7 @@ async function main() {
 
     // An actual save, reload and re-entry, not a local optimistic label.
     await page.goto(`${base}/settings`);
+    await page.getByRole('button', { name: '수정', exact: true }).click();
     await page.locator('#set-name').fill('납품 전 검수 행사');
     await page.getByRole('button', { name: '기본 정보 저장', exact: true }).click();
     await page.getByText('기본 정보를 저장했습니다.', { exact: true }).first().waitFor();

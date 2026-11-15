@@ -93,11 +93,11 @@ async function main() {
       };
       const toStage = async act => {
         await act(() => page.locator(`main a[href="${base}/settings#settings-stage"]`).first().click());
-        await page.locator('#settings-stage').waitFor();
+        await page.locator('#settings-stage').waitFor({ state: 'visible', timeout: 15000 });
         if (BEFORE) {
           const d = page.locator('details[data-settings-collapse="stage"]');
           if (!await d.evaluate(e => e.open)) await act(() => d.locator('summary').click());
-        } else check(`${width} stage deeplink selects real tab`, await page.getByRole('tab', { name: '진행 단계', exact: false }).getAttribute('aria-selected') === 'true');
+        } else check(`${width} stage deeplink lands on its section`, await page.locator('#panel-settings-stage:visible').count() === 1);
       };
       await page.goto(f.baseUrl + base); await overview();
       let s = await snapshot('draft-overview');
@@ -159,7 +159,7 @@ async function main() {
         await act(() => page.getByRole('link', { name: '접수 설정', exact: true }).click());
         await page.locator('#set-consent').waitFor();
         if (!BEFORE) {
-          check(`${width} intake deeplink selects real tab`, await page.getByRole('tab', { name: '참가 접수', exact: false }).getAttribute('aria-selected') === 'true');
+          check(`${width} intake deeplink lands on its section`, await page.locator('#panel-settings-intake:visible').count() === 1);
           const fieldLink = page.getByRole('link', { name: '신청 항목 편집', exact: true });
           check(`${width} field editing is a separate action`, await fieldLink.isVisible() && await fieldLink.evaluate(node => !node.closest('p')) && (await fieldLink.getAttribute('href')) === `${base}/settings/fields`);
           const contactLink = page.getByRole('link', { name: '장소 안내의 문의 정보', exact: true });
@@ -196,33 +196,28 @@ async function main() {
         await capture('07-live-blocked');
       });
       if (!BEFORE) {
-        await page.getByRole('tab', { name: '기본 정보', exact: false }).click();
+        await page.getByRole('button', { name: '수정', exact: true }).click();
         await page.locator('#set-name').fill('저장 전 행사명 초안');
-        await page.getByRole('tab', { name: '참가 접수', exact: false }).click();
         await page.locator('#set-consent').fill('독립 저장 검증 동의 문구');
-        check(`${width} dirty basic tab is named`, (await page.getByRole('tab', { name: '기본 정보', exact: false }).textContent()).includes('저장 안 됨'));
+        check(`${width} dirty basics names itself on the card`, await page.locator('#panel-settings-basics [role="status"]').count() === 1);
         await page.getByRole('button', { name: '양식 게시·접수 열기', exact: true }).click();
         await page.waitForFunction(() => !document.querySelector('#panel-settings-intake [class*="unsavedTag"]'));
         check(`${width} independent consent save persisted`, (await bootstrap()).workspaces[id].consentText === '독립 저장 검증 동의 문구');
-        await page.getByRole('tab', { name: '기본 정보', exact: false }).click();
         check(`${width} save elsewhere preserves basic draft`, await page.locator('#set-name').inputValue() === '저장 전 행사명 초안');
         check(`${width} independent save did not commit basic draft`, (await bootstrap()).events.find(e => e.id === id).name === '모집 준비 흐름 검증 행사');
         page.once('dialog', d => d.dismiss());
         await page.getByRole('link', { name: '현황으로 돌아가기', exact: true }).first().click();
-        check(`${width} dirty return cancellation keeps tab and input`, new URL(page.url()).pathname.endsWith('/settings') && await page.locator('#set-name').inputValue() === '저장 전 행사명 초안');
+        check(`${width} dirty return cancellation keeps section and input`, new URL(page.url()).pathname.endsWith('/settings') && await page.locator('#set-name').inputValue() === '저장 전 행사명 초안');
         await page.locator('#set-name').fill('모집 준비 흐름 검증 행사');
-        const tabs = page.getByRole('tab');
-        check(`${width} exactly four real tabs`, await tabs.count() === 4);
-        await tabs.first().focus(); await page.keyboard.press('End');
-        check(`${width} End focuses and selects stage`, await tabs.last().evaluate(e => e === document.activeElement && e.getAttribute('aria-selected') === 'true'));
-        await page.keyboard.press('Home');
-        check(`${width} Home focuses and selects basics`, await tabs.first().evaluate(e => e === document.activeElement && e.getAttribute('aria-selected') === 'true'));
+        check(`${width} four zones stay mounted`, await page.locator('[data-settings-section]').count() === 4);
+        await page.keyboard.press('Escape');
+        await page.getByRole('dialog', { name: '기본 정보' }).waitFor({ state: 'hidden', timeout: 15000 });
+        check(`${width} Escape closes the drawer onto its trigger`, await page.getByRole('button', { name: '수정', exact: true }).evaluate(e => e === document.activeElement));
         let stops = 0;
         while (stops < KEYBOARD_CAP && !await page.getByRole('link', { name: '현황으로 돌아가기', exact: true }).first().evaluate(e => e === document.activeElement)) { await page.keyboard.press('Tab'); stops += 1; }
         check(`${width} return reachable within unchanged keyboard40`, stops <= KEYBOARD_CAP && await page.getByRole('link', { name: '현황으로 돌아가기', exact: true }).first().evaluate(e => e === document.activeElement), { stops });
-        await capture('08-tabs-draft-guard');
+        await capture('08-sections-draft-guard');
         // Hide one REAL committed response; exact request replays its receipt.
-        await page.getByRole('tab', { name: '참가 접수', exact: false }).click();
         await page.locator('#set-consent').fill('응답 유실 재시도 검증 문구');
         const previousConsentVersion = Number((await bootstrap()).workspaces[id].consentVersion) || 0;
         const attempts = [];
