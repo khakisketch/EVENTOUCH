@@ -69,7 +69,7 @@ async function main() {
     await page.getByRole('alert').getByText('입력 내용을 확인해 주세요.').waitFor();
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'field-label');
     await page.getByLabel('항목 이름').fill('급식 선택');
-    await page.getByLabel('입력 방식').selectOption('select');
+    await page.getByLabel('하나 선택').check();
     await page.getByLabel('선택지 · 한 줄에 하나씩').fill('일반\n채식');
     await page.getByRole('button', { name: '항목 저장' }).click();
     let recovery = page.getByRole('region', { name: '신청 항목 처리 확인 필요' });
