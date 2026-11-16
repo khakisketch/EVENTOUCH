@@ -1,12 +1,13 @@
 import { Suspense } from "react";
 import LoginForm from "./LoginForm";
+import styles from "./login-entry.module.css";
 
 // Shared operator entry: staff and operators sign in here. The optional
 // ?next= destination is validated client-side and rechecked by each target
 // screen against the server-owned role and assignment.
 export default function LoginPage() {
   return (
-    <main id="main-content" tabIndex={-1} className="site-page auth-page login-page">
+    <main id="main-content" tabIndex={-1} className={`site-page auth-page login-page ${styles.stage}`}>
       <header className="auth-brand">
         <p className="auth-promise">모집부터 결과까지, 행사 운영을 한곳에서.</p>
         <span className="wordmark">EVENTOUCH<span>운영 로그인</span></span>

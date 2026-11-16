@@ -133,7 +133,8 @@ test('staff-hub-keeps-chrome-and-never-auto-routes-on-changed-context', () => {
   const hub = readStaff('StaffHub.tsx');
   assert.match(hub, /useOperatorContextSnapshot/);
   assert.match(hub, /orgChanged/);
-  assert.match(hub, /<StaffAccountMenu confirmLeave=\{confirmLeaveHub\} confirmLeaveAccount=\{confirmLeaveHub\} \/>/);
+  // The dark hub draws the same menu as a quiet pill (compact, tone="dark"); its gates are unchanged.
+  assert.match(hub, /<StaffAccountMenu compact tone="dark" confirmLeave=\{confirmLeaveHub\} confirmLeaveAccount=\{confirmLeaveHub\} \/>/);
   assert.match(hub, /orgLineText/);
   assert.match(hub, /<OrganizationContextNotice confirmLeave=\{confirmLeaveHub\} \/>/);
   assert.match(hub, /from "\.\.\/OrganizationSwitcher"/);
