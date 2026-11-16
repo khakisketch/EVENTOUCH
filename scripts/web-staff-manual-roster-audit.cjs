@@ -48,6 +48,7 @@ async function main() {
     assert.equal(await results.getByRole('listitem').count(), 10);
     const more = page.getByRole('button', { name: '2명 더 보기', exact: true });
     await more.focus(); await page.keyboard.press('Enter');
+    await page.waitForFunction(() => document.querySelectorAll('[aria-label="참가자 검색 결과"] > li').length === 12);
     assert.equal(await results.getByRole('listitem').count(), 12);
     await page.waitForFunction(() => document.activeElement?.id === 'staff-manual-result-10');
     const select = page.getByRole('button', { name: '동명이인검증 합성 소속 12 선택', exact: true });

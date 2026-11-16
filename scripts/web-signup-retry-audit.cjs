@@ -14,7 +14,7 @@ const path = require('node:path');
 const axe = require('axe-core').source;
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { confirmInitialStaffDesk } = require('./audit-staff-direction.cjs');
+const { confirmInitialStaffDesk, typeTicket } = require('./audit-staff-direction.cjs');
 
 const OUT = process.env.EVENTOUCH_CAPTURE_ROOT
   ? path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'signup-retry')
@@ -333,7 +333,7 @@ async function main() {
       await page.locator('#staff-desk').waitFor();
       if (await page.locator('#staff-desk').inputValue() !== fixture.deskId) await page.locator('#staff-desk').selectOption(fixture.deskId);
       await confirmInitialStaffDesk(page);
-      await page.locator('#staff-ticket').fill(journeyPerson.ticket);
+      await typeTicket(page, journeyPerson.ticket);
       await page.getByRole('button', { name: '입장 처리', exact: true }).click();
       await page.getByRole('button', { name: '다음 참가자', exact: true }).waitFor();
       const after = await workspace();

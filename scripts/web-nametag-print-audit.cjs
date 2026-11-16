@@ -7,7 +7,7 @@ const axeSource = require('axe-core').source;
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { defaultCaptureDir, prepareCaptureDir, ensureRunTmpDir, runStamp } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { confirmInitialStaffDesk } = require('./audit-staff-direction.cjs');
+const { confirmInitialStaffDesk, typeTicket } = require('./audit-staff-direction.cjs');
 
 async function main() {
   const out = process.env.EVENTOUCH_CAPTURE_ROOT
@@ -111,7 +111,7 @@ async function main() {
     page = await open('staff', { width: 390, height: 844 });
     await page.goto(`${fixture.baseUrl}/staff/events/${fixture.eventId}`, { waitUntil: 'networkidle' });
     await confirmInitialStaffDesk(page);
-    await page.locator('#staff-ticket').fill(person.ticket);
+    await typeTicket(page, person.ticket);
     await page.getByRole('button', { name: '입장 처리', exact: true }).click();
     const result = page.getByRole('region', { name: '스캔 결과 상세', exact: true });
     await result.getByRole('button', { name: '네임택 인쇄', exact: true }).click();

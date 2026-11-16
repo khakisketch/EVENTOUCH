@@ -5,7 +5,7 @@ const path = require('node:path');
 const { source: axeSource } = require('axe-core');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
-const { confirmInitialStaffDesk } = require('./audit-staff-direction.cjs');
+const { confirmInitialStaffDesk, typeTicket, holdResults } = require('./audit-staff-direction.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 (async () => {
   if (!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a private EVENTOUCH_CAPTURE_ROOT');
@@ -45,11 +45,12 @@ const { launchBrowser } = require('./audit-browser.cjs');
       return route.continue();
     });
     await page.goto(`${f.baseUrl}/staff/events/${f.eventId}`);
+    await holdResults(page);
     if (booth) {
       await page.getByRole('group', { name: '업무 종류' }).getByRole('button', { name: '부스 인증', exact: true }).click();
       await page.locator('#staff-booth').selectOption(boothId);
     } else await confirmInitialStaffDesk(page);
-    await page.locator('#staff-ticket').fill(person.ticket);
+    await typeTicket(page, person.ticket);
     await page.getByRole('button', { name: booth ? '부스 인증' : '입장 처리', exact: true }).last().click();
     const result = page.getByRole('region', { name: '스캔 결과 미확인', exact: true }); await result.waitFor();
     const local = result.getByRole('group', { name: '현재 요청 서버 확인' });

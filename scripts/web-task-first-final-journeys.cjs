@@ -445,12 +445,14 @@ async function main() {
     await measure('team-staff-assignment', '팀 수락 구성원 → 행사 선택 → 현장 배정 (owner)', async (act, task) => {
       task.actor = 'owner';
       task.screens = ['/console/team (#team-members)', `/console/events/${createdEventId}/operations?assignAccount=<staff> (#ops-staff)`, '스태프 배정 dialog (#assign-account, 자동 선택)'];
-      task.fields = ['button 행사 배정', 'select 최종 스태프 배정 행사 선택', 'link 스태프 배정으로 이동', '#assign-account', '#assign-target', 'submit 배정 저장'];
+      task.fields = ['button 최종 스태프 (구성원 행)', 'select 최종 스태프 배정 행사 선택', 'link 스태프 배정으로 이동', '#assign-account', '#assign-target', 'submit 배정 저장'];
       await useCookie(ownerCookie);
       await go('/console/team', '#team-members');
-      const row = page.locator('ul[aria-label="구성원 목록"] li').filter({ hasText: '최종 스태프' }).first();
-      await row.getByRole('button', { name: '행사 배정', exact: true }).waitFor({ timeout: 10000 });
-      await act(() => row.getByRole('button', { name: '행사 배정', exact: true }).click());
+      // The assignment picker lives in the member drawer opened from the row.
+      const row = page.locator(`#staff-assign-panel-${journeyStaffId}`);
+      const memberButton = page.locator('ul[aria-label="구성원 목록"]').getByRole('button', { name: '최종 스태프', exact: true });
+      await memberButton.waitFor({ timeout: 10000 });
+      await act(() => memberButton.click());
       const picker = row.locator('select[aria-label="최종 스태프 배정 행사 선택"]');
       await picker.waitFor({ state: 'visible', timeout: 10000 });
       await shotBoth('final-team-assign-panel');

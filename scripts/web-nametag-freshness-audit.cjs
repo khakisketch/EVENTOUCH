@@ -8,7 +8,7 @@ const path = require('node:path');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { defaultCaptureDir, prepareCaptureDir, ensureRunTmpDir, runStamp } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { confirmInitialStaffDesk } = require('./audit-staff-direction.cjs');
+const { confirmInitialStaffDesk, typeTicket } = require('./audit-staff-direction.cjs');
 
 async function main() {
   const out = process.env.EVENTOUCH_CAPTURE_ROOT
@@ -37,7 +37,6 @@ async function main() {
     page.setDefaultTimeout(12000);
     await page.addInitScript(() => { window.print = () => { window.__printCalls = (window.__printCalls || 0) + 1; }; });
     await page.goto(`${fixture.baseUrl}/staff/events/${fixture.eventId}`, { waitUntil: 'networkidle' });
-    await page.locator('#staff-ticket').waitFor();
     await confirmInitialStaffDesk(page);
     await updateCompany('합성 최신 소속');
     let mode = 'error';
@@ -63,7 +62,7 @@ async function main() {
       await route.fetch();
       return route.fulfill({ status: 504, contentType: 'application/json', body: '{"error":"synthetic response lost"}' });
     });
-    await page.locator('#staff-ticket').fill(person.ticket);
+    await typeTicket(page, person.ticket);
     await page.getByRole('button', { name: '입장 처리', exact: true }).click();
     const unknown = page.getByRole('region', { name: '스캔 결과 미확인', exact: true });
     await unknown.getByRole('button', { name: '같은 요청 재확인', exact: true }).click();

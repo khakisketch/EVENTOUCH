@@ -5,6 +5,7 @@ const { source: axeSource } = require('axe-core');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
+const { typeTicket, holdResults } = require('./audit-staff-direction.cjs');
 (async () => {
   if (!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a private EVENTOUCH_CAPTURE_ROOT');
   const lost = process.argv.includes('--lost');
@@ -33,7 +34,8 @@ const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
     });
     await page.goto(`${f.baseUrl}/staff/events/${f.eventId}`);
     await page.getByRole('region', { name: '데스크 업무 방향을 확인해 주세요' }).getByRole('button', { name: '입장 업무 확인' }).click();
-    await page.locator('#staff-ticket').fill(conflict.ticket);
+    await holdResults(page);
+    await typeTicket(page, conflict.ticket);
     if (lost) {
       await page.getByRole('button', { name: '입장 처리', exact: true }).click();
       const uncertain = page.getByRole('region', { name: '스캔 결과 미확인', exact: true });
@@ -57,8 +59,8 @@ const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
       assert.deepEqual(await page.evaluate(async () => (await window.axe.run(document)).violations.filter(v => ['serious', 'critical'].includes(v.impact))), []);
       await page.screenshot({ path: path.join(out, `staff-${width}.png`), fullPage: true });
     }
-    await failure.getByRole('button', { name: '다음 참가자' }).press('Enter');
-    await page.locator('#staff-ticket').fill(valid.ticket);
+    await failure.getByRole('button', { name: '다음 참가자' }).click();
+    await typeTicket(page, valid.ticket);
     await page.getByRole('button', { name: '입장 처리', exact: true }).click();
     await page.getByRole('region', { name: '스캔 결과 상세' }).getByText(valid.name, { exact: false }).waitFor();
     const checks = (await read()).checks;

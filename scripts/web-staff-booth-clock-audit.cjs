@@ -8,6 +8,7 @@ const { source: axeSource } = require('axe-core');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
+const { typeTicket, holdResults, readCode } = require('./audit-staff-direction.cjs');
 
 async function main() {
   if (!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a private capture root');
@@ -36,6 +37,7 @@ async function main() {
     const page = await context.newPage();
     page.setDefaultTimeout(12000);
     await page.goto(`${fixture.baseUrl}/staff/events/${fixture.eventId}`);
+    await holdResults(page);
     await page.getByRole('group', { name: '업무 종류' }).getByRole('button', { name: '부스 인증', exact: true }).click();
     const select = page.locator('#staff-booth');
     const option = select.locator('option[value="clock-booth"]');
@@ -56,13 +58,13 @@ async function main() {
     }, null, { timeout: 25000 });
     assert.ok(Date.now() >= start, 'a definite operating state follows the real server boundary');
     await select.selectOption('clock-booth');
-    await page.locator('#staff-ticket').fill(person.ticket);
+    await typeTicket(page, person.ticket);
     await page.locator('form').filter({ has: page.locator('#staff-ticket') }).getByRole('button', { name: '부스 인증', exact: true }).click();
     await page.getByRole('button', { name: '다음 참가자', exact: true }).waitFor();
     assert.equal((await read()).visits.length, 1, 'successful staff action is saved once');
     await page.getByRole('button', { name: '다음 참가자', exact: true }).click();
     const ticket = page.locator('#staff-ticket');
-    await ticket.fill('합성 입력 보존');
+    await typeTicket(page, '합성 입력 보존');
     await ticket.focus();
     // A second staff screen commits just before closing; hold only its HTTP
     // response so the UI crosses the boundary with a real request in flight.
@@ -73,7 +75,7 @@ async function main() {
     await pendingPage.goto(`${fixture.baseUrl}/staff/events/${fixture.eventId}`);
     await pendingPage.getByRole('group', { name: '업무 종류' }).getByRole('button', { name: '부스 인증', exact: true }).click();
     await pendingPage.locator('#staff-booth').selectOption('clock-booth');
-    await pendingPage.locator('#staff-ticket').fill(person.ticket);
+    await typeTicket(pendingPage, person.ticket);
     const cameraContext = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'ko-KR' });
     await cameraContext.addCookies([{ ...cookieForContext(fixture, 'staff'), url: fixture.baseUrl }]);
     await cameraContext.addInitScript(() => {
@@ -89,7 +91,7 @@ async function main() {
     await cameraPage.goto(`${fixture.baseUrl}/staff/events/${fixture.eventId}`);
     await cameraPage.getByRole('group', { name: '업무 종류' }).getByRole('button', { name: '부스 인증', exact: true }).click();
     await cameraPage.locator('#staff-booth').selectOption('clock-booth');
-    await cameraPage.getByRole('button', { name: '카메라로 스캔', exact: true }).click();
+    await cameraPage.getByRole('button', { name: '카메라 켜기', exact: true }).click();
     await cameraPage.waitForFunction(() => window.__cameraCalls === 1 && window.__clockCamera?.getVideoTracks().length === 1);
     await new Promise(resolve => setTimeout(resolve, Math.max(0, end - Date.now() - 5000)));
     assert.ok(Date.now() < end - 2000, 'leave time for the committed request before closing');
@@ -113,7 +115,7 @@ async function main() {
     assert.equal(await ticket.inputValue(), '합성 입력 보존');
     assert.equal(await ticket.evaluate(node => document.activeElement === node), true, 'time transition preserves typing focus');
     assert.equal(await page.locator('form').filter({ has: ticket }).getByRole('button', { name: '부스 인증', exact: true }).isDisabled(), true);
-    await page.getByText(/선택한 부스가 운영 종료 상태입니다/).waitFor();
+    await page.getByText(/선택한 부스가 운영 종료 상태입니다/).first().waitFor();
     await pendingPage.getByText('처리 결과를 확인하고 있습니다. 확인이 끝나면 티켓과 업무를 다시 바꿀 수 있습니다.', { exact: true }).waitFor();
     assert.equal(await pendingPage.locator('#staff-ticket').inputValue(), person.ticket, 'in-flight request stays bound to its ticket');
     releaseResponse();

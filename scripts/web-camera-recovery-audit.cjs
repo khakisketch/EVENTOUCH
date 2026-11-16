@@ -10,6 +10,14 @@ const { confirmInitialStaffDesk } = require('./audit-staff-direction.cjs');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const before = process.argv.includes('--before');
 let stage = 'setup';
+// The field camera has no close button of its own: it is turned off from the ⋯ menu.
+async function turnCameraOff(page) {
+  await page.evaluate(() => {
+    document.querySelector('details')?.setAttribute('open', '');
+    [...document.querySelectorAll('button')].find((button) => button.textContent.trim() === '카메라 끄기')?.click();
+  });
+}
+
 async function main() {
   if (!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a private EVENTOUCH_CAPTURE_ROOT');
   const out = path.join(process.env.EVENTOUCH_CAPTURE_ROOT, before ? 'camera-before' : 'camera-recovery');
@@ -36,7 +44,7 @@ async function main() {
     await page.goto(`${fixture.baseUrl}/staff/events/${fixture.eventId}`, { waitUntil: 'networkidle' });
     await page.locator('#staff-desk').waitFor();
     await confirmInitialStaffDesk(page);
-    await page.getByRole('button', { name: '카메라로 스캔', exact: true }).click();
+    await page.getByRole('button', { name: '카메라 켜기', exact: true }).click();
     const camera = page.getByRole('region', { name: '카메라 스캔', exact: true });
     await camera.getByRole('alert').waitFor();
     await page.screenshot({ path: path.join(out, 'camera-390.png'), fullPage: true });
@@ -50,7 +58,7 @@ async function main() {
     await page.evaluate(() => { window.__cameraMode = 'NotReadableError'; });
     await camera.getByRole('button', { name: '다시 시도', exact: true }).click();
     await camera.getByRole('alert').filter({ hasText: '다른 앱이 사용 중인지' }).waitFor();
-    assert.equal(await page.locator('#staff-ticket').isVisible(), true, 'manual entry remains available');
+    assert.equal(await page.getByRole('button', { name: '코드 입력', exact: true }).isEnabled(), true, 'manual entry remains available');
     stage = 'stream interruption and resume';
     await page.evaluate(() => { window.__cameraMode = 'ok'; });
     await camera.getByRole('button', { name: '다시 시도', exact: true }).click();
@@ -67,19 +75,19 @@ async function main() {
     await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, value: false }); document.dispatchEvent(new Event('visibilitychange')); });
     await camera.getByRole('button', { name: '다시 시도', exact: true }).click();
     await page.waitForFunction(() => window.__cameraStreams.length === 3 && document.querySelector('video')?.readyState >= 2);
-    await camera.getByRole('button', { name: '닫기', exact: true }).click();
+    await turnCameraOff(page);
     await camera.waitFor({ state: 'hidden' });
     assert.equal(await page.evaluate(() => window.__cameraStreams[2].stream.getVideoTracks()[0].readyState), 'ended');
     await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, value: true }); });
-    await page.getByRole('button', { name: '카메라로 스캔', exact: true }).click();
+    await page.getByRole('button', { name: '카메라 켜기', exact: true }).click();
     await camera.getByRole('status').filter({ hasText: '화면이 가려져 카메라를 멈췄습니다' }).waitFor();
     assert.equal(await page.evaluate(() => window.__cameraStreams.length), 3, 'a scanner opened in a hidden tab never opens a camera');
     await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, value: false }); });
     await camera.getByRole('button', { name: '다시 시도', exact: true }).click();
     await page.waitForFunction(() => window.__cameraStreams.length === 4 && document.querySelector('video')?.readyState >= 2);
-    await camera.getByRole('button', { name: '닫기', exact: true }).click();
+    await turnCameraOff(page);
     assert.equal(await page.evaluate(() => window.__cameraStreams[3].stream.getVideoTracks()[0].readyState), 'ended');
-    assert.equal(await page.locator('#staff-ticket').isVisible(), true);
+    assert.equal(await page.getByRole('button', { name: '코드 입력', exact: true }).isEnabled(), true);
     assert.equal(fixture.gateway.commands.filter(call => ['check.scan', 'booth.visit'].includes(call.command)).length, 0, 'camera recovery submits no scan');
     assert.deepEqual(errors, []);
     await page.evaluate(axeSource);

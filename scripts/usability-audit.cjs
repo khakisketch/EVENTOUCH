@@ -1550,12 +1550,12 @@ async function main() {
         await act(task, () => page.locator('input[type="file"]').first().setInputFiles({
           name: 'usability-roster.csv', mimeType: 'text/csv', buffer: Buffer.from(IMPORT_CSV, 'utf8'),
         }));
-        await page.getByText(/유효 2행/).first().waitFor({ timeout: 15000 });
-        const countText = await page.getByText(/유효 2행/).first().innerText().catch(() => '');
+        await page.locator('[class*="heroNumber"]').getByText('2', { exact: true }).waitFor({ timeout: 15000 });
+        const countText = await page.locator('[class*="heroNumber"]').first().innerText().catch(() => '');
         const firstName = await settledVisible(page.locator('ul[aria-label="적용될 값 미리보기"]').getByText('사용성 명단 가', { exact: true }));
-        task.resultVisible = countText.includes('유효 2행') && firstName;
+        task.resultVisible = countText.includes('2') && firstName;
         task.resultNote = `검토 단계 "${countText.replace(/\s+/g, ' ').slice(0, 50)}" + 미리보기에 이름 표시`;
-        await probeKeyboard(page, task, page.getByRole('button', { name: '검토 결과 만들기', exact: true }), '검토 결과 만들기 버튼');
+        await probeKeyboard(page, task, page.getByRole('button', { name: /^2명 등록$/ }), '2명 등록 버튼');
         await shot(page, 'task-18-import.png');
       } catch (error) {
         task.blocked = true;

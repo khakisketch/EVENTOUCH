@@ -959,7 +959,8 @@ test('web-staff-booth-work-uses-the-booth-visit-command-and-stamp-mode', () => {
   assert.match(staff, /참가자 홈 &gt; 부스 인증/);
   // …so the camera action stays out of SELF mode. A revoked assignment
   // preserves the last result but locks the camera and exposes recovery.
-  assert.match(staff, /stampMode === "SELF" \? null/);
+  assert.match(staff, /const selfBooth = activeTask === "booth" && activeScope\.stampMode === "SELF"/);
+  assert.match(staff, /const cameraMounted = !selfBooth/);
   assert.match(staff, /setAssignmentStale\(true\)/);
   assert.match(staff, /setCameraOpen\(false\)/);
   assert.match(staff, /배정 다시 확인/);

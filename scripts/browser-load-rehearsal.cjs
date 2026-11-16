@@ -9,7 +9,7 @@ const path = require('node:path');
 const { performance } = require('node:perf_hooks');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { confirmInitialStaffDesk } = require('./audit-staff-direction.cjs');
+const { confirmInitialStaffDesk, typeTicket } = require('./audit-staff-direction.cjs');
 const { prepareCaptureDir, ensureRunTmpDir, defaultCaptureDir, runStamp } = require('./capture-dir.cjs');
 const { testDatabaseUrl } = require('../tests/helpers/postgres-test.cjs');
 
@@ -130,7 +130,7 @@ async function main() {
           for (let index = 0; index < 3; index++) {
             const person = people[scanCursor + workerIndex * 3 + index], start = performance.now();
             try {
-              await worker.page.locator('#staff-ticket').fill(person.ticket);
+              await typeTicket(worker.page, person.ticket);
               await worker.page.getByRole('button', { name: '입장 처리', exact: true }).click();
               await worker.page.getByRole('button', { name: '다음 참가자', exact: true }).waitFor({ timeout: 30000 });
               scanDurations.push(performance.now() - start);

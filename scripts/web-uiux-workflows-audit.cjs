@@ -93,7 +93,7 @@ async function main() {
       await imports.locator('p').filter({ hasText: 'CSV·TXT·XLS·XLSX' }).waitFor();
       const buffer = XLSX.write(workbook, { type: 'buffer', bookType: format === 'xls' ? 'biff8' : 'xlsx' });
       await imports.locator('input[type=file]').setInputFiles({ name: `synthetic.${format}`, mimeType: format === 'xls' ? 'application/vnd.ms-excel' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer });
-      await imports.getByRole('heading', { name: '2. 열 연결', exact: true }).waitFor();
+      await imports.getByRole('region', { name: '가져올 명단 확인' }).waitFor({ state: 'attached' });
       const importAlerts = (await imports.getByRole('alert').allTextContents()).map(text => text.trim()).filter(Boolean);
       assert.deepEqual(importAlerts, [], `${format} is parsed without an error: ${JSON.stringify(importAlerts)}`);
     }

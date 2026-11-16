@@ -103,13 +103,13 @@ async function main() {
     await page.keyboard.press('Space');
     await (await fileChooser).setFiles({ name: '참가자.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: workbookBuffer(8, 0, 'xlsx') });
     const review = page.locator(':is(section,[role=region])[aria-labelledby="participant-import-review-heading"]');
-    await review.getByText('유효 8행', { exact: true }).waitFor();
-    await review.getByText('오류 0행', { exact: true }).waitFor();
-    assert.equal(await picker.getByText('참가자.xlsx', { exact: true }).isVisible(), true, 'selected filename is visible');
-    await page.getByRole('button', { name: /유효 8행 반영/ }).click();
+    await review.locator('[class*="heroNumber"]').getByText('8', { exact: true }).waitFor();
+    assert.equal(await review.getByRole('heading', { name: /행은 등록하지 않아요/ }).count(), 0, 'no row is excluded');
+    assert.equal(await review.getByText('참가자.xlsx', { exact: true }).isVisible(), true, 'selected filename is visible');
+    await page.getByRole('button', { name: /^8명 등록$/ }).click();
     await page.getByRole('alert').filter({ hasText: /연결하지 못했습니다/ }).waitFor();
     await page.getByRole('button', { name: '같은 요청 다시 시도', exact: true }).click();
-    await page.getByText('8명을 반영했습니다.', { exact: true }).waitFor();
+    await page.getByText(/^8명을 반영했습니다\./).waitFor();
     const calls = gateway.commands.filter((item) => item.command === 'participant.import');
     assert.equal(calls.length, 2);
     assert.equal(calls[0].commandId, calls[1].commandId, 'lost-response retry must reuse its receipt key');
@@ -119,11 +119,12 @@ async function main() {
     assert.equal(stored.participants[0].phone, '01000000001', 'Excel displayed leading zero must survive parsing');
     await page.screenshot({ path: path.join(captureDir, 'xlsx-retry-1280.png'), fullPage: true });
 
+    await page.getByRole('button', { name: '다른 파일 가져오기', exact: true }).click();
     await file.setInputFiles({ name: '추가참가자.xls', mimeType: 'application/vnd.ms-excel', buffer: workbookBuffer(2, 8, 'biff8') });
-    await review.getByText('유효 2행', { exact: true }).waitFor();
-    await review.getByText('오류 0행', { exact: true }).waitFor();
-    await page.getByRole('button', { name: /유효 2행 반영/ }).click();
-    await page.getByText('2명을 반영했습니다.', { exact: true }).waitFor();
+    await review.locator('[class*="heroNumber"]').getByText('2', { exact: true }).waitFor();
+    assert.equal(await review.getByRole('heading', { name: /행은 등록하지 않아요/ }).count(), 0, 'no row is excluded');
+    await page.getByRole('button', { name: /^2명 등록$/ }).click();
+    await page.getByText(/^2명을 반영했습니다\./).waitFor();
     stored = (await harness.database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [eventId])).rows[0].payload;
     assert.equal(stored.participants.length, 10);
     assert.equal(stored.participants[8].phone, '01000000009');
@@ -132,16 +133,18 @@ async function main() {
     assert.deepEqual(pageErrors, []);
     await page.screenshot({ path: path.join(captureDir, 'xls-1280.png'), fullPage: true });
 
+    await page.getByRole('button', { name: '다른 파일 가져오기', exact: true }).click();
     await file.setInputFiles({ name: '여러열참가자.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: workbookBuffer(2, 10, 'xlsx', true) });
-    await review.getByText('유효 2행', { exact: true }).waitFor();
-    await review.getByText('오류 0행', { exact: true }).waitFor();
-    await page.getByRole('button', { name: /유효 2행 반영/ }).click();
-    await page.getByText('2명을 반영했습니다.', { exact: true }).waitFor();
+    await review.locator('[class*="heroNumber"]').getByText('2', { exact: true }).waitFor();
+    assert.equal(await review.getByRole('heading', { name: /행은 등록하지 않아요/ }).count(), 0, 'no row is excluded');
+    await page.getByRole('button', { name: /^2명 등록$/ }).click();
+    await page.getByText(/^2명을 반영했습니다\./).waitFor();
     stored = (await harness.database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [eventId])).rows[0].payload;
     assert.equal(stored.participants.length, 12);
     assert.equal(stored.participants[10].phone, '01000000011', 'columns beyond the old eight-column truncation must remain mappable');
 
     const writesBeforeRejection = gateway.commands.filter((item) => item.command === 'participant.import').length;
+    await page.getByRole('button', { name: '다른 파일 가져오기', exact: true }).click();
     await file.setInputFiles({ name: '행수초과.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: workbookBuffer(1001, 100, 'xlsx') });
     await page.getByRole('alert').filter({ hasText: /1,000/ }).waitFor();
     assert.equal(gateway.commands.filter((item) => item.command === 'participant.import').length, writesBeforeRejection, 'an oversized workbook must not be silently partially imported');

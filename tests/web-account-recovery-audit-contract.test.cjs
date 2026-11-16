@@ -72,7 +72,7 @@ test('account-recovery audit covers the honest and guarded rendered states', () 
   ]) {
     assert.ok(source.includes(needle), `audit asserts rendered copy: ${needle}`);
   }
-  for (const needle of ['loseFirstResponseFor', 'unroute', 'route.fulfill', 'getByText(/인증됨 ·/)', '#staff-ticket', 'recoveryRequestCommit', 'verify request can commit despite a lost response']) {
+  for (const needle of ['loseFirstResponseFor', 'unroute', 'route.fulfill', 'getByText(/인증됨 ·/)', 'typeTicket(staffPage', 'recoveryRequestCommit', 'verify request can commit despite a lost response']) {
     assert.ok(source.includes(needle), `audit exercises the path: ${needle}`);
   }
 });

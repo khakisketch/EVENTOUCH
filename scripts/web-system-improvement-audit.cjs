@@ -10,7 +10,7 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { loadPlaywright } = require('./audit-browser.cjs');
-const { confirmInitialStaffDesk } = require('./audit-staff-direction.cjs');
+const { confirmInitialStaffDesk, typeTicket } = require('./audit-staff-direction.cjs');
 const captureRoot = process.env.EVENTOUCH_CAPTURE_ROOT || defaultCaptureDir(`system-improvement-20261024/ux-${runStamp()}`);
 const runId = process.env.EVENTOUCH_AUDIT_RUN_ID || new Date().toISOString().replace(/[:.]/g, '-');
 const OUT = path.join(captureRoot, `system-ui-${runId}`);
@@ -185,8 +185,10 @@ async function main() {
       } else await route.continue();
     });
     await ownerPage.goto(f.baseUrl + '/console/team');
-    const permissions = ownerPage.getByRole('region', { name: '행사별 쓰기 권한', exact: true });
-    await permissions.getByRole('button', { name: '권한 편집', exact: true }).click();
+    await ownerPage.getByRole('tab', { name: '행사별 권한' }).click();
+    const permissionList = ownerPage.getByRole('region', { name: '행사별 쓰기 권한', exact: true });
+    await permissionList.getByRole('list', { name: /쓰기 권한 목록/ }).getByRole('button').first().click();
+    const permissions = ownerPage.getByRole('dialog', { name: /쓰기 권한/ });
     for (const width of [1280, 390]) {
       await ownerPage.setViewportSize({ width, height: 900 });
       await ownerPage.screenshot({ path: `${OUT}/team-permission-editor-${width}.png`, fullPage: true });
@@ -195,14 +197,15 @@ async function main() {
       check(`permission editor no overflow ${width}`, await ownerPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
       await checkAccessibility(ownerPage, `team-permissions-${width}`);
     }
+    await permissions.getByText('직접 선택', { exact: false }).first().click();
     await permissions.getByRole('checkbox', { name: /참가자·명단/ }).uncheck();
     await permissions.getByRole('button', { name: '권한 저장', exact: true }).click();
     await permissions.getByRole('button', { name: '같은 요청으로 다시 시도', exact: true }).waitFor();
-    check('unknown permission write freezes event and scopes', await permissions.getByRole('combobox').isDisabled() && await permissions.getByRole('checkbox', { name: /전체/ }).isDisabled());
+    check('unknown permission write freezes event and scopes', await permissionList.getByRole('combobox').isDisabled() && await permissions.getByRole('checkbox', { name: /참가자·명단/ }).isDisabled());
     await ownerPage.screenshot({ path: `${OUT}/team-permission-unknown-390.png`, fullPage: true });
     await ownerPage.screenshot({ path: `${OUT}/team-permission-unknown-viewport-390.png`, fullPage: false });
     await permissions.getByRole('button', { name: '같은 요청으로 다시 시도', exact: true }).click();
-    await permissions.getByRole('button', { name: '권한 편집', exact: true }).waitFor();
+    await permissions.waitFor({ state: 'hidden' });
     check('membership retry uses identical receipt and payload', memberAttempts.length === 2 && JSON.stringify(memberAttempts[0]) === JSON.stringify(memberAttempts[1]), memberAttempts);
     const persistedMembership = (await f.harness.database.query(`SELECT write_permissions FROM memberships WHERE account_id=$1 AND event_id=$2`, [f.manager.id, f.eventId])).rows[0];
     check('owner editor persists explicit read-only grant', JSON.stringify(persistedMembership.write_permissions) === '[]');
@@ -238,7 +241,7 @@ async function main() {
     await staffPage.evaluate(() => { delete document.hidden; });
     await staffPage.getByRole('button', { name: '닫기', exact: true }).click();
     const raw = (await f.harness.database.query(`SELECT payload FROM event_workspaces WHERE event_id=$1`, [f.eventId])).rows[0].payload;
-    await staffPage.locator('#staff-ticket').fill(raw.participants.find((row) => row.id === person.id).ticket);
+    await typeTicket(staffPage, raw.participants.find((row) => row.id === person.id).ticket);
     await staffPage.getByRole('button', { name: '입장 처리', exact: true }).click();
     await staffPage.locator('#correct-reason').waitFor();
     await staffPage.locator('#correct-reason').fill('합성 UI 검증 오스캔 정정');

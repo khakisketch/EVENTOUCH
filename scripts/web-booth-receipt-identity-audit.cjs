@@ -9,6 +9,7 @@ const { source: axeSource } = require('axe-core');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
+const { holdResults, typeTicket } = require('./audit-staff-direction.cjs');
 let stage = 'setup';
 
 async function main() {
@@ -43,10 +44,11 @@ async function main() {
     staff.on('request',(request)=>{ if(request.url()===requestUrl && request.method()==='POST') { const body=request.postDataJSON(); if(body.command==='booth.visit') requests.push(body); } });
     stage='staff initial';
     await staff.goto(`${fixture.baseUrl}/staff/events/${fixture.eventId}`,{waitUntil:'networkidle'});
+    await holdResults(staff);
     await staff.getByRole('group',{name:'업무 종류'}).getByRole('button',{name:'부스 인증',exact:true}).click();
     await staff.locator('#staff-booth').selectOption('audit-booth-a');
     const ticket=staff.getByLabel('티켓 코드',{exact:true});
-    await ticket.fill(staffPerson.ticket);
+    await typeTicket(staff, staffPerson.ticket);
     await staff.route(requestUrl,async(route)=>{
       const response=await route.fetch(); const body=await response.json();
       body.boothId='audit-booth-b';
@@ -87,7 +89,7 @@ async function main() {
     // An opaque pointer persists across reload, while the original ticket is
     // deliberately not persisted. Status lookup cannot prove its target.
     await result.getByRole('button',{name:'다음 참가자',exact:true}).click();
-    await staff.getByLabel('티켓 코드',{exact:true}).fill(guestPerson.ticket);
+    await typeTicket(staff, guestPerson.ticket);
     await staff.route(requestUrl,async(route)=>{
       const response=await route.fetch(); const body=await response.json(); body.visitId='different-request';
       await route.fulfill({response,json:body});

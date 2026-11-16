@@ -9,7 +9,7 @@ const path = require('node:path');
 const axe = require('axe-core').source;
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { confirmInitialStaffDesk } = require('./audit-staff-direction.cjs');
+const { confirmInitialStaffDesk, typeTicket } = require('./audit-staff-direction.cjs');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 let stage = 'setup';
 async function main() {
@@ -123,10 +123,9 @@ async function main() {
     await page.goto(`${f.baseUrl}/staff/events/${f.eventId}`);
     await page.locator('#staff-desk').waitFor();
     await confirmInitialStaffDesk(page);
-    await page.getByRole('button', { name: '카메라로 스캔' }).click();
+    await page.getByRole('button', { name: '카메라 켜기' }).click();
     await page.getByText('참가자 명단에서 확인하거나', { exact: false }).waitFor();
-    await page.getByRole('button', { name: '닫기', exact: true }).click();
-    await page.locator('summary').filter({ hasText: '참가자 명단 확인' }).click();
+    await page.getByRole('button', { name: '명단에서 참가자 찾기', exact: true }).click();
     await page.locator('#staff-manual-search').fill('감사 참가자 1');
     await page.getByRole('button', { name: '감사 참가자 1 감사 업체 1 선택' }).click();
     const submit = page.getByRole('button', { name: '확인한 참가자 입장 처리' });
@@ -155,7 +154,7 @@ async function main() {
     assert.equal((await read()).checks.filter(item => item.participantId === people[0].id).length, 1);
     stage = 'ambiguous or missing identity';
     await page.getByRole('button', { name: '다음 참가자', exact: true }).click();
-    await page.locator('summary').filter({ hasText: '참가자 명단 확인' }).click();
+    await page.getByRole('button', { name: '명단 찾기', exact: true }).click();
     await page.locator('#staff-manual-search').fill('동명이인');
     assert.equal(await page.getByText('같은 이름·소속이 있습니다.', { exact: false }).count(), 2);
     for (const button of await page.getByRole('button', { name: '동명이인 동일 소속 선택' }).all()) assert.equal(await button.isDisabled(), true);
@@ -169,7 +168,8 @@ async function main() {
     await page.getByRole('button', { name: '확인한 참가자 입장 처리' }).click();
     await page.getByRole('region', { name: '스캔 결과 미확인', exact: true }).waitFor();
     const countBefore = requests.length;
-    await page.getByRole('region', { name: '처리 결과 확인' }).getByRole('button', { name: '서버 처리 확인' }).click();
+    // The current request's own status check sits in its unconfirmed result.
+    await page.getByRole('region', { name: '스캔 결과 미확인', exact: true }).getByRole('group', { name: '현재 요청 서버 확인' }).getByRole('button', { name: '서버 처리 확인' }).click();
     await page.getByText('서버 처리를 확인했습니다. 최신 현장 기록을 확인하세요.').waitFor();
     assert.equal(requests.length, countBefore, 'status lookup does not resend');
     assert.equal((await read()).checks.filter(item => item.participantId === people[4].id).length, 1);
@@ -177,7 +177,7 @@ async function main() {
     const qr = people[6];
     const ticketInput = page.locator('#staff-ticket');
     const qrStart = requests.length;
-    await ticketInput.fill(qr.ticket);
+    await typeTicket(page, qr.ticket);
     mode = 'qr-direction';
     await page.getByRole('button', { name: '입장 처리', exact: true }).click();
     const confirmAgain = unknown.getByRole('button', { name: '같은 요청 재확인' });
@@ -189,7 +189,7 @@ async function main() {
     await confirmAgain.waitFor();
     assert.equal(await scanResult.count(), 0, 'a different check id cannot confirm the QR scan');
     await confirmAgain.click();
-    await scanResult.getByText(`${qr.name} · 입장`, { exact: true }).waitFor();
+    await page.getByRole('region', { name: '스캔 결과', exact: true }).getByText(`${qr.name} · 입장`, { exact: true }).waitFor();
     assert.deepEqual(requests.slice(qrStart), Array.from({ length: 3 }, () => requests[qrStart]));
     assert.equal((await read()).checks.filter(item => item.participantId === qr.id).length, 1);
     await page.screenshot({ path: path.join(out, 'qr-receipt-confirmed-390.png'), mask: [ticketInput] });

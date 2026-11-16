@@ -220,7 +220,7 @@ async function main() {
     await capture(first, 'new-org-simulation-only-1280');
     await first.goto(f.baseUrl + '/console/team');
     await first.getByRole('heading', { name: '구성원', exact: true }).waitFor();
-    await first.locator('summary').filter({ hasText: /^연동·활동$/ }).click();
+    await first.getByRole('tab', { name: '연동·활동' }).click();
     await first.getByText('미연동 · 새 운영사는 모의 기록만 사용합니다', { exact: true }).waitFor();
     check('new-org integration display ignores connected legacy health', await first.getByText('fixture-legacy-global-provider', { exact: false }).count() === 0);
     await capture(first, 'new-org-team-1280');
@@ -398,14 +398,17 @@ async function main() {
     // closed against a stale client or direct request.
     await first.reload();
     const memberRow = first.getByRole('region', { name: '구성원', exact: true }).locator('li').filter({ hasText: f.manager.email });
-    const reset = memberRow.getByRole('button', { name: '비밀번호 재설정', exact: true });
+    // Account actions live in the member drawer opened from the row.
+    await memberRow.getByRole('button').first().click();
+    const memberDrawer = first.getByRole('dialog').or(first.getByRole('complementary')).first();
+    const reset = memberDrawer.getByRole('button', { name: '비밀번호 재설정', exact: true });
     check('known shared account offers no enabled password reset', await reset.count() === 0 || await reset.isDisabled());
-    check('shared account explains the cross-organization restriction before input', /공유|여러 (?:운영사|조직)/.test(await memberRow.innerText()) && await first.locator('#reset-password').count() === 0);
+    check('shared account explains the cross-organization restriction before input', /공유|여러 (?:운영사|조직)/.test(await memberDrawer.innerText()) && await first.locator('#reset-password').count() === 0);
     const refusedReset = await write(ownerCookie, `/api/auth/accounts/${f.manager.id}/password`, { password: 'SyntheticNeverApplied!2026', commandId: crypto.randomUUID() });
     check('shared account API refuses a global password change', refusedReset.status === 403 && refusedReset.json.code === 'SHARED_ACCOUNT_GLOBAL_EFFECT', refusedReset.json);
     check('shared account password hash remains unchanged', (await f.harness.database.query('SELECT password_hash FROM accounts WHERE id=$1', [f.manager.id])).rows[0].password_hash === hashBefore);
     await capture(first, 'shared-password-reset-restricted-upfront-1280');
-    await memberRow.getByRole('button', { name: '이 운영사 소속 사용 중지', exact: true }).click();
+    await memberDrawer.getByRole('button', { name: '이 운영사 소속 사용 중지', exact: true }).click();
     await first.getByRole('button', { name: /소속.*중지.*확인|사용 중지한다|이 운영사 소속만 사용 중지/ }).click();
     await first.getByText(/사용 중지했습니다/, { exact: false }).first().waitFor();
     const membership = (await f.harness.database.query('SELECT active FROM organization_memberships WHERE org_id=$1 AND account_id=$2', [cOrg.id, f.manager.id])).rows[0];

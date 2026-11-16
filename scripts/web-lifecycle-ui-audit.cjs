@@ -30,7 +30,7 @@ const axe = require('axe-core').source;
 const jsQR = require('../apps/web/node_modules/jsqr');
 const fixtureLib = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { confirmInitialStaffDesk } = require('./audit-staff-direction.cjs');
+const { confirmInitialStaffDesk, typeTicket, readCode, holdResults } = require('./audit-staff-direction.cjs');
 
 const captureRoot = process.env.EVENTOUCH_CAPTURE_ROOT
   || defaultCaptureDir(`lifecycle-${crypto.randomUUID()}`);
@@ -479,7 +479,7 @@ async function main() {
     await staffWork.locator('#staff-desk').waitFor({ timeout: 15000 });
     await staffWork.screenshot({ path: path.join(OUT, '20-staff-work-390-first.png') });
     await confirmInitialStaffDesk(staffWork);
-    await geometry(staffWork, 'staff work 390', 'button:has-text("카메라로 스캔")');
+    await geometry(staffWork, 'staff work 390', 'button:has-text("카메라 켜기")');
     await axePage(staffWork, 'staff work 390');
     if ((await staffWork.locator('#staff-desk').inputValue()) !== deskId) {
       await staffWork.locator('#staff-desk').selectOption(deskId);
@@ -498,7 +498,7 @@ async function main() {
       }
       return route.continue();
     });
-    await staffWork.locator('#staff-ticket').fill(decodedA);
+    await typeTicket(staffWork, decodedA);
     await geometry(staffWork, 'staff submit 390', 'button:has-text("입장 처리")', true);
     await staffWork.getByRole('button', { name: '입장 처리', exact: true }).click();
     await staffWork.getByText(/확인하지 못했습니다|다시 시도/).first().waitFor({ timeout: 15000 });
@@ -522,9 +522,9 @@ async function main() {
 
     // ---- 15. Staff failure state: unknown ticket keeps the typed input ----
     await staffWork.getByRole('button', { name: '다음 참가자', exact: true }).click();
-    await staffWork.locator('#staff-ticket').fill('ET-INVALID-CODE-0000');
+    await typeTicket(staffWork, 'ET-INVALID-CODE-0000');
     await staffWork.getByRole('button', { name: '입장 처리', exact: true }).click();
-    const failureSection = staffWork.locator('section[aria-label="스캔 실패"]');
+    const failureSection = staffWork.locator('[role="region"][aria-label="스캔 실패"]');
     await failureSection.waitFor({ timeout: 15000 });
     const failureText = ((await failureSection.getByRole('alert').first().innerText()) || '').trim();
     check('failed scan states the error explicitly (alert, not a silent wait)',
@@ -532,7 +532,7 @@ async function main() {
     await maskTicketInput(staffWork);
     await staffWork.screenshot({ path: path.join(OUT, '23-scan-failed-390.png') });
     await unmaskTicketInput(staffWork);
-    check('failed scan keeps the typed code for correction', (await staffWork.locator('#staff-ticket').inputValue()) === 'ET-INVALID-CODE-0000');
+    check('failed scan keeps the typed code for correction', (await readCode(staffWork)) === 'ET-INVALID-CODE-0000');
     await staffWork.unrouteAll({ behavior: 'wait' }).catch(() => {});
 
     // ---- Staff @320: assigned work on the narrow viewport ----
@@ -627,11 +627,11 @@ async function main() {
     await regB.screenshot({ path: path.join(OUT, '26-ticket-b-invalidated-320.png'), fullPage: true });
     // Staff scans the decoded (now revoked) B ticket: rejected, no new IN.
     await staffWork.getByRole('button', { name: '다음 참가자', exact: true }).click().catch(() => {});
-    await staffWork.locator('#staff-ticket').fill(decodedB);
+    await typeTicket(staffWork, decodedB);
     await staffWork.getByRole('button', { name: '입장 처리', exact: true }).click();
-    await staffWork.locator('section[aria-label="스캔 실패"]').waitFor({ timeout: 15000 });
+    await staffWork.locator('[role="region"][aria-label="스캔 실패"]').waitFor({ timeout: 15000 });
     check('staff scan of the cancelled ticket is rejected',
-      ((await staffWork.locator('section[aria-label="스캔 실패"]').getByRole('alert').first().innerText()) || '').trim().length > 0);
+      ((await staffWork.locator('[role="region"][aria-label="스캔 실패"]').getByRole('alert').first().innerText()) || '').trim().length > 0);
     await maskTicketInput(staffWork);
     await staffWork.screenshot({ path: path.join(OUT, '26b-scan-cancelled-rejected-390.png') });
     await unmaskTicketInput(staffWork);
@@ -652,11 +652,11 @@ async function main() {
       typeof reapprovedB.ticket === 'string' && sha256(reapprovedB.ticket) !== sha256(decodedB));
     // Staff scans the OLD decoded B ticket after rotation: rejected, no IN.
     await staffWork.getByRole('button', { name: '다음 참가자', exact: true }).click().catch(() => {});
-    await staffWork.locator('#staff-ticket').fill(decodedB);
+    await typeTicket(staffWork, decodedB);
     await staffWork.getByRole('button', { name: '입장 처리', exact: true }).click();
-    await staffWork.locator('section[aria-label="스캔 실패"]').waitFor({ timeout: 15000 });
+    await staffWork.locator('[role="region"][aria-label="스캔 실패"]').waitFor({ timeout: 15000 });
     check('rotated-out bearer is rejected after reinstatement',
-      ((await staffWork.locator('section[aria-label="스캔 실패"]').getByRole('alert').first().innerText()) || '').trim().length > 0);
+      ((await staffWork.locator('[role="region"][aria-label="스캔 실패"]').getByRole('alert').first().innerText()) || '').trim().length > 0);
     check('rotated-out scan leaves no IN record',
       (await snapshot()).checks.filter((c) => c.participantId === personBId && c.action === 'IN').length === 0);
     // B's device held the cleared bearer: reload preserves the rejection (no

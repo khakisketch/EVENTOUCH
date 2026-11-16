@@ -38,6 +38,7 @@ const axeSource = require('axe-core').source;
 const { launchBrowser, loadPlaywright, launchOptions } = require('./audit-browser.cjs');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { auditLongListBoundaries } = require('./web-console-boundaries.cjs');
+const {  } = require('./audit-staff-direction.cjs');
 
 const BLOCKING = new Set(['serious', 'critical']);
 const CAPTURE_DIR = process.env.EVENTOUCH_CAPTURE_ROOT
@@ -1894,7 +1895,7 @@ async function main() {
         if (!person || !person.ticket) throw new Error('no checked-in participant with a ticket for stamping');
         await page.goto(`${baseUrl}/event/${encodeURIComponent(fixture.slug)}/home?ticket=${encodeURIComponent(person.ticket)}`, { waitUntil: 'networkidle', timeout: 30000 });
         await page.getByRole('button', { name: '부스 인증', exact: true }).click();
-        await page.getByRole('button', { name: '카메라로 스캔', exact: true }).click();
+        await page.getByRole('button', { name: '카메라 켜기', exact: true }).click();
         await page.getByText(/인증을 기록했습니다/).first().waitFor({ timeout: 30000 });
         const after = await readBootstrap(helpers, baseUrl, extended.ownerCookie);
         const visits = after.workspaces[eventId].visits.filter(

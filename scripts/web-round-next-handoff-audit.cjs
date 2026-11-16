@@ -107,8 +107,8 @@ async function main() {
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
       await goto('/console/team');
-      const row = page.locator('li').filter({ has: page.getByText('배정 인계 대상', { exact: true }) }).first();
-      await row.getByRole('button', { name: '행사 배정', exact: true }).click();
+      // The assignment picker lives in the member drawer opened from the row.
+      await page.locator('ul[aria-label="구성원 목록"]').getByRole('button', { name: '배정 인계 대상', exact: true }).click();
       const select = page.getByRole('combobox', { name: '배정 인계 대상 배정 행사 선택' });
       const options = await select.locator('option').evaluateAll(es => es.filter(e => e.value).map(e => ({ value: e.value, label: e.textContent })));
       await select.selectOption(eventId);

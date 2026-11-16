@@ -40,10 +40,10 @@ test('prize lookup replays the last scanned ticket with one touch', () => {
 test('scan input keeps a role-named identity', () => {
   const work = read(WORK);
   assert.match(work, /scanInputHasWork/u);
-  assert.match(work, /prizeStyles\.scanInput/u);
+  assert.match(work, /prizeStyles\.fieldBar/u);
   assert.doesNotMatch(work, /scanDock/u, 'no scanDock remnant in behavior');
   const styles = read('app/staff/staff-event-work.module.css');
-  assert.match(styles, /\.scanInput\s*\{/u);
+  assert.match(styles, /\.fieldBar\s*\{/u);
   assert.doesNotMatch(styles, /scanDock/u);
 });
 

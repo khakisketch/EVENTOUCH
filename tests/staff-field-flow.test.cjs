@@ -23,13 +23,14 @@ const hub = fs.readFileSync(
 test('scan-success-groups-summary-and-next-action-before-auxiliary-acts', () => {
   assert.match(work, /aria-label="스캔 결과"/);
   assert.match(work, /다음 참가자를 스캔하세요/);
-  assert.match(work, /className="button button-primary" disabled=\{writeLocked\} onClick=\{prepareNextParticipant\}>\s*다음 참가자/);
+  assert.match(work, /variant="primary" disabled=\{writeLocked \|\| Boolean\(directionReview\) \|\| confirmingDirection\} onClick=\{prepareNextParticipant\}>\s*다음 참가자/);
+  assert.match(work, /aria-label="다음 참가자" onClick=\{prepareNextParticipant\}/, 'a plain success hands back to the camera on a tap');
   assert.match(work, /const writeLocked = correctionLocked \|\| orgChanged/);
-  // Auxiliary nametag stays available but quiet (ghost) and after the next action.
+  // Auxiliary nametag stays available but quiet (ghost) and after the result.
   const nextIndex = work.indexOf('다음 참가자');
   const nametagIndex = work.indexOf('네임택 인쇄');
   assert.ok(nextIndex !== -1 && nametagIndex !== -1 && nextIndex < nametagIndex);
-  assert.match(work, /button-quiet \$\{prizeStyles\.auxAction\}/);
+  assert.match(work, /variant="ghost" disabled=\{writeLocked\} aria-expanded=\{nametagOpen\}/);
   // No existing copy is dropped: identity, verdict, booth, and reentry stay.
   assert.match(work, /result\.name\}/);
   assert.match(work, /부스 인증/);
@@ -37,14 +38,15 @@ test('scan-success-groups-summary-and-next-action-before-auxiliary-acts', () => 
 });
 
 test('scan-failure-guides-retry-and-manual-entry-without-repeating-itself', () => {
-  assert.match(work, /aria-label=\{result\.uncertain \? "스캔 결과 미확인" : "스캔 실패"\}/);
-  assert.match(work, /result\.uncertain \? "처리 결과를 확인하지 못했습니다" : result\.attendanceReviewRequired \? "출입 기록 확인이 필요합니다" : result\.eligibilityReviewRequired \? "참가 상태 확인이 필요합니다" : "처리에 실패했습니다"/);
+  assert.match(work, /aria-label=\{result\.uncertain \? "스캔 결과 미확인과 복구" : "스캔 실패와 복구"\}/);
+  assert.match(work, /result\.alreadyIn \? "이미 입장했어요" : result\.kind === "failed" && result\.uncertain \? "처리 결과를 확인하지 못했습니다" : result\.kind === "failed" && result\.attendanceReviewRequired \? "출입 기록 확인이 필요합니다" : result\.kind === "failed" && result\.eligibilityReviewRequired \? "참가 상태 확인이 필요합니다" : "처리하지 못했습니다"/);
   assert.match(work, /retryFailedRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
   assert.match(work, /scanFailureRef\.current\?\.scrollIntoView\(\{ block: "center", behavior: "instant" \}\)/);
-  assert.match(work, /role=\{boothLimitReached \? "status" : "alert"\}>\{result\.message\}/);
+  assert.match(work, /role=\{boothLimitReached \|\| result\.alreadyIn \? "status" : "alert"\}>\{result\.message\}/);
   assert.match(work, /카메라가 안 되면 티켓 코드를 직접 입력하세요/);
   assert.match(work, /result\.message\.includes\("다시 시도"\)/);
-  assert.match(work, />\s*다시 시도\s*</);
+  // A definitive failure is acknowledged with 확인, never "다시 스캔": nothing is wrong with the camera.
+  assert.match(work, /onClick=\{retryFailedScan\}>\s*확인\s*</);
 });
 
 test('recent-checks-read-as-one-line-and-offer-next-scan-flow', () => {
@@ -67,7 +69,7 @@ test('failure-retry-keeps-the-typed-ticket-and-refocuses', () => {
   const retry = work.slice(work.indexOf('function retryFailedScan'), work.indexOf('async function copyTicketCode'));
   assert.match(retry, /setResult\(\{ kind: "idle" \}\)/);
   assert.doesNotMatch(retry, /setTicket/);
-  assert.match(work, /onClick=\{retryFailedScan\}>\s*다시 시도\s*</);
+  assert.match(work, /onClick=\{retryFailedScan\}>\s*확인\s*</);
 });
 
 test('pending-scan-temporarily-protects-context-with-a-bounded-uncertain-outcome', () => {
@@ -98,7 +100,7 @@ test('unconfirmed scan offers the original ticket as a direct receipt retry', ()
   assert.match(work, /pendingScanRef\.current !== null \|\| pendingRewardCommandsRef\.current\.size > 0/);
   assert.match(work, /떠나면 같은 요청으로 다시 확인할 수 없습니다/);
   assert.match(work, /const scanControlsLocked = writeLocked \|\| scanUnknown/);
-  assert.match(work, /scanInputHasWork && result\.kind !== "ok" && !scanUnknown/);
+  assert.match(work, /result\.kind === "idle" && scanInputHasWork/);
   assert.match(work, /if \(pendingScanRef\.current\) return;\s*setResult\(\{ kind: "idle" \}\)/);
   assert.match(work, /!correctUnknown && !submitting && !\(result\.kind === "failed" && result\.uncertain\)/);
   assert.match(work, /처리됐을 수 있는 요청의 결과를 아직 확인하지 못했습니다/);
@@ -124,6 +126,7 @@ test('lost response blocks another ticket and replays the exact frozen desk and 
       randomCommandId: () => `command-${++ids}`, setSubmitting: () => {}, setCameraOpen: () => {},
       setResult: result => outcomes.push(result), setTicketCopyNotice: () => {}, clearRewardPanel: () => {},
       setLastScannedTicket: () => {}, setRewardTarget: () => {}, setTargetRewards: () => {}, setRewardDataLoaded: () => {},
+      setEntryMode: () => {}, setSheet: () => {}, setLastScan: () => {},
       setTicket: () => {}, load: async () => {}, rewardEnabled: false, directory: {},
       setManualTarget: () => {}, setManualIdentityConfirmed: () => {}, setManualQuery: () => {},
       abandonOperatorAttempt: id => abandoned.push(id), forgetOperatorReceipt: id => forgotten.push(id),
@@ -198,18 +201,17 @@ test('self-booth-qr-names-its-booth-above-the-code', () => {
 });
 
 test('field-flow-keeps-touch-size-unobscured-scan-and-kiosk-distinction', () => {
-  assert.match(work, /prizeStyles\.scanInput/);
+  assert.match(work, /prizeStyles\.fieldBar/);
   assert.match(work, /kiosk-mode/);
   // 2026-11-10: 토글이 버튼 문구 전환식이 아닌 role=switch 트랙형으로 바뀌었다. 라벨은 고정 '키오스크'.
   assert.match(work, /role="switch"/);
   assert.match(work, /키오스크/);
   assert.match(styles, /\.nextActions button\s*\{[^}]*min-height:\s*44px/s);
   assert.doesNotMatch(styles, /\.recentRow button/, 'recent rows carry no buttons');
-  assert.match(styles, /\.scanPrimary\s*\{[^}]*min-height:\s*56px/s);
-  // The former sticky dock covered the desk on a 320×568 screen. Keep the
-  // scan area in normal flow and retain the rendered hit-test regression.
-  assert.doesNotMatch(styles, /\.scanInput\s*\{[^}]*position:\s*(?:sticky|fixed|absolute)/s);
-  assert.doesNotMatch(styles, /\.fallbackBlock\s*\{[^}]*position:\s*(?:sticky|fixed|absolute)/s);
+  assert.match(styles, /\.scanPrimary\s*\{[^}]*min-height:\s*60px/s);
+  assert.match(styles, /\.bar3 button\s*\{[^}]*min-height:\s*64px/s, 'the three bottom buttons are thumb-sized');
+  // The bottom bar sits in normal flow under the stage: it never covers the desk or the result.
+  assert.doesNotMatch(styles, /\.fieldBar\s*\{[^}]*position:\s*(?:sticky|fixed)/s);
   const audit = fs.readFileSync(path.join(__dirname, '../scripts/web-crossrole-journey-audit.cjs'), 'utf8');
   assert.match(audit, /\['assigned desk', work320\.locator\('#staff-desk'\)\]/);
   assert.match(audit, /\['camera action', work320\.getByRole\('button'/);
@@ -219,24 +221,17 @@ test('field-flow-keeps-touch-size-unobscured-scan-and-kiosk-distinction', () => 
 });
 
 test('scan-320-fallback-peeks-without-a-fixed-overlay', () => {
-  // 320 첫 화면 목적: 고정 오버레이 없이 수동 입력 안내가 보이게 한다.
-  // 간격만 조이고 터치 바닥·글자·order·position은 그대로 둔다.
-  assert.match(styles, /\.fallbackBlock\s*\{[^}]*scroll-margin-top/s);
-  assert.match(styles, /@media\s*\(max-width:\s*360px\)/);
-  const small = styles.slice(styles.indexOf('@media (max-width: 360px)'));
-  assert.match(small, /\.fallbackBlock/);
-  assert.match(small, /scroll-margin-top/);
+  // The camera is the stage and the three quiet buttons sit under it in normal
+  // flow: nothing is a fixed overlay, and the typed code is one tap away in a sheet.
   const globals = fs.readFileSync(path.join(__dirname, '../apps/web/app/globals.css'), 'utf8');
   assert.match(globals, /\.staff-workspace\s+\.scan-form/);
   assert.match(globals, /@media\s*\(max-width:\s*360px\)[\s\S]*?\.staff-workspace\s+\.scan-form[\s\S]*?border-top:\s*0/);
-  // Scan-first order stays: context + camera first, typed code below the hairline.
-  // 2026-11-10: 접힌 details 대신 스캔/명단 전환 버튼을 쓴다. 명단 경로는 숨기지 않는다.
-  // 순서는 모드 선택 → 안내 → 카메라 → 코드 입력이다.
-  const modeOrder = work.indexOf('entryModeSwitch');
-  const scanOrder = work.indexOf('prizeStyles.scanContext');
-  const cameraOrder = work.indexOf('카메라로 스캔');
-  const codeOrder = work.indexOf('코드로 직접 처리');
-  assert.ok(modeOrder !== -1 && scanOrder !== -1 && cameraOrder !== -1 && codeOrder !== -1 && modeOrder < scanOrder && scanOrder < cameraOrder && cameraOrder < codeOrder);
+  const stageOrder = work.indexOf('<div className={prizeStyles.fieldStage}');
+  const barOrder = work.indexOf('<div className={prizeStyles.fieldBar}');
+  const cameraOrder = work.indexOf('카메라 켜기');
+  const codeOrder = work.indexOf('코드 입력');
+  assert.ok(stageOrder !== -1 && barOrder !== -1 && cameraOrder !== -1 && codeOrder !== -1 && stageOrder < barOrder && barOrder < cameraOrder && cameraOrder < codeOrder, 'stage, then the camera action, then the code sheet button');
+  assert.match(work, /<ConsoleDialog title="티켓 코드 입력" presentation="drawer"/);
 });
 
 test('scan-result-binds-request-location-not-current-selection', () => {
@@ -328,7 +323,7 @@ test('staff-warnings-wrap-by-word-without-mid-syllable-split', () => {
   assert.match(styles, /\.ticketFullCode\s+code\s*\{[^}]*overflow-wrap:\s*anywhere/s);
   // The definitive booth limit is a status, while scan failures still announce an alert.
   assert.match(work, /처리 응답을 확인하지 못했습니다\. 같은 업무·티켓으로 다시 시도하세요\./);
-  assert.match(work, /role=\{boothLimitReached \? "status" : "alert"\}>\{result\.message\}/);
+  assert.match(work, /role=\{boothLimitReached \|\| result\.alreadyIn \? "status" : "alert"\}>\{result\.message\}/);
   assert.match(work, /place:\s*requestPlace/);
   assert.match(work, /window\.setTimeout\(\(\) => controller\.abort\(\), 15000\)/);
 });
@@ -351,13 +346,13 @@ test('crossrole-audit-pins-request-place-on-real-responses', () => {
   // open — never after retry clears it into idle. No false pass allowed.
   assert.match(audit, /const multiPlace = await multiFailure\.getByText\(\/처리 위치:\/\)/);
   const bindAt = audit.indexOf('multi-desk failure binds its request desk');
-  const retryAt = audit.indexOf("multiFailureRetry.getByRole('button', { name: '다시 시도'");
+  const retryAt = audit.indexOf("multiFailureRetry.getByRole('button', { name: '확인'");
   const switchAt = audit.indexOf('task switch clears the bound place with the result');
   assert.ok(bindAt !== -1 && retryAt !== -1 && switchAt !== -1 && bindAt < switchAt && switchAt < retryAt,
     'place read (open) -> actual work switch clears -> separate 404 retry reproduction');
   // Separate keyboard-retry reproduction keeps the retry value/focus guard.
-  assert.match(audit, /const multiFailureRetry = multiWork\.locator\('section\[aria-label="스캔 실패"\]'\)/);
-  assert.match(audit, /keyboard retry preserves the submitted ticket and returns focus/);
+  assert.match(audit, /const multiFailureRetry = multiWork\.locator\('\[role="region"\]\[aria-label="스캔 실패"\]'\)/);
+  assert.match(audit, /keyboard acknowledgement preserves the submitted ticket/);
   // Existing guards stay pinned.
   assert.match(audit, /retry replays the identical request \(body and command id\)/);
   assert.match(audit, /exactly one IN check for A \(no duplicate from retry\)/);

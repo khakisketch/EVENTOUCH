@@ -23,6 +23,7 @@ const { emptyWorkspace } = require('../server/state');
 const { buildMessageDispatch } = require('../server/commands/content-results');
 const { startApiHarness, insertAccount, insertEvent, insertMembership, insertAssignment, sessionCookie, requestJson, LEGACY_ORG } = require('../tests/helpers/postgres-api-server.cjs');
 const { startWebApiGateway } = require('../tests/helpers/web-api-gateway.cjs');
+const { typeTicket } = require('./audit-staff-direction.cjs');
 
 const captures = process.env.EVENTOUCH_CAPTURE_ROOT
   ? path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'hanwool-real')
@@ -211,9 +212,9 @@ async function main() {
     // Counts are now separate status pills; still require both the exact
     // accepted and rejected counts before committing the same real import.
     const review = operator.locator(':is(section,[role=region])[aria-labelledby="participant-import-review-heading"]');
-    await review.getByText('유효 8행', { exact: true }).waitFor();
-    await review.getByText('오류 0행', { exact: true }).waitFor();
-    await clickCommand(operator, operator.getByRole('button', { name: /유효 8행 반영/ }), 'participant.import');
+    await review.locator('[class*="heroNumber"]').getByText('8', { exact: true }).waitFor();
+    assert.equal(await review.getByRole('heading', { name: /행은 등록하지 않아요/ }).count(), 0, 'no row is excluded');
+    await clickCommand(operator, operator.getByRole('button', { name: /^8명 등록$/ }), 'participant.import');
     let workspace = await read();
     assert.equal(workspace.participants.length, 8);
     const people = workspace.participants;
@@ -275,7 +276,7 @@ async function main() {
     phase = 'real staff admission with displayed QR';
     await staff.goto(`${gateway.baseUrl}/staff/events/${eventId}`, { waitUntil: 'networkidle' });
     await staff.locator('#staff-desk').selectOption(inDesk.id);
-    await staff.locator('#staff-ticket').fill(decodedTicket);
+    await typeTicket(staff, decodedTicket);
     await clickCommand(staff, staff.getByRole('button', { name: /체크인|입장 처리/, exact: false }).first(), 'check.scan');
     workspace = await read(); assert.equal(workspace.participants[0].everIn, true);
     assert.ok(workspace.checks.find((check) => check.participantId === people[0].id && check.action === 'IN' && check.at));
@@ -493,7 +494,7 @@ async function main() {
 
     phase = 'STAFF scoped OUT scan, explicit collection and lost response';
     await staff.locator('#staff-desk').selectOption(outDesk.id);
-    await staff.locator('#staff-ticket').fill(decodedTicket);
+    await typeTicket(staff, decodedTicket);
     await clickCommand(staff, staff.getByRole('button', { name: /체크인|퇴장 처리/, exact: false }).first(), 'check.scan');
     workspace = await read();
     const ownRewards = workspace.rewards.filter((reward) => reward.participantId === people[0].id);

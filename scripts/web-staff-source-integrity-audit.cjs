@@ -5,7 +5,7 @@ const axe = require('axe-core').source;
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { confirmInitialStaffDesk } = require('./audit-staff-direction.cjs');
+const { confirmInitialStaffDesk, closeSheet, openRecent } = require('./audit-staff-direction.cjs');
 
 async function main() {
   if (!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a private EVENTOUCH_CAPTURE_ROOT');
@@ -34,13 +34,17 @@ async function main() {
       return;
     }
     const warning = page.getByRole('alert').filter({ hasText: '입퇴장을 잠시 멈췄습니다' });
+    const openRoster = async () => { await page.getByRole('button', { name: '명단 찾기', exact: true }).click(); await page.locator('#staff-manual-search').waitFor(); };
     await warning.waitFor();
     assert.match(await warning.innerText(), /참가자 명단 · 출입 기록/);
-    assert.equal(await page.getByRole('button', { name: '카메라로 스캔' }).isDisabled(), true);
-    await page.getByRole('button', { name: '명단 찾기', exact: true }).click();
+    assert.equal(await page.getByRole('button', { name: '카메라 켜기' }).isDisabled(), true);
+    await openRoster();
     assert.equal(await page.locator('#staff-manual-search').isDisabled(), true);
-    assert.match(await page.innerText('body'), /출입 기록을 확인할 수 없습니다/);
-    assert.doesNotMatch(await page.innerText('body'), /아직 처리 기록이 없습니다/);
+    await closeSheet(page);
+    const unavailableList = await openRecent(page);
+    assert.match(await unavailableList.innerText(), /출입 기록을 확인할 수 없습니다/);
+    assert.doesNotMatch(await unavailableList.innerText(), /아직 처리 기록이 없습니다/);
+    await closeSheet(page);
     await page.evaluate(axe);
     for (const width of [320, 390, 1280]) {
       await page.setViewportSize({ width, height: 844 });
@@ -52,8 +56,7 @@ async function main() {
     await save(original);
     await warning.getByRole('button', { name: '업무 정보 다시 확인' }).click();
     await warning.waitFor({ state: 'hidden' });
-    await page.getByRole('button', { name: '스캔', exact: true }).click();
-    assert.equal(await page.getByRole('button', { name: '카메라로 스캔' }).isEnabled(), true);
+    assert.equal(await page.getByRole('button', { name: '카메라 켜기' }).isEnabled(), true);
     const bootstrapRoute = '**/api/bootstrap';
     await page.route(bootstrapRoute, async route => {
       const response = await route.fetch(); const body = await response.json();
@@ -63,11 +66,11 @@ async function main() {
     });
     await page.reload(); await confirmInitialStaffDesk(page);
     await warning.waitFor();
-    assert.equal(await page.getByRole('button', { name: '카메라로 스캔' }).isDisabled(), true, 'older servers without source markers fail closed');
+    assert.equal(await page.getByRole('button', { name: '카메라 켜기' }).isDisabled(), true, 'older servers without source markers fail closed');
     await page.unroute(bootstrapRoute);
     await warning.getByRole('button', { name: '업무 정보 다시 확인' }).click();
     await warning.waitFor({ state: 'hidden' });
-    await page.getByRole('button', { name: '명단 찾기', exact: true }).click();
+    await openRoster();
     const person = original.participants.find(item => item.name.startsWith('감사 참가자') && item.status === 'APPROVED' && item.company);
     assert.ok(person, 'fixture has a uniquely identifiable participant');
     await page.locator('#staff-manual-search').fill(person.name);
@@ -80,24 +83,22 @@ async function main() {
     ]);
     assert.equal(denied.status(), 409); assert.equal((await denied.json()).code, 'CHECK_SOURCE_UNAVAILABLE');
     assert.deepEqual((await read()).checks, [{}]);
-    assert.equal(await page.locator('#staff-manual-search').inputValue(), person.name);
     const failure = page.getByRole('region', { name: '스캔 실패와 복구' });
     await failure.getByRole('button', { name: '업무 정보 다시 확인' }).click();
     await warning.waitFor();
     assert.match(await warning.innerText(), /출입 기록/);
-    await page.getByRole('button', { name: '스캔', exact: true }).click();
-    assert.equal(await page.getByRole('button', { name: '카메라로 스캔' }).isDisabled(), true);
-    await page.getByRole('button', { name: '명단 찾기', exact: true }).click();
-    assert.equal(await page.locator('#staff-manual-search').inputValue(), person.name);
+    assert.equal(await page.getByRole('button', { name: '카메라 켜기' }).isDisabled(), true);
+    await openRoster();
+    assert.equal(await page.locator('#staff-manual-search').inputValue(), person.name, 'the typed name survives the refresh');
+    await closeSheet(page);
     await page.route('**/api/bootstrap', route => route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }), { times: 1 });
     await warning.getByRole('button', { name: '업무 정보 다시 확인' }).click();
     await page.getByText(/업무 정보를 불러오지 못했습니다/).first().waitFor();
-    await page.getByRole('button', { name: '스캔', exact: true }).click();
-    assert.equal(await page.getByRole('button', { name: '카메라로 스캔' }).isDisabled(), true);
-    await page.getByRole('button', { name: '명단 찾기', exact: true }).click();
+    assert.equal(await page.getByRole('button', { name: '카메라 켜기' }).isDisabled(), true);
     const repaired = await read(); repaired.checks = original.checks; await save(repaired);
     await warning.getByRole('button', { name: '업무 정보 다시 확인' }).click();
     await warning.waitFor({ state: 'hidden' });
+    await openRoster();
     assert.equal(await page.locator('#staff-manual-search').inputValue(), person.name);
     await page.getByLabel('이름·소속을 직접 확인했습니다').check();
     const [applied] = await Promise.all([
@@ -106,7 +107,7 @@ async function main() {
     ]);
     assert.equal(applied.status(), 200);
     assert.equal((await read()).checks.filter(item => item?.participantId === person.id).length, 1);
-    await page.getByText('다음 참가자를 스캔하세요.').waitFor();
+    await page.getByRole('region', { name: '스캔 결과 상세' }).getByText(person.name, { exact: false }).waitFor();
     await page.screenshot({ path: path.join(out, 'recovered-390.png'), fullPage: true });
     console.log('PASS: staff source unavailable, preserved input, failed refresh, repair and single check-in');
   } finally { await browser?.close(); await f.close(); }

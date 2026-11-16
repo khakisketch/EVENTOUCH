@@ -31,8 +31,11 @@ export default function StaffAccountMenu({
   confirmLeaveAccount,
   compact = false,
   excludeReceiptCommandId,
+  receipts = true,
 }: {
   compact?: boolean;
+  /** Render the shared 처리 결과 확인 panel here; the field screen shows it in the page flow instead. */
+  receipts?: boolean;
   excludeReceiptCommandId?: string | null;
   confirmLeave?: () => boolean;
   confirmLeaveAccount?: () => boolean;
@@ -180,7 +183,7 @@ export default function StaffAccountMenu({
       </div>
     </div>
     {accountNotice ? <p className={styles.blockedNotice} role="status">{accountNotice}</p> : null}
-    <OperatorReceiptRecovery excludeCommandId={excludeReceiptCommandId} />
+    {receipts ? <OperatorReceiptRecovery excludeCommandId={excludeReceiptCommandId} /> : null}
     </>
   );
 }

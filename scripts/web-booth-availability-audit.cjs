@@ -7,6 +7,7 @@ const { source: axeSource } = require('axe-core');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
+const { typeTicket } = require('./audit-staff-direction.cjs');
 
 async function main() {
   if (!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a new private EVENTOUCH_CAPTURE_ROOT');
@@ -63,7 +64,7 @@ async function main() {
     await boothTask.click();
     await boothSelect.selectOption(booth.id);
     const ticket = staff.getByLabel('티켓 코드', { exact: true });
-    await ticket.fill(attendee.ticket);
+    await typeTicket(staff, attendee.ticket);
     await setMode('SELF');
     const rejectedStaff = await visit(staff, scan);
     assert.equal(rejectedStaff.status(), 409);

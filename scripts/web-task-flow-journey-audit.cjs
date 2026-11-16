@@ -42,6 +42,7 @@ const { prepareCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = requ
 const path = require('node:path');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
+const { typeTicket } = require('./audit-staff-direction.cjs');
 
 const before = process.argv.includes('--before');
 const out = (process.env.CAPTURE_DIR || '').trim()
@@ -442,7 +443,7 @@ async function main() {
           'the only assigned desk is visible and selected; no scan has been submitted');
         await act(() => page.getByRole('button', { name: '입장 업무 확인', exact: true }).click());
       }
-      await act(() => page.locator('#staff-ticket').fill(ticketPerson.ticket));
+      await act(() => typeTicket(page, ticketPerson.ticket));
       const submitted = commandsResponse();
       await act(() => page.locator('form.scan-form').getByRole('button', { name: '입장 처리', exact: true }).click());
       await submitted;
@@ -467,7 +468,7 @@ async function main() {
       await page.locator('#staff-booth').waitFor({ state: 'visible', timeout: 10000 });
       assert.equal(await page.locator('#staff-booth').inputValue(), '', 'booth must not be preselected (StaffEventWork defaults boothId "")');
       await act(() => page.locator('#staff-booth').selectOption(journeyBooth.id));
-      await act(() => page.locator('#staff-ticket').fill(ticketPerson.ticket));
+      await act(() => typeTicket(page, ticketPerson.ticket));
       const submitted = commandsResponse();
       await act(() => page.locator('form.scan-form').getByRole('button', { name: '부스 인증', exact: true }).click());
       await submitted;

@@ -7,7 +7,7 @@ const crypto = require('node:crypto');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { prepareCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { confirmInitialStaffDesk } = require('./audit-staff-direction.cjs');
+const { confirmInitialStaffDesk, typeTicket } = require('./audit-staff-direction.cjs');
 const { startStalledResponseProxy } = require('./stalled-response-fixture.cjs');
 const axeSource = require('axe-core').source;
 
@@ -28,7 +28,7 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
     const staff = await staffContext.newPage();
     await staff.goto(`${fixture.baseUrl}/staff/events/${fixture.eventId}`);
     await confirmInitialStaffDesk(staff);
-    await staff.locator('#staff-ticket').fill(participant.ticket);
+    await typeTicket(staff, participant.ticket);
 
     await context.addCookies([{ ...cookieForContext(fixture, 'manager'), url: proxy.origin }]);
     const page = await context.newPage();
