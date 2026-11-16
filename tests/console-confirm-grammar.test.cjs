@@ -124,10 +124,9 @@ test("the roster keeps one-tap approval and folds the rest of the row tools", ()
   assert.match(css, /\.rowConfirm \{\s*grid-column: 1 \/ -1;/u);
 });
 
-test("the import wizard shows its three steps from the first screen", () => {
+test("the import wizard has no step line: pick a file, then one review screen", () => {
   const wizard = read("console/events/[id]/participants/import/ImportWizard.tsx");
-  assert.match(wizard, /importSteps/u);
-  assert.match(wizard, /aria-label="명단 가져오기 단계"/u);
-  assert.match(wizard, /"파일 선택", "열 연결", "검토 후 반영"/u);
-  assert.match(wizard, /aria-current=\{state === "current" \? "step" : undefined\}/u);
+  assert.doesNotMatch(wizard, /importSteps|modalStep/u);
+  assert.match(wizard, /headingId="participant-import-file-heading"/u);
+  assert.match(wizard, /headingId="participant-import-review-heading"/u);
 });
