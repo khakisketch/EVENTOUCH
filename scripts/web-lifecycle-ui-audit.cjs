@@ -1,5 +1,5 @@
 'use strict';
-const { openCreateSettings } = require('./ui-journey-helpers.cjs');
+const { openCreateSettings, openSettingsBasics } = require('./ui-journey-helpers.cjs');
 
 // Full lifecycle through the rendered UI: ONE event created in the browser,
 // then public setup/publish, participant signup, operator approval, staff
@@ -30,7 +30,7 @@ const axe = require('axe-core').source;
 const jsQR = require('../apps/web/node_modules/jsqr');
 const fixtureLib = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { confirmInitialStaffDesk, typeTicket, readCode, holdResults } = require('./audit-staff-direction.cjs');
+const { confirmInitialStaffDesk, typeTicket, readCode, holdResults, codeField } = require('./audit-staff-direction.cjs');
 
 const captureRoot = process.env.EVENTOUCH_CAPTURE_ROOT
   || defaultCaptureDir(`lifecycle-${crypto.randomUUID()}`);
@@ -214,14 +214,16 @@ async function main() {
 
     // ---- 3. Fresh closed DRAFT: state-specific gate note, link, retention ----
     await login.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/settings`);
-    await login.getByRole('tab', { name: '기본 정보' }).waitFor({ timeout: 15000 });
+    await login.locator('#panel-settings-basics').waitFor({ timeout: 15000 });
     await login.screenshot({ path: path.join(OUT, '05-settings-basics-1280-first.png') });
+    // Settings is one board now: basics edit in a drawer, intake and stage are sections of the board.
+    await openSettingsBasics(login);
     const approvalBox = login.getByLabel('신청 후 운영자 승인 필요');
     if (!(await approvalBox.isChecked())) await approvalBox.check();
     await login.getByRole('button', { name: '기본 정보 저장', exact: true }).click();
     await login.getByText('기본 정보를 저장했습니다').first().waitFor({ timeout: 15000 });
     check('approval gate saved through settings UI', true);
-    await login.getByRole('tab', { name: '참가 접수' }).click();
+    await login.locator('#panel-settings-intake').scrollIntoViewIfNeeded();
     await login.getByRole('button', { name: '양식 게시·접수 열기', exact: true }).waitFor({ timeout: 15000 });
     await login.screenshot({ path: path.join(OUT, '05b-settings-intake-closed-draft-1280.png') });
     // Closed DRAFT names BOTH remaining steps (publish + stage), not just one.
@@ -250,7 +252,7 @@ async function main() {
     await login.locator('#panel-settings-stage').waitFor({ state: 'visible', timeout: 15000 });
     check('stage link lands on the stage tab via keyboard', true);
     await login.screenshot({ path: path.join(OUT, '05c-stage-tab-via-link-1280.png') });
-    await login.getByRole('tab', { name: '참가 접수' }).click();
+    await login.locator('#panel-settings-intake').scrollIntoViewIfNeeded();
     check('unsaved consent draft retained after tab return',
       (await login.locator('#set-consent').inputValue()) === '완주 여정 동의 안내 초안');
     check('closed DRAFT note still shown after return',
@@ -265,7 +267,7 @@ async function main() {
     await login390.getByRole('button', { name: '로그인', exact: true }).click();
     await login390.waitForURL(/\/console/, { timeout: 20000 });
     await login390.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/settings`);
-    await login390.getByRole('tab', { name: '참가 접수' }).click();
+    await login390.locator('#panel-settings-intake').scrollIntoViewIfNeeded();
     await login390.locator('#panel-settings-intake p[role="note"]', { hasText: '접수를 열려면 양식을 게시하고' }).first().waitFor({ timeout: 15000 });
     await login390.screenshot({ path: path.join(OUT, '05d-intake-closed-note-390-first.png') });
     await geometry(login390, 'intake closed note 390', null);
@@ -296,7 +298,7 @@ async function main() {
       (await login.getByText(/현재 접수 중 \(설정\)/).count()) >= 1);
     await login.screenshot({ path: path.join(OUT, '07c-intake-open-note-1280.png') });
     await login390.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/settings`);
-    await login390.getByRole('tab', { name: '참가 접수' }).click();
+    await login390.locator('#panel-settings-intake').scrollIntoViewIfNeeded();
     await login390.locator('#panel-settings-intake p[role="note"]', { hasText: '공개 페이지가 열리지 않아' }).first().waitFor({ timeout: 15000 });
     await login390.screenshot({ path: path.join(OUT, '07d-intake-open-note-390-first.png') });
     await geometry(login390, 'intake open note 390', null);
@@ -327,14 +329,14 @@ async function main() {
     await pubOpen.close();
 
     // ---- 5. DRAFT→READY; both note variants clear once public ----
-    await login.getByRole('tab', { name: '진행 단계' }).click();
+    await login.locator('#panel-settings-stage').scrollIntoViewIfNeeded();
     await login.getByRole('button', { name: '운영 준비 단계로 전환', exact: true }).click();
     await login.getByRole('button', { name: '정말 전환합니다 · 운영 준비 단계로', exact: true }).waitFor({ timeout: 15000 });
     await login.screenshot({ path: path.join(OUT, '07b-stage-to-ready-1280.png') });
     await login.getByRole('button', { name: '정말 전환합니다 · 운영 준비 단계로', exact: true }).click();
     await login.getByText(/행사를 운영 준비 단계로 전환했습니다/).first().waitFor({ timeout: 15000 });
     check('event reaches READY before public signup', (await eventRow()).payload.stage === 'READY');
-    await login.getByRole('tab', { name: '참가 접수' }).click();
+    await login.locator('#panel-settings-intake').scrollIntoViewIfNeeded();
     check('DRAFT gate notes clear once the event is public (READY)',
       (await login.locator('#panel-settings-intake p[role="note"]', { hasText: '기획 단계에서는' }).count()) === 0
       && (await login.locator('#panel-settings-intake p[role="note"]', { hasText: '접수를 열려면 양식을 게시하고' }).count()) === 0);
@@ -447,7 +449,7 @@ async function main() {
     await geometry(staffWork, 'staff unassigned 390', null);
 
     // ---- 12. Operator assigns the staff through the assignment UI ----
-    await login.getByRole('tab', { name: '스태프 배정', exact: true }).click();
+    // Operations is one page now; the 스태프 배정 action sits in its own section, no tab to open.
     await login.getByRole('button', { name: '스태프 배정', exact: true }).first().click();
     await login.locator('#assign-account').waitFor({ timeout: 15000 });
     await login.screenshot({ path: path.join(OUT, '16-assign-dialog-1280.png') });
@@ -465,12 +467,12 @@ async function main() {
 
     // ---- 13. READY→LIVE with the intake still open (ENDED edge needs it) ----
     await login.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/settings`);
-    await login.getByRole('tab', { name: '진행 단계' }).click();
+    await login.locator('#panel-settings-stage').scrollIntoViewIfNeeded();
     await login.getByRole('button', { name: '진행 중 단계로 전환', exact: true }).click();
     await login.getByRole('button', { name: '정말 전환합니다 · 진행 중 단계로', exact: true }).waitFor({ timeout: 15000 });
     await login.screenshot({ path: path.join(OUT, '18-stage-to-live-1280.png') });
     await login.getByRole('button', { name: '정말 전환합니다 · 진행 중 단계로', exact: true }).click();
-    await login.getByText(/행사를 진행 중\(으\)로 전환했습니다/).first().waitFor({ timeout: 15000 });
+    await login.getByText(/행사를 진행 중 단계로 전환했습니다/).first().waitFor({ timeout: 15000 });
     check('event reaches LIVE through settings UI', (await eventRow()).payload.stage === 'LIVE');
     await login.screenshot({ path: path.join(OUT, '19-stage-live-1280.png') });
 
@@ -550,6 +552,8 @@ async function main() {
     await work320.locator('#staff-desk').waitFor({ timeout: 15000 });
     await work320.screenshot({ path: path.join(OUT, '22b-staff-work-320-first.png') });
     await confirmInitialStaffDesk(work320);
+    // The typed-code form (and its 입장 처리 action) opens from the 코드 입력 sheet; camera scanning is the main path.
+    await codeField(work320);
     await geometry(work320, 'staff work 320', 'button:has-text("입장 처리")', true);
     await axePage(work320, 'staff work 320');
     check('assigned staff work renders on 320', true);
@@ -674,7 +678,7 @@ async function main() {
     const rep = await op.newPage();
     rep.on('pageerror', (error) => errors.push(`report: ${error.message}`));
     await rep.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/reports`);
-    await rep.locator('#reports-list').waitFor({ timeout: 15000 });
+    await rep.locator('h1').first().waitFor({ timeout: 15000 });
     await rep.screenshot({ path: path.join(OUT, '27-reports-1280-first.png') });
     await geometry(rep, 'reports 1280', 'button:has-text("보고서 만들기")');
     await axePage(rep, 'reports 1280');
@@ -685,7 +689,8 @@ async function main() {
     await rep.locator('#report-summary').fill('신청부터 승인·입장·취소까지 이어진 여정을 확인한 보고서입니다.');
     await rep.getByRole('button', { name: '보고서 만들기', exact: true }).last().click();
     await rep.getByText(/보고서 초안을 만들었습니다/).first().waitFor({ timeout: 15000 });
-    await rep.getByRole('button', { name: '내용 보기', exact: true }).first().click();
+    // Reports are tabs now: the new report's tab opens its document (there is no 내용 보기 button).
+    await rep.getByRole('tab', { name: /완주 여정 결과 보고서/ }).click();
     await rep.locator('#report-detail').waitFor({ timeout: 15000 });
     await rep.screenshot({ path: path.join(OUT, '29-report-detail-1280.png'), fullPage: true });
     check('report snapshot counts the real check-in',
@@ -694,7 +699,7 @@ async function main() {
     // ---- 20. LIVE→ENDED with the intake still open (server permits it) ----
     const peopleBefore = (await snapshot()).participants.length;
     await login.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/settings`);
-    await login.getByRole('tab', { name: '진행 단계' }).click();
+    await login.locator('#panel-settings-stage').scrollIntoViewIfNeeded();
     check('ENDED transition is offered while the intake is still open',
       (await login.getByRole('button', { name: '종료 단계로 전환', exact: true }).count()) === 1
       && (await login.locator('#settings-stage-precondition').count()) === 0);
@@ -702,7 +707,7 @@ async function main() {
     await login.getByRole('button', { name: '정말 전환합니다 · 종료 단계로', exact: true }).waitFor({ timeout: 15000 });
     await login.screenshot({ path: path.join(OUT, '30a-stage-to-ended-open-1280.png') });
     await login.getByRole('button', { name: '정말 전환합니다 · 종료 단계로', exact: true }).click();
-    await login.getByText(/행사를 종료\(으\)로 전환했습니다/).first().waitFor({ timeout: 15000 });
+    await login.getByText(/행사를 종료 단계로 전환했습니다/).first().waitFor({ timeout: 15000 });
     check('LIVE→ENDED persists with registrationOpen still true',
       (await eventRow()).payload.stage === 'ENDED' && (await snapshot()).registrationOpen === true);
     const endedOverview = await login.context().newPage();
@@ -712,7 +717,7 @@ async function main() {
       (await endedOverview.getByText('접수 중', { exact: true }).count()) === 0
       && (await endedOverview.getByText('공개 접수 종료 · 접수 설정 열림', { exact: false }).count()) === 1);
     await endedOverview.close();
-    await login.getByRole('tab', { name: '참가 접수' }).click();
+    await login.locator('#panel-settings-intake').scrollIntoViewIfNeeded();
     await login.locator('#panel-settings-intake p[role="note"]', { hasText: '종료된 행사에서는 신청을 받을 수 없습니다' }).first().waitFor({ timeout: 15000 });
     check('ENDED-open intake names the closed public route', true);
     check('ENDED-open note labels the public acceptance',
@@ -750,15 +755,16 @@ async function main() {
     }
     // Intake can still be closed from ENDED through the same UI.
     await login.getByRole('button', { name: '접수 닫기', exact: true }).click();
-    await login.getByRole('dialog').getByRole('button', { name: '접수 닫기', exact: true }).click();
+    // The confirmation is an inline "실행 확인" group, not a dialog.
+    await login.getByRole('group', { name: '실행 확인', exact: true }).getByRole('button', { name: '접수 닫기', exact: true }).click();
     await login.getByText('접수를 닫았습니다').first().waitFor({ timeout: 15000 });
     check('intake closed through settings UI in ENDED', (await snapshot()).registrationOpen === false);
-    await login.getByRole('tab', { name: '진행 단계' }).click();
+    await login.locator('#panel-settings-stage').scrollIntoViewIfNeeded();
     await login.getByRole('button', { name: '보관 단계로 전환', exact: true }).click();
     await login.getByRole('button', { name: '정말 전환합니다 · 보관 단계로', exact: true }).waitFor({ timeout: 15000 });
     await login.screenshot({ path: path.join(OUT, '30-stage-to-보관-1280.png') });
     await login.getByRole('button', { name: '정말 전환합니다 · 보관 단계로', exact: true }).click();
-    await login.getByText(/행사를 보관\(으\)로 전환했습니다/).first().waitFor({ timeout: 15000 });
+    await login.getByText(/행사를 보관 단계로 전환했습니다/).first().waitFor({ timeout: 15000 });
     check('event reaches ARCHIVED through settings UI', (await eventRow()).payload.stage === 'ARCHIVED');
     await login.screenshot({ path: path.join(OUT, '31-stage-archived-1280.png') });
     // Closed public state: registration no longer accepts (reliable marker, no fixed sleep).
