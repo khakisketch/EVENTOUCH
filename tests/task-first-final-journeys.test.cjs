@@ -190,9 +190,9 @@ test("archive checklist stays outside the frozen print article", () => {
 
 test("team offers an event picker only on active staff rows", () => {
   const team = read("console/team/TeamWorkspace.tsx");
-  assert.match(team, /account\.role === "STAFF" && account\.active/);
-  assert.match(team, /행사 배정/);
-  assert.match(team, /aria-expanded=\{assignOpenId === account\.id\}/);
+  assert.match(team, /memberRow\.role === "STAFF" && memberRow\.active/);
+  assert.match(team, /현장 배정/);
+  assert.match(team, /<StaffAssignmentPanel key=\{memberRow\.id\} events=\{state\.events\}/);
   assert.match(team, /function StaffAssignmentPanel\(/);
 });
 
@@ -263,7 +263,7 @@ test("journey script injects the customer loss and replays the same receipt", ()
 test("journey script walks team assignment into the offered operations dialog", () => {
   const script = rootRead("scripts/web-task-first-final-journeys.cjs");
   assert.match(script, /team-staff-assignment/);
-  assert.match(script, /행사 배정/);
+  assert.match(script, /staff-assign-panel/);
   assert.match(script, /#assign-account/);
   assert.match(script, /assignAccount/);
   assert.match(script, /#ops-staff/);

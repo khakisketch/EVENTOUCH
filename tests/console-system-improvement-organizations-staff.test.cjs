@@ -193,7 +193,7 @@ test('staff-event-work-locks-writes-retains-state-and-warns-explicitly', () => {
   assert.match(work, /person\.id === manualTargetCurrent\?\.id && manualTargetCurrent\.status === "APPROVED" && manualTargetDistinct && manualIdentityConfirmed/);
   assert.match(work, /!retrySame && pendingScanRef\.current/);
   assert.match(work, /if \(orgChanged\) \{\s*\n\s*throw new Error\("다른 탭에서 조직이 전환됐습니다/);
-  assert.match(work, /\{cameraOpen && ready && !orgChanged/);
+  assert.match(work, /const cameraMounted = !selfBooth && cameraOpen && ready && !orgChanged && !scanUnknown/);
   // Handlers never clear drafts, selections, records, or retained ids on a
   // context change; navigation stays manual everywhere.
   assert.doesNotMatch(work, /if \(orgChanged\)[\s\S]{0,200}?router\.(push|replace)/);

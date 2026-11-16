@@ -82,6 +82,8 @@ export default function ClientsList() {
   const [state, setState] = useState<ClientsState>({ kind: "loading" });
   const [reloadTick, setReloadTick] = useState(0);
   const [draft, setDraft] = useState<Draft | null>(null);
+  // Read-only members open the same row into a viewing drawer.
+  const [viewing, setViewing] = useState<Client | null>(null);
   // Local-only directory search (no API): name/contact/email match with a
   // visible count and clear. File and write paths below are untouched.
   const [clientQuery, setClientQuery] = useState("");
@@ -98,8 +100,8 @@ export default function ClientsList() {
   const pendingAttachmentRef = useRef<AttachmentAttempt | null>(null);
   const [abandonAttachment, setAbandonAttachment] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  // One in-place removal confirm at a time: the trigger button stays, and
-  // the confirm renders inside the same row. Confirming runs the existing
+  // One removal confirm at a time: the trigger stays in the drawer, and
+  // the confirm renders under the file rows. Confirming runs the existing
   // removal and clears the slot; cancelling only clears it.
   const [removePending, setRemovePending] = useState<{ id: string; kind: "logo" | "doc" } | null>(null);
   // Synchronous same-turn gate: state flags flip only on re-render, so a
@@ -162,6 +164,7 @@ export default function ClientsList() {
     // the shared recovery panel; do not keep an invisible draft in memory.
     pendingClientRef.current = null;
     setClientUncertain(false);
+    setRemovePending(null);
   }
 
   async function load(preserveOnError = false) {
@@ -468,14 +471,67 @@ export default function ClientsList() {
     );
   }
 
-  // Local filter only: no API, no new detail area. Counts stay in the
-  // section so a filtered list never reads as the whole directory.
+  // Local filter only: no API, no new detail area. The count stays visible so
+  // a filtered list never reads as the whole directory.
   const clientSearch = clientQuery.trim().toLocaleLowerCase("ko-KR");
   const visibleClients = state.kind === "ready" && clientSearch
     ? state.clients.filter((client) =>
         `${client.name} ${client.contact} ${client.email}`.toLocaleLowerCase("ko-KR").includes(clientSearch)
       )
     : state.kind === "ready" ? state.clients : [];
+
+  const writeLocked = otherClientReceipt || Boolean(pendingAttachment);
+  const draftClient = draft?.id ? state.clients.find((item) => item.id === draft.id) ?? null : null;
+  // Files are linked to the saved record, so they wait for a saved form: a
+  // pending upload closes the drawer to show its recovery panel, and unsaved
+  // fields would go with it.
+  const filesLocked = writeLocked || draftDiffers || clientUncertain || saving || checkingClient || uploading !== null;
+
+  function startUpload(client: Client, kind: "logo" | "doc", file: File) {
+    void uploadAttachment(client, kind, file);
+    // Recovery and result messages live on the page, never behind the scrim.
+    setDraft(null);
+    draftBaselineRef.current = null;
+    setRemovePending(null);
+  }
+
+  function fileRow(client: Client, kind: "logo" | "doc") {
+    const fileId = kind === "logo" ? client.logoFileId : client.docFileId;
+    const noun = kind === "logo" ? "로고" : "사업자등록증";
+    const url = `/api/clients/${encodeURIComponent(client.id)}/files/${encodeURIComponent(fileId)}`;
+    return (
+      <div className={styles.fileRow} role="group" aria-label={`${client.name} ${noun} 관리`}>
+        {kind === "logo" && fileId ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className={styles.fileThumb} src={url} alt={`${client.name} 로고`} />
+        ) : null}
+        <div className={styles.fileText}>
+          <strong>{noun}</strong>
+          <span>{fileId ? "등록됨" : kind === "logo" ? "등록 안 됨 · JPG·PNG·WebP, 600KB 이하" : "등록 안 됨 · PDF, 600KB 이하"}</span>
+        </div>
+        {kind === "doc" && fileId ? <a className={styles.fileAction} href={url}>보기</a> : null}
+        <label className={styles.fileAction} data-disabled={filesLocked || undefined}>
+          {uploading === `${client.id}:${kind}` ? "올리는 중…" : fileId ? "교체" : "올리기"}
+          <input
+            type="file"
+            className="sr-only"
+            accept={kind === "logo" ? "image/jpeg,image/png,image/webp" : "application/pdf"}
+            disabled={filesLocked}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) startUpload(client, kind, file);
+            }}
+          />
+        </label>
+        {fileId ? (
+          <ProductButton type="button" variant="ghost" disabled={filesLocked} onClick={() => requestRemoveAttachment(client, kind)}>
+            제거
+          </ProductButton>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <ConsolePage
@@ -496,7 +552,7 @@ export default function ClientsList() {
           }
           actions={
             state.canManage ? (
-              <ProductButton type="button" className="button button-primary" disabled={otherClientReceipt || Boolean(pendingAttachment)} onClick={() => openDraft({ ...EMPTY_DRAFT })}>
+              <ProductButton type="button" className="button button-primary" disabled={writeLocked} onClick={() => openDraft({ ...EMPTY_DRAFT })}>
                 고객사 등록
               </ProductButton>
             ) : undefined
@@ -512,7 +568,7 @@ export default function ClientsList() {
             <ConsoleFeedback kind="warning">{pendingAttachment.client.name}의 {pendingAttachment.kind === "logo" ? "로고" : "사업자등록증"} {uploading ? "파일을 처리하고 있습니다." : "처리가 끝나지 않았습니다. 이 화면을 떠나면 파일은 다시 선택해야 합니다."}</ConsoleFeedback>
             <p>
               <ProductButton type="button" className="button button-secondary" disabled={uploading !== null} onClick={() => { if (pendingAttachmentRef.current) void runAttachment(pendingAttachmentRef.current); }}>같은 파일 요청 다시 확인</ProductButton>{" "}
-              <ProductButton type="button" className="button button-secondary" disabled={uploading !== null} onClick={() => setAbandonAttachment(true)}>파일 확인 그만두기</ProductButton>
+              <ProductButton type="button" variant="ghost" disabled={uploading !== null} onClick={() => setAbandonAttachment(true)}>파일 확인 그만두기</ProductButton>
             </p>
             {abandonAttachment ? <ConsoleConfirm
               summary="파일이 이미 서버에 저장되었거나 고객사에 연결되었을 수 있습니다. 확인을 그만둘까요?"
@@ -536,19 +592,11 @@ export default function ClientsList() {
         </>
       }
     >
-      <ConsoleSection headingId="client-list-heading" title="고객사 목록" surface="plain" width="full">
-        <p className="participant-count" role="status">
+      <ConsoleSection headingId="client-list-heading" title="고객사 목록" surface="plain" width="full" className={styles.listSection}>
+        <p className={`participant-count ${styles.count}`} role="status">
           {clientSearch
             ? `검색 결과 ${visibleClients.length}개 / 전체 ${state.clients.length}개`
             : `전체 ${state.clients.length}개`}
-          {clientSearch ? (
-            <>
-              {" "}
-              <ProductButton type="button" className="button button-secondary" onClick={() => setClientQuery("")}>
-                검색 지우기
-              </ProductButton>
-            </>
-          ) : null}
         </p>
         {!state.clients.length ? (
           <div className={consoleUiStyles.empty}>
@@ -559,145 +607,98 @@ export default function ClientsList() {
           <div className={consoleUiStyles.empty}>
             <h3>조건에 맞는 고객사가 없습니다.</h3>
             <p>검색어를 바꾸거나 다른 이름·담당자·이메일로 찾아보세요.</p>
-            <p>
-              <ProductButton type="button" className="button button-secondary" onClick={() => setClientQuery("")}>
-                검색 지우기
-              </ProductButton>
-            </p>
           </div>
         ) : (
-          <ul className={consoleUiStyles.collection} aria-label="고객사 목록">
+          <ul className={styles.clientList} aria-label="고객사 목록">
             {visibleClients.map((client) => (
-              <li className={`${consoleUiStyles.recordRow} ${styles.clientRow}`} key={client.id}>
-                <div className={`${consoleUiStyles.recordMain} ${styles.clientMain}`}>
-                  <h3>{client.name}</h3>
+              <li className={styles.clientRow} key={client.id}>
+                <span className={styles.clientAvatar} aria-hidden="true">
                   {client.logoFileId ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      className="client-logo"
                       src={`/api/clients/${encodeURIComponent(client.id)}/files/${encodeURIComponent(client.logoFileId)}`}
-                      alt={`${client.name} 로고`}
+                      alt=""
                     />
-                  ) : null}
-                  {/* Document presence is independent of contact display: a
-                      client with only a business-license file still gets the
-                      문서 보기 link. File permission stays server-side. */}
-                  {client.contact || client.email || client.docFileId ? (
-                    <dl className="client-meta">
-                      {client.contact ? (
-                        <div>
-                          <dt>담당자</dt>
-                          <dd>{client.contact}</dd>
-                        </div>
-                      ) : null}
-                      {client.email ? (
-                        <div>
-                          <dt>이메일</dt>
-                          <dd>{client.email}</dd>
-                        </div>
-                      ) : null}
-                      {client.docFileId ? (
-                        <div>
-                          <dt>사업자등록증</dt>
-                          <dd>
-                            <a href={`/api/clients/${encodeURIComponent(client.id)}/files/${encodeURIComponent(client.docFileId)}`}>
-                              문서 보기
-                            </a>
-                          </dd>
-                        </div>
-                      ) : null}
-                    </dl>
-                  ) : null}
-                </div>
-                {state.canManage ? (
-                  <div className={`${consoleUiStyles.recordActions} ${styles.clientActions}`}>
-                    <div className={styles.clientInfoGroup} role="group" aria-label={`${client.name} 정보 관리`}>
-                    <ProductButton
-                      type="button"
-                      className="button button-secondary"
-                      disabled={otherClientReceipt || Boolean(pendingAttachment)}
-                      onClick={() => {
-                        openDraft({ id: client.id, name: client.name, contact: client.contact, email: client.email });
-                      }}
-                    >
-                      정보 수정
-                    </ProductButton>
-                    </div>
-                    <details className={styles.attachmentTools}>
-                      <summary>파일 관리</summary>
-                      <div className={styles.attachmentPanel}>
-                    <div className={styles.clientFileGroup} role="group" aria-label={`${client.name} 로고 관리`}>
-                    <label className="button button-secondary">
-                      {uploading === `${client.id}:logo` ? "올리는 중…" : client.logoFileId ? "로고 교체" : "로고 등록"}
-                      <input
-                        type="file"
-                        className="sr-only"
-                        accept="image/jpeg,image/png,image/webp"
-                        disabled={uploading !== null || Boolean(pendingAttachment) || otherClientReceipt}
-                        onChange={(event) => {
-                          const file = event.target.files?.[0];
-                          if (file) void uploadAttachment(client, "logo", file);
-                          event.target.value = "";
-                        }}
-                      />
-                    </label>
-                    {client.logoFileId ? (
-                      <ProductButton type="button" className="button button-secondary" disabled={Boolean(pendingAttachment) || otherClientReceipt} onClick={() => requestRemoveAttachment(client, "logo")}>
-                        로고 제거
-                      </ProductButton>
-                    ) : null}
-                    </div>
-                    <div className={styles.clientFileGroup} role="group" aria-label={`${client.name} 사업자등록증 관리`}>
-                    <label className="button button-secondary">
-                      {uploading === `${client.id}:doc` ? "올리는 중…" : client.docFileId ? "서류 교체" : "사업자등록증 등록"}
-                      <input
-                        type="file"
-                        className="sr-only"
-                        accept="application/pdf"
-                        disabled={uploading !== null || Boolean(pendingAttachment) || otherClientReceipt}
-                        onChange={(event) => {
-                          const file = event.target.files?.[0];
-                          if (file) void uploadAttachment(client, "doc", file);
-                          event.target.value = "";
-                        }}
-                      />
-                    </label>
-                    {client.docFileId ? (
-                      <ProductButton type="button" className="button button-secondary" disabled={Boolean(pendingAttachment) || otherClientReceipt} onClick={() => requestRemoveAttachment(client, "doc")}>
-                        서류 제거
-                      </ProductButton>
-                    ) : null}
-                    </div>
-                      </div>
-                    </details>
-                    {removePending?.id === client.id ? (
-                      <ConsoleConfirm
-                        summary={confirmLines(removeSummary(client, removePending.kind))}
-                        confirmLabel="제거한다"
-                        onConfirm={() => {
-                          const pending = removePending;
-                          setRemovePending(null);
-                          void executeRemoveAttachment(client, pending.kind);
-                        }}
-                        onCancel={() => setRemovePending(null)}
-                      />
-                    ) : null}
-                  </div>
-                ) : null}
+                  ) : (
+                    [...client.name.trim()][0] ?? "·"
+                  )}
+                </span>
+                <h3 className={styles.clientName}>
+                  {/* The name button's ::after covers the row, so the whole row is
+                      one entry into the detail drawer without nesting controls. */}
+                  <button
+                    type="button"
+                    className={styles.clientOpen}
+                    disabled={state.canManage && writeLocked}
+                    onClick={() => {
+                      if (state.canManage) openDraft({ id: client.id, name: client.name, contact: client.contact, email: client.email });
+                      else setViewing(client);
+                    }}
+                  >
+                    {client.name}
+                  </button>
+                </h3>
+                <p className={styles.clientContact}>
+                  {client.contact || client.email ? (
+                    <>
+                      <span>{client.contact || client.email}</span>
+                      {client.contact && client.email ? <small>{client.email}</small> : null}
+                    </>
+                  ) : <span className={styles.clientNone}>담당자 없음</span>}
+                </p>
+                <p className={styles.clientFiles}>
+                  <span data-state={client.logoFileId ? "yes" : "no"}>
+                    로고<span className="sr-only"> {client.logoFileId ? "등록됨" : "없음"}</span>
+                  </span>
+                  <span data-state={client.docFileId ? "yes" : "no"}>
+                    사업자등록증<span className="sr-only"> {client.docFileId ? "등록됨" : "없음"}</span>
+                  </span>
+                </p>
+                <span className={styles.clientArrow} aria-hidden="true">
+                  <svg viewBox="0 0 20 20" focusable="false">
+                    <path d="M7 4l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </span>
               </li>
             ))}
           </ul>
         )}
       </ConsoleSection>
+      {viewing && !state.canManage ? (
+        <ConsoleDialog
+          title={viewing.name}
+          presentation="drawer"
+          onClose={() => setViewing(null)}
+          footer={
+            <ConsoleFormActions>
+              <ProductButton type="button" variant="ghost" onClick={() => setViewing(null)}>닫기</ProductButton>
+            </ConsoleFormActions>
+          }
+        >
+          <dl className={styles.viewFacts}>
+            <div><dt>담당자</dt><dd>{viewing.contact || "—"}</dd></div>
+            <div><dt>이메일</dt><dd>{viewing.email || "—"}</dd></div>
+            <div>
+              <dt>사업자등록증</dt>
+              <dd>
+                {viewing.docFileId ? (
+                  <a href={`/api/clients/${encodeURIComponent(viewing.id)}/files/${encodeURIComponent(viewing.docFileId)}`}>문서 보기</a>
+                ) : "등록 안 됨"}
+              </dd>
+            </div>
+          </dl>
+        </ConsoleDialog>
+      ) : null}
       {draft && state.canManage ? (
         <ConsoleDialog
           title={draft.id ? "고객사 정보 수정" : "고객사 등록"}
+          presentation="drawer"
           onClose={closeDraft}
           busy={saving || checkingClient}
           canClose={canCloseClientDialog}
           footer={
             <ConsoleFormActions>
-              <ProductButton type="button" className="button button-secondary" onClick={() => { if (canCloseClientDialog()) closeDraft(); }} disabled={saving || checkingClient}>
+              <ProductButton type="button" variant="ghost" onClick={() => { if (canCloseClientDialog()) closeDraft(); }} disabled={saving || checkingClient}>
                 취소
               </ProductButton>
               {clientUncertain ? <ProductButton type="button" className="button button-secondary" disabled={saving || checkingClient} onClick={() => void checkClientResult()}>{checkingClient ? "확인 중…" : "서버 처리 확인"}</ProductButton> : null}
@@ -753,6 +754,29 @@ export default function ClientsList() {
             </div>
             {formError && !formError.field ? <ConsoleFeedback kind="error">{formError.message}</ConsoleFeedback> : null}
           </ValidatedForm>
+          {draftClient ? (
+            <section className={styles.fileSection} aria-labelledby="client-files-heading">
+              <h3 id="client-files-heading" className={styles.fileHeading}>파일</h3>
+              {fileRow(draftClient, "logo")}
+              {fileRow(draftClient, "doc")}
+              {draftDiffers && !clientUncertain ? <p className={styles.fileNote}>저장하지 않은 변경이 있습니다. 저장한 뒤 파일을 바꿀 수 있습니다.</p> : null}
+              {removePending?.id === draftClient.id ? (
+                <ConsoleConfirm
+                  summary={confirmLines(removeSummary(draftClient, removePending.kind))}
+                  confirmLabel="제거한다"
+                  onConfirm={() => {
+                    const pending = removePending;
+                    setRemovePending(null);
+                    // Results show on the page, so the drawer closes first.
+                    setDraft(null);
+                    draftBaselineRef.current = null;
+                    void executeRemoveAttachment(draftClient, pending.kind);
+                  }}
+                  onCancel={() => setRemovePending(null)}
+                />
+              ) : null}
+            </section>
+          ) : null}
         </ConsoleDialog>
       ) : null}
     </ConsolePage>

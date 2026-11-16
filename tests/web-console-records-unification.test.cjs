@@ -71,7 +71,7 @@ test('records pages share the ConsolePage frame with registry menu ids', () => {
 });
 
 test('toolbars separate filters, actions and conditional selection', () => {
-  for (const key of ['home', 'clients', 'team', 'participants', 'participantImport']) {
+  for (const key of ['home', 'clients', 'team', 'participants']) {
     assert.match(read(PAGES[key]), /ConsoleToolbar/u, `${key} uses the shared toolbar`);
   }
   // Rewards left the toolbar for summary tiles + underline tabs (oversight
@@ -107,8 +107,7 @@ test('toolbars separate filters, actions and conditional selection', () => {
   assert.match(clients, /고객사명·담당자·이메일 검색/u);
   assert.doesNotMatch(clients, /selection=\{/u, 'clients has no selection row');
   const wizard = read(PAGES.participantImport);
-  assert.match(wizard, /filters=\{/u, 'import column mapping filters in the toolbar');
-  assert.match(wizard, /actions=\{/u);
+  assert.match(wizard, /styles\.mapChips/u, 'import column match is a line of chips that change in place');
 });
 
 test('dialogs use the shared shell with busy gating and dirty dismissal', () => {
@@ -226,14 +225,15 @@ test('draft guards register before early returns with workspace-owned dirty', ()
 });
 
 test('records use shared body patterns and keep domain specifics', () => {
-  for (const rel of [PAGES.clients, PAGES.team, PAGES.participantImport]) {
-    assert.match(read(rel), /recordRow/u, `${rel} renders shared record rows`);
-  }
+  assert.match(read(PAGES.team), /teamStyles\.personRow/u, 'team renders its own flat people rows (tests/web-team-composition.test.cjs)');
+  // Import lists its sample as its own flat rows (tests/web-import-composition.test.cjs).
+  assert.match(read(PAGES.participantImport), /styles\.sampleList/u, 'import renders its own flat sample rows');
+  // Clients are a flat list of their own (tests/web-clients-composition.test.cjs).
+  assert.match(read(PAGES.clients), /styles\.clientRow/u, 'clients render their own flat rows');
   assert.match(read(PAGES.rewards), /styles\.rowSummary/u, 'rewards render their own flat ledger rows');
-  assert.match(read(PAGES.clients), /<h3>\{client\.name\}<\/h3>/u, 'client names keep their heading level');
+  assert.match(read(PAGES.clients), /<h3 className=\{styles\.clientName\}>/u, 'client names keep their heading level');
   assert.match(read(PAGES.team), /headingId="pending-invites" title="대기 중인 초대"/u);
   assert.match(read(PAGES.team), /headingId="team-members" title="구성원"/u);
-  assert.match(read(PAGES.participantImport), /surface="panel"/u, 'import steps read as panels');
   assert.match(read(PAGES.participants), /surface="plain"[\s\S]{0,120}width="full"/u, 'roster stays a full-width plain list');
   // B workbench uses native columns with permission-gated headers/cells,
   // rather than preserving the old grid's fixed track strings.
@@ -368,12 +368,12 @@ test('import flags over-limit fields instead of cutting them', () => {
   for (const message of ['이름이 60자를 초과합니다', '이메일이 120자를 초과합니다', '소속이 200자를 초과합니다']) {
     assert.match(wizard, new RegExp(message), `row-numbered error: ${message}`);
   }
-  // Review shows what will actually apply: a 5-row sample of final values
+  // Review shows what will actually apply: a 3-person sample of final values
   // (name/normalized phone/email/company), never all 1000 rows, plus the
   // real apply count on the commit button.
   assert.match(wizard, /적용될 값 미리보기/u);
-  assert.match(wizard, /preview\.valid\.slice\(0, 5\)/u);
-  assert.match(wizard, /유효 \$\{preview\.valid\.length\}행 반영/u);
+  assert.match(wizard, /preview\.valid\.slice\(0, 3\)/u);
+  assert.match(wizard, /\$\{preview\?\.valid\.length \?\? 0\}명 등록/u);
 });
 
 test('team activity maps raw command keys to concise Korean labels', () => {

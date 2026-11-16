@@ -227,7 +227,7 @@ test('root pages keep title-only identity and preserve primary task actions', ()
   assert.match(clients, /<ConsolePage\b[^>]*pageId="clients"/su);
   assert.match(clients, /<ConsoleToolbar\b/u);
   assert.match(clients, /state\.canManage \? \([\s\S]*?className="button button-primary"[\s\S]*?고객사 등록/u);
-  assert.match(clients, /<h3>\{client\.name\}<\/h3>/u);
+  assert.match(clients, /<h3 className=\{styles\.clientName\}>/u);
   assert.doesNotMatch(clientsRoute, /<h1>|console-page-header/u, 'the route does not duplicate the workspace title');
 
   const team = read(rootTargets[2]);
