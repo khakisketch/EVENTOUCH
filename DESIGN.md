@@ -430,3 +430,13 @@ The owner approved this composition on 2026-11-16 (`apps/web/app/console/events/
 - A row is its name as the one button (its hit area covers the row, so its accessible name still contains its visible text), a quiet type line, a 필수/선택 dot and two icon-only move buttons. Exclusion no longer repeats on every row: it is "이 항목 제외" inside the editor, with its confirm directly under the editor. 이름 and 연락처 stay required and cannot be excluded.
 - One orange at a time: "항목 추가" while idle, "항목 저장" while editing (add is blocked then); the preview's button is grey. The draft state is one pill ("게시 안 된 변경 있음", "아직 게시 전", "게시된 양식과 같음"); publishing stays in 참가 접수. The input type is a choice group, not a select.
 - Moves stay one step at a time and every save, move and exclusion is its own command, as before. The same-request recovery, conflict notice, receipt check and abandon flow, and their copy, are unchanged.
+
+## 참여하기 확정 구성
+
+The owner approved this composition on 2026-11-16 (`apps/web/app/event/[slug]/engage/`, mockup `engage-options.html`, option B "행사 색 위의 탭과 카드"). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-engage-composition.test.cjs` guards it.
+
+- The page sits on the event's own home color (`pageExperience.published.homeStyle.backgroundColor`, the same source as the attendee home) with the readable ink (`readableInk`) for the header; program cards stay white so they read on any ground.
+- Programs are grouped by kind (투표, 퀴즈, 만족도, Q&A, 사진 공유, 게시판, 추첨) under pill tabs shown only for kinds the event has and only when there is more than one. An unfinished poll, quiz or survey is an orange dot on its tab. A `?program=` link opens the tab of that program. Within a tab the first program is open and the others stay collapsed, as before.
+- A program's state is a chip in its header (참여 가능 blue, 제출 완료 green, 제출 확인 필요 amber, 종료 grey). Choices are hairline rows with the radio on the text line (the card's label rule used to stack it above the text); score choices turn ink when picked; the submit is the one orange. The one-time notice is a dark line and clears when the tab changes.
+- A voted poll shows the counts it already publishes as bars with its own choice marked (the choice is known only in the session that voted); the counts before voting are shown as before.
+- Submit, same-request recovery, content-version conflict, receipt check, question edit and like, photo upload and the approval-pending note are unchanged. The footer links are quiet text links.

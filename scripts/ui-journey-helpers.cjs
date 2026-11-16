@@ -1,8 +1,24 @@
 'use strict';
 
 // User-visible transitions for the persistent task and program panels.
+// Programs sit under kind tabs on the attendee screen: switch to the tab that
+// holds the program before looking for it.
+async function revealProgram(page, section) {
+  if (await section.first().isVisible().catch(() => false)) return;
+  const tabs = page.getByRole('navigation', { name: '참여 종류' }).getByRole('button');
+  const count = await tabs.count();
+  for (let index = 0; index < count && !(await section.first().isVisible().catch(() => false)); index += 1) await tabs.nth(index).click();
+}
+
+async function programSection(page, title) {
+  const section = page.locator('section').filter({ has: page.getByRole('heading', { name: title, exact: true }) });
+  await revealProgram(page, section);
+  return section;
+}
+
 async function openProgram(page, title) {
   const section = page.locator(':is(section,[role=region])[aria-labelledby^="engage-"]').filter({ has: page.getByRole('heading', { name: title, exact: true }) });
+  await revealProgram(page, section);
   await section.waitFor();
   const details = section.locator(':scope > details');
   if (!await details.evaluate(el => el.open)) await details.locator(':scope > summary').click();
@@ -51,4 +67,4 @@ async function waitForDialogExitFocus(page, trigger, timeout = 5000) {
   await page.getByRole('dialog').waitFor({ state: 'hidden', timeout });
   await page.waitForFunction(element => element === document.activeElement, await trigger.elementHandle(), { polling: 'raf', timeout });
 }
-module.exports = { openProgram, selectTask, openCreateSettings, openSettingsBasics, chooseRadio, messageStep, waitForDialogExitFocus };
+module.exports = { openProgram, programSection, selectTask, openCreateSettings, openSettingsBasics, chooseRadio, messageStep, waitForDialogExitFocus };

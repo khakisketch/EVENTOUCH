@@ -83,6 +83,15 @@
         ],
         "createdAt": "2026-11-15T19:26:12.276Z",
         "reason": "시안 파일의 평면 행(.p)은 하단 구분선만 있는 의도된 hairline 목록(min-height 60-64px)이고, 칩(.chip, .map)은 32px 높이에 좌우 12px 여백의 컴팩트 라벨임. 색을 입힌 카드와 요약 영역은 14-24px 안쪽 여백이 있음"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/engage-options.html"
+        ],
+        "createdAt": "2026-11-16T04:03:22.121Z",
+        "reason": "Rows set their height with min-height and center their content; the detector reads the horizontal-only padding as flush."
       }
     ]
   }

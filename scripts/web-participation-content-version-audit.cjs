@@ -1,4 +1,5 @@
 'use strict';
+const { programSection } = require('./ui-journey-helpers.cjs');
 // Actual command path and isolated synthetic PostgreSQL; never sends SMS.
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
@@ -42,8 +43,9 @@ async function main() {
     };
     const open = async (page, title) => {
       await page.goto(`${f.baseUrl}/event/${f.slug}/engage`, { waitUntil: 'networkidle' });
-      await page.getByRole('heading', { name: title, exact: true }).waitFor();
-      const section = page.locator('section').filter({ has: page.getByRole('heading', { name: title, exact: true }) });
+      await programSection(page, title);
+    await page.getByRole('heading', { name: title, exact: true }).waitFor();
+      const section = (await programSection(page, title));
       const details = section.locator('details').first();
       if (!(await details.evaluate((node) => node.open))) await details.locator('summary').click();
       return section;
@@ -87,7 +89,7 @@ async function main() {
     }
     await section.getByRole('button', { name: '최신 내용으로 답변 검토' }).click();
     assert.equal((await workspace()).responses.filter((item) => item.moduleId === id).length, 0, 'review never submits');
-    section = page.locator('section').filter({ has: page.getByRole('heading', { name: '합성 질문: 오후가 편한가요?', exact: true }) });
+    section = (await programSection(page, '합성 질문: 오후가 편한가요?'));
     await section.getByRole('button', { name: '투표하기' }).click();
     await section.getByText('이미 제출했습니다.', { exact: false }).waitFor();
     const accepted = (await workspace()).responses.filter((item) => item.moduleId === id);
@@ -117,11 +119,12 @@ async function main() {
     ({ context, page } = await guest(people[2]));
     section = await open(page, '합성 이전 질문'); await section.getByLabel(/^예/).check();
     await editPoll(pollId, '합성 변경 질문');
-    const quizSection = page.locator('section').filter({ has: page.getByRole('heading', { name: '합성 별도 퀴즈', exact: true }) });
+    const quizSection = (await programSection(page, '합성 별도 퀴즈'));
     const quizDetails = quizSection.locator('details').first(); if (!(await quizDetails.evaluate((node) => node.open))) await quizDetails.locator('summary').click();
     await quizSection.getByLabel('내 답안').fill('정답'); await quizSection.getByRole('button', { name: '답안 제출' }).click();
+    await programSection(page, '합성 변경 질문');
     await page.getByRole('heading', { name: '합성 변경 질문', exact: true }).waitFor();
-    const changedSection = page.locator('section').filter({ has: page.getByRole('heading', { name: '합성 변경 질문', exact: true }) });
+    const changedSection = (await programSection(page, '합성 변경 질문'));
     const changedDetails = changedSection.locator('details').first(); if (!(await changedDetails.evaluate((node) => node.open))) await changedDetails.locator('summary').click();
     await changedSection.getByRole('heading', { name: '참여 내용이 변경됐습니다' }).waitFor();
     assert.equal(await changedSection.getByLabel(/^예/).isChecked(), true);
@@ -141,7 +144,7 @@ async function main() {
     await section.getByRole('button', { name: '투표하기' }).click();
     await section.getByRole('button', { name: '최신 내용 확인', exact: true }).click();
     await section.getByRole('button', { name: '최신 내용으로 답변 검토' }).click();
-    section = page.locator('section').filter({ has: page.getByRole('heading', { name: '합성 선택지 변경', exact: true }) });
+    section = (await programSection(page, '합성 선택지 변경'));
     await section.getByText('이전에 고른 ‘예’ 선택지가 없습니다.', { exact: false }).waitFor();
     assert.equal(await section.getByRole('button', { name: '투표하기' }).isDisabled(), true);
     await section.getByLabel(/^다른 선택/).check(); await section.getByRole('button', { name: '투표하기' }).click();
@@ -161,7 +164,7 @@ async function main() {
     await section.getByRole('button', { name: '만족도 제출' }).click();
     await section.getByRole('button', { name: '최신 내용 확인', exact: true }).click();
     await section.getByRole('button', { name: '최신 내용으로 답변 검토' }).click();
-    section = page.locator('section').filter({ has: page.getByRole('heading', { name: '합성 설문 변경', exact: true }) });
+    section = (await programSection(page, '합성 설문 변경'));
     await section.getByText('운영 만족: 2점', { exact: true }).waitFor();
     assert.equal(await section.getByLabel('의견 · 선택').inputValue(), '유지할 합성 의견');
     assert.equal(await section.getByRole('group', { name: '전반 만족' }).getByLabel('4점').isChecked(), true);
@@ -193,7 +196,7 @@ async function main() {
     await section.getByRole('button', { name: '이전 답변 복사' }).click();
     await section.getByRole('status').filter({ hasText: /복사|선택/ }).waitFor();
     await section.getByRole('button', { name: '최신 콘텐츠 보기' }).click();
-    section = page.locator('section').filter({ has: page.getByRole('heading', { name: '합성 새 질문 공간', exact: true }) });
+    section = (await programSection(page, '합성 새 질문 공간'));
     assert.equal(await section.getByLabel('이전에 작성한 답변').inputValue(), '선택: 예');
     await page.screenshot({ path: path.join(out, 'type-change-preserved-390.png'), fullPage: true });
     const beforeNavigation = page.url();
@@ -219,12 +222,13 @@ async function main() {
     ({ context, page } = await guest(people[7]));
     section = await open(page, '합성 자동 갱신 이전 유형'); await section.getByLabel(/^예/).check();
     assert.equal((await manager('module.save', { id: autoTypeId, type: 'qa', title: '합성 자동 갱신 새 유형' })).status, 200);
-    const existingQuiz = page.locator('section').filter({ has: page.getByRole('heading', { name: '합성 별도 퀴즈', exact: true }) });
+    const existingQuiz = (await programSection(page, '합성 별도 퀴즈'));
     const existingQuizDetails = existingQuiz.locator('details').first();
     if (!(await existingQuizDetails.evaluate((node) => node.open))) await existingQuizDetails.locator('summary').click();
     await existingQuiz.getByLabel('내 답안').fill('정답'); await existingQuiz.getByRole('button', { name: '답안 제출' }).click();
+    await programSection(page, '합성 자동 갱신 새 유형');
     await page.getByRole('heading', { name: '합성 자동 갱신 새 유형', exact: true }).waitFor();
-    section = page.locator('section').filter({ has: page.getByRole('heading', { name: '합성 자동 갱신 새 유형', exact: true }) });
+    section = (await programSection(page, '합성 자동 갱신 새 유형'));
     const autoDetails = section.locator('details').first(); if (!(await autoDetails.evaluate((node) => node.open))) await autoDetails.locator('summary').click();
     await section.getByRole('heading', { name: '참여 내용이 변경됐습니다' }).waitFor();
     assert.equal(await section.getByLabel('이전에 작성한 답변').inputValue(), '선택: 예');

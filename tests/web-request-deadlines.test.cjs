@@ -169,6 +169,8 @@ function engageReadWorld(fetch) {
     ticketStorageAvailable: () => true, getAllowedTicketForTab: () => '', readStoredTicket: () => '', isTicketRejected: () => false,
     clearSessionForTab() {}, clearTicketRejected() {}, storeTicket: () => true, markTicketRejected() {}, clearStoredTicket() {}, allowSessionForTab() {},
     REJECTED_TICKET_BEARER: 'rejected', state: { kind: 'loading' },
+    // The page reads the event's home color for its ground; the deadline tests do not care which.
+    normalizeHomeStyle: () => ({ backgroundColor: '#B9DEF0' }),
     questionTexts: { module: 'keep my unsent draft' },
   });
   stateSetters(world.sandbox, ['state', 'questionTexts']);
