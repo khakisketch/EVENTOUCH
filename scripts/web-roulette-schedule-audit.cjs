@@ -1,6 +1,7 @@
 'use strict';
 // Synthetic, isolated browser + API journey; no real participant or prizes.
 const assert = require('node:assert/strict');
+const { selectDrawStage } = require('./ui-journey-helpers.cjs');
 const crypto = require('node:crypto');
 const path = require('node:path');
 const { source: axeSource } = require('axe-core');
@@ -31,7 +32,7 @@ async function main() {
     await operator.addCookies([{...cookieForContext(fixture,'manager'),url:fixture.baseUrl}]);
     const page = await operator.newPage();
     const openSetup = async p => {
-      await p.getByRole('tab',{name:'모바일 룰렛',exact:true}).click();
+      await selectDrawStage(p, '모바일 룰렛');
       const details = p.locator('details').filter({hasText:'룰렛 운영 설정'});
       if (!await details.evaluate(el=>el.open)) await details.locator('summary').click();
     };

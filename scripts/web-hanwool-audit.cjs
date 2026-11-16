@@ -1,5 +1,11 @@
 'use strict';
-const { messageStep } = require('./ui-journey-helpers.cjs');
+const { messageStep, selectDrawStage } = require('./ui-journey-helpers.cjs');
+// The roulette settings sit in a collapsed disclosure of the roulette card.
+async function openRouletteSettings(page) {
+  await selectDrawStage(page, '모바일 룰렛');
+  const settings = page.locator('details').filter({ hasText: '룰렛 운영 설정' });
+  if (!await settings.evaluate((el) => el.open)) await settings.locator('summary').click();
+}
 
 const { chooseRadio } = require('./ui-journey-helpers.cjs');
 
@@ -221,7 +227,7 @@ async function main() {
 
     phase = 'UI teams, exact ballot and lucky preassignment';
     await operator.goto(`${gateway.baseUrl}/console/events/${eventId}/draws`, { waitUntil: 'networkidle' });
-    await operator.getByRole('tab', { name: '순위 투표', exact: true }).click();
+    await selectDrawStage(operator, '순위 투표');
     // Setup sections render collapsed; expand them so the existing setup
     // controls stay drivable without changing what the audit asserts.
     await operator.evaluate(() => { document.querySelectorAll('details:not([open])').forEach((el) => { el.open = true; }); });
@@ -230,10 +236,13 @@ async function main() {
       await clickCommand(operator, operator.getByRole('button', { name: '팀 등록', exact: true }), 'team.save');
     }
     await operator.locator('#vote-pick-count').fill('5');
-    await operator.getByRole('tab', { name: '순위 투표', exact: true }).click();
+    await selectDrawStage(operator, '순위 투표');
     await operator.locator('#vote-status').selectOption('CLOSED');
     await clickCommand(operator, operator.getByRole('button', { name: '투표 설정 저장', exact: true }), 'vote.config.save');
-    await operator.getByRole('tab', { name: '럭키번호', exact: true }).click();
+    await selectDrawStage(operator, '럭키번호');
+    // The range settings sit in a collapsed disclosure of the lucky-number card.
+    const luckyRange = operator.locator('details').filter({ hasText: '럭키번호 범위 설정' });
+    if (!await luckyRange.evaluate((el) => el.open)) await luckyRange.locator('summary').click();
     await operator.locator('#lucky-min').fill('1'); await operator.locator('#lucky-max').fill('900');
     await clickCommand(operator, operator.getByRole('button', { name: '번호 범위 저장', exact: true }), 'lucky.config.save-reviewed');
     await operator.getByRole('checkbox', { name: /승인 참가자 전체 8명 선택/ }).check();
@@ -265,11 +274,11 @@ async function main() {
     assert.equal(entry.origin, gateway.baseUrl); assert.equal(entry.searchParams.get('ticket'), people[0].ticket);
     const mobile = await newPage(await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'no-preference' }));
     await mobile.goto(entry.href, { waitUntil: 'networkidle' });
-    await mobile.getByRole('button', { name: '모바일 티켓', exact: true }).waitFor();
+    await mobile.getByRole('button', { name: /^모바일 티켓/ }).waitFor();
     assert.equal(new URL(mobile.url()).searchParams.has('ticket'), false);
     assert.equal(await mobile.evaluate((token) => Object.values(localStorage).some((value) => value.includes(token)), people[0].ticket), false);
     await mobile.screenshot({ path: path.join(captures, 'home-390.png'), fullPage: true });
-    await mobile.getByRole('button', { name: '모바일 티켓', exact: true }).click();
+    await mobile.getByRole('button', { name: /^모바일 티켓/ }).click();
     const decodedTicket = await decodeRenderedTicket(mobile);
     assert.equal(decodedTicket, people[0].ticket);
 
@@ -286,7 +295,7 @@ async function main() {
     await mobile.getByRole('button', { name: '순위 투표', exact: true }).click();
     await operator.goto(`${gateway.baseUrl}/console/events/${eventId}/draws`, { waitUntil: 'networkidle' });
     await operator.evaluate(() => { document.querySelectorAll('details:not([open])').forEach((el) => { el.open = true; }); });
-    await operator.getByRole('tab', { name: '순위 투표', exact: true }).click();
+    await selectDrawStage(operator, '순위 투표');
     await operator.locator('#vote-status').selectOption('OPEN');
     await clickCommand(operator, operator.getByRole('button', { name: '투표 설정 저장', exact: true }), 'vote.config.save');
     const choice = (index) => mobile.getByRole('button', { name: `검증팀 ${String(index).padStart(2, '0')} 선택`, exact: true });
@@ -304,7 +313,7 @@ async function main() {
     const teams = [...workspace.teams].sort((a, b) => a.order - b.order);
     const additional = [[1, 2, 3, 6, 7], [1, 2, 3, 8, 9], [1, 2, 4, 10, 11], [1, 3, 12, 13, 14], [1, 2, 5, 15, 16]];
     for (let index = 0; index < additional.length; index += 1) await command('vote.ranked', { picks: additional[index].map((number) => ({ teamId: teams[number - 1].id })) }, { cookie: null, bearer: people[index + 1].ticket });
-    await operator.getByRole('tab', { name: '순위 투표', exact: true }).click();
+    await selectDrawStage(operator, '순위 투표');
     await operator.locator('#vote-status').selectOption('CLOSED');
     await operator.getByRole('checkbox', { name: '참가자에게 집계 결과 공개', exact: true }).check();
     await clickCommand(operator, operator.getByRole('button', { name: '투표 설정 저장', exact: true }), 'vote.config.save');
@@ -320,7 +329,7 @@ async function main() {
 
     phase = 'independent mobile roulette and persisted entitlement';
     const spinControl = mobile.getByRole('button', { name: /^START/ });
-    await operator.getByRole('tab', { name: '모바일 룰렛', exact: true }).click();
+    await openRouletteSettings(operator);
     await operator.locator('#roulette-status').selectOption('CLOSED');
     await operator.getByLabel('경품 이름', { exact: true }).first().fill('검증 기념품 A');
     await operator.getByLabel('유한 재고 수량', { exact: true }).first().fill('4');
@@ -331,7 +340,7 @@ async function main() {
     await mobile.getByRole('button', { name: '참가 메뉴', exact: true }).click();
     await mobile.getByRole('button', { name: '룰렛 이벤트', exact: true }).click();
     assert.equal(await spinControl.count(), 0);
-    await operator.getByRole('tab', { name: '모바일 룰렛', exact: true }).click();
+    await openRouletteSettings(operator);
     await operator.locator('#roulette-status').selectOption('OPEN');
     await clickCommandConfirm(operator, operator.getByRole('button', { name: '룰렛 설정 저장', exact: true }), '룰렛 운영 시작', 'roulette.config.save-reviewed');
     await spinControl.waitFor();
@@ -362,7 +371,7 @@ async function main() {
     await reduced.getByRole('status').filter({ hasText: '내 당첨 경품' }).waitFor();
     assert.ok(Date.now() - reducedAt < 2000, 'reduced motion must not wait for the 3.4-second wheel reveal');
     workspace = await read(); assert.equal(workspace.rouletteResults.length, 2);
-    await operator.getByRole('tab', { name: '모바일 룰렛', exact: true }).click();
+    await openRouletteSettings(operator);
     await operator.locator('#roulette-status').selectOption('CLOSED');
     await clickCommand(operator, operator.getByRole('button', { name: '룰렛 설정 저장', exact: true }), 'roulette.config.save-reviewed');
     await mobile.reload({ waitUntil: 'networkidle' }); await mobile.getByText(spin.label, { exact: true }).first().waitFor();
@@ -428,8 +437,8 @@ async function main() {
     const companyModule = await createModule('업체 검증 무대');
     await operator.goto(`${gateway.baseUrl}/console/events/${eventId}/draws`, { waitUntil: 'networkidle' });
     async function createProgram(name, module, eligibility, quota, tier) {
-      await operator.evaluate(() => { document.querySelectorAll('details:not([open])').forEach((el) => { el.open = true; }); });
-      await operator.getByRole('tab', { name: '무대 추첨', exact: true }).click();
+      // Programs are created in a dialog opened from 추첨 프로그램 만들기 (there is no 무대 추첨 tab).
+      await operator.getByRole('button', { name: '추첨 프로그램 만들기', exact: true }).click();
       await operator.locator('#draws-program-name').fill(name); await operator.locator('#draws-program-quota').fill(String(quota));
       await operator.locator('#draws-program-module').selectOption(module.id); await chooseRadio(operator, 'draws-program-eligibility', eligibility);
       await chooseRadio(operator, 'draws-program-overlap', 'PROGRAM');
@@ -437,7 +446,9 @@ async function main() {
       await operator.getByLabel('등급 1 이름', { exact: true }).fill(tier); await operator.getByLabel('당첨 인원', { exact: true }).fill(String(quota));
       await clickCommand(operator, operator.getByRole('button', { name: '추첨 만들기', exact: true }), 'draw.program.save');
       const program = (await read()).drawPrograms.find((item) => item.name === name);
-      const card = () => operator.locator('li').filter({ has: operator.getByText(name, { exact: true }) }).first();
+      // The program's detail card shows once its row in the stage list ("무대 선택") is selected.
+      await operator.getByRole('button', { name: new RegExp(`^${name}`) }).click();
+      const card = () => operator.locator(`section[id="draw-program-${program.id}"]`);
       await clickCommandConfirm(operator, card().getByRole('button', { name: '운영 시작', exact: true }), '시작한다', 'draw.program.save');
       return { program, card };
     }
@@ -514,8 +525,10 @@ async function main() {
     assert.equal(JSON.stringify(staffBoot.json).includes(people[0].ticket), false);
     await staff.screenshot({ path: path.join(captures, 'staff-received-390.png'), fullPage: true });
     await staff.reload({ waitUntil: 'networkidle' }); await staff.locator('#staff-desk').selectOption(outDesk.id);
+    // The ticket lookup lives in the 경품 확인·수령 sheet, opened from the bottom action bar.
+    await staff.getByRole('button', { name: '경품 조회', exact: true }).click();
     await staff.locator('#reward-lookup-ticket').fill(decodedTicket);
-    await clickCommand(staff, staff.getByRole('button', { name: '경품 조회', exact: true }), 'reward.lookup');
+    await clickCommand(staff, staff.getByRole('dialog').getByRole('button', { name: '경품 조회', exact: true }), 'reward.lookup');
     assert.equal(await staff.getByRole('region', { name: '경품 확인 및 수령', exact: true }).getByRole('button', { name: '수령 확인', exact: true }).count(), 0);
     phase = 'real-content accessibility and overflow';
     for (const [name, page] of [['operator', operator], ['staff', staff], ['mobile', mobile], ['reduced-motion', reduced], ['narrow-320', narrow], ['stage', stage]]) {

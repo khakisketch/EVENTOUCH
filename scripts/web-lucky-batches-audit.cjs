@@ -1,6 +1,7 @@
 'use strict';
 // Synthetic 5001-person fixture; each request uses the actual command path.
 const assert=require('node:assert/strict');
+const { selectDrawStage } = require('./ui-journey-helpers.cjs');
 const crypto=require('node:crypto');
 const fs=require('node:fs');
 const path=require('node:path');
@@ -26,7 +27,7 @@ async function main(){
   const denied=await cmd('lucky.preassign-range-reviewed',{participantIds:[conflicted.id],expectedRange:{min:1,max:5001}});assert.equal(denied.status,409);assert.equal(denied.json.code,'LUCKY_TARGET_CHANGED');
   browser=await launchBrowser();const ctx=await browser.newContext({viewport:{width:1280,height:900},locale:'ko-KR'});await ctx.addCookies([{...cookieForContext(f,'manager'),url:f.baseUrl}]);page=await ctx.newPage();
   page.on('dialog',dialog=>dialog.accept());
-  const open=async()=>{await page.goto(`${f.baseUrl}/console/events/${f.eventId}/draws`);await page.getByRole('tab',{name:'럭키번호',exact:true}).click();const d=page.locator('details').filter({hasText:'럭키번호 범위 설정'});if(!await d.evaluate(el=>el.open))await d.locator('summary').click();};
+  const open=async()=>{await page.goto(`${f.baseUrl}/console/events/${f.eventId}/draws`);await selectDrawStage(page, '럭키번호');const d=page.locator('details').filter({hasText:'럭키번호 범위 설정'});if(!await d.evaluate(el=>el.open))await d.locator('summary').click();};
   const begin=async()=>{await page.getByRole('checkbox',{name:/승인 참가자 전체 5001명 선택/}).check();await page.getByRole('button',{name:'5001명 번호 일괄 배정',exact:true}).click();await page.getByText(/최대 5,000명씩 순차 처리/).last().waitFor();await page.getByRole('button',{name:'번호 배정',exact:true}).click();};
   await open();await page.getByText(/기록 1건은 배정에서 제외/).waitFor();await page.getByText(/최대 5,000명씩 순차 처리/).waitFor();
   await page.screenshot({path:path.join(out,'ready-1280.png'),fullPage:true});
@@ -101,7 +102,7 @@ async function main(){
   await reset();await open();requests=[];let firstLoss=true;
   const reloadLoss=async r=>{const body=r.request().postDataJSON();if(body?.command!=='lucky.preassign-range-reviewed')return r.continue();requests.push({id:body.commandId,size:body.payload.participantIds.length});if(firstLoss){firstLoss=false;await r.fetch();return r.abort('failed')}return r.continue();};
   await page.route('**/commands',reloadLoss);await begin();recovery=page.getByRole('region',{name:'추첨·투표 처리 확인 필요'});await recovery.waitFor();assert.equal((await read()).luckyNumbers.length,5000);
-  await page.reload();await page.getByRole('tab',{name:'럭키번호',exact:true}).click();const shared=page.getByRole('region',{name:'처리 결과 확인'});await shared.getByText('럭키번호 배정',{exact:true}).waitFor();
+  await page.reload();await selectDrawStage(page, '럭키번호');const shared=page.getByRole('region',{name:'처리 결과 확인'});await shared.getByText('럭키번호 배정',{exact:true}).waitFor();
   await shared.getByRole('button',{name:'서버 처리 확인'}).click();
   await page.getByRole('checkbox',{name:/승인 참가자 전체 5001명 선택/}).check();await page.getByRole('button',{name:'1명 번호 일괄 배정',exact:true}).click();await page.getByRole('button',{name:'번호 배정',exact:true}).click();
   await page.getByText('1명의 번호 배정을 확인했습니다. 기존 번호는 유지됩니다.').waitFor();

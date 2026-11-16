@@ -67,4 +67,13 @@ async function waitForDialogExitFocus(page, trigger, timeout = 5000) {
   await page.getByRole('dialog').waitFor({ state: 'hidden', timeout });
   await page.waitForFunction(element => element === document.activeElement, await trigger.elementHandle(), { polling: 'raf', timeout });
 }
-module.exports = { openProgram, programSection, selectTask, openCreateSettings, openSettingsBasics, chooseRadio, messageStep, waitForDialogExitFocus };
+// Draws is master-detail: the stage list ("무대 선택") rows replaced the old 순위 투표 / 럭키번호 /
+// 모바일 룰렛 tabs. Pressing a row selects it; its detail card holds the same settings.
+const DRAW_STAGE_ROW = { '순위 투표': /^순위 투표/, '럭키번호': /^럭키번호 사전 배정/, '모바일 룰렛': /^모바일 룰렛/ };
+async function selectDrawStage(page, name) {
+  const row = page.getByRole('button', { name: DRAW_STAGE_ROW[name] });
+  await row.click();
+  await page.waitForFunction((el) => el.getAttribute('aria-pressed') === 'true', await row.elementHandle());
+}
+
+module.exports = { selectDrawStage, openProgram, programSection, selectTask, openCreateSettings, openSettingsBasics, chooseRadio, messageStep, waitForDialogExitFocus };
