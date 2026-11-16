@@ -33,6 +33,10 @@ test("approved operations design stays locked", () => {
   assert.match(ops, /onOpen=\{\(\) => setDetail\(/u);
   assert.match(parts, /<Switch/u, "desks run through a switch");
   assert.match(parts, /<Avatar/u, "who is on duty reads as faces");
+  // axe: faces inside the row button must not be focusable (an avatar tooltip adds tabindex),
+  // and the button's name comes from its visible text instead of an aria-label that omits it.
+  assert.match(parts, /<Avatar[^>]*tooltip=\{false\}/u, "decorative faces take no focus");
+  assert.doesNotMatch(parts, /<button[^>]*styles\.locationOpen[^>]*aria-label/u, "row name is its visible text");
   assert.match(ops, /<StatusDot tone=/u, "booths follow their schedule and show a state, never a switch");
 
   // Row actions are not a wall of buttons: nothing secondary lives in a row.

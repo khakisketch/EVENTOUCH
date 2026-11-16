@@ -13,7 +13,7 @@ export function StaffFaces({ staff }: { staff: Staffer[] }) {
   return (
     <span className={styles.faces} aria-hidden="true">
       {staff.slice(0, 3).map((person) => (
-        <Avatar key={person.assignmentId} name={person.name} size="sm" />
+        <Avatar key={person.assignmentId} name={person.name} size="sm" tooltip={false} />
       ))}
       {staff.length > 3 ? <span className={styles.facesMore}>+{staff.length - 3}</span> : null}
     </span>
@@ -38,9 +38,10 @@ type LocationRowProps = {
 export function LocationRow({ name, sub, staff, staffSummary, dim, warning, onOpen, openLabel, control }: LocationRowProps) {
   return (
     <li className={`${styles.location} ${dim ? styles.locationDim : ""}`}>
-      <button type="button" className={styles.locationOpen} onClick={onOpen} aria-label={`${openLabel} ${name}`}>
+      <button type="button" className={styles.locationOpen} onClick={onOpen}>
         <span className={styles.locationText}>
           <strong>{name}</strong>
+          <span className="sr-only">{openLabel}</span>
           <span className={styles.locationSub}>{sub}</span>
           {warning ? <span className={styles.locationWarn}>{warning}</span> : null}
           <span className="sr-only">{staffSummary}</span>
