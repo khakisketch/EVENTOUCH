@@ -14,7 +14,6 @@ const ci = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'c
 const audit = ci.slice(ci.indexOf('name: Run the browser audits serially'), ci.indexOf('name: Upload audit logs and captures on failure'));
 
 const PENDING_PORT = [
-  'web-console-audit',
 ];
 
 test('only the listed audits are allowed to fail without stopping the web job', () => {

@@ -66,7 +66,8 @@ test('console fixtures cross browser filesystems as bytes and keep real QR decod
   assert.match(audit, /--use-file-for-fake-video-capture=\$\{cameraVideo\}/u);
   assert.match(audit, /fs\.unlinkSync\(cameraVideo\)/u);
   const boundaries = fs.readFileSync(path.join(__dirname, '../scripts/web-console-boundaries.cjs'), 'utf8');
-  assert.match(boundaries, /const headingSelector = 'h2\[id\^="module-title-"\]'/u);
+  // Content rows title themselves with h3 since the confirmed programs ledger (2026-11-14).
+  assert.match(boundaries, /const headingSelector = 'h3\[id\^="module-title-"\]'/u);
   assert.match(boundaries, /const fill = 12/u);
   assert.match(boundaries, /headings\[24\]/u);
 });

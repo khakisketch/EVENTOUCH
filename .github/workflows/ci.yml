@@ -345,7 +345,7 @@ jobs:
           }
           npm run db:migrate 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/db-migrate.log"
           npm run web:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-audit.log"
-          npm run web:console:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-console-audit.log" || ci_pending "web-console-audit"
+          npm run web:console:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-console-audit.log"
           npm run web:report-data-availability:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-report-data-availability-audit.log"
           npm run web:report-live-availability:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-report-live-availability-audit.log"
           npm run web:report-cancellation-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-report-cancellation-review-audit.log"

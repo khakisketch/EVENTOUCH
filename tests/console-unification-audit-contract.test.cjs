@@ -96,13 +96,14 @@ test('console-audit-checks-phone-composition-and-real-two-tab-recovery', () => {
   for (const phase of ['phone/global-navigation', 'roles/mobile-global-navigation']) {
     assert.ok(source.includes(phase), `${phase} is exercised in the real browser`);
   }
-  assert.match(source, /cancelled leave discarded input or menu/, 'top menu cancellation preserves the editing context');
+  assert.match(source, /cancelled leave left the page or closed the menu/, 'top menu cancellation keeps the page and menu');
+  assert.match(source, /cancelled leave discarded the settings draft/, 'top menu cancellation preserves the editing context');
   assert.match(source, /outside pointer stole input focus/, 'pointer dismissal preserves the actual target');
   assert.match(source, /for \(const width of \[360, 412\]\)/);
-  assert.match(source, /first\.y > 440/, 'first task content has an independent visibility target');
-  assert.match(source, /stage filter regained card styling or lost its touch height/, 'flat query controls retain their rendered style and touch target');
+  assert.match(source, /first event starts below the first screen/, 'first task content has an independent visibility target');
+  assert.match(source, /stage filter button below 44px/, 'stage filter buttons keep their touch target');
   assert.match(source, /filter reset discarded selection/);
-  assert.match(source, /anchor heading covered by sticky rail/);
+  assert.match(source, /content panel covered by sticky rail/);
   assert.match(source, /preview status squeezed into vertical Korean/);
   assert.match(source, /const second = await context\.newPage\(\)/, 'actual second tab, not a fake conflict response');
   assert.match(source, /merged fields not persisted/, 'merge is checked against real API state');
@@ -119,8 +120,10 @@ test('console-audit-asserts-the-shared-frame-not-just-headings', () => {
   for (const marker of [
     '#console-event-directory', '#client-list-heading', '#team-members',
     '#event-metrics-heading', '#participant-import-file-heading', '#history-heading',
-    '#ops-desks', '#draws-programs', '#evidence-photo-sections', '#content-notices',
-    '#home-intro', '#rewards-list', '#set-name', '#reports-list',
+    // Confirmed screens (2026-11-14~16): draws stage card, content panel, studio save button,
+    // rewards oversight region and the reports tabs replaced the old anchors.
+    '#ops-desks', 'section[aria-label="무대"]', '#evidence-photo-sections', '#content-panel',
+    '#theme-save-draft', '경품 지급 현황', '#set-name', "name: '보고서'",
   ]) {
     assert.ok(source.includes(marker), `loaded marker kept: ${marker}`);
   }
@@ -183,7 +186,7 @@ test('console-audit-covers-centralized-writes-under-response-loss', () => {
   assert.match(source, /seenIds\[0\] !== seenIds\[1\]/);
   assert.match(source, /expected exactly one new record/);
   assert.match(source, /lost response overwrote/);
-  assert.match(source, /dialog closed on the lost response/);
+  assert.match(source, /editor closed on the lost response/);
   assert.match(source, /unexpected draft confirm after settled write/, 'settled writes guard nothing');
   for (const shot of ['writes-client-dialog-error.png', 'writes-notice-dialog-error.png', 'writes-desk-dialog-error.png']) {
     assert.ok(source.includes(shot), `error-state dialog captured: ${shot}`);
