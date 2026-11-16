@@ -293,16 +293,17 @@ async function main() {
     await measure('program-add', '프로그램 일정 추가 (날짜 비움)', async (act, task) => {
       task.screens = [`/console/events/${createdEventId}/content (#content-notices)`];
       task.fields = ['tab 프로그램 일정', '#content-program-title', '#content-program-date (blank)', '#content-program-start', '#content-program-end', 'submit 초안 저장'];
-      await go(`/console/events/${createdEventId}/content`, '#content-notices');
-      await act(() => page.getByRole('tab', { name: '프로그램 일정', exact: true }).click());
+      await go(`/console/events/${createdEventId}/content`, '#content-panel');
+      await act(() => page.getByRole('tab', { name: /^일정/ }).click());
       await act(() => page.getByRole('button', { name: '일정 추가', exact: true }).click());
       await page.locator('#content-program-title').waitFor({ state: 'visible', timeout: 10000 });
       await act(() => page.locator('#content-program-title').fill(PROGRAM_TITLE));
       await act(() => page.locator('#content-program-start').fill(PROGRAM_START));
       await act(() => page.locator('#content-program-end').fill(PROGRAM_END));
       assert.equal(await page.locator('#content-program-date').inputValue(), '', 'program date must stay blank (event date fallback)');
-      await act(() => page.getByRole('dialog').getByRole('button', { name: '초안 저장', exact: true }).click());
-      await page.getByRole('heading', { name: PROGRAM_TITLE, exact: true }).first().waitFor({ timeout: 15000 });
+      await act(() => page.getByRole('button', { name: '초안 저장', exact: true }).click());
+      // The editor is an inline panel now; its title carries a spoken prefix, so wait on the saved text.
+      await page.getByText(PROGRAM_TITLE).first().waitFor({ timeout: 15000 });
       const state = await readBootstrap(helpers, harness.baseUrl, ownerCookie);
       const program = (state.workspaces[createdEventId].program || []).find((item) => item.title === PROGRAM_TITLE);
       assert.ok(program, 'program missing from workspace.program');
@@ -317,15 +318,15 @@ async function main() {
     await measure('notice-publish', '공지 작성·게시', async (act, task) => {
       task.screens = [`/console/events/${createdEventId}/content (#content-notices)`];
       task.fields = ['#content-notice-title', '#content-notice-body', '게시 검토 → 게시하기', 'submit 초안 저장'];
-      await go(`/console/events/${createdEventId}/content`, '#content-notices');
+      await go(`/console/events/${createdEventId}/content`, '#content-panel');
       await act(() => page.getByRole('button', { name: '공지 작성', exact: true }).click());
       await page.locator('#content-notice-title').waitFor({ state: 'visible', timeout: 10000 });
       await act(() => page.locator('#content-notice-title').fill(NOTICE_TITLE));
       await act(() => page.locator('#content-notice-body').fill(NOTICE_BODY));
-      await act(() => page.getByRole('dialog').getByRole('button', { name: '초안 저장', exact: true }).click());
-      await page.getByRole('heading', { name: NOTICE_TITLE, exact: true }).first().waitFor({ timeout: 15000 });
-      const row = page.locator('li').filter({ has: page.getByRole('heading', { name: NOTICE_TITLE, exact: true }) }).last();
-      await act(() => row.getByRole('button', { name: '게시 검토', exact: true }).click());
+      await act(() => page.getByRole('button', { name: '초안 저장', exact: true }).click());
+      await page.getByText(NOTICE_TITLE).first().waitFor({ timeout: 15000 });
+      // The editor stays open on the saved notice, so its 게시 검토 is the one to press.
+      await act(() => page.getByRole('button', { name: '게시 검토', exact: true }).click());
       await act(() => page.getByRole('dialog', { name: '공지 게시 검토', exact: true }).getByRole('button', { name: '게시하기', exact: true }).click());
       await page.getByRole('dialog').waitFor({ state: 'hidden' });
       const state = await readBootstrap(helpers, harness.baseUrl, ownerCookie);
@@ -340,7 +341,9 @@ async function main() {
     await measure('intake-publish', '동의 안내 입력·양식 게시·접수 열기', async (act, task) => {
       task.screens = [`/console/events/${createdEventId}/settings (참가 접수 구역)`];
       task.fields = ['참가 접수 구역', '#set-consent', 'button 양식 게시·접수 열기'];
-      await go(`/console/events/${createdEventId}/settings`, '#set-name');
+      // Consent and publishing sit on the settings board itself; waiting on #set-name would open the
+      // basics drawer, which covers the board.
+      await go(`/console/events/${createdEventId}/settings`, '#set-consent');
       publishedBefore = (await readBootstrap(helpers, harness.baseUrl, ownerCookie))
         .workspaces[createdEventId].publishedVersion;
       await act(() => page.locator('#set-consent').fill(CONSENT_TEXT));
@@ -362,9 +365,10 @@ async function main() {
     await measure('intake-close', '접수 닫기', async (act, task) => {
       task.screens = [`/console/events/${createdEventId}/settings (참가 접수 구역)`];
       task.fields = ['참가 접수 구역', 'button 접수 닫기'];
-      await go(`/console/events/${createdEventId}/settings`, '#set-name');
+      await go(`/console/events/${createdEventId}/settings`, '#set-consent');
       await act(() => page.getByRole('button', { name: '접수 닫기', exact: true }).click());
-      await act(() => page.getByRole('dialog').getByRole('button', { name: '접수 닫기', exact: true }).click());
+      // The confirmation is an inline "실행 확인" group, not a dialog.
+      await act(() => page.getByRole('group', { name: '실행 확인', exact: true }).getByRole('button', { name: '접수 닫기', exact: true }).click());
       await page.getByText('접수 닫힘', { exact: false }).first().waitFor({ timeout: 15000 });
       const workspace = (await readBootstrap(helpers, harness.baseUrl, ownerCookie)).workspaces[createdEventId];
       assert.equal(workspace.registrationOpen, false);
@@ -483,10 +487,10 @@ async function main() {
 
     // ---- Task 10: owner on-site reward fulfil ----
     await measure('reward-fulfill', '현장 경품 수령 처리 (owner)', async (act, task) => {
-      task.screens = [`/console/events/${fixture.eventId}/rewards (#rewards-list)`];
+      task.screens = [`/console/events/${fixture.eventId}/rewards (경품 목록)`];
       task.fields = ['button 수령 처리', 'group 실행 확인 button 처리한다'];
-      await go(`/console/events/${fixture.eventId}/rewards`, '#rewards-list');
-      const row = page.locator('ul[aria-label="경품 목록"] li').filter({ hasText: REWARD_NAME }).first();
+      await go(`/console/events/${fixture.eventId}/rewards`, 'ul[aria-label^="경품 목록"]');
+      const row = page.locator('ul[aria-label^="경품 목록"] li').filter({ hasText: REWARD_NAME }).first();
       await row.getByRole('button', { name: '수령 처리', exact: true }).waitFor({ timeout: 10000 });
       await act(() => row.getByRole('button', { name: '수령 처리', exact: true }).click());
       await row.getByRole('group', { name: '실행 확인' }).waitFor({ timeout: 10000 });
@@ -494,7 +498,7 @@ async function main() {
       await act(() => row.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '처리한다', exact: true }).click());
       await submitted;
       await page.getByText('경품 처리를 확인하고 최신 목록을 불러왔습니다.', { exact: true }).first().waitFor({ timeout: 15000 });
-      await row.getByText('수령 완료', { exact: false }).waitFor({ timeout: 15000 });
+      await row.getByText('수령 완료', { exact: false }).first().waitFor({ timeout: 15000 });
       const state = await readBootstrap(helpers, harness.baseUrl, ownerCookie);
       const done = (state.workspaces[fixture.eventId].rewards || [])
         .find((row2) => row2 && String(row2.id) === String(journeyReward.id));
@@ -519,13 +523,14 @@ async function main() {
     await measure('stage-end', '종료(으)로 전환 (LIVE -> ENDED)', async (act, task) => {
       task.screens = [`/console/events/${fixture.eventId}/settings (진행 단계 구역)`];
       task.fields = ['진행 단계 구역', 'button 종료(으)로 전환', 'group 단계 전환 확인 / button aria 정말 전환합니다 · 종료 단계로'];
-      await go(`/console/events/${fixture.eventId}/settings`, '#set-name');
-      await page.getByRole('button', { name: '종료(으)로 전환', exact: true }).waitFor({ timeout: 10000 });
-      await act(() => page.getByRole('button', { name: '종료(으)로 전환', exact: true }).click());
+      // The stage action reads "<다음 단계> 단계로 전환"; wait on the stage section, not #set-name (that opens the basics drawer).
+      await go(`/console/events/${fixture.eventId}/settings`, '#settings-stage');
+      await page.getByRole('button', { name: '종료 단계로 전환', exact: true }).waitFor({ timeout: 10000 });
+      await act(() => page.getByRole('button', { name: '종료 단계로 전환', exact: true }).click());
       await page.getByRole('group', { name: '단계 전환 확인' }).waitFor({ timeout: 10000 });
       const endConfirm = page.getByRole('button', { name: /^(?:정말 전환합니다 · 종료 단계로|정말 종료 단계로 전환합니다)$/ });
       await act(async () => ((await endConfirm.count() ? endConfirm : page.getByRole('group', { name: '단계 전환 확인' }).getByRole('button', { name: '정말 전환합니다', exact: true })).click()));
-      await page.getByText(/종료\(으\)로 전환했습니다/, { exact: false }).first().waitFor({ timeout: 15000 });
+      await page.getByText(/종료 단계로 전환했습니다/, { exact: false }).first().waitFor({ timeout: 15000 });
       const state = await readBootstrap(helpers, harness.baseUrl, ownerCookie);
       const stage = String((state.events || []).find((item) => item.id === fixture.eventId).stage).toUpperCase();
       assert.equal(stage, 'ENDED');
@@ -538,14 +543,14 @@ async function main() {
     await measure('stage-archive', '보관(으)로 전환 (ENDED -> ARCHIVED)', async (act, task) => {
       task.screens = [`/console/events/${fixture.eventId}/settings (진행 단계 구역)`];
       task.fields = ['진행 단계 구역', 'button 보관(으)로 전환', 'group 단계 전환 확인 / button aria 정말 보관합니다 · 보관 단계로'];
-      await go(`/console/events/${fixture.eventId}/settings`, '#set-name');
+      await go(`/console/events/${fixture.eventId}/settings`, '#settings-stage');
       task.serverNote = 'section scroll counted as 1 step; no collapsed summary remains. ';
-      await page.getByRole('button', { name: '보관(으)로 전환', exact: true }).waitFor({ timeout: 10000 });
-      await act(() => page.getByRole('button', { name: '보관(으)로 전환', exact: true }).click());
+      await page.getByRole('button', { name: '보관 단계로 전환', exact: true }).waitFor({ timeout: 10000 });
+      await act(() => page.getByRole('button', { name: '보관 단계로 전환', exact: true }).click());
       await page.getByRole('group', { name: '단계 전환 확인' }).waitFor({ timeout: 10000 });
       const archiveConfirm = page.getByRole('button', { name: /^(?:정말 전환합니다 · 보관 단계로|정말 보관 단계로 전환합니다)$/ });
       await act(async () => ((await archiveConfirm.count() ? archiveConfirm : page.getByRole('group', { name: '단계 전환 확인' }).getByRole('button', { name: '정말 전환합니다', exact: true })).click()));
-      await page.getByText(/보관\(으\)로 전환했습니다/, { exact: false }).first().waitFor({ timeout: 15000 });
+      await page.getByText(/보관 단계로 전환했습니다/, { exact: false }).first().waitFor({ timeout: 15000 });
       const state = await readBootstrap(helpers, harness.baseUrl, ownerCookie);
       const seed = (state.events || []).find((item) => item.id === fixture.eventId);
       assert.equal(String(seed.stage).toUpperCase(), 'ARCHIVED');
