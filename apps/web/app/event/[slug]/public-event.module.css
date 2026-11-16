@@ -1,5 +1,5 @@
 .introLine {
-  margin: var(--s2) 0 0;
+  margin: var(--s2) 0 var(--s5);
   max-width: var(--web-reading-max, 68ch);
   color: var(--muted);
 }
@@ -29,6 +29,25 @@
   border-radius: var(--radius);
 }
 
+/* Facts read as plain lines under the title, not as boxes. */
+.facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s3);
+  margin-bottom: var(--s5);
+}
+
+.facts :global(.event-fact) {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.facts :global(.event-fact) dd {
+  font-size: var(--h3);
+}
+
 .cta {
   display: flex;
   align-items: stretch;
@@ -54,9 +73,30 @@
   flex: 1 1 auto;
 }
 
+/* Closed intake is information with a way forward, not a dead end: the
+   find-my-ticket link below becomes the one primary action. */
 .registrationClosed {
   margin: 0;
+  padding: var(--s4);
+  border-radius: 16px;
+  background: var(--surface-muted);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.cta :global(.button) {
+  min-height: 56px;
+  border-radius: 16px;
+  font-size: var(--body);
+}
+
+.cta .recoveryLink:not(:global(.button-primary)),
+.cta .homeLink {
+  border-color: transparent;
+  background: transparent;
   color: var(--muted);
+  min-height: 48px;
+  font-size: var(--small);
 }
 
 /* Recovery guidance that shares the CTA row: the same device-binding rule is
@@ -65,10 +105,9 @@
    splits the primary from the way-back links. */
 .recoveryNote {
   margin: 0;
-  padding: var(--s3) var(--s4);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-medium);
-  background: var(--paper);
+  padding: var(--s4);
+  border-radius: 16px;
+  background: var(--surface-muted);
   color: var(--ink);
   font-size: var(--small);
   font-weight: 700;

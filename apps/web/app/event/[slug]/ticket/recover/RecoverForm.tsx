@@ -144,7 +144,7 @@ export default function RecoverForm({ slug }: { slug: string }) {
   }
 
   return (
-    <div className="recover-flow">
+    <div className={`recover-flow ${ticketStyles.recover}`}>
       <p className="recover-lead" role="status">
         {sent
           ? "2. 문자로 받은 인증번호를 입력해 주세요."

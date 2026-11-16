@@ -217,7 +217,7 @@ export default async function EventPage({
         ) : null}
         <h1 className={styles.eventTitle}>{event.name}</h1>
         <p className={styles.introLine}>{intro}</p>
-        <dl className="event-facts">
+        <dl className={`event-facts ${styles.facts}`}>
           {showSchedule ? (
           <div className="event-fact">
             <dt>일정</dt>
@@ -254,7 +254,7 @@ export default async function EventPage({
             <p className={styles.recoveryNote} role="note">이미 신청했다면 신청을 완료한 브라우저 탭에서 티켓을 여세요. 이 행사는 문자로 다시 연결할 수 없습니다. {recoveryContact ? `문의: ${recoveryContact}` : "탭을 찾을 수 없다면 행사 초대 안내를 확인하거나 행사 주최 측에 문의하세요."}</p>
           ) : (
             <Link
-              className={`button button-secondary ${styles.recoveryLink}`}
+              className={`button ${acceptingSignup ? "button-secondary" : "button-primary"} ${styles.recoveryLink}`}
               href={`/event/${encodeURIComponent(slug)}/ticket/recover`}
             >
               이미 신청했다면 내 티켓 찾기

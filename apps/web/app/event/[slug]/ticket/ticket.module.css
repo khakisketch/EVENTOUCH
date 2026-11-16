@@ -27,7 +27,7 @@
 .ticketCard {
   max-width: var(--web-ticket-max);
   margin: 0 auto;
-  padding: var(--s5) 0;
+  padding: var(--s3) 0 var(--s5);
   background: var(--paper);
 }
 
@@ -47,16 +47,16 @@
   overflow-wrap: anywhere;
 }
 
+/* The receipt is a one-time toast, not part of the pass below it. */
 .ticketSuccess {
-  margin: 0 0 var(--s5);
+  margin: 0 0 var(--s3);
   padding: var(--s3) var(--s4);
-  border: 1px solid var(--success-line);
-  border-radius: var(--radius-medium);
-  background: var(--success-soft);
-  color: var(--success);
+  border-radius: 14px;
+  background: var(--ink);
+  color: #fff;
   font-size: var(--small);
   font-weight: 650;
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 .ticketHeading {
@@ -75,65 +75,101 @@
   font-variant-numeric: tabular-nums;
 }
 
-.ticketHeading p,
-.ticketAttendee p {
+.ticketHeading p {
   margin: 0;
   color: var(--muted);
   font-size: var(--small);
   overflow-wrap: anywhere;
 }
 
-.ticketHeading .ticketEventName {
-  color: var(--ink);
-  font-size: var(--h3);
-  font-weight: 650;
-  line-height: 1.45;
-  letter-spacing: 0.01em;
-  word-break: keep-all;
+/* The pass band: state first, then the name at its largest. Its tone is the
+   state, so a glance across the desk reads confirmed, waiting or cancelled. */
+.ticketBand {
+  display: grid;
+  gap: var(--s1);
+  padding: var(--s4) var(--s4) var(--s4);
+  border-radius: 20px;
+  background: var(--success-soft);
 }
 
-.ticketAttendee {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+.ticketBand[data-tone="wait"] { background: var(--warning-soft); }
+.ticketBand[data-tone="bad"] { background: var(--danger-soft); }
+.ticketBand[data-tone="in"] { background: var(--info-soft); }
+
+.ticketBandTop {
+  display: flex;
   align-items: center;
-  gap: var(--s1) var(--s3);
-  margin-bottom: var(--s4);
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.ticketBandTop h1 {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 650;
 }
 
 .ticketAttendeeName {
-  grid-column: 1;
   margin: 0;
-  font-size: var(--h2);
-  font-weight: 750;
-  line-height: 1.35;
-  letter-spacing: -0.02em;
+  font-size: clamp(30px, 10vw, 40px);
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.04em;
   word-break: keep-all;
   overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
 }
 
-.ticketAttendee > p:not(.ticketEntryState) {
-  grid-column: 1;
+.ticketCompany {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--body);
+  overflow-wrap: anywhere;
+}
+
+.ticketEvent {
+  display: grid;
+  gap: 2px;
+  margin: var(--s4) 0 var(--s5);
+  text-align: center;
+}
+
+.ticketEvent p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.ticketEvent .ticketEventName {
+  color: var(--ink);
+  font-size: var(--body);
+  font-weight: 700;
+  word-break: keep-all;
 }
 
 .ticketEntryState {
   display: inline-flex;
   align-items: center;
-  min-height: 36px;
+  gap: var(--s2);
+  min-height: 32px;
   max-width: 100%;
-  padding: var(--s2) var(--s3);
+  margin: 0;
+  padding: 0 var(--s3);
   border-radius: 999px;
   font-size: var(--small);
-  font-weight: 650;
+  font-weight: 750;
   line-height: 1.4;
   text-align: center;
   word-break: keep-all;
 }
 
-.ticketAttendee .ticketEntryState {
-  grid-column: 2;
-  grid-row: 1 / 3;
-  margin: 0;
+.ticketEntryState::before {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
 }
 
 .ticketEntryState[data-tone="good"] {
@@ -141,9 +177,14 @@
   color: var(--success);
 }
 
+.ticketEntryState[data-tone="in"] {
+  background: var(--info-soft);
+  color: var(--info);
+}
+
 .ticketEntryState[data-tone="wait"] {
-  background: var(--brand-tint);
-  color: var(--brand-text);
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 
 .ticketEntryState[data-tone="bad"] {
@@ -151,26 +192,35 @@
   color: var(--danger);
 }
 
+/* On the band the chip would repeat the band's own color: keep it quiet. */
+.ticketBand .ticketEntryState {
+  background: transparent;
+  padding: 0;
+  min-height: 0;
+  justify-content: flex-end;
+}
+
 .ticketQrWrapper {
-  margin-bottom: var(--s5);
-  padding-top: var(--s4);
-  border-top: 1px solid var(--line);
+  margin-top: var(--s4);
   text-align: center;
 }
 
 /* Preserve the pure-white four-module quiet zone and existing code size. */
 .ticketQr {
-  display: inline-block;
-  max-width: 100%;
+  display: block;
+  width: min(100%, 340px);
+  margin-inline: auto;
   padding: var(--s5);
+  border: 1px solid var(--line);
+  border-radius: 20px;
   background: var(--paper);
   user-select: none;
   line-height: 0;
 }
 
 .ticketQr svg {
-  width: 220px !important;
-  height: 220px !important;
+  width: 100% !important;
+  height: auto !important;
 }
 
 .ticketInstruction {
@@ -179,6 +229,12 @@
   color: var(--muted);
   font-size: var(--small);
   line-height: 1.6;
+}
+
+.ticketBrightness {
+  margin: var(--s1) 0 0;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .ticketActions {
@@ -193,6 +249,9 @@
   max-width: 100%;
   min-height: 48px;
   padding-inline: var(--s2);
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
   text-align: center;
 }
 
@@ -253,12 +312,12 @@
   align-items: center;
   justify-content: center;
   gap: var(--s2);
-  min-height: 44px;
+  min-height: 48px;
   padding: var(--s2) var(--s4);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-medium);
+  border-radius: 16px;
   font-size: var(--small);
-  font-weight: 650;
+  font-weight: 700;
   text-decoration: none;
 }
 
@@ -326,8 +385,9 @@
 
 .ticketMessageActions .buttonPrimary,
 .ticketMessageActions .buttonSecondary {
-  min-height: 48px;
+  min-height: 56px;
   max-width: 100%;
+  font-size: var(--body);
 }
 
 .ticketMessageActions .recoverPrimary {
@@ -382,23 +442,6 @@
     padding-block: var(--s4);
   }
 
-  .ticketQr svg {
-    width: 180px !important;
-    height: 180px !important;
-  }
-}
-
-@media (max-width: 360px) {
-  .ticketAttendee {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--s2);
-  }
-
-  .ticketAttendee .ticketEntryState {
-    grid-column: 1;
-    grid-row: auto;
-    justify-self: start;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -406,3 +449,64 @@
     scroll-behavior: auto;
   }
 }
+
+/* Quiet way back to the attendee menu: the page's job is the pass. */
+.returnLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding-inline: var(--s2);
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+/* Finding a ticket again is the door-side failure path: one large field, one
+   primary action, the rest quiet. */
+.recover {
+  display: grid;
+  gap: var(--s4);
+}
+
+.recover :global(.form-field) {
+  display: grid;
+  gap: var(--s2);
+}
+
+.recover :global(.form-field) label {
+  font-size: var(--small);
+  font-weight: 700;
+}
+
+.recover input {
+  min-height: 56px;
+  padding-inline: var(--s4);
+  border-color: var(--line-strong);
+  border-radius: 14px;
+  font-size: var(--h3);
+}
+
+.recover input[aria-invalid="true"] {
+  border: 2px solid var(--danger);
+}
+
+.recover input[autocomplete="one-time-code"] {
+  letter-spacing: 0.3em;
+  font-variant-numeric: tabular-nums;
+}
+
+.recover :global(.button) {
+  min-height: 56px;
+  border-radius: 16px;
+  font-size: var(--body);
+}
+
+.recover :global(.button-secondary) {
+  min-height: 48px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--small);
+}
+
