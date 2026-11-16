@@ -52,23 +52,19 @@ test('all four audits honor the caller capture root', () => {
   }
 });
 
-test('card audit tests the current white row, not the retired A2 tint', () => {
+test('card audit tests the current flat-row directory, not the retired card paint or A2 tint', () => {
   const card = read('scripts/web-event-card-a2-audit.cjs');
-  // Current directory-row example: published color stays in the 8px identity
-  // dot, while drafts never leak into card paint.
-  assert.match(card, /::before/, 'card audit reads the identity dot pseudo-element');
-  assert.match(card, /identity dot/, 'card audit names the current visual contract');
-  assert.match(card, /FLAT_WHITE/, 'card audit pins the flat white zone');
-  assert.match(card, /SOFT_DOT/, 'card audit pins the unpublished dot fallback');
-  assert.match(card, /unsaved draft never moves the published dot/, 'card audit keeps the published-only/no-draft-leak check on the dot');
+  // The directory is the confirmed flat-row list: no per-card paint, identity dot or entry zone to pin.
+  // Its layout is covered by web-console-events-composition and the redesign smoke audit.
+  assert.doesNotMatch(card, /FLAT_WHITE|SOFT_DOT|NAVY_DOT/, 'retired card-paint tokens are gone');
   assert.doesNotMatch(card, /tints the header/, 'retired A2 full-header expectation is gone');
   assert.doesNotMatch(card, /readZone/, 'retired zone-tint reader is gone');
-  assert.match(card, /RETIRED A2 reference \(historical only\)/, 'old A2 reference is marked historical, not authoritative');
+  assert.match(card, /no per-event duplicate button/, 'the directory still offers no per-row duplicate');
+  assert.match(card, /pending row keeps a direct approval link/, 'card keeps the pending-approval proof');
   // Behavioral coverage is untouched by the presentation update.
   assert.match(card, /lost response retried with the identical command id/, 'card keeps the ambiguous-loss idempotence proof');
   assert.match(card, /delayed duplicate still saves exactly one event/, 'card keeps the in-flight lock proof');
   assert.match(card, /keyboard Enter opens the event home/, 'card keeps the keyboard proof');
-  assert.match(card, /direct approval link/, 'card keeps the pending-approval proof');
 });
 test('isolation keeps existing evidence and secrecy guards', () => {
   const importSrc = read('scripts/web-import-audit.cjs');

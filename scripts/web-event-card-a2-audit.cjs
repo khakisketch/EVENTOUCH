@@ -160,7 +160,9 @@ async function main() {
     // One pending approval on the fixture event so its card must carry the
     // direct approval link: import an approved row, then move it back to
     // PENDING through the real operator status path.
-    const pendingEvent = f.eventId;
+    // The running event shows as the page's one live card (no row action), so the pending approval
+    // goes on a regular row.
+    const pendingEvent = `cards-navy-${f.suffix}`;
     const imported = await run(pendingEvent, ownerCookie, 'participant.import', {
       rows: [{ name: '대기 참가자', phone: '01099998888', company: '대기 업체' }],
     });
@@ -206,6 +208,12 @@ async function main() {
       await page.goto(`${f.baseUrl}/console`, { waitUntil: 'networkidle' });
       await page.locator('#console-event-directory').waitFor();
       check(`console directory ready at ${width}px`, true);
+      // A row with pending approvals keeps one direct link to that queue, at a touch-sized target.
+      const approval = page.getByRole('link', { name: /승인 대기 \d+명 처리/ }).first();
+      check(`pending row keeps a direct approval link at ${width}px`, (await approval.count()) === 1);
+      check(`approval link targets the PENDING queue at ${width}px`, ((await approval.getAttribute('href')) || '').includes('participants?status=PENDING'));
+      const approvalBox = await approval.boundingBox();
+      check(`approval link keeps a 44px target at ${width}px`, Boolean(approvalBox) && approvalBox.height >= 44, JSON.stringify(approvalBox));
       check(`no per-event duplicate button at ${width}px`, (await page.getByRole('button', { name: '복제', exact: true }).count()) === 0);
       for (const [, name] of seed) {
         check(`seeded event "${name.slice(0, 12)}" is listed at ${width}px`, (await page.getByText(name.slice(0, 12), { exact: false }).count()) >= 1);
