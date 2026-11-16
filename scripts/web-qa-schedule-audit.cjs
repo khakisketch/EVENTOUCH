@@ -72,8 +72,9 @@ const snapshot = async (page, name) => {
     assert.equal(await manager.getByRole('link', { name: '발송 확인', exact: true }).count(), 1);
     await manager.goto(`${f.baseUrl}/console/events/${f.eventId}/programs`, { waitUntil: 'networkidle' });
     await manager.getByRole('heading', { name: '질문 검증' }).waitFor();
-    await manager.getByText('진행·응답 관리', { exact: true }).click();
-    await manager.locator(`#moderation-question-${mine.id}`).waitFor();
+    // Moderation sits in the review drawer behind the one doorway.
+    await manager.getByRole('button', { name: /^검토할 것/ }).click();
+    await manager.locator(`#review-question-${mine.id}`).waitFor();
     await snapshot(manager, 'operator-before-edit');
     await manager.goto(`${f.baseUrl}/console/events/${f.eventId}/messages`, { waitUntil: 'networkidle' });
     await manager.getByText(/발송 연결 ·/).first().click();
@@ -98,10 +99,12 @@ const snapshot = async (page, name) => {
     catch (error) { await snapshot(guest, 'edit-failure'); console.log('edit failure text:', (await guest.locator('main').innerText()).slice(-2500)); throw error; }
 
     await manager.goto(`${f.baseUrl}/console/events/${f.eventId}/programs`, { waitUntil: 'networkidle' });
-    await manager.getByText('진행·응답 관리', { exact: true }).click();
-    const manageRow = manager.locator(`#moderation-question-${mine.id}`);
-    await manageRow.getByLabel('답변', { exact: true }).fill('유지할 답변');
-    await manageRow.getByRole('button', { name: '승인·공개' }).click();
+    // Moderation sits in the review drawer behind the one doorway.
+    await manager.getByRole('button', { name: /^검토할 것/ }).click();
+    const reviewRow = manager.locator(`#review-question-${mine.id}`);
+    await reviewRow.getByRole('button').first().click();
+    await reviewRow.getByLabel(/질문에 답변$/).fill('유지할 답변');
+    await reviewRow.getByRole('button', { name: '답변하고 공개' }).click();
     await manager.getByText('답변을 저장하고 질문을 공개했습니다.').waitFor();
     await guest.reload({ waitUntil: 'networkidle' });
     const approvedRow = guest.locator('li').filter({ hasText: '승인 전 수정 질문' }).last();
@@ -131,6 +134,11 @@ const snapshot = async (page, name) => {
     await guest.getByText(/수정안 승인 대기: 공개 후 수정안/).waitFor();
     assert.deepEqual(guestAttempts[0], guestAttempts[1]);
     assert.deepEqual(guestAttempts[0], guestAttempts[2]);
+    // A pending edit is reviewed on the content's own row; the drawer's 수정안 확인 hands it over.
+    const openEditReview = async () => {
+      await manager.getByRole('button', { name: /^검토할 것/ }).click();
+      await manager.locator(`#review-question-${mine.id}`).getByRole('button', { name: '수정안 확인' }).click();
+    };
     const publicBefore = await f.helpers.requestJson(f.harness.baseUrl, `/api/public/events/${f.slug}`);
     const publicQuestion = publicBefore.json.workspace.questions.find(q => q.id === mine.id);
     assert.equal(publicQuestion.text, '승인 전 수정 질문');
@@ -138,7 +146,7 @@ const snapshot = async (page, name) => {
     assert.equal('pendingEdit' in publicQuestion, false);
 
     await manager.reload({ waitUntil: 'networkidle' });
-    await manager.getByRole('button', { name: '질문 수정안 1건 검토' }).click();
+    await openEditReview();
     await manager.getByText('수정 후: 공개 후 수정안').waitFor();
     await snapshot(manager, 'operator-pending-edit');
     for (const page of [guest, manager]) {
@@ -175,7 +183,7 @@ const snapshot = async (page, name) => {
     await acceptedRow.getByRole('button', { name: '수정안 제출' }).click();
     await guest.getByText('수정안 승인 대기: 다시 검토할 수정안').waitFor();
     await manager.reload({ waitUntil: 'networkidle' });
-    await manager.getByRole('button', { name: '질문 수정안 1건 검토' }).click();
+    await openEditReview();
     const rejectRow = manager.locator(`#moderation-question-${mine.id}`);
     await manager.waitForFunction((id) => document.activeElement?.id === `moderation-question-${id}`, mine.id);
     await rejectRow.getByText('수정안 반려', { exact: true }).focus();

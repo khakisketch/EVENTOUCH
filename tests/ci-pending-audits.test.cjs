@@ -20,18 +20,12 @@ const PENDING_PORT = [
   'web-attendee-visibility-audit',
   'web-close-audit',
   'web-console-audit',
-  'web-delivery-audit',
   'web-intake-roster-edit-audit',
   'web-message-nav-freshness-audit',
   'web-message-targeting-audit',
-  'web-participation-navigation-audit',
-  'web-publication-audit',
-  'web-publication-context-audit',
-  'web-qa-schedule-audit',
   'web-reviewed-exit-audit',
   'web-reward-cancellation-conflict-audit',
   'web-reward-recovery-audit',
-  'web-system-audit',
   'web-verification-uncertain-audit',
 ];
 

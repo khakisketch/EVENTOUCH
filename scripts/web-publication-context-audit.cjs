@@ -37,10 +37,13 @@ async function main() {
     page.on('pageerror', error => errors.push(error.message));
     page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith('/commands')) writes.push(request.postDataJSON()); });
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}/content`, { waitUntil: 'networkidle' });
-    const row = title => page.locator('li').filter({ has: page.getByRole('heading', { name: title, exact: true }) }).last();
     const dialog = page.getByRole('dialog');
     async function openReview(title) {
-      await row(title).getByRole('button', { name: '게시 검토', exact: true }).click();
+      // Rows open the editor in place; 게시 검토 lives there. Leave any open editor first.
+      const crumb = page.locator('#content-panel').getByRole('button', { name: /^(공지|일정)$/ });
+      if (await crumb.count()) await crumb.first().click();
+      await page.locator('#content-panel li').filter({ hasText: title }).last().getByRole('button').first().click();
+      await page.getByRole('button', { name: '게시 검토', exact: true }).click();
       await dialog.getByRole('heading', { name: /게시 검토/ }).waitFor();
     }
     async function submit(kind) {
@@ -123,7 +126,7 @@ async function main() {
     await publishPage({});
     const program = (await command('program.save', { title: '합성 일정', date: '2027-01-16', start: '10:00', end: '11:00', mode: 'draft' })).program;
     await page.reload({ waitUntil: 'networkidle' });
-    await page.getByRole('tab', { name: '프로그램 일정', exact: true }).click();
+    await page.getByRole('tab', { name: /^일정/ }).click();
     await openReview('합성 일정'); await publishPage({ showPrograms: false });
     assert.equal((await submit('program')).status(), 409); await blocked();
     assert.equal((await read()).program.find(item => item.id === program.id).published, false);
@@ -135,7 +138,7 @@ async function main() {
     const venue = (await read()).venue;
     await command('venue.save', { name: '합성 장소', address: '합성로 1', mode: 'draft', expectedVersion: venue.version || 0 });
     await page.reload({ waitUntil: 'networkidle' });
-    await page.getByRole('tab', { name: '장소 안내', exact: true }).click();
+    await page.getByRole('tab', { name: /^장소 안내/ }).click();
     await page.getByRole('button', { name: '게시 검토', exact: true }).click();
     await dialog.getByRole('heading', { name: '장소 안내 게시 검토' }).waitFor();
     await publishPage({ showVenue: false });
@@ -151,7 +154,7 @@ async function main() {
     const venueBeforeFeatureChange = (await read()).venue;
     await command('venue.save', { name: '합성 장소 변경', address: '합성로 2', mode: 'draft', expectedVersion: venueBeforeFeatureChange.version });
     await page.reload({ waitUntil: 'networkidle' });
-    await page.getByRole('tab', { name: '장소 안내', exact: true }).click();
+    await page.getByRole('tab', { name: /^장소 안내/ }).click();
     await page.getByRole('button', { name: '게시 검토', exact: true }).click();
     await dialog.getByRole('heading', { name: '장소 안내 게시 검토' }).waitFor();
     const event = (await f.harness.database.query('SELECT payload FROM events WHERE id=$1', [f.eventId])).rows[0].payload;
@@ -168,7 +171,7 @@ async function main() {
     await publishPage({});
     const refreshDraft = (await command('notice.save', { title: '조회 실패 공지', body: '합성 내용', mode: 'draft' })).notice;
     await page.reload({ waitUntil: 'networkidle' });
-    await page.getByRole('tab', { name: '공지', exact: true }).click();
+    await page.getByRole('tab', { name: /^공지/ }).click();
     await openReview('조회 실패 공지');
     await publishPage({ showAnnouncements: false });
     let failRefresh = true;

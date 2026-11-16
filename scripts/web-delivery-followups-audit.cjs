@@ -38,11 +38,12 @@ async function main() {
     };
     await p.goto(`${f.baseUrl}/console/events/${f.eventId}/programs`, { waitUntil: 'networkidle' });
     const card = p.locator('li').filter({ has: p.getByRole('heading', { name: '주관식 채점 검수', exact: true }) }).first();
+    // The row itself is the disclosure now; the manual-grading fold sits inside it.
     const open = async () => {
-      for (const label of ['진행·응답 관리', '결과 보기', '응답별 수동 채점 · 1건']) {
-        const summary = card.locator('summary').filter({ hasText: label }).first();
-        if (!await summary.evaluate(el => el.parentElement.open)) await summary.click();
-      }
+      const row = card.locator(':scope > details').first();
+      if (!await row.evaluate(el => el.open)) await row.locator(':scope > summary').click();
+      const grading = card.locator('summary').filter({ hasText: '응답별 수동 채점' }).first();
+      if (!await grading.evaluate(el => el.parentElement.open)) await grading.click();
     };
     await open();
     const attempts = []; p.on('request', r => { if (r.method() === 'POST' && r.url().endsWith('/commands')) { const body = r.postDataJSON(); if (body.command === 'response.grade') attempts.push(body); } });
@@ -50,9 +51,10 @@ async function main() {
     await f.gateway.waitForResponseLoss('response.grade');
     const retry = p.getByRole('button', { name: '같은 채점 다시 확인', exact: true }); await retry.waitFor();
     check('unconfirmed grading freezes all other grade actions', await card.getByRole('button', { name: '응답 1 오답 처리', exact: true }).isDisabled());
+    // The list search only appears past eight rows; with fewer there is nothing to filter the recovery away.
     const search = p.getByRole('searchbox', { name: '콘텐츠 검색', exact: true });
-    await search.fill('검색 결과 없음'); check('filtering cannot hide the unconfirmed grade recovery', await retry.isVisible());
-    await search.fill('');
+    if (await search.count()) { await search.fill('검색 결과 없음'); check('filtering cannot hide the unconfirmed grade recovery', await retry.isVisible()); await search.fill(''); }
+    else check('the unconfirmed grade recovery stays visible without a list filter', await retry.isVisible());
     const endpoint = `**/api/events/${f.eventId}/commands`; let faults = 0;
     await p.route(endpoint, async route => { if (route.request().postDataJSON()?.command !== 'response.grade') return route.continue(); faults++; await route.fulfill({ status: faults === 1 ? 429 : 200, contentType: 'application/json', body: faults === 1 ? '{"error":"잠시 후 다시 시도하세요"}' : '{}' }); });
     await retry.click();

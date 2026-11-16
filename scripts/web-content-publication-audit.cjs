@@ -6,6 +6,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { startStalledResponseProxy } = require('./stalled-response-fixture.cjs');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
+const { openStudioPanel } = require('./ui-journey-helpers.cjs');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const axeSource = require('axe-core').source;
@@ -105,10 +106,10 @@ async function checkDisplayRecovery(page, baseUrl, slug, body, out, check) {
     };
     phase = 'content list';
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}/content`, { waitUntil: 'networkidle' });
-    await page.getByRole('heading', { name: '공지', exact: true }).waitFor();
+    await page.getByRole('tab', { name: /^공지/ }).waitFor();
     await capture('01-list-1280');
-    const row = page.locator('li').filter({ has: page.getByRole('heading', { name: notice.title, exact: true }) }).last();
-    await row.getByRole('button', { name: '편집', exact: true }).click();
+    // Rows open the editor in place (no per-row buttons); the editor holds 게시 검토 and 게시 내리기.
+    await page.locator('#content-panel li').filter({ hasText: notice.title }).last().getByRole('button').first().click();
     await page.locator('#content-notice-title').waitFor();
     await capture('02-notice-edit-1280');
     if (process.argv.includes('--before')) {
@@ -122,8 +123,18 @@ async function checkDisplayRecovery(page, baseUrl, slug, body, out, check) {
       }
     } else {
       const dialog = page.getByRole('dialog');
-      const rowNamed = title => page.locator('li').filter({ has: page.getByRole('heading', { name: title, exact: true }) }).last();
-      const openReview = async title => { await rowNamed(title).getByRole('button', { name: '게시 검토', exact: true }).click(); await dialog.getByRole('heading', { name: '공지 게시 검토', exact: true }).waitFor(); };
+      const rowNamed = title => page.locator('#content-panel li').filter({ hasText: title }).last();
+      const crumbBack = async () => { const crumb = page.locator('#content-panel').getByRole('button', { name: /^(공지|일정)$/ }); if (await crumb.count()) await crumb.first().click(); };
+      // Open an item's editor from the list (leaving any other open editor first).
+      const openItem = async (title, kind = 'notice') => {
+        const field = page.locator(kind === 'notice' ? '#content-notice-title' : '#content-program-title');
+        if (await field.count() && await field.inputValue() === title) return;
+        await crumbBack();
+        await rowNamed(title).getByRole('button').first().click();
+        await field.waitFor();
+      };
+      const openReview = async (title, kind = 'notice') => { await openItem(title, kind); await page.getByRole('button', { name: '게시 검토', exact: true }).click(); await dialog.getByRole('heading', { name: kind === 'notice' ? '공지 게시 검토' : '일정 게시 검토', exact: true }).waitFor(); };
+      const savedDraft = async kind => { await dialog.waitFor({ state: 'hidden' }).catch(() => {}); await page.getByText(kind === 'notice' ? '공지 초안을 저장했습니다.' : '일정 초안을 저장했습니다.', { exact: false }).first().waitFor(); };
       publicContext = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'ko-KR' });
       screenPage = await publicContext.newPage();
       await screenPage.goto(`${f.baseUrl}/screen/${f.slug}`, { waitUntil: 'networkidle' });
@@ -131,15 +142,16 @@ async function checkDisplayRecovery(page, baseUrl, slug, body, out, check) {
       phase = 'display recovery from a stalled response body';
       await checkDisplayRecovery(screenPage, f.baseUrl, f.slug, notice.body, out, check);
       phase = 'save draft without changing live notice';
-      check('editing does not expose a publication checkbox', await dialog.getByRole('checkbox', { name: /게시함/ }).count() === 0);
+      check('editing does not expose a publication checkbox', await page.getByRole('checkbox', { name: /게시함/ }).count() === 0);
       await page.locator('#content-notice-title').fill('입장 장소 변경 안내');
       await page.locator('#content-notice-body').fill('서문 데스크에서 QR 티켓을 보여 주세요.');
-      await dialog.getByRole('button', { name: '초안 저장', exact: true }).click(); await dialog.waitFor({ state: 'hidden' });
+      await page.getByRole('button', { name: '초안 저장', exact: true }).click(); await savedDraft('notice');
       check('draft save leaves the public notice unchanged', (await publicRead()).notices.find(n => n.id === notice.id).body === notice.body);
       await screenPage.reload({ waitUntil: 'networkidle' });
       check('the selected public screen keeps its published notice during drafting', await screenPage.getByText(notice.body, { exact: true }).isVisible());
       check('saved draft survives canonical reload', (await read()).notices.find(n => n.id === notice.id).draft.title === '입장 장소 변경 안내');
-      await rowNamed('입장 장소 변경 안내').getByText('수정 초안 있음', { exact: true }).waitFor();
+      await crumbBack();
+      await rowNamed('입장 장소 변경 안내').getByText('수정본 있음', { exact: true }).waitFor();
       await openReview('입장 장소 변경 안내');
       check('review compares live and draft content together', await dialog.locator('dd').filter({ hasText: notice.body }).isVisible() && await dialog.locator('dd').filter({ hasText: '서문 데스크에서 QR 티켓을 보여 주세요.' }).isVisible());
       check('review names actual participant and screen destinations', await dialog.getByText('행사 안내 · 공지', { exact: true }).isVisible() && await dialog.getByText('참가자 홈 · 공지', { exact: true }).isVisible() && await dialog.getByText('행사장 전광판', { exact: true }).isVisible());
@@ -150,7 +162,7 @@ async function checkDisplayRecovery(page, baseUrl, slug, body, out, check) {
       await page.setViewportSize({ width: 1280, height: 1000 });
       const countBeforeCancel = writes.length;
       await dialog.getByRole('button', { name: '돌아가기', exact: true }).click();
-      check('cancel review performs no write and restores focus', writes.length === countBeforeCancel && await rowNamed('입장 장소 변경 안내').getByRole('button', { name: '게시 검토', exact: true }).evaluate(el => el === document.activeElement));
+      check('cancel review performs no write and restores focus', writes.length === countBeforeCancel && await page.getByRole('button', { name: '게시 검토', exact: true }).evaluate(el => el === document.activeElement));
       await openReview('입장 장소 변경 안내'); await dialog.getByRole('button', { name: '게시하기', exact: true }).click(); await dialog.waitFor({ state: 'hidden' });
       check('publishing changes the actual public projection', (await publicRead()).notices.find(n => n.id === notice.id).title === '입장 장소 변경 안내');
       const publicPage = await publicContext.newPage(); await publicPage.goto(`${f.baseUrl}/event/${f.slug}`, { waitUntil: 'networkidle' });
@@ -160,16 +172,16 @@ async function checkDisplayRecovery(page, baseUrl, slug, body, out, check) {
       await screenPage.reload({ waitUntil: 'networkidle' });
       check('publishing updates the notice on the actual selected screen', await screenPage.getByText('서문 데스크에서 QR 티켓을 보여 주세요.', { exact: true }).isVisible());
       phase = 'program schedule and venue drafts';
-      await page.getByRole('tab', { name: '프로그램 일정', exact: true }).click();
-      await rowNamed('파트너 세션').getByRole('button', { name: '편집', exact: true }).click();
+      await page.getByRole('tab', { name: /^일정/ }).click();
+      await openItem('파트너 세션', 'program');
       await page.locator('#content-program-title').fill('파트너 협업 세션');
-      await dialog.getByRole('button', { name: '초안 저장', exact: true }).click(); await dialog.waitFor({ state: 'hidden' });
+      await page.getByRole('button', { name: '초안 저장', exact: true }).click(); await savedDraft('program');
       check('schedule draft leaves live program unchanged', (await publicRead()).program.some(p => p.title === '파트너 세션'));
-      await rowNamed('파트너 협업 세션').getByRole('button', { name: '게시 검토', exact: true }).click();
+      await page.getByRole('button', { name: '게시 검토', exact: true }).click();
       await dialog.getByText('행사 안내 · 프로그램', { exact: true }).waitFor(); await capture('04-program-review-1280');
       await dialog.getByRole('button', { name: '게시하기', exact: true }).click(); await dialog.waitFor({ state: 'hidden' });
       check('schedule review publishes only the saved revision', (await publicRead()).program.some(p => p.title === '파트너 협업 세션'));
-      await page.getByRole('tab', { name: '장소 안내', exact: true }).click();
+      await page.getByRole('tab', { name: /^장소 안내/ }).click();
       await page.locator('#content-venue-name').fill('서울 파트너 컨벤션홀');
       check('unsaved venue cannot be published', await page.getByRole('button', { name: '게시 검토', exact: true }).isDisabled());
       await page.getByRole('button', { name: '초안 저장', exact: true }).click();
@@ -198,7 +210,7 @@ async function checkDisplayRecovery(page, baseUrl, slug, body, out, check) {
       check('a recovered venue draft can be reviewed and published without a stale revision', (await publicRead()).venue.name === '서울 파트너 컨벤션홀 · 서문');
       await page.unroute('**/api/events/*/commands', lostVenueSave);
       phase = 'publish receipt recovery';
-      await page.getByRole('tab', { name: '공지', exact: true }).click();
+      await page.getByRole('tab', { name: /^공지/ }).click();
       let faultId = '', faultMode = '', faultCount = 0, holdRefresh = false;
       await page.route('**/api/events/*/bootstrap', async route => {
         if (!holdRefresh) return route.continue();
@@ -275,7 +287,8 @@ async function checkDisplayRecovery(page, baseUrl, slug, body, out, check) {
       await dialog.getByRole('button', { name: '게시하기', exact: true }).click(); await dialog.waitFor({ state: 'hidden' });
       check('a newly reviewed revision can be explicitly published', (await publicRead()).notices.find(n => n.id === concurrent.id).body === '다른 운영자가 저장한 새 내용');
       phase = 'unpublish review';
-      await rowNamed('입장 장소 변경 안내').getByRole('button', { name: '게시 내리기', exact: true }).click();
+      await openItem('입장 장소 변경 안내');
+      await page.getByRole('button', { name: '게시 내리기', exact: true }).click();
       await dialog.getByRole('heading', { name: '공지 게시 내리기', exact: true }).waitFor(); await capture('06-unpublish-review-1280');
       await dialog.getByRole('button', { name: '게시 내리기', exact: true }).click(); await dialog.waitFor({ state: 'hidden' });
       check('unpublish removes public content and keeps the editable draft', !(await publicRead()).notices.some(n => n.id === notice.id) && (await read()).notices.find(n => n.id === notice.id).draft.title === '입장 장소 변경 안내');
@@ -285,8 +298,9 @@ async function checkDisplayRecovery(page, baseUrl, slug, body, out, check) {
       phase = 'participant page review and effective visibility';
       await page.goto(`${f.baseUrl}/console/events/${f.eventId}/page`, { waitUntil: 'networkidle' });
       const previousIntro = (await publicRead()).pageExperience.published.intro;
+      await openStudioPanel(page, 'exposure');
       await page.locator('#home-intro').fill('파트너와 함께 만드는 새로운 연결');
-      await page.getByRole('checkbox', { name: '공지 보기', exact: true }).uncheck();
+      await page.getByRole('switch', { name: '공지 보기', exact: true }).click();
       await page.getByRole('button', { name: '초안 저장', exact: true }).click();
       await page.getByText('초안을 저장했습니다. 참가자 화면에는 게시 전까지 적용되지 않습니다.', { exact: true }).waitFor();
       check('participant page draft stays private', (await publicRead()).pageExperience.published.intro === previousIntro);
@@ -306,7 +320,8 @@ async function checkDisplayRecovery(page, baseUrl, slug, body, out, check) {
       await page.getByText('게시했습니다. 이 행사를 보는 참가자에게 새 디자인이 적용되었습니다.', { exact: true }).waitFor();
       check('page review publishes the saved design and visibility settings', (await publicRead()).pageExperience.published.intro === '파트너와 함께 만드는 새로운 연결' && (await publicRead()).pageExperience.published.showAnnouncements === false);
       await page.goto(`${f.baseUrl}/console/events/${f.eventId}/content`, { waitUntil: 'networkidle' });
-      await rowNamed('입장 장소 변경 안내').getByRole('button', { name: '게시 검토', exact: true }).click();
+      await openItem('입장 장소 변경 안내');
+      await page.getByRole('button', { name: '게시 검토', exact: true }).click();
       check('content review explains why published notices can remain hidden', await dialog.getByText(/참가자 페이지 설정에서 공지 표시가 꺼져/).isVisible() && await dialog.getByText(/공지 메뉴가 숨겨져/).isVisible());
       await capture('09-hidden-destinations-1280');
 
