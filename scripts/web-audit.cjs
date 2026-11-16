@@ -84,14 +84,20 @@ async function attendeeHomeNavigation(page, label, failures, navigate = true) {
     boxes.push(await button.boundingBox());
     const geometry = await button.evaluate((element) => {
       const tile = element.getBoundingClientRect();
-      const children = [...element.querySelectorAll('span, svg')].map(child => child.getBoundingClientRect()).filter(rect => rect.width && rect.height);
+      const nodes = [...element.querySelectorAll('span, svg')]
+        .map(child => ({ child, rect: child.getBoundingClientRect() }))
+        .filter(({ rect }) => rect.width && rect.height);
+      const children = nodes.map(({ rect }) => rect);
       const clipped = children.some((rect) => {
         return rect.left < tile.left - 1 || rect.right > tile.right + 1
           || rect.top < tile.top - 1 || rect.bottom > tile.bottom + 1;
       });
-      const overlap = children.some((first, index) => children.slice(index + 1).some((second) =>
-        Math.min(first.right, second.right) - Math.max(first.left, second.left) > 1
-        && Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top) > 1));
+      // The tile is a button with nested wrapper spans, so an element that contains another is
+      // not an overlap; only unrelated items that share area count.
+      const overlap = nodes.some((first, index) => nodes.slice(index + 1).some((second) =>
+        !first.child.contains(second.child) && !second.child.contains(first.child)
+        && Math.min(first.rect.right, second.rect.right) - Math.max(first.rect.left, second.rect.left) > 1
+        && Math.min(first.rect.bottom, second.rect.bottom) - Math.max(first.rect.top, second.rect.top) > 1));
       return { clipped, overlap };
     });
     if (geometry.clipped || geometry.overlap) failures.push(`${label}: a tile label, ticket hint or icon is clipped or overlaps another item`);

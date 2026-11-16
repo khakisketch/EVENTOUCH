@@ -73,3 +73,9 @@ test("the ticket bearer still lives in tab memory only", () => {
   assert.doesNotMatch(shell, /localStorage/u);
   assert.doesNotMatch(ticketView, /localStorage\./u);
 });
+
+test("a tile keeps its 티켓 필요 hint under the label so a 320px tile wraps it instead of clipping it", () => {
+  const css = read("apps/web/app/event/[slug]/home/home-layouts.module.css");
+  assert.match(landing, /<span className=\{L\.tileCopy\}>\s*<span className=\{L\.tileLabel\}>\{menu\.label\}<\/span>\s*\{needsTicket \? <span className=\{L\.needTicket\}>티켓 필요<\/span> : null\}/u);
+  assert.match(css, /\.tileCopy\s*\{[^}]*display:\s*grid[^}]*min-width:\s*0[^}]*white-space:\s*normal/su);
+});

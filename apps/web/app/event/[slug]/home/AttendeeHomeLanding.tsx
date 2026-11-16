@@ -260,9 +260,19 @@ function MenuEntry({
       disabled={preview || !onOpen}
       aria-disabled={preview || undefined}
     >
-      <span className={shape === "tile" ? L.tileLabel : L.entryLabel}>{menu.label}</span>
-      {needsTicket ? " " : null}
-      {needsTicket ? <span className={L.needTicket}>티켓 필요</span> : null}
+      {shape === "tile" ? (
+        // The hint sits under the label so a narrow tile wraps it instead of clipping it.
+        <span className={L.tileCopy}>
+          <span className={L.tileLabel}>{menu.label}</span>
+          {needsTicket ? <span className={L.needTicket}>티켓 필요</span> : null}
+        </span>
+      ) : (
+        <>
+          <span className={L.entryLabel}>{menu.label}</span>
+          {needsTicket ? " " : null}
+          {needsTicket ? <span className={L.needTicket}>티켓 필요</span> : null}
+        </>
+      )}
     </ProductButton>
   );
 }
