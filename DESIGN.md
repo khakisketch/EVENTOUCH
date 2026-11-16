@@ -440,3 +440,12 @@ The owner approved this composition on 2026-11-16 (`apps/web/app/event/[slug]/en
 - A program's state is a chip in its header (참여 가능 blue, 제출 완료 green, 제출 확인 필요 amber, 종료 grey). Choices are hairline rows with the radio on the text line (the card's label rule used to stack it above the text); score choices turn ink when picked; the submit is the one orange. The one-time notice is a dark line and clears when the tab changes.
 - A voted poll shows the counts it already publishes as bars with its own choice marked (the choice is known only in the session that voted); the counts before voting are shown as before.
 - Submit, same-request recovery, content-version conflict, receipt check, question edit and like, photo upload and the approval-pending note are unchanged. The footer links are quiet text links.
+
+## 행사장 대형 화면 확정 구성
+
+The owner approved this composition on 2026-11-16 (`apps/web/app/screen/[slug]/`, mockup `screen-options.html`, option A "어두운 무대"). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-venue-screen-composition.test.cjs` guards it.
+
+- Every scene except the draw sits on the product's stage ink (`board-stage.module.css`, fixed full screen like the draw stage); the draw keeps its violet and gold stage (see 추첨·투표 확정 구성). Type is sized for a room: the title at up to 116px and body at up to 67px on a 1920 screen, with the event name, date and venue as the only small lines. The footer shows the venue only.
+- A poll is one row per option (name, bar, count); the leading option's bar is orange and the others white, with a "투표 진행 중" pill and the total. Counts are the public aggregates, as before.
+- The program lists time, title and place. The session in progress is orange with "진행 중": it needs a start and an end on a known day (a missing day takes the event's date) and is read as the venue's local time against the server's clock (the offset from the response's `Date` header, refreshed on every poll and re-evaluated every 30 seconds), so a screen with a drifting clock highlights the right line. Row size follows the number of sessions shown so ten still fit.
+- Selection rules (the operator's choice first, otherwise a rotation of what exists), quiz answers only after reveal, four questions and six photos at most, words only for notices, the "연결 확인 중 · 마지막 화면입니다" notice and reduced-motion handling are unchanged, and so are the class names the audits read (`.display-frame h2`).

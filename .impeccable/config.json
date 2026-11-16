@@ -92,6 +92,15 @@
         ],
         "createdAt": "2026-11-16T04:03:22.121Z",
         "reason": "Rows set their height with min-height and center their content; the detector reads the horizontal-only padding as flush."
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/screen-options.html"
+        ],
+        "createdAt": "2026-11-16T05:07:40.358Z",
+        "reason": "Rows set their height with min-height and center their content; the detector reads the horizontal-only padding as flush."
       }
     ]
   }

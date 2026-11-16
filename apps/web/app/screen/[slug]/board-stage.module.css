@@ -1,0 +1,124 @@
+/* The venue board's dark stage (DESIGN.md "행사장 대형 화면 확정 구성"). Every
+   scene except the draw (which keeps its violet and gold stage) sits on the
+   product's stage ink. Sizes follow the viewport because the screen is read
+   from across a room; the global .display-* rules supply structure and are
+   overridden here, so class names the audits use stay the same. */
+.dark:global(.display-board) {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  max-width: none;
+  min-height: 0;
+  padding: clamp(18px, 2vw, 40px) clamp(28px, 4.2vw, 84px) clamp(14px, 1.8vw, 34px);
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+  background: var(--stage);
+  color: #fff;
+}
+
+.dark :global(.display-header) { padding-bottom: 0; border-bottom: 0; }
+.dark :global(.display-brand),
+.dark :global(.display-date) {
+  color: var(--side-muted);
+  font-family: inherit;
+  font-size: clamp(14px, 1.4vw, 28px);
+  font-weight: 750;
+  letter-spacing: 0.08em;
+}
+.dark :global(.display-content) { justify-content: center; padding-block: 0; }
+.dark :global(.display-content) > h1 {
+  max-width: none;
+  margin: 0 0 clamp(8px, 1.2vw, 24px);
+  color: var(--side-muted);
+  font-size: clamp(18px, 2.3vw, 44px);
+  font-weight: 700;
+  line-height: 1.2;
+}
+.dark :global(.display-frame) { max-width: none; padding: 0; border: 0; }
+.dark :global(.display-frame) h2 {
+  margin: 0 0 0.3em;
+  color: #fff;
+  font-size: clamp(34px, 6vw, 116px);
+  letter-spacing: -0.04em;
+  line-height: 1.12;
+}
+.dark :global(.display-frame) > p {
+  max-width: 32ch;
+  color: #e8e9eb;
+  font-size: clamp(22px, 3.5vw, 67px);
+  line-height: 1.55;
+}
+.dark :global(.display-frame) ul { gap: 0; padding: 0; list-style: none; }
+.dark :global(.display-footer) {
+  margin-top: auto;
+  padding-top: 0;
+  border-top: 0;
+  color: var(--side-muted);
+  font-size: clamp(14px, 1.4vw, 28px);
+}
+
+/* Poll: one row per option, bar between name and count; the leader is orange. */
+.dark :global(.display-poll) { gap: clamp(10px, 1.4vw, 26px); }
+.dark :global(.display-live) {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: max-content;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 12%);
+  color: #fff;
+  font-size: clamp(14px, 1.4vw, 28px);
+  font-weight: 800;
+}
+.dark :global(.display-live)::before { width: 10px; height: 10px; border-radius: 50%; background: var(--brand); content: ""; }
+.dark :global(.poll-row) {
+  display: grid;
+  grid-template-columns: minmax(0, 24%) minmax(0, 1fr) minmax(4ch, 9%);
+  align-items: center;
+  gap: clamp(12px, 1.8vw, 36px);
+  font-size: clamp(18px, 2.7vw, 52px);
+  font-weight: 700;
+}
+.dark :global(.poll-bar) { height: clamp(18px, 1.8vw, 36px); border-radius: 10px; background: var(--stage-2); }
+.dark :global(.poll-bar) span { border-radius: 10px; background: #fff; }
+.dark :global(.poll-row[data-leader="true"]) :global(.poll-bar) span { background: var(--brand); }
+.dark :global(.poll-row) strong { text-align: right; font-variant-numeric: tabular-nums; }
+.dark :global(.display-count) { margin: 0; color: var(--side-muted); font-size: clamp(14px, 1.4vw, 28px); }
+
+/* Program: time, title, place; the row in progress is orange. Row size follows
+   how many sessions are shown so ten still fit. */
+.dark :global(.program-item) {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) minmax(0, 28%);
+  column-gap: clamp(20px, 3vw, 60px);
+  align-items: center;
+  gap: clamp(12px, 1.8vw, 36px);
+  min-height: min(calc(62vh / var(--rows)), 7.7vw);
+  border-top: 1px solid var(--stage-line);
+  font-size: clamp(16px, min(3.1vw, calc(26vh / var(--rows))), 60px);
+  font-weight: 700;
+}
+.dark :global(.display-frame) ul { --rows: 3; }
+.dark :global(.program-item):last-child { border-bottom: 1px solid var(--stage-line); }
+.dark :global(.program-time),
+.dark :global(.program-meta) { color: var(--side-muted); font-size: 0.75em; font-weight: 600; }
+.dark :global(.program-time) { min-width: 3.6em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dark :global(.program-item[data-live="true"]) { color: var(--brand); }
+.dark :global(.program-item[data-live="true"]) :global(.program-time),
+.dark :global(.program-item[data-live="true"]) :global(.program-meta) { color: var(--brand); }
+
+/* Q&A and photos */
+.dark :global(.display-questions) { gap: clamp(14px, 1.8vw, 36px); }
+.dark :global(.display-question) { padding: 0 0 0 clamp(16px, 2.4vw, 48px); border: 0; border-left: 6px solid var(--brand); border-radius: 0; background: transparent; }
+.dark :global(.display-question) h3 { margin: 0; color: #fff; font-size: clamp(22px, 3.2vw, 62px); line-height: 1.3; }
+.dark :global(.display-question) p { margin-top: 6px; color: var(--side-muted); font-size: clamp(18px, 2.4vw, 48px); }
+.dark :global(.display-photo-grid) figcaption { color: var(--side-muted); }
+
+/* Idle */
+.dark:global(.display-idle) { justify-content: center; }
+.dark:global(.display-idle) > p:first-child { color: var(--side-muted); font-family: inherit; font-size: clamp(16px, 1.6vw, 32px); letter-spacing: 0.08em; }
+.dark:global(.display-idle) > h1 { max-width: 20ch; color: #fff; font-size: clamp(40px, 6vw, 116px); }
+.dark:global(.display-idle) > p { color: var(--side-muted); font-size: clamp(22px, 2.4vw, 48px); }
+.dark:global(.display-idle) :global(.display-footer) { position: absolute; inset-inline: clamp(28px, 4.2vw, 84px); bottom: clamp(14px, 1.8vw, 34px); }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import ProductLink from "../../ui/ProductLink";
 import ProductButton from "../../ui/ProductButton";
 import drawStyles from "./draw-stage.module.css";
+import stageStyles from "./board-stage.module.css";
 import { richPlainText } from "../../../lib/rich-text";
 
 type Notice = { id: string; title: string; body: string };
@@ -230,6 +231,17 @@ function toBoard(
   };
 }
 
+// A session is "in progress" only when it has a start and an end on a known
+// day. Times are read as the venue's local time; the clock is the server's, so
+// a screen whose own clock drifts still highlights the right line.
+function sessionLive(session: ProgramItem, fallbackDate: string, now: number): boolean {
+  const date = session.date || fallbackDate;
+  if (!now || !date || !session.start || !session.end) return false;
+  const start = Date.parse(`${date}T${session.start}:00`);
+  const end = Date.parse(`${date}T${session.end}:00`);
+  return Number.isFinite(start) && Number.isFinite(end) && now >= start && now < end;
+}
+
 function displayedDraw(board: BoardData): DrawOutcome | null {
   if (board.display.type !== "draw") return null;
   const history = board.modules.find((module) => module.id === board.display.moduleId && module.type === "draw")?.drawHistory;
@@ -418,6 +430,16 @@ export default function DisplayBoard({ slug }: { slug: string }) {
   // staffer standing in front of the venue screen needs a visible control
   // that fetches now instead of waiting out the next interval.
   const [retryTick, setRetryTick] = useState(0);
+  // Server clock for the "in progress" line: the response's Date header gives
+  // the offset from this screen's clock; a minute-scale highlight needs no more.
+  const serverOffsetRef = useRef(0);
+  const [nowMs, setNowMs] = useState(0);
+  useEffect(() => {
+    const tick = () => setNowMs(Date.now() + serverOffsetRef.current);
+    tick();
+    const id = window.setInterval(tick, 30000);
+    return () => window.clearInterval(id);
+  }, []);
   function refreshNow() {
     setRetryTick((tick) => tick + 1);
   }
@@ -483,6 +505,8 @@ export default function DisplayBoard({ slug }: { slug: string }) {
           markUnavailable("화면 정보를 불러오지 못했습니다.");
           return;
         }
+        const serverDate = Date.parse(res.headers.get("date") ?? "");
+        if (Number.isFinite(serverDate)) serverOffsetRef.current = serverDate - Date.now();
         const payload = (await res.json()) as object;
         if (stopped) return;
         const board = toBoard(slug, payload);
@@ -617,23 +641,22 @@ export default function DisplayBoard({ slug }: { slug: string }) {
       title: module.title,
       body: (
         <div className="display-poll">
-          <p>응답 {total}표</p>
+          <span className="display-live">투표 진행 중</span>
           {shownOptions.map((option, index) => {
             const count = module.counts[index] ?? 0;
             const ratio = total ? Math.round((count / total) * 100) : 0;
             return (
-              <div className="poll-row" key={option}>
-                <div className="poll-label">
-                  <span>{option}</span>
-                  <strong>{count}표</strong>
-                </div>
+              <div className="poll-row" key={option} data-leader={count > 0 && count === Math.max(...module.counts.slice(0, shownOptions.length)) ? "true" : undefined}>
+                <span className="poll-name">{option}</span>
                 <div className="poll-bar"><span style={{ width: `${ratio}%` }} /></div>
+                <strong>{count}표</strong>
               </div>
             );
           })}
           {module.options.length > shownOptions.length ? (
             <p>외 {module.options.length - shownOptions.length}개 항목</p>
           ) : null}
+          <p className="display-count">응답 {total}표</p>
         </div>
       ),
     };
@@ -693,7 +716,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
   if (selected) {
     const drawSelected = data.display.type === "draw";
     return (
-      <section className={`display-board ${drawSelected ? drawStyles.cinematicBoard : ""}`} aria-live="off">
+      <section className={`display-board ${drawSelected ? drawStyles.cinematicBoard : stageStyles.dark}`} aria-live="off">
         <header className="display-header">
           {!drawSelected ? <span className="display-brand">EVENTOUCH</span> : null}
           {stale ? <p className="display-stale" role="status">연결 확인 중 · 마지막 화면입니다</p> : null}
@@ -713,7 +736,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
         </div>
         {drawSelected
           ? data.venueName ? <footer className="display-footer"><span>{data.venueName}</span></footer> : null
-          : <footer className="display-footer"><span>행사 운영 워크스페이스</span><span>{data.venueName}</span></footer>}
+          : data.venueName ? <footer className="display-footer"><span>{data.venueName}</span></footer> : null}
       </section>
     );
   }
@@ -733,21 +756,19 @@ export default function DisplayBoard({ slug }: { slug: string }) {
       key: "program",
       title: "프로그램",
       body: (
-        <ul>
-          {shownSessions.map((session) => (
-            <li className="program-item" key={session.id}>
-              <span className="program-title">{session.title}</span>
-              {[session.date, session.start && session.end
-                ? `${session.start} ~ ${session.end}`
-                : session.start, session.place].filter(Boolean).length ? (
-                  <span className="program-meta">
-                    {[session.date, session.start && session.end
-                      ? `${session.start} ~ ${session.end}`
-                      : session.start, session.place].filter(Boolean).join(" · ")}
-                  </span>
-                ) : null}
-            </li>
-          ))}
+        <ul style={{ "--rows": shownSessions.length } as React.CSSProperties}>
+          {shownSessions.map((session) => {
+            const live = sessionLive(session, data.date, nowMs);
+            // A session on another day than the event's date keeps its date.
+            const when = [session.date && session.date !== data.date ? session.date.slice(5) : "", session.start].filter(Boolean).join(" ");
+            return (
+              <li className="program-item" key={session.id} data-live={live ? "true" : undefined}>
+                <span className="program-time">{when}</span>
+                <span className="program-title">{session.title}</span>
+                <span className="program-meta">{[session.place, live ? "진행 중" : ""].filter(Boolean).join(" · ")}</span>
+              </li>
+            );
+          })}
           {data.program.length > shownSessions.length ? (
             <li className="program-item">
               <span className="program-title">외 {data.program.length - shownSessions.length}개 프로그램</span>
@@ -769,7 +790,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
     // visible while waiting, and the idle→selected switch adds content
     // without shifting the frame.
     return (
-      <section className="display-board display-idle">
+      <section className={`display-board display-idle ${stageStyles.dark}`}>
         <p>EVENTOUCH</p>
         <h1>{data.name}</h1>
         <p>{data.date}</p>
@@ -782,13 +803,13 @@ export default function DisplayBoard({ slug }: { slug: string }) {
           </p>
         ) : null}
         <p>화면 준비 중</p>
-        <footer className="display-footer"><span>행사 운영 워크스페이스</span><span>{data.venueName}</span></footer>
+        {data.venueName ? <footer className="display-footer"><span>{data.venueName}</span></footer> : null}
       </section>
     );
   }
   const current = frames[frame % frames.length];
   return (
-    <section className="display-board" aria-live="off">
+    <section className={`display-board ${stageStyles.dark}`} aria-live="off">
       <header className="display-header">
         <span className="display-brand">EVENTOUCH</span>
         {stale ? <p className="display-stale" role="status">연결 확인 중 · 마지막 화면입니다</p> : null}
@@ -806,7 +827,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
           {current.body}
         </article>
       </div>
-      <footer className="display-footer"><span>행사 운영 워크스페이스</span><span>{data.venueName}</span></footer>
+      {data.venueName ? <footer className="display-footer"><span>{data.venueName}</span></footer> : null}
     </section>
   );
 }
