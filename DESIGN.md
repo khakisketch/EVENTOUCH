@@ -465,3 +465,12 @@ The owner approved this composition on 2026-11-16 (`apps/web/app/auth-entry.modu
 
 - 비밀번호 재설정, 내 계정 이메일 인증 and 팀 초대 수락 share one frame (`styles.entry`): the login's dark brand band (orange E wordmark from `::first-letter`, the screen's name, the promise line) over a white sheet with 56px fields. On wide screens the band and sheet are one framed card. Forms fill the sheet; an error that leads into a submit sits directly above it with the submit at the bottom, while a lone notice (an unavailable mailer, say) stays in the flow. Inputs, verification and recovery flows, single-use tokens, step copy and focus order are unchanged.
 - The landing's header and hero share one full-width ink band (`box-shadow` plus `clip-path` bleed); the product window stays white. The fact strip, tabs, calls to action and the inquiry rules (email only, example figures disclosed) are unchanged, and every section below the hero stays white. Print keeps its plain frame. The hero's glow bleeds past the container only from 1025px up, where it cannot cause a sideways scroll.
+
+## 새 행사 만들기 확정 구성
+
+The owner approved this composition on 2026-11-16 (`apps/web/app/console/CreateEventDialog.tsx`, `console-home.module.css`, mockup `create-event-a3.html`, "A3"; the time bar of the mock was dropped on purpose). Change it only on a new owner decision.
+
+- 이름, 날짜, 시간, 고객사 are all visible on open; 추가 설정 holds only exact start/end, 정원 and 주소 코드. 진행 형태 is no longer offered or sent (the settings screen already removed it; stored values stay).
+- Each field gets the control that fits it instead of one white box: the name is a title input without a box with the 참가자 주소 line under it ("바꾸기" opens 주소 코드), the date is a large soft field with 내일/1주 뒤/1개월 뒤 chips and a plain "선택한 날짜 … · N일 뒤" line, the time is 종일/오전/오후/저녁 chips with a "09:00–18:00 · 9시간" line, 정원 has 50/100/300/500 chips, and the create mode is a two-way segmented bar.
+- Chips are native radios that only set values the form already holds (date, start/end, capacity); the payload and the write path (receipts, retry, duplicate, customer registration) are unchanged. Selected chips are ink, so the one orange action stays "행사 만들기".
+- Guidance never blocks the write: a same-name event, a past date, a duplicate that keeps the source date, and an end that is not after the start (the server's own rule) show as a one-line notice. With no customers the select is replaced by a one-line explanation and the register action.

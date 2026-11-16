@@ -85,7 +85,7 @@ async function runSafe4Audit() {
       check(`${name} no serious/critical axe`, !violations.some((v) => ['serious', 'critical'].includes(v.impact)), violations);
     };
 
-    // ---- A. Optional format: create with online, settings shows/clears it.
+    // ---- A. The removed progress format: create no longer offers or stores it.
     await page.goto(f.baseUrl + '/console');
     await page.getByRole('button', { name: '새 행사 만들기', exact: true }).click();
     await page.locator('#create-name').fill('검증 진행형태 행사');
@@ -95,31 +95,13 @@ async function runSafe4Audit() {
     await openCreateSettings(page);
     await page.locator('#create-slug').fill(`s4f-${f.suffix.slice(0, 8)}`);
     await page.locator('#create-date').fill('2026-11-10');
-    await chooseRadio(page, 'create-format', 'online');
-    check('create dialog offers the optional unspecified choice', await page.locator('#create-format input[type="radio"][value=""]').count() === 1);
+    check('create dialog no longer offers the removed progress-format choice', await page.locator('#create-format').count() === 0);
     await page.getByRole('button', { name: '행사 만들기', exact: true }).click();
     await page.waitForURL(/\/console\/events\/.+/, { timeout: 15000 });
     const eventId = new URL(page.url()).pathname.split('/').pop();
     check('create navigates to the new event', Boolean(eventId) && eventId !== 'events');
-    const created = (await f.harness.database.query(`SELECT payload->>'format' AS format FROM events WHERE id=$1`, [eventId])).rows[0];
-    check('unspecified stays absent / online stores verbatim', created.format === 'online', created);
-    await page.goto(`${f.baseUrl}/console/events/${eventId}/settings`);
-    await page.getByRole('tab', { name: '기본 정보', exact: true }).click();
-    check('settings basics shows the stored online format', await page.locator('#set-format input:checked').inputValue() === 'online');
-    await capture('safe4-settings-format-1280');
-    await chooseRadio(page, 'set-format', 'hybrid');
-    await page.getByRole('button', { name: '기본 정보 저장', exact: true }).click();
-    await page.getByText(/기본 정보를 저장했습니다/, { exact: false }).first().waitFor();
-    const hybrid = (await f.harness.database.query(`SELECT payload->>'format' AS format FROM events WHERE id=$1`, [eventId])).rows[0];
-    check('settings update stores hybrid without touching other basics', hybrid.format === 'hybrid', hybrid);
-    await chooseRadio(page, 'set-format', '');
-    await Promise.all([
-      page.waitForResponse((response) => response.url().includes('/commands') && response.request().method() === 'POST'),
-      page.getByRole('button', { name: '기본 정보 저장', exact: true }).click(),
-    ]);
-    await page.getByText(/기본 정보를 저장했습니다/, { exact: false }).first().waitFor();
-    const cleared = (await f.harness.database.query(`SELECT payload FROM events WHERE id=$1`, [eventId])).rows[0].payload;
-    check('empty choice clears the key instead of storing a default', !Object.hasOwn(cleared, 'format'), Object.keys(cleared).filter((k) => /format/i.test(k)));
+    const created = (await f.harness.database.query(`SELECT payload FROM events WHERE id=$1`, [eventId])).rows[0].payload;
+    check('creating without a format stores no format key', !Object.hasOwn(created, 'format'), Object.keys(created).filter((k) => /format/i.test(k)));
 
     // ---- B. Row reuse prefills name+company only, guards dirty/uncertain.
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}/participants`);

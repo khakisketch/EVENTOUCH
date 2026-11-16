@@ -37,7 +37,8 @@ const check = (name, condition) => { assert.ok(condition, name); checks.push(nam
       const dialog = page.getByRole('dialog');
       const advanced = dialog.locator('details[data-create-settings]');
       check(`event optional setup starts closed at ${size.width}x${size.height}`, !await advanced.evaluate(el => el.open));
-      check(`event starts with two visible fields at ${size.width}x${size.height}`, await dialog.locator('input:not([type="radio"]):visible,select:visible').count() === 2);
+      const upFront = await dialog.locator('input:not([type="radio"]):visible,select:visible').evaluateAll(els => els.map(el => el.id));
+      check(`event starts with name, date and (when customers exist) the customer select at ${size.width}x${size.height}`, upFront.includes('create-name') && upFront.includes('create-date') && upFront.every(id => ['create-name', 'create-date', 'create-client'].includes(id)));
       const visibleTargets = await dialog.locator('#create-name,#create-date,button[form="create-event-form"]').evaluateAll(elements => elements.every(el => {
         const b=el.getBoundingClientRect(); const hit=document.elementFromPoint(b.x+b.width/2,b.y+b.height/2);
         return b.y>=0 && b.bottom<=innerHeight && b.height>=44 && (hit===el || el.contains(hit));

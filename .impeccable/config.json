@@ -155,6 +155,60 @@
         ],
         "createdAt": "2026-11-16T06:40:50.192Z",
         "reason": "The only low-contrast text is the disabled move arrow at 30% opacity (a control that cannot be used in that direction is drawn dimmed on purpose; disabled controls are exempt from WCAG contrast). Not user confirmed."
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/create-event-a2.html"
+        ],
+        "createdAt": "2026-11-16T06:58:52.961Z",
+        "reason": "시안 파일: 평면 행·입력칸은 min-height로 세로 중앙 정렬된 의도된 목록이고, 시트를 감싼 .stage는 배경 목업 프레임일 뿐 제품 카드 중첩이 아님. 검토 전용 정적 목업"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/create-event-options.html"
+        ],
+        "createdAt": "2026-11-16T06:58:52.976Z",
+        "reason": "같은 시안 계열(위와 동일 사유)"
+      },
+      {
+        "rule": "nested-cards",
+        "value": "*",
+        "files": [
+          "design-review/create-event-a2.html"
+        ],
+        "createdAt": "2026-11-16T06:58:52.988Z",
+        "reason": "시안 파일: 평면 행·입력칸은 min-height로 세로 중앙 정렬된 의도된 목록이고, 시트를 감싼 .stage는 배경 목업 프레임일 뿐 제품 카드 중첩이 아님. 검토 전용 정적 목업"
+      },
+      {
+        "rule": "nested-cards",
+        "value": "*",
+        "files": [
+          "design-review/create-event-options.html"
+        ],
+        "createdAt": "2026-11-16T06:58:52.998Z",
+        "reason": "같은 시안 계열(위와 동일 사유)"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/create-event-a3.html"
+        ],
+        "createdAt": "2026-11-16T07:00:58.713Z",
+        "reason": "시안 파일(검토 전용 정적 목업): 선택 행·칩은 min-height로 세로 중앙 정렬된 의도된 모양이고, .stage는 시트 뒤 배경을 흉내 낸 목업 틀이라 제품 카드 중첩이 아님"
+      },
+      {
+        "rule": "nested-cards",
+        "value": "*",
+        "files": [
+          "design-review/create-event-a3.html"
+        ],
+        "createdAt": "2026-11-16T07:00:58.724Z",
+        "reason": "시안 파일(검토 전용 정적 목업): 선택 행·칩은 min-height로 세로 중앙 정렬된 의도된 모양이고, .stage는 시트 뒤 배경을 흉내 낸 목업 틀이라 제품 카드 중첩이 아님"
       }
     ]
   }

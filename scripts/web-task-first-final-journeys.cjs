@@ -212,7 +212,8 @@ async function main() {
       await act(() => page.locator('#create-name').fill(createdEventName));
       await act(() => page.locator('#create-date').fill(EVENT_DATE));
       await act(() => openCreateSettings(page));
-      const draftFields = ['#create-name', '#create-slug', '#create-client', '#create-date', '#create-start', '#create-end', '#create-capacity'];
+      // No customers exist yet, so the customer select is absent until the inline registration below.
+      const draftFields = ['#create-name', '#create-slug', '#create-date', '#create-start', '#create-end', '#create-capacity'];
       const draftValues = await Promise.all(draftFields.map(field => page.locator(field).inputValue()));
       await act(() => openCreateSettings(page));
       await act(() => page.getByRole('button', { name: '새 고객사 등록', exact: true }).click());
@@ -232,7 +233,6 @@ async function main() {
       await page.locator('#create-client').waitFor({ state: 'visible', timeout: 10000 });
       assert.equal(await page.locator('#create-name').inputValue(), createdEventName, 'event draft must survive the customer subview');
       for (let index = 0; index < draftFields.length; index += 1) {
-        if (draftFields[index] === '#create-client') continue; // intentionally selects the newly registered client
         assert.equal(await page.locator(draftFields[index]).inputValue(), draftValues[index], `${draftFields[index]} draft is retained`);
       }
       await page.getByText(`${inlineClientName} 고객사를 등록하고 선택했습니다.`, { exact: true }).waitFor({ timeout: 10000 });
