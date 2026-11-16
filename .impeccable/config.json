@@ -128,6 +128,33 @@
         ],
         "createdAt": "2026-11-16T06:28:44.172Z",
         "reason": "Rows and fields set their height with min-height and center their content; the detector reads the horizontal-only padding as flush."
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/account-landing-options.html"
+        ],
+        "createdAt": "2026-11-16T06:40:14.599Z",
+        "reason": "Rows, fields and the hero set their height with min-height and center their content; the detector reads the horizontal-only padding as flush."
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/fields-options.html"
+        ],
+        "createdAt": "2026-11-16T06:40:50.181Z",
+        "reason": "Rows, list and segmented control set their height with min-height and center their content; the detector reads the horizontal-only padding as flush. Same false positive as the other mocks."
+      },
+      {
+        "rule": "low-contrast",
+        "value": "*",
+        "files": [
+          "design-review/fields-options.html"
+        ],
+        "createdAt": "2026-11-16T06:40:50.192Z",
+        "reason": "The only low-contrast text is the disabled move arrow at 30% opacity (a control that cannot be used in that direction is drawn dimmed on purpose; disabled controls are exempt from WCAG contrast). Not user confirmed."
       }
     ]
   }

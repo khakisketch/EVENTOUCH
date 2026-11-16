@@ -1306,3 +1306,43 @@
     display: none;
   }
 }
+
+/* ---- Dark entry (DESIGN.md "계정·첫 화면 확정 구성"): the header and the hero
+   share one ink band, full width, like the login and the staff screens. The
+   product window stays white so it reads best against it; every section
+   below is unchanged. ---- */
+.page { padding-top: 0; }
+.header,
+.hero {
+  background: var(--ink);
+  color: var(--paper);
+  box-shadow: 0 0 0 100vmax var(--ink);
+  clip-path: inset(0 -100vmax);
+}
+.header { border-bottom: 0; }
+.brand { color: var(--paper); }
+.brandName::first-letter { color: var(--brand); }
+.brandDescription { color: color-mix(in srgb, var(--paper) 72%, transparent); }
+.siteNav a { color: color-mix(in srgb, var(--paper) 72%, transparent); }
+.siteNav a:hover { color: var(--paper); }
+.loginLink { border-color: color-mix(in srgb, var(--paper) 28%, transparent); color: var(--paper); }
+.loginLink:hover { border-color: var(--paper); background: color-mix(in srgb, var(--paper) 12%, transparent); }
+.header a:focus-visible,
+.header button:focus-visible,
+.hero a:focus-visible,
+.hero button:focus-visible { outline-color: var(--paper); }
+@media (min-width: 1025px) { .hero { overflow: visible; } }
+.hero::before { background: radial-gradient(closest-side, color-mix(in srgb, var(--brand) 30%, transparent), transparent); }
+.heroTitle { color: var(--paper); }
+.heroDescription { color: color-mix(in srgb, var(--paper) 72%, transparent); }
+.heroNote { color: color-mix(in srgb, var(--paper) 72%, transparent); }
+.secondaryAction { border-color: color-mix(in srgb, var(--paper) 28%, transparent); background: transparent; color: var(--paper); }
+.secondaryAction:hover { border-color: var(--paper); background: color-mix(in srgb, var(--paper) 12%, transparent); }
+.heroTabs button { border-color: color-mix(in srgb, var(--paper) 28%, transparent); background: transparent; color: var(--paper); }
+.heroTabs button[aria-selected="true"] { border-color: var(--paper); background: var(--paper); color: var(--ink); }
+.factStrip { border-top-color: color-mix(in srgb, var(--paper) 14%, transparent); border-bottom: 0; }
+.factStrip li + li { border-left-color: color-mix(in srgb, var(--paper) 14%, transparent); }
+.factStrip a { color: color-mix(in srgb, var(--paper) 88%, transparent); }
+.factStrip a:hover { color: var(--paper); text-decoration-color: color-mix(in srgb, var(--paper) 40%, transparent); }
+@media print { .header, .hero { background: transparent; color: inherit; box-shadow: none; clip-path: none; } }
+

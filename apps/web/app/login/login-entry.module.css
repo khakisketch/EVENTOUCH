@@ -61,7 +61,8 @@
   border-radius: 16px;
   font-size: var(--body);
 }
-.stage:global(.login-page) :global(.auth-form) > p[role="alert"] { margin: auto 0 0; padding: var(--s3); border-radius: 12px; background: var(--danger-soft); color: var(--danger); font-weight: 650; }
+.stage:global(.login-page) :global(.auth-form) > p[role="alert"] { margin: 0; padding: var(--s3); border-radius: 12px; background: var(--danger-soft); color: var(--danger); font-weight: 650; }
+.stage:global(.login-page) :global(.auth-form) > p[role="alert"]:has(+ :global(button)) { margin-top: auto; }
 .stage:global(.login-page) :global(.auth-form) > p[role="alert"] + :global(button),
 .stage:global(.login-page) :global(.auth-form) > p[role="alert"] + :global(.product-action) { margin-top: 0; }
 .stage:global(.login-page) :global(.auth-form) :global(.auth-help) { margin: 0; text-align: center; }

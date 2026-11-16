@@ -287,3 +287,95 @@
     font-size: var(--h1);
   }
 }
+
+/* ---- Band and sheet (DESIGN.md "스태프 목록과 로그인 확정 구성", extended to the
+   account screens): the same dark brand band over a white sheet the login
+   uses, so /recover, /account/email and /invite/[token] read as one family.
+   Layered last so the rules above keep structure and copy styling. ---- */
+.entry:global(.site-page):global(.auth-page) {
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+  padding: 0;
+  background: var(--ink);
+}
+.entry:global(.site-page):global(.auth-page) :global(.auth-brand) {
+  position: relative;
+  overflow: hidden;
+  width: min(100%, 440px);
+  gap: var(--s2);
+  padding: var(--s6) var(--s5) 48px;
+  background: var(--ink);
+  color: var(--paper);
+}
+.entry:global(.site-page):global(.auth-page) :global(.auth-brand)::after {
+  position: absolute;
+  top: -70px;
+  right: -70px;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--brand) 34%, transparent), transparent 70%);
+  content: "";
+  pointer-events: none;
+}
+.entry:global(.site-page):global(.auth-page) :global(.auth-brand) :global(.wordmark) { position: relative; z-index: 1; color: var(--paper); font-size: 24px; }
+.entry:global(.site-page):global(.auth-page) :global(.auth-brand) :global(.wordmark)::first-letter { color: var(--brand); }
+.entry:global(.site-page):global(.auth-page) :global(.auth-brand) :global(.wordmark) :global(span) { color: color-mix(in srgb, var(--paper) 72%, transparent); }
+.entry:global(.site-page):global(.auth-page) :global(.auth-brand) :global(.auth-promise) { position: relative; z-index: 1; color: color-mix(in srgb, var(--paper) 72%, transparent); font-size: var(--body); }
+
+.entry:global(.site-page):global(.auth-page) :global(.auth-card) {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  width: min(100%, 440px);
+  margin-top: -24px;
+  padding: var(--s5) var(--s5) var(--s4);
+  border: 0;
+  border-radius: 28px 28px 0 0;
+  background: var(--paper);
+  justify-content: flex-start;
+}
+.entry:global(.site-page):global(.auth-page) :global(.auth-card) :global(h1) { margin: 0 0 var(--s4); font-size: 28px; letter-spacing: -0.04em; }
+
+/* Forms fill the sheet: fields up top, the one error line and the submit at
+   the bottom where the thumb is. */
+.entry:global(.site-page):global(.auth-page) :global(.auth-form),
+.entry:global(.site-page):global(.auth-page) :global(.registration-form) { display: flex; flex: 1; flex-direction: column; gap: var(--s4); }
+.entry:global(.site-page):global(.auth-page) :global(.auth-form) input,
+.entry:global(.site-page):global(.auth-page) :global(.registration-form) input { min-height: 56px; border-radius: 14px; font-size: 16px; }
+.entry:global(.site-page):global(.auth-page) :global(.auth-form) :global(button[type="submit"]),
+.entry:global(.site-page):global(.auth-page) :global(.registration-form) :global(button[type="submit"]),
+.entry:global(.site-page):global(.auth-page) :global(.invite-card) > :global(button.button) {
+  min-height: 56px;
+  margin-top: auto;
+  border-radius: 16px;
+  font-size: var(--body);
+}
+.entry:global(.site-page):global(.auth-page) :global(.auth-form) > p[role="alert"],
+.entry:global(.site-page):global(.auth-page) :global(.registration-form) > p[role="alert"] {
+  margin: 0;
+  padding: var(--s3);
+  border-radius: 12px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-weight: 650;
+}
+/* Only an error that leads into a submit is docked with it; a lone notice stays in the flow. */
+.entry:global(.site-page):global(.auth-page) :global(.auth-form) > p[role="alert"]:has(+ :global(button)),
+.entry:global(.site-page):global(.auth-page) :global(.registration-form) > p[role="alert"]:has(+ :global(button)) { margin-top: auto; }
+.entry:global(.site-page):global(.auth-page) :global(.auth-form) > p[role="alert"] + :global(button),
+.entry:global(.site-page):global(.auth-page) :global(.registration-form) > p[role="alert"] + :global(button) { margin-top: 0; }
+
+@media (min-width: 720px) {
+  .entry:global(.site-page):global(.auth-page) { justify-content: center; padding: var(--s7) var(--s5); background: var(--workspace-ground); }
+  .entry:global(.site-page):global(.auth-page) :global(.auth-brand) { border-radius: 24px 24px 0 0; }
+  .entry:global(.site-page):global(.auth-page) :global(.auth-card) { flex: none; min-height: 420px; border-radius: 28px 28px 24px 24px; box-shadow: var(--shadow-raised); }
+}
+@media (max-width: 900px) {
+  .entry:global(.site-page):global(.auth-page) { padding: 0; }
+  .entry:global(.site-page):global(.auth-page) :global(.auth-card) { padding: var(--s5) var(--s5) var(--s4); }
+}
+@media (min-width: 720px) and (max-width: 900px) {
+  .entry:global(.site-page):global(.auth-page) { padding: var(--s7) var(--s5); }
+}

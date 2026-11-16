@@ -76,7 +76,11 @@ test('web-service-entry-sends-everyone-through-the-shared-login', () => {
   assert.match(home, /실제 발송은 발송 연결과 발신번호가 준비된 경우에만 시도/);
   assert.match(home, /모의 발송이나 미연동 상태에서는 실제로 전달되지 않/);
   assert.match(home, /화면 구성 예시/);
-  for (const variant of ['console', 'home', 'ticket', 'staff', 'report']) {
+  // The hero switches between console, ticket and report through its tabs
+  // (one preview driven by the active tab); the rest are fixed in place.
+  assert.match(home, /<ProductPreview variant=\{activeHero\.id\} \/>/);
+  for (const variant of ['console', 'ticket', 'report']) assert.match(home, new RegExp(`id: "${variant}"`));
+  for (const variant of ['home', 'ticket', 'staff', 'report']) {
     assert.match(home, new RegExp(`<ProductPreview variant="${variant}"`));
   }
 
