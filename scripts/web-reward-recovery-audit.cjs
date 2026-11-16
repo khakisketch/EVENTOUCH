@@ -47,7 +47,13 @@ async function main() {
     const row = (n) => page.locator('li').filter({ has: page.getByText(`합성 경품 ${n}`, { exact: true }) });
     await row(1).getByRole('button', { name: '수령 처리', exact: true }).waitFor();
     const execute = async (n, action) => {
-      await row(n).getByRole('button', { name: action === 'fulfill' ? '수령 처리' : '취소', exact: true }).click();
+      if (action === 'fulfill') await row(n).getByRole('button', { name: '수령 처리', exact: true }).click();
+      else {
+        // Cancel sits inside the row's fold.
+        const fold = row(n).locator('details').first();
+        if (!await fold.evaluate(el => el.open)) await fold.locator('summary').first().click();
+        await row(n).getByRole('button', { name: '경품 취소', exact: true }).click();
+      }
       await row(n).getByRole('group', { name: '실행 확인' }).getByRole('button', { name: action === 'fulfill' ? '처리한다' : '취소한다', exact: true }).click();
     };
     stage = 'lost fulfill';
@@ -84,7 +90,9 @@ async function main() {
     assert.ok(dialogMessage.includes('요청 결과를 아직 확인하지 못했습니다'));
     assert.equal(await recovery.isVisible(), true);
     allowLeave = true;
-    await page.getByRole('searchbox', { name: '경품 검색' }).fill('다른 검색어');
+    // The ledger search only appears past eight prizes; with fewer there is no filter to hide the recovery behind.
+    const search = page.getByRole('searchbox', { name: '경품 검색' });
+    if (await search.count()) await search.fill('다른 검색어');
     assert.equal(await recovery.isVisible(), true, 'filtering cannot hide the recovery controls');
     await recovery.getByRole('button', { name: '같은 요청 다시 시도' }).click();
     await page.getByRole('alert').filter({ hasText: '경품 처리 결과를 확인하지 못했습니다' }).waitFor();
@@ -94,7 +102,7 @@ async function main() {
     assert.equal(attempts[0].commandId, attempts[1].commandId);
     assert.equal(attempts[1].commandId, attempts[2].commandId);
     assert.equal((await readWorkspace()).rewards.find(item => item.id === 'audit-reward-1').status, 'RECEIVED');
-    await page.getByRole('searchbox', { name: '경품 검색' }).fill('');
+    if (await search.count()) await search.fill('');
 
     stage = 'mismatched success and failed refresh';
     mode = 'malformed'; await execute(2, 'fulfill');

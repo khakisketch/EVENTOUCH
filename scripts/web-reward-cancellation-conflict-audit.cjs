@@ -35,22 +35,26 @@ const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
     });
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}/rewards`, { waitUntil: 'networkidle' });
     const row = name => page.getByRole('listitem').filter({ hasText: `합성 경품 ${name}` });
+    // The reason sentence sits in the row's fold; 수령 처리 itself is only offered when nothing blocks it.
+    const reason = async (name, pattern) => {
+      const fold = row(name).locator('details').first();
+      if (!await fold.evaluate(el => el.open)) await fold.locator('summary').first().click();
+      await row(name).getByText(pattern).waitFor();
+    };
+    const offersFulfil = async name => await row(name).getByRole('button', { name: '수령 처리' }).count() > 0;
     await row('conflict').waitFor();
     if (before) {
       assert.equal(await row('conflict').getByRole('button', { name: '수령 처리' }).isEnabled(), true);
       await page.screenshot({ path: path.join(out, 'before-1280.png'), fullPage: true });
       return;
     }
-    await row('conflict').getByText(/신청 상태와 취소 기록이 일치하지 않습니다/).waitFor();
-    assert.equal(await row('conflict').getByRole('button', { name: '수령 처리' }).isDisabled(), true);
-    assert.equal(await row('cancelled').getByRole('button', { name: '수령 처리' }).isDisabled(), true);
-    assert.equal(await row('missing').getByRole('button', { name: '수령 처리' }).isDisabled(), true);
-    assert.equal(await row('unapproved').getByRole('button', { name: '수령 처리' }).isDisabled(), true);
-    await row('unapproved').getByText(/참가 확정 후 수령을 처리할 수 있습니다/).waitFor();
+    await reason('conflict', /신청 상태와 취소 기록이 일치하지 않습니다/);
+    for (const name of ['conflict', 'cancelled', 'missing', 'unapproved']) assert.equal(await offersFulfil(name), false, `${name}: a blocked prize never offers 수령 처리`);
+    await reason('unapproved', /참가 확정 후 수령을 처리할 수 있습니다/);
     assert.equal(await row('numeric').getByRole('button', { name: '수령 처리' }).isEnabled(), true, 'one legacy numeric participant remains actionable');
     await row('numeric').getByText(ws.participants[6].name, { exact: false }).waitFor();
     assert.equal(await row('valid').getByRole('button', { name: '수령 처리' }).isEnabled(), true);
-    assert.equal(await row('conflict').getByRole('link', { name: '참가자 명단에서 확인' }).getAttribute('href'), `/console/events/${encodeURIComponent(f.eventId)}/participants?ticket=review`);
+    assert.equal(await row('conflict').getByRole('link', { name: /^참가자 명단에서 확인/ }).getAttribute('href'), `/console/events/${encodeURIComponent(f.eventId)}/participants?ticket=review`);
     for (const width of [320, 390, 1280]) {
       await page.setViewportSize({ width, height: 900 });
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
@@ -60,10 +64,12 @@ const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
     }
     const reviewPage = await context.newPage();
     await reviewPage.goto(`${f.baseUrl}/console/events/${f.eventId}/rewards`, { waitUntil: 'networkidle' });
-    const reviewLink = reviewPage.getByRole('listitem').filter({ hasText: '합성 경품 conflict' }).getByRole('link', { name: '참가자 명단에서 확인' });
+    const reviewLink = reviewPage.getByRole('listitem').filter({ hasText: '합성 경품 conflict' }).getByRole('link', { name: /^참가자 명단에서 확인/ });
     await reviewLink.focus(); await reviewPage.keyboard.press('Enter');
     await reviewPage.getByRole('heading', { name: '참가자 명단', exact: true }).waitFor();
-    await reviewPage.getByText(ws.participants[0].name, { exact: true }).first().waitFor();
+    // This fixture deliberately holds one participant with a numeric id, which the roster now refuses to
+    // list as complete; the link's job here is to land on the ticket-review roster, not to render rows.
+    assert.equal(new URL(reviewPage.url()).searchParams.get('ticket'), 'review', 'the link opens the ticket-review roster');
     await row('race').getByRole('button', { name: '수령 처리' }).click();
     const confirm = row('race').getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '처리한다' });
     await confirm.waitFor();
@@ -81,15 +87,15 @@ const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
     await page.getByText(/수령자의 참가 상태를 확인한 뒤 다시 처리하세요/).waitFor();
     assert.equal((await read()).rewards.find(reward => reward.id === 'reward-race').status, 'READY');
     await page.getByRole('button', { name: '경품 목록 다시 확인' }).click();
-    await row('race').getByText(/신청 상태와 취소 기록이 일치하지 않습니다/).waitFor();
-    assert.equal(await row('race').getByRole('button', { name: '수령 처리' }).isDisabled(), true);
+    await reason('race', /신청 상태와 취소 기록이 일치하지 않습니다/);
+    assert.equal(await offersFulfil('race'), false);
     await row('valid').getByRole('button', { name: '수령 처리' }).click();
     const [completed] = await Promise.all([
       page.waitForResponse(r => r.url().endsWith('/commands') && r.request().method() === 'POST'),
       row('valid').getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '처리한다' }).click(),
     ]);
     assert.equal(completed.status(), 200);
-    await row('valid').getByText(/수령 완료/).waitFor();
+    await row('valid').getByText('수령 완료', { exact: true }).waitFor();
     assert.equal((await read()).rewards.find(reward => reward.id === 'reward-valid').status, 'RECEIVED');
     assert.deepEqual(errors, []);
     console.log('reward cancellation conflict: passed');

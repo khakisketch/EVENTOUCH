@@ -314,6 +314,8 @@ async function main() {
     const template = workspace.participants.find((person) => person.status !== 'CANCELLED');
     for (let index = 0; index < 1001; index += 1) workspace.participants.push({ ...template, id: `limit-${index}`, name: `합성 대량 참가자 ${index}`, phone: `0107${String(index).padStart(7, '0')}` });
     await write(workspace); await page.reload({ waitUntil: 'networkidle' });
+    // The filter-wide scope is offered beside an existing selection, so select the page first.
+    await page.getByRole('checkbox', { name: '이 페이지 전체 선택', exact: true }).check();
     await page.getByRole('button', { name: /필터 결과 전체 .*명 선택/ }).click();
     await page.getByText('한 번에 1,000명까지 취소할 수 있습니다.', { exact: false }).waitFor();
     assert.equal(await page.getByRole('button', { name: '신청 취소', exact: true }).isDisabled(), true);

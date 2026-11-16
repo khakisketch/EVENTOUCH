@@ -105,8 +105,9 @@ async function main() {
     // any real browser profile. The existing ticket page must offer recovery.
     await context.clearCookies();
     await page.getByRole('button', { name: '연결된 티켓 확인' }).click();
-    await page.waitForURL(/\/ticket$/);
-    await page.getByRole('heading', { name: '티켓이 확인되지 않습니다' }).waitFor();
+    // Without a usable cookie the recovery page itself says the linked ticket was not confirmed and offers a new code.
+    await page.getByText('이 연락처로 연결된 티켓을 확인하지 못했습니다. 새 인증번호를 받아 다시 인증하세요.', { exact: true }).waitFor();
+    await page.getByRole('button', { name: '인증번호 다시 받기' }).waitFor();
     await context.close();
 
     phase = 'a malformed successful recovery response does not imply a session';

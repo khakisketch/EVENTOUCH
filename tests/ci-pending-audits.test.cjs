@@ -14,19 +14,7 @@ const ci = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'c
 const audit = ci.slice(ci.indexOf('name: Run the browser audits serially'), ci.indexOf('name: Upload audit logs and captures on failure'));
 
 const PENDING_PORT = [
-  'audit-usability',
-  'web-account-recovery-audit',
-  'web-attendance-consistency-audit',
-  'web-attendee-visibility-audit',
-  'web-close-audit',
   'web-console-audit',
-  'web-intake-roster-edit-audit',
-  'web-message-nav-freshness-audit',
-  'web-message-targeting-audit',
-  'web-reviewed-exit-audit',
-  'web-reward-cancellation-conflict-audit',
-  'web-reward-recovery-audit',
-  'web-verification-uncertain-audit',
 ];
 
 test('only the listed audits are allowed to fail without stopping the web job', () => {

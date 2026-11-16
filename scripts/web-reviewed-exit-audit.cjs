@@ -146,8 +146,9 @@ async function main() {
     await page.getByText(/퇴장 기록을 저장했습니다/).waitFor();
     assert.equal(await page.evaluate(id => Object.keys(localStorage).some(key => key.endsWith(id)), ids[0]), false, 'success does not resurrect a receipt pointer');
     const overview = await context.newPage();
-    await overview.goto(`${f.baseUrl}/console/events/${f.eventId}`);
-    await overview.getByText('운영자 확인', { exact: true }).waitFor();
+    await overview.goto(`${f.baseUrl}/console/events/${f.eventId}`, { waitUntil: 'networkidle' });
+    await overview.getByRole('heading', { name: '운영 현황', exact: true }).waitFor();
+    await overview.getByText(/^운영자 확인/).first().waitFor();
     await overview.close();
 
     // A second lost response can be resolved from another tab without

@@ -303,9 +303,11 @@ async function main() {
       // The instrument wrapper counts every real operator action by kind:
       // click, fill, select and check stay separate in the JSON.
       const act = async (kind, fn2) => {
-        assert.ok(['click', 'fill', 'select', 'check'].includes(kind), `unknown act kind ${kind}`);
+        // open/confirm are clicks on a drawer or confirmation; scroll is a deliberate move to a section.
+        assert.ok(['click', 'fill', 'select', 'check', 'open', 'confirm', 'scroll'].includes(kind), `unknown act kind ${kind}`);
         task.steps += 1;
-        if (kind === 'click') task.clicks += 1;
+        if (kind === 'click' || kind === 'open' || kind === 'confirm') task.clicks += 1;
+        else if (kind === 'scroll') task.scrolls += 1;
         else if (kind === 'fill') task.fills += 1;
         else if (kind === 'select') task.selects += 1;
         else task.checks += 1;
@@ -404,7 +406,7 @@ async function main() {
     const moduleCard = () => page.locator('li').filter({
       has: page.getByRole('heading', { name: MODULE_TITLE }),
     });
-    const stagePanelReady = () => page.getByRole('button', { name: /\(으\)로 전환/, exact: false }).first()
+    const stagePanelReady = () => page.getByRole('button', { name: /단계로 전환/, exact: false }).first()
       .waitFor({ state: 'visible', timeout: 15000 });
     const selectSettingsTab = async (act, name) => {
       // Settings is one workbench page: sections are always visible, basics
@@ -430,7 +432,7 @@ async function main() {
         : page.getByRole('group', { name: '단계 전환 확인' }).getByRole('button', { name: '정말 전환합니다', exact: true });
       await touch(confirmButton.first(), `${stageLabel} 전환 확정`);
       await act('click', () => confirmButton.first().click());
-      await page.getByText(new RegExp(`${stageLabel}\\(으\\)로 전환했습니다`), { exact: false }).first().waitFor({ timeout: 15000 });
+      await page.getByText(new RegExp(`${stageLabel} 단계로 전환했습니다`), { exact: false }).first().waitFor({ timeout: 15000 });
     };
 
     // Only initial login/overview use goto. Every measured destination is
@@ -438,6 +440,8 @@ async function main() {
     const menuTo = async (rest, marker, act) => {
       const href = eventPath(rest);
       const link = page.locator(`a[href="${href}"]:visible`).first();
+      // On a phone the event menu sits behind the menu button.
+      if (!await link.count()) await act('click', () => page.locator('.console-global-trigger').click());
       await act('click', () => link.click());
       if (marker === '#campaign-title' && await page.locator('#message-compose-open').isVisible()) await act('click', () => page.locator('#message-compose-open').click());
       // Basics editing lives in a drawer: open it before waiting for the field.
@@ -474,7 +478,14 @@ async function main() {
           await touchOk(link, '승인 대기 처리');
           await act('click', () => link.click());
         } else {
-          await act('click', () => page.getByRole('link', { name: '행사 마감 시작', exact: true }).click());
+          // The overview offers 행사 마감 시작 only once the event has ended; this journey closes a running
+          // event step by step, so it reaches the same hub through the visible 결과 보고서 menu link.
+          const startLink = page.getByRole('link', { name: '행사 마감 시작', exact: true });
+          if (await startLink.count()) await act('click', () => startLink.click());
+          else {
+            await menuTo('/reports', '[role="tablist"]', act);
+            await act('click', () => page.getByRole('tab', { name: '행사 마감', exact: true }).click());
+          }
           await page.locator(HUB.nextAction).waitFor({ state: 'visible', timeout: 15000 });
           await shotBoth('paired-hub-start');
           const disclosure = page.locator('details').filter({ has: page.locator('summary').filter({ hasText: '전체 마감 단계와 전제 확인' }) });
@@ -522,6 +533,9 @@ async function main() {
         }
         const card = moduleCard();
         await card.getByRole('heading', { name: MODULE_TITLE }).waitFor({ timeout: 10000 });
+        // The row is a disclosure now: 종료 sits inside the expanded row.
+        const rowDetails = card.locator(':scope > details').first();
+        if (!await rowDetails.evaluate((el) => el.open)) await act('open', () => rowDetails.locator(':scope > summary').click());
         const closeButton = card.getByRole('button', { name: '종료', exact: true });
         await touchOk(closeButton, '프로그램 종료');
         await act('click', () => closeButton.click());
@@ -551,7 +565,7 @@ async function main() {
         const close = page.getByRole('button', { name: '접수 닫기', exact: true });
         await touchOk(close, '접수 닫기');
         await act('click', () => close.click());
-        await act('confirm', () => page.getByRole('dialog').getByRole('button', { name: '접수 닫기', exact: true }).click());
+        await act('confirm', () => page.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '접수 닫기', exact: true }).click());
         await page.getByText(/접수를 닫았습니다/, { exact: false }).first().waitFor({ timeout: 15000 });
         const workspace = (await readBootstrap(helpers, harness.baseUrl, ownerCookie)).workspaces[eventId];
         assert.equal(workspace.registrationOpen, false);
@@ -622,13 +636,13 @@ async function main() {
       await measure('report-freeze', '보고서 검토·동결 (내용 보기 → 공유 완료로 표시 → 공유 완료·잠금)', async (act, task, { touchOk }) => {
         task.screens = [eventPath('/reports'), `${eventPath('/reports')}#report-* (detail)`];
         task.fields = ['내용 보기', '공유 완료로 표시', '공유 완료·잠금'];
-        if (before) {
-          const row = page.locator('li').filter({ hasText: REPORT_TITLE });
-          const detail = row.getByRole('button', { name: '내용 보기', exact: true });
-          await touchOk(detail, '내용 보기');
-          await act('click', () => detail.click());
+        // Reports are tabs now; the new one opens on creation, otherwise pick it from the tab list.
+        if (!await page.locator('#report-detail').isVisible().catch(() => false)) {
+          const tab = page.getByRole('tablist', { name: '보고서 선택' }).getByRole('tab', { name: new RegExp(REPORT_TITLE) });
+          await touchOk(tab, '보고서 탭');
+          await act('click', () => tab.click());
         }
-        await page.getByText('보고서 내용', { exact: true }).first().waitFor({ timeout: 15000 });
+        await page.locator('#report-detail').waitFor({ timeout: 15000 });
         const mark = page.getByRole('button', { name: '공유 완료로 표시', exact: true });
         await touchOk(mark, '공유 완료로 표시');
         await act('click', () => mark.click());
@@ -814,7 +828,7 @@ async function main() {
       await page.keyboard.press('Escape');
       stateChecks.push('ENDED pending: immutable warning, no impossible approval next; old PUBLISHED not auto-selected; Enter/Space disclosure');
       await page.getByRole('tab', { name: '보고서', exact: true }).click();
-      await page.getByRole('button', { name: '내용 보기', exact: true }).click();
+      await page.getByRole('tablist', { name: '보고서 선택' }).getByRole('tab').first().click();
       await page.waitForFunction(() => { const rect = document.getElementById('report-detail')?.getBoundingClientRect(); return rect && rect.top >= 0 && rect.top < innerHeight; });
       await page.locator('[data-report-close-return]').click();
       // The click updates the selected report locally before Next commits
@@ -828,7 +842,12 @@ async function main() {
       await page.locator(HUB.nextAction).waitFor();
       assert.match(await page.locator(HUB.nextAction).innerText(), /결과 안내/);
       stateChecks.push('explicit report selection survives reload; capture basis stays visible');
-      await page.getByRole('button', { name: '집계 차이 보기', exact: true }).click();
+      // The comparison is a fold under the report now; the report itself opens from its tab.
+      if (!await page.locator('#report-detail').isVisible().catch(() => false)) {
+        if (!await page.getByRole('tablist', { name: '보고서 선택' }).count()) await page.getByRole('tab', { name: '보고서', exact: true }).click();
+        await page.getByRole('tablist', { name: '보고서 선택' }).getByRole('tab').first().click();
+      }
+      await page.locator('summary').filter({ hasText: '보고서-최근 집계 비교표 보기' }).click();
       const comparison = page.getByRole('table', { name: '보고서와 최근 참가 집계 비교' });
       await comparison.getByRole('row', { name: /누적 입장.*0명.*1명/ }).waitFor();
       const printable = page.locator('article').filter({ hasText: '이전 동결 보고서' });
@@ -934,7 +953,7 @@ async function main() {
       const refreshGuard = async dialog => { refreshGuardBlocked = true; await dialog.dismiss(); };
       page.on('dialog', refreshGuard);
       await page.locator(HUB.backLink).click();
-      await page.getByText('보관된 행사입니다. 분석과 동결 보고서는 읽기 전용이며, 메시지 작성·발송과 행사 변경은 잠겨 있습니다.', { exact: true }).waitFor();
+      await page.getByText('분석과 동결 보고서는 읽기 전용이며, 메시지 작성·발송과 행사 변경은 잠겨 있습니다.', { exact: true }).waitFor();
       page.off('dialog', refreshGuard);
       assert.equal(refreshGuardBlocked, false, 'verified ARCHIVED refresh resolves the obsolete unconfirmed-write guard');
       await page.unroute(`**/api/events/${refreshArchiveId}/commands`, refreshLossRoute);
@@ -987,6 +1006,8 @@ async function main() {
       await page.getByRole('button', { name: '운영 기능 저장', exact: true }).click();
       await page.getByText('운영 기능 설정을 저장했습니다.', { exact: false }).first().waitFor();
       await page.locator('[data-close-linear-next]').click();
+      // The module row is a disclosure: expand it so its 종료 action is reachable.
+      { const row = page.locator('li > details').first(); if (!await row.evaluate((el) => el.open)) await row.locator(':scope > summary').click(); }
       await page.getByRole('button', { name: '종료', exact: true }).waitFor();
       stateChecks.push('OPEN+feature OFF routes to settings; keyboard entry; unsaved linear-next cancellation; real event.features then direct programs handoff');
       await page.getByRole('button', { name: '종료', exact: true }).click();
