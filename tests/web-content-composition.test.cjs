@@ -130,3 +130,8 @@ test('the notice body is a rich editor on a small schema, stored as Markdown wit
   assert.match(workspace, /summary=\{richSummary\(item\.draft\.body\)\}/u);
   assert.match(preview, /<RichText source=\{item\.body\} imageSrc=\{imageSrc\} \/>/u);
 });
+
+test("content tabs follow the tab keyboard pattern: arrows wrap, Home and End jump", () => {
+  assert.match(workspace, /event\.key === "Home" \? tabs\[0\] : event\.key === "End" \? tabs\[tabs\.length - 1\]/u);
+  assert.match(workspace, /event\.key === "ArrowRight" \? tabs\[\(index \+ 1\) % tabs\.length\]/u);
+});

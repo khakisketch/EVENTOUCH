@@ -1640,7 +1640,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                       onClick={() => selectTab(item.id)}
                       onKeyDown={(event) => {
                         const index = tabs.findIndex((entry) => entry.id === item.id);
-                        const next = event.key === "ArrowRight" ? tabs[(index + 1) % tabs.length] : event.key === "ArrowLeft" ? tabs[(index + tabs.length - 1) % tabs.length] : null;
+                        const next = event.key === "ArrowRight" ? tabs[(index + 1) % tabs.length] : event.key === "ArrowLeft" ? tabs[(index + tabs.length - 1) % tabs.length] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[tabs.length - 1] : null;
                         if (!next) return;
                         event.preventDefault();
                         selectTab(next.id);

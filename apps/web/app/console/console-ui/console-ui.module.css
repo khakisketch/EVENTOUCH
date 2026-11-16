@@ -531,7 +531,8 @@
      side by side at 360–412px, so long Korean labels wrap at phrase
      boundaries instead of squeezing into half-width orphan stacks.
      Desktop keeps intentional pairs on one row. */
-  .formActionsButtons > :global(.button) {
+  .formActionsButtons > :global(.button),
+  .formActionsButtons :global(.astryx-button) {
     flex: 1 1 240px;
     word-break: keep-all;
   }
