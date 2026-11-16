@@ -329,7 +329,7 @@
   .rowAction { justify-content: flex-start; }
   .eventRowLink { grid-template-columns: minmax(0, 1fr) auto; }
   .rowArrow { display: none; }
-  .rowAction { margin-left: calc(9px + var(--s2)); min-height: 36px; }
+  .rowAction { margin-left: calc(9px + var(--s2)); min-height: 44px; }
   .liveCard { grid-template-columns: minmax(0, 1fr); padding: var(--s4); }
   .liveName { font-size: 20px; }
   .calendarPanel { padding: var(--s3); }
