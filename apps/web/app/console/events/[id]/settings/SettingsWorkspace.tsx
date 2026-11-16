@@ -1803,21 +1803,6 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           {sectionStatusLine(basicsStatus, "basics")}
           </fieldset>
         </ValidatedForm>
-        <div className="sr-only" aria-live="polite" aria-atomic="true">
-          {showScheduleReview ? "행사 일시가 저장되었습니다. 게시된 안내도 확인해 주세요." : ""}
-        </div>
-        {showScheduleReview ? (
-          <section className={styles.scheduleReview} aria-labelledby="schedule-review-title">
-            <h3 id="schedule-review-title">참가자에게 보이는 안내도 확인해 주세요</h3>
-            <p>행사 일시는 저장됐지만, 기존에 게시한 프로그램 일정과 공지·장소 안내는 그대로입니다. 여러 날짜에 진행하는 일정일 수 있으니 내용을 확인하고 필요한 경우에만 수정·게시하세요.</p>
-            <div className={styles.scheduleReviewLinks}>
-              {canWriteEvent(capabilities, "program.save") ? <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-program`}>프로그램 일정 확인</ProductLink> : null}
-              {canWriteEvent(capabilities, "notice.save") ? <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-notices`}>공지 확인</ProductLink> : null}
-              {canWriteEvent(capabilities, "venue.save") ? <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-venue`}>장소 안내 확인</ProductLink> : null}
-            </div>
-            {!canWriteEvent(capabilities, "program.save") || !canWriteEvent(capabilities, "notice.save") ? <p>확인할 권한이 없는 안내는 담당 운영자에게 검토를 요청하세요.</p> : null}
-          </section>
-        ) : null}
         {slugConfirm ? (
           <ConsoleConfirm
             summary={<><strong>주소 코드를 바꿀까요?</strong><br />이미 공개된 행사입니다. 바꾸면 이전 주소({state.basics.slug})로 나간 링크는 열리지 않습니다. 새 주소({basics.slug || "미입력"})로 저장할까요?</>}
@@ -1844,6 +1829,22 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           />
         ) : null}
       </ConsoleDialog>
+      ) : null}
+      {/* The drawer closes when the save lands, so the review of what attendees still see lives on the board, not inside it. */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {showScheduleReview ? "행사 일시가 저장되었습니다. 게시된 안내도 확인해 주세요." : ""}
+      </div>
+      {showScheduleReview ? (
+        <section className={styles.scheduleReview} aria-labelledby="schedule-review-title">
+          <h3 id="schedule-review-title">참가자에게 보이는 안내도 확인해 주세요</h3>
+          <p>행사 일시는 저장됐지만, 기존에 게시한 프로그램 일정과 공지·장소 안내는 그대로입니다. 여러 날짜에 진행하는 일정일 수 있으니 내용을 확인하고 필요한 경우에만 수정·게시하세요.</p>
+          <div className={styles.scheduleReviewLinks}>
+            {canWriteEvent(capabilities, "program.save") ? <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-program`}>프로그램 일정 확인</ProductLink> : null}
+            {canWriteEvent(capabilities, "notice.save") ? <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-notices`}>공지 확인</ProductLink> : null}
+            {canWriteEvent(capabilities, "venue.save") ? <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-venue`}>장소 안내 확인</ProductLink> : null}
+          </div>
+          {!canWriteEvent(capabilities, "program.save") || !canWriteEvent(capabilities, "notice.save") ? <p>확인할 권한이 없는 안내는 담당 운영자에게 검토를 요청하세요.</p> : null}
+        </section>
       ) : null}
       <div className={styles.workPanels}>
       <section

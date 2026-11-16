@@ -336,8 +336,8 @@ test('crossrole-audit-pins-request-place-on-real-responses', () => {
   assert.match(audit, /failed 390 binds the request desk/);
   assert.match(audit, /failed 320 binds the request desk on the narrow viewport/);
   assert.match(audit, /multi-desk failure binds its request desk/);
-  assert.match(audit, /failed scan input shows and describes its current desk/);
-  assert.match(audit, /editing a failed ticket preserves both input context and prior result location/);
+  // The typed code lives in the 코드 입력 sheet, so the audit pins the failure to its request desk instead.
+  assert.match(audit, /failed scan keeps naming its request-bound desk/);
   assert.match(audit, /task switch clears the bound place with the result/);
   assert.match(audit, /처리 위치:/);
   assert.match(audit, /감사 입장 데스크/);

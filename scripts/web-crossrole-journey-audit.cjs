@@ -718,7 +718,8 @@ async function main() {
     await rep.locator('#report-summary').fill('참가 신청 2건이 승인·입장까지 이어졌는지 확인한 보고서입니다.');
     await rep.getByRole('button', { name: '보고서 만들기', exact: true }).last().click();
     await rep.getByText(/보고서 초안을 만들었습니다/).first().waitFor({ timeout: 15000 });
-    await rep.getByRole('button', { name: '내용 보기', exact: true }).first().click();
+    // Reports are tabs now; the new one opens on creation, so only switch when it is not.
+    if (!await rep.locator('#report-detail').isVisible().catch(() => false)) await rep.getByRole('tab', { name: /신청부터 입장까지 여정 검수/ }).click();
     await rep.locator('#report-detail').waitFor({ timeout: 15000 });
     await rep.screenshot({ path: path.join(OUT, 'op-report-detail-1280.png'), fullPage: true });
     {
@@ -1164,10 +1165,11 @@ async function main() {
     multiWork.on('pageerror', error => errors.push(`staff-multi: ${error.message}`));
     await multiWork.goto(`${fixture.baseUrl}/staff/events/${fixture.eventId}`);
     await multiWork.locator('#staff-desk').selectOption(fixture.deskId);
+    await confirmInitialStaffDesk(multiWork, { hold: false });
     const cameraButton = multiWork.getByRole('button', { name: '카메라 켜기', exact: true });
     await cameraButton.focus();
     await multiWork.keyboard.press('Enter');
-    await multiWork.locator('[role="region"][aria-label="카메라 스캔"]').waitFor({ timeout: 15000 });
+    await multiWork.getByRole('region', { name: '카메라 스캔', exact: true }).waitFor({ timeout: 15000 });
     check('keyboard opens the simulated camera fallback', true);
     let multiReady, multiFailed, releaseMulti, multiFinished;
     let multiStarted = false;
@@ -1196,7 +1198,9 @@ async function main() {
       await typeTicket(multiWork, 'ET-MULTI-INVALID');
       await multiWork.locator('#staff-ticket').press('Enter');
       check('multiple-assignment scan receives a real rejection', await bounded(multiResponse, 'multiple-assignment scan') === 404);
-      check('pending scan closes the already-open simulated camera', await multiWork.locator('[role="region"][aria-label="카메라 스캔"]').count() === 0);
+      // The camera panel stays (here it shows the simulated denial and its fallbacks); what matters is
+      // that the pending request is announced and the entry sheet says it is processing.
+      check('pending scan is announced and suspends further entry', await multiWork.getByText('처리 결과를 확인하고 있습니다.', { exact: false }).first().isVisible() && await multiWork.getByText('처리 중입니다', { exact: true }).first().isVisible());
       check('pending scan locks both task switches and the assigned desk', await multiWork.getByRole('button', { name: '데스크 체크인', exact: true }).isDisabled() && await multiWork.getByRole('button', { name: '부스 인증', exact: true }).isDisabled() && await multiWork.locator('#staff-desk').isDisabled() && await multiWork.locator('#staff-desk').inputValue() === fixture.deskId);
     } finally {
       releaseMulti();
@@ -1209,22 +1213,9 @@ async function main() {
     // actually open — reading after retry would see the cleared result.
     const multiPlace = await multiFailure.getByText(/처리 위치:/).first().innerText().catch(() => '');
     check('multi-desk failure binds its request desk', /처리 위치:\s*감사 입장 데스크\s*·\s*입장/.test(multiPlace));
-    // The old result and the editable input are different contexts. When a
-    // ticket is edited after a rejection, the action still needs its current
-    // desk in view and in the input's accessible description; the previous
-    // failure must continue to name the request-bound desk, not the input.
-    const multiTicket = multiWork.locator('#staff-ticket');
-    const currentScanHint = multiWork.locator('#staff-scan-hint');
-    const describedBy = (await multiTicket.getAttribute('aria-describedby') || '').split(/\s+/);
-    check('failed scan input shows and describes its current desk',
-      await currentScanHint.isVisible()
-      && /현재\s*감사 입장 데스크\s*·\s*입장/.test(await currentScanHint.innerText())
-      && describedBy.includes('staff-scan-hint'));
-    await multiTicket.fill('ET-MULTI-EDITED');
-    check('editing a failed ticket preserves both input context and prior result location',
-      await currentScanHint.isVisible()
-      && /현재\s*감사 입장 데스크\s*·\s*입장/.test(await currentScanHint.innerText())
-      && /처리 위치:\s*감사 입장 데스크\s*·\s*입장/.test(await multiFailure.getByText(/처리 위치:/).first().innerText()));
+    // The failure stays bound to the desk that made the request; the typed code now lives in the
+    // 코드 입력 sheet, so the old inline-input context checks no longer apply.
+    check('failed scan keeps naming its request-bound desk', /처리 위치:\s*감사 입장 데스크\s*·\s*입장/.test(await multiFailure.getByText(/처리 위치:/).first().innerText()));
     await multiWork.screenshot({ path: path.join(OUT, 'staff-failed-edited-context-390.png') });
     // Stale-place guard: an actual work switch while the verdict is open
     // clears it instead of re-labeling it under the new booth/desk.
@@ -1239,8 +1230,7 @@ async function main() {
     await multiWork.getByRole('button', { name: '데스크 체크인', exact: true }).focus();
     await multiWork.keyboard.press('Enter');
     await multiWork.locator('#staff-desk').waitFor({ timeout: 15000 });
-    await typeTicket(multiWork, 'ET-MULTI-INVALID');
-    await multiWork.locator('#staff-ticket').press('Enter');
+    await (await typeTicket(multiWork, 'ET-MULTI-INVALID')).press('Enter');
     const multiFailureRetry = multiWork.locator('[role="region"][aria-label="스캔 실패"]');
     await multiFailureRetry.waitFor({ timeout: 15000 });
     await multiFailureRetry.getByRole('button', { name: '확인', exact: true }).focus();
@@ -1264,15 +1254,14 @@ async function main() {
     };
     await multiWork.route('**/api/events/*/commands', abandonedRoute);
     try {
-      await multiWork.getByRole('button', { name: '입장 처리', exact: true }).click();
+      await (await typeTicket(multiWork, 'ET-MULTI-INVALID')).press('Enter');
       const unknown = multiWork.locator('[role="region"][aria-label="스캔 결과 미확인"]');
       await unknown.waitFor();
       let abandonWarning = '';
       multiWork.once('dialog', async dialog => { abandonWarning = dialog.message(); await dialog.accept(); });
       await unknown.getByRole('button', { name: '확인 중단하고 다른 업무', exact: true }).click();
       check('abandoning an uncertain scan requires a clear warning', /처리됐을 수 있는 요청/.test(abandonWarning));
-      await codeField(multiWork);
-      await multiWork.getByRole('button', { name: '입장 처리', exact: true }).click();
+      await (await typeTicket(multiWork, 'ET-MULTI-INVALID')).press('Enter');
       await multiWork.locator('[role="region"][aria-label="스캔 실패"]').waitFor();
       check('a new scan after explicit abandonment has a new command id',
         abandonedAttempts.length === 2 && abandonedAttempts[0].commandId !== abandonedAttempts[1].commandId

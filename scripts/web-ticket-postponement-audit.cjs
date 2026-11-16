@@ -7,6 +7,7 @@ const axeSource = require('axe-core').source;
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
+const { openSettingsBasics } = require('./ui-journey-helpers.cjs');
 (async () => {
   if (!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a private capture root');
   const out = path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'ticket-postponement');
@@ -38,17 +39,21 @@ const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
       return route.continue();
     });
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}/settings`, { waitUntil: 'networkidle' });
+    await openSettingsBasics(page);
     await page.locator('#set-date').fill('2027-12-31');
     await page.getByText(/현재 유효한 티켓은 새 행사 날짜에 맞춰 연장/).waitFor();
     for (const width of [320, 390, 1280]) {
       await page.setViewportSize({ width, height: 900 });
+      await openSettingsBasics(page);
       await page.locator('#set-date').evaluate(el => el.scrollIntoView({ block: 'center' }));
       await page.screenshot({ path: path.join(out, `settings-${width}.png`) });
+      await openSettingsBasics(page);
       await page.locator('#set-date').locator('..').screenshot({ path: path.join(out, `date-detail-${width}.png`) });
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
       if (width === 390) { await page.addScriptTag({ content: axeSource }); assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter(v => ['serious','critical'].includes(v.impact)).map(v => v.id)), []); }
     }
     const originalDate = (await f.harness.database.query('SELECT payload FROM events WHERE id=$1', [f.eventId])).rows[0].payload.date;
+    await openSettingsBasics(page);
     const saveBasics = page.getByRole('button', { name: '기본 정보 저장', exact: true });
     await saveBasics.focus();
     await page.keyboard.press('Enter');
@@ -56,6 +61,7 @@ const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
     await unsupported.waitFor();
     assert.equal(await page.getByText(/현재 서버에서는 행사 정보를 안전하게 저장할 수 없습니다/).count(), 1, 'the actionable error is not repeated in three places');
     assert.equal(await saveBasics.evaluate(el => document.activeElement === el), true, 'keyboard focus stays at the failed action');
+    await openSettingsBasics(page);
     assert.equal(await page.locator('#set-date').inputValue(), '2027-12-31', 'old-server rejection keeps the draft');
     assert.equal((await f.harness.database.query('SELECT payload FROM events WHERE id=$1', [f.eventId])).rows[0].payload.date, originalDate, 'old-server rejection makes no write');
     await page.setViewportSize({ width: 390, height: 844 });
@@ -67,6 +73,7 @@ const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
     assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter(v => ['serious','critical'].includes(v.impact)).map(v => v.id)), []);
     await page.screenshot({ path: path.join(out, 'old-server-rejection-390.png'), fullPage: true });
     await page.setViewportSize({ width: 1280, height: 900 });
+    await openSettingsBasics(page);
     await page.getByRole('button', { name: '기본 정보 저장', exact: true }).click();
     const recovery = page.getByRole('region', { name: '행사 설정 처리 확인 필요' }); await recovery.waitFor();
     await recovery.getByRole('button', { name: '서버 처리 확인' }).click();

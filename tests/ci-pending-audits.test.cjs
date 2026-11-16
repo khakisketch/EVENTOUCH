@@ -16,13 +16,10 @@ const audit = ci.slice(ci.indexOf('name: Run the browser audits serially'), ci.i
 const PENDING_PORT = [
   'audit-usability',
   'web-account-recovery-audit',
-  'web-archive-preconditions-audit',
   'web-attendance-consistency-audit',
   'web-attendee-visibility-audit',
-  'web-booth-mode-review-audit',
   'web-close-audit',
   'web-console-audit',
-  'web-crossrole-audit',
   'web-delivery-audit',
   'web-intake-roster-edit-audit',
   'web-message-nav-freshness-audit',
@@ -34,10 +31,7 @@ const PENDING_PORT = [
   'web-reviewed-exit-audit',
   'web-reward-cancellation-conflict-audit',
   'web-reward-recovery-audit',
-  'web-schedule-review-audit',
-  'web-signup-retry-audit',
   'web-system-audit',
-  'web-ticket-postponement-audit',
   'web-verification-uncertain-audit',
 ];
 

@@ -35,7 +35,7 @@ async function main() {
       damaged.participants = participants; await save(damaged);
     }
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}/settings`, { waitUntil: 'networkidle' });
-    const stage = page.locator('[data-workspace-section="settings-stage"]');
+    const stage = page.locator('#panel-settings-stage');
     await stage.waitFor();
     const archive = stage.getByRole('button', { name: '보관 단계로 전환', exact: true });
     if (process.argv.includes('--baseline')) {
@@ -69,7 +69,7 @@ async function main() {
       if (width !== 320) await page.screenshot({ path: path.join(out, `overview-unavailable-${width}.png`), fullPage: true });
     }
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}/participants`, { waitUntil: 'networkidle' });
-    assert.match(await page.innerText('body'), /참가자 명단을 확인할 수 없습니다/);
+    assert.match(await page.innerText('body'), /참가자 명단을 (완전히 )?확인할 수 없습니다/);
     assert.doesNotMatch(await page.innerText('body'), /아직 등록된 참가자가 없습니다/);
     await page.screenshot({ path: path.join(out, 'participants-unavailable-1280.png'), fullPage: true });
     damaged.participants = participants; damaged.modules = modules; damaged.checks = null; await save(damaged);
