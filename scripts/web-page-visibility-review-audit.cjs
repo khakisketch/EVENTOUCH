@@ -7,6 +7,7 @@ const axeSource = require('axe-core').source;
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
+const { openStudioPanel } = require('./ui-journey-helpers.cjs');
 
 async function main() {
   if (!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a private EVENTOUCH_CAPTURE_ROOT');
@@ -51,10 +52,11 @@ async function main() {
     await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/page`, { waitUntil: 'networkidle' });
     assert.ok(await page.getByText(/미리보기.*메뉴는 작동하지 않습니다/).count(), 'read-only preview controls are explained');
     assert.equal(await page.getByRole('region', { name: '390×700 홈 디자인 미리보기' }).getByRole('button', { name: '모바일 티켓' }).isDisabled(), true);
-    const dateToggle = page.getByRole('checkbox', { name: /^(일정 보기|행사 일시 보기)$/ });
-    const programToggle = page.getByRole('checkbox', { name: /^(프로그램 보기|프로그램 일정 보기)$/ });
-    const noticeToggle = page.getByRole('checkbox', { name: '공지 보기', exact: true });
-    const venueToggle = page.getByRole('checkbox', { name: '장소 보기', exact: true });
+    await openStudioPanel(page, 'exposure');
+    const dateToggle = page.getByRole('switch', { name: /^(일정 보기|행사 일시 보기)$/ });
+    const programToggle = page.getByRole('switch', { name: /^(프로그램 보기|프로그램 일정 보기)$/ });
+    const noticeToggle = page.getByRole('switch', { name: '공지 보기', exact: true });
+    const venueToggle = page.getByRole('switch', { name: '장소 보기', exact: true });
     const save = async () => {
       await page.getByRole('button', { name: '초안 저장', exact: true }).click();
       await page.getByText('초안을 저장했습니다. 참가자 화면에는 게시 전까지 적용되지 않습니다.', { exact: true }).waitFor();
@@ -170,8 +172,8 @@ async function main() {
     assert.equal(await attendee.getByRole('heading', { name: '합성 프로그램 일정', exact: true }).count(), 0);
     assert.equal(await attendee.getByRole('heading', { name: '오시는 길', exact: true }).count(), 0);
     await attendee.goto(`${eventUrl}/home`, { waitUntil: 'networkidle' });
-    await attendee.getByRole('button', { name: '모바일 티켓', exact: true }).waitFor();
-    assert.equal(await attendee.getByRole('button', { name: '공지사항', exact: true }).count(), 0);
+    await attendee.getByRole('button', { name: /^모바일 티켓/u }).waitFor();
+    assert.equal(await attendee.getByRole('button', { name: /^공지사항/u }).count(), 0);
     await ticketPage.reload({ waitUntil: 'networkidle' });
     await ticketPage.getByText('2027-01-16', { exact: true }).first().waitFor();
     await screen.reload({ waitUntil: 'networkidle' });
@@ -185,6 +187,7 @@ async function main() {
     const eventRecord = (await fixture.harness.database.query('SELECT payload FROM events WHERE id=$1', [fixture.eventId])).rows[0].payload;
     await command('event.features', { features: eventRecord.features.filter(value => value !== 'venue'), expectedFeatures: eventRecord.features });
     await page.reload({ waitUntil: 'networkidle' });
+    await openStudioPanel(page, 'exposure');
     await page.getByRole('group', { name: '미리보기 기준' }).getByRole('button', { name: '게시본', exact: true }).click();
     await page.getByText(/표시 설정.*모두 켜짐/).waitFor();
     assert.equal(await page.getByText('전체 항목 노출', { exact: false }).count(), 0);
@@ -204,6 +207,7 @@ async function main() {
     assert.equal(unavailable.status(), 404, 'a planning-stage event has no public event page');
     await page.goto(`${fixture.baseUrl}/console/events/${draftId}/page`, { waitUntil: 'networkidle' });
     assert.ok(await page.getByText(/미리보기.*메뉴는 작동하지 않습니다/).count(), 'planning-stage preview controls are explained');
+    await openStudioPanel(page, 'exposure');
     await page.locator('#home-intro').fill('합성 기획 행사 안내');
     await save();
     dialog = await review();
@@ -261,7 +265,8 @@ async function main() {
     await page.getByText(/기획 단계.*참가자.*공개되지/).first().waitFor();
     await page.getByText('페이지 게시됨 · 행사 비공개', { exact: true }).first().waitFor();
     await page.getByRole('group', { name: '미리보기 기준' }).getByRole('button', { name: '게시본', exact: true }).click();
-    await page.getByText(/게시된 설정을 미리 봅니다.*기획 단계.*공개되지/).waitFor();
+    assert.equal(await page.getByRole('group', { name: '미리보기 기준' }).getByRole('button', { name: '게시본', exact: true }).getAttribute('aria-pressed'), 'true', 'the published preview is selected');
+    await page.getByText(/기획 단계.*참가자.*공개되지/).first().waitFor();
     await page.screenshot({ path: path.join(out, 'draft-published-1280.png'), fullPage: true });
     assert.equal((await attendee.goto(draftEventUrl, { waitUntil: 'networkidle' })).status(), 404, 'saving page settings does not expose the event');
     const transition = await fixture.helpers.requestJson(fixture.harness.baseUrl, `/api/events/${draftId}/commands`, {

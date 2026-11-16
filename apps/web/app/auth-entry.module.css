@@ -141,13 +141,14 @@
 
 /*
  * Bare in-card links read as boxed secondary actions at the 44px floor.
- * Links that already carry .button keep their own rank; the wordmark lives
+ * Links that already carry .button (ProductLink drops that class and sets
+ * data-action-variant instead) keep their own rank; the wordmark lives
  * in the brand block, outside this scope. The login-page reset help uses
  * .loginReset without the .entry opt-in, so it is covered by its own
  * higher-specificity rule below (outranking the global reset-help link
  * color regardless of stylesheet order).
  */
-.entry:global(.site-page):global(.auth-page) :global(.auth-card) :global(a:not(.button)) {
+.entry:global(.site-page):global(.auth-page) :global(.auth-card) :global(a:not(.button, [data-action-variant])) {
   display: inline-flex;
   min-height: 44px;
   align-items: center;
@@ -161,7 +162,7 @@
 }
 
 @media (hover: hover) {
-  .entry:global(.site-page):global(.auth-page) :global(.auth-card) :global(a:not(.button)):hover {
+  .entry:global(.site-page):global(.auth-page) :global(.auth-card) :global(a:not(.button, [data-action-variant])):hover {
     border-color: var(--ink);
     background: var(--surface-muted);
     color: var(--ink);
@@ -225,17 +226,18 @@
 }
 
 /* In uncertain account flows, checking the outcome is primary; repeating
-   the submitted action remains available as secondary. */
-.entry:global(.site-page):global(.auth-page) :global(.registration-form) :global(button.button-secondary[type="submit"]),
-.entry:global(.site-page):global(.auth-page) :global(.auth-form) :global(button.button-secondary[type="submit"]) {
+   the submitted action remains available as secondary. ProductButton drops
+   the legacy button-secondary class, so the rule reads its variant attribute. */
+.entry:global(.site-page):global(.auth-page) :global(.registration-form) :global(button[data-product-variant="secondary"][type="submit"]),
+.entry:global(.site-page):global(.auth-page) :global(.auth-form) :global(button[data-product-variant="secondary"][type="submit"]) {
   border-color: var(--line-strong);
   background: var(--paper);
   color: var(--ink);
 }
 
 @media (hover: hover) {
-  .entry:global(.site-page):global(.auth-page) :global(.registration-form) :global(button.button-secondary[type="submit"]):hover,
-  .entry:global(.site-page):global(.auth-page) :global(.auth-form) :global(button.button-secondary[type="submit"]):hover {
+  .entry:global(.site-page):global(.auth-page) :global(.registration-form) :global(button[data-product-variant="secondary"][type="submit"]):hover,
+  .entry:global(.site-page):global(.auth-page) :global(.auth-form) :global(button[data-product-variant="secondary"][type="submit"]):hover {
     border-color: var(--line-strong);
     background: var(--surface-muted);
     color: var(--ink);

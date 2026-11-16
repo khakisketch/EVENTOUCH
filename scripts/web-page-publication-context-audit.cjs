@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 const axeSource = require('axe-core').source;
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
+const { openStudioPanel } = require('./ui-journey-helpers.cjs');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 
@@ -41,6 +42,7 @@ async function main() {
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     const editor = async id => {
       await page.goto(`${f.baseUrl}/console/events/${id}/page`, { waitUntil: 'networkidle' });
+      await openStudioPanel(page, 'exposure');
       await page.locator('#home-intro').fill('합성 검토된 페이지');
       await page.getByRole('button', { name: '초안 저장', exact: true }).click();
       await page.getByText('초안을 저장했습니다. 참가자 화면에는 게시 전까지 적용되지 않습니다.', { exact: true }).waitFor();
@@ -189,6 +191,7 @@ async function main() {
     };
     await page.route('**/api/events/*/bootstrap', partial);
     await page.goto(`${f.baseUrl}/console/events/${partialId}/page`, { waitUntil: 'networkidle' });
+    await openStudioPanel(page, 'exposure');
     await page.locator('#home-intro').fill('합성 보존할 입력');
     assert.equal(await page.getByRole('button', { name: '게시 검토', exact: true }).isDisabled(), true);
     await page.getByText(/행사 공개 상태나 주소를 확인하지 못했습니다/).waitFor();
@@ -198,6 +201,7 @@ async function main() {
     await partialPanel.getByRole('button', { name: '내 변경을 최신 초안에 적용', exact: true }).click();
     const merge = page.getByRole('group', { name: '실행 확인', exact: true });
     await merge.getByRole('button', { name: '내 변경 유지하기', exact: true }).click();
+    await openStudioPanel(page, 'exposure');
     assert.equal(await page.locator('#home-intro').inputValue(), '합성 보존할 입력');
     await page.getByRole('button', { name: '초안 저장', exact: true }).click();
     await page.getByText('초안을 저장했습니다. 참가자 화면에는 게시 전까지 적용되지 않습니다.', { exact: true }).waitFor();

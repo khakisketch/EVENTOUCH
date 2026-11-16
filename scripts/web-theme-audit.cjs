@@ -8,6 +8,7 @@ const fs = require('node:fs');
 const { prepareCaptureDir, ensureCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = require('./capture-dir.cjs');
 const path = require('node:path');
 const { startOwnedNext, ensureAuditDatabaseEnv } = require('./audit-fixture.cjs');
+const { openStudioPanel } = require('./ui-journey-helpers.cjs');
 ensureAuditDatabaseEnv();
 const { chromium } = require('playwright');
 const axeSource = require('axe-core').source;
@@ -48,6 +49,9 @@ async function assertAxe(page, name) {
   assert.deepEqual(findings, [], `${name}: blocking accessibility findings`);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `${name}: horizontal overflow`);
 }
+
+// Studio controls are radio groups inside panels; pick one by group and option.
+const choose = (page, group, name) => page.getByRole('radiogroup', { name: group, exact: true }).getByRole('radio', { name, exact: true }).click();
 
 async function main() {
   prepareCaptureDir(directory);
@@ -111,18 +115,21 @@ async function main() {
     await image.close(); pages.splice(pages.indexOf(image), 1);
     const uploaded = editor.waitForResponse((response) => response.request().method() === 'POST' && response.url().includes(`/api/events/${eventA}/files`) && response.ok());
     uploaded.catch(() => {});
+    await openStudioPanel(editor, 'banner');
     await editor.locator('input[type=file]').first().setInputFiles({ name: '행사-배너.png', mimeType: 'image/png', buffer: banner });
     await uploaded;
-    await editor.locator('input[type=color]').first().fill('#e8efe9');
+    await choose(editor, '사진 초점', '위');
+    await choose(editor, '읽기 배경', '진하게');
+    await choose(editor, '글 위치', '아래');
+    await openStudioPanel(editor, 'text');
     await editor.getByLabel(/배너 제목|상단 제목/).fill('우리의 새로운 행사');
     await editor.getByLabel(/보조 문구|보조 설명/).fill('함께 만드는 특별한 하루');
-    await editor.locator('summary', { hasText: '배치·색상 상세 설정' }).click();
-    await editor.locator('summary', { hasText: '이미지 상세 설정' }).click();
-    await editor.locator('select').filter({ has: editor.locator('option[value="bottom-overlay"]') }).selectOption('bottom-overlay');
-    await editor.locator('select').filter({ has: editor.locator('option[value="strong"]') }).selectOption('strong');
-    await editor.locator('select').filter({ has: editor.locator('option[value="left"]') }).selectOption('left');
-    await editor.locator('select').filter({ has: editor.locator('option[value="top"]') }).selectOption('top');
-    await editor.locator('select').filter({ has: editor.locator('option[value="large"]') }).selectOption('large');
+    await choose(editor, '글 정렬', '왼쪽');
+    await choose(editor, '제목 크기', '크게');
+    // The page background sits on the studio's top list, above the rows.
+    await editor.locator('#theme-edit').getByRole('button', { name: '설정', exact: true }).click();
+    await editor.getByRole('radiogroup', { name: '배경색', exact: true }).getByRole('button', { name: '직접 고르기' }).click();
+    await editor.getByLabel('배경색 색 코드', { exact: true }).fill('#E8EFE9');
     await editor.getByRole('heading', { name: '우리의 새로운 행사', exact: true }).waitFor();
     await editor.screenshot({ path: path.join(directory, 'editor-unsaved-1440.png'), fullPage: true });
     assert.deepEqual(await readPublic(), before, 'unsaved preview must never alter attendee content');
@@ -179,7 +186,7 @@ async function main() {
       await page.getByText('함께 만드는 특별한 하루', { exact: true }).waitFor();
       assert.equal(await page.getByRole('heading', { name: '우리의 새로운 행사', exact: true }).evaluate((element) => getComputedStyle(element).textAlign), 'left');
       assert.equal(await page.getByRole('main').evaluate((element) => getComputedStyle(element).backgroundColor), 'rgb(232, 239, 233)');
-      assert.equal(await page.getByRole('button', { name: '순위 투표', exact: true }).count(), 1);
+      assert.equal(await page.getByRole('button', { name: /^순위 투표/u }).count(), 1);
     }
     await attendee.screenshot({ path: path.join(directory, 'published-390.png'), fullPage: true });
     await second.screenshot({ path: path.join(directory, 'published-320.png'), fullPage: true });
@@ -190,7 +197,7 @@ async function main() {
     await attendee.getByRole('heading', { name: '우리의 새로운 행사', exact: true }).waitFor();
     assert.equal(new URL(attendee.url()).searchParams.has('ticket'), false);
     assert.equal(await attendee.getByRole('main').evaluate((element) => getComputedStyle(element).backgroundColor), 'rgb(232, 239, 233)');
-    await attendee.getByRole('button', { name: '공지사항', exact: true }).click();
+    await attendee.getByRole('button', { name: /^공지사항/u }).click();
     assert.equal(await attendee.getByRole('main').evaluate((element) => getComputedStyle(element).backgroundColor), 'rgb(232, 239, 233)');
     await attendee.getByRole('button', { name: '참가 메뉴', exact: true }).click();
     await attendee.getByRole('heading', { name: '우리의 새로운 행사', exact: true }).waitFor();
@@ -199,8 +206,8 @@ async function main() {
     assert.equal(await second.getByRole('main').evaluate((element) => getComputedStyle(element).backgroundColor), 'rgb(185, 222, 240)');
 
     phase = 'image-only layout and image removal';
-    await editor.locator('summary', { hasText: '배치·색상 상세 설정' }).click();
-    await editor.locator('#home-layout').selectOption('image-only');
+    await openStudioPanel(editor, 'banner');
+    await choose(editor, '글 위치', '글자 숨김');
     await commandClick(editor, save, 'attendee.page.save');
     await commandClick(editor, publish, 'attendee.page.publish-reviewed');
     await attendee.reload({ waitUntil: 'networkidle' });
@@ -213,12 +220,14 @@ async function main() {
     });
     assert.ok(headingVisuallyHidden, 'image-only must hide the overlay visually while retaining its semantic heading');
     await attendee.screenshot({ path: path.join(directory, 'published-image-only-390.png'), fullPage: true });
+    await openStudioPanel(editor, 'banner');
     await editor.getByRole('button', { name: '배너 이미지 제거', exact: true }).click();
     assert.equal((await readWorkspace()).pageExperience.draft.keyvisual.fileId, fileId, 'opening removal review must preserve the saved image');
     await editor.getByRole('group', { name: '실행 확인', exact: true })
       .getByRole('button', { name: '연결 해제하기', exact: true }).click();
     await editor.getByRole('button', { name: '기본 이미지 사용 중', exact: true }).waitFor();
-    await editor.locator('#home-layout').selectOption('centered');
+    await choose(editor, '글 위치', '가운데');
+    await openStudioPanel(editor, 'text');
     await editor.locator('#home-hero-title').fill('');
     await editor.locator('#home-hero-subtitle').fill('');
     await commandClick(editor, save, 'attendee.page.save');
@@ -236,7 +245,9 @@ async function main() {
     phase = 'concurrent draft recovery';
     const stale = await newPage(operatorContext);
     await stale.goto(`${gateway.baseUrl}/console/events/${eventA}/page`, { waitUntil: 'networkidle' });
+    await openStudioPanel(stale, 'text');
     await stale.locator('#home-hero-title').fill('이전 창에서 편집 중인 문구');
+    await openStudioPanel(editor, 'text');
     await editor.locator('#home-hero-title').fill('다른 창에서 저장한 최신 초안');
     await commandClick(editor, save, 'attendee.page.save');
     const conflictResponse = stale.waitForResponse((response) => {

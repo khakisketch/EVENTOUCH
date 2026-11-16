@@ -26,6 +26,15 @@ test('the account screens share the login\'s band and sheet through the one entr
   assert.match(entry, /input,\s*\n?\.entry[^{]*registration-form\) input \{ min-height: 56px/su, 'fields are 56px');
 });
 
+test('a secondary submit in an uncertain flow reads the button variant, not a class ProductButton strips', () => {
+  const button = fs.readFileSync(path.join(app, 'ui/ProductButton.tsx'), 'utf8');
+  assert.match(button, /"data-product-variant": resolvedVariant/u, 'the resolved variant reaches the DOM');
+  assert.doesNotMatch(entry, /button\.button-secondary/u, 'the legacy class never reaches the DOM, so a rule on it never matches');
+  assert.match(entry, /a:not\(\.button, \[data-action-variant\]\)/u, 'an action-styled link (ProductLink) keeps its own rank beside the boxed text links');
+  assert.doesNotMatch(entry, /a:not\(\.button\)/u);
+  assert.match(entry, /button\[data-product-variant="secondary"\]\[type="submit"\]\) \{[^}]*background:\s*var\(--paper\)/su, 'the retry stays secondary beside the one orange check');
+});
+
 test('only an error that leads into a submit is docked with it', () => {
   assert.match(entry, /p\[role="alert"\]:has\(\+ :global\(button\)\)[^{]*\{ margin-top: auto; \}/u);
   assert.doesNotMatch(entry, /p\[role="alert"\] \{[^}]*margin: auto 0 0/su, 'a lone notice must not be pushed to the bottom');

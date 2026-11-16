@@ -67,4 +67,24 @@ async function waitForDialogExitFocus(page, trigger, timeout = 5000) {
   await page.getByRole('dialog').waitFor({ state: 'hidden', timeout });
   await page.waitForFunction(element => element === document.activeElement, await trigger.elementHandle(), { polling: 'raf', timeout });
 }
-module.exports = { openProgram, programSection, selectTask, openCreateSettings, openSettingsBasics, chooseRadio, messageStep, waitForDialogExitFocus };
+// The page studio keeps its fields behind four rows; a field's id only exists
+// once its panel is open. Opens the panel from the list (or from another panel
+// via the "설정" crumb) and waits for its heading.
+const STUDIO_PANEL = {
+  banner: { row: /^배너/u, title: '배너' },
+  text: { row: /^제목과 문구/u, title: '제목과 문구' },
+  menus: { row: /^홈 메뉴/u, title: '홈 메뉴' },
+  exposure: { row: /^소개와 공개 범위/u, title: '소개와 공개 범위' },
+};
+async function openStudioPanel(page, key) {
+  const { row, title } = STUDIO_PANEL[key];
+  const heading = page.locator('#theme-panel-title');
+  if (await heading.isVisible().catch(() => false)) {
+    if ((await heading.innerText()).trim() === title) return;
+    await page.locator('#theme-edit').getByRole('button', { name: '설정', exact: true }).click();
+  }
+  await page.locator('#theme-edit').getByRole('button', { name: row }).click();
+  await page.locator('#theme-panel-title', { hasText: title }).waitFor();
+}
+
+module.exports = { openStudioPanel, openProgram, programSection, selectTask, openCreateSettings, openSettingsBasics, chooseRadio, messageStep, waitForDialogExitFocus };
