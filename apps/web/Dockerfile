@@ -19,6 +19,10 @@ COPY apps/web/ ./
 ENV EVENTOUCH_API_URL=$EVENTOUCH_API_URL
 # No API needed at build time: all page data is fetched at request time.
 RUN npm run build
+# Dev-only tooling (type checker, scaffolding CLI) must not ship: prune it so
+# a dev-only advisory can never ride the image. The runtime entry
+# (web-server.cjs + `next start`) only ever loads production dependencies.
+RUN npm prune --omit=dev && npm cache clean --force
 
 FROM node:24-alpine
 WORKDIR /app
