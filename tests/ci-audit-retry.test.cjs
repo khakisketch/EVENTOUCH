@@ -1,8 +1,10 @@
 'use strict';
 
-// Every browser-audit gate in the web job gets one retry when its first attempt fails.
-// Both attempts append to the gate's own log, and only a failure on both attempts fails
-// the gate. This pins the wiring; the retry never replaces an assertion or a status check.
+// Every browser-audit gate runs through run_gate in the web job: the gate keeps
+// its own log, gets one retry when its first attempt fails, and only a failure
+// on both attempts fails the gate. Three parallel shards split the gates
+// round-robin; each shard still runs its own gates serially. This pins the
+// wiring; the retry never replaces an assertion or a status check.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -19,13 +21,24 @@ test('the retry helper appends to the gate log, gets a fresh capture root, and f
   assert.doesNotMatch(audit, /\|\|\s*true\b/, 'no gate may be turned into a silent pass');
 });
 
-test('every browser-audit gate retries its own log, under the same name', () => {
-  const gates = [...audit.matchAll(/npm run ((?:web|audit):\S+) 2>&1 \| ci_tee "\$EVENTOUCH_CI_LOGS\/([^"/]+)\.log"( \|\| ci_retry "([^"]+)" npm run (\S+))?/g)];
+test('the shards split the gates round-robin and reject a missing shard', () => {
+  assert.match(audit, /case "\$\{EVENTOUCH_CI_SHARD:\?CI shard is not set\}" in/, 'a missing shard fails instead of running everything');
+  assert.match(audit, /1\|2\|3\) ;;/);
+  assert.match(audit, /unknown CI shard/, 'an unknown shard fails instead of running nothing');
+  assert.match(audit, /GATE_INDEX=\$\(\(GATE_INDEX \+ 1\)\)/);
+  assert.match(audit, /\(\( \(GATE_INDEX - 1\) % 3 \)\) -ne \$\(\(EVENTOUCH_CI_SHARD - 1\)\)/, 'gate N runs on shard ((N-1) mod 3) + 1');
+});
+
+test('run_gate keeps the gate log, the retry and the pending port in one place', () => {
+  assert.match(audit, /"\$@" 2>&1 \| ci_tee "\$EVENTOUCH_CI_LOGS\/\$log\.log" \|\| ci_retry "\$log" "\$@"/, 'retrying gates keep ci_tee before ci_retry');
+  assert.match(audit, /"\$@" 2>&1 \| ci_tee "\$EVENTOUCH_CI_LOGS\/\$log\.log" \|\| ci_pending "\$log"/, 'a pending port keeps ci_tee before ci_pending');
+});
+
+test('every browser-audit gate runs through run_gate under its own log name', () => {
+  const gates = [...audit.matchAll(/^ *run_gate "([^"]+)"( pending)? npm run (\S+)$/gm)];
   assert.ok(gates.length > 100, `expected the full browser suite, saw ${gates.length}`);
-  for (const [, script, log, retry, retryName, retryScript] of gates) {
-    assert.ok(retry, `${log} has a retry`);
-    assert.equal(retryName, log, `${log} retries under its own log name`);
-    assert.equal(retryScript, script, `${log} retries the same script`);
+  for (const [, log, , script] of gates) {
+    assert.equal(log, script.replace(/:/g, '-'), `${script} keeps its own log name`);
   }
 });
 

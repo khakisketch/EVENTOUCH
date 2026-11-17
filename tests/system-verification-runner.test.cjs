@@ -37,7 +37,7 @@ test('UI recovery and workflow audits remain serial gates after the product buil
 
 test('integrated verification also runs the web audits wired into CI', () => {
   const workflow = fs.readFileSync(path.join(__dirname, '..', '.github/workflows/ci.yml'), 'utf8');
-  const audits = [...workflow.matchAll(/^\s*npm run (web:[a-z0-9:-]*audit)\b/gm)].map((match) => match[1]);
+  const audits = [...workflow.matchAll(/run_gate "[^"]+" npm run (web:[a-z0-9:-]*audit)\b/g)].map((match) => match[1]);
   assert.ok(audits.length > 0, 'the CI web audits must be discoverable');
   for (const command of audits) {
     assert.ok(SCRIPTS.includes(command), `${command} is wired into CI but missing from integrated verification`);

@@ -14,7 +14,7 @@ test('cross-role journey is wired into npm and the isolated web audit job', () =
   const ci = fs.readFileSync(path.join(root, '.github/workflows/ci.yml'), 'utf8');
   assert.equal(pkg.scripts['web:crossrole:audit'], 'node scripts/web-crossrole-journey-audit.cjs');
   assert.ok(fs.existsSync(path.join(root, 'scripts/web-crossrole-journey-audit.cjs')));
-  assert.match(ci, /npm run web:crossrole:audit 2>&1 \| ci_tee "\$EVENTOUCH_CI_LOGS\/web-crossrole-audit\.log"/);
+  assert.match(ci, /run_gate "web-crossrole-audit" npm run web:crossrole:audit/);
   const webJob = ci.slice(ci.indexOf('\n  web:\n'));
   const build = webJob.indexOf('npm --prefix apps/web run build');
   const audit = webJob.indexOf('npm run web:crossrole:audit');
