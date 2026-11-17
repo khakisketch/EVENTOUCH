@@ -11,10 +11,11 @@ const test = require('node:test');
 const ci = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'ci.yml'), 'utf8');
 const audit = ci.slice(ci.indexOf('name: Run the browser audits serially'), ci.indexOf('name: Upload audit logs and captures on failure'));
 
-test('the retry helper appends to the gate log and fails only when the second attempt fails', () => {
+test('the retry helper appends to the gate log, gets a fresh capture root, and fails only when the second attempt fails', () => {
   assert.match(audit, /ci_retry\(\) \{\n\s+local name="\$1"\n\s+local log=[^\n]+\n\s+shift\n/);
-  assert.match(audit, /local log="\$EVENTOUCH_CI_LOGS\/\$name\.log"/, 'the log is the gate log for this name');
-  assert.match(audit, /"\$@" 2>&1 \| ci_tee "\$log"/, 'both attempts append to that same log');
+  assert.match(audit, /local retry_root="\$EVENTOUCH_CI_CAPTURES\/retry-\$name"/, 'the second attempt has its own captures folder');
+  assert.match(audit, /mkdir -m 700 "\$retry_root"/);
+  assert.match(audit, /EVENTOUCH_CAPTURE_ROOT="\$retry_root" "\$@" 2>&1 \| ci_tee "\$log"/, 'both attempts append to the same gate log');
   assert.doesNotMatch(audit, /\|\|\s*true\b/, 'no gate may be turned into a silent pass');
 });
 

@@ -348,7 +348,11 @@ jobs:
             shift
             ci_retried+=("$name")
             echo "::warning title=Audit retried::$name failed on its first attempt; running it once more. Both attempts stay in its log."
-            "$@" 2>&1 | ci_tee "$log"
+            # The second attempt gets its own capture root under the same captures tree (still uploaded), so
+            # it never meets the first attempt's capture folders (audits refuse to overwrite them).
+            local retry_root="$EVENTOUCH_CI_CAPTURES/retry-$name"
+            mkdir -m 700 "$retry_root"
+            EVENTOUCH_CAPTURE_ROOT="$retry_root" "$@" 2>&1 | ci_tee "$log"
           }
           ci_pending_failed=()
           ci_pending() {
