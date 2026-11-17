@@ -303,6 +303,63 @@ test('a replay reports an earlier entry as history after a newer exit or correct
   assert.equal((await readRecords(event.id)).length, 2);
 });
 
+test('a second entry scan names the person and when they entered, without changing the refusal', async () => {
+  const event = await createFixture();
+  const person = makeParticipant(event.id, '이미 들어온 분');
+  const state = await readWorkspace(event.id);
+  state.participants.push(person);
+  await writeWorkspace(event.id, state);
+
+  const firstId = commandId();
+  assert.equal((await scan(event, person, { id: firstId })).status, 200);
+  const [first] = (await readWorkspace(event.id)).checks.filter((row) => row.id === firstId);
+
+  const again = await scan(event, person);
+  assert.equal(again.status, 409);
+  assert.equal(again.json.code, 'ALREADY_CHECKED_IN');
+  assert.equal(again.json.error, '이미 입장한 참가자입니다. 중복 처리하지 않았습니다.', 'the existing message and code are unchanged');
+  assert.deepEqual(again.json.details, { name: '이미 들어온 분', firstCheckedInAt: first.at });
+  assert.equal(Object.hasOwn(again.json, 'field'), false);
+  assert.equal((await readRecords(event.id)).length, 1, 'the refused scan wrote nothing');
+});
+
+test('the entry time ignores corrected scans and uses the earliest remaining one', async () => {
+  const event = await createFixture();
+  const person = makeParticipant(event.id, '정정 이력 참가자');
+  const state = await readWorkspace(event.id);
+  state.participants.push(person);
+  await writeWorkspace(event.id, state);
+  assert.equal((await scan(event, person)).status, 200);
+
+  // History as a correction leaves it: an earlier IN that was corrected away,
+  // a later IN that stands, and another person's entry that must not leak in.
+  const stored = await readWorkspace(event.id);
+  const standing = stored.checks.find((row) => row.participantId === person.id && row.action === 'IN');
+  stored.checks.push(
+    { ...standing, id: 'corrected-away', at: '2020-01-01T00:00:00.000Z', corrected: true },
+    { ...standing, id: 'someone-else', participantId: 'other-person', at: '2019-01-01T00:00:00.000Z' },
+    { ...standing, id: 'an-exit', action: 'OUT', at: '2018-01-01T00:00:00.000Z' },
+    { ...standing, id: 'unreadable-time', at: 'not-a-time' },
+  );
+  await writeWorkspace(event.id, stored);
+
+  const again = await scan(event, person);
+  assert.equal(again.status, 409);
+  assert.equal(again.json.details.firstCheckedInAt, standing.at);
+});
+
+test('other refusals carry no details', async () => {
+  const event = await createFixture();
+  const person = makeParticipant(event.id, '취소된 참가자');
+  person.status = 'CANCELLED'; person.cancelled = true; person.revoked = true;
+  const state = await readWorkspace(event.id);
+  state.participants.push(person);
+  await writeWorkspace(event.id, state);
+  const refused = await scan(event, person);
+  assert.ok(refused.status >= 400);
+  assert.equal(Object.hasOwn(refused.json, 'details'), false);
+});
+
 test('migration-005-backfills-checks-written-before-the-table-existed', async () => {
   const admin = createDatabase({ connectionString: databaseUrl });
   const schema = `records_upgrade_${suffix.replace(/-/g, '')}`;

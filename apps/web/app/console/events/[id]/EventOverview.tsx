@@ -22,6 +22,7 @@ import { consoleFetch, subscribeConsoleFreshness } from "../../../../lib/console
 import { hasValidScheduledInstant, messageNeedsAttention } from "../../../../lib/message-attention";
 import { attendanceNeedsReview, attendanceNotEntered } from "../../../../lib/attendance-state.cjs";
 import { cancellationNeedsReview } from "../../../../lib/cancellation-state.cjs";
+import { countRewardAttention } from "../../../../lib/reward-status";
 
 type CheckRow = {
   id: string;
@@ -101,6 +102,8 @@ type Overview = {
   allMessageDueAt: number[];
   messageClockAt: number;
   messageReviewIncomplete: boolean;
+  // 확인 필요 prizes, or null while the 경품 feature is off or unreadable.
+  rewardAttention: number | null;
   messageConnection: "connected" | "disconnected" | "unknown";
 };
 
@@ -917,6 +920,8 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             allMessageDueAt,
             messageClockAt,
             messageReviewIncomplete,
+            rewardAttention: Array.isArray(event.features) && event.features.includes("reward")
+              ? countRewardAttention(workspace)?.attention ?? null : null,
             messageConnection: asRecord(bootstrap.integrations)?.connected === true ? "connected"
               : asRecord(bootstrap.integrations)?.connected === false ? "disconnected" : "unknown",
           },
@@ -1221,6 +1226,17 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         hint: `보고서 ${getReportStatus(overview)}.`,
         action: "결과 보고서 보기",
         href: `${base}/reports`,
+      });
+    }
+    // Last on purpose: a quiet row that never outranks the stage's own work.
+    if (overview.rewardAttention !== null && overview.rewardAttention > 0) {
+      nowItems.push({
+        key: "reward-attention",
+        title: "경품 확인 필요",
+        count: `${overview.rewardAttention}건`,
+        hint: "수령자나 참가 상태를 확인해야 지급할 수 있는 경품이 있습니다.",
+        action: "경품 지급 현황",
+        href: `${base}/rewards`,
       });
     }
   }

@@ -11,5 +11,5 @@
     "esModuleInterop": true,
     "types": ["node"]
   },
-  "include": ["commands/**/*.ts", "fastify/**/*.ts", "runtime-security.ts", "signup-protection.ts", "request-observability.ts"]
+  "include": ["commands/**/*.ts", "fastify/**/*.ts", "fastify/**/*.mts", "runtime-security.ts", "signup-protection.ts", "request-observability.ts"]
 }

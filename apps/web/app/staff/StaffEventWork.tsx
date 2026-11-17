@@ -143,7 +143,7 @@ type ScanRecordStatus = keyof typeof SCAN_HISTORY_NOTICES;
 type ScanResult =
   | { kind: "idle" }
   | { kind: "ok"; participantId: string; name: string; action: string; reentry: boolean; booth?: string; place: ScanPlace; checkId?: string; correctionChanged?: true; recordStatus?: ScanRecordStatus }
-  | { kind: "failed"; message: string; uncertain: boolean; place: ScanPlace; requestTicket: string; requestTarget?: string; deskRefreshRequired?: boolean; sourceRefreshRequired?: boolean; manualRefreshRequired?: boolean; boothLimitReached?: boolean; alreadyIn?: boolean; attendanceReviewRequired?: boolean; eligibilityReviewRequired?: boolean };
+  | { kind: "failed"; message: string; uncertain: boolean; place: ScanPlace; requestTicket: string; requestTarget?: string; deskRefreshRequired?: boolean; sourceRefreshRequired?: boolean; manualRefreshRequired?: boolean; boothLimitReached?: boolean; alreadyIn?: boolean; alreadyName?: string; alreadyAt?: string; attendanceReviewRequired?: boolean; eligibilityReviewRequired?: boolean };
 
 function randomCommandId(): string {
   if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
@@ -171,6 +171,17 @@ function formatCheckTime(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "시각 확인 중";
   return new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+// When a ticket is scanned in again the server names who is already inside and
+// when they got in. Both are optional extras: a missing or odd value leaves the
+// plain "이미 입장했어요" notice.
+function alreadyInDetails(value: unknown): { alreadyName?: string; alreadyAt?: string } {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
+  const details = value as { name?: unknown; firstCheckedInAt?: unknown };
+  const name = typeof details.name === "string" ? details.name.trim() : "";
+  const at = typeof details.firstCheckedInAt === "string" && !Number.isNaN(new Date(details.firstCheckedInAt).getTime()) ? details.firstCheckedInAt : "";
+  return { ...(name ? { alreadyName: name } : {}), ...(at ? { alreadyAt: at } : {}) };
 }
 
 function identityKey(person: Pick<DeskParticipant, "name" | "company">): string {
@@ -1114,6 +1125,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         participantId?: unknown;
         rewards?: unknown;
         rewardVerificationId?: unknown;
+        details?: unknown;
       } | null;
       if (!res.ok) {
         // These verdicts are produced only after the server has locked the
@@ -1142,6 +1154,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           uncertain,
           boothLimitReached,
           alreadyIn: isDesk && res.status === 409 && data?.code === "ALREADY_CHECKED_IN",
+          ...(isDesk && res.status === 409 && data?.code === "ALREADY_CHECKED_IN" ? alreadyInDetails(data?.details) : {}),
           attendanceReviewRequired,
           eligibilityReviewRequired,
           deskRefreshRequired: deskChanged,
@@ -2275,6 +2288,9 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
               <span className={prizeStyles.badge} data-tone={stageTone} aria-hidden="true">{stageTone === "info" ? <InfoIcon /> : stageTone === "bad" ? <XIcon /> : <BangIcon />}</span>
               <h2 className={prizeStyles.kicker}>{failKicker}</h2>
               <p className={`${boothLimitReached || result.alreadyIn ? "scan-result notice" : "scan-result scan-failure"} ${prizeStyles.bigMessage}`} role={boothLimitReached || result.alreadyIn ? "status" : "alert"}>{result.message}</p>
+              {result.alreadyIn && (result.alreadyName || result.alreadyAt) ? (
+                <p className={prizeStyles.subLine}>{[result.alreadyName, result.alreadyAt ? `${formatCheckTime(result.alreadyAt)} 입장` : ""].filter(Boolean).join(" · ")}</p>
+              ) : null}
               {result.place.placeName ? (
                 <p className={prizeStyles.subLine}>처리 위치: {result.place.placeName} · {result.place.actionLabel}</p>
               ) : null}

@@ -20,7 +20,7 @@
 
 import fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import type { Readable } from "node:stream";
-import { bearerToken, decodedSegment, errorStatus } from "./legacy-http.ts";
+import { bearerToken, decodedSegment, errorStatus } from "./legacy-http.mts";
 
 export type PublicEventReader = {
   loadPublicEvent: (slug: string) => Promise<unknown | null>;
