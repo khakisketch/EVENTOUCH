@@ -232,11 +232,16 @@ async function main() {
     await editor.locator('#home-hero-title').fill('');
     await editor.locator('#home-hero-subtitle').fill('');
     await commandClick(editor, save, 'attendee.page.save');
+    // Split the two halves: the saved draft must already hold the cleared title before anything is published,
+    // so a later mismatch is known to be a publish problem and not a save that missed the last edit.
+    const clearedDraft = (await readWorkspace()).pageExperience.draft;
+    assert.equal(clearedDraft.homeStyle.heroTitle, null, `the saved draft must hold the cleared title (saw ${JSON.stringify(clearedDraft.homeStyle.heroTitle)})`);
+    assert.equal(clearedDraft.keyvisual, null, 'the saved draft must hold the removed image');
     assert.equal((await attendee.request.get(`${gateway.baseUrl}/api/public/events/${eventA}/files/${fileId}`)).status(), 200, 'a draft removal must not remove the published image');
     await commandClick(editor, publish, 'attendee.page.publish-reviewed');
     published = await readPublic();
     assert.equal(published.keyvisual, null);
-    assert.equal(published.homeStyle.heroTitle, null);
+    assert.equal(published.homeStyle.heroTitle, null, `the published title must match the saved draft (saw ${JSON.stringify(published.homeStyle.heroTitle)})`);
     assert.equal((await attendee.request.get(`${gateway.baseUrl}/api/public/events/${eventA}/files/${fileId}`)).status(), 404, 'an unreferenced image must become private after removal is published');
     await attendee.reload({ waitUntil: 'networkidle' });
     await attendee.getByRole('heading', { name: '디자인 검증 행사 A', exact: true }).waitFor();
