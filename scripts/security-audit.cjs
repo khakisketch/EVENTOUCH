@@ -14,11 +14,12 @@
 // deliberate lockfile edit (safe `npm audit fix`, never --force).
 //
 // Scope notes:
-//   - Root uses --omit=dev: the shipped API image installs with
-//     `npm ci --omit=dev`, so dev-only findings cannot ship. Failing the
-//     gate on dev-only findings would block deploys over tooling CVEs.
-//   - Web has no dev/prod split worth gating separately (Next ships its
-//     whole tree), so the full web tree is audited.
+//   - Both sides use --omit=dev: the shipped images install/prune to
+//     production dependencies only (API: `npm ci --omit=dev`; web:
+//     `npm prune --omit=dev` after the build in apps/web/Dockerfile), so
+//     dev-only findings cannot ship. Failing the gate on dev-only findings
+//     would block deploys over tooling CVEs with no upstream patch
+//     (e.g. a ReDoS in a scaffolding CLI's transitive matcher).
 //   - `npm audit` exit status is the verdict: it exits nonzero when findings
 //     at or above --audit-level exist. This script propagates that status
 //     per lockfile and prints which side failed.
@@ -62,10 +63,10 @@ async function main() {
     }
   }
 
-  process.stdout.write(`[security:audit] gate level: ${level} (root --omit=dev + apps/web)\n`);
+  process.stdout.write(`[security:audit] gate level: ${level} (root --omit=dev + apps/web --omit=dev)\n`);
   const results = [
     await runAudit('root', ['audit', '--omit=dev', `--audit-level=${level}`], ROOT),
-    await runAudit('apps/web', ['audit', '--include=dev', `--audit-level=${level}`], path.join(ROOT, 'apps/web')),
+    await runAudit('apps/web', ['audit', '--omit=dev', `--audit-level=${level}`], path.join(ROOT, 'apps/web')),
   ];
   const failed = results.filter((result) => !result.ok);
   if (failed.length) {
