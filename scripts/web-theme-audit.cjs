@@ -32,7 +32,8 @@ async function commandClick(page, button, name) {
       .getByRole('button', { name: '게시하기', exact: true }).click();
   }
   const response = await pending;
-  const data = await response.json();
+  // Best-effort body for the failure message only; the status check stays exact (see web-hanwool-audit).
+  const data = await response.json().catch(() => null);
   assert.ok(response.ok(), `${name}: ${response.status()} ${JSON.stringify(data)}`);
   await page.waitForLoadState('networkidle');
   return data;
