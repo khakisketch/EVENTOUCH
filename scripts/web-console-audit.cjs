@@ -66,7 +66,7 @@ const SCREENS = [
   { key: 'photos', path: '/console/events/:id/photos', title: '현장 사진', scope: 'event', marker: { css: '#evidence-photo-sections' } },
   { key: 'content', path: '/console/events/:id/content', title: '공지·안내', scope: 'event', marker: { css: '#content-panel' } },
   { key: 'attendeePage', path: '/console/events/:id/page', title: '참가자 페이지', scope: 'event', marker: { css: '#theme-save-draft' } },
-  { key: 'rewards', path: '/console/events/:id/rewards', title: '경품 수령', scope: 'event', marker: { role: 'region', name: '경품 지급 현황' } },
+  { key: 'rewards', path: '/console/events/:id/rewards', title: '경품 지급 현황', scope: 'event', marker: { role: 'region', name: '경품 지급 목록' } },
   { key: 'settings', path: '/console/events/:id/settings', title: '행사 설정', scope: 'event', marker: { css: '#settings-basics' } },
   { key: 'reports', path: '/console/events/:id/reports', title: '결과 보고서', scope: 'event', marker: { role: 'tab', name: '보고서' } },
 ];

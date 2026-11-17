@@ -75,7 +75,7 @@ export const CONSOLE_PAGES: Record<ConsolePageId, ConsolePageMeta> = {
   photos: { label: "현장 사진", title: "현장 사진", scope: "event", layout: "workspace" },
   content: { label: "공지·안내", title: "공지·안내", scope: "event", layout: "workspace" },
   attendeePage: { label: "참가자 페이지", title: "참가자 페이지", scope: "event", layout: "workspace" },
-  rewards: { label: "경품 수령", title: "경품 수령", scope: "event", layout: "workspace" },
+  rewards: { label: "경품 지급 현황", title: "경품 지급 현황", scope: "event", layout: "workspace" },
   settings: { label: "행사 설정", title: "행사 설정", scope: "event", layout: "workspace" },
   reports: { label: "결과 보고서", title: "결과 보고서", scope: "event", layout: "workspace" },
 };

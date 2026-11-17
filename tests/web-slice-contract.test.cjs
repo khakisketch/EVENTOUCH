@@ -763,7 +763,7 @@ test('web-console-shell-keeps-decided-navigation-and-clients-read-only', () => {
   // the event branch; the shell keeps badges, permissions and feature gates.
   const navigation = read('app/console/console-navigation.ts');
   assert.match(navigation, /content: \{ label: "공지·안내"/);
-  assert.match(navigation, /rewards: \{ label: "경품 수령"/);
+  assert.match(navigation, /rewards: \{ label: "경품 지급 현황"/);
   assert.match(navigation, /return `\$\{base\}\/content`/);
   assert.match(navigation, /return `\$\{base\}\/rewards`/);
   // Five hubs own the rail: the active hub expands its pages, the other four

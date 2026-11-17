@@ -117,6 +117,7 @@ const EXPECTED_GATES = [
   'npm run web:staff-booth-clock:audit',
   'npm run web:booth-server-clock:audit',
   'npm run web:overview-message-attention:audit',
+  'npm run web:overview-reward-row:audit',
   'npm run web:message-nav-attention:audit',
   'npm run web:message-nav-freshness:audit',
   'npm run web:ticket-review-queue:audit',

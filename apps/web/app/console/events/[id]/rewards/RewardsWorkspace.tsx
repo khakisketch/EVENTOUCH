@@ -20,6 +20,7 @@ import { canWriteEvent } from "../../../../../lib/event-capabilities";
 import { abandonOperatorAttempt, acknowledgeOperatorReceipt, isOrganizationContextBlock } from "../../../../../lib/operator-context";
 import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../lib/operator-receipts";
 import { useEventReceipts } from "../../../../../lib/use-event-receipts";
+import { rewardBucket, rewardParticipantIssue } from "../../../../../lib/reward-status";
 import styles from "./rewards.module.css";
 
 // Reward handout desk: registration happens on the participant row
@@ -102,12 +103,10 @@ function statusLabel(status: string): string {
 
 type Bucket = "attention" | "waiting" | "done";
 
-// Where a reward belongs on the oversight screen: anything blocked or unclear
-// is 확인 필요, a clean READY prize is 지급 대기, finished ones are done.
+// Where a reward belongs on the oversight screen. The rule is shared with the
+// 운영 현황 task queue (lib/reward-status.ts) so both screens count alike.
 function bucketOf(reward: Reward): Bucket {
-  if (reward.status === "RECEIVED" || reward.status === "CANCELLED") return "done";
-  if (reward.status === "READY" && !reward.participantIssue) return "waiting";
-  return "attention";
+  return rewardBucket(reward.status, reward.participantIssue);
 }
 
 function issueLabel(issue: Reward["participantIssue"]): string {
@@ -321,12 +320,7 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
               const company = text(reward.company);
               const recipientId = participantIdentifier(reward.participantId);
               const matches = people.get(recipientId) ?? [];
-              const person = matches.length === 1 ? matches[0] : null;
-              const participantStatus = text(person?.status).toUpperCase();
-              const participantIssue: Reward["participantIssue"] = !person ? "missing"
-                : participantStatus === "CANCELLED" ? "cancelled"
-                : person.cancelled === true || person.ticketReview === "cancelled" ? "conflict"
-                : participantStatus !== "APPROVED" ? "unapproved" : "";
+              const participantIssue: Reward["participantIssue"] = rewardParticipantIssue(matches);
               return [{
                 id: reward.id,
                 participantId: recipientId,
@@ -657,7 +651,7 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
           <p>참가자 화면에서 참가 확정자에게 경품을 등록하세요.</p>
         </div>
       ) : (
-        <section className={styles.oversight} aria-label="경품 지급 현황">
+        <section className={styles.oversight} aria-label="경품 지급 목록">
           <div className={styles.summary}>
             <div className={styles.ring} role="img" aria-label={`지급 완료 ${countReceived}건 / 전체 ${activeTotal}건`}>
               <svg viewBox="0 0 140 140" aria-hidden="true"><circle className={styles.ringTrack} cx="70" cy="70" r="62" /><circle className={styles.ringDone} cx="70" cy="70" r="62" strokeDasharray={ringLength} strokeDashoffset={ringOffset} /></svg>
