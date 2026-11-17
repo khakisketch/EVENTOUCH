@@ -47,7 +47,9 @@ async function clickCommand(page, button, command) {
   pending.catch(() => {}); // Keep an actionability failure from masking its own error during teardown.
   await button.click();
   const response = await pending;
-  const data = await response.json();
+  // The body is only for the failure message. A page that navigates before it is read must not turn an
+  // exact status check into a protocol error, so read it best-effort and keep the status assertion.
+  const data = await response.json().catch(() => null);
   assert.ok(response.ok(), `${command}: ${response.status()} ${JSON.stringify(data)}`);
   await page.waitForLoadState('networkidle');
   return data;
@@ -115,7 +117,9 @@ async function clickCommandConfirm(page, button, confirmName, command) {
   await button.click();
   await page.getByRole('group', { name: '실행 확인', exact: true }).getByRole('button', { name: confirmName, exact: true }).click();
   const response = await pending;
-  const data = await response.json();
+  // The body is only for the failure message. A page that navigates before it is read must not turn an
+  // exact status check into a protocol error, so read it best-effort and keep the status assertion.
+  const data = await response.json().catch(() => null);
   assert.ok(response.ok(), `${command}: ${response.status()} ${JSON.stringify(data)}`);
   await page.waitForLoadState('networkidle');
   return data;

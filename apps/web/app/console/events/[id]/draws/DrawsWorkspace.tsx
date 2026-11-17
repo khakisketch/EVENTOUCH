@@ -243,6 +243,13 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
   const rouletteVersionRef = useRef<number | null>(null);
   const rouletteReviewedStatusRef = useRef<RouletteConfig["status"] | null>(null);
   const [rouletteConflict, setRouletteConflict] = useState<RouletteConflict | null>(null);
+  // The conflict heading mounts with its state; focus it after that commit, not in a frame that may fire first.
+  const rouletteConflictFocusRef = useRef(false);
+  useEffect(() => {
+    if (!rouletteConflict || !rouletteConflictFocusRef.current) return;
+    rouletteConflictFocusRef.current = false;
+    document.getElementById("roulette-conflict-heading")?.focus();
+  }, [rouletteConflict]);
   const rouletteConflictRead = useRef<symbol | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<
     | { kind: "programStatus"; program: DrawProgram; status: "DRAFT" | "OPEN" | "CLOSED"; summary: string }
@@ -1425,8 +1432,8 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
       }
     } catch (error) {
       if (error instanceof DrawRequestError && error.code === "ROULETTE_CONFIG_CHANGED") {
+        rouletteConflictFocusRef.current = true;
         setRouletteConflict({ loading: false, error: null, latest: null });
-        window.requestAnimationFrame(() => document.getElementById("roulette-conflict-heading")?.focus());
       } else setFailure(error instanceof Error ? error.message : "룰렛 설정을 저장하지 못했습니다.");
     } finally {
       setBusy(null);

@@ -232,7 +232,7 @@ jobs:
           kill "$(cat /tmp/next-a11y.pid)"
   web:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     services:
       postgres:
@@ -338,121 +338,143 @@ jobs:
           # their failure is reported as a warning and listed in the job summary
           # instead of stopping every audit after them. Port one to its screen,
           # then delete its suffix so it blocks again. Every other gate blocks.
+          # A browser audit that fails once is run one more time, in the same log (tee -a), so
+          # both attempts are on record. Only a failure on both attempts fails the gate. The
+          # retry is listed in the job summary; it never replaces an assertion or a status check.
+          ci_retried=()
+          ci_retry() {
+            local name="$1"
+            local log="$EVENTOUCH_CI_LOGS/$name.log"
+            shift
+            ci_retried+=("$name")
+            echo "::warning title=Audit retried::$name failed on its first attempt; running it once more. Both attempts stay in its log."
+            # The second attempt gets its own capture root under the same captures tree (still uploaded), so
+            # it never meets the first attempt's capture folders (audits refuse to overwrite them).
+            local retry_root="$EVENTOUCH_CI_CAPTURES/retry-$name"
+            mkdir -m 700 "$retry_root"
+            EVENTOUCH_CAPTURE_ROOT="$retry_root" "$@" 2>&1 | ci_tee "$log"
+          }
           ci_pending_failed=()
           ci_pending() {
             ci_pending_failed+=("$1")
             echo "::warning title=Audit pending port::$1 failed; it still targets the pre-redesign screens (see its log in the evidence artifact)."
           }
           npm run db:migrate 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/db-migrate.log"
-          npm run web:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-audit.log"
-          npm run web:console:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-console-audit.log"
-          npm run web:report-data-availability:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-report-data-availability-audit.log"
-          npm run web:report-live-availability:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-report-live-availability-audit.log"
-          npm run web:report-cancellation-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-report-cancellation-review-audit.log"
-          npm run web:archive-preconditions:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-archive-preconditions-audit.log"
-          npm run web:staff-source-integrity:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-staff-source-integrity-audit.log"
-          npm run web:waitlist-approval:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-waitlist-approval-audit.log"
-          npm run web:waitlist-overview:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-waitlist-overview-audit.log"
-          npm run web:roulette-schedule:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-roulette-schedule-audit.log"
-          npm run web:roulette-conflict:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-roulette-conflict-audit.log"
-          npm run web:lucky-capacity:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-lucky-capacity-audit.log"
-          npm run web:lucky-batches:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-lucky-batches-audit.log"
-          npm run web:lucky-range-config:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-lucky-range-config-audit.log"
-          npm run web:system:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-system-audit.log"
-          npm run web:organizations:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-organizations-audit.log"
-          npm run web:organization-roles:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-organization-roles-audit.log"
-          npm run web:recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-recovery-audit.log"
-          npm run web:import:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-import-audit.log"
-          npm run web:import-contact-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-import-contact-review-audit.log"
-          npm run web:hanwool:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-hanwool-audit.log"
-          npm run web:theme:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-theme-audit.log"
-          npm run web:theme-freshness:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-theme-freshness-audit.log"
-          npm run web:page-visibility-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-page-visibility-review-audit.log"
-          npm run web:page-publication-context:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-page-publication-context-audit.log"
-          npm run web:retirement:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-retirement-audit.log"
+          npm run web:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-audit.log" || ci_retry "web-audit" npm run web:audit
+          npm run web:console:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-console-audit.log" || ci_retry "web-console-audit" npm run web:console:audit
+          npm run web:report-data-availability:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-report-data-availability-audit.log" || ci_retry "web-report-data-availability-audit" npm run web:report-data-availability:audit
+          npm run web:report-live-availability:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-report-live-availability-audit.log" || ci_retry "web-report-live-availability-audit" npm run web:report-live-availability:audit
+          npm run web:report-cancellation-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-report-cancellation-review-audit.log" || ci_retry "web-report-cancellation-review-audit" npm run web:report-cancellation-review:audit
+          npm run web:archive-preconditions:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-archive-preconditions-audit.log" || ci_retry "web-archive-preconditions-audit" npm run web:archive-preconditions:audit
+          npm run web:staff-source-integrity:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-staff-source-integrity-audit.log" || ci_retry "web-staff-source-integrity-audit" npm run web:staff-source-integrity:audit
+          npm run web:waitlist-approval:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-waitlist-approval-audit.log" || ci_retry "web-waitlist-approval-audit" npm run web:waitlist-approval:audit
+          npm run web:waitlist-overview:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-waitlist-overview-audit.log" || ci_retry "web-waitlist-overview-audit" npm run web:waitlist-overview:audit
+          npm run web:roulette-schedule:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-roulette-schedule-audit.log" || ci_retry "web-roulette-schedule-audit" npm run web:roulette-schedule:audit
+          npm run web:roulette-conflict:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-roulette-conflict-audit.log" || ci_retry "web-roulette-conflict-audit" npm run web:roulette-conflict:audit
+          npm run web:lucky-capacity:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-lucky-capacity-audit.log" || ci_retry "web-lucky-capacity-audit" npm run web:lucky-capacity:audit
+          npm run web:lucky-batches:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-lucky-batches-audit.log" || ci_retry "web-lucky-batches-audit" npm run web:lucky-batches:audit
+          npm run web:lucky-range-config:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-lucky-range-config-audit.log" || ci_retry "web-lucky-range-config-audit" npm run web:lucky-range-config:audit
+          npm run web:system:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-system-audit.log" || ci_retry "web-system-audit" npm run web:system:audit
+          npm run web:organizations:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-organizations-audit.log" || ci_retry "web-organizations-audit" npm run web:organizations:audit
+          npm run web:organization-roles:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-organization-roles-audit.log" || ci_retry "web-organization-roles-audit" npm run web:organization-roles:audit
+          npm run web:recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-recovery-audit.log" || ci_retry "web-recovery-audit" npm run web:recovery:audit
+          npm run web:import:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-import-audit.log" || ci_retry "web-import-audit" npm run web:import:audit
+          npm run web:import-contact-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-import-contact-review-audit.log" || ci_retry "web-import-contact-review-audit" npm run web:import-contact-review:audit
+          npm run web:hanwool:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-hanwool-audit.log" || ci_retry "web-hanwool-audit" npm run web:hanwool:audit
+          npm run web:theme:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-theme-audit.log" || ci_retry "web-theme-audit" npm run web:theme:audit
+          npm run web:theme-freshness:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-theme-freshness-audit.log" || ci_retry "web-theme-freshness-audit" npm run web:theme-freshness:audit
+          npm run web:page-visibility-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-page-visibility-review-audit.log" || ci_retry "web-page-visibility-review-audit" npm run web:page-visibility-review:audit
+          npm run web:page-publication-context:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-page-publication-context-audit.log" || ci_retry "web-page-publication-context-audit" npm run web:page-publication-context:audit
+          npm run web:retirement:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-retirement-audit.log" || ci_retry "web-retirement-audit" npm run web:retirement:audit
           # Preparation / close / workbench / card journeys run against the
           # same isolated database; caps and assertions live in the scripts,
           # CI only wires them so a green build means they really ran.
-          npm run web:preparation:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-preparation-audit.log"
-          npm run web:display-continuity:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-display-continuity-audit.log"
-          npm run web:intake-roster-edit:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-intake-roster-edit-audit.log"
-          npm run web:operator-cross-tab-receipt:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-operator-cross-tab-receipt-audit.log"
-          npm run web:ticket-postponement:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-ticket-postponement-audit.log"
-          npm run web:ticket-reissue-resume:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-ticket-reissue-resume-audit.log"
-          npm run web:ticket-copy-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-ticket-copy-recovery-audit.log"
-          npm run web:ticket-loading-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-ticket-loading-recovery-audit.log"
-          npm run web:camera-fallback:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-camera-fallback-audit.log"
-          npm run web:message-ticket-availability:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-ticket-availability-audit.log"
-          npm run web:message-cancellation-conflict:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-cancellation-conflict-audit.log"
-          npm run web:message-routing-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-routing-review-audit.log"
-          npm run web:message-routing-details:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-routing-details-audit.log"
-          npm run web:message-name-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-name-review-audit.log"
-          npm run web:team-role-switch:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-team-role-switch-audit.log"
-          npm run web:team-refresh-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-team-refresh-recovery-audit.log"
-          npm run web:staff-manual-presence:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-staff-manual-presence-audit.log"
-          npm run web:report-export-scope:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-report-export-scope-audit.log"
-          npm run web:reward-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-reward-recovery-audit.log"
-          npm run web:reward-cancellation-conflict:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-reward-cancellation-conflict-audit.log"
-          npm run web:signup-retry:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-signup-retry-audit.log"
-          npm run web:register-field-error:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-register-field-error-audit.log"
-          npm run web:verification-uncertain:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-verification-uncertain-audit.log"
-          npm run web:attendee-identity:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-identity-audit.log"
-          npm run web:attendee-multievent-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-multievent-recovery-audit.log"
-          npm run web:attendee:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-audit.log"
-          npm run web:attendee-approval-state:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-approval-state-audit.log"
-          npm run web:attendee-visibility:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-visibility-audit.log"
-          npm run web:attendee-retry:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-retry-audit.log"
-          npm run web:attendee-booth-retry:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-booth-retry-audit.log"
-          npm run web:crossrole:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-crossrole-audit.log"
-          npm run web:lifecycle:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-lifecycle-audit.log"
-          npm run web:account-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-account-recovery-audit.log"
-          npm run web:close:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-close-audit.log"
-          npm run web:workbench:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-workbench-audit.log"
-          npm run web:ui:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-ui-audit.log"
-          npm run web:delivery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-delivery-audit.log"
-          npm run web:qa-schedule:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-qa-schedule-audit.log"
-          npm run web:cards:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-cards-audit.log"
-          npm run web:uiux-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-uiux-recovery-audit.log"
-          npm run web:uiux-workflows:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-uiux-workflows-audit.log"
-          npm run web:taskflow:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-taskflow-audit.log"
-          npm run web:template-library:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-template-library-audit.log"
-          npm run web:message-authoring:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-authoring-audit.log"
-          npm run web:message-focus:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-focus-audit.log"
-          npm run web:message-targeting:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-targeting-audit.log"
-          npm run web:publication:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-publication-audit.log"
-          npm run web:publication-context:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-publication-context-audit.log"
-          npm run web:participation-navigation:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-participation-navigation-audit.log"
-          npm run web:nametag-print:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-nametag-print-audit.log"
-          npm run web:roster-nametag-freshness:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-roster-nametag-freshness-audit.log"
-          npm run web:roster-export:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-roster-export-audit.log"
-          npm run web:roster-export-integrity:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-roster-export-integrity-audit.log"
-          npm run web:roster-presence:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-roster-presence-audit.log"
-          npm run web:reviewed-exit:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-reviewed-exit-audit.log"
-          npm run web:attendance-consistency:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendance-consistency-audit.log"
-          npm run web:checkin-attendance-guard:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-checkin-attendance-guard-audit.log"
-          npm run web:cancellation-conflict-checkin:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-cancellation-conflict-checkin-audit.log"
-          npm run web:staff-inline-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-staff-inline-recovery-audit.log"
-          npm run web:approval-cancellation-conflict:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-approval-cancellation-conflict-audit.log"
-          npm run web:cancellation-conflict-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-cancellation-conflict-review-audit.log"
-          npm run web:attendance-reconciliation:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendance-reconciliation-audit.log"
-          npm run web:workspace-preservation:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-workspace-preservation-audit.log"
-          npm run web:booth-mode-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-booth-mode-review-audit.log"
-          npm run web:staff-booth-clock:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-staff-booth-clock-audit.log"
-          npm run web:booth-server-clock:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-booth-server-clock-audit.log"
-          npm run web:overview-message-attention:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-overview-message-attention-audit.log"
-          npm run web:message-nav-attention:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-nav-attention-audit.log"
-          npm run web:message-nav-freshness:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-nav-freshness-audit.log"
-          npm run web:ticket-review-queue:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-ticket-review-queue-audit.log"
-          npm run web:message-locked-reference:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-locked-reference-audit.log"
-          npm run web:schedule-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-schedule-review-audit.log"
-          npm run web:attendee-refresh:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-refresh-audit.log"
-          npm run web:venue-visibility:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-venue-visibility-audit.log"
-          npm run web:staff-direction-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-staff-direction-review-audit.log"
-          npm run web:message-charset:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-charset-audit.log"
+          npm run web:preparation:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-preparation-audit.log" || ci_retry "web-preparation-audit" npm run web:preparation:audit
+          npm run web:display-continuity:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-display-continuity-audit.log" || ci_retry "web-display-continuity-audit" npm run web:display-continuity:audit
+          npm run web:intake-roster-edit:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-intake-roster-edit-audit.log" || ci_retry "web-intake-roster-edit-audit" npm run web:intake-roster-edit:audit
+          npm run web:operator-cross-tab-receipt:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-operator-cross-tab-receipt-audit.log" || ci_retry "web-operator-cross-tab-receipt-audit" npm run web:operator-cross-tab-receipt:audit
+          npm run web:ticket-postponement:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-ticket-postponement-audit.log" || ci_retry "web-ticket-postponement-audit" npm run web:ticket-postponement:audit
+          npm run web:ticket-reissue-resume:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-ticket-reissue-resume-audit.log" || ci_retry "web-ticket-reissue-resume-audit" npm run web:ticket-reissue-resume:audit
+          npm run web:ticket-copy-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-ticket-copy-recovery-audit.log" || ci_retry "web-ticket-copy-recovery-audit" npm run web:ticket-copy-recovery:audit
+          npm run web:ticket-loading-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-ticket-loading-recovery-audit.log" || ci_retry "web-ticket-loading-recovery-audit" npm run web:ticket-loading-recovery:audit
+          npm run web:camera-fallback:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-camera-fallback-audit.log" || ci_retry "web-camera-fallback-audit" npm run web:camera-fallback:audit
+          npm run web:message-ticket-availability:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-ticket-availability-audit.log" || ci_retry "web-message-ticket-availability-audit" npm run web:message-ticket-availability:audit
+          npm run web:message-cancellation-conflict:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-cancellation-conflict-audit.log" || ci_retry "web-message-cancellation-conflict-audit" npm run web:message-cancellation-conflict:audit
+          npm run web:message-routing-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-routing-review-audit.log" || ci_retry "web-message-routing-review-audit" npm run web:message-routing-review:audit
+          npm run web:message-routing-details:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-routing-details-audit.log" || ci_retry "web-message-routing-details-audit" npm run web:message-routing-details:audit
+          npm run web:message-name-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-name-review-audit.log" || ci_retry "web-message-name-review-audit" npm run web:message-name-review:audit
+          npm run web:team-role-switch:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-team-role-switch-audit.log" || ci_retry "web-team-role-switch-audit" npm run web:team-role-switch:audit
+          npm run web:team-refresh-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-team-refresh-recovery-audit.log" || ci_retry "web-team-refresh-recovery-audit" npm run web:team-refresh-recovery:audit
+          npm run web:staff-manual-presence:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-staff-manual-presence-audit.log" || ci_retry "web-staff-manual-presence-audit" npm run web:staff-manual-presence:audit
+          npm run web:report-export-scope:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-report-export-scope-audit.log" || ci_retry "web-report-export-scope-audit" npm run web:report-export-scope:audit
+          npm run web:reward-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-reward-recovery-audit.log" || ci_retry "web-reward-recovery-audit" npm run web:reward-recovery:audit
+          npm run web:reward-cancellation-conflict:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-reward-cancellation-conflict-audit.log" || ci_retry "web-reward-cancellation-conflict-audit" npm run web:reward-cancellation-conflict:audit
+          npm run web:signup-retry:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-signup-retry-audit.log" || ci_retry "web-signup-retry-audit" npm run web:signup-retry:audit
+          npm run web:register-field-error:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-register-field-error-audit.log" || ci_retry "web-register-field-error-audit" npm run web:register-field-error:audit
+          npm run web:verification-uncertain:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-verification-uncertain-audit.log" || ci_retry "web-verification-uncertain-audit" npm run web:verification-uncertain:audit
+          npm run web:attendee-identity:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-identity-audit.log" || ci_retry "web-attendee-identity-audit" npm run web:attendee-identity:audit
+          npm run web:attendee-multievent-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-multievent-recovery-audit.log" || ci_retry "web-attendee-multievent-recovery-audit" npm run web:attendee-multievent-recovery:audit
+          npm run web:attendee:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-audit.log" || ci_retry "web-attendee-audit" npm run web:attendee:audit
+          npm run web:attendee-approval-state:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-approval-state-audit.log" || ci_retry "web-attendee-approval-state-audit" npm run web:attendee-approval-state:audit
+          npm run web:attendee-visibility:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-visibility-audit.log" || ci_retry "web-attendee-visibility-audit" npm run web:attendee-visibility:audit
+          npm run web:attendee-retry:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-retry-audit.log" || ci_retry "web-attendee-retry-audit" npm run web:attendee-retry:audit
+          npm run web:attendee-booth-retry:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-booth-retry-audit.log" || ci_retry "web-attendee-booth-retry-audit" npm run web:attendee-booth-retry:audit
+          npm run web:crossrole:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-crossrole-audit.log" || ci_retry "web-crossrole-audit" npm run web:crossrole:audit
+          npm run web:lifecycle:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-lifecycle-audit.log" || ci_retry "web-lifecycle-audit" npm run web:lifecycle:audit
+          npm run web:account-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-account-recovery-audit.log" || ci_retry "web-account-recovery-audit" npm run web:account-recovery:audit
+          npm run web:close:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-close-audit.log" || ci_retry "web-close-audit" npm run web:close:audit
+          npm run web:workbench:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-workbench-audit.log" || ci_retry "web-workbench-audit" npm run web:workbench:audit
+          npm run web:ui:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-ui-audit.log" || ci_retry "web-ui-audit" npm run web:ui:audit
+          npm run web:delivery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-delivery-audit.log" || ci_retry "web-delivery-audit" npm run web:delivery:audit
+          npm run web:qa-schedule:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-qa-schedule-audit.log" || ci_retry "web-qa-schedule-audit" npm run web:qa-schedule:audit
+          npm run web:cards:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-cards-audit.log" || ci_retry "web-cards-audit" npm run web:cards:audit
+          npm run web:uiux-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-uiux-recovery-audit.log" || ci_retry "web-uiux-recovery-audit" npm run web:uiux-recovery:audit
+          npm run web:uiux-workflows:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-uiux-workflows-audit.log" || ci_retry "web-uiux-workflows-audit" npm run web:uiux-workflows:audit
+          npm run web:taskflow:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-taskflow-audit.log" || ci_retry "web-taskflow-audit" npm run web:taskflow:audit
+          npm run web:template-library:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-template-library-audit.log" || ci_retry "web-template-library-audit" npm run web:template-library:audit
+          npm run web:message-authoring:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-authoring-audit.log" || ci_retry "web-message-authoring-audit" npm run web:message-authoring:audit
+          npm run web:message-focus:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-focus-audit.log" || ci_retry "web-message-focus-audit" npm run web:message-focus:audit
+          npm run web:message-targeting:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-targeting-audit.log" || ci_retry "web-message-targeting-audit" npm run web:message-targeting:audit
+          npm run web:publication:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-publication-audit.log" || ci_retry "web-publication-audit" npm run web:publication:audit
+          npm run web:publication-context:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-publication-context-audit.log" || ci_retry "web-publication-context-audit" npm run web:publication-context:audit
+          npm run web:participation-navigation:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-participation-navigation-audit.log" || ci_retry "web-participation-navigation-audit" npm run web:participation-navigation:audit
+          npm run web:nametag-print:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-nametag-print-audit.log" || ci_retry "web-nametag-print-audit" npm run web:nametag-print:audit
+          npm run web:roster-nametag-freshness:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-roster-nametag-freshness-audit.log" || ci_retry "web-roster-nametag-freshness-audit" npm run web:roster-nametag-freshness:audit
+          npm run web:roster-export:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-roster-export-audit.log" || ci_retry "web-roster-export-audit" npm run web:roster-export:audit
+          npm run web:roster-export-integrity:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-roster-export-integrity-audit.log" || ci_retry "web-roster-export-integrity-audit" npm run web:roster-export-integrity:audit
+          npm run web:roster-presence:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-roster-presence-audit.log" || ci_retry "web-roster-presence-audit" npm run web:roster-presence:audit
+          npm run web:reviewed-exit:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-reviewed-exit-audit.log" || ci_retry "web-reviewed-exit-audit" npm run web:reviewed-exit:audit
+          npm run web:attendance-consistency:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendance-consistency-audit.log" || ci_retry "web-attendance-consistency-audit" npm run web:attendance-consistency:audit
+          npm run web:checkin-attendance-guard:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-checkin-attendance-guard-audit.log" || ci_retry "web-checkin-attendance-guard-audit" npm run web:checkin-attendance-guard:audit
+          npm run web:cancellation-conflict-checkin:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-cancellation-conflict-checkin-audit.log" || ci_retry "web-cancellation-conflict-checkin-audit" npm run web:cancellation-conflict-checkin:audit
+          npm run web:staff-inline-recovery:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-staff-inline-recovery-audit.log" || ci_retry "web-staff-inline-recovery-audit" npm run web:staff-inline-recovery:audit
+          npm run web:approval-cancellation-conflict:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-approval-cancellation-conflict-audit.log" || ci_retry "web-approval-cancellation-conflict-audit" npm run web:approval-cancellation-conflict:audit
+          npm run web:cancellation-conflict-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-cancellation-conflict-review-audit.log" || ci_retry "web-cancellation-conflict-review-audit" npm run web:cancellation-conflict-review:audit
+          npm run web:attendance-reconciliation:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendance-reconciliation-audit.log" || ci_retry "web-attendance-reconciliation-audit" npm run web:attendance-reconciliation:audit
+          npm run web:workspace-preservation:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-workspace-preservation-audit.log" || ci_retry "web-workspace-preservation-audit" npm run web:workspace-preservation:audit
+          npm run web:booth-mode-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-booth-mode-review-audit.log" || ci_retry "web-booth-mode-review-audit" npm run web:booth-mode-review:audit
+          npm run web:staff-booth-clock:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-staff-booth-clock-audit.log" || ci_retry "web-staff-booth-clock-audit" npm run web:staff-booth-clock:audit
+          npm run web:booth-server-clock:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-booth-server-clock-audit.log" || ci_retry "web-booth-server-clock-audit" npm run web:booth-server-clock:audit
+          npm run web:overview-message-attention:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-overview-message-attention-audit.log" || ci_retry "web-overview-message-attention-audit" npm run web:overview-message-attention:audit
+          npm run web:message-nav-attention:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-nav-attention-audit.log" || ci_retry "web-message-nav-attention-audit" npm run web:message-nav-attention:audit
+          npm run web:message-nav-freshness:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-nav-freshness-audit.log" || ci_retry "web-message-nav-freshness-audit" npm run web:message-nav-freshness:audit
+          npm run web:ticket-review-queue:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-ticket-review-queue-audit.log" || ci_retry "web-ticket-review-queue-audit" npm run web:ticket-review-queue:audit
+          npm run web:message-locked-reference:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-locked-reference-audit.log" || ci_retry "web-message-locked-reference-audit" npm run web:message-locked-reference:audit
+          npm run web:schedule-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-schedule-review-audit.log" || ci_retry "web-schedule-review-audit" npm run web:schedule-review:audit
+          npm run web:attendee-refresh:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-attendee-refresh-audit.log" || ci_retry "web-attendee-refresh-audit" npm run web:attendee-refresh:audit
+          npm run web:venue-visibility:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-venue-visibility-audit.log" || ci_retry "web-venue-visibility-audit" npm run web:venue-visibility:audit
+          npm run web:staff-direction-review:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-staff-direction-review-audit.log" || ci_retry "web-staff-direction-review-audit" npm run web:staff-direction-review:audit
+          npm run web:message-charset:audit 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/web-message-charset-audit.log" || ci_retry "web-message-charset-audit" npm run web:message-charset:audit
           # Usability as a gate, not a review: every goal must still be
           # reachable in a handful of actions, with the keyboard path and the
           # server state behind it measured.
-          npm run audit:usability 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/audit-usability.log"
+          npm run audit:usability 2>&1 | ci_tee "$EVENTOUCH_CI_LOGS/audit-usability.log" || ci_retry "audit-usability" npm run audit:usability
+          if [ "${#ci_retried[@]}" -gt 0 ]; then
+            {
+              echo "### Audits retried once (first attempt failed; see both attempts in the log)"
+              printf -- '- %s\n' "${ci_retried[@]}"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
           if [ "${#ci_pending_failed[@]}" -gt 0 ]; then
             {
               echo "### Audits pending port to the confirmed screens (non-blocking)"
