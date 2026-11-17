@@ -87,4 +87,13 @@ async function openStudioPanel(page, key) {
   await page.locator('#theme-panel-title', { hasText: title }).waitFor();
 }
 
-module.exports = { openStudioPanel, openProgram, programSection, selectTask, openCreateSettings, openSettingsBasics, chooseRadio, messageStep, waitForDialogExitFocus };
+// Draws is master-detail: the stage list ("무대 선택") rows replaced the old 순위 투표 / 럭키번호 /
+// 모바일 룰렛 tabs. Pressing a row selects it; its detail card holds the same settings.
+const DRAW_STAGE_ROW = { '순위 투표': /^순위 투표/, '럭키번호': /^럭키번호 사전 배정/, '모바일 룰렛': /^모바일 룰렛/ };
+async function selectDrawStage(page, name) {
+  const row = page.getByRole('button', { name: DRAW_STAGE_ROW[name] });
+  await row.click();
+  await page.waitForFunction((el) => el.getAttribute('aria-pressed') === 'true', await row.elementHandle());
+}
+
+module.exports = { openStudioPanel, selectDrawStage, openProgram, programSection, selectTask, openCreateSettings, openSettingsBasics, chooseRadio, messageStep, waitForDialogExitFocus };

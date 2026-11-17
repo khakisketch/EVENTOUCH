@@ -1,6 +1,7 @@
 'use strict';
 // Real UI and command path with isolated synthetic event data.
 const assert = require('node:assert/strict');
+const { selectDrawStage } = require('./ui-journey-helpers.cjs');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -29,7 +30,7 @@ async function main() {
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'ko-KR' });
     await context.addCookies([{ ...cookieForContext(f, 'manager'), url: f.baseUrl }]);
     page = await context.newPage(); page.on('dialog', dialog => dialog.accept());
-    const open = async () => { await page.goto(`${f.baseUrl}/console/events/${f.eventId}/draws`); await page.getByRole('tab', { name: '럭키번호', exact: true }).click(); const summary = page.locator('summary').filter({ hasText: '럭키번호 범위 설정' }); if (!await summary.locator('..').evaluate(el => el.open)) await summary.click(); };
+    const open = async () => { await page.goto(`${f.baseUrl}/console/events/${f.eventId}/draws`); await selectDrawStage(page, '럭키번호'); const summary = page.locator('summary').filter({ hasText: '럭키번호 범위 설정' }); if (!await summary.locator('..').evaluate(el => el.open)) await summary.click(); };
     const input = () => page.getByLabel('최대 번호');
     const save = () => page.getByRole('button', { name: '번호 범위 저장', exact: true });
     const conflict = () => page.getByRole('region', { name: '번호 범위가 변경됐습니다' });
