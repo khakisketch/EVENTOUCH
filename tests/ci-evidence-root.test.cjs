@@ -171,18 +171,23 @@ test('audit step uses only the conveyed paths and keeps every gate', () => {
   const reservation = audit.match(/for log in ([^\n]+); do/);
   assert.ok(reservation, 'all log names must be reserved before the first producer');
   assert.match(audit, /tee -a "\$dest"/, 'reserved logs must only ever be appended to');
+  assert.match(audit, /EVENTOUCH_CI_SHARD:\s*\$\{\{\s*matrix\.shard\s*\}\}/, 'each matrix shard must know its number');
   assert.doesNotMatch(audit, /\| tee "\$EVENTOUCH_CI_LOGS\//, 'no gate may use truncating tee');
-  const teeUses = [...audit.matchAll(/\|\s*ci_tee "\$EVENTOUCH_CI_LOGS\/[^"]+"/g)];
-  assert.equal(teeUses.length, EXPECTED_GATES.length, 'every gate must write through ci_tee');
+  const gates = [...audit.matchAll(/^ *run_gate "([^"]+)"(?: pending)? npm run (\S+)$/gm)];
+  const expectedScripts = EXPECTED_GATES.map((gate) => gate.replace(/^npm run /, ''));
+  assert.equal(gates.length, expectedScripts.length - 1, 'every gate except db:migrate runs through run_gate');
+  assert.deepEqual(gates.map(([, , script]) => script), expectedScripts.slice(1), 'gates keep their serial order');
   assert.match(audit, /set -o pipefail/, 'a failed audit must not be hidden by tee');
   const expectedLogs = EXPECTED_GATES.map((gate) => `${gate.replace(/^npm run /, '').replace(/:/g, '-')}.log`).sort();
-  const targets = [...audit.matchAll(/ci_tee "\$EVENTOUCH_CI_LOGS\/([^"/]+)"/g)].map((match) => match[1]).sort();
-  assert.deepEqual(targets, expectedLogs, 'ci_tee must cover precisely one log per gate, in gate order');
+  const targets = gates.map(([, log]) => `${log}.log`).sort();
+  assert.deepEqual(targets, expectedLogs.filter((name) => name !== 'db-migrate.log'), 'run_gate must cover precisely one log per gate');
   assert.deepEqual(reservation[1].trim().split(/\s+/).map(name => `${name}.log`).sort(), expectedLogs, 'the preflight must reserve every gate log');
   assert.ok(audit.indexOf('set +o noclobber') < audit.indexOf('npm run db:migrate'), 'reservation must complete before any gate starts');
   assert.doesNotMatch(audit, /\/tmp\/eventouch-ci-logs/, 'audits must not write to a fixed shared directory');
   assert.doesNotMatch(audit, /\/tmp\/eventouch-ci-captures/, 'audits must not capture to a fixed shared directory');
   assert.doesNotMatch(audit, /mkdir -m 700 \/tmp\/eventouch-ci/, 'the audit step must not re-derive the root');
+  const directTees = [...audit.matchAll(/\|\s*ci_tee "\$EVENTOUCH_CI_LOGS\/([A-Za-z][^"/$]*)"/g)].map((match) => match[1]);
+  assert.deepEqual(directTees, ['db-migrate.log'], 'only the migration writes through ci_tee directly; every audit goes through run_gate');
   const build = web.indexOf('npm --prefix apps/web run build');
   for (const gate of EXPECTED_GATES) {
     const at = audit.indexOf(gate);
@@ -274,12 +279,12 @@ test('actual workflow refuses existing evidence before gates and preserves faile
     const bin = path.join(parent, 'bin'); fs.mkdirSync(bin);
     fs.writeFileSync(path.join(bin, 'mkdir'), '#!/bin/sh\nexit 0\n', { mode: 0o700 });
     fs.writeFileSync(path.join(bin, 'npm'), '#!/bin/sh\necho "$2" >> "$GATE_MARKER"\necho "synthetic $2"\n[ "$2" = "$FAIL_GATE" ] && exit 23\nexit 0\n', { mode: 0o700 });
-    const run = (name, existing, failGate) => {
+    const run = (name, existing, failGate, shard = '1') => {
       const root = path.join(parent, name), logs = path.join(root, 'logs'), captures = path.join(root, 'captures');
       fs.mkdirSync(root, { mode: 0o700 }); fs.mkdirSync(logs, { mode: 0o700 }); fs.mkdirSync(captures, { mode: 0o700 });
       const marker = path.join(root, 'gate-marker');
       if (existing) fs.writeFileSync(path.join(logs, 'web-audit.log'), 'sentinel-evidence', { mode: 0o600 });
-      const env = { ...process.env, PATH: `${bin}:/usr/bin:/bin`, EVENTOUCH_CI_LOGS: logs, EVENTOUCH_CI_CAPTURES: captures, GATE_MARKER: marker, FAIL_GATE: failGate || '' };
+      const env = { ...process.env, PATH: `${bin}:/usr/bin:/bin`, EVENTOUCH_CI_LOGS: logs, EVENTOUCH_CI_CAPTURES: captures, EVENTOUCH_CI_SHARD: shard, GATE_MARKER: marker, FAIL_GATE: failGate || '' };
       const invoke = () => spawnSync('/bin/bash', ['-e', '-o', 'pipefail', '-c', script], { env, encoding: 'utf8' });
       return { logs, marker, invoke };
     };
@@ -302,8 +307,24 @@ test('actual workflow refuses existing evidence before gates and preserves faile
     assert.notEqual(failed.invoke().status, 0, 'a same-root retry must fail');
     assert.equal(fs.readFileSync(log, 'utf8'), 'synthetic db:migrate\n');
     assert.equal(fs.readFileSync(failed.marker, 'utf8'), markerBefore, 'retry must not start a gate');
-    const success = run('success', false);
-    assert.equal(success.invoke().status, 0);
-    assert.deepEqual(fs.readFileSync(success.marker, 'utf8').trim().split('\n'), EXPECTED_GATES.map(gate => gate.replace('npm run ', '')));
+    const perShard = [1, 2, 3].map((shard) => {
+      const attempt = run(`success-${shard}`, false, '', String(shard));
+      assert.equal(attempt.invoke().status, 0);
+      return fs.readFileSync(attempt.marker, 'utf8').trim().split('\n');
+    });
+    assert.deepEqual(perShard.map((marks) => marks[0]), ['db:migrate', 'db:migrate', 'db:migrate'], 'every shard migrates its own database');
+    const shards = perShard.map((marks) => marks.slice(1));
+    const serial = [];
+    for (let k = 0; ; k++) {
+      let advanced = false;
+      for (const marks of shards) {
+        if (k < marks.length) { serial.push(marks[k]); advanced = true; }
+      }
+      if (!advanced) break;
+    }
+    assert.deepEqual(serial, EXPECTED_GATES.map((gate) => gate.replace('npm run ', '')).slice(1), 'the three shards partition the whole suite in serial order');
+    const sizes = shards.map((marks) => marks.length).sort((a, b) => a - b);
+    assert.ok(sizes[0] > 0, 'no shard may run empty');
+    assert.ok(sizes[2] - sizes[0] <= 1, `shards must stay balanced, saw ${sizes}`);
   } finally { fs.rmSync(parent, { recursive: true, force: true }); }
 });
