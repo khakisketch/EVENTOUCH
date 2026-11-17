@@ -1,8 +1,9 @@
 'use strict';
 
-// Approved attendee page studio (2026-11-14): the home takes one of three
-// compositions (tile, poster, typography; the photo-first layout is reserved and
-// locked), the banner can be a picture, a gradient or a solid color, and the
+// Approved attendee page studio (2026-11-14): the home takes one of four
+// compositions (tile, poster, typography and, since 2026-11-18, the photo-first
+// instagram feed of approved participant photos), the banner can be a picture,
+// a gradient or a solid color, and the
 // editor is a live phone beside a short settings list whose rows open in place.
 // The server and the web read the same style keys with the same defaults; this
 // file pins that contract and the studio's structure. Save, publish review,
@@ -41,13 +42,13 @@ test('server and web share one default for every layout and banner key', () => {
 });
 
 test('stored styles read through the same allowlist on both sides, and an unknown layout never survives', () => {
-  const stored = { layout: 'instagram', menuShape: 'list', bannerKind: 'gradient', bannerColor: '#2e3d5b', bannerColor2: 'red', bannerAngle: 'sideways' };
+  const stored = { layout: 'grid', menuShape: 'list', bannerKind: 'gradient', bannerColor: '#2e3d5b', bannerColor2: 'red', bannerAngle: 'sideways' };
   const fromServer = server.normalizeHomeStyle(stored);
   const fromWeb = plain(lib.normalizeHomeStyle(stored));
   for (const key of ['layout', 'menuShape', 'bannerKind', 'bannerColor', 'bannerColor2', 'bannerAngle']) {
     assert.equal(fromWeb[key], fromServer[key], `${key} reads the same`);
   }
-  assert.equal(fromServer.layout, 'tile', 'the reserved photo layout falls back');
+  assert.equal(fromServer.layout, 'tile', 'an unknown layout falls back to the default composition');
   assert.equal(fromServer.bannerColor, '#2E3D5B', 'colors are stored uppercase');
   assert.equal(fromServer.bannerColor2, server.DEFAULT_HOME_STYLE.bannerColor2, 'a bad color falls back');
   assert.equal(fromServer.bannerAngle, 'diagonal');
@@ -59,11 +60,42 @@ test('saving validates the new keys strictly and leaves omitted ones alone', () 
   assert.equal(next.layout, 'poster');
   assert.equal(next.bannerColor, '#C8441F');
   assert.equal(next.bannerColor2, stored.bannerColor2, 'omitted keys merge from the stored style');
-  for (const bad of [{ layout: 'instagram' }, { layout: 'grid' }, { menuShape: 'square' }, { bannerKind: 'video' }, { bannerColor: 'blue' }, { bannerColor2: '#12345' }, { bannerAngle: 'diag' }]) {
+  for (const bad of [{ layout: 'grid' }, { layout: 'Instagram' }, { menuShape: 'square' }, { bannerKind: 'video' }, { bannerColor: 'blue' }, { bannerColor2: '#12345' }, { bannerAngle: 'diag' }]) {
     assert.throws(() => server.validateHomeStyleUpdate(bad, stored, fail), (error) => error.status === 400 && String(error.field).startsWith('homeStyle.'), JSON.stringify(bad));
   }
-  assert.throws(() => server.assertPublishableHomeStyle({ layout: 'instagram' }, fail), (error) => error.status === 400, 'a malformed stored draft never publishes');
+  assert.throws(() => server.assertPublishableHomeStyle({ layout: 'grid' }, fail), (error) => error.status === 400, 'a malformed stored draft never publishes');
   assert.equal(server.assertPublishableHomeStyle(undefined, fail).layout, 'tile', 'a legacy draft publishes the default composition');
+});
+
+test('the photo-first instagram layout saves, publishes and reads the same on both sides', () => {
+  const stored = server.defaultHomeStyle();
+  const next = server.validateHomeStyleUpdate({ layout: 'instagram' }, stored, fail);
+  assert.equal(next.layout, 'instagram', 'save accepts it');
+  assert.equal(server.assertPublishableHomeStyle({ layout: 'instagram' }, fail).layout, 'instagram', 'publish accepts it');
+  assert.equal(server.normalizeHomeStyle({ layout: 'instagram' }).layout, 'instagram', 'the public projection keeps it');
+  assert.equal(plain(lib.normalizeHomeStyle({ layout: 'instagram' })).layout, 'instagram', 'the web reads it the same');
+  assert.equal(server.validateHomeStyleUpdate({ textAlign: 'left' }, next, fail).layout, 'instagram', 'an unrelated edit leaves it alone');
+});
+
+test('the home feed lists approved photos only, newest first, through the caller\'s own route', () => {
+  const src = (fileId) => `/files/${fileId}`;
+  const photo = (id, status, extra = {}) => ({ id, status, name: '감사 참가자', caption: `사진 ${id}`, at: '2026-11-18T05:00:00.000Z', image: { fileId: `file-${id}`, type: 'image/png', size: 10 }, ...extra });
+  const parsed = plain(lib.parseHomePhotos([
+    photo('old', 'APPROVED', { at: '2026-11-18T04:00:00.000Z' }),
+    photo('pending', 'PENDING'),
+    photo('hidden', 'HIDDEN'),
+    photo('new', 'APPROVED', { at: '2026-11-18T06:30:00.000Z', caption: '  개막 키노트  ', name: '  홍길동 ' }),
+    photo('noimage', 'APPROVED', { image: null }),
+    photo('badid', 'APPROVED', { image: { fileId: '../etc/passwd' } }),
+    photo('noid', 'APPROVED', { id: '' }),
+    photo('notime', 'APPROVED', { at: 'not-a-time' }),
+    null, 'text', 7, [],
+  ], src));
+  assert.deepEqual(parsed.map((item) => item.id), ['new', 'old', 'notime'], 'approved only, newest first, unreadable time last');
+  assert.deepEqual(parsed[0], { id: 'new', src: '/files/file-new', caption: '개막 키노트', name: '홍길동', at: '2026-11-18T06:30:00.000Z' });
+  assert.deepEqual(plain(lib.parseHomePhotos(undefined, src)), []);
+  assert.deepEqual(plain(lib.parseHomePhotos('nope', src)), []);
+  assert.equal(lib.HOME_FEED_LIMIT, 12);
 });
 
 test('a color banner derives its own CSS and a readable tone', () => {
@@ -77,7 +109,7 @@ test('a color banner derives its own CSS and a readable tone', () => {
   assert.equal(lib.readableInk('#F3EEE6'), '#17252B');
 });
 
-test('the landing renders one of three compositions with the same entries; the photo layout is not rendered', () => {
+test('the landing renders one of four compositions with the same entries; the feed needs approved photos', () => {
   const landing = read('app/event/[slug]/home/AttendeeHomeLanding.tsx');
   const css = read('app/event/[slug]/home/home-layouts.module.css');
   assert.match(landing, /const homeStyle = normalizeHomeStyle\(homeStyleInput\);/u, 'partial or stored styles read through the defaults');
@@ -85,14 +117,21 @@ test('the landing renders one of three compositions with the same entries; the p
   assert.match(landing, /const shape = layout === "tile" \? "tile" : layout === "poster" && homeStyle\.menuShape === "circle" \? "circle" : "row";/u, 'the menu shape only varies on the poster');
   assert.match(landing, /const fill = bannerFillCss\(homeStyle\);/u);
   assert.match(landing, /const tone = fill \? bannerFillTone\(homeStyle\) : neutralBanner \? "light" : homeStyle\.textTone;/u, 'a color banner reads its own tone');
-  assert.doesNotMatch(landing, /instagram/iu, 'the reserved layout has no renderer');
+  // instagram: a feed of approved participant photos under a slim banner.
+  assert.match(landing, /const layout = homeStyle\.layout === "instagram" && !photos\.length && !preview \? "tile" : homeStyle\.layout;/u, 'a public page with no approved photo reads as the tile home; the console preview keeps the layout');
+  assert.match(landing, /const feed = layout === "instagram" \? \(/u);
+  assert.match(landing, /\{feed\}\n\s+<nav className=\{L\.menus\}/u, 'the feed sits between the ticket and the menus');
+  assert.match(landing, /photos\.slice\(0, HOME_FEED_LIMIT\)/u);
+  assert.match(landing, /data-feed-photo=\{photo\.id\}/u);
+  assert.match(landing, /승인된 참가자 사진이 여기에 표시됩니다/u, 'the preview says where the photos will go');
+  assert.match(css, /\.instagram \.hero \{ height: clamp\(124px, 36cqi, 176px\); \}/u);
+  assert.match(css, /\.tile \.ticketWrap, \.poster \.ticketWrap, \.instagram \.ticketWrap \{ margin-top: -26px; \}/u);
   assert.match(css, /\.tile \.hero \{ height: clamp\(156px, 44cqi, 230px\); \}/u);
   assert.match(css, /\.poster \.hero \{ height: clamp\(300px, 88cqi, 460px\); justify-content: flex-end; \}/u);
   assert.match(css, /\.group_tile \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/u, 'tiles are two square columns');
   assert.match(css, /\.root \.tile \{[^}]*aspect-ratio: 1;/su);
   // The floating ticket rides over the banner's lower edge (approved tile and
   // poster mock); the entry grid below it clears the banner by audit.
-  assert.match(css, /\.tile \.ticketWrap, \.poster \.ticketWrap \{ margin-top: -26px; \}/u);
   // The ticket's "열기" pill sits on the brand color, so its text uses the
   // on-brand ink token (white fails contrast on the default brand), and the
   // visible word stays in the accessible name (no aria-hidden on visible text).
@@ -101,14 +140,15 @@ test('the landing renders one of three compositions with the same entries; the p
   assert.doesNotMatch(landing, /ticketGo\} aria-hidden/u);
 });
 
-test('the studio is a live phone beside a short list; rows open in place; the reserved layout is locked', () => {
+test('the studio is a live phone beside a short list; rows open in place; the photo layout is a real choice', () => {
   const theme = read('app/console/events/[id]/page/ThemeWorkspace.tsx');
   const picker = read('app/console/events/[id]/page/LayoutPicker.tsx');
   assert.match(theme, /<LayoutPicker[\s\S]{0,700}onLayout=\{selectLayout\}/u);
   assert.match(theme, /next === "typography" && form\.homeStyle\.backgroundColor === DEFAULT_HOME_STYLE\.backgroundColor \? \{ backgroundColor: "#1E2026" \}/u, 'large type moves off only the untouched default background');
   assert.match(theme, /homeStyle\.layout !== "typography" \? <li>\{studioRow\("banner"/u, 'the banner row is hidden where there is no banner');
-  assert.match(picker, /aria-disabled="true" className=\{`\$\{styles\.card\} \$\{styles\.locked\}`\}/u, 'the photo layout is a locked card');
-  assert.match(picker, /사진 중심 · 곧 제공/u);
+  assert.match(picker, /\{ id: "instagram", name: "인스타형", hint: "참가자 사진 피드" \}/u, 'the photo layout is a real card, no longer locked');
+  assert.doesNotMatch(picker, /곧 제공|styles\.locked|aria-disabled="true"/u);
+  assert.match(picker, /photos=\{photos\}/u, 'the card thumbnail is the real home with the real photos');
   assert.match(picker, /<AttendeeHomeLanding/u, 'cards are the real home, scaled');
   assert.match(picker, /inert>/u, 'a card thumbnail is not interactive');
   assert.match(picker, /value === "poster" \?/u, 'menu shape is offered only for the poster');

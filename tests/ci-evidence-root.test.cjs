@@ -48,6 +48,7 @@ const EXPECTED_GATES = [
   'npm run web:hanwool:audit',
   'npm run web:theme:audit',
   'npm run web:theme-freshness:audit',
+  'npm run web:home-instagram:audit',
   'npm run web:page-visibility-review:audit',
   'npm run web:page-publication-context:audit',
   'npm run web:retirement:audit',

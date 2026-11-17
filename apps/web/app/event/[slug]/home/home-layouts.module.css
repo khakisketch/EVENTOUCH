@@ -1,4 +1,4 @@
-/* Attendee home compositions (homeStyle.layout): tile, poster, typography.
+/* Attendee home compositions (homeStyle.layout): tile, poster, typography, instagram.
    The container is .homePage (inline-size container), so sizes follow the
    phone width, not the operator's window. Colors come from the page background
    (--home-background-color) and its readable ink (--lay-ink); cards stay white
@@ -30,6 +30,7 @@
 .tile .hero { height: clamp(156px, 44cqi, 230px); }
 .poster .hero { height: clamp(300px, 88cqi, 460px); justify-content: flex-end; }
 .tile .hero.textBottom { justify-content: flex-end; }
+.instagram .hero { height: clamp(124px, 36cqi, 176px); }
 
 .artwork {
   position: absolute;
@@ -81,7 +82,7 @@
 
 /* ---- ticket ---- */
 .ticketWrap { position: relative; z-index: 1; padding: 0 16px; }
-.tile .ticketWrap, .poster .ticketWrap { margin-top: -26px; }
+.tile .ticketWrap, .poster .ticketWrap, .instagram .ticketWrap { margin-top: -26px; }
 .typography .ticketWrap { margin-top: 0; }
 
 .root .ticket {
@@ -182,6 +183,25 @@
 .row :global(svg) { width: 20px; height: 20px; color: #17252b; }
 .typography .row :global(svg) { color: var(--lay-ink); }
 .entryLabel { display: flex; align-items: center; min-width: 0; font-size: 15px; font-weight: 800; line-height: 1.3; word-break: keep-all; overflow-wrap: anywhere; text-align: left; }
+
+/* ---- instagram: a feed of approved participant photos ---- */
+.feed { display: grid; gap: 0; padding: 18px 16px 0; }
+.feed > .groupLabel { margin-top: 0; }
+.feedList { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.feedCard {
+  overflow: hidden;
+  border-radius: var(--lay-radius);
+  background: #fff;
+  color: #17252b;
+  box-shadow: 0 8px 22px -16px rgb(16 17 20 / 70%);
+}
+.feedImage { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: #e6eaed; }
+.feedCaption { margin: 0; padding: 10px 14px 13px; font-size: 14px; font-weight: 700; line-height: 1.4; word-break: keep-all; overflow-wrap: anywhere; }
+.feedCaption small { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 600; color: color-mix(in srgb, #17252b 72%, #fff); }
+.feedBroken { display: grid; place-items: center; aspect-ratio: 4 / 3; padding: 16px; background: #eef1f3; color: color-mix(in srgb, #17252b 72%, #fff); font-size: 13px; font-weight: 700; text-align: center; }
+.feedEmptyArt { display: block; aspect-ratio: 4 / 3; background: linear-gradient(135deg, color-mix(in srgb, var(--lay-ink) 10%, #fff), color-mix(in srgb, var(--lay-ink) 22%, #fff)); }
+.feedMore { margin: 10px 4px 0; font-size: 12.5px; font-weight: 700; color: var(--lay-ink); text-align: center; }
+.instagram .menus { padding-top: 22px; }
 
 /* ---- typography ---- */
 .typoHead { padding: max(28px, 8cqi) 0 20px; }

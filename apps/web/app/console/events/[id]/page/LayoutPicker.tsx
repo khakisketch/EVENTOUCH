@@ -2,13 +2,13 @@
 
 // The first choice on the attendee page: which composition the home takes.
 // Each card is the real home rendered small with the event's own colors and
-// banner, so what you pick is what attendees get. The photo-first layout is
-// reserved and shown locked.
+// banner, so what you pick is what attendees get. The photo-first 인스타형 shows
+// where the approved participant photos will go until there are some.
 
 import type { CSSProperties } from "react";
 import AttendeeHomeLanding from "../../../../event/[slug]/home/AttendeeHomeLanding";
 import attendeeHomeStyles from "../../../../event/[slug]/home/home.module.css";
-import { readableInk, type HomeLayout, type HomeStyle, type MenuShape } from "../../../../../lib/attendee-home";
+import { readableInk, type HomeLayout, type HomePhoto, type HomeStyle, type MenuShape } from "../../../../../lib/attendee-home";
 import type { HomeMenus, HomeProgram } from "../../../../../lib/attendee-home-menus";
 import styles from "./layout-picker.module.css";
 
@@ -16,6 +16,7 @@ const LAYOUTS: Array<{ id: HomeLayout; name: string; hint: string }> = [
   { id: "tile", name: "타일형", hint: "정사각 타일 메뉴" },
   { id: "poster", name: "포스터형", hint: "큰 배너와 아이콘 메뉴" },
   { id: "typography", name: "타이포형", hint: "이미지 없이 큰 글자" },
+  { id: "instagram", name: "인스타형", hint: "참가자 사진 피드" },
 ];
 
 type Props = {
@@ -27,13 +28,14 @@ type Props = {
   defaultHomeBanner: "legacy" | "neutral";
   homeMenus: HomeMenus;
   programs: HomeProgram[];
+  photos: HomePhoto[];
   unavailable: Array<"notice" | "lucky" | "roulette" | "vote" | "stamp">;
   disabled?: boolean;
   onLayout: (layout: HomeLayout) => void;
   onMenuShape: (shape: MenuShape) => void;
 };
 
-export default function LayoutPicker({ value, menuShape, homeStyle, eventName, keyvisual, defaultHomeBanner, homeMenus, programs, unavailable, disabled = false, onLayout, onMenuShape }: Props) {
+export default function LayoutPicker({ value, menuShape, homeStyle, eventName, keyvisual, defaultHomeBanner, homeMenus, programs, photos, unavailable, disabled = false, onLayout, onMenuShape }: Props) {
   return (
     <div className={styles.picker}>
       <div className={styles.cards} role="radiogroup" aria-label="홈 레이아웃">
@@ -71,6 +73,7 @@ export default function LayoutPicker({ value, menuShape, homeStyle, eventName, k
                     homeStyle={sample}
                     homeMenus={homeMenus}
                     programs={programs}
+                    photos={photos}
                     unavailable={unavailable}
                     preview
                   />
@@ -81,13 +84,6 @@ export default function LayoutPicker({ value, menuShape, homeStyle, eventName, k
             </div>
           );
         })}
-        <button type="button" role="radio" aria-checked={false} aria-disabled="true" className={`${styles.card} ${styles.locked}`} tabIndex={-1} onClick={(event) => event.preventDefault()}>
-          <span className={`${styles.thumb} ${styles.lockedThumb}`} aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
-          </span>
-          <span className={styles.name}>인스타형</span>
-          <span className={styles.hint}>사진 중심 · 곧 제공</span>
-        </button>
       </div>
       {value === "poster" ? (
         <div className={styles.shapes} role="radiogroup" aria-label="포스터형 메뉴 모양">

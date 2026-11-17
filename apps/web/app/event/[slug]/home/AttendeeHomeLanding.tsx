@@ -4,7 +4,7 @@ import { Fragment, useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import ProductLink from "../../../ui/ProductLink";
 import ProductButton from "../../../ui/ProductButton";
-import { bannerFillCss, bannerFillTone, normalizeHomeStyle, readableInk, type HomeStyle } from "../../../../lib/attendee-home";
+import { HOME_FEED_LIMIT, bannerFillCss, bannerFillTone, normalizeHomeStyle, readableInk, type HomePhoto, type HomeStyle } from "../../../../lib/attendee-home";
 import { normalizeHomeMenus, type HomeMenus, type HomeProgram } from "../../../../lib/attendee-home-menus";
 import styles from "./home.module.css";
 import L from "./home-layouts.module.css";
@@ -48,13 +48,19 @@ type AttendeeHomeLandingProps = {
   unavailable?: HomeMenuKey[];
   homeMenus?: HomeMenus;
   programs?: HomeProgram[];
+  // Approved participant photos, newest first, for the photo-first layout.
+  // Other layouts ignore them.
+  photos?: HomePhoto[];
 };
 
-// One landing, three compositions (homeStyle.layout): tile (compact banner,
-// square tiles), poster (tall banner, circle or list menus) and typography
-// (no banner, large type). Entries, ticket gating, group labels, links and the
-// preview/disabled behavior are the same in every composition; only the
-// arrangement changes. The photo-first layout is reserved and not rendered.
+// One landing, four compositions (homeStyle.layout): tile (compact banner,
+// square tiles), poster (tall banner, circle or list menus), typography (no
+// banner, large type) and instagram (slim banner, a feed of approved
+// participant photos, list menus). Entries, ticket gating, group labels, links
+// and the preview/disabled behavior are the same in every composition; only the
+// arrangement changes. The photo-first layout needs approved photos to say
+// anything: a public page with none reads as the tile home, while the
+// console preview keeps the layout and shows where the photos will go.
 export default function AttendeeHomeLanding({
   eventName,
   hasTicket,
@@ -69,11 +75,12 @@ export default function AttendeeHomeLanding({
   unavailable = [],
   homeMenus,
   programs = [],
+  photos = [],
 }: AttendeeHomeLandingProps) {
   const [imageFailed, setImageFailed] = useState(false);
   // Stored or partial styles always read through the same defaults.
   const homeStyle = normalizeHomeStyle(homeStyleInput);
-  const layout = homeStyle.layout;
+  const layout = homeStyle.layout === "instagram" && !photos.length && !preview ? "tile" : homeStyle.layout;
   const fill = bannerFillCss(homeStyle);
   const imageMode = fill === null;
   const neutralBanner = imageMode && (imageFailed || (!keyvisual && defaultHomeBanner === "neutral"));
@@ -112,6 +119,7 @@ export default function AttendeeHomeLanding({
   const selectedPrograms = menuSettings.programs.flatMap((id) => programById.has(id) ? [programById.get(id)!] : []);
   const showLinks = Boolean(slug || preview);
   const shape = layout === "tile" ? "tile" : layout === "poster" && homeStyle.menuShape === "circle" ? "circle" : "row";
+  const feedPhotos = photos.slice(0, HOME_FEED_LIMIT);
   const rootStyle = { "--lay-ink": readableInk(homeStyle.backgroundColor) } as CSSProperties;
 
   const heroText = (
@@ -165,6 +173,25 @@ export default function AttendeeHomeLanding({
       preview={preview}
     />
   );
+  const feed = layout === "instagram" ? (
+    <section className={L.feed} aria-label="현장 사진">
+      <h2 className={L.groupLabel}>현장 사진{photos.length ? ` ${photos.length}` : ""}</h2>
+      {photos.length ? (
+        <ul className={L.feedList}>
+          {feedPhotos.map((photo) => <FeedCard key={photo.id} photo={photo} />)}
+        </ul>
+      ) : (
+        // Console preview only (a public page with no photos reads as the tile home).
+        <ul className={L.feedList}>
+          <li className={`${L.feedCard} ${L.feedEmpty}`}>
+            <span className={L.feedEmptyArt} aria-hidden="true" />
+            <p className={L.feedCaption}>승인된 참가자 사진이 여기에 표시됩니다<small>사진을 승인하면 최근 사진부터 보여요</small></p>
+          </li>
+        </ul>
+      )}
+      {photos.length > feedPhotos.length ? <p className={L.feedMore}>최근 {feedPhotos.length}장을 보여 드려요. 전체 사진은 참여 콘텐츠에서 볼 수 있어요.</p> : null}
+    </section>
+  ) : null;
   const groups = (["info", "Engagement"] as const).map((category) => ({
     category,
     items: entries.filter((menu) => menu.category === category),
@@ -174,6 +201,7 @@ export default function AttendeeHomeLanding({
     <div className={`${L.root} ${L[layout]}`} style={rootStyle} data-layout={layout} data-menu-shape={shape}>
       {hero}
       {ticketEntry ? <div className={L.ticketWrap}>{ticketEntry}</div> : null}
+      {feed}
       <nav className={L.menus} aria-label="참가 메뉴">
         {groups.map((group, index) => (
           <Fragment key={group.category}>
@@ -200,6 +228,32 @@ export default function AttendeeHomeLanding({
         </nav>
       ) : null}
     </div>
+  );
+}
+
+function formatFeedTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("ko-KR", { hour: "numeric", minute: "2-digit" }).format(date);
+}
+
+// One photo of the feed. An unreadable file shows a quiet note in its place
+// instead of a broken image.
+function FeedCard({ photo }: { photo: HomePhoto }) {
+  const [failed, setFailed] = useState(false);
+  const meta = [photo.name, formatFeedTime(photo.at)].filter(Boolean).join(" · ");
+  return (
+    <li className={L.feedCard} data-feed-photo={photo.id}>
+      {failed ? (
+        <span className={L.feedBroken} role="status">사진을 불러오지 못했습니다.</span>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img className={L.feedImage} src={photo.src} alt={photo.caption || `${photo.name || "참가자"}님이 공유한 사진`} loading="lazy" onError={() => setFailed(true)} />
+      )}
+      {photo.caption || meta ? (
+        <p className={L.feedCaption}>{photo.caption}{meta ? <small>{meta}</small> : null}</p>
+      ) : null}
+    </li>
   );
 }
 
