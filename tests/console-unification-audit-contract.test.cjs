@@ -47,7 +47,7 @@ const EXPECTED_TITLES = {
   photos: '현장 사진',
   content: '공지·안내',
   attendeePage: '참가자 페이지',
-  rewards: '경품 수령',
+  rewards: '경품 지급 현황',
   settings: '행사 설정',
   reports: '결과 보고서',
 };
@@ -123,7 +123,7 @@ test('console-audit-asserts-the-shared-frame-not-just-headings', () => {
     // Confirmed screens (2026-11-14~16): draws stage card, content panel, studio save button,
     // rewards oversight region and the reports tabs replaced the old anchors.
     '#ops-desks', 'section[aria-label="무대"]', '#evidence-photo-sections', '#content-panel',
-    '#theme-save-draft', '경품 지급 현황', '#set-name', "name: '보고서'",
+    '#theme-save-draft', '경품 지급 목록', '#set-name', "name: '보고서'",
   ]) {
     assert.ok(source.includes(marker), `loaded marker kept: ${marker}`);
   }

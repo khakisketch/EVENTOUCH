@@ -239,14 +239,15 @@ The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/
 - A photo is a button that opens a viewer drawer (`ConsoleDialog presentation="drawer"`): large photo, 이전/다음 (and arrow keys), file name and time, 원본 다운로드, 보관 구간 변경, 보관함에서 제외, each behind the existing confirmation. After a move or removal the viewer shows the neighbour or closes.
 - "사진 올리기" is the one orange action; "＋ 사진 추가" ends the gallery; dropping files anywhere on the gallery works. Upload preview, upload history and retry notices keep their existing places and rules.
 
-## 경품 수령 확정 구성
+## 경품 지급 현황 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/rewards/`, option V1). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-rewards-composition.test.cjs` guards it. This is the operator oversight list (blocked prizes, missing recipients, uncertain outcomes); handing a prize to a person at the venue belongs to the staff exit desk.
 
 - One bordered summary card: a progress ring (지급 완료 / 취소 제외 전체) and three tinted status tiles (확인 필요 red, 지급 대기 amber, 수령 완료 green). Tiles filter the list; underline tabs with counts carry the same filter. Search appears only when there are more than 8 prizes or a query.
 - The ledger reads by urgency: 확인 필요 → 지급 대기 → 완료·취소. A row leads with the recipient's initial in a circle (a dashed "?" while a company win has no recipient); a small corner badge carries the state by shape (alert, clock, check, x). Reasons are icon pills (수령자 지정 필요, 참가 취소, 연결 필요, 지급 실패), the method is an icon.
 - 수령 처리 is an ink pill on clean 지급 대기 rows only; a blocked prize shows its reason and a soft link (추첨에서 수령자 지정, 참가자 명단에서 확인) instead. 경품 취소 sits in the expanded row, behind the existing confirmation.
-- The page title and rail label stay "경품 수령"; renaming it (for example 경품 지급 현황) is a separate decision.
+- The page title and rail label are "경품 지급 현황" (owner decision 2026-11-18, renamed from "경품 수령" because this is an oversight screen, not the handout desk). The in-page list region is named "경품 지급 목록" so the heading and region never share a name. 수령 처리 stays the name of the action.
+- 운영 현황 shows one quiet task-queue row, "경품 확인 필요 N건", only while the 경품 feature is on and the count is above zero. It is appended after the other rows so it never takes the single orange action, and it links here. The count comes from the same `lib/reward-status.ts` rule as this screen. The 운영 현황 composition otherwise does not change.
 
 ## 추첨·투표 확정 구성
 

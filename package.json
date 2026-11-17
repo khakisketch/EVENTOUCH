@@ -79,6 +79,7 @@
     "web:staff-booth-clock:audit": "node scripts/web-staff-booth-clock-audit.cjs",
     "web:booth-server-clock:audit": "node scripts/web-booth-server-clock-audit.cjs",
     "web:overview-message-attention:audit": "node scripts/web-overview-message-attention-audit.cjs",
+    "web:overview-reward-row:audit": "node scripts/web-overview-reward-row-audit.cjs",
     "web:message-nav-attention:audit": "node scripts/web-message-nav-attention-audit.cjs",
     "web:message-nav-freshness:audit": "node scripts/web-message-nav-freshness-audit.cjs create && node scripts/web-message-nav-freshness-audit.cjs due && EVENTOUCH_AUDIT_CLOCK_BEHIND=1 node scripts/web-message-nav-freshness-audit.cjs due",
     "web:ticket-review-queue:audit": "node scripts/web-ticket-review-queue-audit.cjs reason && node scripts/web-ticket-review-queue-audit.cjs unknown && node scripts/web-ticket-review-queue-audit.cjs concurrent && node scripts/web-ticket-review-queue-audit.cjs issued",
