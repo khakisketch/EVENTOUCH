@@ -520,6 +520,21 @@ async function revokeStaff(client, event, workspace, input) {
   return { body: { ok: true } };
 }
 
+// What a desk shows when the same ticket is scanned in again: who it is and
+// when they first got in (earliest scan that was not corrected away). The scan
+// already passed ticket, state and attendance checks, so this reveals nothing
+// the successful scan would not have.
+function alreadyCheckedInDetails(workspace, person) {
+  let first = null;
+  let firstMs = Infinity;
+  for (const check of list(workspace.checks)) {
+    if (!check || check.corrected === true || check.action !== 'IN' || String(check.participantId) !== String(person.id)) continue;
+    const ms = Date.parse(check.at);
+    if (Number.isFinite(ms) && ms < firstMs) { first = check.at; firstMs = ms; }
+  }
+  return { name: String(person.name || ''), firstCheckedInAt: first };
+}
+
 function scan(workspace, event, actor, input, assignment) {
   requireLive(event, '행사 진행 중에 입퇴장을 처리할 수 있습니다. 매니저에게 진행 단계 확인을 요청하세요.');
   const deskId = clean(input.deskId || input.targetId, 120);
@@ -589,7 +604,7 @@ function scan(workspace, event, actor, input, assignment) {
   if (attendanceNeedsReview(person, indexLatestChecks(workspace.checks))) {
     throw failure(409, '출입 기록을 확인할 수 없어 처리하지 않았습니다. 현장 책임자에게 확인을 요청하세요.', undefined, 'CHECK_ATTENDANCE_REVIEW_REQUIRED');
   }
-  if (action === 'IN' && person.inside === true) throw failure(409, '이미 입장한 참가자입니다. 중복 처리하지 않았습니다.', undefined, 'ALREADY_CHECKED_IN');
+  if (action === 'IN' && person.inside === true) throw failure(409, '이미 입장한 참가자입니다. 중복 처리하지 않았습니다.', undefined, 'ALREADY_CHECKED_IN', alreadyCheckedInDetails(workspace, person));
   if (action === 'OUT' && person.inside !== true) throw failure(409, '현재 입장 상태가 아닙니다. 퇴장 처리하지 않았습니다.');
   if (action === 'IN' && person.everIn === true && workspace.allowReentry !== true) {
     throw failure(409, '재입장을 허용하지 않는 행사입니다.');

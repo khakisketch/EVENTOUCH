@@ -52,6 +52,35 @@ test('already-entered is information; a definitive failure is acknowledged, not 
   assert.doesNotMatch(work, /onClick=\{retryFailedScan\}>\s*다시 시도\s*</);
 });
 
+test('already-entered adds who and when as one quiet line, never a new control', () => {
+  // The server supplies details (owner decision 2026-11-18); the notice only reads them.
+  assert.match(operations, /'이미 입장한 참가자입니다\. 중복 처리하지 않았습니다\.', undefined, 'ALREADY_CHECKED_IN', alreadyCheckedInDetails\(workspace, person\)/);
+  assert.match(work, /\.\.\.\(isDesk && res\.status === 409 && data\?\.code === "ALREADY_CHECKED_IN" \? alreadyInDetails\(data\?\.details\) : \{\}\)/);
+  assert.match(work, /\{result\.alreadyIn && \(result\.alreadyName \|\| result\.alreadyAt\) \? \(\s*<p className=\{prizeStyles\.subLine\}>/, 'the line reuses the existing subLine style');
+  assert.match(work, /`\$\{formatCheckTime\(result\.alreadyAt\)\} 입장`/, 'the time reads like the 최근 처리 list');
+  // Nothing about the screen's structure changes: still information, still auto-advances, still no button.
+  assert.match(work, /const infoFailure = result\.kind === "failed" && !result\.uncertain && \(result\.alreadyIn === true \|\| boothLimitReached\)/);
+  assert.match(work, /\{!infoAuto \? <div className=\{prizeStyles\.overlayPanel\}>\{resultActions\}<\/div> : null\}/);
+});
+
+test('alreadyInDetails keeps only a usable name and time and never throws on odd details', () => {
+  const ts = require('../apps/web/node_modules/typescript');
+  const vm = require('node:vm');
+  const start = work.indexOf('function alreadyInDetails(');
+  const end = work.indexOf('function identityKey(');
+  assert.ok(start > 0 && end > start);
+  const js = ts.transpileModule(`${work.slice(start, end)}\nthis.result = alreadyInDetails;`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
+  const sandbox = {};
+  vm.runInNewContext(js, sandbox);
+  const details = (value) => JSON.parse(JSON.stringify(sandbox.result(value)));
+  assert.deepEqual(details({ name: ' 홍길동 ', firstCheckedInAt: '2026-11-18T05:13:00.000Z' }), { alreadyName: '홍길동', alreadyAt: '2026-11-18T05:13:00.000Z' });
+  assert.deepEqual(details({ name: '홍길동', firstCheckedInAt: null }), { alreadyName: '홍길동' }, 'no entry time on record: name only');
+  assert.deepEqual(details({ name: '', firstCheckedInAt: 'not-a-time' }), {}, 'blank name and an unreadable time are dropped');
+  for (const odd of [undefined, null, 'text', 7, [], [{ name: 'x' }], { name: 5, firstCheckedInAt: {} }]) {
+    assert.deepEqual(details(odd), {}, `ignored: ${JSON.stringify(odd)}`);
+  }
+});
+
 test('lists and forms open only on demand, as sheets with a visible close', () => {
   for (const title of ['티켓 코드 입력', '명단에서 찾기', '최근 처리', '입장·퇴장 기록 정정', '경품 확인·수령']) {
     assert.match(work, new RegExp(`<ConsoleDialog title="${title}" presentation="drawer" stickyChrome`), `${title} is a sheet`);
