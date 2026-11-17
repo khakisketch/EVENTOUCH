@@ -95,6 +95,7 @@
     "web:roster-uncertain:audit": "node scripts/web-roster-uncertain-audit.cjs",
     "web:import-recovery:audit": "node scripts/web-import-recovery-audit.cjs",
     "web:import-contact-review:audit": "node scripts/web-import-contact-review-audit.cjs",
+    "web:import-extra-fields:audit": "node scripts/web-import-extra-fields-audit.cjs",
     "web:publication:audit": "node scripts/web-content-publication-audit.cjs",
     "web:publication-context:audit": "node scripts/web-publication-context-audit.cjs",
     "web:participation-navigation:audit": "node scripts/web-participation-navigation-audit.cjs",

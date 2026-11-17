@@ -137,6 +137,22 @@ function addPaymentIfNeeded(event, workspace, participant, at) {
   });
 }
 
+// Columns an import row carries on their own; they are never an extra field.
+// `answers` is the carrier of the extra fields' values.
+const IMPORT_OWN_FIELD_IDS = new Set(['name', 'phone', 'email', 'company', 'group', 'answers']);
+
+// The event's own extra form fields (식사 선택, 부서 ...), as operator
+// registration sees them (the draft form). An import row may carry answers for
+// them; only the ones a row actually carries are checked, so a required field
+// the file did not include never blocks every row.
+function importFieldsFor(workspace, carried) {
+  return list(workspace.fields).filter((field) => {
+    if (!field || typeof field !== 'object' || Array.isArray(field)) return false;
+    const id = clean(field.id, 100);
+    return Boolean(id) && !IMPORT_OWN_FIELD_IDS.has(id) && Object.hasOwn(carried, id);
+  });
+}
+
 function createParticipant(event, workspace, input, { registrationType, publicSignup = false, fields, now }) {
   const form = fields || list(publicSignup ? workspace.publishedFields : workspace.fields);
   const values = validateParticipant(input, workspace, { fields: form });
@@ -930,14 +946,21 @@ function createParticipantCommands(database) {
           const created = [];
           for (const row of rows) {
             try {
-              const participant = createParticipant(event, workspace, row, {
+              // Rebuild the input from the columns an import row may carry, so
+              // a row-level key (the file row number `line`, for one) can never
+              // be mistaken for the answer of a form field with the same id.
+              const source = object(row);
+              const carried = object(source.answers);
+              const participant = createParticipant(event, workspace, {
+                name: source.name, phone: source.phone, email: source.email, company: source.company, group: source.group,
+                answers: carried,
+              }, {
                 registrationType: 'PRE',
-                fields: [],
+                fields: importFieldsFor(workspace, carried),
                 now,
               });
               participant.status = 'APPROVED';
               participant.consent = null;
-              participant.answers = {};
               created.push(participant);
             } catch (error) {
               // Bulk import processes the previewed rows in order. Name the

@@ -23,7 +23,7 @@ const test = databaseUrl
 const suffix = crypto.randomUUID().replace(/-/g, '');
 const ids = Object.fromEntries([
   'signup', 'stale', 'duplicate', 'capacity', 'parallel', 'replay', 'operators', 'expired', 'payment',
-  'importOverflow', 'duplicateImport',
+  'importOverflow', 'duplicateImport', 'importAnswers',
 ].map((name) => [name, `registration-${name}-${suffix}`]));
 const slugs = Object.fromEntries(Object.entries(ids).map(([name, id]) => [name, id]));
 const accountIds = {
@@ -170,6 +170,15 @@ before(async () => {
         ? [expiredParticipant(expiredTicket)]
         : [],
     });
+    // Extra form fields of every type, for the import-answers tests.
+    if (name === 'importAnswers') {
+      eventWorkspace.fields.push(
+        { id: 'memo', label: '요청 사항', type: 'text', required: false, options: [] },
+        { id: 'agree', label: '마케팅 동의', type: 'checkbox', required: false, options: [] },
+        { id: 'contact_mail', label: '담당자 메일', type: 'email', required: false, options: [] },
+        { id: 'line', label: '번호', type: 'text', required: false, options: [] },
+      );
+    }
     await insertEvent(harness.database, {orgId: LEGACY_ORG,
       id: ids[name],
       slug: slugs[name],
@@ -184,6 +193,7 @@ before(async () => {
   await insertMembership(harness.database, accountIds.manager, ids.payment, ['all']);
   await insertMembership(harness.database, accountIds.manager, ids.importOverflow, ['all']);
   await insertMembership(harness.database, accountIds.manager, ids.duplicateImport, ['all']);
+  await insertMembership(harness.database, accountIds.manager, ids.importAnswers, ['all']);
   await insertAssignment(harness.database, {
     id: assignmentId,
     accountId: accountIds.staff,
@@ -615,6 +625,75 @@ test('participant-import-duplicate-names-the-file-row', async () => {
     [ids.duplicateImport]
   );
   assert.equal(state.rows[0].payload.participants.length, 1);
+});
+
+// --- import carries the event's extra form fields ----------------------------
+// A row may carry `answers` for the event's own fields (식사 선택, 요청 사항 ...).
+// Only fields a row actually carries are checked, so a required field the file
+// did not include never blocks every row.
+const importAnswers = (rows) => operatorCommand(ids.importAnswers, 'participant.import', { rows }, cookies.manager);
+const storedPeople = async () => (await harness.database.query('SELECT payload FROM event_workspaces WHERE event_id = $1', [ids.importAnswers])).rows[0].payload.participants;
+
+test('participant-import-stores-answers-for-the-extra-fields-a-row-carries', async () => {
+  const imported = await importAnswers([
+    { name: '답변 가', phone: '01012350001', line: 2, answers: { meal: '채식', memo: '  창가 자리  ', agree: true, contact_mail: 'owner@example.test' } },
+    { name: '답변 나', phone: '01012350002', line: 3, answers: { meal: '일반식', agree: false } },
+  ]);
+  assert.equal(imported.status, 200, JSON.stringify(imported.json));
+  const people = await storedPeople();
+  const first = people.find((person) => person.name === '답변 가');
+  const second = people.find((person) => person.name === '답변 나');
+  assert.deepEqual(first.answers, { meal: '채식', memo: '창가 자리', agree: true, contact_mail: 'owner@example.test' });
+  assert.deepEqual(second.answers, { meal: '일반식', agree: false });
+  assert.equal(first.status, 'APPROVED');
+  assert.equal(first.consent, null, 'import still never records consent');
+});
+
+test('participant-import-does-not-require-fields-the-file-did-not-carry', async () => {
+  // 식사 선택 is required on this form, yet a file without that column still imports.
+  const imported = await importAnswers([{ name: '답변 없음', phone: '01012350003', line: 2 }]);
+  assert.equal(imported.status, 200, JSON.stringify(imported.json));
+  const person = (await storedPeople()).find((item) => item.name === '답변 없음');
+  assert.deepEqual(person.answers, {});
+});
+
+test('participant-import-ignores-answers-for-unknown-fields-and-row-level-keys', async () => {
+  const imported = await importAnswers([
+    { name: '낯선 키', phone: '01012350004', line: 9, answers: { ghost: 'x', name: '바꿔치기', phone: '01000000000', company: '무시' } },
+  ]);
+  assert.equal(imported.status, 200, JSON.stringify(imported.json));
+  const person = (await storedPeople()).find((item) => item.phone === '01012350004');
+  assert.equal(person.name, '낯선 키', 'answers can never overwrite the identity columns');
+  assert.deepEqual(person.answers, {});
+  // A form field that happens to be named "line" gets its own answer, not the file row number.
+  const withLine = await importAnswers([{ name: '번호 항목', phone: '01012350005', line: 42, answers: { line: '12번 테이블' } }]);
+  assert.equal(withLine.status, 200, JSON.stringify(withLine.json));
+  assert.deepEqual((await storedPeople()).find((item) => item.phone === '01012350005').answers, { line: '12번 테이블' });
+  const withoutAnswer = await importAnswers([{ name: '번호만', phone: '01012350006', line: 43 }]);
+  assert.deepEqual((await storedPeople()).find((item) => item.phone === '01012350006').answers, {}, 'the row number is never taken for an answer');
+  assert.equal(withoutAnswer.status, 200);
+});
+
+test('participant-import-rejects-a-bad-answer-by-file-row-and-writes-nothing', async () => {
+  const before = (await storedPeople()).length;
+  const cases = [
+    [{ meal: '육식' }, /선택지/, 'meal'],
+    [{ meal: '' }, /입력/, 'meal'],
+    [{ contact_mail: 'not-an-email' }, /형식/, 'contact_mail'],
+    [{ agree: 'yes' }, /확인/, 'agree'],
+    [{ memo: 7 }, /값을 확인/, 'memo'],
+  ];
+  for (const [answers, message, field] of cases) {
+    const failed = await importAnswers([
+      { name: '정상 행', phone: '01012350010', line: 2, answers: { meal: '채식' } },
+      { name: '문제 행', phone: '01012350011', line: 7, answers },
+    ]);
+    assert.equal(failed.status, 400, JSON.stringify(failed.json));
+    assert.match(failed.json.error, /파일 7번째 행/u);
+    assert.match(failed.json.error, message);
+    assert.equal(failed.json.field, field);
+  }
+  assert.equal((await storedPeople()).length, before, 'a bad row leaves the whole import unwritten, including the good row');
 });
 
 test('attendee-ticket-allows-only-self-update-and-cancellation-then-revokes-the-ticket', async () => {
