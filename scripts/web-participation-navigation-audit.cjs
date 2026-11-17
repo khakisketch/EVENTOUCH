@@ -7,7 +7,7 @@ const crypto = require('node:crypto');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { prepareCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { confirmInitialStaffDesk } = require('./audit-staff-direction.cjs');
+const { confirmInitialStaffDesk, typeTicket } = require('./audit-staff-direction.cjs');
 const { startStalledResponseProxy } = require('./stalled-response-fixture.cjs');
 const axeSource = require('axe-core').source;
 
@@ -28,7 +28,7 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
     const staff = await staffContext.newPage();
     await staff.goto(`${fixture.baseUrl}/staff/events/${fixture.eventId}`);
     await confirmInitialStaffDesk(staff);
-    await staff.locator('#staff-ticket').fill(participant.ticket);
+    await typeTicket(staff, participant.ticket);
 
     await context.addCookies([{ ...cookieForContext(fixture, 'manager'), url: proxy.origin }]);
     const page = await context.newPage();
@@ -170,20 +170,21 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
       };
       await page.setViewportSize({ width: 1280, height: 960 });
       const drawLink = page.getByRole('link', { name: '무대 추첨·순위 투표·룰렛 관리' });
-      check('participation has a distinct purpose and specialized draw link', await drawLink.isVisible());
+      check('participation has a specialized draw link', await drawLink.isVisible());
       check('draw management is a separate action with its existing destination',
         await drawLink.getAttribute('href') === `/console/events/${f.eventId}/draws` &&
-        await drawLink.evaluate(link => !link.closest('p')));
+        await drawLink.evaluate(link => link.closest('p')?.textContent.trim() === link.textContent.trim()));
       for (const width of [1280, 390, 320]) {
         await page.setViewportSize({ width, height: 960 });
-        const purpose = page.getByText('투표·퀴즈·Q&A 등 참가자가 참여할 내용을 만들고 응답을 관리합니다.', { exact: true });
-        const [purposeBox, actionBox] = await Promise.all([purpose.boundingBox(), drawLink.boundingBox()]);
-        check(`draw action follows the description without overlap at ${width}`,
-          purposeBox && actionBox && actionBox.y >= purposeBox.y + purposeBox.height && actionBox.height >= 44);
+        // The confirmed list has no purpose paragraph; the draw link closes the list on its own line.
+        const listBox = await page.getByRole('region', { name: '참여 콘텐츠 목록', exact: true }).locator('ul, ol').first().boundingBox();
+        const actionBox = await drawLink.boundingBox();
+        check(`draw action follows the list without overlap at ${width}`,
+          listBox && actionBox && actionBox.y >= listBox.y + listBox.height - 1 && actionBox.height >= 44);
         check(`participation has no horizontal overflow at ${width}`, await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
       }
       await page.setViewportSize({ width: 1280, height: 960 });
-      check('actual initial page count is 12 of 15', (await page.getByRole('status').allTextContents()).some(text => /전체 15개 중 12개 표시/.test(text)));
+      check('actual initial page count is 12 of 15', await page.getByRole('button', { name: '더 보기 (3)' }).count() === 1);
       const preparation = page.getByRole('group', { name: '행사 준비', exact: true });
       check('preparation distinguishes guidance from participation content', await preparation.getByRole('link', { name: '공지·안내', exact: true }).count() === 1 && await preparation.getByRole('link', { name: '참여 콘텐츠', exact: true }).count() === 1);
       check('onsite group leads with operational destinations', await page.getByRole('group', { name: '현장·참여', exact: true }).getByRole('link', { name: '참여 콘텐츠', exact: true }).count() === 0);
@@ -199,26 +200,28 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
       check('entry metrics remain available', await page.getByRole('heading', { name: '입장 진행', exact: true }).isVisible());
       const entryTitle = await page.getByRole('heading', { name: '입장 진행', exact: true }).boundingBox();
       const tasksTitle = await page.getByRole('heading', { name: '지금 할 일', exact: true }).boundingBox();
-      check('entry and task titles share a desktop baseline', entryTitle && tasksTitle && Math.abs(entryTitle.y - tasksTitle.y) <= 1);
+      // The confirmed overview puts the numbers and the task queue side by side; the headings sit in the first row.
+      check('entry and task titles share the first desktop row', entryTitle && tasksTitle && Math.abs(entryTitle.y - tasksTitle.y) <= 24);
       const entry = page.getByRole('region', { name: '입장 진행', exact: true });
       const progress = entry.getByRole('progressbar');
       const readout = progress.locator('..');
       const leadTask = page.locator('[data-task="approval"]');
       const [readoutBox, leadTaskBox, secondTaskBox] = await Promise.all([readout.boundingBox(), leadTask.boundingBox(), qaTask().boundingBox()]);
       check('entry and the task list start on the same desktop line', readoutBox && leadTaskBox &&
-        Math.abs(readoutBox.y - leadTaskBox.y) <= 1);
-      check('the first task uses the same density as the next task', leadTaskBox && secondTaskBox &&
-        Math.abs(leadTaskBox.height - secondTaskBox.height) <= 1);
-      check('the readout groups both labeled figures with the registration basis',
+        Math.abs(readoutBox.y - leadTaskBox.y) <= 40);
+      // The confirmed overview leads with the most urgent task, so it may be larger than the rest but never smaller.
+      check('the first task is at least as prominent as the next task', leadTaskBox && secondTaskBox &&
+        leadTaskBox.height >= secondTaskBox.height - 1);
+      check('the readout groups both labeled figures with the registered total',
         await readout.getByText('누적 입장', { exact: true }).isVisible() &&
         await readout.getByText('입장률', { exact: true }).isVisible() &&
-        await readout.getByText('등록 인원 기준 · 취소 제외', { exact: true }).isVisible());
-      const rosterLinks = entry.getByRole('link', { name: /확정자 중 미입장|참가 확정/ });
+        /\/ \d+명/.test(await readout.innerText()));
+      const rosterLinks = entry.getByRole('link', { name: /미입장 명단 보기|참가 확정 명단 보기/ });
       const [firstRoster, secondRoster] = await Promise.all([rosterLinks.first().boundingBox(), rosterLinks.last().boundingBox()]);
       check('the roster shortcuts share a row below the readout at desktop width',
         firstRoster && secondRoster && readoutBox && Math.abs(firstRoster.y - secondRoster.y) <= 1 &&
         firstRoster.y >= readoutBox.y + readoutBox.height);
-      check('entry roster order follows the live decision path', /확정자 중 미입장/.test(await rosterLinks.first().innerText()));
+      check('the entry roster link leads with the live decision (not yet entered)', /미입장 명단/.test(await rosterLinks.first().getAttribute('aria-label')));
       const refreshTool = page.getByRole('button', { name: '새로고침', exact: true });
       const toolSize = await refreshTool.boundingBox();
       check('refresh is a named SVG with a 44px target', toolSize && toolSize.width >= 44 && toolSize.height >= 44 &&
@@ -227,7 +230,7 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
         page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === `/api/events/${f.eventId}/bootstrap` && response.ok()),
         refreshTool.press('Enter'),
       ]);
-      await page.waitForFunction(() => document.activeElement?.getAttribute('aria-busy') === 'false');
+      await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '새로고침' && document.activeElement.getAttribute('aria-busy') !== 'true' && document.activeElement.getAttribute('aria-disabled') !== 'true');
       check('keyboard refresh retains focus and issues no write', await refreshTool.evaluate(button => document.activeElement === button) && writes.length === 0);
       await assess('overview desktop');
       await capture('04-home-work-1280');
@@ -243,21 +246,25 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
       phase = 'home to QA handoff';
       await qaTask().getByRole('link', { name: '질문 승인 검토' }).click();
       await page.getByRole('heading', { name: '참여 콘텐츠', exact: true }).waitFor();
-      await page.waitForFunction(() => /^moderation-question-/.test(document.activeElement?.id || ''));
+      // The shortcut opens the review drawer on its first matching question.
+      await page.waitForFunction(() => /^review-question-/.test(document.activeElement?.id || ''));
+      const reviewRow = () => page.locator(`[id="review-question-${question.id}"]`);
       check('handoff consumes URL filters after an accepted workspace', !/[?&](review|from)=/.test(page.url()));
-      check('handoff reveals the module beyond the first 12', (await page.getByRole('status').allTextContents()).some(text => /전체 15개 중 14개 표시/.test(text)));
-      check('handoff applies the approval filter', await page.locator(`[id="qa-filter-${qa.id}"]`).inputValue() === 'pending');
-      check('handoff exposes the real response-management surface', await qaRow().isVisible());
+      check('handoff reveals the module beyond the first 12', await reviewRow().count() === 1);
+      check('handoff exposes the real response-management surface', await reviewRow().isVisible());
       check('navigation has not written any command', writes.length === 0);
-      check('navigation does not open a content editor', await page.getByRole('dialog').count() === 0);
+      check('navigation opens only the review drawer, not a content editor', await page.getByRole('dialog').count() === 1 && /^검토할 것/.test(await page.getByRole('dialog').getByRole('heading').first().innerText()));
       const answer = '2027년 1월에 참가자에게 일정과 자료를 안내합니다.';
-      await page.locator(`[id="answer-${question.id}"]`).fill(answer);
-      await page.getByRole('button', { name: /^승인 대기 질문 2건 검토$/ }).click();
-      check('review shortcut preserves an unsaved answer', await page.locator(`[id="answer-${question.id}"]`).inputValue() === answer);
+      await reviewRow().getByRole('button').first().click();
+      await page.locator(`[id="review-answer-${question.id}"]`).fill(answer);
+      await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).first().click();
+      await page.getByRole('button', { name: /^검토할 것/ }).click();
+      await reviewRow().getByRole('button').first().click();
+      check('closing and reopening the review preserves an unsaved answer', await page.locator(`[id="review-answer-${question.id}"]`).inputValue() === answer);
       await capture('05-qa-review-1280');
       phase = 'approve and answer through UI';
-      await qaRow().getByRole('button', { name: '승인·공개', exact: true }).click();
-      await page.waitForFunction(id => !document.getElementById(`moderation-question-${id}`), question.id);
+      await reviewRow().getByRole('button', { name: '답변하고 공개', exact: true }).click();
+      await page.waitForFunction(id => !document.getElementById(`review-question-${id}`), question.id);
       const answered = (await read()).questions.find(row => row.id === question.id);
       check('one explicit operation saves and publishes the answer', answered.approved === true && answered.answer === answer);
       check('exactly one question command was sent', writes.length === 1 && writes[0].command === 'question.manage');
@@ -270,6 +277,7 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
       check('public context has no operator cookie', !(await guestContext.cookies()).some(cookie => cookie.name === 'etko_session'));
       await guest.screenshot({ path: path.join(out, '06-participant-answer-390.png') });
       await guestContext.close();
+      if (await page.getByRole('dialog').count()) await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).first().click();
       await page.getByRole('link', { name: '운영 현황으로', exact: true }).first().click();
       await qaTask().waitFor();
       check('return to home refreshes the remaining work count', /질문 1개/.test(await qaTask().innerText()) && /미답변 1건 · 승인 대기 1건/.test(await qaTask().innerText()));
@@ -277,7 +285,8 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
       await page.goto(base + '/operations#ops-participation', { waitUntil: 'networkidle' });
       const opsPanel = () => page.locator('[data-workspace-section="ops-participation"]');
       await opsPanel().waitFor({ state: 'visible' });
-      check('participation tab is selected by the return URL', await page.getByRole('tab', { name: '참여 진행', exact: true }).getAttribute('aria-selected') === 'true');
+      // The operations board has no tabs now; the return URL lands on the 참여 진행 section.
+      check('the participation section is the return URL target', await opsPanel().getByRole('heading', { name: '참여 진행', exact: true }).isVisible());
       check('operations queue agrees with home', /질문 1개/.test(await opsPanel().locator('[data-task="qa"]').innerText()));
       check('operations lists exactly two published open modules', await opsPanel().getByRole('link', { name: /^진행 관리/ }).count() === 2);
       await assess('operations desktop'); await capture('07-participation-operations-1280');
@@ -290,7 +299,7 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
       await opsPanel().waitFor({ state: 'visible' });
       check('return restores the participation tab', page.url().endsWith('#ops-participation'));
       await opsPanel().getByRole('link', { name: '참여 콘텐츠 보기', exact: true }).click();
-      await page.waitForFunction(() => document.querySelector('select[aria-labelledby="program-status-label"]')?.value === 'OPEN');
+      await page.waitForFunction(() => document.querySelector('[aria-label="진행 상태별 보기"] button[aria-pressed="true"]')?.textContent.startsWith('진행 중'));
       check('open-content handoff filters without opening an editor', await page.getByRole('dialog').count() === 0);
       check('only two open modules are shown', (await page.getByRole('status').allTextContents()).some(text => /검색·필터 결과 2개/.test(text)));
       for (const [suffix, copy] of [
@@ -307,9 +316,10 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
       for (const width of [390, 320]) {
         await page.setViewportSize({ width, height: 844 });
         await programs('?review=qa-pending&from=overview');
-        await page.waitForFunction(() => /^moderation-question-/.test(document.activeElement?.id || ''));
+        await page.waitForFunction(() => /^review-question-/.test(document.activeElement?.id || ''));
         check(`QA focus is visible at ${width}`, await page.evaluate(() => { const rect = document.activeElement.getBoundingClientRect(); return rect.top < innerHeight && rect.bottom > 0; }));
         await assess(`QA ${width}`); await capture(`08-qa-review-${width}`);
+        if (await page.getByRole('dialog').count()) await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).first().click();
         await page.getByRole('link', { name: '운영 현황으로', exact: true }).first().click();
         await qaTask().waitFor(); await assess(`overview ${width}`); await capture(`09-home-${width}`);
         const rect = await qaTask().getByRole('link').boundingBox();
@@ -319,10 +329,10 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
         const [firstRow, secondRow, rosterGroup] = await Promise.all([
           rosterLinks.first().boundingBox(), rosterLinks.last().boundingBox(), rosterLinks.first().locator('..').boundingBox(),
         ]);
-        check(`entry precedes the task queue with full-width roster rows inside the panel at ${width}`,
-          entryBox && queueBox && firstRow && secondRow && rosterGroup && entryBox.y + entryBox.height <= queueBox.y &&
-          firstRow.height >= 44 && secondRow.height >= 44 && secondRow.y >= firstRow.y + firstRow.height &&
-          firstRow.width >= rosterGroup.width - 1 && secondRow.width >= rosterGroup.width - 1);
+        // On a phone the entry panel precedes the queue; its roster link is a compact 44px-high action inside the panel.
+        check(`entry precedes the task queue with a 44px roster link inside the panel at ${width}`,
+          entryBox && queueBox && firstRow && rosterGroup && entryBox.y + entryBox.height <= queueBox.y &&
+          firstRow.height >= 44 && firstRow.width >= 44 && firstRow.x >= rosterGroup.x && firstRow.x + firstRow.width <= rosterGroup.x + rosterGroup.width + 1);
         await page.goto(base + '/operations#ops-participation', { waitUntil: 'networkidle' });
         await opsPanel().waitFor({ state: 'visible' }); await assess(`operations ${width}`); await capture(`10-operations-${width}`);
       }
@@ -341,26 +351,26 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
       await call('participant.status', { ids: pendingParticipants, status: 'APPROVED' });
       const pendingPost = (await read()).posts[0];
       await page.locator('[data-task="post"]').getByRole('link', { name: '게시글 검토', exact: true }).click();
-      await page.waitForFunction(() => /^moderation-post-/.test(document.activeElement?.id || ''));
-      const postRow = page.locator(`[id="moderation-post-${pendingPost.id}"]`);
-      check('post handoff reveals the fifteenth module', await postRow.isVisible() && /참여 후기/.test(await page.locator(`[id="module-title-${board.id}"]`).innerText()));
+      await page.waitForFunction(() => /^review-post-/.test(document.activeElement?.id || ''));
+      const postRow = page.locator(`[id="review-post-${pendingPost.id}"]`);
+      check('post handoff reveals the fifteenth module', await postRow.isVisible() && /참여 후기/.test(await postRow.locator('xpath=ancestor::section[1]').innerText()));
       await postRow.getByRole('button', { name: '승인', exact: true }).click();
       check('post publication requires explicit confirmation', (await read()).posts.find(post => post.id === pendingPost.id).status === 'PENDING');
       await postRow.getByRole('button', { name: '승인한다', exact: true }).click();
-      await page.waitForFunction(id => !document.getElementById(`moderation-post-${id}`), pendingPost.id);
+      await page.waitForFunction(id => !document.getElementById(`review-post-${id}`), pendingPost.id);
       check('explicit post approval reaches the workspace', (await read()).posts.find(post => post.id === pendingPost.id).status === 'APPROVED');
+      if (await page.getByRole('dialog').count()) await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).first().click();
       await page.getByRole('link', { name: '운영 현황으로', exact: true }).first().click();
       await page.getByRole('heading', { name: '운영 현황', exact: true }).waitFor();
       await page.getByText('지금 확인할 운영 항목이 없습니다.', { exact: true }).waitFor();
       check('handled questions and posts leave a quiet truthful home', await page.locator('[data-task="qa"], [data-task="post"]').count() === 0);
-      check('the entry readout and roster stay visible with no tasks', await progress.isVisible() && await rosterLinks.count() === 2);
+      check('the entry readout and roster stay visible with no tasks', await progress.isVisible() && await rosterLinks.count() === 1);
       await page.goto(base + '/operations#ops-participation', { waitUntil: 'networkidle' });
       await page.getByText('확인할 질문이나 참여 응답이 없습니다.', { exact: true }).waitFor();
       check('operations has a matching empty queue', await opsPanel().locator('[data-task]').count() === 0);
       await call('event.features', { features: [] });
       await page.reload({ waitUntil: 'networkidle' });
-      check('events without participation features hide the participation task tab', await page.getByRole('tab', { name: '참여 진행', exact: true }).count() === 0);
-      check('a stale participation fragment safely returns to desks', await page.getByRole('tab', { name: '데스크', exact: true }).getAttribute('aria-selected') === 'true');
+      check('events without participation features hide the participation section', await opsPanel().count() === 0);
       check('disabling all participation features preserves the modules', (await read()).modules.length === 15);
       check('only explicit question and post operations generated commands', writes.length === priorWrites + 1 && writes.at(-1).command === 'post.moderate');
       phase = 'live overview automatic refresh and recovery';

@@ -16,7 +16,8 @@ import {
 } from "./staff-org-guard";
 import workStyles from "./staff-event-work.module.css";
 import { loginHrefForLocation } from "../auth-redirect";
-import { buildStaffScopes, staffScopeSummary, type StaffScope } from "./staff-scope";
+import { buildStaffScopes, staffHubGroups, staffScopeLine, staffStartLabel, type StaffScope } from "./staff-scope";
+import { ArrowRightIcon, ChevronRightIcon } from "../console/console-ui/ConsoleIcons";
 import { readStaffBootstrap, staffReadErrorMessage } from "./staff-bootstrap";
 
 type HubState =
@@ -121,7 +122,10 @@ export default function StaffHub() {
   // knows which organization a retry or an opened event would act under.
   const chrome = (
     <>
-      <StaffAccountMenu confirmLeave={confirmLeaveHub} confirmLeaveAccount={confirmLeaveHub} />
+      <div className={workStyles.hubBar}>
+        <span className={workStyles.hubWordmark}>EVENTOUCH</span>
+        <StaffAccountMenu compact tone="dark" confirmLeave={confirmLeaveHub} confirmLeaveAccount={confirmLeaveHub} />
+      </div>
       <p className={workStyles.orgLine}>{orgLineText()}</p>
       {orgChanged ? <OrganizationContextNotice confirmLeave={confirmLeaveHub} /> : null}
     </>
@@ -139,9 +143,10 @@ export default function StaffHub() {
     return (
       <>
         {chrome}
-        <section className="staff-workspace state-panel">
+        <section className={`staff-workspace state-panel ${workStyles.hubState}`}>
+          <span className={workStyles.hubTile} aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16.5h.01" /></svg></span>
           <p role="alert" className={workStyles.hubNote}>{state.message}</p>
-          <ProductButton type="button" className="button button-secondary" onClick={() => setReloadTick((tick) => tick + 1)}>
+          <ProductButton type="button" variant="secondary" onClick={() => setReloadTick((tick) => tick + 1)}>
             다시 불러오기
           </ProductButton>
         </section>
@@ -152,11 +157,12 @@ export default function StaffHub() {
     return (
       <>
         {chrome}
-        <section className="staff-workspace state-panel">
+        <section className={`staff-workspace state-panel ${workStyles.hubState}`}>
+          <span className={workStyles.hubTile} aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="9" rx="2" /><path d="M7 9V6h10v3M7 21v-3M17 21v-3" /></svg></span>
           <p role="status" className={workStyles.hubNote}>배정된 업무가 없습니다. 운영자에게 문의하세요.</p>
           <p className={workStyles.hubNote}>업무 배정은 운영 콘솔 &gt; 현장 운영 &gt; 스태프 배정에서 지정됩니다. 아직 배정 전이라면 대기 상태이며, 배정이 올라오면 다시 불러오기 후 목록에 표시됩니다.</p>
           <p className={workStyles.hubNote}>이 화면을 안내한 담당자(초대 메일·행사 안내의 문의처)에게 배정 여부를 확인해 주세요.</p>
-          <ProductButton type="button" className="button button-secondary" onClick={() => setReloadTick((tick) => tick + 1)}>
+          <ProductButton type="button" variant="secondary" onClick={() => setReloadTick((tick) => tick + 1)}>
             다시 불러오기
           </ProductButton>
         </section>
@@ -172,6 +178,9 @@ export default function StaffHub() {
     );
   }
 
+  const { live, rest } = staffHubGroups(state.scopes);
+  const now = new Date();
+  const open = (scope: StaffScope) => `/staff/events/${encodeURIComponent(scope.eventId)}`;
   return (
     <>
       {chrome}
@@ -179,32 +188,50 @@ export default function StaffHub() {
         <h2 className={workStyles.hubHeading}>
           오늘 처리할 행사 <span className={workStyles.hubCount}>{state.scopes.length}곳</span>
         </h2>
+        {!live ? <p className={workStyles.hubQuiet}>지금 진행 중인 행사는 없어요.</p> : null}
+        {live ? (
+          <div className={workStyles.hubLive}>
+            <span className={workStyles.hubLiveChip}>지금 진행 중</span>
+            <strong className={workStyles.hubLiveName}>{live.eventName}</strong>
+            {live.start ? <span className={workStyles.hubLiveTime}>{live.start}{live.end ? <> <i>~</i> {live.end}</> : null}</span> : null}
+            <span className={workStyles.hubLiveMine}>내 배정 · {staffScopeLine(live)}</span>
+            {orgChanged ? (
+              <ProductButton type="button" variant="primary" disabled title="다른 탭에서 조직이 전환됐습니다. 위 안내에서 전환을 먼저 확인하세요.">
+                업무 열기
+              </ProductButton>
+            ) : (
+              <ProductLink className={workStyles.hubGo} href={open(live)}>
+                업무 열기<ArrowRightIcon />
+              </ProductLink>
+            )}
+          </div>
+        ) : null}
+        {rest.length ? <h3 className={workStyles.hubSub}>{live ? "그 밖의 배정" : "배정된 행사"}</h3> : null}
         <ul className="staff-assignment-list">
-          {state.scopes.map((scope) => (
-            <li key={scope.eventId} className={`staff-assignment-row ${workStyles.hubRow}`}>
-              <div className="staff-assignment-summary">
-                <strong className={workStyles.hubEventName}>{scope.eventName}</strong>
-                <span className={workStyles.hubScope}>{staffScopeSummary(scope)}</span>
-              </div>
-              {orgChanged ? (
-                <ProductButton
-                  type="button"
-                  className="button button-primary"
-                  disabled
-                  title="다른 탭에서 조직이 전환됐습니다. 위 안내에서 전환을 먼저 확인하세요."
-                >
-                  업무 열기
-                </ProductButton>
-              ) : (
-                <ProductLink
-                  className="button button-primary"
-                  href={`/staff/events/${encodeURIComponent(scope.eventId)}`}
-                >
-                  업무 열기
-                </ProductLink>
-              )}
-            </li>
-          ))}
+          {rest.map((scope) => {
+            const body = (
+              <>
+                <span className={workStyles.hubInitial} aria-hidden="true">{scope.eventName.slice(0, 1)}</span>
+                <span className={workStyles.hubRowText}>
+                  <strong className={workStyles.hubEventName}>{scope.eventName}</strong>
+                  <span className={workStyles.hubScope}>{[staffStartLabel(scope, now), staffScopeLine(scope)].filter(Boolean).join(" · ")}</span>
+                </span>
+                <span className={workStyles.hubRowEnd}>
+                  <i className={scope.stage === "LIVE" ? workStyles.dotLive : workStyles.dotReady} role="img" aria-label={scope.stage === "LIVE" ? "진행 중" : "준비 중"} />
+                  <ChevronRightIcon />
+                </span>
+              </>
+            );
+            return (
+              <li key={scope.eventId} className={`staff-assignment-row ${workStyles.hubRow}`}>
+                {orgChanged ? (
+                  <span className={`${workStyles.hubRowLink} ${workStyles.hubRowOff}`} title="다른 탭에서 조직이 전환됐습니다. 위 안내에서 전환을 먼저 확인하세요.">{body}</span>
+                ) : (
+                  <ProductLink className={workStyles.hubRowLink} href={open(scope)} aria-label={`${scope.eventName} 업무 열기`}>{body}</ProductLink>
+                )}
+              </li>
+            );
+          })}
         </ul>
       </section>
     </>

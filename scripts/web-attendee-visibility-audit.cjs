@@ -24,11 +24,11 @@ async function main() {
       await page.getByRole('button', { name: '모바일 티켓' }).waitFor();
       await page.screenshot({ path: path.join(out, `${enabled ? 'enabled' : 'disabled'}-320.png`) });
         for (const label of ['럭키드로우 번호', '룰렛 이벤트', '순위 투표', '부스 인증']) {
-          assert.equal(await page.getByRole('button', { name: label, exact: true }).count(), enabled ? 1 : 0);
+          assert.equal(await page.getByRole('button', { name: new RegExp(`^${label}`) }).count(), enabled ? 1 : 0); // tiles may add a hint such as 티켓 필요
         }
         assert.equal(await page.locator('[aria-label*="입장 및 퇴장용 QR"]').count(), 0);
-        for (const label of ['모바일 티켓', '공지사항', '내 신청 정보']) await page.getByRole('button', { name: label, exact: true }).waitFor();
-        const ticketBox = await page.getByRole('button', { name: '모바일 티켓', exact: true }).boundingBox();
+        for (const label of ['모바일 티켓', '공지사항', '내 신청 정보']) await page.getByRole('button', { name: new RegExp(`^${label}`) }).first().waitFor();
+        const ticketBox = await page.getByRole('button', { name: /^모바일 티켓/ }).boundingBox();
         assert.ok(ticketBox && ticketBox.y >= 0 && ticketBox.y + ticketBox.height <= 568 && ticketBox.height >= 44);
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
         for (const control of await page.locator('nav[aria-label="참가 메뉴"] button, nav[aria-label="행사 안내와 참여"] button, nav[aria-label="행사 안내와 참여"] a').all()) {

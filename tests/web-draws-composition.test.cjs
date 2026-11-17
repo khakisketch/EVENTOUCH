@@ -54,3 +54,8 @@ test('phone widths keep rows on one line and targets at 44px', () => {
   assert.match(css, /\.actFoot :global\(\.product-action\)\s*\{\s*min-height:\s*44px/u);
   assert.match(css, /\.stepper :global\(\.product-action\)\s*\{[^}]*min-height:\s*56px/su);
 });
+
+test("the phone preview's event line inherits its white ink instead of the global muted <small> gray", () => {
+  const stylesheet = fs.readFileSync(path.join(__dirname, "..", "apps", "web", "app", "console", "events", "[id]", "draws", "draws.module.css"), "utf8");
+  assert.match(stylesheet, /\.phoneHead small\s*\{[^}]*color:\s*inherit/su, "gray on the navy head measured 1.68:1 in axe");
+});

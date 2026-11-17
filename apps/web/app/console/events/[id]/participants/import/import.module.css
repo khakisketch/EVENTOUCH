@@ -1,143 +1,51 @@
-/* Import wizard: the three steps are visible from the first screen, so the
-   operator knows what is still ahead before choosing a file. */
-.importSteps {
+/* Participant import: two screens. Pick a file; read one answer ("N명을
+   등록할 수 있어요") with what needs a look; register. The column match is a
+   quiet line of chips the operator can change in place, and a required column
+   that could not be matched is asked first. The only orange is "N명 등록". */
+
+.modalContent { display: grid; gap: var(--s4); min-width: 0; }
+
+/* The dialog or page title already names the task; the section title stays for
+   assistive technology only. */
+.stage [data-console-section-head] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.stage { min-width: 0; }
+
+/* File task: one large drop area around the real, keyboard-focusable
+   <input type="file"> (visually hidden, never display:none). The visible
+   button is its aria-hidden mirror, so the name is announced once from the
+   sr-only label. */
+.filePicker {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
-  margin: 0 0 var(--s3);
-  padding: 0;
-  list-style: none;
-}
-
-.importStep {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s2);
-  min-height: 44px;
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-medium);
-  background: var(--paper);
-  color: var(--muted);
-  font-size: var(--small);
-  font-variant-numeric: tabular-nums;
-}
-
-.importStepNumber {
-  display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  flex: none;
-  border-radius: 999px;
-  background: var(--surface-muted);
-  color: var(--muted);
-  font-size: var(--small);
-  font-weight: 800;
-}
-
-.importStepLabel {
-  font-weight: 700;
-  letter-spacing: .02em;
-}
-
-.importStepCurrent {
-  border-color: var(--brand);
-  color: var(--ink);
-}
-
-.importStepCurrent .importStepNumber {
-  background: var(--brand);
-  color: var(--on-brand);
-}
-
-.importStepDone {
-  color: var(--ink);
-}
-
-.importStepDone .importStepNumber {
-  background: var(--soft);
-  color: var(--brand-text);
-}
-
-.importStepTodo {
-  border-style: dashed;
-}
-
-/* Step 1 explainer: quiet intro copy, not a banner. The same consent and
-   limit facts stay; only the rhythm changes so the file task reads first. */
-.help {
-  max-width: 68ch;
-  margin: 0 0 var(--s3);
-  color: var(--muted);
-  font-size: var(--small);
-  line-height: 1.6;
-  word-break: keep-all;
-  overflow-wrap: break-word;
-}
-
-.help b {
-  color: var(--ink);
-}
-
-.phoneReview {
-  margin: var(--s3) 0;
+  gap: var(--s3);
   min-width: 0;
-}
-
-.phoneReview summary {
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  font-weight: 700;
-}
-
-.phoneReview summary::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  transform: rotate(-45deg);
-  margin: 0 var(--s3) 0 var(--s1);
-}
-
-.phoneReview[open] summary::before { transform: rotate(45deg); }
-
-.phoneConfirm {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--s2);
-  min-height: 44px;
-  padding: var(--s2) 0;
-  line-height: 1.5;
-}
-
-/* File task: one honest native control, not a drop region. The label reads
-   as a single row — a Korean-named button plus the real selected file name
-   as plain status text. The actual <input type="file"> stays a real,
-   keyboard-focusable control (visually hidden, never display:none); the
-   visible button text is its aria-hidden mirror so the name is announced
-   once from the sr-only label. No drop behavior is implied anywhere. */
-.filePicker {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2) var(--s3);
-  min-width: 0;
-  min-height: 44px;
-  font-size: var(--small);
+  min-height: 220px;
+  padding: var(--s5) var(--s4);
+  border: 2px dashed var(--line-strong);
+  border-radius: var(--radius-large, 14px);
+  text-align: center;
   cursor: pointer;
 }
-
+.filePicker[data-dragging] { background: var(--brand-soft); border-color: var(--brand-text); }
+.dropIcon { display: inline-flex; color: var(--muted); }
+.dropIcon svg { width: 36px; height: 36px; }
+.dropTitle { font-size: 1.0625rem; font-weight: 750; word-break: keep-all; overflow-wrap: break-word; }
 .fileButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-height: 44px;
-  padding: 8px 16px;
+  padding: 8px 18px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-medium);
   background: var(--paper);
@@ -146,19 +54,7 @@
   white-space: nowrap;
   cursor: pointer;
 }
-
-.filePicker:hover .fileButton {
-  background: var(--surface-muted);
-}
-
-.fileName {
-  min-width: 0;
-  color: var(--muted);
-  font-size: var(--small);
-  word-break: keep-all;
-  overflow-wrap: anywhere;
-}
-
+.filePicker:hover .fileButton { background: var(--surface-muted); }
 .fileInput {
   position: absolute;
   width: 1px;
@@ -170,102 +66,240 @@
   white-space: nowrap;
   border: 0;
 }
-
 /* The hidden input keeps keyboard focus: the visible button carries the
-   3px focus ring whenever anything inside the label — the real file
-   input — has it. Plain :focus-within, no :has dependency. The commit
-   flight toggles the explicit disabled class alongside the input's own
-   disabled attribute, so dimming never depends on selectors either. */
+   focus ring whenever the real file input has it. Plain :focus-within. */
 .filePicker:focus-within .fileButton {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
+.filePickerDisabled { cursor: not-allowed; }
+.filePickerDisabled .fileButton { opacity: 0.6; cursor: not-allowed; }
 
-.filePickerDisabled {
-  cursor: not-allowed;
-}
-
-.filePickerDisabled .fileButton {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* Format limits: one quiet constraint line under the file card, wrapping
-   intact at 320px instead of competing with the picker. */
 .fileMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s3);
   max-width: 72ch;
+  margin: var(--s3) 0 0;
+  color: var(--muted);
+  font-size: var(--small);
   word-break: keep-all;
   overflow-wrap: break-word;
 }
 
-/* Step 2 mapping: four related selects share one grid so name/phone read
-   as the required pair and the optional pair sits beside them. */
-.mapGrid {
+/* After a commit the success notice sits above; this row only offers what is next. */
+.doneActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--s2); }
+
+/* Review: the file, one answer, then what needs a look. */
+.fileLine { display: flex; align-items: center; gap: var(--s3); min-width: 0; margin-bottom: var(--s3); }
+.fileIcon {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s2) var(--s3);
-  min-width: 0;
-}
-
-.mapGrid label {
-  display: grid;
-  gap: var(--s1);
-  min-width: 0;
-  font-size: var(--small);
-  font-weight: 650;
-}
-
-.mapGrid select {
-  min-height: 44px;
-}
-
-@media (max-width: 680px) {
-  .mapGrid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-/* Step 3 review: valid/error counts read as one status line above the
-   shared ledger rows; the rows themselves stay untouched. */
-.reviewSummary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2);
-  margin: 0 0 var(--s2);
-  font-size: var(--small);
-}
-
-.reviewCount {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 3px 10px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--paper);
-  color: var(--ink);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.reviewCount[data-tone="good"] {
-  border-color: var(--success-line);
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-medium);
   background: var(--success-soft);
   color: var(--success);
 }
+.fileIcon svg { width: 22px; height: 22px; }
+.fileText { display: grid; flex: 1 1 auto; min-width: 0; }
+.fileText b { font-weight: 750; overflow-wrap: anywhere; }
+.fileText small { color: var(--muted); font-size: var(--small); }
 
-.reviewCount[data-tone="bad"] {
-  border-color: var(--danger-line);
-  background: var(--danger-soft);
-  color: var(--danger);
+.hero {
+  padding: var(--s4);
+  border-radius: var(--radius-large, 14px);
+  background: var(--success-soft);
 }
+.hero[data-empty] { background: var(--surface-muted); }
+.heroLabel { margin: 0; color: var(--success); font-size: var(--body); font-weight: 700; }
+.hero[data-empty] .heroLabel { color: var(--muted); }
+.heroNumber {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  margin: 2px 0 var(--s3);
+}
+.heroNumber b {
+  font-size: 3.25rem;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.heroNumber span { font-size: 1.25rem; font-weight: 750; }
+.bar { display: flex; gap: 3px; height: 10px; }
+.bar i { display: block; flex-basis: 0; min-width: 8px; height: 100%; border-radius: 5px; }
+.bar i[data-kind="clean"] { background: var(--success); }
+.bar i[data-kind="check"] { background: var(--warning); }
+.bar i[data-kind="skip"] { background: var(--danger); }
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s4);
+  margin: var(--s3) 0 0;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 650;
+}
+.legend span::before {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 7px;
+  border-radius: 50%;
+  vertical-align: 1px;
+  content: "";
+}
+.legend span[data-kind="clean"]::before { background: var(--success); }
+.legend span[data-kind="check"]::before { background: var(--warning); }
+.legend span[data-kind="skip"]::before { background: var(--danger); }
+.legend b { margin-left: 4px; color: var(--ink); font-weight: 800; font-variant-numeric: tabular-nums; }
 
-.modalContent { display: grid; gap: var(--s4); min-width: 0; }
-.filePicker { min-height: 120px; justify-content: center; border-style: dashed; }
-.filePicker[data-dragging] { background: var(--brand-soft); border-color: var(--brand-text); }
+.sample { margin-top: var(--s4); }
+.sampleLabel { display: flex; align-items: baseline; gap: var(--s2); margin: 0 0 var(--s1); font-weight: 750; }
+.sampleLabel small { color: var(--muted); font-weight: 600; font-size: var(--small); }
+.sampleList { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.sampleList li {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 64px;
+  border-bottom: 1px solid var(--line);
+}
+.initial {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-weight: 800;
+}
+.sampleWho { display: grid; min-width: 0; }
+.sampleWho b { font-weight: 750; overflow-wrap: anywhere; }
+.sampleWho small { color: var(--muted); font-size: var(--small); overflow-wrap: anywhere; }
+.samplePhone { font-weight: 600; font-variant-numeric: tabular-nums; }
+.sampleList li.sampleMore { display: block; min-height: 48px; padding-block: var(--s3); color: var(--muted); font-weight: 650; }
 
-.importStage[hidden] { display: none; }
-.importStep button { display: flex; align-items: center; gap: var(--s2); min-height: 44px; border: 0; background: transparent; color: inherit; font: inherit; }
-.modalContent .filePicker { display: flex; flex-direction: column; align-items: center; gap: var(--s3); min-height: 180px; border-width: 1px; padding: var(--s4); }
+/* Things that need a look: tinted cards, not a table row. */
+.notice {
+  display: grid;
+  gap: var(--s2);
+  margin-top: var(--s3);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--radius-large, 14px);
+  min-width: 0;
+}
+.notice[data-tone="check"] { background: var(--warning-soft); }
+.notice[data-tone="skip"] { background: var(--danger-soft); }
+.notice h4 { margin: 0; font-size: var(--body); font-weight: 800; }
+.notice[data-tone="check"] h4 { color: var(--warning); }
+.notice[data-tone="skip"] h4 { color: var(--danger); }
+.notice > [data-product-action] { justify-self: start; }
+.notice p { margin: 0; color: var(--muted); font-size: var(--small); line-height: 1.55; word-break: keep-all; overflow-wrap: break-word; }
+.chips { display: flex; flex-wrap: wrap; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
+.chips li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  min-height: 32px;
+  padding: 0 var(--s3);
+  border-radius: 999px;
+  background: var(--paper);
+  font-size: var(--small);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.chips small { color: var(--muted); font-weight: 600; font-size: var(--small); }
+.more summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 700; }
+.more .chips { padding-bottom: var(--s2); }
+.phoneConfirm {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  min-height: 44px;
+  padding: var(--s1) 0;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.errorList { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--danger-line); }
+.errorList li {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: var(--s3);
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--danger-line);
+  font-size: var(--small);
+}
+.errorList li b { font-weight: 750; }
+.errorList li span { color: var(--ink); overflow-wrap: anywhere; }
+.errorList li.errorMore { display: block; color: var(--muted); }
+
+/* Column match: chips that are the selects. A chip says the field and the
+   file column it reads; pressing it changes the column in place. */
+.mapLine { margin-top: var(--s4); padding-top: var(--s3); border-top: 1px solid var(--line); }
+.mapTitle { margin: 0 0 var(--s2); color: var(--muted); font-size: var(--small); font-weight: 700; letter-spacing: 0.02em; }
+.mapChips { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.mapChip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 44px;
+  padding: 0 var(--s1) 0 var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
+  font-size: var(--small);
+  max-width: 100%;
+}
+.mapChip > span { color: var(--muted); font-weight: 700; white-space: nowrap; }
+.mapChip select {
+  min-height: 40px;
+  max-width: 12rem;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+}
+.mapChip[data-empty] { border-style: dashed; }
+.mapChip[data-empty] select { color: var(--muted); font-weight: 600; }
+.mapChip:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* A required column that could not be matched. */
+.pick { min-width: 0; margin: 0; padding: 0; border: 0; }
+.pickTitle { padding: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
+.pickSub { margin: var(--s1) 0 var(--s3); color: var(--muted); font-size: var(--small); }
+.pickList { border-top: 1px solid var(--line); }
+.pickRow {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 60px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+.pickRow:hover { background: var(--surface-muted); }
+.pickRow input { flex: none; width: 20px; min-height: 0; height: 20px; margin: 0; accent-color: var(--ink); }
+.pickRow span { display: grid; min-width: 0; }
+.pickRow b { font-weight: 700; overflow-wrap: anywhere; }
+.pickRow small { color: var(--muted); font-size: var(--small); overflow-wrap: anywhere; }
+
+/* The shared action row only stretches legacy .button; the primary here is a ProductButton. */
+.actions { width: 100%; min-width: 0; }
+
+@media (max-width: 768px) {
+  .actions [data-product-action] { flex: 1 1 100%; }
+  .filePicker { min-height: 180px; }
+  .heroNumber b { font-size: 3rem; }
+  .sampleList li { grid-template-columns: 36px minmax(0, 1fr) auto; gap: var(--s3); min-height: 60px; }
+  .initial { width: 36px; height: 36px; }
+  .errorList li { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .mapChip { width: 100%; }
+  .mapChip select { flex: 1 1 auto; max-width: none; }
+}

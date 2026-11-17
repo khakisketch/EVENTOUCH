@@ -327,40 +327,10 @@ async function main() {
       assert.equal(await page.getByText(/CSV·TXT·(?:XLS·)?XLSX · 최대 1MB, 1,000행/, { exact: false }).count() >= 1, true, `import/${width}: format limits guidance present`);
       judge(`import/${width} guidance`, { optionalTool: true, limitsNote: true });
 
-      if (width === 1280) {
-        // Rendered toolbar geometry: file picker left, helper action right.
-        const boxes = await page.evaluate(() => {
-          const input = document.querySelector('section input[type="file"]');
-          const action = [...document.querySelectorAll('section button')].find((b) => b.textContent.trim() === '양식 CSV');
-          const bar = input ? input.closest('[class*=toolbarMain]') : null;
-          const rect = (el) => {
-            const r = el.getBoundingClientRect();
-            return { x: r.x, y: r.y, width: r.width, height: r.height, right: r.right, top: r.top, bottom: r.bottom };
-          };
-          return input && action && bar
-            ? { input: rect(input), action: rect(action), bar: rect(bar) }
-            : null;
-        });
-        assert.ok(boxes, `import/${width}: toolbar boxes measurable`);
-        assert.ok(boxes.input.x + boxes.input.width <= boxes.action.x + 1,
-          `import/${width}: file picker (right ${boxes.input.right.toFixed(1)}) sits left of the helper action (x ${boxes.action.x.toFixed(1)})`);
-        const sameRow = boxes.input.top < boxes.action.bottom && boxes.action.top < boxes.input.bottom;
-        assert.ok(sameRow, `import/${width}: picker and helper share the toolbar row`);
-        assert.ok(boxes.action.x > boxes.bar.x + boxes.bar.width / 2, `import/${width}: helper action lives in the toolbar right half`);
-        assert.ok(boxes.input.x < boxes.bar.x + boxes.bar.width / 2, `import/${width}: file picker lives in the toolbar left half`);
-        judge(`import/${width} toolbar alignment`, boxes);
-        evidence.import.toolbar1280 = boxes;
-      } else {
-        const boxes = await page.evaluate(() => {
-          const input = document.querySelector('section input[type="file"]');
-          const action = [...document.querySelectorAll('section button')].find((b) => b.textContent.trim() === '양식 CSV');
-          if (!input || !action) return null;
-          const ri = input.getBoundingClientRect();
-          const ra = action.getBoundingClientRect();
-          return { inputY: ri.y, actionY: ra.y, inputW: ri.width, actionW: ra.width };
-        });
-        judge(`import/${width} toolbar stacked`, boxes || {});
-      }
+      // One drop area; the template is one quiet action beside the format line.
+      assert.equal(await page.getByRole('button', { name: '양식 CSV 받기', exact: true }).count(), 1, `import/${width}: template action present`);
+      judge(`import/${width} drop area`, { template: true });
+      evidence.import.dropArea = true;
 
       // Broken CSV first: real parse error, nothing staged.
       await importInput.setInputFiles({
@@ -380,13 +350,13 @@ async function main() {
           `이름,연락처,이메일,소속\n${first.name},${first.phone},first-${width}@example.test,합성 조직\n${second.name},${second.phone},second-${width}@example.test,합성 조직\n`,
         ),
       });
-      await page.getByText(/유효 2행 · 오류 0행/).waitFor({ timeout: UI_TIMEOUT });
-      const previewNames = await page.locator('[aria-label="적용될 값 미리보기"] [class*=recordMain] > span').evaluateAll(
+      await page.locator('[class*="heroNumber"]').getByText('2', { exact: true }).waitFor({ timeout: UI_TIMEOUT });
+      const previewNames = await page.locator('[aria-label="적용될 값 미리보기"] li b').evaluateAll(
         (els) => els.map((el) => el.textContent.trim()),
       );
       assert.deepEqual(previewNames.slice(0, 2), [first.name, second.name],
         `import/${width}: preview keeps user order ${JSON.stringify(previewNames.slice(0, 2))}`);
-      const commitLabel = await page.getByRole('button', { name: /유효 2행 반영/ }).count();
+      const commitLabel = await page.getByRole('button', { name: /^2명 등록$/ }).count();
       assert.equal(commitLabel, 1, `import/${width}: explicit commit offered, not auto-run`);
       const participantsAfter = (await dbWorkspace()).participants.length;
       assert.equal(participantsAfter, participantsBefore,
@@ -399,8 +369,8 @@ async function main() {
       evidence.import[width] = { order: previewNames.slice(0, 2), participantsBefore, participantsAfter };
       // Finish the same workflow explicitly as well: the success count must
       // match the actual new people, not just a locally generated preview.
-      await page.getByRole('button', { name: /유효 2행 반영/ }).click();
-      await page.getByText('2명을 반영했습니다.', { exact: true }).waitFor({ timeout: UI_TIMEOUT });
+      await page.getByRole('button', { name: /^2명 등록$/ }).click();
+      await page.getByText(/^2명을 반영했습니다\./).waitFor({ timeout: UI_TIMEOUT });
       const committedPeople = (await dbWorkspace()).participants;
       assert.equal(committedPeople.length, participantsBefore + 2, `import/${width}: exactly two persisted people`);
       const importedPeople = committedPeople.filter(person => [first.name, second.name].includes(person.name));

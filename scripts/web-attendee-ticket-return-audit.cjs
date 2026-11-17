@@ -5,7 +5,7 @@ const path = require('node:path');
 const { source: axeSource } = require('axe-core');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { confirmInitialStaffDesk } = require('./audit-staff-direction.cjs');
+const { confirmInitialStaffDesk, typeTicket } = require('./audit-staff-direction.cjs');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 
 async function main() {
@@ -221,7 +221,7 @@ async function main() {
     await confirmInitialStaffDesk(staff);
     const scan = staff.getByRole('button', { name: '입장 처리', exact: true });
     const scanTicket = async token => {
-      await staff.locator('#staff-ticket').fill(token);
+      await typeTicket(staff, token);
       return (await Promise.all([
         staff.waitForResponse(response => response.url() === commandUrl && response.request().method() === 'POST'),
         scan.click(),
@@ -233,7 +233,7 @@ async function main() {
     await showTicket(replacement);
     await qrShot('replacement-ticket-390.png');
     assert.equal((await scanTicket(replacement)).status(), 200);
-    await staff.getByRole('region', { name: '스캔 결과 상세', exact: true }).getByText(`${attendee.name} · 입장`, { exact: true }).waitFor();
+    await staff.getByRole('region', { name: '스캔 결과', exact: true }).getByText(`${attendee.name} · 입장`, { exact: true }).waitFor();
     await visibility('hidden');
     await visibility('visible');
     await guest.getByText('입장 중', { exact: true }).waitFor();

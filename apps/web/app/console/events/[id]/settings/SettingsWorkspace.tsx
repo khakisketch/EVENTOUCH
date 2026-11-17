@@ -314,6 +314,21 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   // 기본 정보는 드로어에서 고친다. 접힌 행이 아니라 별도 편집면이므로,
   // 폼 상태는 컴포넌트에 두고 드로어는 열림만 토글한다.
   const [basicsOpen, setBasicsOpen] = useState(false);
+  // Failure paths move focus to an element that only exists once the state change they make has committed (a drawer
+  // opened, a conflict panel shown). A requestAnimationFrame can fire before that commit, so ask for the focus and
+  // apply it in an effect after the render; give up after a few renders if the target never appears.
+  const focusAfterCommitRef = useRef<{ id: string; tries: number } | null>(null);
+  function requestFocusAfterCommit(id: string) {
+    focusAfterCommitRef.current = { id, tries: 0 };
+  }
+  useEffect(() => {
+    const pending = focusAfterCommitRef.current;
+    if (!pending) return;
+    const target = document.getElementById(pending.id);
+    if (target) { focusAfterCommitRef.current = null; target.focus(); return; }
+    pending.tries += 1;
+    if (pending.tries > 3) focusAfterCommitRef.current = null;
+  });
   // 공개된 행사의 주소 코드를 바꿔 저장할 때 한 번 더 묻는다.
   const [slugConfirm, setSlugConfirm] = useState(false);
   // 딥링크 도착 구역을 잠깐 강조한다.
@@ -942,7 +957,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           setIntakeConflict(conflict);
           setFailure(null);
           setIntakeStatus(null);
-          window.requestAnimationFrame(() => document.getElementById("intake-conflict-heading")?.focus());
+          requestFocusAfterCommit("intake-conflict-heading");
         } else if (isBasicsCommand(attempt.command) && res.status === 409 && data?.code === "EVENT_BASICS_CHANGED") {
           commandIdCache.current.delete(attempt.fingerprint);
           abandonOperatorAttempt(attempt.commandId);
@@ -956,7 +971,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           setBasicsConflict(conflict);
           setFailure(null);
           setBasicsStatus(null);
-          window.requestAnimationFrame(() => document.getElementById("basics-conflict-heading")?.focus());
+          requestFocusAfterCommit("basics-conflict-heading");
         } else if (attempt.command === "event.features" && res.status === 409 && data?.code === "EVENT_FEATURES_CHANGED") {
           commandIdCache.current.delete(attempt.fingerprint);
           abandonOperatorAttempt(attempt.commandId);
@@ -970,7 +985,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           setFeaturesConflict(conflict);
           setFailure(null);
           setFeaturesStatus(null);
-          window.requestAnimationFrame(() => document.getElementById("features-conflict-heading")?.focus());
+          requestFocusAfterCommit("features-conflict-heading");
         } else if (!retry && !res.ok && !isAmbiguousFailure(res.status, data)) {
           commandIdCache.current.delete(attempt.fingerprint);
           const unsupportedServer = attempt.command === "event.basics.save" && res.status === 400 && data?.field === "command";
@@ -990,10 +1005,10 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             // 옮긴다. 기본 정보는 드로어가 편집면이라 먼저 연다.
             if (unsupportedServer) {
               setBasicsOpen(true);
-              window.requestAnimationFrame(() => document.getElementById("settings-basics-save")?.focus());
+              requestFocusAfterCommit("settings-basics-save");
             }
             if (data?.field === "consentText") {
-              window.requestAnimationFrame(() => document.getElementById("set-consent")?.focus());
+              requestFocusAfterCommit("set-consent");
             }
           }
         } else {
@@ -1803,21 +1818,6 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           {sectionStatusLine(basicsStatus, "basics")}
           </fieldset>
         </ValidatedForm>
-        <div className="sr-only" aria-live="polite" aria-atomic="true">
-          {showScheduleReview ? "행사 일시가 저장되었습니다. 게시된 안내도 확인해 주세요." : ""}
-        </div>
-        {showScheduleReview ? (
-          <section className={styles.scheduleReview} aria-labelledby="schedule-review-title">
-            <h3 id="schedule-review-title">참가자에게 보이는 안내도 확인해 주세요</h3>
-            <p>행사 일시는 저장됐지만, 기존에 게시한 프로그램 일정과 공지·장소 안내는 그대로입니다. 여러 날짜에 진행하는 일정일 수 있으니 내용을 확인하고 필요한 경우에만 수정·게시하세요.</p>
-            <div className={styles.scheduleReviewLinks}>
-              {canWriteEvent(capabilities, "program.save") ? <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-program`}>프로그램 일정 확인</ProductLink> : null}
-              {canWriteEvent(capabilities, "notice.save") ? <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-notices`}>공지 확인</ProductLink> : null}
-              {canWriteEvent(capabilities, "venue.save") ? <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-venue`}>장소 안내 확인</ProductLink> : null}
-            </div>
-            {!canWriteEvent(capabilities, "program.save") || !canWriteEvent(capabilities, "notice.save") ? <p>확인할 권한이 없는 안내는 담당 운영자에게 검토를 요청하세요.</p> : null}
-          </section>
-        ) : null}
         {slugConfirm ? (
           <ConsoleConfirm
             summary={<><strong>주소 코드를 바꿀까요?</strong><br />이미 공개된 행사입니다. 바꾸면 이전 주소({state.basics.slug})로 나간 링크는 열리지 않습니다. 새 주소({basics.slug || "미입력"})로 저장할까요?</>}
@@ -1844,6 +1844,22 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           />
         ) : null}
       </ConsoleDialog>
+      ) : null}
+      {/* The drawer closes when the save lands, so the review of what attendees still see lives on the board, not inside it. */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {showScheduleReview ? "행사 일시가 저장되었습니다. 게시된 안내도 확인해 주세요." : ""}
+      </div>
+      {showScheduleReview ? (
+        <section className={styles.scheduleReview} aria-labelledby="schedule-review-title">
+          <h3 id="schedule-review-title">참가자에게 보이는 안내도 확인해 주세요</h3>
+          <p>행사 일시는 저장됐지만, 기존에 게시한 프로그램 일정과 공지·장소 안내는 그대로입니다. 여러 날짜에 진행하는 일정일 수 있으니 내용을 확인하고 필요한 경우에만 수정·게시하세요.</p>
+          <div className={styles.scheduleReviewLinks}>
+            {canWriteEvent(capabilities, "program.save") ? <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-program`}>프로그램 일정 확인</ProductLink> : null}
+            {canWriteEvent(capabilities, "notice.save") ? <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-notices`}>공지 확인</ProductLink> : null}
+            {canWriteEvent(capabilities, "venue.save") ? <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-venue`}>장소 안내 확인</ProductLink> : null}
+          </div>
+          {!canWriteEvent(capabilities, "program.save") || !canWriteEvent(capabilities, "notice.save") ? <p>확인할 권한이 없는 안내는 담당 운영자에게 검토를 요청하세요.</p> : null}
+        </section>
       ) : null}
       <div className={styles.workPanels}>
       <section

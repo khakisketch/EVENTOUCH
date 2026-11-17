@@ -1,0 +1,75 @@
+/* Login: a dark brand band over a white form sheet (DESIGN.md "스태프 목록과
+   로그인 확정 구성"). Layered on the global .login-page rules so the markup,
+   copy and behavior stay as they were; the form itself is white, so the way
+   on to the console (white) and the staff screens (dark) both read right. */
+.stage:global(.login-page):global(.auth-page) {
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+  padding: 0;
+  background: var(--ink);
+}
+
+.stage:global(.login-page) :global(.auth-brand) {
+  position: relative;
+  overflow: hidden;
+  width: min(100%, 440px);
+  gap: var(--s2);
+  padding: var(--s6) var(--s5) 48px;
+  background: var(--ink);
+  color: var(--paper);
+}
+.stage:global(.login-page) :global(.auth-brand)::after {
+  position: absolute;
+  top: -70px;
+  right: -70px;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--brand) 34%, transparent), transparent 70%);
+  content: "";
+  pointer-events: none;
+}
+.stage:global(.login-page) :global(.auth-brand) :global(.wordmark) { position: relative; z-index: 1; color: var(--paper); font-size: 24px; }
+.stage:global(.login-page) :global(.auth-brand) :global(.wordmark)::first-letter { color: var(--brand); }
+.stage:global(.login-page) :global(.auth-brand) :global(.wordmark) span { color: color-mix(in srgb, var(--paper) 72%, transparent); }
+.stage:global(.login-page) :global(.auth-promise) { position: relative; z-index: 1; color: color-mix(in srgb, var(--paper) 72%, transparent); font-size: var(--body); }
+
+.stage:global(.login-page) :global(.auth-card) {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  width: min(100%, 440px);
+  margin-top: -24px;
+  padding: var(--s5) var(--s5) var(--s4);
+  border: 0;
+  border-radius: 28px 28px 0 0;
+  background: var(--paper);
+  box-shadow: none;
+}
+.stage:global(.login-page) :global(.auth-card) :global(h1) { margin: 0 0 var(--s4); font-size: 28px; letter-spacing: -0.04em; }
+
+/* The form fills the sheet: fields up top, the submit (and the one error line
+   above it) at the bottom where the thumb is. */
+.stage:global(.login-page) :global(.auth-form) { flex: 1; gap: var(--s4); align-content: start; grid-template-rows: none; display: flex; flex-direction: column; }
+.stage:global(.login-page) :global(.auth-form) input { min-height: 56px; border-radius: 14px; font-size: 16px; }
+.stage:global(.login-page) :global(.auth-form) :global(button[type="submit"]),
+.stage:global(.login-page) :global(.auth-form) :global(.product-action[type="submit"]) {
+  min-height: 56px;
+  margin-top: auto;
+  border-radius: 16px;
+  font-size: var(--body);
+}
+.stage:global(.login-page) :global(.auth-form) > p[role="alert"] { margin: 0; padding: var(--s3); border-radius: 12px; background: var(--danger-soft); color: var(--danger); font-weight: 650; }
+.stage:global(.login-page) :global(.auth-form) > p[role="alert"]:has(+ :global(button)) { margin-top: auto; }
+.stage:global(.login-page) :global(.auth-form) > p[role="alert"] + :global(button),
+.stage:global(.login-page) :global(.auth-form) > p[role="alert"] + :global(.product-action) { margin-top: 0; }
+.stage:global(.login-page) :global(.auth-form) :global(.auth-help) { margin: 0; text-align: center; }
+
+/* Wider screens: the band and sheet are one framed card. */
+@media (min-width: 720px) {
+  .stage:global(.login-page):global(.auth-page) { justify-content: center; padding: var(--s7) var(--s5); background: var(--workspace-ground); }
+  .stage:global(.login-page) :global(.auth-brand) { border-radius: 24px 24px 0 0; }
+  .stage:global(.login-page) :global(.auth-card) { flex: none; border-radius: 28px 28px 24px 24px; box-shadow: var(--shadow-raised); min-height: 420px; }
+}

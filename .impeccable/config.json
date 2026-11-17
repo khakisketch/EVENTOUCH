@@ -11,6 +11,204 @@
         ],
         "createdAt": "2026-11-13T12:10:53.212Z",
         "reason": "agent triage 2026-11-13: flagged .notice(12px/5px) and .chip(12px/3px+28px min-height) are intentional compact badge patterns matching product chip styling; 8px+ would bloat small labels; file is a review-only static proposal mock, not shipped UI"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/clients-options.html"
+        ],
+        "createdAt": "2026-11-15T16:29:06.740Z",
+        "reason": "시안 파일의 평면 행(.c, .ml)은 하단 구분선만 있는 의도된 hairline 목록이며 min-height 60-72px로 세로 중앙 정렬됨. DESIGN.md 화면 구성 규칙(행을 카드로 감싸지 않음)과 일치"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/team-options.html"
+        ],
+        "createdAt": "2026-11-15T17:05:31.291Z",
+        "reason": "시안의 평면 행(.m, .ev, .mx)은 하단 구분선만 있는 의도된 hairline 목록이며 min-height 48-68px로 세로 중앙 정렬됨. DESIGN.md 화면 구성 규칙(행을 카드로 감싸지 않음)과 일치. clients-options.html과 같은 판단"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/team-options-b2.html"
+        ],
+        "createdAt": "2026-11-15T17:09:19.323Z",
+        "reason": "평면 행(.mx2)은 하단 구분선만 있는 의도된 hairline 목록, min-height 64px 세로 중앙 정렬. 이전 팀·고객사 시안과 같은 판단"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/team-options-b3.html"
+        ],
+        "createdAt": "2026-11-15T17:11:01.762Z",
+        "reason": "평면 행(.lr)은 하단 구분선만 있는 의도된 hairline 목록, min-height 68px 세로 중앙 정렬. 이전 팀 시안과 같은 판단"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/team-options-b4.html"
+        ],
+        "createdAt": "2026-11-15T17:13:39.310Z",
+        "reason": "평면 행(.g)은 하단 구분선만 있는 의도된 hairline 목록, min-height 72px 세로 중앙 정렬. 이전 팀 시안과 같은 판단"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/import-options.html"
+        ],
+        "createdAt": "2026-11-15T19:21:30.768Z",
+        "reason": "시안 파일의 평면 행(.tr, .mp, .mpf)은 하단 구분선만 있는 의도된 hairline 목록이며 min-height 38-76px로 세로 중앙 정렬됨. 색을 입힌 확인/오류 행은 좌우 12px 안쪽 여백을 추가해 실제 문제는 수정함. DESIGN.md 화면 구성 규칙(행을 카드로 감싸지 않음)과 일치"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/import-simple.html"
+        ],
+        "createdAt": "2026-11-15T19:23:58.799Z",
+        "reason": "시안 파일의 평면 행(.tr, .pk)은 하단 구분선만 있는 의도된 hairline 목록이며 min-height 44-60px로 세로 중앙 정렬됨. 색을 입힌 안내 칸(.issue)은 14px/16px 안쪽 여백이 있음. DESIGN.md 화면 구성 규칙(행을 카드로 감싸지 않음)과 일치"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/import-simple2.html"
+        ],
+        "createdAt": "2026-11-15T19:26:12.276Z",
+        "reason": "시안 파일의 평면 행(.p)은 하단 구분선만 있는 의도된 hairline 목록(min-height 60-64px)이고, 칩(.chip, .map)은 32px 높이에 좌우 12px 여백의 컴팩트 라벨임. 색을 입힌 카드와 요약 영역은 14-24px 안쪽 여백이 있음"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/engage-options.html"
+        ],
+        "createdAt": "2026-11-16T04:03:22.121Z",
+        "reason": "Rows set their height with min-height and center their content; the detector reads the horizontal-only padding as flush."
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/screen-options.html"
+        ],
+        "createdAt": "2026-11-16T05:07:40.358Z",
+        "reason": "Rows set their height with min-height and center their content; the detector reads the horizontal-only padding as flush."
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/staff-entry-options.html"
+        ],
+        "createdAt": "2026-11-16T05:35:29.211Z",
+        "reason": "Rows and fields set their height with min-height and center their content; the detector reads the horizontal-only padding as flush."
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/staff-entry-a2.html"
+        ],
+        "createdAt": "2026-11-16T05:40:09.986Z",
+        "reason": "Fields set their height with min-height and center their content; the detector reads the horizontal-only padding as flush."
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/staff-entry-a3.html"
+        ],
+        "createdAt": "2026-11-16T06:28:44.172Z",
+        "reason": "Rows and fields set their height with min-height and center their content; the detector reads the horizontal-only padding as flush."
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/account-landing-options.html"
+        ],
+        "createdAt": "2026-11-16T06:40:14.599Z",
+        "reason": "Rows, fields and the hero set their height with min-height and center their content; the detector reads the horizontal-only padding as flush."
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/fields-options.html"
+        ],
+        "createdAt": "2026-11-16T06:40:50.181Z",
+        "reason": "Rows, list and segmented control set their height with min-height and center their content; the detector reads the horizontal-only padding as flush. Same false positive as the other mocks."
+      },
+      {
+        "rule": "low-contrast",
+        "value": "*",
+        "files": [
+          "design-review/fields-options.html"
+        ],
+        "createdAt": "2026-11-16T06:40:50.192Z",
+        "reason": "The only low-contrast text is the disabled move arrow at 30% opacity (a control that cannot be used in that direction is drawn dimmed on purpose; disabled controls are exempt from WCAG contrast). Not user confirmed."
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/create-event-a2.html"
+        ],
+        "createdAt": "2026-11-16T06:58:52.961Z",
+        "reason": "시안 파일: 평면 행·입력칸은 min-height로 세로 중앙 정렬된 의도된 목록이고, 시트를 감싼 .stage는 배경 목업 프레임일 뿐 제품 카드 중첩이 아님. 검토 전용 정적 목업"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/create-event-options.html"
+        ],
+        "createdAt": "2026-11-16T06:58:52.976Z",
+        "reason": "같은 시안 계열(위와 동일 사유)"
+      },
+      {
+        "rule": "nested-cards",
+        "value": "*",
+        "files": [
+          "design-review/create-event-a2.html"
+        ],
+        "createdAt": "2026-11-16T06:58:52.988Z",
+        "reason": "시안 파일: 평면 행·입력칸은 min-height로 세로 중앙 정렬된 의도된 목록이고, 시트를 감싼 .stage는 배경 목업 프레임일 뿐 제품 카드 중첩이 아님. 검토 전용 정적 목업"
+      },
+      {
+        "rule": "nested-cards",
+        "value": "*",
+        "files": [
+          "design-review/create-event-options.html"
+        ],
+        "createdAt": "2026-11-16T06:58:52.998Z",
+        "reason": "같은 시안 계열(위와 동일 사유)"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "design-review/create-event-a3.html"
+        ],
+        "createdAt": "2026-11-16T07:00:58.713Z",
+        "reason": "시안 파일(검토 전용 정적 목업): 선택 행·칩은 min-height로 세로 중앙 정렬된 의도된 모양이고, .stage는 시트 뒤 배경을 흉내 낸 목업 틀이라 제품 카드 중첩이 아님"
+      },
+      {
+        "rule": "nested-cards",
+        "value": "*",
+        "files": [
+          "design-review/create-event-a3.html"
+        ],
+        "createdAt": "2026-11-16T07:00:58.724Z",
+        "reason": "시안 파일(검토 전용 정적 목업): 선택 행·칩은 min-height로 세로 중앙 정렬된 의도된 모양이고, .stage는 시트 뒤 배경을 흉내 낸 목업 틀이라 제품 카드 중첩이 아님"
       }
     ]
   }

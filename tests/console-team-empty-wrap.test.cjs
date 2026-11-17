@@ -36,6 +36,6 @@ test('team empty notices keep words together with an overflow fallback', () => {
 
 test('team empty shells pair the shared empty with the team override', () => {
   const usages = workspace.match(/consoleUiStyles\.empty\} \$\{teamStyles\.teamEmpty\}/g) || [];
-  assert.equal(usages.length, 2, `pending-invite and member empties both layer the override, found ${usages.length}`);
+  assert.equal(usages.length, 3, `unknown-invite, member and permission empties all layer the override, found ${usages.length}`);
   assert.match(workspace, /teamStyles\.inlineAlert/, 'the team-owned revoke alert keeps its local wrap guard');
 });

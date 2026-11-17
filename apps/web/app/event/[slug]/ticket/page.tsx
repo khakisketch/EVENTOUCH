@@ -1,5 +1,6 @@
 import ProductLink from "../../../ui/ProductLink";
 import TicketView from "./TicketView";
+import styles from "./ticket.module.css";
 
 // Slice 3 of the frontend migration: the issued ticket. The bearer arrives
 // in the address once (from registration) and the client component consumes
@@ -15,7 +16,7 @@ export default async function TicketPage({
       <main id="main-content" tabIndex={-1} className="site-page ticket-page">
         <header className="public-page-header">
           <span className="compact-wordmark">EVENTOUCH</span>
-          <ProductLink href={`/event/${encodeURIComponent(slug)}/home`} className="public-return-link button button-secondary">← 참가 메뉴로</ProductLink>
+          <ProductLink href={`/event/${encodeURIComponent(slug)}/home`} className={`public-return-link ${styles.returnLink}`}>← 참가 메뉴로</ProductLink>
         </header>
         <TicketView key={slug} slug={slug} />
       </main>

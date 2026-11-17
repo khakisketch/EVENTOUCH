@@ -440,6 +440,7 @@
   min-height: 44px;
 }
 
+.resultDisclosure > summary,
 .rejectDisclosure > summary {
   display: flex;
   align-items: center;
@@ -449,8 +450,10 @@
   cursor: pointer;
 }
 
+.resultDisclosure > summary::-webkit-details-marker,
 .rejectDisclosure > summary::-webkit-details-marker { display: none; }
 
+.resultDisclosure > summary:focus-visible,
 .rejectDisclosure > summary:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 3px;

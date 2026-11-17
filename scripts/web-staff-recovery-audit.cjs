@@ -10,6 +10,7 @@ const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { startStalledResponseProxy } = require('./stalled-response-fixture.cjs');
+const { typeTicket, holdResults, closeSheet, codeField, readCode } = require('./audit-staff-direction.cjs');
 let stage = 'setup';
 
 async function confirmInitialDesk(page) {
@@ -18,6 +19,7 @@ async function confirmInitialDesk(page) {
   const button = panel.getByRole('button', { name: /^(입장|퇴장) 업무 확인$/ });
   await button.click();
   await panel.waitFor({ state: 'hidden' });
+  await holdResults(page);
 }
 
 // Forward the actual committed command, but keep the first successful
@@ -86,7 +88,7 @@ async function checkRewardBodyTimeout(browser, fixture, out) {
     page.on('request', req => { if (req.method() === 'POST' && req.url().endsWith('/commands')) { const data=req.postDataJSON(); if(data?.command==='reward.collect') commands.push(data.commandId); } });
     await page.goto(`${proxy.origin}/staff/events/${fixture.eventId}`,{waitUntil:'networkidle'});
     await confirmInitialDesk(page);
-    await page.locator('#staff-ticket').fill(person.ticket);
+    await typeTicket(page, person.ticket);
     await page.getByRole('button',{name:'퇴장 처리',exact:true}).click();
     const section = page.getByRole('region',{name:'경품 확인 및 수령',exact:true});
     const row = section.locator('li').filter({has:page.getByText('합성 응답 지연 경품',{exact:true})});
@@ -141,7 +143,7 @@ async function checkStaffReadRecovery(browser, fixture, participant, out) {
     proxy.setStalled(false);
     await retry.click();
     await confirmInitialDesk(page);
-    await page.locator('#staff-ticket').fill(participant.ticket);
+    await typeTicket(page, participant.ticket);
 
     proxy.setStalled(true);
     const [scan] = await Promise.all([
@@ -160,7 +162,7 @@ async function checkStaffReadRecovery(browser, fixture, participant, out) {
     await delayed.waitFor({ state: 'hidden' });
     assert.ok(await result.isVisible(), 'refreshing leaves the last scan result on screen');
     await page.getByRole('button', { name: '다음 참가자', exact: true }).click();
-    await page.locator('#staff-ticket').waitFor();
+    await page.getByRole('button', { name: '코드 입력', exact: true }).waitFor();
     assert.equal(scans, 1, 'assignment recovery never repeats the scan');
     console.log('Staff: stalled hub and work reads recover; confirmed scan survives a stalled refresh and retry');
   } catch (error) {
@@ -186,14 +188,16 @@ async function checkDeskDirectionRecovery(browser, fixture, participant, readWor
     await setOpen(false);
     await page.goto(`${fixture.baseUrl}/staff/events/${fixture.eventId}`);
     await page.getByText('현재 데스크는 가동 중지 상태입니다.', { exact: false }).waitFor();
-    await ticket.fill(participant.ticket);
+    await typeTicket(page, participant.ticket);
     assert.equal(await entry.isDisabled(), true, 'a stopped desk cannot start a scan');
-    assert.equal(await page.getByRole('button', { name: '카메라로 스캔' }).isDisabled(), true);
+    await closeSheet(page);
+    assert.equal(await page.getByRole('button', { name: '카메라 켜기' }).isDisabled(), true);
     await setOpen(true);
     await refresh.click();
     await confirmInitialDesk(page);
     await page.getByText('이 데스크는 입장 처리합니다.', { exact: true }).waitFor();
-    assert.equal(await ticket.inputValue(), participant.ticket);
+    assert.equal(await readCode(page), participant.ticket);
+    await codeField(page);
     assert.equal(await entry.isEnabled(), true);
 
     await managerCommand('desk.save', { id: fixture.deskId, name: '합성 퇴장 데스크', action: 'OUT', mode: 'desk', confirmDirectionChange: true });
@@ -205,7 +209,7 @@ async function checkDeskDirectionRecovery(browser, fixture, participant, readWor
     assert.equal(stale.status(), 409);
     assert.equal((await stale.json()).code, 'DESK_ACTION_CHANGED');
     await refresh.waitFor();
-    assert.equal(await entry.isDisabled(), true);
+    assert.equal(await entry.count(), 0, 'the scan controls are not offered while the desk needs a recheck');
     const stillInside = await readWorkspace();
     assert.equal(stillInside.checks.length, checksBefore);
     assert.equal(stillInside.participants.find(person => person.id === participant.id).inside, true);
@@ -213,13 +217,16 @@ async function checkDeskDirectionRecovery(browser, fixture, participant, readWor
 
     await refresh.click();
     const exit = page.getByRole('button', { name: '퇴장 처리', exact: true });
+    await codeField(page);
     await exit.waitFor();
     assert.equal(await ticket.inputValue(), participant.ticket);
     assert.equal((await readWorkspace()).checks.length, checksBefore, 'refresh does not submit the exit');
     assert.equal(await exit.isDisabled(), true, 'a changed direction stays locked until staff confirm it');
+    await closeSheet(page);
     await page.getByRole('button', { name: '퇴장 업무 확인', exact: true }).click();
     await page.getByRole('button', { name: '퇴장 업무 확인', exact: true }).waitFor({ state: 'hidden' });
     assert.equal((await readWorkspace()).checks.length, checksBefore, 'direction confirmation never submits the exit');
+    await codeField(page);
     await exit.click();
     await page.getByRole('region', { name: '스캔 결과 상세' }).getByText(participant.name, { exact: false }).waitFor();
     const done = await readWorkspace();
@@ -259,11 +266,12 @@ async function checkCorrectionConflict(browser, fixture, participant, readWorksp
     const scan = async (page, label) => {
       await page.goto(`${fixture.baseUrl}/staff/events/${fixture.eventId}`);
       await confirmInitialDesk(page);
-      await page.locator('#staff-ticket').fill(participant.ticket);
+      await typeTicket(page, participant.ticket);
       await page.getByRole('button', { name: `${label} 처리`, exact: true }).click();
-      await page.getByRole('region', { name: '스캔 결과 상세', exact: true }).getByText(`${participant.name} · ${label}`, { exact: true }).waitFor();
+      await page.getByRole('region', { name: '스캔 결과', exact: true }).getByText(`${participant.name} · ${label}`, { exact: true }).waitFor();
     };
     await scan(entry, '입장');
+    await entry.getByRole('button', { name: '잘못 스캔했어요', exact: true }).click();
     await entry.getByLabel('정정 사유', { exact: true }).fill('다른 참가자의 티켓을 스캔했습니다');
     await scan(exit, '퇴장');
     const before = (await readWorkspace()).checks.filter(check => check.participantId === participant.id);
@@ -294,7 +302,8 @@ async function checkCorrectionConflict(browser, fixture, participant, readWorksp
       }
     }
     await entry.getByRole('button', { name: '다음 참가자', exact: true }).click();
-    assert.equal(await entry.locator('#staff-ticket').inputValue(), '');
+    assert.equal(await readCode(entry), '');
+    await exit.getByRole('button', { name: '잘못 스캔했어요', exact: true }).click();
     await exit.getByLabel('정정 사유', { exact: true }).fill('퇴장 처리 위치를 잘못 확인했습니다');
     await exit.getByRole('button', { name: '최신 기록 정정', exact: true }).click();
     await exit.getByRole('status').filter({ hasText: '기록을 정정했습니다' }).waitFor();
@@ -333,7 +342,7 @@ async function checkUncertainDeskConflict(browser, fixture, people, readWorkspac
       await page.goto(`${fixture.baseUrl}/staff/events/${fixture.eventId}`);
       await confirmInitialDesk(page);
       const ticket = page.locator('#staff-ticket');
-      await ticket.fill(people[index].ticket);
+      await typeTicket(page, people[index].ticket);
       await page.getByRole('button', { name: '입장 처리', exact: true }).click();
       const unknown = page.getByRole('region', { name: '스캔 결과 미확인', exact: true });
       await unknown.waitFor();
@@ -354,7 +363,6 @@ async function checkUncertainDeskConflict(browser, fixture, people, readWorkspac
       const refresh = failure.getByRole('button', { name: '데스크 상태 다시 확인', exact: true });
       await refresh.waitFor();
       assert.equal(await unknown.count(), 0, 'a definite desk verdict settles the unknown state');
-      assert.equal(await ticket.inputValue(), people[index].ticket, 'recovery preserves the scanned ticket');
       const before = await readWorkspace();
       assert.equal(before.checks.filter(check => check.id === scans[0].commandId).length, 0);
       const receipts = await fixture.harness.database.query('SELECT count(*)::int AS count FROM command_receipts WHERE command_id=$1', [scans[0].commandId]);
@@ -369,12 +377,13 @@ async function checkUncertainDeskConflict(browser, fixture, people, readWorkspac
       await page.screenshot({ path: path.join(out, `uncertain-${verdict.toLowerCase()}-390.png`), mask: [ticket, page.locator('[data-ticket-full-code]')], fullPage: true });
       await refresh.click();
       assert.equal((await readWorkspace()).checks.length, before.checks.length, 'refreshing must not process a scan');
-      assert.equal(await ticket.inputValue(), people[index].ticket);
+      assert.equal(await readCode(page), people[index].ticket, 'recovery preserves the scanned ticket');
       if (verdict === 'DESK_CLOSED') {
         await page.getByText('가동 중지된 데스크입니다.', { exact: false }).waitFor();
         await managerCommand('desk.set-open', { id: fixture.deskId, open: true });
         await page.getByRole('button', { name: '데스크 상태 다시 확인', exact: true }).click();
         await page.getByText('이 데스크는 입장 처리합니다.', { exact: true }).waitFor();
+        await codeField(page);
         await page.getByRole('button', { name: '입장 처리', exact: true }).click();
       } else {
         await page.getByRole('button', { name: '퇴장 업무 확인', exact: true }).click();
@@ -383,6 +392,7 @@ async function checkUncertainDeskConflict(browser, fixture, people, readWorkspac
         // explicitly handle their exit; refresh itself performs no write.
         const { desk } = await managerCommand('desk.save', { name: '두 번째 합성 입장 데스크', action: 'IN', mode: 'desk', open: true });
         await managerCommand('check.scan', { deskId: desk.id, expectedAction: 'IN', ticket: people[index].ticket });
+        await codeField(page);
         await page.getByRole('button', { name: '퇴장 처리', exact: true }).click();
       }
       await page.getByRole('region', { name: '스캔 결과 상세', exact: true }).getByText(people[index].name, { exact: false }).waitFor();
@@ -452,7 +462,7 @@ async function main() {
     await page.locator('#staff-desk').waitFor();
     await confirmInitialDesk(page);
     stage = 'scan lost response and later rejection';
-    await page.locator('#staff-ticket').fill(persons[0].ticket);
+    await typeTicket(page, persons[0].ticket);
     await page.getByRole('button', { name: '입장 처리', exact: true }).click();
     const unknown = page.getByRole('region', { name: '스캔 결과 미확인', exact: true });
     await unknown.waitFor();
@@ -463,7 +473,7 @@ async function main() {
     const peer = await context.newPage();
     await peer.goto(`${fixture.baseUrl}/staff/events/${fixture.eventId}`);
     await peer.getByRole('region', { name: '처리 결과 확인', exact: true }).getByRole('button', { name: '서버 처리 확인', exact: true }).waitFor();
-    assert.equal(await peer.locator('#staff-ticket').isDisabled(), true, 'another tab retains the shared receipt and locks a new scan');
+    assert.equal(await peer.getByRole('button', { name: '코드 입력', exact: true }).isDisabled(), true, 'another tab retains the shared receipt and locks a new scan');
     await peer.close();
     await page.screenshot({ path: path.join(out, 'scan-unconfirmed-390.png'), fullPage: true });
     await unknown.getByRole('button', { name: '같은 요청 재확인', exact: true }).click();
@@ -475,10 +485,13 @@ async function main() {
     assert.equal(scans[0], scans[1]); assert.equal(scans[1], scans[2]);
     assert.equal((await readWorkspace()).checks.length, 1, 'retry never creates another check-in');
     stage = 'correction response validation';
+    await page.getByRole('button', { name: '잘못 스캔했어요', exact: true }).click();
     await page.locator('#correct-reason').fill('합성 검증 정정');
+    await closeSheet(page);
     acceptDialogs = false;
     await page.getByRole('link', { name: '내 업무', exact: true }).click();
     assert.ok(dialogMessages.some((message) => message.includes('입력 중인 내용이 있습니다')));
+    await page.getByRole('button', { name: '잘못 스캔했어요', exact: true }).click();
     assert.equal(await page.locator('#correct-reason').inputValue(), '합성 검증 정정');
     acceptDialogs = true;
     await page.getByRole('button', { name: '최신 기록 정정', exact: true }).click();
@@ -498,7 +511,7 @@ async function main() {
     assert.equal((await readWorkspace()).checks.length, 1, 'correction replay keeps one record');
     stage = 'assignment removed during successful scan';
     scanMode = 'revoke';
-    await page.locator('#staff-ticket').fill(persons[1].ticket);
+    await typeTicket(page, persons[1].ticket);
     await page.getByRole('button', { name: '입장 처리', exact: true }).click();
     await page.getByRole('alert').filter({ hasText: '업무 배정을 확인할 수 없습니다' }).waitFor();
     assert.match(await page.getByRole('region', { name: '스캔 결과 상세', exact: true }).innerText(), new RegExp(persons[1].name));
@@ -527,10 +540,12 @@ async function main() {
     await database.query('UPDATE event_workspaces SET payload=$2::jsonb WHERE event_id=$1', [fixture.eventId, JSON.stringify(updated)]);
     await page.reload({ waitUntil: 'networkidle' });
     await confirmInitialDesk(page);
-    await page.locator('#staff-ticket').fill(persons[1].ticket);
+    await typeTicket(page, persons[1].ticket);
     await page.getByRole('button', { name: '퇴장 처리', exact: true }).click();
     const rewardSection = page.getByRole('region', { name: '경품 확인 및 수령', exact: true });
+    await page.getByRole('button', { name: '잘못 스캔했어요', exact: true }).click();
     await page.locator('#correct-reason').fill('유지할 합성 정정 사유');
+    await closeSheet(page);
     const firstReward = rewardSection.locator('li').filter({ has: page.getByText('합성 경품', { exact: true }) });
     const collectButton = firstReward.getByRole('button', { name: '수령 확인', exact: true });
     await collectButton.hover();
@@ -554,7 +569,7 @@ async function main() {
     await rewardSection.getByRole('alert').filter({ hasText: '수령 결과를 확인하지 못했습니다' }).waitFor();
     assert.equal(await page.locator('#staff-desk').isDisabled(), true);
     assert.equal(await page.getByRole('button', { name: '다음 참가자', exact: true }).isDisabled(), true);
-    assert.equal(await page.getByRole('button', { name: '최신 기록 정정', exact: true }).isDisabled(), true);
+    assert.equal(await page.getByRole('button', { name: '잘못 스캔했어요', exact: true }).isDisabled(), true, 'the correction cannot be opened while a handout is unconfirmed');
     const secondReward = rewardSection.locator('li').filter({ has: page.getByText('두 번째 합성 경품', { exact: true }) });
     assert.equal(await secondReward.getByRole('button', { name: '수령 확인', exact: true }).isDisabled(), true);
     assert.equal((await readWorkspace()).rewards.find(item => item.id === 'synthetic-reward').status, 'RECEIVED');
@@ -840,10 +855,12 @@ async function main() {
     await database.query('UPDATE event_workspaces SET payload=$2::jsonb WHERE event_id=$1', [fixture.eventId, JSON.stringify(scanWorkspace)]);
     acceptDialogs = false;
     await page.getByRole('button', { name: '다음 참가자', exact: true }).click();
+    await page.getByRole('button', { name: '잘못 스캔했어요', exact: true }).click();
     assert.equal(await page.locator('#correct-reason').inputValue(), '유지할 합성 정정 사유');
+    await closeSheet(page);
     acceptDialogs = true;
     await page.getByRole('button', { name: '다음 참가자', exact: true }).click();
-    scanMode = 'lost'; await page.locator('#staff-ticket').fill(persons[2].ticket);
+    scanMode = 'lost'; await typeTicket(page, persons[2].ticket);
     await page.getByRole('button', { name: '퇴장 처리', exact: true }).click();
     await page.getByRole('region', { name: '스캔 결과 미확인', exact: true }).waitFor();
     const beforeScanStatus = scans.length;
@@ -861,16 +878,17 @@ async function main() {
     await page.getByText('서버 처리를 확인했습니다. 최신 현장 기록을 확인하세요.').waitFor();
     await page.unroute('**/api/bootstrap', scanRefreshFault);
     assert.equal(scans.length, beforeScanStatus);
-    await page.locator('#staff-ticket').fill(persons[3].ticket);
+    await typeTicket(page, persons[3].ticket);
     scanMode = 'lost'; await page.getByRole('button', { name: '퇴장 처리', exact: true }).click();
     await page.getByRole('region', { name: '스캔 결과 미확인', exact: true }).waitFor();
     await page.reload({ waitUntil: 'networkidle' });
-    await page.locator('#staff-ticket').waitFor();
-    assert.equal(await page.locator('#staff-ticket').isDisabled(), true);
+    const codeButton = page.getByRole('button', { name: '코드 입력', exact: true });
+    await codeButton.waitFor();
+    assert.equal(await codeButton.isDisabled(), true);
     receiptPanel = page.getByRole('region', { name: '처리 결과 확인' });
     const beforeReloadStatus = scans.length;
     await receiptPanel.getByRole('button', { name: '서버 처리 확인', exact: true }).click();
-    await page.waitForFunction(() => !document.querySelector('#staff-ticket')?.disabled);
+    await page.waitForFunction(() => [...document.querySelectorAll('button')].find(button => button.textContent.trim() === '코드 입력')?.disabled === false);
     assert.equal(scans.length, beforeReloadStatus);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
     assert.deepEqual(errors, []);

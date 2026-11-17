@@ -352,6 +352,52 @@ The owner approved this composition on 2026-11-15 (`apps/web/app/console/events/
 - PPTX 내보내기는 `pptxgenjs`를 클라이언트에서 동적 import해 표지(어두운 배경 + 오렌지 킥커 + 큰 제목) + 핵심 숫자 + 참여 콘텐츠 + 만족도 + 사진 슬라이드를 한 번 채워 내려준다(xlsx export와 같은 패턴, 새 서버 커맨드 없음). 사진은 `/api/events/:id/files/:fileId`를 fetch해 base64로 넣고, 한 장이 실패해도 나머지 내보내기는 계속된다. 버튼 옆에 "꾸미기는 파워포인트·키노트·캔바에서" 안내 문구가 있다.
 - 내보내기 묶음(PPTX/JSON/인쇄)은 ghost 역할로 낮췄다(보조 버튼 수를 줄이는 Action role rules 판단); 내용 편집·취소·닫기 같은 실제 대안 행동은 secondary로 남았다.
 
+## 고객사 확정 구성
+
+The owner approved this composition on 2026-11-16 (`apps/web/app/console/clients/ClientsList.tsx`, mockup option A). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-clients-composition.test.cjs` guards it.
+
+- A flat list under the toolbar: no card, hairline rows. The page title already says "고객사"; the section title stays for assistive technology only and a quiet count ("전체 N개", "검색 결과 n개 / 전체 N개") stays visible. There is no 검색 지우기 button; the search input clears itself.
+- A row is the logo (or the name's first letter in a soft square), the name, contact and email, two file states, and an arrow. File state is a dot plus the word (로고 / 사업자등록증; green dot = registered, hollow dot = none) with the state spelled out for screen readers. A row holds no buttons: the name button's `::after` makes the whole row one entry into the drawer. "행사 N건" is not shown; the directory has no such count.
+- Tapping a row opens one right-edge drawer (bottom sheet on phones). Managers edit name, contact and email there and manage 로고 and 사업자등록증 beneath the form as quiet text rows (올리기/교체/보기/제거). 제거 stays behind the in-place confirm that names the client. Members without write permission open the same row into a read-only drawer with a 문서 보기 link.
+- The page's orange actions are 고객사 등록 and the drawer's 저장. Cancel, 파일 확인 그만두기 and 제거 are ghost; the secondary ceiling for the screen is 2 (서버 처리 확인, 같은 파일 요청 다시 확인).
+- Files wait for a saved form: while fields differ from their opening values the file rows are disabled with a one-line note. Starting an upload or confirming a removal closes the drawer first so that the recovery panel and result messages are on the page, never behind the scrim.
+- Save, upload, link, removal, receipt recovery, same-request retry, the write locks and the draft guard are unchanged.
+
+## 팀·권한 확정 구성
+
+The owner approved this composition on 2026-11-16 (`apps/web/app/console/team/TeamWorkspace.tsx`, mockup `team-options-b4.html` option A: the three-bar gauge). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-team-composition.test.cjs` guards it.
+
+- Three tabs on the shared `ConsoleSectionNav` (panels stay mounted): 구성원, 행사별 권한 (owners only) and 연동·활동. The toolbar holds only the page's one orange action, 구성원 초대; there is no toolbar label and no standing sentence above the list.
+- 구성원 is a flat list, pending invitations first. A row is an initial, name and contact, role (with "쓰기 권한 N개 행사" for 조직 구성원 when the viewer is the owner), a state word (대기 중 / 사용 중지) and an arrow. A row holds no buttons: the name button's `::after` makes the whole row one entry into a drawer. An unknown invitation queue reads "대기 중인 초대를 확인할 수 없습니다.", never "없습니다".
+- The member drawer is docked beside the list on wide screens (a sheet on phones), so the shell's recovery notice stays reachable while a role request is unsettled. It holds 조직 역할 (each role with one line on what it can do, plus the existing confirm/retry panel), 현장 배정 for active staff, and 계정: 비밀번호 재설정 (closes the drawer, then opens its own dialog) and 소속 사용 중지/다시 활성화 with their inline confirms. Closing or choosing another row goes through the role panel; an in-flight request blocks it, an unknown one asks first.
+- 행사별 권한 shows one gauge row per 조직 구성원 for the chosen event: a name for the level plus one plain sentence, with three bars repeating it. Levels: 전체 (3 bars, stored as `["all"]`), 설정 제외 (2, every scope but `settings`), 직접 설정 (1, "N개 범위만 바꿀 수 있어요") and 읽기 전용 (0, `[]`). A person not yet on the event reads 배정 전.
+- Tapping a row opens a drawer with the levels as cards (each with an eight-segment preview), 설정 제외 marked 추천 as guidance only, and 직접 선택 which unfolds the eight scopes in three groups. One orange 권한 저장. Pending saves freeze the event picker, the levels and the scopes, keep the drawer open and replay the same request; unsaved edits ask before closing.
+- Server permission model, command ids, receipts, retry replay, last-owner rules and the draft guard are unchanged; only the presentation moved.
+
+## 명단 가져오기 확정 구성
+
+The owner approved this composition on 2026-11-16 (`apps/web/app/console/events/[id]/participants/import/ImportWizard.tsx`, mockups `import-simple.html` and `import-simple2.html`). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-import-composition.test.cjs` guards it. It opens as a wide dialog from the roster and also stands as the `/participants/import` page.
+
+- Two screens, no step line. First a drop area (one dashed region around the real file input, 파일 선택 as its mirror, 양식 CSV 받기 as a quiet link beside the format line). Then one review screen. The section titles stay for assistive technology only.
+- The review answers in one sentence of numbers: a green card with "등록할 수 있어요", the big count, a distribution bar (바로 등록 / 확인 필요 / 제외) and its legend, then the first three people as initial, name, company and phone ("이렇게 등록돼요", 외 N명). Phones show as 010-1234-5678 for display; the stored value stays the digits.
+- Problems are tinted cards, not table rows: a warning card names the 연락처 확인 rows (chips, the rest folded) and holds the confirmation checkbox that gates the commit; a danger card says "N행은 등록하지 않아요" and unfolds the file row and reason of each excluded row (first 50) in place. Excluded rows are not imported; the operator fixes the original file and imports again.
+- Columns are matched without a step. Header words (성명, 휴대폰, 회사/부서 and the English equivalents) and, for phone and email, what the first rows look like, pick the file column; a name column is never guessed from values. The match is one line of chips, each a select that changes the column in place (TXT keeps its fixed order). When a required column (이름 or 연락처) cannot be matched, the review is replaced by "어느 열이 이름인가요?": the unused file columns with sample values as a radio list, chosen once.
+- The only orange action is "N명 등록" (the footer of the dialog; below the content on the page). An uncertain write turns it into 같은 요청 다시 시도 beside a secondary 서버 처리 확인; 파일 바꾸기 and the chips lock while a write is pending or uncertain. After a commit the success notice stays and the stage offers 다른 파일 가져오기 and 참가자 명단 보기 (the page: 참가자 목록으로).
+- Parsing limits (1MB, 1,000 rows, first sheet, 256 columns), the consent line (승인 검토 없이 참가 확정, 동의 기록은 생성하지 않음), command id reuse, receipts, the draft guard and the permission and stage gates are unchanged; only the presentation and the column match moved.
+
+## 스태프 현장 화면 확정 구성
+
+The owner approved this composition on 2026-11-16 (`apps/web/app/staff/StaffEventWork.tsx`, mockups `staff-viewfinder.html` for the look and `staff-field2.html` for the flow). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-staff-field-composition.test.cjs` guards it. It is the phone screen for desk check-in and booth stamping.
+
+- A dark column: a quiet top bar (back, event name, one ⋯ menu), the desk or booth select as the title, the camera as the stage, and a short white bar under it. Nothing is fixed or sticky; the bar is in normal flow.
+- The camera is `CameraScan variant="field"`: it fills the stage, stays open after a detection (the next person is scanned without restarting it), keeps the screen awake and offers the torch where the device has one; sound and vibration have a round toggle beside it. While a result shows or a request is in flight the scanner is suspended; the code that was just read is ignored while it stays in front of the lens and for 3 seconds after. The attendee booth camera keeps its one-shot behavior.
+- The bottom bar holds three quiet buttons (코드 입력, 명단 찾기, 최근 처리; 경품 조회 on an exit desk) and no orange. The only orange is "카메라 켜기" while the camera is off, or the one button a result needs. There is no standing recent list or form under the scan.
+- A result is the stage's colored face with a round badge by shape, a kicker, and the name at 40px. A plain success has no panel: it hands itself back after 1.5 seconds or on a tap, with a sound and vibration, and keeps only "잘못 스캔했어요" and 네임택 인쇄 as quiet links. 결과 자동 넘김 can be turned off in the menu.
+- Information is not an error: an already-entered ticket (server code `ALREADY_CHECKED_IN`) and a booth limit are a blue face that hands itself back after 3 seconds. A definitive failure (cancelled, not eligible, not found) is red and waits for 확인; "다시 시도" is only for an uncertain or unreadable result. Anything that needs a decision holds: an uncertain result (same-request recheck), attendance or eligibility review, a correction in flight, a direction review, an exit with prizes to hand over (the prize list sits in the bar until each 수령 확인), and an open nametag.
+- Lists and forms are sheets (`ConsoleDialog presentation="drawer" stickyChrome`) opened on demand: 티켓 코드 입력, 명단에서 찾기 (the name search with its identity confirmation), 최근 처리, 기록 정정 (reason chips plus the free text) and 경품 조회. The last scan stays correctable after it hands back: 최근 처리 offers "잘못 처리했어요". A device with no camera says so on the stage and offers the name search.
+- A result's buttons live inside its own region (the white bar at the bottom of the colored face: 다음 참가자, 확인, 같은 요청 재확인 with its server check, the prize list), never in the scan bar. The code or name-search sheet stays open while its request is in flight (read-only code, "처리 중입니다") and closes when the result arrives. A plain success or an already-entered notice is one big tap target (its text lets the tap through); every other result takes taps normally. The shared 처리 결과 확인 panel (another window's unconfirmed request) shows in the page flow above the stage, never only inside the ⋯ menu. A rejected prize handout keeps its message and the lookup form open.
+- The SELF booth shows its QR on a light stage with one 최근 처리 button. Request ids, same-request recovery, frozen receipts, the draft and leave guards, correction, direction review and the prize contracts are unchanged; only the presentation and the scan loop moved.
+
 ## Product component boundary
 
 Astryx supplies the production theme, actions, icon actions, links, labeled text fields, headings, sections and feedback. `app/ui/ProductButton`, `ProductLink`, `ProductInput` and `ProductNotice` keep the product-facing contract small. The production theme in `apps/web/src/themes/eventouch/` aliases `tokens.css`; generated theme files are rebuilt, not edited. The product explicitly uses light mode and Pretendard. The isolated design-review pilot is not a runtime dependency.
@@ -365,3 +411,66 @@ Native controls remain where browser semantics matter: file/date/number inputs, 
 The console uses task-specific workspaces, not a uniform card grid. The overview places actionable work before supporting metrics; roster controls stay beside selection; reviewed sends and publication remain separate from composition. Tab and dialog controllers preserve mounted state, keyboard behavior and guarded exits.
 
 CSS layer order is declared before vendor imports. Native document/form base rules precede Astryx; legacy layout rules and product adapters have explicit later layers. CSS Modules own domain layout. Do not revive global button paint rules for migrated components or load an unused default theme font.
+
+## 참가 신청과 입장 티켓 확정 구성
+
+The owner approved this composition on 2026-11-16 (`apps/web/app/event/[slug]/` page, `register/`, `ticket/` and `ticket/recover/`, mockup `attendee-ticket-b2.html`, direction "입장 패스 B"). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-attendee-entry-composition.test.cjs` guards it.
+
+- The ticket is a pass held up at the desk. Its band carries the state by color (참가 확정 green, 입장 중 blue, 승인 대기 and 확인 필요 amber, 신청 취소 red) and the name at up to 40px; the QR below is the largest object (up to 340px wide, with the four-module quiet zone kept), then the event name and date, then two quiet utilities (참여 콘텐츠 보기, 상태 다시 확인). The recheck is orange only when there is no QR to show.
+- A fresh signup shows one dark receipt line above the pass ("신청이 완료되었습니다. 이 화면이 입장권입니다.") once; reload or a shared link never replays it. The screen stays awake while the QR is shown (`useScreenWakeLock`, where the browser supports it) and a line asks to brighten it; a browser cannot set brightness itself. A connection failure keeps the QR visible with its notice, as before.
+- The registration form is a short sheet: a lead line under the event name (the outcome copy is unchanged), large 52px fields with a quiet (필수)/(선택), only the field to fix turns red with its message beneath, and a sticky submit that stays in reach with the keyboard up. The "신청하면 어떻게 되나요" and "누가 참가하나요" headings stay for screen readers. A focused field keeps room below it for its hint and error. The phone is not reformatted while typing: the value is also the verification grant and is sent as typed.
+- The event page reads as plain facts under a large title with one primary, "참가 신청하기". When intake is closed, the closed note is a soft card and "이미 신청했다면 내 티켓 찾기" becomes the primary; the way back to the attendee home stays a quiet link.
+- Finding a ticket again (연락처 → 인증번호) is one large field and one primary action; the rest are quiet. Registration, ticket, recovery and verification contracts (same-request retry, bearer in memory and one navigation, cleaned address, unconfirmed result recovery, 404 and transport-failure rules) are unchanged; only the presentation and the pass order changed.
+
+## 신청 항목 편집 확정 구성
+
+The owner approved this composition on 2026-11-16 (`apps/web/app/console/events/[id]/settings/fields/`, mockup `fields-options.html`, option A "폰 미리보기 + 평면 목록"). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-fields-composition.test.cjs` guards it.
+
+- A flat ledger of fields beside a redraw of what the attendee will see (`FieldsPhonePreview.tsx`, sticky on wide screens, below the editor on narrow ones). The preview is decorative (`aria-hidden`, `inert`): it follows the draft as typed, so a new or renamed field shows before it is saved; it must be updated when the real form (`event/[slug]/register`) changes.
+- A row is its name as the one button (its hit area covers the row, so its accessible name still contains its visible text), a quiet type line, a 필수/선택 dot and two icon-only move buttons. Exclusion no longer repeats on every row: it is "이 항목 제외" inside the editor, with its confirm directly under the editor. 이름 and 연락처 stay required and cannot be excluded.
+- One orange at a time: "항목 추가" while idle, "항목 저장" while editing (add is blocked then); the preview's button is grey. The draft state is one pill ("게시 안 된 변경 있음", "아직 게시 전", "게시된 양식과 같음"); publishing stays in 참가 접수. The input type is a choice group, not a select.
+- Moves stay one step at a time and every save, move and exclusion is its own command, as before. The same-request recovery, conflict notice, receipt check and abandon flow, and their copy, are unchanged.
+
+## 참여하기 확정 구성
+
+The owner approved this composition on 2026-11-16 (`apps/web/app/event/[slug]/engage/`, mockup `engage-options.html`, option B "행사 색 위의 탭과 카드"). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-engage-composition.test.cjs` guards it.
+
+- The page sits on the event's own home color (`pageExperience.published.homeStyle.backgroundColor`, the same source as the attendee home) with the readable ink (`readableInk`) for the header; program cards stay white so they read on any ground.
+- Programs are grouped by kind (투표, 퀴즈, 만족도, Q&A, 사진 공유, 게시판, 추첨) under pill tabs shown only for kinds the event has and only when there is more than one. An unfinished poll, quiz or survey is an orange dot on its tab. A `?program=` link opens the tab of that program. Within a tab the first program is open and the others stay collapsed, as before.
+- A program's state is a chip in its header (참여 가능 blue, 제출 완료 green, 제출 확인 필요 amber, 종료 grey). Choices are hairline rows with the radio on the text line (the card's label rule used to stack it above the text); score choices turn ink when picked; the submit is the one orange. The one-time notice is a dark line and clears when the tab changes.
+- A voted poll shows the counts it already publishes as bars with its own choice marked (the choice is known only in the session that voted); the counts before voting are shown as before.
+- Submit, same-request recovery, content-version conflict, receipt check, question edit and like, photo upload and the approval-pending note are unchanged. The footer links are quiet text links.
+
+## 행사장 대형 화면 확정 구성
+
+The owner approved this composition on 2026-11-16 (`apps/web/app/screen/[slug]/`, mockup `screen-options.html`, option A "어두운 무대"). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-venue-screen-composition.test.cjs` guards it.
+
+- Every scene except the draw sits on the product's stage ink (`board-stage.module.css`, fixed full screen like the draw stage); the draw keeps its violet and gold stage (see 추첨·투표 확정 구성). Type is sized for a room: the title at up to 116px and body at up to 67px on a 1920 screen, with the event name, date and venue as the only small lines. The footer shows the venue only.
+- A poll is one row per option (name, bar, count); the leading option's bar is orange and the others white, with a "투표 진행 중" pill and the total. Counts are the public aggregates, as before.
+- The program lists time, title and place. The session in progress is orange with "진행 중": it needs a start and an end on a known day (a missing day takes the event's date) and is read as the venue's local time against the server's clock (the offset from the response's `Date` header, refreshed on every poll and re-evaluated every 30 seconds), so a screen with a drifting clock highlights the right line. Row size follows the number of sessions shown so ten still fit.
+- Selection rules (the operator's choice first, otherwise a rotation of what exists), quiz answers only after reveal, four questions and six photos at most, words only for notices, the "연결 확인 중 · 마지막 화면입니다" notice and reduced-motion handling are unchanged, and so are the class names the audits read (`.display-frame h2`).
+
+## 스태프 목록과 로그인 확정 구성
+
+The owner approved this composition on 2026-11-16 (`apps/web/app/staff/StaffHub.tsx` and `apps/web/app/login/`, mockups `staff-entry-a3.html` for the hub and `staff-entry-a2.html` for the login). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-staff-entry-composition.test.cjs` guards it.
+
+- The assignment hub (shown only for two or more assignments; one goes straight to its event, none shows the empty state) is the field screen's dark column. A top bar holds the EVENTOUCH wordmark (orange E) and the account menu as a quiet pill; the title is "오늘 처리할 행사 N곳" with N in orange.
+- The event that is `LIVE` is one card with the hub's only orange: a "지금 진행 중" chip, the name, the start to end time at 38px, "내 배정 · 데스크 N곳", and "업무 열기". The rest are flat rows that open as a whole (initial tile, name, start label, kind and count, a status dot, a chevron). Names of desks and booths are not listed; they are the work screen's title. A start label is day-level: "09:00 시작", "내일 10:00 시작", "12.20 09:30 시작". With no live event the title is followed by "지금 진행 중인 행사는 없어요."
+- Empty and failed states are an icon tile, the unchanged sentence ("배정된 업무가 없습니다. 운영자에게 문의하세요."), and one outlined "다시 불러오기". Organization line, the changed-organization notice (the rows and card stand down) and the single-assignment shortcut are unchanged.
+- The login keeps its markup and copy: a dark band with the wordmark (orange E, from `::first-letter`) and the promise line over a white sheet with 56px fields; the error line and the submit sit at the bottom of the sheet, the error directly above the submit. On wide screens the band and sheet are one framed card. The submit is docked at the bottom of the sheet, not fixed to the screen. Everything after sign-in (staff to 내 업무, operators to the console), the session notice, first-operator setup and the reset help are unchanged.
+
+## 계정·첫 화면 확정 구성
+
+The owner approved this composition on 2026-11-16 (`apps/web/app/auth-entry.module.css`, `apps/web/app/landing.module.css`, mockup `account-landing-options.html`; the landing hero is option B "어두운 히어로"). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-account-landing-composition.test.cjs` guards it.
+
+- 비밀번호 재설정, 내 계정 이메일 인증 and 팀 초대 수락 share one frame (`styles.entry`): the login's dark brand band (orange E wordmark from `::first-letter`, the screen's name, the promise line) over a white sheet with 56px fields. On wide screens the band and sheet are one framed card. Forms fill the sheet; an error that leads into a submit sits directly above it with the submit at the bottom, while a lone notice (an unavailable mailer, say) stays in the flow. Inputs, verification and recovery flows, single-use tokens, step copy and focus order are unchanged.
+- The landing's header and hero share one full-width ink band (`box-shadow` plus `clip-path` bleed); the product window stays white. The fact strip, tabs, calls to action and the inquiry rules (email only, example figures disclosed) are unchanged, and every section below the hero stays white. Print keeps its plain frame. The hero's glow bleeds past the container only from 1025px up, where it cannot cause a sideways scroll.
+
+## 새 행사 만들기 확정 구성
+
+The owner approved this composition on 2026-11-16 (`apps/web/app/console/CreateEventDialog.tsx`, `console-home.module.css`, mockup `create-event-a3.html`, "A3"; the time bar of the mock was dropped on purpose). Change it only on a new owner decision.
+
+- 이름, 날짜, 시간, 고객사 are all visible on open; 추가 설정 holds only exact start/end, 정원 and 주소 코드. 진행 형태 is no longer offered or sent (the settings screen already removed it; stored values stay).
+- Each field gets the control that fits it instead of one white box: the name is a title input without a box with the 참가자 주소 line under it ("바꾸기" opens 주소 코드), the date is a large soft field with 내일/1주 뒤/1개월 뒤 chips and a plain "선택한 날짜 … · N일 뒤" line, the time is 종일/오전/오후/저녁 chips with a "09:00–18:00 · 9시간" line, 정원 has 50/100/300/500 chips, and the create mode is a two-way segmented bar.
+- Chips are native radios that only set values the form already holds (date, start/end, capacity); the payload and the write path (receipts, retry, duplicate, customer registration) are unchanged. Selected chips are ink, so the one orange action stays "행사 만들기".
+- Guidance never blocks the write: a same-name event, a past date, a duplicate that keeps the source date, and an end that is not after the start (the server's own rule) show as a one-line notice. With no customers the select is replaced by a one-line explanation and the register action.

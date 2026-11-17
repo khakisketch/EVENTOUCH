@@ -69,3 +69,7 @@ test('targets stay 44px and phone rows keep one line each', () => {
   assert.match(css, /\.drawerItem :global\(\.product-action\)\s*\{\s*min-height:\s*44px/u);
   assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.meterSpacer\s*\{\s*display:\s*none/u, 'the empty meter cell never pushes the count to a second line');
 });
+
+test('the manual-grading fold keeps a 44px touch target like the other disclosures', () => {
+  assert.match(css, /\.resultDisclosure > summary,\s*\.rejectDisclosure > summary \{[^}]*min-height:\s*44px/su);
+});

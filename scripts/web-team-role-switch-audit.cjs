@@ -24,16 +24,21 @@ async function main() {
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('dialog', (dialog) => dialog.dismiss());
     await page.goto(`${f.baseUrl}/console/team`);
-    await page.getByRole('heading', { name: '구성원', exact: true }).first().waitFor();
+    await page.getByRole('list', { name: '구성원 목록' }).waitFor();
     const id = `audit-manager-${f.suffix}`.toLowerCase();
     const other = `audit-staff-${f.suffix}`.toLowerCase();
     const panel = page.locator(`#org-role-panel-${id}`);
-    const toggle = page.locator(`#org-role-toggle-${id}`);
-    const otherToggle = page.locator(`#org-role-toggle-${other}`);
+    const toggle = page.locator(`#member-open-${id}`);
+    const otherToggle = page.locator(`#member-open-${other}`);
+    const drawer = page.getByRole('dialog');
+    const closeDrawer = () => drawer.getByRole('button', { name: '닫기', exact: true }).last().click();
     const staff = panel.getByRole('radio', { name: '현장 스태프', exact: false });
     await toggle.click();
+    await panel.waitFor();
     await staff.check();
-    await toggle.click();
+    // The drawer is docked beside the list: leaving it by 닫기 or by choosing
+    // another row asks about the unsaved role pick first.
+    await closeDrawer();
     let review = panel.getByRole('group', { name: '실행 확인' });
     await review.getByText(/저장하지 않은 역할 선택이 사라집니다/).waitFor();
     assert.equal(await review.getByRole('button', { name: '계속 편집' }).evaluate((button) => document.activeElement === button), true, 'safe action gets focus');
@@ -42,8 +47,8 @@ async function main() {
     assert.equal(await staff.isChecked(), true, 'cancel preserves selected role');
     await panel.getByRole('button', { name: '변경 확인' }).click();
     await panel.getByRole('button', { name: '역할을 바꾼다' }).waitFor();
-    await toggle.click();
-    assert.equal(await panel.getByRole('button', { name: '역할을 바꾼다' }).count(), 0, 'switch replaces role confirmation');
+    await closeDrawer();
+    assert.equal(await panel.getByRole('button', { name: '역할을 바꾼다' }).count(), 0, 'closing replaces role confirmation');
     await review.getByRole('button', { name: '계속 편집' }).click();
     await otherToggle.click();
     review = panel.getByRole('group', { name: '실행 확인' });
@@ -52,7 +57,9 @@ async function main() {
     assert.equal(await page.locator(`#org-role-panel-${other}`).count(), 0);
     for (const width of [320, 390, 1280]) {
       await page.setViewportSize({ width, height: 900 });
-      await otherToggle.click();
+      // Narrow screens show the same drawer as a modal sheet, so close it
+      // through its own control; wide screens can also pick another row.
+      if (width === 1280) await otherToggle.click(); else await closeDrawer();
       await review.getByText(/저장하지 않은 역할 선택이 사라집니다/).waitFor();
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `overflow ${width}`);
       await page.evaluate(axeSource);
@@ -90,7 +97,7 @@ async function main() {
     assert.equal(await page.locator(`#org-role-panel-${other}`).count(), 0);
     releaseResponse();
     await panel.getByText(/같은 요청으로 다시 시도하세요/).waitFor();
-    await toggle.click();
+    await closeDrawer();
     await panel.getByText(/진행 중이거나 결과를 확인하지 못한 역할 변경/).waitFor();
     await otherToggle.click();
     assert.equal(await panel.isVisible(), true, 'unknown attempt remains available');

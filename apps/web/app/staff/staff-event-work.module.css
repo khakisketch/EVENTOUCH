@@ -1008,3 +1008,430 @@
 .eventWorkPage :global(.camera-panel) > p { margin-block: 0; color: var(--line-strong); }
 .eventWorkPage :global(.camera-panel) > button[data-variant="secondary"] { border-color: transparent; background: var(--paper); color: var(--ink); }
 .eventWorkPage .resultStage .nextActions :global(.button-quiet) { background: transparent; }
+
+/* ------------------------------------------------------------------
+   Field screen. A dark column: a quiet top bar, the camera (or the result)
+   as the stage, and a short white bar for the three things an operator
+   reaches for. Lists, forms and corrections open only on demand, as sheets.
+   The page heading stays for assistive technology only.
+   ------------------------------------------------------------------ */
+.eventWorkPage {
+  width: 100%;
+  max-width: none;
+  min-height: 100svh;
+  padding: 0;
+  background: var(--ink);
+}
+.eventWorkPage > :global(.staff-header) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.eventWorkPage .fieldApp {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  max-width: 640px;
+  min-height: 100svh;
+  margin: 0 auto;
+  padding: 0;
+  background: var(--ink);
+  color: var(--paper);
+}
+.fieldApp .eventContext {
+  padding: var(--s2) var(--s1) 0;
+  border: 0;
+  color: var(--paper);
+}
+.fieldApp .eventContext :global(.staff-back-link) { color: var(--paper); }
+.fieldApp .eventContext :global(.staff-back-link):hover { background: color-mix(in srgb, var(--paper) 12%, transparent); border-color: transparent; }
+.fieldApp .backLabel { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.fieldApp .eventWorkTitle {
+  text-align: center;
+  color: color-mix(in srgb, var(--paper) 72%, transparent);
+  font-size: var(--small);
+  font-weight: 650;
+}
+.fieldApp .moreMenu { position: relative; color: var(--paper); }
+.fieldApp .moreSummary { color: var(--paper); }
+.fieldApp .moreBody {
+  position: absolute;
+  right: 0;
+  z-index: 8;
+  width: min(320px, calc(100vw - 32px));
+  padding: var(--s3);
+  border-radius: 16px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--shadow-raised);
+}
+
+/* Where the operator works: the select reads as the screen title. */
+.fieldContext {
+  display: grid;
+  gap: var(--s1);
+  padding: 0 var(--s3) var(--s2);
+  color: var(--paper);
+}
+.fieldContext :global(.staff-task-switch) {
+  display: flex;
+  justify-content: center;
+  gap: var(--s2);
+  margin: 0;
+}
+.fieldContext :global(.staff-task-switch) :global(.astryx-button) {
+  min-height: 36px;
+  border-color: color-mix(in srgb, var(--paper) 28%, transparent);
+  background: transparent;
+  color: var(--paper);
+  font-size: var(--small);
+}
+.fieldContext :global(.staff-task-switch) :global(.astryx-button[aria-pressed="true"]) {
+  border-color: var(--paper);
+  background: var(--paper);
+  color: var(--ink);
+}
+.fieldContext :global(.staff-select-field) { display: grid; gap: 0; }
+.fieldContext :global(.staff-select-field) label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.fieldContext :global(.staff-select-field) select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--s5);
+  border: 0;
+  border-radius: 12px;
+  appearance: none;
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 18px;
+  color: var(--paper);
+  font: inherit;
+  font-size: 1.0625rem;
+  font-weight: 800;
+  text-align: center;
+  text-align-last: center;
+}
+.fieldContext :global(.staff-select-field) select option { color: var(--ink); }
+.fieldContext :global(.staff-select-field) select:focus-visible { outline: 3px solid var(--paper); outline-offset: 2px; }
+.fieldContext :global(.staff-direction-hint) {
+  margin: 0;
+  color: color-mix(in srgb, var(--paper) 72%, transparent);
+  font-size: var(--small);
+  text-align: center;
+}
+.fieldContext .directionReview,
+.fieldContext :global(.notice) {
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 14px;
+}
+.fieldContext .workSection { padding: 0; border: 0; background: transparent; }
+
+.fieldApp > :global(.notice),
+.fieldNotice {
+  margin: 0 var(--s3) var(--s2);
+  padding: var(--s3);
+  border-radius: 14px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--small);
+}
+
+/* Stage: the camera or a result fills everything between the bars. */
+.fieldStage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 320px;
+  overflow: hidden;
+  background: var(--ink);
+  color: var(--paper);
+}
+.stageIdle { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: var(--s4); padding: var(--s4); text-align: center; }
+.idleFrame { position: relative; width: min(236px, 62vw); aspect-ratio: 1; opacity: 0.35; }
+.idleFrame i { position: absolute; width: 40px; height: 40px; border: 4px solid var(--paper); }
+.idleFrame i:nth-child(1) { top: 0; left: 0; border-right: 0; border-bottom: 0; border-radius: 24px 0 0 0; }
+.idleFrame i:nth-child(2) { top: 0; right: 0; border-left: 0; border-bottom: 0; border-radius: 0 24px 0 0; }
+.idleFrame i:nth-child(3) { bottom: 0; left: 0; border-right: 0; border-top: 0; border-radius: 0 0 0 24px; }
+.idleFrame i:nth-child(4) { bottom: 0; right: 0; border-left: 0; border-top: 0; border-radius: 0 0 24px 0; }
+.idleText { max-width: 28ch; margin: 0; color: color-mix(in srgb, var(--paper) 72%, transparent); font-size: var(--small); line-height: 1.5; }
+.cameraLoading { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: color-mix(in srgb, var(--paper) 72%, transparent); }
+
+/* The SELF booth: a big code for the participant's own camera. */
+.selfStage {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: var(--s3);
+  overflow: auto;
+  padding: var(--s4);
+  background: var(--paper);
+  color: var(--ink);
+  text-align: center;
+}
+.selfStage :global(.notice) { background: var(--surface-muted); }
+
+/* Result overlay. Tone sets the ground; the badge repeats it by shape. */
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  background: var(--success-soft);
+  color: var(--ink);
+}
+.overlay[data-tone="info"] { background: var(--info-soft); }
+.overlay[data-tone="warn"] { background: var(--warning-soft); }
+.overlay[data-tone="bad"] { background: var(--danger-soft); }
+.overlayTap { position: absolute; inset: 0; z-index: 0; width: 100%; border: 0; background: transparent; cursor: pointer; }
+.overlayBody {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  padding: var(--s5) var(--s4) var(--s3);
+  text-align: center;
+}
+
+.badge {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  margin-bottom: var(--s1);
+  border-radius: 50%;
+  background: var(--success);
+  color: var(--paper);
+}
+.badge[data-tone="info"] { background: var(--info); }
+.badge[data-tone="warn"] { background: var(--warning); }
+.badge[data-tone="bad"] { background: var(--danger); }
+.badge svg { width: 36px; height: 36px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.kicker { margin: 0; color: var(--success); font-size: var(--small); font-weight: 800; letter-spacing: 0.02em; }
+.overlay[data-tone="info"] .kicker { color: var(--info); }
+.overlay[data-tone="warn"] .kicker { color: var(--warning); }
+.overlay[data-tone="bad"] .kicker { color: var(--danger); }
+.bigName { margin: 0; font-size: 2.5rem; font-weight: 800; letter-spacing: -0.035em; line-height: 1.1; overflow-wrap: anywhere; word-break: keep-all; }
+.bigMessage { margin: 0; padding: 0; border: 0; background: transparent; color: var(--ink); font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.3; word-break: keep-all; overflow-wrap: break-word; }
+.subLine { margin: 0; color: var(--muted); font-size: 0.9375rem; overflow-wrap: anywhere; }
+.reason { max-width: 32ch; margin: var(--s1) 0 0; padding: var(--s2) var(--s3); border-radius: 14px; background: color-mix(in srgb, var(--paper) 70%, transparent); font-size: var(--small); line-height: 1.5; word-break: keep-all; overflow-wrap: break-word; }
+.overlayFoot { position: relative; z-index: 2; padding: 0 var(--s4) var(--s4); display: grid; gap: var(--s1); justify-items: center; }
+.overlayInner { position: relative; z-index: 2; flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+/* A result that hands itself back is one big tap target (the button behind the text):
+   its text and timer let the tap through; its quiet links stay tappable. */
+.overlayInner[data-tap] { pointer-events: none; }
+.overlayInner[data-tap] > * { pointer-events: auto; }
+.overlayInner[data-tap] > .overlayBody, .overlayInner[data-tap] > .overlayBody > *, .overlayInner[data-tap] > .overlayFoot { pointer-events: none; }
+.overlayInner[data-tap] .overlayFoot button, .overlayInner[data-tap] .overlayFoot a { pointer-events: auto; }
+/* Result buttons: the same white bar the scan buttons use, inside the result region. */
+.overlayPanel {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  gap: var(--s2);
+  margin-top: auto;
+  padding: var(--s3) var(--s3) var(--s4);
+  border-radius: 28px 28px 0 0;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 -8px 24px color-mix(in srgb, var(--ink) 12%, transparent);
+}
+.overlayPanel .nextActions { display: grid; gap: var(--s2); }
+.overlayPanel .prizeWorkspace { max-height: 45svh; overflow: auto; }
+.timer { width: 100%; height: 6px; overflow: hidden; border-radius: 6px; background: color-mix(in srgb, var(--ink) 12%, transparent); }
+.timer i { display: block; width: 100%; height: 100%; border-radius: 6px; background: var(--success); transform-origin: left; animation: timerRun linear forwards; }
+@keyframes timerRun { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .timer i { animation: none; } }
+.tapHint { margin: 0; color: var(--muted); font-size: var(--small); }
+.linkRow { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s2); }
+.dangerLink { color: var(--danger); }
+
+/* Bottom bar: three quiet buttons, or the one thing the result needs. */
+.fieldBar {
+  position: relative;
+  z-index: 4;
+  display: grid;
+  gap: var(--s2);
+  margin-top: -28px;
+  padding: var(--s3) var(--s3) var(--s4);
+  border-radius: 28px 28px 0 0;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 -8px 24px color-mix(in srgb, var(--ink) 12%, transparent);
+}
+.fieldBar:empty { display: none; }
+.fieldBar :global(.astryx-button):not([data-action-variant="ghost"]) { justify-content: center; }
+.scanPrimary { min-height: 60px; font-size: 1.125rem; font-weight: 750; }
+.bar3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: var(--s1); }
+.bar3 button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 64px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--surface-muted);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.84375rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+.bar3 button:disabled { opacity: 0.5; cursor: default; }
+.bar3 button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.bar3 button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.bar3 svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; color: var(--muted); }
+.bar3 button[aria-pressed="true"] svg { color: var(--paper); }
+.fieldBar .prizeWorkspace { max-height: 55svh; overflow: auto; }
+.fieldBar .nextActions { display: grid; gap: var(--s2); }
+
+.sheetForm { display: grid; gap: var(--s3); }
+.reasonChips { display: flex; flex-wrap: wrap; gap: var(--s2); margin-bottom: var(--s2); }
+.reasonChips button {
+  min-height: 44px;
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.reasonChips button[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.reasonChips button:disabled { opacity: 0.5; cursor: default; }
+
+/* Sheets sit inside the dark column but read on their own paper. */
+.fieldApp :global(.dialog) { color: var(--ink); }
+.lastScan { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); margin-bottom: var(--s3); padding: var(--s2) var(--s3); border-radius: 14px; background: var(--surface-muted); }
+.lastScan p { margin: 0; }
+
+/* Recovery buttons under the station select sit on the dark column: a white face with ink text. */
+.fieldContext :global(.staff-select-field) :global(.astryx-button) {
+  background: var(--paper) !important;
+  border-color: transparent !important;
+  color: var(--ink) !important;
+}
+
+/* The shared recovery panel (another window's unconfirmed request) reads on its own paper above the stage. */
+.fieldReceipts:empty { display: none; }
+.fieldReceipts { padding: 0 var(--s3) var(--s2); }
+.fieldReceipts > section { padding: var(--s3); border-radius: 14px; background: var(--paper); color: var(--ink); }
+
+/* ------------------------------------------------------------------
+   Assignment hub (DESIGN.md "스태프 목록과 로그인 확정 구성"): the same dark
+   column as the field screen. The live event is one card with the only
+   orange; the rest are flat rows that open as a whole. The page heading
+   stays for assistive technology only.
+   ------------------------------------------------------------------ */
+.hubPage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: none;
+  min-height: 100svh;
+  padding: 0 0 var(--s6);
+  background: var(--ink);
+  color: var(--paper);
+}
+.hubPage > :global(.staff-header) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.hubPage > :not(:global(.staff-header)) { width: min(100%, 640px); padding-inline: var(--s4); }
+
+.hubPage :global(.staff-workspace) { gap: 0; padding-block: var(--s2) 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; color: var(--paper); }
+.hubBar { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); min-height: 64px; }
+.hubBar > :global(*:last-child) { margin-bottom: 0; }
+.hubWordmark { font-family: var(--display-font); font-size: 19px; font-weight: 800; letter-spacing: -0.03em; }
+.hubWordmark::first-letter { color: var(--brand); }
+.hubPage .orgLine { margin-top: var(--s2); color: color-mix(in srgb, var(--paper) 72%, transparent); }
+
+.hubPage .hubHeading { margin: var(--s4) 0 var(--s4); font-size: 32px; font-weight: 800; letter-spacing: -0.04em; line-height: 1.15; color: var(--paper); }
+.hubPage .hubCount { color: var(--brand); }
+.hubQuiet { margin: calc(var(--s2) * -1) 0 var(--s4); color: color-mix(in srgb, var(--paper) 72%, transparent); font-size: var(--small); }
+
+.hubLive {
+  position: relative;
+  display: grid;
+  gap: var(--s2);
+  margin-bottom: var(--s5);
+  padding: var(--s4);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--brand) 34%, transparent);
+  border-radius: 24px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 16%, var(--ink)) 0%, color-mix(in srgb, var(--paper) 8%, var(--ink)) 62%);
+}
+.hubLive > * { position: relative; }
+.hubLiveChip { justify-self: start; display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 0 10px; border-radius: 999px; background: var(--success-soft); color: var(--success); font-size: 12.5px; font-weight: 750; }
+.hubLiveChip::before { width: 7px; height: 7px; border-radius: 50%; background: currentColor; content: ""; }
+.hubLiveName { font-size: 28px; font-weight: 800; letter-spacing: -0.035em; line-height: 1.2; overflow-wrap: anywhere; word-break: keep-all; }
+.hubLiveTime { font-size: 38px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.hubLiveTime i { color: color-mix(in srgb, var(--paper) 72%, transparent); font-style: normal; font-weight: 600; }
+.hubLiveMine { color: color-mix(in srgb, var(--paper) 88%, transparent); font-size: 14.5px; font-weight: 650; }
+.hubGo {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 56px; margin-top: var(--s3); border-radius: 16px;
+  background: var(--brand); color: var(--on-brand);
+  font-size: 17px; font-weight: 800; text-decoration: none;
+}
+.hubGo:hover { background: var(--brand-hover); color: var(--on-brand-hover); }
+.hubGo:focus-visible, .hubRowLink:focus-visible { outline: 3px solid var(--paper); outline-offset: 3px; }
+.hubGo svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+.hubSub { margin: 0 0 var(--s2); color: color-mix(in srgb, var(--paper) 72%, transparent); font-size: 13px; font-weight: 750; }
+.hubPage :global(.staff-assignment-list) { margin: 0 calc(var(--s4) * -1); padding: 0; list-style: none; border-top: 1px solid color-mix(in srgb, var(--paper) 14%, transparent); }
+.hubPage .hubRow { display: block; padding: 0; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--paper) 14%, transparent); }
+.hubRowLink { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 14px; min-height: 76px; padding: var(--s3) var(--s4); color: var(--paper); text-decoration: none; }
+.hubRowLink:hover, .hubRowLink:active { background: color-mix(in srgb, var(--paper) 12%, transparent); color: var(--paper); }
+.hubRowOff { opacity: 0.55; cursor: not-allowed; }
+.hubInitial { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; background: color-mix(in srgb, var(--paper) 8%, var(--ink)); font-size: 17px; font-weight: 800; }
+.hubRowText { display: grid; gap: 2px; min-width: 0; }
+.hubPage .hubEventName { font-size: 17px; font-weight: 750; letter-spacing: -0.02em; line-height: 1.3; }
+.hubPage .hubScope { color: color-mix(in srgb, var(--paper) 72%, transparent); font-size: 13px; }
+.hubRowEnd { display: flex; align-items: center; gap: 12px; }
+.hubRowEnd svg { width: 22px; height: 22px; fill: none; stroke: color-mix(in srgb, var(--paper) 72%, transparent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.dotLive, .dotReady { display: block; width: 10px; height: 10px; border-radius: 50%; }
+.dotLive { background: var(--success-line); }
+.dotReady { background: var(--warning-line); }
+
+.hubState { display: grid; gap: var(--s3); justify-items: start; padding: var(--s4) 0; border: 0; background: transparent; color: var(--paper); }
+.hubTile { display: grid; place-items: center; width: 64px; height: 64px; border: 1px solid color-mix(in srgb, var(--paper) 18%, transparent); border-radius: 20px; background: color-mix(in srgb, var(--paper) 8%, var(--ink)); color: color-mix(in srgb, var(--paper) 72%, transparent); }
+.hubTile svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.hubState .hubNote { color: color-mix(in srgb, var(--paper) 88%, transparent); line-height: 1.6; }
+.hubState :global(.product-action) { min-height: 56px; border-color: color-mix(in srgb, var(--paper) 22%, transparent); border-radius: 16px; background: transparent; color: var(--paper); font-weight: 750; }
+.hubPage :global(.loading-state) { color: color-mix(in srgb, var(--paper) 72%, transparent); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .hubRowLink { transition: background-color 120ms ease-out; }
+}

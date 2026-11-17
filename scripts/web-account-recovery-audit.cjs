@@ -33,7 +33,7 @@ const { prepareCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = requ
 const path = require('node:path');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { confirmInitialStaffDesk } = require('./audit-staff-direction.cjs');
+const { confirmInitialStaffDesk, typeTicket, readCode, closeSheet } = require('./audit-staff-direction.cjs');
 const { mockOutbox, clearMockOutbox } = require('../server/email-transport');
 
 const OUT = process.env.EVENTOUCH_CAPTURE_ROOT
@@ -86,6 +86,16 @@ async function splitKoreanWords(locator) {
   });
 }
 
+// The staff desk keeps its account menu inside the "계정·조직·키오스크" fold.
+async function openStaffMenu(page) {
+  if (await page.getByRole('dialog', { name: '계정 및 조직 전환' }).isVisible().catch(() => false)) return;
+  await closeSheet(page); // a typed code lives in a sheet whose backdrop would cover the menu; closing keeps the code
+  await page.waitForLoadState('networkidle');
+  await page.locator('#staff-desk').waitFor({ timeout: 15000 }).catch(() => {});
+  const fold = page.locator('summary[aria-label="계정·조직·키오스크"]');
+  if (await fold.count() && !await fold.evaluate((el) => el.parentElement.open)) await fold.click();
+  await page.getByRole('button', { name: /감사 스태프/ }).click();
+}
 async function runAccountRecoveryAudit() {
   prepareCaptureDir(OUT);
   process.env.TMPDIR = ensureRunTmpDir(OUT);
@@ -430,7 +440,7 @@ async function runAccountRecoveryAudit() {
       document.body.appendChild(sample); const color = getComputedStyle(sample).backgroundColor; sample.remove(); return color;
     });
     await verifyLoss.waitForFunction((expected) => {
-      const retry = document.querySelector('button.button-secondary[type="submit"]');
+      const retry = document.querySelector('button[data-product-variant="secondary"][type="submit"]');
       return retry && getComputedStyle(retry).backgroundColor === expected;
     }, verifyPaperColor);
     check('using the received link is primary while resending is secondary',
@@ -487,7 +497,7 @@ async function runAccountRecoveryAudit() {
     check('empty verify-confirm receipt follows a real commit but is not presented as success', verifiedCommit === 200);
     await verifyLoss.mouse.move(0, 0);
     await verifyLoss.waitForFunction((expected) => {
-      const retry = document.querySelector('button.button-secondary[type="submit"]');
+      const retry = document.querySelector('button[data-product-variant="secondary"][type="submit"]');
       return retry && getComputedStyle(retry).backgroundColor === expected;
     }, verifyPaperColor);
     check('checking verification status is primary while retrying the token is secondary',
@@ -514,7 +524,7 @@ async function runAccountRecoveryAudit() {
     await staffPage.getByRole('button', { name: '로그인', exact: true }).click();
     await staffPage.waitForURL(/\/staff\/events\//, { timeout: 15000 });
     check('staff login reaches assigned event work', true);
-    await staffPage.getByRole('button', { name: /감사 스태프/ }).click();
+    await openStaffMenu(staffPage);
     await staffPage.getByRole('link', { name: '내 계정 이메일 인증' }).waitFor();
     check('staff account menu links to account/email', true);
     await staffPage.getByRole('link', { name: '내 계정 이메일 인증' }).click();
@@ -528,54 +538,55 @@ async function runAccountRecoveryAudit() {
     check('axe staff account/email serious/critical 0', (await axeSeriousOrCritical(staffPage)).length === 0);
     await staffPage.screenshot({ path: path.join(OUT, 'account-email-staff-390.png') });
     await staffPage.goto(`${base}/staff/events/${fixture.eventId}`, { waitUntil: 'load' });
-    await staffPage.locator('#staff-ticket').waitFor({ timeout: 15000 });
+    await staffPage.locator('#staff-desk').waitFor({ timeout: 15000 });
     await confirmInitialStaffDesk(staffPage);
     // Draft: typed but unsubmitted input asks with account wording; cancel
     // preserves the draft and stays.
-    await staffPage.locator('#staff-ticket').fill('DRAFT-KEEP-1');
+    await typeTicket(staffPage, 'DRAFT-KEEP-1');
     let dialogText = '';
     staffPage.once('dialog', async (dialog) => {
       dialogText = dialog.message();
       await dialog.dismiss();
     });
-    await staffPage.getByRole('button', { name: /감사 스태프/ }).click();
+    await openStaffMenu(staffPage);
     await staffPage.getByRole('link', { name: '내 계정 이메일 인증' }).click();
     await staffPage.waitForTimeout(500);
     check('draft confirm names the account page, never an org switch',
       dialogText.includes('내 계정 페이지로 이동하면') && !dialogText.includes('조직을 전환'));
     check('draft cancel preserves input and stays',
       new URL(staffPage.url()).pathname.includes('/staff/events/')
-      && (await staffPage.locator('#staff-ticket').inputValue()) === 'DRAFT-KEEP-1');
+      && (await readCode(staffPage)) === 'DRAFT-KEEP-1');
     staffPage.once('dialog', async (dialog) => { await dialog.accept(); });
-    await staffPage.getByRole('button', { name: /감사 스태프/ }).click();
+    await openStaffMenu(staffPage);
     await staffPage.getByRole('link', { name: '내 계정 이메일 인증' }).click();
     await staffPage.waitForURL(/\/account\/email/, { timeout: 15000 });
     check('draft accept navigates to account/email', true);
     await staffPage.goto(`${base}/staff/events/${fixture.eventId}`, { waitUntil: 'load' });
-    await staffPage.locator('#staff-ticket').waitFor({ timeout: 15000 });
+    await staffPage.locator('#staff-desk').waitFor({ timeout: 15000 });
     await confirmInitialStaffDesk(staffPage);
     // Busy: delay the scan response, click the link mid-flight → blocked.
     await staffPage.route('**/api/events/*/commands', async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 3000));
       await route.continue();
     });
-    await staffPage.locator('#staff-ticket').fill(staffTicket);
-    await staffPage.getByRole('button', { name: '입장 처리' }).click().catch(() => {});
+    await (await typeTicket(staffPage, staffTicket)).press('Enter');
     await staffPage.waitForTimeout(400);
-    await staffPage.getByRole('button', { name: /감사 스태프/ }).click();
-    await staffPage.getByRole('link', { name: '내 계정 이메일 인증' }).click();
+    // The code sheet is modal while the scan is in flight (the page behind it is inert): reach the menu by selector.
+    await staffPage.locator('summary[aria-label="계정·조직·키오스크"]').evaluate(element => { element.parentElement.open = true; });
+    await staffPage.locator('button[aria-haspopup="dialog"][aria-label*="감사 스태프"]').evaluate(element => element.click());
+    await staffPage.locator('a', { hasText: '내 계정 이메일 인증' }).evaluate(element => element.click());
     await staffPage.waitForTimeout(500);
     check('in-flight scan blocks the account navigation',
       new URL(staffPage.url()).pathname.includes('/staff/events/'));
     check('blocked account navigation explains what to do',
-      await staffPage.getByRole('status').filter({ hasText: '이 화면을 떠나지 않았습니다.' }).isVisible());
+      await staffPage.getByText('이 화면을 떠나지 않았습니다.', { exact: false }).first().isVisible());
     check('blocked navigation clears the menu from the recovery controls',
       !await staffPage.getByRole('dialog', { name: '계정 및 조직 전환', exact: true }).isVisible()
-      && await staffPage.getByRole('button', { name: /감사 스태프/ }).isEnabled());
+      && await staffPage.locator('button[aria-haspopup="dialog"][aria-label*="감사 스태프"]').isEnabled());
     await staffPage.unrouteAll({ behavior: 'wait' }).catch(() => {});
-    await staffPage.getByText('다음 참가자를 스캔하세요.').waitFor({ timeout: 15000 });
+    await staffPage.getByRole('region', { name: '스캔 결과 상세' }).waitFor({ timeout: 15000 });
     await staffPage.goto(`${base}/staff/events/${fixture.eventId}`, { waitUntil: 'load' });
-    await staffPage.getByRole('button', { name: /감사 스태프/ }).click();
+    await openStaffMenu(staffPage);
     await staffPage.getByRole('link', { name: '내 계정 이메일 인증' }).click();
     await staffPage.waitForURL(/\/account\/email/, { timeout: 15000 });
     check('settled work allows the account navigation', true);
@@ -598,24 +609,23 @@ async function runAccountRecoveryAudit() {
     await faultPage.getByLabel('비밀번호').fill(faulted.staff.password);
     await faultPage.getByRole('button', { name: '로그인', exact: true }).click();
     await faultPage.waitForURL(/\/staff\/events\//, { timeout: 15000 });
-    await faultPage.locator('#staff-ticket').waitFor({ timeout: 15000 });
+    await faultPage.locator('#staff-desk').waitFor({ timeout: 15000 });
     await confirmInitialStaffDesk(faultPage);
-    await faultPage.locator('#staff-ticket').fill(faultTicket);
-    await faultPage.getByRole('button', { name: '입장 처리' }).click().catch(() => {});
+    await (await typeTicket(faultPage, faultTicket)).press('Enter');
     await faultPage.getByText('연결하지 못했습니다. 같은 업무·티켓으로 다시 시도하세요.').waitFor({ timeout: 15000 });
     check('lost scan response surfaces as retryable unknown', true);
-    await faultPage.getByRole('button', { name: /감사 스태프/ }).click();
+    await openStaffMenu(faultPage);
     await faultPage.getByRole('link', { name: '내 계정 이메일 인증' }).click();
     await faultPage.waitForTimeout(500);
     check('unknown-verdict receipt blocks the account navigation',
       new URL(faultPage.url()).pathname.includes('/staff/events/'));
     check('unknown-verdict block explains the next action',
-      await faultPage.getByRole('status').filter({ hasText: '결과를 확인한 뒤 다시 이동하세요.' }).isVisible());
+      await faultPage.getByText('결과를 확인한 뒤 다시 이동하세요.', { exact: false }).first().isVisible());
     await faultPage.screenshot({ path: path.join(OUT, 'staff-unknown-blocked-390.png') });
     // Same-request retry confirms the committed outcome; the gate reopens.
     await faultPage.getByRole('button', { name: '같은 요청 재확인', exact: true }).click();
-    await faultPage.getByText('다음 참가자를 스캔하세요.').waitFor({ timeout: 15000 });
-    await faultPage.getByRole('button', { name: /감사 스태프/ }).click();
+    await faultPage.getByRole('region', { name: '스캔 결과 상세' }).waitFor({ timeout: 15000 });
+    await openStaffMenu(faultPage);
     await faultPage.getByRole('link', { name: '내 계정 이메일 인증' }).click();
     await faultPage.waitForURL(/\/account\/email/, { timeout: 15000 });
     check('confirmed retry reopens the account navigation', true);

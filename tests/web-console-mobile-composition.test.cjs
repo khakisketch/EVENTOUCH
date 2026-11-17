@@ -186,7 +186,10 @@ test('shared section nav wraps to fully reachable rows on mobile', () => {
 
 test('shared form actions and feedback survive long Korean labels', () => {
   const css = read('app/console/console-ui/console-ui.module.css');
-  assert.match(css, /\.formActionsButtons\s*>\s*:global\(\.button\)\s*\{[^}]*flex:\s*1\s+1\s+240px/su);
-  assert.match(css, /\.formActionsButtons\s*>\s*:global\(\.button\)\s*\{[^}]*word-break:\s*keep-all/su);
+  // The row must widen both the legacy .button and the Astryx button the product renders; the
+  // .button-only rule never matched a ProductButton, leaving a short "등록" at 48px on a phone.
+  const phoneRow = /\.formActionsButtons\s*>\s*:global\(\.button\),\s*\.formActionsButtons\s+:global\(\.astryx-button\)\s*\{[^}]*\}/su.exec(css)?.[0] ?? '';
+  assert.match(phoneRow, /flex:\s*1\s+1\s+240px/u);
+  assert.match(phoneRow, /word-break:\s*keep-all/u);
   assert.match(css, /\.feedback\s*\{[^}]*word-break:\s*keep-all/su);
 });

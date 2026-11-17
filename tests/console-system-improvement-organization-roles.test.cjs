@@ -119,8 +119,8 @@ test('role confirmation names target, from/to, and org scope without global effe
   assert.match(role, /본인 계정입니다/, 'self changes warn explicitly');
   assert.match(role, /\["AGENCY", "MANAGER", "STAFF"\]/, 'all three roles are selectable, including inactive rows');
   assert.match(role, /행사별 쓰기 권한은 바뀌지 않습니다/, 'MANAGER promotion grants no event access here');
-  assert.match(role, /href="#team-event-permissions"/, 'the permission editor is linked, not bypassed');
-  assert.match(role, /행사 배정/, 'STAFF keeps the existing assignment workflow');
+  assert.match(role, /‘행사별 권한’ 탭에서 지정하세요/, 'the permission editor is pointed to, not bypassed');
+  assert.match(role, /‘현장 배정’/, 'STAFF keeps the existing assignment workflow');
   assert.match(role, /사용 중지 상태는 그대로 유지됩니다/, 'inactive rows stay inactive on role change');
 });
 
@@ -133,14 +133,14 @@ test('reactivation is active-only, scoped, and frozen like deactivation', () => 
   assert.match(reactivate, /ORGANIZATION_CONTEXT_CHANGED/, 'same frozen stale handling as deactivation');
   assert.match(reactivate, /isOrganizationContextBlock\(error\)/, 'same pre-transmit drift handling as deactivation');
   assert.match(reactivate, /이 운영사에만 적용됩니다/, 'org scope is explicit, never global');
-  assert.match(team(), /account\.id !== state\.userId && !account\.active/, 'reactivation shows only for inactive others');
+  assert.match(team(), /memberRow\.id !== state\.userId && !memberRow\.active/, 'reactivation shows only for inactive others');
 });
 
 test('known shared accounts get no password reset affordance', () => {
   const panels = team();
   assert.match(panels, /sharedAccount: boolean/, 'the Team DTO retains the shared-account flag');
   assert.match(panels, /sharedAccount: account\.sharedAccount === true/, 'the directory projection is kept verbatim');
-  assert.match(panels, /account\.sharedAccount \?/, 'shared rows diverge before any reset affordance');
+  assert.match(panels, /memberRow\.sharedAccount \?/, 'shared rows diverge before any reset affordance');
   assert.match(
     panels,
     /여러 조직에서 함께 사용 중이라 이 운영사에서 비밀번호를 재설정할 수 없습니다/,

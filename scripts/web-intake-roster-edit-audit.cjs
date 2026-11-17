@@ -69,7 +69,7 @@ async function main() {
     await page.getByRole('alert').getByText('입력 내용을 확인해 주세요.').waitFor();
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'field-label');
     await page.getByLabel('항목 이름').fill('급식 선택');
-    await page.getByLabel('입력 방식').selectOption('select');
+    await page.getByLabel('하나 선택').check();
     await page.getByLabel('선택지 · 한 줄에 하나씩').fill('일반\n채식');
     await page.getByRole('button', { name: '항목 저장' }).click();
     let recovery = page.getByRole('region', { name: '신청 항목 처리 확인 필요' });
@@ -314,6 +314,8 @@ async function main() {
     const template = workspace.participants.find((person) => person.status !== 'CANCELLED');
     for (let index = 0; index < 1001; index += 1) workspace.participants.push({ ...template, id: `limit-${index}`, name: `합성 대량 참가자 ${index}`, phone: `0107${String(index).padStart(7, '0')}` });
     await write(workspace); await page.reload({ waitUntil: 'networkidle' });
+    // The filter-wide scope is offered beside an existing selection, so select the page first.
+    await page.getByRole('checkbox', { name: '이 페이지 전체 선택', exact: true }).check();
     await page.getByRole('button', { name: /필터 결과 전체 .*명 선택/ }).click();
     await page.getByText('한 번에 1,000명까지 취소할 수 있습니다.', { exact: false }).waitFor();
     assert.equal(await page.getByRole('button', { name: '신청 취소', exact: true }).isDisabled(), true);

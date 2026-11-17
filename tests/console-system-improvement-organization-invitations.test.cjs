@@ -154,7 +154,7 @@ test('org membership disable is owner-only, idempotent, and role-free', () => {
   assert.match(action, /다른 조직의 소속과 로그인에는 영향이 없습니다/, 'no cross-org effect is promised');
   assert.match(action, /현재 조직 정보를 확인할 수 없어/, 'unscoped shape explains instead of faking a button');
   assert.doesNotMatch(action, /\brole\b/, 'role change is impossible through this action');
-  assert.match(team, /account\.id !== state\.userId && account\.active/, 'self rows and inactive rows offer no disable');
+  assert.match(team, /memberRow\.id !== state\.userId && memberRow\.active/, 'self rows and inactive rows offer no disable');
   assert.match(team, /organizationId/, 'org id comes from the directory viewer');
   assert.match(team, /const isOwner = role === "AGENCY" \|\| mine\?\.orgOwner === true;/u, 'owner gate is unchanged');
   assert.doesNotMatch(team, /x-eventouch-organization-id|x-eventouch-context-version/, 'no hand-rolled org headers; the parent guard owns transport');

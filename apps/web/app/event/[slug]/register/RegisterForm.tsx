@@ -452,7 +452,7 @@ export default function RegisterForm(initial: Props) {
         <div className="form-field" key={field.id}>
           <label htmlFor={`field-${field.id}`}>
             {field.label}
-            {field.required ? " (필수)" : " (선택)"}
+            <span className={styles.req}>{field.required ? " (필수)" : " (선택)"}</span>
           </label>
           <select
             id={`field-${field.id}`}
@@ -487,7 +487,7 @@ export default function RegisterForm(initial: Props) {
               required={field.required}
             />
             {field.label}
-            {field.required ? " (필수)" : " (선택)"}
+            <span className={styles.req}>{field.required ? " (필수)" : " (선택)"}</span>
           </label>
           {invalid ? <p id={errorId} role="alert">{failure?.message}</p> : null}
         </div>
@@ -497,7 +497,7 @@ export default function RegisterForm(initial: Props) {
       <div className="form-field" key={field.id}>
         <label htmlFor={`field-${field.id}`}>
           {field.label}
-          {field.required ? " (필수)" : " (선택)"}
+          <span className={styles.req}>{field.required ? " (필수)" : " (선택)"}</span>
         </label>
         <input
           id={`field-${field.id}`}
@@ -533,7 +533,7 @@ export default function RegisterForm(initial: Props) {
       <fieldset className="registration-fields" disabled={submitting || retryPending || signupSuperseded}>
       <legend className="sr-only">참가 신청 정보</legend>
       <section className={styles.stepSection} aria-label="신청 결과 안내">
-        <h2 className={styles.outcomeTitle}>신청하면 어떻게 되나요</h2>
+        <h2 className="sr-only">신청하면 어떻게 되나요</h2>
         <p className={styles.outcomeNote} role="note">
           {approvalRequired && paymentPending
             ? "신청 접수 후 운영자 승인과 결제 확인이 모두 끝나면 입장 QR이 표시됩니다."
@@ -549,7 +549,7 @@ export default function RegisterForm(initial: Props) {
         </p>
       </section>
       <section className={styles.stepSection} aria-label="신청 정보 입력">
-        <h2 className={styles.stepTitle}>누가 참가하나요</h2>
+        <h2 className="sr-only">누가 참가하나요</h2>
         {fields.map(renderField)}
       </section>
       {verificationRequired && !signupSuperseded && !recoveryBlocked ? (

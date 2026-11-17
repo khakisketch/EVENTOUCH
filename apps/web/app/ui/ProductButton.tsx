@@ -22,6 +22,7 @@ const ProductButton = forwardRef<HTMLButtonElement, ProductButtonProps>(function
   const named = label ?? props["aria-label"] ?? (actionLabel(children) || props.title || "");
   const ariaDisabled = props["aria-disabled"] === true || props["aria-disabled"] === "true";
   const locked = disabled || busy || ariaDisabled;
+  const resolvedVariant = productActionVariant(className, variant);
   const shared = {
     ...props,
     name: props.name,
@@ -30,12 +31,13 @@ const ProductButton = forwardRef<HTMLButtonElement, ProductButtonProps>(function
     size,
     disabled,
     label: named,
-    variant: productActionVariant(className, variant),
+    variant: resolvedVariant,
     className: productActionClass(className),
     // Native disabled keeps HTML form semantics; loading deliberately keeps focus.
     isLoading: busy,
     "aria-disabled": locked || undefined,
     "data-product-action": "true",
+    "data-product-variant": resolvedVariant,
     onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
       if (locked) { event.preventDefault(); event.stopPropagation(); return; }
       onClick?.(event);

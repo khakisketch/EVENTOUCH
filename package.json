@@ -157,6 +157,7 @@
     "web:build": "npm --prefix apps/web run build",
     "web:start": "PORT=8777 npm --prefix apps/web run start",
     "web:ui:audit": "node scripts/web-ui-audit.cjs",
+    "web:redesign:smoke": "node scripts/web-redesign-smoke-audit.cjs",
     "verify:delivery": "node scripts/delivery-rehearsal.cjs",
     "verify:browser-load": "node scripts/browser-load-rehearsal.cjs",
     "verify:ticket-burst": "node scripts/ticket-burst-rehearsal.cjs",

@@ -279,7 +279,8 @@ async function photosPhase({ fixture, ownerCookie, baseUrl, eventId, ownerSessio
       );
     }
 
-    const rowSelector = 'li[id^="evidence-photo-"]';
+    // The gallery lays photos out as tiles, not list items.
+    const rowSelector = 'div[id^="evidence-photo-"][tabindex="-1"]';
     let ids = await page.evaluate((selector) => [...document.querySelectorAll(selector)].map((node) => node.id), rowSelector);
     if (ids.length === 0) {
       throw new Error('photos: empty list rendered; refusing to claim more-expansion verified');
@@ -429,7 +430,7 @@ async function programsPhase({ fixture, ownerCookie, baseUrl, eventId, ownerSess
     throw new Error(`programs: server holds ${(state.workspaces[eventId].modules || []).length} modules, expected ${fill} before UI creation`);
   }
 
-  const headingSelector = 'h2[id^="module-title-"]';
+  const headingSelector = 'h3[id^="module-title-"]';
   let context = null;
   let page = null;
   try {

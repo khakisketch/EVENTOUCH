@@ -63,11 +63,12 @@ test('the-empty-scan-dock-never-floats-over-the-booth-qr', () => {
   // scan form), and it folds away once a scan succeeded so the next action is
   // the result, not the old input.
   assert.match(staffWork, /const scanInputHasWork = activeTask === "desk" \|\|\s*\(activeScope\.stampMode !== "SELF" && boothAvailable/);
-  assert.match(staffWork, /\{scanInputHasWork && result\.kind !== "ok" && !scanUnknown \? \(/);
-  // Assert that the actual dock remains inside the condition, not merely
-  // that the class appears elsewhere in the component.
-  const dock = staffWork.slice(staffWork.indexOf('{scanInputHasWork && result.kind !== "ok" && !scanUnknown ? ('), staffWork.indexOf('{cameraOpen && ready'));
-  assert.match(dock, /<div className=\{prizeStyles\.scanInput\} ref=\{scanInputRef\}>/);
+  // Field layout: the bottom bar holds the scan buttons only while idle, and
+  // the SELF booth shows the QR on its own stage with a single quiet button.
+  assert.match(staffWork, /\{result\.kind === "idle" && scanInputHasWork \? \(/);
+  const bar = staffWork.slice(staffWork.indexOf('{result.kind === "idle" && scanInputHasWork ? ('), staffWork.indexOf('{selfBooth && result.kind === "idle" ? ('));
+  assert.match(bar, /className=\{prizeStyles\.bar3\}/);
+  assert.match(staffWork, /<div className=\{prizeStyles\.selfStage\}>/);
 });
 
 test('the-booth-qr-scrolls-into-view-when-a-booth-is-picked', () => {

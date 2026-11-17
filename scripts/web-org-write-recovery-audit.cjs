@@ -108,10 +108,11 @@ async function main() {
     stage = 'file upload and client-link response loss';
     await page.setViewportSize({ width: 1280, height: 900 });
     const row = page.locator('li').filter({ has: page.getByRole('heading', { name: '합성 고객사 보호', exact: true }) });
-    await row.getByText('파일 관리', { exact: true }).click();
+    await row.getByRole('button', { name: '합성 고객사 보호', exact: true }).click();
+    await page.getByRole('dialog', { name: '고객사 정보 수정' }).waitFor();
     fileMode = 'lost';
     clientMode = 'malformed';
-    await row.locator('input[type=file]').first().setInputFiles({ name: 'synthetic-logo.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64') });
+    await page.getByRole('dialog', { name: '고객사 정보 수정' }).locator('input[type=file]').first().setInputFiles({ name: 'synthetic-logo.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64') });
     const fileRecovery = page.getByRole('region', { name: '파일 처리 확인' });
     await fileRecovery.getByRole('button', { name: '같은 파일 요청 다시 확인' }).waitFor();
     await page.getByText(/연결이 끊겨 파일 처리 결과/).waitFor();

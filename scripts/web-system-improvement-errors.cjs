@@ -19,9 +19,15 @@ const SECRET = 'fixture-private-error-do-not-display';
 const PRIVATE_DIGEST = '01012345678'; // Synthetic numeric contact-like client digest, not a trusted server reference.
 const PRIVATE_GLOBAL_DIGEST = 'fixture-private-digest-do-not-display';
 
-function chunkWith(marker) {
+// The staff and attendee routes may each carry their own copy of a shared module,
+// so a marker can live in several chunks: `many` blocks every copy (a glob alternation).
+function chunkWith(marker, { many = false } = {}) {
   const dir = 'apps/web/.next/static/chunks';
   const matches = fs.readdirSync(dir).filter((name) => name.endsWith('.js')).filter((name) => fs.readFileSync(path.join(dir, name), 'utf8').includes(marker));
+  if (many) {
+    assert.ok(matches.length >= 1, `a built client module for ${marker}`);
+    return matches.length === 1 ? matches[0] : `{${matches.join(',')}}`;
+  }
   assert.equal(matches.length, 1, `one precise built client module for ${marker}`);
   return matches[0];
 }
@@ -29,7 +35,7 @@ function chunkWith(marker) {
 (async () => {
   prepareCaptureDir(OUT);
   process.env.TMPDIR = ensureRunTmpDir(OUT);
-  const cameraChunk = chunkWith('화면이 가려져 카메라를 멈췄습니다');
+  const cameraChunk = chunkWith('화면이 가려져 카메라를 멈췄습니다', { many: true });
   const skipChunk = chunkWith('본문으로 건너뛰기');
   const fixture = await startAuditFixture();
   const results = [], expectedBrowserErrors = [], unexpectedBrowserErrors = [], writes = [];
@@ -67,7 +73,7 @@ function chunkWith(marker) {
     await runtimePage.goto(staffUrl);
     await runtimePage.locator('#staff-desk').waitFor();
     await confirmInitialStaffDesk(runtimePage);
-    await runtimePage.getByRole('button', { name: '카메라로 스캔', exact: true }).click();
+    await runtimePage.getByRole('button', { name: '카메라 켜기', exact: true }).click();
     await runtimePage.getByRole('heading', { name: '화면을 불러오다 문제가 생겼습니다', exact: true }).waitFor();
     check('render exception reaches Korean route boundary', injectedRender === 1);
     check('render boundary exposes neither private message nor arbitrary digest', !(await runtimePage.locator('body').innerText()).includes(SECRET) && !(await runtimePage.locator('body').innerText()).includes(PRIVATE_DIGEST));
@@ -95,7 +101,7 @@ function chunkWith(marker) {
     await chunkPage.goto(staffUrl);
     await chunkPage.locator('#staff-desk').waitFor();
     await confirmInitialStaffDesk(chunkPage);
-    await chunkPage.getByRole('button', { name: '카메라로 스캔', exact: true }).click();
+    await chunkPage.getByRole('button', { name: '카메라 켜기', exact: true }).click();
     await chunkPage.getByRole('heading', { name: /화면.*불러오/ }).waitFor();
     const navigationCount = documents;
     // Deliberate observation window, not a readiness sleep: prove the
@@ -110,7 +116,7 @@ function chunkWith(marker) {
       await reload.click();
       await chunkPage.locator('#staff-desk').waitFor();
       await confirmInitialStaffDesk(chunkPage);
-      await chunkPage.getByRole('button', { name: '카메라로 스캔', exact: true }).click();
+      await chunkPage.getByRole('button', { name: '카메라 켜기', exact: true }).click();
       await chunkPage.getByRole('region', { name: '카메라 스캔', exact: true }).waitFor();
       check('explicit reload clears rejected chunk and preserves staff route', chunkPage.url() === staffUrl && recoveredChunks > 0);
     }

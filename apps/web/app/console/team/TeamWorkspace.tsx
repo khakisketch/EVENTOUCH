@@ -17,6 +17,7 @@ import ConsoleFeedback from "../console-ui/ConsoleFeedback";
 import ConsoleDialog from "../console-ui/ConsoleDialog";
 import ConsoleFormActions from "../console-ui/ConsoleFormActions";
 import ConsoleSection from "../console-ui/ConsoleSection";
+import ConsoleSectionNav from "../console-ui/ConsoleSectionNav";
 import ConsoleStatePanel from "../console-ui/ConsoleStatePanel";
 import { UNCONFIRMED_WRITE_CLOSE_MESSAGE, useConsoleDraftGuard } from "../console-draft-guard";
 import consoleUiStyles from "../console-ui/console-ui.module.css";
@@ -158,6 +159,53 @@ function isDefinitiveClientError(status: number): boolean {
 
 const DIRTY_CLOSE_MESSAGE = "작성 중인 내용이 사라집니다. 닫을까요?";
 
+// One line per organization role, in the words of what the person can do.
+const ROLE_NOTES: Record<string, string> = {
+  AGENCY: "모든 행사·팀·설정을 관리합니다.",
+  MANAGER: "행사를 운영합니다. 행사마다 쓰기 권한을 정합니다.",
+  STAFF: "현장에서 스캔·경품 지급만 합니다. 행사 배정이 필요합니다.",
+};
+
+function initialOf(name: string): string {
+  return [...name.trim()][0] ?? "·";
+}
+
+// Row actions that own a frozen request report whether it is in flight or
+// unknown, so the drawer that hosts them never closes over an unsettled write.
+type UnsettledState = "busy" | "uncertain" | null;
+function useReportUnsettled(state: UnsettledState, report?: (state: UnsettledState) => void) {
+  const reportRef = useRef(report);
+  reportRef.current = report;
+  useEffect(() => {
+    reportRef.current?.(state);
+    return () => reportRef.current?.(null);
+  }, [state]);
+}
+
+// Event write grants read as one of four levels. The stored value is still the
+// server's scope list: 전체 is ["all"], 설정 제외 is every scope but settings,
+// 읽기 전용 is [], anything else is 직접 설정.
+const WRITE_SCOPE_IDS = EVENT_WRITE_SCOPES.map((item) => item.scope);
+const NO_SETTINGS_SCOPES = WRITE_SCOPE_IDS.filter((scope) => scope !== "settings");
+type GrantLevel = "all" | "nosettings" | "readonly" | "custom" | "none";
+
+function grantLevel(grants: string[] | null): GrantLevel {
+  if (grants === null) return "none";
+  if (grants.includes("all")) return "all";
+  const set = new Set(grants);
+  if (set.size === 0) return "readonly";
+  if (set.size === NO_SETTINGS_SCOPES.length && NO_SETTINGS_SCOPES.every((scope) => set.has(scope))) return "nosettings";
+  return "custom";
+}
+
+const GRANT_LEVEL_COPY: Record<GrantLevel, { name: string; note: (count: number) => string; bars: number }> = {
+  all: { name: "전체", note: () => "이 행사의 모든 것을 바꿀 수 있어요", bars: 3 },
+  nosettings: { name: "설정 제외", note: () => "행사 설정만 못 바꿔요", bars: 2 },
+  custom: { name: "직접 설정", note: (count) => `${count}개 범위만 바꿀 수 있어요`, bars: 1 },
+  readonly: { name: "읽기 전용", note: () => "볼 수만 있어요", bars: 0 },
+  none: { name: "배정 전", note: () => "이 행사에 아직 배정되지 않았어요", bars: 0 },
+};
+
 export default function TeamWorkspace() {
   const [state, setState] = useState<TeamState>({ kind: "loading" });
   const [reloadTick, setReloadTick] = useState(0);
@@ -184,14 +232,59 @@ export default function TeamWorkspace() {
   // dismissal gates (ResetDialog/InviteDialog canClose) keep their own
   // contract and are untouched.
   const [inviteLossPending, setInviteLossPending] = useState<"replace" | "close" | null>(null);
-  // Which accepted member's assignment picker is expanded (account id, one at
-  // a time). Navigation-only: choosing an event never writes, so the member
-  // list stays non-dirty and no draft guard is registered for it.
-  const [assignOpenId, setAssignOpenId] = useState<string | null>(null);
-  // Which accepted member's org-role editor is expanded (account id, one at
-  // a time). The panel below owns its draft/confirm/retry lifecycle.
-  const [roleEditId, setRoleEditId] = useState<string | null>(null);
+  // The member drawer (account id, one at a time) and the invitation drawer.
+  // The role panel inside the member drawer owns its draft/confirm/retry
+  // lifecycle; the drawer only asks it before closing. Choosing an event for a
+  // staff assignment never writes, so it needs no guard.
+  const [memberId, setMemberId] = useState<string | null>(null);
+  const [inviteViewId, setInviteViewId] = useState<string | null>(null);
   const roleEditorRef = useRef<RoleEditorHandle>(null);
+  // Which tab is showing: the docked member drawer hides with its tab instead of unmounting, so a draft or a frozen request survives a tab switch.
+  const [activeTab, setActiveTab] = useState("team-members");
+  // Account actions (disable/reactivate) and invitation revoke report here; a
+  // frozen request keeps its drawer open, an unknown one asks before closing.
+  const memberActionRef = useRef<UnsettledState>(null);
+  const inviteActionRef = useRef<UnsettledState>(null);
+  // Runs once the member drawer has really closed (e.g. open the reset dialog).
+  const afterCloseRef = useRef<(() => void) | null>(null);
+
+  function finishCloseMember(): void {
+    const next = afterCloseRef.current;
+    afterCloseRef.current = null;
+    setMemberId(null);
+    next?.();
+  }
+
+  // Every way out of the member drawer goes through the role panel, which asks
+  // about unsaved role picks and refuses while its own request is unsettled.
+  function leaveMemberAllowed(): boolean {
+    if (memberActionRef.current === "busy") return false;
+    return memberActionRef.current !== "uncertain" || window.confirm(UNCONFIRMED_WRITE_CLOSE_MESSAGE);
+  }
+
+  function requestCloseMember(after?: () => void): void {
+    if (!leaveMemberAllowed()) return;
+    afterCloseRef.current = after ?? null;
+    if (roleEditorRef.current) roleEditorRef.current.requestSwitch(null);
+    else finishCloseMember();
+  }
+
+  // The drawer is docked beside the list on wide screens, so another row can be
+  // chosen while it is open: that goes through the same role-panel gate.
+  function requestSwitchMember(nextId: string): void {
+    if (nextId === memberId) return;
+    if (memberId === null) { setMemberId(nextId); return; }
+    if (!leaveMemberAllowed()) return;
+    afterCloseRef.current = null;
+    if (roleEditorRef.current) roleEditorRef.current.requestSwitch(nextId);
+    else setMemberId(nextId);
+  }
+
+  function requestCloseInvite(): boolean {
+    if (inviteActionRef.current === "busy") return false;
+    if (inviteActionRef.current === "uncertain") return window.confirm(UNCONFIRMED_WRITE_CLOSE_MESSAGE);
+    return true;
+  }
 
   // Only the issued once-shown bearer link guards navigation at the parent
   // level: losing it loses the link. Open reset/invite forms register their
@@ -380,13 +473,21 @@ export default function TeamWorkspace() {
     );
   }
 
+  const memberRow = state.accounts.find((account) => account.id === memberId) ?? null;
+  const inviteRow = state.invitations.find((invitation) => invitation.id === inviteViewId) ?? null;
+  const tabItems = [
+    { id: "team-members", label: "구성원" },
+    ...(state.isOwner ? [{ id: "team-event-permissions", label: "행사별 권한" }] : []),
+    { id: "team-operations", label: "연동·활동" },
+  ];
+
   return (
     <ConsolePage
       pageId="team"
+      sectionNav={<ConsoleSectionNav mode="tabs" label="팀·권한 작업" items={tabItems} initialId="team-members" onNavigate={setActiveTab} />}
       toolbar={
         state.isOwner ? (
           <ConsoleToolbar
-            filters={<p className={teamStyles.toolbarLabel}>팀 관리</p>}
             actions={
               <ProductButton
                 type="button"
@@ -421,7 +522,6 @@ export default function TeamWorkspace() {
         </>
       }
     >
-      <p className="overview-meta">비밀번호 재설정은 소유자만 가능하며, 재설정 시 다른 기기에서 로그아웃됩니다.</p>
       {/* Issued once-shown bearer lives next to the invite action and the
           pending queue — not after the long activity panel — so the operator
           sees it without scrolling. Still once-shown: never re-fetched or
@@ -448,7 +548,7 @@ export default function TeamWorkspace() {
 
               링크 복사
             </ProductButton>
-            <ProductButton type="button" className="button button-secondary" onClick={requestCloseIssued}>
+            <ProductButton type="button" variant="ghost" onClick={requestCloseIssued}>
               닫기
             </ProductButton>
           </ConsoleFormActions>
@@ -464,180 +564,88 @@ export default function TeamWorkspace() {
       ) : null}
       <fieldset className={teamStyles.teamFields} disabled={refreshState !== "idle"}>
       <div className={teamStyles.teamFieldsContent}>
-      {state.isOwner && state.invitations.length ? (
-        <ConsoleSection headingId="pending-invites" title="대기 중인 초대" surface="plain" width="full">
-          <ul className={consoleUiStyles.collection} aria-label="대기 중인 초대 목록">
-            {state.invitations.map((invitation) => {
-              // Event scope and expiry come from the existing invitation
-              // record only: event-scoped invites name their 행사, others
-              // read 미지정, and missing expiry renders nothing.
-              const eventName = invitation.eventId
-                ? state.events.find((item) => item.id === invitation.eventId)?.name ?? ""
-                : "";
-              const expiry = invitation.expiresAt ? formatInviteExpiry(invitation.expiresAt) : "";
+      <div className={teamStyles.memberLayout} data-open={memberRow && state.canManageTeam ? "" : undefined}>
+      <ConsoleSection headingId="team-members" title="구성원" surface="plain" width="full" className={teamStyles.hiddenHead}>
+        {state.isOwner && state.invitations.length ? (
+          <ConsoleSection headingId="pending-invites" title="대기 중인 초대" surface="plain" width="full">
+            <ul className={teamStyles.peopleList} aria-label="대기 중인 초대 목록">
+              {state.invitations.map((invitation) => {
+                // Event scope and expiry come from the existing invitation
+                // record only: event-scoped invites name their 행사, others
+                // read 미지정, and missing expiry renders nothing.
+                const eventName = invitation.eventId
+                  ? state.events.find((item) => item.id === invitation.eventId)?.name ?? ""
+                  : "";
+                const expiry = invitation.expiresAt ? formatInviteExpiry(invitation.expiresAt) : "";
+                return (
+                  <li className={teamStyles.personRow} key={invitation.id}>
+                    <span className={`${teamStyles.avatar} ${teamStyles.avatarInvite}`} aria-hidden="true">{initialOf(invitation.name)}</span>
+                    <div className={teamStyles.personMain}>
+                      <h3 className={teamStyles.personName}>
+                        <button type="button" id={`invite-open-${invitation.id}`} className={teamStyles.rowOpen} onClick={() => setInviteViewId(invitation.id)}>{invitation.name}</button>
+                      </h3>
+                      <p className={teamStyles.personContact}><SafeContact value={invitation.email} /></p>
+                    </div>
+                    <p className={teamStyles.personRole}>
+                      {roleLabel(invitation.role)}
+                      <small>{eventName ? `담당 행사: ${eventName}` : "담당 행사 미지정"}</small>
+                    </p>
+                    <p className={teamStyles.personState}>
+                      <span className={teamStyles.inviteDot} aria-hidden="true" />
+                      대기 중{expiry ? <small>만료 {expiry}</small> : null}
+                    </p>
+                    <span className={teamStyles.rowArrow} aria-hidden="true"><svg viewBox="0 0 20 20" focusable="false"><path d="M7 4l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
+                  </li>
+                );
+              })}
+            </ul>
+          </ConsoleSection>
+        ) : state.isOwner && refreshState !== "idle" ? (
+          // An unknown queue is never reported as an empty one.
+          <div className={`${consoleUiStyles.empty} ${teamStyles.teamEmpty}`}>
+            <h3>대기 중인 초대를 확인할 수 없습니다.</h3>
+            <p>팀 정보를 다시 불러오면 최신 초대 목록을 확인할 수 있습니다.</p>
+          </div>
+        ) : null}
+        {state.accounts.length ? (
+          <ul className={teamStyles.peopleList} aria-label="구성원 목록">
+            {state.accounts.map((account) => {
+              const isSelf = account.id === state.userId;
+              const grantedEvents = state.isOwner && account.role === "MANAGER"
+                ? new Set(state.memberships.filter((item) => item.accountId === account.id).map((item) => item.eventId)).size
+                : 0;
               return (
-              <li className={`${consoleUiStyles.recordRow} ${teamStyles.teamRow} ${teamStyles.inviteRow}`} key={invitation.id}>
-                <div className={`${consoleUiStyles.recordMain} ${teamStyles.memberMain}`}>
-                  <span className={teamStyles.inviteTitle}><strong className={teamStyles.memberName}>{invitation.name}</strong><span className={teamStyles.inviteState}>대기 중</span></span>
-                  <p className={teamStyles.memberRole}>{roleLabel(invitation.role)}</p>
-                  <p className={teamStyles.memberContact}><SafeContact value={invitation.email} /></p>
-                  <p className={teamStyles.inviteDetail}>
-                    <span>{eventName ? `담당 행사: ${eventName}` : "담당 행사 미지정"}</span>
-                    {expiry ? <span>만료: {expiry}</span> : null}
+                <li className={teamStyles.personRow} key={account.id}>
+                  <span className={teamStyles.avatar} aria-hidden="true">{initialOf(account.name)}</span>
+                  <div className={teamStyles.personMain}>
+                    <h3 className={teamStyles.personName}>
+                      {/* The name button's ::after covers the row, so the whole row is
+                          one entry into the member drawer without nesting controls. */}
+                      {state.canManageTeam ? (
+                        <button
+                          type="button"
+                          id={`member-open-${account.id}`}
+                          className={teamStyles.rowOpen}
+                          onClick={() => { setNotice(null); requestSwitchMember(account.id); }}
+                        >{account.name}</button>
+                      ) : account.name}
+                      {isSelf ? <small className={teamStyles.selfMark}>나</small> : null}
+                    </h3>
+                    <p className={teamStyles.personContact}><SafeContact value={account.email} /></p>
+                  </div>
+                  <p className={teamStyles.personRole}>
+                    {roleLabel(account.role)}
+                    {grantedEvents ? <small>쓰기 권한 {grantedEvents}개 행사</small> : null}
                   </p>
-                </div>
-                <div className={`${consoleUiStyles.recordActions} ${teamStyles.memberActions}`}>
-                  <RevokeInviteButton
-                    invitationId={invitation.id}
-                    onDone={() => {
-                      setNotice(`${invitation.name}님의 초대를 철회했습니다.`);
-                      reloadDirectory();
-                    }}
-                  />
-                </div>
-              </li>
+                  <p className={teamStyles.personState}>
+                    {!account.active ? <><span className={teamStyles.offDot} aria-hidden="true" />사용 중지</> : null}
+                  </p>
+                  {state.canManageTeam ? (
+                    <span className={teamStyles.rowArrow} aria-hidden="true"><svg viewBox="0 0 20 20" focusable="false"><path d="M7 4l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
+                  ) : <span />}
+                </li>
               );
             })}
-          </ul>
-        </ConsoleSection>
-      ) : state.isOwner ? (
-        <ConsoleSection headingId="pending-invites" title="대기 중인 초대" surface="plain" width="full">
-          <div className={`${consoleUiStyles.empty} ${teamStyles.teamEmpty}`}>
-            <h3>{refreshState === "idle" ? "대기 중인 초대가 없습니다." : "대기 중인 초대를 확인할 수 없습니다."}</h3>
-            <p>{refreshState === "idle" ? "구성원 초대 버튼으로 새 초대를 보낼 수 있습니다." : "팀 정보를 다시 불러오면 최신 초대 목록을 확인할 수 있습니다."}</p>
-          </div>
-        </ConsoleSection>
-      ) : null}
-      <div className={state.isOwner ? teamStyles.teamWorkbench : teamStyles.teamWorkbenchSingle}>
-      <div className={teamStyles.teamMain}>
-      <ConsoleSection headingId="team-members" title="구성원" surface="plain" width="full">
-        {state.accounts.length ? (
-          <ul className={consoleUiStyles.collection} aria-label="구성원 목록">
-            {state.accounts.map((account) => (
-              <li className={`${consoleUiStyles.recordRow} ${teamStyles.teamRow}`} key={account.id}>
-                <div className={`${consoleUiStyles.recordMain} ${teamStyles.memberMain}`}>
-                  <strong className={teamStyles.memberName}>{account.name}</strong>
-                  <p className={teamStyles.memberRole}>
-                    조직 역할: {roleLabel(account.role)}
-                    {!account.active ? <span className={teamStyles.memberStatus} data-tone="off">사용 중지</span> : null}
-                  </p>
-                  <p className={teamStyles.memberContact}><SafeContact value={account.email} /></p>
-                  {account.sharedAccount ? (
-                    <p className={teamStyles.assignLead} role="note">
-                      여러 조직에서 함께 사용 중이라 이 운영사에서 비밀번호를 재설정할 수 없습니다.
-                    </p>
-                  ) : null}
-                </div>
-                {state.canManageTeam ? (
-                  <div className={`${consoleUiStyles.recordActions} ${teamStyles.memberActions}`}>
-                    <div className={teamStyles.actionPrimary} role="group" aria-label="조직 역할과 행사 배정">
-                    <ProductButton
-                      type="button"
-                      id={`org-role-toggle-${account.id}`}
-                      className="button button-secondary"
-                      aria-expanded={roleEditId === account.id}
-                      aria-controls={`org-role-panel-${account.id}`}
-                      onClick={() => {
-                        setNotice(null);
-                        const nextId = roleEditId === account.id ? null : account.id;
-                        if (roleEditId !== null) {
-                          roleEditorRef.current?.requestSwitch(nextId);
-                        } else {
-                          setRoleEditId(nextId);
-                        }
-                      }}
-                    >
-                      역할 변경
-                    </ProductButton>
-                    {account.role === "STAFF" && account.active ? (
-                      <ProductButton
-                        type="button"
-                        id={`staff-assign-toggle-${account.id}`}                        className="button button-quiet"
-                        aria-expanded={assignOpenId === account.id}
-                        aria-controls={`staff-assign-panel-${account.id}`}
-                        onClick={() => {
-                          setNotice(null);
-                          setAssignOpenId((current) => (current === account.id ? null : account.id));
-                        }}
-                      >
-                        행사 배정
-                      </ProductButton>
-                    ) : null}
-                    </div>
-                    <div className={teamStyles.actionDanger} role="group" aria-label="비밀번호 재설정과 소속 변경(주의 필요)">
-                    {/* Shared identities cannot reset here (see the single
-                        directory note above), so the reset slot stays empty
-                        instead of repeating the same sentence. Disable /
-                        reactivate below are unaffected. */}
-                    {account.sharedAccount ? null : (
-                      <ProductButton
-                        type="button"
-                        className="button button-danger"
-                        disabled={hasUnconfirmedReset}
-                        onClick={() => { setNotice(null); setResetTarget(account); }}
-                      >
-                        비밀번호 재설정
-                      </ProductButton>
-                    )}
-                    {account.id !== state.userId && account.active ? (
-                      <OrgMembershipDisableButton
-                        orgId={state.org.orgId}
-                        account={account}
-                        onDone={(message) => {
-                          setNotice(message);
-                          reloadDirectory();
-                        }}
-                      />
-                    ) : null}
-                    {account.id !== state.userId && !account.active ? (
-                      <OrgMembershipReactivateButton
-                        orgId={state.org.orgId}
-                        account={account}
-                        onDone={(message) => {
-                          setNotice(message);
-                          reloadDirectory();
-                        }}
-                      />
-                    ) : null}
-                    </div>
-                  </div>
-                ) : null}
-                {state.canManageTeam && (assignOpenId === account.id || roleEditId === account.id) ? (
-                  <div className={teamStyles.memberEditor}>
-                    {account.role === "STAFF" && account.active && assignOpenId === account.id ? (
-                      <StaffAssignmentPanel
-                        events={state.events}
-                        accountId={account.id}
-                        accountName={account.name}
-                        onClose={() => {
-                          setAssignOpenId(null);
-                          document.getElementById(`staff-assign-toggle-${account.id}`)?.focus();
-                        }}
-                      />
-                    ) : null}
-                    {roleEditId === account.id ? (
-                      <OrgRoleEditorPanel
-                        ref={roleEditorRef}
-                        orgId={state.org.orgId}
-                        orgName={state.org.orgName}
-                        account={account}
-                        isSelf={account.id === state.userId}
-                        onSwitch={setRoleEditId}
-                        onClose={() => {
-                          setRoleEditId(null);
-                          document.getElementById(`org-role-toggle-${account.id}`)?.focus();
-                        }}
-                        onDone={(message) => {
-                          setRoleEditId(null);
-                          setNotice(message);
-                          reloadDirectory();
-                        }}
-                      />
-                    ) : null}
-                  </div>
-                ) : null}
-              </li>
-            ))}
           </ul>
         ) : (
           <div className={`${consoleUiStyles.empty} ${teamStyles.teamEmpty}`}>
@@ -646,25 +654,155 @@ export default function TeamWorkspace() {
           </div>
         )}
       </ConsoleSection>
-      </div>
-      {state.isOwner ? (
-        <aside className={teamStyles.teamRail} aria-label="구성원 권한">
-          <EventPermissionEditor
-            events={state.events}
-            accounts={state.accounts}
-            memberships={state.memberships}
-            onChanged={(message) => {
-              setNotice(message);
-              reloadDirectory();
-            }}
-          />
-        </aside>
+      {memberRow && state.canManageTeam ? (
+        <div className={teamStyles.dockSlot} hidden={activeTab !== "team-members"}>
+        <ConsoleDialog
+          title={memberRow.name}
+          presentation="inspector"
+          description={<SafeContact value={memberRow.email} />}
+          onClose={() => setMemberId(null)}
+          canClose={() => { requestCloseMember(); return false; }}
+          footer={
+            <ConsoleFormActions>
+              <ProductButton type="button" variant="ghost" onClick={() => requestCloseMember()}>닫기</ProductButton>
+            </ConsoleFormActions>
+          }
+        >
+          <div className={teamStyles.drawerBody} role="group" aria-label="상세 내용" tabIndex={0}>
+            {memberRow.sharedAccount ? (
+              <p className={teamStyles.assignLead} role="note">
+                여러 조직에서 함께 사용 중이라 이 운영사에서 비밀번호를 재설정할 수 없습니다.
+              </p>
+            ) : null}
+            <section className={teamStyles.drawerSection} aria-labelledby="member-role-heading">
+              <h3 id="member-role-heading" className={teamStyles.drawerHeading}>조직 역할</h3>
+              <OrgRoleEditorPanel
+                key={memberRow.id}
+                ref={roleEditorRef}
+                orgId={state.org.orgId}
+                orgName={state.org.orgName}
+                account={memberRow}
+                isSelf={memberRow.id === state.userId}
+                onSwitch={(next) => {
+                  if (next === null) { finishCloseMember(); return; }
+                  afterCloseRef.current = null;
+                  setMemberId(next);
+                }}
+                onDone={(message) => {
+                  afterCloseRef.current = null;
+                  setMemberId(null);
+                  setNotice(message);
+                  reloadDirectory();
+                }}
+              />
+            </section>
+            {memberRow.role === "STAFF" && memberRow.active ? (
+              <section className={teamStyles.drawerSection} aria-labelledby="member-assign-heading">
+                <h3 id="member-assign-heading" className={teamStyles.drawerHeading}>현장 배정</h3>
+                <StaffAssignmentPanel key={memberRow.id} events={state.events} accountId={memberRow.id} accountName={memberRow.name} />
+              </section>
+            ) : null}
+            <section className={teamStyles.drawerSection} aria-labelledby="member-account-heading">
+              <h3 id="member-account-heading" className={teamStyles.drawerHeading}>계정</h3>
+              <div className={teamStyles.accountActions}>
+                {/* Shared identities cannot reset here (see the note above), so the
+                    reset slot stays empty. Disable / reactivate are unaffected. */}
+                {memberRow.sharedAccount ? null : (
+                  <ProductButton
+                    type="button"
+                    className="button button-danger"
+                    disabled={hasUnconfirmedReset}
+                    onClick={() => requestCloseMember(() => { setNotice(null); setResetTarget(memberRow); })}
+                  >
+                    비밀번호 재설정
+                  </ProductButton>
+                )}
+                {memberRow.id !== state.userId && memberRow.active ? (
+                  <OrgMembershipDisableButton
+                    key={memberRow.id}
+                    orgId={state.org.orgId}
+                    account={memberRow}
+                    onUnsettled={(next) => { memberActionRef.current = next; }}
+                    onDone={(message) => {
+                      afterCloseRef.current = null;
+                      setMemberId(null);
+                      setNotice(message);
+                      reloadDirectory();
+                    }}
+                  />
+                ) : null}
+                {memberRow.id !== state.userId && !memberRow.active ? (
+                  <OrgMembershipReactivateButton
+                    key={memberRow.id}
+                    orgId={state.org.orgId}
+                    account={memberRow}
+                    onUnsettled={(next) => { memberActionRef.current = next; }}
+                    onDone={(message) => {
+                      afterCloseRef.current = null;
+                      setMemberId(null);
+                      setNotice(message);
+                      reloadDirectory();
+                    }}
+                  />
+                ) : null}
+              </div>
+              {memberRow.sharedAccount ? null : (
+                <p className={teamStyles.assignLead}>비밀번호 재설정은 소유자만 할 수 있고, 재설정하면 다른 기기에서 로그아웃됩니다.</p>
+              )}
+            </section>
+          </div>
+        </ConsoleDialog>
+        </div>
       ) : null}
       </div>
-      <details className={teamStyles.operationsDetails}>
-        <summary>연동·활동</summary>
+      {state.isOwner ? (
+        <EventPermissionEditor
+          events={state.events}
+          accounts={state.accounts}
+          memberships={state.memberships}
+          onChanged={(message) => {
+            setNotice(message);
+            reloadDirectory();
+          }}
+        />
+      ) : null}
+      <ConsoleSection headingId="team-operations" title="연동·활동" surface="plain" width="full" className={teamStyles.hiddenHead}>
         <OperationsPanels />
-      </details>
+      </ConsoleSection>
+      {inviteRow && state.isOwner ? (
+        <ConsoleDialog
+          title={inviteRow.name}
+          presentation="drawer"
+          description={<SafeContact value={inviteRow.email} />}
+          onClose={() => setInviteViewId(null)}
+          canClose={requestCloseInvite}
+          footer={
+            <ConsoleFormActions>
+              <ProductButton type="button" variant="ghost" onClick={() => { if (requestCloseInvite()) setInviteViewId(null); }}>닫기</ProductButton>
+            </ConsoleFormActions>
+          }
+        >
+          <div className={teamStyles.drawerBody} role="group" aria-label="상세 내용" tabIndex={0}>
+            <dl className={teamStyles.viewFacts}>
+              <div><dt>역할</dt><dd>{roleLabel(inviteRow.role)}</dd></div>
+              <div><dt>담당 행사</dt><dd>{(inviteRow.eventId ? state.events.find((item) => item.id === inviteRow.eventId)?.name : "") || "미지정"}</dd></div>
+              {inviteRow.expiresAt ? <div><dt>만료</dt><dd>{formatInviteExpiry(inviteRow.expiresAt)}</dd></div> : null}
+            </dl>
+            <p className={teamStyles.assignLead}>초대 링크는 발급할 때 한 번만 보입니다. 받지 못했다면 철회한 뒤 다시 초대하세요.</p>
+            <div className={teamStyles.accountActions}>
+              <RevokeInviteButton
+                invitationId={inviteRow.id}
+                onUnsettled={(next) => { inviteActionRef.current = next; }}
+                onDone={() => {
+                  setInviteViewId(null);
+                  setNotice(`${inviteRow.name}님의 초대를 철회했습니다.`);
+                  reloadDirectory();
+                }}
+              />
+            </div>
+          </div>
+        </ConsoleDialog>
+      ) : null}
       {resetTarget ? (
         <ResetDialog
           account={resetTarget}
@@ -710,7 +848,7 @@ function StaffAssignmentPanel({
   events: TeamEvent[];
   accountId: string;
   accountName: string;
-  onClose: () => void;
+  onClose?: () => void;
 }) {
   // Preselect only when there is exactly one event to choose from; with
   // several events the operator must choose, and with none there is nothing
@@ -723,10 +861,6 @@ function StaffAssignmentPanel({
   // ones; unknown stages sort last. Choosing still only reveals the
   // operations link — nothing is stored, sent, or pre-associated.
   const orderedEvents = useMemo(() => sortTeamEventsForAssign(events), [events]);
-  const selectRef = useRef<HTMLSelectElement>(null);
-  useEffect(() => {
-    selectRef.current?.focus();
-  }, []);
   const chosen = events.find((item) => item.id === eventId) ?? null;
   return (
     <div className={teamStyles.assignPanel} id={`staff-assign-panel-${accountId}`}>
@@ -740,7 +874,6 @@ function StaffAssignmentPanel({
         <label className={teamStyles.assignField}>
           <span>배정할 행사</span>
           <select
-            ref={selectRef}
             value={eventId}
             onChange={(event) => setEventId(event.target.value)}
             aria-label={`${accountName} 배정 행사 선택`}
@@ -766,11 +899,13 @@ function StaffAssignmentPanel({
       ) : events.length ? (
         <p className={teamStyles.assignLead} role="status">배정할 행사를 선택하면 이동 링크가 나타납니다.</p>
       ) : null}
-      <p className={teamStyles.assignLead}>
-        <ProductButton type="button" className="button button-secondary" onClick={onClose}>
-          닫기
-        </ProductButton>
-      </p>
+      {onClose ? (
+        <p className={teamStyles.assignLead}>
+          <ProductButton type="button" variant="ghost" onClick={onClose}>
+            닫기
+          </ProductButton>
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -783,10 +918,9 @@ function StaffAssignmentPanel({
 // (POST /api/events/:id/members) validates the scopes and stays
 // authoritative; this editor only mirrors server/event-permissions.js words.
 function grantSummary(grants: string[] | null): string {
-  if (grants === null) return "이 행사 권한 없음";
-  if (grants.includes("all")) return "전체";
-  if (grants.length === 0) return "읽기 전용";
-  return grants
+  const level = grantLevel(grants);
+  if (level !== "custom") return GRANT_LEVEL_COPY[level].name;
+  return (grants ?? [])
     .map((scope) => EVENT_WRITE_SCOPES.find((item) => item.scope === scope)?.label ?? scope)
     .join(" · ");
 }
@@ -805,6 +939,8 @@ function EventPermissionEditor({
   const [eventId, setEventId] = useState(events.length === 1 && events[0] ? events[0].id : "");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<string[]>([]);
+  // The drawer shows three levels first; the eight scopes open only on request.
+  const [customOpen, setCustomOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [retryable, setRetryable] = useState(false);
@@ -857,8 +993,10 @@ function EventPermissionEditor({
       if (!window.confirm(DIRTY_CLOSE_MESSAGE)) return;
     }
     const grants = getEventWriteGrants(memberships, { userId: accountId, eventId });
+    const opening = grants === null ? ["all"] : [...grants];
     setEditingId(accountId);
-    setDraft(grants === null ? ["all"] : [...grants]);
+    setDraft(opening);
+    setCustomOpen(grantLevel(opening) === "custom");
     setFailure(null);
   }
 
@@ -872,24 +1010,41 @@ function EventPermissionEditor({
     setFailure(null);
   }
 
-  function cancelEdit(): void {
-    if (submitGateRef.current || frozen) return;
-    if (scopesDirty && !window.confirm(DIRTY_CLOSE_MESSAGE)) return;
+  // Dismissal gate shared by Escape, the backdrop and 취소: a save in flight or
+  // an unknown result keeps the drawer, unsaved scope edits ask first.
+  function cancelEdit(): boolean {
+    if (submitGateRef.current || frozen) return false;
+    return !scopesDirty || window.confirm(DIRTY_CLOSE_MESSAGE);
+  }
+
+  function closeEditor(): void {
     setEditingId(null);
     setFailure(null);
   }
 
-  function toggleScope(scope: string): void {
+  function pickLevel(level: "all" | "nosettings" | "readonly"): void {
     // Frozen contexts never mint a new key over unknown committed
     // permissions: only the stored attempt may retry, unchanged.
     if (submitGateRef.current || frozen) return;
     setFailure(null);
+    setCustomOpen(false);
+    setDraft(level === "all" ? ["all"] : level === "nosettings" ? [...NO_SETTINGS_SCOPES] : []);
+  }
+
+  function openCustom(): void {
+    if (submitGateRef.current || frozen) return;
+    setFailure(null);
+    setCustomOpen(true);
+    // 전체 is a stored "all"; choosing scopes by hand starts from every scope.
+    setDraft((current) => (current.includes("all") ? [...WRITE_SCOPE_IDS] : current));
+  }
+
+  function toggleScope(scope: string): void {
+    if (submitGateRef.current || frozen) return;
+    setFailure(null);
     setDraft((current) => {
-      if (scope === "all") return current.includes("all") ? [] : ["all"];
-      const withoutAll = current.filter((item) => item !== "all");
-      return withoutAll.includes(scope)
-        ? withoutAll.filter((item) => item !== scope)
-        : [...withoutAll, scope];
+      const base = current.includes("all") ? [...WRITE_SCOPE_IDS] : current;
+      return base.includes(scope) ? base.filter((item) => item !== scope) : [...base, scope];
     });
   }
 
@@ -963,13 +1118,23 @@ function EventPermissionEditor({
     }
   }
 
+  const editingAccount = editingId ? managerAccounts.find((account) => account.id === editingId) ?? null : null;
+  const SCOPE_GROUPS: { label: string; scopes: string[] }[] = [
+    { label: "참가자·화면", scopes: ["participants", "page"] },
+    { label: "프로그램·현장", scopes: ["programs", "onsite", "booth"] },
+    { label: "메시지·결과·설정", scopes: ["messages", "results", "settings"] },
+  ];
+  const draftLevel = customOpen ? "custom" : grantLevel(draft);
+  const levelOptions: { level: "all" | "nosettings" | "readonly"; name: string; note: string; filled: number }[] = [
+    { level: "all", name: "전체", note: "이 행사의 모든 것을 바꿀 수 있어요", filled: WRITE_SCOPE_IDS.length },
+    { level: "nosettings", name: "설정 제외", note: "행사 설정(정보·기능·진행 단계)만 못 바꿔요", filled: NO_SETTINGS_SCOPES.length },
+    { level: "readonly", name: "읽기 전용", note: "볼 수만 있어요", filled: 0 },
+  ];
+
   return (
-    <ConsoleSection headingId="team-event-permissions" title="행사별 쓰기 권한" width="full">
-      <p className={teamStyles.assignLead}>
-        소유자만 변경할 수 있습니다. 저장하지 않으면 읽기 전용입니다.
-      </p>
+    <ConsoleSection headingId="team-event-permissions" title="행사별 쓰기 권한" width="full" className={teamStyles.hiddenHead}>
       {events.length ? (
-        <label className={teamStyles.assignField}>
+        <label className={teamStyles.eventPick}>
           <span>권한을 바꿀 행사</span>
           <select
             value={eventId}
@@ -986,95 +1151,41 @@ function EventPermissionEditor({
       ) : (
         <p className={teamStyles.assignLead} role="status">권한을 바꿀 행사가 없습니다.</p>
       )}
-      {retryable ? (
-        <p className={teamStyles.assignLead} role="note">
-          저장 결과를 확인하지 못했습니다. 이미 저장됐을 수 있으니 같은 요청으로 다시 시도하세요.
-          결과가 확인될 때까지 다른 변경은 잠급니다.
-        </p>
-      ) : null}
       {chosen ? (
         managerAccounts.length ? (
-          <ul className={consoleUiStyles.collection} aria-label={`${chosen.name} 쓰기 권한 목록`}>
+          <ul className={teamStyles.peopleList} aria-label={`${chosen.name} 쓰기 권한 목록`}>
             {managerAccounts.map((account) => {
               const grants = getEventWriteGrants(memberships, { userId: account.id, eventId: chosen.id });
-              const editing = editingId === account.id;
+              const level = grantLevel(grants);
+              const copy = GRANT_LEVEL_COPY[level];
               return (
-                <li className={`${consoleUiStyles.recordRow} ${teamStyles.teamRow}`} key={account.id}>
-                  <div className={`${consoleUiStyles.recordMain} ${teamStyles.memberMain}`}>
-                    <strong className={teamStyles.memberName}>{account.name}</strong>
-                    <p className={teamStyles.memberRole}>
-                      {roleLabel(account.role)} · {grantSummary(grants)}
+                <li className={teamStyles.permRow} key={account.id}>
+                  <div className={teamStyles.personMain}>
+                    <h3 className={teamStyles.personName}>
+                      {/* The name button's ::after covers the row: the whole row opens the drawer. */}
+                      <button type="button" className={teamStyles.rowOpen} disabled={frozen} onClick={() => openEditor(account.id)}>{account.name}</button>
+                    </h3>
+                    <p className={teamStyles.personContact}><SafeContact value={account.email} /></p>
+                  </div>
+                  <div className={teamStyles.gauge}>
+                    <p className={teamStyles.gaugeTop}>
+                      <strong data-level={level}>{copy.name}</strong>
+                      <span>{copy.note(grants === null ? 0 : grants.length)}</span>
                     </p>
-                    <p className={teamStyles.memberContact}><SafeContact value={account.email} /></p>
-                    {editing ? (
-                      <div>
-                        <div role="group" aria-label={`${account.name} 쓰기 범위 선택`}>
-                          <label className={teamStyles.scopeCheck}>
-                            <input
-                              type="checkbox"
-                              checked={draft.includes("all")}
-                              onChange={() => toggleScope("all")}
-                              disabled={frozen}
-                            />
-                            전체 (모든 쓰기)
-                          </label>
-                          {EVENT_WRITE_SCOPES.map((item) => (
-                            <label className={teamStyles.scopeCheck} key={item.scope}>
-                              <input
-                                type="checkbox"
-                                checked={draft.includes(item.scope) && !draft.includes("all")}
-                                onChange={() => toggleScope(item.scope)}
-                                disabled={frozen || draft.includes("all")}
-                              />
-                              {item.label} — {item.description}
-                            </label>
-                          ))}
-                        </div>
-                        {!draft.includes("all") && draft.length === 0 ? (
-                          <p role="note" className={teamStyles.assignLead}>
-                            선택을 모두 비우면 읽기 전용이 됩니다. 화면 보기는 그대로 되지만 아무것도 바꿀 수 없습니다.
-                          </p>
-                        ) : null}
-                        {failure && editing ? <ConsoleFeedback kind="error">{failure}</ConsoleFeedback> : null}
-                        <ConsoleFormActions>
-                          <ProductButton
-                            type="button"
-                            className="button button-primary"
-                            disabled={busy}
-                            onClick={() => void save(account)}
-                          >
-                            {busy ? "저장 중입니다" : retryable ? "같은 요청으로 다시 시도" : "권한 저장"}
-                          </ProductButton>
-                          <ProductButton
-                            type="button"
-                            className="button button-secondary"
-                            disabled={frozen}
-                            onClick={cancelEdit}
-                          >
-                            취소
-                          </ProductButton>
-                        </ConsoleFormActions>
-                      </div>
-                    ) : null}
+                    <span className={teamStyles.gaugeBars} aria-hidden="true">
+                      {[0, 1, 2].map((index) => <i key={index} data-on={index < copy.bars || undefined} />)}
+                    </span>
                   </div>
-                  <div className={`${consoleUiStyles.recordActions} ${teamStyles.memberActions}`}>
-                    {!editing ? (
-                      <ProductButton
-                        type="button"
-                        className="button button-secondary"
-                        disabled={frozen}
-                        onClick={() => openEditor(account.id)}
-                      >
-                        권한 편집
-                      </ProductButton>
-                    ) : null}
-                  </div>
+                  <span className={teamStyles.rowArrow} aria-hidden="true"><svg viewBox="0 0 20 20" focusable="false"><path d="M7 4l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
                 </li>
               );
             })}
           </ul>
         ) : (
-          <p className={teamStyles.assignLead} role="status">권한을 바꿀 조직 구성원이 없습니다.</p>
+          <div className={`${consoleUiStyles.empty} ${teamStyles.teamEmpty}`}>
+            <h3>행사 권한을 정할 구성원이 없습니다</h3>
+            <p>조직 구성원을 초대하면 여기서 행사마다 권한을 정할 수 있습니다.</p>
+          </div>
         )
       ) : events.length ? (
         <p className={teamStyles.assignLead} role="status">행사를 선택하면 구성원별 쓰기 권한이 나타납니다.</p>
@@ -1084,6 +1195,84 @@ function EventPermissionEditor({
           현장 스태프 {staffWithMembership.length}명은 데스크·부스 배정으로만 일하고 행사 쓰기 권한이 없으므로 편집 대상이 아닙니다.
         </p>
       ) : null}
+      {editingAccount && chosen ? (
+        <ConsoleDialog
+          title={`${editingAccount.name} · 쓰기 권한`}
+          presentation="drawer"
+          description={chosen.name}
+          onClose={closeEditor}
+          busy={busy}
+          canClose={cancelEdit}
+          footer={
+            <ConsoleFormActions>
+              <ProductButton type="button" variant="ghost" disabled={frozen} onClick={() => { if (cancelEdit()) closeEditor(); }}>
+                취소
+              </ProductButton>
+              <ProductButton type="button" className="button button-primary" disabled={busy} onClick={() => void save(editingAccount)}>
+                {busy ? "저장 중입니다" : retryable ? "같은 요청으로 다시 시도" : "권한 저장"}
+              </ProductButton>
+            </ConsoleFormActions>
+          }
+        >
+          <div className={teamStyles.drawerBody} role="group" aria-label="상세 내용" tabIndex={0}>
+            {getEventWriteGrants(memberships, { userId: editingAccount.id, eventId: chosen.id }) === null ? (
+              <p className={teamStyles.assignLead} role="note">이 행사에 아직 배정되지 않았습니다. 저장하면 선택한 권한으로 배정됩니다.</p>
+            ) : null}
+            {retryable ? (
+              <p className={teamStyles.assignLead} role="note">
+                저장 결과를 확인하지 못했습니다. 이미 저장됐을 수 있으니 같은 요청으로 다시 시도하세요.
+                결과가 확인될 때까지 다른 변경은 잠급니다.
+              </p>
+            ) : null}
+            <div role="radiogroup" aria-label={`${editingAccount.name} 쓰기 권한 수준`} className={teamStyles.levelList}>
+              {levelOptions.map((option) => (
+                <label className={teamStyles.levelCard} data-on={draftLevel === option.level || undefined} key={option.level}>
+                  <input type="radio" className="sr-only" name="event-grant-level" checked={draftLevel === option.level} disabled={frozen} onChange={() => pickLevel(option.level)} />
+                  <span className={teamStyles.levelText}>
+                    <strong>{option.name}{option.level === "nosettings" ? <em>추천</em> : null}</strong>
+                    <small>{option.note}</small>
+                  </span>
+                  <span className={teamStyles.miniBars} aria-hidden="true">
+                    {WRITE_SCOPE_IDS.map((scope, index) => <i key={scope} data-on={index < option.filled || undefined} />)}
+                  </span>
+                </label>
+              ))}
+              <label className={teamStyles.levelCard} data-on={draftLevel === "custom" || undefined}>
+                <input type="radio" className="sr-only" name="event-grant-level" checked={draftLevel === "custom"} disabled={frozen} onChange={openCustom} />
+                <span className={teamStyles.levelText}>
+                  <strong>직접 선택{customOpen ? ` · ${draft.length}개 범위` : ""}</strong>
+                  <small>범위를 하나씩 고릅니다</small>
+                </span>
+              </label>
+            </div>
+            {customOpen ? (
+              <div role="group" aria-label={`${editingAccount.name} 쓰기 범위 선택`} className={teamStyles.scopeGroups}>
+                {SCOPE_GROUPS.map((group) => (
+                  <div key={group.label}>
+                    <p className={teamStyles.scopeGroupLabel}>{group.label}</p>
+                    {group.scopes.map((scope) => {
+                      const item = EVENT_WRITE_SCOPES.find((entry) => entry.scope === scope);
+                      if (!item) return null;
+                      return (
+                        <label className={teamStyles.scopeCheck} key={scope}>
+                          <input type="checkbox" checked={draft.includes(scope)} onChange={() => toggleScope(scope)} disabled={frozen} />
+                          <span>{item.label}<small>{item.description}</small></span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ))}
+                {draft.length === 0 ? (
+                  <p role="note" className={teamStyles.assignLead}>
+                    선택을 모두 비우면 읽기 전용이 됩니다. 화면 보기는 그대로 되지만 아무것도 바꿀 수 없습니다.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            {failure ? <ConsoleFeedback kind="error">{failure}</ConsoleFeedback> : null}
+          </div>
+        </ConsoleDialog>
+      ) : null}
     </ConsoleSection>
   );
 }
@@ -1092,10 +1281,12 @@ function OrgMembershipDisableButton({
   orgId,
   account,
   onDone,
+  onUnsettled,
 }: {
   orgId: string;
   account: Account;
   onDone: (message: string) => void;
+  onUnsettled?: (state: UnsettledState) => void;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -1107,6 +1298,7 @@ function OrgMembershipDisableButton({
   const pendingRef = useRef<FrozenMembershipAttempt | null>(null);
   const submitGateRef = useRef(false);
   const frozen = busy;
+  useReportUnsettled(busy ? "busy" : retryable ? "uncertain" : null, onUnsettled);
 
   function open(): void {
     if (submitGateRef.current || frozen) return;
@@ -1262,10 +1454,12 @@ function OrgMembershipReactivateButton({
   orgId,
   account,
   onDone,
+  onUnsettled,
 }: {
   orgId: string;
   account: Account;
   onDone: (message: string) => void;
+  onUnsettled?: (state: UnsettledState) => void;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -1276,6 +1470,7 @@ function OrgMembershipReactivateButton({
   const pendingRef = useRef<FrozenMembershipAttempt | null>(null);
   const submitGateRef = useRef(false);
   const frozen = busy;
+  useReportUnsettled(busy ? "busy" : retryable ? "uncertain" : null, onUnsettled);
 
   function open(): void {
     if (submitGateRef.current || frozen) return;
@@ -1432,7 +1627,6 @@ const OrgRoleEditorPanel = forwardRef<RoleEditorHandle, {
   orgName: string;
   account: Account;
   isSelf: boolean;
-  onClose: () => void;
   onDone: (message: string) => void;
   onSwitch: (nextId: string | null) => void;
 }>(function OrgRoleEditorPanel({
@@ -1440,7 +1634,6 @@ const OrgRoleEditorPanel = forwardRef<RoleEditorHandle, {
   orgName,
   account,
   isSelf,
-  onClose,
   onDone,
   onSwitch,
 }, ref) {
@@ -1499,12 +1692,6 @@ const OrgRoleEditorPanel = forwardRef<RoleEditorHandle, {
     (roleChanged && !confirming) || pendingRef.current !== null,
     pendingRef.current !== null ? UNCONFIRMED_WRITE_CLOSE_MESSAGE : DIRTY_CLOSE_MESSAGE
   );
-
-  function cancel(): void {
-    if (submitGateRef.current || frozen) return;
-    if ((roleChanged || pendingRef.current !== null) && !window.confirm(pendingRef.current ? UNCONFIRMED_WRITE_CLOSE_MESSAGE : DIRTY_CLOSE_MESSAGE)) return;
-    onClose();
-  }
 
   function requestConfirm(): void {
     if (submitGateRef.current || busy || (!roleChanged && !retryable)) return;
@@ -1678,7 +1865,7 @@ const OrgRoleEditorPanel = forwardRef<RoleEditorHandle, {
       </p>
       <div role="group" aria-label={`${account.name} 조직 역할 선택`}>
         {(["AGENCY", "MANAGER", "STAFF"] as const).map((scope) => (
-          <label className={teamStyles.scopeCheck} key={scope}>
+          <label className={teamStyles.roleChoice} key={scope}>
             <input
               type="radio"
               name={`org-role-${account.id}`}
@@ -1686,19 +1873,21 @@ const OrgRoleEditorPanel = forwardRef<RoleEditorHandle, {
               onChange={() => setRoleDraft(scope)}
               disabled={frozen}
             />
-            {roleLabel(scope)}{scope === account.role ? " (현재)" : ""}
+            <span>
+              <strong>{roleLabel(scope)}{scope === account.role ? " (현재)" : ""}</strong>
+              <small>{ROLE_NOTES[scope]}</small>
+            </span>
           </label>
         ))}
       </div>
       {roleDraft === "MANAGER" ? (
         <p className={teamStyles.assignLead}>
-          행사별 쓰기 권한은 바뀌지 않습니다. 필요하면 아래{" "}
-          <a className={teamStyles.assignLink} href="#team-event-permissions">행사별 쓰기 권한</a>에서 지정하세요.
+          행사별 쓰기 권한은 바뀌지 않습니다. 필요하면 ‘행사별 권한’ 탭에서 지정하세요.
         </p>
       ) : null}
       {roleDraft === "STAFF" ? (
         <p className={teamStyles.assignLead}>
-          데스크·부스 배정은 각 행의 ‘행사 배정’에서 지정합니다. 역할 변경만으로는 배정이 생기지 않습니다.
+          데스크·부스 배정은 아래 ‘현장 배정’에서 이어서 지정합니다. 역할 변경만으로는 배정이 생기지 않습니다.
         </p>
       ) : null}
       {isSelf && roleChanged ? (
@@ -1713,14 +1902,6 @@ const OrgRoleEditorPanel = forwardRef<RoleEditorHandle, {
       ) : null}
       {failure && !confirming ? <ConsoleFeedback kind="error">{failure}</ConsoleFeedback> : null}
       <ConsoleFormActions>
-        <ProductButton
-          type="button"
-          className="button button-secondary"
-          disabled={frozen}
-          onClick={cancel}
-        >
-          취소
-        </ProductButton>
         <ProductButton
           type="button"
           className="button button-primary"
@@ -2267,9 +2448,11 @@ function InviteDialog({
 function RevokeInviteButton({
   invitationId,
   onDone,
+  onUnsettled,
 }: {
   invitationId: string;
   onDone: () => void;
+  onUnsettled?: (state: UnsettledState) => void;
 }) {
   const [revoking, setRevoking] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -2280,6 +2463,7 @@ function RevokeInviteButton({
   // freshly minted id.
   const pendingRef = useRef<FrozenMembershipAttempt | null>(null);
   const revokingRef = useRef(false);
+  useReportUnsettled(revoking ? "busy" : retryable ? "uncertain" : null, onUnsettled);
   // An unknown revoke outcome guards navigation until it resolves.
   useConsoleDraftGuard(
     pendingRef.current !== null || revoking,

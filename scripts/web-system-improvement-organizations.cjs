@@ -10,6 +10,7 @@ const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
+const { openStudioPanel } = require('./ui-journey-helpers.cjs');
 const captureRoot = process.env.EVENTOUCH_CAPTURE_ROOT || defaultCaptureDir(`system-improvement-20261024/ux-${runStamp()}`);
 const runId = process.env.EVENTOUCH_AUDIT_RUN_ID || new Date().toISOString().replace(/[:.]/g, '-');
 const OUT = path.join(captureRoot, `organizations-${runId}`);
@@ -93,9 +94,20 @@ async function main() {
       axe.push({ name, violations });
       check(`${name} no serious/critical axe`, !violations.some((v) => ['serious', 'critical'].includes(v.impact)), violations);
     };
+    const reconnect = async (page, name) => {
+      // The staff desk's account fold opens over the page; close it before using the notice below it.
+      const openFold = page.locator('details[open] > summary[aria-label="계정·조직·키오스크"]');
+      if (await openFold.count()) await openFold.click();
+      await page.getByRole('button', { name, exact: true }).click();
+    };
     const openAccount = async (page) => {
       const panel = page.getByRole('dialog', { name: /운영자 메뉴|계정 및 조직 전환/ });
-      if (!await panel.isVisible().catch(() => false)) await page.locator('button[aria-haspopup="dialog"]:visible').first().click();
+      if (!await panel.isVisible().catch(() => false)) {
+        // The staff desk keeps the account menu inside its "계정·조직·키오스크" fold.
+        const summary = page.locator('summary[aria-label="계정·조직·키오스크"]');
+        if (await summary.isVisible().catch(() => false)) await summary.click();
+        await page.locator('button[aria-haspopup="dialog"]:visible').first().click();
+      }
       await panel.waitFor();
       return panel;
     };
@@ -106,6 +118,7 @@ async function main() {
     };
     const original = `${f.baseUrl}/console/events/${f.eventId}/page`;
     await first.goto(original);
+    await openStudioPanel(first, 'exposure');
     await first.locator('#home-intro').fill('운영사 A에만 남아야 하는 초안');
     const panel = await openAccount(first);
     await panel.getByText('운영사 소속을 불러오지 못했습니다.', { exact: false }).waitFor();
@@ -118,7 +131,7 @@ async function main() {
     first.once('dialog', async (dialog) => { cancelledWarning = dialog.message(); await dialog.dismiss(); });
     await panel.getByRole('button', { name: '이 운영사로 이동', exact: true }).click();
     check('dirty explicit switch cancels before any selection request', Boolean(cancelledWarning?.includes('저장하지 않은')) && !requests.some((r) => r.path.endsWith('/select')));
-    check('cancelled switch retains A input', await first.locator('#home-intro').inputValue() === '운영사 A에만 남아야 하는 초안');
+    check('cancelled switch retains A input', (await openStudioPanel(first, 'exposure'), await first.locator('#home-intro').inputValue()) === '운영사 A에만 남아야 하는 초안');
     await capture(first, 'account-switch-guard-1280');
     await first.keyboard.press('Escape');
 
@@ -135,25 +148,25 @@ async function main() {
     await capture(second, 'staff-account-switcher-B-390');
     await second.keyboard.press('Escape');
     await first.getByRole('region', { name: '운영사 문맥 변경', exact: true }).waitFor();
-    check('other-tab selection keeps A draft and locks its writes', await first.locator('#home-intro').inputValue() === '운영사 A에만 남아야 하는 초안' && await first.locator('#theme-save-draft').isDisabled());
+    check('other-tab selection keeps A draft and locks its writes', (await openStudioPanel(first, 'exposure'), await first.locator('#home-intro').inputValue()) === '운영사 A에만 남아야 하는 초안' && await first.locator('#theme-save-draft').isDisabled());
     await capture(first, 'other-tab-A-draft-locked-1280');
     await first.setViewportSize({ width: 390, height: 844 });
     await capture(first, 'other-tab-A-draft-locked-390');
     await inspect(first, 'other-tab-A-draft-locked-390');
     const stale = await api(ownerCookie, `/api/events/${f.eventId}/commands`, { method: 'POST', headers: headersFor(startContext), body: { commandId: crypto.randomUUID(), command: 'notice.save', payload: { title: '보내지 않아야 할 과거 탭', body: '합성 반례' } } });
     check('actual server rejects old-tab A headers instead of writing under B', stale.status === 409 && stale.json.code === 'ORGANIZATION_CONTEXT_CHANGED', stale.json);
-    await first.getByRole('button', { name: '검증 운영사 A에 다시 연결', exact: true }).click();
+    await reconnect(first, '검증 운영사 A에 다시 연결');
     await first.getByRole('region', { name: '운영사 문맥 변경', exact: true }).waitFor({ state: 'hidden' });
-    check('explicit A return preserves the original draft', await first.locator('#home-intro').inputValue() === '운영사 A에만 남아야 하는 초안');
+    check('explicit A return preserves the original draft', (await openStudioPanel(first, 'exposure'), await first.locator('#home-intro').inputValue()) === '운영사 A에만 남아야 하는 초안');
     await first.locator('#theme-save-draft').click();
     await f.gateway.waitForResponseLoss('attendee.page.save');
     await first.locator('#theme-save-draft').waitFor();
     await second.getByRole('region', { name: '운영사 문맥 변경', exact: true }).waitFor();
-    await second.getByRole('button', { name: '검증 운영사 B에 다시 연결', exact: true }).click();
+    await reconnect(second, '검증 운영사 B에 다시 연결');
     await second.getByRole('region', { name: '운영사 문맥 변경', exact: true }).waitFor({ state: 'hidden' });
     await first.getByRole('region', { name: '운영사 문맥 변경', exact: true }).waitFor();
     await capture(first, 'uncertain-A-receipt-under-B-390');
-    await first.getByRole('button', { name: '검증 운영사 A에 다시 연결', exact: true }).click();
+    await reconnect(first, '검증 운영사 A에 다시 연결');
     await first.getByRole('region', { name: '운영사 문맥 변경', exact: true }).waitFor({ state: 'hidden' });
     await first.locator('#theme-save-draft').click();
     await first.getByText('초안을 저장했습니다', { exact: false }).first().waitFor();
@@ -168,13 +181,13 @@ async function main() {
       if (!lostSelection) { const actual = await committedResponse(route, 'organization.select'); if (!actual) return; lostSelection = true; await route.fulfill({ status: 502, json: { error: '합성 전환 응답 유실' } }); }
       else await route.continue();
     });
-    await second.getByRole('button', { name: '검증 운영사 B에 다시 연결', exact: true }).click();
+    await reconnect(second, '검증 운영사 B에 다시 연결');
     await second.getByRole('button', { name: '같은 전환 요청 다시 확인', exact: true }).waitFor();
     await capture(second, 'selection-response-unknown-390');
     await second.getByRole('button', { name: '같은 전환 요청 다시 확인', exact: true }).click();
     await second.getByRole('region', { name: '운영사 문맥 변경', exact: true }).waitFor({ state: 'hidden' });
     check('selection lost response retries identical nonce and expected session revision', selectionBodies.length === 2 && JSON.stringify(selectionBodies[0]) === JSON.stringify(selectionBodies[1]), selectionBodies);
-    await first.getByRole('button', { name: '검증 운영사 A에 다시 연결', exact: true }).click();
+    await reconnect(first, '검증 운영사 A에 다시 연결');
     await first.getByRole('region', { name: '운영사 문맥 변경', exact: true }).waitFor({ state: 'hidden' });
 
     // Create is explicit and idempotent; it never selects or inherits sending.
@@ -220,7 +233,7 @@ async function main() {
     await capture(first, 'new-org-simulation-only-1280');
     await first.goto(f.baseUrl + '/console/team');
     await first.getByRole('heading', { name: '구성원', exact: true }).waitFor();
-    await first.locator('summary').filter({ hasText: /^연동·활동$/ }).click();
+    await first.getByRole('tab', { name: '연동·활동' }).click();
     await first.getByText('미연동 · 새 운영사는 모의 기록만 사용합니다', { exact: true }).waitFor();
     check('new-org integration display ignores connected legacy health', await first.getByText('fixture-legacy-global-provider', { exact: false }).count() === 0);
     await capture(first, 'new-org-team-1280');
@@ -377,10 +390,11 @@ async function main() {
     await uncertainMembership.getByLabel('전환할 운영사', { exact: true }).waitFor();
     check('existing invite membership is visible directly on the invitation', (await uncertainMembership.getByLabel('전환할 운영사', { exact: true }).locator('option').evaluateAll((options, id) => options.some((option) => option.value === id), cOrg.id)));
     await existingPage.mouse.move(0, 0);
-    await existingPage.waitForFunction((expected) => {
+    // A secondary action keeps the quiet Astryx fill; the point is that it is not the orange primary.
+    await existingPage.waitForFunction(() => {
       const retry = Array.from(document.querySelectorAll('button')).find((button) => button.textContent.includes('같은 초대 다시 수락'));
-      return retry && getComputedStyle(retry).backgroundColor === expected;
-    }, paperColor);
+      return retry?.getAttribute('data-product-variant') === 'secondary' && getComputedStyle(retry).backgroundColor !== getComputedStyle(document.documentElement).getPropertyValue('--brand');
+    });
     await existingPage.screenshot({ path: `${OUT}/invite-existing-unconfirmed-390.png`, fullPage: true });
     await inspect(existingPage, 'invite-existing-unconfirmed-390');
     await existingPage.unroute('**/api/auth/invitations/*/accept');
@@ -397,15 +411,20 @@ async function main() {
     // surprise the owner with a global-effect refusal. The API also fails
     // closed against a stale client or direct request.
     await first.reload();
-    const memberRow = first.getByRole('region', { name: '구성원', exact: true }).locator('li').filter({ hasText: f.manager.email });
-    const reset = memberRow.getByRole('button', { name: '비밀번호 재설정', exact: true });
+    // The tab choice rides the URL hash across the reload; this check lives on the member list.
+    await first.getByRole('tab', { name: '구성원', exact: true }).click();
+    const memberRow = first.getByRole('list', { name: '구성원 목록', exact: true }).locator('li').filter({ hasText: f.manager.email });
+    // Account actions live in the member drawer opened from the row.
+    await memberRow.getByRole('button').first().click();
+    const memberDrawer = first.locator('[role="group"][aria-label="상세 내용"]:visible').first().locator('xpath=ancestor::*[self::aside or @role="dialog" or @role="complementary"][1]');
+    const reset = memberDrawer.getByRole('button', { name: '비밀번호 재설정', exact: true });
     check('known shared account offers no enabled password reset', await reset.count() === 0 || await reset.isDisabled());
-    check('shared account explains the cross-organization restriction before input', /공유|여러 (?:운영사|조직)/.test(await memberRow.innerText()) && await first.locator('#reset-password').count() === 0);
+    check('shared account explains the cross-organization restriction before input', /공유|여러 (?:운영사|조직)/.test(await memberDrawer.innerText()) && await first.locator('#reset-password').count() === 0);
     const refusedReset = await write(ownerCookie, `/api/auth/accounts/${f.manager.id}/password`, { password: 'SyntheticNeverApplied!2026', commandId: crypto.randomUUID() });
     check('shared account API refuses a global password change', refusedReset.status === 403 && refusedReset.json.code === 'SHARED_ACCOUNT_GLOBAL_EFFECT', refusedReset.json);
     check('shared account password hash remains unchanged', (await f.harness.database.query('SELECT password_hash FROM accounts WHERE id=$1', [f.manager.id])).rows[0].password_hash === hashBefore);
     await capture(first, 'shared-password-reset-restricted-upfront-1280');
-    await memberRow.getByRole('button', { name: '이 운영사 소속 사용 중지', exact: true }).click();
+    await memberDrawer.getByRole('button', { name: '이 운영사 소속 사용 중지', exact: true }).click();
     await first.getByRole('button', { name: /소속.*중지.*확인|사용 중지한다|이 운영사 소속만 사용 중지/ }).click();
     await first.getByText(/사용 중지했습니다/, { exact: false }).first().waitFor();
     const membership = (await f.harness.database.query('SELECT active FROM organization_memberships WHERE org_id=$1 AND account_id=$2', [cOrg.id, f.manager.id])).rows[0];

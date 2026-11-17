@@ -1,6 +1,7 @@
 'use strict';
 // Synthetic 900-person roster, real isolated API and PostgreSQL, no sends.
 const assert = require('node:assert/strict');
+const { selectDrawStage } = require('./ui-journey-helpers.cjs');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -25,7 +26,7 @@ async function main() {
     assert.equal((await command('event.features',{features:['draw']})).status,200);
     browser=await launchBrowser();const context=await browser.newContext({viewport:{width:1280,height:900},locale:'ko-KR'});
     await context.addCookies([{...cookieForContext(f,'manager'),url:f.baseUrl}]);const page=await context.newPage();
-    const open=async()=>{await page.goto(`${f.baseUrl}/console/events/${f.eventId}/draws`);await page.getByRole('tab',{name:'럭키번호',exact:true}).click();const d=page.locator('details').filter({hasText:'럭키번호 범위 설정'});if(!await d.evaluate(el=>el.open))await d.locator('summary').click();};
+    const open=async()=>{await page.goto(`${f.baseUrl}/console/events/${f.eventId}/draws`);await selectDrawStage(page, '럭키번호');const d=page.locator('details').filter({hasText:'럭키번호 범위 설정'});if(!await d.evaluate(el=>el.open))await d.locator('summary').click();};
     await open();await page.getByText(/범위 1–900 · 발급 0명 · 미발급 승인 참가자 900명 · 남은 고유 번호 900개/).waitFor();
     await page.screenshot({path:path.join(out,'ready-1280.png'),fullPage:true});
     await page.getByRole('checkbox',{name:/승인 참가자 전체 900명 선택/}).check();

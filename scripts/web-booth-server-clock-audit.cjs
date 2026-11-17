@@ -8,6 +8,7 @@ const { source: axe } = require('axe-core');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
+const { typeTicket, closeSheet, readCode, codeField } = require('./audit-staff-direction.cjs');
 
 async function main() {
   if (!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a private capture root');
@@ -83,16 +84,18 @@ async function main() {
         if (scenario.serverTime !== 'valid') await page.getByText('운영 시각을 확인할 수 없어 인증할 때 서버에서 확인합니다.', { exact: true }).waitFor();
         await select.selectOption('skew-booth');
         mask = page.locator('#staff-ticket');
-        await mask.fill(person.ticket);
+        await typeTicket(page, person.ticket);
+        await closeSheet(page);
         if (scenario.serverTime === 'valid') {
           await page.evaluate(() => { window.__clockOffset += 7200000; window.dispatchEvent(new Event('focus')); });
           await page.getByText('운영 시각을 확인할 수 없어 인증할 때 서버에서 확인합니다.', { exact: true }).waitFor();
-          assert.equal(await mask.inputValue(), person.ticket, 'clock adjustment keeps the typed ticket');
+          assert.equal(await readCode(page), person.ticket, 'clock adjustment keeps the typed ticket');
           await page.screenshot({ path: path.join(out, 'staff-clock-adjusted-390.png'), fullPage: true, mask: [mask] });
           await page.getByRole('button', { name: '부스 상태 다시 확인', exact: true }).click();
           await page.waitForFunction(() => !document.querySelector('#staff-booth option[value="skew-booth"]')?.textContent.includes('인증 시 시간 확인'));
-          assert.equal(await mask.inputValue(), person.ticket, 'refresh keeps the typed ticket');
+          assert.equal(await readCode(page), person.ticket, 'refresh keeps the typed ticket');
         }
+        await codeField(page);
         await page.locator('form').filter({ has: mask }).getByRole('button', { name: '부스 인증', exact: true }).click();
         await page.getByRole('button', { name: '다음 참가자', exact: true }).waitFor();
       } else {
@@ -161,7 +164,7 @@ async function main() {
     assert.equal(await delayedOption.isDisabled(), false);
     await delayedPage.locator('#staff-booth').selectOption('skew-booth');
     const delayedTicket = delayedPage.locator('#staff-ticket');
-    await delayedTicket.fill(person.ticket);
+    await typeTicket(delayedPage, person.ticket);
     await delayedPage.locator('form').filter({ has: delayedTicket }).getByRole('button', { name: '부스 인증', exact: true }).click();
     await delayedPage.getByRole('button', { name: '다음 참가자', exact: true }).waitFor();
     assert.equal((await read()).visits.length, 1, 'server accepts a real visit after the boundary');

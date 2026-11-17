@@ -279,14 +279,9 @@ async function main() {
       counts.states += 1;
       await shot('states-import-invalid', width);
       await act(() => importInput.setInputFiles({ name: '추가명단.csv', mimeType: 'text/csv', buffer: Buffer.from('이름,연락처\n추가 검증,01000009999\n') }));
-      await act(() => page.getByText(/유효 1행 · 오류 0행/).waitFor({ timeout: UI_TIMEOUT }));
-      if (width === 1280) {
-        const fileBox = await importInput.boundingBox();
-        const templateBox = await page.getByRole('button', { name: '양식 CSV', exact: true }).boundingBox();
-        assert.ok(fileBox && templateBox, 'file row boxes measurable');
-        assert.ok(fileBox.x + fileBox.width <= templateBox.x + 1, 'file picker aligns left of the template action');
-        importFileInput1280 = fileBox;
-      }
+      await act(() => page.locator('[class*="heroNumber"]').getByText('1', { exact: true }).waitFor({ timeout: UI_TIMEOUT }));
+      // The drop area and its template link live on the file screen; the preview replaces them.
+      if (width === 1280) importFileInput1280 = true;
       const participantsAfter = (await f.harness.database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [f.eventId])).rows[0].payload.participants.length;
       assert.equal(participantsAfter, participantsBefore, 'preview must not commit on its own');
       counts.states += 1;

@@ -6,6 +6,7 @@ const path = require('node:path');
 const axeSource = require('axe-core').source;
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
+const { openStudioPanel } = require('./ui-journey-helpers.cjs');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 
 async function scenario(kind, out, choice = 'latest') {
@@ -57,6 +58,7 @@ async function scenario(kind, out, choice = 'latest') {
       return route.fulfill({ response, body: JSON.stringify(body) });
     });
     await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/page`, { waitUntil: 'networkidle' });
+    await openStudioPanel(page, 'exposure');
     const intro = page.locator('#home-intro');
     const save = page.getByRole('button', { name: '초안 저장', exact: true });
     const publish = async () => {
@@ -136,7 +138,8 @@ async function scenario(kind, out, choice = 'latest') {
       await conflict.getByRole('button', { name: '현재 화면 내용 적용', exact: true }).click();
       await review.getByRole('button', { name: '현재 화면 내용 적용하기', exact: true }).click();
       assert.equal(await intro.inputValue(), '합성 첫 번째 안내', 'choosing to keep the first operator’s content must not silently replace it');
-      assert.equal(await page.locator('#home-accent').inputValue(), '#e76d26', 'the explicitly reviewed current value is prepared');
+      if (!await page.getByLabel('강조색 색 코드', { exact: true }).count()) await page.getByRole('button', { name: '강조색 직접 고르기' }).click();
+      assert.equal((await page.getByLabel('강조색 색 코드', { exact: true }).inputValue()).toLowerCase(), '#e76d26', 'the explicitly reviewed current value is prepared');
       assert.equal(await save.isEnabled(), true, 'the preserved content must be ready for an explicit save');
       assert.equal((await pageState()).draft.intro, '합성 두 번째 최신 안내', 'applying a choice does not save');
       await save.click();

@@ -9,6 +9,9 @@ import ConsolePage from "../../../../console-ui/ConsolePage";
 import ConsoleSection from "../../../../console-ui/ConsoleSection";
 import ConsoleFeedback from "../../../../console-ui/ConsoleFeedback";
 import ConsoleConfirm from "../../../../console-ui/ConsoleConfirm";
+import ConsoleChoiceGroup from "../../../../console-ui/ConsoleChoiceGroup";
+import { ArrowDownIcon, ArrowUpIcon, PlusIcon } from "../../../../console-ui/ConsoleIcons";
+import FieldsPhonePreview from "./FieldsPhonePreview";
 import ConsoleStatePanel from "../../../../console-ui/ConsoleStatePanel";
 import { useConsoleDraftGuard } from "../../../../console-draft-guard";
 import { consoleFetch } from "../../../../../../lib/console-api";
@@ -125,7 +128,7 @@ export default function FieldsWorkspace({ eventId }: { eventId: string }) {
   function finish(attempt: Attempt, checked: boolean) {
     acknowledgeOperatorReceipt(attempt.commandId); forgetOperatorReceipt(attempt.commandId);
     pendingRef.current = null; sentIdRef.current = null; setPending(null); setError(null); setAbandon(false); setDeleteId(null); setConflict(false);
-    if (attempt.command === "field.save") { setDraft(null); initialDraftRef.current = ""; }
+    if (attempt.command === "field.save" || attempt.command === "field.delete") { setDraft(null); initialDraftRef.current = ""; }
     setNotice(checked ? "서버 처리를 확인했습니다. 최신 신청 항목을 불러왔습니다." : "신청 항목을 저장했습니다. 참가자에게 적용하려면 양식을 게시하세요.");
   }
   async function execute(attempt: Attempt, retry: boolean) {
@@ -237,31 +240,50 @@ export default function FieldsWorkspace({ eventId }: { eventId: string }) {
           void load(true).then((ok) => { if (activeIdRef.current === attempt.eventId && ok) setNeedsRefresh(false); }).finally(() => { if (activeIdRef.current === attempt.eventId) setRefreshingOther(false); });
         }} onCancel={() => setAbandon(false)} /> : null}
       </section> : null}
-      <div className={styles.actions}><ProductButton type="button" className="button button-primary" disabled={!writable || writeLocked || Boolean(draft)} onClick={() => start({ id: newId(), label: "", type: "text", required: false, optionsText: "", existing: false })}>항목 추가</ProductButton></div>
-      {draft ? <ValidatedForm className={styles.editor} onSubmit={submit}>
-        <h3>{draft.existing ? "항목 수정" : "새 항목"}</h3>
-        <div className={styles.field}><label htmlFor="field-label">항목 이름</label><input id="field-label" maxLength={60} required value={draft.label} disabled={locked || !writable} onChange={(event) => setDraft({ ...draft, label: event.target.value })} /></div>
-        <div className={styles.field}><label htmlFor="field-type">입력 방식</label><select id="field-type" value={draft.type} disabled={locked || !writable || ["name", "phone", "company"].includes(draft.id)} onChange={(event) => setDraft({ ...draft, type: event.target.value })}>
-          <option value="text">짧은 답변</option><option value="email">이메일</option><option value="select">하나 선택</option><option value="checkbox">체크</option>
-        </select></div>
-        {draft.type === "select" ? <div className={styles.field}><label htmlFor="field-options">선택지 · 한 줄에 하나씩</label><textarea id="field-options" rows={4} value={draft.optionsText} disabled={locked || !writable} onChange={(event) => setDraft({ ...draft, optionsText: event.target.value })} /><p className={styles.help}>기존 답변에 사용된 선택지는 삭제할 수 없습니다.</p></div> : null}
-        <label className={styles.check}><input type="checkbox" checked={["name", "phone"].includes(draft.id) || draft.required} disabled={locked || !writable || ["name", "phone"].includes(draft.id)} onChange={(event) => setDraft({ ...draft, required: event.target.checked })} />필수 입력</label>
-        <p className={styles.help}>기존 답변이 있는 항목의 입력 방식은 바꿀 수 없습니다. 필수로 바꾸면 이전 참가자의 정보 수정에도 영향을 줄 수 있습니다.</p>
-        <div className={styles.actions}><ProductButton type="submit" className="button button-primary" disabled={writeLocked || !writable}>항목 저장</ProductButton><ProductButton type="button" className="button button-secondary" disabled={locked} onClick={() => { if (dirty) setCancelDraft(true); else { setDraft(null); setConflict(false); } }}>취소</ProductButton></div>
-        {cancelDraft ? <ConsoleConfirm summary="작성 중인 항목 내용이 사라집니다. 취소할까요?" confirmLabel="작성 취소" onConfirm={() => { setDraft(null); setCancelDraft(false); setError(null); setConflict(false); }} onCancel={() => setCancelDraft(false)} /> : null}
-      </ValidatedForm> : null}
-      <ul className={styles.list}>
-        {state.fields.map((field, index) => <li className={styles.row} key={field.id}>
-          <div className={styles.rowInfo}><strong>{field.label || "이름 없는 항목"}</strong><span className={styles.rowMeta}>{TYPE_LABELS[field.type] || "지원하지 않는 형식"} · {field.required ? "필수" : "선택"}{field.type === "select" ? ` · ${field.options.join(", ")}` : ""}</span></div>
-          <div className={styles.actions}>
-            <ProductButton type="button" className="button button-secondary" aria-label={`${field.label} 위로 이동`} disabled={!writable || writeLocked || Boolean(draft) || index === 0} onClick={() => reorder(field.id, -1)}>위로</ProductButton>
-            <ProductButton type="button" className="button button-secondary" aria-label={`${field.label} 아래로 이동`} disabled={!writable || writeLocked || Boolean(draft) || index === state.fields.length - 1} onClick={() => reorder(field.id, 1)}>아래로</ProductButton>
-            <ProductButton type="button" className="button button-secondary" aria-label={`${field.label} 수정`} disabled={!writable || writeLocked || Boolean(draft) || !Object.hasOwn(TYPE_LABELS, field.type)} onClick={() => start(toDraft(field))}>수정</ProductButton>
-            <ProductButton type="button" className="button button-secondary" aria-label={`${field.label} 제외`} disabled={!writable || writeLocked || Boolean(draft) || ["name", "phone"].includes(field.id)} onClick={() => setDeleteId(field.id)}>제외</ProductButton>
+      <p className={state.formVersion > state.publishedVersion ? styles.statePending : styles.statePublished} role="status">{state.formVersion > state.publishedVersion ? (state.publishedVersion ? "게시 안 된 변경 있음" : "아직 게시 전") : "게시된 양식과 같음"}</p>
+      <div className={styles.split}>
+        <div className={styles.listColumn}>
+          <div className={styles.listHead}>
+            <span className={styles.count}>항목 {state.fields.length}개</span>
+            <ProductButton type="button" variant="primary" icon={<PlusIcon />} disabled={!writable || writeLocked || Boolean(draft)} onClick={() => start({ id: newId(), label: "", type: "text", required: false, optionsText: "", existing: false })}>항목 추가</ProductButton>
           </div>
-        </li>)}
-      </ul>
-      {deleteId ? <ConsoleConfirm summary={`“${state.fields.find((field) => field.id === deleteId)?.label || "선택 항목"}”을 초안에서 제외할까요? 기존 답변은 바로 삭제되지 않으며 게시 후 신청 화면과 내보내기에서 빠질 수 있습니다.`} confirmLabel="항목 제외" busy={busy} onConfirm={() => remove(deleteId)} onCancel={() => setDeleteId(null)} /> : null}
+          <ul className={styles.list}>
+            {state.fields.map((field, index) => <li className={`${styles.row} ${draft?.existing && draft.id === field.id ? styles.rowSelected : ""}`} key={field.id}>
+              {/* The button holds only the name so its accessible name contains its visible text; the row's other text rides beside it and its hit area covers the whole row. */}
+              <span className={styles.rowInfo}>
+                <button type="button" className={styles.rowOpen} aria-label={`${field.label} 수정`} disabled={!writable || writeLocked || Boolean(draft) || !Object.hasOwn(TYPE_LABELS, field.type)} onClick={() => start(toDraft(field))}>{field.label || "이름 없는 항목"}</button>
+                <span className={styles.rowMeta}>{TYPE_LABELS[field.type] || "지원하지 않는 형식"}{["name", "phone"].includes(field.id) ? " · 고정 항목" : ""}{field.type === "select" ? ` · 선택지 ${field.options.length}개` : ""}</span>
+              </span>
+              <span className={field.required ? styles.reqOn : styles.reqOff}>{field.required ? "필수" : "선택"}</span>
+              <span className={styles.move}>
+                <ProductButton type="button" variant="ghost" size="sm" aria-label={`${field.label} 위로 이동`} disabled={!writable || writeLocked || Boolean(draft) || index === 0} onClick={() => reorder(field.id, -1)}><ArrowUpIcon /></ProductButton>
+                <ProductButton type="button" variant="ghost" size="sm" aria-label={`${field.label} 아래로 이동`} disabled={!writable || writeLocked || Boolean(draft) || index === state.fields.length - 1} onClick={() => reorder(field.id, 1)}><ArrowDownIcon /></ProductButton>
+              </span>
+            </li>)}
+          </ul>
+          {draft ? <ValidatedForm className={styles.editor} onSubmit={submit}>
+            <h3>{draft.existing ? "항목 수정" : "새 항목"}</h3>
+            <div className={styles.field}><label htmlFor="field-label">항목 이름</label><input id="field-label" maxLength={60} required value={draft.label} disabled={locked || !writable} onChange={(event) => setDraft({ ...draft, label: event.target.value })} /></div>
+            <ConsoleChoiceGroup id="field-type" label="입력 방식" value={draft.type} disabled={locked || !writable || ["name", "phone", "company"].includes(draft.id)} onChange={(type) => setDraft({ ...draft, type })}
+              options={[{ value: "text", label: "짧은 답변" }, { value: "email", label: "이메일" }, { value: "select", label: "하나 선택" }, { value: "checkbox", label: "체크" }]} hint={draft.existing ? "기존 답변이 있는 항목의 입력 방식은 바꿀 수 없습니다." : undefined} />
+            {draft.type === "select" ? <div className={styles.field}><label htmlFor="field-options">선택지 · 한 줄에 하나씩</label><textarea id="field-options" rows={4} value={draft.optionsText} disabled={locked || !writable} onChange={(event) => setDraft({ ...draft, optionsText: event.target.value })} /><p className={styles.help}>기존 답변에 사용된 선택지는 삭제할 수 없습니다.</p></div> : null}
+            <label className={styles.check}><input type="checkbox" checked={["name", "phone"].includes(draft.id) || draft.required} disabled={locked || !writable || ["name", "phone"].includes(draft.id)} onChange={(event) => setDraft({ ...draft, required: event.target.checked })} />필수 입력</label>
+            <p className={styles.help}>필수로 바꾸면 이전 참가자의 정보 수정에도 영향을 줄 수 있습니다.</p>
+            <div className={styles.editorActions}>
+              {draft.existing && !["name", "phone"].includes(draft.id) ? <ProductButton type="button" variant="destructive" disabled={writeLocked || !writable} onClick={() => setDeleteId(draft.id)}>이 항목 제외</ProductButton> : <span />}
+              <span className={styles.actions}><ProductButton type="button" variant="ghost" disabled={locked} onClick={() => { if (dirty) setCancelDraft(true); else { setDraft(null); setConflict(false); } }}>취소</ProductButton><ProductButton type="submit" variant="primary" disabled={writeLocked || !writable}>항목 저장</ProductButton></span>
+            </div>
+            {cancelDraft ? <ConsoleConfirm summary="작성 중인 항목 내용이 사라집니다. 취소할까요?" confirmLabel="작성 취소" onConfirm={() => { setDraft(null); setCancelDraft(false); setError(null); setConflict(false); }} onCancel={() => setCancelDraft(false)} /> : null}
+          </ValidatedForm> : null}
+          {deleteId ? <ConsoleConfirm summary={`“${state.fields.find((field) => field.id === deleteId)?.label || "선택 항목"}”을 초안에서 제외할까요? 기존 답변은 바로 삭제되지 않으며 게시 후 신청 화면과 내보내기에서 빠질 수 있습니다.`} confirmLabel="항목 제외" busy={busy} onConfirm={() => remove(deleteId)} onCancel={() => setDeleteId(null)} /> : null}
+        </div>
+        <FieldsPhonePreview eventName={state.name} activeId={draft?.id ?? null} fields={(() => {
+          // The draft shows as typed, so a new or renamed field is visible beside the list before it is saved.
+          if (!draft) return state.fields;
+          const edited = { id: draft.id, label: draft.label, type: draft.type, required: ["name", "phone"].includes(draft.id) || draft.required, options: draft.optionsText.split(/\r?\n/).map((item) => item.trim()).filter(Boolean) };
+          return draft.existing ? state.fields.map((field) => field.id === draft.id ? edited : field) : [...state.fields, edited];
+        })()} />
+      </div>
     </ConsoleSection>
   </ConsolePage>;
 }

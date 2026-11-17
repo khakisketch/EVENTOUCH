@@ -34,15 +34,17 @@ test("recent rows are plain: name, detail and time, no per-row button", () => {
   assert.match(work, /className=\{prizeStyles\.recentName\}/u);
 });
 
-test("stage 2: the verdict is a colored face with one wide next action", () => {
-  assert.match(work, /\$\{prizeStyles\.workSection\} \$\{prizeStyles\.resultStage\}`\} data-tone=\{correctionLocked \|\| result\.correctionChanged \|\| historicalScan \? "warn" : "ok"\}/u, "a done scan is green, a corrected or historical one amber");
-  assert.match(work, /data-tone=\{result\.uncertain \|\| boothLimitReached \|\| result\.attendanceReviewRequired[^}]*\? "warn" : "bad"\}/u, "needs-a-look is amber, a plain failure red");
-  assert.match(css, /\.resultStage\[data-tone="ok"\]\s*\{[^}]*var\(--success-soft\)/su);
-  assert.match(css, /\.resultStage\[data-tone="warn"\]\s*\{[^}]*var\(--warning-soft\)/su);
-  assert.match(css, /\.resultStage\[data-tone="bad"\]\s*\{[^}]*var\(--danger-soft\)/su);
-  assert.match(css, /\.resultStage :global\(\.scan-result\)\s*\{[^}]*font-size:\s*30px/su, "the name reads large");
-  assert.match(css, /\.resultStage \.nextActions :global\(\.astryx-button\)\s*\{[^}]*min-height:\s*60px/su, "the next action is wide and tall");
-  assert.match(work, /button button-quiet \$\{prizeStyles\.auxAction\}/u, "the nametag is a quiet action, not a second button");
+test("field result: a colored face over the camera, a plain success hands itself back", () => {
+  assert.match(work, /data-tone=\{stageTone\}/u, "the overlay carries its tone");
+  assert.match(work, /const infoFailure = result\.kind === "failed" && !result\.uncertain && \(result\.alreadyIn === true \|\| boothLimitReached\)/u, "an already-entered ticket is information, not an error");
+  assert.match(work, /\(infoFailure \? "info" : result\.uncertain \|\| result\.attendanceReviewRequired[^)]*\? "warn" : "bad"\)/u, "needs-a-look is amber, a plain failure red");
+  assert.match(css, /\.overlay\s*\{[^}]*var\(--success-soft\)/su);
+  assert.match(css, /\.overlay\[data-tone="info"\]\s*\{[^}]*var\(--info-soft\)/su);
+  assert.match(css, /\.overlay\[data-tone="warn"\]\s*\{[^}]*var\(--warning-soft\)/su);
+  assert.match(css, /\.overlay\[data-tone="bad"\]\s*\{[^}]*var\(--danger-soft\)/su);
+  assert.match(css, /\.bigName\s*\{[^}]*font-size:\s*2\.5rem/su, "the name reads large");
+  assert.match(work, /const autoMs = autoNext \? \(plainSuccess \? 1500 : infoAuto \? 3000 : 0\) : 0/u);
+  assert.match(work, /variant="ghost" disabled=\{writeLocked\} aria-expanded=\{nametagOpen\}/u, "the nametag is a quiet action, not a second button");
 });
 
 test("stage 2: the staff viewfinder is scoped and never touches the attendee camera", () => {

@@ -158,3 +158,15 @@
 }
 
 .blockedNotice { grid-column: 1 / -1; margin: 0; padding: var(--s2) 0; color: var(--warning); font-size: var(--small); line-height: 1.55; }
+
+/* The dark staff hub: the same menu as a quiet pill on ink. */
+.accountMenu[data-tone="dark"] { margin-bottom: 0; }
+.accountMenu[data-tone="dark"] .menuButton {
+  max-width: 11rem;
+  border-color: color-mix(in srgb, var(--paper) 22%, transparent);
+  background: transparent;
+  color: var(--paper);
+}
+.accountMenu[data-tone="dark"] .menuButton:hover { background: color-mix(in srgb, var(--paper) 12%, transparent); }
+.accountMenu[data-tone="dark"] .menuCaret { border-top-color: color-mix(in srgb, var(--paper) 72%, transparent); }
+.accountMenu[data-tone="dark"] .menuButton[aria-expanded="true"] .menuCaret { border-bottom-color: color-mix(in srgb, var(--paper) 72%, transparent); }

@@ -1,6 +1,7 @@
 'use strict';
 // Two real operator sessions, isolated synthetic data and the normal API.
 const assert = require('node:assert/strict');
+const { selectDrawStage } = require('./ui-journey-helpers.cjs');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -32,7 +33,7 @@ async function main() {
     await ca.addCookies([{...cookieForContext(f,'manager'),url:f.baseUrl}]);
     await cb.addCookies([{name:'etko_session',value:decodeURIComponent(secondCookie.split('=')[1]),url:f.baseUrl}]);
     a=await ca.newPage(); const b=await cb.newPage();
-    const setup=async p=>{await p.goto(`${f.baseUrl}/console/events/${f.eventId}/draws`);await p.getByRole('tab',{name:'모바일 룰렛',exact:true}).click();const d=p.locator('details').filter({hasText:'룰렛 운영 설정'});if(!await d.evaluate(el=>el.open))await d.locator('summary').click()};
+    const setup=async p=>{await p.goto(`${f.baseUrl}/console/events/${f.eventId}/draws`);await selectDrawStage(p, '모바일 룰렛');const d=p.locator('details').filter({hasText:'룰렛 운영 설정'});if(!await d.evaluate(el=>el.open))await d.locator('summary').click()};
     const save=async p=>{const response=p.waitForResponse(r=>r.url().includes('/commands')&&r.request().postDataJSON()?.command==='roulette.config.save-reviewed');await p.getByRole('button',{name:'룰렛 설정 저장',exact:true}).click();return response};
     await setup(a); await setup(b);
     await a.getByLabel('유한 재고 수량',{exact:true}).first().fill('4');
@@ -80,7 +81,7 @@ async function main() {
     await a.getByRole('button',{name:'룰렛 운영 시작',exact:true}).click();assert.equal((await confirm).status(),200);
     let saved=await read();assert.equal(saved.rouletteConfig.status,'OPEN');assert.equal(saved.rouletteConfig.prizes[0].quantity,4);
     // A new stale edit can instead discard the draft and adopt the latest settings.
-    await b.reload();await b.getByRole('tab',{name:'모바일 룰렛',exact:true}).click();let d=b.locator('details').filter({hasText:'룰렛 운영 설정'});if(!await d.evaluate(el=>el.open))await d.locator('summary').click();
+    await b.reload();await selectDrawStage(b, '모바일 룰렛');let d=b.locator('details').filter({hasText:'룰렛 운영 설정'});if(!await d.evaluate(el=>el.open))await d.locator('summary').click();
     await a.getByLabel('유한 재고 수량',{exact:true}).first().fill('3');
     await b.locator('#roulette-status').selectOption('CLOSED');assert.equal((await save(b)).status(),200);
     assert.equal((await save(a)).status(),409);await conflict.getByRole('button',{name:'최신 설정 확인',exact:true}).click();

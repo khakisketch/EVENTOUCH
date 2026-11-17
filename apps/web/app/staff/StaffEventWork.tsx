@@ -32,7 +32,7 @@ import {
 } from "../../lib/operator-context";
 import { OrganizationContextNotice } from "../OrganizationSwitcher";
 import StaffAccountMenu from "./StaffAccountMenu";
-import { BackIcon, CopyIcon, MoreIcon, RefreshIcon } from "../console/console-ui/ConsoleIcons";
+import { BackIcon, BangIcon, CheckIcon, ClockIcon, CopyIcon, GiftIcon, InfoIcon, KeyIcon, ListIcon, MoreIcon, RefreshIcon, XIcon } from "../console/console-ui/ConsoleIcons";
 import { useOperatorContextSnapshot } from "./use-operator-context";
 import { useEventReceipts } from "../../lib/use-event-receipts";
 import { forgetOperatorReceipt } from "../../lib/operator-receipts";
@@ -40,12 +40,15 @@ import OperatorReceiptRecovery from "../ui/OperatorReceiptRecovery";
 import { boothCanAttempt, boothOperatingStatus, boothScheduleTime, isBoothContextChanged } from "../../lib/booth-availability";
 import { readServerClock, type ServerClock } from "../../lib/server-clock";
 import prizeStyles from "./staff-event-work.module.css";
+import cameraStyles from "../camera-scan.module.css";
+import ConsoleDialog from "../console/console-ui/ConsoleDialog";
+import { playScanFeedback, primeScanFeedback, type ScanTone } from "./scan-feedback";
 
 // The scanner (and its decoder) loads only when the operator opens it: the
 // field screen never pays for jsQR until the first scan.
 const CameraScan = dynamic(() => import("../CameraScan"), {
   ssr: false,
-  loading: () => <p className="loading-state" role="status">카메라를 준비하고 있습니다.</p>,
+  loading: () => <p className={prizeStyles.cameraLoading} role="status">카메라를 준비하고 있습니다.</p>,
 });
 
 // A staff screen can stay open across an assigned booth's start or end.
@@ -140,7 +143,7 @@ type ScanRecordStatus = keyof typeof SCAN_HISTORY_NOTICES;
 type ScanResult =
   | { kind: "idle" }
   | { kind: "ok"; participantId: string; name: string; action: string; reentry: boolean; booth?: string; place: ScanPlace; checkId?: string; correctionChanged?: true; recordStatus?: ScanRecordStatus }
-  | { kind: "failed"; message: string; uncertain: boolean; place: ScanPlace; requestTicket: string; requestTarget?: string; deskRefreshRequired?: boolean; sourceRefreshRequired?: boolean; manualRefreshRequired?: boolean; boothLimitReached?: boolean; attendanceReviewRequired?: boolean; eligibilityReviewRequired?: boolean };
+  | { kind: "failed"; message: string; uncertain: boolean; place: ScanPlace; requestTicket: string; requestTarget?: string; deskRefreshRequired?: boolean; sourceRefreshRequired?: boolean; manualRefreshRequired?: boolean; boothLimitReached?: boolean; alreadyIn?: boolean; attendanceReviewRequired?: boolean; eligibilityReviewRequired?: boolean };
 
 function randomCommandId(): string {
   if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
@@ -207,6 +210,24 @@ async function readNameTagIdentity(eventId: string, participantId: string, confi
   }
 }
 
+// Timers and one-shot feedback live in tiny components so the long screen
+// body gains no hooks after its early returns: mounting starts them, a new
+// result (a new key) restarts them, unmounting cancels them.
+function AutoAdvance({ ms, onAdvance }: { ms: number; onAdvance: () => void }) {
+  const advance = useRef(onAdvance);
+  advance.current = onAdvance;
+  useEffect(() => {
+    const timer = window.setTimeout(() => advance.current(), ms);
+    return () => window.clearTimeout(timer);
+  }, [ms]);
+  return null;
+}
+
+function ScanFeedback({ tone, enabled }: { tone: ScanTone; enabled: boolean }) {
+  useEffect(() => { playScanFeedback(tone, enabled); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
 export default function StaffEventWork({ eventId }: { eventId: string }) {
   const router = useRouter();
   const targetEventId = resolveStaffScopeId(eventId);
@@ -267,10 +288,32 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   // 입력 방식: 스캔(카메라+코드)과 명단 찾기를 같은 위계의 전환으로 둔다.
   // 접힌 details 뒤에 숨기지 않는다: 카메라 고장 순간에 발견 비용이 가장 크기 때문이다.
   // 카메라 API 자체가 없으면 처음부터 명단 모드로 시작한다.
+  // Field layout: "roster" is the name-search sheet. A device with no camera
+  // API says so on the stage and offers the search there instead of starting
+  // with the sheet open.
   const [entryMode, setEntryMode] = useState<"scan" | "roster">("scan");
+  const [noCamera, setNoCamera] = useState(false);
   useEffect(() => {
-    if (typeof navigator !== "undefined" && !navigator.mediaDevices?.getUserMedia) setEntryMode("roster");
+    if (typeof navigator !== "undefined" && !navigator.mediaDevices?.getUserMedia) setNoCamera(true);
   }, []);
+  // Other sheets and field preferences. Sheets open only on demand; the scan
+  // screen itself carries no list or form.
+  const [sheet, setSheet] = useState<null | "code" | "recent" | "correct" | "rewards">(null);
+  // The last successful scan stays correctable after the result hands itself
+  // back to the camera: the correction opens from 최근 처리.
+  const [lastScan, setLastScan] = useState<Extract<ScanResult, { kind: "ok" }> | null>(null);
+  const [soundOn, setSoundOn] = useState(true);
+  const [autoNext, setAutoNext] = useState(true);
+  const soundOnRef = useRef(true);
+  soundOnRef.current = soundOn;
+  const resultSeqRef = useRef<{ last: ScanResult | null; seq: number }>({ last: null, seq: 0 });
+  // Any result (done, failed or unconfirmed) takes the front: the code and
+  // name-search sheets close so the verdict is not hidden behind them.
+  useEffect(() => {
+    if (result.kind === "idle") return;
+    setSheet((current) => (current === "code" ? null : current));
+    setEntryMode("scan");
+  }, [result]);
   function chooseEntryMode(next: "scan" | "roster") {
     setEntryMode(next);
     if (next === "roster") window.requestAnimationFrame(() => document.getElementById("staff-manual-search")?.focus({ preventScroll: false }));
@@ -303,6 +346,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   const currentEventRef = useRef(targetEventId); currentEventRef.current = targetEventId;
   const ownReceiptIds = new Set([pendingScanRef.current?.commandId, pendingCorrectRef.current?.commandId, ...[...pendingRewardCommandsRef.current.values()].map((entry) => entry.id)]);
   const inlineScanReceiptId = result.kind === "failed" && result.uncertain ? pendingScanRef.current?.commandId : undefined;
+  const tapFocusSeqRef = useRef(0);
   const otherReceipt = eventReceipts.some((entry) => ["check.scan", "booth.visit", "check.correct", "reward.lookup", "reward.collect"].includes(entry.command) && !ownReceiptIds.has(entry.commandId));
   const receiptLock = otherReceipt || receiptRefreshNeeded || (previousOtherReceipt.current.eventId === targetEventId && previousOtherReceipt.current.pending && !otherReceipt);
   function drainAppliedReceipts() {
@@ -427,6 +471,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     if (pendingScanRef.current) return;
     setResult({ kind: "idle" });
     if (result.kind === "failed" && result.requestTarget) {
+      setEntryMode("roster");
       window.requestAnimationFrame(() => document.getElementById("staff-manual-search")?.focus());
     } else focusTicketField();
   }
@@ -1006,9 +1051,11 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     scanEditAtSubmitRef.current = scanEditRevisionRef.current;
     scanBusyRef.current = true;
     setSubmitting(true);
-    // Closing an already-open camera also prevents a late detection from
-    // replacing the ticket whose request is currently being resolved.
-    setCameraOpen(false);
+    // The camera stays open (the next person is scanned without restarting
+    // it); detections are ignored while this request is in flight because the
+    // scanner is suspended and scanBusyRef guards the submit. An open code or
+    // name-search sheet stays until the result arrives (see the effect on
+    // `result`), so its read-only code and "처리 중입니다" stay in view.
     if (!retrySame) setResult({ kind: "idle" });
     setTicketCopyNotice(null);
     clearRewardPanel();
@@ -1094,6 +1141,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           kind: "failed",
           uncertain,
           boothLimitReached,
+          alreadyIn: isDesk && res.status === 409 && data?.code === "ALREADY_CHECKED_IN",
           attendanceReviewRequired,
           eligibilityReviewRequired,
           deskRefreshRequired: deskChanged,
@@ -1142,7 +1190,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       // success action must never look available while the busy guard rejects it.
       const refreshed = await load(true, controller.signal);
       if (refreshed && "participantId" in pending.payload) forgetOperatorReceipt(pending.commandId);
-      setResult({
+      const okResult: Extract<ScanResult, { kind: "ok" }> = {
         kind: "ok",
         participantId,
         name: participantName,
@@ -1152,7 +1200,9 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         reentry: data?.reentry === true,
         booth: typeof data?.booth === "string" ? data.booth : "",
         place: requestPlace,
-      });
+      };
+      setResult(okResult);
+      setLastScan(okResult);
       setTicket("");
       setManualTarget(null);
       setManualIdentityConfirmed(false);
@@ -1215,6 +1265,8 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     setManualTarget(null);
     setManualIdentityConfirmed(false);
     setResult((current) => current.kind === "failed" && current.manualRefreshRequired ? { kind: "idle" } : current);
+    // The name search is a sheet now: bring it back so the refreshed list is in front of the operator.
+    setEntryMode("roster");
     window.requestAnimationFrame(() => document.getElementById("staff-manual-search")?.focus());
   }
 
@@ -1414,9 +1466,10 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   // A valid QR for the wrong person is accepted instantly, so the latest
   // record of this session carries its own correction. The server still
   // enforces desk scope and authorship; other records stay read-only here.
-  const correctableCheck = deskSourcesAvailable && result.kind === "ok" && result.checkId && !result.correctionChanged && !historicalScan
+  const correctTarget = result.kind === "ok" ? result : lastScan;
+  const correctableCheck = deskSourcesAvailable && correctTarget && correctTarget.checkId && !correctTarget.correctionChanged && !correctTarget.recordStatus
     ? activeScope.checks.find(
-        (check) => check.id === result.checkId && check.participantId === result.participantId && check.corrected !== true && check.deskId === deskId
+        (check) => check.id === correctTarget.checkId && check.participantId === correctTarget.participantId && check.corrected !== true && check.deskId === deskId
       ) ?? null
     : null;
 
@@ -1477,6 +1530,8 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           clearRewardPanel();
           setResult((current) => current.kind === "ok" && current.checkId === pending.checkId
             ? { ...current, correctionChanged: true } : current);
+          setLastScan(null);
+          setSheet(null);
           await load(true);
           return;
         }
@@ -1500,6 +1555,8 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       setCorrectUnknown(false);
       setCorrectNotice("기록을 정정했습니다. 현재 입장 상태에 반영되었습니다.");
       setCorrectReason("");
+      setLastScan(null);
+      setSheet(null);
       setResult({ kind: "idle" });
       await load(true);
     } catch {
@@ -1513,8 +1570,264 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     }
   }
 
+  const walkIn = result.kind === "ok" && result.action === "IN" && !result.correctionChanged && !historicalScan;
+  // The prize panel keeps the result open while there is something to hand over, to
+  // recheck, or an error to read (a rejected handout clears the target but leaves its message).
+  const rewardHold = rewardEnabled && isExitDesk && Boolean(assignment) && result.kind === "ok" && !historicalScan
+    && (rewardTarget ? targetRewards.length > 0 || !rewardDataLoaded || Boolean(rewardError) : Boolean(rewardError) || rewardLookupTicket.trim() !== "");
+  // A plain success carries nothing to read or do: it hands back to the
+  // camera by itself (or on a tap). Anything that needs a decision holds.
+  const plainSuccess = result.kind === "ok" && !result.correctionChanged && !historicalScan && !correctionLocked && !rewardCollectUncertain
+    && !directionReview && !nametagOpen && !writeLocked && !correctUnknown && !rewardHold && sheet === null && entryMode !== "roster";
+  const infoFailure = result.kind === "failed" && !result.uncertain && (result.alreadyIn === true || boothLimitReached);
+  const infoAuto = infoFailure && !writeLocked && sheet === null && entryMode !== "roster";
+  const autoMs = autoNext ? (plainSuccess ? 1500 : infoAuto ? 3000 : 0) : 0;
+  const stageTone = result.kind === "ok"
+    ? (plainSuccess || !(correctionLocked || result.correctionChanged || historicalScan) ? "ok" : "warn")
+    : result.kind === "failed"
+      ? (infoFailure ? "info" : result.uncertain || result.attendanceReviewRequired || result.eligibilityReviewRequired || result.manualRefreshRequired || result.deskRefreshRequired || result.sourceRefreshRequired ? "warn" : "bad")
+      : "idle";
+  if (resultSeqRef.current.last !== result) resultSeqRef.current = { last: result, seq: resultSeqRef.current.seq + 1 };
+  const resultSeq = resultSeqRef.current.seq;
+  const selfBooth = activeTask === "booth" && activeScope.stampMode === "SELF";
+  const cameraMounted = !selfBooth && cameraOpen && ready && !orgChanged && !scanUnknown;
+  const scanSuspended = submitting || result.kind !== "idle" || writeLocked || sheet !== null || entryMode === "roster";
+  const placeTitle = activeTask === "desk" ? (selectedDesk?.name ?? "데스크") : (selectedBooth?.name ?? "부스");
+  const failKicker = boothLimitReached ? "인증 한도 도달" : result.kind === "failed" && result.alreadyIn ? "이미 입장했어요" : result.kind === "failed" && result.uncertain ? "처리 결과를 확인하지 못했습니다" : result.kind === "failed" && result.attendanceReviewRequired ? "출입 기록 확인이 필요합니다" : result.kind === "failed" && result.eligibilityReviewRequired ? "참가 상태 확인이 필요합니다" : "처리하지 못했습니다";
+  const resultActions = result.kind === "failed" ? (
+    <div className={prizeStyles.nextActions}>
+            {result.uncertain ? (
+              <ProductButton type="button" ref={retryFailedRef} className="button button-primary" disabled={writeLocked || submitting || scanStatusChecking} onClick={() => { void submitTicket(result.requestTicket, true); }}>
+                같은 요청 재확인
+              </ProductButton>
+            ) : null}
+            {result.uncertain && inlineScanReceiptId ? <OperatorReceiptRecovery inline currentEventId={targetEventId} onlyCommandId={inlineScanReceiptId} disabled={writeLocked || submitting || receiptRefreshing} onCheckingChange={setScanStatusChecking} /> : null}
+            {result.manualRefreshRequired ? (
+              <ProductButton type="button" ref={retryFailedRef} className="button button-primary" disabled={refreshing || writeLocked || submitting} onClick={() => void refreshManualRoster()}>
+                {refreshing ? "명단 확인 중" : "참가자 명단 다시 확인"}
+              </ProductButton>
+            ) : result.sourceRefreshRequired ? (
+              <ProductButton type="button" ref={retryFailedRef} className="button button-primary" disabled={refreshing || writeLocked || submitting} onClick={() => void refreshDeskStatus()}>
+                {refreshing ? "업무 정보 확인 중" : "업무 정보 다시 확인"}
+              </ProductButton>
+            ) : result.deskRefreshRequired ? (
+              <ProductButton type="button" ref={retryFailedRef} className="button button-primary" disabled={refreshing || writeLocked || submitting} onClick={() => void refreshDeskStatus()}>
+                {refreshing ? "데스크 상태 확인 중" : "데스크 상태 다시 확인"}
+              </ProductButton>
+            ) : boothRefreshRequired ? (
+              <ProductButton type="button" ref={retryFailedRef} className="button button-primary" disabled={refreshing || writeLocked || submitting} onClick={() => void refreshBoothStatus()}>
+                {refreshing ? "부스 상태 확인 중" : "부스 상태 다시 확인"}
+              </ProductButton>
+            ) : boothLimitReached || result.attendanceReviewRequired || result.eligibilityReviewRequired ? (
+              <ProductButton type="button" ref={retryFailedRef} className="button button-primary" disabled={writeLocked} onClick={prepareNextParticipant}>
+                다음 참가자
+              </ProductButton>
+            ) : !result.uncertain ? <ProductButton type="button" ref={retryFailedRef} className="button button-primary" disabled={writeLocked} onClick={retryFailedScan}>
+              확인
+            </ProductButton> : (
+              <ProductButton type="button" className="button button-secondary" disabled={submitting || scanStatusChecking} onClick={() => {
+                if (!window.confirm("처리됐을 수 있는 요청의 결과를 아직 확인하지 못했습니다. 확인을 중단하면 이 화면에서 요청을 다시 확인할 수 없을 수 있습니다. 운영자에게 기록을 확인한 뒤 계속하세요. 확인을 중단하시겠습니까?")) return;
+                if (pendingScanRef.current) {
+                  pendingScanIdRef.current.delete(pendingScanRef.current.attempt);
+                  abandonOperatorAttempt(pendingScanRef.current.commandId); forgetOperatorReceipt(pendingScanRef.current.commandId);
+                }
+                pendingScanRef.current = null;
+                setManualTarget(null);
+                setManualIdentityConfirmed(false);
+                setResult({ kind: "idle" });
+              }}>확인 중단하고 다른 업무</ProductButton>
+            )}
+    </div>
+  ) : null;
+  const rewardPanel = rewardEnabled && isExitDesk && assignment ? (
+    <section className={`${prizeStyles.workSection} ${prizeStyles.prizeWorkspace}`} aria-label="경품 확인 및 수령">
+          <div className={prizeStyles.prizeHeader}>
+            <div>
+              <h2>경품 확인·수령</h2>
+              <p>퇴장 처리 응답 또는 티켓 조회로 해당 참가자의 경품만 확인합니다.</p>
+            </div>
+          </div>
+          <ValidatedForm className={prizeStyles.lookupForm} onSubmit={lookupRewardsByTicket}>
+            <div className="form-field">
+              <label htmlFor="reward-lookup-ticket">경품 대상 티켓</label>
+              <input
+                id="reward-lookup-ticket"
+                type="text"
+                autoComplete="off"
+                placeholder="퇴장 스캔 응답을 놓쳤다면 티켓 코드를 입력하세요"
+                value={rewardLookupTicket}
+                disabled={scanUnknown || rewardLookupLoading || rewardCollectUncertain || receiptLock || receiptRefreshing || rewardCollectingId !== null}
+                onChange={(event) => {
+                  if (rewardRequestRef.current) return;
+                  setRewardLookupTicket(event.target.value);
+                  clearRewardPanel();
+                }}
+              />
+            </div>
+            <ProductButton type="submit" className="button button-secondary" disabled={scanUnknown || rewardLookupLoading || assignmentStale || rewardCollectUncertain || receiptLock || receiptRefreshing || rewardCollectingId !== null || !ready || !rewardLookupTicket.trim()}>
+              {rewardLookupLoading ? "조회 중입니다" : "경품 조회"}
+            </ProductButton>
+            {lastScannedTicket ? (
+              <ProductButton
+                type="button"
+                className="button button-secondary"
+                disabled={scanUnknown || rewardLookupLoading || assignmentStale || rewardCollectUncertain || receiptLock || receiptRefreshing || rewardCollectingId !== null || !ready}
+                onClick={(event) => lookupRewardsByTicket(event, lastScannedTicket)}
+              >
+                마지막 스캔 티켓으로 조회
+              </ProductButton>
+            ) : null}
+          </ValidatedForm>
+          {pendingLookup ? <div className={prizeStyles.prizeNote} role="status">
+            <p>이전 경품 조회의 결과를 확인하지 못했습니다. 같은 요청으로 다시 확인하거나 조회 확인을 중단할 수 있습니다.</p>
+            <ProductButton type="button" className="button button-secondary" disabled={rewardLookupLoading || rewardCollectingId !== null} onClick={() => {
+              const entry = [...pendingRewardCommandsRef.current.entries()].find(([, item]) => item.command === "reward.lookup" && item.uncertain);
+              if (!entry) return;
+              abandonOperatorAttempt(entry[1].id);
+              forgetOperatorReceipt(entry[1].id);
+              pendingRewardCommandsRef.current.delete(entry[0]);
+              setRewardDataLoaded(false);
+              setRewardError(null);
+              setRewardNotice("이전 조회 확인을 중단했습니다. 티켓으로 다시 조회하세요. 조회 중단은 경품 지급을 기록하지 않습니다.");
+            }}>이전 조회 확인 중단</ProductButton>
+          </div> : null}
+          {rewardError && !rewardTarget ? <p className={prizeStyles.prizeError} role="alert">{rewardError}</p> : null}
+          {rewardTarget ? (
+            <div className={prizeStyles.prizeTarget}>
+              <div className={prizeStyles.prizeTargetHead}>
+                <div className={prizeStyles.targetIdentity}>
+                  <strong>{rewardTarget.name}</strong>
+                  {rewardTarget.company ? <span>{rewardTarget.company}</span> : null}
+                </div>
+                <ProductButton type="button" className="button button-secondary" disabled={!ready || rewardLookupLoading || scanUnknown || assignmentStale || rewardCollectUncertain || receiptLock || receiptRefreshing || rewardCollectingId !== null} onClick={refreshTargetRewards}>
+                  {rewardLookupLoading ? "다시 확인 중" : "경품 다시 확인"}
+                </ProductButton>
+              </div>
+              {!rewardDataLoaded && !rewardLookupLoading ? (
+                rewardError ? <p className={prizeStyles.prizeError} role="alert">{rewardError}</p>
+                  : <p className={prizeStyles.prizeEmpty}>최신 수령 상태를 확인하려면 ‘경품 다시 확인’을 누르세요.</p>
+              ) : null}
+              {targetRewards.length ? (
+                <ul className={prizeStyles.rewardList}>
+                  {targetRewards.map((reward) => {
+                    const onsite = canHandOutReward(reward);
+                    const received = onsite && reward.status === "RECEIVED";
+                    const readyReward = onsite && reward.status === "READY";
+                    const pending = onsite && reward.status === "PENDING";
+                    const statusLabel = !onsite ? (reward.method.trim().toUpperCase() === "GIFT" ? "기프티콘 · 운영자 확인" : "지급 방식 확인 필요")
+                      : received ? "수령 완료"
+                      : readyReward ? "수령 대기"
+                      : pending ? "운영자 수령자 지정 필요"
+                      : reward.status === "CANCELLED" ? "취소"
+                      : "상태 확인 필요";
+                    const statusTone = received && !reward.issue ? prizeStyles.rewardReceived : readyReward ? prizeStyles.rewardReady : "";
+                    const retrying = pendingRewardCommandsRef.current.has(JSON.stringify([
+                      activeScope.eventId,
+                      assignment.id,
+                      "reward.collect",
+                      { id: reward.id, verificationId: rewardTarget.verificationId, expectedParticipantId: rewardTarget.id },
+                    ]));
+                    return (
+                      <li key={reward.id} className={prizeStyles.rewardItem}>
+                        <div className={prizeStyles.rewardInfo}>
+                          <strong>{reward.name}</strong>
+                          <span className={`${prizeStyles.rewardStatus} ${rewardSnapshotCurrent ? statusTone : ""}`}>
+                            {rewardSnapshotCurrent ? statusLabel : `이전 조회 · ${statusLabel}`}
+                          </span>
+                          {reward.issue && rewardSnapshotCurrent ? <p className={prizeStyles.prizeError} role="alert">{reward.issue}</p> : null}
+                        </div>
+                        {readyReward ? (
+                          <ProductButton type="button" className="button button-primary" disabled={!ready || !rewardSnapshotCurrent || scanUnknown || orgChanged || assignmentStale || receiptLock || receiptRefreshing || (rewardCollectUncertain && pendingCollection?.payload.id !== reward.id) || rewardCollectingId !== null} onClick={() => collectReward(reward)}>
+                            {rewardCollectingId === reward.id ? "수령 확인 중" : retrying ? "같은 요청으로 다시 확인" : "수령 확인"}
+                          </ProductButton>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : rewardDataLoaded ? (
+                <p className={prizeStyles.prizeEmpty}>이 참가자에게 등록된 경품이 없습니다.</p>
+              ) : null}
+              {rewardDataLoaded && targetRewards.some((reward) => reward.status === "PENDING") ? <p className={prizeStyles.prizeNote}>수령자를 먼저 지정해야 합니다. 운영자에게 확인을 요청하세요.</p> : null}
+            </div>
+          ) : rewardError || rewardDeskError ? null : result.kind === "ok" && result.action === "OUT" && !historicalScan ? (
+            <p className={prizeStyles.prizeEmpty}>퇴장 스캔 결과의 경품을 불러오지 못했습니다. 티켓으로 다시 조회하세요.</p>
+          ) : (
+            <p className={prizeStyles.prizeEmpty}>경품 확인은 티켓 스캔 또는 퇴장 처리 후 시작할 수 있습니다.</p>
+          )}
+          {rewardNotice ? <p className={prizeStyles.prizeNotice} role="status">{rewardNotice}</p> : null}
+          {rewardError && rewardTarget && rewardDataLoaded ? <p className={prizeStyles.prizeError} role="alert">{rewardError}</p> : null}
+          <p className={prizeStyles.prizeNote}>이번 요청의 수령 완료 안내를 확인한 뒤 경품을 전달하세요.</p>
+        </section>
+  ) : null;
+  const codeForm = (
+    <ValidatedForm className={`scan-form ${prizeStyles.sheetForm}`} onSubmit={onScan}>
+      <div className="form-field">
+        <label htmlFor="staff-ticket">티켓 코드</label>
+        <input
+          id="staff-ticket"
+          type="text"
+          autoComplete="off"
+          placeholder="카메라가 안 되면 코드를 직접 입력하세요"
+          value={ticket}
+          aria-describedby={submitting ? "staff-scan-hint staff-scan-wait" : result.kind === "failed" ? "staff-scan-hint staff-scan-retry-hint" : "staff-scan-hint"}
+          disabled={writeLocked}
+          readOnly={submitting}
+          onChange={(event) => { if (!scanBusyRef.current) { scanEditRevisionRef.current += 1; setTicket(event.target.value); } }}
+        />
+      </div>
+      {activeTask === "booth" && ticket ? (
+        <p className={prizeStyles.ticketFullCode} data-ticket-full-code>
+          <span className={prizeStyles.ticketFullCodeLabel}>입력한 코드 전체</span>
+          <code>{ticket}</code>
+        </p>
+      ) : null}
+      {activeTask === "booth" ? (
+        <ProductButton type="button" variant="ghost" disabled={!ticket.trim() || submitting} onClick={copyTicketCode} icon={<CopyIcon />}>코드 복사</ProductButton>
+      ) : null}
+      {ticketCopyNotice ? <p role="status" className={prizeStyles.nextStep}>{ticketCopyNotice}</p> : null}
+      <ProductButton variant="primary" type="submit" disabled={submitting || writeLocked || !ready || !ticket.trim()}>
+        {submitting ? "처리 중입니다" : activeTask === "booth" ? "부스 인증" : isExitDesk ? "퇴장 처리" : "입장 처리"}
+      </ProductButton>
+    </ValidatedForm>
+  );
+  const correctionForm = (
+            <ValidatedForm className="correction-form" onSubmit={(event) => { void correctLatest(event); }}>
+          <p className="staff-direction-hint">잘못 처리했다면 사유를 입력하세요. 정정 대상은 이 참가자의 가장 최근 기록이며, 본인이 처리한 건만 정정할 수 있습니다.</p>
+          <div className="form-field">
+            <label htmlFor="correct-reason">정정 사유</label>
+            <input
+              id="correct-reason"
+              type="text"
+              maxLength={300}
+              placeholder="예: 다른 분 티켓을 잘못 스캔함"
+              value={correctReason}
+              disabled={scanControlsLocked}
+              onChange={(event) => setCorrectReason(event.target.value)}
+            />
+          </div>
+          {correctUnknown ? (
+            <p className={prizeStyles.nextStep} role="alert">응답을 확인하기 전까지 정정 대상·사유를 바꾸지 마세요. 같은 정정 요청으로 다시 시도하면 중복 정정 없이 확인할 수 있습니다.</p>
+          ) : null}
+          {correctUnknown ? (
+            <ProductButton
+              className="button button-primary"
+              type="button"
+              disabled={correcting}
+              onClick={(event) => { void correctLatest(event, true); }}
+            >
+              {correcting ? "확인 중입니다" : "같은 요청으로 다시 시도"}
+            </ProductButton>
+          ) : (
+            <ProductButton className={`button button-secondary ${prizeStyles.correctSubmit}`} type="submit" disabled={scanUnknown || correcting || orgChanged || assignmentStale || rewardCollectUncertain || receiptLock || receiptRefreshing || rewardLookupLoading || rewardCollectingId !== null || !correctReason.trim()}>
+              {correcting ? "정정 중입니다" : "최신 기록 정정"}
+            </ProductButton>
+          )}
+        </ValidatedForm>
+  );
+
   return (
-    <section className={`staff-workspace${kiosk ? " kiosk-mode" : ""}`} aria-label={`${activeScope.eventName} 현장 업무`}>
+    <section className={`staff-workspace ${prizeStyles.fieldApp}${kiosk ? " kiosk-mode" : ""}`} aria-label={`${activeScope.eventName} 현장 업무`} data-tone={stageTone}>
       <div className={`staff-event-context ${prizeStyles.eventContext}`}>
         <ProductLink
           className="staff-back-link"
@@ -1581,10 +1894,28 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
               </span>
               <span>키오스크</span>
             </ProductButton>
-            <StaffAccountMenu compact confirmLeave={confirmLeaveStaff} confirmLeaveAccount={confirmLeaveAccountPage} excludeReceiptCommandId={inlineScanReceiptId} />
+            <ProductButton
+              type="button"
+              variant="ghost"
+              role="switch"
+              aria-checked={autoNext}
+              className={`${prizeStyles.kioskSwitch} ${autoNext ? prizeStyles.kioskSwitchOn : ""}`}
+              onClick={() => setAutoNext((current) => !current)}
+            >
+              <span className={prizeStyles.kioskSwitchTrack} aria-hidden="true">
+                <span className={prizeStyles.kioskSwitchThumb} />
+              </span>
+              <span>결과 자동 넘김</span>
+            </ProductButton>
+            {cameraOpen ? (
+              <ProductButton type="button" variant="ghost" disabled={submitting || scanControlsLocked} onClick={() => setCameraOpen(false)}>카메라 끄기</ProductButton>
+            ) : null}
+            <StaffAccountMenu compact receipts={false} confirmLeave={confirmLeaveStaff} confirmLeaveAccount={confirmLeaveAccountPage} excludeReceiptCommandId={inlineScanReceiptId} />
           </div>
         </details>
       </div>
+      {/* The shared 처리 결과 확인 panel stays in the page flow: the notices say "위의 처리 결과 확인". */}
+      <div className={prizeStyles.fieldReceipts}><OperatorReceiptRecovery excludeCommandId={inlineScanReceiptId} /></div>
       {orgChanged ? <OrganizationContextNotice confirmLeave={confirmLeaveStaff} /> : null}
       {otherReceipt ? <p className="notice" role="alert">이전 현장 처리의 결과를 위의 처리 결과 확인에서 확인한 뒤 새 업무를 진행하세요.</p> : null}
       {receiptRefreshNeeded ? <p className="notice" role="alert">최신 업무 정보를 불러온 뒤 다시 진행할 수 있습니다. <ProductButton type="button" className="button button-secondary" disabled={receiptRefreshing} onClick={() => {
@@ -1614,6 +1945,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           공용 태블릿용 큰 화면입니다. 무인 셀프 체크인은 지원하지 않습니다.
         </p>
       ) : null}
+      <div className={prizeStyles.fieldContext}>
       {hasDeskWork && hasBoothWork ? (
         <div className={`staff-task-switch ${prizeStyles.taskSwitch}`} role="group" aria-label="업무 종류">
           <ProductButton
@@ -1756,6 +2088,39 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         </div>
         </section>
       )}
+      </div>
+      {correctionLocked ? (
+        <p className="notice" role="status">정정 응답을 확인하는 중입니다. 데스크·스캔 전환은 잠겨 있습니다.</p>
+      ) : null}
+      {orgChanged ? (
+        <p className="notice" role="status">다른 탭에서 조직이 전환됐습니다. 입력한 티켓·사유와 선택·기록은 그대로 유지됩니다. 스캔·정정·경품 쓰기는 잠시 잠겨 있습니다. 위 안내에서 전환을 먼저 확인하세요. 정정 응답 확인이 남아 있다면 같은 요청으로 다시 시도할 수 있습니다.</p>
+      ) : null}
+      {activeTask === "desk" && !deskSourcesAvailable ? (
+        <div className={prizeStyles.directionReview} role="alert">
+          <p>{[!activeScope.participantsAvailable ? "참가자 명단" : "", !activeScope.checksAvailable ? "출입 기록" : ""].filter(Boolean).join(" · ")}을 확인할 수 없어 입퇴장을 잠시 멈췄습니다. 다시 확인해도 계속되면 현장 책임자에게 문의하세요.</p>
+          <ProductButton type="button" className="button button-secondary" disabled={refreshing || submitting || writeLocked || scanUnknown} onClick={() => void load(true)}>
+            {refreshing ? "확인 중" : "업무 정보 다시 확인"}
+          </ProductButton>
+        </div>
+      ) : null}
+      {loadError && activeTask === "desk" && !assignmentStale && !receiptRefreshNeeded && !deskClosed && !deskRefreshRequired ? (
+        <p className="notice" role="status">
+          {loadError}{" "}
+          <ProductButton type="button" className="button button-secondary" disabled={refreshing} onClick={() => void load(true)}>
+            {refreshing ? "불러오는 중" : "다시 불러오기"}
+          </ProductButton>
+        </p>
+      ) : null}
+      {rewardEnabled === false && result.kind === "ok" && result.action === "OUT" && !historicalScan ? (
+        <p className="notice" role="status">이 행사에서 경품 기능이 꺼져 있어 현장 경품 조회·수령 처리를 사용할 수 없습니다.</p>
+      ) : null}
+      {correctNotice ? <p className={`scan-result ${prizeStyles.fieldNotice}`} role={correctUnknown ? "alert" : "status"}>{correctNotice}</p> : null}
+      {scanLine ? <p id="staff-scan-hint" className="sr-only" role="status">{scanLine}</p> : null}
+      {submitting ? <p id="staff-scan-wait" className={prizeStyles.fieldNotice} role="status">처리 결과를 확인하고 있습니다. 확인이 끝나면 티켓과 업무를 다시 바꿀 수 있습니다.</p> : null}
+
+      <div className={prizeStyles.fieldStage} data-tone={stageTone}>
+        {selfBooth && activeScope.stampAvailable ? (
+          <div className={prizeStyles.selfStage}>
       {activeTask === "booth" && activeScope.stampAvailable && activeScope.stampMode === "SELF" && (!selectedBooth || ready) ? (
         <p className="notice" role="status">
           참가자가 직접 인증하는 방식입니다. QR을 보여주고 참가자 홈 &gt; 부스 인증에서 카메라로 바로 인증하도록 안내하세요.
@@ -1798,159 +2163,200 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           </details>
         </div>
       ) : null}
-      {correctionLocked ? (
-        <p className="notice" role="status">정정 응답을 확인하는 중입니다. 데스크·스캔 전환은 잠겨 있습니다.</p>
-      ) : null}
-      {orgChanged ? (
-        <p className="notice" role="status">다른 탭에서 조직이 전환됐습니다. 입력한 티켓·사유와 선택·기록은 그대로 유지됩니다. 스캔·정정·경품 쓰기는 잠시 잠겨 있습니다. 위 안내에서 전환을 먼저 확인하세요. 정정 응답 확인이 남아 있다면 같은 요청으로 다시 시도할 수 있습니다.</p>
-      ) : null}
-      {activeTask === "desk" && !deskSourcesAvailable ? (
-        <div className={prizeStyles.directionReview} role="alert">
-          <p>{[!activeScope.participantsAvailable ? "참가자 명단" : "", !activeScope.checksAvailable ? "출입 기록" : ""].filter(Boolean).join(" · ")}을 확인할 수 없어 입퇴장을 잠시 멈췄습니다. 다시 확인해도 계속되면 현장 책임자에게 문의하세요.</p>
-          <ProductButton type="button" className="button button-secondary" disabled={refreshing || submitting || writeLocked || scanUnknown} onClick={() => void load(true)}>
-            {refreshing ? "확인 중" : "업무 정보 다시 확인"}
-          </ProductButton>
-        </div>
-      ) : null}
-      {scanInputHasWork && result.kind !== "ok" && !scanUnknown ? (
-       <div className={prizeStyles.scanInput} ref={scanInputRef}>
-      <h2 className={prizeStyles.sectionTitle}>참가자 티켓 확인</h2>
-      {activeTask === "desk" ? (
-        <div className={prizeStyles.entryModeSwitch} role="group" aria-label="입력 방식">
-          <ProductButton
-            type="button"
-            className="button button-secondary"
-            aria-pressed={entryMode === "scan"}
-            disabled={scanControlsLocked || submitting}
-            onClick={() => { setEntryMode("scan"); setCameraOpen(false); }}
-          >
-            스캔
-          </ProductButton>
-          <ProductButton
-            type="button"
-            className="button button-secondary"
-            aria-pressed={entryMode === "roster"}
-            disabled={scanControlsLocked || submitting}
-            onClick={() => chooseEntryMode("roster")}
-          >
-            명단 찾기
-          </ProductButton>
-        </div>
-      ) : null}
-      {/* Field order is scan-first: a moving line points the camera, and the
-          manual input stays as the fallback for unreadable codes. The bar
-          stays in normal flow (never a fixed overlay), so the selector, the
-          org line, and the SELF QR below can never be covered by it. One
-          context line only (see scanLine): the duplicate how-to hint that
-          used to sit above this block is gone. */}
-      {scanLine ? <p id="staff-scan-hint" className={scanContext ? prizeStyles.scanContext : "staff-direction-hint"} role="status">{scanLine}</p> : null}
-      {submitting ? <p id="staff-scan-wait" className="notice" role="status">처리 결과를 확인하고 있습니다. 확인이 끝나면 티켓과 업무를 다시 바꿀 수 있습니다.</p> : null}
-      {(entryMode === "scan" || activeTask !== "desk") ? <div className="camera-action">
-        {activeTask === "booth" && activeScope.stampMode === "SELF" ? null : (
-          <ProductButton
-            ref={cameraButtonRef}
-            type="button"
-            disabled={!ready || writeLocked || submitting}
-            aria-describedby="staff-scan-hint"
-            className={`button button-primary ${prizeStyles.scanPrimary}`}
-            onClick={() => {
-              setResult({ kind: "idle" });
-              setCameraOpen(true);
-            }}
-          >
-            카메라로 스캔
-          </ProductButton>
-        )}
-        {cameraOpen && ready && !orgChanged && !scanUnknown ? (
+          </div>
+        ) : null}
+        {cameraMounted ? (
           <CameraScan
+            variant="field"
             focusOrigin={cameraButtonRef.current}
+            suspended={scanSuspended}
             manualHint={activeTask === "desk" ? "참가자 명단에서 확인하거나 현장 책임자에게 도움을 요청하세요." : "티켓 코드가 없다면 현장 책임자에게 도움을 요청하세요."}
-            onUseManual={activeTask === "desk" ? () => {
-              const previousFocus = document.activeElement;
-              setCameraOpen(false);
-              setEntryMode("roster");
-              window.requestAnimationFrame(() => {
-                const focused = document.activeElement;
-                if (focused && focused !== document.body && focused !== previousFocus && focused.isConnected) return;
-                document.getElementById("staff-manual-search")?.focus();
-              });
-            } : undefined}
+            onUseManual={activeTask === "desk" ? () => chooseEntryMode("roster") : undefined}
             onDetected={(code) => {
-              setCameraOpen(false);
               if (scanBusyRef.current || submitting || writeLocked) return;
               setTicket(code);
               submitTicket(code);
             }}
             onClose={() => setCameraOpen(false)}
+            tools={
+              <button type="button" className={cameraStyles.tool} aria-pressed={soundOn} aria-label={soundOn ? "소리·진동 끄기" : "소리·진동 켜기"} onClick={() => setSoundOn((on) => !on)}>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 10v4h3l4 3V7l-4 3z" />{soundOn ? <path d="M16 9a4 4 0 010 6M18.5 6.5a8 8 0 010 11" /> : <path d="M16 9l5 6M21 9l-5 6" />}</svg>
+              </button>
+            }
           />
-        ) : null}
-      </div> : null}
-      {activeTask === "booth" && activeScope.stampMode !== "SELF" ? (
-        <ValidatedForm className="scan-form" onSubmit={onScan}>
-          <div className={prizeStyles.fallbackBlock}>
-            <p className={prizeStyles.fallbackLabel}>카메라가 안 될 때 · 코드로 인증</p>
-          <div className="form-field">
-            <label htmlFor="staff-ticket">티켓 코드</label>
-            <input
-              id="staff-ticket"
-              type="text"
-              autoComplete="off"
-              placeholder="카메라가 안 되면 코드를 직접 입력하세요"
-              value={ticket}
-              aria-describedby={submitting ? "staff-scan-hint staff-scan-wait" : result.kind === "failed" ? "staff-scan-hint staff-scan-retry-hint" : "staff-scan-hint"}
-              disabled={writeLocked}
-              readOnly={submitting}
-              onChange={(event) => { if (!scanBusyRef.current) { scanEditRevisionRef.current += 1; setTicket(event.target.value); } }}
-            />
-          </div>
-          {ticket ? (
-            <p className={prizeStyles.ticketFullCode} data-ticket-full-code>
-              <span className={prizeStyles.ticketFullCodeLabel}>입력한 코드 전체</span>
-              <code>{ticket}</code>
+        ) : !selfBooth ? (
+          <div className={prizeStyles.stageIdle}>
+            <div className={prizeStyles.idleFrame} aria-hidden="true"><i /><i /><i /><i /></div>
+            <p className={prizeStyles.idleText}>
+              {noCamera ? "이 기기에서는 카메라를 쓸 수 없습니다. 명단에서 찾거나 코드를 입력해 처리하세요." : ready ? "카메라가 꺼져 있습니다" : scanHint}
             </p>
-          ) : null}
-          <ProductButton
-            type="button"
-            className={`button button-secondary ${prizeStyles.ticketCopy}`}
-            disabled={!ticket.trim() || submitting}
-            onClick={copyTicketCode} icon={<CopyIcon />}
-          >
+          </div>
+        ) : null}
 
-            코드 복사
-          </ProductButton>
-          {ticketCopyNotice ? <p role="status" className={prizeStyles.nextStep}>{ticketCopyNotice}</p> : null}
-          <ProductButton className="button button-secondary" type="submit" disabled={submitting || writeLocked || !ready || !ticket.trim()}>
-            {submitting ? "처리 중입니다" : "부스 인증"}
-          </ProductButton>
+        {result.kind === "ok" ? (
+          <div className={prizeStyles.overlay} data-tone={stageTone} role="region" aria-label="스캔 결과">
+            <h2 className="sr-only">{historicalScan ? "이전 출입 기록" : "방금 처리한 참가자"}</h2>
+            <p className="scan-result scan-success sr-only" role="status">
+              {result.correctionChanged ? "이 데스크의 처리 기록 · " : correctionLocked ? "마지막 확인: " : ""}
+              {result.name} ·{" "}
+              {result.action === "STAMP" ? `부스 인증${result.booth ? ` · ${result.booth}` : ""}` : result.action === "IN" ? "입장" : "퇴장"}
+              {result.reentry ? " (재입장)" : ""}
+            </p>
+            <div className={prizeStyles.overlayInner} role="region" aria-label="스캔 결과 상세" data-tap={plainSuccess || undefined}>
+            {plainSuccess ? <button type="button" ref={(node) => {
+              nextParticipantRef.current = node;
+              // The tap target appears once the code sheet has closed: take focus then, once per result.
+              if (node && tapFocusSeqRef.current !== resultSeq && (!document.activeElement || document.activeElement === document.body)) { tapFocusSeqRef.current = resultSeq; node.focus({ preventScroll: true }); }
+            }} className={prizeStyles.overlayTap} aria-label="다음 참가자" onClick={prepareNextParticipant} /> : null}
+            <div className={prizeStyles.overlayBody}>
+              <span className={prizeStyles.badge} data-tone={stageTone} aria-hidden="true">{stageTone === "ok" ? <CheckIcon /> : <BangIcon />}</span>
+              <p className={prizeStyles.kicker}>
+                {historicalScan ? "이전 출입 기록" : result.action === "STAMP" ? "스탬프 인증됨" : result.action === "IN" ? (result.reentry ? "재입장 처리됨" : "입장 처리됨") : "퇴장 처리됨"}
+              </p>
+              <p className={prizeStyles.bigName} aria-hidden="true">{result.name}</p>
+              <p className={prizeStyles.subLine}>
+                {result.action === "STAMP" ? (result.booth || result.place.placeName) : [result.place.placeName, result.place.actionLabel].filter(Boolean).join(" · ")}
+              </p>
+              {historicalScan ? (
+                <p className={prizeStyles.reason} ref={correctionConflictRef} tabIndex={-1}>{SCAN_HISTORY_NOTICES[historicalScan]}</p>
+              ) : result.correctionChanged ? (
+                <p className={prizeStyles.reason} role="alert" ref={correctionConflictRef} tabIndex={-1}>출입 기록이 바뀌어 이 요청은 중단했습니다. 추가 정정은 현장 책임자에게 요청하세요.</p>
+              ) : null}
+              {!plainSuccess ? (
+                <p className={prizeStyles.reason}>{correctionLocked ? "정정 결과를 먼저 확인하세요. 위 기록은 정정 전 마지막으로 확인한 스캔입니다." : rewardCollectUncertain ? "경품 수령 결과를 확인한 뒤 다음 참가자를 처리하세요." : directionReview ? "바뀐 데스크 업무를 확인한 뒤 다음 참가자를 처리하세요." : result.recordStatus === "UNAVAILABLE" || (activeTask === "desk" && !deskSourcesAvailable) ? "현장 책임자에게 참가자와 최근 출입 기록 확인을 요청한 뒤 다음 참가자를 처리하세요." : rewardHold ? "경품을 전달한 뒤 다음 참가자를 스캔하세요." : "다음 참가자를 스캔하세요."}</p>
+              ) : null}
+            </div>
+            <div className={prizeStyles.overlayFoot}>
+              {plainSuccess && autoMs ? <div className={prizeStyles.timer} aria-hidden="true"><i style={{ animationDuration: `${autoMs}ms` }} /></div> : null}
+              {plainSuccess ? <p className={prizeStyles.tapHint}>탭하면 바로 다음 스캔</p> : null}
+              <div className={prizeStyles.linkRow}>
+                {correctableCheck || correctUnknown ? (
+                  <ProductButton type="button" variant="ghost" className={prizeStyles.dangerLink} disabled={scanControlsLocked && !correctUnknown} onClick={() => setSheet("correct")}>잘못 스캔했어요</ProductButton>
+                ) : null}
+                {walkIn ? (
+                  <ProductButton type="button" variant="ghost" disabled={writeLocked} aria-expanded={nametagOpen} onClick={() => setNametagResult(result)}>네임택 인쇄</ProductButton>
+                ) : null}
+              </div>
+            </div>
+            {result.kind === "ok" && !plainSuccess ? (
+              <div className={prizeStyles.overlayPanel}>
+                <div className={prizeStyles.nextActions}>
+                  <ProductButton type="button" ref={nextParticipantRef} variant="primary" disabled={writeLocked || Boolean(directionReview) || confirmingDirection} onClick={prepareNextParticipant}>
+                    다음 참가자
+                  </ProductButton>
+                </div>
+                {rewardHold ? rewardPanel : null}
+              </div>
+            ) : null}
+          {nametagOpen ? (
+            <NameTagPrint identity={{
+              name: result.name,
+              company: "",
+              eventName: activeScope.eventName,
+              context: `${result.place.placeName} · 입장`,
+            }} resolveIdentity={(signal) => readNameTagIdentity(targetEventId, result.participantId, result.name,
+              result.checkId, `${result.place.placeName} · 입장`, signal)} onClose={() => {
+              setNametagResult(null);
+              window.requestAnimationFrame(() => {
+                const field = document.getElementById("staff-ticket");
+                if (field instanceof HTMLInputElement) field.focus();
+              });
+            }} />
+          ) : null}
+            </div>
           </div>
-        </ValidatedForm>
+        ) : null}
+
+        {result.kind === "failed" ? (
+          <div ref={scanFailureRef as React.RefObject<HTMLDivElement>} className={prizeStyles.overlay} data-tone={stageTone} role="region" aria-label={result.uncertain ? "스캔 결과 미확인과 복구" : "스캔 실패와 복구"}>
+            <div className={prizeStyles.overlayInner} role="region" aria-label={result.uncertain ? "스캔 결과 미확인" : "스캔 실패"} data-tap={infoAuto || undefined}>
+            {infoAuto ? <button type="button" className={prizeStyles.overlayTap} aria-label="다음 참가자" onClick={prepareNextParticipant} /> : null}
+            <div className={prizeStyles.overlayBody}>
+              <span className={prizeStyles.badge} data-tone={stageTone} aria-hidden="true">{stageTone === "info" ? <InfoIcon /> : stageTone === "bad" ? <XIcon /> : <BangIcon />}</span>
+              <h2 className={prizeStyles.kicker}>{failKicker}</h2>
+              <p className={`${boothLimitReached || result.alreadyIn ? "scan-result notice" : "scan-result scan-failure"} ${prizeStyles.bigMessage}`} role={boothLimitReached || result.alreadyIn ? "status" : "alert"}>{result.message}</p>
+              {result.place.placeName ? (
+                <p className={prizeStyles.subLine}>처리 위치: {result.place.placeName} · {result.place.actionLabel}</p>
+              ) : null}
+              {result.requestTarget ? <p className={prizeStyles.subLine}>확인한 참가자: {result.requestTarget}</p> : null}
+              <p id="staff-scan-retry-hint" className={prizeStyles.reason}>
+            {result.uncertain
+              ? "다른 스캔과 업무 전환이 잠깁니다. 서버 확인은 요청을 다시 보내지 않습니다. 같은 요청 재확인은 아직 처리되지 않았다면 처리할 수 있습니다."
+              : result.manualRefreshRequired
+              ? loadError || "최신 명단을 불러온 뒤 이름과 소속을 다시 확인하세요."
+              : result.sourceRefreshRequired
+              ? loadError || "참가자 명단과 출입 기록을 다시 확인하세요. 입력과 참가자 선택은 유지됩니다."
+              : result.deskRefreshRequired
+              ? loadError || "데스크 상태를 다시 불러오세요. 입력과 참가자 선택은 유지됩니다."
+              : boothRefreshRequired
+              ? loadError || "부스 상태를 확인한 뒤 안내에 따라 진행하세요."
+              : boothLimitReached
+              ? "같은 부스에서 다음 참가자의 티켓을 확인하세요."
+              : result.attendanceReviewRequired
+              ? "현장 책임자가 참가자와 최근 출입 기록을 확인한 뒤 처리해 주세요."
+              : result.eligibilityReviewRequired
+              ? "현장 책임자가 참가 상태와 출입 기록을 확인한 뒤 처리해 주세요."
+              : result.alreadyIn
+              ? "본인이 맞다면 그대로 들어가셔도 됩니다."
+              : result.requestTarget
+              ? "참가자 정보와 처리 위치를 확인하거나 현장 책임자에게 문의하세요."
+              : result.message.includes("다시 시도")
+              ? "카메라가 안 되면 티켓 코드를 직접 입력하세요."
+              : "이 티켓은 처리되지 않았습니다. 문제가 계속되면 현장 책임자에게 확인을 요청하세요. 카메라가 안 되면 티켓 코드를 직접 입력하세요."}
+              </p>
+            </div>
+            {infoAuto && autoMs ? <div className={prizeStyles.overlayFoot}><div className={prizeStyles.timer} aria-hidden="true"><i style={{ animationDuration: `${autoMs}ms`, background: "var(--info)" }} /></div><p className={prizeStyles.tapHint}>탭하면 바로 다음 스캔</p></div> : null}
+            {!infoAuto ? <div className={prizeStyles.overlayPanel}>{resultActions}</div> : null}
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      <div className={prizeStyles.fieldBar} data-mode={result.kind}>
+        {result.kind === "idle" && scanInputHasWork ? (
+          <>
+            {!cameraMounted && !selfBooth && !noCamera ? (
+              <ProductButton
+                ref={cameraButtonRef}
+                type="button"
+                variant="primary"
+                className={prizeStyles.scanPrimary}
+                disabled={!ready || writeLocked || submitting}
+                aria-describedby="staff-scan-hint"
+                onClick={() => { primeScanFeedback(); setResult({ kind: "idle" }); setCameraOpen(true); }}
+              >
+                카메라 켜기
+              </ProductButton>
+            ) : null}
+            {!selfBooth && noCamera && activeTask === "desk" ? (
+              <ProductButton type="button" variant="primary" disabled={scanControlsLocked || submitting} onClick={() => chooseEntryMode("roster")}>명단에서 찾기</ProductButton>
+            ) : null}
+            <div className={prizeStyles.bar3} role="group" aria-label="입력 방식">
+              <button type="button" disabled={writeLocked || submitting} onClick={() => setSheet("code")}><KeyIcon />코드 입력</button>
+              {activeTask === "desk" ? <button type="button" aria-pressed={entryMode === "roster"} disabled={scanControlsLocked || submitting} onClick={() => chooseEntryMode("roster")}><ListIcon />명단 찾기</button> : null}
+              {rewardEnabled && isExitDesk && assignment ? <button type="button" disabled={scanUnknown || receiptLock} onClick={() => setSheet("rewards")}><GiftIcon />경품 조회</button> : null}
+              <button type="button" onClick={() => setSheet("recent")}><ClockIcon />최근 처리</button>
+            </div>
+          </>
+        ) : null}
+        {selfBooth && result.kind === "idle" ? (
+          <div className={prizeStyles.bar3} role="group" aria-label="입력 방식">
+            <button type="button" onClick={() => setSheet("recent")}><ClockIcon />최근 처리</button>
+          </div>
+        ) : null}
+      </div>
+
+      {autoMs ? <AutoAdvance key={`advance-${resultSeq}`} ms={autoMs} onAdvance={prepareNextParticipant} /> : null}
+      {result.kind !== "idle" ? <ScanFeedback key={`tone-${resultSeq}`} tone={result.kind === "ok" ? "ok" : infoFailure ? "info" : "bad"} enabled={soundOn} /> : null}
+
+      {sheet === "code" ? (
+        <ConsoleDialog title="티켓 코드 입력" presentation="drawer" stickyChrome onClose={() => setSheet(null)} busy={submitting}>
+          {codeForm}
+        </ConsoleDialog>
       ) : null}
-      {activeTask === "desk" && entryMode === "scan" ? (
-        <ValidatedForm className="scan-form" onSubmit={onScan}>
-          <div className={prizeStyles.fallbackBlock}>
-            <p className={prizeStyles.fallbackLabel}>코드로 직접 처리</p>
-          <div className="form-field">
-            <label htmlFor="staff-ticket">티켓 코드</label>
-            <input
-              id="staff-ticket"
-              type="text"
-              autoComplete="off"
-              placeholder="카메라가 안 되면 코드를 직접 입력하세요"
-              value={ticket}
-              aria-describedby={submitting ? "staff-scan-hint staff-scan-wait" : result.kind === "failed" ? "staff-scan-hint staff-scan-retry-hint" : "staff-scan-hint"}
-              disabled={writeLocked}
-              readOnly={submitting}
-              onChange={(event) => { if (!scanBusyRef.current) { scanEditRevisionRef.current += 1; setTicket(event.target.value); } }}
-            />
-          </div>
-          <ProductButton className="button button-secondary" type="submit" disabled={submitting || writeLocked || !ready || !ticket.trim()}>
-            {submitting ? "처리 중입니다" : isExitDesk ? "퇴장 처리" : "입장 처리"}
-          </ProductButton>
-          </div>
-        </ValidatedForm>
-      ) : null}
-      {activeTask === "desk" && entryMode === "roster" ? (
-        <section className={prizeStyles.manualSearch} aria-label="참가자 명단 찾기">
+      {entryMode === "roster" && activeTask === "desk" ? (
+        <ConsoleDialog title="명단에서 찾기" presentation="drawer" stickyChrome onClose={() => { setEntryMode("scan"); }} busy={submitting}>
+<section className={prizeStyles.manualSearch} aria-label="참가자 명단 찾기">
           <div className={prizeStyles.manualSearchBody}>
             <p>참가자의 이름과 소속을 확인한 뒤 처리하세요. 같은 이름과 소속이 여럿이면 현장 책임자에게 확인을 요청하세요.</p>
             <div className={prizeStyles.manualSearchHeading}>
@@ -2014,331 +2420,19 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             ) : null}
           </div>
         </section>
+        </ConsoleDialog>
       ) : null}
-      </div>
-      ) : null}
-      {loadError && activeTask === "desk" && !assignmentStale && !receiptRefreshNeeded && !deskClosed && !deskRefreshRequired ? (
-        <p className="notice" role="status">
-          {loadError}{" "}
-          <ProductButton type="button" className="button button-secondary" disabled={refreshing} onClick={() => void load(true)}>
-            {refreshing ? "불러오는 중" : "다시 불러오기"}
-          </ProductButton>
-        </p>
-      ) : null}
-      {result.kind === "ok" ? (
-        <section className={`${prizeStyles.workSection} ${prizeStyles.resultStage}`} data-tone={correctionLocked || result.correctionChanged || historicalScan ? "warn" : "ok"} aria-label="스캔 결과">
-          <h2 className={prizeStyles.sectionTitle}>{historicalScan ? "이전 출입 기록" : "방금 처리한 참가자"}</h2>
-        <section className={prizeStyles.resultBlock} aria-label="스캔 결과 상세">
-          <p className={correctionLocked || result.correctionChanged || historicalScan ? "scan-result notice" : "scan-result scan-success"} role="status">
-            {result.correctionChanged ? "이 데스크의 처리 기록 · " : correctionLocked ? "마지막 확인: " : ""}
-            {result.name} ·{" "}
-            {result.action === "STAMP"
-              ? `부스 인증${result.booth ? ` · ${result.booth}` : ""}`
-              : result.action === "IN" ? "입장" : "퇴장"}
-            {result.reentry ? " (재입장)" : ""}
-          </p>
-          {result.place.placeName ? (
-            <p className={prizeStyles.nextStep}>처리 위치: {result.place.placeName} · {result.place.actionLabel}</p>
-          ) : null}
-          {historicalScan ? (
-            <p className={prizeStyles.nextStep} ref={correctionConflictRef} tabIndex={-1}>
-              {SCAN_HISTORY_NOTICES[historicalScan]}
-            </p>
-          ) : result.correctionChanged ? (
-            <p className="scan-result scan-failure" role="alert" ref={correctionConflictRef} tabIndex={-1}>
-              출입 기록이 바뀌어 이 요청은 중단했습니다. 추가 정정은 현장 책임자에게 요청하세요.
-            </p>
-          ) : null}
-          <p className={prizeStyles.nextStep}>{correctionLocked ? "정정 결과를 먼저 확인하세요. 위 기록은 정정 전 마지막으로 확인한 스캔입니다." : rewardCollectUncertain ? "경품 수령 결과를 확인한 뒤 다음 참가자를 처리하세요." : directionReview ? "바뀐 데스크 업무를 확인한 뒤 다음 참가자를 처리하세요." : result.recordStatus === "UNAVAILABLE" || (activeTask === "desk" && !deskSourcesAvailable) ? "현장 책임자에게 참가자와 최근 출입 기록 확인을 요청한 뒤 다음 참가자를 처리하세요." : "다음 참가자를 스캔하세요."}</p>
-          <div className={prizeStyles.nextActions}>
-            <ProductButton type="button" ref={nextParticipantRef} className="button button-primary" disabled={writeLocked || Boolean(directionReview) || confirmingDirection} onClick={prepareNextParticipant}>
-              다음 참가자
-            </ProductButton>
-            {result.action === "IN" && !result.correctionChanged && !historicalScan ? (
-              <ProductButton
-                type="button"
-                className={`button button-quiet ${prizeStyles.auxAction}`}
-                disabled={writeLocked}
-                aria-expanded={nametagOpen}
-                onClick={() => setNametagResult(result)}
-              >
-                네임택 인쇄
-              </ProductButton>
-            ) : null}
-          </div>
-          {nametagOpen ? (
-            <NameTagPrint identity={{
-              name: result.name,
-              company: "",
-              eventName: activeScope.eventName,
-              context: `${result.place.placeName} · 입장`,
-            }} resolveIdentity={(signal) => readNameTagIdentity(targetEventId, result.participantId, result.name,
-              result.checkId, `${result.place.placeName} · 입장`, signal)} onClose={() => {
-              setNametagResult(null);
-              window.requestAnimationFrame(() => {
-                const field = document.getElementById("staff-ticket");
-                if (field instanceof HTMLInputElement) field.focus();
-              });
-            }} />
-          ) : null}
-        </section>
-        </section>
-      ) : null}
-      {result.kind === "failed" ? (
-        <section ref={scanFailureRef} className={`${prizeStyles.workSection} ${prizeStyles.resultStage}`} data-tone={result.uncertain || boothLimitReached || result.attendanceReviewRequired || result.eligibilityReviewRequired || result.manualRefreshRequired || result.deskRefreshRequired || result.sourceRefreshRequired ? "warn" : "bad"} aria-label={result.uncertain ? "스캔 결과 미확인과 복구" : "스캔 실패와 복구"}>
-          <h2 className={prizeStyles.sectionTitle}>{boothLimitReached ? "인증 한도 도달" : result.uncertain ? "처리 결과를 확인하지 못했습니다" : result.attendanceReviewRequired ? "출입 기록 확인이 필요합니다" : result.eligibilityReviewRequired ? "참가 상태 확인이 필요합니다" : "처리에 실패했습니다"}</h2>
-        <section className={prizeStyles.resultBlock} aria-label={result.uncertain ? "스캔 결과 미확인" : "스캔 실패"}>
-          <p className={boothLimitReached ? "scan-result notice" : "scan-result scan-failure"} role={boothLimitReached ? "status" : "alert"}>{result.message}</p>
-          {/* Request-bound snapshot: always names the desk/booth this request
-              committed to, even when the input line above currently names the
-              same place. The crossrole audit pins both lines visible together
-              after a ticket edit ("현재 …" at the input, "처리 위치:" at the
-              verdict); wording and placement carry the distinction. */}
-          {result.place.placeName ? (
-            <p className={prizeStyles.nextStep}>처리 위치: {result.place.placeName} · {result.place.actionLabel}</p>
-          ) : null}
-          {result.requestTarget ? <p className={prizeStyles.nextStep}>확인한 참가자: {result.requestTarget}</p> : null}
-          {/* Server verdicts (중복·미등록·만료) carry no recovery steps, while
-              uncertain-network messages already ask for a retry: add only the
-              missing half so the same "다시 시도" guidance never repeats. */}
-          {/* Recovery guidance carries its own id: in the failed state the
-              code inputs are described by both the current-target line above
-              and this recovery text, never by nothing and never by one id
-              twice. */}
-          <p id="staff-scan-retry-hint" className={prizeStyles.nextStep}>
-            {result.uncertain
-              ? "다른 스캔과 업무 전환이 잠깁니다. 서버 확인은 요청을 다시 보내지 않습니다. 같은 요청 재확인은 아직 처리되지 않았다면 처리할 수 있습니다."
-              : result.manualRefreshRequired
-              ? loadError || "최신 명단을 불러온 뒤 이름과 소속을 다시 확인하세요."
-              : result.sourceRefreshRequired
-              ? loadError || "참가자 명단과 출입 기록을 다시 확인하세요. 입력과 참가자 선택은 유지됩니다."
-              : result.deskRefreshRequired
-              ? loadError || "데스크 상태를 다시 불러오세요. 입력과 참가자 선택은 유지됩니다."
-              : boothRefreshRequired
-              ? loadError || "부스 상태를 확인한 뒤 안내에 따라 진행하세요."
-              : boothLimitReached
-              ? "같은 부스에서 다음 참가자의 티켓을 확인하세요."
-              : result.attendanceReviewRequired
-              ? "현장 책임자가 참가자와 최근 출입 기록을 확인한 뒤 처리해 주세요."
-              : result.eligibilityReviewRequired
-              ? "현장 책임자가 참가 상태와 출입 기록을 확인한 뒤 처리해 주세요."
-              : result.requestTarget
-              ? "참가자 정보와 처리 위치를 확인하거나 현장 책임자에게 문의하세요."
-              : result.message.includes("다시 시도")
-              ? "카메라가 안 되면 티켓 코드를 직접 입력하세요."
-              : "같은 업무·같은 티켓으로 다시 시도하세요. 카메라가 안 되면 티켓 코드를 직접 입력하세요."}
-          </p>
-          <div className={prizeStyles.nextActions}>
-            {result.uncertain ? (
-              <ProductButton type="button" ref={retryFailedRef} className="button button-primary" disabled={writeLocked || submitting || scanStatusChecking} onClick={() => { void submitTicket(result.requestTicket, true); }}>
-                같은 요청 재확인
-              </ProductButton>
-            ) : null}
-            {result.uncertain && inlineScanReceiptId ? <OperatorReceiptRecovery inline currentEventId={targetEventId} onlyCommandId={inlineScanReceiptId} disabled={writeLocked || submitting || receiptRefreshing} onCheckingChange={setScanStatusChecking} /> : null}
-            {result.manualRefreshRequired ? (
-              <ProductButton type="button" ref={retryFailedRef} className="button button-primary" disabled={refreshing || writeLocked || submitting} onClick={() => void refreshManualRoster()}>
-                {refreshing ? "명단 확인 중" : "참가자 명단 다시 확인"}
-              </ProductButton>
-            ) : result.sourceRefreshRequired ? (
-              <ProductButton type="button" ref={retryFailedRef} className="button button-primary" disabled={refreshing || writeLocked || submitting} onClick={() => void refreshDeskStatus()}>
-                {refreshing ? "업무 정보 확인 중" : "업무 정보 다시 확인"}
-              </ProductButton>
-            ) : result.deskRefreshRequired ? (
-              <ProductButton type="button" ref={retryFailedRef} className="button button-primary" disabled={refreshing || writeLocked || submitting} onClick={() => void refreshDeskStatus()}>
-                {refreshing ? "데스크 상태 확인 중" : "데스크 상태 다시 확인"}
-              </ProductButton>
-            ) : boothRefreshRequired ? (
-              <ProductButton type="button" ref={retryFailedRef} className="button button-primary" disabled={refreshing || writeLocked || submitting} onClick={() => void refreshBoothStatus()}>
-                {refreshing ? "부스 상태 확인 중" : "부스 상태 다시 확인"}
-              </ProductButton>
-            ) : boothLimitReached || result.attendanceReviewRequired || result.eligibilityReviewRequired ? (
-              <ProductButton type="button" ref={retryFailedRef} className="button button-primary" disabled={writeLocked} onClick={prepareNextParticipant}>
-                다음 참가자
-              </ProductButton>
-            ) : !result.uncertain ? <ProductButton type="button" ref={retryFailedRef} className="button button-primary" disabled={writeLocked} onClick={retryFailedScan}>
-              다시 시도
-            </ProductButton> : (
-              <ProductButton type="button" className="button button-secondary" disabled={submitting || scanStatusChecking} onClick={() => {
-                if (!window.confirm("처리됐을 수 있는 요청의 결과를 아직 확인하지 못했습니다. 확인을 중단하면 이 화면에서 요청을 다시 확인할 수 없을 수 있습니다. 운영자에게 기록을 확인한 뒤 계속하세요. 확인을 중단하시겠습니까?")) return;
-                if (pendingScanRef.current) {
-                  pendingScanIdRef.current.delete(pendingScanRef.current.attempt);
-                  abandonOperatorAttempt(pendingScanRef.current.commandId); forgetOperatorReceipt(pendingScanRef.current.commandId);
-                }
-                pendingScanRef.current = null;
-                setManualTarget(null);
-                setManualIdentityConfirmed(false);
-                setResult({ kind: "idle" });
-              }}>확인 중단하고 다른 업무</ProductButton>
-            )}
-          </div>
-        </section>
-        </section>
-      ) : null}
-      {result.kind === "ok" && result.action === "OUT" && !historicalScan && !rewardEnabled ? (
-        <p className="notice" role="status">이 행사에서 경품 기능이 꺼져 있어 현장 경품 조회·수령 처리를 사용할 수 없습니다.</p>
-      ) : null}
-      {rewardEnabled && isExitDesk && assignment ? (
-        <section className={`${prizeStyles.workSection} ${prizeStyles.prizeWorkspace}`} aria-label="경품 확인 및 수령">
-          <div className={prizeStyles.prizeHeader}>
-            <div>
-              <h2>경품 확인·수령</h2>
-              <p>퇴장 처리 응답 또는 티켓 조회로 해당 참가자의 경품만 확인합니다.</p>
-            </div>
-          </div>
-          <ValidatedForm className={prizeStyles.lookupForm} onSubmit={lookupRewardsByTicket}>
-            <div className="form-field">
-              <label htmlFor="reward-lookup-ticket">경품 대상 티켓</label>
-              <input
-                id="reward-lookup-ticket"
-                type="text"
-                autoComplete="off"
-                placeholder="퇴장 스캔 응답을 놓쳤다면 티켓 코드를 입력하세요"
-                value={rewardLookupTicket}
-                disabled={scanUnknown || rewardLookupLoading || rewardCollectUncertain || receiptLock || receiptRefreshing || rewardCollectingId !== null}
-                onChange={(event) => {
-                  if (rewardRequestRef.current) return;
-                  setRewardLookupTicket(event.target.value);
-                  clearRewardPanel();
-                }}
-              />
-            </div>
-            <ProductButton type="submit" className="button button-secondary" disabled={scanUnknown || rewardLookupLoading || assignmentStale || rewardCollectUncertain || receiptLock || receiptRefreshing || rewardCollectingId !== null || !ready || !rewardLookupTicket.trim()}>
-              {rewardLookupLoading ? "조회 중입니다" : "경품 조회"}
-            </ProductButton>
-            {lastScannedTicket ? (
-              <ProductButton
-                type="button"
-                className="button button-secondary"
-                disabled={scanUnknown || rewardLookupLoading || assignmentStale || rewardCollectUncertain || receiptLock || receiptRefreshing || rewardCollectingId !== null || !ready}
-                onClick={(event) => lookupRewardsByTicket(event, lastScannedTicket)}
-              >
-                마지막 스캔 티켓으로 조회
-              </ProductButton>
-            ) : null}
-          </ValidatedForm>
-          {pendingLookup ? <div className={prizeStyles.prizeNote} role="status">
-            <p>이전 경품 조회의 결과를 확인하지 못했습니다. 같은 요청으로 다시 확인하거나 조회 확인을 중단할 수 있습니다.</p>
-            <ProductButton type="button" className="button button-secondary" disabled={rewardLookupLoading || rewardCollectingId !== null} onClick={() => {
-              const entry = [...pendingRewardCommandsRef.current.entries()].find(([, item]) => item.command === "reward.lookup" && item.uncertain);
-              if (!entry) return;
-              abandonOperatorAttempt(entry[1].id);
-              forgetOperatorReceipt(entry[1].id);
-              pendingRewardCommandsRef.current.delete(entry[0]);
-              setRewardDataLoaded(false);
-              setRewardError(null);
-              setRewardNotice("이전 조회 확인을 중단했습니다. 티켓으로 다시 조회하세요. 조회 중단은 경품 지급을 기록하지 않습니다.");
-            }}>이전 조회 확인 중단</ProductButton>
-          </div> : null}
-          {rewardError && !rewardTarget ? <p className={prizeStyles.prizeError} role="alert">{rewardError}</p> : null}
-          {rewardTarget ? (
-            <div className={prizeStyles.prizeTarget}>
-              <div className={prizeStyles.prizeTargetHead}>
-                <div className={prizeStyles.targetIdentity}>
-                  <strong>{rewardTarget.name}</strong>
-                  {rewardTarget.company ? <span>{rewardTarget.company}</span> : null}
-                </div>
-                <ProductButton type="button" className="button button-secondary" disabled={!ready || rewardLookupLoading || scanUnknown || assignmentStale || rewardCollectUncertain || receiptLock || receiptRefreshing || rewardCollectingId !== null} onClick={refreshTargetRewards}>
-                  {rewardLookupLoading ? "다시 확인 중" : "경품 다시 확인"}
-                </ProductButton>
+      {sheet === "recent" ? (
+        <ConsoleDialog title="최근 처리" presentation="drawer" stickyChrome onClose={() => setSheet(null)}>
+          <section className={prizeStyles.workSection} aria-label="최근 처리 기록">
+            {correctableCheck && correctTarget ? (
+              <div className={prizeStyles.lastScan}>
+                <p><strong>{correctTarget.name}</strong> · 방금 {correctTarget.action === "IN" ? "입장" : correctTarget.action === "OUT" ? "퇴장" : "처리"}</p>
+                <ProductButton type="button" variant="ghost" className={prizeStyles.dangerLink} disabled={scanControlsLocked} onClick={() => setSheet("correct")}>잘못 처리했어요</ProductButton>
               </div>
-              {!rewardDataLoaded && !rewardLookupLoading ? (
-                rewardError ? <p className={prizeStyles.prizeError} role="alert">{rewardError}</p>
-                  : <p className={prizeStyles.prizeEmpty}>최신 수령 상태를 확인하려면 ‘경품 다시 확인’을 누르세요.</p>
-              ) : null}
-              {targetRewards.length ? (
-                <ul className={prizeStyles.rewardList}>
-                  {targetRewards.map((reward) => {
-                    const onsite = canHandOutReward(reward);
-                    const received = onsite && reward.status === "RECEIVED";
-                    const readyReward = onsite && reward.status === "READY";
-                    const pending = onsite && reward.status === "PENDING";
-                    const statusLabel = !onsite ? (reward.method.trim().toUpperCase() === "GIFT" ? "기프티콘 · 운영자 확인" : "지급 방식 확인 필요")
-                      : received ? "수령 완료"
-                      : readyReward ? "수령 대기"
-                      : pending ? "운영자 수령자 지정 필요"
-                      : reward.status === "CANCELLED" ? "취소"
-                      : "상태 확인 필요";
-                    const statusTone = received && !reward.issue ? prizeStyles.rewardReceived : readyReward ? prizeStyles.rewardReady : "";
-                    const retrying = pendingRewardCommandsRef.current.has(JSON.stringify([
-                      activeScope.eventId,
-                      assignment.id,
-                      "reward.collect",
-                      { id: reward.id, verificationId: rewardTarget.verificationId, expectedParticipantId: rewardTarget.id },
-                    ]));
-                    return (
-                      <li key={reward.id} className={prizeStyles.rewardItem}>
-                        <div className={prizeStyles.rewardInfo}>
-                          <strong>{reward.name}</strong>
-                          <span className={`${prizeStyles.rewardStatus} ${rewardSnapshotCurrent ? statusTone : ""}`}>
-                            {rewardSnapshotCurrent ? statusLabel : `이전 조회 · ${statusLabel}`}
-                          </span>
-                          {reward.issue && rewardSnapshotCurrent ? <p className={prizeStyles.prizeError} role="alert">{reward.issue}</p> : null}
-                        </div>
-                        {readyReward ? (
-                          <ProductButton type="button" className="button button-primary" disabled={!ready || !rewardSnapshotCurrent || scanUnknown || orgChanged || assignmentStale || receiptLock || receiptRefreshing || (rewardCollectUncertain && pendingCollection?.payload.id !== reward.id) || rewardCollectingId !== null} onClick={() => collectReward(reward)}>
-                            {rewardCollectingId === reward.id ? "수령 확인 중" : retrying ? "같은 요청으로 다시 확인" : "수령 확인"}
-                          </ProductButton>
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : rewardDataLoaded ? (
-                <p className={prizeStyles.prizeEmpty}>이 참가자에게 등록된 경품이 없습니다.</p>
-              ) : null}
-              {rewardDataLoaded && targetRewards.some((reward) => reward.status === "PENDING") ? <p className={prizeStyles.prizeNote}>수령자를 먼저 지정해야 합니다. 운영자에게 확인을 요청하세요.</p> : null}
-            </div>
-          ) : rewardError || rewardDeskError ? null : result.kind === "ok" && result.action === "OUT" && !historicalScan ? (
-            <p className={prizeStyles.prizeEmpty}>퇴장 스캔 결과의 경품을 불러오지 못했습니다. 티켓으로 다시 조회하세요.</p>
-          ) : (
-            <p className={prizeStyles.prizeEmpty}>경품 확인은 티켓 스캔 또는 퇴장 처리 후 시작할 수 있습니다.</p>
-          )}
-          {rewardNotice ? <p className={prizeStyles.prizeNotice} role="status">{rewardNotice}</p> : null}
-          {rewardError && rewardTarget && rewardDataLoaded ? <p className={prizeStyles.prizeError} role="alert">{rewardError}</p> : null}
-          <p className={prizeStyles.prizeNote}>이번 요청의 수령 완료 안내를 확인한 뒤 경품을 전달하세요.</p>
-        </section>
-      ) : null}
-      {correctableCheck || correctUnknown ? (
-        <section className={prizeStyles.workSection} aria-label="기록 정정">
-          <h2 className={prizeStyles.sectionTitle}>잘못 스캔했다면 바로 정정하세요</h2>
-        <ValidatedForm className="correction-form" onSubmit={(event) => { void correctLatest(event); }}>
-          <p className="staff-direction-hint">잘못 처리했다면 사유를 입력하세요. 정정 대상은 이 참가자의 가장 최근 기록이며, 본인이 처리한 건만 정정할 수 있습니다.</p>
-          <div className="form-field">
-            <label htmlFor="correct-reason">정정 사유</label>
-            <input
-              id="correct-reason"
-              type="text"
-              maxLength={300}
-              placeholder="예: 다른 분 티켓을 잘못 스캔함"
-              value={correctReason}
-              disabled={scanControlsLocked}
-              onChange={(event) => setCorrectReason(event.target.value)}
-            />
-          </div>
-          {correctUnknown ? (
-            <p className={prizeStyles.nextStep} role="alert">응답을 확인하기 전까지 정정 대상·사유를 바꾸지 마세요. 같은 정정 요청으로 다시 시도하면 중복 정정 없이 확인할 수 있습니다.</p>
-          ) : null}
-          {correctUnknown ? (
-            <ProductButton
-              className="button button-primary"
-              type="button"
-              disabled={correcting}
-              onClick={(event) => { void correctLatest(event, true); }}
-            >
-              {correcting ? "확인 중입니다" : "같은 요청으로 다시 시도"}
-            </ProductButton>
-          ) : (
-            <ProductButton className={`button button-secondary ${prizeStyles.correctSubmit}`} type="submit" disabled={scanUnknown || correcting || orgChanged || assignmentStale || rewardCollectUncertain || receiptLock || receiptRefreshing || rewardLookupLoading || rewardCollectingId !== null || !correctReason.trim()}>
-              {correcting ? "정정 중입니다" : "최신 기록 정정"}
-            </ProductButton>
-          )}
-        </ValidatedForm>
-        </section>
-      ) : null}
-      {correctNotice ? <p className="scan-result" role={correctUnknown ? "alert" : "status"}>{correctNotice}</p> : null}
-      <section className={prizeStyles.workSection} aria-label="최근 처리 기록">
-      <h2 className="activity-heading">최근 처리 · {activeTask === "booth" ? "부스 인증" : "데스크 체크인"}</h2>
-      <p className={prizeStyles.nextStep}>{activeTask === "booth" ? "저장된 부스 인증을 최근 순서로 확인할 수 있습니다." : "같은 티켓을 다시 스캔하면 같은 결과가 나옵니다. 아래에서 처리된 내역을 확인하고 다음 참가자로 넘어가세요."}</p>
+            ) : null}
+      <h2 className="sr-only">최근 처리 · {activeTask === "booth" ? "부스 인증" : "데스크 체크인"}</h2>
+      <p className={prizeStyles.nextStep}>{activeTask === "booth" ? "저장된 부스 인증을 최근 순서로 확인할 수 있습니다." : "처리한 내역을 최근 순서로 확인할 수 있습니다. 같은 티켓을 다시 스캔하면 같은 결과가 나옵니다."}</p>
       {boothVisits.length ? (
         <ul className="activity-list">
           {boothVisits.map((visit) => (
@@ -2371,7 +2465,27 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       ) : (
         <p>아직 처리 기록이 없습니다.</p>
       )}
-      </section>
+          </section>
+        </ConsoleDialog>
+      ) : null}
+      {sheet === "correct" && (correctableCheck || correctUnknown) ? (
+        <ConsoleDialog title="입장·퇴장 기록 정정" presentation="drawer" stickyChrome onClose={() => setSheet(null)} busy={correcting} canClose={() => !correcting}>
+          <section className={prizeStyles.workSection} aria-label="기록 정정">
+            {correctTarget ? <p className={prizeStyles.nextStep}><strong>{correctTarget.name}</strong> · {correctTarget.action === "IN" ? "입장" : correctTarget.action === "OUT" ? "퇴장" : "처리"} 기록을 정정합니다.</p> : null}
+            <div className={prizeStyles.reasonChips} role="group" aria-label="정정 사유 예시">
+              {["잘못 스캔했어요", "다른 사람이에요"].map((reason) => (
+                <button key={reason} type="button" aria-pressed={correctReason === reason} disabled={scanControlsLocked || correctUnknown} onClick={() => setCorrectReason(reason)}>{reason}</button>
+              ))}
+            </div>
+            {correctionForm}
+          </section>
+        </ConsoleDialog>
+      ) : null}
+      {sheet === "rewards" && rewardEnabled && isExitDesk && assignment ? (
+        <ConsoleDialog title="경품 확인·수령" presentation="drawer" stickyChrome onClose={() => setSheet(null)} busy={rewardLookupLoading || rewardCollectingId !== null}>
+          {rewardPanel}
+        </ConsoleDialog>
+      ) : null}
     </section>
   );
 }

@@ -1,82 +1,204 @@
-/* Clients directory: the client name owns the row, contact/document facts
-   group beneath it, and the three file tasks (info, logo, license) group
-   beside the identity instead of scattering as five equal buttons. Shared
-   ledger rows, toolbar slots, dialog copy and file contracts stay pinned. */
+/* Clients directory: a flat list. A row is the logo (or the name's first
+   letter), the name, who to contact, and which files exist; the whole row
+   opens one drawer where info and files are managed. No card around the list
+   and no buttons inside rows. The only orange is the page's 고객사 등록. */
 
-.clientRow {
-  width: 100%;
-}
-
-.clientMain {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.clientActions {
-  flex: none;
-  max-width: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--s2) var(--s3);
-  row-gap: var(--s2);
-}
-
-.clientInfoGroup,
-.clientFileGroup {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2);
-  min-width: 0;
-}
-
-.clientFileGroup {
-  padding-left: var(--s3);
-  border-left: 1px solid var(--line);
-}
-
-.clientFileGroup > :global(.astryx-button) {
+/* The page title already says "고객사"; the section title stays for assistive
+   technology only. */
+.listSection [data-console-section-head] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
   white-space: nowrap;
 }
 
-@media (max-width: 768px) {
-  .clientActions {
-    width: 100%;
-    justify-content: flex-start;
-  }
-
-  .clientInfoGroup,
-  .clientFileGroup {
-    flex: 1 1 100%;
-  }
-
-  .clientFileGroup {
-    padding-top: var(--s2);
-    padding-left: 0;
-    border-top: 1px solid var(--line);
-    border-left: 0;
-  }
-
-  /* Natural-width file buttons, left aligned: the shared ledger rule
-     stretches bare row buttons full-width, but a file group owns its own
-     compact cluster so 로고/서류 등록 never reads as a primary CTA. The
-     extra ancestor keeps this above the shared rule whatever the chunk
-     order. */
-  .clientActions .clientFileGroup > :global(.astryx-button) {
-    flex: 0 1 auto;
-  }
+.count {
+  margin: 0 0 var(--s2);
+  color: var(--muted);
+  font-size: var(--small);
 }
 
-.attachmentTools { position: relative; }
-.attachmentTools > summary { display: flex; align-items: center; min-height: 44px; padding-inline: var(--s3); border: 1px solid var(--line-strong); border-radius: var(--radius); font-size: var(--small); font-weight: 600; cursor: pointer; }
-.attachmentPanel { display: grid; gap: var(--s3); padding-block: var(--s3); }
-.attachmentPanel label:has(input:disabled) { opacity: 0.55; cursor: not-allowed; }
-.attachmentPanel .clientFileGroup { border-left: 0; padding-left: 0; }
-.attachmentTools > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.clientList {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.clientRow {
+  position: relative;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1.1fr) minmax(0, 1.3fr) auto 20px;
+  align-items: center;
+  gap: var(--s4);
+  min-width: 0;
+  min-height: 72px;
+  padding-block: var(--s2);
+  border-bottom: 1px solid var(--line);
+}
+.clientRow:hover { background: var(--surface-muted); }
+.clientRow:has(.clientOpen:focus-visible) {
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
+}
+
+.clientAvatar {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: var(--body);
+  font-weight: 800;
+}
+.clientAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: var(--paper);
+}
+
+.clientName {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--body);
+  font-weight: 750;
+  letter-spacing: -0.015em;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.clientOpen {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.clientOpen:disabled { color: var(--ink); cursor: default; }
+.clientOpen::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+.clientOpen:focus-visible { outline: none; }
+.clientRow:hover .clientOpen:not(:disabled) { text-decoration: underline; text-underline-offset: 3px; }
+
+.clientContact {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.clientContact small { color: var(--muted); font-size: var(--small); }
+.clientNone { color: var(--muted); }
+
+.clientFiles {
+  display: flex;
+  gap: var(--s3);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 650;
+  white-space: nowrap;
+}
+.clientFiles > span::before {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: 1px;
+  content: "";
+}
+.clientFiles > span[data-state="yes"] { color: var(--ink); }
+.clientFiles > span[data-state="yes"]::before { background: var(--success); }
+.clientFiles > span[data-state="no"]::before { background: var(--paper); box-shadow: inset 0 0 0 2px var(--line-strong); }
+
+.clientArrow { display: inline-flex; color: var(--muted); }
+.clientArrow svg { width: 20px; height: 20px; }
+.clientRow:hover .clientArrow { color: var(--ink); }
+
+/* Drawer: files under the form, each a quiet row of words. */
+.fileSection {
+  display: grid;
+  gap: var(--s1);
+  margin-top: var(--s4);
+  padding-block: var(--s3) var(--s4);
+  border-top: 1px solid var(--line);
+}
+.fileHeading {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.fileRow {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 56px;
+  min-width: 0;
+}
+.fileThumb {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  object-fit: contain;
+}
+.fileText { display: grid; flex: 1 1 auto; min-width: 0; }
+.fileText span { color: var(--muted); font-size: var(--small); overflow-wrap: anywhere; }
+.fileAction {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  min-height: 44px;
+  padding-inline: var(--s2);
+  color: var(--brand-text);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.fileAction:hover { text-decoration: underline; text-underline-offset: 3px; }
+.fileAction:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
+.fileAction[data-disabled] { color: var(--muted); cursor: not-allowed; }
+.fileNote { margin: 0; color: var(--muted); font-size: var(--small); }
+
+.viewFacts { display: grid; gap: var(--s3); margin: 0; }
+.viewFacts > div { display: grid; gap: 2px; }
+.viewFacts dt { color: var(--muted); font-size: var(--small); font-weight: 650; }
+.viewFacts dd { margin: 0; overflow-wrap: anywhere; }
+
 @media (max-width: 768px) {
-  .clientActions .clientInfoGroup { flex: 0 1 auto; }
-  .clientActions .attachmentTools { flex: 0 1 auto; }
-  .clientActions:has(.attachmentTools[open]) { align-items: flex-start; }
+  .clientRow {
+    grid-template-columns: 40px minmax(0, 1fr) 20px;
+    grid-template-rows: auto auto auto;
+    column-gap: var(--s3);
+    row-gap: 2px;
+    padding-block: var(--s3);
+  }
+  .clientAvatar { grid-row: 1 / span 3; align-self: start; }
+  .clientRow > .clientName { grid-column: 2; grid-row: 1; }
+  .clientRow > .clientContact { grid-column: 2; grid-row: 2; font-size: var(--small); }
+  .clientRow > .clientContact small { display: none; }
+  .clientRow > .clientFiles { grid-column: 2; grid-row: 3; }
+  .clientRow > .clientArrow { grid-column: 3; grid-row: 1 / span 3; }
 }

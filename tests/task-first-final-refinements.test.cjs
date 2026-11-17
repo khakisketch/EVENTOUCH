@@ -135,23 +135,21 @@ test("team contacts break at safe points, never mid-token or hidden", () => {
   const workspace = read("console/team/TeamWorkspace.tsx");
   assert.match(workspace, /<wbr \/>/u, "emails carry semantic break opportunities");
   assert.match(workspace, /SafeContact/u, "both invite and member emails use the safe renderer");
-  assert.equal(workspace.match(/<SafeContact value=\{/g)?.length ?? 0, 3, "invite + member + event-permission editor contacts");
+  assert.equal(workspace.match(/<SafeContact value=\{/g)?.length ?? 0, 5, "invite + member + event-permission rows and the two drawer headers");
   assert.match(workspace, /<SafeContact value=\{invitation\.email\} \/>/u);
-  assert.equal(workspace.match(/<SafeContact value=\{account\.email\} \/>/g)?.length ?? 0, 2, "both member and permission-editor contacts use semantic wrapping");
+  assert.equal(workspace.match(/<SafeContact value=\{account\.email\} \/>/g)?.length ?? 0, 2, "both member and permission-editor rows use semantic wrapping");
   assert.doesNotMatch(workspace, />\s*\{(?:account|invitation)\.email\}\s*</u, "no direct contact rendering bypasses safe wrapping");
   assert.doesNotMatch(workspace, /text-overflow:\s*ellipsis|overflow:\s*hidden/u, "no truncation hides contact info");
   const css = read("console/team/team.module.css");
-  assert.match(css, /\.memberContact\s*\{[^}]*overflow-wrap:\s*break-word/su, "contacts fall back only when no safe point exists");
-  assert.match(css, /\.memberContact\s*\{[^}]*word-break:\s*keep-all/su, "phrases stay intact");
-  assert.doesNotMatch(css, /\.memberContact\s*\{[^}]*anywhere/su, "contacts never snap mid-token");
+  assert.match(css, /\.personContact\s*\{[^}]*overflow-wrap:\s*break-word/su, "contacts fall back only when no safe point exists");
+  assert.match(css, /\.personContact\s*\{[^}]*word-break:\s*keep-all/su, "phrases stay intact");
+  assert.doesNotMatch(css, /\.personContact\s*\{[^}]*anywhere/su, "contacts never snap mid-token");
   assert.doesNotMatch(css, /\.inviteDetail\s*\{[^}]*anywhere/su, "invitation context never snaps mid-token");
   assert.doesNotMatch(css, /\.inviteDetail span\s*\{[^}]*anywhere/su, "invitation context lines never snap mid-token");
-  assert.match(css, /\.teamRow\s*\{[^}]*width:\s*100%/su, "team rows own full width next to their action");
-  assert.match(css, /\.memberMain\s*\{[^}]*min-width:\s*0/su, "text column keeps a shrinkable basis");
-  assert.match(css, /\.memberActions\s*\{[^}]*flex:\s*none/su, "actions never squeeze the text");
-  assert.match(workspace, /teamStyles\.teamRow/u);
-  assert.match(workspace, /teamStyles\.memberMain/u);
-  assert.match(workspace, /teamStyles\.memberActions/u);
+  assert.match(css, /\.personRow,\s*\.permRow\s*\{[^}]*min-width:\s*0/su, "people rows may shrink instead of overflowing");
+  assert.match(css, /\.personMain\s*\{[^}]*min-width:\s*0/su, "text column keeps a shrinkable basis");
+  assert.match(workspace, /teamStyles\.personRow/u);
+  assert.match(workspace, /teamStyles\.personMain/u);
 });
 
 test("globals use tokens: no literal colors, no off-scale type or spacing", () => {
@@ -180,7 +178,6 @@ test("owned modules stay token-clean", () => {
   assert.match(ops, /\.mapPoint\s*\{[^}]*padding:\s*var\(--s1\) var\(--s2\)/su);
   const imp = read("console/events/[id]/participants/import/import.module.css");
   assert.doesNotMatch(imp, /font-size:\s*12px/u);
-  assert.match(imp, /\.importStepNumber\s*\{[^}]*font-size:\s*var\(--small\)/su);
 });
 
 test("operations resources keep an explicit textual state, not color or a switch alone", () => {
@@ -231,12 +228,11 @@ test("photos upload stacks full-width on phones; import file aligns left", () =>
   assert.match(mobile, /\.uploadArea\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/su, "explanation keeps full width");
   assert.match(mobile, /\.uploadArea > :global\(\.product-action\)\s*\{[^}]*width:\s*100%/su, "upload action goes full-width");
   const wizard = read("console/events/[id]/participants/import/ImportWizard.tsx");
-  const fileSlot = wizard.slice(wizard.indexOf('filters={'), wizard.indexOf('actions={', wizard.indexOf('filters={')));
-  assert.match(fileSlot, /<label data-import-dropzone/u, "file picker rides the left filter slot on desktop");
-  assert.match(fileSlot, /styles\.filePicker/u, "the picker owns its focusable presentation");
-  assert.match(fileSlot, /type="file"/u, "the picker remains a native file input");
+  assert.match(wizard, /<label data-import-dropzone/u, "the drop area is one label around the real file input");
+  assert.match(wizard, /styles\.filePicker/u, "the picker owns its focusable presentation");
+  assert.match(wizard, /type="file"/u, "the picker remains a native file input");
   const importCss = read("console/events/[id]/participants/import/import.module.css");
   assert.match(importCss, /\.filePicker:focus-within\s+\.fileButton\s*\{[^}]*outline:\s*3px/su, "keyboard focus is visible without :has");
-  assert.match(wizard, /actions=\{\s*<ProductButton\b/u, "template stays a right-side action");
+  assert.match(wizard, /downloadCsv\("EVENTOUCH_import_template\.csv"/u, "template download stays one quiet link beside the format line");
   assert.match(wizard, /양식 CSV/u, "template download survives the move");
 });

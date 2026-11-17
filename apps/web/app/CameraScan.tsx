@@ -2,7 +2,8 @@
 
 import ProductButton from "./ui/ProductButton";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import fieldStyles from "./camera-scan.module.css";
 import {
   DECODE_INTERVAL_MS,
   MAX_DECODE_HEIGHT,
@@ -12,6 +13,8 @@ import {
   shouldAttemptDecode,
 } from "./scan-frame";
 
+const PAUSED_MESSAGE = "화면이 가려져 카메라를 멈췄습니다. 다시 시도해 스캔을 계속하세요.";
+
 type Props = {
   onDetected: (code: string) => void;
   onClose: () => void;
@@ -20,6 +23,16 @@ type Props = {
   // Fallback copy differs per desk: staff scan tickets, participants scan
   // booth codes. Both keep the same decode-only rule.
   manualHint?: string;
+  // "field": staff desks. The camera fills its parent, stays open after a
+  // detection (the next person is scanned without restarting it), keeps the
+  // screen awake and offers the torch where the device has one. The default
+  // "panel" is unchanged: one detection, then the camera is released.
+  variant?: "panel" | "field";
+  // Field only: while true (a result is showing or a request is in flight)
+  // detections are ignored, so one QR is never submitted twice.
+  suspended?: boolean;
+  // Field only: extra round tool buttons beside the torch.
+  tools?: ReactNode;
 };
 
 // Camera QR scanning for staff check-in and participant booth stamping. The
@@ -33,7 +46,8 @@ type Props = {
 // starts (never in the route bundle), the camera is capped at 640x480, and
 // decoding runs at most ~5 times a second on a downscaled frame
 // (see scan-frame.ts, executed by the contract test).
-export default function CameraScan({ onDetected, onClose, focusOrigin, onUseManual, manualHint = "티켓 코드를 직접 입력하세요." }: Props) {
+export default function CameraScan({ onDetected, onClose, focusOrigin, onUseManual, manualHint = "티켓 코드를 직접 입력하세요.", variant = "panel", suspended = false, tools }: Props) {
+  const field = variant === "field";
   const panelRef = useRef<HTMLElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -46,6 +60,38 @@ export default function CameraScan({ onDetected, onClose, focusOrigin, onUseManu
   const [startupSlow, setStartupSlow] = useState(false);
   const [paused, setPaused] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const suspendedRef = useRef(suspended);
+  suspendedRef.current = suspended;
+  const trackRef = useRef<MediaStreamTrack | null>(null);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
+  // Same code seen again: still in front of the lens (hold), or a repeat too
+  // soon after the last submit. Both are ignored in the field variant.
+  const lastCodeRef = useRef("");
+  const lastSeenRef = useRef(0);
+  const lastFiredRef = useRef(0);
+
+  useEffect(() => {
+    if (!field || typeof navigator === "undefined" || !("wakeLock" in navigator)) return;
+    let lock: WakeLockSentinel | null = null;
+    let cancelled = false;
+    const acquire = async () => {
+      try {
+        const next = await navigator.wakeLock.request("screen");
+        if (cancelled) void next.release(); else lock = next;
+      } catch {
+        // Unsupported or refused: the screen may dim; scanning still works.
+      }
+    };
+    const onVisible = () => { if (!document.hidden && (!lock || lock.released)) void acquire(); };
+    void acquire();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      if (lock) void lock.release().catch(() => {});
+    };
+  }, [field]);
 
   useEffect(() => {
     if (!focusOrigin || document.hidden || document.activeElement !== focusOrigin) return;
@@ -60,6 +106,9 @@ export default function CameraScan({ onDetected, onClose, focusOrigin, onUseManu
     let hidden = false;
     let hintTimer = 0;
     let lastDecode = 0;
+    trackRef.current = null;
+    setTorchSupported(false);
+    setTorchOn(false);
     const startupTimer = window.setTimeout(() => {
       if (!stopped && !hidden && !doneRef.current) setStartupSlow(true);
     }, 6000);
@@ -135,6 +184,12 @@ export default function CameraScan({ onDetected, onClose, focusOrigin, onUseManu
         setFailure(`${reason} ${manualHint}`);
         return;
       }
+      const firstTrack = stream.getVideoTracks()[0];
+      if (field && firstTrack) {
+        trackRef.current = firstTrack;
+        const capabilities = typeof firstTrack.getCapabilities === "function" ? firstTrack.getCapabilities() as MediaTrackCapabilities & { torch?: boolean } : null;
+        setTorchSupported(Boolean(capabilities?.torch));
+      }
       for (const track of stream.getVideoTracks()) {
         track.addEventListener("ended", () => {
           if (stopped || hidden || doneRef.current) return;
@@ -183,7 +238,7 @@ export default function CameraScan({ onDetected, onClose, focusOrigin, onUseManu
       const context: CanvasRenderingContext2D = rendering;
       // A camera that sees nothing for a while is a real situation (dirty
       // lens, wrong code): point at the manual path instead of waiting.
-      hintTimer = window.setTimeout(() => {
+      if (!field) hintTimer = window.setTimeout(() => {
         if (!doneRef.current) setHint(true);
       }, 8000);
       function tick() {
@@ -206,7 +261,24 @@ export default function CameraScan({ onDetected, onClose, focusOrigin, onUseManu
           return;
         }
         const decoded = decode(image.data, image.width, image.height);
-        if (decoded && decoded.data) {
+        if (decoded && decoded.data && field) {
+          const code = decoded.data;
+          const at = Date.now();
+          const same = code === lastCodeRef.current;
+          if (suspendedRef.current) {
+            // A result is showing. The code already submitted stays "in view"
+            // while it is held up; a different code is simply not read yet.
+            if (same) lastSeenRef.current = at;
+            return;
+          }
+          const stillInView = same && at - lastSeenRef.current < 1500;
+          if (same) lastSeenRef.current = at;
+          if (stillInView || (same && at - lastFiredRef.current < 3000)) return;
+          lastCodeRef.current = code;
+          lastSeenRef.current = at;
+          lastFiredRef.current = at;
+          onDetectedRef.current(code);
+        } else if (decoded && decoded.data) {
           doneRef.current = true;
           window.clearTimeout(hintTimer);
           // Release the camera here, not on unmount: the caller submits the
@@ -243,6 +315,64 @@ export default function CameraScan({ onDetected, onClose, focusOrigin, onUseManu
     };
   }, [manualHint, attempt]);
 
+  async function toggleTorch() {
+    const track = trackRef.current;
+    if (!track) return;
+    const next = !torchOn;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: next } as MediaTrackConstraintSet] });
+      setTorchOn(next);
+    } catch {
+      setTorchSupported(false);
+      setTorchOn(false);
+    }
+  }
+
+  function retry() {
+    doneRef.current = false;
+    setFailure(null);
+    setPaused(false);
+    setHint(false);
+    setStarting(true);
+    setStartupSlow(false);
+    setAttempt((value) => value + 1);
+    panelRef.current?.focus({ preventScroll: true });
+  }
+
+  if (field) {
+    const problem = failure ?? (paused ? PAUSED_MESSAGE : null);
+    return (
+      <section ref={panelRef} className={fieldStyles.field} aria-label="카메라 스캔" tabIndex={-1}>
+        <h2 className="sr-only">QR 스캔</h2>
+        {problem ? null : <video className={fieldStyles.video} ref={videoRef} playsInline muted aria-label="카메라 미리보기" />}
+        <canvas ref={canvasRef} hidden aria-hidden="true" />
+        <div className={fieldStyles.frame} data-off={problem ? "true" : undefined} aria-hidden="true">
+          <i data-corner="tl" /><i data-corner="tr" /><i data-corner="bl" /><i data-corner="br" />
+          {problem || starting ? null : <span className={fieldStyles.scanLine} />}
+        </div>
+        {problem ? (
+          <div className={fieldStyles.problem}>
+            <p role={failure ? "alert" : "status"}>{problem}</p>
+            <ProductButton type="button" variant="primary" onClick={retry}>다시 시도</ProductButton>
+            {onUseManual ? <ProductButton type="button" variant="ghost" onClick={onUseManual}>명단에서 참가자 찾기</ProductButton> : null}
+          </div>
+        ) : (
+          <p className={fieldStyles.state} role="status">
+            {starting ? (startupSlow ? `카메라 시작이 늦어지고 있습니다. 브라우저 권한 요청을 확인하거나 ${manualHint}` : "카메라를 준비하고 있습니다. 권한 요청이 보이면 허용해 주세요.") : suspended ? "처리 중입니다" : "QR을 사각형 안에 맞춰 주세요"}
+          </p>
+        )}
+        <div className={fieldStyles.tools}>
+          {torchSupported ? (
+            <button type="button" className={fieldStyles.tool} aria-pressed={torchOn} aria-label="손전등" onClick={() => void toggleTorch()}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3L5 13h6l-1 8 8-10h-6z" /></svg>
+            </button>
+          ) : null}
+          {tools}
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section ref={panelRef} className="camera-panel" aria-label="카메라 스캔" tabIndex={-1}>
       <h2>QR 스캔</h2>
@@ -254,7 +384,7 @@ export default function CameraScan({ onDetected, onClose, focusOrigin, onUseManu
       <canvas ref={canvasRef} hidden aria-hidden="true" />
       {!failure && !paused && starting ? <p className="auth-help" role="status">{startupSlow ? `카메라 시작이 늦어지고 있습니다. 브라우저 권한 요청을 확인하거나 ${manualHint}` : "카메라를 준비하고 있습니다. 브라우저에 권한 요청이 표시되면 허용해 주세요."}</p> : null}
       {hint && !paused && !failure ? <p className="auth-help" role="status">QR 코드를 찾지 못했습니다. {manualHint}</p> : null}
-      {paused ? <p className="auth-help" role="status">화면이 가려져 카메라를 멈췄습니다. 다시 시도해 스캔을 계속하세요.</p> : null}
+      {paused ? <p className="auth-help" role="status">{PAUSED_MESSAGE}</p> : null}
       {failure || paused ? <ProductButton type="button" className="button button-primary" onClick={() => {
         doneRef.current = false;
         setFailure(null);

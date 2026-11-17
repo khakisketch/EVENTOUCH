@@ -589,7 +589,7 @@ function scan(workspace, event, actor, input, assignment) {
   if (attendanceNeedsReview(person, indexLatestChecks(workspace.checks))) {
     throw failure(409, '출입 기록을 확인할 수 없어 처리하지 않았습니다. 현장 책임자에게 확인을 요청하세요.', undefined, 'CHECK_ATTENDANCE_REVIEW_REQUIRED');
   }
-  if (action === 'IN' && person.inside === true) throw failure(409, '이미 입장한 참가자입니다. 중복 처리하지 않았습니다.');
+  if (action === 'IN' && person.inside === true) throw failure(409, '이미 입장한 참가자입니다. 중복 처리하지 않았습니다.', undefined, 'ALREADY_CHECKED_IN');
   if (action === 'OUT' && person.inside !== true) throw failure(409, '현재 입장 상태가 아닙니다. 퇴장 처리하지 않았습니다.');
   if (action === 'IN' && person.everIn === true && workspace.allowReentry !== true) {
     throw failure(409, '재입장을 허용하지 않는 행사입니다.');

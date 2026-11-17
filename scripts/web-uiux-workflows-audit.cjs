@@ -93,7 +93,7 @@ async function main() {
       await imports.locator('p').filter({ hasText: 'CSV·TXT·XLS·XLSX' }).waitFor();
       const buffer = XLSX.write(workbook, { type: 'buffer', bookType: format === 'xls' ? 'biff8' : 'xlsx' });
       await imports.locator('input[type=file]').setInputFiles({ name: `synthetic.${format}`, mimeType: format === 'xls' ? 'application/vnd.ms-excel' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer });
-      await imports.getByRole('heading', { name: '2. 열 연결', exact: true }).waitFor();
+      await imports.getByRole('region', { name: '가져올 명단 확인' }).waitFor({ state: 'attached' });
       const importAlerts = (await imports.getByRole('alert').allTextContents()).map(text => text.trim()).filter(Boolean);
       assert.deepEqual(importAlerts, [], `${format} is parsed without an error: ${JSON.stringify(importAlerts)}`);
     }
@@ -121,9 +121,11 @@ async function main() {
     const theme = await newPage();
     await theme.goto(`${f.baseUrl}/console/events/${newId}/page`);
     await theme.getByText('기본 색상 배너', { exact: true }).waitFor();
+    // The banner editor is a panel opened from the studio's 배너 row; the neutral default is the
+    // current choice, so its "사용 중" action is disabled. (The old in-page section nav with an
+    // underlined 저장·게시 link no longer exists in the studio.)
+    await theme.getByRole('button', { name: /^배너/ }).click();
     assert.equal(await theme.getByRole('button', { name: '기본 배너 사용 중' }).isDisabled(), true);
-    const nav = theme.getByRole('navigation', { name: '참가자 페이지 구역' });
-    assert.equal(await nav.getByRole('link', { name: '저장·게시' }).evaluate(el => getComputedStyle(el).textDecorationLine.includes('underline')), true);
     const guest = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'ko-KR' });
     const home = await guest.newPage();
     await home.goto(`${f.baseUrl}/event/${f.slug}/home`);

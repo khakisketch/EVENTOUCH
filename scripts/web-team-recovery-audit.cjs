@@ -128,8 +128,13 @@ async function main() {
     assert.equal(inviteIds.length, postsBeforeReloadCheck);
 
     stage = 'password reset lost, rejected and replayed';
-    const manager = page.getByRole('list', { name: '구성원 목록' }).locator('li').filter({ hasText: '감사 운영자' });
-    await manager.getByRole('button', { name: '비밀번호 재설정' }).click();
+    // Account actions live in the member drawer; choosing 비밀번호 재설정 closes
+    // it and opens the reset dialog, which keeps its own recovery contract.
+    const openReset = async () => {
+      await page.getByRole('list', { name: '구성원 목록' }).getByRole('button', { name: '감사 운영자', exact: true }).click();
+      await page.getByRole('button', { name: '비밀번호 재설정', exact: true }).click();
+    };
+    await openReset();
     const password = 'synthetic-password-only';
     await page.locator('#reset-password').fill(password);
     await page.locator('#reset-confirm').fill(password);
@@ -147,7 +152,7 @@ async function main() {
     assert.equal(require('../server/auth').verifyPassword(password, account.password_hash), true);
 
     stage = 'password reset read-only confirmation';
-    await manager.getByRole('button', { name: '비밀번호 재설정' }).click();
+    await openReset();
     const secondPassword = 'second-synthetic-password';
     await page.locator('#reset-password').fill(secondPassword);
     await page.locator('#reset-confirm').fill(secondPassword);
@@ -162,17 +167,18 @@ async function main() {
     assert.equal(require('../server/auth').verifyPassword(secondPassword, currentAccount.password_hash), true);
 
     stage = 'event permission malformed, rejected and replayed';
+    await page.getByRole('tab', { name: '행사별 권한' }).click();
     const scopeList = page.getByRole('list', { name: /쓰기 권한 목록/ });
-    await scopeList.locator('li').filter({ hasText: '감사 운영자' }).getByRole('button', { name: '권한 편집' }).click();
-    const scopes = page.getByRole('group', { name: '감사 운영자 쓰기 범위 선택' });
-    await scopes.getByLabel('전체 (모든 쓰기)').uncheck();
+    await scopeList.getByRole('button', { name: '감사 운영자', exact: true }).click();
+    const permissionDrawer = page.getByRole('dialog', { name: /감사 운영자 · 쓰기 권한/ });
+    await permissionDrawer.getByText('읽기 전용', { exact: true }).click();
     memberMode = 'lost';
-    await scopeList.getByRole('button', { name: '권한 저장' }).click();
-    await scopeList.getByRole('button', { name: '같은 요청으로 다시 시도' }).waitFor();
-    await scopeList.getByRole('button', { name: '같은 요청으로 다시 시도' }).click();
+    await permissionDrawer.getByRole('button', { name: '권한 저장' }).click();
+    await permissionDrawer.getByRole('button', { name: '같은 요청으로 다시 시도' }).waitFor();
+    await permissionDrawer.getByRole('button', { name: '같은 요청으로 다시 시도' }).click();
     await page.getByText(/같은 요청으로 다시 시도하세요/).first().waitFor();
-    await scopeList.getByRole('button', { name: '같은 요청으로 다시 시도' }).click();
-    await scopeList.getByRole('button', { name: '권한 편집' }).waitFor();
+    await permissionDrawer.getByRole('button', { name: '같은 요청으로 다시 시도' }).click();
+    await permissionDrawer.waitFor({ state: 'hidden' });
     assert.equal(new Set(memberIds.slice(-3)).size, 1);
     const granted = (await fixture.harness.database.query('SELECT write_permissions FROM memberships WHERE account_id=$1 AND event_id=$2', [fixture.manager.id, fixture.eventId])).rows[0];
     assert.deepEqual(granted.write_permissions, []);

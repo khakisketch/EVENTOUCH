@@ -149,8 +149,8 @@ test('CSV filename preserves mapping, quoting and physical row numbers across ad
   const results = [];
   for (const type of ['text/csv', 'text/plain', '', 'application/vnd.ms-excel']) {
     const world = runtime({ submittingRef: { current: false }, importLocked: false, fileReadingRef: { current: false }, fileReadIdRef: { current: 0 } });
-    stateSetters(world.sandbox, ['readingFile', 'fileError', 'fileName', 'headers', 'dataRows', 'preview', 'phoneReviewed', 'committed', 'fileKind', 'map']);
-    world.functions(IMPORT, ['readFile', 'previewFor', 'stripBom', 'parseCsv', 'parseTxt', 'normalizePhone', 'validateRows'], ['MAX_BYTES', 'MAX_ROWS', 'ALIASES']);
+    stateSetters(world.sandbox, ['readingFile', 'fileError', 'fileName', 'headers', 'dataRows', 'preview', 'phoneReviewed', 'errorsOpen', 'committed', 'fileKind', 'map']);
+    world.functions(IMPORT, ['readFile', 'previewFor', 'stripBom', 'parseCsv', 'parseTxt', 'normalizePhone', 'validateRows', 'detectColumns', 'headerParts'], ['MAX_BYTES', 'MAX_ROWS', 'HEADER_WORDS', 'EMPTY_MAP']);
     const content = 'phone,name,company\r\n01000009999,"Synthetic, Name","Fixture\nCompany"\r\ninvalid,Bad,Other';
     await world.sandbox.readFile({ name: 'participants.CSV', type, size: content.length, text: async () => content });
     results.push(plain({ kind: world.sandbox.fileKind, map: world.sandbox.map, rows: world.sandbox.dataRows, preview: world.sandbox.preview, error: world.sandbox.fileError }));
@@ -169,6 +169,8 @@ function engageReadWorld(fetch) {
     ticketStorageAvailable: () => true, getAllowedTicketForTab: () => '', readStoredTicket: () => '', isTicketRejected: () => false,
     clearSessionForTab() {}, clearTicketRejected() {}, storeTicket: () => true, markTicketRejected() {}, clearStoredTicket() {}, allowSessionForTab() {},
     REJECTED_TICKET_BEARER: 'rejected', state: { kind: 'loading' },
+    // The page reads the event's home color for its ground; the deadline tests do not care which.
+    normalizeHomeStyle: () => ({ backgroundColor: '#B9DEF0' }),
     questionTexts: { module: 'keep my unsent draft' },
   });
   stateSetters(world.sandbox, ['state', 'questionTexts']);
@@ -301,7 +303,7 @@ for (const stage of ['headers', 'body', 'rejection-body']) test(`staff correctio
   s.operatorFetch = world.load('lib/operator-context.ts').operatorFetch;
   Object.assign(s, world.load('app/staff/correction-retry.ts'));
   Object.assign(s, { pendingScanRef: { current: null }, receiptRefreshRef: { current: false }, rewardRequestRef: { current: null }, correctingRef: { current: false }, correcting: false, pendingCorrectRef: { current: null }, correctUnknown: false, rewardCollectUncertain: false, receiptLock: false, rewardLookupLoading: false, rewardCollectingId: null, orgChanged: false, assignmentStale: false, correctableCheck: { id: 'check' }, assignment: { id: 'assignment-original' }, correctReason: 'original reason', activeScope: { eventId: 'event-original' }, clearRewardPanel() {}, forgetOperatorReceipt() {}, load: async () => {} });
-  stateSetters(s, ['correcting', 'correctNotice', 'correctUnknown', 'correctReason', 'result']);
+  stateSetters(s, ['correcting', 'correctNotice', 'correctUnknown', 'correctReason', 'result', 'lastScan', 'sheet']);
   world.functions(STAFF, ['correctLatest']);
   const body = deferred();
   if (stage !== 'headers') s.fetch = async (url, init) => { world.calls.push({ url, init }); return deferredResponse(body, undefined, stage === 'rejection-body' ? 403 : 200); };

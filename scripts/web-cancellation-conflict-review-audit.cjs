@@ -127,7 +127,7 @@ const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
         const ownerContext = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'ko-KR' });
         await ownerContext.addCookies([{ name: 'etko_session', value: decodeURIComponent(ownerCookie.slice('etko_session='.length)), url: f.baseUrl }]);
         const owner = await ownerContext.newPage(); await owner.goto(`${f.baseUrl}/console/team`);
-        await owner.getByText('연동·활동', { exact: true }).click();
+        await owner.getByRole('tab', { name: '연동·활동' }).click();
         await owner.getByText(new RegExp(`참가 취소 기록 확인.*${person.name}.*참가자에게 직접 참가 의사를 확인`)).waitFor();
         await owner.screenshot({ path: path.join(out, 'activity-1280.png'), fullPage: true });
         await ownerContext.close();

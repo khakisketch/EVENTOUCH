@@ -174,14 +174,14 @@ async function runOrganizationRoleAudit() {
       axe.push({ name, violations });
       check(`${name} no serious/critical axe`, !violations.some((v) => ['serious', 'critical'].includes(v.impact)), violations);
     };
-    const headingReady = async () => { await page.getByRole('heading', { name: '구성원', exact: true }).first().waitFor(); };
+    const headingReady = async () => { await page.getByRole('list', { name: '구성원 목록' }).waitFor(); };
     // Initial team load only: if the correct context-block screen appears
     // instead of the team screen, reselect the original org explicitly
     // through the real API (receipt included), reload, and require the team
     // screen. A persistent block fails loudly — never counted as a pass.
     const ensureTeamReady = async (stage) => {
       await page.goto(`${f.baseUrl}/console/team`);
-      const teamHeading = page.getByRole('heading', { name: '구성원', exact: true }).first();
+      const teamHeading = page.getByRole('list', { name: '구성원 목록' });
       await teamHeading.waitFor();
       // The heading alone is NOT success: fixture org writes move the
       // session, so the correct context lock may co-show. A co-visible
@@ -201,7 +201,7 @@ async function runOrganizationRoleAudit() {
     };
     const openEditor = async (accountId) => {
       if (await page.locator(`#org-role-panel-${accountId}`).isVisible().catch(() => false)) return;
-      await page.locator(`#org-role-toggle-${accountId}`).click();
+      await page.locator(`#member-open-${accountId}`).click();
       await page.locator(`#org-role-panel-${accountId}`).waitFor();
     };
     const accountMenuButton = page.locator('button[aria-haspopup="dialog"]:visible').first();
@@ -278,8 +278,11 @@ async function runOrganizationRoleAudit() {
         await route.fulfill({ status: 502, json: { error: '합성 초대 철회 응답 유실' } });
       } else await route.continue();
     });
-    await issuedRow.getByRole('button', { name: '초대 철회', exact: true }).click();
-    const revokeRetry = issuedRow.getByRole('button', { name: /같은 요청/ });
+    // Revoke lives in the invitation drawer opened from the row.
+    await issuedRow.getByRole('button').first().click();
+    const revokeDrawer = page.getByRole('dialog');
+    await revokeDrawer.getByRole('button', { name: '초대 철회', exact: true }).click();
+    const revokeRetry = revokeDrawer.getByRole('button', { name: /같은 요청/ });
     await revokeRetry.waitFor();
     await capture('owner-invite-revoke-unknown-1280');
     await revokeRetry.click();
@@ -479,20 +482,24 @@ async function runOrganizationRoleAudit() {
     await page.reload();
     await headingReady();
     const dormantRow = page.locator('li').filter({ hasText: `${dormantId}@example.test` }).first();
-    const reactivate = dormantRow.getByRole('button', { name: /사용 재개|다시 사용|소속 다시 사용|활성화|중지 해제/ });
-    check('inactive membership offers a real reactivation control', await reactivate.count() > 0, { row: (await dormantRow.innerText().catch(() => '')).slice(0, 300) });
+    // Reactivation is an account action in the member drawer.
+    await openEditor(dormantId);
+    const dormantDrawer = page.getByRole('dialog');
+    const reactivate = dormantDrawer.getByRole('button', { name: /사용 재개|다시 사용|소속 다시 사용|활성화|중지 해제/ });
+    check('inactive membership offers a real reactivation control', await reactivate.count() > 0, { drawer: (await dormantDrawer.innerText().catch(() => '')).slice(0, 300) });
     await reactivate.first().click();
     await page.waitForTimeout(600);
     row = await membershipRow(orgId, dormantId);
     if (!row.active) {
-      const reactivateConfirm = dormantRow.getByRole('button', { name: /재개한다|다시 사용한다|다시 활성화한다|사용한다|확인/ });
+      const reactivateConfirm = dormantDrawer.getByRole('button', { name: /재개한다|다시 사용한다|다시 활성화한다|사용한다/ });
       check('reactivation stages a confirm before applying', await reactivateConfirm.count() > 0);
       await reactivateConfirm.first().click();
       await page.waitForTimeout(1000);
       row = await membershipRow(orgId, dormantId);
     }
     check('team reactivation preserves the stored role', row.active === true && row.role === 'MANAGER', row);
-    const reactivatedRoleLine = await dormantRow.locator('p').filter({ hasText: /조직 역할/ }).first().innerText().catch(() => '');
+    await page.getByRole('dialog').waitFor({ state: 'hidden' });
+    const reactivatedRoleLine = await dormantRow.innerText().catch(() => '');
     check('reactivated row no longer reads as suspended', reactivatedRoleLine.length > 0 && !/사용 중지/.test(reactivatedRoleLine), { roleLine: reactivatedRoleLine.slice(0, 200) });
 
     // Last-owner guard: sole AGENCY can be neither demoted nor deactivated (API + real UI).

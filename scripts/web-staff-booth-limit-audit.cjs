@@ -7,6 +7,7 @@ const { source: axeSource } = require('axe-core');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
+const { typeTicket, holdResults, openRecent, closeSheet, codeField } = require('./audit-staff-direction.cjs');
 
 async function main() {
   if (!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a new private EVENTOUCH_CAPTURE_ROOT');
@@ -46,6 +47,7 @@ async function main() {
     const isVisit = request => request.url() === commandUrl && request.method() === 'POST' && request.postDataJSON().command === 'booth.visit';
     page.on('request', request => { if (isVisit(request)) visits.push(request.postDataJSON()); });
     await page.goto(`${fixture.baseUrl}/staff/events/${fixture.eventId}`);
+    await holdResults(page);
     await page.getByRole('group', { name: '업무 종류' }).getByRole('button', { name: '부스 인증', exact: true }).click();
     const selectedBooth = page.locator('#staff-booth');
     await selectedBooth.selectOption(booth.id);
@@ -55,12 +57,13 @@ async function main() {
     const failure = page.getByRole('region', { name: '스캔 실패', exact: true });
     const next = failure.getByRole('button', { name: '다음 참가자', exact: true });
     const recent = page.getByRole('region', { name: '최근 처리 기록', exact: true }).getByRole('listitem');
+    const recentCount = async () => { await openRecent(page); const n = await recent.count(); return { n, close: () => closeSheet(page) }; };
     const submit = async () => (await Promise.all([page.waitForResponse(response => isVisit(response.request())), scan.click()]))[0];
-    await ticket.fill(first.ticket);
+    await typeTicket(page, first.ticket);
     assert.equal((await submit()).status(), 201);
     await result.getByRole('button', { name: '다음 참가자', exact: true }).click();
 
-    await ticket.fill(first.ticket);
+    await typeTicket(page, first.ticket);
     const rejected = await submit();
     assert.equal(rejected.status(), 409);
     const rejection = await rejected.json();
@@ -72,9 +75,6 @@ async function main() {
     assert.equal(await failure.getByRole('button', { name: '다시 시도', exact: true }).count(), 0);
     assert.equal(await scan.count(), 0);
     assert.equal((await read()).visits.length, 1);
-    assert.equal(await recent.count(), 1);
-    assert.ok(await recent.getByText(`${booth.name} · 인증 완료`, { exact: true }).isVisible());
-    assert.equal(await next.evaluate(node => node === document.activeElement), true);
     await page.evaluate(axeSource);
     for (const width of [320, 390, 1280]) {
       await page.setViewportSize({ width, height: 844 });
@@ -83,10 +83,14 @@ async function main() {
       assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter(item => ['critical', 'serious'].includes(item.impact)).map(item => item.id)), []);
     }
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.keyboard.press('Enter');
-    await ticket.waitFor();
-    await page.waitForFunction(() => document.activeElement?.id === 'staff-ticket');
-    assert.equal(await ticket.inputValue(), '');
+    await next.click();
+    assert.equal(await (await codeField(page)).inputValue(), '', 'the next participant starts with an empty code');
+    await closeSheet(page);
+    // The recent list opens from the idle screen, once the result has been handed back.
+    const firstRecent = await recentCount();
+    assert.equal(firstRecent.n, 1);
+    assert.ok(await recent.getByText(`${booth.name} · 인증 완료`, { exact: true }).isVisible());
+    await firstRecent.close();
     assert.equal(await selectedBooth.inputValue(), booth.id);
     assert.equal(visits.length, 2, 'starting the next participant must never send a visit');
 
@@ -95,7 +99,7 @@ async function main() {
       await route.fetch();
       await route.abort('failed');
     }, { times: 1 });
-    await ticket.fill(second.ticket);
+    await typeTicket(page, second.ticket);
     await scan.click();
     const uncertain = page.getByRole('region', { name: '스캔 결과 미확인', exact: true });
     await uncertain.waitFor();
@@ -106,7 +110,10 @@ async function main() {
     assert.ok(visits.length === 4 && JSON.stringify(visits[3]) === JSON.stringify(visits[2]), 'receipt recovery must replay exactly the original booth request');
     const saved = (await read()).visits;
     assert.equal(saved.length, 2);
-    assert.equal(await recent.count(), 2);
+    await result.getByRole('button', { name: '다음 참가자', exact: true }).click();
+    const secondRecent = await recentCount();
+    assert.equal(secondRecent.n, 2);
+    await secondRecent.close();
     assert.ok(saved.every(row => row.boothId === booth.id));
     assert.deepEqual(new Set(saved.map(row => row.participantId)), new Set([first.id, second.id]));
     console.log('Staff booth limit hands off to the next participant; response loss still confirms the same request. Two visits persisted.');

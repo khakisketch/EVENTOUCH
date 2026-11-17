@@ -28,17 +28,17 @@ async function main() {
     await context.addCookies([{ ...cookieForContext(f, 'manager'), url: f.baseUrl }]);
     const page = await context.newPage();
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}`);
-    const link = page.getByRole('link', { name: /확정자 중 미입장/ }).first();
+    const link = page.getByRole('link', { name: /(미입장|참가 확정) 명단 보기/ }).first();
     await link.waitFor();
     await page.screenshot({ path: path.join(out, 'overview-1280.png'), fullPage: true });
     if (before) {
-      assert.match(await link.innerText(), /1명/);
+      assert.match(await page.getByText(/확정자 중 미입장/).first().innerText(), /1명/);
       await link.click();
       await page.getByText('검색어·상태·그룹·출입 조건에 맞는 사람이 없습니다. 조건을 하나씩 지워보세요.').waitFor();
       await page.screenshot({ path: path.join(out, 'roster-1280.png'), fullPage: true });
       console.log('Reproduced: overview count 1 but linked roster has no matching participants.');
     } else {
-      assert.match(await link.innerText(), /0명/);
+      assert.match(await page.getByText(/확정자 중 미입장/).first().innerText(), /0명/);
       const reviewLink = page.getByRole('link', { name: '출입 기록 확인 필요 1명' });
       await reviewLink.waitFor();
       await page.setViewportSize({ width: 390, height: 900 });
@@ -83,7 +83,7 @@ async function main() {
       assert.equal(response.status(), 201);
       assert.equal(response.request().postDataJSON().payload.expectedAttendance.attendanceReview, 1);
       assert.equal((await response.json()).report.snapshot.metrics.attendanceReview, 1);
-      await page.getByRole('tab', { name: '결과 분석', exact: true }).click();
+      // The analysis tab is gone: the attendance notice sits on the reports page itself.
       await page.getByRole('link', { name: '출입 기록 확인 필요 1명' }).waitFor();
       await page.screenshot({ path: path.join(out, 'report-analysis-390.png'), fullPage: true });
       await page.goto(`${f.baseUrl}/console/events/${f.eventId}/reports?closeReport=${created.json.report.id}#report-${created.json.report.id}`);
@@ -123,8 +123,9 @@ async function main() {
       }
       await page.goto(`${f.baseUrl}/console/events/${f.eventId}`);
       await page.getByRole('link', { name: '출입 기록 확인 필요 3명' }).waitFor();
-      assert.match(await page.getByRole('link', { name: /확정자 중 미입장/ }).first().innerText(), /1명/);
-      await page.getByRole('link', { name: /확정자 중 미입장/ }).first().click();
+      // The entry legend names the count; the one roster link below it opens that roster.
+      assert.match(await page.getByText(/확정자 중 미입장/).first().innerText(), /1명/);
+      await page.getByRole('link', { name: /미입장 명단 보기/ }).click();
       await page.getByRole('button', { name: `${matrix.participants[2].name} 참가자 상세`, exact: true }).waitFor();
       for (const index of [0, 1, 3, 4, 5, 6]) assert.equal(await page.getByRole('button', { name: `${matrix.participants[index].name} 참가자 상세`, exact: true }).count(), 0);
       await page.goto(`${f.baseUrl}/console/events/${f.eventId}/participants?attendance=REVIEW`);

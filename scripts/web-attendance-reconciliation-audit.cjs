@@ -118,7 +118,7 @@ async function main() {
     assert.equal(new URL(page.url()).searchParams.has('attendance'), false);
     const activity = await context.newPage();
     await activity.goto(`${f.baseUrl}/console/team`);
-    await activity.getByText('연동·활동', { exact: true }).click();
+    await activity.getByRole('tab', { name: '연동·활동' }).click();
     const activityList = activity.getByRole('list', { name: '최근 활동 목록' });
     const activityRow = activityList.getByRole('listitem').filter({ hasText: '출입 상태 복구' }).filter({ hasText: person.name });
     await activityRow.getByText(/입장 중/).waitFor();

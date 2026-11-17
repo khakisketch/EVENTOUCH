@@ -85,7 +85,7 @@ async function runSafe4Audit() {
       check(`${name} no serious/critical axe`, !violations.some((v) => ['serious', 'critical'].includes(v.impact)), violations);
     };
 
-    // ---- A. Optional format: create with online, settings shows/clears it.
+    // ---- A. The removed progress format: create no longer offers or stores it.
     await page.goto(f.baseUrl + '/console');
     await page.getByRole('button', { name: '새 행사 만들기', exact: true }).click();
     await page.locator('#create-name').fill('검증 진행형태 행사');
@@ -95,31 +95,13 @@ async function runSafe4Audit() {
     await openCreateSettings(page);
     await page.locator('#create-slug').fill(`s4f-${f.suffix.slice(0, 8)}`);
     await page.locator('#create-date').fill('2026-11-10');
-    await chooseRadio(page, 'create-format', 'online');
-    check('create dialog offers the optional unspecified choice', await page.locator('#create-format input[type="radio"][value=""]').count() === 1);
+    check('create dialog no longer offers the removed progress-format choice', await page.locator('#create-format').count() === 0);
     await page.getByRole('button', { name: '행사 만들기', exact: true }).click();
     await page.waitForURL(/\/console\/events\/.+/, { timeout: 15000 });
     const eventId = new URL(page.url()).pathname.split('/').pop();
     check('create navigates to the new event', Boolean(eventId) && eventId !== 'events');
-    const created = (await f.harness.database.query(`SELECT payload->>'format' AS format FROM events WHERE id=$1`, [eventId])).rows[0];
-    check('unspecified stays absent / online stores verbatim', created.format === 'online', created);
-    await page.goto(`${f.baseUrl}/console/events/${eventId}/settings`);
-    await page.getByRole('tab', { name: '기본 정보', exact: true }).click();
-    check('settings basics shows the stored online format', await page.locator('#set-format input:checked').inputValue() === 'online');
-    await capture('safe4-settings-format-1280');
-    await chooseRadio(page, 'set-format', 'hybrid');
-    await page.getByRole('button', { name: '기본 정보 저장', exact: true }).click();
-    await page.getByText(/기본 정보를 저장했습니다/, { exact: false }).first().waitFor();
-    const hybrid = (await f.harness.database.query(`SELECT payload->>'format' AS format FROM events WHERE id=$1`, [eventId])).rows[0];
-    check('settings update stores hybrid without touching other basics', hybrid.format === 'hybrid', hybrid);
-    await chooseRadio(page, 'set-format', '');
-    await Promise.all([
-      page.waitForResponse((response) => response.url().includes('/commands') && response.request().method() === 'POST'),
-      page.getByRole('button', { name: '기본 정보 저장', exact: true }).click(),
-    ]);
-    await page.getByText(/기본 정보를 저장했습니다/, { exact: false }).first().waitFor();
-    const cleared = (await f.harness.database.query(`SELECT payload FROM events WHERE id=$1`, [eventId])).rows[0].payload;
-    check('empty choice clears the key instead of storing a default', !Object.hasOwn(cleared, 'format'), Object.keys(cleared).filter((k) => /format/i.test(k)));
+    const created = (await f.harness.database.query(`SELECT payload FROM events WHERE id=$1`, [eventId])).rows[0].payload;
+    check('creating without a format stores no format key', !Object.hasOwn(created, 'format'), Object.keys(created).filter((k) => /format/i.test(k)));
 
     // ---- B. Row reuse prefills name+company only, guards dirty/uncertain.
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}/participants`);
@@ -129,15 +111,22 @@ async function runSafe4Audit() {
     await page.locator('#participant-add-company').fill('검증상사');
     await page.getByRole('dialog', { name: '참가자 추가' }).getByRole('button', { name: '등록', exact: true }).click();
     await page.getByText(/등록했습니다/, { exact: false }).first().waitFor();
-    const row = page.locator('li').filter({ hasText: '검증 재사용 원본' }).first();
-    await row.getByRole('button', { name: /참가자 상세/, exact: false }).click();
-    await row.getByRole('button', { name: '이 정보로 새 참가자 등록', exact: true }).click();
+    // The desktop roster is a table; its row opens the participant detail, and the reuse action
+    // lives in that detail instead of the row.
+    const row = page.getByRole('row').filter({ hasText: '검증 재사용 원본' }).first();
+    const reuseFromRow = async () => {
+      await row.getByRole('button', { name: /참가자 상세/ }).click();
+      await page.getByRole('button', { name: '이 정보로 새 참가자 등록', exact: true }).click();
+    };
+    await reuseFromRow();
     check('reuse opens the manual form, not a new route', await page.locator('#participant-add-form').count() === 1);
     check('reuse prefills only name and company', await page.locator('#participant-add-name').inputValue() === '검증 재사용 원본'
       && await page.locator('#participant-add-company').inputValue() === '검증상사'
       && await page.locator('#participant-add-phone').inputValue() === ''
       && await page.locator('#participant-add-email').inputValue() === '');
     check('reuse names the new registration instead of editing', /이름·소속을 가져왔습니다/.test(await page.getByRole('dialog', { name: '참가자 추가' }).innerText().catch(() => '')));
+    // The dialog focuses its first field, then reuse moves focus to the first empty required field; wait for the final stop.
+    await page.waitForFunction(() => document.activeElement && document.activeElement.id === 'participant-add-phone', null, { timeout: 5000 }).catch(() => {});
     check('reuse focuses the first empty required input', await page.evaluate(() => document.activeElement && document.activeElement.id) === 'participant-add-phone');
     await capture('safe4-reuse-prefill-1280');
     await page.keyboard.press('Escape');
@@ -146,7 +135,7 @@ async function runSafe4Audit() {
     await page.locator('#participant-add-name').fill('작성 중인 등록');
     await page.locator('#participant-add-phone').fill('01033334444');
     await page.keyboard.press('Escape');
-    await row.getByRole('button', { name: '이 정보로 새 참가자 등록', exact: true }).click();
+    await reuseFromRow();
     check('dirty form is never overwritten by another row', await page.locator('#participant-add-name').inputValue() === '작성 중인 등록'
       && await page.getByText(/작성 중인 새 등록 내용/, { exact: false }).count() > 0);
     await capture('safe4-reuse-dirty-guard-1280');
@@ -167,7 +156,7 @@ async function runSafe4Audit() {
     await page.getByRole('dialog', { name: '참가자 추가' }).getByRole('button', { name: '등록', exact: true }).click();
     await page.getByText(/같은 내용으로 다시 시도/, { exact: false }).first().waitFor();
     await page.keyboard.press('Escape');
-    await row.getByRole('button', { name: '이 정보로 새 참가자 등록', exact: true }).click();
+    await reuseFromRow();
     check('uncertain create reopens its pending form instead of forking', await page.locator('#participant-add-name').inputValue() === '검증 유실 등록'
       && await page.getByText(/결과 미확인인 등록/, { exact: false }).count() > 0);
     await page.unroute('**/api/events/*/commands');
@@ -185,6 +174,8 @@ async function runSafe4Audit() {
     // ---- C. Arbitrary period analysis reuses the fixed-bucket definitions.
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}`);
     await page.getByRole('heading', { name: '운영 현황', exact: true }).waitFor();
+    // The period analysis sits in the overview's collapsed "기간 분석" disclosure.
+    await page.locator('summary').filter({ hasText: '기간 분석' }).first().click();
     const rangeFrom = page.locator('#range-from');
     await rangeFrom.waitFor();
     check('range analysis offers browser-local from/to inputs', await page.locator('#range-to').count() === 1);
@@ -216,8 +207,9 @@ async function runSafe4Audit() {
     await page.locator('#report-title').fill('검증 보기 모드 보고서');
     await page.getByRole('dialog').getByRole('button', { name: '보고서 만들기', exact: true }).click();
     await page.getByText(/보고서 초안을 만들었습니다/, { exact: false }).first().waitFor();
-    await page.getByRole('button', { name: '내용 보기', exact: true }).first().click();
-    await page.getByRole('heading', { name: '보고서 내용', exact: true }).waitFor();
+    // Reports are tabs now: pick the new report's tab to read its document (there is no 내용 보기 step).
+    await page.getByRole('tab', { name: /검증 보기 모드 보고서/ }).click();
+    await page.locator('#report-detail').waitFor();
     check('report view defaults to A4', await page.getByText(/보기: A4 세로/, { exact: false }).count() > 0);
     await page.getByRole('button', { name: '발표용 16:9', exact: true }).click();
     check('wide view restates scope without editing promises', await page.getByText(/보기: 발표용 16:9/, { exact: false }).count() > 0

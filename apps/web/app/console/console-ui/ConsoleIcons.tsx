@@ -175,3 +175,48 @@ export function PrinterIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function BangIcon({ className }: IconProps) {
+  return (
+    <svg className={baseClass(className)} aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+      <path d="M12 6v8" />
+      <path d="M12 18v.5" />
+    </svg>
+  );
+}
+
+export function InfoIcon({ className }: IconProps) {
+  return (
+    <svg className={baseClass(className)} aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+      <path d="M12 11v6" />
+      <path d="M12 7v.5" />
+    </svg>
+  );
+}
+
+export function KeyIcon({ className }: IconProps) {
+  return (
+    <svg className={baseClass(className)} aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+      <rect x="3" y="6" width="18" height="12" rx="2" />
+      <path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10" />
+    </svg>
+  );
+}
+
+export function GiftIcon({ className }: IconProps) {
+  return (
+    <svg className={baseClass(className)} aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+      <rect x="4" y="9" width="16" height="11" rx="1" />
+      <path d="M12 9v11M3 9h18M12 9c-2-4-6-3-5 0M12 9c2-4 6-3 5 0" />
+    </svg>
+  );
+}
+
+export function ClockIcon({ className }: IconProps) {
+  return (
+    <svg className={baseClass(className)} aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 8v4l3 2" />
+    </svg>
+  );
+}

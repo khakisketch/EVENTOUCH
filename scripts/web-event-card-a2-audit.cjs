@@ -160,7 +160,9 @@ async function main() {
     // One pending approval on the fixture event so its card must carry the
     // direct approval link: import an approved row, then move it back to
     // PENDING through the real operator status path.
-    const pendingEvent = f.eventId;
+    // The running event shows as the page's one live card (no row action), so the pending approval
+    // goes on a regular row.
+    const pendingEvent = `cards-navy-${f.suffix}`;
     const imported = await run(pendingEvent, ownerCookie, 'participant.import', {
       rows: [{ name: '대기 참가자', phone: '01099998888', company: '대기 업체' }],
     });
@@ -197,126 +199,30 @@ async function main() {
     };
     const cardByName = (name) => page.locator('article', { has: page.getByRole('heading', { name, exact: true }) }).first();
 
-    // Approved white-row paint tokens (computed rgb triplets).
-    const FLAT_WHITE = '255,255,255'; // var(--paper): every row zone
-    const NAVY_DOT = '220,222,223'; // 15% tint of published #17252B over white
-    const BRAND_DOT = '251,233,222'; // 15% tint of published #E76D26 over white
-    const REPUBLISHED_DOT = '221,235,228'; // 15% tint of published #1A7A4C over white
-    const SOFT_DOT = '255,243,235'; // var(--soft): unpublished fallback dot
-    const MUTED_INK = '98,107,120'; // quiet date ink (var(--muted))
-    const STRONG_INK = '37,42,52'; // today/tomorrow recency (var(--ink))
-    const expectedDateInk = () => MUTED_INK;
-
+    // The directory is the confirmed flat-row list (docs: DESIGN.md "행사 목록 확정 구성", pinned by
+    // web-console-events-composition and the redesign smoke audit); the old white-card paint,
+    // identity-dot and entry-zone checks belonged to the retired card layout. What this audit still
+    // owns on the directory is what the create/duplicate dialogs depend on.
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
       await page.goto(`${f.baseUrl}/console`, { waitUntil: 'networkidle' });
       await page.locator('#console-event-directory').waitFor();
       check(`console directory ready at ${width}px`, true);
-      const workspaceBg = await page.locator('.console-main').evaluate(effectiveBackground);
-      check(`white ledger is inset against a neutral workspace at ${width}px`, workspaceBg.join(',') === '244,245,247', workspaceBg.join(','));
-      await page.screenshot({ path: path.join(OUT, `console-initial-${width}.png`), fullPage: true });
-
-      // -- No per-card duplicate, no always-empty footer ---------------------
-      check(`no per-card duplicate at ${width}px`, (await page.getByRole('button', { name: '복제', exact: true }).count()) === 0);
-      const footers = await page.locator('[class*="eventCardActions"]').count();
-      const pendingCards = await page.locator('article', { has: page.getByText(/승인 대기 \d+명 처리/) }).count();
-      check(`actions footer only for pending queues at ${width}px`, footers === pendingCards && pendingCards >= 1, `footers=${footers} pending=${pendingCards}`);
-
-      // -- Pending link present and direct -----------------------------------
-      const pendingCard = page.locator('article', { has: page.getByText(/승인 대기 \d+명 처리/) }).first();
-      const approval = pendingCard.getByRole('link', { name: /승인 대기 \d+명 처리/ });
-      check('pending card keeps a direct approval link', (await approval.count()) === 1);
-      check('approval link targets the PENDING queue', ((await approval.getAttribute('href')) || '').includes('participants?status=PENDING'));
-      const approvalBox = await approval.first().boundingBox();
-      check('approval link keeps a 44px target', approvalBox && approvalBox.height >= 44, JSON.stringify(approvalBox));
-
-      // -- White-row structure: one entry link, zone + body ------------------
-      const sample = cardByName('남색 게시 행사');
-      const entry = sample.locator('a:has([class*="eventCardZone"])');
-      check('whole card is one named entry link', (await entry.count()) === 1);
-      check('entry name carries the event identity into the home', ((await entry.first().getAttribute('aria-label')) || (await entry.first().innerText()) || '').includes('남색 게시 행사'));
-      check('zone holds title and grouped date·time', ((await zoneOf(sample).innerText()) || '').includes('2027.02.10 · 09:00–17:00'));
-      const bodyText = (await sample.innerText()) || '';
-      check('body holds client/venue fallback', bodyText.includes('고객사·장소 미지정'));
-      check('no nested controls inside the entry link', (await entry.locator('a,button').count()) === 0);
-
-      // -- White row: flat white zone, identity dot, published-only color ----
-      // Every zone stays flat white. A published participant-home background
-      // paints only the identity dot; unpublished rows keep the soft dot.
-      // Date contrast is measured against the actual white zone behind the
-      // text, including the independent near-term emphasis.
-      const navy = await readCard(cardByName('남색 게시 행사'));
-      check('row zone stays flat white on a published card', navy.bg.join(',') === FLAT_WHITE, navy.bg.join(','));
-      check('published navy paints the identity dot', navy.dot.join(',') === NAVY_DOT, navy.dot.join(','));
-      check('navy date text follows the date urgency, not customer color', navy.ink.join(',') === expectedDateInk(navy), navy.ink.join(','));
-      check('navy date text meets 4.5:1 on the white row', navy.ratio >= 4.5, navy.ratio.toFixed(2));
-      const white = await readCard(cardByName('흰색 게시 행사'));
-      check('published white keeps the white row', white.bg.join(',') === FLAT_WHITE, white.bg.join(','));
-      check('published white dot stays white (bordered, never soft)', white.dot.join(',') === FLAT_WHITE, white.dot.join(','));
-      check('white date text follows the date urgency, not customer color', white.ink.join(',') === expectedDateInk(white), white.ink.join(','));
-      check('white date text meets 4.5:1 on the white row', white.ratio >= 4.5, white.ratio.toFixed(2));
-      const brand = await readCard(cardByName('주황 게시 행사'));
-      check('row zone stays flat white on a brand card', brand.bg.join(',') === FLAT_WHITE, brand.bg.join(','));
-      check('published brand orange tints the identity dot pale', brand.dot.join(',') === BRAND_DOT, brand.dot.join(','));
-      check('brand date text follows the date urgency, not customer color', brand.ink.join(',') === expectedDateInk(brand), brand.ink.join(','));
-      check('brand date text meets 4.5:1 on the white row', brand.ratio >= 4.5, brand.ratio.toFixed(2));
-      const draftOnly = await readCard(cardByName('초안만 있는 행사'));
-      check('draft-only row zone stays flat white', draftOnly.bg.join(',') === FLAT_WHITE, draftOnly.bg.join(','));
-      check('draft-only dot falls back to the soft token', draftOnly.dot.join(',') === SOFT_DOT, draftOnly.dot.join(','));
-      check('draft-only date follows the same urgency rule', draftOnly.ink.join(',') === expectedDateInk(draftOnly), draftOnly.ink.join(','));
-      check('draft-only date meets 4.5:1 on the white row', draftOnly.ratio >= 4.5, draftOnly.ratio.toFixed(2));
-      const todayCard = await readCard(cardByName('오늘 진행 검증 행사'));
-      check('today date is explicitly marked near-term', todayCard.soon);
-      check('today date remains quiet beside the stronger recency', todayCard.ink.join(',') === MUTED_INK, todayCard.ink.join(','));
-      check('today date meets 4.5:1 on the white row', todayCard.ratio >= 4.5, todayCard.ratio.toFixed(2));
-      const tomorrowCard = await readCard(cardByName('내일 진행 검증 행사'));
-      for (const [label, near] of [['오늘', todayCard], ['내일', tomorrowCard]]) {
-        check(`${label} date is explicitly marked near-term`, near.soon);
-        check(`${label} date stays quiet and meets 4.5:1`, near.ink.join(',') === MUTED_INK && near.ratio >= 4.5, JSON.stringify(near));
-        check(`${label} recency uses stronger neutral emphasis`, near.recency?.text === label && near.recency.ink.join(',') === STRONG_INK && near.recency.weight >= 750, JSON.stringify(near.recency));
-        check(`${label} recency meets 4.5:1`, near.recency && contrast(near.recency.ink, near.recency.bg) >= 4.5, JSON.stringify(near.recency));
+      // A row with pending approvals keeps one direct link to that queue, at a touch-sized target.
+      const approval = page.getByRole('link', { name: /승인 대기 \d+명 처리/ }).first();
+      check(`pending row keeps a direct approval link at ${width}px`, (await approval.count()) === 1);
+      check(`approval link targets the PENDING queue at ${width}px`, ((await approval.getAttribute('href')) || '').includes('participants?status=PENDING'));
+      const approvalBox = await approval.boundingBox();
+      check(`approval link keeps a 44px target at ${width}px`, Boolean(approvalBox) && approvalBox.height >= 44, JSON.stringify(approvalBox));
+      check(`no per-event duplicate button at ${width}px`, (await page.getByRole('button', { name: '복제', exact: true }).count()) === 0);
+      for (const [, name] of seed) {
+        check(`seeded event "${name.slice(0, 12)}" is listed at ${width}px`, (await page.getByText(name.slice(0, 12), { exact: false }).count()) >= 1);
       }
-      check('distant recency remains quiet', navy.recency && !navy.soon && navy.recency.ink.join(',') === MUTED_INK && navy.recency.weight < todayCard.recency.weight, JSON.stringify(navy.recency));
-      check('distant recency meets 4.5:1', navy.recency && contrast(navy.recency.ink, navy.recency.bg) >= 4.5, JSON.stringify(navy.recency));
-      const endedCard = cardByName('종료 검증 행사');
-      const ended = await readCard(endedCard);
-      check('ended stage remains explicit beside a quiet past date', await endedCard.locator('.stage-badge').innerText() === '종료' && !ended.soon && ended.recency?.text === 'D+2' && ended.recency.ink.join(',') === MUTED_INK, JSON.stringify(ended));
-      check('ended date and recency meet 4.5:1', ended.ratio >= 4.5 && contrast(ended.recency.ink, ended.recency.bg) >= 4.5, JSON.stringify(ended));
-      const undatedInk = await readCard(cardByName(longName));
-      check('an unknown date remains quiet', !undatedInk.soon && undatedInk.ink.join(',') === MUTED_INK, undatedInk.ink.join(','));
-      check('an unknown date never invents recency', undatedInk.recency === null, JSON.stringify(undatedInk.recency));
-      check('unknown date meets 4.5:1 on the white row', undatedInk.ratio >= 4.5, undatedInk.ratio.toFixed(2));
-
-      // -- Status badges keep semantic colors on the flat white row -----------
-      // LIVE keeps the success-soft surface (tokens.css --success-soft).
-      const liveBadge = cardByName('흰색 게시 행사').locator('.stage-badge').first();
-      check('LIVE badge keeps the success surface on a published card',
-        (await liveBadge.evaluate((el) => getComputedStyle(el).backgroundColor)) === 'rgb(228, 239, 231)');
-
-      // -- Long names wrap; unknown dates stay explicit ------------------------
-      const undated = page.locator('article', { has: page.getByRole('heading', { name: longName.slice(0, 20) }) }).first();
-      check('long undated event renders', (await undated.count()) === 1);
-      check(`long event name remains fully readable at ${width}px`, await undated.locator('h3').evaluate(el => el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1));
-      check('unknown date reads 일정 미정, never blank', ((await zoneOf(undated).innerText()) || '').includes('일정 미정'));
-      const undatedCard = await readCard(undated);
-      check('never-published row keeps the flat white zone', undatedCard.bg.join(',') === FLAT_WHITE, undatedCard.bg.join(','));
-      check('never-published dot falls back to soft', undatedCard.dot.join(',') === SOFT_DOT, undatedCard.dot.join(','));
+      check(`long event name wraps inside its row at ${width}px`, await page.getByText(longName.slice(0, 20), { exact: false }).first()
+        .evaluate((el) => el.scrollWidth <= el.clientWidth + 1));
       check(`no horizontal overflow at ${width}px`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
-
       await page.screenshot({ path: path.join(OUT, `console-${width}.png`), fullPage: true });
     }
-
-    // -- Calendar reuses the same white row ----------------------------------
-    await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto(`${f.baseUrl}/console?view=calendar&month=2027-02`, { waitUntil: 'networkidle' });
-    await page.locator('#console-event-directory').waitFor();
-    await page.getByRole('button', { name: /2월 10일/ }).first().click();
-    const calCard = cardByName('남색 게시 행사');
-    check('calendar reuses the white row card', (await calCard.count()) === 1);
-    const calCardRead = await readCard(calCard);
-    check('calendar card zone stays flat white', calCardRead.bg.join(',') === FLAT_WHITE, calCardRead.bg.join(','));
-    check('calendar card carries the published dot', calCardRead.dot.join(',') === NAVY_DOT, calCardRead.dot.join(','));
-    await page.screenshot({ path: path.join(OUT, 'calendar-1280.png'), fullPage: true });
 
     // -- Create dialog: new-first, source select, real duplicate ---------------
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -335,14 +241,15 @@ async function main() {
     await dialog.locator('#create-name').fill('지킬 초안 행사');
     let confirmText = null;
     page.once('dialog', async (d) => { confirmText = d.message(); await d.dismiss(); });
-    await dialog.getByText('기존 행사 복제').click();
+    // Dismissing the confirm leaves the radio unchanged, which check() would report as a failure.
+    await dialog.getByRole('radio', { name: '기존 행사 복제', exact: true }).click();
     check('mode switch with a typed draft asks first', confirmText && confirmText.includes('바꾸시겠습니까'), confirmText);
     check('dismissed switch keeps the typed draft', (await dialog.locator('#create-name').inputValue()) === '지킬 초안 행사');
     check('dismissed switch stays in new mode', (await dialog.locator('#create-source').count()) === 0);
 
     // Accept the switch, pick a stage-labeled source, submit a real copy.
     const acceptSwitch = page.waitForEvent('dialog').then(async (d) => { await d.accept(); });
-    await dialog.getByText('기존 행사 복제').click();
+    await dialog.getByRole('radio', { name: '기존 행사 복제', exact: true }).check();
     await acceptSwitch;
     await dialog.locator('#create-source').waitFor();
     const options = await dialog.locator('#create-source option').allInnerTexts();
@@ -379,7 +286,7 @@ async function main() {
     await page.getByRole('button', { name: '새 행사 만들기' }).click();
     const flightDialog = page.getByRole('dialog');
     await flightDialog.waitFor({ state: 'visible' });
-    await flightDialog.getByText('기존 행사 복제', { exact: false }).click();
+    await flightDialog.getByRole('radio', { name: '기존 행사 복제', exact: true }).check();
     await flightDialog.locator('#create-source').selectOption({ value: whiteId });
     await page.route('**/api/events/*/duplicate', async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -394,7 +301,7 @@ async function main() {
     check('in-flight mode radios inherit the fieldset lock',
       (await flightDialog.locator('input[name="create-mode"]').count()) === 2
       && (await flightDialog.locator('input[name="create-mode"]').evaluateAll((els) => els.every((el) => el.matches(':disabled')))));
-    await flightDialog.getByText('새로 만들기', { exact: false }).click({ force: true });
+    await flightDialog.getByRole('radio', { name: '새로 만들기', exact: true }).click({ force: true });
     check('in-flight forced mode switch changes nothing',
       (await flightDialog.locator('#create-source').count()) === 1
       && (await flightDialog.locator('#create-name').inputValue()) === '흰색 게시 행사 복사본');
@@ -432,7 +339,7 @@ async function main() {
     await page.getByRole('button', { name: '새 행사 만들기' }).click();
     const lossDialog = page.getByRole('dialog');
     await lossDialog.waitFor({ state: 'visible' });
-    await lossDialog.getByText('기존 행사 복제', { exact: false }).click();
+    await lossDialog.getByRole('radio', { name: '기존 행사 복제', exact: true }).check();
     await lossDialog.locator('#create-source').selectOption({ value: brandId });
     await lossDialog.getByRole('button', { name: '행사 복제', exact: true }).click();
     await lossDialog.getByText(/행사 생성 결과를 확인하지 못했습니다/).first().waitFor({ timeout: 8000 });
@@ -455,30 +362,14 @@ async function main() {
     const lossCopies = (afterLoss.json.state.events || []).filter((item) => item.name === '주황 게시 행사 복사본');
     check('same-id retry replays exactly one record, no second command', lossCopies.length === 1, String(lossCopies.length));
 
-    // -- Remount after publish: the dot follows the published color -----------
-    // A draft save must not move the published dot; only a publish does —
-    // the same published-only/no-draft-leak contract on the white row.
-    const navyId = `cards-navy-${f.suffix}`;
-    await savePage(navyId, '#1A7A4C');
-    await page.goto(`${f.baseUrl}/console`, { waitUntil: 'networkidle' });
-    await page.locator('#console-event-directory').waitFor();
-    const beforePublish = await readCard(cardByName('남색 게시 행사'));
-    check('unsaved draft never moves the published dot', beforePublish.dot.join(',') === NAVY_DOT, beforePublish.dot.join(','));
-    check('unsaved draft keeps the flat white zone', beforePublish.bg.join(',') === FLAT_WHITE, beforePublish.bg.join(','));
-    await publishPage(navyId);
-    await page.goto(`${f.baseUrl}/console`, { waitUntil: 'networkidle' });
-    await page.locator('#console-event-directory').waitFor();
-    const afterPublish = await readCard(cardByName('남색 게시 행사'));
-    check('dot follows the published color after remount', afterPublish.dot.join(',') === REPUBLISHED_DOT, afterPublish.dot.join(','));
-    check('zone stays flat white after republish', afterPublish.bg.join(',') === FLAT_WHITE, afterPublish.bg.join(','));
-    check('republished date still follows date urgency', afterPublish.ink.join(',') === expectedDateInk(afterPublish), afterPublish.ink.join(','));
-    check('republished date text meets 4.5:1', afterPublish.ratio >= 4.5, afterPublish.ratio.toFixed(2));
-    await page.screenshot({ path: path.join(OUT, 'console-republished-1280.png'), fullPage: true });
+    // The published-color identity dot belonged to the retired card layout; the flat-row list has no
+    // per-event paint, so the remount-after-publish dot checks are gone with it.
 
     // -- Keyboard: card entry opens on Enter; dialog cancel returns focus ------
     await page.goto(`${f.baseUrl}/console`, { waitUntil: 'networkidle' });
     await page.locator('#console-event-directory').waitFor();
-    await cardByName('흰색 게시 행사').locator('a:has([class*="eventCardZone"])').focus();
+    // A directory row is one link to the event; Enter on it opens the event.
+    await page.getByRole('link').filter({ hasText: '흰색 게시 행사' }).first().focus();
     await page.keyboard.press('Enter');
     await page.waitForURL(/\/console\/events\/.+/, { timeout: 15000 });
     check('keyboard Enter opens the event home', true, page.url());
@@ -627,7 +518,7 @@ async function main() {
       // Browser native required validation blocks submit while name/date are
       // empty, so fill valid required values through the real UI first; the
       // copy guard is a definitive local error that must win after that.
-      await stickyDialog.getByText('기존 행사 복제', { exact: false }).click();
+      await stickyDialog.getByRole('radio', { name: '기존 행사 복제', exact: true }).check();
       await stickyDialog.locator('#create-source').waitFor({ state: 'visible' });
       check('copy mode names itself before a source is chosen',
         ((await stickyDialog.getByRole('heading', { name: '행사 복제' }).count()) === 1)
@@ -656,8 +547,9 @@ async function main() {
       await page.getByRole('button', { name: '새 행사 만들기' }).click();
       const freshDialog = page.getByRole('dialog');
       await freshDialog.waitFor({ state: 'visible' });
-      await openCreateSettings(page);
-      await freshDialog.locator('#create-client').waitFor({ state: 'visible' });
+      // The customer picker sits with the up-front fields now; with no customers yet it shows its
+      // register action instead of a select, so wait on that action.
+      await freshDialog.getByRole('button', { name: '새 고객사 등록' }).waitFor({ state: 'visible' });
       await freshDialog.getByRole('button', { name: '새 고객사 등록' }).click();
       await freshDialog.locator('#create-new-client-name').waitFor({ state: 'visible' });
       const clientBack = freshDialog.getByRole('button', { name: '행사 입력으로 돌아가기' });

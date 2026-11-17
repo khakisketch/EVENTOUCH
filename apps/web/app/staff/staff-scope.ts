@@ -22,6 +22,10 @@ type StaffBoothVisit = { id: string; boothId: string; at: string };
 export type StaffScope = {
   eventId: string;
   eventName: string;
+  stage: string;
+  date: string;
+  start: string;
+  end: string;
   desks: StaffDesk[];
   assignments: StaffAssignment[];
   booths: StaffBooth[];
@@ -51,7 +55,7 @@ function text(value: unknown): string {
 }
 
 export function buildStaffScopes(
-  events: Array<{ id?: unknown; name?: unknown; stage?: unknown; features?: unknown }>,
+  events: Array<{ id?: unknown; name?: unknown; stage?: unknown; features?: unknown; date?: unknown; start?: unknown; end?: unknown }>,
   workspaces: Record<string, BootstrapWorkspace>
 ): StaffScope[] {
   const next: StaffScope[] = [];
@@ -83,6 +87,10 @@ export function buildStaffScopes(
     next.push({
       eventId: id,
       eventName: typeof event.name === "string" ? event.name : id,
+      stage: typeof event.stage === "string" ? event.stage : "",
+      date: text(event.date),
+      start: text(event.start),
+      end: text(event.end),
       desks: desks.filter((desk) =>
         deskAssignments.some((item) => item.targetId === desk.id)
       ),
@@ -121,4 +129,33 @@ export function resolveStaffScopeId(raw: string): string {
   } catch {
     return raw;
   }
+}
+
+// List line under an event in the assignment hub: what kind of work and how
+// many places. Names stay on the work screen, where the desk is chosen.
+export function staffScopeLine(scope: StaffScope): string {
+  const parts: string[] = [];
+  if (scope.desks.length) parts.push(`데스크 ${scope.desks.length}곳`);
+  if (scope.booths.length) parts.push(`부스 ${scope.booths.length}곳`);
+  return parts.join(" · ") || "배정 업무";
+}
+
+// The hub's one live event: the first LIVE scope. Others keep their order.
+export function staffHubGroups(scopes: StaffScope[]): { live: StaffScope | null; rest: StaffScope[] } {
+  const live = scopes.find((scope) => scope.stage === "LIVE") ?? null;
+  return { live, rest: scopes.filter((scope) => scope !== live) };
+}
+
+// "09:00" today, "내일 10:00" tomorrow, "12.20 09:30" otherwise. Day-level
+// text, so the screen's own clock is precise enough.
+export function staffStartLabel(scope: StaffScope, now: Date): string {
+  if (!scope.start) return "";
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(scope.date);
+  if (!match) return `${scope.start} 시작`;
+  const day = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diff = Math.round((day.getTime() - today.getTime()) / 86400000);
+  if (diff === 0) return `${scope.start} 시작`;
+  if (diff === 1) return `내일 ${scope.start} 시작`;
+  return `${match[2]}.${match[3]} ${scope.start} 시작`;
 }

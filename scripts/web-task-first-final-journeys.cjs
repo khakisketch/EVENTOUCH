@@ -212,7 +212,8 @@ async function main() {
       await act(() => page.locator('#create-name').fill(createdEventName));
       await act(() => page.locator('#create-date').fill(EVENT_DATE));
       await act(() => openCreateSettings(page));
-      const draftFields = ['#create-name', '#create-slug', '#create-client', '#create-date', '#create-start', '#create-end', '#create-capacity'];
+      // No customers exist yet, so the customer select is absent until the inline registration below.
+      const draftFields = ['#create-name', '#create-slug', '#create-date', '#create-start', '#create-end', '#create-capacity'];
       const draftValues = await Promise.all(draftFields.map(field => page.locator(field).inputValue()));
       await act(() => openCreateSettings(page));
       await act(() => page.getByRole('button', { name: '새 고객사 등록', exact: true }).click());
@@ -232,7 +233,6 @@ async function main() {
       await page.locator('#create-client').waitFor({ state: 'visible', timeout: 10000 });
       assert.equal(await page.locator('#create-name').inputValue(), createdEventName, 'event draft must survive the customer subview');
       for (let index = 0; index < draftFields.length; index += 1) {
-        if (draftFields[index] === '#create-client') continue; // intentionally selects the newly registered client
         assert.equal(await page.locator(draftFields[index]).inputValue(), draftValues[index], `${draftFields[index]} draft is retained`);
       }
       await page.getByText(`${inlineClientName} 고객사를 등록하고 선택했습니다.`, { exact: true }).waitFor({ timeout: 10000 });
@@ -384,23 +384,35 @@ async function main() {
       task.screens = [`/console/events/${createdEventId}/reports (#reports-list)`, 'report detail (frozen article + live checklist)', `/console/events/${createdEventId}/settings (tab 진행 단계)`];
       task.fields = ['button 보고서 만들기', '#report-title', 'button 내용 보기', 'link 진행 단계에서 확인·전환', 'tab 진행 단계'];
       await useCookie(ownerCookie);
-      await go(`/console/events/${createdEventId}/reports`, '#reports-list');
+      await go(`/console/events/${createdEventId}/reports`, 'h1');
       await act(() => page.getByRole('button', { name: '보고서 만들기', exact: true }).first().click());
       await page.locator('#report-title').waitFor({ state: 'visible', timeout: 10000 });
       await act(() => page.locator('#report-title').fill(reportTitle));
       await act(() => page.getByRole('dialog').getByRole('button', { name: '보고서 만들기', exact: true }).click());
-      const row = page.locator('ul li').filter({ hasText: reportTitle }).first();
-      await row.getByRole('button', { name: '내용 보기', exact: true }).waitFor({ timeout: 15000 });
-      await act(() => row.getByRole('button', { name: '내용 보기', exact: true }).click());
-      await page.getByText('보관 전제 · 조회 시점', { exact: false }).first().waitFor({ timeout: 10000 });
-      await page.getByText('생성 시점 그대로 유지', { exact: false }).first().waitFor({ timeout: 10000 });
-      await page.getByText('참가 접수 열림', { exact: false }).first().waitFor({ timeout: 10000 });
-      await page.getByText(MODULE_TITLE, { exact: false }).first().waitFor({ timeout: 10000 });
+      // Reports are tabs now: the new report's tab opens its document (there is no 내용 보기 button).
+      const reportTab = page.getByRole('tab', { name: new RegExp(reportTitle) });
+      await reportTab.waitFor({ timeout: 15000 });
+      await act(() => reportTab.click());
+      // The checklist names itself with an aria-label, not visible text.
+      await page.locator('[aria-label="보관 전제 · 조회 시점"]').first().waitFor({ timeout: 10000 });
+      await page.getByText('생성 시점 그대로 유지', { exact: false }).filter({ visible: true }).first().waitFor({ timeout: 10000 });
+      // The current prerequisites (registration, stage, open programs) live in the 행사 마감 map now,
+      // not under the report; open it and read them there.
+      await page.goto(`${baseUrl}/console/events/${createdEventId}/reports#event-close`, { waitUntil: 'networkidle' });
+      const closeTab = page.getByRole('tab', { name: '행사 마감', exact: true });
+      if ((await closeTab.getAttribute('aria-selected')) !== 'true') await act(() => closeTab.click());
+      const closeDetails = page.locator('details').filter({ has: page.locator('summary', { hasText: '전체 마감 단계와 전제 확인' }) });
+      await closeDetails.waitFor({ timeout: 15000 });
+      if (!await closeDetails.evaluate((el) => el.open)) await act(() => closeDetails.locator(':scope > summary').click());
+      await page.getByText('참가 접수 열림', { exact: false }).filter({ visible: true }).first().waitFor({ timeout: 10000 });
+      await page.getByText(MODULE_TITLE, { exact: false }).filter({ visible: true }).first().waitFor({ timeout: 10000 });
       await shotBoth('final-report-archive-checklist');
       // Each checklist item owns its link (the old context-losing single
       // link is gone): the stage row offers 진행 단계에서 확인·전환.
       const settingsHref = await page.getByRole('link', { name: '진행 단계에서 확인·전환', exact: true }).getAttribute('href');
-      assert.ok(settingsHref && settingsHref.endsWith(`/console/events/${createdEventId}/settings#settings-stage`),
+      // The link carries a closeReturn query so settings can offer the way back to the close map.
+      const settingsUrl = settingsHref ? new URL(settingsHref, baseUrl) : null;
+      assert.ok(settingsUrl && settingsUrl.pathname === `/console/events/${createdEventId}/settings` && settingsUrl.hash === '#settings-stage',
         `archive link must land on the settings stage anchor, got ${settingsHref}`);
       let commandFired = false;
       const watch = (request) => {
@@ -410,15 +422,8 @@ async function main() {
       await act(() => page.getByRole('link', { name: '진행 단계에서 확인·전환', exact: true }).click());
       await page.waitForURL(/\/settings/, { timeout: 15000 });
       page.off('request', watch);
-      // The #settings-stage deep link already selects the tab on arrival:
-      // count a click only for a real switch, then verify its own panel.
-      const stageTabFinal = page.getByRole('tab', { name: '진행 단계', exact: true });
-      if ((await stageTabFinal.getAttribute('aria-selected')) !== 'true') {
-        await act(() => stageTabFinal.click());
-      }
-      const stagePanelFinal = await stageTabFinal.getAttribute('aria-controls');
-      if (!stagePanelFinal) throw new Error('settings: 진행 단계 tab names no panel');
-      await page.locator(`#${stagePanelFinal}:visible`).waitFor({ state: 'visible', timeout: 15000 });
+      // Settings has no tabs now: the #settings-stage deep link lands on the stage panel itself.
+      await page.locator('#panel-settings-stage:visible').waitFor({ state: 'visible', timeout: 15000 });
       await page.getByText(/진행 단계/, { exact: false }).first().waitFor({ timeout: 10000 });
       assert.equal(commandFired, false, 'following the archive link must not fire a transition command');
       const state = await readBootstrap(helpers, harness.baseUrl, ownerCookie);
@@ -445,12 +450,14 @@ async function main() {
     await measure('team-staff-assignment', '팀 수락 구성원 → 행사 선택 → 현장 배정 (owner)', async (act, task) => {
       task.actor = 'owner';
       task.screens = ['/console/team (#team-members)', `/console/events/${createdEventId}/operations?assignAccount=<staff> (#ops-staff)`, '스태프 배정 dialog (#assign-account, 자동 선택)'];
-      task.fields = ['button 행사 배정', 'select 최종 스태프 배정 행사 선택', 'link 스태프 배정으로 이동', '#assign-account', '#assign-target', 'submit 배정 저장'];
+      task.fields = ['button 최종 스태프 (구성원 행)', 'select 최종 스태프 배정 행사 선택', 'link 스태프 배정으로 이동', '#assign-account', '#assign-target', 'submit 배정 저장'];
       await useCookie(ownerCookie);
       await go('/console/team', '#team-members');
-      const row = page.locator('ul[aria-label="구성원 목록"] li').filter({ hasText: '최종 스태프' }).first();
-      await row.getByRole('button', { name: '행사 배정', exact: true }).waitFor({ timeout: 10000 });
-      await act(() => row.getByRole('button', { name: '행사 배정', exact: true }).click());
+      // The assignment picker lives in the member drawer opened from the row.
+      const row = page.locator(`#staff-assign-panel-${journeyStaffId}`);
+      const memberButton = page.locator('ul[aria-label="구성원 목록"]').getByRole('button', { name: '최종 스태프', exact: true });
+      await memberButton.waitFor({ timeout: 10000 });
+      await act(() => memberButton.click());
       const picker = row.locator('select[aria-label="최종 스태프 배정 행사 선택"]');
       await picker.waitFor({ state: 'visible', timeout: 10000 });
       await shotBoth('final-team-assign-panel');

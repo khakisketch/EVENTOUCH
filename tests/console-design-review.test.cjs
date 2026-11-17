@@ -78,27 +78,27 @@ test("the shared confirm keeps its primary default and focus contract", () => {
 test("team identity splits name from role with tokens only", () => {
   const css = read("console/team/team.module.css");
   noNewHex(css, "team.module.css");
-  assert.match(css, /\.memberName\s*\{[^}]*font-weight:\s*800/s);
-  assert.match(css, /\.memberRole\s*\{[^}]*color:\s*var\(--muted\)/s);
-  assert.match(css, /\.memberRole\s*\{[^}]*font-size:\s*var\(--small\)/s);
-  assert.match(css, /\.inviteDetail\s*\{[^}]*gap:\s*var\(--s1\)/s);
+  assert.match(css, /\.personName\s*\{[^}]*font-weight:\s*750/s);
+  assert.match(css, /\.personContact\s*\{[^}]*color:\s*var\(--muted\)/s);
+  assert.match(css, /\.personContact\s*\{[^}]*font-size:\s*var\(--small\)/s);
+  assert.match(css, /\.personRole small\s*\{[^}]*color:\s*var\(--muted\)/s);
   const workspace = read("console/team/TeamWorkspace.tsx");
-  assert.match(workspace, /<strong className=\{teamStyles\.memberName\}>\{invitation\.name\}<\/strong>/);
-  assert.match(workspace, /<p className=\{teamStyles\.memberRole\}>\{roleLabel\(invitation\.role\)\}<\/p>/);
-  assert.match(workspace, /<strong className=\{teamStyles\.memberName\}>\{account\.name\}<\/strong>/);
+  assert.match(workspace, /<h3 className=\{teamStyles\.personName\}>/);
+  assert.match(workspace, /\{roleLabel\(invitation\.role\)\}\s*<small>/);
+  assert.match(workspace, />\{account\.name\}<\/button>/);
 });
 
 test("team keeps every field, action and section order", () => {
   const workspace = read("console/team/TeamWorkspace.tsx");
   assert.match(workspace, /roleLabel\(account\.role\)/);
   assert.match(workspace, /사용 중지/);
-  assert.match(workspace, /\{invitation\.email\}/);
+  assert.match(workspace, /<SafeContact value=\{invitation\.email\} \/>/);
   assert.match(workspace, /담당 행사 미지정/);
-  assert.match(workspace, /만료: \{expiry\}/);
+  assert.match(workspace, /만료 \{expiry\}/);
   assert.match(workspace, /<RevokeInviteButton/);
   assert.match(workspace, /비밀번호 재설정/);
   assert.ok(
-    workspace.indexOf('headingId="pending-invites"') < workspace.indexOf('headingId="team-members"'),
+    workspace.indexOf('headingId="pending-invites"') < workspace.indexOf('aria-label="구성원 목록"'),
     "pending invites stay above members"
   );
 });

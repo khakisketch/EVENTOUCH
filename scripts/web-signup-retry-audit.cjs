@@ -14,7 +14,7 @@ const path = require('node:path');
 const axe = require('axe-core').source;
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { confirmInitialStaffDesk } = require('./audit-staff-direction.cjs');
+const { confirmInitialStaffDesk, typeTicket } = require('./audit-staff-direction.cjs');
 
 const OUT = process.env.EVENTOUCH_CAPTURE_ROOT
   ? path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'signup-retry')
@@ -333,7 +333,7 @@ async function main() {
       await page.locator('#staff-desk').waitFor();
       if (await page.locator('#staff-desk').inputValue() !== fixture.deskId) await page.locator('#staff-desk').selectOption(fixture.deskId);
       await confirmInitialStaffDesk(page);
-      await page.locator('#staff-ticket').fill(journeyPerson.ticket);
+      await typeTicket(page, journeyPerson.ticket);
       await page.getByRole('button', { name: '입장 처리', exact: true }).click();
       await page.getByRole('button', { name: '다음 참가자', exact: true }).waitFor();
       const after = await workspace();
@@ -351,9 +351,11 @@ async function main() {
       await operator.addCookies([{ name: 'etko_session', value: decodeURIComponent(fixture.manager.cookie.slice('etko_session='.length)), url: fixture.baseUrl }]);
       const reportPage = await operator.newPage();
       await reportPage.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/reports`);
-      await reportPage.locator('#reports-list').waitFor();
+      await reportPage.getByRole('tablist', { name: '보고서 선택' }).waitFor();
       check('created report is visible to the manager', await reportPage.getByText('신청부터 입장까지 검수', { exact: true }).count() > 0);
-      await reportPage.getByRole('button', { name: '내용 보기', exact: true }).click();
+      // Reports are tabs now; the first one is open already, so only switch when it is not.
+      if (!await reportPage.locator('#report-detail').isVisible().catch(() => false)) await reportPage.getByRole('tablist', { name: '보고서 선택' }).getByRole('tab').first().click();
+      await reportPage.locator('#report-detail').waitFor({ timeout: 15000 });
       check('manager can open the report snapshot', await reportPage.locator('#report-detail').isVisible());
       await reportPage.screenshot({ path: path.join(OUT, 'operator-report.png'), fullPage: true });
       await operator.close();

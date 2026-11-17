@@ -6,6 +6,7 @@ const { source: axeSource } = require('axe-core');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
+const { typeTicket, holdResults, codeField, closeSheet } = require('./audit-staff-direction.cjs');
 
 async function main() {
   if (!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a private EVENTOUCH_CAPTURE_ROOT');
@@ -40,7 +41,8 @@ async function main() {
     await staff.goto(`${f.baseUrl}/staff/events/${f.eventId}`);
     const deskReview = staff.getByRole('region', { name: '데스크 업무 방향을 확인해 주세요' });
     await deskReview.getByRole('button', { name: '입장 업무 확인', exact: true }).click();
-    await staff.locator('#staff-ticket').fill(person.ticket);
+    await holdResults(staff);
+    await typeTicket(staff, person.ticket);
     await staff.getByRole('button', { name: '입장 처리', exact: true }).click();
     await staff.getByRole('region', { name: '스캔 결과 미확인', exact: true }).getByRole('button', { name: '같은 요청 재확인' }).click();
     const failed = staff.getByRole('region', { name: '스캔 실패', exact: true });
@@ -56,15 +58,16 @@ async function main() {
       await staff.screenshot({ path: path.join(out, `staff-review-${width}.png`), fullPage: true });
     }
     assert.equal((await read()).checks.length, 0);
-    await failed.getByRole('button', { name: '다음 참가자' }).press('Enter');
-    assert.equal(await staff.locator('#staff-ticket').inputValue(), '');
+    await failed.getByRole('button', { name: '다음 참가자' }).click();
+    assert.equal(await (await codeField(staff)).inputValue(), '');
+    await closeSheet(staff);
 
     // A committed response can also be lost before the aggregate becomes
     // damaged. Replaying its receipt proves the past scan, but must not
     // claim the participant's present state is known.
     await staff.setViewportSize({ width: 390, height: 900 });
     fault = 'committed';
-    await staff.locator('#staff-ticket').fill(state.participants[1].ticket);
+    await typeTicket(staff, state.participants[1].ticket);
     await staff.getByRole('button', { name: '입장 처리', exact: true }).click();
     await staff.getByRole('region', { name: '스캔 결과 미확인', exact: true }).getByRole('button', { name: '같은 요청 재확인' }).click();
     await staff.getByText('이 기록이 현재 출입 상태에 해당하는지 확인할 수 없습니다.').waitFor();

@@ -27,8 +27,7 @@ async function main() {
     const page = await context.newPage(), errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}/operations#ops-booth-mode`);
-    await page.getByRole('tab', { name: '부스 인증 방식', exact: true }).click();
-    const section = page.locator('[data-workspace-section="ops-booth-mode"]');
+    const section = page.locator(':is(section,[role=region])[aria-labelledby="ops-booth-mode"]');
     await section.locator('summary').waitFor({ state: 'visible' });
     if (!(await section.locator('details').evaluate(el => el.open))) await section.locator('summary').click();
     await section.getByRole('button', { name: '참가자 셀프 스캔' }).waitFor();
@@ -47,7 +46,6 @@ async function main() {
 
     const repaired = await read(); repaired.visits = []; await write(repaired);
     await page.reload();
-    await page.getByRole('tab', { name: '부스 인증 방식', exact: true }).click();
     if (!(await section.locator('details').evaluate(el => el.open))) await section.locator('summary').click();
     await section.getByRole('button', { name: '참가자 셀프 스캔' }).focus();
     await page.keyboard.press('Enter');
@@ -62,7 +60,6 @@ async function main() {
 
     assert.equal((await command('booth.mode-reviewed', { expectedMode: 'SELF', mode: 'STAFF', acknowledge: true })).status, 200);
     await page.reload();
-    await page.getByRole('tab', { name: '부스 인증 방식', exact: true }).click();
     if (!(await section.locator('details').evaluate(el => el.open))) await section.locator('summary').click();
     await section.getByRole('button', { name: '참가자 셀프 스캔' }).click();
     const visitRace = await read(); visitRace.visits.push({ id: 'new-visit', boothId: 'synthetic', participantId: 'synthetic' }); await write(visitRace);
@@ -72,7 +69,6 @@ async function main() {
     assert.equal((await read()).stampMode, 'STAFF');
     visitRace.visits = []; await write(visitRace);
     await page.reload();
-    await page.getByRole('tab', { name: '부스 인증 방식', exact: true }).click();
     if (!(await section.locator('details').evaluate(el => el.open))) await section.locator('summary').click();
     const attempts = [];
     await page.route('**/api/events/*/commands', async route => {
@@ -94,7 +90,6 @@ async function main() {
 
     assert.equal((await command('booth.mode-reviewed', { expectedMode: 'SELF', mode: 'STAFF', acknowledge: true })).status, 200);
     await page.reload();
-    await page.getByRole('tab', { name: '부스 인증 방식', exact: true }).click();
     if (!(await section.locator('details').evaluate(el => el.open))) await section.locator('summary').click();
     const lostBeforeCommit = [];
     await page.route('**/api/events/*/commands', async route => {
@@ -117,7 +112,6 @@ async function main() {
 
     const invalidMode = await read(); invalidMode.stampMode = null; await write(invalidMode);
     await page.reload();
-    await page.getByRole('tab', { name: '부스 인증 방식', exact: true }).click();
     await section.getByText('인증 방식 · 확인 필요').waitFor();
     await section.getByText(/현재 인증 방식을 확인할 수 없습니다/).waitFor();
     assert.equal(await section.getByRole('button', { name: '스태프 확인' }).isDisabled(), true);
@@ -125,7 +119,6 @@ async function main() {
 
     const validAgain = await read(); validAgain.stampMode = 'STAFF'; delete validAgain.visits; await write(validAgain);
     await page.reload();
-    await page.getByRole('tab', { name: '부스 인증 방식', exact: true }).click();
     if (!(await section.locator('details').evaluate(el => el.open))) await section.locator('summary').click();
     assert.equal(await section.getByRole('button', { name: '참가자 셀프 스캔' }).isEnabled(), true, 'absent legacy visits remain an empty record');
     await page.route('**/api/events/*/bootstrap', async route => {
@@ -134,7 +127,6 @@ async function main() {
       await route.fulfill({ response, json: body });
     });
     await page.reload();
-    await page.getByRole('tab', { name: '부스 인증 방식', exact: true }).click();
     await section.getByText(/부스 인증 기록을 확인할 수 없습니다/).waitFor();
     assert.equal(await section.getByRole('button', { name: '참가자 셀프 스캔' }).isDisabled(), true, 'an old server cannot silently bypass review');
     await page.unroute('**/api/events/*/bootstrap');
@@ -146,8 +138,7 @@ async function main() {
     await limited.addCookies([{ name: restrictedCookie[0], value: restrictedCookie.slice(1).join('='), url: f.baseUrl }]);
     const restrictedPage = await limited.newPage();
     await restrictedPage.goto(`${f.baseUrl}/console/events/${f.eventId}/operations`);
-    await restrictedPage.getByRole('tab', { name: '부스 인증 방식', exact: true }).click();
-    const restrictedSection = restrictedPage.locator('[data-workspace-section="ops-booth-mode"]');
+    const restrictedSection = restrictedPage.locator(':is(section,[role=region])[aria-labelledby="ops-booth-mode"]');
     if (!(await restrictedSection.locator('details').evaluate(el => el.open))) await restrictedSection.locator('summary').click();
     assert.equal(await restrictedSection.getByRole('button', { name: '참가자 셀프 스캔' }).isDisabled(), true, 'onsite-only manager cannot change booth mode');
     await limited.close();

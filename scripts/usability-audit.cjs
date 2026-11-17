@@ -1,5 +1,5 @@
 'use strict';
-const { messageStep } = require('./ui-journey-helpers.cjs');
+const { messageStep, openStudioPanel } = require('./ui-journey-helpers.cjs');
 
 
 // Usability audit: measures how many user operations it takes to finish real
@@ -76,6 +76,13 @@ const OPERATOR_STEP_CAP = 12;
 const ATTENDEE_STEP_CAP = 10;
 const SCROLL_CAP = 6;
 const KEYBOARD_CAP = 40;
+
+// First line of the error plus the locator it waited for, so a blocked task names its control.
+function blockedReason(error) {
+  const message = String((error && error.message) || error);
+  const waited = message.match(/waiting for ([^\n]+)/);
+  return message.split('\n')[0] + (waited ? ` (${waited[1].replace(/\u001b\[\d+m/g, '').slice(0, 160)})` : '');
+}
 
 const FAILURE_COPY = /(실패|못했습니다|오류|Application error|Something went wrong|Minified React)/;
 
@@ -752,7 +759,7 @@ async function main() {
         await shot(page, 'task-1-approve.png');
       } catch (error) {
         task.blocked = true;
-        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        task.detail += ` 막힘: ${blockedReason(error)}`;
         task.resultNote = task.resultNote || '목표 미달성';
         await shot(page, 'task-1-approve-blocked.png');
       } finally {
@@ -796,7 +803,7 @@ async function main() {
         await shot(page, 'task-2-direct-add.png');
       } catch (error) {
         task.blocked = true;
-        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        task.detail += ` 막힘: ${blockedReason(error)}`;
         await shot(page, 'task-2-direct-add-blocked.png');
       } finally {
         await finishTask(task, page, started);
@@ -861,7 +868,7 @@ async function main() {
         await shot(page, 'task-3-message.png');
       } catch (error) {
         task.blocked = true;
-        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        task.detail += ` 막힘: ${blockedReason(error)}`;
         await shot(page, 'task-3-message-blocked.png');
       } finally {
         await finishTask(task, page, started);
@@ -881,7 +888,7 @@ async function main() {
         await page.locator('#ops-desks').waitFor({ state: 'visible', timeout: 15000 });
         await verifySkipLink(page, task);
         await installScrollCounter(page);
-        await act(task, () => page.getByRole('tab', { name: '부스', exact: true }).click());
+        // 현장 운영 is one board now: every section is on the page, so there is no tab to pick.
         await act(task, () => page.getByRole('button', { name: '부스 추가', exact: true }).click());
         await page.locator('#booth-name').waitFor({ state: 'visible', timeout: 10000 });
         await act(task, () => page.locator('#booth-name').fill(boothName));
@@ -906,7 +913,7 @@ async function main() {
         await shot(page, 'task-4-booth.png');
       } catch (error) {
         task.blocked = true;
-        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        task.detail += ` 막힘: ${blockedReason(error)}`;
         await shot(page, 'task-4-booth-blocked.png');
       } finally {
         await finishTask(task, page, started);
@@ -922,11 +929,11 @@ async function main() {
       attachErrorListeners(page, task, baseUrl);
       try {
         await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/operations`, { waitUntil: 'networkidle', timeout: 30000 });
-        await act(task, () => page.getByRole('tab', { name: '스태프 배정', exact: true }).click());
+        // 현장 운영 is one board now: every section is on the page, so there is no tab to pick.
         await page.locator('#ops-staff').waitFor({ state: 'visible', timeout: 15000 });
         await verifySkipLink(page, task);
         await installScrollCounter(page);
-        await act(task, () => page.getByRole('button', { name: '스태프 배정', exact: true }).first().click());
+        await act(task, () => page.getByRole('button', { name: /스태프 배정$/ }).first().click());
         await page.locator('#assign-account').waitFor({ state: 'visible', timeout: 10000 });
         // A brand-new staffer must be pickable here for the goal to hold.
         // Dump the actual options on failure: a MANAGER bootstrap only lists
@@ -943,9 +950,11 @@ async function main() {
         await probeKeyboard(page, task, submit, '배정 저장 버튼');
         await act(task, () => submit.click());
         await page.getByText('스태프를 배정했습니다').first().waitFor({ timeout: 15000 });
-        const inList = await settledVisible(page.getByText(seed.staff2Name, { exact: true }));
+        // The confirmed board shows who is on duty as initials on the location row; the full name is the row's
+        // spoken summary. The result is the row that now names the new staffer.
+        const inList = await settledVisible(page.locator('li').filter({ hasText: seed.staff2Name }).getByRole('button').first());
         task.resultVisible = inList;
-        task.resultNote = `배정 목록에 "${seed.staff2Name}" 표시`;
+        task.resultNote = `담당 위치 행에 "${seed.staff2Name}" 배정 표시(얼굴 + 낭독 요약)`;
         try {
           const state = await readBootstrap(helpers, baseUrl, fixture.manager.cookie);
           const assignment = state.workspaces[eventId].assignments.find((item) => item.accountId === seed.staff2Id);
@@ -957,7 +966,7 @@ async function main() {
         await shot(page, 'task-5-assign.png');
       } catch (error) {
         task.blocked = true;
-        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        task.detail += ` 막힘: ${blockedReason(error)}`;
         await shot(page, 'task-5-assign-blocked.png');
       } finally {
         await finishTask(task, page, started);
@@ -1005,7 +1014,7 @@ async function main() {
         await shot(page, 'task-6-signup.png');
       } catch (error) {
         task.blocked = true;
-        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        task.detail += ` 막힘: ${blockedReason(error)}`;
         await shot(page, 'task-6-signup-blocked.png');
       } finally {
         await finishTask(task, page, started);
@@ -1059,7 +1068,7 @@ async function main() {
         await shot(page, 'task-7-ticket.png');
       } catch (error) {
         task.blocked = true;
-        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        task.detail += ` 막힘: ${blockedReason(error)}`;
         await shot(page, 'task-7-ticket-blocked.png');
       } finally {
         await finishTask(task, page, started);
@@ -1102,7 +1111,7 @@ async function main() {
         await shot(page, 'task-8-stamp.png');
       } catch (error) {
         task.blocked = true;
-        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        task.detail += ` 막힘: ${blockedReason(error)}`;
         await shot(page, 'task-8-stamp-blocked.png');
       } finally {
         await finishTask(task, page, started);
@@ -1142,7 +1151,7 @@ async function main() {
         await shot(page, 'task-9-vote.png');
       } catch (error) {
         task.blocked = true;
-        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        task.detail += ` 막힘: ${blockedReason(error)}`;
         await shot(page, 'task-9-vote-blocked.png');
       } finally {
         await finishTask(task, page, started);
@@ -1183,7 +1192,7 @@ async function main() {
         await shot(page, 'task-10-client.png');
       } catch (error) {
         task.blocked = true;
-        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        task.detail += ` 막힘: ${blockedReason(error)}`;
         await shot(page, 'task-10-client-blocked.png');
       } finally {
         await finishTask(task, page, started);
@@ -1228,7 +1237,7 @@ async function main() {
         await shot(page, 'task-11-invite.png');
       } catch (error) {
         task.blocked = true;
-        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        task.detail += ` 막힘: ${blockedReason(error)}`;
         await shot(page, 'task-11-invite-blocked.png');
       } finally {
         await finishTask(task, page, started);
@@ -1241,9 +1250,10 @@ async function main() {
       const task = createTask('message-scheduled', '메시지 예약 등록', 'operator', OPERATOR_STEP_CAP);
       const started = Date.now();
       const title = `사용성 예약 ${datestamp()}`;
-      const future = new Date(Date.now() + 2 * 3600 * 1000);
-      const pad = (value) => String(value).padStart(2, '0');
-      const scheduled = `${future.getFullYear()}-${pad(future.getMonth() + 1)}-${pad(future.getDate())}T${pad(future.getHours())}:${pad(future.getMinutes())}`;
+      // The product reads datetime-local as Korean time. Compute the wall
+      // clock in KST explicitly: on a UTC runner the local getters above
+      // would land 9h in the past and trip the "must be future" validation.
+      const scheduled = new Date(Date.now() + (9 + 2) * 3600 * 1000).toISOString().slice(0, 16);
       const { context, page } = await newOperatorPage();
       attachErrorListeners(page, task, baseUrl);
       try {
@@ -1290,7 +1300,7 @@ async function main() {
         await shot(page, 'task-12-scheduled.png');
       } catch (error) {
         task.blocked = true;
-        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        task.detail += ` 막힘: ${blockedReason(error)}`;
         await shot(page, 'task-12-scheduled-blocked.png');
       } finally {
         await finishTask(task, page, started);
@@ -1313,9 +1323,11 @@ async function main() {
           before = 0;
         }
         await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/page`, { waitUntil: 'networkidle', timeout: 30000 });
-        await page.locator('#home-intro').waitFor({ state: 'visible', timeout: 15000 });
+        await page.locator('#theme-save-draft').waitFor({ state: 'visible', timeout: 15000 });
         await verifySkipLink(page, task);
         await installScrollCounter(page);
+        // The intro lives in the studio's 소개와 공개 범위 panel; opening it is one operator step.
+        await act(task, () => openStudioPanel(page, 'exposure'));
         const current = await page.locator('#home-intro').inputValue().catch(() => '');
         await act(task, () => page.locator('#home-intro').fill(`${current} 사용성 문구`.trim()));
         const submit = page.getByRole('button', { name: '초안 저장', exact: true });
@@ -1336,7 +1348,7 @@ async function main() {
         await shot(page, 'task-13-page-draft.png');
       } catch (error) {
         task.blocked = true;
-        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        task.detail += ` 막힘: ${blockedReason(error)}`;
         await shot(page, 'task-13-page-draft-blocked.png');
       } finally {
         await finishTask(task, page, started);
@@ -1376,8 +1388,8 @@ async function main() {
         await act(task, () => submit.click());
         await page.getByText(/님의 경품을 등록했습니다/).first().waitFor({ timeout: 15000 });
         await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/rewards`, { waitUntil: 'networkidle', timeout: 30000 });
-        await page.locator('#rewards-list').waitFor({ state: 'visible', timeout: 15000 });
-        const inList = await settledVisible(page.locator('ul[aria-label="경품 목록"]').getByText(rewardName, { exact: true }));
+        await page.getByRole('region', { name: '경품 지급 현황' }).waitFor({ state: 'visible', timeout: 15000 });
+        const inList = await settledVisible(page.locator('ul[aria-label^="경품 목록"]').getByText(rewardName, { exact: true }));
         task.resultVisible = inList;
         task.resultNote = `경품 목록에 "${rewardName}" 표시`;
         try {
@@ -1391,7 +1403,7 @@ async function main() {
         await shot(page, 'task-14-reward.png');
       } catch (error) {
         task.blocked = true;
-        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        task.detail += ` 막힘: ${blockedReason(error)}`;
         await shot(page, 'task-14-reward-blocked.png');
       } finally {
         await finishTask(task, page, started);
@@ -1431,7 +1443,7 @@ async function main() {
         await shot(page, 'task-15-draw.png');
       } catch (error) {
         task.blocked = true;
-        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        task.detail += ` 막힘: ${blockedReason(error)}`;
         await shot(page, 'task-15-draw-blocked.png');
       } finally {
         await finishTask(task, page, started);
@@ -1447,7 +1459,10 @@ async function main() {
       attachErrorListeners(page, task, baseUrl);
       try {
         await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/draws`, { waitUntil: 'networkidle', timeout: 30000 });
-        await act(task, () => page.getByRole('tab', { name: '순위 투표', exact: true }).click());
+        // 추첨·투표 is master-detail: pick the 순위 투표 stage, then unfold its settings.
+        await act(task, () => page.getByRole('button', { name: /^순위 투표/ }).first().click());
+        const voteSetup = page.locator('summary').filter({ hasText: /^투표 설정/ }).first();
+        if (!await voteSetup.evaluate((el) => el.parentElement.open)) await act(task, () => voteSetup.click());
         await page.locator('#vote-pick-count').waitFor({ state: 'visible', timeout: 15000 });
         await verifySkipLink(page, task);
         await installScrollCounter(page);
@@ -1471,7 +1486,7 @@ async function main() {
         await shot(page, 'task-16-vote-config.png');
       } catch (error) {
         task.blocked = true;
-        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        task.detail += ` 막힘: ${blockedReason(error)}`;
         await shot(page, 'task-16-vote-config-blocked.png');
       } finally {
         await finishTask(task, page, started);
@@ -1491,7 +1506,7 @@ async function main() {
         await page.locator('#evidence-photo-sections').waitFor({ state: 'visible', timeout: 15000 });
         await verifySkipLink(page, task);
         await installScrollCounter(page);
-        await act(task, () => page.getByRole('button', { name: '파일 찾아보기', exact: true }).click());
+        await act(task, () => page.getByRole('button', { name: '사진 올리기', exact: true }).first().click());
         await act(task, () => page.locator('#evidence-photo-files').setInputFiles({
           name: photoName, mimeType: 'image/png', buffer: Buffer.from(TINY_PNG_BASE64, 'base64'),
         }));
@@ -1519,7 +1534,7 @@ async function main() {
         await shot(page, 'task-17-photo.png');
       } catch (error) {
         task.blocked = true;
-        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        task.detail += ` 막힘: ${blockedReason(error)}`;
         await shot(page, 'task-17-photo-blocked.png');
       } finally {
         await finishTask(task, page, started);
@@ -1550,16 +1565,16 @@ async function main() {
         await act(task, () => page.locator('input[type="file"]').first().setInputFiles({
           name: 'usability-roster.csv', mimeType: 'text/csv', buffer: Buffer.from(IMPORT_CSV, 'utf8'),
         }));
-        await page.getByText(/유효 2행/).first().waitFor({ timeout: 15000 });
-        const countText = await page.getByText(/유효 2행/).first().innerText().catch(() => '');
+        await page.locator('[class*="heroNumber"]').getByText('2', { exact: true }).waitFor({ timeout: 15000 });
+        const countText = await page.locator('[class*="heroNumber"]').first().innerText().catch(() => '');
         const firstName = await settledVisible(page.locator('ul[aria-label="적용될 값 미리보기"]').getByText('사용성 명단 가', { exact: true }));
-        task.resultVisible = countText.includes('유효 2행') && firstName;
+        task.resultVisible = countText.includes('2') && firstName;
         task.resultNote = `검토 단계 "${countText.replace(/\s+/g, ' ').slice(0, 50)}" + 미리보기에 이름 표시`;
-        await probeKeyboard(page, task, page.getByRole('button', { name: '검토 결과 만들기', exact: true }), '검토 결과 만들기 버튼');
+        await probeKeyboard(page, task, page.getByRole('button', { name: /^2명 등록$/ }), '2명 등록 버튼');
         await shot(page, 'task-18-import.png');
       } catch (error) {
         task.blocked = true;
-        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        task.detail += ` 막힘: ${blockedReason(error)}`;
         await shot(page, 'task-18-import-blocked.png');
       } finally {
         await finishTask(task, page, started);
@@ -1586,7 +1601,8 @@ async function main() {
         await probeKeyboard(page, task, submit, '보고서 만들기 버튼');
         await act(task, () => submit.click());
         await page.getByText('보고서 초안을 만들었습니다').first().waitFor({ timeout: 15000 });
-        const inList = await settledVisible(page.locator('li').filter({ hasText: reportTitle }).first());
+        // Reports are tabs: the new report shows as a tab with its 초안 badge.
+        const inList = await settledVisible(page.getByRole('tablist', { name: '보고서 선택' }).getByRole('tab', { name: new RegExp(reportTitle) }));
         const bodyText = await page.evaluate(() => document.body.innerText).catch(() => '');
         task.resultVisible = inList && bodyText.includes('초안');
         task.resultNote = `목록에 "${reportTitle}" + 상태 "초안" 표시`;
@@ -1601,7 +1617,7 @@ async function main() {
         await shot(page, 'task-19-report.png');
       } catch (error) {
         task.blocked = true;
-        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        task.detail += ` 막힘: ${blockedReason(error)}`;
         await shot(page, 'task-19-report-blocked.png');
       } finally {
         await finishTask(task, page, started);
@@ -1617,7 +1633,7 @@ async function main() {
       attachErrorListeners(page, task, baseUrl);
       try {
         await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/operations`, { waitUntil: 'networkidle', timeout: 30000 });
-        await act(task, () => page.getByRole('tab', { name: '전광판 출력', exact: true }).click());
+        // 현장 운영 is one board now: every section is on the page, so there is no tab to pick.
         await page.locator('#ops-display').waitFor({ state: 'visible', timeout: 15000 });
         await verifySkipLink(page, task);
         await installScrollCounter(page);
@@ -1641,7 +1657,7 @@ async function main() {
         await shot(page, 'task-20-display.png');
       } catch (error) {
         task.blocked = true;
-        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        task.detail += ` 막힘: ${blockedReason(error)}`;
         await shot(page, 'task-20-display-blocked.png');
       } finally {
         await finishTask(task, page, started);
@@ -1681,7 +1697,7 @@ async function main() {
         await shot(page, 'task-21-notice.png');
       } catch (error) {
         task.blocked = true;
-        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        task.detail += ` 막힘: ${blockedReason(error)}`;
         await shot(page, 'task-21-notice-blocked.png');
       } finally {
         await finishTask(task, page, started);
@@ -1724,7 +1740,7 @@ async function main() {
         await shot(page, 'task-22-lucky.png');
       } catch (error) {
         task.blocked = true;
-        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        task.detail += ` 막힘: ${blockedReason(error)}`;
         await shot(page, 'task-22-lucky-blocked.png');
       } finally {
         await finishTask(task, page, started);
@@ -1765,7 +1781,7 @@ async function main() {
         await shot(page, 'task-23-roulette.png');
       } catch (error) {
         task.blocked = true;
-        task.detail += ` 막힘: ${String((error && error.message) || error).split('\n')[0]}`;
+        task.detail += ` 막힘: ${blockedReason(error)}`;
         await shot(page, 'task-23-roulette-blocked.png');
       } finally {
         await finishTask(task, page, started);

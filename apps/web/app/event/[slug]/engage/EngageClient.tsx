@@ -8,6 +8,7 @@ import ProductLink from "../../../ui/ProductLink";
 import ProductButton from "../../../ui/ProductButton";
 import { fetchWithDeadline, withRequestDeadline } from "../../../../lib/request-deadline";
 import styles from "./engage.module.css";
+import { normalizeHomeStyle, readableInk } from "../../../../lib/attendee-home";
 import { isRecoveryBlocked, useVerificationMode } from "../../../../lib/use-verification-mode";
 import { readGuestReceipts, writeGuestReceipts, type GuestReceiptPointer } from "../../../../lib/receipt-recovery";
 import { confirmsGuestCommand, confirmsGuestPhotoUpload } from "../../../../lib/guest-command-result";
@@ -84,6 +85,8 @@ type EngageState =
       photos: PublicPhoto[];
       posts: PublicPost[];
       submittedModuleIds: string[];
+      // The event's own home color: the page sits on it like the attendee home.
+      ground: string;
     };
 
 type FormError = { form: string; field: string | null; message: string; uncertain?: boolean };
@@ -271,6 +274,7 @@ export default function EngageClient({ slug }: { slug: string }) {
   const [receiptMessage, setReceiptMessage] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
   const [requestedProgram, setRequestedProgram] = useState("");
+  const [activeType, setActiveType] = useState("");
   const recoveryBlocked = isRecoveryBlocked(useVerificationMode());
 
   useEffect(() => {
@@ -649,6 +653,7 @@ export default function EngageClient({ slug }: { slug: string }) {
             photos,
             posts,
             submittedModuleIds,
+            ground: normalizeHomeStyle((publicData.workspace?.pageExperience as { published?: { homeStyle?: unknown } } | undefined)?.published?.homeStyle).backgroundColor,
           });
         }
       } catch {
@@ -1205,8 +1210,13 @@ export default function EngageClient({ slug }: { slug: string }) {
     );
   }
 
+  // Programs are grouped by kind; the tabs show only the kinds this event has.
+  const typeOrder = [...new Set(state.modules.map((module) => module.type))];
+  const requestedType = state.modules.find((module) => module.id === requestedProgram)?.type;
+  const currentType = typeOrder.includes(activeType) ? activeType : requestedType ?? typeOrder[0] ?? "";
+  const visibleModules = state.modules.filter((module) => module.type === currentType);
   return (
-    <main id="main-content" tabIndex={-1} className={styles.page}>
+    <main id="main-content" tabIndex={-1} className={styles.page} style={{ "--engage-ground": state.ground, "--engage-ink": readableInk(state.ground) } as React.CSSProperties}>
       <header className={styles.pageHeader}>
         <span className={styles.wordmark}>EVENTOUCH</span>
         <span className="eyebrow">참여 콘텐츠</span>
@@ -1220,13 +1230,24 @@ export default function EngageClient({ slug }: { slug: string }) {
         <p className={styles.warning} role="note">참가 확정 후 참여할 수 있습니다. 프로그램 목록은 미리 확인할 수 있습니다.</p>
       ) : null}
 
+      {typeOrder.length > 1 ? (
+        <nav className={styles.typeTabs} aria-label="참여 종류">
+          {typeOrder.map((type) => {
+            const todo = state.approved && state.modules.some((module) => module.type === type && ["poll", "quiz", "survey"].includes(module.type) && module.status !== "CLOSED" && !state.submittedModuleIds.includes(module.id));
+            return <button key={type} type="button" className={styles.typeTab} aria-pressed={type === currentType} onClick={() => { setActiveType(type); setNotice(null); }}>
+              {typeLabel(type)}{todo ? <span className={styles.todoDot} role="img" aria-label="아직 참여하지 않은 프로그램이 있습니다" /> : null}
+            </button>;
+          })}
+        </nav>
+      ) : null}
+
       {state.modules.length ? (
         <ul className={styles.moduleList}>
-          {state.modules.map((module, index) => (
+          {visibleModules.map((module, index) => (
             <li key={module.id} className={styles.moduleCard}>
               <section aria-labelledby={`engage-${module.id}`}>
               <details className={styles.programDisclosure} open={requestedProgram ? module.id === requestedProgram : index === 0}>
-                <summary data-disclosure-indicator=""><h2 id={`engage-${module.id}`} tabIndex={-1}>{module.title}</h2><span>{typeLabel(module.type)} · {hasPending(`${state.eventId}:${module.id}`) ? "제출 확인 필요" : state.submittedModuleIds.includes(module.id) ? "제출 완료" : module.status === "CLOSED" ? "종료" : "참여하기"}</span></summary>
+                <summary data-disclosure-indicator=""><h2 id={`engage-${module.id}`} tabIndex={-1}>{module.title}</h2><span data-state={hasPending(`${state.eventId}:${module.id}`) ? "check" : state.submittedModuleIds.includes(module.id) ? "done" : module.status === "CLOSED" ? "end" : "todo"}>{typeLabel(module.type)} · {hasPending(`${state.eventId}:${module.id}`) ? "제출 확인 필요" : state.submittedModuleIds.includes(module.id) ? "제출 완료" : module.status === "CLOSED" ? "종료" : "참여하기"}</span></summary>
               {(() => {
                 const formKey = `${state.eventId}:${module.id}`;
                 const responseType = ["poll", "quiz", "survey"].includes(module.type);
@@ -1527,7 +1548,23 @@ function ModuleSection(props: {
     <div>
       {module.type === "poll" ? (
         props.submitted ? (
-          <p className={styles.submitted} role="status">이미 제출했습니다. 참여해 주셔서 감사합니다.</p>
+          <>
+            <p className={styles.submitted} role="status">이미 제출했습니다. 참여해 주셔서 감사합니다.</p>
+            {(() => {
+              // The counts are already public on every poll; after voting they read as bars.
+              const total = module.counts.reduce((sum, count) => sum + count, 0);
+              return total > 0 ? <ul className={styles.results} aria-label="투표 결과">
+                {module.options.map((option, index) => {
+                  const count = module.counts[index] ?? 0;
+                  const percent = Math.round((count / total) * 100);
+                  return <li key={`${option}-${index}`} className={styles.resultRow} data-mine={props.pollChoice === option || undefined}>
+                    <i style={{ width: `${percent}%` }} aria-hidden="true" />
+                    <span>{option}{props.pollChoice === option ? " · 내 선택" : ""}</span><span>{count}표 · {percent}%</span>
+                  </li>;
+                })}
+              </ul> : null;
+            })()}
+          </>
         ) : (
           <ValidatedForm
             onSubmit={(event) => {

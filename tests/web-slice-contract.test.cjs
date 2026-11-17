@@ -76,7 +76,11 @@ test('web-service-entry-sends-everyone-through-the-shared-login', () => {
   assert.match(home, /실제 발송은 발송 연결과 발신번호가 준비된 경우에만 시도/);
   assert.match(home, /모의 발송이나 미연동 상태에서는 실제로 전달되지 않/);
   assert.match(home, /화면 구성 예시/);
-  for (const variant of ['console', 'home', 'ticket', 'staff', 'report']) {
+  // The hero switches between console, ticket and report through its tabs
+  // (one preview driven by the active tab); the rest are fixed in place.
+  assert.match(home, /<ProductPreview variant=\{activeHero\.id\} \/>/);
+  for (const variant of ['console', 'ticket', 'report']) assert.match(home, new RegExp(`id: "${variant}"`));
+  for (const variant of ['home', 'ticket', 'staff', 'report']) {
     assert.match(home, new RegExp(`<ProductPreview variant="${variant}"`));
   }
 
@@ -959,7 +963,8 @@ test('web-staff-booth-work-uses-the-booth-visit-command-and-stamp-mode', () => {
   assert.match(staff, /참가자 홈 &gt; 부스 인증/);
   // …so the camera action stays out of SELF mode. A revoked assignment
   // preserves the last result but locks the camera and exposes recovery.
-  assert.match(staff, /stampMode === "SELF" \? null/);
+  assert.match(staff, /const selfBooth = activeTask === "booth" && activeScope\.stampMode === "SELF"/);
+  assert.match(staff, /const cameraMounted = !selfBooth/);
   assert.match(staff, /setAssignmentStale\(true\)/);
   assert.match(staff, /setCameraOpen\(false\)/);
   assert.match(staff, /배정 다시 확인/);

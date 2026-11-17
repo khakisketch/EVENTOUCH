@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import ProductLink from "../../../ui/ProductLink";
 import ProductButton from "../../../ui/ProductButton";
 import QRCode from "react-qr-code";
+import { useScreenWakeLock } from "../../../../lib/use-screen-wake-lock";
 import styles from "./ticket.module.css";
 import { isRecoveryBlocked, useVerificationMode } from "../../../../lib/use-verification-mode";
 import { forgetRecoveredTicket, readRecoveredTicket } from "./recovered-ticket";
@@ -346,6 +347,8 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
   const usable = state.kind === "ready" && Boolean(state.ticket) && state.status === "APPROVED" &&
     (state.paymentStatus === "FREE" || state.paymentStatus === "PAID");
   const showingQr = usable && mode === "ticket";
+  // The attendee holds this screen up at the desk: do not let it dim there.
+  useScreenWakeLock(showingQr);
   const recheckSeqRef = useRef(0);
   const liveSlugRef = useRef(slug);
   liveSlugRef.current = slug;
@@ -554,6 +557,9 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
     );
   }
   const statusUnconfirmed = showingQr && (rechecking || Boolean(recheckError));
+  const tone = usable && !statusUnconfirmed
+    ? (state.inside ? "in" : "good")
+    : state.status === "CANCELLED" ? "bad" : "wait";
   return (
     <section className={styles.ticketCard}>
       {state.recovered ? <p className={styles.ticketSuccess} role="status">연결된 티켓입니다. 참가자 이름이 맞는지 확인하세요.</p> : null}
@@ -568,18 +574,17 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
           <p className={styles.ticketSuccess} role="status">신청이 접수되었습니다. 아래에서 진행 상태를 확인하세요.</p>
         )
       ) : null}
-      <header className={styles.ticketHeading}>
-        <h1>내 티켓</h1>
-        <p className={styles.ticketEventName}>{state.eventName}</p>
-        <p>{state.eventDate}</p>
-      </header>
-      <div className={styles.ticketAttendee}>
+      {/* The band is the pass: state, then the name read at a glance. */}
+      <header className={styles.ticketBand} data-tone={tone}>
+        <div className={styles.ticketBandTop}>
+          <h1>내 티켓</h1>
+          <p className={styles.ticketEntryState} aria-live="polite" data-tone={tone}>
+            {statusUnconfirmed ? rechecking ? "상태 확인 중" : "상태 확인 필요" : entryLabel(state)}
+          </p>
+        </div>
         <h2 className={styles.ticketAttendeeName}>{state.name}</h2>
-        {state.company ? <p>{state.company}</p> : null}
-        <p className={styles.ticketEntryState} aria-live="polite" data-tone={usable && !statusUnconfirmed ? "good" : state.status === "CANCELLED" ? "bad" : "wait"}>
-          {statusUnconfirmed ? rechecking ? "상태 확인 중" : "상태 확인 필요" : entryLabel(state)}
-        </p>
-      </div>
+        {state.company ? <p className={styles.ticketCompany}>{state.company}</p> : null}
+      </header>
       {usable ? (
         <>
           <div className={styles.ticketQrWrapper}>
@@ -590,6 +595,11 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
             <p className={styles.ticketInstruction}>{statusUnconfirmed
               ? "입장 가능 여부는 현장 데스크에서 확인할 수 있습니다."
               : "입장할 때 이 QR을 보여 주세요. 퇴장할 때도 같은 QR을 사용합니다."}</p>
+            <p className={styles.ticketBrightness}>화면을 밝게 하면 더 잘 읽혀요</p>
+          </div>
+          <div className={styles.ticketEvent}>
+            <p className={styles.ticketEventName}>{state.eventName}</p>
+            <p>{state.eventDate}</p>
           </div>
           <div className={styles.ticketActions}>
             {/* Secondary on purpose: the QR above is what the attendee
@@ -600,6 +610,10 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
         </>
       ) : (
         <>
+          <div className={styles.ticketEvent}>
+            <p className={styles.ticketEventName}>{state.eventName}</p>
+            <p>{state.eventDate}</p>
+          </div>
           <p className={styles.ticketUnusable}>{unusableCopy(state).text}</p>
           <p className={styles.ticketMessageActions}>{recheckButton}</p>
           {recheckFeedback}

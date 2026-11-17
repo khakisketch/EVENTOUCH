@@ -81,6 +81,8 @@ function engageWorld(settlement) {
     slug: 'synthetic', liveSlugRef: { current: 'synthetic' }, ticketSlugRef: { current: 'synthetic' }, ticketRef: { current: '' },
     ticketStorageAvailable: () => true, getAllowedTicketForTab: () => '', isTicketRejected: () => false,
     clearSessionForTab() {}, clearTicketRejected() {}, allowSessionForTab() {}, markTicketRejected: () => writes.push('rejected'), REJECTED_TICKET_BEARER: 'rejected',
+    // The page reads the event's home color for its ground; these races do not care which.
+    normalizeHomeStyle: () => ({ backgroundColor: '#B9DEF0' }),
     window: {
       location, history: { replaceState(_state, _title, url) { location.search = new URL(url, 'https://fixture.invalid').search; } },
       sessionStorage: {

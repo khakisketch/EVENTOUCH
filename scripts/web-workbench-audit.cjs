@@ -1,7 +1,7 @@
 'use strict';
 const { messageStep } = require('./ui-journey-helpers.cjs');
 
-const { chooseRadio } = require('./ui-journey-helpers.cjs');
+const { chooseRadio, openStudioPanel } = require('./ui-journey-helpers.cjs');
 
 // Real UI workbench journeys. Every write uses a disposable PostgreSQL schema
 // through the existing API; messages are explicitly simulated. No deployed or
@@ -90,10 +90,10 @@ async function main() {
       for (const [name, route, marker] of [
         ['participants-100', '/participants', '#roster-search-label'],
         ['messages', '/messages', '#history-heading'],
-        ['theme', '/page', '#home-intro'],
+        ['theme', '/page', '#theme-save-draft'],
         ['overview-live', '', '#event-metrics-heading'],
         ['operations', '/operations', '#ops-desks'],
-        ['settings', '/settings', '#set-name'],
+        ['settings', '/settings', '#settings-intake'],
       ]) {
         await page.goto(base + route);
         await page.locator(marker).waitFor({ state: 'attached' });
@@ -108,7 +108,9 @@ async function main() {
             if (!queue || !metric || !schedule) return null;
             const q = queue.getBoundingClientRect(), m = metric.getBoundingClientRect(), s = schedule.getBoundingClientRect();
             return {
-              dom: Boolean(metric.compareDocumentPosition(queue) & Node.DOCUMENT_POSITION_FOLLOWING)
+              // The confirmed overview puts the numbers and the live queue side by
+              // side; what must hold is that both come before the schedule.
+              dom: Boolean(metric.compareDocumentPosition(schedule) & Node.DOCUMENT_POSITION_FOLLOWING)
                 && Boolean(queue.compareDocumentPosition(schedule) & Node.DOCUMENT_POSITION_FOLLOWING),
               queue: { top: q.top, bottom: q.bottom, left: q.left },
               metric: { top: m.top, bottom: m.bottom, left: m.left },
@@ -116,10 +118,10 @@ async function main() {
             };
           });
           check(`LIVE overview prioritizes work and entry before the schedule at ${width}`,
-            Boolean(order && order.dom && order.schedule.top >= Math.max(order.queue.bottom, order.metric.bottom) - 1
-              && (width > 900
+            Boolean(order && order.dom && order.schedule.top >= order.queue.bottom - 1 && order.schedule.top > order.metric.top
+              && (Math.abs(order.queue.left - order.metric.left) > 40
                 ? Math.abs(order.queue.top - order.metric.top) <= 2
-                : order.queue.top >= order.metric.bottom - 1)), order);
+                : order.schedule.top >= Math.max(order.queue.bottom, order.metric.bottom) - 1)), order);
         }
         if (name === 'participants-100' && (width === 1280 || width === 390)) {
           // Both the desktop table and phone list exist in the DOM. The
@@ -313,68 +315,51 @@ async function main() {
     await finish(messaging, 'message-simulated');
 
     const theme = await newTask('배경 수정 → 초안 저장 → 명시적 게시', '/page');
-    await page.locator('#home-background').waitFor();
-    if (PHASE === 'after') check('desktop preview does not rename edit location', await page.locator('nav[aria-label="참가자 페이지 구역"] a[href="#theme-edit"]').getAttribute('aria-current') === 'location');
+    await page.locator('#theme-save-draft').waitFor();
+    // The studio lists four rows; an edited row carries a "미저장 변경" dot, and
+    // the background (above the rows) carries its own.
+    const studioRow = name => page.locator('#theme-edit').getByRole('button', { name });
+    const rowDirty = async name => await studioRow(name).getByRole('img', { name: '미저장 변경' }).count() === 1;
+    const backgroundDirty = async () => await page.locator('#studio-background').getByRole('img', { name: '미저장 변경' }).count() === 1;
+    const backToList = async () => { if (await page.locator('#theme-panel-title').isVisible().catch(() => false)) await page.locator('#theme-edit').getByRole('button', { name: '설정', exact: true }).click(); };
+    const backgroundCode = async () => {
+      await backToList();
+      const code = page.getByLabel('배경색 색 코드', { exact: true });
+      if (!await code.count()) await page.getByRole('radiogroup', { name: '배경색', exact: true }).getByRole('button', { name: '직접 고르기' }).click();
+      return code;
+    };
+    const previewRegion = () => page.getByRole('region', { name: /홈 디자인 미리보기$/ }).first();
     if (PHASE === 'after') {
+      await openStudioPanel(page, 'exposure');
       const intro = page.locator('#home-intro');
       const originalIntro = await intro.inputValue();
       const introOnly = '검증용 소개 변경 — 미리보기에는 표시되지 않음';
       await intro.fill(introOnly);
-      check('intro-only edit marks its own group', (await intro.locator('xpath=ancestor::fieldset[1]/legend').innerText()).includes('미저장 변경'));
-      check('intro-only edit does not mark unrelated design groups',
-        !(await page.locator('#home-background').locator('xpath=ancestor::fieldset[1]/legend').innerText()).includes('미저장 변경')
-        && !(await page.locator('#home-hero-title').locator('xpath=ancestor::fieldset[1]/legend').innerText()).includes('미저장 변경'));
-      check('intro-only edit is not described as immediately previewed',
-        await page.getByText('미저장 변경이 미리보기에 바로 반영됩니다.', { exact: true }).count() === 0
-        && !(await page.locator('[aria-labelledby="home-preview-heading"]').innerText()).includes(introOnly));
-      await intro.fill(originalIntro);
-      check('reverting intro clears that group marker', !(await intro.locator('xpath=ancestor::fieldset[1]/legend').innerText()).includes('미저장 변경'));
+      await backToList();
+      check('intro-only edit marks its own row', await rowDirty(/^소개와 공개 범위/));
+      check('intro-only edit does not mark unrelated design rows',
+        !await rowDirty(/^배너/) && !await rowDirty(/^제목과 문구/) && !await rowDirty(/^홈 메뉴/) && !await backgroundDirty());
+      check('intro-only edit is not shown in the preview', !(await previewRegion().innerText()).includes(introOnly));
+      await openStudioPanel(page, 'exposure');
+      await page.locator('#home-intro').fill(originalIntro);
+      await backToList();
+      check('reverting intro clears that row marker', !await rowDirty(/^소개와 공개 범위/));
     }
-    await act(theme, () => page.locator('#home-background').fill('#FFF1E8'));
+    await act(theme, async () => { await (await backgroundCode()).fill('#FFF1E8'); });
     if (PHASE === 'after') {
-      const mirror = page.locator('#theme-edit > div:first-child > span:first-child');
-      const live = page.locator('#theme-save [aria-live="polite"]');
-      check('background edit marks its group', (await page.locator('#home-background').locator('xpath=ancestor::fieldset[1]/legend').innerText()).includes('미저장 변경'));
-      const editorStatus = { mirrors: await mirror.count(), visible: await mirror.first().isVisible(), live: await live.count(), mirror: await mirror.first().textContent(), announcement: await live.first().textContent() };
-      check('visible editor status matches the single save announcement', editorStatus.mirrors === 1 && editorStatus.visible && editorStatus.live === 1 && editorStatus.announcement.includes(editorStatus.mirror), editorStatus);
+      check('background edit marks its own section', await backgroundDirty());
+      check('background edit leaves the rows unmarked', !await rowDirty(/^소개와 공개 범위/) && !await rowDirty(/^제목과 문구/));
+      const status = page.locator('#theme-save [aria-live="polite"]');
+      const announced = await status.allTextContents();
+      check('the save area announces the unsaved change once', announced.filter(text => text.includes('저장되지 않은 변경')).length === 1, announced);
       await page.screenshot({ path: `${OUT}/theme-dirty-1280.png`, fullPage: true });
       await page.setViewportSize({ width: 390, height: 844 });
       await page.screenshot({ path: `${OUT}/theme-dirty-390.png`, fullPage: true });
-      const previewJump = page.getByRole('button', { name: '배경 미리보기', exact: true }).first();
-      await previewJump.focus();
-      await page.keyboard.press('Enter');
-      await page.locator('#home-preview-heading').waitFor({ state: 'visible' });
-      await page.waitForFunction(() => document.activeElement?.id === 'home-preview-heading');
-      check('mobile preview replaces the editor without discarding it', !(await page.locator('#theme-edit').isVisible()) && await page.locator('#home-preview-heading').isVisible());
-      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-      const previewPosition = await page.locator('#home-preview-heading').evaluate(e => ({ top: e.getBoundingClientRect().top, barBottom: document.querySelector('.console-sidebar')?.getBoundingClientRect().bottom ?? 0 }));
-      check('mobile preview focus is not under the console header', previewPosition.top >= previewPosition.barBottom, previewPosition);
-      await page.screenshot({ path: `${OUT}/theme-mobile-preview-390.png` });
-      await page.getByRole('button', { name: '편집하던 곳으로 돌아가기', exact: true }).click();
-      await page.waitForFunction(() => document.activeElement?.textContent?.trim() === '배경 미리보기');
-      check('mobile preview returns to its initiating control with unsaved edit intact', await previewJump.evaluate(e => e === document.activeElement) && (await page.locator('#home-background').inputValue()).toLowerCase() === '#fff1e8');
-      // The section nav is now the only top-level mobile switch. Exercise it
-      // with keyboard input, including saving from the preview state: the
-      // target must be unhidden before focus moves and the edit must survive.
-      const themeNav = page.locator('nav[aria-label="참가자 페이지 구역"]');
-      await themeNav.getByRole('link', { name: '미리보기', exact: true }).focus();
-      await page.keyboard.press('Enter');
-      await page.waitForFunction(() => document.activeElement?.id === 'home-preview-heading');
-      check('mobile section nav opens the preview with focus', await page.locator('#home-preview-heading').isVisible() && !await page.locator('#theme-edit').isVisible());
-      await themeNav.getByRole('link', { name: '저장·게시', exact: true }).focus();
-      await page.keyboard.press('Enter');
-      await page.waitForFunction(() => document.activeElement?.id === 'theme-save');
-      check('mobile section nav reveals the save area from preview without losing edits', await page.locator('#theme-save').isVisible() && (await page.locator('#home-background').inputValue()).toLowerCase() === '#fff1e8');
-      await themeNav.getByRole('link', { name: '편집', exact: true }).focus();
-      await page.keyboard.press('Enter');
-      await page.waitForFunction(() => document.activeElement?.id === 'theme-edit');
-      const saveJump = page.getByRole('link', { name: '저장·게시 검토', exact: true });
-      await saveJump.focus();
-      await page.keyboard.press('Enter');
-      await page.waitForFunction(() => document.activeElement?.id === 'theme-save-draft');
-      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-      const savePosition = await page.locator('#theme-save-draft').evaluate(e => ({ top: e.getBoundingClientRect().top, bottom: e.getBoundingClientRect().bottom, viewport: innerHeight, barBottom: document.querySelector('.console-sidebar')?.getBoundingClientRect().bottom ?? 0 }));
-      check('mobile review jump moves keyboard focus below the console header', savePosition.top >= savePosition.barBottom && savePosition.bottom <= savePosition.viewport, savePosition);
+      check('the unsaved background survives the phone width and the save area is reachable',
+        (await (await backgroundCode()).inputValue()).toLowerCase() === '#fff1e8'
+        && await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+      await page.locator('#theme-save-draft').scrollIntoViewIfNeeded();
+      check('the save action is visible on a phone', await page.locator('#theme-save-draft').isVisible() && await page.locator('#theme-save-draft').isEnabled());
       await page.setViewportSize({ width: 1280, height: 900 });
     }
     await act(theme, () => page.locator('#theme-save-draft').click());
@@ -388,29 +373,25 @@ async function main() {
     pageExperience = (await bootstrap()).workspaces[f.eventId].pageExperience;
     check('published background matches saved draft', pageExperience.published.homeStyle.backgroundColor === '#FFF1E8');
     await act(theme, () => page.getByRole('button', { name: '게시본', exact: true }).click());
-    if (PHASE === 'after') check('preview source switch preserves editing position', await page.locator('nav[aria-label="참가자 페이지 구역"] a[href="#home-preview-heading"]').getAttribute('aria-current') === null && await page.locator('nav[aria-label="참가자 페이지 구역"] a[aria-current="location"]').count() === 1);
     if (PHASE === 'after') {
+      await openStudioPanel(page, 'text');
       const title = page.locator('#home-hero-title');
       const originalTitle = await title.inputValue();
       await title.fill('검증용 미게시 배너 제목');
-      check('published preview does not show an unsaved banner title', !(await page.locator('[aria-labelledby="home-preview-heading"]').innerText()).includes('검증용 미게시 배너 제목'));
+      check('published preview does not show an unsaved banner title', !(await previewRegion().innerText()).includes('검증용 미게시 배너 제목'));
       await title.fill(originalTitle);
     }
     await finish(theme, 'theme-published');
 
     if (PHASE === 'before') return;
     await page.getByRole('button', { name: '편집 중', exact: true }).click();
-    const imageDetails = page.locator('summary', { hasText: '이미지 상세 설정' });
-    await imageDetails.focus();
-    await page.keyboard.press('Enter');
-    check('image details reveal with keyboard', await page.locator('#home-image-focus').isVisible());
-    await page.locator('#home-image-focus').selectOption('top');
-    const layoutDetails = page.locator('summary', { hasText: '배치·색상 상세 설정' });
-    await layoutDetails.focus();
-    await page.keyboard.press('Enter');
-    check('layout details reveal with keyboard', await page.locator('#home-layout').isVisible());
-    await page.locator('#home-layout').selectOption('bottom-overlay');
-    await page.locator('#home-overlay').selectOption('soft');
+    await openStudioPanel(page, 'banner');
+    const pick = (group, name) => page.getByRole('radiogroup', { name: group, exact: true }).getByRole('radio', { name, exact: true });
+    await pick('사진 초점', '위').click();
+    check('photo focus is chosen from its radio group', await pick('사진 초점', '위').getAttribute('aria-checked') === 'true');
+    await pick('글 위치', '아래').click();
+    check('text position is chosen in the same panel', await pick('글 위치', '아래').getAttribute('aria-checked') === 'true');
+    await pick('읽기 배경', '부드럽게').click();
     await page.locator('#theme-save-draft').click();
     await page.getByText('초안을 저장했습니다', { exact: false }).first().waitFor();
     const advancedPage = (await bootstrap()).workspaces[f.eventId].pageExperience;
@@ -650,10 +631,11 @@ async function main() {
     await page.locator('#campaign-scheduled').fill('2020-01-16T10:00');
     await scheduleSummary.click();
     await page.locator('#campaign-submit').click();
-    await sendConfirmation.getByRole('button', { name: '예약 등록한다', exact: true }).click();
+    // The form now refuses a past time before any confirmation; a server refusal would still arrive after one.
+    if (await sendConfirmation.isVisible().catch(() => false)) await sendConfirmation.getByRole('button', { name: '예약 등록한다', exact: true }).click();
     await page.locator('#campaign-scheduled-error').waitFor({ state: 'visible' });
     await page.waitForFunction(() => document.activeElement?.id === 'campaign-scheduled');
-    check('server schedule error reopens and focuses the original value without creating a message',
+    check('schedule error reopens and focuses the original value without creating a message',
       await scheduleDetails.evaluate(node => node.open)
       && (await page.locator('#campaign-scheduled').inputValue()) === '2020-01-16T10:00'
       && (await bootstrap()).workspaces[f.eventId].messages.length === beforePastSchedule);
@@ -728,7 +710,7 @@ async function main() {
         // Rail links carry live state (participants keeps ?status=PENDING
         // while approvals wait, messages keeps ?attention=1): the route
         // path must match exactly, the query is working state, not drift.
-        && hubDestinations.every((entry, i) => entry.label === approvedDestinations[i].label && entry.href !== null && new URL(entry.href, f.baseUrl).pathname === approvedDestinations[i].href),
+        && hubDestinations.every((entry, i) => entry.label.replace(/\d+$/u, '') === approvedDestinations[i].label && entry.href !== null && new URL(entry.href, f.baseUrl).pathname === approvedDestinations[i].href),
       hubDestinations,
     );
     check('rail grouping chrome carries no fake controls', await page.locator('.desktop-side-nav .nav-event-card, .desktop-side-nav .nav-section-label').evaluateAll(nodes => nodes.length > 0 && nodes.every(e => e.querySelector('a, button, [tabindex]') === null && !e.hasAttribute('tabindex'))));
@@ -738,10 +720,13 @@ async function main() {
     // Page scope and filter scope are independent behaviors: the current
     // page select takes only the visible 25, an explicit deselect clears
     // them, and the filter-wide select then takes all 49 across pages.
-    await page.getByRole('button', { name: '이 페이지 25명 선택', exact: true }).first().click();
+    // On a wide screen the page scope is the header checkbox; the phone list offers scope buttons.
+    await page.getByRole('checkbox', { name: '이 페이지 전체 선택', exact: true }).check();
     check('page-scope selection stays on the current page', await page.locator('#roster-selection-count').textContent().then(t => t.includes('선택 25명') && t.includes('현재 필터 25명') && t.includes('이 페이지 25명') && !t.includes('다른 페이지')));
     await page.getByRole('button', { name: '선택 해제', exact: true }).click();
     check('explicit deselect clears the page-scope selection', await page.locator('#roster-selection-count').count() === 0);
+    // The filter-wide scope is offered beside an existing selection, so select the page again first.
+    await page.getByRole('checkbox', { name: '이 페이지 전체 선택', exact: true }).check();
     await page.getByRole('button', { name: '필터 결과 전체 49명 선택', exact: true }).waitFor();
     await page.getByRole('button', { name: '필터 결과 전체 49명 선택', exact: true }).click();
     check('bulk selection includes other pages without changing displayed count', await page.locator('#roster-selection-count').textContent().then(t => t.includes('선택 49명') && t.includes('현재 필터 49명') && t.includes('이 페이지 25명') && t.includes('다른 페이지 24명')));
@@ -785,7 +770,7 @@ async function main() {
           const queue = rect('event-now-heading'), metric = rect('event-metrics-heading'), schedule = rect('event-runbook-heading');
           return { queueTop: queue?.top, queueBottom: queue?.bottom, metricTop: metric?.top, metricBottom: metric?.bottom, queueLeft: queue?.left, metricLeft: metric?.left, scheduleTop: schedule?.top };
         });
-        check(`${stage} presents its metrics above work and schedule`, headings[0] === '주요 지표' && headings[1] === '지금 할 일' && headings[2] === '행사 일정' && headings[3] === '행사 준비 확인' && Math.abs(geometry.queueTop - geometry.metricTop) <= 2 && geometry.scheduleTop >= Math.max(geometry.queueBottom, geometry.metricBottom) - 1, { headings, geometry });
+        check(`${stage} presents its work and metrics ahead of the schedule`, headings[0] === '지금 할 일' && headings[1] === '주요 지표' && headings[2] === '행사 일정' && headings[3] === '행사 준비 확인' && Math.abs(geometry.queueTop - geometry.metricTop) <= 2 && geometry.scheduleTop >= Math.max(geometry.queueBottom, geometry.metricBottom) - 1, { headings, geometry });
       } else {
         check(`${stage} prioritizes its real task`, headings[0] === (stage === 'ARCHIVED' ? '보관된 행사 마감 확인' : '행사 마감'), headings[0]);
         check(`${stage} retains summary ahead of the schedule`, headings.indexOf('최종 요약') > 0 && headings.indexOf('최종 요약') < headings.indexOf('행사 일정'), headings);
