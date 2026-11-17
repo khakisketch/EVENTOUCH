@@ -929,15 +929,24 @@ function createParticipantCommands(database) {
           }
           const created = [];
           for (const row of rows) {
-            const participant = createParticipant(event, workspace, row, {
-              registrationType: 'PRE',
-              fields: [],
-              now,
-            });
-            participant.status = 'APPROVED';
-            participant.consent = null;
-            participant.answers = {};
-            created.push(participant);
+            try {
+              const participant = createParticipant(event, workspace, row, {
+                registrationType: 'PRE',
+                fields: [],
+                now,
+              });
+              participant.status = 'APPROVED';
+              participant.consent = null;
+              participant.answers = {};
+              created.push(participant);
+            } catch (error) {
+              // Bulk import processes the previewed rows in order. Name the
+              // file row so the operator can find it in a large roster.
+              const line = row && Number.isSafeInteger(row.line) && row.line > 0 ? `파일 ${row.line}번째 행: ` : '';
+              const message = error && error.message ? error.message : '참가자를 등록하지 못했습니다';
+              const status = error && Number.isSafeInteger(error.status) && error.status >= 400 && error.status < 600 ? error.status : 400;
+              throw failure(status, `${line}${message}`, error && error.field, error && error.code);
+            }
           }
           return { body: { participants: created.map((person) => projectParticipant(workspace, event, person)) } };
         }

@@ -1086,7 +1086,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
       }
 
       const programs = snapshotRecords(snapshot?.programs).items;
-      if (programs?.length) {
+      if (report.sections.includes("programs") && programs?.length) {
         const slide = pres.addSlide();
         slide.addText("참여 콘텐츠", { x: 0.5, y: 0.4, w: 9, h: 0.5, fontSize: 22, bold: true, color: "1E2026", fontFace: FONT });
         programs.slice(0, 8).forEach((program, index) => {
@@ -1099,7 +1099,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
       }
 
       const surveys = snapshotRecords(snapshot?.survey).items;
-      if (surveys?.length) {
+      if (report.sections.includes("survey") && surveys?.length) {
         const slide = pres.addSlide();
         slide.addText("행사 만족도", { x: 0.5, y: 0.4, w: 9, h: 0.5, fontSize: 22, bold: true, color: "1E2026", fontFace: FONT });
         surveys.slice(0, 8).forEach((survey, index) => {
@@ -1111,7 +1111,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
         });
       }
 
-      const photoRecords = snapshotRecords(snapshot?.photos).items ?? [];
+      const photoRecords = report.sections.includes("photos") ? snapshotRecords(snapshot?.photos).items ?? [] : [];
       const inlinedPhotos: Array<{ data: string; caption: string }> = [];
       for (const photo of photoRecords.slice(0, 6)) {
         const fileId = snapshotImageFileId(photo.image);
@@ -1815,6 +1815,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                 <p className={styles.exportScope} id="report-export-scope-help">
                   <strong>JSON 원본</strong>에는 화면에서 제외한 항목을 포함해 저장된 자료가 들어갑니다. 공유하기 전에 내용을 확인하세요.
                   선택한 항목만 전달하려면 인쇄에서 PDF로 저장할 수 있습니다.
+                  PPTX는 선택한 항목만 담습니다.
                 </p>
                 <div className={styles.exportGroup}>
                   <p className={styles.toolbarLabel}>내보내기</p>
@@ -1835,7 +1836,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                       </ProductButton>
                     ) : null}
                   </ConsoleFormActions>
-                  <p className={styles.exportNote}>PPTX는 지금 집계로 한 번 채워 내려받습니다. 꾸미기는 파워포인트·키노트·캔바에서 이어가세요.</p>
+                  <p className={styles.exportNote}>PPTX는 저장된 집계 기준(표지의 일시)으로 한 번 채워 내려받습니다. 선택 해제한 항목은 제외되며, 참여 콘텐츠·만족도는 각 최대 8개, 사진은 최대 6개까지 담기고 불러오지 못한 사진은 건너뜁니다. 꾸미기는 파워포인트·키노트·캔바에서 이어가세요.</p>
                 </div>
                 <div className={styles.viewGroup}>
                   <p className={styles.toolbarLabel}>보기</p>

@@ -146,6 +146,18 @@ test('exportPptx dynamically imports pptxgenjs, fetches each approved photo, and
   assert.match(workspace, /\} catch \{\s*\/\/ Skip only this photo; the rest of the export still proceeds\./u);
 });
 
+test('exportPptx only exports selected sections and says so next to the buttons', () => {
+  // A deselected content block must not leak into the shared file.
+  assert.match(workspace, /report\.sections\.includes\("programs"\) && programs\?\.length/u);
+  assert.match(workspace, /report\.sections\.includes\("survey"\) && surveys\?\.length/u);
+  assert.match(workspace, /report\.sections\.includes\("photos"\) \? snapshotRecords\(snapshot\?\.photos\)\.items \?\? \[\] : \[\]/u);
+  // Limits and the snapshot basis are disclosed where the export happens.
+  assert.match(workspace, /PPTX는 선택한 항목만 담습니다/u);
+  assert.match(workspace, /참여 콘텐츠·만족도는 각 최대 8개, 사진은 최대 6개까지/u);
+  assert.match(workspace, /불러오지 못한 사진은 건너뜁니다/u);
+  assert.match(workspace, /저장된 집계 기준\(표지의 일시\)/u);
+});
+
 test('pptxgenjs is declared as a client dependency, same pattern as xlsx', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'apps/web/package.json'), 'utf8'));
   assert.ok(pkg.dependencies.pptxgenjs, 'pptxgenjs is a direct dependency');
