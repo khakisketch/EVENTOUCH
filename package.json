@@ -88,6 +88,7 @@
     "web:schedule-review:audit": "node scripts/web-schedule-review-audit.cjs",
     "web:theme-recovery:audit": "node scripts/web-theme-recovery-audit.cjs",
     "web:theme-freshness:audit": "node scripts/web-theme-freshness-audit.cjs",
+    "web:home-instagram:audit": "node scripts/web-home-instagram-audit.cjs",
     "web:page-visibility-review:audit": "node scripts/web-page-visibility-review-audit.cjs",
     "web:page-publication-context:audit": "node scripts/web-page-publication-context-audit.cjs",
     "web:org-write-recovery:audit": "node scripts/web-org-write-recovery-audit.cjs",

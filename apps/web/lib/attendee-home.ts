@@ -4,9 +4,10 @@ export type ImageFocus = "center" | "top" | "bottom";
 export type TextAlign = "left" | "center" | "right";
 export type TextTone = "light" | "dark";
 export type HeroOverlay = "none" | "soft" | "strong";
-// "instagram" (photo-first) is reserved: the editor shows it locked and the
-// server does not accept it yet.
-export type HomeLayout = "tile" | "poster" | "typography";
+// "instagram" is the photo-first home: a feed of approved participant photos
+// under a slim banner (owner decision 2026-11-18). It needs approved photos to
+// say anything, so a public page with none reads as the tile home.
+export type HomeLayout = "tile" | "poster" | "typography" | "instagram";
 export type MenuShape = "circle" | "list";
 export type BannerKind = "image" | "gradient" | "solid";
 export type BannerAngle = "diagonal" | "vertical" | "horizontal";
@@ -83,7 +84,7 @@ export function normalizeHomeStyle(value: unknown): HomeStyle {
     textAlign: value.textAlign === "left" || value.textAlign === "right" ? value.textAlign : "center",
     textTone: value.textTone === "dark" ? "dark" : "light",
     overlay: value.overlay === "soft" || value.overlay === "strong" ? value.overlay : "none",
-    layout: value.layout === "poster" || value.layout === "typography" ? value.layout : "tile",
+    layout: value.layout === "poster" || value.layout === "typography" || value.layout === "instagram" ? value.layout : "tile",
     menuShape: value.menuShape === "list" ? "list" : "circle",
     bannerKind: value.bannerKind === "gradient" || value.bannerKind === "solid" ? value.bannerKind : "image",
     bannerColor: hexOr(value.bannerColor, DEFAULT_HOME_STYLE.bannerColor),
@@ -123,6 +124,45 @@ export function bannerFillTone(style: HomeStyle): "light" | "dark" {
   const colors = style.bannerKind === "gradient" ? [style.bannerColor, style.bannerColor2] : [style.bannerColor];
   const average = colors.reduce((sum, color) => sum + channelLuminance(color), 0) / colors.length;
   return average > 0.4 ? "dark" : "light";
+}
+
+// An approved participant photo as the photo-first home shows it.
+export type HomePhoto = { id: string; src: string; caption: string; name: string; at: string };
+
+// Most recent photos the feed lists; the rest live on the participation page.
+export const HOME_FEED_LIMIT = 12;
+
+/**
+ * The approved participant photos of a workspace, newest first. Only APPROVED
+ * photos with a usable file id count: a pending, hidden or unreadable photo
+ * never reaches the feed, even when the response carries it (an attendee's own
+ * pending photo rides along in the public projection). `srcFor` decides where
+ * the bytes are read from, so the public page and the console preview each use
+ * their own authorized route.
+ */
+export function parseHomePhotos(value: unknown, srcFor: (fileId: string) => string): HomePhoto[] {
+  if (!Array.isArray(value)) return [];
+  const photos: HomePhoto[] = [];
+  for (const item of value) {
+    if (!isRecord(item) || item.status !== "APPROVED") continue;
+    const image = isRecord(item.image) ? item.image : null;
+    const fileId = typeof image?.fileId === "string" ? image.fileId : "";
+    if (!/^[A-Za-z0-9_-]{1,160}$/.test(fileId)) continue;
+    const id = typeof item.id === "string" ? item.id : "";
+    if (!id) continue;
+    photos.push({
+      id,
+      src: srcFor(fileId),
+      caption: typeof item.caption === "string" ? item.caption.trim() : "",
+      name: typeof item.name === "string" ? item.name.trim() : "",
+      at: typeof item.at === "string" ? item.at : "",
+    });
+  }
+  // Newest first; an unreadable time sorts last and keeps its order.
+  return photos
+    .map((photo, index) => ({ photo, index, time: Date.parse(photo.at) }))
+    .sort((a, b) => (Number.isFinite(b.time) ? b.time : -Infinity) - (Number.isFinite(a.time) ? a.time : -Infinity) || a.index - b.index)
+    .map(({ photo }) => photo);
 }
 
 export function normalizeHomeImage(value: unknown): HomeImage | null {

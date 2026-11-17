@@ -11,9 +11,11 @@ import {
   homeImageLabel,
   normalizeHomeImage,
   normalizeHomeStyle,
+  parseHomePhotos,
   sameHomeImage,
   type HomeImage,
   type HomeLayout,
+  type HomePhoto,
   type HomeStyle,
 } from "../../../../../lib/attendee-home";
 import { normalizeHomeMenus, type ConfigurableHomeMenu, type HomeMenus, type HomeProgram } from "../../../../../lib/attendee-home-menus";
@@ -77,6 +79,8 @@ type Snapshot = {
   availablePrograms: HomeProgram[];
   programOptions: Array<HomeProgram & { available: boolean }>;
   unavailableMenus: ConfigurableHomeMenu[];
+  // Approved participant photos, as the photo-first layout will show them.
+  previewPhotos: HomePhoto[];
 };
 type Ready = Snapshot & { kind: "ready"; savedForm: DesignForm; savedPageFields: PageFields };
 type EditorState =
@@ -280,6 +284,11 @@ function parseSnapshot(
     availablePrograms,
     programOptions,
     unavailableMenus,
+    // Same rule as the public page: only approved photos, and only while the
+    // 사진 feature is on. The console reads them through its own authorized route.
+    previewPhotos: enabled.has("photo")
+      ? parseHomePhotos(workspace.photos, (fileId) => `/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(fileId)}`)
+      : [],
   };
 }
 
@@ -1543,6 +1552,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
                   homeStyle={showingPublished ? state.publishedDesign.homeStyle : state.form.homeStyle}
                   homeMenus={showingPublished ? state.publishedDesign.homeMenus : state.form.homeMenus}
                   programs={state.availablePrograms}
+                  photos={state.previewPhotos}
                   hasPrograms={state.availablePrograms.length > 0}
                   unavailable={[
                     ...state.unavailableMenus,
@@ -1606,6 +1616,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
                     defaultHomeBanner={state.defaultHomeBanner}
                     homeMenus={state.form.homeMenus}
                     programs={state.availablePrograms}
+                    photos={state.previewPhotos}
                     unavailable={state.unavailableMenus}
                     disabled={editsLocked}
                     onLayout={selectLayout}
@@ -1996,6 +2007,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
                   homeStyle={showingPublished ? state.publishedDesign.homeStyle : state.form.homeStyle}
                   homeMenus={showingPublished ? state.publishedDesign.homeMenus : state.form.homeMenus}
                   programs={state.availablePrograms}
+                  photos={state.previewPhotos}
                   hasPrograms={state.availablePrograms.length > 0}
                   unavailable={[
                     ...state.unavailableMenus,

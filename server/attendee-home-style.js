@@ -18,7 +18,7 @@
 //     textAlign: 'left' | 'center' | 'right',
 //     textTone: 'light' | 'dark',
 //     overlay: 'none' | 'soft' | 'strong',
-//     layout: 'tile' | 'poster' | 'typography',   // home composition (default 'tile')
+//     layout: 'tile' | 'poster' | 'typography' | 'instagram',   // home composition (default 'tile')
 //     menuShape: 'circle' | 'list',                // poster menus only
 //     bannerKind: 'image' | 'gradient' | 'solid',  // banner fill; 'image' uses the uploaded picture
 //     bannerColor: '#1E2026',                      // solid color / gradient start
@@ -58,8 +58,10 @@ const ENUMS = {
   textAlign: new Set(['left', 'center', 'right']),
   textTone: new Set(['light', 'dark']),
   overlay: new Set(['none', 'soft', 'strong']),
-  // The photo-first 'instagram' layout is reserved and not accepted yet.
-  layout: new Set(['tile', 'poster', 'typography']),
+  // 'instagram' is the photo-first home (approved participant photos). It is a
+  // pure presentation choice: the public projection already carries only
+  // approved photos, and a page with none reads as the tile home.
+  layout: new Set(['tile', 'poster', 'typography', 'instagram']),
   menuShape: new Set(['circle', 'list']),
   bannerKind: new Set(['image', 'gradient', 'solid']),
   bannerAngle: new Set(['diagonal', 'vertical', 'horizontal']),

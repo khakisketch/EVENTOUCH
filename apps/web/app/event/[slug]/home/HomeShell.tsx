@@ -12,7 +12,7 @@ import TicketView from "../ticket/TicketView";
 import { fetchWithDeadline } from "../../../../lib/request-deadline";
 import styles from "./home.module.css";
 import AttendeeHomeLanding, { HOME_MENUS, type HomeMenuKey } from "./AttendeeHomeLanding";
-import { DEFAULT_HOME_STYLE, normalizeHomeStyle, type HomeStyle } from "../../../../lib/attendee-home";
+import { DEFAULT_HOME_STYLE, normalizeHomeStyle, parseHomePhotos, type HomePhoto, type HomeStyle } from "../../../../lib/attendee-home";
 import { normalizeHomeMenus, type HomeMenus, type HomeProgram } from "../../../../lib/attendee-home-menus";
 import { isRecoveryBlocked, useVerificationMode } from "../../../../lib/use-verification-mode";
 import { useUnsavedNavigationGuard } from "../../../../lib/use-unsaved-navigation-guard";
@@ -154,6 +154,7 @@ type LoadState =
       homeStyle: HomeStyle;
       homeMenus: HomeMenus;
       programs: HomeProgram[];
+      photos: HomePhoto[];
       eventDate: string;
       eventTime: string;
       ticketStatus: string;
@@ -561,6 +562,7 @@ export default function HomeShell({ slug }: { slug: string }) {
             workspace?: {
               notices?: unknown;
               modules?: unknown;
+              photos?: unknown;
               pageExperience?: { published?: { keyvisual?: unknown; defaultHomeBanner?: unknown; homeStyle?: unknown; homeMenus?: unknown; showAnnouncements?: unknown } } | null;
           } | null;
         } | null;
@@ -596,6 +598,13 @@ export default function HomeShell({ slug }: { slug: string }) {
         const defaultHomeBanner = publishedPage?.defaultHomeBanner === "neutral" ? "neutral" : "legacy";
         const homeStyle = normalizeHomeStyle(publishedPage?.homeStyle);
         const homeMenus = normalizeHomeMenus(publishedPage?.homeMenus);
+        // The photo-first home lists approved participant photos only, and only
+        // while the 사진 feature is on. The public projection also carries an
+        // attendee's own pending photo; parseHomePhotos drops everything that
+        // is not approved.
+        const photos: HomePhoto[] = enabled.has("photo")
+          ? parseHomePhotos(publicData.workspace?.photos, (fileId) => `/api/public/events/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}`)
+          : [];
         const notices: Notice[] = Array.isArray(publicData.workspace?.notices)
           ? (publicData.workspace.notices as unknown[]).flatMap((item) => {
               const notice = asRecord(item);
@@ -635,6 +644,7 @@ export default function HomeShell({ slug }: { slug: string }) {
               homeStyle,
               homeMenus,
               programs,
+              photos,
               eventDate: event.date,
               eventTime: `${event.start} ~ ${event.end}`,
               ticketStatus: "",
@@ -856,6 +866,7 @@ export default function HomeShell({ slug }: { slug: string }) {
             homeStyle,
             homeMenus,
             programs,
+            photos,
             eventDate: event.date,
             eventTime: `${event.start} ~ ${event.end}`,
             ticketStatus: text(ticketData.participant.status) || "APPROVED",
@@ -1228,6 +1239,7 @@ export default function HomeShell({ slug }: { slug: string }) {
           homeStyle={state.homeStyle}
           homeMenus={state.homeMenus}
           programs={state.programs}
+          photos={state.photos}
           slug={slug}
           hasPrograms={state.hasPrograms}
           unavailable={state.unavailable}
