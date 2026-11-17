@@ -27,7 +27,7 @@ import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../../
 import { useEventReceipts } from "../../../../../../lib/use-event-receipts";
 
 type ImportMap = { name: string; phone: string; email: string; company: string };
-type ValidRow = { name: string; phone: string; email: string; company: string };
+type ValidRow = { name: string; phone: string; email: string; company: string; line: number };
 type ImportRow = { cells: string[]; line: number };
 type RowError = { row: number; reason: string };
 type PhoneReview = { row: number; name: string; phone: string };
@@ -263,7 +263,7 @@ function validateRows(
       return;
     }
     seen.add(phone);
-    valid.push({ name, phone, email, company });
+    valid.push({ name, phone, email, company, line });
     // A Korean 010 mobile number entered into a numeric spreadsheet cell
     // often loses its first zero. Do not invent a number: it may also be an
     // intentional international number and needs the operator's review.
@@ -742,7 +742,7 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
 
   const listHref = `/console/events/${encodeURIComponent(eventId)}/participants`;
   const actions = canWriteImport && headers ? (
-    <div className={styles.actions}><ConsoleFormActions note="가져온 유효 행은 승인 검토 없이 참가 확정으로 등록됩니다. 동의 기록은 가져오기만으로 생성하지 않습니다.">
+    <div className={styles.actions}><ConsoleFormActions note="가져온 유효 행은 승인 검토 없이 참가 확정으로 등록됩니다. 동의 기록은 가져오기만으로 생성하지 않습니다. 행사별 추가 신청 항목의 응답은 가져오지 않습니다.">
       {onDismiss ? null : <ProductLink className="button button-ghost" variant="ghost" href={listHref}>참가자 목록으로</ProductLink>}
       {importUncertain ? <ProductButton type="button" variant="secondary" disabled={committing || checkingImport} onClick={() => void checkImportResult()}>{checkingImport ? "확인 중입니다" : "서버 처리 확인"}</ProductButton> : null}
       {reviewing ? <ProductButton type="button" variant="primary" disabled={commitDisabled} onClick={() => void commit()}>
@@ -818,7 +818,7 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
                   />
                 </label>
                 <p className={styles.fileMeta}>
-                  <span>CSV·TXT·XLS·XLSX · 최대 1MB, 1,000행. 첫 행은 제목 줄로 읽습니다. TXT는 한 줄에 한 명: 이름, 연락처, 이메일(선택), 소속(선택).</span>
+                  <span>CSV·TXT·XLS·XLSX · 최대 1MB, 1,000행. 첫 행은 제목 줄로 읽습니다. TXT는 한 줄에 한 명: 이름, 연락처, 이메일(선택), 소속(선택). 이메일이 없으면 쉼표·탭으로 구분하고 이메일 칸을 비우세요(예: 홍길동,01012345678,,회사명). 띄어쓰기만으로는 소속을 구분할 수 없습니다.</span>
                   <ProductButton
                     type="button"
                     variant="ghost"

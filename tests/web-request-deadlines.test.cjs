@@ -157,7 +157,7 @@ test('CSV filename preserves mapping, quoting and physical row numbers across ad
   }
   assert.equal(results[0].kind, 'csv');
   assert.deepEqual(results[0].map, { name: '1', phone: '0', email: '', company: '2' });
-  assert.deepEqual(results[0].preview.valid, [{ name: 'Synthetic, Name', phone: '01000009999', email: '', company: 'Fixture\nCompany' }]);
+  assert.deepEqual(results[0].preview.valid, [{ name: 'Synthetic, Name', phone: '01000009999', email: '', company: 'Fixture\nCompany', line: 2 }]);
   assert.equal(results[0].preview.errors[0].row, 4);
   for (const result of results.slice(1)) assert.deepEqual(result, results[0]);
 });

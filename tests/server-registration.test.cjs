@@ -595,6 +595,28 @@ test('participant-import-overflow-and-duplicate-batches-are-rejected-atomically'
   assert.equal(duplicateState.rows[0].payload.participants.length, 0);
 });
 
+test('participant-import-duplicate-names-the-file-row', async () => {
+  const seed = await operatorCommand(ids.duplicateImport, 'participant.create', {
+    name: '기존 참가자', phone: '01012340030', meal: '일반식',
+  }, cookies.manager);
+  assert.equal(seed.status, 201);
+  const failed = await operatorCommand(ids.duplicateImport, 'participant.import', {
+    rows: [
+      { name: '새 참가자', phone: '01012340031', meal: '일반식', line: 5 },
+      { name: '중복 참가자', phone: '01012340030', meal: '일반식', line: 6 },
+    ],
+  }, cookies.manager);
+
+  assert.equal(failed.status, 409);
+  assert.match(failed.json.error, /파일 6번째 행/u);
+  assert.match(failed.json.error, /이미 등록/u);
+  const state = await harness.database.query(
+    'SELECT payload FROM event_workspaces WHERE event_id = $1',
+    [ids.duplicateImport]
+  );
+  assert.equal(state.rows[0].payload.participants.length, 1);
+});
+
 test('attendee-ticket-allows-only-self-update-and-cancellation-then-revokes-the-ticket', async () => {
   const created = await operatorCommand(ids.operators, 'participant.create', {
     name: '티켓 참가자', phone: '01012340006', email: 'ticket@example.test', meal: '일반식',

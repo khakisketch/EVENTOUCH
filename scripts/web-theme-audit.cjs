@@ -231,6 +231,10 @@ async function main() {
     await openStudioPanel(editor, 'text');
     await editor.locator('#home-hero-title').fill('');
     await editor.locator('#home-hero-subtitle').fill('');
+    // The preview renders from the same form state the save sends. Wait for
+    // the cleared title to land in the preview before saving, so a slow
+    // commit can never save the previous title.
+    await editor.getByRole('heading', { name: '우리의 새로운 행사', exact: true }).waitFor({ state: 'detached', timeout: 15000 });
     await commandClick(editor, save, 'attendee.page.save');
     // Split the two halves: the saved draft must already hold the cleared title before anything is published,
     // so a later mismatch is known to be a publish problem and not a save that missed the last edit.

@@ -50,10 +50,15 @@ test('error rows unfold in place and stay reachable by keyboard', () => {
 
 test('the contact check, consent facts and commit gate keep their rules', () => {
   assert.match(wizard, /확인할 연락처를 원본과 비교했고, 표시된 번호로 등록합니다\./u);
-  assert.match(wizard, /가져온 유효 행은 승인 검토 없이 참가 확정으로 등록됩니다\. 동의 기록은 가져오기만으로 생성하지 않습니다\./u);
+  assert.match(wizard, /가져온 유효 행은 승인 검토 없이 참가 확정으로 등록됩니다\. 동의 기록은 가져오기만으로 생성하지 않습니다\. 행사별 추가 신청 항목의 응답은 가져오지 않습니다\./u);
   assert.match(wizard, /preview\.phoneReview\.length > 0 && !phoneReviewed && !importUncertain/u);
   assert.match(wizard, /같은 요청 다시 시도/u);
   assert.match(wizard, /서버 처리 확인/u);
+});
+
+test('TXT guidance names the empty-email-column form', () => {
+  assert.match(wizard, /이메일이 없으면 쉼표·탭으로 구분하고 이메일 칸을 비우세요/u);
+  assert.match(wizard, /띄어쓰기만으로는 소속을 구분할 수 없습니다/u);
 });
 
 test('the column match is chips that change in place; a missing required column is asked first', () => {
