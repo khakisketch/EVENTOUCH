@@ -701,7 +701,7 @@ async function main() {
     const eventBasePath = `/console/events/${f.eventId}`;
     const approvedDestinations = [
       {label:'운영 현황',href:eventBasePath},
-      ...[['참가자 명단','participants'],['메시지','messages'],['현장 운영','operations'],['추첨·투표','draws'],['경품 수령','rewards'],['현장 사진','photos'],['참가자 페이지','page'],['공지·안내','content'],['참여 콘텐츠','programs'],['행사 설정','settings'],['결과 보고서','reports']].map(([label,route])=>({label,href:`${eventBasePath}/${route}`})),
+      ...[['참가자 명단','participants'],['메시지','messages'],['현장 운영','operations'],['추첨·투표','draws'],['경품 지급 현황','rewards'],['현장 사진','photos'],['참가자 페이지','page'],['공지·안내','content'],['참여 콘텐츠','programs'],['행사 설정','settings'],['결과 보고서','reports']].map(([label,route])=>({label,href:`${eventBasePath}/${route}`})),
     ];
 
     check(

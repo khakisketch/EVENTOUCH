@@ -68,7 +68,7 @@ test('navigation registry covers all sixteen menu pages as metadata only', () =>
     participants: '참가자 명단', participantImport: '명단 가져오기', messages: '메시지',
     operations: '현장 운영', programs: '참여 콘텐츠', draws: '추첨·투표',
     photos: '현장 사진', content: '공지·안내', attendeePage: '참가자 페이지',
-    rewards: '경품 수령', settings: '행사 설정', reports: '결과 보고서',
+    rewards: '경품 지급 현황', settings: '행사 설정', reports: '결과 보고서',
   };
   for (const [id, label] of Object.entries(labels)) {
     const scope = ['events', 'clients', 'team'].includes(id) ? 'organization' : 'event';

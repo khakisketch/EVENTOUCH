@@ -1388,7 +1388,7 @@ async function main() {
         await act(task, () => submit.click());
         await page.getByText(/님의 경품을 등록했습니다/).first().waitFor({ timeout: 15000 });
         await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/rewards`, { waitUntil: 'networkidle', timeout: 30000 });
-        await page.getByRole('region', { name: '경품 지급 현황' }).waitFor({ state: 'visible', timeout: 15000 });
+        await page.getByRole('region', { name: '경품 지급 목록' }).waitFor({ state: 'visible', timeout: 15000 });
         const inList = await settledVisible(page.locator('ul[aria-label^="경품 목록"]').getByText(rewardName, { exact: true }));
         task.resultVisible = inList;
         task.resultNote = `경품 목록에 "${rewardName}" 표시`;
