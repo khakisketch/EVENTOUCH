@@ -63,6 +63,7 @@
     "web:staff-manual-presence:audit": "node scripts/web-staff-manual-presence-audit.cjs",
     "web:staff-inline-recovery:audit": "node scripts/web-staff-inline-recovery-audit.cjs && node scripts/web-staff-inline-recovery-audit.cjs --booth",
     "web:staff-direction-review:audit": "node scripts/web-staff-direction-review-audit.cjs",
+    "web:staff-already-in:audit": "node scripts/web-staff-already-in-audit.cjs",
     "web:nametag-print:audit": "node scripts/web-nametag-print-audit.cjs",
     "web:roster-nametag-freshness:audit": "node scripts/web-roster-nametag-freshness-audit.cjs",
     "web:roster-presence:audit": "node scripts/web-roster-presence-audit.cjs",

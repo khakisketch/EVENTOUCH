@@ -126,6 +126,7 @@ const EXPECTED_GATES = [
   'npm run web:attendee-refresh:audit',
   'npm run web:venue-visibility:audit',
   'npm run web:staff-direction-review:audit',
+  'npm run web:staff-already-in:audit',
   'npm run web:message-charset:audit',
   'npm run audit:usability',
 ];

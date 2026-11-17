@@ -21,7 +21,7 @@
 // (Node 24 type stripping) and is verified by `npm run server:typecheck`.
 
 import fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
-import { bearerToken, bodyOf, decodedSegment, fail, failureFields, readBody } from "./legacy-http.ts";
+import { bearerToken, bodyOf, decodedSegment, fail, failureFields, readBody } from "./legacy-http.mts";
 
 export type CommandResult = { status?: unknown; body?: unknown };
 
@@ -104,7 +104,7 @@ async function currentAccount(deps: CommandPathDeps, request: FastifyRequest): P
 
 function failWith(deps: CommandPathDeps, reply: FastifyReply, error: unknown, fallback: string) {
   const mapped = failureFields(error, fallback, deps.failureMessage);
-  return fail(reply, mapped.status, mapped.message, mapped.field, mapped.code);
+  return fail(reply, mapped.status, mapped.message, mapped.field, mapped.code, mapped.details);
 }
 
 async function signup(deps: CommandPathDeps, parts: string[], request: FastifyRequest, reply: FastifyReply, body: unknown) {

@@ -36,7 +36,7 @@
 // (Node 24 type stripping) and is verified by `npm run server:typecheck`.
 
 import fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
-import { decodedSegment, fail, failureFields } from "./legacy-http.ts";
+import { decodedSegment, fail, failureFields } from "./legacy-http.mts";
 
 export type ScopedReadsDeps = {
   /** Session lookup for the cookie the browser already holds. */

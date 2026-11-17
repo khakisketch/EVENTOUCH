@@ -82,6 +82,7 @@ export type FailureFields = {
   message: string;
   field: string | null;
   code: string | null;
+  details: Record<string, unknown> | null;
 };
 
 export function failureFields(
@@ -91,24 +92,29 @@ export function failureFields(
 ): FailureFields {
   const field = error && typeof error === "object" ? (error as { field?: unknown }).field : undefined;
   const code = error && typeof error === "object" ? (error as { code?: unknown }).code : undefined;
+  const details = error && typeof error === "object" ? (error as { details?: unknown }).details : undefined;
   return {
     status: errorStatus(error),
     message: failureMessage(error, fallback),
     field: typeof field === "string" && field ? field : null,
     code: typeof code === "string" && code ? code : null,
+    details: details && typeof details === "object" && !Array.isArray(details) ? details as Record<string, unknown> : null,
   };
 }
 
-// server/api.js err(): the field rides along only when it is set.
+// server/api.js err(): the field rides along only when it is set. `details`
+// likewise: only the command path passes it, and only when a command supplied it.
 export function fail(
   reply: FastifyReply,
   status: Parameters<FastifyReply["code"]>[0],
   message: string,
   field?: string | null,
-  code?: string | null
+  code?: string | null,
+  details?: Record<string, unknown> | null
 ) {
   const body: Record<string, unknown> = { error: message };
   if (field) body.field = field;
   if (code) body.code = code;
+  if (details) body.details = details;
   return reply.code(status).send(body);
 }

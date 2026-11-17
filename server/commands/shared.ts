@@ -14,13 +14,16 @@
 
 import { createHash, randomUUID } from "node:crypto";
 
-export type StatusError = Error & { status?: number; field?: string; code?: string };
+export type StatusError = Error & { status?: number; field?: string; code?: string; details?: Record<string, unknown> };
 
-export function failure(status: number, message: string, field?: string, code?: string): StatusError {
+// `details` is extra, already-authorized context a client may show next to the
+// message. It is optional and additive: callers that ignore it behave as before.
+export function failure(status: number, message: string, field?: string, code?: string, details?: Record<string, unknown>): StatusError {
   const error: StatusError = new Error(message);
   error.status = status;
   if (field) error.field = field;
   if (code) error.code = code;
+  if (details) error.details = details;
   return error;
 }
 
